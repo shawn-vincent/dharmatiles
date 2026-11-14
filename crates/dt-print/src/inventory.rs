@@ -164,7 +164,7 @@ pub fn append(home: &Path, lines: &[String]) -> Result<PathBuf, Vec<Diag>> {
                 &dt_doc::ops::Op::Append(lines),
             ) {
                 Ok(d) => d.text,
-                Err(dt_doc::edit::EditError::Unread(e)) => {
+                Err(dt_doc::ops::EditError::Unread(e)) => {
                     return Err(e.iter().map(Diag::from).collect::<Vec<_>>());
                 }
                 Err(e) => return Err(vec![Diag::plain(dt_lang::codes::INVENTORY, e.to_string())]),

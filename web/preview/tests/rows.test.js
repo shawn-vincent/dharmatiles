@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  addPlace, canStep, coverage, entryPlace, groupAt, idFlaw, idOf, landing, linePoints, maskThumb, movedNote, nameOf, orderRefusal, ownNode,
+  addPlace, canStep, coverage, entryPlace, groupAt, idAtByte, idFlaw, idOf, landing, linePoints, markId, maskThumb, movedNote, nameOf, orderRefusal, ownNode,
   planMove, refusalLine, seedSwap, slotAt, stepSlot, thumbBox, topNode, writtenIn,
 } from '../js/rows.js';
 
@@ -188,4 +188,22 @@ test('how much of the tile a region covers, and the line\'s points as pixels', (
   assert.deepEqual(thumbBox(1, 1), [36, 36]);
   assert.deepEqual(thumbBox(2, 1), [36, 18]);
   assert.deepEqual(thumbBox(1, 3), [12, 36]);
+});
+
+test('an edit names a node by the id the check listed: the node at a byte, else the innermost that holds it', () => {
+  const nodes = [
+    { id: 'tile', what: 'tile', name: null, at: 0, len: 100 },
+    { id: 'tile/line shore', what: 'line', name: 'shore', at: 20, len: 30 },
+    { id: 'tile/line shore/through', what: 'through', name: null, at: 35, len: 10 },
+    { id: 'tile/stack', what: 'stack', name: null, at: 60, len: 30 },
+    { id: 'tile/stack/rock#2', what: 'rock', name: null, at: 70, len: 8 },
+  ];
+  assert.equal(idAtByte(nodes, 70), 'tile/stack/rock#2');
+  assert.equal(idAtByte(nodes, 36), 'tile/line shore/through', 'inside a node: the innermost');
+  assert.equal(idAtByte(nodes, 25), 'tile/line shore');
+  assert.equal(idAtByte(nodes, 500), null, 'no node there');
+  assert.equal(idAtByte(null, 70), null, 'nothing checked yet');
+  assert.equal(idAtByte(nodes, null), null);
+  assert.equal(markId(nodes, 'line', 'shore'), 'tile/line shore');
+  assert.equal(markId(nodes, 'region', 'shore'), null);
 });

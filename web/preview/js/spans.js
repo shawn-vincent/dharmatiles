@@ -20,17 +20,6 @@ export function byteToIndex(text, b) {
   return text.length;
 }
 
-/**
- * The text with the program's `fix` for a mistake laid into it (`{offset, len, was, replacement}`: bytes, as the program counts),
- * or null when the text there is no longer what the fix was made for: a fix goes only into the text it was made for.
- * The program makes the replacement and its words once (dt-doc's `suggest`); this only lays it into the text.
- * @param {string} text @param {{ offset: number, len: number, was: string, replacement: string }} fix
- */
-export function fixedText(text, fix) {
-  const from = byteToIndex(text, fix.offset), to = byteToIndex(text, fix.offset + fix.len);
-  return text.slice(from, to) === fix.was ? text.slice(0, from) + fix.replacement + text.slice(to) : null;
-}
-
 /** `d` is the doc store's state; `tileId` the tile shown. True when its spans describe its text exactly. */
 export function spansFresh(d, tileId) {
   return d.text != null && d.checked === d.text && d.ok === true

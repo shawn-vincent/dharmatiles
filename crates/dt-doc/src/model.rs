@@ -5,7 +5,7 @@
 //! files, a printer profile or the edge contract.  Every name and value
 //! keeps the source span it came from, so later passes can still point at
 //! the text, and every stack entry keeps the edit path that addresses it
-//! in [`crate::edit`].
+//! in [`crate::nodeid`].
 //!
 //! Values are kept as written, in the reference units: sizes in mm at the
 //! DungeonBlocks reference, levels as level expressions, words with the
@@ -428,8 +428,8 @@ pub struct Entry {
     pub slope: Option<Spanned<f64>>,
     /// The optional name written after the element (`dirt hillDirt`).
     pub label: Option<Spanned<String>>,
-    /// The path that addresses this node in [`crate::edit`], such as
-    /// `["tile", "stack", "scatter#2", "boulder"]`.
+    /// The steps of this node's id (see [`crate::nodeid`]), such as
+    /// `["tile", "stack", "scatter#2", "boulder"]`: joined by `/`, the id an edit names it by.
     pub path: Vec<String>,
     /// The whole node.
     pub span: SourceSpan,

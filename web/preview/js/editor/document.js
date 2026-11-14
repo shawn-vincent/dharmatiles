@@ -14,7 +14,7 @@ import { TextPane, byteToIndex } from '../text.js';
 import { patchOnCopy } from '../mine.js';
 import { isOffline } from '../host.js';
 import { createDrafter } from '../drafts.js';
-import { STALE_NOTE, fixedText, spansFresh } from '../spans.js';
+import { STALE_NOTE, spansFresh } from '../spans.js';
 import { failed, showError } from '../problems.js';
 import { token } from '../tokens.js';
 import { thumbs } from './scene-thumbs.js';
@@ -128,7 +128,7 @@ function clearDocument() {
   history.clear(textKey());
   run.lastKind = null;
   shownSid.value = null;
-  doc.set({ text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null });
+  doc.set({ text: null, writable: false, stack: null, map: null, nodes: null, names: null, conflict: null, note: null });
 }
 function record(text, kind, label = null) {
   // a document the program owns has its steps from the program: the source's saves (save() below)
@@ -213,18 +213,29 @@ export function replaceBytes(start, len, text, end) {
 }
 
 /**
- * Mend a mistake with the program's own fix (a message's `fix`, from `file`): the text goes through `edited`, the document's one
- * way in, as one step of the history named by the fix.  Only the text the fix was made for takes it: once the text has moved past
- * the check, or the place no longer reads what the program saw, it waits for the next check and says so.
+ * Mend a mistake with the program's own fix (a message's `fix`, from `file`): the program lays it in, and the text goes through `edited`,
+ * the document's one way in, as one step of the history named by the fix.  Only the text the fix was made for takes it: once the text
+ * has moved past the check, or the place no longer reads what the program saw, it waits for the next check and says so.
  * @param {{ offset: number, len: number, was: string, replacement: string, label: string }} fix
  * @param {string | null} file the file the mistake is in (null: the tile's own)
  */
-export function applyFix(fix, file) {
+export async function applyFix(fix, file) {
   if (!doc.get().writable) { makeMine({ run: () => applyFix(fix, file) }); return false; }
   const d = doc.get();
-  const next = d.text != null && d.checked === d.text && (file == null || file === d.file) ? fixedText(d.text, fix) : null;
-  if (next == null) { toast('The text has changed since the program read it: the fix waits for the next check.'); return false; }
-  edited(next, 'lens', fix.label);
+  const waits = 'The text has changed since the program read it: the fix waits for the next check.';
+  if (d.text == null || d.checked !== d.text || !(file == null || file === d.file)) { toast(waits); return false; }
+  // the program lays the fix in (`Op::Fix`), and only where the text still reads what it saw
+  const r = await host.edit({ op: 'fix', text: d.text, fix });
+  if (failed('Could not make the fix', r)) return false;
+  if (r.status !== 200) {
+    const why = typeof r.body?.error === 'string' ? r.body.error : 'that fix could not be made';
+    doc.set({ note: why });
+    toast(`Could not make the fix: ${why}`);
+    return false;
+  }
+  // the text moved on while the program answered (typing): the answer is for the text it was sent
+  if (doc.get().text !== d.text) { toast(waits); return false; }
+  edited(r.body.text, 'lens', fix.label);
   return true;
 }
 
@@ -276,6 +287,7 @@ async function check() {
   const patch = { note: null, checked: text, checkedFile: d.file, checkedTile: d.tileId, ok: !!r.body.ok, errors: r.body.errors || [] };
   if (r.body.ok && r.body.stack) patch.stack = r.body.stack; // the last good stack stays while there are mistakes
   if (r.body.ok && r.body.map) patch.map = r.body.map;
+  if (r.body.ok && r.body.nodes) patch.nodes = r.body.nodes;
   doc.set(patch);
   return true;
 }
@@ -380,7 +392,7 @@ export async function loadText(file) {
         doc.set({
           text: v.text, writable: v.writable,
           conflict: null, note: null,
-          checked: null, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
+          checked: null, ok: !t.errors.length, errors: [], stack: null, nodes: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
           ...(fresh ? { map: null, names: null } : {}),
         });
       };

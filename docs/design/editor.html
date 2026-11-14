@@ -86,7 +86,7 @@
 </div>
 <p>Two rules come from dharmatiles itself:</p>
 <ul>
-  <li><strong>The text is the tile.</strong> The editor never holds a second model of the tile. Every gesture becomes an edit to the document, made by the same format-preserving editor that keeps your layout and comments (<code>dt-doc</code>'s <code>edit.rs</code>). The file opens in any text editor and any change there shows in the view.</li>
+  <li><strong>The text is the tile.</strong> The editor never holds a second model of the tile. Every gesture becomes an edit to the document, made by the same format-preserving editor that keeps your layout and comments (<code>dt-doc</code>'s <code>ops/tile.rs</code>). The file opens in any text editor and any change there shows in the view.</li>
   <li><strong>The gate is a gate.</strong> The editor shows overhang, it never hides it, and it never offers to loosen a limit. Red and orange mean overhang only; selection and handles use the current theme's accent.</li>
 </ul>
 
@@ -377,7 +377,7 @@
 <tbody>
 <tr><td>The mesh carries, for each triangle, which stack entry made it (a table of owner paths and an index per triangle).</td><td>Solid tags and the per-triangle source ids the materials already use.</td></tr>
 <tr><td>The plan for the page: lines as polylines, regions as masks, fill points, footprints, each entry's reads and writes, and the spans of every node.</td><td><code>dt-eval::check</code> and <code>dt-doc</code>'s spans.</td></tr>
-<tr><td>An edit call: a list of edits in, the new text and its changed ranges out.</td><td><code>dt-doc</code>'s <code>edit.rs</code>; adding and removing a node, and <code>/-</code>, are new.</td></tr>
+<tr><td>An edit call: a list of edits in, the new text and its changed ranges out.</td><td><code>dt-doc</code>'s <code>ops/tile.rs</code>; adding and removing a node, and <code>/-</code>, are new.</td></tr>
 <tr><td>Building from text the page sends, without writing the file, for drafts and sweeps. A draft is one request, answered with its mesh; a newer draft of the same tile takes the place of an older one.</td><td>The preview's build queue, which holds every build (drafts first, then the tiles asked for, then the tiles whose files changed).</td></tr>
 <tr><td>The page told of every change as it happens, and caught up after a drop. A tile is named by an id that does not change while its file keeps its path; each change has a revision, and a stream that reconnects says the last one it saw.</td><td>The preview's event stream.</td></tr>
 <tr><td>Writing the file, refused if it changed since the page read it.</td><td>The file watcher.</td></tr>

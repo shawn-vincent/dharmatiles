@@ -118,7 +118,7 @@ fn entry(e: &Entry, named: &Named, top: Option<&SolvedTop>) -> Result<Value, Str
     v["clouds"] = json!(clouds(e)?);
     // where it is put (at=), as written, for the map's handles
     const PLACE: [&str; 1] = ["at"];
-    let props = dt_doc::edit::props_at(text, e.what.span.offset()).map_err(|err| {
+    let props = dt_doc::nodeid::props_at(text, e.what.span.offset()).map_err(|err| {
         format!(
             "cannot read the properties of the `{what}` entry at byte {} of {}: {err}",
             e.what.span.offset(),

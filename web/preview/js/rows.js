@@ -38,6 +38,28 @@ export function topNode(it, items, file) {
   return top[0];
 }
 
+/**
+ * The id the program named the node by (`tile/stack/rock#2`): of the nodes its check listed, the one whose text starts at byte
+ * `at`, else the innermost that holds it.  An edit names a node by this id, never by the byte: the id is what the program
+ * resolves in the text it is sent, and refuses when the text has no such node.  Null when no node is there.
+ * @param {{id: string, at: number, len: number}[] | null | undefined} nodes the check's `nodes`
+ * @param {number | null | undefined} at
+ */
+export function idAtByte(nodes, at) {
+  if (at == null || !nodes) return null;
+  let best = null;
+  for (const n of nodes) {
+    if (n.at === at) return n.id;
+    if (at > n.at && at < n.at + Math.max(n.len, 1) && (!best || n.len < best.len)) best = n;
+  }
+  return best ? best.id : null;
+}
+
+/** The id of the tile's `line` or `region` called `name` among the check's nodes; null when the text writes none. */
+export function markId(nodes, kind, name) {
+  return nodes?.find((n) => n.what === kind && n.name === name)?.id ?? null;
+}
+
 /** Is `it` a node of this document that a hide, a delete or a move can address? */
 export const writtenIn = (it, file) => ownNode(it, file) != null;
 

@@ -196,7 +196,7 @@ fn a_line_is_read_back_as_written_even_with_odd_text() {
 }
 
 /// The log's one edit, through the one engine.
-fn append(text: &str, lines: &[String]) -> Result<String, dt_doc::edit::EditError> {
+fn append(text: &str, lines: &[String]) -> Result<String, dt_doc::ops::EditError> {
     dt_doc::ops::apply(
         dt_doc::ops::Kind::Inventory,
         text,

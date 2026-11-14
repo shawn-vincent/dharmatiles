@@ -37,23 +37,6 @@ pub(super) fn is_const_node(n: &KdlNode) -> bool {
     matches!(n.name().value(), "let" | "override")
 }
 
-fn step_names(nodes: &[KdlNode]) -> Vec<String> {
-    let mut seen: Vec<&str> = Vec::new();
-    nodes
-        .iter()
-        .map(|n| {
-            let name = n.name().value();
-            let k = seen.iter().filter(|s| **s == name).count();
-            seen.push(name);
-            if k == 0 {
-                name.to_owned()
-            } else {
-                format!("{name}#{}", k + 1)
-            }
-        })
-        .collect()
-}
-
 impl Decoder<'_> {
     /// The entries of a `stack` node.
     pub(crate) fn entries(&mut self, stack: &KdlNode, ctx: &Ctx, path: &[String]) -> Vec<Entry> {
@@ -69,7 +52,7 @@ impl Decoder<'_> {
         let Some(kids) = stack.children() else {
             return Vec::new();
         };
-        let steps = step_names(kids.nodes());
+        let steps = crate::nodeid::steps(kids.nodes());
         let mut base: Option<Base> = None;
         let mut out: Vec<Entry> = Vec::new();
         // format 1: the block's own `let`s and `override`s, for what is in it
@@ -228,7 +211,7 @@ impl Decoder<'_> {
         }
 
         let kids: &[KdlNode] = node.children().map_or(&[], |c| c.nodes());
-        let steps = step_names(kids);
+        let steps = crate::nodeid::steps(kids);
         // format 1: the block's own `let`s and `override`s, for what is in it
         let mut block_ctx: Option<Ctx> = None;
         for c in kids.iter().filter(|c| is_const_node(c)) {

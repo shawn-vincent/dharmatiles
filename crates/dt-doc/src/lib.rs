@@ -13,9 +13,9 @@
 //! - [`schema`] and [`elements`] hold every element's controls and words.
 //! - [`header`] reads the `dharmatiles version=…` first line, which names a
 //!   document's format.
-//! - [`edit`] changes, inserts and removes controls without disturbing
-//!   anything else in a `.dtile`; [`ops`] makes the edits of a print list
-//!   and an inventory, by piece id, with the same error type.
+//! - [`ops`] makes every edit of a `.dtile`, a print list and an inventory,
+//!   by the id each node or piece carries ([`nodeid`] names a tile's nodes),
+//!   without disturbing anything else in the text, with one error type.
 //!
 //! - [`lower`] turns a written value into the numbers and odds a build draws from.
 //!
@@ -25,7 +25,6 @@
 pub mod consts;
 pub mod decode;
 pub mod dim;
-pub mod edit;
 pub mod elements;
 pub mod error;
 pub mod expr;
@@ -36,6 +35,7 @@ pub mod known;
 pub mod lower;
 pub mod map;
 pub mod model;
+pub mod nodeid;
 pub mod ops;
 pub mod paths;
 pub mod place;

@@ -152,7 +152,7 @@ pub(crate) struct Message {
 
 /// An edit that mends a mistake, on the wire: write `replacement` over the `len` bytes at `offset` of the file the message
 /// points into.  The one form of a fix, in a message and in a check's mistake alike.
-#[derive(Clone, PartialEq, Eq, Debug, serde::Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct FixJson {
     pub offset: usize,
@@ -162,6 +162,19 @@ pub struct FixJson {
     pub replacement: String,
     /// The button's words: `Change to dirt`.
     pub label: String,
+}
+
+impl From<&FixJson> for dt_eval::Fix {
+    fn from(f: &FixJson) -> Self {
+        Self {
+            offset: f.offset,
+            len: f.len,
+            was: f.was.clone(),
+            replacement: f.replacement.clone(),
+            label: f.label.clone(),
+            moved: None,
+        }
+    }
 }
 
 impl From<&dt_eval::Fix> for FixJson {

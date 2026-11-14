@@ -100,31 +100,23 @@ pub enum InsertPlace {
     Stack,
     /// In the `tile` node, before the stack.
     Tile,
-    /// On a line of its own above the node at `at`.
+    /// On a line of its own above the node `id`.
     Before,
-    /// As the last child of the node at `at`.
+    /// As the last child of the node `id`.
     In,
 }
 
-#[derive(Deserialize, Clone, Copy)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(rename_all = "kebab-case")]
-pub enum MarkKind {
-    Line,
-    Region,
-}
-
-/// `/api/edit`: a text edit, one kind by `op`.  Nothing is written to disk.
+/// `/api/edit`: a text edit, one kind by `op`, made by `dt_doc::ops` to the node the `id` names (the ids a check
+/// lists in its `nodes`).  An id the text does not have is refused.  Nothing is written to disk.
 #[derive(Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(tag = "op", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum EditReq {
-    /// A control set on the node at byte `at` (`value` null or left out takes it out).
+    /// A control set on the node `id` (`value` null or left out takes it out).
     Set {
         text: String,
-        at: usize,
+        id: String,
         name: String,
         value: Option<Scalar>,
     },
@@ -133,45 +125,55 @@ pub enum EditReq {
         text: String,
         node: String,
         place: Option<InsertPlace>,
-        at: Option<usize>,
+        id: Option<String>,
     },
-    /// A node moved whole to stand before its sibling at `before`, or last.
+    /// A node moved whole to stand before its sibling `before`, or last.
     Move {
         text: String,
-        at: usize,
-        before: Option<usize>,
+        id: String,
+        before: Option<String>,
     },
     Remove {
         text: String,
-        at: usize,
+        id: String,
     },
     /// A node's children of those names out.
     RemoveChildren {
         text: String,
-        at: usize,
+        id: String,
         names: Vec<String>,
     },
     /// A line or region renamed, with what names it.
     Rename {
         text: String,
-        mark: MarkKind,
-        old: String,
+        id: String,
         new: String,
     },
     /// A node's positional argument replaced.
     Arg {
         text: String,
-        at: usize,
+        id: String,
         index: usize,
         value: Scalar,
     },
+    /// A node commented out.
+    Hide {
+        text: String,
+        id: String,
+    },
+    /// The program's own fix for a mistake laid in.
+    Fix {
+        text: String,
+        fix: crate::message::FixJson,
+    },
 }
 
-/// The text after an edit, and (for an insert or a move) the byte the node now starts at.
+/// The text after an edit, and (for a change that leaves a node to select) the node: its id and the byte it starts at.
 #[derive(Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct EditRes {
     pub text: String,
+    pub id: Option<String>,
     pub at: Option<usize>,
 }
 
@@ -185,6 +187,35 @@ pub struct CheckRes {
     pub errors: Vec<Mistake>,
     pub stack: Option<Vec<Json>>,
     pub map: Option<Json>,
+    /// Every node of the text that was read, by the id an edit names it with (`/api/edit`), for a tile.
+    pub nodes: Vec<NodeJson>,
+}
+
+/// One node of a tile's text: the id an edit names it by, what it is, and where its text is.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct NodeJson {
+    pub id: String,
+    /// The node's name as written (`rock`).
+    pub what: String,
+    /// The first word of a node that names itself (`shore` of `line shore`).
+    pub name: Option<String>,
+    /// The byte its text starts at.
+    pub at: usize,
+    /// Its length in bytes.
+    pub len: usize,
+}
+
+impl From<dt_doc::nodeid::Node> for NodeJson {
+    fn from(n: dt_doc::nodeid::Node) -> Self {
+        Self {
+            id: n.id,
+            what: n.what,
+            name: n.name,
+            at: n.at,
+            len: n.len,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -785,7 +816,7 @@ pub(super) fn new_tile(shared: &Shared, v: NewReq) -> Out<Listed> {
 /// that does not parse says so (`{ok: false, message}`): its mistakes are
 /// the check's to show, and the page keeps the names it had.
 pub(super) fn names(_: &Shared, v: NamesReq) -> Out<NamesRes> {
-    Ok(match dt_doc::edit::names_in(&v.text) {
+    Ok(match dt_doc::nodeid::names_in(&v.text) {
         Ok(n) => NamesRes {
             ok: true,
             message: None,
@@ -878,83 +909,87 @@ pub(super) fn printed_set(shared: &Shared, v: PrintedSetReq) -> Out<PrintedSetRe
 }
 
 pub(super) fn edit(_: &Shared, v: EditReq) -> Out<EditRes> {
-    let done = |r: Result<(String, usize), dt_doc::edit::EditError>| match r {
-        Ok((text, at)) => Ok(EditRes { text, at: Some(at) }),
+    use dt_doc::ops::{Kind, Op, Place, apply};
+    let made = |text: &str, op: Op| match apply(Kind::Tile, text, &op) {
+        Ok(d) => Ok(EditRes {
+            text: d.text,
+            id: d.id,
+            at: d.at,
+        }),
         Err(e) => Err(fail::refused("422 Unprocessable Entity", e.to_string())),
     };
-    let text_only = |r: Result<String, dt_doc::edit::EditError>| match r {
-        Ok(text) => Ok(EditRes { text, at: None }),
-        Err(e) => Err(fail::refused("422 Unprocessable Entity", e.to_string())),
-    };
-    match v {
+    match &v {
         EditReq::Insert {
             text,
             node,
             place,
-            at,
-        } => match place.unwrap_or(InsertPlace::Stack) {
-            // as the last child of the node at `at`: a clause of a region
-            InsertPlace::In => {
-                let at = at.ok_or_else(|| bad("give the byte of the node to write into"))?;
-                done(dt_doc::edit::insert_child_at(&text, at, &node))
-            }
-            InsertPlace::Before => {
-                let at = at.ok_or_else(|| bad("give the byte of the node to write above"))?;
-                done(dt_doc::edit::insert_node(
-                    &text,
-                    dt_doc::edit::Place::Before(at),
-                    &node,
-                ))
-            }
-            InsertPlace::Tile => done(dt_doc::edit::insert_node(
-                &text,
-                dt_doc::edit::Place::Tile,
-                &node,
-            )),
-            InsertPlace::Stack => done(dt_doc::edit::insert_node(
-                &text,
-                dt_doc::edit::Place::Stack,
-                &node,
-            )),
-        },
-        EditReq::Move { text, at, before } => done(dt_doc::edit::move_node(&text, at, before)),
-        EditReq::Remove { text, at } => {
-            done(dt_doc::edit::remove_node_at(&text, at).map(|t| (t, at)))
+            id,
+        } => {
+            let named = |what: &str| {
+                id.as_deref()
+                    .ok_or_else(|| bad(format!("give the id of the node to write {what}")))
+            };
+            let place = match place.unwrap_or(InsertPlace::Stack) {
+                InsertPlace::In => Place::In(named("into")?),
+                InsertPlace::Before => Place::Before(named("above")?),
+                InsertPlace::Tile => Place::Tile,
+                InsertPlace::Stack => Place::Stack,
+            };
+            made(text, Op::Insert { place, node })
         }
-        EditReq::RemoveChildren { text, at, names } => {
+        EditReq::Move { text, id, before } => made(
+            text,
+            Op::Move {
+                id,
+                before: before.as_deref(),
+            },
+        ),
+        EditReq::Remove { text, id } => made(text, Op::Take { id }),
+        EditReq::RemoveChildren { text, id, names } => {
             if names.is_empty() {
                 return Err(bad("give the names of the children to take out"));
             }
             let names: Vec<&str> = names.iter().map(String::as_str).collect();
-            done(dt_doc::edit::remove_children_at(&text, at, &names).map(|t| (t, at)))
+            made(text, Op::TakeChildren { id, names: &names })
         }
-        EditReq::Rename {
+        EditReq::Rename { text, id, new } => made(
             text,
-            mark,
-            old,
-            new,
-        } => {
-            let mark = match mark {
-                MarkKind::Line => dt_doc::edit::Mark::Line,
-                MarkKind::Region => dt_doc::edit::Mark::Region,
-            };
-            done(dt_doc::edit::rename_mark(&text, mark, &old, new.trim()).map(|t| (t, 0)))
-        }
+            Op::Rename {
+                id,
+                new: new.trim(),
+            },
+        ),
         EditReq::Arg {
             text,
-            at,
+            id,
             index,
             value,
-        } => done(dt_doc::edit::set_arg_at(&text, at, index, value.kdl()).map(|t| (t, at))),
+        } => made(
+            text,
+            Op::SetArg {
+                id,
+                index: *index,
+                value: value.kdl(),
+            },
+        ),
+        EditReq::Hide { text, id } => made(text, Op::Hide { id }),
+        EditReq::Fix { text, fix } => {
+            let fixes = [dt_doc::error::Fix::from(fix)];
+            made(text, Op::Fix(&fixes))
+        }
         EditReq::Set {
             text,
-            at,
+            id,
             name,
             value,
-        } => text_only(match value {
-            None => dt_doc::edit::remove_control_at(&text, at, &name),
-            Some(k) => dt_doc::edit::set_control_at(&text, at, &name, k.kdl()),
-        }),
+        } => made(
+            text,
+            Op::SetControl {
+                id,
+                name,
+                value: value.as_ref().map(Scalar::kdl),
+            },
+        ),
     }
 }
 
@@ -979,6 +1014,7 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
         errors: api::mistakes(errs),
         stack: None,
         map: None,
+        nodes: Vec::new(),
     };
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
@@ -1017,6 +1053,17 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
                 errors: Vec::new(),
                 stack: stack.map(|s| s.iter().map(api::camel_keys).collect()),
                 map: Some(api::camel_keys(&map)),
+                // the tile's own text read as KDL: it read, or the check would not have got here
+                nodes: dt_doc::nodeid::table(&own)
+                    .map_err(|e| {
+                        fail::failure(
+                            "500 Internal Server Error",
+                            format!("cannot list the nodes of {tile}: {e}"),
+                        )
+                    })?
+                    .into_iter()
+                    .map(NodeJson::from)
+                    .collect(),
             })
         }
         Err(errs) => {

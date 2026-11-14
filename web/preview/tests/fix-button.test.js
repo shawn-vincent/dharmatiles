@@ -1,5 +1,5 @@
 // A message that carries the program's fix has a button that makes it (D26): the row, the view's error card and the text of
-// the fix are one path.  The program writes the replacement and its words once (dt-doc's `suggest`); the page lays it in.
+// the fix are one path.  The program writes the replacement and its words once (dt-doc's `suggest`); the program lays it in (`/api/edit` op `fix`, dt-doc's `Op::Fix`), the page only asks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { computed, signal } from '@preact/signals-core';
@@ -9,7 +9,6 @@ const root = install();
 const { render, html } = await import('../js/view/html.js');
 const { ErrorCard, MessagesBody } = await import('../js/view/messages-panel.js');
 const { createLog } = await import('../js/messages.js');
-const { fixedText } = await import('../js/spans.js');
 
 const TEXT = 'tile size="1x1" {\n  stack {\n    dirtt\n  }\n}\n';
 const at = TEXT.indexOf('dirtt');
@@ -18,14 +17,6 @@ const error = (over = {}) => ({
   seq: 1, t: '2026-11-13T10:00:00.000Z', kind: 'error', severity: 'error', scope: 'check', code: 'dt::unknown-element', tile: 'a', tile_name: 'bad',
   node: null, span: { file: 'bad.dtile', line: 3, col: 5, offset: at, len: 5 }, text: 'no element or definition is called `dirtt`', help: 'did you mean `dirt`?',
   fix, data: {}, state: 'open', ...over,
-});
-
-test('the fix lays its replacement over the text it was made for, and only that text', () => {
-  assert.equal(fixedText(TEXT, fix), TEXT.replace('dirtt', 'dirt'));
-  assert.equal(fixedText(TEXT.replace('dirtt', 'rocks'), fix), null, 'the place no longer reads what the program saw');
-  // offsets are bytes: a multi-byte character before the word moves the index, not the byte
-  const wide = `// é\n${TEXT}`;
-  assert.equal(fixedText(wide, { ...fix, offset: at + 6 }), wide.replace('dirtt', 'dirt'));
 });
 
 function world(msg) {

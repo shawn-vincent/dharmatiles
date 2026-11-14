@@ -1,6 +1,7 @@
-//! The edit operations on a print list (`.dmap`) and an inventory (`.dinv`):
-//! one set of operations, addressed by the id every piece carries, with one
-//! error type ([`EditError`], the one `.dtile` edits report too).
+//! The edit operations on a tile (`.dtile`), a print list (`.dmap`) and an inventory
+//! (`.dinv`): one set of operations, addressed by the id every piece or node carries, with
+//! one error type ([`EditError`]).  A tile's nodes are named by [`crate::nodeid`]
+//! (`tile/stack/rock#2`, `tile/line shore`); the tile's operations are in [`tile`].
 //!
 //! An edit never touches what it does not name: every other byte of the file
 //! stays as it was.  [`apply`] is the one call: it reads the text as the
@@ -10,16 +11,59 @@
 //! (so the editor's first change to a file names all of them in one write),
 //! makes the operation, and answers the new text.
 //!
-//! The same two techniques as every edit here, and only these: an operation
-//! that adds or takes away whole lines splices the text at the node's span;
-//! one that changes a node's words changes the node in the kdl tree and
-//! prints the tree back.  Both keep comments, blank lines and alignment.
+//! A tile's edits are made one way: each works out the byte ranges it changes from the
+//! text's own spans and writes only those (see [`tile`]), so comments, blank lines and
+//! alignment stay.  A print list's edits splice at a piece's span, or change the piece in
+//! the kdl tree and print the tree back; both keep comments, blank lines and alignment.
+
+pub mod tile;
 
 use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
 
-use crate::edit::EditError;
+use crate::error::Fix;
 use crate::inventory;
 use crate::map::{self, At, PrintMode, Want};
+
+/// Why an edit could not be made.
+#[derive(Debug, Clone)]
+pub enum EditError {
+    /// The text is not valid KDL v2.
+    Parse(String),
+    /// No node has this id: the text is not the text the id was made from.
+    NoNode(String),
+    /// The node has no such entry or control.
+    NoEntry(String),
+    /// A name that can't be used here, and why.
+    BadName(String),
+    /// The edit cannot be made on text written this way, and what to change.
+    Cannot(String),
+    /// No piece of a print list has this id.
+    NoPiece(String),
+    /// The text does not read as the document it should be: its own mistakes,
+    /// so nothing is ever edited in a file that is not understood.
+    Unread(Vec<crate::error::DocError>),
+}
+
+impl std::fmt::Display for EditError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EditError::Parse(e) => write!(f, "not KDL v2: {e}"),
+            EditError::NoNode(s) => write!(
+                f,
+                "no node matches `{s}`: the text has changed since it was read"
+            ),
+            EditError::NoEntry(s) => write!(f, "the node has no `{s}`"),
+            EditError::BadName(s) | EditError::Cannot(s) => f.write_str(s),
+            EditError::NoPiece(id) => write!(f, "the list has no piece {id}"),
+            EditError::Unread(e) => f.write_str(
+                e.first()
+                    .map_or("the document does not read", |d| d.message.as_str()),
+            ),
+        }
+    }
+}
+
+impl std::error::Error for EditError {}
 
 /// What kind of document the text is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,6 +72,8 @@ pub enum Kind {
     Map,
     /// An inventory: the log of prints, losses and renames.
     Inventory,
+    /// A tile (or a part): `tile { stack { … } }`, read as KDL v2 and changed at its nodes.
+    Tile,
 }
 
 /// A value a piece's property is set to.
@@ -110,10 +156,85 @@ pub enum Op<'a> {
     },
     /// Every pin taken away.  (Map.)
     UnpinAll,
+    /// A control of a node written, in whichever form it is written (`height=35` on the line, or `height 35`
+    /// on its own line), else on the line as a property; `None` takes it out.  `group/sub` is a property of the
+    /// group's own line (`stones/height`).  (Tile.)
+    SetControl {
+        /// The node.
+        id: &'a str,
+        /// The control.
+        name: &'a str,
+        /// What it becomes, or `None` to take it out.
+        value: Option<KdlValue>,
+    },
+    /// A node's positional argument replaced: a `within`'s distance, say.  (Tile.)
+    SetArg {
+        /// The node.
+        id: &'a str,
+        /// Which argument, from 0.
+        index: usize,
+        /// What it becomes.
+        value: KdlValue,
+    },
+    /// A new node (one or more lines of KDL, unindented) written in a place.  (Tile.)
+    Insert {
+        /// Where it goes.
+        place: Place<'a>,
+        /// The node.
+        node: &'a str,
+    },
+    /// A node moved whole (its children, the comment lines above it and a comment after it on its line) to
+    /// stand before its sibling `before`, or last.  (Tile.)
+    Move {
+        /// The node.
+        id: &'a str,
+        /// The sibling it goes before.
+        before: Option<&'a str>,
+    },
+    /// A node taken out with its children, and its line when it had the line to itself.  (Tile.)
+    Take {
+        /// The node.
+        id: &'a str,
+    },
+    /// Every child of a node named one of `names` taken out.  (Tile.)
+    TakeChildren {
+        /// The node.
+        id: &'a str,
+        /// The children's names.
+        names: &'a [&'a str],
+    },
+    /// A node commented out (`/-`).  (Tile.)
+    Hide {
+        /// The node.
+        id: &'a str,
+    },
+    /// A line or region renamed, and every place the tile names it.  (Tile.)
+    Rename {
+        /// The `line` or `region` node.
+        id: &'a str,
+        /// Its new name.
+        new: &'a str,
+    },
+    /// The program's own fixes for mistakes laid in, each only where the text still reads what it was made for.
+    /// (Tile.)
+    Fix(&'a [Fix]),
+}
+
+/// Where [`Op::Insert`] puts a node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place<'a> {
+    /// The end of the tile's `stack` (made when the tile has none).
+    Stack,
+    /// The tile's own body, before its `stack`: a `line` or a `region`.
+    Tile,
+    /// Before this node, among its siblings: a stack entry written between two others.
+    Before(&'a str),
+    /// As the last child of this node: a clause in a region.
+    In(&'a str),
 }
 
 /// What an edit made.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Done {
     /// The new text.
     pub text: String,
@@ -121,6 +242,37 @@ pub struct Done {
     pub gave_ids: bool,
     /// For [`Op::AddOrBump`], the piece's count now.
     pub count: Option<u32>,
+    /// For a tile's operation that leaves a node to select (set, insert, move), its id in the new text.
+    pub id: Option<String>,
+    /// The byte that node starts at in the new text.
+    pub at: Option<usize>,
+    /// For [`Op::Fix`], which fixes were made and how many wait.
+    pub mended: Option<Mended>,
+}
+
+/// What [`Op::Fix`] did.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Mended {
+    /// The fixes that were made, in the order of the text.
+    pub applied: Vec<Fix>,
+    /// How many were left for another round: fixes whose text overlaps one made (the next check says them again
+    /// if they still hold).
+    pub deferred: usize,
+}
+
+impl Done {
+    /// An edit that made `text` and nothing else to say.
+    #[must_use]
+    pub fn text(text: String) -> Self {
+        Self {
+            text,
+            gave_ids: false,
+            count: None,
+            id: None,
+            at: None,
+            mended: None,
+        }
+    }
 }
 
 /// Make `op` on `text`, read as a `kind` document.
@@ -134,17 +286,16 @@ pub fn apply(kind: Kind, text: &str, op: &Op) -> Result<Done, EditError> {
         Kind::Inventory => match op {
             Op::Append(lines) => {
                 let inv = inventory::decode(inventory::FILE, text).map_err(EditError::Unread)?;
-                Ok(Done {
-                    text: inventory::insert_in_block(text, inv.span, lines),
-                    gave_ids: false,
-                    count: None,
-                })
+                Ok(Done::text(inventory::insert_in_block(
+                    text, inv.span, lines,
+                )))
             }
             _ => Err(EditError::Cannot(
                 "an inventory is added to, nothing else".to_owned(),
             )),
         },
         Kind::Map => map_op(text, op),
+        Kind::Tile => tile::apply(text, op),
     }
 }
 
@@ -154,17 +305,14 @@ fn map_op(text: &str, op: &Op) -> Result<Done, EditError> {
     if let Op::GiveIds = op {
         let (t, gave) = give_ids(text, &list)?;
         return Ok(Done {
-            text: t,
             gave_ids: gave,
-            count: None,
+            ..Done::text(t)
         });
     }
     if let Op::Append(lines) = op {
-        return Ok(Done {
-            text: inventory::insert_in_block(text, list.span, lines),
-            gave_ids: false,
-            count: None,
-        });
+        return Ok(Done::text(inventory::insert_in_block(
+            text, list.span, lines,
+        )));
     }
     // every other operation names pieces: they all have ids by now
     let (text, gave) = give_ids(text, &list)?;
@@ -174,12 +322,23 @@ fn map_op(text: &str, op: &Op) -> Result<Done, EditError> {
         list
     };
     let done = |text: String, count: Option<u32>| Done {
-        text,
         gave_ids: gave,
         count,
+        ..Done::text(text)
     };
     match op {
         Op::GiveIds | Op::Append(_) => unreachable_op(),
+        Op::SetControl { .. }
+        | Op::SetArg { .. }
+        | Op::Insert { .. }
+        | Op::Move { .. }
+        | Op::Take { .. }
+        | Op::TakeChildren { .. }
+        | Op::Hide { .. }
+        | Op::Rename { .. }
+        | Op::Fix(_) => Err(EditError::Cannot(
+            "that edit is made to a tile, not to a print list".to_owned(),
+        )),
         Op::AddOrBump(want) => {
             let found = list.pieces.iter().position(|p| {
                 same_tile(&p.tile.value, want.tile)

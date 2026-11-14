@@ -24,7 +24,11 @@ type Changed = {
  */
 rev: number, };
 
-type CheckRes = { ok: boolean, errors: Array<Mistake>, stack: Array<JsonValue> | null, map: JsonValue | null, };
+type CheckRes = { ok: boolean, errors: Array<Mistake>, stack: Array<JsonValue> | null, map: JsonValue | null, 
+/**
+ * Every node of the text that was read, by the id an edit names it with (`/api/edit`), for a tile.
+ */
+nodes: Array<NodeJson>, };
 
 type CheckValueReq = { element: string, control: string, typed: string, };
 
@@ -40,9 +44,9 @@ type Done = Record<string, never>;
 
 type DraftReq = { text: string, file?: string | null, debug?: boolean | null, };
 
-type EditReq = { "op": "set", text: string, at: number, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, at?: number | null, } | { "op": "move", text: string, at: number, before?: number | null, } | { "op": "remove", text: string, at: number, } | { "op": "remove-children", text: string, at: number, names: Array<string>, } | { "op": "rename", text: string, mark: MarkKind, old: string, new: string, } | { "op": "arg", text: string, at: number, index: number, value: Scalar, };
+type EditReq = { "op": "set", text: string, id: string, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, id?: string | null, } | { "op": "move", text: string, id: string, before?: string | null, } | { "op": "remove", text: string, id: string, } | { "op": "remove-children", text: string, id: string, names: Array<string>, } | { "op": "rename", text: string, id: string, new: string, } | { "op": "arg", text: string, id: string, index: number, value: Scalar, } | { "op": "hide", text: string, id: string, } | { "op": "fix", text: string, fix: FixJson, };
 
-type EditRes = { text: string, at: number | null, };
+type EditRes = { text: string, id: string | null, at: number | null, };
 
 type ErrorBody = { error: ErrorDetail, 
 /**
@@ -304,8 +308,6 @@ plate: number, x: number, y: number, turn?: boolean | null, docRev: number, };
 
 type MapsSetReq = { list: string, id: string, set: PieceWords, docRev: number, };
 
-type MarkKind = "line" | "region";
-
 type MessageJson = { 
 /**
  * Order in the stream.
@@ -374,6 +376,24 @@ size?: string | null,
  * The folder place and the folder in it, when not My tiles.
  */
 root?: number | null, dir?: string | null, };
+
+type NodeJson = { id: string, 
+/**
+ * The node's name as written (`rock`).
+ */
+what: string, 
+/**
+ * The first word of a node that names itself (`shore` of `line shore`).
+ */
+name: string | null, 
+/**
+ * The byte its text starts at.
+ */
+at: number, 
+/**
+ * Its length in bytes.
+ */
+len: number, };
 
 type Nothing = Record<string, never>;
 

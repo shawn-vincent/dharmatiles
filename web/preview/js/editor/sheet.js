@@ -6,7 +6,7 @@
 
 import { kdlString } from '../lens.js';
 import {
-  addFrom, canMine, editable, moveEntry, muteAt, stepEntry, openRowMenu, removeAt, renameMark, rowAction, setControl, takeFocusIndex, tileEdit,
+  addFrom, canMine, editable, moveEntry, muteAt, nodeId, stepEntry, openRowMenu, removeAt, renameMark, rowAction, setControl, takeFocusIndex, tileEdit,
 } from './rows.js';
 import { orderStack } from '../nav.js';
 import { failed, showError } from '../problems.js';
@@ -132,7 +132,7 @@ function tileModel() {
     schema: tileRows(['about']),
     written: av ? [asWritten({ name: 'about', text: av.text, span: av.span })] : [],
     set: (/** @type {any} */ _, /** @type {any} */ value) => (value == null
-      ? about && tileEdit({ op: 'remove', at: about.at }, 'Took out the description')
+      ? about && tileEdit({ op: 'remove', id: nodeId(about.at) }, 'Took out the description')
       : about ? null : tileEdit({ op: 'insert', place: 'tile', node: `about ${kdlString(String(value))}` }, 'Described the tile')),
   });
   // under the tile's own controls: what the inventory says of it and "I have this", then what it holds
@@ -155,7 +155,9 @@ async function setClause(clause, name, value) {
   }
   if (name === 'of') return setControl(clause.at, 'of', value);
   if (name === 'distance') {
-    const r = await host.edit({ op: 'arg', text: doc.get().text, at: clause.at, index: 0, value });
+    const id = nodeId(clause.at);
+    if (id == null) return;
+    const r = await host.edit({ op: 'arg', text: doc.get().text, id, index: 0, value });
     if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed('Could not change the distance', r); return; }
     edited(r.body.text, 'lens', 'Changed distance');
   }
@@ -200,7 +202,7 @@ function markModel(kind, m) {
     const clauses = clauseGroups(m, sh, doc.get().map, asWritten, nodeControl).map((g) => ({
       at: g.clause.at, heading: g.heading, schema: { controls: g.controls }, written: g.written,
       set: (/** @type {string} */ name, /** @type {any} */ value) => setClause(g.clause, name, value),
-      remove: { title: `Take out this ${g.clause.kind} clause`, run: () => tileEdit({ op: 'remove', at: g.clause.at }, `Took out a ${g.clause.kind} clause of ${m.name}`) },
+      remove: { title: `Take out this ${g.clause.kind} clause`, run: () => tileEdit({ op: 'remove', id: nodeId(g.clause.at) }, `Took out a ${g.clause.kind} clause of ${m.name}`) },
     }));
     // the bucket (boundedBy and its fill points) is a clause too: one group, taken out together
     const bucket = controls.filter((c) => c.name !== 'name');
@@ -209,24 +211,24 @@ function markModel(kind, m) {
     if (bucket.length) {
       main.push({
         heading: 'paint bucket', at: sh.at, schema: { controls: bucket }, written: written.filter((w) => w.name !== 'name'), set,
-        remove: { title: 'Take out the boundedBy and its fill points', run: () => tileEdit({ op: 'remove-children', at: sh.at, names: ['boundedBy', 'fill'] }, `Took out the boundedBy of ${m.name}`) },
+        remove: { title: 'Take out the boundedBy and its fill points', run: () => tileEdit({ op: 'remove-children', id: nodeId(sh.at), names: ['boundedBy', 'fill'] }, `Took out the boundedBy of ${m.name}`) },
       });
     }
     const add = {
       label: 'add clause',
       items: clauseMenu(m, sh, doc.get().map).map((c) => ({
         ...c, label: c.disabled ? `${c.label} (${c.why})` : c.label,
-        run: () => tileEdit({ op: 'insert', place: 'in', at: sh.at, node: c.node }, `Added a ${c.kind} clause to ${m.name}`),
+        run: () => tileEdit({ op: 'insert', place: 'in', id: nodeId(sh.at), node: c.node }, `Added a ${c.kind} clause to ${m.name}`),
       })),
     };
     const note = combineNote(sh);
-    const actions = doc.get().writable || canMine() ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
+    const actions = doc.get().writable || canMine() ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', id: nodeId(sh.at) }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
     return {
       title: m.name, kind, href: node.href, note,
       groups: [...main, ...clauses], add, actions,
     };
   }
-  const actions = doc.get().writable || canMine() ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
+  const actions = doc.get().writable || canMine() ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', id: nodeId(sh.at) }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
   return {
     title: m.name, kind, href: node.href,
     groups: [{ at: sh.at, schema: { controls }, written, set }], actions,

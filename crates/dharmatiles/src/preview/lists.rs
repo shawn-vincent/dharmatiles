@@ -30,8 +30,8 @@
 
 use std::path::PathBuf;
 
-use dt_doc::edit::EditError;
 use dt_doc::map::{DEFAULT_PRINTER, Mode, Want};
+use dt_doc::ops::EditError;
 use dt_doc::ops::{Kind, Op, apply};
 use dt_eval::Diag;
 use serde::{Deserialize, Serialize};
@@ -192,6 +192,7 @@ pub(super) fn check_text(shared: &Shared, tile: &str, text: &str) -> CheckRes {
                 errors: Vec::new(),
                 stack: None,
                 map: None,
+                nodes: Vec::new(),
             }
         }
         Err(e) => {
@@ -204,6 +205,7 @@ pub(super) fn check_text(shared: &Shared, tile: &str, text: &str) -> CheckRes {
                 errors: super::api::mistakes(&d),
                 stack: None,
                 map: None,
+                nodes: Vec::new(),
             }
         }
     }

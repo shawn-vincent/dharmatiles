@@ -2,7 +2,7 @@
 //!
 //! A mistake that has a mechanical mend (`dt::seam`, `dt::near-edge`, a misspelt word with a near one) carries it as a
 //! [`dt_eval::Fix`], made once where the mistake is made, with the help that says the same words.  This reads each
-//! document, takes the fixes its mistakes carry, lays them in with `dt_doc::edit::apply_fixes`, checks the mended text
+//! document, takes the fixes its mistakes carry, lays them in with `dt_doc::ops::Op::Fix`, checks the mended text
 //! and goes round again (a fix can show the next), up to [`ROUNDS`].  Nothing is computed here: no table of fixes,
 //! no splicer.
 
@@ -103,9 +103,17 @@ pub(crate) fn run(paths: &[String], opts: &Options) -> Result<Outcome, String> {
             }
             for (file, fixes) in by_file {
                 let old = Mended(&texts).read(&file)?;
-                let done =
-                    dt_doc::edit::apply_fixes(&old, &fixes).map_err(|e| format!("{file}: {e}"))?;
-                for f in &done.applied {
+                let done = dt_doc::ops::apply(
+                    dt_doc::ops::Kind::Tile,
+                    &old,
+                    &dt_doc::ops::Op::Fix(&fixes),
+                )
+                .map_err(|e| format!("{file}: {e}"))?;
+                let mended = done
+                    .mended
+                    .as_ref()
+                    .ok_or_else(|| format!("{file}: the fixes were not laid in"))?;
+                for f in &mended.applied {
                     let code = codes
                         .iter()
                         .find(|(n, off, _)| *n == file && *off == f.offset)

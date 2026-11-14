@@ -720,6 +720,7 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     assert_eq!(v["ok"], true, "{v}");
     let at = v["stack"][0]["span"][0].as_u64().unwrap();
     assert_eq!(&text[usize::try_from(at).unwrap()..][..4], "dirt");
+    let good = v.clone();
     let bad = serde_json::json!({ "text": "dharmatiles version=1\ntile size=\"1x1\" { stack { durt } }" }).to_string();
     let (_, v) = post(
         &r,
@@ -730,9 +731,11 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     );
     assert_eq!(v["ok"], false);
     assert!(v["errors"][0]["line"].is_number(), "{v}");
-    // edit: a control written on the line, the rest kept
+    // edit: a control written on the line, the rest kept; the node is named by the id the check listed
+    let id = id_of(&good, at);
+    assert_eq!(id, "tile/stack/dirt", "{v}");
     let e =
-        serde_json::json!({ "op": "set", "text": text, "at": at, "name": "wear", "value": "worn" })
+        serde_json::json!({ "op": "set", "text": text, "id": id, "name": "wear", "value": "worn" })
             .to_string();
     let (h, v) = post(&r, "/api/edit", Some(&token), None, &e);
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
@@ -1179,9 +1182,10 @@ fn the_editor_places_and_takes_out_nodes_and_maps_the_tile() {
     let at = usize::try_from(v["at"].as_u64().unwrap()).unwrap();
     assert!(placed[at..].starts_with("rock at="), "{v}");
     // and taken out again
+    assert_eq!(v["id"], "tile/stack/rock", "{v}");
     let v = call(
         "/api/edit",
-        serde_json::json!({ "text": placed, "op": "remove", "at": at }),
+        serde_json::json!({ "text": placed, "op": "remove", "id": v["id"] }),
     );
     assert_eq!(v["text"].as_str().unwrap(), text);
     // the map: the line's points where they are written, the region's area
@@ -1429,7 +1433,7 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     assert_eq!(region["fill"]["text"], "\"(0.5sq, 0.25sq)\"");
     let v = call(
         "/api/edit",
-        serde_json::json!({ "op": "rename", "text": text, "mark": "region", "old": "bank", "new": "meadow" }),
+        serde_json::json!({ "op": "rename", "text": text, "id": "tile/region bank", "new": "meadow" }),
     );
     let t = v["text"].as_str().unwrap();
     assert!(
@@ -1438,7 +1442,7 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     );
     let v = call(
         "/api/edit",
-        serde_json::json!({ "op": "rename", "text": text, "mark": "line", "old": "shore", "new": "pool" }),
+        serde_json::json!({ "op": "rename", "text": text, "id": "tile/line shore", "new": "pool" }),
     );
     assert!(
         v["text"].as_str().unwrap().contains("line pool"),
@@ -1523,9 +1527,10 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
         );
     }
     // the distance is edited through the server, the way the other controls are
+    let checked = v.clone();
     let v = call(
         "/api/edit",
-        serde_json::json!({ "op": "arg", "text": text, "at": clauses[1]["at"], "index": 0, "value": "9dmm" }),
+        serde_json::json!({ "op": "arg", "text": text, "id": id_of(&checked, clauses[1]["at"].as_u64().unwrap()), "index": 0, "value": "9dmm" }),
     );
     let t = v["text"].as_str().unwrap();
     assert!(
@@ -1534,7 +1539,7 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
     );
     let v = call(
         "/api/edit",
-        serde_json::json!({ "op": "set", "text": text, "at": clauses[0]["at"], "name": "of", "value": "eastEdge" }),
+        serde_json::json!({ "op": "set", "text": text, "id": id_of(&checked, clauses[0]["at"].as_u64().unwrap()), "name": "of", "value": "eastEdge" }),
     );
     let t = v["text"].as_str().unwrap();
     assert!(t.contains("of=eastEdge; within \"6dmm\" of=knoll"), "{t}");
@@ -2003,9 +2008,10 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
     );
     // what the sheet writes lands as a string with its unit, and checks
     let at = FORMAT_1.find("rock").unwrap();
+    let nodes = call(&check, serde_json::json!({ "text": FORMAT_1 }));
     let v = call(
         "/api/edit",
-        serde_json::json!({ "op": "set", "text": FORMAT_1, "at": at, "name": "size", "value": "9dmm" }),
+        serde_json::json!({ "op": "set", "text": FORMAT_1, "id": id_of(&nodes, at as u64), "name": "size", "value": "9dmm" }),
     );
     let edited = v["text"].as_str().unwrap();
     assert!(edited.contains("size=\"9dmm\""), "{v}");
@@ -2317,15 +2323,27 @@ fn a_mistake_the_build_finds_is_a_message_at_its_entry_and_a_fixed_build_clears_
 
 // ---- editing from the structure --------------------------------------------
 
+/// The id a check lists for the node whose text starts at byte `at`.
+fn id_of(check: &Value, at: u64) -> String {
+    check["nodes"]
+        .as_array()
+        .unwrap_or_else(|| panic!("a check lists the nodes of the text: {check}"))
+        .iter()
+        .find(|n| n["at"].as_u64() == Some(at))
+        .unwrap_or_else(|| panic!("no node starts at byte {at}: {check}"))["id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
 const ROWS: &str = "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=3 {\n    line shore { through west \"(1sq, 0.5sq)\" }\n    stack {\n        base\n        // the soil\n        dirt\n        rock at=\"(0.3sq, 0.4sq)\"\n        grass\n    }\n}\n";
 
 #[test]
 fn an_entry_moves_whole_and_a_new_one_goes_between_two() {
     let (r, _, token) = editable("move", ROWS);
     let call = |body: Value| post(&r, "/api/edit", Some(&token), None, &body.to_string()).1;
-    let dirt = ROWS.find("dirt").unwrap();
-    let grass = ROWS.find("grass").unwrap();
-    let v = call(json!({ "text": ROWS, "op": "move", "at": dirt, "before": null }));
+    let (dirt, grass) = ("tile/stack/dirt", "tile/stack/grass");
+    let v = call(json!({ "text": ROWS, "op": "move", "id": dirt, "before": null }));
     let moved = v["text"].as_str().unwrap();
     // the comment on top of it went with it, and the reply says where it now starts
     assert!(
@@ -2335,7 +2353,7 @@ fn an_entry_moves_whole_and_a_new_one_goes_between_two() {
     let at = usize::try_from(v["at"].as_u64().unwrap()).unwrap();
     assert!(moved[at..].starts_with("dirt"), "{v}");
     // before a sibling
-    let v = call(json!({ "text": ROWS, "op": "move", "at": grass, "before": dirt }));
+    let v = call(json!({ "text": ROWS, "op": "move", "id": grass, "before": dirt }));
     assert!(
         v["text"]
             .as_str()
@@ -2349,14 +2367,13 @@ fn an_entry_moves_whole_and_a_new_one_goes_between_two() {
         "/api/edit",
         Some(&token),
         None,
-        &json!({ "text": ROWS, "op": "move", "at": dirt, "before": ROWS.find("shore").unwrap() })
-            .to_string(),
+        &json!({ "text": ROWS, "op": "move", "id": dirt, "before": "tile/line shore" }).to_string(),
     );
     assert!(head.starts_with("HTTP/1.1 422"), "{head}");
     assert!(body.to_string().contains("siblings"), "{body}");
     // a new entry written above another
     let v = call(
-        json!({ "text": ROWS, "op": "insert", "place": "before", "at": grass, "node": "boulder" }),
+        json!({ "text": ROWS, "op": "insert", "place": "before", "id": grass, "node": "boulder" }),
     );
     let t = v["text"].as_str().unwrap();
     assert!(
@@ -2364,6 +2381,42 @@ fn an_entry_moves_whole_and_a_new_one_goes_between_two() {
         "{v}"
     );
     assert!(t[usize::try_from(v["at"].as_u64().unwrap()).unwrap()..].starts_with("boulder"));
+}
+
+#[test]
+fn a_node_is_hidden_a_fix_is_laid_in_and_an_id_the_text_does_not_have_is_refused() {
+    let (r, _, token) = editable("ops", ROWS);
+    let edit = |body: Value| post(&r, "/api/edit", Some(&token), None, &body.to_string());
+    let (head, v) = edit(json!({ "text": ROWS, "op": "hide", "id": "tile/stack/rock" }));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    assert_eq!(
+        v["text"].as_str().unwrap(),
+        ROWS.replace("rock at", "/- rock at")
+    );
+    // the program's own fix goes in only where the text still reads what it saw
+    let at = ROWS.find("dirt").unwrap();
+    let fix = json!({ "offset": at, "len": 4, "was": "dirt", "replacement": "ground", "label": "Change to ground" });
+    let (head, v) = edit(json!({ "text": ROWS, "op": "fix", "fix": fix }));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    assert_eq!(
+        v["text"].as_str().unwrap(),
+        ROWS.replacen("dirt", "ground", 1)
+    );
+    let (head, v) =
+        edit(json!({ "text": ROWS.replacen("dirt", "soil", 1), "op": "fix", "fix": fix }));
+    assert!(head.starts_with("HTTP/1.1 422"), "{head} {v}");
+    assert!(v.to_string().contains("no longer reads"), "{v}");
+    // an id from other text is refused in words, whatever the edit
+    for body in [
+        json!({ "text": ROWS, "op": "set", "id": "tile/stack/rock#9", "name": "size", "value": "9dmm" }),
+        json!({ "text": ROWS, "op": "remove", "id": "tile/stack/gone" }),
+        json!({ "text": ROWS, "op": "hide", "id": "tile/line gone" }),
+        json!({ "text": ROWS, "op": "insert", "place": "before", "id": "nope", "node": "boulder" }),
+    ] {
+        let (head, v) = edit(body);
+        assert!(head.starts_with("HTTP/1.1 422"), "{head} {v}");
+        assert!(v.to_string().contains("no node matches"), "{v}");
+    }
 }
 
 fn offer<'a>(v: &'a Value, name: &str) -> &'a Value {
@@ -2512,7 +2565,8 @@ fn an_entry_a_definition_call_makes_says_which_call_so_it_can_be_moved() {
         "/api/edit",
         Some(&token),
         None,
-        &json!({ "text": text, "op": "move", "at": call, "before": null }).to_string(),
+        &json!({ "text": text, "op": "move", "id": id_of(&v, call as u64), "before": null })
+            .to_string(),
     )
     .1;
     assert!(

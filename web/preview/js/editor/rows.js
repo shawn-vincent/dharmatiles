@@ -10,7 +10,7 @@ import { orderStack, ordinal } from '../nav.js';
 import { openMenu, openNameField } from '../menu.js';
 import { failed } from '../problems.js';
 import {
-  addPlace, canStep, idFlaw, idOf, landing, movedNote, nameOf, orderRefusal, ownNode, planMove, refusalLine, stepSlot, writtenIn,
+  addPlace, canStep, idAtByte, idFlaw, idOf, landing, markId, movedNote, nameOf, orderRefusal, ownNode, planMove, refusalLine, stepSlot, writtenIn,
 } from '../rows.js';
 import { byteToIndex } from '../text.js';
 import { host, makeMine, toast } from './app.js';
@@ -33,11 +33,24 @@ function refused(what, r) {
 
 // ---- edits of one node ---------------------------------------------------------------------
 
+/**
+ * The id the program names the node at byte `at` of the checked text by: what an edit says it changes.  The program answers an id
+ * it does not find in the text it is sent with a refusal, so a change never lands on another node.  Null (and said) when the
+ * last check lists no node there.
+ */
+export function nodeId(at) {
+  const id = idAtByte(doc.get().nodes, at);
+  if (id == null) toast('That part of the tile is not in the source the program read: it will be in a moment, when the check has caught up');
+  return id;
+}
+
 /** A control written on the node at byte `at`, or taken out (`value` null). */
 export async function setControl(at, name, value) {
   if (!doc.get().writable) return makeMine({ run: () => setControl(at, name, value) });
   if (!spansUsable()) return;
-  const r = await host.edit({ op: 'set', text: doc.get().text, at, name, value });
+  const id = nodeId(at);
+  if (id == null) return;
+  const r = await host.edit({ op: 'set', text: doc.get().text, id, name, value });
   if (r.status !== 200) { refused(`Could not change ${name}`, r); return; }
   edited(r.body.text, 'lens', `Changed ${name}`);
   return true;
@@ -47,6 +60,7 @@ export async function setControl(at, name, value) {
 export async function tileEdit(body, label) {
   if (!doc.get().writable) return makeMine({ run: () => tileEdit(body, label) });
   if (!spansUsable()) return;
+  if ('id' in body && body.id == null) return; // the caller could not name the node (nodeId said so)
   const r = await host.edit({ text: doc.get().text, ...body });
   if (r.status !== 200) { refused(`Could not make the change: ${label}`, r); return; }
   edited(r.body.text, 'lens', label);
@@ -54,12 +68,15 @@ export async function tileEdit(body, label) {
 }
 
 /** Comment a stack entry out (`/-`), with a way back. */
-export function muteAt(byte, label = 'Entry') {
+export async function muteAt(byte, label = 'Entry') {
   if (!doc.get().writable) return makeMine({ run: () => muteAt(byte, label) });
   if (!spansUsable()) return;
-  const t = doc.get().text, i = byteToIndex(t, byte);
+  const id = nodeId(byte);
+  if (id == null) return;
+  const r = await host.edit({ op: 'hide', text: doc.get().text, id });
+  if (r.status !== 200) { refused(`Could not hide ${label}`, r); return; }
   if (isEntry(view.get().sel)) view.set({ sel: null });
-  edited(`${t.slice(0, i)}/- ${t.slice(i)}`, 'view', `Hid ${label}`);
+  edited(r.body.text, 'view', `Hid ${label}`);
   askDraft();
   toast(`${label} hidden`, () => undo(-1));
 }
@@ -68,7 +85,9 @@ export function muteAt(byte, label = 'Entry') {
 export async function removeAt(byte, label = 'Entry') {
   if (!doc.get().writable) return makeMine({ run: () => removeAt(byte, label) });
   if (!spansUsable()) return;
-  const r = await host.edit({ op: 'remove', text: doc.get().text, at: byte });
+  const id = nodeId(byte);
+  if (id == null) return;
+  const r = await host.edit({ op: 'remove', text: doc.get().text, id });
   if (r.status !== 200) { refused(`Could not delete ${label}`, r); return; }
   view.set({ sel: null });
   edited(r.body.text, 'view', `Deleted ${label}`);
@@ -80,7 +99,9 @@ export async function removeAt(byte, label = 'Entry') {
 export async function renameMark(kind, old, name) {
   const next = String(name ?? '').trim();
   if (!next || next === old) return;
-  if (await tileEdit({ op: 'rename', mark: kind, old, new: next }, `Renamed ${kind} ${old} to ${next}`)) {
+  const id = markId(doc.get().nodes, kind, old);
+  if (id == null) { toast(`The source has no ${kind} ${old} to rename`); return; }
+  if (await tileEdit({ op: 'rename', id, new: next }, `Renamed ${kind} ${old} to ${next}`)) {
     view.set({ sel: markSel(kind, next) });
   }
 }
@@ -134,7 +155,9 @@ export async function moveEntry(from, slot) {
   if (!plan) return; // where it already is
   if (!doc.get().writable) return makeMine({ run: () => moveEntry(from, slot) });
   if (!spansUsable()) return;
-  const r = await host.edit({ op: 'move', text: doc.get().text, at: plan.at, before: plan.before });
+  const id = nodeId(plan.at), before = plan.before == null ? null : nodeId(plan.before);
+  if (id == null || (plan.before != null && before == null)) return;
+  const r = await host.edit({ op: 'move', text: doc.get().text, id, before });
   if (r.status !== 200) { refused(`Could not move ${nameOf(it)}`, r); return; }
   const note = movedNote(rows, from, to, nameOf(it));
   wanted = { index: landing(rows, from, to, file), text: r.body.text };
@@ -156,9 +179,11 @@ export function stepEntry(from, dir) {
 async function insertEntry(place, offer) {
   if (!doc.get().writable) return makeMine({ run: () => insertEntry(place, offer) });
   if (!spansUsable()) return;
+  const above = place.place === 'before' ? nodeId(place.at) : null;
+  if (place.place === 'before' && above == null) return;
   /** @type {import('../api').EditReq} */
-  const body = place.place === 'before'
-    ? { op: 'insert', place: 'before', at: place.at, node: offer.node, text: doc.get().text }
+  const body = above != null
+    ? { op: 'insert', place: 'before', id: above, node: offer.node, text: doc.get().text }
     : { op: 'insert', place: 'stack', node: offer.node, text: doc.get().text };
   const r = await host.edit(body);
   if (r.status !== 200) { refused(`Could not add ${offer.name}`, r); return; }
@@ -229,7 +254,7 @@ export async function addMark(kind) {
 async function deleteMark(kind, m) {
   const at = m?.sheet?.at;
   if (at == null) return;
-  if (await tileEdit({ op: 'remove', at }, `Deleted ${kind} ${m.name}`)) {
+  if (await tileEdit({ op: 'remove', id: nodeId(at) }, `Deleted ${kind} ${m.name}`)) {
     if (view.get().sel?.kind === kind && view.get().sel.id === m.name) view.set({ sel: null });
     toast(`Deleted ${kind} ${m.name}`, () => undo(-1));
   }

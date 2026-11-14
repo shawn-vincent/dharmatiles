@@ -146,8 +146,8 @@ fn the_header_is_checked_as_in_every_document() {
 /// The edits of a print list as the tests say them: each one an [`Op`] through
 /// the one engine.
 mod edits {
-    use dt_doc::edit::EditError;
     use dt_doc::map::{At, Want};
+    use dt_doc::ops::EditError;
     pub use dt_doc::ops::Prop;
     use dt_doc::ops::{Kind, Op, apply};
 
