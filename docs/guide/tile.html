@@ -65,16 +65,16 @@
 <h2>The result</h2>
 <dt-example src="examples/guide/flat.dtile" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/a21008965cc2cd4e303333f93d8dac12.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/a21008965cc2cd4e303333f93d8dac12.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/tests/ground/1x1-flat.dtile
-tile size=&quot;1x1&quot; {
-    about &quot;Flat ground at the edge height (3.4 mm) on one square: the first tile built end to end.&quot;
-    stack {
-        base
-        dirt top=&quot;$dirtEdgeHeight&quot; clods=none   // flat, at the edge height (3.4 mm)
-    }
-}
+<span class="tk-comment">// library/tests/ground/1x1-flat.dtile</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">about</span> <span class="tk-string">"Flat ground at the edge height (3.4 mm) on one square: the first tile built end to end."</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">clods</span><span class="tk-punct">=</span>none   <span class="tk-comment">// flat, at the edge height (3.4 mm)</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>The smallest tile in the library, built: one square of flat ground at the edge height, on its connector base.</figcaption>
@@ -101,7 +101,7 @@ tile size=&quot;1x1&quot; {
 <section class="rule">
 <h3 id="header" data-explains="dt::format-0 dt::format-newer dt::header dt::header-version dt::header-twice dt::header-first"><!--gen:anchors--><span id="dt-format-0"></span><span id="dt-format-newer"></span><span id="dt-header"></span><span id="dt-header-version"></span><span id="dt-header-twice"></span><span id="dt-header-first"></span><!--/gen:anchors-->A document starts with a header line</h3>
 <p>A document of any kind (a tile, a parts file, a printer profile, a palette) starts with one line that says which version of the language it is written in:</p>
-<pre data-doc><code>dharmatiles version="1.0.0"</code></pre>
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span></code></pre>
 <p>It is the first node of the file, once; it takes <code>version=</code> and nothing else. By hand the major number is enough: <code>dharmatiles version=1</code>. A version with a second dot or a <code>+</code> is quoted, since KDL reads a bare <code>1.10</code> as the number 1.1. Only the major part matters to reading: it is the document's <strong>format</strong>, and this program reads format 1. The editor writes the full version of the program that wrote the file, as the library's files do (<code>"1.0.0"</code>); re-saving a document leaves the line as it is.</p>
 <p>A document with no header is format 0, the language before this one, and this program does not read it: the decoder refuses it with <a class="codelink" href="../e/format-0.html"><code>dt::format-0</code></a>, wherever the tile is shown (the CLI, the preview, the editor); its help names release 1.0.0 (tag <code>v1.0.0</code>), which carries a file to format 1 with <code>dharmatiles migrate</code>. A document of a newer format than the program reads is refused with <a class="codelink" href="../e/format-newer.html"><code>dt::format-newer</code></a>. A header out of place, repeated or malformed has its own error (<a class="codelink" href="../e/header.html"><code>dt::header</code></a>, <a class="codelink" href="../e/header-first.html"><code>dt::header-first</code></a>, <a class="codelink" href="../e/header-twice.html"><code>dt::header-twice</code></a>, <a class="codelink" href="../e/header-version.html"><code>dt::header-version</code></a>).</p>
 <p><code>dharmatiles --version</code> and the editor's <em>About</em> box (in the view's <kbd>⋯</kbd> menu) give the program's own version and the formats it reads. The program's version is drawn from git: <code>X.Y.Z</code> at the release tag <code>vX.Y.Z</code>; <code>X.Y.Z+N.gHASH</code> on main, N commits past it; <code>X.Y.Z+branch.N.gHASH</code> on another branch; and <code>.dirty</code> added when the engine's files have uncommitted changes. A build record carries it.</p>

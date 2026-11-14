@@ -69,24 +69,24 @@
 <h2>The result</h2>
 <dt-example src="examples/guide/heights.dtile" overlay="regions points">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/5d4a81b01012cf3086af1ab98c334f39.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/5d4a81b01012cf3086af1ab98c334f39.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-tile size=&quot;1x1&quot; seed=62 {
-    point crossing &quot;(0.65sq, 0.5sq)&quot;
-    line stream wobble=&quot;0.5dmm&quot; { through westCenter eastCenter }
-    region banks { within &quot;11.5dmm&quot; of=stream }
-    region bed   { within &quot;1.5dmm&quot; of=stream }
-    stack {
-        base
-        dirt {
-            pin top=&quot;[$waterBedHeight .. $groundHeight + 1dmm]&quot; at=banks       // anywhere from the bed to the land
-            pin top=&quot;[$waterBedHeight .. $waterBedHeight + 0.3dmm]&quot; at=bed     // later, so it wins in the bed
-        }
-        rock size=&quot;6dmm .. 10dmm&quot; at=crossing
-        water top=&quot;[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]&quot; at=banks
-        grass
-    }
-}
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">62</span> <span class="tk-punct">{</span>
+    <span class="tk-node">point</span> crossing <span class="tk-string">"(</span><span class="tk-number">0.65sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+    <span class="tk-node">line</span> stream <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">0.5dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> westCenter eastCenter <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> banks <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">11.5dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>stream <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> bed   <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">1.5dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>stream <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-punct">{</span>
+            <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterBedHeight</span><span class="tk-string"> .. </span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">1dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>banks       <span class="tk-comment">// anywhere from the bed to the land</span>
+            <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterBedHeight</span><span class="tk-string"> .. </span><span class="tk-name">$waterBedHeight</span><span class="tk-string"> + </span><span class="tk-number">0.3dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bed     <span class="tk-comment">// later, so it wins in the bed</span>
+        <span class="tk-punct">}</span>
+        <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">6dmm</span><span class="tk-string"> .. </span><span class="tk-number">10dmm</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>crossing
+        <span class="tk-node">water</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterSurfaceHeight</span><span class="tk-string"> - </span><span class="tk-number">1.9dmm</span><span class="tk-string"> .. </span><span class="tk-name">$waterSurfaceHeight</span><span class="tk-string"> + </span><span class="tk-number">3dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>banks
+        <span class="tk-node">grass</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A stream, its banks and a crossing: dirt held anywhere from the stream bed to the land by pins, a rock at the crossing, water over the banks, grass beside.</figcaption>
@@ -107,21 +107,21 @@ tile size=&quot;1x1&quot; seed=62 {
 <section class="rule">
 <h3 id="tops">A body&rsquo;s <code>top=</code> is a band, and a pin holds it to a height at a place</h3>
 <p>A <em>body</em> of the stack (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>) says how high it may be with its <code>top=</code>, a band: a single height fixes the surface, a range leaves it room. A <a href="../elements/pin.html"><code>pin</code></a> holds the band to a height at a place; where pins overlap the later one wins, and the library's defaults (below) are read first. The stack is written bottom up: <a href="../elements/base.html"><code>base</code></a> first, the land in order, things and grass where you want them, <code>water</code> after the ground it fills over and the rocks and reeds it should ring, and before the grass that should see its shore. The stack is built in the order it is written.</p>
-<pre data-doc><code>dharmatiles version="1.0.0"
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-tile size="1x1" {
-    point knoll "(0.28sq, 0.28sq)"
-    region banks { within "11.5dmm" of=center }
-    stack {
-        base
-        dirt top="[$groundHeight .. $groundHeight + 2.5dmm]" {
-            slope "30deg"                                  // how steeply this dirt lies; 24deg by default
-            pin top="$groundHeight + 4dmm" at=knoll
-        }
-        water at=banks                                // fills over the ground listed above it
-        grass at=banks                                // listed after the water: keeps off the wet ground
-    }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">point</span> knoll <span class="tk-string">"(</span><span class="tk-number">0.28sq</span><span class="tk-string">, </span><span class="tk-number">0.28sq</span><span class="tk-string">)"</span>
+    <span class="tk-node">region</span> banks <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">11.5dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>center <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$groundHeight</span><span class="tk-string"> .. </span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">2.5dmm</span><span class="tk-string">]"</span> <span class="tk-punct">{</span>
+            <span class="tk-node">slope</span> <span class="tk-string">"</span><span class="tk-number">30deg</span><span class="tk-string">"</span>                                  <span class="tk-comment">// how steeply this dirt lies; 24deg by default</span>
+            <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">4dmm</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>knoll
+        <span class="tk-punct">}</span>
+        <span class="tk-node">water</span> <span class="tk-property">at</span><span class="tk-punct">=</span>banks                                <span class="tk-comment">// fills over the ground listed above it</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>banks                                <span class="tk-comment">// listed after the water: keeps off the wet ground</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 </section>
 <section class="rule">
 <h3 id="pin" data-explains="dt::pin"><!--gen:anchors--><span id="dt-pin"></span><!--/gen:anchors-->A pin needs <code>top=</code> and <code>at=</code>, and belongs on a body</h3>

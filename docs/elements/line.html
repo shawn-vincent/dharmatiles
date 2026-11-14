@@ -33,128 +33,128 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>line shore wobble="5dmm" { through "wsw" "e" }
-line trail width="9dmm" wobble="3dmm" { through south "(0.65sq, 0.5sq)" north }
-line ring closed=#true wobble="2dmm" { through "(0.3sq, 0.7sq)" "(0.7sq, 0.7sq)" "(0.5sq, 0.3sq)" }
-line stream { through westCenter eastCenter }       // the built-in points, by name
-line spur { through "(0sq, 1sq/3)" "(0.5sq, 0.7sq)" heading="30deg" pull=0.6 "(1sq, 0.5sq)" }   // a third, exactly; a heading and a pull on one point
-line run curve=straight ends=free { through "(0.1sq, 0.6sq)" "(0.9sq, 0.4sq)" }                // straight runs, ends free</code></pre>
+<pre><code><span class="tk-node">line</span> shore <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"wsw"</span> <span class="tk-string">"e"</span> <span class="tk-punct">}</span>
+<span class="tk-node">line</span> trail <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> south <span class="tk-string">"(</span><span class="tk-number">0.65sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> north <span class="tk-punct">}</span>
+<span class="tk-node">line</span> ring <span class="tk-property">closed</span><span class="tk-punct">=</span><span class="tk-keyword">#true</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0.3sq</span><span class="tk-string">, </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.7sq</span><span class="tk-string">, </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.3sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+<span class="tk-node">line</span> stream <span class="tk-punct">{</span> <span class="tk-node">through</span> westCenter eastCenter <span class="tk-punct">}</span>       <span class="tk-comment">// the built-in points, by name</span>
+<span class="tk-node">line</span> spur <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">/3)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-property">heading</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">30deg</span><span class="tk-string">"</span> <span class="tk-property">pull</span><span class="tk-punct">=</span><span class="tk-number">0.6</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>   <span class="tk-comment">// a third, exactly; a heading and a pull on one point</span>
+<span class="tk-node">line</span> run <span class="tk-property">curve</span><span class="tk-punct">=</span>straight <span class="tk-property">ends</span><span class="tk-punct">=</span>free <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0.1sq</span><span class="tk-string">, </span><span class="tk-number">0.6sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.9sq</span><span class="tk-string">, </span><span class="tk-number">0.4sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>                <span class="tk-comment">// straight runs, ends free</span></code></pre>
 <p>A line is one smooth curve through its points, square to the tile side at an end that is on a side and along the bisector at an end that is on a corner; <code>curve=straight</code> draws straight runs instead. A point on a tile side is on a seam. See the <a href="../guide/lines.html#line-curve">curve</a> and <a href="../guide/lines.html#line-seams">seams</a> in the language guide.</p>
 <p>A line with a <code>width</code> is a strip: everything within half the width of it, wobble included. <code>dirt at=trail</code>, <code>grass at=trail</code> and <code>cliff at=trail</code> fill the strip like a region, and <code>scatter at=trail</code> spreads within half the width either side unless it writes its own <code>reach</code>. A wall follows the line itself, so a width does not widen it. A surface along a line with no width, or along a tile edge (which has none), is <a class="codelink" href="../e/type.html"><code>dt::type</code></a>; for an edge write <code>region rim { within "6dmm" of=northEdge }</code> and <code>at=rim</code>. See <code>demo/line-width.dtile</code>.</p>
 <h2 id="try">Try it</h2>
 <dt-example src="examples/lines/shore.dtile" controls="wobble, seed" overlay="lines points" highlight="line shore">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/f11643c324b63faf6557b694a3cf46c2.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/f11643c324b63faf6557b694a3cf46c2.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A line with a wobble: the shore of a pond.  The line goes through two points and may wander
-// up to 5dmm off the straight path between them; the seed decides how.
-tile size=&quot;1x1&quot; seed=97 {
-    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 2sq/3)&quot; &quot;(1sq, 0.5sq)&quot; }
-    region pool { boundedBy shore; fill &quot;(0.5sq, 0.85sq)&quot; }
-    region bank { boundedBy shore; fill &quot;(0.5sq, 0.2sq)&quot; }
-    stack {
-        base
-        dirt
-        grass at=bank
-    }
-}
+<span class="tk-comment">// A line with a wobble: the shore of a pond.  The line goes through two points and may wander</span>
+<span class="tk-comment">// up to 5dmm off the straight path between them; the seed decides how.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">97</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> shore <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">2sq</span><span class="tk-string">/3)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> pool <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.85sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> bank <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.2sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bank
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A shore through two points, wandering up to <code>5dmm</code> off the straight path between them. Drag <em>wobble</em>, or roll the seed: the points stay where they are written.</figcaption>
 </dt-example>
 <dt-example src="examples/lines/points.dtile" overlay="points" highlight="point 2">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/12db6bbce4336668df2ed11b17b32fb3.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/12db6bbce4336668df2ed11b17b32fb3.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A line is the points it goes through, in order.  This one has three and no wobble, so it is
-// one smooth curve through them, square to the tile's sides; the lawn is the region above it.
-tile size=&quot;1x1&quot; seed=3 {
-    line border { through &quot;(0sq, 2sq/3)&quot; &quot;(0.5sq, 0.4sq)&quot; &quot;(1sq, 2sq/3)&quot; }
-    region lawn { boundedBy border; fill &quot;(0.5sq, 0.1sq)&quot; }
-    stack {
-        base
-        dirt
-        grass at=lawn
-    }
-}
+<span class="tk-comment">// A line is the points it goes through, in order.  This one has three and no wobble, so it is</span>
+<span class="tk-comment">// one smooth curve through them, square to the tile's sides; the lawn is the region above it.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> border <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">2sq</span><span class="tk-string">/3)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.4sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">2sq</span><span class="tk-string">/3)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> lawn <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> border<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.1sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>lawn
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A line is the points it goes through, in order. This one has three and no wobble, so it is one smooth curve through them, square to the tile&rsquo;s sides where it ends.</figcaption>
 </dt-example>
 <dt-example src="examples/lines/wobble.dtile" controls="wobble:0..14, seed" overlay="lines">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/edb9fcf2bfea1777a3cbc73a4b19b69e.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/edb9fcf2bfea1777a3cbc73a4b19b69e.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// The same kind of line with a larger wobble.  Change the seed: the points stay where they are
-// written, and the line wanders differently.
-tile size=&quot;1x1&quot; seed=12 {
-    line border wobble=&quot;9dmm&quot; { through &quot;(0sq, 0.5sq)&quot; &quot;(0.5sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-    region lawn { boundedBy border; fill &quot;(0.5sq, 0.1sq)&quot; }
-    stack {
-        base
-        dirt
-        grass at=lawn
-    }
-}
+<span class="tk-comment">// The same kind of line with a larger wobble.  Change the seed: the points stay where they are</span>
+<span class="tk-comment">// written, and the line wanders differently.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">12</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> border <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> lawn <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> border<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.1sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>lawn
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>The same line with a bigger wobble; the seed decides which way it wanders.</figcaption>
 </dt-example>
 <dt-example src="examples/lines/strip.dtile" controls="width:4..30" overlay="lines">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/d0c13bd3bfd011d8d4e7af75c21d5e0f.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/d0c13bd3bfd011d8d4e7af75c21d5e0f.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A line with a width is a strip.  `verge` is 24dmm wide and the grass that follows it covers the
-// strip; `trail` is narrower, and the pebbles scatter within half its width either side.
-tile size=&quot;1x1&quot; seed=5 {
-    line verge width=&quot;24dmm&quot; wobble=&quot;3dmm&quot; { through southCenter &quot;(0.45sq, 0.5sq)&quot; northCenter }
-    line trail width=&quot;10dmm&quot; wobble=&quot;3dmm&quot; { through southCenter &quot;(0.45sq, 0.5sq)&quot; northCenter }
-    stack {
-        base
-        dirt
-        grass at=verge
-        scatter at=trail perSquare=60 { pebble }
-    }
-}
+<span class="tk-comment">// A line with a width is a strip.  `verge` is 24dmm wide and the grass that follows it covers the</span>
+<span class="tk-comment">// strip; `trail` is narrower, and the pebbles scatter within half its width either side.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">5</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> verge <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">24dmm</span><span class="tk-string">"</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> southCenter <span class="tk-string">"(</span><span class="tk-number">0.45sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> northCenter <span class="tk-punct">}</span>
+    <span class="tk-node">line</span> trail <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">10dmm</span><span class="tk-string">"</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> southCenter <span class="tk-string">"(</span><span class="tk-number">0.45sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> northCenter <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>verge
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span>trail <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">60</span> <span class="tk-punct">{</span> <span class="tk-node">pebble</span> <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A line with a width is a strip; the grass fills the strip and the pebbles scatter within half the trail's width.</figcaption>
 </dt-example>
 <dt-example src="examples/lines/closed.dtile" overlay="lines regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/21c4727f4f8a72d8fa8928c2e36e67a9.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/21c4727f4f8a72d8fa8928c2e36e67a9.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A closed line is a loop, and its inside is a region once it has a fill point.
-tile size=&quot;1x1&quot; seed=21 {
-    line ring closed=#true wobble=&quot;3dmm&quot; { through &quot;(0.3sq, 0.7sq)&quot; &quot;(0.7sq, 0.7sq)&quot; &quot;(0.5sq, 0.28sq)&quot; }
-    region pond { boundedBy ring; fill &quot;(0.5sq, 0.55sq)&quot; }
-    stack {
-        base
-        dirt
-        grass
-        scatter at=pond count=3 { rock size=&quot;4dmm .. 7dmm&quot; }
-    }
-}
+<span class="tk-comment">// A closed line is a loop, and its inside is a region once it has a fill point.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">21</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> ring <span class="tk-property">closed</span><span class="tk-punct">=</span><span class="tk-keyword">#true</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0.3sq</span><span class="tk-string">, </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.7sq</span><span class="tk-string">, </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.28sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> pond <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> ring<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.55sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span>pond <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-punct">{</span> <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4dmm</span><span class="tk-string"> .. </span><span class="tk-number">7dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A closed line is a loop, and its inside is a region.</figcaption>
 </dt-example>
 <dt-example src="examples/values/point-range.dtile" controls="seed" overlay="points">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/95e9c6687e69a8a83858125655b06916.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/95e9c6687e69a8a83858125655b06916.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A point written as a range is drawn once from the seed: the line's middle point is anywhere
-// from 0.3sq to 0.7sq down, a different place for another seed.  Its ends stay on seams: a
-// point on a tile side is one place, never a range, so it meets the next tile's.
-tile size=&quot;1x1&quot; seed=18 {
-    line shore wobble=&quot;3dmm&quot; { through &quot;(0sq, 0.5sq)&quot; &quot;(0.5sq, 0.3sq .. 0.7sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-    region bank { boundedBy shore; fill &quot;(0.5sq, 0.1sq)&quot; }
-    stack {
-        base
-        dirt
-        grass at=bank
-    }
-}
+<span class="tk-comment">// A point written as a range is drawn once from the seed: the line's middle point is anywhere</span>
+<span class="tk-comment">// from 0.3sq to 0.7sq down, a different place for another seed.  Its ends stay on seams: a</span>
+<span class="tk-comment">// point on a tile side is one place, never a range, so it meets the next tile's.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">18</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> shore <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.3sq</span><span class="tk-string"> .. </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> bank <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.1sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bank
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A point written as a range is drawn once from the seed: roll it and the middle of the line moves. The ends stay on seams, since a point on a side is one place.</figcaption>

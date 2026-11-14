@@ -65,16 +65,16 @@
 <h2>The result</h2>
 <dt-example src="examples/values/range.dtile" controls="seed" overlay="squares">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/23d3bb0c10672a93f97b698ac24f0183.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/23d3bb0c10672a93f97b698ac24f0183.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A range is two values and `..`: each rock draws its own size from it, keyed by the tile's seed.
-tile size=&quot;1x1&quot; seed=7 {
-    stack {
-        base
-        dirt
-        scatter count=5 { rock size=&quot;5dmm .. 11dmm&quot; }
-    }
-}
+<span class="tk-comment">// A range is two values and `..`: each rock draws its own size from it, keyed by the tile's seed.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">7</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">5</span> <span class="tk-punct">{</span> <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string"> .. </span><span class="tk-number">11dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A range is two values and <code>..</code>: each rock draws its own size from it, keyed by the tile&rsquo;s seed.</figcaption>
@@ -89,11 +89,11 @@ tile size=&quot;1x1&quot; seed=7 {
 <h2>The rules</h2>
 <section class="rule">
 <h3 id="expressions" data-explains="dt::expr dt::value"><!--gen:anchors--><span id="dt-expr"></span><span id="dt-value"></span><!--/gen:anchors-->A quoted value is a tiny expression</h3>
-<pre data-grammar><code>value  := sum ( ".." sum )?        a range "lo .. hi", drawn afresh per thing
-sum    := prod ( ("+" | "-") prod )*
-prod   := unary ( ("*" | "/") unary )*
-unary  := "-" unary | atom
-atom   := number unit? | number "%" | name | "$" name | call | "(" sum ")" | "[" sum ".." sum "]" | weighting      see Weighted ranges</code></pre>
+<pre data-grammar><code><span class="tk-node">value</span>  <span class="tk-property">:</span><span class="tk-punct">=</span> sum <span class="tk-punct">(</span> <span class="tk-string">".."</span> sum <span class="tk-punct">)</span>?        a range <span class="tk-string">"lo .. hi"</span>, drawn afresh per thing
+<span class="tk-node">sum</span>    <span class="tk-property">:</span><span class="tk-punct">=</span> prod <span class="tk-punct">(</span> <span class="tk-punct">(</span><span class="tk-string">"+"</span> | <span class="tk-string">"-"</span><span class="tk-punct">)</span> prod <span class="tk-punct">)</span>*
+<span class="tk-node">prod</span>   <span class="tk-property">:</span><span class="tk-punct">=</span> unary <span class="tk-punct">(</span> <span class="tk-punct">(</span><span class="tk-string">"*"</span> | <span class="tk-string">"/"</span><span class="tk-punct">)</span> unary <span class="tk-punct">)</span>*
+<span class="tk-node">unary</span>  <span class="tk-property">:</span><span class="tk-punct">=</span> <span class="tk-string">"-"</span> unary | atom
+<span class="tk-node">atom</span>   <span class="tk-property">:</span><span class="tk-punct">=</span> number unit? | number <span class="tk-string">"%"</span> | name | <span class="tk-string">"$"</span> name | call | <span class="tk-string">"("</span> sum <span class="tk-string">")"</span> | <span class="tk-string">"["</span> sum <span class="tk-string">".."</span> sum <span class="tk-string">"]"</span> | weighting      see Weighted ranges</code></pre>
 <p>A range is written <code>lo .. hi</code> or <code>[lo .. hi]</code> in a control value, and the brackets go anywhere a number does: <code>size="[1dmm .. 2dmm] + [3dmm .. 4dmm]"</code> adds two ranges. In a height (a <code>top=</code>, a <code>let</code>) and inside a call, a range is always in brackets. A bare <code>lo .. hi</code> in a control value reaches over sums, so <code>1dmm .. 2dmm + 3dmm</code> is <code>1dmm .. 5dmm</code>; but when a value holds two bare ranges, or one beside a bracket or a weighting, each <code>..</code> binds tighter than the arithmetic. The brackets always say it plainly.</p>
 <p>An unknown function is <a class="codelink" href="../e/value.html"><code>dt::value</code></a>.</p>
 </section>

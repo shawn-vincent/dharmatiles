@@ -63,20 +63,20 @@
 <h2>The result</h2>
 <dt-example src="examples/lines/shore.dtile" controls="wobble, seed" overlay="lines points" highlight="line shore">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/f11643c324b63faf6557b694a3cf46c2.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/f11643c324b63faf6557b694a3cf46c2.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A line with a wobble: the shore of a pond.  The line goes through two points and may wander
-// up to 5dmm off the straight path between them; the seed decides how.
-tile size=&quot;1x1&quot; seed=97 {
-    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 2sq/3)&quot; &quot;(1sq, 0.5sq)&quot; }
-    region pool { boundedBy shore; fill &quot;(0.5sq, 0.85sq)&quot; }
-    region bank { boundedBy shore; fill &quot;(0.5sq, 0.2sq)&quot; }
-    stack {
-        base
-        dirt
-        grass at=bank
-    }
-}
+<span class="tk-comment">// A line with a wobble: the shore of a pond.  The line goes through two points and may wander</span>
+<span class="tk-comment">// up to 5dmm off the straight path between them; the seed decides how.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">97</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> shore <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">2sq</span><span class="tk-string">/3)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> pool <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.85sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> bank <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.2sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bank
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A shore through two points, wandering up to <code>5dmm</code> off the straight path between them. Drag <em>wobble</em>, or roll the seed: the points stay where they are written.</figcaption>
@@ -92,21 +92,21 @@ tile size=&quot;1x1&quot; seed=97 {
 <section class="rule">
 <h3 id="lines" data-explains="dt::line"><!--gen:anchors--><span id="dt-line"></span><!--/gen:anchors-->A line runs through points</h3>
 <p>A drawn line runs through points. With a <code>width</code> it is a strip, and a dirt, grass or cliff <code>at=</code> it fills the strip (within half the width, wobble included), and a scatter reaches half the width either side unless it writes <code>reach</code>. A surface along a line with no width, or along a tile edge, is <a class="codelink" href="../e/type.html"><code>dt::type</code></a>. <code>wobble</code> lets it wander up to that far off its points.</p>
-<pre data-fragment><code>line trail width="9dmm" wobble="3dmm" { through south "(0.65sq, 0.5sq)" north }</code></pre>
+<pre data-fragment><code><span class="tk-node">line</span> trail <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> south <span class="tk-string">"(</span><span class="tk-number">0.65sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> north <span class="tk-punct">}</span></code></pre>
 <p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. <code>side=</code> along a tile edge is an error, because on an edge a wall always stands inside.</p>
 </section>
 <section class="rule">
 <h3 id="line-curve">A line is one smooth curve through its points</h3>
 <p>A line is one smooth curve through the points you write: a cubic B&eacute;zier from each point to the next, its handles 0.4 of the chord long, and inside the line a point&rsquo;s direction is the chord of its two neighbours. Walls, strips, regions, scatters and cliffs all follow that one curve. Where an end meets the edge of the tile, only its direction is decided: an end exactly on a side leaves along the side&rsquo;s normal, and an end exactly on a tile corner leaves along the corner&rsquo;s bisector, 45&deg; to both sides. Each end is decided on its own. A square corner partway along a bigger tile&rsquo;s side is on a side, so it leaves square to it. Two tiles that meet at the same seam therefore meet in the same direction; how much each is still bending there is not matched.</p>
-<pre data-fragment><code>line shore { through "(0sq, 0.5sq)" "(0.5sq, 1sq)" }          // square to the west side, square to the south side
-line knee  { through "(0sq, 0.5sq)"
-                     "(0.4sq, 0.4sq)" corner=#true
-                     "(1sq, 0.5sq)" }                               // a sharp knee on purpose
-line bend  { through "(0sq, 0.5sq)"
-                     "(0.5sq, 0.7sq)" heading="30deg" pull=0.6
-                     "(1sq, 0.5sq)" }                               // leave this point at 30deg, hold the direction 0.6 as far
-line free  ends=free { through "(0.2sq, 0.5sq)" "(0.8sq, 0.3sq)" "(1sq, 0.5sq)" }   // the ends take their direction from the next point
-line run   curve=straight { through "(0sq, 0.5sq)" "(1sq, 2sq/3)" }  // straight runs, exactly as the points say</code></pre>
+<pre data-fragment><code><span class="tk-node">line</span> shore <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>          <span class="tk-comment">// square to the west side, square to the south side</span>
+<span class="tk-node">line</span> knee  <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+                     <span class="tk-string">"(</span><span class="tk-number">0.4sq</span><span class="tk-string">, </span><span class="tk-number">0.4sq</span><span class="tk-string">)"</span> <span class="tk-property">corner</span><span class="tk-punct">=</span><span class="tk-keyword">#true</span>
+                     <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>                               <span class="tk-comment">// a sharp knee on purpose</span>
+<span class="tk-node">line</span> bend  <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+                     <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-property">heading</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">30deg</span><span class="tk-string">"</span> <span class="tk-property">pull</span><span class="tk-punct">=</span><span class="tk-number">0.6</span>
+                     <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>                               <span class="tk-comment">// leave this point at 30deg, hold the direction 0.6 as far</span>
+<span class="tk-node">line</span> free  <span class="tk-property">ends</span><span class="tk-punct">=</span>free <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0.2sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.8sq</span><span class="tk-string">, </span><span class="tk-number">0.3sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>   <span class="tk-comment">// the ends take their direction from the next point</span>
+<span class="tk-node">line</span> run   <span class="tk-property">curve</span><span class="tk-punct">=</span>straight <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">2sq</span><span class="tk-string">/3)"</span> <span class="tk-punct">}</span>  <span class="tk-comment">// straight runs, exactly as the points say</span></code></pre>
 <ul>
   <li><code>corner=#true</code> on a <code>through</code> of one point makes a sharp knee there.</li>
   <li><code>heading=</code> on a <code>through</code> of one point is the way the line goes through it: an angle with its unit, <code>0deg</code> east, <code>90deg</code> south, like <code>polar()</code>. It is allowed on any point, and an end given one leaves that way instead of square.</li>

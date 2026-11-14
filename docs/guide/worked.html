@@ -66,25 +66,25 @@
 <h3 id="ex-grass-tree">A grass meadow with one tree</h3>
 <dt-example src="examples/guide/worked-meadow.dtile" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 2"><img class="dtx-poster" src="../posters/1a99ffdde52fe857cbb50ca9936f5127.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 2"><img class="dtx-poster" src="../posters/1a99ffdde52fe857cbb50ca9936f5127.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/tiles/ground/2x2-grass-tree.dtile
-// A 2×2 grass meadow with one tree.
+<span class="tk-comment">// library/tiles/ground/2x2-grass-tree.dtile</span>
+<span class="tk-comment">// A 2×2 grass meadow with one tree.</span>
 
-use &quot;parts/grass&quot; long-grass
+<span class="tk-node">use</span> <span class="tk-string">"parts/grass"</span> long-grass
 
-tile size=&quot;2x2&quot; seed=84 {
-    stack {
-        base
-        dirt clods=none
-        tree top=&quot;$bottom + 49dmm&quot; {     // anywhere on the tile; or at=&quot;(1sq, 1sq)&quot;
-            trunk height=&quot;30dmm&quot;             // bare trunk below the crown
-            crown width=&quot;30dmm&quot; clumps=32 shape=round branching=normal
-            leaf length=&quot;4.5dmm&quot; width=&quot;3dmm&quot;
-        }
-        long-grass                      // listed after the tree, so it grows round the trunk
-    }
-}
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"2x2"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">84</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">clods</span><span class="tk-punct">=</span>none
+        <span class="tk-node">tree</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + </span><span class="tk-number">49dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span>     <span class="tk-comment">// anywhere on the tile; or at="(1sq, 1sq)"</span>
+            <span class="tk-node">trunk</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">30dmm</span><span class="tk-string">"</span>             <span class="tk-comment">// bare trunk below the crown</span>
+            <span class="tk-node">crown</span> <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">30dmm</span><span class="tk-string">"</span> <span class="tk-property">clumps</span><span class="tk-punct">=</span><span class="tk-number">32</span> <span class="tk-property">shape</span><span class="tk-punct">=</span>round <span class="tk-property">branching</span><span class="tk-punct">=</span>normal
+            <span class="tk-node">leaf</span> <span class="tk-property">length</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4.5dmm</span><span class="tk-string">"</span> <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span>
+        <span class="tk-punct">}</span>
+        <span class="tk-node">long-grass</span>                      <span class="tk-comment">// listed after the tree, so it grows round the trunk</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A grass meadow with one tree.</figcaption>
@@ -107,32 +107,32 @@ tile size=&quot;2x2&quot; seed=84 {
 <h3 id="ex-wall">A fieldstone wall turning a corner</h3>
 <dt-example src="examples/guide/worked-wall.dtile" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/8569b4581e15496fb2e34812c232c6ed.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/8569b4581e15496fb2e34812c232c6ed.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/tiles/walls/1x1-wall-fieldstone-corner.dtile
-use &quot;parts/grass&quot; lawn
+<span class="tk-comment">// library/tiles/walls/1x1-wall-fieldstone-corner.dtile</span>
+<span class="tk-node">use</span> <span class="tk-string">"parts/grass"</span> lawn
 
-tile size=&quot;1x1&quot; seed=64 {
-    stack {
-        base
-        dirt                                // bare earth at the ground height
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">64</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>                                <span class="tk-comment">// bare earth at the ground height</span>
 
-        // Along the north edge, then the west edge.  On a tile edge a
-        // wall always stands inside, its outer face flush with the edge.
-        wall at=&quot;north west&quot; style=fieldstone {
-            height full                     // up to $wallHeight (33.1dmm)
-            thickness &quot;7dmm&quot;
-            coping loose                    // or: on-edge
+        <span class="tk-comment">// Along the north edge, then the west edge.  On a tile edge a</span>
+        <span class="tk-comment">// wall always stands inside, its outer face flush with the edge.</span>
+        <span class="tk-node">wall</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"north west"</span> <span class="tk-property">style</span><span class="tk-punct">=</span>fieldstone <span class="tk-punct">{</span>
+            <span class="tk-node">height</span> full                     <span class="tk-comment">// up to $wallHeight (33.1dmm)</span>
+            <span class="tk-node">thickness</span> <span class="tk-string">"</span><span class="tk-number">7dmm</span><span class="tk-string">"</span>
+            <span class="tk-node">coping</span> loose                    <span class="tk-comment">// or: on-edge</span>
 
-            // fieldstone's own defaults, written out to show them
-            stones height=&quot;2.2dmm .. 5.2dmm&quot; length=&quot;5dmm .. 16dmm&quot;
-            joints width=&quot;0dmm&quot; depth=&quot;2.8dmm&quot;        // how deep the gaps between stones look
-            edges rounding=&quot;1.3dmm .. 2.6dmm&quot;       // worn corners
-        }
+            <span class="tk-comment">// fieldstone's own defaults, written out to show them</span>
+            <span class="tk-node">stones</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2.2dmm</span><span class="tk-string"> .. </span><span class="tk-number">5.2dmm</span><span class="tk-string">"</span> <span class="tk-property">length</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string"> .. </span><span class="tk-number">16dmm</span><span class="tk-string">"</span>
+            <span class="tk-node">joints</span> <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">0dmm</span><span class="tk-string">"</span> <span class="tk-property">depth</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2.8dmm</span><span class="tk-string">"</span>        <span class="tk-comment">// how deep the gaps between stones look</span>
+            <span class="tk-node">edges</span> <span class="tk-property">rounding</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">1.3dmm</span><span class="tk-string"> .. </span><span class="tk-number">2.6dmm</span><span class="tk-string">"</span>       <span class="tk-comment">// worn corners</span>
+        <span class="tk-punct">}</span>
 
-        lawn
-    }
-}
+        <span class="tk-node">lawn</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A fieldstone wall turning a corner.</figcaption>
@@ -147,38 +147,38 @@ tile size=&quot;1x1&quot; seed=64 {
 <h3 id="ex-cliff">A cliff run</h3>
 <dt-example src="examples/guide/worked-cliff.dtile" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 1"><img class="dtx-poster" src="../posters/e2fc851308d473734495f8b7cc8954d5.jpg" alt="The tile this source builds, from above" width="800" height="400" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 1"><img class="dtx-poster" src="../posters/e2fc851308d473734495f8b7cc8954d5.jpg" alt="The tile this source builds, from above" width="800" height="400" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/tiles/cliffs/2x1-cliff.dtile
-tile size=&quot;2x1&quot; seed=1 {
-    about &quot;&quot;&quot;
-        Rock band against the north edge. Both ends finish in the
-        standard end section, so runs butt end to end.
-        &quot;&quot;&quot;
+<span class="tk-comment">// library/tiles/cliffs/2x1-cliff.dtile</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"2x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">1</span> <span class="tk-punct">{</span>
+    <span class="tk-node">about</span> <span class="tk-string">"""</span>
+<span class="tk-string">        Rock band against the north edge. Both ends finish in the</span>
+<span class="tk-string">        standard end section, so runs butt end to end.</span>
+<span class="tk-string">        """</span>
 
-    region crag  { within &quot;[10dmm .. 20dmm]&quot; of=northEdge }
-    region apron { within &quot;6.5dmm&quot; of=crag }
+    <span class="tk-node">region</span> crag  <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"[</span><span class="tk-number">10dmm</span><span class="tk-string"> .. </span><span class="tk-number">20dmm</span><span class="tk-string">]"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>northEdge <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> apron <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">6.5dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>crag <span class="tk-punct">}</span>
 
-    stack {
-        base
-        dirt top=&quot;$dirtEdgeHeight&quot; {
-            pin top=&quot;[$dirtEdgeHeight .. $dirtEdgeHeight + 3.5dmm]&quot; at=apron   // the bank, drawn
-            pin top=&quot;$dirtEdgeHeight&quot; at=edges
-            scatter perSquare=45 { pebble size=&quot;1dmm .. 2.2dmm&quot; buried=&quot;20%..50%&quot; }
-        }
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string">"</span> <span class="tk-punct">{</span>
+            <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string"> .. </span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string"> + </span><span class="tk-number">3.5dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>apron   <span class="tk-comment">// the bank, drawn</span>
+            <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>edges
+            <span class="tk-node">scatter</span> <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">45</span> <span class="tk-punct">{</span> <span class="tk-node">pebble</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">1dmm</span><span class="tk-string"> .. </span><span class="tk-number">2.2dmm</span><span class="tk-string">"</span> <span class="tk-property">buried</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">20%</span><span class="tk-string">..50%"</span> <span class="tk-punct">}</span>
+        <span class="tk-punct">}</span>
 
-        cliff top=&quot;$dirtEdgeHeight + 35dmm&quot; at=crag {
-            rock mixed                  // or: columns, blocks, slabs
-            stoneSize massive          // or: rubble, broken
-            shattered patches=3 width=&quot;5dmm .. 10dmm&quot;
-        }
-        dirt top=&quot;$bottom + [0.6dmm .. 1.2dmm]&quot; at=crag   // dirt on the cliff's top
+        <span class="tk-node">cliff</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string"> + </span><span class="tk-number">35dmm</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>crag <span class="tk-punct">{</span>
+            <span class="tk-node">rock</span> mixed                  <span class="tk-comment">// or: columns, blocks, slabs</span>
+            <span class="tk-node">stoneSize</span> massive          <span class="tk-comment">// or: rubble, broken</span>
+            <span class="tk-node">shattered</span> <span class="tk-property">patches</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string"> .. </span><span class="tk-number">10dmm</span><span class="tk-string">"</span>
+        <span class="tk-punct">}</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + [</span><span class="tk-number">0.6dmm</span><span class="tk-string"> .. </span><span class="tk-number">1.2dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>crag   <span class="tk-comment">// dirt on the cliff's top</span>
 
-        // scree: fallen stones gathered at the cliff's foot
-        scatter at=&quot;foot(cliff)&quot; perSquare=55 reach=&quot;4dmm&quot; { stone size=&quot;low(1dmm .. 6dmm, 11)&quot; }
-        scatter at=&quot;foot(cliff)&quot; perSquare=2.5 { boulder size=&quot;4.5dmm .. 8dmm&quot; }
-    }
-}
+        <span class="tk-comment">// scree: fallen stones gathered at the cliff's foot</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"foot(cliff)"</span> <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">55</span> <span class="tk-property">reach</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">stone</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-function">low</span><span class="tk-string">(</span><span class="tk-number">1dmm</span><span class="tk-string"> .. </span><span class="tk-number">6dmm</span><span class="tk-string">, 11)"</span> <span class="tk-punct">}</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"foot(cliff)"</span> <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">2.5</span> <span class="tk-punct">{</span> <span class="tk-node">boulder</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4.5dmm</span><span class="tk-string"> .. </span><span class="tk-number">8dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A cliff run.</figcaption>
@@ -194,31 +194,31 @@ tile size=&quot;2x1&quot; seed=1 {
 <p>A path of bare dirt winding up a 1×2 tile through grass, with rocks beside it: lines, regions and <code>at=</code> together.</p>
 <dt-example src="examples/guide/worked-path.dtile" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 2"><img class="dtx-poster" src="../posters/34789d071fd6e2c854f59377c4ea39b2.jpg" alt="The tile this source builds, from above" width="800" height="1600" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 2"><img class="dtx-poster" src="../posters/34789d071fd6e2c854f59377c4ea39b2.jpg" alt="The tile this source builds, from above" width="800" height="1600" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-use &quot;parts/grass&quot; lawn
+<span class="tk-node">use</span> <span class="tk-string">"parts/grass"</span> lawn
 
-tile size=&quot;1x2&quot; seed=7 {
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x2"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">7</span> <span class="tk-punct">{</span>
 
-    // From the middle of the south edge to the middle of the north edge,
-    // 9 design millimetres wide, wandering up to 3 off its points.
-    line trail width=&quot;9dmm&quot; wobble=&quot;3dmm&quot; { through south &quot;(0.65sq, 1sq)&quot; north }
+    <span class="tk-comment">// From the middle of the south edge to the middle of the north edge,</span>
+    <span class="tk-comment">// 9 design millimetres wide, wandering up to 3 off its points.</span>
+    <span class="tk-node">line</span> trail <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> south <span class="tk-string">"(</span><span class="tk-number">0.65sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> north <span class="tk-punct">}</span>
 
-    // Everything beside the path: one fill point on each side of it.
-    region verge { boundedBy trail; fill &quot;(0.15sq, 1sq)&quot;; fill &quot;(0.85sq, 1sq)&quot; }
+    <span class="tk-comment">// Everything beside the path: one fill point on each side of it.</span>
+    <span class="tk-node">region</span> verge <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> trail<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.15sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span><span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.85sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
 
-    stack {
-        base
-        dirt                                    // the whole tile, at the ground height
-        dirt at=trail top=&quot;$bottom + [0.4dmm .. 0.8dmm]&quot; clods=none   // the path: a second dirt along it, a little proud and smooth
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>                                    <span class="tk-comment">// the whole tile, at the ground height</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">at</span><span class="tk-punct">=</span>trail <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + [</span><span class="tk-number">0.4dmm</span><span class="tk-string"> .. </span><span class="tk-number">0.8dmm</span><span class="tk-string">]"</span> <span class="tk-property">clods</span><span class="tk-punct">=</span>none   <span class="tk-comment">// the path: a second dirt along it, a little proud and smooth</span>
 
-        scatter at=verge count=5 {
-            rock size=&quot;4dmm .. 10dmm&quot; shape=rounded buried=&quot;30%&quot;   // shape: or angular, flat
-        }
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span>verge <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">5</span> <span class="tk-punct">{</span>
+            <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4dmm</span><span class="tk-string"> .. </span><span class="tk-number">10dmm</span><span class="tk-string">"</span> <span class="tk-property">shape</span><span class="tk-punct">=</span>rounded <span class="tk-property">buried</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">30%</span><span class="tk-string">"</span>   <span class="tk-comment">// shape: or angular, flat</span>
+        <span class="tk-punct">}</span>
 
-        lawn at=verge cover=&quot;85%&quot;
-    }
-}
+        <span class="tk-node">lawn</span> <span class="tk-property">at</span><span class="tk-punct">=</span>verge <span class="tk-property">cover</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">85%</span><span class="tk-string">"</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A divided tile: grass, a path and rocks.</figcaption>
@@ -230,17 +230,17 @@ tile size=&quot;1x2&quot; seed=7 {
 </section>
 <section class="rule">
 <h3 id="ex-snippets">Two short ones</h3>
-<pre data-fragment><code>// A straight wall on the south edge
-wall at=south style=cut-stone {
-    height full
-    thickness "7dmm"
-}
+<pre data-fragment><code><span class="tk-comment">// A straight wall on the south edge</span>
+<span class="tk-node">wall</span> <span class="tk-property">at</span><span class="tk-punct">=</span>south <span class="tk-property">style</span><span class="tk-punct">=</span>cut-stone <span class="tk-punct">{</span>
+    <span class="tk-node">height</span> full
+    <span class="tk-node">thickness</span> <span class="tk-string">"</span><span class="tk-number">7dmm</span><span class="tk-string">"</span>
+<span class="tk-punct">}</span>
 
-// A taller cliff with a ledge
-cliff top="$dirtEdgeHeight + 55dmm" at=crag {
-    rock blocks
-    ledges 1                        // a shelf stepped down the free face
-}</code></pre>
+<span class="tk-comment">// A taller cliff with a ledge</span>
+<span class="tk-node">cliff</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string"> + </span><span class="tk-number">55dmm</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>crag <span class="tk-punct">{</span>
+    <span class="tk-node">rock</span> blocks
+    <span class="tk-node">ledges</span> <span class="tk-number">1</span>                        <span class="tk-comment">// a shelf stepped down the free face</span>
+<span class="tk-punct">}</span></code></pre>
 </section>
 </section>
 <section id="errors-explained">

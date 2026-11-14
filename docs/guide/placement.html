@@ -65,22 +65,22 @@
 <h2>The result</h2>
 <dt-example src="examples/guide/scatter.dtile" controls="seed" overlay="regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/6e86fa5d61689e31aab5c70ad824baa5.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/6e86fa5d61689e31aab5c70ad824baa5.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A scatter says how many and where; its children say what.  Here a pool of bare ground holds
-// rocks and pebbles, three rocks for every ten pebbles.
-tile size=&quot;1x1&quot; seed=11 {
-    line shore wobble=&quot;4dmm&quot; { through &quot;(0sq, 2sq/3)&quot; &quot;(1sq, 0.5sq)&quot; }
-    region pool { boundedBy shore; fill &quot;(0.5sq, 0.85sq)&quot; }
-    stack {
-        base
-        dirt
-        scatter at=pool perSquare=20 {
-            rock size=&quot;6dmm .. 10dmm&quot; weight=3
-            pebble weight=10
-        }
-    }
-}
+<span class="tk-comment">// A scatter says how many and where; its children say what.  Here a pool of bare ground holds</span>
+<span class="tk-comment">// rocks and pebbles, three rocks for every ten pebbles.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">11</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> shore <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">2sq</span><span class="tk-string">/3)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> pool <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.85sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span>pool <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">20</span> <span class="tk-punct">{</span>
+            <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">6dmm</span><span class="tk-string"> .. </span><span class="tk-number">10dmm</span><span class="tk-string">"</span> <span class="tk-property">weight</span><span class="tk-punct">=</span><span class="tk-number">3</span>
+            <span class="tk-node">pebble</span> <span class="tk-property">weight</span><span class="tk-punct">=</span><span class="tk-number">10</span>
+        <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A scatter: how many and where is the scatter&rsquo;s; what is in the pool is its children&rsquo;s. Roll the seed and the same recipe places them again.</figcaption>

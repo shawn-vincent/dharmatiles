@@ -53,20 +53,20 @@
 
 <h2 id="use">Using it in a tile</h2>
 <p>A tile is a short document that lists elements in a <code>stack</code>. The stack is built in the order it is listed, so grass grows round the solids (rocks, trees, walls, cliffs) listed above it. A meadow looks like this:</p>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-use "parts/grass" lawn
+<span class="tk-node">use</span> <span class="tk-string">"parts/grass"</span> lawn
 
-tile size="2x2" seed=1 {
-    stack {
-        base
-        dirt                                         // the ground, and the bare earth between the grass
-        scatter perSquare=2 {                       // about 8 rocks on a 2×2
-            rock size="2dmm .. 10dmm" shape=angular buried="30%"
-        }
-        lawn cover="80%"                             // grass over 80% of the ground; it grows round the rocks
-    }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"2x2"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">1</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>                                         <span class="tk-comment">// the ground, and the bare earth between the grass</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">2</span> <span class="tk-punct">{</span>                       <span class="tk-comment">// about 8 rocks on a 2×2</span>
+            <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2dmm</span><span class="tk-string"> .. </span><span class="tk-number">10dmm</span><span class="tk-string">"</span> <span class="tk-property">shape</span><span class="tk-punct">=</span>angular <span class="tk-property">buried</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">30%</span><span class="tk-string">"</span>
+        <span class="tk-punct">}</span>
+        <span class="tk-node">lawn</span> <span class="tk-property">cover</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">80%</span><span class="tk-string">"</span>                             <span class="tk-comment">// grass over 80% of the ground; it grows round the rocks</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>This is <a href="elements/demo/meadow.dtile"><code>elements/demo/meadow.dtile</code></a>, the tile in the picture above. A tile divided by a path or a shore uses a line and a region, and each element acts <code>at=</code> its region; see the <a href="guide/worked.html#ex-path">path example</a> on the language page.</p>
 
 <h2 id="spec">Specification</h2>

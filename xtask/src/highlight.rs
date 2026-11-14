@@ -88,6 +88,12 @@ fn is_shell(line: &str) -> bool {
         || (l.starts_with("dharmatiles ") && !l.starts_with("dharmatiles version="))
 }
 
+/// A coloured block's HTML as the text it shows (colour spans and change marks dropped, entities read): what a check of
+/// the sample must see.  `None` for a block with other markup.
+pub fn text_of(html: &str) -> Option<String> {
+    plain(html).map(|(text, _)| text)
+}
+
 /// A block's HTML as its text and its change marks; the colour spans written before are dropped.  `None` for a
 /// block with any other markup, or an entity that is not one of the four the writer escapes.
 fn plain(html: &str) -> Option<(String, Vec<Mark>)> {

@@ -66,22 +66,22 @@
 <h2>The result</h2>
 <dt-example src="examples/stack/pond.dtile" controls="wobble, seed" overlay="regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/88e458dab6e3380bf3251afc1a8c710b.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/88e458dab6e3380bf3251afc1a8c710b.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A stack of surfaces and what stands on them: dirt, rocks in the pool, water filling over what
-// is under it, then grass on the bank.
-tile size=&quot;1x1&quot; seed=97 {
-    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 2sq/3)&quot; &quot;(1sq, 0.5sq)&quot; }
-    region pool { boundedBy shore; fill &quot;(0.5sq, 0.75sq)&quot; }
-    region bank { boundedBy shore; fill &quot;(0.5sq, 0.25sq)&quot; }
-    region shoreBand { within &quot;7dmm&quot; of=shore }
-    stack {
-        dirt { pin top=&quot;[$waterBedHeight .. $groundHeight + 1dmm]&quot; at=shoreBand; pin top=&quot;$waterBedHeight&quot; at=pool }
-        scatter at=pool count=2 { rock size=&quot;6dmm .. 10dmm&quot; }
-        water
-        grass at=bank
-    }
-}
+<span class="tk-comment">// A stack of surfaces and what stands on them: dirt, rocks in the pool, water filling over what</span>
+<span class="tk-comment">// is under it, then grass on the bank.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">97</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> shore <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">2sq</span><span class="tk-string">/3)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> pool <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.75sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> bank <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.25sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> shoreBand <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">7dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>shore <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">dirt</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterBedHeight</span><span class="tk-string"> .. </span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">1dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>shoreBand<span class="tk-punct">;</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$waterBedHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>pool <span class="tk-punct">}</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span>pool <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">2</span> <span class="tk-punct">{</span> <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">6dmm</span><span class="tk-string"> .. </span><span class="tk-number">10dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+        <span class="tk-node">water</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bank
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A stack of surfaces and what stands on them: dirt, rocks in the pool, water filling over what is under it, then grass on the bank.</figcaption>

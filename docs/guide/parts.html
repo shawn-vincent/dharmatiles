@@ -65,31 +65,31 @@
 <h2>The result</h2>
 <dt-example src="examples/guide/worked-path.dtile" overlay="lines regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 2"><img class="dtx-poster" src="../posters/34789d071fd6e2c854f59377c4ea39b2.jpg" alt="The tile this source builds, from above" width="800" height="1600" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 2"><img class="dtx-poster" src="../posters/34789d071fd6e2c854f59377c4ea39b2.jpg" alt="The tile this source builds, from above" width="800" height="1600" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-use &quot;parts/grass&quot; lawn
+<span class="tk-node">use</span> <span class="tk-string">"parts/grass"</span> lawn
 
-tile size=&quot;1x2&quot; seed=7 {
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x2"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">7</span> <span class="tk-punct">{</span>
 
-    // From the middle of the south edge to the middle of the north edge,
-    // 9 design millimetres wide, wandering up to 3 off its points.
-    line trail width=&quot;9dmm&quot; wobble=&quot;3dmm&quot; { through south &quot;(0.65sq, 1sq)&quot; north }
+    <span class="tk-comment">// From the middle of the south edge to the middle of the north edge,</span>
+    <span class="tk-comment">// 9 design millimetres wide, wandering up to 3 off its points.</span>
+    <span class="tk-node">line</span> trail <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> south <span class="tk-string">"(</span><span class="tk-number">0.65sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> north <span class="tk-punct">}</span>
 
-    // Everything beside the path: one fill point on each side of it.
-    region verge { boundedBy trail; fill &quot;(0.15sq, 1sq)&quot;; fill &quot;(0.85sq, 1sq)&quot; }
+    <span class="tk-comment">// Everything beside the path: one fill point on each side of it.</span>
+    <span class="tk-node">region</span> verge <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> trail<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.15sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span><span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.85sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
 
-    stack {
-        base
-        dirt                                    // the whole tile, at the ground height
-        dirt at=trail top=&quot;$bottom + [0.4dmm .. 0.8dmm]&quot; clods=none   // the path: a second dirt along it, a little proud and smooth
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>                                    <span class="tk-comment">// the whole tile, at the ground height</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">at</span><span class="tk-punct">=</span>trail <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + [</span><span class="tk-number">0.4dmm</span><span class="tk-string"> .. </span><span class="tk-number">0.8dmm</span><span class="tk-string">]"</span> <span class="tk-property">clods</span><span class="tk-punct">=</span>none   <span class="tk-comment">// the path: a second dirt along it, a little proud and smooth</span>
 
-        scatter at=verge count=5 {
-            rock size=&quot;4dmm .. 10dmm&quot; shape=rounded buried=&quot;30%&quot;   // shape: or angular, flat
-        }
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span>verge <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">5</span> <span class="tk-punct">{</span>
+            <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4dmm</span><span class="tk-string"> .. </span><span class="tk-number">10dmm</span><span class="tk-string">"</span> <span class="tk-property">shape</span><span class="tk-punct">=</span>rounded <span class="tk-property">buried</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">30%</span><span class="tk-string">"</span>   <span class="tk-comment">// shape: or angular, flat</span>
+        <span class="tk-punct">}</span>
 
-        lawn at=verge cover=&quot;85%&quot;
-    }
-}
+        <span class="tk-node">lawn</span> <span class="tk-property">at</span><span class="tk-punct">=</span>verge <span class="tk-property">cover</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">85%</span><span class="tk-string">"</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A path of bare dirt winding up a 1&times;2 tile through grass, with rocks beside it. <code>lawn</code> is a part: it comes from <code>library/parts/grass.dtile</code> by a <code>use</code> line.</figcaption>
@@ -111,26 +111,26 @@ tile size=&quot;1x2&quot; seed=7 {
 <section class="rule">
 <h3 id="define" data-explains="dt::define dt::param"><!--gen:anchors--><span id="dt-define"></span><span id="dt-param"></span><!--/gen:anchors-->A <code>define</code> is a stack with params, called like an element</h3>
 <p>A <code>define</code> has <code>param</code> lines and one <code>stack</code>. It is called like an element; its params are set as properties, and a place (<code>at=</code>) passes through to the elements inside it. A definition can call another. A definition whose stack is one thing is itself a thing, so it can be placed with <code>at=</code> or scattered: <code>scatter count=2 { oak }</code>. Definitions that call each other in a loop are an error (<a class="codelink" href="../e/loop.html"><code>dt::loop</code></a>).</p>
-<pre data-doc><code>dharmatiles version="1.0.0"
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/parts/grass.dtile
-define lawn {
-    param length "3.5dmm .. 6.5dmm"   // blade length along the ground
-    param height "1.5dmm .. 2dmm"     // how tall a blade stands over the ground
-    param clearings 0                 // patches of bare earth per square
-    param cover "100%"                // share of the ground grassed over
+<span class="tk-comment">// library/parts/grass.dtile</span>
+<span class="tk-node">define</span> lawn <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> length <span class="tk-string">"</span><span class="tk-number">3.5dmm</span><span class="tk-string"> .. </span><span class="tk-number">6.5dmm</span><span class="tk-string">"</span>   <span class="tk-comment">// blade length along the ground</span>
+    <span class="tk-node">param</span> height <span class="tk-string">"</span><span class="tk-number">1.5dmm</span><span class="tk-string"> .. </span><span class="tk-number">2dmm</span><span class="tk-string">"</span>     <span class="tk-comment">// how tall a blade stands over the ground</span>
+    <span class="tk-node">param</span> clearings <span class="tk-number">0</span>                 <span class="tk-comment">// patches of bare earth per square</span>
+    <span class="tk-node">param</span> cover <span class="tk-string">"</span><span class="tk-number">100%</span><span class="tk-string">"</span>                <span class="tk-comment">// share of the ground grassed over</span>
 
-    stack {
-        grass length=length height=height clearings=clearings cover=cover
-    }
-}
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">grass</span> <span class="tk-property">length</span><span class="tk-punct">=</span>length <span class="tk-property">height</span><span class="tk-punct">=</span>height <span class="tk-property">clearings</span><span class="tk-punct">=</span>clearings <span class="tk-property">cover</span><span class="tk-punct">=</span>cover
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 
-// Long, tall blades: the species of 2x2-grass-tree.
-define long-grass {
-    stack {
-        lawn length="5dmm .. 9dmm" height="2dmm .. 3dmm"
-    }
-}</code></pre>
+<span class="tk-comment">// Long, tall blades: the species of 2x2-grass-tree.</span>
+<span class="tk-node">define</span> long-grass <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">lawn</span> <span class="tk-property">length</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string"> .. </span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2dmm</span><span class="tk-string"> .. </span><span class="tk-number">3dmm</span><span class="tk-string">"</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 </section>
 <section class="rule">
 <h3 id="param-kind">A param takes its kind from its default or the control it fills</h3>
@@ -138,18 +138,18 @@ define long-grass {
 </section>
 <section class="rule">
 <h3 id="expert">Expert controls live in parts files</h3>
-<pre data-doc><code>dharmatiles version="1.0.0"
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/parts/trees.dtile
-define oak {
-    stack {
-        tree top="$bottom + 59dmm" {
-            trunk height="18dmm"
-            crown width="44dmm" clumps=60 shape=wide
-            branch split="34deg" eagerness=0.6 target=0.25 balance=0.8 exponent=3 minRadius="0.9dmm"
-        }
-    }
-}</code></pre>
+<span class="tk-comment">// library/parts/trees.dtile</span>
+<span class="tk-node">define</span> oak <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">tree</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + </span><span class="tk-number">59dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span>
+            <span class="tk-node">trunk</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">18dmm</span><span class="tk-string">"</span>
+            <span class="tk-node">crown</span> <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">44dmm</span><span class="tk-string">"</span> <span class="tk-property">clumps</span><span class="tk-punct">=</span><span class="tk-number">60</span> <span class="tk-property">shape</span><span class="tk-punct">=</span>wide
+            <span class="tk-node">branch</span> <span class="tk-property">split</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">34deg</span><span class="tk-string">"</span> <span class="tk-property">eagerness</span><span class="tk-punct">=</span><span class="tk-number">0.6</span> <span class="tk-property">target</span><span class="tk-punct">=</span><span class="tk-number">0.25</span> <span class="tk-property">balance</span><span class="tk-punct">=</span><span class="tk-number">0.8</span> <span class="tk-property">exponent</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-property">minRadius</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">0.9dmm</span><span class="tk-string">"</span>
+        <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>A call's <code>top=</code> is the tree's. A tile places one oak as <code>oak at="(1sq, 1sq)" top="$bottom + 60dmm"</code>, or several as <code>scatter count=2 { oak }</code>.</p>
 </section>
 </section>

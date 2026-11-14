@@ -62,19 +62,19 @@
 <h2>The result</h2>
 <dt-example src="examples/lines/wobble.dtile" controls="wobble:0..14, seed" overlay="lines">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/edb9fcf2bfea1777a3cbc73a4b19b69e.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/edb9fcf2bfea1777a3cbc73a4b19b69e.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// The same kind of line with a larger wobble.  Change the seed: the points stay where they are
-// written, and the line wanders differently.
-tile size=&quot;1x1&quot; seed=12 {
-    line border wobble=&quot;9dmm&quot; { through &quot;(0sq, 0.5sq)&quot; &quot;(0.5sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-    region lawn { boundedBy border; fill &quot;(0.5sq, 0.1sq)&quot; }
-    stack {
-        base
-        dirt
-        grass at=lawn
-    }
-}
+<span class="tk-comment">// The same kind of line with a larger wobble.  Change the seed: the points stay where they are</span>
+<span class="tk-comment">// written, and the line wanders differently.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">12</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> border <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> lawn <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> border<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.1sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>lawn
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>The same kind of line with a larger wobble. A node is a name, then values and properties, then an optional block; anything with a unit or a range is quoted.</figcaption>

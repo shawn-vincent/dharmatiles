@@ -64,17 +64,17 @@
 <h2>The result</h2>
 <dt-example src="examples/guide/gate.dtile" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/b4d745970a92362c05047edeb6952f15.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/b4d745970a92362c05047edeb6952f15.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// Every build is held to the printability gate: watertight, nothing lost, and no more than a
-// sliver of the underside past 55 degrees from vertical.  Boulders lean out the most.
-tile size=&quot;1x1&quot; seed=5 {
-    stack {
-        base
-        dirt
-        scatter count=3 { boulder size=&quot;6dmm .. 10dmm&quot; }
-    }
-}
+<span class="tk-comment">// Every build is held to the printability gate: watertight, nothing lost, and no more than a</span>
+<span class="tk-comment">// sliver of the underside past 55 degrees from vertical.  Boulders lean out the most.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">5</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-punct">{</span> <span class="tk-node">boulder</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">6dmm</span><span class="tk-string"> .. </span><span class="tk-number">10dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A tile of dirt with boulders, built and held to the gate: every face that leans past 55&deg; would show orange, and past 65&deg; red.</figcaption>

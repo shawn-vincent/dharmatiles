@@ -63,16 +63,16 @@
 <h2>The result</h2>
 <dt-example src="examples/units/no-unit.dtile" expect-error="dt::unit">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view dtx-nothing" style="aspect-ratio: 1 / 1"><div class="dtx-nobuild"><b>Nothing builds</b><span>this source gives <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a></span></div></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view dtx-nothing" style="aspect-ratio: 1 / 1"><div class="dtx-nobuild"><b>Nothing builds</b><span>this source gives <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a></span></div></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A bare number is not a length: the wobble needs a unit, so this tile does not build.
-tile size=&quot;1x1&quot; seed=4 {
-    line stream wobble=5 { through &quot;(0sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-    stack {
-        base
-        dirt
-    }
-}
+<span class="tk-comment">// A bare number is not a length: the wobble needs a unit, so this tile does not build.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">4</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> stream <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-number">5</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A length with no unit builds nothing: the program says what to write, <code>5dmm</code> or <code>5mm</code>.</figcaption>

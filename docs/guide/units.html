@@ -64,19 +64,19 @@
 <h2>The result</h2>
 <dt-example src="examples/units/units.dtile" controls="wobble:0..14" overlay="regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/cb2f0fe620141b3074a8ef76572e410d.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/cb2f0fe620141b3074a8ef76572e410d.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// Lengths carry a unit: `dmm` is a design millimetre at the 35 mm square (it prints smaller on
-// OpenLOCK), `sq` is a square.  The wobble is 6dmm, and the band round the line is 7dmm.
-tile size=&quot;1x1&quot; seed=4 {
-    line stream wobble=&quot;6dmm&quot; { through &quot;(0sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-    region band { within &quot;7dmm&quot; of=stream }
-    stack {
-        base
-        dirt
-        grass at=band
-    }
-}
+<span class="tk-comment">// Lengths carry a unit: `dmm` is a design millimetre at the 35 mm square (it prints smaller on</span>
+<span class="tk-comment">// OpenLOCK), `sq` is a square.  The wobble is 6dmm, and the band round the line is 7dmm.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">4</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> stream <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">6dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> band <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">7dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>stream <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>band
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>Lengths carry a unit: <code>dmm</code> is a design millimetre at the 35 mm square (it prints smaller on OpenLOCK), <code>sq</code> is a square. The wobble is 6dmm and the band round the line 7dmm.</figcaption>
@@ -108,15 +108,15 @@ tile size=&quot;1x1&quot; seed=4 {
 <section class="rule">
 <h3 id="scaling">Sizes in <code>dmm</code> and <code>sq</code> scale; the printer&rsquo;s floors never do</h3>
 <p>Every size written in <code>dmm</code> or <code>sq</code> scales with the system, like a photocopy. The hidden printability floors never shrink: they come from the printer profile, <code>library/printers/default.dtile</code>, written in printed units:</p>
-<pre data-doc><code>dharmatiles version="1.0.0"
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-printer default {
-    line     "0.45mm"       // one extruded line: the thinnest wall that prints
-    layer    "0.2mm"        // one layer
-    overhang "55deg"        // what every element aims for, degrees from vertical
-    steepest "65deg"        // small patches up to here
-    gap      "0.2mm"        // the narrowest gap that stays open
-}</code></pre>
+<span class="tk-node">printer</span> default <span class="tk-punct">{</span>
+    <span class="tk-node">line</span>     <span class="tk-string">"</span><span class="tk-number">0.45mm</span><span class="tk-string">"</span>       <span class="tk-comment">// one extruded line: the thinnest wall that prints</span>
+    <span class="tk-node">layer</span>    <span class="tk-string">"</span><span class="tk-number">0.2mm</span><span class="tk-string">"</span>        <span class="tk-comment">// one layer</span>
+    <span class="tk-node">overhang</span> <span class="tk-string">"</span><span class="tk-number">55deg</span><span class="tk-string">"</span>        <span class="tk-comment">// what every element aims for, degrees from vertical</span>
+    <span class="tk-node">steepest</span> <span class="tk-string">"</span><span class="tk-number">65deg</span><span class="tk-string">"</span>        <span class="tk-comment">// small patches up to here</span>
+    <span class="tk-node">gap</span>      <span class="tk-string">"</span><span class="tk-number">0.2mm</span><span class="tk-string">"</span>        <span class="tk-comment">// the narrowest gap that stays open</span>
+<span class="tk-punct">}</span></code></pre>
 <p>Other profiles sit beside it in <code>library/printers/</code> (<code>fine</code>, and a machine by brand and model, <code>bambu/x1c</code>), and your own in a <code>printers/</code> folder beside your tiles; <code>--printer</code> chooses one. A profile holds the printer's floors, and for a machine its bed and filaments (see <a href="../printers.html">Printers</a>): the base system is chosen with <code>--system</code>, and edge and corner rounding belong to materials. Elements apply the floors after scaling, so a scaled blade, leaf or branch is never thinner than what prints.</p>
 </section>
 <section class="rule">

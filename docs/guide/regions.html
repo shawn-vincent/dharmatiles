@@ -64,19 +64,19 @@
 <h2>The result</h2>
 <dt-example src="examples/lines/closed.dtile" overlay="lines regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/21c4727f4f8a72d8fa8928c2e36e67a9.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/21c4727f4f8a72d8fa8928c2e36e67a9.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A closed line is a loop, and its inside is a region once it has a fill point.
-tile size=&quot;1x1&quot; seed=21 {
-    line ring closed=#true wobble=&quot;3dmm&quot; { through &quot;(0.3sq, 0.7sq)&quot; &quot;(0.7sq, 0.7sq)&quot; &quot;(0.5sq, 0.28sq)&quot; }
-    region pond { boundedBy ring; fill &quot;(0.5sq, 0.55sq)&quot; }
-    stack {
-        base
-        dirt
-        grass
-        scatter at=pond count=3 { rock size=&quot;4dmm .. 7dmm&quot; }
-    }
-}
+<span class="tk-comment">// A closed line is a loop, and its inside is a region once it has a fill point.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">21</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> ring <span class="tk-property">closed</span><span class="tk-punct">=</span><span class="tk-keyword">#true</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0.3sq</span><span class="tk-string">, </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.7sq</span><span class="tk-string">, </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.28sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> pond <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> ring<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.55sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span>pond <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-punct">{</span> <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4dmm</span><span class="tk-string"> .. </span><span class="tk-number">7dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A closed line is a loop, and its inside is a region once it has a fill point. Here the pond region holds three rocks.</figcaption>
@@ -92,7 +92,7 @@ tile size=&quot;1x1&quot; seed=21 {
 <section class="rule">
 <h3 id="regions" data-explains="dt::unknown-region dt::empty-region"><!--gen:anchors--><span id="dt-unknown-region"></span><span id="dt-empty-region"></span><!--/gen:anchors-->A region is the area its lines bound round its fill points</h3>
 <p>The whole tile is the default area, so an undivided tile needs no region. A region exists when lines divide the tile. It is the paint-bucket model: name the lines that bound it, then drop one or more fill points.</p>
-<pre data-fragment><code>region verge { boundedBy trail; fill "(0.15sq, 0.5sq)"; fill "(0.85sq, 0.5sq)" }</code></pre>
+<pre data-fragment><code><span class="tk-node">region</span> verge <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> trail<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.15sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span><span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.85sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span></code></pre>
 <p>Several fill points on different sides of a line join areas without union, intersection or difference. Elements act inside a region with <code>at=verge</code>.</p>
 </section>
 <section class="rule">
@@ -124,9 +124,9 @@ tile size=&quot;1x1&quot; seed=21 {
 <tr><td>region</td><td><code>region meadow { … }</code></td><td>the whole tile is what no <code>at=</code> means</td></tr>
 </tbody></table></div>
 <p>A place is written as a name or as a literal point <code>"(x, y)"</code>. A region is its fill points and its discs less what it excepts:</p>
-<pre data-fragment><code>region banks { within "4.5dmm" of=stream }                // a disc round a point, a strip beside a line, a ring round a region
-region verge { except path }                              // a region that only excepts is the whole tile less those
-region knoll { boundedBy foot; fill center }             // the paint bucket</code></pre>
+<pre data-fragment><code><span class="tk-node">region</span> banks <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">4.5dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>stream <span class="tk-punct">}</span>                <span class="tk-comment">// a disc round a point, a strip beside a line, a ring round a region</span>
+<span class="tk-node">region</span> verge <span class="tk-punct">{</span> <span class="tk-node">except</span> path <span class="tk-punct">}</span>                              <span class="tk-comment">// a region that only excepts is the whole tile less those</span>
+<span class="tk-node">region</span> knoll <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> foot<span class="tk-punct">;</span> <span class="tk-node">fill</span> center <span class="tk-punct">}</span>             <span class="tk-comment">// the paint bucket</span></code></pre>
 <p>One place word, <code>at=</code>, says where an entry goes, and it takes any place: a point, a line or a region. Each element takes the kinds that mean something to it and refuses the others with <a class="codelink" href="../e/type.html"><code>dt::type</code></a> and a help line: a body, <code>grass</code> or <code>reeds</code> fills a region (a body or <code>grass</code> may also follow a line); a wall follows a line; a thing stands at a point or fills a region, and given a line it is refused (a line has no one place on it: write a scatter); a <code>scatter</code> fills a region or spreads along a line, within <code>reach</code> either side of it, and given a point it is refused (write a region round it, <code>within "5dmm" of=knoll</code>). With no <code>at=</code> an entry covers the whole tile. <code>within</code>, <code>except</code> and <code>boundedBy</code> build places; they never use one. See <a href="../elements/point.html"><code>point</code></a>, <a href="../elements/line.html"><code>line</code></a> and <a href="../elements/region.html"><code>region</code></a>.</p>
 </section>
 </section>

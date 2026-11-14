@@ -64,16 +64,16 @@
 <h2>The result</h2>
 <dt-example src="examples/guide/flat.dtile" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/a21008965cc2cd4e303333f93d8dac12.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/a21008965cc2cd4e303333f93d8dac12.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/tests/ground/1x1-flat.dtile
-tile size=&quot;1x1&quot; {
-    about &quot;Flat ground at the edge height (3.4 mm) on one square: the first tile built end to end.&quot;
-    stack {
-        base
-        dirt top=&quot;$dirtEdgeHeight&quot; clods=none   // flat, at the edge height (3.4 mm)
-    }
-}
+<span class="tk-comment">// library/tests/ground/1x1-flat.dtile</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">about</span> <span class="tk-string">"Flat ground at the edge height (3.4 mm) on one square: the first tile built end to end."</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">clods</span><span class="tk-punct">=</span>none   <span class="tk-comment">// flat, at the edge height (3.4 mm)</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>Flat dirt at the edge height, the library&rsquo;s default for the first dirt, on one square.</figcaption>
@@ -89,15 +89,15 @@ tile size=&quot;1x1&quot; {
 <section class="rule">
 <h3 id="defaults">Every body starts from the library&rsquo;s defaults</h3>
 <p><strong>Defaults.</strong> <code>library/parts/edges.dtile</code> also holds the tops and pins every body starts with, read before the tile's own lines:</p>
-<pre data-doc><code>dharmatiles version="1.0.0"
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-defaults {
-    dirt  top="[$groundHeight .. $groundHeight + 1dmm]" { pin top="$dirtEdgeHeight" at=edges }
-    cliff top="$dirtEdgeHeight + 35dmm"
-    flagstones top="$floorHeight"                     { pin top="$floorEdgeHeight" at=edges }
-    planks top="$floorHeight"                         { pin top="$floorEdgeHeight" at=edges }
-    water top="[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]" { pin top="$waterEdgeHeight" at=edges }
-}</code></pre>
+<span class="tk-node">defaults</span> <span class="tk-punct">{</span>
+    <span class="tk-node">dirt</span>  <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$groundHeight</span><span class="tk-string"> .. </span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">1dmm</span><span class="tk-string">]"</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>edges <span class="tk-punct">}</span>
+    <span class="tk-node">cliff</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string"> + </span><span class="tk-number">35dmm</span><span class="tk-string">"</span>
+    <span class="tk-node">flagstones</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$floorHeight</span><span class="tk-string">"</span>                     <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$floorEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>edges <span class="tk-punct">}</span>
+    <span class="tk-node">planks</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$floorHeight</span><span class="tk-string">"</span>                         <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$floorEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>edges <span class="tk-punct">}</span>
+    <span class="tk-node">water</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterSurfaceHeight</span><span class="tk-string"> - </span><span class="tk-number">1.9dmm</span><span class="tk-string"> .. </span><span class="tk-name">$waterSurfaceHeight</span><span class="tk-string"> + </span><span class="tk-number">3dmm</span><span class="tk-string">]"</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$waterEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>edges <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>A tile's own <code>top=</code> replaces the default top, and its pins win over the default pin wherever they overlap. The dirt default applies to the first dirt only, so a second dirt laid over what is under it (<code>dirt top="$bottom + [0.6dmm .. 1.2dmm]"</code>) is not pulled to the rim; the water, flagstones and planks defaults apply to every water and every floor. <code>dharmatiles check --explain</code> lists every default applied and where it came from, each override (<code>override $waterBedHeight 0.4dmm → 0.8dmm</code>), each pin's share of its place, and the region tree (<a href="regions.html#region-tree">regions</a>).</p>
 </section>
 <section class="rule">

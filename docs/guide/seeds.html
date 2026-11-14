@@ -64,20 +64,20 @@
 <h2>The result</h2>
 <dt-example src="examples/values/point-range.dtile" controls="seed" overlay="points">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/95e9c6687e69a8a83858125655b06916.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/95e9c6687e69a8a83858125655b06916.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A point written as a range is drawn once from the seed: the line's middle point is anywhere
-// from 0.3sq to 0.7sq down, a different place for another seed.  Its ends stay on seams: a
-// point on a tile side is one place, never a range, so it meets the next tile's.
-tile size=&quot;1x1&quot; seed=18 {
-    line shore wobble=&quot;3dmm&quot; { through &quot;(0sq, 0.5sq)&quot; &quot;(0.5sq, 0.3sq .. 0.7sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-    region bank { boundedBy shore; fill &quot;(0.5sq, 0.1sq)&quot; }
-    stack {
-        base
-        dirt
-        grass at=bank
-    }
-}
+<span class="tk-comment">// A point written as a range is drawn once from the seed: the line's middle point is anywhere</span>
+<span class="tk-comment">// from 0.3sq to 0.7sq down, a different place for another seed.  Its ends stay on seams: a</span>
+<span class="tk-comment">// point on a tile side is one place, never a range, so it meets the next tile's.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">18</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> shore <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.3sq</span><span class="tk-string"> .. </span><span class="tk-number">0.7sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> bank <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.1sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bank
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A point written as a range is drawn once from the seed: the middle of the shore is anywhere from 0.3sq to 0.7sq down. Roll the seed and it lands somewhere else; its ends stay on seams.</figcaption>

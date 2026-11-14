@@ -59,34 +59,34 @@
 
 <h2 id="use">Using it in a tile</h2>
 <p>A pool is a bed of <a href="dirt.html"><code>dirt</code></a> pinned below the water's top, then <code>water</code>, which fills everything lower than its top over the ground listed above it:</p>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-tile size="1x1" seed=7 {
-    stack {
-        base
-        dirt top="$waterBedHeight" { pin top="$waterBedHeight" at=edges }   // the bed, 2.2dmm under the water
-        water                                                                // fills to its top, about 2.6dmm
-    }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">7</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$waterBedHeight</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$waterBedHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>edges <span class="tk-punct">}</span>   <span class="tk-comment">// the bed, 2.2dmm under the water</span>
+        <span class="tk-node">water</span>                                                                <span class="tk-comment">// fills to its top, about 2.6dmm</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>A shore is a line dividing the tile into a pool and a bank. Water is built where it is listed, like every other layer. List it after the rocks and reeds and before the grass: the water sees the rocks and rings them with chop, and the grass, listed after the water, sees the shore and keeps off the wet ground:</p>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-tile size="1x1" seed=97 {
-    line shore wobble="5dmm" { through "wsw" "e" }
-    region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
-    region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
-    region shoreBand { within "7dmm" of=shore }
-    stack {
-        base
-        dirt {
-            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand   // a bank drawn between the bed and the land
-            pin top="$waterBedHeight" at=pool                                  // later, so it wins in the pool
-        }
-        scatter at=pool count=2 { rock size="6dmm .. 10dmm" }
-        water                                                         // after the rocks: it rings them
-        grass at=bank                                                 // after the water: it sees the shore
-    }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">97</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> shore <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"wsw"</span> <span class="tk-string">"e"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> pool <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.75sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> bank <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.25sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> shoreBand <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">7dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>shore <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-punct">{</span>
+            <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterBedHeight</span><span class="tk-string"> .. </span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">1dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>shoreBand   <span class="tk-comment">// a bank drawn between the bed and the land</span>
+            <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$waterBedHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>pool                                  <span class="tk-comment">// later, so it wins in the pool</span>
+        <span class="tk-punct">}</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span>pool <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">2</span> <span class="tk-punct">{</span> <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">6dmm</span><span class="tk-string"> .. </span><span class="tk-number">10dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+        <span class="tk-node">water</span>                                                         <span class="tk-comment">// after the rocks: it rings them</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bank                                                 <span class="tk-comment">// after the water: it sees the shore</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>Each rock or reed listed before the water sends its own chop and wake, and the water goes round it; the water fills over it to its level, so a low rock may only just show. A rock listed after the water stands in it without rings. A <code>dirt</code> or <code>ground</code> listed after the water lies over it: where its top is higher than the water the earth shows (a spit, an island), where it is lower the water stays. A <code>tree</code>, <code>grass</code> or <code>wall</code> listed above the ground it stands on is refused (<a class="codelink" href="../e/order.html"><code>dt::order</code></a>), as for any element.</p>
 <p>The waves come from what is around the water: the land sends swells, each rock or reed listed before the water sends chop. They are drawn inside the water's band, scaled to fit it, so a narrower <code>top</code> gives shorter ripples and a single height a still pond.</p>
 

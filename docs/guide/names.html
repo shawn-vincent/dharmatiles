@@ -66,21 +66,21 @@
 <h2>The result</h2>
 <dt-example src="examples/guide/names.dtile" overlay="regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 2"><img class="dtx-poster" src="../posters/619d385d0e5a6ac3290b195e3cc9ccbd.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 2"><img class="dtx-poster" src="../posters/619d385d0e5a6ac3290b195e3cc9ccbd.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-tile size=&quot;2x2&quot; seed=31 {
-    let knollTop &quot;$groundHeight + 4dmm&quot;        // a plain name: this tile's own
-    let $treeLine &quot;40dmm&quot;                      // a $ name: the context, read by whatever is called below
-    override $waterBedHeight &quot;0.8dmm&quot;          // deeper water, everywhere on this tile
-    stack {
-        base
-        dirt { pin top=&quot;knollTop&quot; at=center }
-        scatter count=2 {
-            override $treeLine &quot;30dmm&quot;         // for this block only
-            tree top=&quot;$bottom + $treeLine&quot;
-        }
-    }
-}
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"2x2"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">31</span> <span class="tk-punct">{</span>
+    <span class="tk-node">let</span> knollTop <span class="tk-string">"</span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">4dmm</span><span class="tk-string">"</span>        <span class="tk-comment">// a plain name: this tile's own</span>
+    <span class="tk-node">let</span> $treeLine <span class="tk-string">"</span><span class="tk-number">40dmm</span><span class="tk-string">"</span>                      <span class="tk-comment">// a $ name: the context, read by whatever is called below</span>
+    <span class="tk-node">override</span> $waterBedHeight <span class="tk-string">"</span><span class="tk-number">0.8dmm</span><span class="tk-string">"</span>          <span class="tk-comment">// deeper water, everywhere on this tile</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"knollTop"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>center <span class="tk-punct">}</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">2</span> <span class="tk-punct">{</span>
+            <span class="tk-node">override</span> $treeLine <span class="tk-string">"</span><span class="tk-number">30dmm</span><span class="tk-string">"</span>         <span class="tk-comment">// for this block only</span>
+            <span class="tk-node">tree</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + </span><span class="tk-name">$treeLine</span><span class="tk-string">"</span>
+        <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A tile with a plain name of its own, a <code>$</code> name read by what is built below it, and a deeper water bed than the library gives.</figcaption>

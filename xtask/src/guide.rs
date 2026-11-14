@@ -156,7 +156,12 @@ fn samples(text: &str) -> Vec<(String, String)> {
             .strip_prefix("<code>")
             .and_then(|c| c.strip_suffix("</code>"))
             .unwrap_or(&body[..end]);
-        out.push((attrs, unesc(code)));
+        // the sample as the page shows it: the colour spans `cargo xtask docs` wrote are not part of it (a block with other
+        // markup is read as escaped text, and a check of it fails loudly on the markup)
+        out.push((
+            attrs,
+            crate::highlight::text_of(code).unwrap_or_else(|| unesc(code)),
+        ));
         rest = &body[end..];
     }
     out

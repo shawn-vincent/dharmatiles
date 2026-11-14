@@ -25,17 +25,17 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>line shore wobble="5dmm" { through "wsw" "e" }
-region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
-region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
-region shoreBand { within "7dmm" of=shore }
-stack {
-    base
-    dirt { pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand; pin top="$waterBedHeight" at=pool }
-    water                    // the pool fills over the dirt above it
-    reeds at=bank            // stand along the shore, leaning out over the pool
-    grass at=bank
-}</code></pre>
+<pre><code><span class="tk-node">line</span> shore <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"wsw"</span> <span class="tk-string">"e"</span> <span class="tk-punct">}</span>
+<span class="tk-node">region</span> pool <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.75sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+<span class="tk-node">region</span> bank <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> shore<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.25sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+<span class="tk-node">region</span> shoreBand <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">7dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>shore <span class="tk-punct">}</span>
+<span class="tk-node">stack</span> <span class="tk-punct">{</span>
+    <span class="tk-node">base</span>
+    <span class="tk-node">dirt</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterBedHeight</span><span class="tk-string"> .. </span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">1dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>shoreBand<span class="tk-punct">;</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$waterBedHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>pool <span class="tk-punct">}</span>
+    <span class="tk-node">water</span>                    <span class="tk-comment">// the pool fills over the dirt above it</span>
+    <span class="tk-node">reeds</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bank            <span class="tk-comment">// stand along the shore, leaning out over the pool</span>
+    <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bank
+<span class="tk-punct">}</span></code></pre>
 <p>Reeds stand along the shore: where the region they are in meets <a href="water.html"><code>water</code></a>. Each clump is several stems, each leaning toward the water.</p>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference reeds -->

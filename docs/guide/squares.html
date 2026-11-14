@@ -65,20 +65,20 @@
 <h2>The result</h2>
 <dt-example src="examples/guide/squares.dtile" overlay="squares points">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 1"><img class="dtx-poster" src="../posters/829eeb8013e488fb00c187d963616a96.jpg" alt="The tile this source builds, from above" width="800" height="400" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 1"><img class="dtx-poster" src="../posters/829eeb8013e488fb00c187d963616a96.jpg" alt="The tile this source builds, from above" width="800" height="400" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// A tile is columns by rows of squares, and every position counts from the north-west corner:
-// across, then down.  This tile is two squares across and one down; the knoll is in the second
-// square, 1.28 squares across and 0.72 down.
-tile size=&quot;2x1&quot; seed=8 {
-    point knoll &quot;(1.28sq, 0.72sq)&quot;
-    region hill { within &quot;9dmm&quot; of=knoll }
-    stack {
-        base
-        dirt
-        grass at=hill
-    }
-}
+<span class="tk-comment">// A tile is columns by rows of squares, and every position counts from the north-west corner:</span>
+<span class="tk-comment">// across, then down.  This tile is two squares across and one down; the knoll is in the second</span>
+<span class="tk-comment">// square, 1.28 squares across and 0.72 down.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"2x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">8</span> <span class="tk-punct">{</span>
+    <span class="tk-node">point</span> knoll <span class="tk-string">"(</span><span class="tk-number">1.28sq</span><span class="tk-string">, </span><span class="tk-number">0.72sq</span><span class="tk-string">)"</span>
+    <span class="tk-node">region</span> hill <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"</span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>knoll <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span> <span class="tk-property">at</span><span class="tk-punct">=</span>hill
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A tile of two squares side by side, with one point marked in the second. Every position is counted from the north-west corner.</figcaption>
@@ -113,17 +113,17 @@ tile size=&quot;2x1&quot; seed=8 {
 <tr><td><code>a($region, %)</code>, <code>a($region, deg)</code></td><td>how far round the region: 0 at east, turning towards the south as the page reads (90deg is straight down), a full turn 1 or 360deg; so a wave round it is <code>sin(360deg * $a)</code> (<code>$a</code> for short)</td></tr>
 </tbody></table></div>
 <p>The shorthands <code>$x</code> and <code>$y</code> are always the tile's, so neighbouring tiles meet; <code>$d</code> and <code>$a</code> are always the thing's own region. In a region with a hole (land round a pond) &ldquo;round&rdquo; has no meaning for <code>$a</code>, and a thing that cannot read a name (a rock sets only <code>$region</code>) is refused at <code>check</code>, at the spot.</p>
-<pre data-doc><code>dharmatiles version="1.0.0"
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-tile size="2x1" seed=4 {
-    region hill { within "[8dmm .. 14dmm]" of=center }
-    stack {
-        base
-        dirt top="$groundHeight + 0.6dmm * (1 + sin(360deg * $x / 2))"      // a swell along the tile
-        // a dome over the hill's own region, laid over the swell: up to 3dmm higher where deepest, a skin thick at its rim
-        dirt at=hill top="$bottom + 1dmm + 3dmm * (1 - $d * $d)"
-    }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"2x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">4</span> <span class="tk-punct">{</span>
+    <span class="tk-node">region</span> hill <span class="tk-punct">{</span> <span class="tk-node">within</span> <span class="tk-string">"[</span><span class="tk-number">8dmm</span><span class="tk-string"> .. </span><span class="tk-number">14dmm</span><span class="tk-string">]"</span> <span class="tk-property">of</span><span class="tk-punct">=</span>center <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">0.6dmm</span><span class="tk-string"> * (1 + </span><span class="tk-function">sin</span><span class="tk-string">(</span><span class="tk-number">360deg</span><span class="tk-string"> * </span><span class="tk-name">$x</span><span class="tk-string"> / 2))"</span>      <span class="tk-comment">// a swell along the tile</span>
+        <span class="tk-comment">// a dome over the hill's own region, laid over the swell: up to 3dmm higher where deepest, a skin thick at its rim</span>
+        <span class="tk-node">dirt</span> <span class="tk-property">at</span><span class="tk-punct">=</span>hill <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + </span><span class="tk-number">1dmm</span><span class="tk-string"> + </span><span class="tk-number">3dmm</span><span class="tk-string"> * (1 - </span><span class="tk-name">$d</span><span class="tk-string"> * </span><span class="tk-name">$d</span><span class="tk-string">)"</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 </section>
 <section class="rule">
 <h3 id="points" data-explains="dt::point dt::at"><!--gen:anchors--><span id="dt-point"></span><span id="dt-at"></span><!--/gen:anchors-->A point is across, then down, in the frame it is written in</h3>
