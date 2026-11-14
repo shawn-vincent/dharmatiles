@@ -193,7 +193,7 @@ pub static NODES: &[Node] = &[
     Node {
         name: "tile",
         about: "the tile: its size and seed, and the description the library shows",
-        doc: "language.html",
+        doc: "guide/tile.html",
         controls: &[
             c(
                 "size",
@@ -219,7 +219,7 @@ pub static NODES: &[Node] = &[
     Node {
         name: "line",
         about: "a line drawn through points: it bounds regions and places things along it",
-        doc: "language.html#lines",
+        doc: "guide/lines.html#lines",
         controls: &[
             NAME,
             c("wobble", Axis::Dmm, "how far the line may wander off its points").default("0"),
@@ -263,7 +263,7 @@ pub static NODES: &[Node] = &[
     Node {
         name: "region",
         about: "an area of the tile: what lines enclose around a fill point, what lies within a distance of a place, less what it excepts",
-        doc: "language.html#regions",
+        doc: "guide/regions.html#regions",
         controls: &[
             NAME,
             c(
@@ -283,7 +283,7 @@ pub static NODES: &[Node] = &[
     Node {
         name: "within",
         about: "a clause of a region: all that lies within a distance of a place",
-        doc: "language.html#regions",
+        doc: "guide/regions.html#regions",
         controls: &[
             c(
                 "distance",
@@ -302,7 +302,7 @@ pub static NODES: &[Node] = &[
     Node {
         name: "except",
         about: "a clause of a region: regions taken out of it",
-        doc: "language.html#regions",
+        doc: "guide/regions.html#regions",
         controls: &[c(
             "except",
             Axis::Names,

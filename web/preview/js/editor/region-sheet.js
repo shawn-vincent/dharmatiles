@@ -1,5 +1,5 @@
 // What a region's property sheet shows, from what its source says
-// (docs/language.html, "Regions"): a region is its boundedBy and fill (the paint
+// (docs/guide/regions.html): a region is its boundedBy and fill (the paint
 // bucket), plus each `within` clause, less what it `except`s.  Pure: the sheet
 // (sheet.js) adds the writers.
 

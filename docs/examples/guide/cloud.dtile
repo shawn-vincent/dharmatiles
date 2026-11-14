@@ -1,0 +1,8 @@
+dharmatiles version="1.0.0"
+
+tile size="1x1" seed=21 {
+    stack {
+        base
+        dirt top="$groundHeight + low(0dmm .. 3dmm)" bumpSize="12dmm"
+    }
+}

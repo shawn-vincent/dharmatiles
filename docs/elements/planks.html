@@ -61,8 +61,8 @@ tile size="1x1" seed=73 {
 <h3 id="rules">Rules</h3>
 <p>What this element always does. A change to one of these is a change to the element.</p>
 <ul class="rules">
-  <li>A floor is a <em>pieces body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. It starts with the top <code>$floorHeight</code> and a pin at <code>edges</code> at <code>$floorEdgeHeight</code>, flush with the edge. A floor's pins step: nothing eases between a pin and the band beside it. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
-  <li>A cloud top (<code>$floorHeight + high(-1dmm .. 0dmm)</code>) sets the odds of the heights: the heaved surface the pieces take their height and tilt from is rolled by rank under the weighting, so most are level and a few sunk (<a href="../language.html#clouds">Clouds</a>).</li>
+  <li>A floor is a <em>pieces body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. It starts with the top <code>$floorHeight</code> and a pin at <code>edges</code> at <code>$floorEdgeHeight</code>, flush with the edge. A floor's pins step: nothing eases between a pin and the band beside it. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../guide/heights.html#heights">heights</a>.</li>
+  <li>A cloud top (<code>$floorHeight + high(-1dmm .. 0dmm)</code>) sets the odds of the heights: the heaved surface the pieces take their height and tilt from is rolled by rank under the weighting, so most are level and a few sunk (<a href="../guide/clouds.html#clouds">Clouds</a>).</li>
   <li>Each piece is made to fit the band as it is made: its height and tilt are drawn from a heaved surface inside the band, then held inside the band over every node it stands on, and the finished piece is checked against the band. Nothing is trimmed afterwards. A single height is a flat floor, a wide band a heaved one.</li>
   <li>A piece that misses its band is a bug the build refuses (<a class="codelink" href="../e/band.html"><code>dt::band</code></a>). Where a pin's edge falls inside one piece the band jumps across it and the build is refused: put the pin's edge on the edge of a piece.</li>
   <li>The grain is the piece's own and never rises above the band's top: the highest of it reaches the band, and the rest lies under it.</li>
@@ -73,6 +73,12 @@ tile size="1x1" seed=73 {
 
 <h2 id="notes">Notes</h2>
 <p>Planks are wood: they paint in the wood colour of the 3MF. A <a href="wall.html"><code>wall</code></a> stands on them as on flagstones. Dirt laid on a floor lies on it like on any surface: see <a href="dirt.html">dirt</a>.</p>
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>planks</code>: <a href="../guide/heights.html">Heights</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 </body>

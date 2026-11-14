@@ -197,11 +197,14 @@ fn points_of(text: &str) -> Result<Vec<(f64, f64)>, String> {
                 .trim_matches(['(', ')'])
                 .split_once(',')
                 .ok_or_else(|| format!("bad point {p:?}"))?;
+            // a number of squares, or an exact fraction of one (`2sq/3`)
             let num = |v: &str| {
-                v.trim()
-                    .trim_end_matches("sq")
-                    .parse::<f64>()
-                    .map_err(|e| format!("{p:?}: {e}"))
+                let v = v.trim().replace("sq", "");
+                let one = |t: &str| t.parse::<f64>().map_err(|e| format!("{p:?}: {e}"));
+                match v.split_once('/') {
+                    Some((a, b)) => Ok(one(a)? / one(b)?),
+                    None => one(&v),
+                }
             };
             Ok((num(x)?, rows - num(y)?))
         })

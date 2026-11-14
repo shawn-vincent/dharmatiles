@@ -29,7 +29,7 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+<pre><code>line shore wobble="5dmm" { through "wsw" "e" }
 region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
 region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
 region reach { within "5dmm" of=shore }     // a strip beside the line
@@ -91,7 +91,13 @@ tile size=&quot;1x1&quot; seed=97 {
 <tr><td><code>except</code></td><td>region names</td><td>—</td><td>Takes those regions out. A region that only excepts starts from the whole tile.</td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>The whole tile is the default area, so an undivided tile needs no region. The words add together: the fills, then each <code>within</code>, then <code>except</code> takes away. A region is flat, a footprint and nothing else; it is also a frame (<a href="../language.html#region-tree">every thing makes a region</a>): <code>$region</code>, <code>$tile</code> and <code>parent()</code> name regions in a formula, and <code>x($region, sq)</code>, <code>d($region, %)</code> and <code>a($region, %)</code> measure in one. how high a body is over it is the body's <code>top</code> and <code>pin</code>. Bodies, grass and <code>scatter</code> take a region with <code>at=</code>; a point or a line is refused (<a class="codelink" href="../e/type.html"><code>dt::type</code></a>). A region whose fill points all lie on its lines is an error.</p>
+<p>The whole tile is the default area, so an undivided tile needs no region. The words add together: the fills, then each <code>within</code>, then <code>except</code> takes away. A region is flat, a footprint and nothing else; it is also a frame (<a href="../guide/regions.html#region-tree">every thing makes a region</a>): <code>$region</code>, <code>$tile</code> and <code>parent()</code> name regions in a formula, and <code>x($region, sq)</code>, <code>d($region, %)</code> and <code>a($region, %)</code> measure in one. how high a body is over it is the body's <code>top</code> and <code>pin</code>. Bodies, grass and <code>scatter</code> take a region with <code>at=</code>; a point or a line is refused (<a class="codelink" href="../e/type.html"><code>dt::type</code></a>). A region whose fill points all lie on its lines is an error.</p>
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>region</code>: <a href="../guide/regions.html">Regions</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 </body>

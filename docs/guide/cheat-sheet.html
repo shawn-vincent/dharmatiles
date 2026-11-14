@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cheat sheet</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Cheat sheet</h1>
+  <p class="lede">Every word of the language on one page: the units, functions, weightings, coordinates and <code>$</code> names, the library&rsquo;s heights and the seam words. Nothing here is typed: <code>cargo xtask docs</code> writes it from the program&rsquo;s own word tables, so it cannot say what the program does not.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#units">Units</a></li>
+<li><a href="#functions">Functions</a></li>
+<li><a href="#weightings">Weightings</a></li>
+<li><a href="#dollar"><code>$</code> names</a></li>
+<li><a href="#heights">The library&rsquo;s heights</a></li>
+<li><a href="#seams">Seam words</a></li>
+<li><a href="#numbers">Numbers</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html" aria-current="page">Cheat sheet</a></li>
+</ol>
+</details></nav>
+</div>
+<article class="doc guide cheat">
+<section>
+<h2 id="units">Units</h2>
+<div class="tbl"><table>
+<thead><tr><th>Unit</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><code>sq</code></td><td>a square of the grid; 35 mm on DungeonBlocks, 25.4 mm on OpenLOCK</td></tr>
+<tr><td><code>mm</code></td><td>a printed millimetre: the same on every system</td></tr>
+<tr><td><code>in</code></td><td>a printed inch, 25.4 mm: the same on every system</td></tr>
+<tr><td><code>dmm</code></td><td>design millimetre: 1/35 of a square; 1 mm on DungeonBlocks, 0.73 mm on OpenLOCK</td></tr>
+<tr><td><code>layer</code></td><td>one printed layer: the printer's layer height</td></tr>
+<tr><td><code>deg</code></td><td>a degree</td></tr>
+<tr><td><code>rad</code></td><td>a radian: 180/pi degrees</td></tr>
+<tr><td><code>pi</code></td><td>the number pi: 2 pi rad is a turn</td></tr>
+<tr><td><code>%</code></td><td>a plain fraction: <code>50%</code> is 0.5 (a length only inside a point)</td></tr>
+</tbody></table></div>
+<p class="muted small">Read it in <a href="units.html">Units and kinds</a>.</p></section>
+<section>
+<h2 id="functions">Functions</h2>
+<div class="tbl"><table>
+<thead><tr><th>Word</th><th>Takes</th><th>Kind</th></tr></thead>
+<tbody>
+<tr><td><code>sin</code></td><td>1</td><td>of numbers</td></tr>
+<tr><td><code>cos</code></td><td>1</td><td>of numbers</td></tr>
+<tr><td><code>abs</code></td><td>1</td><td>of numbers</td></tr>
+<tr><td><code>min</code></td><td>2</td><td>of numbers</td></tr>
+<tr><td><code>max</code></td><td>2</td><td>of numbers</td></tr>
+<tr><td><code>clamp</code></td><td>3</td><td>of numbers</td></tr>
+<tr><td><code>smooth</code></td><td>1</td><td>of numbers</td></tr>
+<tr><td><code>x</code></td><td>2</td><td>of a region and a unit, or a frame and two numbers</td></tr>
+<tr><td><code>y</code></td><td>2</td><td>of a region and a unit, or a frame and two numbers</td></tr>
+<tr><td><code>d</code></td><td>2</td><td>of a region and a unit, or a frame and two numbers</td></tr>
+<tr><td><code>a</code></td><td>2</td><td>of a region and a unit, or a frame and two numbers</td></tr>
+<tr><td><code>point</code></td><td>3</td><td>of a region and a unit, or a frame and two numbers</td></tr>
+<tr><td><code>polar</code></td><td>3</td><td>of a region and a unit, or a frame and two numbers</td></tr>
+<tr><td><code>parent</code></td><td>1</td><td>the region that holds a region</td></tr>
+</tbody></table></div>
+<p class="muted small">The coordinates are <code>x</code> <code>y</code> <code>d</code> <code>a</code> <code>parent</code>.</p>
+<p class="muted small">Read it in <a href="squares.html">Squares, cells and points</a>.</p></section>
+<section>
+<h2 id="weightings">Weightings</h2>
+<div class="tbl"><table>
+<thead><tr><th>Word</th><th>Numbers after the range</th></tr></thead>
+<tbody>
+<tr><td><code>flat</code></td><td>0</td></tr>
+<tr><td><code>low</code></td><td>1</td></tr>
+<tr><td><code>high</code></td><td>1</td></tr>
+<tr><td><code>bell</code></td><td>2</td></tr>
+<tr><td><code>peak</code></td><td>2</td></tr>
+<tr><td><code>ends</code></td><td>2</td></tr>
+<tr><td><code>steps</code></td><td>the weight of each step</td></tr>
+<tr><td><code>mix</code></td><td>parts and their weights in pairs</td></tr>
+</tbody></table></div>
+<p class="muted small">Read it in <a href="weightings.html">Weighted ranges</a>.</p></section>
+<section>
+<h2 id="dollar"><code>$</code> names</h2>
+<p>What an element sets where it works a height out: a body, a tree, any other element.</p>
+<div class="tbl"><table>
+<thead><tr><th>Name</th><th>Body</th><th>Tree</th><th>Other</th></tr></thead>
+<tbody>
+<tr><td><code>$x</code></td><td>sets</td><td>sets</td><td></td></tr>
+<tr><td><code>$y</code></td><td>sets</td><td>sets</td><td></td></tr>
+<tr><td><code>$d</code></td><td>sets</td><td>sets</td><td></td></tr>
+<tr><td><code>$a</code></td><td>sets</td><td>sets</td><td></td></tr>
+<tr><td><code>$bottom</code></td><td>sets</td><td>sets</td><td></td></tr>
+<tr><td><code>$tile</code></td><td></td><td></td><td></td></tr>
+<tr><td><code>$region</code></td><td>sets</td><td>sets</td><td>sets</td></tr>
+</tbody></table></div>
+<p class="muted small">Read it in <a href="names.html">Names</a>.</p></section>
+<section>
+<h2 id="heights">The library&rsquo;s heights</h2>
+<div class="tbl"><table>
+<thead><tr><th>Name</th><th>Is</th><th></th></tr></thead>
+<tbody>
+<tr><td><code>$waterBedHeight</code></td><td><code>0.4dmm</code></td><td>the bottom of standing water: two print layers</td></tr>
+<tr><td><code>$waterSurfaceHeight</code></td><td><code>2.6dmm</code></td><td>calm water</td></tr>
+<tr><td><code>$waterEdgeHeight</code></td><td><code>$waterSurfaceHeight + 0.6dmm * cos(720deg * ($x - $y))</code></td><td>water at a tile edge: two waves a square</td></tr>
+<tr><td><code>$dirtEdgeHeight</code></td><td><code>3.4dmm</code></td><td>where dirt meets a tile edge</td></tr>
+<tr><td><code>$groundHeight</code></td><td><code>5dmm</code></td><td>open land</td></tr>
+<tr><td><code>$floorHeight</code></td><td><code>7.4dmm</code></td><td>a built floor's top</td></tr>
+<tr><td><code>$floorEdgeHeight</code></td><td><code>$floorHeight</code></td><td>where a built floor meets a tile edge: flush</td></tr>
+<tr><td><code>$shortWallHeight</code></td><td><code>16.55dmm</code></td><td>half the wall top</td></tr>
+<tr><td><code>$wallHeight</code></td><td><code>33.1dmm</code></td><td>the standard wall top</td></tr>
+<tr><td><code>$tallWallHeight</code></td><td><code>72.3dmm</code></td><td></td></tr>
+</tbody></table></div>
+<p class="muted small">Read it in <a href="heights.html">Heights</a>.</p></section>
+<section>
+<h2 id="seams">Seam words</h2>
+<div class="tbl"><table>
+<thead><tr><th>Along a square&rsquo;s edge</th><th>north</th><th>south</th><th>west</th><th>east</th></tr></thead>
+<tbody>
+<tr><td>1/3 (a third)</td><td><code>nnw</code></td><td><code>ssw</code></td><td><code>wnw</code></td><td><code>ene</code></td></tr>
+<tr><td>1/2 (half)</td><td><code>n</code></td><td><code>s</code></td><td><code>w</code></td><td><code>e</code></td></tr>
+<tr><td>2/3 (two thirds)</td><td><code>nne</code></td><td><code>sse</code></td><td><code>wsw</code></td><td><code>ese</code></td></tr>
+</tbody></table></div>
+<p>The tile&rsquo;s corners: <code>nw</code> (north-west), <code>ne</code> (north-east), <code>se</code> (south-east), <code>sw</code> (south-west). They take no number.</p>
+<p class="muted small">Read it in <a href="lines.html">Lines</a>.</p></section>
+<section>
+<h2 id="numbers">Numbers</h2>
+<div class="tbl"><table>
+<tbody>
+<tr><th>Land slope</th><td>24&deg;: how steeply dirt eases unless an entry says <code>slope=</code></td></tr>
+<tr><th>Water settle</th><td>9 mm: how far water settles over what is under it</td></tr>
+</tbody></table></div>
+</section>
+</article>
+</div>
+</body>
+</html>

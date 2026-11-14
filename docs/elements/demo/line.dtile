@@ -4,7 +4,7 @@ dharmatiles version="1.0.0"
 // dividing a lawn from bare dirt.  The page shows it beside the same line
 // with wobble=0 (cargo xtask pictures makes both).
 tile size="1x1" seed=3 {
-    line border wobble="5dmm" { through "(0sq, 0.7sq)" "(0.5sq, 0.4sq)" "(1sq, 0.65sq)" }
+    line border wobble="5dmm" { through "(0sq, 2sq/3)" "(0.5sq, 0.4sq)" "(1sq, 2sq/3)" }
     region lawn { boundedBy border; fill "(0.5sq, 0.1sq)" }
     stack {
         base

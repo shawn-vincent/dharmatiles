@@ -24,12 +24,12 @@
 </div>
 <section>
 <h2 id="rule">The rule</h2>
-<blockquote class="rule"><p>A range that is drawn once per thing can say which parts of it are likelier. The range goes inside a function:</p></blockquote>
-<p class="cp-in"><a href="../language.html#dt-value">Read it in context: The tile language · Weighted ranges</a></p>
+<blockquote class="rule"><p>A range is written <code>lo .. hi</code> or <code>[lo .. hi]</code> in a control value, and the brackets go anywhere a number does: <code>size="[1dmm .. 2dmm] + [3dmm .. 4dmm]"</code> adds two ranges. In a height (a <code>top=</code>, a <code>let</code>) and inside a call, a range is always in brackets. A bare <code>lo .. hi</code> in a control value reaches over sums, so <code>1dmm .. 2dmm + 3dmm</code> is <code>1dmm .. 5dmm</code>; but when a value holds two bare ranges, or one beside a bracket or a weighting, each <code>..</code> binds tighter than the arithmetic. The brackets always say it plainly.</p></blockquote>
+<p class="cp-in"><a href="../guide/values.html#dt-value">Read it in context: Values and ranges · A quoted value is a tiny expression</a></p>
 </section>
 </div>
 <footer class="cp-foot">
-<span>Explained with it: <a href="range.html"><code>dt::range</code></a> <a href="weighting.html"><code>dt::weighting</code></a></span>
+<span>Explained with it: <a href="expr.html"><code>dt::expr</code></a></span>
 <span><a href="../errors.html">Every error code</a></span>
 <span>Offline: <code>dharmatiles explain dt::value</code></span>
 </footer>

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Names</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Names</h1>
+  <p class="lede">A name starting with <code>$</code> is read from the context; a plain name is declared where it is written.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#names">A name is a <code>$</code> name or a plain name</a></li>
+<li><a href="#let-override"><code>let</code> adds a name and <code>override</code> replaces one</a></li>
+<li><a href="#library-names">The library installs its heights as <code>$</code> names</a></li>
+<li><a href="#unknown-name">A name must be declared or set where it is read</a></li>
+<li><a href="#reserved">A plain name may not be a word of the language</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html" aria-current="page">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="let tree dirt scatter">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/guide/names.dtile" overlay="regions">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/2151c530d6114933fbe36c9c32637a38.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+tile size=&quot;1x1&quot; seed=31 {
+    let knollTop &quot;$groundHeight + 4dmm&quot;        // a plain name: this tile's own
+    let $treeLine &quot;40dmm&quot;                      // a $ name: the context, read by whatever is called below
+    override $waterBedHeight &quot;0.8dmm&quot;          // deeper water, everywhere on this tile
+    stack {
+        base
+        dirt { pin top=&quot;knollTop&quot; at=center }
+        scatter count=3 {
+            override $treeLine &quot;30dmm&quot;         // for this block only
+            tree top=&quot;$bottom + $treeLine&quot;
+        }
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A tile with a plain name of its own, a <code>$</code> name read by what is built below it, and a deeper water bed than the library gives.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>A <code>$</code> name such as <code>$groundHeight</code> is a number the surroundings supply: the library installs its heights, and each element sets the names that say where it is working. A plain name such as <code>knollTop</code> is yours, declared once with <code>let</code>.</p>
+<p><code>let $name</code> adds a name for a block, and <code>override $name</code> changes one for that block and everything called from it. Neither can touch a name an element sets, because that would change where it is.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="names">A name is a <code>$</code> name or a plain name</h3>
+<p>A name is one of two kinds, and the <code>$</code> says which.</p>
+<div class="tbl"><table>
+<thead><tr><th>Kind</th><th>Written</th><th>Where its value comes from</th></tr></thead>
+<tbody>
+<tr><td><code>$</code> names</td><td><code>$x</code>, <code>$d</code>, <code>$bottom</code>, <code>$region</code>, <code>$groundHeight</code></td><td>The <strong>context</strong>: a record of <code>$</code> names that every formula is called with. The library installs its heights in it, an element sets the position names at each point it works out, and a <code>let $name</code> adds one of your own. Whatever calls a formula or a definition passes its context on, changed only where it says so.</td></tr>
+<tr><td>plain names</td><td><code>knollTop</code>, a definition's <code>length</code></td><td>The place they were written: a tile's own <code>let</code>, a definition's <code>param</code>. They are never passed to a definition you call.</td></tr>
+</tbody></table></div>
+<p>The two are separate namespaces: a parameter called <code>length</code> never hides anything with a <code>$</code>, and <code>$high</code> is a fine name though <code>high</code> is a weighting.</p>
+</section>
+<section class="rule">
+<h3 id="let-override"><code>let</code> adds a name and <code>override</code> replaces one</h3>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Does</th><th>Error when</th></tr></thead>
+<tbody>
+<tr><td><code>let $treeLine "40dmm"</code></td><td>puts a new <code>$</code> name in the context, for everything in this block</td><td>the context already has it: use <code>override</code> (<a class="codelink" href="../e/name.html"><code>dt::name</code></a>)</td></tr>
+<tr><td><code>override $groundHeight "6dmm"</code></td><td>replaces a <code>$</code> name for this block and everything called from it; when the block ends the old value is back</td><td>no caller installed it (the message offers the nearest name), or an element sets it itself (<code>$x $y $d $a $bottom $region $tile</code>)</td></tr>
+<tr><td><code>let knollTop "$groundHeight + 4dmm"</code></td><td>declares a plain name, once</td><td>the name is already declared, or is a word of the language</td></tr>
+</tbody></table></div>
+<p><code>let</code> and <code>override</code> work at the top of a tile and inside any block (<code>scatter { override $treeLine "40dmm"; tree … }</code>), and take effect for the rest of that block, the entry they sit in included. A <code>let</code> holds a formula, read where it is used: <code>let $floorEdgeHeight "$floorHeight"</code> follows an <code>override $floorHeight</code> made below it. A <code>$</code> name read where no caller installed it is <a class="codelink" href="../e/unknown-name.html"><code>dt::unknown-name</code></a> at that spot, and <code>check</code> works out which names each part reads at each place it is called, so a part that reads a name its caller does not have is refused at that call. Plain names are camelCase, since a hyphen would read as subtraction (<a class="codelink" href="../e/name.html"><code>dt::name</code></a>).</p>
+</section>
+<section class="rule">
+<h3 id="library-names">The library installs its heights as <code>$</code> names</h3>
+<p>The library's heights come from <code>library/parts/heights.dtile</code> and every file sees them without a <code>use</code> line, as <code>$</code> names in design millimetres above zero (the top of the <a href="../elements/base.html">base</a>):</p>
+<pre data-fragment><code>let $waterBedHeight     "0.4dmm"            // the bottom of standing water: two print layers
+let $waterSurfaceHeight "2.6dmm"            // calm water
+let $waterEdgeHeight    "$waterSurfaceHeight + 0.6dmm * cos(720deg * ($x - $y))"   // water at a tile edge: two waves a square
+let $dirtEdgeHeight     "3.4dmm"            // where dirt meets a tile edge
+let $groundHeight       "5dmm"              // open land
+let $floorHeight        "7.4dmm"            // a built floor's top
+let $floorEdgeHeight    "$floorHeight"      // where a built floor meets a tile edge: flush
+let $shortWallHeight    "16.55dmm"          // half the wall top
+let $wallHeight         "33.1dmm"           // the standard wall top
+let $tallWallHeight     "72.3dmm"</code></pre>
+<p>Beside them an element sets the names a formula may read at each point it works out:</p>
+<div class="tbl"><table>
+<thead><tr><th>Name</th><th>Is</th><th>Kind</th></tr></thead>
+<tbody>
+<tr><td><code>$x</code>, <code>$y</code></td><td>where the point is in the <em>tile</em>, in squares from its north-west corner: <code>x($tile, sq)</code> and <code>y($tile, sq)</code></td><td>plain number</td></tr>
+<tr><td><code>$d</code></td><td>how far in from the edge of the thing's own region: 0 wherever deepest in the interior, 1 right at the edge</td><td>plain fraction</td></tr>
+<tr><td><code>$a</code></td><td>how far round the region: 0 at east, turning towards the south as the page reads (a quarter is straight down), 1 a full turn</td><td>plain fraction</td></tr>
+<tr><td><code>$bottom</code></td><td>what the thing stands on at that point: the surface below it in the stack (the base for a first dirt, the dirt under a second, the ground at a tree's foot, a water's bed)</td><td>length</td></tr>
+<tr><td><code>$region</code></td><td>the region of the thing being built (<a href="regions.html#region-tree">regions</a>)</td><td>region</td></tr>
+<tr><td><code>$tile</code></td><td>the whole tile, the root region</td><td>region</td></tr>
+</tbody></table></div>
+<p>A body (<code>dirt</code>, <code>water</code>, <code>flagstones</code>, <code>planks</code>, <code>cliff</code>) sets all of these at each point of its region. A tree sets all of these at each branch tip, with <code>$region</code> its own disc round the trunk and <code>$bottom</code> the ground at its foot; every other element sets <code>$region</code>. <code>check</code> knows this before any build: reading a name the element does not set is <a class="codelink" href="../e/unknown-name.html"><code>dt::unknown-name</code></a> at the exact spot, with what the element does set. Because <code>$x</code> and <code>$y</code> are the tile's, neighbouring tiles' heights meet, like the water's shared tide. Local position in a region is one call away: <code>x($region, sq)</code>.</p>
+</section>
+<section class="rule">
+<h3 id="unknown-name" data-explains="dt::unknown-name"><!--gen:anchors--><span id="dt-unknown-name"></span><!--/gen:anchors-->A name must be declared or set where it is read</h3>
+<p>A height, a <code>$</code> name or a place that nothing declares or sets is refused, with the nearest name: <code>nothing installed `$groundHeihgt` where this is read</code>, with the help <code>did you mean $groundHeight?</code></p>
+</section>
+<section class="rule">
+<h3 id="reserved" data-explains="dt::name"><!--gen:anchors--><span id="dt-name"></span><!--/gen:anchors-->A plain name may not be a word of the language</h3>
+<p>A plain name (a <code>let</code>, a <code>param</code>) may not be a word of the language; it is a <a class="codelink" href="../e/name.html"><code>dt::name</code></a> error that names the word and its kind.</p>
+<div class="tbl"><table>
+<tbody>
+<tr><th>coordinates</th><td><code>x y d a parent</code></td></tr>
+<tr><th>functions</th><td><code>sin cos abs min max clamp smooth point polar</code></td></tr>
+<tr><th>weightings</th><td><code>flat low high bell peak ends steps mix</code></td></tr>
+<tr><th>units</th><td><code>sq mm in layer deg rad pi dmm</code></td></tr>
+</tbody></table></div>
+<p><code>let a 3</code> is refused, with help to choose another name. Node names (<code>line</code>, <code>layer</code> in a printer file) are not plain names, so they keep theirs.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/unknown-name.html"><code>dt::unknown-name</code></a> Nothing declares or sets that name <a class="cp-in" href="#unknown-name">The rule</a></li>
+<li><a class="codelink" href="../e/name.html"><code>dt::name</code></a> A plain name is declared twice or is a word of the language <a class="cp-in" href="#reserved">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="heights.html">heights</a>, where the library&rsquo;s names are used.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

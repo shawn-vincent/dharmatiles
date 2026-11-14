@@ -156,7 +156,7 @@ impl Decoder<'_> {
                     "not a pair",
                 )
                 .help = Some(
-                    "write \"(0.65sq, 1sq)\": across from the west edge, down from the north"
+                    "write \"(0.65sq, 0.5sq)\": across from the west edge, down from the north"
                         .to_owned(),
                 );
                 return None;
@@ -185,7 +185,7 @@ impl Decoder<'_> {
                 };
                 format!("write it with parentheses and units: \"({}, {})\"", unit(a), unit(b))
             }
-            _ => "write \"(0.65sq, 1sq)\": parentheses, across then down, each with its unit; or `point($tile, 50%, 0)`".to_owned(),
+            _ => "write \"(0.65sq, 0.5sq)\": parentheses, across then down, each with its unit; or `point($tile, 50%, 0)`".to_owned(),
         };
         self.err(
             dt_lang::codes::POINT,

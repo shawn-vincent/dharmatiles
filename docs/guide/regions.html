@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Regions</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Regions</h1>
+  <p class="lede">A region is an area of the tile: lines bound it, fill points say which side, and elements act inside it with <code>at=</code>.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#regions">A region is the area its lines bound round its fill points</a></li>
+<li><a href="#region-tree">Every thing makes a region, and regions nest</a></li>
+<li><a href="#named-places">A place is a point, a line or a region</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html" aria-current="page">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="region line point">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/lines/closed.dtile" overlay="lines regions">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/21c4727f4f8a72d8fa8928c2e36e67a9.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A closed line is a loop, and its inside is a region once it has a fill point.
+tile size=&quot;1x1&quot; seed=21 {
+    line ring closed=#true wobble=&quot;3dmm&quot; { through &quot;(0.3sq, 0.7sq)&quot; &quot;(0.7sq, 0.7sq)&quot; &quot;(0.5sq, 0.28sq)&quot; }
+    region pond { boundedBy ring; fill &quot;(0.5sq, 0.55sq)&quot; }
+    stack {
+        base
+        dirt
+        grass
+        scatter at=pond count=3 { rock size=&quot;4dmm .. 7dmm&quot; }
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A closed line is a loop, and its inside is a region once it has a fill point. Here the pond region holds three rocks.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>The whole tile is the default area, so a tile with no lines needs no regions. When lines divide the tile, you name the area you mean by naming the lines around it and dropping a point inside, like a paint bucket.</p>
+<p>Everything you build also makes a region of its own, a tree&rsquo;s crown or a rock&rsquo;s disc, and regions nest. That is how a formula can ask where it is inside the thing it belongs to.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="regions" data-explains="dt::unknown-region dt::empty-region"><!--gen:anchors--><span id="dt-unknown-region"></span><span id="dt-empty-region"></span><!--/gen:anchors-->A region is the area its lines bound round its fill points</h3>
+<p>The whole tile is the default area, so an undivided tile needs no region. A region exists when lines divide the tile. It is the paint-bucket model: name the lines that bound it, then drop one or more fill points.</p>
+<pre data-fragment><code>region verge { boundedBy trail; fill "(0.15sq, 0.5sq)"; fill "(0.85sq, 0.5sq)" }</code></pre>
+<p>Several fill points on different sides of a line join areas without union, intersection or difference. Elements act inside a region with <code>at=verge</code>.</p>
+</section>
+<section class="rule">
+<h3 id="region-tree" data-explains="dt::region"><!--gen:anchors--><span id="dt-region"></span><!--/gen:anchors-->Every thing makes a region, and regions nest</h3>
+<p>Every frame is a region, and regions nest. A point or a line says where a thing goes; the thing's size makes its region: a tree's crown round its point, a rock's disc, a wall's strip along its line, a scatter's area. A <code>$region</code> is the region of the thing being built (at a declaration, the region the declaration sits in), <code>$tile</code> is the root, and <code>parent($region)</code> is the region containing it.</p>
+<ul>
+  <li>The tile has no parent: <code>parent($tile)</code> is <a class="codelink" href="../e/region.html"><code>dt::region</code></a> &ldquo;the tile has no parent&rdquo;.</li>
+  <li>A named region's parent is the smallest strictly larger region that holds its first fill point, else the tile. Regions that only share a line, like a pool and its bank, are siblings.</li>
+  <li>A <code>scatter</code> is a region of its own, its <code>at=</code> area (or the tile); the things it places are its children: a tree in a scatter at tile level has the scatter, then <code>$tile</code>.</li>
+  <li>A body, coat or scatter with no region of its own acts in its <code>at=</code> region, else the tile.</li>
+</ul>
+<p>A region is its own kind of value: it goes to <code>parent()</code> and to the coordinate calls, never to arithmetic. <code>check</code> refuses a read of a parent that is not there before any build, at the exact spot. <code>dharmatiles check --explain</code> prints the tree:</p>
+<pre data-fragment><code>regions
+  $tile: tile, parent none
+    scatter (entry 2): scatter, parent $tile
+      tree (entry 2, thing 1): placed disc, 18.0 mm across, parent scatter (entry 2)
+      rock (entry 2, thing 2): placed disc, 6.0 mm across, parent scatter (entry 2)
+  entry 1 `dirt` acts in $tile
+  entry 2 `scatter` acts in scatter (entry 2)</code></pre>
+</section>
+<section class="rule">
+<h3 id="named-places">A place is a point, a line or a region</h3>
+<p>A place is a point, a line or a region, all flat: they say where, never how high. Every tile has them built in, named in camelCase:</p>
+<div class="tbl"><table>
+<thead><tr><th>Kind</th><th>Declared</th><th>Built in on every tile</th></tr></thead>
+<tbody>
+<tr><td>point</td><td><code>point knoll "(0.28sq, 0.72sq)"</code></td><td><code>northWestCorner northCenter northEastCorner westCenter center eastCenter southWestCorner southCenter southEastCorner</code></td></tr>
+<tr><td>line</td><td><code>line stream wobble="4dmm" { through … }</code>, <code>closed=#true</code> for a loop</td><td><code>northEdge eastEdge southEdge westEdge</code>, and <code>edges</code> for all four</td></tr>
+<tr><td>region</td><td><code>region meadow { … }</code></td><td>the whole tile is what no <code>at=</code> means</td></tr>
+</tbody></table></div>
+<p>A place is written as a name or as a literal point <code>"(x, y)"</code>. A region is its fill points and its discs less what it excepts:</p>
+<pre data-fragment><code>region banks { within "4.5dmm" of=stream }                // a disc round a point, a strip beside a line, a ring round a region
+region verge { except path }                              // a region that only excepts is the whole tile less those
+region knoll { boundedBy foot; fill center }             // the paint bucket</code></pre>
+<p>One place word, <code>at=</code>, says where an entry goes, and it takes any place: a point, a line or a region. Each element takes the kinds that mean something to it and refuses the others with <a class="codelink" href="../e/type.html"><code>dt::type</code></a> and a help line: a body, <code>grass</code> or <code>reeds</code> fills a region (a body or <code>grass</code> may also follow a line); a wall follows a line; a thing stands at a point or fills a region, and given a line it is refused (a line has no one place on it: write a scatter); a <code>scatter</code> fills a region or spreads along a line, within <code>reach</code> either side of it, and given a point it is refused (write a region round it, <code>within "5dmm" of=knoll</code>). With no <code>at=</code> an entry covers the whole tile. <code>within</code>, <code>except</code> and <code>boundedBy</code> build places; they never use one. See <a href="../elements/point.html"><code>point</code></a>, <a href="../elements/line.html"><code>line</code></a> and <a href="../elements/region.html"><code>region</code></a>.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/unknown-region.html"><code>dt::unknown-region</code></a> No region has that name <a class="cp-in" href="#regions">The rule</a></li>
+<li><a class="codelink" href="../e/empty-region.html"><code>dt::empty-region</code></a> A region covers nothing <a class="cp-in" href="#regions">The rule</a></li>
+<li><a class="codelink" href="../e/region.html"><code>dt::region</code></a> A region cannot be made: it names a place that is not there, or leads back to itself <a class="cp-in" href="#region-tree">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="stack.html">the stack</a>, where the tile&rsquo;s elements are listed and built.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

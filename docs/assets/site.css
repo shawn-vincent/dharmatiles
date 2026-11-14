@@ -310,3 +310,18 @@ blockquote.rule li { margin: 0 0 4px; }
 a.codelink { text-decoration: none; }
 a.codelink code { color: var(--accent); }
 a.codelink:hover code { color: var(--accent-hi); text-decoration: underline; text-underline-offset: 3px; }
+
+/* the guide: a rule is a section of its own; long code scrolls inside its box, never past the page */
+article.guide section.rule { margin-top: 8px; }
+article.guide section.rule > h3 { margin-top: 28px; }
+.not-yet { border-left: 3px solid var(--muted); padding: 2px 0 2px 14px; color: var(--muted); max-width: 72ch; }
+.toc-h { font: 600 13.5px/1.3 var(--f-body); color: var(--muted); margin: 14px 0 6px; }
+nav.toc ol.guide-pages { margin-bottom: 4px; }
+nav.toc ol.guide-pages a[aria-current="page"] { color: var(--ink); font-weight: 600; }
+ul.explains { list-style: none; padding: 0; display: grid; gap: 6px; }
+.guide-map { padding-left: 1.4em; display: grid; gap: 6px; }
+dt-example { display: block; min-width: 0; max-width: 100%; }
+.dtx-grid > * { min-width: 0; }
+.hero code, .hero pre, article.doc pre { max-width: 100%; }
+.hero code { overflow-wrap: anywhere; }
+article.doc pre { overflow-x: auto; }

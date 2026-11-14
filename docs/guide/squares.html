@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Squares, cells and points</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Squares, cells and points</h1>
+  <p class="lede">A tile is a grid of squares; every position in it counts from the north-west corner, across then down.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#squares">A tile is columns by rows of squares</a></li>
+<li><a href="#places">Every position counts from the north-west corner</a></li>
+<li><a href="#coordinates">A coordinate is a function of a region and a unit</a></li>
+<li><a href="#points">A point is across, then down, in the frame it is written in</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html" aria-current="page">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="tile point">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/guide/squares.dtile" overlay="squares points">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 1"><img class="dtx-poster" src="../posters/829eeb8013e488fb00c187d963616a96.jpg" alt="The tile this source builds, from above" width="800" height="400" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A tile is columns by rows of squares, and every position counts from the north-west corner:
+// across, then down.  This tile is two squares across and one down; the knoll is in the second
+// square, 1.28 squares across and 0.72 down.
+tile size=&quot;2x1&quot; seed=8 {
+    point knoll &quot;(1.28sq, 0.72sq)&quot;
+    region hill { within &quot;9dmm&quot; of=knoll }
+    stack {
+        base
+        dirt
+        grass at=hill
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A tile of two squares side by side, with one point marked in the second. Every position is counted from the north-west corner.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>The whole printed piece is a tile. It is made of squares, the same size as the grid you play on: 35 mm for DungeonBlocks, 25.4 mm for OpenLOCK. A tile of <code>size="2x1"</code> is two squares across and one down.</p>
+<p>Inside a tile you point at places by saying how far across and how far down. Those two numbers, with their units, are a point; a few functions give the same numbers back for any region, which is how heights follow the land.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="squares">A tile is columns by rows of squares</h3>
+<p>The whole printed output is a <strong>tile</strong>; one 35 mm DungeonBlocks unit (25.4 mm for OpenLOCK) of it is a <strong>square</strong>; one subdivision of a square that the program works in is a <strong>cell</strong>. <code>sq</code> is the unit for a square. <code>size="2x1"</code> is columns first, and the default is <code>"1x1"</code>. A square is never called a tile, and densities are per square.</p>
+</section>
+<section class="rule">
+<h3 id="places">Every position counts from the north-west corner</h3>
+<p>A tile is rows and columns. Every position counts from the <strong>north-west corner</strong>: across the row from the west edge, then down the column from the north edge. A <code>size="2x1"</code> tile is 2 squares across and 1 down.</p>
+</section>
+<section class="rule">
+<h3 id="coordinates">A coordinate is a function of a region and a unit</h3>
+<p>A coordinate is a function of a region and a unit. <code>x</code> and <code>y</code> are where a point is (across, down), <code>d</code> is how far in from the edge, <code>a</code> is how far round. The unit says what to count in, and divides, so the result is a plain number.</p>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>x($tile, sq)</code>, <code>y($tile, sq)</code></td><td>squares from the tile's north-west corner (<code>$x</code> and <code>$y</code> for short)</td></tr>
+<tr><td><code>x($region, sq)</code>, <code>y($region, sq)</code></td><td>squares from the region's own north-west corner</td></tr>
+<tr><td><code>x($region, %)</code>, <code>y($region, %)</code></td><td>0 at the west (north) edge of the region's bounding box and 1 at its east (south): across the region by share. On <code>$tile</code> it scales with the tile's size, so a 2×2 and a 4×4 give different values the same distance from the corner; anything that must meet across tiles, like the tide, stays in <code>sq</code></td></tr>
+<tr><td><code>d($region, %)</code></td><td>0 wherever deepest in the interior, 1 right at the edge, scaled by the deepest part of each separate piece (a puddle beside a lake has its own 0). A region thinner than a cell is given a depth of one cell (<code>$d</code> for short)</td></tr>
+<tr><td><code>d($region, mm)</code></td><td>the distance in from the edge in printed millimetres: 0 at the edge, rising inward</td></tr>
+<tr><td><code>a($region, %)</code>, <code>a($region, deg)</code></td><td>how far round the region: 0 at east, turning towards the south as the page reads (90deg is straight down), a full turn 1 or 360deg; so a wave round it is <code>sin(360deg * $a)</code> (<code>$a</code> for short)</td></tr>
+</tbody></table></div>
+<p>The shorthands <code>$x</code> and <code>$y</code> are always the tile's, so neighbouring tiles meet; <code>$d</code> and <code>$a</code> are always the thing's own region. In a region with a hole (land round a pond) &ldquo;round&rdquo; has no meaning for <code>$a</code>, and a thing that cannot read a name (a rock sets only <code>$region</code>) is refused at <code>check</code>, at the spot.</p>
+<pre data-doc><code>dharmatiles version="1.0.0"
+
+tile size="2x1" seed=4 {
+    region hill { within "[8dmm .. 14dmm]" of=center }
+    stack {
+        base
+        dirt top="$groundHeight + 0.6dmm * (1 + sin(360deg * $x / 2))"      // a swell along the tile
+        // a dome over the hill's own region, laid over the swell: up to 3dmm higher where deepest, a skin thick at its rim
+        dirt at=hill top="$bottom + 1dmm + 3dmm * (1 - $d * $d)"
+    }
+}</code></pre>
+</section>
+<section class="rule">
+<h3 id="points" data-explains="dt::point dt::at"><!--gen:anchors--><span id="dt-point"></span><span id="dt-at"></span><!--/gen:anchors-->A point is across, then down, in the frame it is written in</h3>
+<p>A point has two halves, across and down, written in parentheses and quoted, each half a length: <code>"(0.65sq, 0.5sq)"</code>. A half may be in any length unit, or a <code>%</code>, which here is a length: the share of the frame's width (or height), <code>"(50%, 0.25sq)"</code>. A tuple is a point in the frame it is written in: the tile, unless it sits in a pin of a body that acts in a named region, where it is that region's own corner.</p>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>"(0.65sq, 0.5sq)"</code></td><td>across 0.65 squares from the west edge, down half a square from the north edge</td></tr>
+<tr><td><code>"(50%, 2dmm)"</code></td><td>half way across, 2 design millimetres down</td></tr>
+<tr><td><code>point($tile, 25%, 75%)</code></td><td>the frame always named: <code>$tile</code>, <code>$region</code> (the region the point sits in) or <code>parent($region)</code>, then across and down</td></tr>
+<tr><td><code>polar($tile, 40%, 90deg)</code></td><td>out from the frame's deepest point by a share of its depth, at an angle round it (0 east, 90deg straight down)</td></tr>
+<tr><td><code>north</code>, <code>southEast</code>… a point's name</td><td>corner and edge words, the built-in names and declared points, unchanged</td></tr>
+</tbody></table></div>
+<p>A point outside the tile, or outside the region it is written in, is <a class="codelink" href="../e/point.html"><code>dt::point</code></a> at <code>check</code>, with the box it should be inside. In a <code>line</code>'s <code>through</code> and a region's <code>fill</code> either half may be a range, drawn once from the tile seed (<code>"(0sq .. 0.1sq, 0.3sq .. 0.5sq)"</code>, or a weighting such as <code>bell(…)</code>), keyed by the line's name and the point's place in the list, so another seed draws another line and editing one point moves no other. A thing's <code>at=</code> is one fixed point, not a range. A part, which has no tile of its own, writes points the same way and they are worked out at each place it is called.</p>
+<div class="tbl"><table>
+<thead><tr><th>Thing</th><th>Written as</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td>Tile size</td><td><code>size="2x1"</code></td><td>Columns first. Default <code>"1x1"</code>.</td></tr>
+<tr><td>Edge</td><td><code>north</code>, <code>south</code>, <code>east</code>, <code>west</code></td><td>For a thing, a point: the middle of that edge. For a wall, surface or scatter, a line: that edge.</td></tr>
+<tr><td>Edge path</td><td><code>at="north west"</code></td><td>Several edges in order, quoted. Two edges meeting make a corner.</td></tr>
+<tr><td>Corner</td><td><code>northWestCorner</code>, <code>southEastCorner</code>, …</td><td>A point at that corner.</td></tr>
+</tbody></table></div>
+<p>A wall or cliff on a tile edge always stands inside the tile, its outer face flush with the edge. That is the DungeonBlocks slab standard, and it means an author never has to work out which side of a line a wall is on.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/point.html"><code>dt::point</code></a> A point is outside the tile or the region it is written in <a class="cp-in" href="#points">The rule</a></li>
+<li><a class="codelink" href="../e/at.html"><code>dt::at</code></a> No point is called that <a class="cp-in" href="#points">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="lines.html">lines</a>, which run through points.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

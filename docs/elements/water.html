@@ -72,7 +72,7 @@ tile size="1x1" seed=7 {
 <pre><code>dharmatiles version="1.0.0"
 
 tile size="1x1" seed=97 {
-    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    line shore wobble="5dmm" { through "wsw" "e" }
     region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
     region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
     region shoreBand { within "7dmm" of=shore }
@@ -154,13 +154,13 @@ tile size="1x1" seed=97 {
 <h3 id="rules">Rules</h3>
 <p>What this element always does. A change to one of these is a change to the element.</p>
 <ul class="rules">
-  <li>A cloud top (<code>$waterSurfaceHeight + bell(-0.8dmm .. 0.8dmm)</code>) makes the waves one smooth surface whose heights come up as often as the weighting says: calm, with rare crests. The edge pin keeps the water flush with its neighbours (<a href="../language.html#clouds">Clouds</a>).</li>
+  <li>A cloud top (<code>$waterSurfaceHeight + bell(-0.8dmm .. 0.8dmm)</code>) makes the waves one smooth surface whose heights come up as often as the weighting says: calm, with rare crests. The edge pin keeps the water flush with its neighbours (<a href="../guide/clouds.html#clouds">Clouds</a>).</li>
   <li>Water covers its whole area up to its top; the shoreline comes from the dirt beneath it.</li>
   <li>The water is a layer of the terrain over the ground, not a skin: the shore is cut exactly where the water's top meets the ground, and where the water meets a tile's side the side shows its whole depth in water colour.</li>
   <li>Waves come from the obstacles: land sends strong ones, rocks and reeds listed before the water weak ones and small rings. Each kind of object sends its own range of wavelengths.</li>
   <li>A source's waves grow less clear with distance; open corners are very faint sources.</li>
   <li>Ripples are smoother at the shore and round rocks, and stroke ends fade like ripples.</li>
-  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. Every water starts with the library's top, <code>[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]</code>, and a pin at <code>edges</code> at <code>$waterEdgeHeight</code>, the tide. Water is built where it is listed, over the ground listed above it: what is listed after it stands in it or on the shore and reads it (grass keeps off the wet ground), and a dirt or ground listed after it lies over it. It eases over 9 mm round a pin. <code>check</code> reads and solves these and <code>build</code> fills them. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. Every water starts with the library's top, <code>[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]</code>, and a pin at <code>edges</code> at <code>$waterEdgeHeight</code>, the tide. Water is built where it is listed, over the ground listed above it: what is listed after it stands in it or on the shore and reads it (grass keeps off the wet ground), and a dirt or ground listed after it lies over it. It eases over 9 mm round a pin. <code>check</code> reads and solves these and <code>build</code> fills them. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../guide/heights.html#heights">heights</a>.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>
@@ -201,6 +201,12 @@ tile size="1x1" seed=97 {
 
 
 
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>water</code>: <a href="../guide/stack.html">The stack</a>, <a href="../guide/heights.html">Heights</a>, <a href="../guide/clouds.html">Clouds</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 <script src="../assets/howto.js"></script>

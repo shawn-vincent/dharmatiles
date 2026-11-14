@@ -1,0 +1,18 @@
+dharmatiles version="1.0.0"
+
+tile size="1x1" seed=62 {
+    point crossing "(0.65sq, 0.5sq)"
+    line stream wobble="0.5dmm" { through westCenter eastCenter }
+    region banks { within "11.5dmm" of=stream }
+    region bed   { within "1.5dmm" of=stream }
+    stack {
+        base
+        dirt {
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=banks       // anywhere from the bed to the land
+            pin top="[$waterBedHeight .. $waterBedHeight + 0.3dmm]" at=bed     // later, so it wins in the bed
+        }
+        rock size="6dmm .. 10dmm" at=crossing
+        water top="[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]" at=banks
+        grass
+    }
+}

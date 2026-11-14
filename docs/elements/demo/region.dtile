@@ -3,10 +3,10 @@ dharmatiles version="1.0.0"
 // The region page's picture: two lines make three regions, each its own
 // surface.
 tile size="1x1" seed=8 {
-    line upper wobble="3dmm" { through "(0sq, 0.5sq)" "(1sq, 0.44sq)" }
-    line lower wobble="4dmm" { through "(0sq, 0.8sq)" "(1sq, 0.74sq)" }
+    line upper wobble="3dmm" { through "wnw" "ene" }
+    line lower wobble="4dmm" { through "wsw" "ese" }
     region yard { boundedBy upper; fill "(0.5sq, 0.15sq)" }
-    region bank { boundedBy upper lower; fill "(0.5sq, 0.62sq)" }
+    region bank { boundedBy upper lower; fill "(0.5sq, 0.5sq)" }
     region pool { boundedBy lower; fill "(0.5sq, 0.9sq)" }
     region shoreBand { within "7dmm" of=lower }
     stack {

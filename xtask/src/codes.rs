@@ -523,7 +523,7 @@ fn plain(html: &str) -> String {
 }
 
 /// Text made safe for HTML, with each `code` in backticks set as code.
-fn inline(s: &str) -> String {
+pub fn inline(s: &str) -> String {
     let mut out = String::new();
     for (i, part) in s.split('`').enumerate() {
         let esc = part

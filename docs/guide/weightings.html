@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Weighted ranges</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Weighted ranges</h1>
+  <p class="lede">A weighting wraps a range and says which parts of it come up more often.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#weighted">A weighted range says which parts of a range are likelier</a></li>
+<li><a href="#weight-numbers">The numbers after the range are plain, and have limits</a></li>
+<li><a href="#weight-lists">A list is the values written, each as likely as its weight</a></li>
+<li><a href="#weight-mix">A mix blends weightings over one range</a></li>
+<li><a href="#weight-wraps">A weighting wraps a plain range</a></li>
+<li><a href="#weight-controls">Every control that draws takes a weighting</a></li>
+<li><a href="#weight-top">A weighted range on a top is a cloud</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html" aria-current="page">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="scatter rock stone">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/values/weighted.dtile" controls="seed">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/de77e71fbbe697a697c1b974c3ad2d8b.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A weighted range says which sizes are likelier: `low` favours the small end 4 to 1, so there
+// are many small stones and a few big ones.
+tile size=&quot;1x1&quot; seed=7 {
+    stack {
+        base
+        dirt
+        scatter perSquare=14 { rock size=&quot;low(3dmm .. 12dmm, 4)&quot; }
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A weighted range says which sizes are likelier: <code>low</code> favours the small end 4 to 1, so there are many small stones and a few big ones.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>A plain range makes every value equally likely. Wrap it in a weighting and the odds change: mostly small, mostly in the middle, mostly at the ends, or one of a few values you list.</p>
+<p>The weightings are a short fixed set of nine. Only the range carries units; the numbers after it are plain.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="weighted" data-explains="dt::weighting dt::range"><!--gen:anchors--><span id="dt-weighting"></span><span id="dt-range"></span><!--/gen:anchors-->A weighted range says which parts of a range are likelier</h3>
+<p>A range that is drawn once per thing can say which parts of it are likelier. The range goes inside a function:</p>
+<pre data-grammar><code>weighting := ("flat" | "low" | "high" | "bell" | "peak" | "ends") "(" range ( "," number )* ")"
+           | "steps" "(" range ( "," weight )+ ")"
+           | "mix" "(" part "," weight ( "," part "," weight )+ ")"       part := a call above, over the same range
+list      := "[" item ( "," item )+ "]"                                   item := value ( ":" weight )?
+range     := sum ".." sum | "[" sum ".." sum "]"</code></pre>
+<p>Nine functions in all. A comma inside brackets makes a list; <code>..</code> makes a range. The range carries its units like any other value (<a href="units.html#units">units</a>): <code>1dmm .. 6dmm</code> for a size, <code>0.2sq .. 0.6sq</code> for a position. The numbers after the range are plain numbers and have none.</p>
+<pre data-fragment><code>scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone size="low(1dmm .. 6dmm, 11)" }
+scatter perSquare=3 { rock size="bell(6dmm .. 10dmm)" }
+scatter perSquare=3 { stone size="[3dmm, 4dmm:3, 5.5dmm]" }</code></pre>
+<div class="weights" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0">
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>flat</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,43.6 8.3,43.6 10.6,43.6 12.9,43.6 15.2,43.6 17.5,43.6 19.8,43.6 22.1,43.6 24.4,43.6 26.7,43.6 29.0,43.6 31.3,43.6 33.6,43.6 35.9,43.6 38.2,43.6 40.5,43.6 42.8,43.6 45.1,43.6 47.4,43.6 49.7,43.6 52.0,43.6 54.3,43.6 56.6,43.6 58.9,43.6 61.2,43.6 63.5,43.6 65.8,43.6 68.1,43.6 70.4,43.6 72.7,43.6 75.0,43.6 77.3,43.6 79.6,43.6 81.9,43.6 84.2,43.6 86.5,43.6 88.8,43.6 91.1,43.6 93.4,43.6 95.7,43.6 98.0,43.6 100.3,43.6 102.6,43.6 104.9,43.6 107.2,43.6 109.5,43.6 111.8,43.6 114.1,43.6 116.4,43.6 118.7,43.6 121.0,43.6 123.3,43.6 125.6,43.6 127.9,43.6 130.2,43.6 132.5,43.6 134.8,43.6 137.1,43.6 139.4,43.6 141.7,43.6 144.0,43.6" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>1dmm .. 6dmm</code> or <code>flat(1dmm .. 6dmm)</code></div><div class="muted small">Every value equally likely.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>low</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,28.1 8.3,28.9 10.6,29.7 12.9,30.4 15.2,31.1 17.5,31.8 19.8,32.5 22.1,33.2 24.4,33.9 26.7,34.5 29.0,35.1 31.3,35.7 33.6,36.3 35.9,36.9 38.2,37.5 40.5,38.1 42.8,38.6 45.1,39.1 47.4,39.7 49.7,40.2 52.0,40.7 54.3,41.2 56.6,41.6 58.9,42.1 61.2,42.6 63.5,43.0 65.8,43.4 68.1,43.9 70.4,44.3 72.7,44.7 75.0,45.1 77.3,45.5 79.6,45.8 81.9,46.2 84.2,46.6 86.5,46.9 88.8,47.3 91.1,47.6 93.4,47.9 95.7,48.3 98.0,48.6 100.3,48.9 102.6,49.2 104.9,49.5 107.2,49.8 109.5,50.0 111.8,50.3 114.1,50.6 116.4,50.8 118.7,51.1 121.0,51.3 123.3,51.6 125.6,51.8 127.9,52.1 130.2,52.3 132.5,52.5 134.8,52.7 137.1,52.9 139.4,53.1 141.7,53.3 144.0,53.5" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>low(1dmm .. 6dmm, 4)</code></div><div class="muted small">Mostly low. The ratio is how many times likelier the low end is than the high end: 1 is flat, 4 the default, a fraction leans high.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>high</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,53.5 8.3,53.3 10.6,53.1 12.9,52.9 15.2,52.7 17.5,52.5 19.8,52.3 22.1,52.1 24.4,51.8 26.7,51.6 29.0,51.3 31.3,51.1 33.6,50.8 35.9,50.6 38.2,50.3 40.5,50.0 42.8,49.8 45.1,49.5 47.4,49.2 49.7,48.9 52.0,48.6 54.3,48.3 56.6,47.9 58.9,47.6 61.2,47.3 63.5,46.9 65.8,46.6 68.1,46.2 70.4,45.8 72.7,45.5 75.0,45.1 77.3,44.7 79.6,44.3 81.9,43.9 84.2,43.4 86.5,43.0 88.8,42.6 91.1,42.1 93.4,41.6 95.7,41.2 98.0,40.7 100.3,40.2 102.6,39.7 104.9,39.1 107.2,38.6 109.5,38.1 111.8,37.5 114.1,36.9 116.4,36.3 118.7,35.7 121.0,35.1 123.3,34.5 125.6,33.9 127.9,33.2 130.2,32.5 132.5,31.8 134.8,31.1 137.1,30.4 139.4,29.7 141.7,28.9 144.0,28.1" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>high(1dmm .. 6dmm, 4)</code></div><div class="muted small">Mostly high: the mirror of <code>low</code>.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>bell</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,60.3 8.3,60.0 10.6,59.5 12.9,59.0 15.2,58.4 17.5,57.7 19.8,56.9 22.1,56.0 24.4,55.0 26.7,53.9 29.0,52.6 31.3,51.3 33.6,49.8 35.9,48.2 38.2,46.5 40.5,44.8 42.8,42.9 45.1,41.1 47.4,39.2 49.7,37.3 52.0,35.4 54.3,33.6 56.6,31.9 58.9,30.2 61.2,28.8 63.5,27.5 65.8,26.4 68.1,25.5 70.4,24.9 72.7,24.5 75.0,24.4 77.3,24.5 79.6,24.9 81.9,25.5 84.2,26.4 86.5,27.5 88.8,28.8 91.1,30.2 93.4,31.9 95.7,33.6 98.0,35.4 100.3,37.3 102.6,39.2 104.9,41.1 107.2,42.9 109.5,44.8 111.8,46.5 114.1,48.2 116.4,49.8 118.7,51.3 121.0,52.6 123.3,53.9 125.6,55.0 127.9,56.0 130.2,56.9 132.5,57.7 134.8,58.4 137.1,59.0 139.4,59.5 141.7,60.0 144.0,60.3" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>bell(1dmm .. 6dmm, 0.2, 0.5)</code></div><div class="muted small">Mostly in the middle. Spread is a share of the width (0.05 to 1); the centre is optional. Cut at the range.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>peak</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,62.0 8.3,60.8 10.6,59.5 12.9,58.3 15.2,57.0 17.5,55.8 19.8,54.5 22.1,53.3 24.4,52.0 26.7,50.8 29.0,49.6 31.3,48.3 33.6,47.1 35.9,45.8 38.2,44.6 40.5,43.3 42.8,42.1 45.1,40.8 47.4,39.6 49.7,38.4 52.0,37.1 54.3,35.9 56.6,34.6 58.9,33.4 61.2,32.1 63.5,30.9 65.8,29.6 68.1,28.4 70.4,27.2 72.7,25.9 75.0,24.7 77.3,25.9 79.6,27.2 81.9,28.4 84.2,29.6 86.5,30.9 88.8,32.1 91.1,33.4 93.4,34.6 95.7,35.9 98.0,37.1 100.3,38.4 102.6,39.6 104.9,40.8 107.2,42.1 109.5,43.3 111.8,44.6 114.1,45.8 116.4,47.1 118.7,48.3 121.0,49.6 123.3,50.8 125.6,52.0 127.9,53.3 130.2,54.5 132.5,55.8 134.8,57.0 137.1,58.3 139.4,59.5 141.7,60.8 144.0,62.0" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>peak(1dmm .. 6dmm, 0.5, 0.5)</code></div><div class="muted small">A favourite value falling off in a straight line over the spread. Cut at the range, so a wide spread leaves the ends above zero; a centre at 0 or 1 makes a ramp.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>ends</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,24.6 8.3,25.8 10.6,27.1 12.9,28.3 15.2,29.6 17.5,30.8 19.8,32.1 22.1,33.3 24.4,34.6 26.7,35.8 29.0,37.1 31.3,38.3 33.6,39.6 35.9,40.8 38.2,42.1 40.5,43.3 42.8,44.5 45.1,45.8 47.4,47.0 49.7,48.3 52.0,49.5 54.3,50.8 56.6,52.0 58.9,53.3 61.2,54.5 63.5,55.8 65.8,57.0 68.1,58.3 70.4,59.5 72.7,60.8 75.0,62.0 77.3,60.8 79.6,59.5 81.9,58.3 84.2,57.0 86.5,55.8 88.8,54.5 91.1,53.3 93.4,52.0 95.7,50.8 98.0,49.5 100.3,48.3 102.6,47.0 104.9,45.8 107.2,44.5 109.5,43.3 111.8,42.1 114.1,40.8 116.4,39.6 118.7,38.3 121.0,37.1 123.3,35.8 125.6,34.6 127.9,33.3 130.2,32.1 132.5,30.8 134.8,29.6 137.1,28.3 139.4,27.1 141.7,25.8 144.0,24.6" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>ends(1dmm .. 6dmm, 1, 0.5)</code></div><div class="muted small">The bell turned over: a valley at the centre, rising as a power. 1 is a straight V, 2 a parabola, 0 flat; a centre at an end makes a ramp away from it.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>steps</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,54.0 52.0,54.0 52.0,29.9 98.0,29.9 98.0,46.0 144.0,46.0" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>steps(1dmm .. 6dmm, 1, 4, 2)</code></div><div class="muted small">Drawn by hand: the range cut into equal bins, one weight each (up to 32), flat inside a bin. A weight of 0 leaves a gap.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>list</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><line x1="6.0" y1="62" x2="6.0" y2="41.2" stroke="var(--accent)" stroke-width="2"/><circle cx="6.0" cy="41.2" r="3" fill="var(--accent)"/><line x1="75.0" y1="62" x2="75.0" y2="36.0" stroke="var(--accent)" stroke-width="2"/><circle cx="75.0" cy="36.0" r="3" fill="var(--accent)"/><line x1="144.0" y1="62" x2="144.0" y2="56.8" stroke="var(--accent)" stroke-width="2"/><circle cx="144.0" cy="56.8" r="3" fill="var(--accent)"/></svg><div class="small"><code>[1dmm:4, 2dmm:5, 3dmm:1]</code></div><div class="muted small">One of the values written, each as likely as its weight (1 when left out). Values need not be whole or evenly spaced, and a list has no range of its own.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>mix</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,56.1 8.3,55.8 10.6,55.5 12.9,55.1 15.2,54.6 17.5,54.1 19.8,53.5 22.1,52.8 24.4,52.0 26.7,51.2 29.0,50.3 31.3,49.2 33.6,48.1 35.9,46.9 38.2,45.7 40.5,44.4 42.8,43.0 45.1,41.6 47.4,40.1 49.7,38.7 52.0,37.3 54.3,35.9 56.6,34.6 58.9,33.4 61.2,32.3 63.5,31.4 65.8,30.5 68.1,29.9 70.4,29.4 72.7,29.1 75.0,29.0 77.3,29.1 79.6,29.4 81.9,29.9 84.2,30.5 86.5,31.4 88.8,32.3 91.1,33.4 93.4,34.6 95.7,35.9 98.0,37.3 100.3,38.7 102.6,40.1 104.9,41.6 107.2,43.0 109.5,44.4 111.8,45.7 114.1,46.9 116.4,48.1 118.7,49.2 121.0,50.3 123.3,51.2 125.6,52.0 127.9,52.8 130.2,53.5 132.5,54.1 134.8,54.6 137.1,55.1 139.4,55.5 141.7,55.8 144.0,56.1" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>mix(bell(1dmm .. 6dmm), 3, flat(1dmm .. 6dmm), 1)</code></div><div class="muted small">A blend of weightings over the same range, each part as likely as its weight: mostly typical, a few anywhere.</div></figure>
+
+</div>
+<p class="muted small">Each curve is the density over the range: higher means likelier, the dotted line is the plain range. A list has no density, so its values stand as bars, as tall as their share.</p>
+</section>
+<section class="rule">
+<h3 id="weight-numbers">The numbers after the range are plain, and have limits</h3>
+<p>Only the range has units; the numbers after it are plain. <code>low</code> and <code>high</code> take a ratio over 0 (4 by default, no upper limit). <code>bell</code> and <code>peak</code> take a spread of 0.05 to 1 and a centre of 0 to 1. <code>ends</code> takes a power of 0 to 8 (1 by default) and the valley's centre. <code>steps</code> takes 2 to 32 weights and <code>mix</code> 2 to 16 parts; a list holds up to 64 values. A weight is 0 or more, and at least one must be above 0. A number outside its limits is <a class="codelink" href="../e/range.html"><code>dt::range</code></a>, with the limits in the help; <code>dharmatiles elements rock</code> lists every function with its defaults and limits.</p>
+</section>
+<section class="rule">
+<h3 id="weight-lists">A list is the values written, each as likely as its weight</h3>
+<p><code>[1:4, 2:5, 3:1]</code> on a count draws 1, 2 or 3, each as likely as its weight; a missing weight is 1, so <code>[1, 2, 3, 4, 5, 6]</code> is a six-sided die, and on a count (<code>count</code>, <code>stems</code>) the same as <code>1..6</code>. On a size, <code>1dmm .. 6dmm</code> is every size between and the list is only the sizes written: <code>size="[2dmm, 5dmm:3, 8.5dmm]"</code>. A weight of 0 is allowed beside one above 0. A value written twice is a <a class="codelink" href="../e/weighting.html"><code>dt::weighting</code></a> error, and its help gives the list to write: <code>[1:4, 2:6]</code> for <code>[1:4, 2:5, 2:1]</code>. Values are drawn in ascending order, so a list moves and scales like any range.</p>
+</section>
+<section class="rule">
+<h3 id="weight-mix">A mix blends weightings over one range</h3>
+<p><code>mix(bell(1dmm .. 6dmm), 3, flat(1dmm .. 6dmm), 1)</code> is three parts bell to one part flat. Every part is written over the same range (a different one is a <a class="codelink" href="../e/weighting.html"><code>dt::weighting</code></a> error), and a part is a call, never a list or another mix.</p>
+</section>
+<section class="rule">
+<h3 id="weight-wraps">A weighting wraps a plain range</h3>
+<p>A weighting wraps a plain range: <code>low(bell(1dmm .. 6dmm))</code> and <code>low(3)</code> are <a class="codelink" href="../e/weighting.html"><code>dt::weighting</code></a> errors. A weighting on a range of no width has no effect, and <code>check</code> says so in a note.</p>
+</section>
+<section class="rule">
+<h3 id="weight-controls">Every control that draws takes a weighting</h3>
+<p>A size, a count, a density, a course or a bay of a wall, a blade's length or height, how deep a rock is buried, how wide a shattered patch is, a tree's heights and a point's range in <code>at=</code>. A control that is a band never does. The "takes" column of each element page says <em>weighted range</em> where it applies.</p>
+</section>
+<section class="rule">
+<h3 id="weight-top">A weighted range on a top is a cloud</h3>
+<p>A body's <code>top=</code> and a pin's top may be a weighted range (<a href="clouds.html#clouds">clouds</a>). A <code>within</code> distance is read as a band, not a draw: <code>low(…)</code> there is a <a class="codelink" href="../e/weighting.html"><code>dt::weighting</code></a> error whose help gives the range to write. <code>flat(…)</code> is the plain range and is accepted anywhere a range is.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/weighting.html"><code>dt::weighting</code></a> A weighting is written wrongly, or the control takes none <a class="cp-in" href="#weighted">The rule</a></li>
+<li><a class="codelink" href="../e/range.html"><code>dt::range</code></a> A number is outside the limits of its weighting <a class="cp-in" href="#weighted">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="units.html">units and kinds</a>, how a length is written and checked.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

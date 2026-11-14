@@ -24,12 +24,12 @@
 </div>
 <section>
 <h2 id="rule">The rule</h2>
-<blockquote class="rule"><p>Parts files hold definitions that tiles bring in by name. A <code>use</code> line names the file and the definitions it brings in, so a reader knows where every name came from:</p></blockquote>
-<p class="cp-in"><a href="../language.html#dt-define">Read it in context: The tile language · 9. Parts: use, define, param</a></p>
+<blockquote class="rule"><p>A <code>define</code> has <code>param</code> lines and one <code>stack</code>. It is called like an element; its params are set as properties, and a place (<code>at=</code>) passes through to the elements inside it. A definition can call another. A definition whose stack is one thing is itself a thing, so it can be placed with <code>at=</code> or scattered: <code>scatter count=2 { oak }</code>. Definitions that call each other in a loop are an error (<a class="codelink" href="loop.html"><code>dt::loop</code></a>).</p></blockquote>
+<p class="cp-in"><a href="../guide/parts.html#dt-define">Read it in context: Parts · A define is a stack with params, called like an element</a></p>
 </section>
 </div>
 <footer class="cp-foot">
-<span>Explained with it: <a href="param.html"><code>dt::param</code></a> <a href="use.html"><code>dt::use</code></a></span>
+<span>Explained with it: <a href="param.html"><code>dt::param</code></a></span>
 <span><a href="../errors.html">Every error code</a></span>
 <span>Offline: <code>dharmatiles explain dt::define</code></span>
 </footer>

@@ -39,9 +39,15 @@ tile size="2x2" { stack { base; dirt; lawn } }</code></pre>
 <tr><td><code>"./mine"</code>, <code>"../shared/x"</code></td><td>A file in your own project, relative to this one.</td></tr>
 <tr><td>names after the path</td><td>The definitions to bring in. Only these can be called.</td></tr>
 </tbody></table></div>
-<p>The path is written without <code>.dtile</code>. Anything else is an error that says what to write. A tile and the parts it uses are written in the <a href="../language.html#header">format</a> the program reads; a part of format 0 is refused (<a class="codelink" href="../e/format-0.html"><code>dt::format-0</code></a>).</p>
+<p>The path is written without <code>.dtile</code>. Anything else is an error that says what to write. A tile and the parts it uses are written in the <a href="../guide/tile.html#header">format</a> the program reads; a part of format 0 is refused (<a class="codelink" href="../e/format-0.html"><code>dt::format-0</code></a>).</p>
 <h2 id="notes">Notes</h2>
 <p>The library's parts: <code>parts/grass</code> (<code>lawn</code>, <code>long-grass</code>), <code>parts/trees</code>, and two every document sees without a <code>use</code>: <a href="let.html"><code>parts/heights</code></a> and <a href="edges.html"><code>parts/edges</code></a>. See <a href="define.html"><code>define</code></a> for writing your own.</p>
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>use</code>: <a href="../guide/tile.html">The tile document</a>, <a href="../guide/parts.html">Parts</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 </body>

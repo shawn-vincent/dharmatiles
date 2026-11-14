@@ -1,0 +1,25 @@
+dharmatiles version="1.0.0"
+
+use "parts/grass" lawn
+
+tile size="1x2" seed=7 {
+
+    // From the middle of the south edge to the middle of the north edge,
+    // 9 design millimetres wide, wandering up to 3 off its points.
+    line trail width="9dmm" wobble="3dmm" { through south "(0.65sq, 1sq)" north }
+
+    // Everything beside the path: one fill point on each side of it.
+    region verge { boundedBy trail; fill "(0.15sq, 1sq)"; fill "(0.85sq, 1sq)" }
+
+    stack {
+        base
+        dirt                                    // the whole tile, at the ground height
+        dirt at=trail top="$bottom + [0.4dmm .. 0.8dmm]" clods=none   // the path: a second dirt along it, a little proud and smooth
+
+        scatter at=verge count=5 {
+            rock size="4dmm .. 10dmm" shape=rounded buried="30%"   // shape: or angular, flat
+        }
+
+        lawn at=verge cover="85%"
+    }
+}

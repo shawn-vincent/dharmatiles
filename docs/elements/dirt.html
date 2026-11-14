@@ -67,7 +67,7 @@ tile size="1x1" seed=13 {
 <pre><code>dharmatiles version="1.0.0"
 
 tile size="1x1" seed=42 {
-    line margin wobble="5dmm" { through "(0.48sq, 0sq)" "(0.52sq, 1sq)" }
+    line margin wobble="5dmm" { through "n" "s" }
     region meadow { boundedBy margin; fill "(0.25sq, 0.5sq)" }
     stack {
         base
@@ -174,7 +174,7 @@ dirt top="$bottom + [0.6dmm .. 1.2dmm]"   // on the tops of the flat ones</code>
 <ul>
   <li><strong>Tile.</strong> Any size in 35 mm squares.</li>
   <li><strong>Edge height.</strong> The library pins the first dirt to <code>$dirtEdgeHeight</code>, <code>3.4dmm</code> above the base, at every tile edge (<code>library/parts/edges.dtile</code>); a pin the tile writes later wins where they overlap.</li>
-  <li><strong>A cloud top.</strong> <code>top="$groundHeight + low(0dmm .. 3dmm)"</code>: the hills are one smooth surface whose heights come up as often as the weighting says (<a href="../language.html#clouds">Clouds</a>); a pin replaces the cloud where it holds and the dirt eases back at its slope.</li>
+  <li><strong>A cloud top.</strong> <code>top="$groundHeight + low(0dmm .. 3dmm)"</code>: the hills are one smooth surface whose heights come up as often as the weighting says (<a href="../guide/clouds.html#clouds">Clouds</a>); a pin replaces the cloud where it holds and the dirt eases back at its slope.</li>
   <li><strong>Hills in a band.</strong> The default top is <code>[$groundHeight .. $groundHeight + 1dmm]</code>: broad hills (<code>bumpSize</code>) spanning that band, easing down to the edge pin at the dirt's slope, <code>24deg</code> unless it says otherwise. Where the band is wide (a bank drawn between a bed and the land) the dirt takes the smoothest surface the band allows.</li>
   <li><strong>Pebbles.</strong> Per square: 45–75 small pebbles (0.5–1.5 mm) and 8–13 medium (2.2–4.5 mm).</li>
   <li><strong>Flat ground.</strong> A single height for <code>top</code> is flat, exactly: <code>dirt top="$groundHeight"</code>.</li>
@@ -202,7 +202,7 @@ dirt top="$bottom + [0.6dmm .. 1.2dmm]"   // on the tops of the flat ones</code>
   <li>Pebbles big enough to read at tabletop distance.</li>
   <li>No frame or rim at the tile edge.</li>
   <li>Exposed ground is dirt on every tile; there is no separate mud texture.</li>
-  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. The first dirt (the first land layer) starts with the library's top, <code>[$groundHeight .. $groundHeight + 1dmm]</code>, and a pin at <code>edges</code> at <code>$dirtEdgeHeight</code>; a tile's own top replaces the top, and its pins win over the rim pin where they overlap. A second dirt, such as <code>top="$bottom + [0.6dmm .. 1.2dmm]"</code>, is a distinct layer and gets no defaults. <code>slope "30deg"</code> in the block sets how steeply this dirt lies (<code>24deg</code> by default). <code>check</code> reads and solves these and <code>build</code> fills them. In a top or a pin, <code>$d</code> and <code>$a</code> are the dirt's place in its own region (how far in from its edge, how far round), so <code>top="$groundHeight + 3dmm * (1 - $d * $d)"</code> is a dome over it. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. The first dirt (the first land layer) starts with the library's top, <code>[$groundHeight .. $groundHeight + 1dmm]</code>, and a pin at <code>edges</code> at <code>$dirtEdgeHeight</code>; a tile's own top replaces the top, and its pins win over the rim pin where they overlap. A second dirt, such as <code>top="$bottom + [0.6dmm .. 1.2dmm]"</code>, is a distinct layer and gets no defaults. <code>slope "30deg"</code> in the block sets how steeply this dirt lies (<code>24deg</code> by default). <code>check</code> reads and solves these and <code>build</code> fills them. In a top or a pin, <code>$d</code> and <code>$a</code> are the dirt's place in its own region (how far in from its edge, how far round), so <code>top="$groundHeight + 3dmm * (1 - $d * $d)"</code> is a dome over it. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../guide/heights.html#heights">heights</a>.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>
@@ -235,6 +235,12 @@ dirt top="$bottom + [0.6dmm .. 1.2dmm]"   // on the tops of the flat ones</code>
 
 
 
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>dirt</code>: <a href="../guide/stack.html">The stack</a>, <a href="../guide/names.html">Names</a>, <a href="../guide/heights.html">Heights</a>, <a href="../guide/clouds.html">Clouds</a>, <a href="../guide/worked.html">Worked tiles</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 <script src="../assets/howto.js"></script>

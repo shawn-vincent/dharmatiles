@@ -5,8 +5,10 @@ use std::process::{Command, ExitCode};
 
 mod codes;
 mod docs;
+mod guide;
 mod image;
 mod live;
+mod nav;
 mod pictures;
 mod release;
 mod shots;

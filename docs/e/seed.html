@@ -54,12 +54,11 @@ tile size=&quot;1x1&quot; seed=<mark class="ins">3</mark> {
 </div>
 <section>
 <h2 id="rule">The rule</h2>
-<blockquote class="rule"><p>A tile document is one <code>.dtile</code> file holding exactly one <code>tile</code> node, after a header line. The tile has a size and a seed, and a body with (its file name is its name: <code>tile</code> takes none):</p></blockquote>
-<p class="cp-in"><a href="../language.html#dt-seed">Read it in context: The tile language · 1. What a tile document is</a></p>
+<blockquote class="rule"><p><code>tile size="1x1" seed=97 { … }</code> sets it; a tile that writes none is built with the seed the build is asked for (<code>dharmatiles check --seed N</code>, or the seed control of a card or the editor). A negative or fractional seed is refused.</p></blockquote>
+<p class="cp-in"><a href="../guide/seeds.html#dt-seed">Read it in context: Seeds · A tile&amp;rsquo;s seed is a whole number from 0</a></p>
 </section>
 </div>
 <footer class="cp-foot">
-<span>Explained with it: <a href="tile.html"><code>dt::tile</code></a> <a href="tile-name.html"><code>dt::tile-name</code></a> <a href="about.html"><code>dt::about</code></a> <a href="stack.html"><code>dt::stack</code></a></span>
 <span><a href="../errors.html">Every error code</a></span>
 <span>Offline: <code>dharmatiles explain dt::seed</code></span>
 </footer>

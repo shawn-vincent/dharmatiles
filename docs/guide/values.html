@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Values and ranges</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Values and ranges</h1>
+  <p class="lede">A quoted value is a small expression; a range in it is a value drawn afresh for each thing.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#expressions">A quoted value is a tiny expression</a></li>
+<li><a href="#let-distribution">A <code>let</code> name holds a distribution</a></li>
+<li><a href="#count-bins">A count has an equal chance for every whole number</a></li>
+<li><a href="#sums-are-dice">Sums are dice</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html" aria-current="page">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="scatter rock let">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/values/range.dtile" controls="seed" overlay="squares">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/23d3bb0c10672a93f97b698ac24f0183.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A range is two values and `..`: each rock draws its own size from it, keyed by the tile's seed.
+tile size=&quot;1x1&quot; seed=7 {
+    stack {
+        base
+        dirt
+        scatter count=5 { rock size=&quot;5dmm .. 11dmm&quot; }
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A range is two values and <code>..</code>: each rock draws its own size from it, keyed by the tile&rsquo;s seed.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>Anywhere a control takes a number, you may write a sum of numbers with units, a name, a call such as <code>min</code> or <code>sin</code>, or a range such as <code>5dmm .. 11dmm</code>. There are no loops and no assignments: a value is only worked out.</p>
+<p>A range is the one place the program rolls dice. Each thing that reads a range draws its own number from it, so five rocks have five sizes, and the seed decides which five.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="expressions" data-explains="dt::expr dt::value"><!--gen:anchors--><span id="dt-expr"></span><span id="dt-value"></span><!--/gen:anchors-->A quoted value is a tiny expression</h3>
+<pre data-grammar><code>value  := sum ( ".." sum )?        a range "lo .. hi", drawn afresh per thing
+sum    := prod ( ("+" | "-") prod )*
+prod   := unary ( ("*" | "/") unary )*
+unary  := "-" unary | atom
+atom   := number unit? | number "%" | name | "$" name | call | "(" sum ")" | "[" sum ".." sum "]" | weighting      see Weighted ranges</code></pre>
+<p>A range is written <code>lo .. hi</code> or <code>[lo .. hi]</code> in a control value, and the brackets go anywhere a number does: <code>size="[1dmm .. 2dmm] + [3dmm .. 4dmm]"</code> adds two ranges. In a height (a <code>top=</code>, a <code>let</code>) and inside a call, a range is always in brackets. A bare <code>lo .. hi</code> in a control value reaches over sums, so <code>1dmm .. 2dmm + 3dmm</code> is <code>1dmm .. 5dmm</code>; but when a value holds two bare ranges, or one beside a bracket or a weighting, each <code>..</code> binds tighter than the arithmetic. The brackets always say it plainly.</p>
+<p>An unknown function is <a class="codelink" href="../e/value.html"><code>dt::value</code></a>.</p>
+</section>
+<section class="rule">
+<h3 id="let-distribution">A <code>let</code> name holds a distribution</h3>
+<p><code>let small "low(1dmm .. 6dmm, 11)"</code> stands for that range with its odds, and a control that names <code>small</code> draws from it, each use its own roll. A tile's own <code>let</code> may be named by a size, count or density control; the library's <code>$</code> heights may not.</p>
+</section>
+<section class="rule">
+<h3 id="count-bins">A count has an equal chance for every whole number</h3>
+<p>A range on a count (<code>count</code>, <code>perSquare</code> as the number it makes, reeds' <code>clumps</code> and <code>stems</code>) is cut into one bin per whole number, ends rounded: <code>2..5</code> gives 2, 3, 4 and 5 a quarter each, the ends no rarer than the middle. A weighting moves the odds across the bins; a sum falls in the bin of its drawn place along its ends.</p>
+</section>
+<section class="rule">
+<h3 id="sums-are-dice">Sums are dice</h3>
+<p><code>size="[1dmm .. 2dmm] + [3dmm .. 4dmm]"</code> adds two rolls and lands anywhere in 4dmm to 6dmm, most often near 5dmm. A name holds the range, not a roll, so <code>s - s</code> with <code>let s "[1dmm .. 2dmm]"</code> is two rolls, anywhere in -1dmm to 1dmm. Numbers and names shift and scale, and a negative factor mirrors. Dividing by a range is refused. On a count the sum is rounded. A band (<code>top=</code>, a pin) spans the interval of the sum (<code>top="[1dmm .. 2dmm] - [1dmm .. 2dmm]"</code> is a band from -1dmm to 1dmm) and its heights come up as two dice do, most often near 0.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/expr.html"><code>dt::expr</code></a> A formula in quotes could not be read <a class="cp-in" href="#expressions">The rule</a></li>
+<li><a class="codelink" href="../e/value.html"><code>dt::value</code></a> A value cannot be read or is not allowed here <a class="cp-in" href="#expressions">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="weightings.html">weighted ranges</a>, for saying which values of a range are likelier.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

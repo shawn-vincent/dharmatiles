@@ -530,7 +530,7 @@ pub struct Node {
     pub name: &'static str,
     /// One line of help.
     pub about: &'static str,
-    /// The anchor in `language.html` that documents it.
+    /// The page of the guide (`docs/guide/…`, with an anchor) that documents it.
     pub doc: &'static str,
     /// Its controls, in the order the sheet shows them.
     pub controls: &'static [Control],

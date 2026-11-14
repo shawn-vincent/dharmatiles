@@ -36,7 +36,13 @@ stack { base; dirt { pin top="$groundHeight + 4dmm" at=knoll } }</code></pre>
 </tbody></table></div>
 <p>Built in on every tile, with no declaration: <code>southWestCorner southCenter southEastCorner westCenter center eastCenter northWestCorner northCenter northEastCorner</code>. The four edge lines are <code>northEdge eastEdge southEdge westEdge</code>, and <code>edges</code> is all four; <code>tile</code> is the whole tile, which is also what no <code>at=</code> means.</p>
 <h2 id="notes">Notes</h2>
-<p>A point may also be written where a place is wanted, as the literal <code>"(0.28sq, 0.28sq)"</code>: <code>at="(0.28sq, 0.28sq)"</code>, <code>fill "(0.5sq, 0.75sq)"</code>, <code>through "(0sq, 0.62sq)"</code>. Naming the frame makes the point explicit: <code>point($tile, 25%, 75%)</code> is a quarter across and three quarters down the tile, and <code>polar($tile, 40%, 90deg)</code> is 40% of the way out from the middle, straight down (0 is east, turning towards the south). A point written inside a pin of a body that acts in a named region is in that region's own frame, and a point outside it is <a class="codelink" href="../e/point.html"><code>dt::point</code></a>. A point is flat: it says where, never how high.</p>
+<p>A point may also be written where a place is wanted, as the literal <code>"(0.28sq, 0.28sq)"</code>: <code>at="(0.28sq, 0.28sq)"</code>, <code>fill "(0.5sq, 0.75sq)"</code>, <code>through "wsw"</code>. Naming the frame makes the point explicit: <code>point($tile, 25%, 75%)</code> is a quarter across and three quarters down the tile, and <code>polar($tile, 40%, 90deg)</code> is 40% of the way out from the middle, straight down (0 is east, turning towards the south). A point written inside a pin of a body that acts in a named region is in that region's own frame, and a point outside it is <a class="codelink" href="../e/point.html"><code>dt::point</code></a>. A point is flat: it says where, never how high.</p>
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>point</code>: <a href="../guide/squares.html">Squares, cells and points</a>, <a href="../guide/lines.html">Lines</a>, <a href="../guide/regions.html">Regions</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 </body>

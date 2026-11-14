@@ -85,10 +85,16 @@ scatter perSquare=3 { rock size="4dmm .. 8dmm" weight=3; flower; tree top="$bott
   <dt>at=foot(cliff)</dt><dd>Gathers at the foot of that kind of thing: <code>cliff</code>, <code>wall</code>, <code>rock</code> or <code>tree</code>. Scattered at a cliff's foot, rocks take the cliff's rock: that is scree.</dd>
   <dt>at=<em>line</em></dt><dd>Spreads along a drawn line, an edge or an edge path, within <code>reach</code> either side of it (default <code>5dmm</code>), to the ends of the line rounded. <code>perSquare</code> counts the line's length in squares. It builds for rocks, flowers and trees alike: <code>scatter at=road count=3 reach="3dmm" { tree top="$bottom + [26dmm .. 32dmm]" }</code>. A single thing at a line is refused (a line has no one place on it); a scatter is how several stand along one.</dd>
   <dt>trees</dt><dd>A scatter of trees places every crown clear of the others (centres at least both crown radii and <code>gap</code> apart, default <code>1dmm</code>), each trunk a crown radius in from the tile edge and clear of what already stands, then grows them one after another, each from its own seed. A tree is a heavy build: ask for few. If the crowns cannot all fit it is an error naming how many do, never fewer trees without a word.</dd>
-  <dt>count, perSquare</dt><dd>Take a weighted range (of plain numbers): <code>perSquare="low(2..8, 3)"</code>. Each whole number of a range is as likely as any other. See <a href="../language.html#weighted">weighted ranges</a>.</dd>
+  <dt>count, perSquare</dt><dd>Take a weighted range (of plain numbers): <code>perSquare="low(2..8, 3)"</code>. Each whole number of a range is as likely as any other. See <a href="../guide/weightings.html#weighted">weighted ranges</a>.</dd>
   <dt>inside a surface</dt><dd>A scatter written inside <code>dirt</code> or <code>grass</code> is placed on that surface, in its area.</dd>
 </dl>
-<p>A scatter is a <a href="../language.html#region-tree">region</a> of its own, its <code>at=</code> area (or the tile), and the things it places are its children: a tree in a scatter has the scatter, then the tile, as parents. A single thing never takes a count: <code>tree count=3</code> is an error whose help says to use a scatter. See <a href="../language.html#placement">placement</a> in the language guide.</p>
+<p>A scatter is a <a href="../guide/regions.html#region-tree">region</a> of its own, its <code>at=</code> area (or the tile), and the things it places are its children: a tree in a scatter has the scatter, then the tile, as parents. A single thing never takes a count: <code>tree count=3</code> is an error whose help says to use a scatter. See <a href="../guide/placement.html#placement">placement</a> in the language guide.</p>
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>scatter</code>: <a href="../guide/stack.html">The stack</a>, <a href="../guide/placement.html">Placement and scatter</a>, <a href="../guide/values.html">Values and ranges</a>, <a href="../guide/weightings.html">Weighted ranges</a>, <a href="../guide/names.html">Names</a>, <a href="../guide/seeds.html">Seeds</a>, <a href="../guide/worked.html">Worked tiles</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 </body>

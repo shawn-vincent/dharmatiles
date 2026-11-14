@@ -1,0 +1,10 @@
+dharmatiles version="1.0.0"
+
+// library/tests/ground/1x1-flat.dtile
+tile size="1x1" {
+    about "Flat ground at the edge height (3.4 mm) on one square: the first tile built end to end."
+    stack {
+        base
+        dirt top="$dirtEdgeHeight" clods=none   // flat, at the edge height (3.4 mm)
+    }
+}

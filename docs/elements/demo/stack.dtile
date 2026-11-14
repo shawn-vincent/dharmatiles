@@ -4,7 +4,7 @@ dharmatiles version="1.0.0"
 // a time (cargo xtask pictures builds it with its first 1 to 4 lines; the
 // `base` line is left out, so each picture is the terrain the stack so far makes).
 tile size="1x1" seed=97 {
-    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    line shore wobble="5dmm" { through "wsw" "e" }
     region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
     region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
     region shoreBand { within "7dmm" of=shore }

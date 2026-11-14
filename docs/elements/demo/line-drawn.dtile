@@ -4,7 +4,7 @@ dharmatiles version="1.0.0"
 // once from the tile seed, so each seed draws its own pond (the contact
 // sheet's four seeds show four).
 tile size="1x1" seed=8 {
-    line shore wobble="3dmm" { through "(0sq, 0.45sq .. 0.6sq)" "(bell(0.35sq .. 0.65sq), 0.4sq .. 0.6sq)" "(1sq, 0.45sq .. 0.6sq)" }
+    line shore wobble="3dmm" { through "w" "(bell(0.35sq .. 0.65sq), 0.4sq .. 0.6sq)" "e" }
     region pool { boundedBy shore; fill "(0.4sq .. 0.6sq, 0.8sq .. 0.9sq)" }
     region bank { boundedBy shore; fill "(0.5sq, 0.1sq)" }
     region shoreBand { within "7dmm" of=shore }

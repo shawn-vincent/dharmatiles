@@ -1,0 +1,11 @@
+dharmatiles version="1.0.0"
+
+// Every build is held to the printability gate: watertight, nothing lost, and no more than a
+// sliver of the underside past 55 degrees from vertical.  Boulders lean out the most.
+tile size="1x1" seed=5 {
+    stack {
+        base
+        dirt
+        scatter count=3 { boulder size="6dmm .. 10dmm" }
+    }
+}

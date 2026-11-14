@@ -52,6 +52,12 @@ define long-grass {                   // a definition can call another
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
 <p>A place given to the call (<code>at=</code>) pass through to the elements inside, and a call's <code>top=</code> is the height of the tree inside it (<code>oak top="$bottom + 40dmm"</code>). Expert controls, such as a tree's <code>branch</code> knobs, are allowed only in parts files. Definitions that call each other in a loop are an error (<a class="codelink" href="../e/loop.html"><code>dt::loop</code></a>). A tile has no params. A part has no tile of its own, so a point it writes (<code>"(50%, 0.5sq)"</code>) is worked out at each place it is called, and a <code>$</code> name it reads comes from its caller: <code>check</code> refuses a call whose context lacks one.</p>
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>define</code>: <a href="../guide/tile.html">The tile document</a>, <a href="../guide/parts.html">Parts</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 </body>

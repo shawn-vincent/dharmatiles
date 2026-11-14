@@ -33,13 +33,13 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
-line trail width="9dmm" wobble="3dmm" { through south "(0.65sq, 1sq)" north }
+<pre><code>line shore wobble="5dmm" { through "wsw" "e" }
+line trail width="9dmm" wobble="3dmm" { through south "(0.65sq, 0.5sq)" north }
 line ring closed=#true wobble="2dmm" { through "(0.3sq, 0.7sq)" "(0.7sq, 0.7sq)" "(0.5sq, 0.3sq)" }
 line stream { through westCenter eastCenter }       // the built-in points, by name
 line spur { through "(0sq, 1sq/3)" "(0.5sq, 0.7sq)" heading="30deg" pull=0.6 "(1sq, 0.5sq)" }   // a third, exactly; a heading and a pull on one point
 line run curve=straight ends=free { through "(0.1sq, 0.6sq)" "(0.9sq, 0.4sq)" }                // straight runs, ends free</code></pre>
-<p>A line is one smooth curve through its points, square to the tile side at an end that is on a side and along the bisector at an end that is on a corner; <code>curve=straight</code> draws straight runs instead. A point on a tile side is on a seam. See the <a href="../language.html#line-curve">curve</a> and <a href="../language.html#line-seams">seams</a> in the language guide.</p>
+<p>A line is one smooth curve through its points, square to the tile side at an end that is on a side and along the bisector at an end that is on a corner; <code>curve=straight</code> draws straight runs instead. A point on a tile side is on a seam. See the <a href="../guide/lines.html#line-curve">curve</a> and <a href="../guide/lines.html#line-seams">seams</a> in the language guide.</p>
 <p>A line with a <code>width</code> is a strip: everything within half the width of it, wobble included. <code>dirt at=trail</code>, <code>grass at=trail</code> and <code>cliff at=trail</code> fill the strip like a region, and <code>scatter at=trail</code> spreads within half the width either side unless it writes its own <code>reach</code>. A wall follows the line itself, so a width does not widen it. A surface along a line with no width, or along a tile edge (which has none), is <a class="codelink" href="../e/type.html"><code>dt::type</code></a>; for an edge write <code>region rim { within "6dmm" of=northEdge }</code> and <code>at=rim</code>. See <code>demo/line-width.dtile</code>.</p>
 <h2 id="try">Try it</h2>
 <dt-example src="examples/lines/shore.dtile" controls="wobble, seed" overlay="lines points" highlight="line shore">
@@ -175,8 +175,14 @@ tile size=&quot;1x1&quot; seed=18 {
 <tr><td><code>through</code> of one point: <code>pull=</code></td><td>0 to 3</td><td>1</td><td>How far the curve holds its direction at this point, as a share of the usual.</td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. Along a tile edge there is no side: a wall or cliff on an edge always stands inside the tile. Edges, corners and points are in <a href="../language.html#places">the language guide</a>.</p>
+<p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. Along a tile edge there is no side: a wall or cliff on an edge always stands inside the tile. Edges, corners and points are in <a href="../guide/squares.html#places">the language guide</a>.</p>
 <p>On a <code>through</code> of one point, <code>corner=#true</code> makes a sharp knee, <code>heading=</code> sets the way the line goes through it and <code>pull=</code> how far it holds that direction (the reference lists them under <code>through</code>). A tile that writes <code>seams=free</code> may cross an edge anywhere; otherwise a point on a side that is not a seam is <a class="codelink" href="../e/seam.html"><code>dt::seam</code></a>.</p>
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>line</code>: <a href="../guide/lines.html">Lines</a>, <a href="../guide/regions.html">Regions</a>, <a href="../guide/seeds.html">Seeds</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 </body>

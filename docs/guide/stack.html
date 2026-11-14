@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The stack</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>The stack</h1>
+  <p class="lede">The stack is the list of elements a tile is made of, written bottom up and built in the order it is listed.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#stack-order">The stack is built in the order it is listed</a></li>
+<li><a href="#elements">A stack lists elements: the built-in ones and your own definitions</a></li>
+<li><a href="#entry">Every stack entry takes <code>id=</code>, <code>weight=</code> and the place words its element accepts</a></li>
+<li><a href="#base-order">The base is the first line of the stack, and there is one</a></li>
+<li><a href="#look">Some mistakes show only when an element builds</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html" aria-current="page">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="stack base dirt grass rock water scatter">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/stack/pond.dtile" controls="wobble, seed" overlay="regions">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/88e458dab6e3380bf3251afc1a8c710b.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A stack of surfaces and what stands on them: dirt, rocks in the pool, water filling over what
+// is under it, then grass on the bank.
+tile size=&quot;1x1&quot; seed=97 {
+    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 2sq/3)&quot; &quot;(1sq, 0.5sq)&quot; }
+    region pool { boundedBy shore; fill &quot;(0.5sq, 0.75sq)&quot; }
+    region bank { boundedBy shore; fill &quot;(0.5sq, 0.25sq)&quot; }
+    region shoreBand { within &quot;7dmm&quot; of=shore }
+    stack {
+        dirt { pin top=&quot;[$waterBedHeight .. $groundHeight + 1dmm]&quot; at=shoreBand; pin top=&quot;$waterBedHeight&quot; at=pool }
+        scatter at=pool count=2 { rock size=&quot;6dmm .. 10dmm&quot; }
+        water
+        grass at=bank
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A stack of surfaces and what stands on them: dirt, rocks in the pool, water filling over what is under it, then grass on the bank.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>Each line of the stack is an element: a surface such as <code>dirt</code> or <code>water</code>, a thing such as a <code>rock</code> or a <code>tree</code>, a run such as a <code>wall</code>. Each stands on the terrain laid so far, and what is listed after it is laid over or beside it.</p>
+<p>So order is part of what you mean: grass listed after the rocks grows round them, water listed after the dirt fills over it. The program never reorders a stack to make it work; it tells you what the order cannot do.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="stack-order" data-explains="dt::order dt::plan"><!--gen:anchors--><span id="dt-order"></span><span id="dt-plan"></span><!--/gen:anchors-->The stack is built in the order it is listed</h3>
+<p><strong>The stack is built in the order it is listed.</strong> Each entry stands on the terrain as laid so far, and what is listed after it is laid over or beside it. Land bodies are laid in stack order, each the higher of what is below and its own top: a dirt along a path, listed after the whole-tile dirt, takes the higher of the two there. A <code>dirt</code> listed <em>after</em> a rock, a tree, a flower or a scatter of them is built after them: it lies on the tops of rocks where they are flatter than its <code>maxSlope</code>, banks up to a trunk or a stone (a rise is no drop), and covers a flower's foot, as written. A tree's crown is never a surface for dirt. A dirt listed <em>before</em> them is laid first, and they stand on it (a rock beds into it). Grass grows round what is listed before it, so list the grass after the rocks, trees and flowers it should grow round; the same goes for water, which fills over the ground listed above it and sees the rocks and reeds listed above it (each sends its own chop). What is listed <em>after</em> the water stands in it or on its shore and reads it: a rock stands in the pool, and grass keeps off the wet ground. A <code>dirt</code> or <code>ground</code> listed after the water lies over it: where its top is higher than the water the earth shows, where it is lower the water stays. Water is built where it is listed, like every other layer; nothing is written about it last.</p>
+<p>The plan refuses what the listed order cannot satisfy, with <a class="codelink" href="../e/order.html"><code>dt::order</code></a> and the entry's place, and never reorders to cure it: a tree, grass or wall listed before the first <code>ground</code> or <code>dirt</code> it stands on, a thing that reads another kind (grass that needs rocks) with the first of that kind listed after it, a floor listed before a surface it lies on. Two things are placed by what they are, not by where they are written: the lift (the one solid the surfaces make together) comes right after the last surface, water or floor, and <code>base</code>, which reads the finished tile, is built last.</p>
+</section>
+<section class="rule">
+<h3 id="elements">A stack lists elements: the built-in ones and your own definitions</h3>
+<p>Each element has a page of its own, with what it makes, a picture, an example and every control it takes, generated from the program: <code>dharmatiles elements NAME</code> prints the same list. Each element leads with a few controls named for what you see. A word in a choice (<code>rock mixed</code>, <code>flow wild</code>) expands to documented numbers; a number is always accepted instead.</p>
+<div class="tbl"><table>
+<thead><tr><th>Kind</th><th>Elements</th></tr></thead>
+<tbody>
+<tr><td>Surfaces</td><td><a href="../elements/dirt.html"><code>dirt</code></a> · <a href="../elements/grass.html"><code>grass</code></a> · <a href="../elements/reeds.html"><code>reeds</code></a> · <a href="../elements/water.html"><code>water</code></a> · <a href="../elements/flagstones.html"><code>flagstones</code></a> · <a href="../elements/planks.html"><code>planks</code></a></td></tr>
+<tr><td>Things</td><td><a href="../elements/rock.html"><code>rock</code></a> · <a href="../elements/stone.html"><code>stone</code></a> · <a href="../elements/boulder.html"><code>boulder</code></a> · <a href="../elements/pebble.html"><code>pebble</code></a> · <a href="../elements/flower.html"><code>flower</code></a> · <a href="../elements/tree.html"><code>tree</code></a></td></tr>
+<tr><td>Runs</td><td><a href="../elements/wall.html"><code>wall</code></a> · <a href="../elements/cliff.html"><code>cliff</code></a></td></tr>
+<tr><td>Placement</td><td><a href="../elements/scatter.html"><code>scatter</code></a></td></tr>
+<tr><td>Bases (added by the build)</td><td><a href="../elements/dungeonblocks.html"><code>dungeonblocks</code></a> · <a href="../elements/openlock.html"><code>openlock</code></a></td></tr>
+</tbody></table></div>
+<p>The document's own elements are <a href="../elements/tile.html"><code>tile</code></a>, <a href="../elements/let.html"><code>let</code></a>, <a href="../elements/line.html"><code>line</code></a>, <a href="../elements/region.html"><code>region</code></a>, <a href="../elements/stack.html"><code>stack</code></a>, <a href="../elements/use.html"><code>use</code></a> and <a href="../elements/define.html"><code>define</code></a>.</p>
+</section>
+<section class="rule">
+<h3 id="entry" data-explains="dt::id dt::weight"><!--gen:anchors--><span id="dt-id"></span><span id="dt-weight"></span><!--/gen:anchors-->Every stack entry takes <code>id=</code>, <code>weight=</code> and the place words its element accepts</h3>
+<ul>
+  <li><code>id=</code>: a name for the entry, for edits and diagnostics.</li>
+  <li><code>weight=</code>: only on a child of a <code>scatter</code>, its share of the mix.</li>
+  <li>The place words its element accepts (<a href="placement.html#placement">placement</a>).</li>
+</ul>
+</section>
+<section class="rule">
+<h3 id="base-order" data-explains="dt::base-order"><!--gen:anchors--><span id="dt-base-order"></span><!--/gen:anchors-->The base is the first line of the stack, and there is one</h3>
+<p><code>base</code> anywhere but first, or a second one, is refused while the document is read (<code>the base is the first line of the stack</code>). A stack with no <code>base</code> line has none, and prints flat on the bed from zero.</p>
+</section>
+<section class="rule">
+<h3 id="look" data-explains="dt::look"><!--gen:anchors--><span id="dt-look"></span><!--/gen:anchors-->Some mistakes show only when an element builds</h3>
+<p>An element cannot build what a control or the place asks for, found only once it is built: <code>the top leaves the crown 0.2 mm to stand in over its base …</code>, with the help <code>raise the top where it is low, or lower the trunk</code>. Every refusal gives the place, the values and what would fit.</p>
+</section>
+<p class="not-yet"><strong>Not yet.</strong> An element the program knows but has not built yet is accepted by <code>check</code> and refused by <code>build</code>, with <a class="codelink" href="../e/not-yet.html"><code>dt::not-yet</code></a> and what to write instead; each element page says <em>built: not yet</em>.</p>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/order.html"><code>dt::order</code></a> The stack lists something before what it stands on <a class="cp-in" href="#stack-order">The rule</a></li>
+<li><a class="codelink" href="../e/plan.html"><code>dt::plan</code></a> The stack asks for something the plan cannot give yet <a class="cp-in" href="#stack-order">The rule</a></li>
+<li><a class="codelink" href="../e/id.html"><code>dt::id</code></a> Another entry of that element already has that <code>id=</code> <a class="cp-in" href="#entry">The rule</a></li>
+<li><a class="codelink" href="../e/weight.html"><code>dt::weight</code></a> <code>weight=</code> is a scatter child's share of the mix <a class="cp-in" href="#entry">The rule</a></li>
+<li><a class="codelink" href="../e/base-order.html"><code>dt::base-order</code></a> The base is the first line of the stack, and there is one <a class="cp-in" href="#base-order">The rule</a></li>
+<li><a class="codelink" href="../e/look.html"><code>dt::look</code></a> An element cannot build what a control or the place asks for <a class="cp-in" href="#look">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="placement.html">placement and scatter</a>, which says where an entry goes and how many of it.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

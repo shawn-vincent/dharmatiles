@@ -1,0 +1,16 @@
+dharmatiles version="1.0.0"
+
+// A scatter says how many and where; its children say what.  Here a pool of bare ground holds
+// rocks and pebbles, three rocks for every ten pebbles.
+tile size="1x1" seed=11 {
+    line shore wobble="4dmm" { through "(0sq, 2sq/3)" "(1sq, 0.5sq)" }
+    region pool { boundedBy shore; fill "(0.5sq, 0.85sq)" }
+    stack {
+        base
+        dirt
+        scatter at=pool perSquare=20 {
+            rock size="6dmm .. 10dmm" weight=3
+            pebble weight=10
+        }
+    }
+}

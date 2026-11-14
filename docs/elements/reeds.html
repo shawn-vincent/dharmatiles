@@ -25,7 +25,7 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+<pre><code>line shore wobble="5dmm" { through "wsw" "e" }
 region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
 region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
 region shoreBand { within "7dmm" of=shore }
@@ -68,6 +68,8 @@ stack {
 
 <h2 id="notes">Notes</h2>
 <p>No shipped library tile has reeds yet; the picture comes from the demo document. The shore and its reeds are described with <a href="water.html#shore">water</a>.</p>
+<!-- gen:seen -->
+<!-- /gen:seen -->
 </article>
 </div>
 </body>

@@ -1189,7 +1189,7 @@ impl<'k> Decoder<'k> {
                 format!("{} point(s)", line.through.len()),
             )
             .help = Some(
-                "write `through south \"(0.65sq, 0sq)\" north`: points, corners or edge middles"
+                "write `through south \"(0.65sq, 0.5sq)\" north`: points, corners or edge middles"
                     .to_owned(),
             );
         }
@@ -1213,7 +1213,8 @@ impl<'k> Decoder<'k> {
                 "a line needs `through`",
                 "no points",
             )
-            .help = Some("write `line trail { through south \"(0.65sq, 0sq)\" north }`".to_owned());
+            .help =
+                Some("write `line trail { through south \"(0.65sq, 0.5sq)\" north }`".to_owned());
         }
         Some(line)
     }
@@ -1446,7 +1447,7 @@ impl<'k> Decoder<'k> {
                             "`fill` takes a point",
                             "no point",
                         )
-                        .help = Some("write `fill \"(0.15sq, 0sq)\"`".to_owned());
+                        .help = Some("write `fill \"(0.15sq, 0.5sq)\"`".to_owned());
                     }
                 }
                 other => {

@@ -33,7 +33,7 @@
 
 tile size="1x1" seed=97 {
     about "Water in the lower half, a meadow bank in the upper."
-    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    line shore wobble="5dmm" { through "wsw" "e" }
     region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
     region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
     region shoreBand { within "7dmm" of=shore }
@@ -113,8 +113,14 @@ tile size=&quot;1x1&quot; seed=4 {
 <tr><td><a href="stack.html"><code>stack</code></a></td><td></td><td>—</td><td>What the tile is made of. <strong>Exactly one.</strong></td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>The document starts with its <a href="../language.html#header">header line</a>, and above the tile it may have <a href="use.html"><code>use</code></a> lines. Anything else at the top level of a tile document is an error. Positions in the tile count from the north-west corner: across the row, then down the column. The tile is the root <a href="../language.html#region-tree">region</a>, <code>$tile</code>. The build adds the <a href="dungeonblocks.html">DungeonBlocks</a> or <a href="openlock.html">OpenLOCK</a> base; the document never names it.</p>
+<p>The document starts with its <a href="../guide/tile.html#header">header line</a>, and above the tile it may have <a href="use.html"><code>use</code></a> lines. Anything else at the top level of a tile document is an error. Positions in the tile count from the north-west corner: across the row, then down the column. The tile is the root <a href="../guide/regions.html#region-tree">region</a>, <code>$tile</code>. The build adds the <a href="dungeonblocks.html">DungeonBlocks</a> or <a href="openlock.html">OpenLOCK</a> base; the document never names it.</p>
 <p>The file name is the tile's name everywhere: in the preview, the tile list and the STL (<code>1x1-water+grass.dtile</code> builds <code>1x1-water+grass-db.stl</code>). To rename a tile, rename its file. Library tiles follow the <a href="../standards/tile-system.html#naming">tile-system naming</a>; your own can be called anything.</p>
+<!-- gen:seen -->
+<section class="seen">
+<h2 id="seen">Seen from the language</h2>
+<p>The guide pages that use <code>tile</code>: <a href="../guide/tile.html">The tile document</a>, <a href="../guide/squares.html">Squares, cells and points</a>, <a href="../guide/lines.html">Lines</a>, <a href="../guide/units.html">Units and kinds</a>, <a href="../guide/seeds.html">Seeds</a>, <a href="../guide/errors.html">Reading errors</a>, <a href="../guide/worked.html">Worked tiles</a>.</p>
+</section>
+<!-- /gen:seen -->
 </article>
 </div>
 </body>

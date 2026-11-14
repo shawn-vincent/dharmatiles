@@ -1,0 +1,26 @@
+dharmatiles version="1.0.0"
+
+// library/tiles/walls/1x1-wall-fieldstone-corner.dtile
+use "parts/grass" lawn
+
+tile size="1x1" seed=64 {
+    stack {
+        base
+        dirt                                // bare earth at the ground height
+
+        // Along the north edge, then the west edge.  On a tile edge a
+        // wall always stands inside, its outer face flush with the edge.
+        wall at="north west" style=fieldstone {
+            height full                     // up to $wallHeight (33.1dmm)
+            thickness "7dmm"
+            coping loose                    // or: on-edge
+
+            // fieldstone's own defaults, written out to show them
+            stones height="2.2dmm .. 5.2dmm" length="5dmm .. 16dmm"
+            joints width="0dmm" depth="2.8dmm"        // how deep the gaps between stones look
+            edges rounding="1.3dmm .. 2.6dmm"       // worn corners
+        }
+
+        lawn
+    }
+}

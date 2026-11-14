@@ -1,0 +1,14 @@
+dharmatiles version="1.0.0"
+
+// A tile is columns by rows of squares, and every position counts from the north-west corner:
+// across, then down.  This tile is two squares across and one down; the knoll is in the second
+// square, 1.28 squares across and 0.72 down.
+tile size="2x1" seed=8 {
+    point knoll "(1.28sq, 0.72sq)"
+    region hill { within "9dmm" of=knoll }
+    stack {
+        base
+        dirt
+        grass at=hill
+    }
+}

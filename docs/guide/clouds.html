@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clouds</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Clouds</h1>
+  <p class="lede">A top may be a cloud: a low surface, a high surface and one weighting that says how often each height between them comes up.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#clouds">A top may be a cloud: a top with odds</a></li>
+<li><a href="#cloud-pin">A pin replaces the cloud where it holds</a></li>
+<li><a href="#cloud-arithmetic">Arithmetic on a cloud keeps two surfaces and one weighting</a></li>
+<li><a href="#cloud-negative">A negative factor swaps low and high</a></li>
+<li><a href="#cloud-two-rolls">Two ranges are two rolls</a></li>
+<li><a href="#cloud-refused">Some arithmetic a cloud does not have is refused</a></li>
+<li><a href="#cloud-numbers">A weighting&rsquo;s extra numbers stay plain</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html" aria-current="page">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="dirt water pin tree rock">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/guide/cloud.dtile" controls="seed">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/58b08ed516266122f84704f5cd8fac86.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+tile size=&quot;1x1&quot; seed=21 {
+    stack {
+        base
+        dirt top=&quot;$groundHeight + low(0dmm .. 3dmm)&quot; bumpSize=&quot;12dmm&quot;
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A top that is a cloud: dirt between the ground height and 3dmm over it, mostly low with a few rises.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>A plain range on a top lets the surface lie anywhere between two heights. A weighted range says how often: <code>low(0dmm .. 3dmm)</code> is mostly low with a few rises. The body draws one smooth surface and the weighting places it between the two.</p>
+<p>Pins, arithmetic and the other elements all work on clouds, and a few things are refused because they could fold the low and high surfaces over each other.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="clouds" data-explains="dt::cloud"><!--gen:anchors--><span id="dt-cloud"></span><!--/gen:anchors-->A top may be a cloud: a top with odds</h3>
+<p>A top may be a <em>cloud</em>: a low surface, a high surface and one weighting that says how often each height between them comes up. Write a weighted range in the top: <code>top="$groundHeight + low(0dmm .. 3dmm)"</code> is dirt between the ground height and 3dmm over it, mostly low with a few rises. A plain range, <code>[a .. b]</code>, is a cloud with every height equally likely, and builds exactly as it always did.</p>
+<p>The body supplies a roll from 0 to 1 at each point and the weighting places it between low and high. How neighbouring rolls relate is the element's own business: <code>dirt</code> and <code>water</code> roll one smooth surface (hills, waves), <code>flagstones</code>, <code>planks</code> and <code>cliff</code> draw their slabs and stacks of stones from one smooth heaved surface, so neighbours are alike. A weighting other than flat reads the roll by its <em>rank</em> over the body's points, so even a smooth field's heights come up as often as the weighting says. Rolls are fixed by the tile's seed and are the same on any number of threads. A tree rolls one smooth field of rolls over its branch tips, ranked through the weighting, so neighbouring tips are alike and the crown stays under the cloud's high; a rock (and <code>stone</code>, <code>boulder</code>, <code>pebble</code>) rolls one smooth field of rolls over the tile's stones, ranked through the weighting, and stands its peak at the cloud worked out at its middle (<code>rock top="$bottom + [4dmm .. 9dmm]"</code>; see <a href="../elements/rock.html#top">rock</a>).</p>
+</section>
+<section class="rule">
+<h3 id="cloud-pin">A pin replaces the cloud where it holds</h3>
+<p>Away from it the surface eases back into the cloud the way the body eases: dirt no steeper than its slope, water over 9 mm, cliffs and floors step. A pin's own top may be a cloud (<code>pin top="$waterBedHeight + high(0dmm .. 0.3dmm)"</code>), rolled with the body's roll; where pins overlap the later one wins. The library's rim pin is the edge height, so the top never leaves its cloud or its pins.</p>
+</section>
+<section class="rule">
+<h3 id="cloud-arithmetic">Arithmetic on a cloud keeps two surfaces and one weighting</h3>
+<p><code>+ - * /</code> by a number, or a formula that is a number at the point, shifts or stretches both surfaces and keeps the weighting; <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code> of one cloud and numbers act on the surfaces (<code>min(high(0dmm .. 20dmm), 10dmm)</code> is <code>high(0dmm .. 10dmm)</code>: no shelf).</p>
+</section>
+<section class="rule">
+<h3 id="cloud-negative">A negative factor swaps low and high</h3>
+<p><strong>A negative factor swaps low and high</strong> at the points where it is negative, and the weighting turns round with them, so low is always the lower surface: <code>10dmm - high(0dmm .. 4dmm)</code> is <code>low(6dmm .. 10dmm)</code>, point by point.</p>
+</section>
+<section class="rule">
+<h3 id="cloud-two-rolls">Two ranges are two rolls</h3>
+<p>A sum or difference of two ranges, with odds or without (<code>low(0dmm .. 2dmm) + [0dmm .. 2dmm]</code>, <code>[0dmm .. 2dmm] + [0dmm .. 2dmm]</code>), spans the interval of the sum and has the odds of two independent rolls: the second is a triangle over <code>0dmm .. 4dmm</code>, most often near 2dmm. The body still rolls one number at each point, in those odds.</p>
+</section>
+<section class="rule">
+<h3 id="cloud-refused">Some arithmetic a cloud does not have is refused</h3>
+<p><strong>Refused, with <a class="codelink" href="../e/cloud.html"><code>dt::cloud</code></a>:</strong> a cloud multiplied or divided by a range, dividing by a cloud or by a range, <code>sin</code>, <code>cos</code> or <code>abs</code> of a cloud (they can fold low and high over each other), a cloud at the end of a range. The help shows the rewrite.</p>
+</section>
+<section class="rule">
+<h3 id="cloud-numbers">A weighting&rsquo;s extra numbers stay plain</h3>
+<p>A weighting's extra numbers stay plain: <code>low(0dmm .. 3dmm, 11)</code>. A list is a cloud of the heights written (<code>[0dmm:3, 2dmm, 4dmm:1]</code>).</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/cloud.html"><code>dt::cloud</code></a> A top with odds (a cloud) is used in arithmetic it does not have <a class="cp-in" href="#clouds">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="seeds.html">seeds</a>, which fix every roll the language makes.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

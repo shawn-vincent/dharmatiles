@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Placement and scatter</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Placement and scatter</h1>
+  <p class="lede">One word, <code>at=</code>, says where an entry goes; <code>scatter</code> says how many of a thing.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#place-words">One word, <code>at=</code>, names the place</a></li>
+<li><a href="#place">A place the element cannot use is refused</a></li>
+<li><a href="#one-thing">A thing is one of itself</a></li>
+<li><a href="#scatter">More than one of a thing is a <code>scatter</code></a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html" aria-current="page">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="scatter rock tree flower stone boulder pebble">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/guide/scatter.dtile" controls="seed" overlay="regions">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/6e86fa5d61689e31aab5c70ad824baa5.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A scatter says how many and where; its children say what.  Here a pool of bare ground holds
+// rocks and pebbles, three rocks for every ten pebbles.
+tile size=&quot;1x1&quot; seed=11 {
+    line shore wobble=&quot;4dmm&quot; { through &quot;(0sq, 2sq/3)&quot; &quot;(1sq, 0.5sq)&quot; }
+    region pool { boundedBy shore; fill &quot;(0.5sq, 0.85sq)&quot; }
+    stack {
+        base
+        dirt
+        scatter at=pool perSquare=20 {
+            rock size=&quot;6dmm .. 10dmm&quot; weight=3
+            pebble weight=10
+        }
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A scatter: how many and where is the scatter&rsquo;s; what is in the pool is its children&rsquo;s. Roll the seed and the same recipe places them again.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>Every entry has one place. A region fills it, a line is followed or spread along, a point stands a single thing there; with no <code>at=</code> the entry covers the whole tile.</p>
+<p>A thing on its own is one of itself. More than one is a scatter: it says how many and where, and its children say what, each by its own weight.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="place-words"><span id="placement"></span>One word, <code>at=</code>, names the place</h3>
+<p>One word, <code>at=</code>, names the place, and <code>side=</code> adjusts a line. Each element page lists the kinds of place it takes.</p>
+<div class="tbl"><table>
+<thead><tr><th>Word</th><th>Takes</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>at=</code> a region</td><td>a region name</td><td>Acts only inside that region. Default: the whole tile.</td></tr>
+<tr><td><code>at=</code> a line</td><td>a line, an edge or an edge path</td><td>Built or spread along it. On a tile edge, always inside.</td></tr>
+<tr><td><code>at=</code> a point</td><td>a point (<code>"(0.65sq, 0.5sq)"</code>, <code>point(…)</code>, <code>polar(…)</code>), a point's name, or a corner or edge word</td><td>Centred there. No <code>at=</code>: anywhere in the area.</td></tr>
+<tr><td><code>at="foot(cliff)"</code></td><td><code>foot(</code> <code>cliff</code>, <code>wall</code>, <code>rock</code> or <code>tree</code> <code>)</code>, quoted</td><td>The band at the foot of that kind of thing, where a scatter gathers. <code>reach=</code> says how far out.</td></tr>
+<tr><td><code>side=</code></td><td><code>left</code>, <code>right</code> or <code>centre</code></td><td>Along a drawn line, which side the element stands, as you walk the line. Not on a tile edge.</td></tr>
+</tbody></table></div>
+<p>A wall must have <code>at=</code> a line; a cliff needs it for the edge forms (<code>run</code>, <code>corner</code>, <code>escarpment</code>) but not the free-standing ones. Surfaces take a region and usually a line; things take a point or a region. An entry has one place: a second <code>at=</code> is <a class="codelink" href="../e/duplicate.html"><code>dt::duplicate</code></a>.</p>
+</section>
+<section class="rule">
+<h3 id="place" data-explains="dt::place"><!--gen:anchors--><span id="dt-place"></span><!--/gen:anchors-->A place the element cannot use is refused</h3>
+<p>Each element takes the kinds of place that mean something to it and refuses the others with <a class="codelink" href="../e/place.html"><code>dt::place</code></a> or <a class="codelink" href="../e/type.html"><code>dt::type</code></a> and a help line: a second <code>at=</code> on one entry, a thing given a line, a scatter given a point, a nesting that has no meaning. The message names what the element accepts.</p>
+</section>
+<section class="rule">
+<h3 id="one-thing">A thing is one of itself</h3>
+<p>Things share one vocabulary. A rock (and <code>stone</code>, <code>boulder</code>, <code>pebble</code>), a <code>tree</code> and a <code>flower</code> are placed the same way, with <code>at=</code> a point or a region they stand in, and sized the same way, by <code>size=</code>, which takes a number, a range or any weighting (<code>size="low(1dmm .. 6dmm, 11)"</code>); a tree's <code>size</code> is its height and a flower's the width across its petals. Many of them are a <code>scatter</code> whose children are things: <code>scatter at=meadow perSquare=4 { flower size="4dmm .. 6dmm" }</code>. A scatter holds rocks, flowers and trees, alone or mixed: each placed item picks its child by <code>weight=</code>, and one <code>gap</code> keeps every two things apart (trees are placed first, then rocks, then flowers); trees keep their crowns clear of one another, and <code>scatter at=road count=3 { tree }</code> is a row of trees along a line. A thing is one of itself. How many is never its own control: <code>tree count=3</code> is an error whose help says to use a scatter. With no <code>at=</code> a thing goes anywhere in its area. Either way its footprint is kept inside the tile and clear of other solids, nudged inward rather than clipped.</p>
+</section>
+<section class="rule">
+<h3 id="scatter" data-explains="dt::scatter"><!--gen:anchors--><span id="dt-scatter"></span><!--/gen:anchors-->More than one of a thing is a <code>scatter</code></h3>
+<p>More than one of a thing is a <code>scatter</code>. It says how many and where; its children say what.</p>
+<div class="tbl"><table>
+<thead><tr><th>Control</th><th>Takes</th><th>What you get</th></tr></thead>
+<tbody>
+<tr><td><code>count</code></td><td>number, or a weighted range</td><td>How many, in total.</td></tr>
+<tr><td><code>perSquare</code></td><td>number, or a weighted range</td><td>How many per square of the area, or per square of length along a line.</td></tr>
+<tr><td><code>reach</code></td><td>a length</td><td>With <code>at="foot(…)"</code>: how far out from the foot.</td></tr>
+<tr><td><code>clumps</code></td><td>per square</td><td>Gathers them into clumps. Default: spread evenly.</td></tr>
+<tr><td><code>gap</code></td><td>a length</td><td>Least space between neighbours.</td></tr>
+<tr><td>child <code>weight=</code></td><td>number</td><td>Share of the mix when there are several children. Default: equal.</td></tr>
+</tbody></table></div>
+<p>A scatter must have exactly one of <code>count</code> and <code>perSquare</code>; <code>reach</code> needs <code>at="foot(…)"</code>. A scatter inside a surface (<code>dirt { scatter … }</code>) lands on that surface.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/place.html"><code>dt::place</code></a> That place is not one the element can use <a class="cp-in" href="#place">The rule</a></li>
+<li><a class="codelink" href="../e/scatter.html"><code>dt::scatter</code></a> That element cannot be scattered <a class="cp-in" href="#scatter">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="values.html">values and ranges</a>, the numbers that sizes and counts are written as.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

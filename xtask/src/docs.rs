@@ -24,6 +24,7 @@ const SOURCE: &str = "https://github.com/shawn-vincent/dharmatiles/blob/main/";
 /// and fail if any page is stale.
 pub fn run(root: &Path, check: bool) -> Result<(), String> {
     crate::shots::check(root)?;
+    crate::nav::run(root, check)?;
     let bin = crate::program(root, true)?;
     crate::codes::run(root, check, &bin)?;
     crate::live::run(root, check)?;
@@ -32,6 +33,7 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
         .output()
         .map_err(|e| format!("{}: {e}", bin.display()))?;
     let all: Value = serde_json::from_slice(&json.stdout).map_err(|e| e.to_string())?;
+    crate::guide::run(root, check, &bin, &all["seams"])?;
     let names: Vec<String> = all["elements"]
         .as_array()
         .ok_or("no elements in `dharmatiles elements --json`")?
@@ -167,6 +169,18 @@ fn fill(text: &str, elements: &[Value], tiles: &[(String, String)]) -> Result<St
     Ok(out)
 }
 
+/// How a seam's position along a square's edge is said: as a fraction and in words.
+pub fn seam_fraction(at: f64) -> Option<(&'static str, &'static str)> {
+    [
+        (1.0 / 3.0, "1/3", "a third"),
+        (0.5, "1/2", "half"),
+        (2.0 / 3.0, "2/3", "two thirds"),
+    ]
+    .iter()
+    .find(|f| (f.0 - at).abs() < 1e-9)
+    .map(|f| (f.1, f.2))
+}
+
 const SEAMS_OPEN: &str = "<!-- gen:seams -->";
 const SEAMS_CLOSE: &str = "<!-- /gen:seams -->";
 
@@ -189,23 +203,14 @@ fn fill_seams(text: &str, seams: &Value) -> Result<String, String> {
     let corners = seams["corners"]
         .as_array()
         .ok_or("no corners in the edge contract")?;
-    let fractions = [
-        (1.0 / 3.0, "1/3", "a third"),
-        (0.5, "1/2", "half"),
-        (2.0 / 3.0, "2/3", "two thirds"),
-    ];
     let mut s = String::new();
     s.push_str(SEAMS_OPEN);
     s.push_str("\n<div class=\"tbl\"><table>\n<thead><tr><th>Along a square&rsquo;s edge</th><th>north</th><th>south</th><th>west</th><th>east</th><th>As a point, on a north side</th></tr></thead>\n<tbody>\n");
     for row in rows {
         let at = row["at"].as_f64().ok_or("a seam has no position")?;
-        let (text, what) = fractions
-            .iter()
-            .find(|f| (f.0 - at).abs() < 1e-9)
-            .map(|f| (f.1, f.2))
-            .ok_or_else(|| {
-                format!("seam {at} has no fraction to show it by: add it to xtask/src/docs.rs")
-            })?;
+        let (text, what) = seam_fraction(at).ok_or_else(|| {
+            format!("seam {at} has no fraction to show it by: add it to xtask/src/docs.rs")
+        })?;
         let word = |k: &str| row[k].as_str().unwrap_or_default();
         let _ = writeln!(
             s,

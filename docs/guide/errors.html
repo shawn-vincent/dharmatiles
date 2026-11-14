@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reading errors</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Reading errors</h1>
+  <p class="lede">Every mistake gets a message with a stable code, the line it is on with the spot underlined, and a hint for what to write instead.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#errors">Every mistake has a code, a place and a hint</a></li>
+<li><a href="#refusals">Mistakes are found in four phases, each as early as it can be known</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html" aria-current="page">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="tile">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/units/no-unit.dtile" expect-error="dt::unit">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view dtx-nothing" style="aspect-ratio: 1 / 1"><div class="dtx-nobuild"><b>Nothing builds</b><span>this source gives <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a></span></div></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A bare number is not a length: the wobble needs a unit, so this tile does not build.
+tile size=&quot;1x1&quot; seed=4 {
+    line stream wobble=5 { through &quot;(0sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
+    stack {
+        base
+        dirt
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A source with a mistake builds nothing. The message names the code, the spot, and what to write instead.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>The program reads on past a mistake, so all of a file&rsquo;s mistakes come together. <code>dharmatiles check my-tile.dtile</code> reports them without building; the preview shows them beside the tile.</p>
+<p>Each code has a page of its own with the rule, a broken document beside its fix, and a link to the section of this guide that explains it.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="errors" data-explains="dt::unknown-control dt::unknown-element"><!--gen:anchors--><span id="dt-unknown-control"></span><span id="dt-unknown-element"></span><!--/gen:anchors-->Every mistake has a code, a place and a hint</h3>
+<p>Every mistake gets a message with a stable code (such as <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a>), the line it is on with the spot underlined, and a hint that says what to write instead. The program reads on past a mistake, so all of a file's mistakes come together. <code>dharmatiles check my-tile.dtile</code> reports them without building (it takes <code>--system</code>, <code>--printer</code> and <code>--seed</code> like <code>build</code>, so a mistake that only shows on OpenLOCK is caught too); the <a href="../preview.html">preview</a> shows them beside the tile. Two examples, from one file:</p>
+<pre data-output><code>dt::unit
+
+  × `pebble size`: `1.2` has no unit, and a length is written with one
+   ╭─[my-tile.dtile:7:44]
+ 6 │         dirt
+ 7 │         scatter perSquare=40 { pebble size=1.2 }
+   ·                                            ─┬─
+   ·                                             ╰── here
+ 8 │         grass cover="85%"
+   ╰────
+  help: write 1.2dmm or 1.2mm (`dmm` is 1/35 of a square: 1 mm on
+        DungeonBlocks; `mm` is a printed millimetre)
+
+dt::unknown-control
+
+  × `tree` has no control `count`
+    ╭─[my-tile.dtile:9:36]
+  8 │         grass cover="85%"
+  9 │         tree top="$bottom + 40dmm" count=3
+    ·                                    ──┬──
+    ·                                      ╰── unknown control
+ 10 │     }
+    ╰────
+  help: a tree is one tree; how many and how spread is a scatter's job:
+        `scatter count=… { tree }`</code></pre>
+<pre data-output><code>dt::unknown-element
+
+  × no element or definition is called `dirrt`
+   ╭─[my-tile.dtile:6:9]
+ 5 │         base
+ 6 │         dirrt clods=none
+   ·         ──┬──
+   ·           ╰── unknown
+ 7 │     }
+   ╰────
+  help: did you mean `dirt`?</code></pre>
+<p>Other mistakes caught the same way: a misspelt control (<code>clumsp</code>, did you mean <code>clumps</code>?), a range or a size that is not quoted, an expert control in a tile, a wall without <code>at=</code>, <code>side=</code> on a tile edge, and KDL v1 syntax.</p>
+</section>
+<section class="rule">
+<h3 id="refusals">Mistakes are found in four phases, each as early as it can be known</h3>
+<p>Four phases, each as early as it can know. The static ones are found reading the document; the solve ones when <code>check</code> works out the bands; the build ones only when the element builds. Every refusal gives the place, the values and what would fit.</p>
+<p>A note does not stop the build; <code>check</code> prints it after the tile's line. The pins named in a note are the ones that cause it.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/unknown-control.html"><code>dt::unknown-control</code></a> The element has no control by that name <a class="cp-in" href="#errors">The rule</a></li>
+<li><a class="codelink" href="../e/unknown-element.html"><code>dt::unknown-element</code></a> No element or definition is called that <a class="cp-in" href="#errors">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="worked.html">worked tiles</a>, whole tiles that put the guide together.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

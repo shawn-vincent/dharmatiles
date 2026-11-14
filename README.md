@@ -60,7 +60,7 @@ dharmatiles elements                          # the elements and their controls
 
 ## Documentation
 
-The site under `docs/` is the reference: the [language guide](docs/language.html), one page per [element](docs/elements/index.html), [composing a tile](docs/composing.html), the [tile system](docs/standards/tile-system.html), [printing](docs/standards/printing.html) and the [rules](docs/standards/rules.html).
+The site under `docs/` is the reference: the [language guide](docs/language.html) (a map of one page for each idea in [docs/guide/](docs/guide/)), one page per [element](docs/elements/index.html), [composing a tile](docs/composing.html), the [tile system](docs/standards/tile-system.html), [printing](docs/standards/printing.html) and the [rules](docs/standards/rules.html).
 
 ## Layout
 
