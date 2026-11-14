@@ -316,6 +316,42 @@ fn plan(files: &[String], pkgs: &BTreeMap<String, (String, Vec<String>)>) -> Pla
     p
 }
 
+/// How long the loop may take (Shawn, 14 Nov 2026): the checks run as work goes on, two minutes; everything,
+/// before a push or a release, ten. A cold build is held to five minutes and a warm one to one, measured by hand.
+/// Past a budget the loop has slowed: the next task is to make it fast again, before anything else.
+const CHECK_BUDGET: f64 = 120.0;
+const FULL_BUDGET: f64 = 600.0;
+
+/// Say loudly when a run took longer than its budget, and keep every run's time in the repository's common git
+/// folder (`dt-times.tsv`, shared by the worktrees), so a slow creep shows before it is half an hour.
+fn over_budget(root: &Path, what: &str, secs: f64, budget: f64) -> Result<(), String> {
+    use std::io::Write as _;
+    let common = git(
+        root,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )?;
+    let log = PathBuf::from(common).join("dt-times.tsv");
+    let branch = git(root, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+    let when = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+    let mut f = File::options()
+        .create(true)
+        .append(true)
+        .open(&log)
+        .map_err(|e| format!("{}: {e}", log.display()))?;
+    writeln!(f, "{when}\t{branch}\t{what}\t{secs:.0}\t{budget:.0}")
+        .map_err(|e| format!("{}: {e}", log.display()))?;
+    if secs > budget {
+        println!(
+            "\nOVER BUDGET: {what} took {secs:.0} s, past its {budget:.0} s. The loop has slowed: queue a task to make it fast again, next, before other work (times: {})",
+            log.display()
+        );
+    }
+    Ok(())
+}
+
 /// One check: what it is, and the call that runs it.
 type Step<'a> = Box<dyn Fn() -> Result<(), String> + 'a>;
 
@@ -435,6 +471,12 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
         }
     }
     let total = t0.elapsed().as_secs_f64();
+    over_budget(
+        root,
+        if full { "check --full" } else { "check" },
+        total,
+        if full { FULL_BUDGET } else { CHECK_BUDGET },
+    )?;
     if failed.is_empty() {
         println!("\nall {} checks passed in {total:.0} s", steps.len());
         Ok(())
