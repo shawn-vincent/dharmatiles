@@ -1,15 +1,13 @@
 dharmatiles version="1.0.0"
 
-// Bambu Lab H2C: 325 x 320 x 320 mm.  The floors (line, layer, overhang, steepest, gap)
+// Bambu Lab H2C: 330 x 320 x 325 mm, two nozzles (Bambu Studio's machine profile).  The floors (line, layer, overhang, steepest, gap)
 // are the default profile's; a machine names the bed and the filaments.
-// VERIFY: not yet checked against the maker's own page (see `verify` below).
 
 printer h2c {
     brand   "Bambu Lab"
     model   "H2C"
-    bed     "325x320mm"
-    height  "320mm"
+    bed     "330x320mm"
+    height  "325mm"
     nozzle  "0.4mm"
-    slots   1
-    verify  "325 to 330 x 320 x 320 to 325 depending on the source."
+    slots   2   // one filament a nozzle without an AMS
 }

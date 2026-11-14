@@ -59,11 +59,15 @@ fn your_two_printers_are_there_as_the_page_says() {
     assert_eq!(x1c.slot_count(), 1);
     assert!(x1c.is_bambu());
     assert!(x1c.verify.is_none(), "the X1 Carbon's numbers agree");
+    // Bambu Studio prints it to 250 mm and keeps the cutter's corner clear
+    assert_eq!(x1c.height, Some(250.0));
+    assert_eq!(x1c.excluded, vec![[0.0, 0.0, 18.0, 28.0]]);
     // the AMS one starts from the plain one and says only its slots
     let ams = printer_machine("bambu/x1c-ams", None).unwrap();
     assert_eq!(ams.bed, Some([256.0, 256.0]));
     assert_eq!(ams.slot_count(), 4);
     assert_eq!(ams.brand.as_deref(), Some("Bambu Lab"));
+    assert_eq!(ams.excluded, x1c.excluded, "the AMS one keeps the same corner clear");
     let sv06 = printer_machine("sovol/sv06", None).unwrap();
     assert_eq!(sv06.bed, Some([220.0, 220.0]));
     assert_eq!(sv06.height, Some(250.0));
@@ -73,10 +77,17 @@ fn your_two_printers_are_there_as_the_page_says() {
 
 #[test]
 fn rows_the_sources_disagree_on_carry_their_verify_mark() {
-    for n in ["bambu/h2d", "bambu/h2c", "bambu/x2d", "voron/2-4-300"] {
+    for n in ["bambu/h2d", "voron/2-4-300"] {
         let m = printer_machine(n, None).unwrap();
         assert!(m.verify.is_some(), "{n} is marked verify");
     }
+    // read from the maker's own slicer, these two no longer disagree: two nozzles, a filament each
+    let h2c = printer_machine("bambu/h2c", None).unwrap();
+    assert_eq!((h2c.bed, h2c.height, h2c.slot_count()), (Some([330.0, 320.0]), Some(325.0), 2));
+    assert!(h2c.verify.is_none());
+    let x2d = printer_machine("bambu/x2d", None).unwrap();
+    assert_eq!((x2d.height, x2d.slot_count()), (Some(261.0), 2));
+    assert!(x2d.verify.is_none());
     let h2d = printer_machine("bambu/h2d", None).unwrap();
     assert!(h2d.verify.unwrap().contains("nozzle mode"));
 }

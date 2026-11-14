@@ -1,15 +1,13 @@
 dharmatiles version="1.0.0"
 
-// Bambu Lab X2D: 256 x 256 x 260 mm.  The floors (line, layer, overhang, steepest, gap)
+// Bambu Lab X2D: 256 x 256 x 261 mm, two nozzles (Bambu Studio's machine profile).  The floors (line, layer, overhang, steepest, gap)
 // are the default profile's; a machine names the bed and the filaments.
-// VERIFY: not yet checked against the maker's own page (see `verify` below).
 
 printer x2d {
     brand   "Bambu Lab"
     model   "X2D"
     bed     "256x256mm"
-    height  "260mm"
+    height  "261mm"
     nozzle  "0.4mm"
-    slots   1
-    verify  "One source only: 256 x 256 x 260."
+    slots   2   // one filament a nozzle without an AMS
 }

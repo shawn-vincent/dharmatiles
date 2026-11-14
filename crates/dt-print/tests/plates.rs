@@ -139,10 +139,11 @@ fn the_real_footprints_make_the_plates_and_a_crown_costs_room() {
     .unwrap();
     let flat = plates::layout(&p, &[boxes([35.0, 35.0], &[])]).unwrap();
     assert_eq!(flat.plates.len(), 1, "6 x 6 squares on a 256 bed");
-    // the same thirty with a crown 9.4 mm past the square: five a row, five rows
+    // the same thirty with a crown 9.4 mm past the square: five a row, five rows, less the one
+    // place the X1 Carbon's cutter corner (18 x 28 mm, front left) keeps clear
     let crown = plates::layout(&p, &[boxes([44.3, 44.4], &[])]).unwrap();
     assert_eq!(crown.plates.len(), 2);
-    assert_eq!(crown.plates[0].len(), 25);
+    assert_eq!(crown.plates[0].len(), 24);
     assert_eq!(crown.pieces(), 30);
 }
 
