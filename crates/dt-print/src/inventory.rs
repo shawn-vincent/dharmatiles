@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use dt_doc::inventory::{self as doc, Inventory};
 
-use crate::diag::Diag;
-use crate::source::{LIB, Source};
+use dt_eval::source::{LIB, Source};
+use dt_eval::{Diag, Files};
 
 /// Where the inventory is: `inventory.dinv` in `home` (My tiles).
 #[must_use]
@@ -63,8 +63,8 @@ pub fn short_hash(h: u64) -> String {
 #[must_use]
 pub fn tile_hash(canon: &str, home: Option<&Path>) -> Option<String> {
     let path = readable(canon, home)?;
-    let text = crate::source::Files.read(&path).ok()?;
-    Some(short_hash(crate::doc::text_hash(&text)))
+    let text = Files.read(&path).ok()?;
+    Some(short_hash(dt_eval::doc::text_hash(&text)))
 }
 
 /// Is the tile different from when it was printed?  False when the print
@@ -170,7 +170,7 @@ pub fn append(home: &Path, lines: &[String]) -> Result<PathBuf, Vec<Diag>> {
             doc::new_text(&dt_doc::header::stamp(env!("CARGO_PKG_VERSION")), lines)
         }
     };
-    crate::atomic::write_atomic(&path, text).map_err(|e| {
+    dt_eval::atomic::write_atomic(&path, text).map_err(|e| {
         vec![Diag::plain(
             "dt::inventory",
             format!("cannot write {}: {e}", path.display()),
@@ -204,15 +204,15 @@ pub fn name_tile(
 ) -> Result<Named, Vec<Diag>> {
     let path = crate::plates::tile_path(tile, dir, home)
         .map_err(|e| vec![Diag::plain("dt::inventory", e)])?;
-    let text = crate::source::Files
+    let text = Files
         .read(&path)
         .map_err(|e| vec![Diag::plain("dt::inventory", e)])?;
-    let opts = crate::Options {
+    let opts = dt_eval::Options {
         system: system.to_owned(),
         seed,
-        ..crate::Options::default()
+        ..dt_eval::Options::default()
     };
-    let checked = crate::check(&crate::source::Files, &path, &opts)?;
+    let checked = dt_eval::check(&Files, &path, &opts)?;
     if checked.tile.is_none() {
         return Err(vec![Diag::plain(
             "dt::inventory",
@@ -222,6 +222,6 @@ pub fn name_tile(
     Ok(Named {
         canon: canonical(&path, home),
         seed: checked.seed,
-        hash: short_hash(crate::doc::text_hash(&text)),
+        hash: short_hash(dt_eval::doc::text_hash(&text)),
     })
 }

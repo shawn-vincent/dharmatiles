@@ -1,7 +1,8 @@
 //! dt-kit: the vocabulary elements are written in.
 //!
 //! The scene of tagged solids ([`Scene`]), the operations, the audit gate,
-//! the STL writer with its build record, and the CPU preview renderer.
+//! the build record, and the painter (palette and per-face colour).  The
+//! files a printer reads and the PNG renderer are `dt-print`.
 //! Elements see only this crate's public API, so an element cannot reach
 //! into the kernels or into another element.
 //!
@@ -24,8 +25,7 @@
 //! | [`Scene::top`] | query: highest z of every solid so far |
 //! | [`Scene::union`] | the whole scene, exported once, with materials |
 //! | [`audit`] | the printability gate |
-//! | [`stl`] | binary STL with the build record |
-//! | [`render`] | a painted preview |
+//! | [`paint_mesh`] | the painter: a colour for every face |
 //!
 //! Also the forms ([`form`]: level sets, hulls, solids from meshes,
 //! box clips, the common stone relief and 3D noise) that walls, floors
@@ -43,7 +43,6 @@
 //! [`Scene::union`].
 
 mod audit;
-mod bambu;
 mod band;
 pub mod debug;
 mod entry;
@@ -53,25 +52,22 @@ pub mod graph;
 mod land;
 mod outline;
 mod paint;
+mod palette;
 mod piece;
 pub mod pieces;
-mod plates;
 pub mod progress;
 pub mod rays;
-mod render;
+mod record;
 mod scene;
 mod shape;
 pub mod span;
 mod stand;
-mod stl;
 mod stone;
-mod threemf;
 
 pub use audit::{
     Audit, Dropped, Export, Hang, HangBand, Printer, audit, audit_banded, audit_rounded, draft,
     fit, hang,
 };
-pub use bambu::{bambu_project, bed_centre, bed_corners, project_settings};
 pub use band::{
     Band, Banded, Ease, Lint, Odds, OddsBuilder, Pin, Refusal, Shadowed, Solved, Steep, drop_mm,
     lints, solve, solve_traced,
@@ -88,14 +84,11 @@ pub use field::{
 };
 pub use land::{Disc, Land, STEEPEST_GROUND_DEG, Seat, SeatRule, THINGS, seat_on};
 pub use outline::Outline;
-pub use paint::paint_mesh;
+pub use paint::{ORANGE, RED, SurfacePaint, paint, paint_mesh, paint_surface};
+pub use palette::{Palette, RAMPS, Ramp};
 pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
-pub use plates::{
-    PlatePart, PlateSet, PlateStand, bambu_columns, bambu_plate_origin, bambu_plates, box_of,
-    filaments_of, plate_3mf, plate_stl, stand_positions,
-};
 pub use progress::{Counter, Event, Progress, Reporter};
-pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
+pub use record::{BuildRecord, target_name};
 pub use scene::{
     ABSENT_UNDER_MM, CORNER_ROUND_MM, Carpet, Frame, Kind, LIFT_TOL_MM, LOW_LIFT_TOL_MM, LayerSpec,
     Material, Part, Parts, Placement, REFERENCE_SQUARE_MM, Relief, Rest, Scene, SideSpec, Slot,
@@ -103,9 +96,7 @@ pub use scene::{
 };
 pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};
 pub use stand::{Stand, Stood, stand};
-pub use stl::{BuildRecord, stl, target_name};
 pub use stone::{Grain, grain, hull, solid};
-pub use threemf::{Palette, RAMPS, Ramp, threemf};
 
 /// Why a kit operation failed.
 #[derive(Clone, Debug, PartialEq)]

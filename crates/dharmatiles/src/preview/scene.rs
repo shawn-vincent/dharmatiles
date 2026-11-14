@@ -324,7 +324,7 @@ fn colour_of(list: &PrintList, printer: &str, home: Option<&Path>) -> &'static s
         },
         |m| m.value,
     );
-    dt_eval::plates::colour_of(mode).word()
+    dt_print::plates::colour_of(mode).word()
 }
 
 /// Say what the shelf holds of each piece, in the order written: copies of one piece share what you own, so the first
@@ -334,7 +334,7 @@ fn colour_of(list: &PrintList, printer: &str, home: Option<&Path>) -> &'static s
 /// An inventory that does not read counts as none here: the snapshot says what is wrong with it.
 fn mark_shelf(pieces: &mut [ScenePiece], home: Option<&Path>) -> (bool, usize, usize) {
     use dt_doc::inventory::{Colour, Identity, Shelf};
-    let loaded = home.and_then(|h| dt_eval::inventory::load(h).ok().flatten());
+    let loaded = home.and_then(|h| dt_print::inventory::load(h).ok().flatten());
     let shelf = loaded.as_ref().map(|l| Shelf::of(&l.inventory));
     let exists = shelf.is_some();
     let mut left: BTreeMap<Identity, u32> = BTreeMap::new();
@@ -430,7 +430,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             .as_ref()
             .map_or_else(|| default_system.clone(), |s| s.value.clone());
         let sq = dt_kit::Frame::for_system(&system, 1, 1).square_mm;
-        let tpath = dt_eval::plates::tile_path(&p.tile.value, dir, home);
+        let tpath = dt_print::plates::tile_path(&p.tile.value, dir, home);
         let mut error = tpath.as_ref().err().cloned();
         let tpath = tpath.unwrap_or_default();
         let seed = p.seed.as_ref().map(|s| s.value);
@@ -518,7 +518,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             lo = [lo[0].min(f[0]), lo[1].min(f[1])];
             hi = [hi[0].max(f[2]), hi[1].max(f[3])];
         }
-        let canon = dt_eval::inventory::canonical(&tpath, home);
+        let canon = dt_print::inventory::canonical(&tpath, home);
         let name = tpath
             .rsplit(['/', ':'])
             .next()

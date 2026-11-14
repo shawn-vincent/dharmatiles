@@ -508,7 +508,7 @@ pub fn build_with(
 #[must_use]
 pub fn stl_sha256(built: &dt_eval::Built) -> (String, usize) {
     use sha2::{Digest, Sha256};
-    let bytes = dt_kit::stl(&built.export.mesh, &built.record);
+    let bytes = dt_print::stl(&built.export.mesh, &built.record);
     let digest = Sha256::digest(&bytes[80..]);
     let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     (hex, bytes.len())

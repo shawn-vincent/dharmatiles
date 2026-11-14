@@ -56,8 +56,8 @@ fn same(a: &Built, b: &Built) {
     assert_eq!(format!("{:?}", a.debug), format!("{:?}", b.debug));
     assert_eq!(a.colours(), b.colours());
     assert_eq!(
-        dt_kit::stl(&a.export.mesh, &a.record),
-        dt_kit::stl(&b.export.mesh, &b.record)
+        dt_print::stl(&a.export.mesh, &a.record),
+        dt_print::stl(&b.export.mesh, &b.record)
     );
 }
 

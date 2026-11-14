@@ -18,7 +18,7 @@
 //! badly) and does not count.
 //!
 //! This module reads and writes the text and counts; where the file lives and
-//! which tile a path means is the evaluator's (`dt_eval::inventory`).
+//! which tile a path means is `dt-print`'s (`dt_print::inventory`).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

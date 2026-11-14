@@ -2668,7 +2668,7 @@ fn atomic_only() {
     rs_files(&src.join("preview"), &mut files);
     files.push(src.join("slicers.rs"));
     files.push(src.join("library.rs"));
-    files.push(src.join("../../dt-eval/src/inventory.rs"));
+    files.push(src.join("../../dt-print/src/inventory.rs"));
     let mut bad = Vec::new();
     for f in &files {
         let text = std::fs::read_to_string(f).unwrap();

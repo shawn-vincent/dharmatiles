@@ -19,10 +19,6 @@ dt-lang.workspace = true
 dt-value.workspace = true
 libm.workspace = true
 parry3d.workspace = true
-png.workspace = true
-flate2.workspace = true
-crc32fast.workspace = true
-serde_json.workspace = true
 
 # rayon through dt-par: the one place that runs it sequentially in the browser
 rayon = { package = "dt-par", path = "../dt-par" }

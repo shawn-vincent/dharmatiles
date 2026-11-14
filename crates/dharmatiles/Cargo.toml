@@ -23,6 +23,7 @@ dt-lang.workspace = true
 kdl.workspace = true
 dt-eval.workspace = true
 dt-store.workspace = true
+dt-print.workspace = true
 dt-kit.workspace = true
 dt-elements.workspace = true
 libm.workspace = true

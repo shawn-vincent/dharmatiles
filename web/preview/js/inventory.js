@@ -18,7 +18,7 @@ export const colourName = (c) => (c === 'multi' ? 'multicolour' : 'single colour
 /**
  * How the log names a tile: `lib:tiles/ground/1x1-grass` for the library's, `home:meadows/glade` for one in
  * My tiles (`home` is the folder, from the snapshot's inventory), else its path; the `.dtile` is left off.
- * The program does the same (dt_eval::inventory::canonical): the two must agree.
+ * The program does the same (dt_print::inventory::canonical): the two must agree.
  */
 export function canonOf(path, home) {
   let p = slashes(path).replace(/\.dtile$/i, '');

@@ -17,10 +17,8 @@ use dt_doc::inventory::{Colour, Identity, Shelf};
 use dt_doc::map::{DEFAULT_PRINTER, Group, Mode, PrintList, PrintMode};
 use dt_kit::Material;
 
-use crate::diag::Diag;
-use crate::machine::{Machine, printer_machine};
-use crate::options::Options;
-use crate::source::{LIB, Source};
+use dt_eval::source::{LIB, Source};
+use dt_eval::{Diag, Machine, Options, printer_machine};
 use pack::{Item, Packing, Placed, Spec};
 
 /// What a caller says beyond the list itself (the command line's words).
@@ -226,8 +224,8 @@ impl Plan {
 /// builds, and a build gives the real filaments.  Earth is always there: the
 /// connector prints in it.
 #[must_use]
-pub fn estimate(tile: &crate::Tile) -> Vec<Material> {
-    fn of(what: &str, controls: &[crate::doc::Setting], out: &mut Vec<Material>) {
+pub fn estimate(tile: &dt_eval::Tile) -> Vec<Material> {
+    fn of(what: &str, controls: &[dt_eval::doc::Setting], out: &mut Vec<Material>) {
         // a winter tree (`leaves=bare`) has no clumps and no leaves: no leaf material
         let bare = controls.iter().any(|c| {
             c.name == "leaves" && matches!(&c.value, dt_elements::Value::Word(w) if w == "bare")
@@ -251,7 +249,7 @@ pub fn estimate(tile: &crate::Tile) -> Vec<Material> {
             of(&c.what.value, &c.controls, &mut out);
         }
     }
-    dt_kit::filaments_of(&out)
+    crate::filaments_of(&out)
 }
 
 /// The path a piece's tile is read from: `lib:tiles/ground/1x1-grass` is the
@@ -420,7 +418,7 @@ pub fn plan(
             seed,
             ..ctx.base.clone()
         };
-        let checked = match crate::check(ctx.sources, &path, &opts) {
+        let checked = match dt_eval::check(ctx.sources, &path, &opts) {
             Ok(c) => c,
             Err(e) => {
                 // the tile's own mistakes, where the tile writes them; and where the
@@ -457,7 +455,7 @@ pub fn plan(
                     ctx.sources
                         .read(&path)
                         .ok()
-                        .map(|t| crate::inventory::short_hash(crate::doc::text_hash(&t)))
+                        .map(|t| crate::inventory::short_hash(dt_eval::doc::text_hash(&t)))
                 })
                 .unwrap_or_default();
         always.push(if p.print == PrintMode::Always {
@@ -656,12 +654,12 @@ impl Boxes {
     /// From a mesh and the material of each of its triangles.
     #[must_use]
     pub fn of(mesh: &dt_kit::TriMesh, materials: &[Material]) -> Self {
-        let (lo, hi) = dt_kit::box_of(mesh);
+        let (lo, hi) = crate::box_of(mesh);
         Self {
             lo,
             size: [hi[0] - lo[0], hi[1] - lo[1]],
             height: hi[2] - lo[2],
-            filaments: dt_kit::filaments_of(materials),
+            filaments: crate::filaments_of(materials),
         }
     }
 }

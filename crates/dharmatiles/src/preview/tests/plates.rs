@@ -156,7 +156,7 @@ fn a_file_that_changes_while_a_plan_is_made_is_a_change_the_worker_still_sees() 
     shared.rescan();
     let id = tile_id(&path);
     // the inventory appears exactly between the plan's files being timed and being read: the race
-    let inv = dt_eval::inventory::path_in(&dir);
+    let inv = dt_print::inventory::path_in(&dir);
     let at = inv.clone();
     crate::preview::plates::AFTER_SEEN.lock().unwrap().insert(
         path.clone(),

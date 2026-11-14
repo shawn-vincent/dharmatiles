@@ -18,6 +18,7 @@ dt-doc.workspace = true
 dt-value.workspace = true
 dt-eval = { workspace = true, features = ["wasm"] }
 dt-kit.workspace = true
+dt-print.workspace = true
 sha2.workspace = true
 miette.workspace = true
 serde.workspace = true

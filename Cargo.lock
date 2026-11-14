@@ -392,6 +392,7 @@ dependencies = [
  "dt-eval",
  "dt-kit",
  "dt-lang",
+ "dt-print",
  "dt-store",
  "kdl",
  "libm",
@@ -458,6 +459,7 @@ dependencies = [
  "dt-geom",
  "dt-kit",
  "dt-lang",
+ "dt-print",
  "dt-value",
  "insta",
  "kdl",
@@ -484,16 +486,12 @@ dependencies = [
 name = "dt-kit"
 version = "1.0.0"
 dependencies = [
- "crc32fast",
  "dt-geom",
  "dt-lang",
  "dt-par",
  "dt-value",
- "flate2",
  "libm",
  "parry3d",
- "png",
- "serde_json",
 ]
 
 [[package]]
@@ -508,12 +506,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "dt-print"
+version = "1.0.0"
+dependencies = [
+ "crc32fast",
+ "dt-doc",
+ "dt-elements",
+ "dt-eval",
+ "dt-geom",
+ "dt-kit",
+ "flate2",
+ "libm",
+ "png",
+ "serde_json",
+]
+
+[[package]]
 name = "dt-store"
 version = "1.0.0"
 dependencies = [
  "dt-elements",
  "dt-eval",
  "dt-kit",
+ "dt-print",
  "sha2",
 ]
 
@@ -532,6 +547,7 @@ dependencies = [
  "dt-doc",
  "dt-eval",
  "dt-kit",
+ "dt-print",
  "dt-value",
  "miette",
  "serde",

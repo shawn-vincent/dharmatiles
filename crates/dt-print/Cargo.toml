@@ -1,0 +1,24 @@
+[package]
+name = "dt-print"
+description = "dharmatiles printing: print lists, plates and the packer, the inventory, and the files a printer reads (STL, 3MF, Bambu Studio projects) with the PNG renderer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+dt-doc.workspace = true
+dt-geom.workspace = true
+dt-eval.workspace = true
+dt-elements.workspace = true
+dt-kit.workspace = true
+libm.workspace = true
+png.workspace = true
+flate2.workspace = true
+crc32fast.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

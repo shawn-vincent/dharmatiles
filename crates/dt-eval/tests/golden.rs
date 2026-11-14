@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use dt_eval::{Built, Library, Options, build};
-use dt_kit::{VIEWS, render};
+use dt_print::{VIEWS, render};
 use rayon::prelude::*;
 
 const TILES: &[&str] = &[

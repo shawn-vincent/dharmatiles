@@ -15,7 +15,7 @@ use dt_geom::TriMesh;
 
 use crate::bambu::{bed_corners, esc, settings};
 use crate::threemf::{byte, filament_of, filaments, paint_code, zip};
-use crate::{BuildRecord, Material, Palette};
+use dt_kit::{BuildRecord, Material, Palette};
 
 /// One built mesh, with each triangle's material.
 #[derive(Clone, Copy, Debug)]
@@ -167,7 +167,7 @@ fn baked(set: &PlateSet, plate: usize) -> TriMesh {
 /// One plate as a binary STL: every piece on it, in one mesh.
 #[must_use]
 pub fn plate_stl(set: &PlateSet, plate: usize) -> Vec<u8> {
-    crate::stl(&baked(set, plate), set.record)
+    crate::stl::stl(&baked(set, plate), set.record)
 }
 
 /// The paint code of each material of a part, by the project's filaments.
@@ -537,5 +537,5 @@ pub fn bambu_plates(
 }
 
 #[cfg(test)]
-#[path = "plates_tests.rs"]
+#[path = "plateset_tests.rs"]
 mod tests;

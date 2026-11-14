@@ -26,6 +26,8 @@ kdl.workspace = true
 miette.workspace = true
 
 [dev-dependencies]
+# the golden tests draw the PNG renders (a dev-dependency cycle: dt-print builds on dt-eval)
+dt-print.workspace = true
 insta.workspace = true
 rayon.workspace = true
 miette = { workspace = true, features = ["fancy-no-backtrace"] }

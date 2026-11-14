@@ -300,7 +300,7 @@ pub(super) fn add(shared: &Shared, v: MapsAddReq) -> Out<MapsPieced> {
         Some(s @ ("db" | "ol")) => Some(s),
         Some(_) => return Err(bad("the system is db or ol")),
     };
-    let canon = dt_eval::inventory::canonical(&tile_path, shared.home.as_deref());
+    let canon = dt_print::inventory::canonical(&tile_path, shared.home.as_deref());
     let path = super::lists::list_path(shared, &v.list)?;
     let (mut shifted, mut seed_given) = (0, None);
     let (edited, id) = edit_list(shared, &v.list, v.doc_rev, |text, l| {

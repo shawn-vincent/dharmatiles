@@ -403,7 +403,7 @@ pub(super) fn add(shared: &Shared, v: ListsAddReq) -> Out<ListsAddRes> {
     else {
         return Err(fail::refused("404 Not Found", "no such tile"));
     };
-    let canon = dt_eval::inventory::canonical(&path, shared.home.as_deref());
+    let canon = dt_print::inventory::canonical(&path, shared.home.as_deref());
     let system = match v.system.as_deref() {
         None => None,
         Some(s @ ("db" | "ol")) => Some(s),

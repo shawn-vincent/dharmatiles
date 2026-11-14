@@ -219,7 +219,7 @@ pub fn for_map(
     palette: &dt_kit::Palette,
 ) -> Result<Vec<u8>, String> {
     let (painted, clean) = b.colours_pair(palette);
-    let (lo, hi) = dt_kit::box_of(&b.export.mesh);
+    let (lo, hi) = dt_print::box_of(&b.export.mesh);
     let meta = json!({
         "tier": tier,
         "doc_rev": doc_rev,

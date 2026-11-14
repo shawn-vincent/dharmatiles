@@ -5,9 +5,9 @@
 
 use dt_doc::inventory::{Colour, Shelf, decode as decode_inventory};
 use dt_doc::map::{Group, Mode, decode};
-use dt_eval::plates::{self, Boxes, Context, Overrides};
 use dt_eval::{Files, Options};
 use dt_kit::Material;
+use dt_print::plates::{self, Boxes, Context, Overrides};
 use std::path::Path;
 
 fn plan_of(text: &str, ov: &Overrides) -> Result<plates::Plan, Vec<dt_eval::Diag>> {

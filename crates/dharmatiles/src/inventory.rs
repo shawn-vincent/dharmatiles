@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use dt_doc::inventory::{self as doc, Colour, Identity, Piece};
 use dt_eval::Diag;
-use dt_eval::inventory as disk;
+use dt_print::inventory as disk;
 use serde_json::{Value, json};
 
 use crate::cli::InventoryAction;

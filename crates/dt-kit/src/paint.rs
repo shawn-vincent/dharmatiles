@@ -16,9 +16,242 @@
 use dt_geom::TriMesh;
 use rayon::prelude::*;
 
-use crate::render::{ORANGE, RED, SurfacePaint};
 use crate::{Material, Palette};
 use dt_geom::vec3::{cross, unit};
+
+/// The overhang paint.
+pub const RED: [f32; 3] = [230.0 / 255.0, 30.0 / 255.0, 30.0 / 255.0];
+/// Faces in the overhang band (past the printer's 55°, within the 65° cap).
+pub const ORANGE: [f32; 3] = [1.0, 0.55, 0.1];
+
+/// Paint per face: the material's colour, red where `overhang` is set.
+#[must_use]
+pub fn paint(materials: &[Material], overhang: &[bool]) -> Vec<[f32; 3]> {
+    materials
+        .iter()
+        .zip(overhang)
+        .map(|(m, &o)| {
+            if o {
+                RED
+            } else {
+                match m {
+                    Material::Earth => [0.50, 0.38, 0.25],
+                    Material::Connector => [0.62, 0.62, 0.64],
+                    Material::Rock => [0.58, 0.58, 0.61],
+                    Material::Water => [0.24, 0.38, 0.56],
+                    Material::Grass => [0.36, 0.56, 0.24],
+                    Material::Flower => [0.85, 0.45, 0.62],
+                    Material::Masonry => [0.66, 0.64, 0.60],
+                    Material::Wood => [0.42, 0.29, 0.18],
+                    Material::Leaf => [0.33, 0.52, 0.24],
+                }
+            }
+        })
+        .collect()
+}
+
+/// flat earth brown.
+const BED: [f32; 3] = [128.0, 97.0, 64.0];
+
+/// How far from the blur a node may stand before the blur is taken over
+/// the nodes at its own height only, mm: dirt lying on stone, high over
+/// the ground round it, has relief against its own surface, not against
+/// the ground.
+const GATE_MM: f64 = 6.0;
+/// The nodes such a blur is taken over: within this of the node's own
+/// height, mm.
+const GATE_SAME_MM: f64 = 0.8;
+
+/// `blurred` (a Gaussian of `sigma` nodes over `z`) where a node stands near
+/// it; where it does not, the Gaussian over the nodes within [`GATE_MM`]
+/// of the node's own height.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
+fn gated(z: &[f64], nx: usize, ny: usize, sigma: f64, blurred: Vec<f64>) -> Vec<f64> {
+    let reach = (3.0 * sigma).ceil() as i64;
+    // the weight of a tap by its squared distance in nodes (a whole number),
+    // each the one value the tap's own `exp` gives
+    let weight: Vec<f64> = (0..=2 * reach * reach)
+        .map(|d2| (-(d2 as f64) / (2.0 * sigma * sigma)).exp())
+        .collect();
+    let mut out = blurred;
+    // every node reads `z` and writes its own: the nodes are independent,
+    // so the threads change nothing of the result
+    out.par_iter_mut().enumerate().for_each(|(k, o)| {
+        let (i, j) = ((k % nx) as i64, (k / nx) as i64);
+        // only where the ground round it falls away: a sample of the ring
+        let away = (0..12).any(|a| {
+            let t = f64::from(a) * std::f64::consts::TAU / 12.0;
+            let (ii, jj) = (
+                (i as f64 + reach as f64 * t.cos()).round() as i64,
+                (j as f64 + reach as f64 * t.sin()).round() as i64,
+            );
+            ii >= 0
+                && jj >= 0
+                && ii < nx as i64
+                && jj < ny as i64
+                && (z[jj as usize * nx + ii as usize] - z[k]).abs() > GATE_MM
+        });
+        if !away {
+            return;
+        }
+        let (mut sum, mut wsum) = (0.0, 0.0);
+        for jj in (j - reach).max(0)..=(j + reach).min(ny as i64 - 1) {
+            for ii in (i - reach).max(0)..=(i + reach).min(nx as i64 - 1) {
+                let q = (jj as usize) * nx + ii as usize;
+                if (z[q] - z[k]).abs() > GATE_SAME_MM {
+                    continue;
+                }
+                let w = weight[((ii - i) * (ii - i) + (jj - j) * (jj - j)) as usize];
+                sum += w * z[q];
+                wsum += w;
+            }
+        }
+        *o = sum / wsum;
+    });
+    out
+}
+
+/// The ground surface as built, for a painted preview: heights, local
+/// relief at two scales, and which nodes are stone.
+#[derive(Clone, Debug)]
+pub struct SurfacePaint {
+    nx: usize,
+    ny: usize,
+    step: f64,
+    z: Vec<f64>,
+    rel: Vec<f64>,
+    rel2: Vec<f64>,
+    /// Relief at 2 mm and 6 mm: what a drybrush catches on the water.
+    wrel: Vec<f64>,
+    whi: Vec<f64>,
+    stone: Vec<bool>,
+    covered: Vec<bool>,
+    low: f64,
+}
+
+impl SurfacePaint {
+    /// From the lifted surface grid and its stone marks.
+    #[must_use]
+    pub fn new(g: &dt_geom::Grid, stone: &dt_geom::Mask) -> Self {
+        let z: Vec<f64> = g.z.iter().map(|&v| f64::from(v)).collect();
+        let blur = |mm: f64| dt_geom::blur(&z, g.nx, g.ny, mm / g.step);
+        let ((b1, b2), (w2, w6)) = rayon::join(
+            || rayon::join(|| blur(0.8), || blur(4.0)),
+            || rayon::join(|| blur(2.0), || blur(6.0)),
+        );
+        let low = z.iter().copied().fold(f64::INFINITY, f64::min);
+        let (b1, b2) = rayon::join(
+            || gated(&z, g.nx, g.ny, 0.8 / g.step, b1),
+            || gated(&z, g.nx, g.ny, 4.0 / g.step, b2),
+        );
+        Self {
+            nx: g.nx,
+            ny: g.ny,
+            step: g.step,
+            rel: z.iter().zip(&b1).map(|(a, b)| a - b).collect(),
+            rel2: z.iter().zip(&b2).map(|(a, b)| a - b).collect(),
+            wrel: z.iter().zip(&w2).map(|(a, b)| a - b).collect(),
+            whi: z.iter().zip(&w6).map(|(a, b)| a - b).collect(),
+            z,
+            stone: stone.bits.clone(),
+            covered: Vec::new(),
+            low,
+        }
+    }
+
+    /// Mark the nodes a solid covers (a floor's or wall's footprint):
+    /// earth under them is painted as bedding, flat brown, not as
+    /// the earth drybrush or the dark tile wall.
+    #[must_use]
+    pub fn covered(mut self, covered: &dt_geom::Mask) -> Self {
+        self.covered.clone_from(&covered.bits);
+        self
+    }
+
+    /// The ground's height under `c` (x, y), for grass and leaves to paint
+    /// by their height above it.
+    pub(crate) fn ground_z(&self, c: [f64; 3]) -> f64 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let node = |v: f64, n: usize| (libm::round(v / self.step).max(0.0) as usize).min(n - 1);
+        self.z[node(c[1], self.ny) * self.nx + node(c[0], self.nx)]
+    }
+
+    /// The water paint at a face centre, or `None` off the grid.
+    pub(crate) fn water(&self, c: [f64; 3], pal: &crate::Palette) -> Option<[f32; 3]> {
+        #[allow(clippy::cast_precision_loss)]
+        let (w, h) = (
+            (self.nx - 1) as f64 * self.step,
+            (self.ny - 1) as f64 * self.step,
+        );
+        if c[0] < -1e-6 || c[1] < -1e-6 || c[0] > w + 1e-6 || c[1] > h + 1e-6 {
+            return None;
+        }
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let node = |v: f64, n: usize| (libm::round(v / self.step).max(0.0) as usize).min(n - 1);
+        let k = node(c[1], self.ny) * self.nx + node(c[0], self.nx);
+        #[allow(clippy::cast_possible_truncation)]
+        let t = (0.5 + 0.5 * (0.65 * self.wrel[k] / 0.5 + 0.35 * self.whi[k] / 0.9)).clamp(0.0, 1.0)
+            as f32;
+        Some(pal.sample("water", t))
+    }
+
+    /// The earth paint for one face (centre `c`, unit normal z `nz`), or
+    /// `None` off the surface's footprint.
+    pub(crate) fn face(&self, c: [f64; 3], nz: f64, pal: &crate::Palette) -> Option<[f32; 3]> {
+        #[allow(clippy::cast_precision_loss)]
+        let w = (self.nx - 1) as f64 * self.step;
+        #[allow(clippy::cast_precision_loss)]
+        let h = (self.ny - 1) as f64 * self.step;
+        if c[0] < -1e-6 || c[1] < -1e-6 || c[0] > w + 1e-6 || c[1] > h + 1e-6 || c[2] < 0.0 {
+            return None;
+        }
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let node = |v: f64, n: usize| (libm::round(v / self.step).max(0.0) as usize).min(n - 1);
+        let k = node(c[1], self.ny) * self.nx + node(c[0], self.nx);
+        let (zs, rel) = (self.z[k], self.rel[k]);
+        // under a floor or wall the earth only shows as bedding: on the
+        // tile's side and on the sliver of bed beside a stone
+        if self.covered.get(k).copied().unwrap_or(false) {
+            return Some(BED.map(|v| v / 255.0));
+        }
+        if (nz.abs() < 0.35 && c[2] < zs - 0.3) || c[2] < self.low - 0.3 {
+            return Some(pal.sample("side", 0.0));
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        if self.stone[k] || c[2] > zs + 0.06 {
+            let t = (0.5 + 0.5 * nz - 0.4 + 0.6 * rel / 0.5) as f32;
+            return Some(pal.sample("pebble", t));
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let t = (0.5 + 0.7 * rel / 0.35 + 0.3 * self.rel2[k] / 1.0) as f32;
+        Some(pal.sample("earth", t))
+    }
+}
+
+/// [`paint_mesh`] with the default palette, no overhang paint beyond
+/// `overhang`, and stone masonry.
+#[must_use]
+pub fn paint_surface(
+    mesh: &TriMesh,
+    materials: &[Material],
+    overhang: &[bool],
+    surface: Option<&SurfacePaint>,
+) -> Vec<[f32; 3]> {
+    crate::paint::paint_mesh(
+        mesh,
+        materials,
+        overhang,
+        &[],
+        surface,
+        &crate::Palette::default(),
+        false,
+    )
+}
 
 /// Per vertex: how far it stands out of its neighbours, in units of the
 /// local edge length, at a fine scale and a coarse one (positive = ridge

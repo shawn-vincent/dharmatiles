@@ -23,8 +23,8 @@ pub(crate) fn template(path: Option<&Path>) -> Result<Option<String>, String> {
     };
     let bytes = std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let settings =
-        dt_kit::project_settings(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        dt_print::project_settings(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
     // refuse now, naming the template, rather than place the tile on a guessed bed
-    dt_kit::bed_centre(&settings).map_err(|e| format!("{}: {e}", path.display()))?;
+    dt_print::bed_centre(&settings).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(Some(settings))
 }

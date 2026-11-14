@@ -18,7 +18,7 @@ use dt_geom::TriMesh;
 use serde_json::{Map, Value};
 
 use crate::threemf::{byte, filament_of, filaments, paint_code, zip};
-use crate::{BuildRecord, Material, Palette};
+use dt_kit::{BuildRecord, Material, Palette};
 
 /// The settings Bambu Studio keeps one value (or a fixed run of values) per
 /// filament slot, by name. Arrays of other lengths (one per extruder, one

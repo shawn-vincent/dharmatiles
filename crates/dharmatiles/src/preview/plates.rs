@@ -17,9 +17,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use dt_doc::map::Mode;
-use dt_eval::plates::{self, Boxes, Context, Layout, Overrides, Plan};
 use dt_eval::{Built, Diag, Files};
 use dt_kit::{Material, TriMesh};
+use dt_print::plates::{self, Boxes, Context, Layout, Overrides, Plan};
 use dt_store::Tier;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -168,7 +168,7 @@ fn plate_mesh(
         // mesh drawn here, which is smaller and would stand the piece off its footprint
         let bx = &parts[i.kind].boxes;
         let base = u32::try_from(mesh.positions.len()).unwrap_or(u32::MAX);
-        mesh.positions.extend(dt_kit::stand_positions(
+        mesh.positions.extend(dt_print::stand_positions(
             &part.export.mesh.positions,
             bx.lo,
             bx.hi(),
@@ -406,7 +406,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     let mut seen = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
     // the inventory decides what prints: the list is laid out again when it changes
     if let Some(h) = shared.home.as_deref() {
-        let inv = dt_eval::inventory::path_in(h)
+        let inv = dt_print::inventory::path_in(h)
             .to_string_lossy()
             .into_owned();
         let at = crate::watch::mtime(&inv);

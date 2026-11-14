@@ -4,11 +4,12 @@
 //! Only full builds are written: a low or super-low build is not checked and
 //! is never exported ([`write_set`] refuses it, by name).
 
-use dt_kit::{BuildRecord, Palette, PlatePart, PlateSet, PlateStand};
+use dt_eval::{Built, Diag};
+use dt_kit::{BuildRecord, Palette};
+
+use crate::{PlatePart, PlateSet, PlateStand};
 
 use super::{Layout, Plan};
-use crate::build::Built;
-use crate::diag::Diag;
 
 /// What the files are.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,7 +36,7 @@ impl Format {
     /// What a printer's profile asks for: a Bambu project for a Bambu printer,
     /// else one STL per plate.
     #[must_use]
-    pub fn for_printer(machine: &crate::Machine) -> Self {
+    pub fn for_printer(machine: &dt_eval::Machine) -> Self {
         if machine.is_bambu() {
             Self::Bambu
         } else {
@@ -121,7 +122,7 @@ pub fn write_set(
             .map(|p| {
                 (
                     format!("{stem}-plate-{:02}.stl", p + 1),
-                    dt_kit::plate_stl(&set, p),
+                    crate::plate_stl(&set, p),
                 )
             })
             .collect()),
@@ -129,7 +130,7 @@ pub fn write_set(
             .map(|p| {
                 (
                     format!("{stem}-plate-{:02}.3mf", p + 1),
-                    dt_kit::plate_3mf(&set, p, palette),
+                    crate::plate_3mf(&set, p, palette),
                 )
             })
             .collect()),
@@ -142,7 +143,7 @@ pub fn write_set(
                 .help("save any project from Bambu Studio for this printer as bambu.3mf in your tiles folder (or name it with --bambu-template), or write one STL per plate with --format stl")
             })?;
             let bed = plan.settings.machine.bed_or_say()?;
-            let bytes = dt_kit::bambu_plates(&set, palette, t, bed)
+            let bytes = crate::bambu_plates(&set, palette, t, bed)
                 .map_err(|e| Diag::plain("dt::plates", e))?;
             Ok(vec![(format!("{stem}.3mf"), bytes)])
         }

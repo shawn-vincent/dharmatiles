@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use dt_doc::inventory::{self as doc, Colour, Identity};
 use dt_eval::Diag;
-use dt_eval::inventory as disk;
+use dt_print::inventory as disk;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 

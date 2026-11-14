@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use dt_eval::{Built, Diag, Files, Options, Source};
-use dt_kit::{VIEWS, render, stl};
+use dt_print::{VIEWS, render, stl};
 use serde_json::{Value, json};
 
 use crate::{AUDIT_FAILED, BUG, ERROR, OK, progress};
@@ -295,9 +295,9 @@ pub(crate) fn write(
         let p = path.with_extension("3mf");
         let bytes = match extras.template {
             Some(t) => {
-                dt_kit::bambu_project(&b.export.mesh, &b.materials, &b.record, extras.palette, t)?
+                dt_print::bambu_project(&b.export.mesh, &b.materials, &b.record, extras.palette, t)?
             }
-            None => dt_kit::threemf(&b.export.mesh, &b.materials, &b.record, extras.palette),
+            None => dt_print::threemf(&b.export.mesh, &b.materials, &b.record, extras.palette),
         };
         w(&p, &bytes)?;
         files.push(p);

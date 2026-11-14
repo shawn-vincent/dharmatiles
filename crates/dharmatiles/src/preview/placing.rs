@@ -171,7 +171,7 @@ impl<'a> Resolver<'a> {
             return BTreeSet::new();
         };
         // an inventory that does not read owns nothing here; the snapshot says what is wrong with it
-        let Some(l) = dt_eval::inventory::load(home).ok().flatten() else {
+        let Some(l) = dt_print::inventory::load(home).ok().flatten() else {
             return BTreeSet::new();
         };
         let colour = if colour == "multi" {

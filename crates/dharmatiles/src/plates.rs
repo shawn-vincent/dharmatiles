@@ -9,9 +9,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use dt_doc::map::{Group, Mode, PrintList};
-use dt_eval::plates::export::{self, Format};
-use dt_eval::plates::{self, Boxes, Context, Layout, Overrides, Plan};
 use dt_eval::{Built, Diag, Files, Options};
+use dt_print::plates::export::{self, Format};
+use dt_print::plates::{self, Boxes, Context, Layout, Overrides, Plan};
 use dt_store::Store;
 use serde_json::{Value, json};
 
@@ -68,7 +68,7 @@ pub(crate) fn shelf_for(
     let Some(home) = home.filter(|_| looks) else {
         return Ok(None);
     };
-    Ok(dt_eval::inventory::load(home)?.map(|l| dt_doc::inventory::Shelf::of(&l.inventory)))
+    Ok(dt_print::inventory::load(home)?.map(|l| dt_doc::inventory::Shelf::of(&l.inventory)))
 }
 
 /// A list's name: its file's stem.
@@ -100,8 +100,8 @@ pub(crate) fn template_for(
     };
     let bytes = std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let settings =
-        dt_kit::project_settings(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
-    dt_kit::bed_centre(&settings).map_err(|e| format!("{}: {e}", path.display()))?;
+        dt_print::project_settings(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    dt_print::bed_centre(&settings).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(Some(settings))
 }
 
