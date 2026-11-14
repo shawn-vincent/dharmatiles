@@ -712,7 +712,13 @@ pub(super) fn step(shared: &Shared, tile: &TileRef, v: StepReq) -> super::route:
         draft: StepDraft::Mesh,
     };
     let mesh = match shared
-        .submit_draft(&tile.id, &tile.path, &file, &head.text, v.debug == Some(true))
+        .submit_draft(
+            &tile.id,
+            &tile.path,
+            &file,
+            &head.text,
+            v.debug == Some(true),
+        )
         .recv_timeout(Duration::from_secs(120))
     {
         Ok(Outcome::Mesh(mesh)) => Some(mesh),

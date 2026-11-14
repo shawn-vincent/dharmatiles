@@ -8,8 +8,8 @@
 //   api.map()                       the map (lines, regions) of the text now
 //   api.writable()                  may the file be changed? (else api.makeMine(replay))
 //   api.insert(place, node)         write `node` into the stack or the tile's body
-//   api.replace(start, len, text, end)  rewrite bytes of the text (a handle)
-//   api.handles()                   the selection's handles: [{q, span, snap}]
+//   api.steps(label, make)          a change at pointer speed (a handle): {to(q), end(q), cancel()}, made by the program
+//   api.handles()                   the selection's handles: [{q, label, make(q) (the program's edit of the point), move?}]
 //   api.redraw(scene)               the overlay, with the tool's drawing
 //   api.note(text)                  a word in the view's hint line
 //
@@ -18,8 +18,6 @@
 
 import { pointLabel, placeText, pointText } from './points.js';
 
-const enc = new TextEncoder();
-const bytes = (s) => enc.encode(s).length;
 const WORDS = [
   ['line', 'draw a line through points on the plate', 'language'],
   ['region', 'click inside the lines: an area to fill', 'language'],
@@ -316,7 +314,11 @@ export class Tools {
     if (!h) return;
     this.canvas.setPointerCapture(e.pointerId);
     const sq = this.api.sq();
-    this.drag = { h, len: h.span[1], start: h.span[0], z: this.overlay.heightAt(h.q[0] * sq, h.q[1] * sq), moved: false };
+    // the program makes every step's edit (where the point lands, by the seam rule for a line's, and the text of it): the page
+    // only says where the pointer is (`api.steps`, js/editor/document.js)
+    const steps = this.api.steps(h.label, h.make);
+    if (!steps) { this.canvas.releasePointerCapture(e.pointerId); return; }
+    this.drag = { h, steps, z: this.overlay.heightAt(h.q[0] * sq, h.q[1] * sq), moved: false, key: '', q: h.q };
   }
 
   dragTo(e) {
@@ -324,23 +326,21 @@ export class Tools {
     const [x, y] = this.xy(e);
     const p = this.at(x, y, d.z);
     if (!p) return;
-    const s = d.h.snap ? snap(p.q, this.api.size()) : { q: p.q, word: null };
-    const rows = this.api.size()[1];
-    const text = d.h.snap ? written(s, rows) : pointText(s.q, rows);
-    if (text === d.text) return;
-    d.text = text;
+    const key = `${p.q[0].toFixed(2)},${p.q[1].toFixed(2)}`;
+    if (key === d.key) return;
+    d.key = key;
     d.moved = true;
-    d.h.q = s.q;
-    d.h.move?.(s.q);
-    this.api.replace(d.start, d.len, text, false);
-    d.len = bytes(text);
+    d.q = p.q;
+    d.h.q = p.q; // the handle follows the pointer; the map shows where the program put the point once the change is checked
+    d.h.move?.(p.q);
+    d.steps.to(p.q);
     this.paint();
   }
 
   letGo() {
     const d = this.drag;
     this.drag = null;
-    if (d.moved) this.api.replace(d.start, d.len, d.text, true);
+    if (d.moved) d.steps.end(d.q);
   }
 
   // ---- drawing --------------------------------------------------------------

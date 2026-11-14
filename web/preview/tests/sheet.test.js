@@ -26,7 +26,7 @@ function world(written) {
   const m = signal(model(written));
   const calls = [];
   const api = {
-    writable: () => true, canMine: () => false, replace: (...a) => calls.push(['replace', ...a]), set: (...a) => calls.push(['set', ...a]),
+    writable: () => true, canMine: () => false, scrub: (...a) => { calls.push(['scrub', ...a]); return { to: (v) => calls.push(['to', v]), end: (v) => calls.push(['end', v]), cancel: () => calls.push(['cancel']) }; }, set: (...a) => calls.push(['set', ...a]),
     onField: (n, on) => calls.push(['field', n, on]), checkValue: async () => null,
   };
   const App = () => html`<${Sheet} model=${m.value} api=${api} />`;
@@ -51,14 +51,16 @@ test('a number is scrubbed by a drag: the source follows the pointer, the step e
   num.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 100, pointerId: 1, preventDefault() {} });
   num.dispatchEvent({ type: 'pointermove', clientX: 100 + 40, shiftKey: false });
   num.dispatchEvent({ type: 'pointermove', clientX: 100 + 80, shiftKey: false });
-  const live = calls.filter((c) => c[0] === 'replace');
-  assert.equal(live.length, 2, 'a write for each step');
-  assert.deepEqual(live.map((c) => c[3]), ['8', '12'], 'the number as it stood at each step');
-  assert.ok(live.every((c) => c[4] === false), 'not an end');
+  const live = calls.filter((c) => c[0] === 'to');
+  assert.equal(live.length, 2, 'a step for each move');
+  assert.deepEqual(live.map((c) => c[1]), [8, 12], 'the number as it stood at each step: a value, which the program writes');
+  assert.deepEqual(calls.find((c) => c[0] === 'scrub').slice(1), [10, 'perSquare', 'Changed perSquare'], 'one change, of the control on its node');
+  assert.equal(calls.filter((c) => c[0] === 'scrub').length, 1);
+  assert.ok(!calls.some((c) => c[0] === 'end'), 'not ended yet');
   num.dispatchEvent({ type: 'pointerup' });
-  const last = calls.filter((c) => c[0] === 'replace').at(-1);
-  assert.equal(last[4], true, 'the end of the drag is the step of history');
-  assert.equal(last[3], '12');
+  const last = calls.filter((c) => c[0] === 'end');
+  assert.equal(last.length, 1, 'the end of the drag is the one step of history');
+  assert.equal(last[0][1], 12);
 });
 
 test('a value being typed keeps its words and focus when the document tells the sheet a new state, and Enter writes it', async () => {
@@ -76,10 +78,8 @@ test('a value being typed keeps its words and focus when the document tells the 
   press(input, 'Enter');
   await settle();
   assert.equal(root.querySelector('.edit'), null, 'the field is gone');
-  const w = calls.filter((c) => c[0] === 'replace' || c[0] === 'set').at(-1);
-  assert.equal(w[0], 'replace');
-  assert.equal(w[3], '12');
-  assert.equal(w[4], true);
+  const w = calls.filter((c) => c[0] === 'set').at(-1);
+  assert.deepEqual(w, ['set', 10, 'perSquare', 12], 'the value, which the program writes');
 });
 
 test('the outline lists the stack top first with its numbers, and a row says what it opens', async () => {

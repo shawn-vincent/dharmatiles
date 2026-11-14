@@ -11,8 +11,8 @@ use miette::SourceSpan;
 
 use super::{Done, EditError, Mended, Op, Place, Slot};
 use crate::error::Fix;
-use crate::seams::Snapped;
 use crate::nodeid::{self, entry_range, value_range};
+use crate::seams::Snapped;
 
 const INDENT: &str = "    ";
 
@@ -64,7 +64,11 @@ pub(super) fn apply(text: &str, op: &Op) -> Result<Done, EditError> {
         }
         Op::SetArgs { id, values } => {
             let node = nodeid::locate(&doc, id)?;
-            let args: Vec<_> = node.entries().iter().filter(|e| e.name().is_none()).collect();
+            let args: Vec<_> = node
+                .entries()
+                .iter()
+                .filter(|e| e.name().is_none())
+                .collect();
             let (Some(first), Some(last)) = (args.first(), args.last()) else {
                 return Err(EditError::NoEntry("argument 0".to_owned()));
             };
@@ -83,12 +87,7 @@ pub(super) fn apply(text: &str, op: &Op) -> Result<Done, EditError> {
             }];
             finish(lay(text, splices), node.span().offset())
         }
-        Op::SetPoint {
-            id,
-            slot,
-            q,
-            seams,
-        } => {
+        Op::SetPoint { id, slot, q, seams } => {
             let node = nodeid::locate(&doc, id)?;
             let (cols, rows) = tile_size(&doc)?;
             let written = match seams.map(|t| t.snap(*q, cols, rows)) {
@@ -172,8 +171,12 @@ fn set_arg(
 
 /// A word as it is written: bare when it is one KDL reads as itself (a line's name), else a string.
 fn word_or_string(s: &str) -> String {
-    let plain = s.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-        && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
+    let plain = s
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
         && !matches!(s, "true" | "false" | "null" | "inf" | "nan");
     if plain {
         s.to_owned()
@@ -191,7 +194,9 @@ fn tile_size(doc: &KdlDocument) -> Result<(u32, u32), EditError> {
         .and_then(|e| e.value().as_string())
         .and_then(|s| s.split_once('x'))
         .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
-        .ok_or_else(|| EditError::Cannot("the tile has no `size=\"2x1\"` to place a point by".to_owned()))
+        .ok_or_else(|| {
+            EditError::Cannot("the tile has no `size=\"2x1\"` to place a point by".to_owned())
+        })
 }
 
 /// A free point as a document writes it: `(0.5sq, 0.25sq)`, counted from the north-west corner.

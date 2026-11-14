@@ -8,7 +8,8 @@ import { byteToIndex } from '../text.js';
 import { failed } from '../problems.js';
 import { token } from '../tokens.js';
 import { $, host, makeMine, viewer } from './app.js';
-import { editCall, askDraft, edited, openFile, replaceBytes, spansUsable, texts } from './document.js';
+import { editCall, askDraft, edited, openFile, spansUsable, steps, texts } from './document.js';
+import { idAtByte } from '../rows.js';
 import { meshStack } from '../payload.js';
 import { doc, elementNamed, isEntry, itemOf, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
 
@@ -37,21 +38,47 @@ function tints() {
 }
 
 /**
+ * Name each point of `list` (each has the `span` of its written value) by the node that holds it and its place among that
+ * node's arguments: what the program's edit of a point says (`{id, slot}`), so the page writes no text.
+ * @param {{span: [number, number]}[]} list @param {any} nodes the check's `nodes`
+ */
+function slotsOf(list, nodes) {
+  const seen = new Map();
+  return list.map((p) => {
+    const id = idAtByte(nodes, p.span?.[0]);
+    const index = seen.get(id) ?? 0;
+    seen.set(id, index + 1);
+    return { id, slot: { arg: index } };
+  });
+}
+/** The program's edit of one point: `make(q)` is the body for a point moved to `q` (squares from the south-west corner). */
+const pointEdit = (/** @type {{id: string, slot: any}} */ { id, slot }, /** @type {boolean} */ snap) => (/** @type {number[]} */ q) => ({ op: 'point', id, slot, q, snap });
+
+/**
  * The selection's handles: a line's points, a region's fill points, a
- * placed thing's at=.  Each {q (squares), span (bytes of the written
- * value), snap (edge words allowed), move(q) (the overlay follows)}.
+ * placed thing's at=.  Each {q (squares), label (the history step of a
+ * drag), make(q) (the program's edit of the point), move(q) (the overlay
+ * follows)}.  A line's points land on the outline by the seam rule (the
+ * program's: `snap`).
  */
 function handles() {
-  const s = view.get().sel, { writable, file, map } = doc.get();
-  if (!s || !writable || file !== tile()?.path || !map) return [];
+  const s = view.get().sel, { writable, file, map, nodes } = doc.get();
+  if (!s || !writable || file !== tile()?.path || !map || !nodes) return [];
   if (s.kind === 'line') {
     const l = mapNode(s);
-    return (l?.points || []).filter((p) => p.at).map((p, k) => ({
-      q: p.at, span: p.span, snap: true,
+    const slots = slotsOf(l?.points || [], nodes);
+    return (l?.points || []).flatMap((p, k) => (p.at && slots[k].id != null ? [{
+      q: p.at, label: `Moved a point of ${s.id}`, make: pointEdit(slots[k], true),
       move(q) { if (!l.wobbleMm && l.pts.length === l.points.length) l.pts[k] = q; },
-    }));
+    }] : []));
   }
-  if (s.kind === 'region') return (mapNode(s)?.fills || []).filter((f) => f.at).map((f) => ({ q: f.at, span: f.span, snap: false, move(q) { f.at = q; } }));
+  if (s.kind === 'region') {
+    const fills = mapNode(s)?.fills || [];
+    const slots = slotsOf(fills, nodes);
+    return fills.flatMap((f, k) => (f.at && slots[k].id != null ? [{
+      q: f.at, label: `Moved the fill point of ${s.id}`, make: pointEdit(slots[k], false), move(q) { f.at = q; },
+    }] : []));
+  }
   if (isEntry(s)) {
     const it = itemOf(s);
     const c = (it?.place || []).find((x) => x.name === 'at');
@@ -60,9 +87,9 @@ function handles() {
     // a fixed point: where the program reads it (a written pair with units,
     // from the north-west; the program says where it is)
     const q = /^"[^"]*[\d(]/.test(v.text) ? it.at : null;
-    if (!q) return [];
-    const start = c.span[0] + new TextEncoder().encode(c.text.slice(0, v.at)).length;
-    return [{ q, span: [start, new TextEncoder().encode(v.text).length], snap: false }];
+    const id = idAtByte(nodes, it.span?.[0]);
+    if (!q || id == null) return [];
+    return [{ q, label: `Moved ${it.label}`, make: pointEdit({ id, slot: { control: 'at' } }, false) }];
   }
   return [];
 }
@@ -115,7 +142,7 @@ export function init() {
     writable: () => doc.get().writable,
     makeMine: (replay) => makeMine(replay),
     insert: (place, node, opts) => insertNode(place, node, opts),
-    replace: replaceBytes,
+    steps,
     handles,
     redraw: () => drawOverlay(),
     note: (text) => { const h = $('hint'); h.textContent = text; h.style.display = 'block'; h.style.left = '12px'; h.style.top = '56px'; setTimeout(() => { h.style.display = 'none'; }, 2600); },

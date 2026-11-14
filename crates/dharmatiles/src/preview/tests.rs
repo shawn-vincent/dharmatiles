@@ -2454,7 +2454,9 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
         )
     };
     // a control: the head says the new text and its revision, the mesh follows
-    let (h, body) = step(json!({ "read": rev(ROWS), "op": "set", "text": ROWS, "id": "tile/stack/rock", "name": "seed", "value": 7 }));
+    let (h, body) = step(
+        json!({ "read": rev(ROWS), "op": "set", "text": ROWS, "id": "tile/stack/rock", "name": "seed", "value": 7 }),
+    );
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     let (head, mesh) = step_parts(&body);
     let text = head["text"].as_str().unwrap();
@@ -2463,28 +2465,38 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
     assert_eq!(head["draft"], "mesh");
     assert_eq!(&mesh[..4], payload::MAGIC);
     // the next step is made to the text the last one made, at the revision it named
-    let (_, body) = step(json!({ "read": head["rev"], "op": "point", "text": text, "id": "tile/stack/rock", "slot": { "control": "at" }, "q": [0.6, 0.3] }));
+    let (_, body) = step(
+        json!({ "read": head["rev"], "op": "point", "text": text, "id": "tile/stack/rock", "slot": { "control": "at" }, "q": [0.6, 0.3] }),
+    );
     let (head, _) = step_parts(&body);
     let text = head["text"].as_str().unwrap();
     assert!(text.contains("rock at=\"(0.6sq, 0.7sq)\" seed=7"), "{head}");
     // a line's point lands on the outline by the seam rule: the north side's middle is `n`
-    let (_, body) = step(json!({ "read": head["rev"], "op": "point", "text": text, "id": "tile/line shore/through", "slot": { "arg": 1 }, "q": [0.52, 0.98], "snap": true }));
+    let (_, body) = step(
+        json!({ "read": head["rev"], "op": "point", "text": text, "id": "tile/line shore/through", "slot": { "arg": 1 }, "q": [0.52, 0.98], "snap": true }),
+    );
     let (head, _) = step_parts(&body);
     assert!(
         head["text"].as_str().unwrap().contains("through west n }"),
         "{head}"
     );
     // a text the reader refuses is still edited: the head says there is no mesh
-    let (h, body) = step(json!({ "read": rev(ROWS), "op": "set", "text": ROWS, "id": "tile/stack/rock", "name": "bogus", "value": 1 }));
+    let (h, body) = step(
+        json!({ "read": rev(ROWS), "op": "set", "text": ROWS, "id": "tile/stack/rock", "name": "bogus", "value": 1 }),
+    );
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     let (head, mesh) = step_parts(&body);
     assert_eq!(head["draft"], "mistake");
     assert!(mesh.is_empty());
     // an edit read at another text is refused, and nothing is drafted
-    let (h, _) = step(json!({ "read": rev("other"), "op": "set", "text": ROWS, "id": "tile/stack/rock", "name": "seed", "value": 8 }));
+    let (h, _) = step(
+        json!({ "read": rev("other"), "op": "set", "text": ROWS, "id": "tile/stack/rock", "name": "seed", "value": 8 }),
+    );
     assert!(h.starts_with("HTTP/1.1 409"), "{h}");
     // an id the text does not have is a 422 in words
-    let (h, _) = step(json!({ "read": rev(ROWS), "op": "set", "text": ROWS, "id": "tile/stack/nothing", "name": "seed", "value": 8 }));
+    let (h, _) = step(
+        json!({ "read": rev(ROWS), "op": "set", "text": ROWS, "id": "tile/stack/nothing", "name": "seed", "value": 8 }),
+    );
     assert!(h.starts_with("HTTP/1.1 422"), "{h}");
 }
 

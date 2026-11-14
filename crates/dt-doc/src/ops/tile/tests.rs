@@ -828,13 +828,25 @@ fn a_dragged_point_on_the_outline_keeps_the_seam_rule() {
         )
     };
     // the west side of this 2x1 tile is one square: a seam is its bare word
-    assert!(drag([0.02, 0.45]).contains("through w "), "{}", drag([0.02, 0.45]));
+    assert!(
+        drag([0.02, 0.45]).contains("through w "),
+        "{}",
+        drag([0.02, 0.45])
+    );
     // the north side is two squares: the word says which
-    assert!(drag([1.45, 0.99]).contains("n(2)"), "{}", drag([1.45, 0.99]));
+    assert!(
+        drag([1.45, 0.99]).contains("n(2)"),
+        "{}",
+        drag([1.45, 0.99])
+    );
     // anywhere along an edge it is a seam, never a pair between seams
     let s = drag([0.7, 0.0]);
     assert!(s.contains("sse(1)") || s.contains("ssw(1)"), "{s}");
     // a corner, then the inside: a free pair
-    assert!(drag([0.03, 0.97]).contains("through nw "), "{}", drag([0.03, 0.97]));
+    assert!(
+        drag([0.03, 0.97]).contains("through nw "),
+        "{}",
+        drag([0.03, 0.97])
+    );
     assert!(drag([0.7, 0.3]).contains("(0.7sq, 0.7sq)"));
 }

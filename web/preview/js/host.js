@@ -195,6 +195,30 @@ export function browserHost(requests = createRequests()) {
       throw e;
     }
   };
+  /**
+   * One step of a drag or a scrub: an edit and the draft of its text in one request.  The answer is the head's JSON after its
+   * length (four bytes, big-endian), then the mesh (empty when the text could not be drafted: `head.draft` says why).
+   * @param {string} id @param {Req<'POST /api/tiles/:id/step'>} body
+   * @returns {Promise<{status: number, head: import('./api').StepHead, buffer: ArrayBuffer} | Reply<{}>>}
+   */
+  const sendStep = async (id, body) => {
+    const path = urlOf('POST /api/tiles/:id/step', id);
+    try {
+      const r = await netFetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-DT-Token': await session() },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) return await reply(r, path);
+      const all = await r.arrayBuffer();
+      const n = new DataView(all).getUint32(0);
+      const head = JSON.parse(new TextDecoder().decode(new Uint8Array(all, 4, n)));
+      return { status: r.status, head, buffer: all.slice(4 + n) };
+    } catch (e) {
+      if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
+      throw e;
+    }
+  };
   /** @param {string} id @param {string} what */
   const tile = (id, what) => `/api/tiles/${encodeURIComponent(id)}/${what}`;
   return {
@@ -337,6 +361,13 @@ export function browserHost(requests = createRequests()) {
       const r = await requests.latest(`draft:${id}`, () => sendDraft(id, body));
       return r === SUPERSEDED ? superseded() : r;
     },
+    /**
+     * A step of a drag or a scrub: the edit made to the text it carries and the draft of what it made, in one request.
+     * {status, head, buffer}; 409 when the text moved on since its nodes were read, 422 when the edit cannot be made.
+     * @param {string} id @param {Req<'POST /api/tiles/:id/step'>} body
+     * @returns {Promise<{status: number, head: import('./api').StepHead, buffer: ArrayBuffer} | Reply<{}>>}
+     */
+    step: (id, body) => sendStep(id, body),
     /** The requests in flight, for a test or a page that waits for quiet. */
     requests,
     /** Write the text to its file, if the file is still at `docRev` (else 409 with its text and docRev). @param {string} id @param {Req<'POST /api/tiles/:id/save'>} body */

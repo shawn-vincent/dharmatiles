@@ -4,7 +4,7 @@
 // `api`:
 //
 //   api.writable()                      may this file be changed?
-//   api.replace(start, len, text, end)  replace bytes [start, start+len) of the document; `end` when a drag ends
+//   api.scrub(at, name, label)          a value changed live, a step at a time, made by the program: {to(value), end(value), cancel()}
 //   api.set(at, name, value)            write a control on the node at byte `at` (value null: take it out)
 //   api.canMine()                       a library tile: its controls work, and the first change copies it
 //   api.checkValue(element, control, typed) -> Promise<string|null>   the program's check of a typed value
@@ -17,7 +17,7 @@
 // state of the document is drawn over the sheet as it is, so neither is lost or held back.
 
 import { carriesUnit, parseValue, valueOf, wordControlNeedsSelect } from '../lens.js';
-import { asNumber, asRange, debounce, isNumeric, kdlString, unquote, valueItems, written } from '../value.js';
+import { asNumber, asRange, debounce, isNumeric, unquote, valueItems } from '../value.js';
 import { html, render, useEffect, useRef, useState } from './html.js';
 import { Icon } from './icons.js';
 import { SizeGridBox, parseSize } from './size-grid.js';
@@ -28,8 +28,6 @@ const STEP = { dmm: 0.1, level: 0.1, degrees: 1, percent: 1, count: 1, 'per squa
 const PX = { count: 10, degrees: 3, percent: 3 }; // pixels a step takes; 4 otherwise
 const NUM = /-?\d+(?:\.\d+)?/g;
 const CHECK_PAUSE_MS = 200; // how long typing pauses before the program is asked about the value
-const enc = new TextEncoder();
-const bytes = (s) => enc.encode(s).length;
 const decimals = (s) => (s.includes('.') ? s.split('.')[1].length : 0);
 const dflt = (c) => c.default1 ?? c.default;
 
@@ -91,16 +89,16 @@ function TypeIn({ g, c, s, v, inh, api, put, onDone }) {
   const [check, setCheck] = useState('');
   const input = useRef(/** @type {HTMLInputElement | null} */ (null));
   const mount = useRef(/** @type {HTMLElement | null} */ (null));
-  const st = useRef({ val: initial, done: false, asked: 0, typed: initial, pointed: null,
-    // the field's changes land in the source as they are made (as a drag's do): the span the value has now
-    live: { start: s && v ? s.span[0] + bytes(s.text.slice(0, v.at)) : 0, len: v ? bytes(v.text) : 0, wrote: false } });
+  // the field's changes land in the source as they are made (as a drag's do), each a step the program makes and drafts
+  // (`api.scrub`); `scrub` is made at the first, null when the source cannot be changed now (undefined: not yet asked)
+  const st = useRef({ val: initial, done: false, asked: 0, typed: initial, pointed: null, scrub: /** @type {any} */ (undefined) });
   const items = c.unit === 'size' ? [] : num ? valueItems(val, caret, c).items : [];
   const range = num ? valueItems(val, caret, c) : { items: [], from: 0, to: 0 };
   const write = num && s && v && !c.viaSet && !text ? (typed) => {
-    const out = written(typed);
-    api.replace(st.current.live.start, st.current.live.len, out, false);
-    st.current.live.len = bytes(out);
-    st.current.live.wrote = true;
+    const x = st.current;
+    if (!typed.trim()) return; // nothing typed is no value: the field ends by taking the control out, not on the way
+    if (x.scrub === undefined) x.scrub = api.scrub?.(g.at, c.name, `Changed ${c.name}`) ?? null;
+    x.scrub?.to(parseValue(typed));
   } : null;
   const set = (/** @type {string} */ next, at = next.length) => { st.current.val = next; setVal(next); setCaret(at); setPick(0); };
   const askLater = useRef(debounce((typed) => {
@@ -118,13 +116,12 @@ function TypeIn({ g, c, s, v, inh, api, put, onDone }) {
     const x = st.current;
     if (x.done) return;
     x.done = true;
-    if (x.live.wrote) {
-      // the source holds what was last written; it ends as one step of history, or is put back
-      api.replace(x.live.start, x.live.len, keep ? written(x.val) : v.text, true);
+    if (x.scrub) {
+      // the source holds what was last written; it ends as one step of history (nothing typed takes the control out), or is put back
+      if (keep) x.scrub.end(x.val.trim() ? parseValue(x.val) : null); else x.scrub.cancel();
     } else if (keep && x.val !== initial) {
       const typed = text ? x.val.trim() : null;
       if (text && !typed) put(g, c.name, null);
-      else if (s && !c.viaSet) api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), text ? kdlString(typed) : num ? written(x.val) : x.val.trim(), true);
       else put(g, c.name, text ? typed : parseValue(x.val));
     }
     onDone();
@@ -194,8 +191,7 @@ function PrintedSize({ g, c, s, v, ro, body, printed, api, put }) {
     setAt(null);
     const next = await api.setPrinted?.({ typed: body, end, mm: Number(text) });
     if (next == null) return; // the program's refusal was shown, loudly (editor/sheet.js)
-    if (s && v) api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), written(next), true);
-    else put(g, c.name, next);
+    put(g, c.name, parseValue(next));
   };
   const can = printed.editable && !ro && !!api.setPrinted;
   const ends = printed.ends.map((e, i) => (at === i
@@ -260,7 +256,7 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
       const start = Number(p.num);
       const step = STEP[c.unit] ?? 0.1;
       const dec = Math.max(decimals(p.num), decimals(String(step)));
-      drag.current = { k: p.k, x: e.clientX, start, step, dec, len: bytes(v.text), valueStart: s.span[0] + bytes(s.text.slice(0, v.at)), cur: null };
+      drag.current = { k: p.k, x: e.clientX, start, step, dec, scrub: undefined, text: null, cur: null };
     },
     onPointerMove: (/** @type {any} */ e) => {
       const d = drag.current;
@@ -273,13 +269,14 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
       if (c.limits && !/\.\./.test(v.text)) x = Math.min(c.limits[1] ?? Infinity, Math.max(c.limits[0], x));
       const txt = String(Number(x.toFixed(fine < 1 ? d.dec + 1 : d.dec))); // 7, not 7.0
       if (txt === (d.cur ?? p.num)) return;
+      // each step is the program's: it makes the edit of the value and drafts it (`api.scrub`); the page only says the value
+      if (d.scrub === undefined) d.scrub = api.scrub?.(g.at, c.name, `Changed ${c.name}`) ?? null;
+      if (!d.scrub) { drag.current = null; api.onField?.(c.name, false); return; } // the source cannot be changed now (said)
       d.cur = txt;
       const l = { [d.k]: txt };
       setLive(l);
-      const out = textNow(l);
-      api.replace(d.valueStart, d.len, out, false);
-      d.len = bytes(out);
-      d.text = out;
+      d.text = textNow(l);
+      d.scrub.to(parseValue(d.text));
     },
     onPointerUp: () => finishScrub(),
     onPointerCancel: () => finishScrub(),
@@ -290,7 +287,7 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
     drag.current = null;
     api.onField?.(c.name, false);
     // ended before the last write, so it is saved
-    if (moved.current) api.replace(d.valueStart, d.len, d.text ?? textNow(live), true);
+    if (moved.current && d.scrub) d.scrub.end(parseValue(d.text ?? textNow(live)));
     setLive(null);
   };
   const dice = c.name === 'seed' && !ro;

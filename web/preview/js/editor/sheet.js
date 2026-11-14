@@ -15,8 +15,9 @@ import { Outline } from '../view/outline.js';
 import { PropertyPage } from '../view/property.js';
 import { inheritedOf, pinsOf, rowsOf, Sheet } from '../view/sheet.js';
 import { ListBlock } from '../view/list-block.js';
-import { $, host, makeMine } from './app.js';
-import { editCall, edited, replaceBytes, spansUsable } from './document.js';
+import { idAtByte } from '../rows.js';
+import { $, host, makeMine, toast } from './app.js';
+import { editCall, edited, spansUsable, steps } from './document.js';
 import { setCloud, doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
 import { closeControl, openControl, showSourceAt } from './levels.js';
 import { setSel } from './selection.js';
@@ -34,7 +35,11 @@ import { addTo, lists } from './lists.js';
 
 const sheetApi = {
   writable: () => doc.get().writable,
-  replace: replaceBytes,
+  // a value scrubbed or typed live, a step at a time: the program makes each edit and drafts it (document.js `steps`)
+  scrub: (/** @type {number} */ at, /** @type {string} */ name, /** @type {string} */ label) => {
+    const id = nodeId(at);
+    return id == null ? null : steps(label, (value) => ({ op: 'set', id, name, value }));
+  },
   set: setControl,
   canMine: () => canMine(),
   // the top field in focus (typed in or scrubbed) selects the entry's cloud; hovered, it shows quietly
@@ -143,6 +148,13 @@ function tileModel() {
 /** A run of written text (a line's points, a region's lines) as a sheet setting. */
 const runWritten = (name, run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
 
+/** A run of arguments (a `boundedBy`'s lines, an `except`'s regions) made `values`: the program writes them over the run's node. */
+function setArgs(/** @type {{span: [number, number]}} */ run, /** @type {string[]} */ values, /** @type {string} */ label) {
+  const id = idAtByte(doc.get().nodes, run.span[0]);
+  if (id == null) { toast('That part of the tile is not in the source the program read: it will be in a moment, when the check has caught up'); return null; }
+  return tileEdit({ op: 'args', id, values }, label);
+}
+
 /** Change one clause of a region (a `within`'s distance or place, an `except`'s regions), through the server's edit route like the other controls. */
 async function setClause(clause, name, value) {
   if (!doc.get().writable) return makeMine({ run: () => setClause(clause, name, value) });
@@ -151,7 +163,7 @@ async function setClause(clause, name, value) {
     const run = clause.regions;
     if (!value.length) { doc.set({ note: 'an except names at least one region; take the clause out instead' }); return null; }
     if (!run?.span) return null;
-    return replaceBytes(run.span[0], run.span[1], value.join(' '), true);
+    return setArgs(run, value, 'Changed the regions of an except');
   }
   if (name === 'of') return setControl(clause.at, 'of', value);
   if (name === 'distance') {
@@ -194,7 +206,7 @@ function markModel(kind, m) {
         const run = sh.boundedBy;
         if (!value.length) { doc.set({ note: 'a region needs at least one line' }); return null; }
         if (!run?.span) return null;
-        return replaceBytes(run.span[0], run.span[1], value.join(' '), true);
+        return setArgs(run, value, `Changed the lines of ${m.name}`);
       }
       return null;
     };

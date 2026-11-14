@@ -2,9 +2,9 @@
 // row can: a range and the odds along it, a height worked out where it stands.  The page is the control's name, what it
 // takes, its value in a field wide enough to read (checked by the program as you type), the forms it can be written in,
 // and what it is as the source writes it.  Nothing here decides a value: the program checks it (`api.checkValue`), the
-// document takes it (`api.replace` over the written bytes, `api.set` when nothing is written yet).
+// document takes it (`api.set`: the program writes the value).
 //
-//   api.writable(), api.canMine(), api.replace(start, len, text, end), api.set(at, name, value),
+//   api.writable(), api.canMine(), api.set(at, name, value),
 //   api.checkValue(element, control, typed) -> Promise<string|null>, api.showSource()
 //
 // `PropertyPage({model, api})` is a function of `model`: `{element, label, c (the program's row for the control), s (what
@@ -13,13 +13,11 @@
 // typing, the caret and the focus stay where they are.
 
 import { parseValue, valueOf } from '../lens.js';
-import { asNumber, asRange, debounce, formOf, unquote, written } from '../value.js';
+import { asNumber, asRange, debounce, formOf, unquote } from '../value.js';
 import { html, useEffect, useRef, useState } from './html.js';
 import { inheritedPhrase } from './sheet.js';
 
 const CHECK_PAUSE_MS = 200;
-const enc = new TextEncoder();
-const bytes = (s) => enc.encode(s).length;
 
 /** The range inside a weighting call (`low(3dmm .. 6dmm)` is `3dmm .. 6dmm`), or the text as it is. */
 export function innerRange(typed, names) {
@@ -64,14 +62,12 @@ export function PropertyPage({ model, api }) {
   const weights = model.weightings || [];
   const weightNames = weights.map((w) => w.name);
 
-  const startByte = () => s.span[0] + bytes(s.text.slice(0, v.at));
   const commit = (text) => {
     const next = text.trim();
     setDraft(null);
     if (next === written0.trim()) return;
     if (!next) { if (s) api.set(model.at, c.name, null); return; }
-    if (s && v) api.replace(startByte(), bytes(v.text), written(next), true);
-    else api.set(model.at, c.name, parseValue(next));
+    api.set(model.at, c.name, parseValue(next));
   };
   const type = (/** @type {string} */ next) => { setDraft(next); askLater.current(next); };
 

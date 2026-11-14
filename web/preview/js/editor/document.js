@@ -10,7 +10,7 @@ import { describeChange } from '../history.js';
 import { html, render } from '../view/html.js';
 import { HistoryMenu, SaveState } from '../view/title-bar.js';
 import { parsePayload } from '../payload.js';
-import { TextPane, byteToIndex } from '../text.js';
+import { TextPane } from '../text.js';
 import { patchOnCopy } from '../mine.js';
 import { isOffline } from '../host.js';
 import { createDrafter } from '../drafts.js';
@@ -40,7 +40,7 @@ doc.derive('docRev', () => heldSource()?.rev ?? null);
 doc.derive('tileId', () => heldSource()?.tile ?? null);
 doc.derive('file', () => heldSource()?.file ?? null);
 
-const run = { lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, saving: false, openText: '' };
+const run = { lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, saving: false, openText: '' };
 
 // The history is the page's one (js/doc-history.js): a tile's source is a document whose steps are made here,
 // typing and the lens, each `{before, after, label, change, caret}`; a print list or a map is a document the
@@ -178,7 +178,7 @@ export function edited(text, kind, label = null, caret = null) {
   if (text !== texts.text) texts.setText(text, caret);
   doc.set({ text });
   if (kind !== 'drag') record(text, kind, label);
-  if (kind === 'drag' || kind === 'lens') askDraft(); // the last step of a scrub asks too: a draft for an earlier value must not stay
+  if (kind === 'lens') askDraft(); // the end of a scrub asks too: a draft for an earlier value must not stay (a step's own draft came with it)
   changed(kind === 'drag');
 }
 
@@ -205,18 +205,100 @@ export const askDraft = () => drafter.ask();
 /** A full build of the text now is on the page: a draft still on its way is dropped. */
 export function supersedeDrafts() { if (!dirty()) drafter.supersede(); }
 
-/** Replace bytes [start, start+len) of the text; `end` (the scrub is over) makes it a step of history and a save. */
-export function replaceBytes(start, len, text, end) {
-  // a library tile: the first step of the change copies it, and the copy gets that step
-  if (!doc.get().writable) { makeMine({ run: () => replaceBytes(start, len, text, true) }); return false; }
-  const t = doc.get().text;
-  // a scrub's later steps follow the text its own steps made (the caller tracks the span); the first needs a clean check of this text
-  if (t !== run.scrubText && !spansUsable()) return false;
-  const i = byteToIndex(t, start), j = byteToIndex(t, start + len);
-  const next = t.slice(0, i) + text + t.slice(j);
-  run.scrubText = end ? null : next;
-  edited(next, end ? 'lens' : 'drag');
-  return true;
+/**
+ * A change made at pointer speed: a map handle dragged, a value scrubbed or typed.  The page never makes the text of one:
+ * each step names what it changes (`make(x)` is the edit's body for the value `x`: its `op`, the node's id and the value) and
+ * the program makes the edit and drafts the text it made in one request (`host.step`), answering the new text, its revision
+ * and the draft.  One request is in the air at a time, and what is wanted meanwhile is only the newest (a fast drag skips
+ * steps rather than queueing them); each is made to the text the last answer made, at the revision it named, and a refusal
+ * for a stale one (409) is answered by a new check, so the next step names the right node.  `end(x)` makes the last value an
+ * ordinary edit: the one step of history the whole change is.  Null when the text has not been checked (the ids it would name
+ * are not known yet; the reason is said).
+ * @param {string} label the history step the change ends as
+ * @param {(x: any) => Record<string, any>} make the edit's body for a value
+ */
+export function steps(label, make) {
+  if (doc.get().writable && !spansUsable()) return null;
+  const base = doc.get().text;
+  /** @type {{ x: any } | null} */ let want = null; // the newest value asked for, not yet sent
+  /** @type {Promise<void> | null} */ let flight = null; // the request in the air
+  /** @type {{ text: string, rev: string, key: string } | null} */ let last = null; // what the last answer made
+  let over = false, mined = false, pending = /** @type {any} */ (null);
+  const key = (/** @type {any} */ x) => JSON.stringify(make(x));
+  /** The revision the ids are read at: the last answer's when the text is still the text it made, else the last check's. */
+  const readAt = () => (last && last.text === doc.get().text ? last.rev : doc.get().nodesRev ?? undefined);
+
+  async function send(/** @type {any} */ x) {
+    const t = tile(), d = doc.get();
+    if (!t || d.text == null || d.tileId !== t.id) return;
+    const text = d.text;
+    const read = readAt();
+    const r = await host.step(t.id, { edit: /** @type {any} */ ({ ...make(x), text, read }), file: d.file === t.path ? undefined : d.file, debug: view.get().debug });
+    if (r.status === 0) return; // the program is away: said by the chip
+    if (r.status === 409) { check(); return; } // the text moved on past the nodes read: checked again, and the next step names them afresh
+    if (r.status !== 200 || !('head' in r)) {
+      doc.set({ note: /** @type {any} */ (r).body?.error || 'that change could not be made' });
+      failed('Could not change the tile', /** @type {any} */ (r));
+      return;
+    }
+    // typing moved the text on while the program answered: the answer is for the text it was sent
+    if (doc.get().text !== text || t.id !== view.get().tileId) return;
+    last = { text: r.head.text, rev: r.head.rev, key: key(x) };
+    edited(r.head.text, 'drag');
+    if (r.head.draft === 'mesh' && r.buffer.byteLength) view.set({ draft: { tileId: t.id, payload: parsePayload(r.buffer) } });
+  }
+  async function pump() {
+    if (flight) return;
+    flight = (async () => { while (want && !over) { const { x } = want; want = null; await send(x); } })();
+    try { await flight; } finally { flight = null; }
+  }
+  /** The ordinary edit of `x` (the change as one step of history), once the ones in the air have landed. */
+  async function settle(/** @type {any} */ x) {
+    for (let tries = 0; tries < 2; tries++) {
+      if (!(last && last.text === doc.get().text) && !spansUsable()) return false;
+      const r = await editCall({ ...make(x), text: doc.get().text, ...(readAt() ? { read: readAt() } : {}) });
+      if (r.status === 409) { await check(); continue; }
+      if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed('Could not change the tile', r); return false; }
+      edited(r.body.text, 'lens', label);
+      return true;
+    }
+    toast(STALE_NOTE);
+    return false;
+  }
+  const guard = (/** @type {Promise<any>} */ p) => p.catch((e) => showError('Could not change the tile', e));
+  return {
+    /** Ask for value `x` now (the newest wins). */
+    to(/** @type {any} */ x) {
+      if (over) return;
+      // a library tile: the change copies it, and the copy gets the value the change ended at
+      if (!doc.get().writable) {
+        pending = x;
+        if (!mined) { mined = true; makeMine({ run: () => guard(settle(pending)) }); }
+        return;
+      }
+      want = { x };
+      guard(pump());
+    },
+    /** The change is over, at `x`: one step of history, and a save. */
+    end(/** @type {any} */ x) {
+      over = true; want = null; pending = x;
+      if (mined) return Promise.resolve();
+      return guard((async () => {
+        if (flight) await flight;
+        if (last && last.text === doc.get().text && last.text === base) { askDraft(); edited(base, 'drag'); } // back where it began: no step to undo
+        else if (last && last.key === key(x) && last.text === doc.get().text) edited(doc.get().text, 'lens', label); // the last answer made it
+        else await settle(x);
+      })());
+    },
+    /** The change is given up: the text as it was, kept out of the history. */
+    cancel() {
+      over = true; want = null;
+      return guard((async () => {
+        if (flight) await flight;
+        if (last && last.text === doc.get().text) { edited(base, 'drag'); askDraft(); }
+      })());
+    },
+  };
 }
 
 /**

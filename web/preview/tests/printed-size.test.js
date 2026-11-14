@@ -27,7 +27,7 @@ function world(rows, printedAnswer) {
   const calls = [];
   const api = {
     writable: () => true, canMine: () => false,
-    replace: (...a) => calls.push(['replace', ...a]), set: (...a) => calls.push(['set', ...a]),
+    scrub: () => ({ to: (v) => calls.push(['to', v]), end: (v) => calls.push(['end', v]), cancel: () => calls.push(['cancel']) }), set: (...a) => calls.push(['set', ...a]),
     onField: () => {}, checkValue: async () => null,
     unitAbout: () => ABOUT,
     printed: async (items) => { calls.push(['printed', items]); return items.map((i) => printedAnswer[i.control] ?? null); },
@@ -56,8 +56,8 @@ test('a scrubbed range still writes the source form, with `..`', async () => {
   num.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 100, pointerId: 1, preventDefault() {} });
   num.dispatchEvent({ type: 'pointermove', clientX: 100 + 40, shiftKey: false });
   num.dispatchEvent({ type: 'pointerup' });
-  const w = calls.filter((c) => c[0] === 'replace').at(-1);
-  assert.match(w[3], /^"?[\d.]+dmm \.\. 6\.5dmm"?$/);
+  const w = calls.filter((c) => c[0] === 'end').at(-1);
+  assert.match(w[1], /^[\d.]+dmm \.\. 6\.5dmm$/);
 });
 
 test('a count of nothing reads "none"', async () => {
@@ -90,11 +90,10 @@ test('a printed size typed in is converted by the program and written as the new
   type(input, '5');
   await rendered(); // the typed text is state: drawn before Enter reads it
   press(input, 'Enter');
-  await until(() => calls.some((c) => c[0] === 'replace'), 'the program\'s conversion written as the new value');
+  await until(() => calls.some((c) => c[0] === 'set'), 'the program\'s conversion written as the new value');
   assert.deepEqual(calls.find((c) => c[0] === 'setPrinted')[1], { typed: '7dmm', end: 0, mm: 5 });
-  const w = calls.filter((c) => c[0] === 'replace').at(-1);
-  assert.equal(w[3], '"6.89dmm"', 'written in the value\'s own unit, as the program said');
-  assert.equal(w[4], true);
+  const w = calls.filter((c) => c[0] === 'set').at(-1);
+  assert.deepEqual(w, ['set', 10, 'size', '6.89dmm'], 'the value in its own unit, as the program said; the program writes it');
 });
 
 test('what is not a number is not sent, and the field says so', async () => {
