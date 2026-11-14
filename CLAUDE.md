@@ -25,7 +25,7 @@ dharmatiles                                                 # no command = previ
 
 cargo test --release --workspace            # all tests (insta golden hashes included), under 5 minutes
 cargo test --release -p dt-eval --test openlock -- --ignored   # release check: every library tile through the gate on both systems
-cargo test --release -p dt-eval --test baseline -- --ignored   # every library tile on DungeonBlocks against tests/baseline/library-db.tsv (hash, triangles, repairs, overhang, and each tile's repair budget: a repair count above its `max_*` fails, and a rewrite can only lower a budget); DT_BASELINE=write rewrites it
+cargo test --release -p dt-eval --test baseline -- --ignored   # every library tile on DungeonBlocks against tests/baseline/library-db.tsv (hash, triangles, repairs, overhang, and each tile's repair budget, held to the worst of four seeds: a repair count above its `max_*` fails, and a rewrite can only lower a budget); DT_BASELINE=write rewrites it; about 18 minutes
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
 cargo xtask sheet <tile|name> [--seeds …] [--system ol]  # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
