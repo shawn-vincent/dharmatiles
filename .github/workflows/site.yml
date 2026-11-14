@@ -54,19 +54,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
-    env:
-      # the engine's sources: what decides whether the cached module and toolchain are still right
-      ENGINE_KEY: ${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', 'crates/dt-lang/**', 'crates/dt-value/**', 'crates/dt-doc/**', 'crates/dt-geom/**', 'crates/dt-kit/**', 'crates/dt-elements/**', 'crates/dt-eval/**', 'crates/dt-par/**', 'crates/dt-web/**', 'third_party/**', 'library/**', 'web/wasm/**', 'xtask/src/wasm.rs') }}
     steps:
       - uses: actions/checkout@v4
       - id: sha
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      # the engine's sources: what decides whether the cached module and toolchain are still right
+      # (hashFiles works only in steps, not in a job's env)
+      - id: engine
+        run: echo "key=${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', 'crates/dt-lang/**', 'crates/dt-value/**', 'crates/dt-doc/**', 'crates/dt-geom/**', 'crates/dt-kit/**', 'crates/dt-elements/**', 'crates/dt-eval/**', 'crates/dt-par/**', 'crates/dt-web/**', 'third_party/**', 'library/**', 'web/wasm/**', 'xtask/src/wasm.rs') }}" >> "$GITHUB_OUTPUT"
       - name: The module, if this engine has one already
         id: cached
         uses: actions/cache@v4
         with:
           path: out/site-module
-          key: module-${{ env.ENGINE_KEY }}
+          key: module-${{ steps.engine.outputs.key }}
       - name: The WASM toolchain
         if: steps.cached.outputs.cache-hit != 'true'
         run: |
@@ -78,7 +79,7 @@ jobs:
         if: steps.cached.outputs.cache-hit != 'true'
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: wasm-${{ env.ENGINE_KEY }}
+          shared-key: wasm-${{ steps.engine.outputs.key }}
       - name: wasm-bindgen, at the version Cargo.lock holds
         if: steps.cached.outputs.cache-hit != 'true'
         run: |
