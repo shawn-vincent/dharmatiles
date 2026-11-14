@@ -40,6 +40,12 @@ fn clone_manifold3d(manifold_src: &Path, commit_stamp_file: &Path) {
             "-c",
             "core.autocrlf=false",
             "clone",
+            // dharmatiles: the pinned tag alone, not the whole history (a full
+            // clone took minutes on every fresh build folder)
+            "--depth",
+            "1",
+            "--branch",
+            MANIFOLD_VERSION,
             "https://github.com/elalish/manifold.git",
             manifold_src.to_str().unwrap(),
         ])

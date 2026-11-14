@@ -53,7 +53,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::time::Instant;
 
-use dt_eval::{Library, Options, build};
+use dt_eval::{Library, Options, build, check};
 
 /// The three seeds a tile is built on besides the one it writes, to count its
 /// repairs: the only place they are set.
@@ -79,6 +79,37 @@ const REPAIRS: [(&str, usize, usize); 5] = [
 ];
 /// A row's fields: the tile and its measures (12), the budgets (5), the time.
 const FIELDS: usize = 18;
+
+/// The elements and tiles `DT_BASELINE_ONLY` names (`grass,cliff` or
+/// `lib:tiles/ground/1x1-grass.dtile`), if it is set: only those tiles and the
+/// library tiles whose stack uses one of the elements (a scatter's things
+/// count) are built, and every other tile's row is kept as the file has it, a rewrite
+/// included. `cargo xtask check` sets it for a change to one element; a
+/// release builds the whole library.
+fn only() -> Option<Vec<String>> {
+    let v = std::env::var("DT_BASELINE_ONLY").ok()?;
+    let names: Vec<String> = v
+        .split(',')
+        .map(|n| n.trim().to_owned())
+        .filter(|n| !n.is_empty())
+        .collect();
+    assert!(!names.is_empty(), "DT_BASELINE_ONLY={v:?} names no element");
+    Some(names)
+}
+
+/// The elements a tile's stack uses, its scatters' things included.
+fn uses(path: &str) -> Vec<String> {
+    let c = check(&Library, path, &Options::default())
+        .unwrap_or_else(|e| panic!("{path} does not check: {e:?}"));
+    let tile = c.tile.unwrap_or_else(|| panic!("{path} is not a tile"));
+    tile.stack
+        .iter()
+        .flat_map(|e| {
+            std::iter::once(e.what.value.clone())
+                .chain(e.children.iter().map(|c| c.what.value.clone()))
+        })
+        .collect()
+}
 
 /// One tile's measured row, without budgets; the last column is the build time.
 fn row(path: &str) -> String {
@@ -158,6 +189,22 @@ fn the_library_builds_as_the_baseline_says() {
         .filter(|p| p.starts_with("lib:tiles/"))
         .collect();
     assert!(tiles.len() > 50, "{} library tiles", tiles.len());
+    let only = only();
+    let tiles: Vec<String> = match &only {
+        Some(names) => tiles
+            .into_iter()
+            .filter(|p| names.contains(p) || uses(p).iter().any(|u| names.contains(u)))
+            .collect(),
+        None => tiles,
+    };
+    if let Some(names) = &only {
+        assert!(
+            !tiles.is_empty(),
+            "no library tile uses {}",
+            names.join(" or ")
+        );
+        eprintln!("{} library tiles use {}", tiles.len(), names.join(" or "));
+    }
     let measured: Vec<Vec<String>> = tiles
         .iter()
         .map(|p| row(p).split('\t').map(str::to_owned).collect())
@@ -240,8 +287,23 @@ fn the_library_builds_as_the_baseline_says() {
         );
     }
 
+    // the tiles not built keep their rows; the file stays in the library's order
+    let built: BTreeMap<&str, &Vec<String>> = rows.iter().map(|r| (r[0].as_str(), r)).collect();
+    let all: Vec<Vec<String>> = if only.is_some() {
+        before
+            .values()
+            .map(|f| {
+                built
+                    .get(f[0].as_str())
+                    .map_or_else(|| f.clone(), |r| (*r).clone())
+            })
+            .chain(rows.iter().filter(|r| !before.contains_key(&r[0])).cloned())
+            .collect()
+    } else {
+        rows.clone()
+    };
     let mut text = format!("{HEADER}\n{MEASURE}\n");
-    for r in &rows {
+    for r in &all {
         writeln!(text, "{}", r.join("\t")).unwrap();
     }
     if writing {
@@ -273,5 +335,7 @@ fn the_library_builds_as_the_baseline_says() {
     }
     eprintln!("build seconds: baseline {t_old:.0}, now {t_new:.0}");
     assert!(changed.is_empty(), "{}", changed.join("\n"));
-    assert_eq!(before.len(), rows.len(), "tiles in the baseline");
+    if only.is_none() {
+        assert_eq!(before.len(), rows.len(), "tiles in the baseline");
+    }
 }

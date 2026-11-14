@@ -98,8 +98,9 @@ opt-level = 3
 # that garbage: the table can come out empty and the next insert faults (a
 # rare, intermittent SIGSEGV in the wall and floor builds). The vendored
 # `manifold-csg-sys` is the published 3.5.105 with one carried patch for it
-# (third_party/manifold-csg-sys/patches); drop the vendored copy once Manifold
-# has the fix.
+# (third_party/manifold-csg-sys/patches), and its build script clones only the
+# pinned tag (build/fetch.rs), not Manifold's whole history; drop the vendored
+# copy once Manifold has the fix.
 [patch.crates-io]
 manifold-csg-sys = { path = "third_party/manifold-csg-sys" }
 # obvhs 0.4.0 with its builders' `Instant` replaced by a clock that does not

@@ -1,0 +1,1 @@
+<li><strong>The disk cache is its own crate:</strong> <code>dt-store</code> holds the store (its SHA-256 keys, entries, eviction and codec) and the stored build calls <code>build_stored</code> and <code>build_tier</code>; <code>dt-eval</code> no longer knows a disk cache exists, only what a build reports of it (<code>Built::cache</code>). Builds and keys are unchanged.</li>

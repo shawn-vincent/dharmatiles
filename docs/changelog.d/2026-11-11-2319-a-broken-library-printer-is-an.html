@@ -1,0 +1,1 @@
+<li><strong>A broken library printer is an error, not a panic:</strong> the command line (<code>build</code>, <code>check</code>, <code>audit</code>) reads the default printer with <code>Options::new()</code>, which reports why it cannot (a broken <code>$DT_LIBRARY</code>) instead of panicking.</li>

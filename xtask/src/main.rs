@@ -14,10 +14,31 @@ mod pictures;
 mod release;
 mod shots;
 mod wasm;
+mod work;
 
 const USAGE: &str = r#"usage: cargo xtask <command>
 
 commands:
+  check [--full] [--plan]
+           the checks this branch's changes can fail, chosen from what it
+           changes against main and printed before they run: always the
+           scans (dt-lang's tests, the changelog's waiting changes); fmt and
+           clippy for Rust; the tests of each changed package and of every
+           package that depends on it; npm test for the page; docs --check;
+           the sweep of the tiles an element or library change can move (the
+           whole library for geometry, a dependency or the compiler). --full
+           runs every check and the whole test suite: before a push;
+           --plan prints the checks without running them
+  sweep [element|lib:tile …]
+           the library baseline (crates/dt-eval/tests/baseline.rs) for the
+           tiles that use those elements, or those tiles; the whole library
+           when none is named. A heavy job
+  heavy <command …>
+           run a command once no other heavy job is running, in any
+           worktree (sweep, sheet, pictures and wasm take the same lock)
+  regen    write every generated file again: the page contract
+           (web/preview/js/api.d.ts, contract.js) and the docs. After a
+           rebase stops on a generated file, take either side and run this
   sheet <tile> [--seeds 1 2 3 4] [--system db|ol] [--dev]
            build a tile at each seed and lay its four views (painted, top,
            low, 20 mm close-up) out as one contact sheet, a row per seed:
@@ -52,8 +73,9 @@ commands:
            refuses a dirty working tree (commit first); unless --no-tests,
            also rebuilds tests/baseline/library-db.tsv and the element
            pictures from the committed tree and refuses if they differ;
-           number a release: the changelog's Unreleased entry becomes
-           <version>, dated today and led by <summary>; Cargo.toml's
+           number a release: the changes under docs/changelog.d/ become
+           <version>'s entry in the changelog, newest first, dated today
+           and led by <summary>, and their files are deleted; Cargo.toml's
            version is bumped; fmt, clippy, docs --check and the tests run
            (--no-tests skips the tests); the docs are written again for the
            new version (the examples' poster names carry it); then one commit, the tag
@@ -69,12 +91,20 @@ commands:
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
-        Some("sheet") => sheet(&args[1..]),
-        Some("pictures") => pictures::run(&root(), &args[1..]),
+        Some("check") => work::check(&root(), &args[1..]),
+        Some("sweep") => work::sweep(&root(), &args[1..]),
+        Some("heavy") => work::heavy(&root(), &args[1..]),
+        Some("regen") => work::regen(&root()),
+        Some("sheet") => work::heavy_lock(&root()).and_then(|()| sheet(&args[1..])),
+        Some("pictures") => {
+            work::heavy_lock(&root()).and_then(|()| pictures::run(&root(), &args[1..]))
+        }
         Some("docs") => docs::run(&root(), args.iter().any(|a| a == "--check")),
         Some("examples") => live::posters(&root(), &args[1..]),
         Some("shots") => shots::run(&root(), &args[1..]),
-        Some("wasm") => wasm::run_wasm(&root(), &args[1..]),
+        Some("wasm") => {
+            work::heavy_lock(&root()).and_then(|()| wasm::run_wasm(&root(), &args[1..]))
+        }
         Some("release") => release::run_release(&root(), &args[1..]),
         Some("help" | "-h" | "--help") => {
             println!("{USAGE}");

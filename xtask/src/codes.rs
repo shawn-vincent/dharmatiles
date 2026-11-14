@@ -56,7 +56,9 @@ pub fn run(root: &Path, check: bool, bin: &Path) -> Result<(), String> {
             .map_err(|e| e.to_string())?
             .to_string_lossy()
             .replace('\\', "/");
-        if rel.starts_with("e/") {
+        // the error pages are written here; the changelog's waiting changes are history, not pages (a release
+        // folds them into the changelog, which is written then)
+        if rel.starts_with("e/") || rel.starts_with("changelog.d/") {
             continue;
         }
         let text =

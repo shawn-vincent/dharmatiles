@@ -16,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 dt-doc.workspace = true
 dt-value.workspace = true
-dt-eval = { workspace = true, features = ["wasm"] }
+dt-eval.workspace = true
 dt-kit.workspace = true
 dt-print.workspace = true
 sha2.workspace = true
@@ -24,6 +24,12 @@ miette.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 wasm-bindgen = "=0.2.130"
+
+# The browser's Manifold (wasm-cxx-shim) only for the browser: on the host,
+# where `cargo test --workspace` builds dt-web beside the program, the engine
+# and Manifold are the program's own, built once.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dt-eval = { workspace = true, features = ["wasm"] }
 
 # The workspace forbids unsafe code; wasm-bindgen's generated glue is unsafe,
 # so this crate takes the workspace's clippy lints and leaves that one out.
