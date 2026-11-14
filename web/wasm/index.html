@@ -1,7 +1,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>dharmatiles in the browser</title>
-<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="../assets/theme.css">
 <style>
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 400 var(--fs-m)/var(--lh-m) var(--f-body); padding-inline: 16px; }
@@ -373,13 +373,15 @@ let worker = null, workerReady = false, buildId = 0, building = null, library = 
 function startWorker(module, libJson) {
   library = JSON.parse(libJson);
   try {
-    worker = new Worker("worker.js", { type: "module" });
+    // the one build worker the site's cards share (docs/assets/live/worker.js), beside this page on the site
+    worker = new Worker("../assets/live/worker.js", { type: "module" });
   } catch (e) { fatal("The page could not start its build worker", e); return; }
   worker.onerror = (ev) => { building = null; $("busy").textContent = ""; fatal("The build worker failed", ev.message || "(no message; it may be blocked from loading)"); };
   worker.onmessage = (ev) => {
     const m = ev.data;
     if (m.type === "ready") { workerReady = true; $("build").disabled = false; }
     else if (m.type === "built") done(m);
+    else if (m.type === "progress" || m.type === "idle") { /* the cards show these; this page shows its own clock */ }
     else if (m.type === "error") { building = null; $("busy").textContent = ""; $("build").disabled = false; fatal("The build worker threw", m.message + (m.stack ? "\n" + m.stack : "")); }
   };
   $("build").disabled = true;
@@ -401,7 +403,7 @@ function startBuild() {
   $("build").disabled = true; $("builderr").hidden = true;
   const tick = () => { if (building) { $("busy").textContent = `building… ${((performance.now() - building.t0) / 1000).toFixed(1)} s (the page is free)`; requestAnimationFrame(tick); } };
   tick();
-  worker.postMessage({ type: "build", id: building.id, text, system, seed: -1, cells });
+  worker.postMessage({ type: "job", id: building.id, steps: ["build"], text, system, seed: -1, cells, tier: "full" });
 }
 function done(m) {
   const wall = performance.now() - building.t0;
