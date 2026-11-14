@@ -8,7 +8,7 @@ import { byteToIndex } from '../text.js';
 import { failed } from '../problems.js';
 import { token } from '../tokens.js';
 import { $, host, makeMine, viewer } from './app.js';
-import { askDraft, edited, openFile, replaceBytes, spansUsable, texts } from './document.js';
+import { editCall, askDraft, edited, openFile, replaceBytes, spansUsable, texts } from './document.js';
 import { meshStack } from '../payload.js';
 import { doc, elementNamed, isEntry, itemOf, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
 
@@ -95,7 +95,7 @@ async function insertNode(place, node, { select: sel } = {}) {
     if (doc.get().file !== t.path) return;
   }
   if (!spansUsable()) return;
-  const r = await host.edit({ op: 'insert', text: doc.get().text, place, node });
+  const r = await editCall({ op: 'insert', text: doc.get().text, place, node });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be written' }); failed('Could not add to the tile', r); return; }
   if (sel) view.set({ sel, source: null }); else doc.set({ selectAt: r.body.at });
   edited(r.body.text, 'view', `Added ${node.trim().split(/\s+/)[0]}`, byteToIndex(r.body.text, r.body.at));

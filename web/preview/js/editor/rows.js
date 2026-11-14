@@ -14,7 +14,7 @@ import {
 } from '../rows.js';
 import { byteToIndex } from '../text.js';
 import { host, makeMine, toast } from './app.js';
-import { askDraft, edited, spansUsable, undo } from './document.js';
+import { editCall, askDraft, edited, spansUsable, undo } from './document.js';
 import { doc, isEntry, markSel, stackItems, tile, view } from './stores.js';
 
 /** A library tile's own text is shown: its first change copies it into My tiles (tiles.js). */
@@ -50,7 +50,7 @@ export async function setControl(at, name, value) {
   if (!spansUsable()) return;
   const id = nodeId(at);
   if (id == null) return;
-  const r = await host.edit({ op: 'set', text: doc.get().text, id, name, value });
+  const r = await editCall({ op: 'set', text: doc.get().text, id, name, value });
   if (r.status !== 200) { refused(`Could not change ${name}`, r); return; }
   edited(r.body.text, 'lens', `Changed ${name}`);
   return true;
@@ -61,7 +61,7 @@ export async function tileEdit(body, label) {
   if (!doc.get().writable) return makeMine({ run: () => tileEdit(body, label) });
   if (!spansUsable()) return;
   if ('id' in body && body.id == null) return; // the caller could not name the node (nodeId said so)
-  const r = await host.edit({ text: doc.get().text, ...body });
+  const r = await editCall({ text: doc.get().text, ...body });
   if (r.status !== 200) { refused(`Could not make the change: ${label}`, r); return; }
   edited(r.body.text, 'lens', label);
   return true;
@@ -73,7 +73,7 @@ export async function muteAt(byte, label = 'Entry') {
   if (!spansUsable()) return;
   const id = nodeId(byte);
   if (id == null) return;
-  const r = await host.edit({ op: 'hide', text: doc.get().text, id });
+  const r = await editCall({ op: 'hide', text: doc.get().text, id });
   if (r.status !== 200) { refused(`Could not hide ${label}`, r); return; }
   if (isEntry(view.get().sel)) view.set({ sel: null });
   edited(r.body.text, 'view', `Hid ${label}`);
@@ -87,7 +87,7 @@ export async function removeAt(byte, label = 'Entry') {
   if (!spansUsable()) return;
   const id = nodeId(byte);
   if (id == null) return;
-  const r = await host.edit({ op: 'remove', text: doc.get().text, id });
+  const r = await editCall({ op: 'remove', text: doc.get().text, id });
   if (r.status !== 200) { refused(`Could not delete ${label}`, r); return; }
   view.set({ sel: null });
   edited(r.body.text, 'view', `Deleted ${label}`);
@@ -157,7 +157,7 @@ export async function moveEntry(from, slot) {
   if (!spansUsable()) return;
   const id = nodeId(plan.at), before = plan.before == null ? null : nodeId(plan.before);
   if (id == null || (plan.before != null && before == null)) return;
-  const r = await host.edit({ op: 'move', text: doc.get().text, id, before });
+  const r = await editCall({ op: 'move', text: doc.get().text, id, before });
   if (r.status !== 200) { refused(`Could not move ${nameOf(it)}`, r); return; }
   const note = movedNote(rows, from, to, nameOf(it));
   wanted = { index: landing(rows, from, to, file), text: r.body.text };
@@ -185,7 +185,7 @@ async function insertEntry(place, offer) {
   const body = above != null
     ? { op: 'insert', place: 'before', id: above, node: offer.node, text: doc.get().text }
     : { op: 'insert', place: 'stack', node: offer.node, text: doc.get().text };
-  const r = await host.edit(body);
+  const r = await editCall(body);
   if (r.status !== 200) { refused(`Could not add ${offer.name}`, r); return; }
   doc.set({ selectAt: r.body.at });
   edited(r.body.text, 'lens', `Added ${offer.name}`, byteToIndex(r.body.text, r.body.at));

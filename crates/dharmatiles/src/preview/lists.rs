@@ -193,6 +193,7 @@ pub(super) fn check_text(shared: &Shared, tile: &str, text: &str) -> CheckRes {
                 stack: None,
                 map: None,
                 nodes: Vec::new(),
+                nodes_rev: None,
             }
         }
         Err(e) => {
@@ -206,6 +207,7 @@ pub(super) fn check_text(shared: &Shared, tile: &str, text: &str) -> CheckRes {
                 stack: None,
                 map: None,
                 nodes: Vec::new(),
+                nodes_rev: None,
             }
         }
     }

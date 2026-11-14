@@ -16,7 +16,7 @@ import { PropertyPage } from '../view/property.js';
 import { inheritedOf, pinsOf, rowsOf, Sheet } from '../view/sheet.js';
 import { ListBlock } from '../view/list-block.js';
 import { $, host, makeMine } from './app.js';
-import { edited, replaceBytes, spansUsable } from './document.js';
+import { editCall, edited, replaceBytes, spansUsable } from './document.js';
 import { setCloud, doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
 import { closeControl, openControl, showSourceAt } from './levels.js';
 import { setSel } from './selection.js';
@@ -157,7 +157,7 @@ async function setClause(clause, name, value) {
   if (name === 'distance') {
     const id = nodeId(clause.at);
     if (id == null) return;
-    const r = await host.edit({ op: 'arg', text: doc.get().text, id, index: 0, value });
+    const r = await editCall({ op: 'arg', text: doc.get().text, id, index: 0, value });
     if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed('Could not change the distance', r); return; }
     edited(r.body.text, 'lens', 'Changed distance');
   }

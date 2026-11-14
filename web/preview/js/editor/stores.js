@@ -114,6 +114,7 @@ export const doc = createStore({
   tileId: null, file: null, base: null, text: null, writable: false, docRev: null, // tileId, file, base and docRev are derived in editor/document.js from the source the pane shows (what the documents module holds of it; a save is made against that revision): these are only their shape; text and writable are the pane's
   checked: null, checkedFile: null, checkedTile: null, // the text last checked, and the file and tile it was checked for
   ok: true, errors: [], stack: null, map: null,
+  nodesRev: null,      // the revision of the text those nodes were read from: an edit carries it back, and the program refuses it when the text has moved on
   nodes: null,         // every node of the text last checked, by the id an edit names it with (rows.js `idAtByte`); kept with the last good stack
   names: null,         // the definitions, regions, lines and points the text makes now, by the program's parser (kept while the text does not parse)
   note: null, conflict: null, saving: false,

@@ -103,7 +103,7 @@ fn piece_of(key: &str) -> String {
 }
 
 /// FNV-1a, 64 bits: what names a text in a key.
-fn fnv(text: &str) -> u64 {
+pub(super) fn fnv(text: &str) -> u64 {
     text.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
     })

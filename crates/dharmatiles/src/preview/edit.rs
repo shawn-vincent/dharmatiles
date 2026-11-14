@@ -112,7 +112,7 @@ pub enum InsertPlace {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(tag = "op", rename_all = "kebab-case", deny_unknown_fields)]
-pub enum EditReq {
+pub enum EditOp {
     /// A control set on the node `id` (`value` null or left out takes it out).
     Set {
         text: String,
@@ -168,6 +168,25 @@ pub enum EditReq {
     },
 }
 
+/// `/api/edit`: an edit and the revision of the text its ids were read at (`CheckRes::nodes_rev`).  An edit whose `text`
+/// is not that text is refused with a 409, so an id like `rock#2` never names another node than the one the page saw.  Only
+/// the program's own fix names no node, and needs no `read`.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+pub struct EditReq {
+    /// The `nodesRev` of the check the ids come from.
+    pub read: Option<String>,
+    #[serde(flatten)]
+    #[cfg_attr(test, ts(flatten))]
+    pub op: EditOp,
+}
+
+/// The revision of a text that a check names its nodes by: what an edit must carry back.
+pub(super) fn text_rev(text: &str) -> String {
+    format!("{:016x}", super::tiers::fnv(text))
+}
+
 /// The text after an edit, and (for a change that leaves a node to select) the node: its id and the byte it starts at.
 #[derive(Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -189,6 +208,10 @@ pub struct CheckRes {
     pub map: Option<Json>,
     /// Every node of the text that was read, by the id an edit names it with (`/api/edit`), for a tile.
     pub nodes: Vec<NodeJson>,
+    /// The revision of the text those nodes were read from; an edit names them with it (`EditReq::read`).
+    #[serde(rename = "nodesRev")]
+    #[cfg_attr(test, ts(rename = "nodesRev"))]
+    pub nodes_rev: Option<String>,
 }
 
 /// One node of a tile's text: the id an edit names it by, what it is, and where its text is.
@@ -946,7 +969,7 @@ pub(super) fn printed_set(shared: &Shared, v: PrintedSetReq) -> Out<PrintedSetRe
         .map_err(|e| fail::refused("422 Unprocessable Entity", e.0))
 }
 
-pub(super) fn edit(_: &Shared, v: EditReq) -> Out<EditRes> {
+pub(super) fn edit(_: &Shared, req: EditReq) -> Out<EditRes> {
     use dt_doc::ops::{Kind, Op, Place, apply};
     let made = |text: &str, op: Op| match apply(Kind::Tile, text, &op) {
         Ok(d) => Ok(EditRes {
@@ -956,8 +979,32 @@ pub(super) fn edit(_: &Shared, v: EditReq) -> Out<EditRes> {
         }),
         Err(e) => Err(fail::refused("422 Unprocessable Entity", e.to_string())),
     };
-    match &v {
-        EditReq::Insert {
+    let v = &req.op;
+    let text_of = match v {
+        EditOp::Insert { text, .. }
+        | EditOp::Move { text, .. }
+        | EditOp::Remove { text, .. }
+        | EditOp::RemoveChildren { text, .. }
+        | EditOp::Rename { text, .. }
+        | EditOp::Arg { text, .. }
+        | EditOp::Hide { text, .. }
+        | EditOp::Set { text, .. }
+        | EditOp::Fix { text, .. } => text,
+    };
+    if !matches!(v, EditOp::Fix { .. }) {
+        let read = req
+            .read
+            .as_deref()
+            .ok_or_else(|| bad("say which reading of the text the ids are from (`read`)"))?;
+        if read != text_rev(text_of) {
+            return Err(fail::refused(
+                "409 Conflict",
+                "The text changed since the program listed its nodes, so this edit could name the wrong one; it will be made again once the text is checked.",
+            ));
+        }
+    }
+    match v {
+        EditOp::Insert {
             text,
             node,
             place,
@@ -975,29 +1022,29 @@ pub(super) fn edit(_: &Shared, v: EditReq) -> Out<EditRes> {
             };
             made(text, Op::Insert { place, node })
         }
-        EditReq::Move { text, id, before } => made(
+        EditOp::Move { text, id, before } => made(
             text,
             Op::Move {
                 id,
                 before: before.as_deref(),
             },
         ),
-        EditReq::Remove { text, id } => made(text, Op::Take { id }),
-        EditReq::RemoveChildren { text, id, names } => {
+        EditOp::Remove { text, id } => made(text, Op::Take { id }),
+        EditOp::RemoveChildren { text, id, names } => {
             if names.is_empty() {
                 return Err(bad("give the names of the children to take out"));
             }
             let names: Vec<&str> = names.iter().map(String::as_str).collect();
             made(text, Op::TakeChildren { id, names: &names })
         }
-        EditReq::Rename { text, id, new } => made(
+        EditOp::Rename { text, id, new } => made(
             text,
             Op::Rename {
                 id,
                 new: new.trim(),
             },
         ),
-        EditReq::Arg {
+        EditOp::Arg {
             text,
             id,
             index,
@@ -1010,12 +1057,12 @@ pub(super) fn edit(_: &Shared, v: EditReq) -> Out<EditRes> {
                 value: value.kdl(),
             },
         ),
-        EditReq::Hide { text, id } => made(text, Op::Hide { id }),
-        EditReq::Fix { text, fix } => {
+        EditOp::Hide { text, id } => made(text, Op::Hide { id }),
+        EditOp::Fix { text, fix } => {
             let fixes = [dt_doc::error::Fix::from(fix)];
             made(text, Op::Fix(&fixes))
         }
-        EditReq::Set {
+        EditOp::Set {
             text,
             id,
             name,
@@ -1053,6 +1100,7 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
         stack: None,
         map: None,
         nodes: Vec::new(),
+        nodes_rev: None,
     };
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
@@ -1102,6 +1150,7 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
                     .into_iter()
                     .map(NodeJson::from)
                     .collect(),
+                nodes_rev: Some(text_rev(&own)),
             })
         }
         Err(errs) => {

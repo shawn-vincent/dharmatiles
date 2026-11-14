@@ -135,7 +135,7 @@ function clearDocument() {
   history.clear(textKey());
   run.lastKind = null;
   shownSid.value = null;
-  doc.set({ text: null, writable: false, stack: null, map: null, nodes: null, names: null, conflict: null, note: null });
+  doc.set({ text: null, writable: false, stack: null, map: null, nodes: null, nodesRev: null, names: null, conflict: null, note: null });
 }
 function record(text, kind, label = null) {
   // a document the program owns has its steps from the program: the source's saves (save() below)
@@ -283,6 +283,19 @@ function changed(dragging = false) {
   if (!dragging) run.saveTimer = setTimeout(save, 500);
 }
 
+/**
+ * An edit made through the server's edit route, naming nodes by the ids of the last check: the call carries the revision of the text
+ * those ids were read at (`nodesRev`), and the program refuses it (409) when the text it is sent is another.  The refusal is shown where
+ * the change was asked for, and the text is checked again, so the next try names the right node.
+ * @param {Record<string, any>} body the edit (its `text` is the document's unless it says another)
+ */
+export async function editCall(body) {
+  // the caller names the op and its fields; the contract's type (EditReq) is checked where the body is made whole, on the wire by the program
+  const r = await host.edit(/** @type {import('../api').EditReq} */ ({ text: doc.get().text, read: doc.get().nodesRev ?? undefined, ...body }));
+  if (r.status === 409) check();
+  return r;
+}
+
 async function check() {
   const t = tile(), d = doc.get();
   if (!t || d.text == null) return false;
@@ -294,7 +307,7 @@ async function check() {
   const patch = { note: null, checked: text, checkedFile: d.file, checkedTile: d.tileId, ok: !!r.body.ok, errors: r.body.errors || [] };
   if (r.body.ok && r.body.stack) patch.stack = r.body.stack; // the last good stack stays while there are mistakes
   if (r.body.ok && r.body.map) patch.map = r.body.map;
-  if (r.body.ok && r.body.nodes) patch.nodes = r.body.nodes;
+  if (r.body.ok && r.body.nodes) { patch.nodes = r.body.nodes; patch.nodesRev = r.body.nodesRev ?? null; }
   doc.set(patch);
   return true;
 }
@@ -399,7 +412,7 @@ export async function loadText(file) {
         doc.set({
           text: v.text, writable: v.writable,
           conflict: null, note: null,
-          checked: null, ok: !t.errors.length, errors: [], stack: null, nodes: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
+          checked: null, ok: !t.errors.length, errors: [], stack: null, nodes: null, nodesRev: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
           ...(fresh ? { map: null, names: null } : {}),
         });
       };

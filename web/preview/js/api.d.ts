@@ -28,7 +28,11 @@ type CheckRes = { ok: boolean, errors: Array<Mistake>, stack: Array<JsonValue> |
 /**
  * Every node of the text that was read, by the id an edit names it with (`/api/edit`), for a tile.
  */
-nodes: Array<NodeJson>, };
+nodes: Array<NodeJson>, 
+/**
+ * The revision of the text those nodes were read from; an edit names them with it (`EditReq::read`).
+ */
+nodesRev: string | null, };
 
 type CheckValueReq = { element: string, control: string, typed: string, };
 
@@ -44,7 +48,11 @@ type Done = Record<string, never>;
 
 type DraftReq = { text: string, file?: string | null, debug?: boolean | null, };
 
-type EditReq = { "op": "set", text: string, id: string, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, id?: string | null, } | { "op": "move", text: string, id: string, before?: string | null, } | { "op": "remove", text: string, id: string, } | { "op": "remove-children", text: string, id: string, names: Array<string>, } | { "op": "rename", text: string, id: string, new: string, } | { "op": "arg", text: string, id: string, index: number, value: Scalar, } | { "op": "hide", text: string, id: string, } | { "op": "fix", text: string, fix: FixJson, };
+type EditReq = { 
+/**
+ * The `nodesRev` of the check the ids come from.
+ */
+read?: string | null, } & ({ "op": "set", text: string, id: string, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, id?: string | null, } | { "op": "move", text: string, id: string, before?: string | null, } | { "op": "remove", text: string, id: string, } | { "op": "remove-children", text: string, id: string, names: Array<string>, } | { "op": "rename", text: string, id: string, new: string, } | { "op": "arg", text: string, id: string, index: number, value: Scalar, } | { "op": "hide", text: string, id: string, } | { "op": "fix", text: string, fix: FixJson, });
 
 type EditRes = { text: string, id: string | null, at: number | null, };
 
