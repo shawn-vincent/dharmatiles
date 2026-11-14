@@ -23,6 +23,7 @@ const SOURCE: &str = "https://github.com/shawn-vincent/dharmatiles/blob/main/";
 /// Fill every page under `docs/elements/`; with `check`, change nothing
 /// and fail if any page is stale.
 pub fn run(root: &Path, check: bool) -> Result<(), String> {
+    crate::shots::check(root)?;
     let bin = crate::program(root, true)?;
     let json = Command::new(&bin)
         .args(["elements", "--json"])

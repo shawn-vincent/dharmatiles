@@ -7,6 +7,7 @@ mod docs;
 mod image;
 mod pictures;
 mod release;
+mod shots;
 mod wasm;
 
 const USAGE: &str = r#"usage: cargo xtask <command>
@@ -25,6 +26,13 @@ commands:
            rebuild the docs' element pictures from docs/elements/demo/
            into docs/elements/img/ (groups: line, region, use, define,
            stack, walls, floors, meadow; all when none is named)
+  shots [--dev] [--only <name> …]
+           redraw the editor's pictures for the docs: runs the editor on a
+           free port over a scratch home (out/shots/: none of your tiles,
+           cache or settings), drives headless Chrome through each state
+           and writes docs/assets/shots/<name>-<light|dark>.webp and
+           shots.json (where each callout's part of the page is); needs
+           Chrome (or set DT_CHROME) and Node 22+; commit the pictures
   docs [--check]
            fill each docs/elements/ page's generated reference block from
            the element schema; --check changes nothing and fails if stale
@@ -51,6 +59,7 @@ fn main() -> ExitCode {
         Some("sheet") => sheet(&args[1..]),
         Some("pictures") => pictures::run(&root(), &args[1..]),
         Some("docs") => docs::run(&root(), args.iter().any(|a| a == "--check")),
+        Some("shots") => shots::run(&root(), &args[1..]),
         Some("wasm") => wasm::run_wasm(&root(), &args[1..]),
         Some("release") => release::run_release(&root(), &args[1..]),
         Some("help" | "-h" | "--help") => {

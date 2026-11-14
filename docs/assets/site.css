@@ -234,3 +234,38 @@ ol.stack-steps li img { order: 0; } ol.stack-steps li code { order: 2; overflow-
 .fam-mark { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--fam); margin-right: 8px; vertical-align: 0; }
 .fam-key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; color: var(--muted); margin: 14px 0 0; }
 .fam-key span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--fam); margin-right: 6px; }
+
+/* ---- the editor's pictures (xtask shots): a screenshot with numbered callouts drawn over it and a key beside it.
+   The pictures are light and dark; the callouts' boxes come from shots.json, read by site.js, so a redrawn picture moves them. */
+figure.shot { margin: 8px 0 32px; }
+figure.shot .frame { position: relative; border-radius: var(--r-lg); background: var(--plate); line-height: 0; box-shadow: 0 0 0 1px var(--line-2), var(--shadow); }
+figure.shot .frame img { display: block; width: 100%; height: auto; border-radius: inherit; }
+figure.shot .frame img.shot-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) figure.shot .frame img.shot-light { display: none; }
+  :root:not([data-theme="light"]) figure.shot .frame img.shot-dark { display: block; }
+}
+:root[data-theme="dark"] figure.shot .frame img.shot-light { display: none; }
+:root[data-theme="dark"] figure.shot .frame img.shot-dark { display: block; }
+figure.shot .pins { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; pointer-events: none; }
+figure.shot .pin { position: absolute; box-sizing: border-box; border: 2px solid var(--ink); border-radius: var(--r-mark); box-shadow: 0 0 0 2px var(--plate), inset 0 0 0 2px var(--plate); max-width: none; transition: background-color .15s var(--ease); }
+figure.shot .pin.on { background: color-mix(in srgb, var(--ink) 16%, transparent); }
+/* the number: a square mark on the box's top-left corner (its bottom-left when the box is at the picture's foot), so it covers none of what it points at */
+figure.shot .pin b, figure.shot ol.key > li::before { display: grid; place-items: center; width: 22px; height: 22px; box-sizing: border-box; border-radius: var(--r-mark); background: var(--ink); color: var(--bg); font: 700 var(--fs-s)/1 var(--f-body); }
+figure.shot .pin b { position: absolute; left: 0; top: 0; transform: translate(-60%, -60%); box-shadow: 0 0 0 2px var(--plate); }
+figure.shot .pin.foot b { top: auto; bottom: 0; transform: translate(-60%, 60%); }
+figure.shot ol.key { counter-reset: key; list-style: none; margin: 16px 0 0; padding: 0; columns: 2 20em; column-gap: 32px; }
+figure.shot ol.key > li { counter-increment: key; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 4px 10px; align-items: start; break-inside: avoid; max-width: none; margin: 0 0 10px; font-size: 14px; line-height: 1.5; color: var(--muted); cursor: default; }
+figure.shot ol.key > li::before { content: counter(key); margin-top: 1px; }
+figure.shot ol.key > li > span > b { color: var(--ink); font-weight: 600; }
+figure.shot ol.key > li > span { min-width: 0; }
+figure.shot figcaption { margin-top: 12px; }
+/* a page that opens with one: the picture runs the full width under the title, the contents list stays beside the text */
+@media (min-width: 1000px) {
+  .doc-layout.has-shot > figure.shot { grid-column: 1 / -1; grid-row: 2; }
+  .doc-layout.has-shot > article.doc { grid-row: 3; }
+  .doc-layout.has-shot > .margin { grid-row: 3; padding-top: 0; }
+  .doc-layout.has-shot > .margin nav.toc { margin-top: 24px; }
+}
+/* a picture inside the text is as narrow as the text: one column of key */
+article.doc figure.shot ol.key { columns: 1; }

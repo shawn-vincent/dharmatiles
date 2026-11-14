@@ -99,3 +99,45 @@ addEventListener('DOMContentLoaded', () => {
   sync();
   wide.addEventListener('change', sync);
 });
+
+// The editor's pictures (cargo xtask shots): each figure.shot is a picture of the editor and a key of numbered callouts
+// (li[data-at]).  Where each callout's part of the picture is comes from shots.json, written by the same command from the
+// live page, so the boxes and numbers are drawn here over the picture, never into it, and follow a redrawn picture.
+addEventListener('DOMContentLoaded', async () => {
+  const figs = [...document.querySelectorAll('figure.shot[data-shot]')];
+  if (!figs.length) return;
+  const first = figs[0].querySelector('img');
+  let book;
+  try {
+    const r = await fetch(new URL('shots.json', first.src));
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    book = await r.json();
+  } catch (e) {
+    // the key under each picture still reads without its boxes: say why they are missing
+    console.error(`the callouts of the editor's pictures need assets/shots/shots.json (${e.message}); serve docs/ over http`);
+    return;
+  }
+  for (const fig of figs) {
+    const shot = book.shots[fig.dataset.shot];
+    const frame = fig.querySelector('.frame');
+    if (!shot) { console.error(`shots.json has no picture "${fig.dataset.shot}"`); continue; }
+    const pins = document.createElement('ol');
+    pins.className = 'pins';
+    pins.setAttribute('aria-hidden', 'true');
+    const items = [...fig.querySelectorAll('ol.key > li[data-at]')];
+    items.forEach((li, i) => {
+      const box = shot.anchors[li.dataset.at];
+      if (!box) { console.error(`picture "${fig.dataset.shot}" has no callout "${li.dataset.at}"`); return; }
+      const pin = document.createElement('li');
+      pin.className = 'pin' + (box.y > shot.h * 0.9 ? ' foot' : '');
+      const pct = (v, of) => `${(100 * v / of).toFixed(3)}%`;
+      pin.style.cssText = `left:${pct(box.x, shot.w)};top:${pct(box.y, shot.h)};width:${pct(box.w, shot.w)};height:${pct(box.h, shot.h)}`;
+      pin.innerHTML = `<b>${i + 1}</b>`;
+      pins.append(pin);
+      const on = (v) => () => pin.classList.toggle('on', v);
+      li.addEventListener('mouseenter', on(true));
+      li.addEventListener('mouseleave', on(false));
+    });
+    frame.append(pins);
+  }
+});

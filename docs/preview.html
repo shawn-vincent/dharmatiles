@@ -9,12 +9,28 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html" aria-current="page">Preview</a><a href="plates.html">Plates</a><a href="maps.html">Maps</a><a href="printers.html">Printers</a><a href="inventory.html">Inventory</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<div class="wrap doc-layout has-shot">
 <header class="hero">
   <div class="eyebrow">dharmatiles preview</div>
   <h1>Preview</h1>
   <p class="lede">A live, painted 3D view of your tiles in the browser, and their editor. Click anything on the tile and the panel beside it goes to what made it, with its controls; or switch the panel to the source and type. It rebuilds a tile every time you save it, paints overhang the way the printability gate sees it, and shows a mistake at its line. It is part of the program and works offline.</p>
 </header>
+<figure class="shot" data-shot="tile">
+  <div class="frame">
+    <img class="shot-light" src="assets/shots/tile-light.webp" width="1512" height="860" alt="The editor with a tile open: the trail and the Tile, Map and Plates switch along the top, the tile as an outline with its stack in the panel on the left, the tile in 3D on the right, the status line under it.">
+    <img class="shot-dark" src="assets/shots/tile-dark.webp" width="1512" height="860" alt="The editor with a tile open: the trail and the Tile, Map and Plates switch along the top, the tile as an outline with its stack in the panel on the left, the tile in 3D on the right, the status line under it.">
+  </div>
+  <ol class="key">
+    <li data-at="modes"><span><b>Tile, Map, Plates.</b> What you are making. Map and Plates are for a map or a print list; a tile opens as Tile.</span></li>
+    <li data-at="trail"><span><b>The trail.</b> Places, the folder, the tile. Press any step to go up to it.</span></li>
+    <li data-at="face"><span><b>Outline or Source.</b> The same column as the tile&rsquo;s levels, or as the text of the file.</span></li>
+    <li data-at="stack"><span><b>The stack,</b> top of the tile first; the number is build order. Press a row to open it.</span></li>
+    <li data-at="view"><span><b>The view.</b> Press a thing on the tile to select its entry; the panel goes to it.</span></li>
+    <li data-at="cameras"><span><b>Cameras.</b> Iso is where a tile opens. The <kbd>⋯</kbd> beside them is Display: paint, overhang, wireframe, the grid.</span></li>
+    <li data-at="status"><span><b>The build&rsquo;s verdict.</b> Press it for the messages, with the full record.</span></li>
+    <li data-at="target"><span><b>The build target and Export.</b> The base system and the printer every build is for; Export writes the files.</span></li>
+  </ol>
+</figure>
 <div class="margin">
 <nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
   <li><a href="#run">Run it</a></li>
@@ -75,6 +91,30 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="panel">The panel</h2>
 <p>The left of the page is one panel that shows one level of the tile at a time, full height. A level is a place on a path: the tile, one thing of it, one control of that. Nothing opens inline: choosing a row slides the panel to its level, from the right; <em>‹</em>, a crumb, <kbd>Esc</kbd> or <kbd>⌘[</kbd> slides it back, and the level you left is where you left it (its scroll position is kept). The slide takes about 200 ms, and is a plain swap when your system asks for reduced motion. A map's levels (the map, one piece, a property of it) are the same panel: one shell shows whichever document's level is the one you are at, slides by depth (a deeper level from the right, a shallower from the left, the same for a tile and a map), keeps each level's scroll, puts the keyboard in the new level after a slide when it was in the panel, and reads <kbd>Esc</kbd>, <kbd>‹</kbd>, <kbd>⌘[</kbd> and <kbd>⌘]</kbd> the same. A level's own view only draws what it holds; it never shows, hides or slides itself. The folder levels, the folders of a map's Add step (<em>Add &rsaquo; Places &rsaquo; My tiles &rsaquo; dungeon</em>, each a level, in the trail above the panel and not a second bar inside it) and the step between a folder and a document are steps of the same trail, and slide by the same rule with the same timing, scroll and keyboard: opening a tile or a map from its folder is one level deeper, <em>‹</em> or a crumb back to the folder one shallower. There is one function that animates a level change (<code>js/slide.js</code>).</p>
+<figure class="shot" data-shot="entry">
+  <div class="frame">
+    <img class="shot-light" src="assets/shots/entry-light.webp" width="1512" height="860" alt="The panel at one stack entry, grass in bank: its name and place in the stack, its controls with their values, and Hide and Delete at the foot; the grass is outlined in the view.">
+    <img class="shot-dark" src="assets/shots/entry-dark.webp" width="1512" height="860" alt="The panel at one stack entry, grass in bank: its name and place in the stack, its controls with their values, and Hide and Delete at the foot; the grass is outlined in the view.">
+  </div>
+  <ol class="key">
+    <li data-at="trail"><span><b>The trail</b> has gone one level deeper, to the entry.</span></li>
+    <li data-at="title"><span><b>The entry:</b> its name, its element and where it stands in the stack.</span></li>
+    <li data-at="controls"><span><b>Its controls,</b> each with its value; <em>default</em> marks one the document does not write. Press a value to type it.</span></li>
+    <li data-at="more"><span><b><kbd>›</kbd></b> opens a control that has more to say, such as a range.</span></li>
+    <li data-at="actions"><span><b>Hide and Delete.</b> Hide comments the entry out; both can be undone.</span></li>
+    <li data-at="selected"><span><b>The entry</b> is outlined on the tile.</span></li>
+  </ol>
+</figure>
+<figure class="shot" data-shot="control">
+  <div class="frame">
+    <img class="shot-light" src="assets/shots/control-light.webp" width="1512" height="860" alt="The panel at one control, the length of the grass: what it is, its value, the odds along a range, what it takes and the value as written.">
+    <img class="shot-dark" src="assets/shots/control-dark.webp" width="1512" height="860" alt="The panel at one control, the length of the grass: what it is, its value, the odds along a range, what it takes and the value as written.">
+  </div>
+  <ol class="key">
+    <li data-at="trail"><span><b>The trail</b> ends at the control.</span></li>
+    <li data-at="body"><span><b>One control in full:</b> what it is, its value, how likely each value is, what it takes and how the source writes it.</span></li>
+  </ol>
+</figure>
 <ul>
   <li><strong>The tile</strong> is the first level. Its own controls (<code>size</code>, <code>seed</code>, its description) come first, then the <em>Stack</em> drawn as the tile stands, the top of the tile first and the base last (the reverse of the order it is written and built in; each row's number is its place in that order), each row with its element's colour, its label, where it is put (<code>at=bank</code>), a thickness bar and the height it spans (<code>1.7 to 6.2 mm</code>: the lowest and highest the entry's geometry reaches in the build, in printed mm from the tile's zero, on one scale for the whole stack with the zero a tick; the base hangs below it; a row has no bar until the tile has built) and a dot when messages point at it (red for a mistake, yellow for a note; a number when there are several; hover it for the words). Under the stack is the <em>Shape</em>: the lines and regions, each with a line about what it is. <kbd>↑</kbd> <kbd>↓</kbd> move between rows (the thing a row names lights in the view), <kbd>Home</kbd> and <kbd>End</kbd> go to the ends, <kbd>Enter</kbd> opens.</li>
   <li><strong>One thing</strong> (a stack entry, a line or a region) is the second: its sheet, with Help at the top and Hide and Delete at the foot. A control that has more to say than a row can, such as a range, a count or a height, has a <kbd>›</kbd> at the end of its row.</li>
@@ -91,6 +131,18 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 </ul>
 <h2 id="places">Places and folders</h2>
 <p>Above the tile are the folder levels, in the same panel with the same slide, crumbs and strip. <strong>Places</strong> is the top: <em>My tiles</em>, any folder you have added, then the <em>Library</em> and <em>Tests</em> (read only). A place opens to a <strong>folder level</strong>: its subfolders first, each with how many tiles are under it, then the tiles in it, each with its name, its size (<q>2×1</q>) and a small picture of its footprint, the squares across and up, and a dot for its build. A subfolder is another level; a filter above the list searches the whole place, at any depth, and says where each match is. The strip under the crumbs says how many tiles the folder holds (<q>14 tiles (2 here) · 3 folders</q>) and where it is on disk, as a short path (<q>~/dharmatiles/dungeon/combo</q>); the library's says <q>library · tiles/ground · read only</q>. <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Home</kbd> <kbd>End</kbd> move between rows, <kbd>→</kbd> or <kbd>Enter</kbd> opens, <kbd>←</kbd> or <kbd>⌘[</kbd> goes up a level (from a place to Places, from a tile to its folder), <kbd>⌘]</kbd> goes back to the tile you left.</p>
+<figure class="shot" data-shot="folder">
+  <div class="frame">
+    <img class="shot-light" src="assets/shots/folder-light.webp" width="1512" height="860" alt="A folder level of the editor: the trail, a filter and four buttons, then the folder&rsquo;s tiles, each with its size and a have or need mark.">
+    <img class="shot-dark" src="assets/shots/folder-dark.webp" width="1512" height="860" alt="A folder level of the editor: the trail, a filter and four buttons, then the folder&rsquo;s tiles, each with its size and a have or need mark.">
+  </div>
+  <ol class="key">
+    <li data-at="trail"><span><b>The trail</b> ends at this folder; every step goes up to its level.</span></li>
+    <li data-at="filter"><span><b>Filter and New.</b> The filter searches the whole place; the buttons make a tile, folder, map or print list here.</span></li>
+    <li data-at="tiles"><span><b>The tiles</b> with their size and a drawing of their footprint, and a mark for the build.</span></li>
+    <li data-at="pills"><span><b>Have and need,</b> from the <a href="inventory.html">inventory</a>, for the base system in the title bar.</span></li>
+  </ol>
+</figure>
 <ul>
   <li><strong>Add a folder.</strong> At Places, <em>Add a folder…</em> shows the Mac&rsquo;s own folder chooser; the folder you choose becomes a place, kept in your settings, and opens at once. Cancelling does nothing. The page never types or sends a path: the program shows the chooser itself, so a page cannot point it at a folder. A folder inside a place you already have, one that holds one, and anything of the library&rsquo;s is refused with the reason, since a tile would be listed twice or the library made writable. A place you added has a <kbd>⋯</kbd> with <em>Take off the list</em>: the folder and its tiles stay on disk. The list is in <code>places.json</code> in <code>~/Library/Application Support/dharmatiles/</code> (<code>$DT_SETTINGS</code> names another folder for it); a settings file that is not valid is said at start and never replaced.</li>
   <li><strong>In My tiles and the folders you added</strong> (the library and the tests are read only) the folder level has <em>New tile</em> (the size picker; the tile is made in this folder and opened) and <em>New folder</em> (a name; the folder opens). Each row has a <kbd>⋯</kbd> (also <kbd>Shift</kbd>+<kbd>F10</kbd> or the menu key on a row). A folder&rsquo;s: <em>Rename…</em> (<kbd>F2</kbd>) and <em>Move to the Trash</em> (<kbd>⌫</kbd>). A tile&rsquo;s: <em>Rename…</em> (<kbd>F2</kbd>), <em>Duplicate</em> (<q>Name copy</q> beside it), <em>Move to…</em> (every other folder you own) and <em>Move to the Trash</em>. A library tile&rsquo;s row has <em>Copy to My tiles</em>.</li>
@@ -116,6 +168,17 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="edit">Editing</h2>
 <p>Every change is a change to the document's source, and the source is the tile: what you change in the view you can read, and keep, in the file.</p>
+<figure class="shot" data-shot="source">
+  <div class="frame">
+    <img class="shot-light" src="assets/shots/source-light.webp" width="1512" height="860" alt="The editor with the panel turned to the tile&rsquo;s source, line numbered, beside the tile in 3D.">
+    <img class="shot-dark" src="assets/shots/source-dark.webp" width="1512" height="860" alt="The editor with the panel turned to the tile&rsquo;s source, line numbered, beside the tile in 3D.">
+  </div>
+  <ol class="key">
+    <li data-at="face"><span><b>Source</b> turns the same column into the file.</span></li>
+    <li data-at="code"><span><b>The text</b> is the tile. Edit it and the tile builds again; a mistake is marked on its line.</span></li>
+    <li data-at="view"><span><b>The view</b> carries on beside it.</span></li>
+  </ol>
+</figure>
 <ul>
   <li><strong>Start fresh.</strong> <em>New tile</em> makes printable flat ground in the folder you are in (My tiles at the start), in a file called what you name it, at 1×1, 2×1, 1×2 or 2×2 squares, ready to change in the same editor.</li>
   <li><strong>The sheet.</strong> Selecting an entry slides the panel to its controls: every control the element has, written or not. A control that is not written shows the value a build would use, faint, and says where it comes from beside it: <q>default</q>, <q>from style brick</q> (a wall&rsquo;s style picks its stones&rsquo; size, joints and bond), <q>from crown branching normal</q> (a tree&rsquo;s branch numbers), <q>from parts/edges</q> (the library&rsquo;s edge defaults, for a body&rsquo;s <code>top</code>), or, for a value written in a part the entry calls, that part. Where leaving a control out has no number to show, the words say what it means (<q>a plain line, no strip</q>, <q>a mix of all three</q>), and a control the build does not take yet says <q>not built yet</q>. The program works each one out, from the same table the build reads, and the page only shows it; the sheet never says <q>not set</q>. Change an inherited value and it is written (the mark goes); <kbd>×</kbd> takes it out again. A group&rsquo;s controls (a wall&rsquo;s <code>stones</code>, <code>joints</code> and <code>edges</code>) are rows of their own, named by their path (<code>stones height</code>). Help is always at the top right; Hide and Delete stay at the bottom. Drag a number sideways to change it (<kbd>Shift</kbd> for fine steps), or click it to type. A short word control shows its choices directly; larger sets use a dropdown so the sheet stays aligned. A switch flips; <kbd>×</kbd> takes a control out, back to what it inherits. Every <code>seed</code> has a die beside it: press it for another arrangement. On the tile&rsquo;s own <code>seed</code> the die lays five small pictures of the tile under the row (the seed it has now first and four new ones, each built low at its seed in the background when you press it, at most five at a time and kept until the page closes); a square on a picture marks a seed you have printed. Press one to use it (one step of undo, the source says <code>seed=&hellip;</code>), <em>Roll again</em> for four more, <em>Close</em> to leave it as it is. An entry that writes its own <code>seed=</code> keeps it when the tile's seed is rolled, so a quiet line under the row says so (<q>wall keeps its own seed (15)</q>, or <q>wall and flagstones keep their own seeds</q>) and pressing a name selects that entry. A scatter's sheet holds its things' controls too. Only the value changes in the text: the layout and comments stay.</li>
@@ -175,6 +238,16 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="target">The build target</h2>
 <p>On a print list or a map the chip names the printer that document uses (<q>Bambu Lab X1 &middot; this map</q>), read from the document as it is now, as the status line does; its card changes that document's printer, and Undo takes it back. Elsewhere the chip at the right of the title bar names what every build is for: the <strong>base system</strong> (DungeonBlocks or OpenLOCK) and the <strong>printer</strong> profile, such as <q>DungeonBlocks · default</q>. Click it to change either. The tile you are looking at, and every other tile you have built, builds again for the new target; the gate's angles and the numbers in the record are the chosen printer's. The choice is remembered in <code>$DT_HOME</code> (else <code>~/dharmatiles</code>) for the next run; <code>--system</code> and <code>--printer</code> on the command line start the run on another one. Each printer is listed by the squares that fit its bed (<q>6 &times; 6 squares &middot; 1 colour &middot; 220 &times; 220 mm</q>) and drawn at one scale with those squares in it, using the square of the base system chosen above (35 mm for DungeonBlocks, 25.4 mm for OpenLOCK); choosing the other system redraws every bed. The slicer imports are one menu, <em>Import from a slicer</em>. The printers are the library's (<code>library/printers/</code>) and your own: a <code>printers/</code> folder beside your tiles, one <code>.dtile</code> file each, named like the file (see <a href="standards/printing.html#profile">Printing</a> and <a href="printers.html">Printers</a>, where a profile is also a machine, by brand and model, such as <code>bambu/x1c</code>). There is no <q>both</q>: one build is one target. With a print list or a map open, the chip names that document's own printer (<q>Bambu Lab X1 Carbon · this map</q>), and choosing a printer in its card changes that document's <code>plates</code> line, as its plates panel does; the base system there stays the one tiles build for.</p>
+<figure class="shot" data-shot="target">
+  <div class="frame">
+    <img class="shot-light" src="assets/shots/target-light.webp" width="1512" height="860" alt="The build target card open over the view: the base system, DungeonBlocks or OpenLOCK, and the list of printers.">
+    <img class="shot-dark" src="assets/shots/target-dark.webp" width="1512" height="860" alt="The build target card open over the view: the base system, DungeonBlocks or OpenLOCK, and the list of printers.">
+  </div>
+  <ol class="key">
+    <li data-at="card"><span><b>The card:</b> the base system, then the printer, from the library, from your own profiles and from slicers you import.</span></li>
+    <li data-at="chip"><span><b>The chip</b> in the title bar names the target and opens the card.</span></li>
+  </ol>
+</figure>
 
 <h2 id="export">Export</h2>
 <p><em>Export</em>, beside the verdict, runs the same build as <code>dharmatiles build</code> on the saved file and writes it to <code>out/</code>: the project's (beside the nearest <code>dharmatiles.dtile</code> above the tile), else one beside the tile, as <code>out/db/my-tile-db.stl</code>. A library tile is never written into the library: it goes to <code>out/</code> in My tiles (<code>~/dharmatiles/out/db/ground/1x1-grass-db.stl</code>). The card says where before you export. It builds for the <a href="#target">build target</a> in the title bar, written to <code>out/&lt;target&gt;/</code> (<code>out/ol-fine/my-tile-ol-fine.stl</code> for OpenLOCK and the printer <code>fine</code>); choose <em>Also a painted 3MF</em> for a 3MF painted by material (a Bambu Studio project when <code>~/dharmatiles/bambu.3mf</code> exists; see <a href="standards/printing.html">Printing</a>). <em>Reveal in Finder</em> shows what was written. Export waits while the tile builds or has unsaved changes, and is refused, with the reason, while the tile fails the printability gate.</p>
@@ -222,6 +295,19 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="messages">Messages</h2>
 <p>Everything the program learns about a tile (a check, a build and how long it took, the printability gate's verdict and numbers, an export, a mistake, a note, a failure) is one <strong>message</strong> in one stream. The status line, the panel, the marks in the source and anything that reads the stream are views of it, so none of them says anything the others do not.</p>
+<figure class="shot" data-shot="messages">
+  <div class="frame">
+    <img class="shot-light" src="assets/shots/messages-light.webp" width="1512" height="860" alt="The messages panel open over the lower part of the view: the build&rsquo;s verdict with two bars against the overhang budget, and a yellow note about the dirt&rsquo;s edge.">
+    <img class="shot-dark" src="assets/shots/messages-dark.webp" width="1512" height="860" alt="The messages panel open over the lower part of the view: the build&rsquo;s verdict with two bars against the overhang budget, and a yellow note about the dirt&rsquo;s edge.">
+  </div>
+  <ol class="key">
+    <li data-at="panel"><span><b>The panel</b> rises over the view when you press the status line or <kbd>⌃J</kbd>.</span></li>
+    <li data-at="filters"><span><b>Filters:</b> all, errors, notes, build.</span></li>
+    <li data-at="verdict"><span><b>The verdict:</b> how long the build took, whether it passes the gate, and two bars of overhang against the budget.</span></li>
+    <li data-at="note"><span><b>A note</b> is yellow: something the checker saw in a tile that is fine. <em>Show on tile</em> goes to its place.</span></li>
+    <li data-at="status"><span><b>The status line</b> says the same in a few words.</span></li>
+  </ol>
+</figure>
 <ul>
   <li><strong>The panel</strong> rises over the lower part of the view when you press the status line or <kbd>⌃J</kbd>. Its top row is the work in flight for the document: a tile&rsquo;s build, or on a map the loading of its pieces (<em>Loading the pieces of first-plate</em>, the piece being built, pieces done of pieces asked, and an estimate once one is done), one record that the status line&rsquo;s word (<em>building</em> or <em>loading</em>) and its bar read as well; while it runs, its stage, the time against the estimate and the bar; when it ends, its record: <em>Built in 2.1 s · passes the printability gate</em>, with the gate's verdict under it as two bars, <em>Past 65&deg;</em> and <em>55 to 65&deg; band</em>, each full at its budget and red past it with the multiple written in the bar (<em>16&times;</em>), the used and the allowed area beside it, and everything else (triangles, dropped bodies, holes, voids, the seed) folded under <em>Details</em>; and <em>Show worst face</em>, which flies to the largest red face (or the largest orange face when there is no red). Under it, every open message is a row: its severity (red for a mistake, yellow for a note), its code, the words, the help, where it is, and its actions: <em>Go to line</em>, <em>Show on tile</em> (the stack entry it is about) and a copy icon that copies its details. <em>All</em>, <em>Errors</em>, <em>Notes</em> and <em>Build</em> filter the rows; <em>Copy all</em> copies the tile's open messages as text. The legend for orange and red is at its foot.</li>
   <li><strong>A mistake leads with its sentence.</strong> Each row says what is wrong in words (the word it is about set in mono, the hint under it), then where it is and its <code>dt::</code> code, quiet, last. Pressing the row goes to its line in the source. When the tile does not build, the view carries a card in the plate's own light colours with the first error in its words, <em>Go to line</em> and <em>All messages</em>, so the place you look says what is wrong.</li>
