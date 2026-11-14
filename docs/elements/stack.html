@@ -47,7 +47,7 @@
 <h2 id="try">Try it</h2>
 <dt-example src="examples/stack/order.dtile" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/682f5ff446dac2b598e240fc0de28f35.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/a94d4005f190eda677c8b4d24cf1b614.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
 // The stack is built in the order it is written: the grass is listed after the rocks, so it
 // grows round them.  Move the scatter below the grass and see the difference.
@@ -65,12 +65,12 @@ tile size=&quot;1x1&quot; seed=9 {
 </dt-example>
 <dt-example src="examples/stack/pond.dtile" controls="wobble, seed" overlay="regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/442c7c952ca06a0404f5a5fad5f3a7b5.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/88e458dab6e3380bf3251afc1a8c710b.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
 // A stack of surfaces and what stands on them: dirt, rocks in the pool, water filling over what
 // is under it, then grass on the bank.
 tile size=&quot;1x1&quot; seed=97 {
-    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 0.62sq)&quot; &quot;(1sq, 0.58sq)&quot; }
+    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 2sq/3)&quot; &quot;(1sq, 0.5sq)&quot; }
     region pool { boundedBy shore; fill &quot;(0.5sq, 0.75sq)&quot; }
     region bank { boundedBy shore; fill &quot;(0.5sq, 0.25sq)&quot; }
     region shoreBand { within &quot;7dmm&quot; of=shore }

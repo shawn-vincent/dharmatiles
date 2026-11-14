@@ -44,12 +44,12 @@ line run curve=straight ends=free { through "(0.1sq, 0.6sq)" "(0.9sq, 0.4sq)" } 
 <h2 id="try">Try it</h2>
 <dt-example src="examples/lines/shore.dtile" controls="wobble, seed" overlay="lines points" highlight="line shore">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/1a9ab71921e6752122c141cdf6d953b6.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/f11643c324b63faf6557b694a3cf46c2.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
 // A line with a wobble: the shore of a pond.  The line goes through two points and may wander
 // up to 5dmm off the straight path between them; the seed decides how.
 tile size=&quot;1x1&quot; seed=97 {
-    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 0.62sq)&quot; &quot;(1sq, 0.58sq)&quot; }
+    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 2sq/3)&quot; &quot;(1sq, 0.5sq)&quot; }
     region pool { boundedBy shore; fill &quot;(0.5sq, 0.85sq)&quot; }
     region bank { boundedBy shore; fill &quot;(0.5sq, 0.2sq)&quot; }
     stack {
@@ -64,12 +64,12 @@ tile size=&quot;1x1&quot; seed=97 {
 </dt-example>
 <dt-example src="examples/lines/points.dtile" overlay="points" highlight="point 2">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/2b331046356f606a1bdcd9e3417c32c1.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/12db6bbce4336668df2ed11b17b32fb3.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
-// A line is the points it goes through, in order.  This one has three, and no wobble, so it
-// runs straight from point to point; the lawn is the region above it.
+// A line is the points it goes through, in order.  This one has three and no wobble, so it is
+// one smooth curve through them, square to the tile's sides; the lawn is the region above it.
 tile size=&quot;1x1&quot; seed=3 {
-    line border { through &quot;(0sq, 0.7sq)&quot; &quot;(0.5sq, 0.4sq)&quot; &quot;(1sq, 0.65sq)&quot; }
+    line border { through &quot;(0sq, 2sq/3)&quot; &quot;(0.5sq, 0.4sq)&quot; &quot;(1sq, 2sq/3)&quot; }
     region lawn { boundedBy border; fill &quot;(0.5sq, 0.1sq)&quot; }
     stack {
         base
@@ -79,11 +79,11 @@ tile size=&quot;1x1&quot; seed=3 {
 }
 </code></pre></div>
 <!-- /gen:example -->
-<figcaption>A line is the points it goes through, in order. This one has three and no wobble, so it runs straight between them.</figcaption>
+<figcaption>A line is the points it goes through, in order. This one has three and no wobble, so it is one smooth curve through them, square to the tile&rsquo;s sides where it ends.</figcaption>
 </dt-example>
 <dt-example src="examples/lines/wobble.dtile" controls="wobble:0..14, seed" overlay="lines">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/e0e1d1844bc16e549ff2b8f5229b35c6.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/edb9fcf2bfea1777a3cbc73a4b19b69e.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
 // The same kind of line with a larger wobble.  Change the seed: the points stay where they are
 // written, and the line wanders differently.
@@ -102,7 +102,7 @@ tile size=&quot;1x1&quot; seed=12 {
 </dt-example>
 <dt-example src="examples/lines/strip.dtile" controls="width:4..30" overlay="lines">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/8d74faead71a8102bdf3ae11310e8f2d.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/d0c13bd3bfd011d8d4e7af75c21d5e0f.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
 // A line with a width is a strip.  `verge` is 24dmm wide and the grass that follows it covers the
 // strip; `trail` is narrower, and the pebbles scatter within half its width either side.
@@ -122,7 +122,7 @@ tile size=&quot;1x1&quot; seed=5 {
 </dt-example>
 <dt-example src="examples/lines/closed.dtile" overlay="lines regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/fa85e158ba196f9960bbaeed94e7d914.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/21c4727f4f8a72d8fa8928c2e36e67a9.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
 // A closed line is a loop, and its inside is a region once it has a fill point.
 tile size=&quot;1x1&quot; seed=21 {
@@ -141,12 +141,13 @@ tile size=&quot;1x1&quot; seed=21 {
 </dt-example>
 <dt-example src="examples/values/point-range.dtile" controls="seed" overlay="points">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/9c38b11c5be12c72978434b66a743a0a.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/95e9c6687e69a8a83858125655b06916.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
-// A point written as a range is drawn once from the seed: where the line leaves the tile's west
-// edge is anywhere from 0.45sq to 0.8sq down, and it is a different place for another seed.
+// A point written as a range is drawn once from the seed: the line's middle point is anywhere
+// from 0.3sq to 0.7sq down, a different place for another seed.  Its ends stay on seams: a
+// point on a tile side is one place, never a range, so it meets the next tile's.
 tile size=&quot;1x1&quot; seed=18 {
-    line shore wobble=&quot;3dmm&quot; { through &quot;(0sq, 0.45sq .. 0.8sq)&quot; &quot;(1sq, 0.6sq)&quot; }
+    line shore wobble=&quot;3dmm&quot; { through &quot;(0sq, 0.5sq)&quot; &quot;(0.5sq, 0.3sq .. 0.7sq)&quot; &quot;(1sq, 0.5sq)&quot; }
     region bank { boundedBy shore; fill &quot;(0.5sq, 0.1sq)&quot; }
     stack {
         base
@@ -156,7 +157,7 @@ tile size=&quot;1x1&quot; seed=18 {
 }
 </code></pre></div>
 <!-- /gen:example -->
-<figcaption>A point written as a range is drawn once from the seed: roll it and the west end of the line moves.</figcaption>
+<figcaption>A point written as a range is drawn once from the seed: roll it and the middle of the line moves. The ends stay on seams, since a point on a side is one place.</figcaption>
 </dt-example>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>

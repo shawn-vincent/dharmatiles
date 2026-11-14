@@ -43,7 +43,7 @@ stack {
 <h2 id="try">Try it</h2>
 <dt-example src="examples/units/units.dtile" controls="wobble:0..14" overlay="regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/d06e2e114ace421a520b9ba3351bed1f.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/cb2f0fe620141b3074a8ef76572e410d.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
 // Lengths carry a unit: `dmm` is a design millimetre at the 35 mm square (it prints smaller on
 // OpenLOCK), `sq` is a square.  The wobble is 6dmm, and the band round the line is 7dmm.
@@ -62,12 +62,12 @@ tile size=&quot;1x1&quot; seed=4 {
 </dt-example>
 <dt-example src="examples/lines/shore.dtile" overlay="regions" highlight="region bank">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/1a9ab71921e6752122c141cdf6d953b6.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/f11643c324b63faf6557b694a3cf46c2.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
 // A line with a wobble: the shore of a pond.  The line goes through two points and may wander
 // up to 5dmm off the straight path between them; the seed decides how.
 tile size=&quot;1x1&quot; seed=97 {
-    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 0.62sq)&quot; &quot;(1sq, 0.58sq)&quot; }
+    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 2sq/3)&quot; &quot;(1sq, 0.5sq)&quot; }
     region pool { boundedBy shore; fill &quot;(0.5sq, 0.85sq)&quot; }
     region bank { boundedBy shore; fill &quot;(0.5sq, 0.2sq)&quot; }
     stack {
