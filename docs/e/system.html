@@ -9,19 +9,29 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::system</h1>
-  <p class="lede" data-part="summary">The build target is not one the program knows</p>
+  <p class="lede" data-part="summary">The build target is not one the program knows.</p>
 </header>
-<article class="doc">
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help">Use <code>db</code> (DungeonBlocks) or <code>ol</code> (OpenLOCK).</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::system</code> prints this page's summary from your own copy of the docs.</p>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../preview.html#dt-system">Preview · The build target</a>.</p>
-</article>
+</section>
 </div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>On a print list or a map the chip names the printer that document uses (Bambu Lab X1 &middot; this map), read from the document as it is now, as the status line does; its card changes that document's printer, and Undo takes it back. Elsewhere the chip at the right of the title bar names what every build is for: the base system (DungeonBlocks or OpenLOCK) and the printer profile, such as DungeonBlocks · default. Click it to change either. The tile you are looking at, and every other tile you have built, builds again for the new target; the gate's angles and the numbers in the record are the chosen printer's. The choice is remembered in <code>$DT_HOME</code> (else <code>~/dharmatiles</code>) for the next run; <code>--system</code> and <code>--printer</code> on the command line start the run on another one. Each printer is listed by the squares that fit its bed (6 &times; 6 squares &middot; 1 colour &middot; 220 &times; 220 mm) and drawn at one scale with those squares in it, using the square of the base system chosen above (35 mm for DungeonBlocks, 25.4 mm for OpenLOCK); choosing the other system redraws every bed. The slicer imports are one menu, Import from a slicer. The printers are the library's (<code>library/printers/</code>) and your own: a <code>printers/</code> folder beside your tiles, one <code>.dtile</code> file each, named like the file (see Printing and Printers, where a profile is also a machine, by brand and model, such as <code>bambu/x1c</code>). There is no both: one build is one target. With a print list or a map open, the chip names that document's own printer (Bambu Lab X1 Carbon · this map), and choosing a printer in its card changes that document's <code>plates</code> line, as its plates panel does; the base system there stays the one tiles build for.</p></blockquote>
+<p class="cp-in"><a href="../preview.html#dt-system">Read it in context: Preview · The build target</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::system</code></span>
+</footer>
+</main>
 </body>
 </html>

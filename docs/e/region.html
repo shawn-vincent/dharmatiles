@@ -9,19 +9,29 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::region</h1>
-  <p class="lede" data-part="summary">A region cannot be made: it names a place that is not there, or leads back to itself</p>
+  <p class="lede" data-part="summary">A region cannot be made: it names a place that is not there, or leads back to itself.</p>
 </header>
-<article class="doc">
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help">A region is made of lines, fill points, <code>within</code> and <code>except</code> of other regions, none of which may lead back to it.</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::region</code> prints this page's summary from your own copy of the docs.</p>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../language.html#dt-region">The tile language · Every thing makes a region</a>.</p>
-</article>
+</section>
 </div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>Every frame is a region, and regions nest. A point or a line says where a thing goes; the thing's size makes its region: a tree's crown round its point, a rock's disc, a wall's strip along its line, a scatter's area. A <code>$region</code> is the region of the thing being built (at a declaration, the region the declaration sits in), <code>$tile</code> is the root, and <code>parent($region)</code> is the region containing it.</p></blockquote>
+<p class="cp-in"><a href="../language.html#dt-region">Read it in context: The tile language · Every thing makes a region</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::region</code></span>
+</footer>
+</main>
 </body>
 </html>

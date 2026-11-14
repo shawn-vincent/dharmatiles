@@ -9,19 +9,29 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::printer</h1>
-  <p class="lede" data-part="summary">A printer profile is not found or does not read</p>
+  <p class="lede" data-part="summary">A printer profile is not found or does not read.</p>
 </header>
-<article class="doc">
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help"><code>dharmatiles printers</code> lists them; the message says what is wrong with a profile.</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::printer</code> prints this page's summary from your own copy of the docs.</p>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../printers.html#dt-printer">Printers · Your own</a>.</p>
-</article>
+</section>
 </div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>Put a file in <code>printers/</code> beside your tiles (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>): <code>printers/shed-voron.dtile</code> is <code>shed-voron</code>, and <code>printers/mine/ender.dtile</code> is <code>mine/ender</code>. A profile of yours with the name of a library one replaces it. It may start from a library one:</p></blockquote>
+<p class="cp-in"><a href="../printers.html#dt-printer">Read it in context: Printers · Your own</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::printer</code></span>
+</footer>
+</main>
 </body>
 </html>

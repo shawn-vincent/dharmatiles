@@ -9,19 +9,30 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::order</h1>
-  <p class="lede" data-part="summary">The stack lists something before what it stands on</p>
+  <p class="lede" data-part="summary">The stack lists something before what it stands on.</p>
 </header>
-<article class="doc">
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help">List the surface (<code>ground</code>, <code>dirt</code>, <code>floor</code>) before the things that stand on it; the plan never reorders.</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::order</code> prints this page's summary from your own copy of the docs.</p>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../language.html#dt-order">The tile language · Stack order</a>.</p>
-</article>
+</section>
 </div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>The stack is built in the order it is listed. Each entry stands on the terrain as laid so far, and what is listed after it is laid over or beside it. Land bodies are laid in stack order, each the higher of what is below and its own top: a dirt along a path, listed after the whole-tile dirt, takes the higher of the two there. A <code>dirt</code> listed after a rock, a tree, a flower or a scatter of them is built after them: it lies on the tops of rocks where they are flatter than its <code>maxSlope</code>, banks up to a trunk or a stone (a rise is no drop), and covers a flower's foot, as written. A tree's crown is never a surface for dirt. A dirt listed before them is laid first, and they stand on it (a rock beds into it). Grass grows round what is listed before it, so list the grass after the rocks, trees and flowers it should grow round; the same goes for water, which fills over the ground listed above it and sees the rocks and reeds listed above it (each sends its own chop). What is listed after the water stands in it or on its shore and reads it: a rock stands in the pool, and grass keeps off the wet ground. A <code>dirt</code> or <code>ground</code> listed after the water lies over it: where its top is higher than the water the earth shows, where it is lower the water stays. Water is built where it is listed, like every other layer; nothing is written about it last.</p></blockquote>
+<p class="cp-in"><a href="../language.html#dt-order">Read it in context: The tile language · Stack order</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span>Explained with it: <a href="plan.html"><code>dt::plan</code></a></span>
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::order</code></span>
+</footer>
+</main>
 </body>
 </html>

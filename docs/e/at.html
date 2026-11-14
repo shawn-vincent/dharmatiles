@@ -9,19 +9,30 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::at</h1>
-  <p class="lede" data-part="summary">No point is called that</p>
+  <p class="lede" data-part="summary">No point is called that.</p>
 </header>
-<article class="doc">
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help">Check the spelling, or declare the point first.</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::at</code> prints this page's summary from your own copy of the docs.</p>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../language.html#dt-at">The tile language · Points</a>.</p>
-</article>
+</section>
 </div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>A point has two halves, across and down, written in parentheses and quoted, each half a length: <code>"(0.65sq, 1sq)"</code>. A half may be in any length unit, or a <code>%</code>, which here is a length: the share of the frame's width (or height), <code>"(50%, 0.25sq)"</code>. A tuple is a point in the frame it is written in: the tile, unless it sits in a pin of a body that acts in a named region, where it is that region's own corner.</p></blockquote>
+<p class="cp-in"><a href="../language.html#dt-at">Read it in context: The tile language · Points</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span>Explained with it: <a href="point.html"><code>dt::point</code></a></span>
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::at</code></span>
+</footer>
+</main>
 </body>
 </html>

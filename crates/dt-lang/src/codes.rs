@@ -84,7 +84,7 @@ registry! {
         help: "start the document with `dharmatiles version=1`; release 1.0.0 carries a file to format 1 with `dharmatiles migrate`",
         example: ex!(
             "tile size=\"1x1\" {\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
         ),
     }
     FORMAT_NEWER "format-newer" Mistake {
@@ -92,7 +92,7 @@ registry! {
         help: "update dharmatiles, or write the document in the format the program reads",
         example: ex!(
             "dharmatiles version=2\ntile size=\"1x1\" {\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
         ),
     }
     HEADER "header" Mistake {
@@ -100,7 +100,7 @@ registry! {
         help: "write just `dharmatiles version=1`, with no children and no other settings",
         example: ex!(
             "dharmatiles version=1 {\n    note\n}\ntile size=\"1x1\" {\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
         ),
     }
     HEADER_VERSION "header-version" Mistake {
@@ -108,15 +108,15 @@ registry! {
         help: "write `version=1` (a number), or a quoted version such as `version=\"1.0.0\"`",
         example: ex!(
             "dharmatiles\ntile size=\"1x1\" {\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
         ),
     }
     HEADER_TWICE "header-twice" Mistake {
         summary: "A document has one header line",
         help: "remove the second header line",
         example: ex!(
-            "dharmatiles version=1\ndharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ndharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
         ),
     }
     HEADER_FIRST "header-first" Mistake {
@@ -124,15 +124,15 @@ registry! {
         help: "move `dharmatiles version=…` above everything else",
         example: ex!(
             "tile size=\"1x1\" {\n    stack { dirt }\n}\ndharmatiles version=1\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
         ),
     }
     SYNTAX "syntax" Mistake {
         summary: "Documents are KDL v2: a bare `true`, `false` or `null` is KDL v1",
         help: "write the keyword with a hash: `#true`, `#false`, `#null`",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt clods=null }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt clods=none }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt clods=null }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt clods=none }\n}\n"
         ),
     }
 
@@ -141,40 +141,40 @@ registry! {
         summary: "A file holds one tile",
         help: "put each tile in its own file",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\ntile size=\"1x1\" {\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\ntile size=\"1x1\" {\n    stack { dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
         ),
     }
     TILE_NAME "tile-name" Mistake {
         summary: "A tile takes no name: its file name is its name",
         help: "remove the name from the `tile` line and name the file instead",
         example: ex!(
-            "dharmatiles version=1\ntile pond size=\"1x1\" {\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile pond size=\"1x1\" {\n    stack { dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
         ),
     }
     ABOUT "about" Mistake {
         summary: "`about` takes one string",
         help: "write one quoted sentence after `about`",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    about 1 2\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    about \"A square of dirt.\"\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    about 1 2\n    stack { dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    about \"A square of dirt.\"\n    stack { dirt }\n}\n"
         ),
     }
     SEED "seed" Mistake {
         summary: "A tile's seed is a whole number from 0",
         help: "write `seed=` with a whole number, 0 or more",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" seed=-3 {\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" seed=3 {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=-3 {\n    stack { dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=3 {\n    stack { dirt }\n}\n"
         ),
     }
     STACK "stack" Mistake {
         summary: "A tile or a definition has one stack",
         help: "merge the stacks into one, listing the elements in the order they are built",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n    stack { grass }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt; grass }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n    stack { grass }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt; grass }\n}\n"
         ),
     }
     PARAM "param" Mistake {
@@ -203,16 +203,16 @@ registry! {
         summary: "The element has no control by that name",
         help: "check the spelling against the element's page; the message names the nearest control",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt tpo=\"3dmm\" }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt top=\"3dmm\" }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt tpo=\"3dmm\" }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt top=\"3dmm\" }\n}\n"
         ),
     }
     UNKNOWN_ELEMENT "unknown-element" Mistake {
         summary: "No element or definition is called that",
         help: "check the spelling; the message names the nearest element, and `dharmatiles elements` lists them all",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirtt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirtt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt }\n}\n"
         ),
     }
     UNKNOWN_NODE "unknown-node" Mistake {
@@ -229,8 +229,8 @@ registry! {
         summary: "The element takes name=value controls, not a bare value",
         help: "write each control as `name=value`",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt \"3dmm\" }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt top=\"3dmm\" }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt \"3dmm\" }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt top=\"3dmm\" }\n}\n"
         ),
     }
     CONTROL_NODE "control-node" Mistake {
@@ -272,8 +272,8 @@ registry! {
         summary: "`weight=` is a scatter child's share of the mix",
         help: "write `weight=` only on a thing inside a `scatter`",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt; rock weight=2 }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt; scatter count=3 { rock weight=2 } }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt; rock weight=2 }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt; scatter count=3 { rock weight=2 } }\n}\n"
         ),
     }
     PERCENT "percent" Mistake {
@@ -297,16 +297,16 @@ registry! {
         summary: "A length or angle has no unit, or a unit that is not one",
         help: "write the unit: `5dmm` or `5mm` for a length, `20deg` for an angle",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt; rock size=5 }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt; rock size=\"5dmm\" }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt; rock size=5 }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt; rock size=\"5dmm\" }\n}\n"
         ),
     }
     TYPE "type" Mistake {
         summary: "Kinds do not agree: a length mixed with a plain number, or a place of the wrong kind",
         help: "make both sides the same kind; the message says what to write",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt top=\"$dirtEdgeHeight + 20%\" }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt top=\"$dirtEdgeHeight + 2dmm\" }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt top=\"$dirtEdgeHeight + 20%\" }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt top=\"$dirtEdgeHeight + 2dmm\" }\n}\n"
         ),
     }
     VALUE "value" Mistake {
@@ -318,8 +318,8 @@ registry! {
         summary: "Nothing declares or sets that name",
         help: "check the spelling; the message names the nearest name",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt top=\"$grundHeight\" }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt top=\"$groundHeight\" }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt top=\"$grundHeight\" }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt top=\"$groundHeight\" }\n}\n"
         ),
     }
     RANGE "range" Mistake {
@@ -343,8 +343,8 @@ registry! {
         summary: "A point is outside the tile or the region it is written in",
         help: "move the point inside the box the message gives",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    point p \"(2sq, 0.5sq)\"\n    stack { dirt }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    point p \"(0.5sq, 0.5sq)\"\n    stack { dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    point p \"(2sq, 0.5sq)\"\n    stack { dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    point p \"(0.5sq, 0.5sq)\"\n    stack { dirt }\n}\n"
         ),
     }
     AT "at" Mistake {
@@ -383,8 +383,8 @@ registry! {
         summary: "The base is the first line of the stack, and there is one",
         help: "move `base` to the top of the stack, and keep one",
         example: ex!(
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirt; base }\n}\n",
-            "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { base; dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { dirt; base }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    stack { base; dirt }\n}\n"
         ),
     }
     ORDER "order" Mistake {

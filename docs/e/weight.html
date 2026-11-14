@@ -9,30 +9,61 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::weight</h1>
-  <p class="lede" data-part="summary"><code>weight=</code> is a scatter child's share of the mix</p>
+  <p class="lede" data-part="summary"><code>weight=</code> is a scatter child's share of the mix.</p>
 </header>
-<article class="doc">
+<section class="said" aria-labelledby="said">
+<h2 id="said">What the program says</h2>
+<pre class="said no-hl"><code>dt::weight
+
+  × `weight=` is a scatter child's share of the mix
+   ╭─[example.dtile:3:24]
+ 2 │ tile size=&quot;1x1&quot; {
+ 3 │     stack { dirt; rock weight=2 }
+   ·                        ───┬──
+   ·                           ╰── not in a scatter
+ 4 │ }
+   ╰────
+  help: write `scatter count=… { rock weight=2; pebble }`
+        explain: https://shawn-vincent.github.io/dharmatiles/e/weight
+        offline: dharmatiles explain dt::weight</code></pre>
+</section>
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help">Write <code>weight=</code> only on a thing inside a <code>scatter</code>.</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::weight</code> prints this page's summary from your own copy of the docs.</p>
+</section>
+<section>
 <h2 id="example">Broken, then fixed</h2>
-<p>This document gives <code>dt::weight</code>:</p>
-<pre><code>dharmatiles version=1
+<div class="cp-pair">
+<figure class="broken"><figcaption>Gives <code>dt::weight</code></figcaption>
+<pre><code>dharmatiles version=&quot;1.0.0&quot;
 tile size=&quot;1x1&quot; {
-    stack { dirt; rock weight=2 }
-}</code></pre>
-<p>Mended, it builds:</p>
-<pre><code>dharmatiles version=1
+    stack { dirt; <mark class="del">rock weight=2</mark> }
+}</code></pre></figure>
+<figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
+<pre><code>dharmatiles version=&quot;1.0.0&quot;
 tile size=&quot;1x1&quot; {
-    stack { dirt; scatter count=3 { rock weight=2 } }
-}</code></pre>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../language.html#dt-weight">The tile language · What every stack entry takes</a>.</p>
-</article>
+    stack { dirt; <mark class="ins">scatter count=3 { rock weight=2 }</mark> }
+}</code></pre></figure>
 </div>
+</section>
+</div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><ul> <li><code>seed=</code>: pins this entry&rsquo;s own randomness while the tile seed changes everything else. The tile level&rsquo;s <code>seed</code> row says which entries do this (wall keeps its own seed (15)), since rolling the tile seed will not change them.</li> <li><code>id=</code>: a name for the entry, for edits and diagnostics.</li> <li><code>weight=</code>: only on a child of a <code>scatter</code>, its share of the mix.</li> <li>The place words its element accepts (section 5).</li> </ul></blockquote>
+<p class="cp-in"><a href="../language.html#dt-weight">Read it in context: The tile language · What every stack entry takes</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span>Explained with it: <a href="id.html"><code>dt::id</code></a></span>
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::weight</code></span>
+</footer>
+</main>
 </body>
 </html>

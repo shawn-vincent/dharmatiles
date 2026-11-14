@@ -269,3 +269,37 @@ figure.shot figcaption { margin-top: 12px; }
 }
 /* a picture inside the text is as narrow as the text: one column of key */
 article.doc figure.shot ol.key { columns: 1; }
+
+/* An error page (docs/e/, written by `cargo xtask docs`): the frame's full width, compact headings, the message as
+   printed, what to do beside the rule, the broken document beside its fix with the change marked. */
+.codepage { padding-block: 0 56px; }
+.codepage header.hero { padding-block: 32px 4px; }
+.codepage .eyebrow a { color: inherit; }
+.codepage h1 { margin-bottom: 10px; }
+.codepage h2 { font-size: 22px; margin: 36px 0 10px; padding-top: 12px; }
+.codepage h2::before { width: 28px; }
+.codepage .lede { font-size: 18px; max-width: 60ch; }
+.codepage pre.said { max-width: min(88ch, 100%); border-left-color: var(--err); margin: 0; }
+.codepage.note pre.said { border-left-color: var(--accent); }
+.cp-grid, .cp-pair { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 48px; }
+.cp-grid p { max-width: none; }
+blockquote.rule { margin: 0 0 10px; padding: 2px 0 2px 16px; border-left: 3px solid var(--line-2); }
+blockquote.rule p { margin: 0; }
+.cp-in { font-size: 14px; margin: 0; }
+.cp-pair { row-gap: 14px; }
+.cp-pair figure { margin: 0; }
+.cp-pair figcaption { font-size: 13.5px; color: var(--muted); margin: 0 0 6px; }
+.cp-pair pre { margin: 0; }
+.cp-pair .broken pre { border-left-color: var(--err); }
+pre mark { color: inherit; border-radius: 3px; padding: 0 1px; }
+pre mark.del { background: color-mix(in srgb, var(--err) 26%, transparent); }
+pre mark.ins { background: color-mix(in srgb, var(--ok) 30%, transparent); }
+pre mark.at { display: inline-block; width: 2px; height: 1.1em; vertical-align: text-bottom; padding: 0; }
+pre mark.del.at { background: var(--err); } pre mark.ins.at { background: var(--ok); }
+.cp-foot { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 28px; }
+.cp-foot a code { color: var(--accent); }
+@media (min-width: 860px) {
+  .cp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+blockquote.rule ul, blockquote.rule ol { margin: 0; padding-left: 1.2em; }
+blockquote.rule li { margin: 0 0 4px; }

@@ -9,19 +9,29 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::base</h1>
-  <p class="lede" data-part="summary"><code>base</code> takes no settings yet</p>
+  <p class="lede" data-part="summary"><code>base</code> takes no settings yet.</p>
 </header>
-<article class="doc">
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help">Write just <code>base</code>: the connector is the build target's.</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::base</code> prints this page's summary from your own copy of the docs.</p>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../elements/base.html#dt-base">base</a>.</p>
-</article>
+</section>
 </div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>The stack is written bottom up and is exactly what is printed. <code>base</code> is the first line, or the tile is refused (<code>dt::base-order</code>); the land follows in stack order, things and grass where they are listed, and <code>water</code> where it is listed, over the ground above it. Heights are lengths measured from zero, the base's top, on which the first layer rests.</p></blockquote>
+<p class="cp-in"><a href="../elements/base.html#dt-base">Read it in context: base</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::base</code></span>
+</footer>
+</main>
 </body>
 </html>

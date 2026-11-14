@@ -9,30 +9,60 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::format-newer</h1>
-  <p class="lede" data-part="summary">The document is of a newer format than this program reads</p>
+  <p class="lede" data-part="summary">The document is of a newer format than this program reads.</p>
 </header>
-<article class="doc">
+<section class="said" aria-labelledby="said">
+<h2 id="said">What the program says</h2>
+<pre class="said no-hl"><code>dt::format-newer
+
+  × this tile is format 2; this dharmatiles reads up to 1
+   ╭─[example.dtile:1:21]
+ 1 │ dharmatiles version=2
+   ·                     ┬
+   ·                     ╰── a newer format than this program reads
+ 2 │ tile size=&quot;1x1&quot; {
+   ╰────
+  help: use a newer dharmatiles, or a copy of the file in the older format
+        explain: https://shawn-vincent.github.io/dharmatiles/e/format-newer
+        offline: dharmatiles explain dt::format-newer</code></pre>
+</section>
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help">Update dharmatiles, or write the document in the format the program reads.</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::format-newer</code> prints this page's summary from your own copy of the docs.</p>
+</section>
+<section>
 <h2 id="example">Broken, then fixed</h2>
-<p>This document gives <code>dt::format-newer</code>:</p>
-<pre><code>dharmatiles version=2
+<div class="cp-pair">
+<figure class="broken"><figcaption>Gives <code>dt::format-newer</code></figcaption>
+<pre><code>dharmatiles version=<mark class="del">2</mark>
 tile size=&quot;1x1&quot; {
     stack { dirt }
-}</code></pre>
-<p>Mended, it builds:</p>
-<pre><code>dharmatiles version=1
+}</code></pre></figure>
+<figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
+<pre><code>dharmatiles version=<mark class="ins">&quot;1.0.0&quot;</mark>
 tile size=&quot;1x1&quot; {
     stack { dirt }
-}</code></pre>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../language.html#dt-format-newer">The tile language · The header line and the format</a>.</p>
-</article>
+}</code></pre></figure>
 </div>
+</section>
+</div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>A document of any kind (a tile, a parts file, a printer profile, a palette) starts with one line that says which version of the language it is written in:</p></blockquote>
+<p class="cp-in"><a href="../language.html#dt-format-newer">Read it in context: The tile language · The header line and the format</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span>Explained with it: <a href="format-0.html"><code>dt::format-0</code></a> <a href="header.html"><code>dt::header</code></a> <a href="header-version.html"><code>dt::header-version</code></a> <a href="header-twice.html"><code>dt::header-twice</code></a> <a href="header-first.html"><code>dt::header-first</code></a></span>
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::format-newer</code></span>
+</footer>
+</main>
 </body>
 </html>

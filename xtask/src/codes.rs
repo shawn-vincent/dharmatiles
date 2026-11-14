@@ -4,8 +4,9 @@
 //! on the section (a heading, a table cell, a list item) that explains it.  This module derives from the two:
 //!
 //! * the `#dt-type` anchor, written as an empty span at the start of the marked element;
-//! * the error page `docs/e/type.html` for every code (what happened, what to do, a broken document and its fix,
-//!   and the link on to the rule at its anchor);
+//! * the error page `docs/e/type.html` for every code: what happened, the message as the program prints it (the
+//!   program run on the registry's broken document), what to do, the rule quoted from its section and linked at its
+//!   anchor, the broken document beside its fix with the change marked, and the codes the same section explains;
 //! * the table of every code on `docs/errors.html`.
 //!
 //! and checks that nothing dangles: a code with no explaining section (or two), a marker for a code that does not
@@ -14,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use dt_lang::codes::{self, Code, Kind};
 
@@ -30,10 +32,16 @@ struct Rule {
     title: String,
     /// The marked section's heading, when the marked element is one.
     section: Option<String>,
+    /// The rule in the section's own words: the first paragraph or list under a marked heading, or the marked
+    /// element's text; HTML with only paragraphs, lists and `<code>` kept.
+    quote: Option<String>,
+    /// The marked element, the same for every code one marker (or one section) explains.
+    place: String,
 }
 
 /// Write the anchors and error pages, or with `check` change nothing and fail if any is missing or stale.
-pub fn run(root: &Path, check: bool) -> Result<(), String> {
+/// `bin` is the program, run on each broken example for the message the page shows.
+pub fn run(root: &Path, check: bool, bin: &Path) -> Result<(), String> {
     let docs = root.join("docs");
     let mut files: BTreeMap<PathBuf, String> = BTreeMap::new(); // every file this module owns, as it should be
     let mut rules: BTreeMap<String, Vec<Rule>> = BTreeMap::new();
@@ -89,11 +97,30 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
 
     // the error pages
     let e_dir = docs.join("e");
+    let scratch = root.join("target/xtask-codes");
+    std::fs::create_dir_all(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
+    let nav = nav(&docs)?;
     for c in codes::ALL {
         if let Some(rule) = rules.get(c.id).and_then(|r| r.first()) {
+            // the codes the same section explains, in the registry's order
+            let related: Vec<&str> = codes::ALL
+                .iter()
+                .filter(|o| {
+                    o.id != c.id
+                        && rules
+                            .get(o.id)
+                            .and_then(|r| r.first())
+                            .is_some_and(|r| r.place == rule.place)
+                })
+                .map(|o| o.id)
+                .collect();
+            let said = match c.example {
+                Some(ex) => Some(message(bin, &scratch, c.id, ex.broken)?),
+                None => None,
+            };
             files.insert(
                 e_dir.join(format!("{}.html", codes::slug(c.id))),
-                error_page(&docs, c, rule)?,
+                error_page(&nav, c, rule, said.as_deref(), &related),
             );
         }
     }
@@ -206,6 +233,7 @@ fn anchor(rel: &str, text: &str, problems: &mut Vec<String>) -> (String, Vec<(St
             .find(|h| tag.starts_with(&format!("<{h} ")) || tag.starts_with(&format!("<{h}>")))
             .and_then(|h| tag_text(&text[tag_start..], &format!("<{h}"), &format!("</{h}>")))
             .map(|t| plain(&t));
+        let quote = quote(text, tag, tag_end, section.is_some());
         for id in &ids {
             found.push((
                 (*id).to_owned(),
@@ -213,6 +241,8 @@ fn anchor(rel: &str, text: &str, problems: &mut Vec<String>) -> (String, Vec<(St
                     page: rel.to_owned(),
                     title: title.clone(),
                     section: section.clone(),
+                    quote: quote.clone(),
+                    place: format!("{rel}@{tag_start}"),
                 },
             ));
         }
@@ -235,6 +265,168 @@ fn anchor(rel: &str, text: &str, problems: &mut Vec<String>) -> (String, Vec<(St
     }
     out.push_str(&text[pos..]);
     (out, found)
+}
+
+/// The rule in its section's words: under a marked heading its first paragraph or list (before the next heading);
+/// on any other marked element (a table cell, a list item) that element's own text, as a paragraph.
+fn quote(text: &str, tag: &str, tag_end: usize, heading: bool) -> Option<String> {
+    let rest = &text[tag_end..];
+    let html = if heading {
+        let end = rest.find("<h").unwrap_or(rest.len());
+        let (at, name) = ["<p", "<ul", "<ol"]
+            .iter()
+            .filter_map(|o| {
+                rest[..end]
+                    .match_indices(o)
+                    .find(|(i, _)| rest[i + o.len()..].starts_with(['>', ' ']))
+                    .map(|(i, _)| (i, &o[1..]))
+            })
+            .min_by_key(|(i, _)| *i)?;
+        let close = format!("</{name}>");
+        let stop = at + rest[at..].find(&close)? + close.len();
+        rest[at..stop].to_owned()
+    } else {
+        let name: String = tag[1..]
+            .chars()
+            .take_while(char::is_ascii_alphanumeric)
+            .collect();
+        format!("<p>{}</p>", &rest[..rest.find(&format!("</{name}>"))?])
+    };
+    let q = kept(&html);
+    (q.len() > "<p></p>".len()).then_some(q)
+}
+
+/// HTML with every tag but paragraphs, lists and `<code>` removed (links, emphasis, generated anchors) and those
+/// kept bare of attributes, whitespace squeezed; entities are kept as written.
+fn kept(html: &str) -> String {
+    const KEEP: [&str; 5] = ["p", "ul", "ol", "li", "code"];
+    let mut out = String::new();
+    let mut rest = html;
+    while let Some(lt) = rest.find('<') {
+        out.push_str(&rest[..lt]);
+        let Some(gt) = rest[lt..].find('>') else {
+            rest = "";
+            break;
+        };
+        let tag = &rest[lt + 1..lt + gt];
+        let (close, body) = tag.strip_prefix('/').map_or((false, tag), |b| (true, b));
+        let name: String = body
+            .chars()
+            .take_while(char::is_ascii_alphanumeric)
+            .collect();
+        if KEEP.contains(&name.as_str()) {
+            out.push_str(&format!("<{}{name}>", if close { "/" } else { "" }));
+        }
+        rest = &rest[lt + gt + 1..];
+    }
+    out.push_str(rest);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// What the program prints for `broken`: `dharmatiles check example.dtile`, run where the file is, so the message
+/// names it as a reader's own would.  The program must refuse it; a clean read is an error here.
+fn message(bin: &Path, scratch: &Path, id: &str, broken: &str) -> Result<String, String> {
+    let file = scratch.join("example.dtile");
+    std::fs::write(&file, broken).map_err(|e| format!("{}: {e}", file.display()))?;
+    let out = Command::new(bin)
+        .current_dir(scratch)
+        .args(["check", "example.dtile"])
+        .env("NO_COLOR", "1")
+        .env_remove("CLICOLOR_FORCE")
+        .env("COLUMNS", "80")
+        .output()
+        .map_err(|e| format!("{}: {e}", bin.display()))?;
+    if out.status.success() {
+        return Err(format!(
+            "{id}: the program read the broken example without an error"
+        ));
+    }
+    let mut said = String::from_utf8_lossy(&out.stderr).into_owned();
+    said.push_str(&String::from_utf8_lossy(&out.stdout));
+    if !said.contains(id) {
+        return Err(format!(
+            "{id}: the program's message for the broken example does not name it:\n{said}"
+        ));
+    }
+    Ok(said
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim_matches('\n')
+        .to_owned())
+}
+
+/// `broken` and `fixed` as HTML, each with what the other does not have marked: a line changed in place has only
+/// its changed middle marked; a line with no partner is marked whole.
+fn marked(broken: &str, fixed: &str) -> (String, String) {
+    let a: Vec<&str> = broken.trim_end().lines().collect();
+    let b: Vec<&str> = fixed.trim_end().lines().collect();
+    let mut out_a = Vec::new();
+    let mut out_b = Vec::new();
+    if a.len() == b.len() {
+        for (x, y) in a.iter().zip(&b) {
+            let (mx, my) = mark_line(x, y);
+            out_a.push(mx);
+            out_b.push(my);
+        }
+    } else {
+        for x in &a {
+            out_a.push(if b.contains(x) {
+                escape(x)
+            } else {
+                format!("<mark class=\"del\">{}</mark>", escape(x))
+            });
+        }
+        for y in &b {
+            out_b.push(if a.contains(y) {
+                escape(y)
+            } else {
+                format!("<mark class=\"ins\">{}</mark>", escape(y))
+            });
+        }
+    }
+    (out_a.join("\n"), out_b.join("\n"))
+}
+
+/// Two versions of one line, each with its changed middle marked (the common start and end left plain).
+fn mark_line(x: &str, y: &str) -> (String, String) {
+    if x == y {
+        return (escape(x), escape(y));
+    }
+    let xc: Vec<char> = x.chars().collect();
+    let yc: Vec<char> = y.chars().collect();
+    let mut pre = 0;
+    while pre < xc.len() && pre < yc.len() && xc[pre] == yc[pre] {
+        pre += 1;
+    }
+    let mut suf = 0;
+    while suf < xc.len() - pre
+        && suf < yc.len() - pre
+        && xc[xc.len() - 1 - suf] == yc[yc.len() - 1 - suf]
+    {
+        suf += 1;
+    }
+    let part = |c: &[char], class: &str| {
+        let s: String = c[pre..c.len() - suf].iter().collect();
+        let head: String = c[..pre].iter().collect();
+        let tail: String = c[c.len() - suf..].iter().collect();
+        if s.is_empty() {
+            format!(
+                "{}<mark class=\"{class} at\"></mark>{}",
+                escape(&head),
+                escape(&tail)
+            )
+        } else {
+            format!(
+                "{}<mark class=\"{class}\">{}</mark>{}",
+                escape(&head),
+                escape(&s),
+                escape(&tail)
+            )
+        }
+    };
+    (part(&xc, "del"), part(&yc, "ins"))
 }
 
 /// The text between `open` (the start of a tag, whatever its attributes) and `close`, tags and all.
@@ -294,6 +486,14 @@ fn kind_words(k: Kind) -> &'static str {
     }
 }
 
+fn kind_class(k: Kind) -> &'static str {
+    match k {
+        Kind::Mistake => "mistake",
+        Kind::Note => "note",
+        Kind::Failure => "failure",
+    }
+}
+
 /// The site's top bar, as the element pages (one level down) write it, with no page marked current.
 fn nav(docs: &Path) -> Result<String, String> {
     let index = docs.join("elements/index.html");
@@ -319,35 +519,29 @@ fn sentence(s: &str) -> String {
     out
 }
 
-/// The error page of one code.
-fn error_page(docs: &Path, c: &Code, rule: &Rule) -> Result<String, String> {
+/// The error page of one code: the code and what happened; the message as printed; what to do beside the rule;
+/// the broken document beside its fix; and the codes the same section explains.
+fn error_page(nav: &str, c: &Code, rule: &Rule, said: Option<&str>, related: &[&str]) -> String {
     let id = c.id;
+    let kind = kind_class(c.kind);
     let mut s = String::new();
     let _ = write!(
         s,
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n\
 <title>{id}</title>\n<link rel=\"stylesheet\" href=\"../assets/site.css\">\n\
-<script src=\"../assets/site.js\"></script>\n</head>\n<body>\n{}\n\
-<div class=\"wrap doc-layout\">\n<header class=\"hero\">\n  <div class=\"eyebrow\">Error code · {}</div>\n  <h1>{id}</h1>\n  \
-<p class=\"lede\" data-part=\"summary\">{}</p>\n</header>\n<article class=\"doc\">\n",
-        nav(docs)?,
+<script src=\"../assets/site.js\"></script>\n</head>\n<body>\n{nav}\n\
+<main class=\"wrap codepage {kind}\">\n<header class=\"hero\">\n  <div class=\"eyebrow\"><a href=\"../errors.html\">Error code</a> · {}</div>\n  <h1>{id}</h1>\n  \
+<p class=\"lede\" data-part=\"summary\">{}</p>\n</header>\n",
         kind_words(c.kind),
-        inline(c.summary)
+        inline(&sentence(c.summary))
     );
-    let _ = write!(
-        s,
-        "<h2 id=\"help\">What to do</h2>\n<p data-part=\"help\">{}</p>\n\
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain {id}</code> prints this page's summary from your own copy of the docs.</p>\n",
-        inline(&sentence(c.help))
-    );
-    if let Some(ex) = c.example {
+    if let Some(said) = said {
         let _ = write!(
             s,
-            "<h2 id=\"example\">Broken, then fixed</h2>\n<p>This document gives <code>{id}</code>:</p>\n<pre><code>{}</code></pre>\n\
-<p>Mended, it builds:</p>\n<pre><code>{}</code></pre>\n",
-            escape(ex.broken.trim_end()),
-            escape(ex.fixed.trim_end())
+            "<section class=\"said\" aria-labelledby=\"said\">\n<h2 id=\"said\">What the program says</h2>\n\
+<pre class=\"said no-hl\"><code>{}</code></pre>\n</section>\n",
+            escape(said)
         );
     }
     let link = format!("../{}#{}", rule.page, codes::anchor(id));
@@ -355,12 +549,47 @@ fn error_page(docs: &Path, c: &Code, rule: &Rule) -> Result<String, String> {
         Some(sec) => format!("{} · {}", escape(&rule.title), escape(sec)),
         None => escape(&rule.title),
     };
+    // what to do and the example on the left, the rule (often the longer) on the right
     let _ = write!(
         s,
-        "<h2 id=\"rule\">The rule</h2>\n<p>The rule behind it is written in context, with its neighbours: <a href=\"{link}\">{place}</a>.</p>\n\
-</article>\n</div>\n</body>\n</html>\n"
+        "<div class=\"cp-grid\">\n<div>\n<section>\n<h2 id=\"help\">What to do</h2>\n<p data-part=\"help\">{}</p>\n</section>\n",
+        inline(&sentence(c.help))
     );
-    Ok(s)
+    if let Some(ex) = c.example {
+        let (broken, fixed) = marked(ex.broken, ex.fixed);
+        let _ = write!(
+            s,
+            "<section>\n<h2 id=\"example\">Broken, then fixed</h2>\n<div class=\"cp-pair\">\n\
+<figure class=\"broken\"><figcaption>Gives <code>{id}</code></figcaption>\n<pre><code>{broken}</code></pre></figure>\n\
+<figure class=\"fixed\"><figcaption>Mended, it reads clean</figcaption>\n<pre><code>{fixed}</code></pre></figure>\n</div>\n</section>\n"
+        );
+    }
+    let _ = write!(
+        s,
+        "</div>\n<section>\n<h2 id=\"rule\">The rule</h2>\n{}<p class=\"cp-in\"><a href=\"{link}\">Read it in context: {place}</a></p>\n</section>\n</div>\n",
+        rule.quote
+            .as_ref()
+            .map(|q| format!("<blockquote class=\"rule\">{q}</blockquote>\n"))
+            .unwrap_or_default()
+    );
+    s.push_str("<footer class=\"cp-foot\">\n");
+    if !related.is_empty() {
+        let _ = writeln!(
+            s,
+            "<span>Explained with it: {}</span>",
+            related
+                .iter()
+                .map(|r| format!("<a href=\"{}.html\"><code>{r}</code></a>", codes::slug(r)))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+    }
+    let _ = write!(
+        s,
+        "<span><a href=\"../errors.html\">Every error code</a></span>\n\
+<span>Offline: <code>dharmatiles explain {id}</code></span>\n</footer>\n</main>\n</body>\n</html>\n"
+    );
+    s
 }
 
 /// `errors.html` with the table of every code written between its markers.

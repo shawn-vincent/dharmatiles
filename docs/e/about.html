@@ -9,32 +9,62 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::about</h1>
-  <p class="lede" data-part="summary"><code>about</code> takes one string</p>
+  <p class="lede" data-part="summary"><code>about</code> takes one string.</p>
 </header>
-<article class="doc">
+<section class="said" aria-labelledby="said">
+<h2 id="said">What the program says</h2>
+<pre class="said no-hl"><code>dt::about
+
+  × `about` takes one string
+   ╭─[example.dtile:3:5]
+ 2 │ tile size=&quot;1x1&quot; {
+ 3 │     about 1 2
+   ·     ────┬────
+   ·         ╰── here
+ 4 │     stack { dirt }
+   ╰────
+  help: explain: https://shawn-vincent.github.io/dharmatiles/e/about
+        offline: dharmatiles explain dt::about</code></pre>
+</section>
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help">Write one quoted sentence after <code>about</code>.</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::about</code> prints this page's summary from your own copy of the docs.</p>
+</section>
+<section>
 <h2 id="example">Broken, then fixed</h2>
-<p>This document gives <code>dt::about</code>:</p>
-<pre><code>dharmatiles version=1
+<div class="cp-pair">
+<figure class="broken"><figcaption>Gives <code>dt::about</code></figcaption>
+<pre><code>dharmatiles version=&quot;1.0.0&quot;
 tile size=&quot;1x1&quot; {
-    about 1 2
+    about <mark class="del">1 2</mark>
     stack { dirt }
-}</code></pre>
-<p>Mended, it builds:</p>
-<pre><code>dharmatiles version=1
+}</code></pre></figure>
+<figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
+<pre><code>dharmatiles version=&quot;1.0.0&quot;
 tile size=&quot;1x1&quot; {
-    about &quot;A square of dirt.&quot;
+    about <mark class="ins">&quot;A square of dirt.&quot;</mark>
     stack { dirt }
-}</code></pre>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../language.html#dt-about">The tile language · 1. What a tile document is</a>.</p>
-</article>
+}</code></pre></figure>
 </div>
+</section>
+</div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>A tile document is one <code>.dtile</code> file holding exactly one <code>tile</code> node, after a header line. The tile has a size and a seed, and a body with (its file name is its name: <code>tile</code> takes none):</p></blockquote>
+<p class="cp-in"><a href="../language.html#dt-about">Read it in context: The tile language · 1. What a tile document is</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span>Explained with it: <a href="tile.html"><code>dt::tile</code></a> <a href="tile-name.html"><code>dt::tile-name</code></a> <a href="seed.html"><code>dt::seed</code></a> <a href="stack.html"><code>dt::stack</code></a></span>
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::about</code></span>
+</footer>
+</main>
 </body>
 </html>

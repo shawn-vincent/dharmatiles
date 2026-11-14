@@ -9,19 +9,29 @@
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
-<div class="wrap doc-layout">
+<main class="wrap codepage mistake">
 <header class="hero">
-  <div class="eyebrow">Error code · a mistake in the document</div>
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
   <h1>dt::cloud</h1>
-  <p class="lede" data-part="summary">A top with odds (a cloud) is used in arithmetic it does not have</p>
+  <p class="lede" data-part="summary">A top with odds (a cloud) is used in arithmetic it does not have.</p>
 </header>
-<article class="doc">
+<div class="cp-grid">
+<div>
+<section>
 <h2 id="help">What to do</h2>
 <p data-part="help">Use a weighted range only where the guide's clouds section allows it.</p>
-<p>The message itself says it for your case, at the line it is about. In a terminal, <code>dharmatiles explain dt::cloud</code> prints this page's summary from your own copy of the docs.</p>
-<h2 id="rule">The rule</h2>
-<p>The rule behind it is written in context, with its neighbours: <a href="../language.html#dt-cloud">The tile language · Clouds: a top with odds</a>.</p>
-</article>
+</section>
 </div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>A top may be a cloud: a low surface, a high surface and one weighting that says how often each height between them comes up. Write a weighted range in the top: <code>top="$groundHeight + low(0dmm .. 3dmm)"</code> is dirt between the ground height and 3dmm over it, mostly low with a few rises. A plain range, <code>[a .. b]</code>, is a cloud with every height equally likely, and builds exactly as it always did.</p></blockquote>
+<p class="cp-in"><a href="../language.html#dt-cloud">Read it in context: The tile language · Clouds: a top with odds</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::cloud</code></span>
+</footer>
+</main>
 </body>
 </html>
