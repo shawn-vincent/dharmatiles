@@ -1,6 +1,6 @@
 //! The docs' side of the diagnostic codes (`dt_lang::codes`): the join of two facts, each written once.
 //!
-//! That a code exists is the registry's.  Where it is explained is the page's: a `data-explains="dt::type"` marker
+//! That a code exists is the registry's.  Where it is explained is the page's: a `data-explains` marker naming it
 //! on the section (a heading, a table cell, a list item) that explains it.  This module derives from the two:
 //!
 //! * the `#dt-type` anchor, written as an empty span at the start of the marked element;

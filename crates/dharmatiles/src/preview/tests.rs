@@ -215,7 +215,7 @@ fn serves_the_docs_an_explain_link_opens() {
     let (head, body) = get(&r, "/docs/e/type.html");
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert!(head.contains("text/html"), "{head}");
-    assert!(String::from_utf8_lossy(&body).contains("dt::type"));
+    assert!(String::from_utf8_lossy(&body).contains(dt_lang::codes::TYPE));
     // the page's own style and the folder's index come from the same place
     assert!(get(&r, "/docs/assets/site.css").0.contains("text/css"));
     assert!(get(&r, "/docs/").0.starts_with("HTTP/1.1 200"));
