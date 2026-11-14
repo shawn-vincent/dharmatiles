@@ -519,6 +519,8 @@ pub enum StreamEvent {
         key: String,
         doc_rev: u64,
         error: Option<String>,
+        /// The error is a mistake in the document's text (not a failure of the program).
+        mistake: bool,
     },
     /// A resource changed.
     Resource(super::resources::ResourceEvent),

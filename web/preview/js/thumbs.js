@@ -28,6 +28,8 @@ export const LIMIT = 5;
  * @typedef {object} Spec
  * @property {string} tile       the program's id of the tile
  * @property {number} [seed]     a seed to build it at, in place of the tile's own (the file is not edited)
+ * @property {string} [text]     a source text to build in place of the file's own (a step of the history): the file is not edited
+ * @property {string} [file]     the file `text` is of (the tile's own when left out)
  * @property {string} [system]   `db` or `ol`
  * @property {string} [printer]  a printer profile
  * @property {'super-low' | 'low'} [tier]  the build's resolution; `super-low` unless more is asked for
@@ -38,8 +40,11 @@ export const LIMIT = 5;
  * @property {number} [h]        height in px
  */
 
+/** A short name for a text, so a picture of it is kept by what it says (FNV-1a, 32 bits). @param {string} t */
+const textName = (t) => { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 0x01000193); return `${t.length}.${(h >>> 0).toString(16)}`; };
+
 /** The cache key of a picture: everything that makes it a different picture. @param {Spec} s */
-export const thumbKey = (s) => [s.tile, s.tier ?? 'super-low', s.seed ?? '-', s.rev ?? '-', s.system ?? '-', s.printer ?? '-', s.view ?? '-', `${s.w ?? 0}x${s.h ?? 0}`, s.plate ?? '-'].join('|');
+export const thumbKey = (s) => [s.tile, s.tier ?? 'super-low', s.seed ?? '-', s.text == null ? '-' : `${s.file ?? '-'}:${textName(s.text)}`, s.rev ?? '-', s.system ?? '-', s.printer ?? '-', s.view ?? '-', `${s.w ?? 0}x${s.h ?? 0}`, s.plate ?? '-'].join('|');
 
 /**
  * The service.
@@ -71,7 +76,7 @@ export function createThumbs({ host, draw, valid = () => true, limit = LIMIT, sc
   async function run(key, e) {
     const { spec } = e;
     try {
-      const got = await tiers.want(key, { tile: spec.tile, tier: spec.tier ?? 'super-low', seed: spec.seed, system: spec.system, printer: spec.printer });
+      const got = await tiers.want(key, { tile: spec.tile, tier: spec.tier ?? 'super-low', seed: spec.seed, system: spec.system, printer: spec.printer, text: spec.text, file: spec.file });
       if (!got || !valid(spec, got)) { cache.delete(key); e.resolve(null); return; }
       e.resolve(draw(got.buf, spec));
     } catch (err) {
@@ -106,7 +111,9 @@ export function createThumbs({ host, draw, valid = () => true, limit = LIMIT, sc
       const e = cache.get(key);
       if (!e) return;
       e.wanted -= 1;
-      if (e.wanted <= 0 && !e.started) { cache.delete(key); e.resolve(null); }
+      if (e.wanted > 0) return;
+      // nobody waits for it: not begun, it is not built; begun, the program is told to stop (its want leaves the set)
+      if (!e.started) { cache.delete(key); e.resolve(null); } else tiers.drop(key);
     },
     /** How many are being made, how many wait and how many are kept: for the tests and the status line. */
     get stats() { return { active, waiting: new Set(waiting.filter((k) => { const e = cache.get(k); return e && !e.started; })).size, kept: cache.size }; },
@@ -120,13 +127,13 @@ export function createThumbs({ host, draw, valid = () => true, limit = LIMIT, sc
  */
 export function Thumb({ svc, spec, className = '', onError, title }) {
   const [url, setUrl] = useState(/** @type {string | null} */ (null));
-  const [bad, setBad] = useState(false);
+  const [bad, setBad] = useState(/** @type {string | null} */ (null));
   const key = thumbKey(spec);
   useEffect(() => {
     let live = true;
-    setUrl(null); setBad(false);
-    svc.picture(spec).then((u) => { if (live && u) setUrl(u); }).catch((e) => { if (live) setBad(true); onError?.(e); });
+    setUrl(null); setBad(null);
+    svc.picture(spec).then((u) => { if (live && u) setUrl(u); }).catch((e) => { if (live) setBad(e.message || 'could not be drawn'); onError?.(e); });
     return () => { live = false; svc.release(spec); };
   }, [key]);
-  return html`<span class=${`thumb-pic${url ? '' : bad ? ' bad' : ' ph'} ${className}`} title=${title}>${url ? html`<img alt="" src=${url} draggable=${false} />` : null}</span>`;
+  return html`<span class=${`thumb-pic${url ? '' : bad ? ' bad' : ' ph'} ${className}`} title=${bad ?? title}>${url ? html`<img alt="" src=${url} draggable=${false} />` : null}</span>`;
 }

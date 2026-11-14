@@ -633,7 +633,11 @@ contract: string, rev: number, epoch: string, system: string, printer: string, p
 
 type SpanJson = { file: string, line: number, col: number, offset: number, len: number, };
 
-type StreamEvent = { "type": "snapshot" } & Snapshot | { "type": "resumed", rev: number, epoch: string, } | { "type": "tile", rev: number, tile: TileSummary, } | { "type": "progress", rev: number, id: string, progress: Progress, } | { "type": "message", rev: number, message: MessageJson, } | { "type": "tier", rev: number, key: string, docRev: number, error: string | null, } | { "type": "resource" } & ResourceEvent;
+type StreamEvent = { "type": "snapshot" } & Snapshot | { "type": "resumed", rev: number, epoch: string, } | { "type": "tile", rev: number, tile: TileSummary, } | { "type": "progress", rev: number, id: string, progress: Progress, } | { "type": "message", rev: number, message: MessageJson, } | { "type": "tier", rev: number, key: string, docRev: number, error: string | null, 
+/**
+ * The error is a mistake in the document's text (not a failure of the program).
+ */
+mistake: boolean, } | { "type": "resource" } & ResourceEvent;
 
 type SystemWord = "db" | "ol";
 
@@ -663,7 +667,16 @@ type TierWant = { tile: string,
 /**
  * `super-low`, `low` or `full`.
  */
-tier: string, seed?: number | null, system?: string | null, printer?: string | null, };
+tier: string, seed?: number | null, system?: string | null, printer?: string | null, 
+/**
+ * A source text to build in place of the file's own (a step of the document's history): the file is not
+ * edited, and the picture is kept by the text, so a text built before is not built again.
+ */
+text?: string | null, 
+/**
+ * The file `text` is of: the tile's own document, or a file its last build read.
+ */
+file?: string | null, };
 
 type TiersWantReq = { 
 /**

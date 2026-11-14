@@ -16,6 +16,8 @@ import { isOffline } from '../host.js';
 import { createDrafter } from '../drafts.js';
 import { STALE_NOTE, fixedText, spansFresh } from '../spans.js';
 import { failed, showError } from '../problems.js';
+import { token } from '../tokens.js';
+import { thumbs } from './scene-thumbs.js';
 import { $, host, makeMine, toast } from './app.js';
 import { dirty, doc, isPlates, server, sourceFile, sourceId, stem, tile, view } from './stores.js';
 import { docs, planOf } from './docs.js';
@@ -80,6 +82,17 @@ function historyItems(key, mine) {
   for (let target = at + 1; target <= (mine ? at + 1 : entries.length); target++) if (entries[target - 1]) redo.push({ entry: entries[target - 1], target, distance: target - at, direction: 'Redo' });
   return { undo, redo };
 }
+/** What a history row draws: the tile at the text it is at now and at the text a row leaves it at, each built low by the program. */
+function historyPictures(id, file, key) {
+  const { system, printer } = server.get();
+  return {
+    svc: thumbs,
+    now: stateNow(key),
+    spec: (/** @type {string} */ text) => ({ tile: id, text, file, system, printer, plate: token('--plate') || '#D9E0EB', w: 120, h: 84 }),
+    // a text with a mistake in it is the document's to show: the picture says so; anything else is the program's failure, shown loudly
+    onError: (/** @type {any} */ e) => { if (!e.mistake) showError('Could not draw a step of the history', e); },
+  };
+}
 function pickHistory(direction, target) {
   if (owned()) undo(direction === 'Undo' ? -1 : 1); else goHistory(target);
   view.set({ popover: null });
@@ -95,8 +108,13 @@ function bindHistory() {
     $('undo').disabled = !canUndo; $('undo-drop').disabled = !canUndo;
     $('redo').disabled = !canRedo; $('redo-drop').disabled = !canRedo;
     const items = key ? historyItems(key, mine) : { undo: [], redo: [] };
-    render(html`<${HistoryMenu} items=${items.undo} onPick=${pickHistory} />`, $('undo-history'));
-    render(html`<${HistoryMenu} items=${items.redo} onPick=${pickHistory} />`, $('redo-history'));
+    // pictures of what a step does: of a tile's own text, and only while the menu is open (nothing is built for a closed menu)
+    const open = view.get().popover;
+    const own = !mine && !!t && doc.get().file === t.path && doc.get().text != null;
+    const pictures = (menu) => (own && open === menu ? historyPictures(t.id, t.path, key) : null);
+    const withText = (list) => list.map((it) => ({ ...it, text: own && open ? stateTextOf(key, it.target) : null }));
+    render(html`<${HistoryMenu} items=${withText(items.undo)} onPick=${pickHistory} pictures=${pictures('undo-history')} />`, $('undo-history'));
+    render(html`<${HistoryMenu} items=${withText(items.redo)} onPick=${pickHistory} pictures=${pictures('redo-history')} />`, $('redo-history'));
   });
 }
 

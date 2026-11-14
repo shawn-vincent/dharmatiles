@@ -2717,6 +2717,57 @@ fn documents_are_written_only_through_the_document_registry() {
     );
 }
 
+/// A step of the history is built as a picture: a wanted tier of a text, in place of the file's, kept by the text,
+/// built on the tier lane (never the tile's own build) and the file left as it was.
+#[test]
+fn a_wanted_tier_can_be_of_a_text_other_than_the_files() {
+    let dir = std::env::temp_dir().join(format!("dt-tiertext-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let doc = dir.join("t.dtile");
+    let on_disk = dt_eval::Library.read(FLAT).unwrap();
+    std::fs::write(&doc, &on_disk).unwrap();
+    let path = doc.to_string_lossy().into_owned();
+    let r = start(&[&path], true);
+    wait_for(&r, "first build", |t| t["status"] == "ready");
+    let (id, token) = (id0(&r), token_of(&r));
+    let other = format!(
+        "{on_disk}
+// another text
+"
+    );
+    let want = |text: Option<&str>, file: Option<&str>| {
+        let mut w = serde_json::json!({"tile": id, "tier": "super-low"});
+        if let Some(t) = text {
+            w["text"] = t.into();
+        }
+        if let Some(f) = file {
+            w["file"] = f.into();
+        }
+        w
+    };
+    // the file's own text and another text are two pictures with two keys
+    let keys = want_tiers(
+        &r,
+        &token,
+        "h",
+        &[want(None, None), want(Some(&other), Some(&path))],
+    );
+    assert_ne!(keys[0], keys[1], "the text is part of the key");
+    assert_eq!(
+        wait_tier(&r, &keys[1], None).0.split(' ').nth(1),
+        Some("200")
+    );
+    // a file that is not the tile's is refused, as a draft's is
+    let body = serde_json::json!({"scope": "h", "wants": [want(Some(&other), Some("/etc/hosts"))]})
+        .to_string();
+    let (head, _) = post(&r, "/api/tiers/want", Some(&token), None, &body);
+    assert!(head.starts_with("HTTP/1.1 403"), "{head}");
+    // the document on disk is as it was
+    assert_eq!(std::fs::read_to_string(&doc).unwrap(), on_disk);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_mesh_is_fetched_by_the_revision_of_the_document_and_another_is_refused() {
     let dir = std::env::temp_dir().join(format!("dt-meshrev-{}", std::process::id()));

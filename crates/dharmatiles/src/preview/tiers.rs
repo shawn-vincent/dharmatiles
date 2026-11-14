@@ -29,6 +29,11 @@ pub struct TierWant {
     pub seed: Option<u64>,
     pub system: Option<String>,
     pub printer: Option<String>,
+    /// A source text to build in place of the file's own (a step of the document's history): the file is not
+    /// edited, and the picture is kept by the text, so a text built before is not built again.
+    pub text: Option<String>,
+    /// The file `text` is of: the tile's own document, or a file its last build read.
+    pub file: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -97,15 +102,27 @@ fn piece_of(key: &str) -> String {
         .join("|")
 }
 
+/// FNV-1a, 64 bits: what names a text in a key.
+fn fnv(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
 fn key_of(w: &TierWant) -> String {
     let dash = || "-".to_owned();
     format!(
-        "{}|{}|{}|{}|{}",
+        "{}|{}|{}|{}|{}|{}",
         w.tile,
         w.tier,
         w.seed.map_or_else(dash, |s| s.to_string()),
         w.system.clone().unwrap_or_else(dash),
         w.printer.clone().unwrap_or_else(dash),
+        w.text.as_deref().map_or_else(dash, |t| format!(
+            "{}:{:016x}",
+            w.file.as_deref().unwrap_or("-"),
+            fnv(t)
+        )),
     )
 }
 
@@ -116,6 +133,8 @@ struct Ready {
     path: String,
     tier: dt_eval::Tier,
     opts: Options,
+    /// A text to build in place of a file's.
+    overlay: Option<edit::Overlay>,
 }
 
 impl Shared {
@@ -131,12 +150,25 @@ impl Shared {
                 ));
             }
         };
-        let Some(path) = lock(&self.tiles)
+        let Some((path, files)) = lock(&self.tiles)
             .iter()
             .find(|t| t.id == w.tile)
-            .map(|t| t.path.clone())
+            .map(|t| (t.path.clone(), t.files.clone()))
         else {
             return Err(fail::refused("404 Not Found", "no such tile"));
+        };
+        // the same rule as a draft's: the tile's own document, or a file its last build read
+        let overlay = match &w.text {
+            None => None,
+            Some(text) => {
+                let file = super::api::TileRef {
+                    id: w.tile.clone(),
+                    path: path.clone(),
+                    files,
+                }
+                .file(w.file.as_deref())?;
+                Some(edit::Overlay(BTreeMap::from([(file, text.clone())])))
+            }
         };
         let mut opts = self.options();
         match w.system.as_deref() {
@@ -160,11 +192,13 @@ impl Shared {
             path,
             tier,
             opts,
+            overlay,
         })
     }
 
-    /// Say on the stream that `key` is done at `doc_rev` (or why it could not be).
-    fn announce_tier(&self, key: &str, doc_rev: u64, error: Option<&str>) {
+    /// Say on the stream that `key` is done at `doc_rev` (or why it could not be, and whether that is a mistake in the
+    /// document's text, which is the document's to show, or a failure of the program's).
+    fn announce_tier(&self, key: &str, doc_rev: u64, error: Option<&str>, mistake: bool) {
         let mut ev = lock(&self.events);
         let rev = ev.rev;
         ev.send(&super::api::StreamEvent::Tier {
@@ -172,6 +206,7 @@ impl Shared {
             key: key.to_owned(),
             doc_rev,
             error: error.map(str::to_owned),
+            mistake,
         });
     }
 
@@ -217,7 +252,7 @@ impl Shared {
             let rev = self.rev_of(&r.path);
             let have = lock(&self.tier_book).results.get(&r.key).map(|d| d.doc_rev);
             if have == Some(rev) {
-                self.announce_tier(&r.key, rev, None);
+                self.announce_tier(&r.key, rev, None, false);
                 continue;
             }
             if !lock(&self.tier_book).inflight.insert(r.key.clone()) {
@@ -247,8 +282,12 @@ impl Shared {
         self.job_current(&r.key, &r.tile);
         let progress = dt_eval::Progress::new(Arc::new(queue::Cancelled(Arc::clone(cancel))));
         let ran = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let sources: &dyn dt_eval::Source = match &r.overlay {
+                Some(o) => o,
+                None => &dt_eval::Files,
+            };
             dt_eval::build_tier(
-                &dt_eval::Files,
+                sources,
                 &r.path,
                 &r.opts,
                 r.tier,
@@ -282,19 +321,29 @@ impl Shared {
                 );
                 lock(&self.tier_book).inflight.remove(&r.key);
                 self.tier_failed(r, &e.message);
-                self.announce_tier(&r.key, rev, Some(&e.message));
+                self.announce_tier(&r.key, rev, Some(&e.message), false);
                 self.job_done_everywhere(&r.key);
                 return;
             }
         };
+        // an error is told with whether it is a mistake in the document's text (a history step of a tile with a
+        // mistake in it is an ordinary thing to ask for) or a failure of the program's own
         let outcome = match built {
-            Err(errs) => Err(errs
-                .iter()
-                .map(|d| d.message.clone())
-                .collect::<Vec<_>>()
-                .join("; ")),
-            Ok(b) => payload::for_map(&b, r.tier.name(), rev, &r.opts, &self.palette())
-                .map_err(|e| format!("cannot prepare the {} view: {e}", r.tier.name())),
+            Err(errs) => Err((
+                errs.iter()
+                    .map(|d| d.message.clone())
+                    .collect::<Vec<_>>()
+                    .join("; "),
+                errs.iter().all(|d| crate::build::is_document_error(d.code)),
+            )),
+            Ok(b) => {
+                payload::for_map(&b, r.tier.name(), rev, &r.opts, &self.palette()).map_err(|e| {
+                    (
+                        format!("cannot prepare the {} view: {e}", r.tier.name()),
+                        false,
+                    )
+                })
+            }
         };
         let mut book = lock(&self.tier_book);
         book.inflight.remove(&r.key);
@@ -319,12 +368,12 @@ impl Shared {
                     }
                 }
                 drop(book);
-                self.announce_tier(&r.key, rev, None);
+                self.announce_tier(&r.key, rev, None, false);
             }
-            Err(message) => {
+            Err((message, mistake)) => {
                 drop(book);
                 self.tier_failed(r, &message);
-                self.announce_tier(&r.key, rev, Some(&message));
+                self.announce_tier(&r.key, rev, Some(&message), mistake);
             }
         }
         self.job_done_everywhere(&r.key);

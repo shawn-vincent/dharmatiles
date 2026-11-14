@@ -3,10 +3,17 @@
 // Each is a function of what it is given; the editor draws them from the history, the document and the export's state.
 
 import { Fragment, html } from './html.js';
+import { Thumb } from '../thumbs.js';
 
-/** One entry of the history as a menu button: what it did, how far away it is, and the text it took out and put in. */
-export function HistoryMenu({ items, onPick }) {
-  return html`${items.map(({ entry, target, distance, direction }) => html`<button type="button" key=${`${direction}${target}`} title=${`${direction} to ${entry.label}`} onClick=${() => onPick(direction, target)}>
+/**
+ * One entry of the history as a menu button: what it did, how far away it is, and the text it took out and put in.  With `pictures`
+ * (`{svc, now, spec(text), onError}`, given only while the menu is open and the text is a tile's own) each row also shows the tile
+ * as it is now and as the row would leave it: the program builds each text low, one at a time off the edit's path, and
+ * what the menu no longer shows is not built (js/thumbs.js).  A text with a mistake in it says so in place of a picture.
+ */
+export function HistoryMenu({ items, onPick, pictures = null }) {
+  return html`${items.map(({ entry, target, distance, direction, text }) => html`<button type="button" key=${`${direction}${target}`} class=${pictures ? 'with-pic' : undefined} title=${`${direction} to ${entry.label}`} onClick=${() => onPick(direction, target)}>
+    ${pictures && text != null ? html`<span class="pics" aria-hidden="true"><${Thumb} svc=${pictures.svc} spec=${pictures.spec(pictures.now)} className="h-pic" onError=${pictures.onError} /><i class="h-to"></i><${Thumb} svc=${pictures.svc} spec=${pictures.spec(text)} className="h-pic" onError=${pictures.onError} /></span>` : null}
     <span class="action">${entry.label}</span><span class="distance">${distance === 1 ? '1 step' : `${distance} steps`}</span>
     ${entry.change?.removed || entry.change?.added ? html`<span class="change">${entry.change.removed ? html`<code class="removed">${`- ${entry.change.removed}`}</code>` : null}${entry.change.added ? html`<code class="added">${`+ ${entry.change.added}`}</code>` : null}</span>` : null}</button>`)}`;
 }

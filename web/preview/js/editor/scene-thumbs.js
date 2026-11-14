@@ -93,7 +93,8 @@ function draw(buffer, plate, w = W, h = H, view = null) {
 export const thumbs = createThumbs({
   host,
   draw: (buf, spec) => draw(buf, spec.plate ?? '#D9E0EB', spec.w ?? W, spec.h ?? H, spec.view ?? null),
-  valid: (spec, got) => { const known = tileById(spec.tile)?.docRev; return known == null || known === got.docRev; },
+  // a picture of a text (a step of the history) is of that text, whatever revision the file is at
+  valid: (spec, got) => { const known = tileById(spec.tile)?.docRev; return spec.text != null || known == null || known === got.docRev; },
 });
 
 /**
