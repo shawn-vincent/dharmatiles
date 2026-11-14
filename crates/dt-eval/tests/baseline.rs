@@ -24,6 +24,17 @@
 //! new tile one (its counts); it refuses to write a file in which a count
 //! stands above its budget.  To raise a budget on purpose, edit the file by
 //! hand, where the diff shows it.
+//!
+//! **Counted on four seeds.**  A repair count is noisy: the grass blades of a
+//! tile overlap in a different arrangement for each seed (and for each move of
+//! a line), and the share of near-coincident vertices the gate has to push
+//! apart changes two or three times over with it.  So a tile's count, the
+//! number its budget is held to, is the worst of its repairs on four seeds:
+//! the seed the tile writes, and [`EXTRA_SEEDS`].  The hash, triangles and
+//! overhang columns stay on the written seed.  The first rewrite under this
+//! measure set the budgets to the worst of four, which for most tiles is above
+//! what the single written seed had counted: that redefinition, approved by
+//! Shawn, is the one time a budget rose.  From then on the rules above hold.
 
 #![allow(clippy::unwrap_used)]
 
@@ -34,7 +45,16 @@ use std::time::Instant;
 
 use dt_eval::{Library, Options, build};
 
+/// The three seeds a tile is built on besides the one it writes, to count its
+/// repairs: the only place they are set.
+const EXTRA_SEEDS: [u64; 3] = [9001, 9002, 9003];
+
 const FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/baseline/library-db.tsv");
+/// The second line of the file, saying how its budgets were counted. A file
+/// without it holds budgets counted on one seed: a rewrite then sets every
+/// budget afresh to the worst of four (once), and the guard is back after.
+const MEASURE: &str =
+    "# budgets: the worst repair count of each tile on four seeds (its own and three more)";
 const HEADER: &str = "tile\thash\ttriangles\tvoids_filled\tpinches_moved\tslivers\tcollapsed\tdropped\toverhang_mm2\tband_mm2\tholes\tgate\tmax_voids\tmax_pinches\tmax_slivers\tmax_collapsed\tmax_dropped\tsecs";
 
 /// The columns that count repairs, and where each one's budget is.
@@ -76,6 +96,25 @@ fn row(path: &str) -> String {
     )
 }
 
+/// The five repair counts of `path` built on `seed`, in the order of
+/// [`REPAIRS`].
+fn repairs_on(path: &str, seed: u64) -> [u64; 5] {
+    let opts = Options {
+        seed: Some(seed),
+        ..Options::default()
+    };
+    let b = build(&Library, path, &opts).unwrap_or_else(|e| panic!("{path} on seed {seed}: {e:?}"));
+    let a = &b.audit;
+    [
+        a.voids.len(),
+        a.pinches_moved,
+        a.slivers.len(),
+        a.collapsed,
+        a.dropped.len(),
+    ]
+    .map(|n| n as u64)
+}
+
 /// A measured row (12 fields and the time) with a tile's budgets put in.
 fn with_budgets(measured: &[String], budgets: &[String; 5]) -> Vec<String> {
     let mut out: Vec<String> = measured[..12].to_vec();
@@ -111,26 +150,53 @@ fn the_library_builds_as_the_baseline_says() {
         .iter()
         .map(|p| row(p).split('\t').map(str::to_owned).collect())
         .collect();
+    // each tile's repair counts: the worst over the written seed and the extra ones
+    let worst: Vec<Option<[u64; 5]>> = measured
+        .iter()
+        .map(|m| {
+            let mut w = [0; 5];
+            for (k, (_, at, _)) in REPAIRS.iter().enumerate() {
+                w[k] = count(m, *at)?;
+            }
+            for seed in EXTRA_SEEDS {
+                let on = repairs_on(&m[0], seed);
+                for (a, b) in w.iter_mut().zip(on) {
+                    *a = (*a).max(b);
+                }
+            }
+            Some(w)
+        })
+        .collect();
     let old = std::fs::read_to_string(Path::new(FILE)).ok();
     // the file's rows, by tile; a file from before the budgets has 13 fields
     let mut before: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for l in old.iter().flat_map(|o| o.lines().skip(1)) {
+    for l in old
+        .iter()
+        .flat_map(|o| o.lines().skip(1))
+        .filter(|l| !l.starts_with('#'))
+    {
         let f: Vec<String> = l.split('\t').map(str::to_owned).collect();
         before.insert(f[0].clone(), f);
     }
-    let has_budgets = before.values().all(|f| f.len() == FIELDS);
+    // budgets counted another way than this one are not held to: a rewrite starts them afresh
+    let counted_now = old
+        .as_ref()
+        .is_some_and(|o| o.lines().nth(1) == Some(MEASURE));
+    let has_budgets = counted_now && before.values().all(|f| f.len() == FIELDS);
     let writing = std::env::var_os("DT_BASELINE").is_some_and(|v| v == "write");
 
     // the repair budget: a count above its budget fails, and a rewrite cannot raise one
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut over = Vec::new();
     let mut under = 0;
-    for m in &measured {
+    for (m, w) in measured.iter().zip(&worst) {
         let name = &m[0];
-        let on_file = before.get(name).filter(|f| f.len() == FIELDS);
+        let on_file = before
+            .get(name)
+            .filter(|f| f.len() == FIELDS && counted_now);
         let mut budgets: [String; 5] = Default::default();
-        for (k, (word, at, bat)) in REPAIRS.iter().enumerate() {
-            let Some(n) = count(m, *at) else { continue };
+        for (k, (word, _, bat)) in REPAIRS.iter().enumerate() {
+            let Some(n) = w.map(|w| w[k]) else { continue };
             let budget = match on_file {
                 Some(f) => count(f, *bat).unwrap_or(n),
                 // a new tile, or the first write of the budgets: what it repairs now
@@ -157,7 +223,7 @@ fn the_library_builds_as_the_baseline_says() {
         );
     }
 
-    let mut text = format!("{HEADER}\n");
+    let mut text = format!("{HEADER}\n{MEASURE}\n");
     for r in &rows {
         writeln!(text, "{}", r.join("\t")).unwrap();
     }
