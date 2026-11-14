@@ -228,7 +228,7 @@ fn dirt_follows_a_stones_top(seeds: &[u32]) {
             built(&table(false, seed, "")),
             built(&table(true, seed, "")),
         );
-        let t = film_thickness(&bare, &dirt);
+        let t = film_thickness(bare, dirt);
         assert!(
             t.len() > 500,
             "{name}: the dirt is laid: {} triangles",
@@ -288,7 +288,7 @@ fn max_slope_changes_how_much_stone_holds_dirt() {
     let tile = |extra: &str| tall(true).replace("at=crag\n", &format!("at=crag {extra}\n"));
     let cover = |extra: &str| {
         let b = built(&tile(extra));
-        dirt_vertices(&b).len()
+        dirt_vertices(b).len()
     };
     let (low, default, high) = (
         cover("maxSlope=\"45deg\""),
