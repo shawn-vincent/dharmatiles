@@ -9,8 +9,9 @@
 use kdl::{KdlDocument, KdlNode, KdlValue};
 use miette::SourceSpan;
 
-use super::{Done, EditError, Mended, Op, Place};
+use super::{Done, EditError, Mended, Op, Place, Slot};
 use crate::error::Fix;
+use crate::seams::Snapped;
 use crate::nodeid::{self, entry_range, value_range};
 
 const INDENT: &str = "    ";
@@ -58,18 +59,48 @@ pub(super) fn apply(text: &str, op: &Op) -> Result<Done, EditError> {
         }
         Op::SetArg { id, index, value } => {
             let node = nodeid::locate(&doc, id)?;
-            let e = node
-                .entries()
+            let splices = vec![set_arg(text, node, *index, value)?];
+            finish(lay(text, splices), node.span().offset())
+        }
+        Op::SetArgs { id, values } => {
+            let node = nodeid::locate(&doc, id)?;
+            let args: Vec<_> = node.entries().iter().filter(|e| e.name().is_none()).collect();
+            let (Some(first), Some(last)) = (args.first(), args.last()) else {
+                return Err(EditError::NoEntry("argument 0".to_owned()));
+            };
+            if values.is_empty() {
+                return Err(EditError::Cannot("give at least one value".to_owned()));
+            }
+            let with = values
                 .iter()
-                .filter(|e| e.name().is_none())
-                .nth(*index)
-                .ok_or_else(|| EditError::NoEntry(format!("argument {index}")))?;
-            let (at, end) = value_range(text, e);
+                .map(|v| word_or_string(v))
+                .collect::<Vec<_>>()
+                .join(" ");
             let splices = vec![Splice {
-                at,
-                end,
-                with: value.to_string(),
+                at: value_range(text, first).0,
+                end: value_range(text, last).1,
+                with,
             }];
+            finish(lay(text, splices), node.span().offset())
+        }
+        Op::SetPoint {
+            id,
+            slot,
+            q,
+            seams,
+        } => {
+            let node = nodeid::locate(&doc, id)?;
+            let (cols, rows) = tile_size(&doc)?;
+            let written = match seams.map(|t| t.snap(*q, cols, rows)) {
+                Some(Snapped::Word(w)) => w,
+                Some(Snapped::Pair(p)) => pair_text(p, rows),
+                None => pair_text(*q, rows),
+            };
+            let value = KdlValue::String(written);
+            let splices = match slot {
+                Slot::Arg(index) => vec![set_arg(text, node, *index, &value)?],
+                Slot::Control(name) => set_control(text, node, name, &value)?,
+            };
             finish(lay(text, splices), node.span().offset())
         }
         Op::Insert { place, node } => insert(text, &doc, *place, node),
@@ -114,6 +145,59 @@ pub(super) fn apply(text: &str, op: &Op) -> Result<Done, EditError> {
             "that edit is made to a print list or an inventory, not to a tile".to_owned(),
         )),
     }
+}
+
+// ---- arguments and points --------------------------------------------------------------------------
+
+/// The write that replaces the positional argument `index` of `node`.
+fn set_arg(
+    text: &str,
+    node: &KdlNode,
+    index: usize,
+    value: &KdlValue,
+) -> Result<Splice, EditError> {
+    let e = node
+        .entries()
+        .iter()
+        .filter(|e| e.name().is_none())
+        .nth(index)
+        .ok_or_else(|| EditError::NoEntry(format!("argument {index}")))?;
+    let (at, end) = value_range(text, e);
+    Ok(Splice {
+        at,
+        end,
+        with: value.to_string(),
+    })
+}
+
+/// A word as it is written: bare when it is one KDL reads as itself (a line's name), else a string.
+fn word_or_string(s: &str) -> String {
+    let plain = s.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
+        && !matches!(s, "true" | "false" | "null" | "inf" | "nan");
+    if plain {
+        s.to_owned()
+    } else {
+        KdlValue::String(s.to_owned()).to_string()
+    }
+}
+
+/// The tile's size in squares, from its `size="2x1"`.
+fn tile_size(doc: &KdlDocument) -> Result<(u32, u32), EditError> {
+    doc.nodes()
+        .iter()
+        .find(|n| n.name().value() == "tile")
+        .and_then(|n| n.entry("size"))
+        .and_then(|e| e.value().as_string())
+        .and_then(|s| s.split_once('x'))
+        .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
+        .ok_or_else(|| EditError::Cannot("the tile has no `size=\"2x1\"` to place a point by".to_owned()))
+}
+
+/// A free point as a document writes it: `(0.5sq, 0.25sq)`, counted from the north-west corner.
+fn pair_text(p: [f64; 2], rows: u32) -> String {
+    let round = |v: f64| (v * 100.0).round() / 100.0 + 0.0;
+    format!("({}sq, {}sq)", round(p[0]), round(f64::from(rows) - p[1]))
 }
 
 // ---- controls ------------------------------------------------------------------------------------

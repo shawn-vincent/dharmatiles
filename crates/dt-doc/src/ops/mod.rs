@@ -176,6 +176,28 @@ pub enum Op<'a> {
         /// What it becomes.
         value: KdlValue,
     },
+    /// Every positional argument of a node replaced by `values`, each a word or a string: a region's `boundedBy`
+    /// lines, an `except`'s regions.  (Tile.)
+    SetArgs {
+        /// The node.
+        id: &'a str,
+        /// What the arguments become, at least one.
+        values: &'a [String],
+    },
+    /// A point written where a node holds one (a line's `through`, a region's `fill`, a thing's `at=`): the
+    /// program writes the point from where it is, in squares from the south-west corner, so no page makes
+    /// the text of one.  With `seams`, a point on or near the outline lands by the seam rule
+    /// ([`crate::seams::SeamTable::snap`]); without, it is a free pair.  (Tile.)
+    SetPoint {
+        /// The node.
+        id: &'a str,
+        /// Which of its values.
+        slot: Slot<'a>,
+        /// Where, in squares from the south-west corner.
+        q: [f64; 2],
+        /// The edge contract's seams, for a point of a line.
+        seams: Option<&'a crate::seams::SeamTable>,
+    },
     /// A new node (one or more lines of KDL, unindented) written in a place.  (Tile.)
     Insert {
         /// Where it goes.
@@ -218,6 +240,15 @@ pub enum Op<'a> {
     /// The program's own fixes for mistakes laid in, each only where the text still reads what it was made for.
     /// (Tile.)
     Fix(&'a [Fix]),
+}
+
+/// Which value of a node [`Op::SetPoint`] writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Slot<'a> {
+    /// The positional argument at this index, from 0 (`through "a" "b"`: 1 is `"b"`).
+    Arg(usize),
+    /// The control of this name (`at`).
+    Control(&'a str),
 }
 
 /// Where [`Op::Insert`] puts a node.
@@ -330,6 +361,8 @@ fn map_op(text: &str, op: &Op) -> Result<Done, EditError> {
         Op::GiveIds | Op::Append(_) => unreachable_op(),
         Op::SetControl { .. }
         | Op::SetArg { .. }
+        | Op::SetArgs { .. }
+        | Op::SetPoint { .. }
         | Op::Insert { .. }
         | Op::Move { .. }
         | Op::Take { .. }

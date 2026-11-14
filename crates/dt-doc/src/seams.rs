@@ -330,6 +330,57 @@ impl SeamTable {
     }
 }
 
+/// How near a dragged point must be to a side to land on it (squares).
+pub const DRAG_EDGE: f64 = 0.05;
+
+/// How near a dragged point must be to a tile corner, on both axes, to land on the corner's word (squares).
+pub const DRAG_CORNER: f64 = 0.08;
+
+/// Where a dragged point lands, by the seam rule.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Snapped {
+    /// A seam or corner, as its word (`nnw`, `n(2)`, `nw`).
+    Word(String),
+    /// A free point, in squares from the south-west corner.
+    Pair([f64; 2]),
+}
+
+impl SeamTable {
+    /// Where a point dragged to `q` (squares from the south-west corner) lands on a `cols` x `rows` tile: onto a
+    /// side when it is within [`DRAG_EDGE`] of one, then, because a line may cross the outline only at a seam,
+    /// onto the nearest seam of that square's edge (as its word), or the tile's corner when it is within
+    /// [`DRAG_CORNER`] of it; anywhere else it is a free pair.  The one rule a drag of a line's point keeps.
+    #[must_use]
+    pub fn snap(&self, q: [f64; 2], cols: u32, rows: u32) -> Snapped {
+        let (w, h) = (f64::from(cols), f64::from(rows));
+        let onto = |v: f64, hi: f64| {
+            let v = v.clamp(0.0, hi);
+            if v <= DRAG_EDGE {
+                0.0
+            } else if hi - v <= DRAG_EDGE {
+                hi
+            } else {
+                v
+            }
+        };
+        let p = [onto(q[0], w), onto(q[1], h)];
+        for (corner, word) in &self.corners {
+            let (cx, cy) = corner.position(w, h);
+            if (p[0] - cx).abs() <= DRAG_CORNER && (p[1] - cy).abs() <= DRAG_CORNER {
+                return Snapped::Word(word.clone());
+            }
+        }
+        if let Some(place) = Self::place_of(p, cols, rows) {
+            let at = self.nearest(place.at);
+            return match self.word_for(&place, at, cols, rows) {
+                Some(word) => Snapped::Word(word),
+                None => Snapped::Pair(Self::point_at(&place, at, cols, rows)),
+            };
+        }
+        Snapped::Pair(p)
+    }
+}
+
 /// A square's place as a person says it: `column 2, row 1, north side`.
 #[must_use]
 pub fn say(p: &Place) -> String {

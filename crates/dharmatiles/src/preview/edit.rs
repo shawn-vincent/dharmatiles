@@ -51,6 +51,11 @@
 //!   answer with its mesh: `200` and the binary buffer, `422` when the text
 //!   has a mistake, `409` when a newer draft of the tile took its place.
 //!   Nothing is written.
+//! - `/api/tiles/ID/step` `{edit, file?, debug?}`: one step of a drag or a
+//!   scrub: the edit (as `/api/edit` makes it, `edit.read` and all) and the
+//!   draft of the text it made, in one request.  The answer is the head (the
+//!   new text, its revision, what became of the draft) as JSON after its
+//!   length in four bytes, then the mesh.  Nothing is written.
 
 use std::collections::BTreeMap;
 use std::hash::{BuildHasher, Hasher};
@@ -106,6 +111,18 @@ pub enum InsertPlace {
     In,
 }
 
+/// Which value of a node a point is written to.
+#[derive(Deserialize, Clone)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(rename_all = "camelCase")]
+pub enum PointSlot {
+    /// The positional argument at this index (a `through`'s third point is 2).
+    Arg(usize),
+    /// The control of this name (`at`).
+    Control(String),
+}
+
 /// `/api/edit`: a text edit, one kind by `op`, made by `dt_doc::ops` to the node the `id` names (the ids a check
 /// lists in its `nodes`).  An id the text does not have is refused.  Nothing is written to disk.
 #[derive(Deserialize)]
@@ -155,6 +172,21 @@ pub enum EditOp {
         id: String,
         index: usize,
         value: Scalar,
+    },
+    /// A node's positional arguments all replaced (a region's `boundedBy` lines, an `except`'s regions).
+    Args {
+        text: String,
+        id: String,
+        values: Vec<String>,
+    },
+    /// A point written where a node holds one, from where it is (squares from the south-west corner): the program
+    /// writes the text.  `snap` (a line's point) lands a point on or near the outline by the seam rule.
+    Point {
+        text: String,
+        id: String,
+        slot: PointSlot,
+        q: [f64; 2],
+        snap: Option<bool>,
     },
     /// A node commented out.
     Hide {
@@ -620,6 +652,121 @@ pub(super) fn draft(shared: &Shared, tile: &TileRef, v: DraftReq) -> super::rout
     }
 }
 
+/// `/api/tiles/ID/step`: one step of a drag or a scrub, an edit and the draft of what it made in one request.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct StepReq {
+    /// The edit, as `/api/edit` takes it (with the `read` of the text it is made to).
+    pub edit: EditReq,
+    /// A file the tile uses, instead of its own document.
+    pub file: Option<String>,
+    pub debug: Option<bool>,
+}
+
+/// What became of the draft of a step.
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub enum StepDraft {
+    /// The mesh follows the head.
+    Mesh,
+    /// The edited text has a mistake (the next check says which): no mesh.
+    Mistake,
+    /// A newer draft of the tile took its place: no mesh.
+    Superseded,
+}
+
+/// The head of a step's answer: the edit's result and the revision of its text (what the next step reads at), and
+/// what became of the draft.  The answer is this as JSON, its length in four bytes (big-endian) before it, and
+/// the draft's mesh after it.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct StepHead {
+    pub text: String,
+    pub id: Option<String>,
+    pub at: Option<usize>,
+    /// The revision of `text` (`EditReq::read` of an edit made to it, as a check's `nodesRev`).
+    pub rev: String,
+    pub draft: StepDraft,
+}
+
+/// A step: the edit is made to the text the request carries, and the answer says the new text, its revision and
+/// the draft of it (queued ahead of the full builds, as `draft` is).  The edit is refused as `/api/edit` refuses
+/// it (a stale `read` is a 409), and a draft that cannot be made of the new text does not undo the edit.
+pub(super) fn step(shared: &Shared, tile: &TileRef, v: StepReq) -> super::route::Reply {
+    let file = match tile.file(v.file.as_deref()) {
+        Ok(f) => f,
+        Err(e) => return e.into(),
+    };
+    let made = match edit(shared, v.edit) {
+        Ok(m) => m,
+        Err(e) => return e.into(),
+    };
+    let mut head = StepHead {
+        rev: text_rev(&made.text),
+        text: made.text,
+        id: made.id,
+        at: made.at,
+        draft: StepDraft::Mesh,
+    };
+    let mesh = match shared
+        .submit_draft(&tile.id, &tile.path, &file, &head.text, v.debug == Some(true))
+        .recv_timeout(Duration::from_secs(120))
+    {
+        Ok(Outcome::Mesh(mesh)) => Some(mesh),
+        Ok(Outcome::Mistake) => {
+            head.draft = StepDraft::Mistake;
+            None
+        }
+        Ok(Outcome::Superseded) => {
+            head.draft = StepDraft::Superseded;
+            None
+        }
+        Ok(Outcome::Failed(e)) => return e.reply().into(),
+        Err(e) => {
+            return fail::failure_from(
+                "500 Internal Server Error",
+                format!("the draft was not answered ({e}): the build worker may have died"),
+                &e,
+            )
+            .into();
+        }
+    };
+    let json = match serde_json::to_vec(&head) {
+        Ok(j) => j,
+        Err(e) => {
+            return fail::failure_from(
+                "500 Internal Server Error",
+                format!("cannot write the answer: {e}"),
+                &e,
+            )
+            .into();
+        }
+    };
+    let mesh = mesh.as_deref().map_or(&[][..], Vec::as_slice);
+    let mut body = Vec::with_capacity(4 + json.len() + mesh.len());
+    // a step's head is a few hundred bytes of JSON plus the text: far under 4 GiB
+    body.extend_from_slice(&u32::try_from(json.len()).unwrap_or(u32::MAX).to_be_bytes());
+    body.extend_from_slice(&json);
+    body.extend_from_slice(mesh);
+    super::route::Reply::Bytes(Arc::new(body))
+}
+
+/// The seams of the edge contract, read from the library on disk.
+fn edge_seams() -> Out<dt_doc::seams::SeamTable> {
+    match dt_eval::doc::read(&dt_eval::Library, dt_eval::doc::EDGES) {
+        Ok(r) => r.file.doc.seams.clone().ok_or_else(|| {
+            fail::failure(
+                "500 Internal Server Error",
+                "the edge contract has no `seams` block",
+            )
+        }),
+        Err(es) => Err(fail::mistakes(&es)),
+    }
+}
+
 /// The file stem for a tile name: the name as written, with only what a
 /// file name cannot hold (path separators, `:`, control characters)
 /// turned into `-`, and no leading dot.  A tile's file name is its name.
@@ -987,6 +1134,8 @@ pub(super) fn edit(_: &Shared, req: EditReq) -> Out<EditRes> {
         | EditOp::RemoveChildren { text, .. }
         | EditOp::Rename { text, .. }
         | EditOp::Arg { text, .. }
+        | EditOp::Args { text, .. }
+        | EditOp::Point { text, .. }
         | EditOp::Hide { text, .. }
         | EditOp::Set { text, .. }
         | EditOp::Fix { text, .. } => text,
@@ -1057,6 +1206,33 @@ pub(super) fn edit(_: &Shared, req: EditReq) -> Out<EditRes> {
                 value: value.kdl(),
             },
         ),
+        EditOp::Args { text, id, values } => made(text, Op::SetArgs { id, values }),
+        EditOp::Point {
+            text,
+            id,
+            slot,
+            q,
+            snap,
+        } => {
+            let table = if *snap == Some(true) {
+                Some(edge_seams()?)
+            } else {
+                None
+            };
+            let slot = match slot {
+                PointSlot::Arg(i) => dt_doc::ops::Slot::Arg(*i),
+                PointSlot::Control(name) => dt_doc::ops::Slot::Control(name),
+            };
+            made(
+                text,
+                Op::SetPoint {
+                    id,
+                    slot,
+                    q: *q,
+                    seams: table.as_ref(),
+                },
+            )
+        }
         EditOp::Hide { text, id } => made(text, Op::Hide { id }),
         EditOp::Fix { text, fix } => {
             let fixes = [dt_doc::error::Fix::from(fix)];

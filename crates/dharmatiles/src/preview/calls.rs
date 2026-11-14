@@ -99,6 +99,13 @@ pub(super) fn dispatch(shared: &Shared, path: &str, body: &[u8]) -> route::Reply
             Err(e) => e.into(),
         };
     }
+    // a step answers a head and a mesh, so it is not a row of the table either
+    if what == "step" {
+        return match request::<edit::StepReq>(path, body) {
+            Ok(r) => edit::step(shared, &tile, r),
+            Err(e) => e.into(),
+        };
+    }
     tile_post(shared, &tile, what, path, body)
         .unwrap_or_else(|| fail::refused("404 Not Found", "no such call"))
         .into()

@@ -2,7 +2,7 @@
 
 use kdl::{KdlDocument, KdlValue};
 
-use super::super::{Done, EditError, Kind, Op, Place, apply};
+use super::super::{Done, EditError, Kind, Op, Place, Slot, apply};
 use crate::error::Fix;
 use crate::nodeid;
 
@@ -717,4 +717,124 @@ fn a_nodes_properties_and_where_their_values_are() {
     assert_eq!(p[0].0, "at");
     assert_eq!(p[0].1, "\"0.5,0.5\"");
     assert_eq!(&T[p[0].2[0]..p[0].2[0] + p[0].2[1]], "\"0.5,0.5\"");
+}
+
+// ---- arguments, points -----------------------------------------------------------------------------
+
+const MAP: &str = "tile size=\"2x1\" {\n    line shore { through \"(0sq, 0.5sq)\" \"(1sq, 0.4sq)\" }  // keep\n    region pool { boundedBy shore other; fill \"(0.5sq, 0.5sq)\" }\n    stack {\n        rock at=\"(0.5sq, 0.5sq)\"\n    }\n}\n";
+
+fn table() -> crate::seams::SeamTable {
+    use crate::place::Corner;
+    use crate::seams::{Seam, SeamTable};
+    let seam = |at, w: [&str; 4]| Seam {
+        at,
+        words: w.map(str::to_owned),
+    };
+    SeamTable {
+        seams: vec![
+            seam(1.0 / 3.0, ["nnw", "ssw", "wnw", "ene"]),
+            seam(0.5, ["n", "s", "w", "e"]),
+            seam(2.0 / 3.0, ["nne", "sse", "wsw", "ese"]),
+        ],
+        corners: vec![
+            (Corner::NorthWest, "nw".into()),
+            (Corner::NorthEast, "ne".into()),
+            (Corner::SouthEast, "se".into()),
+            (Corner::SouthWest, "sw".into()),
+        ],
+    }
+}
+
+#[test]
+fn every_argument_is_replaced_in_one_write() {
+    let out = go(
+        MAP,
+        &Op::SetArgs {
+            id: "tile/region pool/boundedBy",
+            values: &["a".to_owned(), "b c".to_owned(), "d".to_owned()],
+        },
+    );
+    assert_eq!(
+        out,
+        MAP.replace("boundedBy shore other;", "boundedBy a \"b c\" d;")
+    );
+    assert!(matches!(
+        run(
+            MAP,
+            &Op::SetArgs {
+                id: "tile/region pool/boundedBy",
+                values: &[]
+            }
+        ),
+        Err(EditError::Cannot(_))
+    ));
+}
+
+#[test]
+fn a_point_is_written_by_the_program_from_where_it_is() {
+    let id = "tile/line shore/through";
+    // a free point: a pair counted from the north-west corner, rounded to the hundredth, the rest of the text as it was
+    let out = go(
+        MAP,
+        &Op::SetPoint {
+            id,
+            slot: Slot::Arg(1),
+            q: [1.2349, 0.6],
+            seams: None,
+        },
+    );
+    assert_eq!(out, MAP.replace("\"(1sq, 0.4sq)\"", "\"(1.23sq, 0.4sq)\""));
+    // a control: a thing's `at=`
+    let out = go(
+        MAP,
+        &Op::SetPoint {
+            id: "tile/stack/rock",
+            slot: Slot::Control("at"),
+            q: [1.5, 0.25],
+            seams: None,
+        },
+    );
+    assert_eq!(
+        out,
+        MAP.replace("rock at=\"(0.5sq, 0.5sq)\"", "rock at=\"(1.5sq, 0.75sq)\"")
+    );
+    // an argument that is not there is refused
+    assert!(matches!(
+        run(
+            MAP,
+            &Op::SetPoint {
+                id,
+                slot: Slot::Arg(2),
+                q: [0.0, 0.0],
+                seams: None
+            }
+        ),
+        Err(EditError::NoEntry(_))
+    ));
+}
+
+#[test]
+fn a_dragged_point_on_the_outline_keeps_the_seam_rule() {
+    let t = table();
+    let drag = |q: [f64; 2]| {
+        go(
+            MAP,
+            &Op::SetPoint {
+                id: "tile/line shore/through",
+                slot: Slot::Arg(0),
+                q,
+                seams: Some(&t),
+            },
+        )
+    };
+    // the west side of this 2x1 tile is one square: a seam is its bare word
+    assert!(drag([0.02, 0.45]).contains("through w "), "{}", drag([0.02, 0.45]));
+    // the north side is two squares: the word says which
+    assert!(drag([1.45, 0.99]).contains("n(2)"), "{}", drag([1.45, 0.99]));
+    // anywhere along an edge it is a seam, never a pair between seams
+    let s = drag([0.7, 0.0]);
+    assert!(s.contains("sse(1)") || s.contains("ssw(1)"), "{s}");
+    // a corner, then the inside: a free pair
+    assert!(drag([0.03, 0.97]).contains("through nw "), "{}", drag([0.03, 0.97]));
+    assert!(drag([0.7, 0.3]).contains("(0.7sq, 0.7sq)"));
 }

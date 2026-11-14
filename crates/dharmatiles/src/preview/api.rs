@@ -485,6 +485,12 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
         "  \"POST /api/tiles/:id/draft\": {{ req: {}; res: ArrayBuffer }};\n",
         super::edit::DraftReq::name(&all.cfg)
     ));
+    all.add::<super::edit::StepReq>();
+    all.add::<super::edit::StepHead>();
+    routes.push_str(&format!(
+        "  \"POST /api/tiles/:id/step\": {{ req: {}; res: ArrayBuffer }};\n",
+        super::edit::StepReq::name(&all.cfg)
+    ));
 }
 
 /// One event of the stream (`GET /api/events`), tagged by `type`: the page's stream reader is typed by this one

@@ -52,7 +52,7 @@ type EditReq = {
 /**
  * The `nodesRev` of the check the ids come from.
  */
-read?: string | null, } & ({ "op": "set", text: string, id: string, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, id?: string | null, } | { "op": "move", text: string, id: string, before?: string | null, } | { "op": "remove", text: string, id: string, } | { "op": "remove-children", text: string, id: string, names: Array<string>, } | { "op": "rename", text: string, id: string, new: string, } | { "op": "arg", text: string, id: string, index: number, value: Scalar, } | { "op": "hide", text: string, id: string, } | { "op": "fix", text: string, fix: FixJson, });
+read?: string | null, } & ({ "op": "set", text: string, id: string, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, id?: string | null, } | { "op": "move", text: string, id: string, before?: string | null, } | { "op": "remove", text: string, id: string, } | { "op": "remove-children", text: string, id: string, names: Array<string>, } | { "op": "rename", text: string, id: string, new: string, } | { "op": "arg", text: string, id: string, index: number, value: Scalar, } | { "op": "args", text: string, id: string, values: Array<string>, } | { "op": "point", text: string, id: string, slot: PointSlot, q: [number, number], snap?: boolean | null, } | { "op": "hide", text: string, id: string, } | { "op": "fix", text: string, fix: FixJson, });
 
 type EditRes = { text: string, id: string | null, at: number | null, };
 
@@ -503,6 +503,8 @@ list: string,
  */
 plate: number, };
 
+type PointSlot = { "arg": number } | { "control": string };
+
 type PrintedItem = { element: string, control: string, typed: string, };
 
 type PrintedReq = { text: string, items: Array<PrintedItem>, };
@@ -688,6 +690,24 @@ contract: string, rev: number, epoch: string, system: string, printer: string, p
 
 type SpanJson = { file: string, line: number, col: number, offset: number, len: number, };
 
+type StepDraft = "mesh" | "mistake" | "superseded";
+
+type StepHead = { text: string, id: string | null, at: number | null, 
+/**
+ * The revision of `text` (`EditReq::read` of an edit made to it, as a check's `nodesRev`).
+ */
+rev: string, draft: StepDraft, };
+
+type StepReq = { 
+/**
+ * The edit, as `/api/edit` takes it (with the `read` of the text it is made to).
+ */
+edit: EditReq, 
+/**
+ * A file the tile uses, instead of its own document.
+ */
+file?: string | null, debug?: boolean | null, };
+
 type StreamEvent = { "type": "snapshot" } & Snapshot | { "type": "resumed", rev: number, epoch: string, } | { "type": "tile", rev: number, tile: TileSummary, } | { "type": "progress", rev: number, id: string, progress: Progress, } | { "type": "message", rev: number, message: MessageJson, } | { "type": "tier", rev: number, key: string, docRev: number, error: string | null, 
 /**
  * The error is a mistake in the document's text (not a failure of the program).
@@ -853,6 +873,7 @@ export interface Calls {
   "POST /api/tiles/:id/export": { req: ExportReq; res: ExportRes };
   "POST /api/tiles/:id/offers": { req: OffersReq; res: OffersRes };
   "POST /api/tiles/:id/draft": { req: DraftReq; res: ArrayBuffer };
+  "POST /api/tiles/:id/step": { req: StepReq; res: ArrayBuffer };
 }
 
 /** Every read: its answer. */
