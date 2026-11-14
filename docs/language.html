@@ -392,6 +392,36 @@ tile size="2x1" seed=4 {
 <pre><code>line trail width="9dmm" wobble="3dmm" { through south "(0.65sq, 0sq)" north }</code></pre>
 <p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. <code>side=</code> along a tile edge is an error, because on an edge a wall always stands inside.</p>
 
+<h4 id="line-curve">The curve through the points</h4>
+<p>A line is one smooth curve through the points you write: a cubic B&eacute;zier from each point to the next, its handles 0.4 of the chord long, and inside the line a point&rsquo;s direction is the chord of its two neighbours. Walls, strips, regions, scatters and cliffs all follow that one curve. Where an end meets the edge of the tile, only its direction is decided: an end exactly on a side leaves along the side&rsquo;s normal, and an end exactly on a tile corner leaves along the corner&rsquo;s bisector, 45&deg; to both sides. Each end is decided on its own. A square corner partway along a bigger tile&rsquo;s side is on a side, so it leaves square to it. Two tiles that meet at the same seam therefore meet in the same direction; how much each is still bending there is not matched.</p>
+<pre data-check="skip"><code>line shore { through "(0sq, 0.5sq)" "(0.5sq, 1sq)" }          // square to the west side, square to the south side
+line knee  { through "(0sq, 0.5sq)"
+                     "(0.4sq, 0.4sq)" corner=#true
+                     "(1sq, 0.5sq)" }                               // a sharp knee on purpose
+line bend  { through "(0sq, 0.5sq)"
+                     "(0.5sq, 0.7sq)" heading="30deg" pull=0.6
+                     "(1sq, 0.5sq)" }                               // leave this point at 30deg, hold the direction 0.6 as far
+line free  ends=free { through "(0.2sq, 0.5sq)" "(0.8sq, 0.3sq)" "(1sq, 0.5sq)" }   // the ends take their direction from the next point
+line run   curve=straight { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }  // straight runs, exactly as the points say</code></pre>
+<ul>
+  <li><code>corner=#true</code> on a <code>through</code> of one point makes a sharp knee there.</li>
+  <li><code>heading=</code> on a <code>through</code> of one point is the way the line goes through it: an angle with its unit, <code>0deg</code> east, <code>90deg</code> south, like <code>polar()</code>. It is allowed on any point, and an end given one leaves that way instead of square.</li>
+  <li><code>pull=</code> on a <code>through</code> of one point is how far the curve holds its direction there, a share of the usual (1; from 0 to 3).</li>
+  <li><code>ends=free</code> on a line lets both ends take their direction from the neighbouring points. <code>ends=square</code> is the default.</li>
+  <li><code>curve=straight</code> on a line draws straight runs between the points; <code>curve=smooth</code> is the default.</li>
+</ul>
+<p>A point within 1 mm of a side but not on it is <code>dt::near-edge</code>, with a fix that moves it onto the side. A range on a point that lies on a side is <code>dt::edge-range</code>: it would draw a different place for each seed.</p>
+
+<h4 id="line-seams">Seams: where a line crosses an edge</h4>
+<p>A line may cross the edge of a square only at a <strong>seam</strong>: the same few places on every square edge, listed in the edge contract (<code>library/parts/edges.dtile</code>) and shown on the <a href="standards/tile-system.html#seams">tile system</a> page: the corners, a third, a half and two thirds. A point on a tile side that is not a seam is <code>dt::seam</code>, naming the square (<code>column 2, row 1, north side, at 0.45 is not a seam</code>) with a fix that moves it to the nearest seam on that square. Squares are named column then row, counted from 1: C1 R1 is the north-west square. Positions measure from each square&rsquo;s own corner, so a 2&times;2&rsquo;s north side has two sets of seams, one for column 1 and one for column 2. A third is written exactly, <code>1sq/3</code>, never 0.33; the point partway along a side where two squares meet is not a seam, only the tile&rsquo;s own corners are. A tile that must cross an edge elsewhere writes <code>seams=free</code>.</p>
+<p>A seam also has a word, from the table in the edge contract: on the north side <code>nnw</code>, <code>n</code> and <code>nne</code> are a third, a half and two thirds along from the west; <code>ssw s sse</code> on the south; <code>wnw w wsw</code> on the west and <code>ene e ese</code> on the east, from the north. <code>nw ne se sw</code> are the tile&rsquo;s own corners and never take a number. On a side longer than one square the word takes its square, counted from 1 from the west (north and south sides) or the north (west and east sides), and is written quoted because KDL does not allow brackets in a bare word: <code>through "nnw(2)" e</code>. On a one-square side the word stands alone (<code>e(1)</code> means the same). A bare side word on a longer side is an error that lists the numbered forms; a word that is nearly one is offered as a fix, and a point written as a number that lands exactly on a seam is as good as its word. The program keeps no list of its own: the words are in <code>library/parts/edges.dtile</code>.</p>
+<pre data-check="skip"><code>tile size="2x2" seed=1 {
+    line a { through "wnw(1)" "ese(2)" }                  // column 1, row 1's west side at a third, to column 2, row 2's east side at two thirds
+    line b { through "n(1)" "s(2)" }                      // the middle of the first column's north edge to the middle of the second's south edge
+    line c { through "(0sq, 1sq/3)" "(2sq, 5sq/3)" }      // the first line written as points
+}
+tile size="1x1" seams=free { … }                          // no seam check</code></pre>
+
 <h3 id="regions" data-explains="dt::unknown-region dt::empty-region"><!--gen:anchors--><span id="dt-unknown-region"></span><span id="dt-empty-region"></span><!--/gen:anchors-->Regions</h3>
 <p>The whole tile is the default area, so an undivided tile needs no region. A region exists when lines divide the tile. It is the paint-bucket model: name the lines that bound it, then drop one or more fill points.</p>
 <pre><code>region verge { boundedBy trail; fill "(0.15sq, 0.5sq)"; fill "(0.85sq, 0.5sq)" }</code></pre>

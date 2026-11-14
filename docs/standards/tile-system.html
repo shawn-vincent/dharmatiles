@@ -156,9 +156,21 @@
 </tbody></table></div>
 
 <h2 id="edges">Edges and orientation</h2>
-<p>A boundary between two terrains, such as a river bank, leaves the tile only at fixed points on its edges called <strong>anchors</strong>, so it lines up with the next tile. Anchors sit at 0.5 (the middle of an edge) for half-tile and corner shapes, and at 0.33 and 0.67 for corridors. Positions are measured from the north-west end of each edge: left to right along the top and bottom, top to bottom along the sides.</p>
+<p>A boundary between two terrains, such as a river bank, leaves the tile only at fixed points on its edges called <strong>seams</strong>, so it lines up with the next tile. The seams are the same on every <em>square</em> edge: a tile of several squares has them on each of its squares, so a 2&times;2&rsquo;s north side is two square edges. Positions are measured from each square&rsquo;s own corner, from the north-west end of the edge: left to right along the top and bottom, top to bottom along the sides. A line leaves a seam square to the side (and along the bisector at a tile corner), so two tiles that meet at a seam meet in the same direction.</p>
+<h3 id="seams">The seam table</h3>
+<p>Squares are named column then row, counted from 1: C1 R1 is the north-west square. A seam is written as a point, <code>"(1sq/3, 0sq)"</code> (a third is exact; 0.33 is not a seam), and on a 2&times;2 the second column&rsquo;s middle is <code>"(1.5sq, 0sq)"</code>. A point on a tile side that is not a seam is <code>dt::seam</code> with a fix that snaps it to the nearest one on that square; a tile that must cross an edge elsewhere writes <code>seams=free</code>. The table is <code>seams</code> in <code>library/parts/edges.dtile</code>, and must be the same turned a quarter (t becomes 1 &minus; t), which the program checks when it reads it.</p>
+<!-- gen:seams -->
+<div class="tbl"><table>
+<thead><tr><th>Along a square&rsquo;s edge</th><th>north</th><th>south</th><th>west</th><th>east</th><th>As a point, on a north side</th></tr></thead>
+<tbody>
+<tr><td>1/3 (a third)</td><td><code>nnw</code></td><td><code>ssw</code></td><td><code>wnw</code></td><td><code>ene</code></td><td><code>"(1/3sq, 0sq)"</code></td></tr>
+<tr><td>1/2 (half)</td><td><code>n</code></td><td><code>s</code></td><td><code>w</code></td><td><code>e</code></td><td><code>"(1/2sq, 0sq)"</code></td></tr>
+<tr><td>2/3 (two thirds)</td><td><code>nne</code></td><td><code>sse</code></td><td><code>wsw</code></td><td><code>ese</code></td><td><code>"(2/3sq, 0sq)"</code></td></tr>
+</tbody></table></div>
+<p>The tile&rsquo;s own corners: <code>nw</code> (north-west), <code>ne</code> (north-east), <code>se</code> (south-east), <code>sw</code> (south-west). They are always the tile&rsquo;s corners and take no number.</p>
+<!-- /gen:seams -->
 <figure class="diagram">
-<svg viewBox="0 0 420 300" role="img" aria-label="A square tile with its four edges named and the standard anchor positions 0.33, 0.5 and 0.67 marked">
+<svg viewBox="0 0 420 300" role="img" aria-label="A square tile with its four edges named and the seam positions 0.33, 0.5 and 0.67 marked">
   <style>
     .e{fill:var(--card);stroke:currentColor;stroke-width:2}
     .a{fill:var(--accent)}
@@ -183,16 +195,16 @@
   <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="currentColor"/></marker></defs>
   <text class="m" x="132" y="84">x, t</text>
 </svg>
-<figcaption>Anchor positions. Green: corridor points at 0.33 and 0.67. Blue: half-tile and corner points at 0.5. The origin is the top-left (north-west) corner: x runs across, down the sides is t.</figcaption>
+<figcaption>Seam positions. Green: a third and two thirds. Blue: the middle, a half. The origin is the top-left (north-west) corner: x runs across, down the sides is t.</figcaption>
 </figure>
-<p>Inside the tile a boundary may wander, but it passes exactly through its anchors. x runs east (right) along a row and y runs south (down) a column, with the origin at the top-left, north-west corner; z is up from the datum. The tile language names edges by compass (<code>north</code>, <code>south</code>, <code>east</code>, <code>west</code>) and writes positions as <code>"(across, down)"</code> with units, from the north-west corner.</p>
+<p>Inside the tile a boundary may wander, but it passes exactly through its seams. x runs east (right) along a row and y runs south (down) a column, with the origin at the top-left, north-west corner; z is up from the datum. The tile language names edges by compass (<code>north</code>, <code>south</code>, <code>east</code>, <code>west</code>) and writes positions as <code>"(across, down)"</code> with units, from the north-west corner.</p>
 
 <h2 id="edge-contract">How tiles meet</h2>
 <p>The <strong>edge contract</strong> is what every tile does at its border so that two tiles side by side meet with no step:</p>
 <ul>
 <li><strong>Ground</strong> reaches no higher than 3.4 mm at the tile edge, measured at a sharp corner; its grain runs on to the rim and is set into that height, so its high points reach it and its low points lie up to the grain's depth under it. The edge-round (0.2 mm) is cut from that corner, so the top of the ground on the edge is at most 3.2 mm and two dirt tiles meet in a faint groove. The four vertical corners are rounded 0.5 mm in plan at the 35 mm square (0.36 mm on OpenLOCK: it scales with the system like every size).</li>
 <li><strong>Water</strong> meets the edge at a calm, consistent level, so two water tiles continue each other.</li>
-<li><strong>Boundaries</strong> (banks, paths) leave the tile only at the anchor points above.</li>
+<li><strong>Boundaries</strong> (banks, paths) leave the tile only at the seams above.</li>
 <li><strong>Cliffs</strong> end in a standard end section, so cliffs of different seeds join into one run. No stone is cut at the tile edge.</li>
 <li><strong>Walls</strong> butt with a clean vertical cut at the tile edge, as DungeonBlocks walls do; courses need not line up.</li>
 </ul>
