@@ -5,6 +5,12 @@
 const NS = "http://www.w3.org/2000/svg";
 /** An attribute is text: a number or a flag is written as its text. @param {Element} el @param {string} k @param {string | number | boolean} v */
 function attr(el,k,v){ el.setAttribute(k,String(v)); }
+/** The 2D context of a canvas; a browser that gives none is said so, not left to fail at the next line. @param {HTMLCanvasElement} cv */
+function ctx2d(cv){ const c=cv.getContext("2d"); if(!c) throw new Error("This browser gave no 2D canvas for the demo."); return c; }
+/** An element the page's own markup has, by id. @param {string} id */
+function byId(id){ const e=document.getElementById(id); if(!e) throw new Error("The page has no element #"+id+"."); return e; }
+/** The demo's canvas: every demo's markup has one. @param {ParentNode} root @returns {HTMLCanvasElement} */
+function canvasIn(root){ const c=root.querySelector("canvas"); if(!c) throw new Error("The demo's markup has no canvas."); return c; }
 function rng(s){ return function(){ s|=0; s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
 function h2(i,j,s){ let h=Math.imul(i,374761393)+Math.imul(j,668265263)+Math.imul(s,1442695041)|0; h=Math.imul(h^(h>>>13),1274126177); h^=h>>>16; return (h>>>0)/4294967296; }
 function vn(x,y,s){ const i=Math.floor(x), j=Math.floor(y), fx=x-i, fy=y-j, u=fx*fx*(3-2*fx), v=fy*fy*(3-2*fy);
@@ -14,7 +20,7 @@ const smooth=(e0,e1,x)=>{ const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0))); return
 function smax(a,b,k){ const h=Math.max(k-Math.abs(a-b),0)/k; return Math.max(a,b)+h*h*k*.25; }
 /* shade a heightfield H (n x n, mm) with cell size c (mm) into canvas using colour fn */
 function shade(cv, H, n, c, colAt){
-  const off=document.createElement("canvas"); off.width=n; off.height=n; const ox=off.getContext("2d"); const img=ox.createImageData(n,n);
+  const off=document.createElement("canvas"); off.width=n; off.height=n; const ox=ctx2d(off); const img=ox.createImageData(n,n);
   const L=[-.55,-.6,.58]; const ln=Math.hypot(...L); L[0]/=ln; L[1]/=ln; L[2]/=ln;
   for(let j=0;j<n;j++) for(let i=0;i<n;i++){
     const k=j*n+i; const il=i>0?k-1:k, ir=i<n-1?k+1:k, ju=j>0?k-n:k, jd=j<n-1?k+n:k;
@@ -23,7 +29,7 @@ function shade(cv, H, n, c, colAt){
     const lam=Math.max(0,nx*L[0]+ny*L[1]+nz*L[2]); const col=colAt(i,j,k); const f=.28+.85*lam;
     img.data[k*4]=Math.min(255,col[0]*f); img.data[k*4+1]=Math.min(255,col[1]*f); img.data[k*4+2]=Math.min(255,col[2]*f); img.data[k*4+3]=255;
   }
-  ox.putImageData(img,0,0); const ctx=cv.getContext("2d"); ctx.imageSmoothingEnabled=true; ctx.drawImage(off,0,0,cv.width,cv.height);
+  ox.putImageData(img,0,0); const ctx=ctx2d(cv); ctx.imageSmoothingEnabled=true; ctx.drawImage(off,0,0,cv.width,cv.height);
 }
 /* generic stepper */
 function stepper(root, steps, draw){
@@ -37,7 +43,7 @@ function stepper(root, steps, draw){
 
 /* ---------- ROCK demo ---------- */
 (() => {
-  const root=document.getElementById("d-rock"); if(!root) return; const cv=root.querySelector("canvas");
+  const root=document.getElementById("d-rock"); if(!root) return; const cv=canvasIn(root);
   const n=240, mm=40/n; // 40 mm field
   const R=rng(11); const cx=20, cy=20, rx=12.5, ry=9.5, ht=9;
   // dome profile (never widens upward)
@@ -71,7 +77,7 @@ function stepper(root, steps, draw){
     const paint=(count)=>{ const {H,mat}=build(step,count); const cv2=cv; cv2.width=480; cv2.height=480*0.75;
       const tmp=document.createElement("canvas"); tmp.width=n; tmp.height=n;
       shade(tmp,H,n,mm,(i,j,k)=>mat[k]?[168,172,182]:(step>=4?[150,116,80]:[205,208,200]));
-      const ctx=cv.getContext("2d"); ctx.drawImage(tmp,0,n*.125,n,n*.75,0,0,cv.width,cv.height); };
+      const ctx=ctx2d(cv); ctx.drawImage(tmp,0,n*.125,n,n*.75,0,0,cv.width,cv.height); };
     if(step===1){ let c=0; const tick=()=>{ c+=2; paint(c); if(c<planes.length) anim=requestAnimationFrame(tick); }; tick(); } else paint(planes.length);
   }
   stepper(root,steps,draw);
@@ -79,15 +85,16 @@ function stepper(root, steps, draw){
 
 /* ---------- CLIFF demo ---------- */
 (() => {
-  const root=document.getElementById("d-cliff"); if(!root) return; const cv=root.querySelector("canvas"), ctx=cv.getContext("2d");
+  const root=document.getElementById("d-cliff"); if(!root) return; const cv=canvasIn(root), ctx=ctx2d(cv);
   const W=70, Hh=40, s=8; const R=rng(7);
   // target T(x): tiers + gully
   const T=[]; let x=0; const tiers=[]; while(x<W){ const w=8+R()*9; const h=[27,31,34,37][Math.floor(R()*4)]; tiers.push([x,Math.min(W,x+w),h]); x+=w; }
-  for(let i=0;i<W;i++){ const t=tiers.find(t=>i>=t[0]&&i<t[1]); let h=t[2]; if(i>=40&&i<44) h-=7; T.push(h); }
+  for(let i=0;i<W;i++){ const t=/** @type {number[]} */ (tiers.find(t=>i>=t[0]&&i<t[1])); /* the tiers cover 0..W */ let h=t[2]; if(i>=40&&i<44) h-=7; T.push(h); }
   const zone=i=>Math.exp(-((i-22)**2)/(2*36)); // shattered zone near x=22
   // gravity stack
   const S=new Array(W).fill(0);
   /** @type {Array<{x0:number,x1:number,z0:number,z1:number,k:number,col?:number,d?:number[]}>} */
+  /** @type {{x0:number,x1:number,z0:number,z1:number,k:number,col:number,d:number[]}[]} */
   const stones=[];
   for(let guard=0;guard<400;guard++){
     let best=-1,bz=1e9; for(let i=0;i<W;i++) if(S[i]<T[i]-.5 && S[i]<bz){ bz=S[i]; best=i; } if(best<0) break;
@@ -97,7 +104,7 @@ function stepper(root, steps, draw){
     let tmin=Infinity; for(let i=a;i<=b;i++) tmin=Math.min(tmin,T[i]);
     let top=bz+h; if(tmin-top<3.5) top=tmin; // merge crumb into top
     for(const st of stones){ if(st.x1>=a-1&&st.x0<=b+1 && Math.abs(st.z1-top)<1 && top<tmin) top=Math.min(tmin,top+1.6); }
-    stones.push({x0:a,x1:b+1,z0:bz,z1:top,k:stones.length}); for(let i=a;i<=b;i++) S[i]=top;
+    stones.push({x0:a,x1:b+1,z0:bz,z1:top,k:stones.length,col:0,d:[0,0,0,0]}); for(let i=a;i<=b;i++) S[i]=top;
   }
   // columns: union stones whose footprints overlap >=60%
   const par=stones.map((_,i)=>i); const f=i=>par[i]===i?i:(par[i]=f(par[i]));
@@ -141,7 +148,7 @@ function stepper(root, steps, draw){
 
 /* ---------- GRASS demo ---------- */
 (() => {
-  const root=document.getElementById("d-grass"); if(!root) return; const cv=root.querySelector("canvas"), ctx=cv.getContext("2d");
+  const root=document.getElementById("d-grass"); if(!root) return; const cv=canvasIn(root), ctx=ctx2d(cv);
   const W=70, px=cv.width/W; const th0=-.45; const R=rng(21);
   const lenses=[{x:22,y:46,a:7,b:3.2},{x:50,y:22,a:6,b:2.8}];
   const lensM=(L,x,y)=>{ const c=Math.cos(th0), s=Math.sin(th0); const dx=x-L.x, dy=y-L.y; const u=dx*c+dy*s, v=-dx*s+dy*c; return {m:Math.abs(u)/L.a+(v/L.b)**2, u, v}; };
@@ -185,8 +192,10 @@ function stepper(root, steps, draw){
 
 /* ---------- WATER demo ---------- */
 (() => {
-  const root=document.getElementById("d-water"); if(!root) return; const cv=root.querySelector("canvas");
-  const n=200, W=70, c=W/n; let mode="sc", wob=1;
+  const root=document.getElementById("d-water"); if(!root) return; const cv=canvasIn(root);
+  const n=200, W=70, c=W/n; let wob=1;
+  /** @type {string | undefined} */
+  let mode="sc";
   const xs=y=>22+3*Math.sin(y/9)+4*(fbm(3,y/14,2,3)-.5)*2;
   const rc={x:44,y:34}; const rr=a=>5*(1+.12*Math.cos(3*a+1)+.08*Math.cos(5*a));
   function train(d,lo,hi,nc,p,x,y,sharpLong){ let s=0, n2=0; for(let k=0;k<nc;k++){ const lam= nc===1?lo: lo*Math.pow(hi/lo,k/(nc-1)); const a=Math.pow(lam,1.4);
@@ -211,13 +220,13 @@ function stepper(root, steps, draw){
       let z=2.6+rel*.8*(.4+.6*rim); z=Math.max(z, 2.6-1.1+Math.log1p(Math.exp((z-1.5)*4))/4-.0); H[k]=Math.max(land,z); mat[k]= H[k]>land+1e-6?0:1; }
     shade(cv,H,n,c*0.45,(i,j,k)=>mat[k]===2?[170,172,178]:mat[k]===1?[170,140,100]:[60,150,165]); }
   root.querySelectorAll("[data-mode]").forEach(b=>b.addEventListener("click",()=>{ mode=/** @type {HTMLElement} */ (b).dataset.mode; /* a mode button is an HTML element */ root.querySelectorAll("[data-mode]").forEach(x=>attr(x,"aria-pressed",x===b)); compute(); }));
-  const sl=/** @type {HTMLInputElement} */ (document.getElementById("wob")), sv=document.getElementById("wobv"); sl.addEventListener("input",()=>{ wob=+sl.value; sv.textContent=wob.toFixed(1); compute(); });
+  const sl=/** @type {HTMLInputElement} */ (document.getElementById("wob")), sv=byId("wobv"); sl.addEventListener("input",()=>{ wob=+sl.value; sv.textContent=wob.toFixed(1); compute(); });
   compute();
 })();
 
 /* ---------- DIRT demo ---------- */
 (() => {
-  const root=document.getElementById("d-dirt"); if(!root) return; const cv=root.querySelector("canvas");
+  const root=document.getElementById("d-dirt"); if(!root) return; const cv=canvasIn(root);
   const n=220, W=35, c=W/n; const R=rng(9);
   const U=new Float32Array(n*n); for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const x=i*c,y=j*c; U[j*n+i]=1.6*smooth(.45,.85,fbm(x/9,y/9,2,3)); }
   const clods=[]; for(let t=0;t<4000&&clods.length<520;t++){ const x=R()*W,y=R()*W; const P=Math.max(.3,smooth(.35,.7,fbm(x/7,y/7,6,3))); if(R()>P) continue; const r=.35+1.15*Math.pow(R(),2); clods.push({x,y,r,h:Math.min(.45,.32*r),a:R()*6,b:R()*6,cc:R()*6}); }

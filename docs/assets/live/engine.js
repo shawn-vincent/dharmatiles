@@ -65,6 +65,7 @@ export class Engine {
     this.running = null;
     /** @type {Worker | null} */
     this.worker = null;
+    /** @type {Promise<void> | null} */
     this.started = null;
     /** @type {WebAssembly.Module | null} the compiled module, once `start` has it */
     this.module = null;
@@ -85,8 +86,7 @@ export class Engine {
 
   /** Compile the module once and bring up the worker.  Resolves when the worker has the library; rejects loudly. */
   start() {
-    this.started ??= this.#start();
-    return this.started;
+    return (this.started ??= this.#start());
   }
 
   async #start() {
@@ -107,6 +107,8 @@ export class Engine {
 
   /** A fresh worker from the already compiled module (tens of milliseconds: the engine's state is not kept). */
   #spawn() {
+    const { module, library } = this;
+    if (!module || library === null) throw new Error('The engine has no compiled module yet, so no worker can be started.');
     this.worker?.terminate();
     // a fix waiting on the worker that is stopped is lost with it: said, not left hanging
     for (const f of this.fixes.values()) f.reject(new Error('the engine was restarted before the fix was made'));
@@ -123,7 +125,7 @@ export class Engine {
         reject(err);
         this.#failRunning(err.message, '');
       };
-      Engine.post(worker, { type: 'init', module: this.module, library: this.library });
+      Engine.post(worker, { type: 'init', module, library });
     });
   }
 
@@ -135,9 +137,11 @@ export class Engine {
   async fix(text, fix) {
     await this.start();
     const id = `fix-${++this.serial}`;
+    const worker = this.worker;
+    if (!worker) throw new Error('The engine has no worker to make the fix.');
     return new Promise((resolve, reject) => {
       this.fixes.set(id, { resolve, reject });
-      Engine.post(this.worker, { type: 'fix', id, text, fix });
+      Engine.post(worker, { type: 'fix', id, text, fix });
     });
   }
 
@@ -214,6 +218,7 @@ export class Engine {
   async #run(card, job) {
     // the worker is taken from this moment, whether or not the engine is up yet: nothing else may start meanwhile
     const id = ++this.serial;
+    /** @type {NonNullable<Engine['running']>} */
     const r = { id, card, job, timer: null };
     this.running = r;
     this.#emit(card, { type: 'started', version: job.version, kind: job.kind });
@@ -228,7 +233,9 @@ export class Engine {
     // the build may have been stopped (and the worker replaced) while the engine was starting
     if (this.running !== r) return;
     r.timer = setTimeout(() => this.#failRunning(`The build took longer than ${Math.round(RUNAWAY_MS / 60000)} minutes and was stopped`, ''), RUNAWAY_MS);
-    Engine.post(this.worker, { type: "job", id, steps: job.steps, text: job.text, system: job.system, seed: job.seed, cells: job.cells, tier: job.tier });
+    const worker = this.worker;
+    if (!worker) throw new Error('The engine started but has no worker to run the build.');
+    Engine.post(worker, { type: "job", id, steps: job.steps, text: job.text, system: job.system, seed: job.seed, cells: job.cells, tier: job.tier });
   }
 
   /** Take what the worker said.  A message of a job that was stopped is not its card's any more. */
@@ -247,17 +254,19 @@ export class Engine {
     const r = this.running;
     if (!r || m.id !== r.id) return;
     const { card, job } = r;
+    const key = job.key;
+    if (key === undefined) throw new Error('A running job has no cache key (Engine.ask gives every job one).');
     const current = this.versions.get(card) === job.version;
-    const cached = this.cache.get(job.key) ?? {};
+    const cached = this.cache.get(key) ?? {};
     if (m.type === 'progress') {
       if (current) this.#emit(card, { type: 'progress', version: job.version, fraction: m.fraction, label: m.label, done: m.done, total: m.total });
     } else if (m.type === 'checked') {
-      this.#remember(job.key, { ...cached, checked: m.result });
+      this.#remember(key, { ...cached, checked: m.result });
       if (current) this.#emit(card, { type: 'checked', version: job.version, result: m.result, ms: m.ms });
     } else if (m.type === 'built') {
       const built = { meta: m.meta, positions: m.positions, colours: m.colours, stl: m.stl, ms: m.ms };
       // the cache keeps the arrays: a card that shows them copies what it needs
-      this.#remember(job.key, { ...(this.cache.get(job.key) ?? {}), built });
+      this.#remember(key, { ...(this.cache.get(key) ?? {}), built });
       if (current) this.#emit(card, { type: 'built', version: job.version, kind: job.kind, ...built, cached: false });
       this.#finish(r, current);
     } else if (m.type === 'idle') {
@@ -271,7 +280,7 @@ export class Engine {
 
   /** @param {NonNullable<Engine['running']>} r @param {boolean} current */
   #finish(r, current) {
-    clearTimeout(r.timer);
+    if (r.timer !== null) clearTimeout(r.timer);
     this.running = null;
     if (current) this.#emit(r.card, { type: 'idle', version: r.job.version, kind: r.job.kind });
     const next = this.queue.next();
@@ -281,7 +290,7 @@ export class Engine {
   /** The running build is stopped: a new worker from the compiled module.  `why` 'stopped' tells its card it can be resumed. */
   /** @param {NonNullable<Engine['running']>} r @param {string | null} why */
   #respawn(r, why) {
-    clearTimeout(r.timer);
+    if (r.timer !== null) clearTimeout(r.timer);
     this.running = null;
     if (why === 'stopped') this.#emit(r.card, { type: 'stopped', version: r.job.version, kind: r.job.kind });
     this.started = this.#spawn().then(() => undefined);

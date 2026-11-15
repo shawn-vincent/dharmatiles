@@ -14,8 +14,9 @@
     if (b) {
       const dark = s ? s === 'dark' : sys.matches;
       b.textContent = dark ? '☀' : '☾';
-      b.setAttribute('aria-label', dark ? 'Switch to Lichen & Linen' : 'Switch to Moonpool');
-      b.title = b.getAttribute('aria-label');
+      const label = dark ? 'Switch to Lichen & Linen' : 'Switch to Moonpool';
+      b.setAttribute('aria-label', label);
+      b.title = label;
     }
   };
   apply();
@@ -81,6 +82,7 @@ addEventListener('DOMContentLoaded', async () => {
     const shot = book.shots[fig.dataset.shot ?? ''];
     const frame = fig.querySelector('.frame');
     if (!shot) { console.error(`shots.json has no picture "${fig.dataset.shot}"`); continue; }
+    if (!frame) { console.error(`picture "${fig.dataset.shot}" has no .frame`); continue; }
     const pins = document.createElement('ol');
     pins.className = 'pins';
     pins.setAttribute('aria-hidden', 'true');
