@@ -70,7 +70,8 @@ fn clear_old(out: &Path) -> Result<(), String> {
     let read = |e: std::io::Error| format!("cannot read {}: {e}", out.display());
     for e in fs::read_dir(out).map_err(read)? {
         let name = e.map_err(read)?.file_name().to_string_lossy().into_owned();
-        let ours = (name.starts_with("dt_web") && (name.ends_with(".js") || name.ends_with(".wasm")))
+        let ours = (name.starts_with("dt_web")
+            && (name.ends_with(".js") || name.ends_with(".wasm")))
             || (name.starts_with("library") && name.ends_with(".json"))
             || name == "engine.json";
         if ours {
@@ -86,7 +87,8 @@ fn clear_old(out: &Path) -> Result<(), String> {
 /// There is no readable manifest in `bundle`.
 pub fn read_manifest(bundle: &Path) -> Result<EngineManifest, String> {
     let file = bundle.join("engine.json");
-    let text = fs::read_to_string(&file).map_err(|e| format!("cannot read {}: {e}", file.display()))?;
+    let text =
+        fs::read_to_string(&file).map_err(|e| format!("cannot read {}: {e}", file.display()))?;
     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", file.display()))
 }
 
@@ -209,7 +211,8 @@ pub fn run_wasm(root: &Path, args: &[String]) -> Result<(), String> {
     };
     let text = serde_json::to_string_pretty(&manifest)
         .map_err(|e| format!("cannot write engine.json: {e}"))?;
-    fs::write(out.join("engine.json"), text).map_err(|e| format!("cannot write engine.json: {e}"))?;
+    fs::write(out.join("engine.json"), text)
+        .map_err(|e| format!("cannot write engine.json: {e}"))?;
 
     // the page runs on the site, beside `assets/`: it reads the one visual system and the cards' one build worker from there
     fs::copy(root.join("web/wasm/index.html"), out.join("index.html"))

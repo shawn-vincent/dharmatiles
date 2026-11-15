@@ -52,7 +52,9 @@ pub fn full_cost(tile: &Tile) -> FullCost {
     let mut mb = if tile.has_base { BASE_MB } else { 0.0 };
     let mut cpu = if tile.has_base { BASE_CPU } else { 0.0 };
     for e in &tile.stack {
-        let Some(el) = dt_doc::schema::element(&e.what.value) else { continue };
+        let Some(el) = dt_doc::schema::element(&e.what.value) else {
+            continue;
+        };
         let c = el.cost;
         if el.name == "scatter" {
             // each thing costs what its element does; of several kinds, the average of them
@@ -60,7 +62,11 @@ pub fn full_cost(tile: &Tile) -> FullCost {
                 continue;
             }
             let n = items(e, squares);
-            let kinds = e.children.iter().filter_map(|c| dt_doc::schema::element(&c.what.value)).collect::<Vec<_>>();
+            let kinds = e
+                .children
+                .iter()
+                .filter_map(|c| dt_doc::schema::element(&c.what.value))
+                .collect::<Vec<_>>();
             #[allow(clippy::cast_precision_loss)]
             let k = kinds.len().max(1) as f64;
             mb += n * kinds.iter().map(|t| t.cost.mb).sum::<f64>() / k;
@@ -71,7 +77,10 @@ pub fn full_cost(tile: &Tile) -> FullCost {
         mb += c.mb + c.mb_per_square * squares * share;
         cpu += c.cpu + c.cpu_per_square * squares * share;
     }
-    FullCost { peak_mb: mb, cpu_secs: cpu }
+    FullCost {
+        peak_mb: mb,
+        cpu_secs: cpu,
+    }
 }
 
 #[cfg(test)]
@@ -107,15 +116,25 @@ mod tests {
     fn the_estimate_holds_to_measurements() {
         let mut off = Vec::new();
         for (path, mb, cpu) in MEASURED {
-            let c = check(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+            let c = check(&Library, path, &Options::default())
+                .unwrap_or_else(|e| panic!("{path}: {e:?}"));
             let est = full_cost(c.tile.as_ref().expect("a tile"));
             let (m, s) = (est.peak_mb / mb, est.cpu_secs / cpu);
-            println!("{path}: {:.0} MB vs {mb} ({m:.2}x), {:.1} s vs {cpu} ({s:.2}x)", est.peak_mb, est.cpu_secs);
+            println!(
+                "{path}: {:.0} MB vs {mb} ({m:.2}x), {:.1} s vs {cpu} ({s:.2}x)",
+                est.peak_mb, est.cpu_secs
+            );
             if !(1.0 / MB_FACTOR..=MB_FACTOR).contains(&m) {
-                off.push(format!("{path}: {:.0} MB estimated, {mb} measured", est.peak_mb));
+                off.push(format!(
+                    "{path}: {:.0} MB estimated, {mb} measured",
+                    est.peak_mb
+                ));
             }
             if !(1.0 / CPU_FACTOR..=CPU_FACTOR).contains(&s) {
-                off.push(format!("{path}: {:.1} s estimated, {cpu} measured", est.cpu_secs));
+                off.push(format!(
+                    "{path}: {:.1} s estimated, {cpu} measured",
+                    est.cpu_secs
+                ));
             }
         }
         assert!(off.is_empty(), "outside the factor:\n{}", off.join("\n"));
