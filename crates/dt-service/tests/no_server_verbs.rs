@@ -133,6 +133,18 @@ impl TileHost for World {
         "test".to_owned()
     }
 
+    fn home(&self) -> Result<std::path::PathBuf, Refusal> {
+        Ok(std::path::PathBuf::from("/memory/My tiles"))
+    }
+
+    fn listed(&self, dest: &Path) -> dt_service::place_calls::Listed {
+        dt_service::place_calls::Listed {
+            path: dest.to_string_lossy().into_owned(),
+            id: None,
+            tile: None,
+        }
+    }
+
     fn snapshot(&self) -> dt_service::api::Snapshot {
         let (tx, rx) = channel();
         self.core.borrow_mut().apply(Command::Snapshot(tx));

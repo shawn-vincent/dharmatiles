@@ -76,4 +76,14 @@ pub trait TileHost: CheckHost {
 
     /// Every tile's state and the rest of what a page is told, as a stream's first message holds it.
     fn snapshot(&self) -> crate::api::Snapshot;
+
+    /// My tiles: the folder a new tile or a copy of a library tile is written in (made when it is not there yet).
+    ///
+    /// # Errors
+    /// [`Refusal`]: there is no such folder and it cannot be made.
+    fn home(&self) -> Result<std::path::PathBuf, Refusal>;
+
+    /// Say that `dest` was written: list it (the host rescans its places), ask for it to be built next, and give the tile
+    /// as it now stands.
+    fn listed(&self, dest: &std::path::Path) -> crate::place_calls::Listed;
 }

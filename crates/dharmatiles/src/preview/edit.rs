@@ -73,7 +73,6 @@ pub use dt_service::api::DraftTier;
 pub use dt_service::draft_calls::{DraftReq, StepReq};
 #[cfg(test)]
 pub use dt_service::draft_calls::{StepDraft, StepHead};
-pub(super) use dt_service::edit_calls::EDIT_PATH;
 #[cfg(test)]
 pub(super) use dt_service::tile_calls::text_rev;
 pub use dt_service::tile_calls::{CheckRes, TextReq};
@@ -99,18 +98,7 @@ pub struct RenameReq {
     pub name: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct NewReq {
-    pub name: Option<String>,
-    /// Squares across and up, like `2x1`.
-    pub size: Option<String>,
-    /// The folder place and the folder in it, when not My tiles.
-    pub root: Option<usize>,
-    pub dir: Option<String>,
-}
+pub use dt_service::place_calls::NewReq;
 
 // The reading calls' types (names, tokens, checkValue, printed, printedSet) are the service's: `dt_service::read_calls`.
 pub use dt_service::read_calls::{
@@ -277,49 +265,11 @@ pub(super) fn target(shared: &Shared, v: TargetReq) -> Out<TargetRes> {
     })
 }
 
-/// The file stem for a tile name: the name as written, with only what a
-/// file name cannot hold (path separators, `:`, control characters)
-/// turned into `-`, and no leading dot.  A tile's file name is its name.
-fn file_stem(name: &str) -> String {
-    let out: String = name
-        .trim()
-        .chars()
-        .map(|c| {
-            if matches!(c, '/' | '\\' | ':') || c.is_control() {
-                '-'
-            } else {
-                c
-            }
-        })
-        .collect();
-    let out = out.trim_start_matches('.').trim();
-    if out.is_empty() {
-        "Untitled tile".to_owned()
-    } else {
-        out.to_owned()
-    }
-}
-
 pub(super) fn tile_name(name: Option<&str>) -> Result<String, Reply> {
-    let name = name.unwrap_or("").trim();
-    if name.chars().count() > 80 || name.contains(['\n', '\r']) {
-        return Err(bad("a tile name is one line of at most 80 characters"));
-    }
-    Ok(file_stem(name))
+    dt_service::place_calls::tile_name(name).map_err(super::api::refusal_reply)
 }
 
-/// Write `text` as `<stem>.dtile` in `dir`, or `<stem> 2.dtile`, … when
-/// that is taken: created new, so another file is never overwritten.
-fn write_new(
-    storage: &dyn Storage,
-    dir: &Path,
-    stem: &str,
-    text: &str,
-) -> Result<PathBuf, (&'static str, super::api::Body)> {
-    write_new_bytes(storage, dir, stem, text.as_bytes())
-}
-
-/// [`write_new`] for bytes: a copy of a document is written as it was read.
+/// A copy of a document is written as it was read: `<stem>.dtile`, or `<stem> 2.dtile`, … when that is taken.
 pub(super) fn write_new_bytes(
     storage: &dyn Storage,
     dir: &Path,
@@ -329,7 +279,7 @@ pub(super) fn write_new_bytes(
     write_new_ext(storage, dir, stem, "dtile", text)
 }
 
-/// [`write_new_bytes`] for any document extension (a print list is `dmap`).
+/// [`write_new_bytes`] for any document extension (a print list is `dmap`): see [`dt_service::place_calls::write_new`].
 pub(super) fn write_new_ext(
     storage: &dyn Storage,
     dir: &Path,
@@ -337,25 +287,8 @@ pub(super) fn write_new_ext(
     ext: &str,
     text: &[u8],
 ) -> Result<PathBuf, (&'static str, super::api::Body)> {
-    for n in 1..1000 {
-        let dest = dir.join(if n == 1 {
-            format!("{stem}.{ext}")
-        } else {
-            format!("{stem} {n}.{ext}")
-        });
-        match storage.create_new(&dest, text) {
-            Ok(()) => return Ok(dest),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => {
-                return Err(fail::failure_from(
-                    "500 Internal Server Error",
-                    format!("cannot write {}: {e}", dest.display()),
-                    &e,
-                ));
-            }
-        }
-    }
-    Err(fail::failure("500 Internal Server Error", "no free name"))
+    dt_service::place_calls::write_new(storage, dir, stem, ext, text)
+        .map_err(super::api::refusal_reply)
 }
 
 pub(super) fn listed(shared: &Shared, dest: &Path) -> Listed {
@@ -374,25 +307,33 @@ pub(super) fn listed(shared: &Shared, dest: &Path) -> Listed {
 }
 
 pub(super) fn home(shared: &Shared) -> Result<PathBuf, (&'static str, super::api::Body)> {
-    let home = shared
-        .roots()
-        .iter()
-        .find_map(|r| match &r.kind {
-            RootKind::Dir(d) => Some(d.clone()),
-            _ => None,
-        })
-        .map_or_else(
-            || personal_home().map_err(|e| fail::failure("500 Internal Server Error", e)),
-            Ok,
-        )?;
-    shared.storage.create_dir_all(&home).map_err(|e| {
-        fail::failure_from(
-            "500 Internal Server Error",
-            format!("cannot make {}: {e}", home.display()),
-            &e,
-        )
-    })?;
-    Ok(home)
+    shared.home_dir().map_err(super::api::refusal_reply)
+}
+
+impl Shared {
+    /// My tiles: the first folder place (else the personal home), made when it is not there yet.
+    pub(super) fn home_dir(&self) -> Result<PathBuf, dt_service::call::Refusal> {
+        use dt_service::call::{Refusal, Status};
+        let home = self
+            .roots()
+            .iter()
+            .find_map(|r| match &r.kind {
+                RootKind::Dir(d) => Some(d.clone()),
+                _ => None,
+            })
+            .map_or_else(
+                || personal_home().map_err(|e| Refusal::failure(Status::Internal, e)),
+                Ok,
+            )?;
+        self.storage.create_dir_all(&home).map_err(|e| {
+            Refusal::failure(
+                Status::Internal,
+                format!("cannot make {}: {e}", home.display()),
+            )
+            .caused_by(&e)
+        })?;
+        Ok(home)
+    }
 }
 
 /// Rename a tile's file in its folder.  Never over another file: a link
@@ -448,39 +389,15 @@ pub(super) fn delete(shared: &Shared, tile: &TileRef, _: Nothing) -> Out<Deleted
     })
 }
 
-/// Make a small, valid tile in My tiles and return its slot. Starting from a
-/// printable flat square gives the editor something real to select and change;
-/// every later gesture remains ordinary `.dtile` text.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
-)]
+/// Make a small, valid tile in My tiles (or in a folder of a place) and return its slot (see
+/// [`dt_service::place_calls::new_tile`]).
 pub(super) fn new_tile(shared: &Shared, v: NewReq) -> Out<Listed> {
-    // squares across, then up, as the size picker offers: 1 to 8 each way
-    let size = v.size.as_deref().unwrap_or("1x1").trim();
-    let valid = size.split_once('x').is_some_and(|(c, r)| {
-        let ok =
-            |n: &str| n.parse::<u32>().is_ok_and(|n| (1..=8).contains(&n)) && !n.starts_with('0');
-        ok(c) && ok(r)
-    });
-    if !valid {
-        return Err(bad(
-            "size must be squares across and up, like 2x1 (1 to 8 each way)",
-        ));
-    }
-    let stem = tile_name(v.name.as_deref())?;
-    // a new document is written in the current format, with its header
-    let version = dt_doc::header::stamp(env!("DT_ENGINE_VERSION"));
-    let text = format!(
-        "dharmatiles version=\"{version}\"\n\ntile size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        base\n        dirt\n    }}\n}}\n"
-    );
     // in a folder of a place (the page's folder level), else in My tiles
     let into = match places::new_tile_dir(shared, v.root, v.dir.as_deref()) {
-        Some(r) => r?,
-        None => home(shared)?,
+        Some(r) => Some(r?),
+        None => None,
     };
-    let dest = write_new(shared.storage.as_ref(), &into, &stem, &text)?;
-    Ok(listed(shared, &dest))
+    super::api::out(dt_service::place_calls::new_tile(shared, &v, into))
 }
 
 /// `/api/names` (see [`dt_service::read_calls::names`]).
@@ -536,88 +453,8 @@ pub(super) fn save(shared: &Shared, t: &TileRef, v: SaveReq) -> Out<SaveRes> {
     super::api::out(dt_service::edit_calls::save(shared, t, v))
 }
 
-/// `use "parts/grass"` in a library tile names a library file; in a copy it must say so (`use "lib:parts/grass"`).
-/// The build's files say which.  Each `use` line is one [`Op::SetArg`](dt_doc::ops::Op::SetArg) through the
-/// checked `apply`, at the node the decoder says the line is: a `use` inside a string or a comment is not one.
-fn pin_uses(
-    text: &str,
-    files: &BTreeMap<String, Option<SystemTime>>,
-    opts: &dt_eval::Options,
-) -> Result<String, Reply> {
-    use dt_doc::ops::{Kind, Op, apply_with};
-    let reader = dt_eval::Evaluated {
-        base: &dt_eval::Files,
-        path: EDIT_PATH,
-        opts,
-    };
-    let refused = |e: dt_doc::ops::EditError| refusal(&e);
-    let uses = dt_doc::uses("tile", text).map_err(|errs| {
-        fail::mistakes(&errs.iter().map(dt_eval::Diag::from).collect::<Vec<_>>())
-    })?;
-    // every id is read from the text as it is now: a SetArg changes the bytes of its own value only, and the
-    // nodes keep their ids, so the table is read once
-    let table = dt_doc::nodeid::table(text).map_err(refused)?;
-    let mut out = text.to_owned();
-    for u in &uses {
-        let target = u.path.value.as_str();
-        if target.starts_with(dt_eval::LIB) || target.starts_with('/') {
-            continue;
-        }
-        let want = format!("/{}", target.trim_end_matches(".dtile"));
-        let Some(lib) = files.keys().find(|f| {
-            f.starts_with(dt_eval::LIB)
-                && (f.trim_end_matches(".dtile").ends_with(&want)
-                    || f.trim_end_matches(".dtile") == format!("{}{}", dt_eval::LIB, &want[1..]))
-        }) else {
-            continue;
-        };
-        let Some(node) = table.iter().find(|n| n.at == u.span.offset()) else {
-            return Err(fail::failure(
-                "500 Internal Server Error",
-                format!("the decoder's `use \"{target}\"` is at a byte no node starts at"),
-            ));
-        };
-        let value = kdl::KdlValue::String(lib.trim_end_matches(".dtile").to_owned());
-        out = apply_with(
-            &reader,
-            Kind::Tile,
-            &out,
-            &Op::SetArg {
-                id: &node.id,
-                index: 0,
-                value,
-            },
-        )
-        .map_err(refused)?
-        .text;
-    }
-    Ok(out)
-}
-
-pub(super) fn mine(shared: &Shared, t: &TileRef, _: Nothing) -> Out<Listed> {
-    let (tile, files) = (t.path.as_str(), &t.files);
-    if !tile.starts_with(dt_eval::LIB) {
-        return Err(bad("only a library tile is copied"));
-    }
-    let Ok(text) = dt_eval::Files.read(tile) else {
-        return Err(fail::refused(
-            "404 Not Found",
-            format!("cannot read {tile}"),
-        ));
-    };
-    let stem = tile
-        .rsplit('/')
-        .next()
-        .unwrap_or("tile")
-        .trim_end_matches(".dtile")
-        .to_owned();
-    let dest = write_new(
-        shared.storage.as_ref(),
-        &home(shared)?,
-        &stem,
-        &pin_uses(&text, files, &shared.options())?,
-    )?;
-    Ok(listed(shared, &dest))
+pub(super) fn mine(shared: &Shared, t: &TileRef, n: Nothing) -> Out<Listed> {
+    super::api::out(dt_service::place_calls::mine(shared, t, n))
 }
 
 /// Export: the same build as `dharmatiles build` (the saved file, through
@@ -820,26 +657,6 @@ pub(super) fn reveal(_: &Shared, v: RevealReq) -> Out<Done> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_copy_points_its_uses_at_the_library() {
-        let files = BTreeMap::from([
-            ("lib:tiles/water/a.dtile".to_owned(), None),
-            ("lib:parts/grass.dtile".to_owned(), None),
-        ]);
-        let text = "// a\nuse \"parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile {}\n";
-        let opts = dt_eval::Options::default();
-        assert_eq!(
-            pin_uses(text, &files, &opts).unwrap(),
-            "// a\nuse \"lib:parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile {}\n"
-        );
-        // a `use` in a comment or a string, or written with other spacing, is judged by the decoder
-        let odd = "about \"use \\\"parts/grass\\\" x\"\n// use \"parts/grass\" y\nuse   \"parts/grass\"   lawn\ntile {}\n";
-        let got = pin_uses(odd, &files, &opts).unwrap();
-        assert!(got.contains("use   \"lib:parts/grass\"   lawn"), "{got}");
-        assert!(got.contains("// use \"parts/grass\" y"), "{got}");
-        assert!(got.contains("about \"use \\\"parts/grass\\\" x\""), "{got}");
-    }
 
     fn new_named(shared: &Shared, name: &str) -> Listed {
         new_tile(

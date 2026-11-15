@@ -30,7 +30,8 @@
 //! | the typed verb table: [`call::Verb`], [`call::Table`] | seam | here: a call is a verb and a typed request in, a typed response out; the program builds its table from `calls!` (the calls that are not about a tile) and maps the answer to an HTTP reply |
 //! | `Shared`, the build lanes, `SideJob::run`, `Cancelled`, `Superseded`, `catch_unwind` | transport | stay in the binary: the lanes take a typed job from the owner and run it on `Shared` |
 //! | the tile calls that need no transport: [`tile_calls`] (`check`), [`edit_calls`] (`edit`, `save`), [`build_calls`] (`build`) | seam | here: each is one function the program's HTTP handler and the web worker's `Service` (dt-web) both call, written on [`tile_host::TileHost`] (documents, storage, library, `want`, and a check's options and report); a refusal is a typed [`call::Refusal`] the transport maps; [`docs`] holds the documents' revisions and lock |
-//! | `tell!`, `lock`, `watch::mtime`, `fail`, the HTTP `Reply` and `Body`, the other tile verbs of `calls!` (places, plates, draft, step) and the build lanes' jobs | transport | stay in the binary; moving those handlers behind `TileHost` is what is left |
+//! | the draft, reading and place calls: [`draft_calls`] (`draft`, `step`, on the host's draft lane), [`read_calls`] (`names`, `tokens`, `checkValue`, `printed`, `printedSet`, `offers`, `about`, `elements`, `language`, `text`; the schema's JSON is [`elements_json`]), [`place_calls`] (`newTile`, `mine`) | seam | here: written on [`tile_host::TileHost`] like the others; the host also gives its `version`, the first `snapshot`, My tiles (`home`) and the listing of what was written (`listed`) |
+//! | `tell!`, `lock`, `watch::mtime`, `fail`, the HTTP `Reply` and `Body`, the places, plates and inventory handlers of `calls!` and the build lanes' jobs | transport | stay in the binary; moving those handlers behind `TileHost` is what is left |
 //!
 //! The wire types are written once, here, and `web/preview/js/api.d.ts` is generated from them (`ts-rs`), so a
 //! rename fails `tsc` in the page.
@@ -52,6 +53,7 @@ pub mod message;
 pub mod owner;
 pub mod patch;
 pub mod payload;
+pub mod place_calls;
 pub mod plan;
 pub mod queue;
 pub mod read_calls;

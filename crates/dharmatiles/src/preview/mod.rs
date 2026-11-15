@@ -227,6 +227,14 @@ impl dt_service::tile_host::TileHost for Shared {
         env!("DT_ENGINE_VERSION").to_owned()
     }
 
+    fn home(&self) -> Result<std::path::PathBuf, dt_service::call::Refusal> {
+        self.home_dir()
+    }
+
+    fn listed(&self, dest: &std::path::Path) -> dt_service::place_calls::Listed {
+        edit::listed(self, dest)
+    }
+
     fn snapshot(&self) -> dt_service::api::Snapshot {
         Self::snapshot(self)
     }

@@ -33,6 +33,7 @@ use dt_service::message::{Message, Scope};
 use dt_service::owner::{Command, Core, Outside, Setup, Subscribed};
 use dt_service::patch::Patch;
 use dt_service::payload;
+use dt_service::place_calls::{self, Listed, MINE, NEW_TILE, NewReq};
 use dt_service::queue::{Finished, Job, Taken, Taking};
 use dt_service::read_calls::{
     self, ABOUT, AboutRes, CHECK_VALUE, CheckValueReq, CheckValueRes, ELEMENTS, LANGUAGE, NAMES,
@@ -40,7 +41,7 @@ use dt_service::read_calls::{
     PrintedRes, PrintedSetReq, PrintedSetRes, TEXT, TOKENS, TextReq as FileReq, TextRes, TokensReq,
     TokensRes,
 };
-use dt_service::roots::{Root, RootKind};
+use dt_service::roots::{Role, Root, RootKind};
 use dt_service::storage::{MemStorage, Storage};
 use dt_service::tile::{Slot, tile_id};
 use dt_service::tile_calls::{self, CHECK, CheckHost, TextReq};
@@ -51,7 +52,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::{JsError, LIBRARY, MAIN, build_with, stl_sha256, system_of};
+use crate::{JsError, LIBRARY, MAIN, build_with, stage_total, stl_sha256, system_of};
 
 /// The folder the worker's tiles are listed under.
 const FOLDER: &str = "/memory/My tiles";
@@ -65,6 +66,93 @@ pub struct BuiltRes {
     pub passed: bool,
     pub stl_bytes: usize,
     pub stl_sha256: String,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    /// The page's worker hears the stream as it happens: `globalThis.dtStream(json)`, the JSON of one `StreamEvent`.  A
+    /// build runs inside one call, so its progress cannot wait for the call to end (`events()` is what the stream said
+    /// by then).
+    #[wasm_bindgen(js_namespace = globalThis, js_name = dtStream)]
+    fn js_stream(event: &str);
+}
+
+/// Nobody listens off the browser.
+#[cfg(not(target_arch = "wasm32"))]
+fn js_stream(_event: &str) {}
+
+/// A build's stages, said on the stream as they begin: the program's progress events (`dt_kit::Event`) made into the
+/// one [`dt_service::api::Progress`] the page's bar reads.
+struct StreamTicks {
+    id: String,
+    total: usize,
+    begun: std::sync::atomic::AtomicUsize,
+    label: std::sync::Mutex<String>,
+    started_ms: u64,
+}
+
+impl StreamTicks {
+    fn new(id: &str, total: usize) -> Self {
+        Self {
+            id: id.to_owned(),
+            total,
+            begun: std::sync::atomic::AtomicUsize::new(0),
+            label: std::sync::Mutex::new(String::new()),
+            started_ms: WebHost::default().now_ms(),
+        }
+    }
+
+    fn say(&self, done: usize, part: f64, label: &str) {
+        let total = self.total.max(1);
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a count of stages and a time in milliseconds, far below 2^52"
+        )]
+        let (fraction, elapsed_s) = (
+            ((done as f64 + part) / total as f64).clamp(0.0, 0.99),
+            WebHost::default().now_ms().saturating_sub(self.started_ms) as f64 / 1000.0,
+        );
+        let event = dt_service::api::StreamEvent::Progress {
+            rev: 0,
+            id: self.id.clone(),
+            progress: dt_service::api::Progress {
+                what: "building".to_owned(),
+                fraction,
+                label: label.to_owned(),
+                key: label.to_owned(),
+                count: Some(("stages".to_owned(), done, total)),
+                elapsed_s,
+                eta_s: None,
+                estimate_s: None,
+            },
+        };
+        // a reporter cannot return an error, and a tick of numbers and a label cannot fail to write: if it ever does, the
+        // console says so (where the worker picks it up) rather than dropping it unseen
+        match serde_json::to_string(&event) {
+            Ok(json) => js_stream(&json),
+            Err(e) => crate::report_console(&format!("cannot write a progress tick: {e}")),
+        }
+    }
+}
+
+impl dt_kit::Reporter for StreamTicks {
+    fn report(&self, event: &dt_kit::Event<'_>) {
+        use std::sync::atomic::Ordering::Relaxed;
+        match event {
+            dt_kit::Event::Begin { label, .. } => {
+                let n = self.begun.fetch_add(1, Relaxed);
+                (*label).clone_into(&mut self.label.lock_unpoisoned());
+                self.say(n, 0.0, label);
+            }
+            dt_kit::Event::Sub { fraction, .. } => {
+                let n = self.begun.load(Relaxed).saturating_sub(1);
+                let label = self.label.lock_unpoisoned().clone();
+                self.say(n, *fraction, &label);
+            }
+            dt_kit::Event::End { .. } => {}
+        }
+    }
 }
 
 /// The worker as the service's host: alarms are kept for the page, and time is what the page winds.
@@ -126,6 +214,8 @@ impl Host for WebHost {
 /// Everything one worker is: the store, the documents, the owner's state, the stream, and what builds came to.
 struct Inner {
     storage: Arc<MemStorage>,
+    host: Arc<WebHost>,
+    roots: Vec<Root>,
     docs: dt_service::docs::Docs,
     system: Cell<System>,
     core: RefCell<Core<WebHost>>,
@@ -171,6 +261,37 @@ impl Source for Doc<'_> {
 }
 
 impl Inner {
+    /// List what the places hold now: the tiles that are new join, the ones that are gone leave (the program's rescan, over the
+    /// store and the library the page handed over).
+    fn rescan(&self) -> Result<bool, Refusal> {
+        let found: Vec<(usize, Vec<String>)> = self
+            .roots
+            .iter()
+            .enumerate()
+            .filter_map(|(r, root)| {
+                Some((r, root.scan(self.storage.as_ref(), self.host.as_ref())?))
+            })
+            .collect();
+        let fresh: Vec<Slot> = found
+            .iter()
+            .flat_map(|(r, paths)| {
+                paths
+                    .iter()
+                    .map(|p| Slot::in_root(p, *r, self.roots[*r].group(p)))
+            })
+            .collect();
+        let seq = self.seq.get() + 1;
+        self.seq.set(seq);
+        self.ask(|reply| Command::Reconcile {
+            found,
+            fresh,
+            changed_elsewhere: false,
+            seq,
+            read: Vec::new(),
+            reply,
+        })
+    }
+
     /// Ask the owner: `make` is given where the answer goes, and the owner answers in the same step.
     fn ask<R>(&self, make: impl FnOnce(Sender<R>) -> Command<WebHost>) -> Result<R, Refusal> {
         let (tx, rx) = channel();
@@ -230,27 +351,48 @@ impl Inner {
         };
         edit(Patch::Begin);
         let files = BTreeMap::from([(facts.path.clone(), None)]);
-        let text = self
-            .storage
-            .read_text(Path::new(&facts.path))
-            .map_err(|e| {
-                Refusal::failure(
-                    dt_service::call::Status::Internal,
-                    format!("cannot read {}: {e}", facts.path),
-                )
-            })?;
-        let doc_rev = self
-            .docs
-            .read(&facts.path)
-            .map_err(|e| dt_service::docs::read_failed(&facts.path, &e))?
-            .1;
+        // a library tile is read from the library the page handed over, and has no revision to edit against
+        let (text, doc_rev) = if facts.path.starts_with(dt_eval::LIB) {
+            (
+                Lib.read(&facts.path).map_err(|e| {
+                    Refusal::failure(
+                        dt_service::call::Status::Internal,
+                        format!("cannot read {}: {e}", facts.path),
+                    )
+                })?,
+                0,
+            )
+        } else {
+            let text = self
+                .storage
+                .read_text(Path::new(&facts.path))
+                .map_err(|e| {
+                    Refusal::failure(
+                        dt_service::call::Status::Internal,
+                        format!("cannot read {}: {e}", facts.path),
+                    )
+                })?;
+            let rev = self
+                .docs
+                .read(&facts.path)
+                .map_err(|e| dt_service::docs::read_failed(&facts.path, &e))?
+                .1;
+            (text, rev)
+        };
+        // a document that does not check has no stage count: its diagnostics are the build's answer, shown below
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "permitted silence: a document that does not check has no stage count; its diagnostics are what the build answers with"
+        )]
+        let total = stage_total(&Doc { text: &text }, self.system.get()).unwrap_or(1);
+        let progress = dt_eval::Progress::new(Arc::new(StreamTicks::new(id, total)));
         match build_with(
             &Doc { text: &text },
             self.system.get(),
             None,
             0,
             Tier::Full,
-            &dt_eval::Progress::none(),
+            &progress,
             None,
         ) {
             Err(ds) => edit(Patch::BuildFailed {
@@ -342,6 +484,40 @@ impl TileHost for Ctx {
         crate::version()
     }
 
+    fn home(&self) -> Result<std::path::PathBuf, Refusal> {
+        let home = std::path::PathBuf::from(FOLDER);
+        self.inner.storage.create_dir_all(&home).map_err(|e| {
+            Refusal::failure(
+                dt_service::call::Status::Internal,
+                format!("cannot make {}: {e}", home.display()),
+            )
+        })?;
+        Ok(home)
+    }
+
+    fn listed(&self, dest: &Path) -> Listed {
+        let path = dest.to_string_lossy().into_owned();
+        let id = tile_id(&path);
+        // a rescan or a summary the owner cannot answer is a bug in the worker: the page is told by the thrown error
+        self.inner
+            .rescan()
+            .expect("the owner answers a reconcile in the same step");
+        let tile = self
+            .inner
+            .ask(|r| Command::Summary(id.clone(), r))
+            .expect("the owner answers a summary in the same step");
+        if tile.is_some() {
+            self.inner
+                .ask(|r| Command::Want(id.clone(), r))
+                .expect("the owner answers a want in the same step");
+        }
+        Listed {
+            path,
+            id: tile.as_ref().map(|_| id),
+            tile,
+        }
+    }
+
     fn snapshot(&self) -> dt_service::api::Snapshot {
         // the owner answers in the same step: a failure to is a bug in the worker, loudly
         let held = self
@@ -391,11 +567,18 @@ impl TileHost for Ctx {
 }
 
 impl Ctx {
+    /// The tile this call is about, with the files its last build read (what a copy of a library tile pins its `use`s to).
     fn tile_ref(&self) -> TileRef {
+        let id = tile_id(&self.tile);
+        let files = self
+            .inner
+            .ask(|r| Command::Facts(id.clone(), r))
+            .expect("the owner answers facts in the same step")
+            .map_or_else(BTreeMap::new, |f| f.files);
         TileRef {
-            id: tile_id(&self.tile),
+            id,
             path: self.tile.clone(),
-            files: BTreeMap::new(),
+            files,
         }
     }
 }
@@ -485,6 +668,14 @@ fn language(_: &Ctx, _: Nothing) -> Result<dt_doc::wire::LanguageJson, Refusal> 
     Ok(read_calls::language())
 }
 
+fn mine(ctx: &Ctx, req: Nothing) -> Result<Listed, Refusal> {
+    place_calls::mine(ctx, &ctx.tile_ref(), req)
+}
+
+fn new_tile(ctx: &Ctx, req: NewReq) -> Result<Listed, Refusal> {
+    place_calls::new_tile(ctx, &req, None)
+}
+
 fn text(ctx: &Ctx, req: FileReq) -> Result<Option<TextRes>, Refusal> {
     read_calls::text(ctx, &ctx.tile_ref(), req.file.as_deref())
 }
@@ -508,6 +699,8 @@ fn table() -> Table<Ctx, Refusal> {
         .with(&ELEMENTS, elements)
         .with(&LANGUAGE, language)
         .with(&TEXT, text)
+        .with(&MINE, mine)
+        .with(&NEW_TILE, new_tile)
 }
 
 /// What a call answered: JSON, or (a draft, a step) the page's bytes.
@@ -582,19 +775,30 @@ impl Service {
     pub fn new() -> Result<Self, JsError> {
         let target = options_in(&Lib, System::Db).map_err(|r| JsError::new(&r.message))?;
         let storage = Arc::new(MemStorage::default());
+        // the library the page handed over lists as the Library place: its `lib:tiles/` documents
+        let library: Vec<String> = LIBRARY.with(|l| {
+            l.borrow()
+                .keys()
+                .filter(|k| k.starts_with("lib:tiles/"))
+                .cloned()
+                .collect()
+        });
+        storage.set_library(&library.iter().map(String::as_str).collect::<Vec<_>>());
+        let roots = vec![
+            Root::new("My tiles", RootKind::Dir(Path::new(FOLDER).into())).with_role(Role::Home),
+            Root::new("Library", RootKind::Library("tiles/".to_owned())),
+        ];
+        let host = Arc::new(WebHost::default());
         let mut core = Core::new(
             Setup {
                 tiles: Vec::new(),
-                roots: vec![Root::new(
-                    "My tiles",
-                    RootKind::Dir(Path::new(FOLDER).into()),
-                )],
+                roots: roots.clone(),
                 target,
                 home: None,
                 epoch: "worker".to_owned(),
             },
             storage.clone(),
-            Arc::new(WebHost::default()),
+            host.clone(),
             Arc::new(ManualClock::default()),
         );
         let (tx, rx) = channel();
@@ -607,9 +811,11 @@ impl Service {
             .try_recv()
             .map_err(|e| JsError::new(&format!("the owner did not answer a subscription: {e}")))?;
         let docs = dt_service::docs::Docs::new(storage.clone(), None);
-        Ok(Self {
+        let service = Self {
             inner: Rc::new(Inner {
                 storage,
+                host,
+                roots,
                 docs,
                 system: Cell::new(System::Db),
                 core: RefCell::new(core),
@@ -619,7 +825,13 @@ impl Service {
                 seq: Cell::new(0),
             }),
             table: table(),
-        })
+        };
+        // the places as they stand: My tiles is empty, the Library lists the page's tiles
+        service
+            .inner
+            .rescan()
+            .map_err(|r| JsError::new(&r.message))?;
+        Ok(service)
     }
 
     /// Put a tile's text in the store at `path`: the tile is listed the first time, and a later `put` is a save
@@ -632,19 +844,9 @@ impl Service {
             .storage
             .write_text(Path::new(path), text)
             .map_err(|e| JsError::new(&format!("cannot write {path}: {e}")))?;
-        let seq = self.inner.seq.get() + 1;
-        self.inner.seq.set(seq);
-        let (tx, rx) = channel();
-        self.inner.core.borrow_mut().apply(Command::Reconcile {
-            found: Vec::new(),
-            fresh: vec![Slot::in_root(path, 0, None)],
-            changed_elsewhere: false,
-            seq,
-            read: Vec::new(),
-            reply: tx,
-        });
-        rx.try_recv()
-            .map_err(|e| JsError::new(&format!("the owner did not list {path}: {e}")))?;
+        self.inner
+            .rescan()
+            .map_err(|r| JsError::new(&format!("the owner did not list {path}: {}", r.message)))?;
         self.inner
             .core
             .borrow_mut()
@@ -665,6 +867,7 @@ impl Service {
     /// page's bytes for a draft and a step).  What the call queued (`build`) is run before this returns, and its
     /// result is on the stream (`events`).
     fn answer(&self, verb: &str, tile: &str, request: &str) -> Result<Answered, Refusal> {
+        let tile = &self.resolve(tile);
         let options = options_in(&Lib, self.inner.system.get())?;
         let ctx = Ctx {
             inner: self.inner.clone(),
@@ -699,10 +902,21 @@ impl Service {
             ELEMENTS,
             LANGUAGE,
             TEXT,
+            MINE,
+            NEW_TILE,
         ]?;
         // the worker host's turn: what the call queued is built now, and the stream says how it went
         self.inner.run_queued()?;
         Ok(answer)
+    }
+
+    /// The path of the tile `tile` names: it is a tile's id (what the page calls it by) when the owner lists one, else it is the
+    /// path itself (a call from outside, a tile not listed yet).
+    fn resolve(&self, tile: &str) -> String {
+        self.inner
+            .ask(|r| Command::Facts(tile.to_owned(), r))
+            .expect("the owner answers facts in the same step")
+            .map_or_else(|| tile.to_owned(), |f| f.path)
     }
 
     /// The refusal as the page reads it: the status and the error body, written as JSON for the thrown error.
@@ -765,6 +979,8 @@ impl Service {
     /// # Errors
     /// The answer cannot be written.
     pub fn snapshot(&self) -> Result<String, JsError> {
+        // the snapshot holds everything the stream said so far: a page that takes it is told only what comes after
+        self.inner.stream.try_iter().for_each(drop);
         let ctx = Ctx {
             inner: self.inner.clone(),
             tile: String::new(),
@@ -788,12 +1004,13 @@ impl Service {
         serde_json::to_string(b).map_err(|e| JsError::new(&format!("cannot write the answer: {e}")))
     }
 
-    /// The mesh the page reads (`dt_service::payload`'s bytes) of tile `tile`, made by the build of revision `doc_rev` of its
+    /// The mesh the page reads (`dt_service::payload`'s bytes) of tile `tile` (an id or a path), made by the build of revision `doc_rev` of its
     /// document: none when the tile's mesh is of another revision (a build is on its way) or the tile has none.
     ///
     /// # Errors
     /// The owner did not answer.
     pub fn mesh(&self, tile: &str, doc_rev: f64) -> Result<Option<Vec<u8>>, JsError> {
+        let tile = &self.resolve(tile);
         // a revision is a whole number the page counts up from 1: it travels as a JS number
         #[expect(
             clippy::cast_possible_truncation,
