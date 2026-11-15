@@ -91,7 +91,7 @@ fn thorough_every_card_builds_or_gives_the_code_it_says() {
         assert!(path.is_file(), "{page}: {src} does not exist");
         let path = path.display().to_string();
         let mut opts = Options::in_source(&Files).unwrap();
-        opts.low = true;
+        opts.tier = dt_eval::Tier::Low;
         let built = memo::build(&Files, &path, &opts);
         match (code, built) {
             (None, Ok(b)) => assert!(

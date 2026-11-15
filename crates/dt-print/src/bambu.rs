@@ -358,6 +358,21 @@ pub fn bed_centre(template: &str) -> Result<[f64; 2], String> {
 /// # Errors
 /// When the template's settings cannot be read, or it has no printable area.
 pub fn bambu_project(
+    passed: &dt_eval::Passed,
+    palette: &Palette,
+    template: &str,
+) -> Result<Vec<u8>, String> {
+    bambu_mesh(
+        &passed.export.mesh,
+        passed.materials(),
+        &passed.record,
+        palette,
+        template,
+    )
+}
+
+/// [`bambu_project`] from a mesh, private to the crate (a whole plate is only made from passed parts).
+pub(crate) fn bambu_mesh(
     mesh: &TriMesh,
     materials: &[Material],
     record: &BuildRecord,

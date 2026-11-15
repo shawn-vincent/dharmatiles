@@ -4,7 +4,7 @@
 //! Only full builds are written: a low or super-low build is not checked and
 //! is never exported ([`write_set`] refuses it, by name).
 
-use dt_eval::{Built, Diag};
+use dt_eval::{Diag, Passed};
 use dt_kit::{BuildRecord, Palette};
 
 use crate::{PlatePart, PlateSet, PlateStand};
@@ -52,18 +52,14 @@ pub type File = (String, Vec<u8>);
 fn set_of<'a>(
     plan: &'a Plan,
     layout: &Layout,
-    built: &'a [&'a Built],
+    built: &'a [Passed<'a>],
     record: &'a BuildRecord,
 ) -> PlateSet<'a> {
     let parts = plan
         .kinds
         .iter()
         .zip(built)
-        .map(|(k, b)| PlatePart {
-            name: &k.name,
-            mesh: &b.export.mesh,
-            materials: &b.materials,
-        })
+        .map(|(k, b)| PlatePart::of(&k.name, b))
         .collect();
     let mut stands = Vec::new();
     for (plate, on) in layout.plates.iter().enumerate() {
@@ -93,28 +89,17 @@ fn set_of<'a>(
 /// template's project settings (`template`).
 ///
 /// # Errors
-/// A build that was not checked (only a full build is exported), a Bambu
-/// project with no template or with one made for another bed.
+/// A Bambu project with no template or with one made for another bed.  (Only a build that passed the gate is
+/// given: see [`Passed`].)
 pub fn write_set(
     plan: &Plan,
     layout: &Layout,
-    built: &[&Built],
+    built: &[Passed],
     format: Format,
     palette: &Palette,
     template: Option<&str>,
     record: &BuildRecord,
 ) -> Result<Vec<File>, Diag> {
-    for (k, b) in plan.kinds.iter().zip(built) {
-        if !b.checked {
-            return Err(Diag::plain(
-                dt_lang::codes::PLATES,
-                format!(
-                    "{} was not built in full and is not checked: plates are never made from a draft build",
-                    k.name
-                ),
-            ));
-        }
-    }
     let set = set_of(plan, layout, built, record);
     let stem = &plan.title;
     match format {

@@ -117,8 +117,8 @@ pub(crate) fn base_key(
         .field("seed", &seed)
         .field("system", &opts.system)
         .field("printer", &opts.printer)
-        .field("draft", &opts.draft)
-        .field("low", &opts.low)
+        .field("draft", &(opts.tier == crate::Tier::Draft))
+        .field("low", &opts.tier.is_low())
         .field("edges", &edges)
         .field("fills", &fills)
         .field("foots", &foots.len());

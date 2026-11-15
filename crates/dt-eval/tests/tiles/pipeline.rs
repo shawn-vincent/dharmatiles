@@ -19,7 +19,7 @@ fn tile(body: &str) -> String {
 /// Drafts: coarser cells, a fraction of the time, the same plan.
 fn draft() -> Options {
     Options {
-        draft: true,
+        tier: dt_eval::Tier::Draft,
         ..Options::default()
     }
 }

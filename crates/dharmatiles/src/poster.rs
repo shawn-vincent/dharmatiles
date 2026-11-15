@@ -102,11 +102,13 @@ fn write_map(path: &str, opts: &dt_eval::Options, to: &Path) -> Result<(), Strin
 }
 
 fn write_png(path: &str, opts: &dt_eval::Options, png: &Path) -> Result<(), String> {
-    let built = dt_store::build_tier(
+    let built = dt_store::build_stored(
         &Files,
         path,
-        opts,
-        Tier::Full,
+        &dt_eval::Options {
+            tier: Tier::Full,
+            ..opts.clone()
+        },
         &Progress::none(),
         None,
         None,

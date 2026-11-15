@@ -224,8 +224,8 @@ pub(crate) enum Command {
         /// map) or `super-low` (a few thousand triangles).  A low tier is
         /// not yet checked: it writes the `--png` views only, never an STL
         /// or a 3MF.
-        #[arg(long, default_value = "full")]
-        tier: String,
+        #[arg(long, default_value = "full", value_parser = crate::library::tier)]
+        tier: dt_store::Tier,
     },
     /// Lay a print list (`.dmap`) out on a printer's plates and write them:
     /// one Bambu Studio project holding every plate, or one STL (or plain

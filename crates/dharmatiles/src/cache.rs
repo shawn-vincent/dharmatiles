@@ -246,11 +246,13 @@ fn stored_preview(
     path: &str,
     opts: &Options,
 ) -> Result<(dt_eval::Built, Vec<String>), Vec<dt_eval::Diag>> {
-    let mut b = dt_store::build_tier(
+    let mut b = dt_store::build_stored(
         &Files,
         path,
-        opts,
-        dt_store::Tier::SuperLow,
+        &Options {
+            tier: dt_store::Tier::SuperLow,
+            ..opts.clone()
+        },
         &Progress::none(),
         None,
         Some(store),

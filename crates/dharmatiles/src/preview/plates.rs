@@ -123,11 +123,13 @@ fn shown(shared: &Shared, plan: &Plan, k: usize, want_full: bool) -> Result<Show
     let opts = plan.options(k, &shared.options(), shared.home.as_deref())?;
     let kind = &plan.kinds[k];
     let full = want_full || full_kept(shared, &kind.path, &opts);
-    let built = dt_store::build_tier(
+    let built = dt_store::build_stored(
         &Files,
         &kind.path,
-        &opts,
-        if full { Tier::Full } else { Tier::Low },
+        &dt_eval::Options {
+            tier: if full { Tier::Full } else { Tier::Low },
+            ..opts
+        },
         &dt_eval::Progress::none(),
         None,
         shared.store.as_deref(),
@@ -804,10 +806,11 @@ fn rebuild_plates(
         });
         match shown(shared, &plan, k, true) {
             Ok(p) => {
-                let opts = plan
-                    .options(k, &shared.options(), shared.home.as_deref())
-                    .ok();
-                let f = opts.map_or_else(Vec::new, |o| p.built.audit.failures(&o.printer));
+                let opts = match plan.options(k, &shared.options(), shared.home.as_deref()) {
+                    Ok(o) => o,
+                    Err(e) => return fail_with(Some(&list), e, Scope::Build),
+                };
+                let f = p.built.verdict(&opts.printer).reasons().to_vec();
                 if !f.is_empty() {
                     failing.push((k, f));
                 }
@@ -1128,18 +1131,21 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
         system: s.system.clone(),
         printer: s.machine.name.clone(),
     };
-    let refs: Vec<&Built> = builds.built.iter().collect();
-    let files = match plates::export::write_set(
-        &plan,
-        &layout,
-        &refs,
-        fmt,
-        &palette,
-        tpl.as_deref(),
-        &record,
-    ) {
-        Ok(f) => f,
-        Err(e) => return Err(report_err(&[e])),
+    // a piece that failed the gate is never written: the plates wait for it to pass
+    let files = match builds.passed() {
+        Some(passed) => match plates::export::write_set(
+            &plan,
+            &layout,
+            &passed,
+            fmt,
+            &palette,
+            tpl.as_deref(),
+            &record,
+        ) {
+            Ok(f) => f,
+            Err(e) => return Err(report_err(&[e])),
+        },
+        None => Vec::new(),
     };
     let out = edit::export_dir(&path)
         .map(|o| o.join("plates").join(&plan.title))
@@ -1162,7 +1168,7 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
         written.push(p.display().to_string());
     }
     let failing: Vec<String> = builds
-        .failures
+        .gate()
         .iter()
         .enumerate()
         .flat_map(|(k, f)| {
@@ -1173,33 +1179,36 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
         })
         .collect();
     say(shared, &id, Scope::Export, |name| {
-        let mut out = vec![
-            Message::new(
-                Kind::Export,
-                Severity::Info,
-                Scope::Export,
-                &id,
-                name,
-                format!(
-                    "Exported {} plate{} ({} piece{}) for the {}: {}",
-                    layout.plates.len(),
-                    if layout.plates.len() == 1 { "" } else { "s" },
-                    layout.pieces(),
-                    if layout.pieces() == 1 { "" } else { "s" },
-                    s.machine.label(),
-                    written
-                        .iter()
-                        .map(|f| f.rsplit('/').next().unwrap_or(f))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-            )
-            .data(MessageData::PlateFiles(PlateFilesData {
-                files: written.clone(),
-                format: fmt.word().to_owned(),
-                build_s: t0.elapsed().as_secs_f64(),
-            })),
-        ];
+        let mut out = Vec::new();
+        if !written.is_empty() {
+            out.push(
+                Message::new(
+                    Kind::Export,
+                    Severity::Info,
+                    Scope::Export,
+                    &id,
+                    name,
+                    format!(
+                        "Exported {} plate{} ({} piece{}) for the {}: {}",
+                        layout.plates.len(),
+                        if layout.plates.len() == 1 { "" } else { "s" },
+                        layout.pieces(),
+                        if layout.pieces() == 1 { "" } else { "s" },
+                        s.machine.label(),
+                        written
+                            .iter()
+                            .map(|f| f.rsplit('/').next().unwrap_or(f))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                )
+                .data(MessageData::PlateFiles(PlateFilesData {
+                    files: written.clone(),
+                    format: fmt.word().to_owned(),
+                    build_s: t0.elapsed().as_secs_f64(),
+                })),
+            );
+        }
         for f in &failing {
             out.push(
                 Message::new(

@@ -655,11 +655,13 @@ pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
             shared.rev_of(&path),
             "",
             move |shared, cancel| {
-                Ok(dt_store::build_tier(
+                Ok(dt_store::build_stored(
                     &Files,
                     &path,
-                    &opts,
-                    Tier::Low,
+                    &Options {
+                        tier: Tier::Low,
+                        ..opts
+                    },
                     &dt_eval::Progress::new(std::sync::Arc::new(super::queue::Cancelled(
                         std::sync::Arc::clone(cancel),
                     ))),

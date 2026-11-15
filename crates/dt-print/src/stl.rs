@@ -1,13 +1,28 @@
 //! The binary STL writer.  The build record is `dt_kit::BuildRecord`; its
 //! one-line summary is the STL header.
 
+use dt_eval::Passed;
 use dt_geom::TriMesh;
 use dt_kit::BuildRecord;
 
-/// **write_stl**: binary STL bytes of `mesh` (float32 positions, normals
-/// from those positions).
+/// **write_stl**: binary STL bytes of a build that passed the gate (float32
+/// positions, normals from those positions).  A build that was not checked
+/// or failed cannot be written: there is no `Passed` to give.
+///
+/// ```compile_fail
+/// fn write(built: &dt_eval::Built) -> Vec<u8> {
+///     dt_print::stl(built)
+/// }
+/// ```
 #[must_use]
-pub fn stl(mesh: &TriMesh, record: &BuildRecord) -> Vec<u8> {
+pub fn stl(passed: &Passed) -> Vec<u8> {
+    mesh_stl(&passed.export.mesh, &passed.record)
+}
+
+/// The bytes of a plate: a mesh made of passed builds, laid out (see
+/// [`crate::plateset`]).  Private to the crate: a whole plate is only made
+/// from a set of [`Passed`] parts.
+pub(crate) fn mesh_stl(mesh: &TriMesh, record: &BuildRecord) -> Vec<u8> {
     let mut out = Vec::with_capacity(84 + 50 * mesh.triangles.len());
     out.extend_from_slice(&record.header());
     out.extend_from_slice(

@@ -3,7 +3,7 @@
 #![allow(clippy::unwrap_used, clippy::print_stderr)]
 
 use dt_eval::{Built, Library, Options};
-use dt_store::{Tier, build_tier};
+use dt_store::{Tier, build_stored};
 
 /// Six library tiles that between them hold every element a tier draws
 /// differently: grass, soil, a wall, water, a tree and a cliff.
@@ -18,11 +18,13 @@ const SIX: &[&str] = &[
 
 fn made(path: &str, tier: Tier) -> (Built, f64) {
     let t = std::time::Instant::now();
-    let b = build_tier(
+    let b = build_stored(
         &Library,
         path,
-        &Options::default(),
-        tier,
+        &Options {
+            tier,
+            ..Options::default()
+        },
         &dt_eval::Progress::none(),
         None,
         None,
@@ -101,11 +103,13 @@ fn the_three_tiers_are_three_entries() {
     let dir = temp("keys");
     let store = dt_store::Store::new(&dir, "test-engine");
     let go = |tier| {
-        build_tier(
+        build_stored(
             &Library,
             GRASS,
-            &Options::default(),
-            tier,
+            &Options {
+                tier,
+                ..Options::default()
+            },
             &dt_eval::Progress::none(),
             None,
             Some(&store),

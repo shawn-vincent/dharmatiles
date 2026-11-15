@@ -529,7 +529,7 @@ impl<'a> Plan<'a> {
             land_mm: self.solved.by_entry[i].map_or(0.0, |b| self.solved.bodies[b].land_mm),
             calm_mm: self.solved.calm_mm,
             under: self.under.get(i).and_then(Option::as_ref),
-            draft: self.opts.draft,
+            draft: self.opts.tier == crate::Tier::Draft,
             crowns: Some(&self.crowns),
         }
     }
@@ -609,7 +609,7 @@ impl<'a> Plan<'a> {
         let (c, tile) = (self.c, self.tile);
         let mut scene = Scene::new(c.frame, Seed::new(c.seed));
         scene.set_progress(progress.clone());
-        scene.set_low(self.opts.low);
+        scene.set_low(self.opts.tier.is_low());
         let want = dt_kit::debug::Collect {
             clouds: self.opts.clouds,
             marks: self.opts.debug,
@@ -741,7 +741,7 @@ impl<'a> Plan<'a> {
                 (e.what.value.as_str(), style)
             })),
         };
-        let (mesh, mats) = if opts.draft || opts.low {
+        let (mesh, mats) = if !opts.tier.checked() {
             scene.soup_since(0)
         } else {
             scene.union()
@@ -758,7 +758,7 @@ impl<'a> Plan<'a> {
             max_deg: opts.printer.steepest_deg,
             ..dt_kit::HangBand::DEFAULT
         };
-        let (export, audit) = if opts.draft || opts.low {
+        let (export, audit) = if !opts.tier.checked() {
             // the base is the same in every draft: its sockets are not flagged
             let base = u16::try_from(tile.stack.len()).unwrap_or(NO_ENTRY);
             let skip: Vec<bool> = entry_in.iter().map(|&e| e == base).collect();
@@ -803,7 +803,7 @@ impl<'a> Plan<'a> {
                 record,
                 out: out_path(path, &opts.target()),
                 footprint,
-                checked: !(opts.draft || opts.low),
+                checked: opts.tier.checked(),
             },
             report: Report {
                 stages: std::iter::once(self.plan_stage.clone())
@@ -844,7 +844,7 @@ impl<'a> Plan<'a> {
         };
         // a low build keeps to its budget: a cliff's carving is more than a
         // map can show
-        Ok(if opts.low {
+        Ok(if opts.tier.is_low() {
             crate::tiers::thin_built(built, crate::tiers::LOW_BUDGET)
         } else {
             built

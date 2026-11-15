@@ -554,13 +554,13 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
 }
 
 /// A draft: the text the page holds, built quickly (see
-/// [`dt_eval::Options::draft`]) and answered to whoever asked.  A newer draft
+/// [`dt_eval::Tier::Draft`]) and answered to whoever asked.  A newer draft
 /// of the same tile, or the tile leaving the list, stops it at its next
 /// progress report.
 fn draft(shared: &Arc<Shared>, d: &queue::Draft, opts: &Options) {
     use queue::Outcome;
     let opts = Options {
-        draft: true,
+        tier: dt_eval::Tier::Draft,
         ..opts.clone()
     };
     let src = edit::Overlay(BTreeMap::from([(d.file.clone(), d.text.clone())]));

@@ -90,8 +90,12 @@ fn hash_low(text: &str) -> Vec<(String, u64)> {
 
 fn hash_of(text: &str, low: bool) -> Vec<(String, u64)> {
     let draft = Options {
-        draft: true,
-        low,
+        tier: if low {
+            dt_eval::Tier::Low
+        } else {
+            dt_eval::Tier::Draft
+        },
+        cells: low.then_some(dt_eval::DRAFT_CELLS),
         ..legacy()
     };
     let b = memo::build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));

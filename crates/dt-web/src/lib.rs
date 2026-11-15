@@ -22,7 +22,7 @@ use dt_doc::paths::HEIGHTS;
 use dt_doc::schema::{OPENLOCK_SQUARE_MM, SQUARE_MM};
 use dt_doc::units::Units;
 use dt_eval::FixJson;
-use dt_eval::{Diag, Options, Source};
+use dt_eval::{Diag, Options, Source, Tier};
 use dt_value::{Rng, Seed};
 use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
@@ -621,33 +621,6 @@ pub struct BuildMeta {
     pub record: Option<dt_eval::TileRecord>,
 }
 
-/// How finely a build is made, the program's own tiers ([`Options::draft`], [`Options::low`]): `full` is what the printer is
-/// given, `draft` the editor's view while a value is dragged (coarse cells, no union, no gate), `low` the browsing tier (grass
-/// as a carpet, rocks as hulls).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Tier {
-    Full,
-    Draft,
-    Low,
-}
-
-impl Tier {
-    /// The tier a page names.
-    ///
-    /// # Errors
-    /// A word that is no tier.
-    pub fn named(word: &str) -> Result<Self, JsError> {
-        match word {
-            "full" => Ok(Self::Full),
-            "draft" => Ok(Self::Draft),
-            "low" => Ok(Self::Low),
-            other => Err(JsError::new(&format!(
-                "unknown detail `{other}` (full, draft or low)"
-            ))),
-        }
-    }
-}
-
 /// One build, as the program does it: the text of a document, a build
 /// target, a seed (negative keeps the tile's own) and cells per square (0
 /// keeps the build's finest).  The one function the browser and the native
@@ -664,8 +637,7 @@ pub fn build_with(
     progress: &dt_eval::Progress,
 ) -> Result<(dt_eval::Built, Options), Vec<Diag>> {
     let mut opts = Options::in_source(source)?;
-    opts.draft = tier == Tier::Draft;
-    opts.low = tier == Tier::Low;
+    opts.tier = tier;
     system.clone_into(&mut opts.system);
     opts.seed = u64::try_from(seed).ok();
     opts.cells = (cells > 0).then_some(cells);
@@ -773,8 +745,8 @@ fn ticks(total: usize) -> dt_eval::Progress {
 /// The STL of a build, and the hash the parity check compares: SHA-256 of
 /// everything after the 80-byte header.
 #[must_use]
-pub fn stl_sha256(built: &dt_eval::Built) -> (String, usize) {
-    stl_hash(&dt_print::stl(&built.export.mesh, &built.record))
+pub fn stl_sha256(passed: &dt_eval::Passed) -> (String, usize) {
+    stl_hash(&dt_print::stl(passed))
 }
 
 /// The hash of an STL file already made.
@@ -801,7 +773,7 @@ pub fn build_tile(
     tier: &str,
 ) -> Result<Tile, JsError> {
     units_for(system)?;
-    let tier = Tier::named(tier)?;
+    let tier = tier.parse::<Tier>().map_err(|e| JsError::new(&e))?;
     LIBRARY.with(|lib| {
         let lib = lib.borrow();
         if !lib.contains_key(HEIGHTS) {
@@ -856,8 +828,14 @@ pub fn build_tile(
                 colours.extend_from_slice(&c);
             }
         }
-        let stl_file = dt_print::stl(&built.export.mesh, &built.record);
-        let (stl_sha256, stl_bytes) = stl_hash(&stl_file);
+        // only a build that passed the gate has an STL: a draft, a low build or a failing one has none
+        let stl_file = built
+            .verdict(&opts.printer)
+            .passed()
+            .map(|p| dt_print::stl(&p));
+        let (stl_sha256, stl_bytes) = stl_file
+            .as_deref()
+            .map_or_else(|| (String::new(), 0), stl_hash);
         let build_s = built.report.stage_secs.iter().map(|s| s.1).sum();
         let meta = BuildMeta {
             built: true,
@@ -870,8 +848,8 @@ pub fn build_tile(
         };
         Ok(Tile {
             meta: json(&meta)?,
-            stl: if tier == Tier::Full && cells == 0 {
-                stl_file
+            stl: if cells == 0 {
+                stl_file.unwrap_or_default()
             } else {
                 Vec::new()
             },
@@ -1116,11 +1094,15 @@ mod tests {
             &dt_eval::Progress::none(),
         )
         .unwrap();
-        let (hash, bytes) = stl_sha256(&built);
+        let verdict = built.verdict(&opts.printer);
+        let passed = verdict.passed();
+        let (hash, bytes) = passed
+            .as_ref()
+            .map_or_else(|| (String::new(), 0), stl_sha256);
         println!(
             "PARITY {tile} {system} seed={seed} cells={cells}: sha256={hash} bytes={bytes} triangles={} failures={:?} secs={:.2}",
             built.audit.triangles,
-            built.audit.failures(&opts.printer),
+            verdict.reasons(),
             t0.elapsed().as_secs_f64()
         );
     }

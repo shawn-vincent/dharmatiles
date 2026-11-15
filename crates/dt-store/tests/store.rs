@@ -71,10 +71,11 @@ fn same(a: &Built, b: &Built) {
         format!("{:?}", b.report.debug)
     );
     assert_eq!(a.colours(), b.colours());
-    assert_eq!(
-        dt_print::stl(&a.export.mesh, &a.record),
-        dt_print::stl(&b.export.mesh, &b.record)
-    );
+    // the same bytes as files, for builds that passed the gate
+    let printer = &Options::default().printer;
+    if let (Some(pa), Some(pb)) = (a.verdict(printer).passed(), b.verdict(printer).passed()) {
+        assert_eq!(dt_print::stl(&pa), dt_print::stl(&pb));
+    }
 }
 
 #[test]
@@ -256,7 +257,7 @@ fn any_input_change_misses() {
     );
     // the tier
     let draft = Options {
-        draft: true,
+        tier: Tier::Draft,
         ..Options::default()
     };
     differs(
@@ -291,7 +292,7 @@ fn any_input_change_misses() {
     dt_eval::check(&tracked, "mem/t.dtile", &opts).unwrap();
     assert!(format!("{:?}", tracked.reads()).contains("mem/p.dtile"));
     assert_eq!(base.slot().len(), 16);
-    assert_eq!(Tier::of(&draft).name(), "draft");
+    assert_eq!(draft.tier.name(), "draft");
 }
 
 #[test]
@@ -496,7 +497,7 @@ fn the_draft_tier_has_its_own_entries() {
     let store = Store::new(&dir, "test-engine");
     let full = Options::default();
     let draft = Options {
-        draft: true,
+        tier: Tier::Draft,
         ..Options::default()
     };
     let d = stored(&store, &Library, FLAT, &draft);

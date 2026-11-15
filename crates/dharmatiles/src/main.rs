@@ -180,13 +180,6 @@ fn main() -> ExitCode {
             no_cache,
             tier,
         } => {
-            let tier = match library::tier(&tier) {
-                Ok(t) => t,
-                Err(e) => {
-                    tell!("error: {e}");
-                    return ExitCode::from(ERROR);
-                }
-            };
             if tier != dt_store::Tier::Full && threemf {
                 tell!(
                     "error: --tier {} is not yet checked and is never exported: --3mf needs the full tier",
@@ -223,7 +216,7 @@ fn main() -> ExitCode {
             };
             let out = out_dir(out);
             let opts = match options(&system, &printer, seed) {
-                Ok(o) => o,
+                Ok(o) => dt_eval::Options { tier, ..o },
                 Err(e) => {
                     tell!("error: {e}");
                     return ExitCode::from(ERROR);
@@ -253,7 +246,6 @@ fn main() -> ExitCode {
                     palette: &palette,
                     cache: None,
                     store: store.as_ref(),
-                    tier,
                 },
                 json,
             )

@@ -142,7 +142,7 @@ fn token_of(r: &Running) -> String {
 fn tier_want(tile: &str, tier: &str) -> tiers::TierWant {
     tiers::TierWant {
         tile: tile.to_owned(),
-        tier: tier.to_owned(),
+        tier: tier.parse().unwrap(),
         seed: None,
         system: None,
         printer: None,
@@ -3051,11 +3051,13 @@ mod stored {
     fn a_stored_preview_shows_until_the_full_build_lands() {
         let dir = temp("preview");
         let store = dt_store::Store::new(&dir, "test");
-        dt_store::build_tier(
+        dt_store::build_stored(
             &dt_eval::Files,
             FLAT,
-            &Options::default(),
-            dt_store::Tier::SuperLow,
+            &Options {
+                tier: dt_store::Tier::SuperLow,
+                ..Options::default()
+            },
             &dt_eval::Progress::none(),
             None,
             Some(&store),
@@ -3623,12 +3625,17 @@ fn the_tiers_route_refuses_a_bad_want_by_name() {
             },
         )
     };
-    let (head, v) = ask(tier_want(&id, "huge"));
+    // a draft is a tier, but not one a map wants
+    let (head, v) = ask(tier_want(&id, "draft"));
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     assert!(
         format!("{v:?}").contains("a tier is low, super-low or full"),
         "{v:?}"
     );
+    // a word that is no tier cannot be written by the request type: the wire's own refusal
+    let huge = format!(r#"{{"scope":"thumbs","wants":[{{"tile":{id:?},"tier":"huge"}}]}}"#);
+    let (head, _) = post_raw(&r, "/api/tiers/want", Some(&token), None, &huge);
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     let (head, v) = ask(tiers::TierWant {
         system: Some("zz".to_owned()),
         ..tier_want(&id, "low")

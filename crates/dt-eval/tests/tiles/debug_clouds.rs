@@ -139,7 +139,7 @@ fn thorough_a_grove_draws_a_span_for_every_branch_tip() {
 #[test]
 fn with_the_layer_off_nothing_is_collected() {
     let draft = Options {
-        draft: true,
+        tier: dt_eval::Tier::Draft,
         ..Options::default()
     };
     let b = memo::build(

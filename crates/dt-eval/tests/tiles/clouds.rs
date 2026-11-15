@@ -386,7 +386,7 @@ fn real_dirt(top: &str) -> String {
 /// time).
 fn hash(text: &str) -> Vec<(String, u64)> {
     let draft = Options {
-        draft: true,
+        tier: dt_eval::Tier::Draft,
         ..Options::default()
     };
     let b = memo::build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));

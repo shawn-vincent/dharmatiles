@@ -184,7 +184,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             cells_per_square: cells,
             ..frame
         }
-    } else if opts.draft {
+    } else if opts.tier == crate::Tier::Draft {
         Frame {
             cells_per_square: DRAFT_CELLS,
             ..frame

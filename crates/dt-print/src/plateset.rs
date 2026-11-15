@@ -15,6 +15,7 @@ use dt_geom::TriMesh;
 
 use crate::bambu::{bed_corners, esc, settings};
 use crate::threemf::{byte, filament_of, filaments, paint_code, zip};
+use dt_eval::Passed;
 use dt_kit::{BuildRecord, Material, Palette};
 
 /// One built mesh, with each triangle's material.
@@ -23,9 +24,21 @@ pub struct PlatePart<'a> {
     /// What it is called (the tile's name).
     pub name: &'a str,
     /// The mesh as written.
-    pub mesh: &'a TriMesh,
+    pub(crate) mesh: &'a TriMesh,
     /// Each triangle's material.
-    pub materials: &'a [Material],
+    pub(crate) materials: &'a [Material],
+}
+
+impl<'a> PlatePart<'a> {
+    /// A build that passed the gate, as a part of a plate: the only way to make one.
+    #[must_use]
+    pub fn of(name: &'a str, passed: &Passed<'a>) -> Self {
+        Self {
+            name,
+            mesh: &passed.built().export.mesh,
+            materials: passed.materials(),
+        }
+    }
 }
 
 /// One copy of a part on a plate.
@@ -167,7 +180,7 @@ fn baked(set: &PlateSet, plate: usize) -> TriMesh {
 /// One plate as a binary STL: every piece on it, in one mesh.
 #[must_use]
 pub fn plate_stl(set: &PlateSet, plate: usize) -> Vec<u8> {
-    crate::stl::stl(&baked(set, plate), set.record)
+    crate::stl::mesh_stl(&baked(set, plate), set.record)
 }
 
 /// The paint code of each material of a part, by the project's filaments.

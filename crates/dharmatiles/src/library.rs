@@ -91,10 +91,8 @@ pub(crate) fn options(system: &str, printer: &str, seed: Option<u64>) -> Result<
 /// # Errors
 /// A word that is none of them.
 pub(crate) fn tier(word: &str) -> Result<dt_store::Tier, String> {
-    match word {
-        "full" => Ok(dt_store::Tier::Full),
-        "low" => Ok(dt_store::Tier::Low),
-        "super-low" => Ok(dt_store::Tier::SuperLow),
+    match word.parse::<dt_store::Tier>() {
+        Ok(t) if t != dt_store::Tier::Draft => Ok(t),
         _ => Err(format!(
             "`{word}` is not a tier: use `full`, `low` or `super-low`"
         )),

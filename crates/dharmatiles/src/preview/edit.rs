@@ -1477,9 +1477,11 @@ fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<ExportRes> {
         palette: &palette,
         cache: None,
         store: shared.store.as_deref(),
-        tier: dt_store::Tier::Full,
     };
-    let opts = shared.options();
+    let opts = dt_eval::Options {
+        tier: dt_store::Tier::Full,
+        ..shared.options()
+    };
     let target = opts.target();
     let t0 = std::time::Instant::now();
     let mut b = match dt_store::build_stored(
@@ -1509,8 +1511,15 @@ fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<ExportRes> {
     }
     let built_s = t0.elapsed().as_secs_f64();
     let record = dt_eval::TileRecord::of(&b, &opts.printer, built_s);
-    let files = crate::build::write(&b, &record, &out, extras)
-        .map_err(|e| fail::failure("500 Internal Server Error", e))?;
+    let files = crate::build::write(
+        &b,
+        &b.verdict(&opts.printer),
+        &record,
+        &out,
+        extras,
+        opts.tier,
+    )
+    .map_err(|e| fail::failure("500 Internal Server Error", e))?;
     let written: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     let id = tile_id(tile);
     shared.report(&id, messages::Scope::Export, |name| {

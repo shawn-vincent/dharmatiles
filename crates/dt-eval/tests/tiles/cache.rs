@@ -39,8 +39,8 @@ fn through(src: &Memory, path: &str, opts: &Options, cache: &Cache) -> Result<Bu
 /// tier's rocks, grass and trees).
 fn draft() -> Options {
     Options {
-        draft: true,
-        low: true,
+        tier: dt_eval::Tier::Low,
+        cells: Some(dt_eval::DRAFT_CELLS),
         ..Options::default()
     }
 }
@@ -216,7 +216,7 @@ fn the_debug_layer_is_not_in_the_key_but_a_scene_without_it_is_not_given_to_a_bu
     // a draft at full detail: the low tier's grass is a carpet with no blades
     // to leave marks
     let plain = Options {
-        draft: true,
+        tier: dt_eval::Tier::Draft,
         ..Options::default()
     };
     let layer = Options {
