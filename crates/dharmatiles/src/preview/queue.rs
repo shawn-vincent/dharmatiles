@@ -184,8 +184,13 @@ impl Queue {
     /// The files looked at when `finished` builds had ended; out of date when more have ended since.
     pub(super) fn set_changed(&mut self, finished: u64, ids: BTreeSet<TileId>) {
         if finished == self.finished {
-            self.changed = ids;
+            self.changed.extend(ids);
         }
+    }
+
+    /// Tiles whose files the program itself changed.
+    pub(super) fn add_changed(&mut self, ids: impl IntoIterator<Item = TileId>) {
+        self.changed.extend(ids);
     }
 
     /// Ask for tile `id` to be built next.
@@ -446,10 +451,7 @@ impl Shared {
                 self.owner.ask(|done| Command::Withdraw(ticket, done));
                 // one sent before the owner took the request back is waiting here; the request taken back is
                 // dropped, so an empty channel is a disconnected one: nothing came
-                match rx.try_recv() {
-                    Ok(t) => Some(t),
-                    Err(mpsc::TryRecvError::Empty | mpsc::TryRecvError::Disconnected) => None,
-                }
+                rx.try_iter().next()
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 panic!("the state owner stopped while a lane waited for work")

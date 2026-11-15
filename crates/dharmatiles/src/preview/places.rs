@@ -774,11 +774,9 @@ fn trashed(
     path: Option<String>,
 ) -> Out<Trashed> {
     let to = into_trash(shared, from)?;
-    let undo = {
-        let mut kept = lock(&shared.trashed);
-        kept.push((from.to_path_buf(), to));
-        kept.len() - 1
-    };
+    let undo = shared
+        .owner
+        .ask(|r| super::owner::Command::Trash(from.to_path_buf(), to, r));
     Ok(Trashed {
         rev: rescanned(shared),
         dir,
@@ -809,7 +807,9 @@ pub(super) fn trash_tile(shared: &Shared, tile: &super::api::TileRef, _: Nothing
 
 /// `POST /api/trash/undo` `{undo}`: what was trashed goes back where it was, when that place is free.
 pub(super) fn undo_trash(shared: &Shared, req: TrashUndoReq) -> Out<Restored> {
-    let entry = lock(&shared.trashed).get(req.undo).cloned();
+    let entry = shared
+        .owner
+        .ask(|r| super::owner::Command::Trashed(req.undo, r));
     let Some((from, to)) = entry else {
         return Err(refuse(
             "404 Not Found",

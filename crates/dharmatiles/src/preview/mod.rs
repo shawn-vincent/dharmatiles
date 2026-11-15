@@ -36,9 +36,12 @@
 //! are rescanned every second: new tiles join the list, deleted ones leave
 //! it.
 //!
-//! Worker threads take the queue's jobs (one full build at a time, a draft
-//! beside it) and, as `watch` does, poll the modification time of every file a build read, rebuilding the
-//! tile when one changes.  Each build pushes the plan pass first (the
+//! One thread, the [`owner`], holds the tiles, the event stream, the places, the target and the queue; the
+//! connections and the workers send it typed commands and wait on a reply where they need one, so there is no lock
+//! order to keep.  Worker threads wait on the owner for the queue's jobs (one full build at a time, a draft beside
+//! it); the owner answers the moment there is one.  A save the program makes tells the owner at once; the one
+//! polling there is (`worker::watch`, every [`POLL`]) looks at the modification time of every file a build read, as
+//! `watch` does, for a change made outside the program, rebuilding the tile when one changes.  Each build pushes the plan pass first (the
 //! tile's size and stack, from `check`, before any geometry), then
 //! the finished mesh.  Errors are pushed with their file, line and column.
 
@@ -299,7 +302,7 @@ enum Change {
 
 /// The listeners and the changes they have been sent.  Every change to
 /// the list or a tile takes the next revision; progress events ride on
-/// the current one.  Locked after the tiles (never before).
+/// the current one.  Held by the [`owner`] alone.
 struct Events {
     rev: u64,
     log: VecDeque<(u64, Change)>,
@@ -358,8 +361,6 @@ pub struct Shared {
     settings: Option<std::path::PathBuf>,
     /// The Trash a tile or folder is moved to; none where there is none known.
     trash: Option<std::path::PathBuf>,
-    /// What is put in the Trash, for an Undo that names it by number: (where it was, where it is).
-    trashed: Mutex<Vec<(std::path::PathBuf, std::path::PathBuf)>>,
     /// How a folder is chosen for a new place.
     picker: Picker,
     /// This run's secret: the editor's calls carry it (see `route`).
@@ -373,9 +374,6 @@ pub struct Shared {
     /// unchanged opens from it, and an earlier build of one that changed
     /// shows while the new one runs.  None: no disk cache (the tests').
     store: Option<Arc<dt_store::Store>>,
-    /// The inventory as the last snapshot told it, so a change made
-    /// outside the program (the file edited by hand) is told too.
-    inventory_seen: Mutex<Option<crate::inventory_wire::InventoryState>>,
     /// The tiers the page wants of a map's pieces, what is building and what is built ([`tiers`]).
     tier_book: Mutex<tiers::TierBook>,
     /// A tile's size and seed as a map's piece reads them, by tile, seed, system and the file's time ([`scene`]).
@@ -462,9 +460,10 @@ impl Shared {
                 .collect()
         });
         let epoch = edit::token()[..12].to_owned();
+        let owner = owner::Owner::start(tiles, roots, opts.clone(), home_env(), epoch.clone());
         let me = Self {
             home: None,
-            owner: owner::Owner::start(tiles, roots, opts.clone(), home_env(), epoch.clone()),
+            owner: owner.clone(),
             epoch,
             take_seq: std::sync::atomic::AtomicU64::new(1),
             cache: None,
@@ -473,16 +472,14 @@ impl Shared {
             read_seq: std::sync::atomic::AtomicU64::new(1),
             settings: None,
             trash: None,
-            trashed: Mutex::new(Vec::new()),
             picker: Picker::Native,
             token: edit::token(),
             sketch_seq: std::sync::atomic::AtomicU64::new(0),
             build_caches: Mutex::new(VecDeque::new()),
             store: None,
-            inventory_seen: Mutex::new(None),
             tier_book: Mutex::new(tiers::TierBook::default()),
             scene_checks: Mutex::new(BTreeMap::new()),
-            docs: docs::Docs::default(),
+            docs: docs::Docs::telling(owner),
         };
         me.rescan();
         me
@@ -791,12 +788,8 @@ impl Shared {
         // the inventory is the page's too: edited by hand, or by the command line, it is told
         let inventory_changed = {
             let now = inventory::snapshot(self.home.as_deref());
-            let mut seen = lock(&self.inventory_seen);
-            let differs = seen.as_ref() != Some(&now);
-            if differs {
-                *seen = Some(now);
-            }
-            differs
+            self.owner
+                .ask(|r| owner::Command::SeeInventory(Box::new(now), r))
         };
         // the tiles the owner has, so only a new one is read for its size (the disk is read here, not there)
         let have: BTreeSet<(usize, String)> =
@@ -812,15 +805,14 @@ impl Shared {
             }
         }
         let (seq, read) = self.resources_read(false);
-        let changed = self.owner.ask(|reply| owner::Command::Reconcile {
+        self.owner.ask(|reply| owner::Command::Reconcile {
             found,
             fresh,
             changed_elsewhere: folders_changed || inventory_changed,
             seq,
             read,
             reply,
-        });
-        changed
+        })
     }
 
     /// Change tile `id` and tell every listening browser; a tile that is

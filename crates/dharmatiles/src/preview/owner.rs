@@ -1,24 +1,30 @@
 //! The owner of the editor's state: one thread holds the tiles and the event stream, and everything else asks it.
 //!
-//! **What it owns.**  The list of tiles (every [`Slot`]) and the event stream ([`Events`]: the listeners, the log
-//! of changes a stream resumes from, the messages, and what each resource was last told as).  Nothing else reads or
-//! writes either: a transport (an HTTP connection, the worker lanes, a route) holds an [`Owner`], sends it a typed
-//! [`Command`] and, when it needs an answer, waits on the reply channel that came with the command.  The commands
-//! are applied one at a time, in the order they were sent, so there is no lock order: a change and the event that
-//! tells it are one step of the owner, and no listener can fall between them.
+//! **What it owns.**  The list of tiles (every [`Slot`]), the event stream ([`Events`]: the listeners, the log of
+//! changes a stream resumes from, the messages, and what each resource was last told as), the places (the roots and
+//! their folders), the build target, the build queue (what lanes wait for, and the lanes that wait), the Trash's
+//! numbers and the inventory last seen.  Nothing else reads or writes any of them: a transport (an HTTP connection,
+//! the worker lanes, a route) holds an [`Owner`], sends it a typed [`Command`] and, when it needs an answer, waits on
+//! the reply channel that came with the command.  The commands are applied one at a time, in the order they were sent,
+//! so there is no lock order: a change and the event that tells it are one step of the owner, and no listener can
+//! fall between them.  After every command the owner gives the lanes that wait the work there now is for them
+//! ([`Core::dispatch`]): a lane never wakes to look.
 //!
 //! **What it never does.**  It never blocks on a build, reads the disk or takes a lock another thread holds while it
 //! waits on this one.  Long work (a build, a scan of the folders, a read of the inventory) runs on the caller's or a
 //! worker's thread and reaches the owner as a command carrying its result ([`Command::Reconcile`],
 //! [`Command::Publish`], [`Command::Edit`]); what a command needs from the disk (a resource's value, a new tile's
-//! size) is read before it is sent.  So the owner can move, as it is, into a crate that knows neither HTTP nor the
-//! disk.
+//! size) is read before it is sent, and a value read before one already told is dropped (`Command::Publish`'s
+//! `seq`).  The one look at the disk for a change the program did not make is [`Shared::look_for_changes`], made by
+//! one watcher thread every `POLL`; a change the program makes itself arrives as a command ([`Command::Saved`]).  So
+//! the owner can move, as it is, into a crate that knows neither HTTP nor the disk.
 //!
-//! **What stays outside, and why.**  The build caches (`Shared::build_caches`) and the disk [`dt_store::Store`] are
-//! shared between the build threads for speed: a build reads and fills them from many threads at once, and a
-//! command round trip for each stage would cost more than the builds save.  The places (`roots`, `folders`), the
-//! target, the queue of builds and the tier book are still behind their own locks in `Shared`; each is a leaf (held
-//! alone, never with another), and they move into the owner one at a time.
+//! **What stays outside, and why.**  The build caches (`Shared::build_caches`), the scene checks and the disk
+//! [`dt_store::Store`] are shared between the build threads for speed: a build reads and fills them from many
+//! threads at once, and a command round trip for each stage would cost more than they save.  Not yet moved, each
+//! behind its own lock and held alone (so no order): the tier book (the kept tier meshes, what is wanted of them and
+//! the jobs in flight) and the gate that serialises a change of the places.  `tests/state_is_owned.rs` names every
+//! lock that is allowed.
 //!
 //! **The one closure.**  [`Command::Edit`] carries a function over one [`Slot`]: the build changes a dozen
 //! different fields of a tile, and each is told in the same step as it is made.  Every other command is plain
@@ -43,6 +49,11 @@ pub(super) struct Core {
     /// `$HOME`, as the places say it.
     home: Option<String>,
     pub(super) queue: queue::Queue,
+    /// What is put in the Trash, for an Undo that names it by number: (where it was, where it is).
+    trashed: Vec<(std::path::PathBuf, std::path::PathBuf)>,
+    /// The inventory as the last scan told it, so a change made outside the program (the file edited by hand) is told
+    /// too.
+    inventory_seen: Option<crate::inventory_wire::InventoryState>,
     epoch: String,
 }
 
@@ -176,8 +187,17 @@ pub(super) enum Command {
         since: Option<u64>,
         reply: Sender<Subscribed>,
     },
+    /// What is in the Trash under this number.
+    Trashed(
+        usize,
+        Sender<Option<(std::path::PathBuf, std::path::PathBuf)>>,
+    ),
     // ---- writes
     Edit(TileId, EditFn),
+    /// Something was moved to the Trash (where it was, where it is): answers the number its Undo goes by.
+    Trash(std::path::PathBuf, std::path::PathBuf, Sender<usize>),
+    /// The inventory as it is now: answers whether it differs from the last one seen.
+    SeeInventory(Box<crate::inventory_wire::InventoryState>, Sender<bool>),
     /// Tile `id` is asked for; false when it is not listed.
     Want(TileId, Sender<bool>),
     /// A draft joins the queue; answered once it has (so the older one is already answered).
@@ -192,6 +212,9 @@ pub(super) enum Command {
     },
     Withdraw(u64, Sender<()>),
     Finish(queue::Finished),
+    /// A document file was written by the program (a save, an edit through the editor): the tiles that read it are
+    /// built again now, without waiting for the look at the files.
+    Saved(String),
     /// The tiles whose files changed on disk, as the look at them (taken when `finished` builds had ended) found.
     Changed {
         finished: u64,
@@ -254,6 +277,7 @@ pub(super) enum Command {
 }
 
 /// A handle on the owner: what a transport holds.  Cheap to share; the owner stops when the last is dropped.
+#[derive(Clone)]
 pub(super) struct Owner {
     tx: Sender<Command>,
 }
@@ -281,6 +305,8 @@ impl Owner {
             target,
             home,
             queue: queue::Queue::default(),
+            trashed: Vec::new(),
+            inventory_seen: None,
             epoch,
         };
         // the thread ends with the last handle: `recv` fails once every sender is gone
@@ -373,6 +399,18 @@ impl Core {
             Command::Queued(r) => reply(&r, self.queue.count()),
             #[cfg(test)]
             Command::SideWaiting(r) => reply(&r, self.queue.side_waiting()),
+            Command::Trashed(n, r) => reply(&r, self.trashed.get(n).cloned()),
+            Command::Trash(from, to, r) => {
+                self.trashed.push((from, to));
+                reply(&r, self.trashed.len() - 1);
+            }
+            Command::SeeInventory(now, r) => {
+                let differs = self.inventory_seen.as_ref() != Some(&*now);
+                if differs {
+                    self.inventory_seen = Some(*now);
+                }
+                reply(&r, differs);
+            }
             Command::Want(id, r) => {
                 let idle = self.slot(&id).map(|t| t.status == State::Idle);
                 if idle == Some(true) {
@@ -401,6 +439,17 @@ impl Core {
             }
             Command::Finish(done) => self.queue.finish(done),
             Command::Changed { finished, ids } => self.queue.set_changed(finished, ids),
+            Command::Saved(path) => {
+                let hit: Vec<TileId> = self
+                    .tiles
+                    .iter()
+                    .filter(|t| {
+                        t.status != State::Idle && (t.path == path || t.files.contains_key(&path))
+                    })
+                    .map(|t| t.id.clone())
+                    .collect();
+                self.queue.add_changed(hit);
+            }
             Command::Paths(r) => reply(
                 &r,
                 self.tiles
@@ -546,7 +595,10 @@ impl Core {
                     self.reconcile(found, fresh, changed_elsewhere, seq, read),
                 );
             }
-            Command::RemoveRoot(i, r) => reply(&r, self.remove_root(i)),
+            Command::RemoveRoot(i, r) => {
+                self.remove_root(i);
+                reply(&r, ());
+            }
             #[cfg(test)]
             Command::Inspect(f) => f(self),
         }

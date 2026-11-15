@@ -25,6 +25,7 @@ mod inventory;
 mod map_wire;
 mod messages_wire;
 mod plates;
+mod state_is_owned;
 
 struct Running {
     addr: std::net::SocketAddr,

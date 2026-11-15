@@ -8,9 +8,9 @@
 //! under the lock: a text that is not the one the `Doc` last wrote or read
 //! was changed from outside (a text editor, another program), and that is a
 //! new revision too.  So a revision names one text, and a higher one is
-//! a later one, whoever made the change.  The worker's polling of modified
-//! times reads a changed file through [`Docs::read`], which is how an
-//! outside change gets its revision.
+//! a later one, whoever made the change.  A write the program makes is told to the owner at once
+//! ([`Docs::telling`]); the watcher's look at modified times, for a change made outside it, reads a changed file
+//! through [`Docs::read`], which is how an outside change gets its revision.
 //!
 //! An edit made against a revision (`expect`) is refused with a 409 (and the
 //! current text and revision) when the file has moved on; an edit that names
@@ -27,6 +27,8 @@ use super::{fail, lock};
 #[derive(Default)]
 pub(super) struct Docs {
     docs: Mutex<HashMap<String, Arc<Doc>>>,
+    /// Told of every file the program writes, so the tiles that read it are built again at once.
+    saved: Option<super::owner::Owner>,
 }
 
 /// One document: its revision and what it last held, behind the lock.
@@ -63,6 +65,14 @@ pub(super) struct Edited {
 }
 
 impl Docs {
+    /// Documents whose every write is told to the owner ([`super::owner::Command::Saved`]).
+    pub(super) fn telling(owner: super::owner::Owner) -> Self {
+        Self {
+            docs: Mutex::default(),
+            saved: Some(owner),
+        }
+    }
+
     fn doc(&self, path: &str) -> Arc<Doc> {
         Arc::clone(lock(&self.docs).entry(path.to_owned()).or_default())
     }
@@ -124,6 +134,9 @@ impl Docs {
             })?;
             st.hash = Some(dt_eval::doc::text_hash(&after));
             st.rev += 1;
+            if let Some(owner) = &self.saved {
+                owner.send(super::owner::Command::Saved(path.to_owned()));
+            }
         }
         Ok((
             Edited {
