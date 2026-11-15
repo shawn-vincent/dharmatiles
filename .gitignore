@@ -18,6 +18,8 @@ __pycache__/
 docs/*.3mf
 reference/*
 !reference/README.html
+# our own look references (outside projects stay ignored)
+!reference/cliffs/
 
 # the page checker (web/preview, `npm install` there)
 node_modules
