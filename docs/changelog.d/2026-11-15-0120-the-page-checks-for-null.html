@@ -1,0 +1,1 @@
+<li><strong>The map is checked where it is drawn:</strong> the overlay and its geometry read the program's <code>TileMap</code> instead of untyped values, and the page's tests draw the program's own whole map (a fixture the program writes, held to the Rust type by a test) instead of hand-made fragments. <code>npm test</code> now type-checks the tests too.</li>
