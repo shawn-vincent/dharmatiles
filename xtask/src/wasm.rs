@@ -114,15 +114,17 @@ fn path_with_llvm() -> Result<std::ffi::OsString, String> {
     std::env::join_paths(dirs).map_err(|e| format!("cannot extend PATH: {e}"))
 }
 
-/// `cargo check` of `crates` for the browser.
+/// `cargo clippy` of `crates` for the browser, warnings refused: what compiles for the program must compile, and lint
+/// clean, for the browser too (a lint that fires on one pointer width only shows here).
 pub fn check_crates(root: &Path, crates: &[&str]) -> Result<(), String> {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(root)
         .env("PATH", path_with_llvm()?)
-        .args(["check", "--target", TARGET]);
+        .args(["clippy", "--target", TARGET]);
     for c in crates {
         cmd.args(["-p", c]);
     }
+    cmd.args(["--", "-D", "warnings"]);
     run(&mut cmd).map_err(|e| {
         format!(
             "{} no longer compile for {TARGET} (is the target installed: `rustup target add {TARGET}`?): {e}",

@@ -11,7 +11,11 @@ pub(super) enum Fail {
     Drape,
 }
 
-#[expect(clippy::large_enum_variant, reason = "short-lived, one per root")]
+// the variant is large only where pointers are 8 bytes: on wasm32 the lint does not fire, so the expectation is for 64-bit
+#[cfg_attr(
+    target_pointer_width = "64",
+    expect(clippy::large_enum_variant, reason = "short-lived, one per root")
+)]
 pub(super) enum Outcome {
     Placed(TriMesh, V),
     Branch,

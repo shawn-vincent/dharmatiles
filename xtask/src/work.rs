@@ -452,6 +452,11 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             }),
         ));
         steps.push((
+            "cargo xtask wasm --check: the crates the browser builds, linted for the browser".into(),
+            budget::step::WASM_CHECK,
+            Box::new(|| crate::wasm::check(root)),
+        ));
+        steps.push((
             "cargo xtask parity --too-big: a tile too big for the browser stops saying so, never a memory fault".into(),
             budget::step::TOO_BIG,
             Box::new(|| {
