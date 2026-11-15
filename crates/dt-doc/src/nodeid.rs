@@ -301,18 +301,22 @@ pub fn plain_of(written: &str) -> String {
     if !(t.starts_with('"') || t.starts_with("#\"")) {
         return t.to_owned();
     }
-    // one string argument: a document of a node with that one entry
-    let one = format!("n {t}")
-        .parse::<kdl::KdlDocument>()
-        .ok()
-        .and_then(|doc| {
-            let node = doc.nodes().first()?;
-            let [e] = node.entries() else { return None };
-            e.name()
-                .is_none()
-                .then(|| e.value().as_string().map(str::to_owned))?
-        });
-    one.unwrap_or_else(|| t.to_owned())
+    // one string argument: a document of a node with that one entry.  `written` is a slice of a document the
+    // program decoded, so it always reads as KDL: a failure here is the program's mistake, said loudly, never the
+    // quoted text handed back as if it were the words
+    let doc = match format!("n {t}").parse::<kdl::KdlDocument>() {
+        Ok(doc) => doc,
+        Err(e) => panic!("a value the program decoded does not read as KDL again: {t}: {e}"),
+    };
+    // several entries (`"0,0" "1,0"`) or a named one are not one string: their text as written is what they say
+    let one = doc.nodes().first().and_then(|node| match node.entries() {
+        [e] if e.name().is_none() => e.value().as_string().map(str::to_owned),
+        _ => None,
+    });
+    match one {
+        Some(words) => words,
+        None => t.to_owned(),
+    }
 }
 
 /// The properties written on the node at byte `offset`: each name, its value as written, and the value's byte
