@@ -330,10 +330,10 @@ function histogram() {
       svg += `<line x1="${x}" x2="${x}" y1="${y(0)}" y2="${Math.max(yy, T)}" stroke="#B83B2E" stroke-width="3"/>`;
     }
     const tick = (x, label, anchor) => `<text x="${x}" y="${H - 14}" font-size="11" text-anchor="${anchor}" fill="currentColor">${label}</text>`;
-    svg += tick(L, `${r.lo_mm.toFixed(2)} mm`, "start") + tick(W - R, `${r.hi_mm.toFixed(2)} mm`, "end");
+    svg += tick(L, `${r.loMm.toFixed(2)} mm`, "start") + tick(W - R, `${r.hiMm.toFixed(2)} mm`, "end");
     svg += `<text x="${L + iw / 2}" y="${H - 2}" font-size="10.5" text-anchor="middle" fill="currentColor" fill-opacity=".7">bars: your draws · line: the program's own odds (${r.function})</text>`;
     $("hist").innerHTML = svg;
-    $("rngfacts").innerHTML = `<span>as written <b>${esc(r.written)}</b> dmm</span><span>ends <b>${r.lo_dmm.toFixed(2)} to ${r.hi_dmm.toFixed(2)}</b> dmm</span><span>mean <b>${r.mean_dmm.toFixed(3)}</b> dmm</span><span>${r.draws.toLocaleString()} draws in <b>${fmt(ms)}</b></span>`;
+    $("rngfacts").innerHTML = `<span>as written <b>${esc(r.written)}</b> dmm</span><span>ends <b>${r.loDmm.toFixed(2)} to ${r.hiDmm.toFixed(2)}</b> dmm</span><span>mean <b>${r.meanDmm.toFixed(3)}</b> dmm</span><span>${r.draws.toLocaleString()} draws in <b>${fmt(ms)}</b></span>`;
   } catch (e) {
     // a value that is not a range is the program's refusal, shown here; anything else is loud
     const text = String(e && e.message ? e.message : e);
@@ -430,7 +430,7 @@ function done(m) {
       <dt>55 to 65&deg; (orange)</dt><dd>${f(k.band_mm2)} mm&sup2; of ${f(k.band_budget_mm2)} allowed</dd>
       <dt>detail</dt><dd>${k.cells ? k.cells + " cells a square" : "the build's own finest"}</dd>
       <dt>stages</dt><dd>${stages}</dd>
-      <dt>STL sha-256</dt><dd>${k.stl_sha256.slice(0, 16)}&hellip; (${k.stl_bytes.toLocaleString()} bytes)</dd>
+      <dt>STL sha-256</dt><dd>${k.stlSha256.slice(0, 16)}&hellip; (${k.stlBytes.toLocaleString()} bytes)</dd>
     </dl>`;
   $("s-build").textContent = `${(m.ms / 1000).toFixed(2)} s`;
   window.lastBuild = k;

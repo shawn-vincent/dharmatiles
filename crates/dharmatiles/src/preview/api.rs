@@ -376,7 +376,7 @@ macro_rules! calls {
                 reads.push_str(&format!("  \"GET {}\": {};\n", $gpath, <$gres>::name(&all.cfg)));
             )*
             crate::preview::api::extra_types(&mut all, &mut routes);
-            all.finish(&routes, &reads)
+            crate::preview::api::finish(&all, &routes, &reads)
         }
     };
 }
@@ -405,82 +405,29 @@ impl TileRef {
     }
 }
 
-/// The types of the contract, gathered with everything they name.
+/// The gatherer of the contract's types is `dt_doc::contract::Contract`, shared with the site's engine contract.
 #[cfg(test)]
-pub(super) struct Collect {
-    pub cfg: ts_rs::Config,
-    seen: std::collections::BTreeSet<std::any::TypeId>,
-    decls: std::collections::BTreeMap<String, String>,
-    /// The Rust type behind each TypeScript name: two types with one name would leave the page one of them, unsaid.
-    named: std::collections::BTreeMap<String, &'static str>,
-}
+pub(super) use dt_doc::contract::Contract as Collect;
 
+/// The head of the generated file, then every declaration the calls name, then the route tables.
 #[cfg(test)]
-impl Default for Collect {
-    fn default() -> Self {
-        Self {
-            // JSON numbers are numbers: the page has no bigint
-            cfg: ts_rs::Config::default().with_large_int("number"),
-            seen: std::collections::BTreeSet::new(),
-            decls: std::collections::BTreeMap::new(),
-            named: std::collections::BTreeMap::new(),
-        }
-    }
-}
-
-#[cfg(test)]
-impl Collect {
-    pub(super) fn add<T: ts_rs::TS + 'static + ?Sized>(&mut self) {
-        if !self.seen.insert(std::any::TypeId::of::<T>()) {
-            return;
-        }
-        // a builtin (a number, a string, an array) has no declaration of its own
-        if T::output_path().is_some() {
-            let name = T::ident(&self.cfg);
-            let decl = T::decl(&self.cfg);
-            let rust = std::any::type_name::<T>();
-            // two Rust types may share a name only when they say the same thing to the page (ts-rs's own JSON
-            // value and serde_json's; a generic type's instances)
-            if let Some(was) = self.decls.get(&name) {
-                assert_eq!(
-                    was, &decl,
-                    "two types are `{name}` in the page contract ({} and {rust}), and the page would see one of them: rename one",
-                    self.named[&name]
-                );
-            }
-            self.named.insert(name.clone(), rust);
-            self.decls.insert(name, decl);
-        }
-        struct V<'a>(&'a mut Collect);
-        impl ts_rs::TypeVisitor for V<'_> {
-            fn visit<U: ts_rs::TS + 'static + ?Sized>(&mut self) {
-                self.0.add::<U>();
-            }
-        }
-        T::visit_dependencies(&mut V(self));
-    }
-
-    pub(super) fn finish(self, routes: &str, reads: &str) -> String {
-        let mut out = String::from(
-            "// Generated from crates/dharmatiles/src/preview (api.rs and the types it names) by\n\
-             // `DT_CONTRACT=write cargo test -p dharmatiles --bins the_page_contract_is_current`.\n\
-             // Do not edit: a test fails when this file is not what the Rust types say.\n\n\
-             ",
-        );
-        for d in self.decls.values() {
-            out.push_str(d);
-            out.push_str("\n\n");
-        }
-        out.push_str("/** Every call that writes: its request body and its answer. */\nexport interface Calls {\n");
-        out.push_str(routes);
-        out.push_str("}\n\n/** Every read: its answer. */\nexport interface Reads {\n");
-        out.push_str(reads);
-        out.push_str(
-            "}\n\n/** The request body of call `R`. */\nexport type Req<R extends keyof Calls> = Calls[R][\"req\"];\n\n\
-             /** The answer of call `R`. */\nexport type Res<R extends keyof Calls> = Calls[R][\"res\"];\n",
-        );
-        out
-    }
+pub(super) fn finish(all: &Collect, routes: &str, reads: &str) -> String {
+    let mut out = String::from(
+        "// Generated from crates/dharmatiles/src/preview (api.rs and the types it names) by\n\
+         // `DT_CONTRACT=write cargo test -p dharmatiles --bins the_page_contract_is_current`.\n\
+         // Do not edit: a test fails when this file is not what the Rust types say.\n\n\
+         ",
+    );
+    out.push_str(&all.declarations());
+    out.push_str("/** Every call that writes: its request body and its answer. */\nexport interface Calls {\n");
+    out.push_str(routes);
+    out.push_str("}\n\n/** Every read: its answer. */\nexport interface Reads {\n");
+    out.push_str(reads);
+    out.push_str(
+        "}\n\n/** The request body of call `R`. */\nexport type Req<R extends keyof Calls> = Calls[R][\"req\"];\n\n\
+         /** The answer of call `R`. */\nexport type Res<R extends keyof Calls> = Calls[R][\"res\"];\n",
+    );
+    out
 }
 
 /// Types and routes that are in the contract without being a table row: the

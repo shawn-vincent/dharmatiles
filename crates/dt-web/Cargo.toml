@@ -24,6 +24,11 @@ miette.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+# The TypeScript of the engine's answers (docs/assets/live/engine-wire.d.ts): made by this crate's tests only, so the
+# browser build carries no more of ts-rs than dt-eval's own derives bring
+[dev-dependencies]
+ts-rs.workspace = true
+
 # The browser's Manifold (wasm-cxx-shim) only for the browser: on the host,
 # where `cargo test --workspace` builds dt-web beside the program, the engine
 # and Manifold are the program's own, built once.

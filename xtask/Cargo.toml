@@ -17,5 +17,9 @@ serde_json.workspace = true
 # cargo's build messages, read as types (the check's test lanes)
 serde.workspace = true
 
+# the TypeScript of shots.json's type (docs/assets/shots/shots.d.ts), made by this crate's tests only
+[dev-dependencies]
+ts-rs.workspace = true
+
 [lints]
 workspace = true

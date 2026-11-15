@@ -1,3 +1,4 @@
+// @ts-check
 // The card's 3D view: one tile's mesh as the program painted it (a colour for every face, overhang past the band red, the
 // 55 to 65 degree band orange: the program's flags, never a second classification here), drawn by three.js with an orbit.  It
 // draws nothing else: the overlay is the flat renderer's (overlay-render.js) on a canvas above this one, asking `project` where
@@ -30,7 +31,7 @@ export class LiteViewer {
     this.controls.enableDamping = false;
     this.controls.enablePan = false;
     this.controls.addEventListener('change', () => this.invalidate());
-    /** @type {THREE.Mesh | null} */
+    /** @type {any} a THREE.Mesh (vendor/three.module.min.js has no types, so tsc cannot name it) */
     this.mesh = null;
     this.footprint = [35, 35];
     this.dirty = true;

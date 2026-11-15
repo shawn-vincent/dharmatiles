@@ -1,3 +1,4 @@
+// @ts-check
 // The controls a card shows (`controls="wobble, seed"`): a slider or a roll button for a value the source writes.  A control
 // writes the source, never a copy of it: it splices its number into the span the program's map gives for that value
 // (`map.lines[].sheet.controls`, `map.tile.controls`: name, text as written, byte span), so the comments and layout of the

@@ -1,3 +1,4 @@
+// @ts-check
 // A live example card: the source, the tile, the controls the page picked, the messages and the overlay, once the reader has
 // touched it.  Everything it shows is the editor's own code or the program's own words:
 //
@@ -11,6 +12,8 @@
 // the site provides (the deploy job, the program's docs route), so the site reads the code the program ships: there is no copy.
 
 /** @typedef {import('../../../web/preview/js/api').TileMap} TileMap (the repo's path; the site serves the page's code at `../../editor/js`, where api.d.ts is not published, so `tsc` reads it from here) */
+/** @typedef {import('../../../web/preview/js/api').BuildData} BuildData */
+/** @typedef {import('./engine-wire').Checked} Checked */
 
 import { signal, computed } from '@preact/signals-core';
 import { buildStatusLine, paintStatusLine } from '../../editor/js/view/status-line.js';
@@ -33,7 +36,11 @@ let serial = 0;
 const holders = [];
 const MAX_CONTEXTS = 4;
 
-/** @param {string} tag @param {string} [cls] @param {Record<string, string>} [attrs] */
+/**
+ * @template {keyof HTMLElementTagNameMap} K
+ * @param {K} tag @param {string} [cls] @param {Record<string, string>} [attrs]
+ * @returns {HTMLElementTagNameMap[K]}
+ */
 function el(tag, cls = '', attrs = {}) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -55,7 +62,7 @@ export class Card {
     this.original = (code?.textContent ?? '').replace(/\n$/, '\n');
     this.text = this.original;
     this.version = 0;
-    /** @type {{ ok: boolean, errors: any[], notes: any[], map: TileMap | null, squareMm: number } | null} the worker's check (dt-web `Checked`) */
+    /** @type {Checked | null} the worker's check (dt-web's `Checked`, generated into engine-wire.d.ts) */
     this.checked = null;
     this.checkedText = null;
     this.marks = [];
@@ -91,7 +98,7 @@ export class Card {
     const host = this.host;
     host.dataset.state = 'waking';
     const grid = host.querySelector('.dtx-grid') ?? host.appendChild(el('div', 'dtx-grid'));
-    this.view = grid.querySelector('.dtx-view') ?? grid.appendChild(el('figure', 'dtx-view'));
+    this.view = /** @type {HTMLElement} */ (grid.querySelector('.dtx-view') ?? grid.appendChild(el('figure', 'dtx-view')));
     this.poster = this.view.querySelector('.dtx-poster');
     host.querySelector('.dtx-wake')?.remove();
     // the card draws its own marks now: the ones on the poster are put away
@@ -401,7 +408,7 @@ export class Card {
         this.progress = null;
         break;
       case 'progress':
-        this.progress = { what: 'building', fraction: ev.fraction, label: ev.label, key: '', count: ev.total ? ['stage', ev.done + 1, ev.total] : null, elapsedS: 0, etaS: null, estimateS: null };
+        this.progress = { what: 'building', fraction: ev.fraction, label: ev.label, key: '', count: ev.total ? /** @type {[string, number, number]} */ (['stage', ev.done + 1, ev.total]) : null, elapsedS: 0, etaS: null, estimateS: null };
         break;
       case 'checked':
         this.#checked(ev.result);
@@ -528,6 +535,8 @@ export class Card {
     const t = this.tileState.value;
     const counts = countsText(view.counts);
     const has = !!this.mesh;
+    // the build message's data is the program's `BuildData` (site-log.js makes it so)
+    const built = /** @type {BuildData | undefined} */ (view.record?.build?.data);
     let words;
     if (this.status === 'queued') {
       words = { verdict: `queued · behind ${this.queuedBehind} other${this.queuedBehind === 1 ? '' : 's'}`, tone: 'idle', counts, progress: null };
@@ -536,7 +545,7 @@ export class Card {
     } else {
       words = statusOf(view, { t: { ...t, status: this.status === 'ready' && view.counts.errors ? 'failed' : t.status === 'failed' ? 'failed' : this.status === 'ready' ? 'ready' : this.status === 'building' ? 'building' : 'idle' }, p: this.status === 'building' ? this.progress : null });
       if (this.status === 'building' && !this.progress) words.verdict = this.mesh ? 'rebuilding · starting' : 'building · starting';
-      if (this.status === 'ready' && t.shown && !t.shown.checked && !view.counts.errors) words.verdict = `draft detail · ${view.record?.build?.data?.cache === 'hit' ? 'cached' : `${(view.record?.build?.data?.build_s ?? 0).toFixed(2)} s`} · not yet through the gate`;
+      if (this.status === 'ready' && t.shown && !t.shown.checked && !view.counts.errors) words.verdict = `draft detail · ${built?.cache === 'hit' ? 'cached' : `${(built?.build_s ?? 0).toFixed(2)} s`} · not yet through the gate`;
       if (view.counts.errors && has) words.counts = [counts, 'last good build shown'].filter(Boolean).join(' · ');
     }
     paintStatusLine(this.sl, { ...words, counts: words.counts ? `· ${words.counts}` : '', expanded: this.model.open.value });

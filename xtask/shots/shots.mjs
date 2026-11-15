@@ -192,6 +192,7 @@ const ANCHORS = {
 // ---- taking a picture -------------------------------------------------------------------------------------------------
 fs.mkdirSync(outDir, { recursive: true });
 const jsonPath = path.join(outDir, 'shots.json');
+/** @type {import('../../docs/assets/shots/shots').Book} the file's one definition is xtask's `Book` (src/shots.rs), which `check` reads back as that type */
 const book = fs.existsSync(jsonPath) ? JSON.parse(fs.readFileSync(jsonPath, 'utf8')) : { width: WIDTH, height: HEIGHT, shots: {} };
 let theme = 'light';
 const written = [];

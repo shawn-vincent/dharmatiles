@@ -133,6 +133,23 @@ pub fn regen(root: &Path) -> Result<(), String> {
         "--bins",
         "the_page_contract_is_current",
     ]))?;
+    // the site's types: the browser engine's answers (docs/assets/live/engine-wire.d.ts) and shots.json's
+    // (docs/assets/shots/shots.d.ts)
+    run(cargo().current_dir(root).env("DT_CONTRACT", "write").args([
+        "test",
+        "--release",
+        "-p",
+        "dt-web",
+        "--lib",
+        "the_engine_contract_is_current",
+    ]))?;
+    run(cargo().current_dir(root).env("DT_CONTRACT", "write").args([
+        "test",
+        "--release",
+        "-p",
+        "xtask",
+        "the_shots_types_are_current",
+    ]))?;
     crate::docs::run(root, false)?;
     let changed = git(root, &["status", "--short"])?;
     println!(

@@ -34,6 +34,7 @@ pub mod solve;
 pub mod source;
 pub mod tiers;
 pub mod unwritten;
+pub mod wire;
 
 use std::path::{Path, PathBuf};
 

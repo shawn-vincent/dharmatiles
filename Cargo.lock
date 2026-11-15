@@ -568,6 +568,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "ts-rs",
  "wasm-bindgen",
 ]
 
@@ -1849,6 +1850,7 @@ dependencies = [
  "png",
  "serde",
  "serde_json",
+ "ts-rs",
 ]
 
 [[package]]
