@@ -31,9 +31,9 @@
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
+use super::storage::Storage;
 use super::*;
 use resources::Resource;
-use super::storage::Storage;
 
 /// Everything the owner holds.
 pub(super) struct Core {

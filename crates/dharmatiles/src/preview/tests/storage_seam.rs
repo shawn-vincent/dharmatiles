@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use super::super::docs::Docs;
 use super::super::owner::{Command, Owner};
-use dt_service::storage::{MemStorage, Storage};
 use dt_eval::Options;
+use dt_service::storage::{MemStorage, Storage};
 
 const TILE: &str = "tile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n    }\n}\n";
 
@@ -109,7 +109,10 @@ fn the_owner_and_the_documents_make_no_std_fs_call() {
     for file in ["owner.rs", "docs.rs", "patch.rs"] {
         let text = std::fs::read_to_string(src.join(file)).expect("a source file reads");
         // the tests at the foot of a file may use the disk
-        let code = text.split("#[cfg(test)]\nmod tests").next().unwrap_or(&text);
+        let code = text
+            .split("#[cfg(test)]\nmod tests")
+            .next()
+            .unwrap_or(&text);
         for (n, line) in code.lines().enumerate() {
             let body = line.trim_start();
             assert!(

@@ -2,8 +2,8 @@
 //! place the user owns, and does no more than it says.
 
 use super::super::edit::NewReq;
-use super::*;
 use super::super::storage::DiskStorage;
+use super::*;
 use dt_eval::Options;
 
 const TILE: &str =
@@ -173,7 +173,10 @@ fn the_settings_keep_the_added_places_and_a_bad_file_is_told() {
     );
     let a = PathBuf::from("/a/b");
     save_places(&DiskStorage, &d, &[a.clone(), PathBuf::from("/c")]).unwrap();
-    assert_eq!(load_places(&DiskStorage, &d).unwrap(), vec![a, PathBuf::from("/c")]);
+    assert_eq!(
+        load_places(&DiskStorage, &d).unwrap(),
+        vec![a, PathBuf::from("/c")]
+    );
     std::fs::write(d.join("places.json"), "{ not json").unwrap();
     let e = load_places(&DiskStorage, &d).unwrap_err();
     assert!(e.contains("places.json") && e.contains("not valid"), "{e}");
@@ -216,7 +219,10 @@ fn the_chooser_adds_a_place_that_is_kept_and_a_cancel_changes_nothing() {
     assert!(snap.roots[i].writable);
     assert_eq!(folders_of(&shared, i), vec!["sub".to_owned()]);
     assert_eq!(listed_names(&shared, i).len(), 1);
-    assert_eq!(load_places(&DiskStorage, &settings).unwrap(), vec![outside.clone()]);
+    assert_eq!(
+        load_places(&DiskStorage, &settings).unwrap(),
+        vec![outside.clone()]
+    );
     // its tile's size is read without a build
     let t = snap.tiles.iter().find(|t| t.root == i).unwrap();
     assert_eq!(t.size.as_deref(), Some("2x1"));

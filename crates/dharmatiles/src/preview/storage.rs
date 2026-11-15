@@ -132,4 +132,3 @@ fn entry_of(path: PathBuf, m: &std::fs::Metadata) -> Entry {
         path,
     }
 }
-

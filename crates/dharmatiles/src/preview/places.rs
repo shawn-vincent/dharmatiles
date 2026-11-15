@@ -265,7 +265,8 @@ pub fn save_places(storage: &dyn Storage, dir: &Path, places: &[PathBuf]) -> Res
         places: places.to_vec(),
     };
     let text = serde_json::to_string_pretty(&body).map_err(|e| e.to_string())?;
-    storage.write_text(&file, &format!("{text}\n"))
+    storage
+        .write_text(&file, &format!("{text}\n"))
         .map_err(|e| format!("cannot write {}: {e}", file.display()))
 }
 
@@ -902,7 +903,8 @@ pub(super) fn duplicate_tile(
     let stem = from
         .file_stem()
         .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-    let dest = super::edit::write_new_bytes(shared.storage.as_ref(), dir, &format!("{stem} copy"), &text)?;
+    let dest =
+        super::edit::write_new_bytes(shared.storage.as_ref(), dir, &format!("{stem} copy"), &text)?;
     Ok(listed_in(shared, &dest))
 }
 
