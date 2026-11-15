@@ -63,7 +63,7 @@ pub fn short_hash(h: u64) -> String {
 #[must_use]
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a best-effort filesystem probe (None is the meaning: the tile is renamed, moved or deleted)"
 )]
 pub fn tile_hash(canon: &str, home: Option<&Path>) -> Option<String> {
     let path = readable(canon, home)?;

@@ -300,10 +300,6 @@ pub fn tile_path(
 /// Every problem found, each at the text that caused it: an unknown printer or
 /// one with no bed, a tile that is missing or does not check, a printer with
 /// fewer filaments than a piece needs in multicolour.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 pub fn plan(
     list: &PrintList,
     title: &str,
@@ -461,16 +457,26 @@ pub fn plan(
             continue;
         };
         let frame = dt_kit::Frame::for_system(sys, tile.cols, tile.rows);
-        let hash =
-            crate::inventory::tile_hash(&crate::inventory::canonical(&path, ctx.home), ctx.home)
-                .or_else(|| {
-                    // a tile that is not under `lib:` or home is read by its path
-                    ctx.sources
-                        .read(&path)
-                        .ok()
-                        .map(|t| crate::inventory::short_hash(dt_eval::doc::text_hash(&t)))
-                })
-                .unwrap_or_default();
+        let hash = match crate::inventory::tile_hash(
+            &crate::inventory::canonical(&path, ctx.home),
+            ctx.home,
+        ) {
+            Some(h) => h,
+            // a tile that is not under `lib:` or home is read by its path
+            None => match ctx.sources.read(&path) {
+                Ok(t) => crate::inventory::short_hash(dt_eval::doc::text_hash(&t)),
+                Err(e) => {
+                    errors.push(Diag::at(
+                        &list.src,
+                        p.tile.span,
+                        dt_lang::codes::SOURCE,
+                        format!("cannot read `{}`: {e}", p.tile.value),
+                        "this tile",
+                    ));
+                    continue;
+                }
+            },
+        };
         always.push(if p.print == PrintMode::Always {
             p.count.value
         } else {

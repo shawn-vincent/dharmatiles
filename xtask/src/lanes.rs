@@ -127,10 +127,6 @@ fn lane(bins: &[&Binary]) -> Vec<String> {
 ///
 /// # Errors
 /// The build's, or every failing binary, with its output.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 pub fn tests(cargo: Command, build: bool) -> Result<(), String> {
     let bins = built(cargo)?;
     if build {
@@ -150,9 +146,9 @@ pub fn tests(cargo: Command, build: bool) -> Result<(), String> {
         let running: Vec<_> = lanes.iter().map(|l| s.spawn(|| lane(l))).collect();
         running
             .into_iter()
-            .flat_map(|r| {
-                r.join()
-                    .unwrap_or_else(|_| vec!["a test lane panicked".to_owned()])
+            .flat_map(|r| match r.join() {
+                Ok(failed) => failed,
+                Err(_) => vec!["a test lane panicked".to_owned()],
             })
             .collect()
     });

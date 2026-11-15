@@ -70,10 +70,6 @@ const ISLE_MM3: f64 = 0.01;
 /// clump, so nothing shows). A tiny loose body it cut off (under
 /// [`ISLE_MM3`]) is plugged the same way, so it fuses back to the tree it
 /// touches instead of being dropped. Returns how many were filled.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 pub(super) fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, usize), LookError> {
     let bodies = leaves::split_bodies(&solid.mesh());
     let main = bodies.iter().map(dt_kit::signed_volume).fold(0.0, f64::max);
@@ -93,7 +89,13 @@ pub(super) fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, us
                 .map(|p| graph::add(c, graph::scale(graph::sub(*p, c), 1.1)))
                 .collect();
             // a degenerate pocket: no plug, and counted
-            form::hull(&pts).map_err(|_| left_out += 1).ok()
+            match form::hull(&pts) {
+                Ok(plug) => Some(plug),
+                Err(_) => {
+                    left_out += 1;
+                    None
+                }
+            }
         })
         .collect();
     scene.left_out("tree", left_out);

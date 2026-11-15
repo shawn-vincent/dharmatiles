@@ -800,10 +800,6 @@ struct Held {
 /// an edge. `None` when nothing is laid under it (nothing is under it but
 /// its own band); a band that cannot be laid over the surface is counted as
 /// left out.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 fn hold(
     scene: &Scene,
     ctx: &Ctx<'_>,
@@ -836,10 +832,11 @@ fn hold(
         }
     }
     let area = held_area(frame, ctx.area, &surface, max_slope_deg);
-    let band = Band::new(flo, fhi)
-        .map_err(|_| *left_out += 1)
-        .ok()?
-        .with_odds(band.odds().cloned());
+    let Ok(held_band) = Band::new(flo, fhi) else {
+        *left_out += 1;
+        return None;
+    };
+    let band = held_band.with_odds(band.odds().cloned());
     Some(Held { area, band })
 }
 

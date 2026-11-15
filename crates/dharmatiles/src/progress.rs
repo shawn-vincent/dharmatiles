@@ -20,7 +20,7 @@ pub(crate) const WRITE: &str = "write";
 /// plan: the build will report why).
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where None means no progress bar; the build that follows reports why the plan fails"
 )]
 pub(crate) fn tracker_for(
     sources: &dyn Source,

@@ -78,10 +78,6 @@ pub struct Project {
 /// **Project discovery**: walk up from `start` to the first folder with a
 /// `dharmatiles.dtile`, as Cargo finds `Cargo.toml`.
 #[must_use]
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 pub fn discover(start: &Path) -> Project {
     let found = start
         .ancestors()
@@ -101,10 +97,13 @@ pub fn discover(start: &Path) -> Project {
                     .and_then(|n| n.entries().first())
                     .and_then(|e| e.value().as_string().map(PathBuf::from))
             });
-        read.unwrap_or_else(|e| {
-            problem = Some(e);
-            None
-        })
+        match read {
+            Ok(out) => out,
+            Err(e) => {
+                problem = Some(e);
+                None
+            }
+        }
     });
     Project {
         out: root.join(out.unwrap_or_else(|| PathBuf::from("out"))),

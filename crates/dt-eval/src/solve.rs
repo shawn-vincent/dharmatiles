@@ -600,10 +600,6 @@ const BINS: usize = 32;
 /// of `GRID` quantiles each, midpoints so no end is ever claimed, and counted
 /// into `BINS` equal bins across `iv`.  The same values give the same odds
 /// whatever the machine: only `+ - * /` and the weightings' own curves.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 fn independent(vals: &[&Val], iv: Iv, f: impl Fn(&[f64]) -> f64) -> Option<Weighting> {
     let width = iv.hi - iv.lo;
     if width.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
@@ -642,7 +638,12 @@ fn independent(vals: &[&Val], iv: Iv, f: impl Fn(&[f64]) -> f64) -> Option<Weigh
             break;
         }
     }
-    Weighting::steps(&counts).ok()
+    // `BINS` is two or more and within the weightings' limit, and the counts add up to the grid's points, so some
+    // weight is above zero: `steps` has nothing to refuse
+    Some(
+        Weighting::steps(&counts)
+            .expect("BINS bins of counts that add up to the grid's points make a steps weighting"),
+    )
 }
 
 /// A function of values, any of which may be a cloud: `min`, `max`, `clamp`

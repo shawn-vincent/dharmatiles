@@ -195,21 +195,20 @@ pub(crate) fn remember_target(
 ///
 /// # Errors
 /// A flag that is not a system or a printer.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 pub(crate) fn preview_options(
     system: Option<System>,
     printer: Option<&str>,
 ) -> Result<Options, String> {
     let home = crate::preview::roots::personal_home()?;
-    let remembered = remembered_target(&home).unwrap_or_else(|e| {
-        // the remembered target is a convenience: say it is not used, and
-        // build for the default (never silently)
-        tell!("note: {e}; using the default build target");
-        None
-    });
+    let remembered = match remembered_target(&home) {
+        Ok(t) => t,
+        Err(e) => {
+            // the remembered target is a convenience: say it is not used, and
+            // build for the default (never silently)
+            tell!("note: {e}; using the default build target");
+            None
+        }
+    };
     let (rs, rp) = remembered.map_or((None, None), |t| (Some(t.system), Some(t.printer)));
     let sys = system.or(rs).unwrap_or_default();
     let pr = printer

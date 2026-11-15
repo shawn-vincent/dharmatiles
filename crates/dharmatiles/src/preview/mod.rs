@@ -639,15 +639,14 @@ impl Shared {
     /// The paint now, for a view: the palette document, else the default
     /// paint, saying so on stderr; the build that shows a tile tells the page
     /// too ([`Shared::palette_problem`]).
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-    )]
     fn palette(&self) -> dt_kit::Palette {
-        self.palette_checked().unwrap_or_else(|e| {
-            tell_once(&format!("{e}; using the default paint"));
-            dt_kit::Palette::default()
-        })
+        match self.palette_checked() {
+            Ok(p) => p,
+            Err(e) => {
+                tell_once(&format!("{e}; using the default paint"));
+                dt_kit::Palette::default()
+            }
+        }
     }
 
     /// What is wrong with the palette, as the page's unexpected problem
@@ -1108,7 +1107,7 @@ impl Shared {
     /// whatever reads it next says so, with the words.
     #[expect(
         clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+        reason = "permitted silence: a best-effort filesystem probe (a file that cannot be read has revision 0; whatever reads it next reports it with the words)"
     )]
     fn rev_of(&self, path: &str) -> u64 {
         if path.starts_with(dt_eval::LIB) {
@@ -1190,10 +1189,6 @@ fn bind(port: Option<u16>) -> Result<TcpListener, String> {
 }
 
 /// `dharmatiles preview`.  Returns an exit code (it runs until Ctrl-C).
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 pub fn run(
     paths: &[String],
     opts: &Options,
@@ -1208,9 +1203,13 @@ pub fn run(
             return crate::ERROR;
         }
     };
-    let addr = listener
-        .local_addr()
-        .map_or_else(|_| "127.0.0.1".to_owned(), |a| a.to_string());
+    let addr = match listener.local_addr() {
+        Ok(a) => a.to_string(),
+        Err(e) => {
+            tell!("error: cannot read the address the preview is listening on: {e}");
+            return crate::ERROR;
+        }
+    };
     // files named are built at once; folder and library tiles when chosen
     let (roots, files) = match roots_for(paths) {
         Ok(r) => r,

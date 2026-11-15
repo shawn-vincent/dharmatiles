@@ -45,7 +45,7 @@ pub fn library_dir() -> Option<&'static Path> {
 
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (no installed copy beside the program; the caller reports a missing library)"
 )]
 fn find_library() -> Option<PathBuf> {
     let ok = |d: &Path| d.join("printers/default.dtile").is_file();
@@ -75,7 +75,7 @@ fn find_library() -> Option<PathBuf> {
 #[must_use]
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (no installed docs; the caller reports them missing)"
 )]
 pub fn docs_dir() -> Option<PathBuf> {
     let ok = |d: &Path| d.join("index.html").is_file();

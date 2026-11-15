@@ -243,7 +243,7 @@ fn size(p: &Path) -> Result<u64, String> {
 
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where a tool that cannot be run is the answer false"
 )]
 fn which(tool: &str) -> bool {
     Command::new(tool)

@@ -253,10 +253,6 @@ pub struct Start {
     clippy::too_many_arguments,
     reason = "the flat inputs of one maths step, named at the call"
 )]
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 pub fn plan(
     rng: &mut Rng,
     surf: &Surface,
@@ -342,7 +338,9 @@ pub fn plan(
         if let Some(log) = log.as_deref_mut() {
             log.push(Start {
                 at: roots[f],
-                fate: grown.as_ref().map_or_else(|f| *f, |(_, f)| *f),
+                fate: match &grown {
+                    Ok((_, f)) | Err(f) => *f,
+                },
                 edge: false,
             });
         }
@@ -591,10 +589,6 @@ fn cover_frond(cov: &mut [bool], soil: &Field, f: &Frond) {
     clippy::too_many_arguments,
     reason = "the flat inputs of one maths step, named at the call"
 )]
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 fn edge_fill(
     rng: &mut Rng,
     g: &Grower,
@@ -693,7 +687,9 @@ fn edge_fill(
             if let Some(log) = log.as_deref_mut() {
                 log.push(Start {
                     at: root,
-                    fate: grown.as_ref().map_or_else(|f| *f, |(_, f)| *f),
+                    fate: match &grown {
+                        Ok((_, f)) | Err(f) => *f,
+                    },
                     edge: true,
                 });
             }

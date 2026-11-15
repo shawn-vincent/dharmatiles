@@ -185,17 +185,16 @@ impl Crown {
 
     /// Whether the crown, walked down its steepest slope from `p` (normal
     /// `n`) for [`BELOW_STEPS`] steps of [`BELOW_STEP_MM`], gets below `z`.
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-    )]
     pub(super) fn goes_below(&self, p: V, n: V, z: f64) -> bool {
         let down = sub([0.0, 0.0, -1.0], scale(n, -n[2]));
         if norm(down) < 1e-6 {
             return false;
         }
-        self.walk(p, n, safe_norm(down), BELOW_STEP_MM, BELOW_STEPS)
-            .is_ok_and(|f| f.iter().any(|f| f.p[2] < z))
+        // a walk that leaves the crown ends there: it did not get below `z` on it
+        match self.walk(p, n, safe_norm(down), BELOW_STEP_MM, BELOW_STEPS) {
+            Ok(f) => f.iter().any(|f| f.p[2] < z),
+            Err(_) => false,
+        }
     }
 
     /// Walk `steps` steps of `ds` along the crown from `p` heading `t`:

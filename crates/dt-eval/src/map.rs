@@ -288,7 +288,7 @@ impl Reading {
     /// The point a text writes, if it writes one.
     #[expect(
         clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+        reason = "permitted silence: parsing where None is the meaning (text that is not a written point is not a point; the checker reports the real diagnostic where the user wrote it)"
     )]
     fn point(self, t: &crate::Tile, text: &str) -> Option<dt_doc::place::Point> {
         dt_doc::decode::point_text(text.trim(), (t.cols, t.rows), self.units).ok()
@@ -726,10 +726,13 @@ pub fn json(
         return Ok(None);
     };
     let rd = Reading { units };
-    let doc = kdl::KdlDocument::parse(text).ok();
-    let node = doc
-        .as_ref()
-        .and_then(|d| d.nodes().iter().find(|n| n.name().value() == "tile"));
+    let doc = kdl::KdlDocument::parse(text).map_err(|e| {
+        vec![crate::Diag::plain(
+            dt_lang::codes::SYNTAX,
+            format!("the tile's document does not parse: {e}"),
+        )]
+    })?;
+    let node = doc.nodes().iter().find(|n| n.name().value() == "tile");
     let masks = c.region_masks(CELLS)?;
     let lines: Vec<MapLine> = t
         .lines

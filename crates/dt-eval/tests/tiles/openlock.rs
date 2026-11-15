@@ -16,7 +16,7 @@
 )]
 #![expect(
     clippy::disallowed_methods,
-    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed; unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
 )]
 
 use crate::common;
@@ -149,8 +149,11 @@ fn buildable() -> Vec<String> {
         .into_iter()
         .filter(|p| p.starts_with("lib:tiles/") || p.starts_with("lib:tests/"))
         .filter(|p| {
-            check(&Library, p, &Options::default())
-                .is_ok_and(|c| c.tile.is_some() && c.pending().is_empty())
+            // a tile that does not check is not one to build here: the library sweep reports it
+            match check(&Library, p, &Options::default()) {
+                Ok(c) => c.tile.is_some() && c.pending().is_empty(),
+                Err(_) => false,
+            }
         })
         .collect()
 }

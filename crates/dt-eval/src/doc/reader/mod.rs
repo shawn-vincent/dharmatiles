@@ -392,10 +392,6 @@ impl Reader<'_> {
         }
     }
 
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-    )]
     fn tile(&mut self, file: &Arc<File>) -> Option<Tile> {
         let def = file.doc.tile()?;
         let header = def.header()?;
@@ -415,16 +411,19 @@ impl Reader<'_> {
         let lets = Arc::new(Lets::from_consts(&consts));
         let seed = match header.seed {
             None => 1,
-            Some(s) => u64::try_from(s).unwrap_or_else(|_| {
-                self.errors.push(Diag::at(
-                    src,
-                    def.name.span,
-                    dt_lang::codes::SEED,
-                    format!("a tile seed is a whole number from 0, not {s}"),
-                    "this tile",
-                ));
-                1
-            }),
+            Some(s) => match u64::try_from(s) {
+                Ok(seed) => seed,
+                Err(_) => {
+                    self.errors.push(Diag::at(
+                        src,
+                        def.name.span,
+                        dt_lang::codes::SEED,
+                        format!("a tile seed is a whole number from 0, not {s}"),
+                        "this tile",
+                    ));
+                    1
+                }
+            },
         };
         let mut t = Tile {
             cols: header.cols,

@@ -24,7 +24,7 @@ use dt_doc::units::Units;
 use dt_eval::FixJson;
 use dt_eval::{Diag, Options, Source, Tier};
 use dt_lang::System;
-use dt_value::{Rng, Seed};
+use dt_value::{LockExt, Rng, Seed};
 use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -738,17 +738,12 @@ pub struct StageTick {
 }
 
 /// How many stages a build of `source` will announce: its stack, the union and the audit.  A document that
-/// does not check builds nothing, and the build reports why, so the count only has to be a number.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
-fn stage_total(source: &dyn Source, system: System) -> usize {
-    let stack = options(source, system)
-        .ok()
-        .and_then(|o| dt_eval::check(source, MAIN, &o).ok())
-        .and_then(|c| c.tile.as_ref().map(|t| t.stack.len()));
-    stack.unwrap_or(1) + 2
+/// does not check has no count: its diagnostics are the build's answer, shown the way a failed build's are.
+fn stage_total(source: &dyn Source, system: System) -> Result<usize, Vec<Diag>> {
+    let mut opts = Options::in_source(source)?;
+    opts.system = system;
+    let checked = dt_eval::check(source, MAIN, &opts)?;
+    Ok(checked.tile.as_ref().map_or(1, |t| t.stack.len()) + 2)
 }
 
 /// Reports a build's stages to the page, as [`StageTick`]s: the program's progress events (`dt_kit::Event`) made into
@@ -760,10 +755,6 @@ struct Ticks {
 }
 
 impl dt_kit::Reporter for Ticks {
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-    )]
     fn report(&self, event: &dt_kit::Event<'_>) {
         use std::sync::atomic::Ordering::Relaxed;
         let total = self.total.max(1);
@@ -796,14 +787,12 @@ impl dt_kit::Reporter for Ticks {
         match event {
             dt_kit::Event::Begin { label, .. } => {
                 let n = self.begun.fetch_add(1, Relaxed);
-                if let Ok(mut l) = self.label.lock() {
-                    (*label).clone_into(&mut l);
-                }
+                (*label).clone_into(&mut self.label.lock_unpoisoned());
                 at(n, 0.0, label);
             }
             dt_kit::Event::Sub { fraction, .. } => {
                 let n = self.begun.load(Relaxed).saturating_sub(1);
-                let label = self.label.lock().map(|l| l.clone()).unwrap_or_default();
+                let label = self.label.lock_unpoisoned().clone();
                 at(n, *fraction, &label);
             }
             dt_kit::Event::End { .. } => {}
@@ -865,15 +854,17 @@ pub fn build_tile(
             library: &lib,
             text,
         };
-        let (built, opts) = match build_with(
-            &source,
-            system,
-            seed.map(u64::from),
-            cells,
-            tier,
-            &ticks(stage_total(&source, system)),
-            cache.as_deref(),
-        ) {
+        let (built, opts) = match stage_total(&source, system).and_then(|total| {
+            build_with(
+                &source,
+                system,
+                seed.map(u64::from),
+                cells,
+                tier,
+                &ticks(total),
+                cache.as_deref(),
+            )
+        }) {
             Ok(b) => b,
             Err(ds) => {
                 let meta = BuildMeta {

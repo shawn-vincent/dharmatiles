@@ -1129,7 +1129,7 @@ pub(super) fn check_value(shared: &Shared, v: CheckValueReq) -> Out<CheckValueRe
 /// [`dt_doc::printed`] against the tile's own heights.
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where None means not a form this reads; a document with a mistake gives no heights, and the check route reports the mistake where the text is typed"
 )]
 pub(super) fn printed(shared: &Shared, t: &TileRef, v: PrintedReq) -> Out<PrintedRes> {
     let opts = shared.options();
@@ -1777,12 +1777,11 @@ mod tests {
         }
     }
 
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-    )]
     fn status(r: Out<impl Sized>) -> &'static str {
-        r.map_or_else(|e| e.0, |_| "200 OK")
+        match r {
+            Ok(_) => "200 OK",
+            Err(e) => e.0,
+        }
     }
 
     #[test]

@@ -345,7 +345,7 @@ pub(super) fn bind(v: &Spanned<Value>, src: &Src, scope: &Scope) -> Bound {
 /// range, which no built element takes yet).
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where None means no default value here; a `$` name that does not resolve is reported by the scope check"
 )]
 pub(super) fn default_value(c: &'static Control, lets: &Lets) -> Option<dt_elements::Value> {
     element_value(&c.default_value()?, lets)

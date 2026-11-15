@@ -347,7 +347,7 @@ fn native_choose() -> Result<Option<PathBuf>, String> {
 #[must_use]
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a best-effort filesystem probe (a listing shows no size for a file it cannot read; opening the tile reports why)"
 )]
 pub fn size_of(path: &str) -> Option<String> {
     if !path.ends_with(".dtile") {
