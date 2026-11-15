@@ -21,22 +21,27 @@ import {
 } from './stores.js';
 
 /** The entry `key` as the mesh on screen has it (`{key, label, element, what}`), or null: the view's stack, not the text's. */
-const meshOf = (key) => {
+const meshOf = (/** @type {string} */ key) => {
   const i = meshIndex(viewer.payload, key);
   return i < 0 ? null : meshStack(viewer.payload)[i];
 };
 
 // only a scatter's things are picked one by one (a dirt's clods or a grass's clumps are the entry)
-const piecesOf = (key) => (meshOf(key)?.what === 'scatter' ? view.get().pieces.get(key) || 0 : 0);
+const piecesOf = (/** @type {string} */ key) => (meshOf(key)?.what === 'scatter' ? view.get().pieces.get(key) || 0 : 0);
 
 /** What the pointer found in the view, `{entry, piece}` against the mesh's stack, as `{key, piece}` (null: nothing owned). */
+/** @param {{ entry: number, piece: number | null } | null | undefined} hit */
 function hitKey(hit) {
-  const key = hit ? entryKey(viewer.payload, hit.entry) : null;
+  if (!hit) return null;
+  const key = entryKey(viewer.payload, hit.entry);
   return key == null ? null : { key, piece: hit.piece };
 }
 
+/** @typedef {import('./stores.js').Sel} Sel */
+
 // ---- the selection ----------------------------------------------------------
 
+/** @param {Sel | null | undefined} w */
 function describe(w) {
   if (!w) return '';
   if (w.kind === 'tile') return tile() ? `tile ${stem(tile())}` : 'tile';
@@ -45,7 +50,8 @@ function describe(w) {
   const it = itemOf(w) ?? meshOf(w.id);
   if (!it) return '';
   const n = piecesOf(w.id);
-  if (w.piece != null && n > 1) return `${it.label} · ${w.piece + 1} of ${n}`;
+  const piece = 'piece' in w ? w.piece : null;
+  if (piece != null && n > 1) return `${it.label} · ${piece + 1} of ${n}`;
   return it.label;
 }
 
@@ -61,6 +67,7 @@ export function setSel(w, { from, guarded = false } = {}) {
     canLeave().then((ok) => { if (ok) setSel(w, { from, guarded: true }); });
     return;
   }
+  /** @type {Partial<import('./stores.js').ViewState>} */
   const patch = { sel: w };
   // a control open on a thing stays open while the thing stays selected (a piece of it, say); a new thing starts at its own level
   const cur = view.get().sel;
@@ -74,13 +81,15 @@ export function setSel(w, { from, guarded = false } = {}) {
 }
 function revealSel() { const l = linesOf(view.get().sel); if (l) texts.reveal(l[0]); }
 
-function setHov(w) { if (!same(w, view.get().hov)) view.set({ hov: w }); }
+function setHov(/** @type {Sel | null} */ w) { if (!same(w, view.get().hov)) view.set({ hov: w }); }
 
 // ---- the selection in the view, the text and the title ------------------------
 
 /** The view's tint for a selection: its place in the mesh on screen (none when that mesh has no such entry). */
+/** @param {Sel | null | undefined} w */
 function tint(w) {
-  const entry = isEntry(w) ? meshIndex(viewer.payload, w.id) : -1;
+  if (!isEntry(w)) return null;
+  const entry = meshIndex(viewer.payload, w.id);
   return entry < 0 ? null : { entry, piece: w.piece };
 }
 function paintHighlight() {
@@ -114,6 +123,7 @@ export function linesOf(w) {
 }
 
 /** The innermost entry written on line `n` of the file shown, else the tile (its own file) or nothing. */
+/** @param {number} line */
 function entryAtLine(line, hover = false) {
   let best = null, width = Infinity;
   for (const it of stackItems()) {
@@ -143,7 +153,7 @@ function markText() {
   // (dt::look and dt::build are found only by building, so the check never says them)
   // The marks are the stream's messages with a span in this file (an error is a red mark, a note a yellow one;
   // each points to its message), plus a mistake the check just found whose message has not arrived yet.
-  const words = (m) => `${m.text}${m.help ? `. ${m.help[0].toUpperCase()}${m.help.slice(1)}` : ''}`;
+  const words = (/** @type {{ text: string, help?: string | null }} */ m) => `${m.text}${m.help ? `. ${m.help[0].toUpperCase()}${m.help.slice(1)}` : ''}`;
   /** @type {Array<{line: number, message: string, severity: string, id?: number, fix: import('../api').FixJson | null, file: string | null}>} */
   const errs = (tileId && texts.file ? log.inFile(tileId, texts.file) : [])
     .flatMap((m) => (m.span?.line ? [{ line: m.span.line, message: words(m), severity: m.severity === 'error' ? 'error' : 'warning', id: m.seq, fix: m.fix ?? null, file: m.span.file }] : []));
@@ -180,12 +190,13 @@ function selectWritten() {
 }
 
 /** A click in the view on `hit`: select it, or climb when it is already selected. */
+/** @param {{ entry: number, piece: number | null } | null | undefined} found */
 function clickHit(found) {
   const hit = hitKey(found);
   if (!hit) return setSel(null);
   const s = view.get().sel;
   const many = piecesOf(hit.key) > 1;
-  const inOf = (key) => { const it = itemOf(entrySel(key)); return it ? regionOf(it) : null; };
+  const inOf = (/** @type {string} */ key) => { const it = itemOf(entrySel(key)); return it ? regionOf(it) : null; };
   if (s?.kind === 'region' && inOf(hit.key) === s.id) return setSel(tileSel(), { from: 'view' }); // the region -> the tile
   if (!isEntry(s) || s.id !== hit.key) return setSel(entrySel(hit.key, many ? hit.piece : null), { from: 'view' });
   if (s.piece != null) return setSel(entrySel(hit.key), { from: 'view' }); // the piece -> its entry
@@ -224,7 +235,11 @@ export function showWorst() {
 
 // hover and click in the view: a click is a press and release that hardly moved
 const canvas = $('canvas');
-let down = null, hoverRaf = 0, lastMove = null;
+/** @type {{ x: number, y: number, t: number, b: number } | null} */
+let down = null;
+let hoverRaf = 0;
+/** @type {PointerEvent | null} */
+let lastMove = null;
 
 /** Wire this part of the page (once, at load). */
 export function init() {
@@ -268,6 +283,7 @@ export function init() {
     hoverRaf = requestAnimationFrame(() => {
       hoverRaf = 0;
       const r = canvas.getBoundingClientRect();
+      if (!lastMove) return;
       const x = lastMove.clientX - r.left, y = lastMove.clientY - r.top;
       const hit = hitKey(viewer.pick(x, y));
       const many = hit && piecesOf(hit.key) > 1;
