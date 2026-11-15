@@ -13,13 +13,27 @@ import { discTriangles, heightAtGrid, heightGrid, lineHalf, outlineTriangles, re
 // The geometry is its own module (overlay-geometry.js), shared with the site's cards; the editor's code keeps reading it from here.
 export { discTriangles, lineHalf, outlineTriangles, refAnchor, refItems, regionAnchor, regionTriangles, ribbonTriangles };
 
-const css = (name) => token(name) || '#888'; // cached per theme (tokens.js)
+/** @typedef {number[]} Q  a point `[x, y]` in squares from the tile's south-west corner */
+/**
+ * What the overlay draws besides the selection (the tools' drawing; editor/map.js and place.js make it): `show` false hides the map,
+ * `all` draws every line and region (a tool is held), `tints` colours regions, `selRegion` and `selLine` the selected ones, `hov*` the
+ * hovered ones, `handles` the selection's handles, `ring` a footprint, `path` the line being drawn, `box` the box being dragged, `label` a word at a point.
+ * @typedef {{
+ *   show?: boolean, all?: boolean, tints?: Record<string, string>, selRegion?: string | null, selLine?: string | null,
+ *   hovRegion?: string | null, hovLine?: string | null, hovPoint?: string | null,
+ *   handles?: { q: Q, hot?: boolean, kind?: string }[], ring?: { q: Q, r: number }, path?: Q[], box?: [Q, Q], label?: { q: Q, text: string },
+ * }} OverlayScene
+ */
+/** @typedef {import('./viewer.js').Viewer} Viewer */
+
+const css = (/** @type {string} */ name) => token(name) || '#888'; // cached per theme (tokens.js)
 
 export class Overlay {
+  /** @param {HTMLCanvasElement} canvas @param {Viewer} viewer */
   constructor(canvas, viewer) {
     this.canvas = canvas;
     this.viewer = viewer;
-    this.ctx = canvas.getContext('2d');
+    this.ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
     /** @type {import('./api').TileMap | null} */
     this.map = null;
     /** mm per square, the program's (null until a map is set with it: nothing is drawn). */
@@ -27,7 +41,10 @@ export class Overlay {
     this.sq = null;
     /** @type {import('./overlay-geometry.js').HeightGrid | null} */
     this.heights = null;
+    /** @type {OverlayScene} */
     this.scene = {};
+    /** @type {string | null} */
+    this.regionKey = null;
   }
 
   /** The map to draw, at the program's square size; without the size there is nothing to draw it at, so no map. */
@@ -41,17 +58,20 @@ export class Overlay {
    * says are ground, dirt, floor or water: the highest corner in each cell,
    * the empty cells filled from their neighbours.
    */
+  /** @param {import('./payload.js').Payload | null | undefined} payload @param {(entry: number) => boolean} isSurface @param {number[] | null | undefined} footprint */
   setHeights(payload, isSurface, footprint) {
     if (!payload || !footprint) { this.heights = null; return; }
     this.heights = heightGrid(payload.positions, payload.triangles, footprint, (t) => isSurface(payload.entry[t]));
   }
 
   /** The ground's height at (x, y) mm. */
+  /** @param {number} x @param {number} y */
   heightAt(x, y) {
     return heightAtGrid(this.heights, x, y, (this.viewer.plan?.datumZ ?? 0) + 3.4);
   }
 
   /** Where point `q` in squares falls on the canvas, on the ground (lifted `up` mm). */
+  /** @param {Q} q */
   at(q, up = 0.25) {
     const sq = this.squareMm();
     const x = q[0] * sq, y = q[1] * sq;
@@ -59,6 +79,7 @@ export class Overlay {
   }
 
   /** Where point `q` in squares falls on the canvas at level zero, where regions lie. */
+  /** @param {Q} q */
   atZero(q) {
     const sq = this.squareMm();
     return this.viewer.project([q[0] * sq, q[1] * sq, this.viewer.plan?.datumZ ?? 0]);
@@ -75,6 +96,7 @@ export class Overlay {
    * the canvas: the selected one opaque in the accent (the viewer fades
    * the tile round it), or all of them faint while a tool is held.
    */
+  /** @param {OverlayScene} scene */
   drawRegions(scene) {
     const v = this.viewer, m = this.map;
     const z = v.plan?.datumZ ?? 0;
@@ -142,6 +164,7 @@ export class Overlay {
    * handles: [{q, hot, kind}], ring: {q, r}, path: [q], box: [q, q],
    * label: {q, text}}.
    */
+  /** @param {OverlayScene} [scene] */
   draw(scene = this.scene) {
     this.scene = scene;
     this.resize();
@@ -226,16 +249,17 @@ export class Overlay {
    * (the source as written: coordinates, or the point's name), then the names: the line's or region's own, and what a region is made from.
    * Labels keep clear of each other and of the dots.
    */
-  drawLabels(scene, /** @type {import('./api').TileMap} */ m) {
+  drawLabels(/** @type {OverlayScene} */ scene, /** @type {import('./api').TileMap} */ m) {
     const c = this.ctx;
     const sel = m.regions.find((r) => r.name === scene.selRegion) || null;
     const line = m.lines.find((l) => l.name === scene.selLine) || null;
     const markers = ((sel || line)?.markers || []).filter((k) => k.at);
+    /** @type {{ x0: number, y0: number, x1: number, y1: number }[]} */
     const taken = []; // rects {x0, y0, x1, y1} already used on the canvas
-    const free = (r) => !taken.some((t) => r.x0 < t.x1 && r.x1 > t.x0 && r.y0 < t.y1 && r.y1 > t.y0);
-    const width = (text) => c.measureText(text).width + 10;
+    const free = (/** @type {{ x0: number, y0: number, x1: number, y1: number }} */ r) => !taken.some((t) => r.x0 < t.x1 && r.x1 > t.x0 && r.y0 < t.y1 && r.y1 > t.y0);
+    const width = (/** @type {string} */ text) => c.measureText(text).width + 10;
     // the dots first, so labels keep off them
-    const dots = markers.map((k) => ({ k, p: this.atZero(k.at) }));
+    const dots = markers.map((k) => ({ k, p: this.atZero(/** @type {Q} */ (k.at)) })); // markers were filtered to those with a place
     for (const { p } of dots) taken.push({ x0: p.x - 7, y0: p.y - 7, x1: p.x + 7, y1: p.y + 7 });
     c.font = '500 12px "JetBrains Mono", monospace';
     c.textBaseline = 'bottom';
@@ -259,7 +283,7 @@ export class Overlay {
     }
     // the names, centred above their places
     c.font = '600 12px "IBM Plex Sans", sans-serif';
-    const name = (q, text, tone) => {
+    const name = (/** @type {Q | null | undefined} */ q, /** @type {string} */ text, /** @type {boolean | string} */ tone) => {
       if (!q) return;
       const p = this.atZero(q), w = width(text);
       let y = p.y - 8;
@@ -275,6 +299,7 @@ export class Overlay {
   }
 
   /** A small label: `on` true in the accent, 'point' in the colour of control points, 'ref' in the colour of the places a region is made from, else on a pale ground. */
+  /** @param {number} x @param {number} y @param {string} text @param {boolean | string} on @param {CanvasTextAlign} [align] */
   tag(x, y, text, on, align = 'center') {
     const c = this.ctx;
     const w = c.measureText(text).width + 10;
@@ -293,6 +318,7 @@ export class Overlay {
    * The handle (index into `scene.handles`) within `px` pixels of canvas
    * point (x, y), nearest first; -1 for none.
    */
+  /** @param {number} x @param {number} y */
   handleAt(x, y, px = 10) {
     let best = -1, d = px;
     (this.scene.handles || []).forEach((h, i) => {
@@ -304,6 +330,7 @@ export class Overlay {
   }
 
   /** The region (by name) holding point `q` in squares, the last one listed winning; null outside them all. */
+  /** @param {Q} q */
   regionAt(q) {
     const m = this.map;
     if (!m) return null;
@@ -314,6 +341,7 @@ export class Overlay {
   }
 
   /** The line within `px` pixels of canvas point (x, y); null for none. */
+  /** @param {number} x @param {number} y */
   lineAt(x, y, px = 8) {
     let best = null, d = px;
     for (const l of this.map?.lines || []) {
