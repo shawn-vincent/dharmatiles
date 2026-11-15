@@ -40,7 +40,7 @@ use crate::plates as cli;
 
 // ---- the calls' types ------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -51,7 +51,7 @@ pub struct PlatesShowReq {
     pub plate: usize,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -64,7 +64,7 @@ pub struct PlatesSetReq {
     pub doc_rev: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -73,7 +73,7 @@ pub struct PlatesExportReq {
 }
 
 /// The plates written.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PlatesExported {

@@ -49,7 +49,7 @@ use super::{Shared, edit, fail, lock, places};
 /// the text it wrote (`text`), the revision the file has now (`docRev`) and
 /// the map's scene as it now reads (cheap: nothing is built), so the page
 /// shows the change at once.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ListEdited {
@@ -65,7 +65,7 @@ pub struct ListEdited {
     pub note: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -77,7 +77,7 @@ pub struct ListsNewReq {
     pub map: Option<bool>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -92,7 +92,7 @@ pub struct ListsAddReq {
 }
 
 /// One more copy of a tile put in a list.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ListsAddRes {
@@ -104,7 +104,7 @@ pub struct ListsAddRes {
     pub made: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -115,7 +115,7 @@ pub struct ListsCountReq {
     pub doc_rev: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -125,7 +125,7 @@ pub struct ListsRemoveReq {
     pub doc_rev: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

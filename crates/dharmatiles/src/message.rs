@@ -158,7 +158,7 @@ pub struct Span {
 }
 
 /// `open` until a later report of the scope no longer says it, then `cleared`.
-#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum MessageState {
@@ -171,7 +171,7 @@ pub enum MessageState {
 /// `snake_case` everywhere it appears (the page's other JSON is `camelCase`: see `api.rs`).  `data` is
 /// the numbers of the kind, one [`MessageData`] variant for each sort of message that has any, tagged by `type`
 /// (a message of a kind with none has `null`).
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct MessageJson {
     /// Order in the stream.

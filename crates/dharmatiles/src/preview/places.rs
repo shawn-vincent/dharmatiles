@@ -37,13 +37,13 @@ use super::*;
 // ---- the calls' types ------------------------------------------------------------------
 
 /// A call with nothing to say besides which tile it is for.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(type = "Record<string, never>"))]
 #[serde(deny_unknown_fields)]
 pub struct Nothing {}
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -80,7 +80,7 @@ pub struct Changed {
     pub rev: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -90,7 +90,7 @@ pub struct FolderReq {
     pub dir: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -120,7 +120,7 @@ pub struct Trashed {
     pub undo: usize,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -160,7 +160,7 @@ pub struct ListedIn {
 }
 
 /// A tile moved into a folder.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]

@@ -36,7 +36,7 @@ use dt_doc::map::Mode;
 // ---- the calls' types ------------------------------------------------------------------
 
 /// The base system a tile was built for.
-#[derive(Deserialize, Clone, Copy)]
+#[derive(Deserialize, Clone, Copy, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(rename_all = "lowercase")]
@@ -54,7 +54,7 @@ impl SystemWord {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -68,7 +68,7 @@ pub struct InventoryHaveReq {
     pub on: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -81,7 +81,7 @@ pub struct InventoryRecordReq {
     pub on: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -94,7 +94,7 @@ pub struct InventoryGoneReq {
     pub on: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -106,7 +106,7 @@ pub struct InventoryRelinkReq {
     pub on: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -130,7 +130,7 @@ pub struct InventoryWrote {
 }
 
 /// A piece put in a print list again.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct InventoryReprinted {

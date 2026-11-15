@@ -13,7 +13,7 @@ fn bad(msg: &str) -> Reply {
 }
 
 /// `/api/printers/scan`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -52,7 +52,7 @@ impl SlicerFound {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -63,7 +63,7 @@ pub struct PrintersImportReq {
     pub force: Option<bool>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct PrintersImportRes {
     pub written: Vec<PrinterWritten>,

@@ -73,7 +73,7 @@ use super::*;
 // ---- the calls' types ------------------------------------------------------------------
 
 /// A control's or argument's value: a number, a string or a switch.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(untagged)]
@@ -96,7 +96,7 @@ impl Scalar {
 }
 
 /// Where a new node goes.
-#[derive(Deserialize, Clone, Copy)]
+#[derive(Deserialize, Clone, Copy, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(rename_all = "kebab-case")]
@@ -112,7 +112,7 @@ pub enum InsertPlace {
 }
 
 /// Which value of a node a point is written to.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(rename_all = "camelCase")]
@@ -125,7 +125,7 @@ pub enum PointSlot {
 
 /// `/api/edit`: a text edit, one kind by `op`, made by `dt_doc::ops` to the node the `id` names (the ids a check
 /// lists in its `nodes`).  An id the text does not have is refused.  Nothing is written to disk.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(tag = "op", rename_all = "kebab-case", deny_unknown_fields)]
@@ -203,7 +203,7 @@ pub enum EditOp {
 /// `/api/edit`: an edit and the revision of the text its ids were read at (`CheckRes::nodes_rev`).  An edit whose `text`
 /// is not that text is refused with a 409, so an id like `rock#2` never names another node than the one the page saw.  Only
 /// the program's own fix names no node, and needs no `read`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 pub struct EditReq {
@@ -220,7 +220,7 @@ pub(super) fn text_rev(text: &str) -> String {
 }
 
 /// The text after an edit, and (for a change that leaves a node to select) the node: its id and the byte it starts at.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct EditRes {
     pub text: String,
@@ -273,7 +273,7 @@ impl From<dt_doc::nodeid::Node> for NodeJson {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -283,7 +283,7 @@ pub struct TextReq {
     pub file: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -294,20 +294,20 @@ pub struct SaveReq {
     pub file: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SaveRes {
     pub doc_rev: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Deleted {
     pub path: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -315,7 +315,7 @@ pub struct RenameReq {
     pub name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -328,7 +328,7 @@ pub struct NewReq {
     pub dir: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -338,7 +338,7 @@ pub struct NamesReq {
 
 /// The names a text makes; `ok` false (and `message`) when it does not parse: its
 /// mistakes are the check's to show, and the page keeps the names it had.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct NamesRes {
     pub ok: bool,
@@ -350,7 +350,7 @@ pub struct NamesRes {
 }
 
 /// A text to colour.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -361,14 +361,14 @@ pub struct TokensReq {
 /// How a text is coloured, by `dt_lang::highlight`'s one set of rules: `classes` are the CSS classes (`tk-node`,
 /// …), and `pieces` runs three numbers for each coloured piece: its first and last-plus-one UTF-8 byte in the
 /// text and its place in `classes`.  What no piece covers is plain.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct TokensRes {
     pub classes: Vec<String>,
     pub pieces: Vec<u32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -379,7 +379,7 @@ pub struct CheckValueReq {
 }
 
 /// What the reader refuses in a typed value (`message` null when it takes it).
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct CheckValueRes {
     pub message: Option<String>,
@@ -389,7 +389,7 @@ pub struct CheckValueRes {
 
 /// One written value to say the printed size of: the control it is for and
 /// the text as written.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -401,7 +401,7 @@ pub struct PrintedItem {
 
 /// `/api/tiles/ID/printed`: the sizes `items` print on the current target,
 /// reading the `$` heights and `let`s of `text` (the tile's document).
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -412,7 +412,7 @@ pub struct PrintedReq {
 
 /// What a value prints, mm to 0.01: one end for a number, two for a range;
 /// `editable` when the printed size can be typed in.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct PrintedSize {
     pub ends: Vec<String>,
@@ -422,7 +422,7 @@ pub struct PrintedSize {
 /// One answer for each item, in order: `null` where no printed size is shown
 /// (not a length, printing as written, or naming what the document does not
 /// give).
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct PrintedRes {
     pub items: Vec<Option<PrintedSize>>,
@@ -430,7 +430,7 @@ pub struct PrintedRes {
 
 /// `/api/printed-set`: the value `typed` with its end `end` set so that it
 /// prints `mm`, in its own unit.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -441,13 +441,13 @@ pub struct PrintedSetReq {
 }
 
 /// The value as it is now written; the page writes it like any typed value.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct PrintedSetRes {
     pub typed: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -456,14 +456,14 @@ pub struct TargetReq {
     pub printer: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct TargetRes {
     pub system: String,
     pub printer: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -472,13 +472,13 @@ pub struct RevealReq {
 }
 
 /// A call that has nothing to give back but that it was done.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(type = "Record<string, never>"))]
 pub struct Done {}
 
 /// `/api/messages`: the page reports a failure of its own.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -491,7 +491,7 @@ pub struct PageMessageReq {
     pub backtrace: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -501,7 +501,7 @@ pub struct DraftReq {
     pub debug: Option<bool>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -514,7 +514,7 @@ pub struct ExportReq {
 }
 
 /// An export: where it would go, or what it wrote.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(untagged)]
 pub enum ExportRes {
@@ -522,7 +522,7 @@ pub enum ExportRes {
     Built(ExportBuilt),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct ExportBuilt {
     pub path: String,
@@ -642,7 +642,7 @@ pub(super) fn draft(shared: &Shared, tile: &TileRef, v: DraftReq) -> super::rout
 }
 
 /// `/api/tiles/ID/step`: one step of a drag or a scrub, an edit and the draft of what it made in one request.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -655,7 +655,7 @@ pub struct StepReq {
 }
 
 /// What became of the draft of a step.
-#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub enum StepDraft {
@@ -670,7 +670,7 @@ pub enum StepDraft {
 /// The head of a step's answer: the edit's result and the revision of its text (what the next step reads at), and
 /// what became of the draft.  The answer is this as JSON, its length in four bytes (big-endian) before it, and
 /// the draft's mesh after it.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct StepHead {
     pub text: String,

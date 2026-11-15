@@ -18,7 +18,7 @@ use super::edit::{Overlay, bad};
 use super::*;
 
 /// `/api/tiles/ID/offers`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -30,7 +30,7 @@ pub struct OffersReq {
 }
 
 /// One thing the Add menu may offer.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Offer {
     pub name: String,
@@ -46,7 +46,7 @@ pub struct Offer {
 
 /// What may be offered; `ok` false (with `why` and the `errors`) when the
 /// tile has a mistake and there is no plan to ask.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct OffersRes {
     pub ok: bool,

@@ -13,21 +13,21 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::api::ok;
 use super::http::{Request, loopback};
 use super::{Shared, assets, calls, fail};
 
 /// `GET /api/session`: this run's token, which every `POST` must carry.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct SessionRes {
     pub token: String,
 }
 
 /// `GET /api/about`: the program's version and the tile formats it reads.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct AboutRes {
     pub version: String,
@@ -35,7 +35,7 @@ pub struct AboutRes {
 }
 
 /// `GET /api/tiles/ID/text`: a document's text for the text pane.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct TextRes {
@@ -48,7 +48,7 @@ pub struct TextRes {
 
 /// `GET /api/test-idle`: how much work is not finished (0: idle).
 #[cfg(any(test, feature = "test-routes"))]
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TestIdle {
     pub pending: usize,
 }

@@ -42,7 +42,7 @@ where
 }
 
 /// The words a call may set on a piece.
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -77,7 +77,7 @@ pub struct PieceWords {
     pub system: Option<Option<String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -96,7 +96,7 @@ pub struct MapsAddReq {
     pub doc_rev: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -107,7 +107,7 @@ pub struct MapsSetReq {
     pub doc_rev: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -116,7 +116,7 @@ pub struct PieceEdit {
     pub set: PieceWords,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -126,7 +126,7 @@ pub struct MapsBatchReq {
     pub doc_rev: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -139,7 +139,7 @@ pub struct MapsDupReq {
 }
 
 /// A call about one piece.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -149,7 +149,7 @@ pub struct MapsPieceReq {
     pub doc_rev: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -164,7 +164,7 @@ pub struct MapsPinReq {
     pub doc_rev: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -174,7 +174,7 @@ pub struct MapsListReq {
 }
 
 /// An edit that made or named a piece: its id.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct MapsPieced {
     #[serde(flatten)]
@@ -187,7 +187,7 @@ pub struct MapsPieced {
 }
 
 /// An edit of several pieces: how many.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct MapsBatched {
     #[serde(flatten)]
