@@ -110,6 +110,7 @@ fn observe(path: &str) -> Observed {
 /// The tile, built once with every observer on.  Never call this from a
 /// rayon worker: the build runs on its own pool and the caller waits on it.
 pub fn observed(path: &str) -> &'static Observed {
+    warm_reads(path);
     static MEMO: Mutex<BTreeMap<String, Slot<Observed>>> = Mutex::new(BTreeMap::new());
     slot(&MEMO, path).get_or_init(|| Box::leak(Box::new(observe(path))))
 }
@@ -121,17 +122,36 @@ pub fn prebuild(paths: &[&str]) {
     /// Builds at once: six two-thread pools fill twelve cores.
     const AT_ONCE: usize = 6;
     let next = std::sync::atomic::AtomicUsize::new(0);
+    // the workers carry the test's name, so the warm rule knows whose builds they are
+    let name = format!("{}/prebuild", std::thread::current().name().unwrap_or(""));
     std::thread::scope(|s| {
         for _ in 0..AT_ONCE {
-            s.spawn(|| {
-                while let Some(p) =
-                    paths.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
-                {
-                    observed(p);
-                }
-            });
+            let worker = std::thread::Builder::new().name(name.clone());
+            worker
+                .spawn_scoped(s, || {
+                    while let Some(p) =
+                        paths.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+                    {
+                        observed(p);
+                    }
+                })
+                .expect("a prebuild worker starts");
         }
     });
+}
+
+/// A warm test reads only the torture set ([`super::golden::TILES`]): a test tile outside it is built only for a
+/// `thorough_` test, which `cargo xtask check --full` runs, so the warm check never pays for it.
+fn warm_reads(path: &str) {
+    if !path.starts_with("lib:tests/") || super::golden::TILES.contains(&path) {
+        return;
+    }
+    let t = std::thread::current();
+    let name = t.name().unwrap_or("");
+    assert!(
+        name.contains("thorough_"),
+        "{name}: a warm test reads {path}, which is not in the torture set (golden::TILES); read a torture tile, or make the test thorough_ (an ignored test that cargo xtask check --full runs)"
+    );
 }
 
 /// The tile's observed build.
@@ -139,9 +159,25 @@ pub fn built(path: &str) -> &'static Built {
     &observed(path).built
 }
 
-/// The memo's one general entry, shared with the other crates' tests: see
-/// `dt_testkit`.
-pub use dt_testkit::{build, timed};
+/// The memo's one general entry, shared with the other crates' tests (see `dt_testkit`), held to the warm rule.
+pub fn build<S: dt_testkit::Reads>(
+    src: &S,
+    path: &str,
+    opts: &Options,
+) -> Result<&'static Built, &'static Vec<dt_eval::Diag>> {
+    warm_reads(path);
+    dt_testkit::build(src, path, opts)
+}
+
+/// [`build`], with the seconds the one build took.
+pub fn timed<S: dt_testkit::Reads>(
+    src: &S,
+    path: &str,
+    opts: &Options,
+) -> (Result<&'static Built, &'static Vec<dt_eval::Diag>>, f64) {
+    warm_reads(path);
+    dt_testkit::timed(src, path, opts)
+}
 
 /// The tile written in `text`, built with the default options once however
 /// many tests ask.

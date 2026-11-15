@@ -362,7 +362,8 @@ fn a_scatter_of_trees_checks_and_a_tree_at_a_line_is_refused() {
 }
 
 #[test]
-fn a_mixed_scatter_builds_and_is_deterministic() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_mixed_scatter_builds_and_is_deterministic() {
     // rocks and flowers, in a region and at a line
     for body in [
         "scatter count=10 { rock size=\"4dmm .. 6dmm\"; flower }",
@@ -510,7 +511,8 @@ fn tile_with(body: &str) -> String {
 }
 
 #[test]
-fn a_lines_width_makes_a_strip_that_a_surface_follows() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_lines_width_makes_a_strip_that_a_surface_follows() {
     let text = tile_with(
         "line trail width=\"12dmm\" { through southCenter northCenter }\n stack {\n base\n dirt\n grass at=trail\n }",
     );

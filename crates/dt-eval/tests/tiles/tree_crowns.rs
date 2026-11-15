@@ -57,7 +57,8 @@ fn height_full(text: &str) -> f64 {
 }
 
 #[test]
-fn the_crown_stays_under_the_high_of_its_cloud() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_the_crown_stays_under_the_high_of_its_cloud() {
     // the overshoot of the clumps and leaves is no longer on top of the
     // height asked for: a 45dmm tree is at most 45dmm
     for top in [
@@ -83,7 +84,8 @@ fn the_crown_stays_under_the_high_of_its_cloud() {
 }
 
 #[test]
-fn a_tree_top_reads_the_place_of_its_tips() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_tree_top_reads_the_place_of_its_tips() {
     // a tip's $d is its place in the tree's own disc; `$a` the angle round
     // the trunk; $x and $y the tile's coordinates
     for top in [
@@ -102,7 +104,8 @@ fn a_tree_top_reads_the_place_of_its_tips() {
 }
 
 #[test]
-fn a_grove_is_taller_in_the_middle() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_grove_is_taller_in_the_middle() {
     // the tree reads d(parent($region)): 0% at the middle of the tile, 100%
     // at its edge
     let top = "$bottom + 26dmm + 40dmm * (1 - d(parent($region), %))";

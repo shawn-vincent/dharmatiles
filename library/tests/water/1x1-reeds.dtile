@@ -1,0 +1,23 @@
+dharmatiles version="1.0.0"
+
+// A torture tile: the shore's reeds at a quarter of its area. A waterline
+// down the middle, the bed pinned under the water and a band either side of
+// the line, reeds along it, grass on the land.
+
+tile size="1x1" seed=1 seams=free {
+    about "Reeds at a waterline beside grass, for the torture set."
+    line shore wobble="6dmm" { through "(0.5sq, 1sq)" "(0.5sq, 0sq)" }
+    region land { boundedBy shore; fill "(0.2sq, 0.5sq)" }
+    region lake { boundedBy shore; fill "(0.8sq, 0.5sq)" }
+    region shoreBand { within "6dmm" of=shore }
+    stack {
+        base
+        dirt top="$dirtEdgeHeight" {
+            pin top="[$waterBedHeight .. $dirtEdgeHeight]" at=shoreBand
+            pin top="$waterBedHeight" at=lake
+        }
+        reeds
+        water
+        grass at=land bare="15%"
+    }
+}

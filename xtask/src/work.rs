@@ -75,6 +75,36 @@ pub fn heavy(root: &Path, args: &[String]) -> Result<(), String> {
 /// The library baseline's test, in dt-eval's one `tiles` test binary (it runs only when `--ignored` asks).
 pub const BASELINE_TEST: &str = "the_library_builds_as_the_baseline_says";
 
+/// The ignored tests in dt-eval's `tiles` binary that are not checks, which `check --full` leaves out: the release
+/// gate (`cargo xtask release` runs it: every library tile on both systems) and a measurement. Every other ignored
+/// test there is a `thorough_` test or the library baseline, and `--full` runs them all, in one run, so that a tile
+/// any of them reads is built once.
+const NOT_CHECKS: &[&str] = &[
+    "every_library_tile_passes_the_gate_on_both_systems",
+    "placement_by_cells",
+];
+
+/// `check --full`'s run of dt-eval: its warm tests, its thorough tests and the whole-library sweep, in one test
+/// binary and one memo. A heavy job.
+fn dt_eval_full(root: &Path) -> Result<(), String> {
+    heavy_lock(root)?;
+    let mut c = cargo();
+    c.current_dir(root).args([
+        "test",
+        "-q",
+        "--release",
+        "--no-fail-fast",
+        "-p",
+        "dt-eval",
+        "--",
+        "--include-ignored",
+    ]);
+    for t in NOT_CHECKS {
+        c.args(["--skip", t]);
+    }
+    run(&mut c)
+}
+
 /// `cargo xtask sweep [element|lib:tile …]`.
 pub fn sweep(root: &Path, only: &[String]) -> Result<(), String> {
     heavy_lock(root)?;
@@ -324,7 +354,8 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
         p.tests = pkgs.keys().cloned().collect();
         p.page = true;
         p.docs = true;
-        p.sweep = Some(BTreeSet::new());
+        // the sweep is in dt-eval's full run, with the thorough tests
+        p.sweep = None;
     }
     println!(
         "{} files changed against main{}",
@@ -360,6 +391,13 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             }),
         ));
     }
+    if full {
+        steps.push((
+            "dt-eval's tests, the thorough ones and the whole-library sweep, in one run (a heavy job)".into(),
+            Box::new(|| dt_eval_full(root)),
+        ));
+        p.tests.remove("dt-eval");
+    }
     if !p.tests.is_empty() {
         let names: Vec<String> = p.tests.iter().cloned().collect();
         steps.push((
@@ -371,6 +409,8 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
                     .args(["test", "-q", "--release", "--no-fail-fast"]);
                 if names.len() == pkgs.len() {
                     c.arg("--workspace");
+                } else if full {
+                    c.args(["--workspace", "--exclude", "dt-eval"]);
                 } else {
                     for n in &names {
                         c.args(["-p", n]);

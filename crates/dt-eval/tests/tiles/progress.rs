@@ -11,9 +11,9 @@ use super::memo::observed;
 
 /// One tile for each element that reports sub-progress.
 const TILES: &[&str] = &[
-    "lib:tests/plants/2x2-grass.dtile",
-    "lib:tests/walls/1x1-wall-cut-stone.dtile",
-    "lib:tests/rocks/2x2-rocks.dtile",
+    "lib:tests/plants/1x1-grass-flowers.dtile",
+    "lib:tests/walls/1x1-wall-fieldstone.dtile",
+    "lib:tests/rocks/2x2-rock-clouds.dtile",
     "lib:tests/plants/1x1-tree.dtile",
 ];
 
@@ -49,9 +49,9 @@ fn progress_climbs_to_100_percent() {
 #[test]
 fn elements_with_a_loop_report_their_counts() {
     for (path, what) in [
-        ("lib:tests/walls/1x1-wall-cut-stone.dtile", "stones"),
-        ("lib:tests/plants/2x2-grass.dtile", "blades"),
-        ("lib:tests/rocks/2x2-rocks.dtile", "stones"),
+        ("lib:tests/walls/1x1-wall-fieldstone.dtile", "stones"),
+        ("lib:tests/plants/1x1-grass-flowers.dtile", "blades"),
+        ("lib:tests/rocks/2x2-rock-clouds.dtile", "stones"),
     ] {
         let mine: Vec<_> = observed(path).subs.iter().filter(|s| s.0 == what).collect();
         assert!(!mine.is_empty(), "{path} reports its {what}");
@@ -71,7 +71,7 @@ fn elements_with_a_loop_report_their_counts() {
 /// stage's parts.
 #[test]
 fn sketches_come_as_the_build_goes() {
-    let v = &observed("lib:tests/cliffs/1x1-cliff-mound.dtile").sketches;
+    let v = &observed("lib:tests/cliffs/1x1-cliff-plateau.dtile").sketches;
     let first_rough = v.iter().position(|s| s.1).expect("the cliff's rough boxes");
     assert!(v[..first_rough].iter().all(|s| !s.1 && s.0 > 0), "{v:?}");
     assert!(

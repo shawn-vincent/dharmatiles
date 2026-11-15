@@ -41,7 +41,8 @@ fn earth_top(b: &Built, r: f64) -> f64 {
 }
 
 #[test]
-fn a_dirt_after_a_tree_is_built_after_it_and_banks_on_the_trunk() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_dirt_after_a_tree_is_built_after_it_and_banks_on_the_trunk() {
     let after = tile(&format!(
         "        dirt clods=none\n        {TREE}\n        dirt top=\"$bottom + [1dmm .. 1.2dmm]\" clods=none"
     ));

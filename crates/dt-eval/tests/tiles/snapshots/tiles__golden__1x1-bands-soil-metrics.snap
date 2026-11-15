@@ -1,0 +1,18 @@
+---
+source: crates/dt-eval/tests/tiles/golden.rs
+expression: metrics(b)
+---
+triangles: 261556
+volume_mm3: 14155.957
+watertight: true
+bodies: 26
+dropped: 0
+voids_filled: 25
+pinches_moved: 138
+slivers: 0
+collapsed: 0
+overhang_mm2: 0.000
+band_mm2: 0.000
+holes: 0
+render_red_pixels: 0
+gate: pass

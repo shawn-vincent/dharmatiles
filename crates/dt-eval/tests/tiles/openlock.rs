@@ -88,7 +88,8 @@ fn each_element_family_builds_for_openlock() {
 /// A narrow top stone between two head joints that leaned toward each other
 /// was a wedge touching nothing: dropped as a lost part on OpenLOCK.
 #[test]
-fn a_drystone_corner_has_no_loose_stone_on_openlock() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_drystone_corner_has_no_loose_stone_on_openlock() {
     passes("lib:tests/walls/1x1-wall-fieldstone-corner.dtile", "ol");
 }
 

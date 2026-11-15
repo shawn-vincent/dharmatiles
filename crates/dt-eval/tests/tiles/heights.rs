@@ -367,7 +367,8 @@ fn tree_height(text: &str) -> f64 {
 }
 
 #[test]
-fn a_trees_top_over_its_foot_or_above_zero_is_its_height() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_trees_top_over_its_foot_or_above_zero_is_its_height() {
     // flat ground at groundHeight (4 mm): `bottom + 30` and `groundHeight + 30`
     // stand the same tree
     let tree = |top: &str| {

@@ -95,11 +95,20 @@ fn a_floor_with_no_land_stands_on_the_base() {
 
 #[test]
 fn the_library_floors_pass_the_gate() {
-    for path in [
+    the_library_floors_pass_the_gate_on(&[
         "lib:tests/floors/1x1-floor-stone.dtile",
         "lib:tests/floors/1x1-planks.dtile",
-        "lib:tests/floors/1x1-flagstones-heaved.dtile",
-    ] {
+    ]);
+}
+
+#[test]
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_the_library_floors_pass_the_gate() {
+    the_library_floors_pass_the_gate_on(&["lib:tests/floors/1x1-flagstones-heaved.dtile"]);
+}
+
+fn the_library_floors_pass_the_gate_on(paths: &[&str]) {
+    for &path in paths {
         let b = memo::built(path);
         assert!(
             b.audit.failures(&Options::default().printer).is_empty(),

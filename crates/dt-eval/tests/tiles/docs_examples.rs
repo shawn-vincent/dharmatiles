@@ -62,7 +62,8 @@ fn cards() -> Vec<(String, String, Option<String>)> {
 }
 
 #[test]
-fn every_card_builds_or_gives_the_code_it_says() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_every_card_builds_or_gives_the_code_it_says() {
     let cards = cards();
     assert!(
         cards.len() >= 8,

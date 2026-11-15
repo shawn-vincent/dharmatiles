@@ -65,7 +65,7 @@ fn a_draft_is_quick_and_still_traced() {
         ..Options::default()
     };
     {
-        let tile = "lib:tests/water/1x1-water+grass.dtile";
+        let tile = "lib:tests/water/1x1-reeds.dtile";
         let f = memo::built(tile);
         let (d, td) = memo::timed(&dt_eval::Library, tile, &draft);
         let d = d.unwrap();

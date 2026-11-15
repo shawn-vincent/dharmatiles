@@ -1,0 +1,20 @@
+dharmatiles version="1.0.0"
+
+// A torture tile: the grove's code at a fraction of its cost. Two small trees
+// scattered in a round clearing, each top a cloud read in the clearing's own
+// frame (`d(parent($region), %)`: 0% at its middle, 100% at its edge).
+
+tile size="1x1" seed=8 {
+    about "Two small trees in a round clearing, taller in the middle: a scatter of trees whose top is a cloud, for the torture set."
+    region clearing { within "13dmm" of=center }
+    stack {
+        base
+        dirt clods=none
+        scatter at=clearing count=2 gap="4dmm" {
+            tree top="$bottom + high(20dmm .. 24dmm) + 10dmm * (1 - d(parent($region), %))" {
+                trunk height="9dmm"
+                crown width="10dmm" clumps=10 shape=round branching=normal
+            }
+        }
+    }
+}

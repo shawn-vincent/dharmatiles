@@ -1,5 +1,6 @@
 ---
 source: crates/dt-eval/tests/tiles/order.rs
+assertion_line: 24
 expression: text
 ---
 lib:tests/cliffs/1x1-cliff-canyon.dtile: [Entry(0), Entry(1), Entry(2), Entry(3), Lift, Entry(4), Entry(5), Entry(6)]
@@ -30,6 +31,7 @@ lib:tests/ground/1x1-soil.dtile: [Entry(0), Lift, Entry(1)]
 lib:tests/ground/2x2-dirt.dtile: [Entry(0), Lift, Entry(1)]
 lib:tests/ground/2x2-hill.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/plants/1x1-grass-flowers.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entry(3)]
+lib:tests/plants/1x1-grove-small.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/plants/1x1-soil+grass.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/plants/1x1-tree.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/plants/2x2-grass.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
@@ -55,6 +57,7 @@ lib:tests/walls/1x1-wall-stone+grass.dtile: [Entry(0), Lift, Entry(1), Entry(2),
 lib:tests/water/1x1-bands-pond.dtile: [Entry(0), Entry(1), Entry(2), Lift, Entry(3)]
 lib:tests/water/1x1-bands-stream.dtile: [Entry(0), Entry(1), Entry(2), Lift, Entry(3), Entry(4)]
 lib:tests/water/1x1-cloud-water.dtile: [Entry(0), Entry(1), Lift, Entry(2)]
+lib:tests/water/1x1-reeds.dtile: [Entry(0), Entry(1), Entry(2), Lift, Entry(3), Entry(4)]
 lib:tests/water/1x1-water+grass.dtile: [Entry(0), Entry(1), Entry(2), Lift, Entry(3), Entry(4)]
 lib:tests/water/1x1-water-u+soil.dtile: [Entry(0), Entry(1), Entry(2), Lift, Entry(3)]
 lib:tests/water/2x2-shore.dtile: [Entry(0), Entry(1), Entry(2), Entry(3), Entry(4), Lift, Entry(5), Entry(6)]

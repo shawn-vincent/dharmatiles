@@ -116,7 +116,8 @@ fn a_rock_cloud_draws_a_span_for_every_topped_stone() {
 }
 
 #[test]
-fn a_grove_draws_a_span_for_every_branch_tip() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_grove_draws_a_span_for_every_branch_tip() {
     let b = built("plants/2x2-grove.dtile");
     let d = b.report.clouds.as_ref().unwrap();
     let tips: Vec<_> = d

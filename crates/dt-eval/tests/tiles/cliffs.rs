@@ -81,7 +81,8 @@ fn top_of(b: &Built, material: Material, disc: Option<([f64; 2], f64)>) -> f64 {
 }
 
 #[test]
-fn every_stone_top_stands_in_its_band_and_the_pile_reaches_it() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_every_stone_top_stands_in_its_band_and_the_pile_reaches_it() {
     let b = built(&mound(false));
     assert!(b.audit.failures(&Options::default().printer).is_empty());
     let edge = EDGE_MM;
@@ -255,18 +256,20 @@ fn dirt_follows_a_stones_top(seeds: &[u32]) {
 }
 
 #[test]
-fn dirt_follows_a_stones_top_as_a_layer_of_its_band() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_dirt_follows_a_stones_top_as_a_layer_of_its_band() {
     dirt_follows_a_stones_top(&[2]);
 }
 
 #[test]
-#[ignore = "the slow sweep: the same at seeds 5 and 9 (seed 2 runs by default)"]
-fn dirt_follows_a_stones_top_as_a_layer_of_its_band_at_more_seeds() {
+#[ignore = "thorough: cargo xtask check --full runs it (the same at seeds 5 and 9 (seed 2 runs by default))"]
+fn thorough_dirt_follows_a_stones_top_as_a_layer_of_its_band_at_more_seeds() {
     dirt_follows_a_stones_top(&[5, 9]);
 }
 
 #[test]
-fn dirt_is_absent_where_the_surface_under_it_is_steeper_than_max_slope() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_dirt_is_absent_where_the_surface_under_it_is_steeper_than_max_slope() {
     // a pile of broken stones: their grain and tilts are steeper than 35
     // degrees at the scale dirt reads the slope, so dirt keeps to the flat
     // patches (a ledge, the stones' feet) and the faces stay bare; with no
@@ -284,7 +287,8 @@ fn dirt_is_absent_where_the_surface_under_it_is_steeper_than_max_slope() {
 }
 
 #[test]
-fn max_slope_changes_how_much_stone_holds_dirt() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_max_slope_changes_how_much_stone_holds_dirt() {
     let tile = |extra: &str| tall(true).replace("at=crag\n", &format!("at=crag {extra}\n"));
     let cover = |extra: &str| {
         let b = built(&tile(extra));
@@ -343,7 +347,8 @@ fn side_grain(b: &Built, axis: usize, high: bool, z_max: f64) -> (f64, usize, us
 }
 
 #[test]
-fn the_tiles_outer_sides_carry_grain_all_the_way_up() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_the_tiles_outer_sides_carry_grain_all_the_way_up() {
     for path in [
         "lib:tests/cliffs/1x1-cliff-columns.dtile",
         "lib:tests/cliffs/1x1-cliff-corner.dtile",
@@ -392,7 +397,8 @@ fn note(b: &Built, name: &str) -> f64 {
 }
 
 #[test]
-fn a_band_that_holds_a_stone_down_does_not_stack_it_on_itself() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_band_that_holds_a_stone_down_does_not_stack_it_on_itself() {
     // the spire's lumps have wide bands one over the other: a stone standing
     // over two of them is held to the lower one's high, and the stack once
     // placed that same stone again and again at its site (dozens of

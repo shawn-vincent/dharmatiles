@@ -23,9 +23,8 @@ const PLACING: &[&str] = &[
     "lib:tests/rocks/1x1-rock-tops.dtile",
     "lib:tests/plants/1x1-tree.dtile",
     "lib:tests/plants/1x1-grass-flowers.dtile",
-    "lib:tests/plants/2x2-meadow.dtile",
-    "lib:tests/water/1x1-water+grass.dtile",
-    "lib:tests/cliffs/1x1-cliff-mound.dtile",
+    "lib:tests/water/1x1-reeds.dtile",
+    "lib:tests/cliffs/1x1-cliff-plateau.dtile",
 ];
 
 /// The tile built with `f` applied to the default options, once per options
@@ -85,8 +84,21 @@ fn placements_are_recorded_for_every_placing_element() {
     };
     assert!(kinds("lib:tests/rocks/1x1-rock-tops.dtile").contains(&"rock"));
     assert!(kinds("lib:tests/plants/1x1-tree.dtile").contains(&"tree"));
-    assert!(kinds("lib:tests/plants/2x2-meadow.dtile").contains(&"grass"));
     assert!(kinds("lib:tests/plants/1x1-grass-flowers.dtile").contains(&"flowers"));
+}
+
+/// The grass's clearings, round the rocks of a meadow (no tile in the torture set has rocks in grass).
+#[test]
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_grass_clearings_are_recorded() {
+    let p = "lib:tests/plants/2x2-meadow.dtile";
+    assert!(
+        built(p)
+            .report
+            .placed
+            .iter()
+            .any(|q| q.kind.name() == "grass")
+    );
 }
 
 /// What a coarser lattice leaves where it is: the rocks and flowers a tile
@@ -117,8 +129,8 @@ fn rocks_and_flowers_stand_where_they_did_at_other_cells() {
 }
 
 #[test]
-#[ignore = "the slow sweep: the same as the fast test at 48 and 128 cells (one representative, 32, runs by default)"]
-fn rocks_and_flowers_stand_where_they_did_at_more_cells() {
+#[ignore = "thorough: cargo xtask check --full runs it (the same as the fast test at 48 and 128 cells (one representative, 32, runs by default))"]
+fn thorough_rocks_and_flowers_stand_where_they_did_at_more_cells() {
     stand_where_they_did(&[48, 128]);
 }
 

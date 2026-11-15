@@ -23,37 +23,62 @@ use dt_print::{VIEWS, render};
 
 use super::memo::{built, hashes, prebuild};
 
-const TILES: &[&str] = &[
+/// The torture set: the warm check's tiles, each built once, held to its stage hashes, repair counts and the
+/// gate's verdict. Chosen (14 Nov 2026) by measured line coverage of the engine (dt-geom, dt-kit, dt-elements,
+/// dt-eval, dt-doc, dt-value, dt-lang): greedily, each the tile that ran the most lines the ones before it did not
+/// per second of building, to 99.5% of what every test tile together runs, all of them 1×1 (two made for it:
+/// `1x1-grove-small` for the grove's scattered trees under a cloud, `1x1-reeds` for the shore's reeds); then the
+/// odd shapes that line counts cannot see (a 3×1 zigzag, a 1×2 diagonal, a corner sliver), and the small tiles
+/// that alone carry a feature a test reads (plain soil with clods, no base, a body in a definition, the clouds the debug layer draws). Every other test tile
+/// that holds goldens is in [`THOROUGH`], run by `cargo xtask check --full`.
+pub const TILES: &[&str] = &[
     "lib:tests/ground/1x1-flat.dtile",
-    "lib:tests/ground/1x1-no-base.dtile",
-    "lib:tests/ground/1x1-soil.dtile",
-    "lib:tests/ground/2x2-dirt.dtile",
-    "lib:tests/rocks/2x2-rocks.dtile",
-    "lib:tests/water/2x2-water.dtile",
-    "lib:tests/plants/2x2-grass.dtile",
-    "lib:tests/plants/2x2-meadow.dtile",
-    "lib:tests/water/2x2-shore.dtile",
-    "lib:tests/plants/1x1-grass-flowers.dtile",
-    "lib:tests/cliffs/2x1-cliff.dtile",
-    "lib:tests/plants/1x1-tree.dtile",
+    "lib:tests/water/1x1-bands-pond.dtile",
+    "lib:tests/cliffs/1x1-cliff-needles.dtile",
     "lib:tests/walls/1x1-wall-cut-stone-corner.dtile",
-    "lib:tests/walls/1x1-wall-fieldstone.dtile",
-    "lib:tests/floors/1x1-floor-stone.dtile",
-    "lib:tests/floors/1x1-flagstones-heaved.dtile",
+    "lib:tests/ground/1x1-bands-soil.dtile",
+    "lib:tests/plants/1x1-grove-small.dtile",
+    "lib:tests/floors/1x1-floor-fieldstone.dtile",
+    "lib:tests/ground/1x1-cloud-pinned.dtile",
+    "lib:tests/rocks/1x1-rock-tops.dtile",
+    "lib:tests/cliffs/1x1-cliff-plateau.dtile",
+    "lib:tests/water/1x1-reeds.dtile",
+    "lib:tests/plants/1x1-grass-flowers.dtile",
     "lib:tests/floors/1x1-planks.dtile",
-    "lib:tests/walls/1x1-wall-rim.dtile",
-    "lib:tests/ground/2x2-hill.dtile",
-    // a stone floor with a wall standing on it: what laying floors before
-    // the lift must leave as it is
-    "lib:tests/floors/1x1-floor-stone-wall.dtile",
-    // a cove of water cut into dirt: a hollow in the land under a fluid
+    "lib:tests/walls/1x1-wall-fieldstone.dtile",
+    "lib:tests/plants/1x1-tree.dtile",
+    "lib:tests/walls/1x1-wall-brick.dtile",
+    "lib:tests/walls/1x1-wall-regular-brick.dtile",
+    "lib:tests/cliffs/1x1-cliff-escarpment.dtile",
+    "lib:tests/ground/1x1-bands-path.dtile",
+    "lib:tests/floors/1x1-floor-stone.dtile",
     "lib:tests/water/1x1-water-u+soil.dtile",
-    // odd shapes no library would ship: a closed line, sharp teeth on a
-    // long tile, a tile taller than wide, a region that is only a sliver
     "lib:tests/shapes/1x1-island.dtile",
+    "lib:tests/walls/1x1-wall-rim.dtile",
     "lib:tests/shapes/3x1-zigzag.dtile",
     "lib:tests/shapes/1x2-diagonal.dtile",
     "lib:tests/shapes/1x1-corner-sliver.dtile",
+    "lib:tests/ground/1x1-no-base.dtile",
+    "lib:tests/ground/1x1-define-body.dtile",
+    "lib:tests/ground/1x1-soil.dtile",
+    "lib:tests/ground/1x1-cloud-dirt.dtile",
+    "lib:tests/water/1x1-cloud-water.dtile",
+    "lib:tests/rocks/2x2-rock-clouds.dtile",
+];
+
+/// The tiles that held goldens before the torture set and are not in it: their snapshots are kept and checked by
+/// the thorough tests.
+const THOROUGH: &[&str] = &[
+    "lib:tests/cliffs/2x1-cliff.dtile",
+    "lib:tests/floors/1x1-flagstones-heaved.dtile",
+    "lib:tests/floors/1x1-floor-stone-wall.dtile",
+    "lib:tests/ground/2x2-dirt.dtile",
+    "lib:tests/ground/2x2-hill.dtile",
+    "lib:tests/plants/2x2-grass.dtile",
+    "lib:tests/plants/2x2-meadow.dtile",
+    "lib:tests/rocks/2x2-rocks.dtile",
+    "lib:tests/water/2x2-shore.dtile",
+    "lib:tests/water/2x2-water.dtile",
 ];
 
 /// The shape tiles are the edge cases: each must pass the gate, watertight
@@ -125,6 +150,27 @@ fn golden_metrics() {
 }
 
 #[test]
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_golden_metrics() {
+    prebuild(THOROUGH);
+    for path in THOROUGH {
+        let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
+        insta::assert_snapshot!(format!("{name}-metrics"), metrics(built(path)));
+    }
+}
+
+#[test]
+#[cfg(not(windows))]
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_golden_hashes() {
+    prebuild(THOROUGH);
+    for path in THOROUGH {
+        let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
+        insta::assert_snapshot!(format!("{name}-hashes"), hashes(built(path)));
+    }
+}
+
+#[test]
 #[cfg(not(windows))]
 fn golden_hashes() {
     prebuild(TILES);
@@ -156,7 +202,8 @@ pub const OBSERVED: &[&str] = &[
 /// recorded from plain builds (`golden_hashes` does it for the rest).
 #[test]
 #[cfg(not(windows))]
-fn observers_change_nothing() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_observers_change_nothing() {
     prebuild(OBSERVED);
     for path in OBSERVED {
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
@@ -231,12 +278,22 @@ fn no_base_line_means_no_base() {
 /// their high points.
 #[test]
 fn the_edge_height_is_the_most_the_rim_reaches() {
+    the_edge_height_is_the_most_the_rim_reaches_on(&[
+        "lib:tests/ground/1x1-flat.dtile",
+        "lib:tests/ground/1x1-soil.dtile",
+    ]);
+}
+
+#[test]
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_the_edge_height_is_the_most_the_rim_reaches() {
+    the_edge_height_is_the_most_the_rim_reaches_on(&["lib:tests/ground/2x2-dirt.dtile"]);
+}
+
+fn the_edge_height_is_the_most_the_rim_reaches_on(paths: &[&str]) {
     const EDGE: f64 = 3.4;
     const ROUND: f64 = 0.2;
-    for path in [
-        "lib:tests/ground/2x2-dirt.dtile",
-        "lib:tests/ground/1x1-soil.dtile",
-    ] {
+    for &path in paths {
         let b = built(path);
         let (surface, _) = b.report.surface.as_ref().unwrap();
         let (nx, ny) = (surface.nx, surface.ny);
@@ -292,11 +349,20 @@ fn the_edge_height_is_the_most_the_rim_reaches() {
 
 #[test]
 fn the_dirt_sides_are_relief_behind_the_plane() {
-    for path in [
-        "lib:tests/ground/1x1-soil.dtile",
+    the_dirt_sides_are_relief_behind_the_plane_on(&["lib:tests/ground/1x1-soil.dtile"]);
+}
+
+#[test]
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_the_dirt_sides_are_relief_behind_the_plane() {
+    the_dirt_sides_are_relief_behind_the_plane_on(&[
         "lib:tests/ground/2x2-dirt.dtile",
         "lib:tests/ground/2x2-hill.dtile",
-    ] {
+    ]);
+}
+
+fn the_dirt_sides_are_relief_behind_the_plane_on(paths: &[&str]) {
+    for &path in paths {
         let b = built(path);
         let [w, h] = b.footprint;
         let m = &b.export.mesh;
@@ -392,11 +458,20 @@ fn the_dirt_sides_are_relief_behind_the_plane() {
 
 #[test]
 fn the_dirt_tiles_meet_the_exit_criteria() {
-    for path in [
-        "lib:tests/ground/1x1-soil.dtile",
+    the_dirt_tiles_meet_the_exit_criteria_on(&["lib:tests/ground/1x1-soil.dtile"]);
+}
+
+#[test]
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_the_dirt_tiles_meet_the_exit_criteria() {
+    the_dirt_tiles_meet_the_exit_criteria_on(&[
         "lib:tests/ground/2x2-dirt.dtile",
         "lib:tests/ground/2x2-hill.dtile",
-    ] {
+    ]);
+}
+
+fn the_dirt_tiles_meet_the_exit_criteria_on(paths: &[&str]) {
+    for &path in paths {
         let b = built(path);
         let a = &b.audit;
         assert!(a.watertight, "{path}: watertight after the float32 reload");
@@ -430,7 +505,8 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
 }
 
 #[test]
-fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_the_rocks_and_water_tiles_meet_the_exit_criteria() {
     use dt_kit::Material;
     for path in [
         "lib:tests/rocks/2x2-rocks.dtile",
@@ -468,14 +544,25 @@ fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
 
 #[test]
 fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
-    for path in [
+    the_wall_and_floor_tiles_meet_the_exit_criteria_on(&[
         "lib:tests/walls/1x1-wall-cut-stone-corner.dtile",
         "lib:tests/walls/1x1-wall-fieldstone.dtile",
         "lib:tests/walls/1x1-wall-rim.dtile",
         "lib:tests/floors/1x1-floor-stone.dtile",
-        "lib:tests/floors/1x1-flagstones-heaved.dtile",
         "lib:tests/floors/1x1-planks.dtile",
-    ] {
+    ]);
+}
+
+#[test]
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_the_wall_and_floor_tiles_meet_the_exit_criteria() {
+    the_wall_and_floor_tiles_meet_the_exit_criteria_on(&[
+        "lib:tests/floors/1x1-flagstones-heaved.dtile",
+    ]);
+}
+
+fn the_wall_and_floor_tiles_meet_the_exit_criteria_on(paths: &[&str]) {
+    for &path in paths {
         let b = built(path);
         let a = &b.audit;
         assert!(a.watertight, "{path}: watertight after the float32 reload");
@@ -497,7 +584,8 @@ fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
 }
 
 #[test]
-fn the_grass_tiles_meet_the_exit_criteria() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_the_grass_tiles_meet_the_exit_criteria() {
     use dt_kit::Material;
     for path in [
         "lib:tests/plants/2x2-grass.dtile",

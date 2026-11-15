@@ -601,7 +601,8 @@ fn a_walls_courses_and_bays_take_a_weighting() {
 }
 
 #[test]
-fn a_blades_length_and_height_take_a_weighting() {
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_a_blades_length_and_height_take_a_weighting() {
     takes_a_weighting(
         |v| format!("        dirt\n        grass length=\"{v}\""),
         "3.5dmm .. 6.5dmm",

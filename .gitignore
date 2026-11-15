@@ -23,3 +23,6 @@ reference/*
 node_modules/
 docs/engine/
 docs/posters/
+
+# coverage runs (llvm-profdata input)
+*.profraw

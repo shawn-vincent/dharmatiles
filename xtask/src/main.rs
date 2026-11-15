@@ -26,9 +26,10 @@ commands:
            clippy for Rust; the tests of each changed package and of every
            package that depends on it; npm test for the page; docs --check;
            the sweep of each library tile changed (an element or geometry
-           change is held by the test tiles' goldens: stage hashes, repair
-           counts, the gate). --full runs every check, the whole test suite
-           and the whole-library sweep: before a push;
+           change is held by the torture set's goldens: stage hashes, repair
+           counts, the gate). --full runs every check, the whole test suite,
+           the thorough tests and the whole-library sweep (dt-eval's in one
+           run, so a tile is built once): before a push;
            --plan prints the checks without running them
   sweep [element|lib:tile …]
            the library baseline (crates/dt-eval/tests/tiles/baseline.rs) for the
