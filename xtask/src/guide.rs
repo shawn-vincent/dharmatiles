@@ -455,14 +455,28 @@ fn check_samples(
     if samples.is_empty() {
         return Ok(());
     }
-    let scratch = root.join("target/xtask-guide");
+    // a folder of this run's own: two checks at once in one checkout (a check and a `docs --check`) wrote the same
+    // files under the same names, and one read the other's half-written sample (a header with no version)
+    let scratch = root.join(format!("target/xtask-guide/{}", std::process::id()));
     std::fs::create_dir_all(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
+    let checked = run_samples(bin, &scratch, samples, problems);
+    // best-effort cleanup: the folder is under target/, and a leftover changes nothing
+    let _ = std::fs::remove_dir_all(&scratch);
+    checked
+}
+
+fn run_samples(
+    bin: &Path,
+    scratch: &Path,
+    samples: &[(String, usize, String)],
+    problems: &mut Vec<String>,
+) -> Result<(), String> {
     for (page, n, code) in samples {
         let name = format!("{}-{n}.dtile", page.replace(['/', '.'], "-"));
         let file = scratch.join(&name);
         std::fs::write(&file, code).map_err(|e| format!("{}: {e}", file.display()))?;
         let out = Command::new(bin)
-            .current_dir(&scratch)
+            .current_dir(scratch)
             .env("NO_COLOR", "1")
             .env("COLUMNS", "100")
             .env("DT_CACHE", "off")
