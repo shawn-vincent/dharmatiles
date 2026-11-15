@@ -85,7 +85,7 @@ pub(crate) mod places;
 mod placing;
 pub(crate) mod plan;
 mod plates;
-mod printers;
+pub(crate) mod printers;
 mod resources;
 pub(crate) mod roots;
 mod scene;
@@ -110,7 +110,9 @@ use std::time::{Duration, Instant, SystemTime};
 
 use dt_eval::progress::{StageInfo, Status, Timings, Tracker, plan_stages};
 use dt_eval::{Diag, Options};
-use serde_json::{Value, json};
+use serde_json::Value;
+#[cfg(test)]
+use serde_json::json;
 
 use crate::watch::{Recording, mtime};
 

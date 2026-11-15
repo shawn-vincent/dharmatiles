@@ -24,6 +24,7 @@ pub mod hash;
 mod lower;
 pub mod machine;
 pub mod map;
+mod mistake;
 mod options;
 pub mod places;
 pub mod plan;
@@ -34,7 +35,6 @@ pub mod solve;
 pub mod source;
 pub mod tiers;
 pub mod unwritten;
-pub mod wire;
 
 use std::path::{Path, PathBuf};
 
@@ -49,6 +49,7 @@ pub use doc::{Region, Tile, Within};
 pub use dt_doc::lower::{RangeRefusal, Ranged, ranged, weighting_flaw_in};
 pub use dt_kit::Progress;
 pub use machine::{Machine, ProfileKind, printer_machine, printer_names, printer_profile};
+pub use mistake::{FixJson, Mistake, is_document_error, mistakes};
 pub use options::{DRAFT_CELLS, Options, Profile};
 pub use record::TileRecord;
 pub use source::{Files, LIB, Library, Memory, Source, library_file};

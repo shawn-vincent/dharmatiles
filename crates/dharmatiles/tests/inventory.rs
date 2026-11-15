@@ -13,6 +13,12 @@ use std::process::Command;
 #[path = "../src/inventory_wire.rs"]
 mod inventory_wire;
 
+// and for `plates --json`, the same way
+#[allow(dead_code)]
+#[path = "../src/cli_wire.rs"]
+mod cli_wire;
+
+use cli_wire::PlatesChecked;
 use inventory_wire::{ColourWord, InventoryRow, InventoryState};
 
 const EXE: &str = env!("CARGO_BIN_EXE_dharmatiles");
@@ -225,13 +231,9 @@ fn a_list_prints_only_what_the_inventory_lacks_and_all_ignores_it() {
     );
     let (code, out, err) = run(&d, &["plates", l.to_str().unwrap(), "--check", "--json"]);
     assert_eq!(code, 0, "{err}");
-    let j: serde_json::Value = serde_json::from_str(&out).unwrap();
-    let k = &j["plan"]["kinds"][0];
-    assert_eq!(
-        (k["want"].as_u64(), k["have"].as_u64(), k["count"].as_u64()),
-        (Some(4), Some(3), Some(1)),
-        "{j}"
-    );
+    let j: PlatesChecked = serde_json::from_str(&out).unwrap();
+    let k = &j.plan.kinds[0];
+    assert_eq!((k.want, k.have, k.count), (4, 3, 1), "{j:?}");
     let (_, _, err) = run(&d, &["plates", l.to_str().unwrap(), "--check"]);
     assert!(
         err.contains("3 pieces are already in your inventory") && err.contains("1 to print"),
@@ -242,8 +244,8 @@ fn a_list_prints_only_what_the_inventory_lacks_and_all_ignores_it() {
         &d,
         &["plates", l.to_str().unwrap(), "--check", "--json", "--all"],
     );
-    let j: serde_json::Value = serde_json::from_str(&out).unwrap();
-    assert_eq!(j["plan"]["kinds"][0]["count"], 4);
+    let j: PlatesChecked = serde_json::from_str(&out).unwrap();
+    assert_eq!(j.plan.kinds[0].count, 4);
     // single colour: the multicolour prints are another piece, so all four print, and the plan says nothing is held
     let (_, out, _) = run(
         &d,
@@ -256,9 +258,9 @@ fn a_list_prints_only_what_the_inventory_lacks_and_all_ignores_it() {
             "single",
         ],
     );
-    let j: serde_json::Value = serde_json::from_str(&out).unwrap();
-    assert_eq!(j["plan"]["kinds"][0]["count"], 4);
-    assert_eq!(j["plan"]["kinds"][0]["other_colour"], 3);
+    let j: PlatesChecked = serde_json::from_str(&out).unwrap();
+    assert_eq!(j.plan.kinds[0].count, 4);
+    assert_eq!(j.plan.kinds[0].other_colour, 3);
     // all of it on the shelf: refused with the way out
     run(&d, &["inventory", "have", FLAT, "--colour", "multi"]);
     let (code, _, err) = run(&d, &["plates", l.to_str().unwrap(), "--check"]);

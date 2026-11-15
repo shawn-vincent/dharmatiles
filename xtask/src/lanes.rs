@@ -1,4 +1,4 @@
-//! The check's tests, run in two lanes: `cargo test` runs its test binaries one after another and holds the build
+//! The check's tests, run in lanes: `cargo test` runs its test binaries one after another and holds the build
 //! lock until the last ends, so dharmatiles' and every small binary waited behind dt-eval's tile tests (38 s) while
 //! the machine sat mostly idle. Here the build is `cargo test --no-run` (the same command, so the same features),
 //! the binaries it made are read from its messages, and the tile tests run in a lane of their own beside every other
@@ -9,8 +9,10 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Instant;
 
-/// The binaries big enough for a lane of their own, by package and test target.
-const OWN_LANE: &[(&str, &str)] = &[("dt-eval", "tiles")];
+/// The binaries big enough for a lane of their own, by package and test target: dt-eval's tile tests, and dharmatiles'
+/// own (13 s alone), which otherwise ran last in the other lane, after the tile tests had finished and left the cores
+/// idle.  Every other binary shares one more lane.
+const OWN_LANE: &[(&str, &str)] = &[("dt-eval", "tiles"), ("dharmatiles", "dharmatiles")];
 
 /// One of cargo's build messages (`--message-format=json`): the artifacts, of which a test binary has an
 /// executable; every other kind of message is passed over.
@@ -130,20 +132,25 @@ pub fn tests(cargo: Command, build: bool) -> Result<(), String> {
     if build {
         return Ok(());
     }
-    let own = |b: &&Binary| {
+    let lane_of = |b: &Binary| {
         OWN_LANE
             .iter()
-            .any(|(p, t)| b.package == *p && b.target == *t)
+            .position(|(p, t)| b.package == *p && b.target == *t)
+            .unwrap_or(OWN_LANE.len())
     };
-    let (first, rest): (Vec<&Binary>, Vec<&Binary>) = bins.iter().partition(own);
+    let mut lanes: Vec<Vec<&Binary>> = vec![Vec::new(); OWN_LANE.len() + 1];
+    for b in &bins {
+        lanes[lane_of(b)].push(b);
+    }
     let failed: Vec<String> = std::thread::scope(|s| {
-        let a = s.spawn(|| lane(&first));
-        let b = lane(&rest);
-        let mut f = a
-            .join()
-            .unwrap_or_else(|_| vec!["a test lane panicked".to_owned()]);
-        f.extend(b);
-        f
+        let running: Vec<_> = lanes.iter().map(|l| s.spawn(|| lane(l))).collect();
+        running
+            .into_iter()
+            .flat_map(|r| {
+                r.join()
+                    .unwrap_or_else(|_| vec!["a test lane panicked".to_owned()])
+            })
+            .collect()
     });
     if failed.is_empty() {
         Ok(())

@@ -235,28 +235,20 @@ pub fn load_places(dir: &Path) -> Result<Vec<PathBuf>, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(format!("cannot read {}: {e}", file.display())),
     };
-    let v: Value = serde_json::from_str(&text).map_err(|e| {
+    let file_of: PlacesFile = serde_json::from_str(&text).map_err(|e| {
         format!(
             "{} is not valid: {e}; fix it or move it aside",
             file.display()
         )
     })?;
-    let list = v["places"].as_array().ok_or_else(|| {
-        format!(
-            "{} has no \"places\" list; fix it or move it aside",
-            file.display()
-        )
-    })?;
-    list.iter()
-        .map(|p| {
-            p.as_str().map(PathBuf::from).ok_or_else(|| {
-                format!(
-                    "{}: every place must be a path; fix it or move it aside",
-                    file.display()
-                )
-            })
-        })
-        .collect()
+    Ok(file_of.places)
+}
+
+/// `places.json`: the folders added to the Library and My tiles, the one type of that file, read by [`load_places`] and
+/// written by [`save_places`].
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PlacesFile {
+    places: Vec<PathBuf>,
 }
 
 /// Keep `places` as the added folders.
@@ -266,7 +258,9 @@ pub fn load_places(dir: &Path) -> Result<Vec<PathBuf>, String> {
 pub fn save_places(dir: &Path, places: &[PathBuf]) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
     let file = places_file(dir);
-    let body = json!({ "places": places.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>() });
+    let body = PlacesFile {
+        places: places.to_vec(),
+    };
     let text = serde_json::to_string_pretty(&body).map_err(|e| e.to_string())?;
     dt_eval::atomic::write_atomic(&file, format!("{text}\n"))
         .map_err(|e| format!("cannot write {}: {e}", file.display()))

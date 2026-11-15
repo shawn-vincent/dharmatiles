@@ -21,7 +21,7 @@ use dt_doc::model::{ConstKind, Entry, Setting};
 use dt_doc::paths::HEIGHTS;
 use dt_doc::schema::{OPENLOCK_SQUARE_MM, SQUARE_MM};
 use dt_doc::units::Units;
-use dt_eval::wire::FixJson;
+use dt_eval::FixJson;
 use dt_eval::{Diag, Options, Source};
 use dt_value::{Rng, Seed};
 use serde::{Deserialize, Serialize};
@@ -183,7 +183,7 @@ fn line_col(text: &str, at: usize) -> (usize, usize) {
 
 /// One mistake or note of the page's document, with the places a text area and a card need (the program's own
 /// [`dt_eval::Diag`] made wire).  Its fix is the program's [`FixJson`]: the same type its messages and checks carry,
-/// made where both the program and this crate reach it (`dt_eval::wire`), so a fix has one definition.
+/// made where both the program and this crate reach it (`dt_eval::FixJson`, beside `Mistake`), so a fix has one definition.
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]

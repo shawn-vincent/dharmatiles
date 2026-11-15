@@ -6,6 +6,14 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+// the program's own types for what `--json` prints, taken in whole: the tests read the output by deserializing them, never by
+// key
+#[allow(dead_code)]
+#[path = "../src/cli_wire.rs"]
+mod cli_wire;
+
+use cli_wire::{BuildReport, BuildTile, CheckReport, CheckTile, Refused};
+
 const EXE: &str = env!("CARGO_BIN_EXE_dharmatiles");
 
 /// The program, with a build cache of this run's own: a test never reads or
@@ -62,9 +70,14 @@ fn a_write_error_in_json_has_every_error_key() {
         .output()
         .unwrap();
     assert_eq!(o.status.code(), Some(1));
-    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    let e = &v["tiles"][0]["errors"][0];
-    assert_eq!(e["code"], dt_lang::codes::WRITE);
+    let v: BuildReport = serde_json::from_slice(&o.stdout).unwrap();
+    let BuildTile::Failed(f) = &v.tiles[0] else {
+        panic!("the write failed: {v:?}");
+    };
+    assert_eq!(f.errors[0].code, dt_lang::codes::WRITE);
+    // every key of a mistake is on the wire, a missing one as null: a reader's type does not have to guess
+    let raw: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    let e = &raw["tiles"][0]["errors"][0];
     for k in ["code", "message", "file", "line", "column", "help"] {
         assert!(e.get(k).is_some(), "no `{k}` in {e}");
     }
@@ -77,8 +90,11 @@ fn a_missing_document_is_a_source_error() {
         .output()
         .unwrap();
     assert_eq!(o.status.code(), Some(1));
-    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    assert_eq!(v["tiles"][0]["errors"][0]["code"], dt_lang::codes::SOURCE);
+    let v: CheckReport = serde_json::from_slice(&o.stdout).unwrap();
+    let CheckTile::Failed(f) = &v.tiles[0] else {
+        panic!("the file is missing: {v:?}");
+    };
+    assert_eq!(f.errors[0].code, dt_lang::codes::SOURCE);
 }
 
 #[test]
@@ -204,9 +220,9 @@ fn an_unknown_look_is_an_error_with_a_hint() {
 
     let o = exe().args(["elements", "nope", "--json"]).output().unwrap();
     assert_eq!(o.status.code(), Some(1));
-    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    assert_eq!(v["ok"], false);
-    assert_eq!(v["errors"][0]["code"], dt_lang::codes::UNKNOWN_ELEMENT);
+    let v: Refused = serde_json::from_slice(&o.stdout).unwrap();
+    assert!(!v.ok);
+    assert_eq!(v.errors[0].code, dt_lang::codes::UNKNOWN_ELEMENT);
 }
 
 #[test]
@@ -413,8 +429,11 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
                 .is_file(),
             "{args:?}"
         );
-        let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-        assert_eq!(v["tiles"][0]["target"], target, "{v}");
+        let v: BuildReport = serde_json::from_slice(&o.stdout).unwrap();
+        let BuildTile::Printed(p) = &v.tiles[0] else {
+            panic!("{args:?} did not build: {v:?}");
+        };
+        assert_eq!(p.record.target.as_deref(), Some(target), "{v:?}");
     }
     // one build is one target: there is no `both`, and no such printer
     for args in [

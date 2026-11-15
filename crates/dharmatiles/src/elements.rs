@@ -11,9 +11,8 @@ use dt_doc::wire::{
     SeamRow, SeamsJson, WeightingArg, WeightingJson, WeightingRest, WordJson,
 };
 use dt_eval::Diag;
-use serde_json::json;
 
-use crate::{ERROR, OK, errors_json, report};
+use crate::{ERROR, OK, report};
 
 /// The documentation site with its trailing slash.  It is derived from the repository address in `Cargo.toml`
 /// ([`dt_lang::codes::site_base`]), the one place the address is written.
@@ -50,7 +49,7 @@ pub fn run(name: Option<&str>, json: bool) -> u8 {
         )
         .help(hint);
         if json {
-            say!("{}", json!({"ok": false, "errors": errors_json(&[e])}));
+            crate::say_json(&crate::cli_wire::Refused::of(dt_eval::mistakes(&[e])));
         } else {
             report(&[e]);
         }

@@ -415,7 +415,7 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             ),
         );
         steps.push((
-            "the tests, in two lanes (dt-eval's tile tests beside every other binary)".into(),
+            "the tests, in lanes (dt-eval's tile tests and dharmatiles' each beside every other binary)".into(),
             budget::step::TESTS,
             Box::new(move || crate::lanes::tests(tests(), false)),
         ));

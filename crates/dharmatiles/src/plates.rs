@@ -8,12 +8,13 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use crate::cli_wire::{PlatesChecked, PlatesReport, Refused};
 use dt_doc::map::{Group, Mode, PrintList};
 use dt_eval::{Built, Diag, Files, Options};
 use dt_print::plates::export::{self, Format};
+use dt_print::plates::wire::{PlanOnly, PlanPlate};
 use dt_print::plates::{self, Boxes, Context, Layout, Overrides, Plan};
 use dt_store::Store;
-use serde_json::{Value, json};
 
 use crate::{AUDIT_FAILED, ERROR, OK, report};
 
@@ -324,7 +325,10 @@ pub(crate) fn run(
     }
     if check_only {
         if json {
-            say!("{}", json!({"ok": true, "plan": plan_json(&plan)}));
+            crate::say_json(&PlatesChecked {
+                ok: true,
+                plan: PlanOnly::of(&plan),
+            });
         }
         return OK;
     }
@@ -405,16 +409,16 @@ pub(crate) fn run(
         }
         written.push(p);
     }
-    let report_json = json!({
-        "ok": true,
-        "plan": plan_json(&plan),
-        "plates": layout_json(&plan, &layout),
-        "grouping_cost": layout.grouping_cost,
-        "format": fmt.word(),
-        "files": written.iter().map(|f| f.display().to_string()).collect::<Vec<_>>(),
-        "gate": builds.failures,
-        "total_s": t0.elapsed().as_secs_f64(),
-    });
+    let report_json = PlatesReport {
+        ok: true,
+        plan: PlanOnly::of(&plan),
+        plates: PlanPlate::of_layout(&plan, &layout, &dt_doc::map::piece_ids(&list)),
+        grouping_cost: layout.grouping_cost,
+        format: fmt.word().to_owned(),
+        files: written.iter().map(|f| f.display().to_string()).collect(),
+        gate: builds.failures.clone(),
+        total_s: t0.elapsed().as_secs_f64(),
+    };
     let rec = dest.join(format!("{title}.plates.json"));
     match serde_json::to_string_pretty(&report_json)
         .map_err(|e| e.to_string())
@@ -435,7 +439,7 @@ pub(crate) fn run(
         }
     }
     if json {
-        say!("{report_json}");
+        crate::say_json(&report_json);
     } else {
         for (i, p) in layout.plates.iter().enumerate() {
             tell!(
@@ -470,65 +474,9 @@ pub(crate) fn run(
 
 fn fail(errs: &[Diag], json: bool) -> u8 {
     if json {
-        say!(
-            "{}",
-            json!({"ok": false, "errors": crate::errors_json(errs)})
-        );
+        crate::say_json(&Refused::of(dt_eval::mistakes(errs)));
     } else {
         report(errs);
     }
     ERROR
-}
-
-/// The plan as JSON.
-pub(crate) fn plan_json(plan: &Plan) -> Value {
-    let s = &plan.settings;
-    json!({
-        "title": plan.title,
-        "printer": s.machine.name,
-        "label": s.machine.label(),
-        "bed": s.machine.bed,
-        "excluded": s.machine.excluded,
-        "slots": s.machine.slot_count(),
-        "verify": s.machine.verify,
-        "system": s.system,
-        "mode": s.mode.word(),
-        "group": s.group.word(),
-        "gap": s.gap,
-        "margin": s.margin,
-        "turn": s.turn,
-        "kinds": plan.kinds.iter().map(|k| json!({
-            "tile": k.tile, "name": k.name, "path": k.path, "seed": k.seed,
-            "system": k.system, "count": k.count, "want": k.want, "have": k.have,
-            "other_colour": k.other_colour, "canon": k.canon, "seed_used": k.seed_used,
-            "hash": k.hash, "nominal": k.nominal,
-            "estimate": k.estimate.iter().map(|m| m.name()).collect::<Vec<_>>(),
-        })).collect::<Vec<_>>(),
-        "skipped": plan.skipped,
-        "held": plan.held.iter().map(|(n, c)| json!({"name": n, "have": c})).collect::<Vec<_>>(),
-        "check_inventory": s.check_inventory,
-    })
-}
-
-/// A layout as JSON: each plate's pieces with their places.
-pub(crate) fn layout_json(plan: &Plan, layout: &Layout) -> Value {
-    Value::Array(
-        layout
-            .plates
-            .iter()
-            .enumerate()
-            .map(|(i, on)| {
-                json!({
-                    "plate": i + 1,
-                    "filaments": layout.filaments[i].iter().map(|m| m.name()).collect::<Vec<_>>(),
-                    "pieces": on.iter().map(|p| json!({
-                        "kind": p.kind, "copy": p.copy, "name": plan.kinds[p.kind].name,
-                        "x": p.at.x, "y": p.at.y, "w": p.at.w, "d": p.at.d, "turned": p.at.turned,
-                        "piece": plan.kinds[p.kind].copies.get(p.copy),
-                        "pinned": layout.pinned.contains(&(p.kind, p.copy)),
-                    })).collect::<Vec<_>>(),
-                })
-            })
-            .collect(),
-    )
 }

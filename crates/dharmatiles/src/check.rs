@@ -1,9 +1,9 @@
 //! `dharmatiles check`: read and plan tiles, no geometry.
 
+use crate::cli_wire::{CheckReport, CheckTile, Checked, Failed};
 use dt_eval::{Files, Options};
-use serde_json::json;
 
-use crate::{ERROR, OK, errors_json, report};
+use crate::{ERROR, OK, report};
 
 pub(crate) fn check(paths: &[String], opts: &Options, json: bool, explain: bool) -> u8 {
     let mut code = OK;
@@ -58,18 +58,18 @@ pub(crate) fn check(paths: &[String], opts: &Options, json: bool, explain: bool)
                         }
                     }
                 }
-                reports.push(json!({
-                    "path": p,
-                    "ok": true,
-                    "tile": c.tile.as_ref().map(|t| format!("{}x{}", t.cols, t.rows)),
-                    "pending": errors_json(pending),
-                    "notes": errors_json(c.notes()),
-                    "explain": if explain { json!(c.explain()) } else { json!(null) },
+                reports.push(CheckTile::Checked(Checked {
+                    path: p.clone(),
+                    ok: true,
+                    tile: c.tile.as_ref().map(|t| format!("{}x{}", t.cols, t.rows)),
+                    pending: dt_eval::mistakes(pending),
+                    notes: dt_eval::mistakes(c.notes()),
+                    explain: explain.then(|| c.explain().to_vec()),
                 }));
             }
             Err(errs) => {
                 code = ERROR;
-                reports.push(json!({"path": p, "ok": false, "errors": errors_json(&errs)}));
+                reports.push(CheckTile::Failed(Failed::of(p, dt_eval::mistakes(&errs))));
                 if !json {
                     report(&errs);
                 }
@@ -77,7 +77,10 @@ pub(crate) fn check(paths: &[String], opts: &Options, json: bool, explain: bool)
         }
     }
     if json {
-        say!("{}", json!({"ok": code == OK, "tiles": reports}));
+        crate::say_json(&CheckReport {
+            ok: code == OK,
+            tiles: reports,
+        });
     }
     code
 }

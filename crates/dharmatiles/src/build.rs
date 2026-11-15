@@ -3,9 +3,9 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use crate::cli_wire::{BuildReport, BuildTile, Failed, Printed};
 use dt_eval::{Built, Diag, Files, Options, Source};
 use dt_print::{VIEWS, render, stl};
-use serde_json::{Value, json};
 
 use crate::{AUDIT_FAILED, BUG, ERROR, OK, progress};
 
@@ -59,7 +59,13 @@ pub(crate) fn build(
             tell!("error: {p}: the build panicked (a bug in dharmatiles, not in the tile): {msg}");
             (
                 BUG,
-                json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain(dt_lang::codes::PANIC, format!("the build panicked: {msg}"))])}),
+                BuildTile::Failed(Failed::of(
+                    p,
+                    dt_eval::mistakes(&[Diag::plain(
+                        dt_lang::codes::PANIC,
+                        format!("the build panicked: {msg}"),
+                    )]),
+                )),
             )
         });
         if c != OK {
@@ -77,7 +83,10 @@ pub(crate) fn build(
         );
     }
     if json {
-        say!("{}", json!({"ok": code == OK, "tiles": reports}));
+        crate::say_json(&BuildReport {
+            ok: code == OK,
+            tiles: reports,
+        });
     }
     code
 }
@@ -103,7 +112,7 @@ pub(crate) fn build_one(
     out: &Path,
     extras: Extras,
     json: bool,
-) -> (u8, Value) {
+) -> (u8, BuildTile) {
     let t0 = Instant::now();
     let mut timings = dt_eval::progress::Timings::load(&dt_eval::progress::Timings::file_in(out));
     let tracker = extras
@@ -157,7 +166,7 @@ pub(crate) fn build_one(
             }
             return (
                 ERROR,
-                json!({"path": p, "ok": false, "errors": errors_json(&errs)}),
+                BuildTile::Failed(Failed::of(p, dt_eval::mistakes(&errs))),
             );
         }
     };
@@ -178,7 +187,10 @@ pub(crate) fn build_one(
             tell!("error: {p}: {e}");
             return (
                 ERROR,
-                json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain(dt_lang::codes::WRITE, e)])}),
+                BuildTile::Failed(Failed::of(
+                    p,
+                    dt_eval::mistakes(&[Diag::plain(dt_lang::codes::WRITE, e)]),
+                )),
             );
         }
     };
@@ -238,27 +250,15 @@ pub(crate) fn build_one(
         tell!("warning: {p}: {problem}");
     }
     let code = if record.passes() { OK } else { AUDIT_FAILED };
-    let out = Printed {
-        ok: record.passes(),
-        files: files.iter().map(|f| f.display().to_string()).collect(),
-        total_s,
-        record,
-    };
     (
         code,
-        serde_json::to_value(&out).expect("a build's record is JSON"),
+        BuildTile::Printed(Box::new(Printed {
+            ok: record.passes(),
+            files: files.iter().map(|f| f.display().to_string()).collect(),
+            total_s,
+            record,
+        })),
     )
-}
-
-/// What `dharmatiles build --json` prints for a tile: the build's record, whether it passes the gate, the files
-/// written and how long it all took.
-#[derive(serde::Serialize)]
-struct Printed {
-    ok: bool,
-    #[serde(flatten)]
-    record: dt_eval::TileRecord,
-    files: Vec<String>,
-    total_s: f64,
 }
 
 /// Write the STL, its build record (`.build.json`) and, with `png`, the
@@ -328,29 +328,7 @@ fn left_out_text(left_out: &[(String, usize)]) -> String {
         .join(", ")
 }
 
-/// Is `code` a refusal of the document (a mistake the reader can fix) rather
-/// than a failure of the program (a panic, an unreadable or unwritable file,
-/// a kernel that failed)?  The page shows the second kind as a bug.
-pub(crate) fn is_document_error(code: &str) -> bool {
-    !matches!(
-        code,
-        dt_lang::codes::PANIC
-            | dt_lang::codes::SOURCE
-            | dt_lang::codes::WRITE
-            | dt_lang::codes::BUILD
-    )
-}
-
-#[allow(clippy::expect_used)]
-pub(crate) fn errors_json(errs: &[Diag]) -> Vec<Value> {
-    errs.iter()
-        .map(|d| {
-            // the preview contract's type: one shape for a mistake, wherever it is said
-            serde_json::to_value(crate::preview::api::Mistake::from(d))
-                .expect("a mistake is plain data")
-        })
-        .collect()
-}
+pub(crate) use dt_eval::is_document_error;
 
 pub(crate) fn report(errs: &[Diag]) {
     for e in errs {

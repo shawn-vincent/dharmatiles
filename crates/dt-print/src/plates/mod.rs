@@ -10,6 +10,7 @@
 
 pub mod export;
 pub mod pack;
+pub mod wire;
 
 use std::path::{Path, PathBuf};
 

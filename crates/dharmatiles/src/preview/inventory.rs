@@ -450,7 +450,7 @@ pub(super) fn record(shared: &Shared, v: InventoryRecordReq) -> Out<InventoryWro
         return Err(bad("a failed piece is not on the plate"));
     }
     let on = date_of(v.on.as_deref())?;
-    let colour = if p.mode == Mode::Multicolour.word() {
+    let colour = if p.settings.mode == Mode::Multicolour.word() {
         Colour::Multi
     } else {
         Colour::Single
@@ -464,11 +464,11 @@ pub(super) fn record(shared: &Shared, v: InventoryRecordReq) -> Out<InventoryWro
         let Some(k) = p.kinds.get(piece.kind) else {
             return Err(bad("a piece names no tile"));
         };
-        let tile = k.canon.as_str();
+        let tile = k.planned.canon.as_str();
         let ident = Identity {
             tile: tile.to_owned(),
-            seed: k.seed_used,
-            system: k.system.clone(),
+            seed: k.planned.seed_used,
+            system: k.planned.system.clone(),
             colour,
         };
         let hash = disk::tile_hash(tile, shared.home.as_deref());

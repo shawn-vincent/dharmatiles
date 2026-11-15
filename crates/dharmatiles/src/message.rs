@@ -111,17 +111,6 @@ pub enum Scope {
     Server,
 }
 
-/// Where in a file a message points.
-#[derive(Clone, PartialEq, Debug)]
-pub(crate) struct Span {
-    pub file: String,
-    pub line: usize,
-    pub col: usize,
-    /// Byte offset and length in the file's text.
-    pub offset: usize,
-    pub len: usize,
-}
-
 /// One thing that happened.
 #[derive(Clone, Debug)]
 pub(crate) struct Message {
@@ -154,16 +143,16 @@ pub(crate) struct Message {
     pub open: bool,
 }
 
-/// An edit that mends a mistake, on the wire: made in `dt_eval::wire`, where the browser engine reads it too.
-pub use dt_eval::wire::FixJson;
+pub use dt_eval::FixJson;
 
-/// Where in a file a message points, on the wire.
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+/// Where in a file a message points: in the log and on the wire, one type.
+#[derive(Clone, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
-pub struct SpanJson {
+pub struct Span {
     pub file: String,
     pub line: usize,
     pub col: usize,
+    /// Byte offset and length in the file's text.
     pub offset: usize,
     pub len: usize,
 }
@@ -198,7 +187,7 @@ pub struct MessageJson {
     pub tile_name: String,
     /// The stack entry it is about (its key).
     pub node: Option<String>,
-    pub span: Option<SpanJson>,
+    pub span: Option<Span>,
     pub text: String,
     pub help: Option<String>,
     /// An edit that mends it (a button in the page), when the program has one.
@@ -520,13 +509,7 @@ impl Message {
             tile: self.tile.clone(),
             tile_name: self.tile_name.clone(),
             node: self.node.clone(),
-            span: self.span.as_ref().map(|s| SpanJson {
-                file: s.file.clone(),
-                line: s.line,
-                col: s.col,
-                offset: s.offset,
-                len: s.len,
-            }),
+            span: self.span.clone(),
             text: self.text.clone(),
             help: self.help.clone(),
             fix: self.fix.clone(),
