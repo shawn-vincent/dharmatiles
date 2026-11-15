@@ -20,7 +20,7 @@ reference/*
 !reference/README.html
 
 # the page checker (web/preview, `npm install` there)
-node_modules/
+node_modules
 docs/engine/
 docs/posters/
 
