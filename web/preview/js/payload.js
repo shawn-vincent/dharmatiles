@@ -1,3 +1,4 @@
+// @ts-check
 // Reads the binary mesh payload (see crates/dharmatiles/src/preview/payload.rs).
 //
 //   "DTM1" | u32 json_len | json (space padded to 4) |
@@ -17,25 +18,51 @@
 
 export const NO_ENTRY = 65535;
 
-/** The stack the mesh was built from: `[{index, key, label, element, what}]` (none for a mesh made without one). */
+/** @typedef {import('./api').MeshHeader} MeshHeader */
+/** @typedef {import('./api').MeshStackEntry} MeshStackEntry */
+/**
+ * A mesh as the page holds it: its header (the program's type) and the typed arrays over the one buffer.
+ * @typedef {{ meta: MeshHeader, triangles: number, positions: Float32Array, normals: Float32Array,
+ *   painted: Uint8Array, clean: Uint8Array, entry: Uint16Array, piece: Uint16Array }} Payload
+ */
+
+/**
+ * The stack the mesh was built from (empty for a mesh made without one).
+ * @param {Payload | null | undefined} payload
+ * @returns {MeshStackEntry[]}
+ */
 export const meshStack = (payload) => payload?.meta?.stack ?? [];
 
-/** The entry that mesh entry number `index` is (null for none), decoded against the mesh's own stack. */
+/**
+ * The entry that mesh entry number `index` is (null for none), decoded against the mesh's own stack.
+ * @param {Payload | null | undefined} payload
+ * @param {number | null | undefined} index
+ * @returns {MeshStackEntry | null}
+ */
 export function meshEntry(payload, index) {
   if (index == null || index === NO_ENTRY) return null;
   return meshStack(payload)[index] ?? null;
 }
 
-/** The key of mesh entry number `index`, or null. */
+/**
+ * The key of mesh entry number `index`, or null.
+ * @param {Payload | null | undefined} payload
+ * @param {number | null | undefined} index
+ */
 export const entryKey = (payload, index) => meshEntry(payload, index)?.key ?? null;
 
-/** The mesh's entry number for `key`, or -1 when the mesh has no such entry. */
+/**
+ * The mesh's entry number for `key`, or -1 when the mesh has no such entry.
+ * @param {Payload | null | undefined} payload
+ * @param {string | null | undefined} key
+ */
 export const meshIndex = (payload, key) => (key == null ? -1 : meshStack(payload).findIndex((e) => e.key === key));
 
 /**
  * The height each entry's geometry reaches, by key: `Map(key -> [lo, hi])`, printed mm from the tile's zero.  The program
- * measured it in the mesh it built (`stack_json`, payload.rs); an entry that made no triangle has none.  Nothing is worked
+ * measured it in the mesh it built (`stack_json`, payload.rs; `MeshStackEntry.z`); an entry that made no triangle has none.  Nothing is worked
  * out here.
+ * @param {Payload | null | undefined} payload
  */
 export function bandsByKey(payload) {
   const bands = new Map();
@@ -43,7 +70,10 @@ export function bandsByKey(payload) {
   return bands;
 }
 
-/** How many pieces each entry's geometry has, by key: `Map(key -> n)`. */
+/**
+ * How many pieces each entry's geometry has, by key: `Map(key -> n)`.
+ * @param {Payload} payload
+ */
 export function piecesByKey(payload) {
   const pieces = new Map();
   for (let t = 0; t < payload.triangles; t++) {
@@ -131,12 +161,14 @@ export function worstFlagged(payload) {
   return best;
 }
 
+/** @returns {Payload} */
 export function parsePayload(buffer) {
   const head = new DataView(buffer);
   const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));
   if (magic !== 'DTM1') throw new Error('not a dharmatiles mesh payload');
   const jsonLen = head.getUint32(4, true);
-  const meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 8, jsonLen)));
+  // the one place the header is read: it is the program's `MeshHeader`, written by serializing that type
+  const meta = /** @type {MeshHeader} */ (JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 8, jsonLen))));
   const n = meta.triangles;
   let o = 8 + jsonLen;
   const positions = new Float32Array(buffer, o, 9 * n); o += 36 * n;

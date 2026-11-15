@@ -1,5 +1,6 @@
 //! The worker: builds the tiles one at a time and rebuilds on change.
 
+use super::header::{MeshHeader, MeshKind};
 use super::*;
 use crate::message::{Kind, Scope, Severity};
 
@@ -116,7 +117,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     let tracked = dt_store::Tracked::new(&rec);
     let t0 = Instant::now();
     // the plan's stack, once it is known: a mistake in the build finds the entry it is in by it
-    let plan_stack: std::cell::RefCell<Vec<Value>> = std::cell::RefCell::new(Vec::new());
+    let plan_stack: std::cell::RefCell<Vec<stack::StackItem>> = std::cell::RefCell::new(Vec::new());
     let finish_with =
         |rec: Recording, errs: &[Diag], failure: Option<fail::ServerError>, scope: Scope| {
             let errors = super::api::mistakes(errs);
@@ -152,17 +153,23 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         Ok(c) => c,
         Err(errs) => return finish_err(rec, &errs),
     };
-    let plan = match checked.tile.as_ref().map(|t| {
+    let stack_made = checked.tile.as_ref().map(|t| {
         let frame = dt_kit::Frame::for_system(&opts.system, t.cols, t.rows);
         let [w, h] = frame.size_mm();
-        Ok::<_, String>(json!({
+        let items = stack::items(t, checked.solved.as_ref(), &opts.system)?;
+        // typed in phase A3: plan (the stack items are typed; the rest of the plan is not yet)
+        let stack_json = serde_json::to_value(&items)
+            .map_err(|e| format!("cannot write the stack of the plan: {e}"))?;
+        let plan = json!({
             "cols": t.cols, "rows": t.rows,
             "square_mm": frame.square_mm, "size_mm": [w, h],
             // the tile's zero height: where the base meets the tile body
             "datum_z": 0.0,
-            "stack": stack::items(t, checked.solved.as_ref(), &opts.system)?,
-        }))
-    }) {
+            "stack": stack_json,
+        });
+        Ok::<_, String>((plan, items))
+    });
+    let (plan, stack) = match stack_made {
         Some(Err(e)) => {
             let message = format!("cannot describe the stack: {e}");
             return finish_with(
@@ -172,17 +179,13 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 Scope::Check,
             );
         }
-        Some(Ok(p)) => Some(p),
-        None => None,
+        Some(Ok((p, items))) => (Some(p), items),
+        None => (None, Vec::new()),
     };
     if let Some(p) = &plan {
         shared.update(id, |t| t.plan = Some(p.clone()));
     }
     // what the plan pass found: the notes (dt::steep, dt::edge) that never reached the page before
-    let stack: Vec<Value> = plan
-        .as_ref()
-        .and_then(|p| p["stack"].as_array().cloned())
-        .unwrap_or_default();
     plan_stack.replace(stack.clone());
     shared.report(id, Scope::Check, |name| {
         messages::of_check(&checked, id, name, &stack)
@@ -445,8 +448,12 @@ pub(super) fn show_stored(
             t.mesh = Some(Arc::new(bytes));
             t.mesh_version += 1;
             // a low or super-low build is not yet checked: the status line says so
-            t.shown = Some(json!({"kind": kind, "note": note, "checked": !draft,
-                                  "tier": if draft { "low" } else { "full" }}));
+            t.shown = Some(super::api::Shown {
+                kind: kind.to_owned(),
+                note: note.clone(),
+                checked: !draft,
+                tier: Some(if draft { "low" } else { "full" }.to_owned()),
+            });
         }
     });
 }
@@ -507,8 +514,10 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         *c = dt_kit::ORANGE;
     }
     let clean = dt_kit::paint(&materials, &vec![false; materials.len()]);
-    let meta = json!({"overhang_deg": opts.printer.overhang_deg, "footprint": footprint});
-    let bytes = match payload::encode(&export.mesh, &painted, &clean, &meta) {
+    let mut meta = MeshHeader::new(MeshKind::Stl);
+    meta.overhang_deg = Some(opts.printer.overhang_deg);
+    meta.footprint = Some(footprint);
+    let bytes = match payload::encode(&export.mesh, &painted, &clean, meta) {
         Ok(b) => Arc::new(b),
         Err(e) => return fail(format!("cannot prepare the view of {path}: {e}")),
     };
@@ -518,6 +527,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
     let plan = json!({
         "tile": path.rsplit('/').next().unwrap_or(path), "cols": n(footprint[0]), "rows": n(footprint[1]),
         "square_mm": sq, "size_mm": footprint, "datum_z": Value::Null,
+        // typed in phase A3: plan
         "stack": [{"label": "stl file", "element": "stl", "href": Value::Null}],
     });
     let record =

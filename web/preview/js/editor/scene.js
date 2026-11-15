@@ -1,3 +1,4 @@
+// @ts-check
 // The map in the 3D view (docs/maps.html): a `.dmap` with placed pieces opens as a map, and the view shows
 // every piece's tile at its place, turned and raised, on the ground of the chosen backdrop.
 //
@@ -152,7 +153,7 @@ async function run({ p, tier, gkey }) {
     if (geoms.get(gkey) !== e) return;
     const known = tileById(p.tileId)?.docRev;
     if (payload.meta.docRev !== got.docRev || (known != null && known !== got.docRev)) { e.asked.delete(tier); return; }
-    e.tiers.set(tier, { tris: payload.triangles, checked: payload.meta.checked !== false, failures: payload.meta.failures ?? [] });
+    e.tiers.set(tier, { tris: payload.triangles, checked: payload.meta.checked, failures: payload.meta.failures });
     viewer.setSceneGeometry(gidOf(gkey, tier), payload);
     evaluate(true);
   } catch (err) {
@@ -189,6 +190,7 @@ function screenSize(p) {
 /** The tile of a box, for a piece whose tile has not come: its footprint, a hand high, in the plate's grey. */
 function boxPayload(w, d, h) {
   const v = [[0, 0, 0], [w, 0, 0], [w, d, 0], [0, d, 0], [0, 0, h], [w, 0, h], [w, d, h], [0, d, h]];
+  /** @type {[number, number, number, number, number[]][]} */
   const faces = [[0, 1, 2, 3, [0, 0, -1]], [4, 7, 6, 5, [0, 0, 1]], [0, 4, 5, 1, [0, -1, 0]], [1, 5, 6, 2, [1, 0, 0]], [2, 6, 7, 3, [0, 1, 0]], [3, 7, 4, 0, [-1, 0, 0]]];
   const pos = [], nor = [];
   for (const [a, b, c, e, n] of faces) for (const k of [a, b, c, a, c, e]) { pos.push(...v[k]); nor.push(...n); }

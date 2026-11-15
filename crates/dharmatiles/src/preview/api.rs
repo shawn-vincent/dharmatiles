@@ -235,7 +235,22 @@ pub struct TileSummary {
     pub mesh_bytes: Option<usize>,
     pub sketches: Vec<SketchRef>,
     /// While the first build runs: the mesh on show is an earlier one (`kind`, `note`).
-    pub shown: Option<Json>,
+    pub shown: Option<Shown>,
+}
+
+/// The mesh on show while a build runs, and what it is (see [`TileSummary::shown`]).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct Shown {
+    /// What the mesh is of: `earlier` (a full build the cache kept), `preview` (a stored low tier, or the plates' drafts).
+    pub kind: String,
+    /// Words for the status line.
+    pub note: String,
+    /// Whether the gate has checked the mesh on show: a draft has not been.
+    pub checked: bool,
+    /// `low` or `full`, for a build on show; a plates preview has no tier.
+    pub tier: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -460,6 +475,8 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     use ts_rs::TS;
     all.add::<super::edit::DraftReq>();
     all.add::<ErrorBody>();
+    // the header of every mesh: the page reads it off the front of the bytes a draft, a step or a mesh route sends
+    all.add::<super::header::MeshHeader>();
     all.add::<super::resources::ResourceEvent>();
     all.add::<StreamEvent>();
     all.add::<crate::message::MessagesRes>();

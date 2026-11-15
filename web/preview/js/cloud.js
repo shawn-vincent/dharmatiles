@@ -1,3 +1,4 @@
+// @ts-check
 // A cloud as part of the selection: which cloud the source's caret (or the
 // pointer) is in, and the shapes the view draws for it.  A cloud is written
 // as a `top=` value, a body's or a thing's, or as a `pin` in a body's block;
@@ -8,6 +9,10 @@
 
 import { byteToIndex } from './text.js';
 
+/** @typedef {import('./api').Clouds} Clouds */
+/** @typedef {import('./api').CloudSheet} CloudSheet */
+/** @typedef {import('./api').StackItem} StackItem */
+
 /**
  * The clouds written in `text`, for the stack `items` (as the page holds
  * them: `{key, clouds: [{kind, file, span: [byte, length], pin}], …}`) in
@@ -16,6 +21,9 @@ import { byteToIndex } from './text.js';
  * sends each entry's clouds, read off what it parsed, so a comment, a hidden
  * (`/-`) node or a raw string holds none, and a call's `top=` is the cloud of
  * the tree inside the definition.  This only turns bytes into characters.
+ * @param {string} text
+ * @param {StackItem[]} items
+ * @param {string} file
  */
 export function cloudsIn(text, items, file) {
   if (!text) return [];
@@ -48,7 +56,11 @@ export function cloudOnLine(text, clouds, n) {
   return clouds.find((c) => c.from <= end && c.to >= start) ?? null;
 }
 
-/** The debug payload's sheets and clouds at a point that belong to the entry whose key is `key`. */
+/**
+ * The header's sheets and clouds at a point that belong to the entry whose key is `key`.
+ * @param {Clouds | null | undefined} debug
+ * @param {string | null | undefined} key
+ */
 export function cloudOf(debug, key) {
   if (!debug || key == null) return { sheets: [], columns: [] };
   return {
@@ -58,7 +70,9 @@ export function cloudOf(debug, key) {
 }
 
 /** How strong a shade of 0 to 1 draws, as an opacity: [for 0, for 1]. A height that never comes up is nearly clear. */
+/** @type {[number, number]} */
 export const SHADE_SHEET = [0.04, 0.55];
+/** @type {[number, number]} */
 export const SHADE_COLUMN = [0.12, 1];
 
 /** Opacity for a shade (0 to 1; flat odds are 0.5) over `[least, most]`. */
@@ -71,6 +85,7 @@ export function shadeAlpha(shade, [least, most]) {
  * A sheet `{nx, ny, step, z: [h or null]}` as triangles (two per lattice
  * cell whose four corners are all set) and its contour: the cell edges
  * between a drawn cell and one that is not, at their heights.
+ * @param {CloudSheet} s
  */
 export function sheetGeometry(s) {
   const { nx, ny, step, z } = s;
@@ -105,6 +120,7 @@ export function sheetGeometry(s) {
  * Clouds at a point, flat `v` of a payload cloud `[x, y, low, high, rolled, shade low, shade high,
  * shade rolled, …]`, as a line from low to high at each (two vertices, each
  * with its shade) and a marker at the rolled height.
+ * @param {number[]} flat
  */
 export function columnGeometry(flat) {
   const n = Math.floor(flat.length / 8);

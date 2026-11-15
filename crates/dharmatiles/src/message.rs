@@ -30,6 +30,8 @@
 //! help and the numbers under it.
 
 use dt_eval::Diag;
+
+use crate::preview::stack::StackItem;
 use serde_json::{Value, json};
 
 /// What the message is.  A closed list, so a reader can rely on it.
@@ -373,7 +375,7 @@ impl Message {
         as_note: bool,
         tile: &str,
         name: &str,
-        stack: &[Value],
+        stack: &[StackItem],
     ) -> Self {
         let unexpected = !crate::build::is_document_error(d.code);
         let (kind, severity) = if as_note {
@@ -637,29 +639,16 @@ fn scalars(data: &Value) -> String {
 }
 
 /// The innermost stack entry (its key) whose span in `file` holds byte `offset`.
-fn node_at(stack: &[Value], file: &str, offset: usize) -> Option<String> {
+fn node_at(stack: &[StackItem], file: &str, offset: usize) -> Option<String> {
     let mut best: Option<(usize, &str)> = None;
     for it in stack {
-        let (Some(key), Some(f), Some(span)) = (
-            it["key"].as_str(),
-            it["file"].as_str(),
-            it["span"].as_array(),
-        ) else {
-            continue;
-        };
-        let (Some(start), Some(len)) = (
-            span.first().and_then(Value::as_u64),
-            span.get(1).and_then(Value::as_u64),
-        ) else {
-            continue;
-        };
-        let (start, len) = (usize::try_from(start).ok()?, usize::try_from(len).ok()?);
-        if f == file
+        let [start, len] = it.span;
+        if it.file == file
             && offset >= start
             && offset < start + len.max(1)
             && best.is_none_or(|(w, _)| len < w)
         {
-            best = Some((len, key));
+            best = Some((len, it.key.as_str()));
         }
     }
     best.map(|(_, k)| k.to_owned())
@@ -1075,10 +1064,28 @@ mod tests {
 
     #[test]
     fn a_diagnostic_finds_its_entry_by_the_span_it_lies_in() {
+        let at = |key: &str, span: [usize; 2]| StackItem {
+            key: key.to_owned(),
+            label: String::new(),
+            element: String::new(),
+            href: String::new(),
+            what: String::new(),
+            seed: None,
+            file: "a.dtile".to_owned(),
+            span,
+            lines: [1, 1],
+            call: None,
+            controls: Vec::new(),
+            defaults: Vec::new(),
+            clouds: Vec::new(),
+            place: Vec::new(),
+            at: None,
+            things: Vec::new(),
+        };
         let stack = vec![
-            json!({"key": "tile/dirt/0", "file": "a.dtile", "span": [10, 20]}),
-            json!({"key": "tile/dirt/0/pin", "file": "a.dtile", "span": [14, 6]}),
-            json!({"key": "tile/grass/0", "file": "a.dtile", "span": [40, 10]}),
+            at("tile/dirt/0", [10, 20]),
+            at("tile/dirt/0/pin", [14, 6]),
+            at("tile/grass/0", [40, 10]),
         ];
         assert_eq!(
             node_at(&stack, "a.dtile", 15).as_deref(),

@@ -29,7 +29,11 @@
 use dt_eval::Built;
 use dt_kit::TriMesh;
 use rayon::prelude::*;
-use serde_json::{Value, json};
+use std::collections::BTreeMap;
+
+use super::header::{
+    CloudColumns, CloudSheet, Clouds, DebugMarks, MeshHeader, MeshKind, MeshStackEntry,
+};
 
 /// First four bytes of every payload.
 pub const MAGIC: &[u8; 4] = b"DTM1";
@@ -57,8 +61,8 @@ fn byte(c: f32) -> u8 {
     (c * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
-/// Encode `mesh` with its two per-face colour sets.  `meta` is merged into
-/// the JSON header beside `triangles`, `lo` and `hi`.
+/// Encode `mesh` with its two per-face colour sets.  `meta` is the JSON header; the
+/// encoder fills its `triangles`, `lo` and `hi`.
 ///
 /// # Errors
 /// If a colour set is not one colour per triangle.
@@ -66,7 +70,7 @@ pub fn encode(
     mesh: &TriMesh,
     painted: &[[f32; 3]],
     clean: &[[f32; 3]],
-    meta: &Value,
+    meta: MeshHeader,
 ) -> Result<Vec<u8>, String> {
     encode_traced(mesh, painted, clean, &[], &[], meta)
 }
@@ -85,9 +89,8 @@ pub fn encode_traced(
     clean: &[[f32; 3]],
     entries: &[u16],
     pieces: &[u16],
-    meta: &Value,
+    mut header: MeshHeader,
 ) -> Result<Vec<u8>, String> {
-    let meta = &super::api::camel_keys(meta);
     let n = mesh.triangles.len();
     for (what, len, may_be_empty) in [
         ("painted colours", painted.len(), false),
@@ -113,11 +116,11 @@ pub fn encode_traced(
         lo = [0.0; 3];
         hi = [0.0; 3];
     }
-    let mut header = meta.clone();
-    header["triangles"] = json!(n);
-    header["lo"] = json!(lo);
-    header["hi"] = json!(hi);
-    let mut j = header.to_string().into_bytes();
+    header.triangles = n;
+    header.lo = lo;
+    header.hi = hi;
+    let mut j =
+        serde_json::to_vec(&header).map_err(|e| format!("cannot write the mesh header: {e}"))?;
     while !(8 + j.len()).is_multiple_of(4) {
         j.push(b' ');
     }
@@ -181,27 +184,30 @@ pub fn from_built(
     palette: &dt_kit::Palette,
 ) -> Result<Vec<u8>, String> {
     let (painted, clean) = b.colours_pair(palette);
-    let mut meta = json!({
-        "overhang_faces": b.audit.overhang.iter().filter(|&&o| o).count(),
-        "band_faces": b.audit.band.iter().filter(|&&o| o).count(),
-        "overhang_deg": overhang_deg,
-        "footprint": b.footprint,
-        "stack": stack_json(b),
-        "clouds": clouds_json(b),
-        "debug": debug_json(b),
-    }); // a low or super-low build has not been through the gate: the page says so
-    if !b.checked {
-        meta["checked"] = json!(false);
-    }
-
+    let mut meta = of_build(MeshKind::Build, b, overhang_deg);
+    // a low or super-low build has not been through the gate: the page says so
+    meta.checked = b.checked;
     encode_traced(
         &b.export.mesh,
         &painted,
         &clean,
         &b.report.entries,
         &b.report.pieces,
-        &meta,
+        meta,
     )
+}
+
+/// The header of a build or a draft of `b`: the gate's face counts, the stack, the clouds and the debug marks.
+fn of_build(kind: MeshKind, b: &Built, overhang_deg: f64) -> MeshHeader {
+    let mut h = MeshHeader::new(kind);
+    h.overhang_deg = Some(overhang_deg);
+    h.footprint = Some(b.footprint);
+    h.overhang_faces = Some(b.audit.overhang.iter().filter(|&&o| o).count());
+    h.band_faces = Some(b.audit.band.iter().filter(|&&o| o).count());
+    h.stack = stack_json(b);
+    h.clouds = clouds_of(b);
+    h.debug = debug_marks(b);
+    h
 }
 
 /// A piece of a map: the mesh with its colours and what tier it is, with
@@ -220,27 +226,23 @@ pub fn for_map(
 ) -> Result<Vec<u8>, String> {
     let (painted, clean) = b.colours_pair(palette);
     let (lo, hi) = dt_print::box_of(&b.export.mesh);
-    let meta = json!({
-        "tier": tier,
-        "doc_rev": doc_rev,
-        "checked": b.checked,
-        "failures": if b.checked { b.audit.failures(&opts.printer) } else { Vec::new() },
-        "overhang_deg": opts.printer.overhang_deg,
-        "footprint": b.footprint,
-        "tile_lo": lo, "tile_hi": hi,
-    });
-    encode(&b.export.mesh, &painted, &clean, &meta)
+    let mut meta = MeshHeader::new(MeshKind::MapPiece);
+    meta.tier = Some(tier.to_owned());
+    meta.doc_rev = Some(doc_rev);
+    meta.checked = b.checked;
+    if b.checked {
+        meta.failures = b.audit.failures(&opts.printer);
+    }
+    meta.overhang_deg = Some(opts.printer.overhang_deg);
+    meta.footprint = Some(b.footprint);
+    meta.tile_lo = Some(lo);
+    meta.tile_hi = Some(hi);
+    encode(&b.export.mesh, &painted, &clean, meta)
 }
 
-/// The stack a build was made from, as the mesh header carries it: for each
-/// entry its place (the number the mesh's triangles carry), its key (its id,
-/// which survives edits to the text), its words and its element, and `z`: the
-/// lowest and highest height its triangles reach, mm, from the tile's zero
-/// (`null` for an entry that made no triangle).  One reading of the mesh the
-/// build made, so the page draws the thickness of each entry from here and
-/// works nothing out of the mesh itself.
+/// The stack a build was made from, as the mesh header carries it (see [`MeshStackEntry`]).
 #[must_use]
-pub fn stack_json(b: &Built) -> Value {
+pub fn stack_json(b: &Built) -> Vec<MeshStackEntry> {
     let mut z: Vec<Option<[f64; 2]>> = vec![None; b.report.stack.len()];
     for (t, &e) in b.export.mesh.triangles.iter().zip(&b.report.entries) {
         let Some(slot) = z.get_mut(usize::from(e)) else {
@@ -251,19 +253,19 @@ pub fn stack_json(b: &Built) -> Value {
             *slot = Some(slot.map_or([h, h], |[lo, hi]| [lo.min(h), hi.max(h)]));
         }
     }
-    Value::Array(
-        b.report
-            .stack
-            .iter()
-            .enumerate()
-            .map(|(index, n)| {
-                json!({
-                    "index": index, "key": n.id.as_str(), "label": n.label,
-                    "element": n.element, "what": n.what, "z": z[index],
-                })
-            })
-            .collect(),
-    )
+    b.report
+        .stack
+        .iter()
+        .enumerate()
+        .map(|(index, n)| MeshStackEntry {
+            index,
+            key: n.id.as_str().to_owned(),
+            label: n.label.clone(),
+            element: n.element.clone(),
+            what: n.what.clone(),
+            z: z[index],
+        })
+        .collect()
 }
 
 /// The most debug points sent; more are thinned evenly, class by class.
@@ -287,62 +289,52 @@ fn every(n: usize, budget: usize) -> usize {
     n.div_ceil(budget.max(1)).max(1)
 }
 
-/// The debug layer's marks as the page draws them, thinned to
-/// [`DEBUG_DOTS`] and [`DEBUG_TRAIL_POINTS`]:
-/// `{"dots": {class: [x, y, z, …]}, "trails": {class: [[x, y, z, …], …]},
-/// "thinned": bool}`; `null` when the build collected none (the page did not
-/// ask for the layer).  The clouds are not here: see [`clouds_json`].
+/// The debug layer's marks as the page draws them (see [`DebugMarks`]); none when the build collected none (the page did
+/// not ask for the layer).  The clouds are not here: see [`clouds_of`].
 #[must_use]
-pub fn debug_json(b: &Built) -> Value {
-    use std::collections::BTreeMap;
-    let Some(d) = &b.report.debug else {
-        return Value::Null;
-    };
+pub fn debug_marks(b: &Built) -> Option<DebugMarks> {
+    let d = b.report.debug.as_ref()?;
     let mut thinned = false;
     let k_dot = every(d.dots.len(), DEBUG_DOTS);
     thinned |= k_dot > 1;
-    let mut dots: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
+    let mut dots: BTreeMap<String, Vec<f64>> = BTreeMap::new();
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
     for p in &d.dots {
         let n = seen.entry(p.class).or_default();
         if n.is_multiple_of(k_dot) {
-            dots.entry(p.class).or_default().extend(p.at.map(mm));
+            dots.entry(p.class.to_owned())
+                .or_default()
+                .extend(p.at.map(mm));
         }
         *n += 1;
     }
     let total: usize = d.trails.iter().map(|t| t.points.len()).sum();
     let k_trail = every(total, DEBUG_TRAIL_POINTS);
     thinned |= k_trail > 1;
-    let mut trails: BTreeMap<&str, Vec<Vec<f64>>> = BTreeMap::new();
+    let mut trails: BTreeMap<String, Vec<Vec<f64>>> = BTreeMap::new();
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
     for t in &d.trails {
         let n = seen.entry(t.class).or_default();
         if n.is_multiple_of(k_trail) {
             trails
-                .entry(t.class)
+                .entry(t.class.to_owned())
                 .or_default()
                 .push(t.points.iter().flat_map(|p| p.map(mm)).collect());
         }
         *n += 1;
     }
-    json!({"dots": dots, "trails": trails, "thinned": thinned})
+    Some(DebugMarks {
+        dots,
+        trails,
+        thinned,
+    })
 }
 
-/// The clouds a selected `top=` or pin is drawn from, thinned to
-/// [`DEBUG_SHEET_NODES`] and [`DEBUG_COLUMNS`]:
-/// `{"sheets": [{owner, class, nx, ny, step, z: [h or null, …],
-/// shade: [0 to 1, …]}], "columns": [{owner, class, v: [x, y, low, high,
-/// rolled, shade low, shade high, shade rolled, …]}], "thinned": bool}`, each
-/// `owner` an entry's key (`tile/dirt/0`); `null` when the build collected
-/// none.  Its own section of the header, apart from the debug layer's marks:
-/// the page draws a cloud as part of the selection, whether or not the layer
-/// is on.
+/// The clouds a selected `top=` or pin is drawn from (see [`Clouds`]), thinned to [`DEBUG_SHEET_NODES`] and
+/// [`DEBUG_COLUMNS`]; none when the build collected none.
 #[must_use]
-pub fn clouds_json(b: &Built) -> Value {
-    use std::collections::BTreeMap;
-    let Some(d) = &b.report.clouds else {
-        return Value::Null;
-    };
+pub fn clouds_of(b: &Built) -> Option<Clouds> {
+    let d = b.report.clouds.as_ref()?;
     let k_col = every(d.columns.len(), DEBUG_COLUMNS);
     let thinned = k_col > 1;
     // grouped by entry and class: the page draws one entry's clouds
@@ -357,39 +349,47 @@ pub fn clouds_json(b: &Built) -> Value {
         }
         *n += 1;
     }
-    let sheets: Vec<Value> = d
+    let sheets: Vec<CloudSheet> = d
         .sheets
         .iter()
         .map(|s| {
             let k = every(s.z.nx.max(s.z.ny), DEBUG_SHEET_NODES);
             let (nx, ny) = (s.z.nx.div_ceil(k), s.z.ny.div_ceil(k));
-            let z: Vec<Value> = (0..ny)
+            let z: Vec<Option<f64>> = (0..ny)
                 .flat_map(|j| (0..nx).map(move |i| (i * k, j * k)))
                 .map(|(i, j)| {
                     let n = j * s.z.nx + i;
-                    if s.region.bits[n] {
-                        json!(mm(s.z.z[n]))
-                    } else {
-                        Value::Null
-                    }
+                    s.region.bits[n].then(|| mm(s.z.z[n]))
                 })
                 .collect();
             let shade: Vec<f64> = (0..ny)
                 .flat_map(|j| (0..nx).map(move |i| (i * k, j * k)))
                 .map(|(i, j)| (f64::from(s.shade[j * s.z.nx + i]) * 100.0).round() / 100.0)
                 .collect();
-            json!({
-                "owner": s.owner.as_str(), "class": s.class,
-                "nx": nx, "ny": ny, "step": s.z.step * k as f64, "z": z,
-                "shade": shade,
-            })
+            CloudSheet {
+                owner: s.owner.as_str().to_owned(),
+                class: s.class.to_owned(),
+                nx,
+                ny,
+                step: s.z.step * k as f64,
+                z,
+                shade,
+            }
         })
         .collect();
-    let columns: Vec<Value> = columns
+    let columns: Vec<CloudColumns> = columns
         .into_iter()
-        .map(|((owner, class), v)| json!({"owner": owner, "class": class, "v": v}))
+        .map(|((owner, class), v)| CloudColumns {
+            owner: owner.to_owned(),
+            class: class.to_owned(),
+            v,
+        })
         .collect();
-    json!({"sheets": sheets, "columns": columns, "thinned": thinned})
+    Some(Clouds {
+        sheets,
+        columns,
+        thinned,
+    })
 }
 
 /// The most triangles a draft or a sketch is sent with; more are thinned
@@ -432,23 +432,15 @@ pub fn from_draft(
         }
         Ok(kept.iter().map(|&f| v[f]).collect())
     };
-    let meta = json!({
-        "overhang_faces": b.audit.overhang.iter().filter(|&&o| o).count(),
-        "band_faces": b.audit.band.iter().filter(|&&o| o).count(),
-        "overhang_deg": overhang_deg,
-        "footprint": b.footprint,
-        "thinned": kept.len() < b.export.mesh.triangles.len(),
-        "stack": stack_json(b),
-        "clouds": clouds_json(b),
-        "debug": debug_json(b),
-    });
+    let mut meta = of_build(MeshKind::Draft, b, overhang_deg);
+    meta.thinned = kept.len() < b.export.mesh.triangles.len();
     encode_traced(
         &mesh,
         &pick(&painted),
         &pick(&clean),
         &pick16("entries", &b.report.entries)?,
         &pick16("pieces", &b.report.pieces)?,
-        &meta,
+        meta,
     )
 }
 
@@ -474,12 +466,10 @@ pub fn sketch(
     let mats: Vec<dt_kit::Material> = kept.iter().map(|&f| materials[f]).collect();
     let none = vec![false; mats.len()];
     let colours = dt_kit::paint_mesh(&thin, &mats, &none, &none, None, palette, false);
-    encode(
-        &thin,
-        &colours,
-        &colours,
-        &json!({ "sketch": true, "rough": rough }),
-    )
+    let mut meta = MeshHeader::new(MeshKind::Sketch);
+    meta.checked = false;
+    meta.rough = rough;
+    encode(&thin, &colours, &colours, meta)
 }
 
 #[cfg(test)]
@@ -503,14 +493,16 @@ mod tests {
     fn layout_is_header_then_four_typed_arrays() {
         let red = [1.0, 0.0, 0.0];
         let grey = [0.5, 0.5, 0.5];
-        let b = encode(&tri(), &[red, grey], &[grey, grey], &json!({"x": 1})).unwrap();
+        let mut meta = MeshHeader::new(MeshKind::Sketch);
+        meta.rough = true;
+        let b = encode(&tri(), &[red, grey], &[grey, grey], meta).unwrap();
         assert_eq!(&b[..4], MAGIC);
         let jl = u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize;
         assert_eq!((8 + jl) % 4, 0, "arrays start 4-aligned");
-        let h: Value = serde_json::from_slice(&b[8..8 + jl]).unwrap();
-        assert_eq!(h["triangles"], 2);
-        assert_eq!(h["x"], 1);
-        assert_eq!(h["hi"], json!([2.0, 3.0, 5.0]));
+        let h: MeshHeader = serde_json::from_slice(&b[8..8 + jl]).unwrap();
+        assert_eq!(h.triangles, 2);
+        assert!(h.rough);
+        assert_eq!(h.hi, [2.0, 3.0, 5.0]);
         // 2 triangles: positions 18 f32, normals 18 f32, 2 × 18 bytes of
         // colour, 2 × 2 u16 of entry and piece
         assert_eq!(b.len(), 8 + jl + 72 + 72 + 18 + 18 + 8);
@@ -564,12 +556,34 @@ mod tests {
     fn a_short_per_triangle_list_is_an_error_not_a_default() {
         let grey = [0.5; 3];
         // two triangles, one entry: the second would have read entry 0
-        let e = encode_traced(&tri(), &[grey; 2], &[grey; 2], &[3], &[], &json!({}));
+        let e = encode_traced(
+            &tri(),
+            &[grey; 2],
+            &[grey; 2],
+            &[3],
+            &[],
+            MeshHeader::new(MeshKind::Sketch),
+        );
         assert!(e.unwrap_err().contains("2 triangles but 1 entries"));
-        let e = encode_traced(&tri(), &[grey], &[grey; 2], &[], &[], &json!({}));
+        let e = encode_traced(
+            &tri(),
+            &[grey],
+            &[grey; 2],
+            &[],
+            &[],
+            MeshHeader::new(MeshKind::Sketch),
+        );
         assert!(e.unwrap_err().contains("painted colours"));
         // none at all is allowed: every triangle reads NO_ENTRY
-        let b = encode_traced(&tri(), &[grey; 2], &[grey; 2], &[], &[], &json!({})).unwrap();
+        let b = encode_traced(
+            &tri(),
+            &[grey; 2],
+            &[grey; 2],
+            &[],
+            &[],
+            MeshHeader::new(MeshKind::Sketch),
+        )
+        .unwrap();
         assert_eq!(&b[b.len() - 8..b.len() - 4], &[0xff; 4]);
     }
 
@@ -689,7 +703,13 @@ mod tests {
 
     #[test]
     fn an_empty_mesh_still_has_a_header() {
-        let b = encode(&TriMesh::default(), &[], &[], &json!({})).unwrap();
+        let b = encode(
+            &TriMesh::default(),
+            &[],
+            &[],
+            MeshHeader::new(MeshKind::Sketch),
+        )
+        .unwrap();
         assert_eq!(&b[..4], MAGIC);
         assert_eq!(b.len() % 4, 0);
         assert_eq!(
@@ -706,18 +726,18 @@ mod tests {
         let b = dt_testkit::build(&m, "t.dtile", &opts).unwrap();
         let bytes = from_built(b, 55.0, &dt_kit::Palette::default()).unwrap();
         let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
-        let h: Value = serde_json::from_slice(&bytes[8..8 + jl]).unwrap();
-        let stack = h["stack"].as_array().unwrap();
-        let keys: Vec<&str> = stack.iter().map(|e| e["key"].as_str().unwrap()).collect();
+        let h: MeshHeader = serde_json::from_slice(&bytes[8..8 + jl]).unwrap();
+        let stack = &h.stack;
+        let keys: Vec<&str> = stack.iter().map(|e| e.key.as_str()).collect();
         assert_eq!(keys, ["tile/dirt/0", "tile/scatter/0", "tile/connector"]);
         for (i, e) in stack.iter().enumerate() {
-            assert_eq!(e["index"], i);
+            assert_eq!(e.index, i);
         }
-        assert_eq!(stack[1]["label"], "rocks");
-        assert_eq!(stack[1]["what"], "scatter");
-        assert_eq!(stack[1]["element"], "rock");
+        assert_eq!(stack[1].label, "rocks");
+        assert_eq!(stack[1].what, "scatter");
+        assert_eq!(stack[1].element, "rock");
         // every triangle's entry is a place in that stack (or none)
-        let n = h["triangles"].as_u64().unwrap() as usize;
+        let n = h.triangles;
         let at = 8 + jl + 72 * n + 18 * n;
         let entries: Vec<u16> = (0..n)
             .map(|t| u16::from_le_bytes(bytes[at + 2 * t..at + 2 * t + 2].try_into().unwrap()))
@@ -743,20 +763,18 @@ mod tests {
         };
         let b = dt_testkit::build(&m, "t.dtile", &opts).unwrap();
         // the clouds travel apart from the debug layer's marks, which were not asked for
-        assert!(debug_json(b).is_null());
-        let d = clouds_json(b);
-        let sheets = d["sheets"].as_array().unwrap();
-        assert!(sheets.iter().any(|s| s["class"] == "band-hi"));
-        for s in sheets {
-            let n = s["nx"].as_u64().unwrap() * s["ny"].as_u64().unwrap();
-            assert_eq!(s["shade"].as_array().unwrap().len() as u64, n);
-            assert_eq!(s["z"].as_array().unwrap().len() as u64, n);
+        assert!(debug_marks(b).is_none());
+        let d = clouds_of(b).unwrap();
+        assert!(d.sheets.iter().any(|s| s.class == "band-hi"));
+        for s in &d.sheets {
+            let n = s.nx * s.ny;
+            assert_eq!(s.shade.len(), n);
+            assert_eq!(s.z.len(), n);
         }
-        let cols = d["columns"].as_array().unwrap();
-        let rock = cols.iter().find(|c| c["class"] == "stone-cloud").unwrap();
+        let rock = d.columns.iter().find(|c| c.class == "stone-cloud").unwrap();
         // the scatter is the stack's second entry (the base is not one)
-        assert_eq!(rock["owner"], "tile/scatter/0", "{rock}");
-        let stones = rock["v"].as_array().unwrap();
+        assert_eq!(rock.owner, "tile/scatter/0", "{rock:?}");
+        let stones = &rock.v;
         assert!(
             stones.len() >= 3 * 8 && stones.len().is_multiple_of(8),
             "{}",
@@ -764,6 +782,6 @@ mod tests {
         );
         // off: nothing at all
         let off = dt_testkit::build(&m, "t.dtile", &dt_eval::Options::default()).unwrap();
-        assert!(clouds_json(off).is_null() && debug_json(off).is_null());
+        assert!(clouds_of(off).is_none() && debug_marks(off).is_none());
     }
 }

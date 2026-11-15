@@ -26,6 +26,7 @@ use serde_json::{Value, json};
 
 use super::api::{Out, Reply};
 use super::edit::Done;
+use super::header::{MeshHeader, MeshKind};
 use super::lists::ListEdited;
 use super::messages::Scope;
 use super::scene::{self, Note, Scene};
@@ -599,67 +600,80 @@ fn rebuild_plates(
     };
     let view = view.min(layout.plates.len().saturating_sub(1));
     let palette = shared.palette();
-    let push = |layout: &Layout,
-                boxes: &[Boxes],
-                parts: &[Shown],
-                running: bool,
-                note: Option<&str>| {
-        let (mesh, painted, clean, owner) = plate_mesh(layout, parts, view, &palette);
-        let exact: Vec<bool> = parts.iter().map(|p| p.full).collect();
-        let mut sp = shared_plan(
-            &plan,
-            layout,
-            boxes,
-            &exact,
-            view,
-            writable,
-            shared.home.as_deref(),
-        );
-        sp["plates"]["pieces"] = pieces_json(&list);
-        // each laid-out piece names its list piece by id, as an edit does
-        let ids = dt_doc::map::piece_ids(&list);
-        if let Some(plates) = sp["plates"]["layout"].as_array_mut() {
-            for pl in plates {
-                if let Some(on) = pl["pieces"].as_array_mut() {
-                    for p in on {
-                        p["id"] = p["piece"]
-                            .as_u64()
-                            .and_then(|i| usize::try_from(i).ok())
-                            .and_then(|i| ids.get(i))
-                            .map_or(Value::Null, |i| json!(i));
+    let push =
+        |layout: &Layout, boxes: &[Boxes], parts: &[Shown], running: bool, note: Option<&str>| {
+            let (mesh, painted, clean, owner) = plate_mesh(layout, parts, view, &palette);
+            let exact: Vec<bool> = parts.iter().map(|p| p.full).collect();
+            let mut sp = shared_plan(
+                &plan,
+                layout,
+                boxes,
+                &exact,
+                view,
+                writable,
+                shared.home.as_deref(),
+            );
+            sp["plates"]["pieces"] = pieces_json(&list);
+            // each laid-out piece names its list piece by id, as an edit does
+            let ids = dt_doc::map::piece_ids(&list);
+            if let Some(plates) = sp["plates"]["layout"].as_array_mut() {
+                for pl in plates {
+                    if let Some(on) = pl["pieces"].as_array_mut() {
+                        for p in on {
+                            p["id"] = p["piece"]
+                                .as_u64()
+                                .and_then(|i| usize::try_from(i).ok())
+                                .and_then(|i| ids.get(i))
+                                .map_or(Value::Null, |i| json!(i));
+                        }
                     }
                 }
             }
-        }
-        sp["scene"] = scene_json.clone().unwrap_or(Value::Null);
-        sp["docRev"] = json!(rev);
-        let meta = json!({
-            "overhang_deg": shared.options().printer.overhang_deg,
-            "footprint": s.machine.bed,
-            "bed": s.machine.bed, "excluded": s.machine.excluded,
-            "plate": view, "plates": layout.plates.len(),
-            "tier": if exact.iter().all(|e| *e) { "full" } else if exact.iter().any(|e| *e) { "mixed" } else { "low" },
-        });
-        let zero = vec![0u16; owner.len()];
-        match payload::encode_traced(&mesh, &painted, &clean, &owner, &zero, &meta) {
-            Ok(bytes) => shared.update(id, |t| {
-                t.status = State::Ready;
-                t.plan = Some(sp);
-                t.mesh = Some(Arc::new(bytes));
-                t.mesh_version += 1;
-                t.doc_rev = Some(rev);
-                t.files = files.clone();
-                t.errors.clear();
-                t.shown = running.then(|| {
-                    json!({"kind": "preview", "checked": false, "note": note.unwrap_or("draft meshes, not yet checked")})
-                });
-            }),
-            Err(e) => {
-                let d = Diag::plain(dt_lang::codes::VIEW, format!("cannot prepare the view of {path}: {e}"));
-                fail_with(Some(&list), vec![d], Scope::Build);
+            sp["scene"] = scene_json.clone().unwrap_or(Value::Null);
+            sp["docRev"] = json!(rev);
+            let mut meta = MeshHeader::new(MeshKind::Plates);
+            meta.overhang_deg = Some(shared.options().printer.overhang_deg);
+            meta.footprint = s.machine.bed;
+            meta.bed = s.machine.bed;
+            meta.excluded = Some(s.machine.excluded.clone());
+            meta.plate = Some(view);
+            meta.plates = Some(layout.plates.len());
+            meta.tier = Some(
+                if exact.iter().all(|e| *e) {
+                    "full"
+                } else if exact.iter().any(|e| *e) {
+                    "mixed"
+                } else {
+                    "low"
+                }
+                .to_owned(),
+            );
+            let zero = vec![0u16; owner.len()];
+            match payload::encode_traced(&mesh, &painted, &clean, &owner, &zero, meta) {
+                Ok(bytes) => shared.update(id, |t| {
+                    t.status = State::Ready;
+                    t.plan = Some(sp);
+                    t.mesh = Some(Arc::new(bytes));
+                    t.mesh_version += 1;
+                    t.doc_rev = Some(rev);
+                    t.files = files.clone();
+                    t.errors.clear();
+                    t.shown = running.then(|| super::api::Shown {
+                        kind: "preview".to_owned(),
+                        note: note.unwrap_or("draft meshes, not yet checked").to_owned(),
+                        checked: false,
+                        tier: None,
+                    });
+                }),
+                Err(e) => {
+                    let d = Diag::plain(
+                        dt_lang::codes::VIEW,
+                        format!("cannot prepare the view of {path}: {e}"),
+                    );
+                    fail_with(Some(&list), vec![d], Scope::Build);
+                }
             }
-        }
-    };
+        };
     let on_view: Vec<usize> = {
         let mut k: Vec<usize> = layout
             .plates

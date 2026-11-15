@@ -1,3 +1,4 @@
+// @ts-check
 // The catalog's pictures: each tile as the program's super-low mesh seen from above at an angle, on the plate
 // colour, rendered here once and kept for the session.  The picture is the real tile (its colours, its overhang
 // painted red and orange as everywhere), not a drawing of its size.  One small offscreen renderer draws them

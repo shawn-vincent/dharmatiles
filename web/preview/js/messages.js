@@ -239,6 +239,8 @@ export function jobWords(p, name) {
  * cache kept, `t.shown`), offline, an error, fails the gate, no build, passes (with the build's
  * time, or "cached" when the cache gave it).  `t` is the tile's state from the program (status,
  * record, shown); `p` its progress, if building.
+ * @param {any} view
+ * @param {{ t?: import('./api').TileSummary | null, live?: boolean, p?: import('./api').Progress | null }} [opts]
  */
 export function statusOf(view, { t = null, live = true, p = null } = {}) {
   const counts = countsText(view.counts);

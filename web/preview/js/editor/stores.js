@@ -168,12 +168,15 @@ export const isInventory = (t) => !!t && /\.dinv$/i.test(t.path);
 
 /** The stack of the text now: the last clean check of it while editing, else the last build's. */
 // The list is made once for each stack it comes from (the check's, or the build's plan) and handed out again: callers read it, never change it.
+/** @typedef {import('../api').StackItem} StackItem */
+/** @type {StackItem[]} */
 const NONE = [];
 let stackMemo = { from: null, items: NONE };
+/** @returns {StackItem[]} */
 export function stackItems() {
   const d = doc.get(), t = tile();
   const from = (d.stack && d.tileId === view.get().tileId ? d.stack : t?.plan?.stack) || NONE;
-  if (stackMemo.from !== from) stackMemo = { from, items: from.map((s) => (typeof s === 'string' ? { label: s } : s)) };
+  if (stackMemo.from !== from) stackMemo = { from, items: from };
   return stackMemo.items;
 }
 /** Where the entry `key` is in the stack of the text now (the checked one, else the build's plan): -1 when it is not there. */
