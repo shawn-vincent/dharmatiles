@@ -30,6 +30,8 @@ export class LiteViewer {
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = false;
     this.controls.enablePan = false;
+    // OrbitControls claims every touch for itself with an inline `touch-action: none`; the card decides that in theme.css (a finger scrolls the page until Turn it)
+    canvas.style.removeProperty('touch-action');
     this.controls.addEventListener('change', () => this.invalidate());
     /** @type {any} a THREE.Mesh (vendor/three.module.min.js has no types, so tsc cannot name it) */
     this.mesh = null;

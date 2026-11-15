@@ -456,7 +456,7 @@ export class Card {
       const where = new URL('index.html#install', this.engine.root).href;
       const a = el('a', '', { href: where });
       a.textContent = 'the program on a desktop';
-      this.limitNote.append(`A full build needs ${costWords(cost)}, and ${verdict.why}. The picture is the draft the page makes (the poster's tile); `, a, ' makes the full tile and its STL.');
+      this.limitNote.append(`A full build needs ${costWords(cost)}, and ${verdict.why}. The picture is the page's draft detail; `, a, ' makes the full tile and its STL.');
     }
     this.#stlState();
   }
