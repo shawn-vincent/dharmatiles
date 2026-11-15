@@ -30,6 +30,11 @@ pub const SET: &[&str] = &[
     "lib:tests/cliffs/1x1-cliff-canyon.dtile@ol",
     "lib:tests/cliffs/1x1-cliff-escarpment.dtile@ol",
     "lib:tests/cliffs/1x1-cliff-plateau.dtile@ol",
+    "lib:tiles/cliffs/1x1-cliff-spire.dtile@db",
+    "lib:tiles/cliffs/1x1-cliff-spire.dtile@ol",
+    "lib:tiles/cliffs/1x1-cliff-corner.dtile@db",
+    "lib:tiles/cliffs/1x1-cliff-mound.dtile@db",
+    "lib:tests/cliffs/1x1-cliff-columns.dtile@ol",
 ];
 
 #[expect(

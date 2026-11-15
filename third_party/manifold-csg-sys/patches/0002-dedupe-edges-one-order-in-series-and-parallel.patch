@@ -10,7 +10,7 @@ diff --git a/src/edge_op.cpp b/src/edge_op.cpp
 +      // and the order DedupeEdge splits in decides the new vertices' numbers,
 +      // so a tile built in series (the browser) differed from a tile built in
 +      // parallel (the program) by a few triangles.  One order for both.
-+      std::sort(duplicates.begin(), duplicates.end());
++      manifold::stable_sort(duplicates.begin(), duplicates.end());
 +      duplicates.erase(std::unique(duplicates.begin(), duplicates.end()),
 +                       duplicates.end());
      }
