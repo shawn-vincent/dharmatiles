@@ -36,30 +36,39 @@ pub mod step {
 /// fresh clone or worktree).
 #[must_use]
 pub fn build(root: &Path) -> f64 {
+    warm_or_cold(root, "release/deps", WARM_BUILD, COLD_BUILD)
+}
+
+/// `warm` when the target folder holds `built` (that build was made here before), else `cold`.
+fn warm_or_cold(root: &Path, built: &str, warm: f64, cold: f64) -> f64 {
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
-    if target.join("release/deps").is_dir() {
-        WARM_BUILD
+    if target.join(built).is_dir() {
+        warm
     } else {
-        COLD_BUILD
+        cold
     }
 }
 
 /// Each command's budget, seconds, by its name as typed (`cargo xtask <name>`); `check` sets its own.
 #[must_use]
-pub fn of_command(name: &str, args: &[String]) -> Option<f64> {
+pub fn of_command(root: &Path, name: &str, args: &[String]) -> Option<f64> {
     let check_only = args.iter().any(|a| a == "--check");
     Some(match name {
         // the whole library, 60 tiles five at a time
         "sweep" => 240.0,
         "sheet" => 120.0,
         "pictures" => 300.0,
+        // 9 s with the program built (14 Nov 2026)
         "docs" => 45.0,
         "regen" => 90.0,
         "examples" => 300.0,
         "shots" => 300.0,
-        "wasm" if check_only => 90.0,
-        "wasm" => 300.0,
+        // the browser bundle: 21 s warm (14 Nov 2026); a first one builds Manifold for the browser
+        "wasm" if check_only => {
+            warm_or_cold(root, "wasm32-unknown-unknown/debug", 60.0, COLD_BUILD)
+        }
+        "wasm" => warm_or_cold(root, "wasm32-unknown-unknown/release", 60.0, COLD_BUILD),
         // the checks, the release gate and the baseline of every tile
         "release" => 1200.0,
         _ => return None,

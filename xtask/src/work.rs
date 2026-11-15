@@ -435,7 +435,7 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
         };
         steps.push((
             format!("the sweep: {what}"),
-            budget::of_command("sweep", &[]).unwrap_or(budget::CHECK),
+            budget::of_command(root, "sweep", &[]).unwrap_or(budget::CHECK),
             Box::new(move || sweep(root, &only)),
         ));
     }

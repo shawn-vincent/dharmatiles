@@ -95,7 +95,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let name = args.first().map_or("", String::as_str);
     // every command but `check` (which times each of its steps and itself) is timed here against its budget
-    let result = match budget::of_command(name, &args[1..]) {
+    let result = match budget::of_command(&root(), name, &args[1..]) {
         Some(b) => budget::timed(&root(), &args.join(" "), b, || command(&args)),
         None if name == "heavy" => {
             budget::timed(&root(), &args.join(" "), budget::FULL, || command(&args))
