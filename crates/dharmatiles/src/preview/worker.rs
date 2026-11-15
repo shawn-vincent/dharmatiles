@@ -262,13 +262,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         Err(errs) => finish_with(rec, &errs, bug, Scope::Build),
         Ok(b) => {
             let built_s = t0.elapsed().as_secs_f64();
-            let failures = b.audit.failures(&opts.printer);
-            let mut record = tile_json(&b, &failures, built_s);
-            record["cache"] = json!(match b.report.cache.state {
-                dt_eval::CacheState::Off => "off",
-                dt_eval::CacheState::Miss => "miss",
-                dt_eval::CacheState::Hit => "hit",
-            });
+            let record = dt_eval::TileRecord::of(&b, &opts.printer, built_s);
             for problem in &b.report.cache.problems {
                 tell!("warning: {path}: the build cache: {problem}");
             }
@@ -332,8 +326,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             // said before the tile is: what this build no longer reports clears while it still shows as running
             let palette = shared.palette_diags();
             shared.report(id, Scope::Build, |name| {
-                let mut found =
-                    messages::of_build(&record, b.report.reused, &b.report.cache, id, name);
+                let mut found = messages::of_build(&record, b.report.reused, id, name);
                 for m in messages::of_errors(&palette, Scope::Build, id, name, &[]) {
                     found.push(crate::message::Message {
                         severity: Severity::Warning,
@@ -508,7 +501,6 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         &[],
         Some(&dt_kit::HangBand::DEFAULT),
     );
-    let failures = a.failures(&opts.printer);
     let materials = vec![dt_kit::Material::Earth; export.mesh.triangles.len()];
     let mut painted = dt_kit::paint(&materials, &a.overhang);
     for (c, _) in painted.iter_mut().zip(&a.band).filter(|(_, b)| **b) {
@@ -528,15 +520,8 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         "square_mm": sq, "size_mm": footprint, "datum_z": Value::Null,
         "stack": [{"label": "stl file", "element": "stl", "href": Value::Null}],
     });
-    let record = json!({
-        "record": {"seed": Value::Null, "system": opts.system},
-        "audit": {
-            "triangles": a.triangles, "watertight": a.watertight, "overhang_mm2": a.overhang_mm2,
-            "overhang_budget_mm2": a.overhang_budget_mm2, "band_mm2": a.band_mm2, "band_budget_mm2": a.band_budget_mm2, "dropped": a.dropped.len(),
-            "voids_filled": a.voids.len(), "holes": a.holes, "failures": failures,
-        },
-        "build_s": t0.elapsed().as_secs_f64(),
-    });
+    let record =
+        dt_eval::TileRecord::of_stl(path, a.summary(&opts.printer), t0.elapsed().as_secs_f64());
     shared.report(id, Scope::Build, |name| messages::of_stl(&record, id, name));
     shared.update(id, |t| {
         t.status = State::Ready;

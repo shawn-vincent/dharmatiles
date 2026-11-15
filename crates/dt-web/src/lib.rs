@@ -580,37 +580,22 @@ impl Tile {
     }
 }
 
+/// What a build in the page says beside its mesh: the build's record, the program's own (`dt_eval::TileRecord`, the
+/// gate's verdict and numbers, the stage hashes and timings), and what only the page needs.
 #[derive(Serialize)]
 struct BuildMeta {
     /// False when the document did not build: `diagnostics` says why.
     built: bool,
     diagnostics: Vec<Diagnostic>,
-    triangles: usize,
-    vertices: usize,
     /// Cells per square the build used; 0 is the build's own finest.
     cells: u32,
-    /// The gate's verdict: it passes when `failures` is empty and the build
-    /// was checked.
-    passes: bool,
-    checked: bool,
-    failures: Vec<String>,
-    watertight: bool,
-    overhang_mm2: f64,
-    overhang_budget_mm2: f64,
-    band_mm2: f64,
-    band_budget_mm2: f64,
-    holes: usize,
-    bodies: usize,
-    volume_mm3: f64,
     footprint: [f64; 2],
     /// SHA-256 of the STL's triangles (the file after its 80-byte header,
     /// which names the engine and document), as hex.
     stl_sha256: String,
     stl_bytes: usize,
-    /// Each stage's hash, in build order.
-    stages: Vec<(String, String)>,
-    /// How long each stage took in the page, seconds.
-    stage_secs: Vec<(String, f64)>,
+    /// The build's record; none when it did not build.
+    record: Option<dt_eval::TileRecord>,
 }
 
 /// How finely a build is made, the program's own tiers ([`Options::draft`], [`Options::low`]): `full` is what the printer is
@@ -789,25 +774,11 @@ pub fn build_tile(
                 let meta = BuildMeta {
                     built: false,
                     diagnostics: ds.iter().map(diagnostic).collect(),
-                    triangles: 0,
-                    vertices: 0,
                     cells,
-                    passes: false,
-                    checked: false,
-                    failures: Vec::new(),
-                    watertight: false,
-                    overhang_mm2: 0.0,
-                    overhang_budget_mm2: 0.0,
-                    band_mm2: 0.0,
-                    band_budget_mm2: 0.0,
-                    holes: 0,
-                    bodies: 0,
-                    volume_mm3: 0.0,
                     footprint: [0.0; 2],
                     stl_sha256: String::new(),
                     stl_bytes: 0,
-                    stages: Vec::new(),
-                    stage_secs: Vec::new(),
+                    record: None,
                 };
                 return Ok(Tile {
                     meta: json(&meta)?,
@@ -833,37 +804,17 @@ pub fn build_tile(
                 colours.extend_from_slice(&c);
             }
         }
-        let failures = built.audit.failures(&opts.printer);
         let stl_file = dt_print::stl(&built.export.mesh, &built.record);
         let (stl_sha256, stl_bytes) = stl_hash(&stl_file);
-        let a = &built.audit;
+        let build_s = built.report.stage_secs.iter().map(|s| s.1).sum();
         let meta = BuildMeta {
             built: true,
             diagnostics: Vec::new(),
-            triangles: a.triangles,
-            vertices: a.vertices,
             cells,
-            passes: built.checked && failures.is_empty(),
-            checked: built.checked,
-            failures,
-            watertight: a.watertight,
-            overhang_mm2: a.overhang_mm2,
-            overhang_budget_mm2: a.overhang_budget_mm2.max(opts.printer.overhang_budget_mm2),
-            band_mm2: a.band_mm2,
-            band_budget_mm2: a.band_budget_mm2,
-            holes: a.holes,
-            bodies: a.bodies,
-            volume_mm3: a.volume_mm3,
             footprint: built.footprint,
             stl_sha256,
             stl_bytes,
-            stages: built
-                .report
-                .stages
-                .iter()
-                .map(|s| (s.name.clone(), format!("{:016x}", s.hash)))
-                .collect(),
-            stage_secs: built.report.stage_secs.clone(),
+            record: Some(dt_eval::TileRecord::of(&built, &opts.printer, build_s)),
         };
         Ok(Tile {
             meta: json(&meta)?,

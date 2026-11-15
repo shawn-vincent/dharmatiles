@@ -212,7 +212,7 @@ pub enum MessageState {
 /// A message on the wire: the stream's `message` events, `GET /api/messages` and the page's panel read this one
 /// document.  A message is its own document, shared with the command line and an assistant, so its fields keep
 /// `snake_case` everywhere it appears (the page's other JSON is `camelCase`: see `api.rs`).  `data` is the
-/// numbers of the kind: [`GateData`] for a `gate`, [`BuildData`] for a `build`, [`ServerData`] for a `server`,
+/// numbers of the kind: [`dt_kit::AuditSummary`] for a `gate`, [`BuildData`] for a `build`, [`ServerData`] for a `server`,
 /// [`DiagData`] for an `error` or a `note`; the others (a check, an export, plates, the inventory) are read by
 /// no part of the page by name and are not typed.
 #[derive(Clone, serde::Serialize)]
@@ -257,32 +257,15 @@ pub struct MessagesRes {
     pub messages: Vec<MessageJson>,
 }
 
-/// The `data` of a `gate` message: the printability gate's numbers.  A number the audit does not carry is `null`.
-#[derive(Clone, Default, serde::Serialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct GateData {
-    pub triangles: Option<u64>,
-    pub watertight: Option<bool>,
-    pub band_mm2: Option<f64>,
-    pub band_budget_mm2: Option<f64>,
-    pub overhang_mm2: Option<f64>,
-    pub overhang_budget_mm2: Option<f64>,
-    /// How many bodies the gate dropped.
-    pub dropped: u64,
-    pub holes: Option<u64>,
-    pub voids_filled: Option<u64>,
-    pub failures: Vec<String>,
-}
-
 /// The `data` of a finished build's `build` message.
 #[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct BuildData {
-    pub build_s: Option<f64>,
-    pub triangles: Option<u64>,
+    pub build_s: f64,
+    pub triangles: usize,
     pub target: String,
-    /// Seconds each stage took, by stage name.
-    pub stage_secs: Value,
+    /// Seconds each stage took, in build order.
+    pub stage_secs: Vec<(String, f64)>,
     pub reused: usize,
     /// `hit` or `miss`.
     pub cache: String,

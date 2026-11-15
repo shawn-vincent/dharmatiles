@@ -24,7 +24,13 @@ fn fingerprint(b: &Built) -> (Vec<(String, u64)>, u64) {
 /// are the builds the memo must not serve.
 fn through(src: &Memory, path: &str, opts: &Options, cache: &Cache) -> Result<Built, Vec<Diag>> {
     // fresh: a build through the Cache is the thing under test; a memo would hide what the Cache reused
-    build_cached(src, path, opts, &Progress::none(), Some(cache))
+    build_cached(
+        src,
+        path,
+        &dt_testkit::seeded(opts),
+        &Progress::none(),
+        Some(cache),
+    )
 }
 
 /// Drafts of the low tier: the cache keeps those steps as it keeps a full

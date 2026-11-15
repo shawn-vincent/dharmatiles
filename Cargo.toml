@@ -62,7 +62,8 @@ serde = { version = "1", features = ["derive"] }
 # response structs (test builds only; the program does not carry it).
 ts-rs = { version = "12", default-features = false, features = ["serde-json-impl", "serde-compat", "no-serde-warnings"] }
 clap = { version = "4.6.7", features = ["derive"] }
-insta = "1.49.0"
+# json: the golden metrics are a serde struct, recorded and read back as one
+insta = { version = "1.49.0", features = ["json"] }
 # Seeded code uses libm, not std's platform maths (R2: sin/exp differ by OS).
 libm = "0.2.16"
 png = "0.18.1"

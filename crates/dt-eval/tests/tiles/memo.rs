@@ -69,11 +69,11 @@ impl Reporter for Observer {
 }
 
 fn observe(path: &str) -> Observed {
-    let opts = Options {
+    let opts = dt_testkit::seeded(&Options {
         debug: true,
         clouds: true,
         ..Options::default()
-    };
+    });
     let log = Arc::new(Mutex::new(Vec::new()));
     let l = Arc::clone(&log);
     let checked = check(&Library, path, &opts).unwrap_or_else(|e| panic!("{path}: {e:?}"));

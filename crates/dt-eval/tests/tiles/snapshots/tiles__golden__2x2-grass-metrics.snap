@@ -2,17 +2,27 @@
 source: crates/dt-eval/tests/tiles/golden.rs
 expression: metrics(b)
 ---
-triangles: 1778740
-volume_mm3: 55024.222
-watertight: true
-bodies: 302
-dropped: 0
-voids_filled: 301
-pinches_moved: 1026
-slivers: 0
-collapsed: 0
-overhang_mm2: 0.000
-band_mm2: 0.000
-holes: 0
-render_red_pixels: 0
-gate: pass
+{
+  "audit": {
+    "triangles": 1778740,
+    "vertices": 889206,
+    "volume_mm3": 55024.222,
+    "watertight": true,
+    "bodies": 302,
+    "dropped": [],
+    "repairs": {
+      "voids_filled": 301,
+      "pinches_moved": 1026,
+      "slivers": 0,
+      "collapsed": 0,
+      "dropped": 0
+    },
+    "overhang_mm2": 0.0,
+    "overhang_budget_mm2": 8.287,
+    "band_mm2": 0.0,
+    "band_budget_mm2": 8.287,
+    "holes": 0,
+    "failures": []
+  },
+  "render_red_pixels": 0
+}

@@ -31,7 +31,7 @@ fn built(text: &str, threads: Option<usize>) -> &'static Built {
             .build()
             .unwrap()
             // fresh: built on a pool of `n` threads, to compare with another count; a memo hides which pool built
-            .install(|| dt_eval::build(&mem(text), "t.dtile", &opts))
+            .install(|| dt_eval::build(&mem(text), "t.dtile", &dt_testkit::seeded(&opts)))
             .map(|b| &*Box::leak(Box::new(b)))
             .map_err(|e| format!("{e:#?}")),
         None => memo::build(&mem(text), "t.dtile", &opts).map_err(|e| format!("{e:#?}")),

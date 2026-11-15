@@ -96,7 +96,8 @@ export function init() {
         if (r.status !== 0) failed(`Could not export ${stem(t)}`, r);
       } else if ('files' in r.body) {
         // written; a tile that fails the printability gate is written too, and says so
-        set({ files: r.body.files, ...(r.body.ok ? {} : { error: r.body.failures.length ? `Fails the gate: ${r.body.failures[0]}` : 'the build failed' }) });
+        const fails = r.body.build.audit.failures;
+        set({ files: r.body.files, ...(fails.length ? { error: `Fails the gate: ${fails[0]}` } : {}) });
       }
     } catch (e) {
       set({ error: 'the export failed' });

@@ -110,7 +110,6 @@ use dt_eval::progress::{StageInfo, Status, Timings, Tracker, plan_stages};
 use dt_eval::{Diag, Options};
 use serde_json::{Value, json};
 
-use crate::tile_json;
 use crate::watch::{Recording, mtime};
 
 /// How often the worker looks for work.
@@ -171,7 +170,7 @@ pub struct Slot {
     /// check of the text that finds nothing wrong does not take it from the stream.
     scene_notes: Vec<scene::Note>,
     plan: Option<Value>,
-    record: Option<Value>,
+    record: Option<dt_eval::TileRecord>,
     errors: Vec<api::Mistake>,
     /// A build that panicked or could not be encoded, as the page gets it
     /// ([`fail::ServerError`]); the page shows it in the error panel.
@@ -259,7 +258,7 @@ impl Slot {
             size: self.size.clone(),
             status: self.status.as_str().to_owned(),
             plan: self.plan.as_ref().map(api::camel_keys),
-            record: self.record.as_ref().map(api::camel_keys),
+            record: self.record.clone(),
             errors: self.errors.clone(),
             failure: self.failure.clone(),
             progress: self.progress.clone(),

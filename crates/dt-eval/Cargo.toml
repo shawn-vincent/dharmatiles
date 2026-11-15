@@ -25,6 +25,9 @@ dt-elements.workspace = true
 kdl.workspace = true
 miette.workspace = true
 serde_json.workspace = true
+# a build's record (`TileRecord`) is one serde struct, and its TypeScript type is the page's
+serde.workspace = true
+ts-rs.workspace = true
 
 [dev-dependencies]
 # the golden tests draw the PNG renders (a dev-dependency cycle: dt-print builds on dt-eval)

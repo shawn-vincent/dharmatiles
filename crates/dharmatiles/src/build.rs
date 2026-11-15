@@ -162,15 +162,11 @@ pub(crate) fn build_one(
         }
     };
     let built_s = t0.elapsed().as_secs_f64();
-    // only a full build was checked: a low one has nothing to fail
-    let failures = if b.checked {
-        b.audit.failures(&opts.printer)
-    } else {
-        Vec::new()
-    };
+    let record = dt_eval::TileRecord::of(&b, &opts.printer, built_s);
+    let failures = &record.audit.failures;
     reporter.begin(progress::WRITE, "writing files");
     let t_write = Instant::now();
-    let written = write(&b, &failures, built_s, out, extras);
+    let written = write(&b, &record, out, extras);
     reporter.end(progress::WRITE);
     if let Some((t, _)) = &tracker {
         t.finish();
@@ -191,7 +187,7 @@ pub(crate) fn build_one(
     secs.push((progress::WRITE.to_owned(), t_write.elapsed().as_secs_f64()));
     timings.record(p, &opts.system, &secs);
     timings.save();
-    let a = &b.audit;
+    let a = &record.audit;
     if !json && !b.checked {
         tell!(
             "built {p} → {}\n  {} · not yet checked · {} triangles · build {:.2} s, written {:.2} s",
@@ -211,8 +207,8 @@ pub(crate) fn build_one(
             a.overhang_budget_mm2,
             a.band_mm2,
             a.band_budget_mm2,
-            a.dropped.len(),
-            a.voids.len(),
+            a.repairs.dropped,
+            a.repairs.voids_filled,
             a.holes,
             built_s,
             total_s
@@ -234,43 +230,42 @@ pub(crate) fn build_one(
                     .unwrap_or("an earlier run")
             );
         }
-        for f in &failures {
+        for f in failures {
             tell!("  audit failed: {f}");
         }
     }
     for problem in &b.report.cache.problems {
         tell!("warning: {p}: {problem}");
     }
-    let mut r = tile_json(&b, &failures, built_s);
-    r["cache"] = json!({
-        "state": match b.report.cache.state {
-            dt_eval::CacheState::Off => "off",
-            dt_eval::CacheState::Miss => "miss",
-            dt_eval::CacheState::Hit => "hit",
-        },
-        "problems": b.report.cache.problems,
-    });
-    r["files"] = json!(
-        files
-            .iter()
-            .map(|f| f.display().to_string())
-            .collect::<Vec<_>>()
-    );
-    r["total_s"] = json!(total_s);
-    let code = if failures.is_empty() {
-        OK
-    } else {
-        AUDIT_FAILED
+    let code = if record.passes() { OK } else { AUDIT_FAILED };
+    let out = Printed {
+        ok: record.passes(),
+        files: files.iter().map(|f| f.display().to_string()).collect(),
+        total_s,
+        record,
     };
-    (code, r)
+    (
+        code,
+        serde_json::to_value(&out).expect("a build's record is JSON"),
+    )
+}
+
+/// What `dharmatiles build --json` prints for a tile: the build's record, whether it passes the gate, the files
+/// written and how long it all took.
+#[derive(serde::Serialize)]
+struct Printed {
+    ok: bool,
+    #[serde(flatten)]
+    record: dt_eval::TileRecord,
+    files: Vec<String>,
+    total_s: f64,
 }
 
 /// Write the STL, its build record (`.build.json`) and, with `png`, the
 /// four views.
 pub(crate) fn write(
     b: &Built,
-    failures: &[String],
-    built_s: f64,
+    record: &dt_eval::TileRecord,
     out: &Path,
     extras: Extras,
 ) -> Result<Vec<PathBuf>, String> {
@@ -288,12 +283,11 @@ pub(crate) fn write(
         w(&path, &stl(&b.export.mesh, &b.record))?;
         files.push(path.clone());
     }
-    let record = path.with_extension("build.json");
-    let text = serde_json::to_string_pretty(&tile_json(b, failures, built_s))
-        .map_err(|e| e.to_string())?;
+    let beside = path.with_extension("build.json");
+    let text = serde_json::to_string_pretty(record).map_err(|e| e.to_string())?;
     if b.checked {
-        w(&record, text.as_bytes())?;
-        files.push(record);
+        w(&beside, text.as_bytes())?;
+        files.push(beside);
     }
     if extras.threemf && b.checked {
         let p = path.with_extension("3mf");
@@ -334,61 +328,6 @@ fn left_out_text(left_out: &[(String, usize)]) -> String {
         .join(", ")
 }
 
-pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
-    let a = &b.audit;
-    let mut v = json!({
-        "path": b.record.document,
-        "ok": failures.is_empty(),
-        "record": {
-            "engine": b.record.engine,
-            "document": b.record.document,
-            "document_hash": format!("{:016x}", b.record.document_hash),
-            "seed": b.record.seed,
-            "system": b.record.system,
-            "printer": b.record.printer,
-            "target": b.record.target(),
-        },
-        "audit": {
-            "triangles": a.triangles,
-            "vertices": a.vertices,
-            "volume_mm3": a.volume_mm3,
-            "watertight": a.watertight,
-            "bodies": a.bodies,
-            "dropped": a.dropped.iter().map(|d| json!({"triangles": d.triangles, "volume_mm3": d.volume_mm3, "bounds": d.bounds})).collect::<Vec<_>>(),
-            "voids_filled": a.voids.len(),
-            "slivers": a.slivers.len(),
-            "band_mm2": a.band_mm2,
-            "band_budget_mm2": a.band_budget_mm2,
-            "pinches_moved": a.pinches_moved,
-            "collapsed": a.collapsed,
-            "overhang_mm2": a.overhang_mm2,
-            "overhang_budget_mm2": a.overhang_budget_mm2,
-            "holes": a.holes,
-            "failures": failures,
-        },
-        "stages": b.report.stages.iter().map(|s| json!({"name": s.name, "hash": format!("{:016x}", s.hash)})).collect::<Vec<_>>(),
-        "build_s": built_s,
-        "stage_secs": b.report.stage_secs.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>(),
-        "edge_mm": b.report.edge_mm,
-        "stats": stats(&b.report.notes),
-    });
-    // a low build says so; a full one's record is unchanged
-    if !b.checked {
-        v["checked"] = json!(false);
-    }
-    // only when an element left something out: the record is unchanged otherwise
-    if !b.report.left_out.is_empty() {
-        v["left_out"] = b
-            .report
-            .left_out
-            .iter()
-            .map(|(e, n)| (e.clone(), json!(n)))
-            .collect::<serde_json::Map<_, _>>()
-            .into();
-    }
-    v
-}
-
 /// Is `code` a refusal of the document (a mistake the reader can fix) rather
 /// than a failure of the program (a panic, an unreadable or unwritable file,
 /// a kernel that failed)?  The page shows the second kind as a bug.
@@ -417,26 +356,6 @@ pub(crate) fn report(errs: &[Diag]) {
     for e in errs {
         tell!("{:?}", miette::Report::new(e.clone()));
     }
-}
-
-/// The elements' notes as one JSON object. An element used twice notes the same
-/// names twice: the second is keyed `name#2`, the third `name#3`, so no
-/// entry's numbers overwrite another's.
-pub(crate) fn stats(notes: &[(String, f64)]) -> serde_json::Map<String, Value> {
-    let mut seen: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    notes
-        .iter()
-        .map(|(k, v)| {
-            let n = seen.entry(k.as_str()).or_default();
-            *n += 1;
-            let key = if *n == 1 {
-                k.clone()
-            } else {
-                format!("{k}#{n}")
-            };
-            (key, json!(v))
-        })
-        .collect()
 }
 
 #[cfg(test)]

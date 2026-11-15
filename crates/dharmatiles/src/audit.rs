@@ -1,12 +1,19 @@
 //! `dharmatiles audit`: the printability gate on a binary STL, and the STL
 //! readers the preview shares.
 
-use serde_json::json;
-
 use crate::{AUDIT_FAILED, ERROR, OK};
+
+/// What `audit --json` prints: the STL's record (its audit), and whether it passes the gate.
+#[derive(serde::Serialize)]
+struct Audited {
+    ok: bool,
+    #[serde(flatten)]
+    record: dt_eval::TileRecord,
+}
 
 /// `audit FILE.stl`: the gate on a binary STL as a slicer would read it.
 pub(crate) fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, json: bool) -> u8 {
+    let t0 = std::time::Instant::now();
     let bytes = match std::fs::read(path) {
         Ok(b) => b,
         Err(e) => {
@@ -35,16 +42,14 @@ pub(crate) fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, jso
         &[],
         Some(&dt_kit::HangBand::DEFAULT),
     );
-    let failures = a.failures(&printer);
+    let record = dt_eval::TileRecord::of_stl(path, a.summary(&printer), t0.elapsed().as_secs_f64());
+    let failures = &record.audit.failures;
     if json {
-        say!(
-            "{}",
-            json!({"ok": failures.is_empty(), "path": path, "triangles": a.triangles,
-                "volume_mm3": a.volume_mm3, "watertight": a.watertight, "bodies": a.bodies,
-                "overhang_mm2": a.overhang_mm2, "band_mm2": a.band_mm2,
-                "band_budget_mm2": a.band_budget_mm2, "holes": a.holes,
-                "dropped": a.dropped.len(), "failures": failures})
-        );
+        let out = Audited {
+            ok: record.passes(),
+            record: record.clone(),
+        };
+        say!("{}", serde_json::to_string(&out).expect("a record is JSON"));
     } else {
         tell!(
             "{path}: {} triangles, watertight {}, overhang (over 65°) {:.2} mm², band (55–65°) {:.2}/{:.2} mm², {} holes, {} loose bodies dropped",
@@ -56,7 +61,7 @@ pub(crate) fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, jso
             a.holes,
             a.dropped.len()
         );
-        for f in &failures {
+        for f in failures {
             tell!("  audit failed: {f}");
         }
     }

@@ -371,11 +371,11 @@ fn thorough_a_mixed_scatter_builds_and_is_deterministic() {
     ] {
         let src = mem(&[("t.dtile", &on_a_line(body))]);
         // fresh: built twice to prove the same text builds the same tile; a memo would hand back one
-        let a = dt_eval::build(&src, "t.dtile", &legacy()).unwrap();
+        let a = dt_eval::build(&src, "t.dtile", &dt_testkit::seeded(&legacy())).unwrap();
         assert!(a.materials.contains(&dt_kit::Material::Rock), "{body}");
         assert!(a.materials.contains(&dt_kit::Material::Flower), "{body}");
         // fresh: the second of the two builds compared
-        let b = dt_eval::build(&src, "t.dtile", &legacy()).unwrap();
+        let b = dt_eval::build(&src, "t.dtile", &dt_testkit::seeded(&legacy())).unwrap();
         assert_eq!(a.materials, b.materials, "{body}");
         assert_eq!(
             format!("{:?}", a.report.stages),
@@ -420,6 +420,10 @@ fn a_seed_wobbles_the_lines_again() {
     }
 }
 "#;
+    // what no seed means is the tile's own: a run at another seed (DT_TEST_SEED) gives every build that one
+    if !dt_testkit::at_recorded_seeds() {
+        return;
+    }
     let src = mem(&[("t.dtile", text)]);
     let hash = |seed| {
         let o = Options {

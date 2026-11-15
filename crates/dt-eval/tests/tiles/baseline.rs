@@ -45,11 +45,11 @@
 #![allow(clippy::unwrap_used)]
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::path::Path;
 
 use crate::memo;
-use dt_eval::{Library, Options, check};
+use dt_eval::{Library, Options, TileRecord, check};
+use dt_kit::Repairs;
 
 const FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/baseline/library-db.tsv");
 /// The second line of the file, saying how its budgets were counted. A file
@@ -60,16 +60,176 @@ const FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/baseline/library-
 const MEASURE: &str = "# budgets: each tile's repair counts on its own seed are held to these (recorded as the worst of four seeds; a rewrite only lowers them)";
 const HEADER: &str = "tile\thash\ttriangles\tvoids_filled\tpinches_moved\tslivers\tcollapsed\tdropped\toverhang_mm2\tband_mm2\tholes\tgate\tmax_voids\tmax_pinches\tmax_slivers\tmax_collapsed\tmax_dropped\tsecs";
 
-/// The columns that count repairs, and where each one's budget is.
-const REPAIRS: [(&str, usize, usize); 5] = [
-    ("voids_filled", 3, 12),
-    ("pinches_moved", 4, 13),
-    ("slivers", 5, 14),
-    ("collapsed", 6, 15),
-    ("dropped", 7, 16),
-];
-/// A row's fields: the tile and its measures (12), the budgets (5), the time.
-const FIELDS: usize = 18;
+/// What a library tile's build measured, everything the baseline holds it to but its budgets and its time:
+/// its output hash and the numbers of its record's audit ([`dt_kit::AuditSummary`]) the file keeps. A tile's
+/// repair counts and its budgets are both a [`Repairs`], in the order of [`Repairs::named`], the file's columns.
+#[derive(Clone, Debug, PartialEq)]
+enum Measured {
+    Built {
+        /// The output hash: the audited mesh as written.
+        hash: u64,
+        triangles: usize,
+        repairs: Repairs,
+        /// Areas to the 3 decimals the file keeps ([`mm2`]).
+        overhang_mm2: f64,
+        band_mm2: f64,
+        holes: usize,
+        /// Whether it passes the printability gate.
+        passes: bool,
+    },
+    /// The document was refused, with this many diagnostics.
+    Refused(usize),
+}
+
+impl Measured {
+    fn repairs(&self) -> Option<Repairs> {
+        match self {
+            Self::Built { repairs, .. } => Some(*repairs),
+            Self::Refused(_) => None,
+        }
+    }
+    fn passes(&self) -> bool {
+        matches!(self, Self::Built { passes: true, .. })
+    }
+}
+
+/// A tile's line in the file: what it measured on its own seed, its repair budgets (none for a refused tile),
+/// and the seconds its build took.
+#[derive(Clone, Debug, PartialEq)]
+struct Row {
+    tile: String,
+    measured: Measured,
+    budgets: Option<Repairs>,
+    secs: f64,
+}
+
+/// An area as the file keeps it: to 3 decimals.
+fn mm2(x: f64) -> f64 {
+    format!("{x:.3}")
+        .parse()
+        .expect("a formatted number reads back")
+}
+
+/// The file's one way of writing a row and of reading one: nothing else reads its text.
+impl Row {
+    fn to_tsv(&self) -> String {
+        let measured = match &self.measured {
+            Measured::Built {
+                hash,
+                triangles,
+                repairs,
+                overhang_mm2,
+                band_mm2,
+                holes,
+                passes,
+            } => {
+                let r = columns(*repairs);
+                let gate = if *passes { "pass" } else { "fail" };
+                format!(
+                    "{hash:016x}\t{triangles}\t{r}\t{overhang_mm2:.3}\t{band_mm2:.3}\t{holes}\t{gate}"
+                )
+            }
+            Measured::Refused(n) => format!("refused: {n}{}", "\t".repeat(10)),
+        };
+        let budgets = self.budgets.map_or_else(|| "\t".repeat(4), columns);
+        format!("{}\t{measured}\t{budgets}\t{:.1}", self.tile, self.secs)
+    }
+
+    fn from_tsv(line: &str) -> Result<Self, String> {
+        let f: Vec<&str> = line.split('\t').collect();
+        if f.len() != 18 {
+            return Err(format!("{} fields, not 18: {line}", f.len()));
+        }
+        let num = |k: usize| -> Result<usize, String> { field(&f, k, line) };
+        let area = |k: usize| -> Result<f64, String> { field(&f, k, line) };
+        let measured = if let Some(n) = f[1].strip_prefix("refused: ") {
+            Measured::Refused(
+                n.parse()
+                    .map_err(|e| format!("refused count {n:?}: {e}: {line}"))?,
+            )
+        } else {
+            Measured::Built {
+                hash: u64::from_str_radix(f[1], 16)
+                    .map_err(|e| format!("hash {:?}: {e}: {line}", f[1]))?,
+                triangles: field(&f, 2, line)?,
+                repairs: Repairs::from_named([num(3)?, num(4)?, num(5)?, num(6)?, num(7)?]),
+                overhang_mm2: area(8)?,
+                band_mm2: area(9)?,
+                holes: field(&f, 10, line)?,
+                passes: match f[11] {
+                    "pass" => true,
+                    "fail" => false,
+                    g => return Err(format!("gate {g:?} is neither pass nor fail: {line}")),
+                },
+            }
+        };
+        let budgets = if f[12].is_empty() {
+            None
+        } else {
+            Some(Repairs::from_named([
+                num(12)?,
+                num(13)?,
+                num(14)?,
+                num(15)?,
+                num(16)?,
+            ]))
+        };
+        Ok(Self {
+            tile: f[0].to_owned(),
+            measured,
+            budgets,
+            secs: area(17)?,
+        })
+    }
+}
+
+/// The five counts of `r` as the file's columns.
+fn columns(r: Repairs) -> String {
+    r.named().map(|(_, n)| n.to_string()).join("\t")
+}
+
+/// Column `k` of a row's fields, read as a `T`.
+fn field<T: std::str::FromStr>(f: &[&str], k: usize, line: &str) -> Result<T, String>
+where
+    T::Err: std::fmt::Display,
+{
+    f[k].parse()
+        .map_err(|e| format!("column {} ({:?}): {e}: {line}", k + 1, f[k]))
+}
+
+/// The file's rows, by tile, in its order (none when there is no file yet).
+fn read_file() -> Result<Option<Vec<Row>>, String> {
+    let text = match std::fs::read_to_string(Path::new(FILE)) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{FILE}: {e}")),
+    };
+    let mut lines = text.lines();
+    if lines.next() != Some(HEADER) {
+        return Err(format!(
+            "{FILE}: the first line is not the header `{HEADER}`"
+        ));
+    }
+    // a file that does not say how its budgets were counted is not read
+    if lines.next() != Some(MEASURE) {
+        return Err(format!(
+            "{FILE} does not say how its budgets were counted (its second line is `{MEASURE}`): the budgets cannot be started afresh; restore the line, or edit a budget by hand where the diff shows it"
+        ));
+    }
+    lines
+        .map(|l| Row::from_tsv(l).map_err(|e| format!("{FILE}: {e}")))
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
+}
+
+fn write_file(rows: &[Row]) {
+    let mut text = format!("{HEADER}\n{MEASURE}\n");
+    for r in rows {
+        text.push_str(&r.to_tsv());
+        text.push('\n');
+    }
+    std::fs::write(FILE, text).unwrap_or_else(|e| panic!("{FILE}: {e}"));
+}
 
 /// The elements and tiles `DT_BASELINE_ONLY` names (`grass,cliff` or
 /// `lib:tiles/ground/1x1-grass.dtile`), if it is set: only those tiles and the
@@ -102,33 +262,27 @@ fn uses(path: &str) -> Vec<String> {
         .collect()
 }
 
-/// One tile's measured row, without budgets; the last column is the build time.
-fn row(path: &str) -> String {
+/// One tile's build, measured, and the seconds it took.
+fn measure(path: &str) -> (Measured, f64) {
     let opts = Options::default();
     // the memo's build: the release check that passes every library tile through the gate asks for the same
     // one, so the library is built once; the seconds are those of the build, whoever asked first
     let (b, secs) = memo::timed(&Library, path, &opts);
     let b = match b {
         Ok(b) => b,
-        Err(e) => return format!("{path}\trefused: {}\t\t\t\t\t\t\t\t\t\t\t", e.len()),
+        Err(e) => return (Measured::Refused(e.len()), secs),
     };
-    let a = &b.audit;
-    let gate = a.failures(&opts.printer);
-    // the output hash: the audited mesh as written
-    let hash = b.export.mesh.content_hash();
-    format!(
-        "{path}\t{hash:016x}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.3}\t{:.3}\t{}\t{}\t{secs:.1}",
-        a.triangles,
-        a.voids.len(),
-        a.pinches_moved,
-        a.slivers.len(),
-        a.collapsed,
-        a.dropped.len(),
-        a.overhang_mm2,
-        a.band_mm2,
-        a.holes,
-        if gate.is_empty() { "pass" } else { "fail" },
-    )
+    let a = TileRecord::of(b, &opts.printer, secs).audit;
+    let measured = Measured::Built {
+        hash: b.export.mesh.content_hash(),
+        triangles: a.triangles,
+        repairs: a.repairs,
+        overhang_mm2: mm2(a.overhang_mm2),
+        band_mm2: mm2(a.band_mm2),
+        holes: a.holes,
+        passes: a.passes(),
+    };
+    (measured, secs)
 }
 
 /// How many builds the sweep runs at once: enough to keep the machine busy, few enough that the biggest
@@ -157,44 +311,8 @@ fn in_parallel<T: Send>(order: &[usize], work: impl Fn(usize) -> T + Sync) -> Ve
     out.into_inner().expect("a sweep worker panicked")
 }
 
-/// Each tile's build time on the file, to start the longest first; none for a tile not on it.
-fn last_secs() -> BTreeMap<String, f64> {
-    let Ok(text) = std::fs::read_to_string(Path::new(FILE)) else {
-        return BTreeMap::new(); // no file yet: any order
-    };
-    text.lines()
-        .skip(2)
-        .filter_map(|l| {
-            let f: Vec<String> = l.split('\t').map(str::to_owned).collect();
-            (f.len() == FIELDS).then(|| (f[0].clone(), secs(&f)))
-        })
-        .collect()
-}
-
-/// A measured row (12 fields and the time) with a tile's budgets put in.
-fn with_budgets(measured: &[String], budgets: &[String; 5]) -> Vec<String> {
-    let mut out: Vec<String> = measured[..12].to_vec();
-    out.extend(budgets.iter().cloned());
-    out.push(measured[12].clone());
-    out
-}
-
-/// The measured part of a row: its first twelve fields.
-fn fixed(f: &[String]) -> String {
-    f[..12].join("\t")
-}
-
-fn secs(f: &[String]) -> f64 {
-    f.last().and_then(|s| s.parse().ok()).unwrap_or(0.0)
-}
-
-/// A repair count in a row, if the row has one (a refused tile has none).
-fn count(f: &[String], at: usize) -> Option<u64> {
-    f.get(at).and_then(|s| s.parse().ok())
-}
-
 #[test]
-#[ignore = "builds the whole library, about five minutes"]
+#[ignore = "builds the whole library, about three minutes"]
 fn the_library_builds_as_the_baseline_says() {
     let tiles: Vec<String> = Library::paths()
         .expect("the library is listed")
@@ -218,79 +336,68 @@ fn the_library_builds_as_the_baseline_says() {
         );
         eprintln!("{} library tiles use {}", tiles.len(), names.join(" or "));
     }
-    // the tiles build on a few workers at once: one build keeps about a third of the machine busy (the cliff
-    // corner: 4.6 of 12 cores), so [`WORKERS`] of them fill it
-    let took = last_secs();
-    let mut order: Vec<usize> = (0..tiles.len()).collect();
-    // the longest tiles first, so the last to finish are short
-    order.sort_by(|&a, &b| {
-        let t = |j: usize| took.get(&tiles[j]).copied().unwrap_or(f64::MAX);
-        t(b).total_cmp(&t(a))
-    });
-    let mut measured: Vec<Vec<String>> = vec![Vec::new(); tiles.len()];
-    for (t, r) in in_parallel(&order, |t| row(&tiles[t])) {
-        measured[t] = r.split('\t').map(str::to_owned).collect();
-    }
-    // each tile's repair counts (a refused tile has none)
-    let worst: Vec<Option<[u64; 5]>> = measured
+    let file = read_file().unwrap_or_else(|e| panic!("{e}"));
+    let before: BTreeMap<String, Row> = file
         .iter()
-        .map(|m| {
-            let mut w = [0; 5];
-            for (k, (_, at, _)) in REPAIRS.iter().enumerate() {
-                w[k] = count(m, *at)?;
-            }
-            Some(w)
-        })
+        .flatten()
+        .map(|r| (r.tile.clone(), r.clone()))
         .collect();
-    let old = std::fs::read_to_string(Path::new(FILE)).ok();
-    // the file's rows, by tile; a file from before the budgets has 13 fields
-    let mut before: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for l in old
-        .iter()
-        .flat_map(|o| o.lines().skip(1))
-        .filter(|l| !l.starts_with('#'))
-    {
-        let f: Vec<String> = l.split('\t').map(str::to_owned).collect();
-        before.insert(f[0].clone(), f);
-    }
-    // a file that does not say how its budgets were counted is not read
-    assert!(
-        old.as_ref()
-            .is_none_or(|o| o.lines().nth(1) == Some(MEASURE)),
-        "{FILE} does not say how its budgets were counted (its second line is `{MEASURE}`): the budgets cannot be started afresh; restore the line, or edit a budget by hand where the diff shows it"
-    );
-    let has_budgets = before.values().all(|f| f.len() == FIELDS);
     let mode = std::env::var("DT_BASELINE").unwrap_or_default();
     let reset = mode == "reset";
     let writing = reset || mode == "write";
+    // at another seed the file's hashes, triangles and areas are not this run's to compare or to write
+    let other_seed = dt_testkit::test_seed();
+    assert!(
+        !(writing && other_seed.is_some()),
+        "DT_BASELINE={mode} with DT_TEST_SEED={}: the baseline is each tile at its own seed; write it without DT_TEST_SEED",
+        other_seed.unwrap_or_default()
+    );
+
+    // the tiles build on a few workers at once: one build keeps about a third of the machine busy (the cliff
+    // corner: 4.6 of 12 cores), so [`WORKERS`] of them fill it; the longest first, so the last to finish are
+    // short
+    let mut order: Vec<usize> = (0..tiles.len()).collect();
+    order.sort_by(|&a, &b| {
+        let t = |j: usize| before.get(&tiles[j]).map_or(f64::MAX, |r| r.secs);
+        t(b).total_cmp(&t(a))
+    });
+    let mut measured: Vec<Option<(Measured, f64)>> = vec![None; tiles.len()];
+    for (t, m) in in_parallel(&order, |t| measure(&tiles[t])) {
+        measured[t] = Some(m);
+    }
 
     // the repair budget: a count above its budget fails, and a rewrite cannot raise one
-    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut rows: Vec<Row> = Vec::new();
     let mut over = Vec::new();
     let mut under = 0;
-    for (m, w) in measured.iter().zip(&worst) {
-        let name = &m[0];
-        let on_file = before.get(name).filter(|f| f.len() == FIELDS);
-        let mut budgets: [String; 5] = Default::default();
-        for (k, (word, _, bat)) in REPAIRS.iter().enumerate() {
-            let Some(n) = w.map(|w| w[k]) else { continue };
-            let budget = match on_file {
-                Some(f) => count(f, *bat).unwrap_or(n),
-                // a new tile, or the first write of the budgets: what it repairs now
-                None => n,
-            };
-            if reset && n > budget {
-                eprintln!("budget rose: {name} {word} {budget} -> {n}");
+    for (tile, m) in tiles.iter().zip(measured) {
+        let (measured, secs) = m.expect("every tile was measured");
+        let budgets = measured.repairs().map(|counts| {
+            // a new tile's budgets are what it repairs now
+            let on_file = before.get(tile).and_then(|r| r.budgets).unwrap_or(counts);
+            let mut budgets = on_file.named().map(|(_, n)| n);
+            for (k, ((word, n), (_, budget))) in
+                counts.named().into_iter().zip(on_file.named()).enumerate()
+            {
+                if reset && n > budget {
+                    eprintln!("budget rose: {tile} {word} {budget} -> {n}");
+                }
+                if n > budget && !reset {
+                    over.push(format!("{tile}: {word} {n} is over its budget of {budget}"));
+                }
+                if n < budget {
+                    under += 1;
+                }
+                budgets[k] = if reset { n } else { n.min(budget) };
             }
-            if n > budget && !reset {
-                over.push(format!("{name}: {word} {n} is over its budget of {budget}"));
-            }
-            if n < budget {
-                under += 1;
-            }
-            budgets[k] = if reset { n } else { n.min(budget) }.to_string();
-        }
-        rows.push(with_budgets(m, &budgets));
+            Repairs::from_named(budgets)
+        });
+        rows.push(Row {
+            tile: tile.clone(),
+            measured,
+            budgets,
+            secs,
+        });
     }
     assert!(
         over.is_empty(),
@@ -303,50 +410,70 @@ fn the_library_builds_as_the_baseline_says() {
         );
     }
 
-    // the tiles not built keep their rows; the file stays in the library's order
-    let built: BTreeMap<&str, &Vec<String>> = rows.iter().map(|r| (r[0].as_str(), r)).collect();
-    let all: Vec<Vec<String>> = if only.is_some() {
-        before
-            .values()
-            .map(|f| {
-                built
-                    .get(f[0].as_str())
-                    .map_or_else(|| f.clone(), |r| (*r).clone())
+    // at another seed: the repair budgets above, and each tile passing or failing the gate as it does at its own
+    if let Some(seed) = other_seed {
+        let word = |m: &Measured| if m.passes() { "pass" } else { "fail" };
+        let flipped: Vec<String> = rows
+            .iter()
+            .filter_map(|r| {
+                let b = before.get(&r.tile)?;
+                (b.measured.passes() != r.measured.passes()).then(|| {
+                    format!(
+                        "{}: the gate says {} at seed {seed}, {} at its own",
+                        r.tile,
+                        word(&r.measured),
+                        word(&b.measured)
+                    )
+                })
             })
-            .chain(rows.iter().filter(|r| !before.contains_key(&r[0])).cloned())
-            .collect()
-    } else {
-        rows.clone()
-    };
-    let mut text = format!("{HEADER}\n{MEASURE}\n");
-    for r in &all {
-        writeln!(text, "{}", r.join("\t")).unwrap();
+            .collect();
+        assert!(flipped.is_empty(), "{}", flipped.join("\n"));
+        return;
     }
+
     if writing {
-        std::fs::write(FILE, &text).unwrap();
+        // the tiles not built keep their rows; the file stays in the library's order
+        let built: BTreeMap<&str, &Row> = rows.iter().map(|r| (r.tile.as_str(), r)).collect();
+        let all: Vec<Row> = if only.is_some() {
+            file.iter()
+                .flatten()
+                .map(|f| {
+                    built
+                        .get(f.tile.as_str())
+                        .map_or_else(|| f.clone(), |r| (*r).clone())
+                })
+                .chain(
+                    rows.iter()
+                        .filter(|r| !before.contains_key(&r.tile))
+                        .cloned(),
+                )
+                .collect()
+        } else {
+            rows.clone()
+        };
+        write_file(&all);
         eprintln!("wrote {FILE}");
         return;
     }
     assert!(
-        old.is_some(),
+        file.is_some(),
         "run once with DT_BASELINE=write: there is no baseline"
-    );
-    assert!(
-        has_budgets,
-        "the baseline has no repair budgets yet: run once with DT_BASELINE=write to add them"
     );
     let mut changed = Vec::new();
     let (mut t_old, mut t_new) = (0.0, 0.0);
     for r in &rows {
-        match before.get(&r[0]) {
+        match before.get(&r.tile) {
             Some(b) => {
-                t_old += secs(b);
-                t_new += secs(r);
-                if fixed(b) != fixed(r) {
-                    changed.push(format!("{}\n  was {}\n  now {}", r[0], fixed(b), fixed(r)));
+                t_old += b.secs;
+                t_new += r.secs;
+                if b.measured != r.measured {
+                    changed.push(format!(
+                        "{}\n  was {:?}\n  now {:?}",
+                        r.tile, b.measured, r.measured
+                    ));
                 }
             }
-            None => changed.push(format!("{}: not in the baseline", r[0])),
+            None => changed.push(format!("{}: not in the baseline", r.tile)),
         }
     }
     eprintln!("build seconds: baseline {t_old:.0}, now {t_new:.0}");
@@ -354,4 +481,22 @@ fn the_library_builds_as_the_baseline_says() {
     if only.is_none() {
         assert_eq!(before.len(), rows.len(), "tiles in the baseline");
     }
+}
+
+/// The file reads back as it was written: every row on file, to its text.
+#[test]
+fn the_baseline_file_reads_back_as_written() {
+    let text = std::fs::read_to_string(FILE).unwrap();
+    let rows = read_file().unwrap().unwrap();
+    for (line, row) in text.lines().skip(2).zip(&rows) {
+        assert_eq!(row.to_tsv(), line);
+    }
+    assert_eq!(rows.len(), text.lines().count() - 2);
+    let refused = Row {
+        tile: "lib:tiles/x.dtile".into(),
+        measured: Measured::Refused(2),
+        budgets: None,
+        secs: 0.5,
+    };
+    assert_eq!(Row::from_tsv(&refused.to_tsv()).unwrap(), refused);
 }

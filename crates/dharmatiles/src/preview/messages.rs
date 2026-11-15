@@ -8,9 +8,8 @@ use dt_eval::Diag;
 use serde_json::{Value, json};
 
 pub(super) use crate::message::Scope;
-use crate::message::{
-    BuildData, GateData, Kind, Message, MessagesRes, ServerData, Severity, render,
-};
+use crate::message::{BuildData, Kind, Message, MessagesRes, ServerData, Severity, render};
+use dt_eval::TileRecord;
 
 use super::route::Reply;
 use super::{Shared, lock};
@@ -64,26 +63,6 @@ pub(super) fn of_errors(
         .collect()
 }
 
-fn number(v: &Value) -> f64 {
-    v.as_f64().unwrap_or(0.0)
-}
-
-/// The gate's numbers out of an audit record, as the type that names them on the wire.
-fn gate_data(a: &Value, failures: Vec<String>, dropped: u64) -> GateData {
-    GateData {
-        triangles: a["triangles"].as_u64(),
-        watertight: a["watertight"].as_bool(),
-        band_mm2: a["band_mm2"].as_f64(),
-        band_budget_mm2: a["band_budget_mm2"].as_f64(),
-        overhang_mm2: a["overhang_mm2"].as_f64(),
-        overhang_budget_mm2: a["overhang_budget_mm2"].as_f64(),
-        dropped,
-        holes: a["holes"].as_u64(),
-        voids_filled: a["voids_filled"].as_u64(),
-        failures,
-    }
-}
-
 /// A finished build: its timing, and the gate's verdict with its numbers.
 /// `record` is the build's record ([`crate::tile_json`]).  `reused` is how
 /// many steps were kept from the last build; `cache` is what the disk cache
@@ -91,25 +70,17 @@ fn gate_data(a: &Value, failures: Vec<String>, dropped: u64) -> GateData {
 /// it was made), the gate's verdict is the same either way, and each problem
 /// the cache met (a damaged entry removed and built again, an entry that could
 /// not be written) is a warning of its own.
-pub(super) fn of_build(
-    record: &Value,
-    reused: usize,
-    cache: &dt_eval::CacheUse,
-    id: &str,
-    name: &str,
-) -> Vec<Message> {
-    let a = &record["audit"];
-    let secs = number(&record["build_s"]);
-    let target = record["record"]["target"].as_str().unwrap_or("");
+pub(super) fn of_build(record: &TileRecord, reused: usize, id: &str, name: &str) -> Vec<Message> {
+    let cache = &record.cache;
+    let secs = record.build_s;
+    let target = record.target.as_deref().unwrap_or("");
     let kept = if reused > 0 {
         format!(" ({reused} steps kept from the last build)")
     } else {
         String::new()
     };
     let hit = cache.state == dt_eval::CacheState::Hit;
-    let made: f64 = record["stage_secs"]
-        .as_object()
-        .map_or(0.0, |m| m.values().map(number).sum());
+    let made: f64 = record.stage_secs.iter().map(|(_, s)| s).sum();
     let text = if hit {
         format!(
             "From the cache ({made:.1} s when it was built{})",
@@ -123,15 +94,15 @@ pub(super) fn of_build(
     };
     let build =
         Message::new(Kind::Build, Severity::Info, Scope::Build, id, name, text).typed(&BuildData {
-            build_s: record["build_s"].as_f64(),
-            triangles: a["triangles"].as_u64(),
+            build_s: record.build_s,
+            triangles: record.audit.triangles,
             target: target.to_owned(),
-            stage_secs: record["stage_secs"].clone(),
+            stage_secs: record.stage_secs.clone(),
             reused,
             cache: if hit { "hit" } else { "miss" }.to_owned(),
             made_s: hit.then_some(made),
         });
-    let mut out = out_of_gate(build, a, id, name);
+    let mut out = out_of_gate(build, &record.audit, id, name);
     for problem in &cache.problems {
         out.push(
             Message::new(
@@ -184,20 +155,8 @@ pub(super) fn of_cache_problem(problem: &str, id: &str, name: &str) -> Message {
     ))
 }
 
-fn out_of_gate(build: Message, a: &Value, id: &str, name: &str) -> Vec<Message> {
-    let failures: Vec<String> = a["failures"]
-        .as_array()
-        .map(|f| {
-            f.iter()
-                .filter_map(|x| x.as_str().map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default();
-    let dropped = a["dropped"]
-        .as_array()
-        .map_or_else(|| a["dropped"].as_u64().unwrap_or(0), |d| d.len() as u64);
-    let numbers = gate_data(a, failures.clone(), dropped);
-    let gate = if failures.is_empty() {
+fn out_of_gate(build: Message, a: &dt_kit::AuditSummary, id: &str, name: &str) -> Vec<Message> {
+    let gate = if a.passes() {
         Message::new(
             Kind::Gate,
             Severity::Info,
@@ -213,33 +172,33 @@ fn out_of_gate(build: Message, a: &Value, id: &str, name: &str) -> Vec<Message> 
             Scope::Build,
             id,
             name,
-            format!("Fails the printability gate: {}", failures.join("; ")),
+            format!("Fails the printability gate: {}", a.failures.join("; ")),
         )
         .help(Some(
             "fix the geometry where it is made: the gate is not loosened",
         ))
     }
     .code("gate")
-    .typed(&numbers);
+    .typed(a);
     vec![build, gate]
 }
 
 /// A tile read as an STL: only its gate.
-pub(super) fn of_stl(record: &Value, id: &str, name: &str) -> Vec<Message> {
+pub(super) fn of_stl(record: &TileRecord, id: &str, name: &str) -> Vec<Message> {
     let build = Message::new(
         Kind::Build,
         Severity::Info,
         Scope::Build,
         id,
         name,
-        format!("Read the STL in {:.1} s", number(&record["build_s"])),
+        format!("Read the STL in {:.1} s", record.build_s),
     );
-    out_of_gate(build, &record["audit"], id, name)
+    out_of_gate(build, &record.audit, id, name)
 }
 
 /// A finished export: where it wrote, and for which target.
-pub(super) fn of_export(record: &Value, files: &[String], id: &str, name: &str) -> Message {
-    let target = record["record"]["target"].as_str().unwrap_or("");
+pub(super) fn of_export(record: &TileRecord, files: &[String], id: &str, name: &str) -> Message {
+    let target = record.target.as_deref().unwrap_or("");
     let shown = files
         .iter()
         .filter(|f| f.ends_with(".stl") || f.ends_with(".3mf"))
@@ -253,7 +212,7 @@ pub(super) fn of_export(record: &Value, files: &[String], id: &str, name: &str) 
         name,
         format!("Exported {} for {target}", shown.join(", ")),
     )
-    .data(json!({"files": files, "target": target, "build_s": record["build_s"]}))
+    .data(json!({"files": files, "target": target, "build_s": record.build_s}))
 }
 
 /// A failure of the program's own, as the one error path makes it

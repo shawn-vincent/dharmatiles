@@ -526,12 +526,9 @@ pub enum ExportRes {
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct ExportBuilt {
     pub path: String,
-    /// Whether the build passed the printability gate.
-    pub ok: bool,
-    pub failures: Vec<String>,
     pub files: Vec<String>,
-    /// The build's record as `dharmatiles build --json` prints it.
-    pub build: Json,
+    /// The build's record: whether it passes the gate is `build.audit.failures`.
+    pub build: Box<dt_eval::TileRecord>,
 }
 
 /// 128 random bits, hex: the run's token.
@@ -1515,10 +1512,9 @@ fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<ExportRes> {
         b.out = PathBuf::from(&target).join(format!("{stem}-{target}.stl"));
     }
     let built_s = t0.elapsed().as_secs_f64();
-    let failures = b.audit.failures(&opts.printer);
-    let files = crate::build::write(&b, &failures, built_s, &out, extras)
+    let record = dt_eval::TileRecord::of(&b, &opts.printer, built_s);
+    let files = crate::build::write(&b, &record, &out, extras)
         .map_err(|e| fail::failure("500 Internal Server Error", e))?;
-    let record = crate::build::tile_json(&b, &failures, built_s);
     let written: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     let id = tile_id(tile);
     shared.report(&id, messages::Scope::Export, |name| {
@@ -1526,10 +1522,8 @@ fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<ExportRes> {
     });
     Ok(ExportRes::Built(ExportBuilt {
         path: tile.to_owned(),
-        ok: failures.is_empty(),
-        failures,
         files: written,
-        build: record,
+        build: Box::new(record),
     }))
 }
 

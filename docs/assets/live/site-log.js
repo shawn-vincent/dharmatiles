@@ -54,23 +54,22 @@ export class CardLog {
     this.report('check', [...result.errors.map((d) => fromDiagnostic(d, this.tile, false)), ...result.notes.map((d) => fromDiagnostic(d, this.tile, true))]);
   }
 
-  /** A finished build.  A draft has not been through the gate and says so; a full build reports the gate's verdict. */
+  /** A finished build.  A draft has not been through the gate and says so; a full build reports the gate's verdict: the
+   * gate message's data is the build record's audit (the program's `AuditSummary`), as the editor's is. */
   built(meta, { draft, cached, ms }) {
     const secs = ms / 1000;
+    const audit = meta.record.audit;
     const out = [{
       kind: 'build', severity: 'info', scope: 'build', code: null, node: null, span: null, help: null, fix: null,
       text: cached ? `From the cache (${draft ? 'draft' : 'full'} detail)` : `Built at ${draft ? 'draft' : 'full'} detail in ${secs.toFixed(2)} s`,
-      data: { build_s: secs, triangles: meta.triangles, draft, cache: cached ? 'hit' : 'miss' },
+      data: { build_s: secs, triangles: audit.triangles, draft, cache: cached ? 'hit' : 'miss' },
     }];
     if (!draft) {
-      const fails = !meta.passes;
+      const fails = !meta.record.checked || audit.failures.length > 0;
       out.push({
         kind: 'gate', severity: fails ? 'error' : 'info', scope: 'build', code: 'gate', node: null, span: null, help: null, fix: null,
-        text: fails ? `Fails the printability gate: ${meta.failures.join('; ')}` : 'Passes the printability gate',
-        data: {
-          triangles: meta.triangles, watertight: meta.watertight, band_mm2: meta.band_mm2, band_budget_mm2: meta.band_budget_mm2,
-          overhang_mm2: meta.overhang_mm2, overhang_budget_mm2: meta.overhang_budget_mm2, dropped: 0, holes: meta.holes, failures: meta.failures,
-        },
+        text: fails ? `Fails the printability gate: ${audit.failures.join('; ')}` : 'Passes the printability gate',
+        data: audit,
       });
     }
     this.report('build', out);

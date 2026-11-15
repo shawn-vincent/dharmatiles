@@ -123,7 +123,7 @@ impl Printer {
 const VOID_SLIVER_MM3: f64 = 1e-3;
 
 /// A body keep-largest dropped.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct Dropped {
     /// Its triangles.
     pub triangles: usize,
@@ -177,6 +177,13 @@ pub struct Audit {
 }
 
 impl Audit {
+    /// The overhang area the gate allows under `printer`, mm²: the printer's budget, or the band's share past its
+    /// cap, whichever is larger.
+    #[must_use]
+    pub fn overhang_budget(&self, printer: &Printer) -> f64 {
+        self.overhang_budget_mm2.max(printer.overhang_budget_mm2)
+    }
+
     /// Why the gate fails, empty if it passes.
     #[must_use]
     pub fn failures(&self, printer: &Printer) -> Vec<String> {
@@ -184,12 +191,12 @@ impl Audit {
         if !self.watertight {
             f.push("not watertight after the float32 reload".to_owned());
         }
-        if self.overhang_mm2 > self.overhang_budget_mm2.max(printer.overhang_budget_mm2) {
+        if self.overhang_mm2 > self.overhang_budget(printer) {
             f.push(format!(
                 "{:.2} mm² of overhang (over {}°; budget {:.2} mm²)",
                 self.overhang_mm2,
                 HangBand::DEFAULT.max_deg,
-                self.overhang_budget_mm2.max(printer.overhang_budget_mm2)
+                self.overhang_budget(printer)
             ));
         }
         if self.band_mm2 > self.band_budget_mm2 {
@@ -219,6 +226,119 @@ impl Audit {
             ));
         }
         f
+    }
+}
+
+/// The gate's verdict on a tile and the numbers it judged, the one record of it: what `dharmatiles build --json`
+/// and `audit --json` print, what the editor's gate message and a tile's record carry (its TypeScript type is the
+/// page's `AuditSummary`), and what the test tiles' golden snapshots and the library baseline hold.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct AuditSummary {
+    /// Triangles written.
+    pub triangles: usize,
+    /// Vertices written.
+    pub vertices: usize,
+    /// Volume written, mm³.
+    pub volume_mm3: f64,
+    /// Closed and consistently oriented after the float32 reload.
+    pub watertight: bool,
+    /// Bodies before keep-largest.
+    pub bodies: usize,
+    /// Loose bodies keep-largest dropped, largest first: parts the print would lose.
+    pub dropped: Vec<Dropped>,
+    /// The repairs the gate made, counted.
+    pub repairs: Repairs,
+    /// Area of the faces past the steepest angle, mm², and the area allowed: the gate's own budget, the
+    /// printer's or the band's share past its cap, whichever is larger.
+    pub overhang_mm2: f64,
+    pub overhang_budget_mm2: f64,
+    /// Area of the faces in the band, mm², and the area allowed.
+    pub band_mm2: f64,
+    pub band_budget_mm2: f64,
+    /// Vertical rays inside the footprint that miss the mesh.
+    pub holes: usize,
+    /// Why the gate fails, empty if it passes.
+    pub failures: Vec<String>,
+}
+
+impl AuditSummary {
+    /// Whether the tile passes the gate.
+    #[must_use]
+    pub fn passes(&self) -> bool {
+        self.failures.is_empty()
+    }
+}
+
+/// The gate's repairs of a mesh, counted: what it moved, filled, removed, collapsed and dropped before judging
+/// it. The library baseline holds each tile's counts to a budget of the same shape.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS,
+)]
+pub struct Repairs {
+    /// Sealed voids filled.
+    pub voids_filled: usize,
+    /// Vertices pinch separation moved.
+    pub pinches_moved: usize,
+    /// Loose boolean slivers removed.
+    pub slivers: usize,
+    /// Triangles collapsed in the float32 merge.
+    pub collapsed: usize,
+    /// Loose bodies dropped.
+    pub dropped: usize,
+}
+
+impl Repairs {
+    /// The five counts, named, in a fixed order.
+    #[must_use]
+    pub fn named(&self) -> [(&'static str, usize); 5] {
+        [
+            ("voids_filled", self.voids_filled),
+            ("pinches_moved", self.pinches_moved),
+            ("slivers", self.slivers),
+            ("collapsed", self.collapsed),
+            ("dropped", self.dropped),
+        ]
+    }
+
+    /// Each count, from the count of the same name in `named`.
+    #[must_use]
+    pub fn from_named(named: [usize; 5]) -> Self {
+        let [voids_filled, pinches_moved, slivers, collapsed, dropped] = named;
+        Self {
+            voids_filled,
+            pinches_moved,
+            slivers,
+            collapsed,
+            dropped,
+        }
+    }
+}
+
+impl Audit {
+    /// The gate's verdict under `printer`, with the numbers it judged.
+    #[must_use]
+    pub fn summary(&self, printer: &Printer) -> AuditSummary {
+        AuditSummary {
+            triangles: self.triangles,
+            vertices: self.vertices,
+            volume_mm3: self.volume_mm3,
+            watertight: self.watertight,
+            bodies: self.bodies,
+            dropped: self.dropped.clone(),
+            repairs: Repairs {
+                voids_filled: self.voids.len(),
+                pinches_moved: self.pinches_moved,
+                slivers: self.slivers.len(),
+                collapsed: self.collapsed,
+                dropped: self.dropped.len(),
+            },
+            overhang_mm2: self.overhang_mm2,
+            overhang_budget_mm2: self.overhang_budget(printer),
+            band_mm2: self.band_mm2,
+            band_budget_mm2: self.band_budget_mm2,
+            holes: self.holes,
+            failures: self.failures(printer),
+        }
     }
 }
 

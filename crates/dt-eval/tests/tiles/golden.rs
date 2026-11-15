@@ -98,21 +98,42 @@ fn the_shape_tiles_pass_the_gate() {
     }
 }
 
-/// The gate's verdict on DungeonBlocks: `pass`, or each failure. With the repair counts above it, this is what
-/// the library sweep holds every library tile to, held here for the test tiles on every test run (the check
-/// a change to an element runs; the library sweep runs before a push).
-fn gate(b: &Built) -> String {
-    let fails = b.audit.failures(&Options::default().printer);
-    if fails.is_empty() {
-        "pass".to_owned()
-    } else {
-        fails.join("; ")
-    }
+/// Metrics that every platform must agree on: recorded as a JSON snapshot, and read back as this struct.
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct Metrics {
+    /// The gate's verdict on DungeonBlocks and the numbers it judged, as the program reports them (the build
+    /// record's audit, `dt_kit::AuditSummary`), every measure to 3 decimals: with the repair counts in it, what
+    /// the library sweep holds every library tile to, held here for the test tiles on every run.
+    audit: dt_kit::AuditSummary,
+    render_red_pixels: usize,
 }
 
-/// Metrics that every platform must agree on.
-fn metrics(b: &Built) -> String {
-    let a = &b.audit;
+/// To 3 decimals.
+fn thousandths(x: f64) -> f64 {
+    (x * 1000.0).round() / 1000.0
+}
+
+/// `a`, every measure to 3 decimals: what every platform agrees on.
+fn rounded(mut a: dt_kit::AuditSummary) -> dt_kit::AuditSummary {
+    for x in [
+        &mut a.volume_mm3,
+        &mut a.overhang_mm2,
+        &mut a.overhang_budget_mm2,
+        &mut a.band_mm2,
+        &mut a.band_budget_mm2,
+    ] {
+        *x = thousandths(*x);
+    }
+    for d in &mut a.dropped {
+        d.volume_mm3 = thousandths(d.volume_mm3);
+        for x in d.bounds.as_flattened_mut() {
+            *x = thousandths(*x);
+        }
+    }
+    a
+}
+
+fn metrics(b: &Built) -> Metrics {
     let img = render(
         &b.export.mesh,
         &b.colours(),
@@ -120,23 +141,38 @@ fn metrics(b: &Built) -> String {
         b.footprint,
         (600, 475),
     );
-    format!(
-        "triangles: {}\nvolume_mm3: {:.3}\nwatertight: {}\nbodies: {}\ndropped: {}\nvoids_filled: {}\npinches_moved: {}\nslivers: {}\ncollapsed: {}\noverhang_mm2: {:.3}\nband_mm2: {:.3}\nholes: {}\nrender_red_pixels: {}\ngate: {}\n",
-        a.triangles,
-        a.volume_mm3,
-        a.watertight,
-        a.bodies,
-        a.dropped.len(),
-        a.voids.len(),
-        a.pinches_moved,
-        a.slivers.len(),
-        a.collapsed,
-        a.overhang_mm2,
-        a.band_mm2,
-        a.holes,
-        img.red_pixels(),
-        gate(b),
-    )
+    Metrics {
+        audit: rounded(dt_eval::TileRecord::of(b, &Options::default().printer, 0.0).audit),
+        render_red_pixels: img.red_pixels(),
+    }
+}
+
+/// The tile's metrics against its snapshot; at another seed ([`dt_testkit::test_seed`]), whether it passes the
+/// gate only, against the recorded struct.
+fn metrics_hold(name: &str, b: &Built) {
+    if dt_testkit::at_recorded_seeds() {
+        insta::assert_json_snapshot!(format!("{name}-metrics"), metrics(b));
+        return;
+    }
+    let file = std::path::PathBuf::from(format!(
+        "{}/tests/tiles/snapshots/tiles__golden__{name}-metrics.snap",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    let snap =
+        insta::Snapshot::from_file(&file).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
+    let text = snap
+        .contents()
+        .as_text()
+        .unwrap_or_else(|| panic!("{}: not a text snapshot", file.display()))
+        .to_string();
+    let recorded: Metrics =
+        serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
+    assert_eq!(
+        recorded.audit.passes(),
+        metrics(b).audit.passes(),
+        "{name}: whether the gate passes at seed {:?}, against the tile's own",
+        dt_testkit::test_seed()
+    );
 }
 
 #[test]
@@ -145,7 +181,7 @@ fn golden_metrics() {
     for path in TILES {
         let b = built(path);
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
-        insta::assert_snapshot!(format!("{name}-metrics"), metrics(b));
+        metrics_hold(name, b);
     }
 }
 
@@ -155,7 +191,7 @@ fn thorough_golden_metrics() {
     prebuild(THOROUGH);
     for path in THOROUGH {
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
-        insta::assert_snapshot!(format!("{name}-metrics"), metrics(built(path)));
+        metrics_hold(name, built(path));
     }
 }
 
@@ -163,6 +199,9 @@ fn thorough_golden_metrics() {
 #[cfg(not(windows))]
 #[ignore = "thorough: cargo xtask check --full runs it"]
 fn thorough_golden_hashes() {
+    if !dt_testkit::at_recorded_seeds() {
+        return; // recorded at the tiles' own seeds: see dt_testkit::test_seed
+    }
     prebuild(THOROUGH);
     for path in THOROUGH {
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
@@ -173,6 +212,9 @@ fn thorough_golden_hashes() {
 #[test]
 #[cfg(not(windows))]
 fn golden_hashes() {
+    if !dt_testkit::at_recorded_seeds() {
+        return; // recorded at the tiles' own seeds: see dt_testkit::test_seed
+    }
     prebuild(TILES);
     for path in TILES {
         let b = built(path);
@@ -204,6 +246,9 @@ pub const OBSERVED: &[&str] = &[
 #[cfg(not(windows))]
 #[ignore = "thorough: cargo xtask check --full runs it"]
 fn thorough_observers_change_nothing() {
+    if !dt_testkit::at_recorded_seeds() {
+        return; // recorded at the tiles' own seeds: see dt_testkit::test_seed
+    }
     prebuild(OBSERVED);
     for path in OBSERVED {
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");

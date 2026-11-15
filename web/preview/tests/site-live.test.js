@@ -2,6 +2,7 @@
 // messages made from the engine's diagnostics.  Pure parts only: the worker, the canvas and the page are looked at in a browser.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { Queue, isStale } from '../../../docs/assets/live/queue.js';
 import { findControl, parseControls, rangeOf, readValue, writeValue } from '../../../docs/assets/live/controls.js';
 import { CardLog } from '../../../docs/assets/live/site-log.js';
@@ -100,7 +101,8 @@ test('a check\'s mistakes and notes are messages, and what the next check no lon
 
 test('a draft says it has not been through the gate; a full build reports the gate\'s verdict; the engine failing is loud and apart', () => {
   const log = new CardLog('card-2');
-  const meta = { triangles: 1000, passes: true, failures: [], watertight: true, band_mm2: 0, band_budget_mm2: 1, overhang_mm2: 0, overhang_budget_mm2: 1, holes: 0 };
+  const gate = JSON.parse(readFileSync(new URL('./fixtures/gate-numbers.json', import.meta.url), 'utf8'));
+  const meta = { built: true, record: { checked: true, audit: { ...gate, triangles: 1000 } } };
   log.built(meta, { draft: true, cached: false, ms: 310 });
   let v = log.view();
   assert.equal(v.record.gate, null);
@@ -109,7 +111,7 @@ test('a draft says it has not been through the gate; a full build reports the ga
   v = log.view();
   assert.equal(v.record.gate.text, 'Passes the printability gate');
   assert.equal(statusOf(v, { t: { status: 'ready', name: 'x' } }).verdict.startsWith('passes'), true);
-  log.built({ ...meta, passes: false, failures: ['3 holes'] }, { draft: false, cached: false, ms: 2100 });
+  log.built({ ...meta, record: { ...meta.record, audit: { ...meta.record.audit, failures: ['3 holes'] } } }, { draft: false, cached: false, ms: 2100 });
   assert.equal(log.view().record.gate.severity, 'error');
   log.failed('the worker trapped', 'stack');
   assert.equal(log.view().rows.at(-1)?.m.kind ?? log.view().rows[0].m.kind, 'server');

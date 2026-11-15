@@ -20,14 +20,14 @@ import { ServerError } from './server-error.js';
 import { detailsOf, environmentText, tileErrorDetails } from './problems.js';
 
 /** @typedef {import('./api').MessageJson} MessageJson */
-/** @typedef {import('./api').GateData} GateData */
+/** @typedef {import('./api').AuditSummary} AuditSummary */
 /** @typedef {import('./api').BuildData} BuildData */
 /** @typedef {import('./api').ServerData} ServerData */
 
 // A message's `data` is the numbers of its kind (api.rs, `MessageJson`): these are the readings that pair a kind with its type, once,
 // here; the program makes each kind's data from the one type (crate::message), and a test holds the pairing.
-/** @param {MessageJson | null | undefined} m @returns {GateData | null} */
-export const gateOf = (m) => (m?.kind === 'gate' ? /** @type {GateData} */ (m.data) : null);
+/** @param {MessageJson | null | undefined} m @returns {AuditSummary | null} */
+export const gateOf = (m) => (m?.kind === 'gate' ? /** @type {AuditSummary} */ (m.data) : null);
 /** @param {MessageJson | null | undefined} m @returns {BuildData | null} */
 export const buildOf = (m) => (m?.kind === 'build' && m.code == null ? /** @type {BuildData} */ (m.data) : null); // (a build's note about the cache has a code and no numbers)
 /** @param {MessageJson} m @returns {ServerData | null} */
@@ -326,23 +326,24 @@ export function gaugeOf(used, budget) {
 }
 
 /**
- * The gate's numbers as rows for the messages panel: `[name, value, tone]`.  `data` is the gate message's data as the program
- * sends it (`crate::message`: snake_case names, as every field of a message is; tests/fixtures/gate-numbers.json is that data,
- * held to by a test in the program), `angles` the band's and the steepest angle.  A number the message does not carry is left
- * out of the row, never shown as NaN.
+ * The gate's numbers as rows for the messages panel: `[name, value, tone]`.  `data` is the gate message's data, the engine's
+ * `AuditSummary` (tests/fixtures/gate-numbers.json is one, held to by a test in the program), `angles` the band's and the
+ * steepest angle.
  */
-/** @param {GateData} data @param {{ overhangDeg: number, steepestDeg: number }} angles */
+/** @param {AuditSummary} data @param {{ overhangDeg: number, steepestDeg: number }} angles */
 export function gateRows(data, { overhangDeg, steepestDeg }) {
-  const area = (mm2, budget) => (mm2 == null ? null : budget == null ? `${Number(mm2).toFixed(2)} mm²` : `${Number(mm2).toFixed(2)} / ${Number(budget).toFixed(2)} mm²`);
-  const tone = (mm2, budget) => (mm2 > (budget ?? 0) ? 'bad' : mm2 > 0 ? 'warn' : 'ok');
-  const rows = [
-    ['Triangles', Number(data.triangles).toLocaleString(), ''],
+  /** @param {number} mm2 @param {number} budget */
+  const area = (mm2, budget) => `${mm2.toFixed(2)} / ${budget.toFixed(2)} mm²`;
+  /** @param {number} mm2 @param {number} budget */
+  const tone = (mm2, budget) => (mm2 > budget ? 'bad' : mm2 > 0 ? 'warn' : 'ok');
+  const { dropped, voids_filled } = data.repairs;
+  return [
+    ['Triangles', data.triangles.toLocaleString(), ''],
     ['Watertight', data.watertight ? 'Yes' : 'No', data.watertight ? 'ok' : 'bad'],
     [`Band ${overhangDeg}–${steepestDeg}°`, area(data.band_mm2, data.band_budget_mm2), tone(data.band_mm2, data.band_budget_mm2)],
     [`Past ${steepestDeg}°`, area(data.overhang_mm2, data.overhang_budget_mm2), tone(data.overhang_mm2, data.overhang_budget_mm2)],
-    ['Dropped bodies', data.dropped, data.dropped ? 'bad' : ''],
-    ['Voids filled', data.voids_filled, ''],
+    ['Dropped bodies', dropped, dropped ? 'bad' : ''],
+    ['Voids filled', voids_filled, ''],
     ['Holes', data.holes, data.holes ? 'bad' : ''],
   ];
-  return rows.filter(([, v]) => v != null);
 }

@@ -478,11 +478,13 @@ pub struct Part {
 }
 
 /// A named stage hash: equal hashes mean byte-identical stages.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct Stage {
     /// The stage, such as `surface` or `connector:tile/flat/connector`.
     pub name: String,
-    /// 64-bit FNV-1a of the stage's exact output.
+    /// 64-bit FNV-1a of the stage's exact output (16 hex digits on the wire).
+    #[serde(with = "crate::record::hex64")]
+    #[ts(type = "string")]
     pub hash: u64,
 }
 

@@ -2,6 +2,7 @@
 // and the record shows it beside the two bars.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { computed, signal } from '@preact/signals-core';
 import { install, settle } from './dom.js';
 
@@ -31,6 +32,7 @@ test('the underside plan is the flagged faces seen from below, red and orange ap
   assert.equal(undersidePlan({ ...p, meta: {} }), null, 'no outline, no plan');
 });
 
+const gate = JSON.parse(readFileSync(new URL('./fixtures/gate-numbers.json', import.meta.url), 'utf8'));
 const base = { t: '2026-11-13T10:00:00.000Z', tile: 'a', tile_name: 'bad', node: null, span: null, help: null, fix: null, state: 'open', scope: 'build' };
 
 test('a record with a gate verdict shows the underside plan beside the bars when there are flagged faces, and none otherwise', async () => {
@@ -38,7 +40,7 @@ test('a record with a gate verdict shows the underside plan beside the bars when
   log.apply({ ...base, seq: 5, kind: 'build', severity: 'info', code: null, text: 'Built in 2 s', data: { build_s: 2, target: 'db' } });
   log.apply({
     ...base, seq: 6, kind: 'gate', severity: 'error', code: 'gate', text: 'Fails the printability gate: overhang',
-    data: { triangles: 10, watertight: true, band_mm2: 12, band_budget_mm2: 2, overhang_mm2: 8, overhang_budget_mm2: 2, dropped: 0, failures: ['too much'] },
+    data: { ...gate, triangles: 10, band_mm2: 12, band_budget_mm2: 2, overhang_mm2: 8, overhang_budget_mm2: 2, failures: ['too much'] },
   });
   const m = {
     open: signal(true), view: computed(() => log.view('a')), filter: signal('all'), lit: signal(null), clearLit() {},

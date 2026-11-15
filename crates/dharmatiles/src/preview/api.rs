@@ -151,10 +151,6 @@ impl From<&dt_eval::Diag> for Mistake {
     }
 }
 
-/// Keys that hold data (an element's or a stage's name), not fields: what is
-/// under them keeps its keys.
-const DATA_MAPS: [&str; 3] = ["stage_secs", "stats", "left_out"];
-
 /// A JSON document the engine writes (a tile's plan, a build's record, a
 /// mesh's header) with every field name in the contract's one convention,
 /// `camelCase`.  Done where such a document leaves for the page, so the
@@ -162,18 +158,9 @@ const DATA_MAPS: [&str; 3] = ["stage_secs", "stats", "left_out"];
 #[must_use]
 pub fn camel_keys(v: &Value) -> Value {
     match v {
-        Value::Object(o) => Value::Object(
-            o.iter()
-                .map(|(k, x)| {
-                    let inner = if DATA_MAPS.contains(&k.as_str()) {
-                        x.clone()
-                    } else {
-                        camel_keys(x)
-                    };
-                    (camel(k), inner)
-                })
-                .collect(),
-        ),
+        Value::Object(o) => {
+            Value::Object(o.iter().map(|(k, x)| (camel(k), camel_keys(x))).collect())
+        }
         Value::Array(a) => Value::Array(a.iter().map(camel_keys).collect()),
         other => other.clone(),
     }
@@ -236,8 +223,8 @@ pub struct TileSummary {
     pub status: String,
     /// What the plan pass or the plates' layout said (the page reads it by name; see `js/doc-views.js`).
     pub plan: Option<Json>,
-    /// The build's record: audit, stages, timings.
-    pub record: Option<Json>,
+    /// The build's record: audit, stages, timings (snake_case, as `dharmatiles build --json` prints it).
+    pub record: Option<dt_eval::TileRecord>,
     pub errors: Vec<Mistake>,
     /// A build that panicked or could not be encoded: an error body's `error`.
     pub failure: Option<ErrorDetail>,
@@ -477,7 +464,7 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     all.add::<StreamEvent>();
     all.add::<crate::message::MessagesRes>();
     all.add::<crate::report::Report>();
-    all.add::<crate::message::GateData>();
+    all.add::<dt_kit::AuditSummary>();
     all.add::<crate::message::BuildData>();
     all.add::<crate::message::ServerData>();
     all.add::<crate::message::DiagData>();

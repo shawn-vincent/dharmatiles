@@ -215,9 +215,8 @@ test('the gate\'s rows read the numbers under the names the program sends them (
   assert.equal(rows[3][1], '0.00 / 3.50 mm²');
   assert.equal(rows[3][2], 'ok');
   assert.equal(rows[5][1], 2);
-  // past its budget is bad; a number the message does not carry is left out, not shown as NaN
+  // past its budget is bad
   assert.equal(gateRows({ ...data, overhang_mm2: 5 }, { overhangDeg: 55, steepestDeg: 65 })[3][2], 'bad');
-  assert.equal(gateRows({ triangles: 1, watertight: true }, { overhangDeg: 55, steepestDeg: 65 }).length, 2);
 });
 
 test('work in flight for a document is one record: a tile build and a map\'s pieces loading are said from it, and a tile build reads as it did', () => {

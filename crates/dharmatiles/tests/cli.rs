@@ -434,7 +434,7 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
             "{args:?}"
         );
         let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-        assert_eq!(v["tiles"][0]["record"]["target"], target, "{v}");
+        assert_eq!(v["tiles"][0]["target"], target, "{v}");
     }
     // one build is one target: there is no `both`, and no such printer
     for args in [

@@ -19,6 +19,9 @@ dt-lang.workspace = true
 dt-value.workspace = true
 libm.workspace = true
 parry3d.workspace = true
+# the gate's verdict (`AuditSummary`) is one serde struct, and its TypeScript type is the page's
+serde.workspace = true
+ts-rs.workspace = true
 
 # rayon through dt-par: the one place that runs it sequentially in the browser
 rayon = { package = "dt-par", path = "../dt-par" }

@@ -6,7 +6,10 @@
 //! for everything the build reads.  A test that must build fresh (it tests
 //! the build, the cache or the threads, or builds twice to compare) calls
 //! `dt_eval::build` (or `build_with`, `build_cached`, `build_checked`) itself
-//! and says why in a comment starting `fresh:` on that line or the one above.
+//! and says why in a comment starting `fresh:` on that line or the one above,
+//! and passes its options through `dt_testkit::seeded`, so a run at another
+//! seed (`DT_TEST_SEED`) builds it on that seed too, like the memo's builds it
+//! is compared with.
 
 #![allow(clippy::unwrap_used)]
 
@@ -60,6 +63,25 @@ fn says_why(lines: &[&str], at: usize) -> bool {
         || (at > 0 && lines[at - 1].trim_start().starts_with("//") && says(lines[at - 1]))
 }
 
+/// Whether the build that starts on `lines[at]` takes the test seed: its options go through `seeded`, on that
+/// line or the call's next lines (a call `cargo fmt` breaks over several, up to the one that ends it).
+fn takes_the_seed(lines: &[&str], at: usize) -> bool {
+    let code = |l: &str| l.split("//").next().unwrap_or("").to_owned();
+    // the call's open brackets: it ends on the line that closes them
+    let mut open = 0usize;
+    for l in &lines[at..] {
+        let c = code(l);
+        if c.contains("seeded(") {
+            return true;
+        }
+        open = (open + c.matches('(').count()).saturating_sub(c.matches(')').count());
+        if open == 0 {
+            return false;
+        }
+    }
+    false
+}
+
 /// Every offending line of the test sources in `dir`, as `file:line: text`.
 fn offences(dir: &Path, skip: &[&str]) -> Vec<String> {
     let mut out = Vec::new();
@@ -84,7 +106,7 @@ fn offences(dir: &Path, skip: &[&str]) -> Vec<String> {
             if l.trim_start().starts_with("use ") {
                 continue;
             }
-            if names_a_build(l) && !says_why(&lines, i) {
+            if names_a_build(l) && (!says_why(&lines, i) || !takes_the_seed(&lines, i)) {
                 out.push(format!("{name}:{}: {}", i + 1, l.trim()));
             }
         }
@@ -99,7 +121,7 @@ fn the_memo_is_the_only_way_a_test_builds() {
     let bad = offences(&dir, &["memo.rs", "memo_only.rs"]);
     assert!(
         bad.is_empty(),
-        "a test builds without the memo; call `memo::build`, or say why it must build fresh in a `// fresh: …` comment on that line or the one above:\n{}",
+        "a test builds without the memo; call `memo::build`, or say why it must build fresh in a `// fresh: …` comment on that line or the one above and pass its options through `dt_testkit::seeded`:\n{}",
         bad.join("\n")
     );
 }
@@ -125,4 +147,24 @@ fn the_scan_sees_a_build_that_skips_the_memo() {
         "let c = dt_eval::build(&s, p, &o);",
     ];
     assert!(says_why(&lines, 1) && says_why(&lines, 2) && !says_why(&lines, 3));
+    assert!(takes_the_seed(
+        &["dt_eval::build(&s, p, &dt_testkit::seeded(&o)); // fresh: why"],
+        0
+    ));
+    assert!(takes_the_seed(
+        &[
+            "build_cached(",
+            "    src,",
+            "    &dt_testkit::seeded(opts),",
+            ")"
+        ],
+        0
+    ));
+    assert!(!takes_the_seed(
+        &[
+            "dt_eval::build(&s, p, &o); // fresh: seeded(…) in a comment",
+            "seeded(x)"
+        ],
+        0
+    ));
 }

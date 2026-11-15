@@ -124,8 +124,8 @@ fn a_region_is_made_once_and_every_stage_sees_the_same_one() {
         "the pool covers ground"
     );
     // fresh: the test builds the same text twice to compare the two meshes; a memo would hand back one
-    let a = dt_eval::build(&mem(&text), "t.dtile", &opts).unwrap();
+    let a = dt_eval::build(&mem(&text), "t.dtile", &dt_testkit::seeded(&opts)).unwrap();
     // fresh: the second of the two builds compared
-    let b = dt_eval::build(&mem(&text), "t.dtile", &opts).unwrap();
+    let b = dt_eval::build(&mem(&text), "t.dtile", &dt_testkit::seeded(&opts)).unwrap();
     assert_eq!(a.export.mesh.content_hash(), b.export.mesh.content_hash());
 }

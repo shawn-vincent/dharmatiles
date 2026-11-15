@@ -19,7 +19,10 @@ use crate::{coords, crowns, progress};
 use dt_kit::Progress;
 
 /// Whether a build used the disk cache, and how.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum CacheState {
     /// Not asked (no store).
     #[default]
@@ -32,7 +35,7 @@ pub enum CacheState {
 
 /// What the disk cache did for one build ([`Built::cache`]); the cache itself
 /// is the `dt-store` crate.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct CacheUse {
     /// Whether it was used.
     pub state: CacheState,

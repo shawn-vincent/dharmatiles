@@ -1398,7 +1398,11 @@ fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_writte
         serde_json::json!({}),
     );
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
-    assert_eq!(v["ok"], true, "{v}");
+    assert_eq!(
+        v["build"]["audit"]["failures"],
+        serde_json::json!([]),
+        "{v}"
+    );
     // the project's out/, by system and the tile's own name, not its folders
     let stl = dir.join("out/ol/flat-ol.stl");
     assert!(stl.is_file(), "{v}");
@@ -2785,8 +2789,8 @@ mod stored {
         rebuild(&first, FLAT);
         assert_eq!(slot(&first, FLAT, |t| t.status), State::Ready);
         assert_eq!(
-            slot(&first, FLAT, |t| t.record.clone().unwrap()["cache"].clone()),
-            "miss"
+            slot(&first, FLAT, |t| t.record.clone().unwrap().cache.state),
+            dt_eval::CacheState::Miss
         );
         let mesh = slot(&first, FLAT, |t| t.mesh.clone().unwrap());
         let said = texts(&first, FLAT);
@@ -2801,8 +2805,8 @@ mod stored {
         rebuild(&again, FLAT);
         assert_eq!(slot(&again, FLAT, |t| t.status), State::Ready);
         assert_eq!(
-            slot(&again, FLAT, |t| t.record.clone().unwrap()["cache"].clone()),
-            "hit"
+            slot(&again, FLAT, |t| t.record.clone().unwrap().cache.state),
+            dt_eval::CacheState::Hit
         );
         assert_eq!(
             slot(&again, FLAT, |t| t.mesh.clone().unwrap()),

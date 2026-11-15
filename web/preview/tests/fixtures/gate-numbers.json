@@ -1,12 +1,21 @@
 {
   "triangles": 461038,
+  "vertices": 230521,
+  "volume_mm3": 41000.5,
   "watertight": true,
-  "band_mm2": 1.25,
-  "band_budget_mm2": 3.5,
+  "bodies": 1,
+  "dropped": [],
+  "repairs": {
+    "voids_filled": 2,
+    "pinches_moved": 0,
+    "slivers": 0,
+    "collapsed": 0,
+    "dropped": 0
+  },
   "overhang_mm2": 0.0,
   "overhang_budget_mm2": 3.5,
-  "dropped": 0,
+  "band_mm2": 1.25,
+  "band_budget_mm2": 3.5,
   "holes": 0,
-  "voids_filled": 2,
   "failures": []
 }

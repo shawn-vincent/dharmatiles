@@ -4,11 +4,58 @@
 
 type AboutRes = { version: string, formats: string, };
 
-type BuildData = { build_s: number | null, triangles: number | null, target: string, 
+type AuditSummary = { 
 /**
- * Seconds each stage took, by stage name.
+ * Triangles written.
  */
-stage_secs: JsonValue, reused: number, 
+triangles: number, 
+/**
+ * Vertices written.
+ */
+vertices: number, 
+/**
+ * Volume written, mm³.
+ */
+volume_mm3: number, 
+/**
+ * Closed and consistently oriented after the float32 reload.
+ */
+watertight: boolean, 
+/**
+ * Bodies before keep-largest.
+ */
+bodies: number, 
+/**
+ * Loose bodies keep-largest dropped, largest first: parts the print would lose.
+ */
+dropped: Array<Dropped>, 
+/**
+ * The repairs the gate made, counted.
+ */
+repairs: Repairs, 
+/**
+ * Area of the faces past the steepest angle, mm², and the area allowed: the gate's own budget, the
+ * printer's or the band's share past its cap, whichever is larger.
+ */
+overhang_mm2: number, overhang_budget_mm2: number, 
+/**
+ * Area of the faces in the band, mm², and the area allowed.
+ */
+band_mm2: number, band_budget_mm2: number, 
+/**
+ * Vertical rays inside the footprint that miss the mesh.
+ */
+holes: number, 
+/**
+ * Why the gate fails, empty if it passes.
+ */
+failures: Array<string>, };
+
+type BuildData = { build_s: number, triangles: number, target: string, 
+/**
+ * Seconds each stage took, in build order.
+ */
+stage_secs: Array<[string, number]>, reused: number, 
 /**
  * `hit` or `miss`.
  */
@@ -17,6 +64,51 @@ cache: string,
  * On a cache hit, how long the tile took when it was made.
  */
 made_s: number | null, };
+
+type BuildRecord = { 
+/**
+ * Engine version, as the build script formats it (`v1.0.0-12-gabc1234`,
+ * `gabc1234-dirty`, …).
+ */
+engine: string, 
+/**
+ * The document's path, such as `lib:tests/ground/1x1-flat.dtile`.
+ */
+document: string, 
+/**
+ * 64-bit FNV-1a of the document's text (16 hex digits on the wire).
+ */
+document_hash: string, 
+/**
+ * The tile's root seed.
+ */
+seed: number, 
+/**
+ * The connector system, `db` or `ol`.
+ */
+system: string, 
+/**
+ * The printer profile's name (`default`, or another).
+ */
+printer: string, };
+
+type CacheState = "off" | "miss" | "hit";
+
+type CacheUse = { 
+/**
+ * Whether it was used.
+ */
+state: CacheState, 
+/**
+ * On a hit, the engine that made the entry.
+ */
+made_by: string | null, 
+/**
+ * What went wrong, in words, for the front end to show: a damaged entry
+ * that was removed and built again, an entry that could not be written.
+ * The build is real either way.
+ */
+problems: Array<string>, };
 
 type Changed = { 
 /**
@@ -47,6 +139,20 @@ type DiagData = { label?: string, unexpected?: boolean, };
 type Done = Record<string, never>;
 
 type DraftReq = { text: string, file?: string | null, debug?: boolean | null, };
+
+type Dropped = { 
+/**
+ * Its triangles.
+ */
+triangles: number, 
+/**
+ * Its volume, mm³.
+ */
+volume_mm3: number, 
+/**
+ * Its bounding box, mm (low corner, high corner): where to element.
+ */
+bounds: [[number, number, number], [number, number, number]], };
 
 type EditReq = { 
 /**
@@ -86,15 +192,11 @@ type ErrorDetail = {
  */
 kind: string, message: string, help: string | null, causes: Array<string>, backtrace: string, context: ErrorContext, };
 
-type ExportBuilt = { path: string, 
+type ExportBuilt = { path: string, files: Array<string>, 
 /**
- * Whether the build passed the printability gate.
+ * The build's record: whether it passes the gate is `build.audit.failures`.
  */
-ok: boolean, failures: Array<string>, files: Array<string>, 
-/**
- * The build's record as `dharmatiles build --json` prints it.
- */
-build: JsonValue, };
+build: TileRecord, };
 
 type ExportReq = { 
 /**
@@ -133,12 +235,6 @@ type FolderReq = { root: number,
  * The folder, by its path below the place (`""` is the place).
  */
 dir: string, };
-
-type GateData = { triangles: number | null, watertight: boolean | null, band_mm2: number | null, band_budget_mm2: number | null, overhang_mm2: number | null, overhang_budget_mm2: number | null, 
-/**
- * How many bodies the gate dropped.
- */
-dropped: number, holes: number | null, voids_filled: number | null, failures: Array<string>, };
 
 type HeightName = { name: string, dmm: number, own: boolean, };
 
@@ -542,6 +638,28 @@ count: [string, number, number] | null, elapsedS: number, etaS: number | null, e
 
 type RenameReq = { name: string, };
 
+type Repairs = { 
+/**
+ * Sealed voids filled.
+ */
+voids_filled: number, 
+/**
+ * Vertices pinch separation moved.
+ */
+pinches_moved: number, 
+/**
+ * Loose boolean slivers removed.
+ */
+slivers: number, 
+/**
+ * Triangles collapsed in the float32 merge.
+ */
+collapsed: number, 
+/**
+ * Loose bodies dropped.
+ */
+dropped: number, };
+
 type Report = { url: string, title: string, labels: Array<string>, 
 /**
  * The whole report: what the preview shows, and what goes to the clipboard when the URL is shortened.
@@ -690,6 +808,16 @@ contract: string, rev: number, epoch: string, system: string, printer: string, p
 
 type SpanJson = { file: string, line: number, col: number, offset: number, len: number, };
 
+type Stage = { 
+/**
+ * The stage, such as `surface` or `connector:tile/flat/connector`.
+ */
+name: string, 
+/**
+ * 64-bit FNV-1a of the stage's exact output (16 hex digits on the wire).
+ */
+hash: string, };
+
 type StepDraft = "mesh" | "mistake" | "superseded";
 
 type StepHead = { text: string, id: string | null, at: number | null, 
@@ -772,6 +900,56 @@ type TiersWantRes = { keys: Array<string>, };
 
 type TileMoveReq = { root: number, dir: string, };
 
+type TileRecord = { 
+/**
+ * The document's path, or the STL's.
+ */
+path: string, 
+/**
+ * Where the build came from; none for an STL.
+ */
+record: BuildRecord | null, 
+/**
+ * The build target (`db`, `ol`, `db-fine`); none for an STL.
+ */
+target: string | null, 
+/**
+ * The gate's verdict and the numbers it judged.  A low build is not checked: its failures are empty.
+ */
+audit: AuditSummary, 
+/**
+ * Whether the gate checked this build: only a full build is.
+ */
+checked: boolean, 
+/**
+ * Stage hashes, in build order.
+ */
+stages: Array<Stage>, 
+/**
+ * Seconds the build took.
+ */
+build_s: number, 
+/**
+ * Seconds each stage took, in build order (`3:grass`, `union`, `audit`).
+ */
+stage_secs: Array<[string, number]>, 
+/**
+ * The edge level the ground meets every tile edge at, mm.
+ */
+edge_mm: number | null, 
+/**
+ * Numbers the elements noted (counts), by name; a name noted again is `name#2`, `name#3`.
+ */
+stats: { [key in string]: number }, 
+/**
+ * Pieces elements left out because they could not make them, by element.
+ */
+left_out: { [key in string]: number }, 
+/**
+ * What the disk cache did.
+ */
+cache: CacheUse, };
+
 type TileSummary = { id: string, path: string, name: string, 
 /**
  * The place it is listed under: an index into `roots`.
@@ -786,9 +964,9 @@ status: string,
  */
 plan: JsonValue | null, 
 /**
- * The build's record: audit, stages, timings.
+ * The build's record: audit, stages, timings (snake_case, as `dharmatiles build --json` prints it).
  */
-record: JsonValue | null, errors: Array<Mistake>, 
+record: TileRecord | null, errors: Array<Mistake>, 
 /**
  * A build that panicked or could not be encoded: an error body's `error`.
  */

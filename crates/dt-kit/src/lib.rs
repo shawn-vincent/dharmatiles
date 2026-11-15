@@ -66,8 +66,8 @@ mod stand;
 mod stone;
 
 pub use audit::{
-    Audit, Dropped, Export, Hang, HangBand, Printer, audit, audit_banded, audit_rounded, draft,
-    fit, hang,
+    Audit, AuditSummary, Dropped, Export, Hang, HangBand, Printer, Repairs, audit, audit_banded,
+    audit_rounded, draft, fit, hang,
 };
 pub use band::{
     Band, Banded, Ease, Lint, Odds, OddsBuilder, Pin, Refusal, Shadowed, Solved, Steep, drop_mm,

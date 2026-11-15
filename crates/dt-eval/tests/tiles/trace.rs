@@ -55,7 +55,8 @@ fn every_triangle_has_its_entry() {
             "entry {e} has no triangles: {count:?}"
         );
     }
-    assert_eq!(rocks.len(), 2, "{rocks:?}");
+    // two rocks, each one stone or a cluster of them (seed 7 makes four stones), each its own piece
+    assert!(rocks.len() >= 2, "{rocks:?}");
 }
 
 #[test]
