@@ -313,7 +313,10 @@ pub(crate) struct Finish {
 /// side, never per corner: faces stay planar), the settle of an exposed
 /// top, the attitude, the relief depth. `mask` zeroes the pull on a side
 /// (floor slabs run flush to the tile edge); the draws happen anyway.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 pub(crate) fn draw(
     rng: &mut Rng,
     seg: usize,
@@ -452,7 +455,6 @@ pub(crate) fn hold_proud(blocks: &mut [Block], segs: &[Seg]) {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     fn seg() -> Seg {

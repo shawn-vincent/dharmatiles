@@ -241,7 +241,10 @@ pub fn unit(a: [f64; 3]) -> Option<[f64; 3]> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::needless_range_loop)]
+    #![expect(
+        clippy::needless_range_loop,
+        reason = "a test: a failing unwrap is the failure; the index also addresses a second array"
+    )]
     use super::*;
 
     fn cloud(seed: u64, n: usize) -> Vec<[f64; 3]> {

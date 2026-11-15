@@ -15,10 +15,9 @@
 //! the flower's centre put the petal tip 2.5 mm out over a 1 mm column, a
 //! 68 degree overhang; under its own centre the same petal leans 41 degrees.
 
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::too_many_arguments
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction; the flat inputs of one maths step, named at the call"
 )]
 
 use core::f64::consts::{FRAC_PI_2, PI, TAU};
@@ -509,7 +508,7 @@ impl Element for Scatter {
             Some(r) => r.int_by(1.0, &mut rng),
             None => self.per_square.int_by(squares, &mut rng),
         };
-        #[allow(clippy::cast_sign_loss)]
+
         let n = n.clamp(0, 10_000) as usize;
         let total: f64 = self.plants.iter().map(|p| p.weight).sum();
         let mut flowers: Vec<(&Plant, f64)> = Vec::with_capacity(n);

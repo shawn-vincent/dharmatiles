@@ -5,7 +5,6 @@
 //! jumps across a piece is refused (`dt::band`); a floor stands on the land
 //! under it, or on the base with none.
 
-#![allow(clippy::unwrap_used)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"

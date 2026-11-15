@@ -1,8 +1,6 @@
 //! Edge cases found in review: each test is one repro,
 //! kept so the fix stays fixed.
 
-#![allow(clippy::unwrap_used)]
-
 use crate::common;
 
 use dt_eval::{Memory, Options, check};

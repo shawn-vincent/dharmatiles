@@ -124,7 +124,6 @@ impl Decoder<'_> {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
     fn entry(
         &mut self,
         node: &KdlNode,
@@ -372,7 +371,7 @@ impl Decoder<'_> {
     }
 
     /// A place word on an entry; false when `key` is not one.
-    #[allow(clippy::too_many_lines)]
+
     #[expect(
         clippy::disallowed_methods,
         reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
@@ -553,7 +552,10 @@ impl Decoder<'_> {
 
     /// One control, from a property (`height=35`) or a child line
     /// (`height 35`, `leaf length=4.5`, `ledges 1 height="40%"`).
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the flat inputs of one maths step, named at the call"
+    )]
     fn control(
         &mut self,
         entry: &mut Entry,
@@ -825,7 +827,7 @@ impl Decoder<'_> {
     }
 
     /// Checks across one entry's place words, controls and children.
-    #[allow(clippy::too_many_lines)]
+
     fn check_entry(&mut self, entry: &mut Entry, ctx: &Ctx) {
         let owner = entry.what.value.clone();
         let span = entry.what.span;

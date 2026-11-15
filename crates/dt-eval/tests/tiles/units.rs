@@ -3,7 +3,10 @@
 //! units checked before any build, and format 1 tiles written as the mirror
 //! of format 0 ones building the same mesh.
 
-#![allow(clippy::unwrap_used, clippy::float_cmp)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure; an exact comparison of a stored or sentinel value, not a computed one"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
@@ -234,7 +237,10 @@ fn node(c: &Checked, x: f64, y: f64) -> usize {
     let frame = tree(c).frame;
     let per = f64::from(frame.cells_per_square);
     let (nx, _) = frame.nodes();
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let (i, j) = ((x * per).round() as usize, (y * per).round() as usize);
     j * nx + i
 }

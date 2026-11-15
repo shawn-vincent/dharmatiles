@@ -246,7 +246,10 @@ pub fn welded(m: &TriMesh) -> (Vec<[f64; 3]>, Vec<[u32; 3]>) {
 ///
 /// # Errors
 /// [`KitError::Lift`] when the grid cannot be lifted.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+)]
 pub fn hung(depth: &Field, tol: f64) -> Result<TriMesh, KitError> {
     let z: Vec<f32> = depth.z.iter().map(|&d| d.max(1e-3) as f32).collect();
     let lat = dt_geom::Lattice {

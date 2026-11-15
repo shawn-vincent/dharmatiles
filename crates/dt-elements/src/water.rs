@@ -116,7 +116,6 @@ enum Kind {
 }
 
 fn mean_std(v: &[f64]) -> (f64, f64) {
-    #[allow(clippy::cast_precision_loss)]
     let n = v.len().max(1) as f64;
     let m = v.iter().sum::<f64>() / n;
     let var = v.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / n;
@@ -186,7 +185,6 @@ fn swell_train(
     let mut long = vec![0.0; d.z.len()];
     let mut short = vec![0.0; d.z.len()];
     for c in 0..n {
-        #[allow(clippy::cast_precision_loss)]
         let t = if n > 1 {
             c as f64 / (n - 1) as f64
         } else {
@@ -519,7 +517,7 @@ fn emitters(
                 wet += usize::from(wk);
             }
         }
-        #[allow(clippy::cast_precision_loss)]
+
         if wet as f64 > 0.5 * all as f64 {
             let st = CORNER.0 * rng.uniform(0.8, 1.2);
             corners.push(Source {
@@ -535,7 +533,7 @@ fn emitters(
         .filter(|&k| on_edge(k, nx, ny))
         .map(|k| m.land[k])
         .collect();
-    #[allow(clippy::cast_precision_loss)]
+
     let f_enc = ((perim.iter().filter(|&&b| b).count() as f64 / perim.len().max(1) as f64
         - ENCLOSE_FREE)
         / (1.0 - ENCLOSE_FREE))
@@ -675,7 +673,7 @@ fn stats(
         .collect();
     let (_, rs) = mean_std(&open);
     let (gx, gy) = top.gradient();
-    #[allow(clippy::cast_precision_loss)]
+
     let wet_share = wet.iter().filter(|&&b| b).count() as f64 / nn as f64;
     Stats {
         relief: (

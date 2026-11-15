@@ -193,7 +193,7 @@ pub(super) struct DocKind {
     /// The file extension, lower case, without the dot.
     pub(super) ext: &'static str,
     /// What the page calls the kind (`tile`).
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "used by one build configuration only")]
     pub(super) kind: &'static str,
     /// Whether the folder actions apply (an `.stl` is shown, not managed).
     pub(super) actions: bool,

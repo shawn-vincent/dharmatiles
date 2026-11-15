@@ -17,15 +17,12 @@
 //! like shingles, so they are grouped into solids of mutually clear blades
 //! (a slot each), and the union takes it from there.
 
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
     clippy::float_cmp,
     clippy::needless_range_loop,
     clippy::type_complexity,
-    clippy::too_many_lines
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction; an exact comparison of a stored or sentinel value, not a computed one; the index also addresses a second array; a one-off tuple of parts, named where it is used"
 )]
 
 mod blade;
@@ -166,7 +163,10 @@ impl Grass {
         let s = frame.scale();
         let [w, h] = frame.size_mm();
         let (step, inset) = (CARPET_STEP_MM * s, CARPET_INSET_MM * s);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (nx, ny) = (
             ((w - 2.0 * inset) / step).floor() as usize + 1,
             ((h - 2.0 * inset) / step).floor() as usize + 1,
@@ -203,7 +203,10 @@ impl Grass {
             let clump = (0.5 + 0.3 * clumps.z[k]).clamp(0.0, 1.0);
             let thick = 1.25 * amp * grown * (0.35 + 0.65 * ridge * (0.55 + 0.45 * clump));
             // f32 is what the mesher takes
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             {
                 // the plate lies on the tile's bed, deep inside the ground (and
                 // under any water), where no thinning can bring it to the surface
@@ -245,7 +248,6 @@ impl Element for Grass {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
         let frame = *scene.frame();
         let s = frame.scale();
@@ -301,7 +303,10 @@ impl Element for Grass {
         // 2 clearings of bare earth, and the flow round them and the rocks
         let n_sq = (w / frame.square_mm) * (h / frame.square_mm);
         let share = ctx.area.share();
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let count = if self.clearings <= 0.0 {
             0
         } else {
@@ -468,14 +473,16 @@ impl Element for Grass {
             meshes.iter().map(|m| m.as_ref().map(plan_box)).collect();
         let classes = colour(&boxes);
         let n_classes = classes.iter().copied().max().map_or(0, |c| c + 1);
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let slots = scene
             .slots(n_classes as u32, Material::Grass)
             .map_err(LookError::build)?;
         let owner = ctx.path.clone();
         let mut made = 0usize;
         for c in 0..n_classes {
-            #[allow(clippy::cast_precision_loss)]
             progress.fraction("solids", 0.85 + 0.15 * c as f64 / n_classes as f64);
             let mut merged = TriMesh::default();
             for (m, _) in meshes
@@ -488,7 +495,10 @@ impl Element for Grass {
                     made += 1;
                 }
             }
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let solid = form::solid(slots.get(c as u32), &merged).map_err(LookError::build)?;
             scene.add(
                 Tag {
@@ -498,7 +508,7 @@ impl Element for Grass {
                 solid,
             );
         }
-        #[allow(clippy::cast_precision_loss)]
+
         let soil_share = surf.soil.z.iter().filter(|&&v| v > 0.5).count() as f64 / (nx * ny) as f64;
         // bare earth as counted: clearings and what stands on the
         // ground, over the grass's own area
@@ -508,7 +518,7 @@ impl Element for Grass {
             .filter(|&&k| surf.soil.z[k] > 0.5 || blocker.bits[k])
             .count() as f64
             / in_area.len().max(1) as f64;
-        #[allow(clippy::cast_precision_loss)]
+
         for (k, v) in [
             ("blades", made as f64),
             ("soil_frac", soil_share),
@@ -531,7 +541,10 @@ const ARROW_MM: (f64, f64) = (3.5, 2.2);
 /// The debug layer's marks: every blade start by its fate, each grown
 /// blade's spine (cut short, added along the edge), and the flow on a
 /// coarse grid over the area.  Reads only what the build made.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 fn debug_marks(
     d: &mut dt_kit::debug::Debug,
     owner: &dt_kit::EntryId,
@@ -548,7 +561,10 @@ fn debug_marks(
     };
     let grown = starts.iter().filter(|s| s.fate.grown());
     for (st, f) in grown.zip(frs) {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let n = ((f.length / fronds::TRACE_STEP_MM) as usize).min(f.path.len() - 1);
         // a point every half millimetre, and the tip
         let mut pts: Vec<[f64; 3]> = f.path[..=n].iter().step_by(2).map(|&p| drape(p)).collect();
@@ -602,7 +618,7 @@ fn debug_marks(
 /// neighbours differ, up to ±50 µm across and ±12 µm high.
 fn hair(i: usize) -> [f64; 3] {
     let frac = |x: f64| x - libm::floor(x);
-    #[allow(clippy::cast_precision_loss)]
+
     let k = i as f64 + 1.0;
     [
         (frac(k * 0.618_033_988_749_895) - 0.5) * 0.1,
@@ -614,7 +630,10 @@ fn hair(i: usize) -> [f64; 3] {
 fn raw_node(frame: &dt_kit::Frame, x: f64, y: f64) -> (usize, usize) {
     let (nx, ny) = frame.nodes();
     let st = frame.step_mm();
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     (
         ((x / st).round().max(0.0) as usize).min(nx - 1),
         ((y / st).round().max(0.0) as usize).min(ny - 1),
@@ -716,15 +735,12 @@ fn fill_bare_earth(
         .step_by(STRIDE)
         .flat_map(|j| (0..nx).step_by(STRIDE).map(move |i| (j * nx + i, i, j)))
         .filter(|(k, _, _)| !outside[*k])
-        .map(|(k, i, j)| {
-            #[allow(clippy::cast_precision_loss)]
-            (k, i as f64 * st, j as f64 * st)
-        })
+        .map(|(k, i, j)| (k, i as f64 * st, j as f64 * st))
         .collect();
     let mut lens = free.combine(0, aprons);
     for k in 0..=free.centre.len() {
         lens = free.combine(k, aprons);
-        #[allow(clippy::cast_precision_loss)]
+
         let bare = nodes
             .iter()
             .filter(|(i, x, y)| blocker.bits[*i] || lens.mask(*x, *y) > 0.5)
@@ -758,12 +774,18 @@ fn colour(boxes: &[Option<([f64; 2], [f64; 2])>]) -> Vec<usize> {
         std::collections::HashMap::new();
     let mut class = vec![0usize; boxes.len()];
     let cells = |b: &([f64; 2], [f64; 2])| {
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i0, i1) = (
             libm::floor(b.0[0] / CELL) as i64,
             libm::floor(b.1[0] / CELL) as i64,
         );
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (j0, j1) = (
             libm::floor(b.0[1] / CELL) as i64,
             libm::floor(b.1[1] / CELL) as i64,

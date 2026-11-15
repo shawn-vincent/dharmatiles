@@ -2,8 +2,6 @@
 //! solid's slot and so every hash, so a change to the planner that moves
 //! any tile's order shows here first.
 
-#![allow(clippy::unwrap_used)]
-
 use std::fmt::Write as _;
 
 use dt_eval::{Library, Options, check};

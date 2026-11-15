@@ -6,11 +6,9 @@ use dt_kit::{KitError, Rng, TriMesh};
 
 /// `fibonacci_sphere`: `n` evenly spread unit directions.
 pub(crate) fn fibonacci_sphere(n: usize) -> Vec<[f64; 3]> {
-    #[allow(clippy::cast_precision_loss)]
     let nf = n as f64;
     (0..n)
         .map(|i| {
-            #[allow(clippy::cast_precision_loss)]
             let i = i as f64 + 0.5;
             let phi = libm::acos(1.0 - 2.0 * i / nf);
             let theta = core::f64::consts::PI * (1.0 + libm::sqrt(5.0)) * i;
@@ -27,7 +25,10 @@ pub(crate) fn fibonacci_sphere(n: usize) -> Vec<[f64; 3]> {
 /// jittered directions, an ellipsoid↔box radial blend, heavy lump
 /// variance, crisp facets (smooth rubble reads as mortar: E26).
 pub(crate) fn rubble_points(l: [f64; 3], rng: &mut Rng) -> Vec<[f64; 3]> {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let m = rng.int(10, 14) as usize;
     let squash = rng.uniform(0.5, 0.8);
     let half = l.map(|v| v / 2.0);
@@ -97,7 +98,6 @@ pub(crate) fn boxed(lo: [f64; 3], hi: [f64; 3]) -> Result<TriMesh, KitError> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     #[test]

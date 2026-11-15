@@ -768,7 +768,10 @@ impl dt_kit::Reporter for Ticks {
         use std::sync::atomic::Ordering::Relaxed;
         let total = self.total.max(1);
         let at = |done: usize, part: f64, label: &str| {
-            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let (f, d, t) = (
                 ((done as f64 + part) / total as f64).clamp(0.0, 0.99),
                 done as u32,
@@ -895,7 +898,7 @@ pub fn build_tile(
         for t in &mesh.triangles {
             for &i in t {
                 for x in mesh.positions[i as usize] {
-                    #[allow(clippy::cast_possible_truncation)]
+                    #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
                     positions.push(x as f32);
                 }
             }
@@ -1070,7 +1073,10 @@ pub fn explore(
         // the top edge belongs to the last bin
         let k = (t * f64::from(bins)).floor().max(0.0);
         // 0 <= k <= bins, so the cast is exact
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let k = (k as usize).min(bins as usize - 1);
         counts[k] += 1;
     }
@@ -1093,7 +1099,6 @@ pub fn explore(
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
 
     use super::*;
 

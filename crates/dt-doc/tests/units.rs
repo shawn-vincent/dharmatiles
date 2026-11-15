@@ -1,7 +1,10 @@
 //! Format 1's units and kinds, points and printers, as dt-doc reads them:
 //! every rule has its refusal with the help that says what to write.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"

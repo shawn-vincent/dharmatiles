@@ -1,8 +1,6 @@
 //! The editor's debug layer changes nothing that is built: the same tile
 //! with and without it writes the same STL, stage by stage.
 
-#![allow(clippy::unwrap_used)]
-
 use crate::common;
 
 use crate::memo;

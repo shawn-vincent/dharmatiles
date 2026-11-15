@@ -125,19 +125,13 @@ pub struct Relaxed {
 /// there. `scale` is the system's ([`crate::Frame::scale`]): the coarse
 /// lattice is [`RELAX_STEP_MM`] times it.
 #[must_use]
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_precision_loss
-)]
 pub fn relax(band: &Band, scale: f64) -> Relaxed {
     relax_rounds(band, scale, RELAX_ROUNDS)
 }
 
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_precision_loss
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
 )]
 fn relax_rounds(band: &Band, scale: f64, rounds: usize) -> Relaxed {
     let (lo, hi) = (band.lo(), band.hi());
@@ -275,7 +269,10 @@ pub struct Hills {
 /// # Panics
 /// If the noise is on another lattice than the band.
 #[must_use]
-#[allow(clippy::needless_range_loop)]
+#[expect(
+    clippy::needless_range_loop,
+    reason = "the index also addresses a second array"
+)]
 pub fn hills(noise: &Field, band: &Band, hill_mm: f64, slope_deg: f64, scale: f64) -> Hills {
     assert!(
         noise.nx == band.lo().nx && noise.ny == band.lo().ny,
@@ -336,7 +333,6 @@ pub fn hills(noise: &Field, band: &Band, hill_mm: f64, slope_deg: f64, scale: f6
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::cast_precision_loss)]
     use super::*;
     use dt_geom::Iv;
 

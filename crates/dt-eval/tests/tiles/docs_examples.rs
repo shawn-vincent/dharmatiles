@@ -6,7 +6,10 @@
 //! The build is the low tier (grass as a carpet, rocks as hulls), which is what the page builds while it is being edited; the gate's own
 //! sweep is the library's.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

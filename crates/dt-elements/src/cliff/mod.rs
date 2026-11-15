@@ -31,10 +31,9 @@
 
 // Lattice and grid arithmetic here converts between float positions and
 // indices throughout, on values that are small and checked in range.
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
 )]
 
 mod chips;
@@ -394,7 +393,6 @@ impl Cliff {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
     use dt_kit::{Band, Field, Frame, Scene, Seed};
     use std::sync::Arc;

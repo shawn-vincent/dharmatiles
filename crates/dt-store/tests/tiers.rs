@@ -1,6 +1,9 @@
 //! The tiers of a build: what each one is, what it costs and what it keeps.
 
-#![allow(clippy::unwrap_used, clippy::print_stderr)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"

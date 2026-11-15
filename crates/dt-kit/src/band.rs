@@ -332,7 +332,6 @@ fn same_lattice(a: &Field, b: &Field) -> bool {
 }
 
 fn xy(g: &Field, k: usize) -> [f64; 2] {
-    #[allow(clippy::cast_precision_loss)]
     [(k % g.nx) as f64 * g.step, (k / g.nx) as f64 * g.step]
 }
 
@@ -422,7 +421,7 @@ impl Band {
     /// # Panics
     /// If `roll` is not one value per node.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+
     pub fn rolled(&self, roll: &[f64], take: impl Fn(usize) -> bool) -> Vec<Option<f64>> {
         let n = self.lo.z.len();
         assert_eq!(roll.len(), n, "rolled: one roll per node");
@@ -884,11 +883,10 @@ fn steepest(solved: &Solved, limit_deg: f64) -> Option<Steep> {
 }
 
 #[cfg(test)]
-#[allow(
+#[expect(
     clippy::float_cmp,
     clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss
+    reason = "an exact comparison of a stored or sentinel value, not a computed one; a grid index, count or small id in a bounded range: the value fits by construction"
 )]
 mod tests {
     use super::*;

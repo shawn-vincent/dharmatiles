@@ -9,8 +9,6 @@
 //! wants each to be a sound solid of about the right volume.  It is a
 //! stress, not a proof: the fault was intermittent.
 
-#![allow(clippy::unwrap_used)]
-
 use dt_geom::{Bounds, Solid};
 
 #[test]

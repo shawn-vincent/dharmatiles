@@ -8,11 +8,9 @@
 //! level set of the removed voxels, so the rest of the surface is
 //! untouched (foliage clumps standing on their branches).
 
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap,
-    clippy::cast_precision_loss
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
 )]
 
 use dt_geom::TriMesh;
@@ -98,7 +96,10 @@ pub fn stand(
     let g = s.grid_mm;
     let lay = s.layer_mm;
     let lo = [lo[0] - 2.0 * g, lo[1] - 2.0 * g, lo[2] - lay];
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let count = |a: f64, b: f64, d: f64| (((b - a) / d).ceil().max(1.0) as usize) + 2;
     let (nx, ny, nz) = (
         count(lo[0], hi[0], g),
@@ -107,7 +108,7 @@ pub fn stand(
     );
     let cols = nx * ny;
     // the centre of voxel (i, j, k)
-    #[allow(clippy::cast_precision_loss)]
+
     let centre = |i: usize, j: usize, k: usize| {
         [
             lo[0] + (i as f64 + 0.5) * g,
@@ -121,7 +122,10 @@ pub fn stand(
     // voxel stays if, for every j up to the span, material j layers down
     // lies within reach + (j − 1) × the cone's step
     let cone = lay / libm::tan(s.angle_deg.to_radians());
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let span = ((s.span_mm / lay) as usize).max(1);
     let mut keep = vec![false; nz * cols];
     let mut far: Vec<Vec<f64>> = Vec::with_capacity(nz);
@@ -136,7 +140,6 @@ pub fn stand(
                 .map(|c| {
                     inside_t[k * cols + c]
                         && (1..=span.min(k)).all(|j| {
-                            #[allow(clippy::cast_precision_loss)]
                             let limit = s.reach_mm + (j - 1) as f64 * cone;
                             far[k - j][c] <= limit + 1e-9
                         })
@@ -233,7 +236,7 @@ pub fn stand(
         .enumerate()
         .map(|(k, m)| form::solid(slots.get(dt_value::idx(k)), m))
         .collect::<Result<_, _>>()?;
-    #[allow(clippy::cast_precision_loss)]
+
     let stood = Stood {
         cut_mm3: n_removed as f64 * g * g * lay,
         pieces: comps.len(),
@@ -263,7 +266,7 @@ fn voxels(
             let x1 = a[0].max(b[0]).max(c[0]);
             let y0 = a[1].min(b[1]).min(c[1]);
             let y1 = a[1].max(b[1]).max(c[1]);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
             let span = |v0: f64, v1: f64, o: f64, n: usize| {
                 let s = ((v0 - o) / g - 0.5).ceil().max(0.0) as usize;
                 let e = (((v1 - o) / g - 0.5).floor() as i64).min(n as i64 - 1);
@@ -271,11 +274,6 @@ fn voxels(
             };
             let (is, ie) = span(x0, x1, lo[0], nx);
             let (js, je) = span(y0, y1, lo[1], ny);
-            #[allow(
-                clippy::cast_possible_wrap,
-                clippy::cast_sign_loss,
-                clippy::cast_precision_loss
-            )]
             for j in js..=(je.max(-1) as usize).min(ny - 1) {
                 if je < 0 {
                     break;
@@ -308,7 +306,6 @@ fn voxels(
         zs.sort_by(f64::total_cmp);
         let mut h = 0;
         for k in 0..nz {
-            #[allow(clippy::cast_precision_loss)]
             let z = lo[2] + (k as f64 + 0.5) * lay;
             while h < zs.len() && zs[h] < z {
                 h += 1;
@@ -356,9 +353,8 @@ fn components(set: &[bool], nx: usize, ny: usize, nz: usize) -> Vec<([usize; 3],
             for dk in -1i64..=1 {
                 for dj in -1i64..=1 {
                     for di in -1i64..=1 {
-                        #[allow(clippy::cast_possible_wrap)]
                         let (a, b, c) = (i as i64 + di, j as i64 + dj, k as i64 + dk);
-                        #[allow(clippy::cast_possible_wrap)]
+
                         let ok = a >= 0
                             && b >= 0
                             && c >= 0
@@ -368,7 +364,7 @@ fn components(set: &[bool], nx: usize, ny: usize, nz: usize) -> Vec<([usize; 3],
                         if !ok {
                             continue;
                         }
-                        #[allow(clippy::cast_sign_loss)]
+
                         let u = c as usize * cols + b as usize * nx + a as usize;
                         if set[u] && !seen[u] {
                             seen[u] = true;

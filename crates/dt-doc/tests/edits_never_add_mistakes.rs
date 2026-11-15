@@ -7,12 +7,10 @@
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed; permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
 )]
-#![allow(
+#![expect(
     clippy::unwrap_used,
     clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss
+    reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction"
 )]
 
 mod common;

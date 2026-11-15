@@ -64,7 +64,7 @@ struct Arris {
 
 /// The chips (hulls) that break the arrises as a mason's are broken. A chip
 /// whose hull comes out degenerate is left out and added to `left_out`.
-#[allow(clippy::too_many_lines)]
+
 pub fn chip_edges(
     rng: &mut Rng,
     rock: &Piece,

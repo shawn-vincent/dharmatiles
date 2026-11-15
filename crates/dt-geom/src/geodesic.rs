@@ -64,13 +64,15 @@ pub fn geodesic(
             (-1, 1, diag),
             (1, 1, diag),
         ] {
-            #[allow(clippy::cast_possible_wrap)]
             let (a, b) = (i as i64 + di, j as i64 + dj);
-            #[allow(clippy::cast_possible_wrap)]
+
             if a < 0 || b < 0 || a >= nx as i64 || b >= ny as i64 {
                 continue;
             }
-            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let m = b as usize * nx + a as usize;
             if !ok(m) {
                 continue;
@@ -91,7 +93,10 @@ pub fn geodesic(
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::float_cmp)]
+    #![expect(
+        clippy::float_cmp,
+        reason = "a test: a failing unwrap is the failure; an exact comparison of a stored or sentinel value, not a computed one"
+    )]
     use super::*;
 
     #[test]

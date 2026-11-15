@@ -2,7 +2,10 @@
 //! bytes, any input change misses, a damaged entry is reported and made
 //! again, the folder stays under its limit and writers do not collide.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 mod common;
 

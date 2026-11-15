@@ -1,7 +1,10 @@
 //! Format 1: `$` names read from the context, `let` and `override` in any
 //! block, reserved words, and `check` refusing a read nothing installed.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"

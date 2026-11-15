@@ -29,7 +29,10 @@
 //! overhang flags are the gate's own (layer reach), not an angle guess.
 
 // f64 mesh coordinates to f32 for the GPU, and colours 0..1 to bytes.
-#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+)]
 
 use dt_eval::Built;
 use dt_kit::TriMesh;

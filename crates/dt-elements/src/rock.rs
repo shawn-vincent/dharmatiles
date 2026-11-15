@@ -173,10 +173,9 @@ fn tilted(rng: &mut Rng, n: [f64; 3], max_deg: f64) -> [f64; 3] {
 fn permutation(rng: &mut Rng, n: usize) -> Vec<usize> {
     let mut v: Vec<usize> = (0..n).collect();
     for i in (1..n).rev() {
-        #[allow(
+        #[expect(
             clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            clippy::cast_possible_wrap
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
         )]
         let j = rng.int(0, i as i64) as usize;
         v.swap(i, j);
@@ -428,7 +427,10 @@ pub fn make_stone(rng: &mut Rng, d: f64, mix: [f64; 4], low: bool) -> Result<Sto
         rock = c;
         chips += 1;
     }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     Ok(Stone {
         convex: rock.compact(),
         facets,
@@ -482,7 +484,7 @@ pub fn make_item(
     for j in 1..k {
         let dj = (d * rng.uniform(CLUSTER_SIZE.0, CLUSTER_SIZE.1)).max(MIN_STONE_MM);
         let s = make_stone(rng, dj, mix, low)?;
-        #[allow(clippy::cast_precision_loss)]
+
         let ang = ang0 + j as f64 * TAU / k as f64 + rng.uniform(-0.5, 0.5);
         let dist = (d / 2.0 + dj / 2.0) * rng.uniform(CLUSTER_DIST.0, CLUSTER_DIST.1);
         stones.push(([dist * libm::cos(ang), dist * libm::sin(ang)], s));
@@ -627,7 +629,10 @@ pub(crate) fn add_items(
     let s = scene.frame().scale();
     let slack = scene.frame().step_mm();
     let n: usize = items.iter().map(|(it, _, _)| it.stones.len()).sum();
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let slots = scene
         .slots(n as u32, Material::Rock)
         .map_err(LookError::build)?;
@@ -830,7 +835,7 @@ fn peaks_under_clouds(
             .collect();
         let mut order: Vec<usize> = (0..m).collect();
         order.sort_by(|&a, &b| rolls[a].total_cmp(&rolls[b]).then(a.cmp(&b)));
-        #[allow(clippy::cast_precision_loss)]
+
         for (r, &j) in order.iter().enumerate() {
             rank[j] = (r as f64 + 0.5) / m as f64;
         }
@@ -871,11 +876,10 @@ fn peaks_under_clouds(
 }
 
 pub(crate) fn note(scene: &mut Scene, t: &Tally) {
-    #[allow(clippy::cast_precision_loss)]
     let mean = |v: &[u32]| v.iter().map(|&x| f64::from(x)).sum::<f64>() / v.len().max(1) as f64;
     let min = |v: &[u32]| f64::from(v.iter().copied().min().unwrap_or(0));
     let max = |v: &[u32]| f64::from(v.iter().copied().max().unwrap_or(0));
-    #[allow(clippy::cast_precision_loss)]
+
     for (k, v) in [
         ("placements", t.placements as f64),
         ("clusters", t.clusters as f64),
@@ -897,7 +901,6 @@ pub(crate) fn note(scene: &mut Scene, t: &Tally) {
         scene.note(k, v);
     }
     if t.topped > 0 {
-        #[allow(clippy::cast_precision_loss)]
         scene.note("topped_stones", t.topped as f64);
     }
 }
@@ -1045,7 +1048,10 @@ pub(crate) fn place(
     let area = &open_area(scene, ctx, reach);
     let step = frame.step_mm();
     let inside = |x: f64, y: f64| {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i, j) = (
             (libm::round(x / step).max(0.0) as usize).min(area.nx - 1),
             (libm::round(y / step).max(0.0) as usize).min(area.ny - 1),
@@ -1115,7 +1121,10 @@ fn place_at_foot(
         {
             continue;
         }
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (gi, gj) = (
             (libm::round(at[0] / step).max(0.0) as usize).min(area.nx - 1),
             (libm::round(at[1] / step).max(0.0) as usize).min(area.ny - 1),
@@ -1239,7 +1248,7 @@ impl Element for Scatter {
             None => None,
         };
         // squares the area covers
-        #[allow(clippy::cast_precision_loss)]
+
         let line_reach = self.reach.unwrap_or(crate::LINE_REACH_MM);
         let squares = foot.map_or_else(
             || ctx.spread_squares(&frame, &ctx.spread_area(&frame, line_reach)),
@@ -1250,7 +1259,6 @@ impl Element for Scatter {
             Some(r) => r.int_by(1.0, &mut rng),
             None => self.per_square.int_by(squares, &mut rng),
         };
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let n = n.clamp(0, 10_000) as usize;
         let total: f64 = self.things.iter().map(|t| t.weight).sum();
         let mut items = Vec::with_capacity(n);

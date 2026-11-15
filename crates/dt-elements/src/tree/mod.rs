@@ -246,7 +246,10 @@ impl Tree {
         p.leaf_length = s.dist_or("leaf/length", p.leaf_length)?;
         p.leaf_width = s.dist_or("leaf/width", p.leaf_width)?;
         if let Some(v) = s.number("crown/clumps")? {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             {
                 p.clumps = v.round() as usize;
             }
@@ -339,7 +342,7 @@ impl Tree {
     ///
     /// # Errors
     /// [`LookError`] when the crown is empty or the kernel fails.
-    #[allow(clippy::too_many_lines)]
+
     pub fn grow(
         &self,
         scene: &mut Scene,
@@ -439,7 +442,10 @@ impl Tree {
         let mut clouds = scene.collecting().clouds.then(Vec::new);
         let pts = under_the_cloud(&pts, &env, cap, seed, radius, s, &cloud_at, clouds.as_mut())?;
         let step = SEGMENT_MM * s;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let max_steps = (libm::ceil(height / step) as usize * 4).max(60);
         let traced = graph::colonise(
             at,
@@ -750,7 +756,7 @@ fn set_trunk_width(g: &mut graph::Graph, w: f64) {
 /// What one built tree noted about itself.
 fn note_built(scene: &mut Scene, b: &Built) {
     let gr = &b.grown;
-    #[allow(clippy::cast_precision_loss)]
+
     for (k, v) in [
         ("tree.attractors", gr.attractors as f64),
         ("tree.terminals", gr.terminals as f64),
@@ -786,7 +792,6 @@ fn plant(scene: &mut Scene, path: &dt_kit::EntryId, b: Built) {
     let step = frame.step_mm();
     let mut mask = dt_kit::Mask::new(nx, ny, false);
     for (k, bit) in mask.bits.iter_mut().enumerate() {
-        #[allow(clippy::cast_precision_loss)]
         let (x, y) = ((k % nx) as f64 * step, (k / nx) as f64 * step);
         *bit = libm::hypot(x - b.at[0], y - b.at[1]) <= b.stamp_r_mm;
     }
@@ -988,7 +993,6 @@ impl Element for Scatter {
             Some(r) => r.int_by(1.0, &mut rng),
             None => self.per_square.int_by(squares, &mut rng),
         };
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let n = n.clamp(0, 10_000) as usize;
         let total: f64 = self.trees.iter().map(|t| t.1).sum();
         // each tree: which, its own seed, and the room its crown needs
@@ -1107,7 +1111,10 @@ fn dt_kit_tip(frame: &dt_kit::Frame, foot: [f64; 3], at: [f64; 2], radius: f64) 
 /// # Errors
 /// [`LookError`] when the cloud leaves a tip no room above the crown's base
 /// or the formula cannot be worked out there.
-#[allow(clippy::too_many_arguments)] // the crown's inputs, and the debug layer's list
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)] // the crown's inputs, and the debug layer's list
 fn under_the_cloud(
     pts: &[[f64; 3]],
     env: &crown::Envelope,
@@ -1138,7 +1145,7 @@ fn under_the_cloud(
     let mut order: Vec<usize> = (0..pts.len()).collect();
     order.sort_by(|&a, &b| rolls[a].total_cmp(&rolls[b]).then(a.cmp(&b)));
     let mut rank = vec![0.0; pts.len()];
-    #[allow(clippy::cast_precision_loss)]
+
     for (r, &i) in order.iter().enumerate() {
         rank[i] = (r as f64 + 0.5) / pts.len() as f64;
     }

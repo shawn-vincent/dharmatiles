@@ -283,7 +283,7 @@ pub(super) fn find(p: &mut [usize], mut i: usize) -> usize {
 
 /// The triangles of `m` grouped by `groups[t]` (first-seen order), each
 /// group its own compact mesh.
-#[allow(clippy::cast_possible_truncation, reason = "vertex indices fit u32")]
+#[expect(clippy::cast_possible_truncation, reason = "vertex indices fit u32")]
 pub(super) fn gather(m: &TriMesh, groups: &[usize]) -> Vec<TriMesh> {
     let mut of: HashMap<usize, usize> = HashMap::new();
     let mut tris: Vec<Vec<[u32; 3]>> = Vec::new();

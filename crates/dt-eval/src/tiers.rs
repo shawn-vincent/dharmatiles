@@ -7,7 +7,10 @@
 //! own entry in the cache ([`crate::Tier`]).
 
 // cell numbers are small whole numbers
-#![allow(clippy::cast_possible_truncation)]
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+)]
 
 use dt_kit::TriMesh;
 
@@ -55,7 +58,7 @@ fn thinned_snap(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>, Vec<u32>
             0.5 * (x[0] * x[0] + x[1] * x[1] + x[2] * x[2]).sqrt()
         })
         .sum();
-    #[allow(clippy::cast_precision_loss)]
+
     let mut cell = (2.0 * area / budget as f64).sqrt().max(1e-3);
     loop {
         let mut of = std::collections::HashMap::with_capacity(mesh.positions.len() / 2);

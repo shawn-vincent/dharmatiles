@@ -547,7 +547,7 @@ impl Shared {
                 return;
             };
             let elapsed = j.started.elapsed().as_secs_f64();
-            #[allow(clippy::cast_precision_loss)]
+
             let (done, total) = (j.done as f64, j.total.max(1) as f64);
             let estimate = (j.done > 0).then(|| elapsed / done * total);
             api::Progress {

@@ -46,10 +46,8 @@ impl OnFrame for Field {
         let mut out = <Self as OnFrame>::new(frame, 0.0);
         let (nx, step) = (out.nx, out.step);
         out.z.par_chunks_mut(nx).enumerate().for_each(|(j, row)| {
-            #[allow(clippy::cast_precision_loss)]
             let y = j as f64 * step;
             for (i, o) in row.iter_mut().enumerate() {
-                #[allow(clippy::cast_precision_loss)]
                 let x = i as f64 * step;
                 *o = f(x, y);
             }
@@ -294,7 +292,6 @@ pub fn cap(planes: &[Plane], x: f64, y: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::float_cmp)]
     use super::*;
 
     fn frame(square: f64) -> Frame {

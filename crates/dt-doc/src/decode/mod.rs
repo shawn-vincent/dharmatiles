@@ -796,7 +796,7 @@ impl<'k> Decoder<'k> {
                                     None => s.trim().parse::<f64>().ok(),
                                 },
                                 KdlValue::Float(f) => Some(*f),
-                                #[allow(clippy::cast_precision_loss)]
+
                                 KdlValue::Integer(i) => Some(*i as f64),
                                 _ => None,
                             });
@@ -1273,7 +1273,6 @@ impl<'k> Decoder<'k> {
                 }
             },
             "pull" => {
-                #[allow(clippy::cast_precision_loss)]
                 let v = match e.value() {
                     KdlValue::Float(f) => Some(*f),
                     KdlValue::Integer(i) => Some(*i as f64),

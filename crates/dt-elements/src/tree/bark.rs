@@ -53,7 +53,7 @@ pub fn hash01(parts: &[u64]) -> f64 {
     h ^= h >> 33;
     h = h.wrapping_mul(0xC4CE_B9FE_1A85_EC53);
     h ^= h >> 33;
-    #[allow(clippy::cast_precision_loss)]
+
     let v = (h >> 11) as f64 / (1u64 << 53) as f64;
     v
 }
@@ -77,7 +77,10 @@ fn select(parent: &[Line], radius: f64) -> Vec<Line> {
     if parent.is_empty() || radius < MIN_BRANCH_RADIUS_MM {
         return Vec::new();
     }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let want = libm::floor(TAU * radius / SPACING_MM) as usize;
     if want >= parent.len() {
         return parent.to_vec();
@@ -86,10 +89,9 @@ fn select(parent: &[Line], radius: f64) -> Vec<Line> {
     ordered.sort_by(|a, b| wrap(a.theta).total_cmp(&wrap(b.theta)));
     let mut picked: Vec<Line> = Vec::new();
     for k in 0..want {
-        #[allow(
-            clippy::cast_precision_loss,
+        #[expect(
             clippy::cast_possible_truncation,
-            clippy::cast_sign_loss
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
         )]
         let i = libm::round(k as f64 * ordered.len() as f64 / want as f64) as usize % ordered.len();
         if !picked.iter().any(|l| l.id == ordered[i].id) {
@@ -113,9 +115,12 @@ impl Bark {
         let n = g.nodes.len();
         let ch = g.children();
         let mut node: Vec<Vec<Line>> = vec![Vec::new(); n];
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let n_root = (libm::floor(TAU * g.radii[0] / SPACING_MM) as usize).max(5);
-        #[allow(clippy::cast_precision_loss)]
+
         {
             node[0] = (0..n_root)
                 .map(|i| Line {
@@ -221,7 +226,10 @@ impl Bark {
         }
         let r = ring.radius;
         let amp = ROUGH_MM.min(0.45 * DEPTH_MM);
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let s_cell = libm::floor(ring.s / ROUGH_CELL_MM) as i64;
         let (lo, hi) = ((r - 0.35 * r).max(0.42), r + amp);
         for (a, out) in angles.iter().zip(radii.iter_mut()) {
@@ -238,9 +246,12 @@ impl Bark {
             }
             let mut rough = 0.0;
             if cut <= 1e-9 {
-                #[allow(clippy::cast_possible_truncation)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                )]
                 let t_cell = libm::floor(r * wrap(*a) / ROUGH_CELL_MM) as i64;
-                #[allow(clippy::cast_sign_loss)]
+
                 let key = [self.seed, 3, ring.edge as u64, s_cell as u64, t_cell as u64];
                 let u1 = hash01(&key).max(1e-12);
                 let mut k2 = key;

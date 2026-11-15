@@ -58,7 +58,10 @@ pub fn trace_batch(
     delta: Option<&[f64]>,
     sign: f64,
 ) -> Vec<Vec<[f64; 2]>> {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let n = ((length / TRACE_STEP_MM).ceil() as usize).max(1);
     starts
         .par_iter()
@@ -108,7 +111,10 @@ fn make_strand_roots(
         .collect();
     let back_max = back.iter().copied().fold(0.0, f64::max);
     let bp = trace_batch(&seeds, back_max, flow, None, -1.0);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let start: Vec<[f64; 2]> = (0..n)
         .map(|i| bp[i][((back[i] / TRACE_STEP_MM) as usize).min(bp[i].len() - 1)])
         .collect();
@@ -120,7 +126,10 @@ fn make_strand_roots(
         let mut u = 0.0;
         while u < slen[i] {
             let l = len.draw(rng);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let k = ((u / TRACE_STEP_MM) as usize).min(fp[i].len() - 2);
             let (p, q) = (fp[i][k], fp[i][k + 1]);
             let t = [q[0] - p[0], q[1] - p[1]];
@@ -240,7 +249,10 @@ pub struct Start {
 /// Returns the fronds and the strand count.  With `log`, every start in
 /// the tile is written to it with its fate, in order: the grown ones match
 /// the fronds one to one.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 #[expect(
     clippy::disallowed_methods,
     reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
@@ -350,7 +362,10 @@ struct Taken(std::collections::HashMap<(i64, i64), Vec<[f64; 2]>>);
 
 impl Taken {
     fn bin(p: [f64; 2]) -> (i64, i64) {
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let b = (
             libm::floor(p[0] / MIN_ROOT_GAP_MM) as i64,
             libm::floor(p[1] / MIN_ROOT_GAP_MM) as i64,
@@ -449,7 +464,10 @@ impl Grower<'_> {
         }
         // shorten (never slice) so the tip ends inside the tile, at most
         // `spill` into bare soil, and at most `tuck` into an obstacle
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let nl = (((blade_len / step).ceil() as usize) + 1).min(path.len());
         let mut stop = None;
         for (t, p) in path.iter().take(nl).enumerate() {
@@ -469,7 +487,6 @@ impl Grower<'_> {
                 .as_ref()
                 .is_some_and(|b| b.z[kk] > surf.tuck_mm);
             if folds || rim || deep || in_blk || surf.outside[kk] {
-                #[allow(clippy::cast_precision_loss)]
                 let at = t as f64 * step;
                 let short = if surf.outside[kk] {
                     if t == 0 {
@@ -496,7 +513,10 @@ impl Grower<'_> {
         }
         // blade height falls beside an obstacle, where it presses against it
         if let Some(near) = &surf.near {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let tip = path[((length / step) as usize).min(path.len() - 1)];
             hf *= near.z[self.idx(tip)];
         }
@@ -541,10 +561,12 @@ fn footprint_half(s: f64, len: f64, half_w: f64) -> f64 {
 /// Mark the lattice nodes under frond `f` in `cov`.
 fn cover_frond(cov: &mut [bool], soil: &Field, f: &Frond) {
     let step = TRACE_STEP_MM;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let n = ((f.length / step) as usize).min(f.path.len() - 1);
     for (t, p) in f.path.iter().take(n + 1).enumerate() {
-        #[allow(clippy::cast_precision_loss)]
         let r = footprint_half(t as f64 * step, f.length, f.half_w);
         let (i0, j0) = soil.node(p[0] - r, p[1] - r);
         let (i1, j1) = soil.node(p[0] + r, p[1] + r);
@@ -565,7 +587,10 @@ fn cover_frond(cov: &mut [bool], soil: &Field, f: &Frond) {
 /// Its start is upstream along the flow so the blade's full part lies over
 /// the gap; where the edge is right behind the gap, the blade is grown the
 /// other way, against the edge, and shortened at it.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 #[expect(
     clippy::disallowed_methods,
     reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
@@ -621,7 +646,7 @@ fn edge_fill(
             let reach = EDGE_MID * l0;
             // room upstream of the gap, inside the area
             let back = &trace_batch(&[p], reach, flow, Some(&d), -1.0)[0];
-            #[allow(clippy::cast_precision_loss)]
+
             let room = back
                 .iter()
                 .take_while(|q| open(**q))
@@ -629,14 +654,17 @@ fn edge_fill(
                 .saturating_sub(1) as f64
                 * TRACE_STEP_MM;
             let (root, sign) = if room >= EDGE_BACK_MM {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                )]
                 let t = ((room.min(reach) / TRACE_STEP_MM) as usize).min(back.len() - 1);
                 (back[t], 1.0)
             } else {
                 // the edge is right behind the gap: start downstream and
                 // grow back toward the edge
                 let fwd = &trace_batch(&[p], reach, flow, Some(&d), 1.0)[0];
-                #[allow(clippy::cast_precision_loss)]
+
                 let ahead = fwd
                     .iter()
                     .take_while(|q| open(**q))
@@ -653,7 +681,10 @@ fn edge_fill(
                     }
                     continue;
                 }
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                )]
                 let t = ((ahead.min(reach) / TRACE_STEP_MM) as usize).min(fwd.len() - 1);
                 (fwd[t], -1.0)
             };

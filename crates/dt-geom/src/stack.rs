@@ -271,7 +271,10 @@ impl<'l, 'a> Mesher<'l, 'a> {
     }
 
     /// A position rounded as the lattice says.
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     fn rd(&self, v: f64) -> f64 {
         match self.round {
             Round::None => v,
@@ -279,7 +282,6 @@ impl<'l, 'a> Mesher<'l, 'a> {
         }
     }
 
-    #[allow(clippy::cast_precision_loss)]
     fn node_xy(&self, k: usize) -> [f64; 2] {
         let (i, j) = (k % self.nx, k / self.nx);
         let p = [i as f64 * self.step, j as f64 * self.step];
@@ -311,7 +313,10 @@ impl<'l, 'a> Mesher<'l, 'a> {
     /// Step 1: the leaves of the adaptive lift of the shown top, a leaf
     /// forced to a single cell where its nodes show several layers
     /// (summed-area tables of the nodes showing each layer above the first).
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     #[expect(
         clippy::disallowed_methods,
         reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
@@ -491,13 +496,11 @@ impl<'l, 'a> Mesher<'l, 'a> {
     /// layer boundary and rows between them where a layer has relief, the
     /// floor, and between two columns a panel per layer, zipped so the
     /// columns' different rows meet without a T-junction.
-    #[allow(
-        clippy::cast_precision_loss,
+    #[expect(
         clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
         clippy::float_cmp,
-        clippy::too_many_lines,
-        clippy::many_single_char_names
+        clippy::many_single_char_names,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction; an exact comparison of a stored or sentinel value, not a computed one; see the code beside it"
     )]
     #[expect(
         clippy::disallowed_methods,
@@ -696,7 +699,7 @@ impl<'l, 'a> Mesher<'l, 'a> {
     }
 
     /// Step 5: one run per layer that made triangles, in layer order.
-    #[allow(clippy::cast_precision_loss)]
+
     fn finish(self) -> TriMesh {
         let mut out = TriMesh {
             positions: self.positions,
@@ -739,11 +742,10 @@ pub fn lift_stack(lat: &Lattice, layers: &[Layer], sides: &Sides) -> Result<TriM
 
 #[cfg(test)]
 mod tests {
-    #![allow(
-        clippy::unwrap_used,
-        clippy::cast_precision_loss,
+    #![expect(
         clippy::cast_possible_truncation,
-        clippy::float_cmp
+        clippy::float_cmp,
+        reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction; an exact comparison of a stored or sentinel value, not a computed one"
     )]
     use super::*;
     use crate::Solid;

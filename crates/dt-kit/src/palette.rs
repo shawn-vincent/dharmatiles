@@ -54,7 +54,7 @@ impl Default for Palette {
         // (`the_bundled_palette_reads`), so this cannot fail in a program that
         // passed its tests; if it ever did, stopping is right: no colours
         // can be guessed.
-        #[allow(clippy::expect_used)]
+
         p.read(DEFAULT)
             .expect("the bundled palette (library/palettes/default.dtile) reads");
         p
@@ -147,7 +147,7 @@ impl Palette {
                 if toks.len() < 2 {
                     return Err(format!("line {}: a ramp needs at least two tones", n + 1));
                 }
-                #[allow(clippy::cast_precision_loss)]
+
                 let last = (toks.len() - 1) as f32;
                 let mut ramp: Ramp = Vec::new();
                 for (k, tok) in toks.iter().enumerate() {
@@ -157,7 +157,7 @@ impl Palette {
                     let c = hex(h).ok_or_else(|| {
                         format!("line {}: `{tok}` is not a colour like \"#8a8a90\"", n + 1)
                     })?;
-                    #[allow(clippy::cast_precision_loss)]
+
                     let pos = match at {
                         Some(a) => a
                             .trim_matches('"')
@@ -165,7 +165,10 @@ impl Palette {
                             .map_err(|_| format!("line {}: `@{a}` is not a number", n + 1))?,
                         None => k as f32 / last,
                     };
-                    #[allow(clippy::cast_possible_truncation)]
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                    )]
                     ramp.push((pos, c.map(|v| v as f32)));
                 }
                 if ramp.windows(2).any(|w| w[1].0 <= w[0].0) {

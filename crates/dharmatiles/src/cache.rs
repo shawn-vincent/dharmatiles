@@ -33,7 +33,6 @@ pub(crate) fn open() -> Result<Option<Store>, String> {
 
 /// `1.4 GB`, `312 MB`, `87 KB`.
 pub(crate) fn size_text(bytes: u64) -> String {
-    #[allow(clippy::cast_precision_loss)]
     let b = bytes as f64;
     if b >= 1e9 {
         format!("{:.2} GB", b / 1e9)

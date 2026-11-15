@@ -50,7 +50,10 @@ impl CrownTops for Crowns<'_> {
         };
         let (nx, ny) = self.frame.nodes();
         let per = f64::from(self.frame.cells_per_square);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i, j) = (
             ((tip.at[0] * per).round().max(0.0) as usize).min(nx - 1),
             ((tip.at[1] * per).round().max(0.0) as usize).min(ny - 1),

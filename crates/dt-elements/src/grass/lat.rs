@@ -23,7 +23,6 @@ pub struct Lat {
     pub z: Vec<f64>,
 }
 
-#[allow(clippy::cast_precision_loss)]
 impl Lat {
     /// A lattice covering `[x0, x1] × [y0, y1]`, every value `v`.
     pub fn new(x0: f64, y0: f64, x1: f64, y1: f64, res: f64, v: f64) -> Self {
@@ -157,7 +156,10 @@ impl Lat {
 
 /// A normalised Gaussian kernel for `sigma` samples, reaching 4 sigma.
 pub fn kernel(sigma: f64) -> Vec<f64> {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let r = (4.0 * sigma + 0.5) as usize;
     let mut k: Vec<f64> = (0..=2 * r)
         .map(|t| {

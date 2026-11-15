@@ -146,7 +146,6 @@ pub struct SolveReport {
 }
 
 fn node_xy(k: usize, nx: usize, per: f64) -> (f64, f64) {
-    #[allow(clippy::cast_precision_loss)]
     ((k % nx) as f64 / per, (k / nx) as f64 / per)
 }
 
@@ -611,7 +610,6 @@ fn independent(vals: &[&Val], iv: Iv, f: impl Fn(&[f64]) -> f64) -> Option<Weigh
         return None;
     }
     let quantile = |v: &Val, i: usize| {
-        #[allow(clippy::cast_precision_loss)]
         let u = (i as f64 + 0.5) / GRID as f64;
         let t = v.odds.as_ref().map_or(u, |w| w.unit(u));
         v.iv.lo + v.iv.width() * t
@@ -624,10 +622,9 @@ fn independent(vals: &[&Val], iv: Iv, f: impl Fn(&[f64]) -> f64) -> Option<Weigh
             x[k] = quantile(v, at[k]);
         }
         let r = f(&x);
-        #[allow(
+        #[expect(
             clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            clippy::cast_precision_loss
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
         )]
         let bin = (((r - iv.lo) / width * BINS as f64).floor().max(0.0) as usize).min(BINS - 1);
         counts[bin] += 1.0;
@@ -802,7 +799,10 @@ impl Ground<'_> {
         }
         let err: std::cell::RefCell<Option<Flaw>> = std::cell::RefCell::new(None);
         let band = Band::from_fn(self.nx, self.ny, self.step, |px, py| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let (i, j) = (
                 (px / self.step).round() as usize,
                 (py / self.step).round() as usize,
@@ -864,7 +864,7 @@ fn mm(v: f64) -> String {
 /// # Errors
 /// What cannot be solved: an unknown place, a height that cannot be worked
 /// out, a pin with no ground, a layer that can never be thick enough.
-#[allow(clippy::too_many_lines)]
+
 pub fn solve(
     tile: &Tile,
     f: &Frame,
@@ -1235,7 +1235,7 @@ pub fn solve(
                         };
                         if here {
                             let t = if along == 0 { i } else { j };
-                            #[allow(clippy::cast_precision_loss)]
+
                             let t = t as f64 / g.per;
                             lo = lo.min(t);
                             hi = hi.max(t);

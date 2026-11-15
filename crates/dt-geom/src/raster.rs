@@ -42,7 +42,7 @@ impl Mask {
 
     /// The share of nodes set, 0 to 1.
     #[must_use]
-    #[allow(clippy::cast_precision_loss, reason = "node counts are far below 2^52")]
+
     pub fn share(&self) -> f64 {
         self.count() as f64 / (self.nx * self.ny) as f64
     }
@@ -75,13 +75,19 @@ pub fn draw_line(mask: &mut Mask, a: [f64; 2], b: [f64; 2]) {
     let len = (b[0] - a[0]).abs().max((b[1] - a[1]).abs());
     let steps = (2.0 * len).ceil().max(1.0);
     let clamp = |v: f64, n: usize| v.round().clamp(0.0, (n - 1) as f64);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let n = steps as usize;
     for s in 0..=n {
         let t = s as f64 / steps;
         let x = a[0] + (b[0] - a[0]) * t;
         let y = a[1] + (b[1] - a[1]) * t;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i, j) = (clamp(x, mask.nx) as usize, clamp(y, mask.ny) as usize);
         mask.bits[j * mask.nx + i] = true;
     }
@@ -131,10 +137,9 @@ pub fn fill(walls: &Mask, seed: (usize, usize)) -> Mask {
 pub fn fill_polygons(nx: usize, ny: usize, step: f64, polygons: &[Vec<[f64; 2]>]) -> Mask {
     let mut m = Mask::new(nx, ny, false);
     let mut xs: Vec<f64> = Vec::new();
-    #[allow(clippy::cast_precision_loss)]
+
     let last = nx.saturating_sub(1) as f64;
     for j in 0..ny {
-        #[allow(clippy::cast_precision_loss)]
         let y = j as f64 * step;
         xs.clear();
         for ring in polygons {
@@ -152,7 +157,10 @@ pub fn fill_polygons(nx: usize, ny: usize, step: f64, polygons: &[Vec<[f64; 2]>]
             let lo = libm::ceil(pair[0] / step).max(0.0);
             let hi = libm::floor(pair[1] / step).min(last);
             if hi >= lo {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                )]
                 let (lo, hi) = (lo as usize, hi as usize);
                 m.bits[j * nx + lo..=j * nx + hi].fill(true);
             }

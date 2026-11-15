@@ -2,7 +2,11 @@
 //! at an end on a side and along the bisector at a corner; a point on a side
 //! is on a seam; the words that name a seam come from the edge contract.
 
-#![allow(clippy::unwrap_used, clippy::float_cmp)]
+#![expect(
+    clippy::unwrap_used,
+    clippy::float_cmp,
+    reason = "a test: a failing unwrap is the failure; an exact comparison of a stored or sentinel value, not a computed one"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"

@@ -302,7 +302,6 @@ impl Tracker {
         (self.on_change)(&st);
     }
 
-    #[allow(clippy::cast_precision_loss)]
     fn compute(&self, s: &mut State) -> Status {
         let elapsed = self.t0.elapsed().as_secs_f64();
         let total: f64 = s.stages.iter().map(|x| x.secs.max(0.01)).sum();

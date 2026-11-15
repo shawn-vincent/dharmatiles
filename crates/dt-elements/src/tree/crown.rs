@@ -38,7 +38,10 @@ pub struct Envelope {
 }
 
 impl Envelope {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the flat inputs of one maths step, named at the call"
+    )]
     pub fn new(
         cx: f64,
         cy: f64,
@@ -183,7 +186,7 @@ pub fn sample(env: &Envelope, rng: &mut Rng, n: usize) -> Vec<[f64; 3]> {
         return Vec::new();
     }
     let m = 257.max(n * 8);
-    #[allow(clippy::cast_precision_loss)]
+
     let ts: Vec<f64> = (0..m).map(|k| k as f64 / (m - 1) as f64).collect();
     let zs: Vec<f64> = ts.iter().map(|t| env.base_z() + t * h).collect();
     let rs: Vec<f64> = ts.iter().map(|&t| env.radius_at_t(t)).collect();
@@ -206,7 +209,7 @@ pub fn sample(env: &Envelope, rng: &mut Rng, n: usize) -> Vec<[f64; 3]> {
     let jitter: Vec<f64> = (0..n).map(|_| rng.random()).collect();
     let phase = rng.uniform(0.0, std::f64::consts::TAU);
     let twist: Vec<f64> = (0..n).map(|_| rng.uniform(-0.5, 0.5)).collect();
-    #[allow(clippy::cast_precision_loss)]
+
     (0..n)
         .map(|i| {
             let a = (i as f64 + jitter[i]) / n as f64 * total;
@@ -261,7 +264,10 @@ pub fn n_groups(env: &Envelope, width: f64, height: f64) -> usize {
     }
     let around = round_half_even(2.0 * std::f64::consts::PI * env.radius / width).max(1.0);
     let tall = round_half_even(env.crown_height() / height).max(1.0);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let n = (around * tall) as usize;
     n.max(2)
 }
@@ -278,10 +284,9 @@ pub fn groups(pts: &[[f64; 3]], k: usize, rng: &mut Rng, z_scale: f64) -> Vec<us
     // k distinct seeds (a partial Fisher–Yates shuffle)
     let mut idx: Vec<usize> = (0..n).collect();
     for i in 0..k {
-        #[allow(
+        #[expect(
             clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            clippy::cast_possible_wrap
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
         )]
         let j = rng.int(i as i64, (n - 1) as i64) as usize;
         idx.swap(i, j);
@@ -304,7 +309,6 @@ pub fn groups(pts: &[[f64; 3]], k: usize, rng: &mut Rng, z_scale: f64) -> Vec<us
         let mut moved = false;
         for j in 0..k {
             if cnt[j] > 0 {
-                #[allow(clippy::cast_precision_loss)]
                 let c = sum[j].map(|v| v / cnt[j] as f64);
                 if (0..3).any(|a| (c[a] - seeds[j][a]).abs() > 1e-6) {
                     moved = true;

@@ -66,7 +66,10 @@ pub fn hull(points: &[[f64; 3]]) -> Result<TriMesh, KitError> {
     // form's size, not its place on the tile.
     let n = points.len() as f64;
     let c = [0, 1, 2].map(|k| points.iter().map(|p| p[k]).sum::<f64>() / n);
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let pts: Vec<parry3d::math::Vector> = points
         .iter()
         .map(|p| {
@@ -249,7 +252,10 @@ fn relief_along(
     let relaxed = taubin(&p, &mesh.triangles, 10);
     let vn = vertex_normals(&relaxed, &mesh.triangles);
     let mut rng = dt_value::Rng::new(dt_value::Seed::new(seed));
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let nseed = (rng.random() * 2_147_483_648.0) as u64;
     let rot = random_rotation(&mut rng);
     let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
@@ -406,7 +412,7 @@ fn taubin(p: &[[f64; 3]], tris: &[[u32; 3]], iterations: usize) -> Vec<[f64; 3]>
                 if l.is_empty() {
                     return *q;
                 }
-                #[allow(clippy::cast_precision_loss)]
+
                 let w = 1.0 / l.len() as f64;
                 let mut avg = [0.0; 3];
                 for &j in l {
@@ -444,7 +450,10 @@ fn value3(p: [f64; 3], seed: u64, scale: f64) -> f64 {
     let i = q.map(libm::floor);
     let f = [0, 1, 2].map(|k| q[k] - i[k]);
     let u = f.map(|t| t * t * (3.0 - 2.0 * t));
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let ii = i.map(|v| v as i64);
     let c = |dx: i64, dy: i64, dz: i64| lattice3(ii[0] + dx, ii[1] + dy, ii[2] + dz, seed);
     let lerp = |a: f64, b: f64, t: f64| a + (b - a) * t;
@@ -457,7 +466,6 @@ fn value3(p: [f64; 3], seed: u64, scale: f64) -> f64 {
 
 /// `_hash_lattice`: an integer-lattice hash to −1..1.
 fn lattice3(ix: i64, iy: i64, iz: i64, seed: u64) -> f64 {
-    #[allow(clippy::cast_possible_wrap)]
     let mut n = ix.wrapping_mul(73_856_093)
         ^ iy.wrapping_mul(19_349_663)
         ^ iz.wrapping_mul(83_492_791)
@@ -466,14 +474,13 @@ fn lattice3(ix: i64, iy: i64, iz: i64, seed: u64) -> f64 {
     n = (n ^ (n >> 13)).wrapping_mul(1_274_126_177);
     n &= 0x7FFF_FFFF_FFFF_FFFF;
     n ^= n >> 16;
-    #[allow(clippy::cast_precision_loss)]
+
     let v = (n & 0xFF_FFFF) as f64 / f64::from(0x7F_FFFF_u32);
     v - 1.0
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     #[test]

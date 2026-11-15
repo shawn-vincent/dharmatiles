@@ -13,10 +13,10 @@
 //! Manifold's own parallelism (TBB) is whatever the build has; the default
 //! build has it on. Its thread count is not set here.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     clippy::cast_possible_truncation,
-    clippy::float_cmp
+    reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction; an exact comparison of a stored or sentinel value, not a computed one"
 )]
 
 use dt_geom::{BoolOp, Bounds, Fnv, IdBlock, Solid, TriMesh, batch_in_order};

@@ -327,14 +327,12 @@ pub fn plate_3mf(set: &PlateSet, plate: usize, palette: &Palette) -> Vec<u8> {
 /// plates (its `compute_colum_count`).
 #[must_use]
 pub fn bambu_columns(n: usize) -> usize {
-    #[allow(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss
-    )]
     let v = (n as f64).sqrt();
     let r = v.round();
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let c = if v > r { r as usize + 1 } else { r as usize };
     c.max(1)
 }
@@ -346,7 +344,7 @@ pub fn bambu_columns(n: usize) -> usize {
 pub fn bambu_plate_origin(i: usize, n: usize, bed: [f64; 2]) -> [f64; 2] {
     let cols = bambu_columns(n);
     let (row, col) = (i / cols, i % cols);
-    #[allow(clippy::cast_precision_loss)]
+
     [col as f64 * bed[0] * 1.2, -(row as f64) * bed[1] * 1.2]
 }
 

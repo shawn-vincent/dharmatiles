@@ -67,7 +67,7 @@ pub fn full_cost(tile: &Tile) -> FullCost {
                 .iter()
                 .filter_map(|c| dt_doc::schema::element(&c.what.value))
                 .collect::<Vec<_>>();
-            #[allow(clippy::cast_precision_loss)]
+
             let k = kinds.len().max(1) as f64;
             mb += n * kinds.iter().map(|t| t.cost.mb).sum::<f64>() / k;
             cpu += n * kinds.iter().map(|t| t.cost.cpu).sum::<f64>() / k;

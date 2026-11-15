@@ -15,14 +15,16 @@ use rayon::prelude::*;
 
 /// scipy's `reflect` index: `d c b a | a b c d | d c b a`.
 fn reflect(k: i64, n: usize) -> usize {
-    #[allow(clippy::cast_possible_wrap)]
     let n = n as i64;
     let period = 2 * n;
     let mut m = k.rem_euclid(period);
     if m >= n {
         m = period - 1 - m;
     }
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let m = m as usize;
     m
 }
@@ -30,9 +32,12 @@ fn reflect(k: i64, n: usize) -> usize {
 /// The normalised Gaussian kernel of `sigma` nodes (scipy: radius
 /// `int(4 sigma + 0.5)`).
 fn kernel(sigma: f64) -> Vec<f64> {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let r = (4.0 * sigma + 0.5) as usize;
-    #[allow(clippy::cast_precision_loss)]
+
     let mut k: Vec<f64> = (0..=2 * r)
         .map(|i| {
             let x = i as f64 - r as f64;
@@ -46,7 +51,7 @@ fn kernel(sigma: f64) -> Vec<f64> {
 
 fn blur_lines(src: &[f64], dst: &mut [f64], len: usize, k: &[f64]) {
     let r = k.len() / 2;
-    #[allow(clippy::cast_possible_wrap)]
+
     let ri = r as i64;
     dst.par_chunks_mut(len)
         .zip(src.par_chunks(len))
@@ -58,10 +63,8 @@ fn blur_lines(src: &[f64], dst: &mut [f64], len: usize, k: &[f64]) {
                         acc += w * v;
                     }
                 } else {
-                    #[allow(clippy::cast_possible_wrap)]
                     let c = i as i64;
                     for (t, w) in k.iter().enumerate() {
-                        #[allow(clippy::cast_possible_wrap)]
                         let at = c + t as i64 - ri;
                         acc += w * line[reflect(at, len)];
                     }
@@ -119,7 +122,10 @@ pub fn blur_recursive(v: &[f64], nx: usize, ny: usize, sigma: f64) -> Vec<f64> {
     let b3 = 0.422_205 * q3;
     let bb = 1.0 - (b1 + b2 + b3) / b0;
     let coef = (bb, b1 / b0, b2 / b0, b3 / b0);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let pad = (4.0 * sigma).ceil() as usize + 3;
     let pass = |src: &[f64], len: usize| -> Vec<f64> {
         let mut out = vec![0.0; src.len()];
@@ -141,7 +147,7 @@ fn recursive_line(
     (b, b1, b2, b3): (f64, f64, f64, f64),
 ) {
     let len = line.len();
-    #[allow(clippy::cast_possible_wrap)]
+
     let ext: Vec<f64> = (-(pad as i64)..(len + pad) as i64)
         .map(|k| line[reflect(k, len)])
         .collect();
@@ -178,13 +184,16 @@ impl Structuring {
         match self {
             Self::Square(r) => vec![r; 2 * r + 1],
             Self::Disc(rad) => {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                )]
                 let r = rad.max(0.0).floor() as usize;
-                #[allow(clippy::cast_precision_loss)]
+
                 (0..=2 * r)
                     .map(|k| {
                         let dy = k as f64 - r as f64;
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
                         let w = libm::sqrt((rad * rad - dy * dy).max(0.0)).floor() as usize;
                         w
                     })
@@ -265,12 +274,11 @@ fn morph(v: &[f64], nx: usize, ny: usize, fp: Structuring, max: bool) -> Vec<f64
             };
         });
         for (k, &wk) in which.iter().enumerate() {
-            #[allow(clippy::cast_possible_wrap)]
             let jj = j as i64 + k as i64 - r as i64;
             if jj < 0 || jj >= ny as i64 {
                 continue;
             }
-            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
             let src = &runs[wk][jj as usize * nx..(jj as usize + 1) * nx];
             for (o, s) in row.iter_mut().zip(src) {
                 *o = pick(*o, *s);
@@ -302,19 +310,21 @@ pub fn quantile(v: &[f64], q: f64) -> f64 {
     }
     let mut s = v.to_vec();
     s.sort_unstable_by(f64::total_cmp);
-    #[allow(clippy::cast_precision_loss)]
+
     let pos = q.clamp(0.0, 1.0) * (s.len() - 1) as f64;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let lo = pos.floor() as usize;
     let hi = (lo + 1).min(s.len() - 1);
-    #[allow(clippy::cast_precision_loss)]
+
     let t = pos - lo as f64;
     s[lo] + (s[hi] - s[lo]) * t
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::float_cmp, clippy::cast_precision_loss)]
     use super::*;
 
     #[test]

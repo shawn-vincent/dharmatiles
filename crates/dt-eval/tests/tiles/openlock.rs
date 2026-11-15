@@ -10,7 +10,10 @@
 //! `cargo test --release -p dt-eval --test tiles -- --ignored every_library_tile_passes`
 //! (or `dharmatiles build --all --system ol`).
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed; unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"

@@ -2,8 +2,6 @@
 //! is built after it and banks against the trunk; a thing listed above the
 //! ground it stands on is refused, never reordered.
 
-#![allow(clippy::unwrap_used)]
-
 use crate::common;
 
 use crate::memo;

@@ -34,7 +34,7 @@ impl Request {
     /// A request as the server would read it from the loopback page,
     /// carrying `token` when given (the tests' way into [`super::route`]).
     #[cfg(test)]
-    #[allow(clippy::expect_used)]
+
     pub fn build(method: &str, target: &str, token: Option<&str>, body: &[u8]) -> Self {
         let mut head = format!("{method} {target} HTTP/1.1\r\nHost: 127.0.0.1:1\r\n");
         if let Some(t) = token {
@@ -158,7 +158,6 @@ pub(super) fn respond(out: &mut impl Write, status: &str, ctype: &str, body: &[u
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

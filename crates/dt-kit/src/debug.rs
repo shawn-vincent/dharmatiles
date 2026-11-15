@@ -134,13 +134,19 @@ pub fn shade_of(w: Option<&Weighting>, u: f64) -> f32 {
             .sum::<f64>()
             * BINS as f64
     } else if let Some(bins) = w.density(BINS) {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let k = ((u * BINS as f64) as usize).min(BINS - 1);
         bins[k]
     } else {
         1.0
     };
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     {
         (d / (1.0 + d)) as f32
     }

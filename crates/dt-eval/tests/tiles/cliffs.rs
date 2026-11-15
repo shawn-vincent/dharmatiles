@@ -2,7 +2,11 @@
 //! tops lying like dirt (on the stone, off the steep faces, as far as
 //! `maxSlope` lets it), and the tile's outer sides carrying grain.
 
-#![allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
+#![expect(
+    clippy::unwrap_used,
+    clippy::cast_possible_truncation,
+    reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction"
+)]
 
 use dt_eval::{Built, Memory, Options, check};
 use dt_kit::Material;

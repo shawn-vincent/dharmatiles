@@ -565,7 +565,10 @@ pub fn lower(
             let f = factor(u, base, units)?;
             let n = go(lhs)?;
             // the reference itself: no factor, so no float differs
-            #[allow(clippy::float_cmp)]
+            #[expect(
+                clippy::float_cmp,
+                reason = "an exact comparison of a stored or sentinel value, not a computed one"
+            )]
             if f == 1.0 {
                 n
             } else {

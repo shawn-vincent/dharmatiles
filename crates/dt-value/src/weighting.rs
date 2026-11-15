@@ -11,7 +11,10 @@
 //! fixed constants), so the bits are the same on every platform.
 
 // Exact comparisons are meant: a ratio of exactly 1 is the plain range.
-#![allow(clippy::float_cmp)]
+#![expect(
+    clippy::float_cmp,
+    reason = "an exact comparison of a stored or sentinel value, not a computed one"
+)]
 
 use crate::seed::Rng;
 use std::sync::Arc;
@@ -570,13 +573,12 @@ impl Weighting {
         if matches!(self, Self::List(_)) || bins == 0 {
             return None;
         }
-        #[allow(clippy::cast_precision_loss)]
+
         let n = bins as f64;
         let mut at = 0.0;
         Some(
             (1..=bins)
                 .map(|i| {
-                    #[allow(clippy::cast_precision_loss)]
                     let x = i as f64 / n;
                     let d = self.cdf(x) - self.cdf(at);
                     at = x;
@@ -712,13 +714,13 @@ fn ends_cdf(x: f64, k: f64, at: f64) -> f64 {
 fn steps(u: f64, ws: &[f64]) -> f64 {
     let total: f64 = ws.iter().sum();
     let target = u * total;
-    #[allow(clippy::cast_precision_loss)]
+
     let n = ws.len() as f64;
     let (mut cum, mut end) = (0.0, 0.0);
     for (i, &w) in ws.iter().enumerate() {
         if w > 0.0 {
             let next = cum + w;
-            #[allow(clippy::cast_precision_loss)]
+
             let i = i as f64;
             if target < next {
                 return (i + (target - cum) / w) / n;
@@ -733,11 +735,10 @@ fn steps(u: f64, ws: &[f64]) -> f64 {
 
 fn steps_cdf(x: f64, ws: &[f64]) -> f64 {
     let total: f64 = ws.iter().sum();
-    #[allow(clippy::cast_precision_loss)]
+
     let pos = x * ws.len() as f64;
     let mut cum = 0.0;
     for (i, &w) in ws.iter().enumerate() {
-        #[allow(clippy::cast_precision_loss)]
         let i = i as f64;
         if pos < i + 1.0 {
             return (cum + w * (pos - i).max(0.0)) / total;
@@ -814,7 +815,7 @@ fn peak_cdf(x: f64, s: f64, c: f64) -> f64 {
 
 /// The inverse of the standard normal CDF for p in (0, 1): Wichura's
 /// algorithm AS241 (PPND16), accurate to about 1e-16.
-#[allow(clippy::excessive_precision, clippy::unreadable_literal)]
+
 fn normal_quantile(p: f64) -> f64 {
     let q = p - 0.5;
     if q.abs() <= 0.425 {
@@ -1060,7 +1061,10 @@ impl Dist {
     /// cut into equal bins: `lo + floor((hi - lo + 1) t)`, clamped to `hi`.
     #[must_use]
     pub fn bin(lo: i64, hi: i64, t: f64) -> i64 {
-        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let k = libm::floor((hi - lo + 1) as f64 * t) as i64;
         (lo + k).clamp(lo, hi)
     }
@@ -1244,7 +1248,10 @@ impl Draw {
     /// ends round, a lone range is [`Dist::int`], a sum falls in the equal bin
     /// its drawn place along its ends does.  `k` scales the value first (a density times the squares).
     pub fn int_by(&self, k: f64, rng: &mut Rng) -> i64 {
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let r = |v: f64| libm::round(v) as i64;
         let (lo, hi) = self.bounds();
         let (l, h) = (r(lo * k), r(hi * k));
@@ -1266,7 +1273,10 @@ impl Draw {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+)]
 mod tests {
     #[test]
     fn the_function_lists_agree_with_the_language_table() {

@@ -876,7 +876,10 @@ pub(super) fn pin_decl(p: &model::Pin, from: &Provenance) -> PinDecl {
 fn squares(v: f64) -> String {
     let thirds = v * 3.0;
     if (thirds - thirds.round()).abs() < 1e-9 {
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let n = thirds.round() as i64;
         if n % 3 == 0 {
             return format!("{}sq", n / 3);
@@ -890,7 +893,10 @@ fn squares(v: f64) -> String {
 fn share(v: f64) -> String {
     let thirds = v * 3.0;
     if (thirds - thirds.round()).abs() < 1e-9 && (thirds.round() - 1.0).abs() < 0.5 + 1.0 {
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let n = thirds.round() as i64;
         return match n {
             0 | 3 => format!("{}", n / 3),
@@ -942,7 +948,10 @@ pub fn edge_path(edges: &[Edge], (cols, rows): (f64, f64)) -> Vec<[f64; 2]> {
         Edge::West => ([0.0, rows], [0.0, 0.0]),
     };
     let mut order: Vec<Edge> = edges.to_vec();
-    #[allow(clippy::float_cmp)]
+    #[expect(
+        clippy::float_cmp,
+        reason = "an exact comparison of a stored or sentinel value, not a computed one"
+    )]
     let follows = |a: Edge, b: Edge| walk(a).1 == walk(b).0;
     if order.len() > 1 && !follows(order[0], order[1]) {
         order.reverse();

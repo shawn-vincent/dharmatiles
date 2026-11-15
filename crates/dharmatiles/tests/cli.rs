@@ -1,7 +1,10 @@
 //! The command line from outside: exit codes, the JSON report's shape,
 //! the engine version.  Cases from the Phase 1 exit review.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
@@ -12,7 +15,7 @@ use std::process::{Command, Stdio};
 
 // the program's own types for what `--json` prints, taken in whole: the tests read the output by deserializing them, never by
 // key
-#[allow(dead_code)]
+#[allow(dead_code, reason = "used by one build configuration only")]
 #[path = "../src/cli_wire.rs"]
 mod cli_wire;
 

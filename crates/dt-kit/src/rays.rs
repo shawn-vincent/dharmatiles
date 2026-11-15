@@ -72,7 +72,7 @@ impl RayMesh {
 
     /// Build over positions and triangles (mm).
     #[must_use]
-    #[allow(
+    #[expect(
         clippy::cast_possible_truncation,
         reason = "the f32 build frame is the point: Embree is f32"
     )]
@@ -227,7 +227,7 @@ impl RayMesh {
         (count, back)
     }
 
-    #[allow(
+    #[expect(
         clippy::cast_possible_truncation,
         reason = "the f32 query frame is the point: Embree is f32"
     )]

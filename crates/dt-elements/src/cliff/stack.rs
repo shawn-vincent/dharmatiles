@@ -12,7 +12,10 @@ use super::util::{Cells, Draw, Grid, P2, cell_grid, edt_in, lerp, min_side, trac
 use dt_kit::Field;
 
 /// kind: (p, along, depth, height (None: ground to top), bridge, tilt deg)
-#[allow(clippy::type_complexity)]
+#[expect(
+    clippy::type_complexity,
+    reason = "a one-off tuple of parts, named where it is used"
+)]
 pub const KINDS: [(
     &str,
     f64,
@@ -235,7 +238,6 @@ fn grow(rng: &mut Rng, ok: &Cells, ij: (usize, usize), w: f64, d: f64) -> Cells 
     cells
 }
 
-#[allow(clippy::too_many_arguments)]
 fn grow_turned(
     ok: &Cells,
     site: (f64, f64),
@@ -432,7 +434,6 @@ pub struct Stacked {
     pub s: Field,
 }
 
-#[allow(clippy::too_many_lines)]
 pub fn stack(
     rng: &mut Rng,
     form: &Form,

@@ -4,7 +4,6 @@
 //! roll smoothly inside it and the crown, clumps and leaves included, stays
 //! under the cloud's high; nothing grows past the height asked for.
 
-#![allow(clippy::unwrap_used)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"

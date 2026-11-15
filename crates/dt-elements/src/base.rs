@@ -97,12 +97,11 @@ pub fn arc(frame: &Frame) -> Vec<[f64; 2]> {
     if r <= 0.0 {
         return vec![[0.0, 0.0]];
     }
-    #[allow(clippy::cast_precision_loss)]
+
     let theta = std::f64::consts::FRAC_PI_2 / ARC_SEGMENTS as f64;
     let big = r / libm::cos(theta / 2.0);
     (0..ARC_SEGMENTS)
         .map(|i| {
-            #[allow(clippy::cast_precision_loss)]
             let a = std::f64::consts::PI + (i as f64 + 0.5) * theta;
             [r + big * libm::cos(a), r + big * libm::sin(a)]
         })
@@ -129,7 +128,6 @@ pub fn tile_corners(frame: &Frame, col: u32, row: u32) -> [bool; 4] {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     #[test]

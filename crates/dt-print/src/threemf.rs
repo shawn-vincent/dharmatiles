@@ -169,7 +169,10 @@ pub(crate) fn paint_code(n: usize) -> String {
         .collect()
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+)]
 pub(crate) fn byte(c: f64) -> u8 {
     (c * 255.0).round().clamp(0.0, 255.0) as u8
 }

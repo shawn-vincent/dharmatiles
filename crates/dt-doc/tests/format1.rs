@@ -1,7 +1,10 @@
 //! Format 1 as dt-doc decodes it: `let` in any block and in a define,
 //! reserved words, `$` names.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 mod common;
 

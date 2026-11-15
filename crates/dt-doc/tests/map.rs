@@ -1,7 +1,10 @@
 //! The print list (`.dmap`): what it reads, and that a mistake is shown at
 //! its text with a hint.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use dt_doc::map::{Group, Mode, decode};
 

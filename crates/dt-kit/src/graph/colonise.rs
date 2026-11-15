@@ -99,7 +99,6 @@ struct Branch {
     steps: usize,
 }
 
-#[allow(clippy::too_many_lines)]
 fn step(t: &mut Traced, queue: &mut VecDeque<Branch>, b: Branch, c: &Colonise, floor: f64) {
     let pos = t.nodes[b.tip];
     let heading = t.dirs[b.tip];
@@ -167,13 +166,14 @@ fn step(t: &mut Traced, queue: &mut VecDeque<Branch>, b: Branch, c: &Colonise, f
                 None => cluster_pca(&t.targets, &stray_t, pos, c.max_branches - 1),
             };
             if c.balance > 1e-6 && !clusters.is_empty() {
-                #[allow(clippy::cast_precision_loss)]
                 let k_forks = (1 + clusters.len()) as f64;
                 match &b.labels {
                     None => {
-                        #[allow(clippy::cast_precision_loss)]
                         let (np, no) = (primary.len() as f64, b.owned.len() as f64);
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                        )]
                         let n_target = (round_half_even(np + (no / k_forks - np) * c.balance)
                             .max(1.0) as usize)
                             .min(b.owned.len() - 1)
@@ -197,9 +197,12 @@ fn step(t: &mut Traced, queue: &mut VecDeque<Branch>, b: Branch, c: &Colonise, f
                             u.dedup();
                             u.len()
                         });
-                        #[allow(clippy::cast_precision_loss)]
+
                         let (fpg, fg) = (n_pg as f64, n_g as f64);
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                        )]
                         let n_gt =
                             (round_half_even(fpg + (fg / k_forks - fpg) * c.balance).max(1.0)
                                 as usize)
@@ -448,7 +451,7 @@ fn cluster_pca(
             scale(d, 1.0 / n)
         })
         .collect();
-    #[allow(clippy::cast_precision_loss)]
+
     let n = units.len() as f64;
     let mean = [0, 1, 2].map(|k| units.iter().map(|u| u[k]).sum::<f64>() / n);
     let centred: Vec<[f64; 3]> = units.iter().map(|u| sub(*u, mean)).collect();

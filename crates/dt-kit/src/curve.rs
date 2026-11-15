@@ -168,14 +168,17 @@ pub fn spine(
         let p1 = [p0[0] + ha * leave[0], p0[1] + ha * leave[1]];
         let p2 = [p3[0] - hb * arrive[0], p3[1] - hb * arrive[1]];
         let poly = length(sub(p1, p0)) + length(sub(p2, p1)) + length(sub(p3, p2));
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let k = (libm::ceil(poly / step) as usize).max(1);
         for i in 1..=k {
             if i == k {
                 out.push(p3);
                 break;
             }
-            #[allow(clippy::cast_precision_loss)]
+
             let t = i as f64 / k as f64;
             let u = 1.0 - t;
             let (w0, w1, w2, w3) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);

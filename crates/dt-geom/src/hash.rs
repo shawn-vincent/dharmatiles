@@ -18,7 +18,10 @@ impl SpatialHash {
     #[must_use]
     pub fn new(w: f64, h: f64, cell: f64) -> Self {
         let cell = if cell > 0.0 { cell } else { 1.0 };
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let n = |v: f64| ((v.max(0.0) / cell).ceil() as usize).max(1);
         let (nx, ny) = (n(w), n(h));
         Self {
@@ -31,7 +34,10 @@ impl SpatialHash {
     }
 
     fn bin(&self, v: f64, n: usize) -> usize {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let k = (v / self.cell).floor().max(0.0) as usize;
         k.min(n - 1)
     }
@@ -71,7 +77,7 @@ impl SpatialHash {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::cast_precision_loss)]
+
     use super::*;
 
     #[test]

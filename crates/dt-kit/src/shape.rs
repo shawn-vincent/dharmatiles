@@ -159,10 +159,12 @@ pub fn wobble(
             continue;
         }
         let n = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let k = (libm::ceil(len / step) as usize).max(1);
         for i in 0..k {
-            #[allow(clippy::cast_precision_loss)]
             let t = i as f64 / k as f64;
             pts.push((
                 [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])],

@@ -83,7 +83,10 @@ pub fn tubes(
     out
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 fn tube(
     g: &Graph,
     i: usize,
@@ -106,7 +109,10 @@ fn tube(
         arc.push(arc[arc.len() - 1] + dist(w[0], w[1]));
     }
     let length = arc[64];
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let steps = (libm::ceil(length / style.step_mm) as usize).max(4);
     // the overlap into the parent: straight back along its tangent
     let overlap = if p == 0 {
@@ -118,7 +124,7 @@ fn tube(
     if overlap > 0.0 {
         rings.push((sub(p0, scale(t_in, overlap)), t_in, -overlap, r_start));
     }
-    #[allow(clippy::cast_precision_loss)]
+
     for k in 0..=steps {
         let t = k as f64 / steps as f64;
         let c = curve.at(t);
@@ -133,7 +139,6 @@ fn tube(
     }
     let angles: Vec<f64> = (0..n_sides)
         .map(|k| {
-            #[allow(clippy::cast_precision_loss)]
             let a = 2.0 * std::f64::consts::PI * k as f64 / n_sides as f64;
             a
         })
@@ -183,7 +188,6 @@ fn tube(
         // a hemisphere dome on the end ring
         let mut prev: Vec<u32> = (0..n_sides).map(|k| idx(last, k)).collect();
         for lat in 1..=style.dome_rings {
-            #[allow(clippy::cast_precision_loss)]
             let phi = std::f64::consts::FRAC_PI_2 * lat as f64 / style.dome_rings as f64;
             let centre = add(tip_c, scale(tip_t, tip_r * libm::sin(phi)));
             if lat < style.dome_rings {
@@ -228,9 +232,12 @@ fn tube(
 
 fn interp_arc(arc: &[f64], t: f64) -> f64 {
     let x = t * 64.0;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let k = (x.floor() as usize).min(63);
-    #[allow(clippy::cast_precision_loss)]
+
     let f = x - k as f64;
     arc[k] + f * (arc[k + 1] - arc[k])
 }

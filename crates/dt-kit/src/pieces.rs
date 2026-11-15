@@ -64,11 +64,6 @@ impl<'a> Pieces<'a> {
     /// The nodes inside the box `lo..hi` (mm), grown by `grow` mm: the
     /// footprint of a piece.
     #[must_use]
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )]
     pub fn nodes(&self, lo: [f64; 2], hi: [f64; 2], grow: f64) -> Vec<usize> {
         let (is, js) = self.frame.node_range(lo, hi, grow);
         let mut out = Vec::new();
@@ -80,7 +75,6 @@ impl<'a> Pieces<'a> {
         out
     }
 
-    #[allow(clippy::cast_precision_loss)]
     fn pos(&self, k: usize) -> [f64; 2] {
         [
             (k % self.nx) as f64 * self.step,
@@ -236,7 +230,7 @@ impl<'a> Pieces<'a> {
     ///
     /// # Errors
     /// [`Refusal::Band`] at the vertex farthest over the band.
-    #[allow(clippy::cast_precision_loss)]
+
     pub fn admits_within(&self, mesh: &TriMesh, tol_mm: f64) -> Result<(), Refusal> {
         let w = (self.nx - 1) as f64 * self.step;
         let h = (self.ny - 1) as f64 * self.step;
@@ -265,7 +259,6 @@ impl<'a> Pieces<'a> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     fn frame() -> Frame {

@@ -1,7 +1,10 @@
 //! Plans and layouts: what a print list resolves to, and what the real
 //! footprints do to the plates.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use dt_doc::inventory::{Colour, Shelf, decode as decode_inventory};
 use dt_doc::map::{Group, Mode, decode};

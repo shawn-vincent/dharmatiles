@@ -56,7 +56,10 @@ pub(crate) fn secs(s: f64) -> String {
 pub(crate) fn line(prefix: &str, name: &str, s: &Status, width: usize) -> String {
     const BAR: usize = 20;
     let pct = (s.fraction * 100.0).floor().clamp(0.0, 100.0);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let filled = ((s.fraction * BAR as f64).floor() as usize).min(BAR);
     let bar: String = "#".repeat(filled) + &"-".repeat(BAR - filled);
     let stage = match &s.count {

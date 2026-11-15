@@ -149,7 +149,7 @@ fn seat_bed(r: &Placed) -> Field {
 
 /// Seat a resting rock on the stones under it (its underside one surface
 /// at the overhang limit starting BEVEL up its side at the outline).
-#[allow(clippy::too_many_lines)]
+
 fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Piece, KitError> {
     let Some((lo3, hi3)) = rock.bounds() else {
         return Ok(rock);
@@ -703,7 +703,10 @@ pub struct ColState {
 }
 
 /// Build stone `ri` of column `c`. `support` is what a cut must not undercut.
-#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 pub fn rock_piece(
     rng: &mut Rng,
     crng: &mut Rng,

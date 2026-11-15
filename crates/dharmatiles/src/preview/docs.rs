@@ -158,7 +158,6 @@ pub(super) fn read_failed(path: &str, e: &std::io::Error) -> Reply {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     fn file(name: &str, text: &str) -> String {

@@ -27,7 +27,10 @@ pub(crate) fn mesh_stl(mesh: &TriMesh, record: &BuildRecord) -> Vec<u8> {
     out.extend_from_slice(&record.header());
     out.extend_from_slice(&dt_value::idx(mesh.triangles.len()).to_le_bytes());
     for t in &mesh.triangles {
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let v = t.map(|i| mesh.positions[i as usize].map(|x| x as f32));
         let (a, b) = (
             [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]],

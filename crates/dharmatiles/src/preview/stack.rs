@@ -374,7 +374,6 @@ fn settings(controls: &[dt_eval::doc::Setting], file: &str) -> Result<Vec<Writte
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
 
     use dt_eval::{Files, Options};
 

@@ -15,10 +15,9 @@
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
 )]
-#![allow(
+#![expect(
     clippy::unwrap_used,
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss
+    reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction"
 )]
 
 use crate::memo;

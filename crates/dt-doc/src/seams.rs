@@ -176,7 +176,10 @@ impl SeamTable {
         if k >= f64::from(n) {
             k = f64::from(n) - 1.0;
         }
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let k = k as u32;
         let at = along - f64::from(k);
         let (col, row) = match side {
@@ -392,7 +395,10 @@ pub fn say(p: &Place) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
+#[expect(
+    clippy::float_cmp,
+    reason = "an exact comparison of a stored or sentinel value, not a computed one"
+)]
 mod tests {
     use super::*;
 

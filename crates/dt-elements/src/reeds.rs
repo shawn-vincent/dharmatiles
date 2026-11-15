@@ -8,17 +8,6 @@
 //! blunt point, bent gently outward (offset grows with the square of the
 //! height, so it stands vertical at its base).
 
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    clippy::float_cmp,
-    clippy::needless_range_loop,
-    clippy::type_complexity,
-    clippy::too_many_lines
-)]
-
 use dt_kit::Kind;
 use dt_kit::{Material, Rng, Scene, Tag, TriMesh, form};
 
@@ -172,7 +161,10 @@ impl Element for Reeds {
             .collect();
         // a shuffle (Fisher–Yates), then the first that stand clear
         for i in (1..cand.len()).rev() {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let j = rng.int(0, i as i64) as usize;
             cand.swap(i, j);
         }
@@ -227,12 +219,18 @@ impl Element for Reeds {
                 });
             }
         }
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let slots = scene
             .slots(stems.len() as u32, Material::Grass)
             .map_err(LookError::build)?;
         for (i, st) in stems.iter().enumerate() {
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let solid = form::solid(slots.get(i as u32), &st.mesh()).map_err(LookError::build)?;
             scene.add(
                 Tag {
@@ -242,7 +240,7 @@ impl Element for Reeds {
                 solid,
             );
         }
-        #[allow(clippy::cast_precision_loss)]
+
         for (k, v) in [
             ("reed_clumps", centres.len() as f64),
             ("reed_stems", stems.len() as f64),

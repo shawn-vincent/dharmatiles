@@ -251,7 +251,10 @@ impl Element for DungeonBlocks {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::float_cmp)]
+    #![expect(
+        clippy::float_cmp,
+        reason = "a test: a failing unwrap is the failure; an exact comparison of a stored or sentinel value, not a computed one"
+    )]
     use super::*;
 
     #[test]

@@ -578,7 +578,6 @@ pub(crate) fn bounds(m: &TriMesh) -> Option<([f64; 3], [f64; 3])> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
     use dt_geom::{BOX_TRIANGLES, Grid, lift};
 
@@ -621,7 +620,10 @@ mod tests {
 
     /// A 10 mm square plate 2 mm thick whose four corners are rounded in
     /// plan by `r`: a prism on a ring of arc points.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     fn rounded_plate(r: f64) -> TriMesh {
         let n = 24;
         let mut ring = Vec::new();

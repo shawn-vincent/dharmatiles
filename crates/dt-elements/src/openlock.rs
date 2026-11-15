@@ -144,7 +144,10 @@ impl Side {
 struct Socket {
     /// Which side it is in (the tests ask for sockets by side, not by the
     /// order they are made in).
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "used by one build configuration only")
+    )]
     side: Side,
     slot: Cutter,
     pocket: Cutter,
@@ -375,7 +378,6 @@ impl Element for OpenLock {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     fn on(sockets: &[Socket], side: Side) -> Vec<&Socket> {

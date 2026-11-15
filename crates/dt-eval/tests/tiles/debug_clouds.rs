@@ -3,7 +3,10 @@
 //! span.  It is marks, never geometry: with the layer off nothing is made,
 //! and what is built never changes.
 
-#![allow(clippy::unwrap_used, clippy::float_cmp)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure; an exact comparison of a stored or sentinel value, not a computed one"
+)]
 
 use dt_eval::{Built, Options};
 

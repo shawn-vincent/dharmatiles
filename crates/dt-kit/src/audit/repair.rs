@@ -49,7 +49,10 @@ pub(super) fn separate_pinches(m: &mut TriMesh) -> usize {
     for _ in 0..4 {
         let mut cells: HashMap<[i64; 3], Vec<u32>, Fx> =
             HashMap::with_capacity_and_hasher(m.positions.len(), Fx::default());
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let key = |p: [f64; 3]| p.map(|x| (x / CELL).floor() as i64);
         for (i, p) in m.positions.iter().enumerate() {
             cells.entry(key(*p)).or_default().push(dt_value::idx(i));
@@ -65,7 +68,7 @@ pub(super) fn separate_pinches(m: &mut TriMesh) -> usize {
                 let k = key(*p);
                 // cells are 2 NEAR wide, so a point within NEAR lies in this
                 // cell or the one on the side of the cell this point is nearer
-                #[allow(clippy::cast_precision_loss)]
+
                 let side = [0, 1, 2].map(|a| {
                     if p[a] / CELL - k[a] as f64 >= 0.5 {
                         1
@@ -152,7 +155,7 @@ impl std::hash::Hasher for FxHasher {
     fn write_u32(&mut self, v: u32) {
         self.write_u64(u64::from(v));
     }
-    #[allow(clippy::cast_sign_loss)]
+
     fn write_i64(&mut self, v: i64) {
         self.write_u64(v as u64);
     }
@@ -163,7 +166,10 @@ type Fx = std::hash::BuildHasherDefault<FxHasher>;
 /// Positions rounded to float32 and merged by position (as an STL reader
 /// does); triangles that collapse are dropped and counted.
 pub(super) fn quantise(m: &TriMesh) -> (TriMesh, Vec<u32>, usize) {
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let q = |p: [f64; 3]| p.map(|x| x as f32);
     let mut index: HashMap<[u32; 3], u32> = HashMap::with_capacity(m.positions.len());
     let mut positions = Vec::with_capacity(m.positions.len());
@@ -204,7 +210,10 @@ pub(super) fn quantise(m: &TriMesh) -> (TriMesh, Vec<u32>, usize) {
 /// Each left-out body comes with the mean of its vertices, the probe for
 /// [`contains`] (inside a small void even where its surface lies within
 /// rounding of the kept body's).
-#[allow(clippy::type_complexity)]
+#[expect(
+    clippy::type_complexity,
+    reason = "a one-off tuple of parts, named where it is used"
+)]
 pub(super) fn keep_largest(
     m: &TriMesh,
     source: &[u32],
@@ -294,7 +303,10 @@ pub(super) fn keep_largest(
 /// counted once by the top-left rule. Deterministic: no sampling.
 pub(super) fn contains(m: &TriMesh, p: [f64; 3]) -> bool {
     let (px, py) = (p[0] + 1.37e-4, p[1] + 0.91e-4);
-    #[allow(clippy::float_cmp)]
+    #[expect(
+        clippy::float_cmp,
+        reason = "an exact comparison of a stored or sentinel value, not a computed one"
+    )]
     let top_left = |a: [f64; 3], b: [f64; 3]| (a[1] == b[1] && b[0] < a[0]) || b[1] < a[1];
     let mut odd = false;
     for t in &m.triangles {
@@ -317,7 +329,6 @@ pub(super) fn contains(m: &TriMesh, p: [f64; 3]) -> bool {
         }
         let edges = [(v[1], v[2]), (v[2], v[0]), (v[0], v[1])];
         let w = edges.map(|(a, b)| (b[0] - a[0]) * (py - a[1]) - (b[1] - a[1]) * (px - a[0]));
-        #[allow(clippy::float_cmp)]
         let hit = (0..3).all(|k| w[k] > 0.0 || (w[k] == 0.0 && top_left(edges[k].0, edges[k].1)));
         if hit {
             let z = (w[0] * v[0][2] + w[1] * v[1][2] + w[2] * v[2][2]) / area.abs();

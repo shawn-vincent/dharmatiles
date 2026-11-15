@@ -1,7 +1,10 @@
 //! `dharmatiles fix` from outside: it shows without `--write`, writes with it, repeats until no fix applies, shows a
 //! moved point in millimetres on the target's square, and fails while a mistake with no fix remains.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use std::path::PathBuf;
 use std::process::{Command, Output};

@@ -187,15 +187,20 @@ pub fn disc(frame: &Frame, centre: [f64; 2], radius: f64) -> Mask {
     let mut m = Mask::new(nx, ny, false);
     let (cx, cy, r) = (centre[0] * per, centre[1] * per, radius * per);
     let range = |c: f64, n: usize| {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let lo = (c - r).floor().max(0.0) as usize;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let hi = ((c + r).ceil().max(0.0) as usize).min(n - 1);
         lo..=hi
     };
     for j in range(cy, ny) {
         for i in range(cx, nx) {
-            #[allow(clippy::cast_precision_loss)]
             let (dx, dy) = (i as f64 - cx, j as f64 - cy);
             if dx * dx + dy * dy <= r * r {
                 m.bits[j * nx + i] = true;
@@ -222,9 +227,15 @@ pub fn strip(frame: &Frame, pts: &[[f64; 2]], half: f64) -> Mask {
             [w[1][0] * per, w[1][1] * per],
         );
         let range = |lo: f64, hi: f64, n: usize| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let l = (lo.min(hi) - r).floor().max(0.0) as usize;
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let h = ((lo.max(hi) + r).ceil().max(0.0) as usize).min(n - 1);
             l..=h
         };
@@ -232,7 +243,6 @@ pub fn strip(frame: &Frame, pts: &[[f64; 2]], half: f64) -> Mask {
         let len2 = ex * ex + ey * ey;
         for j in range(a[1], b[1], ny) {
             for i in range(a[0], b[0], nx) {
-                #[allow(clippy::cast_precision_loss)]
                 let (px, py) = (i as f64 - a[0], j as f64 - a[1]);
                 let t = if len2 > 0.0 {
                     ((px * ex + py * ey) / len2).clamp(0.0, 1.0)
@@ -265,7 +275,7 @@ fn bbox_of(frame: &Frame, m: &Mask) -> Option<BBox> {
             j1 = j1.max(j);
         }
     }
-    #[allow(clippy::cast_precision_loss)]
+
     any.then(|| BBox {
         x0: i0 as f64 / per,
         y0: j0 as f64 / per,

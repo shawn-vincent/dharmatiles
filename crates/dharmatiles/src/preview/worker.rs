@@ -524,7 +524,10 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         Err(e) => return fail(format!("cannot prepare the view of {path}: {e}")),
     };
     let sq = dt_kit::Frame::for_system(opts.system, 1, 1).square_mm;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let n = |v: f64| (libm::round(v / sq).max(1.0)) as u32;
     let plan = TilePlan::Stl {
         tile: path.rsplit('/').next().unwrap_or(path).to_owned(),

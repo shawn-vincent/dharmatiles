@@ -91,7 +91,10 @@ fn whole(s: &Settings, name: &str, default: u32) -> Result<u32, LookError> {
             format!("write how many across a square, such as {name}=2"),
         ));
     }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     Ok(v as u32)
 }
 
@@ -269,7 +272,10 @@ fn lay(
     let keep = |c: &wall::layout::Cell| {
         // laid flat: t runs east, the rows (cell z) north
         let (x, y) = (0.5 * (c.t0 + c.t1), 0.5 * (c.z0 + c.z1));
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i, j) = (
             (libm::round(x / step) as usize).min(nx - 1),
             (libm::round(y / step) as usize).min(ny - 1),
@@ -294,13 +300,11 @@ fn lay(
     }
     for p in &placed {
         for j in 0..ny {
-            #[allow(clippy::cast_precision_loss)]
             let y = j as f64 * step;
             if y < p.lo[1] || y > p.hi[1] {
                 continue;
             }
             for i in 0..nx {
-                #[allow(clippy::cast_precision_loss)]
                 let x = i as f64 * step;
                 if x >= p.lo[0] && x <= p.hi[0] {
                     let k = j * nx + i;

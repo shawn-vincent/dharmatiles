@@ -81,7 +81,6 @@ mod native {
             Self
         }
 
-        #[allow(clippy::unused_self)]
         pub fn stage_peak_bytes(&self) -> Option<u64> {
             Some(core::arch::wasm32::memory_size::<0>() as u64 * 65_536)
         }
@@ -102,7 +101,6 @@ impl Meter {
     /// where the platform gives no reading.
     #[must_use]
     pub fn stage_peak_mb(&self) -> Option<f64> {
-        #[allow(clippy::cast_precision_loss)]
         self.0.stage_peak_bytes().map(|b| b as f64 / MB)
     }
 }

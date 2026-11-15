@@ -1,8 +1,6 @@
 //! The registry's broken and fixed documents (`dt_lang::codes`) are what the error pages show, so each broken one
 //! must give its code and each fixed one must read clean.  An example cannot drift from the program.
 
-#![allow(clippy::unwrap_used)]
-
 use crate::common;
 
 use dt_eval::{Options, check};

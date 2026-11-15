@@ -313,7 +313,10 @@ impl CellMm {
     /// From mm, in whole micrometres.
     #[must_use]
     pub fn mm(v: f64) -> Self {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let um = (v * 1000.0).round().clamp(1.0, 1e6) as u32;
         Self(um)
     }
@@ -413,7 +416,6 @@ impl Ctx<'_> {
         let step = frame.step_mm();
         let mm: Vec<[f64; 2]> = path.iter().map(|p| [p[0] * sq, p[1] * sq]).collect();
         for (k, bit) in area.bits.iter_mut().enumerate().filter(|(_, b)| **b) {
-            #[allow(clippy::cast_precision_loss)]
             let (x, y) = (
                 (k % self.area.nx) as f64 * step,
                 (k / self.area.nx) as f64 * step,
@@ -432,7 +434,7 @@ impl Ctx<'_> {
                 .windows(2)
                 .map(|w| libm::hypot(w[1][0] - w[0][0], w[1][1] - w[0][1]))
                 .sum(),
-            #[allow(clippy::cast_precision_loss)]
+
             None => {
                 area.count() as f64
                     / (frame.cells_per_square as f64 * frame.cells_per_square as f64)

@@ -129,7 +129,6 @@ fn along(a: P2, b: P2, g: &Line) -> bool {
 
 type Walked = (Vec<P2>, Option<usize>);
 
-#[allow(clippy::too_many_arguments)]
 fn walk(rng: &mut Rng, net: &Net, p: P2, th0: f64, up: bool) -> Walked {
     let mut pts = vec![p];
     let mut th = th0;
@@ -189,7 +188,10 @@ fn walk(rng: &mut Rng, net: &Net, p: P2, th0: f64, up: bool) -> Walked {
 }
 
 /// A crack network over [0, L] x [z0, z1], `want` mm more of it.
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 pub fn crack_net(
     rng: &mut Rng,
     l: f64,
@@ -559,7 +561,6 @@ fn level(c: &Line) -> bool {
     (b[1] - a[1]).abs() < libm::tan(CRACK_LEVEL_DEG.to_radians()) * (b[0] - a[0]).abs()
 }
 
-#[allow(clippy::too_many_lines)]
 fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
     let g = RELIEF_GRID_MM;
     let nu = (sp.l / g) as usize + 2;

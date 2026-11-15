@@ -11,7 +11,10 @@
 //! seed (`DT_TEST_SEED`) builds it on that seed too, like the memo's builds it
 //! is compared with.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use std::path::Path;
 

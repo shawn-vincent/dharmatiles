@@ -113,14 +113,12 @@ pub(crate) fn plan_leaves(
 /// Max |z − bilinear patch of the corners| over the leaf's nodes.
 fn bilinear_error(z: &impl Fn(usize, usize) -> f64, l: Leaf) -> f64 {
     let (a, b, c, d) = (z(l.i0, l.j0), z(l.i1, l.j0), z(l.i1, l.j1), z(l.i0, l.j1));
-    #[allow(clippy::cast_precision_loss)]
+
     let (w, h) = ((l.i1 - l.i0) as f64, (l.j1 - l.j0) as f64);
     let mut e: f64 = 0.0;
     for j in l.j0..=l.j1 {
-        #[allow(clippy::cast_precision_loss)]
         let v = (j - l.j0) as f64 / h;
         for i in l.i0..=l.i1 {
-            #[allow(clippy::cast_precision_loss)]
             let u = (i - l.i0) as f64 / w;
             let p = (a * (1.0 - u) + b * u) * (1.0 - v) + (d * (1.0 - u) + c * u) * v;
             e = e.max((z(i, j) - p).abs());
@@ -199,9 +197,11 @@ impl Corners {
 
 /// The fan centre of a leaf: its middle, on the grid's bilinear surface.
 pub(crate) fn centre(g: &Grid, l: Leaf) -> [f64; 3] {
-    #[allow(clippy::cast_precision_loss)]
     let (ci, cj) = (0.5 * (l.i0 + l.i1) as f64, 0.5 * (l.j0 + l.j1) as f64);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let (fi, fj) = (ci.floor() as usize, cj.floor() as usize);
     let (ti, tj) = (ci - libm::floor(ci), cj - libm::floor(cj));
     let (i1, j1) = ((fi + 1).min(g.nx - 1), (fj + 1).min(g.ny - 1));
@@ -214,7 +214,7 @@ pub(crate) fn centre(g: &Grid, l: Leaf) -> [f64; 3] {
 /// The triangles of a leaf, in node coordinates (x, y in nodes, z in mm).
 fn triangles(g: &Grid, verts: &Corners, l: Leaf) -> Vec<[[f64; 3]; 3]> {
     let ring = verts.ring(l);
-    #[allow(clippy::cast_precision_loss)]
+
     let p = |(i, j): (usize, usize)| [i as f64, j as f64, f64::from(g.z[j * g.nx + i])];
     if ring.len() == 4 {
         let [a, b, c, d] = [p(ring[0]), p(ring[1]), p(ring[2]), p(ring[3])];
@@ -238,7 +238,10 @@ fn fan_error(z: &impl Fn(usize, usize) -> f64, g: &Grid, verts: &Corners, l: Lea
         }
         let lo = |k: usize| a[k].min(b[k]).min(c[k]);
         let hi = |k: usize| a[k].max(b[k]).max(c[k]);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i0, i1, j0, j1) = (
             lo(0).ceil() as usize,
             hi(0).floor() as usize,
@@ -247,7 +250,6 @@ fn fan_error(z: &impl Fn(usize, usize) -> f64, g: &Grid, verts: &Corners, l: Lea
         );
         for j in j0..=j1 {
             for i in i0..=i1 {
-                #[allow(clippy::cast_precision_loss)]
                 let (x, y) = (i as f64, j as f64);
                 let w0 = ((b[1] - c[1]) * (x - c[0]) + (c[0] - b[0]) * (y - c[1])) / det;
                 let w1 = ((c[1] - a[1]) * (x - c[0]) + (a[0] - c[0]) * (y - c[1])) / det;
@@ -265,7 +267,6 @@ fn fan_error(z: &impl Fn(usize, usize) -> f64, g: &Grid, verts: &Corners, l: Lea
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::cast_precision_loss)]
     use super::*;
     use crate::TriMesh;
     use crate::stack::{Lattice, Layer, Round, Sides, lift_stack};
@@ -292,7 +293,10 @@ mod tests {
                 // a smooth hill, a sharp ridge, and a flat plain
                 let hill = 2.0 * libm::exp(-((x - 6.0).powi(2) + (y - 5.0).powi(2)) / 8.0);
                 let ridge = (0.6 - (x - 12.0).abs()).max(0.0);
-                #[allow(clippy::cast_possible_truncation)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                )]
                 let v = (3.0 + hill + ridge) as f32;
                 g.z[j * nx + i] = v;
             }

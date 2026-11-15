@@ -580,7 +580,10 @@ impl<'a> Plan<'a> {
                 // another lattice: the band's node nearest this one
                 let (i, j) = (n % area.nx, n / area.nx);
                 let k = self.c.frame.step_mm() / band.lo().step;
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                )]
                 let (i, j) = (
                     ((i as f64 * k).round() as usize).min(bx - 1),
                     ((j as f64 * k).round() as usize).min(by - 1),
@@ -926,7 +929,10 @@ fn trace_entries(scene: &Scene, mesh: &dt_kit::TriMesh, plan: &Plan<'_>) -> (Vec
     let ground = |t: usize| -> u16 {
         let [a, b, d] = mesh.triangles[t].map(|i| mesh.positions[i as usize]);
         let (x, y) = ((a[0] + b[0] + d[0]) / 3.0, (a[1] + b[1] + d[1]) / 3.0);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i, j) = (
             (x / step).round().max(0.0) as usize,
             (y / step).round().max(0.0) as usize,

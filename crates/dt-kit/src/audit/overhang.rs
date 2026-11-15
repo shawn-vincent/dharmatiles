@@ -35,7 +35,10 @@ pub(super) struct Slices {
 }
 
 impl Slices {
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     pub(super) fn layer_of(&self, z: f64) -> usize {
         ((z / self.lay + 0.5).floor() as i64).clamp(0, self.nl as i64) as usize
     }
@@ -45,16 +48,25 @@ impl Slices {
         let (lo, hi) = bounds(m)?;
         let g = p.grid_mm;
         let (x0, y0) = (lo[0] + 0.0137, lo[1] + 0.0091);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let count = |a: f64, b: f64| ((b - a) / g).ceil().max(0.0) as usize;
         let (nx, ny) = (count(x0, hi[0]), count(y0, hi[1]));
         if nx == 0 || ny == 0 {
             return None;
         }
         let lay = p.layer_mm;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let nl = ((hi[2] / lay).ceil().max(0.0) as usize) + 1;
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let layer_of = |z: f64| ((z / lay + 0.5).floor() as i64).clamp(0, nl as i64) as usize;
 
         // Every (column, z) hit, one list per triangle, gathered in order.
@@ -113,7 +125,10 @@ impl Slices {
         }
         let layer = |k: usize| &inside[k * nx * ny..(k + 1) * nx * ny];
         // distance (mm) to the nearest material of every layer, in parallel
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let far: Vec<Vec<f32>> = (0..nl)
             .into_par_iter()
             .map(|k| {
@@ -153,7 +168,10 @@ impl Slices {
         let layer = |k: usize| &self.inside[k * nx * ny..(k + 1) * nx * ny];
         let layer_of = |z: f64| self.layer_of(z);
         let c = lay * libm::tan(p.overhang_deg.to_radians());
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let span = (p.span_mm / lay) as usize;
         let cells = nx * ny;
         // a cell droops when material sits in it with too little below
@@ -166,7 +184,7 @@ impl Slices {
                 for (col, b) in row.iter_mut().enumerate() {
                     *b = layer(i)[col]
                         && (1..=span.min(i)).any(|j| {
-                            #[allow(clippy::cast_possible_truncation)]
+                            #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
                             let limit = (p.reach_mm + (j - 1) as f64 * c) as f32;
                             far[i - j][col] > limit
                         });
@@ -193,7 +211,7 @@ impl Slices {
                 if !(n[2] < 0.0 && pc[2] > 0.05) {
                     return false;
                 }
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
                 let at = |v: f64, o: f64, n: usize| {
                     ((v - o) / g).round().clamp(0.0, (n - 1) as f64) as usize
                 };
@@ -279,7 +297,10 @@ pub(super) fn column_hits(
         v[0][1].min(v[1][1]).min(v[2][1]),
         v[0][1].max(v[1][1]).max(v[2][1]),
     );
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let span = |lo: f64, hi: f64, o: f64, n: usize| {
         let a = ((lo - o) / g).ceil().max(0.0) as i64;
         let b = (((hi - o) / g).floor() as i64).min(n as i64 - 1);
@@ -289,19 +310,24 @@ pub(super) fn column_hits(
     let (j0, j1) = span(miny, maxy, origin[1], ny);
     // top-left rule on the counter-clockwise projection
     // (exact comparison on purpose: ties are what the rule decides)
-    #[allow(clippy::float_cmp)]
+    #[expect(
+        clippy::float_cmp,
+        reason = "an exact comparison of a stored or sentinel value, not a computed one"
+    )]
     let top_left = |a: [f64; 3], b: [f64; 3]| (a[1] == b[1] && b[0] < a[0]) || b[1] < a[1];
     let edges = [(v[1], v[2]), (v[2], v[0]), (v[0], v[1])];
     let tl = edges.map(|(a, b)| top_left(a, b));
     let mut out = Vec::new();
     for j in j0..=j1 {
         for i in i0..=i1 {
-            #[allow(clippy::cast_precision_loss)]
             let (px, py) = (origin[0] + i as f64 * g, origin[1] + j as f64 * g);
             let w = edges.map(|(a, b)| (b[0] - a[0]) * (py - a[1]) - (b[1] - a[1]) * (px - a[0]));
             if (0..3).all(|k| w[k] > 0.0 || (w[k] == 0.0 && tl[k])) {
                 let z = (w[0] * v[0][2] + w[1] * v[1][2] + w[2] * v[2][2]) / area;
-                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                )]
                 out.push((j as usize * nx + i as usize, z));
             }
         }

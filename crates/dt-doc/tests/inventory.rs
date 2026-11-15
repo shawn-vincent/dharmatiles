@@ -1,6 +1,9 @@
 //! The inventory document: the log, what it adds up to, and what is written.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use dt_doc::inventory::{
     Colour, Entry, Identity, Shelf, decode, gone_line, new_text, print_line, renamed_line,

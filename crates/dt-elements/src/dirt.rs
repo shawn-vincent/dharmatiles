@@ -384,7 +384,10 @@ fn clod_layer(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, base: &Field) -> (
     let [w, h] = frame.size_mm();
     let mut rng = Rng::new(seed.key("clods"));
     let n = rng.poisson(dirt.clod_density * w * h);
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let radii: Vec<f64> = (0..n as usize)
         .map(|_| skewed(&mut rng, CLOD_R_MM, CLOD_R_EXP))
         .collect();
@@ -541,10 +544,13 @@ fn cluster_field(frame: &dt_kit::Frame, seed: Seed, ground: &Field) -> Field {
     let [w, h] = frame.size_mm();
     let squares = f64::from(frame.cols) * f64::from(frame.rows);
     let mut rng = Rng::new(seed.key("clusters"));
-    #[allow(clippy::cast_precision_loss)]
+
     let n = libm::round(rng.int(PEB_CLUSTERS_2X2.0, PEB_CLUSTERS_2X2.1) as f64 * squares / 4.0);
     let inset = PEB_CLUSTER_INSET_MM * s;
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let n = n as i64;
     let blobs: Vec<(f64, f64, f64)> = (0..n)
         .map(|_| {
@@ -602,7 +608,7 @@ impl Pebble {
             k = (k / 3).max(3);
         }
         let tau = 2.0 * core::f64::consts::PI;
-        #[allow(clippy::cast_precision_loss)]
+
         let kf = k as f64;
         let jitter: Vec<f64> = (0..k).map(|_| rng.random()).collect();
         let turn = rng.uniform(0.0, tau);
@@ -614,7 +620,6 @@ impl Pebble {
         let cap_g = libm::tan(PEB_MAX_FACET_DEG.to_radians());
         let mut planes = Vec::new();
         for (m, (&u, &r)) in jitter.iter().zip(&rs).enumerate() {
-            #[allow(clippy::cast_precision_loss)]
             let t = (m as f64 + u) * tau / kf + turn;
             let (pa, pb) = (a * r * libm::cos(t), a * r * libm::sin(t));
             let sq = libm::sqrt((1.0 - libm::pow(r, pf)).max(1e-3));
@@ -646,13 +651,12 @@ impl Pebble {
         }
         // the polygonal skirt: no side steeper than the skirt angle
         let sides = rng.int(PEB_SKIRT_SIDES.0, PEB_SKIRT_SIDES.1);
-        #[allow(clippy::cast_precision_loss)]
+
         let sf = sides as f64;
         let jit: Vec<f64> = (0..sides).map(|_| rng.uniform(-0.3, 0.3)).collect();
         let turn = rng.uniform(0.0, tau);
         let sk = libm::tan(PEB_SKIRT_DEG.to_radians());
         for (m, j) in jit.iter().enumerate() {
-            #[allow(clippy::cast_precision_loss)]
             let t = (m as f64 + j) * tau / sf + turn;
             let off = a * rng.uniform(0.82, 1.05) * if rounded { 1.1 } else { 1.0 };
             planes.push(Plane {
@@ -700,10 +704,9 @@ fn place_pebbles(
     let area_sq = w * h / (dt_kit::REFERENCE_SQUARE_MM * dt_kit::REFERENCE_SQUARE_MM);
     let c = cluster_field(frame, seed, ground);
     let mut rng = Rng::new(seed.key("pebbles"));
-    #[allow(
-        clippy::cast_precision_loss,
+    #[expect(
         clippy::cast_possible_truncation,
-        clippy::cast_sign_loss
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
     )]
     let count = |rng: &mut Rng, (lo, hi): (i64, i64)| (rng.int(lo, hi) as f64 * area_sq) as usize;
     let n_med = count(&mut rng, MED_PER_SQ);
@@ -1000,7 +1003,7 @@ impl Element for Dirt {
             })
             .map_err(LookError::build)?;
         scene.mark_stone(area, &stone);
-        #[allow(clippy::cast_precision_loss)]
+
         for (k, v) in [
             ("clods", counts.clods),
             ("pebbles_small", counts.small),
@@ -1028,18 +1031,16 @@ pub fn texture_ok(z: &Field, rim: &Field) -> f64 {
         .fold((0usize, 0usize), |(ok, all), (r, _)| {
             (ok + usize::from(*r >= TEXTURE_LAYER_MM), all + 1)
         });
-    #[allow(clippy::cast_precision_loss)]
+
     let share = ok as f64 / all.max(1) as f64;
     share
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(
-        clippy::unwrap_used,
+    #![expect(
         clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
+        reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction"
     )]
     use super::*;
     use dt_kit::Frame;

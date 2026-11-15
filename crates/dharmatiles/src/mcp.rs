@@ -537,9 +537,9 @@ macro_rules! args {
         impl $name {
             /// The `inputSchema` of the tool that takes these.
             fn schema() -> Value {
-                #[allow(unused_mut)]
+                #[allow(unused_mut, reason = "mutated under one build configuration only")]
                 let mut properties = serde_json::Map::new();
-                #[allow(unused_mut)]
+                #[allow(unused_mut, reason = "mutated under one build configuration only")]
                 let mut required: Vec<&str> = Vec::new();
                 $(
                     let mut p = <$ty as Param>::schema();

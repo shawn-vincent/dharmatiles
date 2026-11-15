@@ -2,8 +2,6 @@
 //! click-to-select): surfaces by their masks, solids by their owner path,
 //! the connector last.
 
-#![allow(clippy::unwrap_used)]
-
 use std::collections::BTreeMap;
 
 use dt_eval::{NO_ENTRY, Options};

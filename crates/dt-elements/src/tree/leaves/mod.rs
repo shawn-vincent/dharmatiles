@@ -348,11 +348,7 @@ fn place_inner(
 
     // ── roots: maximal normal-aware Poisson disk ──────────────────────────
     let cand = {
-        #[allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "a count"
-        )]
+        #[expect(clippy::cast_possible_truncation, reason = "a count")]
         let n = (CANDIDATE_FACTOR * crown.area / (spacing * spacing)).max(64.0) as usize;
         crown.sample(n, &mut Rng::new(seed.key("leaf-candidates")))
     };
@@ -385,11 +381,7 @@ fn place_inner(
 
     // ── coverage verification ──────────────────────────────────────────────
     let tests = {
-        #[allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "a count"
-        )]
+        #[expect(clippy::cast_possible_truncation, reason = "a count")]
         let n = (crown.area / (VERIFY_RES_MM * VERIFY_RES_MM)).max(64.0) as usize;
         crown.sample(n, &mut Rng::new(seed.key("leaf-coverage")))
     };
@@ -477,7 +469,7 @@ impl PoissonGrid {
         }
     }
 
-    #[allow(clippy::cast_possible_truncation, reason = "grid cells of a crown")]
+    #[expect(clippy::cast_possible_truncation, reason = "grid cells of a crown")]
     fn cell(&self, p: V) -> [i64; 3] {
         p.map(|x| libm::floor(x / self.gap) as i64)
     }
@@ -540,7 +532,7 @@ fn field_angle(p: V, phase: [f64; 3]) -> f64 {
 
 /// Bottom-up, each leaf stands `STEP` above the
 /// tallest lower leaf it has a tip conflict with (capped), plus jitter.
-#[allow(clippy::cast_possible_truncation, reason = "grid cells of a crown")]
+#[expect(clippy::cast_possible_truncation, reason = "grid cells of a crown")]
 fn shingle_standoffs(bases: &[V], dirs: &[V], len: f64, seed: Seed) -> Vec<f64> {
     let n = bases.len();
     let mut out = vec![0.0; n];
@@ -703,7 +695,7 @@ mod tests {
 
     /// A closed UV sphere (outward winding), radius `r` mm, centred at
     /// `(0, 0, r + 1)`.
-    #[allow(clippy::cast_possible_truncation, reason = "tiny indices")]
+    #[expect(clippy::cast_possible_truncation, reason = "tiny indices")]
     fn sphere(r: f64) -> TriMesh {
         let (nu, nv) = (28_usize, 18_usize);
         let mut positions = vec![[0.0, 0.0, r + 1.0 + r], [0.0, 0.0, 1.0]];

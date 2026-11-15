@@ -776,7 +776,10 @@ fn cura(install: &Install, problems: &mut Vec<String>) -> Vec<Candidate> {
                 || name.split(' ').next().unwrap_or_default().to_owned(),
                 str::to_owned,
             );
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         // clamped to 1..=32 just above
         let extruders =
             n("machine_extruder_count").map_or(1, |x| x.clamp(1.0, 32.0).round() as u32);

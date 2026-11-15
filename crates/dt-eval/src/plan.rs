@@ -107,7 +107,10 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
             .unwrap_or(usize::MAX)
     };
     let ground: Vec<usize> = (0..n).filter(|&j| is(j, Write::Surface)).collect();
-    #[allow(clippy::needless_range_loop)] // `i` also names the entry in `pos`
+    #[expect(
+        clippy::needless_range_loop,
+        reason = "the index also addresses a second array"
+    )] // `i` also names the entry in `pos`
     for i in 0..n {
         // a floor lies on the ground painted before it; a fill (water) is
         // built where it is listed and a surface listed after it lies over it

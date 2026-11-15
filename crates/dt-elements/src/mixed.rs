@@ -149,7 +149,6 @@ impl Element for Scatter {
             Some(r) => r.int_by(1.0, &mut rng),
             None => self.per_square.int_by(squares, &mut rng),
         };
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let n = n.clamp(0, 10_000) as usize;
         let total: f64 = self.parts.iter().map(Part::weight).sum();
 

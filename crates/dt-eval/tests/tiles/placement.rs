@@ -11,7 +11,10 @@
 //! The lattice itself is not a free knob: `Options::cells` moves what is
 //! placed, and [`placement_by_cells`] measures how far (ignored; it prints).
 
-#![allow(clippy::unwrap_used, clippy::print_stderr)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use dt_eval::{Built, Options};
 

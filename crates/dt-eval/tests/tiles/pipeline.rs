@@ -2,8 +2,6 @@
 //! what was planned and the audit gate judges it, and a plan or a region
 //! that is refused stops both with the same word.
 
-#![allow(clippy::unwrap_used)]
-
 use crate::memo;
 use dt_eval::plan::Step;
 use dt_eval::{Memory, Options, check};

@@ -161,7 +161,7 @@ impl Convex {
                 c.map(|x| x / l)
             };
             let w = cross(n, u);
-            #[allow(clippy::cast_precision_loss)]
+
             let k = on_plane.len() as f64;
             let c = on_plane.iter().fold([0.0; 3], |s, &i| {
                 let p = vertices[i as usize];
@@ -339,7 +339,6 @@ impl Convex {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::float_cmp)]
     use super::*;
 
     fn unit() -> Convex {

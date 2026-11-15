@@ -90,7 +90,6 @@ impl<T: Copy> Grid<T> {
     /// The x of column `i`, mm.
     #[must_use]
     pub fn x(&self, i: usize) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
         let x = i as f64 * self.step;
         x
     }
@@ -98,7 +97,6 @@ impl<T: Copy> Grid<T> {
     /// The y of row `j`, mm.
     #[must_use]
     pub fn y(&self, j: usize) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
         let y = j as f64 * self.step;
         y
     }
@@ -107,7 +105,10 @@ impl<T: Copy> Grid<T> {
     #[must_use]
     pub fn node(&self, x: f64, y: f64) -> (usize, usize) {
         let k = |v: f64, n: usize| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let k = libm::floor(v / self.step).max(0.0) as usize;
             k.min(n - 1)
         };
@@ -123,12 +124,18 @@ impl<T: Copy> Grid<T> {
         r: f64,
     ) -> (std::ops::Range<usize>, std::ops::Range<usize>) {
         let lo = |v: f64, n: usize| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let k = libm::ceil((v - r) / self.step).max(0.0) as usize;
             k.min(n)
         };
         let hi = |v: f64, n: usize| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let k = (libm::floor((v + r) / self.step) + 1.0).max(0.0) as usize;
             k.min(n)
         };
@@ -163,14 +170,16 @@ impl Grid<f64> {
     /// The bilinear value at `(x, y)` mm (clamped to the lattice).
     #[must_use]
     pub fn sample(&self, x: f64, y: f64) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
         let (mx, my) = ((self.nx - 1) as f64, (self.ny - 1) as f64);
         let (u, v) = (
             (x / self.step).clamp(0.0, mx),
             (y / self.step).clamp(0.0, my),
         );
         let (fu, fv) = (libm::floor(u), libm::floor(v));
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i, j) = (fu as usize, fv as usize);
         let (i1, j1) = ((i + 1).min(self.nx - 1), (j + 1).min(self.ny - 1));
         let (tu, tv) = (u - fu, v - fv);
@@ -218,7 +227,10 @@ impl Grid<f64> {
     /// round each node: the printable-texture measure.
     #[must_use]
     pub fn range(&self, w_mm: f64) -> Self {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let r = libm::round(0.5 * w_mm / self.step) as usize;
         let hi = crate::filter::dilate(&self.z, self.nx, self.ny, Structuring::Square(r));
         let lo = crate::filter::erode(&self.z, self.nx, self.ny, Structuring::Square(r));
@@ -257,7 +269,7 @@ impl Grid<f64> {
             for i in 0..nx {
                 let (i0, i1) = (i.saturating_sub(1), (i + 1).min(nx - 1));
                 let k = j * nx + i;
-                #[allow(clippy::cast_precision_loss)]
+
                 {
                     gx[k] = (self.at(i1, j) - self.at(i0, j)) / ((i1 - i0).max(1) as f64 * h);
                     gy[k] = (self.at(i, j1) - self.at(i, j0)) / ((j1 - j0).max(1) as f64 * h);
@@ -546,7 +558,6 @@ fn edt_1d_arg(f: &[f64], out: &mut [f64], arg: &mut [usize]) {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::float_cmp)]
     use super::*;
 
     #[test]

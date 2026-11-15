@@ -1,6 +1,6 @@
 //! The library's heights as the tests read them, and a few helpers over the
 //! decoder.
-#![allow(dead_code)]
+#![allow(dead_code, reason = "used by one build configuration only")]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"

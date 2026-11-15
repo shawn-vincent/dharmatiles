@@ -260,7 +260,6 @@ fn too_tight() -> LookError {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     #[test]

@@ -189,7 +189,10 @@ pub(crate) const MIN_BAY_FRAC: f64 = 0.45;
 /// Running bond: the least end closer, mm.
 const CLOSER_MIN: f64 = 1.5;
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+)]
 fn count(total: f64, lo: f64, hi: f64) -> usize {
     (libm::round(total / (0.5 * (lo + hi))) as usize).max(1)
 }
@@ -205,7 +208,7 @@ pub(crate) fn course_heights(h: f64, course: &Draw, rng: &mut Rng) -> Vec<f64> {
 
 fn running_heights(h: f64, lo: f64, hi: f64) -> Vec<f64> {
     let n = count(h, lo, hi);
-    #[allow(clippy::cast_precision_loss)]
+
     let each = h / n as f64;
     vec![each; n]
 }
@@ -252,11 +255,14 @@ fn bay_cuts(t0: f64, t1: f64, bay: &Draw, prev: &[f64], min_bond: f64, rng: &mut
 }
 
 /// `_running_cuts`: a grid of `brick` mm phase-shifted by `offset`.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+)]
 fn running_cuts(t0: f64, t1: f64, brick: f64, offset: f64) -> Vec<f64> {
     let lo = libm::floor((t0 - offset) / brick) as i64;
     let hi = libm::ceil((t1 - offset) / brick) as i64;
-    #[allow(clippy::cast_precision_loss)]
+
     (lo..=hi)
         .map(|k| offset + k as f64 * brick)
         .filter(|&c| c > t0 + CLOSER_MIN && c < t1 - CLOSER_MIN)
@@ -317,7 +323,7 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
             if t1 - t0 < MIN_BAY_FRAC * c.bay.lo() {
                 continue;
             }
-            #[allow(clippy::cast_precision_loss)]
+
             let mut cuts = if running {
                 running_cuts(t0, t1, brick, (ci % 2) as f64 * 0.5 * brick)
             } else {
@@ -335,7 +341,10 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
             edges.push(t1);
             for (b, e) in edges.windows(2).enumerate() {
                 let (ta, tb) = (e[0], e[1]);
-                #[allow(clippy::float_cmp)]
+                #[expect(
+                    clippy::float_cmp,
+                    reason = "an exact comparison of a stored or sentinel value, not a computed one"
+                )]
                 cells.push(Cell {
                     seg: k,
                     t0: ta,
@@ -408,7 +417,10 @@ pub(crate) fn crenellate(
     let wc_avg = 0.5 * (crenel.0 + crenel.1);
     let mut all = Vec::new();
     for seg in segs {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let n_c = (libm::round((seg.len - wm_avg) / (wm_avg + wc_avg)) as usize).max(1);
         let wm: Vec<f64> = (0..=n_c).map(|_| rng.uniform(merlon.0, merlon.1)).collect();
         let wc: Vec<f64> = (0..n_c).map(|_| rng.uniform(crenel.0, crenel.1)).collect();
@@ -433,7 +445,7 @@ pub(crate) fn crenellate(
                 continue;
             }
             let mut key = c.key.clone();
-            #[allow(clippy::cast_possible_wrap)]
+
             key.push(mi as i64);
             out.push(Cell {
                 t0: lo,
@@ -551,7 +563,6 @@ pub(crate) fn ruin_cells(
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     fn corner() -> Vec<Seg> {

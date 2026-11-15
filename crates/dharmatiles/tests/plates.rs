@@ -2,14 +2,17 @@
 //! list laid on two printers' beds and written as files.  Builds only test
 //! tiles (`lib:tests/…`).
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // the program's own types for what `--json` prints, taken in whole: the tests read the output by deserializing them, never by
 // key
-#[allow(dead_code)]
+#[allow(dead_code, reason = "used by one build configuration only")]
 #[path = "../src/cli_wire.rs"]
 mod cli_wire;
 

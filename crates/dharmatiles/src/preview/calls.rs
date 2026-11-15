@@ -115,7 +115,6 @@ pub(super) fn dispatch(shared: &Shared, path: &str, body: &[u8]) -> route::Reply
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
 
     /// Where the generated types are checked in.
     fn file() -> std::path::PathBuf {

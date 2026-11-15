@@ -1,7 +1,10 @@
 //! A suggestion is made in one place: `dt_doc::error::suggest` writes the help and builds the fix together, so no
 //! diagnostic can say "did you mean" without carrying the edit the page turns into a button.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use std::path::{Path, PathBuf};
 

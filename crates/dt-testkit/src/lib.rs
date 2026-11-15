@@ -20,7 +20,10 @@
 //! depend on it (the gate's verdict, the repair budgets) and says so once, at
 //! the start, past the test harness's capture.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, OnceLock};

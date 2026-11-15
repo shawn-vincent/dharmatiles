@@ -11,7 +11,7 @@ pub(super) enum Fail {
     Drape,
 }
 
-#[allow(clippy::large_enum_variant, reason = "short-lived, one per root")]
+#[expect(clippy::large_enum_variant, reason = "short-lived, one per root")]
 pub(super) enum Outcome {
     Placed(TriMesh, V),
     Branch,
@@ -27,7 +27,7 @@ pub(super) struct Job<'a> {
 
 impl Job<'_> {
     /// Re-centre on the root, attempt, cull skewers.
-    #[allow(clippy::too_many_arguments, reason = "the per-root inputs")]
+    #[expect(clippy::too_many_arguments, reason = "the per-root inputs")]
     pub(super) fn leaf(
         &self,
         base: V,
@@ -333,11 +333,8 @@ impl Job<'_> {
     /// One attempt at a leaf, as the organic placer makes it (flat-seat
     /// fallback, base and tip tucks; no burial probe under `tuck_tip`). Returns the blade surface, the
     /// root oval (world mm) and the seated tangent.
-    #[allow(clippy::too_many_arguments, reason = "the placer's per-leaf knobs")]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one pipeline, kept in pipeline order"
-    )]
+    #[expect(clippy::too_many_arguments, reason = "the placer's per-leaf knobs")]
+
     pub(super) fn attempt(
         &self,
         base: V,
@@ -468,7 +465,7 @@ impl Job<'_> {
 
     /// Pitch the blade about `pivot` (axis normal × tangent) so vertex
     /// `idx` comes down toward `target` clearance along −normal.
-    #[allow(clippy::too_many_arguments, reason = "the two tucks share it")]
+    #[expect(clippy::too_many_arguments, reason = "the two tucks share it")]
     pub(super) fn tuck(
         &self,
         surf: &mut [V],

@@ -75,7 +75,6 @@ impl Rng {
 
     /// Uniform in [0, 1).
     pub fn random(&mut self) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
         let u = (self.next_u64() >> 11) as f64 * (1.0 / (1u64 << 53) as f64);
         u
     }
@@ -90,9 +89,9 @@ impl Rng {
         if hi <= lo {
             return lo;
         }
-        #[allow(clippy::cast_sign_loss)]
+
         let span = (hi - lo) as u64 + 1;
-        #[allow(clippy::cast_possible_wrap)]
+
         let k = (self.next_u64() % span) as i64;
         lo + k
     }
@@ -112,7 +111,10 @@ impl Rng {
         }
         if lambda > 30.0 {
             let v = libm::round(self.normal(lambda, libm::sqrt(lambda)));
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             return v.max(0.0) as u64;
         }
         let limit = libm::exp(-lambda);
@@ -198,10 +200,10 @@ mod tests {
             assert!((4..=7).contains(&k));
         }
         let n: Vec<f64> = (0..20_000).map(|_| r.normal(1.0, 2.0)).collect();
-        #[allow(clippy::cast_precision_loss)]
+
         let m = n.iter().sum::<f64>() / n.len() as f64;
         assert!((m - 1.0).abs() < 0.05);
-        #[allow(clippy::cast_precision_loss)]
+
         let p = (0..4000).map(|_| r.poisson(3.5)).sum::<u64>() as f64 / 4000.0;
         assert!((p - 3.5).abs() < 0.1, "{p}");
         assert_eq!(r.poisson(0.0), 0);

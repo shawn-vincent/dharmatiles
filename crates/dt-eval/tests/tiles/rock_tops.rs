@@ -3,7 +3,11 @@
 //! rolls one height in it and its peak stands there.  Rocks without a `top=`
 //! build as they always did.
 
-#![allow(clippy::unwrap_used, clippy::float_cmp)]
+#![expect(
+    clippy::unwrap_used,
+    clippy::float_cmp,
+    reason = "a test: a failing unwrap is the failure; an exact comparison of a stored or sentinel value, not a computed one"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"

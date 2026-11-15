@@ -190,7 +190,10 @@ pub(crate) fn layout_of(plan: &Plan, builds: &Builds) -> Result<Layout, Vec<Diag
 }
 
 /// The settings words a caller may give, as the command line's.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 pub(crate) fn overrides(
     printer: Option<String>,
     system: Option<dt_lang::System>,
@@ -253,7 +256,10 @@ pub(crate) fn format_of(word: Option<&str>, machine: &dt_eval::Machine) -> Resul
 }
 
 /// `plan` then, unless `check_only`, everything to the files.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 pub(crate) fn run(
     list_path: &Path,
     ov: &Overrides,

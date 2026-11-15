@@ -1,6 +1,5 @@
 //! The server's routes and the worker, end to end on a loopback port.
 
-#![allow(clippy::unwrap_used)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"

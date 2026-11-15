@@ -1,5 +1,5 @@
 //! Shared by the tests that build documents from text held in memory.
-#![allow(dead_code)]
+#![allow(dead_code, reason = "used by one build configuration only")]
 
 use std::collections::BTreeMap;
 

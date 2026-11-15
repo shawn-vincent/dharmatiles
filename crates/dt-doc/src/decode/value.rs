@@ -161,7 +161,10 @@ impl Decoder<'_> {
     /// percent.  `k` supplies words for hints and limits.  `lets` lets the
     /// number name the tile's `let` heights (a line's `wobble`); no element
     /// control does.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the flat inputs of one maths step, named at the call"
+    )]
     pub(crate) fn num(
         &mut self,
         e: &KdlEntry,

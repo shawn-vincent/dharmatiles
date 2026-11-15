@@ -2,7 +2,10 @@
 //! an error at their line with a hint; imports, regions and the scheduler
 //! work on real text.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed; permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"

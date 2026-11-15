@@ -2,19 +2,22 @@
 //! counted by tile, seed, system and colour mode, and a list prints only what
 //! it lacks.  Tiles are test tiles (`lib:tests/…`) and a copy in a scratch home.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // the program's own type for the inventory's state and rows, taken in whole: `list --json` writes it, and the tests read the
 // output by deserializing it, never by key
-#[allow(dead_code)]
+#[allow(dead_code, reason = "used by one build configuration only")]
 #[path = "../src/inventory_wire.rs"]
 mod inventory_wire;
 
 // and for `plates --json`, the same way
-#[allow(dead_code)]
+#[allow(dead_code, reason = "used by one build configuration only")]
 #[path = "../src/cli_wire.rs"]
 mod cli_wire;
 

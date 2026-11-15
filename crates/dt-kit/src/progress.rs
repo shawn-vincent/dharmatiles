@@ -152,7 +152,7 @@ pub struct Counter {
 
 impl Counter {
     /// One more done.  Safe from parallel iterators.
-    #[allow(clippy::cast_precision_loss)]
+
     pub fn tick(&self) {
         if !self.progress.is_on() {
             return;

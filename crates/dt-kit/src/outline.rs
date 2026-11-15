@@ -202,7 +202,6 @@ fn subdivide(
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::float_cmp)]
     use super::*;
 
     #[test]

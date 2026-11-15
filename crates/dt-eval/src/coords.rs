@@ -130,9 +130,9 @@ impl RegionField {
                 .copied()
                 .filter(|&k| depth[k] >= top - 1e-9)
                 .collect();
-            #[allow(clippy::cast_precision_loss)]
+
             let n = ridge.len() as f64;
-            #[allow(clippy::cast_precision_loss)]
+
             let (sx, sy) = ridge.iter().fold((0.0, 0.0), |(a, b), &k| {
                 (a + (k % nx) as f64, b + (k / nx) as f64)
             });
@@ -183,14 +183,12 @@ impl RegionField {
 
     /// The node's `x` from the region's north-west corner, squares.
     fn across(&self, k: usize) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
         let x = (k % self.nx) as f64 / self.per;
         x - self.bbox.x0
     }
 
     /// The node's `y` from the region's north-west corner, running south.
     fn down(&self, k: usize) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
         let y = (k / self.nx) as f64 / self.per;
         self.bbox.y1 - y
     }
@@ -232,7 +230,7 @@ impl RegionField {
             return 0.0;
         }
         let c = self.centre[p - 1];
-        #[allow(clippy::cast_precision_loss)]
+
         let (i, j) = ((k % self.nx) as f64, (k / self.nx) as f64);
         // east is +x, south is -y: a quarter turn points straight down
         let angle = libm::atan2(c[1] - j, i - c[0]);
@@ -241,7 +239,6 @@ impl RegionField {
     }
 
     fn along_line(&self, k: usize, pts: &[[f64; 2]], acc: &[f64]) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
         let (x, y) = (
             (k % self.nx) as f64 / self.per,
             (k / self.nx) as f64 / self.per,

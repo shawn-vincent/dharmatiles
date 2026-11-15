@@ -85,7 +85,6 @@ pub(super) fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, us
             v < 0.0 || (v < main && v < ISLE_MM3)
         })
         .filter_map(|b| {
-            #[allow(clippy::cast_precision_loss)]
             let n = b.positions.len() as f64;
             let c = [0, 1, 2].map(|k| b.positions.iter().map(|p| p[k]).sum::<f64>() / n);
             let pts: Vec<[f64; 3]> = b
@@ -157,7 +156,6 @@ pub(super) fn ground_drop(scene: &Scene, at: [f64; 3], r: f64) -> f64 {
     };
     let mut lo = at[2];
     for (k, z) in f.z.iter().enumerate() {
-        #[allow(clippy::cast_precision_loss)]
         let (x, y) = ((k % f.nx) as f64 * f.step, (k / f.nx) as f64 * f.step);
         if libm::hypot(x - at[0], y - at[1]) <= r {
             lo = lo.min(f64::from(*z));
@@ -182,7 +180,7 @@ pub(super) fn place(
     let mut rng = Rng::new(ctx.seed.key("place"));
     let a = ctx.area;
     let step = frame.step_mm();
-    #[allow(clippy::cast_precision_loss)]
+
     let xy = |k: usize| ((k % a.nx) as f64 * step, (k / a.nx) as f64 * step);
     // the trunk a crown radius from the tile edge (all of the tile's
     // middle when the crown is wider than the tile)
@@ -209,7 +207,10 @@ pub(super) fn place(
         // nudged in so the crown stays on the tile, never clipped
         let x = (u * sq).clamp(m, w - m);
         let y = (v * sq).clamp(m, h - m);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let node = |x: f64, y: f64| {
             let i = libm::round(x / step).clamp(0.0, (a.nx - 1) as f64) as usize;
             let j = libm::round(y / step).clamp(0.0, (a.ny - 1) as f64) as usize;
@@ -240,14 +241,16 @@ pub(super) fn place(
         }
     } else {
         let support = scene.support();
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let rr = libm::ceil(clear / step) as usize;
         let clear_of = |k: usize| -> bool {
             let Some(sup) = support else { return true };
             let (i, j) = (k % a.nx, k / a.nx);
             for jj in j.saturating_sub(rr)..=(j + rr).min(a.ny - 1) {
                 for ii in i.saturating_sub(rr)..=(i + rr).min(a.nx - 1) {
-                    #[allow(clippy::cast_precision_loss)]
                     let d =
                         libm::hypot((ii as f64 - i as f64) * step, (jj as f64 - j as f64) * step);
                     if d <= clear && sup.z[jj * a.nx + ii].is_finite() {
@@ -270,10 +273,9 @@ pub(super) fn place(
             // nudged: the area's node nearest the tile's middle
             middle()?
         } else {
-            #[allow(
+            #[expect(
                 clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                clippy::cast_possible_wrap
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
             )]
             let i = rng.int(0, (pick.len() - 1) as i64) as usize;
             pick[i]
@@ -286,10 +288,9 @@ pub(super) fn place(
 /// The ground (or what a stamped solid stands up to) under `(x, y)`.
 pub(super) fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
     let node = |f: &dt_kit::Grid| {
-        #[allow(
+        #[expect(
             clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            clippy::cast_precision_loss
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
         )]
         let (i, j) = (
             libm::round(x / f.step).clamp(0.0, (f.nx - 1) as f64) as usize,
@@ -321,10 +322,16 @@ pub(super) fn scatter_sites(
     let frame = *scene.frame();
     let step = frame.step_mm();
     let support = scene.support();
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let rr = libm::ceil(clear / step) as usize;
     let node = |x: f64, y: f64| {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i, j) = (
             (libm::round(x / step).max(0.0) as usize).min(area.nx - 1),
             (libm::round(y / step).max(0.0) as usize).min(area.ny - 1),
@@ -339,7 +346,6 @@ pub(super) fn scatter_sites(
         if let Some(sup) = support {
             for jj in j.saturating_sub(rr)..=(j + rr).min(area.ny - 1) {
                 for ii in i.saturating_sub(rr)..=(i + rr).min(area.nx - 1) {
-                    #[allow(clippy::cast_precision_loss)]
                     let d =
                         libm::hypot((ii as f64 - i as f64) * step, (jj as f64 - j as f64) * step);
                     if d <= clear && sup.z[jj * area.nx + ii].is_finite() {

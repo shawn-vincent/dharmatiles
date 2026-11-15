@@ -42,7 +42,6 @@
 //! (which will redo the looks), the grass blades' caps having changed.  Plain
 //! `DT_BASELINE=write` still only lowers.
 
-#![allow(clippy::unwrap_used)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies); a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"

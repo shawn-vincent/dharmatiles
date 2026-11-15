@@ -88,7 +88,10 @@ pub(crate) struct Field {
 }
 
 fn quant(v: f64) -> u64 {
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let k = libm::round(v * 100.0) as i64;
     k.cast_unsigned()
 }
@@ -220,7 +223,10 @@ fn coping_cells(segs: &[Seg], t: f64, z0: f64, h: f64, s: f64, rng: &mut Rng) ->
             t1 = b;
         }
         let span = t1 - t0;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let n = (libm::round(span / (0.5 * (COPING_W.0 + COPING_W.1) * s)) as usize).max(1);
         let w: Vec<f64> = (0..n)
             .map(|_| rng.uniform(COPING_W.0, COPING_W.1))
@@ -238,7 +244,7 @@ fn coping_cells(segs: &[Seg], t: f64, z0: f64, h: f64, s: f64, rng: &mut Rng) ->
         for (b, (ta, tb)) in pieces.into_iter().enumerate() {
             let first = ta <= 1e-6 && (seg.start == Vertex::Free || owns_start);
             let last = tb >= seg.len - 1e-6 && (seg.end == Vertex::Free || owns_end);
-            #[allow(clippy::cast_possible_wrap)]
+
             out.push(Cell {
                 seg: k,
                 t0: ta,
@@ -414,7 +420,7 @@ pub(crate) struct Stone {
 
 /// The outline polygon (t, z), counter-clockwise, bounded by the cell's
 /// cracks (`_outline`).
-#[allow(clippy::too_many_lines)]
+
 fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64; 2]> {
     let s = run.scale;
     let g = &run.segs[c.seg];
@@ -477,7 +483,6 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
             let zm = 0.5 * (zb0 + zb1);
             let hh = 0.5 * (zb1 - zb0);
             for k in 0..5 {
-                #[allow(clippy::cast_precision_loss)]
                 let z = zb0 + (zb1 - zb0) * k as f64 / 4.0;
                 let q = (z - zm) / hh;
                 let t = t_cut + off + d * q / 2.0 + bow * (1.0 - q * q);
@@ -507,11 +512,13 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
     let left = side(c.t0, c.end0, -ov0, 1.0, c.crack_w[0]);
     let right = side(c.t1, c.end1, ov1, -1.0, c.crack_w[1]);
     let bedline = |z: f64, ta: f64, tb: f64| -> Vec<[f64; 2]> {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let n = ((libm::fabs(tb - ta) / (4.0 * s)) as usize + 2).max(2);
         (0..n)
             .map(|k| {
-                #[allow(clippy::cast_precision_loss)]
                 let t = ta + (tb - ta) * k as f64 / (n - 1) as f64;
                 [t, zeff(z, t)]
             })
@@ -577,7 +584,6 @@ fn centroid(p: &[[f64; 2]]) -> [f64; 2] {
     let n = p.len();
     let a = signed_area(p);
     if a.abs() < 1e-12 {
-        #[allow(clippy::cast_precision_loss)]
         let k = n as f64;
         return [
             p.iter().map(|q| q[0]).sum::<f64>() / k,
@@ -606,12 +612,11 @@ fn len2(a: [f64; 2]) -> f64 {
 /// and how many vertices it passed.
 fn walk(p: &[[f64; 2]], i: usize, dir: isize, d: f64) -> ([f64; 2], usize) {
     let n = p.len();
-    #[allow(clippy::cast_possible_wrap)]
+
     let ni = n as isize;
     let mut left = d;
     let mut cur = i;
     for k in 1..n {
-        #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
         let nx = ((i as isize + dir * k as isize).rem_euclid(ni)) as usize;
         let e = len2(sub(p[nx], p[cur]));
         if e >= left {
@@ -751,10 +756,12 @@ fn segmentize(p: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
     for i in 0..n {
         let (a, b) = (p[i], p[(i + 1) % n]);
         let l = len2(sub(b, a));
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let k = (libm::ceil(l / step) as usize).max(1);
         for j in 0..k {
-            #[allow(clippy::cast_precision_loss)]
             let f = j as f64 / k as f64;
             out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
         }
@@ -764,7 +771,7 @@ fn segmentize(p: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
 
 /// Draw the stone for a cell (`_place_block`, up to the mesh), or `None`
 /// for a cell the rounding swallows.
-#[allow(clippy::too_many_lines)]
+
 pub(crate) fn stone(m: &Mason, run: &Run, c: &Cell, seed: Seed) -> Option<Stone> {
     let s = run.scale;
     let bs = super::cell_seed(seed, "stone", &c.key);
@@ -1010,7 +1017,6 @@ impl Stone {
         let zlo = self.ring.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
         let mut pos: Vec<[f64; 3]> = Vec::with_capacity(k_lat * n + 2);
         for j in 0..k_lat {
-            #[allow(clippy::cast_precision_loss)]
             let lat = -core::f64::consts::FRAC_PI_2
                 + core::f64::consts::PI * (j + 1) as f64 / (k_lat + 1) as f64;
             let u = libm::fabs(libm::sin(lat));
@@ -1094,7 +1100,6 @@ impl Stone {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     /// A head joint never leans or bows more than [`CRACK_SHARE`] of the

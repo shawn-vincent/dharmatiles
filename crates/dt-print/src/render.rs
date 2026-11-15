@@ -176,7 +176,10 @@ pub fn render(
                 n = n.map(|x| -x);
             }
             let shade = 0.3 + dot(n, l1).max(0.0) + 0.35 * dot(n, l2).max(0.0);
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             let col = colours.get(f).copied().unwrap_or([0.7; 3]).map(|c| {
                 let v = (f64::from(c) * shade * 0.95).clamp(0.0, 1.0);
                 libm::pow(v, 1.0 / 1.25) as f32
@@ -229,7 +232,10 @@ fn fill_triangle(s: &[[f64; 3]; 3], w: usize, h: usize, mut put: impl FnMut(usiz
     if minx > maxx || miny > maxy {
         return;
     }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let (x0, x1, y0, y1) = (minx as usize, maxx as usize, miny as usize, maxy as usize);
     for y in y0..=y1 {
         for x in x0..=x1 {
@@ -270,7 +276,10 @@ fn crop(rgb: &[[f32; 3]], depth: &[f64], w: usize, h: usize) -> Image {
     let mut out = Vec::with_capacity((x1 - x0 + 1) * (y1 - y0 + 1) * 3);
     for y in y0..=y1 {
         for x in x0..=x1 {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            )]
             out.extend(rgb[y * w + x].map(|c| (c * 255.0).round().clamp(0.0, 255.0) as u8));
         }
     }

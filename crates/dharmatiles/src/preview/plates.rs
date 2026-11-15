@@ -301,7 +301,10 @@ pub(super) fn printer_rows(home: Option<&Path>) -> Vec<PrinterRow> {
 }
 
 /// What the page's panel reads: the settings, the pieces and the plates.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 fn plates_panel(
     plan: &Plan,
     layout: &Layout,
@@ -897,7 +900,10 @@ fn rebuild_plates(
 }
 
 /// The page's plan for a finished layout.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the flat inputs of one maths step, named at the call"
+)]
 fn shared_plan(
     plan: &Plan,
     list: &dt_doc::map::PrintList,

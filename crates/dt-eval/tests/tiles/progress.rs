@@ -5,8 +5,6 @@
 //! and the sketching reporter listening (`memo`), against hashes recorded
 //! without them.
 
-#![allow(clippy::unwrap_used)]
-
 use super::memo::observed;
 
 /// One tile for each element that reports sub-progress.

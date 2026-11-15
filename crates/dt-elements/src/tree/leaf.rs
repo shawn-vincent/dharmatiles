@@ -47,13 +47,13 @@ pub(super) struct Blade {
 }
 
 /// Interior station `k` (0-based) as numpy's `linspace(0, 1, 13)[1:-1]`.
-#[allow(clippy::cast_precision_loss, reason = "k < 12")]
+
 pub(super) fn station(k: usize) -> f64 {
     (k + 1) as f64 * (1.0 / N_LONG as f64)
 }
 
 /// Lateral position `j` as numpy's `linspace(-1, 1, 11)`.
-#[allow(clippy::cast_precision_loss, reason = "j ≤ 10")]
+
 fn lateral(j: usize) -> f64 {
     if j == N_LAT {
         1.0
@@ -125,7 +125,7 @@ pub(super) fn surface(base: V, tangent: V, up_hint: V, b: &Blade) -> Vec<V> {
     };
     let inner = b.inner_curve.max(0.0);
     let outer = b.outer_curve.max(0.0);
-    #[allow(clippy::cast_precision_loss, reason = "i ≤ 256")]
+
     let lobe_norm = (0..257)
         .map(|i| lobe(if i == 256 { 1.0 } else { i as f64 / 256.0 }, inner, outer))
         .fold(f64::NEG_INFINITY, f64::max);
@@ -177,7 +177,7 @@ pub(super) fn surface(base: V, tangent: V, up_hint: V, b: &Blade) -> Vec<V> {
 
 /// The surface's triangles (base fan, body quads, tip fan), as
 /// `build_leaf_surface` writes them.
-#[allow(clippy::cast_possible_truncation, reason = "indices < 123")]
+#[expect(clippy::cast_possible_truncation, reason = "indices < 123")]
 pub(super) fn surface_triangles() -> Vec<[u32; 3]> {
     let mut f = Vec::with_capacity(2 * N_LAT * RINGS);
     let (b, t) = (BASE as u32, TIP as u32);
@@ -225,7 +225,7 @@ pub(super) fn oval(n_hat: V, t: V, across: V, len: f64, width: f64, embed_mm: f6
 /// The closed leaf (`solidify_leaf`): blade vertices first (`0..NV`), then
 /// the oval's (`NV..2·NV`); the oval reversed and a wall stitched round
 /// the matching perimeters. Wound outward (positive volume).
-#[allow(clippy::cast_possible_truncation, reason = "indices < 246")]
+#[expect(clippy::cast_possible_truncation, reason = "indices < 246")]
 pub(super) fn solidify(outer: &[V], inner: &[V], tris: &[[u32; 3]]) -> TriMesh {
     let n = NV as u32;
     let mut triangles: Vec<[u32; 3]> = Vec::with_capacity(2 * tris.len() + 4 * N_LONG + 4);

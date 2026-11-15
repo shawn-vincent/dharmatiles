@@ -118,7 +118,10 @@ fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
     let south_arc = pi2 * r_back;
     let cone_arc = libm::sqrt(total * total + (r_tip - r_back) * (r_tip - r_back));
     let north_arc = pi2 * r_tip;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let count = |a: f64, m: usize| (libm::ceil(a / ring_res) as usize).max(m);
     let (n_south, n_cone, n_north) = (count(south_arc, 3), count(cone_arc, 4), count(north_arc, 4));
     let factor_tip = (1.0 - (r_base + MAX_NOISE_MM) / r_tip.max(1e-6)).max(0.0);
@@ -126,7 +129,7 @@ fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
     let (pu_s, pu_tip) = (up_perp(start_t), up_perp(tip_t));
 
     let mut rings: Vec<([f64; 3], f64, [f64; 3])> = Vec::new();
-    #[allow(clippy::cast_precision_loss)]
+
     for j in 1..=n_south {
         let phi = pi2 * j as f64 / n_south as f64;
         let rr = r_back * libm::sin(phi);
@@ -137,7 +140,7 @@ fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
             start_t,
         ));
     }
-    #[allow(clippy::cast_precision_loss)]
+
     for i in 1..=n_cone {
         let tc = i as f64 / n_cone as f64;
         let rr = r_back + tc * (r_tip - r_back);
@@ -150,7 +153,7 @@ fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
         let fac = 0.5 + (factor_tip - 0.5) * sm;
         rings.push((add(p, scale(up_perp(t), rr * fac)), rr, t));
     }
-    #[allow(clippy::cast_precision_loss)]
+
     for j in 1..n_north {
         let phi = pi2 * j as f64 / n_north as f64;
         let rr = r_tip * libm::cos(phi);
@@ -185,7 +188,7 @@ fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
         };
         let e2 = cross(*ax, e1);
         reference = e1;
-        #[allow(clippy::cast_precision_loss)]
+
         for k in 0..n_theta {
             let th = std::f64::consts::TAU * k as f64 / n_theta as f64;
             let (ct, s) = (libm::cos(th), libm::sin(th));
@@ -252,7 +255,10 @@ fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
 
 /// Per-vertex grain: a normal draw per 0.05 mm cell of position.
 fn fine(p: [f64; 3], key: u64) -> f64 {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let c = p.map(|x| libm::floor(x / 0.05) as i64 as u64);
     let u1 = hash01(&[key, 11, c[0], c[1], c[2]]).max(1e-10);
     let u2 = hash01(&[key, 12, c[0], c[1], c[2]]);
@@ -265,7 +271,10 @@ fn coarse(p: [f64; 3], key: u64) -> f64 {
     let fl = q.map(libm::floor);
     let f = [0, 1, 2].map(|a| q[a] - fl[a]);
     let s = f.map(|t| t * t * (3.0 - 2.0 * t));
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let i = fl.map(|x| x as i64);
     let mut val = 0.0;
     for dz in 0..2i64 {
@@ -274,7 +283,7 @@ fn coarse(p: [f64; 3], key: u64) -> f64 {
             let wy = if dy == 1 { s[1] } else { 1.0 - s[1] };
             for dx in 0..2i64 {
                 let wx = if dx == 1 { s[0] } else { 1.0 - s[0] };
-                #[allow(clippy::cast_sign_loss)]
+
                 let h = hash01(&[
                     key,
                     13,

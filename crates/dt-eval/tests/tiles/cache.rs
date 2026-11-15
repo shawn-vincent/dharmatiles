@@ -2,7 +2,10 @@
 //! the last build kept is the same, hash for hash, as one from nothing,
 //! and an edit rebuilds only the steps from the first one it changes.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 
 use std::collections::BTreeMap;
 

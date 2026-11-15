@@ -149,9 +149,12 @@ pub(crate) fn percentile(mut v: Vec<f64>, pct: f64) -> f64 {
         return 0.0;
     }
     v.sort_by(f64::total_cmp);
-    #[allow(clippy::cast_precision_loss)]
+
     let r = pct / 100.0 * (v.len() - 1) as f64;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    )]
     let i = libm::floor(r) as usize;
     let f = r - libm::floor(r);
     if i + 1 < v.len() {
@@ -196,7 +199,6 @@ pub(crate) fn footprint(scene: &Scene, segs: &[Seg], depth: f64) -> Mask {
     let mut m = Mask::new(nx, ny, false);
     for j in 0..ny {
         for i in 0..nx {
-            #[allow(clippy::cast_precision_loss)]
             let p = [i as f64 * step, j as f64 * step];
             m.bits[j * nx + i] = segs.iter().any(|g| {
                 let (dx, dy) = (p[0] - g.a[0], p[1] - g.a[1]);
@@ -241,7 +243,7 @@ pub(crate) fn finish_build(
         solid,
     );
     scene.stamp(fp, top);
-    #[allow(clippy::cast_precision_loss)]
+
     {
         scene.note(&format!("{kind}.units"), counts.units as f64);
         scene.note(&format!("{kind}.courses"), counts.courses as f64);
@@ -256,7 +258,7 @@ pub(crate) type Built = (Solid, Counts, Mask, f64, Vec<Placed>);
 
 /// Build a masonry run (not yet added). `keep(cell)` drops cells (a
 /// floor outside its area).
-#[allow(clippy::too_many_lines)]
+
 pub(crate) fn run(
     m: &Mason,
     scene: &mut Scene,
@@ -751,7 +753,7 @@ type BlocksMade = (Vec<Block>, Vec<TriMesh>, usize, Vec<Placed>);
 /// Blocks for every cell (mortared families and slabs), held printable,
 /// plus the mortar under a missing brick and the pointing of joints wider
 /// than the printer's gap. Returns (blocks, extra meshes, missing count).
-#[allow(clippy::too_many_lines)]
+
 pub(crate) fn blocks(
     m: &Mason,
     run: &Run,
@@ -1036,16 +1038,20 @@ fn hearting(
     let mut rng = Rng::new(seed.key("hearting"));
     let mut out = Vec::new();
     for (k, g) in run.segs.iter().enumerate() {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let nt = (libm::round(g.len / sp) as usize + 1).max(2);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let nz = (libm::round(h / sp) as usize + 1).max(2);
         for (layer, &(y0, y1)) in bands.iter().enumerate() {
-            #[allow(clippy::cast_precision_loss)]
             let off = 0.5 * layer as f64;
             for i in 0..nt {
                 for j in 0..nz {
-                    #[allow(clippy::cast_precision_loss)]
                     let (fi, fj, fnt, fnz) = (i as f64, j as f64, nt as f64, nz as f64);
                     let stagger = if j % 2 == 1 { 0.5 } else { 0.0 };
                     let tc = (fi + stagger + off + rng.uniform(-0.25, 0.25)) * g.len / (fnt - 1.0);
@@ -1080,7 +1086,10 @@ fn foot_rubble(m: &Mason, run: &Run, scene: &Scene, seed: Seed) -> Result<Vec<Tr
     let step = scene.frame().step_mm();
     let ground = |p: [f64; 2]| -> f64 {
         let Some(g) = grid else { return run.seat };
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let (i, j) = (
             (libm::round(p[0] / step).max(0.0) as usize).min(g.nx - 1),
             (libm::round(p[1] / step).max(0.0) as usize).min(g.ny - 1),
@@ -1088,7 +1097,10 @@ fn foot_rubble(m: &Mason, run: &Run, scene: &Scene, seed: Seed) -> Result<Vec<Tr
         f64::from(g.z[j * g.nx + i])
     };
     for (k, g) in run.segs.iter().enumerate() {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        )]
         let n = (m.ruin * g.len / (FOOT_RUBBLE_EVERY_MM * s)) as usize;
         for _ in 0..n {
             let tt = rng.uniform(2.0 * s, g.len - 2.0 * s);

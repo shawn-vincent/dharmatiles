@@ -354,7 +354,7 @@ fn write_lines(
 }
 
 /// `dharmatiles inventory …`.
-#[allow(clippy::too_many_lines)]
+
 #[expect(
     clippy::disallowed_methods,
     reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"

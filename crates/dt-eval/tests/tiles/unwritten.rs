@@ -4,7 +4,10 @@
 //! (or "not set"), so a new control cannot arrive without its default, the
 //! value its element works out, or the words for what leaving it out means.
 
-#![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "a test: a failing unwrap is the failure"
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
