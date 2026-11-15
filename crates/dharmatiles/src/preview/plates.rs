@@ -34,7 +34,7 @@ use super::plan::{
     TilePlan,
 };
 use super::scene::{self, Note, Scene, SceneJson};
-use super::{Shared, State, edit, fail, lock, messages, payload};
+use super::{Shared, State, edit, fail, messages, payload};
 use crate::message::{Kind, LayoutData, Message, MessageData, PlateFilesData, Severity};
 use crate::plates as cli;
 
@@ -441,7 +441,7 @@ pub(super) static AFTER_SEEN: std::sync::Mutex<BTreeMap<String, Box<dyn FnOnce()
 
 #[cfg(test)]
 fn after_seen(path: &str) {
-    if let Some(hook) = lock(&AFTER_SEEN).remove(path) {
+    if let Some(hook) = super::lock(&AFTER_SEEN).remove(path) {
         hook();
     }
 }
@@ -485,17 +485,20 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         let mut sc = scene::read(shared, path, &list, rev);
         // the scene reaches the page now, before anything is built: a map shows its pieces
         // (as boxes, then their meshes) while its plates are still being laid out
-        shared.update(id, |t| {
+        let json = sc.json.clone();
+        let ground = unplanned_ground(shared);
+        let panel = written_panel(&list, shared.home.as_deref(), true);
+        shared.update(id, move |t| {
             // a plan already made keeps its panel: the scene and its revision are what this reading adds
             if let Some(TilePlan::Plates(doc)) = &mut t.plan {
-                doc.scene = Some(sc.json.clone());
+                doc.scene = Some(json);
                 doc.doc_rev = rev;
             } else {
                 t.plan = Some(TilePlan::Plates(Box::new(PlatesDoc {
-                    ground: unplanned_ground(shared),
+                    ground,
                     writable: true,
-                    plates: written_panel(&list, shared.home.as_deref(), true),
-                    scene: Some(sc.json.clone()),
+                    plates: panel,
+                    scene: Some(json),
                     doc_rev: rev,
                 })));
             }
@@ -532,16 +535,13 @@ fn rebuild_plates(
     let t0 = Instant::now();
     let scene_json = scene.map(|s| s.json.clone());
     let kept: Vec<Note> = scene.map_or_else(Vec::new, |s| s.notes.clone());
-    shared.update(id, |t| t.scene_notes = kept);
+    shared.update(id, move |t| t.scene_notes = kept);
     let no_notes = (Vec::new(), Vec::new());
     let (notes, diags) = scene.map_or(no_notes, |s| (s.notes.clone(), s.diags.clone()));
     let is_map = scene.is_some_and(|s| s.json.map);
     let files = seen;
     let writable = std::fs::metadata(path).is_ok_and(|m| !m.permissions().readonly());
-    let view = lock(&shared.tiles)
-        .iter()
-        .find(|t| t.id == id)
-        .map_or(0, |t| t.plate);
+    let view = shared.facts(id).map_or(0, |t| t.plate);
     let fail_with = |list: Option<&dt_doc::map::PrintList>, errs: Vec<Diag>, scope: Scope| {
         // a map whose every piece is on your shelf has nothing to print: that is a fact about
         // the plates, not a mistake in the map
@@ -574,22 +574,21 @@ fn rebuild_plates(
             },
             |l| written_panel(l, shared.home.as_deref(), writable),
         );
-        shared.update(id, |t| {
+        let (files, scene_json) = (files.clone(), scene_json.clone());
+        let mistakes = super::api::mistakes(&errs);
+        let ground = unplanned_ground(shared);
+        shared.update(id, move |t| {
             t.status = if calm { State::Ready } else { State::Failed };
             t.progress = None;
             t.shown = None;
-            t.errors = if calm {
-                Vec::new()
-            } else {
-                super::api::mistakes(&errs)
-            };
-            t.files = files.clone();
+            t.errors = if calm { Vec::new() } else { mistakes };
+            t.files = files;
             t.mesh = None;
             t.plan = Some(TilePlan::Plates(Box::new(PlatesDoc {
-                ground: unplanned_ground(shared),
+                ground,
                 writable,
                 plates: loose,
-                scene: scene_json.clone(),
+                scene: scene_json,
                 doc_rev: rev,
             })));
         });
@@ -701,21 +700,25 @@ fn rebuild_plates(
             );
             let zero = vec![0u16; owner.len()];
             match payload::encode_traced(&mesh, &painted, &clean, &owner, &zero, meta) {
-                Ok(bytes) => shared.update(id, |t| {
-                    t.status = State::Ready;
-                    t.plan = Some(sp);
-                    t.mesh = Some(Arc::new(bytes));
-                    t.mesh_version += 1;
-                    t.doc_rev = Some(rev);
-                    t.files = files.clone();
-                    t.errors.clear();
-                    t.shown = running.then(|| super::api::Shown {
-                        kind: "preview".to_owned(),
-                        note: note.unwrap_or("draft meshes, not yet checked").to_owned(),
-                        checked: false,
-                        tier: None,
+                Ok(bytes) => {
+                    let files = files.clone();
+                    let note = note.unwrap_or("draft meshes, not yet checked").to_owned();
+                    shared.update(id, move |t| {
+                        t.status = State::Ready;
+                        t.plan = Some(sp);
+                        t.mesh = Some(Arc::new(bytes));
+                        t.mesh_version += 1;
+                        t.doc_rev = Some(rev);
+                        t.files = files;
+                        t.errors.clear();
+                        t.shown = running.then(|| super::api::Shown {
+                            kind: "preview".to_owned(),
+                            note,
+                            checked: false,
+                            tier: None,
+                        });
                     });
-                }),
+                }
                 Err(e) => {
                     let d = Diag::plain(
                         dt_lang::codes::VIEW,
@@ -811,18 +814,17 @@ fn rebuild_plates(
     let before = layout.plates.clone();
     let mut failing: Vec<(usize, Vec<String>)> = Vec::new();
     for (n, &k) in todo.iter().enumerate() {
-        shared.update(id, |t| {
-            t.progress = Some(super::api::Progress {
-                what: "building".to_owned(),
-                fraction: n as f64 / todo.len() as f64,
-                label: format!("building {} in full", plan.kinds[k].name),
-                key: "plates".to_owned(),
-                count: Some((format!("{} of {}", n + 1, todo.len()), 0, 0)),
-                elapsed_s: t0.elapsed().as_secs_f64(),
-                eta_s: None,
-                estimate_s: None,
-            });
-        });
+        let progress = super::api::Progress {
+            what: "building".to_owned(),
+            fraction: n as f64 / todo.len() as f64,
+            label: format!("building {} in full", plan.kinds[k].name),
+            key: "plates".to_owned(),
+            count: Some((format!("{} of {}", n + 1, todo.len()), 0, 0)),
+            elapsed_s: t0.elapsed().as_secs_f64(),
+            eta_s: None,
+            estimate_s: None,
+        };
+        shared.update(id, move |t| t.progress = Some(progress));
         match shown(shared, &plan, k, true) {
             Ok(p) => {
                 let opts = match plan.options(k, &shared.options(), shared.home.as_deref()) {
@@ -945,19 +947,19 @@ fn bad(msg: &str) -> (&'static str, super::api::Body) {
 }
 
 fn slot_of(shared: &Shared, id: &str) -> Result<(String, String), Reply> {
-    lock(&shared.tiles)
-        .iter()
-        .find(|t| t.id == id && is_plates(&t.path))
-        .map(|t| (t.id.clone(), t.path.clone()))
+    shared
+        .path_of(id)
+        .filter(|p| is_plates(p))
+        .map(|p| (id.to_owned(), p))
         .ok_or_else(|| fail::refused("404 Not Found", "no such print list"))
 }
 
 /// `/api/plates/show` `{list, plate}`: the plate in view.
 pub(super) fn show(shared: &Shared, v: PlatesShowReq) -> Out<Done> {
     let (id, _) = slot_of(shared, &v.list)?;
-    if let Some(t) = lock(&shared.tiles).iter_mut().find(|t| t.id == id) {
-        t.plate = v.plate;
-    }
+    shared
+        .owner
+        .send(super::owner::Command::SetPlate(id.clone(), v.plate));
     again(shared, &id);
     Ok(Done {})
 }
@@ -1119,18 +1121,17 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
         shared.home.as_deref(),
         shared.store.as_deref(),
         &mut |n, of, name| {
-            shared.update(&id, |t| {
-                t.progress = Some(super::api::Progress {
-                    what: "building".to_owned(),
-                    fraction: (n - 1) as f64 / of as f64,
-                    label: format!("building {name} in full for the export"),
-                    key: "plates".to_owned(),
-                    count: Some((format!("{n} of {of}"), 0, 0)),
-                    elapsed_s: t0.elapsed().as_secs_f64(),
-                    eta_s: None,
-                    estimate_s: None,
-                });
-            });
+            let progress = super::api::Progress {
+                what: "building".to_owned(),
+                fraction: (n - 1) as f64 / of as f64,
+                label: format!("building {name} in full for the export"),
+                key: "plates".to_owned(),
+                count: Some((format!("{n} of {of}"), 0, 0)),
+                elapsed_s: t0.elapsed().as_secs_f64(),
+                eta_s: None,
+                estimate_s: None,
+            };
+            shared.update(&id, move |t| t.progress = Some(progress));
         },
     ) {
         Ok(b) => b,

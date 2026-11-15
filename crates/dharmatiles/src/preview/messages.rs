@@ -14,9 +14,9 @@ use crate::message::{
 };
 use dt_eval::TileRecord;
 
+use super::Shared;
 use super::route::Reply;
 use super::stack::StackItem;
-use super::{Shared, lock};
 
 /// What a check says: that it read the tile, and each note it made
 /// (`dt::steep`, `dt::edge`).  `stack` is the plan's stack items, for the
@@ -270,15 +270,23 @@ pub(super) fn read(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> R
     let only: Option<u64> = param("seq").and_then(|s| s.parse().ok());
     let want = |k: &str| param(k).filter(|v| !v.is_empty() && v != "all");
     let (state, kind, severity) = (want("state"), want("kind"), want("severity"));
-    let ev = lock(&shared.events);
-    let found = ev.messages.query(tile.as_deref(), since, |m| {
-        only.is_none_or(|n| n == m.seq)
-            && state.as_deref().is_none_or(|s| (s == "open") == m.open)
-            && kind.as_deref().is_none_or(|k| k == m.kind.as_str())
-            && severity.as_deref().is_none_or(|s| s == m.severity.as_str())
-    });
+    let found: Vec<_> = shared
+        .owner
+        .ask(|reply| super::owner::Command::Messages { tile, since, reply })
+        .into_iter()
+        .filter(|m| {
+            only.is_none_or(|n| n == m.seq)
+                && state.as_deref().is_none_or(|s| (s == "open") == m.open)
+                && kind.as_deref().is_none_or(|k| k == m.kind.as_str())
+                && severity.as_deref().is_none_or(|s| s == m.severity.as_str())
+        })
+        .collect();
     match param("format").as_deref() {
-        Some("text") => Reply::Body("200 OK", "text/plain; charset=utf-8", render(&found)),
+        Some("text") => Reply::Body(
+            "200 OK",
+            "text/plain; charset=utf-8",
+            render(&found.iter().collect::<Vec<_>>()),
+        ),
         Some("json") | None => super::api::ok(&MessagesRes {
             epoch: shared.epoch.clone(),
             messages: found.iter().map(|m| m.wire()).collect(),
@@ -304,11 +312,9 @@ pub(super) fn report(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) ->
         return super::fail::refused("400 Bad Request", "report needs seq=N, a message's number")
             .into();
     };
-    let ev = lock(&shared.events);
-    let Some(m) = ev.messages.all().iter().find(|m| m.seq == seq).cloned() else {
+    let Some(m) = shared.owner.ask(|r| super::owner::Command::Message(seq, r)) else {
         return super::fail::refused("404 Not Found", format!("no message {seq}")).into();
     };
-    drop(ev);
     if !m.reportable() {
         return super::fail::refused(
             "400 Bad Request",

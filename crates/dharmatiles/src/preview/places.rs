@@ -594,11 +594,10 @@ pub(super) fn add_place(shared: &Shared, _: Nothing) -> Out<PlacesAddRes> {
         return Err(fail::failure("500 Internal Server Error", e));
     }
     let root = Root::new(&label_of(&real), RootKind::Dir(real.clone())).with_role(Role::Added);
-    let (index, label) = {
-        let mut roots = lock(&shared.roots);
-        roots.push(root);
-        (roots.len() - 1, label_of(&real))
-    };
+    let index = shared
+        .owner
+        .ask(|r| super::owner::Command::AddRoot(root, r));
+    let label = label_of(&real);
     shared.rescan_held();
     announce(shared);
     Ok(PlacesAddRes::Added(Box::new(PlaceAdded {
@@ -640,30 +639,13 @@ pub(super) fn remove_place(shared: &Shared, req: PlacesRemoveReq) -> Out<Changed
         return Err(fail::failure("500 Internal Server Error", e));
     }
     let gone: Vec<TileId> = {
-        let mut tiles = lock(&shared.tiles);
-        let mut gone = Vec::new();
-        tiles.retain(|t| {
-            let here = t.root == i;
-            if here {
-                gone.push(t.id.clone());
-            }
-            !here
-        });
-        for t in tiles.iter_mut().filter(|t| t.root > i) {
-            t.root -= 1;
-        }
-        lock(&shared.roots).remove(i);
-        let mut folders = lock(&shared.folders);
-        *folders = std::mem::take(&mut *folders)
-            .into_iter()
-            .filter(|(r, _)| *r != i)
-            .map(|(r, v)| (if r > i { r - 1 } else { r }, v))
-            .collect();
+        let gone = shared
+            .owner
+            .ask(|r| super::owner::Command::RemoveRoot(i, r));
         gone
     };
     for id in &gone {
         shared.forget(id);
-        lock(&shared.events).messages.forget(id);
     }
     announce(shared);
     Ok(Changed { rev: shared.told() })

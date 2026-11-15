@@ -134,9 +134,9 @@ fn events(mut conn: TcpStream, shared: &Shared, from: &Resume) {
     if conn.write_all(head.as_bytes()).is_err() {
         return;
     }
-    let rx = shared.subscribe(from);
+    let stream = shared.subscribe(from);
     loop {
-        let sent = match rx.recv_timeout(Duration::from_secs(10)) {
+        let sent = match stream.recv_timeout(Duration::from_secs(10)) {
             Ok(msg) => conn.write_all(format!("data: {msg}\n\n").as_bytes()),
             Err(RecvTimeoutError::Timeout) => conn.write_all(b": keep-alive\n\n"),
             Err(RecvTimeoutError::Disconnected) => return,

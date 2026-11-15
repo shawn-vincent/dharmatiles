@@ -131,10 +131,7 @@ impl Shared {
     /// Ask for tile `id` to be built next (a no-op once it has been
     /// built).  False when there is no such tile.
     pub(super) fn want(&self, id: &str) -> bool {
-        let idle = lock(&self.tiles)
-            .iter()
-            .find(|t| t.id == id)
-            .map(|t| t.status == State::Idle);
+        let idle = self.facts(id).map(|t| t.idle);
         if idle == Some(true) {
             let mut q = lock(&self.queue);
             if !q.wanted.iter().any(|w| w == id) {
@@ -218,15 +215,15 @@ impl Shared {
     }
 
     fn pick_full(&self, wanted: &mut VecDeque<TileId>, eager: bool) -> Option<TileId> {
-        let tiles = lock(&self.tiles);
+        let tiles = self.rows();
         while let Some(id) = wanted.pop_front() {
             if tiles.iter().any(|t| t.id == id) {
                 return Some(id);
             }
         }
         let roots = self.roots();
-        let named = |t: &Slot| roots.get(t.root).is_none_or(|r| r.kind == RootKind::Files);
-        if eager && let Some(t) = tiles.iter().find(|t| t.status == State::Idle && named(t)) {
+        let named = |t: &owner::Row| roots.get(t.root).is_none_or(|r| r.kind == RootKind::Files);
+        if eager && let Some(t) = tiles.iter().find(|t| t.idle && named(t)) {
             return Some(t.id.clone());
         }
         tiles.iter().find(|t| t.changed()).map(|t| t.id.clone())
@@ -245,11 +242,11 @@ impl Shared {
             + q.side.len()
             + q.side_running.len();
         drop(q);
-        let tiles = lock(&self.tiles);
         queued
-            + tiles
+            + self
+                .rows()
                 .iter()
-                .filter(|t| t.status == State::Building || t.changed())
+                .filter(|t| t.building || t.changed())
                 .count()
     }
 

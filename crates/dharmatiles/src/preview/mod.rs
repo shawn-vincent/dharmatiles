@@ -81,6 +81,7 @@ mod local_docs;
 mod maps;
 mod messages;
 mod offers;
+mod owner;
 pub mod payload;
 pub(crate) mod places;
 mod placing;
@@ -279,8 +280,9 @@ impl Slot {
         }
     }
 
+    #[cfg(test)]
     fn changed(&self) -> bool {
-        self.status != State::Idle && (self.stale || self.files.iter().any(|(f, t)| mtime(f) != *t))
+        self.row().changed()
     }
 }
 
@@ -329,14 +331,11 @@ impl Events {
 
 /// What the server and the worker share.
 pub struct Shared {
-    /// The build target the page chose: base system and printer, as the
-    /// options every build is made with (see [`Shared::set_target`]).
-    target: Mutex<Options>,
     /// Where the user's own printers live and the chosen target is
     /// remembered (`$DT_HOME`); none in the tests that must not touch it.
     home: Option<std::path::PathBuf>,
-    tiles: Mutex<Vec<Slot>>,
-    events: Mutex<Events>,
+    /// The tiles and the event stream: owned by one thread, asked by command ([`owner`]).
+    owner: owner::Owner,
     /// This run: a stream from another run cannot resume, whatever its
     /// revision.
     epoch: String,
@@ -347,15 +346,10 @@ pub struct Shared {
     cache: Option<std::path::PathBuf>,
     /// A palette document the paint is read from at each build.
     palette: Option<std::path::PathBuf>,
-    /// Where the tiles come from; a slot's `root` indexes this.  A place the
-    /// user adds is appended, one they remove is taken out (and the slots'
-    /// indexes after it move down: see [`places`]).  Locked after the tiles.
-    roots: Mutex<Vec<Root>>,
-    /// The folders of each folder place, as paths below it (empty ones too):
-    /// what the last scan found, so a new or removed folder is told.
-    folders: Mutex<BTreeMap<usize, Vec<String>>>,
     /// Held while the places are scanned or changed: one at a time.
     gate: Mutex<()>,
+    /// The number of the next reading of the resources the owner cannot read ([`Shared::resources_read`]).
+    read_seq: std::sync::atomic::AtomicU64,
     /// When the folders were last rescanned.
     scanned: Mutex<Option<Instant>>,
     /// Where the per-user settings live (the added places); none in the
@@ -397,9 +391,9 @@ struct BuildingGuard {
 
 impl Drop for BuildingGuard {
     fn drop(&mut self) {
-        let mut ev = lock(&self.shared.events);
-        let gone = ev.messages.end_progress(&self.id);
-        Shared::send_messages(&mut ev, &gone);
+        self.shared
+            .owner
+            .send(owner::Command::EndProgress(self.id.clone()));
     }
 }
 
@@ -413,6 +407,15 @@ const BUILD_CACHES: usize = 4;
 /// replaced whole, so a poisoned lock holds nothing half-written.
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     dt_value::LockExt::lock_unpoisoned(m)
+}
+
+/// `$HOME`, as the places say it; none when it is not set.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+)]
+fn home_env() -> Option<String> {
+    std::env::var("HOME").ok()
 }
 
 /// Log `msg` to stderr the first time it is said, for a failure the periodic
@@ -457,25 +460,17 @@ impl Shared {
                 .map(|p| Slot::in_root(p, r, roots[r].group(p)))
                 .collect()
         });
+        let epoch = edit::token()[..12].to_owned();
         let me = Self {
-            target: Mutex::new(opts.clone()),
             home: None,
-            tiles: Mutex::new(tiles),
-            events: Mutex::new(Events {
-                rev: 1,
-                log: VecDeque::new(),
-                clients: Vec::new(),
-                messages: crate::message::Log::default(),
-                told: resources::Told::default(),
-            }),
-            epoch: edit::token()[..12].to_owned(),
+            owner: owner::Owner::start(tiles, roots, opts.clone(), home_env(), epoch.clone()),
+            epoch,
             queue: Mutex::new(queue::Queue::default()),
             queue_cv: std::sync::Condvar::new(),
             cache: None,
             palette: None,
-            roots: Mutex::new(roots),
-            folders: Mutex::new(BTreeMap::new()),
             gate: Mutex::new(()),
+            read_seq: std::sync::atomic::AtomicU64::new(1),
             scanned: Mutex::new(None),
             settings: None,
             trash: None,
@@ -539,13 +534,13 @@ impl Shared {
 
     /// The places now (a copy: they can change while it is read).
     fn roots(&self) -> Vec<Root> {
-        lock(&self.roots).clone()
+        self.owner.ask(owner::Command::Roots)
     }
 
     /// Whether the page has the debug layer on for tile `id`: its builds
     /// collect the layer's marks.
     fn marks_of(&self, id: &str) -> bool {
-        lock(&self.tiles).iter().any(|t| t.id == id && t.marks)
+        self.facts(id).is_some_and(|f| f.marks)
     }
 
     /// The page turned the debug layer on or off for tile `id`.  Turned on
@@ -554,22 +549,27 @@ impl Shared {
     /// hides the layer and the builds after this one leave the marks out.
     /// False when there is no such tile.
     fn set_marks(&self, id: &str, on: bool) -> bool {
-        let mut tiles = lock(&self.tiles);
-        let Some(t) = tiles.iter_mut().find(|t| t.id == id) else {
-            return false;
-        };
-        let was = std::mem::replace(&mut t.marks, on);
-        if on && !was && t.status != State::Idle {
-            t.stale = true;
+        let found = self
+            .owner
+            .ask(|r| owner::Command::SetMarks(id.to_owned(), on, r));
+        if found {
+            self.queue_cv.notify_all();
         }
-        drop(tiles);
-        self.queue_cv.notify_all();
-        true
+        found
+    }
+
+    /// The tiles, for a test to read or arrange: run on the owner.
+    #[cfg(test)]
+    fn tiles_with<R: Send + 'static>(
+        &self,
+        f: impl FnOnce(&mut Vec<Slot>) -> R + Send + 'static,
+    ) -> R {
+        self.owner.inspect(move |c| f(&mut c.tiles))
     }
 
     /// The options every build is made with: the chosen target.
     fn options(&self) -> Options {
-        lock(&self.target).clone()
+        self.owner.ask(owner::Command::Target)
     }
 
     /// Tell every page the state again (the printers there are changed on disk).
@@ -601,13 +601,7 @@ impl Shared {
         if let Some(h) = &self.home {
             crate::library::remember_target(h, system, printer)?;
         }
-        *lock(&self.target) = next;
-        let mut tiles = lock(&self.tiles);
-        for t in tiles.iter_mut().filter(|t| t.status != State::Idle) {
-            t.stale = true;
-        }
-        self.publish_locked(&tiles, false);
-        drop(tiles);
+        self.owner.send(owner::Command::SetTarget(next));
         self.queue_cv.notify_all();
         Ok(())
     }
@@ -698,58 +692,26 @@ impl Shared {
     /// Work in flight for document `id`, said: remembered for a browser that connects later, and sent now.  A job (a
     /// map's pieces loading) does not take the place of the document's own build once that has a stage to say.
     fn tell_progress(&self, id: &str, body: api::Progress, job: bool) {
-        let mut tiles = lock(&self.tiles);
-        if let Some(slot) = tiles.iter_mut().find(|t| t.id == id) {
-            // the document's own build, once it has a stage to say, is the work in flight until it ends
-            if job
-                && slot.status == State::Building
-                && slot.progress.as_ref().is_some_and(|p| p.what == "building")
-            {
-                return;
-            }
-            slot.progress = Some(body.clone());
-            let mut ev = lock(&self.events);
-            let rev = ev.rev;
-            ev.send(&api::StreamEvent::Progress {
-                rev,
-                id: id.to_owned(),
-                progress: body,
-            });
-        }
+        self.owner.send(owner::Command::Progress {
+            id: id.to_owned(),
+            body,
+            job,
+        });
+    }
+
+    /// What the owner knows of tile `id` besides its summary; none when it is not listed.
+    fn facts(&self, id: &str) -> Option<owner::Facts> {
+        self.owner.ask(|r| owner::Command::Facts(id.to_owned(), r))
     }
 
     /// A tile's name (for a message), or none when it is not listed.
     fn name_of(&self, id: &str) -> Option<String> {
-        lock(&self.tiles)
-            .iter()
-            .find(|t| t.id == id)
-            .map(|t| t.name.clone())
+        self.facts(id).map(|f| f.name)
     }
 
     /// The path of tile `id` as the program names it (a path in My tiles, or `lib:` in the library).
     fn path_of(&self, id: &str) -> Option<String> {
-        lock(&self.tiles)
-            .iter()
-            .find(|t| t.id == id)
-            .map(|t| t.path.clone())
-    }
-
-    /// A message about a tile names the tile's file when it names none of its own: a copy of it says which file.
-    fn name_file(&self, m: &mut crate::message::Message) {
-        if m.file.is_none() {
-            m.file = self.path_of(&m.tile);
-        }
-    }
-
-    /// Tell every listener of `changed` messages.
-    fn send_messages(ev: &mut Events, changed: &[crate::message::Message]) {
-        let rev = ev.rev;
-        for m in changed {
-            ev.send(&api::StreamEvent::Message {
-                rev,
-                message: Box::new(m.wire()),
-            });
-        }
+        self.facts(id).map(|f| f.path)
     }
 
     /// What tile `id` reports for `scope` now (`make` is given its name): what
@@ -763,63 +725,38 @@ impl Shared {
         make: impl FnOnce(&str) -> Vec<crate::message::Message>,
     ) {
         let Some(name) = self.name_of(id) else { return };
-        let mut found = make(&name);
-        for m in &mut found {
-            self.name_file(m);
-        }
-        let mut ev = lock(&self.events);
-        let changed = ev.messages.report(fail::now_ms(), id, scope, found);
-        Self::send_messages(&mut ev, &changed);
+        self.owner.send(owner::Command::Report {
+            id: id.to_owned(),
+            scope,
+            found: make(&name),
+        });
     }
 
     /// One message with nothing to clear (a failure of the server's or the page's), said now.
-    fn say(&self, mut m: crate::message::Message) {
-        self.name_file(&mut m);
-        let mut ev = lock(&self.events);
-        let m = ev.messages.say(fail::now_ms(), m);
-        Self::send_messages(&mut ev, &[m]);
+    fn say(&self, m: crate::message::Message) {
+        self.owner.send(owner::Command::Say(m));
     }
 
     /// A build of tile `id` begins: a message says so until the guard drops
     /// (whatever way the build ends); it is never kept.
     fn building(self: &Arc<Self>, id: &str) -> Option<BuildingGuard> {
-        use crate::message::{Kind, Message, Scope, Severity};
-        let name = self.name_of(id)?;
-        let mut ev = lock(&self.events);
-        let m = Message::new(
-            Kind::Progress,
-            Severity::Info,
-            Scope::Build,
-            id,
-            &name,
-            format!("Building {name}"),
-        );
-        let m = ev.messages.begin_progress(fail::now_ms(), m);
-        Self::send_messages(&mut ev, &[m]);
+        self.name_of(id)?;
+        self.owner.send(owner::Command::BeginMessage(owner::Begin {
+            id: id.to_owned(),
+            text: |name| format!("Building {name}"),
+            code: None,
+        }));
         Some(BuildingGuard {
             shared: Arc::clone(self),
             id: id.to_owned(),
         })
     }
 
-    /// Every tile's state: the `/api/tiles` body and the first event.
-    fn snapshot_of(&self, tiles: &[Slot], rev: u64) -> api::Snapshot {
-        let (target, places) = (self.target_value(), self.places_value());
-        api::Snapshot {
-            contract: api::contract().to_owned(),
-            rev,
-            epoch: self.epoch.clone(),
-            system: target.system,
-            printer: target.printer,
+    /// What a snapshot holds that is read from the disk (the owner makes the rest): the printers and the inventory.
+    fn snapshot_outside(&self) -> owner::Outside {
+        owner::Outside {
             printers: self.printers_value(),
-            overhang_deg: target.overhang_deg,
-            steepest_deg: target.steepest_deg,
-            square_mm: target.square_mm,
-            roots: places.roots,
-            folders: places.folders,
-            home: places.home,
             inventory: self.inventory_value(),
-            tiles: tiles.iter().map(Slot::summary).collect(),
         }
     }
 
@@ -828,13 +765,13 @@ impl Shared {
     /// stream, the one path every change reaches it by.
     fn told(&self) -> u64 {
         self.publish(false);
-        lock(&self.events).rev
+        self.owner.ask(owner::Command::Rev)
     }
 
+    /// Every tile's state and the rest of what the page is told: what the owner holds, then what is read from disk.
     fn snapshot(&self) -> api::Snapshot {
-        let tiles = lock(&self.tiles);
-        let rev = lock(&self.events).rev;
-        self.snapshot_of(&tiles, rev)
+        let held = self.owner.ask(owner::Command::Snapshot);
+        held.with(self.snapshot_outside())
     }
 
     /// Rescan the folders and the library once [`RESCAN`] has passed:
@@ -874,15 +811,7 @@ impl Shared {
             .enumerate()
             .filter_map(|(r, root)| Some((r, root.scan_folders()?)))
             .collect();
-        let folders_changed = {
-            let mut now = lock(&self.folders);
-            let differs = *now != folders;
-            if differs {
-                *now = folders;
-            }
-            differs
-        };
-        let mut removed = Vec::new();
+        let folders_changed = self.owner.ask(|r| owner::Command::SetFolders(folders, r));
         // the inventory is the page's too: edited by hand, or by the command line, it is told
         let inventory_changed = {
             let now = inventory::snapshot(self.home.as_deref());
@@ -893,156 +822,64 @@ impl Shared {
             }
             differs
         };
-        let changed = {
-            let mut tiles = lock(&self.tiles);
-            let before = tiles.len();
-            for (r, paths) in found {
-                let have: BTreeSet<&str> = paths.iter().map(String::as_str).collect();
-                tiles.retain(|t| {
-                    let keep = t.root != r || have.contains(t.path.as_str());
-                    if !keep {
-                        removed.push(t.id.clone());
-                    }
-                    keep
-                });
-                for p in &paths {
-                    if !tiles.iter().any(|t| t.root == r && &t.path == p) {
-                        let mut slot = Slot::in_root(p, r, roots[r].group(p));
-                        slot.size = places::size_of(p);
-                        tiles.push(slot);
-                    }
+        // the tiles the owner has, so only a new one is read for its size (the disk is read here, not there)
+        let have: BTreeSet<(usize, String)> =
+            self.owner.ask(owner::Command::Paths).into_iter().collect();
+        let mut fresh = Vec::new();
+        for (r, paths) in &found {
+            for p in paths {
+                if !have.contains(&(*r, p.clone())) {
+                    let mut slot = Slot::in_root(p, *r, roots[*r].group(p));
+                    slot.size = places::size_of(p);
+                    fresh.push(slot);
                 }
             }
-            let changed = tiles.len() != before
-                || !removed.is_empty()
-                || folders_changed
-                || inventory_changed;
-            if changed {
-                self.publish_locked(&tiles, false);
-            }
-            changed
-        };
+        }
+        let (seq, read) = self.resources_read(false);
+        let (changed, removed) = self.owner.ask(|reply| owner::Command::Reconcile {
+            found,
+            fresh,
+            changed_elsewhere: folders_changed || inventory_changed,
+            seq,
+            read,
+            reply,
+        });
         for id in &removed {
             self.forget(id);
-            lock(&self.events).messages.forget(id);
         }
         changed
     }
 
     /// Change tile `id` and tell every listening browser; a tile that is
     /// not listed is left alone.
-    fn update(&self, id: &str, f: impl FnOnce(&mut Slot)) {
-        let mut tiles = lock(&self.tiles);
-        let Some(slot) = tiles.iter_mut().find(|t| t.id == id) else {
-            return;
-        };
-        f(slot);
-        let summary = slot.summary();
-        let mut ev = lock(&self.events);
-        let rev = ev.bump(Change::Tile(id.to_owned()));
-        ev.send(&api::StreamEvent::Tile {
-            rev,
-            tile: Box::new(summary),
-        });
+    fn update(&self, id: &str, f: impl FnOnce(&mut Slot) + Send + 'static) {
+        self.owner.edit(id, f);
     }
 
     /// The tile `id` as the page reads it, for a call that makes or moves
     /// one (the reply carries it, so the page need not wait for an event).
     fn summary(&self, id: &str) -> Option<api::TileSummary> {
-        lock(&self.tiles)
-            .iter()
-            .find(|t| t.id == id)
-            .map(Slot::summary)
-    }
-
-    /// One event to one new listener (the receiver is held by the caller: a send cannot fail).
-    fn send_to(tx: &std::sync::mpsc::Sender<String>, event: &api::StreamEvent) {
-        match serde_json::to_string(event) {
-            Ok(s) => {
-                // a page that went away between its connection and its first events
-                let _ = tx.send(s);
-            }
-            Err(e) => tell!("error: preview: an event could not be written: {e}"),
-        }
+        self.owner
+            .ask(|r| owner::Command::Summary(id.to_owned(), r))
     }
 
     /// A new listener.  With the epoch and last revision of a stream that
-    /// dropped, and the log still holding everything since, it is sent
-    /// only what changed (one event per tile, as it is now); otherwise
-    /// the snapshot.  Locked so no change falls between the first message
-    /// and the rest.
-    fn subscribe(&self, from: &route::Resume) -> std::sync::mpsc::Receiver<String> {
-        // The sends below ignore their result: `rx` is held here until this
-        // returns, so a send to `tx` cannot fail.
-        let (tx, rx) = std::sync::mpsc::channel();
-        let tiles = lock(&self.tiles);
-        let mut ev = lock(&self.events);
-        let mut resumed = false;
-        if let (Some(e), Some(since)) = (&from.epoch, from.since)
-            && *e == self.epoch
-            && since <= ev.rev
-            && (since == ev.rev || ev.log.front().is_some_and(|(r, _)| *r <= since + 1))
-        {
-            let mut ids = Vec::new();
-            let mut list = false;
-            let mut names: Vec<&'static str> = Vec::new();
-            for (_, c) in ev.log.iter().filter(|(r, _)| *r > since) {
-                match c {
-                    // tiles that joined or left: the page starts over from the whole
-                    Change::Resource("list") => list = true,
-                    Change::Resource(n) if !names.contains(n) => names.push(n),
-                    Change::Resource(_) => {}
-                    Change::Tile(id) if !ids.contains(id) => ids.push(id.clone()),
-                    Change::Tile(_) => {}
-                }
-            }
-            if !list {
-                let rev = ev.rev;
-                // (the receiver is held here until this returns: a send cannot fail)
-                Self::send_to(
-                    &tx,
-                    &api::StreamEvent::Resumed {
-                        rev,
-                        epoch: self.epoch.clone(),
-                    },
-                );
-                // the last of each resource that changed since, not the whole
-                for event in Self::resource_events(&ev, &names) {
-                    let _ = tx.send(event);
-                }
-                for id in ids {
-                    if let Some(t) = tiles.iter().find(|t| t.id == id) {
-                        Self::send_to(
-                            &tx,
-                            &api::StreamEvent::Tile {
-                                rev,
-                                tile: Box::new(t.summary()),
-                            },
-                        );
-                    }
-                }
-                resumed = true;
-            }
+    /// dropped, and the owner still holding everything since, it is sent
+    /// only what changed; otherwise the snapshot.
+    fn subscribe(&self, from: &route::Resume) -> owner::Subscription {
+        let sub = self.owner.ask(|reply| owner::Command::Subscribe {
+            epoch: from.epoch.clone(),
+            since: from.since,
+            reply,
+        });
+        let mut head: VecDeque<String> = sub.lead.into();
+        if let Some(held) = sub.fresh {
+            // read after the listener was registered: what it says is of that moment or later
+            let whole = held.with(self.snapshot_outside());
+            head.extend(owner::encode(&api::StreamEvent::Snapshot(Box::new(whole))));
         }
-        if !resumed {
-            let rev = ev.rev;
-            Self::send_to(
-                &tx,
-                &api::StreamEvent::Snapshot(Box::new(self.snapshot_of(&tiles, rev))),
-            );
-        }
-        // every kept message follows, so a page that came (or came back) has the whole record
-        for m in ev.messages.all() {
-            Self::send_to(
-                &tx,
-                &api::StreamEvent::Message {
-                    rev: ev.rev,
-                    message: Box::new(m.wire()),
-                },
-            );
-        }
-        ev.clients.push(tx);
-        rx
+        head.extend(sub.messages);
+        owner::Subscription::new(head, sub.rx)
     }
 
     /// A file of tile `id` for the text pane: the tile's own document, or
@@ -1057,12 +894,11 @@ impl Shared {
     )]
     fn text(&self, id: &str, file: Option<&str>) -> Result<Option<route::TextRes>, String> {
         let path = {
-            let tiles = lock(&self.tiles);
-            let Some(t) = tiles.iter().find(|t| t.id == id) else {
+            let Some(t) = self.facts(id) else {
                 return Ok(None);
             };
             match file {
-                None => t.path.clone(),
+                None => t.path,
                 Some(f) if f == t.path || t.files.contains_key(f) => f.to_owned(),
                 Some(_) => return Ok(None),
             }
@@ -1091,15 +927,8 @@ impl Shared {
     /// The tile's mesh, if it is of document revision `doc_rev`: `Ok(None)` when there is none yet, `Err(now)` (the
     /// revision it is of) when it is of another, which is never sent as if it were this one's.
     fn mesh(&self, id: &str, doc_rev: u64) -> Result<Option<Arc<Vec<u8>>>, u64> {
-        let tiles = lock(&self.tiles);
-        let Some(t) = tiles.iter().find(|t| t.id == id) else {
-            return Ok(None);
-        };
-        match (&t.mesh, t.doc_rev) {
-            (Some(m), Some(r)) if r == doc_rev => Ok(Some(Arc::clone(m))),
-            (Some(_), r) => Err(r.unwrap_or(0)),
-            (None, _) => Ok(None),
-        }
+        self.owner
+            .ask(|r| owner::Command::Mesh(id.to_owned(), doc_rev, r))
     }
 
     /// The revision of the document at `path` now: a library file has none (0).  A file that cannot be read is 0 too:
@@ -1116,13 +945,8 @@ impl Shared {
     }
 
     fn sketch_mesh(&self, id: &str, sketch: u64) -> Option<Arc<Vec<u8>>> {
-        lock(&self.tiles)
-            .iter()
-            .find(|t| t.id == id)?
-            .sketches
-            .iter()
-            .find(|k| k.id == sketch)
-            .map(|k| Arc::clone(&k.mesh))
+        self.owner
+            .ask(|r| owner::Command::SketchMesh(id.to_owned(), sketch, r))
     }
 
     /// The build cache for `path` (a draft's, or a full build's), made
@@ -1142,10 +966,11 @@ impl Shared {
     /// Keep stage `stage`'s sketch for tile `id`, in place of its last.
     fn add_sketch(&self, id: &str, stage: &str, rough: bool, mesh: Vec<u8>) {
         let sketch = self.sketch_seq.fetch_add(1, Ordering::Relaxed) + 1;
-        self.update(id, |t| {
+        let stage = stage.to_owned();
+        self.update(id, move |t| {
             t.sketches.retain(|k| k.stage != stage);
             t.sketches.push(Sketch {
-                stage: stage.to_owned(),
+                stage,
                 id: sketch,
                 rough,
                 mesh: Arc::new(mesh),
@@ -1265,7 +1090,7 @@ pub fn run(
     let url = format!("http://{addr}/");
     tell!("preview: {url}  (Ctrl-C to stop)");
     for (i, r) in shared.roots().iter().enumerate() {
-        let n = lock(&shared.tiles).iter().filter(|t| t.root == i).count();
+        let n = shared.rows().iter().filter(|t| t.root == i).count();
         match &r.kind {
             RootKind::Dir(d) if !d.is_dir() => tell!(
                 "{}: {} (not there yet; tiles saved there will show up)",

@@ -1063,15 +1063,15 @@ fn the_debug_layer_is_collected_only_for_a_tile_the_page_has_it_on_for() {
     // not built yet: switching it on only records it (the build asked for has the marks)
     assert!(matches!(post(1), Reply::Json("202 Accepted", _)));
     assert!(shared.marks_of(&id));
-    assert!(!lock(&shared.tiles).iter().any(|t| t.stale));
+    assert!(!shared.tiles_with(|t| t.iter().any(|t| t.stale)));
     // built; the layer off again, then on: only turning it on builds the tile again
-    lock(&shared.tiles)[0].status = State::Ready;
+    shared.tiles_with(|t| t[0].status = State::Ready);
     assert!(matches!(post(0), Reply::Json(..)));
     assert!(!shared.marks_of(&id));
-    assert!(!lock(&shared.tiles)[0].stale, "off rebuilds nothing");
+    assert!(!shared.tiles_with(|t| t[0].stale), "off rebuilds nothing");
     assert!(matches!(post(1), Reply::Json(..)));
     assert!(
-        lock(&shared.tiles)[0].stale,
+        shared.tiles_with(|t| t[0].stale),
         "on builds it again, with the marks"
     );
     // a tile there is not
@@ -1156,7 +1156,7 @@ fn a_stream_resumes_from_its_last_revision_or_starts_over() {
         epoch: Some(epoch.to_owned()),
         since: Some(since),
     };
-    let msgs = |rx: &std::sync::mpsc::Receiver<String>| -> Vec<StreamEvent> {
+    let msgs = |rx: &owner::Subscription| -> Vec<StreamEvent> {
         rx.try_iter().map(|m| read(m.as_bytes())).collect()
     };
     let first = msgs(&shared.subscribe(&route::Resume {
@@ -1814,12 +1814,11 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     assert_eq!(snap.printer, "default");
     // one tile has been built
     assert_eq!(shared.snapshot().tiles.len(), 0);
-    {
-        let mut tiles = lock(&shared.tiles);
+    shared.tiles_with(|tiles| {
         let mut t = Slot::new("lib:tests/ground/1x1-flat.dtile");
         t.status = State::Ready;
         tiles.push(t);
-    }
+    });
     assert!(shared.set_target(None, Some("mine")).is_ok());
     let snap = shared.snapshot();
     assert_eq!(snap.printer, "mine");
@@ -1828,7 +1827,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     assert!((snap.overhang_deg - 50.0).abs() < 1e-9);
     assert!((snap.steepest_deg - 62.0).abs() < 1e-9);
     // the built tile is stale: it builds again for the new target
-    assert!(lock(&shared.tiles).iter().all(|t| t.stale && t.changed()));
+    assert!(shared.tiles_with(|t| t.iter().all(|t| t.stale && t.changed())));
     assert_eq!(shared.options().target(), "db-mine");
     // and the choice is in the home, for the next run
     let kept = crate::library::remembered_target(&dir).unwrap().unwrap();
@@ -2941,20 +2940,25 @@ mod stored {
     }
 
     fn texts(shared: &Shared, path: &str) -> Vec<String> {
-        lock(&shared.events)
-            .messages
-            .query(Some(&tile_id(path)), 0, |_| true)
-            .iter()
-            .filter(|m| m.open)
-            .map(|m| m.text.clone())
-            .collect()
+        let id = tile_id(path);
+        shared.owner.inspect(move |c| {
+            c.events
+                .messages
+                .query(Some(&id), 0, |_| true)
+                .iter()
+                .filter(|m| m.open)
+                .map(|m| m.text.clone())
+                .collect()
+        })
     }
 
-    fn slot<T>(shared: &Shared, path: &str, f: impl Fn(&Slot) -> T) -> T {
-        f(lock(&shared.tiles)
-            .iter()
-            .find(|t| t.id == tile_id(path))
-            .unwrap())
+    fn slot<T: Send + 'static>(
+        shared: &Shared,
+        path: &str,
+        f: impl Fn(&Slot) -> T + Send + 'static,
+    ) -> T {
+        let id = tile_id(path);
+        shared.tiles_with(move |tiles| f(tiles.iter().find(|t| t.id == id).unwrap()))
     }
 
     #[test]
@@ -3050,11 +3054,13 @@ mod stored {
         assert!(said.iter().any(|t| t.starts_with("Built in")), "{said:?}");
 
         // a tile that then does not read leaves no stale view behind
-        lock(&next.tiles)[0].shown = Some(api::Shown {
-            kind: "earlier".to_owned(),
-            note: "x".to_owned(),
-            checked: true,
-            tier: None,
+        next.tiles_with(|t| {
+            t[0].shown = Some(api::Shown {
+                kind: "earlier".to_owned(),
+                note: "x".to_owned(),
+                checked: true,
+                tier: None,
+            });
         });
         std::fs::write(&tile, "tile {").unwrap();
         rebuild(&next, &path);

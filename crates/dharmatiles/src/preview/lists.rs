@@ -41,7 +41,7 @@ use super::docs::Edited;
 use super::edit::CheckRes;
 use super::messages::Scope;
 use super::scene::SceneJson;
-use super::{Shared, edit, fail, lock, places};
+use super::{Shared, edit, fail, places};
 
 // ---- the calls' types ------------------------------------------------------------------
 
@@ -189,11 +189,9 @@ pub(super) fn check_text(shared: &Shared, tile: &str, text: &str) -> CheckRes {
     match result {
         Ok(()) => {
             // what the last reading of a map noted (its crowns) is still true of this text
-            let notes = lock(&shared.tiles)
-                .iter()
-                .find(|t| t.id == id)
-                .map(|t| t.scene_notes.clone())
-                .unwrap_or_default();
+            let notes = shared
+                .owner
+                .ask(|r| super::owner::Command::SceneNotes(id.clone(), r));
             shared.report(&id, Scope::Check, |name| {
                 notes
                     .iter()
@@ -247,10 +245,9 @@ fn printer_for(shared: &Shared) -> String {
 }
 
 pub(super) fn list_path(shared: &Shared, id: &str) -> Result<String, Reply> {
-    lock(&shared.tiles)
-        .iter()
-        .find(|t| t.id == id && super::plates::is_plates(&t.path))
-        .map(|t| t.path.clone())
+    shared
+        .path_of(id)
+        .filter(|p| super::plates::is_plates(p))
         .ok_or_else(|| fail::refused("404 Not Found", "no such print list"))
 }
 
@@ -437,10 +434,8 @@ pub(super) fn put(
 
 /// `/api/lists/add`.
 pub(super) fn add(shared: &Shared, v: ListsAddReq) -> Out<ListsAddRes> {
-    let Some(path) = lock(&shared.tiles)
-        .iter()
-        .find(|t| t.id == v.tile)
-        .map(|t| t.path.clone())
+    let Some(path) = shared
+        .path_of(&v.tile)
         .filter(|p| p.to_ascii_lowercase().ends_with(".dtile"))
     else {
         return Err(fail::refused("404 Not Found", "no such tile"));

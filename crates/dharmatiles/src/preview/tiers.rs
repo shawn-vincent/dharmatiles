@@ -138,11 +138,7 @@ struct Ready {
 
 impl Shared {
     fn prepare(&self, w: &TierWant) -> Result<Ready, Reply> {
-        let Some((path, files)) = lock(&self.tiles)
-            .iter()
-            .find(|t| t.id == w.tile)
-            .map(|t| (t.path.clone(), t.files.clone()))
-        else {
+        let Some((path, files)) = self.facts(&w.tile).map(|t| (t.path, t.files)) else {
             return Err(fail::refused("404 Not Found", "no such tile"));
         };
         // the same rule as a draft's: the tile's own document, or a file its last build read
@@ -198,10 +194,7 @@ impl Shared {
         mistake: bool,
         code: Option<&str>,
     ) {
-        let mut ev = lock(&self.events);
-        let rev = ev.rev;
-        ev.send(&super::api::StreamEvent::Tier {
-            rev,
+        self.owner.send(super::owner::Command::Tier {
             key: key.to_owned(),
             doc_rev,
             error: error.map(str::to_owned),
@@ -566,31 +559,18 @@ impl Shared {
 
     /// The job's running message (dropped when it ends, never kept), like a build's.
     fn job_begins(&self, doc: &str) {
-        use crate::message::{Kind, Message, Scope, Severity};
-        let Some(name) = self.name_of(doc) else {
-            return;
-        };
-        let mut ev = lock(&self.events);
-        let m = Message::new(
-            Kind::Progress,
-            Severity::Info,
-            Scope::Build,
-            doc,
-            &name,
-            format!("Loading the pieces of {name}"),
-        )
-        .code(crate::message::JOB);
-        let m = ev.messages.begin_progress(fail::now_ms(), m);
-        Self::send_messages(&mut ev, &[m]);
+        self.owner
+            .send(super::owner::Command::BeginMessage(super::owner::Begin {
+                id: doc.to_owned(),
+                text: |name| format!("Loading the pieces of {name}"),
+                code: Some(crate::message::JOB),
+            }));
     }
 
     /// The job is done: its message goes, and the document says it has no work in flight.
     fn job_ends(&self, doc: &str) {
-        {
-            let mut ev = lock(&self.events);
-            let gone = ev.messages.end_job(doc);
-            Self::send_messages(&mut ev, &gone);
-        }
+        self.owner
+            .send(super::owner::Command::EndJob(doc.to_owned()));
         // the job's words go; a document that is itself building keeps the progress of its own build
         self.update(doc, |s| {
             if s.progress.as_ref().is_some_and(|p| p.what == "loading") {
