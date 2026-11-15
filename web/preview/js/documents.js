@@ -30,7 +30,8 @@ import { createHistory } from './doc-history.js';
 /** @typedef {{ status: number, body: any }} Reply */
 /** @typedef {{ status: 'unwritable' } | { status: 'conflict', disk: string, docRev: number } | { status: 'saved', docRev: number } | { status: 'failed', reply: Reply }} Saved  how a save went */
 /** @typedef {import('./doc-history.js').Entry} Entry */
-/** @typedef {{ label: string, steps: { name: string, body: object | null | ((state: DocState | null | undefined) => object | null) }[], note: string | ((answers: any[]) => string) } | null} Change  what an action's `build` answers */
+/** @typedef {{ name: string, body: object | null | ((state: DocState | null | undefined) => object | null) }} Step  one call of an action: its name and body (a body may be a function of the state as it is then) */
+/** @typedef {{ label: string, steps: Step[], note: string | ((answers: any[]) => string) } | null} Change  what an action's `build` answers */
 
 /**
  * A state is read, never written: frozen all the way down.

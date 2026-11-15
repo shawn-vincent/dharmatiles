@@ -18,24 +18,30 @@ const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib
 const rowOf = (/** @type {number} */ n) => { const p = plan(); return p?.layout?.[p.view]?.pieces?.[n] ?? null; };
 
 /** One change to the map or print list in view: an action on its document, with a toast whose Undo is the history's. */
+/** @param {string} label @param {string} note @param {import('../documents.js').Step} step */
 async function change(label, note, step) {
-  const id = tile().id;
+  const id = /** @type {NonNullable<ReturnType<typeof tile>>} */ (tile()).id; // a pin is made on the document in view
   const r = await docs.edit(id, () => ({ label, note, steps: [step] }));
   if (r) toast(r.note, () => undoToast(id, r.entry));
   return r;
 }
 
 /** Pin the piece (by id) at `x`, `y` (the footprint's north-west corner from the bed's, mm) on plate `plate` (from 1). */
+/** @param {string} id @param {number} plate @param {number} x @param {number} y @param {boolean} turn @param {string} name */
 export const pin = (id, plate, x, y, turn, name) => change('Could not pin the piece', `Pinned ${name} on plate ${plate}`, steps.mapsPin({ id, plate, x, y, turn }));
 
 /** Take the pin of a piece away. */
-export const unpin = (id, name) => change('Could not take the pin away', `Took the pin off ${name}`, steps.mapsUnpin({ id }));
+export const unpin = (/** @type {string} */ id, /** @type {string} */ name) => change('Could not take the pin away', `Took the pin off ${name}`, steps.mapsUnpin({ id }));
 
 /** Take every pin away. */
 export const unpinAll = () => change('Could not take the pins away', 'Took every pin away', steps.mapsUnpinAll({}));
 
+/** @typedef {NonNullable<ReturnType<typeof rowOf>>} Row  a piece of the plate in view */
+
+/** @type {{ row: Row, line: any, x: number, y: number, offX: number, offY: number, moved: boolean, to: { x: number, y: number } | null } | null} the piece being dragged */
 let drag = null;
 
+/** @param {PointerEvent} e */
 function onDown(e) {
   if (!isPlatesView() || e.button !== 0 || e.shiftKey || e.pointerType === 'touch' || !editable() || !topDown()) return;
   const p = plan();
@@ -55,6 +61,7 @@ function onDown(e) {
   drag = { row, line, x: e.clientX, y: e.clientY, offX: pt.p[0] - row.x, offY: pt.p[1] - row.y, moved: false, to: null };
 }
 
+/** @param {PointerEvent} e */
 function onMove(e) {
   if (!drag) return;
   if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) return;
@@ -62,9 +69,10 @@ function onMove(e) {
   const r = $('canvas').getBoundingClientRect();
   const pt = viewer.pointAt(e.clientX - r.left, e.clientY - r.top, 0);
   if (!pt) return;
-  const snap = (v) => Math.round(v * 2) / 2;
-  drag.to = { x: snap(pt.p[0] - drag.offX), y: snap(pt.p[1] - drag.offY) };
-  viewer.setGhostRect({ x0: drag.to.x, y0: drag.to.y, x1: drag.to.x + drag.row.w, y1: drag.to.y + drag.row.d });
+  const snap = (/** @type {number} */ v) => Math.round(v * 2) / 2;
+  const to = { x: snap(pt.p[0] - drag.offX), y: snap(pt.p[1] - drag.offY) };
+  drag.to = to;
+  viewer.setGhostRect({ x0: to.x, y0: to.y, x1: to.x + drag.row.w, y1: to.y + drag.row.d });
 }
 
 async function onUp() {
@@ -77,7 +85,7 @@ async function onUp() {
   if (!p?.bed) { viewer.setGhostRect(null); return; } // onDown has said why
   const bed = p.bed;
   try {
-    await pin(d.row.id, p.view + 1, d.to.x, bed[1] - d.to.y - d.row.d, d.row.turned, d.row.name);
+    await pin(/** @type {string} */ (d.row.id), p.view + 1, d.to.x, bed[1] - d.to.y - d.row.d, d.row.turned, d.row.name);
   } finally {
     // the plate is laid out again with the pin: until it comes, the ghost shows where it was dropped
     setTimeout(() => viewer.setGhostRect(null), 1500);
@@ -86,6 +94,7 @@ async function onUp() {
 
 // ---- the pin pills ----------------------------------------------------------------------------------------
 
+/** @type {Map<number, HTMLElement>} */
 const tags = new Map();
 
 function drawTags() {
