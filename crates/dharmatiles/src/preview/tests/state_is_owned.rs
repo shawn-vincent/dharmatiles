@@ -10,8 +10,8 @@ const ALLOWED: &[(&str, &str)] = &[
     (
         "mod.rs",
         "`Shared`'s shared caches and the pieces not yet moved: the build caches and the scene checks (read and filled \
-         from many build threads, so a command round trip each would cost more than they save), the tier book (the \
-         kept tier meshes and what is wanted of them), the places gate; and the log's once-only memory",
+         from many build threads, so a command round trip each would cost more than they save), and the places gate (held \
+         across the disk and the folder chooser, which the owner never waits on); and the log's once-only memory",
     ),
     (
         "docs.rs",
@@ -31,8 +31,8 @@ const ALLOWED: &[(&str, &str)] = &[
     ),
 ];
 
-/// The fields of `Shared` that are behind a lock: the shared caches and the pieces not yet moved to the owner.
-const SHARED_LOCKS: &[&str] = &["gate", "build_caches", "tier_book", "scene_checks"];
+/// The fields of `Shared` that are behind a lock: the shared caches, and the places gate (a lock held across disk and the chooser).
+const SHARED_LOCKS: &[&str] = &["gate", "build_caches", "scene_checks"];
 
 fn rust_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
     let entries = std::fs::read_dir(dir).expect("the preview's source folder is readable");

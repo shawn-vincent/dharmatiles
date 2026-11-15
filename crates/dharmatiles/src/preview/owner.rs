@@ -21,14 +21,13 @@
 //!
 //! **What stays outside, and why.**  The build caches (`Shared::build_caches`), the scene checks and the disk
 //! [`dt_store::Store`] are shared between the build threads for speed: a build reads and fills them from many
-//! threads at once, and a command round trip for each stage would cost more than they save.  Not yet moved, each
-//! behind its own lock and held alone (so no order): the tier book (the kept tier meshes, what is wanted of them and
-//! the jobs in flight) and the gate that serialises a change of the places.  `tests/state_is_owned.rs` names every
+//! threads at once, and a command round trip for each stage would cost more than they save.  The tier book (the kept tier meshes, what is wanted of them and the jobs in flight) is the owner's ([`tiers::BookOp`]).  The one lock left
+//! beside them is the gate that serialises a change of the places: it is held across the disk and the folder
+//! chooser, which the owner never waits on, so it cannot be a command.  `tests/state_is_owned.rs` names every
 //! lock that is allowed.
 //!
-//! **The one closure.**  [`Command::Edit`] carries a function over one [`Slot`]: the build changes a dozen
-//! different fields of a tile, and each is told in the same step as it is made.  Every other command is plain
-//! data.  It is the part of this to turn into typed patches before the owner leaves this crate.
+//! **Plain data.**  [`Command::Edit`] carries a [`Patch`], an enum of what a build or a reading does to one tile
+//! ([`patch`]): the owner holds no function of its callers, and tells each change in the same step as it is made.
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -49,6 +48,8 @@ pub(super) struct Core {
     /// `$HOME`, as the places say it.
     home: Option<String>,
     pub(super) queue: queue::Queue,
+    /// The tiers the page wants of a map's pieces, what is building and what is built, and each document's job.
+    tiers: tiers::TierBook,
     /// What is put in the Trash, for an Undo that names it by number: (where it was, where it is).
     trashed: Vec<(std::path::PathBuf, std::path::PathBuf)>,
     /// The inventory as the last scan told it, so a change made outside the program (the file edited by hand) is told
@@ -106,9 +107,6 @@ pub(super) struct Subscribed {
     /// ...and then every kept message, so a page that came (or came back) has the whole record.
     pub messages: Vec<String>,
 }
-
-/// A change to one tile, made on the owner.
-pub(super) type EditFn = Box<dyn FnOnce(&mut Slot) + Send>;
 
 /// What a caller reads of one tile, besides its summary.
 pub(super) struct Facts {
@@ -193,7 +191,7 @@ pub(super) enum Command {
         Sender<Option<(std::path::PathBuf, std::path::PathBuf)>>,
     ),
     // ---- writes
-    Edit(TileId, EditFn),
+    Edit(TileId, Patch),
     /// Something was moved to the Trash (where it was, where it is): answers the number its Undo goes by.
     Trash(std::path::PathBuf, std::path::PathBuf, Sender<usize>),
     /// The inventory as it is now: answers whether it differs from the last one seen.
@@ -245,8 +243,9 @@ pub(super) enum Command {
         code: Option<String>,
     },
     BeginMessage(Begin),
+    /// A step of the tier book ([`tiers::BookOp`]).
+    Book(tiers::BookOp),
     EndProgress(TileId),
-    EndJob(TileId),
     Report {
         id: TileId,
         scope: crate::message::Scope,
@@ -305,6 +304,7 @@ impl Owner {
             target,
             home,
             queue: queue::Queue::default(),
+            tiers: tiers::TierBook::default(),
             trashed: Vec::new(),
             inventory_seen: None,
             epoch,
@@ -345,8 +345,8 @@ impl Owner {
         answer(&rx)
     }
 
-    pub(super) fn edit(&self, id: &str, f: impl FnOnce(&mut Slot) + Send + 'static) {
-        self.send(Command::Edit(id.to_owned(), Box::new(f)));
+    pub(super) fn edit(&self, id: &str, patch: Patch) {
+        self.send(Command::Edit(id.to_owned(), patch));
     }
 
     #[cfg(test)]
@@ -553,12 +553,9 @@ impl Core {
                 });
             }
             Command::BeginMessage(b) => self.begin_message(&b),
+            Command::Book(op) => self.book(op),
             Command::EndProgress(id) => {
                 let gone = self.events.messages.end_progress(&id);
-                self.send_messages(&gone);
-            }
-            Command::EndJob(id) => {
-                let gone = self.events.messages.end_job(&id);
                 self.send_messages(&gone);
             }
             Command::Report { id, scope, found } => {
@@ -616,11 +613,11 @@ impl Core {
     }
 
     /// Change tile `id` and tell every listening browser; a tile that is not listed is left alone.
-    fn update(&mut self, id: &str, f: EditFn) {
+    fn update(&mut self, id: &str, patch: Patch) {
         let Some(slot) = self.tiles.iter_mut().find(|t| t.id == id) else {
             return;
         };
-        f(slot);
+        patch.apply(slot);
         let summary = slot.summary();
         let ev = &mut self.events;
         let rev = ev.bump(Change::Tile(id.to_owned()));
@@ -656,6 +653,71 @@ impl Core {
     fn name_file(&self, m: &mut crate::message::Message) {
         if m.file.is_none() {
             m.file = self.slot(&m.tile).map(|t| t.path.clone());
+        }
+    }
+
+    /// One step of the tier book, with what it says to the listeners said in the same step.
+    fn book(&mut self, op: tiers::BookOp) {
+        use tiers::BookOp as B;
+        match op {
+            B::Want {
+                scope,
+                doc,
+                keys,
+                reply: r,
+            } => reply(&r, self.tiers.want(&scope, doc, keys)),
+            B::Have(key, r) => reply(&r, self.tiers.have(&key)),
+            B::Claim(key, r) => reply(&r, self.tiers.claim(&key)),
+            B::Release(key) => self.tiers.release(&key),
+            B::Keep { key, rev, bytes } => self.tiers.keep(&key, rev, bytes),
+            B::Docs(key, r) => reply(&r, self.tiers.docs_wanting(&key)),
+            B::Result {
+                key,
+                doc_rev,
+                reply: r,
+            } => reply(&r, self.tiers.result(&key, doc_rev)),
+            B::JobAdd { doc, key } => {
+                if self.tiers.job_add(&doc, &key) {
+                    self.begin_message(&Begin {
+                        id: doc,
+                        text: |name| format!("Loading the pieces of {name}"),
+                        code: Some(crate::message::JOB),
+                    });
+                }
+            }
+            B::JobDone { doc, key } => self.job_done(&doc, &key),
+            B::JobDoneEverywhere(key) => {
+                for d in self.tiers.owed(&key) {
+                    self.job_done(&d, &key);
+                }
+            }
+            B::JobCurrent { key, name } => {
+                for d in self.tiers.job_current(&key, &name) {
+                    self.job_tell(&d);
+                }
+            }
+            B::JobTell(doc) => self.job_tell(&doc),
+        }
+    }
+
+    /// The piece `key` is no longer owed to `doc`: the job tells how far it is, or ends.
+    fn job_done(&mut self, doc: &str, key: &str) {
+        match self.tiers.job_done(doc, key) {
+            None => {}
+            Some(true) => {
+                // the job's message goes, and the document says it has no work in flight (one that is itself
+                // building keeps the progress of its own build)
+                let gone = self.events.messages.end_job(doc);
+                self.send_messages(&gone);
+                self.update(doc, Patch::EndLoading);
+            }
+            Some(false) => self.job_tell(doc),
+        }
+    }
+
+    fn job_tell(&mut self, doc: &str) {
+        if let Some(body) = self.tiers.job_progress(doc) {
+            self.progress(doc, body, true);
         }
     }
 

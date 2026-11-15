@@ -1176,8 +1176,8 @@ fn a_stream_resumes_from_its_last_revision_or_starts_over() {
 
     // a tile changed twice: one event, as it is now
     shared.want(&id);
-    shared.update(&id, |t| t.status = State::Building);
-    shared.update(&id, |t| t.status = State::Ready);
+    shared.update(&id, Patch::Status(State::Building));
+    shared.update(&id, Patch::Status(State::Ready));
     let m = msgs(&shared.subscribe(&resume(&epoch, rev)));
     assert_eq!(m.len(), 2, "{m:?}");
     assert!(matches!(m[0], StreamEvent::Resumed { .. }), "{m:?}");

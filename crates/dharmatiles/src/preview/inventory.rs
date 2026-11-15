@@ -26,8 +26,9 @@ use serde::{Deserialize, Serialize};
 
 use super::api::{Out, Reply};
 use super::messages::Scope;
+use super::patch::Patch;
 use super::plan::{InventoryDoc, InventoryRead, PlatesPanel, TilePlan};
-use super::{Shared, State, fail, messages};
+use super::{Shared, fail, messages};
 use crate::inventory::{pieces_of, state_of};
 use crate::inventory_wire::{ColourWord, InventoryState};
 use crate::message::{Kind, Message, MessageData, Severity};
@@ -173,19 +174,18 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
             messages::of_errors(&errs, Scope::Check, id, name, &[])
         });
         let (files, text) = (files.clone(), text.to_owned());
-        shared.update(id, move |t| {
-            t.status = State::Failed;
-            t.progress = None;
-            t.shown = None;
-            t.errors = super::api::mistakes(&errs);
-            t.files = files;
-            t.mesh = None;
-            t.plan = Some(skeleton(InventoryRead {
-                text,
-                pieces: Vec::new(),
-                problems: super::api::mistakes(&errs),
-            }));
-        });
+        shared.update(
+            id,
+            Patch::InventoryFailed {
+                errors: super::api::mistakes(&errs),
+                files,
+                plan: skeleton(InventoryRead {
+                    text,
+                    pieces: Vec::new(),
+                    problems: super::api::mistakes(&errs),
+                }),
+            },
+        );
     };
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
@@ -221,20 +221,17 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
             ),
         )]
     });
-    shared.update(id, move |t| {
-        t.status = State::Ready;
-        t.progress = None;
-        t.shown = None;
-        t.errors.clear();
-        t.failure = None;
-        t.files = files;
-        t.mesh = None;
-        t.plan = Some(skeleton(InventoryRead {
-            text,
-            pieces,
-            problems: Vec::new(),
-        }));
-    });
+    shared.update(
+        id,
+        Patch::InventoryReady {
+            files,
+            plan: skeleton(InventoryRead {
+                text,
+                pieces,
+                problems: Vec::new(),
+            }),
+        },
+    );
 }
 
 // ---- the calls ------------------------------------------------------------------------------

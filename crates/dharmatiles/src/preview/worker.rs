@@ -89,14 +89,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     };
     // the stream says a build is under way until this function ends, however it does
     let _building = shared.building(id);
-    shared.update(id, move |t| {
-        t.status = State::Building;
-        t.stale = false;
-        t.errors.clear();
-        t.failure = None;
-        t.progress = None;
-        t.sketches.clear();
-    });
+    shared.update(id, Patch::Begin);
     if path.to_ascii_lowercase().ends_with(".stl") {
         return rebuild_stl(shared, id, opts, &path);
     }
@@ -130,18 +123,14 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 found
             });
             let files = rec.files();
-            shared.update(id, move |t| {
-                t.status = State::Failed;
-                t.progress = None;
-                t.sketches.clear();
-                t.errors = errors;
-                t.failure = failure;
-                t.files = files;
-                // a build the cache kept was only on show until this one landed
-                if t.shown.take().is_some() {
-                    t.mesh = None;
-                }
-            });
+            shared.update(
+                id,
+                Patch::BuildFailed {
+                    errors,
+                    failure,
+                    files,
+                },
+            );
         };
     let finish_err = |rec: Recording, errs: &[Diag]| finish_with(rec, errs, None, Scope::Check);
     // plan pass: no geometry, so under a second
@@ -183,7 +172,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     };
     if let Some(p) = &plan {
         let p = p.clone();
-        shared.update(id, move |t| t.plan = Some(p));
+        shared.update(id, Patch::Plan(p));
     }
     // what the plan pass found: the notes (dt::steep, dt::edge) that never reached the page before
     plan_stack.replace(stack.clone());
@@ -242,10 +231,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         Err(panic) if panic.is::<Superseded>() => {
             tell!("cancelled superseded build of {path}");
             let files = latest.files.clone();
-            shared.update(id, move |t| {
-                t.progress = None;
-                t.files = files;
-            });
+            shared.update(id, Patch::Superseded { files });
             return;
         }
         Err(panic) => {
@@ -257,10 +243,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     if latest.changed() {
         tell!("discarded superseded build of {path}");
         let files = latest.files.clone();
-        shared.update(id, move |t| {
-            t.progress = None;
-            t.files = files;
-        });
+        shared.update(id, Patch::Superseded { files });
         return;
     }
     match built {
@@ -298,10 +281,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             if latest.changed() {
                 tell!("discarded superseded view of {path}");
                 let files = latest.files.clone();
-                shared.update(id, move |t| {
-                    t.progress = None;
-                    t.files = files;
-                });
+                shared.update(id, Patch::Superseded { files });
                 return;
             }
             encode_progress.end(ENCODE);
@@ -342,19 +322,16 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 found
             });
             let (problem, files) = (shared.palette_problem(), watched(&rec, shared));
-            shared.update(id, move |t| {
-                t.status = State::Ready;
-                // what to say beside a good build: the palette
-                t.errors = problem;
-                t.progress = None;
-                t.sketches.clear();
-                t.record = Some(record);
-                t.mesh = Some(mesh);
-                t.mesh_version += 1;
-                t.doc_rev = Some(doc_rev);
-                t.shown = None;
-                t.files = files;
-            });
+            shared.update(
+                id,
+                Patch::BuildReady {
+                    problem,
+                    record,
+                    mesh,
+                    doc_rev,
+                    files,
+                },
+            );
         }
     }
 }
@@ -441,22 +418,21 @@ pub(super) fn show_stored(
         vec![messages::of_shown(&note, kind, id, name)]
     });
     let (rev, kind, note) = (shared.rev_of(path), kind.to_owned(), note.clone());
-    shared.update(id, move |t| {
-        if t.mesh.is_none() {
-            // an earlier build, shown while the new one runs (`shown` says so): labelled with the revision now, so
-            // the page can fetch it; it is never mistaken for the build, which replaces it
-            t.doc_rev = Some(rev);
-            t.mesh = Some(Arc::new(bytes));
-            t.mesh_version += 1;
-            // a low or super-low build is not yet checked: the status line says so
-            t.shown = Some(super::api::Shown {
+    // an earlier build, shown while the new one runs (`shown` says so); a low or super-low build is not yet checked:
+    // the status line says so
+    shared.update(
+        id,
+        Patch::ShowEarlier {
+            rev,
+            bytes,
+            shown: super::api::Shown {
                 kind,
                 note,
                 checked: !draft,
                 tier: Some(if draft { "low" } else { "full" }.to_owned()),
-            });
-        }
-    });
+            },
+        },
+    );
 }
 
 /// What a tile's build depends on: the files it read, and the palette.
@@ -489,11 +465,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         });
         let errors = super::api::mistakes(&[Diag::plain(dt_lang::codes::SOURCE, msg)]);
         let files = files.clone();
-        shared.update(id, move |t| {
-            t.status = State::Failed;
-            t.errors = errors;
-            t.files = files;
-        });
+        shared.update(id, Patch::StlFailed { errors, files });
     };
     let mesh = match std::fs::read(path) {
         Err(e) => return fail(format!("cannot read {path}: {e}")),
@@ -546,15 +518,16 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
     let record =
         dt_eval::TileRecord::of_stl(path, a.summary(&opts.printer), t0.elapsed().as_secs_f64());
     shared.report(id, Scope::Build, |name| messages::of_stl(&record, id, name));
-    shared.update(id, move |t| {
-        t.status = State::Ready;
-        t.plan = Some(plan);
-        t.record = Some(record);
-        t.mesh = Some(bytes);
-        t.mesh_version += 1;
-        t.doc_rev = Some(stl_rev);
-        t.files = files;
-    });
+    shared.update(
+        id,
+        Patch::StlReady {
+            plan,
+            record,
+            bytes,
+            rev: stl_rev,
+            files,
+        },
+    );
 }
 
 /// A draft: the text the page holds, built quickly (see
@@ -679,13 +652,13 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
                         found
                     });
                     let (errors, detail) = (super::api::mistakes(&[d]), failure.detail());
-                    shared.update(id, move |t| {
-                        t.status = State::Failed;
-                        t.progress = None;
-                        t.sketches.clear();
-                        t.errors = errors;
-                        t.failure = Some(detail);
-                    });
+                    shared.update(
+                        id,
+                        Patch::DraftFailed {
+                            errors,
+                            failure: detail,
+                        },
+                    );
                 }
             }
         }

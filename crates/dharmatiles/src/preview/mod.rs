@@ -85,6 +85,8 @@ mod maps;
 mod messages;
 mod offers;
 mod owner;
+mod patch;
+use patch::Patch;
 pub mod payload;
 pub(crate) mod places;
 mod placing;
@@ -374,8 +376,6 @@ pub struct Shared {
     /// unchanged opens from it, and an earlier build of one that changed
     /// shows while the new one runs.  None: no disk cache (the tests').
     store: Option<Arc<dt_store::Store>>,
-    /// The tiers the page wants of a map's pieces, what is building and what is built ([`tiers`]).
-    tier_book: Mutex<tiers::TierBook>,
     /// A tile's size and seed as a map's piece reads them, by tile, seed, system and the file's time ([`scene`]).
     scene_checks: Mutex<BTreeMap<SceneCheck, (u32, u32, u64)>>,
     /// The owner of each document file: its revision and its lock ([`docs`]).
@@ -477,7 +477,6 @@ impl Shared {
             sketch_seq: std::sync::atomic::AtomicU64::new(0),
             build_caches: Mutex::new(VecDeque::new()),
             store: None,
-            tier_book: Mutex::new(tiers::TierBook::default()),
             scene_checks: Mutex::new(BTreeMap::new()),
             docs: docs::Docs::telling(owner),
         };
@@ -817,8 +816,8 @@ impl Shared {
 
     /// Change tile `id` and tell every listening browser; a tile that is
     /// not listed is left alone.
-    fn update(&self, id: &str, f: impl FnOnce(&mut Slot) + Send + 'static) {
-        self.owner.edit(id, f);
+    fn update(&self, id: &str, patch: patch::Patch) {
+        self.owner.edit(id, patch);
     }
 
     /// The tile `id` as the page reads it, for a call that makes or moves
@@ -932,15 +931,15 @@ impl Shared {
     fn add_sketch(&self, id: &str, stage: &str, rough: bool, mesh: Vec<u8>) {
         let sketch = self.sketch_seq.fetch_add(1, Ordering::Relaxed) + 1;
         let stage = stage.to_owned();
-        self.update(id, move |t| {
-            t.sketches.retain(|k| k.stage != stage);
-            t.sketches.push(Sketch {
+        self.update(
+            id,
+            Patch::Sketch(Sketch {
                 stage,
                 id: sketch,
                 rough,
                 mesh: Arc::new(mesh),
-            });
-        });
+            }),
+        );
     }
 }
 

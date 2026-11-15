@@ -28,13 +28,14 @@ use super::edit::Done;
 use super::header::{MeshHeader, MeshKind};
 use super::lists::ListEdited;
 use super::messages::Scope;
+use super::patch::Patch;
 use super::plan::{
     ListPiece, PlanGround, PlanKind, PlanPlate, PlanSettings, PlannedKind, PlatesDoc, PlatesPanel,
     PlatesPlanned, PlatesUnread, PlatesWritten, PrinterBroken, PrinterRead, PrinterRow, SlotCheck,
     TilePlan,
 };
 use super::scene::{self, Note, Scene, SceneJson};
-use super::{Shared, State, edit, fail, messages, payload};
+use super::{Shared, edit, fail, messages, payload};
 use crate::message::{Kind, LayoutData, Message, MessageData, PlateFilesData, Severity};
 use crate::plates as cli;
 
@@ -488,21 +489,18 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         let json = sc.json.clone();
         let ground = unplanned_ground(shared);
         let panel = written_panel(&list, shared.home.as_deref(), true);
-        shared.update(id, move |t| {
-            // a plan already made keeps its panel: the scene and its revision are what this reading adds
-            if let Some(TilePlan::Plates(doc)) = &mut t.plan {
-                doc.scene = Some(json);
-                doc.doc_rev = rev;
-            } else {
-                t.plan = Some(TilePlan::Plates(Box::new(PlatesDoc {
+        shared.update(
+            id,
+            Patch::PlatesScene {
+                doc: Box::new(PlatesDoc {
                     ground,
                     writable: true,
                     plates: panel,
                     scene: Some(json),
                     doc_rev: rev,
-                })));
-            }
-        });
+                }),
+            },
+        );
         if sc.pieces.iter().filter(|p| p.at.is_some()).count() > 1 {
             sc.notes = scene::crowns(shared, &sc);
         }
@@ -535,7 +533,7 @@ fn rebuild_plates(
     let t0 = Instant::now();
     let scene_json = scene.map(|s| s.json.clone());
     let kept: Vec<Note> = scene.map_or_else(Vec::new, |s| s.notes.clone());
-    shared.update(id, move |t| t.scene_notes = kept);
+    shared.update(id, Patch::SceneNotes(kept));
     let no_notes = (Vec::new(), Vec::new());
     let (notes, diags) = scene.map_or(no_notes, |s| (s.notes.clone(), s.diags.clone()));
     let is_map = scene.is_some_and(|s| s.json.map);
@@ -577,21 +575,21 @@ fn rebuild_plates(
         let (files, scene_json) = (files.clone(), scene_json.clone());
         let mistakes = super::api::mistakes(&errs);
         let ground = unplanned_ground(shared);
-        shared.update(id, move |t| {
-            t.status = if calm { State::Ready } else { State::Failed };
-            t.progress = None;
-            t.shown = None;
-            t.errors = if calm { Vec::new() } else { mistakes };
-            t.files = files;
-            t.mesh = None;
-            t.plan = Some(TilePlan::Plates(Box::new(PlatesDoc {
-                ground,
-                writable,
-                plates: loose,
-                scene: scene_json,
-                doc_rev: rev,
-            })));
-        });
+        shared.update(
+            id,
+            Patch::PlatesFailed {
+                calm,
+                errors: mistakes,
+                files,
+                doc: Box::new(PlatesDoc {
+                    ground,
+                    writable,
+                    plates: loose,
+                    scene: scene_json,
+                    doc_rev: rev,
+                }),
+            },
+        );
     };
     let planned = match text {
         Ok(t) => plan_from(shared, path, t, &Overrides::default()),
@@ -703,21 +701,21 @@ fn rebuild_plates(
                 Ok(bytes) => {
                     let files = files.clone();
                     let note = note.unwrap_or("draft meshes, not yet checked").to_owned();
-                    shared.update(id, move |t| {
-                        t.status = State::Ready;
-                        t.plan = Some(sp);
-                        t.mesh = Some(Arc::new(bytes));
-                        t.mesh_version += 1;
-                        t.doc_rev = Some(rev);
-                        t.files = files;
-                        t.errors.clear();
-                        t.shown = running.then(|| super::api::Shown {
-                            kind: "preview".to_owned(),
-                            note,
-                            checked: false,
-                            tier: None,
-                        });
-                    });
+                    shared.update(
+                        id,
+                        Patch::PlatesReady {
+                            plan: sp,
+                            bytes: Arc::new(bytes),
+                            rev,
+                            files,
+                            shown: running.then(|| super::api::Shown {
+                                kind: "preview".to_owned(),
+                                note,
+                                checked: false,
+                                tier: None,
+                            }),
+                        },
+                    );
                 }
                 Err(e) => {
                     let d = Diag::plain(
@@ -824,7 +822,7 @@ fn rebuild_plates(
             eta_s: None,
             estimate_s: None,
         };
-        shared.update(id, move |t| t.progress = Some(progress));
+        shared.update(id, Patch::Progress(progress));
         match shown(shared, &plan, k, true) {
             Ok(p) => {
                 let opts = match plan.options(k, &shared.options(), shared.home.as_deref()) {
@@ -895,10 +893,7 @@ fn rebuild_plates(
             out
         });
     }
-    shared.update(id, |t| {
-        t.progress = None;
-        t.shown = None;
-    });
+    shared.update(id, Patch::ClearProgressAndShown);
 }
 
 /// The page's plan for a finished layout.
@@ -967,12 +962,7 @@ pub(super) fn show(shared: &Shared, v: PlatesShowReq) -> Out<Done> {
 /// Build the list again: its plate in view or its file changed.
 pub(super) fn again(shared: &Shared, id: &str) {
     // building from now: a plan shown as ready while a newer one is due would be read as the answer
-    shared.update(id, |t| {
-        t.stale = true;
-        if t.status != State::Idle {
-            t.status = State::Building;
-        }
-    });
+    shared.update(id, Patch::MarkStale);
 }
 
 /// `text` with one word of the list's `plates` line set (null takes it off),
@@ -1054,7 +1044,7 @@ pub(super) fn set(shared: &Shared, v: PlatesSetReq) -> Out<ListEdited> {
             if key == "printer" {
                 // another bed: back to the first plate (the printer itself is the document's word,
                 // which the answer's scene carries: the chip and the status line read it there)
-                shared.update(&id, |t| t.plate = 0);
+                shared.update(&id, Patch::PlateZero);
             }
             again(shared, &id);
             Ok(super::lists::done(shared, &path, &e, None))
@@ -1130,16 +1120,16 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
                 eta_s: None,
                 estimate_s: None,
             };
-            shared.update(&id, move |t| t.progress = Some(progress));
+            shared.update(&id, Patch::Progress(progress));
         },
     ) {
         Ok(b) => b,
         Err(e) => {
-            shared.update(&id, |t| t.progress = None);
+            shared.update(&id, Patch::ClearProgress);
             return Err(report_err(&e));
         }
     };
-    shared.update(&id, |t| t.progress = None);
+    shared.update(&id, Patch::ClearProgress);
     let layout = match cli::layout_of(&plan, &builds) {
         Ok(l) => l,
         Err(e) => return Err(report_err(&e)),
