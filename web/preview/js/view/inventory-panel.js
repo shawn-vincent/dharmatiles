@@ -9,7 +9,7 @@
 // same when the panel is drawn again; the list a reprint goes into and the tile a re-link points to are the form's own.
 
 import {
-  SYSTEMS, canonOf, colourName, dateWords, groups, haveLine, nameOf, numbered, pieceLine, shelfBadge, relinkCandidates, systemName, tileHave, totalsLine, exists,
+  SYSTEMS, canonOf, colourName, dateWords, groups, haveLine, nameOf, numbered, pieceLine, shelfBadge, relinkCandidates, systemName, tileHave, totalsLine, exists, homeOf,
 } from '../inventory.js';
 import { html, useState } from './html.js';
 import { Thumb } from '../thumbs.js';
@@ -19,7 +19,7 @@ import { Seg, plural } from './widgets.js';
 export function HaveBlock({ t, m, act }) {
   const inv = m.inventory.value;
   const system = m.system.value;
-  const h = tileHave(inv, canonOf(t.path, inv?.home), system);
+  const h = tileHave(inv, canonOf(t.path, homeOf(inv)), system);
   const colour = m.colour.value;
   return html`<section class="inv-block"><h3 class="cap">${`Inventory · ${systemName(system)}`}</h3>
     <p class=${`inv-have${h.have ? '' : ' none'}`}>${exists(inv) ? haveLine(h) : 'No inventory yet. The first print you add makes the file.'}</p>
@@ -62,7 +62,7 @@ function Reprint({ p, m, act }) {
 function Relink({ g, m, act }) {
   const cands = relinkCandidates(m.tiles.value, g.tile);
   const same = cands.filter((c) => nameOf(canonOf(c.path, '')) === nameOf(g.tile));
-  const home = m.inventory.value?.home;
+  const home = homeOf(m.inventory.value);
   const [to, setTo] = useState('');
   const chosen = to || cands[0]?.id;
   return html`<div class="inv-relink"><span class="inv-gone">Not at this path any more.</span>

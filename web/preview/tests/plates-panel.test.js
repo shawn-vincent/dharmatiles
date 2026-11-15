@@ -20,7 +20,7 @@ function world() {
   const p = signal(plan(10));
   const ui = signal({ exporting: { busy: false, files: null, error: null, failures: [] }, after: { open: false, plate: 1, bad: [], busy: false } });
   const m = {
-    on: signal(true), tile: signal({ id: 'l1', path: '/x/l.dmap', status: 'ok', errors: [] }), plan: p, ui: computed(() => ui.value), inventory: signal({ exists: false }),
+    on: signal(true), tile: signal({ id: 'l1', path: '/x/l.dmap', status: 'ok', errors: [] }), plan: p, ui: computed(() => ui.value), inventory: signal({ state: 'unavailable' }),
     printers: signal([]), currentPrinter: signal('p'), readOnly: signal(false), name: signal('l'),
   };
   const calls = [];

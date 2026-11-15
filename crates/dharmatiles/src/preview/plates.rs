@@ -22,7 +22,7 @@ use dt_kit::{Material, TriMesh};
 use dt_print::plates::{self, Boxes, Context, Layout, Overrides, Plan};
 use dt_store::Tier;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::api::{Out, Reply};
 use super::edit::Done;
@@ -36,7 +36,7 @@ use super::plan::{
 };
 use super::scene::{self, Note, Scene, SceneJson};
 use super::{Shared, State, edit, fail, lock, messages, payload};
-use crate::message::{Kind, Message, Severity};
+use crate::message::{Kind, LayoutData, Message, MessageData, PlateFilesData, Severity};
 use crate::plates as cli;
 
 // ---- the calls' types ------------------------------------------------------------------
@@ -779,30 +779,39 @@ fn rebuild_plates(
         .collect();
     say(shared, id, Scope::Build, |name| {
         let low = parts.iter().filter(|p| !p.full).count();
-        let mut out = vec![Message::new(
-            Kind::Build,
-            Severity::Info,
-            Scope::Build,
-            id,
-            name,
-            format!(
-                "{} pieces on {} plate{}{}{}",
-                layout.pieces(),
-                layout.plates.len(),
-                if layout.plates.len() == 1 { "" } else { "s" },
-                if low > 0 {
-                    format!(": draft meshes for {low} tile{}, not yet checked", if low == 1 { "" } else { "s" })
-                } else {
-                    String::new()
-                },
-                if todo.is_empty() {
-                    String::new()
-                } else {
-                    format!("; building {} in full for plate {}", todo.len(), view + 1)
-                }
-            ),
-        )
-        .data(json!({"low": low, "plates": layout.plates.len(), "build_s": t0.elapsed().as_secs_f64()}))];
+        let mut out = vec![
+            Message::new(
+                Kind::Build,
+                Severity::Info,
+                Scope::Build,
+                id,
+                name,
+                format!(
+                    "{} pieces on {} plate{}{}{}",
+                    layout.pieces(),
+                    layout.plates.len(),
+                    if layout.plates.len() == 1 { "" } else { "s" },
+                    if low > 0 {
+                        format!(
+                            ": draft meshes for {low} tile{}, not yet checked",
+                            if low == 1 { "" } else { "s" }
+                        )
+                    } else {
+                        String::new()
+                    },
+                    if todo.is_empty() {
+                        String::new()
+                    } else {
+                        format!("; building {} in full for plate {}", todo.len(), view + 1)
+                    }
+                ),
+            )
+            .data(MessageData::Layout(LayoutData {
+                low,
+                plates: layout.plates.len(),
+                build_s: t0.elapsed().as_secs_f64(),
+            })),
+        ];
         for (pin, why) in &layout.bad_pins {
             out.push(
                 Message::new(
@@ -1223,27 +1232,33 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
         })
         .collect();
     say(shared, &id, Scope::Export, |name| {
-        let mut out = vec![Message::new(
-            Kind::Export,
-            Severity::Info,
-            Scope::Export,
-            &id,
-            name,
-            format!(
-                "Exported {} plate{} ({} piece{}) for the {}: {}",
-                layout.plates.len(),
-                if layout.plates.len() == 1 { "" } else { "s" },
-                layout.pieces(),
-                if layout.pieces() == 1 { "" } else { "s" },
-                s.machine.label(),
-                written
-                    .iter()
-                    .map(|f| f.rsplit('/').next().unwrap_or(f))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        )
-        .data(json!({"files": written, "format": fmt.word(), "build_s": t0.elapsed().as_secs_f64()}))];
+        let mut out = vec![
+            Message::new(
+                Kind::Export,
+                Severity::Info,
+                Scope::Export,
+                &id,
+                name,
+                format!(
+                    "Exported {} plate{} ({} piece{}) for the {}: {}",
+                    layout.plates.len(),
+                    if layout.plates.len() == 1 { "" } else { "s" },
+                    layout.pieces(),
+                    if layout.pieces() == 1 { "" } else { "s" },
+                    s.machine.label(),
+                    written
+                        .iter()
+                        .map(|f| f.rsplit('/').next().unwrap_or(f))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )
+            .data(MessageData::PlateFiles(PlateFilesData {
+                files: written.clone(),
+                format: fmt.word().to_owned(),
+                build_s: t0.elapsed().as_secs_f64(),
+            })),
+        ];
         for f in &failing {
             out.push(
                 Message::new(

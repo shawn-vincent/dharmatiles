@@ -7,6 +7,14 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// the program's own type for the inventory's state and rows, taken in whole: `list --json` writes it, and the tests read the
+// output by deserializing it, never by key
+#[allow(dead_code)]
+#[path = "../src/inventory_wire.rs"]
+mod inventory_wire;
+
+use inventory_wire::{ColourWord, InventoryRow, InventoryState};
+
 const EXE: &str = env!("CARGO_BIN_EXE_dharmatiles");
 const FLAT: &str = "lib:tests/ground/1x1-flat";
 
@@ -42,13 +50,18 @@ fn inventory_file(d: &Path) -> PathBuf {
     d.join("home").join("inventory.dinv")
 }
 
-fn list_json(d: &Path, extra: &[&str]) -> serde_json::Value {
+fn list_json(d: &Path, extra: &[&str]) -> InventoryState {
     // `--json` belongs to `inventory`, before its action
     let mut args = vec!["inventory", "--json", "list"];
     args.extend_from_slice(extra);
     let (code, out, err) = run(d, &args);
     assert_eq!(code, 0, "{err}");
     serde_json::from_str(&out).unwrap()
+}
+
+/// The pieces `list --json` gives.
+fn listed(d: &Path, extra: &[&str]) -> Vec<InventoryRow> {
+    list_json(d, extra).pieces().to_vec()
 }
 
 #[test]
@@ -60,8 +73,11 @@ fn nothing_is_made_until_the_first_line_is_written() {
     assert!(!inventory_file(&d).exists(), "reading makes nothing");
     assert!(!d.join("home").exists(), "not even the folder");
     let j = list_json(&d, &[]);
-    assert_eq!(j["file"], serde_json::Value::Null);
-    assert_eq!(j["pieces"].as_array().unwrap().len(), 0);
+    assert!(
+        matches!(j, InventoryState::Absent { .. }),
+        "no file yet: {j:?}"
+    );
+    assert!(j.pieces().is_empty());
 }
 
 #[test]
@@ -112,20 +128,19 @@ fn have_and_gone_add_lines_and_the_counts_follow_by_system_and_colour() {
             "2026-11-10",
         ],
     );
-    let j = list_json(&d, &["--system", "all"]);
-    let pieces = j["pieces"].as_array().unwrap();
-    let have = |sys: &str, colour: &str| -> u64 {
+    let pieces = listed(&d, &["--system", "all"]);
+    let have = |sys: &str, colour: ColourWord| -> u32 {
         pieces
             .iter()
-            .filter(|p| p["system"] == sys && p["colour"] == colour)
-            .map(|p| p["have"].as_u64().unwrap())
+            .filter(|p| p.system == sys && p.colour == colour)
+            .map(|p| p.have)
             .sum()
     };
     assert_eq!(
         (
-            have("db", "multi"),
-            have("db", "single"),
-            have("ol", "multi")
+            have("db", ColourWord::Multi),
+            have("db", ColourWord::Single),
+            have("ol", ColourWord::Multi)
         ),
         (2, 1, 1)
     );
@@ -149,9 +164,8 @@ fn have_and_gone_add_lines_and_the_counts_follow_by_system_and_colour() {
         ],
     );
     assert_eq!(code, 0, "{err}");
-    let j = list_json(&d, &["--colour", "multi"]);
-    assert_eq!(j["pieces"][0]["have"], 1);
-    assert_eq!(j["pieces"][0]["gone"], 1);
+    let pieces = listed(&d, &["--colour", "multi"]);
+    assert_eq!((pieces[0].have, pieces[0].gone), (1, 1));
     let text = std::fs::read_to_string(inventory_file(&d)).unwrap();
     assert_eq!(
         text.matches("print ").count(),
@@ -183,14 +197,8 @@ fn have_and_gone_add_lines_and_the_counts_follow_by_system_and_colour() {
         &["inventory", "have", FLAT, "--colour", "single", "--failed"],
     );
     assert_eq!(code, 0);
-    let j = list_json(&d, &["--colour", "single"]);
-    assert_eq!(
-        (
-            j["pieces"][0]["have"].as_u64(),
-            j["pieces"][0]["failed"].as_u64()
-        ),
-        (Some(1), Some(1))
-    );
+    let pieces = listed(&d, &["--colour", "single"]);
+    assert_eq!((pieces[0].have, pieces[0].failed), (1, 1));
 }
 
 #[test]
@@ -315,15 +323,15 @@ fn a_tile_that_moved_is_followed_by_a_renamed_line() {
     assert_eq!(code, 0, "{err}");
     std::fs::rename(home.join("meadow.dtile"), home.join("glade.dtile")).unwrap();
     // the path is not there any more: the list says so
-    let j = list_json(&d, &[]);
-    assert_eq!(j["pieces"][0]["tile"], "home:meadow");
-    assert_eq!(j["pieces"][0]["missing"], true);
+    let pieces = listed(&d, &[]);
+    assert_eq!(pieces[0].tile, "home:meadow");
+    assert!(pieces[0].missing);
     let (code, _, err) = run(&d, &["inventory", "relink", "home:meadow", "home:glade"]);
     assert_eq!(code, 0, "{err}");
-    let j = list_json(&d, &[]);
-    assert_eq!(j["pieces"][0]["tile"], "home:glade");
-    assert_eq!(j["pieces"][0]["have"], 1);
-    assert_eq!(j["pieces"][0]["missing"], false);
+    let pieces = listed(&d, &[]);
+    assert_eq!(pieces[0].tile, "home:glade");
+    assert_eq!(pieces[0].have, 1);
+    assert!(!pieces[0].missing);
     let text = std::fs::read_to_string(inventory_file(&d)).unwrap();
     assert!(
         text.contains("renamed \"home:meadow\" to=\"home:glade\""),
@@ -341,7 +349,7 @@ fn a_tile_that_moved_is_followed_by_a_renamed_line() {
     let mut t = std::fs::read_to_string(home.join("glade.dtile")).unwrap();
     t.push_str("\n// edited\n");
     std::fs::write(home.join("glade.dtile"), t).unwrap();
-    let j = list_json(&d, &[]);
-    assert_eq!(j["pieces"][0]["edited_since_printing"], true);
-    assert_eq!(j["pieces"][0]["have"], 1);
+    let pieces = listed(&d, &[]);
+    assert!(pieces[0].edited);
+    assert_eq!(pieces[0].have, 1);
 }

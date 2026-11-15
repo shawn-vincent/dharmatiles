@@ -81,16 +81,25 @@ pub(super) fn answer(shared: &Shared, req: &Request) -> Reply {
             // the one error path: a failure of the program's own is a message in the stream too
             let id = tile_route(&req.path).map(|(id, _)| id.to_owned());
             let name = id.as_deref().and_then(|i| shared.name_of(i));
+            // the body is the one error path's `{"error": ErrorDetail}`: read it as that type, and say it when it is not
+            let error = serde_json::from_value::<super::api::ErrorDetail>(body["error"].clone())
+                .unwrap_or_else(|e| {
+                    fail::ServerError::failure(
+                        "500 Internal Server Error",
+                        format!("a {status} reply did not carry an error body: {e}"),
+                    )
+                    .detail()
+                });
             shared.say(super::messages::of_server_error(
-                &body["error"],
+                &error,
                 (id.as_deref().unwrap_or(""), name.as_deref().unwrap_or("")),
-                "server",
+                crate::message::Origin::Server,
             ));
             tell!(
                 "error: preview: {} {}: {status}: {}",
                 req.method,
                 req.path,
-                body["error"]["message"].as_str().unwrap_or("no message")
+                error.message
             );
         }
         _ => {}

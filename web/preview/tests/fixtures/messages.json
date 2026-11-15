@@ -1,0 +1,192 @@
+[
+  {
+    "seq": 1,
+    "t": "2026-11-12T10:41:40.771Z",
+    "kind": "check",
+    "severity": "info",
+    "scope": "check",
+    "code": null,
+    "tile": "ab6ca6099010d82a",
+    "tile_name": "glade",
+    "node": null,
+    "span": null,
+    "text": "Read glade: 1×1 squares, 3 stack entries",
+    "help": null,
+    "fix": null,
+    "file": null,
+    "doing": null,
+    "source": null,
+    "data": {
+      "type": "check",
+      "cols": 1,
+      "rows": 1,
+      "entries": 3
+    },
+    "state": "open",
+    "reportable": false
+  },
+  {
+    "seq": 2,
+    "t": "2026-11-12T10:41:40.771Z",
+    "kind": "build",
+    "severity": "info",
+    "scope": "build",
+    "code": null,
+    "tile": "ab6ca6099010d82a",
+    "tile_name": "glade",
+    "node": null,
+    "span": null,
+    "text": "Built in 2.5 s",
+    "help": null,
+    "fix": null,
+    "file": null,
+    "doing": null,
+    "source": null,
+    "data": {
+      "type": "build",
+      "build_s": 2.5,
+      "triangles": 461038,
+      "target": "db",
+      "stage_secs": [
+        [
+          "ground",
+          0.5
+        ],
+        [
+          "grass",
+          1.5
+        ]
+      ],
+      "reused": 0,
+      "cache": "miss",
+      "made_s": null
+    },
+    "state": "open",
+    "reportable": false
+  },
+  {
+    "seq": 3,
+    "t": "2026-11-12T10:41:40.771Z",
+    "kind": "gate",
+    "severity": "info",
+    "scope": "build",
+    "code": "gate",
+    "tile": "ab6ca6099010d82a",
+    "tile_name": "glade",
+    "node": null,
+    "span": null,
+    "text": "Passes the printability gate",
+    "help": null,
+    "fix": null,
+    "file": null,
+    "doing": null,
+    "source": null,
+    "data": {
+      "type": "gate",
+      "triangles": 461038,
+      "vertices": 230521,
+      "volume_mm3": 41000.5,
+      "watertight": true,
+      "bodies": 1,
+      "dropped": [],
+      "repairs": {
+        "voids_filled": 2,
+        "pinches_moved": 0,
+        "slivers": 0,
+        "collapsed": 0,
+        "dropped": 0
+      },
+      "overhang_mm2": 0.0,
+      "overhang_budget_mm2": 3.5,
+      "band_mm2": 1.25,
+      "band_budget_mm2": 3.5,
+      "holes": 0,
+      "failures": []
+    },
+    "state": "open",
+    "reportable": false
+  },
+  {
+    "seq": 4,
+    "t": "2026-11-12T10:41:40.771Z",
+    "kind": "server",
+    "severity": "error",
+    "scope": "server",
+    "code": "bug",
+    "tile": "ab6ca6099010d82a",
+    "tile_name": "glade",
+    "node": null,
+    "span": null,
+    "text": "x is not a function",
+    "help": null,
+    "fix": null,
+    "file": null,
+    "doing": null,
+    "source": null,
+    "data": {
+      "type": "server",
+      "origin": "page",
+      "kind": "bug",
+      "route": "The page hit a script error",
+      "causes": [
+        "x is not a function"
+      ],
+      "backtrace": "at a.js:1",
+      "version": "1.0.0"
+    },
+    "state": "open",
+    "reportable": true
+  },
+  {
+    "seq": 5,
+    "t": "2026-11-12T10:41:40.771Z",
+    "kind": "note",
+    "severity": "note",
+    "scope": "check",
+    "code": "dt::steep",
+    "tile": "ab6ca6099010d82a",
+    "tile_name": "glade",
+    "node": null,
+    "span": null,
+    "text": "the dirt is steep",
+    "help": null,
+    "fix": null,
+    "file": null,
+    "doing": null,
+    "source": null,
+    "data": {
+      "type": "diag",
+      "label": "here"
+    },
+    "state": "open",
+    "reportable": false
+  },
+  {
+    "seq": 6,
+    "t": "2026-11-12T10:41:40.771Z",
+    "kind": "export",
+    "severity": "info",
+    "scope": "export",
+    "code": null,
+    "tile": "ab6ca6099010d82a",
+    "tile_name": "glade",
+    "node": null,
+    "span": null,
+    "text": "Exported glade-db.stl for db",
+    "help": null,
+    "fix": null,
+    "file": null,
+    "doing": null,
+    "source": null,
+    "data": {
+      "type": "export",
+      "files": [
+        "glade-db.stl"
+      ],
+      "target": "db",
+      "build_s": 0.5
+    },
+    "state": "open",
+    "reportable": false
+  }
+]

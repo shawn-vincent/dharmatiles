@@ -23,36 +23,17 @@ use dt_doc::inventory::{self as doc, Colour, Identity};
 use dt_eval::Diag;
 use dt_print::inventory as disk;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
 
 use super::api::{Out, Reply};
 use super::messages::Scope;
 use super::plan::{InventoryDoc, InventoryRead, PlatesPanel, TilePlan};
 use super::{Shared, State, fail, lock, messages};
-use crate::errors_json;
-use crate::message::{Kind, Message, Severity};
+use crate::inventory::{pieces_of, state_of};
+use crate::inventory_wire::{ColourWord, InventoryState};
+use crate::message::{Kind, Message, MessageData, Severity};
 use dt_doc::map::Mode;
 
 // ---- the calls' types ------------------------------------------------------------------
-
-/// The colour mode a print was made in.
-#[derive(Deserialize, Clone, Copy)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(rename_all = "lowercase")]
-pub enum ColourWord {
-    Single,
-    Multi,
-}
-
-impl From<ColourWord> for Colour {
-    fn from(c: ColourWord) -> Self {
-        match c {
-            ColourWord::Single => Self::Single,
-            ColourWord::Multi => Self::Multi,
-        }
-    }
-}
 
 /// The base system a tile was built for.
 #[derive(Deserialize, Clone, Copy)]
@@ -141,7 +122,7 @@ pub struct InventoryReprintReq {
 }
 
 /// Lines added to the inventory.
-#[derive(Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct InventoryWrote {
     pub lines: Vec<String>,
@@ -170,47 +151,24 @@ pub(super) fn is_inventory(path: &str) -> bool {
     path.to_ascii_lowercase().ends_with(".dinv")
 }
 
-/// The inventory as the page reads it, in every snapshot: where it is, the
-/// pieces it adds up to (with whether their tile changed or is gone), the
-/// colour mode last used, and what is wrong with it if it does not read.
-pub(super) fn snapshot(home: Option<&Path>) -> Value {
+/// The inventory as the page reads it, in every snapshot: where it is, the pieces it adds up to (with whether their tile
+/// changed or is gone), the colour mode last used, and what is wrong with it if it does not read.
+pub(super) fn snapshot(home: Option<&Path>) -> InventoryState {
     let Some(home) = home else {
-        return json!({"available": false, "pieces": []});
+        return InventoryState::Unavailable;
     };
-    let path = disk::path_in(home);
-    let base = json!({
-        "available": true, "home": home.to_string_lossy(),
-        "path": path.to_string_lossy(), "id": super::tile_id(&path.to_string_lossy()),
-    });
-    let mut out = base;
-    match disk::load(home) {
-        Ok(None) => {
-            out["exists"] = json!(false);
-            out["pieces"] = json!([]);
-        }
-        Ok(Some(l)) => {
-            out["exists"] = json!(true);
-            out["pieces"] = json!(crate::inventory::pieces_json(&l.inventory, home));
-            out["last_colour"] = json!(last_colour(&l.inventory).word());
-        }
-        Err(e) => {
-            out["exists"] = json!(true);
-            out["pieces"] = json!([]);
-            out["problems"] = Value::Array(errors_json(&e));
+    match state_of(home) {
+        Ok(state) => state,
+        Err(errs) => {
+            let path = disk::path_in(home);
+            InventoryState::Broken {
+                home: home.to_string_lossy().into_owned(),
+                id: super::tile_id(&path.to_string_lossy()),
+                path: path.to_string_lossy().into_owned(),
+                problems: errs.iter().map(|d| d.message.clone()).collect(),
+            }
         }
     }
-    out
-}
-
-fn last_colour(inv: &doc::Inventory) -> Colour {
-    inv.entries
-        .iter()
-        .rev()
-        .find_map(|e| match e {
-            doc::Entry::Print { id, .. } | doc::Entry::Gone { id, .. } => Some(id.colour),
-            doc::Entry::Renamed { .. } => None,
-        })
-        .unwrap_or(Colour::Single)
 }
 
 // ---- the document ---------------------------------------------------------------------------
@@ -257,7 +215,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         Ok(i) => i,
         Err(e) => return fail_with(e.iter().map(Diag::from).collect(), &text),
     };
-    let pieces = crate::inventory::pieces_json(
+    let pieces = pieces_of(
         &inv,
         shared.home.as_deref().unwrap_or_else(|| Path::new(".")),
     );
@@ -359,7 +317,10 @@ fn write(shared: &Shared, about: &str, lines: &[String], said: &str) -> Out<Inve
                     &to.1,
                     said,
                 )
-                .data(json!({"lines": lines, "file": path.display().to_string()})),
+                .data(MessageData::Inventory(InventoryWrote {
+                    lines: lines.to_vec(),
+                    file: path.display().to_string(),
+                })),
             );
             Ok(InventoryWrote {
                 lines: lines.to_vec(),

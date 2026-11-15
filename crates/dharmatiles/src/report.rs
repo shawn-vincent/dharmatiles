@@ -5,9 +5,8 @@
 //! it is left out.  A URL past [`URL_LIMIT`] carries a short body that says to paste the report, and the full report goes to
 //! the clipboard (the page) or to a file (the command line).
 
-use crate::message::{Kind, Message, Scope, Severity};
+use crate::message::{Kind, Message, MessageData, Origin, Scope, ServerData, Severity};
 use crate::preview::fail::Panic;
-use serde_json::json;
 
 /// Where the issue is filed.
 const ISSUES: &str = "https://github.com/shawn-vincent/dharmatiles/issues/new";
@@ -121,7 +120,14 @@ pub(crate) fn tell_panic(p: &Panic) {
         p.message.clone(),
     )
     .code("bug");
-    m.data = json!({"origin": "cli", "kind": "bug", "causes": [format!("panicked at {}", p.location)], "backtrace": p.backtrace});
+    m.data = Some(MessageData::Server(ServerData {
+        origin: Origin::Cli,
+        kind: "bug".to_owned(),
+        route: None,
+        causes: vec![format!("panicked at {}", p.location)],
+        backtrace: p.backtrace.clone(),
+        version: env!("DT_ENGINE_VERSION").to_owned(),
+    }));
     let r = of(&m, &environment(), None);
     if r.truncated {
         let path =
@@ -157,7 +163,14 @@ mod tests {
             "the kernel gave up\nsecond line",
         )
         .code(dt_lang::codes::GATE)
-        .data(json!({"origin": "server", "kind": "bug", "causes": ["inner"], "backtrace": "a\nb"}))
+        .data(MessageData::Server(ServerData {
+            origin: Origin::Server,
+            kind: "bug".to_owned(),
+            route: None,
+            causes: vec!["inner".to_owned()],
+            backtrace: "a\nb".to_owned(),
+            version: "1.2.3".to_owned(),
+        }))
     }
 
     fn decode(u: &str, key: &str) -> String {

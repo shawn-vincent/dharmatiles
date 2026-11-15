@@ -12,9 +12,10 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use super::api::{self, FolderJson, Json, RootJson, TileSummary};
+use super::api::{self, FolderJson, RootJson, TileSummary};
 use super::plan::PrinterRow;
 use super::*;
+use crate::inventory_wire::InventoryState;
 
 /// What the pages were last told of each resource.
 #[derive(Default)]
@@ -67,7 +68,7 @@ pub enum Resource {
     Places(Places),
     Target(Target),
     Printers(Vec<PrinterRow>),
-    Inventory(Json),
+    Inventory(InventoryState),
     List(List),
 }
 
@@ -132,8 +133,8 @@ impl Shared {
         plates::printer_rows(self.home.as_deref())
     }
 
-    pub(super) fn inventory_value(&self) -> Json {
-        api::camel_keys(&inventory::snapshot(self.home.as_deref()))
+    pub(super) fn inventory_value(&self) -> InventoryState {
+        inventory::snapshot(self.home.as_deref())
     }
 
     /// Say what changed among the places, the target, the inventory and the list of tiles (and the printers when

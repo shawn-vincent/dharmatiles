@@ -9,12 +9,13 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use dt_doc::inventory::{self as doc, Colour, Identity, Piece};
+use dt_doc::inventory::{self as doc, Colour, Identity};
 use dt_eval::Diag;
 use dt_print::inventory as disk;
 use serde_json::json;
 
 use crate::cli::InventoryAction;
+use crate::inventory_wire::{InventoryRow, InventoryState};
 use crate::{ERROR, OK, report};
 
 /// The command's choices, as the words the command line gives them.
@@ -60,7 +61,7 @@ fn date_of(on: Option<&str>) -> Result<String, String> {
 }
 
 /// The colour mode last used in the log (what `have` assumes), else single.
-fn last_colour(inv: &doc::Inventory) -> Colour {
+pub(crate) fn last_colour(inv: &doc::Inventory) -> Colour {
     inv.entries
         .iter()
         .rev()
@@ -94,7 +95,7 @@ fn read(home: &Path) -> Result<(doc::Inventory, Option<PathBuf>), Vec<Diag>> {
     })
 }
 
-/// One row of `list`: a tile, system and colour mode with the seeds held.
+/// One line of the table `list` prints: a tile, system and colour mode, the pieces of its seeds added up.
 struct Row {
     tile: String,
     system: String,
@@ -107,28 +108,30 @@ struct Row {
     missing: bool,
 }
 
-fn rows(pieces: &[Piece], home: &Path) -> Vec<Row> {
+/// The table's lines from the pieces (the same rows the page reads, grouped by tile, system and colour mode).
+fn rows(pieces: &[InventoryRow]) -> Vec<Row> {
     let mut by: BTreeMap<(String, String, Colour), Row> = BTreeMap::new();
     for p in pieces {
+        let colour = Colour::from(p.colour);
         let r = by
-            .entry((p.id.tile.clone(), p.id.system.clone(), p.id.colour))
+            .entry((p.tile.clone(), p.system.clone(), colour))
             .or_insert_with(|| Row {
-                tile: p.id.tile.clone(),
-                system: p.id.system.clone(),
-                colour: p.id.colour,
+                tile: p.tile.clone(),
+                system: p.system.clone(),
+                colour,
                 have: 0,
                 seeds: Vec::new(),
                 failed: 0,
                 gone: 0,
                 edited: false,
-                missing: !disk::tile_exists(&p.id.tile, Some(home)),
+                missing: p.missing,
             });
         r.have += p.have;
         r.failed += p.failed;
         r.gone += p.gone;
         if p.have > 0 {
-            r.seeds.push((p.id.seed, p.have));
-            r.edited |= disk::edited_since(&p.id.tile, p.hash.as_deref(), Some(home));
+            r.seeds.push((p.seed, p.have));
+            r.edited |= p.edited;
         }
     }
     by.into_values().collect()
@@ -163,47 +166,66 @@ fn list(home: &Path, c: &Choice, tile: Option<&str>, failures: bool) -> u8 {
             return ERROR;
         }
     };
-    let (inv, path) = match read(home) {
+    let state = match state_of(home) {
         Ok(x) => x,
         Err(e) => return fail(&e, c.json),
     };
-    let all = inv.pieces();
+    let all = state.pieces();
     let others = all
         .iter()
-        .filter(|p| system.as_ref().is_some_and(|s| &p.id.system != s))
+        .filter(|p| system.as_ref().is_some_and(|s| &p.system != s))
         .count();
-    let shown: Vec<Piece> = all
-        .into_iter()
-        .filter(|p| system.as_ref().is_none_or(|s| &p.id.system == s))
-        .filter(|p| colour.is_none_or(|k| p.id.colour == k))
-        .filter(|p| tile.is_none_or(|t| p.id.tile.contains(t)))
+    let shown: Vec<InventoryRow> = all
+        .iter()
+        .filter(|p| system.as_ref().is_none_or(|s| &p.system == s))
+        .filter(|p| colour.is_none_or(|k| Colour::from(p.colour) == k))
+        .filter(|p| tile.is_none_or(|t| p.tile.contains(t)))
         .filter(|p| !failures || p.failed > 0)
+        .cloned()
         .collect();
-    let table = rows(&shown, home);
     if c.json {
-        say!(
-            "{}",
-            json!({
-                "ok": true, "file": path.as_ref().map(|p| p.display().to_string()),
-                "system": system, "pieces": table.iter().map(|r| json!({
-                    "tile": r.tile, "system": r.system, "colour": r.colour.word(),
-                    "have": r.have, "seeds": r.seeds.iter().map(|(s, n)| json!({"seed": s, "have": n})).collect::<Vec<_>>(),
-                    "failed": r.failed, "gone": r.gone, "edited_since_printing": r.edited, "missing": r.missing,
-                })).collect::<Vec<_>>(),
-            })
-        );
+        // the page's own type, with the pieces the filters leave
+        let out = match state {
+            InventoryState::Read {
+                home,
+                path,
+                id,
+                last_colour,
+                ..
+            } => InventoryState::Read {
+                home,
+                path,
+                id,
+                pieces: shown,
+                last_colour,
+            },
+            other => other,
+        };
+        match serde_json::to_string(&out) {
+            Ok(text) => say!("{text}"),
+            Err(e) => {
+                tell!("error: the inventory did not write as JSON: {e}");
+                return ERROR;
+            }
+        }
         return OK;
     }
-    let Some(path) = path else {
-        tell!(
-            "no inventory yet: nothing is made until the first line is written ({} will be it); `dharmatiles inventory have <tile>` adds one",
-            disk::path_in(home).display()
-        );
-        return OK;
+    let table = rows(&shown);
+    let path = match &state {
+        InventoryState::Read { path, .. } => path,
+        InventoryState::Absent { path, .. } => {
+            tell!(
+                "no inventory yet: nothing is made until the first line is written ({path} will be it); `dharmatiles inventory have <tile>` adds one"
+            );
+            return OK;
+        }
+        other => {
+            tell!("error: the inventory cannot be listed: {other:?}");
+            return ERROR;
+        }
     };
     tell!(
-        "{} ({}): {}",
-        path.display(),
+        "{path} ({}): {}",
         system.as_deref().map_or("every system", |s| if s == "db" {
             "DungeonBlocks"
         } else {
@@ -450,18 +472,15 @@ pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
     }
 }
 
-/// The inventory as the preview's page reads it: every piece with what is
-/// held, and whether its tile changed or is gone.
-pub(crate) fn pieces_json(
-    inv: &doc::Inventory,
-    home: &Path,
-) -> Vec<crate::preview::plan::InventoryRow> {
+/// The inventory's rows as the page and `list --json` read them: every piece with what is held, and whether its tile
+/// changed or is gone.
+pub(crate) fn pieces_of(inv: &doc::Inventory, home: &Path) -> Vec<InventoryRow> {
     inv.pieces()
         .into_iter()
-        .map(|p| crate::preview::plan::InventoryRow {
+        .map(|p| InventoryRow {
             edited: p.have > 0 && disk::edited_since(&p.id.tile, p.hash.as_deref(), Some(home)),
             missing: !disk::tile_exists(&p.id.tile, Some(home)),
-            colour: p.id.colour.word().to_owned(),
+            colour: p.id.colour.into(),
             tile: p.id.tile,
             seed: p.id.seed,
             system: p.id.system,
@@ -474,4 +493,27 @@ pub(crate) fn pieces_json(
             lines: p.lines,
         })
         .collect()
+}
+
+/// The inventory in `home`, as its state: absent until the first line is written, or read.  A file that does not read is
+/// the diagnostics it made.
+pub(crate) fn state_of(home: &Path) -> Result<InventoryState, Vec<Diag>> {
+    let path = disk::path_in(home);
+    let path_text = path.to_string_lossy().into_owned();
+    let id = crate::preview::tile_id(&path_text);
+    let home_text = home.to_string_lossy().into_owned();
+    Ok(match disk::load(home)? {
+        None => InventoryState::Absent {
+            home: home_text,
+            path: path_text,
+            id,
+        },
+        Some(l) => InventoryState::Read {
+            home: home_text,
+            path: path_text,
+            id,
+            pieces: pieces_of(&l.inventory, home),
+            last_colour: last_colour(&l.inventory).into(),
+        },
+    })
 }

@@ -32,10 +32,10 @@
 use dt_eval::Diag;
 
 use crate::preview::stack::StackItem;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 /// What the message is.  A closed list, so a reader can rely on it.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -72,7 +72,9 @@ impl Kind {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, serde::Serialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, serde::Serialize, serde::Deserialize,
+)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
@@ -95,7 +97,7 @@ impl Severity {
 
 /// What reports a message, and so what clears it: a new report of the same
 /// scope for the same tile replaces the last.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum Scope {
@@ -141,7 +143,7 @@ pub(crate) struct Message {
     pub help: Option<String>,
     /// An edit that mends it, when the program has one.
     pub fix: Option<FixJson>,
-    pub data: Value,
+    pub data: Option<MessageData>,
     /// The tile file it is about, as the program names it (a path in My tiles, or `lib:` in the library): the file a
     /// pasted copy needs, which the tile's name alone does not give (a map's piece is not the document the message is in).
     pub file: Option<String>,
@@ -192,7 +194,7 @@ impl From<&dt_eval::Fix> for FixJson {
 }
 
 /// Where in a file a message points, on the wire.
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct SpanJson {
     pub file: String,
@@ -203,7 +205,7 @@ pub struct SpanJson {
 }
 
 /// `open` until a later report of the scope no longer says it, then `cleared`.
-#[derive(Clone, Copy, serde::Serialize)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum MessageState {
@@ -213,11 +215,10 @@ pub enum MessageState {
 
 /// A message on the wire: the stream's `message` events, `GET /api/messages` and the page's panel read this one
 /// document.  A message is its own document, shared with the command line and an assistant, so its fields keep
-/// `snake_case` everywhere it appears (the page's other JSON is `camelCase`: see `api.rs`).  `data` is the
-/// numbers of the kind: [`dt_kit::AuditSummary`] for a `gate`, [`BuildData`] for a `build`, [`ServerData`] for a `server`,
-/// [`DiagData`] for an `error` or a `note`; the others (a check, an export, plates, the inventory) are read by
-/// no part of the page by name and are not typed.
-#[derive(Clone, serde::Serialize)]
+/// `snake_case` everywhere it appears (the page's other JSON is `camelCase`: see `api.rs`).  `data` is
+/// the numbers of the kind, one [`MessageData`] variant for each sort of message that has any, tagged by `type`
+/// (a message of a kind with none has `null`).
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct MessageJson {
     /// Order in the stream.
@@ -244,7 +245,8 @@ pub struct MessageJson {
     pub doing: Option<String>,
     /// The line of the file the span is on.
     pub source: Option<String>,
-    pub data: Value,
+    /// The numbers of the kind, when it has any: one variant for each sort of message that carries data.
+    pub data: Option<MessageData>,
     pub state: MessageState,
     /// The program went wrong (a bug or failure of its own, a gate failure): the editor offers Report this defect.
     /// Never true for a mistake in the document.
@@ -252,7 +254,7 @@ pub struct MessageJson {
 }
 
 /// `GET /api/messages` as JSON.
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct MessagesRes {
     pub epoch: String,
@@ -260,7 +262,7 @@ pub struct MessagesRes {
 }
 
 /// The `data` of a finished build's `build` message.
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct BuildData {
     pub build_s: f64,
@@ -275,21 +277,141 @@ pub struct BuildData {
     pub made_s: Option<f64>,
 }
 
+/// Who found a failure of the program's own.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "lowercase")]
+pub enum Origin {
+    /// The server's own code (a route, the build worker).
+    Server,
+    /// The page, which reported a script error of its own.
+    Page,
+    /// The command line, which met a panic.
+    Cli,
+}
+
+impl Origin {
+    pub(crate) fn word(self) -> &'static str {
+        match self {
+            Self::Server => "server",
+            Self::Page => "page",
+            Self::Cli => "cli",
+        }
+    }
+}
+
 /// The `data` of a `server` message: a failure of the program's own, or the page's.
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct ServerData {
-    /// `server` or `page`.
-    pub origin: String,
+    pub origin: Origin,
+    /// `refused`, `failure` or `bug` (see `preview::fail`).
     pub kind: String,
     pub route: Option<String>,
-    pub causes: Value,
-    pub backtrace: Value,
-    pub version: Option<String>,
+    /// The error chain, outermost first, or a panic's place.
+    pub causes: Vec<String>,
+    pub backtrace: String,
+    pub version: String,
+}
+
+/// The `data` of a `check` message: what the plan read.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct CheckData {
+    pub cols: u32,
+    pub rows: u32,
+    pub entries: usize,
+}
+
+/// The `data` of the build message that says which earlier build is shown while the tile builds.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct ShownData {
+    /// What is shown: an earlier build of the tile, or the library's stored preview.
+    pub shown: String,
+}
+
+/// The `data` of an `export` message: where the files went, and for which target.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct ExportData {
+    pub files: Vec<String>,
+    pub target: String,
+    pub build_s: f64,
+}
+
+/// The `data` of the message that says plates were laid out.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct LayoutData {
+    /// How many tiles are drafts, not yet checked.
+    pub low: usize,
+    pub plates: usize,
+    pub build_s: f64,
+}
+
+/// The `data` of the message that says plate files were written.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct PlateFilesData {
+    pub files: Vec<String>,
+    pub format: String,
+    pub build_s: f64,
+}
+
+/// The numbers a message carries, one variant for each sort that has any, tagged by `type`.  Made where the message is,
+/// read by matching: nothing reads a message's data by key.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum MessageData {
+    /// A check read the tile.
+    Check(CheckData),
+    /// A build finished.
+    Build(BuildData),
+    /// A build the cache kept is shown while the tile builds.
+    Shown(ShownData),
+    /// The printability gate's verdict.
+    Gate(dt_kit::AuditSummary),
+    /// An export.
+    Export(ExportData),
+    /// Plates laid out.
+    Layout(LayoutData),
+    /// Plate files written.
+    PlateFiles(PlateFilesData),
+    /// Lines added to the inventory.
+    Inventory(crate::preview::inventory::InventoryWrote),
+    /// An `error` or a `note`.
+    Diag(DiagData),
+    /// A failure of the program's own, or the page's.
+    Server(ServerData),
+}
+
+impl MessageData {
+    /// `k=v k=v` for the numbers, strings and switches of the variant's payload (nothing nested): the text form's line
+    /// of numbers.  The payload is written out as JSON, once, for this one rendering.
+    fn numbers(&self) -> String {
+        let payload = match self {
+            Self::Check(d) => serde_json::to_value(d),
+            Self::Build(d) => serde_json::to_value(d),
+            Self::Shown(d) => serde_json::to_value(d),
+            Self::Gate(d) => serde_json::to_value(d),
+            Self::Export(d) => serde_json::to_value(d),
+            Self::Layout(d) => serde_json::to_value(d),
+            Self::PlateFiles(d) => serde_json::to_value(d),
+            Self::Inventory(d) => serde_json::to_value(d),
+            Self::Diag(d) => serde_json::to_value(d),
+            Self::Server(d) => serde_json::to_value(d),
+        };
+        match payload {
+            Ok(v) => scalars(&v),
+            Err(e) => format!("(its numbers did not write: {e})"),
+        }
+    }
 }
 
 /// The `data` of an `error` or a `note`.
-#[derive(Clone, Default, serde::Serialize)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct DiagData {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -324,7 +446,7 @@ impl Message {
             text: text.into(),
             help: None,
             fix: None,
-            data: json!({}),
+            data: None,
             file: None,
             doing: None,
             source: None,
@@ -353,15 +475,8 @@ impl Message {
     }
 
     #[must_use]
-    pub(crate) fn data(mut self, data: Value) -> Self {
-        self.data = data;
-        self
-    }
-
-    /// The numbers of the kind, as their type (so the names on the wire are the type's).
-    #[must_use]
-    pub(crate) fn typed<T: serde::Serialize>(mut self, data: &T) -> Self {
-        self.data = json!(data);
+    pub(crate) fn data(mut self, data: MessageData) -> Self {
+        self.data = Some(data);
         self
     }
 
@@ -405,10 +520,10 @@ impl Message {
                 len: span.len(),
             });
         }
-        m.data = json!(DiagData {
+        m.data = Some(MessageData::Diag(DiagData {
             label: (!d.label.is_empty()).then(|| d.label.clone()),
             unexpected: unexpected.then_some(true),
-        });
+        }));
         m
     }
 
@@ -472,7 +587,7 @@ impl Message {
             Kind::Server => true,
             Kind::Gate => self.severity == Severity::Error,
             Kind::Error => {
-                self.data["unexpected"].as_bool() == Some(true)
+                matches!(&self.data, Some(MessageData::Diag(d)) if d.unexpected == Some(true))
                     || self
                         .code
                         .as_deref()
@@ -496,14 +611,14 @@ impl Message {
         match self.kind {
             Kind::Error => "mistake (in the tile)".to_owned(),
             Kind::Note => "note (the tile is fine)".to_owned(),
-            Kind::Server => {
-                let d = &self.data;
-                let kind = d["kind"].as_str().unwrap_or("failure");
-                match d["origin"].as_str() {
-                    Some(o) => format!("{kind} (the program's own, found by the {o})"),
-                    None => format!("{kind} (the program's own)"),
-                }
-            }
+            Kind::Server => match &self.data {
+                Some(MessageData::Server(d)) => format!(
+                    "{} (the program's own, found by the {})",
+                    d.kind,
+                    d.origin.word()
+                ),
+                _ => "failure (the program's own)".to_owned(),
+            },
             k => k.as_str().to_owned(),
         }
     }
@@ -583,22 +698,24 @@ impl Message {
             ));
         }
         out.push_str(&format!("\n  kind: {}", self.kind_words()));
-        let numbers = scalars(&self.data);
+        let numbers = self
+            .data
+            .as_ref()
+            .map(MessageData::numbers)
+            .unwrap_or_default();
         if !numbers.is_empty() {
             out.push_str("\n  ");
             out.push_str(&numbers);
         }
         // a failure of the program's own carries its causes and where it happened
-        if self.kind == Kind::Server {
-            for c in self.data["causes"].as_array().into_iter().flatten() {
-                if let Some(c) = c.as_str() {
-                    out.push_str("\n  caused by: ");
-                    out.push_str(c);
-                }
+        if let Some(MessageData::Server(d)) = &self.data {
+            for c in &d.causes {
+                out.push_str("\n  caused by: ");
+                out.push_str(c);
             }
-            if let Some(b) = self.data["backtrace"].as_str().filter(|b| !b.is_empty()) {
+            if !d.backtrace.is_empty() {
                 out.push_str("\n  backtrace:");
-                for l in b.lines() {
+                for l in d.backtrace.lines() {
                     out.push_str("\n    ");
                     out.push_str(l);
                 }
@@ -854,7 +971,11 @@ mod tests {
     fn the_text_form_is_a_header_then_the_words_the_help_and_the_numbers() {
         let mut m = note("the dirt is forced to 64.2°\nsteeper than its slope")
             .help(Some("soften the heights"))
-            .data(json!({"degrees": 64.25, "pins": 2, "label": "here"}));
+            .data(MessageData::Layout(LayoutData {
+                low: 1,
+                plates: 2,
+                build_s: 64.25,
+            }));
         m.node = Some("tile/dirt/0".to_owned());
         m.span = Some(Span {
             file: "lib:parts/edges.dtile".to_owned(),
@@ -867,7 +988,7 @@ mod tests {
         m.at_ms = 1_794_480_100_771;
         assert_eq!(
             m.text(),
-            "10:41:40.771 note dt::steep pond tile/dirt/0 edges.dtile:13:59\n  the dirt is forced to 64.2°\n  steeper than its slope\n  help: soften the heights\n  kind: note (the tile is fine)\n  degrees=64.25 label=here pins=2"
+            "10:41:40.771 note dt::steep pond tile/dirt/0 edges.dtile:13:59\n  the dirt is forced to 64.2°\n  steeper than its slope\n  help: soften the heights\n  kind: note (the tile is fine)\n  build_s=64.25 low=1 plates=2"
         );
         m.open = false;
         assert!(m.text().lines().next().unwrap().ends_with("(cleared)"));
@@ -1051,7 +1172,14 @@ mod tests {
             "boom",
         )
         .code("bug")
-        .data(json!({"origin": "page", "kind": "bug", "causes": ["inner"], "backtrace": "a\nb"}));
+        .data(MessageData::Server(ServerData {
+            origin: Origin::Page,
+            kind: "bug".to_owned(),
+            route: None,
+            causes: vec!["inner".to_owned()],
+            backtrace: "a\nb".to_owned(),
+            version: "1.2.3".to_owned(),
+        }));
         let t = bug.text();
         for want in [
             "kind: bug (the program's own, found by the page)",

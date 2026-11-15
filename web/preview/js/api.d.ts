@@ -120,6 +120,8 @@ type Changed = {
  */
 rev: number, };
 
+type CheckData = { cols: number, rows: number, entries: number, };
+
 type CheckRes = { ok: boolean, errors: Array<Mistake>, stack: Array<StackItem> | null, map: TileMap | null, 
 /**
  * Every node of the text that was read, by the id an edit names it with (`/api/edit`), for a tile.
@@ -314,6 +316,8 @@ type ExportBuilt = { path: string, files: Array<string>,
  */
 build: TileRecord, };
 
+type ExportData = { files: Array<string>, target: string, build_s: number, };
+
 type ExportReq = { 
 /**
  * Also write the painted 3MF.
@@ -412,7 +416,17 @@ type InventoryReprinted = {
  */
 list: string, id: string, made: boolean, warning: string | null, always: boolean, before: string | null, text: string, docRev: number, note: string | null, };
 
-type InventoryRow = { tile: string, seed: number, system: string, colour: string, have: number, printed: number, failed: number, gone: number, hash: string | null, last: string | null, edited: boolean, missing: boolean, lines: Array<number>, };
+type InventoryRow = { tile: string, seed: number, system: string, colour: ColourWord, have: number, printed: number, failed: number, gone: number, hash: string | null, last: string | null, edited: boolean, missing: boolean, lines: Array<number>, };
+
+type InventoryState = { "state": "unavailable" } | { "state": "absent", home: string, 
+/**
+ * Where the file will be.
+ */
+path: string, id: string, } | { "state": "read", home: string, path: string, id: string, pieces: Array<InventoryRow>, lastColour: ColourWord, } | { "state": "broken", home: string, path: string, id: string, 
+/**
+ * What is wrong with it, one line each.
+ */
+problems: Array<string>, };
 
 type InventoryWrote = { lines: Array<string>, file: string, };
 
@@ -435,6 +449,12 @@ unitAbout: { [key in string]: string }, functions: Array<string>, weightings: Ar
  * The `$` names.
  */
 names: Array<string>, };
+
+type LayoutData = { 
+/**
+ * How many tiles are drafts, not yet checked.
+ */
+low: number, plates: number, build_s: number, };
 
 type LineSheet = { at: number, controls: Array<MapControl>, through: Run | null, };
 
@@ -658,6 +678,8 @@ type MeshKind = "build" | "draft" | "mapPiece" | "sketch" | "stl" | "plates";
 
 type MeshStackEntry = { index: number, key: string, label: string, element: string, what: string, z: [number, number] | null, };
 
+type MessageData = { "type": "check" } & CheckData | { "type": "build" } & BuildData | { "type": "shown" } & ShownData | { "type": "gate" } & AuditSummary | { "type": "export" } & ExportData | { "type": "layout" } & LayoutData | { "type": "plate_files" } & PlateFilesData | { "type": "inventory" } & InventoryWrote | { "type": "diag" } & DiagData | { "type": "server" } & ServerData;
+
 type MessageJson = { 
 /**
  * Order in the stream.
@@ -690,7 +712,11 @@ doing: string | null,
 /**
  * The line of the file the span is on.
  */
-source: string | null, data: JsonValue, state: MessageState, 
+source: string | null, 
+/**
+ * The numbers of the kind, when it has any: one variant for each sort of message that carries data.
+ */
+data: MessageData | null, state: MessageState, 
 /**
  * The program went wrong (a bug or failure of its own, a gate failure): the editor offers Report this defect.
  * Never true for a mistake in the document.
@@ -775,9 +801,11 @@ at: number, file?: string | null, };
 
 type OffersRes = { ok: boolean, at: number | null, offers: Array<Offer>, why: string | null, errors: Array<Mistake> | null, };
 
+type Origin = "server" | "page" | "cli";
+
 type OwnedSeed = { seed: number, have: number, };
 
-type PageMessageReq = { tile?: string | null, what?: string | null, text: string, help?: string | null, causes?: JsonValue | null, backtrace?: string | null, };
+type PageMessageReq = { tile?: string | null, what?: string | null, text: string, help?: string | null, causes?: Array<string> | null, backtrace?: string | null, };
 
 type PieceEdit = { id: string, set: PieceWords, };
 
@@ -864,6 +892,8 @@ type PlanPlate = {
  * From 1.
  */
 plate: number, filaments: Array<string>, pieces: Array<PlanPlaced>, };
+
+type PlateFilesData = { files: Array<string>, format: string, build_s: number, };
 
 type PlatesDoc = { 
 /**
@@ -1038,7 +1068,7 @@ rev: number,
 /**
  * The resource's own revision: it rises when this resource changes and not otherwise.
  */
-resRev: number, } & ({ "name": "places", "value": Places } | { "name": "target", "value": Target } | { "name": "printers", "value": Array<PrinterRow> } | { "name": "inventory", "value": JsonValue } | { "name": "list", "value": List });
+resRev: number, } & ({ "name": "places", "value": Places } | { "name": "target", "value": Target } | { "name": "printers", "value": Array<PrinterRow> } | { "name": "inventory", "value": InventoryState } | { "name": "list", "value": List });
 
 type Restored = { path: string, id: string | null, tile: TileSummary | null, 
 /**
@@ -1146,11 +1176,15 @@ type Scope = "check" | "build" | "export" | "server";
 
 type SeedWord = "fresh" | "if-needed";
 
-type ServerData = { 
+type ServerData = { origin: Origin, 
 /**
- * `server` or `page`.
+ * `refused`, `failure` or `bug` (see `preview::fail`).
  */
-origin: string, kind: string, route: string | null, causes: JsonValue, backtrace: JsonValue, version: string | null, };
+kind: string, route: string | null, 
+/**
+ * The error chain, outermost first, or a panic's place.
+ */
+causes: Array<string>, backtrace: string, version: string, };
 
 type SessionRes = { token: string, };
 
@@ -1176,6 +1210,12 @@ checked: boolean,
  */
 tier: string | null, };
 
+type ShownData = { 
+/**
+ * What is shown: an earlier build of the tile, or the library's stored preview.
+ */
+shown: string, };
+
 type SketchRef = { id: number, rough: boolean, };
 
 type SlicerFound = { slicer: string, label: string, title: string, };
@@ -1186,7 +1226,7 @@ type Snapshot = {
 /**
  * The contract stamp of this program (`contract()`): a page that imported a different one is from another build.
  */
-contract: string, rev: number, epoch: string, system: string, printer: string, printers: Array<PrinterRow>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: JsonValue, tiles: Array<TileSummary>, };
+contract: string, rev: number, epoch: string, system: string, printer: string, printers: Array<PrinterRow>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: InventoryState, tiles: Array<TileSummary>, };
 
 type SpanJson = { file: string, line: number, col: number, offset: number, len: number, };
 

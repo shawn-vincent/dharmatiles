@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FILTERS, MSG_MIN, countsText, createLog, detailsFor, filterRows, fitMsgHeight, jobWords, statusOf } from '../js/messages.js';
+import { readFileSync } from 'node:fs';
+import { FILTERS, MSG_MIN, buildOf, countsText, createLog, detailsFor, filterRows, fitMsgHeight, gateOf, jobWords, serverOf, statusOf } from '../js/messages.js';
 
 let n = 0;
 const msg = (over = {}) => ({
   seq: ++n, t: '2026-11-12T10:41:40.771Z', kind: 'error', severity: 'error', scope: 'check', code: 'dt::look', tile: 'a', tile_name: 'tree-err',
   node: null, span: { file: 'tree-err.dtile', line: 8, col: 9, offset: 100, len: 20 }, text: 'the trunk leaves no room', help: 'make trunk height less',
-  data: {}, state: 'open', ...over,
+  data: null, state: 'open', ...over,
 });
 const note = (over = {}) => msg({ kind: 'note', severity: 'note', code: 'dt::steep', text: 'the dirt is forced to 64°', help: 'soften the heights', ...over });
-const build = (over = {}) => msg({ kind: 'build', severity: 'info', scope: 'build', code: null, span: null, text: 'Built in 2.1 s', help: null, data: { build_s: 2.1, triangles: 162262 }, ...over });
+const build = (over = {}) => msg({ kind: 'build', severity: 'info', scope: 'build', code: null, span: null, text: 'Built in 2.1 s', help: null, data: { type: 'build', build_s: 2.1, triangles: 162262 }, ...over });
 const gate = (over = {}) => msg({ kind: 'gate', severity: 'info', scope: 'build', code: 'gate', span: null, text: 'Passes the printability gate', help: null, ...over });
 const cleared = (m) => ({ ...m, state: 'cleared' });
 
@@ -162,7 +163,7 @@ test('a build the cache kept is said so: "rebuilding" while it is on show, "cach
   const own = statusOf(log.view('a'), { t: { status: 'building', shown: null }, p: { fraction: 0.2, label: 'grass' } });
   assert.equal(own.verdict, 'building 20% · grass', 'a tile with nothing kept on show is only building');
   const hit = createLog();
-  hit.apply(build({ data: { build_s: 0.05, cache: 'hit', triangles: 10 }, text: 'From the cache (2.1 s when it was built)' }));
+  hit.apply(build({ data: { type: 'build', build_s: 0.05, cache: 'hit', triangles: 10 }, text: 'From the cache (2.1 s when it was built)' }));
   assert.equal(statusOf(hit.view('a'), { t: { status: 'ready' } }).verdict, 'passes · cached');
 });
 
@@ -184,7 +185,7 @@ test('the copy text of a failure of the program\'s or the page\'s is the whole c
   const env = { version: '1.0.0', system: 'db', printer: 'default', tile: 't', file: 'f', userAgent: 'x', platform: 'p', screen: 's', time: 'now', url: 'u' };
   const m = msg({
     kind: 'server', code: 'bug', span: null, text: 'a test panic', help: 'This is a bug in dharmatiles',
-    data: { origin: 'server', kind: 'bug', route: 'POST /api/tiles/abc/save', causes: ['panicked at route.rs:1'], backtrace: '   0: dharmatiles::preview::route', version: '1.0.0' },
+    data: { type: 'server', origin: 'server', kind: 'bug', route: 'POST /api/tiles/abc/save', causes: ['panicked at route.rs:1'], backtrace: '   0: dharmatiles::preview::route', version: '1.0.0' },
   });
   const text = detailsFor(m, { env });
   assert.match(text, /dharmatiles error report/);
@@ -246,4 +247,22 @@ test('a build stage with no words yet shows its percent alone, never a separator
   const t = { status: 'building', name: 'x', shown: { checked: false } };
   assert.equal(statusOf(createLog().view('a'), { t, p: { fraction: 0.77, label: '', what: 'building' } }).verdict, 'rebuilding 77%');
   assert.equal(statusOf(createLog().view('a'), { t, p: { fraction: 0.5, label: 'grass', what: 'building' } }).verdict, 'rebuilding 50% · grass');
+});
+
+// the program's own messages (crates/dharmatiles/src/preview/tests/messages_wire.rs holds the file to what the program writes):
+// each reading takes the variant of `data` it names and nothing else
+test('the readings of a message\'s data take the variant they name', () => {
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/messages.json', import.meta.url), 'utf8'));
+  const by = (kind) => fixture.find((m) => m.kind === kind);
+  assert.equal(gateOf(by('gate'))?.triangles, 461038);
+  assert.equal(buildOf(by('build'))?.target, 'db');
+  assert.equal(serverOf(by('server'))?.origin, 'page');
+  assert.equal(gateOf(by('build')), null);
+  assert.equal(buildOf(by('gate')), null);
+  assert.equal(serverOf(by('note')), null);
+  assert.equal(serverOf(by('check')), null);
+  // a server message's details carry its causes and backtrace as the program sent them
+  const details = detailsFor(by('server'));
+  assert.match(details, /x is not a function/);
+  assert.match(details, /at a\.js:1/);
 });

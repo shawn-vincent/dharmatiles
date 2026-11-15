@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::message::{MessageData, Origin};
 use dt_eval::{Options, Source};
 use serde_json::Value;
 
@@ -2098,6 +2099,11 @@ fn check_text(r: &Running, token: &str, text: &str) -> Value {
     v
 }
 
+/// A message of the stream as its type (the wire form is the type's).
+fn typed_message(m: &Value) -> crate::message::MessageJson {
+    serde_json::from_value(m.clone()).expect("a message of the stream is a MessageJson")
+}
+
 fn messages(r: &Running, query: &str) -> Vec<Value> {
     let (head, body) = get(r, &format!("/api/messages?{query}"));
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
@@ -2195,12 +2201,18 @@ fn a_build_says_its_timing_and_the_gates_numbers_and_progress_is_not_kept() {
     assert!(!kinds.contains(&"progress"), "{kinds:?}");
     let build = found.iter().find(|m| m["kind"] == "build").unwrap();
     assert!(build["text"].as_str().unwrap().starts_with("Built in "));
-    assert!(build["data"]["build_s"].as_f64().unwrap() > 0.0);
+    let Some(MessageData::Build(built)) = typed_message(build).data else {
+        panic!("a build message carries the build's numbers: {build}");
+    };
+    assert!(built.build_s > 0.0);
     let gate = found.iter().find(|m| m["kind"] == "gate").unwrap();
     assert_eq!(gate["code"], "gate");
     assert_eq!(gate["severity"], "info");
-    assert!(gate["data"]["triangles"].as_u64().unwrap() > 0);
-    assert!(gate["data"]["failures"].as_array().unwrap().is_empty());
+    let Some(MessageData::Gate(numbers)) = typed_message(gate).data else {
+        panic!("a gate message carries the audit summary: {gate}");
+    };
+    assert!(numbers.triangles > 0);
+    assert!(numbers.failures.is_empty());
     // no progress message is left in the log, cleared or not
     assert!(messages(&r, &format!("tile={id}&kind=progress")).is_empty());
 }
@@ -2222,12 +2234,20 @@ fn a_failure_of_the_server_and_one_the_page_reports_are_messages_too() {
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     let found = messages(&r, "kind=server");
     assert_eq!(found.len(), 2, "{found:?}");
-    assert_eq!(found[0]["data"]["origin"], "server");
+    let server_data = |m: &Value| match typed_message(m).data {
+        Some(MessageData::Server(d)) => d,
+        other => panic!("a server message carries its failure: {other:?}"),
+    };
+    let (from_server, from_page) = (server_data(&found[0]), server_data(&found[1]));
+    assert_eq!(from_server.origin, Origin::Server);
     assert_eq!(found[0]["severity"], "error");
-    assert!(found[0]["data"]["backtrace"].is_string());
-    assert_eq!(found[1]["data"]["origin"], "page");
+    assert!(!from_server.backtrace.is_empty());
+    assert_eq!(from_page.origin, Origin::Page);
     assert_eq!(found[1]["text"], "x is not a function");
-    assert_eq!(found[1]["data"]["route"], "The page hit a script error");
+    assert_eq!(
+        from_page.route.as_deref(),
+        Some("The page hit a script error")
+    );
     // Report this defect: the program's own failures are reportable, with the one text as the body and no source for a
     // message about no tile; a mistake in a document is not
     assert_eq!(found[0]["reportable"], true);

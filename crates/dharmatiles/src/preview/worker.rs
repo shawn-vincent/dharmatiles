@@ -3,7 +3,7 @@
 use super::header::{MeshHeader, MeshKind};
 use super::plan::{PlanGround, PlanSquares, TilePlan};
 use super::*;
-use crate::message::{Kind, Scope, Severity};
+use crate::message::{Kind, Origin, Scope, Severity};
 
 /// A progress reporter that also notices when any source read by the plan
 /// pass changes. Progress events are safe interruption boundaries in the
@@ -128,9 +128,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 let mut found = messages::of_errors(errs, scope, id, name, &plan_stack.borrow());
                 if let Some(f) = &failure {
                     for m in found.iter_mut().filter(|m| m.kind == Kind::Server) {
-                        m.data =
-                            messages::of_server_error(&fail::to_value(f), (id, name), "server")
-                                .data;
+                        m.data = messages::of_server_error(f, (id, name), Origin::Server).data;
                     }
                 }
                 found
@@ -671,9 +669,12 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
                             &[],
                         );
                         for m in &mut found {
-                            m.data =
-                                messages::of_server_error(&failure.json(), (id, name), "server")
-                                    .data;
+                            m.data = messages::of_server_error(
+                                &failure.detail(),
+                                (id, name),
+                                Origin::Server,
+                            )
+                            .data;
                         }
                         found
                     });
