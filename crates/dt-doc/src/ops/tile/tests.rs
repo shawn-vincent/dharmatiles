@@ -691,7 +691,8 @@ fn fixes_are_laid_in_from_the_end_and_only_where_the_text_matches() {
 fn overlapping_fixes_wait_and_a_repeat_is_made_once() {
     let t = "tile { stack { abcdef } }";
     let fixes = [fix(t, "abc", "1"), fix(t, "abc", "1"), fix(t, "bcd", "2")];
-    let d = run(t, &Op::Fix(&fixes)).unwrap();
+    // laid in by the tile's own operation: the words are not elements, which the checked `apply` would refuse
+    let d = super::apply(t, &Op::Fix(&fixes)).unwrap();
     assert_eq!(d.text, "tile { stack { 1def } }");
     assert_eq!(d.mended.unwrap().deferred, 1);
 }

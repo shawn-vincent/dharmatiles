@@ -42,6 +42,90 @@ pub enum EditError {
     /// The text does not read as the document it should be: its own mistakes,
     /// so nothing is ever edited in a file that is not understood.
     Unread(Vec<crate::error::DocError>),
+    /// The edit would leave the text with a mistake the old text did not have: nothing is changed.  Held by
+    /// [`Checked`], the one way an edit's text is made.
+    Adds(Vec<Mistake>),
+}
+
+/// One mistake a document has, as an edit compares them: the code and the headline (not where, since an edit
+/// moves text).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Mistake {
+    /// The stable `dt::…` code.
+    pub code: String,
+    /// The headline.
+    pub message: String,
+}
+
+impl From<&crate::error::DocError> for Mistake {
+    fn from(d: &crate::error::DocError) -> Self {
+        Self {
+            code: d.code.to_owned(),
+            message: d.message.clone(),
+        }
+    }
+}
+
+/// How the mistakes of a text are read: the one question [`Checked`] asks of the old text and of the new.  A
+/// caller that knows more of a document than its text does (the library it `use`s, the plan of its stack) gives
+/// a reader of its own; [`Plain`] reads the text alone.
+pub trait Reader {
+    /// The mistakes `text` has, read as a `kind` document.
+    fn mistakes(&self, kind: Kind, text: &str) -> Vec<Mistake>;
+}
+
+/// The reader of a text alone: the decoder of its kind, with nothing known from outside the file.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Plain;
+
+impl Reader for Plain {
+    fn mistakes(&self, kind: Kind, text: &str) -> Vec<Mistake> {
+        let read = match kind {
+            Kind::Tile => crate::decode("tile", text, &crate::Known::new()).map(drop),
+            Kind::Map => map::decode("map", text).map(drop),
+            Kind::Inventory => inventory::decode(inventory::FILE, text).map(drop),
+        };
+        read.err()
+            .map(|errs| errs.iter().map(Mistake::from).collect())
+            .unwrap_or_default()
+    }
+}
+
+/// An edit's result that has been read again: the only constructor re-reads the new text and compares its
+/// mistakes with the old text's, so that an edit never adds a mistake the text did not have.  A mistake already
+/// in the text stays (an edit is how it is mended), and one gone is fine.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Checked(Done);
+
+impl Checked {
+    /// `done`, the result of an edit of `before`, if its text has no mistake `before` did not.
+    ///
+    /// # Errors
+    /// [`EditError::Adds`] with the mistakes the edit added.
+    pub fn new(reader: &dyn Reader, kind: Kind, before: &str, done: Done) -> Result<Self, EditError> {
+        if done.text == before {
+            return Ok(Self(done));
+        }
+        let old: std::collections::BTreeSet<Mistake> =
+            reader.mistakes(kind, before).into_iter().collect();
+        let mut added: Vec<Mistake> = reader
+            .mistakes(kind, &done.text)
+            .into_iter()
+            .filter(|m| !old.contains(m))
+            .collect();
+        added.dedup();
+        if added.is_empty() {
+            Ok(Self(done))
+        } else {
+            Err(EditError::Adds(added))
+        }
+    }
+
+    /// The result.
+    #[must_use]
+    pub fn into_done(self) -> Done {
+        self.0
+    }
 }
 
 impl std::fmt::Display for EditError {
@@ -55,6 +139,11 @@ impl std::fmt::Display for EditError {
             EditError::NoEntry(s) => write!(f, "the node has no `{s}`"),
             EditError::BadName(s) | EditError::Cannot(s) => f.write_str(s),
             EditError::NoPiece(id) => write!(f, "the list has no piece {id}"),
+            EditError::Adds(m) => write!(
+                f,
+                "this edit would add a mistake the text does not have: {}",
+                m.first().map_or("", |m| m.message.as_str())
+            ),
             EditError::Unread(e) => f.write_str(
                 e.first()
                     .map_or("the document does not read", |d| d.message.as_str()),
@@ -313,6 +402,19 @@ impl Done {
 /// not there ([`EditError::NoPiece`]), the operation is not one of this kind
 /// of document, or a value is out of range.
 pub fn apply(kind: Kind, text: &str, op: &Op) -> Result<Done, EditError> {
+    apply_with(&Plain, kind, text, op)
+}
+
+/// [`apply`], with the mistakes of the old and the new text read by `reader`: an edit that adds one is refused
+/// ([`EditError::Adds`]).  This is the one way an edit of any kind of document is made.
+///
+/// # Errors
+/// As [`apply`], and [`EditError::Adds`].
+pub fn apply_with(reader: &dyn Reader, kind: Kind, text: &str, op: &Op) -> Result<Done, EditError> {
+    Checked::new(reader, kind, text, make(kind, text, op)?).map(Checked::into_done)
+}
+
+fn make(kind: Kind, text: &str, op: &Op) -> Result<Done, EditError> {
     match kind {
         Kind::Inventory => match op {
             Op::Append(lines) => {
