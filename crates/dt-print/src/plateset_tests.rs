@@ -184,6 +184,7 @@ fn a_bambu_project_holds_every_plate_its_instances_and_its_paint() {
         6,
         "earth is filament 1"
     );
+    // the slicer's own project file: its keys are Bambu Studio's, not a type of ours, so it stays a `Value`
     let cfg: serde_json::Value =
         serde_json::from_str(&text(&z, "Metadata/project_settings.config")).unwrap();
     assert_eq!(cfg["filament_colour"].as_array().unwrap().len(), 3);

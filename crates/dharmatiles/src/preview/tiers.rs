@@ -18,7 +18,7 @@ use super::queue::Lane;
 use super::*;
 
 /// One tier of one piece's tile that the page wants.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -36,7 +36,7 @@ pub struct TierWant {
     pub file: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
@@ -51,7 +51,7 @@ pub struct TiersWantReq {
 }
 
 /// The key of each want, in the order asked: what its result is announced and fetched by.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct TiersWantRes {
     pub keys: Vec<String>,

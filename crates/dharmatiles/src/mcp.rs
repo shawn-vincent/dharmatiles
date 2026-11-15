@@ -20,12 +20,12 @@ pub fn run() -> u8 {
         if line.trim().is_empty() {
             continue;
         }
-        let reply = match serde_json::from_str::<Value>(&line) {
-            Ok(msg) => handle(&msg),
-            Err(e) => Some(error(&Value::Null, -32700, &format!("parse error: {e}"))),
+        let reply = match Request::parse(line.as_bytes()) {
+            Ok(req) => handle(&req),
+            Err(refused) => Some(refused),
         };
         if let Some(r) = reply
-            && (writeln!(out, "{r}").is_err() || out.flush().is_err())
+            && (writeln!(out, "{}", r.to_json()).is_err() || out.flush().is_err())
         {
             break;
         }
@@ -99,7 +99,7 @@ fn http_one(mut conn: std::net::TcpStream) {
         reply(
             conn,
             "400 Bad Request",
-            &error(&Value::Null, -32600, &why).to_string(),
+            &Response::error(None, ErrorCode::InvalidRequest, &why).to_json(),
         );
         finish_early(conn);
     };
@@ -148,7 +148,11 @@ fn http_one(mut conn: std::net::TcpStream) {
     // client could not send one.
     let refuse_as = |conn: &mut std::net::TcpStream, status: &str, why: &str| {
         eprintln!("error: dharmatiles mcp: refused: {why}");
-        reply(conn, status, &error(&Value::Null, -32600, why).to_string());
+        reply(
+            conn,
+            status,
+            &Response::error(None, ErrorCode::InvalidRequest, why).to_json(),
+        );
         finish_early(conn);
     };
     let refuse = |conn: &mut std::net::TcpStream, why: &str| refuse_as(conn, "403 Forbidden", why);
@@ -194,16 +198,12 @@ fn http_one(mut conn: std::net::TcpStream) {
             format!("the body is shorter than its Content-Length: {e}"),
         );
     }
-    match serde_json::from_slice::<Value>(&body) {
-        Ok(msg) => {
-            // only to address an error reply if the call panics: a message that is no request gets its own
-            // error from `handle`
-            let id = serde_json::from_value::<Request>(msg.clone())
-                .ok()
-                .and_then(|r| r.id)
-                .unwrap_or(Value::Null);
-            match std::panic::catch_unwind(|| handle(&msg)) {
-                Ok(Some(r)) => reply(&mut conn, "200 OK", &r.to_string()),
+    match Request::parse(&body) {
+        Ok(req) => {
+            // the id only addresses an error reply if the call panics
+            let id = req.id.clone();
+            match std::panic::catch_unwind(|| handle(&req)) {
+                Ok(Some(r)) => reply(&mut conn, "200 OK", &r.to_json()),
                 Ok(None) => reply(&mut conn, "202 Accepted", ""),
                 Err(panic) => {
                     let why = format!(
@@ -214,82 +214,269 @@ fn http_one(mut conn: std::net::TcpStream) {
                     reply(
                         &mut conn,
                         "500 Internal Server Error",
-                        &error(&id, -32603, &why).to_string(),
+                        &Response::error(id, ErrorCode::Internal, &why).to_json(),
                     );
                 }
             }
         }
-        Err(e) => reply(
-            &mut conn,
-            "400 Bad Request",
-            &error(&Value::Null, -32700, &format!("parse error: {e}")).to_string(),
-        ),
+        // a body that is not JSON at all is a 400; JSON that is no request is answered like the stdio server does
+        Err(refused) => {
+            let status = if refused.is_code(ErrorCode::Parse) {
+                "400 Bad Request"
+            } else {
+                "200 OK"
+            };
+            reply(&mut conn, status, &refused.to_json());
+        }
     }
 }
 
-fn error(id: &Value, code: i64, message: &str) -> Value {
-    json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
+/// The `id` of a request: a number or a string (JSON-RPC 2.0), echoed in the reply.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(untagged)]
+enum Id {
+    Num(serde_json::Number),
+    Str(String),
+}
+
+/// The `"jsonrpc": "2.0"` every message carries.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+enum Version {
+    #[serde(rename = "2.0")]
+    V2,
+}
+
+/// The error codes this server answers with (the JSON-RPC 2.0 ones).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ErrorCode {
+    Parse,
+    InvalidRequest,
+    NoMethod,
+    InvalidParams,
+    Internal,
+}
+
+impl ErrorCode {
+    const fn number(self) -> i64 {
+        match self {
+            Self::Parse => -32700,
+            Self::InvalidRequest => -32600,
+            Self::NoMethod => -32601,
+            Self::InvalidParams => -32602,
+            Self::Internal => -32603,
+        }
+    }
 }
 
 /// A JSON-RPC message: the envelope, read as a type.
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct Request {
+    #[serde(default = "version")]
+    jsonrpc: Version,
     /// None for a notification (no `id` at all, which is not the same as `"id": null`).
-    #[serde(default, deserialize_with = "present")]
-    id: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    id: Option<Id>,
     #[serde(default)]
     method: String,
-    #[serde(default)]
+    /// What the method takes, read as its own type once the method is known (`CallParams` for `tools/call`); the
+    /// protocol makes it method-dependent, so the envelope holds it as the JSON it arrived as.
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     params: Value,
 }
 
+const fn version() -> Version {
+    Version::V2
+}
+
+impl Request {
+    /// Read one message; what is not one is the reply that says so.
+    fn parse(bytes: &[u8]) -> Result<Self, Response> {
+        serde_json::from_slice(bytes).map_err(|e| {
+            if e.classify() == serde_json::error::Category::Data {
+                Response::error(
+                    None,
+                    ErrorCode::InvalidRequest,
+                    &format!("not a JSON-RPC request: {e}"),
+                )
+            } else {
+                Response::error(None, ErrorCode::Parse, &format!("parse error: {e}"))
+            }
+        })
+    }
+}
+
 /// The params of `tools/call`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct CallParams {
     name: String,
+    /// The tool's own arguments, read as its argument struct by [`with`].
     #[serde(default)]
     arguments: Value,
 }
 
-/// A field that is there, `null` or not, is `Some`.
-fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Value>, D::Error> {
-    <Value as serde::Deserialize>::deserialize(d).map(Some)
+/// The error of a reply.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+struct RpcError {
+    code: i64,
+    message: String,
 }
 
-fn handle(msg: &Value) -> Option<Value> {
-    let req: Request = match serde_json::from_value(msg.clone()) {
-        Ok(r) => r,
-        Err(e) => {
-            return Some(error(
-                &Value::Null,
-                -32600,
-                &format!("not a JSON-RPC request: {e}"),
-            ));
+/// What the server answers: the envelope, and a result or an error.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct Response {
+    jsonrpc: Version,
+    /// `null` when the request's id could not be read.
+    id: Option<Id>,
+    #[serde(flatten)]
+    outcome: Outcome,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+enum Outcome {
+    Result(Answer),
+    Error(RpcError),
+}
+
+/// The results of the methods, each its own type.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(untagged)]
+enum Answer {
+    Initialize(InitializeResult),
+    Tools(ListToolsResult),
+    Call(CallToolResult),
+    /// `ping`: `{}`.
+    Empty(Empty),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
+struct Empty {}
+
+/// The result of `initialize`.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct InitializeResult {
+    protocol_version: String,
+    capabilities: Capabilities,
+    server_info: ServerInfo,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct Capabilities {
+    tools: Empty,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct ServerInfo {
+    name: String,
+    version: String,
+}
+
+/// The result of `tools/list`.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct ListToolsResult {
+    tools: Vec<ToolInfo>,
+}
+
+/// One tool as `tools/list` says it.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ToolInfo {
+    name: String,
+    description: String,
+    /// A JSON Schema document, made from the tool's argument struct.
+    input_schema: Value,
+}
+
+/// The result of `tools/call`.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct CallToolResult {
+    content: Vec<Content>,
+    is_error: bool,
+}
+
+/// One item of a tool's answer.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum Content {
+    Text {
+        text: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    Image {
+        /// Base64.
+        data: String,
+        mime_type: String,
+    },
+}
+
+impl Response {
+    fn ok(id: Id, answer: Answer) -> Self {
+        Self {
+            jsonrpc: Version::V2,
+            id: Some(id),
+            outcome: Outcome::Result(answer),
         }
-    };
-    let id = req.id?; // a notification has no id: no reply
+    }
+
+    fn error(id: Option<Id>, code: ErrorCode, message: &str) -> Self {
+        Self {
+            jsonrpc: Version::V2,
+            id,
+            outcome: Outcome::Error(RpcError {
+                code: code.number(),
+                message: message.to_owned(),
+            }),
+        }
+    }
+
+    fn is_code(&self, code: ErrorCode) -> bool {
+        matches!(&self.outcome, Outcome::Error(e) if e.code == code.number())
+    }
+
+    /// The message as one line of JSON.
+    fn to_json(&self) -> String {
+        // plain data and strings: it serializes
+        serde_json::to_string(self).expect("a JSON-RPC response serializes")
+    }
+}
+
+fn handle(req: &Request) -> Option<Response> {
+    let id = req.id.clone()?; // a notification has no id: no reply
     let method = req.method.as_str();
-    let result = match method {
-        "initialize" => json!({
-            "protocolVersion": PROTOCOL,
-            "capabilities": {"tools": {}},
-            "serverInfo": {"name": "dharmatiles", "version": env!("CARGO_PKG_VERSION")},
+    let answer = match method {
+        "initialize" => Answer::Initialize(InitializeResult {
+            protocol_version: PROTOCOL.to_owned(),
+            capabilities: Capabilities {
+                tools: Empty::default(),
+            },
+            server_info: ServerInfo {
+                name: "dharmatiles".to_owned(),
+                version: env!("CARGO_PKG_VERSION").to_owned(),
+            },
         }),
-        "ping" => json!({}),
-        "tools/list" => json!({"tools": tools()}),
-        "tools/call" => match serde_json::from_value::<CallParams>(req.params) {
-            Ok(p) => call(&p.name, &p.arguments),
+        "ping" => Answer::Empty(Empty::default()),
+        "tools/list" => Answer::Tools(ListToolsResult { tools: tools() }),
+        "tools/call" => match serde_json::from_value::<CallParams>(req.params.clone()) {
+            Ok(p) => Answer::Call(call(&p.name, &p.arguments)),
             Err(e) => {
-                return Some(error(
-                    &id,
-                    -32602,
+                return Some(Response::error(
+                    Some(id),
+                    ErrorCode::InvalidParams,
                     &format!("tools/call needs params {{name, arguments}}: {e}"),
                 ));
             }
         },
-        _ => return Some(error(&id, -32601, &format!("no method `{method}`"))),
+        _ => {
+            return Some(Response::error(
+                Some(id),
+                ErrorCode::NoMethod,
+                &format!("no method `{method}`"),
+            ));
+        }
     };
-    Some(json!({"jsonrpc": "2.0", "id": id, "result": result}))
+    Some(Response::ok(id, answer))
 }
 
 /// What a Rust type is as a JSON-schema property, and whether leaving it out is allowed: the one place a tool's
@@ -455,17 +642,21 @@ struct Tool {
     name: &'static str,
     about: &'static str,
     schema: fn() -> Value,
-    run: fn(&Value) -> Value,
+    run: fn(&Value) -> CallToolResult,
 }
 
 /// Read a call's arguments as `A` and run `f` on them; arguments that are not `A` are a tool error that says why.
 fn with<A: serde::de::DeserializeOwned>(
     tool: &str,
     a: &Value,
-    f: impl FnOnce(A) -> Value,
-) -> Value {
+    f: impl FnOnce(A) -> CallToolResult,
+) -> CallToolResult {
     // a client may leave `arguments` out of a tool that takes none
-    let given = if a.is_null() { json!({}) } else { a.clone() };
+    let given = if a.is_null() {
+        Value::Object(serde_json::Map::new())
+    } else {
+        a.clone()
+    };
     match serde_json::from_value::<A>(given) {
         Ok(args) => f(args),
         Err(e) => text(&format!("`{tool}`: the arguments are not valid: {e}"), true),
@@ -524,7 +715,7 @@ const TOOLS: [Tool; 7] = [
         schema: NoArgs::schema,
         run: |a| {
             with("list_tiles", a, |_: NoArgs| match crate::library_tiles() {
-                Ok(tiles) => text(&json!({"tiles": tiles}).to_string(), false),
+                Ok(tiles) => text(&TilesListed { tiles }.to_json(), false),
                 Err(e) => text(&format!("cannot list the library: {e}"), true),
             })
         },
@@ -579,21 +770,49 @@ const TOOLS: [Tool; 7] = [
     },
 ];
 
-fn tools() -> Value {
-    Value::Array(
-        TOOLS
-            .iter()
-            .map(|t| json!({"name": t.name, "description": t.about, "inputSchema": (t.schema)()}))
-            .collect(),
-    )
+/// What `list_tiles` answers, as text.
+#[derive(serde::Serialize)]
+struct TilesListed {
+    tiles: Vec<String>,
 }
 
-fn text(v: &str, is_error: bool) -> Value {
-    json!({"content": [{"type": "text", "text": v}], "isError": is_error})
+impl TilesListed {
+    fn to_json(&self) -> String {
+        // strings: it serializes
+        serde_json::to_string(self).expect("a list of paths serializes")
+    }
+}
+
+fn tools() -> Vec<ToolInfo> {
+    TOOLS
+        .iter()
+        .map(|t| ToolInfo {
+            name: t.name.to_owned(),
+            description: t.about.to_owned(),
+            input_schema: (t.schema)(),
+        })
+        .collect()
+}
+
+fn text(v: &str, is_error: bool) -> CallToolResult {
+    CallToolResult {
+        content: vec![Content::Text { text: v.to_owned() }],
+        is_error,
+    }
+}
+
+impl CallToolResult {
+    /// The first text item: what a tool says in words.
+    fn first_text(&self) -> Option<&str> {
+        self.content.iter().find_map(|c| match c {
+            Content::Text { text } => Some(text.as_str()),
+            Content::Image { .. } => None,
+        })
+    }
 }
 
 /// Run this program with `args`; its stdout (the `--json` report) is the answer.
-fn run_self(args: &[String]) -> Value {
+fn run_self(args: &[String]) -> CallToolResult {
     let Ok(exe) = std::env::current_exe() else {
         return text("cannot find the dharmatiles program", true);
     };
@@ -609,14 +828,14 @@ fn run_self(args: &[String]) -> Value {
 }
 
 /// Run the tool `name` on its arguments.
-fn call(name: &str, a: &Value) -> Value {
+fn call(name: &str, a: &Value) -> CallToolResult {
     match TOOLS.iter().find(|t| t.name == name) {
         Some(t) => (t.run)(a),
         None => text(&format!("`{name}` is not a tool (see tools/list)"), true),
     }
 }
 
-fn preview(path: &str, opts: &[String], view: View) -> Value {
+fn preview(path: &str, opts: &[String], view: View) -> CallToolResult {
     let dir = std::env::temp_dir().join(format!("dharmatiles-mcp-{}", std::process::id()));
     let mut args = vec![
         "build".to_owned(),
@@ -659,10 +878,19 @@ fn preview(path: &str, opts: &[String], view: View) -> Value {
     };
     // best-effort cleanup of the scratch folder
     let _ = std::fs::remove_dir_all(&dir);
-    json!({"content": [
-        {"type": "image", "data": base64(&png), "mimeType": "image/png"},
-        {"type": "text", "text": report["content"][0]["text"]},
-    ], "isError": false})
+    let mut content = vec![Content::Image {
+        data: base64(&png),
+        mime_type: "image/png".to_owned(),
+    }];
+    content.extend(
+        report
+            .first_text()
+            .map(|t| Content::Text { text: t.to_owned() }),
+    );
+    CallToolResult {
+        content,
+        is_error: false,
+    }
 }
 
 fn walk(dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
@@ -710,17 +938,39 @@ mod tests {
         assert_eq!(base64(b"foobar"), "Zm9vYmFy");
     }
 
+    /// A request of the given method, as the protocol writes it.
+    fn request(id: Option<Id>, method: &str) -> Request {
+        Request {
+            jsonrpc: Version::V2,
+            id,
+            method: method.to_owned(),
+            params: Value::Null,
+        }
+    }
+
+    fn answer(r: Response) -> Answer {
+        match r.outcome {
+            Outcome::Result(a) => a,
+            Outcome::Error(e) => panic!("an error where an answer was due: {e:?}"),
+        }
+    }
+
     #[test]
     fn initialize_and_list_tools() {
-        let r = handle(&json!({"jsonrpc": "2.0", "id": 1, "method": "initialize"})).unwrap();
-        assert_eq!(r["result"]["protocolVersion"], PROTOCOL);
-        let t = handle(&json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})).unwrap();
-        let names: Vec<&str> = t["result"]["tools"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter_map(|x| x["name"].as_str())
-            .collect();
+        let r = handle(&request(Some(Id::Num(1.into())), "initialize")).unwrap();
+        assert_eq!(r.id, Some(Id::Num(1.into())));
+        let Answer::Initialize(init) = answer(r) else {
+            panic!("initialize answers its own result")
+        };
+        assert_eq!(init.protocol_version, PROTOCOL);
+        assert_eq!(init.server_info.name, "dharmatiles");
+        let t = handle(&request(Some(Id::Str("two".to_owned())), "tools/list")).unwrap();
+        // a string id is echoed as the string
+        assert_eq!(t.id, Some(Id::Str("two".to_owned())));
+        let Answer::Tools(listed) = answer(t) else {
+            panic!("tools/list answers its own result")
+        };
+        let names: Vec<&str> = listed.tools.iter().map(|x| x.name.as_str()).collect();
         for n in [
             "check_document",
             "list_elements",
@@ -733,9 +983,20 @@ mod tests {
             assert!(names.contains(&n), "{n}");
         }
         // a notification gets no reply
-        assert!(
-            handle(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"})).is_none()
-        );
+        assert!(handle(&request(None, "notifications/initialized")).is_none());
+    }
+
+    #[test]
+    fn a_message_that_is_no_request_gets_its_error() {
+        let refused = Request::parse(b"{not json").unwrap_err();
+        assert!(refused.is_code(ErrorCode::Parse));
+        let refused = Request::parse(br#"{"jsonrpc":"2.0","id":[1],"method":"ping"}"#).unwrap_err();
+        assert!(refused.is_code(ErrorCode::InvalidRequest));
+        let r = handle(&request(Some(Id::Num(3.into())), "nope")).unwrap();
+        assert!(r.is_code(ErrorCode::NoMethod));
+        // the wire itself: an id the request could not give is `null`, and an error carries no `result`
+        let wire = serde_json::to_value(&refused).unwrap();
+        assert!(wire["id"].is_null() && wire.get("result").is_none());
     }
 
     #[test]
@@ -751,18 +1012,18 @@ mod tests {
         );
         // every tool in the table is listed, with the schema its struct makes
         let listed = tools();
-        assert_eq!(listed.as_array().unwrap().len(), TOOLS.len());
+        assert_eq!(listed.len(), TOOLS.len());
     }
 
     #[test]
     fn an_argument_a_tool_does_not_take_is_refused() {
         let r = super::call("check_document", &json!({"path": "x", "colour": "red"}));
-        assert_eq!(r["isError"], true);
-        assert!(r["content"][0]["text"].as_str().unwrap().contains("colour"));
+        assert!(r.is_error);
+        assert!(r.first_text().unwrap().contains("colour"));
         let r = super::call("build_tile", &json!({"path": "x", "system": "xx"}));
-        assert_eq!(r["isError"], true);
+        assert!(r.is_error);
         let r = super::call("no_such_tool", &json!({}));
-        assert_eq!(r["isError"], true);
+        assert!(r.is_error);
     }
 
     /// One request to a real `http_one`; the status line and the body come back.

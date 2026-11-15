@@ -50,7 +50,7 @@ impl Home {
     }
 
     fn call(&self, route: &str, body: Value) -> (String, Value) {
-        post(&self.r, route, Some(&self.token), None, &body.to_string())
+        post_value(&self.r, route, Some(&self.token), None, &body.to_string())
     }
 
     /// The revision the program holds for the document `id` (what the page names its edits against).
@@ -87,7 +87,7 @@ impl Home {
     }
 
     fn snapshot(&self) -> Value {
-        tiles(&self.r)
+        serde_json::from_slice(&get(&self.r, "/api/tiles").1).unwrap()
     }
 
     /// The snapshot's inventory, as its type.
@@ -154,7 +154,7 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     // a call needs the token
     let body = serde_json::json!({"tile": h.id("glade.dtile"), "colour": "single"}).to_string();
     assert!(
-        post(&h.r, "/api/inventory/have", None, None, &body)
+        post_value(&h.r, "/api/inventory/have", None, None, &body)
             .0
             .starts_with("HTTP/1.1 403")
     );

@@ -226,7 +226,7 @@ pub struct SketchRef {
 }
 
 /// One place the list shows.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct RootJson {
     pub index: usize,
@@ -240,7 +240,7 @@ pub struct RootJson {
 }
 
 /// A folder of a place, by its path below it.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct FolderJson {
     pub root: usize,
@@ -249,7 +249,7 @@ pub struct FolderJson {
 
 /// Every tile's state and what the page lists them with: `GET /api/tiles` and the
 /// stream's first event.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
@@ -430,7 +430,7 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
 
 /// One event of the stream (`GET /api/events`), tagged by `type`: the page's stream reader is typed by this one
 /// type, so a field renamed here fails `tsc` in the page's reader.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(
     tag = "type",

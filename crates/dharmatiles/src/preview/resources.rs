@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::api::{self, FolderJson, RootJson, TileSummary};
 use super::plan::PrinterRow;
@@ -31,7 +31,7 @@ pub(super) struct Told {
 }
 
 /// The places: where tiles come from and the folders in them.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Places {
     pub roots: Vec<RootJson>,
@@ -40,7 +40,7 @@ pub struct Places {
 }
 
 /// The build target the page chose.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct Target {
@@ -53,7 +53,7 @@ pub struct Target {
 }
 
 /// The tiles listed, in order, with the state of the ones that joined since the pages were last told.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct List {
     pub ids: Vec<String>,
@@ -61,7 +61,7 @@ pub struct List {
 }
 
 /// One resource and its value.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(tag = "name", content = "value", rename_all = "camelCase")]
 pub enum Resource {
@@ -73,7 +73,7 @@ pub enum Resource {
 }
 
 /// A resource on the event stream.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceEvent {
