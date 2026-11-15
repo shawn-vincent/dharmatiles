@@ -75,7 +75,7 @@ export class Card {
     this.status = 'waking';
     this.progress = null;
     this.queuedBehind = 0;
-    this.log = new CardLog(this.id);
+    this.log = new CardLog(this.id, () => engine.version);
     this.moment = {
       toggles: new Set((host.getAttribute('overlay') ?? '').split(/[\s,]+/).filter(Boolean)),
       pinned: new Set(), hover: null, caret: null,

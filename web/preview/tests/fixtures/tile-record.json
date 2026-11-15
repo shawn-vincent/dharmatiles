@@ -1,0 +1,59 @@
+{
+  "path": "tile.dtile",
+  "record": {
+    "engine": "1.0.0",
+    "document": "tile.dtile",
+    "document_hash": "00000000000000ab",
+    "seed": 97,
+    "system": "db",
+    "printer": "default"
+  },
+  "target": "db",
+  "audit": {
+    "triangles": 461038,
+    "vertices": 230521,
+    "volume_mm3": 41000.5,
+    "watertight": true,
+    "bodies": 1,
+    "dropped": [],
+    "repairs": {
+      "voids_filled": 2,
+      "pinches_moved": 0,
+      "slivers": 0,
+      "collapsed": 0,
+      "dropped": 0
+    },
+    "overhang_mm2": 0.0,
+    "overhang_budget_mm2": 3.5,
+    "band_mm2": 1.25,
+    "band_budget_mm2": 3.5,
+    "holes": 0,
+    "failures": []
+  },
+  "checked": true,
+  "stages": [
+    {
+      "name": "ground",
+      "hash": "00000000000000cd"
+    }
+  ],
+  "build_s": 2.1,
+  "stage_secs": [
+    [
+      "ground",
+      0.4
+    ],
+    [
+      "union",
+      1.2
+    ]
+  ],
+  "edge_mm": 3.4,
+  "stats": {},
+  "left_out": {},
+  "cache": {
+    "state": "miss",
+    "made_by": null,
+    "problems": []
+  }
+}

@@ -37,6 +37,8 @@ export class Engine {
     /** @type {Map<string, any>} */
     this.cache = new Map();
     this.serial = 0;
+    /** @type {string | null} the engine's version, once its worker has said it (`ready`) */
+    this.version = null;
     /** @type {{ id: number, card: string, job: any, timer: any } | null} */
     this.running = null;
     this.worker = null;
@@ -85,7 +87,7 @@ export class Engine {
     this.worker = worker;
     return new Promise((resolve, reject) => {
       worker.onmessage = (ev) => {
-        if (ev.data.type === 'ready') { worker.onmessage = (e) => this.#heard(e.data); resolve(undefined); } else if (ev.data.type === 'error') reject(new Error(ev.data.message));
+        if (ev.data.type === 'ready') { this.version = ev.data.version; worker.onmessage = (e) => this.#heard(e.data); resolve(undefined); } else if (ev.data.type === 'error') reject(new Error(ev.data.message));
       };
       worker.onerror = (e) => {
         const err = new Error(`the engine's worker failed: ${e.message || 'it could not load'}`);

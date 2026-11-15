@@ -28,7 +28,9 @@ const said = (m) => ({ ...m, file: null, doing: null, source: null, reportable: 
 function fromDiagnostic(d, note) {
   return said({
     kind: note ? 'note' : 'error', severity: note ? 'note' : 'error', scope: 'check', code: d.code,
-    node: null, text: d.message, help: d.help, fix: d.fix, data: {},
+    node: null, text: d.message, help: d.help, fix: d.fix,
+    // as the program's own (message.rs `from_diag`): the label when there is one
+    data: d.label ? { type: 'diag', label: d.label } : { type: 'diag' },
     span: d.file === FILE || !d.file ? { file: FILE, line: d.line, col: d.col, offset: d.span[0], len: d.span[1] } : null,
   });
 }
@@ -37,9 +39,13 @@ function fromDiagnostic(d, note) {
 const keyOf = (m) => `${m.scope}|${m.kind}|${m.code}|${m.text}|${m.span?.offset ?? ''}`;
 
 export class CardLog {
-  /** @param {string} tile the card's id, which is the tile the log is about */
-  constructor(tile) {
+  /**
+   * @param {string} tile the card's id, which is the tile the log is about
+   * @param {() => string | null} version the engine's version, once it has said it
+   */
+  constructor(tile, version) {
     this.tile = tile;
+    this.version = version;
     this.log = createLog();
     this.seq = 0;
     /** @type {Map<string, MessageJson>} the open messages by what makes them the same message */
@@ -82,20 +88,27 @@ export class CardLog {
    */
   built(meta, { draft, cached, ms }) {
     const secs = ms / 1000;
-    if (!meta.record) throw new Error('the engine said a build was built, with no record of it');
-    const audit = meta.record.audit;
+    const record = meta.record;
+    if (!record) throw new Error('the engine said a build was built, with no record of it');
+    if (record.target == null) throw new Error('the engine built a tile with no target in its record');
+    const audit = record.audit;
+    // what the program's build message says (preview/messages.rs `of_build`): nothing here is kept from a last build
+    const made = record.stage_secs.reduce((a, [, s]) => a + s, 0);
     /** @type {ReturnType<typeof said>[]} */
     const out = [said({
       kind: 'build', severity: 'info', scope: 'build', code: null, node: null, span: null, help: null, fix: null,
       text: cached ? `From the cache (${draft ? 'draft' : 'full'} detail)` : `Built at ${draft ? 'draft' : 'full'} detail in ${secs.toFixed(2)} s`,
-      data: { build_s: secs, triangles: audit.triangles, draft, cache: cached ? 'hit' : 'miss' },
+      data: {
+        type: 'build', build_s: secs, triangles: audit.triangles, target: record.target, stage_secs: record.stage_secs,
+        reused: 0, cache: cached ? 'hit' : 'miss', made_s: cached ? made : null,
+      },
     })];
     if (!draft) {
-      const fails = !meta.record.checked || audit.failures.length > 0;
+      const fails = !record.checked || audit.failures.length > 0;
       out.push(said({
         kind: 'gate', severity: fails ? 'error' : 'info', scope: 'build', code: 'gate', node: null, span: null, help: null, fix: null,
         text: fails ? `Fails the printability gate: ${audit.failures.join('; ')}` : 'Passes the printability gate',
-        data: audit,
+        data: { type: 'gate', ...audit },
       }));
     }
     this.report('build', out);
@@ -105,7 +118,12 @@ export class CardLog {
   failed(message, stack) {
     this.report('build', [said({
       kind: 'server', severity: 'error', scope: 'build', code: 'failure', node: null, span: null, help: null, fix: null,
-      text: message, data: { origin: 'page', kind: 'failure', backtrace: stack ?? '' },
+      text: message,
+      // the engine's version, as the program's failures name theirs; an engine that never started has said none
+      data: {
+        type: 'server', origin: 'page', kind: 'failure', route: null, causes: [], backtrace: stack ?? '',
+        version: this.version() ?? 'none: the engine did not start',
+      },
     })]);
   }
 

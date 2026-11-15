@@ -83,7 +83,7 @@ test('a control finds its value in the map and writes it where it is written, ke
 const diag = (over = {}) => ({ code: 'dt::unit', message: '`5` has no unit', label: 'here', help: 'write 5dmm', file: 'tile.dtile', span: [10, 1], span16: [10, 1], line: 2, col: 5, fix: null, ...over });
 
 test('a check\'s mistakes and notes are messages, and what the next check no longer reports is cleared', () => {
-  const log = new CardLog('card-1');
+  const log = new CardLog('card-1', () => '1.0.0');
   log.checked({ ok: false, errors: [diag()], notes: [diag({ code: 'dt::edge', message: 'the dirt meets the edge' })] });
   let v = log.view();
   assert.deepEqual(v.rows.map((r) => [r.m.severity, r.m.code]), [['error', 'dt::unit'], ['note', 'dt::edge']]);
@@ -100,9 +100,10 @@ test('a check\'s mistakes and notes are messages, and what the next check no lon
 });
 
 test('a draft says it has not been through the gate; a full build reports the gate\'s verdict; the engine failing is loud and apart', () => {
-  const log = new CardLog('card-2');
-  const gate = JSON.parse(readFileSync(new URL('./fixtures/gate-numbers.json', import.meta.url), 'utf8'));
-  const meta = { built: true, record: { checked: true, audit: { ...gate, triangles: 1000 } } };
+  const log = new CardLog('card-2', () => '1.0.0');
+  // a whole build record, held to the program's TileRecord by messages_wire.rs
+  const record = JSON.parse(readFileSync(new URL('./fixtures/tile-record.json', import.meta.url), 'utf8'));
+  const meta = { built: true, record };
   log.built(meta, { draft: true, cached: false, ms: 310 });
   let v = log.view();
   assert.equal(v.record.gate, null);

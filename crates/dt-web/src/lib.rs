@@ -80,6 +80,13 @@ extern "C" {
     fn console_error(message: &str);
 }
 
+/// The engine's version: the program's own (`Cargo.toml`), which a failure the page reports names, as the program's do.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[must_use]
+pub fn version() -> String {
+    env!("CARGO_PKG_VERSION").to_owned()
+}
+
 /// Give the module the library: a JSON object of `lib:` path to text.  In the
 /// browser it also gives the engine the page's clock (`performance.now()`),
 /// which a build times its stages with.
@@ -1045,7 +1052,18 @@ mod tests {
         out.push_str(
             "/** Each engine function that answers JSON, and what the JSON is. */\n\
              export interface Answers {\n  analyze: Analysis;\n  check_tile: Checked;\n  explore: Explored;\n  \
-             printed: PrintedBoth | null;\n  \"build_tile().meta\": BuildMeta;\n  \"dtProgress\": StageTick;\n}\n",
+             printed: PrintedBoth | null;\n  \"build_tile().meta\": BuildMeta;\n  \"dtProgress\": StageTick;\n}\n\n\
+             /** A built tile (`Tile`): its getters, as wasm-bindgen exports them. */\n\
+             export interface EngineTile {\n  readonly meta: string;\n  readonly stl: Uint8Array;\n  \
+             readonly positions: Float32Array;\n  readonly colours: Float32Array;\n  free(): void;\n}\n\n\
+             /** The compiled module (docs/engine/dt_web.js, `cargo xtask wasm`, not in the repo): its exports, written here \
+             beside the Rust functions they are, so a script is checked the same whether a build is on disk or not. */\n\
+             export interface Engine {\n  default(init: { module_or_path: WebAssembly.Module | string }): Promise<unknown>;\n  \
+             version(): string;\n  set_library(json: string): void;\n  analyze(text: string, system: string): string;\n  \
+             check_tile(text: string, system: string): string;\n  fix_tile(text: string, fix: string): string;\n  \
+             printed(typed: string): string;\n  \
+             build_tile(text: string, system: string, seed: number, cells: number, tier: string): EngineTile;\n  \
+             explore(typed: string, system: string, bins: number, draws: number, seed: number): string;\n}\n",
         );
         out
     }

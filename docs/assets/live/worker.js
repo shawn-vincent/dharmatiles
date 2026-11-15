@@ -13,9 +13,12 @@
 // A fix is `{type: 'fix', id, text, fix}` (`fix` is the check's mistake's `fix`); it answers `fixed`, or `error`.
 // A job is `{id, steps: ['check', 'build'], text, system, seed, cells}`.  `cells` is cells per square: a number for a draft, 0
 // for the build's own finest, the detail the printer is given.
-// @ts-expect-error the compiled module (docs/engine/, `cargo xtask wasm`) is not in the repo, so tsc has no types for it: what it
-// answers is typed where it is read, by the generated engine-wire.d.ts (its `Answers`), which wasm-bindgen's functions are held to
-import init, * as engine from '../../engine/dt_web.js';
+// The compiled module (docs/engine/, `cargo xtask wasm`) is not in the repo: it is imported by a name tsc does not
+// follow, and typed by the generated engine-wire.d.ts (`Engine`, `Answers`), the same whether a build is on disk or not.
+const ENGINE = '../../engine/dt_web.js';
+const engine = /** @type {import('./engine-wire').Engine} */ (await import(ENGINE));
+const init = engine.default;
+export {}; // a module worker: the engine is awaited at the top
 
 /** @typedef {import('./engine-wire').Answers} Answers */
 
@@ -48,7 +51,7 @@ scope.onmessage = async (ev) => {
       await init({ module_or_path: m.module });
       engine.set_library(m.library);
       ready = true;
-      scope.postMessage({ type: 'ready' });
+      scope.postMessage({ type: 'ready', version: engine.version() });
       return;
     }
     if (m.type === 'fix') {

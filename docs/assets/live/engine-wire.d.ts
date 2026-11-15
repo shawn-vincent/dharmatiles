@@ -408,3 +408,25 @@ export interface Answers {
   "build_tile().meta": BuildMeta;
   "dtProgress": StageTick;
 }
+
+/** A built tile (`Tile`): its getters, as wasm-bindgen exports them. */
+export interface EngineTile {
+  readonly meta: string;
+  readonly stl: Uint8Array;
+  readonly positions: Float32Array;
+  readonly colours: Float32Array;
+  free(): void;
+}
+
+/** The compiled module (docs/engine/dt_web.js, `cargo xtask wasm`, not in the repo): its exports, written here beside the Rust functions they are, so a script is checked the same whether a build is on disk or not. */
+export interface Engine {
+  default(init: { module_or_path: WebAssembly.Module | string }): Promise<unknown>;
+  version(): string;
+  set_library(json: string): void;
+  analyze(text: string, system: string): string;
+  check_tile(text: string, system: string): string;
+  fix_tile(text: string, fix: string): string;
+  printed(typed: string): string;
+  build_tile(text: string, system: string, seed: number, cells: number, tier: string): EngineTile;
+  explore(typed: string, system: string, bins: number, draws: number, seed: number): string;
+}
