@@ -120,3 +120,7 @@ manifold-csg-sys = { path = "third_party/manifold-csg-sys" }
 # run on wasm32, where std's `Instant::now()` panics (third_party/obvhs/src/
 # instant.rs); the rest is the published source.  Drop it once obvhs has the fix.
 obvhs = { path = "third_party/obvhs" }
+# glamx 0.3.1 with its symmetric 3x3 eigenvalues (and 2x2 SVD, 2D pose) on libm instead of std's acos, cos, sin and
+# atan2, which round differently natively and in the browser (third_party/glamx/src/libm_math.rs); parry's
+# convex hull orders its first mesh by those eigenvalues. Drop it once glamx has libm there.
+glamx = { path = "third_party/glamx" }

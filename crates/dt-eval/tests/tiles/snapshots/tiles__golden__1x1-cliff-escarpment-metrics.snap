@@ -4,15 +4,15 @@ expression: metrics(b)
 ---
 {
   "audit": {
-    "triangles": 793230,
-    "vertices": 396553,
-    "volume_mm3": 23630.744,
+    "triangles": 793170,
+    "vertices": 396523,
+    "volume_mm3": 23630.738,
     "watertight": true,
     "bodies": 42,
     "dropped": [],
     "repairs": {
       "voids_filled": 41,
-      "pinches_moved": 1334,
+      "pinches_moved": 1332,
       "slivers": 0,
       "collapsed": 0,
       "dropped": 0
