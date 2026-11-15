@@ -132,6 +132,17 @@ pub trait Storage: Send + Sync {
     /// # Errors
     /// The move fails.
     fn restore(&self, trashed: &Path, original: &Path) -> Result<()>;
+
+    /// Rename the folder `from` (and what is in it) to `to`, never over what is there.  The same folder under another
+    /// spelling of its name (a disk that ignores case) is renamed in place.
+    ///
+    /// # Errors
+    /// `AlreadyExists` when `to` is taken; any other kind is the system's.
+    fn rename_dir(&self, from: &Path, to: &Path) -> Result<()>;
+
+    /// Is `path` inside `base` by their real paths (a link that leaves the place leaves it here too)?  False when either
+    /// is not there.
+    fn is_inside(&self, path: &Path, base: &Path) -> bool;
 }
 
 /// The name a trashed `name` takes the `n`th time it is looked for (1 is its own).
@@ -190,6 +201,43 @@ impl Mem {
 
     fn taken(&self, path: &Path) -> bool {
         self.files.contains_key(path) || self.dirs.contains(path)
+    }
+
+    /// Move the file `from`, or the folder `from` with everything under it, to `to` (taken or not: the caller checked).
+    fn relocate(&mut self, from: &Path, to: &Path) -> Result<()> {
+        if let Some(bytes) = self.files.remove(from) {
+            self.times.remove(from);
+            self.put(to, &bytes);
+            return Ok(());
+        }
+        if !self.dirs.contains(from) {
+            return Err(not_found(from));
+        }
+        let under: Vec<PathBuf> = self
+            .files
+            .keys()
+            .filter(|p| p.starts_with(from))
+            .cloned()
+            .collect();
+        let folders: Vec<PathBuf> = self
+            .dirs
+            .iter()
+            .filter(|p| p.starts_with(from))
+            .cloned()
+            .collect();
+        for f in under {
+            let rel = f.strip_prefix(from).map_err(Error::other)?.to_path_buf();
+            let bytes = self.files.remove(&f).ok_or_else(|| not_found(&f))?;
+            self.times.remove(&f);
+            self.put(&to.join(rel), &bytes);
+        }
+        for d in folders {
+            let rel = d.strip_prefix(from).map_err(Error::other)?.to_path_buf();
+            self.dirs.remove(&d);
+            self.dirs.insert(to.join(rel));
+        }
+        self.make_dirs(to.parent());
+        Ok(())
     }
 
     fn entry(&self, path: &Path) -> Option<Entry> {
@@ -332,14 +380,13 @@ impl Storage for MemStorage {
     fn trash(&self, from: &Path, trash: &Path) -> Result<PathBuf> {
         let mut m = self.state();
         let name = file_name(from);
+        let is_file = m.files.contains_key(from);
         for n in 1..1000 {
-            let to = trash.join(trash_name(&name, true, n));
+            let to = trash.join(trash_name(&name, is_file, n));
             if m.taken(&to) {
                 continue;
             }
-            let bytes = m.files.remove(from).ok_or_else(|| not_found(from))?;
-            m.times.remove(from);
-            m.put(&to, &bytes);
+            m.relocate(from, &to)?;
             return Ok(to);
         }
         Err(Error::other("no free name in the Trash"))
@@ -350,13 +397,22 @@ impl Storage for MemStorage {
     }
 
     fn restore(&self, trashed: &Path, original: &Path) -> Result<()> {
+        self.state().relocate(trashed, original)
+    }
+
+    fn rename_dir(&self, from: &Path, to: &Path) -> Result<()> {
         let mut m = self.state();
-        let bytes = m
-            .files
-            .remove(trashed)
-            .ok_or_else(|| Error::new(ErrorKind::NotFound, "not in the Trash"))?;
-        m.times.remove(trashed);
-        m.put(original, &bytes);
-        Ok(())
+        if to != from && m.taken(to) {
+            return Err(Error::new(ErrorKind::AlreadyExists, "taken"));
+        }
+        if !m.dirs.contains(from) {
+            return Err(not_found(from));
+        }
+        m.relocate(from, to)
+    }
+
+    fn is_inside(&self, path: &Path, base: &Path) -> bool {
+        // memory has no links: a path is inside a place when it is below it
+        path.starts_with(base)
     }
 }

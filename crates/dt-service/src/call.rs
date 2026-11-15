@@ -86,15 +86,30 @@ pub struct Refusal {
     pub message: String,
     /// What was under it (an I/O error's words).
     pub causes: Vec<String>,
-    /// A conflict: the file as it is now, and its revision.
-    pub text: Option<String>,
-    pub doc_rev: Option<u64>,
+    /// A conflict: the file as it is now, and its revision (boxed with the rest of what almost no refusal carries).
+    pub conflict: Option<Box<Conflict>>,
     /// An unreadable document: its mistakes, each at its place.
     pub errors: Option<Box<[dt_eval::Mistake]>>,
     /// What a bug adds (boxed: a refusal is returned by every call, and almost none is a bug).
     pub bug: Option<Box<BugDetail>>,
     /// A newer request of the same kind took this one's place: nothing is wrong, nothing is said.
     pub superseded: bool,
+    /// What the program was doing when it failed, when the call's own route does not say (a lane's work: the draft worker).
+    pub doing: Option<Box<Doing>>,
+}
+
+/// A file that moved on: what it holds now and the revision that is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Conflict {
+    pub text: String,
+    pub doc_rev: u64,
+}
+
+/// What the program was at when it failed: the work (`draft worker`) and the tile it was for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Doing {
+    pub route: String,
+    pub tile: Option<String>,
 }
 
 impl Refusal {
@@ -116,11 +131,11 @@ impl Refusal {
             fault,
             message: message.into(),
             causes: Vec::new(),
-            text: None,
-            doc_rev: None,
+            conflict: None,
             errors: None,
             bug: None,
             superseded: false,
+            doing: None,
         }
     }
 
@@ -144,6 +159,16 @@ impl Refusal {
         let mut r = Self::refused(Status::Conflict, message);
         r.superseded = true;
         r
+    }
+
+    /// Say what the program was doing, where the call's own route does not: a lane's work, for a tile.
+    #[must_use]
+    pub fn doing(mut self, route: impl Into<String>, tile: Option<&str>) -> Self {
+        self.doing = Some(Box::new(Doing {
+            route: route.into(),
+            tile: tile.map(str::to_owned),
+        }));
+        self
     }
 
     /// With the error under it, as the causes.
@@ -188,6 +213,11 @@ impl Refusal {
             Fault::Bug => "bug",
         };
         let bug = self.bug.unwrap_or_default();
+        // the work that failed, when it is named, is what the error says it was doing
+        let (route, tile) = match self.doing {
+            Some(d) => (d.route, d.tile.or_else(|| tile.map(str::to_owned))),
+            None => (route.to_owned(), tile.map(str::to_owned)),
+        };
         RefusalReply {
             status: self.status.code(),
             body: crate::api::ErrorBody {
@@ -198,14 +228,14 @@ impl Refusal {
                     causes: self.causes,
                     backtrace: bug.backtrace,
                     context: crate::api::ErrorContext {
-                        route: Some(route.to_owned()),
-                        tile: tile.map(str::to_owned),
+                        route: Some(route),
+                        tile,
                         version: version.to_owned(),
                         at_ms,
                     },
                 },
-                text: self.text,
-                doc_rev: self.doc_rev,
+                text: self.conflict.as_ref().map(|c| c.text.clone()),
+                doc_rev: self.conflict.as_ref().map(|c| c.doc_rev),
                 scene: None,
                 errors: self.errors.map(Vec::from),
                 superseded: self.superseded.then_some(true),
@@ -302,6 +332,23 @@ impl<C: 'static, E: 'static> Table<C, E> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What the program was doing travels with the refusal: the reply says the work and its tile, not the call's route.
+    #[test]
+    fn a_refusal_says_what_the_program_was_doing() {
+        let plain = Refusal::failure(Status::Internal, "no").reply("draft", Some("a"), "v", 1);
+        assert_eq!(plain.body.error.context.route.as_deref(), Some("draft"));
+        let at = Refusal::failure(Status::Internal, "no")
+            .doing("draft worker", Some("b"))
+            .reply("draft", Some("a"), "v", 1);
+        assert_eq!(at.body.error.context.route.as_deref(), Some("draft worker"));
+        assert_eq!(at.body.error.context.tile.as_deref(), Some("b"));
+        // a work that names no tile keeps the call's
+        let some = Refusal::failure(Status::Internal, "no")
+            .doing("build worker", None)
+            .reply("build", Some("a"), "v", 1);
+        assert_eq!(some.body.error.context.tile.as_deref(), Some("a"));
+    }
 
     const DOUBLE: Verb<u32, u32> = Verb::new("double");
     const SHOUT: Verb<String, String> = Verb::new("shout");

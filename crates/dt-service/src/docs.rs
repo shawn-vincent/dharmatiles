@@ -182,8 +182,10 @@ pub fn stale(now: &str, rev: u64) -> Refusal {
         Status::Conflict,
         "The file changed since this edit was made (in another tab or your text editor); the edit would lose that change.",
     );
-    r.text = Some(now.to_owned());
-    r.doc_rev = Some(rev);
+    r.conflict = Some(Box::new(crate::call::Conflict {
+        text: now.to_owned(),
+        doc_rev: rev,
+    }));
     r
 }
 

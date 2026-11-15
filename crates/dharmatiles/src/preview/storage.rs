@@ -115,6 +115,24 @@ impl Storage for DiskStorage {
     fn restore(&self, trashed: &Path, original: &Path) -> Result<()> {
         std::fs::rename(trashed, original)
     }
+
+    fn rename_dir(&self, from: &Path, to: &Path) -> Result<()> {
+        if to != from && std::fs::symlink_metadata(to).is_ok() {
+            // a change of case only, on a disk that ignores case, is the same folder
+            let same = matches!((std::fs::canonicalize(from), std::fs::canonicalize(to)), (Ok(a), Ok(b)) if a == b);
+            if !same {
+                return Err(Error::new(ErrorKind::AlreadyExists, "taken"));
+            }
+        }
+        std::fs::rename(from, to)
+    }
+
+    fn is_inside(&self, path: &Path, base: &Path) -> bool {
+        match (std::fs::canonicalize(path), std::fs::canonicalize(base)) {
+            (Ok(p), Ok(b)) => p.starts_with(b),
+            _ => false,
+        }
+    }
 }
 
 #[expect(

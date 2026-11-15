@@ -237,6 +237,9 @@ pub(super) fn refusal_reply(r: dt_service::call::Refusal) -> Reply {
         Fault::Bug => fail::ServerError::new(fail::Kind::Bug, status, r.message),
     };
     e.causes = r.causes;
+    if let Some(d) = r.doing {
+        e = e.doing(d.route, d.tile.as_deref());
+    }
     if let Some(bug) = r.bug {
         e.help = bug.help.or(e.help);
         if !bug.backtrace.is_empty() {
@@ -245,8 +248,10 @@ pub(super) fn refusal_reply(r: dt_service::call::Refusal) -> Reply {
     }
     let superseded = r.superseded.then_some(true);
     e.reply_with(|b| {
-        b.text = r.text;
-        b.doc_rev = r.doc_rev;
+        if let Some(c) = r.conflict {
+            b.text = Some(c.text);
+            b.doc_rev = Some(c.doc_rev);
+        }
         b.errors = r.errors.map(Vec::from);
         b.superseded = superseded;
     })

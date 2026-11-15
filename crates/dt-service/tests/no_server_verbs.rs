@@ -18,12 +18,15 @@ use dt_service::clock::ManualClock;
 use dt_service::docs::Docs;
 use dt_service::draft_calls::{DRAFT, DraftAsk, DraftReq, Drafted, STEP, StepDraft, StepReq};
 use dt_service::edit_calls::{EDIT, EditOp, EditReq, SAVE, SaveReq, Scalar};
+use dt_service::folder_calls::{
+    self, FolderNamedReq, FolderReq, PlaceHost, RenameReq, TileMoveReq, TrashUndoReq,
+};
 use dt_service::host::{Alarm, Host};
 use dt_service::message::{Message, Scope};
 use dt_service::owner::{Command, Core, Setup, Subscribed};
 use dt_service::patch::Patch;
 use dt_service::queue::{Finished, Job, Taken, Taking};
-use dt_service::read_calls::{self, Overlay};
+use dt_service::read_calls::{self, Nothing, Overlay};
 use dt_service::roots::{Root, RootKind};
 use dt_service::storage::{MemStorage, Storage};
 use dt_service::tile::{Slot, tile_id};
@@ -67,6 +70,8 @@ struct World {
     docs: Docs,
     core: RefCell<Core<TestHost>>,
     options: Options,
+    /// What `moved` was told: (from, to, a folder).
+    moves: RefCell<Vec<(std::path::PathBuf, std::path::PathBuf, bool)>>,
 }
 
 /// The tile's own file from the store; everything else (`lib:`) from the library.
@@ -154,6 +159,48 @@ impl TileHost for World {
                 printers: Vec::new(),
                 inventory: dt_service::inventory::InventoryState::Unavailable,
             })
+    }
+}
+
+impl World {
+    fn ask<R>(&self, make: impl FnOnce(std::sync::mpsc::Sender<R>) -> Command<TestHost>) -> R {
+        let (tx, rx) = channel();
+        self.core.borrow_mut().apply(make(tx));
+        rx.try_recv().expect("the owner answered in the same step")
+    }
+}
+
+impl PlaceHost for World {
+    fn roots(&self) -> Vec<Root> {
+        self.ask(Command::Roots)
+    }
+
+    fn trash_dir(&self) -> Option<std::path::PathBuf> {
+        Some("/memory/.trash".into())
+    }
+
+    fn trash_note(&self, from: &Path, to: &Path) -> usize {
+        self.ask(|r| Command::Trash(from.to_path_buf(), to.to_path_buf(), r))
+    }
+
+    fn trash_taken(&self, undo: usize) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+        self.ask(|r| Command::Trashed(undo, r))
+    }
+
+    fn rescan(&self) {}
+
+    fn told(&self) -> u64 {
+        self.ask(Command::Rev)
+    }
+
+    fn summary(&self, _: &str) -> Option<dt_service::api::TileSummary> {
+        None
+    }
+
+    fn moved(&self, from: &Path, to: &Path, folder: bool) {
+        self.moves
+            .borrow_mut()
+            .push((from.to_path_buf(), to.to_path_buf(), folder));
     }
 }
 
@@ -255,6 +302,7 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
         mem,
         core: RefCell::new(core),
         options: Options::default(),
+        moves: RefCell::new(Vec::new()),
     };
     let table = table();
     let id = tile_id(PATH);
@@ -372,8 +420,9 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
     ) {
         Err(CallError::Refused(r)) => {
             assert_eq!(r.status, Status::Conflict);
-            assert_eq!(r.doc_rev, Some(rev + 1));
-            assert!(r.text.is_some_and(|t| t.contains("seed=2")));
+            let c = r.conflict.expect("a conflict says the file as it is now");
+            assert_eq!(c.doc_rev, rev + 1);
+            assert!(c.text.contains("seed=2"));
         }
         other => panic!("a stale save is a conflict: {other:?}"),
     }
@@ -421,6 +470,7 @@ fn world() -> World {
         mem,
         core: RefCell::new(core),
         options: Options::default(),
+        moves: RefCell::new(Vec::new()),
     }
 }
 
@@ -568,4 +618,169 @@ fn the_reading_verbs_answer_from_the_text_and_the_options_alone() {
     // the first message of a stream
     let snapshot = TileHost::snapshot(&w);
     assert_eq!(snapshot.tiles.len(), 1);
+}
+
+/// A folder made, renamed and trashed and put back, a tile moved into it, copied, renamed, trashed and deleted: all by
+/// the service's own functions over a `MemStorage`, with the refusals the program gives (the library, a path out of a
+/// place, a place that is not there).
+#[test]
+fn the_folder_and_tile_verbs_change_the_places_with_no_server_and_no_disk() {
+    let w = world();
+    let home = Path::new("/memory/My tiles");
+    let named = |dir: &str, name: &str| FolderNamedReq {
+        root: 0,
+        dir: dir.to_owned(),
+        name: name.to_owned(),
+    };
+    let made = folder_calls::new_folder(&w, named("", "dungeon")).expect("a folder is made");
+    assert_eq!(made.dir, "dungeon");
+    assert!(
+        w.mem
+            .stat(&home.join("dungeon"))
+            .expect("it is there")
+            .is_dir()
+    );
+    let taken =
+        folder_calls::new_folder(&w, named("", "dungeon")).expect_err("a name is not taken twice");
+    assert_eq!(taken.status, Status::Conflict);
+    for odd in ["", "..", "out"] {
+        folder_calls::new_folder(&w, named("", odd))
+            .expect_err(&format!("`{odd}` is no folder name"));
+    }
+    let up = folder_calls::new_folder(&w, named("../x", "y")).expect_err("no way out of the place");
+    assert_eq!(up.status, Status::BadRequest);
+    let no_place = folder_calls::new_folder(
+        &w,
+        FolderNamedReq {
+            root: 9,
+            dir: String::new(),
+            name: "x".to_owned(),
+        },
+    )
+    .expect_err("no such place");
+    assert_eq!(no_place.status, Status::NotFound);
+
+    // a tile moves in, keeps its name, and the host is told
+    let into = TileMoveReq {
+        root: 0,
+        dir: "dungeon".to_owned(),
+    };
+    let moved = folder_calls::move_tile(&w, &tile_ref(), into).expect("the tile moves");
+    let there = home.join("dungeon/b.dtile");
+    assert_eq!(moved.path, there.to_string_lossy());
+    assert!(w.mem.exists(&there) && !w.mem.exists(Path::new(PATH)));
+    assert_eq!(w.moves.borrow().len(), 1);
+    let at = TileRef {
+        id: tile_id(&there.to_string_lossy()),
+        path: there.to_string_lossy().into_owned(),
+        files: BTreeMap::new(),
+    };
+
+    // a copy beside it, never over a file; a rename never over a file
+    let copy = folder_calls::duplicate_tile(&w, &at, Nothing {}).expect("a copy");
+    assert!(copy.path.ends_with("dungeon/b copy.dtile"), "{}", copy.path);
+    let twice = folder_calls::duplicate_tile(&w, &at, Nothing {}).expect("another copy");
+    assert!(twice.path.ends_with("b copy 2.dtile"), "{}", twice.path);
+    let clash = folder_calls::rename(
+        &w,
+        &at,
+        RenameReq {
+            name: "b copy".to_owned(),
+        },
+    )
+    .expect_err("the name is taken");
+    assert_eq!(clash.status, Status::Conflict);
+    let renamed = folder_calls::rename(
+        &w,
+        &at,
+        RenameReq {
+            name: "keep".to_owned(),
+        },
+    )
+    .expect("renamed");
+    assert!(
+        renamed.path.ends_with("dungeon/keep.dtile"),
+        "{}",
+        renamed.path
+    );
+    let kept = TileRef {
+        id: tile_id(&renamed.path),
+        path: renamed.path.clone(),
+        files: BTreeMap::new(),
+    };
+
+    // a tile to the Trash and back
+    let gone = folder_calls::trash_tile(&w, &kept, Nothing {}).expect("trashed");
+    assert!(!w.mem.exists(Path::new(&kept.path)));
+    assert!(w.mem.exists(Path::new("/memory/.trash/keep.dtile")));
+    let back = folder_calls::undo_trash(&w, TrashUndoReq { undo: gone.undo }).expect("put back");
+    assert_eq!(back.path, kept.path);
+    assert!(w.mem.exists(Path::new(&kept.path)));
+    folder_calls::undo_trash(
+        &w,
+        TrashUndoReq {
+            undo: gone.undo + 7,
+        },
+    )
+    .expect_err("no such number");
+
+    // a folder renamed (its tiles come along), trashed with them and put back
+    let r = folder_calls::rename_folder(&w, named("dungeon", "cellar")).expect("renamed");
+    assert_eq!(r.dir, "cellar");
+    assert!(w.mem.exists(&home.join("cellar/keep.dtile")));
+    assert!(!w.mem.exists(&home.join("dungeon/keep.dtile")));
+    assert!(
+        w.moves.borrow().iter().any(|m| m.2),
+        "the host was told of the folder"
+    );
+    let t = folder_calls::trash_folder(
+        &w,
+        FolderReq {
+            root: 0,
+            dir: "cellar".to_owned(),
+        },
+    )
+    .expect("trashed");
+    assert!(!w.mem.exists(&home.join("cellar")));
+    folder_calls::undo_trash(&w, TrashUndoReq { undo: t.undo }).expect("put back");
+    assert!(w.mem.exists(&home.join("cellar/keep.dtile")));
+    folder_calls::trash_folder(
+        &w,
+        FolderReq {
+            root: 0,
+            dir: String::new(),
+        },
+    )
+    .expect_err("a place is not trashed");
+
+    // removed for good; and what is not the user's is refused
+    let del = TileRef {
+        id: tile_id(&renamed.path),
+        path: renamed.path.replace("dungeon", "cellar"),
+        files: BTreeMap::new(),
+    };
+    folder_calls::delete_tile(&w, &del, Nothing {}).expect("removed");
+    assert!(!w.mem.exists(&home.join("cellar/keep.dtile")));
+    let lib = TileRef {
+        id: "x".to_owned(),
+        path: "lib:tiles/ground/1x1-grass.dtile".to_owned(),
+        files: BTreeMap::new(),
+    };
+    for r in [
+        folder_calls::delete_tile(&w, &lib, Nothing {}).map(drop),
+        folder_calls::trash_tile(&w, &lib, Nothing {}).map(drop),
+        folder_calls::rename(
+            &w,
+            &lib,
+            RenameReq {
+                name: "x".to_owned(),
+            },
+        )
+        .map(drop),
+    ] {
+        assert_eq!(
+            r.expect_err("the library is read only").status,
+            Status::BadRequest
+        );
+    }
 }

@@ -25,13 +25,11 @@
 //! The per-user settings are `places.json` in [`settings_dir`]: the folders
 //! added, as real paths.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::api::{Out, Reply, TileSummary};
-use super::edit::bad;
-use super::roots::kind_of;
+use super::api::{Out, Reply};
 use super::storage::Storage;
 use super::*;
 
@@ -77,87 +75,10 @@ pub struct Changed {
     pub rev: u64,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct FolderReq {
-    pub root: usize,
-    /// The folder, by its path below the place (`""` is the place).
-    pub dir: String,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct FolderNamedReq {
-    pub root: usize,
-    pub dir: String,
-    pub name: String,
-}
-
-/// A folder made or renamed: its path below the place.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct FolderDone {
-    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
-    pub rev: u64,
-    pub dir: String,
-}
-
-/// Something moved to the Trash: what it was and the number its Undo goes by.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct Trashed {
-    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
-    pub rev: u64,
-    pub dir: Option<String>,
-    pub path: Option<String>,
-    pub undo: usize,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct TrashUndoReq {
-    pub undo: usize,
-}
-
-/// A tile (or folder) put back, with the list.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct Restored {
-    pub path: String,
-    pub id: Option<String>,
-    pub tile: Option<TileSummary>,
-    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
-    pub rev: u64,
-}
-
+pub use dt_service::folder_calls::{
+    FolderDone, FolderNamedReq, FolderReq, ListedIn, Restored, TileMoveReq, TrashUndoReq, Trashed,
+};
 pub use dt_service::place_calls::Listed;
-
-/// [`Listed`], with the list as it now is.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct ListedIn {
-    pub path: String,
-    pub id: Option<String>,
-    pub tile: Option<TileSummary>,
-    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
-    pub rev: u64,
-}
-
-/// A tile moved into a folder.
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct TileMoveReq {
-    pub root: usize,
-    pub dir: String,
-}
 
 // ---- the settings ------------------------------------------------------------------
 
@@ -378,143 +299,6 @@ fn io_failure(what: &str, path: &Path, e: &std::io::Error) -> Reply {
     )
 }
 
-/// `dir` as a list of names below a place: no empty, `.`, `..`, hidden, build-output or
-/// odd-character names.  `""` is the place itself.
-fn components(dir: &str) -> Result<Vec<&str>, Reply> {
-    if dir.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut out = Vec::new();
-    for c in dir.split('/') {
-        let odd = c.is_empty()
-            || c.starts_with('.')
-            || c.contains(['\\', ':'])
-            || c.chars().any(char::is_control)
-            || roots::SKIP_DIRS.contains(&c);
-        if odd {
-            return Err(refuse(
-                "400 Bad Request",
-                "a folder is named by the names below its place, one by one",
-            ));
-        }
-        out.push(c);
-    }
-    Ok(out)
-}
-
-/// Is `path` (made of existing folders up to its last name) under `base`, by
-/// their real paths: a symlink that leaves the place leaves it here too.
-fn really_inside(path: &Path, base: &Path) -> bool {
-    match (std::fs::canonicalize(path), std::fs::canonicalize(base)) {
-        (Ok(p), Ok(b)) => p.starts_with(b),
-        _ => false,
-    }
-}
-
-/// Place `root` as a folder place the user owns: its index checked, its folder on disk.
-fn place(shared: &Shared, i: usize) -> Result<(usize, PathBuf), Reply> {
-    let roots = shared.roots();
-    let Some(r) = roots.get(i) else {
-        return Err(refuse("404 Not Found", "no such place"));
-    };
-    if !r.writable() {
-        return Err(refuse(
-            "403 Forbidden",
-            format!("{} is read only: its tiles are not changed here", r.label),
-        ));
-    }
-    let Some(d) = r.dir() else {
-        return Err(bad("that place is not a folder"));
-    };
-    Ok((i, d.to_path_buf()))
-}
-
-/// Folder `dir` below place `root`: `(place index, the place's folder, the folder)`.  `must_exist`
-/// is for a folder acted on; a destination is the same.  The real path is checked to stay inside.
-fn folder(shared: &Shared, root: usize, dir: &str) -> Result<(usize, PathBuf, PathBuf), Reply> {
-    let (i, base) = place(shared, root)?;
-    let names = components(dir)?;
-    let full = names.iter().fold(base.clone(), |p, n| p.join(n));
-    if !full.is_dir() {
-        return Err(refuse("404 Not Found", "no such folder"));
-    }
-    if !really_inside(&full, &base) {
-        return Err(refuse(
-            "403 Forbidden",
-            "that folder is outside its place (a link leads out of it)",
-        ));
-    }
-    Ok((i, base, full))
-}
-
-/// A tile file of a place the user owns: `(place index, its path)`.  Not the
-/// library, not a path with `..`, only a kind the actions apply to, and its
-/// folder is really inside its place.
-fn tile_file(shared: &Shared, tile: &str, what: &str) -> Result<(usize, PathBuf), Reply> {
-    if tile.starts_with(dt_eval::LIB) {
-        return Err(bad(format!(
-            "a library tile is read only: it is not {what}; make it yours first"
-        )));
-    }
-    let path = PathBuf::from(tile);
-    if path.components().any(|c| c == Component::ParentDir) {
-        return Err(bad("a path with .. is not a tile"));
-    }
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    if !kind_of(name).is_some_and(|k| k.actions) {
-        return Err(bad(format!("only a tile document is {what}")));
-    }
-    let roots = shared.roots();
-    let found = roots.iter().enumerate().find(|(_, r)| {
-        r.writable()
-            && r.dir().is_some_and(|d| {
-                path.starts_with(d) && path.parent().is_some_and(|p| really_inside(p, d))
-            })
-    });
-    match found {
-        Some((i, _)) => Ok((i, path)),
-        None => Err(bad(format!(
-            "only a tile in a folder you own is {what} here"
-        ))),
-    }
-}
-
-/// The checks of a tile that is renamed or removed (the calls of `edit`): the place it is in.
-pub(super) fn owned_tile(shared: &Shared, tile: &str, what: &str) -> Result<PathBuf, Reply> {
-    tile_file(shared, tile, what).map(|(_, p)| p)
-}
-
-/// One name of a file or folder from the page: one line of at most 80 characters, with what a
-/// file name cannot hold turned into `-`, and no leading dot.
-fn leaf_name(name: &str, what: &str) -> Result<String, Reply> {
-    let name = name.trim();
-    if name.chars().count() > 80 || name.contains(['\n', '\r']) {
-        return Err(bad(format!(
-            "a {what} name is one line of at most 80 characters"
-        )));
-    }
-    let out: String = name
-        .chars()
-        .map(|c| {
-            if matches!(c, '/' | '\\' | ':') || c.is_control() {
-                '-'
-            } else {
-                c
-            }
-        })
-        .collect();
-    let out = out.trim_start_matches('.').trim().to_owned();
-    if out.is_empty() {
-        return Err(bad(format!("a {what} needs a name")));
-    }
-    if roots::SKIP_DIRS.contains(&out.as_str()) {
-        return Err(bad(format!(
-            "“{out}” is not listed (it holds build output): pick another name"
-        )));
-    }
-    Ok(out)
-}
-
 // ---- the places -----------------------------------------------------------------------------
 
 /// Tell every listener what changed among the places, the inventory and the list (only that: see `resources`).
@@ -638,273 +422,42 @@ pub(super) fn remove_place(shared: &Shared, req: PlacesRemoveReq) -> Out<Changed
     Ok(Changed { rev: shared.told() })
 }
 
-// ---- folders ------------------------------------------------------------------------------------
+// ---- folders and tiles: the service's calls (dt_service::folder_calls), as this program's replies -------------------
 
-/// A folder made, renamed or trashed is in the list: told, and the answer says the revision it was told at.
-fn rescanned(shared: &Shared) -> u64 {
-    shared.rescan();
-    shared.told()
-}
-
-/// `POST /api/folders/new` `{root, dir, name}`.
 pub(super) fn new_folder(shared: &Shared, req: FolderNamedReq) -> Out<FolderDone> {
-    let (_, _, parent) = folder(shared, req.root, &req.dir)?;
-    let name = leaf_name(&req.name, "folder")?;
-    let to = parent.join(&name);
-    // `create_dir` never goes over what is there
-    match shared.storage.create_dir(&to) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            return Err(refuse(
-                "409 Conflict",
-                format!("“{name}” is already in this folder"),
-            ));
-        }
-        Err(e) => return Err(io_failure("make", &to, &e)),
-    }
-    let dir = join_rel(&req.dir, &name);
-    Ok(FolderDone {
-        rev: rescanned(shared),
-        dir,
-    })
+    super::api::out(dt_service::folder_calls::new_folder(shared, req))
 }
 
-fn join_rel(dir: &str, name: &str) -> String {
-    if dir.is_empty() {
-        name.to_owned()
-    } else {
-        format!("{dir}/{name}")
-    }
-}
-
-/// `POST /api/folders/rename` `{root, dir, name}`: `dir` (not the place itself) gets a new last name.
 pub(super) fn rename_folder(shared: &Shared, req: FolderNamedReq) -> Out<FolderDone> {
-    let (_, base, from) = folder(shared, req.root, &req.dir)?;
-    if from == base {
-        return Err(bad("a place is not renamed here: only a folder in it"));
-    }
-    let name = leaf_name(&req.name, "folder")?;
-    let Some(parent) = from.parent() else {
-        return Err(bad("the folder has no parent"));
-    };
-    let to = parent.join(&name);
-    if to != from && std::fs::symlink_metadata(&to).is_ok() {
-        // a change of case only, on a disk that ignores case, is the same folder
-        let same = matches!((std::fs::canonicalize(&from), std::fs::canonicalize(&to)), (Ok(a), Ok(b)) if a == b);
-        if !same {
-            return Err(refuse(
-                "409 Conflict",
-                format!("“{name}” is already in this folder"),
-            ));
-        }
-    }
-    if let Err(e) = std::fs::rename(&from, &to) {
-        return Err(io_failure("rename", &from, &e));
-    }
-    // the prints of the tiles in it follow them
-    super::inventory::note_folder_rename(shared, &from, &to);
-    let dir = match req.dir.rsplit_once('/') {
-        Some((up, _)) => join_rel(up, &name),
-        None => name,
-    };
-    Ok(FolderDone {
-        rev: rescanned(shared),
-        dir,
-    })
+    super::api::out(dt_service::folder_calls::rename_folder(shared, req))
 }
 
-/// Move `from` into the Trash under a name that is free there; where it went.
-fn into_trash(shared: &Shared, from: &Path) -> Result<PathBuf, Reply> {
-    let Some(trash) = &shared.trash else {
-        return Err(fail::failure(
-            "500 Internal Server Error",
-            "there is no Trash known on this system, so nothing was moved (a delete is never a hard delete)",
-        ));
-    };
-    shared.storage.trash(from, trash).map_err(|e| {
-        fail::failure_from(
-            "500 Internal Server Error",
-            format!(
-                "cannot move {} to the Trash ({}): {e}; nothing was deleted",
-                from.display(),
-                trash.display()
-            ),
-            &e,
-        )
-    })
-}
-
-/// Trash `from` and answer with the number its Undo goes by.
-fn trashed(
-    shared: &Shared,
-    from: &Path,
-    dir: Option<String>,
-    path: Option<String>,
-) -> Out<Trashed> {
-    let to = into_trash(shared, from)?;
-    let undo = shared
-        .owner
-        .ask(|r| super::owner::Command::Trash(from.to_path_buf(), to, r));
-    Ok(Trashed {
-        rev: rescanned(shared),
-        dir,
-        path,
-        undo,
-    })
-}
-
-/// `POST /api/folders/trash` `{root, dir}`.
 pub(super) fn trash_folder(shared: &Shared, req: FolderReq) -> Out<Trashed> {
-    let (_, base, from) = folder(shared, req.root, &req.dir)?;
-    if from == base {
-        return Err(bad(
-            "a place is taken off the list, not trashed: only a folder in it is",
-        ));
-    }
-    trashed(shared, &from, Some(req.dir), None)
+    super::api::out(dt_service::folder_calls::trash_folder(shared, req))
 }
 
-/// `POST /api/tiles/ID/trash`.
-pub(super) fn trash_tile(shared: &Shared, tile: &super::api::TileRef, _: Nothing) -> Out<Trashed> {
-    let (_, path) = tile_file(shared, &tile.path, "moved to the Trash")?;
-    if !path.is_file() {
-        return Err(refuse("404 Not Found", "the tile's file is not there"));
-    }
-    trashed(shared, &path, None, Some(tile.path.clone()))
+pub(super) fn trash_tile(shared: &Shared, tile: &super::api::TileRef, n: Nothing) -> Out<Trashed> {
+    super::api::out(dt_service::folder_calls::trash_tile(shared, tile, n))
 }
 
-/// `POST /api/trash/undo` `{undo}`: what was trashed goes back where it was, when that place is free.
 pub(super) fn undo_trash(shared: &Shared, req: TrashUndoReq) -> Out<Restored> {
-    let entry = shared
-        .owner
-        .ask(|r| super::owner::Command::Trashed(req.undo, r));
-    let Some((from, to)) = entry else {
-        return Err(refuse(
-            "404 Not Found",
-            "nothing was trashed under that number",
-        ));
-    };
-    // the place it came from must still be one the user owns
-    let roots = shared.roots();
-    let inside = roots.iter().any(|r| {
-        r.writable()
-            && r.dir().is_some_and(|d| {
-                from.starts_with(d) && from.parent().is_some_and(|p| really_inside(p, d))
-            })
-    });
-    if !inside {
-        return Err(refuse(
-            "409 Conflict",
-            "the folder it came from is not there any more: take it out of the Trash yourself",
-        ));
-    }
-    if shared.storage.exists(&from) {
-        return Err(refuse(
-            "409 Conflict",
-            format!("{} is there again: it is left in the Trash", from.display()),
-        ));
-    }
-    if let Err(e) = shared.storage.restore(&to, &from) {
-        return Err(io_failure("put back", &to, &e));
-    }
-    let path = from.to_string_lossy().into_owned();
-    let is_tile = from.is_file();
-    shared.rescan();
-    let id = tile_id(&path);
-    let tile = if is_tile { shared.summary(&id) } else { None };
-    Ok(Restored {
-        path,
-        id: tile.as_ref().map(|_| id),
-        tile,
-        rev: shared.told(),
-    })
+    super::api::out(dt_service::folder_calls::undo_trash(shared, req))
 }
 
-// ---- tiles ----------------------------------------------------------------------------------------
-
-/// A file appears at `dest`: listed, its build asked for, and its state answered with the list.
-fn listed_in(shared: &Shared, dest: &Path) -> ListedIn {
-    let l = super::edit::listed(shared, dest);
-    ListedIn {
-        path: l.path,
-        id: l.id,
-        tile: l.tile,
-        rev: shared.told(),
-    }
-}
-
-/// Put `from` at `to` without ever going over a file there ([`super::storage::Storage::move_no_clobber`]).
-pub(super) fn move_no_clobber(
-    shared: &Shared,
-    from: &Path,
-    to: &Path,
-    clash: &str,
-) -> Result<(), Reply> {
-    shared.storage.move_no_clobber(from, to).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            refuse("409 Conflict", clash.to_owned())
-        } else {
-            io_failure("move", from, &e)
-        }
-    })
-}
-
-/// `POST /api/tiles/ID/move` `{root, dir}`: the tile's file goes into that folder, under the same name.
 pub(super) fn move_tile(
     shared: &Shared,
     tile: &super::api::TileRef,
     req: TileMoveReq,
 ) -> Out<ListedIn> {
-    let (_, from) = tile_file(shared, &tile.path, "moved")?;
-    let (_, _, dest_dir) = folder(shared, req.root, &req.dir)?;
-    let Some(name) = from.file_name() else {
-        return Err(bad("the tile has no name"));
-    };
-    let to = dest_dir.join(name);
-    if to == from {
-        return Ok(listed_in(shared, &to));
-    }
-    let clash = format!(
-        "a tile called “{}” is already in that folder",
-        from.file_stem()
-            .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
-    );
-    move_no_clobber(shared, &from, &to, &clash)?;
-    // its prints in the inventory follow it
-    super::inventory::note_rename(shared, &from, &to);
-    Ok(listed_in(shared, &to))
+    super::api::out(dt_service::folder_calls::move_tile(shared, tile, req))
 }
 
-/// `POST /api/tiles/ID/duplicate`: a copy beside the tile, “Name copy”, never over a file.
 pub(super) fn duplicate_tile(
     shared: &Shared,
     tile: &super::api::TileRef,
-    _: Nothing,
+    n: Nothing,
 ) -> Out<ListedIn> {
-    let (_, from) = tile_file(shared, &tile.path, "copied")?;
-    let text = shared
-        .storage
-        .read_bytes(&from)
-        .map_err(|e| io_failure("read", &from, &e))?;
-    let Some(dir) = from.parent() else {
-        return Err(bad("the tile has no folder"));
-    };
-    let stem = from
-        .file_stem()
-        .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-    let dest =
-        super::edit::write_new_bytes(shared.storage.as_ref(), dir, &format!("{stem} copy"), &text)?;
-    Ok(listed_in(shared, &dest))
-}
-
-/// Where a new tile goes: folder `dir` of place `root` when `root` is given, else My tiles.
-pub(super) fn new_tile_dir(
-    shared: &Shared,
-    root: Option<usize>,
-    dir: Option<&str>,
-) -> Option<Result<PathBuf, Reply>> {
-    let root = root?;
-    Some(folder(shared, root, dir.unwrap_or("")).map(|(_, _, f)| f))
+    super::api::out(dt_service::folder_calls::duplicate_tile(shared, tile, n))
 }
 
 #[cfg(test)]

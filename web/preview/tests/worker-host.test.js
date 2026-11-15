@@ -99,3 +99,25 @@ test('a draft answers its mesh bytes, and a step its head and its mesh', async (
   assert.equal(s.head.draft, 'mesh');
   assert.deepEqual([...new Uint8Array(s.buffer)], [1, 2, 3]);
 });
+
+test('the folder, trash and target calls are the service\'s verbs, with their requests as the page writes them', async () => {
+  const ok = (body) => () => ({ ok: true, json: JSON.stringify(body), events: '[]' });
+  const engine = fakeEngine({
+    newFolder: ok({ rev: 2, dir: 'a' }), renameFolder: ok({ rev: 3, dir: 'b' }), trashFolder: ok({ rev: 4, dir: 'b', path: null, undo: 1 }),
+    moveTile: ok({ path: 'p', id: null, tile: null, rev: 5 }), duplicateTile: ok({ path: 'p', id: null, tile: null, rev: 6 }),
+    trashTile: ok({ rev: 7, dir: null, path: 'p', undo: 2 }), undoTrash: ok({ path: 'p', id: null, tile: null, rev: 8 }),
+    rename: ok({ path: 'q', id: null, tile: null }), deleteTile: ok({ path: 'p' }), setTarget: ok({ system: 'ol', printer: 'default' }),
+  });
+  const host = workerHost(undefined, engine);
+  const said = async (call) => { const r = await call; assert.equal(r.status, 200); const m = engine.calls.at(-1); return [m.verb, m.tile, JSON.parse(m.request)]; };
+  assert.deepEqual(await said(host.newFolder(0, '', 'a')), ['newFolder', '', { root: 0, dir: '', name: 'a' }]);
+  assert.deepEqual(await said(host.renameFolder(0, 'a', 'b')), ['renameFolder', '', { root: 0, dir: 'a', name: 'b' }]);
+  assert.deepEqual(await said(host.trashFolder(0, 'b')), ['trashFolder', '', { root: 0, dir: 'b' }]);
+  assert.deepEqual(await said(host.moveTile('t', { root: 0, dir: 'b' })), ['moveTile', 't', { root: 0, dir: 'b' }]);
+  assert.deepEqual(await said(host.duplicateTile('t')), ['duplicateTile', 't', {}]);
+  assert.deepEqual(await said(host.trashTile('t')), ['trashTile', 't', {}]);
+  assert.deepEqual(await said(host.undoTrash(2)), ['undoTrash', '', { undo: 2 }]);
+  assert.deepEqual(await said(host.rename('t', 'new')), ['rename', 't', { name: 'new' }]);
+  assert.deepEqual(await said(host.deleteTile('t')), ['deleteTile', 't', {}]);
+  assert.deepEqual(await said(host.setTarget({ system: 'ol' })), ['setTarget', '', { system: 'ol' }]);
+});

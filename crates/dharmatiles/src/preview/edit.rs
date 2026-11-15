@@ -84,19 +84,7 @@ pub use dt_service::tile_calls::{CheckRes, TextReq};
 pub use dt_service::edit_calls::{EditOp, InsertPlace, PointSlot, Scalar};
 pub use dt_service::edit_calls::{EditReq, EditRes, SaveReq, SaveRes};
 
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct Deleted {
-    pub path: String,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct RenameReq {
-    pub name: String,
-}
+pub use dt_service::folder_calls::{Deleted, RenameReq};
 
 pub use dt_service::place_calls::NewReq;
 
@@ -108,21 +96,7 @@ pub use dt_service::read_calls::{
 #[cfg(test)]
 pub use dt_service::read_calls::{PrintedItem, PrintedSize};
 
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct TargetReq {
-    pub system: Option<dt_lang::System>,
-    pub printer: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct TargetRes {
-    pub system: dt_lang::System,
-    pub printer: String,
-}
+pub use dt_service::target_calls::{TargetReq, TargetRes};
 
 #[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -251,35 +225,16 @@ pub(super) fn page_message(shared: &Shared, v: PageMessageReq) -> Out<Done> {
     Ok(Done {})
 }
 
-/// Choose the build target: `system` (`db` or `ol`) and/or `printer` (a
-/// profile's name), for every build from now on; the tiles built so far
-/// are built again.
+/// `/api/target` (see [`dt_service::target_calls::set_target`]).
 pub(super) fn target(shared: &Shared, v: TargetReq) -> Out<TargetRes> {
-    shared
-        .set_target(v.system, v.printer.as_deref())
-        .map_err(bad)?;
-    let o = shared.options();
-    Ok(TargetRes {
-        system: o.system,
-        printer: o.printer.name,
-    })
+    super::api::out(dt_service::target_calls::set_target(shared, v))
 }
 
 pub(super) fn tile_name(name: Option<&str>) -> Result<String, Reply> {
     dt_service::place_calls::tile_name(name).map_err(super::api::refusal_reply)
 }
 
-/// A copy of a document is written as it was read: `<stem>.dtile`, or `<stem> 2.dtile`, … when that is taken.
-pub(super) fn write_new_bytes(
-    storage: &dyn Storage,
-    dir: &Path,
-    stem: &str,
-    text: &[u8],
-) -> Result<PathBuf, (&'static str, super::api::Body)> {
-    write_new_ext(storage, dir, stem, "dtile", text)
-}
-
-/// [`write_new_bytes`] for any document extension (a print list is `dmap`): see [`dt_service::place_calls::write_new`].
+/// A document written new, whatever its extension (a print list is `dmap`): see [`dt_service::place_calls::write_new`].
 pub(super) fn write_new_ext(
     storage: &dyn Storage,
     dir: &Path,
@@ -336,67 +291,25 @@ impl Shared {
     }
 }
 
-/// Rename a tile's file in its folder.  Never over another file: a link
-/// to the new name is made first (which fails if the name is taken), then
-/// the old name removed.  Only a change of case, on a disk that ignores
-/// case, renames in place.
+/// `/api/tiles/ID/rename` (see [`dt_service::folder_calls::rename`]).
 pub(super) fn rename(shared: &Shared, tile: &TileRef, v: RenameReq) -> Out<Listed> {
-    let from = places::owned_tile(shared, &tile.path, "renamed")?;
-    let stem = tile_name(Some(&v.name))?;
-    let Some(dir) = from.parent() else {
-        return Err(bad("the tile has no folder"));
-    };
-    let to = dir.join(format!("{stem}.dtile"));
-    if to == from {
-        return Ok(listed(shared, &to));
-    }
-    match shared.storage.move_no_clobber(&from, &to) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            return Err(fail::refused(
-                "409 Conflict",
-                format!("a tile called “{stem}” is already in this folder"),
-            ));
-        }
-        Err(e) => {
-            return Err(fail::failure_from(
-                "500 Internal Server Error",
-                format!("cannot rename {}: {e}", from.display()),
-                &e,
-            ));
-        }
-    }
-    // its prints in the inventory follow it
-    super::inventory::note_rename(shared, &from, &to);
-    Ok(listed(shared, &to))
+    super::api::out(dt_service::folder_calls::rename(shared, tile, v))
 }
 
-/// Delete a tile's file from a folder the preview lists: what the editor's
-/// Undo does to the copy it made of a library tile.  Never the library, never
-/// a file outside the folders, never anything but a tile document.
-pub(super) fn delete(shared: &Shared, tile: &TileRef, _: Nothing) -> Out<Deleted> {
-    let path = places::owned_tile(shared, &tile.path, "deleted")?;
-    shared.storage.remove_file(&path).map_err(|e| {
-        fail::failure_from(
-            "500 Internal Server Error",
-            format!("cannot delete {}: {e}", path.display()),
-            &e,
-        )
-    })?;
-    shared.rescan();
-    Ok(Deleted {
-        path: tile.path.clone(),
-    })
+/// `/api/tiles/ID/delete` (see [`dt_service::folder_calls::delete_tile`]).
+pub(super) fn delete(shared: &Shared, tile: &TileRef, n: Nothing) -> Out<Deleted> {
+    super::api::out(dt_service::folder_calls::delete_tile(shared, tile, n))
 }
 
 /// Make a small, valid tile in My tiles (or in a folder of a place) and return its slot (see
 /// [`dt_service::place_calls::new_tile`]).
 pub(super) fn new_tile(shared: &Shared, v: NewReq) -> Out<Listed> {
     // in a folder of a place (the page's folder level), else in My tiles
-    let into = match places::new_tile_dir(shared, v.root, v.dir.as_deref()) {
-        Some(r) => Some(r?),
-        None => None,
-    };
+    let into = super::api::out(dt_service::folder_calls::new_tile_dir(
+        shared,
+        v.root,
+        v.dir.as_deref(),
+    ))?;
     super::api::out(dt_service::place_calls::new_tile(shared, &v, into))
 }
 

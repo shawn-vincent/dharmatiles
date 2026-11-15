@@ -328,8 +328,12 @@ pub(super) fn new_list(shared: &Shared, v: ListsNewReq) -> Out<super::places::Li
         .filter(|n| !n.trim().is_empty())
         .unwrap_or("Print list");
     let stem = edit::tile_name(Some(name))?;
-    let into = match places::new_tile_dir(shared, v.root, v.dir.as_deref()) {
-        Some(r) => r?,
+    let into = match super::api::out(dt_service::folder_calls::new_tile_dir(
+        shared,
+        v.root,
+        v.dir.as_deref(),
+    ))? {
+        Some(d) => d,
         None => edit::home(shared)?,
     };
     let mut text = dt_doc::map::new_list(

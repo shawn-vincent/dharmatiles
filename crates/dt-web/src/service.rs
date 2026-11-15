@@ -28,6 +28,11 @@ use dt_service::draft_calls::{
     self, DRAFT, DraftAsk, DraftReq, Drafted, Mesh, STEP, StepReq, Stepped,
 };
 use dt_service::edit_calls::{self, EDIT, EditReq, EditRes, SAVE, SaveReq, SaveRes};
+use dt_service::folder_calls::{
+    self, DELETE_TILE, DUPLICATE_TILE, Deleted, FolderDone, FolderNamedReq, FolderReq, ListedIn,
+    MOVE_TILE, NEW_FOLDER, PlaceHost, RENAME, RENAME_FOLDER, RenameReq, Restored, TRASH_FOLDER,
+    TRASH_TILE, TileMoveReq, TrashUndoReq, Trashed, UNDO_TRASH,
+};
 use dt_service::host::{Alarm, Host};
 use dt_service::message::{Message, Scope};
 use dt_service::owner::{Command, Core, Outside, Setup, Subscribed};
@@ -43,6 +48,7 @@ use dt_service::read_calls::{
 };
 use dt_service::roots::{Role, Root, RootKind};
 use dt_service::storage::{MemStorage, Storage};
+use dt_service::target_calls::{self, SET_TARGET, TargetHost, TargetReq, TargetRes};
 use dt_service::tile::{Slot, tile_id};
 use dt_service::tile_calls::{self, CHECK, CheckHost, TextReq};
 use dt_service::tile_host::{TileHost, TileRef};
@@ -56,6 +62,9 @@ use crate::{JsError, LIBRARY, MAIN, build_with, stage_total, stl_sha256, system_
 
 /// The folder the worker's tiles are listed under.
 const FOLDER: &str = "/memory/My tiles";
+
+/// Where the worker's Trash is: a folder of its store, so an Undo puts a tile back.
+const TRASH: &str = "/memory/.trash";
 
 /// What a build came to, as the worker keeps it beside the stream's record: the hash of the STL's triangles (empty
 /// when the gate stopped the build: only a build that passed has an STL).  `built(path)` answers it.
@@ -408,7 +417,7 @@ impl Inner {
                 let build_s = built.report.stage_secs.iter().map(|s| s.1).sum();
                 let record = TileRecord::of(&built, &opts.printer, build_s);
                 self.built.borrow_mut().insert(
-                    facts.path,
+                    facts.path.clone(),
                     BuiltRes {
                         record: record.clone(),
                         passed: passed.is_some(),
@@ -428,6 +437,7 @@ impl Inner {
                         dt_service::call::Status::Internal,
                         format!("cannot make the view of the build: {e}"),
                     )
+                    .doing("build worker", Some(&facts.path))
                 })?;
                 edit(Patch::BuildReady {
                     problem: Vec::new(),
@@ -562,7 +572,88 @@ impl TileHost for Ctx {
                 dt_service::call::Status::Internal,
                 format!("cannot prepare the draft's view: {e}"),
             )
+            .doing("draft worker", Some(&self.tile))
         })
+    }
+}
+
+impl PlaceHost for Ctx {
+    fn roots(&self) -> Vec<Root> {
+        self.inner.roots.clone()
+    }
+
+    fn trash_dir(&self) -> Option<std::path::PathBuf> {
+        Some(std::path::PathBuf::from(TRASH))
+    }
+
+    fn trash_note(&self, from: &Path, to: &Path) -> usize {
+        self.inner
+            .ask(|r| Command::Trash(from.to_path_buf(), to.to_path_buf(), r))
+            .expect("the owner answers a trash in the same step")
+    }
+
+    fn trash_taken(&self, undo: usize) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+        self.inner
+            .ask(|r| Command::Trashed(undo, r))
+            .expect("the owner answers a trashed in the same step")
+    }
+
+    fn rescan(&self) {
+        // whether the list changed is on the stream: the page is told by it
+        self.inner
+            .rescan()
+            .expect("the owner answers a reconcile in the same step");
+    }
+
+    fn told(&self) -> u64 {
+        self.inner.seq.set(self.inner.seq.get() + 1);
+        let seq = self.inner.seq.get();
+        self.inner.core.borrow_mut().apply(Command::Publish {
+            seq,
+            read: Vec::new(),
+        });
+        self.inner
+            .ask(Command::Rev)
+            .expect("the owner answers a revision in the same step")
+    }
+
+    fn summary(&self, id: &str) -> Option<dt_service::api::TileSummary> {
+        self.inner
+            .ask(|r| Command::Summary(id.to_owned(), r))
+            .expect("the owner answers a summary in the same step")
+    }
+
+    fn moved(&self, _: &Path, _: &Path, _: bool) {
+        // a worker keeps no inventory of prints, so nothing follows a tile that moves
+    }
+}
+
+impl TargetHost for Ctx {
+    fn set_target(
+        &self,
+        system: Option<System>,
+        printer: Option<&str>,
+    ) -> Result<TargetRes, Refusal> {
+        if let Some(p) = printer
+            && p != self.options.printer.name
+        {
+            return Err(Refusal::refused(
+                Status::BadRequest,
+                format!(
+                    "the browser editor builds with the library's printer ({}) only: it has no profile called {p}",
+                    self.options.printer.name
+                ),
+            ));
+        }
+        let system = system.unwrap_or(self.options.system);
+        self.inner.system.set(system);
+        let next = options_in(&Lib, system)?;
+        let res = TargetRes {
+            system,
+            printer: next.printer.name.clone(),
+        };
+        self.inner.core.borrow_mut().apply(Command::SetTarget(next));
+        Ok(res)
     }
 }
 
@@ -673,7 +764,48 @@ fn mine(ctx: &Ctx, req: Nothing) -> Result<Listed, Refusal> {
 }
 
 fn new_tile(ctx: &Ctx, req: NewReq) -> Result<Listed, Refusal> {
-    place_calls::new_tile(ctx, &req, None)
+    let into = folder_calls::new_tile_dir(ctx, req.root, req.dir.as_deref())?;
+    place_calls::new_tile(ctx, &req, into)
+}
+
+fn new_folder(ctx: &Ctx, req: FolderNamedReq) -> Result<FolderDone, Refusal> {
+    folder_calls::new_folder(ctx, req)
+}
+
+fn rename_folder(ctx: &Ctx, req: FolderNamedReq) -> Result<FolderDone, Refusal> {
+    folder_calls::rename_folder(ctx, req)
+}
+
+fn trash_folder(ctx: &Ctx, req: FolderReq) -> Result<Trashed, Refusal> {
+    folder_calls::trash_folder(ctx, req)
+}
+
+fn trash_tile(ctx: &Ctx, req: Nothing) -> Result<Trashed, Refusal> {
+    folder_calls::trash_tile(ctx, &ctx.tile_ref(), req)
+}
+
+fn undo_trash(ctx: &Ctx, req: TrashUndoReq) -> Result<Restored, Refusal> {
+    folder_calls::undo_trash(ctx, req)
+}
+
+fn move_tile(ctx: &Ctx, req: TileMoveReq) -> Result<ListedIn, Refusal> {
+    folder_calls::move_tile(ctx, &ctx.tile_ref(), req)
+}
+
+fn duplicate_tile(ctx: &Ctx, req: Nothing) -> Result<ListedIn, Refusal> {
+    folder_calls::duplicate_tile(ctx, &ctx.tile_ref(), req)
+}
+
+fn rename(ctx: &Ctx, req: RenameReq) -> Result<Listed, Refusal> {
+    folder_calls::rename(ctx, &ctx.tile_ref(), req)
+}
+
+fn delete_tile(ctx: &Ctx, req: Nothing) -> Result<Deleted, Refusal> {
+    folder_calls::delete_tile(ctx, &ctx.tile_ref(), req)
+}
+
+fn set_target(ctx: &Ctx, req: TargetReq) -> Result<TargetRes, Refusal> {
+    target_calls::set_target(ctx, req)
 }
 
 fn text(ctx: &Ctx, req: FileReq) -> Result<Option<TextRes>, Refusal> {
@@ -701,6 +833,16 @@ fn table() -> Table<Ctx, Refusal> {
         .with(&TEXT, text)
         .with(&MINE, mine)
         .with(&NEW_TILE, new_tile)
+        .with(&NEW_FOLDER, new_folder)
+        .with(&RENAME_FOLDER, rename_folder)
+        .with(&TRASH_FOLDER, trash_folder)
+        .with(&TRASH_TILE, trash_tile)
+        .with(&UNDO_TRASH, undo_trash)
+        .with(&MOVE_TILE, move_tile)
+        .with(&DUPLICATE_TILE, duplicate_tile)
+        .with(&RENAME, rename)
+        .with(&DELETE_TILE, delete_tile)
+        .with(&SET_TARGET, set_target)
 }
 
 /// What a call answered: JSON, or (a draft, a step) the page's bytes.
@@ -904,6 +1046,16 @@ impl Service {
             TEXT,
             MINE,
             NEW_TILE,
+            NEW_FOLDER,
+            RENAME_FOLDER,
+            TRASH_FOLDER,
+            TRASH_TILE,
+            UNDO_TRASH,
+            MOVE_TILE,
+            DUPLICATE_TILE,
+            RENAME,
+            DELETE_TILE,
+            SET_TARGET,
         ]?;
         // the worker host's turn: what the call queued is built now, and the stream says how it went
         self.inner.run_queued()?;

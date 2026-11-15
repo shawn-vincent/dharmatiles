@@ -518,7 +518,7 @@ const unavailableIn = (what) => `${what} is not in the browser editor yet: it ne
 const refusedReply = (status, message) => replyOf(status, { error: { kind: 'refused', message, help: null, causes: [], backtrace: '', context: {} } });
 
 /** The verbs the worker's service answers by their HTTP name (the others are refused by `unavailableIn`). */
-const WORKER_VERBS = new Set(['check', 'edit', 'save', 'names', 'tokens', 'checkValue', 'printed', 'printedSet', 'offers', 'newTile', 'mine']);
+const WORKER_VERBS = new Set(['check', 'edit', 'save', 'names', 'tokens', 'checkValue', 'printed', 'printedSet', 'offers', 'newTile', 'mine', 'rename', 'deleteTile', 'newFolder', 'renameFolder', 'trashFolder', 'moveTile', 'duplicateTile', 'trashTile', 'undoTrash', 'setTarget']);
 
 /** @typedef {import('./editor-worker.js').FromWorker} FromWorker */
 /** @typedef {Extract<FromWorker, { id: number, ok: true }>} WorkerAnswer */
@@ -702,10 +702,12 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     requests,
     /** @param {string} id @param {Req<'save'>} body */
     save: (id, body) => call('save', body, id),
-    rename: no('renaming a tile'),
+    /** @param {string} id @param {string} name */
+    rename: (id, name) => call('rename', { name }, id),
     /** @param {string} id */
     mine: (id) => call('mine', {}, id),
-    deleteTile: no('deleting a tile'),
+    /** @param {string} id */
+    deleteTile: (id) => call('deleteTile', {}, id),
     /** @param {Req<'reportMessage'>} body @returns {Promise<Reply<{}>>} */
     async reportMessage(body) {
       // the browser editor has no message stream of the program's to join: the page's own failure goes to the console, loudly
@@ -719,16 +721,24 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     newTile: (name, size, into) => call('newTile', { name, size, ...(into ? { root: into.root, dir: into.dir } : {}) }),
     addPlace: no('adding a folder'),
     removePlace: no('removing a place'),
-    newFolder: no('a new folder'),
-    renameFolder: no('renaming a folder'),
-    trashFolder: no('trashing a folder'),
-    moveTile: no('moving a tile'),
-    duplicateTile: no('duplicating a tile'),
-    trashTile: no('trashing a tile'),
-    undoTrash: no('undoing a trash'),
+    /** @param {number} root @param {string} dir @param {string} name */
+    newFolder: (root, dir, name) => call('newFolder', { root, dir, name }),
+    /** @param {number} root @param {string} dir @param {string} name */
+    renameFolder: (root, dir, name) => call('renameFolder', { root, dir, name }),
+    /** @param {number} root @param {string} dir */
+    trashFolder: (root, dir) => call('trashFolder', { root, dir }),
+    /** @param {string} id @param {{root: number, dir: string}} into */
+    moveTile: (id, into) => call('moveTile', { root: into.root, dir: into.dir }, id),
+    /** @param {string} id */
+    duplicateTile: (id) => call('duplicateTile', {}, id),
+    /** @param {string} id */
+    trashTile: (id) => call('trashTile', {}, id),
+    /** @param {number} undo */
+    undoTrash: (undo) => call('undoTrash', { undo }),
     /** @param {Req<'edit'>} body */
     edit: (body) => call('edit', body),
-    setTarget: no('another build target'),
+    /** @param {Req<'setTarget'>} body */
+    setTarget: (body) => call('setTarget', body),
     printersScan: no('the printers'),
     printersImport: no('importing a printer'),
     exportTile: no('writing an STL'),

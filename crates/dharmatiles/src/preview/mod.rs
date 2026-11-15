@@ -261,6 +261,10 @@ impl dt_service::tile_host::TileHost for Shared {
                     fail::Kind::Failure => Refusal::failure(Status::Internal, e.message),
                 };
                 r.causes = e.causes;
+                // what the lane was at (the draft worker, for this tile) is kept, not the request's route
+                if let Some(route) = e.doing.route {
+                    r = r.doing(route, e.doing.tile.as_deref());
+                }
                 if let (Some(bug), Some(help)) = (r.bug.as_mut(), e.help) {
                     bug.help = Some(help);
                 }
@@ -270,8 +274,66 @@ impl dt_service::tile_host::TileHost for Shared {
                 Status::Internal,
                 format!("the draft was not answered ({e}): the build worker may have died"),
             )
-            .caused_by(&e)),
+            .caused_by(&e)
+            .doing("draft worker", Some(&ask.path))),
         }
+    }
+}
+
+impl dt_service::folder_calls::PlaceHost for Shared {
+    fn roots(&self) -> Vec<Root> {
+        Self::roots(self)
+    }
+
+    fn trash_dir(&self) -> Option<std::path::PathBuf> {
+        self.trash.clone()
+    }
+
+    fn trash_note(&self, from: &std::path::Path, to: &std::path::Path) -> usize {
+        self.owner
+            .ask(|r| owner::Command::Trash(from.to_path_buf(), to.to_path_buf(), r))
+    }
+
+    fn trash_taken(&self, undo: usize) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+        self.owner.ask(|r| owner::Command::Trashed(undo, r))
+    }
+
+    fn rescan(&self) {
+        // whether the list changed is told to every page by the rescan itself
+        Self::rescan(self);
+    }
+
+    fn told(&self) -> u64 {
+        Self::told(self)
+    }
+
+    fn summary(&self, id: &str) -> Option<api::TileSummary> {
+        Self::summary(self, id)
+    }
+
+    fn moved(&self, from: &std::path::Path, to: &std::path::Path, folder: bool) {
+        if folder {
+            inventory::note_folder_rename(self, from, to);
+        } else {
+            inventory::note_rename(self, from, to);
+        }
+    }
+}
+
+impl dt_service::target_calls::TargetHost for Shared {
+    fn set_target(
+        &self,
+        system: Option<dt_lang::System>,
+        printer: Option<&str>,
+    ) -> Result<dt_service::target_calls::TargetRes, dt_service::call::Refusal> {
+        Self::set_target(self, system, printer).map_err(|e| {
+            dt_service::call::Refusal::refused(dt_service::call::Status::BadRequest, e)
+        })?;
+        let o = self.options();
+        Ok(dt_service::target_calls::TargetRes {
+            system: o.system,
+            printer: o.printer.name,
+        })
     }
 }
 
