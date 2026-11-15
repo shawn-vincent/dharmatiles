@@ -27,9 +27,11 @@ use serde_json::{Value, json};
 
 use super::api::{Out, Reply};
 use super::messages::Scope;
+use super::plan::{InventoryDoc, InventoryRead, PlanFrame, PlatesPanel, TilePlan};
 use super::{Shared, State, fail, lock, messages};
 use crate::errors_json;
 use crate::message::{Kind, Message, Severity};
+use dt_doc::map::Mode;
 
 // ---- the calls' types ------------------------------------------------------------------
 
@@ -188,7 +190,7 @@ pub(super) fn snapshot(home: Option<&Path>) -> Value {
         }
         Ok(Some(l)) => {
             out["exists"] = json!(true);
-            out["pieces"] = Value::Array(crate::inventory::pieces_json(&l.inventory, home));
+            out["pieces"] = json!(crate::inventory::pieces_json(&l.inventory, home));
             out["last_colour"] = json!(last_colour(&l.inventory).word());
         }
         Err(e) => {
@@ -217,11 +219,17 @@ fn last_colour(inv: &doc::Inventory) -> Colour {
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     let files = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
     let writable = std::fs::metadata(path).is_ok_and(|m| !m.permissions().readonly());
-    let skeleton = |inv: Value| {
-        json!({
-            "kind": "inventory", "tile": "inventory", "cols": 1, "rows": 1, "square_mm": 35.0,
-            "size_mm": [0, 0], "datum_z": 0.0, "stack": [], "writable": writable,
-            "inventory": inv,
+    let skeleton = |inventory: InventoryRead| {
+        TilePlan::Inventory(InventoryDoc {
+            frame: PlanFrame {
+                cols: 1,
+                rows: 1,
+                square_mm: 35.0,
+                size_mm: [0.0, 0.0],
+                datum_z: Some(0.0),
+            },
+            writable,
+            inventory,
         })
     };
     let fail_with = |errs: Vec<Diag>, text: &str| {
@@ -235,9 +243,11 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
             t.errors = super::api::mistakes(&errs);
             t.files = files.clone();
             t.mesh = None;
-            t.plan = Some(skeleton(
-                json!({"text": text, "pieces": [], "problems": errors_json(&errs)}),
-            ));
+            t.plan = Some(skeleton(InventoryRead {
+                text: text.to_owned(),
+                pieces: Vec::new(),
+                problems: super::api::mistakes(&errs),
+            }));
         });
     };
     let text = match std::fs::read_to_string(path) {
@@ -282,7 +292,11 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         t.failure = None;
         t.files = files.clone();
         t.mesh = None;
-        t.plan = Some(skeleton(json!({"text": text, "pieces": pieces})));
+        t.plan = Some(skeleton(InventoryRead {
+            text,
+            pieces,
+            problems: Vec::new(),
+        }));
     });
 }
 
@@ -460,11 +474,12 @@ pub(super) fn record(shared: &Shared, v: InventoryRecordReq) -> Out<InventoryWro
         };
         (t.path.clone(), t.plan.clone())
     };
-    let Some(p) = plan
-        .as_ref()
-        .map(|p| &p["plates"])
-        .filter(|p| p["planned"] == json!(true))
-    else {
+    let Some(TilePlan::Plates(doc)) = plan else {
+        return Err(bad(
+            "this list does not plan yet, so there are no plates to record",
+        ));
+    };
+    let PlatesPanel::Planned(p) = doc.plates else {
         return Err(bad(
             "this list does not plan yet, so there are no plates to record",
         ));
@@ -473,10 +488,7 @@ pub(super) fn record(shared: &Shared, v: InventoryRecordReq) -> Out<InventoryWro
         return Err(bad("give the plate (from 1)"));
     }
     let plate = v.plate;
-    let Some(pieces) = p["layout"]
-        .get(plate - 1)
-        .and_then(|pl| pl["pieces"].as_array())
-    else {
+    let Some(pieces) = p.layout.get(plate - 1).map(|pl| &pl.pieces) else {
         return Err(bad("the list has no such plate"));
     };
     let failed: Vec<usize> = v.failed.unwrap_or_default();
@@ -484,7 +496,7 @@ pub(super) fn record(shared: &Shared, v: InventoryRecordReq) -> Out<InventoryWro
         return Err(bad("a failed piece is not on the plate"));
     }
     let on = date_of(v.on.as_deref())?;
-    let colour = if p["mode"] == json!("multicolour") {
+    let colour = if p.mode == Mode::Multicolour.word() {
         Colour::Multi
     } else {
         Colour::Single
@@ -495,23 +507,14 @@ pub(super) fn record(shared: &Shared, v: InventoryRecordReq) -> Out<InventoryWro
     );
     let mut lines = Vec::new();
     for (i, piece) in pieces.iter().enumerate() {
-        let Some(k) = piece["kind"]
-            .as_u64()
-            .and_then(|k| p["kinds"].get(usize::try_from(k).unwrap_or(usize::MAX)))
-        else {
+        let Some(k) = p.kinds.get(piece.kind) else {
             return Err(bad("a piece names no tile"));
         };
-        let (Some(tile), Some(seed), Some(system)) = (
-            k["canon"].as_str(),
-            k["seed_used"].as_u64(),
-            k["system"].as_str(),
-        ) else {
-            return Err(bad("the plan is missing a piece's tile, seed or system"));
-        };
+        let tile = k.canon.as_str();
         let ident = Identity {
             tile: tile.to_owned(),
-            seed,
-            system: system.to_owned(),
+            seed: k.seed_used,
+            system: k.system.clone(),
             colour,
         };
         let hash = disk::tile_hash(tile, shared.home.as_deref());

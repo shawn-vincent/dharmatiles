@@ -36,5 +36,26 @@ export async function undoToast(id, entry) {
   if (!(await docs.undoIf(id, entry))) toast('A later change came after this one: Undo in the title bar goes back one change at a time', null, { ms: 7000 });
 }
 
-/** The plan of tile `t`: for a print list or a map, its document's (what the program last said, js/documents.js); for a tile, the summary's own. */
+/** @typedef {import('../api').TilePlan} TilePlan */
+/**
+ * The plan of tile `t`: for a print list or a map, its document's (what the program last said, js/documents.js); for a tile, the summary's own.
+ * @returns {TilePlan | null}
+ */
 export const planOf = (t) => (!t ? null : isPlates(t) ? docs.get(t.id)?.plan ?? null : t.plan ?? null);
+
+/** Can the document be edited, as the program says: a tile or a model says nothing (it can), a print list or the inventory says. */
+export const writableOf = (t) => { const p = planOf(t); return p?.kind === 'plates' || p?.kind === 'inventory' ? p.writable : true; };
+
+/** @typedef {import('../api').PlatesPanel} PlatesPanel */
+/**
+ * The plates' panel of a print list's plan: its settings and, once it plans, the layout (null for a document with no such plan).
+ * @returns {PlatesPanel | null}
+ */
+export const panelOf = (t) => { const p = planOf(t); return p?.kind === 'plates' ? p.plates : null; };
+
+/** @typedef {import('../api').PlatesPlanned} PlatesPlanned */
+/**
+ * The plates' panel of a list the program has laid out (null while it has not, or the list does not plan).
+ * @returns {PlatesPlanned | null}
+ */
+export const plannedOf = (t) => { const p = panelOf(t); return p?.planned ? p : null; };

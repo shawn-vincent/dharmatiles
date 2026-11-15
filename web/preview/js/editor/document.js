@@ -20,7 +20,7 @@ import { token } from '../tokens.js';
 import { thumbs } from './scene-thumbs.js';
 import { $, host, makeMine, toast } from './app.js';
 import { dirty, doc, isPlates, server, sourceFile, sourceId, stem, tile, view } from './stores.js';
-import { docs, planOf } from './docs.js';
+import { docs, writableOf } from './docs.js';
 
 // ---- the document: the text, one history, checking and saving -----------------
 // The text pane edits the file shown (the tile's document, or a file it
@@ -109,7 +109,7 @@ function bindHistory() {
     const t = tile();
     const mine = owned();
     const key = mine ? t?.id : textKey();
-    const writable = mine ? !!(t && !t.path.startsWith('lib:') && (planOf(t)?.writable ?? true)) : doc.get().writable;
+    const writable = mine ? !!(t && !t.path.startsWith('lib:') && writableOf(t)) : doc.get().writable;
     const canUndo = writable && !!key && history.canUndo(key);
     const canRedo = writable && !!key && history.canRedo(key);
     $('undo').disabled = !canUndo; $('undo-drop').disabled = !canUndo;

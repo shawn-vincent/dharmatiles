@@ -1,3 +1,4 @@
+// @ts-check
 // What the page shows of a document, as functions of the document's state: the pieces of a map, the selection,
 // the printer the title bar's chip names, the words of the status line.  Each is worked out when it is asked
 // for, from the state it is given, and kept by nothing; the identity-keyed memo below only saves repeating the

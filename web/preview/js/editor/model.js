@@ -1,3 +1,4 @@
+// @ts-check
 // The page's model: what the panels draw, as signals derived from the three things that hold the page's facts and
 // from nothing else.
 //
@@ -21,7 +22,7 @@ import { levelOf, placesOf, settledLevel, whereIs, writable } from '../folders.j
 import { ADD_PANES, mapLevelOf } from '../nav.js';
 import { token } from '../tokens.js';
 import { defaultFilters } from '../inventory.js';
-import { docs, planOf } from './docs.js';
+import { docs, panelOf, writableOf } from './docs.js';
 import './mode.js'; // `view.dmode` is derived there
 import { isInventory, isPlates, server, stem, tile, tileById, view } from './stores.js';
 
@@ -49,7 +50,7 @@ export const inventory = computed(() => server.get().inventory);
 /** May the map not be changed here (a library file, or one the program says is read only)? */
 export const readOnly = computed(() => {
   const t = tileNow.value;
-  return !t || !(planOf(t)?.writable ?? true) || t.path.startsWith('lib:');
+  return !t || !writableOf(t) || t.path.startsWith('lib:');
 });
 /** Why there is no scene to draw, as the panel says it. */
 export const waiting = computed(() => (tileNow.value?.status === 'failed' ? 'This map does not read: mend it in Source.' : 'Reading the map…'));
@@ -93,7 +94,7 @@ export function pictureFor(t, o = {}) {
 const tileOfCanon = (canon) => { const home = server.get().inventory?.home; return server.get().tiles.find((x) => canonOf(x.path, home) === canon); };
 
 /** The plates of the list shown, as the program last planned them (null while it has not). */
-export const plan = computed(() => (isPlates(tileNow.value) ? planOf(tileNow.value)?.plates ?? null : null));
+export const plan = computed(() => (isPlates(tileNow.value) ? panelOf(tileNow.value) : null));
 /** Is the plates' panel the one on show (a print list, not its map)? */
 export const platesOn = computed(() => isPlates(tileNow.value) && view.get().dmode !== 'map');
 
@@ -123,8 +124,8 @@ export const platesPanel = {
   /** The top-down picture of a kind of piece on a plate (null when its tile is not listed): `kind` is a plan's kind. */
   picture: (/** @type {any} */ kind) => { const t = tileOfCanon(kind.canon); return t ? pictureFor(t, { system: kind.system, seed: kind.seed, ...pxBox(kind.size[0], kind.size[1], 72), view: 'top' }) : null; },
   // the printer the document names now (its own word, from its scene), the plan's only until that is there
-  currentPrinter: computed(() => (tileNow.value && docs.scene(tileNow.value.id)?.printer) ?? plan.value?.printer),
-  readOnly: computed(() => !(plan.value?.writable ?? planOf(tileNow.value)?.writable)),
+  currentPrinter: computed(() => (tileNow.value && docs.scene(tileNow.value.id)?.printer) ?? (plan.value && 'printer' in plan.value ? plan.value.printer : undefined)),
+  readOnly: computed(() => !(plan.value?.writable ?? writableOf(tileNow.value))),
   name: computed(() => (tileNow.value ? stem(tileNow.value).replace(/\.dmap$/i, '') : '')),
 };
 

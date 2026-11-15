@@ -9,7 +9,7 @@
 import * as M from '../map-model.js';
 import { piecesOf } from '../doc-views.js';
 import { toast } from './app.js';
-import { docs, planOf, undoToast } from './docs.js';
+import { docs, undoToast, writableOf } from './docs.js';
 import { isMapView, server, tile, view } from './stores.js';
 import { flashAdded } from './model.js';
 import { pieceAt, sceneNow, selected, select } from './scene.js';
@@ -201,7 +201,7 @@ export async function openTile(id) {
 }
 
 /** May the map be changed here (a file of yours, not the library's)? */
-export const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib:') && (planOf(t)?.writable ?? true); };
+export const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib:') && writableOf(t); };
 
 /** The keys: R turns, D duplicates, Backspace or Delete takes out.  (⌘Z is the page's one Undo, editor/document.js.) */
 export function onKey(e) {

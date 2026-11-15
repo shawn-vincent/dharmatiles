@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use dt_doc::inventory::{self as doc, Colour, Identity, Piece};
 use dt_eval::Diag;
 use dt_print::inventory as disk;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::cli::InventoryAction;
 use crate::{ERROR, OK, report};
@@ -452,18 +452,26 @@ pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
 
 /// The inventory as the preview's page reads it: every piece with what is
 /// held, and whether its tile changed or is gone.
-pub(crate) fn pieces_json(inv: &doc::Inventory, home: &Path) -> Vec<Value> {
+pub(crate) fn pieces_json(
+    inv: &doc::Inventory,
+    home: &Path,
+) -> Vec<crate::preview::plan::InventoryRow> {
     inv.pieces()
-        .iter()
-        .map(|p| {
-            json!({
-                "tile": p.id.tile, "seed": p.id.seed, "system": p.id.system,
-                "colour": p.id.colour.word(), "have": p.have, "printed": p.printed,
-                "failed": p.failed, "gone": p.gone, "hash": p.hash, "last": p.last,
-                "edited": p.have > 0 && disk::edited_since(&p.id.tile, p.hash.as_deref(), Some(home)),
-                "missing": !disk::tile_exists(&p.id.tile, Some(home)),
-                "lines": p.lines,
-            })
+        .into_iter()
+        .map(|p| crate::preview::plan::InventoryRow {
+            edited: p.have > 0 && disk::edited_since(&p.id.tile, p.hash.as_deref(), Some(home)),
+            missing: !disk::tile_exists(&p.id.tile, Some(home)),
+            colour: p.id.colour.word().to_owned(),
+            tile: p.id.tile,
+            seed: p.id.seed,
+            system: p.id.system,
+            have: p.have,
+            printed: p.printed,
+            failed: p.failed,
+            gone: p.gone,
+            hash: p.hash,
+            last: p.last,
+            lines: p.lines,
         })
         .collect()
 }

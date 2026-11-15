@@ -360,6 +360,17 @@ type HeightName = { name: string, dmm: number, own: boolean, };
 
 type InsertPlace = "stack" | "tile" | "before" | "in";
 
+type InventoryDoc = { writable: boolean, inventory: InventoryRead, cols: number, rows: number, squareMm: number, 
+/**
+ * Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
+ */
+sizeMm: [number, number], 
+/**
+ * The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
+ * the mesh's lowest point stands in.
+ */
+datumZ: number | null, };
+
 type InventoryGoneReq = { tile: string, seed: number, system: SystemWord, colour: ColourWord, note?: string | null, on?: string | null, };
 
 type InventoryHaveReq = { tile: string, colour: ColourWord, system?: SystemWord | null, seed?: number | null, count?: number | null, 
@@ -367,6 +378,12 @@ type InventoryHaveReq = { tile: string, colour: ColourWord, system?: SystemWord 
  * The date, like 2026-11-09 (today when left out).
  */
 on?: string | null, };
+
+type InventoryRead = { text: string, pieces: Array<InventoryRow>, 
+/**
+ * What is wrong with the file; empty when it reads.
+ */
+problems: Array<Mistake>, };
 
 type InventoryRecordReq = { list: string, 
 /**
@@ -404,6 +421,8 @@ type InventoryReprinted = {
  */
 list: string, id: string, made: boolean, warning: string | null, always: boolean, before: string | null, text: string, docRev: number, note: string | null, };
 
+type InventoryRow = { tile: string, seed: number, system: string, colour: string, have: number, printed: number, failed: number, gone: number, hash: string | null, last: string | null, edited: boolean, missing: boolean, lines: Array<number>, };
+
 type InventoryWrote = { lines: Array<string>, file: string, };
 
 type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null;
@@ -439,6 +458,12 @@ list: string, path: string, before: string | null, text: string, docRev: number,
  * Said once: the pieces were given ids.
  */
 note: string | null, };
+
+type ListPiece = { tile: string, count: number, 
+/**
+ * The id the piece has, or the one the first edit of the file will write on it.
+ */
+id: string, pinned: boolean, seed: number | null, system: string | null, print: string, };
 
 type Listed = { path: string, id: string | null, tile: TileSummary | null, };
 
@@ -813,6 +838,65 @@ type PlacesRemoveReq = {
  */
 root: number, };
 
+type PlanHeld = { name: string, have: number, };
+
+type PlanKind = { tile: string, name: string, count: number, want: number, have: number, otherColour: number, 
+/**
+ * The tile as the inventory names it.
+ */
+canon: string, seedUsed: number, seed: number | null, system: string, 
+/**
+ * Its footprint, mm.
+ */
+size: [number, number], height: number, 
+/**
+ * Its filaments are the build's (not the stack's estimate).
+ */
+exact: boolean, filaments: Array<string>, };
+
+type PlanPlaced = { 
+/**
+ * Which of the list's [`PlanKind`]s.
+ */
+kind: number, copy: number, name: string, x: number, y: number, w: number, d: number, turned: boolean, 
+/**
+ * The list piece this copy is (an index into the list's pieces).
+ */
+piece: number | null, pinned: boolean, 
+/**
+ * That list piece's id, as an edit names it.
+ */
+id: string | null, };
+
+type PlanPlate = { 
+/**
+ * From 1.
+ */
+plate: number, filaments: Array<string>, pieces: Array<PlanPlaced>, };
+
+type PlatesDoc = { 
+/**
+ * The file can be edited.
+ */
+writable: boolean, plates: PlatesPanel, 
+/**
+ * The map as read; none while the file does not read as a list.
+ */
+scene: SceneJson | null, 
+/**
+ * The revision of the file the scene (and the layout) is of.
+ */
+docRev: number, cols: number, rows: number, squareMm: number, 
+/**
+ * Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
+ */
+sizeMm: [number, number], 
+/**
+ * The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
+ * the mesh's lowest point stands in.
+ */
+datumZ: number | null, };
+
 type PlatesExportReq = { list: string, };
 
 type PlatesExported = { files: Array<string>, format: string, 
@@ -820,6 +904,26 @@ type PlatesExported = { files: Array<string>, format: string,
  * The pieces that fail the printability gate, by tile.
  */
 failures: Array<string>, plates: number, totalS: number, out: string, };
+
+type PlatesPanel = PlatesPlanned | PlatesWritten | PlatesUnread;
+
+type PlatesPlanned = { planned: true, title: string, printer: string, label: string, bed: [number, number] | null, excluded: Array<[number, number, number, number]>, slots: number, verify: string | null, system: string, mode: string, group: string, gap: number, margin: number, turn: boolean, skipped: Array<string>, held: Array<PlanHeld>, checkInventory: boolean, kinds: Array<PlanKind>, layout: Array<PlanPlate>, 
+/**
+ * The plate on show, from 0.
+ */
+view: number, 
+/**
+ * Every piece's mesh is its full build.
+ */
+exact: boolean, groupingCost: number | null, slotCheck: SlotCheck, writable: boolean, 
+/**
+ * How an export is written: `bambu`, `stl` or `3mf`.
+ */
+format: string, printers: Array<PrinterRow>, 
+/**
+ * The list's own pieces, in the order written.
+ */
+pieces: Array<ListPiece>, };
 
 type PlatesSetReq = { list: string, 
 /**
@@ -841,6 +945,10 @@ list: string,
  */
 plate: number, };
 
+type PlatesUnread = { planned: false, writable: boolean, printers: Array<PrinterRow>, };
+
+type PlatesWritten = { planned: false, writable: boolean, printer: string, label: string | null, bed: [number, number] | null, slots: number | null, mode: string | null, group: string | null, gap: number | null, margin: number | null, printers: Array<PrinterRow>, checkInventory: boolean, pieces: Array<ListPiece>, };
+
 type PointSlot = { "arg": number } | { "control": string };
 
 type PrintedItem = { element: string, control: string, typed: string, };
@@ -854,6 +962,16 @@ type PrintedSetReq = { typed: string, end: number, mm: number, };
 type PrintedSetRes = { typed: string, };
 
 type PrintedSize = { ends: Array<string>, editable: boolean, };
+
+type PrinterBroken = { name: string, label: string, slots: number, mine: boolean, 
+/**
+ * What is wrong with it.
+ */
+broken: string, };
+
+type PrinterRead = { name: string, brand: string | null, model: string | null, label: string, bed: [number, number] | null, height: number | null, slots: number, verify: string | null, zones: number, fromSlicer: string | null, mine: boolean, };
+
+type PrinterRow = PrinterRead | PrinterBroken;
 
 type PrinterWritten = { name: string, 
 /**
@@ -928,7 +1046,7 @@ rev: number,
 /**
  * The resource's own revision: it rises when this resource changes and not otherwise.
  */
-resRev: number, } & ({ "name": "places", "value": Places } | { "name": "target", "value": Target } | { "name": "printers", "value": Array<JsonValue> } | { "name": "inventory", "value": JsonValue } | { "name": "list", "value": List });
+resRev: number, } & ({ "name": "places", "value": Places } | { "name": "target", "value": Target } | { "name": "printers", "value": Array<PrinterRow> } | { "name": "inventory", "value": JsonValue } | { "name": "list", "value": List });
 
 type Restored = { path: string, id: string | null, tile: TileSummary | null, 
 /**
@@ -1070,11 +1188,13 @@ type SketchRef = { id: number, rough: boolean, };
 
 type SlicerFound = { slicer: string, label: string, title: string, };
 
+type SlotCheck = { need: number, have: number, ok: boolean, };
+
 type Snapshot = { 
 /**
  * The contract stamp of this program (`contract()`): a page that imported a different one is from another build.
  */
-contract: string, rev: number, epoch: string, system: string, printer: string, printers: Array<JsonValue>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: JsonValue, tiles: Array<TileSummary>, };
+contract: string, rev: number, epoch: string, system: string, printer: string, printers: Array<PrinterRow>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: JsonValue, tiles: Array<TileSummary>, };
 
 type SpanJson = { file: string, line: number, col: number, offset: number, len: number, };
 
@@ -1223,6 +1343,30 @@ type TileMoveReq = { root: number, dir: string, };
 
 type TileNode = { at: number, controls: Array<MapControl>, about: About | null, heights: Array<Height>, };
 
+type TilePlan = { "kind": "tile", stack: Array<StackItem>, cols: number, rows: number, squareMm: number, 
+/**
+ * Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
+ */
+sizeMm: [number, number], 
+/**
+ * The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
+ * the mesh's lowest point stands in.
+ */
+datumZ: number | null, } | { "kind": "stl", 
+/**
+ * The file's name.
+ */
+tile: string, stack: Array<StackItem>, cols: number, rows: number, squareMm: number, 
+/**
+ * Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
+ */
+sizeMm: [number, number], 
+/**
+ * The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
+ * the mesh's lowest point stands in.
+ */
+datumZ: number | null, } | { "kind": "plates" } & PlatesDoc | { "kind": "inventory" } & InventoryDoc;
+
 type TileRecord = { 
 /**
  * The document's path, or the STL's.
@@ -1283,9 +1427,9 @@ root: number, group: string | null, size: string | null,
  */
 status: string, 
 /**
- * What the plan pass or the plates' layout said (the page reads it by name; see `js/doc-views.js`).
+ * What the plan pass, the plates' layout or the reading of the inventory said.
  */
-plan: JsonValue | null, 
+plan: TilePlan | null, 
 /**
  * The build's record: audit, stages, timings (snake_case, as `dharmatiles build --json` prints it).
  */
