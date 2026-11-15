@@ -44,7 +44,7 @@
 <tr><td>Everything, before a push or a release</td><td><code>cargo xtask check --full</code></td><td>about 10 minutes (<code>FULL_BUDGET</code>)</td></tr>
 </tbody>
 </table></div>
-<p>Times are measured on an idle machine (the development Mac: 12 cores, 8 performance and 4 efficiency, 64 GB). <code>cargo xtask check</code> times itself, prints <b>OVER BUDGET</b> when past its budget, and logs every run (time, worktree, which check, seconds, budget) to <code>dt-times.tsv</code> in the git common folder, so every worktree's runs are in one file. Both budgets are constants in <code>xtask/src/work.rs</code>.</p>
+<p>Times are measured on an idle machine (the development Mac: 12 cores, 8 performance and 4 efficiency, 64 GB). Every <code>cargo xtask</code> command is timed against its budget, and so is each step of <code>check</code>. The build is a step of its own, held to the warm build's budget, or the cold build's in a checkout with no release build yet, so the steps after it time only their own work. Each prints its time, a run past its budget prints an <b>OVER BUDGET</b> banner on both streams, and every run (time, worktree, what, seconds, budget) is logged to <code>dt-times.tsv</code> in the git common folder, so every worktree's runs are in one file. A check ends with each step's time against its budget on one screen. The budgets are one table, <code>xtask/src/budget.rs</code>, and are raised only by editing it.</p>
 
 <h2 id="now">Where each cycle stands</h2>
 <div class="tbl"><table>
@@ -114,7 +114,7 @@
 <h2 id="rules">Rules</h2>
 <ul class="rules">
   <li>An over-budget cycle is the next task, straight after the current one and ahead of the queue. It is fixed where the waste is made, never by skipping a check or loosening the gate.</li>
-  <li>Slowness is visible by construction: a check times itself against its budget and says when it is over.</li>
+  <li>Slowness is visible by construction: every command and every step of a check is timed against its budget and says when it is over.</li>
   <li>Checks are sized to the change while working (<code>cargo xtask check</code>); the full set runs once before a push (<code>--full</code>).</li>
   <li>At most two heavy jobs on the machine at once: two agents, and the heavy-job lock for sweeps, contact sheets, pictures and the browser build.</li>
   <li>A warm test reads only the torture set; a new element or feature gets a small torture tile, and its test reads that.</li>

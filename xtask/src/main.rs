@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
+mod budget;
 mod codes;
 mod docs;
 mod guide;
@@ -92,7 +93,27 @@ commands:
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let result = match args.first().map(String::as_str) {
+    let name = args.first().map_or("", String::as_str);
+    // every command but `check` (which times each of its steps and itself) is timed here against its budget
+    let result = match budget::of_command(name, &args[1..]) {
+        Some(b) => budget::timed(&root(), &args.join(" "), b, || command(&args)),
+        None if name == "heavy" => {
+            budget::timed(&root(), &args.join(" "), budget::FULL, || command(&args))
+        }
+        None => command(&args),
+    };
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// One command, run.
+fn command(args: &[String]) -> Result<(), String> {
+    match args.first().map(String::as_str) {
         Some("check") => work::check(&root(), &args[1..]),
         Some("sweep") => work::sweep(&root(), &args[1..]),
         Some("heavy") => work::heavy(&root(), &args[1..]),
@@ -110,17 +131,10 @@ fn main() -> ExitCode {
         Some("release") => release::run_release(&root(), &args[1..]),
         Some("help" | "-h" | "--help") => {
             println!("{USAGE}");
-            return ExitCode::SUCCESS;
+            Ok(())
         }
         Some(other) => Err(format!("unknown command: {other}\n\n{USAGE}")),
         None => Err(USAGE.to_owned()),
-    };
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("{e}");
-            ExitCode::FAILURE
-        }
     }
 }
 

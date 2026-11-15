@@ -24,6 +24,7 @@ use std::time::Instant;
 
 use serde_json::Value;
 
+use crate::budget;
 use crate::run;
 
 /// The heavy-job lock, held until this process ends; taken once (a release
@@ -86,19 +87,15 @@ const NOT_CHECKS: &[&str] = &[
 
 /// `check --full`'s run of dt-eval: its warm tests, its thorough tests and the whole-library sweep, in one test
 /// binary and one memo. A heavy job.
-fn dt_eval_full(root: &Path) -> Result<(), String> {
-    heavy_lock(root)?;
+fn dt_eval_full(root: &Path, build: bool) -> Result<(), String> {
     let mut c = cargo();
-    c.current_dir(root).args([
-        "test",
-        "-q",
-        "--release",
-        "--no-fail-fast",
-        "-p",
-        "dt-eval",
-        "--",
-        "--include-ignored",
-    ]);
+    c.current_dir(root)
+        .args(["test", "-q", "--release", "--no-fail-fast", "-p", "dt-eval"]);
+    if build {
+        return run(c.arg("--no-run"));
+    }
+    heavy_lock(root)?;
+    c.args(["--", "--include-ignored"]);
     for t in NOT_CHECKS {
         c.args(["--skip", t]);
     }
@@ -153,7 +150,7 @@ fn cargo() -> Command {
     Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
 }
 
-fn git(root: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) fn git(root: &Path, args: &[&str]) -> Result<String, String> {
     let out = Command::new("git")
         .current_dir(root)
         .args(args)
@@ -304,44 +301,8 @@ fn plan(files: &[String], pkgs: &BTreeMap<String, (String, Vec<String>)>) -> Pla
     p
 }
 
-/// How long the loop may take (Shawn, 14 Nov 2026): the checks run as work goes on, two minutes; everything,
-/// before a push or a release, ten. A cold build is held to five minutes and a warm one to one, measured by hand.
-/// Past a budget the loop has slowed: the next task is to make it fast again, before anything else.
-const CHECK_BUDGET: f64 = 120.0;
-const FULL_BUDGET: f64 = 600.0;
-
-/// Say loudly when a run took longer than its budget, and keep every run's time in the repository's common git
-/// folder (`dt-times.tsv`, shared by the worktrees), so a slow creep shows before it is half an hour.
-fn over_budget(root: &Path, what: &str, secs: f64, budget: f64) -> Result<(), String> {
-    use std::io::Write as _;
-    let common = git(
-        root,
-        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
-    )?;
-    let log = PathBuf::from(common).join("dt-times.tsv");
-    let branch = git(root, &["rev-parse", "--abbrev-ref", "HEAD"])?;
-    let when = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_secs();
-    let mut f = File::options()
-        .create(true)
-        .append(true)
-        .open(&log)
-        .map_err(|e| format!("{}: {e}", log.display()))?;
-    writeln!(f, "{when}\t{branch}\t{what}\t{secs:.0}\t{budget:.0}")
-        .map_err(|e| format!("{}: {e}", log.display()))?;
-    if secs > budget {
-        println!(
-            "\nOVER BUDGET: {what} took {secs:.0} s, past its {budget:.0} s. The loop has slowed: queue a task to make it fast again, next, before other work (times: {})",
-            log.display()
-        );
-    }
-    Ok(())
-}
-
-/// One check: what it is, and the call that runs it.
-type Step<'a> = Box<dyn Fn() -> Result<(), String> + 'a>;
+/// One check: what it is, its budget in seconds ([`crate::budget::step`]), and the call that runs it.
+type Step<'a> = (String, f64, Box<dyn Fn() -> Result<(), String> + 'a>);
 
 /// `cargo xtask check [--full]`.
 pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
@@ -362,10 +323,11 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
         files.len(),
         if full { "; --full: every check" } else { "" }
     );
-    let mut steps: Vec<(String, Step)> = Vec::new();
+    let mut steps: Vec<Step> = Vec::new();
     // always: the cheap checks that read the whole tree
     steps.push((
         "the scans (dt-lang's tests: no code outside the registry; the changelog's waiting changes)".into(),
+        budget::step::SCANS,
         Box::new(|| {
             crate::release::check_changes(root)?;
             run(cargo().current_dir(root).args(["test", "-q", "--release", "-p", "dt-lang"]))
@@ -374,10 +336,12 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
     if p.rust {
         steps.push((
             "cargo fmt --check".into(),
+            budget::step::FMT,
             Box::new(|| run(cargo().current_dir(root).args(["fmt", "--check"]))),
         ));
         steps.push((
             "cargo clippy".into(),
+            budget::step::CLIPPY,
             Box::new(|| {
                 run(cargo().current_dir(root).args([
                     "clippy",
@@ -394,35 +358,60 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
     if full {
         steps.push((
             "dt-eval's tests, the thorough ones and the whole-library sweep, in one run (a heavy job)".into(),
-            Box::new(|| dt_eval_full(root)),
+            budget::step::DT_EVAL_FULL,
+            Box::new(|| dt_eval_full(root, false)),
         ));
         p.tests.remove("dt-eval");
     }
     if !p.tests.is_empty() {
         let names: Vec<String> = p.tests.iter().cloned().collect();
-        steps.push((
-            format!("cargo test --release for {}", names.join(", ")),
-            Box::new(move || {
-                let mut c = cargo();
-                // every test binary runs, so one failure does not hide another
-                c.current_dir(root)
-                    .args(["test", "-q", "--release", "--no-fail-fast"]);
-                if names.len() == pkgs.len() {
-                    c.arg("--workspace");
-                } else if full {
-                    c.args(["--workspace", "--exclude", "dt-eval"]);
-                } else {
-                    for n in &names {
-                        c.args(["-p", n]);
-                    }
+        let all = names.len() == pkgs.len();
+        // the tests' own command, with `--no-run` the build of exactly what they run (the same packages, so the
+        // same features: the step after it builds nothing)
+        let tests = move |build: bool| {
+            let mut c = cargo();
+            // every test binary runs, so one failure does not hide another
+            c.current_dir(root)
+                .args(["test", "-q", "--release", "--no-fail-fast"]);
+            if build {
+                c.arg("--no-run");
+            }
+            if all {
+                c.arg("--workspace");
+            } else if full {
+                c.args(["--workspace", "--exclude", "dt-eval"]);
+            } else {
+                for n in &names {
+                    c.args(["-p", n]);
                 }
-                run(&mut c)
-            }),
+            }
+            c
+        };
+        let build = tests.clone();
+        steps.insert(
+            usize::from(p.rust) + 1,
+            (
+                "the build: every test binary the checks run".into(),
+                budget::build(root),
+                Box::new(move || {
+                    run(&mut build(true))?;
+                    if full {
+                        dt_eval_full(root, true)?;
+                    }
+                    Ok(())
+                }),
+            ),
+        );
+        steps.push((
+            "the tests".into(),
+            budget::step::TESTS,
+            Box::new(move || run(&mut tests(false))),
         ));
     }
     if p.page {
         steps.push((
             "npm test (web/preview)".into(),
+            budget::step::PAGE,
             Box::new(|| {
                 run(Command::new("npm")
                     .current_dir(root.join("web/preview"))
@@ -433,6 +422,7 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
     if p.docs {
         steps.push((
             "cargo xtask docs --check".into(),
+            budget::step::DOCS,
             Box::new(|| crate::docs::run(root, true)),
         ));
     }
@@ -445,11 +435,12 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
         };
         steps.push((
             format!("the sweep: {what}"),
+            budget::of_command("sweep", &[]).unwrap_or(budget::CHECK),
             Box::new(move || sweep(root, &only)),
         ));
     }
-    for (k, (what, _)) in steps.iter().enumerate() {
-        println!("  {}. {what}", k + 1);
+    for (k, (what, budget, _)) in steps.iter().enumerate() {
+        println!("  {}. {what} (budget {budget:.0} s)", k + 1);
     }
     if args.iter().any(|a| a == "--plan") {
         return Ok(());
@@ -457,25 +448,38 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
     let t0 = Instant::now();
     // every check runs, so one failure does not hide the next
     let mut failed = Vec::new();
-    for (k, (what, step)) in steps.iter().enumerate() {
+    let mut times: Vec<(usize, &str, f64, f64)> = Vec::new();
+    for (k, (what, budget, step)) in steps.iter().enumerate() {
         let t = Instant::now();
         println!("\n== {}. {what}", k + 1);
-        let secs = || t.elapsed().as_secs_f64();
-        match step() {
-            Ok(()) => println!("== {}. passed in {:.0} s", k + 1, secs()),
+        let result = step();
+        let secs = t.elapsed().as_secs_f64();
+        match &result {
+            Ok(()) => println!("== {}. passed in {secs:.0} s", k + 1),
             Err(e) => {
-                println!("== {}. FAILED in {:.0} s: {e}", k + 1, secs());
+                println!("== {}. FAILED in {secs:.0} s: {e}", k + 1);
                 failed.push(format!("  {}. {what}: {e}", k + 1));
             }
         }
+        // the step's short name, before its explanation: `the scans`, `the build`, `npm test`
+        let short = what.split([':', '(']).next().unwrap_or(what).trim();
+        let name = format!("check step: {short}");
+        budget::record(root, &name, secs, *budget, result.is_ok())?;
+        times.push((k + 1, what, secs, *budget));
     }
     let total = t0.elapsed().as_secs_f64();
-    over_budget(
-        root,
-        if full { "check --full" } else { "check" },
-        total,
-        if full { FULL_BUDGET } else { CHECK_BUDGET },
-    )?;
+    // each step against its budget on one screen, so what slowed is plain
+    println!("\nthe steps' times:");
+    for (k, what, secs, budget) in &times {
+        let mark = if secs > budget { "  OVER" } else { "" };
+        println!("  {k}. {secs:>4.0} s of {budget:>3.0}{mark}  {what}");
+    }
+    let (name, whole) = if full {
+        ("check --full", budget::FULL)
+    } else {
+        ("check", budget::CHECK)
+    };
+    budget::record(root, name, total, whole, failed.is_empty())?;
     if failed.is_empty() {
         println!("\nall {} checks passed in {total:.0} s", steps.len());
         Ok(())
