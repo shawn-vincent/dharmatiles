@@ -25,7 +25,7 @@ pub const BUILD: Verb<BuildReq, Accepted> = Verb::new("build");
 /// # Errors
 /// [`Refusal`] (not found): there is no such tile.
 pub fn build<H: TileHost>(host: &H, id: &str, _: BuildReq) -> Result<Accepted, Refusal> {
-    if host.want(id) {
+    if host.want(id)? {
         Ok(Accepted {})
     } else {
         Err(Refusal::refused(Status::NotFound, "no such tile"))

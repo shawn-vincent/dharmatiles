@@ -101,9 +101,15 @@ impl Host for WebHost {
     #[cfg(not(target_arch = "wasm32"))]
     fn now_ms(&self) -> u64 {
         use std::time::{SystemTime, UNIX_EPOCH};
-        SystemTime::now()
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "milliseconds since 1970 fit a u64 for 500 million years"
+        )]
+        let ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+            .expect("the clock is after 1970")
+            .as_millis() as u64;
+        ms
     }
 }
 
@@ -306,10 +312,8 @@ impl TileHost for Ctx {
         &Lib
     }
 
-    fn want(&self, id: &str) -> bool {
-        self.inner
-            .ask(|r| Command::Want(id.to_owned(), r))
-            .unwrap_or(false)
+    fn want(&self, id: &str) -> Result<bool, Refusal> {
+        self.inner.ask(|r| Command::Want(id.to_owned(), r))
     }
 }
 

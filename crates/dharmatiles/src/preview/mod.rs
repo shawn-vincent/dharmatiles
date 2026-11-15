@@ -218,8 +218,8 @@ impl dt_service::tile_host::TileHost for Shared {
         &dt_eval::Files
     }
 
-    fn want(&self, id: &str) -> bool {
-        Self::want(self, id)
+    fn want(&self, id: &str) -> Result<bool, dt_service::call::Refusal> {
+        Ok(Self::want(self, id))
     }
 }
 

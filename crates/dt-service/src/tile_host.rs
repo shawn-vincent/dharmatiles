@@ -56,5 +56,8 @@ pub trait TileHost: CheckHost {
     fn library(&self) -> &dyn Source;
     /// Ask for tile `id` to be built next: false when there is no such tile.  The build runs on the host's lane and
     /// its record comes on the event stream.
-    fn want(&self, id: &str) -> bool;
+    ///
+    /// # Errors
+    /// [`Refusal`]: the owner could not be asked.
+    fn want(&self, id: &str) -> Result<bool, Refusal>;
 }
