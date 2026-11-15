@@ -43,6 +43,7 @@ pub mod printed;
 pub mod schema;
 pub mod seams;
 pub mod units;
+pub mod wire;
 pub mod words;
 
 pub use decode::{decode, uses};

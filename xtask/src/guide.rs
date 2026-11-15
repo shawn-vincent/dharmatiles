@@ -21,8 +21,8 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use dt_doc::wire::SeamsJson;
 use dt_lang::codes;
-use serde_json::Value;
 
 /// Ids every concept page has, so they are no anchor of the old guide.
 const TEMPLATE_IDS: [&str; 6] = [
@@ -168,7 +168,7 @@ fn samples(text: &str) -> Vec<(String, String)> {
 }
 
 /// `cargo xtask docs`'s part for the guide.
-pub fn run(root: &Path, check: bool, bin: &Path, seams: &Value) -> Result<(), String> {
+pub fn run(root: &Path, check: bool, bin: &Path, seams: &SeamsJson) -> Result<(), String> {
     let docs = root.join("docs");
     let guide = docs.join("guide");
     let map_path = docs.join("language.html");
@@ -515,7 +515,7 @@ fn library_heights(root: &Path) -> Result<Vec<(String, String, String)>, String>
 fn cheat_sheet(
     root: &Path,
     nav: &str,
-    seams: &Value,
+    seams: &SeamsJson,
     order: &[String],
     titles: &BTreeMap<String, String>,
 ) -> Result<String, String> {
@@ -637,39 +637,32 @@ fn cheat_sheet(
 
     // seams
     s.push_str("<section>\n<h2 id=\"seams\">Seam words</h2>\n");
-    if seams["ok"].as_bool() != Some(true) {
-        return Err(format!("the edge contract's seams did not read: {seams}"));
-    }
+    let (rows, corners) = match seams {
+        SeamsJson::Read { seams, corners } => (seams, corners),
+        SeamsJson::Failed { errors } => {
+            return Err(format!(
+                "the edge contract's seams did not read: {}",
+                errors.join("; ")
+            ));
+        }
+    };
     s.push_str("<div class=\"tbl\"><table>\n<thead><tr><th>Along a square&rsquo;s edge</th><th>north</th><th>south</th><th>west</th><th>east</th></tr></thead>\n<tbody>\n");
-    for row in seams["seams"]
-        .as_array()
-        .ok_or("no seams in the edge contract")?
-    {
-        let at = row["at"].as_f64().ok_or("a seam has no position")?;
-        let (frac, what) = crate::docs::seam_fraction(at).ok_or_else(|| {
-            format!("seam {at} has no fraction to show it by: add it to xtask/src/docs.rs")
+    for row in rows {
+        let (frac, what) = crate::docs::seam_fraction(row.at).ok_or_else(|| {
+            format!(
+                "seam {} has no fraction to show it by: add it to xtask/src/docs.rs",
+                row.at
+            )
         })?;
-        let w = |k: &str| row[k].as_str().unwrap_or_default();
         let _ = writeln!(
             s,
             "<tr><td>{frac} ({what})</td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td></tr>",
-            w("north"),
-            w("south"),
-            w("west"),
-            w("east")
+            row.north, row.south, row.west, row.east
         );
     }
-    let corners: Vec<String> = seams["corners"]
-        .as_array()
-        .ok_or("no corners in the edge contract")?
+    let corners: Vec<String> = corners
         .iter()
-        .map(|c| {
-            format!(
-                "<code>{}</code> ({})",
-                c["word"].as_str().unwrap_or_default(),
-                c["corner"].as_str().unwrap_or_default()
-            )
-        })
+        .map(|c| format!("<code>{}</code> ({})", c.word, c.corner))
         .collect();
     let _ = writeln!(
         s,

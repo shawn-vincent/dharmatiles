@@ -835,89 +835,46 @@ fn about_gives_the_version_and_the_formats() {
 #[test]
 fn serves_every_element_for_the_lens() {
     let r = start(&[], false);
-    let v: Value = serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
-    let rock = v
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|e| e["name"] == "rock")
-        .unwrap();
-    assert!(
-        rock["controls"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|c| c["name"] == "size")
-    );
+    let v: Vec<dt_doc::wire::ElementJson> =
+        serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
+    let rock = v.iter().find(|e| e.summary.name == "rock").unwrap();
+    assert!(rock.controls.iter().any(|c| c.name == "size"));
 }
 
 #[test]
 fn every_control_of_every_element_and_node_has_one_shape_on_the_wire() {
+    // each is read back as its type, so every field is there and of its kind
     let r = start(&[], false);
-    let els: Value = serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
-    let lang: Value = serde_json::from_slice(&get(&r, "/api/language").1).unwrap();
-    let nodes = lang["nodes"].as_array().unwrap();
+    let els: Vec<dt_doc::wire::ElementJson> =
+        serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
+    let lang: dt_doc::wire::LanguageJson =
+        serde_json::from_slice(&get(&r, "/api/language").1).unwrap();
     assert_eq!(
-        nodes
+        lang.nodes
             .iter()
-            .map(|n| n["name"].as_str().unwrap())
+            .map(|n| n.name.as_str())
             .collect::<Vec<_>>(),
         ["tile", "line", "region", "within", "except"]
     );
-    let mut controls: Vec<&Value> = Vec::new();
-    for e in els.as_array().unwrap() {
-        assert!(e["href"].as_str().unwrap().contains("elements/"), "{e}");
-        controls.extend(e["controls"].as_array().unwrap());
+    for e in &els {
+        assert!(e.summary.href.contains("elements/"), "{}", e.summary.href);
     }
-    for n in nodes {
-        assert!(
-            n["href"]
-                .as_str()
-                .unwrap()
-                .starts_with(lang["docs"].as_str().unwrap())
-        );
-        controls.extend(n["controls"].as_array().unwrap());
-    }
-    for c in controls {
-        for key in [
-            "name", "unit", "numeric", "default", "default1", "absent", "required", "taken",
-            "about", "words", "subs",
-        ] {
-            assert!(c.get(key).is_some(), "{} lacks {key}", c["name"]);
-        }
+    for n in &lang.nodes {
+        assert!(n.href.starts_with(&lang.docs));
     }
     // a body's `top` is a row of the sheet like any control, from the schema
-    let dirt = els
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|e| e["name"] == "dirt")
-        .unwrap();
-    assert_eq!(dirt["body"], true);
-    let top = dirt["controls"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["name"] == "top")
-        .unwrap();
-    assert_eq!(
-        (top["unit"].as_str(), top["numeric"].as_bool()),
-        (Some("height"), Some(true))
-    );
+    let dirt = els.iter().find(|e| e.summary.name == "dirt").unwrap();
+    assert!(dirt.body);
+    let top = dirt.controls.iter().find(|c| c.name == "top").unwrap();
+    assert_eq!((top.unit.as_deref(), top.numeric), (Some("height"), true));
     // the language's words
-    assert!(lang["units"].as_array().unwrap().iter().any(|u| u == "dmm"));
+    assert!(lang.units.iter().any(|u| u == "dmm"));
     // what each unit means, in the program's own words
     assert_eq!(
-        lang["unitAbout"]["dmm"],
+        lang.unit_about["dmm"],
         "design millimetre: 1/35 of a square; 1 mm on DungeonBlocks, 0.73 mm on OpenLOCK"
     );
-    assert!(
-        lang["functions"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|u| u == "parent")
-    );
+    assert!(lang.functions.iter().any(|u| u == "parent"));
 }
 
 #[test]
@@ -2063,27 +2020,13 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
     let v = call(&check, serde_json::json!({ "text": edited }));
     assert_eq!(v["ok"], true, "{v}");
     // the controls come with their defaults as a format 1 document writes them
-    let els: Value = serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
-    let tree = els
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|e| e["name"] == "tree")
-        .unwrap();
-    let crown = tree["controls"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["name"] == "crown")
-        .unwrap();
-    let width = crown["subs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["name"] == "width")
-        .unwrap();
-    assert_eq!(width["default"], "30");
-    assert_eq!(width["default1"], "30dmm");
+    let els: Vec<dt_doc::wire::ElementJson> =
+        serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
+    let tree = els.iter().find(|e| e.summary.name == "tree").unwrap();
+    let crown = tree.controls.iter().find(|c| c.name == "crown").unwrap();
+    let width = crown.subs.iter().find(|c| c.name == "width").unwrap();
+    assert_eq!(width.default.as_deref(), Some("30"));
+    assert_eq!(width.default1.as_deref(), Some("30dmm"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

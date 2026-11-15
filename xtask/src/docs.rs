@@ -14,7 +14,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde_json::Value;
+use dt_doc::wire::{ControlJson, ElementJson, ElementList, SeamsJson};
 
 const OPEN: &str = "<!-- gen:reference ";
 const CLOSE: &str = "<!-- /gen:reference -->";
@@ -33,21 +33,20 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
         .args(["elements", "--json"])
         .output()
         .map_err(|e| format!("{}: {e}", bin.display()))?;
-    let all: Value = serde_json::from_slice(&json.stdout).map_err(|e| e.to_string())?;
-    crate::guide::run(root, check, &bin, &all["seams"])?;
-    let names: Vec<String> = all["elements"]
-        .as_array()
-        .ok_or("no elements in `dharmatiles elements --json`")?
-        .iter()
-        .filter_map(|l| l["name"].as_str().map(str::to_owned))
-        .collect();
+    let all: ElementList = serde_json::from_slice(&json.stdout)
+        .map_err(|e| format!("`dharmatiles elements --json`: {e}"))?;
+    crate::guide::run(root, check, &bin, &all.seams)?;
+    let names: Vec<String> = all.elements.iter().map(|l| l.name.clone()).collect();
     let mut elements = Vec::new();
     for n in &names {
         let o = Command::new(&bin)
             .args(["elements", n, "--json"])
             .output()
             .map_err(|e| e.to_string())?;
-        elements.push(serde_json::from_slice::<Value>(&o.stdout).map_err(|e| e.to_string())?);
+        elements.push(
+            serde_json::from_slice::<ElementJson>(&o.stdout)
+                .map_err(|e| format!("`dharmatiles elements {n} --json`: {e}"))?,
+        );
     }
     let tiles = library_tiles(&root.join("library/tiles"))?;
 
@@ -91,7 +90,7 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
     // the tile-system page's seam table, from the edge contract
     let page = root.join("docs/standards/tile-system.html");
     let text = std::fs::read_to_string(&page).map_err(|e| format!("{}: {e}", page.display()))?;
-    let new = fill_seams(&text, &all["seams"])?;
+    let new = fill_seams(&text, &all.seams)?;
     if new != text {
         if check {
             stale.push(page.display().to_string());
@@ -144,7 +143,11 @@ fn writes(text: &str, name: &str) -> bool {
     })
 }
 
-fn fill(text: &str, elements: &[Value], tiles: &[(String, String)]) -> Result<String, String> {
+fn fill(
+    text: &str,
+    elements: &[ElementJson],
+    tiles: &[(String, String)],
+) -> Result<String, String> {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(i) = rest.find(OPEN) {
@@ -156,7 +159,7 @@ fn fill(text: &str, elements: &[Value], tiles: &[(String, String)]) -> Result<St
             .ok_or_else(|| format!("gen:reference {name} has no {CLOSE}"))?;
         let element = elements
             .iter()
-            .find(|l| l["name"] == name)
+            .find(|l| l.summary.name == name)
             .ok_or_else(|| format!("gen:reference {name}: no such element"))?;
         out.push_str(&rest[..i]);
         out.push_str(OPEN);
@@ -187,7 +190,7 @@ const SEAMS_CLOSE: &str = "<!-- /gen:seams -->";
 
 /// Fill the `gen:seams` block with the edge contract's seam table: one row
 /// for each seam, with how it reads on a square's north side.
-fn fill_seams(text: &str, seams: &Value) -> Result<String, String> {
+fn fill_seams(text: &str, seams: &SeamsJson) -> Result<String, String> {
     let Some(i) = text.find(SEAMS_OPEN) else {
         return Ok(text.to_owned());
     };
@@ -195,43 +198,33 @@ fn fill_seams(text: &str, seams: &Value) -> Result<String, String> {
     let close = after
         .find(SEAMS_CLOSE)
         .ok_or_else(|| format!("gen:seams has no {SEAMS_CLOSE}"))?;
-    if seams["ok"].as_bool() != Some(true) {
-        return Err(format!("the edge contract's seams did not read: {seams}"));
-    }
-    let rows = seams["seams"]
-        .as_array()
-        .ok_or("no seams in the edge contract")?;
-    let corners = seams["corners"]
-        .as_array()
-        .ok_or("no corners in the edge contract")?;
+    let (rows, corners) = match seams {
+        SeamsJson::Read { seams, corners } => (seams, corners),
+        SeamsJson::Failed { errors } => {
+            return Err(format!(
+                "the edge contract's seams did not read: {}",
+                errors.join("; ")
+            ));
+        }
+    };
     let mut s = String::new();
     s.push_str(SEAMS_OPEN);
     s.push_str("\n<div class=\"tbl\"><table>\n<thead><tr><th>Along a square&rsquo;s edge</th><th>north</th><th>south</th><th>west</th><th>east</th><th>As a point, on a north side</th></tr></thead>\n<tbody>\n");
     for row in rows {
-        let at = row["at"].as_f64().ok_or("a seam has no position")?;
+        let at = row.at;
         let (text, what) = seam_fraction(at).ok_or_else(|| {
             format!("seam {at} has no fraction to show it by: add it to xtask/src/docs.rs")
         })?;
-        let word = |k: &str| row[k].as_str().unwrap_or_default();
         let _ = writeln!(
             s,
             "<tr><td>{text} ({what})</td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td><code>\"({text}sq, 0sq)\"</code></td></tr>",
-            word("north"),
-            word("south"),
-            word("west"),
-            word("east"),
+            row.north, row.south, row.west, row.east,
         );
     }
     s.push_str("</tbody></table></div>\n<p>The tile&rsquo;s own corners: ");
     let words: Vec<String> = corners
         .iter()
-        .map(|c| {
-            format!(
-                "<code>{}</code> ({})",
-                c["word"].as_str().unwrap_or_default(),
-                c["corner"].as_str().unwrap_or_default()
-            )
-        })
+        .map(|c| format!("<code>{}</code> ({})", c.word, c.corner))
         .collect();
     s.push_str(&words.join(", "));
     s.push_str(". They are always the tile&rsquo;s corners and take no number.</p>\n");
@@ -269,28 +262,22 @@ fn role_text(role: &str) -> &'static str {
     }
 }
 
-fn reference(element: &Value, tiles: &[(String, String)]) -> String {
-    let name = element["name"].as_str().unwrap_or_default();
+fn reference(element: &ElementJson, tiles: &[(String, String)]) -> String {
+    let name = element.summary.name.as_str();
     let mut s = String::new();
-    let takes: Vec<&str> = element["takes"]
-        .as_array()
-        .map(|a| a.iter().filter_map(Value::as_str).collect())
-        .unwrap_or_default();
+    let takes = &element.takes;
     let mut place: Vec<String> = Vec::new();
     if !takes.is_empty() {
         place.push(format!("<code>at=</code> {}", takes.join(", ")));
     }
-    if element["place"]
-        .as_array()
-        .is_some_and(|a| a.iter().any(|w| w.as_str() == Some("side")))
-    {
+    if element.place.iter().any(|w| w == "side") {
         place.push("<code>side=</code>".to_owned());
     }
     let _ = writeln!(s, "<div class=\"facts\">");
     let _ = writeln!(
         s,
         "  <div><div class=\"k\">Kind</div><div class=\"v\">{}</div></div>",
-        role_text(element["role"].as_str().unwrap_or_default())
+        role_text(&element.summary.role)
     );
     let _ = writeln!(
         s,
@@ -301,15 +288,11 @@ fn reference(element: &Value, tiles: &[(String, String)]) -> String {
             place.join("; ")
         }
     );
-    let needs: Vec<String> = element["needs"]
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(Value::as_str)
-                .map(|w| format!("<code>{w}=</code>"))
-                .collect()
-        })
-        .unwrap_or_default();
+    let needs: Vec<String> = element
+        .needs
+        .iter()
+        .map(|w| format!("<code>{w}=</code>"))
+        .collect();
     if !needs.is_empty() {
         let _ = writeln!(
             s,
@@ -317,7 +300,7 @@ fn reference(element: &Value, tiles: &[(String, String)]) -> String {
             needs.join(" ")
         );
     }
-    if element["holds_scatter"].as_bool() == Some(true) {
+    if element.holds_scatter {
         let _ = writeln!(
             s,
             "  <div><div class=\"k\">Holds</div><div class=\"v\">a <a href=\"scatter.html\"><code>scatter</code></a> inside it lands on it</div></div>"
@@ -326,7 +309,7 @@ fn reference(element: &Value, tiles: &[(String, String)]) -> String {
     let _ = writeln!(
         s,
         "  <div><div class=\"k\">Built</div><div class=\"v\">{}</div></div>",
-        if element["built"].as_bool() == Some(true) {
+        if element.summary.built {
             "yes"
         } else {
             "not yet"
@@ -334,10 +317,7 @@ fn reference(element: &Value, tiles: &[(String, String)]) -> String {
     );
     let _ = writeln!(s, "</div>");
 
-    let controls = element["controls"].as_array().cloned().unwrap_or_default();
-    let (plain, expert): (Vec<_>, Vec<_>) = controls
-        .iter()
-        .partition(|c| c["expert"].as_bool() != Some(true));
+    let (expert, plain): (Vec<_>, Vec<_>) = element.controls.iter().partition(|c| c.expert);
     let _ = writeln!(s, "<h3 id=\"controls\">Controls</h3>");
     if plain.is_empty() {
         let _ = writeln!(s, "<p>None: <code>{name}</code> takes no controls.</p>");
@@ -378,23 +358,23 @@ fn reference(element: &Value, tiles: &[(String, String)]) -> String {
     s
 }
 
-fn takes(c: &Value) -> String {
+fn takes(c: &ControlJson) -> String {
     // the schema's axis names, as a format 1 document writes the value: a
     // length and an angle carry their unit (the limits are in that unit)
-    let unit = match c["unit"].as_str() {
+    let unit = match c.unit.as_deref() {
         Some("dmm") => "length (dmm)",
         Some("degrees") => "angle (deg)",
         Some(u) => u,
         None => "group",
     };
     let mut t = esc(unit);
-    if let Some(takes) = c["takes"].as_str() {
+    if let Some(takes) = &c.takes {
         let _ = write!(t, ", {}", esc(takes));
     }
     t
 }
 
-fn table(s: &mut String, controls: &[&Value]) {
+fn table(s: &mut String, controls: &[&ControlJson]) {
     let _ = writeln!(s, "<div class=\"tbl\"><table class=\"controls\">");
     let _ = writeln!(
         s,
@@ -402,42 +382,41 @@ fn table(s: &mut String, controls: &[&Value]) {
     );
     for c in controls {
         row(s, c, None);
-        for sub in c["subs"].as_array().into_iter().flatten() {
-            row(s, sub, c["name"].as_str());
+        for sub in &c.subs {
+            row(s, sub, Some(&c.name));
         }
     }
     let _ = writeln!(s, "</tbody></table></div>");
 }
 
-fn row(s: &mut String, c: &Value, parent: Option<&str>) {
-    let name = c["name"].as_str().unwrap_or_default();
+fn row(s: &mut String, c: &ControlJson, parent: Option<&str>) {
+    let name = c.name.as_str();
     let shown = parent.map_or_else(|| name.to_owned(), |p| format!("{p} {name}"));
     // `default1` is the default as a format 1 document writes it (`5dmm`, `34deg`)
     // no default value: the words for what leaving it out means, where it has them (the sheet says the same)
-    let default = match (c["default1"].as_str(), c["absent"].as_str()) {
+    let default = match (c.default1.as_deref(), c.absent.as_deref()) {
         (Some(d), _) => format!("<code>{}</code>", esc(d)),
         (None, Some(a)) => format!("<span class=\"muted\">{}</span>", esc(a)),
         (None, None) => "—".to_owned(),
     };
-    let mut about = prose(c["about"].as_str().unwrap_or_default());
-    if c["required"].as_bool() == Some(true) {
+    let mut about = prose(&c.about);
+    if c.required {
         about.push_str(" <strong>Required.</strong>");
     }
-    if c["taken"].as_bool() == Some(false) {
+    if !c.taken {
         about.push_str(
             " <span class=\"tag\">not built yet</span> <span class=\"muted small\">\
              <code>check</code> accepts it; <code>build</code> refuses it</span>",
         );
     }
-    let words = c["words"].as_array().cloned().unwrap_or_default();
-    if !words.is_empty() {
+    if !c.words.is_empty() {
         about.push_str("<dl class=\"words\">");
-        for w in &words {
+        for w in &c.words {
             let _ = write!(
                 about,
                 "<dt><code>{}</code></dt><dd>{}</dd>",
-                esc(w["word"].as_str().unwrap_or_default()),
-                prose(w["about"].as_str().unwrap_or_default())
+                esc(&w.word),
+                prose(&w.about)
             );
         }
         about.push_str("</dl>");

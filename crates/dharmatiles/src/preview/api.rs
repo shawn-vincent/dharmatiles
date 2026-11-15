@@ -460,6 +460,9 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     use ts_rs::TS;
     all.add::<super::edit::DraftReq>();
     all.add::<ErrorBody>();
+    // `GET /api/elements` answers a list of them, which names no declaration of its own
+    all.add::<dt_doc::wire::ElementJson>();
+    all.add::<dt_doc::wire::LanguageJson>();
     all.add::<super::resources::ResourceEvent>();
     all.add::<StreamEvent>();
     all.add::<crate::message::MessagesRes>();

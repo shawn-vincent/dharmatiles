@@ -1,3 +1,4 @@
+// @ts-check
 // Completion for the source pane, from the element schema and the document's
 // own names (docs/design/editor.html, "The text").  Three places:
 //
@@ -26,6 +27,10 @@ const NO_NAMES = { defs: [], regions: [], lines: [], points: [] };
  * or null.  `caret` is TextPane.caret(); `force` lists even with nothing typed;
  * `names` are the definitions, regions, lines and points the program's parser
  * found in the text now (`/api/names`).
+ * @param {{ before: string, index: number }} caret
+ * @param {import('./api').ElementJson[]} elements
+ * @param {boolean} [force]
+ * @param {import('./api').LanguageJson | null} [language]
  */
 export function suggest(caret, elements, force = false, language = null, names = NO_NAMES) {
   const before = caret.before;

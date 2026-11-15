@@ -1,3 +1,4 @@
+// @ts-check
 // The property sheet: the controls of the selected thing (a stack entry, a line, a region, the tile itself) fill the
 // panel.  Every number in a value is scrubbed by dragging it sideways (Shift for fine steps) or typed after a click; a
 // word control is a row of its words; a switch flips.  Each change is a change to the document's text, made through

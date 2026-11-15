@@ -67,7 +67,7 @@ export function createStore(initial, report = showError) {
 }
 
 export const server = createStore({
-  tiles: [], roots: [], folders: [], home: null, inventory: null, elements: [], language: null, system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
+  tiles: [], roots: [], folders: [], home: null, inventory: null, elements: /** @type {import('../api').ElementJson[]} */ ([]), language: /** @type {import('../api').LanguageJson | null} */ (null), system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
   live: false,    // the event stream is open and in step
   ever: false,    // it has been, once: so a loss reads 'reconnecting…', not 'connecting…'
   ready: false,   // the first list of tiles is in

@@ -1,3 +1,4 @@
+// @ts-check
 // The property level: one control of a thing, with room.  A control gets a level of its own when it has more to say than a
 // row can: a range and the odds along it, a height worked out where it stands.  The page is the control's name, what it
 // takes, its value in a field wide enough to read (checked by the program as you type), the forms it can be written in,
