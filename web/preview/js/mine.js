@@ -7,7 +7,13 @@
 // a position in the one is found in the other by the text both share before it
 // and after it.
 
-/** The change from `before` to `after` as {from, to, insert} over `before`: the middle that differs. */
+/** @typedef {{ from: number, to: number, insert: string }} Patch  a change over a text: the bytes [from, to) become `insert` */
+
+/**
+ * The change from `before` to `after` as {from, to, insert} over `before`: the middle that differs.
+ * @param {string} before @param {string} after
+ * @returns {Patch}
+ */
 export function patchOf(before, after) {
   let a = 0;
   while (a < before.length && a < after.length && before[a] === after[a]) a++;
@@ -16,7 +22,10 @@ export function patchOf(before, after) {
   return { from: a, to: before.length - b, insert: after.slice(a, after.length - b) };
 }
 
-/** Where position `x` of `lib` is in `copy`, or null when it is inside what the two do not share. */
+/**
+ * Where position `x` of `lib` is in `copy`, or null when it is inside what the two do not share.
+ * @param {number} x @param {string} lib @param {string} copy
+ */
 export function mapPos(x, lib, copy) {
   if (lib === copy) return x;
   let a = 0;
@@ -31,6 +40,7 @@ export function mapPos(x, lib, copy) {
 /**
  * `patch` (over `lib`) made on `copy`: {text, caret} (the caret just after what was written),
  * or null when the patch touches what the copy changed (nothing is guessed).
+ * @param {Patch} patch @param {string} lib @param {string} copy
  */
 export function patchOnCopy(patch, lib, copy) {
   const from = mapPos(patch.from, lib, copy), to = mapPos(patch.to, lib, copy);
@@ -39,6 +49,7 @@ export function patchOnCopy(patch, lib, copy) {
 }
 
 /** The line the toast says: where the copy is and that the change is in it. */
+/** @param {string} name @param {boolean | null} applied */
 export function copiedNote(name, applied) {
   if (applied == null) return `Copied to My tiles as ${name}.`;
   return applied
