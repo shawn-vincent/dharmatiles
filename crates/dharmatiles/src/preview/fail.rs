@@ -22,9 +22,7 @@ use std::panic::PanicHookInfo;
 use std::sync::{Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde_json::Value;
-
-use super::api::{ErrorBody, ErrorContext, ErrorDetail, Mistake};
+use super::api::{Body, ErrorBody, ErrorContext, ErrorDetail, Mistake};
 
 /// How the page should put an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -307,27 +305,21 @@ impl ServerError {
         }
     }
 
-    /// The error as JSON, the body of `{"error": ...}`.
-    #[must_use]
-    pub fn json(&self) -> Value {
-        to_value(&self.detail())
-    }
-
     /// The reply: the status and `{"error": ...}`.
     #[must_use]
-    pub fn reply(&self) -> (&'static str, Value) {
+    pub fn reply(&self) -> (&'static str, Body) {
         self.reply_with(|_| {})
     }
 
     /// The reply, with what else the refusal says set on the body by `f`.
     #[must_use]
-    pub fn reply_with(&self, f: impl FnOnce(&mut ErrorBody)) -> (&'static str, Value) {
+    pub fn reply_with(&self, f: impl FnOnce(&mut ErrorBody)) -> (&'static str, Body) {
         let mut body = ErrorBody {
             error: self.detail(),
             ..ErrorBody::default()
         };
         f(&mut body);
-        (self.status, to_value(&body))
+        (self.status, Body::Failed(Box::new(body)))
     }
 
     /// The line for the server's log.
@@ -340,7 +332,7 @@ impl ServerError {
     }
 }
 
-impl From<ServerError> for (&'static str, Value) {
+impl From<ServerError> for (&'static str, Body) {
     fn from(e: ServerError) -> Self {
         e.reply()
     }
@@ -348,7 +340,7 @@ impl From<ServerError> for (&'static str, Value) {
 
 /// A request the page got wrong: the status, the words.
 #[must_use]
-pub fn refused(status: &'static str, message: impl Into<String>) -> (&'static str, Value) {
+pub fn refused(status: &'static str, message: impl Into<String>) -> (&'static str, Body) {
     ServerError::refused(status, message).reply()
 }
 
@@ -359,14 +351,14 @@ pub fn refused_with(
     status: &'static str,
     message: impl Into<String>,
     f: impl FnOnce(&mut ErrorBody),
-) -> (&'static str, Value) {
+) -> (&'static str, Body) {
     ServerError::refused(status, message).reply_with(f)
 }
 
 /// A document that does not read: 422, its mistakes each at its place, and
 /// the first one's words as the message.
 #[must_use]
-pub fn mistakes(errs: &[dt_eval::Diag]) -> (&'static str, Value) {
+pub fn mistakes(errs: &[dt_eval::Diag]) -> (&'static str, Body) {
     let list: Vec<Mistake> = errs.iter().map(Mistake::from).collect();
     let message = errs.first().map_or_else(
         || "the document does not read".to_owned(),
@@ -375,16 +367,9 @@ pub fn mistakes(errs: &[dt_eval::Diag]) -> (&'static str, Value) {
     ServerError::refused("422 Unprocessable Entity", message).reply_with(|b| b.errors = Some(list))
 }
 
-/// A body made by the contract's types.  A value that cannot be written is
-/// a bug, said as one (never an empty body).
-#[allow(clippy::expect_used)]
-pub(super) fn to_value<T: serde::Serialize>(t: &T) -> Value {
-    serde_json::to_value(t).expect("an error body is plain data")
-}
-
 /// Something the program could not do: the status, the words.
 #[must_use]
-pub fn failure(status: &'static str, message: impl Into<String>) -> (&'static str, Value) {
+pub fn failure(status: &'static str, message: impl Into<String>) -> (&'static str, Body) {
     ServerError::failure(status, message).reply()
 }
 
@@ -394,7 +379,7 @@ pub fn failure_from(
     status: &'static str,
     message: impl Into<String>,
     err: &(dyn std::error::Error + 'static),
-) -> (&'static str, Value) {
+) -> (&'static str, Body) {
     ServerError::failure(status, message).caused_by(err).reply()
 }
 
@@ -446,22 +431,18 @@ mod tests {
             tile: Some("t.dtile".to_owned()),
         };
         let e = ServerError::bug(panic.as_ref(), Some(doing));
-        let v = e.json();
-        assert_eq!(v["kind"], "bug");
-        assert_eq!(v["message"], "the kernel fell over");
-        assert!(v["causes"][0].as_str().unwrap().contains("fail.rs"), "{v}");
+        let v = e.detail();
+        assert_eq!(v.kind, "bug");
+        assert_eq!(v.message, "the kernel fell over");
+        assert!(v.causes[0].contains("fail.rs"), "{v:?}");
         assert!(
-            v["backtrace"].as_str().unwrap().contains("a_caught_panic"),
+            v.backtrace.contains("a_caught_panic"),
             "the stack is the panic's, taken in the hook: {}",
-            v["backtrace"]
+            v.backtrace
         );
-        assert_eq!(v["context"]["route"], "build worker");
-        assert_eq!(v["context"]["tile"], "t.dtile");
-        assert!(
-            v["context"]["version"]
-                .as_str()
-                .is_some_and(|s| !s.is_empty())
-        );
+        assert_eq!(v.context.route.as_deref(), Some("build worker"));
+        assert_eq!(v.context.tile.as_deref(), Some("t.dtile"));
+        assert!(!v.context.version.is_empty());
     }
 
     #[test]
@@ -469,18 +450,20 @@ mod tests {
         let outer = Layered::demo();
         let (status, body) = failure_from("500 Internal Server Error", "cannot write x", &outer);
         assert_eq!(status, "500 Internal Server Error");
-        assert_eq!(body["error"]["kind"], "failure");
+        let body = body.failed().unwrap();
+        assert_eq!(body.error.kind, "failure");
         assert_eq!(
-            body["error"]["causes"],
-            serde_json::json!([
+            body.error.causes,
+            [
                 "could not save the tile",
                 "the folder is read-only",
                 "permission denied (os error 13)"
-            ])
+            ]
         );
-        assert!(!body["error"]["backtrace"].as_str().unwrap().is_empty());
+        assert!(!body.error.backtrace.is_empty());
         let (_, body) = refused_with("409 Conflict", "no", |b| b.text = Some("t".to_owned()));
-        assert_eq!(body["error"]["kind"], "refused");
-        assert_eq!(body["text"], "t");
+        let body = body.failed().unwrap();
+        assert_eq!(body.error.kind, "refused");
+        assert_eq!(body.text.as_deref(), Some("t"));
     }
 }

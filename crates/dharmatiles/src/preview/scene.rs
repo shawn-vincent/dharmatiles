@@ -21,12 +21,12 @@ use std::path::Path;
 use dt_doc::map::{PrintList, parse_height};
 use dt_eval::{Diag, Files, Options};
 use dt_store::Tier;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{Shared, lock};
 
 /// A map as the page reads it (`scene`): pieces, grid, bounds, heights.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SceneJson {
@@ -55,7 +55,7 @@ pub struct SceneJson {
     pub printer: String,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct SceneGrid {
     pub cols: u32,
@@ -63,7 +63,7 @@ pub struct SceneGrid {
 }
 
 /// A standard or the map's own height name, in dmm.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct HeightName {
     pub name: String,
@@ -72,7 +72,7 @@ pub struct HeightName {
 }
 
 /// One piece of a map.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ScenePiece {
@@ -112,7 +112,7 @@ pub struct ScenePiece {
 }
 
 /// A seed you own of a tile, and how many prints of it.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct OwnedSeed {
     pub seed: u64,
@@ -121,7 +121,7 @@ pub struct OwnedSeed {
 
 /// What the inventory says of a piece: `have` (a print you own is this piece), `need` (it prints), `other` (you own
 /// it in the other colour mode: it still prints), `skip` (`print=skip`).
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ShelfMark {

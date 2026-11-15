@@ -12,6 +12,7 @@ use std::time::Duration;
 use super::Shared;
 use super::http::{Request, respond};
 
+use super::api::Body;
 use super::fail;
 use super::route::{Reply, Resume, route, tile_route};
 
@@ -38,25 +39,40 @@ fn one(mut conn: TcpStream, shared: &Shared) {
             "400 Bad Request",
             "the request could not be read: malformed, too large or cut short",
         );
-        respond(
-            &mut conn,
-            status,
-            "application/json",
-            body.to_string().as_bytes(),
-        );
+        send_json(&mut conn, status, &body);
         return;
     };
     match answer(shared, &req) {
-        Reply::Json(status, body) => respond(
-            &mut conn,
-            status,
-            "application/json",
-            body.to_string().as_bytes(),
-        ),
+        Reply::Json(status, body) => send_json(&mut conn, status, &body),
         Reply::Bytes(b) => respond(&mut conn, "200 OK", "application/octet-stream", &b),
         Reply::Body(status, ctype, body) => respond(&mut conn, status, ctype, body.as_bytes()),
         Reply::Asset(ctype, body) => respond(&mut conn, "200 OK", ctype, &body),
         Reply::Events(from) => events(conn, shared, &from),
+    }
+}
+
+/// Write a JSON reply.  A body that cannot be written is the program's failure: said in the log and to the page as
+/// a 500 (and, were even that body unwritable, as plain text), never an empty body.
+fn send_json(conn: &mut TcpStream, status: &'static str, body: &Body) {
+    match body.wire() {
+        Ok(text) => respond(conn, status, "application/json", text.as_bytes()),
+        Err(e) => {
+            tell!("error: preview: cannot write a {status} reply: {e}");
+            let (status, body) =
+                fail::failure_from("500 Internal Server Error", "cannot write the reply", &e);
+            match body.wire() {
+                Ok(text) => respond(conn, status, "application/json", text.as_bytes()),
+                Err(e) => {
+                    tell!("error: preview: cannot write the error reply either: {e}");
+                    respond(
+                        conn,
+                        status,
+                        "text/plain; charset=utf-8",
+                        e.to_string().as_bytes(),
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -81,15 +97,17 @@ pub(super) fn answer(shared: &Shared, req: &Request) -> Reply {
             // the one error path: a failure of the program's own is a message in the stream too
             let id = tile_route(&req.path).map(|(id, _)| id.to_owned());
             let name = id.as_deref().and_then(|i| shared.name_of(i));
-            // the body is the one error path's `{"error": ErrorDetail}`: read it as that type, and say it when it is not
-            let error = serde_json::from_value::<super::api::ErrorDetail>(body["error"].clone())
-                .unwrap_or_else(|e| {
+            // every 5xx is built by the one error path, so its body is an `ErrorBody`: say it when it is not
+            let error = body.failed().map_or_else(
+                || {
                     fail::ServerError::failure(
                         "500 Internal Server Error",
-                        format!("a {status} reply did not carry an error body: {e}"),
+                        format!("a {status} reply did not carry an error body"),
                     )
                     .detail()
-                });
+                },
+                |b| b.error.clone(),
+            );
             shared.say(super::messages::of_server_error(
                 &error,
                 (id.as_deref().unwrap_or(""), name.as_deref().unwrap_or("")),

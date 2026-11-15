@@ -231,7 +231,7 @@ pub struct EditRes {
 /// What is read of a document: the check's (and the lists') verdict.  A
 /// document that does not read is an answer here, not a failure: the text pane
 /// shows its mistakes as you type.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct CheckRes {
     pub ok: bool,
@@ -247,7 +247,7 @@ pub struct CheckRes {
 }
 
 /// One node of a tile's text: the id an edit names it by, what it is, and where its text is.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct NodeJson {
     pub id: String,
@@ -795,7 +795,11 @@ pub(super) fn tile_name(name: Option<&str>) -> Result<String, Reply> {
 
 /// Write `text` as `<stem>.dtile` in `dir`, or `<stem> 2.dtile`, … when
 /// that is taken: created new, so another file is never overwritten.
-fn write_new(dir: &Path, stem: &str, text: &str) -> Result<PathBuf, (&'static str, Value)> {
+fn write_new(
+    dir: &Path,
+    stem: &str,
+    text: &str,
+) -> Result<PathBuf, (&'static str, super::api::Body)> {
     write_new_bytes(dir, stem, text.as_bytes())
 }
 
@@ -804,7 +808,7 @@ pub(super) fn write_new_bytes(
     dir: &Path,
     stem: &str,
     text: &[u8],
-) -> Result<PathBuf, (&'static str, Value)> {
+) -> Result<PathBuf, (&'static str, super::api::Body)> {
     write_new_ext(dir, stem, "dtile", text)
 }
 
@@ -814,7 +818,7 @@ pub(super) fn write_new_ext(
     stem: &str,
     ext: &str,
     text: &[u8],
-) -> Result<PathBuf, (&'static str, Value)> {
+) -> Result<PathBuf, (&'static str, super::api::Body)> {
     use std::io::Write;
     for n in 1..1000 {
         let dest = dir.join(if n == 1 {
@@ -866,7 +870,7 @@ pub(super) fn listed(shared: &Shared, dest: &Path) -> Listed {
     }
 }
 
-pub(super) fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
+pub(super) fn home(shared: &Shared) -> Result<PathBuf, (&'static str, super::api::Body)> {
     let home = shared
         .roots()
         .iter()

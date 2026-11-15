@@ -3,7 +3,7 @@
 //! every reader (Rust or the page, through the generated TypeScript) reads its fields; nothing patches or looks up by
 //! key.  The wire names are the page's, `camelCase`.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::api::Mistake;
 use super::scene::SceneJson;
@@ -12,7 +12,7 @@ pub use crate::inventory_wire::InventoryRow;
 pub use dt_print::plates::wire::{PlanPlate, PlanSettings, PlannedKind};
 
 /// A tile's squares, across and up: what a tile and an STL file's footprint have, and a print list does not.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PlanSquares {
@@ -21,7 +21,7 @@ pub struct PlanSquares {
 }
 
 /// The ground a document stands on, which the viewer rules: its square, its size and the height of its zero.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PlanGround {
@@ -35,7 +35,7 @@ pub struct PlanGround {
 }
 
 /// What the plan pass (or the layout, or the reading of the inventory) said about a document.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TilePlan {
@@ -64,7 +64,7 @@ pub enum TilePlan {
 }
 
 /// A print list or map's plan: the panel, and the scene once it is read.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PlatesDoc {
@@ -81,7 +81,7 @@ pub struct PlatesDoc {
 
 /// What the plates' panel reads: a list that plans, one that does not (its settings as written), or one that did not
 /// read at all.  The page tells them by `planned` and by `printer`.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(untagged)]
 pub enum PlatesPanel {
@@ -92,7 +92,7 @@ pub enum PlatesPanel {
 
 /// A list that does not plan: the settings as written, so the panel still offers the printer and the mode and the
 /// mistake can be mended there.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PlatesWritten {
@@ -113,7 +113,7 @@ pub struct PlatesWritten {
 }
 
 /// A file that did not read as a list: only the printers to choose from.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PlatesUnread {
@@ -124,7 +124,7 @@ pub struct PlatesUnread {
 }
 
 /// A list that plans: the plan's settings and kinds, the layout and the checks on it.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PlatesPlanned {
@@ -150,7 +150,7 @@ pub struct PlatesPlanned {
 }
 
 /// One distinct piece of a planned list.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PlanKind {
@@ -165,7 +165,7 @@ pub struct PlanKind {
 }
 
 /// Do the filaments the plates need fit the printer's slots.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SlotCheck {
@@ -175,7 +175,7 @@ pub struct SlotCheck {
 }
 
 /// A piece of a list, in the order written, for the panel to edit.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ListPiece {
@@ -190,7 +190,7 @@ pub struct ListPiece {
 }
 
 /// A printer profile, for the choosers: brand, then model.  One with no bed (`default`, `fine`) is only floors.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(untagged)]
 pub enum PrinterRow {
@@ -201,7 +201,7 @@ pub enum PrinterRow {
 }
 
 /// A printer profile that reads.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PrinterRead {
@@ -219,7 +219,7 @@ pub struct PrinterRead {
 }
 
 /// A printer profile that does not read.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PrinterBroken {
@@ -232,7 +232,7 @@ pub struct PrinterBroken {
 }
 
 /// The inventory's plan: its source and the pieces it adds up to.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct InventoryDoc {
@@ -241,7 +241,7 @@ pub struct InventoryDoc {
 }
 
 /// What reading the inventory made.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct InventoryRead {

@@ -33,48 +33,50 @@ fn serve(name: &str) -> (Shared, PathBuf, PathBuf, PathBuf) {
     (shared, home, settings, trash)
 }
 
-fn ok(r: &Reply) -> &Value {
-    assert_eq!(r.0, "200 OK", "{}", r.1);
-    &r.1
+/// A 200, and its body as the route's response type.
+fn ok<T: serde::de::DeserializeOwned>(r: &Reply) -> T {
+    assert_eq!(r.0, "200 OK", "{:?}", r.1);
+    r.1.read().unwrap()
+}
+
+/// A 200 whose body nothing here reads.
+fn done(r: &Reply) {
+    assert_eq!(r.0, "200 OK", "{:?}", r.1);
 }
 
 fn refused(r: &Reply, status: &str) {
     assert!(
         r.0.starts_with(status),
-        "wanted {status}, got {} {}",
+        "wanted {status}, got {} {:?}",
         r.0,
         r.1
     );
 }
 
 /// A call as the page makes it: a JSON body to the typed route, and its reply.
-fn call(shared: &Shared, path: &str, v: &Value) -> Reply {
+fn call(shared: &Shared, path: &str, v: &serde_json::Value) -> Reply {
     match super::super::edit::post(shared, path, v.to_string().as_bytes()) {
         super::super::route::Reply::Json(status, body) => (status, body),
         _ => panic!("not a JSON reply"),
     }
 }
 
-fn snap_json(shared: &Shared) -> Value {
-    serde_json::to_value(shared.snapshot()).unwrap()
-}
-
 fn add_place(shared: &Shared) -> Reply {
     call(shared, "/api/places/add", &json!({}))
 }
-fn remove_place(shared: &Shared, v: &Value) -> Reply {
+fn remove_place(shared: &Shared, v: &serde_json::Value) -> Reply {
     call(shared, "/api/places/remove", v)
 }
-fn new_folder(shared: &Shared, v: &Value) -> Reply {
+fn new_folder(shared: &Shared, v: &serde_json::Value) -> Reply {
     call(shared, "/api/folders/new", v)
 }
-fn rename_folder(shared: &Shared, v: &Value) -> Reply {
+fn rename_folder(shared: &Shared, v: &serde_json::Value) -> Reply {
     call(shared, "/api/folders/rename", v)
 }
-fn trash_folder(shared: &Shared, v: &Value) -> Reply {
+fn trash_folder(shared: &Shared, v: &serde_json::Value) -> Reply {
     call(shared, "/api/folders/trash", v)
 }
-fn undo_trash(shared: &Shared, v: &Value) -> Reply {
+fn undo_trash(shared: &Shared, v: &serde_json::Value) -> Reply {
     call(shared, "/api/trash/undo", v)
 }
 
@@ -92,7 +94,7 @@ fn trash_tile(shared: &Shared, path: &str) -> Reply {
 fn duplicate_tile(shared: &Shared, path: &str) -> Reply {
     super::super::api::reply(super::duplicate_tile(shared, &tile_ref(path), Nothing {}))
 }
-fn move_tile(shared: &Shared, path: &str, v: &Value) -> Reply {
+fn move_tile(shared: &Shared, path: &str, v: &serde_json::Value) -> Reply {
     match serde_json::from_value::<TileMoveReq>(v.clone()) {
         Ok(req) => super::super::api::reply(super::move_tile(shared, &tile_ref(path), req)),
         Err(e) => super::super::fail::refused("400 Bad Request", e.to_string()),
@@ -100,24 +102,24 @@ fn move_tile(shared: &Shared, path: &str, v: &Value) -> Reply {
 }
 
 fn listed_names(shared: &Shared, root: usize) -> Vec<String> {
-    let mut v: Vec<String> = snap_json(shared)["tiles"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|t| t["root"] == root)
-        .map(|t| t["path"].as_str().unwrap().to_owned())
+    let mut v: Vec<String> = shared
+        .snapshot()
+        .tiles
+        .into_iter()
+        .filter(|t| t.root == root)
+        .map(|t| t.path)
         .collect();
     v.sort();
     v
 }
 
 fn folders_of(shared: &Shared, root: usize) -> Vec<String> {
-    snap_json(shared)["folders"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|f| f["root"] == root)
-        .map(|f| f["path"].as_str().unwrap().to_owned())
+    shared
+        .snapshot()
+        .folders
+        .into_iter()
+        .filter(|f| f.root == root)
+        .map(|f| f.path)
         .collect()
 }
 
@@ -165,30 +167,30 @@ fn the_chooser_adds_a_place_that_is_kept_and_a_cancel_changes_nothing() {
         .with_settings(settings.clone())
         .with_picker(Picker::Fixed(None));
     let r = add_place(&cancelled);
-    assert_eq!(ok(&r)["cancelled"], true);
+    assert!(matches!(
+        ok::<PlacesAddRes>(&r),
+        PlacesAddRes::Cancelled { cancelled: true }
+    ));
     assert!(!settings.join("places.json").exists());
     assert_eq!(cancelled.roots().len(), 2);
 
     let shared = shared.with_picker(Picker::Fixed(Some(outside.clone())));
     let r = add_place(&shared);
-    let body = ok(&r);
-    assert_eq!(body["added"], true);
-    let i = usize::try_from(body["root"].as_u64().unwrap()).unwrap();
-    assert_eq!(body["label"], "Dungeon dressing");
-    let snap = snap_json(&shared);
-    assert_eq!(snap["roots"][i]["role"], "added");
-    assert_eq!(snap["roots"][i]["writable"], true);
+    let PlacesAddRes::Added(body) = ok(&r) else {
+        panic!("the folder was added: {r:?}")
+    };
+    assert!(body.added);
+    let i = body.root;
+    assert_eq!(body.label, "Dungeon dressing");
+    let snap = shared.snapshot();
+    assert_eq!(snap.roots[i].role, "added");
+    assert!(snap.roots[i].writable);
     assert_eq!(folders_of(&shared, i), vec!["sub".to_owned()]);
     assert_eq!(listed_names(&shared, i).len(), 1);
     assert_eq!(load_places(&settings).unwrap(), vec![outside.clone()]);
     // its tile's size is read without a build
-    let t = snap["tiles"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|t| t["root"] == i)
-        .unwrap();
-    assert_eq!(t["size"], "2x1");
+    let t = snap.tiles.iter().find(|t| t.root == i).unwrap();
+    assert_eq!(t.size.as_deref(), Some("2x1"));
 
     // the same folder, one inside it, and one that holds it: refused, with the reason
     refused(&add_place(&shared), "409");
@@ -213,7 +215,7 @@ fn the_chooser_adds_a_place_that_is_kept_and_a_cancel_changes_nothing() {
 
     // removing it takes it off the list and the settings, and the folder stays as it was
     let r = remove_place(&shared, &json!({ "root": i }));
-    ok(&r);
+    done(&r);
     assert_eq!(shared.roots().len(), 2);
     assert!(load_places(&settings).unwrap().is_empty());
     assert!(outside.join("sub/x.dtile").exists());
@@ -232,11 +234,17 @@ fn removing_a_place_moves_the_ones_after_it_down() {
     std::fs::write(b.join("b.dtile"), TILE).unwrap();
     std::fs::write(home.join("h.dtile"), TILE).unwrap();
     let shared = shared.with_picker(Picker::Fixed(Some(a.clone())));
-    let ra = ok(&add_place(&shared))["root"].as_u64().unwrap();
+    let PlacesAddRes::Added(ra) = ok(&add_place(&shared)) else {
+        panic!("a was added")
+    };
+    let ra = ra.root;
     let shared = shared.with_picker(Picker::Fixed(Some(b.clone())));
-    let rb = ok(&add_place(&shared))["root"].as_u64().unwrap();
+    let PlacesAddRes::Added(rb) = ok(&add_place(&shared)) else {
+        panic!("b was added")
+    };
+    let rb = rb.root;
     assert_eq!((ra, rb), (2, 3));
-    ok(&remove_place(&shared, &json!({ "root": ra })));
+    done(&remove_place(&shared, &json!({ "root": ra })));
     // b is place 2 now, and its tile still says so
     assert_eq!(shared.roots()[2].dir(), Some(b.as_path()));
     assert_eq!(listed_names(&shared, 2).len(), 1);
@@ -249,12 +257,13 @@ fn an_answer_names_the_revision_it_was_told_at_and_carries_no_state() {
     let (shared, _, _, _) = serve("rev");
     let before = shared.told();
     let r = new_folder(&shared, &json!({ "root": 0, "dir": "", "name": "dungeon" }));
-    let body = ok(&r);
+    // raw wire on purpose: that no `snapshot` key is sent is a fact about the wire, which no response type can show
+    let raw: serde_json::Value = serde_json::from_str(&r.1.wire().unwrap()).unwrap();
     assert!(
-        body.get("snapshot").is_none(),
-        "the change reaches the page on the stream, not in the answer: {body}"
+        raw.get("snapshot").is_none(),
+        "the change reaches the page on the stream, not in the answer: {raw}"
     );
-    let rev = body["rev"].as_u64().expect("the answer names a revision");
+    let rev = ok::<FolderDone>(&r).rev;
     assert!(rev > before, "the folder was told after {before}: {rev}");
     assert_eq!(rev, shared.told(), "nothing was left to tell");
 }
@@ -263,14 +272,14 @@ fn an_answer_names_the_revision_it_was_told_at_and_carries_no_state() {
 fn a_folder_is_made_renamed_and_trashed_inside_a_place_only() {
     let (shared, home, _, trash) = serve("folders");
     let r = new_folder(&shared, &json!({ "root": 0, "dir": "", "name": "dungeon" }));
-    assert_eq!(ok(&r)["dir"], "dungeon");
+    assert_eq!(ok::<FolderDone>(&r).dir, "dungeon");
     assert!(home.join("dungeon").is_dir());
     assert_eq!(
         folders_of(&shared, 0),
         vec!["dungeon".to_owned()],
         "listed at once"
     );
-    ok(&new_folder(
+    done(&new_folder(
         &shared,
         &json!({ "root": 0, "dir": "dungeon", "name": "combo" }),
     ));
@@ -285,7 +294,7 @@ fn a_folder_is_made_renamed_and_trashed_inside_a_place_only() {
     );
     // a name is a name: slashes become dashes, nothing hidden or empty
     let r = new_folder(&shared, &json!({ "root": 0, "dir": "", "name": "a/b" }));
-    assert_eq!(ok(&r)["dir"], "a-b");
+    assert_eq!(ok::<FolderDone>(&r).dir, "a-b");
     refused(
         &new_folder(&shared, &json!({ "root": 0, "dir": "", "name": "   " })),
         "400",
@@ -301,14 +310,14 @@ fn a_folder_is_made_renamed_and_trashed_inside_a_place_only() {
         &shared,
         &json!({ "root": 0, "dir": "dungeon/combo", "name": "fights" }),
     );
-    assert_eq!(ok(&r)["dir"], "dungeon/fights");
+    assert_eq!(ok::<FolderDone>(&r).dir, "dungeon/fights");
     assert!(home.join("dungeon/fights").is_dir() && !home.join("dungeon/combo").exists());
     // another folder's name is free in this one
-    ok(&rename_folder(
+    done(&rename_folder(
         &shared,
         &json!({ "root": 0, "dir": "dungeon/fights", "name": "a-b" }),
     ));
-    ok(&rename_folder(
+    done(&rename_folder(
         &shared,
         &json!({ "root": 0, "dir": "dungeon/a-b", "name": "fights" }),
     ));
@@ -326,11 +335,11 @@ fn a_folder_is_made_renamed_and_trashed_inside_a_place_only() {
 
     // trash: into the Trash, with an Undo that puts it back, and not over something there again
     let r = trash_folder(&shared, &json!({ "root": 0, "dir": "dungeon" }));
-    let undo = ok(&r)["undo"].clone();
+    let undo = ok::<Trashed>(&r).undo;
     assert!(!home.join("dungeon").exists());
     assert!(trash.join("dungeon/fights").is_dir());
     assert!(!folders_of(&shared, 0).contains(&"dungeon".to_owned()));
-    ok(&undo_trash(&shared, &json!({ "undo": undo })));
+    done(&undo_trash(&shared, &json!({ "undo": undo })));
     assert!(home.join("dungeon/fights").is_dir());
     refused(&undo_trash(&shared, &json!({ "undo": undo })), "409");
     refused(&undo_trash(&shared, &json!({ "undo": 99 })), "404");
@@ -364,7 +373,7 @@ fn a_call_refuses_a_place_it_may_not_touch_and_a_path_that_leaves_one() {
         let r = new_folder(&shared, &json!({ "root": 0, "dir": dir, "name": "x" }));
         assert!(
             r.0.starts_with("400") || r.0.starts_with("404"),
-            "{dir}: {} {}",
+            "{dir}: {} {:?}",
             r.0,
             r.1
         );
@@ -420,7 +429,7 @@ fn a_tile_is_moved_copied_and_trashed_only_when_it_is_one_of_the_places() {
     // move into a folder: the file goes, the list says so at once, nothing is overwritten
     let r = move_tile(&shared, &pond, &json!({ "root": 0, "dir": "ponds" }));
     let moved = home.join("ponds/Pond.dtile");
-    assert_eq!(ok(&r)["path"], moved.to_string_lossy().as_ref());
+    assert_eq!(ok::<ListedIn>(&r).path, moved.to_string_lossy());
     assert!(moved.exists() && !Path::new(&pond).exists());
     assert_eq!(
         listed_names(&shared, 0),
@@ -447,13 +456,13 @@ fn a_tile_is_moved_copied_and_trashed_only_when_it_is_one_of_the_places() {
         "403",
     );
     // to its own folder: nothing to do
-    ok(&move_tile(&shared, &pond, &json!({ "root": 0, "dir": "" })));
+    done(&move_tile(&shared, &pond, &json!({ "root": 0, "dir": "" })));
 
     // a copy beside it, then another
     let r = duplicate_tile(&shared, &pond);
     assert_eq!(
-        ok(&r)["path"],
-        home.join("Pond copy.dtile").to_string_lossy().as_ref()
+        ok::<ListedIn>(&r).path,
+        home.join("Pond copy.dtile").to_string_lossy()
     );
     assert_eq!(
         std::fs::read_to_string(home.join("Pond copy.dtile")).unwrap(),
@@ -461,21 +470,21 @@ fn a_tile_is_moved_copied_and_trashed_only_when_it_is_one_of_the_places() {
     );
     let r = duplicate_tile(&shared, &pond);
     assert_eq!(
-        ok(&r)["path"],
-        home.join("Pond copy 2.dtile").to_string_lossy().as_ref()
+        ok::<ListedIn>(&r).path,
+        home.join("Pond copy 2.dtile").to_string_lossy()
     );
 
     // the Trash, never a delete; and the Undo
     let r = trash_tile(&shared, &pond);
-    let undo = ok(&r)["undo"].clone();
+    let undo = ok::<Trashed>(&r).undo;
     assert!(!Path::new(&pond).exists() && trash.join("Pond.dtile").exists());
     assert!(shared.summary(&tile_id(&pond)).is_none());
     let r = undo_trash(&shared, &json!({ "undo": undo }));
-    assert!(ok(&r)["id"].is_string(), "{r:?}");
+    assert!(ok::<Restored>(&r).id.is_some(), "{r:?}");
     assert!(Path::new(&pond).exists() && !trash.join("Pond.dtile").exists());
     // trashing again beside what is in the Trash already: its own name
     std::fs::write(trash.join("Pond.dtile"), "an older one").unwrap();
-    ok(&trash_tile(&shared, &pond));
+    done(&trash_tile(&shared, &pond));
     assert!(trash.join("Pond 2.dtile").exists());
     assert_eq!(
         std::fs::read_to_string(trash.join("Pond.dtile")).unwrap(),
@@ -533,7 +542,7 @@ fn a_new_tile_can_be_made_in_a_folder_and_not_outside_a_place() {
     let super::super::route::Reply::Json(status, body) = r else {
         panic!("not a JSON reply")
     };
-    assert_eq!(status, "200 OK", "{body}");
+    assert_eq!(status, "200 OK", "{body:?}");
     assert!(home.join("ponds/Marsh.dtile").exists());
     let r = super::super::edit::post(
         &shared,

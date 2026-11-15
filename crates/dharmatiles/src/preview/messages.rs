@@ -274,17 +274,11 @@ pub(super) fn read(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> R
     });
     match param("format").as_deref() {
         Some("text") => Reply::Body("200 OK", "text/plain; charset=utf-8", render(&found)),
-        Some("json") | None => match serde_json::to_value(MessagesRes {
+        Some("json") | None => super::api::ok(&MessagesRes {
             epoch: shared.epoch.clone(),
             messages: found.iter().map(|m| m.wire()).collect(),
-        }) {
-            Ok(v) => Reply::Json("200 OK", v),
-            Err(e) => super::fail::failure(
-                "500 Internal Server Error",
-                format!("the messages could not be written: {e}"),
-            )
-            .into(),
-        },
+        })
+        .into(),
         Some(other) => super::fail::refused(
             "400 Bad Request",
             format!("format is text or json, not {other}"),
@@ -329,12 +323,5 @@ pub(super) fn report(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) ->
     };
     let env = param("env").unwrap_or_else(crate::report::environment);
     let r = crate::report::of(&m, &env, source.as_deref());
-    match serde_json::to_value(&r) {
-        Ok(v) => Reply::Json("200 OK", v),
-        Err(e) => super::fail::failure(
-            "500 Internal Server Error",
-            format!("the report could not be written: {e}"),
-        )
-        .into(),
-    }
+    super::api::ok(&r).into()
 }

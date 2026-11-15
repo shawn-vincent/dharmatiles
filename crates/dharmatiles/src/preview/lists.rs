@@ -287,14 +287,16 @@ pub(super) fn edit_list<X>(
 /// A refusal because the file moved on carries the file's scene as it is now,
 /// so the page takes the current state at once, not when the worker's next word comes.
 pub(super) fn with_current(shared: &Shared, path: &str, reply: Reply) -> Reply {
-    if reply.0.starts_with("409")
-        && let (Some(text), Some(rev)) = (reply.1["text"].as_str(), reply.1["docRev"].as_u64())
-    {
-        let mut body = reply.1.clone();
-        body["scene"] = super::maps::scene_value(shared, path, text, rev);
-        return (reply.0, body);
+    let (status, body) = reply;
+    match body {
+        super::api::Body::Failed(mut b) if status.starts_with("409") => {
+            if let (Some(text), Some(rev)) = (&b.text, b.doc_rev) {
+                b.scene = super::maps::scene_of(shared, path, text, rev);
+            }
+            (status, super::api::Body::Failed(b))
+        }
+        body => (status, body),
     }
-    reply
 }
 
 /// `/api/lists/new`.

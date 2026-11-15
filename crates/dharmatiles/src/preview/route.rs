@@ -14,7 +14,6 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use serde::Serialize;
-use serde_json::Value;
 
 use super::api::ok;
 use super::http::{Request, loopback};
@@ -60,7 +59,7 @@ pub struct Accepted {}
 
 /// What to send back.
 pub(super) enum Reply {
-    Json(&'static str, Value),
+    Json(&'static str, super::api::Body),
     /// A mesh buffer (a tile's, a sketch's or a draft's), 200.
     Bytes(Arc<Vec<u8>>),
     /// A body made now, with its content type (the messages as text).
@@ -77,8 +76,8 @@ pub(super) struct Resume {
     pub since: Option<u64>,
 }
 
-impl From<(&'static str, Value)> for Reply {
-    fn from((status, body): (&'static str, Value)) -> Self {
+impl From<(&'static str, super::api::Body)> for Reply {
+    fn from((status, body): (&'static str, super::api::Body)) -> Self {
         Self::Json(status, body)
     }
 }
@@ -161,12 +160,12 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         #[cfg(any(test, feature = "test-routes"))]
         ("GET", "/api/test-failure", _) => {
             let e = fail::Layered::demo();
-            let (status, body) = fail::failure_from(
+            fail::failure_from(
                 "500 Internal Server Error",
                 "cannot write the demo file",
                 &e,
-            );
-            Reply::Json(status, body)
+            )
+            .into()
         }
         ("GET", "/api/messages/report", _) => {
             super::messages::report(shared, &|k| req.param(k).map(str::to_owned))
@@ -220,13 +219,11 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         ("GET", _, Some((id, "text"))) => match shared.text(id, req.param("file")) {
             Ok(Some(v)) => ok(&v).into(),
             Ok(None) => fail::refused("404 Not Found", "no such file").into(),
-            Err(e) => {
-                let (status, body) = fail::failure(
-                    "500 Internal Server Error",
-                    format!("cannot read the file: {e}"),
-                );
-                Reply::Json(status, body)
-            }
+            Err(e) => fail::failure(
+                "500 Internal Server Error",
+                format!("cannot read the file: {e}"),
+            )
+            .into(),
         },
         ("POST", _, Some((id, "build"))) => {
             // `?debug=1` or `?debug=0`: the page has the debug layer on or off for this tile

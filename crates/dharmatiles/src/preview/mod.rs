@@ -110,7 +110,6 @@ use std::time::{Duration, Instant, SystemTime};
 
 use dt_eval::progress::{StageInfo, Status, Timings, Tracker, plan_stages};
 use dt_eval::{Diag, Options};
-use serde_json::Value;
 #[cfg(test)]
 use serde_json::json;
 
@@ -132,7 +131,7 @@ const LOG: usize = 1024;
 struct Superseded;
 
 /// A mesh of another revision of the document than the one asked for: 409 with the revision it is of.
-fn stale_mesh(rev: u64) -> (&'static str, Value) {
+fn stale_mesh(rev: u64) -> (&'static str, api::Body) {
     fail::refused_with(
         "409 Conflict",
         "that is not the revision of the document the mesh is of",
@@ -824,13 +823,6 @@ impl Shared {
     fn told(&self) -> u64 {
         self.publish(false);
         lock(&self.events).rev
-    }
-
-    /// The snapshot as JSON, the way a test reads it.
-    #[cfg(test)]
-    #[allow(clippy::unwrap_used)]
-    fn snapshot_json(&self) -> Value {
-        serde_json::to_value(self.snapshot()).unwrap()
     }
 
     fn snapshot(&self) -> api::Snapshot {

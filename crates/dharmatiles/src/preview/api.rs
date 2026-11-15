@@ -24,12 +24,52 @@
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use super::fail;
 
 /// What to send: the status and the body.
-pub(super) type Reply = (&'static str, Value);
+pub(super) type Reply = (&'static str, Body);
+
+/// A reply's body, typed until it is written to the socket: a success is the response type serialized once
+/// ([`ok`]), a refusal is the [`ErrorBody`] itself.  Nobody holds the JSON of a reply as a `Value`; the server asks
+/// [`Body::wire`] for the text, and a test asks [`Body::read`] for the route's response type.
+#[derive(Debug)]
+pub enum Body {
+    /// The JSON of a route's response type.
+    Done(String),
+    /// Every reply that is not a success.
+    Failed(Box<ErrorBody>),
+}
+
+impl Body {
+    /// The JSON text for the socket.
+    ///
+    /// # Errors
+    /// An error body that cannot be written: the program's own failure.
+    pub fn wire(&self) -> Result<String, serde_json::Error> {
+        match self {
+            Self::Done(text) => Ok(text.clone()),
+            Self::Failed(e) => serde_json::to_string(e),
+        }
+    }
+
+    /// The body as the route's response type.
+    ///
+    /// # Errors
+    /// The body is an error body, or is not that type.
+    #[cfg(test)]
+    pub(super) fn read<T: DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
+        serde_json::from_str(&self.wire()?)
+    }
+
+    /// The error body of a refusal or failure, `None` for a success.
+    pub fn failed(&self) -> Option<&ErrorBody> {
+        match self {
+            Self::Failed(e) => Some(e),
+            Self::Done(_) => None,
+        }
+    }
+}
 
 /// What a route's function gives: its answer, or the reply that refuses.
 pub(super) type Out<T> = Result<T, Reply>;
@@ -47,8 +87,8 @@ pub(super) fn request<T: DeserializeOwned>(path: &str, body: &[u8]) -> Result<T,
 /// A success as the reply: the type serialized.  A value that cannot be
 /// written is the program's failure, said loudly.
 pub(super) fn ok<T: Serialize>(t: &T) -> Reply {
-    match serde_json::to_value(t) {
-        Ok(v) => ("200 OK", v),
+    match serde_json::to_string(t) {
+        Ok(v) => ("200 OK", Body::Done(v)),
         Err(e) => fail::failure_from(
             "500 Internal Server Error",
             format!("cannot write the answer: {e}"),
@@ -65,7 +105,7 @@ pub(super) fn reply<T: Serialize>(r: Out<T>) -> Reply {
 /// The error body every route that fails sends (see [`fail`]): the error,
 /// and beside it what a refusal also says (the text a conflicting edit lost
 /// to, a document's mistakes).
-#[derive(Serialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorBody {
@@ -88,7 +128,7 @@ pub struct ErrorBody {
 }
 
 /// The error itself.
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorDetail {
@@ -102,7 +142,7 @@ pub struct ErrorDetail {
 }
 
 /// What the server was doing.
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorContext {
@@ -115,7 +155,7 @@ pub struct ErrorContext {
 pub use dt_eval::{Mistake, mistakes};
 
 /// A build's progress while it runs (a `progress` event's body).
-#[derive(Serialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct Progress {
@@ -133,7 +173,7 @@ pub struct Progress {
 }
 
 /// One tile (or print list, or the inventory) as the page reads it.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct TileSummary {
@@ -164,7 +204,7 @@ pub struct TileSummary {
 }
 
 /// The mesh on show while a build runs, and what it is (see [`TileSummary::shown`]).
-#[derive(Serialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct Shown {
@@ -178,7 +218,7 @@ pub struct Shown {
     pub tier: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct SketchRef {
     pub id: u64,

@@ -445,7 +445,7 @@ fn the_slot_name_comes_from_the_file_until_the_plan_is_read() {
         "1x1-grass"
     );
     assert_eq!(Slot::new("my/tiles/a.dtile").name, "a");
-    let _ = Shared::new(&[]).snapshot_json();
+    let _ = Shared::new(&[]).snapshot();
 }
 
 #[test]
@@ -532,38 +532,26 @@ fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
         Root::new("Tests", RootKind::Library("tests/ground/".to_owned())),
     ];
     let shared = Shared::with_roots(roots, &[], &Options::default());
-    let listed = |s: &Shared| -> Vec<(String, Value, Value)> {
-        let v = s.snapshot_json();
-        v["tiles"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|t| t["root"] == 0)
-            .map(|t| {
-                (
-                    t["name"].as_str().unwrap().to_owned(),
-                    t["group"].clone(),
-                    t["status"].clone(),
-                )
-            })
+    let listed = |s: &Shared| -> Vec<(String, Option<String>, String)> {
+        s.snapshot()
+            .tiles
+            .into_iter()
+            .filter(|t| t.root == 0)
+            .map(|t| (t.name, t.group, t.status))
             .collect()
     };
     assert_eq!(
         listed(&shared),
         vec![
-            ("a".to_owned(), Value::Null, "idle".into()),
-            ("b".to_owned(), "ponds".into(), "idle".into())
+            ("a".to_owned(), None, "idle".to_owned()),
+            ("b".to_owned(), Some("ponds".to_owned()), "idle".to_owned())
         ]
     );
-    let snap = shared.snapshot_json();
-    assert_eq!(snap["roots"][0]["kind"], "dir");
-    assert_eq!(snap["roots"][1]["kind"], "library");
+    let snap = shared.snapshot();
+    assert_eq!(snap.roots[0].kind, "dir");
+    assert_eq!(snap.roots[1].kind, "library");
     assert!(
-        snap["tiles"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|t| t["root"] == 1),
+        snap.tiles.iter().any(|t| t.root == 1),
         "the library's test tiles are listed too"
     );
     assert!(
@@ -573,12 +561,11 @@ fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
 
     // a new tile joins; a deleted one leaves the list altogether
     let id_of = |s: &Shared, name: &str| {
-        s.snapshot_json()["tiles"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|t| t["root"] == 0 && t["name"] == name)
-            .map(|t| t["id"].as_str().unwrap().to_owned())
+        s.snapshot()
+            .tiles
+            .into_iter()
+            .find(|t| t.root == 0 && t.name == name)
+            .map(|t| t.id)
     };
     let a = id_of(&shared, "a").unwrap();
     assert_eq!(a, tile_id(&dir.join("a.dtile").to_string_lossy()));
@@ -1050,8 +1037,11 @@ fn routes_answer_without_a_socket() {
         &http::Request::build("GET", "/api/tiles", None, b""),
     ));
     assert_eq!(s, "200 OK");
-    assert_eq!(v["tiles"][0]["id"], id.as_str());
-    assert!(v["tiles"][0].get("index").is_none() && v["tiles"][0].get("gone").is_none());
+    // `Snapshot` is written, not read, by the program: the reply is read as the one raw JSON a key's absence is asked of
+    let wire: Value = serde_json::from_str(&v.wire().unwrap()).unwrap();
+    assert_eq!(wire["tiles"][0]["id"], id.as_str());
+    // raw wire on purpose: that the old `index` and `gone` keys are no longer sent is a fact about the wire
+    assert!(wire["tiles"][0].get("index").is_none() && wire["tiles"][0].get("gone").is_none());
     // no mesh yet; an unknown tile; a call without the token
     assert!(matches!(
         route(
@@ -1082,7 +1072,10 @@ fn routes_answer_without_a_socket() {
             b"{\"text\": \"x\"}",
         ),
     ));
-    assert_eq!((s, v["ok"].clone()), ("200 OK", Value::Bool(false)));
+    assert_eq!(
+        (s, v.read::<edit::CheckRes>().unwrap().ok),
+        ("200 OK", false)
+    );
     // the event stream is the one reply the server runs itself
     assert!(matches!(
         route(
@@ -1621,20 +1614,21 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
     let shared = Shared::with_roots(roots, &[], &Options::default()).with_home(dir.clone());
     // the page is told the printers there are: the library's and yours
-    let snap = shared.snapshot_json();
-    let names: Vec<(&str, bool)> = snap["printers"]
-        .as_array()
-        .unwrap()
+    let snap = shared.snapshot();
+    let names: Vec<(&str, bool)> = snap
+        .printers
         .iter()
-        .map(|p| (p["name"].as_str().unwrap(), p["mine"].as_bool().unwrap()))
+        .map(|p| match p {
+            plan::PrinterRow::Read(p) => (p.name.as_str(), p.mine),
+            plan::PrinterRow::Broken(b) => panic!("a printer that does not read: {b:?}"),
+        })
         .collect();
     assert!(names.contains(&("default", false)), "{names:?}");
     assert!(names.contains(&("fine", false)), "{names:?}");
     assert!(names.contains(&("mine", true)), "{names:?}");
-    assert_eq!(snap["printer"], "default");
+    assert_eq!(snap.printer, "default");
     // one tile has been built
-    let id = shared.snapshot_json()["tiles"].as_array().map(|t| t.len());
-    assert_eq!(id, Some(0));
+    assert_eq!(shared.snapshot().tiles.len(), 0);
     {
         let mut tiles = lock(&shared.tiles);
         let mut t = Slot::new("lib:tests/ground/1x1-flat.dtile");
@@ -1642,12 +1636,12 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
         tiles.push(t);
     }
     assert!(shared.set_target(None, Some("mine")).is_ok());
-    let snap = shared.snapshot_json();
-    assert_eq!(snap["printer"], "mine");
-    assert_eq!(snap["system"], "db");
+    let snap = shared.snapshot();
+    assert_eq!(snap.printer, "mine");
+    assert_eq!(snap.system, "db");
     // the gate's angles are the chosen printer's
-    assert!((snap["overhangDeg"].as_f64().unwrap() - 50.0).abs() < 1e-9);
-    assert!((snap["steepestDeg"].as_f64().unwrap() - 62.0).abs() < 1e-9);
+    assert!((snap.overhang_deg - 50.0).abs() < 1e-9);
+    assert!((snap.steepest_deg - 62.0).abs() < 1e-9);
     // the built tile is stale: it builds again for the new target
     assert!(lock(&shared.tiles).iter().all(|t| t.stale && t.changed()));
     assert_eq!(shared.options().target(), "db-mine");
@@ -1696,48 +1690,31 @@ fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
     let text = "dharmatiles version=1\ntile size=\"1x1\" {\n    stack {\n        dirtt\n    }\n}\n";
     let body = serde_json::json!({ "text": text }).to_string();
     let (s, v) = call("POST", &format!("/api/tiles/{id}/check"), body.as_bytes());
-    assert_eq!((s, v["ok"].clone()), ("200 OK", Value::Bool(false)));
-    let e = &v["errors"][0];
-    assert!(e["code"].as_str().unwrap().starts_with("dt::"), "{e}");
-    assert_eq!(e["unexpected"], false, "a mistake in the document");
+    let v = v.read::<edit::CheckRes>().unwrap();
+    assert_eq!((s, v.ok), ("200 OK", false));
+    let e = &v.errors[0];
+    assert!(e.code.starts_with("dt::"), "{e:?}");
+    assert!(!e.unexpected, "a mistake in the document");
     // an internal failure: the file cannot be read; 500 and the reason
     let body = serde_json::json!({ "text": "x", "docRev": 1 }).to_string();
     let (s, v) = call("POST", &format!("/api/tiles/{id}/save"), body.as_bytes());
     assert_eq!(s, "500 Internal Server Error");
-    assert!(
-        v["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("cannot read"),
-        "{v}"
-    );
+    let v = v.failed().unwrap();
+    assert!(v.error.message.contains("cannot read"), "{v:?}");
     let (s, v) = call("GET", &format!("/api/tiles/{id}/text"), b"");
     assert_eq!(s, "500 Internal Server Error");
-    assert!(
-        v["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("cannot read"),
-        "{v}"
-    );
+    let v = v.failed().unwrap();
+    assert!(v.error.message.contains("cannot read"), "{v:?}");
     // a panic in a route: 500 naming it, and the next call is answered
     let (s, v) = call("GET", "/api/test-panic", b"");
     assert_eq!(s, "500 Internal Server Error");
-    assert!(
-        v["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("a test panic in a route"),
-        "{v}"
-    );
-    let e = &v["error"];
-    assert_eq!(e["kind"], "bug", "{v}");
-    assert_eq!(e["context"]["route"], "GET /api/test-panic");
-    assert!(
-        e["causes"][0].as_str().unwrap().starts_with("panicked at "),
-        "{v}"
-    );
-    let trace = e["backtrace"].as_str().unwrap();
+    let v = v.failed().unwrap();
+    assert!(v.error.message.contains("a test panic in a route"), "{v:?}");
+    let e = &v.error;
+    assert_eq!(e.kind, "bug", "{v:?}");
+    assert_eq!(e.context.route.as_deref(), Some("GET /api/test-panic"));
+    assert!(e.causes[0].starts_with("panicked at "), "{v:?}");
+    let trace = e.backtrace.as_str();
     assert!(!trace.is_empty(), "a bug carries the panic's stack");
     assert!(
         trace.contains("route"),
@@ -1747,16 +1724,20 @@ fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
     // the same shape for a failure with a chain of causes, a refusal and a bug
     let (s, v) = call("GET", "/api/test-failure", b"");
     assert_eq!(s, "500 Internal Server Error");
-    let e = &v["error"];
-    assert_eq!(e["kind"], "failure", "{v}");
-    assert_eq!(e["causes"].as_array().unwrap().len(), 3, "{v}");
-    assert!(!e["backtrace"].as_str().unwrap().is_empty(), "{v}");
+    let e = &v.failed().unwrap().error;
+    assert_eq!(e.kind, "failure", "{e:?}");
+    assert_eq!(e.causes.len(), 3, "{e:?}");
+    assert!(!e.backtrace.is_empty(), "{e:?}");
     let (s, v) = call("POST", "/api/tiles/nope/check", b"{}");
     assert_eq!(s, "404 Not Found");
-    assert_eq!(v["error"]["kind"], "refused", "{v}");
-    assert_eq!(v["error"]["context"]["route"], "POST /api/tiles/nope/check");
-    assert_eq!(v["error"]["context"]["tile"], "nope");
-    assert!(!v["error"]["backtrace"].as_str().unwrap().is_empty());
+    let e = &v.failed().unwrap().error;
+    assert_eq!(e.kind, "refused", "{e:?}");
+    assert_eq!(
+        e.context.route.as_deref(),
+        Some("POST /api/tiles/nope/check")
+    );
+    assert_eq!(e.context.tile.as_deref(), Some("nope"));
+    assert!(!e.backtrace.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

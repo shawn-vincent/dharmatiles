@@ -53,7 +53,7 @@ pub struct PlacesRemoveReq {
 }
 
 /// What `places/add` answers: the place added, or that the chooser was closed.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(untagged)]
 pub enum PlacesAddRes {
@@ -61,7 +61,7 @@ pub enum PlacesAddRes {
     Added(Box<PlaceAdded>),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct PlaceAdded {
     pub added: bool,
@@ -73,7 +73,7 @@ pub struct PlaceAdded {
 }
 
 /// A change to the places or their folders: the list as it now is.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Changed {
     /// The stream's revision once the change was told: the page has the change when its stream reaches it.
@@ -101,7 +101,7 @@ pub struct FolderNamedReq {
 }
 
 /// A folder made or renamed: its path below the place.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct FolderDone {
     /// The stream's revision once the change was told: the page has the change when its stream reaches it.
@@ -110,7 +110,7 @@ pub struct FolderDone {
 }
 
 /// Something moved to the Trash: what it was and the number its Undo goes by.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Trashed {
     /// The stream's revision once the change was told: the page has the change when its stream reaches it.
@@ -129,7 +129,7 @@ pub struct TrashUndoReq {
 }
 
 /// A tile (or folder) put back, with the list.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Restored {
     pub path: String,
@@ -140,7 +140,7 @@ pub struct Restored {
 }
 
 /// A file that appeared or moved: where, and which tile it is.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Listed {
     pub path: String,
@@ -149,7 +149,7 @@ pub struct Listed {
 }
 
 /// [`Listed`], with the list as it now is.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct ListedIn {
     pub path: String,

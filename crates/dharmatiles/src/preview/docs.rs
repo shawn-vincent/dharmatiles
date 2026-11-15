@@ -224,8 +224,9 @@ mod tests {
             .err()
             .unwrap();
         assert_eq!(status, "409 Conflict");
+        let body = body.failed().unwrap();
         assert_eq!(
-            (body["text"].as_str(), body["docRev"].as_u64()),
+            (body.text.as_deref(), body.doc_rev),
             (Some("c"), Some(rev + 2))
         );
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "c");

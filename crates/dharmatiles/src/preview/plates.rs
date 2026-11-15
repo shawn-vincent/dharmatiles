@@ -22,7 +22,6 @@ use dt_kit::{Material, TriMesh};
 use dt_print::plates::{self, Boxes, Context, Layout, Overrides, Plan};
 use dt_store::Tier;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use super::api::{Out, Reply};
 use super::edit::Done;
@@ -916,7 +915,7 @@ fn unplanned_ground(shared: &Shared) -> PlanGround {
     }
 }
 
-fn bad(msg: &str) -> (&'static str, Value) {
+fn bad(msg: &str) -> (&'static str, super::api::Body) {
     fail::refused("400 Bad Request", msg)
 }
 

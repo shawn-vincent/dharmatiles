@@ -204,11 +204,6 @@ pub(super) fn scene_of(shared: &Shared, path: &str, text: &str, rev: u64) -> Opt
         .map(|list| scene::read(shared, path, &list, rev).json)
 }
 
-/// [`scene_of`] as JSON, for the body of a 409.
-pub(super) fn scene_value(shared: &Shared, path: &str, text: &str, rev: u64) -> serde_json::Value {
-    serde_json::to_value(scene_of(shared, path, text, rev)).unwrap_or(serde_json::Value::Null)
-}
-
 /// The words a call may set on a piece.
 fn props_of(set: &PieceWords) -> Result<Vec<(&'static str, Option<Prop>)>, String> {
     let mut out = Vec::new();
