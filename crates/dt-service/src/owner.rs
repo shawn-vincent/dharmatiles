@@ -30,6 +30,7 @@
 //! ([`patch`]): the owner holds no function of its callers, and tells each change in the same step as it is made.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+#[cfg(not(target_arch = "wasm32"))]
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -1045,6 +1046,7 @@ impl<H: Host> Core<H> {
 
 /// The answer to a command, waited for.  The owner not answering means it has stopped: a failure of the program, not
 /// something to go on without.
+#[cfg(not(target_arch = "wasm32"))]
 fn answer<R>(rx: &Receiver<R>) -> R {
     match rx.recv() {
         Ok(r) => r,
