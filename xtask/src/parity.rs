@@ -44,29 +44,73 @@ pub fn run_parity(root: &Path) -> Result<(), String> {
             .map(|s| s.lines().map(str::to_owned).collect::<Vec<_>>())
             .map_err(|e| format!("not UTF-8: {e}"))
     };
-    let browser = capture(
-        Command::new("node")
-            .current_dir(root)
-            .arg("xtask/parity.mjs")
-            .arg(&bundle)
-            .args(&jobs),
-    )?;
-    let native = capture(
-        Command::new("cargo")
-            .current_dir(root)
-            .args([
-                "run",
-                "-q",
-                "--release",
-                "-p",
-                "dt-web",
-                "--example",
-                "parity",
-                "--",
-            ])
-            .arg(bundle.join(crate::wasm::read_manifest(&bundle)?.library))
-            .args(&jobs),
-    )?;
+    // the browser half is single-threaded wasm, one tile after another in a Node process: the tiles are spread over a
+    // few processes, and the native half runs beside them, so the run takes the slowest share and not the sum
+    let shards = std::thread::available_parallelism()
+        .map_or(4, |n| n.get() / 2)
+        .clamp(1, jobs.len().max(1));
+    let library = bundle.join(crate::wasm::read_manifest(&bundle)?.library);
+    let (shares, native) = std::thread::scope(|s| {
+        let native = s.spawn(|| {
+            capture(
+                Command::new("cargo")
+                    .current_dir(root)
+                    .args([
+                        "run",
+                        "-q",
+                        "--release",
+                        "-p",
+                        "dt-web",
+                        "--example",
+                        "parity",
+                        "--",
+                    ])
+                    .arg(&library)
+                    .args(&jobs),
+            )
+        });
+        let shares: Vec<_> = (0..shards)
+            .map(|k| {
+                // tile i goes to process i % shards, so each share's answers come back in its own order
+                let mine: Vec<&String> = jobs.iter().skip(k).step_by(shards).collect();
+                let bundle = &bundle;
+                s.spawn(move || {
+                    capture(
+                        Command::new("node")
+                            .current_dir(root)
+                            .arg("xtask/parity.mjs")
+                            .arg(bundle)
+                            .args(mine),
+                    )
+                })
+            })
+            .collect();
+        let shares: Vec<Result<Vec<u8>, String>> = shares
+            .into_iter()
+            .map(|h| {
+                h.join()
+                    .unwrap_or_else(|_| Err("a parity process panicked".to_owned()))
+            })
+            .collect();
+        let native = native
+            .join()
+            .unwrap_or_else(|_| Err("the native parity build panicked".to_owned()));
+        (shares, native)
+    });
+    let shares = shares
+        .into_iter()
+        .map(|r| r.and_then(lines))
+        .collect::<Result<Vec<_>, String>>()?;
+    // the answers back in the set's order: tile i is answer i / shards of share i % shards
+    let mut browser = Vec::with_capacity(jobs.len());
+    for i in 0..jobs.len() {
+        let line = shares[i % shards]
+            .get(i / shards)
+            .ok_or_else(|| format!("parity: the browser gave no answer for {}", jobs[i]))?;
+        browser.push(line.clone());
+    }
+    let browser = browser.join("\n").into_bytes();
+    let native = native?;
     let (browser, native) = (lines(browser)?, lines(native)?);
     if browser.len() != jobs.len() || native.len() != jobs.len() {
         return Err(format!(
