@@ -1,6 +1,6 @@
 ---
-source: crates/dt-eval/tests/golden.rs
-expression: hashes(b)
+source: crates/dt-eval/tests/tiles/golden.rs
+expression: hashes(built(path))
 ---
 edf853e5215fa88e  plan
 e9168fc51a7005b6  rock:tile/scatter/0
@@ -128,17 +128,17 @@ ff382110f74479e6  rock:tile/scatter/0
 a32def0dd9421747  rock:tile/scatter/0
 8f778d30ccb3d986  rock:tile/scatter/0
 ad3788e2e74f75ef  rock:tile/scatter/0
-4dbc1a7ab89ad2bc  cliff:tile/cliff/0
+51ad4b7f26cde280  cliff:tile/cliff/0
 838548feff88d9d0  cliff:tile/cliff/0
-77de6ec99c858da5  cliff:tile/cliff/0
-641083750fa95b31  cliff:tile/cliff/0
-0e1ead98811df13b  cliff:tile/cliff/0
+c09cc3ecd8618c0a  cliff:tile/cliff/0
+00eb499c0576e2b1  cliff:tile/cliff/0
+9036f4b65890d3b3  cliff:tile/cliff/0
 bdb5764227be8f4a  cliff:tile/cliff/0
-78a3bd88fb07217a  cliff:tile/cliff/0
+6a55a345a585af94  cliff:tile/cliff/0
 7e204adf998485f7  cliff:tile/cliff/0
 961f281c50654ed1  cliff:tile/cliff/0
-421db9a30025b982  cliff:tile/cliff/0
-b955f2dc0bbeb86b  cliff:tile/cliff/0
+843e82532785d963  cliff:tile/cliff/0
+07650681e97f7ebd  cliff:tile/cliff/0
 43d579a890542bbb  cliff:tile/cliff/0
 45c9deab00d62faa  cliff:tile/cliff/0
 16e9b1f86e99ca5c  cliff:tile/cliff/0
@@ -148,17 +148,17 @@ f5a0114f6ee0f083  cliff:tile/cliff/0
 0964b0a8e15c18ac  cliff:tile/cliff/0
 a78a1e0b1284d908  cliff:tile/cliff/0
 875556b35777ef8a  cliff:tile/cliff/0
-db6d8c05f67f99d5  cliff:tile/cliff/0
-b0a4bf9af6e03cf7  cliff:tile/cliff/0
+1f5333ac30cf6f54  cliff:tile/cliff/0
+95d64495b3481440  cliff:tile/cliff/0
 0f65504ca8497036  cliff:tile/cliff/0
 bf7f24f2f9140596  cliff:tile/cliff/0
 458d38e08bde9e34  cliff:tile/cliff/0
-587b931e95ef24ef  cliff:tile/cliff/0
+f785c2ef0ab8201d  cliff:tile/cliff/0
 97d440d249f645da  cliff:tile/cliff/0
 cd1bd43f2dd88913  cliff:tile/cliff/0
 d106dec5f81fb1dc  cliff:tile/cliff/0
-208c79a70acc6d89  surface
-b4c1642243d1ce6e  terrain:tile/terrain
+dd8a61f5ef6bf8ba  surface
+ee9338f5e00afe7e  terrain:tile/terrain
 5d71edc053639b52  rock:tile/scatter/1
 a1089d52fce68023  rock:tile/scatter/1
 f70fed9c59e7e4df  rock:tile/scatter/1
@@ -186,5 +186,5 @@ dbcfbd0c82444772  rock:tile/scatter/1
 9b958f60d4823c5a  rock:tile/scatter/1
 2ce1cdad06dbbe5a  rock:tile/scatter/1
 df3311b61d160185  connector:tile/connector
-5686eb8d3efc788c  union
-736b5e27371d7066  export
+2a183779194f389d  union
+c992aaf88aa43694  export

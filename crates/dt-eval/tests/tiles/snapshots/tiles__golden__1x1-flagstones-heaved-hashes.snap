@@ -1,11 +1,11 @@
 ---
-source: crates/dt-eval/tests/golden.rs
-expression: hashes(b)
+source: crates/dt-eval/tests/tiles/golden.rs
+expression: hashes(built(path))
 ---
 0623ea2bd4ba3c2a  plan
-929107a21483dbc9  floor:tile/flagstones/0
+73e6d777935659fe  floor:tile/flagstones/0
 e28ad63e7367842c  surface
 7ff271f67f760064  terrain:tile/terrain
 f7653a612bb4f2ea  connector:tile/connector
-8ec9a2d268050565  union
+08ad06edfeb4aa5a  union
 309f473affe6d188  export

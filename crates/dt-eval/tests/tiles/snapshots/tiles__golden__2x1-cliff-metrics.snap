@@ -4,23 +4,23 @@ expression: metrics(b)
 ---
 {
   "audit": {
-    "triangles": 1376018,
-    "vertices": 687835,
-    "volume_mm3": 61032.125,
+    "triangles": 1385196,
+    "vertices": 692414,
+    "volume_mm3": 61033.866,
     "watertight": true,
-    "bodies": 133,
+    "bodies": 134,
     "dropped": [],
     "repairs": {
-      "voids_filled": 132,
-      "pinches_moved": 3462,
+      "voids_filled": 133,
+      "pinches_moved": 3524,
       "slivers": 0,
       "collapsed": 0,
       "dropped": 0
     },
-    "overhang_mm2": 0.051,
-    "overhang_budget_mm2": 7.304,
-    "band_mm2": 0.175,
-    "band_budget_mm2": 7.304,
+    "overhang_mm2": 0.104,
+    "overhang_budget_mm2": 7.31,
+    "band_mm2": 0.238,
+    "band_budget_mm2": 7.31,
     "holes": 0,
     "failures": []
   },
