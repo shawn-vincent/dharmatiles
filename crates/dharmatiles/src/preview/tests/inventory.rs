@@ -300,9 +300,7 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     assert!(!h.dir.join("inventory.dinv").exists());
     // a call needs the token
     let body = h.have_req("glade.dtile", ColourWord::Single, None);
-    assert!(
-        post_head(&h.r, "/api/inventory/have", None, None, &body).starts_with("HTTP/1.1 403")
-    );
+    assert!(post_head(&h.r, "/api/inventory/have", None, None, &body).starts_with("HTTP/1.1 403"));
     // a bad colour is refused, nothing written (a word no type can say, so the body is the wire's own)
     let raw = format!(r#"{{"tile":{:?},"colour":"rainbow"}}"#, h.id("glade.dtile"));
     let (head, _) = post_raw(&h.r, "/api/inventory/have", Some(&h.token), None, &raw);
@@ -420,10 +418,7 @@ fn the_sheet_after_a_print_adds_the_plate_good_and_failed_and_the_plates_shrink(
         t.status == "ready" && plates_planned(t).is_some_and(|p| p.kinds[0].planned.have == 2)
     });
     let p = plates_planned(&t).unwrap();
-    assert_eq!(
-        (p.kinds[0].planned.want, p.kinds[0].planned.count),
-        (3, 1)
-    );
+    assert_eq!((p.kinds[0].planned.want, p.kinds[0].planned.count), (3, 1));
     assert_eq!(p.layout[0].pieces.len(), 1);
     // the switch: everything prints again, written in the list's plates line
     let _: lists::ListEdited = h.edited("/api/plates/set", &kit, |doc_rev| {
@@ -678,10 +673,7 @@ fn undo_is_refused_when_the_file_changed_since_the_edit() {
         Some(other.as_str()),
         "the answer carries the file as it is"
     );
-    assert!(
-        v.error.message.contains("changed since this edit"),
-        "{v:?}"
-    );
+    assert!(v.error.message.contains("changed since this edit"), "{v:?}");
     assert_eq!(
         std::fs::read_to_string(&file).unwrap(),
         other,
@@ -702,8 +694,7 @@ fn undo_is_refused_when_the_file_changed_since_the_edit() {
 fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     let h = start_home("lists", &[("glade.dtile", GLADE)]);
     // a new list in My tiles: an empty map for the printer last chosen, never over a file
-    let (head, v): (String, places::Listed) =
-        h.call("/api/lists/new", &new_list("Crossing", None));
+    let (head, v): (String, places::Listed) = h.call("/api/lists/new", &new_list("Crossing", None));
     assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
     let text = std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap();
     assert!(
@@ -733,12 +724,13 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     });
     // count and remove through the panel's calls, Undo by restore
     // the pieces are named by id (the editor wrote them), and nothing needs saying
-    let c: lists::ListEdited = h.edited("/api/lists/count", &list, |doc_rev| lists::ListsCountReq {
-        list: list.clone(),
-        id: "p1".to_owned(),
-        count: 5,
-        doc_rev,
-    });
+    let c: lists::ListEdited =
+        h.edited("/api/lists/count", &list, |doc_rev| lists::ListsCountReq {
+            list: list.clone(),
+            id: "p1".to_owned(),
+            count: 5,
+            doc_rev,
+        });
     assert!(c.note.is_none(), "{c:?}");
     assert!(
         std::fs::read_to_string(h.dir.join("Crossing.dmap"))
@@ -755,10 +747,12 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
         .0
         .starts_with("HTTP/1.1 400")
     );
-    let r: lists::ListEdited = h.edited("/api/lists/remove", &list, |doc_rev| lists::ListsRemoveReq {
-        list: list.clone(),
-        id: "p1".to_owned(),
-        doc_rev,
+    let r: lists::ListEdited = h.edited("/api/lists/remove", &list, |doc_rev| {
+        lists::ListsRemoveReq {
+            list: list.clone(),
+            id: "p1".to_owned(),
+            doc_rev,
+        }
     });
     assert!(r.note.is_none(), "ids are written once: {r:?}");
     assert!(
@@ -912,10 +906,7 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     );
     // an edit made against an older revision is refused with the file as it is
     let stale = b.edited.doc_rev - 1;
-    let (head, v) = h.refused(
-        "/api/maps/set",
-        &set_req(&list, "p1", rot_words(90), stale),
-    );
+    let (head, v) = h.refused("/api/maps/set", &set_req(&list, "p1", rot_words(90), stale));
     assert!(head.starts_with("HTTP/1.1 409"), "{head} {v:?}");
     assert_eq!(v.doc_rev, Some(b.edited.doc_rev));
     assert_eq!(
@@ -1031,10 +1022,11 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
         !text.contains("p5") && !text.contains("pin "),
         "the piece goes with its pin: {text}"
     );
-    let u: lists::ListEdited = h.edited("/api/maps/unpin-all", &list, |doc_rev| maps::MapsListReq {
-        list: list.clone(),
-        doc_rev,
-    });
+    let u: lists::ListEdited =
+        h.edited("/api/maps/unpin-all", &list, |doc_rev| maps::MapsListReq {
+            list: list.clone(),
+            doc_rev,
+        });
     // undo through the print lists' restore, the scene answered at once
     let r: lists::ListEdited = h.ok(
         "/api/lists/restore",
@@ -1159,13 +1151,7 @@ fn two_edits_asking_for_the_same_square_end_on_two_squares_and_each_says_where_i
             rot: Some(0),
             ..add_piece_req(&list, &tile, rev)
         };
-        post_raw(
-            &h.r,
-            "/api/maps/add",
-            Some(&h.token),
-            None,
-            &wire(&req),
-        )
+        post_raw(&h.r, "/api/maps/add", Some(&h.token), None, &wire(&req))
     };
     let (a, b) = std::thread::scope(|s| {
         let x = s.spawn(|| asks(&h, rev));

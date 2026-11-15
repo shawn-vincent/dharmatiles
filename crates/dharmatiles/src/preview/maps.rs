@@ -48,7 +48,11 @@ where
 #[serde(deny_unknown_fields)]
 pub struct PieceWords {
     /// Where, as written: `(2sq, 1sq)`.
-    #[serde(default, deserialize_with = "word", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "word",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(test, ts(type = "string | null", optional))]
     pub at: Option<Option<String>>,
     /// Instead of `at`: the nearest free square to this point, settled by the program in the write.
@@ -58,21 +62,41 @@ pub struct PieceWords {
     #[serde(default, rename = "freshSeed", skip_serializing_if = "Option::is_none")]
     pub fresh_seed: Option<bool>,
     /// Quarter turns clockwise, in degrees: 0, 90, 180, 270.
-    #[serde(default, deserialize_with = "word", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "word",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(test, ts(type = "number | null", optional))]
     pub rot: Option<Option<i64>>,
     /// A height: a `$` name or a length.
-    #[serde(default, deserialize_with = "word", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "word",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(test, ts(type = "string | null", optional))]
     pub bottom: Option<Option<String>>,
-    #[serde(default, deserialize_with = "word", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "word",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(test, ts(type = "number | null", optional))]
     pub seed: Option<Option<i64>>,
     /// `missing`, or the default (no word).
-    #[serde(default, deserialize_with = "word", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "word",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(test, ts(type = "string | null", optional))]
     pub print: Option<Option<String>>,
-    #[serde(default, deserialize_with = "word", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "word",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[cfg_attr(test, ts(type = "string | null", optional))]
     pub system: Option<Option<String>>,
 }

@@ -14,7 +14,7 @@ const ISSUES: &str = "https://github.com/shawn-vincent/dharmatiles/issues/new";
 pub(crate) const URL_LIMIT: usize = 8000;
 
 /// A report ready to file; also `GET /api/messages/report` on the wire.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Report {
     pub url: String,

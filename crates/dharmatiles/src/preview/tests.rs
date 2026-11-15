@@ -704,18 +704,6 @@ fn post_head<Q: Serialize>(
     post_raw(r, path, token, origin, &wire(body)).0
 }
 
-/// The calls not yet typed: a `json!` body sent and the reply held as a `Value` (the key reads D3 has not reached).
-fn post_value(
-    r: &Running,
-    path: &str,
-    token: Option<&str>,
-    origin: Option<&str>,
-    body: &str,
-) -> (String, Value) {
-    let (head, body) = post_raw(r, path, token, origin, body);
-    (head, serde_json::from_slice(&body).unwrap_or(Value::Null))
-}
-
 /// A request type as the JSON the page sends.
 fn wire<Q: Serialize>(body: &Q) -> String {
     serde_json::to_string(body).unwrap()
@@ -993,18 +981,25 @@ fn the_colouring_of_a_text_comes_from_the_languages_one_set_of_rules() {
 #[test]
 fn a_draft_is_a_request_answered_with_its_mesh() {
     let r = start(&[FLAT], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let t = token["token"].as_str().unwrap().to_owned();
+    let t = session_token(&r);
     let text = dt_eval::Files.read(FLAT).unwrap();
     let path = format!("/api/tiles/{}/draft", id0(&r));
-    let body = serde_json::json!({ "text": text }).to_string();
+    let body = wire(&edit::DraftReq {
+        text: text.clone(),
+        file: None,
+        debug: None,
+    });
     let (h, mesh) = post_raw(&r, &path, Some(&t), None, &body);
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     assert_eq!(&mesh[..4], payload::MAGIC);
     let tile = &tiles(&r).tiles[0];
     assert_eq!(tile.mesh_version, None, "a draft is not the tile's build");
     // a mistake in the text is a 422, not a mesh
-    let bad = serde_json::json!({ "text": "dharmatiles version=1\ntile size=\"1x1\" { stack { durt } }" }).to_string();
+    let bad = wire(&edit::DraftReq {
+        text: "dharmatiles version=1\ntile size=\"1x1\" { stack { durt } }".to_owned(),
+        file: None,
+        debug: None,
+    });
     let (h, _) = post_raw(&r, &path, Some(&t), None, &bad);
     assert!(h.starts_with("HTTP/1.1 422"), "{h}");
     // nothing is written, and the tile never grew a draft route of its own
@@ -1090,10 +1085,11 @@ fn routes_answer_without_a_socket() {
         &http::Request::build("GET", "/api/tiles", None, b""),
     ));
     assert_eq!(s, "200 OK");
-    // `Snapshot` is written, not read, by the program: the reply is read as the one raw JSON a key's absence is asked of
+    let snap: Snapshot = read(v.wire().unwrap().as_bytes());
+    assert_eq!(snap.tiles[0].id, id);
+    // raw wire on purpose: that the old `index` and `gone` keys are no longer sent is a fact about the wire (a key's
+    // absence, which no type can say)
     let wire: Value = serde_json::from_str(&v.wire().unwrap()).unwrap();
-    assert_eq!(wire["tiles"][0]["id"], id.as_str());
-    // raw wire on purpose: that the old `index` and `gone` keys are no longer sent is a fact about the wire
     assert!(wire["tiles"][0].get("index").is_none() && wire["tiles"][0].get("gone").is_none());
     // no mesh yet; an unknown tile; a call without the token
     assert!(matches!(
@@ -1153,57 +1149,127 @@ fn a_stream_resumes_from_its_last_revision_or_starts_over() {
         epoch: Some(epoch.to_owned()),
         since: Some(since),
     };
-    let msgs = |rx: &std::sync::mpsc::Receiver<String>| -> Vec<Value> {
-        rx.try_iter()
-            .map(|m| serde_json::from_str(&m).unwrap())
-            .collect()
+    let msgs = |rx: &std::sync::mpsc::Receiver<String>| -> Vec<StreamEvent> {
+        rx.try_iter().map(|m| read(m.as_bytes())).collect()
     };
     let first = msgs(&shared.subscribe(&route::Resume {
         epoch: None,
         since: None,
     }));
-    assert_eq!(first[0]["type"], "snapshot");
-    let (epoch, rev) = (
-        first[0]["epoch"].as_str().unwrap().to_owned(),
-        first[0]["rev"].as_u64().unwrap(),
-    );
+    let StreamEvent::Snapshot(whole) = &first[0] else {
+        panic!("the stream begins with the whole: {:?}", first[0]);
+    };
+    let (epoch, rev) = (whole.epoch.clone(), whole.rev);
 
     // nothing changed: resumed, and nothing else
     let m = msgs(&shared.subscribe(&resume(&epoch, rev)));
     assert_eq!(m.len(), 1);
-    assert_eq!(m[0]["type"], "resumed");
+    assert!(matches!(m[0], StreamEvent::Resumed { .. }), "{m:?}");
 
     // a tile changed twice: one event, as it is now
     shared.want(&id);
     shared.update(&id, |t| t.status = State::Building);
     shared.update(&id, |t| t.status = State::Ready);
     let m = msgs(&shared.subscribe(&resume(&epoch, rev)));
-    assert_eq!(
-        m.iter()
-            .map(|v| v["type"].as_str().unwrap())
-            .collect::<Vec<_>>(),
-        ["resumed", "tile"]
-    );
-    assert_eq!(m[1]["tile"]["status"], "ready");
-    assert!(m[1]["rev"].as_u64().unwrap() >= rev + 2);
+    assert_eq!(m.len(), 2, "{m:?}");
+    assert!(matches!(m[0], StreamEvent::Resumed { .. }), "{m:?}");
+    let StreamEvent::Tile {
+        rev: told, tile, ..
+    } = &m[1]
+    else {
+        panic!("not a tile: {:?}", m[1]);
+    };
+    assert_eq!(tile.status, "ready");
+    assert!(*told >= rev + 2);
 
     // the list changed: a fresh snapshot
     std::fs::write(dir.join("b.dtile"), &text).unwrap();
     assert!(shared.rescan());
     let m = msgs(&shared.subscribe(&resume(&epoch, rev)));
-    assert_eq!(m[0]["type"], "snapshot");
-    assert_eq!(m[0]["tiles"].as_array().unwrap().len(), 2);
+    let StreamEvent::Snapshot(whole) = &m[0] else {
+        panic!("a changed list is a fresh snapshot: {:?}", m[0]);
+    };
+    assert_eq!(whole.tiles.len(), 2);
 
     // another run, or a revision from the future: a snapshot too
-    assert_eq!(
-        msgs(&shared.subscribe(&resume("other", rev)))[0]["type"],
-        "snapshot"
-    );
-    assert_eq!(
-        msgs(&shared.subscribe(&resume(&epoch, 9999)))[0]["type"],
-        "snapshot"
-    );
+    assert!(matches!(
+        msgs(&shared.subscribe(&resume("other", rev)))[0],
+        StreamEvent::Snapshot(_)
+    ));
+    assert!(matches!(
+        msgs(&shared.subscribe(&resume(&epoch, 9999)))[0],
+        StreamEvent::Snapshot(_)
+    ));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A check of `text` as the tile `id` reads it.
+fn check_as(r: &Running, token: &str, id: &str, text: &str) -> edit::CheckRes {
+    let (h, v) = post::<_, edit::CheckRes>(
+        r,
+        &format!("/api/tiles/{id}/check"),
+        Some(token),
+        None,
+        &edit::TextReq {
+            text: text.to_owned(),
+            file: None,
+        },
+    );
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v:?}");
+    v
+}
+
+/// An edit as the page makes it, answered: the status line and the new text.
+fn edit_call(
+    r: &Running,
+    token: &str,
+    read: Option<String>,
+    op: edit::EditOp,
+) -> (String, edit::EditRes) {
+    post(
+        r,
+        "/api/edit",
+        Some(token),
+        None,
+        &edit::EditReq { read, op },
+    )
+}
+
+/// An edit of `text` (read at its own revision) that must succeed.
+fn edited(r: &Running, token: &str, text: &str, op: edit::EditOp) -> edit::EditRes {
+    let (h, v) = edit_call(r, token, Some(rev(text)), op);
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v:?}");
+    v
+}
+
+/// An edit that is refused: the status line and the error body.
+fn edit_refused(
+    r: &Running,
+    token: &str,
+    read: Option<String>,
+    op: edit::EditOp,
+) -> (String, ErrorBody) {
+    post_err(
+        r,
+        "/api/edit",
+        Some(token),
+        None,
+        &edit::EditReq { read, op },
+    )
+}
+
+/// `POST /api/target`: the status line.
+fn target_head(r: &Running, token: &str, system: Option<&str>, printer: Option<&str>) -> String {
+    post_head(
+        r,
+        "/api/target",
+        Some(token),
+        None,
+        &edit::TargetReq {
+            system: system.map(str::to_owned),
+            printer: printer.map(str::to_owned),
+        },
+    )
 }
 
 #[test]
@@ -1215,46 +1281,52 @@ fn the_editor_places_and_takes_out_nodes_and_maps_the_tile() {
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let call =
-        |path: &str, body: Value| post_value(&r, path, Some(&token), None, &body.to_string()).1;
+    let token = session_token(&r);
     // a rock placed: the end of the stack, and where it starts
-    let v = call(
-        "/api/edit",
-        serde_json::json!({ "text": text, "read": rev(text), "op": "insert", "place": "stack", "node": "rock at=\"(0.3sq, 0.4sq)\"" }),
+    let v = edited(
+        &r,
+        &token,
+        text,
+        edit::EditOp::Insert {
+            text: text.to_owned(),
+            node: "rock at=\"(0.3sq, 0.4sq)\"".to_owned(),
+            place: Some(edit::InsertPlace::Stack),
+            id: None,
+        },
     );
-    let placed = v["text"].as_str().unwrap().to_owned();
-    let at = usize::try_from(v["at"].as_u64().unwrap()).unwrap();
-    assert!(placed[at..].starts_with("rock at="), "{v}");
+    let placed = v.text.clone();
+    let at = v.at.unwrap();
+    assert!(placed[at..].starts_with("rock at="), "{v:?}");
     // and taken out again
-    assert_eq!(v["id"], "tile/stack/rock", "{v}");
-    let v = call(
-        "/api/edit",
-        serde_json::json!({ "text": placed, "read": rev(&placed), "op": "remove", "id": v["id"] }),
+    assert_eq!(v.id.as_deref(), Some("tile/stack/rock"), "{v:?}");
+    let v = edited(
+        &r,
+        &token,
+        &placed,
+        edit::EditOp::Remove {
+            text: placed.clone(),
+            id: v.id.clone().unwrap(),
+        },
     );
-    assert_eq!(v["text"].as_str().unwrap(), text);
+    assert_eq!(v.text, text);
     // the map: the line's points where they are written, the region's area
-    let v = call(
-        &format!("/api/tiles/{}/check", id0(&r)),
-        serde_json::json!({ "text": text }),
-    );
-    let map = &v["map"];
-    let line = &map["lines"][0];
-    assert_eq!(line["name"], "shore");
-    let p = &line["points"][1];
-    let s = usize::try_from(p["span"][0].as_u64().unwrap()).unwrap();
+    let v = check_as(&r, &token, &id0(&r), text);
+    let map = v.map.as_ref().unwrap();
+    let line = &map.lines[0];
+    assert_eq!(line.name, "shore");
+    let p = &line.points[1];
+    let s = p.span[0];
     assert_eq!(&text[s..][..14], "\"(1sq, 0.5sq)\"");
-    assert_eq!(p["at"], serde_json::json!([1.0, 0.5]));
-    assert_eq!(line["points"][0]["text"], "west");
-    let pool = &map["regions"][0];
-    let n = pool["nx"].as_u64().unwrap();
-    let bits = pool["bits"].as_str().unwrap().as_bytes();
-    assert_eq!(bits.len() as u64, n * pool["ny"].as_u64().unwrap());
+    assert_eq!(p.at, Some([1.0, 0.5]));
+    assert_eq!(line.points[0].text, "west");
+    let pool = &map.regions[0];
+    let n = pool.nx;
+    let bits = pool.bits.as_bytes();
+    assert_eq!(bits.len(), n * pool.ny);
     // south of the shore is the pool, north of it is not
-    assert_eq!(bits[usize::try_from(n * 2 + n / 2).unwrap()], b'1');
-    assert_eq!(bits[usize::try_from(n * (n - 3) + n / 2).unwrap()], b'0');
-    assert_eq!(pool["fills"][0]["at"], serde_json::json!([0.5, 0.2]));
+    assert_eq!(bits[n * 2 + n / 2], b'1');
+    assert_eq!(bits[n * (n - 3) + n / 2], b'0');
+    assert_eq!(pool.fills[0].at, Some([0.5, 0.2]));
 }
 
 #[test]
@@ -1266,40 +1338,34 @@ fn the_map_carries_the_tiles_own_controls() {
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let v = post_value(
-        &r,
-        &format!("/api/tiles/{}/check", id0(&r)),
-        Some(&token),
-        None,
-        &serde_json::json!({ "text": text }).to_string(),
-    )
-    .1;
-    let own = &v["map"]["tile"];
-    assert_eq!(own["at"], text.find("\ntile").unwrap() + 1, "{v}");
-    let seed = own["controls"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["name"] == "seed")
-        .unwrap();
-    let s = usize::try_from(seed["span"][0].as_u64().unwrap()).unwrap();
+    let token = session_token(&r);
+    let v = check_as(&r, &token, &id0(&r), text);
+    let own = v.map.as_ref().unwrap().tile.as_ref().unwrap();
+    assert_eq!(own.at, text.find("\ntile").unwrap() + 1, "{v:?}");
+    let seed = own.controls.iter().find(|c| c.name == "seed").unwrap();
+    let s = seed.span[0];
     assert_eq!(&text[s..=s], "7");
-    assert_eq!(seed["text"], "7");
+    assert_eq!(seed.text, "7");
     // the description and the tile's own heights, where they are written
-    let a = &own["about"]["value"];
-    let s = usize::try_from(a["span"][0].as_u64().unwrap()).unwrap();
+    let a = own.about.as_ref().unwrap().value.as_ref().unwrap();
+    let s = a.span[0];
     assert_eq!(&text[s..s + 8], "\"A bank\"");
-    assert_eq!(a["text"], "\"A bank\"");
-    let heights = own["heights"].as_array().unwrap();
-    let has = |name: &str, value: f64, from: &str| {
-        heights
+    assert_eq!(a.text, "\"A bank\"");
+    let has = |name: &str, value: f64, from: dt_eval::map::HeightFrom| {
+        own.heights
             .iter()
-            .any(|h| h["name"] == name && h["value"] == value && h["from"] == from)
+            .any(|h| h.name == name && h.value == Some(value) && h.from == from)
     };
-    assert!(has("foot", 4.0, "tile"), "{heights:?}");
-    assert!(has("$dirtEdgeHeight", 3.4, "library"), "{heights:?}");
+    assert!(
+        has("foot", 4.0, dt_eval::map::HeightFrom::Tile),
+        "{:?}",
+        own.heights
+    );
+    assert!(
+        has("$dirtEdgeHeight", 3.4, dt_eval::map::HeightFrom::Library),
+        "{:?}",
+        own.heights
+    );
 }
 
 #[test]
@@ -1312,50 +1378,68 @@ fn a_length_prints_what_the_program_says_on_the_target_and_a_printed_size_is_wri
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let call = |p: &str, body: Value| post_value(&r, p, Some(&token), None, &body.to_string());
-    let ask = |items: Value| {
-        let (h, v) = call(
-            &format!("/api/tiles/{}/printed", id0(&r)),
-            serde_json::json!({ "text": text, "items": items }),
-        );
-        assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
-        v["items"].clone()
+    let token = session_token(&r);
+    let item = |element: &str, control: &str, typed: &str| edit::PrintedItem {
+        element: element.to_owned(),
+        control: control.to_owned(),
+        typed: typed.to_owned(),
     };
-    let items = serde_json::json!([
-        { "element": "rock", "control": "size", "typed": "7dmm" },
-        { "element": "rock", "control": "size", "typed": "3.5dmm .. 6.5dmm" },
-        { "element": "dirt", "control": "top", "typed": "$groundHeight + 4dmm" },
-        { "element": "rock", "control": "size", "typed": "1sq" },
-        { "element": "rock", "control": "count", "typed": "3" },
-    ]);
+    let items = || {
+        vec![
+            item("rock", "size", "7dmm"),
+            item("rock", "size", "3.5dmm .. 6.5dmm"),
+            item("dirt", "top", "$groundHeight + 4dmm"),
+            item("rock", "size", "1sq"),
+            item("rock", "count", "3"),
+        ]
+    };
+    let ask = || {
+        let (h, v) = post::<_, edit::PrintedRes>(
+            &r,
+            &format!("/api/tiles/{}/printed", id0(&r)),
+            Some(&token),
+            None,
+            &edit::PrintedReq {
+                text: text.to_owned(),
+                items: items(),
+            },
+        );
+        assert!(h.starts_with("HTTP/1.1 200"), "{h} {v:?}");
+        v.items
+    };
+    let ends = |s: &Option<edit::PrintedSize>| s.as_ref().unwrap().ends.clone();
     // DungeonBlocks: dmm prints as itself, so only the formula (the tile's own
     // height) and sq show
-    let v = ask(items.clone());
-    assert!(v[0].is_null() && v[1].is_null() && v[4].is_null(), "{v}");
-    assert_eq!(v[2]["ends"], serde_json::json!(["10"]), "{v}");
-    assert_eq!(v[2]["editable"], false);
-    assert_eq!(v[3]["ends"], serde_json::json!(["35"]));
+    let v = ask();
+    assert!(v[0].is_none() && v[1].is_none() && v[4].is_none(), "{v:?}");
+    assert_eq!(ends(&v[2]), ["10"], "{v:?}");
+    assert!(!v[2].as_ref().unwrap().editable);
+    assert_eq!(ends(&v[3]), ["35"]);
     // OpenLOCK: every dmm length shows
-    let (h, _) = call("/api/target", serde_json::json!({ "system": "ol" }));
+    let h = target_head(&r, &token, Some("ol"), None);
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
-    let v = ask(items);
-    assert_eq!(v[0]["ends"], serde_json::json!(["5.08"]), "{v}");
-    assert_eq!(v[0]["editable"], true);
-    assert_eq!(v[1]["ends"], serde_json::json!(["2.54", "4.72"]), "{v}");
-    assert_eq!(v[2]["ends"], serde_json::json!(["7.26"]), "{v}");
-    assert_eq!(v[3]["ends"], serde_json::json!(["25.4"]));
+    let v = ask();
+    assert_eq!(ends(&v[0]), ["5.08"], "{v:?}");
+    assert!(v[0].as_ref().unwrap().editable);
+    assert_eq!(ends(&v[1]), ["2.54", "4.72"], "{v:?}");
+    assert_eq!(ends(&v[2]), ["7.26"], "{v:?}");
+    assert_eq!(ends(&v[3]), ["25.4"]);
     // typing a printed size writes the value's own unit; a formula refuses
-    let (h, v) = call(
+    let set = |typed: &str| edit::PrintedSetReq {
+        typed: typed.to_owned(),
+        end: 0,
+        mm: 5.0,
+    };
+    let (h, v) =
+        post::<_, edit::PrintedSetRes>(&r, "/api/printed-set", Some(&token), None, &set("7dmm"));
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v:?}");
+    assert_eq!(v.typed, "6.89dmm");
+    let h = post_head(
+        &r,
         "/api/printed-set",
-        serde_json::json!({ "typed": "7dmm", "end": 0, "mm": 5.0 }),
-    );
-    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
-    assert_eq!(v["typed"], "6.89dmm");
-    let (h, _) = call(
-        "/api/printed-set",
-        serde_json::json!({ "typed": "$groundHeight + 4dmm", "end": 0, "mm": 5.0 }),
+        Some(&token),
+        None,
+        &set("$groundHeight + 4dmm"),
     );
     assert!(h.starts_with("HTTP/1.1 422"), "{h}");
 }
@@ -1374,61 +1458,71 @@ fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_writte
     .unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let call = |p: &str, body: Value| post_value(&r, p, Some(&token), None, &body.to_string());
+    let token = session_token(&r);
     // a target that is not one is refused
-    for bad in [
-        serde_json::json!({ "system": "lego" }),
-        serde_json::json!({ "printer": "no-such-printer" }),
-        serde_json::json!({ "system": "both" }),
+    for (system, printer) in [
+        (Some("lego"), None),
+        (None, Some("no-such-printer")),
+        (Some("both"), None),
     ] {
-        let (h, _) = call("/api/target", bad);
+        let h = target_head(&r, &token, system, printer);
         assert!(h.starts_with("HTTP/1.1 400"), "{h}");
     }
     assert_eq!(tiles(&r).system, "db");
     assert_eq!(tiles(&r).printer, "default");
+    let export = |req: edit::ExportReq| {
+        post::<_, edit::ExportRes>(
+            &r,
+            &format!("/api/tiles/{}/export", id0(&r)),
+            Some(&token),
+            None,
+            &req,
+        )
+    };
     // where it would go, without building
-    let (_, v) = call(
-        &format!("/api/tiles/{}/export", id0(&r)),
-        serde_json::json!({ "where": true }),
-    );
-    assert_eq!(v["out"], dir.join("out").to_string_lossy().as_ref(), "{v}");
+    let (_, v) = export(edit::ExportReq {
+        threemf: None,
+        ask_where: Some(true),
+    });
+    let edit::ExportRes::Where { out, .. } = &v else {
+        panic!("not a where: {v:?}");
+    };
+    assert_eq!(out, dir.join("out").to_string_lossy().as_ref(), "{v:?}");
     // the export is for the target the title bar's chip chose
-    let (h, _) = call("/api/target", serde_json::json!({ "system": "ol" }));
+    let h = target_head(&r, &token, Some("ol"), None);
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     assert_eq!(tiles(&r).system, "ol");
-    let (h, v) = call(
-        &format!("/api/tiles/{}/export", id0(&r)),
-        serde_json::json!({}),
-    );
-    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
-    assert_eq!(
-        v["build"]["audit"]["failures"],
-        serde_json::json!([]),
-        "{v}"
-    );
+    let (h, v) = export(edit::ExportReq {
+        threemf: None,
+        ask_where: None,
+    });
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v:?}");
+    let edit::ExportRes::Built(built) = &v else {
+        panic!("not a build: {v:?}");
+    };
+    assert!(built.build.audit.failures.is_empty(), "{v:?}");
     // the project's out/, by system and the tile's own name, not its folders
     let stl = dir.join("out/ol/flat-ol.stl");
-    assert!(stl.is_file(), "{v}");
+    assert!(stl.is_file(), "{v:?}");
     assert!(
-        v["files"]
-            .as_array()
-            .unwrap()
+        built
+            .files
             .iter()
             .any(|f| f == stl.to_string_lossy().as_ref())
     );
     // reveal: only a written STL or 3MF
-    let (h, _) = call(
-        "/api/reveal",
-        serde_json::json!({ "path": dir.join("dharmatiles.dtile") }),
-    );
-    assert!(h.starts_with("HTTP/1.1 400"), "{h}");
-    let (h, _) = call(
-        "/api/reveal",
-        serde_json::json!({ "path": dir.join("out/ol/none.stl") }),
-    );
-    assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+    for p in [dir.join("dharmatiles.dtile"), dir.join("out/ol/none.stl")] {
+        let h = post_head(
+            &r,
+            "/api/reveal",
+            Some(&token),
+            None,
+            &edit::RevealReq {
+                path: p.to_string_lossy().into_owned(),
+            },
+        );
+        assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+    }
 }
 
 #[test]
@@ -1462,46 +1556,46 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let call = |p: &str, body: Value| post_value(&r, p, Some(&token), None, &body.to_string()).1;
-    let v = call(
-        &format!("/api/tiles/{}/check", id0(&r)),
-        serde_json::json!({ "text": text }),
-    );
-    let line = &v["map"]["lines"][0]["sheet"];
-    assert_eq!(line["controls"][0]["name"], "wobble", "{v}");
-    assert_eq!(line["controls"][0]["text"], "\"5dmm\"");
-    assert_eq!(
-        line["through"]["text"],
-        "\"(0sq, 0.62sq)\" \"(1sq, 0.58sq)\""
-    );
-    let s = usize::try_from(line["through"]["span"][0].as_u64().unwrap()).unwrap();
+    let token = session_token(&r);
+    let v = check_as(&r, &token, &id0(&r), text);
+    let map = v.map.as_ref().unwrap();
+    let line = map.lines[0].sheet.as_ref().unwrap();
+    assert_eq!(line.controls[0].name, "wobble", "{v:?}");
+    assert_eq!(line.controls[0].text, "\"5dmm\"");
+    let through = line.through.as_ref().unwrap();
+    assert_eq!(through.text, "\"(0sq, 0.62sq)\" \"(1sq, 0.58sq)\"");
+    let s = through.span.unwrap()[0];
     assert!(text[s..].starts_with("\"(0sq, 0.62sq)\" \"(1sq, 0.58sq)\" }"));
-    let region = &v["map"]["regions"][1]["sheet"];
-    assert_eq!(region["boundedBy"]["text"], "shore");
-    assert_eq!(region["fill"]["text"], "\"(0.5sq, 0.25sq)\"");
-    let v = call(
-        "/api/edit",
-        serde_json::json!({ "op": "rename", "text": text, "read": rev(text), "id": "tile/region bank", "new": "meadow" }),
-    );
-    let t = v["text"].as_str().unwrap();
+    let region = map.regions[1].sheet.as_ref().unwrap();
+    assert_eq!(region.bounded_by.as_ref().unwrap().text, "shore");
+    assert_eq!(region.fill.as_ref().unwrap().text, "\"(0.5sq, 0.25sq)\"");
+    let rename = |id: &str, new: &str| {
+        edited(
+            &r,
+            &token,
+            text,
+            edit::EditOp::Rename {
+                text: text.to_owned(),
+                id: id.to_owned(),
+                new: new.to_owned(),
+            },
+        )
+    };
+    let t = rename("tile/region bank", "meadow").text;
     assert!(
         t.contains("region meadow") && t.contains("dirt at=meadow"),
         "{t}"
     );
-    let v = call(
-        "/api/edit",
-        serde_json::json!({ "op": "rename", "text": text, "read": rev(text), "id": "tile/line shore", "new": "pool" }),
-    );
+    let v = rename("tile/line shore", "pool");
     assert!(
-        v["text"].as_str().unwrap().contains("line pool"),
-        "a line may share a region's name: {v}"
+        v.text.contains("line pool"),
+        "a line may share a region's name: {v:?}"
     );
 }
 
 #[test]
 fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
+    use dt_eval::map::{Clause, PlaceKind, PlaceRef};
     let dir = std::env::temp_dir().join(format!("dt-clauses-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
@@ -1509,110 +1603,137 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let call = |p: &str, body: Value| post_value(&r, p, Some(&token), None, &body.to_string()).1;
-    let v = call(
-        &format!("/api/tiles/{}/check", id0(&r)),
-        serde_json::json!({ "text": text }),
-    );
-    let region = |name: &str| {
-        v["map"]["regions"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|r| r["name"] == name)
-            .unwrap()
-            .clone()
-    };
+    let token = session_token(&r);
+    let v = check_as(&r, &token, &id0(&r), text);
+    let map = v.map.as_ref().unwrap();
+    let region = |name: &str| map.regions.iter().find(|r| r.name == name).unwrap();
     let crag = region("crag");
-    let clauses = crag["sheet"]["clauses"].as_array().unwrap();
-    assert_eq!(clauses.len(), 2, "{crag}");
-    assert_eq!(clauses[0]["kind"], "within");
-    assert_eq!(clauses[0]["distance"]["text"], "\"[8dmm .. 14dmm]\"");
-    assert!(
-        clauses[0]["printed"].is_null(),
-        "printed as written on DungeonBlocks: {crag}"
-    );
-    assert_eq!(clauses[0]["of"]["text"], "westEdge");
-    let sp = |c: &Value, k: &str| {
-        let s = c[k]["span"].as_array().unwrap();
-        let a = usize::try_from(s[0].as_u64().unwrap()).unwrap();
-        a..a + usize::try_from(s[1].as_u64().unwrap()).unwrap()
+    let clauses = &crag.sheet.as_ref().unwrap().clauses;
+    assert_eq!(clauses.len(), 2, "{crag:?}");
+    let Clause::Within {
+        at: first_at,
+        distance,
+        of,
+        printed,
+    } = &clauses[0]
+    else {
+        panic!("not a within: {:?}", clauses[0]);
     };
-    assert_eq!(&text[sp(&clauses[0], "distance")], "\"[8dmm .. 14dmm]\"");
-    assert_eq!(&text[sp(&clauses[1], "of")], "knoll");
+    let distance = distance.as_ref().unwrap();
+    assert_eq!(distance.text, "\"[8dmm .. 14dmm]\"");
+    assert!(
+        printed.is_none(),
+        "printed as written on DungeonBlocks: {crag:?}"
+    );
+    let of = of.as_ref().unwrap();
+    assert_eq!(of.text, "westEdge");
+    let Clause::Within {
+        at: second_at,
+        of: Some(second_of),
+        ..
+    } = &clauses[1]
+    else {
+        panic!("not a within of a place: {:?}", clauses[1]);
+    };
+    let span = |s: [usize; 2]| s[0]..s[0] + s[1];
+    assert_eq!(&text[span(distance.span)], "\"[8dmm .. 14dmm]\"");
+    assert_eq!(&text[span(second_of.span)], "knoll");
     // the places it refers to, with their geometry
-    let refs = crag["refs"].as_array().unwrap();
-    assert_eq!(refs[0]["name"], "westEdge");
-    assert_eq!(refs[0]["kind"], "edge");
-    assert_eq!(refs[0]["pts"], serde_json::json!([[0.0, 0.0], [0.0, 2.0]]));
-    assert_eq!(refs[1]["kind"], "point");
-    assert_eq!(refs[1]["at"], serde_json::json!([0.5, 0.5]));
+    let refs = &crag.refs;
+    let PlaceRef::Edge { name, pts } = &refs[0] else {
+        panic!("not an edge: {:?}", refs[0]);
+    };
+    assert_eq!(name, "westEdge");
+    assert_eq!(pts, &[[0.0, 0.0], [0.0, 2.0]]);
+    let PlaceRef::Point { at, .. } = &refs[1] else {
+        panic!("not a point: {:?}", refs[1]);
+    };
+    assert_eq!(at, &[0.5, 0.5]);
     // a region refers to another region (once, though it names it twice), and excepts are clauses
     let apron = region("apron");
-    let refs = apron["refs"].as_array().unwrap();
-    assert_eq!(refs.len(), 1, "{apron}");
-    assert_eq!(refs[0]["kind"], "region");
-    let ex = &apron["sheet"]["clauses"][1];
-    assert_eq!(ex["kind"], "except");
-    assert_eq!(ex["regions"]["text"], "crag");
+    assert_eq!(apron.refs.len(), 1, "{apron:?}");
+    assert!(matches!(apron.refs[0], PlaceRef::Region { .. }));
+    let Clause::Except { regions, .. } = &apron.sheet.as_ref().unwrap().clauses[1] else {
+        panic!("not an except: {apron:?}");
+    };
+    assert_eq!(regions.text, "crag");
     // a bucket region refers to the lines that bound it, and has no clauses
     let pool = region("pool");
-    assert_eq!(pool["refs"][0]["kind"], "line");
-    assert_eq!(pool["sheet"]["clauses"].as_array().unwrap().len(), 0);
+    assert!(matches!(pool.refs[0], PlaceRef::Line { .. }));
+    assert_eq!(pool.sheet.as_ref().unwrap().clauses.len(), 0);
     // the places a choice can name
-    let places = v["map"]["places"].as_array().unwrap();
     for (n, k) in [
-        ("northEdge", "edge"),
-        ("shore", "line"),
-        ("crag", "region"),
-        ("knoll", "point"),
-        ("center", "point"),
-        ("tile", "tile"),
+        ("northEdge", PlaceKind::Edge),
+        ("shore", PlaceKind::Line),
+        ("crag", PlaceKind::Region),
+        ("knoll", PlaceKind::Point),
+        ("center", PlaceKind::Point),
+        ("tile", PlaceKind::Tile),
     ] {
         assert!(
-            places.iter().any(|p| p["name"] == n && p["kind"] == k),
-            "{n}: {places:?}"
+            map.places.iter().any(|p| p.name == n && p.kind == k),
+            "{n}: {:?}",
+            map.places
         );
     }
     // the distance is edited through the server, the way the other controls are
-    let checked = v.clone();
-    let v = call(
-        "/api/edit",
-        serde_json::json!({ "op": "arg", "text": text, "read": rev(text), "id": id_in_value(&checked, clauses[1]["at"].as_u64().unwrap()), "index": 0, "value": "9dmm" }),
+    let (first_id, second_id) = (id_of(&v, *first_at), id_of(&v, *second_at));
+    let v = edited(
+        &r,
+        &token,
+        text,
+        edit::EditOp::Arg {
+            text: text.to_owned(),
+            id: second_id,
+            index: 0,
+            value: edit::Scalar::Str("9dmm".to_owned()),
+        },
     );
-    let t = v["text"].as_str().unwrap();
+    let t = &v.text;
     assert!(
         t.contains("within \"[8dmm .. 14dmm]\" of=westEdge; within \"9dmm\" of=knoll"),
         "{t}"
     );
-    let v = call(
-        "/api/edit",
-        serde_json::json!({ "op": "set", "text": text, "read": rev(text), "id": id_in_value(&checked, clauses[0]["at"].as_u64().unwrap()), "name": "of", "value": "eastEdge" }),
+    let v = edited(
+        &r,
+        &token,
+        text,
+        edit::EditOp::Set {
+            text: text.to_owned(),
+            id: first_id,
+            name: "of".to_owned(),
+            value: Some(edit::Scalar::Str("eastEdge".to_owned())),
+        },
     );
-    let t = v["text"].as_str().unwrap();
+    let t = &v.text;
     assert!(t.contains("of=eastEdge; within \"6dmm\" of=knoll"), "{t}");
     // OpenLOCK: the program says what each distance prints (the page writes no unit word of its own)
-    call("/api/target", serde_json::json!({ "system": "ol" }));
-    let v = call(
-        &format!("/api/tiles/{}/check", id0(&r)),
-        serde_json::json!({ "text": text }),
-    );
-    let crag = v["map"]["regions"]
-        .as_array()
+    let h = target_head(&r, &token, Some("ol"), None);
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    let v = check_as(&r, &token, &id0(&r), text);
+    let crag = v
+        .map
+        .as_ref()
         .unwrap()
+        .regions
         .iter()
-        .find(|r| r["name"] == "crag")
-        .unwrap()
-        .clone();
-    let clauses = crag["sheet"]["clauses"].as_array().unwrap();
+        .find(|r| r.name == "crag")
+        .unwrap();
+    let clauses = &crag.sheet.as_ref().unwrap().clauses;
+    let printed = |c: &Clause| match c {
+        Clause::Within { printed, .. } => printed.clone(),
+        other => panic!("not a within: {other:?}"),
+    };
     assert_eq!(
-        clauses[0]["printed"],
-        serde_json::json!(["5.81", "10.16"]),
-        "{crag}"
+        printed(&clauses[0]),
+        Some(vec!["5.81".to_owned(), "10.16".to_owned()]),
+        "{crag:?}"
     );
-    assert_eq!(clauses[1]["printed"], serde_json::json!(["4.35"]), "{crag}");
+    assert_eq!(
+        printed(&clauses[1]),
+        Some(vec!["4.35".to_owned()]),
+        "{crag:?}"
+    );
 }
 
 #[test]
@@ -1635,19 +1756,17 @@ fn a_build_sends_sketches_as_it_goes_and_drops_them_when_done() {
         let Some(data) = l.strip_prefix("data: ") else {
             continue;
         };
-        let v: Value = serde_json::from_str(data).unwrap();
-        if v["type"] != "tile" {
+        let StreamEvent::Tile { tile: t, .. } = read::<StreamEvent>(data.as_bytes()) else {
             continue;
-        }
-        let t = &v["tile"];
-        let n = t["sketches"].as_array().map_or(0, Vec::len);
-        if t["status"] == "ready" {
+        };
+        let n = t.sketches.len();
+        if t.status == "ready" {
             assert_eq!(n, 0, "the finished mesh replaces the sketches");
             break;
         }
         if n > 0 {
-            assert_eq!(t["status"], "building");
-            assert_eq!(t["sketches"][0]["rough"], false);
+            assert_eq!(t.status, "building");
+            assert!(!t.sketches[0].rough);
             sketched += 1;
         }
     }
@@ -1742,7 +1861,10 @@ fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
     };
     // a document error: 200, ok false, a code and a place
     let text = "dharmatiles version=1\ntile size=\"1x1\" {\n    stack {\n        dirtt\n    }\n}\n";
-    let body = serde_json::json!({ "text": text }).to_string();
+    let body = wire(&edit::TextReq {
+        text: text.to_owned(),
+        file: None,
+    });
     let (s, v) = call("POST", &format!("/api/tiles/{id}/check"), body.as_bytes());
     let v = v.read::<edit::CheckRes>().unwrap();
     assert_eq!((s, v.ok), ("200 OK", false));
@@ -1750,7 +1872,11 @@ fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
     assert!(e.code.starts_with("dt::"), "{e:?}");
     assert!(!e.unexpected, "a mistake in the document");
     // an internal failure: the file cannot be read; 500 and the reason
-    let body = serde_json::json!({ "text": "x", "docRev": 1 }).to_string();
+    let body = wire(&edit::SaveReq {
+        text: "x".to_owned(),
+        doc_rev: 1,
+        file: None,
+    });
     let (s, v) = call("POST", &format!("/api/tiles/{id}/save"), body.as_bytes());
     assert_eq!(s, "500 Internal Server Error");
     let v = v.failed().unwrap();
@@ -1856,6 +1982,7 @@ fn a_panic_in_a_build_is_reported_and_the_server_keeps_serving() {
 
 #[test]
 fn the_map_marks_every_point_a_line_or_region_refers_to() {
+    use dt_eval::map::{Marker, MarkerKind};
     let dir = std::env::temp_dir().join(format!("dt-markers-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
@@ -1863,66 +1990,51 @@ fn the_map_marks_every_point_a_line_or_region_refers_to() {
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let v = post_value(
-        &r,
-        &format!("/api/tiles/{}/check", id0(&r)),
-        Some(&token),
-        None,
-        &serde_json::json!({ "text": text }).to_string(),
-    )
-    .1;
-    let map = &v["map"];
-    let span = |m: &Value| {
-        let s = m["span"].as_array().unwrap();
-        let a = usize::try_from(s[0].as_u64().unwrap()).unwrap();
-        a..a + usize::try_from(s[1].as_u64().unwrap()).unwrap()
+    let token = session_token(&r);
+    let v = check_as(&r, &token, &id0(&r), text);
+    let map = v.map.as_ref().unwrap();
+    let span = |m: &Marker| {
+        let s = m.span.unwrap();
+        s[0]..s[0] + s[1]
     };
     // a line: every through point, named or literal, as written
-    let shore = map["lines"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|l| l["name"] == "shore")
-        .unwrap();
-    let m = shore["markers"].as_array().unwrap();
-    let labels: Vec<_> = m.iter().map(|m| m["label"].as_str().unwrap()).collect();
+    let shore = map.lines.iter().find(|l| l.name == "shore").unwrap();
+    let m = &shore.markers;
+    let labels: Vec<_> = m.iter().map(|m| m.label.as_str()).collect();
     assert_eq!(
         labels,
         ["west", "(0sq, 1.5sq)", "knoll", "(1.5sq, 0.75sq)", "east"]
     );
-    let kinds: Vec<_> = m.iter().map(|m| m["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds, ["name", "literal", "name", "literal", "name"]);
-    assert_eq!(m[0]["at"], serde_json::json!([0.0, 1.0]));
-    assert_eq!(m[2]["at"], serde_json::json!([0.5, 0.5]));
-    assert_eq!(m[3]["at"], serde_json::json!([1.5, 1.25]));
+    let kinds: Vec<_> = m.iter().map(|m| m.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            MarkerKind::Name,
+            MarkerKind::Literal,
+            MarkerKind::Name,
+            MarkerKind::Literal,
+            MarkerKind::Name
+        ]
+    );
+    assert_eq!(m[0].at, Some([0.0, 1.0]));
+    assert_eq!(m[2].at, Some([0.5, 0.5]));
+    assert_eq!(m[3].at, Some([1.5, 1.25]));
     assert_eq!(&text[span(&m[3])], "\"(1.5sq, 0.75sq)\"");
     // a closed line has them all still (its drawn points repeat the first)
-    let ring = map["lines"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|l| l["name"] == "ring")
-        .unwrap();
-    assert_eq!(ring["markers"].as_array().unwrap().len(), 3);
-    assert_eq!(ring["markers"][1]["at"], serde_json::json!([0.75, 0.25]));
+    let ring = map.lines.iter().find(|l| l.name == "ring").unwrap();
+    assert_eq!(ring.markers.len(), 3);
+    assert_eq!(ring.markers[1].at, Some([0.75, 0.25]));
     // a region: each fill, then each within centre that is a point (not the line)
-    let bay = map["regions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|l| l["name"] == "bay")
-        .unwrap();
-    let m = bay["markers"].as_array().unwrap();
-    let labels: Vec<_> = m.iter().map(|m| m["label"].as_str().unwrap()).collect();
+    let bay = map.regions.iter().find(|l| l.name == "bay").unwrap();
+    let m = &bay.markers;
+    let labels: Vec<_> = m.iter().map(|m| m.label.as_str()).collect();
     assert_eq!(
         labels,
         ["(0.5sq, 1.75sq)", "center", "(1.25sq, 1.75sq)", "knoll"],
         "{m:?}"
     );
-    assert_eq!(m[1]["at"], serde_json::json!([1.0, 1.0]));
-    assert_eq!(m[2]["at"], serde_json::json!([1.25, 0.25]));
+    assert_eq!(m[1].at, Some([1.0, 1.0]));
+    assert_eq!(m[2].at, Some([1.25, 0.25]));
 }
 
 // ---- format 1 in the editor and the preview ----
@@ -1937,123 +2049,123 @@ fn preview_opts() -> Options {
 
 #[test]
 fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
+    use dt_eval::map::MarkerKind;
     let dir = std::env::temp_dir().join(format!("dt-f1-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
     std::fs::write(&file, FORMAT_1).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start_with(&[&path], true, &preview_opts());
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let call = |p: &str, body: Value| post_value(&r, p, Some(&token), None, &body.to_string()).1;
+    let token = session_token(&r);
     // it opens: the build comes back ready, with no errors
     let t = wait_for(&r, "ready", |t| t.status == "ready" || t.status == "failed");
     assert_eq!(t.status, "ready", "{t:?}");
     // its check: the format, and every point as the program reads it (the
     // north-west counting is the program's, not the page's)
-    let check = format!("/api/tiles/{}/check", id0(&r));
-    let v = call(&check, serde_json::json!({ "text": FORMAT_1 }));
-    assert_eq!(v["ok"], true, "{v}");
-    let map = &v["map"];
-    assert!(
-        map["language"]["names"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|n| n == "$bottom")
-    );
-    let shore = &map["lines"][0];
-    let m = shore["markers"].as_array().unwrap();
-    let labels: Vec<_> = m.iter().map(|m| m["label"].as_str().unwrap()).collect();
+    let id = id0(&r);
+    let v = check_as(&r, &token, &id, FORMAT_1);
+    assert!(v.ok, "{v:?}");
+    let map = v.map.as_ref().unwrap();
+    assert!(map.language.names.iter().any(|n| n == "$bottom"));
+    let shore = &map.lines[0];
+    let m = &shore.markers;
+    let labels: Vec<_> = m.iter().map(|m| m.label.as_str()).collect();
     assert_eq!(
         labels,
         ["west", "(0, 0.38sq)", "knoll", "(1.5sq, 1.25sq)", "east"]
     );
-    let kinds: Vec<_> = m.iter().map(|m| m["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds, ["name", "literal", "name", "literal", "name"]);
-    assert_eq!(m[1]["at"], serde_json::json!([0.0, 1.62]));
-    assert_eq!(m[2]["at"], serde_json::json!([0.5, 1.5]));
-    assert_eq!(m[3]["at"], serde_json::json!([1.5, 0.75]));
-    let bay = &map["regions"][0];
-    let fill = bay["markers"][0]["at"].as_array().unwrap();
-    assert!((fill[0].as_f64().unwrap() - 0.5).abs() < 1e-9);
-    assert!((fill[1].as_f64().unwrap() - 0.4).abs() < 1e-9, "{fill:?}");
+    let kinds: Vec<_> = m.iter().map(|m| m.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            MarkerKind::Name,
+            MarkerKind::Literal,
+            MarkerKind::Name,
+            MarkerKind::Literal,
+            MarkerKind::Name
+        ]
+    );
+    assert_eq!(m[1].at, Some([0.0, 1.62]));
+    assert_eq!(m[2].at, Some([0.5, 1.5]));
+    assert_eq!(m[3].at, Some([1.5, 0.75]));
+    let bay = &map.regions[0];
+    let fill = bay.markers[0].at.unwrap();
+    assert!((fill[0] - 0.5).abs() < 1e-9);
+    assert!((fill[1] - 0.4).abs() < 1e-9, "{fill:?}");
     // a placed thing says where it stands, for its handle
-    let rock = v["stack"]
-        .as_array()
+    let rock = v
+        .stack
+        .as_ref()
         .unwrap()
         .iter()
-        .find(|i| i["what"] == "rock")
+        .find(|i| i.what == "rock")
         .unwrap();
-    assert_eq!(rock["at"], serde_json::json!([1.5, 1.5]));
+    assert_eq!(rock.at, Some([1.5, 1.5]));
     // a mistake is shown where it is made, with its help: a bare size
     let bad = FORMAT_1.replace("size=\"8dmm\"", "size=8");
-    let v = call(&check, serde_json::json!({ "text": bad }));
-    assert_eq!(v["ok"], false, "{v}");
-    assert_eq!(v["errors"][0]["code"], dt_lang::codes::UNIT, "{v}");
+    let v = check_as(&r, &token, &id, &bad);
+    assert!(!v.ok, "{v:?}");
+    assert_eq!(v.errors[0].code, dt_lang::codes::UNIT, "{v:?}");
     assert!(
-        v["errors"][0]["help"].as_str().unwrap().contains("dmm"),
-        "{v}"
+        v.errors[0].help.as_deref().unwrap().contains("dmm"),
+        "{v:?}"
     );
     // and a point outside its region, at check
     let off = FORMAT_1.replace("(1.5sq, 0.5sq)", "(1.5sq, 2.5sq)");
-    let v = call(&check, serde_json::json!({ "text": off }));
-    assert_eq!(v["ok"], false, "{v}");
-    assert!(
-        v["errors"][0]["message"]
-            .as_str()
-            .unwrap()
-            .contains("off the tile"),
-        "{v}"
-    );
-    // the sheet's check of a typed value is read with units
-    let cv = |control: &str, typed: &str| {
-        let v = call(
+    let v = check_as(&r, &token, &id, &off);
+    assert!(!v.ok, "{v:?}");
+    assert!(v.errors[0].message.contains("off the tile"), "{v:?}");
+    // the sheet's check of a typed value is read with units: the message, with its help after it
+    let cv = |control: &str, typed: &str| -> Option<String> {
+        let (_, v) = post::<_, edit::CheckValueRes>(
+            &r,
             "/api/check-value",
-            serde_json::json!({ "element": "rock", "control": control, "typed": typed }),
+            Some(&token),
+            None,
+            &edit::CheckValueReq {
+                element: "rock".to_owned(),
+                control: control.to_owned(),
+                typed: typed.to_owned(),
+            },
         );
-        // the message, with its help after it
-        match v["message"].as_str() {
-            None => Value::Null,
-            Some(m) => Value::String(format!("{m} {}", v["help"].as_str().unwrap_or_default())),
-        }
+        v.message
+            .map(|m| format!("{m} {}", v.help.as_deref().unwrap_or_default()))
     };
-    assert!(cv("size", "8dmm").is_null());
-    assert!(cv("size", "6dmm..10dmm").is_null());
-    assert!(cv("size", "2sq").is_null());
-    assert!(cv("size", "$x").is_null() || cv("size", "$x").is_string());
+    assert!(cv("size", "8dmm").is_none());
+    assert!(cv("size", "6dmm..10dmm").is_none());
+    assert!(cv("size", "2sq").is_none());
+    let _ = cv("size", "$x");
     assert!(
-        cv("size", "8").as_str().unwrap().contains("dmm"),
+        cv("size", "8").unwrap().contains("dmm"),
         "a bare number needs its unit"
     );
-    assert!(
-        cv("size", "250dmm")
-            .as_str()
-            .unwrap()
-            .starts_with("`rock size` is ")
-    );
-    assert!(cv("size", "8deg").as_str().unwrap().contains("length"));
-    assert!(cv("size", "low(20dmm..60dmm, 3)").is_null());
+    assert!(cv("size", "250dmm").unwrap().starts_with("`rock size` is "));
+    assert!(cv("size", "8deg").unwrap().contains("length"));
+    assert!(cv("size", "low(20dmm..60dmm, 3)").is_none());
     assert!(
         cv("size", "low(20dmm..60dmm, -2)")
-            .as_str()
             .unwrap()
             .starts_with("low's ratio must be above 0, not -2")
     );
     // what the sheet writes lands as a string with its unit, and checks
     let at = FORMAT_1.find("rock").unwrap();
-    let nodes = call(&check, serde_json::json!({ "text": FORMAT_1 }));
-    let v = call(
-        "/api/edit",
-        serde_json::json!({ "op": "set", "text": FORMAT_1, "read": rev(FORMAT_1), "id": id_in_value(&nodes, at as u64), "name": "size", "value": "9dmm" }),
+    let nodes = check_as(&r, &token, &id, FORMAT_1);
+    let v = edited(
+        &r,
+        &token,
+        FORMAT_1,
+        edit::EditOp::Set {
+            text: FORMAT_1.to_owned(),
+            id: id_of(&nodes, at),
+            name: "size".to_owned(),
+            value: Some(edit::Scalar::Str("9dmm".to_owned())),
+        },
     );
-    let edited = v["text"].as_str().unwrap();
-    assert!(edited.contains("size=\"9dmm\""), "{v}");
-    let v = call(&check, serde_json::json!({ "text": edited }));
-    assert_eq!(v["ok"], true, "{v}");
+    assert!(v.text.contains("size=\"9dmm\""), "{v:?}");
+    let v = check_as(&r, &token, &id, &v.text);
+    assert!(v.ok, "{v:?}");
     // the controls come with their defaults as a format 1 document writes them
-    let els: Vec<dt_doc::wire::ElementJson> =
-        serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
+    let els: Vec<dt_doc::wire::ElementJson> = read(&get(&r, "/api/elements").1);
     let tree = els.iter().find(|e| e.summary.name == "tree").unwrap();
     let crown = tree.controls.iter().find(|c| c.name == "crown").unwrap();
     let width = crown.subs.iter().find(|c| c.name == "width").unwrap();
@@ -2072,31 +2184,21 @@ fn an_older_tile_is_refused_where_it_is_checked_with_help_to_migrate_it() {
     std::fs::write(&file, old).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], true);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
+    let token = session_token(&r);
     // it does not build, and says why
     let t = wait_for(&r, "failed", |t| {
         t.status == "ready" || t.status == "failed"
     });
     assert_eq!(t.status, "failed", "{t:?}");
     // the editor's check gives the same refusal, with the command to run
-    let id = id0(&r);
-    let v = post_value(
-        &r,
-        &format!("/api/tiles/{id}/check"),
-        Some(&token),
-        None,
-        &serde_json::json!({ "text": old }).to_string(),
-    )
-    .1;
-    assert_eq!(v["ok"], false, "{v}");
-    let e = v["errors"]
-        .as_array()
-        .unwrap()
+    let v = check_as(&r, &token, &id0(&r), old);
+    assert!(!v.ok, "{v:?}");
+    let e = v
+        .errors
         .iter()
-        .find(|e| e["code"] == dt_lang::codes::FORMAT_0)
-        .unwrap_or_else(|| panic!("{v}"));
-    assert!(e["help"].as_str().unwrap().contains("v1.0.0"), "{e}");
+        .find(|e| e.code == dt_lang::codes::FORMAT_0)
+        .unwrap_or_else(|| panic!("{v:?}"));
+    assert!(e.help.as_deref().unwrap().contains("v1.0.0"), "{e:?}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), old);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -2105,7 +2207,6 @@ fn an_older_tile_is_refused_where_it_is_checked_with_help_to_migrate_it() {
 
 const STEEP: &str = "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=3 {\n    line ridge { through \"(0.3sq, 0.5sq)\" \"(0.7sq, 0.5sq)\" }\n    region hill { within \"2dmm\" of=ridge }\n    stack {\n        base\n        dirt {\n            pin top=\"12dmm\" at=hill\n        }\n    }\n}\n";
 
-/// A temp tile with `text`, served and not built; its path and the editor's token.
 fn editable(name: &str, text: &str) -> (Running, String, String) {
     let dir = std::env::temp_dir().join(format!("dt-msg-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -2113,50 +2214,47 @@ fn editable(name: &str, text: &str) -> (Running, String, String) {
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
+    let token = session_token(&r);
     (r, path, token)
 }
 
-fn check_text(r: &Running, token: &str, text: &str) -> Value {
-    let (h, v) = post_value(
+fn check_text(r: &Running, token: &str, text: &str) -> edit::CheckRes {
+    let (h, v) = post::<_, edit::CheckRes>(
         r,
         &format!("/api/tiles/{}/check", id0(r)),
         Some(token),
         Some(&format!("http://{}", r.addr)),
-        &serde_json::json!({ "text": text }).to_string(),
+        &edit::TextReq {
+            text: text.to_owned(),
+            file: None,
+        },
     );
-    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v:?}");
     v
 }
 
-/// A message of the stream as its type (the wire form is the type's).
-fn typed_message(m: &Value) -> crate::message::MessageJson {
-    serde_json::from_value(m.clone()).expect("a message of the stream is a MessageJson")
-}
-
-fn messages(r: &Running, query: &str) -> Vec<Value> {
+fn messages(r: &Running, query: &str) -> Vec<crate::message::MessageJson> {
     let (head, body) = get(r, &format!("/api/messages?{query}"));
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
-    let v: Value = serde_json::from_slice(&body).unwrap();
-    v["messages"].as_array().unwrap().clone()
+    read::<crate::message::MessagesRes>(&body).messages
 }
 
 #[test]
 fn a_note_from_the_checker_reaches_the_stream_and_the_messages_route() {
+    use crate::message::{MessageState, Scope, Severity};
     let (r, _, token) = editable("note", STEEP);
     let v = check_text(&r, &token, STEEP);
-    assert_eq!(v["ok"], true, "{v}");
+    assert!(v.ok, "{v:?}");
     let id = id0(&r);
     let found = messages(&r, &format!("tile={id}&kind=note"));
     assert_eq!(found.len(), 1, "{found:?}");
     let n = &found[0];
-    assert_eq!(n["code"], dt_lang::codes::STEEP);
-    assert_eq!(n["severity"], "note");
-    assert_eq!(n["scope"], "check");
-    assert_eq!(n["state"], "open");
-    assert!(n["text"].as_str().unwrap().contains("steeper than its"));
-    assert!(n["span"]["line"].as_u64().is_some());
+    assert_eq!(n.code.as_deref(), Some(dt_lang::codes::STEEP));
+    assert_eq!(n.severity, Severity::Note);
+    assert_eq!(n.scope, Scope::Check);
+    assert!(matches!(n.state, MessageState::Open));
+    assert!(n.text.contains("steeper than its"));
+    assert!(n.span.is_some());
     // the text form is the same message, one function
     let (head, body) = get(
         &r,
@@ -2176,16 +2274,16 @@ fn a_note_from_the_checker_reaches_the_stream_and_the_messages_route() {
         let Some(data) = l.strip_prefix("data: ") else {
             continue;
         };
-        let v: Value = serde_json::from_str(data).unwrap();
-        if v["type"] == "message" && v["message"]["code"] == dt_lang::codes::STEEP {
-            seen = Some(v["message"].clone());
+        if let StreamEvent::Message { message, .. } = read::<StreamEvent>(data.as_bytes())
+            && message.code.as_deref() == Some(dt_lang::codes::STEEP)
+        {
+            seen = Some(message);
             break;
         }
     }
-    assert_eq!(seen.as_ref().map(|m| &m["seq"]), Some(&n["seq"]));
+    assert_eq!(seen.as_ref().map(|m| m.seq), Some(n.seq));
     // `since` reads only what came after
-    let after = n["seq"].as_u64().unwrap();
-    assert!(messages(&r, &format!("tile={id}&since={after}")).is_empty());
+    assert!(messages(&r, &format!("tile={id}&since={}", n.seq)).is_empty());
     // a format that is not one is refused in words
     let (head, _) = get(&r, "/api/messages?format=xml");
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
@@ -2193,54 +2291,53 @@ fn a_note_from_the_checker_reaches_the_stream_and_the_messages_route() {
 
 #[test]
 fn a_new_check_clears_what_it_no_longer_reports() {
+    use crate::message::Kind;
     let (r, _, token) = editable("clear", STEEP);
     let broken = STEEP.replace("        dirt {", "        durt {");
     let v = check_text(&r, &token, &broken);
-    assert_eq!(v["ok"], false, "{v}");
+    assert!(!v.ok, "{v:?}");
     let id = id0(&r);
     let open = messages(&r, &format!("tile={id}&state=open&severity=error"));
     assert_eq!(open.len(), 1, "{open:?}");
-    assert_eq!(open[0]["kind"], "error");
-    assert!(open[0]["span"]["line"].as_u64().is_some());
+    assert_eq!(open[0].kind, Kind::Error);
+    assert!(open[0].span.is_some());
     // the same mistake again is the same message: it keeps its place in the stream
     check_text(&r, &token, &broken);
     let again = messages(&r, &format!("tile={id}&state=open&severity=error"));
-    assert_eq!(again[0]["seq"], open[0]["seq"]);
+    assert_eq!(again[0].seq, open[0].seq);
     // fixed: the mistake is cleared (kept, as cleared), and the notes are there
     check_text(&r, &token, STEEP);
     assert!(messages(&r, &format!("tile={id}&state=open&severity=error")).is_empty());
     let cleared = messages(&r, &format!("tile={id}&state=cleared"));
-    assert!(
-        cleared.iter().any(|m| m["seq"] == open[0]["seq"]),
-        "{cleared:?}"
-    );
+    assert!(cleared.iter().any(|m| m.seq == open[0].seq), "{cleared:?}");
     let notes = messages(&r, &format!("tile={id}&state=open&kind=note"));
     assert_eq!(notes.len(), 1, "{notes:?}");
 }
 
 #[test]
 fn a_build_says_its_timing_and_the_gates_numbers_and_progress_is_not_kept() {
+    use crate::message::{Kind, Severity};
     let r = start(&[FLAT], true);
     let t = wait_for(&r, "the build", |t| t.status == "ready");
     let id = t.id.clone();
     let found = messages(&r, &format!("tile={id}&state=open"));
-    let kinds: Vec<&str> = found.iter().map(|m| m["kind"].as_str().unwrap()).collect();
+    let kinds: Vec<Kind> = found.iter().map(|m| m.kind).collect();
     assert!(
-        kinds.contains(&"build") && kinds.contains(&"gate"),
+        kinds.contains(&Kind::Build) && kinds.contains(&Kind::Gate),
         "{kinds:?}"
     );
-    assert!(!kinds.contains(&"progress"), "{kinds:?}");
-    let build = found.iter().find(|m| m["kind"] == "build").unwrap();
-    assert!(build["text"].as_str().unwrap().starts_with("Built in "));
-    let Some(MessageData::Build(built)) = typed_message(build).data else {
-        panic!("a build message carries the build's numbers: {build}");
+    assert!(!kinds.contains(&Kind::Progress), "{kinds:?}");
+    let build = found.iter().find(|m| m.kind == Kind::Build).unwrap();
+    assert!(build.text.starts_with("Built in "));
+    let Some(MessageData::Build(built)) = &build.data else {
+        panic!("a build message carries the build's numbers: {build:?}");
     };
     assert!(built.build_s > 0.0);
-    let gate = found.iter().find(|m| m["kind"] == "gate").unwrap();
-    assert_eq!(gate["code"], "gate");
-    assert_eq!(gate["severity"], "info");
-    let Some(MessageData::Gate(numbers)) = typed_message(gate).data else {
-        panic!("a gate message carries the audit summary: {gate}");
+    let gate = found.iter().find(|m| m.kind == Kind::Gate).unwrap();
+    assert_eq!(gate.code.as_deref(), Some("gate"));
+    assert_eq!(gate.severity, Severity::Info);
+    let Some(MessageData::Gate(numbers)) = &gate.data else {
+        panic!("a gate message carries the audit summary: {gate:?}");
     };
     assert!(numbers.triangles > 0);
     assert!(numbers.failures.is_empty());
@@ -2250,64 +2347,68 @@ fn a_build_says_its_timing_and_the_gates_numbers_and_progress_is_not_kept() {
 
 #[test]
 fn a_failure_of_the_server_and_one_the_page_reports_are_messages_too() {
+    use crate::message::Severity;
     let r = start(&[], false);
     let (head, _) = get(&r, "/api/test-failure");
     assert!(head.starts_with("HTTP/1.1 500"), "{head}");
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let (h, _) = post_value(
+    let token = session_token(&r);
+    let h = post_head(
         &r,
         "/api/messages",
         Some(&token),
         Some(&format!("http://{}", r.addr)),
-        &serde_json::json!({ "what": "The page hit a script error", "text": "x is not a function", "backtrace": "at a.js:1" }).to_string(),
+        &edit::PageMessageReq {
+            tile: None,
+            what: Some("The page hit a script error".to_owned()),
+            text: "x is not a function".to_owned(),
+            help: None,
+            causes: None,
+            backtrace: Some("at a.js:1".to_owned()),
+        },
     );
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     let found = messages(&r, "kind=server");
     assert_eq!(found.len(), 2, "{found:?}");
-    let server_data = |m: &Value| match typed_message(m).data {
-        Some(MessageData::Server(d)) => d,
+    let server_data = |m: &crate::message::MessageJson| match &m.data {
+        Some(MessageData::Server(d)) => d.clone(),
         other => panic!("a server message carries its failure: {other:?}"),
     };
     let (from_server, from_page) = (server_data(&found[0]), server_data(&found[1]));
     assert_eq!(from_server.origin, Origin::Server);
-    assert_eq!(found[0]["severity"], "error");
+    assert_eq!(found[0].severity, Severity::Error);
     assert!(!from_server.backtrace.is_empty());
     assert_eq!(from_page.origin, Origin::Page);
-    assert_eq!(found[1]["text"], "x is not a function");
+    assert_eq!(found[1].text, "x is not a function");
     assert_eq!(
         from_page.route.as_deref(),
         Some("The page hit a script error")
     );
     // Report this defect: the program's own failures are reportable, with the one text as the body and no source for a
     // message about no tile; a mistake in a document is not
-    assert_eq!(found[0]["reportable"], true);
+    assert!(found[0].reportable);
     let (h, body) = get(
         &r,
         &format!(
             "/api/messages/report?seq={}&env=Environment%0A%20%20page%20x",
-            found[0]["seq"]
+            found[0].seq
         ),
     );
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
-    let rep: Value = serde_json::from_slice(&body).unwrap();
+    let rep: crate::report::Report = read(&body);
     assert!(
-        rep["url"]
-            .as_str()
-            .unwrap()
+        rep.url
             .starts_with("https://github.com/shawn-vincent/dharmatiles/issues/new?title="),
-        "{rep}"
+        "{rep:?}"
     );
-    assert_eq!(rep["labels"][0], "defect");
-    assert_eq!(rep["truncated"], false);
+    assert_eq!(rep.labels[0], "defect");
+    assert!(!rep.truncated);
     let (_, text) = get(
         &r,
-        &format!("/api/messages?seq={}&format=text", found[0]["seq"]),
+        &format!("/api/messages?seq={}&format=text", found[0].seq),
     );
     let text = String::from_utf8(text).unwrap();
-    let body = rep["body"].as_str().unwrap();
-    assert!(body.starts_with(text.trim_end()), "{body}");
-    assert!(body.contains("page x"), "{body}");
+    assert!(rep.body.starts_with(text.trim_end()), "{}", rep.body);
+    assert!(rep.body.contains("page x"), "{}", rep.body);
     let (h, _) = get(&r, "/api/messages/report?seq=999999");
     assert!(h.starts_with("HTTP/1.1 404"), "{h}");
 }
@@ -2317,13 +2418,14 @@ fn a_mistake_in_the_document_has_no_report() {
     let (r, _, token) = editable("note-report", STEEP);
     check_text(&r, &token, STEEP);
     let found = messages(&r, &format!("tile={}&kind=note", id0(&r)));
-    assert_eq!(found[0]["reportable"], false, "{found:?}");
-    let (h, _) = get(&r, &format!("/api/messages/report?seq={}", found[0]["seq"]));
+    assert!(!found[0].reportable, "{found:?}");
+    let (h, _) = get(&r, &format!("/api/messages/report?seq={}", found[0].seq));
     assert!(h.starts_with("HTTP/1.1 400"), "{h}");
 }
 
 #[test]
 fn a_mistake_the_build_finds_is_a_message_at_its_entry_and_a_fixed_build_clears_it() {
+    use crate::message::Scope;
     let tree = |trunk: &str| {
         format!(
             "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=4 {{\n    stack {{\n        base\n        dirt\n        tree at=center top=\"$bottom + 22dmm\" {{\n            trunk height=\"{trunk}\"\n        }}\n    }}\n}}\n"
@@ -2339,12 +2441,12 @@ fn a_mistake_the_build_finds_is_a_message_at_its_entry_and_a_fixed_build_clears_
     wait_for(&r, "the failed build", |t| t.status == "failed");
     let errs = messages(&r, &format!("tile={id}&state=open&kind=error"));
     assert_eq!(errs.len(), 1, "{errs:?}");
-    assert_eq!(errs[0]["code"], dt_lang::codes::LOOK);
-    assert_eq!(errs[0]["scope"], "build");
+    assert_eq!(errs[0].code.as_deref(), Some(dt_lang::codes::LOOK));
+    assert_eq!(errs[0].scope, Scope::Build);
     assert!(
-        errs[0]["node"].as_str().is_some_and(|n| n.contains("tree")),
+        errs[0].node.as_deref().is_some_and(|n| n.contains("tree")),
         "the entry it is in: {:?}",
-        errs[0]["node"]
+        errs[0].node
     );
     // no build record while it fails; the plan pass's own message is there
     assert!(messages(&r, &format!("tile={id}&state=open&kind=build")).is_empty());
@@ -2353,7 +2455,7 @@ fn a_mistake_the_build_finds_is_a_message_at_its_entry_and_a_fixed_build_clears_
     wait_for(&r, "the good build", |t| t.status == "ready");
     assert!(messages(&r, &format!("tile={id}&state=open&kind=error")).is_empty());
     let cleared = messages(&r, &format!("tile={id}&state=cleared&kind=error"));
-    assert_eq!(cleared[0]["seq"], errs[0]["seq"]);
+    assert_eq!(cleared[0].seq, errs[0].seq);
     assert_eq!(
         messages(&r, &format!("tile={id}&state=open&kind=gate")).len(),
         1
@@ -2383,128 +2485,146 @@ const ROWS: &str = "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=3 {\
 #[test]
 fn an_entry_moves_whole_and_a_new_one_goes_between_two() {
     let (r, _, token) = editable("move", ROWS);
-    let call = |body: Value| post_value(&r, "/api/edit", Some(&token), None, &body.to_string()).1;
+    let mv = |id: &str, before: Option<&str>| edit::EditOp::Move {
+        text: ROWS.to_owned(),
+        id: id.to_owned(),
+        before: before.map(str::to_owned),
+    };
     let (dirt, grass) = ("tile/stack/dirt", "tile/stack/grass");
-    let v =
-        call(json!({ "text": ROWS, "read": rev(ROWS), "op": "move", "id": dirt, "before": null }));
-    let moved = v["text"].as_str().unwrap();
+    let v = edited(&r, &token, ROWS, mv(dirt, None));
+    let moved = &v.text;
     // the comment on top of it went with it, and the reply says where it now starts
     assert!(
         moved.contains("grass\n        // the soil\n        dirt\n    }"),
-        "{v}"
+        "{v:?}"
     );
-    let at = usize::try_from(v["at"].as_u64().unwrap()).unwrap();
-    assert!(moved[at..].starts_with("dirt"), "{v}");
+    assert!(moved[v.at.unwrap()..].starts_with("dirt"), "{v:?}");
     // before a sibling
-    let v =
-        call(json!({ "text": ROWS, "read": rev(ROWS), "op": "move", "id": grass, "before": dirt }));
+    let v = edited(&r, &token, ROWS, mv(grass, Some(dirt)));
     assert!(
-        v["text"]
-            .as_str()
-            .unwrap()
+        v.text
             .contains("base\n        grass\n        // the soil\n        dirt"),
-        "{v}"
+        "{v:?}"
     );
     // a target that is not a sibling is refused in words
-    let (head, body) = post_value(
+    let (head, body) = edit_refused(
         &r,
-        "/api/edit",
-        Some(&token),
-        None,
-        &json!({ "text": ROWS, "read": rev(ROWS), "op": "move", "id": dirt, "before": "tile/line shore" }).to_string(),
+        &token,
+        Some(rev(ROWS)),
+        mv(dirt, Some("tile/line shore")),
     );
     assert!(head.starts_with("HTTP/1.1 422"), "{head}");
-    assert!(body.to_string().contains("siblings"), "{body}");
+    assert!(format!("{body:?}").contains("siblings"), "{body:?}");
     // a new entry written above another
-    let v = call(
-        json!({ "text": ROWS, "read": rev(ROWS), "op": "insert", "place": "before", "id": grass, "node": "boulder" }),
+    let v = edited(
+        &r,
+        &token,
+        ROWS,
+        edit::EditOp::Insert {
+            text: ROWS.to_owned(),
+            node: "boulder".to_owned(),
+            place: Some(edit::InsertPlace::Before),
+            id: Some(grass.to_owned()),
+        },
     );
-    let t = v["text"].as_str().unwrap();
+    let t = &v.text;
     assert!(
         t.contains("rock at=\"(0.3sq, 0.4sq)\"\n        boulder\n        grass"),
-        "{v}"
+        "{v:?}"
     );
-    assert!(t[usize::try_from(v["at"].as_u64().unwrap()).unwrap()..].starts_with("boulder"));
+    assert!(t[v.at.unwrap()..].starts_with("boulder"));
 }
 
-/// A reply to `/api/edit` or the check that is not yet a typed read: the node an id names.
-fn id_in_value(check: &Value, at: u64) -> String {
-    check["nodes"]
-        .as_array()
-        .unwrap_or_else(|| panic!("a check lists the nodes of the text: {check}"))
-        .iter()
-        .find(|n| n["at"].as_u64() == Some(at))
-        .unwrap_or_else(|| panic!("no node starts at byte {at}: {check}"))["id"]
-        .as_str()
-        .unwrap()
-        .to_owned()
-}
-
-/// A step's answer split: the head's JSON, and the mesh after it.
-fn step_parts(body: &[u8]) -> (Value, Vec<u8>) {
+/// A step's answer split: the head, and the mesh after it.
+fn step_parts(body: &[u8]) -> (edit::StepHead, Vec<u8>) {
     let n = u32::from_be_bytes(body[..4].try_into().unwrap()) as usize;
-    (
-        serde_json::from_slice(&body[4..4 + n]).unwrap(),
-        body[4 + n..].to_vec(),
-    )
+    (read(&body[4..4 + n]), body[4 + n..].to_vec())
 }
 
 #[test]
 fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
     let (r, _, token) = editable("step", ROWS);
     let path = format!("/api/tiles/{}/step", id0(&r));
-    let step = |edit: Value| {
+    let step = |read: String, op: edit::EditOp| {
         post_raw(
             &r,
             &path,
             Some(&token),
             None,
-            &json!({ "edit": edit }).to_string(),
+            &wire(&edit::StepReq {
+                edit: edit::EditReq {
+                    read: Some(read),
+                    op,
+                },
+                file: None,
+                debug: None,
+            }),
         )
     };
+    let set = |name: &str, value: edit::Scalar| edit::EditOp::Set {
+        text: ROWS.to_owned(),
+        id: "tile/stack/rock".to_owned(),
+        name: name.to_owned(),
+        value: Some(value),
+    };
     // a control: the head says the new text and its revision, the mesh follows
-    let (h, body) = step(
-        json!({ "read": rev(ROWS), "op": "set", "text": ROWS, "id": "tile/stack/rock", "name": "seed", "value": 7 }),
-    );
+    let (h, body) = step(rev(ROWS), set("seed", edit::Scalar::Int(7)));
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     let (head, mesh) = step_parts(&body);
-    let text = head["text"].as_str().unwrap();
-    assert!(text.contains("rock at=\"(0.3sq, 0.4sq)\" seed=7"), "{head}");
-    assert_eq!(head["rev"], rev(text));
-    assert_eq!(head["draft"], "mesh");
+    assert!(
+        head.text.contains("rock at=\"(0.3sq, 0.4sq)\" seed=7"),
+        "{head:?}"
+    );
+    assert_eq!(head.rev, rev(&head.text));
+    assert_eq!(head.draft, edit::StepDraft::Mesh);
     assert_eq!(&mesh[..4], payload::MAGIC);
     // the next step is made to the text the last one made, at the revision it named
     let (_, body) = step(
-        json!({ "read": head["rev"], "op": "point", "text": text, "id": "tile/stack/rock", "slot": { "control": "at" }, "q": [0.6, 0.3] }),
-    );
-    let (head, _) = step_parts(&body);
-    let text = head["text"].as_str().unwrap();
-    assert!(text.contains("rock at=\"(0.6sq, 0.7sq)\" seed=7"), "{head}");
-    // a line's point lands on the outline by the seam rule: the north side's middle is `n`
-    let (_, body) = step(
-        json!({ "read": head["rev"], "op": "point", "text": text, "id": "tile/line shore/through", "slot": { "arg": 1 }, "q": [0.52, 0.98], "snap": true }),
+        head.rev.clone(),
+        edit::EditOp::Point {
+            text: head.text.clone(),
+            id: "tile/stack/rock".to_owned(),
+            slot: edit::PointSlot::Control("at".to_owned()),
+            q: [0.6, 0.3],
+            snap: None,
+        },
     );
     let (head, _) = step_parts(&body);
     assert!(
-        head["text"].as_str().unwrap().contains("through west n }"),
-        "{head}"
+        head.text.contains("rock at=\"(0.6sq, 0.7sq)\" seed=7"),
+        "{head:?}"
     );
+    // a line's point lands on the outline by the seam rule: the north side's middle is `n`
+    let (_, body) = step(
+        head.rev.clone(),
+        edit::EditOp::Point {
+            text: head.text.clone(),
+            id: "tile/line shore/through".to_owned(),
+            slot: edit::PointSlot::Arg(1),
+            q: [0.52, 0.98],
+            snap: Some(true),
+        },
+    );
+    let (head, _) = step_parts(&body);
+    assert!(head.text.contains("through west n }"), "{head:?}");
     // a text the reader refuses is still edited: the head says there is no mesh
-    let (h, body) = step(
-        json!({ "read": rev(ROWS), "op": "set", "text": ROWS, "id": "tile/stack/rock", "name": "bogus", "value": 1 }),
-    );
+    let (h, body) = step(rev(ROWS), set("bogus", edit::Scalar::Int(1)));
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     let (head, mesh) = step_parts(&body);
-    assert_eq!(head["draft"], "mistake");
+    assert_eq!(head.draft, edit::StepDraft::Mistake);
     assert!(mesh.is_empty());
     // an edit read at another text is refused, and nothing is drafted
-    let (h, _) = step(
-        json!({ "read": rev("other"), "op": "set", "text": ROWS, "id": "tile/stack/rock", "name": "seed", "value": 8 }),
-    );
+    let (h, _) = step(rev("other"), set("seed", edit::Scalar::Int(8)));
     assert!(h.starts_with("HTTP/1.1 409"), "{h}");
     // an id the text does not have is a 422 in words
     let (h, _) = step(
-        json!({ "read": rev(ROWS), "op": "set", "text": ROWS, "id": "tile/stack/nothing", "name": "seed", "value": 8 }),
+        rev(ROWS),
+        edit::EditOp::Set {
+            text: ROWS.to_owned(),
+            id: "tile/stack/nothing".to_owned(),
+            name: "seed".to_owned(),
+            value: Some(edit::Scalar::Int(8)),
+        },
     );
     assert!(h.starts_with("HTTP/1.1 422"), "{h}");
 }
@@ -2512,155 +2632,193 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
 #[test]
 fn a_node_is_hidden_a_fix_is_laid_in_and_an_id_the_text_does_not_have_is_refused() {
     let (r, _, token) = editable("ops", ROWS);
-    let edit = |body: Value| post_value(&r, "/api/edit", Some(&token), None, &body.to_string());
-    let (head, v) =
-        edit(json!({ "text": ROWS, "read": rev(ROWS), "op": "hide", "id": "tile/stack/rock" }));
-    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
-    assert_eq!(
-        v["text"].as_str().unwrap(),
-        ROWS.replace("rock at", "/- rock at")
+    let v = edited(
+        &r,
+        &token,
+        ROWS,
+        edit::EditOp::Hide {
+            text: ROWS.to_owned(),
+            id: "tile/stack/rock".to_owned(),
+        },
     );
-    // the program's own fix goes in only where the text still reads what it saw
+    assert_eq!(v.text, ROWS.replace("rock at", "/- rock at"));
+    // the program's own fix goes in only where the text still reads what it saw (a fix names no node: no `read`)
     let at = ROWS.find("dirt").unwrap();
-    let fix = json!({ "offset": at, "len": 4, "was": "dirt", "replacement": "ground", "label": "Change to ground" });
-    let (head, v) = edit(json!({ "text": ROWS, "op": "fix", "fix": fix }));
-    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
-    assert_eq!(
-        v["text"].as_str().unwrap(),
-        ROWS.replacen("dirt", "ground", 1)
+    let fix = || crate::message::FixJson {
+        offset: at,
+        len: 4,
+        was: "dirt".to_owned(),
+        replacement: "ground".to_owned(),
+        label: "Change to ground".to_owned(),
+    };
+    let (head, v) = edit_call(
+        &r,
+        &token,
+        None,
+        edit::EditOp::Fix {
+            text: ROWS.to_owned(),
+            fix: fix(),
+        },
     );
-    let (head, v) =
-        edit(json!({ "text": ROWS.replacen("dirt", "soil", 1), "op": "fix", "fix": fix }));
-    assert!(head.starts_with("HTTP/1.1 422"), "{head} {v}");
-    assert!(v.to_string().contains("no longer reads"), "{v}");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
+    assert_eq!(v.text, ROWS.replacen("dirt", "ground", 1));
+    let (head, v) = edit_refused(
+        &r,
+        &token,
+        None,
+        edit::EditOp::Fix {
+            text: ROWS.replacen("dirt", "soil", 1),
+            fix: fix(),
+        },
+    );
+    assert!(head.starts_with("HTTP/1.1 422"), "{head} {v:?}");
+    assert!(format!("{v:?}").contains("no longer reads"), "{v:?}");
     // an id from other text is refused in words, whatever the edit
-    for body in [
-        json!({ "text": ROWS, "read": rev(ROWS), "op": "set", "id": "tile/stack/rock#9", "name": "size", "value": "9dmm" }),
-        json!({ "text": ROWS, "read": rev(ROWS), "op": "remove", "id": "tile/stack/gone" }),
-        json!({ "text": ROWS, "read": rev(ROWS), "op": "hide", "id": "tile/line gone" }),
-        json!({ "text": ROWS, "read": rev(ROWS), "op": "insert", "place": "before", "id": "nope", "node": "boulder" }),
+    let text = || ROWS.to_owned();
+    for op in [
+        edit::EditOp::Set {
+            text: text(),
+            id: "tile/stack/rock#9".to_owned(),
+            name: "size".to_owned(),
+            value: Some(edit::Scalar::Str("9dmm".to_owned())),
+        },
+        edit::EditOp::Remove {
+            text: text(),
+            id: "tile/stack/gone".to_owned(),
+        },
+        edit::EditOp::Hide {
+            text: text(),
+            id: "tile/line gone".to_owned(),
+        },
+        edit::EditOp::Insert {
+            text: text(),
+            node: "boulder".to_owned(),
+            place: Some(edit::InsertPlace::Before),
+            id: Some("nope".to_owned()),
+        },
     ] {
-        let (head, v) = edit(body);
-        assert!(head.starts_with("HTTP/1.1 422"), "{head} {v}");
-        assert!(v.to_string().contains("no node matches"), "{v}");
+        let (head, v) = edit_refused(&r, &token, Some(rev(ROWS)), op);
+        assert!(head.starts_with("HTTP/1.1 422"), "{head} {v:?}");
+        assert!(format!("{v:?}").contains("no node matches"), "{v:?}");
     }
 }
 
 #[test]
 fn an_edit_read_at_other_text_is_refused_and_one_read_at_this_text_is_made() {
     let (r, _, token) = editable("stale", ROWS);
-    let edit = |body: Value| post_value(&r, "/api/edit", Some(&token), None, &body.to_string());
+    let hide = |text: &str| edit::EditOp::Hide {
+        text: text.to_owned(),
+        id: "tile/stack/rock".to_owned(),
+    };
     // the ids a check lists come with the revision of the text they were read from
-    let (_, check) = post_value(
-        &r,
-        &format!("/api/tiles/{}/check", id0(&r)),
-        Some(&token),
-        None,
-        &json!({ "text": ROWS }).to_string(),
+    let check = check_as(&r, &token, &id0(&r), ROWS);
+    assert_eq!(
+        check.nodes_rev.as_deref(),
+        Some(rev(ROWS).as_str()),
+        "{check:?}"
     );
-    assert_eq!(check["nodesRev"], rev(ROWS), "{check}");
     let moved = ROWS.replacen("dirt", "soil", 1);
     // the text moved on after the check: the same id could name another node, so the edit is refused
-    let (head, v) = edit(
-        json!({ "text": moved, "read": check["nodesRev"], "op": "hide", "id": "tile/stack/rock" }),
-    );
-    assert!(head.starts_with("HTTP/1.1 409"), "{head} {v}");
-    assert!(v.to_string().contains("text changed"), "{v}");
+    let (head, v) = edit_refused(&r, &token, check.nodes_rev.clone(), hide(&moved));
+    assert!(head.starts_with("HTTP/1.1 409"), "{head} {v:?}");
+    assert!(format!("{v:?}").contains("text changed"), "{v:?}");
     // no revision at all is no way to name a node
-    let (head, v) = edit(json!({ "text": ROWS, "op": "hide", "id": "tile/stack/rock" }));
-    assert!(head.starts_with("HTTP/1.1 400"), "{head} {v}");
+    let (head, v) = edit_refused(&r, &token, None, hide(ROWS));
+    assert!(head.starts_with("HTTP/1.1 400"), "{head} {v:?}");
     // the text the ids were read at is made
-    let (head, v) = edit(
-        json!({ "text": ROWS, "read": check["nodesRev"], "op": "hide", "id": "tile/stack/rock" }),
-    );
-    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    let (head, v) = edit_call(&r, &token, check.nodes_rev.clone(), hide(ROWS));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
 }
 
-fn offer<'a>(v: &'a Value, name: &str) -> &'a Value {
-    v["offers"]
-        .as_array()
-        .unwrap()
+fn offer<'a>(v: &'a offers::OffersRes, name: &str) -> &'a offers::Offer {
+    v.offers
         .iter()
-        .find(|o| o["name"] == name)
-        .unwrap_or_else(|| panic!("no offer called {name}: {v}"))
+        .find(|o| o.name == name)
+        .unwrap_or_else(|| panic!("no offer called {name}: {v:?}"))
 }
 
 #[test]
 fn the_add_menu_offers_what_the_plan_lets_stand_there_and_says_why_not() {
     let (r, _, token) = editable("offers", ROWS);
     let id = id0(&r);
-    let ask = |text: &str, at: u64| {
-        let (h, v) = post_value(
+    let ask = |text: &str, at: usize| {
+        let (h, v) = post::<_, offers::OffersRes>(
             &r,
             &format!("/api/tiles/{id}/offers"),
             Some(&token),
             None,
-            &json!({ "text": text, "at": at }).to_string(),
+            &offers::OffersReq {
+                text: text.to_owned(),
+                at,
+                file: None,
+            },
         );
         assert!(h.starts_with("HTTP/1.1 200"), "{h}");
         v
     };
     // the stack is dirt, rock, grass (the base is not one of its entries)
     let end = ask(ROWS, 3);
-    assert_eq!(end["ok"], true, "{end}");
-    assert_eq!(offer(&end, "tree")["ok"], true, "{end}");
-    assert_eq!(offer(&end, "water")["ok"], true);
+    assert!(end.ok, "{end:?}");
+    assert!(offer(&end, "tree").ok, "{end:?}");
+    assert!(offer(&end, "water").ok);
     // a wall runs along the drawn line
-    assert_eq!(offer(&end, "wall")["node"], "wall at=shore");
+    assert_eq!(offer(&end, "wall").node, "wall at=shore");
     // the tile has its base already
-    assert_eq!(offer(&end, "base")["ok"], false);
+    assert!(!offer(&end, "base").ok);
     assert!(
-        offer(&end, "base")["why"]
-            .as_str()
+        offer(&end, "base")
+            .why
+            .as_deref()
             .unwrap()
             .contains("already")
     );
     // above the dirt, a tree would stand on ground not yet painted
     let top = ask(ROWS, 0);
-    assert_eq!(offer(&top, "tree")["ok"], false, "{top}");
+    assert!(!offer(&top, "tree").ok, "{top:?}");
     assert!(
-        offer(&top, "tree")["why"]
-            .as_str()
+        offer(&top, "tree")
+            .why
+            .as_deref()
             .unwrap()
             .contains("ground"),
-        "{top}"
+        "{top:?}"
     );
     // things that read nothing stand anywhere
-    assert_eq!(offer(&top, "rock")["ok"], true);
+    assert!(offer(&top, "rock").ok);
     // a floor lies on the ground above it: a dirt listed after it is refused, naming the floor
     let floor = ROWS.replace("        grass\n", "        planks\n");
     let after = ask(&floor, 3);
-    assert_eq!(offer(&after, "dirt")["ok"], false, "{after}");
+    assert!(!offer(&after, "dirt").ok, "{after:?}");
     assert!(
-        offer(&after, "dirt")["why"]
-            .as_str()
+        offer(&after, "dirt")
+            .why
+            .as_deref()
             .unwrap()
             .contains("planks"),
-        "{after}"
+        "{after:?}"
     );
-    assert_eq!(offer(&ask(&floor, 1), "dirt")["ok"], true);
+    assert!(offer(&ask(&floor, 1), "dirt").ok);
     // a tile with a mistake has no plan to ask
     let broken = ask(&ROWS.replace("rock at", "rock at=nowhere at"), 0);
-    assert_eq!(broken["ok"], false, "{broken}");
-    assert!(broken["why"].as_str().is_some());
+    assert!(!broken.ok, "{broken:?}");
+    assert!(broken.why.is_some());
 }
 
 #[test]
 fn every_element_can_be_offered_with_nothing_set() {
     let (r, _, token) = editable("offers-all", ROWS);
-    let (_, v) = post_value(
+    let (_, v) = post::<_, offers::OffersRes>(
         &r,
         &format!("/api/tiles/{}/offers", id0(&r)),
         Some(&token),
         None,
-        &json!({ "text": ROWS, "at": 3 }).to_string(),
+        &offers::OffersReq {
+            text: ROWS.to_owned(),
+            at: 3,
+            file: None,
+        },
     );
-    let names: Vec<&str> = v["offers"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|o| o["name"].as_str())
-        .collect();
+    let names: Vec<&str> = v.offers.iter().map(|o| o.name.as_str()).collect();
     for want in [
         "dirt",
         "grass",
@@ -2680,18 +2838,17 @@ fn every_element_can_be_offered_with_nothing_set() {
     }
     // the line each would write is one the reader accepts in a stack
     let mut bad = Vec::new();
-    for o in v["offers"].as_array().unwrap() {
-        if o["ok"] != true || o["name"] == "base" {
+    for o in &v.offers {
+        if !o.ok || o.name == "base" {
             continue;
         }
-        let node = o["node"].as_str().unwrap();
         let text = ROWS.replace(
             "        grass\n",
-            &format!("        {}\n", node.replace('\n', "\n        ")),
+            &format!("        {}\n", o.node.replace('\n', "\n        ")),
         );
         let c = check_text(&r, &token, &text);
-        if c["ok"] != true {
-            bad.push(format!("{node}: {}", c["errors"][0]["message"]));
+        if !c.ok {
+            bad.push(format!("{}: {}", o.node, c.errors[0].message));
         }
     }
     assert!(bad.is_empty(), "{bad:#?}");
@@ -2702,36 +2859,33 @@ fn an_entry_a_definition_call_makes_says_which_call_so_it_can_be_moved() {
     let text = "dharmatiles version=\"1.0.0\"\n\ndefine knoll {\n    stack {\n        dirt top=\"$groundHeight + 1.5dmm\" clods=none\n    }\n}\n\ntile size=\"1x1\" seed=6 {\n    stack {\n        base\n        knoll\n        rock at=\"(0.3sq, 0.4sq)\"\n    }\n}\n";
     let (r, _, token) = editable("call", text);
     let v = check_text(&r, &token, text);
-    assert_eq!(v["ok"], true, "{v}");
-    let stack = v["stack"].as_array().unwrap();
-    let dirt = stack.iter().find(|s| s["what"] == "dirt").unwrap();
-    let rock = stack.iter().find(|s| s["what"] == "rock").unwrap();
+    assert!(v.ok, "{v:?}");
+    let stack = v.stack.as_ref().unwrap();
+    let dirt = stack.iter().find(|s| s.what == "dirt").unwrap();
+    let rock = stack.iter().find(|s| s.what == "rock").unwrap();
     let call = text.find("        knoll\n").unwrap() + 8;
     // the dirt is written in the definition; the document's own node for it is the call
-    assert_eq!(
-        dirt["call"]["span"][0].as_u64().unwrap(),
-        call as u64,
-        "{dirt}"
-    );
-    assert!(dirt["call"]["file"].as_str().unwrap().ends_with("t.dtile"));
+    let at = dirt.call.as_ref().unwrap();
+    assert_eq!(at.span[0], call, "{dirt:?}");
+    assert!(at.file.ends_with("t.dtile"));
     // an entry the document writes itself has no call
-    assert!(rock["call"].is_null(), "{rock}");
+    assert!(rock.call.is_none(), "{rock:?}");
     // and the call moves like any node
-    let moved = post_value(
+    let moved = edited(
         &r,
-        "/api/edit",
-        Some(&token),
-        None,
-        &json!({ "text": text, "read": rev(text), "op": "move", "id": id_in_value(&v, call as u64), "before": null })
-            .to_string(),
-    )
-    .1;
+        &token,
+        text,
+        edit::EditOp::Move {
+            text: text.to_owned(),
+            id: id_of(&v, call),
+            before: None,
+        },
+    );
     assert!(
-        moved["text"]
-            .as_str()
-            .unwrap()
+        moved
+            .text
             .contains("rock at=\"(0.3sq, 0.4sq)\"\n        knoll\n    }"),
-        "{moved}"
+        "{moved:?}"
     );
 }
 
@@ -3037,8 +3191,6 @@ fn documents_are_written_only_through_the_document_registry() {
     );
 }
 
-/// A step of the history is built as a picture: a wanted tier of a text, in place of the file's, kept by the text,
-/// built on the tier lane (never the tile's own build) and the file left as it was.
 #[test]
 fn a_wanted_tier_can_be_of_a_text_other_than_the_files() {
     let dir = std::env::temp_dir().join(format!("dt-tiertext-{}", std::process::id()));
@@ -3074,9 +3226,17 @@ fn a_wanted_tier_can_be_of_a_text_other_than_the_files() {
         Some("200")
     );
     // a file that is not the tile's is refused, as a draft's is
-    let body = serde_json::json!({"scope": "h", "wants": [want(Some(&other), Some("/etc/hosts"))]})
-        .to_string();
-    let (head, _) = post_value(&r, "/api/tiers/want", Some(&token), None, &body);
+    let head = post_head(
+        &r,
+        "/api/tiers/want",
+        Some(&token),
+        None,
+        &tiers::TiersWantReq {
+            scope: "h".to_owned(),
+            doc: None,
+            wants: vec![want(Some(&other), Some("/etc/hosts"))],
+        },
+    );
     assert!(head.starts_with("HTTP/1.1 403"), "{head}");
     // the document on disk is as it was
     assert_eq!(std::fs::read_to_string(&doc).unwrap(), on_disk);
@@ -3104,8 +3264,8 @@ fn a_mesh_is_fetched_by_the_revision_of_the_document_and_another_is_refused() {
     // an older (or any other) one is refused with the revision the mesh is of, never served as if it were
     let (head, body) = get(&r, &format!("/api/tiles/{id}/mesh?docRev={}", rev + 7));
     assert!(head.starts_with("HTTP/1.1 409"), "{head}");
-    let v: Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(v["docRev"].as_u64(), Some(rev));
+    let v: ErrorBody = read(&body);
+    assert_eq!(v.doc_rev, Some(rev));
     // no revision asked for is no mesh
     assert!(
         get(&r, &format!("/api/tiles/{id}/mesh"))
@@ -3136,8 +3296,8 @@ fn a_mesh_is_fetched_by_the_revision_of_the_document_and_another_is_refused() {
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     // and the payload says which revision it is of
     let jl = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
-    let meta: Value = serde_json::from_slice(&body[8..8 + jl]).unwrap();
-    assert_eq!(meta["docRev"].as_u64(), Some(now));
+    let meta: header::MeshHeader = read(&body[8..8 + jl]);
+    assert_eq!(meta.doc_rev, Some(now));
     assert!(
         get(
             &r,
@@ -3152,10 +3312,7 @@ fn a_mesh_is_fetched_by_the_revision_of_the_document_and_another_is_refused() {
         &format!("/api/tiers/result?key={}&docRev={rev}", keys[0]),
     );
     assert!(head.starts_with("HTTP/1.1 409"), "{head}");
-    assert_eq!(
-        serde_json::from_slice::<Value>(&body).unwrap()["docRev"].as_u64(),
-        Some(now)
-    );
+    assert_eq!(read::<ErrorBody>(&body).doc_rev, Some(now));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -3239,6 +3396,7 @@ fn a_job_that_panics_on_a_lane_is_raised_again_in_its_request() {
 #[test]
 fn a_maps_pieces_loading_is_one_job_of_its_document_said_as_progress_and_in_the_messages_and_ending_cleanly()
  {
+    use crate::message::{Kind, MessageState};
     let r = start(&[FLAT], false);
     let id = id0(&r);
     let token = token_of(&r);
@@ -3246,44 +3404,54 @@ fn a_maps_pieces_loading_is_one_job_of_its_document_said_as_progress_and_in_the_
     write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
     c.set_read_timeout(Some(Duration::from_secs(120))).unwrap();
     // four pieces wanted on behalf of the document, each at two tiers: seeds of one tile (eight meshes, four pieces)
-    let wants: Vec<Value> = (1..=4)
+    let wants: Vec<tiers::TierWant> = (1..=4)
         .flat_map(|s| {
-            ["super-low", "low"].map(|t| serde_json::json!({"tile": id, "tier": t, "seed": s}))
+            ["super-low", "low"].map(|t| tiers::TierWant {
+                seed: Some(s),
+                ..tier_want(&id, t)
+            })
         })
         .collect();
-    let body = serde_json::json!({"scope": "map", "doc": id, "wants": wants}).to_string();
-    let (head, v) = post_value(&r, "/api/tiers/want", Some(&token), None, &body);
-    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    let (head, v) = post::<_, tiers::TiersWantRes>(
+        &r,
+        "/api/tiers/want",
+        Some(&token),
+        None,
+        &tiers::TiersWantReq {
+            scope: "map".to_owned(),
+            doc: Some(id.clone()),
+            wants,
+        },
+    );
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
     let (mut counts, mut began, mut ended, mut cleared) = (Vec::new(), false, false, false);
     for l in BufReader::new(c).lines() {
         let l = l.unwrap();
         let Some(data) = l.strip_prefix("data: ") else {
             continue;
         };
-        let v: Value = serde_json::from_str(data).unwrap();
-        match v["type"].as_str() {
-            Some("progress") if v["id"] == id => {
-                let p = &v["progress"];
-                assert_eq!(p["what"], "loading", "{p}");
-                assert_eq!(p["key"], "pieces", "{p}");
-                counts.push((
-                    p["count"][1].as_u64().unwrap(),
-                    p["count"][2].as_u64().unwrap(),
-                ));
+        match read::<StreamEvent>(data.as_bytes()) {
+            StreamEvent::Progress {
+                id: told,
+                progress: p,
+                ..
+            } if told == id => {
+                assert_eq!(p.what, "loading", "{p:?}");
+                assert_eq!(p.key, "pieces", "{p:?}");
+                let (_, done, total) = p.count.clone().unwrap();
+                counts.push((done, total));
             }
-            Some("message")
-                if v["message"]["kind"] == "progress" && v["message"]["code"] == "pieces" =>
+            StreamEvent::Message { message: m, .. }
+                if m.kind == Kind::Progress && m.code.as_deref() == Some("pieces") =>
             {
-                if v["message"]["state"] == "open" {
+                if matches!(m.state, MessageState::Open) {
                     began = true;
                 } else {
                     cleared = true;
                 }
             }
-            Some("tile")
-                if v["tile"]["id"] == id
-                    && v["tile"]["progress"].is_null()
-                    && !counts.is_empty() =>
+            StreamEvent::Tile { tile: t, .. }
+                if t.id == id && t.progress.is_none() && !counts.is_empty() =>
             {
                 ended = true;
             }
@@ -3323,17 +3491,18 @@ fn a_withdrawn_job_ends_its_row_cleanly() {
             ..tier_want(&id, "low")
         })
         .collect();
-    let body = serde_json::json!({"scope": "map", "doc": id, "wants": many}).to_string();
+    let job = |wants: Vec<tiers::TierWant>| tiers::TiersWantReq {
+        scope: "map".to_owned(),
+        doc: Some(id.clone()),
+        wants,
+    };
     assert!(
-        post_value(&r, "/api/tiers/want", Some(&token), None, &body)
-            .0
+        post_head(&r, "/api/tiers/want", Some(&token), None, &job(many))
             .starts_with("HTTP/1.1 200")
     );
     // the page lets go of everything: the job ends at once, whatever the lane was at
-    let none = serde_json::json!({"scope": "map", "doc": id, "wants": []}).to_string();
     assert!(
-        post_value(&r, "/api/tiers/want", Some(&token), None, &none)
-            .0
+        post_head(&r, "/api/tiers/want", Some(&token), None, &job(vec![]))
             .starts_with("HTTP/1.1 200")
     );
     wait_idle(&r);
@@ -3343,7 +3512,7 @@ fn a_withdrawn_job_ends_its_row_cleanly() {
         "no work in flight: {:?}",
         t.tiles[0].progress
     );
-    let open: Vec<Value> = messages(&r, &format!("tile={id}&state=open&kind=progress"));
+    let open = messages(&r, &format!("tile={id}&state=open&kind=progress"));
     assert!(open.is_empty(), "no running row is left: {open:?}");
 }
 
@@ -3368,14 +3537,16 @@ fn an_edit_is_answered_while_the_tier_lane_is_full_and_a_withdrawn_want_is_cance
     assert_eq!(keys.len(), 30);
     // the lane is full: an edit is answered at once, not after the builds
     let t1 = Instant::now();
-    let (head, v) = post_value(
+    let (head, v) = post::<_, edit::NamesRes>(
         &r,
         "/api/names",
         Some(&token),
         None,
-        &serde_json::json!({"text": "tile {}"}).to_string(),
+        &edit::NamesReq {
+            text: "tile {}".to_owned(),
+        },
     );
-    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
     assert!(
         t1.elapsed() < Duration::from_secs(1),
         "the edit waited {:?} behind the builds",
@@ -3434,32 +3605,46 @@ fn a_library_tile_has_a_super_low_picture_at_each_seed_and_they_differ() {
     assert_ne!(a, b, "two seeds drew the same picture");
 }
 
-/// A want the program cannot make is refused by name, never built and never answered with a shrug.
 #[test]
 fn the_tiers_route_refuses_a_bad_want_by_name() {
     let r = start(&[ROCKS_ONE], false);
     let id = id0(&r);
     let token = token_of(&r);
-    let ask = |want: Value| {
-        let body = serde_json::json!({"scope": "thumbs", "wants": [want]}).to_string();
-        post_value(&r, "/api/tiers/want", Some(&token), None, &body)
+    let ask = |want: tiers::TierWant| {
+        post_err(
+            &r,
+            "/api/tiers/want",
+            Some(&token),
+            None,
+            &tiers::TiersWantReq {
+                scope: "thumbs".to_owned(),
+                doc: None,
+                wants: vec![want],
+            },
+        )
     };
-    let (head, v) = ask(serde_json::json!({"tile": id, "tier": "huge"}));
+    let (head, v) = ask(tier_want(&id, "huge"));
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     assert!(
-        v.to_string().contains("a tier is low, super-low or full"),
-        "{v}"
+        format!("{v:?}").contains("a tier is low, super-low or full"),
+        "{v:?}"
     );
-    let (head, v) = ask(serde_json::json!({"tile": id, "tier": "low", "system": "zz"}));
+    let (head, v) = ask(tiers::TierWant {
+        system: Some("zz".to_owned()),
+        ..tier_want(&id, "low")
+    });
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
-    assert!(v.to_string().contains("the system is db or ol"), "{v}");
-    let (head, v) = ask(serde_json::json!({"tile": "nope", "tier": "low"}));
+    assert!(format!("{v:?}").contains("the system is db or ol"), "{v:?}");
+    let (head, v) = ask(tier_want("nope", "low"));
     assert!(head.starts_with("HTTP/1.1 404"), "{head}");
-    assert!(v.to_string().contains("no such tile"), "{v}");
-    // a field the contract does not have is refused, not ignored
-    let (head, v) = ask(serde_json::json!({"tile": id, "tier": "low", "size": 64}));
-    assert!(head.starts_with("HTTP/1.1 400"), "{head} {v}");
-    assert!(v.to_string().contains("size"), "{v}");
+    assert!(format!("{v:?}").contains("no such tile"), "{v:?}");
+    // a field the contract does not have is refused, not ignored (a body the request type cannot write, so this
+    // one is the wire's own)
+    let raw = format!(r#"{{"scope":"thumbs","wants":[{{"tile":{id:?},"tier":"low","size":64}}]}}"#);
+    let (head, body) = post_raw(&r, "/api/tiers/want", Some(&token), None, &raw);
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
+    let v: ErrorBody = read(&body);
+    assert!(format!("{v:?}").contains("size"), "{v:?}");
 }
 
 /// A line that ends off a seam: `dt::seam`, twice.
@@ -3477,6 +3662,7 @@ tile size="1x1" seed=97 {
 #[test]
 fn a_listed_tile_with_a_document_mistake_reaches_every_picture_as_the_tiles_mistake_with_its_code()
 {
+    use crate::message::Kind;
     let dir = std::env::temp_dir().join(format!("dt-pic-mistake-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -3504,11 +3690,17 @@ fn a_listed_tile_with_a_document_mistake_reaches_every_picture_as_the_tiles_mist
     let mut c = TcpStream::connect(r.addr).unwrap();
     write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
     c.set_read_timeout(Some(Duration::from_secs(120))).unwrap();
-    let body = serde_json::json!({"scope": "pics", "doc": doc_id, "wants": [
-        {"tile": bad_id, "tier": "super-low"}
-    ]})
-    .to_string();
-    let (head, _) = post_value(&r, "/api/tiers/want", Some(&token), None, &body);
+    let head = post_head(
+        &r,
+        "/api/tiers/want",
+        Some(&token),
+        None,
+        &tiers::TiersWantReq {
+            scope: "pics".to_owned(),
+            doc: Some(doc_id.clone()),
+            wants: vec![tier_want(&bad_id, "super-low")],
+        },
+    );
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     let mut seen = None;
     for l in BufReader::new(c).lines() {
@@ -3516,17 +3708,22 @@ fn a_listed_tile_with_a_document_mistake_reaches_every_picture_as_the_tiles_mist
         let Some(data) = l.strip_prefix("data: ") else {
             continue;
         };
-        let v: Value = serde_json::from_str(data).unwrap();
-        if v["type"] == "tier" && v["error"].is_string() {
-            seen = Some(v);
+        if let StreamEvent::Tier {
+            error: Some(error),
+            mistake,
+            code,
+            ..
+        } = read::<StreamEvent>(data.as_bytes())
+        {
+            seen = Some((error, mistake, code));
             break;
         }
     }
-    let ev = seen.expect("the tier's failure is announced");
+    let (error, mistake, code) = seen.expect("the tier's failure is announced");
     // the document's mistake, with its code: not the program's failure
-    assert_eq!(ev["mistake"], true, "{ev}");
-    assert_eq!(ev["code"], dt_lang::codes::SEAM, "{ev}");
-    assert!(ev["error"].as_str().unwrap().contains("is not a seam"));
+    assert!(mistake, "{error}");
+    assert_eq!(code.as_deref(), Some(dt_lang::codes::SEAM), "{error}");
+    assert!(error.contains("is not a seam"));
     // and the document that uses the picture is told as the tile's mistake, each with its place, file and help
     let said = messages(&r, &format!("tile={doc_id}&kind=error"));
     assert!(
@@ -3535,33 +3732,30 @@ fn a_listed_tile_with_a_document_mistake_reaches_every_picture_as_the_tiles_mist
     );
     assert!(
         said.iter()
-            .all(|m| m["code"] == dt_lang::codes::SEAM && m["kind"] == "error"),
+            .all(|m| m.code.as_deref() == Some(dt_lang::codes::SEAM) && m.kind == Kind::Error),
         "{said:?}"
     );
     assert!(
         messages(&r, "kind=server")
             .iter()
-            .all(|m| m["code"] != "tier" && m["code"] != "bug")
+            .all(|m| m.code.as_deref() != Some("tier") && m.code.as_deref() != Some("bug"))
     );
     let first = &said[0];
     assert!(
-        first["file"].as_str().unwrap().ends_with("broken.dtile"),
-        "{first}"
+        first.file.as_deref().unwrap().ends_with("broken.dtile"),
+        "{first:?}"
     );
     assert!(
-        first["doing"].as_str().unwrap().contains("super-low"),
-        "{first}"
+        first.doing.as_deref().unwrap().contains("super-low"),
+        "{first:?}"
     );
     assert!(
-        first["source"].as_str().unwrap().contains("through"),
-        "{first}"
+        first.source.as_deref().unwrap().contains("through"),
+        "{first:?}"
     );
-    assert!(first["help"].as_str().unwrap().contains("`wsw`"));
+    assert!(first.help.as_deref().unwrap().contains("`wsw`"));
     // one message, as the same text the whole list is copied in
-    let (head, text) = get(
-        &r,
-        &format!("/api/messages?seq={}&format=text", first["seq"]),
-    );
+    let (head, text) = get(&r, &format!("/api/messages?seq={}&format=text", first.seq));
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     let text = String::from_utf8(text).unwrap();
     for want in [
