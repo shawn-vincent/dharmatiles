@@ -138,6 +138,10 @@ impl Decoder<'_> {
 
     /// A height or length: a KDL number, or a quoted expression of the
     /// heights language, its names and measures checked.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     pub(crate) fn height_expr(
         &mut self,
         e: &KdlEntry,
@@ -1158,6 +1162,10 @@ impl Decoder<'_> {
 
     /// An angle written in format 1 as a string with its unit, in degrees;
     /// a mistake is reported and gives `None`.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+    )]
     pub(crate) fn angle_v1(&mut self, e: &KdlEntry) -> Option<f64> {
         let span = value_span(e);
         let text = match e.value() {

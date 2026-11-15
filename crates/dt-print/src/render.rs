@@ -275,8 +275,8 @@ fn crop(rgb: &[[f32; 3]], depth: &[f64], w: usize, h: usize) -> Image {
         }
     }
     Image {
-        width: u32::try_from(x1 - x0 + 1).unwrap_or(0),
-        height: u32::try_from(y1 - y0 + 1).unwrap_or(0),
+        width: dt_value::idx(x1 - x0 + 1),
+        height: dt_value::idx(y1 - y0 + 1),
         rgb: out,
     }
 }

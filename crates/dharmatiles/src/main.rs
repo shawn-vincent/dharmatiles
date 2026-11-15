@@ -115,6 +115,10 @@ fn install_panic_hook() {
     }));
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+)]
 fn main() -> ExitCode {
     install_panic_hook();
     if let Err(e) = terminal::install() {

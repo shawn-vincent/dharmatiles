@@ -49,7 +49,7 @@ pub fn start_on(c: &Curve, length: f64) -> ([f64; 3], [f64; 3], f64) {
         let seg = dist(pts[k], pts[k - 1]);
         if acc + seg >= length {
             let f = (length - acc) / seg.max(1e-12);
-            t_start = (f64::from(u32::try_from(k).unwrap_or(0)) - f) / 63.0;
+            t_start = (f64::from(dt_value::idx(k)) - f) / 63.0;
             found = true;
             break;
         }
@@ -194,7 +194,7 @@ fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
     }
     v.push(north);
     let nr = rings.len();
-    let u = |i: usize| u32::try_from(i).unwrap_or(u32::MAX);
+    let u = |i: usize| dt_value::idx(i);
     let mut tris = Vec::new();
     for k in 0..n_theta {
         tris.push([0, u(1 + k), u(1 + (k + 1) % n_theta)]);

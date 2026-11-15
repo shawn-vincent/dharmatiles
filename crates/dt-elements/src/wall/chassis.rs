@@ -630,7 +630,7 @@ pub(crate) fn solidify(
                     hi[k] = hi[k].max(p[k]);
                 }
             }
-            let i = u32::try_from(i).unwrap_or(u32::MAX);
+            let i = dt_value::idx(i);
             Ok((
                 solid(slots.get(i), &mesh).map_err(LookError::build)?,
                 lo,

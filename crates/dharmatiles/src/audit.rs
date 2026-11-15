@@ -120,6 +120,10 @@ pub(crate) fn stl_corner_round(footprint: [f64; 2]) -> f64 {
 
 /// A binary STL's triangles, vertices merged by position (as a slicer
 /// reads it).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(crate) fn read_stl(b: &[u8]) -> Option<dt_kit::TriMesh> {
     let n = usize::try_from(u32::from_le_bytes(b.get(80..84)?.try_into().ok()?)).ok()?;
     if b.len() < 84 + 50 * n {
@@ -136,7 +140,7 @@ pub(crate) fn read_stl(b: &[u8]) -> Option<dt_kit::TriMesh> {
             let p = [f(o), f(o + 4), f(o + 8)];
             *slot = *index.entry(p.map(f32::to_bits)).or_insert_with(|| {
                 m.positions.push(p.map(f64::from));
-                u32::try_from(m.positions.len() - 1).unwrap_or(u32::MAX)
+                dt_value::idx(m.positions.len() - 1)
             });
         }
         m.triangles.push(tri);

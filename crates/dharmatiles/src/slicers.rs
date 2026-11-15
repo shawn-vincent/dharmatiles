@@ -237,6 +237,10 @@ pub(crate) fn scan(install: &Install) -> Scan {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn num(s: &str) -> Option<f64> {
     s.trim().trim_end_matches('%').parse::<f64>().ok()
 }
@@ -489,6 +493,10 @@ fn json_slicer(install: &Install, problems: &mut Vec<String>) -> Vec<Candidate> 
     one_per_model(all)
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn json_candidate(
     name: &str,
     brand: &str,
@@ -591,6 +599,10 @@ fn merged(
     out
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn prusa(install: &Install, problems: &mut Vec<String>) -> Vec<Candidate> {
     let mut all = Vec::new();
     for root in &install.roots {

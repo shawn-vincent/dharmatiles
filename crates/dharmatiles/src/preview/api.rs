@@ -98,6 +98,10 @@ pub(super) fn ok<T: Serialize>(t: &T) -> Reply {
 }
 
 /// A route's outcome as the reply to send.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(super) fn reply<T: Serialize>(r: Out<T>) -> Reply {
     r.map_or_else(|e| e, |t| ok(&t))
 }

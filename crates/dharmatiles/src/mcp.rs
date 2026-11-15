@@ -66,6 +66,10 @@ fn is_json(ctype: &str) -> bool {
 /// After an answer given before the request was read to its end (a refusal):
 /// say no more, then read and drop what the client is still sending, so the
 /// close does not reset the connection and lose the answer on its way.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn finish_early(conn: &mut std::net::TcpStream) {
     use std::io::Read;
     // best effort: the answer is already written; a client that has gone needs nothing more

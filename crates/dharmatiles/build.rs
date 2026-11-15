@@ -39,6 +39,10 @@ const INPUTS: [&str; 6] = [
     "rust-toolchain.toml",
 ];
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn git(root: &Path, args: &[&str]) -> Option<String> {
     let out = Command::new("git")
         .current_dir(root)
@@ -52,6 +56,10 @@ fn git(root: &Path, args: &[&str]) -> Option<String> {
 
 /// The commits past the release: counted from the tag `v{version}`, else
 /// from the nearest `v*` tag, else from the first commit.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn distance(root: &Path, version: &str) -> Option<u64> {
     let tag = format!("refs/tags/v{version}");
     let base = if git(root, &["rev-parse", "-q", "--verify", &tag]).is_some() {
@@ -117,6 +125,10 @@ fn collect(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
 /// the vendored kernel, and the one library file compiled into the program
 /// (`parts/heights.dtile`).  The rest of the library is read at run time,
 /// and the cache keys on its text.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a path outside its root stays as written (display only)"
+)]
 fn source_hash(root: &Path) -> String {
     let mut files = Vec::new();
     if let Ok(rd) = std::fs::read_dir(root.join("crates")) {
@@ -155,6 +167,10 @@ fn source_hash(root: &Path) -> String {
     format!("{h:016x}")
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+)]
 fn main() {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
     let root = Path::new(&manifest).join("../..");

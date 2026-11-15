@@ -538,6 +538,10 @@ pub struct ExportBuilt {
 }
 
 /// 128 random bits, hex: the run's token.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a clock before 1970 or a missing mtime reads as zero (a stamp, never data)"
+)]
 pub(super) fn token() -> String {
     let word = |salt: u64| {
         let mut h = std::collections::hash_map::RandomState::new().build_hasher();
@@ -783,7 +787,7 @@ pub(super) fn step(shared: &Shared, tile: &TileRef, v: StepReq) -> super::route:
     let mesh = mesh.as_deref().map_or(&[][..], Vec::as_slice);
     let mut body = Vec::with_capacity(4 + json.len() + mesh.len());
     // a step's head is a few hundred bytes of JSON plus the text: far under 4 GiB
-    body.extend_from_slice(&u32::try_from(json.len()).unwrap_or(u32::MAX).to_be_bytes());
+    body.extend_from_slice(&dt_value::idx(json.len()).to_be_bytes());
     body.extend_from_slice(&json);
     body.extend_from_slice(mesh);
     super::route::Reply::Bytes(Arc::new(body))
@@ -1011,6 +1015,10 @@ pub(super) fn delete(shared: &Shared, tile: &TileRef, _: Nothing) -> Out<Deleted
 /// Make a small, valid tile in My tiles and return its slot. Starting from a
 /// printable flat square gives the editor something real to select and change;
 /// every later gesture remains ordinary `.dtile` text.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(super) fn new_tile(shared: &Shared, v: NewReq) -> Out<Listed> {
     // squares across, then up, as the size picker offers: 1 to 8 each way
     let size = v.size.as_deref().unwrap_or("1x1").trim();
@@ -1119,6 +1127,10 @@ pub(super) fn check_value(shared: &Shared, v: CheckValueReq) -> Out<CheckValueRe
 /// `/api/tiles/ID/printed`: what each written value prints on the current
 /// target (the system's square, the printer's layer), worked out by
 /// [`dt_doc::printed`] against the tile's own heights.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(super) fn printed(shared: &Shared, t: &TileRef, v: PrintedReq) -> Out<PrintedRes> {
     let opts = shared.options();
     let units = opts.units();
@@ -1418,6 +1430,10 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
 }
 
 /// May the editor write `file`?  Never the library, nor a read-only file.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
+)]
 pub(super) fn writable(file: &str) -> bool {
     !file.starts_with(dt_eval::LIB)
         && std::fs::metadata(file).is_ok_and(|m| m.is_file() && !m.permissions().readonly())
@@ -1555,6 +1571,10 @@ pub(super) fn lane_out<T>(r: Result<Out<T>, queue::Interrupted>) -> Out<T> {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a path outside its root stays as written (display only)"
+)]
 fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<ExportRes> {
     let tile = t.path.as_str();
     let threemf = v.threemf.unwrap_or(false);
@@ -1757,6 +1777,10 @@ mod tests {
         }
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    )]
     fn status(r: Out<impl Sized>) -> &'static str {
         r.map_or_else(|e| e.0, |_| "200 OK")
     }

@@ -259,6 +259,10 @@ pub(super) fn of_server_error(error: &ErrorDetail, tile: (&str, &str), origin: O
 }
 
 /// `GET /api/messages?tile=&since=&seq=&format=text|json&state=&kind=&severity=`.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(super) fn read(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> Reply {
     let since = param("since").and_then(|s| s.parse().ok()).unwrap_or(0);
     let tile = param("tile");
@@ -291,6 +295,10 @@ pub(super) fn read(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> R
 /// `GET /api/messages/report?seq=N[&source=0][&env=TEXT]`: the filled-in new-issue form for a message that means the
 /// program went wrong, as `{url, title, labels, body, truncated}` (the one producer, [`crate::report`]).  `env` is the
 /// page's own environment text; without it the program says its own.  A document mistake gets none: 400.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(super) fn report(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> Reply {
     let Some(seq) = param("seq").and_then(|s| s.parse::<u64>().ok()) else {
         return super::fail::refused("400 Bad Request", "report needs seq=N, a message's number")

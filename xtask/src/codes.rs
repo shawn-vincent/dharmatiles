@@ -44,6 +44,10 @@ struct Rule {
 
 /// Write the anchors and error pages, or with `check` change nothing and fail if any is missing or stale.
 /// `bin` is the program, run on each broken example for the message the page shows.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call); permitted silence: a path outside its root stays as written (display only)"
+)]
 pub fn run(root: &Path, check: bool, bin: &Path) -> Result<(), String> {
     let docs = root.join("docs");
     let mut files: BTreeMap<PathBuf, String> = BTreeMap::new(); // every file this module owns, as it should be

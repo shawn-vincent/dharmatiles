@@ -35,6 +35,10 @@ pub fn formats() -> String {
 /// program's build details (a program before 1.0.0 writes format 1 with its own
 /// build details).
 #[must_use]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub fn stamp(app_version: &str) -> String {
     let major: Option<u32> = app_version
         .split(['.', '+'])
@@ -59,6 +63,10 @@ pub struct Header {
 }
 
 /// The major part of a version string `major[.minor[.patch]][+build]`.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn parse_version(text: &str) -> Option<u32> {
     let (core, build) = text
         .split_once('+')
@@ -107,6 +115,10 @@ fn err(
     e
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn read_node(
     src: &Src,
     n: &KdlNode,

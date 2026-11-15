@@ -792,7 +792,7 @@ fn colour(boxes: &[Option<([f64; 2], [f64; 2])>]) -> Vec<usize> {
 
 /// Append `b` to `a` (disjoint shells).
 fn append(a: &mut TriMesh, b: &TriMesh) {
-    let base = u32::try_from(a.positions.len()).unwrap_or(u32::MAX);
+    let base = dt_value::idx(a.positions.len());
     a.positions.extend_from_slice(&b.positions);
     a.triangles.extend(
         b.triangles

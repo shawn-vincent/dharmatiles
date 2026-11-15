@@ -70,6 +70,10 @@ fn attr(tag: &str, name: &str) -> Option<String> {
 }
 
 /// `../` as many times as `page` is deep under `docs/`, or `./`.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a path outside its root stays as written (display only)"
+)]
 fn up(page: &Path, docs: &Path) -> String {
     let depth = page
         .strip_prefix(docs)
@@ -114,6 +118,10 @@ fn keys(root: &Path, files: &[String]) -> Result<BTreeMap<String, String>, Strin
 }
 
 /// The markup of one card: its poster (or, for an example that must fail, a plain note) and its source as text.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn block(root: &Path, card: &Card, key: &str, rel: &str) -> Result<String, String> {
     let file = root.join("docs").join(&card.src);
     let source = read(&file)?;
@@ -282,6 +290,10 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
 /// `cargo xtask examples [--out DIR]`: the poster of every example, `DIR/KEY.jpg` (docs/posters by default), each made once:
 /// a poster that is there is kept, for its name is its build's key.  The tile's top view cropped to its footprint, so the page
 /// can lay the overlay over it with no more than the tile's size.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a path outside its root stays as written (display only)"
+)]
 pub fn posters(root: &Path, args: &[String]) -> Result<(), String> {
     let out = match args {
         [] => root.join("docs/posters"),

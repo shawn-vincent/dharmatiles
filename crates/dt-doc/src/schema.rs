@@ -225,6 +225,10 @@ impl Control {
     /// The default as a decoded value: one of its words, or a number (a
     /// range for some); `None` without a default.
     #[must_use]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     pub fn default_value(&'static self) -> Option<crate::model::Value> {
         use crate::model::{Num, Value};
         if self.default.is_empty() {
@@ -706,6 +710,10 @@ impl Element {
     /// The width its footprint takes when its control is not written: the
     /// middle of the control's default, mm at the reference square.
     #[must_use]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter); permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+    )]
     pub fn footprint_default_mm(&'static self) -> Option<f64> {
         let f = self.footprint?;
         let mut parts = f.control.splitn(2, '/');

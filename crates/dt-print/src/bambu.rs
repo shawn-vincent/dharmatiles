@@ -312,6 +312,10 @@ pub(crate) fn settings(template: &str, slots: &[String]) -> Result<String, Strin
 ///
 /// # Errors
 /// When the template has no printable area to find the bed from.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub fn bed_corners(template: &str) -> Result<([f64; 2], [f64; 2]), String> {
     // `settings` has already parsed this same text (and refused it when it is
     // not JSON), so the parse cannot fail here; a Null just finds no bed.

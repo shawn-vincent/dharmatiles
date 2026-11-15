@@ -9,6 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+dt-value.workspace = true
 dt-eval.workspace = true
 dt-kit.workspace = true
 dt-lang.workspace = true

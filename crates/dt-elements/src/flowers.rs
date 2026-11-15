@@ -137,7 +137,7 @@ fn dome_on_column(
             ]);
         }
     }
-    let u = |i: usize| u32::try_from(i).unwrap_or(u32::MAX);
+    let u = |i: usize| dt_value::idx(i);
     let mut t: Vec<[u32; 3]> = Vec::new();
     for a in 0..AZ {
         t.push([0, u(1 + a), u(1 + (a + 1) % AZ)]);
@@ -294,8 +294,7 @@ pub(crate) fn stand(
         )
         .map_err(LookError::build)?;
     for (i, m) in parts.iter().enumerate() {
-        let solid =
-            form::solid(slots.get(u32::try_from(i).unwrap_or(0)), m).map_err(LookError::build)?;
+        let solid = form::solid(slots.get(dt_value::idx(i)), m).map_err(LookError::build)?;
         scene.add(
             Tag {
                 kind: Kind::Flowers,

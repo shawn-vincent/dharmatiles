@@ -424,6 +424,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     fn every_library_and_test_tile_describes_its_stack_without_a_bad_span() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
         let mut paths = Vec::new();

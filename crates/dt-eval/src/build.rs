@@ -727,6 +727,10 @@ impl<'a> Plan<'a> {
     }
 
     /// The union, the gate and the result.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn finish(
         &self,
         path: &str,
@@ -877,6 +881,10 @@ impl<'a> Plan<'a> {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn trace_entries(scene: &Scene, mesh: &dt_kit::TriMesh, plan: &Plan<'_>) -> (Vec<u16>, Vec<u16>) {
     let (tile, c, masks) = (plan.tile, plan.c, &plan.masks);
     let writes = &c.writes;

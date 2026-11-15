@@ -163,7 +163,7 @@ fn tube(
         }
     }
     let nr = rings.len();
-    let idx = |r: usize, k: usize| u32::try_from(r * n_sides + k % n_sides).unwrap_or(u32::MAX);
+    let idx = |r: usize, k: usize| dt_value::idx(r * n_sides + k % n_sides);
     let mut tris: Vec<[u32; 3]> = Vec::new();
     for r in 0..nr - 1 {
         for k in 0..n_sides {
@@ -172,7 +172,7 @@ fn tube(
         }
     }
     // start cap
-    let cs = u32::try_from(positions.len()).unwrap_or(u32::MAX);
+    let cs = dt_value::idx(positions.len());
     positions.push(rings[0].0);
     for k in 0..n_sides {
         tris.push([cs, idx(0, k + 1), idx(0, k)]);
@@ -193,9 +193,7 @@ fn tube(
                     let (ca, sa) = (libm::cos(*a), libm::sin(*a));
                     positions.push([0, 1, 2].map(|d| centre[d] + rr * (ca * u[d] + sa * v[d])));
                 }
-                let cur: Vec<u32> = (0..n_sides)
-                    .map(|k| u32::try_from(base + k).unwrap_or(u32::MAX))
-                    .collect();
+                let cur: Vec<u32> = (0..n_sides).map(|k| dt_value::idx(base + k)).collect();
                 for k in 0..n_sides {
                     let k1 = (k + 1) % n_sides;
                     tris.push([prev[k], prev[k1], cur[k1]]);
@@ -203,7 +201,7 @@ fn tube(
                 }
                 prev = cur;
             } else {
-                let pole = u32::try_from(positions.len()).unwrap_or(u32::MAX);
+                let pole = dt_value::idx(positions.len());
                 positions.push(centre);
                 for k in 0..n_sides {
                     tris.push([pole, prev[k], prev[(k + 1) % n_sides]]);
@@ -211,7 +209,7 @@ fn tube(
             }
         }
     } else {
-        let ce = u32::try_from(positions.len()).unwrap_or(u32::MAX);
+        let ce = dt_value::idx(positions.len());
         positions.push(tip_c);
         for k in 0..n_sides {
             tris.push([ce, idx(last, k), idx(last, k + 1)]);

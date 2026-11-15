@@ -113,6 +113,10 @@ mod tests {
     const CPU_FACTOR: f64 = 2.5;
 
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     fn the_estimate_holds_to_measurements() {
         let mut off = Vec::new();
         for (path, mb, cpu) in MEASURED {

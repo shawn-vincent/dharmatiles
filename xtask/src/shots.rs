@@ -354,6 +354,10 @@ fn find_chrome() -> Result<PathBuf, String> {
 }
 
 /// Node 22 or newer (the script uses its built-in `WebSocket` and `fetch`).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn find_node() -> Result<PathBuf, String> {
     let out = Command::new("node")
         .arg("--version")
@@ -381,6 +385,10 @@ fn find_node() -> Result<PathBuf, String> {
 /// `x-light.webp`, `x-dark.webp`, an `x` entry in `shots.json` and, for each
 /// `data-at="k"` in its key, an anchor `k`. Run by `cargo xtask docs` (and
 /// `--check`) and by this crate's test.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a path outside its root stays as written (display only)"
+)]
 pub fn check(root: &Path) -> Result<(), String> {
     let dir = root.join(DIR);
     let book_path = dir.join("shots.json");
@@ -453,6 +461,10 @@ fn html_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     fn the_docs_pictures_exist() {
         let root = crate::root();
         super::check(&root).unwrap_or_else(|e| panic!("{e}"));
@@ -460,6 +472,10 @@ mod tests {
 
     /// `docs/assets/shots/shots.d.ts` is what [`super::Book`] says; `DT_CONTRACT=write` rewrites it.
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call); a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     fn the_shots_types_are_current() {
         let mut all = dt_doc::contract::Contract::default();
         all.add::<super::Book>();
@@ -470,7 +486,7 @@ mod tests {
             all.declarations()
         );
         let file = crate::root().join(super::DIR).join("shots.d.ts");
-        if std::env::var("DT_CONTRACT").is_ok_and(|v| v == "write") {
+        if std::env::var_os("DT_CONTRACT").is_some_and(|v| v == "write") {
             std::fs::write(&file, &want).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
             return;
         }

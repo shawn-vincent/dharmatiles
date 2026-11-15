@@ -4,6 +4,10 @@
 //! of format 0 ones building the same mesh.
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+)]
 
 use crate::common;
 

@@ -334,6 +334,9 @@ fn deinterleave(props: &[f64], np: usize) -> (Vec<[f64; 3]>, Vec<f64>) {
 /// Narrow an index buffer that the kernel already limits to 32 bits.
 fn narrow(v: impl IntoIterator<Item = u64>) -> Vec<u32> {
     v.into_iter()
-        .map(|x| u32::try_from(x).unwrap_or(u32::MAX))
+        .map(|x| match u32::try_from(x) {
+            Ok(v) => v,
+            Err(_) => panic!("kernel index {x} does not fit 32 bits"),
+        })
         .collect()
 }

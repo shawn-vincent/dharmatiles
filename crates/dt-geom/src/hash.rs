@@ -39,7 +39,7 @@ impl SpatialHash {
     /// Add a disc.
     pub fn insert(&mut self, x: f64, y: f64, r: f64) {
         let k = self.bin(y, self.ny) * self.nx + self.bin(x, self.nx);
-        let id = u32::try_from(self.discs.len()).unwrap_or(u32::MAX);
+        let id = dt_value::idx(self.discs.len());
         self.discs.push([x, y, r]);
         self.bins[k].push(id);
     }

@@ -287,6 +287,10 @@ fn names_of(list: &PrintList) -> BTreeMap<String, String> {
 }
 
 /// The standard height names with their value in dmm, for the page's chooser.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn height_names(list: &PrintList) -> Vec<HeightName> {
     let names = names_of(list);
     let own: Vec<&str> = list.lets.iter().map(|l| l.name.value.as_str()).collect();
@@ -305,6 +309,10 @@ fn height_names(list: &PrintList) -> Vec<HeightName> {
 
 /// The mode a list's plates would be in, as `single` or `multi` (the
 /// inventory's word).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn colour_of(list: &PrintList, printer: &str, home: Option<&Path>) -> &'static str {
     use dt_doc::map::Mode;
     let slots = dt_eval::printer_machine(printer, home).map_or(1, |m| m.slot_count());
@@ -324,6 +332,10 @@ fn colour_of(list: &PrintList, printer: &str, home: Option<&Path>) -> &'static s
 /// exists, how many pieces it leaves off and how many print.
 ///
 /// An inventory that does not read counts as none here: the snapshot says what is wrong with it.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn mark_shelf(pieces: &mut [ScenePiece], home: Option<&Path>) -> (bool, usize, usize) {
     use dt_doc::inventory::{Colour, Identity, Shelf};
     let loaded = home.and_then(|h| dt_print::inventory::load(h).ok().flatten());
@@ -391,6 +403,10 @@ fn mark_shelf(pieces: &mut [ScenePiece], home: Option<&Path>) -> (bool, usize, u
 }
 
 /// Read a map: its pieces' tiles, places and heights.  No tile is built.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter); unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> Scene {
     let base = shared.options();
     let home = shared.home.as_deref();
@@ -620,6 +636,10 @@ fn shape_of(mesh: &dt_kit::TriMesh, w: f64, d: f64) -> Shape {
 
 /// A crown over a taller neighbour: found from each piece's low build (kept
 /// beside the full one), said as a note for each pair.  Never a refusal.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
     let base = shared.options();
     let mut shapes: BTreeMap<(String, u64, dt_lang::System), Option<Shape>> = BTreeMap::new();

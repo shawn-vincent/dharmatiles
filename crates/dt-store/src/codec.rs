@@ -7,6 +7,7 @@
 //! are left, so a damaged file is an error in words, never a huge
 //! allocation or a panic.
 
+use dt_value::LockExt as _;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -235,9 +236,7 @@ impl<'a> Rd<'a> {
 /// back, the few distinct words are kept for the run (each leaked once).
 fn intern(s: &str) -> &'static str {
     static POOL: Mutex<BTreeSet<&'static str>> = Mutex::new(BTreeSet::new());
-    let mut pool = POOL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut pool = POOL.lock_unpoisoned();
     if let Some(k) = pool.get(s) {
         return k;
     }
@@ -447,6 +446,10 @@ fn debug_in(r: &mut Rd) -> R<Debug> {
 
 /// What the cache keeps of a build, as bytes.  `reused` and the cache's own
 /// note belong to the run that made it and are not kept.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(super) fn built_out(b: &Built) -> Vec<u8> {
     let mut w = Wr(Vec::with_capacity(
         b.export.mesh.positions.len() * 24 + b.export.mesh.triangles.len() * 40 + 4096,

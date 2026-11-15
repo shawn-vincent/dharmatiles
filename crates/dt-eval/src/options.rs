@@ -227,6 +227,10 @@ impl Default for Options {
     ///
     /// # Panics
     /// If the library's default printer does not decode.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     fn default() -> Self {
         Self::new().unwrap_or_else(|e| panic!("the bundled printer must decode: {e:?}"))
     }

@@ -1400,6 +1400,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     fn every_number_default_is_one_its_control_takes() {
         let level = |_: &str| None;
         for (owner, k) in every_control() {

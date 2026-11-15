@@ -185,6 +185,10 @@ impl Crown {
 
     /// Whether the crown, walked down its steepest slope from `p` (normal
     /// `n`) for [`BELOW_STEPS`] steps of [`BELOW_STEP_MM`], gets below `z`.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    )]
     pub(super) fn goes_below(&self, p: V, n: V, z: f64) -> bool {
         let down = sub([0.0, 0.0, -1.0], scale(n, -n[2]));
         if norm(down) < 1e-6 {

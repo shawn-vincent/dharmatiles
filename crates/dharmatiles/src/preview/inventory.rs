@@ -155,6 +155,10 @@ pub(super) fn snapshot(home: Option<&Path>) -> InventoryState {
 // ---- the document ---------------------------------------------------------------------------
 
 /// Open or rebuild an inventory document for the page.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
+)]
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     let files = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
     let writable = std::fs::metadata(path).is_ok_and(|m| !m.permissions().readonly());
@@ -656,6 +660,10 @@ fn say_problem(shared: &Shared, text: &str) {
 /// or into a new one beside your tiles.  A piece you still have is added with
 /// `print=always`; one you do not is a plain piece, which prints because the
 /// inventory lacks it.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
+)]
 pub(super) fn reprint(shared: &Shared, v: InventoryReprintReq) -> Out<InventoryReprinted> {
     let (tile, seed, system) = (v.tile.as_str(), v.seed, v.system);
     let colour: Colour = v.colour.into();

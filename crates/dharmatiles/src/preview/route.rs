@@ -92,6 +92,10 @@ pub(super) fn tile_route(path: &str) -> Option<(&str, &str)> {
 /// With `DT_WEB` set to `web/preview`, the page's own files (only the
 /// paths the program serves) are read from there on every request, so the
 /// page can be worked on without rebuilding the program.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn dev_asset(path: &str) -> Option<(&'static str, Vec<u8>)> {
     let dir = std::env::var_os("DT_WEB")?;
     let (ctype, _) = assets::find(path)?;
@@ -111,6 +115,10 @@ fn dev_asset(path: &str) -> Option<(&'static str, Vec<u8>)> {
 }
 
 /// The reply to one request.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
     if !loopback(&req.host) {
         return fail::refused(

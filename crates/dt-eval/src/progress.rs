@@ -14,6 +14,7 @@
 //! that, the bar creeps through the stage by its expected duration and
 //! never reaches the end of it before the stage reports it is over.
 
+use dt_value::LockExt as _;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -281,9 +282,7 @@ impl Tracker {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.state.lock_unpoisoned()
     }
 
     /// The current status.

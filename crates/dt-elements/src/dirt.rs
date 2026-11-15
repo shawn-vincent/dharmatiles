@@ -797,6 +797,10 @@ struct Held {
 /// an edge. `None` when nothing is laid under it (nothing is under it but
 /// its own band); a band that cannot be laid over the surface is counted as
 /// left out.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn hold(
     scene: &Scene,
     ctx: &Ctx<'_>,

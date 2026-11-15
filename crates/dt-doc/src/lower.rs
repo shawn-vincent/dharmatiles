@@ -451,6 +451,10 @@ fn ranged_expr(src: &str, e: &Expr) -> Result<Ranged, RangeRefusal> {
 /// `None` for a value that does not parse (the reader's check says so) or
 /// that names things only the document knows.
 #[must_use]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub fn weighting_flaw_in(src: &str, units: crate::units::Units) -> Option<RangeRefusal> {
     let e = crate::expr::parse(src.trim()).ok()?;
     let e = crate::units::lower(&e, crate::units::Base::Dmm, units, None).ok()?;

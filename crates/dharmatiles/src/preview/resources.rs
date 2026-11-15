@@ -98,6 +98,10 @@ impl Resource {
 }
 
 impl Shared {
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+    )]
     pub(super) fn places_value(&self) -> Places {
         Places {
             roots: lock(&self.roots)

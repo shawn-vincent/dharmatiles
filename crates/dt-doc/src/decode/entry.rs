@@ -373,6 +373,10 @@ impl Decoder<'_> {
 
     /// A place word on an entry; false when `key` is not one.
     #[allow(clippy::too_many_lines)]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn place_word(
         &mut self,
         entry: &mut Entry,

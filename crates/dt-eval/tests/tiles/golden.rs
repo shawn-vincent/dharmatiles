@@ -11,6 +11,10 @@
 //! hash snapshot is shared by macOS and Linux; Windows checks the metrics
 //! snapshot and the render gate only.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+)]
 #![allow(
     clippy::unwrap_used,
     clippy::cast_possible_truncation,

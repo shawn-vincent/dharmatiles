@@ -739,6 +739,10 @@ pub struct StageTick {
 
 /// How many stages a build of `source` will announce: its stack, the union and the audit.  A document that
 /// does not check builds nothing, and the build reports why, so the count only has to be a number.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn stage_total(source: &dyn Source, system: System) -> usize {
     let stack = options(source, system)
         .ok()
@@ -756,6 +760,10 @@ struct Ticks {
 }
 
 impl dt_kit::Reporter for Ticks {
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    )]
     fn report(&self, event: &dt_kit::Event<'_>) {
         use std::sync::atomic::Ordering::Relaxed;
         let total = self.total.max(1);
@@ -1200,9 +1208,13 @@ mod tests {
     /// site's scripts are checked against that file by `tsc` (`npm test` in web/preview), so a field renamed here
     /// fails there.
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
+    )]
     fn the_engine_contract_is_current() {
         let want = engine_typescript();
-        if std::env::var("DT_CONTRACT").is_ok_and(|v| v == "write") {
+        if std::env::var_os("DT_CONTRACT").is_some_and(|v| v == "write") {
             std::fs::write(contract_file(), &want).unwrap();
             return;
         }

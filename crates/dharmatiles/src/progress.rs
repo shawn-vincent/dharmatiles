@@ -18,6 +18,10 @@ pub(crate) const WRITE: &str = "write";
 
 /// A tile's tracker, from a plan pass (`None` when the document does not
 /// plan: the build will report why).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(crate) fn tracker_for(
     sources: &dyn Source,
     path: &str,
@@ -78,6 +82,10 @@ pub(crate) fn line(prefix: &str, name: &str, s: &Status, width: usize) -> String
 
 /// A status line on stderr that redraws in place, at most ten times a
 /// second (the tracker throttles).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies); permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(crate) fn tty_sink(prefix: String, name: String) -> Box<dyn Fn(&Status) + Send + Sync> {
     let width = std::env::var("COLUMNS")
         .ok()

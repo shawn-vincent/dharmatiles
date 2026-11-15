@@ -746,6 +746,10 @@ impl<'k> Decoder<'k> {
     /// along a square's side (a decimal or a fraction) and its word on each
     /// side, and the words of the tile's corners. The positions must be closed
     /// under the quarter turn.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn seams(&mut self, n: &KdlNode) -> Option<crate::seams::SeamTable> {
         use crate::seams::{Seam, SeamTable};
         let mut table = SeamTable::default();
@@ -873,6 +877,10 @@ impl<'k> Decoder<'k> {
         Some(table)
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn tile_header(&mut self, node: &KdlNode) -> TileHeader {
         let mut h = TileHeader {
             cols: 1,
@@ -1643,6 +1651,10 @@ impl<'k> Decoder<'k> {
 
     /// A printer's number in format 1: printed millimetres (`0.4mm`), or an
     /// angle (`55deg`).  A mistake is reported and gives `None`.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+    )]
     fn printer_value(&mut self, key: &str, e: &KdlEntry) -> Option<f64> {
         use crate::units::{Base, Want, expect, lower};
         let span = value_span(e);
@@ -1843,6 +1855,10 @@ impl<'k> Decoder<'k> {
 
 /// A `seed=` value: a whole number from 0 to `i64::MAX`, or why not (the
 /// message and its label).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(crate) fn seed_value(e: &KdlEntry) -> Result<i64, (String, &'static str)> {
     match e.value().as_integer() {
         Some(i) => i64::try_from(i).ok().filter(|i| *i >= 0).ok_or_else(|| {

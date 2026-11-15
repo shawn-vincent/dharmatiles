@@ -231,7 +231,7 @@ pub fn stand(
     let solids: Vec<Solid> = cutters
         .par_iter()
         .enumerate()
-        .map(|(k, m)| form::solid(slots.get(u32::try_from(k).unwrap_or(u32::MAX)), m))
+        .map(|(k, m)| form::solid(slots.get(dt_value::idx(k)), m))
         .collect::<Result<_, _>>()?;
     #[allow(clippy::cast_precision_loss)]
     let stood = Stood {
@@ -499,7 +499,7 @@ fn tetra_mesh(v: &[f64], dims: [usize; 3], origin: [f64; 3], step: [f64; 3]) -> 
                             let (pa, pb) = (pos(ca.0, ca.1, ca.2), pos(cb.0, cb.1, cb.2));
                             out.positions
                                 .push([0, 1, 2].map(|q| pa[q] + (pb[q] - pa[q]) * t));
-                            u32::try_from(out.positions.len() - 1).unwrap_or(u32::MAX)
+                            dt_value::idx(out.positions.len() - 1)
                         })
                     };
                     let mut polygon: Vec<u32> = Vec::with_capacity(4);

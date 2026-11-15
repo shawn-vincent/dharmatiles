@@ -25,6 +25,10 @@ pub(crate) const KEYS: [&str; 11] = [
 ];
 
 /// A length in millimetres: `180mm`, `0.4 mm`; `Err` says what is wrong.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn mm(text: &str) -> Result<f64> {
     let t = text.trim();
     let n = t.strip_suffix("mm").ok_or_else(|| {
@@ -160,6 +164,10 @@ impl Decoder<'_> {
         false
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn slots(&mut self, c: &KdlNode) -> Option<Spanned<u32>> {
         let [e] = c.entries() else {
             self.err(

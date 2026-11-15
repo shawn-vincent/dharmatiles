@@ -150,6 +150,10 @@ type PlateMesh = (TriMesh, Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<u16>);
 
 /// The pieces on one plate, as one mesh with each triangle's colour: every
 /// piece baked at its place, resting on the bed.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn plate_mesh(
     layout: &Layout,
     parts: &[Shown],
@@ -174,7 +178,7 @@ fn plate_mesh(
         // placed by the box the packer measured (the full mesh's), not the box of the thinned
         // mesh drawn here, which is smaller and would stand the piece off its footprint
         let bx = &parts[i.kind].boxes;
-        let base = u32::try_from(mesh.positions.len()).unwrap_or(u32::MAX);
+        let base = dt_value::idx(mesh.positions.len());
         mesh.positions.extend(dt_print::stand_positions(
             &part.export.mesh.positions,
             bx.lo,
@@ -203,6 +207,10 @@ fn plate_mesh(
 /// The settings as written, for a page that has no plan to show (the list
 /// does not plan): the panel still offers the printer and the mode, so the
 /// mistake can be mended there.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn written_panel(
     list: &dt_doc::map::PrintList,
     home: Option<&Path>,
@@ -435,6 +443,10 @@ fn after_seen(path: &str) {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     // the times of the files this plan will be of, taken *before* they are read: a file that changes while the plan is
     // made is a change the worker sees afterwards, never one this plan is taken to have included
@@ -501,6 +513,10 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     );
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
+)]
 fn rebuild_plates(
     shared: &Arc<Shared>,
     id: &str,

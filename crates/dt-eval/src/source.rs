@@ -43,6 +43,10 @@ pub fn library_dir() -> Option<&'static Path> {
     DISK.get_or_init(find_library).as_deref()
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn find_library() -> Option<PathBuf> {
     let ok = |d: &Path| d.join("printers/default.dtile").is_file();
     if let Some(d) = std::env::var_os("DT_LIBRARY").map(PathBuf::from) {
@@ -69,6 +73,10 @@ fn find_library() -> Option<PathBuf> {
 /// installed beside the program (`docs/` next to it, or Homebrew's `../share/dharmatiles/docs`), else this source
 /// tree's `docs/`.  `None` when no docs are found.
 #[must_use]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub fn docs_dir() -> Option<PathBuf> {
     let ok = |d: &Path| d.join("index.html").is_file();
     if let Some(d) = std::env::var_os("DT_DOCS").map(PathBuf::from) {

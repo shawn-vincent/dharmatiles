@@ -33,4 +33,12 @@ disallowed-methods = [
     { path = "f32::ln", reason = "use libm::logf (one maths on every target)" },
     { path = "f32::powf", reason = "use libm::powf (one maths on every target)" },
     { path = "f32::hypot", reason = "use libm::hypotf (one maths on every target)" },
+    { path = "core::result::Result::ok", reason = "a Result's error is never dropped: `?` it to a boundary, or mark a permitted silence with #[expect(clippy::disallowed_methods, reason = ...)] (docs/standards/errors.html)" },
+    { path = "core::result::Result::unwrap_or_default", reason = "a failure never becomes a default: `?` it to a boundary, or mark a permitted silence (docs/standards/errors.html)" },
+    { path = "core::result::Result::unwrap_or", reason = "a failure never becomes a fallback value: `?` it to a boundary, or mark a permitted silence (docs/standards/errors.html)" },
+    { path = "core::result::Result::unwrap_or_else", reason = "a failure never becomes a fallback value: `?` it to a boundary, or mark a permitted silence (docs/standards/errors.html)" },
+    { path = "core::result::Result::map_or", reason = "a failure never becomes a fallback value: match the Result, or mark a permitted silence (docs/standards/errors.html)" },
+    { path = "core::result::Result::map_or_else", reason = "a failure never becomes a fallback value: match the Result, or mark a permitted silence (docs/standards/errors.html)" },
+    { path = "core::result::Result::is_ok_and", reason = "a failure is not a plain false: match the Result, or mark a permitted silence (docs/standards/errors.html)" },
+    { path = "core::result::Result::is_err_and", reason = "match the Result, or mark a permitted silence (docs/standards/errors.html)" },
 ]

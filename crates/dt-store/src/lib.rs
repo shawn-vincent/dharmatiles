@@ -34,6 +34,7 @@
 
 mod codec;
 
+use dt_value::LockExt as _;
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -122,8 +123,7 @@ impl<'a> Tracked<'a> {
     pub fn reads(&self) -> Reads {
         Reads(
             self.seen
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_unpoisoned()
                 .iter()
                 .map(|(p, t)| (p.clone(), t.clone()))
                 .collect(),
@@ -135,8 +135,7 @@ impl Source for Tracked<'_> {
     fn read(&self, path: &str) -> Result<String, String> {
         let text = self.inner.read(path)?;
         self.seen
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .lock_unpoisoned()
             .insert(path.to_owned(), text.clone());
         Ok(text)
     }
@@ -466,6 +465,10 @@ impl Store {
     ///
     /// # Errors
     /// The folder or file cannot be written, in words.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a clock before 1970 or a missing mtime reads as zero (a stamp, never data)"
+    )]
     pub fn put(&self, key: &Key, built: &Built) -> Result<(), String> {
         let file = self.file_of(key);
         let dir = file
@@ -560,6 +563,10 @@ impl Store {
     }
 
     /// Every file under the cache: size and last use.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call); permitted silence: a clock before 1970 or a missing mtime reads as zero (a stamp, never data)"
+    )]
     fn files(&self) -> Result<Vec<Stray>, String> {
         let mut out = Vec::new();
         for root in self.roots()? {
@@ -1035,6 +1042,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn sizes_parse() {
         assert_eq!(parse_size("4GB").unwrap_or(0), 4 << 30);
         assert_eq!(parse_size("500 MB").unwrap_or(0), 500 << 20);

@@ -517,6 +517,10 @@ impl Reader {
     }
 
     /// A length in millimetres, `"3mm"`.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn mm(&mut self, key: &str, e: &KdlEntry) -> Option<Spanned<f64>> {
         let span = value_span(e);
         let KdlValue::String(s) = e.value() else {
@@ -566,6 +570,10 @@ impl Reader {
         }
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn piece(&mut self, n: &KdlNode) -> Option<Piece> {
         let mut pos: Vec<&KdlEntry> = Vec::new();
         let mut p = Piece {
@@ -741,6 +749,10 @@ impl Reader {
     }
 
     /// `grid cols=8 rows=5`.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn grid(&mut self, n: &KdlNode, list: &mut PrintList) {
         if list.grid.is_some() {
             self.err(
@@ -835,6 +847,10 @@ impl Reader {
     }
 
     /// `pin p4 plate=1 at="(0mm, 5mm)" turn=90`.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn pin(&mut self, n: &KdlNode) -> Option<Pin> {
         let pos: Vec<&KdlEntry> = n.entries().iter().filter(|e| e.name().is_none()).collect();
         let [id] = pos.as_slice() else {

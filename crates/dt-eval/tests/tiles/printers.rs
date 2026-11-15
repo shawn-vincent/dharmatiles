@@ -3,6 +3,10 @@
 //! and the floors a machine leaves out are the default profile's.
 
 #![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+)]
 
 use dt_eval::{ProfileKind, printer_machine, printer_names, printer_profile};
 

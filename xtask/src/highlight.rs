@@ -205,6 +205,10 @@ pub struct Said {
 ///
 /// # Errors
 /// On an escape sequence this does not know: nothing is dropped unseen.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub fn ansi(text: &str) -> Result<Said, String> {
     #[derive(Clone, Copy, Default, PartialEq)]
     struct State {

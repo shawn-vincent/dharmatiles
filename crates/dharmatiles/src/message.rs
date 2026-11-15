@@ -733,6 +733,10 @@ fn clock(ms: u64) -> String {
 }
 
 /// `2026-11-12T10:41:40.771Z` of a time in milliseconds since 1970.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn iso(ms: u64) -> String {
     // civil date from days since 1970 (Howard Hinnant's algorithm)
     let days = i64::try_from(ms / 86_400_000).unwrap_or(0) + 719_468;

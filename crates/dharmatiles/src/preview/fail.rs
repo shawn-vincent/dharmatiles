@@ -16,10 +16,11 @@
 //! one.  A panic's is taken in the panic hook, where the stack still is, and
 //! picked up where the panic is caught.
 
+use dt_value::LockExt as _;
 use std::backtrace::Backtrace;
 use std::cell::RefCell;
 use std::panic::PanicHookInfo;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::api::{Body, ErrorBody, ErrorContext, ErrorDetail, Mistake};
@@ -102,7 +103,7 @@ pub fn record(info: &PanicHookInfo<'_>) -> Panic {
         location,
         backtrace: panic_trace(),
     };
-    *LAST_PANIC.lock().unwrap_or_else(PoisonError::into_inner) = Some(p.clone());
+    *LAST_PANIC.lock_unpoisoned() = Some(p.clone());
     PANIC.with(|c| *c.borrow_mut() = Some(p.clone()));
     p
 }
@@ -171,14 +172,15 @@ fn capture_trace() -> String {
 }
 
 fn take_panic() -> Option<Panic> {
-    PANIC.with(|c| c.borrow_mut().take()).or_else(|| {
-        LAST_PANIC
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .take()
-    })
+    PANIC
+        .with(|c| c.borrow_mut().take())
+        .or_else(|| LAST_PANIC.lock_unpoisoned().take())
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(crate) fn now_ms() -> u64 {
     // a clock before 1970 is not a case; 0 then, in a field only the page's dedupe reads
     SystemTime::now()

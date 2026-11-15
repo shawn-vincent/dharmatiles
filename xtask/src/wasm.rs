@@ -241,6 +241,10 @@ fn size(p: &Path) -> Result<u64, String> {
         .map_err(|e| format!("cannot read {}: {e}", p.display()))
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn which(tool: &str) -> bool {
     Command::new(tool)
         .arg("--version")
@@ -274,6 +278,10 @@ fn collect(root: &Path, dir: &Path, out: &mut BTreeMap<String, String>) -> Resul
 mod tests {
     /// `docs/assets/live/engine-manifest.d.ts` is what [`super::EngineManifest`] says; `DT_CONTRACT=write` rewrites it.
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call); a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     fn the_engine_manifest_type_is_current() {
         let mut all = dt_doc::contract::Contract::default();
         all.add::<super::EngineManifest>();
@@ -284,7 +292,7 @@ mod tests {
             all.declarations()
         );
         let file = crate::root().join("docs/assets/live/engine-manifest.d.ts");
-        if std::env::var("DT_CONTRACT").is_ok_and(|v| v == "write") {
+        if std::env::var_os("DT_CONTRACT").is_some_and(|v| v == "write") {
             std::fs::write(&file, &want).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
             return;
         }

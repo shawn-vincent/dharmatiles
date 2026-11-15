@@ -6,6 +6,10 @@
 //! The engine's check compiles Manifold with clang, so it needs
 //! `brew install llvm lld cmake` and runs with `--ignored` (`cargo xtask wasm
 //! --check` runs both).
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+)]
 
 use std::process::Command;
 

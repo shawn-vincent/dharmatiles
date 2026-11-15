@@ -127,6 +127,10 @@ fn lane(bins: &[&Binary]) -> Vec<String> {
 ///
 /// # Errors
 /// The build's, or every failing binary, with its output.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub fn tests(cargo: Command, build: bool) -> Result<(), String> {
     let bins = built(cargo)?;
     if build {

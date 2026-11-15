@@ -8,6 +8,10 @@ use crate::expr::{self, Expr};
 use crate::model::{Num, Spanned, Value};
 use crate::schema::{Axis, Control, Refusal, Word, did_you_mean};
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn as_f64(v: &KdlValue) -> Option<f64> {
     match v {
         KdlValue::Integer(i) => i.to_string().parse().ok(),
@@ -429,6 +433,10 @@ fn percent_flaw(
 
 /// What is wrong with a number with no names in it, against the control's
 /// limits (`(h)` is in wall tops, checked in mm).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+)]
 fn range_flaw(
     x: &Expr,
     axis: Axis,

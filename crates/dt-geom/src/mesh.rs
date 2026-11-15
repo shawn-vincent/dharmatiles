@@ -47,8 +47,8 @@ impl TriMesh {
     /// overlaps stay.  Per-vertex properties and face IDs are kept only
     /// when both meshes have them alike.
     pub fn append(&mut self, other: &TriMesh) {
-        let base_v = u32::try_from(self.positions.len()).unwrap_or(u32::MAX);
-        let base_i = u32::try_from(self.triangles.len() * 3).unwrap_or(u32::MAX);
+        let base_v = dt_value::idx(self.positions.len());
+        let base_i = dt_value::idx(self.triangles.len() * 3);
         let first = self.triangles.is_empty() && self.positions.is_empty();
         if first {
             self.num_extra = other.num_extra;
@@ -113,7 +113,7 @@ impl TriMesh {
             return true;
         }
         let mut canon: Vec<u32> = (0..self.positions.len())
-            .map(|i| u32::try_from(i).unwrap_or(u32::MAX))
+            .map(|i| dt_value::idx(i))
             .collect();
         for (&f, &t) in self.merge_from.iter().zip(&self.merge_to) {
             if let Some(slot) = canon.get_mut(f as usize) {

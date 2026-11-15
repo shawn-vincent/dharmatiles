@@ -222,6 +222,10 @@ pub struct MapsBatched {
 }
 
 /// The scene of `text` (the file at revision `rev`) as the page reads it (no builds).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(super) fn scene_of(shared: &Shared, path: &str, text: &str, rev: u64) -> Option<SceneJson> {
     decode(path, text)
         .ok()
@@ -253,6 +257,10 @@ fn props_of(set: &PieceWords) -> Result<Vec<(&'static str, Option<Prop>)>, Strin
 }
 
 /// What the program settled of one piece's intents: the words to write and what it says of them.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn words_for(
     set: &PieceWords,
     piece: &super::scene::ScenePiece,

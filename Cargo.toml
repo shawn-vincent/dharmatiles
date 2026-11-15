@@ -89,6 +89,7 @@ todo = "warn"
 unwrap_used = "warn"
 float_cmp = "warn"
 cast_possible_truncation = "warn"
+allow_attributes_without_reason = "warn"
 
 # Geometry at opt-level 0 is too slow to judge by eye.
 [profile.dev.package."*"]

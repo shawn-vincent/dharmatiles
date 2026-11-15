@@ -242,6 +242,10 @@ impl Decoder<'_> {
 
     /// A point's halves in `frame`: against the tile worked out now, else
     /// kept as written.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+    )]
     fn framed_xy(
         &mut self,
         frame: &Expr,
@@ -331,6 +335,10 @@ impl Decoder<'_> {
     }
 
     /// `point(frame, x, y)` and `polar(frame, d, a)`.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+    )]
     fn point_call(
         &mut self,
         t: &str,

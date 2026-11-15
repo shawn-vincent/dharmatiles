@@ -35,6 +35,10 @@ const MONTHS: [&str; 12] = [
 struct Version(u32, u32, u32);
 
 impl Version {
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn parse(s: &str) -> Option<Self> {
         let mut it = s.trim().split('.').map(|p| p.parse::<u32>().ok());
         let v = Self(it.next()??, it.next()??, it.next()??);
@@ -57,6 +61,10 @@ struct Day {
 
 impl Day {
     /// Today, local time (from `date`).
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn today() -> Result<Self, String> {
         let out = Command::new("date")
             .arg("+%Y %m %d")
@@ -254,6 +262,10 @@ fn git(root: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+)]
 fn cargo(root: &Path, args: &[&str]) -> Result<(), String> {
     let mut c = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
     run(c.current_dir(root).args(args))
@@ -264,6 +276,10 @@ fn cargo(root: &Path, args: &[&str]) -> Result<(), String> {
 /// now differs from what is committed: engine code and the baselines it
 /// changes land in one commit, so a baseline may have been built from a
 /// dirty tree, and only a rebuild from this one proves it holds.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+)]
 fn rebuilt_matches_committed(root: &Path) -> Result<(), String> {
     crate::work::heavy_lock(root)?;
     println!("rebuilding the baselines and pictures from the committed tree");

@@ -114,6 +114,10 @@ fn mm_text(mm: f64) -> String {
 /// document's, with the library's); without them a value that names one has
 /// no printed size.
 #[must_use]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter); permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+)]
 pub fn printed_size(
     axis: Axis,
     typed: &str,
@@ -160,6 +164,10 @@ pub struct SetError(pub String);
 /// The value is not a number or a range of numbers with their units (a
 /// formula is edited as written), `end` is not one of its ends, or `mm` is
 /// not a finite number.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub fn set_printed(typed: &str, end: usize, mm: f64, units: Units) -> Result<String, SetError> {
     let refuse = |why: &str| Err(SetError(why.to_owned()));
     if !mm.is_finite() {

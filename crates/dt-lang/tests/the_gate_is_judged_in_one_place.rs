@@ -1,5 +1,9 @@
 //! The printability gate is judged in one place: `dt_eval::Built::verdict` (which reads the audit in `dt-kit`).  A front
 //! end that calls `.failures(` itself is deciding "passed" a second way, and this test fails on it.
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: permitted silence: a path outside its root stays as written (display only)"
+)]
 
 use std::path::{Path, PathBuf};
 

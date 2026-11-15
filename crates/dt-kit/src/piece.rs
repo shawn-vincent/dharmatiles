@@ -210,7 +210,7 @@ impl Piece {
 /// The mesh with split vertices merged: one position per point.
 #[must_use]
 pub fn welded(m: &TriMesh) -> (Vec<[f64; 3]>, Vec<[u32; 3]>) {
-    let mut to: Vec<u32> = (0..u32::try_from(m.positions.len()).unwrap_or(u32::MAX)).collect();
+    let mut to: Vec<u32> = (0..dt_value::idx(m.positions.len())).collect();
     for (&f, &t) in m.merge_from.iter().zip(&m.merge_to) {
         to[f as usize] = t;
     }
@@ -227,7 +227,7 @@ pub fn welded(m: &TriMesh) -> (Vec<[f64; 3]>, Vec<[u32; 3]>) {
     let mut pos = Vec::new();
     for (i, &t) in to.iter().enumerate() {
         if t as usize == i {
-            new[i] = u32::try_from(pos.len()).unwrap_or(u32::MAX);
+            new[i] = dt_value::idx(pos.len());
             pos.push(m.positions[i]);
         }
     }
@@ -271,6 +271,10 @@ pub fn tri_normal(p: &[[f64; 3]], t: [u32; 3]) -> [f64; 3] {
 /// An empty solid. The mesh is empty either way: should the kernel refuse an
 /// empty mesh, the empty hull is the same nothing, so the fallback changes no
 /// geometry and there is nothing to count.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn empty() -> dt_geom::Solid {
     dt_geom::Solid::from_tri_mesh(&TriMesh::default()).unwrap_or_else(|_| dt_geom::Solid::hull(&[]))
 }

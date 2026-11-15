@@ -3,6 +3,10 @@
 //! is on a seam; the words that name a seam come from the edge contract.
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+)]
 
 use crate::common;
 

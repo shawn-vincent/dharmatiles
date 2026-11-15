@@ -29,6 +29,10 @@ pub(crate) struct Extras<'a> {
     pub(crate) store: Option<&'a dt_store::Store>,
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(crate) fn build(
     paths: &[String],
     opts: &Options,

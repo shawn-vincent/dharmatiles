@@ -265,6 +265,10 @@ fn list(home: &Path, c: &Choice, tile: Option<&str>, failures: bool) -> u8 {
 }
 
 /// A line for each tile named, for `have` and `gone`.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+)]
 fn write_lines(
     home: &Path,
     c: &Choice,
@@ -351,6 +355,10 @@ fn write_lines(
 
 /// `dharmatiles inventory …`.
 #[allow(clippy::too_many_lines)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+)]
 pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
     let home = match home() {
         Ok(h) => h,

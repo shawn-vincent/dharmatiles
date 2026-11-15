@@ -517,7 +517,7 @@ impl Tree {
             let mut parts: Vec<Solid> = tubes
                 .par_iter()
                 .enumerate()
-                .map(|(k, m)| form::solid(slots.get(u32::try_from(k).unwrap_or(0)), m))
+                .map(|(k, m)| form::solid(slots.get(dt_value::idx(k)), m))
                 .collect::<Result<_, _>>()
                 .map_err(LookError::build)?;
             if p.clumps_on {
@@ -547,7 +547,7 @@ impl Tree {
                 let leaves: Vec<Solid> = meshes
                     .iter()
                     .enumerate()
-                    .map(|(k, m)| form::solid(cslots.get(u32::try_from(k).unwrap_or(0)), m))
+                    .map(|(k, m)| form::solid(cslots.get(dt_value::idx(k)), m))
                     .collect::<Result<_, _>>()
                     .map_err(LookError::build)?;
                 grown.clumps = leaves.len();
@@ -608,7 +608,7 @@ impl Tree {
         let tube_solids: Vec<Solid> = tubes
             .par_iter()
             .enumerate()
-            .map(|(k, m)| form::solid(slots.get(u32::try_from(k).unwrap_or(0)), m))
+            .map(|(k, m)| form::solid(slots.get(dt_value::idx(k)), m))
             .collect::<Result<_, _>>()
             .map_err(LookError::build)?;
         scene.progress().fraction("branches", 0.01);
@@ -653,7 +653,7 @@ impl Tree {
             let solids: Vec<Solid> = meshes
                 .par_iter()
                 .enumerate()
-                .map(|(k, m)| form::solid(cslots.get(u32::try_from(k).unwrap_or(0)), m))
+                .map(|(k, m)| form::solid(cslots.get(dt_value::idx(k)), m))
                 .collect::<Result<_, _>>()
                 .map_err(LookError::build)?;
             grown.clumps = solids.len();
@@ -691,7 +691,7 @@ impl Tree {
                         .par_iter()
                         .enumerate()
                         .map(|(k, m)| {
-                            let s = form::solid(lslots.get(u32::try_from(k).unwrap_or(0)), m);
+                            let s = form::solid(lslots.get(dt_value::idx(k)), m);
                             solid_ticks.tick();
                             s
                         })

@@ -478,6 +478,10 @@ impl ConstTable {
         self.scalar_at(expr, u, vars, 0)
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+    )]
     fn scalar_at(
         &self,
         expr: &Expr,

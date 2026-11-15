@@ -6,6 +6,7 @@
 //! recorded by a wrapper [`Source`]; the embedded library (`lib:`) never
 //! changes, so it is not watched.
 
+use dt_value::LockExt as _;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::{Mutex, PoisonError};
@@ -20,6 +21,10 @@ const POLL: Duration = Duration::from_millis(300);
 
 /// A file's modification time, `None` when it cannot be read (missing,
 /// or mid-save).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
+)]
 pub(crate) fn mtime(path: &str) -> Option<SystemTime> {
     if path.starts_with(LIB) {
         // a library file is watched only when the library is on disk
@@ -50,8 +55,7 @@ impl Recording {
     fn watch(&self, path: &str) {
         if !path.starts_with(LIB) || dt_eval::source::library_dir().is_some() {
             self.read
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
+                .lock_unpoisoned()
                 .entry(path.to_owned())
                 .or_insert_with(|| mtime(path));
         }
@@ -59,13 +63,14 @@ impl Recording {
 
     /// The files read, with their times before reading.
     pub(crate) fn files(&self) -> BTreeMap<String, Option<SystemTime>> {
-        self.read
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        self.read.lock_unpoisoned().clone()
     }
 
     /// The files read, taken.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     fn into_files(self) -> BTreeMap<String, Option<SystemTime>> {
         self.read
             .into_inner()

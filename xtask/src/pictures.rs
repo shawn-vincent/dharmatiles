@@ -174,6 +174,10 @@ pub fn run(root: &Path, only: &[String]) -> Result<(), String> {
 /// The quoted `"(Xsq, Ysq)"` points of the first `through` in `text`, in
 /// squares with y up (format 1 counts down from the north-west corner, so
 /// y is taken from the tile's `rows`).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn points_of(text: &str) -> Result<Vec<(f64, f64)>, String> {
     let size = text
         .split_once("size=\"")

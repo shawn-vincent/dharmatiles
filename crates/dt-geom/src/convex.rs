@@ -128,7 +128,7 @@ impl Convex {
                         let t = dist[p] / (dist[p] - dist[q]);
                         let (vp, vq) = (vertices[p], vertices[q]);
                         vertices.push([0, 1, 2].map(|c| vp[c] + t * (vq[c] - vp[c])));
-                        u32::try_from(vertices.len() - 1).unwrap_or(u32::MAX)
+                        dt_value::idx(vertices.len() - 1)
                     });
                     out.push(v);
                     on_plane.push(v);
@@ -225,7 +225,7 @@ impl Convex {
         let mut map = vec![u32::MAX; self.vertices.len()];
         let mut vertices = Vec::with_capacity(used.len());
         for &i in &used {
-            map[i as usize] = u32::try_from(vertices.len()).unwrap_or(u32::MAX);
+            map[i as usize] = dt_value::idx(vertices.len());
             vertices.push(self.vertices[i as usize]);
         }
         for f in &mut self.faces {

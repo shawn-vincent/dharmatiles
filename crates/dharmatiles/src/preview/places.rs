@@ -345,6 +345,10 @@ fn native_choose() -> Result<Option<PathBuf>, String> {
 /// The size a tile document writes (`2x1`), from the `tile` node's `size=`;
 /// none for a file that is not read or says none.
 #[must_use]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub fn size_of(path: &str) -> Option<String> {
     if !path.ends_with(".dtile") {
         return None;
@@ -526,6 +530,10 @@ pub(super) fn announce(shared: &Shared) {
 }
 
 /// `POST /api/places/add`: show the chooser; the folder chosen is a place from now on.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a path outside its root stays as written (display only)"
+)]
 pub(super) fn add_place(shared: &Shared, _: Nothing) -> Out<PlacesAddRes> {
     let Some(settings) = shared.settings.clone() else {
         return Err(fail::failure(

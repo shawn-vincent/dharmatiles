@@ -179,6 +179,10 @@ impl Sides {
 }
 
 /// The shown layer at every node.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn classes(layers: &[Layer], n: usize) -> Vec<u8> {
     (0..n)
         .map(|k| {
@@ -196,7 +200,7 @@ fn classes(layers: &[Layer], n: usize) -> Vec<u8> {
 }
 
 fn u(n: usize) -> u32 {
-    u32::try_from(n).unwrap_or(u32::MAX)
+    dt_value::idx(n)
 }
 
 /// The stack mesher's state: the shown layer at every node, the vertices
@@ -308,6 +312,10 @@ impl<'l, 'a> Mesher<'l, 'a> {
     /// forced to a single cell where its nodes show several layers
     /// (summed-area tables of the nodes showing each layer above the first).
     #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn plan(
         &self,
         tol: f64,
@@ -490,6 +498,10 @@ impl<'l, 'a> Mesher<'l, 'a> {
         clippy::float_cmp,
         clippy::too_many_lines,
         clippy::many_single_char_names
+    )]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
     )]
     fn side_panels(&mut self, verts: &Corners, sides: &Sides) {
         let nl = self.layers.len();

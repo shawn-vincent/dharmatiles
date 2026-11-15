@@ -162,7 +162,7 @@ fn baked(set: &PlateSet, plate: usize) -> TriMesh {
     for s in set.stands.iter().filter(|s| s.plate == plate) {
         let part = &set.parts[s.part];
         let (lo, hi) = bounds(part.mesh);
-        let base = u32::try_from(out.positions.len()).unwrap_or(u32::MAX);
+        let base = dt_value::idx(out.positions.len());
         out.positions.extend(stand_positions(
             &part.mesh.positions,
             lo,

@@ -132,6 +132,10 @@ pub(super) fn plan(look: &Look, site: &Site<'_>) -> Result<Planned, LookError> {
 /// Dress a planned pile: its stones cut, fitted to the band and checked
 /// against it (a stone over the band is a bug in the body), and the core's
 /// field. `slots` holds [`Planned::slots_needed`].
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(super) fn dress(
     planned: &Planned,
     site: &Site<'_>,

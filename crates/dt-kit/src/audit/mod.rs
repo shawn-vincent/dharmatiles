@@ -551,7 +551,7 @@ pub fn draft(mesh: TriMesh, printer: &Printer, skip: &[bool]) -> (Export, Audit)
         band,
         holes: 0,
     };
-    let source = (0..u32::try_from(n).unwrap_or(u32::MAX)).collect();
+    let source = (0..dt_value::idx(n)).collect();
     (Export { mesh, source }, audit)
 }
 

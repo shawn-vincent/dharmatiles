@@ -196,6 +196,10 @@ fn word_or_string(s: &str) -> String {
 }
 
 /// The tile's size in squares, from its `size="2x1"`.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn tile_size(doc: &KdlDocument) -> Result<(u32, u32), EditError> {
     doc.nodes()
         .iter()

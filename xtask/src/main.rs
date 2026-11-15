@@ -163,6 +163,10 @@ fn run(cmd: &mut Command) -> Result<(), String> {
 }
 
 /// Build the `dharmatiles` binary and return its path.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+)]
 fn program(root: &Path, release: bool) -> Result<PathBuf, String> {
     let mut cargo = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
     cargo.current_dir(root).args(["build", "-p", "dharmatiles"]);

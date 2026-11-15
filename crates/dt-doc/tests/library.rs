@@ -2,6 +2,10 @@
 //! first, then the parts the tiles `use`, then the rest.
 
 #![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+)]
 
 mod common;
 

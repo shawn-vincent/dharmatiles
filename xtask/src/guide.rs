@@ -168,6 +168,10 @@ fn samples(text: &str) -> Vec<(String, String)> {
 }
 
 /// `cargo xtask docs`'s part for the guide.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call); permitted silence: a path outside its root stays as written (display only)"
+)]
 pub fn run(root: &Path, check: bool, bin: &Path, seams: &SeamsJson) -> Result<(), String> {
     let docs = root.join("docs");
     let guide = docs.join("guide");

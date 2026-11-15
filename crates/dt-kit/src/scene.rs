@@ -1026,7 +1026,7 @@ impl Parts {
         let mut of = std::collections::BTreeMap::new();
         for (p, ids) in self.sources.iter().enumerate() {
             for &id in ids {
-                of.entry(id).or_insert(u32::try_from(p).unwrap_or(u32::MAX));
+                of.entry(id).or_insert(dt_value::idx(p));
             }
         }
         mesh.triangle_original_ids().map_or_else(

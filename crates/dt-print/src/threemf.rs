@@ -181,12 +181,16 @@ fn escape(s: &str) -> String {
 }
 
 /// A zip of `files`, each deflated.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 pub(crate) fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     let mut central: Vec<u8> = Vec::new();
     let le16 = |v: &mut Vec<u8>, n: u16| v.extend_from_slice(&n.to_le_bytes());
     let le32 = |v: &mut Vec<u8>, n: u32| v.extend_from_slice(&n.to_le_bytes());
-    let size = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    let size = |n: usize| dt_value::idx(n);
     for (name, data) in files {
         let mut enc =
             flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());

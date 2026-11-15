@@ -245,6 +245,10 @@ impl SeamTable {
     /// the text is not shaped like a word (`nnw`, `nnw(2)`) or names nothing
     /// and nothing near it; `Some(Err)` when it is a word with a mistake in it.
     #[must_use]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     pub fn read(&self, text: &str, cols: u32, rows: u32) -> Option<Result<Word, WordError>> {
         let t = text.trim();
         let (name, number) = match t.split_once('(') {

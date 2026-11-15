@@ -192,6 +192,10 @@ impl Shared {
     /// not built yet, else a tile whose files changed.  Folder and library
     /// tiles are built only when asked for.  With nothing to do it waits
     /// for [`POLL`] (or a new job) and says `None`.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     pub(super) fn next_job(&self, eager: bool) -> Option<Job> {
         let mut q = lock(&self.queue);
         if let Some(d) = q.drafts.pop_front() {
@@ -255,6 +259,10 @@ impl Shared {
     ///
     /// # Errors
     /// [`Interrupted`]: superseded (also when it was cancelled while running and stopped), or the job panicked.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    )]
     pub(super) fn on_lane<T: Send + 'static>(
         &self,
         lane: Lane,
@@ -316,6 +324,10 @@ impl Shared {
 
     /// The next job for a side lane, when fewer than the lane's limit are running; with nothing to do it waits a
     /// moment for one and says `None`.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     pub(super) fn next_side(&self, lane: Lane) -> Option<Side> {
         let mut q = lock(&self.queue);
         let running = q.side_running.iter().filter(|r| r.lane == lane).count();

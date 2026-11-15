@@ -24,6 +24,10 @@ pub(crate) fn disk_library() {
 
 /// The folder the program was run in; when it cannot be found, say so and
 /// use `.` (never silently).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
+)]
 pub(crate) fn current_dir() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|e| {
         tell!("note: cannot find the current folder ({e}); using `.`");
@@ -191,6 +195,10 @@ pub(crate) fn remember_target(
 ///
 /// # Errors
 /// A flag that is not a system or a printer.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub(crate) fn preview_options(
     system: Option<System>,
     printer: Option<&str>,

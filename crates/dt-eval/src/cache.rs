@@ -14,7 +14,8 @@
 //! A clone of a scene shares its solids and paints, so keeping one after
 //! every step costs little more than the last scene alone.
 
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use dt_value::LockExt as _;
+use std::sync::{Mutex, MutexGuard};
 
 use dt_elements::Foot;
 use dt_kit::{Frame, Scene};
@@ -70,7 +71,7 @@ impl Cache {
     }
 
     fn lock(&self) -> MutexGuard<'_, Vec<Kept>> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+        self.0.lock_unpoisoned()
     }
 
     /// The last kept step whose key, and every key before it, matches

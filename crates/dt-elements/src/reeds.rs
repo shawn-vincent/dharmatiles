@@ -138,6 +138,10 @@ impl Element for Reeds {
         }
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
         let frame = *scene.frame();
         let s = frame.scale();

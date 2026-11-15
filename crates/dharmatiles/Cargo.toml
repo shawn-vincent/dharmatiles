@@ -15,6 +15,7 @@ build = "build.rs"
 test-routes = []
 
 [dependencies]
+dt-value.workspace = true
 clap.workspace = true
 dt-doc.workspace = true
 dt-lang.workspace = true

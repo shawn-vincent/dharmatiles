@@ -3,6 +3,10 @@
 //! edit answers, the text it leaves decodes no worse than the text it was made to, read here by a decoder
 //! that knows the library's heights and parts, not by the check `apply` makes itself.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed; permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+)]
 #![allow(
     clippy::unwrap_used,
     clippy::cast_possible_truncation,

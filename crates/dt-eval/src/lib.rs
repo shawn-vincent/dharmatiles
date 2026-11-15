@@ -78,6 +78,10 @@ pub struct Project {
 /// **Project discovery**: walk up from `start` to the first folder with a
 /// `dharmatiles.dtile`, as Cargo finds `Cargo.toml`.
 #[must_use]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub fn discover(start: &Path) -> Project {
     let found = start
         .ancestors()

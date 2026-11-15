@@ -165,6 +165,10 @@ impl<'a> Resolver<'a> {
     }
 
     /// The seeds you own of this tile in this system and colour mode.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    )]
     fn owned(&self, canon: &str, system: dt_lang::System, colour: &str) -> BTreeSet<u64> {
         use dt_doc::inventory::Colour;
         let Some(home) = self.shared.home.as_deref() else {
@@ -243,6 +247,10 @@ impl<'a> Resolver<'a> {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a clock before 1970 or a missing mtime reads as zero (a stamp, never data)"
+)]
 fn random() -> u64 {
     let mut h = std::collections::hash_map::RandomState::new().build_hasher();
     h.write_u128(

@@ -36,7 +36,7 @@ pub fn thinned(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>) {
 fn thinned_snap(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>, Vec<u32>) {
     let n = mesh.triangles.len();
     if n <= budget {
-        let identity = (0..u32::try_from(mesh.positions.len()).unwrap_or(u32::MAX)).collect();
+        let identity = (0..dt_value::idx(mesh.positions.len())).collect();
         return (mesh.clone(), (0..n).collect(), identity);
     }
     // a first cell from the surface area: about two triangles per cell face
@@ -67,7 +67,7 @@ fn thinned_snap(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>, Vec<u32>
                 let k = p.map(|c| (c / cell).floor() as i64);
                 *of.entry(k).or_insert_with(|| {
                     positions.push(*p);
-                    u32::try_from(positions.len() - 1).unwrap_or(u32::MAX)
+                    dt_value::idx(positions.len() - 1)
                 })
             })
             .collect();

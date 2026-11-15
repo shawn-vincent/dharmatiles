@@ -32,6 +32,10 @@ pub const SET: &[&str] = &[
     "lib:tests/cliffs/1x1-cliff-plateau.dtile@ol",
 ];
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub fn run_parity(root: &Path) -> Result<(), String> {
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), Into::into);

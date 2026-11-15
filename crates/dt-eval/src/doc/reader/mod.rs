@@ -392,6 +392,10 @@ impl Reader<'_> {
         }
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    )]
     fn tile(&mut self, file: &Arc<File>) -> Option<Tile> {
         let def = file.doc.tile()?;
         let header = def.header()?;
@@ -903,6 +907,10 @@ fn number(v: f64) -> String {
 }
 
 /// A point in squares, if it is not drawn from a range.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+)]
 pub(super) fn fixed_point(
     p: &dt_doc::place::Point,
     cols: f64,

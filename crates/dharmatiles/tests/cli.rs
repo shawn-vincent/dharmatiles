@@ -2,6 +2,10 @@
 //! the engine version.  Cases from the Phase 1 exit review.
 
 #![allow(clippy::unwrap_used)]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};

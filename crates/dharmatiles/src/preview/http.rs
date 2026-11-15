@@ -48,6 +48,10 @@ impl Request {
 
     /// Read one request: the line, the headers, then the body.  `None`
     /// for anything malformed or too large.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call); permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     pub fn parse(input: impl Read) -> Option<Self> {
         // bounded as a whole: a line with no end cannot grow without limit
         let mut r = BufReader::new(input.take(MAX_HEAD + MAX_BODY as u64));

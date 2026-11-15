@@ -110,6 +110,10 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
 }
 
 /// `(path from the repo root, text)` of every shipped library tile.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a path outside its root stays as written (display only)"
+)]
 fn library_tiles(dir: &Path) -> Result<Vec<(String, String)>, String> {
     let mut out = Vec::new();
     for g in std::fs::read_dir(dir).map_err(|e| e.to_string())? {

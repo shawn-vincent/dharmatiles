@@ -20,7 +20,7 @@ pub fn loft(slot: Slot, rings: &[Vec<[f64; 3]>]) -> Result<Solid, KitError> {
             "loft needs two or more rings of equal length (≥ 3)".into(),
         ));
     }
-    let u = |i: usize| u32::try_from(i).unwrap_or(u32::MAX);
+    let u = |i: usize| dt_value::idx(i);
     let positions: Vec<[f64; 3]> = rings.iter().flatten().copied().collect();
     let mut triangles = Vec::new();
     for k in 1..n - 1 {

@@ -6,10 +6,14 @@
 //! - [`weighting`]: a range's odds ([`Weighting`], [`Dist`]): one draw, any
 //!   width.
 
+pub mod index;
 pub mod seed;
+pub mod sync;
 pub mod weighting;
 
+pub use index::{idx, idx8};
 pub use seed::{Rng, Seed};
+pub use sync::LockExt;
 pub use weighting::{
     Dist, Draw, ENDS_POWER, MAX_BINS, MAX_LIST, MAX_MIX, Op, WEIGHTINGS, Weighting, WeightingArg,
     WeightingError, WeightingFn, WeightingRest, weighting_names,

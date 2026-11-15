@@ -53,6 +53,7 @@ mod util;
 
 use dt_kit::Kind;
 use dt_kit::{Band, Field, Material, OnFrame, Scene, Tag};
+use dt_value::LockExt as _;
 
 use crate::read::{Pick, Settings};
 use crate::{Control, Ctx, Element, LookError, Plan, Shown, Write, num_text};
@@ -162,11 +163,7 @@ impl Cliff {
         ctx: &Ctx<'_>,
     ) -> Result<std::sync::Arc<Planned>, LookError> {
         let key = Self::plan_key(frame, ctx);
-        let mut kept = self
-            .plan
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut kept = self.plan.0.lock_unpoisoned();
         if let Some((k, p)) = kept.as_ref()
             && *k == key
         {

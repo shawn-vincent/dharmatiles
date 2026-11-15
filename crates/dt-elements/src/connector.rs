@@ -193,7 +193,7 @@ impl Element for DungeonBlocks {
         // Three leaves per square (peg, groove, lotus), slots fixed by index
         // before the parallel work; all connector material, so the cut
         // faces are too.
-        let n = u32::try_from(squares.len()).unwrap_or(u32::MAX);
+        let n = dt_value::idx(squares.len());
         let slots = scene
             .slots(3 * n, Material::Connector)
             .map_err(LookError::build)?;
@@ -202,7 +202,7 @@ impl Element for DungeonBlocks {
             .par_iter()
             .enumerate()
             .map(|(k, &(c, r))| {
-                let k = u32::try_from(k).unwrap_or(u32::MAX);
+                let k = dt_value::idx(k);
                 let (x, y) = (f64::from(c) * s, f64::from(r) * s);
                 let round = base::tile_corners(&f, c, r);
                 let rings = self.rings([x, y], s, peg, &arc, round);

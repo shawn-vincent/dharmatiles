@@ -382,6 +382,10 @@ fn starts_number(b: &[u8], i: usize) -> bool {
 
 /// A quoted string's pieces, `b[start..end]` quotes and all: its `$` names, numbers with their unit and calls of
 /// a function or weighting, and the rest as strings.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn inner(b: &[u8], start: usize, end: usize, out: &mut Vec<Piece>) {
     let mut i = start;
     let mut plain_from = start;
@@ -427,6 +431,10 @@ fn inner(b: &[u8], start: usize, end: usize, out: &mut Vec<Piece>) {
 }
 
 /// The end of a number at `i` that is followed by a unit word or `%` (`8dmm`, `0.5sq`, `50%`), within `end`.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn number_with_unit(b: &[u8], i: usize, end: usize) -> Option<usize> {
     let mut j = i + usize::from(b[i] == b'-');
     while j < end && b[j].is_ascii_digit() {

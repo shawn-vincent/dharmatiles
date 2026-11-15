@@ -329,7 +329,7 @@ impl Element for OpenLock {
         let bottom = -self.depth_mm;
         let sockets = self.sockets(&f);
         let cutters: Vec<&Cutter> = sockets.iter().flat_map(Socket::cutters).collect();
-        let n = u32::try_from(cutters.len() + 2).unwrap_or(u32::MAX);
+        let n = dt_value::idx(cutters.len() + 2);
         let slots = scene
             .slots(n, Material::Connector)
             .map_err(LookError::build)?;
@@ -338,7 +338,7 @@ impl Element for OpenLock {
         let body = extrude(slots.get(0), &slab, 0.0, bottom, 0.0).map_err(LookError::build)?;
         let mut cuts = Vec::with_capacity(cutters.len() + 1);
         for (k, c) in cutters.into_iter().enumerate() {
-            let k = u32::try_from(k + 1).unwrap_or(u32::MAX);
+            let k = dt_value::idx(k + 1);
             let o = Outline {
                 contours: vec![c.outline.clone()],
             };

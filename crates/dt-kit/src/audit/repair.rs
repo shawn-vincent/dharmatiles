@@ -7,9 +7,7 @@ use super::*;
 /// Positions with split vertices merged and unused ones gone; only
 /// `positions` and `triangles` are kept.
 pub(super) fn canonical(m: &TriMesh) -> TriMesh {
-    let mut to: Vec<u32> = (0..m.positions.len())
-        .map(|i| u32::try_from(i).unwrap_or(u32::MAX))
-        .collect();
+    let mut to: Vec<u32> = (0..m.positions.len()).map(|i| dt_value::idx(i)).collect();
     for (&f, &t) in m.merge_from.iter().zip(&m.merge_to) {
         if let Some(s) = to.get_mut(f as usize) {
             *s = t;
@@ -24,7 +22,7 @@ pub(super) fn canonical(m: &TriMesh) -> TriMesh {
             t.map(|v| {
                 let c = to[v as usize] as usize;
                 if new_index[c] == u32::MAX {
-                    new_index[c] = u32::try_from(positions.len()).unwrap_or(u32::MAX);
+                    new_index[c] = dt_value::idx(positions.len());
                     positions.push(m.positions[c]);
                 }
                 new_index[c]
@@ -54,10 +52,7 @@ pub(super) fn separate_pinches(m: &mut TriMesh) -> usize {
         #[allow(clippy::cast_possible_truncation)]
         let key = |p: [f64; 3]| p.map(|x| (x / CELL).floor() as i64);
         for (i, p) in m.positions.iter().enumerate() {
-            cells
-                .entry(key(*p))
-                .or_default()
-                .push(u32::try_from(i).unwrap_or(u32::MAX));
+            cells.entry(key(*p)).or_default().push(dt_value::idx(i));
         }
         // pairs closer than NEAR (rare: found by cell, edges checked after)
         // (each point on its own; `pairs` is sorted below, so the order
@@ -78,7 +73,7 @@ pub(super) fn separate_pinches(m: &mut TriMesh) -> usize {
                         -1
                     }
                 });
-                let i = u32::try_from(i).unwrap_or(u32::MAX);
+                let i = dt_value::idx(i);
                 let cells = &cells;
                 let positions = &m.positions;
                 (0..8).flat_map(move |c| {
@@ -179,7 +174,7 @@ pub(super) fn quantise(m: &TriMesh) -> (TriMesh, Vec<u32>, usize) {
             let f = q(*p);
             *index.entry(f.map(f32::to_bits)).or_insert_with(|| {
                 positions.push(f.map(f64::from));
-                u32::try_from(positions.len() - 1).unwrap_or(u32::MAX)
+                dt_value::idx(positions.len() - 1)
             })
         })
         .collect();
@@ -189,7 +184,7 @@ pub(super) fn quantise(m: &TriMesh) -> (TriMesh, Vec<u32>, usize) {
         let v = t.map(|i| remap[i as usize]);
         if v[0] != v[1] && v[1] != v[2] && v[0] != v[2] {
             triangles.push(v);
-            source.push(u32::try_from(k).unwrap_or(u32::MAX));
+            source.push(dt_value::idx(k));
         }
     }
     let collapsed = m.triangles.len() - triangles.len();

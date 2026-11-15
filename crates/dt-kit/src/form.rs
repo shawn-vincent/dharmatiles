@@ -306,7 +306,7 @@ pub fn subdivide(mesh: &TriMesh) -> TriMesh {
         *mid.entry(key).or_insert_with(|| {
             let (p, q) = (positions[a as usize], positions[b as usize]);
             positions.push([0, 1, 2].map(|k| 0.5 * (p[k] + q[k])));
-            u32::try_from(positions.len() - 1).unwrap_or(u32::MAX)
+            dt_value::idx(positions.len() - 1)
         })
     };
     for t in &mesh.triangles {

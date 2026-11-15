@@ -145,10 +145,14 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
+    )]
     fn the_page_contract_is_current() {
         let want = super::typescript();
         let want_js = stamp_js(&stamp_of(&want));
-        if std::env::var("DT_CONTRACT").is_ok_and(|v| v == "write") {
+        if std::env::var_os("DT_CONTRACT").is_some_and(|v| v == "write") {
             std::fs::write(file(), &want).unwrap();
             std::fs::write(stamp_file(), &want_js).unwrap();
             return;

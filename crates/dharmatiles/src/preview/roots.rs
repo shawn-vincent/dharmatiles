@@ -148,6 +148,10 @@ impl Root {
 
     /// The group a tile is listed under: its folder below the root (the
     /// library's `ground`, `water`, …), none at the top.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a path outside its root stays as written (display only)"
+    )]
     pub(super) fn group(&self, path: &str) -> Option<String> {
         match &self.kind {
             RootKind::Dir(d) => {
@@ -171,6 +175,10 @@ pub(super) fn lib_group(path: &str) -> Option<String> {
 
 /// Is this `.dtile` a tile (a `tile` node at the top), not a shared part,
 /// palette, printer or project file?  A file that can't be read yet counts.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
+)]
 pub(super) fn is_tile_document(f: &std::path::Path) -> bool {
     std::fs::read_to_string(f).map_or(true, |t| {
         t.lines()

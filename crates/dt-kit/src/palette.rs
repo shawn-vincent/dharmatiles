@@ -61,6 +61,10 @@ impl Default for Palette {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+)]
 fn hex(h: &str) -> Option<[f64; 3]> {
     let h = h.trim_matches('"').trim_start_matches('#');
     if h.len() != 6 || !h.chars().all(|c| c.is_ascii_hexdigit()) {

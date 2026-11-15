@@ -33,6 +33,10 @@ use dt_eval::{Built, Diag, Files, Library, Memory, Options, Source};
 ///
 /// # Panics
 /// If `DT_TEST_SEED` is set and is not a whole number: a run asked for a seed it would not get.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies); a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+)]
 pub fn test_seed() -> Option<u64> {
     static SEED: OnceLock<Option<u64>> = OnceLock::new();
     *SEED.get_or_init(|| {

@@ -298,7 +298,7 @@ pub fn mesh(
         positions.extend(plan.iter().map(|p| [p[0], p[1], drape(p[0], p[1]) + h]));
     }
     let nr = rings.len() + 1;
-    let u = |i: usize| u32::try_from(i).unwrap_or(u32::MAX);
+    let u = |i: usize| dt_value::idx(i);
     let mut tris: Vec<[u32; 3]> = Vec::new();
     for r in 0..nr - 1 {
         let (a, b) = (r * m, (r + 1) * m);
@@ -332,7 +332,7 @@ pub fn mesh(
 /// cap would cross itself and the union would have to resolve it.
 fn strip_cap(tris: &mut Vec<[u32; 3]>, base: usize, m: usize, reversed: bool) {
     let stations = m / 2 + 1;
-    let at = |i: usize| u32::try_from(base + i).unwrap_or(u32::MAX);
+    let at = |i: usize| dt_value::idx(base + i);
     // the left side's station i is point i; the right side's is point m - i
     // (the two tips are shared)
     let left = |i: usize| at(i);
@@ -358,7 +358,7 @@ fn strip_cap(tris: &mut Vec<[u32; 3]>, base: usize, m: usize, reversed: bool) {
 /// capped at both ends by a fan from the centroid, wound outward.
 pub fn ring_mesh(rings: &[Vec<[f64; 3]>]) -> TriMesh {
     let m = rings[0].len();
-    let u = |i: usize| u32::try_from(i).unwrap_or(u32::MAX);
+    let u = |i: usize| dt_value::idx(i);
     let mut positions: Vec<[f64; 3]> = rings.iter().flatten().copied().collect();
     let mut tris: Vec<[u32; 3]> = Vec::new();
     for r in 0..rings.len() - 1 {
@@ -440,6 +440,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+    )]
     fn blades_are_closed_manifolds() {
         for (len, h, hw, bend) in [
             (5.0, 1.8, 1.0, 0.0),

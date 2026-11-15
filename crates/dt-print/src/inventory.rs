@@ -61,6 +61,10 @@ pub fn short_hash(h: u64) -> String {
 /// The hash of the tile `canon` as it is now, as the log writes it; `None`
 /// when the tile cannot be read (it is not there: renamed, moved or deleted).
 #[must_use]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub fn tile_hash(canon: &str, home: Option<&Path>) -> Option<String> {
     let path = readable(canon, home)?;
     let text = Files.read(&path).ok()?;
@@ -87,6 +91,10 @@ pub fn tile_exists(canon: &str, home: Option<&Path>) -> bool {
 /// Today's date, `2026-11-12`, in UTC (the editor sends its own local day;
 /// the command line has no zone to ask for).
 #[must_use]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter); permitted silence: a clock before 1970 or a missing mtime reads as zero (a stamp, never data)"
+)]
 pub fn today() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

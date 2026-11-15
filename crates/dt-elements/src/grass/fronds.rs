@@ -241,6 +241,10 @@ pub struct Start {
 /// the tile is written to it with its fate, in order: the grown ones match
 /// the fronds one to one.
 #[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub fn plan(
     rng: &mut Rng,
     surf: &Surface,
@@ -562,6 +566,10 @@ fn cover_frond(cov: &mut [bool], soil: &Field, f: &Frond) {
 /// the gap; where the edge is right behind the gap, the blade is grown the
 /// other way, against the edge, and shortened at it.
 #[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn edge_fill(
     rng: &mut Rng,
     g: &Grower,

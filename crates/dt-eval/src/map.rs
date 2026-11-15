@@ -286,6 +286,10 @@ struct Reading {
 
 impl Reading {
     /// The point a text writes, if it writes one.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    )]
     fn point(self, t: &crate::Tile, text: &str) -> Option<dt_doc::place::Point> {
         dt_doc::decode::point_text(text.trim(), (t.cols, t.rows), self.units).ok()
     }
@@ -544,6 +548,10 @@ fn place_ref(t: &crate::Tile, name: &str, rd: Reading) -> PlaceRef {
 /// A coordinate drawn from a range or written as an expression is placed
 /// where its range middles; a name nothing declares has no place.  The
 /// reading is the program's own (the decoder's), not the page's.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+)]
 fn locate(t: &crate::Tile, text: &str, rd: Reading) -> (MarkerKind, Option<[f64; 2]>) {
     use dt_doc::place::{BUILTIN_POINTS, Point, builtin_point};
     let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
@@ -705,6 +713,10 @@ fn points(w: &[WrittenEntry], at: Option<&Vec<[f64; 2]>>) -> Vec<WrittenPoint> {
 ///
 /// # Errors
 /// The regions' masks could not be made.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter); permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+)]
 pub fn json(
     c: &crate::Checked,
     text: &str,
@@ -882,6 +894,10 @@ fn language(t: &crate::Tile) -> Language {
 /// The heights a value may name in this tile: its constants (the library's
 /// first, then its own `let`s), each with its value in mm at the reference
 /// square where it is one number, and where it comes from.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
+)]
 fn heights(table: &dt_doc::consts::ConstTable) -> Vec<Height> {
     use dt_doc::consts::Origin;
     table

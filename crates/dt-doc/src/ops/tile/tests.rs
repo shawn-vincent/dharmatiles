@@ -1,4 +1,8 @@
 //! The tile operations: every edit keeps each byte it does not name, and an id the text does not have is refused.
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+)]
 
 use kdl::{KdlDocument, KdlValue};
 

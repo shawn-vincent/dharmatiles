@@ -601,6 +601,10 @@ const BINS: usize = 32;
 /// of `GRID` quantiles each, midpoints so no end is ever claimed, and counted
 /// into `BINS` equal bins across `iv`.  The same values give the same odds
 /// whatever the machine: only `+ - * /` and the weightings' own curves.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 fn independent(vals: &[&Val], iv: Iv, f: impl Fn(&[f64]) -> f64) -> Option<Weighting> {
     let width = iv.hi - iv.lo;
     if width.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {

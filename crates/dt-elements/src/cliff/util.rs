@@ -22,6 +22,10 @@ impl Draw for Rng {
         }
         p.len() - 1
     }
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn perm(&mut self, n: usize) -> Vec<usize> {
         let mut v: Vec<usize> = (0..n).collect();
         for i in (1..n).rev() {

@@ -1,6 +1,10 @@
 //! The library's heights as the tests read them, and a few helpers over the
 //! decoder.
 #![allow(dead_code)]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test: a failure that panics with its message named (a broken invariant or a failing test): shown loudly, not swallowed"
+)]
 
 use dt_doc::{DocError, Known, decode, model::Document};
 

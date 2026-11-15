@@ -397,7 +397,7 @@ pub fn lift(g: &Grid) -> Result<TriMesh, LiftError> {
             }
         }
     }
-    let idx = |i: usize, j: usize| u32::try_from(j * nx + i).unwrap_or(u32::MAX);
+    let idx = |i: usize, j: usize| dt_value::idx(j * nx + i);
     let mut positions = Vec::with_capacity(nx * ny + 2 * (nx + ny) + 1);
     for j in 0..ny {
         for i in 0..nx {
@@ -418,12 +418,12 @@ pub fn lift(g: &Grid) -> Result<TriMesh, LiftError> {
     ring.extend((0..ny - 1).map(|j| (nx - 1, j)));
     ring.extend((1..nx).rev().map(|i| (i, ny - 1)));
     ring.extend((1..ny).rev().map(|j| (0, j)));
-    let base = u32::try_from(positions.len()).unwrap_or(u32::MAX);
+    let base = dt_value::idx(positions.len());
     positions.extend(ring.iter().map(|&(i, j)| node(g, i, j, 0.0)));
-    let centre = u32::try_from(positions.len()).unwrap_or(u32::MAX);
+    let centre = dt_value::idx(positions.len());
     let half = |n: usize| 0.5 * (n - 1) as f64 * g.step;
     positions.push([half(nx), half(ny), 0.0]);
-    let n = u32::try_from(ring.len()).unwrap_or(u32::MAX);
+    let n = dt_value::idx(ring.len());
     for k in 0..n {
         let k1 = (k + 1) % n;
         let (t0, t1) = (

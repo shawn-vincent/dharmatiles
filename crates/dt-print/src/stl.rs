@@ -25,11 +25,7 @@ pub fn stl(passed: &Passed) -> Vec<u8> {
 pub(crate) fn mesh_stl(mesh: &TriMesh, record: &BuildRecord) -> Vec<u8> {
     let mut out = Vec::with_capacity(84 + 50 * mesh.triangles.len());
     out.extend_from_slice(&record.header());
-    out.extend_from_slice(
-        &u32::try_from(mesh.triangles.len())
-            .unwrap_or(u32::MAX)
-            .to_le_bytes(),
-    );
+    out.extend_from_slice(&dt_value::idx(mesh.triangles.len()).to_le_bytes());
     for t in &mesh.triangles {
         #[allow(clippy::cast_possible_truncation)]
         let v = t.map(|i| mesh.positions[i as usize].map(|x| x as f32));

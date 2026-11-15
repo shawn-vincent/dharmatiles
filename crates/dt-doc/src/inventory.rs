@@ -399,6 +399,10 @@ impl Reader {
     }
 
     /// A line's tile path (its one argument) and properties.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
+    )]
     fn identity(
         &mut self,
         n: &KdlNode,

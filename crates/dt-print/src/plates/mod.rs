@@ -300,6 +300,10 @@ pub fn tile_path(
 /// Every problem found, each at the text that caused it: an unknown printer or
 /// one with no bed, a tile that is missing or does not check, a printer with
 /// fewer filaments than a piece needs in multicolour.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+)]
 pub fn plan(
     list: &PrintList,
     title: &str,

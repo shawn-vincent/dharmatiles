@@ -1043,7 +1043,7 @@ impl Stone {
         pos.push([self.poles[0][0], self.y0, self.poles[0][1]]);
         pos.push([self.poles[1][0], self.y1, self.poles[1][1]]);
         let mut tris: Vec<[u32; 3]> = Vec::with_capacity(2 * k_lat * n);
-        let id = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
+        let id = |v: usize| dt_value::idx(v);
         for k in 0..k_lat - 1 {
             let (a0, b0) = (k * n, (k + 1) * n);
             for i in 0..n {

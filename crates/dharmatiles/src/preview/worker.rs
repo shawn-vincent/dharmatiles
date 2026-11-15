@@ -720,6 +720,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    )]
     fn a_changed_source_cancels_at_the_next_progress_boundary() {
         let missing = "/a/path/that/dharmatiles-does-not-have".to_owned();
         let latest = LatestBuild {

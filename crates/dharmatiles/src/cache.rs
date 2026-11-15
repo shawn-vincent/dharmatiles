@@ -46,6 +46,10 @@ pub(crate) fn size_text(bytes: u64) -> String {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a clock before 1970 or a missing mtime reads as zero (a stamp, never data)"
+)]
 pub(crate) fn age_text(t: SystemTime) -> String {
     let s = SystemTime::now()
         .duration_since(t)

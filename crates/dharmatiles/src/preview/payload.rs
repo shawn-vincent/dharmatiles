@@ -142,7 +142,7 @@ pub fn encode_traced(
     let colours_len = (3 * palette.len()).next_multiple_of(4);
     let mut out = Vec::with_capacity(8 + j.len() + 12 * v + 12 * n + colours_len + 8 * n);
     out.extend_from_slice(MAGIC);
-    out.extend_from_slice(&u32::try_from(j.len()).unwrap_or(u32::MAX).to_le_bytes());
+    out.extend_from_slice(&dt_value::idx(j.len()).to_le_bytes());
     out.extend_from_slice(&j);
     for p in &mesh.positions {
         for c in p {
