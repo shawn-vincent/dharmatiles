@@ -34,7 +34,7 @@ pub(super) struct Core {
     pub(super) tiles: Vec<Slot>,
     pub(super) events: Events,
     /// Where the tiles come from; a slot's `root` indexes this.
-    roots: Vec<Root>,
+    pub(super) roots: Vec<Root>,
     /// The folders of each folder place, as paths below it (empty ones too): what the last scan found, so a new or
     /// removed folder is told.
     folders: BTreeMap<usize, Vec<String>>,
@@ -42,6 +42,7 @@ pub(super) struct Core {
     target: Options,
     /// `$HOME`, as the places say it.
     home: Option<String>,
+    pub(super) queue: queue::Queue,
     epoch: String,
 }
 
@@ -106,7 +107,6 @@ pub(super) struct Facts {
     pub plate: usize,
     pub has_mesh: bool,
     pub marks: bool,
-    pub idle: bool,
 }
 
 /// One tile as the queue sees it: enough to pick what to build, and to see whether its files changed.
@@ -151,6 +151,13 @@ pub(super) enum Command {
     Plan(TileId, Sender<Option<plan::TilePlan>>),
     SceneNotes(TileId, Sender<Vec<scene::Note>>),
     Rows(Sender<Vec<Row>>),
+    /// The rows, and how many full builds have ended when they were read ([`queue::Queue::set_changed`]).
+    Watch(Sender<(u64, Vec<Row>)>),
+    /// How much work is queued or running.
+    #[cfg(any(test, feature = "test-routes"))]
+    Queued(Sender<usize>),
+    #[cfg(test)]
+    SideWaiting(Sender<bool>),
     Paths(Sender<Vec<(usize, String)>>),
     Mesh(TileId, u64, Sender<Result<Option<Arc<Vec<u8>>>, u64>>),
     SketchMesh(TileId, u64, Sender<Option<Arc<Vec<u8>>>>),
@@ -171,6 +178,25 @@ pub(super) enum Command {
     },
     // ---- writes
     Edit(TileId, EditFn),
+    /// Tile `id` is asked for; false when it is not listed.
+    Want(TileId, Sender<bool>),
+    /// A draft joins the queue; answered once it has (so the older one is already answered).
+    SubmitDraft(Box<queue::Draft>, Sender<()>),
+    SubmitSide(queue::Side),
+    CancelLane(queue::Lane, String),
+    /// A lane waits for work of `kind` until it is sent, or `Withdraw`n.
+    Take {
+        ticket: u64,
+        kind: queue::Taking,
+        reply: Sender<queue::Taken>,
+    },
+    Withdraw(u64, Sender<()>),
+    Finish(queue::Finished),
+    /// The tiles whose files changed on disk, as the look at them (taken when `finished` builds had ended) found.
+    Changed {
+        finished: u64,
+        ids: BTreeSet<TileId>,
+    },
     /// The debug layer on or off; false when there is no such tile.
     SetMarks(TileId, bool, Sender<bool>),
     SetPlate(TileId, usize),
@@ -219,10 +245,10 @@ pub(super) enum Command {
         changed_elsewhere: bool,
         seq: u64,
         read: Vec<Resource>,
-        reply: Sender<(bool, Vec<TileId>)>,
+        reply: Sender<bool>,
     },
     /// A place left the list: it and its tiles go, and the places after it move down.  Answers the ids that left.
-    RemoveRoot(usize, Sender<Vec<TileId>>),
+    RemoveRoot(usize, Sender<()>),
     #[cfg(test)]
     Inspect(Box<dyn FnOnce(&mut Core) + Send>),
 }
@@ -254,6 +280,7 @@ impl Owner {
             folders: BTreeMap::new(),
             target,
             home,
+            queue: queue::Queue::default(),
             epoch,
         };
         // the thread ends with the last handle: `recv` fails once every sender is gone
@@ -316,6 +343,14 @@ impl Core {
     }
 
     fn apply(&mut self, c: Command) {
+        self.handle(c);
+        // any command may have made work for a lane that waits (see [`queue`])
+        if !self.queue.parked.is_empty() {
+            self.dispatch();
+        }
+    }
+
+    fn handle(&mut self, c: Command) {
         match c {
             Command::Facts(id, r) => reply(&r, self.slot(&id).map(Slot::facts)),
             Command::Summary(id, r) => reply(&r, self.slot(&id).map(Slot::summary)),
@@ -327,6 +362,45 @@ impl Core {
                     .unwrap_or_default(),
             ),
             Command::Rows(r) => reply(&r, self.tiles.iter().map(Slot::row).collect()),
+            Command::Watch(r) => reply(
+                &r,
+                (
+                    self.queue.finished(),
+                    self.tiles.iter().map(Slot::row).collect(),
+                ),
+            ),
+            #[cfg(any(test, feature = "test-routes"))]
+            Command::Queued(r) => reply(&r, self.queue.count()),
+            #[cfg(test)]
+            Command::SideWaiting(r) => reply(&r, self.queue.side_waiting()),
+            Command::Want(id, r) => {
+                let idle = self.slot(&id).map(|t| t.status == State::Idle);
+                if idle == Some(true) {
+                    self.queue.want(&id);
+                }
+                reply(&r, idle.is_some());
+            }
+            Command::SubmitDraft(d, r) => {
+                self.queue.add_draft(*d);
+                reply(&r, ());
+            }
+            Command::SubmitSide(s) => self.queue.add_side(s),
+            Command::CancelLane(lane, key) => self.queue.cancel_lane(lane, &key),
+            Command::Take {
+                ticket,
+                kind,
+                reply,
+            } => self.queue.parked.push(queue::Parked {
+                ticket,
+                kind,
+                reply,
+            }),
+            Command::Withdraw(ticket, r) => {
+                self.queue.parked.retain(|p| p.ticket != ticket);
+                reply(&r, ());
+            }
+            Command::Finish(done) => self.queue.finish(done),
+            Command::Changed { finished, ids } => self.queue.set_changed(finished, ids),
             Command::Paths(r) => reply(
                 &r,
                 self.tiles
@@ -691,7 +765,7 @@ impl Core {
         changed_elsewhere: bool,
         seq: u64,
         read: Vec<Resource>,
-    ) -> (bool, Vec<TileId>) {
+    ) -> bool {
         let before = self.tiles.len();
         let mut removed = Vec::new();
         for (r, paths) in found {
@@ -719,11 +793,12 @@ impl Core {
         }
         for id in &removed {
             self.events.messages.forget(id);
+            self.queue.forget(id);
         }
-        (changed, removed)
+        changed
     }
 
-    fn remove_root(&mut self, i: usize) -> Vec<TileId> {
+    fn remove_root(&mut self, i: usize) {
         self.roots.remove(i);
         self.folders = std::mem::take(&mut self.folders)
             .into_iter()
@@ -743,8 +818,8 @@ impl Core {
         }
         for id in &gone {
             self.events.messages.forget(id);
+            self.queue.forget(id);
         }
-        gone
     }
 
     /// A new listener.  With the epoch and last revision of a stream that dropped, and the log still holding
@@ -890,7 +965,6 @@ impl Slot {
             plate: self.plate,
             has_mesh: self.mesh.is_some(),
             marks: self.marks,
-            idle: self.status == State::Idle,
         }
     }
 

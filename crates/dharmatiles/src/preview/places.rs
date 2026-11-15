@@ -638,14 +638,9 @@ pub(super) fn remove_place(shared: &Shared, req: PlacesRemoveReq) -> Out<Changed
     if let Err(e) = save_places(&settings, &kept) {
         return Err(fail::failure("500 Internal Server Error", e));
     }
-    let gone: Vec<TileId> = {
-        shared
-            .owner
-            .ask(|r| super::owner::Command::RemoveRoot(i, r))
-    };
-    for id in &gone {
-        shared.forget(id);
-    }
+    shared
+        .owner
+        .ask(|r| super::owner::Command::RemoveRoot(i, r));
     announce(shared);
     Ok(Changed { rev: shared.told() })
 }

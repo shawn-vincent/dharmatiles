@@ -625,8 +625,7 @@ impl dt_kit::Reporter for Cancelled {
 /// One worker lane: take jobs from the queue until `stop`.
 fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
     while !stop.load(Ordering::Relaxed) {
-        shared.rescan_due();
-        let Some(job) = shared.next_job(eager) else {
+        let Some(job) = shared.next_job_within(eager, LANE_WAIT) else {
             continue;
         };
         // the target the page chose now, for this job; the clouds are always
@@ -698,6 +697,7 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
 /// build (and no two full builds run at once), until `stop`.
 pub fn work(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
     std::thread::scope(|s| {
+        s.spawn(|| watch(shared, stop));
         s.spawn(|| lane(shared, eager, stop));
         // the lanes of the rest of the building (tiers, exports): see [`queue`]
         for side in [queue::Lane::Tier, queue::Lane::Tier, queue::Lane::Export] {
@@ -705,6 +705,20 @@ pub fn work(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
         }
         lane(shared, eager, stop);
     });
+}
+
+/// The one place the program polls: every [`POLL`], the files of the tiles built are looked at for a change made
+/// outside it, and every [`RESCAN`] the folders for a tile that came or went.
+fn watch(shared: &Arc<Shared>, stop: &AtomicBool) {
+    let mut scanned: Option<Instant> = None;
+    while !stop.load(Ordering::Relaxed) {
+        if scanned.is_none_or(|t| t.elapsed() >= RESCAN) {
+            scanned = Some(Instant::now());
+            shared.rescan();
+        }
+        shared.look_for_changes();
+        std::thread::sleep(POLL);
+    }
 }
 
 /// A lane for the work that is not a tile's own build: it takes the jobs of its kind, one after another.  A job

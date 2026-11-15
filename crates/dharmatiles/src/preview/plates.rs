@@ -973,7 +973,6 @@ pub(super) fn again(shared: &Shared, id: &str) {
             t.status = State::Building;
         }
     });
-    shared.queue_cv.notify_all();
 }
 
 /// `text` with one word of the list's `plates` line set (null takes it off),

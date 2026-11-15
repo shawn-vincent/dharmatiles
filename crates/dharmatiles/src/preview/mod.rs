@@ -107,7 +107,7 @@ use std::net::TcpListener;
 use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime};
 
 use dt_eval::progress::{StageInfo, Status, Timings, Tracker, plan_stages};
@@ -115,8 +115,12 @@ use dt_eval::{Diag, Options};
 
 use crate::watch::{Recording, mtime};
 
-/// How often the worker looks for work.
+/// How often the files of the tiles built, and the folders, are looked at for a change made outside the program (the
+/// one polling there is: see [`Shared::look_for_changes`]).
 const POLL: Duration = Duration::from_millis(150);
+/// How long a lane that has no work waits before it looks at whether it is to stop: a wait on the owner, which
+/// answers the moment there is a job, and not a look for work.
+const LANE_WAIT: Duration = Duration::from_secs(1);
 /// The first port tried, when `--port` is not given.
 pub const FIRST_PORT: u16 = 7878;
 /// The stage after the build: the mesh's colours and binary buffer.
@@ -339,9 +343,8 @@ pub struct Shared {
     /// This run: a stream from another run cannot resume, whatever its
     /// revision.
     epoch: String,
-    /// Every build waiting or running, and the signal that one arrived.
-    queue: Mutex<queue::Queue>,
-    queue_cv: std::sync::Condvar,
+    /// The number of the next lane request ([`Shared::take`]).
+    take_seq: std::sync::atomic::AtomicU64,
     /// Where measured stage durations are kept between builds.
     cache: Option<std::path::PathBuf>,
     /// A palette document the paint is read from at each build.
@@ -350,8 +353,6 @@ pub struct Shared {
     gate: Mutex<()>,
     /// The number of the next reading of the resources the owner cannot read ([`Shared::resources_read`]).
     read_seq: std::sync::atomic::AtomicU64,
-    /// When the folders were last rescanned.
-    scanned: Mutex<Option<Instant>>,
     /// Where the per-user settings live (the added places); none in the
     /// tests that must not touch them.
     settings: Option<std::path::PathBuf>,
@@ -465,13 +466,11 @@ impl Shared {
             home: None,
             owner: owner::Owner::start(tiles, roots, opts.clone(), home_env(), epoch.clone()),
             epoch,
-            queue: Mutex::new(queue::Queue::default()),
-            queue_cv: std::sync::Condvar::new(),
+            take_seq: std::sync::atomic::AtomicU64::new(1),
             cache: None,
             palette: None,
             gate: Mutex::new(()),
             read_seq: std::sync::atomic::AtomicU64::new(1),
-            scanned: Mutex::new(None),
             settings: None,
             trash: None,
             trashed: Mutex::new(Vec::new()),
@@ -549,13 +548,8 @@ impl Shared {
     /// hides the layer and the builds after this one leave the marks out.
     /// False when there is no such tile.
     fn set_marks(&self, id: &str, on: bool) -> bool {
-        let found = self
-            .owner
-            .ask(|r| owner::Command::SetMarks(id.to_owned(), on, r));
-        if found {
-            self.queue_cv.notify_all();
-        }
-        found
+        self.owner
+            .ask(|r| owner::Command::SetMarks(id.to_owned(), on, r))
     }
 
     /// The tiles, for a test to read or arrange: run on the owner.
@@ -602,7 +596,6 @@ impl Shared {
             crate::library::remember_target(h, system, printer)?;
         }
         self.owner.send(owner::Command::SetTarget(next));
-        self.queue_cv.notify_all();
         Ok(())
     }
 
@@ -774,23 +767,6 @@ impl Shared {
         held.with(self.snapshot_outside())
     }
 
-    /// Rescan the folders and the library once [`RESCAN`] has passed:
-    /// new tiles join the list, deleted ones leave it (and come back,
-    /// under the same id, if the file does).  Every browser is told.
-    fn rescan_due(&self) {
-        let due = {
-            let mut last = lock(&self.scanned);
-            let due = last.is_none_or(|t| t.elapsed() >= RESCAN);
-            if due {
-                *last = Some(Instant::now());
-            }
-            due
-        };
-        if due {
-            self.rescan();
-        }
-    }
-
     /// Rescan every root now, telling every browser the new list when it
     /// changed.  True when it did.
     fn rescan(&self) -> bool {
@@ -836,7 +812,7 @@ impl Shared {
             }
         }
         let (seq, read) = self.resources_read(false);
-        let (changed, removed) = self.owner.ask(|reply| owner::Command::Reconcile {
+        let changed = self.owner.ask(|reply| owner::Command::Reconcile {
             found,
             fresh,
             changed_elsewhere: folders_changed || inventory_changed,
@@ -844,9 +820,6 @@ impl Shared {
             read,
             reply,
         });
-        for id in &removed {
-            self.forget(id);
-        }
         changed
     }
 
