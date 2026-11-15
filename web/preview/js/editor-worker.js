@@ -3,8 +3,8 @@
 // the same `Service` the program answers over HTTP (dt-web's service.rs): the page's `workerHost` (js/host.js) sends a call by
 // its verb and gets the answer back, with no server.  The page never writes tile text and never reads a build: it asks.
 //
-//   to the worker    {id, op: 'init', glue, module, library}  the engine's glue (a URL), its compiled module and the library as JSON: the page
-//                                                              fetched them (js/host.js is the one place the page reaches the network)
+//   to the worker    {id, op: 'init', glue, module, library, engine}  the engine's glue (a URL), its compiled module, the library as JSON and the
+//                                                              engine's hash: the page fetched them (js/host.js is the one place the page reaches the network)
 //                    {id, op: 'call', verb, tile, request}     one verb; `tile` is a tile's id or its path, `request` the verb's JSON
 //                    {id, op: 'bytes', verb, tile, request}    a verb that answers bytes (`draft`, `step`)
 //                    {id, op: 'mesh', tile, docRev}            the page's mesh of the revision, or none
@@ -14,8 +14,10 @@
 //                    {type: 'stream', json}                         one stream event as it happens (a build's progress)
 //                    {type: 'ready', version}                       the engine is up and has the library
 //
+// The builds the worker keeps (dt-web's `KeptBuilds`) are held in IndexedDB between visits by js/kept-idb.js; the engine decides what is
+// kept (its key, its size limit, which entry goes first), the page's reload finds them again, and a build of a tile kept reads it.
 // A trap or a throw is loud: it is answered with its words, never an empty answer.
-/** @typedef {{ id: number, op: 'init', glue: string, module: WebAssembly.Module, library: string }} InitMsg */
+/** @typedef {{ id: number, op: 'init', glue: string, module: WebAssembly.Module, library: string, engine: string }} InitMsg */
 /** @typedef {{ id: number, op: 'call' | 'bytes', verb: string, tile: string, request: string }} CallMsg */
 /** @typedef {{ id: number, op: 'mesh', tile: string, docRev: number }} MeshMsg */
 /** @typedef {{ id: number, op: 'snapshot' }} SnapshotMsg */
@@ -32,7 +34,8 @@
  *   default: (init: { module_or_path: BufferSource | WebAssembly.Module }) => Promise<unknown>,
  *   set_library: (json: string) => void,
  *   version: () => string,
- *   Service: new (entropy: Uint8Array) => {
+ *   KeptBuilds: new (engine: string) => import('./kept-idb.js').Kept,
+ *   Service: new (entropy: Uint8Array, kept: import('./kept-idb.js').Kept) => {
  *     call(verb: string, tile: string, request: string): string,
  *     call_bytes(verb: string, tile: string, request: string): Uint8Array,
  *     mesh(tile: string, docRev: number): Uint8Array | undefined,
@@ -42,6 +45,7 @@
  * }} Engine
  */
 
+import { openKept } from './kept-idb.js';
 export {}; // a module worker
 
 const scope = /** @type {{ postMessage(m: FromWorker, transfer?: Transferable[]): void, onmessage: ((ev: MessageEvent<ToWorker>) => unknown) | null }} */ (
@@ -85,7 +89,10 @@ scope.onmessage = async (/** @type {MessageEvent<ToWorker>} */ ev) => {
       await engine.default({ module_or_path: m.module });
       engine.set_library(m.library);
       // a worker has no system to ask for a number nobody chose: the page gives real randomness, a fresh seed is drawn from it
-      service = new engine.Service(crypto.getRandomValues(new Uint8Array(32)));
+      // the builds of earlier visits are loaded before the first call, and every build kept from now on is written behind it
+      const kept = new engine.KeptBuilds(m.engine);
+      await openKept(kept);
+      service = new engine.Service(crypto.getRandomValues(new Uint8Array(32)), kept);
       scope.postMessage({ type: 'ready', version: engine.version() });
       scope.postMessage({ id: m.id, ok: true, events: '[]' });
       return;

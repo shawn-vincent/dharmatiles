@@ -35,6 +35,8 @@ dt-eval = { workspace = true, features = ["wasm"] }
 # the one build memo the tests share (the payload's tests build through it)
 [dev-dependencies]
 dt-testkit.workspace = true
+# the test host's kept builds: the lane and an export of a tile share one entry (no_server_verbs)
+dt-store.workspace = true
 
 [lints]
 workspace = true

@@ -58,7 +58,10 @@ impl std::fmt::Display for JsError {
 }
 
 pub mod edit;
+pub mod kept;
 pub mod service;
+
+pub use kept::KeptBuilds;
 
 /// The path the page's document is read as.
 const MAIN: &str = "tile.dtile";
@@ -738,25 +741,45 @@ pub struct Via<'a> {
     pub debug: bool,
 }
 
-/// One build, as the program does it: the text of a document, a build
-/// target, a seed (negative keeps the tile's own) and cells per square (0
-/// keeps the build's finest).  The one function the browser and the native
-/// parity test both call.
+/// What a build in the page is told beside its document: the build target, a seed (none keeps the tile's own), cells per
+/// square (0 keeps the build's finest) and the tier.
+#[derive(Clone, Copy)]
+pub struct Ask {
+    pub system: System,
+    pub seed: Option<u64>,
+    pub cells: u32,
+    pub tier: Tier,
+}
+
+impl Ask {
+    /// The finished build as the page makes it of a library tile: the tile's own seed, the finest cells, the full tier.
+    #[must_use]
+    pub fn full(system: System) -> Self {
+        Self {
+            system,
+            seed: None,
+            cells: 0,
+            tier: Tier::Full,
+        }
+    }
+}
+
+/// One build, as the program does it: the document `path` read through `source`, told `ask`.  The one function the
+/// browser and the native parity test both call.  `path` is the document's own (a tile's file, or [`MAIN`] for the site's one example): the key a
+/// build is kept under reads it, so the same tile built by the editor's lane, an export or a plate is one entry.
 ///
 /// # Errors
 /// The document's mistakes, as the program's diagnostics.
 pub fn build_with(
     source: &dyn Source,
-    system: System,
-    seed: Option<u64>,
-    cells: u32,
-    tier: Tier,
+    path: &str,
+    ask: Ask,
     progress: &dt_eval::Progress,
     via: Via<'_>,
 ) -> Result<(dt_eval::Built, Options), Vec<Diag>> {
-    let mut opts = build_options(source, system, seed, cells, tier)?;
+    let mut opts = build_options(source, ask.system, ask.seed, ask.cells, ask.tier)?;
     opts.debug = via.debug;
-    let built = dt_store::build_stored(source, MAIN, &opts, progress, via.cache, via.store)?;
+    let built = dt_store::build_stored(source, path, &opts, progress, via.cache, via.store)?;
     Ok((built, opts))
 }
 
@@ -780,7 +803,7 @@ pub fn build_options(
     Ok(opts)
 }
 
-/// The key a build of the page's document is kept under between visits: dt-store's own key ([`dt_store::make_key`], the
+/// The key a build of the document `path` is kept under: dt-store's own key ([`dt_store::make_key`], the
 /// one the program's disk cache uses), made from every file the check read and the options the build is given.  `engine`
 /// names the engine (the page gives its hash), so a mesh an older engine made is never found.  A document that does not
 /// check has no key (its mistakes are the check's answer).
@@ -789,6 +812,7 @@ pub fn build_options(
 /// The document's mistakes, as the program's diagnostics.
 pub fn stored_key(
     source: &dyn Source,
+    path: &str,
     engine: &str,
     system: System,
     seed: Option<u64>,
@@ -797,9 +821,9 @@ pub fn stored_key(
 ) -> Result<String, Vec<Diag>> {
     let tracked = dt_store::Tracked::new(source);
     let opts = build_options(&tracked, system, seed, cells, tier)?;
-    dt_eval::check(&tracked, MAIN, &opts)?;
+    dt_eval::check(&tracked, path, &opts)?;
     Ok(
-        dt_store::make_key(engine, &tracked.reads(), MAIN, &opts, tier)
+        dt_store::make_key(engine, &tracked.reads(), path, &opts, tier)
             .id()
             .to_owned(),
     )
@@ -833,10 +857,14 @@ pub struct StageTick {
 
 /// How many stages a build of `source` will announce: its stack, the union and the audit.  A document that
 /// does not check has no count: its diagnostics are the build's answer, shown the way a failed build's are.
-pub(crate) fn stage_total(source: &dyn Source, system: System) -> Result<usize, Vec<Diag>> {
+pub(crate) fn stage_total(
+    source: &dyn Source,
+    path: &str,
+    system: System,
+) -> Result<usize, Vec<Diag>> {
     let mut opts = Options::in_source(source)?;
     opts.system = system;
-    let checked = dt_eval::check(source, MAIN, &opts)?;
+    let checked = dt_eval::check(source, path, &opts)?;
     Ok(checked.tile.as_ref().map_or(1, |t| t.stack.len()) + 2)
 }
 
@@ -916,11 +944,17 @@ fn stl_hash(bytes: &[u8]) -> (String, usize) {
 /// Build `text` for `system` and hand back the mesh, painted, with the
 /// gate's findings.  `seed` below 0 keeps the tile's own; `cells` is cells
 /// per square (0: the build's finest).  A document with a mistake is not an
-/// error: the result is unbuilt and says where, in `meta`.
+/// error: the result is unbuilt and says where, in `meta`.  With `keep` the build goes through `kept` (a build the
+/// store holds is read, not made, and one made is kept: the page's own examples' drafts, between visits); without it
+/// the store is not touched.
 ///
 /// # Errors
 /// An unknown target, or the library was never set.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the page's call: JavaScript passes these positionally, and `kept` and `keep` cannot be one value (a handle passed by value is consumed)"
+)]
 pub fn build_tile(
     text: &str,
     system: &str,
@@ -928,6 +962,8 @@ pub fn build_tile(
     cells: u32,
     tier: &str,
     card: Option<String>,
+    kept: &KeptBuilds,
+    keep: bool,
 ) -> Result<Tile, JsError> {
     let system = system_of(system)?;
     let tier = tier.parse::<Tier>().map_err(|e| JsError::new(&e))?;
@@ -944,16 +980,20 @@ pub fn build_tile(
             library: &lib,
             text,
         };
-        let (built, opts) = match stage_total(&source, system).and_then(|total| {
+        let (built, opts) = match stage_total(&source, MAIN, system).and_then(|total| {
             build_with(
                 &source,
-                system,
-                seed.map(u64::from),
-                cells,
-                tier,
+                MAIN,
+                Ask {
+                    system,
+                    seed: seed.map(u64::from),
+                    cells,
+                    tier,
+                },
                 &ticks(total),
                 Via {
                     cache: cache.as_deref(),
+                    store: keep.then(|| -> &dyn dt_store::Kept { &**kept.store() }),
                     ..Via::default()
                 },
             )
@@ -1038,49 +1078,13 @@ pub struct ParityLine {
     pub passed: bool,
     pub stl_bytes: usize,
     pub stl_sha256: String,
-    /// The key the page keeps this build under ([`stored_key`], the engine named [`PARITY_ENGINE`]): the browser's
+    /// The key this build is kept under ([`stored_key`] of the tile's own path, the engine named [`PARITY_ENGINE`]): the browser's
     /// must be the program's.
     pub key: String,
 }
 
 /// The engine name the parity run keys with: both sides name the same one.
 pub const PARITY_ENGINE: &str = "parity";
-
-/// The key of the page's document `text` for `system`, `seed` (none: the tile's own), `cells` and `tier`, by the engine
-/// the page names ([`stored_key`]): what the page's worker keeps a draft under between visits.  `None` when the
-/// document does not read: its mistakes are the check's answer, which the page shows.
-///
-/// # Errors
-/// An unknown target or tier, or the library was never set.
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn store_key(
-    text: &str,
-    engine: &str,
-    system: &str,
-    seed: Option<u32>,
-    cells: u32,
-    tier: &str,
-) -> Result<Option<String>, JsError> {
-    let system = system_of(system)?;
-    let tier = tier.parse::<Tier>().map_err(|e| JsError::new(&e))?;
-    LIBRARY.with(|lib| {
-        let lib = lib.borrow();
-        if !lib.contains_key(HEIGHTS) {
-            return Err(JsError::new(
-                "the library has no parts/heights.dtile: call set_library first",
-            ));
-        }
-        let source = Overlay {
-            library: &lib,
-            text,
-        };
-        match stored_key(&source, engine, system, seed.map(u64::from), cells, tier) {
-            Ok(key) => Ok(Some(key)),
-            // a document with mistakes has no key; the check shows the mistakes
-            Err(_) => Ok(None),
-        }
-    })
-}
 
 /// Build the library tile `tile` for `system_word` as the page does (its own seed, the finest cells, full tier) and
 /// say what the build came to, as JSON: one [`ParityLine`].  The browser's and the program's answers are compared
@@ -1102,10 +1106,8 @@ pub fn parity_line(tile: &str, system_word: &str) -> Result<String, JsError> {
         };
         let (built, opts) = build_with(
             &source,
-            system,
-            None,
-            0,
-            Tier::Full,
+            tile,
+            Ask::full(system),
             &dt_eval::Progress::none(),
             Via::default(),
         )
@@ -1129,7 +1131,7 @@ pub fn parity_line(tile: &str, system_word: &str) -> Result<String, JsError> {
             passed: passed.is_some(),
             stl_bytes,
             stl_sha256,
-            key: stored_key(&source, PARITY_ENGINE, system, None, 0, Tier::Full)
+            key: stored_key(&source, tile, PARITY_ENGINE, system, None, 0, Tier::Full)
                 .map_err(|ds| JsError::new(&format!("{tile} has no key: {ds:?}")))?,
         })
     })
@@ -1269,12 +1271,20 @@ mod tests {
     fn the_pages_key_is_the_programs_key() {
         lib();
         let text = LIBRARY.with(|l| l.borrow()["lib:tiles/ground/1x1-grass.dtile"].clone());
-        let key = |text: &str, engine: &str, seed: Option<u32>, cells: u32, tier: &str| {
-            store_key(text, engine, "db", seed, cells, tier)
-                .unwrap()
-                .expect("the tile reads")
+        let key_at = |path: &str, text: &str, engine: &str, seed: Option<u64>, cells: u32, tier: Tier| {
+            LIBRARY.with(|l| {
+                let lib = l.borrow();
+                let source = Overlay {
+                    library: &lib,
+                    text,
+                };
+                stored_key(&source, path, engine, System::Db, seed, cells, tier)
+            })
         };
-        let base = key(&text, "e1", None, 24, "low");
+        let key = |text: &str, engine: &str, seed: Option<u64>, cells: u32, tier: Tier| {
+            key_at(MAIN, text, engine, seed, cells, tier).unwrap()
+        };
+        let base = key(&text, "e1", None, 24, Tier::Low);
         // the program's store, for the same reads and options
         let programs = LIBRARY.with(|l| {
             let lib = l.borrow();
@@ -1291,21 +1301,24 @@ mod tests {
                 .to_owned()
         });
         assert_eq!(base, programs);
-        assert_eq!(base, key(&text, "e1", None, 24, "low"));
+        assert_eq!(base, key(&text, "e1", None, 24, Tier::Low));
         for other in [
-            key(&text, "e2", None, 24, "low"),
-            key(&text, "e1", Some(5), 24, "low"),
-            key(&text, "e1", None, 12, "low"),
-            key(&text, "e1", None, 24, "draft"),
-            key(&format!("{text}\n"), "e1", None, 24, "low"),
+            key(&text, "e2", None, 24, Tier::Low),
+            key(&text, "e1", Some(5), 24, Tier::Low),
+            key(&text, "e1", None, 12, Tier::Low),
+            key(&text, "e1", None, 24, Tier::Draft),
+            key(&format!("{text}\n"), "e1", None, 24, Tier::Low),
         ] {
             assert_ne!(base, other);
         }
-        // a document with a mistake has no key
-        assert_eq!(
-            store_key("tile size=\"", "e1", "db", None, 24, "low").unwrap(),
-            None
+        // the document's path is part of the key: one tile under two paths is two entries, which is why every build of
+        // a tile names the tile's own
+        assert_ne!(
+            base,
+            key_at("lib:tiles/ground/1x1-grass.dtile", &text, "e1", None, 24, Tier::Low).unwrap()
         );
+        // a document with a mistake has no key
+        assert!(key_at(MAIN, "tile size=\"", "e1", None, 24, Tier::Low).is_err());
     }
 
     #[test]
@@ -1368,13 +1381,15 @@ mod tests {
              /** A built tile (`Tile`): its getters, as wasm-bindgen exports them. */\n\
              export interface EngineTile {\n  readonly meta: string;\n  readonly stl: Uint8Array;\n  \
              readonly positions: Float32Array;\n  readonly colours: Float32Array;\n  free(): void;\n}\n\n\
+             /** The builds a worker keeps (`KeptBuilds`, kept.rs): kept-idb.js loads an earlier visit's records into it and then hears its changes. */\n\
+             export interface EngineKept {\n  load(bytes: Uint8Array, used: number): string;\n  persist(): void;\n  free(): void;\n}\n\n\
              /** The compiled module (docs/engine/dt_web.js, `cargo xtask wasm`, not in the repo): its exports, written here \
              beside the Rust functions they are, so a script is checked the same whether a build is on disk or not. */\n\
              export interface Engine {\n  default(init: { module_or_path: WebAssembly.Module | string }): Promise<unknown>;\n  \
              version(): string;\n  set_library(json: string): void;\n  analyze(text: string, system: string): string;\n  \
              check_tile(text: string, system: string): string;\n  fix_tile(text: string, fix: string): string;\n  edit_tile(req: string, system: string): string;\n  \
              printed(typed: string): string;\n  \
-             build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null): EngineTile;\n  forget_card(card: string): void;\n  store_key(text: string, engine: string, system: string, seed: number | null, cells: number, tier: string): string | null;\n  \
+             build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null, kept: EngineKept, keep: boolean): EngineTile;\n  forget_card(card: string): void;\n  KeptBuilds: new (engine: string) => EngineKept;\n  \
              explore(typed: string, system: string, bins: number, draws: number, seed: number): string;\n}\n",
         );
         out

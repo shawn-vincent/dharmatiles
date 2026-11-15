@@ -590,10 +590,10 @@ export function startEditorWorker(base = engineBase()) {
     return r;
   };
   const ready = (async () => {
-    const manifest = /** @type {{ js: string, wasm: string, library: string }} */ (await (await get('engine.json')).json());
+    const manifest = /** @type {{ js: string, wasm: string, library: string, hash: string }} */ (await (await get('engine.json')).json());
     const [bytes, library] = await Promise.all([get(manifest.wasm).then((r) => r.arrayBuffer()), get(manifest.library).then((r) => r.text())]);
     const module = await WebAssembly.compile(bytes);
-    return ask({ op: 'init', glue: new URL(manifest.js, new URL(base, location.href)).href, module, library });
+    return ask({ op: 'init', glue: new URL(manifest.js, new URL(base, location.href)).href, module, library, engine: manifest.hash });
   })();
   return { ask, ready, onStream: (/** @type {(json: string) => void} */ f) => { streams.push(f); } };
 }

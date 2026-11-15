@@ -533,6 +533,13 @@ export interface EngineTile {
   free(): void;
 }
 
+/** The builds a worker keeps (`KeptBuilds`, kept.rs): kept-idb.js loads an earlier visit's records into it and then hears its changes. */
+export interface EngineKept {
+  load(bytes: Uint8Array, used: number): string;
+  persist(): void;
+  free(): void;
+}
+
 /** The compiled module (docs/engine/dt_web.js, `cargo xtask wasm`, not in the repo): its exports, written here beside the Rust functions they are, so a script is checked the same whether a build is on disk or not. */
 export interface Engine {
   default(init: { module_or_path: WebAssembly.Module | string }): Promise<unknown>;
@@ -543,8 +550,8 @@ export interface Engine {
   fix_tile(text: string, fix: string): string;
   edit_tile(req: string, system: string): string;
   printed(typed: string): string;
-  build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null): EngineTile;
+  build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null, kept: EngineKept, keep: boolean): EngineTile;
   forget_card(card: string): void;
-  store_key(text: string, engine: string, system: string, seed: number | null, cells: number, tier: string): string | null;
+  KeptBuilds: new (engine: string) => EngineKept;
   explore(typed: string, system: string, bins: number, draws: number, seed: number): string;
 }

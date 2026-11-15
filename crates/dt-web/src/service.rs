@@ -86,7 +86,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::{JsError, LIBRARY, MAIN, Via, build_with, stage_total, stl_sha256, system_of};
+use crate::{JsError, KeptBuilds, LIBRARY, MAIN, stage_total, stl_sha256, system_of};
 
 /// The folder the worker's tiles are listed under.
 const FOLDER: &str = "/memory/My tiles";
@@ -273,11 +273,8 @@ struct Inner {
     /// The finished builds this worker keeps between calls (the program's disk cache, in memory): a build of a tile
     /// whose document, parts and target have not changed is read, not made.  Every full build, every plate's piece
     /// and every tier goes through it by `dt_store::build_stored`.
-    kept: dt_store::MemStore,
+    kept: Arc<dt_store::MemStore>,
 }
-
-/// The memory a worker keeps finished builds in (a browser tab holds the wasm's 4 GB, and a build is made in it as well).
-const KEPT_BYTES: usize = 256 << 20;
 
 /// What one call runs on: the worker, the tile it is about and the options it reads it with.
 struct Ctx {
@@ -476,54 +473,33 @@ impl Inner {
             return Ok(());
         }
         // a library tile is read from the library the page handed over, and has no revision to edit against
-        let (text, doc_rev) = if facts.path.starts_with(dt_eval::LIB) {
-            (
-                Lib.read(&facts.path).map_err(|e| {
-                    Refusal::failure(
-                        dt_service::call::Status::Internal,
-                        format!("cannot read {}: {e}", facts.path),
-                    )
-                })?,
-                0,
-            )
+        let doc_rev = if facts.path.starts_with(dt_eval::LIB) {
+            0
         } else {
-            let text = self
-                .storage
-                .read_text(Path::new(&facts.path))
-                .map_err(|e| {
-                    Refusal::failure(
-                        dt_service::call::Status::Internal,
-                        format!("cannot read {}: {e}", facts.path),
-                    )
-                })?;
-            let rev = self
-                .docs
+            self.docs
                 .read(&facts.path)
                 .map_err(|e| dt_service::docs::read_failed(&facts.path, &e))?
-                .1;
-            (text, rev)
+                .1
+        };
+        // the tile is built under its own path, through the one function every build of a tile goes through
+        // ([`Inner::build_kept`]): an export of it later is the same key, and reads this build
+        let opts = Options {
+            tier: Tier::Full,
+            // the page's debug layer for this tile: its marks are collected only then (the program's lanes do the same)
+            debug: facts.marks,
+            ..options_in(&Lib, self.system.get())?
         };
         // a document that does not check has no stage count: its diagnostics are the build's answer, shown below
         #[expect(
             clippy::disallowed_methods,
             reason = "permitted silence: a document that does not check has no stage count; its diagnostics are what the build answers with"
         )]
-        let total = stage_total(&Doc { text: &text }, self.system.get()).unwrap_or(1);
+        let total = stage_total(&self.tiles, &facts.path, self.system.get()).unwrap_or(1);
         let progress = dt_eval::Progress::new(Arc::new(StreamTicks::new(id, total)));
-        match build_with(
-            &Doc { text: &text },
-            self.system.get(),
-            None,
-            0,
-            Tier::Full,
-            &progress,
-            Via {
-                store: Some(&self.kept),
-                // the page's debug layer for this tile: its marks are collected only then (the program's lanes do the same)
-                debug: facts.marks,
-                ..Via::default()
-            },
-        ) {
+        match self
+            .build_kept(&facts.path, &opts, &progress)
+            .map(|built| (built, opts))
+        {
             Err(ds) => edit(Patch::BuildFailed {
                 errors: dt_eval::mistakes(&ds),
                 failure: None,
@@ -572,6 +548,20 @@ impl Inner {
             .borrow_mut()
             .apply(Command::Finish(Finished::Full(id.to_owned())));
         Ok(())
+    }
+}
+
+impl Inner {
+    /// A tile built, or read from what the worker keeps: the one build of a tile in this worker (the lane's full build,
+    /// an export, a plate's piece), always under the tile's own path and the options the caller made, so the same tile
+    /// at the same options is one key and one entry whoever asks first.
+    fn build_kept(
+        &self,
+        path: &str,
+        opts: &Options,
+        progress: &dt_eval::Progress,
+    ) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
+        dt_store::build_stored(&self.tiles, path, opts, progress, None, Some(&*self.kept))
     }
 }
 
@@ -899,9 +889,9 @@ impl PlatesHost for Ctx {
         };
         dt_eval::check(&tracked, path, &full).is_ok()
             && dt_store::Kept::get(
-                &self.inner.kept,
+                &*self.inner.kept,
                 &dt_store::make_key(
-                    dt_store::Kept::engine(&self.inner.kept),
+                    dt_store::Kept::engine(&*self.inner.kept),
                     &tracked.reads(),
                     path,
                     &full,
@@ -917,14 +907,8 @@ impl PlatesHost for Ctx {
         path: &str,
         opts: &Options,
     ) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
-        dt_store::build_stored(
-            &self.inner.tiles,
-            path,
-            opts,
-            &dt_eval::Progress::none(),
-            None,
-            Some(&self.inner.kept),
-        )
+        self.inner
+            .build_kept(path, opts, &dt_eval::Progress::none())
     }
 
     #[expect(
@@ -1260,7 +1244,7 @@ fn tiers_want(ctx: &Ctx, req: TiersWantReq) -> Result<TiersWantRes, Refusal> {
             &r.opts,
             &dt_eval::Progress::none(),
             None,
-            Some(&inner.kept),
+            Some(&*inner.kept),
         );
         match built {
             Ok(b) => match tier_calls::tier_bytes(b, &r, rev, &ctx.palette()) {
@@ -1469,8 +1453,11 @@ impl Service {
     ///
     /// # Errors
     /// The library has no default printer that reads, the entropy is short, or the owner did not answer its first listener.
+    ///
+    /// `kept` is the worker's one store of finished builds (kept.rs): every full build, every plate's piece and every tier
+    /// goes through it, and the page's keeper (IndexedDB) follows it.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
-    pub fn new(entropy: &[u8]) -> Result<Self, JsError> {
+    pub fn new(entropy: &[u8], kept: &KeptBuilds) -> Result<Self, JsError> {
         if entropy.len() < 8 {
             return Err(JsError::new(
                 "the page gave fewer than eight bytes of entropy for fresh seeds",
@@ -1554,7 +1541,7 @@ impl Service {
                 ticket: Cell::new(0),
                 seq: Cell::new(0),
                 entropy: Cell::new(entropy),
-                kept: dt_store::MemStore::new(crate::version(), KEPT_BYTES),
+                kept: kept.store().clone(),
             }),
             table: table(),
         };
@@ -1830,19 +1817,20 @@ mod tests {
                 .map(|i| n.wrapping_mul(31).wrapping_add(i))
                 .collect()
         };
-        let a = Service::new(&bytes(1)).expect("a service");
+        let kept = crate::KeptBuilds::new("test");
+        let a = Service::new(&bytes(1), &kept).expect("a service");
         let (first, second) = (fresh_seed(&a, "One"), fresh_seed(&a, "Two"));
         assert_ne!(first, second, "two edits of one worker repeated a seed");
-        let reloaded = Service::new(&bytes(2)).expect("a service");
+        let reloaded = Service::new(&bytes(2), &kept).expect("a service");
         assert_ne!(
             first,
             fresh_seed(&reloaded, "One"),
             "a reload of the page repeated a seed"
         );
-        let same = Service::new(&bytes(1)).expect("a service");
+        let same = Service::new(&bytes(1), &kept).expect("a service");
         assert_eq!(first, fresh_seed(&same, "One"), "one entropy is one stream");
         assert!(
-            Service::new(&[1, 2, 3]).is_err(),
+            Service::new(&[1, 2, 3], &kept).is_err(),
             "a page that gives no entropy is refused, never given a constant"
         );
     }

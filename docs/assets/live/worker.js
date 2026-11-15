@@ -9,19 +9,22 @@
 //   built    {id, ...}             a mesh, painted, with the gate's findings (and the STL of a full build)
 //   fixed    {id, text}            the source with a mistake's fix laid in (dt_doc::ops Op::Fix, the program's one applier)
 //   edited   {id, made}            the source with an edit made (dt_service::edit::apply, the editor's one applier): `made` is the new text, the node and the text's fingerprint
-//   keyed    {id, key}             the key a build of the text is kept under between visits (dt-store's key function, compiled into the engine: the program's disk cache's key maker); null when the text does not read
 //   error    {id, message, stack}  a trap or a throw, loud: the page shows it
 //
 // A fix is `{type: 'fix', id, text, fix}` (`fix` is the check's mistake's `fix`); it answers `fixed`, or `error`.
 // An edit is `{type: 'edit', id, req, system}` (`req` is the typed `EditReq`: an op, the node it names by id, and the fingerprint
 // of the text the ids were read at); it answers `edited`, or `error` with the program's refusal.  The page never writes tile text.
-// A job is `{id, steps: ['check', 'build'], text, system, seed, cells}`.  `cells` is cells per square: a number for a draft, 0
-// for the build's own finest, the detail the printer is given.
+// A job is `{id, steps: ['check', 'build'], text, system, seed, cells, tier, card, persist}`.  `cells` is cells per square: a number for a draft, 0
+// for the build's own finest, the detail the printer is given.  `persist` builds through the engine's kept builds (kept.rs, held in
+// IndexedDB between visits by the editor's kept-idb.js): the page's own examples' drafts, which a later visit reads instead of building.
 // The compiled module (docs/engine/, `cargo xtask wasm`) is not in the repo and its files carry their hashes in their names: the page
 // reads engine.json and hands the glue's URL over with the module (`init`), so a glue file is always the one its module was made with.
 // It is imported by that URL, which tsc does not follow, and typed by the generated engine-wire.d.ts (`Engine`, `Answers`).
 /** @type {import('./engine-wire').Engine | null} */
 let engine = null;
+/** The builds this worker keeps (dt-web's `KeptBuilds`), opened at init. @type {import('./engine-wire').EngineKept | null} */
+let kept = null;
+import { openKept } from '../../editor/js/kept-idb.js';
 export {}; // a module worker
 
 /** @typedef {import('./engine-wire').Answers} Answers */
@@ -29,24 +32,22 @@ export {}; // a module worker
 // The protocol, once, where the worker makes and takes the messages (engine.js imports these).  What the answers carry is the
 // generated engine-wire.d.ts's: `Answers`.
 /** @typedef {'check' | 'build'} Step */
-/** What a job asks: its steps, the source, the target, the seed (null for the document's own), the cells a square (0: the finest), the tier, and the card whose step cache a draft builds through (null: a full build keeps none). @typedef {{steps: Step[], text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null}} JobSpec */
-/** @typedef {{type: 'init', module: WebAssembly.Module, library: string, glue: string}} InitMsg  to the worker: the compiled module, the library as JSON, and the URL of the glue made with the module */
+/** What a job asks: its steps, the source, the target, the seed (null for the document's own), the cells a square (0: the finest), the tier, the card whose step cache a draft builds through (null: a full build keeps none), and whether the build goes through the kept builds. @typedef {{steps: Step[], text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null, persist: boolean}} JobSpec */
+/** @typedef {{type: 'init', module: WebAssembly.Module, library: string, glue: string, engine: string}} InitMsg  to the worker: the compiled module, the library as JSON, the URL of the glue made with the module, and the engine's hash (the kept builds are of this engine alone) */
 /** @typedef {{type: 'forget', card: string}} ForgetMsg  to the worker: a card left the page, drop its step cache */
 /** @typedef {{type: 'fix', id: string, text: string, fix: import('./engine-wire').FixJson}} FixMsg  to the worker: lay a mistake's fix into the source */
 /** @typedef {{type: 'edit', id: string, req: import('./engine-wire').EditReq, system: string}} EditMsg  to the worker: make an edit (the program's `edit_tile`) */
-/** @typedef {{type: 'key', id: string, engine: string} & Omit<JobSpec, 'steps' | 'card'>} KeyMsg  to the worker: the key a build of this job would be kept under, for the engine named (the page's hash of it) */
 /** @typedef {{type: 'job', id: number} & JobSpec} JobMsg  to the worker: one job */
-/** @typedef {InitMsg | FixMsg | EditMsg | KeyMsg | JobMsg | ForgetMsg} ToWorker */
+/** @typedef {InitMsg | FixMsg | EditMsg | JobMsg | ForgetMsg} ToWorker */
 /** @typedef {{type: 'ready', version: string}} ReadyMsg */
 /** @typedef {{type: 'progress', id: number} & Answers['dtProgress']} ProgressMsg */
 /** @typedef {{type: 'checked', id: number, result: Answers['check_tile'], ms: number}} CheckedMsg */
 /** @typedef {{type: 'built', id: number, ms: number, meta: Answers['build_tile().meta'], positions: Float32Array, colours: Float32Array, stl: Uint8Array}} BuiltMsg */
 /** @typedef {{type: 'fixed', id: string, text: string}} FixedMsg */
 /** @typedef {{type: 'edited', id: string, made: Answers['edit_tile']}} EditedMsg */
-/** @typedef {{type: 'keyed', id: string, key: string | null}} KeyedMsg */
 /** @typedef {{type: 'idle', id: number}} IdleMsg  the job is done and nothing was built (the check failed, or only the check was asked) */
 /** @typedef {{type: 'error', id: number | string | undefined, message: string, stack: string}} ErrorMsg */
-/** @typedef {ReadyMsg | ProgressMsg | CheckedMsg | BuiltMsg | FixedMsg | EditedMsg | KeyedMsg | IdleMsg | ErrorMsg} FromWorker */
+/** @typedef {ReadyMsg | ProgressMsg | CheckedMsg | BuiltMsg | FixedMsg | EditedMsg | IdleMsg | ErrorMsg} FromWorker */
 
 /** The worker's own scope, which the `DOM` lib types as a window. */
 const scope = /** @type {{ postMessage(m: FromWorker, transfer?: Transferable[]): void, onmessage: ((ev: MessageEvent<ToWorker>) => unknown) | null }} */ (
@@ -77,11 +78,13 @@ scope.onmessage = async (/** @type {MessageEvent<ToWorker>} */ ev) => {
       engine = /** @type {import('./engine-wire').Engine} */ (await import(m.glue));
       await engine.default({ module_or_path: m.module });
       engine.set_library(m.library);
+      kept = new engine.KeptBuilds(m.engine);
+      await openKept(kept);
       ready = true;
       scope.postMessage({ type: 'ready', version: engine.version() });
       return;
     }
-    if (!ready || !engine) throw new Error(`the worker was sent a "${m.type}" message before it was ready`);
+    if (!ready || !engine || !kept) throw new Error(`the worker was sent a "${m.type}" message before it was ready`);
     if (m.type === 'forget') {
       engine.forget_card(m.card);
       return;
@@ -92,10 +95,6 @@ scope.onmessage = async (/** @type {MessageEvent<ToWorker>} */ ev) => {
     }
     if (m.type === 'edit') {
       scope.postMessage({ type: 'edited', id: m.id, made: answer('edit_tile', engine.edit_tile(JSON.stringify(m.req), m.system)) });
-      return;
-    }
-    if (m.type === 'key') {
-      scope.postMessage({ type: 'keyed', id: m.id, key: engine.store_key(m.text, m.engine, m.system, m.seed, m.cells, m.tier) ?? null });
       return;
     }
     if (m.type !== 'job') throw new Error(`the worker was sent a "${/** @type {{ type: string }} */ (m).type}" message it does not know`);
@@ -109,7 +108,7 @@ scope.onmessage = async (/** @type {MessageEvent<ToWorker>} */ ev) => {
     }
     if (m.steps.includes('build')) {
       const t0 = performance.now();
-      const tile = engine.build_tile(m.text, m.system, m.seed, m.cells, m.tier, m.card);
+      const tile = engine.build_tile(m.text, m.system, m.seed, m.cells, m.tier, m.card, kept, m.persist);
       const ms = performance.now() - t0;
       const meta = answer('build_tile().meta', tile.meta);
       const positions = tile.positions, colours = tile.colours, stl = tile.stl;

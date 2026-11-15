@@ -82,6 +82,27 @@ struct World {
     plate: RefCell<Option<usize>>,
     /// What the inventory's calls said on the stream.
     said: RefCell<Vec<String>>,
+    /// The finished builds this host keeps (the worker's memory store): its lane and its exports build through it.
+    kept: dt_store::MemStore,
+}
+
+impl World {
+    /// The one build of a tile in this host, the lane's and an export's alike: the tile's own path, the caller's options,
+    /// and the kept builds.
+    fn build_tile(
+        &self,
+        path: &str,
+        opts: &Options,
+    ) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
+        dt_store::build_stored(
+            &self.tiles,
+            path,
+            opts,
+            &dt_eval::Progress::none(),
+            None,
+            Some(&self.kept),
+        )
+    }
 }
 
 /// A map's pieces' tiles: the store, then the library from the checkout.
@@ -184,7 +205,7 @@ impl dt_service::plates_calls::PlatesHost for World {
         path: &str,
         opts: &Options,
     ) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
-        dt_eval::build_cached(&self.tiles, path, opts, &dt_eval::Progress::none(), None)
+        self.build_tile(path, opts)
     }
 
     fn crown_build(&self, _path: &str, _opts: Options) -> Option<dt_eval::Built> {
@@ -373,14 +394,16 @@ impl World {
             edit(Patch::Begin);
             let files = BTreeMap::from([(PATH.to_owned(), None)]);
             let (_, rev) = self.docs.read(PATH).expect("the tile reads");
-            let built = dt_eval::build_cached(
-                &Mem(&self.mem),
-                PATH,
-                &self.options,
-                &dt_eval::Progress::none(),
-                None,
-            )
-            .expect("the tile builds");
+            // the lane's options are the export's (`Options { tier: Full, ..host.options() }`): one key
+            let built = self
+                .build_tile(
+                    PATH,
+                    &Options {
+                        tier: dt_eval::Tier::Full,
+                        ..self.options.clone()
+                    },
+                )
+                .expect("the tile builds");
             edit(Patch::BuildReady {
                 problem: Vec::new(),
                 record: TileRecord::of(&built, &self.options.printer, 0.0),
@@ -455,6 +478,7 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
         patched: RefCell::new(Vec::new()),
         plate: RefCell::new(None),
         said: RefCell::new(Vec::new()),
+        kept: dt_store::MemStore::new("test", 64 << 20),
     };
     let table = table();
     let id = tile_id(PATH);
@@ -657,6 +681,7 @@ fn world() -> World {
         patched: RefCell::new(Vec::new()),
         plate: RefCell::new(None),
         said: RefCell::new(Vec::new()),
+        kept: dt_store::MemStore::new("test", 64 << 20),
     }
 }
 
@@ -1514,5 +1539,42 @@ fn a_tile_is_exported_as_downloads_by_verb_with_no_server_and_no_disk() {
         stl,
         dt_print::stl(&verdict.passed().expect("it passes")),
         "the download is the STL"
+    );
+}
+
+#[test]
+fn the_lanes_build_and_an_export_of_the_same_tile_are_one_key_and_one_entry() {
+    use dt_service::export_calls::{self, ExportReq, ExportRes};
+    let w = world();
+    let table = table();
+    // the lane builds the tile in full: one entry is kept
+    assert!(w.kept.is_empty());
+    table
+        .call(&w, &BUILD, BuildReq::default())
+        .expect("the build is queued");
+    w.run_queued();
+    assert_eq!(w.kept.len(), 1, "the lane's build is kept");
+    // an export of the same tile at the same options reads that entry: the same key, a hit, nothing built, nothing more kept
+    let ExportRes::Built(made) = export_calls::export_tile(
+        &w,
+        &tile_ref(),
+        &ExportReq {
+            threemf: None,
+            ask_where: None,
+        },
+    )
+    .expect("the tile exports") else {
+        panic!("an export answered where")
+    };
+    assert_eq!(
+        made.build.cache.state,
+        dt_eval::CacheState::Hit,
+        "the export did not read the lane's build: {:?}",
+        made.build.cache
+    );
+    assert_eq!(
+        w.kept.len(),
+        1,
+        "the export kept a second entry: another key"
     );
 }

@@ -946,13 +946,34 @@ impl Store {
     }
 }
 
+/// A change to what a [`MemStore`] holds, told to its watcher (a browser's worker keeps the entries in IndexedDB: the one
+/// place that decides what is kept and what goes is the memory store, and the page's copy follows it).
+#[derive(Clone, Copy, Debug)]
+pub enum Change<'a> {
+    /// An entry was kept (or kept again) under `id`: its bytes (`entry_bytes`'s, the same the disk keeps) and its use
+    /// tick, which orders the least recently used.
+    Put {
+        id: &'a str,
+        bytes: &'a [u8],
+        used: u64,
+    },
+    /// The entry under `id` is gone: evicted past the limit, damaged, or made by another engine.
+    Drop { id: &'a str },
+}
+
+/// What hears a [`MemStore`]'s changes.
+pub type Watcher = Box<dyn Fn(Change<'_>) + Send + Sync>;
+
 /// Builds kept in memory, as the same bytes the disk keeps: what a browser's worker holds between calls (a second
 /// build of an unchanged tile is read, not made), bounded by `limit` bytes with the least recently used going first.
-/// It reads no clock and no disk, so it builds for `wasm32-unknown-unknown`.
+/// It reads no clock and no disk, so it builds for `wasm32-unknown-unknown`.  A watcher ([`MemStore::watch`]) hears every
+/// change, and [`MemStore::load`] takes entries back, which is how the browser keeps builds between visits with this
+/// the only keeper of the limit and of the order of eviction.
 pub struct MemStore {
     engine: String,
     limit: usize,
     held: Mutex<MemHeld>,
+    watcher: Mutex<Option<Watcher>>,
 }
 
 #[derive(Default)]
@@ -969,6 +990,25 @@ impl MemHeld {
             self.bytes -= b.len();
         }
     }
+
+    /// Past the limit the least recently used go first, never `keep`; the ids that went.
+    fn evict(&mut self, limit: usize, keep: Option<&str>) -> Vec<String> {
+        let mut gone = Vec::new();
+        while self.bytes > limit {
+            let Some(oldest) = self
+                .entries
+                .iter()
+                .filter(|(id, _)| Some(id.as_str()) != keep)
+                .min_by_key(|(_, (_, used))| *used)
+                .map(|(id, _)| id.clone())
+            else {
+                break;
+            };
+            self.drop_entry(&oldest);
+            gone.push(oldest);
+        }
+        gone
+    }
 }
 
 impl MemStore {
@@ -979,6 +1019,7 @@ impl MemStore {
             engine: engine.into(),
             limit,
             held: Mutex::new(MemHeld::default()),
+            watcher: Mutex::new(None),
         }
     }
 
@@ -992,6 +1033,51 @@ impl MemStore {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Hear every change from now on (replacing an earlier watcher).
+    pub fn watch(&self, watcher: Watcher) {
+        *self.watcher.lock_unpoisoned() = Some(watcher);
+    }
+
+    fn tell(&self, change: Change<'_>) {
+        if let Some(w) = self.watcher.lock_unpoisoned().as_ref() {
+            w(change);
+        }
+    }
+
+    /// Take back entries kept by an earlier visit: each is `(bytes, use tick)` as a [`Change::Put`] told them.  An entry
+    /// another engine made is dropped without a word (a mesh an older engine made is a wrong tile, and is never read);
+    /// one that is damaged is dropped and said; past the limit the least recently used go.  What is dropped is told to
+    /// the watcher, so the keeper's copy follows.  The use ticks go on from the newest loaded.
+    ///
+    /// Returns what was wrong with the entries that were damaged, in words (a damaged entry has no readable id: the
+    /// keeper's copy of it is for the keeper to clear).
+    pub fn load(&self, entries: Vec<(Vec<u8>, u64)>) -> Vec<String> {
+        let mut problems = Vec::new();
+        let mut gone: Vec<String> = Vec::new();
+        {
+            let mut h = self.held.lock_unpoisoned();
+            for (bytes, used) in entries {
+                match split(&bytes) {
+                    Ok((head, _)) if head.engine == self.engine => {
+                        h.drop_entry(&head.key);
+                        h.tick = h.tick.max(used);
+                        h.bytes += bytes.len();
+                        h.entries.insert(head.key, (bytes, used));
+                    }
+                    Ok((head, _)) => gone.push(head.key),
+                    Err(why) => {
+                        problems.push(format!("a kept build is damaged ({why}); it is dropped"));
+                    }
+                }
+            }
+            gone.extend(h.evict(self.limit, None));
+        }
+        for id in &gone {
+            self.tell(Change::Drop { id });
+        }
+        problems
     }
 }
 
@@ -1013,11 +1099,13 @@ impl Kept for MemStore {
             Ok(v) => v,
             Err(why) => {
                 h.drop_entry(&key.id);
+                self.tell(Change::Drop { id: &key.id });
                 return Err(format!("the kept build is damaged ({why}); it is dropped"));
             }
         };
         if head.key != key.id {
             h.drop_entry(&key.id);
+            self.tell(Change::Drop { id: &key.id });
             return Err("a kept build holds another key's build; it is dropped".to_owned());
         }
         if !collected(&built).covers(want) {
@@ -1034,20 +1122,15 @@ impl Kept for MemStore {
         h.tick += 1;
         let tick = h.tick;
         h.drop_entry(&key.id);
+        self.tell(Change::Put {
+            id: &key.id,
+            bytes: &bytes,
+            used: tick,
+        });
         h.bytes += bytes.len();
         h.entries.insert(key.id.clone(), (bytes, tick));
-        // past the limit the least recently used go first, never the one just kept
-        while h.bytes > self.limit {
-            let Some(oldest) = h
-                .entries
-                .iter()
-                .filter(|(id, _)| **id != key.id)
-                .min_by_key(|(_, (_, used))| *used)
-                .map(|(id, _)| id.clone())
-            else {
-                break;
-            };
-            h.drop_entry(&oldest);
+        for id in h.evict(self.limit, Some(&key.id)) {
+            self.tell(Change::Drop { id: &id });
         }
         Ok(())
     }

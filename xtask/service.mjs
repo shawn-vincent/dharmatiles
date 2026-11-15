@@ -24,7 +24,9 @@ if (text === undefined) throw new Error(`${tile} is not in the library`);
 // the worker's host hears a build's progress as it happens: one StreamEvent a stage
 const streamed = [];
 globalThis.dtStream = (json) => streamed.push(JSON.parse(json));
-const service = new engine.Service(crypto.getRandomValues(new Uint8Array(32)));
+// the worker's one store of kept builds, memory alone here (the page's worker also holds it in IndexedDB: js/kept-idb.js)
+const kept = new engine.KeptBuilds('parity');
+const service = new engine.Service(crypto.getRandomValues(new Uint8Array(32)), kept);
 service.set_target(system);
 const path = `/memory/My tiles/${tile.split('/').pop()}`;
 service.put(path, text);
@@ -115,7 +117,12 @@ if (plan?.kind !== 'plates' || plan.plates?.planned !== true) throw new Error(`t
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 const bytesOf = (d) => Buffer.from(d.data, 'base64');
 lap('lists and maps');
+// the lane built this tile above (`build`), under the tile's own path: an export of it, at the same options, is the same key, so it reads
+// that build (a hit) and keeps nothing more
+const keptBefore = kept.len();
 const exported = call('exportTile', path, { threemf: true });
+if (exported.build.cache.state !== 'hit') throw new Error(`the export did not read the lane's build of the same tile: ${JSON.stringify(exported.build.cache)}`);
+if (kept.len() !== keptBefore) throw new Error(`the export kept another entry (${keptBefore} before, ${kept.len()} after): a second key for one tile`);
 const stlDownload = exported.downloads.find((d) => d.name.endsWith('.stl'));
 if (!stlDownload || stlDownload.mediaType !== 'model/stl' || exported.files.length !== 0) throw new Error(`exportTile gave no STL download: ${JSON.stringify(exported).slice(0, 300)}`);
 if (bytesOf(exported.downloads.find((d) => d.name.endsWith('.3mf'))).subarray(0, 2).toString() !== 'PK') throw new Error('the 3MF download is not a zip');

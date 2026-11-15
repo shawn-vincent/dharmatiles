@@ -1,10 +1,9 @@
-// A page of cards that cannot hurt a phone: the pure policy (docs/assets/live/limits.js), the draft store's key and bound, and the
+// A page of cards that cannot hurt a phone: the pure policy (docs/assets/live/limits.js), and the
 // engine's waiting line and workers driven with a stand-in worker and fetch.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ByteCache, CACHE_BYTES, costWords, deviceVerdict, keptBytes, runawayMs } from '../../../docs/assets/live/limits.js';
 import { Engine } from '../../../docs/assets/live/engine.js';
-import { DraftStore, MAX_ENTRIES, oldestOver } from '../../../docs/assets/live/draft-store.js';
 
 test('the result cache is bounded by bytes: the oldest go first, a use keeps one, and a value over the whole limit is refused', () => {
   const c = new ByteCache(100, (v) => v.n);
@@ -31,17 +30,6 @@ test('a kept result weighs its arrays, so 64 MB holds dozens of drafts but not t
   const f = new ByteCache(CACHE_BYTES, keptBytes);
   for (let i = 0; i < 5; i++) f.set(`f${i}`, fullish);
   assert.ok(f.size <= 1, `${f.size} full-sized results kept`);
-});
-
-test('the store keeps the newest drafts', () => {
-  assert.deepEqual(oldestOver([{ at: 3 }, { at: 1 }, { at: 2 }], 2).map((e) => e.at), [1]);
-  assert.equal(oldestOver([{ at: 1 }], MAX_ENTRIES).length, 0);
-});
-
-test('the store does without IndexedDB: nothing found, nothing thrown', async () => {
-  const none = new DraftStore('e1', undefined);
-  assert.equal(await none.get('k'), null);
-  await none.put('k', {});
 });
 
 test('the runaway limit is three times the estimate, within bounds, and the longest when there is none', () => {
