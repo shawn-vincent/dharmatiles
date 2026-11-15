@@ -639,10 +639,9 @@ pub(super) fn remove_place(shared: &Shared, req: PlacesRemoveReq) -> Out<Changed
         return Err(fail::failure("500 Internal Server Error", e));
     }
     let gone: Vec<TileId> = {
-        let gone = shared
+        shared
             .owner
-            .ask(|r| super::owner::Command::RemoveRoot(i, r));
-        gone
+            .ask(|r| super::owner::Command::RemoveRoot(i, r))
     };
     for id in &gone {
         shared.forget(id);

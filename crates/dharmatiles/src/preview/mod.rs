@@ -694,7 +694,7 @@ impl Shared {
     fn tell_progress(&self, id: &str, body: api::Progress, job: bool) {
         self.owner.send(owner::Command::Progress {
             id: id.to_owned(),
-            body,
+            body: Box::new(body),
             job,
         });
     }
@@ -734,7 +734,7 @@ impl Shared {
 
     /// One message with nothing to clear (a failure of the server's or the page's), said now.
     fn say(&self, m: crate::message::Message) {
-        self.owner.send(owner::Command::Say(m));
+        self.owner.send(owner::Command::Say(Box::new(m)));
     }
 
     /// A build of tile `id` begins: a message says so until the guard drops

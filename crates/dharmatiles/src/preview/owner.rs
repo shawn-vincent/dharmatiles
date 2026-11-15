@@ -184,7 +184,7 @@ pub(super) enum Command {
     SetTarget(Options),
     Progress {
         id: TileId,
-        body: api::Progress,
+        body: Box<api::Progress>,
         job: bool,
     },
     /// A tier's outcome, said to every listener.
@@ -203,7 +203,7 @@ pub(super) enum Command {
         scope: crate::message::Scope,
         found: Vec<crate::message::Message>,
     },
-    Say(crate::message::Message),
+    Say(Box<crate::message::Message>),
     /// Tell the resources that differ from what the pages were last told: the places, the target and the list from the
     /// owner's own state, `read` (the inventory, the printers) as the caller read them at read number `seq` (a value
     /// read before one already told is not told: the pages never go back to an older reading).
@@ -257,7 +257,7 @@ impl Owner {
             epoch,
         };
         // the thread ends with the last handle: `recv` fails once every sender is gone
-        std::thread::Builder::new()
+        let started = std::thread::Builder::new()
             .name("owner".to_owned())
             .spawn(move || {
                 while let Ok(c) = rx.recv() {
@@ -271,7 +271,10 @@ impl Owner {
                     }
                 }
             })
-            .unwrap_or_else(|e| panic!("the state owner's thread could not start: {e}"));
+            .map(drop);
+        if let Err(e) = started {
+            panic!("the state owner's thread could not start: {e}");
+        }
         Self { tx }
     }
 
@@ -286,8 +289,7 @@ impl Owner {
     pub(super) fn ask<R>(&self, make: impl FnOnce(Sender<R>) -> Command) -> R {
         let (tx, rx) = channel();
         self.send(make(tx));
-        rx.recv()
-            .unwrap_or_else(|_| panic!("the state owner stopped before it answered"))
+        answer(&rx)
     }
 
     pub(super) fn edit(&self, id: &str, f: impl FnOnce(&mut Slot) + Send + 'static) {
@@ -304,8 +306,7 @@ impl Owner {
             // the asker is waiting on `rx`: a send cannot fail
             let _ = tx.send(f(c));
         })));
-        rx.recv()
-            .unwrap_or_else(|_| panic!("the state owner stopped before it answered"))
+        answer(&rx)
     }
 }
 
@@ -410,7 +411,7 @@ impl Core {
                 }
                 self.publish(0, Vec::new());
             }
-            Command::Progress { id, body, job } => self.progress(&id, body, job),
+            Command::Progress { id, body, job } => self.progress(&id, *body, job),
             Command::Tier {
                 key,
                 doc_rev,
@@ -451,7 +452,8 @@ impl Core {
                     self.send_messages(&changed);
                 }
             }
-            Command::Say(mut m) => {
+            Command::Say(m) => {
+                let mut m = *m;
                 self.name_file(&mut m);
                 let m = self.events.messages.say(fail::now_ms(), m);
                 self.send_messages(&[m]);
@@ -817,6 +819,15 @@ impl Core {
             fresh,
             messages,
         }
+    }
+}
+
+/// The answer to a command, waited for.  The owner not answering means it has stopped: a failure of the program, not
+/// something to go on without.
+fn answer<R>(rx: &Receiver<R>) -> R {
+    match rx.recv() {
+        Ok(r) => r,
+        Err(_) => panic!("the state owner stopped before it answered"),
     }
 }
 
