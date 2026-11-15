@@ -347,6 +347,9 @@ pub fn run_release(root: &Path, args: &[String]) -> Result<(), String> {
     if !flag("--no-tests") {
         cargo(root, &["test", "--release", "--workspace"])?;
         rebuilt_matches_committed(root)?;
+        // the browser's tile is the program's: the wasm bundle against the native build, byte for byte
+        crate::work::heavy_lock(root)?;
+        crate::parity::run_parity(root)?;
     }
 
     // the release

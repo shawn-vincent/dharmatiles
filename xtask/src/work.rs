@@ -420,6 +420,17 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             Box::new(move || crate::lanes::tests(tests(), false)),
         ));
     }
+    if full {
+        steps.push((
+            "cargo xtask parity: the same tile in the browser as in the program (a heavy job)"
+                .into(),
+            budget::step::PARITY,
+            Box::new(|| {
+                heavy_lock(root)?;
+                crate::parity::run_parity(root)
+            }),
+        ));
+    }
     if p.page {
         steps.push((
             "npm test (web/preview)".into(),

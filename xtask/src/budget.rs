@@ -30,6 +30,8 @@ pub mod step {
     pub const DT_EVAL_FULL: f64 = 300.0;
     pub const PAGE: f64 = 30.0;
     pub const DOCS: f64 = 30.0;
+    /// `cargo xtask parity`: the wasm bundle and the set of tiles, in Node and natively.
+    pub const PARITY: f64 = 150.0;
 }
 
 /// The build's budget in `root`: a warm build's, or a cold one's when this checkout has no release build yet (a
@@ -69,6 +71,13 @@ pub fn of_command(root: &Path, name: &str, args: &[String]) -> Option<f64> {
             warm_or_cold(root, "wasm32-unknown-unknown/debug", 60.0, COLD_BUILD)
         }
         "wasm" => warm_or_cold(root, "wasm32-unknown-unknown/release", 60.0, COLD_BUILD),
+        // the browser bundle, then the parity set built twice, in Node and natively (single-threaded wasm sets the time)
+        "parity" => warm_or_cold(
+            root,
+            "wasm32-unknown-unknown/release",
+            step::PARITY,
+            COLD_BUILD + step::PARITY,
+        ),
         // the checks, the release gate and the baseline of every tile
         "release" => 1200.0,
         _ => return None,

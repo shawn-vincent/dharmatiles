@@ -24,6 +24,7 @@ pub mod hash;
 mod lower;
 pub mod machine;
 pub mod map;
+pub mod memory;
 mod mistake;
 mod options;
 pub mod places;

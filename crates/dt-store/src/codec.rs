@@ -499,6 +499,11 @@ pub(super) fn built_out(b: &Built) -> Vec<u8> {
         w.str(k);
         w.f64(*v);
     }
+    w.usize(b.report.stage_peak_mb.len());
+    for (k, v) in &b.report.stage_peak_mb {
+        w.str(k);
+        w.f64(*v);
+    }
     w.bool(b.report.look.brick);
     w.u16s(&b.report.entries);
     w.u16s(&b.report.pieces);
@@ -595,6 +600,9 @@ pub(super) fn built_in(bytes: &[u8]) -> R<Built> {
     let stage_secs = (0..r.len(16)?)
         .map(|_| Ok((r.str()?, r.f64()?)))
         .collect::<R<Vec<_>>>()?;
+    let stage_peak_mb = (0..r.len(16)?)
+        .map(|_| Ok((r.str()?, r.f64()?)))
+        .collect::<R<Vec<_>>>()?;
     let brick = r.bool()?;
     let entries = r.u16s()?;
     let pieces = r.u16s()?;
@@ -663,6 +671,7 @@ pub(super) fn built_in(bytes: &[u8]) -> R<Built> {
             surface,
             covered,
             stage_secs,
+            stage_peak_mb,
             reused: 0,
             look: Look { brick },
             entries,

@@ -64,13 +64,20 @@ pub fn build(
         cmake_args.push("-DMANIFOLD_PAR=OFF".to_string());
     }
 
+    // dharmatiles: floating-point contraction off, for the C++ of every target. Clang contracts a*b+c into a
+    // fused multiply-add by default (Apple clang on arm64 does), and WebAssembly has no fused multiply-add, so
+    // with it on the same tile can differ, bit for bit, between a Mac and a browser (docs/standards/performance.html,
+    // "The same tile everywhere"). `cargo xtask parity` holds the two together.
+    let mut cxx_flags = vec!["-ffp-contract=off"];
     if is_emscripten {
         // Compile manifold's C++ with native wasm exception handling. Manifold's
         // C wrapper translates internal C++ exceptions into status codes; without
         // this flag those throws would trap-and-abort the wasm module on invalid
         // input. Must match the link-time -fwasm-exceptions emitted below.
-        cmake_args.push("-DCMAKE_CXX_FLAGS=-fwasm-exceptions".to_string());
+        cxx_flags.push("-fwasm-exceptions");
     }
+    cmake_args.push(format!("-DCMAKE_CXX_FLAGS={}", cxx_flags.join(" ")));
+    cmake_args.push("-DCMAKE_C_FLAGS=-ffp-contract=off".to_string());
 
     // Route C/C++ compiles through sccache when available so rebuilds after
     // `cargo clean` reuse object files rather than recompiling manifold from

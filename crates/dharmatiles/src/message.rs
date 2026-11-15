@@ -223,6 +223,8 @@ pub struct BuildData {
     pub target: String,
     /// Seconds each stage took, in build order.
     pub stage_secs: Vec<(String, f64)>,
+    /// The highest resident memory each stage reached, MB, under the same names (empty from the cache).
+    pub stage_peak_mb: Vec<(String, f64)>,
     pub reused: usize,
     /// `hit` or `miss`.
     pub cache: String,

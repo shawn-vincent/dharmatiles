@@ -106,6 +106,7 @@ pub(super) fn of_build(record: &TileRecord, reused: usize, id: &str, name: &str)
             triangles: record.audit.triangles,
             target: target.to_owned(),
             stage_secs: record.stage_secs.clone(),
+            stage_peak_mb: record.stage_peak_mb.clone(),
             reused,
             cache: if hit { "hit" } else { "miss" }.to_owned(),
             made_s: hit.then_some(made),

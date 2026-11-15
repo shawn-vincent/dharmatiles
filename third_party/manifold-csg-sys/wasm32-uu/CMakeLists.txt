@@ -77,6 +77,11 @@ add_compile_options(
 # file instead of patching Clipper2.
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include iterator -include cstdlib")
 
+# dharmatiles: floating-point contraction off, as on the host (build/build.rs): no target fuses a multiply and an
+# add in Manifold, so a tile is the same bytes everywhere.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffp-contract=off")
+
 # dharmatiles: the host lane's carried Manifold patch (-DDT_MANIFOLD_PATCH).
 set(_dt_patch_args)
 if(DT_MANIFOLD_PATCH)
