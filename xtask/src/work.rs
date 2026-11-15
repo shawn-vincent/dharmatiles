@@ -184,9 +184,19 @@ pub(crate) fn git(root: &Path, args: &[&str]) -> Result<String, String> {
 }
 
 /// Every file this branch changes against main: committed, staged, in the
-/// working tree, or new.
+/// working tree, or new.  On main itself (a merge just made there) the base is
+/// what has been pushed, main's upstream: the check covers every change not
+/// yet pushed, never nothing.
 fn changed(root: &Path) -> Result<Vec<String>, String> {
-    let base = git(root, &["merge-base", "HEAD", "main"])?;
+    let head = git(root, &["rev-parse", "HEAD"])?;
+    let mut base = git(root, &["merge-base", "HEAD", "main"])?;
+    if base == head {
+        base = git(root, &["merge-base", "HEAD", "main@{upstream}"]).map_err(|e| {
+            format!(
+                "on main, the check compares with what is pushed, and main has no upstream: {e}"
+            )
+        })?;
+    }
     let mut all = BTreeSet::new();
     for args in [
         vec!["diff", "--name-only", base.as_str()],
