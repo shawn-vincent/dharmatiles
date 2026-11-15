@@ -25,21 +25,17 @@
 //! stands above its budget.  To raise a budget on purpose, edit the file by
 //! hand, where the diff shows it.
 //!
-//! **Counted on four seeds.**  A repair count is noisy: the grass blades of a
-//! tile overlap in a different arrangement for each seed (and for each move of
-//! a line), and the share of near-coincident vertices the gate has to push
-//! apart changes two or three times over with it.  So a tile's count, the
-//! number its budget is held to, is the worst of its repairs on four seeds:
-//! the seed the tile writes, and [`EXTRA_SEEDS`].  The hash, triangles and
-//! overhang columns stay on the written seed.  The first rewrite under this
-//! measure set the budgets to the worst of four, which for most tiles is above
-//! what the single written seed had counted: that redefinition, approved by
-//! Shawn, is the one time a budget rose.  From then on the rules above hold,
-//! and a file that does not carry the line saying so is refused: there is no
-//! second way to start the budgets afresh.
+//! **Counted on the seed the tile writes.**  The repair counts, like the
+//! hash, triangles and overhang, are the build on the tile's own seed. The
+//! budgets on file were recorded as the worst of four seeds (the written one
+//! and three more), which leaves room for the counts' noise: the grass blades
+//! of a tile overlap in another arrangement for each move of a line, and the
+//! share of near-coincident vertices the gate pushes apart changes two or
+//! three times over with it. A rewrite still only lowers a budget, so after an
+//! edit that moves things, a budget left at its old height is the room.
 //!
 //! **Budgets re-recorded (`DT_BASELINE=reset`).**  This writes every tile's
-//! budgets as the worst of four seeds measured now, raising or lowering, and
+//! budgets as the counts measured now, raising or lowering, and
 //! prints each one that rose.  It is used only on Shawn's say-so, never to
 //! get a failing build past the budget.  So far once: 14 Nov 2026, when the
 //! budgets were re-recorded at the measured counts before the aesthetics pass
@@ -55,18 +51,13 @@ use std::path::Path;
 use crate::memo;
 use dt_eval::{Library, Options, check};
 
-/// The three seeds a tile is built on besides the one it writes, to count its
-/// repairs: the only place they are set.
-const EXTRA_SEEDS: [u64; 3] = [9001, 9002, 9003];
-
 const FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/baseline/library-db.tsv");
 /// The second line of the file, saying how its budgets were counted. A file
 /// that has budgets but not this line is refused, with a rewrite or without
-/// (there is no way to start the budgets afresh: that was done once, when they
-/// became the worst of four seeds, and a budget is raised now only by editing
-/// the file by hand).
-const MEASURE: &str =
-    "# budgets: the worst repair count of each tile on four seeds (its own and three more)";
+/// (there is no way to start the budgets afresh but `DT_BASELINE=reset`, on
+/// Shawn's say-so, and a budget is raised otherwise only by editing the file by
+/// hand).
+const MEASURE: &str = "# budgets: each tile's repair counts on its own seed are held to these (recorded as the worst of four seeds; a rewrite only lowers them)";
 const HEADER: &str = "tile\thash\ttriangles\tvoids_filled\tpinches_moved\tslivers\tcollapsed\tdropped\toverhang_mm2\tband_mm2\tholes\tgate\tmax_voids\tmax_pinches\tmax_slivers\tmax_collapsed\tmax_dropped\tsecs";
 
 /// The columns that count repairs, and where each one's budget is.
@@ -140,39 +131,11 @@ fn row(path: &str) -> String {
     )
 }
 
-/// The five repair counts of `path` built on `seed`, in the order of
-/// [`REPAIRS`], or why it did not build.
-fn repairs_on(path: &str, seed: u64) -> Result<[u64; 5], String> {
-    let opts = Options {
-        seed: Some(seed),
-        ..Options::default()
-    };
-    // Each extra seed is read once, for its repair counts; kept, three more copies of the library (several GB)
-    // would stand for the whole run.
-    // fresh: built once and dropped, so the memo does not keep it
-    let b = dt_eval::build(&Library, path, &opts).map_err(|e| format!("on seed {seed}: {e:?}"))?;
-    let a = &b.audit;
-    Ok([
-        a.voids.len(),
-        a.pinches_moved,
-        a.slivers.len(),
-        a.collapsed,
-        a.dropped.len(),
-    ]
-    .map(|n| n as u64))
-}
-
-/// What one of the sweep's builds gave.
-enum Done {
-    /// A tile's row on its written seed.
-    Row(Vec<String>),
-    /// Its repair counts on an extra seed.
-    Repairs(Result<[u64; 5], String>),
-}
-
 /// How many builds the sweep runs at once: enough to keep the machine busy, few enough that the biggest
-/// builds (near 8.5 GB each at their peak) fit in memory together.
-const WORKERS: usize = 3;
+/// builds (8.2 GB each at their peak, the cliffs) fit in memory together. Measured on the cliff tiles,
+/// 14 Nov 2026: 300 s on three, 251 on five, 250 on six, the same CPU time each (2,230 s): five fill the
+/// machine, and five of the biggest are 41 GB.
+const WORKERS: usize = 5;
 
 /// `work` on each job, in the order given, on [`WORKERS`] threads; each build still spreads over the whole
 /// machine inside. Each result comes back with its job.
@@ -255,46 +218,26 @@ fn the_library_builds_as_the_baseline_says() {
         );
         eprintln!("{} library tiles use {}", tiles.len(), names.join(" or "));
     }
-    // every build the sweep makes, a tile on its written seed or an extra one, runs on a few workers at once:
-    // one build keeps about half the machine busy, so three together finish in about half the time (measured
-    // 14 Nov 2026: six tiles 41 s together, 90 s one by one); the biggest builds peak near 8.5 GB each
-    let jobs: Vec<(usize, Option<u64>)> = (0..tiles.len())
-        .flat_map(|t| std::iter::once((t, None)).chain(EXTRA_SEEDS.map(|s| (t, Some(s)))))
-        .collect();
+    // the tiles build on a few workers at once: one build keeps about a third of the machine busy (the cliff
+    // corner: 4.6 of 12 cores), so [`WORKERS`] of them fill it
     let took = last_secs();
-    let mut order: Vec<usize> = (0..jobs.len()).collect();
+    let mut order: Vec<usize> = (0..tiles.len()).collect();
     // the longest tiles first, so the last to finish are short
     order.sort_by(|&a, &b| {
-        let t = |j: usize| took.get(&tiles[jobs[j].0]).copied().unwrap_or(f64::MAX);
+        let t = |j: usize| took.get(&tiles[j]).copied().unwrap_or(f64::MAX);
         t(b).total_cmp(&t(a))
     });
-    let done = in_parallel(&order, |j| match jobs[j] {
-        (t, None) => Done::Row(row(&tiles[t]).split('\t').map(str::to_owned).collect()),
-        (t, Some(seed)) => Done::Repairs(repairs_on(&tiles[t], seed)),
-    });
     let mut measured: Vec<Vec<String>> = vec![Vec::new(); tiles.len()];
-    let mut extra: Vec<Vec<Result<[u64; 5], String>>> = vec![Vec::new(); tiles.len()];
-    for (j, d) in done {
-        match d {
-            Done::Row(r) => measured[jobs[j].0] = r,
-            Done::Repairs(r) => extra[jobs[j].0].push(r),
-        }
+    for (t, r) in in_parallel(&order, |t| row(&tiles[t])) {
+        measured[t] = r.split('\t').map(str::to_owned).collect();
     }
-    // each tile's repair counts: the worst over the written seed and the extra ones (a tile refused on its own
-    // seed has none, whatever the extra seeds did)
+    // each tile's repair counts (a refused tile has none)
     let worst: Vec<Option<[u64; 5]>> = measured
         .iter()
-        .zip(&extra)
-        .map(|(m, more)| {
+        .map(|m| {
             let mut w = [0; 5];
             for (k, (_, at, _)) in REPAIRS.iter().enumerate() {
                 w[k] = count(m, *at)?;
-            }
-            for on in more {
-                let on = on.as_ref().unwrap_or_else(|e| panic!("{}: {e}", m[0]));
-                for (a, b) in w.iter_mut().zip(on) {
-                    *a = (*a).max(*b);
-                }
             }
             Some(w)
         })
@@ -310,7 +253,7 @@ fn the_library_builds_as_the_baseline_says() {
         let f: Vec<String> = l.split('\t').map(str::to_owned).collect();
         before.insert(f[0].clone(), f);
     }
-    // a file that does not say how its budgets were counted is not read: there is no reset
+    // a file that does not say how its budgets were counted is not read
     assert!(
         old.as_ref()
             .is_none_or(|o| o.lines().nth(1) == Some(MEASURE)),

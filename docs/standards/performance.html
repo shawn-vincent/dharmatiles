@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Performance</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Standard · building, checking, the tests</div>
+  <h1>Performance</h1>
+  <p class="lede">The work is many small changes in quick succession, so the time to build and check one is kept like correctness. Each cycle has a budget; the checks time themselves against it and say when they are over; an over-budget cycle is the next task. This page is the budgets, where the time goes now, and how to measure it.</p>
+  <div class="facts">
+    <div><div class="k">Warm build</div><div class="v">under 1 minute</div></div>
+    <div><div class="k">The check, before a merge</div><div class="v">under 2 minutes</div></div>
+    <div><div class="k">Everything, before a push</div><div class="v">about 10 minutes</div></div>
+  </div>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+  <li><a href="#budgets">The budgets</a></li>
+  <li><a href="#now">Where each cycle stands</a></li>
+  <li><a href="#tests">The tests: a torture set, each tile built once</a></li>
+  <li><a href="#build">Where a build's time goes</a></li>
+  <li><a href="#sweep">The library sweep</a></li>
+  <li><a href="#measure">How to measure</a></li>
+  <li><a href="#coverage">Choosing the torture set by coverage</a></li>
+  <li><a href="#rules">Rules</a></li>
+</ol></details></nav>
+</div>
+<article class="doc">
+
+<h2 id="budgets">The budgets</h2>
+<div class="tbl"><table>
+<thead><tr><th>Cycle</th><th>The command</th><th>Budget</th></tr></thead>
+<tbody>
+<tr><td>Warm build after an edit</td><td><code>cargo build --release</code></td><td>under 1 minute (seconds is the aim)</td></tr>
+<tr><td>The checks, as work goes on and before each merge</td><td><code>cargo xtask check</code></td><td>under 2 minutes (<code>CHECK_BUDGET</code>)</td></tr>
+<tr><td>Cold build from a fresh clone or worktree</td><td><code>cargo build --release</code> in an empty target folder</td><td>under 5 minutes</td></tr>
+<tr><td>Everything, before a push or a release</td><td><code>cargo xtask check --full</code></td><td>about 10 minutes (<code>FULL_BUDGET</code>)</td></tr>
+</tbody>
+</table></div>
+<p>Times are measured on an idle machine (the development Mac: 12 cores, 8 performance and 4 efficiency, 64 GB). <code>cargo xtask check</code> times itself, prints <b>OVER BUDGET</b> when past its budget, and logs every run (time, worktree, which check, seconds, budget) to <code>dt-times.tsv</code> in the git common folder, so every worktree's runs are in one file. Both budgets are constants in <code>xtask/src/work.rs</code>.</p>
+
+<h2 id="now">Where each cycle stands</h2>
+<div class="tbl"><table>
+<thead><tr><th>Cycle</th><th>Measured</th><th>Budget</th><th></th></tr></thead>
+<tbody>
+<tr><td>Warm build (one crate touched)</td><td>16 s</td><td>60 s</td><td>within</td></tr>
+<tr><td>Cold build</td><td>82 s</td><td>300 s</td><td>within</td></tr>
+<tr><td><code>cargo xtask check</code> (an element change: its crate and everything that depends on it)</td><td>103 s</td><td>120 s</td><td>within</td></tr>
+<tr><td>dt-eval's warm tests (the torture set)</td><td>38 s</td><td>part of the check</td><td></td></tr>
+<tr><td><code>cargo xtask check --full</code></td><td id="full-now">298 s</td><td>600 s</td><td>within</td></tr>
+<tr><td>dt-eval's full run inside it (warm, thorough, the whole-library sweep)</td><td>227 s</td><td></td><td></td></tr>
+</tbody>
+</table></div>
+<p><code>check --full</code> at its peak holds 22 GB (the sweep's five builds and the thorough tests' at once) and keeps about 10 of the 12 cores busy. The live numbers are the last rows of <code>dt-times.tsv</code>; this table is the state when it was last written.</p>
+
+<h2 id="tests">The tests: a torture set, each tile built once</h2>
+<ul class="rules">
+  <li><b>A test never builds what a test already built.</b> dt-eval's integration tests are one test binary (<code>crates/dt-eval/tests/tiles/</code>, a module for each file) and build only through one memo (<code>memo::build</code>, from the dev crate <code>dt-testkit</code>), keyed by everything a build reads: the source's content, the path, every field of <code>Options</code>. A scan test fails a build outside it unless a <code>// fresh: why</code> comment says the test must build again (the cache, thread counts, a build compared with itself).</li>
+  <li><b>The warm check builds the torture set only.</b> <code>golden::TILES</code> in <code>crates/dt-eval/tests/tiles/golden.rs</code>: about thirty small test tiles, each held to its stage hashes, repair counts and the gate's verdict. A warm test that reads any other test tile fails, by construction (the memo checks the test's name). A test that needs another tile is a <code>thorough_</code> test: ignored, with a reason saying so, and run by <code>check --full</code>.</li>
+  <li><b><code>--full</code> runs dt-eval once.</b> Its warm tests, its thorough tests and the library baseline (the sweep) are one run of the one test binary, so a tile any of them reads is built once even there. Only the release gate (every library tile on both systems, which <code>cargo xtask release</code> runs) and a measurement are left out (<code>NOT_CHECKS</code> in <code>xtask/src/work.rs</code>).</li>
+  <li><b>Test builds run several at once.</b> A memo build runs on its own two-thread pool (so the pool is never the whole machine, and a match with the golden hashes, recorded from plain builds, proves threads change nothing), and <code>memo::prebuild</code> builds a list of tiles six at a time.</li>
+</ul>
+
+<h2 id="build">Where a build's time goes</h2>
+<p>A build is mostly serial: alone on the machine, the biggest library tile (<code>cliffs/2x2-cliff-corner</code>, 22.5 s) keeps 4.6 of the 12 cores busy on average. Its peak memory is 8.2 GB; the 2×2 wall curve's 7.1 GB, the 2×2 grass and tree's 5.8 GB.</p>
+<div class="tbl"><table>
+<thead><tr><th>Library tile, alone</th><th>Build</th><th>The stages that take the time</th></tr></thead>
+<tbody>
+<tr><td><code>cliffs/2x2-cliff-corner</code></td><td>21 s</td><td>cliff 10.7 s, audit 3.5, union 2.8, dirt 2.1</td></tr>
+<tr><td><code>walls/2x2-wall-curve</code></td><td>14 s</td><td>union 7.2 s, grass 2.4, audit 2.2, wall 1.3</td></tr>
+<tr><td><code>ground/2x2-grass-tree</code></td><td>14 s</td><td>union 6.5 s, tree 2.7, grass 2.5, audit 2.1</td></tr>
+</tbody>
+</table></div>
+<p>The cliff's CPU, sampled: about half is Manifold (the booleans that carve each stone and the union), a fifth is ray casting (the relief pass: for each stone and each of its faces, at two angles, a ray grid over the face against the stone's mesh, through obvhs), the rest the element's own code. The cliff dresses its columns in parallel and the stones of one column in order, so one tall column sets how long the stage takes. The union is Manifold's batch boolean over every solid in the scene, in source order.</p>
+
+<h2 id="sweep">The library sweep</h2>
+<p>The library baseline (<code>crates/dt-eval/tests/tiles/baseline.rs</code>, held to <code>crates/dt-eval/tests/baseline/library-db.tsv</code>) builds every library tile on DungeonBlocks once, on the seed it writes: sixty builds. Its repair budgets were recorded as the worst of four seeds, which leaves room for the counts' noise; the counts are held to them on the one seed. It is CPU-bound: the builds run on <code>WORKERS</code> threads at once, longest first, each build spreading over the machine inside; five fill the machine (the cliff tiles: 300 s on three workers, 251 on five, 250 on six, the same 2,230 s of CPU each), and five of the biggest builds together are 41 GB. The cliff tiles are about half the sweep.</p>
+<p>So the sweep is made faster only by building less or by building faster: the engine's own time (the cliff's stones, Manifold's booleans, the relief rays) is what it is made of. <code>cargo xtask sweep grass</code> sweeps only the tiles that use an element; the check sweeps only the library tiles a change touches.</p>
+
+<h2 id="measure">How to measure</h2>
+<div class="tbl"><table>
+<thead><tr><th>To see</th><th>Run</th></tr></thead>
+<tbody>
+<tr><td>A command's wall time and CPU time</td><td><code>/usr/bin/time -p &lt;command&gt;</code>: CPU time over wall time is how many cores it kept busy</td></tr>
+<tr><td>Its peak memory</td><td><code>/usr/bin/time -l &lt;command&gt;</code>: maximum resident set size</td></tr>
+<tr><td>A build's stages</td><td><code>dharmatiles build &lt;tile&gt; --no-cache --json</code>: <code>stage_secs</code>, each element of the stack and the union, lift and audit</td></tr>
+<tr><td>Where a build's CPU goes</td><td>start the build in the background and run <code>sample &lt;pid&gt; 18 1 -file out.txt</code> (macOS): the call tree, and the functions by samples at the top of the stack; leave out the waits (<code>__psynch_cvwait</code>, <code>semaphore_wait_trap</code>, <code>swtch_pri</code>, TBB's backoff) to read the busy share</td></tr>
+<tr><td>The sweep at another pool shape</td><td><code>DT_BASELINE_ONLY=cliff</code> (an element's tiles, or <code>lib:</code> paths) on <code>the_library_builds_as_the_baseline_says</code>, with <code>WORKERS</code> changed</td></tr>
+<tr><td>Which test spends a test binary's build time</td><td>log each build's thread name (the test's name), path and seconds from <code>build_checked</code> for one run, and sum by test</td></tr>
+<tr><td>The checks' history</td><td><code>dt-times.tsv</code> in the git common folder (<code>git rev-parse --git-common-dir</code>)</td></tr>
+</tbody>
+</table></div>
+<p>Measure on an idle machine, one heavy job at a time (the heavy-job lock: <code>cargo xtask heavy &lt;command&gt;</code>), and time the real commands. Find the cause before optimising: load from too many parallel jobs, the same thing built twice, network fetches in builds, and checks sized for the biggest possible change are the usual ones.</p>
+
+<h2 id="coverage">Choosing the torture set by coverage</h2>
+<p>The torture set is the fewest tiles that run the most of the engine. To choose it again (after a new element, say):</p>
+<ol>
+  <li>Build the program with coverage on the workspace's crates only (instrumenting the dependencies too, Manifold's bindings among them, makes a build four times slower): a <code>RUSTC_WORKSPACE_WRAPPER</code> script that adds <code>-C instrument-coverage</code>, and its own <code>CARGO_TARGET_DIR</code>. The toolchain's <code>llvm-tools</code> component has <code>llvm-profdata</code> and <code>llvm-cov</code>.</li>
+  <li>Build each test tile once with <code>LLVM_PROFILE_FILE</code> set to a file of its own (and the OpenLOCK and other tiers a test reads), timing each.</li>
+  <li>For each: <code>llvm-profdata merge</code>, then <code>llvm-cov export -format=lcov</code>, and keep the lines run in the engine's crates (dt-geom, dt-kit, dt-elements, dt-eval, dt-doc, dt-value, dt-lang).</li>
+  <li>Choose greedily: each time, the tile that runs the most lines the chosen ones do not, per second of building, until the set reaches 99.5% of what all the test tiles run together. Weighting by build time matters: it picks small tiles over big ones that run the same code. Where only a big tile reaches some code, write a small tile that does (that is how <code>1x1-grove-small</code> and <code>1x1-reeds</code> came to be) and run the choice again.</li>
+  <li>Add what line counts cannot see: the odd shapes (a 3×1 zigzag, a 1×2 diagonal, a corner sliver), and a small tile for any feature a warm test reads that no chosen tile has.</li>
+</ol>
+<p>A new tile's hash snapshot is checked against a plain build (no observers, the whole machine) before it is committed: that the memo's two-thread, observed build matches it is the proof that threads and observers change nothing.</p>
+
+<h2 id="rules">Rules</h2>
+<ul class="rules">
+  <li>An over-budget cycle is the next task, straight after the current one and ahead of the queue. It is fixed where the waste is made, never by skipping a check or loosening the gate.</li>
+  <li>Slowness is visible by construction: a check times itself against its budget and says when it is over.</li>
+  <li>Checks are sized to the change while working (<code>cargo xtask check</code>); the full set runs once before a push (<code>--full</code>).</li>
+  <li>At most two heavy jobs on the machine at once: two agents, and the heavy-job lock for sweeps, contact sheets, pictures and the browser build.</li>
+  <li>A warm test reads only the torture set; a new element or feature gets a small torture tile, and its test reads that.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>

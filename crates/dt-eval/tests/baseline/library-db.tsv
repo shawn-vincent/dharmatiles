@@ -1,5 +1,5 @@
 tile	hash	triangles	voids_filled	pinches_moved	slivers	collapsed	dropped	overhang_mm2	band_mm2	holes	gate	max_voids	max_pinches	max_slivers	max_collapsed	max_dropped	secs
-# budgets: the worst repair count of each tile on four seeds (its own and three more)
+# budgets: each tile's repair counts on its own seed are held to these (recorded as the worst of four seeds; a rewrite only lowers them)
 lib:tiles/cliffs/1x1-cliff-corner.dtile	03562597d3140f3b	1645520	100	7698	0	0	0	1.641	2.263	0	pass	141	17120	0	0	0	10.9
 lib:tiles/cliffs/1x1-cliff-mound.dtile	11a8c9e57fd8feff	733592	54	5374	2	0	0	0.072	0.000	0	pass	116	14056	2	2	0	9.3
 lib:tiles/cliffs/1x1-cliff-spire.dtile	f00ae4da21f5ac07	536406	40	876	0	0	0	0.099	0.000	0	pass	122	7556	1	0	1	14.5
