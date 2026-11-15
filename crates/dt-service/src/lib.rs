@@ -32,11 +32,14 @@
 
 pub mod api;
 pub mod clock;
+pub mod events;
+pub mod host;
 pub mod inventory;
 pub mod message;
 pub mod patch;
 pub mod plan;
 pub mod resources;
+pub mod roots;
 pub mod scene;
 pub mod stack;
 pub mod storage;

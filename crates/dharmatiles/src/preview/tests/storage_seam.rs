@@ -77,7 +77,7 @@ fn a_scan_a_new_file_and_a_delete_need_no_disk() {
     mem.write_text(&home.join(".hidden/c.dtile"), TILE).unwrap();
     mem.write_text(&home.join("out/d.dtile"), TILE).unwrap();
     let root = Root::new("My tiles", RootKind::Dir(home.clone()));
-    let tiles = root.scan(&mem).expect("a folder scans");
+    let tiles = root.scan(&mem, &super::super::Program).expect("a folder scans");
     assert_eq!(
         tiles,
         vec![

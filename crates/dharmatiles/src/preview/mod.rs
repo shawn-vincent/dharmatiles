@@ -89,7 +89,6 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::net::TcpListener;
 use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -111,8 +110,6 @@ pub const FIRST_PORT: u16 = 7878;
 const ENCODE: &str = "encode";
 /// How often folders are rescanned for new and deleted tiles.
 const RESCAN: Duration = Duration::from_secs(1);
-/// How many changes the event log remembers for a stream that resumes.
-const LOG: usize = 1024;
 /// Private unwind payload used for cooperative latest-edit-wins cancellation.
 /// `resume_unwind` avoids printing an alarming panic for an expected abort.
 #[derive(Debug)]
@@ -132,48 +129,20 @@ type SceneCheck = (String, Option<u64>, dt_lang::System, Option<SystemTime>);
 
 pub(crate) use dt_service::tile::{Facts, Row, Sketch, Slot, State, TileId, tile_id};
 
-/// What changed, as the event log remembers it.
-enum Change {
-    Tile(TileId),
-    /// A resource (places, target, printers, inventory, list) changed: see [`resources`].
-    Resource(&'static str),
-}
+/// What the service asks of the program (a place to say what is wrong, the time): the owner runs with it.
+pub(crate) struct Program;
 
-/// The listeners and the changes they have been sent.  Every change to
-/// the list or a tile takes the next revision; progress events ride on
-/// the current one.  Held by the [`owner`] alone.
-struct Events {
-    rev: u64,
-    log: VecDeque<(u64, Change)>,
-    clients: Vec<Sender<String>>,
-    /// What happened to each tile ([`dt_service::message`]): kept here so it is sent in step with the changes.
-    messages: dt_service::message::Log,
-    /// What the pages were last told of each resource.
-    told: resources::Told,
-}
-
-impl Events {
-    fn send<T: serde::Serialize>(&mut self, msg: &T) {
-        let msg = match serde_json::to_string(msg) {
-            Ok(m) => m,
-            Err(e) => {
-                tell!("error: preview: an event could not be written: {e}");
-                return;
-            }
-        };
-        self.clients.retain(|tx| tx.send(msg.clone()).is_ok());
+impl dt_service::host::Alarm for Program {
+    fn alarm(&self, msg: &str) {
+        tell!("{msg}");
     }
 
-    /// Note a change, and say which revision it is.
-    fn bump(&mut self, change: Change) -> u64 {
-        self.rev += 1;
-        self.log.push_back((self.rev, change));
-        if self.log.len() > LOG {
-            self.log.pop_front();
-        }
-        self.rev
+    fn alarm_once(&self, msg: &str) {
+        tell_once(msg);
     }
 }
+
+use dt_service::events::{Change, Events};
 
 /// What the server and the worker share.
 pub struct Shared {
@@ -624,7 +593,7 @@ impl Shared {
         let found: Vec<(usize, Vec<String>)> = roots
             .iter()
             .enumerate()
-            .filter_map(|(r, root)| Some((r, root.scan(self.storage.as_ref())?)))
+            .filter_map(|(r, root)| Some((r, root.scan(self.storage.as_ref(), &Program)?)))
             .collect();
         let folders: BTreeMap<usize, Vec<String>> = roots
             .iter()

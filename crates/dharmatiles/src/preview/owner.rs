@@ -259,13 +259,7 @@ impl Owner {
         let (tx, rx) = channel::<Command>();
         let mut core = Core {
             tiles,
-            events: Events {
-                rev: 1,
-                log: VecDeque::new(),
-                clients: Vec::new(),
-                messages: dt_service::message::Log::default(),
-                told: resources::Told::default(),
-            },
+            events: Events::new(Arc::new(Program)),
             roots,
             folders: BTreeMap::new(),
             target,
