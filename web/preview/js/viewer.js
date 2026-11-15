@@ -15,8 +15,26 @@ import { createFraming } from './viewer/framing.js';
 
 export { VIEWS } from './viewer/consts.js';
 
-export class Viewer {
+/**
+ * The viewer's parts are written as method tables (viewer/camera.js, fade.js, layers.js, scene.js) and installed on
+ * `Viewer.prototype` at the foot of this file, so tsc cannot see them on the class.  This one type says what they
+ * add: their methods (read off the tables themselves, so it cannot drift from them) and the state they create.  A scene
+ * geometry and its looks are THREE objects, and no types are vendored for three, so those are `any`.
+ * @typedef {typeof cameraMethods & typeof fadeMethods & typeof layersMethods & typeof sceneMethods & {
+ *   controls: import('/vendor/OrbitControls.js').OrbitControls,
+ *   sceneOn: boolean, sceneSel: Set<number>, groundMask: any, groundOn: boolean, groundZ?: number, bedGroup?: any, tween?: {done?: () => void, raf: number} | null,
+ *   maxDistance?: number, onDebugChange?: (debug: object | null) => void,
+ *   sceneGeoms: Map<string, {geometry: any, painted: any, clean: any, triangles: number, grey: any}>,
+ * }} ViewerParts
+ */
+
+/** What `Viewer` extends: nothing at run time (the methods are on `Viewer.prototype`), `ViewerParts` to the checker. */
+const Parts = /** @type {new () => ViewerParts} */ (class {});
+
+export class Viewer extends Parts {
+  /** @param {HTMLCanvasElement} canvas */
   constructor(canvas) {
+    super();
     this.canvas = canvas;
     this.renderHooks = hookSet();
     this.userViewHooks = hookSet();

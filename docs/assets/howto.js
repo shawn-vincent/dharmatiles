@@ -3,6 +3,8 @@
    not the program's output. Each demo runs only where its element is on the page. */
 /* ---------- shared helpers ---------- */
 const NS = "http://www.w3.org/2000/svg";
+/** An attribute is text: a number or a flag is written as its text. @param {Element} el @param {string} k @param {string | number | boolean} v */
+function attr(el,k,v){ el.setAttribute(k,String(v)); }
 function rng(s){ return function(){ s|=0; s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
 function h2(i,j,s){ let h=Math.imul(i,374761393)+Math.imul(j,668265263)+Math.imul(s,1442695041)|0; h=Math.imul(h^(h>>>13),1274126177); h^=h>>>16; return (h>>>0)/4294967296; }
 function vn(x,y,s){ const i=Math.floor(x), j=Math.floor(y), fx=x-i, fy=y-j, u=fx*fx*(3-2*fx), v=fy*fy*(3-2*fy);
@@ -84,7 +86,9 @@ function stepper(root, steps, draw){
   for(let i=0;i<W;i++){ const t=tiers.find(t=>i>=t[0]&&i<t[1]); let h=t[2]; if(i>=40&&i<44) h-=7; T.push(h); }
   const zone=i=>Math.exp(-((i-22)**2)/(2*36)); // shattered zone near x=22
   // gravity stack
-  const S=new Array(W).fill(0); const stones=[];
+  const S=new Array(W).fill(0);
+  /** @type {Array<{x0:number,x1:number,z0:number,z1:number,k:number,col?:number,d?:number[]}>} */
+  const stones=[];
   for(let guard=0;guard<400;guard++){
     let best=-1,bz=1e9; for(let i=0;i<W;i++) if(S[i]<T[i]-.5 && S[i]<bz){ bz=S[i]; best=i; } if(best<0) break;
     const kind=R(); const sc=1-.45*zone(best);
@@ -173,10 +177,10 @@ function stepper(root, steps, draw){
   stepper(root,steps,draw);
   // blade cross-section svg
   const xs=document.getElementById("xsec"), sd=document.getElementById("side"); if(!xs||!sd) return; const layers=[2,3,4,4,3,1]; const lw=24, lh=20;
-  layers.forEach((nl,k)=>{ const y=150-k*(lh+2); const w=nl*lw; const x0=130-w/2; for(let q=0;q<nl;q++){ const r=document.createElementNS(NS,"rect"); r.setAttribute("x",x0+q*lw+1); r.setAttribute("y",y-lh); r.setAttribute("width",lw-2); r.setAttribute("height",lh); r.setAttribute("rx",9); r.setAttribute("fill","var(--accent)"); r.setAttribute("fill-opacity",".55"); r.setAttribute("stroke","currentColor"); r.setAttribute("stroke-width",".8"); xs.appendChild(r);} const t=document.createElementNS(NS,"text"); t.setAttribute("x",x0-8); t.setAttribute("y",y-6); t.setAttribute("text-anchor","end"); t.textContent=nl; xs.appendChild(t); });
-  const t1=document.createElementNS(NS,"text"); t1.setAttribute("x",200); t1.setAttribute("y",40); t1.textContent="0.45 mm line"; xs.appendChild(t1);
-  const t2=document.createElementNS(NS,"text"); t2.setAttribute("x",200); t2.setAttribute("y",56); t2.textContent="× 0.2 mm layer"; xs.appendChild(t2);
-  for(let k=0;k<6;k++){ const y=150-k*(lh+2); const L=200-k*14 - (k<5?0:0); const rake=(5-k)*8; const r=document.createElementNS(NS,"rect"); r.setAttribute("x",300+k*12); r.setAttribute("y",y-lh); r.setAttribute("width",Math.max(30,L-rake-k*6)); r.setAttribute("height",lh); r.setAttribute("rx",9); r.setAttribute("fill","var(--accent)"); r.setAttribute("fill-opacity",".45"); r.setAttribute("stroke","currentColor"); r.setAttribute("stroke-width",".8"); sd.appendChild(r); }
+  layers.forEach((nl,k)=>{ const y=150-k*(lh+2); const w=nl*lw; const x0=130-w/2; for(let q=0;q<nl;q++){ const r=document.createElementNS(NS,"rect"); attr(r,"x",x0+q*lw+1); attr(r,"y",y-lh); attr(r,"width",lw-2); attr(r,"height",lh); attr(r,"rx",9); attr(r,"fill","var(--accent)"); attr(r,"fill-opacity",".55"); attr(r,"stroke","currentColor"); attr(r,"stroke-width",".8"); xs.appendChild(r);} const t=document.createElementNS(NS,"text"); attr(t,"x",x0-8); attr(t,"y",y-6); attr(t,"text-anchor","end"); t.textContent=String(nl); xs.appendChild(t); });
+  const t1=document.createElementNS(NS,"text"); attr(t1,"x",200); attr(t1,"y",40); t1.textContent="0.45 mm line"; xs.appendChild(t1);
+  const t2=document.createElementNS(NS,"text"); attr(t2,"x",200); attr(t2,"y",56); t2.textContent="× 0.2 mm layer"; xs.appendChild(t2);
+  for(let k=0;k<6;k++){ const y=150-k*(lh+2); const L=200-k*14 - (k<5?0:0); const rake=(5-k)*8; const r=document.createElementNS(NS,"rect"); attr(r,"x",300+k*12); attr(r,"y",y-lh); attr(r,"width",Math.max(30,L-rake-k*6)); attr(r,"height",lh); attr(r,"rx",9); attr(r,"fill","var(--accent)"); attr(r,"fill-opacity",".45"); attr(r,"stroke","currentColor"); attr(r,"stroke-width",".8"); sd.appendChild(r); }
 })();
 
 /* ---------- WATER demo ---------- */
@@ -206,8 +210,8 @@ function stepper(root, steps, draw){
       const rim=smooth(0,4,Math.min(x,y,W-x,W-y));
       let z=2.6+rel*.8*(.4+.6*rim); z=Math.max(z, 2.6-1.1+Math.log1p(Math.exp((z-1.5)*4))/4-.0); H[k]=Math.max(land,z); mat[k]= H[k]>land+1e-6?0:1; }
     shade(cv,H,n,c*0.45,(i,j,k)=>mat[k]===2?[170,172,178]:mat[k]===1?[170,140,100]:[60,150,165]); }
-  root.querySelectorAll("[data-mode]").forEach(b=>b.addEventListener("click",()=>{ mode=b.dataset.mode; root.querySelectorAll("[data-mode]").forEach(x=>x.setAttribute("aria-pressed",x===b)); compute(); }));
-  const sl=document.getElementById("wob"), sv=document.getElementById("wobv"); sl.addEventListener("input",()=>{ wob=+sl.value; sv.textContent=wob.toFixed(1); compute(); });
+  root.querySelectorAll("[data-mode]").forEach(b=>b.addEventListener("click",()=>{ mode=/** @type {HTMLElement} */ (b).dataset.mode; /* a mode button is an HTML element */ root.querySelectorAll("[data-mode]").forEach(x=>attr(x,"aria-pressed",x===b)); compute(); }));
+  const sl=/** @type {HTMLInputElement} */ (document.getElementById("wob")), sv=document.getElementById("wobv"); sl.addEventListener("input",()=>{ wob=+sl.value; sv.textContent=wob.toFixed(1); compute(); });
   compute();
 })();
 

@@ -78,6 +78,8 @@ export function openSizeGrid(input, take, { quote = true, parent = document.body
 /**
  * Make a plain text field a size field: the grid opens under it on focus or click, and closes when a size is taken, on
  * Enter, Tab or Escape, or on blur.
+ * @param {HTMLInputElement} input
+ * @param {{parent?: HTMLElement}} [options]
  */
 export function attachSizeGrid(input, { parent } = {}) {
   let close = null;

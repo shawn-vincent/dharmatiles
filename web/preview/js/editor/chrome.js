@@ -245,11 +245,13 @@ export function init() {
       if (browsing() && tile() && !$('side').hidden) { view.set({ pageAt: 'edit' }); return; }
       if (browsing()) { $('bback').click(); return; }
       // typing in the panel (a map's search) is not a step up the trail: Esc there leaves the field
-      if (e.target.tagName === 'INPUT' && e.target.closest('#side')) { e.target.blur(); return; }
+      const field = /** @type {HTMLElement} */ (e.target); // boundary: a keydown's target is an element (never the document: keys are heard on it)
+      if (field.tagName === 'INPUT' && field.closest('#side')) { field.blur(); return; }
       goUp(); // up a level of the panel (levels.js: a tile's or a map's); at the tile there is nowhere to go
       return;
     }
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+    const typingIn = /** @type {HTMLElement} */ (e.target); // boundary: as above
+    if (typingIn.tagName === 'INPUT' || typingIn.tagName === 'TEXTAREA' || typingIn.isContentEditable) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const n = Number(e.key);
     if (n >= 1 && n <= VIEWS.length) pickView(VIEWS[n - 1][0]);

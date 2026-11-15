@@ -138,7 +138,8 @@ const DRAG_PX = 5;
 const dragging = signal(false);
 
 const targetAt = (x, y) => {
-  const hit = document.elementFromPoint(x, y)?.closest?.('[data-drop-root]');
+  const found = document.elementFromPoint(x, y)?.closest?.('[data-drop-root]'); // a drop target is always an HTML element
+  const hit = /** @type {HTMLElement | null | undefined} */ (found);
   return hit ? { el: hit, target: { root: Number(hit.dataset.dropRoot), dir: hit.dataset.dropDir || '' } } : null;
 };
 
@@ -193,7 +194,7 @@ function wireDrag(root, getOn) {
       g.chip.textContent = g.wrap.querySelector('.nm')?.textContent || '';
       document.body.append(g.chip);
       // every place a tile could go is faintly marked, so it is clear what is a target
-      for (const t of document.querySelectorAll('[data-drop-root]')) if (getOn().canDrop?.(g.id, { root: Number(t.dataset.dropRoot), dir: t.dataset.dropDir || '' }).ok) t.classList.add('cand');
+      for (const t of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('[data-drop-root]'))) if (getOn().canDrop?.(g.id, { root: Number(t.dataset.dropRoot), dir: t.dataset.dropDir || '' }).ok) t.classList.add('cand');
     }
     g.chip.style.transform = `translate(${e.clientX + 14}px, ${e.clientY + 12}px)`;
     const hit = targetAt(e.clientX, e.clientY);

@@ -13,6 +13,8 @@ import { reveal } from './slide.js';
 
 export const SASH = 6;
 export const MIN = { panel: 300, view: 360 };
+/** @typedef {{mode: string, side: 'left' | 'right', hidePanel: boolean, sidew: number}} Arrangement */
+/** @type {Readonly<Arrangement>} */
 export const DEFAULTS = Object.freeze({ mode: 'edit', side: 'left', hidePanel: false, sidew: 440 });
 
 /** A layout from anything stored: unknown or broken fields fall back to the defaults. */
@@ -44,7 +46,11 @@ export function grid(o) {
 }
 
 export class Layout {
-  /** `app` is the grid; `onChange` runs after every change (the view resizes itself). */
+  /**
+   * `app` is the grid; `onChange` runs after every change (the view resizes itself).
+   * @param {HTMLElement} app
+   * @param {(o: Arrangement) => void} [onChange]
+   */
   constructor(app, onChange = () => {}) {
     this.app = app;
     this.onChange = onChange;
@@ -52,7 +58,7 @@ export class Layout {
     let stored = null;
     try { stored = JSON.parse(localStorage.getItem('dt-layout') || 'null'); } catch { /* private mode, or nothing kept */ }
     this.o = normalise(stored);
-    this.side = app.querySelector('#side');
+    this.side = /** @type {HTMLElement} */ (app.querySelector('#side')); // the page's own panel, always there
     const s = document.createElement('div');
     s.className = 'sash';
     s.id = 'sash-side';

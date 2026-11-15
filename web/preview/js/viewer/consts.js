@@ -6,6 +6,7 @@ THREE.ColorManagement.enabled = false; // colours are already display values
 
 // [name, label, elevation deg, azimuth deg (round from +x), close-up?]
 // painted/top/low/close are the contact sheet's four views.
+/** @type {Array<[string, string, number, number, boolean]>} */
 export const VIEWS = [
   ['painted', 'Iso', 40, -120, false],
   ['top', 'Top', 89, -90, false],

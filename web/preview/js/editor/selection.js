@@ -49,7 +49,11 @@ function describe(w) {
   return it.label;
 }
 
-/** Select `w` (or nothing); the text follows to the selection's own file. */
+/**
+ * Select `w` (or nothing); the text follows to the selection's own file.
+ * @param {any} w
+ * @param {{from?: string, guarded?: boolean}} [options]
+ */
 export function setSel(w, { from, guarded = false } = {}) {
   if (same(w, view.get().sel)) return;
   const targetFile = isEntry(w) ? itemOf(w)?.file : w ? tile()?.path : null;
@@ -133,6 +137,7 @@ function markText() {
   // The marks are the stream's messages with a span in this file (an error is a red mark, a note a yellow one;
   // each points to its message), plus a mistake the check just found whose message has not arrived yet.
   const words = (m) => `${m.text}${m.help ? `. ${m.help[0].toUpperCase()}${m.help.slice(1)}` : ''}`;
+  /** @type {Array<{line: number, message: string, severity: string, id?: number, fix: import('../api').FixJson | null, file: string | null}>} */
   const errs = (tileId && texts.file ? log.inFile(tileId, texts.file) : []).filter((m) => m.span.line)
     .map((m) => ({ line: m.span.line, message: words(m), severity: m.severity === 'error' ? 'error' : 'warning', id: m.seq, fix: m.fix ?? null, file: m.span.file }));
   const found = [...(live ? d.errors : []), ...(!dirty() ? t?.errors || [] : [])];
@@ -237,7 +242,8 @@ export function init() {
   // a file just shown: scroll it to the selection's lines
   doc.subscribe(['file'], revealSel);
   addEventListener('keydown', (e) => {
-    const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+    const t = /** @type {HTMLElement} */ (e.target); // boundary: a keydown's target is an element
+    const typing = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable;
     if (e.key === 'f' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && view.get().sel) frameSel();
   });
   canvas.addEventListener('pointerdown', (e) => { if (isMapView()) return; down = { x: e.clientX, y: e.clientY, t: performance.now(), b: e.button }; $('hint').style.display = 'none'; });

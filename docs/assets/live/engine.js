@@ -12,6 +12,28 @@
 
 import { Queue } from './queue.js';
 
+// The messages to and from the worker are typed where worker.js makes and takes them.
+/** @typedef {import('./worker.js').ToWorker} ToWorker */
+/** @typedef {import('./worker.js').FromWorker} FromWorker */
+/** @typedef {import('./worker.js').JobSpec} JobSpec */
+/** @typedef {import('./worker.js').BuiltMsg} BuiltMsg */
+/** What a card asks for: the source, the target and seed, and its own version; an edit also says the cells and tier (a full build is the finest). @typedef {{text: string, system: string, seed: number, version: number}} FullAsk */
+/** @typedef {FullAsk & {cells: number, tier: string}} EditAsk */
+/** An ask, made a job: the kind it is, the steps it takes, and the key it is cached by. @typedef {JobSpec & {kind: 'edit' | 'full', version: number, key?: string}} Job */
+/** The mesh of a build, as kept and as told: what the worker's `built` carries, less its job. @typedef {Pick<BuiltMsg, 'meta' | 'positions' | 'colours' | 'stl' | 'ms'>} Built */
+/** What the engine keeps of a job's key: the check's answer and the build. @typedef {{checked?: import('./engine-wire').Checked, built?: Built}} Kept */
+/**
+ * What a card is told (each carries the `version` of the job it answers):
+ * @typedef {{type: 'queued', version: number, kind: Job['kind'], behind: number}
+ *   | {type: 'started', version: number, kind: Job['kind']}
+ *   | {type: 'progress', version: number, fraction: number, label: string, done: number, total: number}
+ *   | {type: 'checked', version: number, result: import('./engine-wire').Checked, ms?: number, cached?: boolean}
+ *   | ({type: 'built', version: number, kind: Job['kind'], cached: boolean} & Built)
+ *   | {type: 'stopped', version: number, kind: Job['kind']}
+ *   | {type: 'idle', version: number, kind: Job['kind']}
+ *   | {type: 'failed', version: number, kind: Job['kind'], message: string, stack: string}} CardEvent
+ */
+
 /**
  * What a card builds while it is edited, chosen by measuring (shore, strip and pond examples, one tile each): the program's `low`
  * tier at 24 cells a square takes 0.17 to 0.35 s and draws 7 000 to 15 000 triangles; its `draft` tier takes 1.0 to 2.3 s and
@@ -30,19 +52,24 @@ export class Engine {
   constructor(root) {
     this.root = root;
     this.queue = new Queue();
-    /** @type {Map<string, (ev: any) => void>} */
+    /** @type {Map<string, (ev: CardEvent) => void>} */
     this.cards = new Map();
     /** @type {Map<string, number>} the newest version each card asked for */
     this.versions = new Map();
-    /** @type {Map<string, any>} */
+    /** @type {Map<string, Kept>} */
     this.cache = new Map();
     this.serial = 0;
     /** @type {string | null} the engine's version, once its worker has said it (`ready`) */
     this.version = null;
-    /** @type {{ id: number, card: string, job: any, timer: any } | null} */
+    /** @type {{ id: number, card: string, job: Job, timer: ReturnType<typeof setTimeout> | null } | null} */
     this.running = null;
+    /** @type {Worker | null} */
     this.worker = null;
     this.started = null;
+    /** @type {WebAssembly.Module | null} the compiled module, once `start` has it */
+    this.module = null;
+    /** @type {string | null} the library's JSON, once `start` has it */
+    this.library = null;
     this.moduleBytes = null;
     /** @type {Map<string, {resolve: (text: string) => void, reject: (e: Error) => void}>} fixes asked of the worker, by id */
     this.fixes = new Map();
@@ -50,7 +77,8 @@ export class Engine {
 
   /** Fetch the module quietly (no compile, no worker), so the first touch is quick.  Skipped on a metered link. */
   prefetch() {
-    const c = /** @type {any} */ (navigator).connection;
+    // boundary: the Network Information API is in no DOM lib
+    const c = /** @type {{saveData?: boolean, effectiveType?: string} | undefined} */ (/** @type {{connection?: unknown}} */ (navigator).connection);
     if (c?.saveData || /(^|-)2g$/.test(c?.effectiveType ?? '')) return;
     this.moduleBytes ??= fetch(new URL('engine/dt_web_bg.wasm', this.root)).catch(() => null);
   }
@@ -86,47 +114,54 @@ export class Engine {
     const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     this.worker = worker;
     return new Promise((resolve, reject) => {
+      /** @param {MessageEvent<FromWorker>} ev */
       worker.onmessage = (ev) => {
-        if (ev.data.type === 'ready') { this.version = ev.data.version; worker.onmessage = (e) => this.#heard(e.data); resolve(undefined); } else if (ev.data.type === 'error') reject(new Error(ev.data.message));
+        if (ev.data.type === 'ready') { this.version = ev.data.version; worker.onmessage = (/** @type {MessageEvent<FromWorker>} */ e) => this.#heard(e.data); resolve(undefined); } else if (ev.data.type === 'error') reject(new Error(ev.data.message));
       };
       worker.onerror = (e) => {
         const err = new Error(`the engine's worker failed: ${e.message || 'it could not load'}`);
         reject(err);
         this.#failRunning(err.message, '');
       };
-      worker.postMessage({ type: 'init', module: this.module, library: this.library });
+      Engine.post(worker, { type: 'init', module: this.module, library: this.library });
     });
   }
 
   /**
    * The source with a mistake's `fix` (from a `checked` result) laid in, by the program's own applier (dt_doc::ops Op::Fix, in the
    * worker).  It waits behind a build the worker is running; rejects loudly when the text is not the one the fix was made for.
-   * @param {string} text @param {object} fix @returns {Promise<string>}
+   * @param {string} text @param {import('./engine-wire').FixJson} fix @returns {Promise<string>}
    */
   async fix(text, fix) {
     await this.start();
     const id = `fix-${++this.serial}`;
     return new Promise((resolve, reject) => {
       this.fixes.set(id, { resolve, reject });
-      this.worker.postMessage({ type: 'fix', id, text, fix });
+      Engine.post(this.worker, { type: 'fix', id, text, fix });
     });
   }
 
-  /** @param {string} id @param {(ev: any) => void} onEvent */
+  /** The one place a message goes to the worker, so each is checked against the protocol. @param {Worker} worker @param {ToWorker} message */
+  static post(worker, message) { worker.postMessage(message); }
+
+  /** @param {string} id @param {(ev: CardEvent) => void} onEvent */
   register(id, onEvent) {
     this.cards.set(id, onEvent);
     return {
-      edit: (/** @type {any} */ job) => this.#submit(id, { ...job, kind: 'edit', steps: ['check', 'build'] }),
-      full: (/** @type {any} */ job) => this.#submit(id, { ...job, kind: "full", steps: ["build"], cells: 0, tier: "full" }),
+      edit: (/** @type {EditAsk} */ job) => this.#submit(id, { ...job, kind: 'edit', steps: ['check', 'build'] }),
+      full: (/** @type {FullAsk} */ job) => this.#submit(id, { ...job, kind: "full", steps: ["build"], cells: 0, tier: "full" }),
       focus: () => this.#focus(id),
       forget: () => { this.cards.delete(id); this.queue.drop(id, 'edit'); this.queue.drop(id, 'full'); },
     };
   }
 
+  /** @param {string} card @param {CardEvent} ev */
   #emit(card, ev) { this.cards.get(card)?.(ev); }
 
+  /** @param {Job} job */
   static key(job) { return `${job.kind}|${job.tier}|${job.system}|${job.seed}|${job.cells ?? ''}|${job.text}`; }
 
+  /** @param {string} key @param {Kept} value */
   #remember(key, value) {
     this.cache.delete(key);
     this.cache.set(key, value);
@@ -142,6 +177,7 @@ export class Engine {
     }
   }
 
+  /** @param {string} card @param {Job} job */
   #submit(card, job) {
     this.versions.set(card, job.version);
     const key = Engine.key(job);
@@ -166,12 +202,15 @@ export class Engine {
       const next = this.queue.next();
       if (next) this.#run(next.card, next.job);
     }
-    for (const kind of ['edit', 'full']) {
+    /** @type {Array<Job['kind']>} */
+    const kinds = ['edit', 'full'];
+    for (const kind of kinds) {
       const n = this.queue.ahead(asked, kind);
       if (n >= 0) this.#emit(asked, { type: 'queued', version: this.queue.pending(asked, kind).version, kind, behind: n + (this.running ? 1 : 0) });
     }
   }
 
+  /** @param {string} card @param {Job} job */
   async #run(card, job) {
     // the worker is taken from this moment, whether or not the engine is up yet: nothing else may start meanwhile
     const id = ++this.serial;
@@ -189,15 +228,20 @@ export class Engine {
     // the build may have been stopped (and the worker replaced) while the engine was starting
     if (this.running !== r) return;
     r.timer = setTimeout(() => this.#failRunning(`The build took longer than ${Math.round(RUNAWAY_MS / 60000)} minutes and was stopped`, ''), RUNAWAY_MS);
-    this.worker.postMessage({ type: "job", id, steps: job.steps, text: job.text, system: job.system, seed: job.seed, cells: job.cells, tier: job.tier });
+    Engine.post(this.worker, { type: "job", id, steps: job.steps, text: job.text, system: job.system, seed: job.seed, cells: job.cells, tier: job.tier });
   }
 
   /** Take what the worker said.  A message of a job that was stopped is not its card's any more. */
+  /** @param {FromWorker} m */
   #heard(m) {
-    const fix = this.fixes.get(m.id);
-    if (fix) {
-      this.fixes.delete(m.id);
-      if (m.type === 'fixed') fix.resolve(m.text); else fix.reject(new Error(m.message));
+    if (m.type === 'ready') return; // said once, to `start`
+    const fixId = typeof m.id === 'string' ? m.id : undefined; // a fix's id is a string, a job's a number
+    const fix = fixId === undefined ? undefined : this.fixes.get(fixId);
+    if (fixId !== undefined && fix) {
+      this.fixes.delete(fixId);
+      if (m.type === 'fixed') fix.resolve(m.text);
+      else if (m.type === 'error') fix.reject(new Error(m.message));
+      else fix.reject(new Error(`the worker answered a fix with a "${m.type}" message`));
       return;
     }
     const r = this.running;
@@ -225,6 +269,7 @@ export class Engine {
     }
   }
 
+  /** @param {NonNullable<Engine['running']>} r @param {boolean} current */
   #finish(r, current) {
     clearTimeout(r.timer);
     this.running = null;
@@ -234,6 +279,7 @@ export class Engine {
   }
 
   /** The running build is stopped: a new worker from the compiled module.  `why` 'stopped' tells its card it can be resumed. */
+  /** @param {NonNullable<Engine['running']>} r @param {string | null} why */
   #respawn(r, why) {
     clearTimeout(r.timer);
     this.running = null;
@@ -245,6 +291,7 @@ export class Engine {
     }, (e) => this.#emit(r.card, { type: 'failed', version: r.job.version, kind: r.job.kind, message: `The engine did not restart: ${e.message}`, stack: e.stack ?? '' }));
   }
 
+  /** @param {string} message @param {string} stack */
   #failRunning(message, stack) {
     const r = this.running;
     if (!r) return;

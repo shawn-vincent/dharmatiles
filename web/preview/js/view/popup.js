@@ -61,6 +61,9 @@ export function place(box, anchor, align) {
  * A menu of `items` by `anchor`.  An item is `{label, sub, swatch, hint, danger, disabled, why, run}` (`why` is the
  * reason an item that cannot be chosen is not), `{head}` (a small heading) or `{sep: true}`.  Choosing an item closes the
  * menu and runs it.  `label` names the menu for a screen reader.
+ * @param {Element} anchor
+ * @param {any[]} items
+ * @param {{label?: string, cls?: string, align?: string, onClose?: () => void}} [options]
  */
 export function openMenu(anchor, items, { label = 'Actions', cls = '', align = 'right', onClose } = {}) {
   open({ kind: 'menu', anchor, items, label, cls, align, onClose });

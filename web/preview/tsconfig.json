@@ -1,19 +1,20 @@
 {
-  "//": "The page is checked against the server's contract (js/api.d.ts, generated from the Rust types). A file is checked when it says `// @ts-check` at the top; the files that talk to the server all do. `npm test` runs this before the page's tests.",
+  "//": "The whole page is checked against the server's contract (js/api.d.ts, generated from the Rust types): every .js file under js/ is, with no file opting out (a test refuses `@ts-nocheck`), so a new file is checked from its first line.  `strict` is not on yet: `strictNullChecks` alone shows about 580 places and `noImplicitAny` about 5000 (callbacks and handlers with no types), so the next step is those two, one at a time.  The vendored libraries are typed by the .d.ts/.d.mts beside them (vendor/), and `paths` points at those.  `npm test` runs this before the page's tests.",
   "compilerOptions": {
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noEmit": true,
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "preact": ["vendor/preact.mjs"],
-      "preact/hooks": ["vendor/preact-hooks.mjs"],
-      "htm": ["vendor/htm.mjs"],
-      "@preact/signals": ["vendor/preact-signals.mjs"],
-      "@preact/signals-core": ["vendor/preact-signals-core.mjs"]
+      "preact": ["vendor/preact.d.mts"],
+      "preact/hooks": ["vendor/preact-hooks.d.mts"],
+      "htm": ["vendor/htm.d.mts"],
+      "/vendor/OrbitControls.js": ["vendor/OrbitControls.d.ts"],
+      "@preact/signals": ["vendor/preact-signals.d.mts"],
+      "@preact/signals-core": ["vendor/preact-signals-core.d.mts"]
     },
     "lib": [
       "ES2022",

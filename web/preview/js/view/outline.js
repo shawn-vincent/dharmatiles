@@ -246,7 +246,7 @@ export function Outline({ data, on }) {
   useEffect(() => {
     const i = on.focusAfter?.();
     if (i == null) return;
-    [...(root.current?.querySelectorAll('.orow') ?? [])].find((x) => x.dataset.kind === 'entry' && Number(x.dataset.index) === i)?.focus({ preventScroll: false });
+    [.../** @type {NodeListOf<HTMLElement>} */ (root.current?.querySelectorAll('.orow') ?? [])].find((x) => x.dataset.kind === 'entry' && Number(x.dataset.index) === i)?.focus({ preventScroll: false });
   });
   if (dragging.value && held.current) return held.current;
   const items = data.stack || [];

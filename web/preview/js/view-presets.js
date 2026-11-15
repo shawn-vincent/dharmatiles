@@ -19,7 +19,7 @@ const between = (a, b) => (Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1]
  */
 export function presetAt(views, elev, azim, prefer = null) {
   const cam = dir(elev, azim);
-  const near = views.map(([name, , e, a]) => [name, between(cam, dir(e, a))]).filter(([, angle]) => angle <= AT_DEGREES);
+  const near = views.map(([name, , e, a]) => /** @type {[string, number]} */ ([name, between(cam, dir(e, a))])).filter(([, angle]) => angle <= AT_DEGREES);
   if (prefer && near.some(([name]) => name === prefer)) return prefer;
   near.sort((x, y) => x[1] - y[1]);
   return near[0]?.[0] ?? null;

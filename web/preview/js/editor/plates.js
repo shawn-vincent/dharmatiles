@@ -30,7 +30,7 @@ let lastList = null, lastTile = null; // the print list and the tile last shown,
 export function contextLines() {
   const p = plan.value, t = tile();
   if (!p) return [t?.status === 'building' ? 'Laying out the plates…' : 'A print list that does not plan yet: mend it, or choose a printer here.'];
-  if (!p.planned) return ['This list does not plan yet.', p.label ? `For the ${p.label}` : 'Choose a printer'];
+  if (!p.planned) return ['This list does not plan yet.', 'label' in p && p.label ? `For the ${p.label}` : 'Choose a printer'];
   const n = p.layout.length;
   return [`${plural(p.layout.reduce((a, x) => a + x.pieces.length, 0), 'piece')} on ${plural(n, 'plate')}`, `${mm(p.bed[0])} × ${mm(p.bed[1])} mm · ${p.mode === 'single' ? 'single colour' : 'multicolour'}`];
 }
@@ -82,7 +82,7 @@ async function doExport() {
   try {
     const r = await host.platesExport(t.id);
     if (r.status !== 200) { exporting({ error: r.body?.error || `could not export (${r.status})` }); if (r.status !== 0) failed(`Could not export ${stem(t)}`, r); }
-    else { exporting({ files: r.body.files, failures: r.body.failures ?? [] }); sheet({ open: true, plate: (plan.value?.view ?? 0) + 1, bad: [] }); }
+    else { exporting({ files: r.body.files, failures: r.body.failures ?? [] }); sheet({ open: true, plate: (plan.value && 'view' in plan.value ? plan.value.view : 0) + 1, bad: [] }); }
   } catch (e) { exporting({ error: 'the export failed' }); showError(`Could not export ${stem(t)}`, e); }
   exporting({ busy: false });
 }

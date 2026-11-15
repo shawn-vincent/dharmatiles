@@ -47,7 +47,7 @@ function Pick({ printers, current, onPick, needBed, disabled, skey, scan, begin,
   // the chosen model is in view when the list opens (the list scrolls itself, not the panel round it)
   useEffect(() => {
     const l = list.current;
-    const on = l?.querySelector('.pc-row.on');
+    const on = /** @type {HTMLElement | null | undefined} */ (l?.querySelector('.pc-row.on')); // a row is an element
     if (l && on && !query) l.scrollTop = Math.max(0, on.offsetTop - l.clientHeight / 2 + on.offsetHeight / 2);
   }, [current]);
   const groups = groupPrinters(printers, { needBed, query });

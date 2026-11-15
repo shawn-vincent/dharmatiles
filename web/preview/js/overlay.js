@@ -77,6 +77,7 @@ export class Overlay {
     }
     const line = m && scene.show !== false ? m.lines.find((l) => l.name === scene.selLine && l.pts.length > 1) : null;
     const focus = want.some((w) => w.sel) || !!line;
+    /** @type {Array<{positions: Float32Array, color: string, alpha: number, role?: string, dz?: number}>} */
     const items = (focus ? want.filter((w) => w.sel) : want).map(({ r, sel }) => ({
       positions: regionTriangles(r, m, this.sq),
       color: sel ? css('--accent') : scene.tints?.[r.name] || css('--plate-ink'),
