@@ -786,6 +786,7 @@ impl<'a> Plan<'a> {
         };
         let (export, audit) = if !opts.tier.checked() {
             // the base is the same in every draft: its sockets are not flagged
+            // the stack holds at most `MAX_ENTRIES` (10 000) entries, the reader's `dt::too-many`, so this fits a u16
             let base = u16::try_from(tile.stack.len()).unwrap_or(NO_ENTRY);
             let skip: Vec<bool> = entry_in.iter().map(|&e| e == base).collect();
             dt_kit::draft(mesh, &opts.printer, &skip)
@@ -891,6 +892,9 @@ impl<'a> Plan<'a> {
 fn trace_entries(scene: &Scene, mesh: &dt_kit::TriMesh, plan: &Plan<'_>) -> (Vec<u16>, Vec<u16>) {
     let (tile, c, masks) = (plan.tile, plan.c, &plan.masks);
     let writes = &c.writes;
+    // An entry's index is under `MAX_ENTRIES` (10 000, the reader's `dt::too-many`), so it fits a u16.  A piece's number
+    // within its entry (a scatter is clamped to 10 000 things, but an element that makes a part for each blade or leaf is not) can pass 65 534 in an extreme tile: it then
+    // saturates at `NO_ENTRY`, which the editor's trace shows as no piece (the trace is for the highlight; it is not in the STL).
     let to16 = |i: usize| u16::try_from(i).unwrap_or(NO_ENTRY);
     let mut seen: std::collections::BTreeMap<&EntryId, usize> = std::collections::BTreeMap::new();
     let parts: Vec<(Option<u16>, u16)> = scene

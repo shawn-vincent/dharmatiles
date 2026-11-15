@@ -183,17 +183,21 @@ fn escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// A zip of `files`, each deflated.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
-)]
+/// A zip of `files`, each deflated.  The sizes and the offsets are 32 bits (`dt_value::idx` stops loudly on a file or a
+/// whole archive past 4 GB: no zip64); a name's length and the file count are 16 bits, and they are the program's own
+/// fixed names (a handful), so [`small`] stops loudly on one that is not.
 pub(crate) fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     let mut central: Vec<u8> = Vec::new();
     let le16 = |v: &mut Vec<u8>, n: u16| v.extend_from_slice(&n.to_le_bytes());
     let le32 = |v: &mut Vec<u8>, n: u32| v.extend_from_slice(&n.to_le_bytes());
     let size = |n: usize| dt_value::idx(n);
+    let small = |n: usize| match u16::try_from(n) {
+        Ok(v) => v,
+        Err(_) => panic!(
+            "{n} does not fit a zip's 16-bit field: the names and the count are the program's own"
+        ),
+    };
     for (name, data) in files {
         let mut enc =
             flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
@@ -212,7 +216,7 @@ pub(crate) fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
         le32(&mut out, crc);
         le32(&mut out, size(packed.len()));
         le32(&mut out, size(data.len()));
-        le16(&mut out, u16::try_from(name.len()).unwrap_or(0));
+        le16(&mut out, small(name.len()));
         le16(&mut out, 0);
         out.extend_from_slice(name.as_bytes());
         out.extend_from_slice(&packed);
@@ -227,7 +231,7 @@ pub(crate) fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
         le32(&mut central, crc);
         le32(&mut central, size(packed.len()));
         le32(&mut central, size(data.len()));
-        le16(&mut central, u16::try_from(name.len()).unwrap_or(0));
+        le16(&mut central, small(name.len()));
         le16(&mut central, 0);
         le16(&mut central, 0);
         le16(&mut central, 0);
@@ -241,8 +245,8 @@ pub(crate) fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
     le32(&mut out, 0x0605_4b50);
     le16(&mut out, 0);
     le16(&mut out, 0);
-    le16(&mut out, u16::try_from(files.len()).unwrap_or(0));
-    le16(&mut out, u16::try_from(files.len()).unwrap_or(0));
+    le16(&mut out, small(files.len()));
+    le16(&mut out, small(files.len()));
     le32(&mut out, size(central.len()));
     le32(&mut out, cd_at);
     le16(&mut out, 0);
