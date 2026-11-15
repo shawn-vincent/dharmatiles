@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 import { suggest } from '../js/complete.js';
 import { placeText, pointLabel, pointText } from '../js/points.js';
-import { asNumber, asRange, formOf, setUnits, written } from '../js/value.js';
+import { asNumber, asRange, formOf, setUnits } from '../js/value.js';
 
 setUnits(['sq', 'mm', 'in', 'dmm', 'layer', 'deg', 'rad', 'pi']); // what the program's language table says
 
@@ -23,7 +23,7 @@ test('a placed thing writes one point for its at=, never a range', () => {
   assert.ok(!placeText([0.1, 0.9], 2).includes('..'));
 });
 
-test('typed values with units are numbers and ranges, and are written as strings', () => {
+test('typed values with units are numbers and ranges', () => {
   assert.equal(formOf('8dmm'), 'number');
   assert.equal(formOf('0.5sq'), 'number');
   assert.equal(formOf('40deg'), 'number');
@@ -31,8 +31,6 @@ test('typed values with units are numbers and ranges, and are written as strings
   assert.equal(formOf('$bottom + 40dmm'), 'expression');
   assert.equal(asRange('8dmm'), '8dmm..8dmm');
   assert.equal(asNumber('6dmm..10dmm'), '6dmm');
-  assert.equal(written('8dmm'), '"8dmm"');
-  assert.equal(written('8'), '8'); // format 0 as ever (the program refuses it in format 1)
 });
 
 const elements = [{ name: 'dirt', about: 'earth', role: 'surface', controls: [{ name: 'top' }] }];

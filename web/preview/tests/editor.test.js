@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { suggest } from '../js/complete.js';
 import { browserHost } from '../js/host.js';
-import { kdlString, parseValue, unquote, valueOf, wordControlNeedsSelect } from '../js/lens.js';
+import { parseValue, unquote, valueOf, wordControlNeedsSelect } from '../js/lens.js';
 import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
 import { indentFor, braceEnd, colourRanges } from '../js/text.js';
@@ -11,7 +11,7 @@ import { byteIndexer, byteToIndex } from '../js/spans.js';
 import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
 import { PINNED_VIEWS, presetAt } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
-import { asNumber, asRange, debounce, formOf, setUnits, valueItems, written } from '../js/value.js';
+import { asNumber, asRange, debounce, formOf, setUnits, valueItems } from '../js/value.js';
 
 setUnits(['sq', 'mm', 'in', 'dmm', 'layer', 'deg', 'rad', 'pi']); // what the program's language table says
 
@@ -236,22 +236,9 @@ test('a brace folds to its own closing brace, skipping strings and comments', ()
   assert.equal(braceEnd('a {', 2), null);
 });
 
-test('a description is written as a KDL v2 string and read back the same', () => {
-  const s = 'A "pool" \\ by the bank\n\u0001';
-  const k = kdlString(s);
-  assert.equal(k, '"A \\"pool\\" \\\\ by the bank\\n\\u{1}"');
-  assert.equal(unquote(k), s);
+test('a written string is read back as its text', () => {
+  assert.equal(unquote('"A \\"pool\\" \\\\ by the bank\\n\\u{1}"'), 'A "pool" \\ by the bank\n\u0001');
   assert.equal(unquote('#"raw "quotes""#'), 'raw "quotes"');
-});
-
-test('a typed value is written bare when KDL takes it bare, else quoted', () => {
-  assert.equal(written('6'), '6');
-  assert.equal(written(' (h)1.2 '), '(h)1.2');
-  assert.equal(written('edge'), 'edge');
-  assert.equal(written('6..15'), '"6..15"');
-  assert.equal(written('ground - 1'), '"ground - 1"');
-  assert.equal(written('30%'), '"30%"');
-  assert.equal(written('inf'), '"inf"');
 });
 
 test('a value switches between one number and a range', () => {

@@ -256,6 +256,12 @@ pub enum Op<'a> {
         /// What it becomes, or `None` to take it out.
         value: Option<KdlValue>,
     },
+    /// The tile's description made `text`: the `about` line's string replaced, or the line written first in the tile's
+    /// body when there is none.  The program writes the string, so no page quotes one.  (Tile.)
+    SetAbout {
+        /// The description, as typed.
+        text: &'a str,
+    },
     /// A node's positional argument replaced: a `within`'s distance, say.  (Tile.)
     SetArg {
         /// The node.
@@ -463,6 +469,7 @@ fn map_op(text: &str, op: &Op) -> Result<Done, EditError> {
         Op::GiveIds | Op::Append(_) => unreachable_op(),
         Op::SetControl { .. }
         | Op::SetArg { .. }
+        | Op::SetAbout { .. }
         | Op::SetArgs { .. }
         | Op::SetPoint { .. }
         | Op::Insert { .. }

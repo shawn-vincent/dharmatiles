@@ -166,6 +166,9 @@ pub enum EditOp {
         id: String,
         new: String,
     },
+    /// The tile's description: the `about` line's string made `value`, or the line written when there is none.  The
+    /// program writes the string.
+    About { text: String, value: String },
     /// A node's positional argument replaced.
     Arg {
         text: String,
@@ -1188,6 +1191,7 @@ pub(super) fn edit(shared: &Shared, req: EditReq) -> Out<EditRes> {
         | EditOp::RemoveChildren { text, .. }
         | EditOp::Rename { text, .. }
         | EditOp::Arg { text, .. }
+        | EditOp::About { text, .. }
         | EditOp::Args { text, .. }
         | EditOp::Point { text, .. }
         | EditOp::Hide { text, .. }
@@ -1261,6 +1265,7 @@ pub(super) fn edit(shared: &Shared, req: EditReq) -> Out<EditRes> {
             },
         ),
         EditOp::Args { text, id, values } => made(text, Op::SetArgs { id, values }),
+        EditOp::About { text, value } => made(text, Op::SetAbout { text: value }),
         EditOp::Point {
             text,
             id,

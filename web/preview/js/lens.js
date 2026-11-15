@@ -1,12 +1,12 @@
 // A control's value as the sheet reads and writes it: the helpers behind view/sheet.js (the rows, the scrub and the typed
 // value) and view/property.js.  No page here.
 
-import { kdlString, unquote } from './value.js';
+import { unquote } from './value.js';
 
 /** Does a written value carry its own unit (`3.5dmm`, `20%`, `45deg`)? */
 export const carriesUnit = (/** @type {unknown} */ shown) => /\d\s*[a-zA-Z%°]/.test(String(shown ?? ''));
 
-export { kdlString, unquote };
+export { unquote };
 
 /**
  * The value part of a written control and where it starts in its text.
