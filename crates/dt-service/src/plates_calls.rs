@@ -90,6 +90,12 @@ pub trait PlatesHost: ListHost {
     /// A piece's low build, for a crown's look at it: none when it does not build or a newer reading of the map is on its
     /// way and will look again.
     fn crown_build(&self, path: &str, opts: Options) -> Option<Built>;
+    /// The Bambu Studio template's project settings for `machine`, where one is reachable: `None` when there is
+    /// none (the plates cannot be a Bambu project without it).
+    ///
+    /// # Errors
+    /// A template that is found and cannot be read, or this host cannot read one at all (said in words).
+    fn bambu_template(&self, machine: &dt_eval::Machine) -> Result<Option<String>, String>;
     /// Seconds, from any starting point that does not change (a build's length is the difference of two): the host's own
     /// clock, since a web page has no `Instant`.
     fn seconds(&self) -> f64;

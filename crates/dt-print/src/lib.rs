@@ -21,6 +21,7 @@ pub mod plates;
 pub mod plateset;
 pub mod stl;
 pub mod threemf;
+pub mod tile_files;
 
 pub use bambu::{bambu_project, bed_centre, bed_corners, project_settings};
 pub use plateset::{
@@ -29,3 +30,4 @@ pub use plateset::{
 };
 pub use stl::stl;
 pub use threemf::threemf;
+pub use tile_files::tile_files;

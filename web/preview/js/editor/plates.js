@@ -83,11 +83,14 @@ async function recordPlate() {
 async function doExport() {
   const t = tile();
   if (!t || ui().exporting.busy) return;
-  exporting({ busy: true, files: null, error: null, failures: [] });
+  exporting({ busy: true, files: null, saved: false, error: null, failures: [] });
   try {
     const r = await host.platesExport(t.id);
     if (r.status !== 200) { exporting({ error: r.body?.error || `could not export (${r.status})` }); if (r.status !== 0) failed(`Could not export ${stem(t)}`, r); }
-    else { exporting({ files: r.body.files, failures: r.body.failures ?? [] }); sheet({ open: true, plate: (plan.value && 'view' in plan.value ? plan.value.view : 0) + 1, bad: [] }); }
+    else {
+      // the program writes its files where it does; the browser editor's answer is files for the browser to save
+      for (const d of r.body.downloads) host.saveFile(d);
+      exporting({ files: [...r.body.files, ...r.body.downloads.map((d) => d.name)], saved: r.body.downloads.length > 0, failures: r.body.failures ?? [] }); sheet({ open: true, plate: (plan.value && 'view' in plan.value ? plan.value.view : 0) + 1, bad: [] }); }
   } catch (e) { exporting({ error: 'the export failed' }); showError(`Could not export ${stem(t)}`, e); }
   exporting({ busy: false });
 }

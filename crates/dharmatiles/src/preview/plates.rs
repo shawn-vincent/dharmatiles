@@ -8,10 +8,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use dt_eval::Diag;
-use dt_print::plates::{self, Overrides, Plan};
+use dt_print::plates::{Overrides, Plan};
 use dt_service::message::{Kind, Message, MessageData, PlateFilesData, Scope, Severity};
 use dt_service::patch::Patch;
-use serde::{Deserialize, Serialize};
 
 use super::api::{Out, Reply, out};
 use super::edit::Done;
@@ -23,27 +22,7 @@ use dt_service::plates_calls as calls;
 pub use dt_service::list_calls::is_plates;
 pub use dt_service::plates_calls::{PlatesSetReq, PlatesShowReq, again, printer_rows};
 
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct PlatesExportReq {
-    pub list: String,
-}
-
-/// The plates written.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct PlatesExported {
-    pub files: Vec<String>,
-    pub format: String,
-    /// The pieces that fail the printability gate, by tile.
-    pub failures: Vec<String>,
-    pub plates: usize,
-    pub total_s: f64,
-    pub out: String,
-}
+pub use dt_service::export_calls::{PlatesExportReq, PlatesExported};
 
 /// Open or rebuild a print list or a map for the page (see [`dt_service::plates_calls::rebuild`]).
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
@@ -129,32 +108,8 @@ pub(super) fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExp
         Err(b) => return Err(report_err(&b.1)),
     };
     let s = &plan.settings;
-    let fmt = plates::export::Format::for_printer(&s.machine);
-    let tpl = if fmt == plates::export::Format::Bambu {
-        match cli::template_for(&s.machine, None, shared.home.as_deref()) {
-            Ok(Some(t)) => Some(t),
-            Ok(None) => {
-                return Err(report_err(&[Diag::plain(
-                    dt_lang::codes::PLATES,
-                    "a Bambu Studio project needs a template for the printer's settings",
-                )
-                .help("save any project from Bambu Studio for this printer as bambu.3mf in your tiles folder")]));
-            }
-            Err(e) => return Err(report_err(&[Diag::plain(dt_lang::codes::PLATES, e)])),
-        }
-    } else {
-        None
-    };
-    let palette = shared
-        .palette_checked()
-        .map_err(|e| fail::failure("500 Internal Server Error", e))?;
-    let base = shared.options();
-    let builds = match cli::build_all(
-        &plan,
-        &base,
-        shared.home.as_deref(),
-        shared.store.as_deref(),
-        &mut |n, of, name| {
+    let made =
+        match dt_service::export_calls::plate_files(shared, &plan, &path, &mut |n, of, name| {
             let progress = super::api::Progress {
                 what: "building".to_owned(),
                 fraction: (n - 1) as f64 / of as f64,
@@ -166,44 +121,15 @@ pub(super) fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExp
                 estimate_s: None,
             };
             shared.update(&id, Patch::Progress(progress));
-        },
-    ) {
-        Ok(b) => b,
-        Err(e) => {
-            shared.update(&id, Patch::ClearProgress);
-            return Err(report_err(&e));
-        }
-    };
+        }) {
+            Ok(m) => m,
+            Err(errs) => {
+                shared.update(&id, Patch::ClearProgress);
+                return Err(report_err(&errs));
+            }
+        };
     shared.update(&id, Patch::ClearProgress);
-    let layout = match cli::layout_of(&plan, &builds) {
-        Ok(l) => l,
-        Err(e) => return Err(report_err(&e)),
-    };
-    let b0 = &builds.built[0];
-    let record = dt_kit::BuildRecord {
-        engine: b0.record.engine.clone(),
-        document: path.clone(),
-        document_hash: b0.record.document_hash,
-        seed: 0,
-        system: s.system,
-        printer: s.machine.name.clone(),
-    };
-    // a piece that failed the gate is never written: the plates wait for it to pass
-    let files = match builds.passed() {
-        Some(passed) => match plates::export::write_set(
-            &plan,
-            &layout,
-            &passed,
-            fmt,
-            &palette,
-            tpl.as_deref(),
-            &record,
-        ) {
-            Ok(f) => f,
-            Err(e) => return Err(report_err(&[e])),
-        },
-        None => Vec::new(),
-    };
+    let (layout, fmt, files, failing) = (made.layout, made.format, made.files, made.failures);
     let out = edit::export_dir(&path)
         .map(|o| o.join("plates").join(&plan.title))
         .map_err(|e| fail::failure("500 Internal Server Error", e))?;
@@ -224,17 +150,6 @@ pub(super) fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExp
         })?;
         written.push(p.display().to_string());
     }
-    let failing: Vec<String> = builds
-        .gate()
-        .iter()
-        .enumerate()
-        .flat_map(|(k, f)| {
-            let name = plan.kinds[k].name.clone();
-            f.iter()
-                .map(move |l| format!("{name}: {l}"))
-                .collect::<Vec<_>>()
-        })
-        .collect();
     say(shared, &id, Scope::Export, |name| {
         let mut out = Vec::new();
         if !written.is_empty() {
@@ -285,6 +200,7 @@ pub(super) fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExp
     again(shared, &id);
     Ok(PlatesExported {
         files: written,
+        downloads: Vec::new(),
         format: fmt.word().to_owned(),
         failures: failing,
         plates: layout.plates.len(),

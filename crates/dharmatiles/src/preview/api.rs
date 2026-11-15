@@ -304,7 +304,7 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     all.add::<super::resources::ResourceEvent>();
     all.add::<StreamEvent>();
     all.add::<dt_service::message::MessagesRes>();
-    all.add::<crate::report::Report>();
+    all.add::<dt_service::report::Report>();
     all.add::<dt_kit::AuditSummary>();
     all.add::<dt_service::message::BuildData>();
     all.add::<dt_service::message::ServerData>();

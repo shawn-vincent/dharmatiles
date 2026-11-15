@@ -8,6 +8,7 @@
 //! each distinct piece (the CLI for an export, the editor for its view) at the
 //! tier it needs, then asks for the layout.
 
+pub mod builds;
 pub mod export;
 pub mod pack;
 pub mod wire;

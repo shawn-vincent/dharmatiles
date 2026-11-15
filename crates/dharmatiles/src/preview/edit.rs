@@ -121,35 +121,7 @@ pub struct PageMessageReq {
     pub backtrace: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct ExportReq {
-    /// Also write the painted 3MF.
-    pub threemf: Option<bool>,
-    /// Only say where the files would go.
-    #[serde(rename = "where")]
-    pub ask_where: Option<bool>,
-}
-
-/// An export: where it would go, or what it wrote.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(untagged)]
-pub enum ExportRes {
-    Where { out: String, shown: String },
-    Built(ExportBuilt),
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct ExportBuilt {
-    pub path: String,
-    pub files: Vec<String>,
-    /// The build's record: whether it passes the gate is `build.audit.failures`.
-    pub build: Box<dt_eval::TileRecord>,
-}
+pub use dt_service::export_calls::{ExportBuilt, ExportReq, ExportRes};
 
 /// 128 random bits, hex: the run's token.
 #[expect(
@@ -446,12 +418,7 @@ pub(super) fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<Exp
     };
     // a file of yours goes to out/<target>/<name>-<target>.stl, not under
     // the folders it sits in (a library tile mirrors the library, as build does)
-    if !tile.starts_with("lib:") {
-        let stem = Path::new(tile)
-            .file_stem()
-            .map_or_else(|| "tile".to_owned(), |s| s.to_string_lossy().into_owned());
-        b.out = PathBuf::from(&target).join(format!("{stem}-{target}.stl"));
-    }
+    dt_service::export_calls::place_out(&mut b, tile, &target);
     let built_s = t0.elapsed().as_secs_f64();
     let record = dt_eval::TileRecord::of(&b, &opts.printer, built_s);
     let files = crate::build::write(
@@ -471,6 +438,7 @@ pub(super) fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<Exp
     Ok(ExportRes::Built(ExportBuilt {
         path: tile.to_owned(),
         files: written,
+        downloads: Vec::new(),
         build: Box::new(record),
     }))
 }

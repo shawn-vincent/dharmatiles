@@ -389,6 +389,10 @@ impl dt_service::plates_calls::PlatesHost for Shared {
         Self::palette(self)
     }
 
+    fn bambu_template(&self, machine: &dt_eval::Machine) -> Result<Option<String>, String> {
+        crate::plates::template_for(machine, None, self.home.as_deref())
+    }
+
     fn seconds(&self) -> f64 {
         static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
         START.get_or_init(Instant::now).elapsed().as_secs_f64()
@@ -1037,9 +1041,6 @@ impl Shared {
         );
     }
 }
-
-/// The most triangles one piece of a map has at full detail in the page.
-const MAP_FULL_TRIANGLES: usize = 600_000;
 
 /// Open `url` in the default browser.
 fn open_browser(url: &str) {

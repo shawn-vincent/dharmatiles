@@ -244,6 +244,8 @@ type DiagData = { label?: string, unexpected?: boolean, };
 
 type Done = Record<string, never>;
 
+type Download = { name: string, mediaType: string, data: string, };
+
 type DraftReq = { text: string, 
 /**
  * A file the tile uses, instead of its own document.
@@ -342,7 +344,15 @@ type ErrorDetail = {
  */
 kind: string, message: string, help: string | null, causes: Array<string>, backtrace: string, context: ErrorContext, };
 
-type ExportBuilt = { path: string, files: Array<string>, 
+type ExportBuilt = { path: string, 
+/**
+ * The files written, by path: the program's (empty where the files are downloads).
+ */
+files: Array<string>, 
+/**
+ * The files to save: the browser editor's (empty where the program wrote them).
+ */
+downloads: Array<Download>, 
 /**
  * The build's record: whether it passes the gate is `build.audit.failures`.
  */
@@ -997,7 +1007,15 @@ datumZ: number | null, };
 
 type PlatesExportReq = { list: string, };
 
-type PlatesExported = { files: Array<string>, format: string, 
+type PlatesExported = { 
+/**
+ * The files written, by path: the program's (empty where the files are downloads).
+ */
+files: Array<string>, 
+/**
+ * The files to save: the browser editor's (empty where the program wrote them).
+ */
+downloads: Array<Download>, format: string, 
 /**
  * The pieces that fail the printability gate, by tile.
  */

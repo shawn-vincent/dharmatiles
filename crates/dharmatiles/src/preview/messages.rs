@@ -211,22 +211,19 @@ pub(super) fn of_server_error(error: &ErrorDetail, tile: (&str, &str), origin: O
 )]
 pub(super) fn read(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> Reply {
     let since = param("since").and_then(|s| s.parse().ok()).unwrap_or(0);
-    let tile = param("tile");
     // one message by its number: the details of a row, in the same text as Copy all
-    let only: Option<u64> = param("seq").and_then(|s| s.parse().ok());
-    let want = |k: &str| param(k).filter(|v| !v.is_empty() && v != "all");
-    let (state, kind, severity) = (want("state"), want("kind"), want("severity"));
-    let found: Vec<_> = shared
-        .owner
-        .ask(|reply| super::owner::Command::Messages { tile, since, reply })
-        .into_iter()
-        .filter(|m| {
-            only.is_none_or(|n| n == m.seq)
-                && state.as_deref().is_none_or(|s| (s == "open") == m.open)
-                && kind.as_deref().is_none_or(|k| k == m.kind.as_str())
-                && severity.as_deref().is_none_or(|s| s == m.severity.as_str())
-        })
-        .collect();
+    let seq: Option<u64> = param("seq").and_then(|s| s.parse().ok());
+    let found = dt_service::message_calls::select(
+        shared,
+        &dt_service::message_calls::MessagesReq {
+            tile: param("tile"),
+            since: Some(since),
+            seq,
+            state: param("state"),
+            kind: param("kind"),
+            severity: param("severity"),
+        },
+    );
     match param("format").as_deref() {
         Some("text") => Reply::Body(
             "200 OK",
@@ -258,34 +255,36 @@ pub(super) fn report(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) ->
         return super::fail::refused("400 Bad Request", "report needs seq=N, a message's number")
             .into();
     };
-    let Some(m) = shared.owner.ask(|r| super::owner::Command::Message(seq, r)) else {
-        return super::fail::refused("404 Not Found", format!("no message {seq}")).into();
-    };
-    if !m.reportable() {
-        return super::fail::refused(
-            "400 Bad Request",
-            "this message is about your tile, not a defect in the program: there is nothing to report",
-        )
-        .into();
+    match dt_service::message_calls::report(
+        shared,
+        dt_service::message_calls::MessagesReportReq {
+            seq,
+            env: param("env"),
+            leave_source_out: Some(param("source").as_deref() == Some("0")),
+        },
+    ) {
+        Ok(r) => super::api::ok(&r).into(),
+        Err(r) => super::api::refusal_reply(r).into(),
     }
-    let source = if param("source").as_deref() == Some("0") {
-        None
-    } else {
-        match shared.text(&m.tile, None) {
-            Ok(t) => t.map(|t| t.text),
-            Err(e) => {
-                return super::fail::failure(
-                    "500 Internal Server Error",
-                    format!(
-                        "the tile's source could not be read for the report: {}",
-                        e.message
-                    ),
-                )
-                .into();
-            }
-        }
-    };
-    let env = param("env").unwrap_or_else(crate::report::environment);
-    let r = crate::report::of(&m, &env, source.as_deref());
-    super::api::ok(&r).into()
+}
+
+impl dt_service::message_calls::MessageHost for Shared {
+    fn messages(&self, tile: Option<String>, since: u64) -> Vec<dt_service::message::Message> {
+        self.owner
+            .ask(|reply| super::owner::Command::Messages { tile, since, reply })
+    }
+
+    fn message(&self, seq: u64) -> Option<dt_service::message::Message> {
+        self.owner.ask(|r| super::owner::Command::Message(seq, r))
+    }
+
+    fn source_of(&self, tile: &str) -> Result<Option<String>, String> {
+        self.text(tile, None)
+            .map(|t| t.map(|t| t.text))
+            .map_err(|e| e.message)
+    }
+
+    fn environment(&self) -> String {
+        crate::report::environment()
+    }
 }

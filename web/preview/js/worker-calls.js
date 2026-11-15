@@ -3,17 +3,16 @@
 // Every call there is (js/contract.js's ROUTES, generated from the program's one table of routes) has a row here, so a new call
 // cannot be forgotten: `tsc` fails on a row that is missing, and tests/worker-calls.test.js fails on a row that names no call.
 // A call is answered by the service in the worker (`service`), or refused in words by name: it needs the program, as a folder
-// chooser or showing a file in the file manager does (`program`), or it is not answered in the worker yet (`later`).  Never
-// answered empty.
+// chooser or showing a file in the file manager does (`program`).  Never answered empty.
 
 import { ROUTES } from './contract.js';
 
 /**
- * @typedef {'service' | 'worker' | { program: string } | { later: string }} InWorker
+ * @typedef {'service' | 'worker' | { program: string }} InWorker
  * `service`: the worker's service answers it as a verb of its table, by the call's name (`xtask/service.mjs` holds the table to this).
- * `worker`: the worker host answers it itself, in the page (the stream, a mesh, the page's own report of a failure).
+ * `worker`: the worker host answers it itself, in the page (the stream, a mesh, the page's own report of a failure, a sketch: a build
+ * here runs inside one call, so there is no sketch of it to fetch while it builds).
  * `program`: what only the native program can do, said as the thing the page asked for (`adding a folder`).
- * `later`: not answered in the worker yet, said the same way.
  */
 
 /** @type {Record<keyof typeof ROUTES, InWorker>} */
@@ -33,12 +32,12 @@ export const WORKER_CALLS = {
   renameFolder: 'service',
   trashFolder: 'service',
   undoTrash: 'service',
-  tiersWant: { later: 'the map\'s tiers' },
+  tiersWant: 'service',
   printersScan: { program: 'reading the slicers installed on this computer' },
   printersImport: { program: 'importing a printer from an installed slicer' },
   platesShow: 'service',
   platesSet: 'service',
-  platesExport: { later: 'the plates' },
+  platesExport: 'service',
   inventoryHave: 'service',
   inventoryRecord: 'service',
   inventoryGone: 'service',
@@ -66,7 +65,7 @@ export const WORKER_CALLS = {
   moveTile: 'service',
   duplicateTile: 'service',
   trashTile: 'service',
-  exportTile: { later: 'writing an STL or a 3MF' },
+  exportTile: 'service',
   offers: 'service',
   draft: 'service',
   step: 'service',
@@ -78,11 +77,11 @@ export const WORKER_CALLS = {
   snapshot: 'worker',
   text: 'service',
   mesh: 'worker',
-  sketch: { later: 'a build\'s sketches' },
-  tierResult: { later: 'the map\'s tiers' },
+  sketch: 'worker',
+  tierResult: 'service',
   events: 'worker',
-  messages: { later: 'the messages as text' },
-  messagesReport: { later: 'a defect report' },
+  messages: 'service',
+  messagesReport: 'service',
   testPanic: { program: 'the program\'s own failure test' },
   testIdle: { program: 'the program\'s own idle test' },
   testFailure: { program: 'the program\'s own failure test' },
@@ -96,13 +95,11 @@ export const WORKER_VERBS = new Set(
 );
 
 /**
- * What the page is told of a call the worker does not answer: what was asked, and why (the program, or not yet).
+ * What the page is told of a call the worker does not answer: what was asked, and that only the program can do it.
  * @param {keyof typeof ROUTES} call @returns {string}
  */
 export function refusalOf(call) {
   const how = WORKER_CALLS[call];
-  if (how === 'service' || how === 'worker') throw new Error(`${call} is answered in the worker: it has no refusal`);
-  return 'program' in how
-    ? `${how.program} needs the program (dharmatiles preview): a web page cannot do it`
-    : `${how.later} is not in the browser editor yet: it needs the program (dharmatiles preview)`;
+  if (typeof how === 'string') throw new Error(`${call} is answered in the worker: it has no refusal`);
+  return `${how.program} needs the program (dharmatiles preview): a web page cannot do it`;
 }

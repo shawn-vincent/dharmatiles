@@ -17,7 +17,7 @@ import { targetLabel } from './target.js';
  * What the export has done for the target `target`: it says what was written only while the target is the one it was
  * written for (a new target makes it no longer the answer), so nothing has to clear it.
  */
-const exporting = signal(/** @type {{ busy: boolean, files: string[] | null, error: string | null, out: { out?: string } | null, target: string | null }} */ ({ busy: false, files: null, error: null, out: null, target: null }));
+const exporting = signal(/** @type {{ busy: boolean, files: string[] | null, saved: boolean, error: string | null, out: { out?: string } | null, target: string | null }} */ ({ busy: false, files: null, saved: false, error: null, out: null, target: null }));
 const with3mf = signal(false); // the card's "Also a painted 3MF"
 const set = (/** @type {any} */ patch) => { exporting.value = { ...exporting.value, ...patch }; };
 const targetNow = () => targetLabel(server.get());
@@ -48,7 +48,7 @@ function showExport() {
   p.classList.toggle('bad', !!(why || x.error));
   p.title = !x.busy && !x.error && !files ? (mine ? x.out?.out : '') || '' : '';
   render(html`<${ExportWhy} busy=${x.busy} error=${x.error} files=${files} why=${why} out=${mine ? x.out : null} />`, p);
-  $('export-reveal').hidden = !files;
+  $('export-reveal').hidden = !files || x.saved; // a file the browser saved is in its downloads: there is nothing to reveal
 }
 
 /** The tile's name in the crumb and the title (its size is the tile level's row); the verdict, the progress and the record are the status line's and the messages panel's (panel.js). */
@@ -88,7 +88,7 @@ export function init() {
   $('export-go').onclick = async () => {
     const t = tile();
     if (!t || exportBlock()) return;
-    set({ busy: true, error: null, files: null, target: targetNow() });
+    set({ busy: true, error: null, files: null, saved: false, target: targetNow() });
     try {
       const r = await host.exportTile(t.id, { threemf: with3mf.value });
       if (r.status !== 200) {
@@ -97,7 +97,9 @@ export function init() {
       } else if ('files' in r.body) {
         // written; a tile that fails the printability gate is written too, and says so
         const fails = r.body.build.audit.failures;
-        set({ files: r.body.files, ...(fails.length ? { error: `Fails the gate: ${fails[0]}` } : {}) });
+        // the program writes its files where `dharmatiles build` does; the browser editor's answer is files to save
+        for (const d of r.body.downloads) host.saveFile(d);
+        set({ files: [...r.body.files, ...r.body.downloads.map((d) => d.name)], saved: r.body.downloads.length > 0, ...(fails.length ? { error: `Fails the gate: ${fails[0]}` } : {}) });
       }
     } catch (e) {
       set({ error: 'the export failed' });

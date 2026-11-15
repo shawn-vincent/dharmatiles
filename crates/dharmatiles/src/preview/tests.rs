@@ -2384,7 +2384,7 @@ fn a_failure_of_the_server_and_one_the_page_reports_are_messages_too() {
         ),
     );
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
-    let rep: crate::report::Report = read(&body);
+    let rep: dt_service::report::Report = read(&body);
     assert!(
         rep.url
             .starts_with("https://github.com/shawn-vincent/dharmatiles/issues/new?title="),

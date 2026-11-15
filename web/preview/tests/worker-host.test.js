@@ -58,12 +58,51 @@ test('a refusal comes back as the HTTP error body: its status, its words, and wh
   assert.equal(r.error?.kind, 'refused');
 });
 
-test('what the service does not answer yet is refused in words, by name, never answered empty', async () => {
+test('what only the program can do is refused in words, by name, never answered empty', async () => {
   const host = workerHost(undefined, fakeEngine({}));
-  const r = await host.platesExport('list');
+  const r = await host.addPlace();
   assert.equal(r.status, 501);
-  assert.match(r.body.error, /the plates is not in the browser editor yet/);
-  await assert.rejects(() => host.messagesText('abc'), /the messages as text is not in the browser editor yet/);
+  assert.match(r.body.error, /adding a folder as a place needs the program/);
+});
+
+test('an export is a file for the browser to save: the service answers its name, media type and bytes, and the page saves it', async () => {
+  const download = { name: 'tile-db.stl', mediaType: 'model/stl', data: Buffer.from('solid x').toString('base64') };
+  const engine = fakeEngine({
+    exportTile: () => ({ ok: true, json: JSON.stringify({ path: 'p', files: [], downloads: [download], build: {} }), events: '[]' }),
+    platesExport: () => ({ ok: true, json: JSON.stringify({ files: [], downloads: [download], format: 'stl', failures: [], plates: 1, totalS: 0, out: 'downloads' }), events: '[]' }),
+  });
+  const host = workerHost(undefined, engine);
+  const tile = await host.exportTile('abc', { threemf: true });
+  assert.deepEqual(tile.body.downloads, [download]);
+  assert.deepEqual(engine.calls[0], { op: 'call', verb: 'exportTile', tile: 'abc', request: JSON.stringify({ threemf: true }) });
+  assert.deepEqual((await host.platesExport('list')).body.downloads, [download]);
+  // the one generic file op: a Blob and a click on a link that downloads
+  const clicked = [];
+  const made = [];
+  globalThis.document = { createElement: () => { const a = { click: () => clicked.push({ href: a.href, download: a.download }), remove() {} }; return a; }, body: { append() {} } };
+  globalThis.URL.createObjectURL = (blob) => { made.push(blob); return 'blob:x'; };
+  globalThis.URL.revokeObjectURL = () => {};
+  const keep = globalThis.setTimeout;
+  globalThis.setTimeout = () => 0;
+  try { host.saveFile(download); } finally { globalThis.setTimeout = keep; delete globalThis.document; }
+  assert.deepEqual(clicked, [{ href: 'blob:x', download: 'tile-db.stl' }]);
+  assert.equal(made[0].type, 'model/stl');
+  assert.equal(await made[0].text(), 'solid x');
+});
+
+test('a map\'s tiers and the messages as text are the service\'s: the kept mesh is its bytes, empty when none is kept', async () => {
+  const engine = fakeEngine({
+    tiersWant: () => ({ ok: true, json: JSON.stringify({ keys: ['k'] }), events: '[]' }),
+    tierResult: () => ({ ok: true, bytes: new Uint8Array([1, 2, 3]), events: '[]' }),
+    messages: (m) => ({ ok: true, json: JSON.stringify({ text: `the text of ${m.request}` }), events: '[]' }),
+  });
+  const host = workerHost(undefined, engine);
+  assert.deepEqual((await host.tiersWant({ scope: 's', wants: [] })).body.keys, ['k']);
+  assert.deepEqual([...new Uint8Array(await host.tierResult('k', 3))], [1, 2, 3]);
+  assert.deepEqual(engine.calls.at(-1), { op: 'bytes', verb: 'tierResult', tile: '', request: JSON.stringify({ key: 'k', docRev: 3 }) });
+  assert.match(await host.messagesText('abc'), /the text of {"tile":"abc","state":"open"}/);
+  const none = fakeEngine({ tierResult: () => ({ ok: true, bytes: new Uint8Array(0), events: '[]' }) });
+  assert.equal(await workerHost(undefined, none).tierResult('k', 1), null);
 });
 
 test('a trap of the engine is thrown loudly with its words, not turned into an answer', async () => {

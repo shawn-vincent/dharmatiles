@@ -198,7 +198,7 @@ const Export = (/** @type {PlannedProps} */ { m, p, act }) => {
     ${x.error ? html`<p class="note bad">${x.error}</p>` : null}
     ${x.failures.map((/** @type {string} */ f, /** @type {number} */ i) => html`<p class="note bad" key=${i}>${`Gate: ${f}`}</p>`)}
     ${files ? html`<div class="pl-files">${files.map((/** @type {string} */ f) => html`<code title=${f} key=${f}>${f.split(/[\\/]/).slice(-3).join('/')}</code>`)}</div>
-      <button type="button" class="linkish" onClick=${() => act.reveal(files[0])}>Reveal in Finder</button>` : null}
+      ${x.saved ? null : html`<button type="button" class="linkish" onClick=${() => act.reveal(files[0])}>Reveal in Finder</button>`}` : null}
   <//>`;
 };
 

@@ -9,131 +9,30 @@
 //! (`GET /api/tiers/result?key=K&docRev=N`; 409 for a result of another revision, never that one).  The program owns
 //! the order and the work; the page owns the set of what it wants and nothing else.
 
-use std::collections::BTreeMap;
-
-use serde::{Deserialize, Serialize};
-
-use super::api::{Out, Reply, TileRefReply};
+use super::api::{Out, Reply};
 use super::owner::Command;
 use super::queue::Lane;
 use super::*;
 pub(super) use dt_service::tiers::BookOp;
 
-/// One tier of one piece's tile that the page wants.
-#[derive(Deserialize, Clone, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct TierWant {
-    pub tile: String,
-    /// `super-low`, `low` or `full`.
-    pub tier: dt_store::Tier,
-    pub seed: Option<u64>,
-    pub system: Option<dt_lang::System>,
-    pub printer: Option<String>,
-    /// A source text to build in place of the file's own (a step of the document's history): the file is not
-    /// edited, and the picture is kept by the text, so a text built before is not built again.
-    pub text: Option<String>,
-    /// The file `text` is of: the tile's own document, or a file its last build read.
-    pub file: Option<String>,
-}
+pub use dt_service::tier_calls::{TierWant, TiersWantReq, TiersWantRes};
 
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct TiersWantReq {
-    /// Whose wants these are (a map, the picture shelf): a post replaces the last of the same scope.
-    pub scope: String,
-    /// The document the work is for (a map's tile id): its pieces loading is one job of it, said as the document's
-    /// progress and in the messages like a build.  None for the picture shelf.
-    #[serde(default)]
-    pub doc: Option<String>,
-    pub wants: Vec<TierWant>,
-}
-
-/// The key of each want, in the order asked: what its result is announced and fetched by.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct TiersWantRes {
-    pub keys: Vec<String>,
-}
-
-pub(super) use dt_service::tile_calls::fnv;
-
-fn key_of(w: &TierWant) -> String {
-    let dash = || "-".to_owned();
-    format!(
-        "{}|{}|{}|{}|{}|{}",
-        w.tile,
-        w.tier,
-        w.seed.map_or_else(dash, |s| s.to_string()),
-        w.system.map_or_else(dash, |s| s.to_string()),
-        w.printer.clone().unwrap_or_else(dash),
-        w.text.as_deref().map_or_else(dash, |t| format!(
-            "{}:{:016x}",
-            w.file.as_deref().unwrap_or("-"),
-            fnv(t)
-        )),
-    )
-}
-
-/// A want, checked and ready to build.
-pub(crate) struct Ready {
-    pub(super) key: String,
-    pub(super) tile: String,
-    pub(super) path: String,
-    pub(super) opts: Options,
-    /// A text to build in place of a file's.
-    pub(super) overlay: Option<edit::Overlay>,
-}
+pub(crate) use dt_service::tier_calls::Ready;
 
 impl Shared {
     fn prepare(&self, w: &TierWant) -> Result<Ready, Reply> {
-        let Some((path, files)) = self.facts(&w.tile).map(|t| (t.path, t.files)) else {
-            return Err(fail::refused("404 Not Found", "no such tile"));
-        };
-        // the same rule as a draft's: the tile's own document, or a file its last build read
-        let overlay = match &w.text {
-            None => None,
-            Some(text) => {
-                let file = super::api::TileRef {
-                    id: w.tile.clone(),
-                    path: path.clone(),
-                    files,
-                }
-                .file(w.file.as_deref())?;
-                Some(edit::Overlay(BTreeMap::from([(file, text.clone())])))
-            }
-        };
-        let mut opts = self.options();
-        if w.tier == dt_store::Tier::Draft {
-            return Err(fail::refused(
-                "400 Bad Request",
-                "a tier is low, super-low or full",
-            ));
-        }
-        opts.tier = w.tier;
-        if let Some(s) = w.system {
-            opts.system = s;
-        }
-        opts.seed = w.seed.or(opts.seed);
-        if let Some(p) = w.printer.as_deref()
-            && p != opts.printer.name
-            && let Err(e) = opts.use_printer(p, self.home.as_deref())
-        {
-            return Err(fail::refused(
-                "400 Bad Request",
-                e.first().map_or_else(String::new, |d| d.message.clone()),
-            ));
-        }
-        Ok(Ready {
-            key: key_of(w),
-            tile: w.tile.clone(),
-            path,
-            opts,
-            overlay,
-        })
+        dt_service::tier_calls::prepare(
+            self,
+            |id| {
+                self.facts(id).map(|t| dt_service::tile_host::TileRef {
+                    id: id.to_owned(),
+                    path: t.path,
+                    files: t.files,
+                })
+            },
+            w,
+        )
+        .map_err(super::api::refusal_reply)
     }
 
     /// Say on the stream that `key` is done at `doc_rev` (or why it could not be, and whether that is a mistake in the
@@ -222,25 +121,15 @@ impl Shared {
         self.job_current(&r.key, &r.tile);
         let progress = dt_eval::Progress::new(Arc::new(queue::Cancelled(Arc::clone(cancel))));
         let ran = std::panic::catch_unwind(AssertUnwindSafe(|| {
-            let sources: &dyn dt_eval::Source = match &r.overlay {
-                Some(o) => o,
-                None => &dt_eval::Files,
-            };
+            let sources = dt_service::tier_calls::Sources::of(r, &dt_eval::Files);
             dt_store::build_stored(
-                sources,
+                &sources,
                 &r.path,
                 &r.opts,
                 &progress,
                 None,
                 self.store.as_deref(),
             )
-            .map(|b| {
-                if r.opts.tier == dt_store::Tier::Full {
-                    dt_eval::tiers::thin_built(b, MAP_FULL_TRIANGLES)
-                } else {
-                    b
-                }
-            })
         }));
         let built = match ran {
             Ok(b) => b,
@@ -278,14 +167,8 @@ impl Shared {
                 errs.iter().all(|d| crate::build::is_document_error(d.code)),
                 errs,
             )),
-            Ok(b) => payload::for_map(&b, r.opts.tier.name(), rev, &r.opts, &self.palette())
-                .map_err(|e| {
-                    (
-                        format!("cannot prepare the {} view: {e}", r.opts.tier.name()),
-                        false,
-                        Vec::new(),
-                    )
-                }),
+            Ok(b) => dt_service::tier_calls::tier_bytes(b, r, rev, &self.palette())
+                .map_err(|e| (e, false, Vec::new())),
         };
         match outcome {
             Ok(bytes) => {

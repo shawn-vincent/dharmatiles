@@ -28,6 +28,9 @@ use dt_service::draft_calls::{
     self, DRAFT, DraftAsk, DraftReq, Drafted, Mesh, STEP, StepReq, Stepped,
 };
 use dt_service::edit_calls::{self, EDIT, EditReq, EditRes, SAVE, SaveReq, SaveRes};
+use dt_service::export_calls::{
+    self, EXPORT_TILE, ExportReq, ExportRes, PLATES_EXPORT, PlatesExportReq, PlatesExported,
+};
 use dt_service::folder_calls::{
     self, DELETE_TILE, DUPLICATE_TILE, Deleted, FolderDone, FolderNamedReq, FolderReq, ListedIn,
     MOVE_TILE, NEW_FOLDER, PlaceHost, RENAME, RENAME_FOLDER, RenameReq, Restored, TRASH_FOLDER,
@@ -50,6 +53,9 @@ use dt_service::map_calls::{
     MapsPieced, MapsPinReq, MapsSetReq,
 };
 use dt_service::message::{Message, Scope};
+use dt_service::message_calls::{
+    self, MESSAGES, MESSAGES_REPORT, MessageHost, MessagesReportReq, MessagesReq, MessagesText,
+};
 use dt_service::owner::{Command, Core, Outside, Setup, Subscribed};
 use dt_service::patch::Patch;
 use dt_service::payload;
@@ -64,10 +70,13 @@ use dt_service::read_calls::{
     PrintedReq, PrintedRes, PrintedSetReq, PrintedSetRes, TEXT, TOKENS, TextReq as FileReq,
     TextRes, TokensReq, TokensRes,
 };
+use dt_service::report::Report;
 use dt_service::roots::{Role, Root, RootKind};
 use dt_service::scene_read::{SceneHost, SceneMemo};
 use dt_service::storage::{MemStorage, Storage};
 use dt_service::target_calls::{self, SET_TARGET, TargetHost, TargetReq, TargetRes};
+use dt_service::tier_calls::{self, TIERS_WANT, TierResultReq, TiersWantReq, TiersWantRes};
+use dt_service::tiers::BookOp;
 use dt_service::tile::{Slot, tile_id};
 use dt_service::tile_calls::{self, CHECK, CheckHost, TextReq};
 use dt_service::tile_host::{TileHost, TileRef};
@@ -822,6 +831,13 @@ impl PlatesHost for Ctx {
         dt_kit::Palette::default()
     }
 
+    fn bambu_template(&self, machine: &dt_eval::Machine) -> Result<Option<String>, String> {
+        Err(format!(
+            "plates for the {} are one Bambu Studio project, made from a template (a bambu.3mf of your own, saved from Bambu Studio) that a web page has no folder to find: use the program (dharmatiles preview), or pick a printer that makes STL or 3MF plates",
+            machine.label()
+        ))
+    }
+
     fn seconds(&self) -> f64 {
         // the page's clock (a web page has no `Instant`): milliseconds are small enough for a float to hold exactly
         #[expect(
@@ -933,6 +949,19 @@ impl TargetHost for Ctx {
 }
 
 impl Ctx {
+    /// A listed tile (by id) and the files its last build read; none when it is not listed.
+    fn tile_of(&self, id: &str) -> Option<TileRef> {
+        let f = self
+            .inner
+            .ask(|r| Command::Facts(id.to_owned(), r))
+            .expect("the owner answers facts in the same step")?;
+        Some(TileRef {
+            id: id.to_owned(),
+            path: f.path,
+            files: f.files,
+        })
+    }
+
     /// The tile this call is about, with the files its last build read (what a copy of a library tile pins its `use`s to).
     fn tile_ref(&self) -> TileRef {
         let id = tile_id(&self.tile);
@@ -1144,6 +1173,125 @@ fn plates_set(ctx: &Ctx, req: PlatesSetReq) -> Result<ListEdited, Refusal> {
     plates_calls::set(ctx, req)
 }
 
+/// `tiersWant` in the worker: the scope's wants replaced, and each piece not kept at its document's revision built here, in
+/// the call, one after another (the program queues them on its tier lane); each outcome is on the stream as the program's is,
+/// and the bytes are kept for `tierResult`.
+fn tiers_want(ctx: &Ctx, req: TiersWantReq) -> Result<TiersWantRes, Refusal> {
+    let inner = &ctx.inner;
+    let ready = req
+        .wants
+        .iter()
+        .map(|w| tier_calls::prepare(ctx, |id| ctx.tile_of(id), w))
+        .collect::<Result<Vec<_>, _>>()?;
+    let keys: Vec<String> = ready.iter().map(|r| r.key.clone()).collect();
+    // what the scope let go of is simply not asked for again: nothing of it is queued here to cancel
+    inner.ask(|reply| {
+        Command::Book(BookOp::Want {
+            scope: req.scope.clone(),
+            doc: req.doc.clone(),
+            keys: keys.clone(),
+            reply,
+        })
+    })?;
+    let announce =
+        |key: &str, doc_rev: u64, error: Option<String>, mistake: bool, code: Option<String>| {
+            inner.core.borrow_mut().apply(Command::Tier {
+                key: key.to_owned(),
+                doc_rev,
+                error,
+                mistake,
+                code,
+            });
+        };
+    for r in ready {
+        let rev = if r.path.starts_with(dt_eval::LIB) {
+            0
+        } else {
+            inner.docs.rev(&r.path)?
+        };
+        let have = inner.ask(|reply| Command::Book(BookOp::Have(r.key.clone(), reply)))?;
+        if have == Some(rev) {
+            announce(&r.key, rev, None, false, None);
+            continue;
+        }
+        let sources = tier_calls::Sources::of(&r, &inner.tiles);
+        let built =
+            dt_eval::build_cached(&sources, &r.path, &r.opts, &dt_eval::Progress::none(), None);
+        match built {
+            Ok(b) => match tier_calls::tier_bytes(b, &r, rev, &ctx.palette()) {
+                Ok(bytes) => {
+                    inner.core.borrow_mut().apply(Command::Book(BookOp::Keep {
+                        key: r.key.clone(),
+                        rev,
+                        bytes: Arc::new(bytes),
+                    }));
+                    announce(&r.key, rev, None, false, None);
+                }
+                Err(e) => announce(&r.key, rev, Some(e), false, None),
+            },
+            Err(errs) => {
+                // a mistake in the document's text is the document's to show; the page is told which it is
+                let message = errs
+                    .iter()
+                    .map(|d| d.message.clone())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                let mistake = errs.iter().all(|d| dt_eval::is_document_error(d.code));
+                let code = errs.first().filter(|_| mistake).map(|d| d.code.to_owned());
+                announce(&r.key, rev, Some(message), mistake, code);
+            }
+        }
+    }
+    Ok(TiersWantRes { keys })
+}
+
+fn messages(ctx: &Ctx, req: MessagesReq) -> Result<MessagesText, Refusal> {
+    message_calls::messages(ctx, req)
+}
+
+fn messages_report(ctx: &Ctx, req: MessagesReportReq) -> Result<Report, Refusal> {
+    message_calls::report(ctx, req)
+}
+
+impl MessageHost for Ctx {
+    fn messages(&self, tile: Option<String>, since: u64) -> Vec<Message> {
+        self.inner
+            .ask(|reply| Command::Messages { tile, since, reply })
+            .expect("the owner answers messages in the same step")
+    }
+
+    fn message(&self, seq: u64) -> Option<Message> {
+        self.inner
+            .ask(|r| Command::Message(seq, r))
+            .expect("the owner answers a message in the same step")
+    }
+
+    fn source_of(&self, tile: &str) -> Result<Option<String>, String> {
+        let t = self.tile_of(tile);
+        match t {
+            None => Ok(None),
+            Some(t) => read_calls::text(self, &t, None)
+                .map(|r| r.map(|r| r.text))
+                .map_err(|e| e.message),
+        }
+    }
+
+    fn environment(&self) -> String {
+        format!(
+            "Environment\n  dharmatiles   {} (browser editor)",
+            crate::version()
+        )
+    }
+}
+
+fn export_tile(ctx: &Ctx, req: ExportReq) -> Result<ExportRes, Refusal> {
+    export_calls::export_tile(ctx, &ctx.tile_ref(), &req)
+}
+
+fn plates_export(ctx: &Ctx, req: PlatesExportReq) -> Result<PlatesExported, Refusal> {
+    export_calls::export_plates(ctx, &req)
+}
+
 fn inventory_have(ctx: &Ctx, req: InventoryHaveReq) -> Result<InventoryWrote, Refusal> {
     inventory_calls::have(ctx, req)
 }
@@ -1214,6 +1362,11 @@ fn table() -> Table<Ctx, Refusal> {
         .with_json(&MAPS_UNPIN_ALL, maps_unpin_all)
         .with_json(&PLATES_SHOW, plates_show)
         .with_json(&PLATES_SET, plates_set)
+        .with_json(&TIERS_WANT, tiers_want)
+        .with_json(&MESSAGES, messages)
+        .with_json(&MESSAGES_REPORT, messages_report)
+        .with_json(&PLATES_EXPORT, plates_export)
+        .with_json(&EXPORT_TILE, export_tile)
         .with_json(&INVENTORY_HAVE, inventory_have)
         .with_json(&INVENTORY_RECORD, inventory_record)
         .with_json(&INVENTORY_GONE, inventory_gone)
@@ -1414,6 +1567,8 @@ impl Service {
             "step" => run(t, &ctx, &STEP, request)
                 .and_then(|s| s.bytes())
                 .map(Answered::Bytes),
+            // a kept tier's mesh: none (an empty answer: a payload is never empty) when it is not kept at that revision
+            "tierResult" => self.tier_result(request).map(Answered::Bytes),
             // every other verb is a row of the table that reads its request and writes its answer as JSON
             other => match t.call_json(&ctx, other, request) {
                 Some(Ok(json)) => Ok(Answered::Json(json)),
@@ -1438,6 +1593,30 @@ impl Service {
             .ask(|r| Command::Facts(tile.to_owned(), r))
             .expect("the owner answers facts in the same step")
             .map_or_else(|| tile.to_owned(), |f| f.path)
+    }
+
+    /// The kept result of a tier (`tierResult`): its bytes, or none (empty) when nothing is kept for the key at that
+    /// revision of the document.
+    fn tier_result(&self, request: &str) -> Result<Vec<u8>, Refusal> {
+        let req: TierResultReq = serde_json::from_str(request).map_err(|e| {
+            Refusal::refused(
+                Status::BadRequest,
+                format!("tierResult does not take this: {e}"),
+            )
+            .caused_by(&e)
+        })?;
+        let kept = self.inner.ask(|reply| {
+            Command::Book(BookOp::Result {
+                key: req.key.clone(),
+                doc_rev: Some(req.doc_rev),
+                reply,
+            })
+        })?;
+        // `Err(rev)`: it is of another revision, which is none for this one
+        Ok(match kept {
+            Ok(Some(bytes)) => bytes.as_ref().clone(),
+            Ok(None) | Err(_) => Vec::new(),
+        })
     }
 
     /// The refusal as the page reads it: the status and the error body, written as JSON for the thrown error.

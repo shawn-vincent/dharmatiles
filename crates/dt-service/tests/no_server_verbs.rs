@@ -171,6 +171,10 @@ impl dt_service::plates_calls::PlatesHost for World {
         None
     }
 
+    fn bambu_template(&self, _machine: &dt_eval::Machine) -> Result<Option<String>, String> {
+        Ok(None)
+    }
+
     fn full_kept(&self, _path: &str, _opts: &Options) -> bool {
         false
     }
@@ -1411,4 +1415,71 @@ fn the_inventory_is_read_and_added_to_by_verb_through_the_store_with_no_server_a
         inventory_calls::snapshot(&w),
         InventoryState::Broken { .. }
     ));
+}
+
+#[test]
+fn a_tile_is_exported_as_downloads_by_verb_with_no_server_and_no_disk() {
+    use dt_service::export_calls::{self, ExportReq, ExportRes};
+    let w = world();
+    let t = tile_ref();
+    // where the files would go: a browser has downloads, never a folder
+    let ExportRes::Where { out, .. } = export_calls::export_tile(
+        &w,
+        &t,
+        &ExportReq {
+            threemf: None,
+            ask_where: Some(true),
+        },
+    )
+    .expect("asking where is answered") else {
+        panic!("asking where answered files")
+    };
+    assert_eq!(out, "downloads");
+    // the tile built in full, through the gate: its STL, its record and the plain painted 3MF, as bytes
+    let ExportRes::Built(made) = export_calls::export_tile(
+        &w,
+        &t,
+        &ExportReq {
+            threemf: Some(true),
+            ask_where: None,
+        },
+    )
+    .expect("the tile exports") else {
+        panic!("an export answered where")
+    };
+    assert!(made.files.is_empty(), "nothing is written: the page saves");
+    let names: Vec<&str> = made.downloads.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(names.len(), 3, "{names:?}");
+    assert!(
+        names[0].ends_with("-db.stl") && names[0].starts_with("db/b-"),
+        "{names:?}"
+    );
+    assert!(
+        names[1].ends_with(".build.json") && names[2].ends_with(".3mf"),
+        "{names:?}"
+    );
+    let stl = made.downloads[0].bytes().expect("the data is base64");
+    // a binary STL: 80 bytes of header, a count, 50 bytes a triangle
+    let n = u32::from_le_bytes(stl[80..84].try_into().expect("four bytes")) as usize;
+    assert_eq!(stl.len(), 84 + 50 * n);
+    assert_eq!(made.downloads[0].media_type, "model/stl");
+    assert!(made.build.audit.failures.is_empty());
+    // the same bytes the command line writes: one function makes them
+    let again = dt_eval::build_cached(
+        &w.tiles,
+        PATH,
+        &dt_eval::Options {
+            tier: dt_eval::Tier::Full,
+            ..w.options.clone()
+        },
+        &dt_eval::Progress::none(),
+        None,
+    )
+    .expect("the tile builds");
+    let verdict = again.verdict(&w.options.printer);
+    assert_eq!(
+        stl,
+        dt_print::stl(&verdict.passed().expect("it passes")),
+        "the download is the STL"
+    );
 }

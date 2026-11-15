@@ -98,10 +98,10 @@ export const plan = computed(() => (isPlates(tileNow.value) ? panelOf(tileNow.va
 /** Is the plates' panel the one on show (a print list, not its map)? */
 export const platesOn = computed(() => isPlates(tileNow.value) && view.get().dmode !== 'map');
 
-/** @typedef {{ id: string | null, exporting: { busy: boolean, files: string[] | null, error: string | null, failures: string[] }, after: { open: boolean, plate: number, bad: number[], busy: boolean } }} PlatesUiState */
+/** @typedef {{ id: string | null, exporting: { busy: boolean, files: string[] | null, saved: boolean, error: string | null, failures: string[] }, after: { open: boolean, plate: number, bad: number[], busy: boolean } }} PlatesUiState */
 /** @typedef {{ id: string | null, filters: import('../inventory.js').Filters | null, face: string, reprint: string | null }} InventoryUiState */
 
-const freshUi = (/** @type {string | null} */ id) => /** @type {PlatesUiState} */ ({ id, exporting: { busy: false, files: null, error: null, failures: [] }, after: { open: false, plate: 1, bad: [], busy: false } });
+const freshUi = (/** @type {string | null} */ id) => /** @type {PlatesUiState} */ ({ id, exporting: { busy: false, files: null, saved: false, error: null, failures: [] }, after: { open: false, plate: 1, bad: [], busy: false } });
 const uiSignal = signal(freshUi(null));
 /**
  * What the user is in the middle of in the plates' panel, for the list shown: the sheet after a print (which plate,

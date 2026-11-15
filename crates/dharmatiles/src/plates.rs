@@ -10,10 +10,11 @@ use std::time::Instant;
 
 use crate::cli_wire::{PlatesChecked, PlatesReport, Refused};
 use dt_doc::map::{Group, Mode, PrintList};
-use dt_eval::{Built, Diag, Files, Options};
-use dt_print::plates::export::{self, Format};
+use dt_eval::{Diag, Files, Options};
+use dt_print::plates::builds::Builds;
+use dt_print::plates::export::Format;
 use dt_print::plates::wire::{PlanOnly, PlanPlate};
-use dt_print::plates::{self, Boxes, Context, Layout, Overrides, Plan};
+use dt_print::plates::{self, Context, Overrides, Plan};
 use dt_store::Store;
 
 use crate::{AUDIT_FAILED, ERROR, OK, report};
@@ -111,43 +112,8 @@ pub(crate) fn template_for(
     Ok(Some(settings))
 }
 
-/// What the build of every piece gave.
-pub(crate) struct Builds {
-    pub(crate) built: Vec<Built>,
-    /// The printer each piece was built for, whose gate judges it.
-    printers: Vec<dt_eval::Profile>,
-}
-
-impl Builds {
-    /// The gate's verdict on each piece.
-    pub(crate) fn verdicts(&self) -> Vec<dt_eval::Verdict<'_>> {
-        self.built
-            .iter()
-            .zip(&self.printers)
-            .map(|(b, p)| b.verdict(p))
-            .collect()
-    }
-
-    /// Each piece's gate failures (empty when it passed).
-    pub(crate) fn gate(&self) -> Vec<Vec<String>> {
-        self.verdicts()
-            .iter()
-            .map(|v| v.reasons().to_vec())
-            .collect()
-    }
-
-    /// Every piece's proof, when all of them passed: the only way to write the plates.
-    pub(crate) fn passed(&self) -> Option<Vec<dt_eval::Passed<'_>>> {
-        self.verdicts()
-            .iter()
-            .map(dt_eval::Verdict::passed)
-            .collect()
-    }
-}
-
-/// Build every distinct piece of a plan in full (through the cache when there
-/// is one), calling `step` before each with its number, the count and its
-/// name.
+/// Build every distinct piece of a plan in full (through the cache when there is one), calling `step` before each
+/// with its number, the count and its name: [`Builds::of`] with the disk cache's build.
 ///
 /// # Errors
 /// A piece that does not build.
@@ -158,40 +124,15 @@ pub(crate) fn build_all(
     store: Option<&Store>,
     step: &mut dyn FnMut(usize, usize, &str),
 ) -> Result<Builds, Vec<Diag>> {
-    let mut built = Vec::new();
-    let mut printers = Vec::new();
-    for (k, kind) in plan.kinds.iter().enumerate() {
-        step(k + 1, plan.kinds.len(), &kind.name);
-        let opts = plan.options(k, base, &dt_eval::OnDisk { home })?;
-        let opts = dt_eval::Options {
-            tier: dt_store::Tier::Full,
-            ..opts
-        };
-        let b = dt_store::build_stored(
-            &Files,
-            &kind.path,
-            &opts,
-            &dt_eval::Progress::none(),
-            None,
-            store,
-        )?;
-        printers.push(opts.printer);
-        built.push(b);
-    }
-    Ok(Builds { built, printers })
-}
-
-/// The layout the builds give.
-///
-/// # Errors
-/// A piece that does not fit, or needs too many filaments.
-pub(crate) fn layout_of(plan: &Plan, builds: &Builds) -> Result<Layout, Vec<Diag>> {
-    let boxes: Vec<Boxes> = builds
-        .built
-        .iter()
-        .map(|b| Boxes::of(&b.export.mesh, &b.materials))
-        .collect();
-    plates::layout(plan, &boxes)
+    Builds::of(
+        plan,
+        base,
+        &dt_eval::OnDisk { home },
+        step,
+        &mut |path, opts| {
+            dt_store::build_stored(&Files, path, opts, &dt_eval::Progress::none(), None, store)
+        },
+    )
 }
 
 /// The settings words a caller may give, as the command line's.
@@ -403,7 +344,7 @@ pub(crate) fn run(
         Ok(b) => b,
         Err(e) => return fail(&e, json),
     };
-    let layout = match layout_of(&plan, &builds) {
+    let layout = match builds.layout(&plan) {
         Ok(l) => l,
         Err(e) => return fail(&e, json),
     };
@@ -415,35 +356,21 @@ pub(crate) fn run(
             if n == 1 { "" } else { "s" }
         );
     }
-    let b0 = &builds.built[0];
-    let record = dt_kit::BuildRecord {
-        engine: b0.record.engine.clone(),
-        document: list_path.display().to_string(),
-        document_hash: b0.record.document_hash,
-        seed: 0,
-        system: s.system,
-        printer: s.machine.name.clone(),
-    };
     let gate = builds.gate();
     // a piece that failed the gate is never written: the plates wait for it to pass
-    let passed = builds.passed();
-    let files = match &passed {
-        Some(passed) => {
-            match export::write_set(
-                &plan,
-                &layout,
-                passed,
-                fmt,
-                palette,
-                tpl.as_deref(),
-                &record,
-            ) {
-                Ok(f) => f,
-                Err(e) => return fail(&[e], json),
-            }
-        }
-        None => Vec::new(),
+    let files = match builds.files(
+        &plan,
+        &layout,
+        fmt,
+        palette,
+        tpl.as_deref(),
+        &list_path.display().to_string(),
+    ) {
+        Ok(f) => f,
+        Err(e) => return fail(&[e], json),
     };
+    let passed = files.is_some();
+    let files = files.unwrap_or_default();
     let dest = out.join("plates").join(&title);
     if let Err(e) = std::fs::create_dir_all(&dest) {
         tell!("error: cannot create {}: {e}", dest.display());
@@ -459,7 +386,7 @@ pub(crate) fn run(
         written.push(p);
     }
     let report_json = PlatesReport {
-        ok: passed.is_some(),
+        ok: passed,
         plan: PlanOnly::of(&plan),
         plates: PlanPlate::of_layout(&plan, &layout, &dt_doc::map::piece_ids(&list)),
         grouping_cost: layout.grouping_cost,

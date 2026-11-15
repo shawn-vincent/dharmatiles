@@ -455,6 +455,8 @@ export function browserHost(requests = createRequests()) {
     exportTile: (id, body) => call('exportTile', body, id),
     /** Show a written file in the file manager. @param {string} path */
     reveal: (path) => call('reveal', { path }),
+    /** Save a file a call made (an export's download). @param {Parameters<typeof saveFile>[0]} file */
+    saveFile,
     /** The plate of a print list the view shows (from 0). @param {string} list @param {number} plate */
     platesShow: (list, plate) => call('platesShow', { list, plate }),
     /** Set a word of the list's `plates` line; value null removes it. @param {Req<'platesSet'>} body */
@@ -506,6 +508,24 @@ export function browserHost(requests = createRequests()) {
 // HTTP).  A call is its verb and its request as JSON; a refusal comes back as the same status and error body HTTP sends, so
 // the page reads one shape from either host.  Which calls the service answers is one table (js/worker-calls.js); a call it does
 // not answer (what only the program can do, or what is not in the worker yet) is refused in words, by name: never answered empty.
+
+/**
+ * Save a file a call made (a name, a media type, its bytes as base64): the browser's own download, with no server to write it.
+ * The one generic file op of the page: nothing else in it knows what an STL or a 3MF is.
+ * @param {import('./api').Download} file
+ */
+export function saveFile(file) {
+  const bytes = Uint8Array.from(atob(file.data), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: file.mediaType }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  // the download has started by the time the click returns; the address is let go a while after
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 /**
  * A refusal the page reads like any other, made here.
@@ -642,8 +662,6 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     const r = await serve({ op: 'bytes', verb, tile: id, request: JSON.stringify(body) });
     return 'refused' in r ? r.refused : { status: 200, buffer: bufferOf(/** @type {Uint8Array} */ (r.answer.bytes)) };
   };
-  /** A text call the worker does not answer: it throws the words of its refusal. @param {keyof typeof ROUTES} call @returns {() => Promise<never>} */
-  const noText = (call) => async () => { throw new Error(refusalOf(call)); };
 
   return {
     /** @param {StreamHandlers} handlers */
@@ -666,8 +684,14 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     },
     /** @param {Req<'tiersWant'>} body */
     tiersWant: (body) => call('tiersWant', body),
-    async tierResult() { return null; /* no tier is ever announced here, so none is ready */ },
-    async fetchSketch() { return null; /* a build here keeps no sketches */ },
+    /** The kept mesh of a tier, or null when none is kept at that revision. @param {string} key @param {number} docRev @returns {Promise<ArrayBuffer | null>} */
+    async tierResult(key, docRev) {
+      const r = await bytesOf('tierResult', { key, docRev }, '');
+      if (!('buffer' in r)) throw new Error(`the tier: ${r.error?.message}`, { cause: r.error });
+      return r.buffer.byteLength ? r.buffer : null; // a payload is never empty: empty is none kept
+    },
+    // a build here runs inside one call, so there is no sketch of it to fetch while it builds: none, as the program says once the build has moved on
+    async fetchSketch() { return null; },
     /** @param {string} id */
     async build(id) {
       const r = await callVerb('build', {}, id);
@@ -723,9 +747,12 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
       console.error(`the page reports: ${body.text}`, body);
       return { status: 200, body: {} };
     },
-    messagesText: noText('messages'),
-    messageText: noText('messages'),
-    messageReport: noText('messagesReport'),
+    /** @param {string} id */
+    messagesText: async (id) => (await read('messages', { tile: id, state: 'open' })).text,
+    /** @param {number} seq */
+    messageText: async (seq) => (await read('messages', { seq })).text,
+    /** @param {number} seq @param {{ env: string, leaveSourceOut: boolean }} o @returns {Promise<import('./api').Report>} */
+    messageReport: (seq, { env, leaveSourceOut }) => read('messagesReport', { seq, env, leaveSourceOut }),
     /** @param {string} name @param {string} size @param {{root: number, dir: string}} [into] */
     newTile: (name, size, into) => call('newTile', { name, size, ...(into ? { root: into.root, dir: into.dir } : {}) }),
     addPlace: () => call('addPlace', {}),
@@ -757,6 +784,8 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     exportTile: (id, body) => call('exportTile', body, id),
     /** @param {string} path */
     reveal: (path) => call('reveal', { path }),
+    /** @param {Parameters<typeof saveFile>[0]} file */
+    saveFile,
     /** @param {string} list @param {number} plate */
     platesShow: (list, plate) => call('platesShow', { list, plate }),
     /** @param {Req<'platesSet'>} body */

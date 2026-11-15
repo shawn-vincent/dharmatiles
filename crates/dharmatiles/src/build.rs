@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use crate::cli_wire::{BuildReport, BuildTile, Failed, Printed};
 use dt_eval::{Built, Diag, Files, Options, Source, Verdict};
-use dt_print::stl;
+
 use dt_render::{VIEWS, render};
 
 use crate::{AUDIT_FAILED, BUG, ERROR, OK, progress};
@@ -276,24 +276,18 @@ pub(crate) fn write(
         std::fs::write(p, bytes).map_err(|e| format!("cannot write {}: {e}", p.display()))
     };
     // only a build that passed the gate is exported; a low or failed one writes its views (and, once
-    // checked, its record) and nothing a printer reads
+    // checked, its record) and nothing a printer reads.  The files' bytes are `dt_print::tile_files`', the one
+    // function the browser editor's export makes them with too.
     let mut files = Vec::new();
-    let beside = path.with_extension("build.json");
-    let text = serde_json::to_string_pretty(record).map_err(|e| e.to_string())?;
-    if let Verdict::Passed(passed) = verdict {
-        w(&path, &stl(passed))?;
-        files.push(path.clone());
-    }
-    if !matches!(verdict, Verdict::NotChecked) {
-        w(&beside, text.as_bytes())?;
-        files.push(beside);
-    }
-    if let (Verdict::Passed(passed), true) = (verdict, extras.threemf) {
-        let p = path.with_extension("3mf");
-        let bytes = match extras.template {
-            Some(t) => dt_print::bambu_project(passed, extras.palette, t)?,
-            None => dt_print::threemf(passed, extras.palette),
-        };
+    for (name, bytes) in dt_print::tile_files(
+        b,
+        verdict,
+        record,
+        extras.threemf,
+        extras.template,
+        extras.palette,
+    )? {
+        let p = out.join(name);
         w(&p, &bytes)?;
         files.push(p);
     }
