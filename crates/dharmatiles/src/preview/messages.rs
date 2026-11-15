@@ -8,8 +8,8 @@ use super::api::ErrorDetail;
 use dt_eval::TileRecord;
 pub(super) use dt_service::message::Scope;
 use dt_service::message::{
-    BuildData, ExportData, Kind, Message, MessageData, MessagesRes, Origin, ServerData,
-    Severity, ShownData, render,
+    BuildData, ExportData, Kind, Message, MessageData, MessagesRes, Origin, ServerData, Severity,
+    ShownData, render,
 };
 
 use super::Shared;

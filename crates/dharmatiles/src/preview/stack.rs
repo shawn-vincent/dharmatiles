@@ -5,12 +5,11 @@
 //! type for the check's answer, the plan and every reader (its TypeScript
 //! type is generated from it).
 
-pub use dt_service::stack::{
-    StackItem, docs, items,
-};
+pub use dt_service::stack::{StackItem, items};
 
 #[cfg(test)]
 mod tests {
+    use dt_service::stack::docs;
 
     use dt_eval::{Files, Options};
 
@@ -270,7 +269,7 @@ mod tests {
         )
         .unwrap()
         {
-            assert!(v.href.starts_with(&super::docs()));
+            assert!(v.href.starts_with(&docs()));
         }
     }
 }

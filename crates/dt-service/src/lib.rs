@@ -27,7 +27,8 @@
 //! | `Program` (the host: alarms to stderr, `fail::now_ms`, `SideJob`, a failed draft's `ServerError`) | transport | stays in the binary: `Core<Program>` is the program's instance (`preview/owner.rs`), `Owner::start` is called there |
 //! | the typed verb table: [`call::Verb`], [`call::Table`] | seam | here: a call is a verb and a typed request in, a typed response out; the program builds its table from `calls!` (the calls that are not about a tile) and maps the answer to an HTTP reply |
 //! | `Shared`, the build lanes, `SideJob::run`, `Cancelled`, `Superseded`, `catch_unwind` | transport | stay in the binary: the lanes take a typed job from the owner and run it on `Shared` |
-//! | `tell!`, `lock`, `watch::mtime`, `fail`, the HTTP `Reply` and `Body`, the tile verbs of `calls!` (they take a `TileRef`) | transport | stay in the binary; moving the handlers (edit, save, check, build) is what a worker needs next |
+//! | the tile calls that need no transport: [`tile_calls`] (`check`, its types, `of_check`, `of_errors`, the stack's `items`) | seam | here: the program's handler and the web worker's `Service` (dt-web) call [`tile_calls::check`] through [`tile_calls::CheckHost`] |
+//! | `tell!`, `lock`, `watch::mtime`, `fail`, the HTTP `Reply` and `Body`, the other tile verbs of `calls!` (they take a `TileRef` and `Shared`) | transport | stay in the binary; moving those handlers (edit, save, places, plates, draft, step, build) behind `Host` is what is left |
 //!
 //! The wire types are written once, here, and `web/preview/js/api.d.ts` is generated from them (`ts-rs`), so a
 //! rename fails `tsc` in the page.

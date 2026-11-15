@@ -88,7 +88,6 @@ pub struct TextReq {
     pub file: Option<String>,
 }
 
-
 /// What a check says: that it read the tile, and each note it made (`dt::steep`, `dt::edge`).  `stack` is the
 /// plan's stack items, for the entry each note is about.
 #[must_use]
@@ -126,7 +125,13 @@ pub fn of_check(c: &dt_eval::Checked, id: &str, name: &str, stack: &[StackItem])
 
 /// A check or a build that stopped on mistakes: one message each.
 #[must_use]
-pub fn of_errors(errs: &[Diag], scope: Scope, id: &str, name: &str, stack: &[StackItem]) -> Vec<Message> {
+pub fn of_errors(
+    errs: &[Diag],
+    scope: Scope,
+    id: &str,
+    name: &str,
+    stack: &[StackItem],
+) -> Vec<Message> {
     errs.iter()
         .map(|d| Message::from_diag(d, scope, false, id, name, stack))
         .collect()
@@ -142,7 +147,9 @@ pub fn check<H: CheckHost>(host: &H, src: &dyn Source, tile: &str) -> Result<Che
     let id = crate::tile::tile_id(tile);
     // what this check found is said in the stream too: its mistakes, and the notes that were never shown
     let said = |errs: &[Diag]| {
-        host.report(&id, Scope::Check, |name| of_errors(errs, Scope::Check, &id, name, &[]));
+        host.report(&id, Scope::Check, |name| {
+            of_errors(errs, Scope::Check, &id, name, &[])
+        });
     };
     let unread = |errs: &[Diag]| CheckRes {
         ok: false,
@@ -159,7 +166,9 @@ pub fn check<H: CheckHost>(host: &H, src: &dyn Source, tile: &str) -> Result<Che
                 .as_ref()
                 .map(|t| stack::items(t, c.solved.as_ref(), opts.system))
             {
-                Some(Err(e)) => return Err(Failed(format!("cannot describe the stack of {tile}: {e}"))),
+                Some(Err(e)) => {
+                    return Err(Failed(format!("cannot describe the stack of {tile}: {e}")));
+                }
                 Some(Ok(items)) => Some(items),
                 None => None,
             };

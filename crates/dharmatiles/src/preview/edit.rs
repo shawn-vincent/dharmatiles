@@ -65,13 +65,13 @@ use dt_eval::Source;
 use serde::{Deserialize, Serialize};
 
 use super::api::{Out, Reply, TileRef};
-pub use dt_service::tile_calls::{CheckRes, TextReq};
 use super::places::{Listed, Nothing};
 use super::queue::Outcome;
 use super::roots::personal_home;
 use super::storage::Storage;
 use super::*;
 pub use dt_service::api::DraftTier;
+pub use dt_service::tile_calls::{CheckRes, TextReq};
 
 // ---- the calls' types ------------------------------------------------------------------
 
@@ -1242,7 +1242,8 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
         return Ok(super::lists::check_text(shared, tile, &text));
     }
     let src = Overlay(BTreeMap::from([(file.to_owned(), text)]));
-    dt_service::tile_calls::check(shared, &src, tile).map_err(|e| fail::failure("500 Internal Server Error", e.0))
+    dt_service::tile_calls::check(shared, &src, tile)
+        .map_err(|e| fail::failure("500 Internal Server Error", e.0))
 }
 
 /// May the editor write `file`?  Never the library, nor a read-only file.

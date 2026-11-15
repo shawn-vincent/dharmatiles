@@ -229,10 +229,6 @@ const SERVICE_TILE: &str = "lib:tiles/ground/1x1-grass.dtile";
 /// `cargo xtask parity --service`: the editor's service as a web worker will run it, under Node.  The bundle's
 /// `Service` is given one library tile and called by verb: `check`, then `buildNow`.  The program builds the same
 /// tile (`dharmatiles build`), and the two STLs' triangles must have the same SHA-256.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "permitted silence: an environment fact that is not readable is the meaning (the default target folder)"
-)]
 fn run_service(root: &Path) -> Result<(), String> {
     use sha2::{Digest, Sha256};
     let target =
@@ -275,15 +271,15 @@ fn run_service(root: &Path) -> Result<(), String> {
             .arg(&out),
     )?;
     let stl_path = out.join("db/ground/1x1-grass-db.stl");
-    let stl = std::fs::read(&stl_path)
-        .map_err(|e| format!("cannot read {}: {e}", stl_path.display()))?;
+    let stl =
+        std::fs::read(&stl_path).map_err(|e| format!("cannot read {}: {e}", stl_path.display()))?;
     let native: String = Sha256::digest(&stl[80..])
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    let said = browser["stlSha256"].as_str().ok_or_else(|| {
-        format!("service: the worker's answer has no stlSha256: {browser}")
-    })?;
+    let said = browser["stlSha256"]
+        .as_str()
+        .ok_or_else(|| format!("service: the worker's answer has no stlSha256: {browser}"))?;
     if said == native && browser["passed"] == Value::Bool(true) {
         println!(
             "service: check then buildNow by verb under Node gave the program's STL for {SERVICE_TILE} ({native})"
