@@ -2,8 +2,17 @@
 //! sheet after a print, gone, a tile that moved, a reprint into a print list,
 //! and what the plates make of it.  A scratch home of the test's own.
 
+use std::fmt::Debug;
+
+use super::plates::plates_planned;
 use super::*;
 use crate::inventory_wire::{ColourWord, InventoryRow, InventoryState};
+use crate::preview::inventory as calls_inventory;
+use crate::preview::inventory::SystemWord;
+use crate::preview::placing::Near;
+use crate::preview::resources::Resource;
+use crate::preview::scene::{SceneJson, ScenePiece};
+use crate::preview::{lists, maps, places, tiers};
 
 struct Home {
     dir: std::path::PathBuf,
@@ -30,8 +39,7 @@ fn start_home(name: &str, files: &[(&str, &str)]) -> Home {
     let (s, st) = (Arc::clone(&shared), Arc::clone(&stop));
     std::thread::spawn(move || work(&s, true, &st));
     let r = Running { addr, stop };
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
+    let token = session_token(&r);
     Home {
         dir,
         shared,
@@ -49,51 +57,61 @@ impl Home {
         tile_id(&self.path(f))
     }
 
-    fn call(&self, route: &str, body: Value) -> (String, Value) {
-        post_value(&self.r, route, Some(&self.token), None, &body.to_string())
+    /// A `POST` of a request type, with the token: the status line and the route's response type.
+    fn call<Q: Serialize, T: DeserializeOwned>(&self, route: &str, body: &Q) -> (String, T) {
+        post(&self.r, route, Some(&self.token), None, body)
+    }
+
+    /// A `POST` that fails or is refused: the status line and the error body.
+    fn refused<Q: Serialize>(&self, route: &str, body: &Q) -> (String, ErrorBody) {
+        post_err(&self.r, route, Some(&self.token), None, body)
+    }
+
+    /// A `POST` of which only the status line matters.
+    fn head<Q: Serialize>(&self, route: &str, body: &Q) -> String {
+        post_head(&self.r, route, Some(&self.token), None, body)
     }
 
     /// The revision the program holds for the document `id` (what the page names its edits against).
     fn rev(&self, id: &str) -> u64 {
-        let (_, body) = get(&self.r, &format!("/api/tiles/{id}/text"));
-        serde_json::from_slice::<Value>(&body).unwrap()["docRev"]
-            .as_u64()
-            .unwrap()
+        read::<route::TextRes>(&get(&self.r, &format!("/api/tiles/{id}/text")).1).doc_rev
     }
 
-    /// `body` as the page sends an edit: made against the revision the program holds now.
-    fn with_rev(&self, mut body: Value) -> Value {
-        let id = body["list"]
-            .as_str()
-            .or_else(|| body["tile"].as_str())
-            .unwrap()
-            .to_owned();
-        body["docRev"] = self.rev(&id).into();
-        body
+    /// An edit that is refused: the request made against the revision the program holds for `list` now; the
+    /// status line and the error body.
+    fn edit_refused<Q: Serialize>(
+        &self,
+        route: &str,
+        list: &str,
+        make: impl FnOnce(u64) -> Q,
+    ) -> (String, ErrorBody) {
+        self.refused(route, &make(self.rev(list)))
     }
 
-    fn edit_call(&self, route: &str, body: Value) -> (String, Value) {
-        self.call(route, self.with_rev(body))
-    }
-
-    fn edit(&self, route: &str, body: Value) -> Value {
-        self.ok(route, self.with_rev(body))
-    }
-
-    fn ok(&self, route: &str, body: Value) -> Value {
+    /// A call that must answer 200: its response type.
+    fn ok<Q: Serialize, T: DeserializeOwned + Debug>(&self, route: &str, body: &Q) -> T {
         let (head, v) = self.call(route, body);
-        assert!(head.starts_with("HTTP/1.1 200"), "{route}: {head} {v}");
+        assert!(head.starts_with("HTTP/1.1 200"), "{route}: {head} {v:?}");
         v
     }
 
-    fn snapshot(&self) -> Value {
-        serde_json::from_slice(&get(&self.r, "/api/tiles").1).unwrap()
+    /// An edit as the page sends it, made against the revision the program holds for `list` now, that must answer 200.
+    fn edited<Q: Serialize, T: DeserializeOwned + Debug>(
+        &self,
+        route: &str,
+        list: &str,
+        make: impl FnOnce(u64) -> Q,
+    ) -> T {
+        self.ok(route, &make(self.rev(list)))
+    }
+
+    fn snapshot(&self) -> Snapshot {
+        tiles(&self.r)
     }
 
     /// The snapshot's inventory, as its type.
     fn inventory(&self) -> InventoryState {
-        serde_json::from_value(self.snapshot()["inventory"].clone())
-            .expect("the snapshot's inventory is an InventoryState")
+        self.snapshot().inventory
     }
 
     /// The first piece the snapshot's inventory holds.
@@ -101,17 +119,12 @@ impl Home {
         self.inventory().pieces()[0].clone()
     }
 
-    fn tile(&self, f: &str) -> Option<Value> {
+    fn tile(&self, f: &str) -> Option<TileSummary> {
         let id = self.id(f);
-        self.snapshot()["tiles"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|t| t["id"] == id.as_str())
-            .cloned()
+        self.snapshot().tiles.into_iter().find(|t| t.id == id)
     }
 
-    fn wait(&self, f: &str, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Value {
+    fn wait(&self, f: &str, what: &str, mut ok: impl FnMut(&TileSummary) -> bool) -> TileSummary {
         let t0 = Instant::now();
         loop {
             // a folder's tiles build when they are chosen
@@ -123,7 +136,7 @@ impl Home {
             }
             assert!(
                 t0.elapsed() < Duration::from_secs(120),
-                "timed out waiting for {what}: {}",
+                "timed out waiting for {what}: {:?}",
                 self.snapshot()
             );
             std::thread::sleep(Duration::from_millis(100));
@@ -133,11 +146,145 @@ impl Home {
     fn text(&self) -> String {
         std::fs::read_to_string(self.dir.join("inventory.dinv")).unwrap()
     }
+
+    /// "I have this" for the file `f`, in `colour`, on the day `on`.
+    fn have_req(
+        &self,
+        f: &str,
+        colour: ColourWord,
+        on: Option<&str>,
+    ) -> calls_inventory::InventoryHaveReq {
+        calls_inventory::InventoryHaveReq {
+            tile: self.id(f),
+            colour,
+            system: None,
+            seed: None,
+            count: None,
+            on: on.map(str::to_owned),
+        }
+    }
 }
 
 impl Drop for Home {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+/// A map's scene, once its document plans.
+fn scene(t: &TileSummary) -> Option<&SceneJson> {
+    match &t.plan {
+        Some(TilePlan::Plates(d)) => d.scene.as_ref(),
+        _ => None,
+    }
+}
+
+/// The scene has `n` pieces.
+fn has_pieces(t: &TileSummary, n: usize) -> bool {
+    scene(t).is_some_and(|s| s.pieces.len() == n)
+}
+
+/// The piece named `id` in a scene.
+fn piece_of<'a>(s: &'a SceneJson, id: &str) -> &'a ScenePiece {
+    s.pieces
+        .iter()
+        .find(|p| p.id == id)
+        .unwrap_or_else(|| panic!("no piece {id} in the scene"))
+}
+
+/// A piece of the inventory as the calls name it (the glade, seed 5, DungeonBlocks).
+fn gone_req(tile: &str, colour: ColourWord) -> calls_inventory::InventoryGoneReq {
+    calls_inventory::InventoryGoneReq {
+        tile: tile.to_owned(),
+        seed: 5,
+        system: SystemWord::Db,
+        colour,
+        note: None,
+        on: None,
+    }
+}
+
+fn reprint_req(colour: ColourWord, list: Option<String>) -> calls_inventory::InventoryReprintReq {
+    calls_inventory::InventoryReprintReq {
+        tile: "home:clearing".to_owned(),
+        seed: 5,
+        system: SystemWord::Db,
+        colour,
+        list,
+        doc_rev: None,
+    }
+}
+
+fn new_list(name: &str, map: Option<bool>) -> lists::ListsNewReq {
+    lists::ListsNewReq {
+        name: Some(name.to_owned()),
+        root: None,
+        dir: None,
+        map,
+    }
+}
+
+fn add_req(tile: &str, list: Option<&str>) -> lists::ListsAddReq {
+    lists::ListsAddReq {
+        tile: tile.to_owned(),
+        list: list.map(str::to_owned),
+        seed: None,
+        system: None,
+        doc_rev: None,
+    }
+}
+
+fn piece_req(list: &str, id: &str, doc_rev: u64) -> maps::MapsPieceReq {
+    maps::MapsPieceReq {
+        list: list.to_owned(),
+        id: id.to_owned(),
+        doc_rev,
+    }
+}
+
+fn set_req(list: &str, id: &str, set: maps::PieceWords, doc_rev: u64) -> maps::MapsSetReq {
+    maps::MapsSetReq {
+        list: list.to_owned(),
+        id: id.to_owned(),
+        set,
+        doc_rev,
+    }
+}
+
+fn edit_of(id: &str, set: maps::PieceWords) -> maps::PieceEdit {
+    maps::PieceEdit {
+        id: id.to_owned(),
+        set,
+    }
+}
+
+fn add_piece_req(list: &str, tile: &str, doc_rev: u64) -> maps::MapsAddReq {
+    maps::MapsAddReq {
+        list: list.to_owned(),
+        tile: tile.to_owned(),
+        at: None,
+        near: None,
+        rot: None,
+        seed: None,
+        seed_word: None,
+        system: None,
+        doc_rev,
+    }
+}
+
+/// The words that turn a piece to `rot`.
+fn rot_words(rot: i64) -> maps::PieceWords {
+    maps::PieceWords {
+        rot: Some(Some(rot)),
+        ..Default::default()
+    }
+}
+
+fn folder_new_req(name: &str) -> places::FolderNamedReq {
+    places::FolderNamedReq {
+        root: 0,
+        dir: String::new(),
+        name: name.to_owned(),
     }
 }
 
@@ -152,25 +299,19 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     assert!(matches!(h.inventory(), InventoryState::Absent { .. }));
     assert!(!h.dir.join("inventory.dinv").exists());
     // a call needs the token
-    let body = serde_json::json!({"tile": h.id("glade.dtile"), "colour": "single"}).to_string();
-    assert!(
-        post_value(&h.r, "/api/inventory/have", None, None, &body)
-            .0
-            .starts_with("HTTP/1.1 403")
-    );
-    // a bad colour is refused, nothing written
-    let (head, _) = h.call(
-        "/api/inventory/have",
-        serde_json::json!({"tile": h.id("glade.dtile"), "colour": "rainbow"}),
-    );
+    let body = h.have_req("glade.dtile", ColourWord::Single, None);
+    assert!(post_head(&h.r, "/api/inventory/have", None, None, &body).starts_with("HTTP/1.1 403"));
+    // a bad colour is refused, nothing written (a word no type can say, so the body is the wire's own)
+    let raw = format!(r#"{{"tile":{:?},"colour":"rainbow"}}"#, h.id("glade.dtile"));
+    let (head, _) = post_raw(&h.r, "/api/inventory/have", Some(&h.token), None, &raw);
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     assert!(!h.dir.join("inventory.dinv").exists());
     // a print list or the inventory is not a tile
-    let v = h.ok(
+    let v: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        serde_json::json!({"tile": h.id("glade.dtile"), "colour": "multi", "on": "2026-11-12"}),
+        &h.have_req("glade.dtile", ColourWord::Multi, Some("2026-11-12")),
     );
-    assert_eq!(v["lines"].as_array().unwrap().len(), 1);
+    assert_eq!(v.lines.len(), 1);
     let text = h.text();
     assert!(
         text.contains(
@@ -194,15 +335,13 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     );
     // the file is a tile of My tiles now, opened as an inventory
     let t = h.wait("inventory.dinv", "the inventory document", |t| {
-        t["status"] == "ready" && t["plan"]["kind"] == "inventory"
+        t.status == "ready" && matches!(t.plan, Some(TilePlan::Inventory(_)))
     });
-    assert_eq!(t["plan"]["inventory"]["pieces"][0]["have"], 1);
-    assert!(
-        t["plan"]["inventory"]["text"]
-            .as_str()
-            .unwrap()
-            .contains("home:glade")
-    );
+    let Some(TilePlan::Inventory(doc)) = &t.plan else {
+        panic!("not an inventory's plan: {:?}", t.plan);
+    };
+    assert_eq!(doc.inventory.pieces[0].have, 1);
+    assert!(doc.inventory.text.contains("home:glade"));
     // the tile edited since it was printed: information only, it still counts
     std::fs::write(h.dir.join("glade.dtile"), format!("{GLADE}// edited\n")).unwrap();
     h.shared.rescan();
@@ -210,9 +349,9 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     assert!(piece.edited);
     assert_eq!(piece.have, 1);
     // a second print of the same piece is a second piece; a mistake in the file is never added to
-    h.ok(
+    let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        serde_json::json!({"tile": h.id("glade.dtile"), "colour": "multi"}),
+        &h.have_req("glade.dtile", ColourWord::Multi, None),
     );
     assert_eq!(h.first_piece().have, 2);
     let good = h.text();
@@ -221,20 +360,15 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
         good.replace("seed=5", "seed=\"x\""),
     )
     .unwrap();
-    let (head, v) = h.call(
+    let (head, v) = h.refused(
         "/api/inventory/have",
-        serde_json::json!({"tile": h.id("glade.dtile"), "colour": "multi"}),
+        &h.have_req("glade.dtile", ColourWord::Multi, None),
     );
+    assert!(head.starts_with("HTTP/1.1 422"), "{head} {v:?}");
+    let errors = v.errors.as_ref().expect("the file's mistakes");
     assert!(
-        head.starts_with("HTTP/1.1 422") && v["errors"].is_array(),
-        "{head} {v}"
-    );
-    assert!(
-        v["errors"][0]["message"]
-            .as_str()
-            .unwrap()
-            .contains("`seed` is a whole number"),
-        "{v}"
+        errors[0].message.contains("`seed` is a whole number"),
+        "{v:?}"
     );
     assert_eq!(h.text().matches("print ").count(), 2, "not a line added");
     // and the stream says so, loudly
@@ -247,16 +381,25 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
 fn the_sheet_after_a_print_adds_the_plate_good_and_failed_and_the_plates_shrink() {
     let h = start_home("sheet", &[("glade.dtile", GLADE), ("kit.dmap", KIT)]);
     let t = h.wait("kit.dmap", "the plates", |t| {
-        t["status"] == "ready" && t["plan"]["plates"]["planned"] == true
+        t.status == "ready" && plates_planned(t).is_some()
     });
-    let p = &t["plan"]["plates"];
-    assert_eq!(p["kinds"][0]["count"], 3);
-    assert_eq!(p["kinds"][0]["canon"], "home:glade");
-    assert_eq!(p["kinds"][0]["seedUsed"], 5);
-    assert_eq!(p["layout"][0]["pieces"].as_array().unwrap().len(), 3);
+    let p = plates_planned(&t).unwrap();
+    assert_eq!(p.kinds[0].planned.count, 3);
+    assert_eq!(p.kinds[0].planned.canon, "home:glade");
+    assert_eq!(p.kinds[0].planned.seed_used, 5);
+    assert_eq!(p.layout[0].pieces.len(), 3);
     // all three come off plate 1, the second one failed
-    let v = h.ok("/api/inventory/record", serde_json::json!({"list": h.id("kit.dmap"), "plate": 1, "failed": [1], "on": "2026-11-13"}));
-    assert_eq!(v["lines"].as_array().unwrap().len(), 3);
+    let kit = h.id("kit.dmap");
+    let v: calls_inventory::InventoryWrote = h.ok(
+        "/api/inventory/record",
+        &calls_inventory::InventoryRecordReq {
+            list: kit.clone(),
+            plate: 1,
+            failed: Some(vec![1]),
+            on: Some("2026-11-13".to_owned()),
+        },
+    );
+    assert_eq!(v.lines.len(), 3);
     let text = h.text();
     assert_eq!(text.matches("result=ok").count(), 2, "{text}");
     assert_eq!(text.matches("result=failed").count(), 1, "{text}");
@@ -272,38 +415,44 @@ fn the_sheet_after_a_print_adds_the_plate_good_and_failed_and_the_plates_shrink(
     assert_eq!((piece.have, piece.failed), (2, 1));
     // the list is laid out again against the shelf: one to print, two in the inventory
     let t = h.wait("kit.dmap", "the plates against the shelf", |t| {
-        t["status"] == "ready" && t["plan"]["plates"]["kinds"][0]["have"] == 2
+        t.status == "ready" && plates_planned(t).is_some_and(|p| p.kinds[0].planned.have == 2)
     });
-    let p = &t["plan"]["plates"];
-    assert_eq!(
-        (
-            p["kinds"][0]["want"].as_u64(),
-            p["kinds"][0]["count"].as_u64()
-        ),
-        (Some(3), Some(1))
-    );
-    assert_eq!(p["layout"][0]["pieces"].as_array().unwrap().len(), 1);
+    let p = plates_planned(&t).unwrap();
+    assert_eq!((p.kinds[0].planned.want, p.kinds[0].planned.count), (3, 1));
+    assert_eq!(p.layout[0].pieces.len(), 1);
     // the switch: everything prints again, written in the list's plates line
-    h.edit(
-        "/api/plates/set",
-        serde_json::json!({"list": h.id("kit.dmap"), "key": "inventory", "value": "ignore"}),
-    );
-    let t = h.wait("kit.dmap", "every piece", |t| {
-        t["status"] == "ready" && t["plan"]["plates"]["kinds"][0]["count"] == 3
+    let _: lists::ListEdited = h.edited("/api/plates/set", &kit, |doc_rev| {
+        crate::preview::plates::PlatesSetReq {
+            list: kit.clone(),
+            key: "inventory".to_owned(),
+            value: Some("ignore".to_owned()),
+            doc_rev,
+        }
     });
-    assert_eq!(t["plan"]["plates"]["checkInventory"], false);
-    let kit = std::fs::read_to_string(h.dir.join("kit.dmap")).unwrap();
+    let t = h.wait("kit.dmap", "every piece", |t| {
+        t.status == "ready" && plates_planned(t).is_some_and(|p| p.kinds[0].planned.count == 3)
+    });
+    assert!(!plates_planned(&t).unwrap().settings.check_inventory);
+    let kit_text = std::fs::read_to_string(h.dir.join("kit.dmap")).unwrap();
     assert!(
-        kit.contains("inventory=ignore") || kit.contains("inventory=\"ignore\""),
-        "{kit}"
+        kit_text.contains("inventory=ignore") || kit_text.contains("inventory=\"ignore\""),
+        "{kit_text}"
     );
     // a plate that is not there, a piece that is not on it, and a list that is not one are refused
-    for body in [
-        serde_json::json!({"list": h.id("kit.dmap"), "plate": 9}),
-        serde_json::json!({"list": h.id("kit.dmap"), "plate": 1, "failed": [7]}),
-        serde_json::json!({"list": h.id("glade.dtile"), "plate": 1}),
+    for (list, plate, failed) in [
+        (kit.clone(), 9, None),
+        (kit.clone(), 1, Some(vec![7])),
+        (h.id("glade.dtile"), 1, None),
     ] {
-        let (head, _) = h.call("/api/inventory/record", body);
+        let head = h.head(
+            "/api/inventory/record",
+            &calls_inventory::InventoryRecordReq {
+                list,
+                plate,
+                failed,
+                on: None,
+            },
+        );
         assert!(
             head.starts_with("HTTP/1.1 400") || head.starts_with("HTTP/1.1 404"),
             "{head}"
@@ -319,17 +468,23 @@ fn the_sheet_after_a_print_adds_the_plate_good_and_failed_and_the_plates_shrink(
 #[test]
 fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
     let h = start_home("moves", &[("glade.dtile", GLADE), ("kit.dmap", KIT)]);
-    h.ok("/api/inventory/have", serde_json::json!({"tile": h.id("glade.dtile"), "colour": "single", "count": 2, "on": "2026-11-09"}));
+    let _: calls_inventory::InventoryWrote = h.ok(
+        "/api/inventory/have",
+        &calls_inventory::InventoryHaveReq {
+            count: Some(2),
+            ..h.have_req("glade.dtile", ColourWord::Single, Some("2026-11-09"))
+        },
+    );
     let before = h.text();
     // gone: one of the piece; none to take away is refused
-    let piece =
-        serde_json::json!({"tile": "home:glade", "seed": 5, "system": "db", "colour": "single"});
-    h.ok("/api/inventory/gone", {
-        let mut b = piece.clone();
-        b["on"] = "2026-11-10".into();
-        b["note"] = "dropped on the floor".into();
-        b
-    });
+    let _: calls_inventory::InventoryWrote = h.ok(
+        "/api/inventory/gone",
+        &calls_inventory::InventoryGoneReq {
+            on: Some("2026-11-10".to_owned()),
+            note: Some("dropped on the floor".to_owned()),
+            ..gone_req("home:glade", ColourWord::Single)
+        },
+    );
     let piece = h.first_piece();
     assert_eq!((piece.have, piece.gone), (1, 1));
     let after = h.text();
@@ -338,17 +493,19 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         "every earlier byte kept"
     );
     assert!(after.contains("gone \"home:glade\" seed=5 system=db colour=single on=\"2026-11-10\" note=\"dropped on the floor\""), "{after}");
-    let none =
-        serde_json::json!({"tile": "home:glade", "seed": 5, "system": "db", "colour": "multi"});
     assert!(
-        h.call("/api/inventory/gone", none)
-            .0
-            .starts_with("HTTP/1.1 409")
+        h.head(
+            "/api/inventory/gone",
+            &gone_req("home:glade", ColourWord::Multi)
+        )
+        .starts_with("HTTP/1.1 409")
     );
     // renaming the tile in the editor adds a renamed line, and the count follows
-    let (head, _) = h.call(
+    let (head, _): (String, places::Listed) = h.call(
         &format!("/api/tiles/{}/rename", h.id("glade.dtile")),
-        serde_json::json!({"name": "meadow"}),
+        &edit::RenameReq {
+            name: "meadow".to_owned(),
+        },
     );
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert!(
@@ -363,9 +520,12 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
     // a tile moved into a folder follows too (the move route)
     std::fs::create_dir_all(h.dir.join("sets")).unwrap();
     h.shared.rescan();
-    let (head, _) = h.call(
+    let (head, _): (String, places::ListedIn) = h.call(
         &format!("/api/tiles/{}/move", h.id("meadow.dtile")),
-        serde_json::json!({"root": 0, "dir": "sets"}),
+        &places::TileMoveReq {
+            root: 0,
+            dir: "sets".to_owned(),
+        },
     );
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert_eq!(h.first_piece().tile, "home:sets/meadow");
@@ -377,7 +537,14 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
     .unwrap();
     h.shared.rescan();
     assert!(h.first_piece().missing);
-    h.ok("/api/inventory/relink", serde_json::json!({"from": "home:sets/meadow", "to": h.id("clearing.dtile"), "on": "2026-11-11"}));
+    let _: calls_inventory::InventoryWrote = h.ok(
+        "/api/inventory/relink",
+        &calls_inventory::InventoryRelinkReq {
+            from: "home:sets/meadow".to_owned(),
+            to: h.id("clearing.dtile"),
+            on: Some("2026-11-11".to_owned()),
+        },
+    );
     let piece = h.first_piece();
     assert_eq!(
         (piece.tile.as_str(), piece.missing),
@@ -390,24 +557,31 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         h.text()
     );
     assert!(
-        h.call(
+        h.head(
             "/api/inventory/relink",
-            serde_json::json!({"from": "home:never", "to": h.id("clearing.dtile")})
+            &calls_inventory::InventoryRelinkReq {
+                from: "home:never".to_owned(),
+                to: h.id("clearing.dtile"),
+                on: None,
+            }
         )
-        .0
         .starts_with("HTTP/1.1 409")
     );
     // renaming a folder carries the tiles in it
     std::fs::create_dir_all(h.dir.join("old")).unwrap();
     std::fs::write(h.dir.join("old/pond.dtile"), GLADE).unwrap();
     h.shared.rescan();
-    h.ok(
+    let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        serde_json::json!({"tile": h.id("old/pond.dtile"), "colour": "single"}),
+        &h.have_req("old/pond.dtile", ColourWord::Single, None),
     );
-    let (head, _) = h.call(
+    let (head, _): (String, places::FolderDone) = h.call(
         "/api/folders/rename",
-        serde_json::json!({"root": 0, "dir": "old", "name": "new"}),
+        &places::FolderNamedReq {
+            root: 0,
+            dir: "old".to_owned(),
+            name: "new".to_owned(),
+        },
     );
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert!(
@@ -417,11 +591,11 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         h.text()
     );
     // reprint: a piece you still have goes into the list with print=always, its recorded seed and system
-    let v = h.ok("/api/inventory/reprint", serde_json::json!({"tile": "home:clearing", "seed": 5, "system": "db", "colour": "single", "list": h.id("kit.dmap")}));
-    assert_eq!(
-        (v["always"].clone(), v["made"].clone()),
-        (serde_json::json!(true), serde_json::json!(false))
+    let v: calls_inventory::InventoryReprinted = h.ok(
+        "/api/inventory/reprint",
+        &reprint_req(ColourWord::Single, Some(h.id("kit.dmap"))),
     );
+    assert_eq!((v.always, v.made), (true, false));
     let kit = std::fs::read_to_string(h.dir.join("kit.dmap")).unwrap();
     assert!(
         kit.contains("piece p2 \"home:clearing\" count=1 seed=5 system=db print=always"),
@@ -432,16 +606,16 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         "the rest is kept: {kit}"
     );
     // a piece you have none of is a plain piece; no list makes a new one, laid out for the piece's colour mode
-    h.ok(
+    let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/gone",
-        serde_json::json!({"tile": "home:clearing", "seed": 5, "system": "db", "colour": "single"}),
+        &gone_req("home:clearing", ColourWord::Single),
     );
-    let v = h.ok(
+    let v: calls_inventory::InventoryReprinted = h.ok(
         "/api/inventory/reprint",
-        serde_json::json!({"tile": "home:clearing", "seed": 5, "system": "db", "colour": "multi"}),
+        &reprint_req(ColourWord::Multi, None),
     );
-    assert_eq!(v["made"], true);
-    let made = std::fs::read_to_string(v["list"].as_str().unwrap()).unwrap();
+    assert!(v.made);
+    let made = std::fs::read_to_string(&v.list).unwrap();
     assert!(
         made.contains("piece p1 \"home:clearing\" count=1 seed=5 system=db\n")
             && !made.contains("always"),
@@ -453,62 +627,65 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         "it reads as a print list"
     );
     // a list with a different colour mode is warned about, not refused
-    let v = h.ok("/api/inventory/reprint", serde_json::json!({"tile": "home:clearing", "seed": 5, "system": "db", "colour": "multi", "list": h.id("kit.dmap")}));
+    let v: calls_inventory::InventoryReprinted = h.ok(
+        "/api/inventory/reprint",
+        &reprint_req(ColourWord::Multi, Some(h.id("kit.dmap"))),
+    );
+    let warning = v.warning.as_deref().unwrap_or_default();
     assert!(
-        v["warning"].as_str().unwrap().contains("single colour")
-            || v["warning"].as_str().unwrap().contains("multicolour"),
-        "{v}"
+        warning.contains("single colour") || warning.contains("multicolour"),
+        "{v:?}"
     );
 }
 
 #[test]
 fn undo_is_refused_when_the_file_changed_since_the_edit() {
     let h = start_home("undo409", &[("glade.dtile", GLADE)]);
-    h.call("/api/lists/new", serde_json::json!({"name": "Crossing"}));
+    let _: places::Listed = h.ok("/api/lists/new", &new_list("Crossing", None));
     let file = h.dir.join("Crossing.dmap");
     let list = h.id("Crossing.dmap");
-    let b = h.ok(
+    let b: lists::ListsAddRes = h.ok(
         "/api/lists/add",
-        serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
+        &add_req(&h.id("glade.dtile"), Some(&list)),
     );
-    let (before, rev) = (b["before"].clone(), b["docRev"].clone());
+    let (before, rev) = (b.edited.before.clone().unwrap(), b.edited.doc_rev);
     // the file is changed behind the editor's back (another tab, a text editor)
     let other = std::fs::read_to_string(&file)
         .unwrap()
         .replace("count=1", "count=7");
     assert!(other.contains("count=7"), "{other}");
     std::fs::write(&file, &other).unwrap();
-    let (head, v) = h.call(
+    let (head, v) = h.refused(
         "/api/lists/restore",
-        serde_json::json!({"list": list, "text": before, "docRev": rev}),
+        &lists::ListsRestoreReq {
+            list: list.clone(),
+            text: before.clone(),
+            doc_rev: rev,
+        },
     );
-    assert!(head.starts_with("HTTP/1.1 409"), "{head} {v}");
+    assert!(head.starts_with("HTTP/1.1 409"), "{head} {v:?}");
     assert!(
-        v["docRev"].as_u64().unwrap() > rev.as_u64().unwrap(),
-        "the file's change is a revision of its own: {v}"
+        v.doc_rev.unwrap() > rev,
+        "the file's change is a revision of its own: {v:?}"
     );
     assert_eq!(
-        v["text"],
-        other.as_str(),
+        v.text.as_deref(),
+        Some(other.as_str()),
         "the answer carries the file as it is"
     );
-    assert!(
-        v["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("changed since this edit"),
-        "{v}"
-    );
+    assert!(v.error.message.contains("changed since this edit"), "{v:?}");
     assert_eq!(
         std::fs::read_to_string(&file).unwrap(),
         other,
         "nothing was written"
     );
-    // a restore that says nothing of the revision it expects is not a restore
-    let (head, _) = h.call(
-        "/api/lists/restore",
-        serde_json::json!({"list": list, "text": before}),
+    // a restore that says nothing of the revision it expects is not a restore (a body the request type cannot
+    // write: `docRev` is not optional, so this one is the wire's own)
+    let raw = format!(
+        r#"{{"list":{list:?},"text":{}}}"#,
+        serde_json::to_string(&before).unwrap()
     );
+    let (head, _) = post_raw(&h.r, "/api/lists/restore", Some(&h.token), None, &raw);
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), other);
 }
@@ -517,84 +694,79 @@ fn undo_is_refused_when_the_file_changed_since_the_edit() {
 fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     let h = start_home("lists", &[("glade.dtile", GLADE)]);
     // a new list in My tiles: an empty map for the printer last chosen, never over a file
-    let (head, v) = h.call("/api/lists/new", serde_json::json!({"name": "Crossing"}));
-    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    let (head, v): (String, places::Listed) = h.call("/api/lists/new", &new_list("Crossing", None));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
     let text = std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap();
     assert!(
         text.contains("map {") && text.contains("plates printer=\"bambu/x1c-ams\" system=db"),
         "{text}"
     );
     assert!(dt_doc::map::decode("c", &text).is_ok());
-    let (_, v2) = h.call("/api/lists/new", serde_json::json!({"name": "Crossing"}));
-    assert!(
-        v2["path"].as_str().unwrap().ends_with("Crossing 2.dmap"),
-        "{v2}"
-    );
+    let (_, v2): (String, places::Listed) = h.call("/api/lists/new", &new_list("Crossing", None));
+    assert!(v2.path.ends_with("Crossing 2.dmap"), "{v2:?}");
     // a name that climbs out of the folder is a name, not a path
-    h.call(
-        "/api/lists/new",
-        serde_json::json!({"name": "../../escape"}),
-    );
+    h.head("/api/lists/new", &new_list("../../escape", None));
     assert!(!h.dir.join("../../escape.dmap").exists());
     let list = h.id("Crossing.dmap");
+    let glade = h.id("glade.dtile");
     // add a tile: a piece; again: its count; the program says what it replaced, for Undo
-    let b = h.ok(
-        "/api/lists/add",
-        serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
-    );
-    assert_eq!(
-        (b["count"].as_u64(), b["made"].clone()),
-        (Some(1), serde_json::json!(false))
-    );
-    let b = h.ok(
-        "/api/lists/add",
-        serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
-    );
-    assert_eq!(b["count"], 2);
-    let before = b["before"].as_str().unwrap().to_owned();
+    let b: lists::ListsAddRes = h.ok("/api/lists/add", &add_req(&glade, Some(&list)));
+    assert_eq!((b.count, b.made), (1, false));
+    let b: lists::ListsAddRes = h.ok("/api/lists/add", &add_req(&glade, Some(&list)));
+    assert_eq!(b.count, 2);
+    let before = b.edited.before.clone().unwrap();
     let now = std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap();
     assert!(now.contains("piece p1 \"home:glade\" count=2"), "{now}");
     assert!(before.contains("count=1"));
     // the plates are laid out again with the two
     h.wait("Crossing.dmap", "two pieces planned", |t| {
-        t["status"] == "ready" && t["plan"]["plates"]["pieces"][0]["count"] == 2
+        t.status == "ready" && plates_planned(t).is_some_and(|p| p.pieces[0].count == 2)
     });
     // count and remove through the panel's calls, Undo by restore
     // the pieces are named by id (the editor wrote them), and nothing needs saying
-    let c = h.edit(
-        "/api/lists/count",
-        serde_json::json!({"list": list, "id": "p1", "count": 5}),
-    );
-    assert!(c.get("note").is_none_or(Value::is_null), "{c}");
+    let c: lists::ListEdited =
+        h.edited("/api/lists/count", &list, |doc_rev| lists::ListsCountReq {
+            list: list.clone(),
+            id: "p1".to_owned(),
+            count: 5,
+            doc_rev,
+        });
+    assert!(c.note.is_none(), "{c:?}");
     assert!(
         std::fs::read_to_string(h.dir.join("Crossing.dmap"))
             .unwrap()
             .contains("count=5")
     );
     assert!(
-        h.edit_call(
-            "/api/lists/count",
-            serde_json::json!({"list": list, "id": "p1", "count": 0})
-        )
+        h.edit_refused("/api/lists/count", &list, |doc_rev| lists::ListsCountReq {
+            list: list.clone(),
+            id: "p1".to_owned(),
+            count: 0,
+            doc_rev,
+        })
         .0
         .starts_with("HTTP/1.1 400")
     );
-    let r = h.edit(
-        "/api/lists/remove",
-        serde_json::json!({"list": list, "id": "p1"}),
-    );
-    assert!(
-        r.get("note").is_none_or(Value::is_null),
-        "ids are written once: {r}"
-    );
+    let r: lists::ListEdited = h.edited("/api/lists/remove", &list, |doc_rev| {
+        lists::ListsRemoveReq {
+            list: list.clone(),
+            id: "p1".to_owned(),
+            doc_rev,
+        }
+    });
+    assert!(r.note.is_none(), "ids are written once: {r:?}");
     assert!(
         !std::fs::read_to_string(h.dir.join("Crossing.dmap"))
             .unwrap()
             .contains("piece")
     );
-    h.ok(
+    let _: lists::ListEdited = h.ok(
         "/api/lists/restore",
-        serde_json::json!({"list": list, "text": r["before"], "docRev": r["docRev"]}),
+        &lists::ListsRestoreReq {
+            list: list.clone(),
+            text: r.before.clone().unwrap(),
+            doc_rev: r.doc_rev,
+        },
     );
     assert!(
         std::fs::read_to_string(h.dir.join("Crossing.dmap"))
@@ -602,13 +774,10 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
             .contains("count=5")
     );
     // a tile with no list named starts a new one holding it
-    let b = h.ok(
-        "/api/lists/add",
-        serde_json::json!({"tile": h.id("glade.dtile")}),
-    );
-    assert_eq!(b["made"], true);
+    let b: lists::ListsAddRes = h.ok("/api/lists/add", &add_req(&glade, None));
+    assert!(b.made);
     assert!(
-        std::fs::read_to_string(b["path"].as_str().unwrap())
+        std::fs::read_to_string(&b.edited.path)
             .unwrap()
             .contains("piece p1 \"home:glade\"")
     );
@@ -618,13 +787,10 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
         "dharmatiles version=1\nmap {\n piece\n}\n",
     )
     .unwrap();
-    let (head, v) = h.call(
-        "/api/lists/add",
-        serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
-    );
+    let (head, v) = h.refused("/api/lists/add", &add_req(&glade, Some(&list)));
     assert!(
-        head.starts_with("HTTP/1.1 422") && v["errors"].is_array(),
-        "{head} {v}"
+        head.starts_with("HTTP/1.1 422") && v.errors.is_some(),
+        "{head} {v:?}"
     );
     assert_eq!(
         std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap(),
@@ -633,17 +799,18 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     // the source of a list is served, saved with the token, and checked by its decoder
     let (head, body) = get(&h.r, &format!("/api/tiles/{list}/text"));
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
-    let served: Value = serde_json::from_slice(&body).unwrap();
-    assert!(
-        served["text"].as_str().unwrap().contains("map {"),
-        "{served}"
-    );
+    let served: route::TextRes = read(&body);
+    assert!(served.text.contains("map {"), "{served:?}");
     let edited = "dharmatiles version=1\nmap {\n piece \"home:glade\" count=7\n}\n";
-    let (head, v) = h.call(
+    let (head, v): (String, edit::SaveRes) = h.call(
         &format!("/api/tiles/{list}/save"),
-        serde_json::json!({"text": edited, "docRev": served["docRev"]}),
+        &edit::SaveReq {
+            text: edited.to_owned(),
+            doc_rev: served.doc_rev,
+            file: None,
+        },
     );
-    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
     assert_eq!(
         std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap(),
         edited
@@ -651,26 +818,24 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     h.wait(
         "Crossing.dmap",
         "the plates planned again from the saved source",
-        |t| t["status"] == "ready" && t["plan"]["plates"]["pieces"][0]["count"] == 7,
+        |t| t.status == "ready" && plates_planned(t).is_some_and(|p| p.pieces[0].count == 7),
     );
     // the source of a list is checked by its decoder, mistakes at their text
-    let (_, c) = h.call(
-        &format!("/api/tiles/{list}/check"),
-        serde_json::json!({"text": "dharmatiles version=1\nmap {\n piece \"x\" count=0\n}\n"}),
-    );
-    assert_eq!(c["ok"], false, "{c}");
-    assert!(
-        c["errors"][0]["message"]
-            .as_str()
-            .unwrap()
-            .contains("count"),
-        "{c}"
-    );
-    let (_, c) = h.call(
-        &format!("/api/tiles/{list}/check"),
-        serde_json::json!({"text": "dharmatiles version=1\nmap {\n piece \"x\"\n}\n"}),
-    );
-    assert_eq!(c["ok"], true, "{c}");
+    let check = |text: &str| -> edit::CheckRes {
+        h.call(
+            &format!("/api/tiles/{list}/check"),
+            &edit::TextReq {
+                text: text.to_owned(),
+                file: None,
+            },
+        )
+        .1
+    };
+    let c = check("dharmatiles version=1\nmap {\n piece \"x\" count=0\n}\n");
+    assert!(!c.ok, "{c:?}");
+    assert!(c.errors[0].message.contains("count"), "{c:?}");
+    let c = check("dharmatiles version=1\nmap {\n piece \"x\"\n}\n");
+    assert!(c.ok, "{c:?}");
 }
 
 const TOWN: &str = "dharmatiles version=1\nmap {\n    grid cols=4 rows=3\n    let $step \"4dmm\"\n    piece p1 \"home:glade\" at=\"(0sq, 0sq)\" rot=0\n    piece p2 \"home:glade\" at=\"(1sq, 0sq)\" rot=90 seed=9 bottom=\"$step + 1mm\"\n    piece p3 \"home:glade\" at=\"(2sq, 1sq)\" rot=0 bottom=\"$wallHeight\"\n}\nplates printer=\"sovol/sv06\" mode=\"single\"\n";
@@ -681,81 +846,81 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     let list = h.id("town.dmap");
     let file = h.dir.join("town.dmap");
     // opened, a map is a scene before anything is laid out: each piece's place in mm, its bottom by name
-    let t = h.wait("town.dmap", "the scene", |t| {
-        t["plan"]["scene"]["pieces"]
-            .as_array()
-            .is_some_and(|p| p.len() == 3)
-    });
-    let sc = &t["plan"]["scene"];
-    assert_eq!(sc["map"], true);
-    assert_eq!(sc["grid"]["cols"], 4);
-    assert_eq!(sc["pieces"][1]["at"], serde_json::json!([35.0, 0.0]));
-    assert_eq!(sc["pieces"][1]["rot"], 90);
-    assert_eq!(sc["pieces"][1]["seed"], 9);
+    let t = h.wait("town.dmap", "the scene", |t| has_pieces(t, 3));
+    let sc = scene(&t).unwrap();
+    assert!(sc.map);
+    assert_eq!(sc.grid.as_ref().unwrap().cols, 4);
+    assert_eq!(piece_of(sc, "p2").at, Some([35.0, 0.0]));
+    assert_eq!(sc.pieces[1].rot, Some(90));
+    assert_eq!(sc.pieces[1].seed, Some(9));
     // 4 dmm + 1 mm on DungeonBlocks, and a standard name: 33.1 dmm
-    assert!((sc["pieces"][1]["bottomMm"].as_f64().unwrap() - 5.0).abs() < 1e-9);
-    assert!((sc["pieces"][2]["bottomMm"].as_f64().unwrap() - 33.1).abs() < 1e-9);
-    assert_eq!(sc["pieces"][0]["seedUsed"], 5, "the tile's own seed");
+    assert!((sc.pieces[1].bottom_mm - 5.0).abs() < 1e-9);
+    assert!((sc.pieces[2].bottom_mm - 33.1).abs() < 1e-9);
+    assert_eq!(sc.pieces[0].seed_used, 5, "the tile's own seed");
+    assert!(sc.heights.iter().any(|n| n.name == "wallHeight"));
+    assert!(sc.doc_rev >= 1);
+    assert_eq!(sc.pieces[1].id, "p2");
+    // a piece is named by its id and has no index: a field the type does not have, so this is the wire's own read
+    let wire: Value = read(&get(&h.r, "/api/tiles").1);
+    let on_wire = wire["tiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["id"] == list.as_str())
+        .unwrap();
     assert!(
-        sc["heights"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|n| n["name"] == "wallHeight")
-    );
-    assert!(sc["docRev"].as_u64().unwrap() >= 1);
-    assert_eq!(sc["pieces"][1]["id"], "p2");
-    assert!(
-        sc["pieces"][1].get("index").is_none(),
+        on_wire["plan"]["scene"]["pieces"][1].get("index").is_none(),
         "a piece is named by its id"
     );
     // a tile of the map is served at a tier, as the map builds it (its own seed here)
     let id = h.id("glade.dtile");
-    let (head, v) = h.call(
-        "/api/tiers/want",
-        serde_json::json!({"scope": "t", "wants": [{"tile": id, "tier": "super-low", "seed": 9, "system": "db"}]}),
-    );
-    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
-    let key = v["keys"][0].as_str().unwrap().to_owned();
-    let (head, body) = wait_tier(&h.r, &key, None);
+    let want = |tier: &str, seed: Option<u64>, system: &str| tiers::TiersWantReq {
+        scope: "t".to_owned(),
+        doc: None,
+        wants: vec![tiers::TierWant {
+            seed,
+            system: Some(system.to_owned()),
+            ..tier_want(&id, tier)
+        }],
+    };
+    let (head, v): (String, tiers::TiersWantRes) =
+        h.call("/api/tiers/want", &want("super-low", Some(9), "db"));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
+    let (head, body) = wait_tier(&h.r, &v.keys[0], None);
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert_eq!(&body[..4], b"DTM1");
-    let (head, _) = h.call(
-        "/api/tiers/want",
-        serde_json::json!({"scope": "t", "wants": [{"tile": id, "tier": "low", "system": "xx"}]}),
-    );
+    let head = h.head("/api/tiers/want", &want("low", None, "xx"));
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     // add: a new piece with its own id, in the answer's scene at once
-    let b = h.edit(
-        "/api/maps/add",
-        serde_json::json!({"list": list, "tile": id, "at": "(3sq, 2sq)", "rot": 180, "seed": 77}),
-    );
-    assert_eq!(b["id"].as_str(), Some("p4"));
+    let b: maps::MapsPieced = h.edited("/api/maps/add", &list, |doc_rev| maps::MapsAddReq {
+        at: Some("(3sq, 2sq)".to_owned()),
+        rot: Some(180),
+        seed: Some(77),
+        ..add_piece_req(&list, &id, doc_rev)
+    });
+    assert_eq!(b.id, "p4");
+    let bs = b.edited.scene.as_ref().unwrap();
     assert_eq!(
-        b["scene"]["docRev"], b["docRev"],
+        bs.doc_rev, b.edited.doc_rev,
         "the scene is of the revision the call made"
     );
     // an edit made against an older revision is refused with the file as it is
-    let stale = b["docRev"].as_u64().unwrap() - 1;
-    let (head, v) = h.call(
-        "/api/maps/set",
-        serde_json::json!({"list": list, "id": "p1", "set": {"rot": 90}, "docRev": stale}),
-    );
-    assert!(head.starts_with("HTTP/1.1 409"), "{head} {v}");
-    assert_eq!(v["docRev"], b["docRev"]);
+    let stale = b.edited.doc_rev - 1;
+    let (head, v) = h.refused("/api/maps/set", &set_req(&list, "p1", rot_words(90), stale));
+    assert!(head.starts_with("HTTP/1.1 409"), "{head} {v:?}");
+    assert_eq!(v.doc_rev, Some(b.edited.doc_rev));
     assert_eq!(
-        v["scene"]["pieces"].as_array().unwrap().len(),
+        v.scene.as_ref().unwrap().pieces.len(),
         4,
         "the current state comes with it"
     );
-    // and one that names no revision is not an edit
-    let (head, _) = h.call(
-        "/api/maps/set",
-        serde_json::json!({"list": list, "id": "p1", "set": {"rot": 90}}),
-    );
+    // and one that names no revision is not an edit (a body the request type cannot write: `docRev` is not
+    // optional, so this one is the wire's own)
+    let raw = format!(r#"{{"list":{list:?},"id":"p1","set":{{"rot":90}}}}"#);
+    let (head, _) = post_raw(&h.r, "/api/maps/set", Some(&h.token), None, &raw);
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
-    assert_eq!(b["scene"]["pieces"].as_array().unwrap().len(), 4);
-    assert_eq!(b["scene"]["pieces"][3]["seed"], 77);
+    assert_eq!(bs.pieces.len(), 4);
+    assert_eq!(bs.pieces[3].seed, Some(77));
     let text = std::fs::read_to_string(&file).unwrap();
     assert!(
         text.contains("piece p4 \"home:glade\" at=\"(3sq, 2sq)\" rot=180 seed=77"),
@@ -767,85 +932,117 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     );
     // set: move and turn, take a seed off; the toast's Undo is the text it replaced
     let before = std::fs::read_to_string(&file).unwrap();
-    let b = h.edit(
-        "/api/maps/set",
-        serde_json::json!({"list": list, "id": "p2", "set": {"at": "(1sq, 1sq)", "rot": 270, "seed": null}}),
-    );
-    assert_eq!(b["before"], before.as_str());
+    let b: lists::ListEdited = h.edited("/api/maps/set", &list, |doc_rev| {
+        set_req(
+            &list,
+            "p2",
+            maps::PieceWords {
+                at: Some(Some("(1sq, 1sq)".to_owned())),
+                rot: Some(Some(270)),
+                seed: Some(None),
+                ..Default::default()
+            },
+            doc_rev,
+        )
+    });
+    assert_eq!(b.before.as_deref(), Some(before.as_str()));
     let l = dt_doc::map::decode("t", &std::fs::read_to_string(&file).unwrap()).unwrap();
     assert_eq!(l.pieces[1].rot.as_ref().unwrap().value, 270);
     assert!(l.pieces[1].seed.is_none());
     // a word the document refuses is shown as data and writes nothing
     let was = std::fs::read_to_string(&file).unwrap();
-    let (head, v) = h.edit_call(
-        "/api/maps/set",
-        serde_json::json!({"list": list, "id": "p2", "set": {"rot": 45}}),
-    );
+    let (head, v) = h.edit_refused("/api/maps/set", &list, |doc_rev| {
+        set_req(&list, "p2", rot_words(45), doc_rev)
+    });
     assert!(
-        head.starts_with("HTTP/1.1 422") && v["errors"].is_array(),
-        "{head} {v}"
+        head.starts_with("HTTP/1.1 422") && v.errors.is_some(),
+        "{head} {v:?}"
     );
     assert_eq!(std::fs::read_to_string(&file).unwrap(), was);
     // batch: several pieces in one change
-    let b = h.edit(
-        "/api/maps/batch",
-        serde_json::json!({"list": list, "edits": [{"id": "p1", "set": {"seed": 3}}, {"id": "p3", "set": {"seed": 4, "print": "skip"}}]}),
-    );
-    assert_eq!(b["changed"], 2);
-    assert_eq!(b["scene"]["pieces"][2]["print"], "skip");
+    let b: maps::MapsBatched = h.edited("/api/maps/batch", &list, |doc_rev| maps::MapsBatchReq {
+        list: list.clone(),
+        edits: vec![
+            edit_of(
+                "p1",
+                maps::PieceWords {
+                    seed: Some(Some(3)),
+                    ..Default::default()
+                },
+            ),
+            edit_of(
+                "p3",
+                maps::PieceWords {
+                    seed: Some(Some(4)),
+                    print: Some(Some("skip".to_owned())),
+                    ..Default::default()
+                },
+            ),
+        ],
+        doc_rev,
+    });
+    assert_eq!(b.changed, 2);
+    assert_eq!(b.edited.scene.as_ref().unwrap().pieces[2].print, "skip");
     // duplicate: its own id, the original's seed, the place asked for; remove takes the piece and its pin
-    let b = h.edit(
-        "/api/maps/dup",
-        serde_json::json!({"list": list, "id": "p1", "at": "(0sq, 2sq)"}),
-    );
-    assert_eq!(b["id"], "p5");
-    assert_eq!(b["scene"]["pieces"][1]["id"], "p5");
-    assert_eq!(b["scene"]["pieces"][1]["seed"], 3);
+    let b: maps::MapsPieced = h.edited("/api/maps/dup", &list, |doc_rev| maps::MapsDupReq {
+        list: list.clone(),
+        id: "p1".to_owned(),
+        at: Some("(0sq, 2sq)".to_owned()),
+        near: None,
+        doc_rev,
+    });
+    assert_eq!(b.id, "p5");
+    let bs = b.edited.scene.as_ref().unwrap();
+    assert_eq!(bs.pieces[1].id, "p5");
+    assert_eq!(bs.pieces[1].seed, Some(3));
     // a pin names the piece by its id
-    let b = h.edit(
-        "/api/maps/pin",
-        serde_json::json!({"list": list, "id": "p5", "plate": 1, "x": 12.34, "y": 20.0, "turn": true}),
-    );
-    assert_eq!(b["id"], "p5");
+    let pin = |doc_rev: u64, x: f64, y: f64, turn: Option<bool>| maps::MapsPinReq {
+        list: list.clone(),
+        id: "p5".to_owned(),
+        plate: 1,
+        x,
+        y,
+        turn,
+        doc_rev,
+    };
+    let b: maps::MapsPieced = h.edited("/api/maps/pin", &list, |r| pin(r, 12.34, 20.0, Some(true)));
+    assert_eq!(b.id, "p5");
     let text = std::fs::read_to_string(&file).unwrap();
     assert!(
         text.contains("pin \"p5\" plate=1 at=\"(12.3mm, 20mm)\" turn=90"),
         "{text}"
     );
-    assert_eq!(b["scene"]["pieces"][1]["pinned"], true);
-    h.edit(
-        "/api/maps/unpin",
-        serde_json::json!({"list": list, "id": "p5"}),
-    );
+    assert!(b.edited.scene.as_ref().unwrap().pieces[1].pinned);
+    let _: lists::ListEdited = h.edited("/api/maps/unpin", &list, |r| piece_req(&list, "p5", r));
     assert!(!std::fs::read_to_string(&file).unwrap().contains("pin "));
-    h.edit(
-        "/api/maps/pin",
-        serde_json::json!({"list": list, "id": "p5", "plate": 1, "x": 5.0, "y": 5.0}),
-    );
-    h.edit(
-        "/api/maps/remove",
-        serde_json::json!({"list": list, "id": "p5"}),
-    );
+    let _: maps::MapsPieced = h.edited("/api/maps/pin", &list, |r| pin(r, 5.0, 5.0, None));
+    let _: lists::ListEdited = h.edited("/api/maps/remove", &list, |r| piece_req(&list, "p5", r));
     let text = std::fs::read_to_string(&file).unwrap();
     assert!(
         !text.contains("p5") && !text.contains("pin "),
         "the piece goes with its pin: {text}"
     );
-    let u = h.edit("/api/maps/unpin-all", serde_json::json!({"list": list}));
+    let u: lists::ListEdited =
+        h.edited("/api/maps/unpin-all", &list, |doc_rev| maps::MapsListReq {
+            list: list.clone(),
+            doc_rev,
+        });
     // undo through the print lists' restore, the scene answered at once
-    let r = h.ok(
+    let r: lists::ListEdited = h.ok(
         "/api/lists/restore",
-        serde_json::json!({"list": list, "text": TOWN, "docRev": u["docRev"]}),
+        &lists::ListsRestoreReq {
+            list: list.clone(),
+            text: TOWN.to_owned(),
+            doc_rev: u.doc_rev,
+        },
     );
-    assert_eq!(r["scene"]["pieces"].as_array().unwrap().len(), 3);
+    assert_eq!(r.scene.as_ref().unwrap().pieces.len(), 3);
     assert_eq!(std::fs::read_to_string(&file).unwrap(), TOWN);
     // a new map has a grid, so it opens as a map before a piece is placed
-    let (head, v) = h.call(
-        "/api/lists/new",
-        serde_json::json!({"name": "Table", "map": true}),
-    );
-    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
-    let made = std::fs::read_to_string(v["path"].as_str().unwrap()).unwrap();
+    let (head, v): (String, places::Listed) =
+        h.call("/api/lists/new", &new_list("Table", Some(true)));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
+    let made = std::fs::read_to_string(&v.path).unwrap();
     assert!(
         made.contains("grid cols=8 rows=6") && made.contains("about \"A map.\""),
         "{made}"
@@ -853,15 +1050,9 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     assert!(dt_doc::map::decode("m", &made).is_ok());
     // the plates see the placed pieces as pieces to print, one each
     let t = h.wait("town.dmap", "the plates", |t| {
-        t["status"] == "ready" && t["plan"]["plates"]["planned"] == true
+        t.status == "ready" && plates_planned(t).is_some()
     });
-    assert_eq!(
-        t["plan"]["plates"]["layout"][0]["pieces"]
-            .as_array()
-            .unwrap()
-            .len(),
-        3
-    );
+    assert_eq!(plates_planned(&t).unwrap().layout[0].pieces.len(), 3);
 }
 
 #[test]
@@ -870,21 +1061,12 @@ fn the_first_edit_of_a_file_without_ids_writes_ids_on_every_piece_and_says_so_on
     let h = start_home("noids", &[("glade.dtile", GLADE), ("hand.dmap", hand)]);
     let list = h.id("hand.dmap");
     // the scene names each piece by the id the first edit will write (p1 is taken: p2, then p1, then p3)
-    let t = h.wait("hand.dmap", "the scene", |t| {
-        t["plan"]["scene"]["pieces"]
-            .as_array()
-            .is_some_and(|p| p.len() == 3)
-    });
-    let ids: Vec<_> = t["plan"]["scene"]["pieces"]
-        .as_array()
+    let t = h.wait("hand.dmap", "the scene", |t| has_pieces(t, 3));
+    let ids: Vec<_> = scene(&t)
         .unwrap()
+        .pieces
         .iter()
-        .map(|p| {
-            (
-                p["id"].as_str().unwrap().to_owned(),
-                p["written"].as_bool().unwrap(),
-            )
-        })
+        .map(|p| (p.id.clone(), p.written))
         .collect();
     assert_eq!(
         ids,
@@ -895,11 +1077,10 @@ fn the_first_edit_of_a_file_without_ids_writes_ids_on_every_piece_and_says_so_on
         ]
     );
     // turning the piece the scene calls p3 writes the ids on all of them, in that one write
-    let b = h.edit(
-        "/api/maps/set",
-        serde_json::json!({"list": list, "id": "p3", "set": {"rot": 90}}),
-    );
-    assert!(b["note"].as_str().unwrap().contains("an id"), "{b}");
+    let b: lists::ListEdited = h.edited("/api/maps/set", &list, |doc_rev| {
+        set_req(&list, "p3", rot_words(90), doc_rev)
+    });
+    assert!(b.note.as_deref().unwrap().contains("an id"), "{b:?}");
     let text = std::fs::read_to_string(h.dir.join("hand.dmap")).unwrap();
     assert!(text.contains("// by hand"), "{text}");
     assert!(
@@ -910,73 +1091,49 @@ fn the_first_edit_of_a_file_without_ids_writes_ids_on_every_piece_and_says_so_on
         text.contains("piece p3 \"home:glade\" at=\"(2sq, 0sq)\" rot=90"),
         "{text}"
     );
-    assert_eq!(b["scene"]["pieces"][2]["written"], true);
+    assert!(b.scene.as_ref().unwrap().pieces[2].written);
     // the next edit has nothing to say
-    let b = h.edit(
-        "/api/maps/set",
-        serde_json::json!({"list": list, "id": "p2", "set": {"rot": 180}}),
-    );
-    assert!(b.get("note").is_none_or(Value::is_null), "{b}");
+    let b: lists::ListEdited = h.edited("/api/maps/set", &list, |doc_rev| {
+        set_req(&list, "p2", rot_words(180), doc_rev)
+    });
+    assert!(b.note.is_none(), "{b:?}");
 }
 
 #[test]
 fn the_scene_says_which_pieces_the_shelf_leaves_off_and_how_many_print() {
     let h = start_home("shelf", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
     // no inventory: nothing is had, every piece prints
-    let t = h.wait("town.dmap", "the scene", |t| {
-        t["plan"]["scene"]["pieces"]
-            .as_array()
-            .is_some_and(|p| p.len() == 3)
-    });
-    let sc = &t["plan"]["scene"];
-    assert_eq!(sc["shelfExists"], false);
-    assert_eq!(
-        (sc["have"].as_u64(), sc["toPrint"].as_u64()),
-        (Some(0), Some(3))
-    );
-    assert_eq!(sc["pieces"][0]["shelf"]["state"], "need");
+    let t = h.wait("town.dmap", "the scene", |t| has_pieces(t, 3));
+    let sc = scene(&t).unwrap();
+    assert!(!sc.shelf_exists);
+    assert_eq!((sc.have, sc.to_print), (0, 3));
+    assert_eq!(sc.pieces[0].shelf.as_ref().unwrap().state, "need");
     // one good print of the tile's own seed: the first piece of that seed in the order written is the one you have
-    h.ok(
+    let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        serde_json::json!({"tile": h.id("glade.dtile"), "colour": "single", "on": "2026-11-12"}),
+        &h.have_req("glade.dtile", ColourWord::Single, Some("2026-11-12")),
     );
     let t = h.wait("town.dmap", "the shelf", |t| {
-        t["plan"]["scene"]["shelfExists"] == true
+        scene(t).is_some_and(|s| s.shelf_exists)
     });
-    let sc = &t["plan"]["scene"];
-    let state = |i: usize| {
-        sc["pieces"][i]["shelf"]["state"]
-            .as_str()
-            .unwrap()
-            .to_owned()
-    };
+    let sc = scene(&t).unwrap();
+    let state = |i: usize| sc.pieces[i].shelf.as_ref().unwrap().state.clone();
     assert_eq!(
         (state(0), state(1), state(2)),
         ("have".to_owned(), "need".to_owned(), "need".to_owned()),
-        "{sc}"
+        "{sc:?}"
     );
-    assert_eq!(
-        (sc["have"].as_u64(), sc["toPrint"].as_u64()),
-        (Some(1), Some(2))
-    );
+    assert_eq!((sc.have, sc.to_print), (1, 2));
     // a piece left off by its own word is neither
-    assert_eq!(sc["pieces"][0]["shelf"]["text"], "have");
+    assert_eq!(sc.pieces[0].shelf.as_ref().unwrap().text, "have");
 }
 
 /// The place of every piece of the scene in the answer of an edit.
-fn spots(v: &Value) -> Vec<(String, f64, f64)> {
-    v["scene"]["pieces"]
-        .as_array()
-        .unwrap()
+fn spots(scene: &SceneJson) -> Vec<(String, f64, f64)> {
+    scene
+        .pieces
         .iter()
-        .filter_map(|p| {
-            let at = p["at"].as_array()?;
-            Some((
-                p["id"].as_str().unwrap().to_owned(),
-                at[0].as_f64()?,
-                at[1].as_f64()?,
-            ))
-        })
+        .filter_map(|p| p.at.map(|at| (p.id.clone(), at[0], at[1])))
         .collect()
 }
 
@@ -985,18 +1142,16 @@ fn two_edits_asking_for_the_same_square_end_on_two_squares_and_each_says_where_i
     let h = start_home("near", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
     let list = h.id("town.dmap");
     let tile = h.id("glade.dtile");
-    h.wait("town.dmap", "the scene", |t| {
-        t["plan"]["scene"]["pieces"]
-            .as_array()
-            .is_some_and(|p| p.len() == 3)
-    });
+    h.wait("town.dmap", "the scene", |t| has_pieces(t, 3));
     let rev = h.rev(&list);
     // both are made against the same revision and both ask for the nearest free square to (10, 10)
     let asks = |h: &Home, rev: u64| {
-        h.call(
-            "/api/maps/add",
-            serde_json::json!({"list": list, "tile": tile, "near": {"x": 10.0, "y": 10.0}, "rot": 0, "docRev": rev}),
-        )
+        let req = maps::MapsAddReq {
+            near: Some(Near { x: 10.0, y: 10.0 }),
+            rot: Some(0),
+            ..add_piece_req(&list, &tile, rev)
+        };
+        post_raw(&h.r, "/api/maps/add", Some(&h.token), None, &wire(&req))
     };
     let (a, b) = std::thread::scope(|s| {
         let x = s.spawn(|| asks(&h, rev));
@@ -1009,25 +1164,23 @@ fn two_edits_asking_for_the_same_square_end_on_two_squares_and_each_says_where_i
     } else {
         (b, a)
     };
-    assert!(won.0.starts_with("HTTP/1.1 200"), "{} {}", won.0, won.1);
-    assert!(lost.0.starts_with("HTTP/1.1 409"), "{} {}", lost.0, lost.1);
-    let again = asks(&h, lost.1["docRev"].as_u64().unwrap());
-    assert!(
-        again.0.starts_with("HTTP/1.1 200"),
-        "{} {}",
-        again.0,
-        again.1
-    );
+    assert!(won.0.starts_with("HTTP/1.1 200"), "{}", won.0);
+    assert!(lost.0.starts_with("HTTP/1.1 409"), "{}", lost.0);
+    let won: maps::MapsPieced = read(&won.1);
+    let lost: ErrorBody = read(&lost.1);
+    let (head, body) = asks(&h, lost.doc_rev.unwrap());
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    let again: maps::MapsPieced = read(&body);
     // the first got the square asked for; the second, made against a map with that square taken, another, and says so
-    assert_eq!(won.1["shifted"], 0);
-    assert_eq!(again.1["shifted"], 1, "{}", again.1);
-    let first = spots(&won.1)
+    assert_eq!(won.shifted, 0);
+    assert_eq!(again.shifted, 1, "{again:?}");
+    let first = spots(won.edited.scene.as_ref().unwrap())
         .into_iter()
-        .find(|(id, ..)| *id == won.1["id"].as_str().unwrap())
+        .find(|(id, ..)| *id == won.id)
         .unwrap();
-    let second = spots(&again.1)
+    let second = spots(again.edited.scene.as_ref().unwrap())
         .into_iter()
-        .find(|(id, ..)| *id == again.1["id"].as_str().unwrap())
+        .find(|(id, ..)| *id == again.id)
         .unwrap();
     assert_eq!((first.1, first.2), (350.0, 350.0));
     assert_ne!(
@@ -1041,47 +1194,61 @@ fn two_edits_asking_for_the_same_square_end_on_two_squares_and_each_says_where_i
 fn fresh_seeds_are_not_owned_not_on_the_map_and_not_repeated_within_an_edit() {
     let h = start_home("fresh", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
     let list = h.id("town.dmap");
-    h.wait("town.dmap", "the scene", |t| {
-        t["plan"]["scene"]["pieces"]
-            .as_array()
-            .is_some_and(|p| p.len() == 3)
-    });
+    h.wait("town.dmap", "the scene", |t| has_pieces(t, 3));
     // one good print of seed 5 is on the shelf: a fresh seed is not that one, nor 9 (p2), in any piece of one batch
-    h.ok(
+    let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        serde_json::json!({"tile": h.id("glade.dtile"), "colour": "single", "on": "2026-11-12"}),
+        &h.have_req("glade.dtile", ColourWord::Single, Some("2026-11-12")),
     );
-    let b = h.edit(
-        "/api/maps/batch",
-        serde_json::json!({"list": list, "edits": [{"id": "p1", "set": {"freshSeed": true}}, {"id": "p3", "set": {"freshSeed": true}}]}),
-    );
+    let fresh = maps::PieceWords {
+        fresh_seed: Some(true),
+        ..Default::default()
+    };
+    let b: maps::MapsBatched = h.edited("/api/maps/batch", &list, |doc_rev| maps::MapsBatchReq {
+        list: list.clone(),
+        edits: vec![
+            edit_of(
+                "p1",
+                maps::PieceWords {
+                    fresh_seed: Some(true),
+                    ..Default::default()
+                },
+            ),
+            edit_of("p3", fresh),
+        ],
+        doc_rev,
+    });
+    let sc = b.edited.scene.as_ref().unwrap();
     let seeds: Vec<u64> = ["p1", "p3"]
         .iter()
-        .map(|id| {
-            b["scene"]["pieces"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .find(|p| p["id"] == *id)
-                .unwrap()["seedUsed"]
-                .as_u64()
-                .unwrap()
-        })
+        .map(|id| piece_of(sc, id).seed_used)
         .collect();
     assert_ne!(seeds[0], seeds[1], "a seed repeated within an edit");
     assert!(seeds.iter().all(|s| ![5, 9].contains(s)), "{seeds:?}");
     // both an `at` and a `near`, or a seed and a fresh one, is a mistake
-    let (head, _) = h.edit_call(
-        "/api/maps/set",
-        serde_json::json!({"list": list, "id": "p1", "set": {"at": "(1sq, 1sq)", "near": {"x": 1.0, "y": 1.0}}}),
-    );
+    let (head, _) = h.edit_refused("/api/maps/set", &list, |doc_rev| {
+        set_req(
+            &list,
+            "p1",
+            maps::PieceWords {
+                at: Some(Some("(1sq, 1sq)".to_owned())),
+                near: Some(Near { x: 1.0, y: 1.0 }),
+                ..Default::default()
+            },
+            doc_rev,
+        )
+    });
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
 }
 
 /// What the stream says, for as long as it says anything: the events (parsed) from a stream opened now, until one
 /// that `stop` accepts.  `on_open` runs once the stream's first event (the snapshot) is in: the stream is then
 /// subscribed, so what `on_open` makes happen is told on it and nothing is missed.
-fn events_until(h: &Home, on_open: impl FnOnce(), stop: impl Fn(&Value) -> bool) -> Vec<Value> {
+fn events_until(
+    h: &Home,
+    on_open: impl FnOnce(),
+    stop: impl Fn(&StreamEvent) -> bool,
+) -> Vec<StreamEvent> {
     let mut c = TcpStream::connect(h.r.addr).unwrap();
     write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", h.r.addr).unwrap();
     c.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
@@ -1092,7 +1259,7 @@ fn events_until(h: &Home, on_open: impl FnOnce(), stop: impl Fn(&Value) -> bool)
         let Some(data) = l.strip_prefix("data: ") else {
             continue;
         };
-        let v: Value = serde_json::from_str(data).unwrap();
+        let v: StreamEvent = read(data.as_bytes());
         let done = stop(&v);
         seen.push(v);
         if done {
@@ -1109,18 +1276,13 @@ fn events_until(h: &Home, on_open: impl FnOnce(), stop: impl Fn(&Value) -> bool)
 fn a_change_is_told_as_the_resource_that_changed_and_not_as_the_whole() {
     let h = start_home("resources", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
     let new_folder = |name: &str| {
-        let (head, v) = h.call(
-            "/api/folders/new",
-            serde_json::json!({"root": 0, "dir": "", "name": name}),
-        );
-        assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+        let (head, v): (String, places::FolderDone) =
+            h.call("/api/folders/new", &folder_new_req(name));
+        assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
     };
-    let names_folder = |v: &Value, name: &str| {
-        v["type"] == "resource"
-            && v["name"] == "places"
-            && v["value"]["folders"]
-                .as_array()
-                .is_some_and(|f| f.iter().any(|f| f["path"] == name))
+    let names_folder = |v: &StreamEvent, name: &str| {
+        matches!(v, StreamEvent::Resource(e)
+            if matches!(&e.resource, Resource::Places(p) if p.folders.iter().any(|f| f.path == name)))
     };
     // The stream is open once its snapshot is in.  What the server tells after a start (the inventory settling, a tile
     // read) is told before the first folder is made: wait until it has nothing left, so none of it can be mistaken for
@@ -1135,8 +1297,8 @@ fn a_change_is_told_as_the_resource_that_changed_and_not_as_the_whole() {
         },
         |v| names_folder(v, "sentinel"),
     );
-    assert_eq!(
-        seen[0]["type"], "snapshot",
+    assert!(
+        matches!(seen[0], StreamEvent::Snapshot(_)),
         "the stream begins with the whole"
     );
     let at = seen
@@ -1145,13 +1307,18 @@ fn a_change_is_told_as_the_resource_that_changed_and_not_as_the_whole() {
         .expect("the folder is told as the places");
     let end = seen.len() - 1;
     // the folder is told as the places, with a revision of its own that rose
-    assert!(seen[at]["resRev"].as_u64().unwrap() >= 1);
+    let StreamEvent::Resource(told) = &seen[at] else {
+        panic!("not a resource: {:?}", seen[at]);
+    };
+    assert!(told.res_rev >= 1);
     // and as nothing else: no whole snapshot, no inventory, no list of tiles, no tile
     assert!(
-        seen[at + 1..end].iter().all(|v| v["type"] != "snapshot"
-            && v["type"] != "tile"
-            && v["name"] != "inventory"
-            && v["name"] != "list"),
+        seen[at + 1..end].iter().all(|v| match v {
+            StreamEvent::Snapshot(_) | StreamEvent::Tile { .. } => false,
+            StreamEvent::Resource(e) =>
+                !matches!(e.resource, Resource::Inventory(_) | Resource::List(_)),
+            _ => true,
+        }),
         "a folder does not resend the inventory or the tiles: {:?}",
         &seen[at + 1..end]
     );
@@ -1160,16 +1327,15 @@ fn a_change_is_told_as_the_resource_that_changed_and_not_as_the_whole() {
 #[test]
 fn a_documents_scene_and_plates_are_of_one_revision_whenever_the_page_is_sent_them() {
     let h = start_home("onerev", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
-    let tiles_of = |v: &Value| -> Vec<Value> {
-        match v["type"].as_str() {
-            Some("tile") => vec![v["tile"].clone()],
-            Some("snapshot") => v["tiles"].as_array().unwrap().clone(),
+    let tiles_of = |v: &StreamEvent| -> Vec<TileSummary> {
+        match v {
+            StreamEvent::Tile { tile, .. } => vec![(**tile).clone()],
+            StreamEvent::Snapshot(s) => s.tiles.clone(),
             _ => vec![],
         }
     };
-    let map = |t: &Value| t["path"].as_str().unwrap_or("").ends_with(".dmap");
-    let planned =
-        |t: &Value| map(t) && t["status"] == "ready" && t["plan"]["plates"]["planned"] == true;
+    let map = |t: &TileSummary| t.path.ends_with(".dmap");
+    let planned = |t: &TileSummary| map(t) && t.status == "ready" && plates_planned(t).is_some();
     // every state of the map the stream sends (the whole first, then each change) names one revision for its scene and its plan
     // a tile in a folder builds when it is chosen (the page asks when you open it): the stream is open first, then
     // the map is chosen, and the plates it plans are told on the stream.  (Waiting for them before the stream is
@@ -1186,12 +1352,14 @@ fn a_documents_scene_and_plates_are_of_one_revision_whenever_the_page_is_sent_th
     );
     let mut n = 0;
     for v in &seen {
-        for t in tiles_of(v)
-            .iter()
-            .filter(|t| map(t) && !t["plan"]["scene"].is_null())
-        {
-            n += 1;
-            assert_eq!(t["plan"]["scene"]["docRev"], t["plan"]["docRev"]);
+        for t in tiles_of(v).iter().filter(|t| map(t)) {
+            let Some(TilePlan::Plates(d)) = &t.plan else {
+                continue;
+            };
+            if let Some(sc) = &d.scene {
+                n += 1;
+                assert_eq!(sc.doc_rev, d.doc_rev);
+            }
         }
     }
     assert!(n > 0, "no state of the map was seen");

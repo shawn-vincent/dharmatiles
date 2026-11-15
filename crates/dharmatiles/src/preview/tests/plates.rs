@@ -4,7 +4,7 @@ use super::*;
 use crate::preview::plan::PlatesDoc;
 
 /// A print list's plates panel when the list plans (`None` for any other plan).
-fn plates_planned(t: &TileSummary) -> Option<&PlatesPlanned> {
+pub(super) fn plates_planned(t: &TileSummary) -> Option<&PlatesPlanned> {
     match &t.plan {
         Some(TilePlan::Plates(d)) => match &d.plates {
             PlatesPanel::Planned(p) => Some(p),
@@ -15,7 +15,7 @@ fn plates_planned(t: &TileSummary) -> Option<&PlatesPlanned> {
 }
 
 /// A print list's plan.
-fn plates_doc(t: &TileSummary) -> &PlatesDoc {
+pub(super) fn plates_doc(t: &TileSummary) -> &PlatesDoc {
     match &t.plan {
         Some(TilePlan::Plates(d)) => d,
         other => panic!("not a print list's plan: {other:?}"),
