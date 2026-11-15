@@ -22,28 +22,46 @@
 import { batch, signal } from '@preact/signals-core';
 import { createHistory } from './doc-history.js';
 
-/** A state is read, never written: frozen all the way down. */
+/** @typedef {import('./api').SceneJson} SceneJson */
+/** @typedef {import('./api').TilePlan & { scene?: SceneJson | null }} Plan  what the program made of a document: a map's carries its scene */
+/** @typedef {{ tile: string, own: boolean, file: string, text: string, writable: boolean }} Source  the text of a file at a revision */
+/** @typedef {{ id: string, docRev: number, plan: Plan | null, source?: Source & { rev: number } }} DocState  what the page holds of one document */
+/** @typedef {{ id: string, docRev: number, plan?: Plan | null, scene?: SceneJson | null, source?: Source }} Taken  a state the program sent */
+/** @typedef {{ status: number, body: any }} Reply */
+/** @typedef {{ status: 'unwritable' } | { status: 'conflict', disk: string, docRev: number } | { status: 'saved', docRev: number } | { status: 'failed', reply: Reply }} Saved  how a save went */
+/** @typedef {import('./doc-history.js').Entry} Entry */
+/** @typedef {{ label: string, steps: { name: string, body: object | null | ((state: DocState | null | undefined) => object | null) }[], note: string | ((answers: any[]) => string) } | null} Change  what an action's `build` answers */
+
+/**
+ * A state is read, never written: frozen all the way down.
+ * @template T
+ * @param {T} v
+ * @returns {T}
+ */
 function deepFreeze(v) {
   if (v && typeof v === 'object' && !Object.isFrozen(v)) {
     Object.freeze(v);
-    for (const k of Object.keys(v)) deepFreeze(v[k]);
+    for (const k of Object.keys(v)) deepFreeze(/** @type {Record<string, unknown>} */ (v)[k]);
   }
   return v;
 }
 
 /**
- * @param {{send: (name: string, body: object) => Promise<{status: number, body: any}>,
- *   report?: {refusal?(label: string, r: object): void, failure?(label: string, r: object): void, note?(text: string): void},
+ * @param {{send: (name: string, body: any) => Promise<Reply>,
+ *   report?: {refusal?(label: string, r: Reply): void, failure?(label: string, r: Reply): void, note?(text: string): void},
  *   history?: ReturnType<typeof createHistory>}} deps
- * @returns {{docs: object, receive: (state: object) => boolean}} the readers and actions, and the setter apart from them
+ * the readers and actions (`docs`), and the setter apart from them (`receive`)
  */
 export function createDocuments({ send, report = {}, history = createHistory() }) {
   // each document's state is a signal (@preact/signals-core): what reads it inside a component or a `computed` follows it
+  /** @type {Map<string, import('@preact/signals-core').Signal<DocState | undefined>>} */
   const slots = new Map();
-  const slot = (id) => { let s = slots.get(id); if (!s) { s = signal(undefined); slots.set(id, s); } return s; };
-  const held = { get: (id) => slot(id).value, set: (id, v) => { slot(id).value = v; }, has: (id) => slot(id).value !== undefined };
+  const slot = (/** @type {string} */ id) => { let s = slots.get(id); if (!s) { s = signal(undefined); slots.set(id, s); } return s; };
+  const held = { get: (/** @type {string} */ id) => slot(id).value, set: (/** @type {string} */ id, /** @type {DocState} */ v) => { slot(id).value = v; }, has: (/** @type {string} */ id) => slot(id).value !== undefined };
   const subs = new Set();
+  /** @type {Map<string, Promise<any>>} */
   const queues = new Map();
+  /** @type {Map<string, string>} */
   const conflicts = new Map(); // id -> the disk's text, while a save was refused and the user has not chosen
   const say = {
     refusal: report.refusal ?? (() => {}),
@@ -51,8 +69,9 @@ export function createDocuments({ send, report = {}, history = createHistory() }
     note: report.note ?? (() => {}),
   };
 
-  const notify = (id) => { for (const s of [...subs]) s(id); };
+  const notify = (/** @type {string} */ id) => { for (const s of [...subs]) s(id); };
 
+  /** @param {string} id @param {DocState} state */
   function commit(id, state) {
     held.set(id, deepFreeze(state));
     notify(id);
@@ -64,6 +83,7 @@ export function createDocuments({ send, report = {}, history = createHistory() }
    * a tile or a part of it, or of a map or print list, is a document like the rest, and what is on disk is
    * what the program last said, here and nowhere else.  A library file has no revision (0) and is read only:
    * what it says now replaces what was held.
+   * @param {Taken} state
    */
   function receive(state) {
     const { id, docRev } = state;
@@ -73,7 +93,7 @@ export function createDocuments({ send, report = {}, history = createHistory() }
     let plan = state.plan ?? h?.plan ?? null; // null until the program has planned the document: a source alone is not a plan
     // the same text, planned further: the plates come after the scene
     if (h && docRev === h.docRev && state.plan) plan = { ...h.plan, ...state.plan };
-    if (state.scene) plan = { ...plan, scene: state.scene };
+    if (state.scene) plan = /** @type {Plan} */ ({ ...plan, scene: state.scene }); // a scene arrives with a plan, or before it: the plan then is the scene alone
     // the source carries the revision its text is of (`rev`): the state's own docRev may be later (the program says an
     // outside change happened) without the text having been read, and a save is made against the text's revision
     let source = h?.source;
@@ -90,7 +110,12 @@ export function createDocuments({ send, report = {}, history = createHistory() }
     return true;
   }
 
-  /** Run `fn` after the actions already waiting on document `id`. */
+  /**
+   * Run `fn` after the actions already waiting on document `id`.
+   * @template T
+   * @param {string} id @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
+   */
   function enqueue(id, fn) {
     const run = (queues.get(id) ?? Promise.resolve()).then(fn);
     queues.set(id, run.catch(() => {}));
@@ -98,6 +123,7 @@ export function createDocuments({ send, report = {}, history = createHistory() }
   }
 
   /** One call's answer: its body when it went through (taken into the state), else null after saying why. */
+  /** @param {string} id @param {string} label @param {string} name @param {object} body */
   async function call(id, label, name, body) {
     const s = held.get(id);
     const r = await send(name, { ...body, list: id, docRev: s?.docRev });
@@ -120,23 +146,27 @@ export function createDocuments({ send, report = {}, history = createHistory() }
 
   const docs = {
     /** The state of document `id` as it is now (frozen), or null. */
-    get: (id) => held.get(id) ?? null,
+    get: (/** @type {string} */ id) => held.get(id) ?? null,
     /** The scene of document `id` as it is now: what a map draws. */
-    scene: (id) => held.get(id)?.plan?.scene ?? null,
+    scene: (/** @type {string} */ id) => held.get(id)?.plan?.scene ?? null,
     /** `fn(id)` after each state taken; returns the way to stop. */
-    subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
+    subscribe(/** @type {(id: string) => void} */ fn) { subs.add(fn); return () => subs.delete(fn); },
     history,
 
     /**
      * One change to document `id`.  `build(state)` runs when the change's turn comes and answers `{label,
      * steps: [{name, body}]}` (a body may be a function of the state as it is then) or null for nothing to do.
      * Resolves `{last, entry, note}` (the last answer, the history entry made, and the action's own `note`), or null when nothing was made.
+     * @param {string} id
+     * @param {(state: DocState | null) => Change} build
      */
     edit(id, build) {
       return enqueue(id, async () => {
         const plan = build(held.get(id) ?? null);
         if (!plan?.steps?.length) return null;
+        /** @type {any} */
         let first = null, last = null;
+        /** @type {any[]} */
         const answers = [];
         for (const step of plan.steps) {
           const body = typeof step.body === 'function' ? step.body(held.get(id)) : step.body;
@@ -166,7 +196,7 @@ export function createDocuments({ send, report = {}, history = createHistory() }
      * @param {{tile: string, own: boolean}} meta
      * @param {() => Promise<import('./api').TextRes | null | undefined>} read
      * @param {(v: import('./api').TextRes) => boolean} [accept]
-     * @param {((state: any) => void) | null} [apply]
+     * @param {((state: DocState | undefined) => void) | null} [apply]
      */
     loadSource(id, meta, read, accept = () => true, apply = null) {
       return enqueue(id, async () => {
@@ -187,8 +217,9 @@ export function createDocuments({ send, report = {}, history = createHistory() }
      * actions on it.  Resolves `{status}`: `saved` (the new state is held), `conflict` (the file moved on: the
      * disk's text and revision are held, and `disk` is its text, for the user to choose), `unwritable` (nothing
      * held, or a read only file), or `failed` (said).
+     * @returns {Promise<Saved>}
      */
-    saveSource(id, text, label = 'Could not save') {
+    saveSource(/** @type {string} */ id, /** @type {string} */ text, label = 'Could not save') {
       return enqueue(id, async () => {
         const h = held.get(id);
         const src = h?.source;
@@ -217,15 +248,16 @@ export function createDocuments({ send, report = {}, history = createHistory() }
      * the conflict was about (null when there was none).  "Keep mine" is then a save, against the disk's revision
      * (already held); "take the disk's" is the page putting that text in its pane.
      */
-    resolveConflict(id) {
+    resolveConflict(/** @type {string | null} */ id) {
+      if (id == null) return null;
       const disk = conflicts.get(id) ?? null;
       conflicts.delete(id);
       return disk;
     },
-    hasConflict: (id) => conflicts.has(id),
+    hasConflict: (/** @type {string} */ id) => conflicts.has(id),
 
     /** A change made by a call outside the document's own page (a tile put on a list): its answer joins the history. */
-    adopt(id, label, body) {
+    adopt(/** @type {string} */ id, /** @type {string} */ label, /** @type {{ docRev?: number | null, before?: string | null, text: string, scene?: SceneJson | null }} */ body) {
       if (body.docRev == null || body.before == null) return null;
       const entry = { label, before: body.before, after: body.text, docRev: body.docRev };
       history.push(id, entry);
@@ -235,7 +267,7 @@ export function createDocuments({ send, report = {}, history = createHistory() }
     },
 
     /** Undo (`dir` -1) or Redo (1) of document `id`: the text written back, against the revision this history left the file at. */
-    step(id, dir) {
+    step(/** @type {string} */ id, /** @type {number} */ dir) {
       return enqueue(id, async () => {
         const entry = dir < 0 ? history.nextUndo(id) : history.nextRedo(id);
         if (!entry) return false;
@@ -258,17 +290,17 @@ export function createDocuments({ send, report = {}, history = createHistory() }
         return false;
       });
     },
-    undo: (id) => docs.step(id, -1),
-    redo: (id) => docs.step(id, 1),
+    undo: (/** @type {string} */ id) => docs.step(id, -1),
+    redo: (/** @type {string} */ id) => docs.step(id, 1),
     /** A toast's Undo: only while its change is still the last one; false (and nothing written) otherwise. */
-    undoIf(id, entry) {
+    undoIf(/** @type {string} */ id, /** @type {Entry} */ entry) {
       if (history.nextUndo(id) !== entry) return Promise.resolve(false);
       return docs.undo(id);
     },
-    canUndo: (id) => history.canUndo(id),
-    canRedo: (id) => history.canRedo(id),
+    canUndo: (/** @type {string} */ id) => history.canUndo(id),
+    canRedo: (/** @type {string} */ id) => history.canRedo(id),
     /** Resolves when every action waiting on `id` is done (tests, and the editor's own waits). */
-    idle: (id) => queues.get(id) ?? Promise.resolve(),
+    idle: (/** @type {string} */ id) => queues.get(id) ?? Promise.resolve(),
   };
   return { docs, receive };
 }

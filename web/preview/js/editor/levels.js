@@ -443,7 +443,7 @@ function wantLevel(want) {
 }
 /** A map's pieces and property an address asks for, once the map's scene has come: the pieces that are there, as the selection. */
 function takePieces(want) {
-  const have = new Set(mapScene.value.pieces.map((p) => p.id));
+  const have = new Set(mapScene.value?.pieces.map((p) => p.id));
   const ids = want.pieces.filter((i) => have.has(i));
   if (ids.length < want.pieces.length) toast(ids.length ? 'Some of those pieces are not on the map now' : 'The map has no such piece now');
   view.set({ face: want.face, msel: ids, mprop: ids.length === 1 && want.prop ? want.prop : null, madd: false });

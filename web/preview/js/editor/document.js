@@ -151,7 +151,7 @@ function record(text, kind, label = null) {
   const at = history.at(key);
   const join = kind === 'type' && run.lastKind === 'type' && now - run.lastTime < 1000 && at > 0;
   const prior = join ? history.entries(key)[at - 1].before : stateNow(key);
-  const change = describeChange(prior, text, kind, label);
+  const change = describeChange(prior ?? undefined, text, kind, label);
   if (join) history.amend(key, { after: text, caret: texts.selectionStart, kind, label: change.title, change });
   else history.push(key, { before: prior, after: text, caret: texts.selectionStart, kind, label: change.title, change });
   run.lastKind = kind; run.lastTime = now;
@@ -416,7 +416,7 @@ async function save(now = false) {
   d = doc.get();
   if (d.checked !== d.text || !d.ok) return false; // a mistake: kept here until it is fixed
   const t = tile(), text = d.text, file = d.file, sid = shownSid.value;
-  if (!t || !file || !sid) return false;
+  if (!t || !file || !sid || text == null) return false;
   run.saving = true;
   doc.set({ saving: true });
   try {
@@ -557,7 +557,7 @@ function showTextBar() {
   st.classList.toggle('bad', conflict || !!words?.bad);
   // the disk's text and revision are already the held state (js/documents.js): choosing says which text is the user's
   render(html`<${SaveState} words=${words} conflict=${conflict}
-    onTake=${() => { const disk = docs.resolveConflict(shownSid.value) ?? d.conflict; doc.set({ conflict: null }); edited(disk, 'disk'); }}
+    onTake=${() => { const disk = docs.resolveConflict(shownSid.value) ?? d.conflict; doc.set({ conflict: null }); if (disk != null) edited(disk, 'disk'); }}
     onKeep=${() => { docs.resolveConflict(shownSid.value); doc.set({ conflict: null }); changed(); }} />`, st);
 }
 
