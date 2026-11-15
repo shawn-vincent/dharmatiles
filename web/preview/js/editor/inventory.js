@@ -75,7 +75,7 @@ async function haveThis(t, colour, button) {
 const edit = (/** @type {(s: any) => any} */ f) => { const t = tile(); if (t) inventoryUi.update(t.id, f); };
 
 /** What the buttons do. */
-const buttons = {
+export const buttons = {
   pickColour: (/** @type {string} */ c) => { pickedColour.value = c; rememberColour(c); },
   haveThis,
   setFace: (/** @type {string} */ face) => edit(() => ({ face })),
@@ -91,7 +91,7 @@ const buttons = {
     edit(() => ({ reprint: null }));
     toast(`${b.made ? 'Made' : 'Added it to'} ${b.list.split(/[\\/]/).pop()}${b.warning ? `. ${b.warning}` : ''}`, () => import('./open.js').then(({ select }) => select(b.id).then(() => view.set({ pageAt: 'edit' }))), { label: 'Open', ms: b.warning ? 12000 : 7000 });
   },
-  relink: async (/** @type {any} */ g, /** @type {string} */ id, /** @type {string} */ label) => {
+  relink: async (/** @type {any} */ g, /** @type {string} */ id, /** @type {string | undefined} */ label) => {
     const b = await act('Could not re-link', () => host.inventoryRelink({ from: g.tile, to: id, on: today() }));
     if (b) toast(`Re-linked ${g.name} to ${label}`);
   },

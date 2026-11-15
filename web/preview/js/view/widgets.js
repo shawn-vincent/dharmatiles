@@ -10,7 +10,7 @@ export const Button = (/** @type {{ text: any, run?: (e: MouseEvent) => void, ti
 export const Section = (/** @type {{ title?: string, cls?: string, children?: any }} */ { title, cls = '', children }) => html`<section class=${`pl-sec${cls ? ` ${cls}` : ''}`}>${title ? html`<h3 class="cap">${title}</h3>` : null}${children}</section>`;
 
 /** A row of buttons, one pressed: `options` are [value, text, title]; pressing another one calls `on(value)`. */
-export const Seg = (/** @type {{ label: string, options: readonly (readonly [string, string, string?])[], current: string, on: (value: string) => void, disabled?: boolean }} */ { label, options, current, on, disabled }) => html`<div class="pl-field"><span class="pl-lab">${label}</span>
+export const Seg = (/** @type {{ label: string, options: readonly (readonly [string | null, string, string?])[], current: string | null, on: (value: string | null) => void, disabled?: boolean }} */ { label, options, current, on, disabled }) => html`<div class="pl-field"><span class="pl-lab">${label}</span>
   <div class="seg" role="group" aria-label=${label}>${options.map(([v, text, title]) => html`<button type="button" key=${v} aria-pressed=${String(v === current)} title=${title} disabled=${!!disabled} onClick=${() => { if (v !== current) on(v); }}>${text}</button>`)}</div></div>`;
 
 /** A note under a heading: `cls` adds its tone (`ok`, `bad`, `warn`). */
