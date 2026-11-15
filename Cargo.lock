@@ -383,6 +383,7 @@ dependencies = [
  "dt-kit",
  "dt-lang",
  "dt-print",
+ "dt-service",
  "dt-store",
  "dt-testkit",
  "dt-value",
@@ -537,6 +538,13 @@ dependencies = [
  "serde",
  "serde_json",
  "ts-rs",
+]
+
+[[package]]
+name = "dt-service"
+version = "1.0.0"
+dependencies = [
+ "dt-value",
 ]
 
 [[package]]

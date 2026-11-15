@@ -2,6 +2,7 @@
 //! place the user owns, and does no more than it says.
 
 use super::super::edit::NewReq;
+use super::super::storage::DiskStorage;
 use super::*;
 use dt_eval::Options;
 
@@ -166,19 +167,22 @@ fn a_tile_document_says_its_size() {
 fn the_settings_keep_the_added_places_and_a_bad_file_is_told() {
     let d = scratch("settings").join("s");
     assert_eq!(
-        load_places(&d).unwrap(),
+        load_places(&DiskStorage, &d).unwrap(),
         Vec::<PathBuf>::new(),
         "no file yet: none"
     );
     let a = PathBuf::from("/a/b");
-    save_places(&d, &[a.clone(), PathBuf::from("/c")]).unwrap();
-    assert_eq!(load_places(&d).unwrap(), vec![a, PathBuf::from("/c")]);
+    save_places(&DiskStorage, &d, &[a.clone(), PathBuf::from("/c")]).unwrap();
+    assert_eq!(
+        load_places(&DiskStorage, &d).unwrap(),
+        vec![a, PathBuf::from("/c")]
+    );
     std::fs::write(d.join("places.json"), "{ not json").unwrap();
-    let e = load_places(&d).unwrap_err();
+    let e = load_places(&DiskStorage, &d).unwrap_err();
     assert!(e.contains("places.json") && e.contains("not valid"), "{e}");
     std::fs::write(d.join("places.json"), "{\"places\": [3]}").unwrap();
     assert!(
-        load_places(&d).is_err(),
+        load_places(&DiskStorage, &d).is_err(),
         "a place that is not a path is told, not skipped"
     );
 }
@@ -215,7 +219,10 @@ fn the_chooser_adds_a_place_that_is_kept_and_a_cancel_changes_nothing() {
     assert!(snap.roots[i].writable);
     assert_eq!(folders_of(&shared, i), vec!["sub".to_owned()]);
     assert_eq!(listed_names(&shared, i).len(), 1);
-    assert_eq!(load_places(&settings).unwrap(), vec![outside.clone()]);
+    assert_eq!(
+        load_places(&DiskStorage, &settings).unwrap(),
+        vec![outside.clone()]
+    );
     // its tile's size is read without a build
     let t = snap.tiles.iter().find(|t| t.root == i).unwrap();
     assert_eq!(t.size.as_deref(), Some("2x1"));
@@ -236,7 +243,7 @@ fn the_chooser_adds_a_place_that_is_kept_and_a_cancel_changes_nothing() {
         .with_picker(Picker::Fixed(Some(outside.join("sub/x.dtile"))));
     refused(&add_place(&file), "400");
     assert_eq!(
-        load_places(&settings).unwrap().len(),
+        load_places(&DiskStorage, &settings).unwrap().len(),
         1,
         "a refusal keeps nothing"
     );
@@ -245,7 +252,7 @@ fn the_chooser_adds_a_place_that_is_kept_and_a_cancel_changes_nothing() {
     let r = remove_place(&shared, &PlacesRemoveReq { root: i });
     done(&r);
     assert_eq!(shared.roots().len(), 2);
-    assert!(load_places(&settings).unwrap().is_empty());
+    assert!(load_places(&DiskStorage, &settings).unwrap().is_empty());
     assert!(outside.join("sub/x.dtile").exists());
     assert!(listed_names(&shared, i).is_empty());
     // My tiles and the library stay
@@ -276,7 +283,7 @@ fn removing_a_place_moves_the_ones_after_it_down() {
     // b is place 2 now, and its tile still says so
     assert_eq!(shared.roots()[2].dir(), Some(b.as_path()));
     assert_eq!(listed_names(&shared, 2).len(), 1);
-    assert_eq!(load_places(&settings).unwrap(), vec![b]);
+    assert_eq!(load_places(&DiskStorage, &settings).unwrap(), vec![b]);
     assert_eq!(listed_names(&shared, 0).len(), 1);
 }
 

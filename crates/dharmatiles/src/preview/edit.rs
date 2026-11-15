@@ -68,6 +68,7 @@ use super::api::{Mistake, Out, Reply, TileRef};
 use super::places::{Listed, Nothing};
 use super::queue::Outcome;
 use super::roots::personal_home;
+use super::storage::Storage;
 use super::*;
 
 // ---- the calls' types ------------------------------------------------------------------
@@ -840,52 +841,40 @@ pub(super) fn tile_name(name: Option<&str>) -> Result<String, Reply> {
 /// Write `text` as `<stem>.dtile` in `dir`, or `<stem> 2.dtile`, … when
 /// that is taken: created new, so another file is never overwritten.
 fn write_new(
+    storage: &dyn Storage,
     dir: &Path,
     stem: &str,
     text: &str,
 ) -> Result<PathBuf, (&'static str, super::api::Body)> {
-    write_new_bytes(dir, stem, text.as_bytes())
+    write_new_bytes(storage, dir, stem, text.as_bytes())
 }
 
 /// [`write_new`] for bytes: a copy of a document is written as it was read.
 pub(super) fn write_new_bytes(
+    storage: &dyn Storage,
     dir: &Path,
     stem: &str,
     text: &[u8],
 ) -> Result<PathBuf, (&'static str, super::api::Body)> {
-    write_new_ext(dir, stem, "dtile", text)
+    write_new_ext(storage, dir, stem, "dtile", text)
 }
 
 /// [`write_new_bytes`] for any document extension (a print list is `dmap`).
 pub(super) fn write_new_ext(
+    storage: &dyn Storage,
     dir: &Path,
     stem: &str,
     ext: &str,
     text: &[u8],
 ) -> Result<PathBuf, (&'static str, super::api::Body)> {
-    use std::io::Write;
     for n in 1..1000 {
         let dest = dir.join(if n == 1 {
             format!("{stem}.{ext}")
         } else {
             format!("{stem} {n}.{ext}")
         });
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&dest)
-        {
-            Ok(mut f) => {
-                return f.write_all(text).map(|()| dest.clone()).map_err(|e| {
-                    // best-effort cleanup of the half-made file; the write error is what is reported
-                    let _ = std::fs::remove_file(&dest);
-                    fail::failure_from(
-                        "500 Internal Server Error",
-                        format!("cannot write {}: {e}", dest.display()),
-                        &e,
-                    )
-                });
-            }
+        match storage.create_new(&dest, text) {
+            Ok(()) => return Ok(dest),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(e) => {
                 return Err(fail::failure_from(
@@ -926,7 +915,7 @@ pub(super) fn home(shared: &Shared) -> Result<PathBuf, (&'static str, super::api
             || personal_home().map_err(|e| fail::failure("500 Internal Server Error", e)),
             Ok,
         )?;
-    std::fs::create_dir_all(&home).map_err(|e| {
+    shared.storage.create_dir_all(&home).map_err(|e| {
         fail::failure_from(
             "500 Internal Server Error",
             format!("cannot make {}: {e}", home.display()),
@@ -950,36 +939,13 @@ pub(super) fn rename(shared: &Shared, tile: &TileRef, v: RenameReq) -> Out<Liste
     if to == from {
         return Ok(listed(shared, &to));
     }
-    match std::fs::hard_link(&from, &to) {
-        Ok(()) => {
-            if let Err(e) = std::fs::remove_file(&from) {
-                // best-effort cleanup of the new link; the failure to remove the old name is what is reported
-                let _ = std::fs::remove_file(&to);
-                return Err(fail::failure_from(
-                    "500 Internal Server Error",
-                    format!("cannot rename {}: {e}", from.display()),
-                    &e,
-                ));
-            }
-        }
+    match shared.storage.move_no_clobber(&from, &to) {
+        Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let same = matches!(
-                (std::fs::canonicalize(&from), std::fs::canonicalize(&to)),
-                (Ok(a), Ok(b)) if a == b
-            );
-            if !same {
-                return Err(fail::refused(
-                    "409 Conflict",
-                    format!("a tile called “{stem}” is already in this folder"),
-                ));
-            }
-            if let Err(e) = std::fs::rename(&from, &to) {
-                return Err(fail::failure_from(
-                    "500 Internal Server Error",
-                    format!("cannot rename {}: {e}", from.display()),
-                    &e,
-                ));
-            }
+            return Err(fail::refused(
+                "409 Conflict",
+                format!("a tile called “{stem}” is already in this folder"),
+            ));
         }
         Err(e) => {
             return Err(fail::failure_from(
@@ -999,7 +965,7 @@ pub(super) fn rename(shared: &Shared, tile: &TileRef, v: RenameReq) -> Out<Liste
 /// a file outside the folders, never anything but a tile document.
 pub(super) fn delete(shared: &Shared, tile: &TileRef, _: Nothing) -> Out<Deleted> {
     let path = places::owned_tile(shared, &tile.path, "deleted")?;
-    std::fs::remove_file(&path).map_err(|e| {
+    shared.storage.remove_file(&path).map_err(|e| {
         fail::failure_from(
             "500 Internal Server Error",
             format!("cannot delete {}: {e}", path.display()),
@@ -1043,7 +1009,7 @@ pub(super) fn new_tile(shared: &Shared, v: NewReq) -> Out<Listed> {
         Some(r) => r?,
         None => home(shared)?,
     };
-    let dest = write_new(&into, &stem, &text)?;
+    let dest = write_new(shared.storage.as_ref(), &into, &stem, &text)?;
     Ok(listed(shared, &dest))
 }
 
@@ -1434,9 +1400,11 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
     clippy::disallowed_methods,
     reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
 )]
-pub(super) fn writable(file: &str) -> bool {
+pub(super) fn writable(storage: &dyn Storage, file: &str) -> bool {
     !file.starts_with(dt_eval::LIB)
-        && std::fs::metadata(file).is_ok_and(|m| m.is_file() && !m.permissions().readonly())
+        && storage
+            .stat(Path::new(file))
+            .is_ok_and(|m| m.is_file() && !m.readonly)
 }
 
 /// `/api/tiles/ID/save` `{text, docRev, file?}`: the text written, if the file is
@@ -1444,7 +1412,7 @@ pub(super) fn writable(file: &str) -> bool {
 /// current text and revision).  Answers the revision the file has now.
 pub(super) fn save(shared: &Shared, t: &TileRef, v: SaveReq) -> Out<SaveRes> {
     let file = t.file(v.file.as_deref())?;
-    if !writable(&file) {
+    if !writable(shared.storage.as_ref(), &file) {
         return Err(fail::refused(
             "403 Forbidden",
             "this file is read only: a library tile is copied into My tiles when it is first changed",
@@ -1532,6 +1500,7 @@ pub(super) fn mine(shared: &Shared, t: &TileRef, _: Nothing) -> Out<Listed> {
         .trim_end_matches(".dtile")
         .to_owned();
     let dest = write_new(
+        shared.storage.as_ref(),
         &home(shared)?,
         &stem,
         &pin_uses(&text, files, &shared.options())?,

@@ -95,7 +95,7 @@ pub fn read_manifest(bundle: &Path) -> Result<EngineManifest, String> {
 const TARGET: &str = "wasm32-unknown-unknown";
 
 /// The language crates, which must keep compiling for the browser (no C++).
-pub const CORE: [&str; 3] = ["dt-lang", "dt-value", "dt-doc"];
+pub const CORE: [&str; 4] = ["dt-lang", "dt-value", "dt-doc", "dt-service"];
 
 /// The engine, which must too: dt-web brings in dt-eval, dt-elements, dt-kit
 /// and dt-geom (and Manifold, so this needs the C++ toolchain).

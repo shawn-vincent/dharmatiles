@@ -1,0 +1,15 @@
+[package]
+name = "dt-service"
+description = "The editor's service, below every transport: the Storage trait for the files it reads and writes (and one in memory), and the Clock; it reads no disk, speaks no HTTP and builds on wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+dt-value.workspace = true
+
+[lints]
+workspace = true
