@@ -59,12 +59,7 @@ pub struct TiersWantRes {
     pub keys: Vec<String>,
 }
 
-/// FNV-1a, 64 bits: what names a text in a key.
-pub(super) fn fnv(text: &str) -> u64 {
-    text.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-    })
-}
+pub(super) use dt_service::tile_calls::fnv;
 
 fn key_of(w: &TierWant) -> String {
     let dash = || "-".to_owned();

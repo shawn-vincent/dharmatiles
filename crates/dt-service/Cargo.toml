@@ -19,6 +19,7 @@ dt-doc.workspace = true
 dt-eval.workspace = true
 dt-kit.workspace = true
 dt-print.workspace = true
+miette.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true

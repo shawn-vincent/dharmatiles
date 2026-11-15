@@ -4,72 +4,18 @@
 //! [`super::Shared::report`] and [`super::Shared::say`] put them in the log
 //! and on the event stream; this module only makes them.
 
-use dt_eval::Diag;
-
 use super::api::ErrorDetail;
 use dt_eval::TileRecord;
 pub(super) use dt_service::message::Scope;
 use dt_service::message::{
-    BuildData, CheckData, ExportData, Kind, Message, MessageData, MessagesRes, Origin, ServerData,
-    Severity, ShownData, render,
+    BuildData, ExportData, Kind, Message, MessageData, MessagesRes, Origin, ServerData, Severity,
+    ShownData, render,
 };
 
 use super::Shared;
 use super::route::Reply;
-use super::stack::StackItem;
 
-/// What a check says: that it read the tile, and each note it made
-/// (`dt::steep`, `dt::edge`).  `stack` is the plan's stack items, for the
-/// entry each note is about.
-pub(super) fn of_check(
-    c: &dt_eval::Checked,
-    id: &str,
-    name: &str,
-    stack: &[StackItem],
-) -> Vec<Message> {
-    let mut out = Vec::new();
-    if let Some(t) = &c.tile {
-        out.push(
-            Message::new(
-                Kind::Check,
-                Severity::Info,
-                Scope::Check,
-                id,
-                name,
-                format!(
-                    "Read {name}: {}×{} squares, {} stack entries",
-                    t.cols,
-                    t.rows,
-                    t.stack.len()
-                ),
-            )
-            .data(MessageData::Check(CheckData {
-                cols: t.cols,
-                rows: t.rows,
-                entries: t.stack.len(),
-            })),
-        );
-    }
-    out.extend(
-        c.notes()
-            .iter()
-            .map(|d| Message::from_diag(d, Scope::Check, true, id, name, stack)),
-    );
-    out
-}
-
-/// A check or a build that stopped on mistakes: one message each.
-pub(super) fn of_errors(
-    errs: &[Diag],
-    scope: Scope,
-    id: &str,
-    name: &str,
-    stack: &[StackItem],
-) -> Vec<Message> {
-    errs.iter()
-        .map(|d| Message::from_diag(d, scope, false, id, name, stack))
-        .collect()
-}
+pub(super) use dt_service::tile_calls::{of_check, of_errors};
 
 /// A finished build: its timing, and the gate's verdict with its numbers.
 /// `record` is the build's record ([`crate::tile_json`]).  `reused` is how
