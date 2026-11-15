@@ -197,7 +197,7 @@ const addedNow = signal(/** @type {{doc: string | null, tileId: string, name: st
 const freshNow = signal(false);
 let freshTimer = 0;
 /** The tile `t` was just put on the map: its row lights up for a moment (the Add tiles level's list, and its one line when folded). */
-/** @param {{ id: string, name: string }} t */
+/** @param {import('./stores.js').ServerTile} t */
 export function flashAdded(t) {
   addedNow.value = { doc: tileNow.value?.id ?? null, tileId: t.id, name: stem(t).replace(/\\.dtile$/i, ''), n: (addedNow.peek()?.n ?? 0) + 1 };
   freshNow.value = true;
