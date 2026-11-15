@@ -27,66 +27,99 @@ export const KINDS = [
   { kind: 'stl', exts: ['.stl'], noun: 'model', plural: 'models', actions: false },
 ];
 
-/** The kind of a file (by its extension), or undefined. */
+/** @typedef {import('./api').RootJson} Root */
+/** @typedef {import('./api').FolderJson} Folder */
+/** @typedef {{ root: number, path: string }} TileAt what a folder level reads of a tile */
+/** @typedef {{ size?: string | null, plan?: import('./api').TilePlan | null }} Sized */
+/** @typedef {{ root: number | null, dir: string }} Level */
+
+/**
+ * The kind of a file (by its extension), or undefined.
+ * @param {string | null | undefined} path
+ */
 export const kindOf = (path) => {
   const p = String(path || '').toLowerCase();
   return KINDS.find((k) => k.exts.some((e) => p.endsWith(e)));
 };
 
 /** The file's name without its extension (`2x1-cliff`; an `.stl` and a `.dmap` keep their suffix, as the menu always showed an `.stl`). */
+/** @param {string | null | undefined} path */
 export const stemOf = (path) => /** @type {string} */ (String(path || '').replace(/^lib:/, '').split(/[\\/]/).pop()).replace(/\.dtile$/i, ''); // split always yields a piece
 
+/** @param {number} n @param {string} one @param {string} [many] */
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** @param {string | null | undefined} s */
 const slashes = (s) => String(s || '').replace(/\\/g, '/');
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+/** @param {string} a @param {string} b */
 const byName = (a, b) => collator.compare(a, b);
 
 // ---- the places -----------------------------------------------------------------------------
 
 const ROLE_ORDER = ['home', 'files', 'folder', 'added', 'library', 'tests'];
 
-/** The places in the order Places lists them: My tiles, files named, folders named, folders added, the library, the tests. */
+/**
+ * The places in the order Places lists them: My tiles, files named, folders named, folders added, the library, the tests.
+ * @param {Root[] | null | undefined} roots
+ */
 export function placesOf(roots) {
   return (roots || []).map((r, i) => ({ ...r, index: r.index ?? i }))
     .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.index - b.index);
 }
 
 /** What names a place in an address: its path (a folder's, or `lib:tiles/`), `files` for the files named. */
+/** @param {Root | null | undefined} r */
 export const placeKey = (r) => r?.path ?? 'files';
 
 /** The index of the place an address names, or -1. */
+/** @param {Root[] | null | undefined} roots @param {string} key */
 export const placeIndex = (roots, key) => (roots || []).findIndex((r) => placeKey(r) === key);
 
 /** May a place's contents be changed from the page (it is a folder you own)? */
+/** @param {{ writable?: boolean } | null | undefined} r */
 export const writable = (r) => !!r?.writable;
 
 /** The tile paths of a place are relative to this prefix (`/Users/x/tiles/`, `lib:tiles/`), or null for the files named. */
+/** @param {Root | null | undefined} r */
 function prefixOf(r) {
   if (!r || r.kind === 'files' || !r.path) return null;
   const p = slashes(r.path);
   return p.endsWith('/') ? p : `${p}/`;
 }
 
-/** The names a tile's path has below its place: `['dungeon', 'combo.dtile']`. */
+/**
+ * The names a tile's path has below its place: `['dungeon', 'combo.dtile']`.
+ * @param {Root | null | undefined} r
+ * @param {string} path
+ * @returns {string[]}
+ */
 export function relOf(r, path) {
   const p = slashes(path);
   const pre = prefixOf(r);
   // split always yields a piece, so `pop` is never undefined here
-  if (pre == null) return [p.split('/').pop()];
+  if (pre == null) return [/** @type {string} */ (p.split('/').pop())];
   const rest = p.startsWith(pre) ? p.slice(pre.length) : /** @type {string} */ (p.split('/').pop());
   return rest.split('/').filter(Boolean);
 }
 
-/** Where a tile is: `{root, dir}` (its place and folder), or null for a tile no place holds. */
+/**
+ * Where a tile is: `{root, dir}` (its place and folder), or null for a tile no place holds.
+ * @param {Root[] | null | undefined} roots
+ * @param {TileAt | null | undefined} tile
+ * @returns {{ root: number, dir: string } | null}
+ */
 export function whereIs(roots, tile) {
-  const r = (roots || [])[tile?.root];
-  if (!r) return null;
+  const r = tile && (roots || [])[tile.root];
+  if (!tile || !r) return null;
   return { root: tile.root, dir: relOf(r, tile.path).slice(0, -1).join('/') };
 }
 
 // ---- what a folder level lists ------------------------------------------------------------------
 
-/** Every folder path a place has: the ones the program lists (empty ones too) and the ones its tiles are in. */
+/**
+ * Every folder path a place has: the ones the program lists (empty ones too) and the ones its tiles are in.
+ * @param {Root} r @param {number} root @param {TileAt[] | undefined} tiles @param {Folder[] | undefined} folders
+ */
 function folderPaths(r, root, tiles, folders) {
   const all = new Set((folders || []).filter((f) => f.root === root).map((f) => f.path));
   for (const t of tiles || []) {
@@ -102,6 +135,9 @@ function folderPaths(r, root, tiles, folders) {
  * the way down, and its own subfolders) and the tiles in it, each folder and tile by name.  With a `query`
  * the place is searched instead: no folders, and every tile of it, at any depth, whose name or path has the
  * words in it (each carries `where`, its folder).  Null when the place is not there.
+ * @template {TileAt} T
+ * @param {{ roots: Root[], tiles: T[], folders?: Folder[], root: number, dir?: string, query?: string }} p
+ * @returns {{ place: Root, dir: string, folders: { name: string, dir: string, tiles: number, folders: number }[], items: { tile: T, where: string }[], total: number, here: number } | null}
  */
 export function levelOf({ roots, tiles, folders = [], root, dir = '', query = '' }) {
   const r = (roots || [])[root];
@@ -117,6 +153,7 @@ export function levelOf({ roots, tiles, folders = [], root, dir = '', query = ''
   }
   const base = dir ? `${dir}/` : '';
   const all = folderPaths(r, root, tiles, folders);
+  /** @type {Map<string, { name: string, dir: string, tiles: number, folders: number }>} */
   const subs = new Map();
   for (const f of all) {
     if (!f.startsWith(base)) continue;
@@ -126,8 +163,9 @@ export function levelOf({ roots, tiles, folders = [], root, dir = '', query = ''
     if (!subs.has(name)) subs.set(name, { name, dir: `${base}${name}`, tiles: 0, folders: 0 });
     if (!rest.includes('/')) continue;
     // a deeper path: it is a folder of the sub
-    if (rest.split('/').length === 2) subs.get(name).folders += 1;
+    if (rest.split('/').length === 2) /** @type {{ folders: number }} */ (subs.get(name)).folders += 1;
   }
+  /** @type {{ tile: T, where: string }[]} */
   const items = [];
   for (const { t, rel } of mine) {
     const at = rel.slice(0, -1).join('/');
@@ -144,7 +182,7 @@ export function levelOf({ roots, tiles, folders = [], root, dir = '', query = ''
 }
 
 /** Does the level `{root, dir}` exist (the place is listed, and the folder is one of it)? */
-/** @param {{ roots: *[], tiles: *[], folders?: string[], root: number, dir?: string }} p */
+/** @param {{ roots: Root[], tiles: TileAt[], folders?: Folder[], root: number, dir?: string }} p */
 export function levelExists({ roots, tiles, folders = [], root, dir = '' }) {
   const r = (roots || [])[root];
   if (!r) return false;
@@ -153,16 +191,22 @@ export function levelExists({ roots, tiles, folders = [], root, dir = '' }) {
 
 /** The level `level` stands for among what the program lists now: itself, else the nearest of its parents that is there (a place taken off, a folder trashed). */
 /**
- * @param {{ roots: *[], tiles: *[], folders?: string[] }} state
+ * @param {{ roots: Root[], tiles: TileAt[], folders?: Folder[] }} state
  * @param {{ root: number | null, dir?: string }} level
+ * @returns {Level}
  */
 export function settledLevel({ roots, tiles, folders = [] }, level) {
-  let l = level;
-  while (l.root != null && !levelExists({ roots, tiles, folders, root: l.root, dir: l.dir })) l = /** @type {{ root: number | null, dir: string }} */ (parentLevel(l)); // a level with a place always has a parent
+  /** @type {Level} */
+  let l = { root: level.root, dir: level.dir ?? '' };
+  while (l.root != null && !levelExists({ roots, tiles, folders, root: l.root, dir: l.dir })) l = /** @type {Level} */ (parentLevel(l)); // a level with a place always has a parent
   return l;
 }
 
-/** The folder one level up from `{root, dir}`: its parent folder, else the place, else Places (null). */
+/**
+ * The folder one level up from `{root, dir}`: its parent folder, else the place, else Places (null).
+ * @param {{ root: number | null, dir?: string }} level
+ * @returns {Level | null}
+ */
 export function parentLevel({ root, dir = '' }) {
   if (root == null) return null;
   if (!dir) return { root: null, dir: '' };
@@ -172,7 +216,10 @@ export function parentLevel({ root, dir = '' }) {
 
 // ---- the words ------------------------------------------------------------------------------------
 
-/** `/Users/me/dharmatiles/dungeon` as `~/dharmatiles/dungeon`; a long one keeps its end: `~/…/dungeon/combo`. */
+/**
+ * `/Users/me/dharmatiles/dungeon` as `~/dharmatiles/dungeon`; a long one keeps its end: `~/…/dungeon/combo`.
+ * @param {string | null | undefined} path @param {string | null | undefined} home @param {number} [max]
+ */
 export function shortPath(path, home, max = 38) {
   let p = slashes(path);
   const h = slashes(home).replace(/\/$/, '');
@@ -184,7 +231,10 @@ export function shortPath(path, home, max = 38) {
   return `${homed ? '~/' : parts[0] === '' ? '/' : ''}…/${keep}`;
 }
 
-/** Where a folder level is on disk, as a short path (a library group as `library · tiles/ground`). */
+/**
+ * Where a folder level is on disk, as a short path (a library group as `library · tiles/ground`).
+ * @param {Root | null | undefined} r @param {string} dir @param {string | null | undefined} home
+ */
 export function wherePath(r, dir, home) {
   if (!r) return '';
   if (r.kind === 'dir') return shortPath(dir ? `${slashes(r.path)}/${dir}` : r.path, home);
@@ -195,7 +245,11 @@ export function wherePath(r, dir, home) {
   return 'named when dharmatiles started';
 }
 
-/** The strip under the crumbs on a folder level: up to two short lines. */
+/**
+ * The strip under the crumbs on a folder level: up to two short lines.
+ * @param {{ roots: Root[], level: Level, view: { total: number, here: number, folders: unknown[] } | null | undefined, home: string | null | undefined }} p
+ * @returns {string[]}
+ */
 export function contextForFolder({ roots, level, view, home }) {
   if (level.root == null) {
     const n = (roots || []).length;
@@ -215,26 +269,38 @@ export function contextForFolder({ roots, level, view, home }) {
   return [counts.join(' · '), `${where}${note}`].filter(Boolean);
 }
 
-/** A tile's row: its size (`2×1`, from the build's plan once there is one, else what the document writes). */
+/**
+ * A tile's row: its size (`2×1`, from the build's plan once there is one, else what the document writes).
+ * @param {Sized | null | undefined} t
+ */
 export function sizeLine(t) {
   const p = t?.plan;
-  if (p?.cols && p?.rows) return `${p.cols}×${p.rows}`;
+  if (p && 'cols' in p && p.cols && p.rows) return `${p.cols}×${p.rows}`;
   return String(t?.size || '').replace(/x/i, '×');
 }
 
-/** The size as squares across and up, for a thumbnail: [cols, rows] or null. */
+/**
+ * The size as squares across and up, for a thumbnail: [cols, rows] or null.
+ * @param {Sized | null | undefined} t
+ * @returns {[number, number] | null}
+ */
 export function sizeSquares(t) {
   const p = t?.plan;
-  if (p?.cols && p?.rows) return [p.cols, p.rows];
+  if (p && 'cols' in p && p.cols && p.rows) return [p.cols, p.rows];
   const m = /^(\d+)x(\d+)$/i.exec(String(t?.size || ''));
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
 // ---- the address ------------------------------------------------------------------------------------
 
-/** The hash pairs of a folder level: `place` (its key; empty at Places) and `dir`. */
+/**
+ * The hash pairs of a folder level: `place` (its key; empty at Places) and `dir`.
+ * @param {Root[] | null | undefined} roots @param {{ root: number | null, dir?: string }} level
+ * @returns {{ place: string, dir?: string }}
+ */
 export function placeParams(roots, { root, dir = '' }) {
   if (root == null || !roots?.[root]) return { place: '' };
+  /** @type {{ place: string, dir?: string }} */
   const p = { place: placeKey(roots[root]) };
   if (dir) p.dir = dir;
   return p;
@@ -244,12 +310,16 @@ export function placeParams(roots, { root, dir = '' }) {
  * The folder level a parsed hash asks for: `{root, dir}` (root null for Places), or null when the hash
  * asks for no folder level (it names a tile, or nothing).  A place the program does not list gives
  * `{missing: key}` so the page can say so.
+ * @param {Root[]} roots
+ * @param {{ tile?: string | null, place?: string, dir?: string }} h
+ * @returns {{ root: number | null, dir: string, missing?: undefined } | { missing: string, root?: undefined, dir?: undefined } | null}
  */
 export function levelOfParams(roots, h) {
   if (h.tile != null || !('place' in h)) return null;
   if (h.place === '') return { root: null, dir: '' };
-  const root = placeIndex(roots, h.place);
-  if (root < 0) return { missing: h.place };
+  const root = placeIndex(roots, h.place ?? '');
+  if (root < 0) return { missing: h.place ?? '' };
+
   return { root, dir: slashes(h.dir || '').replace(/^\/+|\/+$/g, '') };
 }
 
@@ -259,6 +329,8 @@ export function levelOfParams(roots, h) {
  * May the tile `t` be dropped on `target` (`{root, dir}`, a folder row or a crumb)?  Not into the folder
  * it is in, nor a place that is read only.  The program checks all of it again: this is only what the
  * page offers, and the reason a target that cannot take it is not lit.
+ * @param {Root[]} roots @param {TileAt | null | undefined} t @param {{ root: number | null, dir?: string } | null | undefined} target
+ * @returns {{ ok: true } | { ok: false, why: string }}
  */
 export function canDrop(roots, t, target) {
   if (!t || !target || target.root == null) return { ok: false, why: 'not a folder' };
@@ -272,8 +344,13 @@ export function canDrop(roots, t, target) {
   return { ok: true };
 }
 
-/** The folders a tile can move to, for its menu: every folder of every place you own, each `{root, dir, label, place}`, the place itself first. */
+/**
+ * The folders a tile can move to, for its menu: every folder of every place you own, each `{root, dir, label, place}`, the place itself first.
+ * @param {Root[]} roots @param {Folder[] | undefined} folders @param {TileAt} t
+ * @returns {{ root: number, dir: string, label: string, place: string }[]}
+ */
 export function moveTargets(roots, folders, t) {
+  /** @type {{ root: number, dir: string, label: string, place: string }[]} */
   const out = [];
   for (const r of placesOf(roots)) {
     if (!writable(r)) continue;
@@ -286,8 +363,12 @@ export function moveTargets(roots, folders, t) {
   return out;
 }
 
-/** After a folder is renamed, the folder level `dir` (below it, or itself) with its new name: the dir it is now. */
+/**
+ * After a folder is renamed, the folder level `dir` (below it, or itself) with its new name: the dir it is now.
+ * @param {string} dir @param {string} from @param {string} to
+ */
 export function renamedDir(dir, from, to) {
+
   if (dir === from) return to;
   return dir.startsWith(`${from}/`) ? `${to}${dir.slice(from.length)}` : dir;
 }

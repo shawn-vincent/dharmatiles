@@ -19,66 +19,143 @@ import { showError } from '../problems.js';
 import { createLog } from '../messages.js';
 import { settledLevel, whereIs } from '../folders.js';
 
+/**
+ * @template S the keys the store holds (each a signal), with the type of each
+ * @template [D={}] the keys worked out from other state (`derive`): read like the others, never set
+ * @typedef {{
+ *   get: () => S & D,
+ *   derive: <K extends keyof D>(k: K, fn: () => D[K]) => void,
+ *   set: (patch: Partial<S>) => void,
+ *   subscribe: (keys: (keyof (S & D))[] | null, fn: (state: S & D, changed: (keyof (S & D))[]) => void) => () => void,
+ * }} Store
+ */
+
 // `report(what, err)` takes what a subscriber threw: the error panel by default.
 //
 // Each key of a store is a signal (@preact/signals-core), and `get()` is an object whose properties read them: read
 // inside a component or a `computed`, a key is followed by whoever read it; read anywhere else, it is a plain read.
 // `set` writes the keys in one batch.  `subscribe` is for the parts of the page not yet written as components.
+//
+// The state is typed by the caller: `set` takes a `Partial` of it, so a misspelt key or a wrong value fails tsc, and
+// `get()` is the state itself.  The body reaches the keys by name, which a type cannot follow, so it holds them as a
+// `Record` (the one place the store is untyped, kept inside this function).
+/**
+ * @template S
+ * @template [D={}]
+ * @param {S} initial
+ * @param {(what: string, err: unknown) => void} [report]
+ * @returns {Store<S, D>}
+ */
 export function createStore(initial, report = showError) {
+  /** @type {Map<string, import('@preact/signals-core').Signal<any>>} */
   const sigs = new Map();
-  const state = /** @type {typeof initial} */ ({});
+  /** @type {Record<string, any>} */
+  const state = {};
+  /** @type {Set<{ keys: string[] | null, fn: (state: any, changed: any) => void }>} */
   const subs = new Set();
+  /** @param {string} k @param {any} v */
   const own = (k, v) => {
     const s = signal(v);
     sigs.set(k, s);
     Object.defineProperty(state, k, { enumerable: true, configurable: true, get: () => s.value });
     return s;
   };
-  for (const [k, v] of Object.entries(initial)) own(k, v);
+  for (const [k, v] of Object.entries(/** @type {Record<string, any>} */ (initial))) own(k, v);
+  /** @param {string[]} changed */
   const tell = (changed) => {
     // every subscriber runs, and one that throws is reported, never allowed to stop the rest
     for (const s of [...subs]) {
-      if (s.keys && !changed.some((k) => s.keys.includes(k))) continue;
+      const keys = s.keys;
+      if (keys && !changed.some((k) => keys.includes(k))) continue;
       try { s.fn(state, changed); } catch (e) { report(`A part of the page failed to follow a change (${changed.join(', ')})`, e); }
     }
   };
   return {
-    get: () => state,
+    get: () => /** @type {any} */ (state), // the Record the state is held as, seen as the state it is
     /** A key worked out from other state and stored nowhere: `fn` is read like any other key, and a change of its value is told to the subscribers of its key. */
     derive(k, fn) {
+      const key = /** @type {string} */ (k);
       const c = computed(fn);
-      Object.defineProperty(state, k, { enumerable: true, configurable: true, get: () => c.value });
+      Object.defineProperty(state, key, { enumerable: true, configurable: true, get: () => c.value });
       let last = c.peek();
-      effect(() => { const v = c.value; if (!Object.is(v, last)) { last = v; untracked(() => tell([k])); } });
+      effect(() => { const v = c.value; if (!Object.is(v, last)) { last = v; untracked(() => tell([key])); } });
     },
     set(patch) {
-      const changed = Object.keys(patch).filter((k) => !Object.is(untracked(() => state[k]), patch[k]));
+      const p = /** @type {Record<string, any>} */ (patch);
+      const changed = Object.keys(p).filter((k) => !Object.is(untracked(() => state[k]), p[k]));
       if (!changed.length) return;
-      batch(() => { for (const k of changed) (sigs.get(k) ?? own(k, undefined)).value = patch[k]; });
+      batch(() => { for (const k of changed) (sigs.get(k) ?? own(k, undefined)).value = p[k]; });
       tell(changed);
     },
     /** `fn(state, changedKeys)` after a change to any of `keys` (all of them when `keys` is null); returns the way to stop. */
     subscribe(keys, fn) {
-      const s = { keys, fn };
+      const s = { keys: /** @type {string[] | null} */ (keys), fn };
       subs.add(s);
       return () => subs.delete(s);
     },
   };
 }
 
-export const server = createStore({
-  tiles: [], roots: [], folders: [], home: null, inventory: null, elements: /** @type {import('../api').ElementJson[]} */ ([]), language: /** @type {import('../api').LanguageJson | null} */ (null), system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
+/** @typedef {import('../api').TileSummary} TileSummary */
+/** @typedef {import('../api').StackItem} StackItem */
+/** @typedef {import('../api').TileMap} TileMap */
+/** @typedef {import('../api').MapLine} MapLine */
+/** @typedef {import('../api').MapRegion} MapRegion */
+/** @typedef {import('../api').NamedPoint} NamedPoint */
+/** A tile as the server store keeps it: the program's summary without its progress (kept apart) and, for a print list or a map, without its plan (the document's state). */
+/** @typedef {Omit<TileSummary, 'progress' | 'plan'> & { plan?: TileSummary['plan'] }} ServerTile */
+/** What is selected or hovered: an entry (id: its key; piece: one of its pieces), a region or line (id: the name), a point, or the tile. */
+/** @typedef {{ kind: 'entry', id: string, piece?: number | null }} EntrySel */
+/** @typedef {{ kind: 'region', id: string }} RegionSel */
+/** @typedef {{ kind: 'line', id: string }} LineSel */
+/** @typedef {{ kind: 'point', id: string }} PointSel */
+/** @typedef {{ kind: 'tile', id?: string | null }} TileSel */
+/** @typedef {EntrySel | RegionSel | LineSel | PointSel | TileSel} Sel */
+/** One folder level of the browser: root null is Places. */
+/** @typedef {{ root: number | null, dir: string }} Level */
+/** @typedef {{ tile: string | null, text: string | null, sheet: string | null, hov: string | null, sheetHov: string | null }} CloudKeys */
+
+/**
+ * @typedef {{
+ *   tiles: ServerTile[], roots: import('../api').RootJson[], folders: import('../api').FolderJson[], home: string | null,
+ *   inventory: import('../api').InventoryState | null, elements: import('../api').ElementJson[],
+ *   language: import('../api').LanguageJson | null, system: string, printer: string, squareMm?: number,
+ *   printers: import('../api').PrinterRow[], overhangDeg: number, steepestDeg: number,
+ *   live: boolean, ever: boolean, ready: boolean, epoch: string | null,
+ *   progress: Record<string, import('../api').Progress>,
+ * }} ServerState
+ */
+/** @type {Store<ServerState>} */
+export const server = createStore(/** @type {ServerState} */ ({
+  tiles: [], roots: [], folders: [], home: null, inventory: null, elements: [], language: null, system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
   live: false,    // the event stream is open and in step
   ever: false,    // it has been, once: so a loss reads 'reconnecting…', not 'connecting…'
   ready: false,   // the first list of tiles is in
   epoch: null,    // which run of the program the numbers (mesh versions, sketches) are from
   progress: {},   // document id -> the work in flight for it (a tile's build, a map's pieces loading): one record kind, `Progress`
-});
+}));
 
 /** What happened, one stream (js/messages.js): live.js writes it from the event stream; every surface draws from it. */
 export const log = createLog();
 
-export const view = createStore({
+/**
+ * @typedef {{
+ *   tileId: string | null, placeAt: { root: number | null, dir: string, tile: string | null }, query: string, sel: Sel | null,
+ *   control: { name: string, group?: number } | null, face: 'tile' | 'source', hov: Sel | null, cloudAt: CloudKeys, debug: boolean,
+ *   mode: string, pick: { name: string, animate: boolean } | null, pieces: Map<string, number>, bands: Map<string, [number, number]>,
+ *   shown: { id: string, epoch: string | null, version: number } | null,
+ *   draft: { tileId: string, payload: import('../payload').Payload } | null, source: string | null, addressRead: boolean,
+ *   pageAt: 'browse' | 'edit', msel: string[], mprop: 'bottom' | 'seed' | 'print' | null,
+ *   mlist: Record<string, { sort?: string, filter?: string, query?: string }>, madd: boolean, addAt: { root: number | null, dir: string } | null,
+ *   addSlot: number, addQuery: string, panel: boolean, popover: string | null,
+ * }} ViewState
+ */
+/**
+ * The keys worked out, not stored: `place` and `page` below, `dmode` (editor/mode.js), `activeView` (editor/framing.js).
+ * @typedef {{ place: Level, page: 'browse' | 'edit', dmode: 'map' | 'plates' | null, activeView: string | null }} ViewDerived
+ */
+/** @type {Store<ViewState, ViewDerived>} */
+export const view = createStore(/** @type {ViewState} */ ({
   tileId: null,
   placeAt: { root: null, dir: '', tile: null }, // the folder level chosen on the browser page (js/folders.js: the place's number, the folder below it; root null is Places) and the tile that was open when it was chosen; `place` is derived from it below
   query: '',           // the browser's filter: the words a tile's name must have
@@ -108,9 +185,19 @@ export const view = createStore({
   addQuery: '',        // the words filtering the folder the Add tiles level browses
   panel: false,        // the messages panel is open
   popover: null,       // the id of the open popover, if any
-});
+}));
 
-export const doc = createStore({
+/**
+ * @typedef {{
+ *   tileId: string | null, file: string | null, base: string | null, text: string | null, writable: boolean, docRev: number | null,
+ *   checked: string | null, checkedFile: string | null, checkedTile: string | null, ok: boolean, errors: import('../api').Mistake[],
+ *   stack: StackItem[] | null, map: TileMap | null, nodesRev: number | null, nodes: import('../api').NodeJson[] | null,
+ *   names: { defs: string[], regions: string[], lines: string[], points: string[] } | null,
+ *   note: string | null, conflict: string | null, saving: boolean, selectAt: number | null,
+ * }} DocState
+ */
+/** @type {Store<DocState, Pick<DocState, 'tileId' | 'file' | 'base' | 'docRev'>>} */
+export const doc = createStore(/** @type {DocState} */ ({
   tileId: null, file: null, base: null, text: null, writable: false, docRev: null, // tileId, file, base and docRev are derived in editor/document.js from the source the pane shows (what the documents module holds of it; a save is made against that revision): these are only their shape; text and writable are the pane's
   checked: null, checkedFile: null, checkedTile: null, // the text last checked, and the file and tile it was checked for
   ok: true, errors: [], stack: null, map: null,
@@ -119,7 +206,7 @@ export const doc = createStore({
   names: null,         // the definitions, regions, lines and points the text makes now, by the program's parser (kept while the text does not parse)
   note: null, conflict: null, saving: false,
   selectAt: null,      // the byte of a node a gesture just wrote: select it once it is checked
-});
+}));
 
 // ---- selectors ---------------------------------------------------------------
 
@@ -168,7 +255,6 @@ export const isInventory = (t) => !!t && /\.dinv$/i.test(t.path);
 
 /** The stack of the text now: the last clean check of it while editing, else the last build's. */
 // The list is made once for each stack it comes from (the check's, or the build's plan) and handed out again: callers read it, never change it.
-/** @typedef {import('../api').StackItem} StackItem */
 /** @type {StackItem[]} */
 const NONE = [];
 let stackMemo = { from: null, items: NONE };
@@ -183,7 +269,18 @@ export function stackItems() {
 export const stackIndex = (key) => (key == null ? -1 : stackItems().findIndex((it) => it.key === key));
 /** The stack item of an entry selection, in the stack of the text now; undefined for another selection or an entry the text no longer has. */
 export const itemOf = (w) => (w?.kind === 'entry' ? stackItems()[stackIndex(w.id)] : undefined);
-/** The map's region or line a selection names. */
+/**
+ * The map's region, line or point a selection names.
+ * @overload
+ * @param {LineSel} w
+ * @returns {MapLine | null}
+ * @overload
+ * @param {RegionSel} w
+ * @returns {MapRegion | null}
+ * @overload
+ * @param {Sel | null | undefined} w
+ * @returns {MapLine | MapRegion | NamedPoint | null}
+ */
 export function mapNode(w) {
   const { map, tileId } = doc.get();
   if (!w || !map || tileId !== view.get().tileId) return null;
@@ -193,15 +290,27 @@ export function mapNode(w) {
 
 // ---- the selection's one shape -----------------------------------------------
 
+/** @param {string} id @param {number | null} [piece] @returns {EntrySel} */
 export const entrySel = (id, piece = null) => ({ kind: 'entry', id, piece });
+/** @template {'region' | 'line' | 'point'} K @param {K} kind @param {string} id @returns {{ kind: K, id: string }} */
 export const markSel = (kind, id) => ({ kind, id });
+/** @returns {TileSel} */
 export const tileSel = () => ({ kind: 'tile', id: view.get().tileId });
+/** @param {Sel | null | undefined} w @returns {w is EntrySel} */
 export const isEntry = (w) => w?.kind === 'entry';
+/** @param {Sel | null | undefined} w @returns {w is RegionSel | LineSel} */
 export const isMark = (w) => w?.kind === 'region' || w?.kind === 'line';
-/** A place the map draws: a mark, or a point (which is hovered, not selected). */
+/**
+ * A place the map draws: a mark, or a point (which is hovered, not selected).
+ * @param {Sel | null | undefined} w
+ * @returns {w is RegionSel | LineSel | PointSel}
+ */
 export const isPlace = (w) => isMark(w) || w?.kind === 'point';
-const keyOf = (w) => (!w ? '' : w.kind === 'tile' ? 'tile' : `${w.kind}:${w.id}:${w.piece ?? ''}`);
+/** @param {Sel | null | undefined} w */
+const keyOf = (w) => (!w ? '' : w.kind === 'tile' ? 'tile' : `${w.kind}:${w.id}:${'piece' in w ? w.piece ?? '' : ''}`);
+/** @param {Sel | null | undefined} a @param {Sel | null | undefined} b */
 export const same = (a, b) => keyOf(a) === keyOf(b);
+
 
 /**
  * Resolves true once tile `id` is on the list (false after a few seconds):

@@ -296,7 +296,7 @@ export function steps(label, make) {
       return guard((async () => {
         if (flight) await flight;
         if (last && last.text === doc.get().text && last.text === base) { askDraft(); edited(base, 'drag'); } // back where it began: no step to undo
-        else if (last && last.key === key(x) && last.text === doc.get().text) edited(doc.get().text, 'lens', label); // the last answer made it
+        else if (last && last.key === key(x) && last.text === doc.get().text) edited(last.text, 'lens', label); // the last answer made it
         else await settle(x);
       })());
     },
@@ -305,7 +305,7 @@ export function steps(label, make) {
       over = true; want = null;
       return guard((async () => {
         if (flight) await flight;
-        if (last && last.text === doc.get().text) { edited(base, 'drag'); askDraft(); }
+        if (last && last.text === doc.get().text && base != null) { edited(base, 'drag'); askDraft(); }
       })());
     },
   };

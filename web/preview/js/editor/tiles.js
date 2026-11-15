@@ -16,7 +16,7 @@ import { doc, renameable, server, stem, tile, view, whenListed } from './stores.
 // {root, dir, name}), ready for the same text/lens/direct edits as every other tile.
 let makingIn = null;
 /**
- * @param {{ root: string | null, dir?: string, name?: string } | null} [into]
+ * @param {{ root: number | null, dir?: string, name?: string } | null} [into]
  */
 export function openNewTile(into = null) {
   view.set({ popover: null });
@@ -156,7 +156,7 @@ export function init() {
   onMakeMine(mineIt);
   // the empty page's New tile: into the folder the browser is at, when it is one of yours
   $('empty-new').onclick = () => {
-    const l = view.get().place, r = server.get().roots[l.root];
+    const l = view.get().place, r = l.root == null ? undefined : server.get().roots[l.root];
     openNewTile(r?.writable ? { root: l.root, dir: l.dir, name: [r.label, ...(l.dir ? l.dir.split('/') : [])].join(' › ') } : null);
   };
   attachSizeGrid($('new-size'), { parent: $('new-dialog') });

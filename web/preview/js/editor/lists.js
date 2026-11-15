@@ -64,6 +64,7 @@ export async function addTo(t, listId) {
 
 /** The menu of lists a tile can go to: each existing one, and a new one. */
 export function listMenu(t, anchor) {
+  /** @type {{ label?: string, sub?: string, run?: () => unknown, sep?: boolean }[]} */
   const items = lists().map((l) => ({ label: l.name, sub: 'add one copy', run: () => addTo(t, l.id) }));
   if (items.length) items.push({ sep: true });
   items.push({ label: 'New list…', sub: 'a new print list with this tile', run: () => addTo(t, null) });

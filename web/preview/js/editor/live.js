@@ -106,7 +106,7 @@ export function applyResource(m) {
       for (const id of [...building]) if (!ids.has(id)) { building.delete(id); log.forget(id); }
       for (const t of log.all()) if (t.tile && !ids.has(t.tile)) log.forget(t.tile);
       const { progress } = server.get();
-      server.set({ tiles: m.value.ids.map((id) => have.get(id)).filter(Boolean), progress: Object.fromEntries(Object.entries(progress).filter(([id]) => ids.has(id))) });
+      server.set({ tiles: m.value.ids.map((id) => have.get(id)).filter((t) => t !== undefined), progress: Object.fromEntries(Object.entries(progress).filter(([id]) => ids.has(id))) });
       break;
     }
     default: {

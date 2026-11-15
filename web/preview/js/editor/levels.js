@@ -227,7 +227,7 @@ export function showSourceLine(n) {
 function thingName() {
   const { sel } = view.get();
   if (sel?.kind === 'entry') return itemOf(sel)?.label || stackItems().find((it) => it.key === sel.id)?.label || sel.id;
-  return sel?.id;
+  return sel?.id ?? '';
 }
 
 const PROPS = { bottom: 'Bottom', seed: 'Seed', print: 'Print' };
@@ -241,7 +241,7 @@ function trailNow() {
     const ps = mapSelected.value;
     const id = mapLevel.value;
     const prop = id === 'prop' ? mapProp.value : null;
-    if (ADD_PANES.includes(id)) return { depth: levelDepth(id, addLevel.value), add: addLevel.value };
+    if (id === 'add' || id === 'add2') return { depth: levelDepth(id, addLevel.value), add: addLevel.value };
     return { depth: LEVELS[id].depth, what: ps.length > 1 ? `${ps.length} pieces` : ps[0] ? pieceLabel(ps[0]) : '', control: PROPS[prop] ?? prop ?? '' };
   }
   const { sel, control } = view.get();
@@ -292,7 +292,8 @@ function renderContext() {
     const it = itemOf(sel);
     entry = it ? { standing: standing(items, sel.id), place: placeOf(it) } : null;
     if (control && it) {
-      const g = control.group === 0 ? it.controls : it.things?.[control.group - 1]?.controls;
+      const group = control.group ?? 0;
+      const g = group === 0 ? it.controls : it.things?.[group - 1]?.controls;
       const w = g?.find((c) => c.name === control.name);
       value = w ? w.text.replace(/^"|"$/g, '') : '';
     }
@@ -354,7 +355,7 @@ function pageDepth(edit) {
   if (!edit) return folderDepth(view.get().place || TOP);
   const t = tile();
   const l = shellLevel();
-  return trailDepth((t && whereIs(server.get().roots, t)) || TOP, l ? levelDepth(l.id, l.folder) : 0);
+  return trailDepth((t && whereIs(server.get().roots, t)) || TOP, l ? levelDepth(/** @type {import('../nav.js').LevelId} */ (l.id), l.folder) : 0);
 }
 let pageIsEdit = null;
 /**

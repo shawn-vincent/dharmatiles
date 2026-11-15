@@ -71,7 +71,7 @@ function handles() {
     const slots = slotsOf(l?.points || [], nodes);
     return (l?.points || []).flatMap((p, k) => (p.at && slots[k].id != null ? [{
       q: p.at, label: `Moved a point of ${s.id}`, make: pointEdit(slots[k], true),
-      move(q) { if (!l.wobbleMm && l.pts.length === l.points.length) l.pts[k] = q; },
+      move(q) { if (l && !l.wobbleMm && l.pts.length === l.points.length) l.pts[k] = q; },
     }] : []));
   }
   if (s.kind === 'region') {

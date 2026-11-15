@@ -287,6 +287,8 @@ async function renameFolder(root, dir, name) {
 
 async function newFolder(anchor) {
   const l = levelNow();
+  const root = l.root;
+  if (root == null) throw new Error('A folder is made inside a place, and the level shown is Places');
   const have = new Set((dataNow().view?.folders || []).map((f) => f.name.toLowerCase()));
   nameField(anchor, {
     title: 'New folder',
@@ -299,7 +301,7 @@ async function newFolder(anchor) {
       return have.has(s.toLowerCase()) ? `A folder called ${s} is already here` : null;
     },
     save: async (v) => {
-      const r = await host.newFolder(l.root, l.dir, v);
+      const r = await host.newFolder(root, l.dir, v);
       if (r.status !== 200) { refusal('Could not make the folder', r); return; }
       await take(r);
       goTo({ root: l.root, dir: r.body.dir }, { focus: true });
@@ -392,7 +394,7 @@ function openRowMenu(kind, id, anchor) {
     return;
   }
   if (kind === 'folder') {
-    if (!writable(roots[l.root])) return;
+    if (l.root == null || !writable(roots[l.root])) return;
     openMenu(anchor, [
       { label: 'Rename…', hint: 'F2', run: () => nameFolderRow(l.root, id, anchor), keepFocus: true },
       { sep: true },
@@ -426,7 +428,7 @@ function rowAction(action, kind, id, anchor) {
   const l = levelNow();
   if (kind === 'place') { if (action === 'trash' && roots[Number(id)]?.role === 'added') removePlace(Number(id)); return; }
   if (kind === 'folder') {
-    if (!writable(roots[l.root])) return;
+    if (l.root == null || !writable(roots[l.root])) return;
     if (action === 'rename') nameFolderRow(l.root, id, anchor); else trashFolder(l.root, id);
     return;
   }

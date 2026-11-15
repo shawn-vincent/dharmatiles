@@ -88,7 +88,11 @@ function paintHighlight() {
   viewer.setHighlight(tint(sel), isEntry(hov) && !same(hov, sel) ? tint(hov) : null);
 }
 
-/** The lines [first, last] (from 1) that byte span [offset, length] of the text covers. */
+/**
+ * The lines [first, last] (from 1) that byte span [offset, length] of the text covers.
+ * @param {[number, number]} span
+ * @returns {[number, number]}
+ */
 function spanLines([o, len]) {
   const t = doc.get().text || '';
   const a = byteToIndex(t, o), b = byteToIndex(t, o + Math.max(len, 1) - 1);
@@ -96,6 +100,7 @@ function spanLines([o, len]) {
 }
 
 /** The lines of the file shown that a selection is written on, or null. */
+/** @param {import('./stores.js').Sel | null | undefined} w @returns {[number, number] | null} */
 export function linesOf(w) {
   if (!w) return null;
   const d = doc.get(), own = d.file === tile()?.path;
@@ -120,7 +125,9 @@ function entryAtLine(line, hover = false) {
   if (texts.file !== tile()?.path) return null;
   const map = doc.get().map;
   // a point is only hovered: the caret on one selects the tile
-  for (const [kind, list] of [['region', map?.regions], ['line', map?.lines], ...(hover ? [['point', map?.points]] : [])]) {
+  /** @type {['region' | 'line' | 'point', ({ name: string, span?: [number, number] | null })[] | undefined][]} */
+  const kinds = [['region', map?.regions], ['line', map?.lines], ...(hover ? /** @type {['point', NonNullable<typeof map>['points']][]} */ ([['point', map?.points]]) : [])];
+  for (const [kind, list] of kinds) {
     for (const node of list || []) {
       const l = node.span && spanLines(node.span);
       if (l && line >= l[0] && line <= l[1]) return markSel(kind, node.name);

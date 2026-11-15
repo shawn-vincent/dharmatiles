@@ -30,7 +30,8 @@ const NO_NAMES = { defs: [], regions: [], lines: [], points: [] };
  * @param {{ before: string, index: number }} caret
  * @param {import('./api').ElementJson[]} elements
  * @param {boolean} [force]
- * @param {import('./api').LanguageJson | null} [language]
+ * @param {import('./api').Language | null} [language]
+ * @param {{ defs?: string[], regions?: string[], lines?: string[], points?: string[] }} [names]
  */
 export function suggest(caret, elements, force = false, language = null, names = NO_NAMES) {
   const before = caret.before;

@@ -183,8 +183,8 @@ async function insertEntry(place, offer) {
   if (place.place === 'before' && above == null) return;
   /** @type {import('../api').EditReq} */
   const body = above != null
-    ? { op: 'insert', place: 'before', id: above, node: offer.node, text: doc.get().text }
-    : { op: 'insert', place: 'stack', node: offer.node, text: doc.get().text };
+    ? { op: 'insert', place: 'before', id: above, node: offer.node, text: /** @type {string} */ (doc.get().text) } // a writable document holds its text
+    : { op: 'insert', place: 'stack', node: offer.node, text: /** @type {string} */ (doc.get().text) };
   const r = await editCall(body);
   if (r.status !== 200) { refused(`Could not add ${offer.name}`, r); return; }
   doc.set({ selectAt: r.body.at });
@@ -210,7 +210,8 @@ export async function openAdd(anchor, slot = null, { phrase = null, align = 'lef
   anchor.setAttribute('aria-busy', 'true');
   let r;
   try {
-    r = await host.offers(t.id, { text: d.text, at: place.index, file: d.file === t.path ? undefined : d.file });
+    // a writable document holds its text
+    r = await host.offers(t.id, { text: /** @type {string} */ (d.text), at: place.index, file: d.file === t.path ? undefined : d.file });
   } finally { anchor.removeAttribute('aria-busy'); }
   if (failed('Could not ask what can be added', r)) return;
   if (r.status !== 200) { refused('Could not ask what can be added', r); return; }
@@ -235,7 +236,7 @@ export async function openAdd(anchor, slot = null, { phrase = null, align = 'lef
 
 /** A name no line, region or point of the tile has yet: `line1`, `line2`… */
 function freeName(base) {
-  const n = doc.get().names || {};
+  const n = doc.get().names || { lines: [], regions: [], points: [], defs: [] };
   const taken = new Set([...(n.lines || []), ...(n.regions || []), ...(n.points || []), ...(n.defs || [])]);
   for (let i = 1; ; i++) if (!taken.has(`${base}${i}`)) return `${base}${i}`;
 }
@@ -258,7 +259,8 @@ async function deleteMark(kind, m) {
   const at = m?.sheet?.at;
   if (at == null) return;
   if (await tileEdit({ op: 'remove', id: nodeId(at) }, `Deleted ${kind} ${m.name}`)) {
-    if (view.get().sel?.kind === kind && view.get().sel.id === m.name) view.set({ sel: null });
+    const sel = view.get().sel;
+    if (sel && sel.kind === kind && sel.id === m.name) view.set({ sel: null });
     toast(`Deleted ${kind} ${m.name}`, () => undo(-1));
   }
 }

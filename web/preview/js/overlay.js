@@ -31,7 +31,7 @@ export class Overlay {
   }
 
   /** The map to draw, at the program's square size; without the size there is nothing to draw it at, so no map. */
-  setMap(/** @type {import('./api').TileMap} */ map, /** @type {number | undefined} */ squareMm) {
+  setMap(/** @type {import('./api').TileMap | null} */ map, /** @type {number | undefined} */ squareMm) {
     this.sq = squareMm !== undefined && squareMm > 0 ? squareMm : null;
     this.map = this.sq ? map : null;
   }

@@ -43,8 +43,8 @@ const sheetApi = {
   set: setControl,
   canMine: () => canMine(),
   // the top field in focus (typed in or scrubbed) selects the entry's cloud; hovered, it shows quietly
-  onField: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') setCloud({ sheet: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
-  onFieldHover: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') setCloud({ sheetHov: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
+  onField: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') { const sel = view.get().sel; setCloud({ sheet: on && isEntry(sel) ? sel.id : null }); } },
+  onFieldHover: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') { const sel = view.get().sel; setCloud({ sheetHov: on && isEntry(sel) ? sel.id : null }); } },
   checkValue: async (/** @type {string} */ element, /** @type {string} */ control, /** @type {string} */ typed) => {
     const r = await host.checkValue(element, control, typed);
     if (failed(`Could not check what was typed for ${control}`, r)) return null;
@@ -99,8 +99,8 @@ function seedStrip(/** @type {any} */ t, /** @type {any} */ own) {
 
 /** What a row of the tile level does. */
 const outlineOn = {
-  open: (/** @type {string} */ kind, /** @type {string} */ id) => setSel(kind === 'entry' ? entrySel(id) : markSel(kind, id), /** @type {any} */ ({ from: 'view' })),
-  hover: (/** @type {any} */ w) => view.set({ hov: w && w.kind === 'entry' ? entrySel(w.id) : null }),
+  open: (/** @type {string} */ kind, /** @type {string} */ id) => setSel(kind === 'entry' ? entrySel(id) : markSel(/** @type {'region' | 'line' | 'point'} */ (kind), id), /** @type {any} */ ({ from: 'view' })),
+  hover: (/** @type {import('./stores.js').Sel | null} */ w) => view.set({ hov: w && w.kind === 'entry' ? entrySel(w.id) : null }),
   menu: openRowMenu,
   act: rowAction,
   add: addFrom,
@@ -182,9 +182,12 @@ function markModel(kind, m) {
   const node = nodeNamed(kind);
   if (!node) return null;
   // renaming goes through the server's edit route (`viaSet`), which renames every use of the name
-  const nameRow = { ...nodeControl(kind, 'name'), viaSet: true };
+  // the language lists a `name` control for a line and a region, so the row is whole
+  const nameRow = /** @type {import('../api').ControlJson & { viaSet: boolean }} */ ({ ...nodeControl(kind, 'name'), viaSet: true });
   const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0] }];
-  let controls, set;
+  /** @type {(import('../api').ControlJson & { viaSet?: boolean })[]} */
+  let controls;
+  let set;
   if (kind === 'line') {
     controls = node.controls.map((c) => (c.name === 'name' ? nameRow : c));
     written.push(...sh.controls.map(asWritten));
@@ -194,7 +197,7 @@ function markModel(kind, m) {
   } else {
     // a region is made as its source says: lines and fill points, places it reaches round and regions it excepts, or both
     const rk = regionKind(sh);
-    const lines = (doc.get().map?.lines || []).map((l) => ({ word: l.name, about: `bounded by the line ${l.name}` }));
+    const lines = (doc.get().map?.lines || []).map((l) => ({ word: l.name, about: `bounded by the line ${l.name}`, sets: {}, level: null }));
     controls = [nameRow];
     if (rk !== 'places') {
       controls.push(...node.controls.filter((c) => c.name !== 'name').map((c) => (c.name === 'boundedBy' ? { ...c, words: lines } : c)));
@@ -308,7 +311,7 @@ function PropertyLevel() {
   const held = useRef(/** @type {any} */ (null));
   const { sel, control, tileId } = view.get();
   const model = control && isEntry(sel) ? thingModel() : null;
-  const g = model?.groups[control?.group];
+  const g = model?.groups[control?.group ?? 0];
   const c = g?.schema?.controls?.find((/** @type {any} */ x) => x.name === control?.name);
   // a control the sheet no longer has closes its page
   useEffect(() => { if (control && isEntry(sel) && model && !c) closeControl(); });
