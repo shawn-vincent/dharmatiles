@@ -13,6 +13,8 @@ dt-lang.workspace = true
 jpeg-encoder = "0.7.1"
 png.workspace = true
 serde_json.workspace = true
+# cargo's build messages, read as types (the check's test lanes)
+serde.workspace = true
 
 [lints]
 workspace = true

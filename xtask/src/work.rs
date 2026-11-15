@@ -368,14 +368,9 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
         let all = names.len() == pkgs.len();
         // the tests' own command, with `--no-run` the build of exactly what they run (the same packages, so the
         // same features: the step after it builds nothing)
-        let tests = move |build: bool| {
+        let tests = move || {
             let mut c = cargo();
-            // every test binary runs, so one failure does not hide another
-            c.current_dir(root)
-                .args(["test", "-q", "--release", "--no-fail-fast"]);
-            if build {
-                c.arg("--no-run");
-            }
+            c.current_dir(root).args(["test", "-q", "--release"]);
             if all {
                 c.arg("--workspace");
             } else if full {
@@ -394,7 +389,7 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
                 "the build: every test binary the checks run".into(),
                 budget::build(root),
                 Box::new(move || {
-                    run(&mut build(true))?;
+                    crate::lanes::tests(build(), true)?;
                     if full {
                         dt_eval_full(root, true)?;
                     }
@@ -403,9 +398,9 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             ),
         );
         steps.push((
-            "the tests".into(),
+            "the tests, in two lanes (dt-eval's tile tests beside every other binary)".into(),
             budget::step::TESTS,
-            Box::new(move || run(&mut tests(false))),
+            Box::new(move || crate::lanes::tests(tests(), false)),
         ));
     }
     if p.page {

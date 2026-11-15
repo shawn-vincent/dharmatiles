@@ -1844,6 +1844,7 @@ dependencies = [
  "dt-lang",
  "jpeg-encoder",
  "png",
+ "serde",
  "serde_json",
 ]
 

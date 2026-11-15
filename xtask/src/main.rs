@@ -9,6 +9,7 @@ mod docs;
 mod guide;
 mod highlight;
 mod image;
+mod lanes;
 mod live;
 mod nav;
 mod pictures;
