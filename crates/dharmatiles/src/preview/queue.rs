@@ -34,6 +34,9 @@ pub(super) type Job = dt_service::queue::Job<Program>;
 pub(super) type Side = dt_service::queue::Side<Program>;
 pub(super) type Taken = dt_service::queue::Taken<Program>;
 
+#[cfg(test)]
+type Probe = Box<dyn FnOnce(&Shared, &Arc<AtomicBool>) + Send>;
+
 /// What a side lane runs: one value for each kind of work the program puts on a side lane, with the typed request it
 /// is made from and the channel its requester waits on.  The owner holds them and runs none; the lane that takes one
 /// calls [`SideJob::run`].
@@ -60,7 +63,7 @@ pub(crate) enum SideJob {
     Tier { ready: tiers::Ready, rev: u64 },
     /// A job a test makes of a function, to see the lanes order, cancel and replace jobs.
     #[cfg(test)]
-    Probe(Box<dyn FnOnce(&Shared, &Arc<AtomicBool>) + Send>),
+    Probe(Probe),
 }
 
 /// What the program says of itself to the service: the lanes' work and a failed draft's error.

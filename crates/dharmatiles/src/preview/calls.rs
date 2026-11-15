@@ -4,7 +4,7 @@
 //! that is not a row here is not a call, and a row has exactly one type for
 //! what it takes and one for what it gives.
 
-use super::api::{Reply, TileRef, calls, reply, request};
+use super::api::{Reply, TileRef, called, calls, reply, request};
 use super::edit::{self, DraftReq};
 use super::route;
 use super::routes::{resolve, tile_shape};

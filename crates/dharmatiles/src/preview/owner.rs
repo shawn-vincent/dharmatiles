@@ -22,11 +22,13 @@ pub(super) fn start(
     storage: Arc<dyn storage::Storage>,
 ) -> Owner {
     Owner::start(
-        tiles,
-        roots,
-        target,
-        home,
-        epoch,
+        dt_service::owner::Setup {
+            tiles,
+            roots,
+            target,
+            home,
+            epoch,
+        },
         storage,
         Arc::new(Program),
         Arc::new(MonotonicClock::default()),

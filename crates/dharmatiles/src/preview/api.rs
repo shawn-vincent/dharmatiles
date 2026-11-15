@@ -97,6 +97,20 @@ pub(super) fn ok<T: Serialize>(t: &T) -> Reply {
     }
 }
 
+/// What the service's table answered, as the reply to send: a success is its type written, a refusal is its own
+/// reply, and a call the table could not make is the program's own failure, said loudly.
+pub(super) fn called<T: Serialize>(r: Result<T, dt_service::call::CallError<Reply>>) -> Reply {
+    use dt_service::call::CallError;
+    match r {
+        Ok(t) => ok(&t),
+        Err(CallError::Refused(reply)) => reply,
+        Err(e) => fail::failure(
+            "500 Internal Server Error",
+            format!("the call table is wrong: {e:?}"),
+        ),
+    }
+}
+
 /// A route's outcome as the reply to send.
 pub(super) fn reply<T: Serialize>(r: Out<T>) -> Reply {
     match r {
@@ -124,11 +138,25 @@ macro_rules! calls {
         pub(super) fn post_verb(shared: &Shared, verb: &str, path: &str, body: &[u8]) -> Option<Reply> {
             match verb {
                 $( $verb => Some(match request::<$req>(path, body) {
-                    Ok(r) => reply($f(shared, r)),
+                    Ok(r) => called(table().call(shared, &dt_service::call::Verb::<$req, $res>::new($verb), r)),
                     Err(e) => e,
                 }), )*
                 _ => None,
             }
+        }
+
+        /// The calls that are not about a tile, as the service's table of verbs: each row is the call's function on
+        /// the program's state ([`dt_service::call::Table`]).
+        fn table() -> &'static dt_service::call::Table<Shared, Reply> {
+            static TABLE: std::sync::LazyLock<dt_service::call::Table<Shared, Reply>> =
+                std::sync::LazyLock::new(|| {
+                    dt_service::call::Table::default()
+                    $( .with(
+                        &dt_service::call::Verb::<$req, $res>::new($verb),
+                        |shared: &Shared, r: $req| $f(shared, r),
+                    ) )*
+                });
+            &TABLE
         }
 
         /// The reply to the call `verb` about `tile`.

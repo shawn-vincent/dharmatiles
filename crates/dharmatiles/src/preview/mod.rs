@@ -127,7 +127,9 @@ fn stale_mesh(rev: u64) -> (&'static str, api::Body) {
 /// What a tile's size and seed are remembered by: its path, the seed asked, the system and its file's time.
 type SceneCheck = (String, Option<u64>, dt_lang::System, Option<SystemTime>);
 
-pub(crate) use dt_service::tile::{Facts, Row, Sketch, Slot, State, TileId, tile_id};
+#[cfg(test)]
+pub(crate) use dt_service::tile::State;
+pub(crate) use dt_service::tile::{Facts, Row, Sketch, Slot, TileId, tile_id};
 
 /// What the service asks of the program (a place to say what is wrong, the time): the owner runs with it.
 pub(crate) struct Program;

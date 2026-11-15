@@ -253,7 +253,20 @@ pub enum Command<H: Host> {
     /// A place left the list: it and its tiles go, and the places after it move down.  Answers the ids that left.
     RemoveRoot(usize, Sender<()>),
     #[cfg(feature = "inspect")]
-    Inspect(Box<dyn FnOnce(&mut Core<H>) + Send>),
+    Inspect(Inspector<H>),
+}
+
+/// What a test runs on the state, on the owner.
+#[cfg(feature = "inspect")]
+pub type Inspector<H> = Box<dyn FnOnce(&mut Core<H>) + Send>;
+
+/// What the owner starts with: the tiles listed, the places, the build target, `$HOME` and this run's epoch.
+pub struct Setup {
+    pub tiles: Vec<Slot>,
+    pub roots: Vec<Root>,
+    pub target: Options,
+    pub home: Option<String>,
+    pub epoch: String,
 }
 
 /// A handle on the owner: what a transport holds.  Cheap to share; the owner stops when the last is dropped.
@@ -273,15 +286,18 @@ impl<H: Host> Core<H> {
     /// The owner's state, with nothing yet told or queued.
     #[must_use]
     pub fn new(
-        tiles: Vec<Slot>,
-        roots: Vec<Root>,
-        target: Options,
-        home: Option<String>,
-        epoch: String,
+        setup: Setup,
         storage: Arc<dyn Storage>,
         host: Arc<H>,
         clock: Arc<dyn Clock>,
     ) -> Self {
+        let Setup {
+            tiles,
+            roots,
+            target,
+            home,
+            epoch,
+        } = setup;
         let alarm: Arc<dyn Alarm> = Arc::clone(&host) as Arc<dyn Alarm>;
         Self {
             tiles,
@@ -305,17 +321,13 @@ impl<H: Host> Core<H> {
 #[cfg(not(target_arch = "wasm32"))]
 impl<H: Host> Owner<H> {
     pub fn start(
-        tiles: Vec<Slot>,
-        roots: Vec<Root>,
-        target: Options,
-        home: Option<String>,
-        epoch: String,
+        setup: Setup,
         storage: Arc<dyn Storage>,
         host: Arc<H>,
         clock: Arc<dyn Clock>,
     ) -> Self {
         let (tx, rx) = channel::<Command<H>>();
-        let mut core = Core::new(tiles, roots, target, home, epoch, storage, host, clock);
+        let mut core = Core::new(setup, storage, host, clock);
         let alarm = Arc::clone(&core.host);
         // the thread ends with the last handle: `recv` fails once every sender is gone
         let started = std::thread::Builder::new()
