@@ -12,6 +12,7 @@ mod image;
 mod lanes;
 mod live;
 mod nav;
+mod parity;
 mod pictures;
 mod release;
 mod shots;
@@ -90,6 +91,10 @@ commands:
            (needs wasm-bindgen-cli; uses wasm-opt when installed); --check
            only checks dt-lang, dt-value, dt-doc and dt-web still compile
            for wasm32-unknown-unknown
+  parity   the same tile in the browser as in the program: builds the wasm
+           bundle, builds a fixed set of tiles under Node and natively, and
+           fails on any difference in a tile's STL hash, audit numbers or
+           verdict, naming the tile. A heavy job
   help     show this message"#;
 
 fn main() -> ExitCode {
@@ -129,6 +134,7 @@ fn command(args: &[String]) -> Result<(), String> {
         Some("wasm") => {
             work::heavy_lock(&root()).and_then(|()| wasm::run_wasm(&root(), &args[1..]))
         }
+        Some("parity") => work::heavy_lock(&root()).and_then(|()| parity::run_parity(&root())),
         Some("release") => release::run_release(&root(), &args[1..]),
         Some("help" | "-h" | "--help") => {
             println!("{USAGE}");

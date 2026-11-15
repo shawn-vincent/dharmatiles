@@ -860,6 +860,72 @@ pub fn build_tile(
     })
 }
 
+/// What `cargo xtask parity` compares between the browser and the program for one tile: the build's gate verdict
+/// and every number it judged, and the SHA-256 of the STL's triangles.  Made here, once, and called by both.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParityLine {
+    /// The library path built, and the build target.
+    pub tile: String,
+    pub system: String,
+    /// The gate's verdict and numbers (`dt_kit::AuditSummary`), exactly as the build made them.
+    pub audit: dt_kit::AuditSummary,
+    /// Whether the build passed the gate: only then is there an STL.
+    pub passed: bool,
+    pub stl_bytes: usize,
+    pub stl_sha256: String,
+}
+
+/// Build the library tile `tile` for `system_word` as the page does (its own seed, the finest cells, full tier) and
+/// say what the build came to, as JSON: one [`ParityLine`].  The browser's and the program's answers are compared
+/// by `cargo xtask parity`.
+///
+/// # Errors
+/// An unknown target or tile, the library was never set, or the tile did not build.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn parity_line(tile: &str, system_word: &str) -> Result<String, JsError> {
+    let system = system_of(system_word)?;
+    LIBRARY.with(|lib| {
+        let lib = lib.borrow();
+        let text = lib
+            .get(tile)
+            .ok_or_else(|| JsError::new(&format!("{tile} is not in the library")))?;
+        let source = Overlay {
+            library: &lib,
+            text,
+        };
+        let (built, opts) = build_with(
+            &source,
+            system,
+            None,
+            0,
+            Tier::Full,
+            &dt_eval::Progress::none(),
+        )
+        .map_err(|ds| {
+            JsError::new(&format!(
+                "{tile} did not build: {}",
+                ds.iter()
+                    .map(|d| format!("{d:?}"))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ))
+        })?;
+        let passed = built.verdict(&opts.printer).passed();
+        let (stl_sha256, stl_bytes) = passed
+            .as_ref()
+            .map_or_else(|| (String::new(), 0), stl_sha256);
+        json(&ParityLine {
+            tile: tile.to_owned(),
+            system: system_word.to_owned(),
+            audit: built.audit.summary(&opts.printer),
+            passed: passed.is_some(),
+            stl_bytes,
+            stl_sha256,
+        })
+    })
+}
+
 /// A weighted range, drawn.
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -1061,53 +1127,6 @@ mod tests {
         assert!(
             have == want,
             "docs/assets/live/engine-wire.d.ts is not what the engine's types say; run\n  DT_CONTRACT=write cargo test -p dt-web --lib the_engine_contract_is_current\nand then `npm test` in web/preview, which checks the site against it"
-        );
-    }
-
-    /// Prints the parity hash of a build, for comparing with the browser's:
-    /// `PARITY_TILE=lib:tiles/ground/1x1-grass.dtile PARITY_CELLS=48 cargo test --release -p dt-web parity -- --ignored --nocapture`.
-    #[test]
-    #[ignore = "a hash for comparing with the browser's: run by hand"]
-    fn parity() {
-        lib();
-        let var = |k: &str, d: &str| std::env::var(k).unwrap_or_else(|_| d.to_owned());
-        let tile = var("PARITY_TILE", "lib:tiles/ground/1x1-grass.dtile");
-        let system: System = var("PARITY_SYSTEM", "db").parse().unwrap();
-        // no PARITY_SEED keeps the tile's own
-        let seed: Option<u64> = std::env::var("PARITY_SEED")
-            .ok()
-            .map(|s| s.parse().unwrap());
-        let cells: u32 = var("PARITY_CELLS", "0").parse().unwrap();
-        let lib = LIBRARY.with(|l| l.borrow().clone());
-        // PARITY_FILE: a document on disk (the page's own presets) instead of a library tile
-        let text = match std::env::var("PARITY_FILE") {
-            Ok(f) => std::fs::read_to_string(f).unwrap(),
-            Err(_) => lib.get(&tile).unwrap().clone(),
-        };
-        let t0 = std::time::Instant::now();
-        let source = Overlay {
-            library: &lib,
-            text: &text,
-        };
-        let (built, opts) = build_with(
-            &source,
-            system,
-            seed,
-            cells,
-            Tier::Full,
-            &dt_eval::Progress::none(),
-        )
-        .unwrap();
-        let verdict = built.verdict(&opts.printer);
-        let passed = verdict.passed();
-        let (hash, bytes) = passed
-            .as_ref()
-            .map_or_else(|| (String::new(), 0), stl_sha256);
-        println!(
-            "PARITY {tile} {system} seed={seed:?} cells={cells}: sha256={hash} bytes={bytes} triangles={} failures={:?} secs={:.2}",
-            built.audit.triangles,
-            verdict.reasons(),
-            t0.elapsed().as_secs_f64()
         );
     }
 }
