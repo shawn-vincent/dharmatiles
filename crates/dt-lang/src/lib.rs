@@ -3,13 +3,16 @@
 //! has to agree on.  The decoder, the completion list, the docs generator and
 //! the editor's page read these; none keeps a copy.
 //!
-//! Plain data and no dependencies, so the document reader (which holds no
+//! Plain data, so the document reader (which holds no
 //! geometry), the geometry kernels (which hold the odds behind each weighting
 //! and check their table against this one), the elements and the editor's
 //! server can all depend on it.
 
 pub mod codes;
 pub mod highlight;
+mod system;
+
+pub use system::System;
 
 /// The land's steepest ease, degrees: what dirt's hills are made at, and what
 /// the solver eases a land body at unless the entry says `slope=`.

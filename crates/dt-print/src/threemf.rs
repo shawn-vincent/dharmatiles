@@ -284,7 +284,7 @@ mod tests {
             document: "d".into(),
             document_hash: 1,
             seed: 2,
-            system: "db".into(),
+            system: dt_lang::System::Db,
             printer: "default".into(),
         };
         let z = mesh_3mf(&mesh, &mats, &rec, &Palette::default());

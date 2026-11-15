@@ -193,7 +193,7 @@ pub(crate) fn layout_of(plan: &Plan, builds: &Builds) -> Result<Layout, Vec<Diag
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn overrides(
     printer: Option<String>,
-    system: Option<String>,
+    system: Option<dt_lang::System>,
     mode: Option<&str>,
     group: Option<&str>,
     gap: Option<f64>,
@@ -227,11 +227,6 @@ pub(crate) fn overrides(
             ));
         }
     };
-    if let Some(s) = &system
-        && !matches!(s.as_str(), "db" | "ol")
-    {
-        return Err(format!("`{s}` is not a system: use `db` or `ol`"));
-    }
     Ok(Overrides {
         printer,
         system,
@@ -283,7 +278,7 @@ pub(crate) fn run(
         Ok(l) => l,
         Err(e) => return fail(&e, json),
     };
-    let base = match crate::library::options("db", "default", None) {
+    let base = match crate::library::options(dt_lang::System::Db, "default", None) {
         Ok(o) => o,
         Err(e) => {
             tell!("error: {e}");

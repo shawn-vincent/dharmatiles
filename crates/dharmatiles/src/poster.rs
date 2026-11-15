@@ -23,7 +23,8 @@ use crate::{ERROR, OK};
 /// # Errors
 /// The document does not read or check: the first mistake's code.
 pub(crate) fn key_of(path: &str) -> Result<(String, dt_eval::Options), Result<String, String>> {
-    let opts = crate::library::options_in("db", "default", None, None).map_err(Err)?;
+    let opts =
+        crate::library::options_in(dt_lang::System::Db, "default", None, None).map_err(Err)?;
     let tracked = Tracked::new(&Files);
     tracked.read(path).map_err(Err)?;
     if let Err(errs) = check(&tracked, path, &opts) {

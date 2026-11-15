@@ -35,25 +35,6 @@ use dt_doc::map::Mode;
 
 // ---- the calls' types ------------------------------------------------------------------
 
-/// The base system a tile was built for.
-#[derive(Deserialize, Clone, Copy, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(rename_all = "lowercase")]
-pub enum SystemWord {
-    Db,
-    Ol,
-}
-
-impl SystemWord {
-    fn word(self) -> &'static str {
-        match self {
-            Self::Db => "db",
-            Self::Ol => "ol",
-        }
-    }
-}
-
 #[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
@@ -61,7 +42,7 @@ impl SystemWord {
 pub struct InventoryHaveReq {
     pub tile: String,
     pub colour: ColourWord,
-    pub system: Option<SystemWord>,
+    pub system: Option<dt_lang::System>,
     pub seed: Option<u64>,
     pub count: Option<u64>,
     /// The date, like 2026-11-09 (today when left out).
@@ -88,7 +69,7 @@ pub struct InventoryRecordReq {
 pub struct InventoryGoneReq {
     pub tile: String,
     pub seed: u64,
-    pub system: SystemWord,
+    pub system: dt_lang::System,
     pub colour: ColourWord,
     pub note: Option<String>,
     pub on: Option<String>,
@@ -113,7 +94,7 @@ pub struct InventoryRelinkReq {
 pub struct InventoryReprintReq {
     pub tile: String,
     pub seed: u64,
-    pub system: SystemWord,
+    pub system: dt_lang::System,
     pub colour: ColourWord,
     /// The print list's id; none makes a new list.
     pub list: Option<String>,
@@ -281,8 +262,8 @@ fn date_of(on: Option<&str>) -> Result<String, Reply> {
     }
 }
 
-fn system_of(shared: &Shared, system: Option<SystemWord>) -> String {
-    system.map_or_else(|| shared.options().system, |s| s.word().to_owned())
+fn system_of(shared: &Shared, system: Option<dt_lang::System>) -> dt_lang::System {
+    system.unwrap_or_else(|| shared.options().system)
 }
 
 /// Tell every listener the inventory (and so the list) changed.
@@ -373,12 +354,12 @@ pub(super) fn have(shared: &Shared, v: InventoryHaveReq) -> Out<InventoryWrote> 
     let on = date_of(v.on.as_deref())?;
     let seed = v.seed;
     let count = v.count.unwrap_or(1).clamp(1, 100) as usize;
-    let named = disk::name_tile(&path, None, shared.home.as_deref(), &system, seed)
+    let named = disk::name_tile(&path, None, shared.home.as_deref(), system, seed)
         .map_err(|e| fail::mistakes(&e))?;
     let ident = Identity {
         tile: named.canon.clone(),
         seed: named.seed,
-        system: system.clone(),
+        system,
         colour,
     };
     let line = doc::print_line(&ident, true, &on, Some(&named.hash), None, None);
@@ -396,11 +377,7 @@ pub(super) fn have(shared: &Shared, v: InventoryHaveReq) -> Out<InventoryWrote> 
                 count.to_string()
             },
             named.seed,
-            if system == "db" {
-                "DungeonBlocks"
-            } else {
-                "OpenLOCK"
-            },
+            system.title(),
             if colour == Colour::Multi {
                 "multicolour"
             } else {
@@ -506,7 +483,7 @@ pub(super) fn gone(shared: &Shared, v: InventoryGoneReq) -> Out<InventoryWrote> 
     let ident = Identity {
         tile: v.tile.clone(),
         seed: v.seed,
-        system: v.system.word().to_owned(),
+        system: v.system,
         colour: v.colour.into(),
     };
     match disk::load(home) {
@@ -680,14 +657,14 @@ fn say_problem(shared: &Shared, text: &str) {
 /// `print=always`; one you do not is a plain piece, which prints because the
 /// inventory lacks it.
 pub(super) fn reprint(shared: &Shared, v: InventoryReprintReq) -> Out<InventoryReprinted> {
-    let (tile, seed, system) = (v.tile.as_str(), v.seed, v.system.word());
+    let (tile, seed, system) = (v.tile.as_str(), v.seed, v.system);
     let colour: Colour = v.colour.into();
     let home = home_of(shared)?;
     let have = match disk::load(home) {
         Ok(Some(l)) => l.inventory.have(&Identity {
             tile: tile.to_owned(),
             seed,
-            system: system.to_owned(),
+            system,
             colour,
         }),
         Ok(None) => 0,

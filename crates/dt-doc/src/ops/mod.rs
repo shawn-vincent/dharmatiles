@@ -376,7 +376,7 @@ fn map_op(text: &str, op: &Op) -> Result<Done, EditError> {
             let found = list.pieces.iter().position(|p| {
                 same_tile(&p.tile.value, want.tile)
                     && p.seed.as_ref().map(|s| s.value) == want.seed
-                    && p.system.as_ref().map(|s| s.value.as_str()) == want.system
+                    && p.system.as_ref().map(|s| s.value) == want.system
                     && (p.print == PrintMode::Always) == want.always
             });
             if let Some(i) = found {

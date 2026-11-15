@@ -55,7 +55,7 @@ const SMALL: &[(&str, &str)] = &[
 
 fn on(system: &str) -> Options {
     Options {
-        system: system.to_owned(),
+        system: system.parse().unwrap(),
         ..Options::default()
     }
 }
@@ -79,7 +79,7 @@ fn passes_in<S: dt_testkit::Reads>(src: &S, path: &str, system: &str) {
         return;
     }
     let tile = check(src, path, &Options::default()).unwrap().tile.unwrap();
-    let db = Frame::for_system("db", tile.cols, tile.rows).size_mm();
+    let db = Frame::for_system(dt_lang::System::Db, tile.cols, tile.rows).size_mm();
     for (built, plan) in b.footprint.iter().zip(db) {
         let ratio = built / plan;
         assert!((ratio - RATIO).abs() < 1e-12, "{path}: {ratio}");

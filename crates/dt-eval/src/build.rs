@@ -792,7 +792,7 @@ impl<'a> Plan<'a> {
             document: path.to_owned(),
             document_hash: doc::text_hash(text),
             seed: c.seed,
-            system: opts.system.clone(),
+            system: opts.system,
             printer: opts.printer.name.clone(),
         };
         let built = Built {
@@ -835,7 +835,7 @@ impl<'a> Plan<'a> {
                 look,
                 entries,
                 pieces,
-                stack: tile.names(&opts.system),
+                stack: tile.names(opts.system),
                 clouds: opts.clouds.then(|| cloud_part(scene.collected())).flatten(),
                 debug: opts.debug.then(|| mark_part(scene.collected())).flatten(),
                 placed: scene.placed().to_vec(),

@@ -452,14 +452,14 @@ pub struct PrintedSetRes {
 #[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
 pub struct TargetReq {
-    pub system: Option<String>,
+    pub system: Option<dt_lang::System>,
     pub printer: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct TargetRes {
-    pub system: String,
+    pub system: dt_lang::System,
     pub printer: String,
 }
 
@@ -601,7 +601,7 @@ pub(super) fn page_message(shared: &Shared, v: PageMessageReq) -> Out<Done> {
 /// are built again.
 pub(super) fn target(shared: &Shared, v: TargetReq) -> Out<TargetRes> {
     shared
-        .set_target(v.system.as_deref(), v.printer.as_deref())
+        .set_target(v.system, v.printer.as_deref())
         .map_err(bad)?;
     let o = shared.options();
     Ok(TargetRes {
@@ -1282,7 +1282,7 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
             let stack = match c
                 .tile
                 .as_ref()
-                .map(|t| stack::items(t, c.solved.as_ref(), &opts.system))
+                .map(|t| stack::items(t, c.solved.as_ref(), opts.system))
             {
                 Some(Err(e)) => {
                     return Err(fail::failure(

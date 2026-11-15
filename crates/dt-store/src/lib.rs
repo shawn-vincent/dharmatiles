@@ -357,7 +357,7 @@ impl Store {
         c.field("format", &FORMAT)
             .field("engine", &self.engine)
             .field("tier", tier.name())
-            .field("system", &opts.system)
+            .field("system", opts.system.word())
             .field("printer", &opts.printer.name)
             .field("printer-values", &opts.printer)
             .field("seed", &opts.seed)

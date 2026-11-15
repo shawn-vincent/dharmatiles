@@ -232,7 +232,7 @@ fn any_input_change_misses() {
     differs(key_of(&store, &tile_edit, "mem/t.dtile", &opts), "the tile");
     // the system
     let ol = Options {
-        system: "ol".to_owned(),
+        system: dt_lang::System::Ol,
         ..Options::default()
     };
     differs(

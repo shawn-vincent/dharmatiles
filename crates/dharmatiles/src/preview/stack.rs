@@ -168,7 +168,7 @@ fn line_of(text: &str, o: usize) -> usize {
 pub fn items(
     tile: &Tile,
     solved: Option<&SolveReport>,
-    system: &str,
+    system: dt_lang::System,
 ) -> Result<Vec<StackItem>, String> {
     let names = tile.names(system);
     let mut out = Vec::with_capacity(names.len());
@@ -379,6 +379,7 @@ mod tests {
     use dt_eval::{Files, Options};
 
     fn labels(path: &str, system: &str) -> Vec<String> {
+        let system: dt_lang::System = system.parse().unwrap();
         let c = dt_eval::check(&Files, path, &Options::default()).unwrap();
         super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), system)
             .unwrap()
@@ -411,7 +412,12 @@ mod tests {
             &Options::default(),
         )
         .unwrap();
-        let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
+        let items = super::items(
+            c.tile.as_ref().unwrap(),
+            c.solved.as_ref(),
+            dt_lang::System::Db,
+        )
+        .unwrap();
         let seed = |what: &str| items.iter().find(|v| v.what == what).unwrap().seed;
         assert_eq!(seed("wall"), Some(11));
         assert_eq!(seed("dirt"), None);
@@ -445,7 +451,8 @@ mod tests {
             if let Ok(c) = dt_eval::check(&Files, &path, &Options::default())
                 && let Some(t) = c.tile.as_ref()
             {
-                super::items(t, None, "db").unwrap_or_else(|e| panic!("{path}: {e}"));
+                super::items(t, None, dt_lang::System::Db)
+                    .unwrap_or_else(|e| panic!("{path}: {e}"));
             }
         }
     }
@@ -454,26 +461,30 @@ mod tests {
     fn clouds_of(text: &str) -> Vec<(String, Vec<(String, String)>)> {
         let m = dt_eval::Memory([("t.dtile".to_owned(), text.to_owned())].into());
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
-        super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db")
-            .unwrap()
-            .iter()
-            .filter(|v| v.key != "tile/connector")
-            .map(|v| {
-                let cs = v
-                    .clouds
-                    .iter()
-                    .map(|c| {
-                        let [o, l] = c.span;
-                        let kind = match c.pin {
-                            Some(k) => format!("pin {k}"),
-                            None => c.kind.clone(),
-                        };
-                        (kind, text[o..o + l].to_owned())
-                    })
-                    .collect();
-                (v.key.clone(), cs)
-            })
-            .collect()
+        super::items(
+            c.tile.as_ref().unwrap(),
+            c.solved.as_ref(),
+            dt_lang::System::Db,
+        )
+        .unwrap()
+        .iter()
+        .filter(|v| v.key != "tile/connector")
+        .map(|v| {
+            let cs = v
+                .clouds
+                .iter()
+                .map(|c| {
+                    let [o, l] = c.span;
+                    let kind = match c.pin {
+                        Some(k) => format!("pin {k}"),
+                        None => c.kind.clone(),
+                    };
+                    (kind, text[o..o + l].to_owned())
+                })
+                .collect();
+            (v.key.clone(), cs)
+        })
+        .collect()
     }
 
     #[test]
@@ -521,7 +532,12 @@ mod tests {
             .into(),
         );
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
-        let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
+        let items = super::items(
+            c.tile.as_ref().unwrap(),
+            c.solved.as_ref(),
+            dt_lang::System::Db,
+        )
+        .unwrap();
         let tree = items.iter().find(|v| v.what == "tree").unwrap();
         let cloud = &tree.clouds[0];
         let text = c.file.src.inner();
@@ -540,7 +556,12 @@ mod tests {
             .into(),
         );
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
-        let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
+        let items = super::items(
+            c.tile.as_ref().unwrap(),
+            c.solved.as_ref(),
+            dt_lang::System::Db,
+        )
+        .unwrap();
         let top = items[0].controls.iter().find(|c| c.name == "top").unwrap();
         assert_eq!(top.text, "top=\"$groundHeight + 1dmm\"");
     }
@@ -560,7 +581,12 @@ mod tests {
             .into(),
         );
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
-        let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
+        let items = super::items(
+            c.tile.as_ref().unwrap(),
+            c.solved.as_ref(),
+            dt_lang::System::Db,
+        )
+        .unwrap();
         let wall = items.iter().find(|v| v.what == "wall").unwrap();
         let written: Vec<&str> = wall.controls.iter().map(|c| c.name.as_str()).collect();
         assert_eq!(written, ["style", "height"], "no `height.height`");
@@ -597,7 +623,13 @@ mod tests {
             &Options::default(),
         )
         .unwrap();
-        for v in super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "ol").unwrap() {
+        for v in super::items(
+            c.tile.as_ref().unwrap(),
+            c.solved.as_ref(),
+            dt_lang::System::Ol,
+        )
+        .unwrap()
+        {
             assert!(v.href.starts_with(&super::docs()));
         }
     }

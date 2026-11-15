@@ -73,8 +73,8 @@ pub struct Identity {
     pub tile: String,
     /// The seed it was built with.
     pub seed: u64,
-    /// `db` or `ol`: they never count for each other.
-    pub system: String,
+    /// The systems never count for each other.
+    pub system: dt_lang::System,
     /// Single colour or multicolour.
     pub colour: Colour,
 }
@@ -422,7 +422,12 @@ impl Reader {
                         self.err(value_span(e), "`seed` is a whole number", "not that");
                     }
                 },
-                "system" => system = self.word("system", e, &["db", "ol"]),
+                "system" => {
+                    // `word` has checked it is one of the system words, so it reads
+                    system = self
+                        .word("system", e, &dt_lang::System::words())
+                        .and_then(|w| w.parse().ok());
+                }
                 "colour" => colour = self.word("colour", e, &["single", "multi"]),
                 other if keys.contains(&other) => rest.push((other.to_owned(), e.clone())),
                 other => {

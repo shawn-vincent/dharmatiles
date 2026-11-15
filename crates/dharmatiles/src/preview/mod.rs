@@ -140,7 +140,7 @@ fn stale_mesh(rev: u64) -> (&'static str, api::Body) {
 }
 
 /// What a tile's size and seed are remembered by: its path, the seed asked, the system and its file's time.
-type SceneCheck = (String, Option<u64>, String, Option<SystemTime>);
+type SceneCheck = (String, Option<u64>, dt_lang::System, Option<SystemTime>);
 
 /// A tile's name for the page: 16 hex digits of a hash of its path.  The
 /// same path is the same id for as long as it is listed, and across runs.
@@ -586,9 +586,13 @@ impl Shared {
     /// # Errors
     /// In words: a system that is not `db` or `ol`, a printer that is not
     /// there.
-    fn set_target(&self, system: Option<&str>, printer: Option<&str>) -> Result<(), String> {
+    fn set_target(
+        &self,
+        system: Option<dt_lang::System>,
+        printer: Option<&str>,
+    ) -> Result<(), String> {
         let now = self.options();
-        let system = system.unwrap_or(&now.system);
+        let system = system.unwrap_or(now.system);
         let printer = printer.unwrap_or(&now.printer.name);
         let mut next = crate::library::options_in(system, printer, None, self.home.as_deref())?;
         next.engine = now.engine.clone();

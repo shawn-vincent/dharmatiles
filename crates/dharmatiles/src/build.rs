@@ -128,7 +128,7 @@ pub(crate) fn build_one(
                 "writing files",
                 0.3,
                 p,
-                &opts.system,
+                opts.system.word(),
                 &timings,
             );
             progress::tracker_for(
@@ -186,7 +186,7 @@ pub(crate) fn build_one(
     let total_s = t0.elapsed().as_secs_f64();
     let mut secs = b.report.stage_secs.clone();
     secs.push((progress::WRITE.to_owned(), t_write.elapsed().as_secs_f64()));
-    timings.record(p, &opts.system, &secs);
+    timings.record(p, opts.system.word(), &secs);
     timings.save();
     let a = &record.audit;
     if !json && matches!(verdict, Verdict::NotChecked) {

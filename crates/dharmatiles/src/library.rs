@@ -1,6 +1,7 @@
 //! Where tiles come from: the library on disk, tile lists, options and
 //! the output folder.
 
+use dt_lang::System;
 use std::path::PathBuf;
 
 use dt_eval::Options;
@@ -77,7 +78,7 @@ pub(crate) fn library_tiles() -> Result<Vec<String>, String> {
 ///
 /// # Errors
 /// A system that is not `db` or `ol`; a printer that is not there.
-pub(crate) fn options(system: &str, printer: &str, seed: Option<u64>) -> Result<Options, String> {
+pub(crate) fn options(system: System, printer: &str, seed: Option<u64>) -> Result<Options, String> {
     options_in(
         system,
         printer,
@@ -101,14 +102,11 @@ pub(crate) fn tier(word: &str) -> Result<dt_store::Tier, String> {
 
 /// [`options`], with the user's printers read from `home`.
 pub(crate) fn options_in(
-    system: &str,
+    system: System,
     printer: &str,
     seed: Option<u64>,
     home: Option<&std::path::Path>,
 ) -> Result<Options, String> {
-    if !matches!(system, "db" | "ol") {
-        return Err(format!("`{system}` is not a system: use `db` or `ol`"));
-    }
     let say = |e: Vec<dt_eval::Diag>| {
         e.iter()
             .map(|d| match &d.help {
@@ -119,7 +117,7 @@ pub(crate) fn options_in(
             .join("; ")
     };
     let mut o = Options {
-        system: system.to_owned(),
+        system,
         seed,
         engine: env!("DT_ENGINE_VERSION").to_owned(),
         ..Options::new().map_err(say)?
@@ -140,7 +138,7 @@ const TARGET_FILE: &str = "target.json";
 /// written only here.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct RememberedTarget {
-    pub system: String,
+    pub system: System,
     pub printer: String,
 }
 
@@ -168,11 +166,11 @@ pub(crate) fn remembered_target(
 /// The folder cannot be made or the file written.
 pub(crate) fn remember_target(
     home: &std::path::Path,
-    system: &str,
+    system: System,
     printer: &str,
 ) -> Result<(), String> {
     let text = serde_json::to_string(&RememberedTarget {
-        system: system.to_owned(),
+        system,
         printer: printer.to_owned(),
     })
     .map_err(|e| e.to_string())?
@@ -194,7 +192,7 @@ pub(crate) fn remember_target(
 /// # Errors
 /// A flag that is not a system or a printer.
 pub(crate) fn preview_options(
-    system: Option<&str>,
+    system: Option<System>,
     printer: Option<&str>,
 ) -> Result<Options, String> {
     let home = crate::preview::roots::personal_home()?;
@@ -205,21 +203,18 @@ pub(crate) fn preview_options(
         None
     });
     let (rs, rp) = remembered.map_or((None, None), |t| (Some(t.system), Some(t.printer)));
-    let sys = system
-        .map(str::to_owned)
-        .or(rs)
-        .unwrap_or_else(|| "db".to_owned());
+    let sys = system.or(rs).unwrap_or_default();
     let pr = printer
         .map(str::to_owned)
         .or(rp)
         .unwrap_or_else(|| "default".to_owned());
-    match options_in(&sys, &pr, None, Some(&home)) {
+    match options_in(sys, &pr, None, Some(&home)) {
         // a remembered printer that has gone: the default, not a failure, and said
         Err(e) if printer.is_none() && system.is_none() => {
             tell!(
                 "note: the remembered build target {sys}/{pr} is not available ({e}); using db/default"
             );
-            options_in("db", "default", None, Some(&home))
+            options_in(System::Db, "default", None, Some(&home))
         }
         r => r,
     }

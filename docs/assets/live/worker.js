@@ -25,7 +25,7 @@ export {}; // a module worker: the engine is awaited at the top
 // The protocol, once, where the worker makes and takes the messages (engine.js imports these).  What the answers carry is the
 // generated engine-wire.d.ts's: `Answers`.
 /** @typedef {'check' | 'build'} Step */
-/** What a job asks: its steps, the source, the target, the seed (-1 for the document's own), the cells a square (0: the finest) and the tier. @typedef {{steps: Step[], text: string, system: string, seed: number, cells: number, tier: string}} JobSpec */
+/** What a job asks: its steps, the source, the target, the seed (null for the document's own), the cells a square (0: the finest) and the tier. @typedef {{steps: Step[], text: string, system: string, seed: number | null, cells: number, tier: string}} JobSpec */
 /** @typedef {{type: 'init', module: WebAssembly.Module, library: string}} InitMsg  to the worker: the compiled module, and the library as JSON */
 /** @typedef {{type: 'fix', id: string, text: string, fix: import('./engine-wire').FixJson}} FixMsg  to the worker: lay a mistake's fix into the source */
 /** @typedef {{type: 'job', id: number} & JobSpec} JobMsg  to the worker: one job */

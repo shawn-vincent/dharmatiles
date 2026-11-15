@@ -67,7 +67,7 @@ fn check_plans_the_stack_in_the_order_it_is_written_and_build_builds_that_plan()
             .iter()
             .map(|n| n.label.clone())
             .collect::<Vec<_>>(),
-        t.names(&opts.system)
+        t.names(opts.system)
             .iter()
             .map(|n| n.label.clone())
             .collect::<Vec<_>>()

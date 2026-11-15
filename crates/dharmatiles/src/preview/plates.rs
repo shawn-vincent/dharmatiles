@@ -896,7 +896,7 @@ fn shared_plan(
 ) -> TilePlan {
     TilePlan::Plates(Box::new(PlatesDoc {
         ground: PlanGround {
-            square_mm: dt_kit::Frame::for_system(&plan.settings.system, 1, 1).square_mm,
+            square_mm: dt_kit::Frame::for_system(plan.settings.system, 1, 1).square_mm,
             size_mm: plan.settings.machine.bed,
             datum_z: Some(0.0),
         },
@@ -912,7 +912,7 @@ fn shared_plan(
 /// The ground of a list that has no layout: the system's square, and no bed (no printer is read).
 fn unplanned_ground(shared: &Shared) -> PlanGround {
     PlanGround {
-        square_mm: dt_kit::Frame::for_system(&shared.options().system, 1, 1).square_mm,
+        square_mm: dt_kit::Frame::for_system(shared.options().system, 1, 1).square_mm,
         size_mm: None,
         datum_z: Some(0.0),
     }

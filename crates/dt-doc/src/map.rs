@@ -286,7 +286,7 @@ pub struct Piece {
     /// A seed to build it with, in place of the tile's own.
     pub seed: Option<Spanned<u64>>,
     /// A base system for this piece (`db` or `ol`), in place of the list's.
-    pub system: Option<Spanned<String>>,
+    pub system: Option<Spanned<dt_lang::System>>,
     /// `print=`: `missing` (the default: print what the inventory lacks),
     /// `always` (print it whatever you have) or `skip` (leave it off).
     pub print: PrintMode,
@@ -369,7 +369,7 @@ impl Group {
 #[derive(Debug, Clone)]
 pub struct Plates {
     /// The base system pieces are built for (`db`, `ol`).
-    pub system: Option<Spanned<String>>,
+    pub system: Option<Spanned<dt_lang::System>>,
     /// The printer profile (`bambu/x1c-ams`).
     pub printer: Option<Spanned<String>>,
     /// Single colour or multicolour.
@@ -610,11 +610,8 @@ impl Reader {
                     }
                 }
                 "system" => {
-                    if let Some(s) = self.word("system", e, &[("db", "db"), ("ol", "ol")]) {
-                        p.system = Some(Spanned {
-                            value: s.value.to_owned(),
-                            span: s.span,
-                        });
+                    if let Some(s) = self.word("system", e, &system_words()) {
+                        p.system = Some(s);
                     }
                 }
                 "print" => {
@@ -955,11 +952,8 @@ impl Reader {
             };
             match k.value() {
                 "system" => {
-                    if let Some(s) = self.word("system", e, &[("db", "db"), ("ol", "ol")]) {
-                        into.system = Some(Spanned {
-                            value: s.value.to_owned(),
-                            span: s.span,
-                        });
+                    if let Some(s) = self.word("system", e, &system_words()) {
+                        into.system = Some(s);
                     }
                 }
                 "printer" => into.printer = self.string("printer", e),
@@ -1230,6 +1224,11 @@ fn read_map(r: &mut Reader, n: &KdlNode, list: &mut PrintList) {
     }
 }
 
+/// The words a `system` setting may take, each with its system.
+fn system_words() -> [(&'static str, dt_lang::System); 2] {
+    dt_lang::System::ALL.map(|s| (s.word(), s))
+}
+
 /// A `piece` line for a print list.
 #[must_use]
 pub fn piece_line(
@@ -1237,7 +1236,7 @@ pub fn piece_line(
     tile: &str,
     count: u32,
     seed: Option<u64>,
-    system: Option<&str>,
+    system: Option<dt_lang::System>,
     always: bool,
 ) -> String {
     let mut l = format!(
@@ -1266,7 +1265,7 @@ pub struct Want<'a> {
     /// A seed, if it is not the tile's own.
     pub seed: Option<u64>,
     /// A system, if it is not the list's.
-    pub system: Option<&'a str>,
+    pub system: Option<dt_lang::System>,
     /// `print=always`.
     pub always: bool,
 }
@@ -1322,7 +1321,7 @@ pub fn placed_line(
     at: At,
     rot: i64,
     seed: Option<u64>,
-    system: Option<&str>,
+    system: Option<dt_lang::System>,
 ) -> String {
     let mut l = format!(
         "piece {id} {} at={} rot={rot}",
@@ -1346,7 +1345,7 @@ pub fn new_list(
     about: &str,
     lines: &[String],
     printer: Option<&str>,
-    system: &str,
+    system: dt_lang::System,
     mode: Option<Mode>,
 ) -> String {
     let mut t = format!(

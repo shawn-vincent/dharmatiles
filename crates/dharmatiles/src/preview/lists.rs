@@ -86,7 +86,7 @@ pub struct ListsAddReq {
     /// The list's id; none makes a new list.
     pub list: Option<String>,
     pub seed: Option<u64>,
-    pub system: Option<String>,
+    pub system: Option<dt_lang::System>,
     /// The revision of the list the caller last saw, when it has the list open.
     pub doc_rev: Option<u64>,
 }
@@ -316,7 +316,7 @@ pub(super) fn new_list(shared: &Shared, v: ListsNewReq) -> Out<super::places::Li
         "Tiles to print.",
         &[],
         Some(&printer_for(shared)),
-        &shared.options().system,
+        shared.options().system,
         None,
     );
     // a map has a grid (it is what opens a document as a map, before a piece is placed)
@@ -395,7 +395,7 @@ pub(super) fn put(
             want.always,
         )],
         Some(&printer_for(shared)),
-        &shared.options().system,
+        shared.options().system,
         mode,
     );
     let dest = edit::write_new_ext(&home, "Print list", "dmap", text.as_bytes())?;
@@ -422,11 +422,7 @@ pub(super) fn add(shared: &Shared, v: ListsAddReq) -> Out<ListsAddRes> {
         return Err(fail::refused("404 Not Found", "no such tile"));
     };
     let canon = dt_print::inventory::canonical(&path, shared.home.as_deref());
-    let system = match v.system.as_deref() {
-        None => None,
-        Some(s @ ("db" | "ol")) => Some(s),
-        Some(_) => return Err(bad("the system is db or ol")),
-    };
+    let system = v.system;
     let want = Want {
         tile: &canon,
         seed: v.seed,

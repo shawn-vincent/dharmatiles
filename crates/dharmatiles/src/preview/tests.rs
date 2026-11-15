@@ -1260,16 +1260,14 @@ fn edit_refused(
 
 /// `POST /api/target`: the status line.
 fn target_head(r: &Running, token: &str, system: Option<&str>, printer: Option<&str>) -> String {
-    post_head(
-        r,
-        "/api/target",
-        Some(token),
-        None,
-        &edit::TargetReq {
-            system: system.map(str::to_owned),
-            printer: printer.map(str::to_owned),
-        },
-    )
+    // the words as the wire carries them, so a word that is no system can be sent too
+    let word = |k: &str, v: Option<&str>| v.map_or_else(String::new, |v| format!("{k:?}:{v:?}"));
+    let body = [word("system", system), word("printer", printer)]
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(",");
+    post_raw(r, "/api/target", Some(token), None, &format!("{{{body}}}")).0
 }
 
 #[test]
@@ -1468,7 +1466,7 @@ fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_writte
         let h = target_head(&r, &token, system, printer);
         assert!(h.starts_with("HTTP/1.1 400"), "{h}");
     }
-    assert_eq!(tiles(&r).system, "db");
+    assert_eq!(tiles(&r).system, dt_lang::System::Db);
     assert_eq!(tiles(&r).printer, "default");
     let export = |req: edit::ExportReq| {
         post::<_, edit::ExportRes>(
@@ -1491,7 +1489,7 @@ fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_writte
     // the export is for the target the title bar's chip chose
     let h = target_head(&r, &token, Some("ol"), None);
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
-    assert_eq!(tiles(&r).system, "ol");
+    assert_eq!(tiles(&r).system, dt_lang::System::Ol);
     let (h, v) = export(edit::ExportReq {
         threemf: None,
         ask_where: None,
@@ -1811,7 +1809,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     assert!(shared.set_target(None, Some("mine")).is_ok());
     let snap = shared.snapshot();
     assert_eq!(snap.printer, "mine");
-    assert_eq!(snap.system, "db");
+    assert_eq!(snap.system, dt_lang::System::Db);
     // the gate's angles are the chosen printer's
     assert!((snap.overhang_deg - 50.0).abs() < 1e-9);
     assert!((snap.steepest_deg - 62.0).abs() < 1e-9);
@@ -1821,16 +1819,15 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     // and the choice is in the home, for the next run
     let kept = crate::library::remembered_target(&dir).unwrap().unwrap();
     assert_eq!(
-        (kept.system.as_str(), kept.printer.as_str()),
-        ("db", "mine")
+        (kept.system, kept.printer.as_str()),
+        (dt_lang::System::Db, "mine")
     );
-    assert!(shared.set_target(Some("ol"), None).is_ok());
+    assert!(shared.set_target(Some(dt_lang::System::Ol), None).is_ok());
     assert_eq!(shared.options().target(), "ol-mine");
-    assert!(shared.set_target(Some("lego"), None).is_err());
     assert!(shared.set_target(None, Some("../mine")).is_err());
     // a profile of yours that has gone: the remembered target falls back
     std::fs::remove_file(dir.join("printers/mine.dtile")).unwrap();
-    let o = crate::library::options_in("db", "default", None, Some(&dir)).unwrap();
+    let o = crate::library::options_in(dt_lang::System::Db, "default", None, Some(&dir)).unwrap();
     assert_eq!(o.target(), "db");
 }
 
@@ -3636,12 +3633,11 @@ fn the_tiers_route_refuses_a_bad_want_by_name() {
     let huge = format!(r#"{{"scope":"thumbs","wants":[{{"tile":{id:?},"tier":"huge"}}]}}"#);
     let (head, _) = post_raw(&r, "/api/tiers/want", Some(&token), None, &huge);
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
-    let (head, v) = ask(tiers::TierWant {
-        system: Some("zz".to_owned()),
-        ..tier_want(&id, "low")
-    });
+    // a word that is no system cannot be written by the request type either: the wire's own refusal
+    let zz =
+        format!(r#"{{"scope":"thumbs","wants":[{{"tile":{id:?},"tier":"low","system":"zz"}}]}}"#);
+    let (head, _) = post_raw(&r, "/api/tiers/want", Some(&token), None, &zz);
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
-    assert!(format!("{v:?}").contains("the system is db or ol"), "{v:?}");
     let (head, v) = ask(tier_want("nope", "low"));
     assert!(head.starts_with("HTTP/1.1 404"), "{head}");
     assert!(format!("{v:?}").contains("no such tile"), "{v:?}");

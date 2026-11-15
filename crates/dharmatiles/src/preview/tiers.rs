@@ -27,7 +27,7 @@ pub struct TierWant {
     /// `super-low`, `low` or `full`.
     pub tier: dt_store::Tier,
     pub seed: Option<u64>,
-    pub system: Option<String>,
+    pub system: Option<dt_lang::System>,
     pub printer: Option<String>,
     /// A source text to build in place of the file's own (a step of the document's history): the file is not
     /// edited, and the picture is kept by the text, so a text built before is not built again.
@@ -116,7 +116,7 @@ fn key_of(w: &TierWant) -> String {
         w.tile,
         w.tier,
         w.seed.map_or_else(dash, |s| s.to_string()),
-        w.system.clone().unwrap_or_else(dash),
+        w.system.map_or_else(dash, |s| s.to_string()),
         w.printer.clone().unwrap_or_else(dash),
         w.text.as_deref().map_or_else(dash, |t| format!(
             "{}:{:016x}",
@@ -166,10 +166,8 @@ impl Shared {
             ));
         }
         opts.tier = w.tier;
-        match w.system.as_deref() {
-            None => {}
-            Some(s @ ("db" | "ol")) => opts.system = s.to_owned(),
-            Some(_) => return Err(fail::refused("400 Bad Request", "the system is db or ol")),
+        if let Some(s) = w.system {
+            opts.system = s;
         }
         opts.seed = w.seed.or(opts.seed);
         if let Some(p) = w.printer.as_deref()

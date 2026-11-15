@@ -144,7 +144,7 @@ fn main() -> ExitCode {
             json,
             explain,
         } => {
-            let opts = match options(&system, &printer, seed) {
+            let opts = match options(system, &printer, seed) {
                 Ok(o) => o,
                 Err(e) => {
                     tell!("error: {e}");
@@ -158,7 +158,7 @@ fn main() -> ExitCode {
             write,
             system,
             printer,
-        } => match options(&system, &printer, None) {
+        } => match options(system, &printer, None) {
             Ok(opts) => fix::fix(&paths, &opts, write),
             Err(e) => {
                 tell!("error: {e}");
@@ -215,7 +215,7 @@ fn main() -> ExitCode {
                 paths
             };
             let out = out_dir(out);
-            let opts = match options(&system, &printer, seed) {
+            let opts = match options(system, &printer, seed) {
                 Ok(o) => dt_eval::Options { tier, ..o },
                 Err(e) => {
                     tell!("error: {e}");
@@ -335,7 +335,7 @@ fn main() -> ExitCode {
             port,
             open,
             palette,
-        } => match library::preview_options(system.as_deref(), printer.as_deref()) {
+        } => match library::preview_options(system, printer.as_deref()) {
             Ok(o) => preview::run(&paths, &o, port, open, palette),
             Err(e) => {
                 tell!("error: {e}");
@@ -350,7 +350,7 @@ fn main() -> ExitCode {
             out,
             png,
             max_builds,
-        } => match options(&system, &printer, seed) {
+        } => match options(system, &printer, seed) {
             Ok(o) => watch::run(&paths, &o, &out_dir(out), png, max_builds),
             Err(e) => {
                 tell!("error: {e}");

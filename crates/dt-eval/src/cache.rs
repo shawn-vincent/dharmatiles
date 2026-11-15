@@ -115,7 +115,7 @@ pub(crate) fn base_key(
     let mut c = Canon::new();
     c.field("frame", frame)
         .field("seed", &seed)
-        .field("system", &opts.system)
+        .field("system", opts.system.word())
         .field("printer", &opts.printer)
         .field("draft", &(opts.tier == crate::Tier::Draft))
         .field("low", &opts.tier.is_low())

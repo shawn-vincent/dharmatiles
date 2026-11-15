@@ -17,7 +17,7 @@ import { Queue } from './queue.js';
 /** @typedef {import('./worker.js').FromWorker} FromWorker */
 /** @typedef {import('./worker.js').JobSpec} JobSpec */
 /** @typedef {import('./worker.js').BuiltMsg} BuiltMsg */
-/** What a card asks for: the source, the target and seed, and its own version; an edit also says the cells and tier (a full build is the finest). @typedef {{text: string, system: string, seed: number, version: number}} FullAsk */
+/** What a card asks for: the source, the target and seed, and its own version; an edit also says the cells and tier (a full build is the finest). @typedef {{text: string, system: string, seed: number | null, version: number}} FullAsk */
 /** @typedef {FullAsk & {cells: number, tier: string}} EditAsk */
 /** An ask, made a job: the kind it is, the steps it takes, and the key it is cached by. @typedef {JobSpec & {kind: 'edit' | 'full', version: number, key?: string}} Job */
 /** The mesh of a build, as kept and as told: what the worker's `built` carries, less its job. @typedef {Pick<BuiltMsg, 'meta' | 'positions' | 'colours' | 'stl' | 'ms'>} Built */

@@ -41,7 +41,7 @@ impl From<Colour> for ColourWord {
 pub struct InventoryRow {
     pub tile: String,
     pub seed: u64,
-    pub system: String,
+    pub system: dt_lang::System,
     pub colour: ColourWord,
     pub have: u32,
     pub printed: u32,

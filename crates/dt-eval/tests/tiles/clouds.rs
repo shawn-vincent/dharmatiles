@@ -440,7 +440,7 @@ fn the_cloud_tiles_pass_the_gate() {
 #[test]
 fn the_cloud_tiles_build_for_openlock_too() {
     let opts = Options {
-        system: "ol".to_owned(),
+        system: dt_lang::System::Ol,
         ..Options::default()
     };
     for path in CLOUD_TILES {

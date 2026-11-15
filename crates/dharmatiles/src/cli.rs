@@ -42,8 +42,8 @@ pub(crate) enum CacheAction {
     /// out as the cache is, for an install to copy into the cache folder.
     Previews {
         /// Base system: `db` or `ol` (run it for each).
-        #[arg(long, default_value = "db")]
-        system: String,
+        #[arg(long, default_value_t)]
+        system: dt_lang::System,
         /// Printer profile, as for `build`.
         #[arg(long, default_value = "default")]
         printer: String,
@@ -181,8 +181,8 @@ pub(crate) enum Command {
         #[arg(long)]
         all: bool,
         /// Base system: `db` (DungeonBlocks) or `ol` (OpenLOCK).
-        #[arg(long, default_value = "db")]
-        system: String,
+        #[arg(long, default_value_t)]
+        system: dt_lang::System,
         /// Printer profile: a name from `library/printers/` or from
         /// `printers/` beside your tiles (`$DT_HOME`, else `~/dharmatiles`).
         /// Output goes to `out/<system>[-<printer>]/`.
@@ -241,7 +241,7 @@ pub(crate) enum Command {
         printer: Option<String>,
         /// Base system, in place of the list's: `db` or `ol`.
         #[arg(long)]
-        system: Option<String>,
+        system: Option<dt_lang::System>,
         /// `single` (one filament, no paint) or `multicolour`, in place of
         /// the list's (default: multicolour when the printer holds more than
         /// one filament).
@@ -317,8 +317,8 @@ pub(crate) enum Command {
         /// Base system, as for `build`: `db` (DungeonBlocks) or `ol`
         /// (OpenLOCK). Units and sizes depend on it, so a tile can pass
         /// for one and fail for the other.
-        #[arg(long, default_value = "db")]
-        system: String,
+        #[arg(long, default_value_t)]
+        system: dt_lang::System,
         /// Printer profile, as for `build`: a name from `library/printers/`
         /// or from `printers/` beside your tiles.
         #[arg(long, default_value = "default")]
@@ -344,8 +344,8 @@ pub(crate) enum Command {
         #[arg(long)]
         write: bool,
         /// Base system, as for `check`: sizes in millimetres depend on it.
-        #[arg(long, default_value = "db")]
-        system: String,
+        #[arg(long, default_value_t)]
+        system: dt_lang::System,
         /// Printer profile, as for `check`.
         #[arg(long, default_value = "default")]
         printer: String,
@@ -421,7 +421,7 @@ pub(crate) enum Command {
         /// Base system: `db` or `ol`.  Default: the one the title bar's chip
         /// last chose (remembered in `$DT_HOME`), else `db`.
         #[arg(long)]
-        system: Option<String>,
+        system: Option<dt_lang::System>,
         /// Printer profile; see `build`.  Default: the chip's, else `default`.
         #[arg(long)]
         printer: Option<String>,
@@ -444,8 +444,8 @@ pub(crate) enum Command {
         #[arg(required = true)]
         paths: Vec<String>,
         /// Base system: `db` or `ol`.
-        #[arg(long, default_value = "db")]
-        system: String,
+        #[arg(long, default_value_t)]
+        system: dt_lang::System,
         /// Printer profile; see `build`.
         #[arg(long, default_value = "default")]
         printer: String,

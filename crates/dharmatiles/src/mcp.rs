@@ -7,6 +7,7 @@
 use std::io::{BufRead, Write};
 use std::process::Command;
 
+use dt_lang::System;
 use serde_json::{Value, json};
 
 const PROTOCOL: &str = "2024-11-05";
@@ -577,9 +578,10 @@ macro_rules! words {
     };
 }
 
-words! {
-    /// The build target.
-    System { Db = "db", Ol = "ol" }
+impl Param for System {
+    fn schema() -> Value {
+        json!({"type": "string", "enum": System::words()})
+    }
 }
 
 words! {

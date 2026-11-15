@@ -465,7 +465,7 @@ pub(super) fn built_out(b: &Built) -> Vec<u8> {
     w.str(&b.record.document);
     w.u64(b.record.document_hash);
     w.u64(b.record.seed);
-    w.str(&b.record.system);
+    w.str(b.record.system.word());
     w.str(&b.record.printer);
     w.str(&b.out.to_string_lossy());
     w.f64(b.footprint[0]);
@@ -563,7 +563,7 @@ pub(super) fn built_in(bytes: &[u8]) -> R<Built> {
         document: r.str()?,
         document_hash: r.u64()?,
         seed: r.u64()?,
-        system: r.str()?,
+        system: r.str()?.parse()?,
         printer: r.str()?,
     };
     let out = PathBuf::from(r.str()?);

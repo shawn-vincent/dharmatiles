@@ -13,8 +13,8 @@ use crate::source::{Library, Source};
 /// How to build.
 #[derive(Clone, Debug)]
 pub struct Options {
-    /// The connector system: `db`.
-    pub system: String,
+    /// The connector system.
+    pub system: dt_lang::System,
     /// Replaces the tile's seed (the CLI's `--seed`).
     pub seed: Option<u64>,
     /// The printer the audit checks against, with its name.
@@ -155,7 +155,7 @@ impl Options {
     #[must_use]
     pub fn units(&self) -> dt_doc::units::Units {
         dt_doc::units::Units {
-            square_mm: Frame::for_system(&self.system, 1, 1).square_mm,
+            square_mm: Frame::for_system(self.system, 1, 1).square_mm,
             layer_mm: self.printer.layer_mm,
         }
     }
@@ -165,7 +165,7 @@ impl Options {
     /// files and the build record.
     #[must_use]
     pub fn target(&self) -> String {
-        dt_kit::target_name(&self.system, &self.printer.name)
+        dt_kit::target_name(self.system, &self.printer.name)
     }
 
     /// Build for the printer profile `name` (see [`printer_profile`]).
@@ -205,7 +205,7 @@ impl Options {
     pub fn in_source(sources: &dyn Source) -> Result<Self, Vec<Diag>> {
         let printer = doc::printer(sources, doc::PRINTER)?;
         Ok(Self {
-            system: "db".to_owned(),
+            system: dt_lang::System::Db,
             seed: None,
             printer: Profile {
                 name: "default".to_owned(),

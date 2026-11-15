@@ -185,7 +185,7 @@ pub struct ListPiece {
     pub id: String,
     pub pinned: bool,
     pub seed: Option<u64>,
-    pub system: Option<String>,
+    pub system: Option<dt_lang::System>,
     pub print: String,
 }
 

@@ -16,8 +16,8 @@ pub struct BuildRecord {
     pub document_hash: u64,
     /// The tile's root seed.
     pub seed: u64,
-    /// The connector system, `db` or `ol`.
-    pub system: String,
+    /// The connector system.
+    pub system: dt_lang::System,
     /// The printer profile's name (`default`, or another).
     pub printer: String,
 }
@@ -47,9 +47,9 @@ pub mod hex64 {
 /// `bambu/x1c`, the `/` made a `-` so a target is one folder name): the
 /// printer is left out when it is `default`.
 #[must_use]
-pub fn target_name(system: &str, printer: &str) -> String {
+pub fn target_name(system: dt_lang::System, printer: &str) -> String {
     if printer == "default" {
-        system.to_owned()
+        system.to_string()
     } else {
         format!("{system}-{}", printer.replace('/', "-"))
     }
@@ -60,7 +60,7 @@ impl BuildRecord {
     /// default one (`db`, `ol`, `db-fine`).
     #[must_use]
     pub fn target(&self) -> String {
-        target_name(&self.system, &self.printer)
+        target_name(self.system, &self.printer)
     }
 
     /// The 80-byte STL header: never starts with `solid` (that marks ASCII

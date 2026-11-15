@@ -113,7 +113,7 @@ mod tests {
     fn a_target_is_the_system_and_a_printer_that_is_not_the_default() {
         let mut o = Options::default();
         assert_eq!(o.target(), "db");
-        assert_eq!(dt_kit::target_name("ol", "default"), "ol");
+        assert_eq!(dt_kit::target_name(dt_lang::System::Ol, "default"), "ol");
         o.use_printer("fine", None).unwrap();
         assert_eq!(o.target(), "db-fine");
         assert_eq!(o.printer.layer_mm, 0.12);

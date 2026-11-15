@@ -23,7 +23,7 @@ fn id(tile: &str, seed: u64, system: &str, colour: Colour) -> Identity {
     Identity {
         tile: tile.to_owned(),
         seed,
-        system: system.to_owned(),
+        system: system.parse().unwrap(),
         colour,
     }
 }

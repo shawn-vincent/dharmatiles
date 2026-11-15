@@ -153,9 +153,9 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         Err(errs) => return finish_err(rec, &errs),
     };
     let stack_made = checked.tile.as_ref().map(|t| {
-        let frame = dt_kit::Frame::for_system(&opts.system, t.cols, t.rows);
+        let frame = dt_kit::Frame::for_system(opts.system, t.cols, t.rows);
         let [w, h] = frame.size_mm();
-        let items = stack::items(t, checked.solved.as_ref(), &opts.system)?;
+        let items = stack::items(t, checked.solved.as_ref(), opts.system)?;
         let plan = TilePlan::Tile {
             squares: PlanSquares {
                 cols: t.cols,
@@ -207,7 +207,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         "preparing the view",
         0.4,
         &path,
-        &opts.system,
+        opts.system.word(),
         &timings,
     ));
     drop(checked);
@@ -310,7 +310,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             if shared.cache.is_some() {
                 let mut secs = b.report.stage_secs.clone();
                 secs.push((ENCODE.to_owned(), t_encode.elapsed().as_secs_f64()));
-                timings.record(&path, &opts.system, &secs);
+                timings.record(&path, opts.system.word(), &secs);
                 timings.save();
             }
             let reused = match b.report.reused {
@@ -523,7 +523,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         Ok(b) => Arc::new(b),
         Err(e) => return fail(format!("cannot prepare the view of {path}: {e}")),
     };
-    let sq = dt_kit::Frame::for_system(&opts.system, 1, 1).square_mm;
+    let sq = dt_kit::Frame::for_system(opts.system, 1, 1).square_mm;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let n = |v: f64| (libm::round(v / sq).max(1.0)) as u32;
     let plan = TilePlan::Stl {

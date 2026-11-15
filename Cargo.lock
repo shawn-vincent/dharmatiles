@@ -502,6 +502,10 @@ dependencies = [
 [[package]]
 name = "dt-lang"
 version = "1.0.0"
+dependencies = [
+ "serde",
+ "ts-rs",
+]
 
 [[package]]
 name = "dt-par"
@@ -564,6 +568,7 @@ dependencies = [
  "dt-doc",
  "dt-eval",
  "dt-kit",
+ "dt-lang",
  "dt-print",
  "dt-value",
  "miette",
