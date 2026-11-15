@@ -871,7 +871,6 @@ impl Decoder<'_> {
     /// `foot(cliff)`, the band at a kind of thing's foot; each element
     /// takes the kinds [`schema::Element::place`] lists and refuses the
     /// rest with `dt::type`.
-
     pub(super) fn at_word(
         &mut self,
         entry: &mut Entry,

@@ -138,10 +138,7 @@ fn tube(
         ));
     }
     let angles: Vec<f64> = (0..n_sides)
-        .map(|k| {
-            let a = 2.0 * std::f64::consts::PI * k as f64 / n_sides as f64;
-            a
-        })
+        .map(|k| 2.0 * std::f64::consts::PI * k as f64 / n_sides as f64)
         .collect();
     let (mut u, mut v) = frame;
     let mut positions: Vec<[f64; 3]> = Vec::new();

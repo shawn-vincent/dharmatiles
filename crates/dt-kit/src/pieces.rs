@@ -230,7 +230,6 @@ impl<'a> Pieces<'a> {
     ///
     /// # Errors
     /// [`Refusal::Band`] at the vertex farthest over the band.
-
     pub fn admits_within(&self, mesh: &TriMesh, tol_mm: f64) -> Result<(), Refusal> {
         let w = (self.nx - 1) as f64 * self.step;
         let h = (self.ny - 1) as f64 * self.step;

@@ -342,7 +342,6 @@ impl Tree {
     ///
     /// # Errors
     /// [`LookError`] when the crown is empty or the kernel fails.
-
     pub fn grow(
         &self,
         scene: &mut Scene,

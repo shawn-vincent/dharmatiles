@@ -699,7 +699,6 @@ impl<'l, 'a> Mesher<'l, 'a> {
     }
 
     /// Step 5: one run per layer that made triangles, in layer order.
-
     fn finish(self) -> TriMesh {
         let mut out = TriMesh {
             positions: self.positions,

@@ -152,7 +152,6 @@ pub struct Counter {
 
 impl Counter {
     /// One more done.  Safe from parallel iterators.
-
     pub fn tick(&self) {
         if !self.progress.is_on() {
             return;

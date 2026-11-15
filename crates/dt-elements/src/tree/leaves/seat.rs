@@ -334,7 +334,6 @@ impl Job<'_> {
     /// fallback, base and tip tucks; no burial probe under `tuck_tip`). Returns the blade surface, the
     /// root oval (world mm) and the seated tangent.
     #[expect(clippy::too_many_arguments, reason = "the placer's per-leaf knobs")]
-
     pub(super) fn attempt(
         &self,
         base: V,

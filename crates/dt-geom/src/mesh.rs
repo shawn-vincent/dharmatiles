@@ -112,9 +112,7 @@ impl TriMesh {
         if self.triangles.is_empty() {
             return true;
         }
-        let mut canon: Vec<u32> = (0..self.positions.len())
-            .map(|i| dt_value::idx(i))
-            .collect();
+        let mut canon: Vec<u32> = (0..self.positions.len()).map(dt_value::idx).collect();
         for (&f, &t) in self.merge_from.iter().zip(&self.merge_to) {
             if let Some(slot) = canon.get_mut(f as usize) {
                 *slot = t;

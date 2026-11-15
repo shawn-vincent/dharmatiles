@@ -1032,8 +1032,7 @@ pub fn texture_ok(z: &Field, rim: &Field) -> f64 {
             (ok + usize::from(*r >= TEXTURE_LAYER_MM), all + 1)
         });
 
-    let share = ok as f64 / all.max(1) as f64;
-    share
+    ok as f64 / all.max(1) as f64
 }
 
 #[cfg(test)]

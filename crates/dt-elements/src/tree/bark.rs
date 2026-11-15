@@ -54,8 +54,7 @@ pub fn hash01(parts: &[u64]) -> f64 {
     h = h.wrapping_mul(0xC4CE_B9FE_1A85_EC53);
     h ^= h >> 33;
 
-    let v = (h >> 11) as f64 / (1u64 << 53) as f64;
-    v
+    (h >> 11) as f64 / (1u64 << 53) as f64
 }
 
 const TAU: f64 = std::f64::consts::TAU;

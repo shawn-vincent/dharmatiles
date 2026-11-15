@@ -420,7 +420,6 @@ pub(crate) struct Stone {
 
 /// The outline polygon (t, z), counter-clockwise, bounded by the cell's
 /// cracks (`_outline`).
-
 fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64; 2]> {
     let s = run.scale;
     let g = &run.segs[c.seg];
@@ -771,7 +770,6 @@ fn segmentize(p: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
 
 /// Draw the stone for a cell (`_place_block`, up to the mesh), or `None`
 /// for a cell the rounding swallows.
-
 pub(crate) fn stone(m: &Mason, run: &Run, c: &Cell, seed: Seed) -> Option<Stone> {
     let s = run.scale;
     let bs = super::cell_seed(seed, "stone", &c.key);

@@ -42,7 +42,6 @@ impl Mask {
 
     /// The share of nodes set, 0 to 1.
     #[must_use]
-
     pub fn share(&self) -> f64 {
         self.count() as f64 / (self.nx * self.ny) as f64
     }

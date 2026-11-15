@@ -7,7 +7,7 @@ use super::*;
 /// Positions with split vertices merged and unused ones gone; only
 /// `positions` and `triangles` are kept.
 pub(super) fn canonical(m: &TriMesh) -> TriMesh {
-    let mut to: Vec<u32> = (0..m.positions.len()).map(|i| dt_value::idx(i)).collect();
+    let mut to: Vec<u32> = (0..m.positions.len()).map(dt_value::idx).collect();
     for (&f, &t) in m.merge_from.iter().zip(&m.merge_to) {
         if let Some(s) = to.get_mut(f as usize) {
             *s = t;

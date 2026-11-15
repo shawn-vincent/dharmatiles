@@ -258,7 +258,6 @@ pub(crate) type Built = (Solid, Counts, Mask, f64, Vec<Placed>);
 
 /// Build a masonry run (not yet added). `keep(cell)` drops cells (a
 /// floor outside its area).
-
 pub(crate) fn run(
     m: &Mason,
     scene: &mut Scene,
@@ -753,7 +752,6 @@ type BlocksMade = (Vec<Block>, Vec<TriMesh>, usize, Vec<Placed>);
 /// Blocks for every cell (mortared families and slabs), held printable,
 /// plus the mortar under a missing brick and the pointing of joints wider
 /// than the printer's gap. Returns (blocks, extra meshes, missing count).
-
 pub(crate) fn blocks(
     m: &Mason,
     run: &Run,

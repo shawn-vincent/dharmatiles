@@ -421,7 +421,6 @@ impl Band {
     /// # Panics
     /// If `roll` is not one value per node.
     #[must_use]
-
     pub fn rolled(&self, roll: &[f64], take: impl Fn(usize) -> bool) -> Vec<Option<f64>> {
         let n = self.lo.z.len();
         assert_eq!(roll.len(), n, "rolled: one roll per node");

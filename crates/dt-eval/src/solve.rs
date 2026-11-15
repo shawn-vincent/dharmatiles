@@ -864,7 +864,6 @@ fn mm(v: f64) -> String {
 /// # Errors
 /// What cannot be solved: an unknown place, a height that cannot be worked
 /// out, a pin with no ground, a layer that can never be thick enough.
-
 pub fn solve(
     tile: &Tile,
     f: &Frame,

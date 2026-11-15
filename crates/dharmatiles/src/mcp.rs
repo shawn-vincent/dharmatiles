@@ -66,10 +66,6 @@ fn is_json(ctype: &str) -> bool {
 /// After an answer given before the request was read to its end (a refusal):
 /// say no more, then read and drop what the client is still sending, so the
 /// close does not reset the connection and lose the answer on its way.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
-)]
 fn finish_early(conn: &mut std::net::TcpStream) {
     use std::io::Read;
     // best effort: the answer is already written; a client that has gone needs nothing more
@@ -82,7 +78,7 @@ fn finish_early(conn: &mut std::net::TcpStream) {
     {
         return;
     }
-    let max = u64::try_from(crate::preview::http::MAX_BODY).unwrap_or(u64::MAX);
+    let max = crate::preview::http::MAX_BODY as u64;
     // what is read is thrown away; a read error only ends the draining
     if std::io::copy(&mut conn.take(max), &mut std::io::sink()).is_err() {}
 }
@@ -112,40 +108,14 @@ fn http_one(mut conn: std::net::TcpStream) {
         Ok(c) => c,
         Err(e) => return eprintln!("error: dharmatiles mcp: cannot read a connection: {e}"),
     };
-    let mut reader = std::io::BufReader::new(clone);
-    let mut first = String::new();
-    match reader.read_line(&mut first) {
+    use crate::preview::http::{Head, MAX_BODY, MAX_HEAD, ReadError};
+    let mut reader = std::io::BufReader::new(clone.take(MAX_HEAD + MAX_BODY as u64));
+    let head = match Head::read(&mut reader) {
         // the client connected and left without a word: nothing to answer
-        Ok(0) => return,
-        Ok(_) => {}
-        Err(e) => return bad(&mut conn, format!("cannot read the request: {e}")),
-    }
-    let mut len = 0usize;
-    let (mut host, mut origin, mut ctype) = (String::new(), None::<String>, String::new());
-    loop {
-        let mut h = String::new();
-        match reader.read_line(&mut h) {
-            Ok(0) => break,
-            Ok(_) if h.trim().is_empty() => break,
-            Ok(_) => {}
-            Err(e) => return bad(&mut conn, format!("cannot read the request headers: {e}")),
-        }
-        if let Some((k, v)) = h.split_once(':') {
-            let v = v.trim();
-            if k.eq_ignore_ascii_case("content-length") {
-                match v.parse() {
-                    Ok(n) => len = n,
-                    Err(e) => return bad(&mut conn, format!("bad Content-Length `{v}`: {e}")),
-                }
-            } else if k.eq_ignore_ascii_case("host") {
-                v.clone_into(&mut host);
-            } else if k.eq_ignore_ascii_case("origin") {
-                origin = Some(v.to_owned());
-            } else if k.eq_ignore_ascii_case("content-type") {
-                v.clone_into(&mut ctype);
-            }
-        }
-    }
+        Ok(None) => return,
+        Ok(Some(head)) => head,
+        Err(e) => return bad(&mut conn, e.to_string()),
+    };
     // A web page must not reach this server: not by DNS rebinding (a `Host`
     // that is not the loopback), not by a cross-site POST (browsers always
     // send an `Origin`; an MCP client sends none), not by a "simple" request
@@ -161,13 +131,13 @@ fn http_one(mut conn: std::net::TcpStream) {
         finish_early(conn);
     };
     let refuse = |conn: &mut std::net::TcpStream, why: &str| refuse_as(conn, "403 Forbidden", why);
-    if !crate::preview::http::loopback(&host) {
+    if !crate::preview::http::loopback(&head.host) {
         return refuse(
             &mut conn,
             "loopback only: the Host is not 127.0.0.1, localhost or ::1",
         );
     }
-    if let Some(o) = &origin
+    if let Some(o) = &head.origin
         && !crate::preview::http::loopback_origin(o)
     {
         return refuse(
@@ -175,34 +145,28 @@ fn http_one(mut conn: std::net::TcpStream) {
             "a web page of another site cannot call this server (its Origin is not the loopback)",
         );
     }
-    if !is_json(&ctype) {
+    if !is_json(&head.content_type) {
         return refuse(
             &mut conn,
             "the request must be Content-Type: application/json",
         );
     }
-    if len > crate::preview::http::MAX_BODY {
+    if head.length > MAX_BODY {
         return refuse_as(
             &mut conn,
             "413 Payload Too Large",
-            &format!(
-                "the body is {len} bytes; the most read is {}",
-                crate::preview::http::MAX_BODY
-            ),
+            &ReadError::TooLarge(head.length).to_string(),
         );
     }
-    if !first.starts_with("POST /mcp") {
+    if head.method != "POST" || head.path != "/mcp" {
         reply(&mut conn, "404 Not Found", "{}");
         finish_early(&mut conn);
         return;
     }
-    let mut body = vec![0u8; len];
-    if let Err(e) = reader.read_exact(&mut body) {
-        return bad(
-            &mut conn,
-            format!("the body is shorter than its Content-Length: {e}"),
-        );
-    }
+    let body = match head.body(&mut reader) {
+        Ok(request) => request.body,
+        Err(e) => return bad(&mut conn, e.to_string()),
+    };
     match Request::parse(&body) {
         Ok(req) => {
             // the id only addresses an error reply if the call panics

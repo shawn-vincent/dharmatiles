@@ -549,7 +549,6 @@ impl Message {
 
     /// [`Message::wire`] as a JSON value (the form a test reads).
     #[cfg(test)]
-
     pub(crate) fn json(&self) -> Value {
         serde_json::to_value(self.wire()).expect("a message is plain data")
     }

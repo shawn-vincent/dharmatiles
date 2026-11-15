@@ -47,13 +47,11 @@ pub(super) struct Blade {
 }
 
 /// Interior station `k` (0-based) as numpy's `linspace(0, 1, 13)[1:-1]`.
-
 pub(super) fn station(k: usize) -> f64 {
     (k + 1) as f64 * (1.0 / N_LONG as f64)
 }
 
 /// Lateral position `j` as numpy's `linspace(-1, 1, 11)`.
-
 fn lateral(j: usize) -> f64 {
     if j == N_LAT {
         1.0

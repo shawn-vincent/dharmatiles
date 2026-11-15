@@ -75,8 +75,7 @@ impl Rng {
 
     /// Uniform in [0, 1).
     pub fn random(&mut self) -> f64 {
-        let u = (self.next_u64() >> 11) as f64 * (1.0 / (1u64 << 53) as f64);
-        u
+        (self.next_u64() >> 11) as f64 * (1.0 / (1u64 << 53) as f64)
     }
 
     /// Uniform in [lo, hi).

@@ -149,7 +149,6 @@ fn seat_bed(r: &Placed) -> Field {
 
 /// Seat a resting rock on the stones under it (its underside one surface
 /// at the overhang limit starting BEVEL up its side at the outline).
-
 fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Piece, KitError> {
     let Some((lo3, hi3)) = rock.bounds() else {
         return Ok(rock);

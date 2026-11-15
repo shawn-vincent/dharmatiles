@@ -34,7 +34,6 @@ macro_rules! tell {
 }
 
 /// One value to stdout as one line of JSON: the type is the document.
-
 fn say_json<T: serde::Serialize>(t: &T) {
     say!(
         "{}",

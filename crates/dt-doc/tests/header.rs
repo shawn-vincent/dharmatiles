@@ -2,7 +2,6 @@
 //! first in every kind of document, refused anywhere else it goes wrong, and
 //! never an element.  A document older than the format the decoder reads is
 //! refused, with help naming the release that carried it over.
-#![expect(reason = "a test: a failing unwrap is the failure")] // test helpers outside #[test] fns
 
 mod common;
 

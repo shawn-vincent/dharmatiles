@@ -371,7 +371,6 @@ impl Decoder<'_> {
     }
 
     /// A place word on an entry; false when `key` is not one.
-
     #[expect(
         clippy::disallowed_methods,
         reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
@@ -827,7 +826,6 @@ impl Decoder<'_> {
     }
 
     /// Checks across one entry's place words, controls and children.
-
     fn check_entry(&mut self, entry: &mut Entry, ctx: &Ctx) {
         let owner = entry.what.value.clone();
         let span = entry.what.span;

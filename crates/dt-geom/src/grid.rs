@@ -90,15 +90,13 @@ impl<T: Copy> Grid<T> {
     /// The x of column `i`, mm.
     #[must_use]
     pub fn x(&self, i: usize) -> f64 {
-        let x = i as f64 * self.step;
-        x
+        i as f64 * self.step
     }
 
     /// The y of row `j`, mm.
     #[must_use]
     pub fn y(&self, j: usize) -> f64 {
-        let y = j as f64 * self.step;
-        y
+        j as f64 * self.step
     }
 
     /// The node at or below `(x, y)` mm, clamped to the lattice.

@@ -815,7 +815,10 @@ fn peak_cdf(x: f64, s: f64, c: f64) -> f64 {
 
 /// The inverse of the standard normal CDF for p in (0, 1): Wichura's
 /// algorithm AS241 (PPND16), accurate to about 1e-16.
-
+#[expect(
+    clippy::excessive_precision,
+    reason = "the published coefficients, at full precision"
+)]
 fn normal_quantile(p: f64) -> f64 {
     let q = p - 0.5;
     if q.abs() <= 0.425 {
@@ -905,7 +908,6 @@ fn normal_quantile(p: f64) -> f64 {
     };
     if q < 0.0 { -v } else { v }
 }
-
 /// A range with its odds: what one draw of a weighted range is.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dist {
