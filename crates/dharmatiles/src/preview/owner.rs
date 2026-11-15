@@ -191,7 +191,7 @@ pub(super) enum Command {
         Sender<Option<(std::path::PathBuf, std::path::PathBuf)>>,
     ),
     // ---- writes
-    Edit(TileId, Patch),
+    Edit(TileId, Box<Patch>),
     /// Something was moved to the Trash (where it was, where it is): answers the number its Undo goes by.
     Trash(std::path::PathBuf, std::path::PathBuf, Sender<usize>),
     /// The inventory as it is now: answers whether it differs from the last one seen.
@@ -346,7 +346,7 @@ impl Owner {
     }
 
     pub(super) fn edit(&self, id: &str, patch: Patch) {
-        self.send(Command::Edit(id.to_owned(), patch));
+        self.send(Command::Edit(id.to_owned(), Box::new(patch)));
     }
 
     #[cfg(test)]
@@ -499,7 +499,7 @@ impl Core {
                 let sub = self.subscribe(epoch.as_deref(), since);
                 reply(&r, sub);
             }
-            Command::Edit(id, f) => self.update(&id, f),
+            Command::Edit(id, patch) => self.update(&id, *patch),
             Command::SetMarks(id, on, r) => {
                 let found = self.tiles.iter_mut().find(|t| t.id == id).map(|t| {
                     let was = std::mem::replace(&mut t.marks, on);

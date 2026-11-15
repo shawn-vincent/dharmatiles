@@ -26,6 +26,7 @@ mod map_wire;
 mod messages_wire;
 mod plates;
 mod state_is_owned;
+mod storage_seam;
 
 struct Running {
     addr: std::net::SocketAddr,
@@ -3199,7 +3200,9 @@ fn documents_are_written_only_through_the_document_registry() {
     for e in std::fs::read_dir(&dir).unwrap() {
         let p = e.unwrap().path();
         let name = p.file_name().unwrap().to_string_lossy().into_owned();
-        if !name.ends_with(".rs") || ["docs.rs", "places.rs", "tests.rs"].contains(&name.as_str()) {
+        if !name.ends_with(".rs")
+            || ["docs.rs", "places.rs", "storage.rs", "tests.rs"].contains(&name.as_str())
+        {
             continue;
         }
         let text = std::fs::read_to_string(&p).unwrap();

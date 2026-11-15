@@ -15,8 +15,8 @@ use std::sync::mpsc::Sender;
 use serde::{Deserialize, Serialize};
 
 use super::api::{Out, Reply};
-use super::queue::Lane;
 use super::owner::Command;
+use super::queue::Lane;
 use super::*;
 
 /// One tier of one piece's tile that the page wants.
@@ -179,7 +179,13 @@ impl TierBook {
         self.inflight.remove(key);
         if self
             .results
-            .insert(key.to_owned(), Done { doc_rev: rev, bytes })
+            .insert(
+                key.to_owned(),
+                Done {
+                    doc_rev: rev,
+                    bytes,
+                },
+            )
             .is_none()
         {
             self.order.push_back(key.to_owned());
@@ -203,7 +209,11 @@ impl TierBook {
         docs
     }
 
-    pub(super) fn result(&self, key: &str, doc_rev: Option<u64>) -> Result<Option<Arc<Vec<u8>>>, u64> {
+    pub(super) fn result(
+        &self,
+        key: &str,
+        doc_rev: Option<u64>,
+    ) -> Result<Option<Arc<Vec<u8>>>, u64> {
         match self.results.get(key) {
             None => Ok(None),
             Some(d) if doc_rev.is_none_or(|r| r == d.doc_rev) => Ok(Some(Arc::clone(&d.bytes))),

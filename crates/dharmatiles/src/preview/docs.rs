@@ -21,6 +21,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use super::api::Reply;
+use super::storage::{DiskStorage, Storage};
 use super::{fail, lock};
 
 /// The documents the editor has read or written.
@@ -29,6 +30,8 @@ pub(super) struct Docs {
     docs: Mutex<HashMap<String, Arc<Doc>>>,
     /// Told of every file the program writes, so the tiles that read it are built again at once.
     saved: Option<super::owner::Owner>,
+    /// Where the files are read and written.
+    storage: Option<Arc<dyn Storage>>,
 }
 
 /// One document: its revision and what it last held, behind the lock.
@@ -66,11 +69,17 @@ pub(super) struct Edited {
 
 impl Docs {
     /// Documents whose every write is told to the owner ([`super::owner::Command::Saved`]).
-    pub(super) fn telling(owner: super::owner::Owner) -> Self {
+    pub(super) fn telling(owner: super::owner::Owner, storage: Arc<dyn Storage>) -> Self {
         Self {
             docs: Mutex::default(),
             saved: Some(owner),
+            storage: Some(storage),
         }
+    }
+
+    /// The files' storage: the disk, unless a host gave one.
+    fn files(&self) -> &dyn Storage {
+        self.storage.as_deref().unwrap_or(&DiskStorage)
     }
 
     fn doc(&self, path: &str) -> Arc<Doc> {
@@ -84,7 +93,7 @@ impl Docs {
     pub(super) fn read(&self, path: &str) -> std::io::Result<(String, u64)> {
         let doc = self.doc(path);
         let mut st = lock(&doc.state);
-        let text = std::fs::read_to_string(path)?;
+        let text = self.files().read_text(std::path::Path::new(path))?;
         st.observe(&text);
         Ok((text, st.rev))
     }
@@ -115,7 +124,10 @@ impl Docs {
     ) -> Result<(Edited, X), Reply> {
         let doc = self.doc(path);
         let mut st = lock(&doc.state);
-        let before = std::fs::read_to_string(path).map_err(|e| read_failed(path, &e))?;
+        let before = self
+            .files()
+            .read_text(std::path::Path::new(path))
+            .map_err(|e| read_failed(path, &e))?;
         st.observe(&before);
         if let Some(want) = expect
             && want != st.rev
@@ -125,13 +137,15 @@ impl Docs {
         let (after, extra) = f(&before)?;
         // an edit that changes nothing is not a revision
         if after != before {
-            dt_eval::atomic::write_atomic(std::path::Path::new(path), &after).map_err(|e| {
-                fail::failure_from(
-                    "500 Internal Server Error",
-                    format!("cannot write {path}: {e}"),
-                    &e,
-                )
-            })?;
+            self.files()
+                .write_text(std::path::Path::new(path), &after)
+                .map_err(|e| {
+                    fail::failure_from(
+                        "500 Internal Server Error",
+                        format!("cannot write {path}: {e}"),
+                        &e,
+                    )
+                })?;
             st.hash = Some(dt_eval::doc::text_hash(&after));
             st.rev += 1;
             if let Some(owner) = &self.saved {

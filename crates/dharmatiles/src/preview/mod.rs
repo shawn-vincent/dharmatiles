@@ -98,6 +98,7 @@ pub(crate) mod roots;
 mod scene;
 mod server;
 pub(crate) mod stack;
+pub mod storage;
 mod tiers;
 mod worker;
 
@@ -380,6 +381,8 @@ pub struct Shared {
     scene_checks: Mutex<BTreeMap<SceneCheck, (u32, u32, u64)>>,
     /// The owner of each document file: its revision and its lock ([`docs`]).
     docs: docs::Docs,
+    /// Where tiles' files are read, written and trashed ([`storage`]).
+    storage: Arc<dyn storage::Storage>,
 }
 
 /// Held while a tile builds: dropping it ends the build's progress message.
@@ -461,6 +464,7 @@ impl Shared {
         });
         let epoch = edit::token()[..12].to_owned();
         let owner = owner::Owner::start(tiles, roots, opts.clone(), home_env(), epoch.clone());
+        let storage: Arc<dyn storage::Storage> = Arc::new(storage::DiskStorage);
         let me = Self {
             home: None,
             owner: owner.clone(),
@@ -478,7 +482,8 @@ impl Shared {
             build_caches: Mutex::new(VecDeque::new()),
             store: None,
             scene_checks: Mutex::new(BTreeMap::new()),
-            docs: docs::Docs::telling(owner),
+            docs: docs::Docs::telling(owner, Arc::clone(&storage)),
+            storage,
         };
         me.rescan();
         me

@@ -728,42 +728,17 @@ fn into_trash(shared: &Shared, from: &Path) -> Result<PathBuf, Reply> {
             "there is no Trash known on this system, so nothing was moved (a delete is never a hard delete)",
         ));
     };
-    if let Err(e) = std::fs::create_dir_all(trash) {
-        return Err(io_failure("make", trash, &e));
-    }
-    let name = from
-        .file_name()
-        .map_or_else(|| "item".to_owned(), |n| n.to_string_lossy().into_owned());
-    let (stem, ext) = match name.rsplit_once('.') {
-        Some((s, e)) if !s.is_empty() && from.is_file() => (s.to_owned(), format!(".{e}")),
-        _ => (name.clone(), String::new()),
-    };
-    for n in 1..1000 {
-        let to = trash.join(if n == 1 {
-            name.clone()
-        } else {
-            format!("{stem} {n}{ext}")
-        });
-        if std::fs::symlink_metadata(&to).is_ok() {
-            continue;
-        }
-        return match std::fs::rename(from, &to) {
-            Ok(()) => Ok(to),
-            Err(e) => Err(fail::failure_from(
-                "500 Internal Server Error",
-                format!(
-                    "cannot move {} to the Trash ({}): {e}; nothing was deleted",
-                    from.display(),
-                    trash.display()
-                ),
-                &e,
-            )),
-        };
-    }
-    Err(fail::failure(
-        "500 Internal Server Error",
-        "no free name in the Trash",
-    ))
+    shared.storage.trash(from, trash).map_err(|e| {
+        fail::failure_from(
+            "500 Internal Server Error",
+            format!(
+                "cannot move {} to the Trash ({}): {e}; nothing was deleted",
+                from.display(),
+                trash.display()
+            ),
+            &e,
+        )
+    })
 }
 
 /// Trash `from` and answer with the number its Undo goes by.
@@ -830,13 +805,13 @@ pub(super) fn undo_trash(shared: &Shared, req: TrashUndoReq) -> Out<Restored> {
             "the folder it came from is not there any more: take it out of the Trash yourself",
         ));
     }
-    if std::fs::symlink_metadata(&from).is_ok() {
+    if shared.storage.exists(&from) {
         return Err(refuse(
             "409 Conflict",
             format!("{} is there again: it is left in the Trash", from.display()),
         ));
     }
-    if let Err(e) = std::fs::rename(&to, &from) {
+    if let Err(e) = shared.storage.restore(&to, &from) {
         return Err(io_failure("put back", &to, &e));
     }
     let path = from.to_string_lossy().into_owned();
@@ -865,47 +840,20 @@ fn listed_in(shared: &Shared, dest: &Path) -> ListedIn {
     }
 }
 
-/// Put `from` at `to` without ever going over a file there: a link first (which refuses a name
-/// that is taken), then the old name removed; across disks, a copy created new.
-pub(super) fn move_no_clobber(from: &Path, to: &Path, clash: &str) -> Result<(), Reply> {
-    use std::io::Write;
-    match std::fs::hard_link(from, to) {
-        Ok(()) => std::fs::remove_file(from).map_err(|e| {
-            // best-effort cleanup of the new link; the failure to remove the old name is what is reported
-            let _ = std::fs::remove_file(to);
+/// Put `from` at `to` without ever going over a file there ([`super::storage::Storage::move_no_clobber`]).
+pub(super) fn move_no_clobber(
+    shared: &Shared,
+    from: &Path,
+    to: &Path,
+    clash: &str,
+) -> Result<(), Reply> {
+    shared.storage.move_no_clobber(from, to).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            refuse("409 Conflict", clash.to_owned())
+        } else {
             io_failure("move", from, &e)
-        }),
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            Err(refuse("409 Conflict", clash.to_owned()))
         }
-        Err(link) => {
-            // another disk (or one that does not link): copy, created new, and only then the old one removed
-            let text = std::fs::read(from).map_err(|e| io_failure("read", from, &e))?;
-            let mut f = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(to)
-                .map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::AlreadyExists {
-                        refuse("409 Conflict", clash.to_owned())
-                    } else {
-                        io_failure("write", to, &e)
-                    }
-                })?;
-            if let Err(e) = f.write_all(&text) {
-                // best-effort cleanup of the half-made copy; the write error is what is reported
-                let _ = std::fs::remove_file(to);
-                return Err(io_failure("write", to, &e));
-            }
-            std::fs::remove_file(from).map_err(|e| {
-                io_failure(
-                    &format!("remove (after a copy; linking said {link}),"),
-                    from,
-                    &e,
-                )
-            })
-        }
-    }
+    })
 }
 
 /// `POST /api/tiles/ID/move` `{root, dir}`: the tile's file goes into that folder, under the same name.
@@ -928,7 +876,7 @@ pub(super) fn move_tile(
         from.file_stem()
             .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
     );
-    move_no_clobber(&from, &to, &clash)?;
+    move_no_clobber(shared, &from, &to, &clash)?;
     // its prints in the inventory follow it
     super::inventory::note_rename(shared, &from, &to);
     Ok(listed_in(shared, &to))
