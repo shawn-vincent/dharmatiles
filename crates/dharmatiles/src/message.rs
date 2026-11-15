@@ -154,44 +154,8 @@ pub(crate) struct Message {
     pub open: bool,
 }
 
-/// An edit that mends a mistake, on the wire: write `replacement` over the `len` bytes at `offset` of the file the message
-/// points into.  The one form of a fix, in a message and in a check's mistake alike.
-#[derive(Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct FixJson {
-    pub offset: usize,
-    pub len: usize,
-    /// The text there now: the page applies the fix only where it still reads this.
-    pub was: String,
-    pub replacement: String,
-    /// The button's words: `Change to dirt`.
-    pub label: String,
-}
-
-impl From<&FixJson> for dt_eval::Fix {
-    fn from(f: &FixJson) -> Self {
-        Self {
-            offset: f.offset,
-            len: f.len,
-            was: f.was.clone(),
-            replacement: f.replacement.clone(),
-            label: f.label.clone(),
-            moved: None,
-        }
-    }
-}
-
-impl From<&dt_eval::Fix> for FixJson {
-    fn from(f: &dt_eval::Fix) -> Self {
-        Self {
-            offset: f.offset,
-            len: f.len,
-            was: f.was.clone(),
-            replacement: f.replacement.clone(),
-            label: f.label.clone(),
-        }
-    }
-}
+/// An edit that mends a mistake, on the wire: made in `dt_eval::wire`, where the browser engine reads it too.
+pub use dt_eval::wire::FixJson;
 
 /// Where in a file a message points, on the wire.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]

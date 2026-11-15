@@ -196,7 +196,12 @@ fn http_one(mut conn: std::net::TcpStream) {
     }
     match serde_json::from_slice::<Value>(&body) {
         Ok(msg) => {
-            let id = msg.get("id").cloned().unwrap_or(Value::Null);
+            // only to address an error reply if the call panics: a message that is no request gets its own
+            // error from `handle`
+            let id = serde_json::from_value::<Request>(msg.clone())
+                .ok()
+                .and_then(|r| r.id)
+                .unwrap_or(Value::Null);
             match std::panic::catch_unwind(|| handle(&msg)) {
                 Ok(Some(r)) => reply(&mut conn, "200 OK", &r.to_string()),
                 Ok(None) => reply(&mut conn, "202 Accepted", ""),
@@ -226,9 +231,44 @@ fn error(id: &Value, code: i64, message: &str) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
 }
 
+/// A JSON-RPC message: the envelope, read as a type.
+#[derive(serde::Deserialize)]
+struct Request {
+    /// None for a notification (no `id` at all, which is not the same as `"id": null`).
+    #[serde(default, deserialize_with = "present")]
+    id: Option<Value>,
+    #[serde(default)]
+    method: String,
+    #[serde(default)]
+    params: Value,
+}
+
+/// The params of `tools/call`.
+#[derive(serde::Deserialize)]
+struct CallParams {
+    name: String,
+    #[serde(default)]
+    arguments: Value,
+}
+
+/// A field that is there, `null` or not, is `Some`.
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Value>, D::Error> {
+    <Value as serde::Deserialize>::deserialize(d).map(Some)
+}
+
 fn handle(msg: &Value) -> Option<Value> {
-    let id = msg.get("id")?.clone(); // a notification has no id: no reply
-    let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
+    let req: Request = match serde_json::from_value(msg.clone()) {
+        Ok(r) => r,
+        Err(e) => {
+            return Some(error(
+                &Value::Null,
+                -32600,
+                &format!("not a JSON-RPC request: {e}"),
+            ));
+        }
+    };
+    let id = req.id?; // a notification has no id: no reply
+    let method = req.method.as_str();
     let result = match method {
         "initialize" => json!({
             "protocolVersion": PROTOCOL,
@@ -237,39 +277,315 @@ fn handle(msg: &Value) -> Option<Value> {
         }),
         "ping" => json!({}),
         "tools/list" => json!({"tools": tools()}),
-        "tools/call" => {
-            let p = msg.get("params").cloned().unwrap_or(Value::Null);
-            call(
-                p.get("name").and_then(Value::as_str).unwrap_or(""),
-                p.get("arguments").unwrap_or(&Value::Null),
-            )
-        }
+        "tools/call" => match serde_json::from_value::<CallParams>(req.params) {
+            Ok(p) => call(&p.name, &p.arguments),
+            Err(e) => {
+                return Some(error(
+                    &id,
+                    -32602,
+                    &format!("tools/call needs params {{name, arguments}}: {e}"),
+                ));
+            }
+        },
         _ => return Some(error(&id, -32601, &format!("no method `{method}`"))),
     };
     Some(json!({"jsonrpc": "2.0", "id": id, "result": result}))
 }
 
+/// What a Rust type is as a JSON-schema property, and whether leaving it out is allowed: the one place a tool's
+/// argument type becomes its `inputSchema`, so the schema is read off the struct the call is deserialized into.
+trait Param {
+    /// A value of this type is required (an `Option` is not).
+    const REQUIRED: bool = true;
+    fn schema() -> Value;
+}
+
+impl Param for String {
+    fn schema() -> Value {
+        json!({"type": "string"})
+    }
+}
+
+impl Param for u64 {
+    fn schema() -> Value {
+        json!({"type": "integer", "minimum": 0})
+    }
+}
+
+impl Param for f64 {
+    fn schema() -> Value {
+        json!({"type": "number"})
+    }
+}
+
+impl Param for bool {
+    fn schema() -> Value {
+        json!({"type": "boolean"})
+    }
+}
+
+impl<T: Param> Param for Option<T> {
+    const REQUIRED: bool = false;
+    fn schema() -> Value {
+        T::schema()
+    }
+}
+
+/// A tool's arguments: the struct a call is deserialized into (an argument the tool does not take is an error, never
+/// ignored) and, from the same field list, its `inputSchema`.  Each field is `name: Type = "what it is"`.
+macro_rules! args {
+    ($(#[$m:meta])* $name:ident { $($field:ident : $ty:ty = $about:expr),* $(,)? }) => {
+        $(#[$m])*
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct $name {
+            $($field: $ty),*
+        }
+
+        impl $name {
+            /// The `inputSchema` of the tool that takes these.
+            fn schema() -> Value {
+                #[allow(unused_mut)]
+                let mut properties = serde_json::Map::new();
+                #[allow(unused_mut)]
+                let mut required: Vec<&str> = Vec::new();
+                $(
+                    let mut p = <$ty as Param>::schema();
+                    p["description"] = json!($about);
+                    properties.insert(stringify!($field).to_owned(), p);
+                    if <$ty as Param>::REQUIRED {
+                        required.push(stringify!($field));
+                    }
+                )*
+                let mut schema = json!({"type": "object", "properties": properties});
+                if !required.is_empty() {
+                    schema["required"] = json!(required);
+                }
+                schema
+            }
+        }
+    };
+}
+
+/// A string argument that is one of a few words: the words are its schema's `enum`.
+macro_rules! words {
+    ($(#[$m:meta])* $name:ident { $($variant:ident = $word:literal),* $(,)? }) => {
+        $(#[$m])*
+        #[derive(serde::Deserialize, Clone, Copy)]
+        enum $name {
+            $(#[serde(rename = $word)] $variant),*
+        }
+
+        impl $name {
+            fn word(self) -> &'static str {
+                match self { $(Self::$variant => $word),* }
+            }
+        }
+
+        impl Param for $name {
+            fn schema() -> Value {
+                json!({"type": "string", "enum": [$($word),*]})
+            }
+        }
+    };
+}
+
+words! {
+    /// The build target.
+    System { Db = "db", Ol = "ol" }
+}
+
+words! {
+    /// One of the four views of a preview.
+    View { Painted = "painted", Top = "top", Low = "low", Close = "close" }
+}
+
+const PATH: &str = "A tile document: a file, or `lib:tiles/…` in the bundled library";
+const SYSTEM: &str = "Base system: db (DungeonBlocks) or ol (OpenLOCK)";
+const PRINTER: &str =
+    "Printer profile name (library/printers/ or your own printers/ folder; default: default)";
+const SEED: &str = "Replace the tile's seed";
+
+args! {
+    /// `check_document`.
+    CheckArgs { path: String = PATH }
+}
+args! {
+    /// `list_elements` and `list_tiles`: nothing.
+    NoArgs {}
+}
+args! {
+    /// `describe_element`.
+    DescribeArgs { name: String = "An element's name" }
+}
+args! {
+    /// `build_tile`.
+    BuildArgs {
+        path: String = PATH,
+        system: Option<System> = SYSTEM,
+        printer: Option<String> = PRINTER,
+        seed: Option<u64> = SEED,
+        out: Option<String> = "Output folder (default out/)",
+        threemf: Option<bool> = "Also write a 3MF with materials",
+        palette: Option<String> = "A palette document (material \"#rrggbb\" lines) to paint the 3MF with",
+    }
+}
+args! {
+    /// `render_preview`.
+    PreviewArgs {
+        path: String = PATH,
+        system: Option<System> = SYSTEM,
+        printer: Option<String> = PRINTER,
+        seed: Option<u64> = SEED,
+        view: Option<View> = "Which of the four views (default painted)",
+    }
+}
+args! {
+    /// `audit_mesh`.
+    AuditArgs {
+        path: String = "An STL file",
+        width_mm: Option<f64> = "The tile's width, mm",
+        height_mm: Option<f64> = "The tile's height, mm",
+    }
+}
+
+/// One tool: its name and words, the schema of its arguments and what it runs.  The tools are this table and nothing
+/// else, so `tools/list` and `tools/call` cannot disagree about a tool.
+struct Tool {
+    name: &'static str,
+    about: &'static str,
+    schema: fn() -> Value,
+    run: fn(&Value) -> Value,
+}
+
+/// Read a call's arguments as `A` and run `f` on them; arguments that are not `A` are a tool error that says why.
+fn with<A: serde::de::DeserializeOwned>(
+    tool: &str,
+    a: &Value,
+    f: impl FnOnce(A) -> Value,
+) -> Value {
+    // a client may leave `arguments` out of a tool that takes none
+    let given = if a.is_null() { json!({}) } else { a.clone() };
+    match serde_json::from_value::<A>(given) {
+        Ok(args) => f(args),
+        Err(e) => text(&format!("`{tool}`: the arguments are not valid: {e}"), true),
+    }
+}
+
+/// The options every build-like tool takes, as command-line flags.
+fn flags(system: Option<System>, printer: Option<&String>, seed: Option<u64>) -> Vec<String> {
+    let mut opts = Vec::new();
+    if let Some(sys) = system {
+        opts.extend(["--system".to_owned(), sys.word().to_owned()]);
+    }
+    if let Some(p) = printer {
+        opts.extend(["--printer".to_owned(), p.clone()]);
+    }
+    if let Some(seed) = seed {
+        opts.extend(["--seed".to_owned(), seed.to_string()]);
+    }
+    opts
+}
+
+const TOOLS: [Tool; 7] = [
+    Tool {
+        name: "check_document",
+        about: "Read and plan a tile document without building geometry; returns its errors (with file, line and help) or its stack.",
+        schema: CheckArgs::schema,
+        run: |a| {
+            with("check_document", a, |a: CheckArgs| {
+                run_self(&["check".to_owned(), a.path, "--json".to_owned()])
+            })
+        },
+    },
+    Tool {
+        name: "list_elements",
+        about: "The elements a stack can hold: ground, dirt, rock, scatter, water, grass, reeds, wall, floor, tree, cliff.",
+        schema: NoArgs::schema,
+        run: |a| {
+            with("list_elements", a, |_: NoArgs| {
+                run_self(&["elements".to_owned(), "--json".to_owned()])
+            })
+        },
+    },
+    Tool {
+        name: "describe_element",
+        about: "One element's controls with units, ranges and defaults, and which this build takes.",
+        schema: DescribeArgs::schema,
+        run: |a| {
+            with("describe_element", a, |a: DescribeArgs| {
+                run_self(&["elements".to_owned(), a.name, "--json".to_owned()])
+            })
+        },
+    },
+    Tool {
+        name: "list_tiles",
+        about: "The library tiles that ship with dharmatiles (`lib:tiles/…` paths).",
+        schema: NoArgs::schema,
+        run: |a| {
+            with("list_tiles", a, |_: NoArgs| match crate::library_tiles() {
+                Ok(tiles) => text(&json!({"tiles": tiles}).to_string(), false),
+                Err(e) => text(&format!("cannot list the library: {e}"), true),
+            })
+        },
+    },
+    Tool {
+        name: "build_tile",
+        about: "Build a tile to STL through the printability gate; returns the audit (watertight, overhang mm², dropped parts), timings and the files written.",
+        schema: BuildArgs::schema,
+        run: |a| {
+            with("build_tile", a, |a: BuildArgs| {
+                let mut args = vec!["build".to_owned(), a.path, "--json".to_owned()];
+                args.extend(flags(a.system, a.printer.as_ref(), a.seed));
+                if let Some(o) = a.out {
+                    args.extend(["--out".to_owned(), o]);
+                }
+                if a.threemf == Some(true) {
+                    args.push("--3mf".to_owned());
+                }
+                if let Some(p) = a.palette {
+                    args.extend(["--palette".to_owned(), p]);
+                }
+                run_self(&args)
+            })
+        },
+    },
+    Tool {
+        name: "render_preview",
+        about: "Build a tile and return its painted preview (overhang faces red).",
+        schema: PreviewArgs::schema,
+        run: |a| {
+            with("render_preview", a, |a: PreviewArgs| {
+                let opts = flags(a.system, a.printer.as_ref(), a.seed);
+                preview(&a.path, &opts, a.view.unwrap_or(View::Painted))
+            })
+        },
+    },
+    Tool {
+        name: "audit_mesh",
+        about: "Run the printability gate on a binary STL file: watertight, bodies, overhang over 65 degrees (the 55-65 band is reported apart), see-through holes.",
+        schema: AuditArgs::schema,
+        run: |a| {
+            with("audit_mesh", a, |a: AuditArgs| {
+                let mut args = vec!["audit".to_owned(), a.path, "--json".to_owned()];
+                for (v, f) in [(a.width_mm, "--width"), (a.height_mm, "--height")] {
+                    if let Some(v) = v {
+                        args.extend([f.to_owned(), v.to_string()]);
+                    }
+                }
+                run_self(&args)
+            })
+        },
+    },
+];
+
 fn tools() -> Value {
-    let path = json!({"type": "string", "description": "A tile document: a file, or `lib:tiles/…` in the bundled library"});
-    let system = json!({"type": "string", "enum": ["db", "ol"], "description": "Base system: db (DungeonBlocks) or ol (OpenLOCK)"});
-    let printer = json!({"type": "string", "description": "Printer profile name (library/printers/ or your own printers/ folder; default: default)"});
-    let seed = json!({"type": "integer", "description": "Replace the tile's seed"});
-    json!([
-        {"name": "check_document", "description": "Read and plan a tile document without building geometry; returns its errors (with file, line and help) or its stack.",
-         "inputSchema": {"type": "object", "properties": {"path": path}, "required": ["path"]}},
-        {"name": "list_elements", "description": "The elements a stack can hold: ground, dirt, rock, scatter, water, grass, reeds, wall, floor, tree, cliff.",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "describe_element", "description": "One element's controls with units, ranges and defaults, and which this build takes.",
-         "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
-        {"name": "list_tiles", "description": "The library tiles that ship with dharmatiles (`lib:tiles/…` paths).",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "build_tile", "description": "Build a tile to STL through the printability gate; returns the audit (watertight, overhang mm², dropped parts), timings and the files written.",
-         "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "printer": printer, "seed": seed, "out": {"type": "string", "description": "Output folder (default out/)"}, "threemf": {"type": "boolean", "description": "Also write a 3MF with materials"}, "palette": {"type": "string", "description": "A palette document (material \"#rrggbb\" lines) to paint the 3MF with"}}, "required": ["path"]}},
-        {"name": "render_preview", "description": "Build a tile and return its painted preview (overhang faces red).",
-         "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "printer": printer, "seed": seed, "view": {"type": "string", "enum": ["painted", "top", "low", "close"], "description": "Which of the four views (default painted)"}}, "required": ["path"]}},
-        {"name": "audit_mesh", "description": "Run the printability gate on a binary STL file: watertight, bodies, overhang over 65 degrees (the 55-65 band is reported apart), see-through holes.",
-         "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "description": "An STL file"}, "width_mm": {"type": "number"}, "height_mm": {"type": "number"}}, "required": ["path"]}},
-    ])
+    Value::Array(
+        TOOLS
+            .iter()
+            .map(|t| json!({"name": t.name, "description": t.about, "inputSchema": (t.schema)()}))
+            .collect(),
+    )
 }
 
 fn text(v: &str, is_error: bool) -> Value {
@@ -292,62 +608,15 @@ fn run_self(args: &[String]) -> Value {
     }
 }
 
-fn arg<'a>(a: &'a Value, k: &str) -> Option<&'a str> {
-    a.get(k).and_then(Value::as_str)
-}
-
+/// Run the tool `name` on its arguments.
 fn call(name: &str, a: &Value) -> Value {
-    let s = |x: &str| x.to_owned();
-    let mut opts = Vec::new();
-    if let Some(sys) = arg(a, "system") {
-        opts.extend([s("--system"), s(sys)]);
-    }
-    if let Some(p) = arg(a, "printer") {
-        opts.extend([s("--printer"), s(p)]);
-    }
-    if let Some(seed) = a.get("seed").and_then(Value::as_u64) {
-        opts.extend([s("--seed"), seed.to_string()]);
-    }
-    match (name, arg(a, "path"), arg(a, "name")) {
-        ("check_document", Some(p), _) => run_self(&[s("check"), s(p), s("--json")]),
-        ("list_elements", _, _) => run_self(&[s("elements"), s("--json")]),
-        ("describe_element", _, Some(n)) => run_self(&[s("elements"), s(n), s("--json")]),
-        ("list_tiles", _, _) => match crate::library_tiles() {
-            Ok(tiles) => text(&json!({"tiles": tiles}).to_string(), false),
-            Err(e) => text(&format!("cannot list the library: {e}"), true),
-        },
-        ("build_tile", Some(p), _) => {
-            let mut args = vec![s("build"), s(p), s("--json")];
-            args.extend(opts);
-            if let Some(o) = arg(a, "out") {
-                args.extend([s("--out"), s(o)]);
-            }
-            if a.get("threemf").and_then(Value::as_bool) == Some(true) {
-                args.push(s("--3mf"));
-            }
-            if let Some(p) = arg(a, "palette") {
-                args.extend([s("--palette"), s(p)]);
-            }
-            run_self(&args)
-        }
-        ("render_preview", Some(p), _) => preview(p, &opts, arg(a, "view").unwrap_or("painted")),
-        ("audit_mesh", Some(p), _) => {
-            let mut args = vec![s("audit"), s(p), s("--json")];
-            for (k, f) in [("width_mm", "--width"), ("height_mm", "--height")] {
-                if let Some(v) = a.get(k).and_then(Value::as_f64) {
-                    args.extend([s(f), v.to_string()]);
-                }
-            }
-            run_self(&args)
-        }
-        (n, _, _) => text(
-            &format!("`{n}` needs its arguments (see tools/list), or is not a tool"),
-            true,
-        ),
+    match TOOLS.iter().find(|t| t.name == name) {
+        Some(t) => (t.run)(a),
+        None => text(&format!("`{name}` is not a tool (see tools/list)"), true),
     }
 }
 
-fn preview(path: &str, opts: &[String], view: &str) -> Value {
+fn preview(path: &str, opts: &[String], view: View) -> Value {
     let dir = std::env::temp_dir().join(format!("dharmatiles-mcp-{}", std::process::id()));
     let mut args = vec![
         "build".to_owned(),
@@ -358,16 +627,12 @@ fn preview(path: &str, opts: &[String], view: &str) -> Value {
     ];
     args.extend_from_slice(opts);
     let report = run_self(&args);
-    let want = match view {
-        "top" => "-top.png",
-        "low" => "-low.png",
-        "close" => "-close.png",
-        _ => "-painted.png",
-    };
+    // the build writes `<tile>-<view>.png` for each of the four views, named by the word the schema offers
+    let want = format!("-{}.png", view.word());
     let found = match walk(&dir) {
         Ok(files) => files
             .into_iter()
-            .find(|p| p.to_string_lossy().ends_with(want)),
+            .find(|p| p.to_string_lossy().ends_with(&want)),
         // nothing was written: the build failed, and `report` says why
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return report,
         Err(e) => {
@@ -471,6 +736,33 @@ mod tests {
         assert!(
             handle(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"})).is_none()
         );
+    }
+
+    #[test]
+    fn a_tools_schema_is_its_argument_structs() {
+        let build = BuildArgs::schema();
+        assert_eq!(build["required"], json!(["path"]));
+        assert_eq!(build["properties"]["system"]["enum"], json!(["db", "ol"]));
+        assert_eq!(build["properties"]["seed"]["type"], "integer");
+        assert_eq!(build["properties"]["threemf"]["type"], "boolean");
+        assert_eq!(
+            NoArgs::schema(),
+            json!({"type": "object", "properties": {}})
+        );
+        // every tool in the table is listed, with the schema its struct makes
+        let listed = tools();
+        assert_eq!(listed.as_array().unwrap().len(), TOOLS.len());
+    }
+
+    #[test]
+    fn an_argument_a_tool_does_not_take_is_refused() {
+        let r = super::call("check_document", &json!({"path": "x", "colour": "red"}));
+        assert_eq!(r["isError"], true);
+        assert!(r["content"][0]["text"].as_str().unwrap().contains("colour"));
+        let r = super::call("build_tile", &json!({"path": "x", "system": "xx"}));
+        assert_eq!(r["isError"], true);
+        let r = super::call("no_such_tool", &json!({}));
+        assert_eq!(r["isError"], true);
     }
 
     /// One request to a real `http_one`; the status line and the body come back.

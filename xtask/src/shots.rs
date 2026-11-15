@@ -20,6 +20,39 @@ use std::time::{Duration, Instant};
 /// Where the pictures live under `docs/`.
 pub const DIR: &str = "docs/assets/shots";
 
+/// `shots.json`, the one definition of the file: `xtask/shots/shots.mjs` writes it (its `book` is typed by the
+/// generated `docs/assets/shots/shots.d.ts`), [`check`] reads it as this type, and the docs' `site.js` reads it as the
+/// same generated type.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct Book {
+    /// The size every picture is drawn at, px.
+    pub width: u32,
+    pub height: u32,
+    /// Each picture, by name.
+    pub shots: std::collections::BTreeMap<String, Shot>,
+}
+
+/// One picture: its size and where each callout's part of the page is.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct Shot {
+    pub w: u32,
+    pub h: u32,
+    /// Callout name to the box it points at.
+    pub anchors: std::collections::BTreeMap<String, Anchor>,
+}
+
+/// A box of a picture, px (a page's `getBoundingClientRect`, so fractions are possible).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct Anchor {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
 /// A child process that is killed (and reaped) when it goes out of scope.
 struct Guard(Child, &'static str);
 
@@ -351,7 +384,7 @@ fn find_node() -> Result<PathBuf, String> {
 pub fn check(root: &Path) -> Result<(), String> {
     let dir = root.join(DIR);
     let book_path = dir.join("shots.json");
-    let book: serde_json::Value = serde_json::from_str(
+    let book: Book = serde_json::from_str(
         &std::fs::read_to_string(&book_path)
             .map_err(|e| format!("{}: {e} (run `cargo xtask shots`)", book_path.display()))?,
     )
@@ -379,7 +412,7 @@ pub fn check(root: &Path) -> Result<(), String> {
                     problems.push(format!("{name}: {DIR}/{shot}-{theme}.webp is missing"));
                 }
             }
-            let Some(entry) = book["shots"].get(shot) else {
+            let Some(entry) = book.shots.get(shot) else {
                 problems.push(format!("{name}: shots.json has no picture \"{shot}\""));
                 continue;
             };
@@ -387,7 +420,7 @@ pub fn check(root: &Path) -> Result<(), String> {
             while let Some(j) = keys.find("data-at=\"") {
                 keys = &keys[j + 9..];
                 let at = keys.split('"').next().unwrap_or("");
-                if entry["anchors"].get(at).is_none() {
+                if !entry.anchors.contains_key(at) {
                     problems.push(format!(
                         "{name}: picture \"{shot}\" has no callout \"{at}\" in shots.json"
                     ));
@@ -423,5 +456,29 @@ mod tests {
     fn the_docs_pictures_exist() {
         let root = crate::root();
         super::check(&root).unwrap_or_else(|e| panic!("{e}"));
+    }
+
+    /// `docs/assets/shots/shots.d.ts` is what [`super::Book`] says; `DT_CONTRACT=write` rewrites it.
+    #[test]
+    fn the_shots_types_are_current() {
+        let mut all = dt_doc::contract::Contract::default();
+        all.add::<super::Book>();
+        let want = format!(
+            "// Generated from xtask/src/shots.rs (`Book`) by `DT_CONTRACT=write cargo test -p xtask the_shots_types_are_current`.\n\
+             // Do not edit: a test fails when this file is not what the Rust types say.  The docs' site.js and\n\
+             // xtask/shots/shots.mjs are typed by it.\n\n{}export type {{ Anchor, Book, Shot }};\n",
+            all.declarations()
+        );
+        let file = crate::root().join(super::DIR).join("shots.d.ts");
+        if std::env::var("DT_CONTRACT").is_ok_and(|v| v == "write") {
+            std::fs::write(&file, &want).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
+            return;
+        }
+        let have = std::fs::read_to_string(&file).unwrap_or_default();
+        assert!(
+            have == want,
+            "{} is not what xtask's `Book` says; run\n  DT_CONTRACT=write cargo test -p xtask the_shots_types_are_current",
+            file.display()
+        );
     }
 }

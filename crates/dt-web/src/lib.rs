@@ -21,9 +21,10 @@ use dt_doc::model::{ConstKind, Entry, Setting};
 use dt_doc::paths::HEIGHTS;
 use dt_doc::schema::{OPENLOCK_SQUARE_MM, SQUARE_MM};
 use dt_doc::units::Units;
+use dt_eval::wire::FixJson;
 use dt_eval::{Diag, Options, Source};
 use dt_value::{Rng, Seed};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -173,32 +174,27 @@ fn line_col(text: &str, at: usize) -> (usize, usize) {
     (line, col)
 }
 
-#[derive(Serialize)]
-struct Diagnostic {
-    code: &'static str,
-    message: String,
-    label: String,
-    help: Option<String>,
+/// One mistake or note of the page's document, with the places a text area and a card need (the program's own
+/// [`dt_eval::Diag`] made wire).  Its fix is the program's [`FixJson`]: the same type its messages and checks carry,
+/// made where both the program and this crate reach it (`dt_eval::wire`), so a fix has one definition.
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct Diagnostic {
+    pub code: String,
+    pub message: String,
+    pub label: String,
+    pub help: Option<String>,
     /// The file it is in (`tile.dtile` is the page's document).
-    file: String,
+    pub file: String,
     /// Byte offset and length in that file.
-    span: [usize; 2],
+    pub span: [usize; 2],
     /// UTF-16 offset and length, for a text area.
-    span16: [usize; 2],
-    line: usize,
-    col: usize,
+    pub span16: [usize; 2],
+    pub line: usize,
+    pub col: usize,
     /// An edit that mends it, when the program has one: write `replacement` over the `len` bytes at `offset`.
-    fix: Option<FixOut>,
-}
-
-/// A [`dt_eval::Fix`] on the wire, as the program's messages carry it.
-#[derive(Serialize)]
-struct FixOut {
-    offset: usize,
-    len: usize,
-    was: String,
-    replacement: String,
-    label: String,
+    pub fix: Option<FixJson>,
 }
 
 fn diagnostic(e: &Diag) -> Diagnostic {
@@ -217,7 +213,7 @@ fn diagnostic(e: &Diag) -> Diagnostic {
     let s16 = utf16_at(text, o);
     let e16 = utf16_at(text, o + l);
     Diagnostic {
-        code: e.code,
+        code: e.code.to_owned(),
         message: e.message.clone(),
         label: e.label.clone(),
         help: e.help.clone(),
@@ -226,64 +222,73 @@ fn diagnostic(e: &Diag) -> Diagnostic {
         span16: [s16, e16 - s16],
         line,
         col,
-        fix: e.fix.as_deref().map(|f| FixOut {
-            offset: f.offset,
-            len: f.len,
-            was: f.was.clone(),
-            replacement: f.replacement.clone(),
-            label: f.label.clone(),
-        }),
+        fix: e.fix.as_deref().map(FixJson::from),
     }
 }
 
 /// What a length prints on each target, as the editor shows it.
-#[derive(Serialize)]
-struct PrintedBoth {
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PrintedBoth {
     /// DungeonBlocks: the printed mm of each end, empty when it prints as written.
-    db: Vec<String>,
+    pub db: Vec<String>,
     /// OpenLOCK.
-    ol: Vec<String>,
+    pub ol: Vec<String>,
 }
 
-#[derive(Serialize)]
-struct Control {
-    name: String,
+/// A control written on an outline entry, with what it prints on both targets.
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct OutlineControl {
+    pub name: String,
     /// The value as written, without its quotes.
-    value: String,
-    span16: [usize; 2],
+    pub value: String,
+    pub span16: [usize; 2],
     /// What the schema says it measures (`Dmm`), when it is a known control.
-    axis: Option<String>,
-    about: Option<&'static str>,
-    printed: Option<PrintedBoth>,
+    pub axis: Option<String>,
+    pub about: Option<String>,
+    pub printed: Option<PrintedBoth>,
 }
 
-#[derive(Serialize)]
-struct StackItem {
-    what: String,
+/// One entry of the document's outline (`analyze`).  Not the program's `StackItem` (the plan's entry, made from a
+/// planned tile with ids and clouds): the outline reads only the text, to light the written places of a text area.
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct OutlineItem {
+    pub what: String,
     /// `element` or `definition`.
-    callee: &'static str,
-    line: usize,
-    span16: [usize; 2],
-    controls: Vec<Control>,
-    children: Vec<StackItem>,
+    pub callee: String,
+    pub line: usize,
+    pub span16: [usize; 2],
+    pub controls: Vec<OutlineControl>,
+    pub children: Vec<OutlineItem>,
 }
 
-#[derive(Serialize)]
-struct TileInfo {
-    name: String,
-    cols: u32,
-    rows: u32,
-    seed: Option<i64>,
-    about: Option<String>,
+/// The tile line of a document.
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct TileInfo {
+    pub name: String,
+    pub cols: u32,
+    pub rows: u32,
+    pub seed: Option<i64>,
+    pub about: Option<String>,
 }
 
-#[derive(Serialize)]
-struct Analysis {
+/// `analyze`'s answer.
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct Analysis {
     /// False when the document has a mistake: `diagnostics` says where.
-    ok: bool,
-    diagnostics: Vec<Diagnostic>,
-    tile: Option<TileInfo>,
-    stack: Vec<StackItem>,
+    pub ok: bool,
+    pub diagnostics: Vec<Diagnostic>,
+    pub tile: Option<TileInfo>,
+    pub stack: Vec<OutlineItem>,
 }
 
 struct Ctx<'a> {
@@ -293,7 +298,7 @@ struct Ctx<'a> {
     ol: Units,
 }
 
-fn control(c: &Setting, cx: &Ctx<'_>) -> Control {
+fn control(c: &Setting, cx: &Ctx<'_>) -> OutlineControl {
     let (o, l) = c.value.as_ref().map_or_else(
         || (c.span.offset(), c.span.len()),
         |v| (v.span.offset(), v.span.len()),
@@ -317,26 +322,27 @@ fn control(c: &Setting, cx: &Ctx<'_>) -> Control {
             ol: both(cx.ol),
         }
     });
-    Control {
+    OutlineControl {
         name: c.name.value.clone(),
         value,
         span16: [s16, e16 - s16],
         axis: axis.map(|a| format!("{a:?}")),
-        about: c.control.map(|k| k.about),
+        about: c.control.map(|k| k.about.to_owned()),
         printed,
     }
 }
 
-fn item(e: &Entry, cx: &Ctx<'_>) -> StackItem {
+fn item(e: &Entry, cx: &Ctx<'_>) -> OutlineItem {
     let (o, l) = (e.span.offset(), e.span.len());
     let (s16, e16) = (utf16_at(cx.text, o), utf16_at(cx.text, o + l));
-    StackItem {
+    OutlineItem {
         what: e.what.value.clone(),
         callee: if e.element().is_some() {
             "element"
         } else {
             "definition"
-        },
+        }
+        .to_owned(),
         line: line_col(cx.text, o).0,
         span16: [s16, e16 - s16],
         controls: e.controls.iter().map(|c| control(c, cx)).collect(),
@@ -418,15 +424,16 @@ pub fn analyze(text: &str, system: &str) -> Result<String, JsError> {
 /// [`dt_eval::map::TileMap`], made by the one constructor the program's server uses too) and
 /// what one square is on the target.
 #[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
-struct Checked {
-    ok: bool,
-    errors: Vec<Diagnostic>,
-    notes: Vec<Diagnostic>,
+pub struct Checked {
+    pub ok: bool,
+    pub errors: Vec<Diagnostic>,
+    pub notes: Vec<Diagnostic>,
     /// The tile's map, or null when the document has no tile or did not read.
-    map: Option<dt_eval::map::TileMap>,
+    pub map: Option<dt_eval::map::TileMap>,
     /// One square's side on the target, mm.
-    square_mm: f64,
+    pub square_mm: f64,
 }
 
 /// Check `text` for `system` and describe what the overlay draws: JSON
@@ -482,35 +489,17 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
     })
 }
 
-/// Lay the program's fix for a mistake into `text`: `fix` is the JSON of a check's `errors[].fix`
-/// (`{offset, len, was, replacement, label}`), and the edit is [`dt_doc::ops::Op::Fix`], the one
-/// operation the program's editor and `dharmatiles fix` use.  Returns the new text.
+/// Lay the program's fix for a mistake into `text`: `fix` is the JSON of a check's `errors[].fix` (a
+/// [`FixJson`]), and the edit is [`dt_doc::ops::Op::Fix`], the one operation the program's editor and
+/// `dharmatiles fix` use.  Returns the new text.
 ///
 /// # Errors
 /// The fix is not that JSON, or the text no longer reads what the fix was made for.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn fix_tile(text: &str, fix: &str) -> Result<String, JsError> {
-    #[derive(serde::Deserialize)]
-    struct FixIn {
-        offset: usize,
-        len: usize,
-        was: String,
-        replacement: String,
-        label: String,
-    }
-    let f: FixIn = serde_json::from_str(fix).map_err(|e| {
-        JsError::new(&format!(
-            "the fix is not {{offset, len, was, replacement, label}}: {e}"
-        ))
-    })?;
-    let fixes = [dt_doc::error::Fix {
-        offset: f.offset,
-        len: f.len,
-        was: f.was,
-        replacement: f.replacement,
-        label: f.label,
-        moved: None,
-    }];
+    let f: FixJson = serde_json::from_str(fix)
+        .map_err(|e| JsError::new(&format!("the fix is not a FixJson: {e}")))?;
+    let fixes = [dt_eval::Fix::from(&f)];
     let done = dt_doc::ops::apply(dt_doc::ops::Kind::Tile, text, &dt_doc::ops::Op::Fix(&fixes))
         .map_err(|e| JsError::new(&e.to_string()))?;
     Ok(done.text)
@@ -608,19 +597,21 @@ impl Tile {
 /// What a build in the page says beside its mesh: the build's record, the program's own (`dt_eval::TileRecord`, the
 /// gate's verdict and numbers, the stage hashes and timings), and what only the page needs.
 #[derive(Serialize)]
-struct BuildMeta {
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct BuildMeta {
     /// False when the document did not build: `diagnostics` says why.
-    built: bool,
-    diagnostics: Vec<Diagnostic>,
+    pub built: bool,
+    pub diagnostics: Vec<Diagnostic>,
     /// Cells per square the build used; 0 is the build's own finest.
-    cells: u32,
-    footprint: [f64; 2],
+    pub cells: u32,
+    pub footprint: [f64; 2],
     /// SHA-256 of the STL's triangles (the file after its 80-byte header,
     /// which names the engine and document), as hex.
-    stl_sha256: String,
-    stl_bytes: usize,
+    pub stl_sha256: String,
+    pub stl_bytes: usize,
     /// The build's record; none when it did not build.
-    record: Option<dt_eval::TileRecord>,
+    pub record: Option<dt_eval::TileRecord>,
 }
 
 /// How finely a build is made, the program's own tiers ([`Options::draft`], [`Options::low`]): `full` is what the printer is
@@ -678,14 +669,28 @@ pub fn build_with(
 #[cfg(target_arch = "wasm32")]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 extern "C" {
-    /// The page's worker hears each stage: `globalThis.dtProgress(fraction, label, done, total)`.
+    /// The page's worker hears each stage: `globalThis.dtProgress(json)`, the JSON of a [`StageTick`].
     #[wasm_bindgen(js_namespace = globalThis, js_name = dtProgress)]
-    fn js_progress(fraction: f64, label: &str, done: u32, total: u32);
+    fn js_progress(tick: &str);
 }
 
 /// Nobody listens off the browser.
 #[cfg(not(target_arch = "wasm32"))]
-fn js_progress(_fraction: f64, _label: &str, _done: u32, _total: u32) {}
+fn js_progress(_tick: &str) {}
+
+/// One tick of a build in the page: the stage it is in and how far the whole build has come.  A build here is
+/// timed by the page (its worker's clock), so this carries no times, unlike the program's own progress record.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct StageTick {
+    /// 0 to 0.99 (a finished build is the page's `built` answer).
+    pub fraction: f64,
+    pub label: String,
+    /// Stages begun before this one, and the stages the build will announce.
+    pub done: u32,
+    pub total: u32,
+}
 
 /// How many stages a build of `source` will announce: its stack, the union and the audit.  A document that
 /// does not check builds nothing, and the build reports why, so the count only has to be a number.
@@ -697,7 +702,8 @@ fn stage_total(source: &dyn Source, system: &str) -> usize {
     stack.unwrap_or(1) + 2
 }
 
-/// Reports a build's stages to the page: the browser's third copy of the program's progress events.
+/// Reports a build's stages to the page, as [`StageTick`]s: the program's progress events (`dt_kit::Event`) made into
+/// the one number the page's bar needs.
 struct Ticks {
     total: usize,
     begun: std::sync::atomic::AtomicUsize,
@@ -715,7 +721,21 @@ impl dt_kit::Reporter for Ticks {
                 done as u32,
                 total as u32,
             );
-            js_progress(f, label, d, t);
+            let tick = StageTick {
+                fraction: f,
+                label: label.to_owned(),
+                done: d,
+                total: t,
+            };
+            // a reporter cannot return an error, and a tick of numbers and a label cannot fail to write: if it
+            // ever does, the console says so (where the worker picks it up) rather than dropping it unseen
+            match serde_json::to_string(&tick) {
+                Ok(json) => js_progress(&json),
+                #[cfg(target_arch = "wasm32")]
+                Err(e) => console_error(&format!("cannot write a progress tick: {e}")),
+                #[cfg(not(target_arch = "wasm32"))]
+                Err(e) => eprintln!("cannot write a progress tick: {e}"),
+            }
         };
         match event {
             dt_kit::Event::Begin { label, .. } => {
@@ -855,28 +875,31 @@ pub fn build_tile(
 }
 
 /// A weighted range, drawn.
-#[derive(Serialize)]
-struct Explored {
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct Explored {
     /// The odds' function: `flat`, `low`, `list`, ...
-    function: String,
-    args: Vec<f64>,
+    pub function: String,
+    pub args: Vec<f64>,
     /// As the program writes the range (`low(1..6, 4)`), in dmm.
-    written: String,
+    pub written: String,
     /// The ends, dmm at the 35 mm reference.
-    lo_dmm: f64,
-    hi_dmm: f64,
+    pub lo_dmm: f64,
+    pub hi_dmm: f64,
     /// The ends printed on the target, mm.
-    lo_mm: f64,
-    hi_mm: f64,
+    pub lo_mm: f64,
+    pub hi_mm: f64,
     /// The program's own curve: each of `bins` slices' share, as a multiple
     /// of a flat range's.  Null for a list.
-    density: Option<Vec<f64>>,
+    pub density: Option<Vec<f64>>,
     /// A list's values: position along the range and share of the draws.
-    masses: Option<Vec<(f64, f64)>>,
+    pub masses: Option<Vec<(f64, f64)>>,
     /// How many of `draws` landed in each of `bins` equal slices.
-    counts: Vec<u32>,
-    draws: u32,
-    mean_dmm: f64,
+    pub counts: Vec<u32>,
+    pub draws: u32,
+    /// The mean of the draws, dmm; null for no draws (JSON has no NaN).
+    pub mean_dmm: Option<f64>,
 }
 
 /// Read `typed` as one weighted range (`low(1dmm .. 6dmm, 4)`, `1..6`,
@@ -934,11 +957,7 @@ pub fn explore(
         masses: d.weighting.masses(),
         counts,
         draws,
-        mean_dmm: if draws == 0 {
-            f64::NAN
-        } else {
-            sum / f64::from(draws)
-        },
+        mean_dmm: (draws > 0).then(|| sum / f64::from(draws)),
     })
 }
 
@@ -974,33 +993,77 @@ mod tests {
 
     #[test]
     fn a_range_is_drawn_with_the_programs_odds() {
-        let v: serde_json::Value =
+        let v: Explored =
             serde_json::from_str(&explore("low(1dmm .. 6dmm, 4)", "db", 10, 1000, 1).unwrap())
                 .unwrap();
-        assert_eq!(v["function"], "low");
-        assert_eq!(v["counts"].as_array().unwrap().len(), 10);
+        assert_eq!(v.function, "low");
+        assert_eq!(v.counts.len(), 10);
         // low odds: the first slice is the most drawn
-        assert!(v["counts"][0].as_u64() > v["counts"][9].as_u64());
+        assert!(v.counts[0] > v.counts[9]);
     }
 
     #[test]
     fn a_length_prints_less_on_openlock() {
         lib();
-        let v: serde_json::Value = serde_json::from_str(&printed("7dmm").unwrap()).unwrap();
-        assert_eq!(v["ol"][0], "5.08");
+        let v: Option<PrintedBoth> = serde_json::from_str(&printed("7dmm").unwrap()).unwrap();
+        assert_eq!(v.unwrap().ol[0], "5.08");
     }
 
     #[test]
     fn a_mistake_is_a_diagnostic_with_a_span() {
         lib();
-        let v: serde_json::Value =
+        let v: Analysis =
             serde_json::from_str(&analyze("tile size=\"1x1\" {}\n", "db").unwrap()).unwrap();
-        assert_eq!(v["ok"], false);
+        assert!(!v.ok);
+        assert!(v.diagnostics[0].code.starts_with("dt::"));
+    }
+
+    /// Where the site's engine types are checked in.
+    fn contract_file() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../docs/assets/live/engine-wire.d.ts")
+    }
+
+    /// The TypeScript of every answer the engine gives the page, and the engine's functions with the type each
+    /// answers as JSON.
+    fn engine_typescript() -> String {
+        let mut all = dt_doc::contract::Contract::default();
+        all.add::<Analysis>();
+        all.add::<Checked>();
+        all.add::<BuildMeta>();
+        all.add::<Explored>();
+        all.add::<PrintedBoth>();
+        all.add::<StageTick>();
+        all.add::<FixJson>();
+        let mut out = String::from(
+            "// Generated from crates/dt-web/src/lib.rs (the engine's answers and the types they name) by\n\
+             // `DT_CONTRACT=write cargo test -p dt-web --lib the_engine_contract_is_current`.\n\
+             // Do not edit: a test fails when this file is not what the Rust types say.  The site's scripts\n\
+             // (docs/assets/live/*.js) are checked against it by `npm test` in web/preview.\n\n",
+        );
+        out.push_str(&all.declarations());
+        out.push_str(
+            "/** Each engine function that answers JSON, and what the JSON is. */\n\
+             export interface Answers {\n  analyze: Analysis;\n  check_tile: Checked;\n  explore: Explored;\n  \
+             printed: PrintedBoth | null;\n  \"build_tile().meta\": BuildMeta;\n  \"dtProgress\": StageTick;\n}\n",
+        );
+        out
+    }
+
+    /// `docs/assets/live/engine-wire.d.ts` is what the engine's Rust types say; `DT_CONTRACT=write` rewrites it.  The
+    /// site's scripts are checked against that file by `tsc` (`npm test` in web/preview), so a field renamed here
+    /// fails there.
+    #[test]
+    fn the_engine_contract_is_current() {
+        let want = engine_typescript();
+        if std::env::var("DT_CONTRACT").is_ok_and(|v| v == "write") {
+            std::fs::write(contract_file(), &want).unwrap();
+            return;
+        }
+        let have = std::fs::read_to_string(contract_file()).unwrap_or_default();
         assert!(
-            v["diagnostics"][0]["code"]
-                .as_str()
-                .unwrap()
-                .starts_with("dt::")
+            have == want,
+            "docs/assets/live/engine-wire.d.ts is not what the engine's types say; run\n  DT_CONTRACT=write cargo test -p dt-web --lib the_engine_contract_is_current\nand then `npm test` in web/preview, which checks the site against it"
         );
     }
 

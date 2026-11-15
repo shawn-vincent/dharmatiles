@@ -1,3 +1,4 @@
+// @ts-check
 // <dt-example>: a live example on a page.  The page is complete without this script: the generator (`cargo xtask docs`) wrote the
 // poster's picture and the source as real text inside the element.  This file only makes the element come alive when it is
 // touched, and costs almost nothing before that (the engine is 3.5 MB of WebAssembly and is not fetched until wanted):

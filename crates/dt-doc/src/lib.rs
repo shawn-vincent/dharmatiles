@@ -23,6 +23,7 @@
 //! editor or the browser can use it without building Manifold.
 
 pub mod consts;
+pub mod contract;
 pub mod decode;
 pub mod dim;
 pub mod elements;

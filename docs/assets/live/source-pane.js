@@ -1,3 +1,4 @@
+// @ts-check
 // The card's source: real selectable text in a plain textarea, with a mirror behind it that draws what marks a place in it: an
 // underline for each open message (wavy red for an error, yellow for a note: a stripe, never a tile colour), the lit mark's
 // span, and the pinned one.  The editor's source is CodeMirror (web/preview/js/text.js, 360 KB); a card has a few lines, so it

@@ -1,3 +1,4 @@
+// @ts-check
 // The engine for a page of cards: one compiled module, one worker, one waiting line (queue.js).  This is the site's host, the
 // third beside the program's server and the desktop app: it gives each card the events the editor's host gives (progress,
 // messages, the built mesh, the map JSON), from the worker instead of the server.

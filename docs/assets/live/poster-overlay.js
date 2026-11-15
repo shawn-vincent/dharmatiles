@@ -1,3 +1,4 @@
+// @ts-check
 // The overlay on a poster, before the engine has woken: a card whose page picks marks (`overlay`, `highlight`) shows them on its
 // picture from the start.  The poster's map is `posters/KEY.map.json`, beside the picture and named by the same key (the map is
 // the program's own, dt_eval::map, written by `cargo xtask examples`), so nothing here needs the engine.  The marks are drawn
@@ -11,7 +12,7 @@ const SQUARE_MM = 35;
 
 /** @param {HTMLElement} host a <dt-example> that is still cold */
 export async function drawOnPoster(host) {
-  const img = host.querySelector('.dtx-poster');
+  const img = /** @type {HTMLImageElement | null} */ (host.querySelector('.dtx-poster'));
   const view = host.querySelector('.dtx-view');
   const key = /posters\/([0-9a-f]+)\.jpg/.exec(img?.getAttribute('src') ?? '')?.[1];
   if (!img || !view || !key) return;

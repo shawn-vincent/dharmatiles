@@ -1,3 +1,4 @@
+// @ts-check
 // The one worker every card on a page shares: the engine (docs/engine/dt_web*.js|wasm, `cargo xtask wasm`) in its own
 // thread, so a build never freezes the page.  The page compiles the module once and hands it over (and hands it over again to a
 // fresh worker when a runaway build is stopped); a job is one message in, and the answers come back as messages:
@@ -12,7 +13,19 @@
 // A fix is `{type: 'fix', id, text, fix}` (`fix` is the check's mistake's `fix`); it answers `fixed`, or `error`.
 // A job is `{id, steps: ['check', 'build'], text, system, seed, cells}`.  `cells` is cells per square: a number for a draft, 0
 // for the build's own finest, the detail the printer is given.
+// @ts-expect-error the compiled module (docs/engine/, `cargo xtask wasm`) is not in the repo, so tsc has no types for it: what it
+// answers is typed where it is read, by the generated engine-wire.d.ts (its `Answers`), which wasm-bindgen's functions are held to
 import init, * as engine from '../../engine/dt_web.js';
+
+/** @typedef {import('./engine-wire').Answers} Answers */
+
+/** The worker's own scope, which the `DOM` lib types as a window. */
+const scope = /** @type {{ postMessage(m: unknown, transfer?: Transferable[]): void, onmessage: ((ev: MessageEvent) => unknown) | null }} */ (
+  /** @type {unknown} */ (self)
+);
+
+/** The JSON an engine function answered, as the type the engine's Rust code says it is (`Answers`). @template {keyof Answers} K @param {K} _fn @param {string} json @returns {Answers[K]} */
+const answer = (_fn, json) => JSON.parse(json);
 
 let ready = false;
 // a Rust panic reaches the console just before the trap: keep it, so the error says what it was
@@ -20,24 +33,27 @@ let lastPanic = '';
 const consoleError = console.error.bind(console);
 console.error = (...args) => { lastPanic = args.join(' '); consoleError(...args); };
 
+/** @type {string | null} the id of the job being built */
 let current = null;
-globalThis.dtProgress = (fraction, label, done, total) => {
-  if (current != null) self.postMessage({ type: 'progress', id: current, fraction, label, done, total });
+// the engine calls this at each stage with the JSON of a `StageTick`
+// @ts-ignore a global the engine's glue looks up by name
+globalThis.dtProgress = (/** @type {string} */ tick) => {
+  if (current != null) scope.postMessage({ type: 'progress', id: current, ...answer('dtProgress', tick) });
 };
 
-self.onmessage = async (ev) => {
+scope.onmessage = async (ev) => {
   const m = ev.data;
   try {
     if (m.type === 'init') {
       await init({ module_or_path: m.module });
       engine.set_library(m.library);
       ready = true;
-      self.postMessage({ type: 'ready' });
+      scope.postMessage({ type: 'ready' });
       return;
     }
     if (m.type === 'fix') {
       if (!ready) throw new Error('the worker was given a fix before it was ready');
-      self.postMessage({ type: 'fixed', id: m.id, text: engine.fix_tile(m.text, JSON.stringify(m.fix)) });
+      scope.postMessage({ type: 'fixed', id: m.id, text: engine.fix_tile(m.text, JSON.stringify(m.fix)) });
       return;
     }
     if (m.type !== 'job') throw new Error(`the worker was sent a "${m.type}" message it does not know`);
@@ -46,23 +62,23 @@ self.onmessage = async (ev) => {
     lastPanic = '';
     if (m.steps.includes('check')) {
       const t0 = performance.now();
-      const result = JSON.parse(engine.check_tile(m.text, m.system));
-      self.postMessage({ type: 'checked', id: m.id, result, ms: performance.now() - t0 });
-      if (!result.ok || !m.steps.includes('build')) { self.postMessage({ type: 'idle', id: m.id }); current = null; return; }
+      const result = answer('check_tile', engine.check_tile(m.text, m.system));
+      scope.postMessage({ type: 'checked', id: m.id, result, ms: performance.now() - t0 });
+      if (!result.ok || !m.steps.includes('build')) { scope.postMessage({ type: 'idle', id: m.id }); current = null; return; }
     }
     if (m.steps.includes('build')) {
       const t0 = performance.now();
       const tile = engine.build_tile(m.text, m.system, m.seed, m.cells, m.tier);
       const ms = performance.now() - t0;
-      const meta = JSON.parse(tile.meta);
+      const meta = answer('build_tile().meta', tile.meta);
       const positions = tile.positions, colours = tile.colours, stl = tile.stl;
       tile.free();
-      self.postMessage({ type: 'built', id: m.id, ms, meta, positions, colours, stl }, [positions.buffer, colours.buffer, stl.buffer]);
+      scope.postMessage({ type: 'built', id: m.id, ms, meta, positions, colours, stl }, [positions.buffer, colours.buffer, stl.buffer]);
     }
     current = null;
   } catch (e) {
     current = null;
     // a trap or a throw is loud: the page shows it, never a blank view
-    self.postMessage({ type: 'error', id: m.id, message: (lastPanic ? `${lastPanic}\n` : '') + String(e && e.message ? e.message : e), stack: e && e.stack ? String(e.stack) : '' });
+    scope.postMessage({ type: 'error', id: m.id, message: (lastPanic ? `${lastPanic}\n` : '') + String(e && e.message ? e.message : e), stack: e && e.stack ? String(e.stack) : '' });
   }
 };

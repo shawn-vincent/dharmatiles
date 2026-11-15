@@ -1,3 +1,4 @@
+// @ts-check
 // The docs' one script: the light/dark switch, the same control the preview
 // has.  The system's setting until it is used; then the choice is
 // remembered in this browser.  Runs in <head>, so the page never flashes.
@@ -41,7 +42,7 @@
 
 addEventListener("DOMContentLoaded", () => {
   // an element without a picture gets its name on a plate
-  for (const a of document.querySelectorAll(".elements a")) {
+  for (const a of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".elements a"))) {
     if (!a.querySelector("img, svg")) a.dataset.name = (a.querySelector("code") || a).textContent.trim();
   }
 });
@@ -49,7 +50,7 @@ addEventListener("DOMContentLoaded", () => {
 // The contents list is one disclosure: open in the margin column on a wide
 // screen (where it is not a control), folded above the content on a phone.
 addEventListener('DOMContentLoaded', () => {
-  const toc = document.querySelector('nav.toc > details');
+  const toc = /** @type {HTMLDetailsElement | null} */ (document.querySelector('nav.toc > details'));
   if (!toc) return;
   const wide = matchMedia('(min-width: 1000px)');
   const sync = () => { toc.open = wide.matches; };
@@ -61,9 +62,11 @@ addEventListener('DOMContentLoaded', () => {
 // (li[data-at]).  Where each callout's part of the picture is comes from shots.json, written by the same command from the
 // live page, so the boxes and numbers are drawn here over the picture, never into it, and follow a redrawn picture.
 addEventListener('DOMContentLoaded', async () => {
-  const figs = [...document.querySelectorAll('figure.shot[data-shot]')];
+  const figs = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('figure.shot[data-shot]')]);
   if (!figs.length) return;
   const first = figs[0].querySelector('img');
+  if (!first) { console.error('the first editor picture has no img'); return; }
+  /** @type {import('./shots/shots').Book} shots.json, as xtask writes it (`Book`, generated into shots/shots.d.ts) */
   let book;
   try {
     const r = await fetch(new URL('shots.json', first.src));
@@ -75,15 +78,15 @@ addEventListener('DOMContentLoaded', async () => {
     return;
   }
   for (const fig of figs) {
-    const shot = book.shots[fig.dataset.shot];
+    const shot = book.shots[fig.dataset.shot ?? ''];
     const frame = fig.querySelector('.frame');
     if (!shot) { console.error(`shots.json has no picture "${fig.dataset.shot}"`); continue; }
     const pins = document.createElement('ol');
     pins.className = 'pins';
     pins.setAttribute('aria-hidden', 'true');
-    const items = [...fig.querySelectorAll('ol.key > li[data-at]')];
+    const items = /** @type {HTMLElement[]} */ ([...fig.querySelectorAll('ol.key > li[data-at]')]);
     items.forEach((li, i) => {
-      const box = shot.anchors[li.dataset.at];
+      const box = shot.anchors[li.dataset.at ?? ''];
       if (!box) { console.error(`picture "${fig.dataset.shot}" has no callout "${li.dataset.at}"`); return; }
       const pin = document.createElement('li');
       pin.className = 'pin' + (box.y > shot.h * 0.9 ? ' foot' : '');

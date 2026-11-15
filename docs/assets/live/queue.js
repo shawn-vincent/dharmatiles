@@ -1,3 +1,4 @@
+// @ts-check
 // The engine's waiting line, as a pure policy (no worker, no DOM) so it can be held by tests.  The engine is single-threaded in
 // the browser, so a build cannot pause partway; everything here follows from that:
 //
@@ -44,7 +45,7 @@ export class Queue {
 
   /** The order the waiting jobs would run in: [{card, job}], first first. */
   order() {
-    const cards = [...this.slots.entries()].sort(([a, x], [b, y]) => (b === this.focus) - (a === this.focus) || y.at - x.at);
+    const cards = [...this.slots.entries()].sort(([a, x], [b, y]) => Number(b === this.focus) - Number(a === this.focus) || y.at - x.at);
     const out = [];
     for (const [card, slot] of cards) {
       if (slot.edit) out.push({ card, job: slot.edit });

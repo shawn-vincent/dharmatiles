@@ -1,0 +1,45 @@
+{
+  "//": "The docs site's scripts (docs/assets/live/*.js, docs/assets/site.js) are checked against the types the Rust code generates: docs/assets/live/engine-wire.d.ts (the browser engine's answers, dt-web), docs/assets/shots/shots.d.ts (shots.json, xtask) and js/api.d.ts (the program's map). A file is checked when it says `// @ts-check` at the top; the site's scripts all do. The site serves the page's code at `../../editor/js` and `../../editor/vendor` (one URL for web/preview/js and vendor), which is not a folder of the repo: `rootDirs` makes tsc read those imports from web/preview, so the types of what the site imports are the page's real ones. `npm test` runs this beside tsconfig.json.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "rootDirs": [
+      "../../docs/editor/js",
+      "js",
+      "../../docs/editor/vendor",
+      "vendor"
+    ],
+    "paths": {
+      "preact": ["vendor/preact.mjs"],
+      "preact/hooks": ["vendor/preact-hooks.mjs"],
+      "htm": ["vendor/htm.mjs"],
+      "@preact/signals": ["vendor/preact-signals.mjs"],
+      "@preact/signals-core": ["vendor/preact-signals-core.mjs"],
+      "three": ["vendor/three.module.min.js"]
+    },
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [],
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": false
+  },
+  "include": [
+    "../../docs/assets/live/*.js",
+    "../../docs/assets/live/*.d.ts",
+    "../../docs/assets/shots/*.d.ts",
+    "../../docs/assets/site.js",
+    "js/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
