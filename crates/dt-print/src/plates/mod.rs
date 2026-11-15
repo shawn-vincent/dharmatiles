@@ -287,7 +287,9 @@ pub fn tile_path(
         ));
     }
     let p = PathBuf::from(tile);
-    if p.is_absolute() {
+    // a path that starts at the root is absolute wherever the program runs: `Path::is_absolute` is false for it on
+    // wasm32-unknown-unknown (a web worker's store has such paths and no drive), so the root is asked for by name
+    if p.is_absolute() || tile.starts_with('/') {
         return Ok(with_ext(tile.to_owned()));
     }
     let d = list_dir.ok_or_else(|| {
