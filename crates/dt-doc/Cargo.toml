@@ -14,6 +14,9 @@ dt-lang.workspace = true
 dt-value.workspace = true
 kdl.workspace = true
 miette.workspace = true
+serde.workspace = true
+# the page contract and the docs generator read the element schema as types
+ts-rs.workspace = true
 
 [dev-dependencies]
 miette = { workspace = true, features = ["fancy-no-backtrace"] }

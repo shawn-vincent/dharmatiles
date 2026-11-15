@@ -174,6 +174,36 @@ type Clouds = { sheets: Array<CloudSheet>, columns: Array<CloudColumns>, thinned
 
 type ColourWord = "single" | "multi";
 
+type ControlJson = { name: string, 
+/**
+ * What it measures; none for a group.
+ */
+unit: string | null, numeric: boolean, 
+/**
+ * `[min, max]`, max none for no high end.
+ */
+limits: [number, number | null] | null, 
+/**
+ * `limits` refuses its minimum itself.
+ */
+above: boolean, ranges: boolean, weighted: boolean, 
+/**
+ * What it takes, in words.
+ */
+takes: string | null, default: string | null, 
+/**
+ * The default as a format 1 document writes it (a length with its unit).
+ */
+default1: string | null, 
+/**
+ * What leaving it out means, where there is no value to show for it.
+ */
+absent: string | null, required: boolean, expert: boolean, 
+/**
+ * Whether this build takes it.
+ */
+taken: boolean, about: string, words: Array<WordJson>, subs: Array<ControlJson>, };
+
 type DebugMarks = { 
 /**
  * By class: `[x, y, z, …]`.
@@ -213,6 +243,40 @@ type EditReq = {
 read?: string | null, } & ({ "op": "set", text: string, id: string, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, id?: string | null, } | { "op": "move", text: string, id: string, before?: string | null, } | { "op": "remove", text: string, id: string, } | { "op": "remove-children", text: string, id: string, names: Array<string>, } | { "op": "rename", text: string, id: string, new: string, } | { "op": "arg", text: string, id: string, index: number, value: Scalar, } | { "op": "args", text: string, id: string, values: Array<string>, } | { "op": "point", text: string, id: string, slot: PointSlot, q: [number, number], snap?: boolean | null, } | { "op": "hide", text: string, id: string, } | { "op": "fix", text: string, fix: FixJson, });
 
 type EditRes = { text: string, id: string | null, at: number | null, };
+
+type ElementJson = { 
+/**
+ * The place words it takes: `at`, `side`.
+ */
+place: Array<string>, 
+/**
+ * What `at=` may name.
+ */
+takes: Array<string>, 
+/**
+ * The place words it needs.
+ */
+needs: Array<string>, holdsScatter: boolean, 
+/**
+ * Whether it is a body (fills a band over a region).
+ */
+body: boolean, controls: Array<ControlJson>, 
+/**
+ * The weighting functions, for an element with a control that takes one; empty for the rest.
+ */
+weightings: Array<WeightingJson>, name: string, 
+/**
+ * `surface`, `thing`, `run` or `scatter`.
+ */
+role: string, about: string, 
+/**
+ * The element's page on the site.
+ */
+href: string, family: string, 
+/**
+ * Whether this build builds it.
+ */
+built: boolean, };
 
 type ErrorBody = { error: ErrorDetail, 
 /**
@@ -347,6 +411,20 @@ type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string
 type Kind = "progress" | "check" | "build" | "gate" | "error" | "note" | "export" | "server";
 
 type Language = { names: Array<string>, units: Array<string>, functions: Array<string>, };
+
+type LanguageJson = { 
+/**
+ * The documentation site, with its trailing slash.
+ */
+docs: string, nodes: Array<NodeSchema>, units: Array<string>, 
+/**
+ * What each unit word means, for the tooltip on a written unit.
+ */
+unitAbout: { [key in string]: string }, functions: Array<string>, weightings: Array<string>, 
+/**
+ * The `$` names.
+ */
+names: Array<string>, };
 
 type LineSheet = { at: number, controls: Array<MapControl>, through: Run | null, };
 
@@ -652,6 +730,8 @@ at: number,
  * Its length in bytes.
  */
 len: number, };
+
+type NodeSchema = { name: string, about: string, href: string, controls: Array<ControlJson>, };
 
 type Nothing = Record<string, never>;
 
@@ -1237,6 +1317,30 @@ rev: number, dir: string | null, path: string | null, undo: number, };
 
 type UnwrittenControl = { control: string, text: string, from: string, };
 
+type WeightingArg = { name: string, default: number | null, least: number, 
+/**
+ * `least` itself is refused.
+ */
+above: boolean, 
+/**
+ * None for no limit.
+ */
+most: number | null, };
+
+type WeightingJson = { name: string, call: string, about: string, args: Array<WeightingArg>, 
+/**
+ * The numbers it takes any number of.
+ */
+rest: WeightingRest | null, };
+
+type WeightingRest = { name: string, least: number, atLeast: number, atMost: number, };
+
+type WordJson = { word: string, about: string, 
+/**
+ * The numbers the word sets, by control name.
+ */
+sets: { [key in string]: number }, level: string | null, };
+
 type Written = { text: string, span: [number, number], };
 
 type WrittenControl = { name: string, text: string, span: [number, number], 
@@ -1313,6 +1417,8 @@ export interface Calls {
 export interface Reads {
   "GET /api/session": SessionRes;
   "GET /api/about": AboutRes;
+  "GET /api/elements": Array<ElementJson>;
+  "GET /api/language": LanguageJson;
   "GET /api/tiles": Snapshot;
   "GET /api/tiles/:id/text": TextRes;
 }

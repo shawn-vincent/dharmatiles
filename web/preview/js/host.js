@@ -325,13 +325,13 @@ export function browserHost(requests = createRequests()) {
       if (!r.ok) throw await replyError(r, 'about');
       return r.json();
     },
-    /** The element schema. */
+    /** The element schema. @returns {Promise<Reads['GET /api/elements']>} */
     async elements() {
       const r = await netFetch('/api/elements', { cache: 'force-cache' });
       if (!r.ok) throw await replyError(r, 'elements');
       return r.json();
     },
-    /** The tile's nodes with their controls, and the language's words. */
+    /** The tile's nodes with their controls, and the language's words. @returns {Promise<Reads['GET /api/language']>} */
     async language() {
       const r = await netFetch('/api/language', { cache: 'force-cache' });
       if (!r.ok) throw await replyError(r, 'language');

@@ -125,35 +125,29 @@ fn elements_lists_every_element() {
 fn elements_json_lists_every_function_with_its_numbers() {
     let o = exe().args(["elements", "rock", "--json"]).output().unwrap();
     assert_eq!(o.status.code(), Some(0));
-    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    let names: Vec<&str> = v["weightings"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|w| w["name"].as_str().unwrap())
-        .collect();
+    let v: dt_doc::wire::ElementJson = serde_json::from_slice(&o.stdout).unwrap();
+    let names: Vec<&str> = v.weightings.iter().map(|w| w.name.as_str()).collect();
     assert_eq!(
         names,
         [
             "flat", "low", "high", "bell", "peak", "ends", "steps", "list", "mix"
         ]
     );
-    let bell = &v["weightings"][3];
-    assert_eq!(bell["call"], "bell(range, spread = 0.2, at = 0.5)");
-    assert_eq!(bell["args"][0]["name"], "spread");
-    assert_eq!(bell["args"][0]["default"], 0.2);
-    assert_eq!(bell["args"][0]["least"], 0.05);
-    assert_eq!(bell["args"][0]["most"], 1.0);
-    // no upper limit is null; over 0 says so
-    let low = &v["weightings"][1];
-    assert_eq!(low["args"][0]["most"], serde_json::Value::Null);
-    assert_eq!(low["args"][0]["above"], true);
+    let bell = &v.weightings[3];
+    assert_eq!(bell.call, "bell(range, spread = 0.2, at = 0.5)");
+    assert_eq!(bell.args[0].name, "spread");
+    assert_eq!(bell.args[0].default, Some(0.2));
+    assert_eq!(bell.args[0].least, 0.05);
+    assert_eq!(bell.args[0].most, Some(1.0));
+    // no upper limit is none; over 0 says so
+    let low = &v.weightings[1];
+    assert_eq!(low.args[0].most, None);
+    assert!(low.args[0].above);
     // the numbers a function takes any number of
-    let steps = &v["weightings"][6];
-    assert_eq!(steps["rest"]["atLeast"], 2);
-    assert_eq!(steps["rest"]["atMost"], 32);
-    assert_eq!(v["weightings"][7]["rest"]["atMost"], 64);
-    assert_eq!(v["weightings"][8]["rest"]["atMost"], 16);
+    let steps = v.weightings[6].rest.as_ref().unwrap();
+    assert_eq!((steps.at_least, steps.at_most), (2, 32));
+    assert_eq!(v.weightings[7].rest.as_ref().unwrap().at_most, 64);
+    assert_eq!(v.weightings[8].rest.as_ref().unwrap().at_most, 16);
 }
 
 #[test]
@@ -219,48 +213,34 @@ fn an_unknown_look_is_an_error_with_a_hint() {
 fn elements_dirt_json_has_units_limits_defaults_and_subs() {
     let o = exe().args(["elements", "dirt", "--json"]).output().unwrap();
     assert_eq!(o.status.code(), Some(0));
-    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    assert_eq!(v["name"], "dirt");
-    assert_eq!(v["role"], "surface");
-    assert!(v["built"].is_boolean());
-    let controls = v["controls"].as_array().unwrap();
-    let find = |n: &str| controls.iter().find(|c| c["name"] == n).unwrap();
+    let v: dt_doc::wire::ElementJson = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v.summary.name, "dirt");
+    assert_eq!(v.summary.role, "surface");
+    let controls = &v.controls;
+    let find = |n: &str| controls.iter().find(|c| c.name == n).unwrap();
     let size = find("bumpSize");
-    assert_eq!(size["unit"], "dmm"); // a design millimetre: it scales with the system
-    assert_eq!(size["limits"], serde_json::json!([5.0, 70.0]));
+    assert_eq!(size.unit.as_deref(), Some("dmm")); // a design millimetre: it scales with the system
+    assert_eq!(size.limits, Some((5.0, Some(70.0))));
     assert!(
         controls
             .iter()
-            .all(|c| c["name"] != "level" && c["name"] != "bumps")
+            .all(|c| c.name != "level" && c.name != "bumps")
     );
     let clods = find("clods");
-    assert_eq!(clods["unit"], "word");
-    assert_eq!(clods["default"], "some");
-    let some = clods["words"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|w| w["word"] == "some")
-        .unwrap();
-    assert!(some["sets"]["density"].is_number());
+    assert_eq!(clods.unit.as_deref(), Some("word"));
+    assert_eq!(clods.default.as_deref(), Some("some"));
+    let some = clods.words.iter().find(|w| w.word == "some").unwrap();
+    assert!(some.sets.contains_key("density"));
     // a group's subs: the cliff's shattered patches
     let o = exe()
         .args(["elements", "cliff", "--json"])
         .output()
         .unwrap();
-    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    let cliff = v["controls"].as_array().unwrap();
-    let shattered: Vec<_> = cliff.iter().find(|c| c["name"] == "shattered").unwrap()["subs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|s| s["name"].as_str().unwrap())
-        .collect();
-    assert_eq!(shattered, ["patches", "width"]);
-    assert!(cliff.iter().find(|c| c["name"] == "shattered").unwrap()["unit"].is_null());
-    for c in controls {
-        assert!(c["taken"].is_boolean(), "{c}");
-    }
+    let v: dt_doc::wire::ElementJson = serde_json::from_slice(&o.stdout).unwrap();
+    let shattered = v.controls.iter().find(|c| c.name == "shattered").unwrap();
+    let subs: Vec<&str> = shattered.subs.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(subs, ["patches", "width"]);
+    assert!(shattered.unit.is_none());
 }
 
 #[test]

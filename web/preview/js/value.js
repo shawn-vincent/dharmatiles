@@ -1,3 +1,4 @@
+// @ts-check
 // A control's value as the sheet edits it: what may be typed, what it is
 // written as, and what can go at the caret.  No page here;
 // the sheet draws it (view/sheet.js).  Nothing here checks a value: the program's

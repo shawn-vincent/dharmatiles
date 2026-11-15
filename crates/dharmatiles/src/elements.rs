@@ -6,8 +6,12 @@ use std::fmt::Write as _;
 
 use dt_doc::elements::ELEMENTS;
 use dt_doc::schema::{self, Axis, Control, Element, Node, PlaceWord, Role, Word};
+use dt_doc::wire::{
+    ControlJson, CornerRow, ElementJson, ElementList, ElementSummary, LanguageJson, NodeSchema,
+    SeamRow, SeamsJson, WeightingArg, WeightingJson, WeightingRest, WordJson,
+};
 use dt_eval::Diag;
-use serde_json::{Map, Value, json};
+use serde_json::json;
 
 use crate::{ERROR, OK, errors_json, report};
 
@@ -22,10 +26,12 @@ pub fn docs() -> String {
 pub fn run(name: Option<&str>, json: bool) -> u8 {
     let Some(name) = name else {
         if json {
-            let elements: Vec<Value> = ELEMENTS.iter().map(summary_json).collect();
             say!(
                 "{}",
-                json!({"ok": true, "elements": elements, "seams": seams_json()})
+                to_json(&ElementList {
+                    elements: ELEMENTS.iter().map(summary_json).collect(),
+                    seams: seams_json(),
+                })
             );
         } else {
             list();
@@ -51,7 +57,7 @@ pub fn run(name: Option<&str>, json: bool) -> u8 {
         return ERROR;
     };
     if json {
-        say!("{}", element_json(element));
+        say!("{}", to_json(&element_json(element)));
     } else {
         show(element);
     }
@@ -61,17 +67,34 @@ pub fn run(name: Option<&str>, json: bool) -> u8 {
 /// The seams of the edge contract, from the library on disk: what the
 /// tile-system page's table is made from. A contract that does not read is
 /// reported in the answer, never left out.
-fn seams_json() -> Value {
+fn seams_json() -> SeamsJson {
+    let failed = |errors: Vec<String>| SeamsJson::Failed { errors };
     match dt_eval::doc::read(&dt_eval::Library, dt_eval::doc::EDGES) {
         Ok(r) => match &r.file.doc.seams {
-            Some(table) => json!({
-                "ok": true,
-                "seams": table.seams.iter().map(|s| json!({"at": s.at, "north": s.words[0], "south": s.words[1], "west": s.words[2], "east": s.words[3]})).collect::<Vec<_>>(),
-                "corners": table.corners.iter().map(|(c, w)| json!({"corner": c.as_str(), "word": w})).collect::<Vec<_>>(),
-            }),
-            None => json!({"ok": false, "errors": ["the edge contract has no `seams` block"]}),
+            Some(table) => SeamsJson::Read {
+                seams: table
+                    .seams
+                    .iter()
+                    .map(|s| SeamRow {
+                        at: s.at,
+                        north: s.words[0].to_string(),
+                        south: s.words[1].to_string(),
+                        west: s.words[2].to_string(),
+                        east: s.words[3].to_string(),
+                    })
+                    .collect(),
+                corners: table
+                    .corners
+                    .iter()
+                    .map(|(c, w)| CornerRow {
+                        corner: c.as_str().to_owned(),
+                        word: w.to_string(),
+                    })
+                    .collect(),
+            },
+            None => failed(vec!["the edge contract has no `seams` block".to_owned()]),
         },
-        Err(es) => json!({"ok": false, "errors": errors_json(&es)}),
+        Err(es) => failed(es.iter().map(ToString::to_string).collect()),
     }
 }
 
@@ -134,73 +157,79 @@ fn built(l: &'static Element) -> Option<&'static Element> {
     dt_elements::built().any(|n| n == l.name).then_some(l)
 }
 
-fn summary_json(l: &'static Element) -> Value {
-    json!({
-        "name": l.name,
-        "role": role(l.role),
-        "about": l.about,
-        "href": format!("{}elements/{}.html", docs(), l.name),
-        "family": l.family.as_str(),
-        "built": built(l).is_some(),
-    })
+fn summary_json(l: &'static Element) -> ElementSummary {
+    ElementSummary {
+        name: l.name.to_owned(),
+        role: role(l.role).to_owned(),
+        about: l.about.to_owned(),
+        href: format!("{}elements/{}.html", docs(), l.name),
+        family: l.family.as_str().to_owned(),
+        built: built(l).is_some(),
+    }
 }
 
 /// Every element with its controls, for the editor's lens and completion.
-pub(crate) fn all_json() -> Value {
-    Value::Array(ELEMENTS.iter().map(element_json).collect())
+pub(crate) fn all_json() -> Vec<ElementJson> {
+    ELEMENTS.iter().map(element_json).collect()
 }
 
-fn element_json(l: &'static Element) -> Value {
+fn strings(words: &[&str]) -> Vec<String> {
+    words.iter().map(|w| (*w).to_owned()).collect()
+}
+
+fn element_json(l: &'static Element) -> ElementJson {
     let takes = built(l);
-    let mut v = summary_json(l);
-    v["ok"] = json!(true);
-    v["place"] = json!(l.place_words());
-    v["takes"] = json!(l.place_kinds());
-    v["needs"] = json!(l.needs.iter().map(|p| p.as_str()).collect::<Vec<_>>());
-    v["holds_scatter"] = json!(l.holds_scatter);
-    v["body"] = json!(l.is_body());
-    v["controls"] = json!(
-        l.controls
+    ElementJson {
+        summary: summary_json(l),
+        place: strings(&l.place_words()),
+        takes: strings(&l.place_kinds()),
+        needs: l.needs.iter().map(|p| p.as_str().to_owned()).collect(),
+        holds_scatter: l.holds_scatter,
+        body: l.is_body(),
+        controls: l
+            .controls
             .iter()
             .map(|c| control_json(Taken::By(takes), c.name, c))
-            .collect::<Vec<_>>()
-    );
-    v["weightings"] = weightings_json(l);
-    v
+            .collect(),
+        weightings: weightings_json(l),
+    }
 }
 
 /// The weighting functions, for an element with a control that takes one;
 /// empty for the rest.
-fn weightings_json(l: &Element) -> Value {
+fn weightings_json(l: &Element) -> Vec<WeightingJson> {
     if !takes_weighting(l.controls) {
-        return json!([]);
+        return Vec::new();
     }
-    Value::Array(dt_kit::WEIGHTINGS.iter().map(weighting_json).collect())
+    dt_kit::WEIGHTINGS.iter().map(weighting_json).collect()
 }
 
 /// One weighting function: how it is written, each number after the range
-/// with its default and limits (`most` null for no limit; `above` refuses
+/// with its default and limits (`most` none for no limit; `above` refuses
 /// `least` itself), and the numbers it takes any number of.
-pub(crate) fn weighting_json(f: &dt_kit::WeightingFn) -> Value {
-    let finite = |x: f64| x.is_finite().then_some(x);
-    json!({
-        "name": f.name,
-        "call": f.call,
-        "about": f.about,
-        "args": f.args.iter().map(|a| json!({
-            "name": a.name,
-            "default": a.default,
-            "least": a.least,
-            "above": a.above,
-            "most": finite(a.most),
-        })).collect::<Vec<_>>(),
-        "rest": f.rest.map(|r| json!({
-            "name": r.name,
-            "least": r.least,
-            "atLeast": r.at_least,
-            "atMost": r.at_most,
-        })),
-    })
+fn weighting_json(f: &dt_kit::WeightingFn) -> WeightingJson {
+    WeightingJson {
+        name: f.name.to_owned(),
+        call: f.call.to_owned(),
+        about: f.about.to_owned(),
+        args: f
+            .args
+            .iter()
+            .map(|a| WeightingArg {
+                name: a.name.to_owned(),
+                default: a.default,
+                least: a.least,
+                above: a.above,
+                most: a.most.is_finite().then_some(a.most),
+            })
+            .collect(),
+        rest: f.rest.map(|r| WeightingRest {
+            name: r.name.to_owned(),
+            least: r.least,
+            at_least: r.at_least,
+            at_most: r.at_most,
+        }),
+    }
 }
 
 fn takes_weighting(controls: &[Control]) -> bool {
@@ -216,81 +245,94 @@ enum Taken {
     Always,
 }
 
-/// One control on the wire, the same shape for every element and node:
-/// `name`, `unit` (what it measures), `numeric`, `limits`/`above`, `ranges`,
-/// `weighted`, `takes`, `default` and `default1`, `absent`, `required`, `expert`,
-/// `taken`, `about` (its help), its `words` and its `subs`.  The element or
-/// node it belongs to carries the `href` of its page.
-fn control_json(takes: Taken, path: &str, c: &Control) -> Value {
+/// One control on the wire, the same shape for every element and node.  The element or node it belongs to
+/// carries the `href` of its page.
+fn control_json(takes: Taken, path: &str, c: &Control) -> ControlJson {
     let taken = match takes {
         Taken::Always => true,
         Taken::By(t) => taken(t, path, c),
     };
-    json!({
-        "name": c.name,
-        "unit": c.value.map(unit),
-        "numeric": c.value.is_some_and(Axis::is_numeric),
-        // [min, max], max null for no high end; `above` refuses min itself;
-        // `takes` says it all in words
-        "limits": c.limits.map(|l| [Some(l.min), l.max.is_finite().then_some(l.max)]),
-        "above": c.limits.is_some_and(|l| l.above),
-        "ranges": c.ranges,
-        "weighted": c.weighted,
-        "takes": c.takes(),
-        "default": (!c.default.is_empty()).then_some(c.default),
+    let given = (!c.default.is_empty()).then_some(c.default);
+    ControlJson {
+        name: c.name.to_owned(),
+        unit: c.value.map(|a| unit(a).to_owned()),
+        numeric: c.value.is_some_and(Axis::is_numeric),
+        // [min, max], max none for no high end; `above` refuses min itself; `takes` says it all in words
+        limits: c
+            .limits
+            .map(|l| (l.min, l.max.is_finite().then_some(l.max))),
+        above: c.limits.is_some_and(|l| l.above),
+        ranges: c.ranges,
+        weighted: c.weighted,
+        takes: c.takes(),
+        default: given.map(str::to_owned),
         // as a format 1 document writes it (a length with its unit)
-        "default1": (!c.default.is_empty()).then(|| c.default_written()),
+        default1: given.map(|_| c.default_written()),
         // what leaving it out means, where there is no value to show
-        "absent": (!c.absent.is_empty()).then_some(c.absent),
-        "required": c.required,
-        "expert": c.expert,
-        "taken": taken,
-        "about": c.about,
-        "words": c.words.iter().map(word_json).collect::<Vec<_>>(),
-        "subs": c.subs.iter().map(|s| control_json(takes, &format!("{path}/{}", s.name), s)).collect::<Vec<_>>(),
-    })
+        absent: (!c.absent.is_empty()).then(|| c.absent.to_owned()),
+        required: c.required,
+        expert: c.expert,
+        taken,
+        about: c.about.to_owned(),
+        words: c.words.iter().map(word_json).collect(),
+        subs: c
+            .subs
+            .iter()
+            .map(|s| control_json(takes, &format!("{path}/{}", s.name), s))
+            .collect(),
+    }
 }
 
-fn node_json(n: &'static Node) -> Value {
-    json!({
-        "name": n.name,
-        "about": n.about,
-        "href": format!("{}{}", docs(), n.doc),
-        "controls": n.controls.iter().map(|c| control_json(Taken::Always, c.name, c)).collect::<Vec<_>>(),
-    })
+fn node_json(n: &'static Node) -> NodeSchema {
+    NodeSchema {
+        name: n.name.to_owned(),
+        about: n.about.to_owned(),
+        href: format!("{}{}", docs(), n.doc),
+        controls: n
+            .controls
+            .iter()
+            .map(|c| control_json(Taken::Always, c.name, c))
+            .collect(),
+    }
 }
 
 /// The language's own tables for the editor: the tile's nodes with their
 /// controls, the units, the function words and the `$` names, so the page
 /// keeps no copy of any.
-pub(crate) fn language_json() -> Value {
-    let names: Vec<&str> = [dt_lang::POINT_NAMES, dt_lang::REGION_NAMES].concat();
-    json!({
-        "docs": docs(),
-        "nodes": schema_nodes().iter().map(node_json).collect::<Vec<_>>(),
-        "units": dt_lang::UNITS,
+pub(crate) fn language_json() -> LanguageJson {
+    let square = |system| dt_kit::Frame::for_system(system, 1, 1).square_mm;
+    let (db, ol) = (square("db"), square("ol"));
+    LanguageJson {
+        docs: docs(),
+        nodes: schema_nodes().iter().map(node_json).collect(),
+        units: strings(&dt_lang::UNITS),
         // what each unit word means, for the tooltip on a written unit
-        "unitAbout": dt_lang::UNITS.iter().filter_map(|u| {
-            dt_lang::unit_about(u, dt_kit::Frame::for_system("db", 1, 1).square_mm, dt_kit::Frame::for_system("ol", 1, 1).square_mm)
-                .map(|a| ((*u).to_owned(), json!(a)))
-        }).collect::<Map<String, Value>>(),
-        "functions": dt_lang::function_words(),
-        "weightings": dt_lang::WEIGHTINGS.iter().map(|w| w.0).collect::<Vec<_>>(),
-        "names": names,
-    })
+        unit_about: dt_lang::UNITS
+            .iter()
+            .filter_map(|u| dt_lang::unit_about(u, db, ol).map(|a| ((*u).to_owned(), a)))
+            .collect(),
+        functions: strings(&dt_lang::function_words()),
+        weightings: dt_lang::WEIGHTINGS.iter().map(|w| w.0.to_owned()).collect(),
+        names: strings(&[dt_lang::POINT_NAMES, dt_lang::REGION_NAMES].concat()),
+    }
 }
 
 fn schema_nodes() -> &'static [Node] {
     dt_doc::elements::NODES
 }
 
-fn word_json(w: &Word) -> Value {
-    let sets: Map<String, Value> = w
-        .sets
-        .iter()
-        .map(|(k, n)| ((*k).to_owned(), json!(n)))
-        .collect();
-    json!({"word": w.word, "about": w.about, "sets": sets, "level": w.level})
+fn word_json(w: &Word) -> WordJson {
+    WordJson {
+        word: w.word.to_owned(),
+        about: w.about.to_owned(),
+        sets: w.sets.iter().map(|(k, n)| ((*k).to_owned(), *n)).collect(),
+        level: w.level.map(str::to_owned),
+    }
+}
+
+/// A type as the JSON text the command prints.
+fn to_json<T: serde::Serialize>(t: &T) -> String {
+    serde_json::to_string(t).expect("the element schema is plain data")
 }
 
 fn list() {

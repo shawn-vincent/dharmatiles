@@ -493,6 +493,9 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     all.add::<ErrorBody>();
     // the header of every mesh: the page reads it off the front of the bytes a draft, a step or a mesh route sends
     all.add::<super::header::MeshHeader>();
+    // `GET /api/elements` answers a list of them, which names no declaration of its own
+    all.add::<dt_doc::wire::ElementJson>();
+    all.add::<dt_doc::wire::LanguageJson>();
     all.add::<super::resources::ResourceEvent>();
     all.add::<StreamEvent>();
     all.add::<crate::message::MessagesRes>();

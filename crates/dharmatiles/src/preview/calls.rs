@@ -67,6 +67,8 @@ calls! {
     get {
         "/api/session" => route::SessionRes;
         "/api/about" => route::AboutRes;
+        "/api/elements" => Vec<dt_doc::wire::ElementJson>;
+        "/api/language" => dt_doc::wire::LanguageJson;
         "/api/tiles" => super::api::Snapshot;
         "/api/tiles/:id/text" => route::TextRes;
     }
