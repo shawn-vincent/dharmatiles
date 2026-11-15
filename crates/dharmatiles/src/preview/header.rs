@@ -102,6 +102,9 @@ pub struct MeshHeader {
     pub kind: MeshKind,
     /// How many triangles the arrays hold (set when the mesh is encoded).
     pub triangles: usize,
+    /// How many vertices the shared positions hold, and how many colours the palette (set when the mesh is encoded).
+    pub vertices: usize,
+    pub palette: usize,
     /// The mesh's own box, mm (set when the mesh is encoded).
     pub lo: [f64; 3],
     pub hi: [f64; 3],
@@ -146,6 +149,8 @@ impl MeshHeader {
         Self {
             kind,
             triangles: 0,
+            vertices: 0,
+            palette: 0,
             lo: [0.0; 3],
             hi: [0.0; 3],
             overhang_deg: None,

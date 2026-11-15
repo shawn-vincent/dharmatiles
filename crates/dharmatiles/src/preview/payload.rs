@@ -1,16 +1,21 @@
 //! The mesh payload the viewer fetches: one binary buffer, typed arrays.
 //!
 //! ```text
-//! "DTM1"                      4 bytes magic
+//! "DTM2"                      4 bytes magic
 //! u32 LE  json_len            padded so everything after starts 4-aligned
-//! json (space padded)         {"triangles": n, "lo": [x,y,z], "hi": [x,y,z], …}
-//! f32 LE  positions  [9 n]    3 vertices × xyz per triangle (unindexed)
-//! f32 LE  normals    [9 n]    the face normal, once per vertex (flat shading)
-//! u8      painted    [9 n]    the PNG renders' colours: overhang red, band orange
-//! u8      clean      [9 n]    the same without the overhang paint
+//! json (space padded)         {"triangles": n, "vertices": v, "palette": p, "lo": [x,y,z], "hi": [x,y,z], …}
+//! f32 LE  positions  [3 v]    the mesh's vertices, xyz
+//! u32 LE  indices    [3 n]    the three vertices of each triangle
+//! u8      palette    [3 p]    the colours the faces use (padded to 4 bytes)
+//! u16 LE  painted    [n]      each face's palette index in the PNG renders' colours: overhang red, band orange
+//! u16 LE  clean      [n]      the same without the overhang paint
 //! u16 LE  entry      [n]      the stack entry each triangle came from (65535 none)
 //! u16 LE  piece      [n]      which of the entry's solids it came from
 //! ```
+//!
+//! The page reads it into per-vertex arrays for the GPU (flat shading: the face normal is worked out from the
+//! positions there), so the bytes on the wire are the shared vertices, the indices and one palette index per face, not
+//! every triangle three times over.
 //!
 //! An entry number is a place in the header's `stack`: the stack this mesh
 //! was built from, `[{index, key, label, element, what}]`, the connector
@@ -28,7 +33,6 @@
 
 use dt_eval::Built;
 use dt_kit::TriMesh;
-use rayon::prelude::*;
 use std::collections::BTreeMap;
 
 use super::header::{
@@ -36,26 +40,10 @@ use super::header::{
 };
 
 /// First four bytes of every payload.
-pub const MAGIC: &[u8; 4] = b"DTM1";
+pub const MAGIC: &[u8; 4] = b"DTM2";
 
 /// A triangle that belongs to no stack entry (the page's `NO_ENTRY`).
 pub const NO_ENTRY: u16 = u16::MAX;
-
-fn unit_normal(p: [[f64; 3]; 3]) -> [f32; 3] {
-    let a = [0, 1, 2].map(|k| p[1][k] - p[0][k]);
-    let b = [0, 1, 2].map(|k| p[2][k] - p[0][k]);
-    let n = [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ];
-    let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-    if l > 0.0 {
-        n.map(|x| (x / l) as f32)
-    } else {
-        [0.0; 3]
-    }
-}
 
 fn byte(c: f32) -> u8 {
     (c * 255.0).round().clamp(0.0, 255.0) as u8
@@ -116,7 +104,33 @@ pub fn encode_traced(
         lo = [0.0; 3];
         hi = [0.0; 3];
     }
+    // one palette for both colour sets, in the order the faces first use a colour: a face carries an index
+    let mut palette: Vec<[u8; 3]> = Vec::new();
+    let mut seen: std::collections::HashMap<[u8; 3], u16> = std::collections::HashMap::new();
+    let mut index_of = |set: &[[f32; 3]]| -> Result<Vec<u16>, String> {
+        set.iter()
+            .map(|c| {
+                let c = c.map(byte);
+                if let Some(&i) = seen.get(&c) {
+                    return Ok(i);
+                }
+                let i = u16::try_from(palette.len()).map_err(|_| {
+                    format!(
+                        "the view's mesh has more than {} colours: a face's palette index is 16 bits",
+                        u16::MAX
+                    )
+                })?;
+                palette.push(c);
+                seen.insert(c, i);
+                Ok(i)
+            })
+            .collect()
+    };
+    let painted_at = index_of(painted)?;
+    let clean_at = index_of(clean)?;
     header.triangles = n;
+    header.vertices = mesh.positions.len();
+    header.palette = palette.len();
     header.lo = lo;
     header.hi = hi;
     let mut j =
@@ -124,51 +138,33 @@ pub fn encode_traced(
     while !(8 + j.len()).is_multiple_of(4) {
         j.push(b' ');
     }
-    let head = 8 + j.len();
-    // the sections laid out in one buffer, each filled by the threads in
-    // runs of triangles: the bytes are the ones a single pass would write
-    let mut out = vec![0u8; head + n * 36 + n * 36 + n * 9 * 2 + n * 4];
-    out[..4].copy_from_slice(MAGIC);
-    out[4..8].copy_from_slice(&u32::try_from(j.len()).unwrap_or(u32::MAX).to_le_bytes());
-    out[8..head].copy_from_slice(&j);
-    let (positions, rest) = out[head..].split_at_mut(n * 36);
-    let (normals, rest) = rest.split_at_mut(n * 36);
-    let (colours, ids) = rest.split_at_mut(n * 18);
-    positions
-        .par_chunks_mut(36)
-        .zip(normals.par_chunks_mut(36))
-        .zip(&mesh.triangles)
-        .for_each(|((pos, nrm), t)| {
-            let p = t.map(|i| mesh.positions[i as usize]);
-            let nf = unit_normal(p);
-            for (a, v) in p.iter().enumerate() {
-                for (k, c) in v.iter().enumerate() {
-                    let at = 12 * a + 4 * k;
-                    pos[at..at + 4].copy_from_slice(&(*c as f32).to_le_bytes());
-                }
-                for (k, c) in nf.iter().enumerate() {
-                    let at = 12 * a + 4 * k;
-                    nrm[at..at + 4].copy_from_slice(&c.to_le_bytes());
-                }
-            }
-        });
-    let (painted_out, clean_out) = colours.split_at_mut(n * 9);
-    for (dst, set) in [(painted_out, painted), (clean_out, clean)] {
-        dst.par_chunks_mut(9).zip(set).for_each(|(d, colour)| {
-            let c = colour.map(byte);
-            for a in 0..3 {
-                d[3 * a..3 * a + 3].copy_from_slice(&c);
-            }
-        });
+    let v = mesh.positions.len();
+    let colours_len = (3 * palette.len()).next_multiple_of(4);
+    let mut out = Vec::with_capacity(8 + j.len() + 12 * v + 12 * n + colours_len + 8 * n);
+    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(&u32::try_from(j.len()).unwrap_or(u32::MAX).to_le_bytes());
+    out.extend_from_slice(&j);
+    for p in &mesh.positions {
+        for c in p {
+            out.extend_from_slice(&(*c as f32).to_le_bytes());
+        }
     }
-    let (entries_out, pieces_out) = ids.split_at_mut(n * 2);
-    for (dst, set) in [(entries_out, entries), (pieces_out, pieces)] {
-        dst.par_chunks_mut(2).enumerate().for_each(|(f, d)| {
-            d.copy_from_slice(&set.get(f).copied().unwrap_or(NO_ENTRY).to_le_bytes());
-        });
+    for t in &mesh.triangles {
+        for i in t {
+            out.extend_from_slice(&i.to_le_bytes());
+        }
     }
-    while !out.len().is_multiple_of(4) {
-        out.push(0);
+    for c in &palette {
+        out.extend_from_slice(c);
+    }
+    out.resize(out.len() + colours_len - 3 * palette.len(), 0);
+    for at in painted_at.iter().chain(&clean_at) {
+        out.extend_from_slice(&at.to_le_bytes());
+    }
+    for set in [entries, pieces] {
+        for f in 0..n {
+            out.extend_from_slice(&set.get(f).copied().unwrap_or(NO_ENTRY).to_le_bytes());
+        }
     }
     Ok(out)
 }
@@ -489,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_is_header_then_four_typed_arrays() {
+    fn layout_is_header_then_shared_positions_indices_palette_and_per_face_lists() {
         let red = [1.0, 0.0, 0.0];
         let grey = [0.5, 0.5, 0.5];
         let mut meta = MeshHeader::new(MeshKind::Sketch);
@@ -502,22 +498,25 @@ mod tests {
         assert_eq!(h.triangles, 2);
         assert!(h.rough);
         assert_eq!(h.hi, [2.0, 3.0, 5.0]);
-        // 2 triangles: positions 18 f32, normals 18 f32, 2 × 18 bytes of
-        // colour, 2 × 2 u16 of entry and piece
-        assert_eq!(b.len(), 8 + jl + 72 + 72 + 18 + 18 + 8);
-        let f = |o: usize| f32::from_le_bytes(b[8 + jl + o..8 + jl + o + 4].try_into().unwrap());
+        // 4 shared vertices (12 bytes), 2 triangles of 3 u32 indices, a palette of two colours padded to 8, then
+        // painted, clean, entry and piece as u16 for each of the 2 triangles
+        assert_eq!((h.vertices, h.palette), (4, 2));
+        assert_eq!(b.len(), 8 + jl + 48 + 24 + 8 + 4 + 4 + 4 + 4);
+        let at = 8 + jl;
+        let f = |o: usize| f32::from_le_bytes(b[at + o..at + o + 4].try_into().unwrap());
         assert!((f(4 * 3) - 2.0).abs() < 1e-6, "second vertex x");
-        // normals: first face is (2,0,0)x(0,3,1) = (0,-2,6)/|…|
-        let nl = (4.0f32 + 36.0).sqrt();
-        assert!((f(72 + 4) - (-2.0 / nl)).abs() < 1e-6);
-        assert!((f(72 + 8) - (6.0 / nl)).abs() < 1e-6);
-        // painted colours: face 0 red on all three vertices, face 1 grey
-        let c0 = 8 + jl + 144;
-        assert_eq!(&b[c0..c0 + 3], &[255, 0, 0]);
-        assert_eq!(&b[c0 + 6..c0 + 9], &[255, 0, 0]);
-        assert_eq!(&b[c0 + 9..c0 + 12], &[128, 128, 128]);
-        // clean colours follow, no red
-        assert_eq!(&b[c0 + 18..c0 + 21], &[128, 128, 128]);
+        let index = |o: usize| u32::from_le_bytes(b[at + 48 + o..at + 48 + o + 4].try_into().unwrap());
+        assert_eq!([index(0), index(4), index(8)], [0, 1, 2]);
+        assert_eq!([index(12), index(16), index(20)], [0, 2, 3]);
+        // the palette is in the order the faces first use a colour: red, then grey
+        let pal = at + 48 + 24;
+        assert_eq!(&b[pal..pal + 3], &[255, 0, 0]);
+        assert_eq!(&b[pal + 3..pal + 6], &[128, 128, 128]);
+        // painted: face 0 red, face 1 grey; clean: both grey
+        let idx = pal + 8;
+        let u = |o: usize| u16::from_le_bytes([b[idx + o], b[idx + o + 1]]);
+        assert_eq!([u(0), u(2)], [0, 1]);
+        assert_eq!([u(4), u(6)], [1, 1]);
     }
 
     #[test]
@@ -586,58 +585,41 @@ mod tests {
         assert_eq!(&b[b.len() - 8..b.len() - 4], &[0xff; 4]);
     }
 
-    /// The encoder as it was written before the threads: one triangle after
-    /// another into a growing buffer.
-    fn encode_in_order(
-        mesh: &TriMesh,
-        painted: &[[f32; 3]],
-        clean: &[[f32; 3]],
-        entries: &[u16],
-        pieces: &[u16],
-        j: &[u8],
-    ) -> Vec<u8> {
-        let n = mesh.triangles.len();
-        let mut out = Vec::new();
-        out.extend_from_slice(MAGIC);
-        out.extend_from_slice(&(j.len() as u32).to_le_bytes());
-        out.extend_from_slice(j);
-        let mut normals = Vec::new();
-        for t in &mesh.triangles {
-            let p = t.map(|i| mesh.positions[i as usize]);
-            for v in p {
-                for c in v {
-                    out.extend_from_slice(&(c as f32).to_le_bytes());
-                }
-            }
-            let nf = unit_normal(p);
-            for _ in 0..3 {
-                for c in nf {
-                    normals.extend_from_slice(&c.to_le_bytes());
-                }
-            }
-        }
-        out.extend_from_slice(&normals);
-        for set in [painted, clean] {
-            for colour in set {
-                let c = colour.map(byte);
-                for _ in 0..3 {
-                    out.extend_from_slice(&c);
-                }
-            }
-        }
-        for set in [entries, pieces] {
-            for f in 0..n {
-                out.extend_from_slice(&set.get(f).copied().unwrap_or(NO_ENTRY).to_le_bytes());
-            }
-        }
-        while !out.len().is_multiple_of(4) {
-            out.push(0);
-        }
-        out
+    /// The wire read back as the page reads it: every face's three positions, and its painted and clean colours.
+    fn read_back(bytes: &[u8]) -> (Vec<[[f32; 3]; 3]>, Vec<[u8; 3]>, Vec<[u8; 3]>) {
+        let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+        let h: MeshHeader = serde_json::from_slice(&bytes[8..8 + jl]).unwrap();
+        let (n, v, p) = (h.triangles, h.vertices, h.palette);
+        let f32s = |at: usize, k: usize| -> Vec<f32> {
+            (0..k)
+                .map(|i| f32::from_le_bytes(bytes[at + 4 * i..at + 4 * i + 4].try_into().unwrap()))
+                .collect()
+        };
+        let mut o = 8 + jl;
+        let shared = f32s(o, 3 * v);
+        o += 12 * v;
+        let index = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
+        let tris: Vec<[[f32; 3]; 3]> = (0..n)
+            .map(|t| {
+                [0, 1, 2].map(|a| {
+                    let i = index(o + 12 * t + 4 * a);
+                    [shared[3 * i], shared[3 * i + 1], shared[3 * i + 2]]
+                })
+            })
+            .collect();
+        o += 12 * n;
+        let palette: Vec<[u8; 3]> = (0..p)
+            .map(|i| bytes[o + 3 * i..o + 3 * i + 3].try_into().unwrap())
+            .collect();
+        o += (3 * p).next_multiple_of(4);
+        let at = |o: usize, t: usize| usize::from(u16::from_le_bytes([bytes[o + 2 * t], bytes[o + 2 * t + 1]]));
+        let painted = (0..n).map(|t| palette[at(o, t)]).collect();
+        let clean = (0..n).map(|t| palette[at(o + 2 * n, t)]).collect();
+        (tris, painted, clean)
     }
 
     #[test]
-    fn the_view_bytes_are_unchanged_by_painting_once_and_threading() {
+    fn the_wire_reads_back_as_the_meshs_own_positions_and_colours() {
         let pal = dt_kit::Palette::default();
         for tile in [
             "lib:tests/plants/1x1-tree.dtile",
@@ -649,29 +631,16 @@ mod tests {
             let (painted, clean) = b.colours_pair(&pal);
             assert_eq!(painted, b.colours_with(&pal, true), "{tile}: painted");
             assert_eq!(clean, b.colours_with(&pal, false), "{tile}: clean");
-            let (over, band) = (
-                b.audit.overhang.iter().any(|&o| o),
-                b.audit.band.iter().any(|&o| o),
-            );
-            eprintln!("{tile}: overhang {over}, band {band}");
             let bytes = from_built(b, 55.0, &pal).unwrap();
-            let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
-            let want = encode_in_order(
-                &b.export.mesh,
-                &painted,
-                &clean,
-                &b.report.entries,
-                &b.report.pieces,
-                &bytes[8..8 + jl],
-            );
-            let first = bytes.iter().zip(&want).position(|(a, b)| a != b);
-            assert!(
-                bytes == want,
-                "{tile}: the threaded encoding differs: lengths {} and {}, first at {first:?} (head {})",
-                bytes.len(),
-                want.len(),
-                8 + jl
-            );
+            assert!(bytes.len().is_multiple_of(4), "{tile}: 4-aligned");
+            let (tris, got_painted, got_clean) = read_back(&bytes);
+            assert_eq!(tris.len(), b.export.mesh.triangles.len(), "{tile}");
+            for (f, t) in b.export.mesh.triangles.iter().enumerate() {
+                let want = t.map(|i| b.export.mesh.positions[i as usize].map(|c| c as f32));
+                assert_eq!(tris[f], want, "{tile}: face {f}");
+                assert_eq!(got_painted[f], painted[f].map(byte), "{tile}: painted {f}");
+                assert_eq!(got_clean[f], clean[f].map(byte), "{tile}: clean {f}");
+            }
         }
     }
 
@@ -737,7 +706,7 @@ mod tests {
         assert_eq!(stack[1].element, "rock");
         // every triangle's entry is a place in that stack (or none)
         let n = h.triangles;
-        let at = 8 + jl + 72 * n + 18 * n;
+        let at = 8 + jl + 12 * h.vertices + 12 * n + (3 * h.palette).next_multiple_of(4) + 4 * n;
         let entries: Vec<u16> = (0..n)
             .map(|t| u16::from_le_bytes(bytes[at + 2 * t..at + 2 * t + 2].try_into().unwrap()))
             .collect();

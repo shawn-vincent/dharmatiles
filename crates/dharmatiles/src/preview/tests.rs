@@ -361,11 +361,12 @@ fn builds_a_tile_and_serves_its_mesh() {
     let h: header::MeshHeader = read(&body[8..8 + jl]);
     let n = h.triangles;
     assert_eq!(n as u64, record.audit.triangles as u64);
-    // positions, normals, painted, clean, entry, piece; padded to 4
+    // shared positions, indices, the palette (padded to 4), painted and clean palette indices, entry, piece
     assert_eq!(
         body.len(),
-        (8 + jl + n * (36 + 36 + 9 + 9 + 2 + 2)).next_multiple_of(4)
+        8 + jl + h.vertices * 12 + n * 12 + (3 * h.palette).next_multiple_of(4) + n * 8
     );
+    assert!(h.vertices < 3 * n, "the vertices are shared between triangles");
     assert_eq!(h.overhang_deg, Some(55.0));
     assert!(
         get(&r, "/api/tiles/ffffffffffffffff/mesh?docRev=0")

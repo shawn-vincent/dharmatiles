@@ -640,6 +640,10 @@ type MeshHeader = { kind: MeshKind,
  */
 triangles: number, 
 /**
+ * How many vertices the shared positions hold, and how many colours the palette (set when the mesh is encoded).
+ */
+vertices: number, palette: number, 
+/**
  * The mesh's own box, mm (set when the mesh is encoded).
  */
 lo: [number, number, number], hi: [number, number, number], 
