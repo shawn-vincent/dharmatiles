@@ -18,6 +18,7 @@
       "preact": ["vendor/preact.d.mts"],
       "preact/hooks": ["vendor/preact-hooks.d.mts"],
       "htm": ["vendor/htm.d.mts"],
+      "three": ["vendor/three.d.ts"],
       "/vendor/OrbitControls.js": ["vendor/OrbitControls.d.ts"],
       "@preact/signals": ["vendor/preact-signals.d.mts"],
       "@preact/signals-core": ["vendor/preact-signals-core.d.mts"]

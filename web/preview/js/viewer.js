@@ -320,7 +320,7 @@ export class Viewer extends Parts {
   pointAt(x, y, planeZ = null) {
     if (planeZ == null && this.pickMesh && this.payload) {
       const { lo, hi } = this.payload.meta;
-      this.pointUniforms.uLo.value.set(...lo);
+      this.pointUniforms.uLo.value.set(lo[0], lo[1], lo[2]);
       this.pointUniforms.uSpan.value.set(Math.max(hi[0] - lo[0], 1e-3), Math.max(hi[1] - lo[1], 1e-3), Math.max(hi[2] - lo[2], 1e-3));
       this.pickMesh.material = this.pointMaterial;
       const hit = this.pickPixel(x, y);

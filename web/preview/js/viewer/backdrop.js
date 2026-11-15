@@ -277,7 +277,7 @@ export class Backdrop {
   setRects(rects) {
     const n = Math.min(rects.length, MAX_RECTS);
     this.uniforms.uN.value = n;
-    for (let i = 0; i < n; i++) this.uniforms.uRects.value[i].set(...rects[i]);
+    for (let i = 0; i < n; i++) this.uniforms.uRects.value[i].set(rects[i][0], rects[i][1], rects[i][2], rects[i][3]);
   }
 
   /** Draw the backdrop for the viewer's camera: its pose, a far clip that reaches the horizon. */
