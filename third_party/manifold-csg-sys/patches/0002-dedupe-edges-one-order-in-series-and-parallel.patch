@@ -1,0 +1,18 @@
+diff --git a/src/edge_op.cpp b/src/edge_op.cpp
+--- a/src/edge_op.cpp
++++ b/src/edge_op.cpp
+@@ -926,6 +926,14 @@
+     {
+       std::vector<bool> local(nbEdges, false);
+       localLoop(0, nbEdges, local, duplicates);
++      // dharmatiles: the parallel branch above hands DedupeEdge its halfedges
++      // sorted and unique; the series branch handed them in ring-visit order,
++      // and the order DedupeEdge splits in decides the new vertices' numbers,
++      // so a tile built in series (the browser) differed from a tile built in
++      // parallel (the program) by a few triangles.  One order for both.
++      std::sort(duplicates.begin(), duplicates.end());
++      duplicates.erase(std::unique(duplicates.begin(), duplicates.end()),
++                       duplicates.end());
+     }
+
+     size_t numFlagged = 0;
