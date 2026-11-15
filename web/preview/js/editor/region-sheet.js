@@ -51,6 +51,7 @@ export function combineNote(sh) {
 /**
  * The places a `within` may be round, grouped the way the language names them: edges, lines, regions
  * (not `self`), points.  `current` is added when it is something else (a literal point).
+ * @param {{ name: string, kind: string }[] | null | undefined} places @param {string} self @param {string | null | undefined} current
  */
 export function placeChoices(places, self, current) {
   const order = ['edge', 'line', 'region', 'tile', 'point'];
@@ -68,12 +69,17 @@ export function placeChoices(places, self, current) {
  * with spans)}; `as` turns a {name, text, span} into the setting the lens reads; `row(node, name)` is the
  * program's row for a control of a clause node (`within`'s distance, `except`'s regions): what it measures,
  * its help, whether it is required.  The words it may be are the tile's own, so they are added here.
+ * @param {{ name: string }} m @param {RegionSheet} sh @param {import('../api').TileMap | null | undefined} map
+ * @param {(s: { name: string, text: string, span: [number, number] }) => any} as @param {(node: string, name: string) => Record<string, any> | undefined} row
  */
 export function clauseGroups(m, sh, map, as, row) {
   const regions = (map?.regions || []).filter((r) => r.name !== m.name).map((r) => ({ word: r.name, about: `the region ${r.name}` }));
+  /** @type {{ clause: any, heading: string, controls: any[], written: any[] }[]} */
   const groups = [];
   for (const c of sh.clauses || []) {
+    /** @type {any[]} */
     const written = [];
+    /** @type {any[]} */
     let controls;
     if (c.kind === 'except') {
       controls = [{ ...row('except', 'except'), words: regions }];
@@ -96,6 +102,7 @@ export function clauseGroups(m, sh, map, as, row) {
  * The clauses a region's "add clause" menu offers, each {kind, label, title, disabled, node}: `node` is the source it writes.
  * A `within` is a small disc round the tile's centre, an `except` names another region, a `boundedBy` names a line (with a
  * `fill` point beside it when the region has none, since the pair make the paint bucket).  One that cannot be written says why.
+ * @param {{ name: string }} m @param {RegionSheet | null | undefined} sh @param {import('../api').TileMap | null | undefined} map
  */
 export function clauseMenu(m, sh, map) {
   const other = (map?.regions || []).find((r) => r.name !== m.name);
