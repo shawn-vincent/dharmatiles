@@ -643,10 +643,6 @@ mod tests {
     /// selects the engine's tests.  dt-eval once read dt-print for the renderer (a dev-dependency), and every such change
     /// reran dt-eval's tile tests, the slowest binary of the check.
     #[test]
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "a test: the workspace's own metadata must read, and the test panics when it does not"
-    )]
     fn a_printing_change_does_not_select_the_engines_tests() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")

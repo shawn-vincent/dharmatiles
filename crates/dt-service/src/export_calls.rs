@@ -76,7 +76,7 @@ pub fn base64(data: &[u8]) -> String {
 /// # Errors
 /// A character that is not base64, or a length that is not a multiple of four.
 pub fn unbase64(text: &str) -> Result<Vec<u8>, String> {
-    if text.len() % 4 != 0 {
+    if !text.len().is_multiple_of(4) {
         return Err("base64 text is a multiple of four characters".to_owned());
     }
     let value = |b: u8| ALPHABET.iter().position(|a| *a == b);

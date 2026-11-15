@@ -9,6 +9,9 @@ use dt_kit::{BuildRecord, Palette};
 use super::export::{self, File, Format};
 use super::{Boxes, Layout, Plan};
 
+/// How one tile is built for the plates: its path and the options (full tier, the plan's printer).
+pub type BuildOne<'a> = dyn FnMut(&str, &Options) -> Result<Built, Vec<Diag>> + 'a;
+
 /// What the build of every piece gave.
 pub struct Builds {
     pub built: Vec<Built>,
@@ -27,7 +30,7 @@ impl Builds {
         base: &Options,
         profiles: &dyn dt_eval::Profiles,
         step: &mut dyn FnMut(usize, usize, &str),
-        build: &mut dyn FnMut(&str, &Options) -> Result<Built, Vec<Diag>>,
+        build: &mut BuildOne<'_>,
     ) -> Result<Self, Vec<Diag>> {
         let mut built = Vec::new();
         let mut printers = Vec::new();
