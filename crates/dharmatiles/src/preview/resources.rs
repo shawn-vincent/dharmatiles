@@ -8,26 +8,9 @@
 //! the pages were last told and sends only the ones that differ.  The first event of a stream, and the answer of
 //! `GET /api/tiles`, is the whole ([`api::Snapshot`]), built from the same values.
 
-use std::collections::BTreeMap;
-
 use super::plan::PrinterRow;
 use super::*;
 use dt_service::inventory::InventoryState;
-
-/// What the pages were last told of each resource.
-#[derive(Default)]
-pub(super) struct Told {
-    /// Each resource's last event, as sent (what a page that resumes is sent again).
-    pub(super) events: BTreeMap<&'static str, String>,
-    /// Each resource's value as text, to see whether it changed.
-    pub(super) values: BTreeMap<&'static str, String>,
-    /// Each resource's own revision.
-    pub(super) revs: BTreeMap<&'static str, u64>,
-    /// The reading each resource read on another thread was told from ([`Command::Publish`]).
-    pub(super) read_at: BTreeMap<&'static str, u64>,
-    /// The tiles listed, in order.
-    pub(super) ids: Vec<TileId>,
-}
 
 pub use dt_service::resources::*;
 

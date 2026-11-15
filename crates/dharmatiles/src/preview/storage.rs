@@ -72,6 +72,10 @@ impl Storage for DiskStorage {
         std::fs::remove_file(path)
     }
 
+    fn library_tiles(&self) -> Result<Vec<String>> {
+        crate::all_library_tiles().map_err(Error::other)
+    }
+
     fn move_no_clobber(&self, from: &Path, to: &Path) -> Result<()> {
         match std::fs::hard_link(from, to) {
             Ok(()) => std::fs::remove_file(from).inspect_err(|_| {

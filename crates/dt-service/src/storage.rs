@@ -107,6 +107,13 @@ pub trait Storage: Send + Sync {
     /// There is no such file, or it cannot be removed.
     fn remove_file(&self, path: &Path) -> Result<()>;
 
+    /// Every tile of the bundled library, as `lib:` paths, sorted (the program's is read from the library on disk; a
+    /// host with no disk is given its list).
+    ///
+    /// # Errors
+    /// The library cannot be found or listed.
+    fn library_tiles(&self) -> Result<Vec<String>>;
+
     /// Put `from` at `to` without ever going over a file there.  The same file under another spelling of its name
     /// (a disk that ignores case) is renamed in place.
     ///
@@ -159,6 +166,8 @@ struct Mem {
     /// A counter in place of a clock: each write is a later time (a second after the epoch).
     clock: u64,
     times: BTreeMap<PathBuf, u64>,
+    /// The library's tiles, as `lib:` paths.
+    library: Vec<String>,
 }
 
 impl Mem {
@@ -219,6 +228,13 @@ impl MemStorage {
         let me = Self::default();
         me.state().put(Path::new(path), text.as_bytes());
         me
+    }
+
+    /// Say which tiles the library holds (`lib:tiles/x.dtile`).
+    pub fn set_library(&self, paths: &[&str]) {
+        let mut all: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
+        all.sort();
+        self.state().library = all;
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, Mem> {
@@ -327,6 +343,10 @@ impl Storage for MemStorage {
             return Ok(to);
         }
         Err(Error::other("no free name in the Trash"))
+    }
+
+    fn library_tiles(&self) -> Result<Vec<String>> {
+        Ok(self.state().library.clone())
     }
 
     fn restore(&self, trashed: &Path, original: &Path) -> Result<()> {
