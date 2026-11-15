@@ -17,6 +17,7 @@ pub mod canon;
 mod check;
 pub mod clock;
 pub mod coords;
+pub mod cost;
 mod crowns;
 pub mod diag;
 pub mod doc;
@@ -46,6 +47,7 @@ pub use build::{
 };
 pub use cache::Cache;
 pub use check::{Checked, check};
+pub use cost::{FullCost, full_cost};
 pub use diag::{Diag, Fix};
 pub use doc::{Region, Tile, Within};
 pub use dt_doc::lower::{RangeRefusal, Ranged, ranged, weighting_flaw_in};

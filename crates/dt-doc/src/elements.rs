@@ -936,9 +936,25 @@ const fn thing(
         cost: Cost {
             fixed: 0.05,
             per_square: 0.0,
+            mb: 3.0,
+            mb_per_square: 0.0,
+            cpu: 0.03,
+            cpu_per_square: 0.0,
         },
         controls,
         ..Element::BASE
+    }
+}
+
+/// `el` as a big thing (a rock or a boulder, not a stone or a pebble): what it weighs in a full build.
+const fn big(el: Element) -> Element {
+    Element {
+        cost: Cost {
+            mb: 40.0,
+            cpu: 0.3,
+            ..el.cost
+        },
+        ..el
     }
 }
 
@@ -969,6 +985,10 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 0.0,
             per_square: 0.06,
+            mb: 0.0,
+            mb_per_square: 116.0,
+            cpu: 0.0,
+            cpu_per_square: 0.37,
         },
         controls: &[
             BODY_TOP,
@@ -996,6 +1016,10 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 0.0,
             per_square: 0.35,
+            mb: 0.0,
+            mb_per_square: 1600.0,
+            cpu: 0.0,
+            cpu_per_square: 17.0,
         },
         controls: &[
             c("length", Axis::Dmm, "blade length along the ground")
@@ -1038,6 +1062,10 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 0.05,
             per_square: 0.0,
+            mb: 150.0,
+            mb_per_square: 0.0,
+            cpu: 3.0,
+            cpu_per_square: 0.0,
         },
         controls: &[
             c("clumps", Axis::Count, "how many clumps along the shore")
@@ -1067,17 +1095,21 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 0.0,
             per_square: 0.1,
+            mb: 0.0,
+            mb_per_square: 60.0,
+            cpu: 0.0,
+            cpu_per_square: 0.5,
         },
         controls: &[BODY_TOP],
         ..Element::BASE
     },
-    rock("rock", "one rock", &ROCK),
+    big(rock("rock", "one rock", &ROCK)),
     rock("stone", "a rock with stone sizes, about 1–6dmm", &STONE),
-    rock(
+    big(rock(
         "boulder",
         "a rock with boulder sizes, about 4.5–8dmm",
         &BOULDER,
-    ),
+    )),
     rock(
         "pebble",
         "a rock with pebble sizes, about 1–2.2dmm",
@@ -1106,6 +1138,10 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 6.5,
             per_square: 0.0,
+            mb: 1250.0,
+            mb_per_square: 0.0,
+            cpu: 13.0,
+            cpu_per_square: 0.0,
         },
         ..thing(
             "tree",
@@ -1129,6 +1165,10 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 0.7,
             per_square: 0.0,
+            mb: 940.0,
+            mb_per_square: 0.0,
+            cpu: 6.4,
+            cpu_per_square: 0.0,
         },
         controls: WALL,
         ..Element::BASE
@@ -1144,6 +1184,10 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 0.4,
             per_square: 0.0,
+            mb: 180.0,
+            mb_per_square: 0.0,
+            cpu: 1.0,
+            cpu_per_square: 0.0,
         },
         controls: FLAGSTONES,
         ..Element::BASE
@@ -1158,6 +1202,10 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 0.4,
             per_square: 0.0,
+            mb: 180.0,
+            mb_per_square: 0.0,
+            cpu: 1.0,
+            cpu_per_square: 0.0,
         },
         controls: PLANKS,
         ..Element::BASE
@@ -1172,6 +1220,10 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 0.2,
             per_square: 0.0,
+            mb: 450.0,
+            mb_per_square: 0.0,
+            cpu: 5.0,
+            cpu_per_square: 0.0,
         },
         controls: CLIFF,
         ..Element::BASE
@@ -1185,6 +1237,10 @@ pub static ELEMENTS: &[Element] = &[
         cost: Cost {
             fixed: 0.05,
             per_square: 0.0,
+            mb: 0.0,
+            mb_per_square: 0.0,
+            cpu: 0.0,
+            cpu_per_square: 0.0,
         },
         controls: SCATTER,
         ..Element::BASE

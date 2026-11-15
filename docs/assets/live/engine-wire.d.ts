@@ -130,7 +130,13 @@ map: TileMap | null,
 /**
  * One square's side on the target, mm.
  */
-squareMm: number, };
+squareMm: number, 
+/**
+ * What a full build of this tile will need (`dt_eval::full_cost`, the program's one estimate), so the
+ * page can say so before it tries, and refuse on a device that cannot carry it; null when the document
+ * has no tile that reads.
+ */
+fullCost: FullCost | null, };
 
 type Clause = { "kind": "within", at: number, distance: Written | null, of: OfPlace | null, printed: Array<string> | null, } | { "kind": "except", at: number, regions: Run, };
 
@@ -210,6 +216,16 @@ was: string, replacement: string,
  * The button's words: `Change to dirt`.
  */
 label: string, };
+
+type FullCost = { 
+/**
+ * The highest memory the build reaches, MB.
+ */
+peakMb: number, 
+/**
+ * CPU seconds one thread takes (the browser has one).
+ */
+cpuSecs: number, };
 
 type Height = { name: string, value: number | null, text: string, from: HeightFrom, };
 
@@ -435,6 +451,7 @@ export interface Engine {
   check_tile(text: string, system: string): string;
   fix_tile(text: string, fix: string): string;
   printed(typed: string): string;
-  build_tile(text: string, system: string, seed: number | null, cells: number, tier: string): EngineTile;
+  build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null): EngineTile;
+  forget_card(card: string): void;
   explore(typed: string, system: string, bins: number, draws: number, seed: number): string;
 }

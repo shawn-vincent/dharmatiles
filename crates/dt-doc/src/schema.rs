@@ -646,13 +646,24 @@ pub struct Footprint {
 }
 
 /// A rough cost of one build, in seconds on a tile of `s` squares:
-/// `fixed + per_square * s`.
+/// `fixed + per_square * s`.  `fixed` and `per_square` are wall seconds in the program (many threads) and weight
+/// the progress bar; `mb` and `cpu` are what a full build of the element weighs in the browser's one thread, from
+/// the build record's `stage_peak_mb` and a process's CPU seconds on the library (`dt_eval::cost` adds them up
+/// into the page's estimate and holds them to measurements).  For a thing in a scatter they are each thing's.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cost {
     /// Whatever the tile.
     pub fixed: f64,
     /// For each square of the tile.
     pub per_square: f64,
+    /// Peak memory it adds to a full build, MB.
+    pub mb: f64,
+    /// Peak memory it adds for each square, MB.
+    pub mb_per_square: f64,
+    /// CPU seconds it adds to a full build.
+    pub cpu: f64,
+    /// CPU seconds it adds for each square.
+    pub cpu_per_square: f64,
 }
 
 impl Cost {
@@ -684,6 +695,10 @@ impl Element {
         cost: Cost {
             fixed: 0.1,
             per_square: 0.0,
+            mb: 20.0,
+            mb_per_square: 0.0,
+            cpu: 0.1,
+            cpu_per_square: 0.0,
         },
         controls: &[],
     };

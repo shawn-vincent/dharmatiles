@@ -58,8 +58,46 @@ const MAIN: &str = "tile.dtile";
 /// The printer's layer on both systems (the default printer's).
 const LAYER_MM: f64 = 0.2;
 
+/// How many cards keep the scenes of their last draft in this worker (the oldest is forgotten first): a card's
+/// step cache is what lets an edit to the grass leave the cliff under it alone, and it is memory a wasm heap never
+/// gives back, so it is bounded, and a fresh worker (after every full build) starts with none.
+pub const MAX_CARD_CACHES: usize = 4;
+
 thread_local! {
     static LIBRARY: RefCell<BTreeMap<String, String>> = const { RefCell::new(BTreeMap::new()) };
+    /// Each card's step cache, oldest first.
+    static CARDS: RefCell<Vec<(String, std::rc::Rc<dt_eval::Cache>)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// The step cache of `card`, made when it has none; the most recently used is last, and past [`MAX_CARD_CACHES`]
+/// the oldest is dropped (its memory with it).
+fn card_cache(card: &str) -> std::rc::Rc<dt_eval::Cache> {
+    CARDS.with(|cards| {
+        let mut cards = cards.borrow_mut();
+        let at = cards.iter().position(|(c, _)| c == card);
+        let entry = at.map_or_else(
+            || (card.to_owned(), std::rc::Rc::new(dt_eval::Cache::new())),
+            |i| cards.remove(i),
+        );
+        let cache = entry.1.clone();
+        cards.push(entry);
+        while cards.len() > MAX_CARD_CACHES {
+            cards.remove(0);
+        }
+        cache
+    })
+}
+
+/// Drop `card`'s step cache (the card was removed from the page).
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn forget_card(card: &str) {
+    CARDS.with(|cards| cards.borrow_mut().retain(|(c, _)| c != card));
+}
+
+/// How many cards hold a step cache now.
+#[must_use]
+pub fn cards_cached() -> usize {
+    CARDS.with(|c| c.borrow().len())
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -441,6 +479,10 @@ pub struct Checked {
     pub map: Option<dt_eval::map::TileMap>,
     /// One square's side on the target, mm.
     pub square_mm: f64,
+    /// What a full build of this tile will need (`dt_eval::full_cost`, the program's one estimate), so the
+    /// page can say so before it tries, and refuse on a device that cannot carry it; null when the document
+    /// has no tile that reads.
+    pub full_cost: Option<dt_eval::FullCost>,
 }
 
 /// Check `text` for `system` and describe what the overlay draws: JSON
@@ -474,6 +516,7 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
                     notes: Vec::new(),
                     map: None,
                     square_mm: units.square_mm,
+                    full_cost: None,
                 });
             }
         };
@@ -485,6 +528,7 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
                 notes,
                 map,
                 square_mm: units.square_mm,
+                full_cost: checked.tile.as_ref().map(dt_eval::full_cost),
             }),
             Err(ds) => json(&Checked {
                 ok: false,
@@ -492,6 +536,7 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
                 notes,
                 map: None,
                 square_mm: units.square_mm,
+                full_cost: None,
             }),
         }
     })
@@ -636,13 +681,14 @@ pub fn build_with(
     cells: u32,
     tier: Tier,
     progress: &dt_eval::Progress,
+    cache: Option<&dt_eval::Cache>,
 ) -> Result<(dt_eval::Built, Options), Vec<Diag>> {
     let mut opts = Options::in_source(source)?;
     opts.tier = tier;
     opts.system = system;
     opts.seed = seed;
     opts.cells = (cells > 0).then_some(cells);
-    let built = dt_eval::build_with(source, MAIN, &opts, progress)?;
+    let built = dt_eval::build_cached(source, MAIN, &opts, progress, cache)?;
     Ok((built, opts))
 }
 
@@ -772,9 +818,12 @@ pub fn build_tile(
     seed: Option<u32>,
     cells: u32,
     tier: &str,
+    card: Option<String>,
 ) -> Result<Tile, JsError> {
     let system = system_of(system)?;
     let tier = tier.parse::<Tier>().map_err(|e| JsError::new(&e))?;
+    // a card's drafts share its step cache; a full build (no card) keeps none, so its memory is the build's alone
+    let cache = card.as_deref().map(card_cache);
     LIBRARY.with(|lib| {
         let lib = lib.borrow();
         if !lib.contains_key(HEIGHTS) {
@@ -793,6 +842,7 @@ pub fn build_tile(
             cells,
             tier,
             &ticks(stage_total(&source, system)),
+            cache.as_deref(),
         ) {
             Ok(b) => b,
             Err(ds) => {
@@ -901,6 +951,7 @@ pub fn parity_line(tile: &str, system_word: &str) -> Result<String, JsError> {
             0,
             Tier::Full,
             &dt_eval::Progress::none(),
+            None,
         )
         .map_err(|ds| {
             JsError::new(&format!(
@@ -1015,6 +1066,19 @@ pub fn explore(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_workers_card_caches_are_bounded_and_forgotten() {
+        for i in 0..super::MAX_CARD_CACHES + 3 {
+            super::card_cache(&format!("card-{i}"));
+        }
+        assert_eq!(super::cards_cached(), super::MAX_CARD_CACHES);
+        // asking again for a card keeps its cache (the same one), and forgetting drops it
+        let a = super::card_cache("card-last");
+        assert!(std::rc::Rc::ptr_eq(&a, &super::card_cache("card-last")));
+        super::forget_card("card-last");
+        assert_eq!(super::cards_cached(), super::MAX_CARD_CACHES - 1);
+    }
+
     #![allow(clippy::unwrap_used)]
 
     use super::*;
@@ -1107,7 +1171,7 @@ mod tests {
              version(): string;\n  set_library(json: string): void;\n  analyze(text: string, system: string): string;\n  \
              check_tile(text: string, system: string): string;\n  fix_tile(text: string, fix: string): string;\n  \
              printed(typed: string): string;\n  \
-             build_tile(text: string, system: string, seed: number | null, cells: number, tier: string): EngineTile;\n  \
+             build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null): EngineTile;\n  forget_card(card: string): void;\n  \
              explore(typed: string, system: string, bins: number, draws: number, seed: number): string;\n}\n",
         );
         out
