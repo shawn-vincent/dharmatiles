@@ -1068,11 +1068,11 @@ pub(super) fn export(shared: &Shared, v: PlatesExportReq) -> Out<PlatesExported>
         format!("export|{id}"),
         rev,
         &id.clone(),
-        move |shared, _| Ok(export_now(shared, &id, &path)),
+        move |reply| super::queue::SideJob::ExportPlates { id, path, reply },
     ))
 }
 
-fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
+pub(super) fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
     let id = id.to_owned();
     let path = path.to_owned();
     let t0 = Instant::now();

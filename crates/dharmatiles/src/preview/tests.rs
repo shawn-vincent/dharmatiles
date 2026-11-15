@@ -3369,7 +3369,7 @@ fn a_request_for_a_newer_revision_cancels_the_older_one_on_a_lane_running_or_wai
     // the export lane runs one at a time: a first job holds it until told, and sees its cancel token set
     let s1 = Arc::clone(&shared);
     let held = std::thread::spawn(move || {
-        s1.on_lane(Lane::Export, "k".to_owned(), 1, "t", move |_, cancel| {
+        s1.on_probe(Lane::Export, "k".to_owned(), 1, "t", move |_, cancel| {
             started_tx.send(()).unwrap();
             go_rx.recv().unwrap();
             if cancel.load(Ordering::Relaxed) {
@@ -3383,14 +3383,14 @@ fn a_request_for_a_newer_revision_cancels_the_older_one_on_a_lane_running_or_wai
     // a waiting job, then a newer revision of the same key that replaces it
     let s2 = Arc::clone(&shared);
     let waiting = std::thread::spawn(move || {
-        s2.on_lane(Lane::Export, "j".to_owned(), 1, "t", |_, _| Ok("never"))
+        s2.on_probe(Lane::Export, "j".to_owned(), 1, "t", |_, _| Ok("never"))
     });
     while !shared.pending_has_side_waiting() {
         std::thread::sleep(Duration::from_millis(5));
     }
     let s3 = Arc::clone(&shared);
     let newer = std::thread::spawn(move || {
-        s3.on_lane(Lane::Export, "j".to_owned(), 2, "t", |_, _| Ok("new"))
+        s3.on_probe(Lane::Export, "j".to_owned(), 2, "t", |_, _| Ok("new"))
     });
     assert!(
         matches!(waiting.join().unwrap(), Err(Interrupted::Superseded)),
@@ -3399,7 +3399,7 @@ fn a_request_for_a_newer_revision_cancels_the_older_one_on_a_lane_running_or_wai
     // the running one is cancelled by a newer revision of its key
     let s4 = Arc::clone(&shared);
     let newest = std::thread::spawn(move || {
-        s4.on_lane(Lane::Export, "k".to_owned(), 2, "t", |_, _| Ok("newest"))
+        s4.on_probe(Lane::Export, "k".to_owned(), 2, "t", |_, _| Ok("newest"))
     });
     std::thread::sleep(Duration::from_millis(100));
     go_tx.send(()).unwrap();
@@ -3416,13 +3416,13 @@ fn a_request_for_a_newer_revision_cancels_the_older_one_on_a_lane_running_or_wai
 fn a_job_that_panics_on_a_lane_is_raised_again_in_its_request() {
     use queue::{Interrupted, Lane};
     let (shared, stop) = lanes();
-    let r = shared.on_lane::<()>(Lane::Tier, "p".to_owned(), 1, "t", |_, _| {
+    let r = shared.on_probe::<()>(Lane::Tier, "p".to_owned(), 1, "t", |_, _| {
         panic!("a test panic on a lane")
     });
     assert!(matches!(r, Err(Interrupted::Panicked(_))));
     // and the lane goes on
     assert!(matches!(
-        shared.on_lane(Lane::Tier, "q".to_owned(), 1, "t", |_, _| Ok(7)),
+        shared.on_probe(Lane::Tier, "q".to_owned(), 1, "t", |_, _| Ok(7)),
         Ok(7)
     ));
     stop.store(true, Ordering::Relaxed);

@@ -504,20 +504,13 @@ pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
             jobkey,
             shared.rev_of(&path),
             "",
-            move |shared, cancel| {
-                Ok(dt_store::build_stored(
-                    &Files,
-                    &path,
-                    &Options {
-                        tier: Tier::Low,
-                        ..opts
-                    },
-                    &dt_eval::Progress::new(std::sync::Arc::new(super::queue::Cancelled(
-                        std::sync::Arc::clone(cancel),
-                    ))),
-                    None,
-                    shared.store.as_deref(),
-                ))
+            move |reply| super::queue::SideJob::Crown {
+                path,
+                opts: Options {
+                    tier: Tier::Low,
+                    ..opts
+                },
+                reply,
             },
         );
         let built = match built {

@@ -142,8 +142,6 @@ impl dt_service::host::Alarm for Program {
     }
 }
 
-use dt_service::events::{Change, Events};
-
 /// What the server and the worker share.
 pub struct Shared {
     /// Where the user's own printers live and the chosen target is
@@ -235,13 +233,7 @@ pub(crate) fn tell_once(msg: &str) {
 }
 
 /// The words of a caught panic (its message), for the log and the page.
-pub(crate) fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
-    panic
-        .downcast_ref::<&str>()
-        .map(|s| (*s).to_owned())
-        .or_else(|| panic.downcast_ref::<String>().cloned())
-        .unwrap_or_else(|| "a panic with no message".to_owned())
-}
+pub(crate) use dt_service::host::panic_message;
 
 impl Shared {
     /// Serve `paths` for the default target (the tests' server).
@@ -269,7 +261,7 @@ impl Shared {
         });
         let epoch = edit::token()[..12].to_owned();
         let storage: Arc<dyn storage::Storage> = Arc::new(storage::DiskStorage);
-        let owner = owner::Owner::start(
+        let owner = owner::start(
             tiles,
             roots,
             opts.clone(),

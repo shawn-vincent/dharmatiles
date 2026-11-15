@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::super::docs::Docs;
-use super::super::owner::{Command, Owner};
+use super::super::owner::Command;
 use dt_eval::Options;
 use dt_service::storage::{MemStorage, Storage};
 
@@ -17,7 +17,7 @@ fn a_save_a_rename_and_a_trash_then_undo_need_no_disk() {
     let b = PathBuf::from("/memory/My tiles/b.dtile");
     let bin = PathBuf::from("/memory/Trash");
     let mem = Arc::new(MemStorage::with(a.to_str().unwrap(), TILE));
-    let owner = Owner::start(
+    let owner = super::super::owner::start(
         Vec::new(),
         Vec::new(),
         Options::default(),
@@ -77,7 +77,9 @@ fn a_scan_a_new_file_and_a_delete_need_no_disk() {
     mem.write_text(&home.join(".hidden/c.dtile"), TILE).unwrap();
     mem.write_text(&home.join("out/d.dtile"), TILE).unwrap();
     let root = Root::new("My tiles", RootKind::Dir(home.clone()));
-    let tiles = root.scan(&mem, &super::super::Program).expect("a folder scans");
+    let tiles = root
+        .scan(&mem, &super::super::Program)
+        .expect("a folder scans");
     assert_eq!(
         tiles,
         vec![

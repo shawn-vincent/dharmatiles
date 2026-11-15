@@ -218,3 +218,25 @@ pub enum StreamEvent {
     /// A resource changed.
     Resource(crate::resources::ResourceEvent),
 }
+
+/// The tiers a draft is built at.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default, ts_rs::TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum DraftTier {
+    /// The editor's usual draft ([`dt_eval::Tier::Draft`]).
+    #[default]
+    Draft,
+    /// Coarser, for a drag in progress ([`dt_eval::Tier::Low`]): the same places, less detail.
+    Low,
+}
+
+impl DraftTier {
+    /// The build tier it asks for.
+    #[must_use]
+    pub const fn build(self) -> dt_eval::Tier {
+        match self {
+            Self::Draft => dt_eval::Tier::Draft,
+            Self::Low => dt_eval::Tier::Low,
+        }
+    }
+}

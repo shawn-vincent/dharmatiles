@@ -25,3 +25,12 @@ pub trait Host: Alarm + 'static {
     /// Milliseconds since the Unix epoch, for a message's time.
     fn now_ms(&self) -> u64;
 }
+
+/// The words of a caught panic (its message), for the log and the page.
+pub fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_owned())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "a panic with no message".to_owned())
+}

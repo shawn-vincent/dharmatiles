@@ -70,6 +70,7 @@ use super::queue::Outcome;
 use super::roots::personal_home;
 use super::storage::Storage;
 use super::*;
+pub use dt_service::api::DraftTier;
 
 // ---- the calls' types ------------------------------------------------------------------
 
@@ -673,29 +674,6 @@ pub struct StepReq {
     /// How coarse the draft is: `low` while a drag is going on (the step has to keep up with the pointer), left out
     /// (the usual draft) for the step that ends it and for every other change.
     pub tier: Option<DraftTier>,
-}
-
-/// The tiers a draft is built at.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "kebab-case")]
-pub enum DraftTier {
-    /// The editor's usual draft ([`dt_eval::Tier::Draft`]).
-    #[default]
-    Draft,
-    /// Coarser, for a drag in progress ([`dt_eval::Tier::Low`]): the same places, less detail.
-    Low,
-}
-
-impl DraftTier {
-    /// The build tier it asks for.
-    #[must_use]
-    pub const fn build(self) -> dt_eval::Tier {
-        match self {
-            Self::Draft => dt_eval::Tier::Draft,
-            Self::Low => dt_eval::Tier::Low,
-        }
-    }
 }
 
 /// What became of the draft of a step.
@@ -1523,7 +1501,11 @@ pub(super) fn export(shared: &Shared, t: &TileRef, v: ExportReq) -> Out<ExportRe
         format!("export|{}", t.id),
         rev,
         &t.id,
-        move |shared, _| Ok(export_now(shared, &tile, &v)),
+        move |reply| queue::SideJob::ExportTile {
+            tile,
+            req: v,
+            reply,
+        },
     ))
 }
 
@@ -1544,7 +1526,7 @@ pub(super) fn lane_out<T>(r: Result<Out<T>, queue::Interrupted>) -> Out<T> {
     clippy::disallowed_methods,
     reason = "permitted silence: a path outside its root stays as written (display only)"
 )]
-fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<ExportRes> {
+pub(super) fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<ExportRes> {
     let tile = t.path.as_str();
     let threemf = v.threemf.unwrap_or(false);
     let template = if threemf {

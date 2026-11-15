@@ -63,8 +63,9 @@ impl Events {
         let msg = match serde_json::to_string(msg) {
             Ok(m) => m,
             Err(e) => {
-                self.alarm
-                    .alarm(&format!("error: preview: an event could not be written: {e}"));
+                self.alarm.alarm(&format!(
+                    "error: preview: an event could not be written: {e}"
+                ));
                 return;
             }
         };
