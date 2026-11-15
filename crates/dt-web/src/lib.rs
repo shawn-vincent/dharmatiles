@@ -1066,6 +1066,10 @@ pub fn explore(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+
     #[test]
     fn a_workers_card_caches_are_bounded_and_forgotten() {
         for i in 0..super::MAX_CARD_CACHES + 3 {
@@ -1078,10 +1082,6 @@ mod tests {
         super::forget_card("card-last");
         assert_eq!(super::cards_cached(), super::MAX_CARD_CACHES - 1);
     }
-
-    #![allow(clippy::unwrap_used)]
-
-    use super::*;
 
     fn lib() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
