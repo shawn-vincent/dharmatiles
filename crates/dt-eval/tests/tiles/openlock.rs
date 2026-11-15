@@ -12,6 +12,7 @@
 
 #![allow(clippy::unwrap_used)]
 
+use crate::common;
 use crate::memo;
 use dt_eval::{Library, Options, check};
 use dt_kit::Frame;
@@ -19,17 +20,37 @@ use rayon::prelude::*;
 
 const RATIO: f64 = 25.4 / 35.0;
 
-/// One tile for each element family.
+/// One torture tile for each family it has a cheap one for.
 const TILES: &[&str] = &[
     "lib:tests/ground/1x1-flat.dtile",
+    "lib:tests/water/1x1-bands-pond.dtile",
+    "lib:tests/floors/1x1-planks.dtile",
+    "lib:tests/rocks/1x1-rock-tops.dtile",
+    "lib:tests/walls/1x1-wall-cut-stone-corner.dtile",
+];
+
+/// One tile for each element family, with the heavier ones the warm test leaves to the thorough one.
+const ALL: &[&str] = &[
+    "lib:tests/ground/1x1-flat.dtile",
     "lib:tests/plants/1x1-soil+grass.dtile",
-    "lib:tests/plants/1x1-grass-flowers.dtile",
     "lib:tests/water/1x1-water+grass.dtile",
     "lib:tests/walls/1x1-wall-brick-corner+grass.dtile",
     "lib:tests/floors/1x1-floor-stone-wall.dtile",
     "lib:tests/floors/1x1-planks.dtile",
     "lib:tests/cliffs/1x1-cliff-columns.dtile",
-    "lib:tests/plants/1x1-tree.dtile",
+];
+
+/// The two families whose torture tiles are the heaviest builds (a tree of 32 clumps, a meadow round flowers),
+/// each as the smallest document that still has the family in it, built from memory.
+const SMALL: &[(&str, &str)] = &[
+    (
+        "flowers.dtile",
+        "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=7 {\n    stack {\n        base\n        dirt\n        scatter perSquare=4 { flower size=\"5dmm\" petals=5 centre=\"1.5dmm\" stem=\"1dmm\" dome=\"1dmm\" petal=\"0.5dmm\" }\n    }\n}\n",
+    ),
+    (
+        "tree.dtile",
+        "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=42 {\n    stack {\n        base\n        dirt clods=none\n        tree top=\"$bottom + 36dmm\" {\n            trunk height=\"24dmm\"\n            crown width=\"18dmm\" clumps=10 shape=round branching=normal\n            leaves on\n        }\n    }\n}\n",
+    ),
 ];
 
 fn on(system: &str) -> Options {
@@ -42,8 +63,12 @@ fn on(system: &str) -> Options {
 /// Build `path` for `system` and hold it to the gate; for OpenLOCK, also to
 /// the photocopy of its DungeonBlocks plan.
 fn passes(path: &str, system: &str) {
+    passes_in(&Library, path, system);
+}
+
+fn passes_in<S: dt_testkit::Reads>(src: &S, path: &str, system: &str) {
     let opts = on(system);
-    let b = memo::build(&Library, path, &opts).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+    let b = memo::build(src, path, &opts).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     let a = &b.audit;
     let fails = a.failures(&opts.printer);
     assert!(fails.is_empty(), "{path} ({system}): {fails:?}");
@@ -53,10 +78,7 @@ fn passes(path: &str, system: &str) {
     if system != "ol" {
         return;
     }
-    let tile = check(&Library, path, &Options::default())
-        .unwrap()
-        .tile
-        .unwrap();
+    let tile = check(src, path, &Options::default()).unwrap().tile.unwrap();
     let db = Frame::for_system("db", tile.cols, tile.rows).size_mm();
     for (built, plan) in b.footprint.iter().zip(db) {
         let ratio = built / plan;
@@ -80,9 +102,29 @@ fn passes(path: &str, system: &str) {
     assert!((lo - want).abs() < 1e-3, "{path}: bottom at {lo}");
 }
 
+/// Warm: the torture tiles that build quickly and the two small documents.  Grass, a cliff and a tree with its
+/// grass are built on OpenLOCK by the thorough test below; the system changes only the scale and the base, which
+/// every family here shares.
 #[test]
 fn each_element_family_builds_for_openlock() {
-    TILES.par_iter().for_each(|p| passes(p, "ol"));
+    // one at a time: a build holds its memo slot while it waits on the rayon pool, so a test that holds the pool's
+    // workers on memo slots (a `par_iter` over builds) can starve a build another test is making: a deadlock
+    for p in TILES {
+        passes(p, "ol");
+    }
+    for (name, text) in SMALL {
+        passes_in(&common::memory(&[(name, text)]), name, "ol");
+    }
+}
+
+#[test]
+#[ignore = "thorough: cargo xtask check --full runs it"]
+fn thorough_each_element_family_builds_for_openlock_with_the_heavy_tiles() {
+    for p in ALL {
+        passes(p, "ol");
+    }
+    passes("lib:tests/plants/1x1-grass-flowers.dtile", "ol");
+    passes("lib:tests/plants/1x1-tree.dtile", "ol");
 }
 
 /// A narrow top stone between two head joints that leaned toward each other

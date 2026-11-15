@@ -636,7 +636,7 @@ fn a_trees_heights_and_a_cliffs_patches_take_a_weighting() {
     ));
     let cliff = |v: &str| {
         format!(
-            "dharmatiles version=\"1.0.0\"; tile size=\"2x1\" seed=1 {{\n    region crag {{ within \"[10dmm .. 20dmm]\" of=northEdge }}\n    stack {{\n        base\n        dirt top=\"4dmm\"\n        cliff top=\"$dirtEdgeHeight + 35dmm\" at=crag {{\n            rock mixed\n            shattered patches=3 width=\"{v}\"\n        }}\n    }}\n}}\n"
+            "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed=1 {{\n    region crag {{ within \"[10dmm .. 20dmm]\" of=northEdge }}\n    stack {{\n        base\n        dirt top=\"4dmm\"\n        cliff top=\"$dirtEdgeHeight + 35dmm\" at=crag {{\n            rock mixed\n            shattered patches=3 width=\"{v}\"\n        }}\n    }}\n}}\n"
         )
     };
     let base = hash_low(&cliff("5dmm .. 10dmm"));
