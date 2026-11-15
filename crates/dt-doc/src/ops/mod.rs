@@ -102,7 +102,12 @@ impl Checked {
     ///
     /// # Errors
     /// [`EditError::Adds`] with the mistakes the edit added.
-    pub fn new(reader: &dyn Reader, kind: Kind, before: &str, done: Done) -> Result<Self, EditError> {
+    pub fn new(
+        reader: &dyn Reader,
+        kind: Kind,
+        before: &str,
+        done: Done,
+    ) -> Result<Self, EditError> {
         if done.text == before {
             return Ok(Self(done));
         }

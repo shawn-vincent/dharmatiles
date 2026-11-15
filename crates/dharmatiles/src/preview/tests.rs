@@ -366,7 +366,10 @@ fn builds_a_tile_and_serves_its_mesh() {
         body.len(),
         8 + jl + h.vertices * 12 + n * 12 + (3 * h.palette).next_multiple_of(4) + n * 8
     );
-    assert!(h.vertices < 3 * n, "the vertices are shared between triangles");
+    assert!(
+        h.vertices < 3 * n,
+        "the vertices are shared between triangles"
+    );
     assert_eq!(h.overhang_deg, Some(55.0));
     assert!(
         get(&r, "/api/tiles/ffffffffffffffff/mesh?docRev=0")
@@ -2507,8 +2510,7 @@ fn an_entry_moves_whole_and_a_new_one_goes_between_two() {
     // before a sibling
     let v = edited(&r, &token, ROWS, mv(grass, Some(rock)));
     assert!(
-        v.text
-            .contains("dirt\n        grass\n        rock at"),
+        v.text.contains("dirt\n        grass\n        rock at"),
         "{v:?}"
     );
     // a move that would put the ground after what stands on it adds a mistake: refused, and the page is told which

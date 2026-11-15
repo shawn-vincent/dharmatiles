@@ -168,7 +168,10 @@ pub enum EditOp {
     },
     /// The tile's description: the `about` line's string made `value`, or the line written when there is none.  The
     /// program writes the string.
-    About { text: String, value: String },
+    About {
+        text: String,
+        value: String,
+    },
     /// A node's positional argument replaced.
     Arg {
         text: String,
@@ -1194,7 +1197,9 @@ pub(super) fn refusal(e: &dt_doc::ops::EditError) -> Reply {
             file: None,
             line: None,
             column: None,
-            help: Some("The edit was not made: it would add a mistake the text does not have.".to_owned()),
+            help: Some(
+                "The edit was not made: it would add a mistake the text does not have.".to_owned(),
+            ),
             fix: None,
             unexpected: false,
         })
@@ -1202,7 +1207,9 @@ pub(super) fn refusal(e: &dt_doc::ops::EditError) -> Reply {
     let message = added
         .first()
         .map_or_else(|| e.to_string(), |f| f.message.clone());
-    fail::refused_with("422 Unprocessable Entity", message, |b| b.errors = Some(list))
+    fail::refused_with("422 Unprocessable Entity", message, |b| {
+        b.errors = Some(list)
+    })
 }
 
 pub(super) fn edit(shared: &Shared, req: EditReq) -> Out<EditRes> {
@@ -1523,7 +1530,11 @@ pub(super) fn mine(shared: &Shared, t: &TileRef, _: Nothing) -> Out<Listed> {
         .unwrap_or("tile")
         .trim_end_matches(".dtile")
         .to_owned();
-    let dest = write_new(&home(shared)?, &stem, &pin_uses(&text, files, &shared.options())?)?;
+    let dest = write_new(
+        &home(shared)?,
+        &stem,
+        &pin_uses(&text, files, &shared.options())?,
+    )?;
     Ok(listed(shared, &dest))
 }
 

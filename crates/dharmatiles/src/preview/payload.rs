@@ -505,7 +505,8 @@ mod tests {
         let at = 8 + jl;
         let f = |o: usize| f32::from_le_bytes(b[at + o..at + o + 4].try_into().unwrap());
         assert!((f(4 * 3) - 2.0).abs() < 1e-6, "second vertex x");
-        let index = |o: usize| u32::from_le_bytes(b[at + 48 + o..at + 48 + o + 4].try_into().unwrap());
+        let index =
+            |o: usize| u32::from_le_bytes(b[at + 48 + o..at + 48 + o + 4].try_into().unwrap());
         assert_eq!([index(0), index(4), index(8)], [0, 1, 2]);
         assert_eq!([index(12), index(16), index(20)], [0, 2, 3]);
         // the palette is in the order the faces first use a colour: red, then grey
@@ -586,7 +587,9 @@ mod tests {
     }
 
     /// The wire read back as the page reads it: every face's three positions, and its painted and clean colours.
-    fn read_back(bytes: &[u8]) -> (Vec<[[f32; 3]; 3]>, Vec<[u8; 3]>, Vec<[u8; 3]>) {
+    type Faces = (Vec<[[f32; 3]; 3]>, Vec<[u8; 3]>, Vec<[u8; 3]>);
+
+    fn read_back(bytes: &[u8]) -> Faces {
         let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
         let h: MeshHeader = serde_json::from_slice(&bytes[8..8 + jl]).unwrap();
         let (n, v, p) = (h.triangles, h.vertices, h.palette);
@@ -612,7 +615,9 @@ mod tests {
             .map(|i| bytes[o + 3 * i..o + 3 * i + 3].try_into().unwrap())
             .collect();
         o += (3 * p).next_multiple_of(4);
-        let at = |o: usize, t: usize| usize::from(u16::from_le_bytes([bytes[o + 2 * t], bytes[o + 2 * t + 1]]));
+        let at = |o: usize, t: usize| {
+            usize::from(u16::from_le_bytes([bytes[o + 2 * t], bytes[o + 2 * t + 1]]))
+        };
         let painted = (0..n).map(|t| palette[at(o, t)]).collect();
         let clean = (0..n).map(|t| palette[at(o + 2 * n, t)]).collect();
         (tris, painted, clean)

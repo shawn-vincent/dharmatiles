@@ -3,7 +3,13 @@
 //! edit answers, the text it leaves decodes no worse than the text it was made to, read here by a decoder
 //! that knows the library's heights and parts, not by the check `apply` makes itself.
 
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
 
 mod common;
 
@@ -11,7 +17,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use dt_doc::nodeid;
-use dt_doc::ops::{Kind, Flaw, Op, Place, Reader, apply_with};
+use dt_doc::ops::{Flaw, Kind, Op, Place, Reader, apply_with};
 use dt_doc::{Known, decode};
 use kdl::KdlValue;
 
@@ -189,6 +195,12 @@ fn no_edit_leaves_text_that_decodes_worse() {
         started.elapsed()
     );
     assert!(made > 100, "only {made} edits were made");
-    assert!(refused > 20, "only {refused} edits were refused: the generator is too tame");
-    assert!(started.elapsed().as_secs() < 5, "the property test is over its 5 s");
+    assert!(
+        refused > 20,
+        "only {refused} edits were refused: the generator is too tame"
+    );
+    assert!(
+        started.elapsed().as_secs() < 5,
+        "the property test is over its 5 s"
+    );
 }
