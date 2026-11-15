@@ -17,6 +17,11 @@ import { host, makeMine, toast } from './app.js';
 import { editCall, askDraft, edited, spansUsable, undo } from './document.js';
 import { doc, isEntry, markSel, stackItems, tile, view } from './stores.js';
 
+/** @typedef {import('../rows.js').Item} Item */
+/** @typedef {import('../api').Offer} Offer */
+/** @typedef {import('../api').MapLine | import('../api').MapRegion} Mark */
+/** @typedef {'line' | 'region'} MarkKind */
+
 /** A library tile's own text is shown: its first change copies it into My tiles (tiles.js). */
 export const canMine = () => { const t = tile(), d = doc.get(); return !d.writable && !!t?.path.startsWith('lib:') && d.file === t.path; };
 /** May a change be made to the document shown (it is the tile's own, and writable or a library tile that is copied first)? */
@@ -25,8 +30,10 @@ export const editable = () => doc.get().file === tile()?.path && (doc.get().writ
 const list = () => orderStack(stackItems());
 
 /** What an edit that was refused says: the program's words, shown where the change was asked for. */
+/** @param {string} what @param {import('../host.js').Reply<unknown>} r */
 function refused(what, r) {
-  const why = typeof r.body?.error === 'string' ? r.body.error : r.body?.error?.message || 'that change could not be made';
+  const e = /** @type {string | { message?: string } | undefined} */ (r.body?.error); // the program's words (a string; an error object has them as `message`)
+  const why = typeof e === 'string' ? e : e?.message || 'that change could not be made';
   doc.set({ note: why });
   if (!failed(what, r)) toast(`${what}: ${why}`);
 }
@@ -38,13 +45,18 @@ function refused(what, r) {
  * it does not find in the text it is sent with a refusal, so a change never lands on another node.  Null (and said) when the
  * last check lists no node there.
  */
+/** @param {number | null | undefined} at */
 export function nodeId(at) {
   const id = idAtByte(doc.get().nodes, at);
   if (id == null) toast('That part of the tile is not in the source the program read: it will be in a moment, when the check has caught up');
   return id;
 }
 
-/** A control written on the node at byte `at`, or taken out (`value` null). */
+/**
+ * A control written on the node at byte `at`, or taken out (`value` null).
+ * @param {number | null} at @param {string} name @param {string | null} value
+ * @returns {Promise<boolean | undefined>}
+ */
 export async function setControl(at, name, value) {
   if (!doc.get().writable) return makeMine({ run: () => setControl(at, name, value) });
   if (!spansUsable()) return;
@@ -56,7 +68,11 @@ export async function setControl(at, name, value) {
   return true;
 }
 
-/** A whole-node change to the tile's text (insert, remove, move or rename), as one step of history. */
+/**
+ * A whole-node change to the tile's text (insert, remove, move or rename), as one step of history.
+ * @param {Record<string, any>} body @param {string} label
+ * @returns {Promise<boolean | undefined>}
+ */
 export async function tileEdit(body, label) {
   if (!doc.get().writable) return makeMine({ run: () => tileEdit(body, label) });
   if (!spansUsable()) return;
@@ -67,7 +83,11 @@ export async function tileEdit(body, label) {
   return true;
 }
 
-/** Comment a stack entry out (`/-`), with a way back. */
+/**
+ * Comment a stack entry out (`/-`), with a way back.
+ * @param {number | null} byte
+ * @returns {Promise<void>}
+ */
 export async function muteAt(byte, label = 'Entry') {
   if (!doc.get().writable) return makeMine({ run: () => muteAt(byte, label) });
   if (!spansUsable()) return;
@@ -81,7 +101,11 @@ export async function muteAt(byte, label = 'Entry') {
   toast(`${label} hidden`, () => undo(-1));
 }
 
-/** Take a stack entry out of the text, with a way back. */
+/**
+ * Take a stack entry out of the text, with a way back.
+ * @param {number | null} byte
+ * @returns {Promise<void>}
+ */
 export async function removeAt(byte, label = 'Entry') {
   if (!doc.get().writable) return makeMine({ run: () => removeAt(byte, label) });
   if (!spansUsable()) return;
@@ -95,7 +119,10 @@ export async function removeAt(byte, label = 'Entry') {
   toast(`${label} removed`, () => undo(-1));
 }
 
-/** Rename the selected line or region, and keep it selected under its new name. */
+/**
+ * Rename the selected line or region, and keep it selected under its new name.
+ * @param {MarkKind} kind @param {string} old @param {string | null | undefined} name
+ */
 export async function renameMark(kind, old, name) {
   const next = String(name ?? '').trim();
   if (!next || next === old) return;
@@ -108,6 +135,7 @@ export async function renameMark(kind, old, name) {
 
 // ---- the stack ----------------------------------------------------------------------------------------
 
+/** @type {{ index: number, text: string } | null} */
 let wanted = null; // {index, text}: the row the keyboard goes to once the moved stack is on screen
 
 /** The row to put the keyboard on after a move, if the stack shown is the moved one: its list position (once). */
@@ -122,6 +150,7 @@ export function takeFocusIndex() {
 }
 
 /** After a change to the order, say so when the plan refuses it: in its own words, with the Undo that goes back to the order before. */
+/** @param {string} text */
 function watchOrder(text) {
   let off = () => {};
   const stop = setTimeout(() => off(), 20000);
@@ -140,6 +169,8 @@ function watchOrder(text) {
  * Move stack row `from` to stand before list position `slot` (the list length is the end).  The check
  * says whether the plan accepts the new order: a refused order is allowed and reported in the checker's
  * own words (with an Undo), never blocked on the way: a stack is often put right in two moves.
+ * @param {number} from @param {number} slot
+ * @returns {Promise<any>}
  */
 export async function moveEntry(from, slot) {
   const rows = list();
@@ -168,6 +199,7 @@ export async function moveEntry(from, slot) {
 }
 
 /** One place earlier (`dir` -1) or later (+1) in the written stack, which is down or up the tile as drawn: ⌥↓ and ⌥↑ on a row, and the row menu's Move down and Move up. */
+/** @param {number} from @param {number} dir */
 export function stepEntry(from, dir) {
   const rows = list();
   const slot = stepSlot(rows, from, dir, doc.get().file);
@@ -175,7 +207,11 @@ export function stepEntry(from, dir) {
   return moveEntry(from, slot);
 }
 
-/** Write `offer`'s node at `place` ({place, at}) and open the new entry's level. */
+/**
+ * Write `offer`'s node at `place` ({place, at}) and open the new entry's level.
+ * @param {ReturnType<typeof addPlace>} place @param {Offer} offer
+ * @returns {Promise<any>}
+ */
 async function insertEntry(place, offer) {
   if (!doc.get().writable) return makeMine({ run: () => insertEntry(place, offer) });
   if (!spansUsable()) return;
@@ -196,7 +232,7 @@ async function insertEntry(place, offer) {
 /**
  * The Add menu for list position `slot` (the end when left out): every element, those the plan lets stand
  * there first-class, the rest listed with the plan's reason.  Choosing one writes it and opens its level.
- * @param {*} anchor
+ * @param {HTMLElement} anchor
  * @param {number | null} [slot]
  * @param {{ phrase?: string | null, align?: string }} [opts]
  */
@@ -224,7 +260,7 @@ export async function openAdd(anchor, slot = null, { phrase = null, align = 'lef
     return;
   }
   const ok = r.body.offers.filter((o) => o.ok), no = r.body.offers.filter((o) => !o.ok);
-  const item = (o) => ({ label: o.name, sub: o.about, swatch: o.family, disabled: !o.ok, why: o.why, run: () => insertEntry(place, o) });
+  const item = (/** @type {Offer} */ o) => ({ label: o.name, sub: o.about, swatch: o.family, disabled: !o.ok, why: o.why, run: () => insertEntry(place, o) });
   openMenu(anchor, [
     { head: `Add ${where}` },
     ...ok.map(item),
@@ -235,6 +271,7 @@ export async function openAdd(anchor, slot = null, { phrase = null, align = 'lef
 // ---- lines and regions ---------------------------------------------------------------------------------
 
 /** A name no line, region or point of the tile has yet: `line1`, `line2`… */
+/** @param {string} base */
 function freeName(base) {
   const n = doc.get().names || { lines: [], regions: [], points: [], defs: [] };
   const taken = new Set([...(n.lines || []), ...(n.regions || []), ...(n.points || []), ...(n.defs || [])]);
@@ -242,6 +279,7 @@ function freeName(base) {
 }
 
 /** Write a plain line across the middle, or a region along the north edge, into the tile's body and open its level. */
+/** @param {string} kind */
 export async function addMark(kind) {
   if (!editable()) { toast('This part is read only: change the tile’s own text'); return; }
   const name = freeName(kind);
@@ -249,12 +287,13 @@ export async function addMark(kind) {
     ? `line ${name} { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }`
     : `region ${name} { within "8dmm" of=northEdge }`;
   if (await tileEdit({ op: 'insert', place: 'tile', node }, `Added ${kind} ${name}`)) {
-    view.set({ sel: markSel(kind, name) });
+    view.set({ sel: markSel(/** @type {MarkKind} */ (kind), name) });
     toast(`Added ${kind} ${name}`, () => undo(-1));
   }
 }
 
 /** Delete a line or a region from its row, with a way back. */
+/** @param {string} kind @param {Mark & { sheet?: { at?: number | null } | null }} m */
 async function deleteMark(kind, m) {
   const at = m?.sheet?.at;
   if (at == null) return;
@@ -271,6 +310,7 @@ async function deleteMark(kind, m) {
 export const nameField = openNameField;
 
 /** Name an entry: `id=` on its node.  A name is part of its seed path, so the look is drawn again once and then kept. */
+/** @param {Item} it @param {HTMLElement} anchor */
 function renameEntry(it, anchor) {
   const rows = list();
   const cur = idOf(it.key) ?? '';
@@ -289,6 +329,7 @@ function renameEntry(it, anchor) {
 }
 
 /** Rename a line or region from its row, with every use of its name. */
+/** @param {string} kind @param {string} name @param {HTMLElement} anchor */
 function renameShape(kind, name, anchor) {
   const map = doc.get().map;
   const taken = new Set([...(map?.lines || []), ...(map?.regions || [])].map((m) => m.name));
@@ -302,15 +343,16 @@ function renameShape(kind, name, anchor) {
       if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(s)) return 'A letter, then letters, digits, - and _';
       return s !== name && taken.has(s) ? `Another ${kind === 'line' ? 'line' : 'region'} is called ${s}` : null;
     },
-    save: (v) => renameMark(kind, name, v),
+    save: (v) => renameMark(/** @type {MarkKind} */ (kind), name, v),
   });
 }
 
 // ---- the row's menu ---------------------------------------------------------------------------------------------
 
-const labelOf = (it) => nameOf(it);
+const labelOf = (/** @type {Item} */ it) => nameOf(it);
 
 /** The menu of a row of the tile level (its ⋯, the menu key). */
+/** @param {string} kind @param {string} id @param {HTMLElement} anchor */
 export function openRowMenu(kind, id, anchor) {
   if (kind === 'add') return;
   if (kind !== 'entry') {
@@ -334,7 +376,7 @@ export function openRowMenu(kind, id, anchor) {
   const why = mine ? null : elsewhere;
   // a call of a definition makes the entry: it is renamed, hidden and deleted as the call
   const called = !!it.call;
-  const step = (dir) => canStep(rows, i, dir, file);
+  const step = (/** @type {number} */ dir) => canStep(rows, i, dir, file);
   openMenu(anchor, [
     { label: 'Rename…', hint: 'F2', disabled: !mine || base || called, why: base ? 'the base has no name' : called ? 'made by a definition call: name the call' : why, run: () => renameEntry(it, anchor), keepFocus: true },
     { label: 'Hide', sub: 'comment it out, keep it', disabled: !mine, why, run: () => muteAt(ownNode(it, file), labelOf(it)) },
@@ -350,6 +392,7 @@ export function openRowMenu(kind, id, anchor) {
 }
 
 /** A row's key that is an action of its own: F2 (rename) or Delete. */
+/** @param {string} action @param {string} kind @param {string} id @param {HTMLElement} anchor */
 export function rowAction(action, kind, id, anchor) {
   if (kind === 'add') return;
   if (kind !== 'entry') {
@@ -367,6 +410,7 @@ export function rowAction(action, kind, id, anchor) {
 }
 
 /** The Add row of the stack (`entry`), or of the Shape (`line`, `region`). */
+/** @param {string} kind @param {HTMLElement} anchor */
 export function addFrom(kind, anchor) {
   if (kind === 'entry') openAdd(anchor);
   else addMark(kind);
