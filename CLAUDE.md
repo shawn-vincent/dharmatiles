@@ -58,7 +58,7 @@ CI is off. Run the tests locally on this Mac only; do not wait on or re-enable G
 
 ## Architecture
 
-Fourteen crates under `crates/`:
+Fifteen crates under `crates/`:
 
 | Crate | Role |
 |---|---|
@@ -70,6 +70,7 @@ Fourteen crates under `crates/`:
 | `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the element schema (`elements.rs`: controls, and each element's body, footprint, family and cost), one expression evaluator (`Expr::eval` over an algebra), the edits: `ops` for a `.dtile`, a print list and an inventory (`Op` through one `apply`, by node or piece id, one `EditError`; a tile's nodes are named by `nodeid`, e.g. `tile/stack/rock#2`, and every `.dtile` edit writes only the byte ranges it changes). |
 | `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each element reads and writes), builds it into a `Scene`, audits, and returns the build. Printer profiles (the gate's floors and the machine) are read here, since a build's gate needs them. Library tiles are bundled from `library/`. |
 | `dt-par` | Parallel iteration for the engine: rayon everywhere but the browser, where the same calls run in order. |
+| `dt-service` | The editor's service below every transport (round 4 of lifting it out of the binary, in progress): the `Storage` trait for every file the editor reads, lists, writes, deletes and trashes (with `Entry` and an in-memory `MemStorage`), and the `Clock`. It depends on `dt-value` alone, reads no disk, knows no HTTP, and builds for `wasm32-unknown-unknown` (`cargo xtask wasm --check` holds it). `DiskStorage` stays in the binary. Still to move in: the owner, `Patch`, the tier book and the verb dispatch. |
 | `dt-store` | The disk cache of builds: a finished `Built` kept under a SHA-256 key (the `sha2` crate, over `dt-eval`'s canonical form of everything the build read), and the stored build calls (`build_stored`, `build_tier`) that read it. It sits above `dt-eval`, which knows nothing of it. |
 | `dt-print` | A built tile on its way to a printer, above the engine: print lists, plates and the packer, the inventory, binary STL, 3MF and Bambu Studio projects, and the CPU renderer that draws `build --png` and the contact sheets (its only readers are those outputs). |
 | `dt-crash-switch` | The crash switch the CLI's exit-code tests drive (`DT_TEST_PANIC`), a leaf only the program depends on: its `on` feature is turned on by dharmatiles' dev-dependencies alone, so it reaches this crate and the binary and nothing else (a test-only feature anywhere lower would build every crate above it twice). |

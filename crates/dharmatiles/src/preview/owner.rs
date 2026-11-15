@@ -33,6 +33,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 
 use super::*;
 use resources::Resource;
+use super::storage::Storage;
 
 /// Everything the owner holds.
 pub(super) struct Core {
@@ -56,6 +57,8 @@ pub(super) struct Core {
     /// too.
     inventory_seen: Option<crate::inventory_wire::InventoryState>,
     epoch: String,
+    /// Where the places are looked at (whether a folder is there); the owner reads nothing else from it.
+    storage: Arc<dyn Storage>,
 }
 
 /// What a snapshot holds that the owner cannot read itself (it reads the disk): read by the caller, after the owner
@@ -288,6 +291,7 @@ impl Owner {
         target: Options,
         home: Option<String>,
         epoch: String,
+        storage: Arc<dyn Storage>,
     ) -> Self {
         let (tx, rx) = channel::<Command>();
         let mut core = Core {
@@ -308,6 +312,7 @@ impl Owner {
             trashed: Vec::new(),
             inventory_seen: None,
             epoch,
+            storage,
         };
         // the thread ends with the last handle: `recv` fails once every sender is gone
         let started = std::thread::Builder::new()
@@ -770,7 +775,7 @@ impl Core {
                 .roots
                 .iter()
                 .enumerate()
-                .map(|(i, r)| r.json(i))
+                .map(|(i, r)| r.json(i, self.storage.as_ref()))
                 .collect(),
             folders: self
                 .folders

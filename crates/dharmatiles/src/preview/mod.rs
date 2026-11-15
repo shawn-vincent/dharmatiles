@@ -463,8 +463,15 @@ impl Shared {
                 .collect()
         });
         let epoch = edit::token()[..12].to_owned();
-        let owner = owner::Owner::start(tiles, roots, opts.clone(), home_env(), epoch.clone());
         let storage: Arc<dyn storage::Storage> = Arc::new(storage::DiskStorage);
+        let owner = owner::Owner::start(
+            tiles,
+            roots,
+            opts.clone(),
+            home_env(),
+            epoch.clone(),
+            Arc::clone(&storage),
+        );
         let me = Self {
             home: None,
             owner: owner.clone(),
@@ -781,12 +788,12 @@ impl Shared {
         let found: Vec<(usize, Vec<String>)> = roots
             .iter()
             .enumerate()
-            .filter_map(|(r, root)| Some((r, root.scan()?)))
+            .filter_map(|(r, root)| Some((r, root.scan(self.storage.as_ref())?)))
             .collect();
         let folders: BTreeMap<usize, Vec<String>> = roots
             .iter()
             .enumerate()
-            .filter_map(|(r, root)| Some((r, root.scan_folders()?)))
+            .filter_map(|(r, root)| Some((r, root.scan_folders(self.storage.as_ref())?)))
             .collect();
         let folders_changed = self.owner.ask(|r| owner::Command::SetFolders(folders, r));
         // the inventory is the page's too: edited by hand, or by the command line, it is told
@@ -884,7 +891,10 @@ impl Shared {
                 .map_err(|e| format!("cannot read {path}: {e}"))?
         };
         let writable = !path.starts_with(dt_eval::LIB)
-            && std::fs::metadata(&path).is_ok_and(|m| !m.permissions().readonly());
+            && self
+                .storage
+                .stat(std::path::Path::new(&path))
+                .is_ok_and(|m| !m.readonly);
         Ok(Some(route::TextRes {
             file: path,
             text,
@@ -1035,7 +1045,7 @@ pub fn run(
     };
     // the folders added with the chooser: listed after the rest, in the order they were added
     let mut roots = roots;
-    match places::load_places(&settings) {
+    match places::load_places(&storage::DiskStorage, &settings) {
         Ok(added) => roots.extend(
             added
                 .into_iter()

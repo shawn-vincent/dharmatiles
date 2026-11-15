@@ -14,10 +14,6 @@ const ALLOWED: &[(&str, &str)] = &[
          across the disk and the folder chooser, which the owner never waits on); and the log's once-only memory",
     ),
     (
-        "storage.rs",
-        "`MemStorage`'s files: a stand-in for a disk, which is shared state by nature",
-    ),
-    (
         "docs.rs",
         "one lock per document file: the read-modify-write of a file on disk",
     ),

@@ -16,6 +16,7 @@ test-routes = []
 
 [dependencies]
 dt-value.workspace = true
+dt-service.workspace = true
 clap.workspace = true
 dt-doc.workspace = true
 dt-lang.workspace = true

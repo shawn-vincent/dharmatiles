@@ -538,7 +538,10 @@ fn rebuild_plates(
     let (notes, diags) = scene.map_or(no_notes, |s| (s.notes.clone(), s.diags.clone()));
     let is_map = scene.is_some_and(|s| s.json.map);
     let files = seen;
-    let writable = std::fs::metadata(path).is_ok_and(|m| !m.permissions().readonly());
+    let writable = shared
+        .storage
+        .stat(Path::new(path))
+        .is_ok_and(|m| !m.readonly);
     let view = shared.facts(id).map_or(0, |t| t.plate);
     let fail_with = |list: Option<&dt_doc::map::PrintList>, errs: Vec<Diag>, scope: Scope| {
         // a map whose every piece is on your shelf has nothing to print: that is a fact about

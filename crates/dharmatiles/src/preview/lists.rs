@@ -348,7 +348,7 @@ pub(super) fn new_list(shared: &Shared, v: ListsNewReq) -> Out<super::places::Li
             1,
         );
     }
-    let dest = edit::write_new_ext(&into, &stem, "dmap", text.as_bytes())?;
+    let dest = edit::write_new_ext(shared.storage.as_ref(), &into, &stem, "dmap", text.as_bytes())?;
     Ok(edit::listed(shared, &dest))
 }
 
@@ -419,7 +419,7 @@ pub(super) fn put(
         shared.options().system,
         mode,
     );
-    let dest = edit::write_new_ext(&home, "Print list", "dmap", text.as_bytes())?;
+    let dest = edit::write_new_ext(shared.storage.as_ref(), &home, "Print list", "dmap", text.as_bytes())?;
     let rev = shared.docs.rev(&dest.to_string_lossy())?;
     Ok(Put {
         path: dest,

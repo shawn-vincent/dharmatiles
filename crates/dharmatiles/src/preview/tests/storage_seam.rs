@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use super::super::docs::Docs;
 use super::super::owner::{Command, Owner};
-use super::super::storage::{MemStorage, Storage};
+use dt_service::storage::{MemStorage, Storage};
 use dt_eval::Options;
 
 const TILE: &str = "tile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n    }\n}\n";
@@ -23,6 +23,7 @@ fn a_save_a_rename_and_a_trash_then_undo_need_no_disk() {
         Options::default(),
         None,
         "test".into(),
+        mem.clone(),
     );
     let docs = Docs::telling(owner.clone(), mem.clone());
 
@@ -60,4 +61,62 @@ fn a_save_a_rename_and_a_trash_then_undo_need_no_disk() {
     mem.write_text(&c, "again").unwrap();
     mem.write_text(&bin.join("c.dtile"), "kept").unwrap();
     assert_eq!(mem.trash(&c, &bin).unwrap(), bin.join("c 2.dtile"));
+}
+
+#[test]
+fn a_scan_a_new_file_and_a_delete_need_no_disk() {
+    use super::super::roots::{Root, RootKind};
+    use super::super::storage::EntryKind;
+
+    let home = PathBuf::from("/memory/scan/My tiles");
+    let mem = MemStorage::with(home.join("a.dtile").to_str().unwrap(), TILE);
+    mem.write_text(&home.join("sub/b.dtile"), TILE).unwrap();
+    // a part is not a tile; a hidden folder and build output are not listed
+    mem.write_text(&home.join("part.dtile"), "define x { }\n")
+        .unwrap();
+    mem.write_text(&home.join(".hidden/c.dtile"), TILE).unwrap();
+    mem.write_text(&home.join("out/d.dtile"), TILE).unwrap();
+    let root = Root::new("My tiles", RootKind::Dir(home.clone()));
+    let tiles = root.scan(&mem).expect("a folder scans");
+    assert_eq!(
+        tiles,
+        vec![
+            home.join("a.dtile").to_string_lossy().into_owned(),
+            home.join("sub/b.dtile").to_string_lossy().into_owned(),
+        ]
+    );
+    assert_eq!(root.scan_folders(&mem), Some(vec!["sub".to_owned()]));
+    assert_eq!(mem.stat(&home).unwrap().kind, EntryKind::Dir);
+
+    // a new file is never over another, and a delete takes only the file named
+    let dest = home.join("new.dtile");
+    mem.create_new(&dest, TILE.as_bytes()).unwrap();
+    let clash = mem.create_new(&dest, b"x").unwrap_err();
+    assert_eq!(clash.kind(), std::io::ErrorKind::AlreadyExists);
+    mem.remove_file(&dest).unwrap();
+    assert!(!mem.exists(&dest) && mem.exists(&home.join("a.dtile")));
+    assert_eq!(
+        mem.remove_file(&dest).unwrap_err().kind(),
+        std::io::ErrorKind::NotFound
+    );
+    assert!(!Path::new("/memory").exists(), "the test touched the disk");
+}
+
+/// The owner and the documents reach files only through [`Storage`]: a scan of their source finds no `std::fs`.
+#[test]
+fn the_owner_and_the_documents_make_no_std_fs_call() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/preview");
+    for file in ["owner.rs", "docs.rs", "patch.rs"] {
+        let text = std::fs::read_to_string(src.join(file)).expect("a source file reads");
+        // the tests at the foot of a file may use the disk
+        let code = text.split("#[cfg(test)]\nmod tests").next().unwrap_or(&text);
+        for (n, line) in code.lines().enumerate() {
+            let body = line.trim_start();
+            assert!(
+                body.starts_with("//") || !(body.contains("std::fs") || body.contains("fs::")),
+                "{file}:{} reaches the disk, not Storage: {line}",
+                n + 1
+            );
+        }
+    }
 }

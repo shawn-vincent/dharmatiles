@@ -162,7 +162,10 @@ pub(super) fn snapshot(home: Option<&Path>) -> InventoryState {
 )]
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     let files = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
-    let writable = std::fs::metadata(path).is_ok_and(|m| !m.permissions().readonly());
+    let writable = shared
+        .storage
+        .stat(Path::new(path))
+        .is_ok_and(|m| !m.readonly);
     let skeleton = move |inventory: InventoryRead| {
         TilePlan::Inventory(InventoryDoc {
             writable,
@@ -187,7 +190,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
             },
         );
     };
-    let text = match std::fs::read_to_string(path) {
+    let text = match shared.storage.read_text(Path::new(path)) {
         Ok(t) => t,
         Err(e) => {
             let d = Diag::plain(

@@ -32,6 +32,7 @@ use serde::{Deserialize, Serialize};
 use super::api::{Out, Reply, TileSummary};
 use super::edit::bad;
 use super::roots::kind_of;
+use super::storage::Storage;
 use super::*;
 
 // ---- the calls' types ------------------------------------------------------------------
@@ -228,9 +229,9 @@ fn places_file(dir: &Path) -> PathBuf {
 /// # Errors
 /// A settings file that cannot be read or is not what it should be: told, never
 /// replaced by an empty list (the next save would lose the folders in it).
-pub fn load_places(dir: &Path) -> Result<Vec<PathBuf>, String> {
+pub fn load_places(storage: &dyn Storage, dir: &Path) -> Result<Vec<PathBuf>, String> {
     let file = places_file(dir);
-    let text = match std::fs::read_to_string(&file) {
+    let text = match storage.read_text(&file) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(format!("cannot read {}: {e}", file.display())),
@@ -255,14 +256,16 @@ struct PlacesFile {
 ///
 /// # Errors
 /// The settings folder or file cannot be written.
-pub fn save_places(dir: &Path, places: &[PathBuf]) -> Result<(), String> {
-    std::fs::create_dir_all(dir).map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
+pub fn save_places(storage: &dyn Storage, dir: &Path, places: &[PathBuf]) -> Result<(), String> {
+    storage
+        .create_dir_all(dir)
+        .map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
     let file = places_file(dir);
     let body = PlacesFile {
         places: places.to_vec(),
     };
     let text = serde_json::to_string_pretty(&body).map_err(|e| e.to_string())?;
-    dt_eval::atomic::write_atomic(&file, format!("{text}\n"))
+    storage.write_text(&file, &format!("{text}\n"))
         .map_err(|e| format!("cannot write {}: {e}", file.display()))
 }
 
@@ -585,12 +588,12 @@ pub(super) fn add_place(shared: &Shared, _: Nothing) -> Out<PlacesAddRes> {
             ));
         }
     }
-    let mut kept = match load_places(&settings) {
+    let mut kept = match load_places(shared.storage.as_ref(), &settings) {
         Ok(k) => k,
         Err(e) => return Err(fail::failure("500 Internal Server Error", e)),
     };
     kept.push(real.clone());
-    if let Err(e) = save_places(&settings, &kept) {
+    if let Err(e) = save_places(shared.storage.as_ref(), &settings, &kept) {
         return Err(fail::failure("500 Internal Server Error", e));
     }
     let root = Root::new(&label_of(&real), RootKind::Dir(real.clone())).with_role(Role::Added);
@@ -635,7 +638,7 @@ pub(super) fn remove_place(shared: &Shared, req: PlacesRemoveReq) -> Out<Changed
         .filter(|(j, r)| *j != i && r.role == Role::Added)
         .filter_map(|(_, r)| r.dir().map(Path::to_path_buf))
         .collect();
-    if let Err(e) = save_places(&settings, &kept) {
+    if let Err(e) = save_places(shared.storage.as_ref(), &settings, &kept) {
         return Err(fail::failure("500 Internal Server Error", e));
     }
     shared
@@ -659,7 +662,7 @@ pub(super) fn new_folder(shared: &Shared, req: FolderNamedReq) -> Out<FolderDone
     let name = leaf_name(&req.name, "folder")?;
     let to = parent.join(&name);
     // `create_dir` never goes over what is there
-    match std::fs::create_dir(&to) {
+    match shared.storage.create_dir(&to) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             return Err(refuse(
@@ -889,14 +892,17 @@ pub(super) fn duplicate_tile(
     _: Nothing,
 ) -> Out<ListedIn> {
     let (_, from) = tile_file(shared, &tile.path, "copied")?;
-    let text = std::fs::read(&from).map_err(|e| io_failure("read", &from, &e))?;
+    let text = shared
+        .storage
+        .read_bytes(&from)
+        .map_err(|e| io_failure("read", &from, &e))?;
     let Some(dir) = from.parent() else {
         return Err(bad("the tile has no folder"));
     };
     let stem = from
         .file_stem()
         .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-    let dest = super::edit::write_new_bytes(dir, &format!("{stem} copy"), &text)?;
+    let dest = super::edit::write_new_bytes(shared.storage.as_ref(), dir, &format!("{stem} copy"), &text)?;
     Ok(listed_in(shared, &dest))
 }
 

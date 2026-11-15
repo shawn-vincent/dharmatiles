@@ -1,5 +1,7 @@
 //! The roots the preview lists tiles from: files, folders, the library.
 
+use super::storage::{EntryKind, Storage};
+
 /// Folders a scan never enters (besides hidden ones): build output.
 pub(super) const SKIP_DIRS: [&str; 3] = ["out", "target", "node_modules"];
 
@@ -93,7 +95,11 @@ impl Root {
         }
     }
 
-    pub(super) fn json(&self, index: usize) -> super::api::RootJson {
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a best-effort filesystem probe (a missing folder reads as not there, read again on the next list)"
+    )]
+    pub(super) fn json(&self, index: usize, storage: &dyn Storage) -> super::api::RootJson {
         let (kind, path) = match &self.kind {
             RootKind::Files => ("files", None),
             RootKind::Dir(d) => ("dir", Some(d.to_string_lossy().into_owned())),
@@ -106,7 +112,9 @@ impl Root {
             path,
             role: self.role.as_str().to_owned(),
             writable: self.writable(),
-            exists: self.dir().is_none_or(std::path::Path::is_dir),
+            exists: self
+                .dir()
+                .is_none_or(|d| storage.stat(d).is_ok_and(|e| e.is_dir())),
         }
     }
 
@@ -114,21 +122,21 @@ impl Root {
     /// the folders the page lists, empty ones included.  `None` for a place
     /// that has none to scan (files, the library: its groups are in its
     /// tiles' paths).
-    pub(super) fn scan_folders(&self) -> Option<Vec<String>> {
+    pub(super) fn scan_folders(&self, storage: &dyn Storage) -> Option<Vec<String>> {
         let d = self.dir()?;
         let mut v = Vec::new();
-        sub_folders(d, "", 0, &mut v);
+        sub_folders(storage, d, "", 0, &mut v);
         v.sort();
         Some(v)
     }
 
     /// The tiles in this root now, sorted; `None` for the named files.
-    pub(super) fn scan(&self) -> Option<Vec<String>> {
+    pub(super) fn scan(&self, storage: &dyn Storage) -> Option<Vec<String>> {
         match &self.kind {
             RootKind::Files => None,
             RootKind::Dir(d) => {
                 let mut v = Vec::new();
-                tile_files(d, 0, &mut v);
+                tile_files(storage, d, 0, &mut v);
                 v.sort();
                 Some(v)
             }
@@ -179,8 +187,8 @@ pub(super) fn lib_group(path: &str) -> Option<String> {
     clippy::disallowed_methods,
     reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
 )]
-pub(super) fn is_tile_document(f: &std::path::Path) -> bool {
-    std::fs::read_to_string(f).map_or(true, |t| {
+pub(super) fn is_tile_document(storage: &dyn Storage, f: &std::path::Path) -> bool {
+    storage.read_text(f).map_or(true, |t| {
         t.lines()
             .any(|l| l.starts_with("tile ") || l.starts_with("tile{") || l == "tile")
     })
@@ -198,10 +206,10 @@ pub(super) struct DocKind {
     /// Whether the folder actions apply (an `.stl` is shown, not managed).
     pub(super) actions: bool,
     /// Whether this file is one of the kind (a `.dtile` that is a tile, not a part).
-    pub(super) is_one: fn(&std::path::Path) -> bool,
+    pub(super) is_one: fn(&dyn Storage, &std::path::Path) -> bool,
 }
 
-fn always(_: &std::path::Path) -> bool {
+fn always(_: &dyn Storage, _: &std::path::Path) -> bool {
     true
 }
 
@@ -238,11 +246,11 @@ pub(super) const KINDS: [DocKind; 4] = [
 ];
 
 /// A `.dtile` that is a tile: not the project file, not a part or palette.
-fn is_tile_file(f: &std::path::Path) -> bool {
+fn is_tile_file(storage: &dyn Storage, f: &std::path::Path) -> bool {
     f.file_name()
         .and_then(|n| n.to_str())
         .is_none_or(|n| !n.eq_ignore_ascii_case("dharmatiles.dtile"))
-        && is_tile_document(f)
+        && is_tile_document(storage, f)
 }
 
 /// The kind a file name is, by its extension.
@@ -255,15 +263,21 @@ pub(super) fn kind_of(name: &str) -> Option<&'static DocKind> {
 }
 
 /// The folders under `dir` (below `rel`), hidden ones and build output skipped.
-fn sub_folders(dir: &std::path::Path, rel: &str, depth: usize, out: &mut Vec<String>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
+fn sub_folders(
+    storage: &dyn Storage,
+    dir: &std::path::Path,
+    rel: &str,
+    depth: usize,
+    out: &mut Vec<String>,
+) {
+    let Ok(entries) = storage.list(dir) else {
         // the same folder is read by `tile_files`, which tells a failure (once)
         return;
     };
-    for e in entries.flatten() {
-        let name = e.file_name().to_string_lossy().into_owned();
-        let p = e.path();
-        if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) || !p.is_dir() {
+    for e in entries {
+        let name = e.name;
+        let p = e.path;
+        if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) || e.kind != EntryKind::Dir {
             continue;
         }
         let here = if rel.is_empty() {
@@ -273,15 +287,20 @@ fn sub_folders(dir: &std::path::Path, rel: &str, depth: usize, out: &mut Vec<Str
         };
         out.push(here.clone());
         if depth < 8 {
-            sub_folders(&p, &here, depth + 1, out);
+            sub_folders(storage, &p, &here, depth + 1, out);
         }
     }
 }
 
 /// Every document of a kind the folders list (a `.dtile` that is a tile, an
 /// `.stl`) under `dir`, skipping hidden folders and build output.
-pub(super) fn tile_files(dir: &std::path::Path, depth: usize, out: &mut Vec<String>) {
-    let entries = match std::fs::read_dir(dir) {
+pub(super) fn tile_files(
+    storage: &dyn Storage,
+    dir: &std::path::Path,
+    depth: usize,
+    out: &mut Vec<String>,
+) {
+    let entries = match storage.list(dir) {
         Ok(e) => e,
         // a folder not made yet (the personal home) simply has no tiles
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
@@ -294,28 +313,18 @@ pub(super) fn tile_files(dir: &std::path::Path, depth: usize, out: &mut Vec<Stri
         }
     };
     for e in entries {
-        let e = match e {
-            Ok(e) => e,
-            Err(e) => {
-                super::tell_once(&format!(
-                    "error: preview: cannot list an entry of {}: {e}",
-                    dir.display()
-                ));
-                continue;
-            }
-        };
-        let name = e.file_name().to_string_lossy().into_owned();
+        let name = e.name;
         if name.starts_with('.') {
             continue;
         }
-        let p = e.path();
-        if p.is_dir() {
+        let p = e.path;
+        if e.kind == EntryKind::Dir {
             if depth < 8 && !SKIP_DIRS.contains(&name.as_str()) {
-                tile_files(&p, depth + 1, out);
+                tile_files(storage, &p, depth + 1, out);
             }
             continue;
         }
-        if kind_of(&name).is_some_and(|k| (k.is_one)(&p)) {
+        if kind_of(&name).is_some_and(|k| (k.is_one)(storage, &p)) {
             out.push(p.to_string_lossy().into_owned());
         }
     }
