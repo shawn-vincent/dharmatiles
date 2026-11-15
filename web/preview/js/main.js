@@ -48,7 +48,7 @@ import { doc, log, server, view } from './editor/stores.js';
 
 installGlobalHandlers(); // a script error or an unhandled rejection lands in the error panel
 
-window.dtPreview = { server, view, doc, viewer, log, texts, docs, mapEdit, mapScene, get tools() { return tools; } }; // for tests and the console
+/** @type {Window & {dtPreview?: object}} */ (window).dtPreview = { server, view, doc, viewer, log, texts, docs, mapEdit, mapScene, get tools() { return tools; } }; // for tests and the console
 
 // each part wires itself in the order the page was written in: the frame, the
 // build's camera, the tile menu, the view's tile, the text, the selection, the

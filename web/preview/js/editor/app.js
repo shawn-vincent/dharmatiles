@@ -6,11 +6,15 @@ import { browserHost } from '../host.js';
 import { Viewer } from '../viewer.js';
 import { view } from './stores.js';
 
-/** An element of the page by its id (the page's own markup: not checked here). @param {string} id @returns {any} */
+/**
+ * An element of the page by its id.  The one DOM lookup boundary of the editor: the page's markup (index.html) is not typed,
+ * so an id is taken to be the element it names there, whatever its kind (an input, a dialog, a button), and is `any`.
+ * @param {string} id @returns {any}
+ */
 export const $ = (id) => document.getElementById(id);
 export const host = browserHost();
-/** The one viewer (its methods come from mixins, so its class is not checked here). @type {any} */
-export const viewer = new Viewer($('canvas'));
+/** The one viewer. */
+export const viewer = new Viewer(/** @type {HTMLCanvasElement} */ ($('canvas')));
 
 let toastTimer = 0;
 /** A line over the view with, optionally, one action (`label` defaults to Undo); it goes after `ms`. */

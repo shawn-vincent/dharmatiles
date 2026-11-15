@@ -22,17 +22,24 @@
 //   - a map or the plates frame again whenever what they show changes size, or the view is resized, mid-flight
 //     too (the flight lands on the new frame).
 
-/** A box's diagonal, mm. */
+/** @typedef {{lo: number[], hi: number[]}} Box  a box in mm, as the viewer measures what is shown */
+/** @typedef {{p: number[], t: number[]}} Pose  the camera's position and target, as `getCamera` says it */
+
+/** A box's diagonal, mm. @param {Box} b */
 const diag = (b) => Math.hypot(...b.hi.map((v, a) => v - b.lo[a]));
 
-/** The same box for the camera's purpose: a small change is not worth a move. */
+/**
+ * The same box for the camera's purpose: a small change is not worth a move.
+ * @param {Box | null | undefined} a
+ * @param {Box | null | undefined} b
+ */
 export function nearBox(a, b) {
   if (!a || !b) return false;
   return Math.abs(diag(a) - diag(b)) < 0.08 * diag(b)
     && a.lo.every((v, k) => Math.abs(v - b.lo[k]) < 2) && a.hi.every((v, k) => Math.abs(v - b.hi[k]) < 2);
 }
 
-/** @param {any} box */
+/** @param {Box | null | undefined} a @param {Box | null | undefined} b */
 const sameBox = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /** The camera's memory and its rules. */
@@ -42,6 +49,7 @@ export function createFraming() {
   /** What the camera is on now: {key, view, held, asked, box, finished, following} (null: nothing yet). */
   let cur = null;
 
+  /** @param {string} view @param {Box} box @param {boolean} animate @returns {{do: 'frame', view: string, box: Box, animate: boolean}} */
   const frame = (view, box, animate) => ({ do: 'frame', view, box, animate });
 
   return {
@@ -56,10 +64,10 @@ export function createFraming() {
 
     /**
      * What to do about the camera now.
-     * @param {{desc: {key: string, kind: string, view: string, asked: any, fresh?: boolean} | null, box: any, finished: boolean, flying?: boolean, resized?: boolean, camera: () => any}} input
+     * @param {{desc: {key: string, kind: string, view: string, asked: {animate?: boolean} | null, fresh?: boolean} | null, box: Box, finished: boolean, flying?: boolean, resized?: boolean, camera: () => Pose}} input
      *   `box` is what is shown, framed by the preset (a map's close view: the selected piece); `finished` that the
      *   document's own mesh is in; `flying` that a flight is on; `resized` that the view's size changed.
-     * @returns {{do: 'keep'} | {do: 'restore', camera: any} | {do: 'frame', view: string, box: any, animate: boolean}}
+     * @returns {{do: 'keep'} | {do: 'restore', camera: Pose} | {do: 'frame', view: string, box: Box, animate: boolean}}
      */
     step({ desc, box, finished, flying = false, resized = false, camera }) {
       if (!desc) return { do: 'keep' };

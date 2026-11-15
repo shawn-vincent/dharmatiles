@@ -22,12 +22,6 @@
 import { batch, signal } from '@preact/signals-core';
 import { createHistory } from './doc-history.js';
 
-/**
- * @param {{send: (name: string, body: object) => Promise<{status: number, body: any}>,
- *   report?: {refusal(label: string, r: object): void, failure(label: string, r: object): void, note(text: string): void},
- *   history?: ReturnType<typeof createHistory>}} deps
- * @returns {{docs: object, receive: (state: object) => boolean}} the readers and actions, and the setter apart from them
- */
 /** A state is read, never written: frozen all the way down. */
 function deepFreeze(v) {
   if (v && typeof v === 'object' && !Object.isFrozen(v)) {
@@ -37,6 +31,12 @@ function deepFreeze(v) {
   return v;
 }
 
+/**
+ * @param {{send: (name: string, body: object) => Promise<{status: number, body: any}>,
+ *   report?: {refusal?(label: string, r: object): void, failure?(label: string, r: object): void, note?(text: string): void},
+ *   history?: ReturnType<typeof createHistory>}} deps
+ * @returns {{docs: object, receive: (state: object) => boolean}} the readers and actions, and the setter apart from them
+ */
 export function createDocuments({ send, report = {}, history = createHistory() }) {
   // each document's state is a signal (@preact/signals-core): what reads it inside a component or a `computed` follows it
   const slots = new Map();
@@ -162,6 +162,11 @@ export function createDocuments({ send, report = {}, history = createHistory() }
      * `apply(state)` is called with the state just taken, in the same step as taking it (nothing reads the held state between the
      * two), so what shows the document can change with it at once.
      * Resolves the state held after it, or null when nothing was read or taken.
+     * @param {string} id
+     * @param {{tile: string, own: boolean}} meta
+     * @param {() => Promise<import('./api').TextRes | null | undefined>} read
+     * @param {(v: import('./api').TextRes) => boolean} [accept]
+     * @param {((state: any) => void) | null} [apply]
      */
     loadSource(id, meta, read, accept = () => true, apply = null) {
       return enqueue(id, async () => {

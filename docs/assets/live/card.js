@@ -467,7 +467,7 @@ export class Card {
     this.#showMesh(ev.positions, ev.colours, meta.footprint);
     if (!draft) { this.stl = ev.stl; this.fullAt = this.version; }
     this.log.built(meta, { draft, cached: ev.cached, ms: ev.ms });
-    this.tileState.value = { ...this.tileState.value, status: 'ready', shown: { checked: !draft, draft }, record: { record: { seed: null } } };
+    this.tileState.value = { ...this.tileState.value, status: 'ready', shown: { checked: !draft, draft } };
     this.model.shown.value = !draft;
     this.draftNote = draft;
     this.host.dataset.detail = draft ? 'draft' : 'full';

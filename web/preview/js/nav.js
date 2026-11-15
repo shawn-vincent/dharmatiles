@@ -169,7 +169,12 @@ export function moveRow(i, key, count) {
 // ---- the crumbs and the strip --------------------------------------------------
 
 /** The crumbs of a folder path: `Places`, the place (`root`), a crumb for each folder below it (`dir`), each saying where it goes (`place`: `{root, dir}`; null for Places). */
+/** @typedef {{root: number | null, dir: string}} FolderAt */
+/** @typedef {{root: number | null, label: string, dir: string}} FolderPlace */
+/** @typedef {{id: string, label: string, depth: number, place?: FolderAt | null, add?: FolderAt, current?: boolean}} Crumb */
+/** @param {FolderPlace | null} place @returns {Crumb[]} */
 function folderCrumbs(place) {
+  /** @type {Crumb[]} */
   const out = [{ id: 'places', label: 'Places', depth: -1, place: null }];
   if (place) {
     out.push({ id: 'place', label: place.label, depth: -1, place: { root: place.root, dir: '' } });

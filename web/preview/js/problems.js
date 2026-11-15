@@ -101,10 +101,16 @@ export function chainOf(err) {
   return levels;
 }
 
+/** @typedef {{navigator?: {userAgent?: string, platform?: string, userAgentData?: {platform?: string}}, screen?: {width?: number, height?: number}, location?: {href?: string}, devicePixelRatio?: number, innerWidth?: number, innerHeight?: number}} EnvGlobals  the browser globals the report reads */
+/** @typedef {{version?: string | null, system?: string | null, printer?: string | null, tile?: string | null, file?: string | null}} EnvKnown  what the editor knows */
+
 /**
  * What the report says about where it happened, from the page's own globals
  * (`g`, so a test can give it fake ones) and what the editor knows
  * (`setEnvironment`): version, target, tile, file, browser, screen, time, URL.
+ * @param {EnvGlobals} [g]
+ * @param {EnvKnown} [known]
+ * @param {Date} [now]
  */
 export function collectEnvironment(g = globalThis, known = {}, now = new Date()) {
   const nav = g.navigator || {}, scr = g.screen || {}, loc = g.location || {};
@@ -122,6 +128,7 @@ export function collectEnvironment(g = globalThis, known = {}, now = new Date())
   };
 }
 
+/** @type {() => EnvKnown} */
 let known = () => ({});
 /** The editor says what it knows (`fn()` -> {version, system, printer, tile, file}); read when a failure happens. */
 export function setEnvironment(fn) { known = fn; }

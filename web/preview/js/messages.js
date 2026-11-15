@@ -237,10 +237,10 @@ export function jobWords(p, name) {
  * The status line: {verdict, tone, counts, progress}.  `verdict` is the one word that matters most,
  * worst first: building (with its percent and stage; "rebuilding" while the view is a build the
  * cache kept, `t.shown`), offline, an error, fails the gate, no build, passes (with the build's
- * time, or "cached" when the cache gave it).  `t` is the tile's state from the program (status,
- * record, shown); `p` its progress, if building.
+ * time, or "cached" when the cache gave it).  `t` is the tile's state from the program (the name, status
+ * and what is shown: all it reads, so a site card, which has no more of a tile, passes just those); `p` its progress, if building.
  * @param {any} view
- * @param {{ t?: import('./api').TileSummary | null, live?: boolean, p?: import('./api').Progress | null }} [opts]
+ * @param {{ t?: Pick<import('./api').TileSummary, 'name' | 'shown' | 'status'> | null, live?: boolean, p?: import('./api').Progress | null }} [opts]
  */
 export function statusOf(view, { t = null, live = true, p = null } = {}) {
   const counts = countsText(view.counts);

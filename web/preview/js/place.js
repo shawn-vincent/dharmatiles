@@ -43,8 +43,13 @@ export function snap(q, [cols, rows]) {
 /** A snapped point as written: its word, else a pair. */
 const written = (s, rows) => s.word || pointText(s.q, rows);
 
-/** The nearest tile edge's word to `q`. */
+/**
+ * The nearest tile edge's word to `q`.
+ * @param {number[]} q
+ * @param {number[]} size `[cols, rows]`
+ */
 function edgeOf([x, y], [cols, rows]) {
+  /** @type {Array<[number, string]>} */
   const d = [[x, 'west'], [cols - x, 'east'], [y, 'south'], [rows - y, 'north']];
   return d.sort((a, b) => a[0] - b[0])[0][1];
 }
@@ -94,7 +99,7 @@ export class Tools {
       const li = document.createElement('div');
       li.className = `it fam-${role}${i === this.list.i ? ' on' : ''}`;
       li.setAttribute('role', 'option');
-      li.setAttribute('aria-selected', i === this.list.i);
+      li.setAttribute('aria-selected', String(i === this.list.i));
       li.innerHTML = '<i class="sw"></i><b></b><span></span>';
       li.querySelector('b').textContent = name;
       li.querySelector('span').textContent = about || '';

@@ -123,8 +123,15 @@ const LATEST = {
   'POST /api/target': () => 'target',
 };
 
+/**
+ * A reply of a call that got no answer (status 0): its words as `error`.  Boundary: the body is the failure's shape, which every
+ * caller already reads through `body.error` before it reads a `T`; this is the one place it is said to be a `Reply<T>`.
+ * @template T @param {string} error @param {boolean} [superseded] @returns {Reply<T>}
+ */
+const noAnswer = (error, superseded) => /** @type {Reply<T>} */ (/** @type {unknown} */ ({ status: 0, body: superseded ? { error, superseded } : { error } }));
+
 /** What a call answers when a newer one of its key took its place: nothing happened, and nothing is said. */
-const superseded = () => /** @type {any} */ ({ status: 0, body: { error: 'a newer request took its place', superseded: true } });
+const superseded = () => noAnswer('a newer request took its place', true);
 
 /** @param {ReturnType<typeof createRequests>} [requests] */
 export function browserHost(requests = createRequests()) {
@@ -165,7 +172,7 @@ export function browserHost(requests = createRequests()) {
       });
       return await reply(r, path);
     } catch (e) {
-      if (offline(e)) return /** @type {any} */ ({ status: 0, body: { error: 'the editor is disconnected' } });
+      if (offline(e)) return noAnswer('the editor is disconnected');
       throw e;
     }
   };

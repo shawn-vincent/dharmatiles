@@ -22,8 +22,25 @@ export {}; // a module worker: the engine is awaited at the top
 
 /** @typedef {import('./engine-wire').Answers} Answers */
 
+// The protocol, once, where the worker makes and takes the messages (engine.js imports these).  What the answers carry is the
+// generated engine-wire.d.ts's: `Answers`.
+/** @typedef {'check' | 'build'} Step */
+/** What a job asks: its steps, the source, the target, the seed (-1 for the document's own), the cells a square (0: the finest) and the tier. @typedef {{steps: Step[], text: string, system: string, seed: number, cells: number, tier: string}} JobSpec */
+/** @typedef {{type: 'init', module: WebAssembly.Module, library: string}} InitMsg  to the worker: the compiled module, and the library as JSON */
+/** @typedef {{type: 'fix', id: string, text: string, fix: import('./engine-wire').FixJson}} FixMsg  to the worker: lay a mistake's fix into the source */
+/** @typedef {{type: 'job', id: number} & JobSpec} JobMsg  to the worker: one job */
+/** @typedef {InitMsg | FixMsg | JobMsg} ToWorker */
+/** @typedef {{type: 'ready', version: string}} ReadyMsg */
+/** @typedef {{type: 'progress', id: number} & Answers['dtProgress']} ProgressMsg */
+/** @typedef {{type: 'checked', id: number, result: Answers['check_tile'], ms: number}} CheckedMsg */
+/** @typedef {{type: 'built', id: number, ms: number, meta: Answers['build_tile().meta'], positions: Float32Array, colours: Float32Array, stl: Uint8Array}} BuiltMsg */
+/** @typedef {{type: 'fixed', id: string, text: string}} FixedMsg */
+/** @typedef {{type: 'idle', id: number}} IdleMsg  the job is done and nothing was built (the check failed, or only the check was asked) */
+/** @typedef {{type: 'error', id: number | string | undefined, message: string, stack: string}} ErrorMsg */
+/** @typedef {ReadyMsg | ProgressMsg | CheckedMsg | BuiltMsg | FixedMsg | IdleMsg | ErrorMsg} FromWorker */
+
 /** The worker's own scope, which the `DOM` lib types as a window. */
-const scope = /** @type {{ postMessage(m: unknown, transfer?: Transferable[]): void, onmessage: ((ev: MessageEvent) => unknown) | null }} */ (
+const scope = /** @type {{ postMessage(m: FromWorker, transfer?: Transferable[]): void, onmessage: ((ev: MessageEvent<ToWorker>) => unknown) | null }} */ (
   /** @type {unknown} */ (self)
 );
 
@@ -36,7 +53,7 @@ let lastPanic = '';
 const consoleError = console.error.bind(console);
 console.error = (...args) => { lastPanic = args.join(' '); consoleError(...args); };
 
-/** @type {string | null} the id of the job being built */
+/** @type {number | null} the id of the job being built */
 let current = null;
 // the engine calls this at each stage with the JSON of a `StageTick`
 // @ts-ignore a global the engine's glue looks up by name

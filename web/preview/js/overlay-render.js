@@ -72,7 +72,7 @@ export function renderMarks(c, { map, sq, drawn, squares = false, project, zAt =
 
   // regions under lines, lines under points, lit over shown
   const order = { region: 0, line: 1, fill: 2, point: 2, square: 3 };
-  const list = [...drawn].sort((a, b) => (a.state === 'lit') - (b.state === 'lit') || order[a.mark.kind] - order[b.mark.kind]);
+  const list = [...drawn].sort((a, b) => Number(a.state === 'lit') - Number(b.state === 'lit') || order[a.mark.kind] - order[b.mark.kind]);
   const labelled = [];
   for (const { mark, state } of list) {
     const lit = state === 'lit';
