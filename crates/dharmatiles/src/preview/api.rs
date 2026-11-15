@@ -234,12 +234,21 @@ pub(super) fn refusal_reply(r: dt_service::call::Refusal) -> Reply {
     let mut e = match r.fault {
         Fault::Refused => fail::ServerError::refused(status, r.message),
         Fault::Failure => fail::ServerError::failure(status, r.message),
+        Fault::Bug => fail::ServerError::new(fail::Kind::Bug, status, r.message),
     };
     e.causes = r.causes;
+    if let Some(bug) = r.bug {
+        e.help = bug.help.or(e.help);
+        if !bug.backtrace.is_empty() {
+            e.backtrace = bug.backtrace;
+        }
+    }
+    let superseded = r.superseded.then_some(true);
     e.reply_with(|b| {
         b.text = r.text;
         b.doc_rev = r.doc_rev;
-        b.errors = r.errors;
+        b.errors = r.errors.map(Vec::from);
+        b.superseded = superseded;
     })
 }
 
@@ -278,7 +287,7 @@ pub(super) fn finish(all: &Collect, routes: &str, reads: &str) -> String {
 #[cfg(test)]
 pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     use ts_rs::TS;
-    all.add::<super::edit::DraftReq>();
+    all.add::<dt_service::draft_calls::DraftReq>();
     all.add::<dt_eval::map::PosterMap>();
     all.add::<ErrorBody>();
     // the header of every mesh: the page reads it off the front of the bytes a draft, a step or a mesh route sends
@@ -296,12 +305,12 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     all.add::<dt_service::message::DiagData>();
     routes.push_str(&format!(
         "  \"draft\": {{ req: {}; res: ArrayBuffer }};\n",
-        super::edit::DraftReq::name(&all.cfg)
+        dt_service::draft_calls::DraftReq::name(&all.cfg)
     ));
-    all.add::<super::edit::StepReq>();
-    all.add::<super::edit::StepHead>();
+    all.add::<dt_service::draft_calls::StepReq>();
+    all.add::<dt_service::draft_calls::StepHead>();
     routes.push_str(&format!(
         "  \"step\": {{ req: {}; res: ArrayBuffer }};\n",
-        super::edit::StepReq::name(&all.cfg)
+        dt_service::draft_calls::StepReq::name(&all.cfg)
     ));
 }

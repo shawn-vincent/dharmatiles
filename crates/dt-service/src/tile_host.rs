@@ -60,4 +60,20 @@ pub trait TileHost: CheckHost {
     /// # Errors
     /// [`Refusal`]: the owner could not be asked.
     fn want(&self, id: &str) -> Result<bool, Refusal>;
+
+    /// Build a draft for the page on the host's draft lane and wait for it: the program queues it ahead of its full
+    /// builds (a newer draft of the tile replaces an older), a worker builds it in its own turn.
+    ///
+    /// # Errors
+    /// [`Refusal`]: the draft panicked or its view could not be made (a bug or a failure, not a mistake in the text).
+    fn draft(
+        &self,
+        ask: crate::draft_calls::DraftAsk,
+    ) -> Result<crate::draft_calls::Drafted, Refusal>;
+
+    /// The program's version, as the page's About and an error's context say it.
+    fn version(&self) -> String;
+
+    /// Every tile's state and the rest of what a page is told, as a stream's first message holds it.
+    fn snapshot(&self) -> crate::api::Snapshot;
 }

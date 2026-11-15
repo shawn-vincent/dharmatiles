@@ -62,7 +62,7 @@ pub fn refusal(e: &dt_doc::ops::EditError) -> Refusal {
         .first()
         .map_or_else(|| e.to_string(), |f| f.message.clone());
     let mut r = Refusal::refused(Status::Unprocessable, message);
-    r.errors = Some(list);
+    r.errors = Some(list.into());
     r
 }
 

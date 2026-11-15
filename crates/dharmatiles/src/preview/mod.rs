@@ -221,6 +221,50 @@ impl dt_service::tile_host::TileHost for Shared {
     fn want(&self, id: &str) -> Result<bool, dt_service::call::Refusal> {
         Ok(Self::want(self, id))
     }
+
+    /// The program's draft lane: queued ahead of every full build, replacing an older draft of the tile, and waited for.
+    fn version(&self) -> String {
+        env!("DT_ENGINE_VERSION").to_owned()
+    }
+
+    fn snapshot(&self) -> dt_service::api::Snapshot {
+        Self::snapshot(self)
+    }
+
+    fn draft(
+        &self,
+        ask: dt_service::draft_calls::DraftAsk,
+    ) -> Result<dt_service::draft_calls::Drafted, dt_service::call::Refusal> {
+        use dt_service::call::{Refusal, Status};
+        use dt_service::draft_calls::Drafted;
+        match self
+            .submit_draft(
+                &ask.id, &ask.path, &ask.file, &ask.text, ask.marks, ask.tier,
+            )
+            .recv_timeout(Duration::from_secs(120))
+        {
+            Ok(queue::Outcome::Mesh(mesh)) => Ok(Drafted::Mesh(mesh)),
+            Ok(queue::Outcome::Mistake) => Ok(Drafted::Mistake),
+            Ok(queue::Outcome::Superseded) => Ok(Drafted::Superseded),
+            Ok(queue::Outcome::Failed(e)) => {
+                let mut r = match e.kind {
+                    fail::Kind::Bug => Refusal::bug(Status::Internal, e.message, e.backtrace),
+                    fail::Kind::Refused => Refusal::refused(Status::Internal, e.message),
+                    fail::Kind::Failure => Refusal::failure(Status::Internal, e.message),
+                };
+                r.causes = e.causes;
+                if let (Some(bug), Some(help)) = (r.bug.as_mut(), e.help) {
+                    bug.help = Some(help);
+                }
+                Err(r)
+            }
+            Err(e) => Err(Refusal::failure(
+                Status::Internal,
+                format!("the draft was not answered ({e}): the build worker may have died"),
+            )
+            .caused_by(&e)),
+        }
+    }
 }
 
 /// Held while a tile builds: dropping it ends the build's progress message.
@@ -696,43 +740,20 @@ impl Shared {
     ///
     /// # Errors
     /// The file is one the tile has, but it could not be read.
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
-    )]
-    fn text(&self, id: &str, file: Option<&str>) -> Result<Option<route::TextRes>, String> {
-        let path = {
-            let Some(t) = self.facts(id) else {
-                return Ok(None);
-            };
-            match file {
-                None => t.path,
-                Some(f) if f == t.path || t.files.contains_key(f) => f.to_owned(),
-                Some(_) => return Ok(None),
-            }
-        };
-        if !path.ends_with(".dtile") && !path.ends_with(".dmap") {
+    fn text(
+        &self,
+        id: &str,
+        file: Option<&str>,
+    ) -> Result<Option<route::TextRes>, dt_service::call::Refusal> {
+        let Some(t) = self.facts(id) else {
             return Ok(None);
-        }
-        // a library file is read only, and has no revision to edit against
-        let (text, doc_rev) = if path.starts_with(dt_eval::LIB) {
-            (dt_eval::Source::read(&dt_eval::Files, &path)?, 0)
-        } else {
-            self.docs
-                .read(&path)
-                .map_err(|e| format!("cannot read {path}: {e}"))?
         };
-        let writable = !path.starts_with(dt_eval::LIB)
-            && self
-                .storage
-                .stat(std::path::Path::new(&path))
-                .is_ok_and(|m| !m.readonly);
-        Ok(Some(route::TextRes {
-            file: path,
-            text,
-            writable,
-            doc_rev,
-        }))
+        let tile = api::TileRef {
+            id: id.to_owned(),
+            path: t.path,
+            files: t.files,
+        };
+        dt_service::read_calls::text(self, &tile, file)
     }
 
     /// The tile's mesh, if it is of document revision `doc_rev`: `Ok(None)` when there is none yet, `Err(now)` (the

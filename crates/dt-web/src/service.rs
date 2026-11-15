@@ -22,15 +22,24 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 use dt_eval::{Options, Source, Tier, TileRecord};
 use dt_lang::System;
 use dt_service::build_calls::{self, Accepted, BUILD, BuildReq};
-use dt_service::call::{CallError, Refusal, Table, Verb};
+use dt_service::call::{CallError, Refusal, Status, Table, Verb};
 use dt_service::clock::ManualClock;
+use dt_service::draft_calls::{
+    self, DRAFT, DraftAsk, DraftReq, Drafted, Mesh, STEP, StepReq, Stepped,
+};
 use dt_service::edit_calls::{self, EDIT, EditReq, EditRes, SAVE, SaveReq, SaveRes};
 use dt_service::host::{Alarm, Host};
 use dt_service::message::{Message, Scope};
-use dt_service::owner::{Command, Core, Setup, Subscribed};
+use dt_service::owner::{Command, Core, Outside, Setup, Subscribed};
 use dt_service::patch::Patch;
 use dt_service::payload;
 use dt_service::queue::{Finished, Job, Taken, Taking};
+use dt_service::read_calls::{
+    self, ABOUT, AboutRes, CHECK_VALUE, CheckValueReq, CheckValueRes, ELEMENTS, LANGUAGE, NAMES,
+    NamesReq, NamesRes, Nothing, OFFERS, OffersReq, OffersRes, PRINTED, PRINTED_SET, PrintedReq,
+    PrintedRes, PrintedSetReq, PrintedSetRes, TEXT, TOKENS, TextReq as FileReq, TextRes, TokensReq,
+    TokensRes,
+};
 use dt_service::roots::{Root, RootKind};
 use dt_service::storage::{MemStorage, Storage};
 use dt_service::tile::{Slot, tile_id};
@@ -328,6 +337,57 @@ impl TileHost for Ctx {
     fn want(&self, id: &str) -> Result<bool, Refusal> {
         self.inner.ask(|r| Command::Want(id.to_owned(), r))
     }
+
+    fn version(&self) -> String {
+        crate::version()
+    }
+
+    fn snapshot(&self) -> dt_service::api::Snapshot {
+        // the owner answers in the same step: a failure to is a bug in the worker, loudly
+        let held = self
+            .inner
+            .ask(Command::Snapshot)
+            .expect("the owner answers a snapshot in the same step");
+        held.with(Outside {
+            // a worker has no slicers to scan and no home folder to keep an inventory in
+            printers: Vec::new(),
+            inventory: dt_service::inventory::InventoryState::Unavailable,
+        })
+    }
+
+    /// The worker's draft lane is its own turn: the draft is built here, now, from the text the page holds (a worker
+    /// runs one call at a time, so no draft is ever replaced by a newer one while it waits).
+    fn draft(&self, ask: DraftAsk) -> Result<Drafted, Refusal> {
+        let opts = Options {
+            tier: ask.tier.build(),
+            debug: ask.marks,
+            clouds: true,
+            ..self.options.clone()
+        };
+        let built = match dt_eval::build_cached(
+            &Doc { text: &ask.text },
+            MAIN,
+            &opts,
+            &dt_eval::Progress::none(),
+            None,
+        ) {
+            Ok(b) => b,
+            // a mistake in the text: the check says where, the last mesh stays
+            Err(_) => return Ok(Drafted::Mistake),
+        };
+        payload::from_draft(
+            &built,
+            opts.printer.overhang_deg,
+            &dt_kit::Palette::default(),
+        )
+        .map(|mesh| Drafted::Mesh(Arc::new(mesh)))
+        .map_err(|e| {
+            Refusal::failure(
+                dt_service::call::Status::Internal,
+                format!("cannot prepare the draft's view: {e}"),
+            )
+        })
+    }
 }
 
 impl Ctx {
@@ -380,6 +440,55 @@ fn build(ctx: &Ctx, req: BuildReq) -> Result<Accepted, Refusal> {
     build_calls::build(ctx, &tile_id(&ctx.tile), req)
 }
 
+fn draft(ctx: &Ctx, req: DraftReq) -> Result<Mesh, Refusal> {
+    draft_calls::draft(ctx, &ctx.tile_ref(), req)
+}
+
+fn step(ctx: &Ctx, req: StepReq) -> Result<Stepped, Refusal> {
+    draft_calls::step(ctx, &ctx.tile_ref(), req)
+}
+
+fn names(_: &Ctx, req: NamesReq) -> Result<NamesRes, Refusal> {
+    Ok(read_calls::names(&req))
+}
+
+fn tokens(_: &Ctx, req: TokensReq) -> Result<TokensRes, Refusal> {
+    read_calls::tokens(&req)
+}
+
+fn check_value(ctx: &Ctx, req: CheckValueReq) -> Result<CheckValueRes, Refusal> {
+    Ok(read_calls::check_value(ctx, &req))
+}
+
+fn printed(ctx: &Ctx, req: PrintedReq) -> Result<PrintedRes, Refusal> {
+    let src = Doc { text: &req.text };
+    Ok(read_calls::printed(ctx, &src, MAIN, &req))
+}
+
+fn printed_set(ctx: &Ctx, req: PrintedSetReq) -> Result<PrintedSetRes, Refusal> {
+    read_calls::printed_set(ctx, &req)
+}
+
+fn offers(ctx: &Ctx, req: OffersReq) -> Result<OffersRes, Refusal> {
+    read_calls::offers(ctx, &Doc { text: &req.text }, MAIN, req.at)
+}
+
+fn about(ctx: &Ctx, _: Nothing) -> Result<AboutRes, Refusal> {
+    Ok(read_calls::about(ctx))
+}
+
+fn elements(_: &Ctx, _: Nothing) -> Result<Vec<dt_doc::wire::ElementJson>, Refusal> {
+    Ok(read_calls::elements())
+}
+
+fn language(_: &Ctx, _: Nothing) -> Result<dt_doc::wire::LanguageJson, Refusal> {
+    Ok(read_calls::language())
+}
+
+fn text(ctx: &Ctx, req: FileReq) -> Result<Option<TextRes>, Refusal> {
+    read_calls::text(ctx, &ctx.tile_ref(), req.file.as_deref())
+}
+
 /// The verbs a worker answers, once.
 fn table() -> Table<Ctx, Refusal> {
     Table::default()
@@ -387,27 +496,72 @@ fn table() -> Table<Ctx, Refusal> {
         .with(&EDIT, edit)
         .with(&SAVE, save)
         .with(&BUILD, build)
+        .with(&DRAFT, draft)
+        .with(&STEP, step)
+        .with(&NAMES, names)
+        .with(&TOKENS, tokens)
+        .with(&CHECK_VALUE, check_value)
+        .with(&PRINTED, printed)
+        .with(&PRINTED_SET, printed_set)
+        .with(&OFFERS, offers)
+        .with(&ABOUT, about)
+        .with(&ELEMENTS, elements)
+        .with(&LANGUAGE, language)
+        .with(&TEXT, text)
 }
 
-/// Read `request` as the verb's request type, call it, and write the answer.
+/// What a call answered: JSON, or (a draft, a step) the page's bytes.
+enum Answered {
+    Json(String),
+    Bytes(Vec<u8>),
+}
+
+/// Read `request` as the verb's request type and call it.
 fn run<Q, S>(
     table: &Table<Ctx, Refusal>,
     ctx: &Ctx,
     verb: &Verb<Q, S>,
     request: &str,
-) -> Result<String, JsError>
+) -> Result<S, Refusal>
+where
+    Q: serde::de::DeserializeOwned + 'static,
+    S: 'static,
+{
+    let req: Q = serde_json::from_str(request).map_err(|e| {
+        Refusal::refused(
+            Status::BadRequest,
+            format!("{} does not take this: {e}", verb.name),
+        )
+        .caused_by(&e)
+    })?;
+    match table.call(ctx, verb, req) {
+        Ok(answer) => Ok(answer),
+        Err(CallError::Refused(r)) => Err(r),
+        Err(e) => Err(Refusal::failure(
+            Status::Internal,
+            format!("the call table is wrong: {e:?}"),
+        )),
+    }
+}
+
+/// [`run`], with the answer written as JSON.
+fn run_json<Q, S>(
+    table: &Table<Ctx, Refusal>,
+    ctx: &Ctx,
+    verb: &Verb<Q, S>,
+    request: &str,
+) -> Result<Answered, Refusal>
 where
     Q: serde::de::DeserializeOwned + 'static,
     S: Serialize + 'static,
 {
-    let req: Q = serde_json::from_str(request)
-        .map_err(|e| JsError::new(&format!("{} does not take this: {e}", verb.name)))?;
-    match table.call(ctx, verb, req) {
-        Ok(answer) => serde_json::to_string(&answer)
-            .map_err(|e| JsError::new(&format!("cannot write the answer: {e}"))),
-        Err(CallError::Refused(r)) => Err(JsError::new(&r.message)),
-        Err(e) => Err(JsError::new(&format!("the call table is wrong: {e:?}"))),
-    }
+    let answer = run(table, ctx, verb, request)?;
+    serde_json::to_string(&answer)
+        .map(Answered::Json)
+        .map_err(|e| {
+            Refusal::failure(Status::Internal, format!("cannot write the answer: {e}"))
+                .caused_by(&e)
+        })
 }
 
 /// The service in a worker.
@@ -507,31 +661,118 @@ impl Service {
         Ok(())
     }
 
-    /// Call the verb `verb` about the tile stored at `tile`, with `request` (JSON), and answer JSON.  What the call
-    /// queued (`build`) is run before this returns, and its result is on the stream (`events`).
-    ///
-    /// # Errors
-    /// No such verb, a request that is not the verb's, or the call refused or failed: its words.
-    pub fn call(&self, verb: &str, tile: &str, request: &str) -> Result<String, JsError> {
-        let options =
-            options_in(&Lib, self.inner.system.get()).map_err(|r| JsError::new(&r.message))?;
+    /// Call the verb `verb` about the tile stored at `tile`, with `request` (JSON), and answer what it gave (JSON, or the
+    /// page's bytes for a draft and a step).  What the call queued (`build`) is run before this returns, and its
+    /// result is on the stream (`events`).
+    fn answer(&self, verb: &str, tile: &str, request: &str) -> Result<Answered, Refusal> {
+        let options = options_in(&Lib, self.inner.system.get())?;
         let ctx = Ctx {
             inner: self.inner.clone(),
             tile: tile.to_owned(),
             options,
         };
-        let answer = match verb {
-            v if v == CHECK.name => run(&self.table, &ctx, &CHECK, request),
-            v if v == EDIT.name => run(&self.table, &ctx, &EDIT, request),
-            v if v == SAVE.name => run(&self.table, &ctx, &SAVE, request),
-            v if v == BUILD.name => run(&self.table, &ctx, &BUILD, request),
-            other => Err(JsError::new(&format!("no such call: {other}"))),
-        }?;
+        let t = &self.table;
+        macro_rules! json {
+            ($($v:ident),* $(,)?) => {
+                match verb {
+                    $( n if n == $v.name => run_json(t, &ctx, &$v, request), )*
+                    "draft" => run(t, &ctx, &DRAFT, request).map(|m| Answered::Bytes(m.0.as_ref().clone())),
+                    "step" => run(t, &ctx, &STEP, request)
+                        .and_then(|s| s.bytes())
+                        .map(Answered::Bytes),
+                    other => Err(Refusal::refused(Status::NotFound, format!("no such call: {other}"))),
+                }
+            };
+        }
+        let answer = json![
+            CHECK,
+            EDIT,
+            SAVE,
+            BUILD,
+            NAMES,
+            TOKENS,
+            CHECK_VALUE,
+            PRINTED,
+            PRINTED_SET,
+            OFFERS,
+            ABOUT,
+            ELEMENTS,
+            LANGUAGE,
+            TEXT,
+        ]?;
         // the worker host's turn: what the call queued is built now, and the stream says how it went
-        self.inner
-            .run_queued()
-            .map_err(|r| JsError::new(&r.message))?;
+        self.inner.run_queued()?;
         Ok(answer)
+    }
+
+    /// The refusal as the page reads it: the status and the error body, written as JSON for the thrown error.
+    fn refused(&self, verb: &str, tile: &str, r: Refusal) -> JsError {
+        let reply = r.reply(
+            verb,
+            Some(tile),
+            &crate::version(),
+            WebHost::default().now_ms(),
+        );
+        match serde_json::to_string(&reply) {
+            Ok(json) => JsError::new(&json),
+            Err(e) => JsError::new(&format!("cannot write a refusal: {e}")),
+        }
+    }
+
+    /// Call the verb `verb` about the tile stored at `tile`, with `request` (JSON), and answer JSON.  What the call
+    /// queued (`build`) is run before this returns, and its result is on the stream (`events`).
+    ///
+    /// # Errors
+    /// No such verb, a request that is not the verb's, or the call refused or failed: the error's message is the JSON of a
+    /// `RefusalReply` (the status number and the same error body HTTP sends).
+    pub fn call(&self, verb: &str, tile: &str, request: &str) -> Result<String, JsError> {
+        match self.answer(verb, tile, request) {
+            Ok(Answered::Json(json)) => Ok(json),
+            Ok(Answered::Bytes(_)) => Err(self.refused(
+                verb,
+                tile,
+                Refusal::refused(
+                    Status::BadRequest,
+                    format!("{verb} answers bytes: ask with call_bytes"),
+                ),
+            )),
+            Err(r) => Err(self.refused(verb, tile, r)),
+        }
+    }
+
+    /// [`Service::call`] for the verbs that answer bytes: `draft` (the mesh) and `step` (the head's length, the head, the
+    /// mesh), as the HTTP routes answer them.
+    ///
+    /// # Errors
+    /// As [`Service::call`].
+    pub fn call_bytes(&self, verb: &str, tile: &str, request: &str) -> Result<Vec<u8>, JsError> {
+        match self.answer(verb, tile, request) {
+            Ok(Answered::Bytes(b)) => Ok(b),
+            Ok(Answered::Json(_)) => Err(self.refused(
+                verb,
+                tile,
+                Refusal::refused(
+                    Status::BadRequest,
+                    format!("{verb} answers JSON: ask with call"),
+                ),
+            )),
+            Err(r) => Err(self.refused(verb, tile, r)),
+        }
+    }
+
+    /// The first message of a stream: every tile's state and the rest of what a page is told, as JSON.
+    ///
+    /// # Errors
+    /// The answer cannot be written.
+    pub fn snapshot(&self) -> Result<String, JsError> {
+        let ctx = Ctx {
+            inner: self.inner.clone(),
+            tile: String::new(),
+            options: options_in(&Lib, self.inner.system.get())
+                .map_err(|r| JsError::new(&r.message))?,
+        };
+        serde_json::to_string(&TileHost::snapshot(&ctx))
+            .map_err(|e| JsError::new(&format!("cannot write the snapshot: {e}")))
     }
 
     /// What a finished build came to, for the tile at `path` (its record, whether it passed, the STL's hash): the

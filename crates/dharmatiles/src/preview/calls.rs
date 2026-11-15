@@ -9,6 +9,7 @@ use super::edit::{self, DraftReq};
 use super::route;
 use super::routes::{resolve, tile_shape};
 use super::{Shared, fail, inventory, lists, maps, offers, places, plates, printers, tiers};
+use dt_service::draft_calls;
 
 calls! {
     post {
@@ -103,14 +104,20 @@ pub(super) fn dispatch(shared: &Shared, path: &str, body: &[u8]) -> route::Reply
     // the draft answers a mesh, so it is not a row of the table
     if verb == "draft" {
         return match request::<DraftReq>(path, body) {
-            Ok(r) => edit::draft(shared, &tile, r),
+            Ok(r) => match draft_calls::draft(shared, &tile, r) {
+                Ok(dt_service::draft_calls::Mesh(mesh)) => route::Reply::Bytes(mesh),
+                Err(refusal) => super::api::refusal_reply(refusal).into(),
+            },
             Err(e) => e.into(),
         };
     }
     // a step answers a head and a mesh, so it is not a row of the table either
     if verb == "step" {
         return match request::<edit::StepReq>(path, body) {
-            Ok(r) => edit::step(shared, &tile, r),
+            Ok(r) => match draft_calls::step(shared, &tile, r).and_then(|s| s.bytes()) {
+                Ok(bytes) => route::Reply::Bytes(std::sync::Arc::new(bytes)),
+                Err(refusal) => super::api::refusal_reply(refusal).into(),
+            },
             Err(e) => e.into(),
         };
     }

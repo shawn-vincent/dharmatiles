@@ -66,12 +66,15 @@ use serde::{Deserialize, Serialize};
 
 use super::api::{Out, Reply, TileRef, TileRefReply};
 use super::places::{Listed, Nothing};
-use super::queue::Outcome;
 use super::roots::personal_home;
 use super::storage::Storage;
 use super::*;
 pub use dt_service::api::DraftTier;
+pub use dt_service::draft_calls::{DraftReq, StepReq};
+#[cfg(test)]
+pub use dt_service::draft_calls::{StepDraft, StepHead};
 pub(super) use dt_service::edit_calls::EDIT_PATH;
+#[cfg(test)]
 pub(super) use dt_service::tile_calls::text_rev;
 pub use dt_service::tile_calls::{CheckRes, TextReq};
 
@@ -109,124 +112,13 @@ pub struct NewReq {
     pub dir: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct NamesReq {
-    pub text: String,
-}
-
-/// The names a text makes; `ok` false (and `message`) when it does not parse: its
-/// mistakes are the check's to show, and the page keeps the names it had.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct NamesRes {
-    pub ok: bool,
-    pub message: Option<String>,
-    pub defs: Vec<String>,
-    pub regions: Vec<String>,
-    pub lines: Vec<String>,
-    pub points: Vec<String>,
-}
-
-/// A text to colour.
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct TokensReq {
-    pub text: String,
-}
-
-/// How a text is coloured, by `dt_lang::highlight`'s one set of rules: `classes` are the CSS classes (`tk-node`,
-/// …), and `pieces` runs three numbers for each coloured piece: its first and last-plus-one UTF-8 byte in the
-/// text and its place in `classes`.  What no piece covers is plain.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct TokensRes {
-    pub classes: Vec<String>,
-    pub pieces: Vec<u32>,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct CheckValueReq {
-    pub element: String,
-    pub control: String,
-    pub typed: String,
-}
-
-/// What the reader refuses in a typed value (`message` null when it takes it).
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct CheckValueRes {
-    pub message: Option<String>,
-    pub label: Option<String>,
-    pub help: Option<String>,
-}
-
-/// One written value to say the printed size of: the control it is for and
-/// the text as written.
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct PrintedItem {
-    pub element: String,
-    pub control: String,
-    pub typed: String,
-}
-
-/// `/api/tiles/ID/printed`: the sizes `items` print on the current target,
-/// reading the `$` heights and `let`s of `text` (the tile's document).
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct PrintedReq {
-    pub text: String,
-    pub items: Vec<PrintedItem>,
-}
-
-/// What a value prints, mm to 0.01: one end for a number, two for a range;
-/// `editable` when the printed size can be typed in.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct PrintedSize {
-    pub ends: Vec<String>,
-    pub editable: bool,
-}
-
-/// One answer for each item, in order: `null` where no printed size is shown
-/// (not a length, printing as written, or naming what the document does not
-/// give).
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct PrintedRes {
-    pub items: Vec<Option<PrintedSize>>,
-}
-
-/// `/api/printed-set`: the value `typed` with its end `end` set so that it
-/// prints `mm`, in its own unit.
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct PrintedSetReq {
-    pub typed: String,
-    pub end: u32,
-    pub mm: f64,
-}
-
-/// The value as it is now written; the page writes it like any typed value.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct PrintedSetRes {
-    pub typed: String,
-}
+// The reading calls' types (names, tokens, checkValue, printed, printedSet) are the service's: `dt_service::read_calls`.
+pub use dt_service::read_calls::{
+    CheckValueReq, CheckValueRes, NamesReq, NamesRes, PrintedReq, PrintedRes, PrintedSetReq,
+    PrintedSetRes, TokensReq, TokensRes,
+};
+#[cfg(test)]
+pub use dt_service::read_calls::{PrintedItem, PrintedSize};
 
 #[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -270,16 +162,6 @@ pub struct PageMessageReq {
     pub help: Option<String>,
     pub causes: Option<Vec<String>>,
     pub backtrace: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct DraftReq {
-    pub text: String,
-    pub file: Option<String>,
-    pub debug: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -393,156 +275,6 @@ pub(super) fn target(shared: &Shared, v: TargetReq) -> Out<TargetRes> {
         system: o.system,
         printer: o.printer.name,
     })
-}
-
-/// A draft: queued ahead of the full builds and waited for, so the reply is
-/// the mesh itself.  `debug: true` asks for the debug layer's marks too.
-pub(super) fn draft(shared: &Shared, tile: &TileRef, v: DraftReq) -> super::route::Reply {
-    let file = match tile.file(v.file.as_deref()) {
-        Ok(f) => f,
-        Err(e) => return e.into(),
-    };
-    match shared
-        .submit_draft(
-            &tile.id,
-            &tile.path,
-            &file,
-            &v.text,
-            v.debug == Some(true),
-            DraftTier::Draft,
-        )
-        .recv_timeout(Duration::from_secs(120))
-    {
-        Ok(Outcome::Mesh(mesh)) => super::route::Reply::Bytes(mesh),
-        Ok(Outcome::Mistake) => {
-            fail::refused("422 Unprocessable Entity", "the text has a mistake").into()
-        }
-        Ok(Outcome::Superseded) => {
-            fail::refused_with("409 Conflict", "a newer draft took its place", |b| {
-                b.superseded = Some(true)
-            })
-            .into()
-        }
-        Ok(Outcome::Failed(e)) => e.reply().into(),
-        Err(e) => fail::failure_from(
-            "500 Internal Server Error",
-            format!("the draft was not answered ({e}): the build worker may have died"),
-            &e,
-        )
-        .into(),
-    }
-}
-
-/// `/api/tiles/ID/step`: one step of a drag or a scrub, an edit and the draft of what it made in one request.
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct StepReq {
-    /// The edit, as `/api/edit` takes it (with the `read` of the text it is made to).
-    pub edit: EditReq,
-    /// A file the tile uses, instead of its own document.
-    pub file: Option<String>,
-    pub debug: Option<bool>,
-    /// How coarse the draft is: `low` while a drag is going on (the step has to keep up with the pointer), left out
-    /// (the usual draft) for the step that ends it and for every other change.
-    pub tier: Option<DraftTier>,
-}
-
-/// What became of the draft of a step.
-#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub enum StepDraft {
-    /// The mesh follows the head.
-    Mesh,
-    /// The edited text has a mistake (the next check says which): no mesh.
-    Mistake,
-    /// A newer draft of the tile took its place: no mesh.
-    Superseded,
-}
-
-/// The head of a step's answer: the edit's result and the revision of its text (what the next step reads at), and
-/// what became of the draft.  The answer is this as JSON, its length in four bytes (big-endian) before it, and
-/// the draft's mesh after it.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct StepHead {
-    pub text: String,
-    pub id: Option<String>,
-    pub at: Option<usize>,
-    /// The revision of `text` (`EditReq::read` of an edit made to it, as a check's `nodesRev`).
-    pub rev: String,
-    pub draft: StepDraft,
-}
-
-/// A step: the edit is made to the text the request carries, and the answer says the new text, its revision and
-/// the draft of it (queued ahead of the full builds, as `draft` is).  The edit is refused as `/api/edit` refuses
-/// it (a stale `read` is a 409), and a draft that cannot be made of the new text does not undo the edit.
-pub(super) fn step(shared: &Shared, tile: &TileRef, v: StepReq) -> super::route::Reply {
-    let file = match tile.file(v.file.as_deref()) {
-        Ok(f) => f,
-        Err(e) => return e.into(),
-    };
-    let made = match edit(shared, v.edit) {
-        Ok(m) => m,
-        Err(e) => return e.into(),
-    };
-    let mut head = StepHead {
-        rev: text_rev(&made.text),
-        text: made.text,
-        id: made.id,
-        at: made.at,
-        draft: StepDraft::Mesh,
-    };
-    let mesh = match shared
-        .submit_draft(
-            &tile.id,
-            &tile.path,
-            &file,
-            &head.text,
-            v.debug == Some(true),
-            v.tier.unwrap_or_default(),
-        )
-        .recv_timeout(Duration::from_secs(120))
-    {
-        Ok(Outcome::Mesh(mesh)) => Some(mesh),
-        Ok(Outcome::Mistake) => {
-            head.draft = StepDraft::Mistake;
-            None
-        }
-        Ok(Outcome::Superseded) => {
-            head.draft = StepDraft::Superseded;
-            None
-        }
-        Ok(Outcome::Failed(e)) => return e.reply().into(),
-        Err(e) => {
-            return fail::failure_from(
-                "500 Internal Server Error",
-                format!("the draft was not answered ({e}): the build worker may have died"),
-                &e,
-            )
-            .into();
-        }
-    };
-    let json = match serde_json::to_vec(&head) {
-        Ok(j) => j,
-        Err(e) => {
-            return fail::failure_from(
-                "500 Internal Server Error",
-                format!("cannot write the answer: {e}"),
-                &e,
-            )
-            .into();
-        }
-    };
-    let mesh = mesh.as_deref().map_or(&[][..], Vec::as_slice);
-    let mut body = Vec::with_capacity(4 + json.len() + mesh.len());
-    // a step's head is a few hundred bytes of JSON plus the text: far under 4 GiB
-    body.extend_from_slice(&dt_value::idx(json.len()).to_be_bytes());
-    body.extend_from_slice(&json);
-    body.extend_from_slice(mesh);
-    super::route::Reply::Bytes(Arc::new(body))
 }
 
 /// The file stem for a tile name: the name as written, with only what a
@@ -751,124 +483,30 @@ pub(super) fn new_tile(shared: &Shared, v: NewReq) -> Out<Listed> {
     Ok(listed(shared, &dest))
 }
 
-/// `/api/names` `{text}`: the names the text makes (definitions, regions,
-/// lines, points), by the parser, for completion between checks.  A text
-/// that does not parse says so (`{ok: false, message}`): its mistakes are
-/// the check's to show, and the page keeps the names it had.
+/// `/api/names` (see [`dt_service::read_calls::names`]).
 pub(super) fn names(_: &Shared, v: NamesReq) -> Out<NamesRes> {
-    Ok(match dt_doc::nodeid::names_in(&v.text) {
-        Ok(n) => NamesRes {
-            ok: true,
-            message: None,
-            defs: n.defs,
-            regions: n.regions,
-            lines: n.lines,
-            points: n.points,
-        },
-        Err(e) => NamesRes {
-            ok: false,
-            message: Some(e.to_string()),
-            defs: Vec::new(),
-            regions: Vec::new(),
-            lines: Vec::new(),
-            points: Vec::new(),
-        },
-    })
+    Ok(dt_service::read_calls::names(&v))
 }
 
-/// `/api/tokens` `{text}`: the text's colouring, for the editor's source pane.  Any text colours (a broken one as
-/// far as it reads); a text too long to number in 32 bits is the one failure.
+/// `/api/tokens` (see [`dt_service::read_calls::tokens`]).
 pub(super) fn tokens(_: &Shared, v: TokensReq) -> Out<TokensRes> {
-    let too_long = |_| bad("the text is too long to colour");
-    let mut pieces = Vec::new();
-    for p in dt_lang::highlight::tokens(&v.text) {
-        pieces.push(u32::try_from(p.start).map_err(too_long)?);
-        pieces.push(u32::try_from(p.end).map_err(too_long)?);
-        pieces.push(u32::try_from(p.class.index()).map_err(too_long)?);
-    }
-    Ok(TokensRes {
-        classes: dt_lang::highlight::CLASSES
-            .iter()
-            .map(|c| c.css().to_owned())
-            .collect(),
-        pieces,
-    })
+    super::api::out(dt_service::read_calls::tokens(&v))
 }
 
-/// `/api/check-value`: the reader's check of one typed value.
+/// `/api/check-value` (see [`dt_service::read_calls::check_value`]).
 pub(super) fn check_value(shared: &Shared, v: CheckValueReq) -> Out<CheckValueRes> {
-    // a control the schema does not know (the tile's own, a line's) has
-    // nothing to check against here
-    // a value is read with units, as the reader reads one
-    let opts = shared.options();
-    let (element, control, typed) = (&v.element, &v.control, &v.typed);
-    let flaw = dt_doc::schema::element(element)
-        .and_then(|e| e.control_at(control))
-        .and_then(|c| dt_doc::decode::check_text_in(c, element, typed, opts.units()));
-    // the reader's check first; then the weighting's numbers against their
-    // limits, which the reader only meets when the value is lowered
-    Ok(match flaw {
-        Some(r) => CheckValueRes {
-            message: Some(r.message),
-            label: Some(r.label.to_owned()),
-            help: r.help,
-        },
-        None => match dt_eval::weighting_flaw_in(typed, opts.units()) {
-            Some(w) => CheckValueRes {
-                message: Some(w.message),
-                label: Some("here".to_owned()),
-                help: w.help,
-            },
-            None => CheckValueRes {
-                message: None,
-                label: None,
-                help: None,
-            },
-        },
-    })
+    Ok(dt_service::read_calls::check_value(shared, &v))
 }
 
-/// `/api/tiles/ID/printed`: what each written value prints on the current
-/// target (the system's square, the printer's layer), worked out by
-/// [`dt_doc::printed`] against the tile's own heights.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "permitted silence: a probe where None means not a form this reads; a document with a mistake gives no heights, and the check route reports the mistake where the text is typed"
-)]
+/// `/api/tiles/ID/printed` (see [`dt_service::read_calls::printed`]), reading the tile's text from the request.
 pub(super) fn printed(shared: &Shared, t: &TileRef, v: PrintedReq) -> Out<PrintedRes> {
-    let opts = shared.options();
-    let units = opts.units();
-    let src = Overlay(BTreeMap::from([(t.path.clone(), v.text)]));
-    // A document with a mistake in it gives no heights: a value that reads a
-    // `$` name then has no printed size.  The mistake itself is the check's
-    // to show (`/api/tiles/ID/check`), as the text is typed.
-    let read = dt_eval::doc::read_with(&src, &t.path, units).ok();
-    let consts = read
-        .as_ref()
-        .and_then(|r| r.tile.as_ref())
-        .map(|tile| &tile.heights.consts);
-    let items = v
-        .items
-        .iter()
-        .map(|i| {
-            let axis = dt_doc::schema::element(&i.element)
-                .and_then(|e| e.control_at(&i.control))
-                .and_then(|c| c.value)?;
-            dt_doc::printed::printed_size(axis, &i.typed, units, consts).map(|p| PrintedSize {
-                ends: p.ends,
-                editable: p.editable,
-            })
-        })
-        .collect();
-    Ok(PrintedRes { items })
+    let src = Overlay(BTreeMap::from([(t.path.clone(), v.text.clone())]));
+    Ok(dt_service::read_calls::printed(shared, &src, &t.path, &v))
 }
 
-/// `/api/printed-set`: a printed size typed in, written in the value's own
-/// unit (see [`dt_doc::printed::set_printed`]).
+/// `/api/printed-set` (see [`dt_service::read_calls::printed_set`]).
 pub(super) fn printed_set(shared: &Shared, v: PrintedSetReq) -> Out<PrintedSetRes> {
-    dt_doc::printed::set_printed(&v.typed, v.end as usize, v.mm, shared.options().units())
-        .map(|typed| PrintedSetRes { typed })
-        .map_err(|e| fail::refused("422 Unprocessable Entity", e.0))
+    super::api::out(dt_service::read_calls::printed_set(shared, &v))
 }
 
 /// How an edit that cannot be made is told (see [`dt_service::edit_calls::refusal`]), as the reply.
