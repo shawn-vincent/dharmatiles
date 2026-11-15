@@ -24,15 +24,40 @@ import { html, useEffect, useLayoutEffect, useRef, useState } from './html.js';
 import { Icon } from './icons.js';
 import { plural } from './widgets.js';
 
+/** @typedef {import('../folders.js').Level} Level */
+/** @typedef {import('../editor/stores.js').ServerTile} Tile */
+/** @typedef {ReturnType<typeof import('../editor/model.js').folderData>} FolderData  what a level draws */
+/**
+ * What a row or a button does (editor/places.js).  `canDrop` answers whether a tile can be let go on a target.
+ * @typedef {{
+ *   place: (index: number) => void,
+ *   folder: (dir: string) => void,
+ *   tile: (id: string) => void,
+ *   menu: (kind: string, id: string, anchor: HTMLElement) => void,
+ *   act: (action: string, kind: string, id: string, anchor: HTMLElement) => void,
+ *   canDrop: (id: string, target: Level & { root: number }) => { ok: boolean, why?: string },
+ *   drop: (id: string, target: Level & { root: number }) => void,
+ * }} RowHandlers
+ */
+/**
+ * What the Add step's pane adds to a row's handlers: a tile's picture, and a tile dragged to where it should stand.
+ * @typedef {RowHandlers & {
+ *   picture: (t: Tile, plate?: string) => Promise<string | null | undefined>,
+ *   pictureFailed: (e: unknown) => void,
+ *   dragTile: (e: DragEvent, t: Tile) => void,
+ * }} AddHandlers
+ */
+
+/** @param {Level} l */
 const keyOf = (l) => `${l.root ?? 'places'}|${l.dir || ''}`;
 
 // ---- the pictures ---------------------------------------------------------------------------
 
 /** A glyph for a kind of row, in the text colour: a folder, a house (My tiles), shelves (the library), a flask (the tests), a disk (a folder you added). */
-const Glyph = ({ name }) => html`<span class="fico" aria-hidden="true"><${Icon} name=${name} size=${20} /></span>`;
+const Glyph = /** @param {{ name: string }} p */ ({ name }) => html`<span class="fico" aria-hidden="true"><${Icon} name=${name} size=${20} /></span>`;
 
 /** A tile's picture: its footprint as squares on the plate, as many across and up as the tile is. */
-function SizeThumb({ t }) {
+function SizeThumb(/** @type {{ t: Tile }} */ { t }) {
   const sq = sizeSquares(t);
   const [bw, bh] = thumbBox(sq?.[0], sq?.[1], 34);
   const grid = sq && (sq[0] > 1 || sq[1] > 1) && sq[0] <= 8 && sq[1] <= 8;
@@ -46,7 +71,7 @@ function SizeThumb({ t }) {
  * A tile's picture: the tile's own (`on.picture` answers its url) once its card is near the visible part of the list, else the empty
  * plate.  The list scrolls down, so the margin is above and below.
  */
-function Pic({ t, plate, on }) {
+function Pic(/** @type {{ t: Tile, plate?: string, on: AddHandlers }} */ { t, plate, on }) {
   const box = useRef(/** @type {HTMLElement | null} */ (null));
   const [url, setUrl] = useState(/** @type {string | null} */ (null));
   const [bad, setBad] = useState(/** @type {string | null} */ (null));
@@ -66,40 +91,40 @@ function Pic({ t, plate, on }) {
 }
 
 /** A tile of the add mode: its picture, its name and size, and what you have of it.  Pressed it goes on the map; dragged it is let go where it should stand. */
-function AddCard({ t, d, on }) {
+function AddCard(/** @type {{ t: Tile, d: FolderData, on: AddHandlers }} */ { t, d, on }) {
   const pill = d.pill?.(t);
   return html`<div class="acard" role="button" tabindex="0" draggable=${true} data-id=${t.id} title=${`${stemOf(t.path)}\nPress to put it on the map; drag it to choose where`}
-    onDragStart=${(e) => on.dragTile(e, t)} onClick=${() => on.tile(t.id)} onKeyDown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); on.tile(t.id); } }}>
+    onDragStart=${(/** @type {DragEvent} */ e) => on.dragTile(e, t)} onClick=${() => on.tile(t.id)} onKeyDown=${(/** @type {KeyboardEvent} */ e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); on.tile(t.id); } }}>
     <${Pic} t=${t} plate=${d.plate} on=${on} />
     <span class="arow"><b>${stemOf(t.path)}</b><span class="asize">${sizeLine(t)}</span></span>
     ${pill ? html`<span class=${`ipill ${pill.kind}`} title=${pill.title}>${pill.text}</span>` : null}</div>`;
 }
 
-const dotClass = (t) => {
+const dotClass = (/** @type {Tile} */ t) => {
   const over = t.record && (t.record.audit.overhang_mm2 > 0 || t.record.audit.band_mm2 > 0);
   return `dot ${t.status}${over && t.status === 'ready' ? ' over' : ''}`;
 };
 
 // ---- the rows ---------------------------------------------------------------------------------
 
-const Text = ({ label, sub }) => html`<span class="tx"><span class="nm" title=${label}>${label}</span>${sub ? html`<span class="sub">${sub}</span>` : null}</span>`;
-const Label = ({ title, hint }) => html`<div class="cap flab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
+const Text = (/** @type {{ label: string, sub?: string }} */ { label, sub }) => html`<span class="tx"><span class="nm" title=${label}>${label}</span>${sub ? html`<span class="sub">${sub}</span>` : null}</span>`;
+const Label = (/** @type {{ title: string, hint?: string | null }} */ { title, hint }) => html`<div class="cap flab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
 
 /**
  * A row: its button, and its ⋯ when `menuTitle` says it has a menu.  `drop` makes it a place a tile can be let go.
- * @param {{ kind: string, id: *, name?: string, menuTitle?: string, on: *, sel?: boolean, drop?: { root: *, dir: string } | null, cls?: string, onOpen?: *, title?: string, children?: * }} p
+ * @param {{ kind: string, id: string | number, name?: string, menuTitle?: string | null, on: RowHandlers, sel?: boolean, drop?: { root: number | null, dir: string } | null, cls?: string, onOpen?: () => void, title?: string, children?: any }} p
  */
 function Row({ kind, id, name, menuTitle, on, sel = false, drop = null, cls = '', onOpen, title, children }) {
   return html`<div class=${`orwrap${sel ? ' sel' : ''}`} data-drop-root=${drop ? String(drop.root) : undefined} data-drop-dir=${drop ? drop.dir : undefined}>
     <button type="button" class=${`orow ${cls}`} role="option" data-kind=${kind} data-id=${String(id)} title=${title} onClick=${onOpen}>${children}</button>
-    ${menuTitle ? html`<button type="button" class="omore" title=${`${name}: ${menuTitle}`} aria-label=${`Actions for ${name}`} aria-haspopup="menu" onClick=${(e) => { e.stopPropagation(); on.menu?.(kind, String(id), e.currentTarget); }}><${Icon} name="ellipsis" size=${16} /></button>` : null}
+    ${menuTitle ? html`<button type="button" class="omore" title=${`${name}: ${menuTitle}`} aria-label=${`Actions for ${name}`} aria-haspopup="menu" onClick=${(/** @type {MouseEvent} */ e) => { e.stopPropagation(); on.menu?.(kind, String(id), /** @type {HTMLElement} */ (e.currentTarget)); }}><${Icon} name="ellipsis" size=${16} /></button>` : null}
   </div>`;
 }
 
-function Places({ d, on }) {
+function Places(/** @type {{ d: FolderData, on: RowHandlers }} */ { d, on }) {
   const mine = d.places.filter((r) => r.writable || r.role === 'files');
   const included = d.places.filter((r) => !r.writable && r.role !== 'files');
-  const row = (r) => {
+  const row = (/** @type {import('../folders.js').Root} */ r) => {
     const n = (d.tiles || []).filter((t) => t.root === r.index).length;
     const where = wherePath(r, '', d.home);
     return html`<${Row} key=${`p${r.index}`} kind="place" id=${r.index} name=${r.label} menuTitle=${r.role === 'added' ? 'take it off the list' : null} on=${on} title=${r.path || r.label} onOpen=${() => on.place(r.index)}>
@@ -109,7 +134,7 @@ function Places({ d, on }) {
   return html`${mine.length ? html`<${Label} title="Your places" hint="folders on this computer" />${mine.map(row)}` : null}${included.length ? html`<${Label} title="Included" hint="read only" />${included.map(row)}` : null}`;
 }
 
-function FolderLevel({ d, on }) {
+function FolderLevel(/** @type {{ d: FolderData, on: RowHandlers }} */ { d, on }) {
   const v = d.view;
   const can = d.writable;
   const searching = !!d.query.trim();
@@ -140,23 +165,25 @@ const DRAG_PX = 5;
 /** True while a tile is being dragged: the list is not drawn again under the pointer. */
 const dragging = signal(false);
 
-const targetAt = (x, y) => {
+const targetAt = (/** @type {number} */ x, /** @type {number} */ y) => {
   const found = document.elementFromPoint(x, y)?.closest?.('[data-drop-root]'); // a drop target is always an HTML element
   const hit = /** @type {HTMLElement | null | undefined} */ (found);
   return hit ? { el: hit, target: { root: Number(hit.dataset.dropRoot), dir: hit.dataset.dropDir || '' } } : null;
 };
 
 /** Press a tile row and pull it: the folder that can take it lights up under the pointer, and letting go moves it there. */
-function wireDrag(root, getOn) {
+function wireDrag(/** @type {HTMLElement} */ root, /** @type {() => RowHandlers} */ getOn) {
+  /** @typedef {NonNullable<ReturnType<typeof targetAt>>} Hit */
+  /** @type {{ wrap: HTMLElement, id: string, startX: number, startY: number, started: boolean, lit: Hit | null, auto: number, chip?: HTMLElement } | null} */
   let g = null;
   const scroller = () => root.closest('.flvl');
-  const light = (hit) => {
-    if (g.lit?.el === hit?.el) return;
+  const light = (/** @type {Hit | null} */ hit) => {
+    if (!g || g.lit?.el === hit?.el) return;
     g.lit?.el.classList.remove('drop');
     g.lit = hit;
     hit?.el.classList.add('drop');
   };
-  const end = (go) => {
+  const end = (/** @type {boolean} */ go) => {
     if (!g) return;
     const { wrap, started, lit, id, chip } = g;
     g = null;
@@ -171,19 +198,19 @@ function wireDrag(root, getOn) {
     dragging.value = false;
     if (!started) return;
     // the click that ends a drag is not an open
-    const stop = (e) => { e.stopPropagation(); e.preventDefault(); };
+    const stop = (/** @type {Event} */ e) => { e.stopPropagation(); e.preventDefault(); };
     addEventListener('click', stop, { capture: true, once: true });
     setTimeout(() => removeEventListener('click', stop, true), 0);
     if (go && lit) getOn().drop?.(id, lit.target);
   };
   const onUp = () => end(true);
   const onCancel = () => end(false);
-  const onEsc = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false); } };
+  const onEsc = (/** @type {KeyboardEvent} */ e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false); } };
   const frame = () => {
     const sc = scroller();
     if (g?.started && sc && g.auto) { sc.scrollTop += g.auto; requestAnimationFrame(frame); }
   };
-  function onMove(e) {
+  function onMove(/** @type {PointerEvent} */ e) {
     if (!g) return;
     if (!g.started) {
       if (Math.abs(e.clientY - g.startY) + Math.abs(e.clientX - g.startX) < DRAG_PX) return;
@@ -199,7 +226,7 @@ function wireDrag(root, getOn) {
       // every place a tile could go is faintly marked, so it is clear what is a target
       for (const t of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('[data-drop-root]'))) if (getOn().canDrop?.(g.id, { root: Number(t.dataset.dropRoot), dir: t.dataset.dropDir || '' }).ok) t.classList.add('cand');
     }
-    g.chip.style.transform = `translate(${e.clientX + 14}px, ${e.clientY + 12}px)`;
+    if (g.chip) g.chip.style.transform = `translate(${e.clientX + 14}px, ${e.clientY + 12}px)`;
     const hit = targetAt(e.clientX, e.clientY);
     light(hit && getOn().canDrop?.(g.id, hit.target).ok ? hit : null);
     const sc = scroller();
@@ -211,10 +238,10 @@ function wireDrag(root, getOn) {
     }
     if (g.auto) requestAnimationFrame(frame);
   }
-  const down = (e) => {
+  const down = (/** @type {PointerEvent} */ e) => {
     if (e.button !== 0 || e.pointerType === 'touch' || g) return; // a finger scrolls; its way to move a tile is the menu
-    const b = e.target.closest?.('.orow');
-    if (!b || b.dataset.kind !== 'tile') return;
+    const b = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest?.('.orow'));
+    if (!b || b.dataset.kind !== 'tile' || !b.parentElement || b.dataset.id == null) return;
     g = { wrap: b.parentElement, id: b.dataset.id, startX: e.clientX, startY: e.clientY, started: false, lit: null, auto: 0 };
     addEventListener('pointermove', onMove, true);
     addEventListener('pointerup', onUp, true);
@@ -226,14 +253,14 @@ function wireDrag(root, getOn) {
 }
 
 /** What a row answers to besides the arrows (which the page moves by): the menu key opens its menu, F2 renames, Delete trashes. */
-function onRowKey(e, on) {
-  const b = e.target.closest?.('.orow');
+function onRowKey(/** @type {KeyboardEvent} */ e, /** @type {RowHandlers} */ on) {
+  const b = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest?.('.orow'));
   if (!b) return;
-  const kind = b.dataset.kind, id = b.dataset.id;
-  const more = b.parentElement.querySelector('.omore') || b;
+  const kind = /** @type {string} */ (b.dataset.kind), id = /** @type {string} */ (b.dataset.id); // every row sets both
+  const more = /** @type {HTMLElement} */ (b.parentElement?.querySelector('.omore') || b);
   if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
     e.preventDefault(); e.stopPropagation();
-    if (b.parentElement.querySelector('.omore')) on.menu?.(kind, id, more);
+    if (b.parentElement?.querySelector('.omore')) on.menu?.(kind, id, more);
   } else if (e.key === 'F2' && !e.metaKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault(); e.stopPropagation();
     on.act?.('rename', kind, id, more);
@@ -248,14 +275,14 @@ function onRowKey(e, on) {
  * `folder(dir)`, `tile(id)`, `menu(kind, id, anchor)`, `act(action, kind, id, anchor)`, `canDrop(tileId, target)`,
  * `drop(tileId, target)`.  While a drag is on, the list is the one that was drawn when it began.
  */
-export function FolderList({ d, on, ghost = false }) {
+export function FolderList(/** @type {{ d: FolderData, on: RowHandlers, ghost?: boolean }} */ { d, on, ghost = false }) {
   const held = useRef(/** @type {any} */ (null));
   const root = useRef(/** @type {HTMLElement | null} */ (null));
   const onRef = useRef(on);
   onRef.current = on;
   useEffect(() => (ghost || !root.current ? undefined : wireDrag(root.current, () => onRef.current)), []);
   if (!ghost && dragging.value && held.current) return held.current;
-  const vnode = html`<div class="flist" ref=${root} onKeyDown=${(e) => onRowKey(e, on)}>${d.level.root == null ? html`<${Places} d=${d} on=${on} />` : html`<${FolderLevel} d=${d} on=${on} />`}</div>`;
+  const vnode = html`<div class="flist" ref=${root} onKeyDown=${(/** @type {KeyboardEvent} */ e) => onRowKey(e, on)}>${d.level.root == null ? html`<${Places} d=${d} on=${on} />` : html`<${FolderLevel} d=${d} on=${on} />`}</div>`;
   held.current = vnode;
   return vnode;
 }
@@ -265,7 +292,7 @@ export function FolderList({ d, on, ghost = false }) {
  * depths): the level the list was on stays one more moment as a ghost for it to take away.  How far each level was scrolled is
  * remembered, and given back when it is shown again.
  */
-export function Levels({ d, on, scrolls, arrived }) {
+export function Levels(/** @type {{ d: FolderData, on: RowHandlers, scrolls: Map<string, number>, arrived?: () => void }} */ { d, on, scrolls, arrived }) {
   const key = keyOf(d.level);
   const last = useRef({ key, depth: folderDepth(d.level), d, ghost: /** @type {{ d: *, dir: number, scroll: number } | null} */ (null) });
   const cur = useRef(/** @type {HTMLElement | null} */ (null));
@@ -286,11 +313,11 @@ export function Levels({ d, on, scrolls, arrived }) {
     old.current.scrollTop = ghost.scroll;
     slide({ scope: cur.current.parentElement, to: cur.current, out: old.current, dir: ghost.dir, leave: () => { if (last.current.ghost === ghost) { last.current.ghost = null; redraw((n) => n + 1); } } });
   }, [key]);
-  return html`<div id="folder" class="flvl" role="listbox" aria-label="Places and folders" tabindex="-1" ref=${cur} onScroll=${(e) => scrolls.set(key, e.currentTarget.scrollTop)}><${FolderList} d=${d} on=${on} /></div>
+  return html`<div id="folder" class="flvl" role="listbox" aria-label="Places and folders" tabindex="-1" ref=${cur} onScroll=${(/** @type {Event} */ e) => scrolls.set(key, /** @type {HTMLElement} */ (e.currentTarget).scrollTop)}><${FolderList} d=${d} on=${on} /></div>
     ${ghost ? html`<div class="flvl ghost" ref=${old} inert=${true}><${FolderList} d=${ghost.d} on=${on} ghost=${true} /></div>` : null}`;
 }
 
-export const ContextLines = ({ lines }) => html`${lines.map((l, i) => html`<div class="ln" key=${i}>${l}</div>`)}`;
+export const ContextLines = (/** @type {{ lines: string[] }} */ { lines }) => html`${lines.map((l, i) => html`<div class="ln" key=${i}>${l}</div>`)}`;
 
 /** The buttons above the list: what can be added here. */
-export const FolderActions = ({ buttons }) => html`${buttons.map((b) => html`<button type="button" class=${`btn ${b.cls || ''}`} key=${b.label} title=${b.title} onClick=${(e) => b.run(e.currentTarget)}>${b.label}</button>`)}`;
+export const FolderActions = (/** @type {{ buttons: { label: string, title: string, cls?: string, run: (anchor: HTMLElement) => void }[] }} */ { buttons }) => html`${buttons.map((b) => html`<button type="button" class=${`btn ${b.cls || ''}`} key=${b.label} title=${b.title} onClick=${(/** @type {MouseEvent} */ e) => b.run(/** @type {HTMLElement} */ (e.currentTarget))}>${b.label}</button>`)}`;

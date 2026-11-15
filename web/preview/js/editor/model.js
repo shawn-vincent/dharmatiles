@@ -137,14 +137,19 @@ const isDtile = (t) => /\.dtile$/i.test(t.path);
 /**
  * What a folder level draws (js/view/places-panel.js), for the browser's page and for the Add tiles level's pane alike: the one
  * walk of the places and folders.  `keep` says which tiles are listed; `extra` is what only one of them has.
+ * @param {import('../folders.js').Level} level
+ * @param {string} query
+ * @param {string} system
+ * @param {(t: import('./stores.js').ServerTile) => boolean} keep
+ * @param {{ openTile?: string | null, add?: boolean, slot?: number, writable?: boolean, plate?: string, places?: import('../folders.js').Root[] }} extra
  */
-function folderData(level, query, system, keep, extra) {
+export function folderData(level, query, system, keep, extra) {
   const { roots, tiles, folders, home, inventory } = server.get();
-  const r = roots[level.root];
+  const r = level.root == null ? undefined : roots[level.root];
   return {
     roots, tiles, folders, level, query, places: placesOf(roots), home,
     // have and need pills: what the inventory says of a tile for the target system (the chip in the title bar)
-    pill: (t) => invPill(inventory, t.path, system), system, inventory,
+    pill: (/** @type {import('./stores.js').ServerTile} */ t) => invPill(inventory, t.path, system), system, inventory,
     view: level.root == null ? null : levelOf({ roots, tiles: tiles.filter(keep), folders, root: level.root, dir: level.dir, query }),
     writable: !!r && writable(r) && !query.trim(),
     ...extra,

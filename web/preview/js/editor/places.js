@@ -44,11 +44,21 @@ const browsing = () => view.get().page === 'browse';
 
 const scrolls = new Map(); // a level's key -> how far its list was scrolled
 let started = false;
+/** @type {{ kind: string, id: string } | null} */
 let leftFrom = null;       // the folder or place the last Up left, so the keyboard goes back to its row
 
 // ---- what the program says of a refusal ----------------------------------------------------------
 
-/** A reply that was not a success, shown where it was asked for: the program's words in a toast (an internal failure goes to the error panel). */
+/** @typedef {import('../host.js').Reply<unknown>} Answer  any call's reply */
+/** @typedef {import('../folders.js').Level} Level */
+/** @typedef {import('./stores.js').ServerTile} Tile */
+/** @typedef {typeof browse.data.value} BrowseData  what the browser's level draws */
+
+/**
+ * A reply that was not a success, shown where it was asked for: the program's words in a toast (an internal failure goes to the error panel).
+ * @param {string} what
+ * @param {Answer} r
+ */
 function refusal(what, r) {
   if (!failed(what, r)) toast(`${what}: ${whyOf(r)}`, null, { ms: 9000 });
 }
@@ -57,14 +67,19 @@ function refusal(what, r) {
  * The program's answer to a call that changed the list names the revision of the stream its change was told at:
  * the page waits for its stream to reach it, so the change is held (and drawn) the one way every change is.
  */
-const take = async (r) => {
-  if (r.body?.rev == null) return;
-  if (!(await reached(r.body.rev))) showError('The list did not follow the change', new Error(`the program told the change at revision ${r.body.rev} and the page's stream had not reached it`));
+const take = /** @param {Answer} r */ async (r) => {
+  const rev = /** @type {{ rev?: number } | undefined} */ (r.body)?.rev; // the answers that changed the list carry it; the others have none
+  if (rev == null) return;
+  if (!(await reached(rev))) showError('The list did not follow the change', new Error(`the program told the change at revision ${rev} and the page's stream had not reached it`));
 };
 
 // ---- going places ---------------------------------------------------------------------------------
 
-/** Show the folder level `next` (Places for null), on the browser page. */
+/**
+ * Show the folder level `next` (Places for null), on the browser page.
+ * @param {import('../nav.js').FolderAt | null | undefined} next
+ * @param {{ focus?: boolean }} [opts]
+ */
 export function goTo(next, { focus = false } = {}) {
   const to = next || TOP;
   view.set({ placeAt: placeAt(to), query: '', pageAt: 'browse' });
@@ -99,7 +114,7 @@ function fromAddress() {
   const h = parseHash(location.hash);
   const lv = levelOfParams(server.get().roots, h);
   if (!lv) return;
-  if (lv.missing) { toast('That place is not on the list now'); goTo(TOP); return; }
+  if (lv.missing !== undefined) { toast('That place is not on the list now'); goTo(TOP); return; }
   view.set({ placeAt: placeAt(lv), query: '', pageAt: 'browse' });
 }
 
@@ -107,8 +122,12 @@ function fromAddress() {
 
 const dataNow = () => browse.data.value;
 
-/** The buttons above the list: what can be added at the level. */
+/**
+ * The buttons above the list: what can be added at the level.
+ * @param {BrowseData} d
+ */
 function actionButtons(d) {
+  /** @param {string} label @param {string} title @param {(anchor: HTMLElement) => void} run */
   const mk = (label, title, run, cls = '') => ({ label, title, run, cls });
   const buttons = [];
   if (d.level.root == null) buttons.push(mk('Add a folder…', 'Choose a folder of tiles on this computer to list here', addPlace));
@@ -121,8 +140,10 @@ function actionButtons(d) {
   return buttons;
 }
 
-const placeName = (d) => [d.roots[d.level.root]?.label, ...(d.level.dir ? d.level.dir.split('/') : [])].join(' › ');
+/** @param {BrowseData} d */
+const placeName = (d) => [(d.level.root == null ? undefined : d.roots[d.level.root])?.label, ...(d.level.dir ? d.level.dir.split('/') : [])].join(' › ');
 
+/** @type {import('../view/places-panel.js').RowHandlers} */
 const listHandlers = {
   place: (i) => goTo({ root: i, dir: '' }, { focus: !!$('browser').contains(document.activeElement) }),
   folder: (dir) => goTo({ root: levelNow().root, dir }, { focus: !!$('browser').contains(document.activeElement) }),
@@ -140,7 +161,7 @@ function bind() {
   effect(() => {
     if (!browse.ready.value) return;
     const d = browse.data.value;
-    const r = d.roots[d.level.root];
+    const r = d.level.root == null ? undefined : d.roots[d.level.root];
     // Places has nothing to filter
     $('filter').hidden = d.level.root == null;
     if ($('filter').value !== d.query) $('filter').value = d.query;
@@ -173,6 +194,7 @@ function BrowserLevels() {
 
 // ---- opening a tile -------------------------------------------------------------------------------------------
 
+/** @param {string} id */
 async function openTile(id) {
   if (id === view.get().tileId) { view.set({ pageAt: 'edit' }); return; }
   if ((await select(id)) !== false) view.set({ pageAt: 'edit' });
@@ -180,6 +202,7 @@ async function openTile(id) {
 
 // ---- the actions ------------------------------------------------------------------------------------------------
 
+/** @param {number} root @param {string} dir */
 const folderOpenIn = (root, dir) => {
   const t = tile();
   const at = t && whereIs(server.get().roots, t);
@@ -190,6 +213,7 @@ const folderOpenIn = (root, dir) => {
  * After the open tile's file moved: the tile at its new path is opened again, on the level it was at (and the
  * page it was on: its old path left the list as the new one joined, so for a moment no tile was shown).
  */
+/** @param {string} path @param {ReturnType<typeof levelSnapshot> | null} here @param {boolean} editing */
 async function followOpen(path, here, editing) {
   const t = await whenListedWhere((x) => x.path === path);
   if (!t) return;
@@ -198,13 +222,18 @@ async function followOpen(path, here, editing) {
   if (editing) view.set({ pageAt: 'edit' });
 }
 
-/** Rename tile `t` (the open one keeps its level). */
+/**
+ * Rename tile `t` (the open one keeps its level).
+ * @param {Tile} t
+ * @param {string} name
+ */
 async function renameFromList(t, name) {
   const r = await renameTile(t, name);
   if (!r.ok && r.r) refusal(`Could not rename ${stemOf(t.path)}`, r.r);
   return r.ok;
 }
 
+/** @param {Tile} t */
 async function duplicate(t) {
   const r = await host.duplicateTile(t.id);
   if (r.status !== 200 || r.body.id == null) { refusal(`Could not copy ${stemOf(t.path)}`, r); return; }
@@ -214,7 +243,11 @@ async function duplicate(t) {
   toast(`Made ${name}`, () => host.deleteTile(madeId).then((d) => { if (d.status !== 200) refusal(`Could not take ${name} away again`, d); }), { label: 'Undo' });
 }
 
-/** Move tile `t` into `target` ({root, dir}); the Undo moves it back. */
+/**
+ * Move tile `t` into `target` ({root, dir}); the Undo moves it back.
+ * @param {Tile} t
+ * @param {Level & { root: number }} target
+ */
 async function moveTile(t, target) {
   const roots = server.get().roots;
   const from = whereIs(roots, t);
@@ -227,12 +260,14 @@ async function moveTile(t, target) {
   const r = await host.moveTile(t.id, target);
   if (r.status !== 200) { refusal(`Could not move ${stemOf(t.path)}`, r); return; }
   await take(r);
-  if (open) await followOpen(r.body.path, here, editing);
+  if (open && r.body.path != null) await followOpen(r.body.path, here, editing);
   const to = roots[target.root];
   const where = target.dir ? target.dir.split('/').pop() : to?.label;
-  toast(`Moved ${stemOf(t.path)} into ${where}`, () => undoMove(r.body.id, from, stemOf(t.path)), { ms: 8000 });
+  // a tile no place holds has nowhere to be moved back to, so no Undo is offered
+  toast(`Moved ${stemOf(t.path)} into ${where}`, from ? () => undoMove(/** @type {string} */ (r.body.id), from, stemOf(t.path)) : null, { ms: 8000 });
 }
 
+/** @param {string} id @param {Level & { root: number }} from @param {string} name */
 async function undoMove(id, from, name) {
   const open = id === view.get().tileId;
   const here = open ? levelSnapshot() : null;
@@ -243,7 +278,10 @@ async function undoMove(id, from, name) {
   if (open) await followOpen(r.body.path, here, editing);
 }
 
-/** To the Trash, never a delete; the toast's Undo puts it back. */
+/**
+ * To the Trash, never a delete; the toast's Undo puts it back.
+ * @param {Tile} t
+ */
 async function trashTile(t) {
   const open = t.id === view.get().tileId;
   if (open && !(await canLeave())) return;
@@ -254,6 +292,7 @@ async function trashTile(t) {
   toast(`Moved ${name} to the Trash`, () => undoTrash(r.body.undo, name, open), { ms: 9000 });
 }
 
+/** @param {number} n @param {string} name @param {boolean} reopen */
 async function undoTrash(n, name, reopen) {
   const r = await host.undoTrash(n);
   if (r.status !== 200) { refusal(`Could not put ${name} back`, r); return; }
@@ -261,15 +300,17 @@ async function undoTrash(n, name, reopen) {
   if (reopen && r.body.id && (await whenListedWhere((x) => x.id === r.body.id))) { await select(r.body.id, true); view.set({ pageAt: 'edit' }); }
 }
 
+/** @param {number} root @param {string} dir */
 async function trashFolder(root, dir) {
   if (folderOpenIn(root, dir) && !(await canLeave())) return;
   const name = dir.split('/').pop();
   const r = await host.trashFolder(root, dir);
   if (r.status !== 200) { refusal(`Could not move ${name} to the Trash`, r); return; }
   await take(r);
-  toast(`Moved the folder ${name} to the Trash`, () => undoTrash(r.body.undo, name, false), { ms: 9000 });
+  toast(`Moved the folder ${name} to the Trash`, () => undoTrash(r.body.undo, /** @type {string} */ (name), false), { ms: 9000 });
 }
 
+/** @param {number} root @param {string} dir @param {string} name */
 async function renameFolder(root, dir, name) {
   const inside = folderOpenIn(root, dir);
   if (inside && !(await canLeave())) return;
@@ -287,6 +328,7 @@ async function renameFolder(root, dir, name) {
   if (inside && open) await followOpen(`${roots[root].path}/${nowDir}/${open.path.slice(oldPrefix.length)}`, here, editing);
 }
 
+/** @param {HTMLElement} anchor */
 async function newFolder(anchor) {
   const l = levelNow();
   const root = l.root;
@@ -311,7 +353,10 @@ async function newFolder(anchor) {
   });
 }
 
-/** Add a folder with the program's own chooser; a cancel does nothing. */
+/**
+ * Add a folder with the program's own chooser; a cancel does nothing.
+ * @param {HTMLElement} anchor
+ */
 async function addPlace(anchor) {
   anchor.setAttribute('aria-busy', 'true');
   let r;
@@ -324,6 +369,7 @@ async function addPlace(anchor) {
   toast(`Added ${r.body.label} to Places. The folder itself is untouched.`, null, { ms: 6000 });
 }
 
+/** @param {number} i */
 async function removePlace(i) {
   const r0 = server.get().roots[i];
   if (!r0) return;
@@ -337,7 +383,10 @@ async function removePlace(i) {
   toast(`Took ${r0.label} off the list. The folder and its tiles are still on disk.`, null, { ms: 7000 });
 }
 
-/** A library tile is copied into My tiles: the row's way to make it yours without opening it. */
+/**
+ * A library tile is copied into My tiles: the row's way to make it yours without opening it.
+ * @param {Tile} t
+ */
 async function copyToMine(t) {
   const r = await host.mine(t.id);
   if (r.status !== 200 || r.body?.id == null) { refusal(`Could not copy ${stemOf(t.path)} into My tiles`, r); return; }
@@ -348,8 +397,9 @@ async function copyToMine(t) {
 
 // ---- row menus and keys ----------------------------------------------------------------------------------------------
 
+/** @param {number} root @param {string} dir @param {HTMLElement} anchor */
 function nameFolderRow(root, dir, anchor) {
-  const cur = dir.split('/').pop();
+  const cur = /** @type {string} */ (dir.split('/').pop()); // split always yields a piece
   const parent = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '';
   const siblings = new Set((levelOf({ ...server.get(), root, dir: parent })?.folders || []).map((f) => f.name.toLowerCase()));
   nameField(anchor, {
@@ -366,6 +416,7 @@ function nameFolderRow(root, dir, anchor) {
   });
 }
 
+/** @param {Tile} t @param {HTMLElement} anchor */
 function nameTileRow(t, anchor) {
   const cur = stemOf(t.path);
   nameField(anchor, {
@@ -377,6 +428,7 @@ function nameTileRow(t, anchor) {
   });
 }
 
+/** @param {Tile} t @param {HTMLElement} anchor */
 function moveMenu(t, anchor) {
   const { roots, folders } = server.get();
   const targets = moveTargets(roots, folders, t);
@@ -386,6 +438,7 @@ function moveMenu(t, anchor) {
   openMenu(anchor, [{ head: `Move ${stemOf(t.path)} to` }, ...items], { label: `Move ${stemOf(t.path)} to`, cls: 'addmenu', align: 'right' });
 }
 
+/** @param {string} kind @param {string} id @param {HTMLElement} anchor */
 function openRowMenu(kind, id, anchor) {
   const { roots } = server.get();
   const l = levelNow();
@@ -398,9 +451,9 @@ function openRowMenu(kind, id, anchor) {
   if (kind === 'folder') {
     if (l.root == null || !writable(roots[l.root])) return;
     openMenu(anchor, [
-      { label: 'Rename…', hint: 'F2', run: () => nameFolderRow(l.root, id, anchor), keepFocus: true },
+      { label: 'Rename…', hint: 'F2', run: () => nameFolderRow(/** @type {number} */ (l.root), id, anchor), keepFocus: true },
       { sep: true },
-      { label: 'Move to the Trash', hint: '⌫', danger: true, run: () => trashFolder(l.root, id) },
+      { label: 'Move to the Trash', hint: '⌫', danger: true, run: () => trashFolder(/** @type {number} */ (l.root), id) },
     ], { label: id.split('/').pop() });
     return;
   }
@@ -423,8 +476,10 @@ function openRowMenu(kind, id, anchor) {
     { label: 'Move to the Trash', hint: '⌫', danger: true, disabled: !can, why: 'only a tile document is trashed here', run: () => trashTile(t) },
   ], { label: stemOf(t.path) });
 }
+/** @param {Tile} t */
 const kindActions = (t) => /\.dtile$/i.test(t.path);
 
+/** @param {string} action @param {string} kind @param {string} id @param {HTMLElement} anchor */
 function rowAction(action, kind, id, anchor) {
   const { roots } = server.get();
   const l = levelNow();
@@ -439,7 +494,10 @@ function rowAction(action, kind, id, anchor) {
   if (action === 'rename') nameTileRow(t, anchor); else trashTile(t);
 }
 
-/** The arrows move between rows; → opens a folder or place, ← goes up. */
+/**
+ * The arrows move between rows; → opens a folder or place, ← goes up.
+ * @param {KeyboardEvent} e
+ */
 function onListKey(e) {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const row = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest?.('.orow'));

@@ -322,11 +322,11 @@ export function whenListed(id) {
 }
 
 /** Resolves with the first listed tile that `pred` accepts (null after a few seconds): a tile a call has just made or moved joins the list with the program's next word. */
-export function whenListedWhere(pred) {
+export function whenListedWhere(/** @type {(t: ServerTile) => boolean} */ pred) {
   const now = server.get().tiles.find(pred);
   if (now) return Promise.resolve(now);
-  return new Promise((resolve) => {
-    const stop = (t) => { off(); clearTimeout(timer); resolve(t); };
+  return new Promise((/** @type {(t: ServerTile | null) => void} */ resolve) => {
+    const stop = (/** @type {ServerTile | null} */ t) => { off(); clearTimeout(timer); resolve(t); };
     const off = server.subscribe(['tiles'], () => { const t = server.get().tiles.find(pred); if (t) stop(t); });
     const timer = setTimeout(() => stop(null), 5000);
   });
@@ -339,7 +339,7 @@ const levels = new Map();
 const levelNamed = (root, dir) => { const k = `${root ?? ''}|${dir}`; let l = levels.get(k); if (!l) { l = { root, dir }; levels.set(k, l); } return l; };
 
 /** The level the browser stands for a choice made while the tile `tile` was open: `{root, dir, tile}`. */
-export const placeAt = (l) => ({ root: l.root ?? null, dir: l.dir || '', tile: view.get().tileId });
+export const placeAt = (/** @type {{ root: number | null, dir?: string }} */ l) => ({ root: l.root ?? null, dir: l.dir || '', tile: view.get().tileId });
 
 // The level is the one chosen on the browser page, for as long as the tile that was open then is the open one; a tile
 // that opens puts it at the folder the tile is in.  A level that is gone (a place taken off, a folder trashed) is its

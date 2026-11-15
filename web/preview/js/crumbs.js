@@ -6,12 +6,21 @@
 import { Crumbs } from './view/crumbs.js';
 import { html, render } from './view/html.js';
 
-/** Draw `crumbs` into `nav` (the component is js/view/crumbs.js); `go(crumb)` is what a click does. */
+/**
+ * Draw `crumbs` into `nav` (the component is js/view/crumbs.js); `go(crumb)` is what a click does.
+ * @param {HTMLElement} nav
+ * @param {import('./nav.js').Crumb[]} crumbs
+ * @param {(crumb: import('./nav.js').Crumb) => void} go
+ * @param {{ trailing?: boolean, leading?: boolean }} [opts]
+ */
 export function fillCrumbs(nav, crumbs, go, { trailing = false, leading = false } = {}) {
   render(html`<${Crumbs} crumbs=${crumbs} go=${go} trailing=${trailing} leading=${leading} />`, nav);
 }
 
-/** Keep the end of a crumb line in view (where you are), with the start fading out when it is cut off. */
+/**
+ * Keep the end of a crumb line in view (where you are), with the start fading out when it is cut off.
+ * @param {HTMLElement} scroller
+ */
 export function pinEnd(scroller) {
   const fit = () => {
     scroller.scrollLeft = scroller.scrollWidth;
@@ -22,7 +31,10 @@ export function pinEnd(scroller) {
   requestAnimationFrame(fit);
 }
 
-/** Pin the end now and whenever the bar's size changes (once per scroller). */
+/**
+ * Pin the end now and whenever the bar's size changes (once per scroller).
+ * @param {HTMLElement} scroller
+ */
 export function keepEnd(scroller) {
   if (typeof ResizeObserver === 'undefined') return;
   new ResizeObserver(() => pinEnd(scroller)).observe(scroller);
