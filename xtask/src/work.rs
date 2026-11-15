@@ -451,6 +451,14 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
                 crate::parity::run_parity(root, &[])
             }),
         ));
+        steps.push((
+            "cargo xtask parity --too-big: a tile too big for the browser stops saying so, never a memory fault".into(),
+            budget::step::TOO_BIG,
+            Box::new(|| {
+                heavy_lock(root)?;
+                crate::parity::run_parity(root, &["--too-big".to_owned()])
+            }),
+        ));
     }
     if p.page {
         steps.push((

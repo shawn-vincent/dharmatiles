@@ -32,6 +32,9 @@ pub mod step {
     pub const DOCS: f64 = 30.0;
     /// `cargo xtask parity`: the wasm bundle and the set of tiles, in Node and natively.
     pub const PARITY: f64 = 150.0;
+    /// `cargo xtask parity --too-big`: one 2x2 cliff in Node until it runs out of the module's memory and says so
+    /// (about 100 s, 15 Nov 2026), on the bundle parity just built.
+    pub const TOO_BIG: f64 = 150.0;
 }
 
 /// The build's budget in `root`: a warm build's, or a cold one's when this checkout has no release build yet (a
