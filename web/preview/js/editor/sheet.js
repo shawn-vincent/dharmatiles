@@ -33,7 +33,7 @@ import { addTo, lists } from './lists.js';
 
 // ---- what edits do -----------------------------------------------------------------------------------------
 
-const sheetApi = {
+export const sheetApi = {
   writable: () => doc.get().writable,
   // a value scrubbed or typed live, a step at a time: the program makes each edit and drafts it (document.js `steps`)
   scrub: (/** @type {number} */ at, /** @type {string} */ name, /** @type {string} */ label) => {

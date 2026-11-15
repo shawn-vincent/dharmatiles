@@ -19,7 +19,7 @@ import { docs, undoToast } from './docs.js';
 import { server, view } from './stores.js';
 import { steps } from '../steps.js';
 
-const el = (tag, cls, text) => {
+const el = (/** @type {string} */ tag, /** @type {string} */ cls, /** @type {string | null | undefined} */ text) => {
   const x = document.createElement(tag);
   if (cls) x.className = cls;
   if (text != null) x.textContent = text;
@@ -40,7 +40,11 @@ async function openId(id, mode = null) {
   if ((await select(id)) !== false) view.set({ pageAt: 'edit' });
 }
 
-/** A call that edits a list: the program's refusal shown, the success returned; null when it did not go through. */
+/**
+ * A call that edits a list: the program's refusal shown, the success returned; null when it did not go through.
+ * @template T
+ * @param {string} label @param {() => Promise<import('../host.js').Reply<T>>} run
+ */
 async function call(label, run) {
   try {
     const r = await run();
@@ -49,11 +53,11 @@ async function call(label, run) {
   } catch (e) { showError(label, e); return null; }
 }
 
-/** Add one copy of tile `t` to the list `listId`, or to a new list when null. */
+/** Add one copy of tile `t` to the list `listId`, or to a new list when null. @param {import('./stores.js').ServerTile} t @param {string | null} listId */
 export async function addTo(t, listId) {
   const b = await call('Could not add to the print list', () => host.listsAdd({ tile: t.id, list: listId, docRev: listId ? docs.get(listId)?.docRev : undefined }));
   if (!b) return;
-  const name = b.path.split(/[\\/]/).pop().replace(/\.dmap$/i, '');
+  const name = /** @type {string} */ (b.path.split(/[\\/]/).pop()).replace(/\.dmap$/i, ''); // split always yields a piece
   if (b.made) {
     toast(`Made ${name} with ${t.name}`, () => openId(b.list), { label: 'Open' });
     return;
@@ -62,7 +66,7 @@ export async function addTo(t, listId) {
   toast(b.count > 1 ? `${t.name} is ${b.count} in ${name}` : `Added ${t.name} to ${name}`, entry ? () => undoToast(b.list, entry) : null);
 }
 
-/** The menu of lists a tile can go to: each existing one, and a new one. */
+/** The menu of lists a tile can go to: each existing one, and a new one. @param {import('./stores.js').ServerTile} t @param {HTMLElement} anchor */
 export function listMenu(t, anchor) {
   /** @type {{ label?: string, sub?: string, run?: () => unknown, sep?: boolean }[]} */
   const items = lists().map((l) => ({ label: l.name, sub: 'add one copy', run: () => addTo(t, l.id) }));
@@ -71,7 +75,7 @@ export function listMenu(t, anchor) {
   openMenu(anchor, [{ head: `Add ${t.name} to` }, ...items], { label: `Add ${t.name} to a print list`, cls: 'addmenu', align: 'right' });
 }
 
-/** New print list in folder `dir` of place `root`: asks a name, writes it, opens it. */
+/** New print list in folder `dir` of place `root`: asks a name, writes it, opens it. @param {number} root @param {string} dir @param {HTMLElement} anchor @param {string} where */
 export function newList(root, dir, anchor, where, map = false) {
   nameField(anchor, {
     title: map ? 'New map' : 'New print list',
@@ -88,13 +92,13 @@ export function newList(root, dir, anchor, where, map = false) {
   });
 }
 
-/** Set a piece (by id) of the list `listId` to `count` copies. */
+/** Set a piece (by id) of the list `listId` to `count` copies. @param {string} listId @param {string} id @param {number} count */
 export async function setCount(listId, id, count) {
   const r = await docs.edit(listId, () => ({ label: 'Could not change the count', note: `Now ${count}`, steps: [steps.listsCount({ id, count })] }));
   if (r) toast(r.note, () => undoToast(listId, r.entry));
 }
 
-/** Take a piece (by id) out of the list `listId`. */
+/** Take a piece (by id) out of the list `listId`. @param {string} listId @param {string} id @param {string} name */
 export async function removePiece(listId, id, name) {
   const r = await docs.edit(listId, () => ({ label: 'Could not take the piece out', note: `Took ${name} out of the list`, steps: [steps.listsRemove({ id })] }));
   if (r) toast(r.note, () => undoToast(listId, r.entry));

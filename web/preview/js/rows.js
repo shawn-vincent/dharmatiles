@@ -5,7 +5,13 @@
 // wear (a region's mask, a line's points).  The page part (editor/rows.js) sends
 // the edits; every rule about them is here, so it can be tested without one.
 
-const isBase = (it) => it.what === 'base' || (it.element === 'connector' && it.key === 'tile/connector');
+/**
+ * What these rules read of a stack entry (the program's `StackItem` has all of it): its key, what it is, and where it is written.
+ * @typedef {{ key: string, what?: string, element?: string, label?: string, call?: { file: string, span: [number, number] } | null, span?: [number, number], file?: string }} Item
+ */
+/** @typedef {[number, number]} Range  the bytes [start, end) of a node */
+
+const isBase = (/** @type {Item} */ it) => it.what === 'base' || (it.element === 'connector' && it.key === 'tile/connector');
 
 // ---- which node of the document an entry is -------------------------------------------------------
 //
@@ -15,17 +21,19 @@ const isBase = (it) => it.what === 'base' || (it.element === 'connector' && it.k
 // A move, a hide and a delete address a node of the document, never an entry as such.
 
 /** The bytes [start, end) of the node of `file` this entry stands for: its own node, or the call that made it; null when `file` does not write it. */
+/** @param {Item | null | undefined} it @param {string | null | undefined} file @returns {Range | null} */
 export function nodeRange(it, file) {
   if (it?.call) return it.call.file === file ? [it.call.span[0], it.call.span[0] + it.call.span[1]] : null;
   return it?.span && it.file === file ? [it.span[0], it.span[0] + it.span[1]] : null;
 }
 
 /** The byte of the node a hide, a delete or a name addresses: the entry's own, or the call that made it; null when `file` does not write it. */
-export const ownNode = (it, file) => nodeRange(it, file)?.[0] ?? null;
+export const ownNode = (/** @type {Item | null | undefined} */ it, /** @type {string | null | undefined} */ file) => nodeRange(it, file)?.[0] ?? null;
 
 /**
  * The byte of the outermost node of `file` that holds this entry, the one a move carries it in: a scatter written
  * inside a dirt moves with the dirt.  Null for an entry `file` does not write.
+ * @param {Item} it @param {Item[]} items @param {string | null | undefined} file
  */
 export function topNode(it, items, file) {
   const r = nodeRange(it, file);
@@ -47,6 +55,7 @@ export function topNode(it, items, file) {
  */
 export function idAtByte(nodes, at) {
   if (at == null || !nodes) return null;
+  /** @type {{id: string, at: number, len: number} | null} */
   let best = null;
   for (const n of nodes) {
     if (n.at === at) return n.id;
@@ -56,14 +65,16 @@ export function idAtByte(nodes, at) {
 }
 
 /** The id of the tile's `line` or `region` called `name` among the check's nodes; null when the text writes none. */
+/** @param {{ id: string, what?: string, name?: string | null }[] | null | undefined} nodes @param {string} kind @param {string} name */
 export function markId(nodes, kind, name) {
   return nodes?.find((n) => n.what === kind && n.name === name)?.id ?? null;
 }
 
 /** Is `it` a node of this document that a hide, a delete or a move can address? */
-export const writtenIn = (it, file) => ownNode(it, file) != null;
+export const writtenIn = (/** @type {Item} */ it, /** @type {string | null | undefined} */ file) => ownNode(it, file) != null;
 
 /** The first and last list position of the entries that one node makes, around `i` (just `i` when `file` does not write it). */
+/** @param {Item[]} items @param {number} i @param {string | null | undefined} file @returns {[number, number]} */
 export function groupAt(items, i, file) {
   const n = topNode(items[i], items, file);
   if (n == null) return [i, i];
@@ -74,12 +85,13 @@ export function groupAt(items, i, file) {
 }
 
 /** How many of the entries before list position `i` are stack entries (the base is a line of the stack that is not one): the place the plan is asked about. */
-export const entryPlace = (items, i) => items.slice(0, i).filter((it) => !isBase(it)).length;
+export const entryPlace = (/** @type {Item[]} */ items, /** @type {number} */ i) => items.slice(0, i).filter((it) => !isBase(it)).length;
 
 /**
  * Where a new entry goes when it is put before list position `slot` (the list length is the end):
  * `{place: 'before', at}` above the first node from there on that the document writes (a slot inside what one node makes
  * is after it), else `{place: 'stack'}`, the end of the stack; and `index`, the place for the offers.
+ * @param {Item[]} items @param {number} slot @param {string | null | undefined} file
  */
 export function addPlace(items, slot, file) {
   let from = slot;
@@ -98,6 +110,8 @@ export function addPlace(items, slot, file) {
  * What moving entry `from` (with whatever shares its node) to stand before list position `slot` asks of the source:
  * `{at, before}` (`before` the byte of the node it goes above, null for the end), or null when it would not move (it is
  * already there, or its node is not this document's, or nothing this document writes is there to go above).
+ * @param {Item[]} items @param {number} from @param {number} slot @param {string | null | undefined} file
+ * @returns {{ at: number, before: number | null } | null}
  */
 export function planMove(items, from, slot, file) {
   const it = items[from];
@@ -121,6 +135,7 @@ export function planMove(items, from, slot, file) {
 }
 
 /** The slot for a move one node up (`-1`) or down (`+1`) from `from`: where planMove takes it; null when there is no such step. */
+/** @param {Item[]} items @param {number} from @param {number} dir @param {string | null | undefined} file */
 export function stepSlot(items, from, dir, file) {
   const [g0, g1] = groupAt(items, from, file);
   if (dir < 0) return g0 === 0 ? null : groupAt(items, g0 - 1, file)[0];
@@ -128,12 +143,14 @@ export function stepSlot(items, from, dir, file) {
 }
 
 /** Can entry `from` step that way (`dir` -1 up, +1 down)? */
+/** @param {Item[]} items @param {number} from @param {number} dir @param {string | null | undefined} file */
 export function canStep(items, from, dir, file) {
   const s = stepSlot(items, from, dir, file);
   return s != null && planMove(items, from, s, file) != null;
 }
 
 /** Which slot of the rows a pointer at height `y` means: `mids` are the middles of the rows (in order); the slot is the number of rows whose middle is above `y`. */
+/** @param {number[]} mids @param {number} y */
 export function slotAt(mids, y) {
   let n = 0;
   for (const m of mids) if (y > m) n++;
@@ -144,6 +161,7 @@ export function slotAt(mids, y) {
  * The element a move changes the seeds of, if it does.  An entry without `id=` is keyed by its element
  * and its count (`tile/dirt/1`), so moving it across another entry of the same element and no id swaps the
  * two counts, and so the two looks.  Returns that element's name, else null.
+ * @param {Item[]} items @param {number} from @param {number} slot
  */
 export function seedSwap(items, from, slot) {
   const it = items[from];
@@ -156,18 +174,20 @@ export function seedSwap(items, from, slot) {
 // ---- id= ----------------------------------------------------------------------------
 
 /** The `id=` an entry's key says (`tile/rock/oak` -> `oak`); null for one named by its count (`tile/rock/0`), the base and anything inlined from a call. */
+/** @param {string | null | undefined} key */
 export function idOf(key) {
   const p = String(key || '').split('/');
   return p.length === 3 && p[0] === 'tile' && !/^\d+$/.test(p[2]) ? p[2] : null;
 }
 
 /** What the page says an entry is called: its id, else what it is. */
-export const nameOf = (it) => idOf(it.key) ?? it.label;
+export const nameOf = (/** @type {Item} */ it) => idOf(it.key) ?? it.label ?? '';
 
 /**
  * Why `name` cannot be the id of entry `it` (null when it can).  The reader refuses an empty id, one
  * with a slash and one that is only digits (an id becomes a part of a seed path beside the counts);
  * this takes the plain names: letters, digits, `-` and `_`.  No other entry of the same element has it.
+ * @param {string | null | undefined} name @param {Item[]} items @param {Item} it
  */
 export function idFlaw(name, items, it) {
   const s = String(name ?? '').trim();
@@ -183,6 +203,7 @@ export function idFlaw(name, items, it) {
 /**
  * A region's mask (`bits` in `nx` by `ny` cells, row 0 at the south) boxed down to at most `max` across: `{w, h, a}`
  * with `a` each cell's coverage 0-255, the top row first (the picture's).  The mask is the one the build paints on.
+ * @param {{ nx: number, ny: number, bits: string }} r
  */
 export function maskThumb(r, max = 64) {
   const { nx, ny, bits } = r;
@@ -203,7 +224,7 @@ export function maskThumb(r, max = 64) {
 }
 
 /** How many cells of the mask are set, as a share of the tile (0-1): a region with none shows a dash, not a blank. */
-export const coverage = (r) => {
+export const coverage = (/** @type {{ bits: string }} */ r) => {
   let n = 0;
   for (let i = 0; i < r.bits.length; i++) if (r.bits[i] === '1') n++;
   return r.bits.length ? n / r.bits.length : 0;
@@ -212,6 +233,7 @@ export const coverage = (r) => {
 /**
  * A line's points (in squares from the south-west corner, as the map has them) as pixel points in a box
  * `w` by `h` for a tile `cols` by `rows` squares (the box has the tile's shape), with `pad` kept clear and y turned over.
+ * @param {[number, number][] | null | undefined} pts @param {number} cols @param {number} rows @param {number} w @param {number} h
  */
 export function linePoints(pts, cols, rows, w, h, pad = 2) {
   const iw = w - 2 * pad, ih = h - 2 * pad;
@@ -222,6 +244,7 @@ export function linePoints(pts, cols, rows, w, h, pad = 2) {
 }
 
 /** The size (px) of a thumbnail box for a tile `cols` by `rows`: the longer side is `max`. */
+/** @param {number | null | undefined} cols @param {number | null | undefined} rows @returns {[number, number]} */
 export function thumbBox(cols, rows, max = 36) {
   const c = cols || 1, r = rows || 1;
   return c >= r ? [max, Math.max(8, Math.round((max * r) / c))] : [Math.max(8, Math.round((max * c) / r)), max];
@@ -233,21 +256,23 @@ export function thumbBox(cols, rows, max = 36) {
 const ORDER_CODES = new Set(['dt::order', 'dt::plan']);
 
 /** The check's refusal of the order, if its errors hold one: the first. */
-export const orderRefusal = (errors) => (errors || []).find((e) => ORDER_CODES.has(e.code)) ?? null;
+export const orderRefusal = (/** @type {import('./api').Mistake[] | null | undefined} */ errors) => (errors || []).find((e) => ORDER_CODES.has(e.code)) ?? null;
 
 /** The first letter of `s` as a capital. */
-const sentence = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const sentence = (/** @type {string} */ s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** One line for a refused order, in the checker's own words: what it says, then how to mend it, each as a sentence. */
-export const refusalLine = (e) => [e.message, e.help].filter(Boolean).map((s) => sentence(s.replace(/\.$/, ''))).join('. ');
+export const refusalLine = (/** @type {{ message: string, help?: string | null }} */ e) => /** @type {string[]} */ ([e.message, e.help].filter(Boolean)).map((s) => sentence(s.replace(/\.$/, ''))).join('. ');
 
 /** Where the moved entry's first row stands in the list once the move is made: its list position (`from` is any row of what moves). */
+/** @param {Item[]} items @param {number} from @param {number} slot @param {string | null | undefined} file */
 export function landing(items, from, slot, file) {
   const [g0, g1] = groupAt(items, from, file);
   return (slot < g0 ? slot : slot - (g1 - g0 + 1)) + (from - g0);
 }
 
 /** What a finished move says: where the entry went as the stack is drawn, top of the tile first (below which, or to the bottom or the top), and that two same-named entries with no id swapped their looks. */
+/** @param {Item[]} items @param {number} from @param {number} slot @param {string} label */
 export function movedNote(items, from, slot, label) {
   const where = slot <= 0 ? 'to the bottom' : slot >= items.length ? 'to the top' : `below ${nameOf(items[slot])}`;
   const swap = seedSwap(items, from, slot);

@@ -191,7 +191,7 @@ export const view = createStore(/** @type {ViewState} */ ({
  * @typedef {{
  *   tileId: string | null, file: string | null, base: string | null, text: string | null, writable: boolean, docRev: number | null,
  *   checked: string | null, checkedFile: string | null, checkedTile: string | null, ok: boolean, errors: import('../api').Mistake[],
- *   stack: StackItem[] | null, map: TileMap | null, nodesRev: number | null, nodes: import('../api').NodeJson[] | null,
+ *   stack: StackItem[] | null, map: TileMap | null, nodesRev: string | null, nodes: import('../api').NodeJson[] | null,
  *   names: { defs: string[], regions: string[], lines: string[], points: string[] } | null,
  *   note: string | null, conflict: string | null, saving: boolean, selectAt: number | null,
  * }} DocState
@@ -211,52 +211,54 @@ export const doc = createStore(/** @type {DocState} */ ({
 // ---- selectors ---------------------------------------------------------------
 
 const byId = new WeakMap();
+/** @param {string | null | undefined} id */
 export function tileById(id) {
   const tiles = server.get().tiles;
   let m = byId.get(tiles);
   if (!m) { m = new Map(tiles.map((t) => [t.id, t])); byId.set(tiles, m); }
   return (id != null && m.get(id)) || null;
 }
-export const rootOf = (r) => server.get().roots[r] || { kind: 'files', label: 'Files', path: null };
+export const rootOf = (/** @type {number} */ r) => server.get().roots[r] || { kind: 'files', label: 'Files', path: null };
 /** May the tile's file be renamed here? */
-export const renameable = (t) => !!t && !t.path.startsWith('lib:') && /\.dtile$/i.test(t.path) && !!rootOf(t.root).writable;
+export const renameable = (/** @type {ServerTile | null | undefined} */ t) => !!t && !t.path.startsWith('lib:') && /\.dtile$/i.test(t.path) && !!rootOf(t.root).writable;
 /** The id of the document that holds `file` of tile `t`: the tile's own file is the tile's id, a part of it `id#file`. */
-export const sourceId = (t, file) => (!file || file === t.path ? t.id : `${t.id}#${file}`);
+export const sourceId = (/** @type {{ id: string, path: string }} */ t, /** @type {string | null | undefined} */ file) => (!file || file === t.path ? t.id : `${t.id}#${file}`);
 /** The file a source id of tile `t` names (null: the tile's own). */
-export const sourceFile = (t, sid) => (!sid || sid === t.id || !sid.startsWith(`${t.id}#`) ? null : sid.slice(t.id.length + 1));
+export const sourceFile = (/** @type {{ id: string }} */ t, /** @type {string | null | undefined} */ sid) => (!sid || sid === t.id || !sid.startsWith(`${t.id}#`) ? null : sid.slice(t.id.length + 1));
 /** The tile shown. */
 export const tile = () => tileById(view.get().tileId);
-export const progressOf = (id) => server.get().progress[id] || null;
-export const elementNamed = (n) => server.get().elements.find((e) => e.name === n);
+export const progressOf = (/** @type {string} */ id) => server.get().progress[id] || null;
+export const elementNamed = (/** @type {string | null | undefined} */ n) => server.get().elements.find((e) => e.name === n);
 /** A node of the tile's own language (`tile`, `line`, `region`, `within`, `except`) with its controls, as the program describes it. */
-export const nodeNamed = (n) => server.get().language?.nodes.find((x) => x.name === n);
+export const nodeNamed = (/** @type {string} */ n) => server.get().language?.nodes.find((x) => x.name === n);
 /** One control of a node, by name: the program's row for it. */
-export const nodeControl = (node, name) => nodeNamed(node)?.controls.find((c) => c.name === name);
+export const nodeControl = (/** @type {string} */ node, /** @type {string} */ name) => nodeNamed(node)?.controls.find((c) => c.name === name);
 /** Is there text with changes not yet saved? */
 export const dirty = () => { const d = doc.get(); return d.text != null && d.base != null && d.text !== d.base; };
 
 /** A word of a stack entry's own controls (`at=bank` -> bank), or undefined. */
-export const controlText = (it, name) => [...(it.place || []), ...(it.controls || [])].find((c) => c.name === name)?.text.replace(new RegExp(`^${name}=`), '').replace(/"/g, '');
+export const controlText = (/** @type {Pick<StackItem, 'place' | 'controls'>} */ it, /** @type {string} */ name) => [...(it.place || []), ...(it.controls || [])].find((c) => c.name === name)?.text.replace(new RegExp(`^${name}=`), '').replace(/"/g, '');
 /** The region an entry is put in (`at=bank` -> bank): its `at=` when that names one of the map's regions. */
-export const regionOf = (it) => {
+export const regionOf = (/** @type {Pick<StackItem, 'place' | 'controls'>} */ it) => {
   const at = controlText(it, 'at');
   return at && doc.get().map?.regions.some((r) => r.name === at) ? at : undefined;
 };
 /** The file stem (`2x1-cliff`, `1x1-water+grass-tree`): the menu's name for a tile, whatever the document calls it. */
-export const stem = (t) => t.path.replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.dtile$/i, '');
+export const stem = (/** @type {{ path: string }} */ t) => /** @type {string} */ (t.path.replace(/^lib:/, '').split(/[\\/]/).pop()).replace(/\.dtile$/i, ''); // split always yields a piece
 /** Is the document a print list (its panel and view are the plates', editor/plates.js)? */
-export const isPlates = (t) => !!t && /\.dmap$/i.test(t.path);
+export const isPlates = (/** @type {{ path: string } | null | undefined} */ t) => !!t && /\.dmap$/i.test(t.path);
 /** Is a .dmap's map the view (the title bar's Map), not its plates? */
 export const isMapView = () => isPlates(tile()) && view.get().dmode === 'map';
 /** Is a .dmap's plates the view? */
 export const isPlatesView = () => isPlates(tile()) && view.get().dmode !== 'map';
 /** Is the document the inventory (its view is editor/inventory.js)? */
-export const isInventory = (t) => !!t && /\.dinv$/i.test(t.path);
+export const isInventory = (/** @type {{ path: string } | null | undefined} */ t) => !!t && /\.dinv$/i.test(t.path);
 
 /** The stack of the text now: the last clean check of it while editing, else the last build's. */
 // The list is made once for each stack it comes from (the check's, or the build's plan) and handed out again: callers read it, never change it.
 /** @type {StackItem[]} */
 const NONE = [];
+/** @type {{ from: StackItem[] | null, items: StackItem[] }} */
 let stackMemo = { from: null, items: NONE };
 /** @returns {StackItem[]} */
 export function stackItems() {
@@ -266,9 +268,9 @@ export function stackItems() {
   return stackMemo.items;
 }
 /** Where the entry `key` is in the stack of the text now (the checked one, else the build's plan): -1 when it is not there. */
-export const stackIndex = (key) => (key == null ? -1 : stackItems().findIndex((it) => it.key === key));
+export const stackIndex = (/** @type {string | null | undefined} */ key) => (key == null ? -1 : stackItems().findIndex((it) => it.key === key));
 /** The stack item of an entry selection, in the stack of the text now; undefined for another selection or an entry the text no longer has. */
-export const itemOf = (w) => (w?.kind === 'entry' ? stackItems()[stackIndex(w.id)] : undefined);
+export const itemOf = (/** @type {Sel | null | undefined} */ w) => (w?.kind === 'entry' ? stackItems()[stackIndex(w.id)] : undefined);
 /**
  * The map's region, line or point a selection names.
  * @overload
@@ -280,6 +282,8 @@ export const itemOf = (w) => (w?.kind === 'entry' ? stackItems()[stackIndex(w.id
  * @overload
  * @param {Sel | null | undefined} w
  * @returns {MapLine | MapRegion | NamedPoint | null}
+ *
+ * @param {Sel | null | undefined} w
  */
 export function mapNode(w) {
   const { map, tileId } = doc.get();
@@ -316,17 +320,18 @@ export const same = (a, b) => keyOf(a) === keyOf(b);
  * Resolves true once tile `id` is on the list (false after a few seconds):
  * a tile the program has just made joins it with its next event.
  */
+/** @param {string} id */
 export function whenListed(id) {
   if (tileById(id)) return Promise.resolve(true);
   return whenListedWhere((t) => t.id === id).then((t) => !!t);
 }
 
 /** Resolves with the first listed tile that `pred` accepts (null after a few seconds): a tile a call has just made or moved joins the list with the program's next word. */
-export function whenListedWhere(pred) {
+export function whenListedWhere(/** @type {(t: ServerTile) => boolean} */ pred) {
   const now = server.get().tiles.find(pred);
   if (now) return Promise.resolve(now);
-  return new Promise((resolve) => {
-    const stop = (t) => { off(); clearTimeout(timer); resolve(t); };
+  return new Promise((/** @type {(t: ServerTile | null) => void} */ resolve) => {
+    const stop = (/** @type {ServerTile | null} */ t) => { off(); clearTimeout(timer); resolve(t); };
     const off = server.subscribe(['tiles'], () => { const t = server.get().tiles.find(pred); if (t) stop(t); });
     const timer = setTimeout(() => stop(null), 5000);
   });
@@ -334,12 +339,13 @@ export function whenListedWhere(pred) {
 
 // ---- the folder level the browser shows ----------------------------------------------------------------------
 
+/** @type {Map<string, Level>} */
 const levels = new Map();
 /** One object for each level, so a level that did not change is the same object. */
-const levelNamed = (root, dir) => { const k = `${root ?? ''}|${dir}`; let l = levels.get(k); if (!l) { l = { root, dir }; levels.set(k, l); } return l; };
+const levelNamed = (/** @type {number | null} */ root, /** @type {string} */ dir) => { const k = `${root ?? ''}|${dir}`; let l = levels.get(k); if (!l) { l = { root, dir }; levels.set(k, l); } return l; };
 
 /** The level the browser stands for a choice made while the tile `tile` was open: `{root, dir, tile}`. */
-export const placeAt = (l) => ({ root: l.root ?? null, dir: l.dir || '', tile: view.get().tileId });
+export const placeAt = (/** @type {{ root: number | null, dir?: string }} */ l) => ({ root: l.root ?? null, dir: l.dir || '', tile: view.get().tileId });
 
 // The level is the one chosen on the browser page, for as long as the tile that was open then is the open one; a tile
 // that opens puts it at the folder the tile is in.  A level that is gone (a place taken off, a folder trashed) is its
@@ -361,4 +367,4 @@ const NO_CLOUD = { text: null, sheet: null, hov: null, sheetHov: null };
 /** The clouds lit now: what was set for the tile shown, and nothing for any other (so a new tile starts with none, and nothing has to clear them). */
 export const cloudOf = () => { const c = view.get().cloudAt; return c.tile === view.get().tileId ? c : NO_CLOUD; };
 /** Light or put out clouds (`{text, sheet, hov, sheetHov}`: the parts to change) for the tile shown. */
-export const setCloud = (patch) => view.set({ cloudAt: { ...cloudOf(), ...patch, tile: view.get().tileId } });
+export const setCloud = (/** @type {Partial<CloudKeys>} */ patch) => view.set({ cloudAt: { ...cloudOf(), ...patch, tile: view.get().tileId } });

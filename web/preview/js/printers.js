@@ -2,12 +2,20 @@
 // that are only floors.  An AMS-style variant (`x1c-ams` beside `x1c`) is not a model of its own:
 // it is the model's switch.  No DOM here (the chooser is js/editor/printer-chooser.js).
 
+/**
+ * What the choosers read of a profile the program lists (a reading one, or a broken one: `broken` says why).
+ * @typedef {{ name: string, label?: string, brand?: string | null, model?: string | null, mine?: boolean, bed?: [number, number] | null, slots?: number | null, broken?: string | null, verify?: string | null, fromSlicer?: string | null }} Printer
+ */
+/** @typedef {{ name: string, title: string, p: Printer, ams: Printer | null }} Model  a model the list shows, and its AMS variant if there is one */
+
 const AMS = /-ams$/;
 
 /** `[{label, kind, models: [{name, title, p, ams}]}]` for the printers that match `query`. */
+/** @param {Printer[]} printers @param {{ needBed?: boolean, query?: string }} [opts] */
 export function groupPrinters(printers, { needBed = false, query = '' } = {}) {
   const have = new Set(printers.map((p) => p.name));
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  /** @type {Model[]} */
   const models = [];
   for (const p of printers) {
     if (needBed && !p.bed && !p.broken) continue;
@@ -20,9 +28,9 @@ export function groupPrinters(printers, { needBed = false, query = '' } = {}) {
     if (!words.every((w) => hay.includes(w))) continue;
     models.push({ name: p.name, title, p, ams });
   }
-  const by = (label, kind, pick) => ({ label, kind, models: models.filter(pick) });
+  const by = (/** @type {string} */ label, /** @type {string} */ kind, /** @type {(m: Model) => unknown} */ pick) => ({ label, kind, models: models.filter(pick) });
   const out = [by('Yours', 'mine', (m) => m.p.mine)];
-  const brands = [...new Set(models.filter((m) => !m.p.mine && (m.p.bed || m.p.broken) && m.p.brand).map((m) => m.p.brand))].sort((a, b) => a.localeCompare(b));
+  const brands = /** @type {string[]} */ ([...new Set(models.filter((m) => !m.p.mine && (m.p.bed || m.p.broken) && m.p.brand).map((m) => m.p.brand))]).sort((a, b) => a.localeCompare(b));
   for (const b of brands) out.push(by(b, 'brand', (m) => !m.p.mine && m.p.brand === b));
   out.push(by('Floors only', 'floors', (m) => !m.p.mine && !m.p.bed && !m.p.broken));
   // a library profile that names no brand, with a bed
@@ -31,6 +39,7 @@ export function groupPrinters(printers, { needBed = false, query = '' } = {}) {
 }
 
 /** The plain model a profile name stands for in the list, and whether the AMS variant is chosen. */
+/** @param {Printer[]} printers @param {string} name */
 export function selectionOf(printers, name) {
   const have = new Set(printers.map((p) => p.name));
   if (AMS.test(name) && have.has(name.replace(AMS, ''))) return { model: name.replace(AMS, ''), ams: true };
@@ -38,17 +47,19 @@ export function selectionOf(printers, name) {
 }
 
 /** How many whole squares fit along each side of the bed: `[6, 6]`, or null for a profile with no bed. */
-export const squaresOf = (p, square) => (p.bed ? [Math.floor(p.bed[0] / square), Math.floor(p.bed[1] / square)] : null);
+export const squaresOf = (/** @type {Printer} */ p, /** @type {number} */ square) => (p.bed ? [Math.floor(p.bed[0] / square), Math.floor(p.bed[1] / square)] : null);
 
 /** The model's answer in words, squares first: `6 × 6 squares · 1 colour · 220 × 220 mm`. */
+/** @param {Printer} p @param {number} square */
 export function fitWords(p, square) {
   const n = squaresOf(p, square);
-  if (!n) return 'printability floors only';
+  if (!n || !p.bed) return 'printability floors only';
   const f = p.slots === 1 ? '1 colour' : `${p.slots} colours`;
   return `${n[0]} × ${n[1]} squares · ${f} · ${p.bed[0]} × ${p.bed[1]} mm`;
 }
 
 /** The model's size in words: `256 × 256 mm · 1 filament`. */
+/** @param {Printer} p */
 export function sizeWords(p) {
   if (!p.bed) return 'printability floors only';
   const f = p.slots === 1 ? '1 filament' : `${p.slots} filaments`;

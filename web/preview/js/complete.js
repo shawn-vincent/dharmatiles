@@ -9,6 +9,8 @@
 //   after `name=`            the control's words, or the document's regions
 //                            (at=: regions, lines and edges)
 
+/** @typedef {{ label: string, insert: string, about: string, kind: string, family?: string }} Suggestion  one thing the pane offers */
+
 const WORDS = [
   ['stack', 'the entries, in build order'], ['region', 'an area bounded by lines'], ['line', 'a line through points'],
   ['define', 'a definition of your own'], ['use', 'definitions from another file'], ['param', 'a definition\'s parameter'],
@@ -41,7 +43,8 @@ export function suggest(caret, elements, force = false, language = null, names =
   if (/\/\//.test(line)) return null; // in a comment
   if (before.split('"').length % 2 === 0) return language ? inValue(caret, before, line, language, force) : null; // in a string
   const n = { ...NO_NAMES, ...names };
-  const el = (name) => elements.find((e) => e.name === name);
+  const el = (/** @type {string} */ name) => elements.find((e) => e.name === name);
+  /** @type {<T extends { label: string }>(items: T[], word: string) => T[]} */
   const rank = (items, word) => items
     .filter((i) => i.label.startsWith(word) && i.label !== word)
     .sort((a, b) => a.label.length - b.label.length || a.label.localeCompare(b.label));
@@ -50,6 +53,7 @@ export function suggest(caret, elements, force = false, language = null, names =
   if (val) {
     const [, ctl, quote, word] = val;
     const node = seg.trim().split(/\s+/)[0];
+    /** @type {Suggestion[]} */
     let items = [];
     if (ctl === 'at') {
       items = [
@@ -68,6 +72,7 @@ export function suggest(caret, elements, force = false, language = null, names =
   const word = (before.match(/[A-Za-z_][\w+\-.]*$/) || [''])[0];
   if (!word && !force) return null;
   const lead = seg.slice(0, seg.length - word.length);
+  /** @type {Suggestion[]} */
   let items;
   if (!lead.trim() || /^\s*\/-\s*$/.test(lead)) {
     // a node's name
@@ -99,6 +104,7 @@ export function suggest(caret, elements, force = false, language = null, names =
  * the `$` names, the functions and, straight after a number, the units, all
  * from the program's own word lists (`language`, in the map).  Other strings
  * (a description, a name) are the author's.
+ * @param {{ before: string, index: number }} caret @param {string} before @param {string} line @param {import('./api').Language} language @param {boolean} force
  */
 function inValue(caret, before, line, language, force) {
   const quote = before.lastIndexOf('"');
@@ -108,6 +114,7 @@ function inValue(caret, before, line, language, force) {
   const word = (before.slice(quote + 1).match(/\$?[A-Za-z_]\w*$/) || [''])[0];
   const afterNumber = /\d$/.test(before.slice(quote + 1, before.length - word.length));
   if (!word && !force) return null;
+  /** @type {Suggestion[]} */
   const items = [];
   if (afterNumber) items.push(...language.units.map((u) => ({ label: u, insert: u, about: 'a unit', kind: 'unit' })));
   else {

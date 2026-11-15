@@ -26,7 +26,7 @@ import { docs, panelOf, writableOf } from './docs.js';
 import './mode.js'; // `view.dmode` is derived there
 import { isInventory, isPlates, server, stem, tile, tileById, view } from './stores.js';
 
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (/** @type {number} */ n, /** @type {string} */ one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** The tile shown. */
 export const tileNow = computed(() => tile());
@@ -98,7 +98,10 @@ export const plan = computed(() => (isPlates(tileNow.value) ? panelOf(tileNow.va
 /** Is the plates' panel the one on show (a print list, not its map)? */
 export const platesOn = computed(() => isPlates(tileNow.value) && view.get().dmode !== 'map');
 
-const freshUi = (id) => ({ id, exporting: { busy: false, files: null, error: null, failures: [] }, after: { open: false, plate: 1, bad: [], busy: false } });
+/** @typedef {{ id: string | null, exporting: { busy: boolean, files: string[] | null, error: string | null, failures: string[] }, after: { open: boolean, plate: number, bad: number[], busy: boolean } }} PlatesUiState */
+/** @typedef {{ id: string | null, filters: import('../inventory.js').Filters | null, face: string, reprint: string | null }} InventoryUiState */
+
+const freshUi = (/** @type {string | null} */ id) => /** @type {PlatesUiState} */ ({ id, exporting: { busy: false, files: null, error: null, failures: [] }, after: { open: false, plate: 1, bad: [], busy: false } });
 const uiSignal = signal(freshUi(null));
 /**
  * What the user is in the middle of in the plates' panel, for the list shown: the sheet after a print (which plate,
@@ -107,7 +110,7 @@ const uiSignal = signal(freshUi(null));
 export const platesUi = {
   value: computed(() => { const id = tileNow.value?.id ?? null; return uiSignal.value.id === id ? uiSignal.value : freshUi(id); }),
   /** Change the state of list `id`: `edit(state)` answers the parts that change. */
-  update(id, edit) {
+  update(/** @type {string} */ id, /** @type {(state: PlatesUiState) => Partial<PlatesUiState>} */ edit) {
     const cur = uiSignal.peek().id === id ? uiSignal.peek() : freshUi(id);
     uiSignal.value = { ...cur, ...edit(cur), id };
   },
@@ -132,19 +135,24 @@ export const platesPanel = {
 // ---- the folder levels ---------------------------------------------------------------------------------------------
 
 /** What the browser's levels draw (js/view/places-panel.js): the level `view.place` is, what the program lists there, and the filter's words. */
-const isDtile = (t) => /\.dtile$/i.test(t.path);
+const isDtile = (/** @type {{ path: string }} */ t) => /\.dtile$/i.test(t.path);
 
 /**
  * What a folder level draws (js/view/places-panel.js), for the browser's page and for the Add tiles level's pane alike: the one
  * walk of the places and folders.  `keep` says which tiles are listed; `extra` is what only one of them has.
+ * @param {import('../folders.js').Level} level
+ * @param {string} query
+ * @param {string} system
+ * @param {(t: import('./stores.js').ServerTile) => boolean} keep
+ * @param {{ openTile?: string | null, add?: boolean, slot?: number, writable?: boolean, plate?: string, places?: import('../folders.js').Root[] }} extra
  */
-function folderData(level, query, system, keep, extra) {
+export function folderData(level, query, system, keep, extra) {
   const { roots, tiles, folders, home, inventory } = server.get();
-  const r = roots[level.root];
+  const r = level.root == null ? undefined : roots[level.root];
   return {
     roots, tiles, folders, level, query, places: placesOf(roots), home,
     // have and need pills: what the inventory says of a tile for the target system (the chip in the title bar)
-    pill: (t) => invPill(inventory, t.path, system), system, inventory,
+    pill: (/** @type {import('./stores.js').ServerTile} */ t) => invPill(inventory, t.path, system), system, inventory,
     view: level.root == null ? null : levelOf({ roots, tiles: tiles.filter(keep), folders, root: level.root, dir: level.dir, query }),
     writable: !!r && writable(r) && !query.trim(),
     ...extra,
@@ -189,6 +197,7 @@ const addedNow = signal(/** @type {{doc: string | null, tileId: string, name: st
 const freshNow = signal(false);
 let freshTimer = 0;
 /** The tile `t` was just put on the map: its row lights up for a moment (the Add tiles level's list, and its one line when folded). */
+/** @param {import('./stores.js').ServerTile} t */
 export function flashAdded(t) {
   addedNow.value = { doc: tileNow.value?.id ?? null, tileId: t.id, name: stem(t).replace(/\\.dtile$/i, ''), n: (addedNow.peek()?.n ?? 0) + 1 };
   freshNow.value = true;
@@ -210,12 +219,12 @@ export const mapPanel = {
 
 // ---- the inventory --------------------------------------------------------------------------------------------------
 
-const freshInv = (id) => ({ id, filters: null, face: 'view', reprint: null });
+const freshInv = (/** @type {string | null} */ id) => /** @type {InventoryUiState} */ ({ id, filters: null, face: 'view', reprint: null });
 const invSignal = signal(freshInv(null));
 /** What the user is choosing in the inventory's view for the document shown: the filters, the face, the piece a reprint form is open under. */
 export const inventoryUi = {
   value: computed(() => { const id = tileNow.value?.id ?? null; return invSignal.value.id === id ? invSignal.value : freshInv(id); }),
-  update(id, edit) {
+  update(/** @type {string} */ id, /** @type {(state: InventoryUiState) => Partial<InventoryUiState>} */ edit) {
     const cur = invSignal.peek().id === id ? invSignal.peek() : freshInv(id);
     invSignal.value = { ...cur, ...edit(cur), id };
   },
@@ -235,9 +244,9 @@ export const pickedColour = signal(/** @type {string | null} */ (null));
 export const colourKept = signal(0);
 
 /** The piece's log, as the program adds it up: from the snapshot when this is the home inventory (it follows at once), else the document's. */
-const dataOf = (t) => {
+const dataOf = (/** @type {{ path: string, plan?: import('../api').TilePlan | null }} */ t) => {
   const snap = server.get().inventory;
-  const own = t.plan?.inventory;
+  const own = t.plan && 'inventory' in t.plan ? t.plan.inventory : undefined;
   if (snap?.state === 'read' && snap.path === t.path) return { pieces: snap.pieces, text: own?.text ?? '', problems: undefined, home: snap.home };
   return { pieces: own?.pieces ?? [], text: own?.text ?? '', problems: own?.problems, home: homeOf(snap) };
 };

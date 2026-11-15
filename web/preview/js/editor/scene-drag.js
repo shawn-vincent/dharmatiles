@@ -16,15 +16,24 @@ import { addTile, editable, moveTo } from './scene-edit.js';
 /** Is the camera looking (nearly) straight down? */
 const topDown = () => viewer.camera.position.clone().sub(viewer.controls.target).normalize().z > 0.93;
 
-/** The map point (mm, y down) under the pointer on the plane `z`, or null. */
+/**
+ * The map point (mm, y down) under the pointer on the plane `z`, or null.
+ * @param {MouseEvent} e @param {number} z
+ * @returns {[number, number] | null}
+ */
 function mapPoint(e, z) {
   const r = $('canvas').getBoundingClientRect();
   const h = viewer.pointAt(e.clientX - r.left, e.clientY - r.top, z);
   return h ? [h.p[0], -h.p[1]] : null;
 }
 
+/** @typedef {import('../doc-views.js').Piece & { at: [number, number] }} Placed */
+/** @typedef {{ p: Placed, id: string, x: number, y: number }} Move  a piece and the square it is over */
+
+/** @type {{ ps: Placed[], z: number, x: number, y: number, from: [number, number], offs: [number, number][], moved: boolean, to: Move[] | null } | null} the pieces being dragged */
 let drag = null;
 
+/** @param {PointerEvent} e */
 function onDown(e) {
   if (!mapMode() || e.button !== 0 || e.shiftKey || e.pointerType === 'touch') return;
   if (!editable() || !topDown()) return;
@@ -34,7 +43,7 @@ function onDown(e) {
   const sel = view.get().msel.includes(hit) ? view.get().msel : [hit];
   if (!view.get().msel.includes(hit)) select([hit]);
   // what is picked up now, as it stands now: the drag follows these ids and puts them down by id
-  const ps = pieces().filter((p) => sel.includes(p.id) && p.at);
+  const ps = pieces().filter((p) => sel.includes(p.id)).filter(M.isPlaced);
   if (!ps.length) return;
   const z = ps[0].bottomMm || 0;
   const pt = mapPoint(e, z);
@@ -42,10 +51,11 @@ function onDown(e) {
   // the orbit does not take this press: the controls are off until it is let go
   viewer.controls.enabled = false;
   sceneEdit.dragged = false;
-  drag = { ps, z, x: e.clientX, y: e.clientY, from: pt, offs: ps.map((p) => [pt[0] - p.at[0], pt[1] - p.at[1]]), moved: false, to: null };
+  drag = { ps, z, x: e.clientX, y: e.clientY, from: pt, offs: ps.map((p) => /** @type {[number, number]} */ ([pt[0] - p.at[0], pt[1] - p.at[1]])), moved: false, to: null };
 }
 
 let raf = 0;
+/** @param {PointerEvent} e */
 function onMove(e) {
   if (!drag) return;
   if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) return;
@@ -53,8 +63,9 @@ function onMove(e) {
   sceneEdit.dragged = true;
   const pt = mapPoint(e, drag.z);
   if (!pt) return;
+  const held = drag;
   drag.to = drag.ps.map((p, i) => {
-    const s = M.snapSquares(p, pt[0] - drag.offs[i][0], pt[1] - drag.offs[i][1]);
+    const s = M.snapSquares(p, pt[0] - held.offs[i][0], pt[1] - held.offs[i][1]);
     return { p, id: p.id, x: s.x, y: s.y };
   });
   for (const m of drag.to) live.set(m.id, [m.x * m.p.sq, m.y * m.p.sq]);
@@ -81,12 +92,14 @@ async function onUp() {
 
 export const TILE_MIME = 'application/x-dharmatiles-tile';
 
+/** @param {DragEvent} e */
 function onDragOver(e) {
   if (!mapMode() || !e.dataTransfer?.types.includes(TILE_MIME)) return;
   e.preventDefault();
   e.dataTransfer.dropEffect = 'copy';
 }
 
+/** @param {DragEvent} e */
 async function onDrop(e) {
   if (!mapMode() || !e.dataTransfer?.types.includes(TILE_MIME)) return;
   e.preventDefault();

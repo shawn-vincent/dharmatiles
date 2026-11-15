@@ -19,6 +19,26 @@
 import { need } from './dom.js';
 import { pointLabel, placeText, pointText } from './points.js';
 
+/** @typedef {import('./overlay.js').Q} Q */
+/** @typedef {import('./overlay.js').OverlayScene} OverlayScene */
+/** @typedef {import('./api').ElementJson} Element */
+/** @typedef {[string, string, string]} Choice  a name the bar offers, what it is, and its family */
+/** @typedef {{ q: Q, word: string | null }} Snapped */
+/** @typedef {{ kind: string, name: string, el: Element | undefined, extra: string, points: Snapped[] }} Tool  the tool in hand */
+/** @typedef {{ q: Q, label: string, make: (q: Q) => Record<string, any>, move?: (q: Q) => void }} Handle  a handle of the selection */
+/** @typedef {{ to: (x: any) => void, end: (x: any) => void, cancel: () => void }} Steps  a change at pointer speed (editor/document.js `steps`) */
+/** @typedef {{ q: Q, x: number, y: number, moved: boolean }} Press */
+/**
+ * What the tools ask of the page.
+ * @typedef {{
+ *   elements: () => Element[], defs: () => string[], sq: () => number | undefined, size: () => number[], map: () => import('./api').TileMap | null,
+ *   writable: () => boolean, makeMine: (replay: { run?: () => any } | null) => any,
+ *   insert: (place: string, node: string, opts?: { lens?: string, select?: any }) => Promise<any>,
+ *   steps: (label: string, make: (x: any) => Record<string, any>) => Steps | null, handles: () => Handle[], redraw: (scene: OverlayScene) => void, note: (text: string) => void,
+ * }} ToolsApi
+ */
+
+/** @type {Choice[]} */
 const WORDS = [
   ['line', 'draw a line through points on the plate', 'language'],
   ['region', 'click inside the lines: an area to fill', 'language'],
@@ -27,9 +47,9 @@ const EDGE = 0.05; // squares from an edge that snap onto it
 const MID = 0.08;  // squares from an edge's middle or a corner that snap to its word
 
 /** Point `q` (squares) snapped to the tile's edges: {q, word|null}. */
-export function snap(q, [cols, rows]) {
+export function snap(/** @type {Q} */ q, /** @type {number[]} */ [cols, rows]) {
   let [x, y] = q;
-  const near = (v, to, d) => Math.abs(v - to) <= d;
+  const near = (/** @type {number} */ v, /** @type {number} */ to, /** @type {number} */ d) => Math.abs(v - to) <= d;
   // corners, then the middles of edges, as words
   const ns = near(y, 0, MID) ? 'south' : near(y, rows, MID) ? 'north' : null;
   const ew = near(x, 0, MID) ? 'west' : near(x, cols, MID) ? 'east' : null;
@@ -42,7 +62,7 @@ export function snap(q, [cols, rows]) {
   return { q: [Math.min(cols, Math.max(0, x)), Math.min(rows, Math.max(0, y))], word: null };
 }
 /** A snapped point as written: its word, else a pair. */
-const written = (s, rows) => s.word || pointText(s.q, rows);
+const written = (/** @type {Snapped} */ s, /** @type {number} */ rows) => s.word || pointText(s.q, rows);
 
 /**
  * The nearest tile edge's word to `q`.
@@ -56,6 +76,7 @@ function edgeOf([x, y], [cols, rows]) {
 }
 
 /** A name not yet used in `taken`: `base` (`line-1`), then `line-2`… */
+/** @param {string} base @param {string[]} taken */
 function fresh(base, taken) {
   if (!taken.includes(base)) return base;
   const stem = base.replace(/-1$/, '');
@@ -63,17 +84,31 @@ function fresh(base, taken) {
 }
 
 export class Tools {
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {import('./viewer.js').Viewer} viewer
+   * @param {import('./overlay.js').Overlay} overlay
+   * @param {{ bar: HTMLElement, input: HTMLInputElement, list: HTMLElement, chip: HTMLElement }} ui
+   * @param {ToolsApi} api
+   */
   constructor(canvas, viewer, overlay, ui, api) {
     this.canvas = canvas;
     this.viewer = viewer;
     this.overlay = overlay;
     this.ui = ui; // {bar, input, list, chip}
     this.api = api;
+    /** @type {Tool | null} */
     this.tool = null;
-    /** @type {{ h: any, steps: any, z: any, moved: boolean, key: string, q: any } | null} the handle being dragged */
+    /** @type {{ h: Handle, steps: Steps, z: number, moved: boolean, key: string, q: Q } | null} the handle being dragged */
     this.drag = null;
-    /** @type {{ items: any[][], i: number }} */
+    /** @type {{ items: Choice[], i: number }} */
     this.list = { items: [], i: 0 };
+    /** @type {Press | null} */
+    this.press = null;
+    /** @type {number} the handle under the pointer, or -1 */
+    this.hot = -1;
+    /** @type {(Q & { x?: number }) | any} the point under the pointer while a tool is in hand */
+    this.hover = null;
     this.listen();
   }
 
@@ -81,9 +116,15 @@ export class Tools {
   get busy() { return !!this.tool || !!this.drag; }
 
   // ---- the bar --------------------------------------------------------
-  /** What the bar can take, for the word typed. */
+  /**
+   * What the bar can take, for the word typed.
+   * @param {string} word
+   * @returns {Choice[]}
+   */
   choices(word) {
+    /** @type {Choice[]} */
     const els = this.api.elements().map((e) => [e.name, e.about, e.role]);
+    /** @type {Choice[]} */
     const defs = this.api.defs().map((d) => [d, 'a definition of this document', 'thing']);
     return [...els, ...defs, ...WORDS]
       .filter(([n]) => n.startsWith(word))
@@ -136,20 +177,21 @@ export class Tools {
     this.start({ kind, name, el, extra, points: [] });
   }
 
+  /** @param {Tool} tool */
   start(tool) {
     this.tool = tool;
     this.canvas.classList.add('tool');
-    const say = {
+    const say = /** @type {string} */ ({
       place: `Click to place ${tool.name}`,
       scatter: 'Click or drag over a region to scatter in it',
       paint: `Click a region to lay ${tool.name} there`,
       run: `Click a line or near an edge to run ${tool.name} along it`,
       line: 'Click points; Enter or a double-click ends the line',
       region: 'Click inside the lines',
-    }[tool.kind];
+    }[/** @type {'place'} */ (tool.kind)]);
     this.ui.chip.hidden = false;
-    this.ui.chip.querySelector('b').textContent = tool.name + (tool.extra ? ` ${tool.extra}` : '');
-    this.ui.chip.querySelector('span').textContent = say;
+    need(this.ui.chip, 'b').textContent = tool.name + (tool.extra ? ` ${tool.extra}` : '');
+    need(this.ui.chip, 'span').textContent = say;
     this.paint();
   }
 
@@ -166,10 +208,11 @@ export class Tools {
   at(x, y, planeZ = null) {
     const hit = this.viewer.pointAt(x, y, planeZ);
     if (!hit) return null;
-    const sq = this.api.sq();
+    const sq = /** @type {number} */ (this.api.sq()); // a map is drawn only with the program's square size
     return { q: [hit.p[0] / sq, hit.p[1] / sq], z: hit.p[2] };
   }
 
+  /** @param {MouseEvent} e */
   xy(e) { const r = this.canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 
   listen() {
@@ -244,7 +287,7 @@ export class Tools {
     });
   }
 
-  /** A key for the tool in hand: true when taken. */
+  /** A key for the tool in hand: true when taken. @param {KeyboardEvent} e */
   key(e) {
     if (!this.tool) return false;
     if (e.key === 'Escape') {
@@ -259,7 +302,7 @@ export class Tools {
 
   // ---- what each tool does -----------------------------------------------
   footprint() {
-    const t = this.tool;
+    const t = /** @type {Tool} */ (this.tool); // asked while a tool is in hand
     const size = t.el?.controls.find((c) => c.name === 'size')?.default;
     const own = t.extra.match(/size="?([^"\s]+)/);
     const nums = (own ? own[1] : size || '').match(/\d+(?:\.\d+)?/g)?.map(Number);
@@ -267,9 +310,10 @@ export class Tools {
     return t.name === 'tree' ? 12 : t.el ? 5 : 8;
   }
 
+  /** @param {Press} press @param {{ q: Q, z: number }} p @param {number} x @param {number} y */
   async act(press, p, x, y) {
-    const t = this.tool;
-    const node = (more) => [t.name, t.extra, more].filter(Boolean).join(' ');
+    const t = /** @type {Tool} */ (this.tool); // a press is only made while a tool is in hand
+    const node = (/** @type {string} */ more) => [t.name, t.extra, more].filter(Boolean).join(' ');
     const size = this.api.size();
     if (t.kind === 'place') {
       const at = placeText(p.q, size[1]);
@@ -304,10 +348,10 @@ export class Tools {
   }
 
   async endLine() {
-    const t = this.tool;
+    const t = /** @type {Tool} */ (this.tool); // asked while a line is being drawn
     // a double-click's two clicks put the last point down twice
     const rows = this.api.size()[1];
-    const w = (p) => written(p, rows);
+    const w = (/** @type {Snapped} */ p) => written(p, rows);
     const pts = t.points.filter((p, i) => i === 0 || w(p) !== w(t.points[i - 1]));
     if (pts.length < 2) { this.api.note('A line needs two points at least'); return; }
     const name = fresh(t.extra && !t.extra.includes('=') ? t.extra.split(/\s+/)[0] : 'line-1', (this.api.map()?.lines || []).map((l) => l.name));
@@ -317,11 +361,12 @@ export class Tools {
   }
 
   // ---- handles ------------------------------------------------------------
+  /** @param {number} i @param {PointerEvent} e */
   grab(i, e) {
     const h = this.api.handles()[i];
     if (!h) return;
     this.canvas.setPointerCapture(e.pointerId);
-    const sq = this.api.sq();
+    const sq = /** @type {number} */ (this.api.sq()); // handles are drawn only with the program's square size
     // the program makes every step's edit (where the point lands, by the seam rule for a line's, and the text of it): the page
     // only says where the pointer is (`api.steps`, js/editor/document.js)
     const steps = this.api.steps(h.label, h.make);
@@ -329,6 +374,7 @@ export class Tools {
     this.drag = { h, steps, z: this.overlay.heightAt(h.q[0] * sq, h.q[1] * sq), moved: false, key: '', q: h.q };
   }
 
+  /** @param {PointerEvent} e */
   dragTo(e) {
     const d = this.drag;
     if (!d) return; // no handle is held
@@ -355,9 +401,10 @@ export class Tools {
   // ---- drawing --------------------------------------------------------------
   /** The overlay's tool drawing for now. */
   scene() {
+    /** @type {OverlayScene} */
     const s = {};
     const t = this.tool, h = this.hover;
-    s.handles = this.api.handles().map((x, i) => ({ q: x.q, hot: i === this.hot || x === this.drag?.h }));
+    s.handles = this.api.handles().map((/** @type {Handle} */ x, /** @type {number} */ i) => ({ q: x.q, hot: i === this.hot || x === this.drag?.h }));
     if (t && h) {
       const size = this.api.size();
       if (t.kind === 'place') {

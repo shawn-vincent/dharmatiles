@@ -8,5 +8,5 @@ import { PrinterChooser } from '../view/printer-chooser.js';
 import { host, toast } from './app.js';
 import { server } from './stores.js';
 
-/** The chooser as a vnode for `{printers, current, onPick, needBed, disabled, skey}`. @param {any} props */
+/** The chooser as a vnode for `{printers, current, onPick, needBed, disabled, skey}`. @param {import('../view/printer-chooser.js').ChooserArgs} props */
 export const chooserFor = (props) => html`<${PrinterChooser} square=${server.get().squareMm} ...${props} scan=${host.printersScan} importFrom=${host.printersImport} say=${failed} toast=${toast} />`;

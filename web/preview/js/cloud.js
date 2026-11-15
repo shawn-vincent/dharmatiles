@@ -12,6 +12,7 @@ import { byteToIndex } from './text.js';
 /** @typedef {import('./api').Clouds} Clouds */
 /** @typedef {import('./api').CloudSheet} CloudSheet */
 /** @typedef {import('./api').StackItem} StackItem */
+/** @typedef {{ key: string, from: number, to: number, pin: number | null }} Cloud  a cloud written in the text, as character indices */
 
 /**
  * The clouds written in `text`, for the stack `items` (as the page holds
@@ -27,6 +28,7 @@ import { byteToIndex } from './text.js';
  */
 export function cloudsIn(text, items, file) {
   if (!text) return [];
+  /** @type {Cloud[]} */
   const out = [];
   for (const it of items) {
     if (!it?.key) continue;
@@ -38,12 +40,12 @@ export function cloudsIn(text, items, file) {
   return out.sort((a, b) => a.from - b.from);
 }
 
-/** The cloud the caret at character `i` is in (its ends count), else null. */
+/** The cloud the caret at character `i` is in (its ends count), else null. @param {Cloud[]} clouds @param {number} i */
 export function cloudAtCaret(clouds, i) {
   return clouds.find((c) => i >= c.from && i <= c.to) ?? null;
 }
 
-/** The first cloud written on 1-based line `n`, else null. */
+/** The first cloud written on 1-based line `n`, else null. @param {string | null} text @param {Cloud[]} clouds @param {number | null | undefined} n */
 export function cloudOnLine(text, clouds, n) {
   if (!text || n == null) return null;
   let start = 0;
@@ -75,7 +77,7 @@ export const SHADE_SHEET = [0.04, 0.55];
 /** @type {[number, number]} */
 export const SHADE_COLUMN = [0.12, 1];
 
-/** Opacity for a shade (0 to 1; flat odds are 0.5) over `[least, most]`. */
+/** Opacity for a shade (0 to 1; flat odds are 0.5) over `[least, most]`. @param {number | null | undefined} shade @param {[number, number]} range */
 export function shadeAlpha(shade, [least, most]) {
   const t = Math.min(1, Math.max(0, shade ?? 0.5));
   return least + (most - least) * t;
@@ -89,7 +91,7 @@ export function shadeAlpha(shade, [least, most]) {
  */
 export function sheetGeometry(s) {
   const { nx, ny, step, z } = s;
-  const at = (i, j) => z[j * nx + i];
+  const at = (/** @type {number} */ i, /** @type {number} */ j) => z[j * nx + i];
   const cx = nx - 1, cy = ny - 1;
   const drawn = new Uint8Array(Math.max(0, cx * cy));
   for (let j = 0; j < cy; j++) {
@@ -97,11 +99,12 @@ export function sheetGeometry(s) {
       drawn[j * cx + i] = at(i, j) != null && at(i + 1, j) != null && at(i, j + 1) != null && at(i + 1, j + 1) != null ? 1 : 0;
     }
   }
+  /** @type {number[]} */
   const tri = [], edge = [], shade = [];
-  const sh = (i, j) => (s.shade ? s.shade[j * nx + i] : 0.5);
+  const sh = (/** @type {number} */ i, /** @type {number} */ j) => (s.shade ? s.shade[j * nx + i] : 0.5);
   // only a drawn cell is walked, and a drawn cell has all four corners set
-  const p = (i, j) => [i * step, j * step, /** @type {number} */ (at(i, j))];
-  const cell = (i, j) => i >= 0 && j >= 0 && i < cx && j < cy && drawn[j * cx + i] === 1;
+  const p = (/** @type {number} */ i, /** @type {number} */ j) => [i * step, j * step, /** @type {number} */ (at(i, j))];
+  const cell = (/** @type {number} */ i, /** @type {number} */ j) => i >= 0 && j >= 0 && i < cx && j < cy && drawn[j * cx + i] === 1;
   for (let j = 0; j < cy; j++) {
     for (let i = 0; i < cx; i++) {
       if (!cell(i, j)) continue;

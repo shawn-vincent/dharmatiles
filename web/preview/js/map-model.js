@@ -9,9 +9,14 @@
 // the tile's frame: x east, y north from its south-west corner.  The map's world frame, the one the view
 // draws, has x east and y north from the map's north-west corner: y is minus the document's "down".
 
-const norm = (r) => ((Math.round(Number(r) || 0) % 360) + 360) % 360;
+/** @typedef {import('./api').ScenePiece} Piece */
+/** @typedef {Pick<Piece, 'at' | 'rot' | 'size'>} Placed  what a footprint reads of a piece */
+/** @typedef {[number, number, number, number]} Box  `[x0, y0, x1, y1]`, mm, y down */
+
+const norm = (/** @type {number | null | undefined} */ r) => ((Math.round(Number(r) || 0) % 360) + 360) % 360;
 
 /** The piece's footprint on the map as `[x0, y0, x1, y1]`, y down (as the document counts), mm; null when it is not placed. */
+/** @param {Placed} p @returns {Box | null} */
 export function footprint(p) {
   if (!p.at) return null;
   const turned = (norm(p.rot) / 90) % 2 === 1;
@@ -20,6 +25,7 @@ export function footprint(p) {
 }
 
 /** The 4 x 4 matrix (column-major, three.js's) that puts a piece's tile mesh where the piece stands, raised by its bottom (the tile's zero stands there; the connector is below it). */
+/** @param {Placed & { bottomMm?: number }} p */
 export function matrixOf(p) {
   const f = footprint(p);
   if (!f) throw new Error('A piece with no place (`at`) has no matrix.');
@@ -34,12 +40,14 @@ export function matrixOf(p) {
 }
 
 /** A point of the tile's frame as the map's world point [x, y, z] (y up). */
+/** @param {Placed & { bottomMm?: number }} p @param {number} x @param {number} y */
 export function toWorld(p, x, y, z = 0) {
   const m = matrixOf(p);
   return [m[0] * x + m[4] * y + m[12], m[1] * x + m[5] * y + m[13], z + m[14]];
 }
 
 /** The box a placed piece fills in the world: its footprint, from `below` mm under its bottom (the tile's connector hangs below the tile's zero) to `top` mm over it. */
+/** @param {Placed & { bottomMm?: number }} p @param {number} [top] @param {number} [below] */
 export function worldBox(p, top = 8, below = 0) {
   const f = footprint(p);
   if (!f) throw new Error('A piece with no place (`at`) has no box.');
@@ -48,20 +56,23 @@ export function worldBox(p, top = 8, below = 0) {
 }
 
 /** Do two footprints overlap by more than a hair? */
+/** @param {Box} a @param {Box} b */
 export function overlaps(a, b) {
   return a[0] < b[2] - 0.01 && b[0] < a[2] - 0.01 && a[1] < b[3] - 0.01 && b[1] < a[3] - 0.01;
 }
 
 /** `(2sq, 1.5sq)`: a place as the document writes it, in the piece's own squares. */
-export const atWord = (xSq, ySq) => `(${num(xSq)}sq, ${num(ySq)}sq)`;
-const num = (v) => String(Number(v.toFixed(3)));
+export const atWord = (/** @type {number} */ xSq, /** @type {number} */ ySq) => `(${num(xSq)}sq, ${num(ySq)}sq)`;
+const num = (/** @type {number} */ v) => String(Number(v.toFixed(3)));
 
 /** Snap a map point (mm, y down) to the whole squares of the piece's own system: {x, y} in squares of that piece. */
+/** @param {{ sq: number }} p @param {number} xMm @param {number} yMm */
 export function snapSquares(p, xMm, yMm) {
   return { x: Math.round(xMm / p.sq), y: Math.round(yMm / p.sq) };
 }
 
 /** `column 1, row 1`: where a piece stands, counted from one (the document writes it from zero). A piece in the tray has no place. */
+/** @param {Pick<Piece, 'at' | 'sq'>} p */
 export function placeWords(p) {
   if (!p.at) return 'in the tray';
   const s = snapSquares(p, p.at[0], p.at[1]);
@@ -69,10 +80,10 @@ export function placeWords(p) {
 }
 
 /** Which of a piece's sides are against another piece: not used to refuse, only to read. */
-export const bounds = (pieces) => {
+export const bounds = (/** @type {Placed[]} */ pieces) => {
   const placed = pieces.filter((p) => p.at);
   if (!placed.length) return null;
-  const f = placed.map(footprint);
+  const f = /** @type {Box[]} */ (placed.map(footprint)); // each is placed, so each has a footprint
   const lo = [Math.min(...f.map((b) => b[0])), Math.min(...f.map((b) => b[1]))];
   const hi = [Math.max(...f.map((b) => b[2])), Math.max(...f.map((b) => b[3]))];
   return { lo, hi };
@@ -84,9 +95,15 @@ export const bounds = (pieces) => {
 // `scene.have`, `scene.toPrint`: crates/dharmatiles/src/preview/scene.rs `mark_shelf`); the page draws it.
 
 /** `Map(id -> {state, text})` of what the program says of each piece with a word: have, need, other or skip. */
-export const marks = (pieces) => new Map(pieces.filter((p) => p.shelf).map((p) => [p.id, p.shelf]));
+export const marks = (/** @type {Pick<Piece, 'id' | 'shelf'>[]} */ pieces) => {
+  /** @type {Map<string, import('./api').ShelfMark>} */
+  const out = new Map();
+  for (const p of pieces) if (p.shelf) out.set(p.id, p.shelf);
+  return out;
+};
 
 /** `3 in inventory · 11 to print`, or `11 to print` where there is no inventory: the program's numbers, said. */
+/** @param {Pick<import('./api').SceneJson, 'toPrint' | 'shelfExists' | 'have'> | null | undefined} scene */
 export function totalsText(scene) {
   const toPrint = scene?.toPrint ?? 0;
   return scene?.shelfExists ? `${scene.have} in inventory · ${toPrint} to print` : `${toPrint} to print`;
@@ -121,6 +138,7 @@ export const GUESS = { 'super-low': 8_000, low: 25_000, full: 330_000 };
  * (a piece moved to another seed, tile build or printer, or left the map, leaves its old mesh behind).
  * `held` is the keys kept, `pieces` the scene's (each with its `gkey`, null for one with no mesh).
  */
+/** @param {Iterable<string>} held @param {{ gkey?: string | null }[]} pieces */
 export function staleKeys(held, pieces) {
   const used = new Set(pieces.map((p) => p.gkey).filter(Boolean));
   return [...held].filter((k) => !used.has(k));
@@ -141,6 +159,13 @@ export function wantedTier(px, was = null, selected = false) {
 }
 
 /**
+ * @typedef {{
+ *   want: string[], px: number[], have: Set<string>[], tris: ((tier: string) => number)[],
+ *   current?: (string | null)[], dist?: number[], ids?: string[], budget?: number,
+ * }} TierInput
+ */
+
+/**
  * Which tier each piece is drawn at, as one input object: `want[i]` the tier piece i would like by its size,
  * `px[i]` its size on screen, `have[i]` the tiers loaded for it (a Set), `tris[i]` a function tier -> triangles
  * (the loaded mesh's, or a guess), `current[i]` the tier it holds now (shown, or asked for and on its way; null for
@@ -151,17 +176,18 @@ export function wantedTier(px, was = null, selected = false) {
  * Who deserves most is a total order that does not depend on the order of the list: by size on screen, a piece that
  * holds full counting STICKY times its size (so another takes its room only by being clearly bigger), then by the
  * nearer, then by id.  Returns the tier to draw for each piece (null: nothing loaded yet) and the total.
+ * @param {TierInput} input
  */
 export function chooseTiers({ want, px, have, tris, current = [], dist = [], ids = [], budget = BUDGET }) {
-  const best = (i, cap) => {
+  const best = (/** @type {number} */ i, /** @type {number} */ cap) => {
     for (let t = cap; t >= 0; t--) if (have[i].has(TIERS[t])) return t;
     return -1;
   };
   const pick = want.map((w, i) => best(i, TIERS.indexOf(w)));
-  const cost = (i) => (pick[i] < 0 ? 0 : tris[i](TIERS[pick[i]]));
+  const cost = (/** @type {number} */ i) => (pick[i] < 0 ? 0 : tris[i](TIERS[pick[i]]));
   let total = pick.reduce((n, _, k) => n + cost(k), 0);
-  const eff = (i) => px[i] * (current[i] === 'full' ? STICKY : 1);
-  const id = (i) => String(ids[i] ?? i);
+  const eff = (/** @type {number} */ i) => px[i] * (current[i] === 'full' ? STICKY : 1);
+  const id = (/** @type {number} */ i) => String(ids[i] ?? i);
   const lowestFirst = pick.map((_, i) => i).sort((a, b) =>
     eff(a) - eff(b) || (dist[b] ?? 0) - (dist[a] ?? 0) || id(b).localeCompare(id(a)) || b - a);
   // the fulls go first (to low), the least deserving of them first; only when that is not enough, the lows (to super-low)
@@ -184,10 +210,12 @@ export function chooseTiers({ want, px, have, tris, current = [], dist = [], ids
  * everything wanted had arrived, so the pieces that will fit the budget are the ones fetched, all together:
  * `fetch` lists `[i, tier]` of each piece's intended tier that is not loaded, most deserving first.
  */
+/** @param {TierInput} input */
 export function planTiers(input) {
   const shown = chooseTiers(input);
   const intended = chooseTiers({ ...input, have: input.have.map(() => new Set(TIERS)) });
-  const id = (i) => String(input.ids?.[i] ?? i);
+  const id = (/** @type {number} */ i) => String(input.ids?.[i] ?? i);
+  /** @type {[number, string][]} */
   const fetch = [];
   intended.tiers.forEach((t, i) => { if (t && !input.have[i].has(t)) fetch.push([i, t]); });
   fetch.sort(([a], [b]) => input.px[b] - input.px[a] || (input.dist?.[a] ?? 0) - (input.dist?.[b] ?? 0) || id(a).localeCompare(id(b)));
@@ -195,41 +223,53 @@ export function planTiers(input) {
 }
 
 /** How many pieces are drawn at each tier, and how many have nothing yet: `{full, low, 'super-low', none}`. */
+/** @param {(string | null)[]} tiers */
 export function tierCounts(tiers) {
+  /** @type {Record<string, number>} */
   const c = { full: 0, low: 0, 'super-low': 0, none: 0 };
   for (const t of tiers) c[t ?? 'none'] += 1;
   return c;
 }
 
 /** The pixel size of `mm` at `dist` from a perspective camera of `fov` degrees on a canvas `h` pixels tall. */
-export const pxOfPerspective = (mm, dist, fov, h) => (mm * h) / (2 * Math.max(dist, 1e-3) * Math.tan((fov * Math.PI) / 360));
+export const pxOfPerspective = (/** @type {number} */ mm, /** @type {number} */ dist, /** @type {number} */ fov, /** @type {number} */ h) => (mm * h) / (2 * Math.max(dist, 1e-3) * Math.tan((fov * Math.PI) / 360));
 /** The same for an orthographic camera whose frustum is `half` mm from the middle to the top edge. */
-export const pxOfOrtho = (mm, half, h) => (mm * h) / (2 * half);
+export const pxOfOrtho = (/** @type {number} */ mm, /** @type {number} */ half, /** @type {number} */ h) => (mm * h) / (2 * half);
 
 // ---- a piece's words -------------------------------------------------------------------------------------
 
 /** The words the panel says of a piece's bottom (where its tile's zero stands): a `$` name's own text or the length as written. */
-export const bottomWords = (p, names = []) => {
+export const bottomWords = (/** @type {Pick<Piece, 'bottom'>} */ p, /** @type {{ name: string, dmm: number }[]} */ names = []) => {
   if (!p.bottom) return 'ground level';
   const n = names.find((x) => `$${x.name}` === p.bottom);
   return n ? `${p.bottom} · ${Number(n.dmm.toFixed(1))} dmm` : p.bottom;
 };
 
 /** A piece's label: its tile's name, and its id when it has one. */
-export const label = (p) => (p.id ? `${p.name} · ${p.id}` : p.name);
+export const label = (/** @type {Pick<Piece, 'id' | 'name'>} */ p) => (p.id ? `${p.name} · ${p.id}` : p.name);
 
 /** The turn a quarter on from `rot`: clockwise (+1) or counter-clockwise (-1). */
-export const turned = (rot, dir) => norm(rot + 90 * dir);
+export const turned = (/** @type {number} */ rot, /** @type {number} */ dir) => norm(rot + 90 * dir);
 
 /** A piece as the page draws it on a plate pin: nothing here, see js/editor/plates.js. */
+/**
+ * @template {Pick<Piece, 'at'>} P
+ * @param {P} p
+ * @returns {p is P & { at: [number, number] }}
+ */
 export const isPlaced = (p) => !!p.at;
 
 /** The groups of the map's pieces by tile: [{canon, name, pieces}], in the order the tiles first appear. */
+/**
+ * @template {Pick<Piece, 'canon' | 'name'>} P
+ * @param {P[]} ps
+ */
 export function groupsOf(ps) {
+  /** @type {Map<string, { canon: string, name: string, pieces: P[] }>} */
   const by = new Map();
   for (const p of ps) {
     if (!by.has(p.canon)) by.set(p.canon, { canon: p.canon, name: p.name, pieces: [] });
-    by.get(p.canon).pieces.push(p);
+    /** @type {{ pieces: P[] }} */ (by.get(p.canon)).pieces.push(p); // set on the line above
   }
   return [...by.values()];
 }

@@ -44,8 +44,8 @@ function pickFirst() {
   const wanted = want ? tiles.find((t) => t.path === want) : null;
   if (wanted) return select(wanted.id, true);
   const level = levelOfParams(roots, parseHash(location.hash));
-  if (level?.missing) toast('That place is not on the list now');
-  else if (level) view.set({ placeAt: placeAt(level), pageAt: 'browse' });
+  if (level && level.missing !== undefined) toast('That place is not on the list now');
+  else if (level && level.missing === undefined) view.set({ placeAt: placeAt(level), pageAt: 'browse' });
   else {
     const files = roots.findIndex((r) => r.kind === 'files');
     const named = files >= 0 ? tiles.find((t) => t.root === files) : null;

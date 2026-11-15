@@ -10,7 +10,14 @@
 import { signal } from '@preact/signals-core';
 import { html, render, useEffect, useLayoutEffect, useRef, useState } from './html.js';
 
-/** @type {import('@preact/signals-core').Signal<any>} */
+/**
+ * What a menu row is: a choice, a small heading or a separator.
+ * @typedef {{ label?: string, sub?: string | null, swatch?: string, hint?: string, danger?: boolean, disabled?: boolean, why?: string | null, keepFocus?: boolean, run?: () => void, head?: string, sep?: boolean }} MenuItem
+ */
+/** @typedef {{ kind: 'menu', anchor: Element, items: MenuItem[], label: string, cls: string, align: string, onClose?: () => void }} MenuSpec */
+/** @typedef {{ kind: 'name', anchor: Element, title: string, value: string, hint: string, flaw: (value: string) => string | null, save: (value: string) => void, align: string, onClose?: () => void }} NameSpec */
+
+/** @type {import('@preact/signals-core').Signal<MenuSpec | NameSpec | null>} */
 const current = signal(null);
 
 /** Close the popup that is open, if one is; `restore` gives the keyboard back to what opened it. */
@@ -19,10 +26,11 @@ export function closePopup({ restore = true } = {}) {
   if (!p) return;
   current.value = null;
   p.anchor.removeAttribute('aria-expanded');
-  if (restore && document.contains(p.anchor)) p.anchor.focus({ preventScroll: true });
+  if (restore && document.contains(p.anchor)) /** @type {HTMLElement} */ (p.anchor).focus({ preventScroll: true });
   p.onClose?.();
 }
 
+/** @param {MenuSpec | NameSpec} spec */
 function open(spec) {
   closePopup();
   ensureHost();
@@ -40,7 +48,7 @@ function ensureHost() {
 }
 
 /** Put `box` by `anchor`: under it (above it when there is no room), `align` its left or right edge with the anchor's, kept on screen. */
-export function place(box, anchor, align) {
+export function place(/** @type {HTMLElement} */ box, /** @type {Element} */ anchor, /** @type {string} */ align) {
   const a = anchor.getBoundingClientRect();
   const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
   box.style.maxHeight = '';
@@ -62,7 +70,7 @@ export function place(box, anchor, align) {
  * reason an item that cannot be chosen is not), `{head}` (a small heading) or `{sep: true}`.  Choosing an item closes the
  * menu and runs it.  `label` names the menu for a screen reader.
  * @param {Element} anchor
- * @param {any[]} items
+ * @param {MenuItem[]} items
  * @param {{label?: string, cls?: string, align?: string, onClose?: () => void}} [options]
  */
 export function openMenu(anchor, items, { label = 'Actions', cls = '', align = 'right', onClose } = {}) {
@@ -70,11 +78,11 @@ export function openMenu(anchor, items, { label = 'Actions', cls = '', align = '
 }
 
 /** A popover by `anchor` with one field: `flaw(value)` says why a name will not do; `save(value)` writes it. */
-export function openNameField(anchor, { title, value, hint, flaw, save }) {
+export function openNameField(/** @type {Element} */ anchor, /** @type {{ title: string, value: string, hint: string, flaw: (value: string) => string | null, save: (value: string) => void }} */ { title, value, hint, flaw, save }) {
   open({ kind: 'name', anchor, title, value, hint, flaw, save, align: 'left' });
 }
 
-function Menu({ p }) {
+function Menu(/** @type {{ p: MenuSpec }} */ { p }) {
   const box = useRef(/** @type {HTMLElement | null} */ (null));
   useLayoutEffect(() => { if (box.current) place(box.current, p.anchor, p.align); }, [p]);
   useEffect(() => {
@@ -95,7 +103,7 @@ function Menu({ p }) {
     else return;
     e.preventDefault();
   };
-  return html`<div class=${`rmenu ${p.cls}`} role="menu" aria-label=${p.label} ref=${box} onKeyDown=${onKeyDown}>${p.items.map((it, i) => {
+  return html`<div class=${`rmenu ${p.cls}`} role="menu" aria-label=${p.label} ref=${box} onKeyDown=${onKeyDown}>${p.items.map((/** @type {MenuItem} */ it, /** @type {number} */ i) => {
     if (it.sep) return html`<hr class="rsep" key=${i} />`;
     if (it.head) return html`<div class="cap rhead" key=${i}>${it.head}</div>`;
     const sub = it.disabled && it.why ? it.why : it.sub;
@@ -107,7 +115,7 @@ function Menu({ p }) {
   })}</div>`;
 }
 
-function NameBox({ p }) {
+function NameBox(/** @type {{ p: NameSpec }} */ { p }) {
   const box = useRef(/** @type {HTMLElement | null} */ (null));
   const input = useRef(/** @type {HTMLInputElement | null} */ (null));
   const [value, setValue] = useState(p.value); // what is being typed: this popover's own
@@ -117,7 +125,7 @@ function NameBox({ p }) {
   const submit = () => { if (p.flaw(value)) return; closePopup(); p.save(value.trim()); };
   return html`<div class="rmenu rpop namebox" role="dialog" aria-label=${p.title} ref=${box}>
     <label class="rlab">${p.title}</label>
-    <input class="pin" ref=${input} value=${value} spellcheck=${false} autocomplete="off" onInput=${(e) => setValue(e.target.value)} onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }} />
+    <input class="pin" ref=${input} value=${value} spellcheck=${false} autocomplete="off" onInput=${(/** @type {Event} */ e) => setValue(/** @type {HTMLInputElement} */ (e.target).value)} onKeyDown=${(/** @type {KeyboardEvent} */ e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }} />
     <div class="rerr" role="alert">${flaw || ''}</div>
     <p class="rnote">${p.hint}</p>
     <div class="rbtns"><button type="button" class="btn" onClick=${() => closePopup()}>Cancel</button><button type="button" class="btn primary" disabled=${!!flaw} onClick=${submit}>Save</button></div>

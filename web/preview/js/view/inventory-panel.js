@@ -15,8 +15,14 @@ import { html, useState } from './html.js';
 import { Thumb } from '../thumbs.js';
 import { Seg, plural } from './widgets.js';
 
+/** @typedef {typeof import('../editor/model.js').inventoryPanel} PanelModel  what the inventory's own view reads */
+/** @typedef {typeof import('../editor/model.js').haveBlockModel} HaveModel  what the tile level's block reads */
+/** @typedef {typeof import('../editor/inventory.js').buttons} Actions  what the buttons do */
+/** @typedef {import('../api').InventoryRow} Row */
+/** @typedef {ReturnType<typeof groups>[number]} Group  a tile's pieces under the filters */
+
 /** What the inventory says of tile `t`, and the one button that adds to it. */
-export function HaveBlock({ t, m, act }) {
+export function HaveBlock(/** @type {{ t: import('../editor/stores.js').ServerTile, m: HaveModel, act: Actions }} */ { t, m, act }) {
   const inv = m.inventory.value;
   const system = m.system.value;
   const h = tileHave(inv, canonOf(t.path, homeOf(inv)), system);
@@ -24,8 +30,8 @@ export function HaveBlock({ t, m, act }) {
   return html`<section class="inv-block"><h3 class="cap">${`Inventory · ${systemName(system)}`}</h3>
     <p class=${`inv-have${h.have ? '' : ' none'}`}>${exists(inv) ? haveLine(h) : 'No inventory yet. The first print you add makes the file.'}</p>
     ${h.edited ? html`<p class="inv-edited" title="The tile changed since the print you have was made. It still counts as had; this is only to tell you.">Edited since printing</p>` : null}
-    <div class="inv-ask"><${Seg} label="Colour" options=${[['single', 'Single colour', 'One filament, no paint'], ['multi', 'Multicolour', 'Each material in its own filament']]} current=${colour} on=${(c) => act.pickColour(c)} />
-      <button type="button" class="btn" title=${`Add one good print of this tile (its seed now, ${systemName(system)}, ${colourName(colour)}) to your inventory, without exporting anything`} onClick=${(e) => act.haveThis(t, colour, e.currentTarget)}>I have this</button></div>
+    <div class="inv-ask"><${Seg} label="Colour" options=${[['single', 'Single colour', 'One filament, no paint'], ['multi', 'Multicolour', 'Each material in its own filament']]} current=${colour} on=${(/** @type {string} */ c) => act.pickColour(c)} />
+      <button type="button" class="btn" title=${`Add one good print of this tile (its seed now, ${systemName(system)}, ${colourName(colour)}) to your inventory, without exporting anything`} onClick=${(/** @type {MouseEvent} */ e) => act.haveThis(t, colour, /** @type {HTMLButtonElement} */ (e.currentTarget))}>I have this</button></div>
   </section>`;
 }
 
@@ -34,7 +40,7 @@ export function HaveBlock({ t, m, act }) {
  * picture service), the seed, what the log says of it, how many are on the shelf over the picture, and the two actions.
  * Cards of one tile are a row of the shelf under the tile's name; Reprint's form opens as a row of its own below them.
  */
-function PieceCard({ g, p, system, m, act }) {
+function PieceCard(/** @type {{ g: Group, p: Row, system: string, m: PanelModel, act: Actions }} */ { g, p, system, m, act }) {
   const pic = m.picture ? m.picture(g.tile, p.system) : null;
   const key = `${p.tile}|${p.seed}|${p.system}|${p.colour}`;
   const when = p.last ? (dateWords(p.last) === 'today' ? 'printed today' : `printed ${dateWords(p.last)}`) : '';
@@ -50,16 +56,16 @@ function PieceCard({ g, p, system, m, act }) {
 }
 
 /** The small form under a piece: which print list it goes into (or a new one). */
-function Reprint({ p, m, act }) {
+function Reprint(/** @type {{ p: Row, m: PanelModel, act: Actions }} */ { p, m, act }) {
   const [list, setList] = useState('');
   return html`<div class="inv-reprint"><span class="pl-lab">${`Seed ${p.seed} into`}</span>
-    <select class="word-select" aria-label="Print list" value=${list} onChange=${(e) => setList(e.target.value)}><option value="">A new print list</option>${m.lists.value.map((l) => html`<option value=${l.id} key=${l.id}>${l.name}</option>`)}</select>
+    <select class="word-select" aria-label="Print list" value=${list} onChange=${(/** @type {Event} */ e) => setList(/** @type {HTMLSelectElement} */ (e.target).value)}><option value="">A new print list</option>${m.lists.value.map((l) => html`<option value=${l.id} key=${l.id}>${l.name}</option>`)}</select>
     <button type="button" class="btn" onClick=${() => act.reprint(p, list)}>Add</button>
     <button type="button" class="linkish" onClick=${() => act.toggleReprint(null)}>Cancel</button></div>`;
 }
 
 /** A tile that is not at its path any more: the one-click re-link, which adds a `renamed` line. */
-function Relink({ g, m, act }) {
+function Relink(/** @type {{ g: Group, m: PanelModel, act: Actions }} */ { g, m, act }) {
   const cands = relinkCandidates(m.tiles.value, g.tile);
   const same = cands.filter((c) => nameOf(canonOf(c.path, '')) === nameOf(g.tile));
   const home = homeOf(m.inventory.value);
@@ -67,11 +73,11 @@ function Relink({ g, m, act }) {
   const chosen = to || cands[0]?.id;
   return html`<div class="inv-relink"><span class="inv-gone">Not at this path any more.</span>
     ${same.length === 1 ? html`<button type="button" class="btn" onClick=${() => act.relink(g, same[0].id, same[0].name)}>${`Re-link to ${canonOf(same[0].path, home)}`}</button>`
-    : cands.length ? html`<select class="word-select" aria-label="The tile it is now" value=${chosen} onChange=${(e) => setTo(e.target.value)}>${cands.map((c) => html`<option value=${c.id} key=${c.id}>${canonOf(c.path, home)}</option>`)}</select>
+    : cands.length ? html`<select class="word-select" aria-label="The tile it is now" value=${chosen} onChange=${(/** @type {Event} */ e) => setTo(/** @type {HTMLSelectElement} */ (e.target).value)}>${cands.map((c) => html`<option value=${c.id} key=${c.id}>${canonOf(c.path, home)}</option>`)}</select>
       <button type="button" class="btn" onClick=${() => act.relink(g, chosen, cands.find((c) => c.id === chosen)?.name)}>Re-link</button>` : null}</div>`;
 }
 
-function Group({ g, system, m, act }) {
+function Group(/** @type {{ g: Group, system: string, m: PanelModel, act: Actions }} */ { g, system, m, act }) {
   return html`<section class="inv-group"><div class="inv-head"><b title=${g.tile}>${g.name}</b>
       ${g.edited ? html`<span class="inv-tag edited" title="The tile changed since the print was made. It still counts; this is only to tell you.">edited since printing</span>` : null}</div>
     ${g.missing ? html`<${Relink} g=${g} m=${m} act=${act} />` : null}
@@ -81,12 +87,12 @@ function Group({ g, system, m, act }) {
     })}</div></section>`;
 }
 
-function Source({ text }) {
+function Source(/** @type {{ text: string }} */ { text }) {
   return html`<pre class="inv-source" tabIndex="0">${numbered(text).map(([n, line]) => html`<div class="ln" key=${n}><span class="no">${String(n)}</span><span class="tx">${line || ' '}</span></div>`)}</pre>
     <p class="note">Edit the file by hand in any editor: this view follows it. Counts are never stored; they are worked out from these lines.</p>`;
 }
 
-export function InventoryPanel({ m, act }) {
+export function InventoryPanel(/** @type {{ m: PanelModel, act: Actions }} */ { m, act }) {
   const t = m.tile.value;
   if (!t || !m.on.value) return null; // not the inventory's turn: the panel draws nothing
   const d = m.data.value;
@@ -98,12 +104,12 @@ export function InventoryPanel({ m, act }) {
   return html`<div class="lt"><div class="heading"><span class="cap">Inventory</span><b>${t.path.split(/[\\/]/).pop()}</b></div>
       <div class="seg inv-face" role="group" aria-label="What the panel shows">${[['view', 'Outline'], ['source', 'Source']].map(([v, label]) => html`<button type="button" key=${v} aria-pressed=${String(face === v)} title=${v === 'view' ? 'What you have, by tile' : 'The file itself: KDL, one line a print, a loss or a rename'} onClick=${() => act.setFace(v)}>${label}</button>`)}</div></div>
     <div class="body">
-      ${failed ? html`<p class="note bad">This inventory does not read, so nothing is counted from it.</p>${(d.problems ?? t.errors ?? []).slice(0, 4).map((e, i) => html`<p class="note bad" key=${i}>${e.message}${e.help ? html`<span class="pl-help">${` ${e.help}`}</span>` : null}</p>`)}` : null}
+      ${failed ? html`<p class="note bad">This inventory does not read, so nothing is counted from it.</p>${(d.problems ?? t.errors ?? []).slice(0, 4).map((/** @type {import('../api').Mistake} */ e, /** @type {number} */ i) => html`<p class="note bad" key=${i}>${e.message}${e.help ? html`<span class="pl-help">${` ${e.help}`}</span>` : null}</p>`)}` : null}
       ${face === 'source' ? html`<${Source} text=${d.text} />` : !failed ? html`
         <div class="inv-filters">
-          <${Seg} label="System" options=${SYSTEMS.map(([v, n]) => [v, n, `Only ${n} pieces: DungeonBlocks and OpenLOCK never count for each other`])} current=${f.system} on=${(v) => act.filter({ system: v })} />
-          <${Seg} label="Colour" options=${[[null, 'Both'], ['single', 'Single'], ['multi', 'Multi']]} current=${f.colour} on=${(v) => act.filter({ colour: v })} />
-          <${Seg} label="Show" options=${[['all', 'All'], ['have', 'On the shelf'], ['off', 'Not on the shelf']]} current=${f.show} on=${(v) => act.filter({ show: v })} />
+          <${Seg} label="System" options=${SYSTEMS.map(([v, n]) => [v, n, `Only ${n} pieces: DungeonBlocks and OpenLOCK never count for each other`])} current=${f.system} on=${(/** @type {string} */ v) => act.filter({ system: v })} />
+          <${Seg} label="Colour" options=${[[null, 'Both'], ['single', 'Single'], ['multi', 'Multi']]} current=${f.colour} on=${(/** @type {string | null} */ v) => act.filter({ colour: v })} />
+          <${Seg} label="Show" options=${[['all', 'All'], ['have', 'On the shelf'], ['off', 'Not on the shelf']]} current=${f.show} on=${(/** @type {string} */ v) => act.filter({ show: v })} />
         </div>
         <p class="inv-totals">${gs.length ? totalsLine(gs) : 'Nothing matches these filters.'}</p>
         ${gs.map((g) => html`<${Group} key=${g.tile} g=${g} system=${f.system} m=${m} act=${act} />`)}

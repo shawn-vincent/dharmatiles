@@ -8,21 +8,25 @@
 
 import { html, render, useLayoutEffect, useRef } from './html.js';
 
+/** @typedef {[number, number]} Size  squares across and up */
+
 const MIN = 4, MAX = 8;
 
 /** The squares a typed size says (`2x1`), or null. */
+/** @param {string} t @returns {Size | null} */
 export const parseSize = (t) => {
   const m = t.match(/(\d+)\s*x\s*(\d+)/i);
   return m ? [Math.max(1, Number(m[1])), Math.max(1, Number(m[2]))] : null;
 };
 
 /** The grid's own size for a pick: one spare row and column past it, so the grid grows as you go. */
+/** @param {Size | null} pick @param {boolean} full @returns {Size} */
 const gridFor = (pick, full) => {
   const [x, y] = pick || [0, 0];
   return full ? [MAX, MAX] : [Math.min(MAX, Math.max(MIN, x + 1)), Math.min(MAX, Math.max(MIN, y + 1))];
 };
 
-export function SizeGridBox({ pick, full, input, onPoint, onTake }) {
+export function SizeGridBox(/** @type {{ pick: Size | null, full: boolean, input: HTMLInputElement | null, onPoint: (p: Size | null) => void, onTake: (p: Size) => void }} */ { pick, full, input, onPoint, onTake }) {
   const box = useRef(/** @type {HTMLElement | null} */ (null));
   const [cols, rows] = gridFor(pick, full);
   const [x, y] = pick || [0, 0];
@@ -30,9 +34,9 @@ export function SizeGridBox({ pick, full, input, onPoint, onTake }) {
   // when the window has no room below for the whole grid
   useLayoutEffect(() => {
     const place = () => {
-      const f = input.getBoundingClientRect();
       const el = box.current;
-      if (!el) return;
+      if (!el || !input) return;
+      const f = input.getBoundingClientRect();
       const below = f.bottom + 4 + el.offsetHeight <= window.innerHeight - 4;
       el.style.left = `${Math.max(4, Math.min(f.left, window.innerWidth - el.offsetWidth - 4))}px`;
       el.style.top = `${below ? f.bottom + 4 : Math.max(4, f.top - 4 - el.offsetHeight)}px`;
@@ -41,16 +45,16 @@ export function SizeGridBox({ pick, full, input, onPoint, onTake }) {
     window.addEventListener('scroll', place, true);
     return () => window.removeEventListener('scroll', place, true);
   });
-  const at = (/** @type {any} */ e) => {
-    const b = e.target.closest?.('.size-cell');
-    return b ? [Number(b.dataset.x), Number(b.dataset.y)] : null;
+  const at = (/** @type {Event} */ e) => {
+    const b = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest?.('.size-cell'));
+    return b ? /** @type {Size} */ ([Number(b.dataset.x), Number(b.dataset.y)]) : null;
   };
   const cells = [];
   for (let j = 1; j <= rows; j++) for (let i = 1; i <= cols; i++) cells.push(html`<span class=${`size-cell${i <= x && j <= y ? ' on' : ''}`} data-x=${i} data-y=${j} key=${`${i},${j}`}></span>`);
   // the field keeps the focus: a click in the grid is not a blur
-  return html`<div class="size-grid" ref=${box} onPointerDown=${(e) => e.preventDefault()} onMouseDown=${(e) => e.preventDefault()}>
+  return html`<div class="size-grid" ref=${box} onPointerDown=${(/** @type {Event} */ e) => e.preventDefault()} onMouseDown=${(/** @type {Event} */ e) => e.preventDefault()}>
     <div class="size-cells" style=${`grid-template-columns: repeat(${cols}, 1fr)`}
-      onPointerMove=${(e) => { const p = at(e); if (p) onPoint(p); }} onPointerLeave=${() => onPoint(null)} onClick=${(e) => { const p = at(e); if (p) onTake(p); }}>${cells}</div>
+      onPointerMove=${(/** @type {Event} */ e) => { const p = at(e); if (p) onPoint(p); }} onPointerLeave=${() => onPoint(null)} onClick=${(/** @type {Event} */ e) => { const p = at(e); if (p) onTake(p); }}>${cells}</div>
     <div class="size-label">${pick ? `${x} across × ${y} up` : 'squares across × up'}</div></div>`;
 }
 
@@ -58,17 +62,19 @@ export function SizeGridBox({ pick, full, input, onPoint, onTake }) {
  * Put a size grid by `input` (a plain field of the page: its value is read and written here).  `quote`: the field
  * holds the size as a KDL string ("2x1"); off, bare (2x1).  `parent`: where the grid goes; inside an open dialog, which
  * would cover it on the page.  Returns what closes it.
+ * @param {HTMLInputElement} input @param {() => void} take @param {{ quote?: boolean, parent?: HTMLElement }} [opts]
  */
 export function openSizeGrid(input, take, { quote = true, parent = document.body } = {}) {
-  const fmt = (p) => (quote ? `"${p[0]}x${p[1]}"` : `${p[0]}x${p[1]}`);
+  const fmt = (/** @type {Size} */ p) => (quote ? `"${p[0]}x${p[1]}"` : `${p[0]}x${p[1]}`);
   const host = document.createElement('div');
   parent.append(host);
   let typed = input.value; // what the field holds apart from pointing
+  /** @type {Size | null} */
   let pointed = null;
   const below = () => input.getBoundingClientRect().bottom + 4 + 330 <= window.innerHeight - 4;
   let full = !below();
   const draw = () => render(html`<${SizeGridBox} pick=${pointed ?? parseSize(typed)} full=${full} input=${input}
-    onPoint=${(p) => { pointed = p; input.value = p ? fmt(p) : typed; draw(); }} onTake=${(p) => { input.value = fmt(p); take(); }} />`, host);
+    onPoint=${(/** @type {Size | null} */ p) => { pointed = p; input.value = p ? fmt(p) : typed; draw(); }} onTake=${(/** @type {Size} */ p) => { input.value = fmt(p); take(); }} />`, host);
   const onInput = () => { typed = input.value; pointed = null; draw(); };
   input.addEventListener('input', onInput);
   draw();
@@ -82,6 +88,7 @@ export function openSizeGrid(input, take, { quote = true, parent = document.body
  * @param {{parent?: HTMLElement}} [options]
  */
 export function attachSizeGrid(input, { parent } = {}) {
+  /** @type {(() => void) | null} */
   let close = null;
   const shut = () => { close?.(); close = null; };
   const open = () => { if (!close) close = openSizeGrid(input, shut, { quote: false, parent }); };

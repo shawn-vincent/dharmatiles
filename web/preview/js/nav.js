@@ -402,20 +402,25 @@ export function stepsHistory(cur, next) {
   return false;
 }
 
+/** @typedef {{ sel: Sel, control: { name: string, group: number } | null, face: 'source' | 'tile', pieces?: string[], prop?: 'bottom' | 'seed' | 'print', add?: { place: string, dir: string } }} LevelAsk  a level an address asks for */
+
 /** The level a hash asks for: {sel, control, face} (sel the tile when it names none), and for a map `pieces` (ids) and `prop`, or `add` (the folder of the Add step, `{place, dir}`: the place's key, which the page resolves). */
-/** @param {string | null | undefined} hash */
+/**
+ * @param {string | null | undefined} hash
+ * @returns {LevelAsk}
+ */
 export function levelOfHash(hash) {
 
   const h = parseHash(hash);
   const sel = selOfAt(h.at);
   if (sel.kind === 'entry' && h.piece != null && /^\d+$/.test(h.piece)) sel.piece = Number(h.piece);
   const control = sel.kind !== 'tile' && h.control ? { name: h.control, group: /^\d+$/.test(h.group || '') ? Number(h.group) : 0 } : null;
-  /** @type {{ sel: Sel, control: { name: string, group: number } | null, face: 'source' | 'tile', pieces?: string[], prop?: string, add?: { place: string, dir: string } }} */
+  /** @type {LevelAsk} */
   const out = { sel, control, face: h.face === 'source' ? 'source' : 'tile' };
   const pieces = (h.pieces || '').split(',').filter(Boolean);
   if (pieces.length) {
     out.pieces = pieces;
-    if (h.prop && ['bottom', 'seed', 'print'].includes(h.prop)) out.prop = h.prop;
+    if (h.prop === 'bottom' || h.prop === 'seed' || h.prop === 'print') out.prop = h.prop;
   } else if (h.add != null) out.add = { place: h.add, dir: h.adir || '' };
   return out;
 }

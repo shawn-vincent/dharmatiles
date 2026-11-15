@@ -35,8 +35,15 @@ export { chooseMode, setChosen };
 /** How the map is drawn: the tiers in use and the budget.  The map itself (its pieces) is the document's state, read when asked. */
 export const sceneStore = createStore({ counts: M.tierCounts([]), triangles: 0, busy: 0 });
 
-const geoms = new Map();      // gkey -> {tiers: Map(tier -> {tris}), asked: Set(tier), failed: Set(tier)}
+/** @typedef {import('../doc-views.js').Piece} Piece */
+/** @typedef {import('../doc-views.js').SceneJson} SceneJson */
+/** @typedef {import('./stores.js').ServerTile} Tile */
+/** @typedef {{ tiers: Map<string, { tris: number, checked: boolean, failures: string[] }>, asked: Set<string>, failed: Set<string> }} Geom  what the page holds of one tile's geometry: the tiers loaded, asked for and refused */
+
+/** @type {Map<string, Geom>} gkey -> its tiers */
+const geoms = new Map();
 let mounted = false;          // the scene is in the view
+/** @type {string | null} */
 let mountedPath = null;
 let lastSig = '';
 let evalTimer = 0;
@@ -56,11 +63,11 @@ export const sceneNow = () => model.scene.value;
 export const pieces = () => model.pieces.value;
 /** The selected pieces: the selection's ids that the map has now. */
 export const selected = () => model.selected.value;
-export const pieceAt = (id) => pieces().find((p) => p.id === id) ?? null;
+export const pieceAt = (/** @type {string} */ id) => pieces().find((p) => p.id === id) ?? null;
 
 // ---- the pieces ---------------------------------------------------------------------------------------
 
-const gidOf = (gkey, tier) => `${gkey}#${tier}`;
+const gidOf = (/** @type {string} */ gkey, /** @type {string} */ tier) => `${gkey}#${tier}`;
 
 /** Put the map in the view as the document's state says it is now (or take it out when the map is not the view). */
 function sync() {
@@ -82,6 +89,7 @@ function sync() {
   evaluate(true);
 }
 
+/** @param {Tile} t @param {SceneJson} sc */
 function mount(t, sc) {
   if (mounted && mountedPath && mountedPath !== t.path) unmount();
   mounted = true;
@@ -107,6 +115,7 @@ function unmount() {
 // ---- the tiers ----------------------------------------------------------------------------------------
 
 /** Ask for what the pieces want at least: every tile's super-low, so nothing is a box for long. */
+/** @param {Piece[]} ps */
 function request(ps) {
   for (const p of ps) {
     if (!p.gkey || !p.at) continue;
@@ -115,16 +124,18 @@ function request(ps) {
 }
 
 /** Let go of the geometry no piece of the scene uses any more: the page's record and the viewer's meshes. */
+/** @param {Piece[]} ps */
 function release(ps) {
   const stale = new Set(M.staleKeys(geoms.keys(), ps));
   if (!stale.size) return;
   for (const g of stale) {
     for (const tier of M.TIERS) tierSet.drop(`${g}|${tier}`); // withdrawn: the program cancels what nobody wants
-    for (const tier of geoms.get(g).tiers.keys()) viewer.dropSceneGeometry(gidOf(g, tier));
+    for (const tier of /** @type {Geom} */ (geoms.get(g)).tiers.keys()) viewer.dropSceneGeometry(gidOf(g, tier));
     geoms.delete(g);
   }
 }
 
+/** @param {string} gkey */
 function entry(gkey) {
   let e = geoms.get(gkey);
   if (!e) { e = { tiers: new Map(), asked: new Set(), failed: new Set() }; geoms.set(gkey, e); }
@@ -132,16 +143,19 @@ function entry(gkey) {
 }
 
 /** Fetch piece `p`'s tile at `tier` if it is not here, asked for or refused. */
+/** @param {Piece} p @param {string} tier */
 function ensure(p, tier) {
-  const e = entry(p.gkey);
+  const gkey = /** @type {string} */ (p.gkey); // a piece with no mesh is not asked for
+  const e = entry(gkey);
   if (e.tiers.has(tier) || e.asked.has(tier) || e.failed.has(tier)) return;
   e.asked.add(tier);
   // the program has the one queue of builds (its tier lane: two at a time, a newer revision of a piece cancels the older)
   inflight += 1;
   sceneStore.set({ busy: inflight });
-  run({ p, tier, gkey: p.gkey }).finally(() => { inflight -= 1; sceneStore.set({ busy: inflight }); });
+  run({ p, tier, gkey }).finally(() => { inflight -= 1; sceneStore.set({ busy: inflight }); });
 }
 
+/** @param {{ p: Piece, tier: string, gkey: string }} ask */
 async function run({ p, tier, gkey }) {
   const e = geoms.get(gkey);
   if (!e) return; // let go of while it waited
@@ -164,9 +178,10 @@ async function run({ p, tier, gkey }) {
   }
 }
 
-const sizeOf = (p) => Math.max(...p.size);
+const sizeOf = (/** @type {Piece} */ p) => Math.max(...p.size);
 
 /** A piece's distance from the eye, mm (0 for an orthographic camera, which has none): what breaks a tie between equal sizes. */
+/** @param {Piece} p */
 function eyeDistance(p) {
   if (viewer.isOrtho) return 0;
   const c = M.toWorld(p, p.size[0] / 2, p.size[1] / 2, 6);
@@ -174,6 +189,7 @@ function eyeDistance(p) {
 }
 
 /** A piece's size on screen, CSS pixels, by its longer side at its distance; 0 when it is out of the view. */
+/** @param {Piece} p */
 function screenSize(p) {
   const c = M.toWorld(p, p.size[0] / 2, p.size[1] / 2, 6);
   const h = viewer.canvas.clientHeight || 1;
@@ -188,6 +204,7 @@ function screenSize(p) {
 }
 
 /** The tile of a box, for a piece whose tile has not come: its footprint, a hand high, in the plate's grey. */
+/** @param {number} w @param {number} d @param {number} h */
 function boxPayload(w, d, h) {
   const v = [[0, 0, 0], [w, 0, 0], [w, d, 0], [0, d, 0], [0, 0, h], [w, 0, h], [w, d, h], [0, d, h]];
   /** @type {[number, number, number, number, number[]][]} */
@@ -215,7 +232,7 @@ export function evaluate(now = false) {
   wasWanted.clear();
   ps.forEach((p, i) => wasWanted.set(p.id, want[i]));
   const have = ps.map((p) => new Set(p.gkey ? [...(geoms.get(p.gkey)?.tiers.keys() ?? [])] : []));
-  const tris = ps.map((p) => (tier) => (p.gkey ? geoms.get(p.gkey)?.tiers.get(tier)?.tris ?? M.GUESS[tier] : 0));
+  const tris = ps.map((p) => (/** @type {string} */ tier) => (p.gkey ? geoms.get(p.gkey)?.tiers.get(tier)?.tris ?? M.GUESS[/** @type {keyof typeof M.GUESS} */ (tier)] : 0));
   // the tier a piece holds: the one it shows, or the full it has asked for, so a build on its way counts as held
   const current = ps.map((p) => (p.gkey && (shownTier.get(p.id) === 'full' || geoms.get(p.gkey)?.asked.has('full')) ? 'full' : shownTier.get(p.id) ?? null));
   const { tiers, total, intended, fetch } = M.planTiers({ want, px, have, tris, current, dist: ps.map(eyeDistance), ids: ps.map((p) => p.id) });
@@ -304,13 +321,16 @@ function drawTags() {
 // ---- hover and click ---------------------------------------------------------------------------------
 
 let hovered = -1;       // the slot under the pointer
+/** @type {{ x: number, y: number, t: number, b: number, shift: boolean } | null} */
 let down = null;
+/** @type {string[]} */
 let drawn = [];         // the ids of the pieces in the order the view was last given them: the view names a piece by its place here
-const slotsOf = (ids) => new Set(drawn.flatMap((id, i) => (ids.includes(id) ? [i] : [])));
-const idAt = (slot) => (slot >= 0 ? drawn[slot] ?? null : null);
+const slotsOf = (/** @type {string[]} */ ids) => new Set(drawn.flatMap((id, i) => (ids.includes(id) ? [i] : [])));
+const idAt = (/** @type {number} */ slot) => (slot >= 0 ? drawn[slot] ?? null : null);
 /** The id of the piece the view's pick `slot` names (what scene-drag.js asks after a pick). */
-export const pickAt = (x, y) => idAt(viewer.scenePick(x, y));
+export const pickAt = (/** @type {number} */ x, /** @type {number} */ y) => idAt(viewer.scenePick(x, y));
 
+/** @type {string[]} */
 let listHover = []; // the ids of the pieces whose row in the panel's list the pointer is on
 
 /** What the view lights: the selection, and the pieces under the pointer: the one in the view, or the pieces of the row under the pointer in the list. */
@@ -319,12 +339,14 @@ function highlight() {
 }
 
 /** Light the pieces of a row of the panel's list (their ids; none ends it): the same highlight as the pointer's own. */
+/** @param {string[]} ids */
 export function hoverPieces(ids) {
   listHover = ids;
   highlight();
 }
 
 /** Set the piece under the pointer. */
+/** @param {number} i */
 function hover(i) {
   if (hovered === i) return;
   hovered = i;
@@ -333,6 +355,7 @@ function hover(i) {
 }
 
 /** Select pieces (ids); `add` toggles one into the selection. */
+/** @param {string[]} ids */
 export function select(ids, add = false) {
   const cur = view.get().msel;
   const next = add ? (ids.length === 1 && cur.includes(ids[0]) ? cur.filter((i) => i !== ids[0]) : [...new Set([...cur, ...ids])]) : ids;
@@ -342,11 +365,13 @@ export function select(ids, add = false) {
 
 const rect = () => $('canvas').getBoundingClientRect();
 
+/** @param {PointerEvent} e */
 function onPointerDown(e) {
   if (!mapMode()) return;
   down = { x: e.clientX, y: e.clientY, t: performance.now(), b: e.button, shift: e.shiftKey };
 }
 
+/** @param {PointerEvent} e */
 function onPointerUp(e) {
   const d = down;
   down = null;
@@ -358,7 +383,10 @@ function onPointerUp(e) {
   else if (!d.shift) select([]);
 }
 
-let moveRaf = 0, lastMove = null;
+let moveRaf = 0;
+/** @type {PointerEvent | null} */
+let lastMove = null;
+/** @param {PointerEvent} e */
 function onPointerMove(e) {
   if (!mapMode() || e.buttons || e.pointerType === 'touch') return;
   lastMove = e;
@@ -366,7 +394,7 @@ function onPointerMove(e) {
   moveRaf = requestAnimationFrame(() => {
     moveRaf = 0;
     const r = rect();
-    hover(viewer.scenePick(lastMove.clientX - r.left, lastMove.clientY - r.top));
+    if (lastMove) hover(viewer.scenePick(lastMove.clientX - r.left, lastMove.clientY - r.top));
   });
 }
 

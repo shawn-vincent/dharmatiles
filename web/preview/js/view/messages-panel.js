@@ -11,19 +11,25 @@ import { html, useEffect, useState } from './html.js';
 import { ReportButton, ReportPane, canReport } from './report-button.js';
 import { Icon } from './icons.js';
 
-const secs = (s) => (s == null ? '' : s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` : `${s.toFixed(1)} s`);
+/** @typedef {typeof import('../editor/panel.js').model} Model  what the panel reads */
+/** @typedef {typeof import('../editor/panel.js').act} Actions  what its buttons do */
+/** @typedef {import('../api').MessageJson} MessageJson */
+/** @typedef {{ m: MessageJson, dim: boolean }} MessageRow  a message and whether it is from the last build */
+/** @typedef {ReturnType<ReturnType<typeof import('../messages.js').createLog>['view']>['record']} BuildRecord */
 
-export function MessageFilters({ m, act }) {
+const secs = (/** @type {number | null | undefined} */ s) => (s == null ? '' : s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` : `${s.toFixed(1)} s`);
+
+export function MessageFilters(/** @type {{ m: Model, act: Actions }} */ { m, act }) {
   const v = m.view.value;
   const filter = m.filter.value;
   return html`${FILTERS.map(([id, label, keep]) => {
-    const n = id === 'all' ? v.rows.length : v.rows.filter((r) => keep(r.m)).length;
+    const n = id === 'all' ? v.rows.length : v.rows.filter((/** @type {MessageRow} */ r) => keep(r.m)).length;
     return html`<button type="button" key=${id} class=${filter === id ? 'on' : undefined} data-filter=${id} aria-pressed=${String(filter === id)} onClick=${() => act.setFilter(id)}>${label}${n ? html` <span class="n">${n}</span>` : null}</button>`;
   })}`;
 }
 
 /** The build under way: stage, elapsed against the estimate, the bar. */
-function Running({ m }) {
+function Running(/** @type {{ m: Model }} */ { m }) {
   const t = m.tile.value;
   const p = m.progress.value;
   const words = p ? jobWords(p, t?.name ?? '') : null;
@@ -32,7 +38,7 @@ function Running({ m }) {
 }
 
 /** One overhang budget as a bar: full at the budget, the multiple written in it when it is past. */
-function Gauge({ label, g }) {
+function Gauge(/** @type {{ label: string, g: NonNullable<ReturnType<typeof gaugeOf>> }} */ { label, g }) {
   return html`<div class=${`gauge ${g.tone}`}><span class="g-lab">${label}</span>
     <span class="g-bar" role="meter" aria-valuemin="0" aria-valuemax=${g.budget} aria-valuenow=${g.used} aria-label=${label}><i style=${`width: ${Math.round(g.fill * 100)}%`}>${g.over ? html`<b>${g.over}</b>` : null}</i></span>
     <span class="g-num">${`${g.used.toFixed(2)} of ${g.budget.toFixed(2)} mm²`}</span></div>`;
@@ -43,7 +49,7 @@ function Gauge({ label, g }) {
  * steepest angle, `--band` in the band).  `plan` is the viewer's own mesh read once (`undersidePlan`, payload.js): the page draws
  * the program's flags, it does not classify.  Seen from below, so x runs the other way.
  */
-function Underside({ plan, angles }) {
+function Underside(/** @type {{ plan: NonNullable<ReturnType<Actions['underside']>>, angles: { overhangDeg: number, steepestDeg: number } }} */ { plan, angles }) {
   const { overhangDeg, steepestDeg } = angles;
   const w = plan.width, h = plan.height;
   return html`<figure class="underside"><svg viewBox=${`0 0 ${w} ${h}`} role="img" aria-label=${`The underside of the tile: where the faces past ${steepestDeg} degrees and in the ${overhangDeg} to ${steepestDeg} degree band are`}>
@@ -53,7 +59,7 @@ function Underside({ plan, angles }) {
 }
 
 /** The gate's verdict: the two budgets that decide as bars, everything else in one Details line. */
-function Numbers({ gate, m, t }) {
+function Numbers(/** @type {{ gate: MessageJson, m: Model, t: Model['tile']['value'] }} */ { gate, m, t }) {
   const a = gateOf(gate);
   if (!a) return null;
   const { overhangDeg, steepestDeg } = m.angles.value;
@@ -64,11 +70,11 @@ function Numbers({ gate, m, t }) {
     <details class="gate-details"><summary>Details</summary><dl class="nums">${rest.map(([k, v, cls]) => html`<div class="pair" key=${k}><dt>${k}</dt><dd class=${cls || undefined}>${v}</dd></div>`)}</dl></details>`;
 }
 
-function Record({ rec, m, act }) {
+function Record(/** @type {{ rec: NonNullable<BuildRecord>, m: Model, act: Actions }} */ { rec, m, act }) {
   const t = m.tile.value;
   const gate = rec.gate, fails = gate?.severity === 'error';
   // "Built in 2.1 s · passes the printability gate": the numbers below, and each reason the gate fails on its own line
-  const verdict = gate?.text.split(':')[0].replace(/^(Passes|Fails)/, (w) => w.toLowerCase());
+  const verdict = gate?.text.split(':')[0].replace(/^(Passes|Fails)/, (/** @type {string} */ w) => w.toLowerCase());
   const target = buildOf(rec.build)?.target ? ` · for ${buildOf(rec.build)?.target}` : '';
   void m.shown.value; // the worst face and the underside are known once the mesh is
   const plan = gate ? act.underside() : null;
@@ -92,7 +98,7 @@ function explain(/** @type {string | null | undefined} */ code) {
   return href ? html`<a class="btn explain" href=${href} target="_blank" rel="noopener" title="What this error means, and the rule behind it">Explain</a>` : null;
 }
 
-function Row({ row, m, act }) {
+function Row(/** @type {{ row: MessageRow, m: Model, act: Actions }} */ { row, m, act }) {
   const { m: msg, dim } = row;
   const t = m.tile.value;
   const lit = m.lit.value === msg.seq;
@@ -103,32 +109,33 @@ function Row({ row, m, act }) {
     return () => clearTimeout(timer);
   }, [lit]);
   const source = msg.span && msg.span.file === m.file.value ? m.text.value ?? null : null;
-  const line = msg.span?.line ? () => act.showLine(msg.span.file === t?.path ? null : msg.span.file, msg.span.line) : null;
+  const span = msg.span;
+  const line = span?.line ? () => act.showLine(span.file === t?.path ? null : span.file, span.line) : null;
   const here = msg.span ? `${msg.span.file.split('/').slice(-1)[0]}:${msg.span.line}:${msg.span.col}` : null;
   // the sentence first; the code, a name for looking up, last and quiet.  A row with a place goes to it when clicked.
-  return html`<div class=${`msg ${msg.severity}${dim ? ' dim' : ''}${lit ? ' lit' : ''}${line ? ' goes' : ''}`} data-seq=${msg.seq} ref=${(el) => { if (el && lit) el.scrollIntoView({ block: 'nearest' }); }}
-      title=${line ? 'Show the line in the source' : undefined} role=${line ? 'button' : undefined} tabIndex=${line ? 0 : undefined} onKeyDown=${line ? (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) line(); } : undefined} onClick=${line ? (e) => { if (!e.target.closest('.acts') && !e.target.closest('.report-pane')) line(); } : undefined}>
+  return html`<div class=${`msg ${msg.severity}${dim ? ' dim' : ''}${lit ? ' lit' : ''}${line ? ' goes' : ''}`} data-seq=${msg.seq} ref=${(/** @type {HTMLElement | null} */ el) => { if (el && lit) el.scrollIntoView({ block: 'nearest' }); }}
+      title=${line ? 'Show the line in the source' : undefined} role=${line ? 'button' : undefined} tabIndex=${line ? 0 : undefined} onKeyDown=${line ? (/** @type {KeyboardEvent} */ e) => { if (e.key === 'Enter' && e.target === e.currentTarget) line(); } : undefined} onClick=${line ? (e) => { if (!e.target.closest('.acts') && !e.target.closest('.report-pane')) line(); } : undefined}>
     <i class=${`dot ${msg.severity}`}></i>
     <div class="body"><div class="head"><span class="text">${serverOf(msg)?.origin === 'page' ? 'The page: ' : ''}${tickWords(msg.text)}</span></div>
       ${msg.help ? html`<div class="help">${tickWords(msg.help)}</div>` : null}
-      <div class="where">${here ? html`<span title=${msg.span.file}>${here}</span>` : null}${msg.code ? html`<code class="code">${msg.code}</code>` : null}</div>
+      <div class="where">${here ? html`<span title=${span?.file}>${here}</span>` : null}${msg.code ? html`<code class="code">${msg.code}</code>` : null}</div>
       ${reporting ? html`<${ReportPane} msg=${msg} act=${act} close=${() => setReporting(false)} />` : null}</div>
     <div class="acts">
       ${msg.fix ? html`<button type="button" class="btn primary fix" title="Make this change in the source" onClick=${() => act.applyFix(msg)}>${msg.fix.label}</button>` : null}
       ${explain(msg.code)}
-      ${msg.node && t ? html`<button type="button" class="btn" title="Select the stack entry this is about" onClick=${() => act.showNode(msg.node)}>Show on tile</button>` : null}
+      ${msg.node && t ? html`<button type="button" class="btn" title="Select the stack entry this is about" onClick=${() => act.showNode(/** @type {string} */ (msg.node))}>Show on tile</button>` : null}
       <${CopyButton} text=${() => act.details(msg, source)} title="Copy details: the code, where it is, its source line and this environment" />
       ${canReport(msg) ? html`<${ReportButton} open=${reporting} toggle=${() => setReporting(!reporting)} />` : null}
       ${msg.kind === 'server' ? html`<button type="button" class="btn icon" title="Put this away" aria-label="Put this message away" onClick=${() => act.dismiss(msg.seq)}><${Icon} name="x" size=${14} /></button>` : null}
     </div></div>`;
 }
 
-export function MessagesBody({ m, act }) {
+export function MessagesBody(/** @type {{ m: Model, act: Actions }} */ { m, act }) {
   if (!m.open.value) return null; // shut: nothing is drawn
   const t = m.tile.value;
   const v = m.view.value;
   const shown = filterRows(v.rows, m.filter.value);
-  const fresh = shown.filter((r) => !r.dim), stale = shown.filter((r) => r.dim);
+  const fresh = shown.filter((/** @type {MessageRow} */ r) => !r.dim), stale = shown.filter((/** @type {MessageRow} */ r) => r.dim);
   // work in flight for the document: a tile's build or a map's pieces loading, the one record the program sends
   const working = v.running || !!m.progress.value;
   return html`${working ? html`<${Running} m=${m} />` : null}${!v.running && v.record ? html`<${Record} rec=${v.record} m=${m} act=${act} />` : null}
@@ -139,14 +146,14 @@ export function MessagesBody({ m, act }) {
 }
 
 /** Copy all: the program's own text of the tile's open messages (one renderer), never the page's. */
-export const CopyAll = ({ act }) => html`<${CopyButton} text=${act.allText} label="Copy all" title="Copy every open message of this tile as text" />`;
+export const CopyAll = (/** @type {{ act: Actions }} */ { act }) => html`<${CopyButton} text=${act.allText} label="Copy all" title="Copy every open message of this tile as text" />`;
 
 /**
  * The view's card when a document does not build: the first error in its words, laid over the plate in the plate's own light
  * colours (the `--chip-*` tokens), so the place the user looks says what is wrong.  The messages panel stays the full record.
  * Nothing is drawn while the tile builds or reads.  `m` is the panel's model, `act` its actions.
  */
-export function ErrorCard({ m, act }) {
+export function ErrorCard(/** @type {{ m: Model, act: Actions }} */ { m, act }) {
   const t = m.tile.value;
   const v = m.view.value;
   if (!t || t.status !== 'failed' || v.running) return null;
@@ -164,7 +171,7 @@ export function ErrorCard({ m, act }) {
  * mistake (code and words) and offers Go to line.  `first` is `firstError` (the same record as the card and the messages);
  * `go` jumps into the source (null: the mistake has no line).
  */
-export function Unread({ name, first, go, openPanel }) {
+export function Unread(/** @type {{ name?: string | null, first: ReturnType<typeof firstError>, go: (() => void) | null, openPanel: () => void }} */ { name, first, go, openPanel }) {
   return html`<div class="empty unread" role="alert"><b>${name ? `${name} could not be read` : 'This tile could not be read'}</b>
     ${first ? html`<div class="de-text">${first.code ? html`<code>${first.code}</code> ` : null}${tickWords(first.text)}${first.span?.line ? html` <span class="de-at">${`(line ${first.span.line})`}</span>` : null}</div>
       ${first.help ? html`<div class="de-help">${tickWords(first.help)}</div>` : null}` : html`<div class="de-text">The program gave no reason: see the messages.</div>`}

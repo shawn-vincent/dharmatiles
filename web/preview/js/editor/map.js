@@ -31,6 +31,7 @@ function surfaceHeights(p) {
 
 /** Each region's tint: the colour of the last thing laid in it. */
 function tints() {
+  /** @type {Record<string, string>} */
   const out = {};
   for (const it of stackItems()) {
     const r = regionOf(it);

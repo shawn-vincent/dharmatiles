@@ -23,11 +23,35 @@ import { html, useEffect, useRef } from './html.js';
 import { Icon } from './icons.js';
 import { plural } from './widgets.js';
 
+/** @typedef {import('../api').StackItem} StackItem */
+/** @typedef {import('../api').MapLine} MapLine */
+/** @typedef {import('../api').MapRegion} MapRegion */
+/** @typedef {Map<string, [number, number]>} Bands  entry key -> [lo, hi], printed mm */
+/**
+ * What the outline draws: the map's lines and regions, the stack items in written order, the messages by entry key, the
+ * height bands, the tile's size in squares, and whether the document can be changed from here.
+ * @typedef {{ lines?: MapLine[], regions?: MapRegion[], stack?: (StackItem & { family?: string })[], badges?: Map<string, any>, bands?: Bands | null, cols: number, rows: number, editable?: boolean }} OutlineData
+ */
+/**
+ * What a row does.  `focusAfter` answers the index of the row the keyboard follows to where a move put it, once, or null.
+ * @typedef {{
+ *   open: (kind: string, id: string) => void,
+ *   hover?: (w: { kind: string, id: string } | null) => void,
+ *   menu?: (kind: string, id: string, anchor: HTMLElement) => void,
+ *   act?: (action: string, kind: string, id: string, anchor: HTMLElement) => void,
+ *   add?: (kind: string, anchor: HTMLElement) => void,
+ *   move?: (from: number, slot: number) => void,
+ *   step?: (from: number, dir: number) => void,
+ *   focusAfter?: () => number | null,
+ * }} OutlineHandlers
+ */
+
 /**
  * The thickness bars (docs/preview.html): each stack row's height band on one scale, the tile's zero a tick, the span from
  * the lowest to the highest the entry's geometry reaches as the program measured it in the build (`bands`: key ->
  * [lo, hi], printed mm).  Returns `{lo, hi}` of the shared axis, or null while no entry has one (nothing built yet).
  */
+/** @param {{ key: string }[]} items @param {Bands | null | undefined} bands */
 export function axisOf(items, bands) {
   let lo = 0, hi = 0, any = false;
   for (const it of items) {
@@ -39,9 +63,9 @@ export function axisOf(items, bands) {
 }
 
 /** A height in printed mm, as short as it reads: `3.4`, `-5.7`, `0`. */
-export const mmWord = (v) => String(Number(v.toFixed(1)) || 0);
+export const mmWord = (/** @type {number} */ v) => String(Number(v.toFixed(1)) || 0);
 
-const Bar = ({ band, axis }) => {
+const Bar = (/** @type {{ band: [number, number], axis: { lo: number, hi: number } }} */ { band, axis }) => {
   const span = axis.hi - axis.lo;
   const left = ((band[0] - axis.lo) / span) * 100;
   const width = Math.max(((band[1] - band[0]) / span) * 100, 1.5);
@@ -66,9 +90,11 @@ export const lineSummary = (m) => (m.points?.length ? plural(m.points.length, 'p
 
 // ---- the pictures a Shape row wears --------------------------------------------------------
 
+/** @type {WeakMap<object, string>} */
 const urls = new WeakMap(); // region -> the data URL of its picture: made once for each check's map
 
 /** The region's mask as a small picture: the build's own cells, drawn in the region's colour through the picture as a mask. */
+/** @param {MapRegion} r */
 function regionUrl(r) {
   let url = urls.get(r);
   if (!url) {
@@ -86,7 +112,7 @@ function regionUrl(r) {
   return url;
 }
 
-function RegionThumb({ r, cols, rows }) {
+function RegionThumb(/** @type {{ r: MapRegion, cols: number, rows: number }} */ { r, cols, rows }) {
   const [bw, bh] = thumbBox(cols, rows);
   const style = `width: ${bw}px; height: ${bh}px`;
   if (!coverage(r)) return html`<span class="thumb region empty" style=${style} aria-hidden="true"></span>`;
@@ -94,7 +120,7 @@ function RegionThumb({ r, cols, rows }) {
   return html`<span class="thumb region" style=${style} aria-hidden="true" title=${`covers ${Math.round(coverage(r) * 100)}% of the tile`}><i style=${`-webkit-mask-image: url(${url}); mask-image: url(${url})`}></i></span>`;
 }
 
-function LineThumb({ m, cols, rows }) {
+function LineThumb(/** @type {{ m: MapLine, cols: number, rows: number }} */ { m, cols, rows }) {
   const [bw, bh] = thumbBox(cols, rows);
   const pts = linePoints(m.pts, cols, rows, bw, bh);
   return html`<span class="thumb line" style=${`width: ${bw}px; height: ${bh}px`} aria-hidden="true"><svg viewBox=${`0 0 ${bw} ${bh}`}>${pts.length > 1 ? html`<polyline points=${pts.map((q) => q.join(',')).join(' ')} />` : null}</svg></span>`;
@@ -102,17 +128,17 @@ function LineThumb({ m, cols, rows }) {
 
 // ---- the rows ---------------------------------------------------------------------------
 
-const Text = ({ label, sub, bar = null, range = null }) => html`<span class="tx"><span class="nm">${label}</span>${sub ? html`<span class="sub">${sub}</span>` : null}${bar ? html`<span class="trow">${bar}<span class="trange">${range}</span></span>` : null}</span>`;
-const Section = ({ title, hint }) => html`<div class="cap olab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
+const Text = (/** @type {{ label: string, sub?: string, bar?: any, range?: string | null }} */ { label, sub, bar = null, range = null }) => html`<span class="tx"><span class="nm">${label}</span>${sub ? html`<span class="sub">${sub}</span>` : null}${bar ? html`<span class="trow">${bar}<span class="trange">${range}</span></span>` : null}</span>`;
+const Section = (/** @type {{ title: string, hint?: string }} */ { title, hint }) => html`<div class="cap olab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
 
 /** A row and its ⋯ button, side by side (a button cannot hold a button). */
-function Wrap({ kind, id, name, editable, on, cls = '', index, children }) {
+function Wrap(/** @type {{ kind: string, id: string, name: string, editable: boolean, on: OutlineHandlers, cls?: string, index?: string, children?: any }} */ { kind, id, name, editable, on, cls = '', index, children }) {
   return html`<div class="orwrap">
     <button type="button" class=${`orow ${cls}`} role="option" data-kind=${kind} data-id=${id} data-index=${index} onClick=${() => on.open(kind, id)} onMouseEnter=${() => on.hover?.({ kind, id })} onMouseLeave=${() => on.hover?.(null)}>${children}</button>
-    ${editable ? html`<button type="button" class="omore" title=${`${name}: rename, hide, delete, move, add`} aria-label=${`Actions for ${name}`} aria-haspopup="menu" onClick=${(e) => { e.stopPropagation(); on.menu?.(kind, id, e.currentTarget); }}><${Icon} name="ellipsis" size=${16} /></button>` : null}</div>`;
+    ${editable ? html`<button type="button" class="omore" title=${`${name}: rename, hide, delete, move, add`} aria-label=${`Actions for ${name}`} aria-haspopup="menu" onClick=${(/** @type {MouseEvent} */ e) => { e.stopPropagation(); on.menu?.(kind, id, /** @type {HTMLElement} */ (e.currentTarget)); }}><${Icon} name="ellipsis" size=${16} /></button>` : null}</div>`;
 }
 
-const AddRow = ({ kind, label, hint, on }) => html`<div class="orwrap"><button type="button" class="orow oadd" data-kind="add" data-id=${kind} aria-haspopup=${kind === 'entry' ? 'menu' : 'false'} onClick=${(e) => on.add?.(kind, e.currentTarget)}><span class="plus">+</span><${Text} label=${label} sub=${hint} /></button></div>`;
+const AddRow = (/** @type {{ kind: string, label: string, hint: string, on: OutlineHandlers }} */ { kind, label, hint, on }) => html`<div class="orwrap"><button type="button" class="orow oadd" data-kind="add" data-id=${kind} aria-haspopup=${kind === 'entry' ? 'menu' : 'false'} onClick=${(/** @type {MouseEvent} */ e) => on.add?.(kind, /** @type {HTMLElement} */ (e.currentTarget))}><span class="plus">+</span><${Text} label=${label} sub=${hint} /></button></div>`;
 
 // ---- a drag of a stack row ---------------------------------------------------------------------------
 
@@ -125,11 +151,12 @@ const dragging = signal(false);
  * The rows are drawn top of the tile first, so a place on screen (`pos`, counted from the top) is written
  * place `n - 1 - pos`, and the gap above screen row `s` is the written slot `n - s`.
  */
-function wireDrag(root, getOn) {
+function wireDrag(/** @type {HTMLElement} */ root, /** @type {() => OutlineHandlers} */ getOn) {
+  /** @type {{ wrap: HTMLElement, from: number, slot: number, startY: number, y: number, started: boolean, scroll0: number, line: HTMLElement | null, auto: number } | null} */
   let g = null; // the gesture under way
-  const wraps = () => [...root.querySelectorAll('.orwrap')].filter((w) => w.firstElementChild.dataset.kind === 'entry');
+  const wraps = () => /** @type {HTMLElement[]} */ ([...root.querySelectorAll('.orwrap')]).filter((w) => /** @type {HTMLElement} */ (w.firstElementChild).dataset.kind === 'entry');
   const scroller = () => root.closest('.body');
-  const end = (move) => {
+  const end = (/** @type {boolean} */ move) => {
     if (!g) return;
     const { wrap, line, slot, from, started } = g;
     g = null;
@@ -144,7 +171,7 @@ function wireDrag(root, getOn) {
     dragging.value = false;
     if (started) {
       // the click that ends a drag is not an open
-      const stop = (e) => { e.stopPropagation(); e.preventDefault(); };
+      const stop = (/** @type {Event} */ e) => { e.stopPropagation(); e.preventDefault(); };
       addEventListener('click', stop, { capture: true, once: true });
       setTimeout(() => removeEventListener('click', stop, true), 0);
       const n = wraps().length;
@@ -153,7 +180,7 @@ function wireDrag(root, getOn) {
   };
   const onUp = () => end(true);
   const onCancel = () => end(false);
-  const onEsc = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false); } };
+  const onEsc = (/** @type {KeyboardEvent} */ e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false); } };
   const frame = () => {
     if (!g?.started) return;
     const sc = scroller();
@@ -162,19 +189,21 @@ function wireDrag(root, getOn) {
   /** Place the lifted row under the pointer and the line at the slot it means. */
   function paint() {
     const sc = scroller();
+    if (!g) return;
     const list = wraps();
     const rects = list.map((w) => w.getBoundingClientRect());
     // the lifted row stays at its own place in the flow: its middle is where it was, so the others' middles are fair
-    const mids = rects.map((r, i) => (i === g.from ? Number.NEGATIVE_INFINITY : (r.top + r.bottom) / 2));
+    const gesture = g;
+    const mids = rects.map((r, i) => (i === gesture.from ? Number.NEGATIVE_INFINITY : (r.top + r.bottom) / 2));
     const raw = slotAt(mids.filter((m) => m !== Number.NEGATIVE_INFINITY), g.y);
     // slots count the rows without the lifted one: put the lifted one's own place back
     g.slot = raw >= g.from ? raw + 1 : raw;
     const r0 = root.getBoundingClientRect();
     const at = g.slot >= list.length ? rects[list.length - 1].bottom : rects[g.slot].top;
-    g.line.style.top = `${at - r0.top}px`;
+    if (g.line) g.line.style.top = `${at - r0.top}px`;
     g.wrap.style.transform = `translateY(${g.y - g.startY + (sc ? sc.scrollTop - g.scroll0 : 0)}px)`;
   }
-  function onMove(e) {
+  function onMove(/** @type {PointerEvent} */ e) {
     if (!g) return;
     g.y = e.clientY;
     if (!g.started) {
@@ -198,10 +227,10 @@ function wireDrag(root, getOn) {
     paint();
     if (g.auto) requestAnimationFrame(frame);
   }
-  const down = (e) => {
+  const down = (/** @type {PointerEvent} */ e) => {
     if (e.button !== 0 || e.pointerType === 'touch') return; // a finger scrolls; its way to move a row is the menu
-    const b = e.target.closest?.('.orow');
-    if (!b || b.dataset.kind !== 'entry' || g) return;
+    const b = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest?.('.orow'));
+    if (!b || b.dataset.kind !== 'entry' || g || !b.parentElement) return;
     const sc = scroller();
     const pos = wraps().indexOf(b.parentElement);
     g = { wrap: b.parentElement, from: pos, slot: pos, startY: e.clientY, y: e.clientY, started: false, scroll0: sc ? sc.scrollTop : 0, line: null, auto: 0 };
@@ -215,11 +244,11 @@ function wireDrag(root, getOn) {
 }
 
 /** What a row answers to besides the arrows (which the panel moves by): ⌥↑ ⌥↓ move an entry, the menu key opens its menu, F2 renames, Delete deletes. */
-function onRowKey(e, on) {
-  const b = e.target.closest?.('.orow');
+function onRowKey(/** @type {KeyboardEvent} */ e, /** @type {OutlineHandlers} */ on) {
+  const b = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest?.('.orow'));
   if (!b || b.classList.contains('oadd')) return;
-  const kind = b.dataset.kind, id = b.dataset.id;
-  const more = b.parentElement.querySelector('.omore');
+  const kind = /** @type {string} */ (b.dataset.kind), id = /** @type {string} */ (b.dataset.id); // every row sets both
+  const more = /** @type {HTMLElement | null | undefined} */ (b.parentElement?.querySelector('.omore'));
   if (!more) return;
   if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && kind === 'entry') {
     e.preventDefault(); e.stopPropagation();
@@ -236,7 +265,7 @@ function onRowKey(e, on) {
   }
 }
 
-export function Outline({ data, on }) {
+export function Outline(/** @type {{ data: OutlineData, on: OutlineHandlers }} */ { data, on }) {
   const root = useRef(/** @type {HTMLElement | null} */ (null));
   const held = useRef(/** @type {any} */ (null));
   const onRef = useRef(on);
@@ -252,8 +281,9 @@ export function Outline({ data, on }) {
   if (dragging.value && held.current) return held.current;
   const items = data.stack || [];
   const axis = axisOf(items, data.bands);
-  const shaped = [...(data.lines || []).map((m) => ['line', m]), ...(data.regions || []).map((m) => ['region', m])];
-  const vnode = html`<div class="outline" role="listbox" aria-label="What the tile holds" ref=${root} onKeyDown=${(e) => onRowKey(e, on)}>
+  /** @type {(['line', MapLine] | ['region', MapRegion])[]} */
+  const shaped = [...(data.lines || []).map((/** @type {MapLine} */ m) => /** @type {['line', MapLine]} */ (['line', m])), ...(data.regions || []).map((/** @type {MapRegion} */ m) => /** @type {['region', MapRegion]} */ (['region', m]))];
+  const vnode = html`<div class="outline" role="listbox" aria-label="What the tile holds" ref=${root} onKeyDown=${(/** @type {KeyboardEvent} */ e) => onRowKey(e, on)}>
     <${Section} title="Stack" hint="top of the tile first" />
     ${editable ? html`<${AddRow} kind="entry" label="Add to the stack" hint="what stands on top" on=${on} />` : null}
     ${items.length ? null : html`<p class="oempty">Nothing in the stack yet.</p>`}
@@ -268,8 +298,8 @@ export function Outline({ data, on }) {
     })}
     ${shaped.length || editable ? html`<${Section} title="Shape" hint="lines and regions" />
       ${shaped.map(([kind, m]) => html`<${Wrap} key=${`${kind}:${m.name}`} kind=${kind} id=${m.name} name=${m.name} editable=${editable} on=${on}>
-        ${kind === 'line' ? html`<${LineThumb} m=${m} cols=${data.cols} rows=${data.rows} />` : html`<${RegionThumb} r=${m} cols=${data.cols} rows=${data.rows} />`}
-        <${Text} label=${m.name} sub=${kind === 'line' ? lineSummary(m) : regionSummary(m)} /><span class="chev"><${Icon} name="chevron-right" size=${14} /></span><//>`)}
+        ${kind === 'line' ? html`<${LineThumb} m=${/** @type {MapLine} */ (m)} cols=${data.cols} rows=${data.rows} />` : html`<${RegionThumb} r=${/** @type {MapRegion} */ (m)} cols=${data.cols} rows=${data.rows} />`}
+        <${Text} label=${m.name} sub=${kind === 'line' ? lineSummary(/** @type {MapLine} */ (m)) : regionSummary(/** @type {MapRegion} */ (m))} /><span class="chev"><${Icon} name="chevron-right" size=${14} /></span><//>`)}
       ${editable ? html`<${AddRow} kind="line" label="Add line" hint="draw one through points" on=${on} /><${AddRow} kind="region" label="Add region" hint="a place bounded by lines" on=${on} />` : null}` : null}
   </div>`;
   held.current = vnode;

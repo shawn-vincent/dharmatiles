@@ -25,12 +25,36 @@ import { SizeGridBox, parseSize } from './size-grid.js';
 import { ValuePopBox } from './value-pop.js';
 import { SeedDice, SeedStrip, candidates, newSeed } from './seed-strip.js';
 
+/** @typedef {Partial<import('../api').ControlJson> & { name: string, label?: string, viaSet?: boolean }} Control  a control as the sheet's row has it: the program's schema entry (or just a name) */
+/** @typedef {import('../api').WrittenControl} Setting  a control written in the document */
+/** @typedef {{ text: string, from: string }} Inherited  what an unwritten control shows, and where it comes from */
+/** @typedef {ReturnType<typeof valueOf>} Value  a written control's value part */
+/**
+ * One group of the sheet: a thing's controls.  `schema` is the element's (or node's) own, `written` what the document writes,
+ * `defaults` what the program says each unwritten control is, `set` writes a control of a group that is not an entry's node, `remove` the ✕ beside the heading.
+ * @typedef {{ heading?: string, at: number, schema?: { name?: string, controls: Control[] } | null, written: Setting[], defaults?: import('../api').UnwrittenControl[], set?: (name: string, value: any) => any, remove?: { title: string, run: () => void } }} Group
+ */
+/** @typedef {{ label: string, items: { label: string, title?: string, disabled?: boolean, run: () => void }[] }} AddItems  a menu that adds something */
+/**
+ * The sheet's model (js/editor/sheet.js builds it from the document).
+ * @typedef {{
+ *   groups: Group[], note?: string, add?: AddItems | null, tail?: any, actions?: { label: string, title?: string, danger?: boolean, run: () => void }[],
+ *   seedStrip?: ReturnType<typeof import('../editor/scene-thumbs.js').seedStripOf> | null, seedPins?: ReturnType<typeof pinsOf>, openEntry?: (key: string) => void,
+ * }} SheetModel
+ */
+/**
+ * What the sheet's edits go through (js/editor/sheet.js `sheetApi`); a control with more to show opens its own level (`detail`, `openControl`).
+ * @typedef {typeof import('../editor/sheet.js').sheetApi & { detail?: (c: Control) => boolean, openControl?: (group: number, name: string) => void, showSource?: () => void }} SheetApi
+ */
+/** @typedef {(g: Group, name: string, value: any) => any} Put  write a control of a group (null takes it out) */
+/** @typedef {{ ends: string[], editable: boolean, stale?: boolean, typed?: string }} Printed  what a length prints on the build target */
+
 const STEP = { dmm: 0.1, level: 0.1, degrees: 1, percent: 1, count: 1, 'per square': 0.05, number: 0.05 };
 const PX = { count: 10, degrees: 3, percent: 3 }; // pixels a step takes; 4 otherwise
 const NUM = /-?\d+(?:\.\d+)?/g;
 const CHECK_PAUSE_MS = 200; // how long typing pauses before the program is asked about the value
-const decimals = (s) => (s.includes('.') ? s.split('.')[1].length : 0);
-const dflt = (c) => c.default1 ?? c.default;
+const decimals = (/** @type {string} */ s) => (s.includes('.') ? s.split('.')[1].length : 0);
+const dflt = (/** @type {Control} */ c) => c.default1 ?? c.default;
 
 /**
  * What an unwritten control shows: `{text, from}`.  An entry's controls come with what the program says each is where nothing is
@@ -38,8 +62,8 @@ const dflt = (c) => c.default1 ?? c.default;
  * when `text` says what leaving it out means); the tile's own nodes show their schema's default or its `absent` words.  The
  * page works nothing out.  Null where nothing says, which the row shows as a mistake, never as a blank.
  * @param {{ defaults?: {control: string, text: string, from: string}[] }} g
- * @param {any} c
- * @returns {{text: string, from: string} | null}
+ * @param {Control} c
+ * @returns {Inherited | null}
  */
 export function inheritedOf(g, c) {
   if (g.defaults) {
@@ -55,7 +79,8 @@ export function inheritedOf(g, c) {
  * (`stones/height`) as the document's written controls are, so a row, its written text, the edit of it and its page all
  * answer to one name.  A group has no value of its own to show, so it has no row.
  */
-export function rowsOf(/** @type {any[]} */ controls, prefix = '', /** @type {any} */ up = {}) {
+export function rowsOf(/** @type {Control[]} */ controls, prefix = '', /** @type {{ expert?: boolean, untaken?: boolean }} */ up = {}) {
+  /** @type {Control[]} */
   const out = [];
   for (const c of controls) {
     const path = `${prefix}${c.name}`;
@@ -78,7 +103,7 @@ const valueIn = (/** @type {{text: string, from: string} | null} */ inh) => (inh
 // ---- a value typed in place ------------------------------------------------------------------------------------
 
 /** A value being typed: the field, the helper under it (or the size grid), and the writes it makes as it goes. */
-function TypeIn({ g, c, s, v, inh, api, put, onDone }) {
+function TypeIn(/** @type {{ g: Group, c: Control, s?: Setting, v: Value | null, inh: Inherited | null, api: SheetApi, put: Put, onDone: () => void }} */ { g, c, s, v, inh, api, put, onDone }) {
   const text = c.unit === 'text'; // plain words: typed without quotes, written as a KDL string
   // a number, range or expression: typed bare, quoted as it is written
   const num = isNumeric(c);
@@ -92,19 +117,19 @@ function TypeIn({ g, c, s, v, inh, api, put, onDone }) {
   const mount = useRef(/** @type {HTMLElement | null} */ (null));
   // the field's changes land in the source as they are made (as a drag's do), each a step the program makes and drafts
   // (`api.scrub`); `scrub` is made at the first, null when the source cannot be changed now (undefined: not yet asked)
-  const st = useRef({ val: initial, done: false, asked: 0, typed: initial, pointed: null, scrub: /** @type {any} */ (undefined) });
+  const st = useRef({ val: initial, done: false, asked: 0, typed: initial, pointed: /** @type {[number, number] | null} */ (null), scrub: /** @type {any} */ (undefined) });
   const items = c.unit === 'size' ? [] : num ? valueItems(val, caret, c).items : [];
   const range = num ? valueItems(val, caret, c) : { items: [], from: 0, to: 0 };
-  const write = num && s && v && !c.viaSet && !text ? (typed) => {
+  const write = num && s && v && !c.viaSet && !text ? (/** @type {string} */ typed) => {
     const x = st.current;
     if (!typed.trim()) return; // nothing typed is no value: the field ends by taking the control out, not on the way
     if (x.scrub === undefined) x.scrub = api.scrub?.(g.at, c.name, `Changed ${c.name}`) ?? null;
     x.scrub?.to(parseValue(typed));
   } : null;
   const set = (/** @type {string} */ next, at = next.length) => { st.current.val = next; setVal(next); setCaret(at); setPick(0); };
-  const askLater = useRef(debounce((typed) => {
+  const askLater = useRef(debounce((/** @type {string} */ typed) => {
     const ask = ++st.current.asked;
-    api.checkValue?.(g.schema?.name, c.name, typed)?.then((why) => { if (ask === st.current.asked) setCheck(why || ''); });
+    api.checkValue?.(/** @type {string} */ (g.schema?.name), c.name, typed)?.then((/** @type {string | null} */ why) => { if (ask === st.current.asked) setCheck(why || ''); });
   }, CHECK_PAUSE_MS));
   useEffect(() => {
     api.onField?.(c.name, true);
@@ -113,7 +138,7 @@ function TypeIn({ g, c, s, v, inh, api, put, onDone }) {
     if (num || c.unit === 'size') askLater.current(initial);
     return () => { askLater.current.cancel(); api.onField?.(c.name, false); };
   }, []);
-  const finish = (keep) => {
+  const finish = (/** @type {boolean} */ keep) => {
     const x = st.current;
     if (x.done) return;
     x.done = true;
@@ -157,14 +182,14 @@ function TypeIn({ g, c, s, v, inh, api, put, onDone }) {
     if (c.unit === 'size') {
       const pointed = st.current.pointed;
       render(html`<${SizeGridBox} pick=${pointed ?? parseSize(val)} full=${false} input=${input.current}
-        onPoint=${(p) => { st.current.pointed = p; const f = p ? `"${p[0]}x${p[1]}"` : st.current.typed; st.current.val = f; setVal(f); }} onTake=${(p) => { st.current.val = `"${p[0]}x${p[1]}"`; finish(true); }} />`, mount.current);
+        onPoint=${(/** @type {[number, number] | null} */ p) => { st.current.pointed = p; const f = p ? `"${p[0]}x${p[1]}"` : st.current.typed; st.current.val = f; setVal(f); }} onTake=${(/** @type {[number, number]} */ p) => { st.current.val = `"${p[0]}x${p[1]}"`; finish(true); }} />`, mount.current);
     } else if (num) {
       render(html`<${ValuePopBox} c=${c} dflt=${inheritedPhrase(inh)} input=${input.current} typed=${val} items=${items} index=${pick} check=${check}
-        onForm=${(f) => { const next = f === 'number' ? asNumber(val) : asRange(val); set(next); write?.(next); askLater.current(next); input.current?.focus(); }} onPick=${(k) => take(k)} />`, mount.current);
+        onForm=${(/** @type {string} */ f) => { const next = f === 'number' ? asNumber(val) : asRange(val); set(next); write?.(next); askLater.current(next); input.current?.focus(); }} onPick=${(/** @type {number} */ k) => take(k)} />`, mount.current);
     }
   });
   useEffect(() => () => { if (mount.current) { render(null, mount.current); mount.current.remove(); mount.current = null; } }, []);
-  return html`<input class="edit" ref=${input} value=${val} spellcheck=${false} onInput=${onInput} onClick=${(e) => setCaret(e.target.selectionStart ?? val.length)} onKeyDown=${onKeyDown} onBlur=${() => finish(true)} />`;
+  return html`<input class="edit" ref=${input} value=${val} spellcheck=${false} onInput=${onInput} onClick=${(/** @type {MouseEvent} */ e) => setCaret(/** @type {HTMLInputElement} */ (e.target).selectionStart ?? val.length)} onKeyDown=${onKeyDown} onBlur=${() => finish(true)} />`;
 }
 
 // ---- the printed size -----------------------------------------------------------------------------------------
@@ -174,7 +199,7 @@ function TypeIn({ g, c, s, v, inh, api, put, onDone }) {
  * out (`/api/tiles/ID/printed`); this only shows it.  Where the value is a number or a range of numbers, a printed number
  * is typed in place: the program writes it back in the value's own unit (`/api/printed-set`), and the result is written like
  * any typed value, one step of history.  A formula only shows its printed size.
- * @param {{ g: any, c: any, s: any, v: any, ro: boolean, body: string, printed: {ends: string[], editable: boolean, stale?: boolean}, api: any, put: Function }} p
+ * @param {{ g: Group, c: Control, s?: Setting, v: Value | null, ro: boolean, body: string, printed: Printed, api: SheetApi, put: Put }} p
  */
 function PrintedSize({ g, c, s, v, ro, body, printed, api, put }) {
   const [at, setAt] = useState(/** @type {number | null} */ (null));
@@ -210,7 +235,7 @@ function PrintedSize({ g, c, s, v, ro, body, printed, api, put }) {
 // ---- a value shown --------------------------------------------------------------------------------------------
 
 /** A value: its numbers scrubbed by a drag, the whole of it typed after a click. */
-function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
+function ValueCell(/** @type {{ g: Group, c: Control, s?: Setting, v: Value | null, inh: Inherited | null, ro: boolean, api: SheetApi, put: Put, roll: (() => void) | null, printed: Printed | null }} */ { g, c, s, v, inh, ro, api, put, roll, printed }) {
   const [typing, setTyping] = useState(false);
   const [live, setLive] = useState(/** @type {Record<number, string> | null} */ (null)); // the numbers as the drag has them now
   const drag = useRef(/** @type {any} */ (null));
@@ -221,10 +246,11 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
   const post = pre ? (shownRaw.slice(pre.length).match(/"#?$/) || [''])[0] : '';
   // a description reads as its words: no quotes, no escapes
   const body = c.unit === 'text' ? unquote(shownRaw) : shownRaw.slice(pre.length, shownRaw.length - post.length);
+  /** @type {({ text: string, num?: undefined, k?: undefined } | { text: string, num: string, k: number })[]} */
   const parts = [];
   let last = 0, k = 0;
   for (const m of c.unit === 'text' || c.viaSet ? [] : body.matchAll(NUM)) {
-    parts.push({ text: body.slice(last, m.index) }, { num: m[0], k: k++ });
+    parts.push({ text: body.slice(last, m.index) }, { text: '', num: m[0], k: k++ });
     last = m.index + m[0].length;
   }
   parts.push({ text: body.slice(last) });
@@ -255,7 +281,7 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
       e.currentTarget.setPointerCapture(e.pointerId);
       api.onField?.(c.name, true);
       const start = Number(p.num);
-      const step = STEP[c.unit] ?? 0.1;
+      const step = STEP[/** @type {keyof typeof STEP} */ (c.unit)] ?? 0.1;
       const dec = Math.max(decimals(p.num), decimals(String(step)));
       drag.current = { k: p.k, x: e.clientX, start, step, dec, scrub: undefined, text: null, cur: null };
     },
@@ -266,8 +292,8 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
       if (Math.abs(dx) > 2) moved.current = true;
       if (!moved.current) return;
       const fine = e.shiftKey ? 0.1 : 1;
-      let x = d.start + Math.round(dx / (PX[c.unit] ?? 4)) * d.step * fine;
-      if (c.limits && !/\.\./.test(v.text)) x = Math.min(c.limits[1] ?? Infinity, Math.max(c.limits[0], x));
+      let x = d.start + Math.round(dx / (PX[/** @type {keyof typeof PX} */ (c.unit)] ?? 4)) * d.step * fine;
+      if (c.limits && !/\.\./.test(v?.text ?? '')) x = Math.min(c.limits[1] ?? Infinity, Math.max(c.limits[0], x));
       const txt = String(Number(x.toFixed(fine < 1 ? d.dec + 1 : d.dec))); // 7, not 7.0
       if (txt === (d.cur ?? p.num)) return;
       // each step is the program's: it makes the edit of the value and drafts it (`api.scrub`); the page only says the value
@@ -313,6 +339,7 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
  * `seed` are not in it.  @param {any[]} stack
  */
 export function pinsOf(stack) {
+  /** @type {{ key: string, name: string, seed: string }[]} */
   const pins = [];
   for (const it of stack) {
     if (it.key != null && it.seed != null) pins.push({ key: it.key, name: it.label || it.what || it.key, seed: String(it.seed) });
@@ -338,7 +365,7 @@ export const pinLine = (/** @type {{ key: string, name: string, seed: string }[]
 
 // ---- a row ----------------------------------------------------------------------------------------------------
 
-function Row({ g, c, s, editable, api, put, model, printed }) {
+function Row(/** @type {{ g: Group, c: Control, s?: Setting, editable: boolean, api: SheetApi, put: Put, model: SheetModel, printed: Printed | null }} */ { g, c, s, editable, api, put, model, printed }) {
   // the tile's own seed row: its dice shows a strip of candidates under the row (`model.seedStrip`)
   const strip = c.name === 'seed' && model.seedStrip && model.groups[0] === g ? model.seedStrip : null;
   const [seeds, setSeeds] = useState(/** @type {(number | null)[] | null} */ (null));
@@ -355,7 +382,7 @@ function Row({ g, c, s, editable, api, put, model, printed }) {
   const words = c.words?.length ? c.words : null;
   let cell;
   if (words && c.unit === 'several') {
-    const cur = new Set(shown.split(/\s+/).filter(Boolean).map((w) => unquote(w)));
+    const cur = new Set(shown.split(/\s+/).filter(Boolean).map((/** @type {string} */ w) => unquote(w)));
     cell = html`<span class="words">${words.map((w) => {
       const on = cur.has(w.word);
       return html`<button type="button" key=${w.word} class=${on ? 'on' : undefined} title=${w.about || ''} disabled=${ro} aria-pressed=${String(on)}
@@ -365,7 +392,7 @@ function Row({ g, c, s, editable, api, put, model, printed }) {
     const cur = shown.replace(/^"|"$/g, '');
     if (wordControlNeedsSelect(words)) {
       const known = words.some((w) => w.word === cur);
-      cell = html`<select class="word-select" disabled=${ro} value=${known ? cur : ''} title=${words.find((w) => w.word === cur)?.about || c.about || ''} onChange=${(e) => put(g, c.name, e.target.value)}>
+      cell = html`<select class="word-select" disabled=${ro} value=${known ? cur : ''} title=${words.find((w) => w.word === cur)?.about || c.about || ''} onChange=${(/** @type {Event} */ e) => put(g, c.name, /** @type {HTMLSelectElement} */ (e.target).value)}>
         ${known ? null : html`<option value="" disabled>${inh?.text ?? `no default for ${c.name}`}</option>`}${words.map((w) => html`<option value=${w.word} title=${w.about || ''} key=${w.word}>${w.word}</option>`)}</select>`;
     } else {
       cell = html`<span class="words">${words.map((w) => html`<button type="button" key=${w.word} class=${w.word === cur ? (s ? 'on' : 'on inh') : undefined} title=${w.about || ''} disabled=${ro} onClick=${() => put(g, c.name, w.word)}>${w.word}</button>`)}</span>`;
@@ -389,13 +416,13 @@ function Row({ g, c, s, editable, api, put, model, printed }) {
 }
 
 /** A menu that adds something: `add` is {label, items: [{label, title, disabled, run}]}; choosing an item runs it, then the menu is ready again. */
-function AddMenu({ add }) {
-  return html`<select class="word-select add" aria-label=${add.label} value="" onChange=${(e) => { const it = add.items[Number(e.target.value)]; e.target.value = ''; if (it && !it.disabled) it.run(); }}>
+function AddMenu(/** @type {{ add: AddItems }} */ { add }) {
+  return html`<select class="word-select add" aria-label=${add.label} value="" onChange=${(/** @type {Event} */ e) => { const sel = /** @type {HTMLSelectElement} */ (e.target); const it = add.items[Number(sel.value)]; sel.value = ''; if (it && !it.disabled) it.run(); }}>
     <option value="" disabled>${`${add.label}…`}</option>${add.items.map((it, i) => html`<option value=${String(i)} title=${it.title || ''} disabled=${!!it.disabled} key=${i}>${it.label}</option>`)}</select>`;
 }
 
 /** The lengths of a sheet the program is asked the printed size of: [{key, element, control, typed}], the typed value as written (or the default shown). */
-function printedWanted(/** @type {any} */ model) {
+function printedWanted(/** @type {SheetModel} */ model) {
   const out = [];
   for (const g of model.groups) {
     if (!g.schema?.name) continue;
@@ -408,14 +435,14 @@ function printedWanted(/** @type {any} */ model) {
   }
   return out;
 }
-const printedKey = (/** @type {any} */ g, /** @type {any} */ c) => `${g.schema?.name}@${g.at}.${c.name}`;
+const printedKey = (/** @type {Group} */ g, /** @type {Control} */ c) => `${g.schema?.name}@${g.at}.${c.name}`;
 
-export function Sheet({ model, api, emptyTitle = 'Nothing selected', emptyText = 'Click something on the tile or put the cursor in its line to inspect and change it.' }) {
+export function Sheet(/** @type {{ model: SheetModel | null | undefined, api: SheetApi, emptyTitle?: string, emptyText?: string }} */ { model, api, emptyTitle = 'Nothing selected', emptyText = 'Click something on the tile or put the cursor in its line to inspect and change it.' }) {
   const [more, setMore] = useState(false);
   // the printed size of each length, asked of the program when what is written (or the build target) changes; the last
   // answer stays, dimmed, while the next one is on its way
   const [printed, setPrinted] = useState(/** @type {Record<string, any>} */ ({}));
-  const wanted = model && api.printed ? printedWanted(model) : [];
+  const wanted = model && typeof api.printed === 'function' ? printedWanted(model) : [];
   const asked = `${JSON.stringify(wanted)}|${api.printedKey?.() ?? ''}`;
   useEffect(() => {
     if (!wanted.length) { setPrinted({}); return undefined; }
@@ -430,10 +457,12 @@ export function Sheet({ model, api, emptyTitle = 'Nothing selected', emptyText =
   }, [asked]);
   if (!model) return html`<div class="empty"><b>${emptyTitle}</b>${emptyText}</div>`;
   const editable = api.writable() || !!api.canMine?.();
+  /** @type {Put} */
   const put = (g, name, value) => (g.set ? g.set(name, value) : api.set(g.at, name, value));
   let hidden = 0;
   const groups = model.groups.map((g, gi) => {
     const writtenBy = new Map(g.written.map((x) => [x.name, x]));
+    /** @type {Control[]} */
     const controls = g.schema ? g.schema.controls : g.written.map((x) => ({ name: x.name }));
     const rows = [];
     for (const c of controls) {

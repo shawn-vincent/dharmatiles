@@ -50,10 +50,13 @@ const run = { lastKind: /** @type {string | null} */ (null), lastTime: 0, checkT
 const history = docs.history;
 const textKey = () => `text:${tile()?.id ?? doc.get().tileId ?? ''}`;
 const owned = () => isPlates(tile());
+/** @typedef {import('./stores.js').DocState} DocState */
+/** @typedef {{ entry: import('../doc-history.js').Entry, target: number, distance: number, direction: 'Undo' | 'Redo' }} HistoryItem  one step a history menu offers */
+
 /** The text at state `i` of the history of `key` (0: as opened). */
-const stateTextOf = (key, i) => history.stateText(key, i) ?? run.openText;
+const stateTextOf = (/** @type {string} */ key, /** @type {number} */ i) => history.stateText(key, i) ?? run.openText;
 /** The text the source is at now, by the history's account. */
-const stateNow = (key) => stateTextOf(key, history.at(key));
+const stateNow = (/** @type {string} */ key) => stateTextOf(key, history.at(key));
 
 export const texts = new TextPane($('code'), {
   onEdit: (text, kind) => {
@@ -81,16 +84,21 @@ export const texts = new TextPane($('code'), {
 // one history for the file shown: typing (a pause or another kind of change starts a new step), changes from the lens, and
 // changes on disk.  The title bar's Undo and Redo and their menus are bound to it (`bindHistory`): they read the history's
 // signal, the tile and the document, so they follow every change without being told.
+/** @param {string} key @param {boolean} mine */
 function historyItems(key, mine) {
   const at = history.at(key), entries = history.entries(key);
   // a program-owned document goes back one change at a time (each is a call against the file's revision)
-  const undo = [], redo = [];
+  /** @type {HistoryItem[]} */
+  const undo = [];
+  /** @type {HistoryItem[]} */
+  const redo = [];
   // (a step that is not there, at the ends, is not offered: the menus are drawn whatever the buttons say)
   for (let target = at - 1; target >= (mine ? at - 1 : 0); target--) if (entries[target]) undo.push({ entry: entries[target], target, distance: at - target, direction: 'Undo' });
   for (let target = at + 1; target <= (mine ? at + 1 : entries.length); target++) if (entries[target - 1]) redo.push({ entry: entries[target - 1], target, distance: target - at, direction: 'Redo' });
   return { undo, redo };
 }
 /** What a history row draws: the tile at the text it is at now and at the text a row leaves it at, each built low by the program. */
+/** @param {string} id @param {string} file @param {string} key */
 function historyPictures(id, file, key) {
   const { system, printer } = server.get();
   return {
@@ -101,6 +109,7 @@ function historyPictures(id, file, key) {
     onError: (/** @type {any} */ e) => showError('Could not draw a step of the history', e),
   };
 }
+/** @param {'Undo' | 'Redo'} direction @param {number} target */
 function pickHistory(direction, target) {
   if (owned()) undo(direction === 'Undo' ? -1 : 1); else goHistory(target);
   view.set({ popover: null });
@@ -119,13 +128,14 @@ function bindHistory() {
     // pictures of what a step does: of a tile's own text, and only while the menu is open (nothing is built for a closed menu)
     const open = view.get().popover;
     const own = !mine && !!t && doc.get().file === t.path && doc.get().text != null;
-    const pictures = (menu) => (own && open === menu ? historyPictures(t.id, t.path, key) : null);
-    const withText = (list) => list.map((it) => ({ ...it, text: own && open ? stateTextOf(key, it.target) : null }));
+    const pictures = (/** @type {string} */ menu) => (own && open === menu && t && key ? historyPictures(t.id, t.path, key) : null);
+    const withText = (/** @type {HistoryItem[]} */ list) => list.map((it) => ({ ...it, text: own && open ? stateTextOf(key, it.target) : null }));
     render(html`<${HistoryMenu} items=${withText(items.undo)} onPick=${pickHistory} pictures=${pictures('undo-history')} />`, $('undo-history'));
     render(html`<${HistoryMenu} items=${withText(items.redo)} onPick=${pickHistory} pictures=${pictures('redo-history')} />`, $('redo-history'));
   });
 }
 
+/** @param {string} text */
 function resetHistory(text) {
   history.clear(textKey());
   run.openText = text; run.lastKind = null;
@@ -151,12 +161,13 @@ function record(text, kind, label = null) {
   const at = history.at(key);
   const join = kind === 'type' && run.lastKind === 'type' && now - run.lastTime < 1000 && at > 0;
   const prior = join ? history.entries(key)[at - 1].before : stateNow(key);
-  const change = describeChange(prior, text, kind, label);
+  const change = describeChange(prior ?? undefined, text, kind, label);
   if (join) history.amend(key, { after: text, caret: texts.selectionStart, kind, label: change.title, change });
   else history.push(key, { before: prior, after: text, caret: texts.selectionStart, kind, label: change.title, change });
   run.lastKind = kind; run.lastTime = now;
 }
 /** The source goes to state `i` of its history (the text of a tile; a program-owned document is stepped by docs.step). */
+/** @param {number} i */
 function goHistory(i) {
   const key = textKey();
   if (owned() || !doc.get().writable || i < 0 || i > history.entries(key).length) return;
@@ -169,6 +180,7 @@ function goHistory(i) {
   changed();
 }
 /** Undo (`step` -1) or Redo (1): the page's one, for whichever document is open. */
+/** @param {number} step */
 export function undo(step) {
   const t = tile();
   if (owned()) { if (t) docs.step(t.id, step); return; }
@@ -202,14 +214,14 @@ const drafter = createDrafter({
     const t = tile(), d = doc.get();
     return !t || !d.file || d.text == null || d.tileId !== t.id ? null : d.text;
   },
-  request: async (text) => {
+  request: async (/** @type {string} */ text) => {
     const t = tile(), d = doc.get();
     return { t, r: await host.draft(t.id, { text, file: d.file === t.path ? undefined : d.file, debug: view.get().debug }) };
   },
-  accept: ({ t, r }) => {
+  accept: (/** @type {{ t: import('./stores.js').ServerTile, r: any }} */ { t, r }) => {
     if (!failed(`Could not draft ${stem(t)}`, r) && r.buffer && t.id === view.get().tileId) view.set({ draft: { tileId: t.id, payload: parsePayload(r.buffer) } });
   },
-  fail: (e) => showError('Could not draft', e),
+  fail: (/** @type {unknown} */ e) => showError('Could not draft', e),
 });
 export const askDraft = () => drafter.ask();
 /** A full build of the text now is on the page: a draft still on its way is dropped. */
@@ -396,6 +408,7 @@ async function check() {
   if (r.status === 0) return false; // the server is away (not checked yet, and checked again when it is back), or a newer check took its place
   if (failed(`Could not check ${stem(t)}`, r)) return false;
   if (text !== doc.get().text || !r.body || t.id !== view.get().tileId) return false;
+  /** @type {Partial<DocState>} */
   const patch = { note: null, checked: text, checkedFile: d.file, checkedTile: d.tileId, ok: !!r.body.ok, errors: r.body.errors || [] };
   if (r.body.ok && r.body.stack) patch.stack = r.body.stack; // the last good stack stays while there are mistakes
   if (r.body.ok && r.body.map) patch.map = r.body.map;
@@ -416,7 +429,7 @@ async function save(now = false) {
   d = doc.get();
   if (d.checked !== d.text || !d.ok) return false; // a mistake: kept here until it is fixed
   const t = tile(), text = d.text, file = d.file, sid = shownSid.value;
-  if (!t || !file || !sid) return false;
+  if (!t || !file || !sid || text == null) return false;
   run.saving = true;
   doc.set({ saving: true });
   try {
@@ -436,6 +449,7 @@ async function save(now = false) {
   return !dirty();
 }
 
+/** @type {Promise<boolean> | null} */
 let leaving = null;
 function confirmDiscard() {
   if (leaving) return leaving;
@@ -471,12 +485,18 @@ export async function canLeave() {
   return confirmDiscard();
 }
 
-let loadToken = 0, loadKey = null, loading = null;
+let loadToken = 0;
+/** @type {string | null} */
+let loadKey = null;
+/** @type {Promise<boolean> | null} */
+let loading = null;
+/** @type {{ key: string } | null} */
 let carried = null; // the key of the undo history a rename brings to the renamed file
 /** Bring the undo history along to the file a rename is about to make. */
 export function carryHistory() { carried = { key: textKey() }; }
 
 /** Show `file` of the tile shown (null: its own document); resolves true once it is there. */
+/** @param {string | null} file */
 export async function loadText(file) {
   const t = tile();
   if (!t || /\.(stl|dinv)$/i.test(t.path)) { clearDocument(); return false; } // a model, or the inventory (its own view), has no tile text to edit here
@@ -492,11 +512,12 @@ export async function loadText(file) {
     try {
       const sid = sourceId(t, want);
       // taken unless the page has unsaved changes on this very text, or a later load has begun
-      const mine = (v) => dirty() && texts.file === v.file && doc.get().tileId === t.id;
+      const mine = (/** @type {{ file: string }} */ v) => dirty() && texts.file === v.file && doc.get().tileId === t.id;
       let read = null;
       // the text, the pane and the source shown change in the same step as the held state is taken (no reader sees one without the others)
       let fresh = false;
-      const apply = (state) => {
+      const apply = (/** @type {import('../documents.js').DocState | undefined} */ state) => {
+        if (!state?.source) return;
         const v = { file: state.source.file, text: state.source.text, writable: state.source.writable };
         fresh = doc.get().tileId !== t.id || texts.file !== v.file;
         texts.show(v.file, v.text, v.writable);
@@ -533,6 +554,7 @@ export async function loadText(file) {
 }
 
 /** Show `file` (null: the tile's own) and, once it is there, scroll to `line`. */
+/** @param {string | null} file @param {number | null} [line] */
 export async function openFile(file, line) {
   const t = tile();
   view.set({ source: !file || file === t?.path ? null : sourceId(t, file) });
@@ -557,7 +579,7 @@ function showTextBar() {
   st.classList.toggle('bad', conflict || !!words?.bad);
   // the disk's text and revision are already the held state (js/documents.js): choosing says which text is the user's
   render(html`<${SaveState} words=${words} conflict=${conflict}
-    onTake=${() => { const disk = docs.resolveConflict(shownSid.value) ?? d.conflict; doc.set({ conflict: null }); edited(disk, 'disk'); }}
+    onTake=${() => { const disk = docs.resolveConflict(shownSid.value) ?? d.conflict; doc.set({ conflict: null }); if (disk != null) edited(disk, 'disk'); }}
     onKeep=${() => { docs.resolveConflict(shownSid.value); doc.set({ conflict: null }); changed(); }} />`, st);
 }
 
@@ -583,11 +605,12 @@ export function saveWords() {
  * Resolves true once the text pane holds tile `id`'s own document and it has been
  * checked (the spans an edit writes at are of exactly this text); false after a few seconds.
  */
+/** @param {string} id */
 export function whenChecked(id) {
   const ready = () => { const d = doc.get(); return d.tileId === id && d.text != null && d.checked === d.text && d.file === tile()?.path; };
   if (ready()) return Promise.resolve(true);
   return new Promise((resolve) => {
-    const stop = (ok) => { off(); offView(); clearTimeout(timer); resolve(ok); };
+    const stop = (/** @type {boolean} */ ok) => { off(); offView(); clearTimeout(timer); resolve(ok); };
     const off = doc.subscribe(['checked', 'tileId', 'text'], () => { if (ready()) stop(true); });
     const offView = view.subscribe(['tileId'], () => { if (view.get().tileId !== id) stop(false); });
     const timer = setTimeout(() => stop(false), 6000);
@@ -599,8 +622,10 @@ export function whenChecked(id) {
  * on the text now shown, which is that tile's copy: typed, as one step of history.  False when
  * the copy changed the very text the patch touches.
  */
+/** @param {import('../mine.js').Patch} patch @param {string | null} lib */
 export function applyPatchOnCopy(patch, lib) {
-  const r = patchOnCopy(patch, lib, doc.get().text);
+  const copy = doc.get().text;
+  const r = lib == null || copy == null ? null : patchOnCopy(patch, lib, copy); // both are held when a copy was made from a library tile
   if (!r) return false;
   edited(r.text, 'type', null, r.caret);
   return true;
@@ -616,6 +641,7 @@ export function abandonChanges() {
 // ---- completion -------------------------------------------------------------
 
 const comp = { s: /** @type {NonNullable<ReturnType<typeof suggest>> | null} */ (null), i: 0 };
+/** @param {boolean} force */
 function openComp(force) {
   const elements = server.get().elements;
   if (!doc.get().writable || !elements.length) return closeComp();
@@ -628,7 +654,7 @@ function renderComp() {
   const box = $('comp');
   box.replaceChildren();
   if (!comp.s) return;
-  comp.s.items.forEach((it, i) => {
+  comp.s.items.forEach((/** @type {NonNullable<typeof comp.s>['items'][number]} */ it, /** @type {number} */ i) => {
     const d = document.createElement('div');
     d.className = `it fam-${it.family || 'doc'}${i === comp.i ? ' on' : ''}`;
     d.setAttribute('role', 'option');
@@ -656,6 +682,7 @@ function acceptComp() {
   closeComp();
   texts.insert(it.insert, s.from, s.to);
 }
+/** @param {KeyboardEvent} e */
 function compKey(e) {
   if ((e.ctrlKey || e.metaKey) && e.key === ' ') { openComp(true); return true; }
   if (!comp.s) return false;
