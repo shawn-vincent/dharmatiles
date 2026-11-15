@@ -10,7 +10,7 @@
     "tile_name": "glade",
     "node": null,
     "span": null,
-    "text": "Read glade: 1×1 squares, 3 stack entries",
+    "text": "Read glade: 1\u00d71 squares, 3 stack entries",
     "help": null,
     "fix": null,
     "file": null,
@@ -55,6 +55,16 @@
         [
           "grass",
           1.5
+        ]
+      ],
+      "stage_peak_mb": [
+        [
+          "ground",
+          310.0
+        ],
+        [
+          "grass",
+          612.0
         ]
       ],
       "reused": 0,

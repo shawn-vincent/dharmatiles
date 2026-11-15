@@ -29,6 +29,10 @@ pub struct TileRecord {
     pub build_s: f64,
     /// Seconds each stage took, in build order (`3:grass`, `union`, `audit`).
     pub stage_secs: Vec<(String, f64)>,
+    /// The highest resident memory each stage reached, MB, under the stage names of `stage_secs` (measured
+    /// natively by sampling the process: read it from a build run alone).  Empty for a build from the cache and
+    /// for an STL; varies from run to run.
+    pub stage_peak_mb: Vec<(String, f64)>,
     /// The edge level the ground meets every tile edge at, mm.
     pub edge_mm: Option<f64>,
     /// Numbers the elements noted (counts), by name; a name noted again is `name#2`, `name#3`.
@@ -73,6 +77,7 @@ impl TileRecord {
             stages: b.report.stages.clone(),
             build_s,
             stage_secs: b.report.stage_secs.clone(),
+            stage_peak_mb: b.report.stage_peak_mb.clone(),
             edge_mm: b.report.edge_mm,
             stats,
             left_out: b.report.left_out.iter().cloned().collect(),
@@ -92,6 +97,7 @@ impl TileRecord {
             stages: Vec::new(),
             build_s,
             stage_secs: Vec::new(),
+            stage_peak_mb: Vec::new(),
             edge_mm: None,
             stats: BTreeMap::new(),
             left_out: BTreeMap::new(),

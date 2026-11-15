@@ -48,6 +48,16 @@
       1.2
     ]
   ],
+  "stage_peak_mb": [
+    [
+      "ground",
+      310.0
+    ],
+    [
+      "union",
+      845.5
+    ]
+  ],
   "edge_mm": 3.4,
   "stats": {},
   "left_out": {},

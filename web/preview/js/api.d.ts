@@ -57,7 +57,11 @@ type BuildData = { build_s: number, triangles: number, target: string,
 /**
  * Seconds each stage took, in build order.
  */
-stage_secs: Array<[string, number]>, reused: number, 
+stage_secs: Array<[string, number]>, 
+/**
+ * The highest resident memory each stage reached, MB, under the same names (empty from the cache).
+ */
+stage_peak_mb: Array<[string, number]>, reused: number, 
 /**
  * `hit` or `miss`.
  */
@@ -1460,6 +1464,12 @@ build_s: number,
  * Seconds each stage took, in build order (`3:grass`, `union`, `audit`).
  */
 stage_secs: Array<[string, number]>, 
+/**
+ * The highest resident memory each stage reached, MB, under the stage names of `stage_secs` (measured
+ * natively by sampling the process: read it from a build run alone).  Empty for a build from the cache and
+ * for an STL; varies from run to run.
+ */
+stage_peak_mb: Array<[string, number]>, 
 /**
  * The edge level the ground meets every tile edge at, mm.
  */

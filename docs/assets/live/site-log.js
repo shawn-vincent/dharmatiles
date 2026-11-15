@@ -99,7 +99,7 @@ export class CardLog {
       kind: 'build', severity: 'info', scope: 'build', code: null, node: null, span: null, help: null, fix: null,
       text: cached ? `From the cache (${draft ? 'draft' : 'full'} detail)` : `Built at ${draft ? 'draft' : 'full'} detail in ${secs.toFixed(2)} s`,
       data: {
-        type: 'build', build_s: secs, triangles: audit.triangles, target: record.target, stage_secs: record.stage_secs,
+        type: 'build', build_s: secs, triangles: audit.triangles, target: record.target, stage_secs: record.stage_secs, stage_peak_mb: record.stage_peak_mb,
         reused: 0, cache: cached ? 'hit' : 'miss', made_s: cached ? made : null,
       },
     })];

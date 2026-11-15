@@ -92,6 +92,10 @@ pub struct Report {
     /// How long each stage took, seconds, in build order (`3:grass`,
     /// `union`, `audit`): the weights the next build's progress bar uses.
     pub stage_secs: Vec<(String, f64)>,
+    /// The highest resident memory each stage reached, MB, in build order, under the same names as
+    /// `stage_secs` ([`crate::memory`]); a stage the platform gave no reading for is missing.  Varies from run
+    /// to run: never hashed.
+    pub stage_peak_mb: Vec<(String, f64)>,
     /// Steps a [`Cache`] gave, not built (the first ones, in plan order);
     /// their stages are missing from `stage_secs`.
     pub reused: usize,
@@ -339,6 +343,9 @@ struct Plan<'a> {
 struct Ran {
     scene: Scene,
     stage_secs: Vec<(String, f64)>,
+    stage_peak_mb: Vec<(String, f64)>,
+    /// Reads the memory the rest of the stages reach.
+    meter: crate::memory::Meter,
     /// Steps the cache gave.
     reused: usize,
 }
@@ -616,6 +623,8 @@ impl<'a> Plan<'a> {
         };
         scene.collect(want);
         let mut stage_secs = Vec::new();
+        let mut stage_peak_mb = Vec::new();
+        let meter = crate::memory::Meter::start();
         let mut painted = false;
         // sketches start with the lifted ground, which carries what the
         // surfaces made before it: a lone pebble is no picture of a tile
@@ -693,6 +702,7 @@ impl<'a> Plan<'a> {
             }
             progress.end(key);
             stage_secs.push((key.clone(), t_stage.elapsed_secs()));
+            stage_peak_mb.extend(meter.stage_peak_mb().map(|mb| (key.clone(), mb)));
             if let Some(cache) = cache {
                 let mut scene = scene.clone();
                 scene.set_progress(Progress::none());
@@ -710,6 +720,8 @@ impl<'a> Plan<'a> {
         Ok(Ran {
             scene,
             stage_secs,
+            stage_peak_mb,
+            meter,
             reused: first,
         })
     }
@@ -726,6 +738,8 @@ impl<'a> Plan<'a> {
         let Ran {
             mut scene,
             mut stage_secs,
+            mut stage_peak_mb,
+            meter,
             reused,
         } = ran;
         let t_stage = crate::clock::Stopwatch::start();
@@ -750,6 +764,11 @@ impl<'a> Plan<'a> {
         let (entry_in, piece_in) = trace_entries(&scene, &mesh, self);
         progress.end(progress::UNION);
         stage_secs.push((progress::UNION.to_owned(), t_stage.elapsed_secs()));
+        stage_peak_mb.extend(
+            meter
+                .stage_peak_mb()
+                .map(|mb| (progress::UNION.to_owned(), mb)),
+        );
         let t_stage = crate::clock::Stopwatch::start();
         progress.begin(progress::AUDIT, "checking printability");
         let footprint = c.frame.size_mm();
@@ -775,6 +794,11 @@ impl<'a> Plan<'a> {
         };
         progress.end(progress::AUDIT);
         stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed_secs()));
+        stage_peak_mb.extend(
+            meter
+                .stage_peak_mb()
+                .map(|mb| (progress::AUDIT.to_owned(), mb)),
+        );
         let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
         let entries = export
             .source
@@ -831,6 +855,7 @@ impl<'a> Plan<'a> {
                         bits,
                     }),
                 stage_secs,
+                stage_peak_mb,
                 reused,
                 look,
                 entries,

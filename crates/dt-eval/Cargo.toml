@@ -24,6 +24,10 @@ serde_json.workspace = true
 serde.workspace = true
 ts-rs.workspace = true
 
+# the resident size a build's stages reach (the browser reads its memory's size instead)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+memory-stats.workspace = true
+
 [dev-dependencies]
 # the golden tests draw the PNG renders (a dev-dependency cycle: dt-print builds on dt-eval)
 dt-print.workspace = true
