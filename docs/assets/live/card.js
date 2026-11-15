@@ -379,6 +379,7 @@ export class Card {
 
   #edited() {
     this.version++;
+    this.#stlState();
     this.model.text.value = this.text;
     this.checkedText = null;
     this.#markSource();
@@ -405,8 +406,24 @@ export class Card {
   }
 
   #download() {
-    if (this.fullAt === this.version && this.stl) this.#save();
-    else this.#full(true);
+    if (this.fullAt !== this.version) return this.#full(true);
+    // a full build of this text is shown: it has its STL, or it failed the gate and has none (the button says so)
+    if (this.stl) this.#save();
+  }
+
+  /**
+   * The Download button as the text's last full build leaves it: a build that fails the printability gate makes no STL
+   * (dt-web writes none for a failed build), so the button is off and says why, until the text changes.
+   */
+  #stlState() {
+    // the button is made with the card's controls, after the first edits a page's script may make
+    const b = this.stlBtn;
+    if (!b) return;
+    const refused = this.fullAt === this.version && !this.stl;
+    b.disabled = refused;
+    b.title = refused
+      ? 'This tile fails the printability gate, so no STL is made: the messages say what to change'
+      : 'The STL the printer gets: always built at full detail';
   }
 
   #save() {
@@ -499,13 +516,13 @@ export class Card {
     const meta = ev.meta;
     if (!meta.built) return;
     this.#showMesh(ev.positions, ev.colours, meta.footprint);
-    if (!draft) { this.stl = ev.stl; this.fullAt = this.version; }
+    if (!draft) { this.stl = ev.stl.byteLength ? ev.stl : null; this.fullAt = this.version; this.#stlState(); }
     this.log.built(meta, { draft, cached: ev.cached, ms: ev.ms });
     this.tileState.value = { ...this.tileState.value, status: 'ready', shown: { checked: !draft, draft } };
     this.model.shown.value = !draft;
     this.draftNote = draft;
     this.host.dataset.detail = draft ? 'draft' : 'full';
-    if (!draft && this.wantDownload) { this.wantDownload = false; if (this.stl?.byteLength) this.#save(); }
+    if (!draft && this.wantDownload) { this.wantDownload = false; if (this.stl) this.#save(); }
     this.#paint();
   }
 
