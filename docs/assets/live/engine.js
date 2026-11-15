@@ -20,6 +20,7 @@
 
 import { Queue } from './queue.js';
 import { ByteCache, CACHE_BYTES, keptBytes, runawayMs, storeKey } from './limits.js';
+import { engineFile } from './engine-files.js';
 import { DraftStore } from './draft-store.js';
 
 // The messages to and from the worker are typed where worker.js makes and takes them.
@@ -107,33 +108,15 @@ export class Engine {
   }
 
   /**
-   * A file of the engine, from the Cache API when this engine's copy is there, else fetched and kept (the name carries the file's hash,
-   * so a kept copy is never the wrong one; caches of other engines are removed).  The cache is a convenience: when it cannot be used the
-   * file is fetched as it always was.
+   * A file of the engine, from the Cache API when this engine's copy is there, else fetched and kept (engine-files.js: the cache is
+   * named by the manifest's hash, so a copy kept for another engine is never used and its cache is removed).  A copy that cannot be
+   * kept is said on the console, once for each file.
    * @param {string} name @returns {Promise<Response>}
    */
   async #file(name) {
     const m = await this.manifest();
-    const url = new URL(`engine/${name}`, this.root);
-    /** @type {Cache | null} */
-    let kept = null;
-    try {
-      kept = await globalThis.caches?.open(`dt-engine-${m.hash}`) ?? null;
-      const hit = await kept?.match(url);
-      if (hit) return hit;
-    } catch {
-      kept = null; // no Cache API here (an insecure page, blocked site data): fetch as usual
-    }
-    const r = await fetch(url);
-    if (r.ok && kept) {
-      try {
-        await kept.put(url, r.clone());
-        for (const k of await globalThis.caches.keys()) if (k.startsWith('dt-engine-') && k !== `dt-engine-${m.hash}`) await globalThis.caches.delete(k);
-      } catch {
-        // a copy that cannot be kept (quota) only means the next visit fetches it again
-      }
-    }
-    return r;
+    const host = { caches: globalThis.caches, fetch: (/** @type {URL} */ u) => fetch(u), say: (/** @type {string} */ msg) => console.warn(msg) };
+    return engineFile(host, m.hash, new URL(`engine/${name}`, this.root));
   }
 
   /** The between-visits store of drafts, for this engine; null when the manifest cannot be read (`start` says so, loudly) or IndexedDB is missing. */
