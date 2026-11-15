@@ -8,6 +8,11 @@
 //! blunt point, bent gently outward (offset grows with the square of the
 //! height, so it stands vertical at its base).
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "reed counts below u32 (a stem count is in the tens) and a random pick below the index"
+)]
+
 use dt_kit::Kind;
 use dt_kit::{Material, Rng, Scene, Tag, TriMesh, form};
 
@@ -161,10 +166,6 @@ impl Element for Reeds {
             .collect();
         // a shuffle (Fisher–Yates), then the first that stand clear
         for i in (1..cand.len()).rev() {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let j = rng.int(0, i as i64) as usize;
             cand.swap(i, j);
         }
@@ -219,18 +220,10 @@ impl Element for Reeds {
                 });
             }
         }
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let slots = scene
             .slots(stems.len() as u32, Material::Grass)
             .map_err(LookError::build)?;
         for (i, st) in stems.iter().enumerate() {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let solid = form::solid(slots.get(i as u32), &st.mesh()).map_err(LookError::build)?;
             scene.add(
                 Tag {

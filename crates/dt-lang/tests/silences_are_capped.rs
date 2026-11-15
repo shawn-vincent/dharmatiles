@@ -6,9 +6,7 @@
 use std::path::{Path, PathBuf};
 
 /// The sites in the workspace's Rust that keep a refused call under an expectation of that lint.
-const SILENCES: usize = 189;
-/// Of those, the ones whose reason says they are not yet decided (show the failure, or name its permitted kind).
-const UNREVIEWED: usize = 48;
+const SILENCES: usize = 166;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let entries = std::fs::read_dir(dir).expect("a readable directory");
@@ -58,8 +56,9 @@ fn the_silences_never_grow_without_the_number_changing() {
          in this file, in the same commit",
         "disallowed_methods"
     );
-    assert!(
-        unreviewed <= UNREVIEWED,
-        "{unreviewed} undecided silences, over the {UNREVIEWED} recorded: decide each new one before it lands"
+    assert_eq!(
+        unreviewed, 0,
+        "{unreviewed} undecided silences: a silence is never marked unreviewed; show the failure, make it infallible, \
+         or name its permitted kind (docs/standards/errors.html)"
     );
 }

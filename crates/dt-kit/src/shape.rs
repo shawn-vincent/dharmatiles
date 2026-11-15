@@ -161,7 +161,7 @@ pub fn wobble(
         let n = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "a segment count: a length over the step, at least 1"
         )]
         let k = (libm::ceil(len / step) as usize).max(1);
         for i in 0..k {

@@ -17,7 +17,7 @@
 )]
 #![expect(
     clippy::unwrap_used,
-    reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction"
+    reason = "a test: a failing unwrap is the failure; a test: a hash nibble or small count in the golden tables"
 )]
 
 use crate::memo;

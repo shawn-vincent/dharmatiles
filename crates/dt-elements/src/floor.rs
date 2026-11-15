@@ -93,7 +93,7 @@ fn whole(s: &Settings, name: &str, default: u32) -> Result<u32, LookError> {
     }
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "a floor value checked finite and non-negative on the lines above, and a lattice node index clamped by `min(n - 1)`"
     )]
     Ok(v as u32)
 }
@@ -274,7 +274,7 @@ fn lay(
         let (x, y) = (0.5 * (c.t0 + c.t1), 0.5 * (c.z0 + c.z1));
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "a floor value checked finite and non-negative on the lines above, and a lattice node index clamped by `min(n - 1)`"
         )]
         let (i, j) = (
             (libm::round(x / step) as usize).min(nx - 1),

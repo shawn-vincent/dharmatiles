@@ -22,9 +22,8 @@
     clippy::float_cmp,
     clippy::needless_range_loop,
     clippy::type_complexity,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction; an exact comparison of a stored or sentinel value, not a computed one; the index also addresses a second array; a one-off tuple of parts, named where it is used"
+    reason = "grass lattice cells (a position over the cell step, clamped into the grid) and class counts (the grass classes number a few dozen); an exact comparison of a stored or sentinel value, not a computed one; the index also addresses a second array; a one-off tuple of parts, named where it is used"
 )]
-
 mod blade;
 mod flow;
 mod fronds;
@@ -163,10 +162,6 @@ impl Grass {
         let s = frame.scale();
         let [w, h] = frame.size_mm();
         let (step, inset) = (CARPET_STEP_MM * s, CARPET_INSET_MM * s);
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (nx, ny) = (
             ((w - 2.0 * inset) / step).floor() as usize + 1,
             ((h - 2.0 * inset) / step).floor() as usize + 1,
@@ -203,10 +198,6 @@ impl Grass {
             let clump = (0.5 + 0.3 * clumps.z[k]).clamp(0.0, 1.0);
             let thick = 1.25 * amp * grown * (0.35 + 0.65 * ridge * (0.55 + 0.45 * clump));
             // f32 is what the mesher takes
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             {
                 // the plate lies on the tile's bed, deep inside the ground (and
                 // under any water), where no thinning can bring it to the surface
@@ -303,10 +294,6 @@ impl Element for Grass {
         // 2 clearings of bare earth, and the flow round them and the rocks
         let n_sq = (w / frame.square_mm) * (h / frame.square_mm);
         let share = ctx.area.share();
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let count = if self.clearings <= 0.0 {
             0
         } else {
@@ -473,10 +460,6 @@ impl Element for Grass {
             meshes.iter().map(|m| m.as_ref().map(plan_box)).collect();
         let classes = colour(&boxes);
         let n_classes = classes.iter().copied().max().map_or(0, |c| c + 1);
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let slots = scene
             .slots(n_classes as u32, Material::Grass)
             .map_err(LookError::build)?;
@@ -495,10 +478,6 @@ impl Element for Grass {
                     made += 1;
                 }
             }
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let solid = form::solid(slots.get(c as u32), &merged).map_err(LookError::build)?;
             scene.add(
                 Tag {
@@ -561,10 +540,6 @@ fn debug_marks(
     };
     let grown = starts.iter().filter(|s| s.fate.grown());
     for (st, f) in grown.zip(frs) {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let n = ((f.length / fronds::TRACE_STEP_MM) as usize).min(f.path.len() - 1);
         // a point every half millimetre, and the tip
         let mut pts: Vec<[f64; 3]> = f.path[..=n].iter().step_by(2).map(|&p| drape(p)).collect();
@@ -630,10 +605,6 @@ fn hair(i: usize) -> [f64; 3] {
 fn raw_node(frame: &dt_kit::Frame, x: f64, y: f64) -> (usize, usize) {
     let (nx, ny) = frame.nodes();
     let st = frame.step_mm();
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     (
         ((x / st).round().max(0.0) as usize).min(nx - 1),
         ((y / st).round().max(0.0) as usize).min(ny - 1),
@@ -774,18 +745,10 @@ fn colour(boxes: &[Option<([f64; 2], [f64; 2])>]) -> Vec<usize> {
         std::collections::HashMap::new();
     let mut class = vec![0usize; boxes.len()];
     let cells = |b: &([f64; 2], [f64; 2])| {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (i0, i1) = (
             libm::floor(b.0[0] / CELL) as i64,
             libm::floor(b.1[0] / CELL) as i64,
         );
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (j0, j1) = (
             libm::floor(b.0[1] / CELL) as i64,
             libm::floor(b.1[1] / CELL) as i64,

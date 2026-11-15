@@ -20,7 +20,7 @@ impl SpatialHash {
         let cell = if cell > 0.0 { cell } else { 1.0 };
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "cell indices of a spatial hash: a coordinate over the cell, clamped non-negative, and counted at least 1"
         )]
         let n = |v: f64| ((v.max(0.0) / cell).ceil() as usize).max(1);
         let (nx, ny) = (n(w), n(h));
@@ -36,7 +36,7 @@ impl SpatialHash {
     fn bin(&self, v: f64, n: usize) -> usize {
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "cell indices of a spatial hash: a coordinate over the cell, clamped non-negative, and counted at least 1"
         )]
         let k = (v / self.cell).floor().max(0.0) as usize;
         k.min(n - 1)

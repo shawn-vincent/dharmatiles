@@ -526,9 +526,9 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
     let sq = dt_kit::Frame::for_system(opts.system, 1, 1).square_mm;
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "a model's footprint in squares: a length over the square, at least 1, and a mesh is far below u32::MAX squares"
     )]
-    let n = |v: f64| (libm::round(v / sq).max(1.0)) as u32;
+    let n = |v: f64| (libm::round(v / sq).clamp(1.0, f64::from(u32::MAX))) as u32;
     let plan = TilePlan::Stl {
         tile: path.rsplit('/').next().unwrap_or(path).to_owned(),
         squares: PlanSquares {
@@ -723,10 +723,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-    )]
     fn a_changed_source_cancels_at_the_next_progress_boundary() {
         let missing = "/a/path/that/dharmatiles-does-not-have".to_owned();
         let latest = LatestBuild {
@@ -746,6 +742,9 @@ mod tests {
                 },
             );
         }));
-        assert!(stopped.is_err_and(|p| p.is::<Superseded>()));
+        let Err(payload) = stopped else {
+            panic!("a changed source did not cancel the build");
+        };
+        assert!(payload.is::<Superseded>());
     }
 }

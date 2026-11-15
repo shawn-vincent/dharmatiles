@@ -21,6 +21,11 @@
 //! | [`subdivide`] | split every triangle in four (midpoints) | fieldstone (relief needs the density) |
 //! | [`fbm3`] | isotropic 3D value-noise fBm | relief, foliage noise, bark |
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "f32 and i64 keys of a form's points and a seed below 2^31"
+)]
+
 use dt_geom::{Bounds, TriMesh};
 
 use crate::KitError;
@@ -66,10 +71,6 @@ pub fn hull(points: &[[f64; 3]]) -> Result<TriMesh, KitError> {
     // form's size, not its place on the tile.
     let n = points.len() as f64;
     let c = [0, 1, 2].map(|k| points.iter().map(|p| p[k]).sum::<f64>() / n);
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let pts: Vec<parry3d::math::Vector> = points
         .iter()
         .map(|p| {
@@ -252,10 +253,6 @@ fn relief_along(
     let relaxed = taubin(&p, &mesh.triangles, 10);
     let vn = vertex_normals(&relaxed, &mesh.triangles);
     let mut rng = dt_value::Rng::new(dt_value::Seed::new(seed));
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let nseed = (rng.random() * 2_147_483_648.0) as u64;
     let rot = random_rotation(&mut rng);
     let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
@@ -450,10 +447,6 @@ fn value3(p: [f64; 3], seed: u64, scale: f64) -> f64 {
     let i = q.map(libm::floor);
     let f = [0, 1, 2].map(|k| q[k] - i[k]);
     let u = f.map(|t| t * t * (3.0 - 2.0 * t));
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let ii = i.map(|v| v as i64);
     let c = |dx: i64, dy: i64, dz: i64| lattice3(ii[0] + dx, ii[1] + dy, ii[2] + dz, seed);
     let lerp = |a: f64, b: f64, t: f64| a + (b - a) * t;

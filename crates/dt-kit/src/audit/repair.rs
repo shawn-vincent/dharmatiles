@@ -51,7 +51,7 @@ pub(super) fn separate_pinches(m: &mut TriMesh) -> usize {
             HashMap::with_capacity_and_hasher(m.positions.len(), Fx::default());
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "welding keys (a coordinate over the weld cell as an i64) and f32 positions (the mesh format)"
         )]
         let key = |p: [f64; 3]| p.map(|x| (x / CELL).floor() as i64);
         for (i, p) in m.positions.iter().enumerate() {
@@ -168,7 +168,7 @@ type Fx = std::hash::BuildHasherDefault<FxHasher>;
 pub(super) fn quantise(m: &TriMesh) -> (TriMesh, Vec<u32>, usize) {
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "welding keys (a coordinate over the weld cell as an i64) and f32 positions (the mesh format)"
     )]
     let q = |p: [f64; 3]| p.map(|x| x as f32);
     let mut index: HashMap<[u32; 3], u32> = HashMap::with_capacity(m.positions.len());

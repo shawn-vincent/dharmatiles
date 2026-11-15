@@ -94,7 +94,7 @@ pub(super) fn tile_route(path: &str) -> Option<(&str, &str)> {
 /// page can be worked on without rebuilding the program.
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a developer aid (DT_WEB is never set for a user): a file not there is served from the copy in the program"
 )]
 fn dev_asset(path: &str) -> Option<(&'static str, Vec<u8>)> {
     let dir = std::env::var_os("DT_WEB")?;

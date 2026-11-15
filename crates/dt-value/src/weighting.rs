@@ -15,6 +15,10 @@
     clippy::float_cmp,
     reason = "an exact comparison of a stored or sentinel value, not a computed one"
 )]
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "weighting bins: a quantile times a bin count (at most MAX_BINS) floored, and integer ranges rounded"
+)]
 
 use crate::seed::Rng;
 use std::sync::Arc;
@@ -1063,10 +1067,6 @@ impl Dist {
     /// cut into equal bins: `lo + floor((hi - lo + 1) t)`, clamped to `hi`.
     #[must_use]
     pub fn bin(lo: i64, hi: i64, t: f64) -> i64 {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let k = libm::floor((hi - lo + 1) as f64 * t) as i64;
         (lo + k).clamp(lo, hi)
     }
@@ -1250,10 +1250,6 @@ impl Draw {
     /// ends round, a lone range is [`Dist::int`], a sum falls in the equal bin
     /// its drawn place along its ends does.  `k` scales the value first (a density times the squares).
     pub fn int_by(&self, k: f64, rng: &mut Rng) -> i64 {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let r = |v: f64| libm::round(v) as i64;
         let (lo, hi) = self.bounds();
         let (l, h) = (r(lo * k), r(hi * k));
@@ -1275,10 +1271,6 @@ impl Draw {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-)]
 mod tests {
     #[test]
     fn the_function_lists_agree_with_the_language_table() {

@@ -17,7 +17,7 @@
 
 #![expect(
     clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction; the flat inputs of one maths step, named at the call"
+    reason = "a flower count per square in the tens; the flat inputs of one maths step, named at the call"
 )]
 
 use core::f64::consts::{FRAC_PI_2, PI, TAU};

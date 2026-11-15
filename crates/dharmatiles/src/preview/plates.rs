@@ -209,7 +209,7 @@ fn plate_mesh(
 /// mistake can be mended there.
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where no machine means no label or bed on the panel; the plan that reads the same printer reports the failure"
 )]
 fn written_panel(
     list: &dt_doc::map::PrintList,
@@ -448,7 +448,7 @@ fn after_seen(path: &str) {
 
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where None means no scene yet; rebuild_plates reads the same text and reports why it does not read"
 )]
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     // the times of the files this plan will be of, taken *before* they are read: a file that changes while the plan is

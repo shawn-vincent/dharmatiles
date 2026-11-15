@@ -3,6 +3,11 @@
 //! on the ground, cut to the tile and stamped. The wall and the floor
 //! both build through [`run`].
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "wall counts and lattice nodes: a length over a millimetre-scale spacing (a wall is a few squares long), and positions clamped into the grid"
+)]
+
 use dt_kit::Kind;
 use dt_kit::form::{clip, solid};
 use dt_kit::pieces::{Pieces, Plane};
@@ -151,10 +156,6 @@ pub(crate) fn percentile(mut v: Vec<f64>, pct: f64) -> f64 {
     v.sort_by(f64::total_cmp);
 
     let r = pct / 100.0 * (v.len() - 1) as f64;
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let i = libm::floor(r) as usize;
     let f = r - libm::floor(r);
     if i + 1 < v.len() {
@@ -1036,15 +1037,7 @@ fn hearting(
     let mut rng = Rng::new(seed.key("hearting"));
     let mut out = Vec::new();
     for (k, g) in run.segs.iter().enumerate() {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let nt = (libm::round(g.len / sp) as usize + 1).max(2);
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let nz = (libm::round(h / sp) as usize + 1).max(2);
         for (layer, &(y0, y1)) in bands.iter().enumerate() {
             let off = 0.5 * layer as f64;
@@ -1084,10 +1077,6 @@ fn foot_rubble(m: &Mason, run: &Run, scene: &Scene, seed: Seed) -> Result<Vec<Tr
     let step = scene.frame().step_mm();
     let ground = |p: [f64; 2]| -> f64 {
         let Some(g) = grid else { return run.seat };
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (i, j) = (
             (libm::round(p[0] / step).max(0.0) as usize).min(g.nx - 1),
             (libm::round(p[1] / step).max(0.0) as usize).min(g.ny - 1),
@@ -1095,10 +1084,6 @@ fn foot_rubble(m: &Mason, run: &Run, scene: &Scene, seed: Seed) -> Result<Vec<Tr
         f64::from(g.z[j * g.nx + i])
     };
     for (k, g) in run.segs.iter().enumerate() {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let n = (m.ruin * g.len / (FOOT_RUBBLE_EVERY_MM * s)) as usize;
         for _ in 0..n {
             let tt = rng.uniform(2.0 * s, g.len - 2.0 * s);

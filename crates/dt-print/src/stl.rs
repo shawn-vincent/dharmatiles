@@ -29,7 +29,7 @@ pub(crate) fn mesh_stl(mesh: &TriMesh, record: &BuildRecord) -> Vec<u8> {
     for t in &mesh.triangles {
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "binary STL stores f32: the mesh's precision is the format's"
         )]
         let v = t.map(|i| mesh.positions[i as usize].map(|x| x as f32));
         let (a, b) = (

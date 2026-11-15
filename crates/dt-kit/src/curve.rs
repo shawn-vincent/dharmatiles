@@ -170,7 +170,7 @@ pub fn spine(
         let poly = length(sub(p1, p0)) + length(sub(p2, p1)) + length(sub(p3, p2));
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "a segment count: a polyline length over the step, at least 1"
         )]
         let k = (libm::ceil(poly / step) as usize).max(1);
         for i in 1..=k {

@@ -71,7 +71,7 @@ pub fn geodesic(
             }
             #[expect(
                 clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                reason = "a lattice index of the field being marched"
             )]
             let m = b as usize * nx + a as usize;
             if !ok(m) {

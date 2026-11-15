@@ -24,6 +24,11 @@
 //! squares.  Coordinates are squares from the south-west corner (the
 //! document's north-west counting is worked out in [`crate::coords`]).
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "region lattice ranges: a circle's extent over the cell, clamped non-negative and to the grid (`min(n - 1)`)"
+)]
+
 use dt_doc::consts::ConstTable;
 use dt_doc::model::PlaceRef;
 use dt_geom::Mask;
@@ -187,15 +192,7 @@ pub fn disc(frame: &Frame, centre: [f64; 2], radius: f64) -> Mask {
     let mut m = Mask::new(nx, ny, false);
     let (cx, cy, r) = (centre[0] * per, centre[1] * per, radius * per);
     let range = |c: f64, n: usize| {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let lo = (c - r).floor().max(0.0) as usize;
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let hi = ((c + r).ceil().max(0.0) as usize).min(n - 1);
         lo..=hi
     };
@@ -227,15 +224,7 @@ pub fn strip(frame: &Frame, pts: &[[f64; 2]], half: f64) -> Mask {
             [w[1][0] * per, w[1][1] * per],
         );
         let range = |lo: f64, hi: f64, n: usize| {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let l = (lo.min(hi) - r).floor().max(0.0) as usize;
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let h = ((lo.max(hi) + r).ceil().max(0.0) as usize).min(n - 1);
             l..=h
         };

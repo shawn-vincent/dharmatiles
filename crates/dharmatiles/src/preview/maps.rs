@@ -224,7 +224,7 @@ pub struct MapsBatched {
 /// The scene of `text` (the file at revision `rev`) as the page reads it (no builds).
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where None means no scene yet; a map that does not decode is reported by the check route where its text is typed"
 )]
 pub(super) fn scene_of(shared: &Shared, path: &str, text: &str, rev: u64) -> Option<SceneJson> {
     decode(path, text)

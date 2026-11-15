@@ -5,10 +5,6 @@
     clippy::unwrap_used,
     reason = "a test: a failing unwrap is the failure"
 )]
-#![expect(
-    clippy::disallowed_methods,
-    reason = "a test: unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -296,7 +292,13 @@ fn watch_rebuilds_when_a_used_file_changes() {
     let stderr = child.stderr.take().unwrap();
     std::thread::spawn(move || {
         for line in std::io::BufReader::new(stderr).lines() {
-            if tx.send(line.unwrap_or_default()).is_err() {
+            if tx
+                .send(match line {
+                    Ok(l) => l,
+                    Err(e) => format!("<the child's stderr could not be read: {e}>"),
+                })
+                .is_err()
+            {
                 break;
             }
         }
@@ -357,7 +359,13 @@ fn watch_of_a_library_tile_watches_its_file_on_disk() {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         for line in std::io::BufReader::new(stderr).lines() {
-            if tx.send(line.unwrap_or_default()).is_err() {
+            if tx
+                .send(match line {
+                    Ok(l) => l,
+                    Err(e) => format!("<the child's stderr could not be read: {e}>"),
+                })
+                .is_err()
+            {
                 break;
             }
         }

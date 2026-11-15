@@ -11,6 +11,11 @@
 //! Every output node is computed by one fixed sequence of operations, so
 //! results are identical at any thread count. Seeded maths uses `libm`.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "filter radii and offsets: a sigma or radius in cells (a handful) as a count, and run offsets inside the grid the caller sized"
+)]
+
 use rayon::prelude::*;
 
 /// scipy's `reflect` index: `d c b a | a b c d | d c b a`.
@@ -21,21 +26,12 @@ fn reflect(k: i64, n: usize) -> usize {
     if m >= n {
         m = period - 1 - m;
     }
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
-    let m = m as usize;
-    m
+    m as usize
 }
 
 /// The normalised Gaussian kernel of `sigma` nodes (scipy: radius
 /// `int(4 sigma + 0.5)`).
 fn kernel(sigma: f64) -> Vec<f64> {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let r = (4.0 * sigma + 0.5) as usize;
 
     let mut k: Vec<f64> = (0..=2 * r)
@@ -122,10 +118,6 @@ pub fn blur_recursive(v: &[f64], nx: usize, ny: usize, sigma: f64) -> Vec<f64> {
     let b3 = 0.422_205 * q3;
     let bb = 1.0 - (b1 + b2 + b3) / b0;
     let coef = (bb, b1 / b0, b2 / b0, b3 / b0);
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let pad = (4.0 * sigma).ceil() as usize + 3;
     let pass = |src: &[f64], len: usize| -> Vec<f64> {
         let mut out = vec![0.0; src.len()];
@@ -184,18 +176,12 @@ impl Structuring {
         match self {
             Self::Square(r) => vec![r; 2 * r + 1],
             Self::Disc(rad) => {
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-                )]
                 let r = rad.max(0.0).floor() as usize;
 
                 (0..=2 * r)
                     .map(|k| {
                         let dy = k as f64 - r as f64;
-                        #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
-                        let w = libm::sqrt((rad * rad - dy * dy).max(0.0)).floor() as usize;
-                        w
+                        libm::sqrt((rad * rad - dy * dy).max(0.0)).floor() as usize
                     })
                     .collect()
             }
@@ -278,7 +264,6 @@ fn morph(v: &[f64], nx: usize, ny: usize, fp: Structuring, max: bool) -> Vec<f64
             if jj < 0 || jj >= ny as i64 {
                 continue;
             }
-            #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
             let src = &runs[wk][jj as usize * nx..(jj as usize + 1) * nx];
             for (o, s) in row.iter_mut().zip(src) {
                 *o = pick(*o, *s);
@@ -312,10 +297,6 @@ pub fn quantile(v: &[f64], q: f64) -> f64 {
     s.sort_unstable_by(f64::total_cmp);
 
     let pos = q.clamp(0.0, 1.0) * (s.len() - 1) as f64;
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let lo = pos.floor() as usize;
     let hi = (lo + 1).min(s.len() - 1);
 

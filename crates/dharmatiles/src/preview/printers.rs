@@ -92,22 +92,18 @@ impl PrinterWritten {
 
 /// `/api/printers/scan` `{slicer?}`: without a slicer, the ones installed;
 /// with one, every model it has and what could not be read.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 pub(super) fn scan(_: &Shared, v: PrintersScanReq) -> Out<PrintersScanRes> {
-    let home = crate::preview::roots::personal_home().ok();
     let Some(word) = v.slicer.as_deref() else {
         let f = cli::found().map_err(|e| fail::failure("500 Internal Server Error", e))?;
         return Ok(PrintersScanRes::Slicers {
             slicers: f.iter().map(SlicerFound::of).collect(),
         });
     };
+    let home = crate::preview::roots::personal_home().map_err(|e| bad(&e))?;
     let i = cli::install_of(word, None).map_err(|e| bad(&e))?;
     Ok(PrintersScanRes::Models(cli::scan_json(
         &slicers::scan(&i),
-        home.as_deref(),
+        Some(home.as_path()),
     )))
 }
 

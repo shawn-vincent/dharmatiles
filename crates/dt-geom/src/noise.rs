@@ -17,6 +17,11 @@
 //!
 //! Seeded maths uses `libm`: platform `exp` differs by OS.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "noise lattice cells: floor or ceil of a coordinate in cells as an i64 key, and row and offset counts inside the table sized for them"
+)]
+
 /// The lattice value at integer point `(ix, iy)`, in [-1, 1).
 #[must_use]
 pub fn lattice(seed: u64, ix: i64, iy: i64) -> f64 {
@@ -78,10 +83,6 @@ pub fn smooth(seed: u64, sigma: f64, xs: &[f64], ys: &[f64]) -> Vec<f64> {
         (lo.min(*a), hi.max(b))
     });
     // row pass: for each lattice row, the x-filtered values at every xs
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let rows = (yhi - ylo + 1) as usize;
     let mut a = vec![0.0; rows * nx];
     let mut white = Vec::new();
@@ -90,10 +91,6 @@ pub fn smooth(seed: u64, sigma: f64, xs: &[f64], ys: &[f64]) -> Vec<f64> {
         white.clear();
         white.extend((xlo..=xhi).map(|ix| lattice(seed, ix, iy)));
         for (i, (first, ws)) in wx.iter().enumerate() {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let off = (first - xlo) as usize;
             a[r * nx + i] = ws.iter().zip(&white[off..]).map(|(w, v)| w * v).sum();
         }
@@ -103,10 +100,6 @@ pub fn smooth(seed: u64, sigma: f64, xs: &[f64], ys: &[f64]) -> Vec<f64> {
     let norm = 1.0 / ((1.0f64 / 3.0).sqrt() * sigma * core::f64::consts::PI.sqrt() / h);
     let mut out = vec![0.0; nx * ny];
     for (j, (first, ws)) in wy.iter().enumerate() {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let off = (first - ylo) as usize;
         let row = &mut out[j * nx..(j + 1) * nx];
         for (k, w) in ws.iter().enumerate() {
@@ -121,21 +114,11 @@ pub fn smooth(seed: u64, sigma: f64, xs: &[f64], ys: &[f64]) -> Vec<f64> {
 }
 
 fn floor_i64(v: f64) -> i64 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
-    let f = libm::floor(v) as i64;
-    f
+    libm::floor(v) as i64
 }
 
 fn ceil_i64(v: f64) -> i64 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
-    let f = libm::ceil(v) as i64;
-    f
+    libm::ceil(v) as i64
 }
 
 /// Smoothstep-interpolated value noise at `scale`, in about [-1, 1].

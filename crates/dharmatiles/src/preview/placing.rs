@@ -167,7 +167,7 @@ impl<'a> Resolver<'a> {
     /// The seeds you own of this tile in this system and colour mode.
     #[expect(
         clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+        reason = "permitted silence: a probe where an inventory that does not read owns nothing here; the snapshot reports what is wrong with it"
     )]
     fn owned(&self, canon: &str, system: dt_lang::System, colour: &str) -> BTreeSet<u64> {
         use dt_doc::inventory::Colour;

@@ -885,7 +885,7 @@ fn steepest(solved: &Solved, limit_deg: f64) -> Option<Steep> {
 #[expect(
     clippy::float_cmp,
     clippy::cast_possible_truncation,
-    reason = "an exact comparison of a stored or sentinel value, not a computed one; a grid index, count or small id in a bounded range: the value fits by construction"
+    reason = "an exact comparison of a stored or sentinel value, not a computed one; a test: a count of the band's own samples"
 )]
 mod tests {
     use super::*;

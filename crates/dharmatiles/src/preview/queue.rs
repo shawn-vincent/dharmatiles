@@ -261,7 +261,7 @@ impl Shared {
     /// [`Interrupted`]: superseded (also when it was cancelled while running and stopped), or the job panicked.
     #[expect(
         clippy::disallowed_methods,
-        reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+        reason = "permitted silence: user cancel (a closed channel means the job was dropped by a newer revision of the same key, so it was superseded)"
     )]
     pub(super) fn on_lane<T: Send + 'static>(
         &self,

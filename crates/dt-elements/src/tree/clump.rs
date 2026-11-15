@@ -7,6 +7,11 @@
 //! assembled. Noise fades from the underside so it does not carve ceiling-like
 //! dents there, but the underside itself is not clipped or bevelled flat.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "foliage clump counts (an extent over the ring resolution) and 5 cm hash cells as keys"
+)]
+
 use dt_kit::graph::{Curve, add, cross, dist, dot, norm, scale, sub, unit};
 use dt_kit::{TriMesh, form};
 
@@ -118,10 +123,6 @@ fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
     let south_arc = pi2 * r_back;
     let cone_arc = libm::sqrt(total * total + (r_tip - r_back) * (r_tip - r_back));
     let north_arc = pi2 * r_tip;
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let count = |a: f64, m: usize| (libm::ceil(a / ring_res) as usize).max(m);
     let (n_south, n_cone, n_north) = (count(south_arc, 3), count(cone_arc, 4), count(north_arc, 4));
     let factor_tip = (1.0 - (r_base + MAX_NOISE_MM) / r_tip.max(1e-6)).max(0.0);
@@ -255,10 +256,6 @@ fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
 
 /// Per-vertex grain: a normal draw per 0.05 mm cell of position.
 fn fine(p: [f64; 3], key: u64) -> f64 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let c = p.map(|x| libm::floor(x / 0.05) as i64 as u64);
     let u1 = hash01(&[key, 11, c[0], c[1], c[2]]).max(1e-10);
     let u2 = hash01(&[key, 12, c[0], c[1], c[2]]);
@@ -271,10 +268,6 @@ fn coarse(p: [f64; 3], key: u64) -> f64 {
     let fl = q.map(libm::floor);
     let f = [0, 1, 2].map(|a| q[a] - fl[a]);
     let s = f.map(|t| t * t * (3.0 - 2.0 * t));
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let i = fl.map(|x| x as i64);
     let mut val = 0.0;
     for dz in 0..2i64 {

@@ -27,7 +27,7 @@ pub(crate) fn fibonacci_sphere(n: usize) -> Vec<[f64; 3]> {
 pub(crate) fn rubble_points(l: [f64; 3], rng: &mut Rng) -> Vec<[f64; 3]> {
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "a rubble count drawn from 10..=14"
     )]
     let m = rng.int(10, 14) as usize;
     let squash = rng.uniform(0.5, 0.8);

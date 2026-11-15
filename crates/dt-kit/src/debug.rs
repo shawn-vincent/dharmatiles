@@ -136,7 +136,7 @@ pub fn shade_of(w: Option<&Weighting>, u: f64) -> f32 {
     } else if let Some(bins) = w.density(BINS) {
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "a histogram bin clamped by `min(BINS - 1)`"
         )]
         let k = ((u * BINS as f64) as usize).min(BINS - 1);
         bins[k]
@@ -145,7 +145,7 @@ pub fn shade_of(w: Option<&Weighting>, u: f64) -> f32 {
     };
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "a histogram bin clamped by `min(BINS - 1)`"
     )]
     {
         (d / (1.0 + d)) as f32

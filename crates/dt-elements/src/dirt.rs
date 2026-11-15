@@ -23,6 +23,11 @@
 //! (layout); clods, grit and pebbles keep their true mm (default 1), so
 //! their counts follow the tile's area.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "dirt counts: clod and pebble counts drawn from a per-square range times the area (tens), and a lattice size of the dirt's own grid"
+)]
+
 use dt_kit::OnFrame;
 use dt_kit::{
     Band, Banded, Field, Noise, Placed, Plane, Rng, Scale, Scene, Seed, Spread, cap, noise, rim,
@@ -384,10 +389,6 @@ fn clod_layer(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, base: &Field) -> (
     let [w, h] = frame.size_mm();
     let mut rng = Rng::new(seed.key("clods"));
     let n = rng.poisson(dirt.clod_density * w * h);
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let radii: Vec<f64> = (0..n as usize)
         .map(|_| skewed(&mut rng, CLOD_R_MM, CLOD_R_EXP))
         .collect();
@@ -547,10 +548,6 @@ fn cluster_field(frame: &dt_kit::Frame, seed: Seed, ground: &Field) -> Field {
 
     let n = libm::round(rng.int(PEB_CLUSTERS_2X2.0, PEB_CLUSTERS_2X2.1) as f64 * squares / 4.0);
     let inset = PEB_CLUSTER_INSET_MM * s;
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let n = n as i64;
     let blobs: Vec<(f64, f64, f64)> = (0..n)
         .map(|_| {
@@ -704,10 +701,6 @@ fn place_pebbles(
     let area_sq = w * h / (dt_kit::REFERENCE_SQUARE_MM * dt_kit::REFERENCE_SQUARE_MM);
     let c = cluster_field(frame, seed, ground);
     let mut rng = Rng::new(seed.key("pebbles"));
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let count = |rng: &mut Rng, (lo, hi): (i64, i64)| (rng.int(lo, hi) as f64 * area_sq) as usize;
     let n_med = count(&mut rng, MED_PER_SQ);
     let mut sizes: Vec<f64> = (0..n_med)
@@ -800,10 +793,6 @@ struct Held {
 /// an edge. `None` when nothing is laid under it (nothing is under it but
 /// its own band); a band that cannot be laid over the surface is counted as
 /// left out.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
 fn hold(
     scene: &Scene,
     ctx: &Ctx<'_>,
@@ -836,10 +825,11 @@ fn hold(
         }
     }
     let area = held_area(frame, ctx.area, &surface, max_slope_deg);
-    let band = Band::new(flo, fhi)
-        .map_err(|_| *left_out += 1)
-        .ok()?
-        .with_odds(band.odds().cloned());
+    let Ok(held_band) = Band::new(flo, fhi) else {
+        *left_out += 1;
+        return None;
+    };
+    let band = held_band.with_odds(band.odds().cloned());
     Some(Held { area, band })
 }
 

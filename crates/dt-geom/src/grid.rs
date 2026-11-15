@@ -8,6 +8,11 @@
 //! per square has `cols * n + 1` nodes across, so its edge nodes lie exactly
 //! on the tile edge.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "grid node indices: a value over the step, floored or ceiled and clamped non-negative; `as` saturates and every caller clamps to the grid's size"
+)]
+
 use crate::{Structuring, TriMesh};
 
 /// Values on a lattice of nodes, row-major (`j` outer): a painted height
@@ -103,10 +108,6 @@ impl<T: Copy> Grid<T> {
     #[must_use]
     pub fn node(&self, x: f64, y: f64) -> (usize, usize) {
         let k = |v: f64, n: usize| {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let k = libm::floor(v / self.step).max(0.0) as usize;
             k.min(n - 1)
         };
@@ -122,18 +123,10 @@ impl<T: Copy> Grid<T> {
         r: f64,
     ) -> (std::ops::Range<usize>, std::ops::Range<usize>) {
         let lo = |v: f64, n: usize| {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let k = libm::ceil((v - r) / self.step).max(0.0) as usize;
             k.min(n)
         };
         let hi = |v: f64, n: usize| {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let k = (libm::floor((v + r) / self.step) + 1.0).max(0.0) as usize;
             k.min(n)
         };
@@ -174,10 +167,6 @@ impl Grid<f64> {
             (y / self.step).clamp(0.0, my),
         );
         let (fu, fv) = (libm::floor(u), libm::floor(v));
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (i, j) = (fu as usize, fv as usize);
         let (i1, j1) = ((i + 1).min(self.nx - 1), (j + 1).min(self.ny - 1));
         let (tu, tv) = (u - fu, v - fv);
@@ -225,10 +214,6 @@ impl Grid<f64> {
     /// round each node: the printable-texture measure.
     #[must_use]
     pub fn range(&self, w_mm: f64) -> Self {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let r = libm::round(0.5 * w_mm / self.step) as usize;
         let hi = crate::filter::dilate(&self.z, self.nx, self.ny, Structuring::Square(r));
         let lo = crate::filter::erode(&self.z, self.nx, self.ny, Structuring::Square(r));

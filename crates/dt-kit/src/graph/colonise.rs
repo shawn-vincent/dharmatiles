@@ -172,7 +172,7 @@ fn step(t: &mut Traced, queue: &mut VecDeque<Branch>, b: Branch, c: &Colonise, f
                         let (np, no) = (primary.len() as f64, b.owned.len() as f64);
                         #[expect(
                             clippy::cast_possible_truncation,
-                            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                            reason = "branch counts: a share of the owned set, clamped by `min(len - 1)`"
                         )]
                         let n_target = (round_half_even(np + (no / k_forks - np) * c.balance)
                             .max(1.0) as usize)
@@ -201,7 +201,7 @@ fn step(t: &mut Traced, queue: &mut VecDeque<Branch>, b: Branch, c: &Colonise, f
                         let (fpg, fg) = (n_pg as f64, n_g as f64);
                         #[expect(
                             clippy::cast_possible_truncation,
-                            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                            reason = "branch counts: a share of the owned set, clamped by `min(len - 1)`"
                         )]
                         let n_gt =
                             (round_half_even(fpg + (fg / k_forks - fpg) * c.balance).max(1.0)

@@ -9,7 +9,7 @@
 // cell numbers are small whole numbers
 #![expect(
     clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    reason = "a tier's grid size in cells"
 )]
 
 use dt_kit::TriMesh;

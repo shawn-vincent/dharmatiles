@@ -289,7 +289,7 @@ fn names_of(list: &PrintList) -> BTreeMap<String, String> {
 /// The standard height names with their value in dmm, for the page's chooser.
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where a name whose expression does not evaluate is left out of the chooser; the check reports the expression where it is written"
 )]
 fn height_names(list: &PrintList) -> Vec<HeightName> {
     let names = names_of(list);
@@ -311,7 +311,7 @@ fn height_names(list: &PrintList) -> Vec<HeightName> {
 /// inventory's word).
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where a printer that does not read counts as one slot; the plan reports the printer where it is named"
 )]
 fn colour_of(list: &PrintList, printer: &str, home: Option<&Path>) -> &'static str {
     use dt_doc::map::Mode;
@@ -334,7 +334,7 @@ fn colour_of(list: &PrintList, printer: &str, home: Option<&Path>) -> &'static s
 /// An inventory that does not read counts as none here: the snapshot says what is wrong with it.
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where an inventory that does not read counts as none here; the snapshot reports what is wrong with it"
 )]
 fn mark_shelf(pieces: &mut [ScenePiece], home: Option<&Path>) -> (bool, usize, usize) {
     use dt_doc::inventory::{Colour, Identity, Shelf};
@@ -405,7 +405,7 @@ fn mark_shelf(pieces: &mut [ScenePiece], home: Option<&Path>) -> (bool, usize, u
 /// Read a map: its pieces' tiles, places and heights.  No tile is built.
 #[expect(
     clippy::disallowed_methods,
-    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter); unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter)"
 )]
 pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> Scene {
     let base = shared.options();
@@ -638,7 +638,7 @@ fn shape_of(mesh: &dt_kit::TriMesh, w: f64, d: f64) -> Shape {
 /// beside the full one), said as a note for each pair.  Never a refusal.
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a probe where a piece whose build failed has no shape to crowd; the failure is shown on that piece by its own build"
 )]
 pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
     let base = shared.options();

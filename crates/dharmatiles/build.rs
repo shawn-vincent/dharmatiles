@@ -41,7 +41,7 @@ const INPUTS: [&str; 6] = [
 
 #[expect(
     clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
+    reason = "permitted silence: a best-effort probe (the tool missing, or not a checkout, means the build carries no commit stamp)"
 )]
 fn git(root: &Path, args: &[&str]) -> Option<String> {
     let out = Command::new("git")

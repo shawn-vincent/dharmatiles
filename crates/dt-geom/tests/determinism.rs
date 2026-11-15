@@ -16,7 +16,7 @@
 #![expect(
     clippy::unwrap_used,
     clippy::cast_possible_truncation,
-    reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction; an exact comparison of a stored or sentinel value, not a computed one"
+    reason = "a test: a failing unwrap is the failure; a test: indices of the test's own small mesh; an exact comparison of a stored or sentinel value, not a computed one"
 )]
 
 use dt_geom::{BoolOp, Bounds, Fnv, IdBlock, Solid, TriMesh, batch_in_order};

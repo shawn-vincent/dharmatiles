@@ -248,7 +248,7 @@ pub fn welded(m: &TriMesh) -> (Vec<[f64; 3]>, Vec<[u32; 3]>) {
 /// [`KitError::Lift`] when the grid cannot be lifted.
 #[expect(
     clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    reason = "a count of the piece's own contours"
 )]
 pub fn hung(depth: &Field, tol: f64) -> Result<TriMesh, KitError> {
     let z: Vec<f32> = depth.z.iter().map(|&d| d.max(1e-3) as f32).collect();
@@ -271,15 +271,9 @@ pub fn tri_normal(p: &[[f64; 3]], t: [u32; 3]) -> [f64; 3] {
     unit(cross(sub(b, a), sub(c, a)))
 }
 
-/// An empty solid. The mesh is empty either way: should the kernel refuse an
-/// empty mesh, the empty hull is the same nothing, so the fallback changes no
-/// geometry and there is nothing to count.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "unreviewed silence: kept as written until it is decided whether to show the failure; counted by the cap (errors.html)"
-)]
+/// An empty solid: the hull of no points, which nothing can refuse.
 fn empty() -> dt_geom::Solid {
-    dt_geom::Solid::from_tri_mesh(&TriMesh::default()).unwrap_or_else(|_| dt_geom::Solid::hull(&[]))
+    dt_geom::Solid::hull(&[])
 }
 
 /// A prism of closed polygons (even-odd) from `z0` to `z1`, as a mesh.
