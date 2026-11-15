@@ -150,6 +150,13 @@ pub fn regen(root: &Path) -> Result<(), String> {
         "xtask",
         "the_shots_types_are_current",
     ]))?;
+    run(cargo().current_dir(root).env("DT_CONTRACT", "write").args([
+        "test",
+        "--release",
+        "-p",
+        "xtask",
+        "the_engine_manifest_type_is_current",
+    ]))?;
     crate::docs::run(root, false)?;
     let changed = git(root, &["status", "--short"])?;
     println!(

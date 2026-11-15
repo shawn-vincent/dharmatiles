@@ -13,23 +13,24 @@
 // A fix is `{type: 'fix', id, text, fix}` (`fix` is the check's mistake's `fix`); it answers `fixed`, or `error`.
 // A job is `{id, steps: ['check', 'build'], text, system, seed, cells}`.  `cells` is cells per square: a number for a draft, 0
 // for the build's own finest, the detail the printer is given.
-// The compiled module (docs/engine/, `cargo xtask wasm`) is not in the repo: it is imported by a name tsc does not
-// follow, and typed by the generated engine-wire.d.ts (`Engine`, `Answers`), the same whether a build is on disk or not.
-const ENGINE = '../../engine/dt_web.js';
-const engine = /** @type {import('./engine-wire').Engine} */ (await import(ENGINE));
-const init = engine.default;
-export {}; // a module worker: the engine is awaited at the top
+// The compiled module (docs/engine/, `cargo xtask wasm`) is not in the repo and its files carry their hashes in their names: the page
+// reads engine.json and hands the glue's URL over with the module (`init`), so a glue file is always the one its module was made with.
+// It is imported by that URL, which tsc does not follow, and typed by the generated engine-wire.d.ts (`Engine`, `Answers`).
+/** @type {import('./engine-wire').Engine | null} */
+let engine = null;
+export {}; // a module worker
 
 /** @typedef {import('./engine-wire').Answers} Answers */
 
 // The protocol, once, where the worker makes and takes the messages (engine.js imports these).  What the answers carry is the
 // generated engine-wire.d.ts's: `Answers`.
 /** @typedef {'check' | 'build'} Step */
-/** What a job asks: its steps, the source, the target, the seed (null for the document's own), the cells a square (0: the finest) and the tier. @typedef {{steps: Step[], text: string, system: string, seed: number | null, cells: number, tier: string}} JobSpec */
-/** @typedef {{type: 'init', module: WebAssembly.Module, library: string}} InitMsg  to the worker: the compiled module, and the library as JSON */
+/** What a job asks: its steps, the source, the target, the seed (null for the document's own), the cells a square (0: the finest), the tier, and the card whose step cache a draft builds through (null: a full build keeps none). @typedef {{steps: Step[], text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null}} JobSpec */
+/** @typedef {{type: 'init', module: WebAssembly.Module, library: string, glue: string}} InitMsg  to the worker: the compiled module, the library as JSON, and the URL of the glue made with the module */
+/** @typedef {{type: 'forget', card: string}} ForgetMsg  to the worker: a card left the page, drop its step cache */
 /** @typedef {{type: 'fix', id: string, text: string, fix: import('./engine-wire').FixJson}} FixMsg  to the worker: lay a mistake's fix into the source */
 /** @typedef {{type: 'job', id: number} & JobSpec} JobMsg  to the worker: one job */
-/** @typedef {InitMsg | FixMsg | JobMsg} ToWorker */
+/** @typedef {InitMsg | FixMsg | JobMsg | ForgetMsg} ToWorker */
 /** @typedef {{type: 'ready', version: string}} ReadyMsg */
 /** @typedef {{type: 'progress', id: number} & Answers['dtProgress']} ProgressMsg */
 /** @typedef {{type: 'checked', id: number, result: Answers['check_tile'], ms: number}} CheckedMsg */
@@ -65,19 +66,23 @@ scope.onmessage = async (/** @type {MessageEvent<ToWorker>} */ ev) => {
   const m = ev.data;
   try {
     if (m.type === 'init') {
-      await init({ module_or_path: m.module });
+      engine = /** @type {import('./engine-wire').Engine} */ (await import(m.glue));
+      await engine.default({ module_or_path: m.module });
       engine.set_library(m.library);
       ready = true;
       scope.postMessage({ type: 'ready', version: engine.version() });
       return;
     }
+    if (!ready || !engine) throw new Error(`the worker was sent a "${m.type}" message before it was ready`);
+    if (m.type === 'forget') {
+      engine.forget_card(m.card);
+      return;
+    }
     if (m.type === 'fix') {
-      if (!ready) throw new Error('the worker was given a fix before it was ready');
       scope.postMessage({ type: 'fixed', id: m.id, text: engine.fix_tile(m.text, JSON.stringify(m.fix)) });
       return;
     }
     if (m.type !== 'job') throw new Error(`the worker was sent a "${/** @type {{ type: string }} */ (m).type}" message it does not know`);
-    if (!ready) throw new Error('the worker was given a job before it was ready');
     current = m.id;
     lastPanic = '';
     if (m.steps.includes('check')) {
@@ -88,7 +93,7 @@ scope.onmessage = async (/** @type {MessageEvent<ToWorker>} */ ev) => {
     }
     if (m.steps.includes('build')) {
       const t0 = performance.now();
-      const tile = engine.build_tile(m.text, m.system, m.seed, m.cells, m.tier);
+      const tile = engine.build_tile(m.text, m.system, m.seed, m.cells, m.tier, m.card);
       const ms = performance.now() - t0;
       const meta = answer('build_tile().meta', tile.meta);
       const positions = tile.positions, colours = tile.colours, stl = tile.stl;

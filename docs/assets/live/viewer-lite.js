@@ -55,6 +55,10 @@ export class LiteViewer {
     this.invalidate();
   }
 
+  /** Whether a drag turns the tile.  A touch screen leaves it off until the card's Turn it is pressed, so a finger on the card scrolls the page. */
+  /** @param {boolean} on */
+  setInteractive(on) { this.controls.enabled = on; }
+
   /** The camera from above and a little south, the way the poster is drawn: the first picture is the one the poster promised. */
   reset() {
     const [w, h] = this.footprint;

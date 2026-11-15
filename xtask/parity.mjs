@@ -6,9 +6,11 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const [dir, ...jobs] = process.argv.slice(2);
-const engine = await import(pathToFileURL(join(dir, 'dt_web.js')).href);
-await engine.default({ module_or_path: readFileSync(join(dir, 'dt_web_bg.wasm')) });
-engine.set_library(readFileSync(join(dir, 'library.json'), 'utf8'));
+// the bundle's files carry their hashes in their names: engine.json says which
+const manifest = JSON.parse(readFileSync(join(dir, 'engine.json'), 'utf8'));
+const engine = await import(pathToFileURL(join(dir, manifest.js)).href);
+await engine.default({ module_or_path: readFileSync(join(dir, manifest.wasm)) });
+engine.set_library(readFileSync(join(dir, manifest.library), 'utf8'));
 for (const job of jobs) {
   const [tile, system] = job.split('@');
   console.log(engine.parity_line(tile, system));

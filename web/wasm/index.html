@@ -370,7 +370,7 @@ tile size="1x1" seed=7 {
 `,
 };
 let worker = null, workerReady = false, buildId = 0, building = null, library = {};
-function startWorker(module, libJson) {
+function startWorker(module, libJson, glueUrl) {
   library = JSON.parse(libJson);
   try {
     // the one build worker the site's cards share (docs/assets/live/worker.js), beside this page on the site
@@ -385,7 +385,7 @@ function startWorker(module, libJson) {
     else if (m.type === "error") { building = null; $("busy").textContent = ""; $("build").disabled = false; fatal("The build worker threw", m.message + (m.stack ? "\n" + m.stack : "")); }
   };
   $("build").disabled = true;
-  worker.postMessage({ type: "init", module, library: libJson });
+  worker.postMessage({ type: "init", module, library: libJson, glue: glueUrl });
 }
 function recipe() {
   const p = $("preset").value;
@@ -403,7 +403,7 @@ function startBuild() {
   $("build").disabled = true; $("builderr").hidden = true;
   const tick = () => { if (building) { $("busy").textContent = `building… ${((performance.now() - building.t0) / 1000).toFixed(1)} s (the page is free)`; requestAnimationFrame(tick); } };
   tick();
-  worker.postMessage({ type: "job", id: building.id, steps: ["build"], text, system, seed: -1, cells, tier: "full" });
+  worker.postMessage({ type: "job", id: building.id, steps: ["build"], text, system, seed: -1, cells, tier: "full", card: null });
 }
 function done(m) {
   const wall = performance.now() - building.t0;
@@ -488,15 +488,17 @@ function setSystem(s) {
 
 async function main() {
   const t0 = performance.now();
+  // the engine's files carry their hashes in their names: engine.json (`cargo xtask wasm`) says which they are
+  const manifest = await fetch("engine.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error(`engine.json: ${r.status}`); return r.json(); });
   const [glue, lib, bin] = await Promise.all([
-    import("./dt_web.js"),
-    fetch("library.json").then((r) => { if (!r.ok) throw new Error(`library.json: ${r.status}`); return r.json(); }),
-    fetch("dt_web_bg.wasm").then((r) => { if (!r.ok) throw new Error(`dt_web_bg.wasm: ${r.status}`); return r.arrayBuffer(); }),
+    import("./" + manifest.js),
+    fetch(manifest.library).then((r) => { if (!r.ok) throw new Error(`${manifest.library}: ${r.status}`); return r.json(); }),
+    fetch(manifest.wasm).then((r) => { if (!r.ok) throw new Error(`${manifest.wasm}: ${r.status}`); return r.arrayBuffer(); }),
   ]);
   const module = await WebAssembly.compile(bin);
   await glue.default({ module_or_path: module });
   wasm = glue;
-  startWorker(module, JSON.stringify(lib));
+  startWorker(module, JSON.stringify(lib), new URL(manifest.js, location.href).href);
   wasm.set_library(JSON.stringify(lib));
   $("s-wasm").textContent = `${kb(bin.byteLength)} (.wasm)`;
   $("s-load").textContent = fmt(performance.now() - t0);

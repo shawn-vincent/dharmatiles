@@ -70,7 +70,7 @@ pub fn run_parity(root: &Path) -> Result<(), String> {
                 "parity",
                 "--",
             ])
-            .arg(bundle.join("library.json"))
+            .arg(bundle.join(crate::wasm::read_manifest(&bundle)?.library))
             .args(&jobs),
     )?;
     let (browser, native) = (lines(browser)?, lines(native)?);

@@ -344,8 +344,11 @@ dt-example[data-view="live"] .dtx-gl, dt-example[data-view="live"] .dtx-ov, dt-e
 dt-example[data-view="live"] .dtx-poster { visibility: hidden; }
 dt-example[data-state="cold"] .dtx-view { cursor: pointer; }
 .dtx-wake { position: absolute; right: 8px; bottom: 8px; }
-.dtx-gl { touch-action: none; }
-/* a card on a phone: the thumb scrolls the page until it asks to turn the tile */
+/* a card on a phone: the thumb scrolls the page until it asks (Turn it) to turn the tile; a mouse or trackpad turns it by dragging, as ever */
+.dtx-gl { touch-action: auto; }
+dt-example[data-pointer="fine"] .dtx-gl, dt-example[data-interact="true"] .dtx-gl { touch-action: none; }
+.dtx-interact { position: absolute; right: 8px; top: 8px; }
+.dtx-interact[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, var(--bg)); }
 .dtx-view[data-busy="true"] .dtx-gl, .dtx-view[data-busy="true"] .dtx-poster { opacity: .82; }
 dt-example[data-state="queued"] .dtx-view { --queued: 1; }
 .dtx-badge { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: var(--r); background: var(--bg); color: var(--ink); font-size: var(--fs-s); line-height: var(--lh-s); border: 1px solid var(--line-2); pointer-events: none; }
@@ -379,6 +382,7 @@ dt-example[data-state="queued"] .dtx-view { --queued: 1; }
 .dtx-mirror .m-pin { background: color-mix(in srgb, var(--accent) 34%, transparent); border-radius: var(--r-mark); }
 .dtx-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .dtx-actions a.btn { text-decoration: none; }
+.dtx-limit { margin: 0; padding: 8px 12px; border: 1px dashed var(--line-2); border-radius: var(--r); color: var(--muted); font-size: var(--fs-s); line-height: var(--lh-s); }
 .dtx-msgs { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); padding: 4px 0; }
 .dtx-side .statusline { border: 1px solid var(--line); border-radius: var(--r); }
 .dtx-fail { padding: 8px 12px; border: 1px solid var(--err); border-radius: var(--r); color: var(--ink); background: color-mix(in srgb, var(--err) 8%, var(--bg)); }

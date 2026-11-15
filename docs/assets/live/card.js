@@ -33,6 +33,7 @@ import { CardLog } from './site-log.js';
 import { SourcePane } from './source-pane.js';
 import { findControl, parseControls, rangeOf, readValue, writeValue } from './controls.js';
 import { LiteViewer } from './viewer-lite.js';
+import { costWords, deviceVerdict } from './limits.js';
 
 const TOGGLES = [['lines', 'Lines'], ['points', 'Points'], ['regions', 'Regions'], ['squares', 'Squares']];
 let serial = 0;
@@ -127,10 +128,22 @@ export class Card {
     host.querySelector('.dtx-wake')?.remove();
     // the card draws its own marks now: the ones on the poster are put away
     host.querySelector('.dtx-pre')?.remove();
-    this.gl = el('canvas', 'dtx-gl', { 'aria-label': 'The tile, in 3D: drag to turn it', role: 'img', tabindex: '0' });
+    this.gl = el('canvas', 'dtx-gl', { 'aria-label': 'The tile, in 3D: drag to turn it (on a touch screen, press Turn it first)', role: 'img', tabindex: '0' });
     this.ov = el('canvas', 'dtx-ov', { 'aria-hidden': 'true' });
     this.badge = el('div', 'dtx-badge', { role: 'status' });
     this.view.append(this.gl, this.ov, this.badge);
+    // a touch screen scrolls the page under a finger on a card and turns the tile only when asked (Interact): one finger is the page's
+    // before it is the card's, and the card's own gesture (turning) is chosen with a button, not by counting fingers, which a browser's
+    // pinch-zoom and a thumb resting on the glass both get wrong.  A mouse or trackpad turns it by dragging, as ever.
+    this.coarse = matchMedia('(pointer: coarse)').matches;
+    host.dataset.pointer = this.coarse ? 'coarse' : 'fine';
+    this.interact = false;
+    if (this.coarse) {
+      this.interactBtn = el('button', 'btn sm dtx-interact', { type: 'button', 'aria-pressed': 'false', title: 'Turn the tile with one finger (the page stops scrolling under it)' });
+      this.interactBtn.textContent = 'Turn it';
+      this.interactBtn.addEventListener('click', () => this.#interact(!this.interact));
+      this.view.append(this.interactBtn);
+    }
 
     const side = el('div', 'dtx-side');
     // the toggles: what to show on the tile
@@ -167,6 +180,9 @@ export class Card {
     for (const ev of ['pointerdown', 'focus', 'mouseover']) this.openLink.addEventListener(ev, refresh);
     this.resetBtn = this.#button('Reset', 'Back to the source as the page wrote it', () => { this.pane.set(this.original); this.text = this.original; this.#edited(); });
     actions.append(this.fullBtn, this.stlBtn, this.openLink, this.resetBtn);
+    // when this device cannot carry a full build, the card says so here (never hiding the cost) and points to the poster and the program
+    this.limitNote = el('p', 'dtx-limit');
+    this.limitNote.hidden = true;
 
     // the status line, and the messages it folds
     this.sl = buildStatusLine({ onToggle: () => this.#fold(!this.model.open.value), controls: `${this.id}-msgs` });
@@ -175,7 +191,7 @@ export class Card {
     this.model = this.#model();
     render(html`<${MessagesBody} m=${this.model} act=${this.#act()} />`, this.msgs);
 
-    side.append(tg, this.controlsBox, this.sourceBox, actions, this.sl.root, this.msgs);
+    side.append(tg, this.controlsBox, this.sourceBox, actions, this.limitNote, this.sl.root, this.msgs);
     grid.append(side);
     host.querySelector('.dtx-code')?.remove();
 
@@ -371,6 +387,7 @@ export class Card {
     }
     this.mesh = { positions, colours, footprint };
     this.heights = heightGrid(positions, positions.length / 9, footprint);
+    this.viewer.setInteractive(this.interact || !this.coarse);
     this.viewer.setMesh(positions, colours, footprint);
     this.host.dataset.view = 'live';
   }
@@ -399,19 +416,57 @@ export class Card {
     this.status = 'building';
     this.log.begin();
     this.tileState.value = { ...this.tileState.value, status: 'building' };
-    this.handle.edit({ text: this.text, system: this.system, seed: null, cells: DRAFT_CELLS, tier: DRAFT_TIER, version: this.version });
+    // only the page's own text is kept between visits (an edited one is the reader's and is not worth keeping)
+    this.handle.edit({ text: this.text, system: this.system, seed: null, cells: DRAFT_CELLS, tier: DRAFT_TIER, version: this.version, persist: this.text === this.original });
     this.#touch();
   }
 
   /** @param {boolean} download */
   #full(download) {
+    if (this.#device()?.fits === false) return; // the button says why it is off; a stray call does nothing
     this.wantDownload = download;
     this.status = 'building';
     this.log.begin();
     this.tileState.value = { ...this.tileState.value, status: 'building' };
     this.handle.focus();
-    this.handle.full({ text: this.text, system: this.system, seed: null, version: this.version });
+    this.handle.full({ text: this.text, system: this.system, seed: null, version: this.version, cpuSecs: this.checked?.fullCost?.cpuSecs });
     this.#touch();
+  }
+
+  /** Whether this device can carry a full build of the checked tile: null before the check says what it costs. */
+  #device() {
+    const cost = this.checked?.fullCost;
+    if (!cost) return null;
+    // boundary: `deviceMemory` is in no DOM lib; it is used for the default and the words only
+    const memory = /** @type {{deviceMemory?: number}} */ (navigator).deviceMemory;
+    return deviceVerdict(cost, { deviceMemory: memory, coarse: this.coarse, smallScreen: Math.min(screen.width, screen.height) <= 820 });
+  }
+
+  /** The Full detail button says what it costs, and when this device cannot carry that, says so and turns off. */
+  #fullState() {
+    const cost = this.checked?.fullCost;
+    const verdict = this.#device();
+    this.fullBtn.textContent = cost ? `Full detail · ${costWords(cost)}` : 'Full detail';
+    const off = verdict?.fits === false;
+    this.fullBtn.disabled = off;
+    this.fullBtn.title = off ? 'Too big for this device' : 'Build what the printer is given (slower, and it needs the memory above)';
+    this.limitNote.hidden = !off;
+    if (off && cost) {
+      this.limitNote.textContent = '';
+      const where = new URL('index.html#install', this.engine.root).href;
+      const a = el('a', '', { href: where });
+      a.textContent = 'the program on a desktop';
+      this.limitNote.append(`A full build needs ${costWords(cost)}, and ${verdict.why}. The picture is the draft the page makes (the poster's tile); `, a, ' makes the full tile and its STL.');
+    }
+    this.#stlState();
+  }
+
+  /** @param {boolean} on */
+  #interact(on) {
+    this.interact = on;
+    this.host.dataset.interact = String(on);
+    this.interactBtn?.setAttribute('aria-pressed', String(on));
+    this.viewer?.setInteractive(on || !this.coarse);
   }
 
   #download() {
@@ -429,8 +484,9 @@ export class Card {
     const b = this.stlBtn;
     if (!b) return;
     const refused = this.fullAt === this.version && !this.stl;
-    b.disabled = refused;
-    b.title = refused
+    const tooBig = this.#device()?.fits === false;
+    b.disabled = refused || tooBig;
+    b.title = tooBig ? 'Too big for this device to build: the program on a desktop makes the STL' : refused
       ? 'This tile fails the printability gate, so no STL is made: the messages say what to change'
       : 'The STL the printer gets: always built at full detail';
   }
@@ -521,6 +577,7 @@ export class Card {
     else if (!errors.size && this.model.open.value && !this.opened) this.#fold(false);
     this.tileState.value = { ...this.tileState.value, status: result.ok ? 'building' : 'failed', errors: result.errors };
     this.#controls();
+    this.#fullState();
     this.#paint();
   }
 
