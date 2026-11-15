@@ -40,7 +40,7 @@ fn a_low_build_places_everything_where_the_full_build_does() {
     let mut anything = 0;
     for path in PLACING {
         let full = built(path);
-        let low = with(path, |o| o.low = true);
+        let low = with(path, |o| o.tier = dt_eval::Tier::Low);
         let of = |b: &Built, grass: bool| -> Vec<dt_kit::Placement> {
             b.report
                 .placed

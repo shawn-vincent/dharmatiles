@@ -83,7 +83,7 @@ pub(crate) fn run(action: Option<CacheAction>, json: bool) -> u8 {
             system,
             printer,
             into,
-        }) => previews(&store, &system, &printer, into, json),
+        }) => previews(&store, system, &printer, into, json),
     }
 }
 
@@ -192,7 +192,13 @@ fn clear(store: &Store, json: bool) -> u8 {
 /// cache).  A low build cut down to about 12 000 triangles, a fraction of
 /// a megabyte a tile; the map draws it from far and the preview shows it
 /// while a tile builds and nothing earlier of it is kept.
-fn previews(store: &Store, system: &str, printer: &str, into: Option<PathBuf>, json: bool) -> u8 {
+fn previews(
+    store: &Store,
+    system: dt_lang::System,
+    printer: &str,
+    into: Option<PathBuf>,
+    json: bool,
+) -> u8 {
     let opts = match crate::library::options(system, printer, None) {
         Ok(o) => o,
         Err(e) => {
@@ -246,11 +252,13 @@ fn stored_preview(
     path: &str,
     opts: &Options,
 ) -> Result<(dt_eval::Built, Vec<String>), Vec<dt_eval::Diag>> {
-    let mut b = dt_store::build_tier(
+    let mut b = dt_store::build_stored(
         &Files,
         path,
-        opts,
-        dt_store::Tier::SuperLow,
+        &Options {
+            tier: dt_store::Tier::SuperLow,
+            ..opts.clone()
+        },
         &Progress::none(),
         None,
         Some(store),

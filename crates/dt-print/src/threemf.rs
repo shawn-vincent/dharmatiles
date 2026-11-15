@@ -11,14 +11,26 @@
 use std::fmt::Write as _;
 use std::io::Write as _;
 
+use dt_eval::Passed;
 use dt_geom::TriMesh;
 
 use dt_kit::{BuildRecord, Material, Palette};
 
-/// **write_3mf**: the 3MF bytes of `mesh`, with `materials` giving each
-/// triangle's material (as many as triangles).
+/// **write_3mf**: the 3MF bytes of a build that passed the gate, each
+/// triangle in its material.
 #[must_use]
-pub fn threemf(
+pub fn threemf(passed: &Passed, palette: &Palette) -> Vec<u8> {
+    mesh_3mf(
+        &passed.export.mesh,
+        passed.materials(),
+        &passed.record,
+        palette,
+    )
+}
+
+/// The bytes of `mesh`, with `materials` giving each triangle's material (as
+/// many as triangles).  Private to the crate, as [`crate::stl::mesh_stl`].
+pub(crate) fn mesh_3mf(
     mesh: &TriMesh,
     materials: &[Material],
     record: &BuildRecord,
@@ -272,10 +284,10 @@ mod tests {
             document: "d".into(),
             document_hash: 1,
             seed: 2,
-            system: "db".into(),
+            system: dt_lang::System::Db,
             printer: "default".into(),
         };
-        let z = threemf(&mesh, &mats, &rec, &Palette::default());
+        let z = mesh_3mf(&mesh, &mats, &rec, &Palette::default());
         assert_eq!(&z[..4], b"PK\x03\x04");
         assert_eq!(&z[z.len() - 22..z.len() - 18], b"PK\x05\x06");
         // three entries, each named in the central directory

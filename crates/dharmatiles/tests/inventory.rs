@@ -138,7 +138,7 @@ fn have_and_gone_add_lines_and_the_counts_follow_by_system_and_colour() {
     let have = |sys: &str, colour: ColourWord| -> u32 {
         pieces
             .iter()
-            .filter(|p| p.system == sys && p.colour == colour)
+            .filter(|p| p.system.word() == sys && p.colour == colour)
             .map(|p| p.have)
             .sum()
     };

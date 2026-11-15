@@ -124,7 +124,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     if let Some(seed) = opts.seed {
         tile.reseed(seed);
     }
-    let frame = Frame::for_system(&opts.system, tile.cols, tile.rows);
+    let frame = Frame::for_system(opts.system, tile.cols, tile.rows);
     let mut errors = Vec::new();
     let mut elements: Vec<Box<dyn Element>> = Vec::new();
     let mut areas = Vec::new();
@@ -184,7 +184,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             cells_per_square: cells,
             ..frame
         }
-    } else if opts.draft {
+    } else if opts.tier == crate::Tier::Draft {
         Frame {
             cells_per_square: DRAFT_CELLS,
             ..frame
@@ -215,15 +215,8 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     // the connector comes only from a `base` line; with none the tile has
     // no base, printed flat from zero up
     if tile.has_base {
-        match dt_elements::connector(&opts.system) {
-            Ok(c) => {
-                elements.push(c);
-                areas.push(None);
-            }
-            Err(le) => {
-                errors.push(Diag::plain(dt_lang::codes::SYSTEM, le.message).maybe_help(le.help))
-            }
-        }
+        elements.push(dt_elements::connector(opts.system));
+        areas.push(None);
     }
     // format 1: every thing's region, and what each formula can reach
     let region_tree = if errors.is_empty() {

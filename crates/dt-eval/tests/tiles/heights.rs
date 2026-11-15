@@ -205,7 +205,7 @@ fn heights_scale_with_the_system() {
         &mem(&tile("stack { base\n dirt }")),
         "t.dtile",
         &Options {
-            system: "ol".into(),
+            system: dt_lang::System::Ol,
             ..legacy()
         },
     )

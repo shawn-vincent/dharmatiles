@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crate::cli_wire::{BuildReport, BuildTile, Failed, Printed};
-use dt_eval::{Built, Diag, Files, Options, Source};
+use dt_eval::{Built, Diag, Files, Options, Source, Verdict};
 use dt_print::{VIEWS, render, stl};
 
 use crate::{AUDIT_FAILED, BUG, ERROR, OK, progress};
@@ -27,9 +27,6 @@ pub(crate) struct Extras<'a> {
     /// The disk cache of builds: a build whose inputs are all unchanged is
     /// read from it, not made (`--no-cache`: none).
     pub(crate) store: Option<&'a dt_store::Store>,
-    /// How finely to build.  Only the full tier is checked and written as an
-    /// STL; a low one writes the `png` views alone.
-    pub(crate) tier: dt_store::Tier,
 }
 
 pub(crate) fn build(
@@ -131,7 +128,7 @@ pub(crate) fn build_one(
                 "writing files",
                 0.3,
                 p,
-                &opts.system,
+                opts.system.word(),
                 &timings,
             );
             progress::tracker_for(
@@ -147,15 +144,7 @@ pub(crate) fn build_one(
     let reporter = tracker
         .as_ref()
         .map_or_else(dt_eval::Progress::none, |(_, pr)| pr.clone());
-    let b = match dt_store::build_tier(
-        sources,
-        p,
-        opts,
-        extras.tier,
-        &reporter,
-        extras.cache,
-        extras.store,
-    ) {
+    let b = match dt_store::build_stored(sources, p, opts, &reporter, extras.cache, extras.store) {
         Ok(b) => b,
         Err(errs) => {
             if tracker.is_some() {
@@ -172,10 +161,10 @@ pub(crate) fn build_one(
     };
     let built_s = t0.elapsed().as_secs_f64();
     let record = dt_eval::TileRecord::of(&b, &opts.printer, built_s);
-    let failures = &record.audit.failures;
+    let verdict = b.verdict(&opts.printer);
     reporter.begin(progress::WRITE, "writing files");
     let t_write = Instant::now();
-    let written = write(&b, &record, out, extras);
+    let written = write(&b, &verdict, &record, out, extras, opts.tier);
     reporter.end(progress::WRITE);
     if let Some((t, _)) = &tracker {
         t.finish();
@@ -197,14 +186,14 @@ pub(crate) fn build_one(
     let total_s = t0.elapsed().as_secs_f64();
     let mut secs = b.report.stage_secs.clone();
     secs.push((progress::WRITE.to_owned(), t_write.elapsed().as_secs_f64()));
-    timings.record(p, &opts.system, &secs);
+    timings.record(p, opts.system.word(), &secs);
     timings.save();
     let a = &record.audit;
-    if !json && !b.checked {
+    if !json && matches!(verdict, Verdict::NotChecked) {
         tell!(
             "built {p} → {}\n  {} · not yet checked · {} triangles · build {:.2} s, written {:.2} s",
             files[0].display(),
-            extras.tier.name(),
+            opts.tier.name(),
             a.triangles,
             built_s,
             total_s
@@ -242,18 +231,19 @@ pub(crate) fn build_one(
                     .unwrap_or("an earlier run")
             );
         }
-        for f in failures {
+        for f in verdict.reasons() {
             tell!("  audit failed: {f}");
         }
     }
     for problem in &b.report.cache.problems {
         tell!("warning: {p}: {problem}");
     }
-    let code = if record.passes() { OK } else { AUDIT_FAILED };
+    let ok = !matches!(verdict, Verdict::Failed(_));
+    let code = if ok { OK } else { AUDIT_FAILED };
     (
         code,
         BuildTile::Printed(Box::new(Printed {
-            ok: record.passes(),
+            ok,
             files: files.iter().map(|f| f.display().to_string()).collect(),
             total_s,
             record,
@@ -265,9 +255,11 @@ pub(crate) fn build_one(
 /// four views.
 pub(crate) fn write(
     b: &Built,
+    verdict: &Verdict,
     record: &dt_eval::TileRecord,
     out: &Path,
     extras: Extras,
+    tier: dt_store::Tier,
 ) -> Result<Vec<PathBuf>, String> {
     let path = out.join(&b.out);
     if let Some(dir) = path.parent() {
@@ -277,25 +269,24 @@ pub(crate) fn write(
     let w = |p: &Path, bytes: &[u8]| {
         std::fs::write(p, bytes).map_err(|e| format!("cannot write {}: {e}", p.display()))
     };
-    // a low build is never exported: its views are all it writes
+    // only a build that passed the gate is exported; a low or failed one writes its views (and, once
+    // checked, its record) and nothing a printer reads
     let mut files = Vec::new();
-    if b.checked {
-        w(&path, &stl(&b.export.mesh, &b.record))?;
-        files.push(path.clone());
-    }
     let beside = path.with_extension("build.json");
     let text = serde_json::to_string_pretty(record).map_err(|e| e.to_string())?;
-    if b.checked {
+    if let Verdict::Passed(passed) = verdict {
+        w(&path, &stl(passed))?;
+        files.push(path.clone());
+    }
+    if !matches!(verdict, Verdict::NotChecked) {
         w(&beside, text.as_bytes())?;
         files.push(beside);
     }
-    if extras.threemf && b.checked {
+    if let (Verdict::Passed(passed), true) = (verdict, extras.threemf) {
         let p = path.with_extension("3mf");
         let bytes = match extras.template {
-            Some(t) => {
-                dt_print::bambu_project(&b.export.mesh, &b.materials, &b.record, extras.palette, t)?
-            }
-            None => dt_print::threemf(&b.export.mesh, &b.materials, &b.record, extras.palette),
+            Some(t) => dt_print::bambu_project(passed, extras.palette, t)?,
+            None => dt_print::threemf(passed, extras.palette),
         };
         w(&p, &bytes)?;
         files.push(p);
@@ -306,8 +297,8 @@ pub(crate) fn write(
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
-        if !b.checked {
-            stem = format!("{stem}-{}", extras.tier.name());
+        if matches!(verdict, Verdict::NotChecked) {
+            stem = format!("{stem}-{}", tier.name());
         }
         for v in &VIEWS {
             let img = render(&b.export.mesh, &colours, v, b.footprint, (1200, 950));

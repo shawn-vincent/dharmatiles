@@ -257,7 +257,7 @@ pub struct Snapshot {
     pub contract: String,
     pub rev: u64,
     pub epoch: String,
-    pub system: String,
+    pub system: dt_lang::System,
     pub printer: String,
     pub printers: Vec<super::plan::PrinterRow>,
     pub overhang_deg: f64,

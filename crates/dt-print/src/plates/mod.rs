@@ -28,7 +28,7 @@ pub struct Overrides {
     /// A printer profile in place of the list's.
     pub printer: Option<String>,
     /// A base system in place of the list's.
-    pub system: Option<String>,
+    pub system: Option<dt_lang::System>,
     /// A print mode in place of the list's.
     pub mode: Option<Mode>,
     /// A grouping in place of the list's.
@@ -67,7 +67,7 @@ pub struct Settings {
     /// The printer.
     pub machine: Machine,
     /// The base system pieces are built for, where a piece names none.
-    pub system: String,
+    pub system: dt_lang::System,
     /// Single colour or multicolour.
     pub mode: Mode,
     /// How multicolour pieces are grouped.
@@ -98,7 +98,7 @@ pub struct Kind {
     /// The seed it is built with, if the list gives one.
     pub seed: Option<u64>,
     /// The base system it is built for.
-    pub system: String,
+    pub system: dt_lang::System,
     /// How many copies print.
     pub count: u32,
     /// How many copies the list asks for (`print=missing` ones, and the
@@ -175,7 +175,7 @@ impl Kind {
         Identity {
             tile: self.canon.clone(),
             seed: self.seed_used,
-            system: self.system.clone(),
+            system: self.system,
             colour,
         }
     }
@@ -204,7 +204,7 @@ impl Plan {
     ) -> Result<Options, Vec<Diag>> {
         let kind = &self.kinds[k];
         let mut o = Options {
-            system: kind.system.clone(),
+            system: kind.system,
             seed: kind.seed.or(base.seed),
             ..base.clone()
         };
@@ -351,9 +351,8 @@ pub fn plan(
     }
     let system = ov
         .system
-        .clone()
-        .or_else(|| pl.system.as_ref().map(|s| s.value.clone()))
-        .unwrap_or_else(|| ctx.base.system.clone());
+        .or_else(|| pl.system.as_ref().map(|s| s.value))
+        .unwrap_or(ctx.base.system);
     let slots = machine.as_ref().map_or(1, Machine::slot_count);
     let mode = ov
         .mode
@@ -408,10 +407,7 @@ pub fn plan(
                 continue;
             }
         };
-        let sys = p
-            .system
-            .as_ref()
-            .map_or_else(|| system.clone(), |s| s.value.clone());
+        let sys = p.system.as_ref().map_or(system, |s| s.value);
         let seed = p.seed.as_ref().map(|s| s.value);
         if let Some(i) = kinds
             .iter()
@@ -427,7 +423,7 @@ pub fn plan(
             continue;
         }
         let opts = Options {
-            system: sys.clone(),
+            system: sys,
             seed,
             ..ctx.base.clone()
         };
@@ -460,7 +456,7 @@ pub fn plan(
             ));
             continue;
         };
-        let frame = dt_kit::Frame::for_system(&sys, tile.cols, tile.rows);
+        let frame = dt_kit::Frame::for_system(sys, tile.cols, tile.rows);
         let hash =
             crate::inventory::tile_hash(&crate::inventory::canonical(&path, ctx.home), ctx.home)
                 .or_else(|| {
@@ -613,7 +609,7 @@ pub fn plan(
             continue;
         };
         let Some((at, _)) = pin.at else { continue };
-        let sq = dt_kit::Frame::for_system(&kinds[kind].system, 1, 1).square_mm;
+        let sq = dt_kit::Frame::for_system(kinds[kind].system, 1, 1).square_mm;
         pins.push(PinSpec {
             id: pin.id.value.clone(),
             kind,

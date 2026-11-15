@@ -15,6 +15,7 @@ crate-type = ["cdylib", "rlib"]
 # runs Manifold through wasm-cxx-shim, and rayon is `rayon-seq` there.
 [dependencies]
 dt-doc.workspace = true
+dt-lang.workspace = true
 dt-value.workspace = true
 dt-eval.workspace = true
 dt-kit.workspace = true

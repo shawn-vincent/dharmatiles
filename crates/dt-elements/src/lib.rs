@@ -634,35 +634,27 @@ pub fn built() -> impl Iterator<Item = &'static str> {
 /// caller until cuts exist.
 ///
 /// # Errors
-/// [`LookError`] for an unknown system.
+/// [`LookError`] when the connector cannot keep out its footprint.
 pub fn keep_out(
-    system: &str,
+    system: dt_lang::System,
     frame: &dt_kit::Frame,
     content_top_mm: f64,
     wall_mm: f64,
 ) -> Result<Vec<base::KeepOut>, LookError> {
-    match system {
-        "db" => Ok(connector::DungeonBlocks::default().keep_out(frame, content_top_mm, wall_mm)),
-        "ol" => Ok(openlock::OpenLock::default().keep_out(frame, wall_mm)),
-        _ => Err(LookError::general(
-            format!("no connector for system `{system}`"),
-            "the systems are db (DungeonBlocks) and ol (OpenLOCK)",
-        )),
-    }
+    Ok(match system {
+        dt_lang::System::Db => {
+            connector::DungeonBlocks::default().keep_out(frame, content_top_mm, wall_mm)
+        }
+        dt_lang::System::Ol => openlock::OpenLock::default().keep_out(frame, wall_mm),
+    })
 }
 
 /// The connector for a system: `db` (DungeonBlocks) or `ol` (OpenLOCK).
 ///
-/// # Errors
-/// [`LookError`] for an unknown system.
-pub fn connector(system: &str) -> Result<Box<dyn Element>, LookError> {
+pub fn connector(system: dt_lang::System) -> Box<dyn Element> {
     match system {
-        "db" => Ok(Box::new(connector::DungeonBlocks::default())),
-        "ol" => Ok(Box::new(openlock::OpenLock::default())),
-        _ => Err(LookError::general(
-            format!("no connector for system `{system}`"),
-            "the systems are db (DungeonBlocks) and ol (OpenLOCK)",
-        )),
+        dt_lang::System::Db => Box::new(connector::DungeonBlocks::default()),
+        dt_lang::System::Ol => Box::new(openlock::OpenLock::default()),
     }
 }
 

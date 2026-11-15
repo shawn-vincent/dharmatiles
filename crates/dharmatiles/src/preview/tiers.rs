@@ -25,9 +25,9 @@ use super::*;
 pub struct TierWant {
     pub tile: String,
     /// `super-low`, `low` or `full`.
-    pub tier: String,
+    pub tier: dt_store::Tier,
     pub seed: Option<u64>,
-    pub system: Option<String>,
+    pub system: Option<dt_lang::System>,
     pub printer: Option<String>,
     /// A source text to build in place of the file's own (a step of the document's history): the file is not
     /// edited, and the picture is kept by the text, so a text built before is not built again.
@@ -116,7 +116,7 @@ fn key_of(w: &TierWant) -> String {
         w.tile,
         w.tier,
         w.seed.map_or_else(dash, |s| s.to_string()),
-        w.system.clone().unwrap_or_else(dash),
+        w.system.map_or_else(dash, |s| s.to_string()),
         w.printer.clone().unwrap_or_else(dash),
         w.text.as_deref().map_or_else(dash, |t| format!(
             "{}:{:016x}",
@@ -131,7 +131,6 @@ struct Ready {
     key: String,
     tile: String,
     path: String,
-    tier: dt_store::Tier,
     opts: Options,
     /// A text to build in place of a file's.
     overlay: Option<edit::Overlay>,
@@ -139,17 +138,6 @@ struct Ready {
 
 impl Shared {
     fn prepare(&self, w: &TierWant) -> Result<Ready, Reply> {
-        let tier = match w.tier.as_str() {
-            "low" => dt_store::Tier::Low,
-            "super-low" => dt_store::Tier::SuperLow,
-            "full" => dt_store::Tier::Full,
-            _ => {
-                return Err(fail::refused(
-                    "400 Bad Request",
-                    "a tier is low, super-low or full",
-                ));
-            }
-        };
         let Some((path, files)) = lock(&self.tiles)
             .iter()
             .find(|t| t.id == w.tile)
@@ -171,10 +159,15 @@ impl Shared {
             }
         };
         let mut opts = self.options();
-        match w.system.as_deref() {
-            None => {}
-            Some(s @ ("db" | "ol")) => opts.system = s.to_owned(),
-            Some(_) => return Err(fail::refused("400 Bad Request", "the system is db or ol")),
+        if w.tier == dt_store::Tier::Draft {
+            return Err(fail::refused(
+                "400 Bad Request",
+                "a tier is low, super-low or full",
+            ));
+        }
+        opts.tier = w.tier;
+        if let Some(s) = w.system {
+            opts.system = s;
         }
         opts.seed = w.seed.or(opts.seed);
         if let Some(p) = w.printer.as_deref()
@@ -190,7 +183,6 @@ impl Shared {
             key: key_of(w),
             tile: w.tile.clone(),
             path,
-            tier,
             opts,
             overlay,
         })
@@ -294,17 +286,16 @@ impl Shared {
                 Some(o) => o,
                 None => &dt_eval::Files,
             };
-            dt_store::build_tier(
+            dt_store::build_stored(
                 sources,
                 &r.path,
                 &r.opts,
-                r.tier,
                 &progress,
                 None,
                 self.store.as_deref(),
             )
             .map(|b| {
-                if r.tier == dt_store::Tier::Full {
+                if r.opts.tier == dt_store::Tier::Full {
                     dt_eval::tiers::thin_built(b, MAP_FULL_TRIANGLES)
                 } else {
                     b
@@ -323,7 +314,7 @@ impl Shared {
                 let e = fail::ServerError::bug(p.as_ref(), None);
                 tell!(
                     "error: preview: the {} build of {} panicked: {}",
-                    r.tier.name(),
+                    r.opts.tier.name(),
                     r.path,
                     e.message
                 );
@@ -345,15 +336,14 @@ impl Shared {
                 errs.iter().all(|d| crate::build::is_document_error(d.code)),
                 errs,
             )),
-            Ok(b) => {
-                payload::for_map(&b, r.tier.name(), rev, &r.opts, &self.palette()).map_err(|e| {
+            Ok(b) => payload::for_map(&b, r.opts.tier.name(), rev, &r.opts, &self.palette())
+                .map_err(|e| {
                     (
-                        format!("cannot prepare the {} view: {e}", r.tier.name()),
+                        format!("cannot prepare the {} view: {e}", r.opts.tier.name()),
                         false,
                         Vec::new(),
                     )
-                })
-            }
+                }),
         };
         let mut book = lock(&self.tier_book);
         book.inflight.remove(&r.key);
@@ -403,7 +393,7 @@ impl Shared {
                 .map_or_else(|| "its own seed".to_owned(), |s| format!("seed {s}"));
             format!(
                 "the {} build of {piece}, for the map or list: system {}, printer {}, {seed}",
-                r.tier.name(),
+                r.opts.tier.name(),
                 o.system,
                 o.printer.name
             )
@@ -420,7 +410,10 @@ impl Shared {
                         Scope::Server,
                         &d,
                         &name,
-                        format!("The {} build of {piece} failed: {message}", r.tier.name()),
+                        format!(
+                            "The {} build of {piece} failed: {message}",
+                            r.opts.tier.name()
+                        ),
                     )
                     .code("tier")
                     .about(&r.path, doing.clone()),

@@ -79,7 +79,7 @@ pub(super) struct Resolver<'a> {
     /// The footprints taken, with the height each stands at: the pieces placed (but those the edit moves) and those it placed.
     taken: Vec<(f64, [f64; 4])>,
     /// Seeds handed out in this edit, by tile and system.
-    given: BTreeMap<(String, String), BTreeSet<u64>>,
+    given: BTreeMap<(String, dt_lang::System), BTreeSet<u64>>,
     /// How many places went to a square other than the one wished.
     pub shifted: usize,
 }
@@ -165,7 +165,7 @@ impl<'a> Resolver<'a> {
     }
 
     /// The seeds you own of this tile in this system and colour mode.
-    fn owned(&self, canon: &str, system: &str, colour: &str) -> BTreeSet<u64> {
+    fn owned(&self, canon: &str, system: dt_lang::System, colour: &str) -> BTreeSet<u64> {
         use dt_doc::inventory::Colour;
         let Some(home) = self.shared.home.as_deref() else {
             return BTreeSet::new();
@@ -197,12 +197,12 @@ impl<'a> Resolver<'a> {
     pub(super) fn fresh(
         &mut self,
         canon: &str,
-        system: &str,
+        system: dt_lang::System,
         colour: &str,
         own: Option<u64>,
     ) -> Result<u64, String> {
         let owned = self.owned(canon, system, colour);
-        let key = (canon.to_owned(), system.to_owned());
+        let key = (canon.to_owned(), system);
         let mut used: BTreeSet<u64> = self
             .scene
             .pieces
@@ -226,7 +226,7 @@ impl<'a> Resolver<'a> {
     pub(super) fn taken_seed(
         &self,
         canon: &str,
-        system: &str,
+        system: dt_lang::System,
         colour: &str,
     ) -> Option<Option<u64>> {
         let on_map = self
@@ -275,7 +275,7 @@ mod tests {
             path: "t.dtile".to_owned(),
             seed: None,
             seed_used: seed,
-            system: "db".to_owned(),
+            system: dt_lang::System::Db,
             colour: "single".to_owned(),
             cols: 1,
             rows: 1,
@@ -309,7 +309,7 @@ mod tests {
             have: 0,
             to_print: 0,
             colour: "single".to_owned(),
-            system: "db".to_owned(),
+            system: dt_lang::System::Db,
             square_mm: 35.0,
             printer: "default".to_owned(),
         }
@@ -384,7 +384,9 @@ mod tests {
         let mut rs = Resolver::new(&shared, scene(vec![a]), &[]);
         let mut seen = BTreeSet::new();
         for _ in 0..200 {
-            let s = rs.fresh("home:t", "db", "single", Some(5)).unwrap();
+            let s = rs
+                .fresh("home:t", dt_lang::System::Db, "single", Some(5))
+                .unwrap();
             assert!(s != 4 && s != 5 && (1..=99_998).contains(&s));
             assert!(seen.insert(s), "a seed repeated within an edit");
         }

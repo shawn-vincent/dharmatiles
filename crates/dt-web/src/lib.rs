@@ -22,7 +22,8 @@ use dt_doc::paths::HEIGHTS;
 use dt_doc::schema::{OPENLOCK_SQUARE_MM, SQUARE_MM};
 use dt_doc::units::Units;
 use dt_eval::FixJson;
-use dt_eval::{Diag, Options, Source};
+use dt_eval::{Diag, Options, Source, Tier};
+use dt_lang::System;
 use dt_value::{Rng, Seed};
 use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
@@ -127,27 +128,25 @@ impl Source for Overlay<'_> {
     }
 }
 
-/// What `mm`, `in` and `layer` are worth on a build target (`db` or `ol`).
-fn units_for(system: &str) -> Result<Units, JsError> {
-    let square_mm = match system {
-        "db" => SQUARE_MM,
-        "ol" => OPENLOCK_SQUARE_MM,
-        other => {
-            return Err(JsError::new(&format!(
-                "unknown build target `{other}` (db or ol)"
-            )));
-        }
-    };
-    Ok(Units {
-        square_mm,
+/// The system a page's word names: the one place the page's `system` argument is read.
+fn system_of(word: &str) -> Result<System, JsError> {
+    word.parse().map_err(|e: String| JsError::new(&e))
+}
+
+/// What `mm`, `in` and `layer` are worth on a build target.
+fn units_for(system: System) -> Units {
+    Units {
+        square_mm: match system {
+            System::Db => SQUARE_MM,
+            System::Ol => OPENLOCK_SQUARE_MM,
+        },
         layer_mm: LAYER_MM,
-    })
+    }
 }
 
 /// The engine's options for a target: the library's default printer, read
 /// through the page's library.
-fn options(source: &dyn Source, system: &str) -> Result<Options, JsError> {
-    units_for(system)?;
+fn options(source: &dyn Source, system: System) -> Result<Options, JsError> {
     let mut o = Options::in_source(source).map_err(|ds| {
         let why: Vec<&str> = ds.iter().map(|d| d.message.as_str()).collect();
         JsError::new(&format!(
@@ -155,7 +154,7 @@ fn options(source: &dyn Source, system: &str) -> Result<Options, JsError> {
             why.join("; ")
         ))
     })?;
-    system.clone_into(&mut o.system);
+    o.system = system;
     Ok(o)
 }
 
@@ -370,7 +369,8 @@ fn json<T: Serialize>(v: &T) -> Result<String, JsError> {
 /// An unknown target, or the library was never set.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn analyze(text: &str, system: &str) -> Result<String, JsError> {
-    let (db, ol) = (units_for("db")?, units_for("ol")?);
+    let system = system_of(system)?;
+    let (db, ol) = (units_for(System::Db), units_for(System::Ol));
     LIBRARY.with(|lib| {
         let lib = lib.borrow();
         if !lib.contains_key(HEIGHTS) {
@@ -451,7 +451,8 @@ pub struct Checked {
 /// An unknown target, or the library was never set.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
-    let units = units_for(system)?;
+    let system = system_of(system)?;
+    let units = units_for(system);
     LIBRARY.with(|lib| {
         let lib = lib.borrow();
         if !lib.contains_key(HEIGHTS) {
@@ -521,7 +522,7 @@ pub fn fix_tile(text: &str, fix: &str) -> Result<String, JsError> {
 /// The library was never set, or its heights do not read.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn printed(typed: &str) -> Result<String, JsError> {
-    let (db, ol) = (units_for("db")?, units_for("ol")?);
+    let (db, ol) = (units_for(System::Db), units_for(System::Ol));
     LIBRARY.with(|lib| {
         let lib = lib.borrow();
         let source = Overlay {
@@ -621,33 +622,6 @@ pub struct BuildMeta {
     pub record: Option<dt_eval::TileRecord>,
 }
 
-/// How finely a build is made, the program's own tiers ([`Options::draft`], [`Options::low`]): `full` is what the printer is
-/// given, `draft` the editor's view while a value is dragged (coarse cells, no union, no gate), `low` the browsing tier (grass
-/// as a carpet, rocks as hulls).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Tier {
-    Full,
-    Draft,
-    Low,
-}
-
-impl Tier {
-    /// The tier a page names.
-    ///
-    /// # Errors
-    /// A word that is no tier.
-    pub fn named(word: &str) -> Result<Self, JsError> {
-        match word {
-            "full" => Ok(Self::Full),
-            "draft" => Ok(Self::Draft),
-            "low" => Ok(Self::Low),
-            other => Err(JsError::new(&format!(
-                "unknown detail `{other}` (full, draft or low)"
-            ))),
-        }
-    }
-}
-
 /// One build, as the program does it: the text of a document, a build
 /// target, a seed (negative keeps the tile's own) and cells per square (0
 /// keeps the build's finest).  The one function the browser and the native
@@ -657,17 +631,16 @@ impl Tier {
 /// The document's mistakes, as the program's diagnostics.
 pub fn build_with(
     source: &dyn Source,
-    system: &str,
-    seed: i64,
+    system: System,
+    seed: Option<u64>,
     cells: u32,
     tier: Tier,
     progress: &dt_eval::Progress,
 ) -> Result<(dt_eval::Built, Options), Vec<Diag>> {
     let mut opts = Options::in_source(source)?;
-    opts.draft = tier == Tier::Draft;
-    opts.low = tier == Tier::Low;
-    system.clone_into(&mut opts.system);
-    opts.seed = u64::try_from(seed).ok();
+    opts.tier = tier;
+    opts.system = system;
+    opts.seed = seed;
     opts.cells = (cells > 0).then_some(cells);
     let built = dt_eval::build_with(source, MAIN, &opts, progress)?;
     Ok((built, opts))
@@ -701,7 +674,7 @@ pub struct StageTick {
 
 /// How many stages a build of `source` will announce: its stack, the union and the audit.  A document that
 /// does not check builds nothing, and the build reports why, so the count only has to be a number.
-fn stage_total(source: &dyn Source, system: &str) -> usize {
+fn stage_total(source: &dyn Source, system: System) -> usize {
     let stack = options(source, system)
         .ok()
         .and_then(|o| dt_eval::check(source, MAIN, &o).ok())
@@ -773,8 +746,8 @@ fn ticks(total: usize) -> dt_eval::Progress {
 /// The STL of a build, and the hash the parity check compares: SHA-256 of
 /// everything after the 80-byte header.
 #[must_use]
-pub fn stl_sha256(built: &dt_eval::Built) -> (String, usize) {
-    stl_hash(&dt_print::stl(&built.export.mesh, &built.record))
+pub fn stl_sha256(passed: &dt_eval::Passed) -> (String, usize) {
+    stl_hash(&dt_print::stl(passed))
 }
 
 /// The hash of an STL file already made.
@@ -796,12 +769,12 @@ fn stl_hash(bytes: &[u8]) -> (String, usize) {
 pub fn build_tile(
     text: &str,
     system: &str,
-    seed: i32,
+    seed: Option<u32>,
     cells: u32,
     tier: &str,
 ) -> Result<Tile, JsError> {
-    units_for(system)?;
-    let tier = Tier::named(tier)?;
+    let system = system_of(system)?;
+    let tier = tier.parse::<Tier>().map_err(|e| JsError::new(&e))?;
     LIBRARY.with(|lib| {
         let lib = lib.borrow();
         if !lib.contains_key(HEIGHTS) {
@@ -816,7 +789,7 @@ pub fn build_tile(
         let (built, opts) = match build_with(
             &source,
             system,
-            i64::from(seed),
+            seed.map(u64::from),
             cells,
             tier,
             &ticks(stage_total(&source, system)),
@@ -856,8 +829,14 @@ pub fn build_tile(
                 colours.extend_from_slice(&c);
             }
         }
-        let stl_file = dt_print::stl(&built.export.mesh, &built.record);
-        let (stl_sha256, stl_bytes) = stl_hash(&stl_file);
+        // only a build that passed the gate has an STL: a draft, a low build or a failing one has none
+        let stl_file = built
+            .verdict(&opts.printer)
+            .passed()
+            .map(|p| dt_print::stl(&p));
+        let (stl_sha256, stl_bytes) = stl_file
+            .as_deref()
+            .map_or_else(|| (String::new(), 0), stl_hash);
         let build_s = built.report.stage_secs.iter().map(|s| s.1).sum();
         let meta = BuildMeta {
             built: true,
@@ -870,8 +849,8 @@ pub fn build_tile(
         };
         Ok(Tile {
             meta: json(&meta)?,
-            stl: if tier == Tier::Full && cells == 0 {
-                stl_file
+            stl: if cells == 0 {
+                stl_file.unwrap_or_default()
             } else {
                 Vec::new()
             },
@@ -927,7 +906,7 @@ pub fn explore(
     if bins == 0 {
         return Err(JsError::new("a histogram needs at least one bin"));
     }
-    let units = units_for(system)?;
+    let units = units_for(system_of(system)?);
     let r = dt_doc::lower::ranged(typed, units).map_err(|r| {
         let help = r.help.map(|h| format!(" ({h})")).unwrap_or_default();
         JsError::new(&format!("{}: {}{help}", r.code, r.message))
@@ -1062,7 +1041,7 @@ mod tests {
              version(): string;\n  set_library(json: string): void;\n  analyze(text: string, system: string): string;\n  \
              check_tile(text: string, system: string): string;\n  fix_tile(text: string, fix: string): string;\n  \
              printed(typed: string): string;\n  \
-             build_tile(text: string, system: string, seed: number, cells: number, tier: string): EngineTile;\n  \
+             build_tile(text: string, system: string, seed: number | null, cells: number, tier: string): EngineTile;\n  \
              explore(typed: string, system: string, bins: number, draws: number, seed: number): string;\n}\n",
         );
         out
@@ -1093,8 +1072,11 @@ mod tests {
         lib();
         let var = |k: &str, d: &str| std::env::var(k).unwrap_or_else(|_| d.to_owned());
         let tile = var("PARITY_TILE", "lib:tiles/ground/1x1-grass.dtile");
-        let system = var("PARITY_SYSTEM", "db");
-        let seed: i64 = var("PARITY_SEED", "-1").parse().unwrap();
+        let system: System = var("PARITY_SYSTEM", "db").parse().unwrap();
+        // no PARITY_SEED keeps the tile's own
+        let seed: Option<u64> = std::env::var("PARITY_SEED")
+            .ok()
+            .map(|s| s.parse().unwrap());
         let cells: u32 = var("PARITY_CELLS", "0").parse().unwrap();
         let lib = LIBRARY.with(|l| l.borrow().clone());
         // PARITY_FILE: a document on disk (the page's own presets) instead of a library tile
@@ -1109,18 +1091,22 @@ mod tests {
         };
         let (built, opts) = build_with(
             &source,
-            &system,
+            system,
             seed,
             cells,
             Tier::Full,
             &dt_eval::Progress::none(),
         )
         .unwrap();
-        let (hash, bytes) = stl_sha256(&built);
+        let verdict = built.verdict(&opts.printer);
+        let passed = verdict.passed();
+        let (hash, bytes) = passed
+            .as_ref()
+            .map_or_else(|| (String::new(), 0), stl_sha256);
         println!(
-            "PARITY {tile} {system} seed={seed} cells={cells}: sha256={hash} bytes={bytes} triangles={} failures={:?} secs={:.2}",
+            "PARITY {tile} {system} seed={seed:?} cells={cells}: sha256={hash} bytes={bytes} triangles={} failures={:?} secs={:.2}",
             built.audit.triangles,
-            built.audit.failures(&opts.printer),
+            verdict.reasons(),
             t0.elapsed().as_secs_f64()
         );
     }

@@ -229,10 +229,9 @@ pub fn for_map(
     let mut meta = MeshHeader::new(MeshKind::MapPiece);
     meta.tier = Some(tier.to_owned());
     meta.doc_rev = Some(doc_rev);
-    meta.checked = b.checked;
-    if b.checked {
-        meta.failures = b.audit.failures(&opts.printer);
-    }
+    let verdict = b.verdict(&opts.printer);
+    meta.checked = !matches!(verdict, dt_eval::Verdict::NotChecked);
+    meta.failures = verdict.reasons().to_vec();
     meta.overhang_deg = Some(opts.printer.overhang_deg);
     meta.footprint = Some(b.footprint);
     meta.tile_lo = Some(lo);

@@ -116,7 +116,7 @@ pub struct MapsAddReq {
     pub seed: Option<u64>,
     /// A seed to give it, settled in the write, when `seed` is not given.
     pub seed_word: Option<SeedWord>,
-    pub system: Option<String>,
+    pub system: Option<dt_lang::System>,
     pub doc_rev: u64,
 }
 
@@ -276,7 +276,7 @@ fn words_for(
     if set.fresh_seed == Some(true) {
         let s = rs.fresh(
             &piece.canon,
-            &piece.system,
+            piece.system,
             &piece.colour,
             Some(piece.seed_used),
         )?;
@@ -310,11 +310,7 @@ pub(super) fn add(shared: &Shared, v: MapsAddReq) -> Out<MapsPieced> {
     if ![0, 90, 180, 270].contains(&rot) {
         return Err(bad("`rot` is 0, 90, 180 or 270"));
     }
-    let system = match v.system.as_deref() {
-        None => None,
-        Some(s @ ("db" | "ol")) => Some(s),
-        Some(_) => return Err(bad("the system is db or ol")),
-    };
+    let system = v.system;
     let canon = dt_print::inventory::canonical(&tile_path, shared.home.as_deref());
     let path = super::lists::list_path(shared, &v.list)?;
     let (mut shifted, mut seed_given) = (0, None);
@@ -323,17 +319,14 @@ pub(super) fn add(shared: &Shared, v: MapsAddReq) -> Out<MapsPieced> {
         let needs_scene = v.near.is_some() || v.seed_word.is_some();
         let mut rs =
             needs_scene.then(|| Resolver::new(shared, scene_at(shared, &path, l, v.doc_rev), &[]));
-        let sys = system.map_or_else(
-            || {
-                rs.as_ref()
-                    .map_or_else(String::new, |r| r.scene().system.clone())
-            },
-            str::to_owned,
-        );
+        let sys = system.unwrap_or_else(|| {
+            rs.as_ref()
+                .map_or_else(Default::default, |r| r.scene().system)
+        });
         // the tile as a piece of this map would be: its size in squares and its own seed
-        let own = |sys: &str| -> Result<(u32, u32, u64, f64), String> {
+        let own = |sys: dt_lang::System| -> Result<(u32, u32, u64, f64), String> {
             let opts = dt_eval::Options {
-                system: sys.to_owned(),
+                system: sys,
                 seed: None,
                 ..shared.options()
             };
@@ -355,7 +348,7 @@ pub(super) fn add(shared: &Shared, v: MapsAddReq) -> Out<MapsPieced> {
             (Some(a), _) => dt_doc::map::parse_at(a)?,
             (None, Some(near)) => {
                 let r = rs.as_mut().ok_or("no map")?;
-                let (cols, rows, _, sq) = own(&sys)?;
+                let (cols, rows, _, sq) = own(sys)?;
                 let g = Geom {
                     w: f64::from(cols) * sq,
                     d: f64::from(rows) * sq,
@@ -371,13 +364,13 @@ pub(super) fn add(shared: &Shared, v: MapsAddReq) -> Out<MapsPieced> {
         let seed = match (v.seed, v.seed_word, rs.as_mut()) {
             (Some(s), _, _) => Some(s),
             (None, Some(SeedWord::Fresh), Some(r)) => {
-                let (_, _, tile_seed, _) = own(&sys)?;
-                Some(r.fresh(&canon, &sys, &r.scene().colour.clone(), Some(tile_seed))?)
+                let (_, _, tile_seed, _) = own(sys)?;
+                Some(r.fresh(&canon, sys, &r.scene().colour.clone(), Some(tile_seed))?)
             }
             (None, Some(SeedWord::IfNeeded), Some(r)) => {
                 let colour = r.scene().colour.clone();
-                match r.taken_seed(&canon, &sys, &colour) {
-                    Some(on_map) => Some(r.fresh(&canon, &sys, &colour, on_map)?),
+                match r.taken_seed(&canon, sys, &colour) {
+                    Some(on_map) => Some(r.fresh(&canon, sys, &colour, on_map)?),
                     None => None,
                 }
             }

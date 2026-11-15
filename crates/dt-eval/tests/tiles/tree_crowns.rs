@@ -45,7 +45,7 @@ fn height_with(text: &str, opts: &Options) -> f64 {
 /// under a millimetre with the cells.
 fn height(text: &str) -> f64 {
     let draft = Options {
-        draft: true,
+        tier: dt_eval::Tier::Draft,
         ..Options::default()
     };
     height_with(text, &draft)

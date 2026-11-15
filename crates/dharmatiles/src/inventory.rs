@@ -36,11 +36,13 @@ fn colour_of(word: Option<&str>) -> Result<Option<Colour>, String> {
     }
 }
 
-fn system_of(word: Option<&str>) -> Result<Option<String>, String> {
+fn system_of(word: Option<&str>) -> Result<Option<dt_lang::System>, String> {
     match word {
         None | Some("all") => Ok(None),
-        Some(s @ ("db" | "ol")) => Ok(Some(s.to_owned())),
-        Some(s) => Err(format!("`{s}` is not a system: use `db`, `ol` or `all`")),
+        Some(s) => s
+            .parse()
+            .map(Some)
+            .map_err(|e: String| format!("{e} (or `all`)")),
     }
 }
 
@@ -94,7 +96,7 @@ fn read(home: &Path) -> Result<(doc::Inventory, Option<PathBuf>), Vec<Diag>> {
 /// One line of the table `list` prints: a tile, system and colour mode, the pieces of its seeds added up.
 struct Row {
     tile: String,
-    system: String,
+    system: dt_lang::System,
     colour: Colour,
     have: u32,
     seeds: Vec<(u64, u32)>,
@@ -106,14 +108,14 @@ struct Row {
 
 /// The table's lines from the pieces (the same rows the page reads, grouped by tile, system and colour mode).
 fn rows(pieces: &[InventoryRow]) -> Vec<Row> {
-    let mut by: BTreeMap<(String, String, Colour), Row> = BTreeMap::new();
+    let mut by: BTreeMap<(String, dt_lang::System, Colour), Row> = BTreeMap::new();
     for p in pieces {
         let colour = Colour::from(p.colour);
         let r = by
-            .entry((p.tile.clone(), p.system.clone(), colour))
+            .entry((p.tile.clone(), p.system, colour))
             .or_insert_with(|| Row {
                 tile: p.tile.clone(),
-                system: p.system.clone(),
+                system: p.system,
                 colour,
                 have: 0,
                 seeds: Vec::new(),
@@ -148,7 +150,7 @@ fn seeds_text(seeds: &[(u64, u32)]) -> String {
 }
 
 fn list(home: &Path, c: &Choice, tile: Option<&str>, failures: bool) -> u8 {
-    let system = match system_of(c.system.as_deref().or(Some("db"))) {
+    let system = match system_of(c.system.as_deref().or(Some(dt_lang::System::Db.word()))) {
         Ok(s) => s,
         Err(e) => {
             tell!("error: {e}");
@@ -222,11 +224,7 @@ fn list(home: &Path, c: &Choice, tile: Option<&str>, failures: bool) -> u8 {
     };
     tell!(
         "{path} ({}): {}",
-        system.as_deref().map_or("every system", |s| if s == "db" {
-            "DungeonBlocks"
-        } else {
-            "OpenLOCK"
-        }),
+        system.map_or("every system", dt_lang::System::title),
         match table.len() {
             0 => "nothing matches".to_owned(),
             n => format!("{n} piece group{}", if n == 1 { "" } else { "s" }),
@@ -274,7 +272,7 @@ fn write_lines(
     make: &dyn Fn(&Identity, &disk::Named, &str) -> Vec<String>,
     verb: &str,
 ) -> u8 {
-    let system = match system_of(c.system.as_deref().or(Some("db"))) {
+    let system = match system_of(c.system.as_deref().or(Some(dt_lang::System::Db.word()))) {
         Ok(Some(s)) => s,
         Ok(None) => {
             tell!("error: name one system, `db` or `ol`");
@@ -307,12 +305,12 @@ fn write_lines(
     let cwd = std::env::current_dir().ok();
     let mut lines = Vec::new();
     for t in tiles {
-        match disk::name_tile(t, cwd.as_deref(), Some(home), &system, c.seed) {
+        match disk::name_tile(t, cwd.as_deref(), Some(home), system, c.seed) {
             Ok(n) => {
                 let id = Identity {
                     tile: n.canon.clone(),
                     seed: n.seed,
-                    system: system.clone(),
+                    system,
                     colour,
                 };
                 if verb == "gone" && inv.have(&id) == 0 {
@@ -438,10 +436,12 @@ pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
             };
             let cwd = std::env::current_dir().ok();
             // the old name need not be a tile any more; the new one must be
-            let to = match disk::name_tile(&new, cwd.as_deref(), Some(&home), "db", None) {
-                Ok(n) => n.canon,
-                Err(e) => return fail(&e, json),
-            };
+            let to =
+                match disk::name_tile(&new, cwd.as_deref(), Some(&home), dt_lang::System::Db, None)
+                {
+                    Ok(n) => n.canon,
+                    Err(e) => return fail(&e, json),
+                };
             let from = if old.starts_with("lib:") || old.starts_with("home:") {
                 old.trim_end_matches(".dtile").to_owned()
             } else {

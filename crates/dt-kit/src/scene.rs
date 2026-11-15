@@ -76,14 +76,12 @@ impl Frame {
         }
     }
 
-    /// The frame for a connector system: `ol` is OpenLOCK, anything else
-    /// DungeonBlocks.
+    /// The frame for a connector system.
     #[must_use]
-    pub fn for_system(system: &str, cols: u32, rows: u32) -> Self {
-        if system == "ol" {
-            Self::openlock(cols, rows)
-        } else {
-            Self::dungeonblocks(cols, rows)
+    pub const fn for_system(system: dt_lang::System, cols: u32, rows: u32) -> Self {
+        match system {
+            dt_lang::System::Ol => Self::openlock(cols, rows),
+            dt_lang::System::Db => Self::dungeonblocks(cols, rows),
         }
     }
 

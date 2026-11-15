@@ -19,7 +19,7 @@ fn tile(body: &str) -> String {
 /// Drafts: coarser cells, a fraction of the time, the same plan.
 fn draft() -> Options {
     Options {
-        draft: true,
+        tier: dt_eval::Tier::Draft,
         ..Options::default()
     }
 }
@@ -67,7 +67,7 @@ fn check_plans_the_stack_in_the_order_it_is_written_and_build_builds_that_plan()
             .iter()
             .map(|n| n.label.clone())
             .collect::<Vec<_>>(),
-        t.names(&opts.system)
+        t.names(opts.system)
             .iter()
             .map(|n| n.label.clone())
             .collect::<Vec<_>>()

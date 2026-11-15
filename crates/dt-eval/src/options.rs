@@ -13,26 +13,17 @@ use crate::source::{Library, Source};
 /// How to build.
 #[derive(Clone, Debug)]
 pub struct Options {
-    /// The connector system: `db`.
-    pub system: String,
+    /// The connector system.
+    pub system: dt_lang::System,
     /// Replaces the tile's seed (the CLI's `--seed`).
     pub seed: Option<u64>,
     /// The printer the audit checks against, with its name.
     pub printer: Profile,
     /// Engine version for the build record.
     pub engine: String,
-    /// A draft for the editor's view while a value is dragged: coarser
-    /// cells ([`DRAFT_CELLS`] per square), the parts shown as they are
-    /// without the union, and the gate's verdict left out (each face is
-    /// flagged by its angle alone, see [`dt_kit::draft`]).  Never written.
-    pub draft: bool,
-    /// A low build, the tier for browsing and the map: the same places,
-    /// drawn with less detail (a rock as its hull, grass as a carpet, a
-    /// tree as blobs, the ground meshed within a third of a millimetre),
-    /// the parts shown as they are without the union, and the gate's
-    /// verdict left out (each face is flagged by its angle alone).  A low
-    /// build is **not yet checked**: it is never printed or exported.
-    pub low: bool,
+    /// How finely to build, one of [`Tier`]: a full build is the only one
+    /// that is checked and may be written out.
+    pub tier: Tier,
     /// Cells per square for the whole build, instead of the finest cell any
     /// entry asks for (128 where none does).  What is placed does not
     /// depend on it (see `dt_eval::places`); the surfaces and what is drawn
@@ -47,6 +38,91 @@ pub struct Options {
     /// body's band as low and high sheets, and the span at each tree tip or
     /// stone.  As for [`Options::debug`].
     pub clouds: bool,
+}
+
+/// How finely a build is made.  One field of [`Options`], so no illegal pair
+/// of flags can be written, and part of the key of every kept build: each tier
+/// has its own entries (a full build is never answered with a preview).
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    ts_rs::TS,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum Tier {
+    /// A finished build: the union and the gate.  What the printer is given.
+    #[default]
+    Full,
+    /// The editor's draft: coarser cells ([`DRAFT_CELLS`] per square), the
+    /// parts shown as they are without the union, and the gate's verdict
+    /// left out (each face is flagged by its angle alone, see
+    /// [`dt_kit::draft`]).  Shown while a value is dragged; never kept or
+    /// written.
+    Draft,
+    /// The tier for browsing and the map: the same places, drawn with less
+    /// detail (a rock as its hull, grass as a carpet, a tree as blobs, the
+    /// ground meshed within a third of a millimetre), the parts as they are
+    /// without the union, no gate verdict.  **Not yet checked**: never
+    /// printed or exported.
+    Low,
+    /// A low build cut down to a few thousand triangles
+    /// ([`crate::super_low`]): the library's previews, the map when far.  It
+    /// is built as a low build; the name keeps its entries apart.
+    SuperLow,
+}
+
+impl Tier {
+    /// Its name, as the key, the wire and `dharmatiles cache` say it.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Draft => "draft",
+            Self::Low => "low",
+            Self::SuperLow => "super-low",
+        }
+    }
+
+    /// Whether the gate checks a build of this tier: only a full one.
+    #[must_use]
+    pub const fn checked(self) -> bool {
+        matches!(self, Self::Full)
+    }
+
+    /// Whether the elements draw with less detail (a low build, or a super-low's source).
+    #[must_use]
+    pub const fn is_low(self) -> bool {
+        matches!(self, Self::Low | Self::SuperLow)
+    }
+}
+
+impl std::fmt::Display for Tier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl std::str::FromStr for Tier {
+    type Err = String;
+    fn from_str(word: &str) -> Result<Self, String> {
+        match word {
+            "full" => Ok(Self::Full),
+            "draft" => Ok(Self::Draft),
+            "low" => Ok(Self::Low),
+            "super-low" => Ok(Self::SuperLow),
+            other => Err(format!(
+                "`{other}` is not a tier: full, draft, low or super-low"
+            )),
+        }
+    }
 }
 
 /// A printer profile in use: the gate's numbers and the name they were read
@@ -79,7 +155,7 @@ impl Options {
     #[must_use]
     pub fn units(&self) -> dt_doc::units::Units {
         dt_doc::units::Units {
-            square_mm: Frame::for_system(&self.system, 1, 1).square_mm,
+            square_mm: Frame::for_system(self.system, 1, 1).square_mm,
             layer_mm: self.printer.layer_mm,
         }
     }
@@ -89,7 +165,7 @@ impl Options {
     /// files and the build record.
     #[must_use]
     pub fn target(&self) -> String {
-        dt_kit::target_name(&self.system, &self.printer.name)
+        dt_kit::target_name(self.system, &self.printer.name)
     }
 
     /// Build for the printer profile `name` (see [`printer_profile`]).
@@ -129,15 +205,14 @@ impl Options {
     pub fn in_source(sources: &dyn Source) -> Result<Self, Vec<Diag>> {
         let printer = doc::printer(sources, doc::PRINTER)?;
         Ok(Self {
-            system: "db".to_owned(),
+            system: dt_lang::System::Db,
             seed: None,
             printer: Profile {
                 name: "default".to_owned(),
                 gate: printer,
             },
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
-            draft: false,
-            low: false,
+            tier: Tier::Full,
             cells: None,
             debug: false,
             clouds: false,

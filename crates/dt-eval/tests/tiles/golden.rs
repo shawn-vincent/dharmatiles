@@ -296,7 +296,7 @@ fn no_base_line_means_no_base() {
     };
     for system in ["db", "ol"] {
         let opts = Options {
-            system: system.to_owned(),
+            system: system.parse().unwrap(),
             ..Options::default()
         };
         let none = memo::build(&Library, "lib:tests/ground/1x1-no-base.dtile", &opts).unwrap();

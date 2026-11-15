@@ -386,7 +386,7 @@ fn real_dirt(top: &str) -> String {
 /// time).
 fn hash(text: &str) -> Vec<(String, u64)> {
     let draft = Options {
-        draft: true,
+        tier: dt_eval::Tier::Draft,
         ..Options::default()
     };
     let b = memo::build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
@@ -440,7 +440,7 @@ fn the_cloud_tiles_pass_the_gate() {
 #[test]
 fn the_cloud_tiles_build_for_openlock_too() {
     let opts = Options {
-        system: "ol".to_owned(),
+        system: dt_lang::System::Ol,
         ..Options::default()
     };
     for path in CLOUD_TILES {

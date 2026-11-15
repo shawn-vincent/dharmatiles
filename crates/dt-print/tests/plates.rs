@@ -65,13 +65,13 @@ fn a_list_resolves_its_tiles_merges_copies_and_takes_the_defaults() {
     assert_eq!(s.machine.name, "bambu/x1c-ams");
     assert_eq!((s.mode, s.group), (Mode::Multicolour, Group::Filament));
     assert_eq!((s.gap, s.margin, s.turn), (3.0, 5.0, true));
-    assert_eq!(s.system, "db");
+    assert_eq!(s.system, dt_lang::System::Db);
     // a square is a square: 35 mm on DungeonBlocks, 25.4 on OpenLOCK
     assert_eq!(p.kinds[0].nominal, [35.0, 35.0]);
     let ol = plan_of(
         "map {\n piece \"lib:tests/ground/1x1-flat\"\n piece \"lib:tests/ground/1x1-soil\" system=\"db\"\n}",
         &Overrides {
-            system: Some("ol".into()),
+            system: Some(dt_lang::System::Ol),
             ..Overrides::default()
         },
     )

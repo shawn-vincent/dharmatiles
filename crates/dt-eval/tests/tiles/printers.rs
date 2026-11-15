@@ -226,8 +226,11 @@ fn a_mistake_in_a_machine_says_where() {
 
 #[test]
 fn a_brand_profile_names_a_build_target_folder_without_a_slash() {
-    assert_eq!(dt_kit::target_name("db", "bambu/x1c"), "db-bambu-x1c");
-    assert_eq!(dt_kit::target_name("ol", "default"), "ol");
+    assert_eq!(
+        dt_kit::target_name(dt_lang::System::Db, "bambu/x1c"),
+        "db-bambu-x1c"
+    );
+    assert_eq!(dt_kit::target_name(dt_lang::System::Ol, "default"), "ol");
     let mut o = dt_eval::Options::default();
     o.use_printer("bambu/x1c", None).unwrap();
     assert_eq!(o.target(), "db-bambu-x1c");

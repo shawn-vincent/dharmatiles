@@ -97,7 +97,7 @@ pub fn plan_stages(c: &Checked, doc: &str, opts: &Options, timings: &Timings) ->
         .into_iter()
         .map(|(key, label)| {
             let secs = timings
-                .get(doc, &opts.system, &key)
+                .get(doc, opts.system.word(), &key)
                 .unwrap_or_else(|| default_secs(&label, squares));
             StageInfo { key, label, secs }
         })
@@ -107,7 +107,7 @@ pub fn plan_stages(c: &Checked, doc: &str, opts: &Options, timings: &Timings) ->
         (UNION, "joining the parts", union),
         (AUDIT, "checking printability", audit),
     ] {
-        let secs = timings.get(doc, &opts.system, key).unwrap_or(default);
+        let secs = timings.get(doc, opts.system.word(), key).unwrap_or(default);
         v.push(StageInfo {
             key: key.to_owned(),
             label: label.to_owned(),

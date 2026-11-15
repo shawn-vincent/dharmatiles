@@ -29,7 +29,7 @@ pub struct PlanSettings {
     pub excluded: Vec<[f64; 4]>,
     pub slots: u32,
     pub verify: Option<String>,
-    pub system: String,
+    pub system: dt_lang::System,
     pub mode: String,
     pub group: String,
     pub gap: f64,
@@ -53,7 +53,7 @@ impl PlanSettings {
             excluded: s.machine.excluded.clone(),
             slots: s.machine.slot_count(),
             verify: s.machine.verify.clone(),
-            system: s.system.clone(),
+            system: s.system,
             mode: s.mode.word().to_owned(),
             group: s.group.word().to_owned(),
             gap: s.gap,
@@ -87,7 +87,7 @@ pub struct PlannedKind {
     pub canon: String,
     pub seed_used: u64,
     pub seed: Option<u64>,
-    pub system: String,
+    pub system: dt_lang::System,
 }
 
 impl PlannedKind {
@@ -104,7 +104,7 @@ impl PlannedKind {
             canon: kind.canon.clone(),
             seed_used: kind.seed_used,
             seed: kind.seed,
-            system: kind.system.clone(),
+            system: kind.system,
         }
     }
 }

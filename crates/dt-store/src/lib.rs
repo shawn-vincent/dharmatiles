@@ -68,57 +68,7 @@ pub const DEFAULT_LIMIT: u64 = 4 << 30;
 
 const MAGIC: &[u8; 4] = b"DTBC";
 
-/// How finely a build was made.  Part of the key, so each tier has its own
-/// entries: a full build is never answered with a preview, and the three
-/// tiers of one tile are three entries.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Tier {
-    /// A finished build: the union and the gate.
-    Full,
-    /// The editor's draft ([`Options::draft`]): coarser cells, no union, no
-    /// gate verdict.  Shown while a value is dragged; not kept by the
-    /// program, but a key may be asked for.
-    Draft,
-    /// The low build ([`Options::low`]): the same places drawn with less
-    /// detail, no union, no gate verdict: **not yet checked**.  For
-    /// browsing and the map when near.
-    Low,
-    /// A low build cut down to a few thousand triangles
-    /// ([`dt_eval::super_low`]): the library's previews, the map when far.
-    SuperLow,
-}
-
-impl Tier {
-    /// The tier a build with `opts` makes (a super-low is made from a low
-    /// build, so no options ask for it).
-    #[must_use]
-    pub fn of(opts: &Options) -> Self {
-        if opts.low {
-            Self::Low
-        } else if opts.draft {
-            Self::Draft
-        } else {
-            Self::Full
-        }
-    }
-
-    /// Its name, as the key and `dharmatiles cache` say it.
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Full => "full",
-            Self::Draft => "draft",
-            Self::Low => "low",
-            Self::SuperLow => "super-low",
-        }
-    }
-
-    /// Whether the gate has checked a build of this tier: only a full one.
-    #[must_use]
-    pub const fn checked(self) -> bool {
-        matches!(self, Self::Full)
-    }
-}
+pub use dt_eval::Tier;
 
 /// What a build depends on, hashed: where its entry is.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -398,7 +348,7 @@ impl Store {
     /// read (see [`Tracked`]).
     #[must_use]
     pub fn key(&self, reads: &Reads, path: &str, opts: &Options) -> Key {
-        self.key_for(reads, path, opts, Tier::of(opts))
+        self.key_for(reads, path, opts, opts.tier)
     }
 
     fn key_for(&self, reads: &Reads, path: &str, opts: &Options, tier: Tier) -> Key {
@@ -407,7 +357,7 @@ impl Store {
         c.field("format", &FORMAT)
             .field("engine", &self.engine)
             .field("tier", tier.name())
-            .field("system", &opts.system)
+            .field("system", opts.system.word())
             .field("printer", &opts.printer.name)
             .field("printer-values", &opts.printer)
             .field("seed", &opts.seed)
@@ -433,8 +383,7 @@ impl Store {
     #[must_use]
     pub fn key_at(&self, reads: &Reads, path: &str, opts: &Options, tier: Tier) -> Key {
         let mut o = opts.clone();
-        o.draft = tier == Tier::Draft;
-        o.low = matches!(tier, Tier::Low | Tier::SuperLow);
+        o.tier = tier;
         self.key_for(reads, path, &o, tier)
     }
 
@@ -936,7 +885,7 @@ fn split(bytes: &[u8]) -> Result<(Head, &[u8]), String> {
 ///
 /// # Errors
 /// As [`build`].
-pub fn build_stored(
+fn stored_build(
     sources: &dyn Source,
     path: &str,
     opts: &Options,
@@ -987,7 +936,7 @@ pub fn build_stored(
     Ok(b)
 }
 
-/// [`build_stored`] at `tier`: what a map or a browser asks for by distance.
+/// [`build_stored`]: what a map or a browser asks for by distance, at the tier `opts` names ([`Options::tier`]).
 ///
 /// - [`Tier::Full`]: the finished build, through the union and the gate.
 /// - [`Tier::Low`]: the same places drawn with less detail, the parts as they
@@ -996,33 +945,29 @@ pub fn build_stored(
 /// - [`Tier::SuperLow`]: a low build cut down to
 ///   [`crate::tiers::SUPER_LOW_BUDGET`] triangles.  It is made from the low
 ///   build (made, not kept) and kept as its own entry.
-/// - [`Tier::Draft`]: the editor's draft (coarse cells), never kept.
+/// - [`Tier::Draft`]: the editor's draft (coarse cells); the program passes no store for it.
 ///
-/// Each tier is its own entry in the store; the options' own `draft` and
-/// `low` are overruled by the tier.  Only a full build may be written out:
-/// check [`Built::checked`] before an export.
+/// Each tier is its own entry in the store.  Only a full build may be
+/// written out: see [`Built::verdict`].
 ///
 /// # Errors
 /// As [`build`].
-pub fn build_tier(
+pub fn build_stored(
     sources: &dyn Source,
     path: &str,
     opts: &Options,
-    tier: Tier,
     progress: &Progress,
     cache: Option<&Cache>,
     store: Option<&Store>,
 ) -> Result<Built, Vec<Diag>> {
+    let tier = opts.tier;
     let at = |t: Tier| Options {
-        draft: t == Tier::Draft,
-        low: matches!(t, Tier::Low | Tier::SuperLow),
+        tier: t,
         ..opts.clone()
     };
     if tier != Tier::SuperLow {
         let o = at(tier);
-        // a draft is never kept: it is the view while a value is dragged
-        let store = if tier == Tier::Draft { None } else { store };
-        return build_stored(sources, path, &o, progress, cache, store);
+        return stored_build(sources, path, &o, progress, cache, store);
     }
     let Some(store) = store else {
         let low = build_cached(sources, path, &at(Tier::Low), progress, cache)?;

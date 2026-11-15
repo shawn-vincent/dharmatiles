@@ -144,7 +144,7 @@ fn main() -> ExitCode {
             json,
             explain,
         } => {
-            let opts = match options(&system, &printer, seed) {
+            let opts = match options(system, &printer, seed) {
                 Ok(o) => o,
                 Err(e) => {
                     tell!("error: {e}");
@@ -158,7 +158,7 @@ fn main() -> ExitCode {
             write,
             system,
             printer,
-        } => match options(&system, &printer, None) {
+        } => match options(system, &printer, None) {
             Ok(opts) => fix::fix(&paths, &opts, write),
             Err(e) => {
                 tell!("error: {e}");
@@ -180,13 +180,6 @@ fn main() -> ExitCode {
             no_cache,
             tier,
         } => {
-            let tier = match library::tier(&tier) {
-                Ok(t) => t,
-                Err(e) => {
-                    tell!("error: {e}");
-                    return ExitCode::from(ERROR);
-                }
-            };
             if tier != dt_store::Tier::Full && threemf {
                 tell!(
                     "error: --tier {} is not yet checked and is never exported: --3mf needs the full tier",
@@ -222,8 +215,8 @@ fn main() -> ExitCode {
                 paths
             };
             let out = out_dir(out);
-            let opts = match options(&system, &printer, seed) {
-                Ok(o) => o,
+            let opts = match options(system, &printer, seed) {
+                Ok(o) => dt_eval::Options { tier, ..o },
                 Err(e) => {
                     tell!("error: {e}");
                     return ExitCode::from(ERROR);
@@ -253,7 +246,6 @@ fn main() -> ExitCode {
                     palette: &palette,
                     cache: None,
                     store: store.as_ref(),
-                    tier,
                 },
                 json,
             )
@@ -343,7 +335,7 @@ fn main() -> ExitCode {
             port,
             open,
             palette,
-        } => match library::preview_options(system.as_deref(), printer.as_deref()) {
+        } => match library::preview_options(system, printer.as_deref()) {
             Ok(o) => preview::run(&paths, &o, port, open, palette),
             Err(e) => {
                 tell!("error: {e}");
@@ -358,7 +350,7 @@ fn main() -> ExitCode {
             out,
             png,
             max_builds,
-        } => match options(&system, &printer, seed) {
+        } => match options(system, &printer, seed) {
             Ok(o) => watch::run(&paths, &o, &out_dir(out), png, max_builds),
             Err(e) => {
                 tell!("error: {e}");

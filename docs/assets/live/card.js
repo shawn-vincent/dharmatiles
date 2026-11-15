@@ -390,7 +390,7 @@ export class Card {
     this.status = 'building';
     this.log.begin();
     this.tileState.value = { ...this.tileState.value, status: 'building' };
-    this.handle.edit({ text: this.text, system: this.system, seed: -1, cells: DRAFT_CELLS, tier: DRAFT_TIER, version: this.version });
+    this.handle.edit({ text: this.text, system: this.system, seed: null, cells: DRAFT_CELLS, tier: DRAFT_TIER, version: this.version });
     this.#touch();
   }
 
@@ -400,7 +400,7 @@ export class Card {
     this.log.begin();
     this.tileState.value = { ...this.tileState.value, status: 'building' };
     this.handle.focus();
-    this.handle.full({ text: this.text, system: this.system, seed: -1, version: this.version });
+    this.handle.full({ text: this.text, system: this.system, seed: null, version: this.version });
     this.#touch();
   }
 

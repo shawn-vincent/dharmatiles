@@ -8,7 +8,6 @@ use super::plates::plates_planned;
 use super::*;
 use crate::inventory_wire::{ColourWord, InventoryRow, InventoryState};
 use crate::preview::inventory as calls_inventory;
-use crate::preview::inventory::SystemWord;
 use crate::preview::placing::Near;
 use crate::preview::resources::Resource;
 use crate::preview::scene::{SceneJson, ScenePiece};
@@ -197,7 +196,7 @@ fn gone_req(tile: &str, colour: ColourWord) -> calls_inventory::InventoryGoneReq
     calls_inventory::InventoryGoneReq {
         tile: tile.to_owned(),
         seed: 5,
-        system: SystemWord::Db,
+        system: dt_lang::System::Db,
         colour,
         note: None,
         on: None,
@@ -208,7 +207,7 @@ fn reprint_req(colour: ColourWord, list: Option<String>) -> calls_inventory::Inv
     calls_inventory::InventoryReprintReq {
         tile: "home:clearing".to_owned(),
         seed: 5,
-        system: SystemWord::Db,
+        system: dt_lang::System::Db,
         colour,
         list,
         doc_rev: None,
@@ -879,7 +878,7 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
         doc: None,
         wants: vec![tiers::TierWant {
             seed,
-            system: Some(system.to_owned()),
+            system: Some(system.parse().unwrap()),
             ..tier_want(&id, tier)
         }],
     };
@@ -889,8 +888,6 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     let (head, body) = wait_tier(&h.r, &v.keys[0], None);
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert_eq!(&body[..4], b"DTM1");
-    let head = h.head("/api/tiers/want", &want("low", None, "xx"));
-    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     // add: a new piece with its own id, in the answer's scene at once
     let b: maps::MapsPieced = h.edited("/api/maps/add", &list, |doc_rev| maps::MapsAddReq {
         at: Some("(3sq, 2sq)".to_owned()),

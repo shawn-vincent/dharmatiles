@@ -44,7 +44,7 @@ pub struct Places {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct Target {
-    pub system: String,
+    pub system: dt_lang::System,
     pub printer: String,
     pub overhang_deg: f64,
     pub steepest_deg: f64,
@@ -121,10 +121,10 @@ impl Shared {
     pub(super) fn target_value(&self) -> Target {
         let t = self.options();
         Target {
-            system: t.system.clone(),
+            system: t.system,
             overhang_deg: t.printer.overhang_deg,
             steepest_deg: t.printer.steepest_deg,
-            square_mm: dt_kit::Frame::for_system(&t.system, 1, 1).square_mm,
+            square_mm: dt_kit::Frame::for_system(t.system, 1, 1).square_mm,
             printer: t.printer.name.clone(),
         }
     }

@@ -442,7 +442,9 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
         ["--printer", "../x"],
     ] {
         let o = build(&args);
-        assert_eq!(o.status.code(), Some(1), "{args:?}");
+        // a system that is none is a usage error of the command line (2), a printer that is none our own (1)
+        let want = if args[0] == "--system" { 2 } else { 1 };
+        assert_eq!(o.status.code(), Some(want), "{args:?}");
         assert!(!o.stderr.is_empty(), "{args:?}");
     }
 }

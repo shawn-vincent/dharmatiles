@@ -35,6 +35,7 @@ pub mod solve;
 pub mod source;
 pub mod tiers;
 pub mod unwritten;
+mod verdict;
 
 use std::path::{Path, PathBuf};
 
@@ -50,9 +51,10 @@ pub use dt_doc::lower::{RangeRefusal, Ranged, ranged, weighting_flaw_in};
 pub use dt_kit::Progress;
 pub use machine::{Machine, ProfileKind, printer_machine, printer_names, printer_profile};
 pub use mistake::{FixJson, Mistake, is_document_error, mistakes};
-pub use options::{DRAFT_CELLS, Options, Profile};
+pub use options::{DRAFT_CELLS, Options, Profile, Tier};
 pub use record::TileRecord;
 pub use source::{Files, LIB, Library, Memory, Source, library_file};
+pub use verdict::{Passed, Verdict};
 
 /// A project: the folder holding `dharmatiles.dtile` (or the start folder
 /// when there is none) and where builds go.
@@ -111,7 +113,7 @@ mod tests {
     fn a_target_is_the_system_and_a_printer_that_is_not_the_default() {
         let mut o = Options::default();
         assert_eq!(o.target(), "db");
-        assert_eq!(dt_kit::target_name("ol", "default"), "ol");
+        assert_eq!(dt_kit::target_name(dt_lang::System::Ol, "default"), "ol");
         o.use_printer("fine", None).unwrap();
         assert_eq!(o.target(), "db-fine");
         assert_eq!(o.printer.layer_mm, 0.12);

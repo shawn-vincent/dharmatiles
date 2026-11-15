@@ -86,9 +86,9 @@ document_hash: string,
  */
 seed: number, 
 /**
- * The connector system, `db` or `ol`.
+ * The connector system.
  */
-system: string, 
+system: System, 
 /**
  * The printer profile's name (`default`, or another).
  */
@@ -384,9 +384,9 @@ type InsertPlace = "stack" | "tile" | "before" | "in";
 
 type InventoryDoc = { writable: boolean, inventory: InventoryRead, };
 
-type InventoryGoneReq = { tile: string, seed: number, system: SystemWord, colour: ColourWord, note?: string | null, on?: string | null, };
+type InventoryGoneReq = { tile: string, seed: number, system: System, colour: ColourWord, note?: string | null, on?: string | null, };
 
-type InventoryHaveReq = { tile: string, colour: ColourWord, system?: SystemWord | null, seed?: number | null, count?: number | null, 
+type InventoryHaveReq = { tile: string, colour: ColourWord, system?: System | null, seed?: number | null, count?: number | null, 
 /**
  * The date, like 2026-11-09 (today when left out).
  */
@@ -418,7 +418,7 @@ from: string,
  */
 to: string, on?: string | null, };
 
-type InventoryReprintReq = { tile: string, seed: number, system: SystemWord, colour: ColourWord, 
+type InventoryReprintReq = { tile: string, seed: number, system: System, colour: ColourWord, 
 /**
  * The print list's id; none makes a new list.
  */
@@ -434,7 +434,7 @@ type InventoryReprinted = {
  */
 list: string, id: string, made: boolean, warning: string | null, always: boolean, before: string | null, text: string, docRev: number, note: string | null, };
 
-type InventoryRow = { tile: string, seed: number, system: string, colour: ColourWord, have: number, printed: number, failed: number, gone: number, hash: string | null, last: string | null, edited: boolean, missing: boolean, lines: Array<number>, };
+type InventoryRow = { tile: string, seed: number, system: System, colour: ColourWord, have: number, printed: number, failed: number, gone: number, hash: string | null, last: string | null, edited: boolean, missing: boolean, lines: Array<number>, };
 
 type InventoryState = { "state": "unavailable" } | { "state": "absent", home: string, 
 /**
@@ -490,7 +490,7 @@ type ListPiece = { tile: string, count: number,
 /**
  * The id the piece has, or the one the first edit of the file will write on it.
  */
-id: string, pinned: boolean, seed: number | null, system: string | null, print: string, };
+id: string, pinned: boolean, seed: number | null, system: System | null, print: string, };
 
 type Listed = { path: string, id: string | null, tile: TileSummary | null, };
 
@@ -504,7 +504,7 @@ type ListsAddReq = { tile: string,
 /**
  * The list's id; none makes a new list.
  */
-list?: string | null, seed?: number | null, system?: string | null, 
+list?: string | null, seed?: number | null, system?: System | null, 
 /**
  * The revision of the list the caller last saw, when it has the list open.
  */
@@ -566,7 +566,7 @@ near?: Near | null, rot?: number | null, seed?: number | null,
 /**
  * A seed to give it, settled in the write, when `seed` is not given.
  */
-seedWord?: SeedWord | null, system?: string | null, docRev: number, };
+seedWord?: SeedWord | null, system?: System | null, docRev: number, };
 
 type MapsBatchReq = { list: string, edits: Array<PieceEdit>, docRev: number, };
 
@@ -887,7 +887,7 @@ exact: boolean, filaments: Array<string>, tile: string, name: string, count: num
 /**
  * The tile as the inventory names it.
  */
-canon: string, seedUsed: number, seed: number | null, system: string, };
+canon: string, seedUsed: number, seed: number | null, system: System, };
 
 type PlanPlaced = { 
 /**
@@ -961,7 +961,7 @@ format: string, printers: Array<PrinterRow>,
 /**
  * The list's own pieces, in the order written.
  */
-pieces: Array<ListPiece>, title: string, printer: string, label: string, bed: [number, number] | null, excluded: Array<[number, number, number, number]>, slots: number, verify: string | null, system: string, mode: string, group: string, gap: number, margin: number, turn: boolean, skipped: Array<string>, held: Array<PlanHeld>, checkInventory: boolean, };
+pieces: Array<ListPiece>, title: string, printer: string, label: string, bed: [number, number] | null, excluded: Array<[number, number, number, number]>, slots: number, verify: string | null, system: System, mode: string, group: string, gap: number, margin: number, turn: boolean, skipped: Array<string>, held: Array<PlanHeld>, checkInventory: boolean, };
 
 type PlatesSetReq = { list: string, 
 /**
@@ -1152,7 +1152,7 @@ have: number, toPrint: number,
 /**
  * `single` or `multi`.
  */
-colour: string, system: string, 
+colour: string, system: System, 
 /**
  * The square of `system`, mm: where a tile dropped on the map lands.
  */
@@ -1174,7 +1174,7 @@ tile: string, canon: string, name: string,
 /**
  * The listed tile's id, when the tile is listed.
  */
-tileId: string | null, path: string, seed: number | null, seedUsed: number, system: string, colour: string, cols: number, rows: number, 
+tileId: string | null, path: string, seed: number | null, seedUsed: number, system: System, colour: string, cols: number, rows: number, 
 /**
  * One square, mm.
  */
@@ -1246,7 +1246,7 @@ type Snapshot = {
 /**
  * The contract stamp of this program (`contract()`): a page that imported a different one is from another build.
  */
-contract: string, rev: number, epoch: string, system: string, printer: string, printers: Array<PrinterRow>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: InventoryState, tiles: Array<TileSummary>, };
+contract: string, rev: number, epoch: string, system: System, printer: string, printers: Array<PrinterRow>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: InventoryState, tiles: Array<TileSummary>, };
 
 type Span = { file: string, line: number, col: number, 
 /**
@@ -1323,17 +1323,17 @@ mistake: boolean,
  */
 code: string | null, } | { "type": "resource" } & ResourceEvent;
 
-type SystemWord = "db" | "ol";
+type System = "db" | "ol";
 
-type Target = { system: string, printer: string, overhangDeg: number, steepestDeg: number, 
+type Target = { system: System, printer: string, overhangDeg: number, steepestDeg: number, 
 /**
  * One square's side on the chosen system, mm (35 DungeonBlocks, 25.4 OpenLOCK): the page's only source for it.
  */
 squareMm: number, };
 
-type TargetReq = { system?: string | null, printer?: string | null, };
+type TargetReq = { system?: System | null, printer?: string | null, };
 
-type TargetRes = { system: string, printer: string, };
+type TargetRes = { system: System, printer: string, };
 
 type TextReq = { text: string, 
 /**
@@ -1353,11 +1353,13 @@ type Thing = { what: string,
  */
 at: number, controls: Array<WrittenControl>, defaults: Array<UnwrittenControl>, };
 
+type Tier = "full" | "draft" | "low" | "super-low";
+
 type TierWant = { tile: string, 
 /**
  * `super-low`, `low` or `full`.
  */
-tier: string, seed?: number | null, system?: string | null, printer?: string | null, 
+tier: Tier, seed?: number | null, system?: System | null, printer?: string | null, 
 /**
  * A source text to build in place of the file's own (a step of the document's history): the file is not
  * edited, and the picture is kept by the text, so a text built before is not built again.

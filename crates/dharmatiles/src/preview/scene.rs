@@ -49,7 +49,7 @@ pub struct SceneJson {
     pub to_print: usize,
     /// `single` or `multi`.
     pub colour: String,
-    pub system: String,
+    pub system: dt_lang::System,
     /// The square of `system`, mm: where a tile dropped on the map lands.
     pub square_mm: f64,
     pub printer: String,
@@ -89,7 +89,7 @@ pub struct ScenePiece {
     pub path: String,
     pub seed: Option<u64>,
     pub seed_used: u64,
-    pub system: String,
+    pub system: dt_lang::System,
     pub colour: String,
     pub cols: u32,
     pub rows: u32,
@@ -199,7 +199,7 @@ impl Placement {
 }
 
 /// What a tile's check said, by tile, seed and system: its squares across and down, and the seed it builds with.
-type Checks = BTreeMap<(String, Option<u64>, String), Result<(u32, u32, u64), String>>;
+type Checks = BTreeMap<(String, Option<u64>, dt_lang::System), Result<(u32, u32, u64), String>>;
 
 /// One piece as the scene knows it.
 pub(super) struct PieceInfo {
@@ -209,7 +209,7 @@ pub(super) struct PieceInfo {
     pub path: String,
     pub seed_used: u64,
     pub seed: Option<u64>,
-    pub system: String,
+    pub system: dt_lang::System,
     pub at: Option<Placement>,
     pub error: Option<String>,
 }
@@ -356,7 +356,7 @@ fn mark_shelf(pieces: &mut [ScenePiece], home: Option<&Path>) -> (bool, usize, u
         let id = Identity {
             tile: p.canon.clone(),
             seed: p.seed_used,
-            system: p.system.clone(),
+            system: p.system,
             colour: if p.colour == "multi" {
                 Colour::Multi
             } else {
@@ -403,7 +403,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         .plates
         .system
         .as_ref()
-        .map_or_else(|| base.system.clone(), |s| s.value.clone());
+        .map_or_else(|| base.system, |s| s.value);
     let colour = colour_of(list, &printer, home);
     let names = names_of(list);
     let tiles = lock(&shared.tiles)
@@ -420,25 +420,25 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         let system = p
             .system
             .as_ref()
-            .map_or_else(|| default_system.clone(), |s| s.value.clone());
-        let sq = dt_kit::Frame::for_system(&system, 1, 1).square_mm;
+            .map_or_else(|| default_system, |s| s.value);
+        let sq = dt_kit::Frame::for_system(system, 1, 1).square_mm;
         let tpath = dt_print::plates::tile_path(&p.tile.value, dir, home);
         let mut error = tpath.as_ref().err().cloned();
         let tpath = tpath.unwrap_or_default();
         let seed = p.seed.as_ref().map(|s| s.value);
         let info = if error.is_none() {
             checked
-                .entry((tpath.clone(), seed, system.clone()))
+                .entry((tpath.clone(), seed, system))
                 .or_insert_with(|| {
                     // a tile's size and seed, kept while its file is as it was (the reading of a map is asked often:
                     // every edit of it); a mistake is never kept, it is found again each time
                     let stamp = crate::watch::mtime(&tpath);
-                    let memo = (tpath.clone(), seed, system.clone(), stamp);
+                    let memo = (tpath.clone(), seed, system, stamp);
                     if let Some(known) = lock(&shared.scene_checks).get(&memo) {
                         return Ok(*known);
                     }
                     let opts = Options {
-                        system: system.clone(),
+                        system,
                         seed,
                         ..base.clone()
                     };
@@ -528,7 +528,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             path: tpath.clone(),
             seed,
             seed_used,
-            system: system.clone(),
+            system,
             colour: colour.to_owned(),
             cols,
             rows,
@@ -568,7 +568,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
     });
     let bounds = (placed > 0).then(|| [lo[0], lo[1], hi[0], hi[1]]);
     let (shelf_exists, have, to_print) = mark_shelf(&mut out, home);
-    let square_mm = dt_kit::Frame::for_system(&default_system, 1, 1).square_mm;
+    let square_mm = dt_kit::Frame::for_system(default_system, 1, 1).square_mm;
     let json = SceneJson {
         shelf_exists,
         have,
@@ -622,20 +622,20 @@ fn shape_of(mesh: &dt_kit::TriMesh, w: f64, d: f64) -> Shape {
 /// beside the full one), said as a note for each pair.  Never a refusal.
 pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
     let base = shared.options();
-    let mut shapes: BTreeMap<(String, u64, String), Option<Shape>> = BTreeMap::new();
+    let mut shapes: BTreeMap<(String, u64, dt_lang::System), Option<Shape>> = BTreeMap::new();
     let placed: Vec<&PieceInfo> = scene
         .pieces
         .iter()
         .filter(|p| p.at.is_some() && p.error.is_none())
         .collect();
     for p in &placed {
-        let key = (p.path.clone(), p.seed_used, p.system.clone());
+        let key = (p.path.clone(), p.seed_used, p.system);
         if shapes.contains_key(&key) {
             continue;
         }
         let Some(at) = p.at else { continue };
         let mut opts = Options {
-            system: p.system.clone(),
+            system: p.system,
             seed: p.seed,
             ..base.clone()
         };
@@ -655,11 +655,13 @@ pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
             shared.rev_of(&path),
             "",
             move |shared, cancel| {
-                Ok(dt_store::build_tier(
+                Ok(dt_store::build_stored(
                     &Files,
                     &path,
-                    &opts,
-                    Tier::Low,
+                    &Options {
+                        tier: Tier::Low,
+                        ..opts
+                    },
                     &dt_eval::Progress::new(std::sync::Arc::new(super::queue::Cancelled(
                         std::sync::Arc::clone(cancel),
                     ))),
@@ -684,10 +686,9 @@ pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
     }
     let mut notes = Vec::new();
     for a in &placed {
-        let (Some(pa), Some(Some(sa))) = (
-            a.at,
-            shapes.get(&(a.path.clone(), a.seed_used, a.system.clone())),
-        ) else {
+        let (Some(pa), Some(Some(sa))) =
+            (a.at, shapes.get(&(a.path.clone(), a.seed_used, a.system)))
+        else {
             continue;
         };
         let Some((cbox, clow)) = sa.crown else {
@@ -699,10 +700,9 @@ pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
             if b.index == a.index {
                 continue;
             }
-            let (Some(pb), Some(Some(sb))) = (
-                b.at,
-                shapes.get(&(b.path.clone(), b.seed_used, b.system.clone())),
-            ) else {
+            let (Some(pb), Some(Some(sb))) =
+                (b.at, shapes.get(&(b.path.clone(), b.seed_used, b.system)))
+            else {
                 continue;
             };
             let f = pb.footprint();

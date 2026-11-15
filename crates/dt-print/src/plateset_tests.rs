@@ -41,7 +41,7 @@ fn record() -> BuildRecord {
         document: "kit.dmap".into(),
         document_hash: 1,
         seed: 0,
-        system: "db".into(),
+        system: dt_lang::System::Db,
         printer: "bambu/x1c".into(),
     }
 }

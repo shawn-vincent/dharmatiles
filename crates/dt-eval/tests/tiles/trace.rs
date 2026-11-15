@@ -62,7 +62,7 @@ fn every_triangle_has_its_entry() {
 #[test]
 fn a_draft_is_quick_and_still_traced() {
     let draft = Options {
-        draft: true,
+        tier: dt_eval::Tier::Draft,
         ..Options::default()
     };
     {

@@ -279,11 +279,10 @@ pub struct Named {
 
 /// The connector's label and the page that documents it, for the target.
 #[must_use]
-pub fn base_label(system: &str) -> (&'static str, &'static str) {
-    if system == "ol" {
-        ("OpenLOCK base", "openlock")
-    } else {
-        ("DungeonBlocks base", "dungeonblocks")
+pub fn base_label(system: dt_lang::System) -> (&'static str, &'static str) {
+    match system {
+        dt_lang::System::Ol => ("OpenLOCK base", "openlock"),
+        dt_lang::System::Db => ("DungeonBlocks base", "dungeonblocks"),
     }
 }
 
@@ -390,7 +389,7 @@ impl Tile {
     /// connector's when the tile has a `base` line (for build target
     /// `system`).
     #[must_use]
-    pub fn names(&self, system: &str) -> Vec<Named> {
+    pub fn names(&self, system: dt_lang::System) -> Vec<Named> {
         let mut out = Vec::with_capacity(self.stack.len() + 1);
         for (i, e) in self.stack.iter().enumerate() {
             let outer = self.stack[..i].iter().rev().find(|p| e.inside(p));

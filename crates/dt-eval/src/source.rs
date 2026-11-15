@@ -188,8 +188,14 @@ mod tests {
     fn the_squares_dt_doc_reads_are_the_kits() {
         // dt-doc has no geometry, so it holds its own copy of each square
         let kit = |system| dt_kit::Frame::for_system(system, 1, 1).square_mm.to_bits();
-        assert_eq!(dt_doc::schema::SQUARE_MM.to_bits(), kit("db"));
-        assert_eq!(dt_doc::schema::OPENLOCK_SQUARE_MM.to_bits(), kit("ol"));
+        assert_eq!(
+            dt_doc::schema::SQUARE_MM.to_bits(),
+            kit(dt_lang::System::Db)
+        );
+        assert_eq!(
+            dt_doc::schema::OPENLOCK_SQUARE_MM.to_bits(),
+            kit(dt_lang::System::Ol)
+        );
     }
 
     #[test]

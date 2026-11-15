@@ -45,7 +45,7 @@ fn a_print_list_reads_pieces_and_plates() {
     let q = &l.pieces[1];
     assert_eq!(q.id.as_ref().unwrap().value, "p2");
     assert_eq!(q.seed.as_ref().unwrap().value, 12);
-    assert_eq!(q.system.as_ref().unwrap().value, "ol");
+    assert_eq!(q.system.as_ref().unwrap().value, dt_lang::System::Ol);
     assert!(l.pieces[2].print == dt_doc::map::PrintMode::Skip);
     assert_eq!(l.pieces[3].rot.as_ref().unwrap().value, 90);
     assert_eq!(l.pieces[3].at.as_ref().unwrap().value, "(4sq, 1sq)");
@@ -381,7 +381,7 @@ fn a_map_editor_writes_places_and_keeps_every_other_byte() {
         at(1.0, 3.5),
         0,
         Some(12),
-        Some("ol"),
+        Some(dt_lang::System::Ol),
     );
     assert_eq!(
         line,

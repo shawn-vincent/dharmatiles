@@ -96,9 +96,9 @@ document_hash: string,
  */
 seed: number, 
 /**
- * The connector system, `db` or `ol`.
+ * The connector system.
  */
-system: string, 
+system: System, 
 /**
  * The printer profile's name (`default`, or another).
  */
@@ -327,6 +327,8 @@ fraction: number, label: string,
  */
 done: number, total: number, };
 
+type System = "db" | "ol";
+
 type TileInfo = { name: string, cols: number, rows: number, seed: number | null, about: string | null, };
 
 type TileMap = { language: Language, cols: number, rows: number, 
@@ -427,6 +429,6 @@ export interface Engine {
   check_tile(text: string, system: string): string;
   fix_tile(text: string, fix: string): string;
   printed(typed: string): string;
-  build_tile(text: string, system: string, seed: number, cells: number, tier: string): EngineTile;
+  build_tile(text: string, system: string, seed: number | null, cells: number, tier: string): EngineTile;
   explore(typed: string, system: string, bins: number, draws: number, seed: number): string;
 }

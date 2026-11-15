@@ -269,7 +269,7 @@ mod tests {
     use super::*;
 
     fn frame() -> Frame {
-        Frame::for_system("db", 1, 1)
+        Frame::for_system(dt_lang::System::Db, 1, 1)
     }
 
     fn band(f: impl Fn(f64, f64) -> (f64, f64)) -> (Band, Frame) {

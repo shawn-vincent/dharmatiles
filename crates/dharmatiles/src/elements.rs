@@ -300,7 +300,7 @@ fn node_json(n: &'static Node) -> NodeSchema {
 /// keeps no copy of any.
 pub(crate) fn language_json() -> LanguageJson {
     let square = |system| dt_kit::Frame::for_system(system, 1, 1).square_mm;
-    let (db, ol) = (square("db"), square("ol"));
+    let (db, ol) = (square(dt_lang::System::Db), square(dt_lang::System::Ol));
     LanguageJson {
         docs: docs(),
         nodes: schema_nodes().iter().map(node_json).collect(),

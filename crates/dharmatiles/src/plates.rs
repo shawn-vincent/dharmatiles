@@ -109,8 +109,35 @@ pub(crate) fn template_for(
 /// What the build of every piece gave.
 pub(crate) struct Builds {
     pub(crate) built: Vec<Built>,
+    /// The printer each piece was built for, whose gate judges it.
+    printers: Vec<dt_eval::Profile>,
+}
+
+impl Builds {
+    /// The gate's verdict on each piece.
+    pub(crate) fn verdicts(&self) -> Vec<dt_eval::Verdict<'_>> {
+        self.built
+            .iter()
+            .zip(&self.printers)
+            .map(|(b, p)| b.verdict(p))
+            .collect()
+    }
+
     /// Each piece's gate failures (empty when it passed).
-    pub(crate) failures: Vec<Vec<String>>,
+    pub(crate) fn gate(&self) -> Vec<Vec<String>> {
+        self.verdicts()
+            .iter()
+            .map(|v| v.reasons().to_vec())
+            .collect()
+    }
+
+    /// Every piece's proof, when all of them passed: the only way to write the plates.
+    pub(crate) fn passed(&self) -> Option<Vec<dt_eval::Passed<'_>>> {
+        self.verdicts()
+            .iter()
+            .map(dt_eval::Verdict::passed)
+            .collect()
+    }
 }
 
 /// Build every distinct piece of a plan in full (through the cache when there
@@ -127,27 +154,26 @@ pub(crate) fn build_all(
     step: &mut dyn FnMut(usize, usize, &str),
 ) -> Result<Builds, Vec<Diag>> {
     let mut built = Vec::new();
-    let mut failures = Vec::new();
+    let mut printers = Vec::new();
     for (k, kind) in plan.kinds.iter().enumerate() {
         step(k + 1, plan.kinds.len(), &kind.name);
         let opts = plan.options(k, base, home)?;
-        let b = dt_store::build_tier(
+        let opts = dt_eval::Options {
+            tier: dt_store::Tier::Full,
+            ..opts
+        };
+        let b = dt_store::build_stored(
             &Files,
             &kind.path,
             &opts,
-            dt_store::Tier::Full,
             &dt_eval::Progress::none(),
             None,
             store,
         )?;
-        failures.push(if b.checked {
-            b.audit.failures(&opts.printer)
-        } else {
-            Vec::new()
-        });
+        printers.push(opts.printer);
         built.push(b);
     }
-    Ok(Builds { built, failures })
+    Ok(Builds { built, printers })
 }
 
 /// The layout the builds give.
@@ -167,7 +193,7 @@ pub(crate) fn layout_of(plan: &Plan, builds: &Builds) -> Result<Layout, Vec<Diag
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn overrides(
     printer: Option<String>,
-    system: Option<String>,
+    system: Option<dt_lang::System>,
     mode: Option<&str>,
     group: Option<&str>,
     gap: Option<f64>,
@@ -201,11 +227,6 @@ pub(crate) fn overrides(
             ));
         }
     };
-    if let Some(s) = &system
-        && !matches!(s.as_str(), "db" | "ol")
-    {
-        return Err(format!("`{s}` is not a system: use `db` or `ol`"));
-    }
     Ok(Overrides {
         printer,
         system,
@@ -257,7 +278,7 @@ pub(crate) fn run(
         Ok(l) => l,
         Err(e) => return fail(&e, json),
     };
-    let base = match crate::library::options("db", "default", None) {
+    let base = match crate::library::options(dt_lang::System::Db, "default", None) {
         Ok(o) => o,
         Err(e) => {
             tell!("error: {e}");
@@ -386,15 +407,29 @@ pub(crate) fn run(
         document: list_path.display().to_string(),
         document_hash: b0.record.document_hash,
         seed: 0,
-        system: s.system.clone(),
+        system: s.system,
         printer: s.machine.name.clone(),
     };
-    let refs: Vec<&Built> = builds.built.iter().collect();
-    let files =
-        match export::write_set(&plan, &layout, &refs, fmt, palette, tpl.as_deref(), &record) {
-            Ok(f) => f,
-            Err(e) => return fail(&[e], json),
-        };
+    let gate = builds.gate();
+    // a piece that failed the gate is never written: the plates wait for it to pass
+    let passed = builds.passed();
+    let files = match &passed {
+        Some(passed) => {
+            match export::write_set(
+                &plan,
+                &layout,
+                passed,
+                fmt,
+                palette,
+                tpl.as_deref(),
+                &record,
+            ) {
+                Ok(f) => f,
+                Err(e) => return fail(&[e], json),
+            }
+        }
+        None => Vec::new(),
+    };
     let dest = out.join("plates").join(&title);
     if let Err(e) = std::fs::create_dir_all(&dest) {
         tell!("error: cannot create {}: {e}", dest.display());
@@ -410,13 +445,13 @@ pub(crate) fn run(
         written.push(p);
     }
     let report_json = PlatesReport {
-        ok: true,
+        ok: passed.is_some(),
         plan: PlanOnly::of(&plan),
         plates: PlanPlate::of_layout(&plan, &layout, &dt_doc::map::piece_ids(&list)),
         grouping_cost: layout.grouping_cost,
         format: fmt.word().to_owned(),
         files: written.iter().map(|f| f.display().to_string()).collect(),
-        gate: builds.failures.clone(),
+        gate: gate.clone(),
         total_s: t0.elapsed().as_secs_f64(),
     };
     let rec = dest.join(format!("{title}.plates.json"));
@@ -432,7 +467,7 @@ pub(crate) fn run(
         }
     }
     let mut code = OK;
-    for (k, f) in builds.failures.iter().enumerate() {
+    for (k, f) in gate.iter().enumerate() {
         for line in f {
             code = AUDIT_FAILED;
             tell!("audit failed: {}: {line}", plan.kinds[k].name);

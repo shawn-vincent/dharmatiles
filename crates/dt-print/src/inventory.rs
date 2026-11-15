@@ -209,7 +209,7 @@ pub fn name_tile(
     tile: &str,
     dir: Option<&Path>,
     home: Option<&Path>,
-    system: &str,
+    system: dt_lang::System,
     seed: Option<u64>,
 ) -> Result<Named, Vec<Diag>> {
     let path = crate::plates::tile_path(tile, dir, home)
@@ -218,7 +218,7 @@ pub fn name_tile(
         .read(&path)
         .map_err(|e| vec![Diag::plain(dt_lang::codes::INVENTORY, e)])?;
     let opts = dt_eval::Options {
-        system: system.to_owned(),
+        system,
         seed,
         ..dt_eval::Options::default()
     };
