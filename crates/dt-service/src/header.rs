@@ -1,17 +1,16 @@
-//! The mesh header: the JSON that goes with every mesh to the page, read before the arrays (see [`super::payload`]).
+//! The mesh header: the JSON that goes with every mesh to the page, read before the arrays (see [`crate::payload`]).
 //! One type, [`MeshHeader`], made by its constructors and written by serializing it; the page's TypeScript type of the
 //! same name is generated from it, so a field renamed here fails `tsc` in the page's readers.
 
 use std::collections::BTreeMap;
 
 /// What a mesh is of: the header is read the same way for each, and this says which it got.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub enum MeshKind {
     /// A finished build of a tile.
     Build,
-    /// A draft: a build thinned to [`super::payload::VIEW_BUDGET`].
+    /// A draft: a build thinned to [`crate::payload::VIEW_BUDGET`].
     Draft,
     /// One piece of a map, at a tier.
     MapPiece,
@@ -27,8 +26,7 @@ pub enum MeshKind {
 /// edits to the text), its words and element, and `z`: the lowest and highest height its triangles reach, mm from the
 /// tile's zero (none for an entry that made no triangle).  One reading of the mesh the build made, so the page draws the
 /// thickness of each entry from here and works nothing out of the mesh itself.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MeshStackEntry {
     pub index: usize,
@@ -39,10 +37,9 @@ pub struct MeshStackEntry {
     pub z: Option<[f64; 2]>,
 }
 
-/// The debug layer's marks as the page draws them, thinned to [`super::payload::DEBUG_DOTS`] and
-/// [`super::payload::DEBUG_TRAIL_POINTS`].  The clouds are not here: see [`Clouds`].
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+/// The debug layer's marks as the page draws them, thinned to [`crate::payload::DEBUG_DOTS`] and
+/// [`crate::payload::DEBUG_TRAIL_POINTS`].  The clouds are not here: see [`Clouds`].
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DebugMarks {
     /// By class: `[x, y, z, …]`.
@@ -53,8 +50,7 @@ pub struct DebugMarks {
 }
 
 /// A grid of heights a cloud is drawn from, an entry's.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CloudSheet {
     /// An entry's key (`tile/dirt/0`).
@@ -70,8 +66,7 @@ pub struct CloudSheet {
 }
 
 /// The clouds at a point (branch tips, stones) of one entry and class.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CloudColumns {
     /// An entry's key.
@@ -81,11 +76,10 @@ pub struct CloudColumns {
     pub v: Vec<f64>,
 }
 
-/// The clouds a selected `top=` or pin is drawn from, thinned to [`super::payload::DEBUG_SHEET_NODES`] and
-/// [`super::payload::DEBUG_COLUMNS`].  Its own section of the header, apart from the debug layer's marks: the page draws
+/// The clouds a selected `top=` or pin is drawn from, thinned to [`crate::payload::DEBUG_SHEET_NODES`] and
+/// [`crate::payload::DEBUG_COLUMNS`].  Its own section of the header, apart from the debug layer's marks: the page draws
 /// a cloud as part of the selection, whether or not the layer is on.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Clouds {
     pub sheets: Vec<CloudSheet>,
@@ -95,8 +89,7 @@ pub struct Clouds {
 
 /// The JSON header of every mesh (its TypeScript type, `MeshHeader`, is generated from this one).  A field is none only
 /// where the kind of mesh has no such data.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MeshHeader {
     pub kind: MeshKind,

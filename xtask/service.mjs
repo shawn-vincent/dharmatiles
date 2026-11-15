@@ -34,6 +34,15 @@ const built = JSON.parse(service.built(path));
 if (JSON.stringify(ready.tile.record.audit) !== JSON.stringify(built.record.audit)) {
   throw new Error('the stream\'s record is not the build\'s');
 }
+// the page's mesh, by revision: the payload's magic and its header's triangle count are the build's
+const mesh = service.mesh(path, saved.docRev);
+if (!mesh) throw new Error('the worker has no mesh for the revision it built');
+if (new TextDecoder().decode(mesh.subarray(0, 4)) !== 'DTM2') throw new Error('the worker\'s mesh is not a DTM2 payload');
+const headLen = new DataView(mesh.buffer, mesh.byteOffset).getUint32(4, true);
+const head = JSON.parse(new TextDecoder().decode(mesh.subarray(8, 8 + headLen)));
+if (head.triangles !== built.record.audit.triangles) throw new Error(`the mesh has ${head.triangles} triangles, the build ${built.record.audit.triangles}`);
+// a mesh of another revision is not given
+if (service.mesh(path, saved.docRev + 5) != null) throw new Error('a mesh of another revision was given');
 // a verb the service does not have is refused loudly, never answered empty
 let refused = '';
 try {
@@ -55,5 +64,6 @@ console.log(
     stlBytes: built.stlBytes,
     stlSha256: built.stlSha256,
     triangles: built.record.audit.triangles,
+    meshBytes: mesh.length,
   }),
 );

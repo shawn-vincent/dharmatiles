@@ -18,6 +18,7 @@
 //! | `plan::*`, `scene::{SceneJson, Note, Placement}`, `resources::{Places, Target, List, Resource, ResourceEvent}` | contract | here: [`plan`], [`scene`], [`resources`] |
 //! | `EditReq`, `EditOp`, `EditRes`, `NodeJson`, `text_rev`, and the one function that makes an edit | contract | here: [`edit`]; `/api/edit` and the browser engine's `edit_tile` both call [`edit::apply`] |
 //! | `message::*`, `StackItem` and its parts, the inventory's wire types | contract | here: [`message`], [`stack`], [`inventory`] |
+//! | the mesh payload the page reads (`header::MeshHeader` and its parts, `payload::{encode, from_built, for_map, from_draft, sketch, debug_marks, clouds_of}`) | contract | here: [`header`], [`payload`]; the program's `/api/.../mesh` and the web worker's `Service` both make the page's mesh bytes with them |
 //! | `Storage`, `Entry`, `Clock` | seam | here: [`storage`], [`clock`] |
 //! | `TileRecord`, `Mistake`, `Options`, `Diag`, `AuditSummary`, `Tier` | engine | `dt-eval`, `dt-kit`, `dt-store`, used from there |
 //! | `Events`, `Change`, `Told` | state | here: [`events`]; an event that cannot be written goes to the [`host::Alarm`] the host gives |
@@ -42,11 +43,13 @@ pub mod docs;
 pub mod edit;
 pub mod edit_calls;
 pub mod events;
+pub mod header;
 pub mod host;
 pub mod inventory;
 pub mod message;
 pub mod owner;
 pub mod patch;
+pub mod payload;
 pub mod plan;
 pub mod queue;
 pub mod resources;

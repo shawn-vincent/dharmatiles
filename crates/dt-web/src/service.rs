@@ -29,6 +29,7 @@ use dt_service::host::{Alarm, Host};
 use dt_service::message::{Message, Scope};
 use dt_service::owner::{Command, Core, Setup, Subscribed};
 use dt_service::patch::Patch;
+use dt_service::payload;
 use dt_service::queue::{Finished, Job, Taken, Taking};
 use dt_service::roots::{Root, RootKind};
 use dt_service::storage::{MemStorage, Storage};
@@ -264,11 +265,23 @@ impl Inner {
                         stl_sha256,
                     },
                 );
-                // the worker keeps no view of the mesh: the page's mesh comes from its own build call
+                // the page's mesh, made by the painter the program's lanes use (`dt_service::payload`), kept by the owner
+                // and fetched by revision (`Service::mesh`)
+                let mesh = payload::from_built(
+                    &built,
+                    opts.printer.overhang_deg,
+                    &dt_kit::Palette::default(),
+                )
+                .map_err(|e| {
+                    Refusal::failure(
+                        dt_service::call::Status::Internal,
+                        format!("cannot make the view of the build: {e}"),
+                    )
+                })?;
                 edit(Patch::BuildReady {
                     problem: Vec::new(),
                     record,
-                    mesh: Arc::new(Vec::new()),
+                    mesh: Arc::new(mesh),
                     doc_rev,
                     files,
                 });
@@ -532,6 +545,30 @@ impl Service {
             .get(path)
             .ok_or_else(|| JsError::new(&format!("{path} has not been built here")))?;
         serde_json::to_string(b).map_err(|e| JsError::new(&format!("cannot write the answer: {e}")))
+    }
+
+    /// The mesh the page reads (`dt_service::payload`'s bytes) of tile `tile`, made by the build of revision `doc_rev` of its
+    /// document: none when the tile's mesh is of another revision (a build is on its way) or the tile has none.
+    ///
+    /// # Errors
+    /// The owner did not answer.
+    pub fn mesh(&self, tile: &str, doc_rev: f64) -> Result<Option<Vec<u8>>, JsError> {
+        // a revision is a whole number the page counts up from 1: it travels as a JS number
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a document revision is a small whole number"
+        )]
+        let rev = doc_rev as u64;
+        let answer = self
+            .inner
+            .ask(|r| Command::Mesh(tile_id(tile), rev, r))
+            .map_err(|r| JsError::new(&r.message))?;
+        // `Err(rev)`: the mesh is of another revision, which the next summary says
+        Ok(match answer {
+            Ok(mesh) => mesh.map(|m| m.as_ref().clone()),
+            Err(_other_revision) => None,
+        })
     }
 
     /// What the stream said since the last pull, as a JSON array of stream events (a tile's state with its record, the

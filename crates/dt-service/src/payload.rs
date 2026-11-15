@@ -38,7 +38,7 @@ use dt_eval::Built;
 use dt_kit::TriMesh;
 use std::collections::BTreeMap;
 
-use super::header::{
+use crate::header::{
     CloudColumns, CloudSheet, Clouds, DebugMarks, MeshHeader, MeshKind, MeshStackEntry,
 };
 

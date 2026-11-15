@@ -550,6 +550,7 @@ dependencies = [
  "dt-kit",
  "dt-lang",
  "dt-print",
+ "dt-testkit",
  "dt-value",
  "kdl",
  "miette",

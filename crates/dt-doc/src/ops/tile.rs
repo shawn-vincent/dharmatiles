@@ -252,7 +252,11 @@ fn value_text(v: &NewValue, rows: u32) -> String {
 /// A new node as the lines of KDL [`insert`] writes (unindented).
 fn make(doc: &KdlDocument, node: &NewNode) -> Result<String, EditError> {
     // a point is counted from the north-west corner, so a node with one needs the tile's size
-    let rows = if has_point(node) { tile_size(doc)?.1 } else { 0 };
+    let rows = if has_point(node) {
+        tile_size(doc)?.1
+    } else {
+        0
+    };
     render(node, rows, "")
 }
 
