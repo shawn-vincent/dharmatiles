@@ -83,17 +83,28 @@ fn slot_of(shared: &Shared, id: &str) -> Result<(String, String), Reply> {
 pub(super) fn export(shared: &Shared, v: PlatesExportReq) -> Out<PlatesExported> {
     let (id, path) = slot_of(shared, &v.list)?;
     let rev = shared.rev_of(&path);
+    let format = v.format;
     // on the export lane, one at a time, in its turn
     edit::lane_out(shared.on_lane(
         super::queue::Lane::Export,
         format!("export|{id}"),
         rev,
         &id.clone(),
-        move |reply| super::queue::SideJob::ExportPlates { id, path, reply },
+        move |reply| super::queue::SideJob::ExportPlates {
+            id,
+            path,
+            format,
+            reply,
+        },
     ))
 }
 
-pub(super) fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
+pub(super) fn export_now(
+    shared: &Shared,
+    id: &str,
+    path: &str,
+    format: Option<&str>,
+) -> Out<PlatesExported> {
     let id = id.to_owned();
     let path = path.to_owned();
     let t0 = Instant::now();
@@ -108,8 +119,12 @@ pub(super) fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExp
         Err(b) => return Err(report_err(&b.1)),
     };
     let s = &plan.settings;
-    let made =
-        match dt_service::export_calls::plate_files(shared, &plan, &path, &mut |n, of, name| {
+    let made = match dt_service::export_calls::plate_files(
+        shared,
+        &plan,
+        &path,
+        format,
+        &mut |n, of, name| {
             let progress = super::api::Progress {
                 what: "building".to_owned(),
                 fraction: (n - 1) as f64 / of as f64,
@@ -121,13 +136,14 @@ pub(super) fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExp
                 estimate_s: None,
             };
             shared.update(&id, Patch::Progress(progress));
-        }) {
-            Ok(m) => m,
-            Err(errs) => {
-                shared.update(&id, Patch::ClearProgress);
-                return Err(report_err(&errs));
-            }
-        };
+        },
+    ) {
+        Ok(m) => m,
+        Err(errs) => {
+            shared.update(&id, Patch::ClearProgress);
+            return Err(report_err(&errs));
+        }
+    };
     shared.update(&id, Patch::ClearProgress);
     let (layout, fmt, files, failing) = (made.layout, made.format, made.files, made.failures);
     let out = edit::export_dir(&path)

@@ -190,15 +190,7 @@ pub(crate) fn overrides(
 
 /// The format a word names.
 pub(crate) fn format_of(word: Option<&str>, machine: &dt_eval::Machine) -> Result<Format, String> {
-    match word {
-        None => Ok(Format::for_printer(machine)),
-        Some("bambu") => Ok(Format::Bambu),
-        Some("stl") => Ok(Format::Stl),
-        Some("3mf") => Ok(Format::ThreeMf),
-        Some(w) => Err(format!(
-            "`{w}` is not a format: use `bambu`, `stl` or `3mf`"
-        )),
-    }
+    word.map_or_else(|| Ok(Format::for_printer(machine)), Format::from_word)
 }
 
 /// `plan` then, unless `check_only`, everything to the files.

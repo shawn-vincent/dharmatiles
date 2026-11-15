@@ -1450,10 +1450,7 @@ fn a_tile_is_exported_as_downloads_by_verb_with_no_server_and_no_disk() {
     assert!(made.files.is_empty(), "nothing is written: the page saves");
     let names: Vec<&str> = made.downloads.iter().map(|d| d.name.as_str()).collect();
     assert_eq!(names.len(), 3, "{names:?}");
-    assert!(
-        names[0].ends_with("-db.stl") && names[0].starts_with("db/b-"),
-        "{names:?}"
-    );
+    assert!(names[0] == "b-db.stl", "{names:?}");
     assert!(
         names[1].ends_with(".build.json") && names[2].ends_with(".3mf"),
         "{names:?}"

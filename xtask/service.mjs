@@ -2,6 +2,7 @@
 // `save` and `build` by verb, as the page's worker will: `build` is HTTP's verb (it queues the job, the worker host
 // runs it, and the record arrives on the event stream). Prints one JSON line: what the calls answered. Usage:
 //   node service.mjs <bundle-dir> <tile>@<system>
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -79,6 +80,51 @@ if (!planned.text.includes('bambu/x1c')) throw new Error('platesSet did not writ
 const planOf = (id) => JSON.parse(service.snapshot()).tiles.find((t) => t.id === id)?.plan;
 const plan = planOf(gridded.id);
 if (plan?.kind !== 'plates' || plan.plates?.planned !== true) throw new Error(`the map was not planned in the worker: ${JSON.stringify(plan)?.slice(0, 300)}`);
+// exports: the tile's files and the print list's plates are downloads (a name, a media type, base64 bytes), made by the one
+// function the program writes them with; the printer is set to one that makes STL plates (a Bambu project needs a template
+// file, which a web page has no folder for: refused by name)
+const sha = (b) => createHash('sha256').update(b).digest('hex');
+const bytesOf = (d) => Buffer.from(d.data, 'base64');
+const exported = call('exportTile', path, { threemf: true });
+const stlDownload = exported.downloads.find((d) => d.name.endsWith('.stl'));
+if (!stlDownload || stlDownload.mediaType !== 'model/stl' || exported.files.length !== 0) throw new Error(`exportTile gave no STL download: ${JSON.stringify(exported).slice(0, 300)}`);
+if (bytesOf(exported.downloads.find((d) => d.name.endsWith('.3mf'))).subarray(0, 2).toString() !== 'PK') throw new Error('the 3MF download is not a zip');
+if (call('exportTile', path, { where: true }).out !== 'downloads') throw new Error('where did not say downloads');
+// the plates are of a soil tile (a plate of full grass tiles is a long build in a browser); the program lays out the same list
+const SOIL = 'lib:tiles/ground/1x1-soil.dtile';
+const soil = JSON.parse(service.call('mine', SOIL, '{}'));
+const soilList = call('listsAdd', '', { tile: soil.id });
+const listPath = () => soilList.path;
+const listDoc = () => JSON.parse(service.call('text', soilList.list, '{}'));
+call('platesSet', soilList.list, { list: soilList.list, key: 'printer', value: 'sovol/sv06', docRev: listDoc().docRev });
+// each plate set is made once (a plate of full grass tiles is a long build); an STL's 80-byte header names the document it was
+// made from (the list's path, which is not the same where the program runs it), so its hash is of what follows
+const plateSet = (format) => call('platesExport', '', { list: soilList.list, format }).downloads;
+const hashes = (files) => Object.fromEntries(files.map((d) => [d.name, sha(d.name.endsWith('.stl') ? bytesOf(d).subarray(80) : bytesOf(d))]));
+const stlPlates = plateSet('stl');
+const threePlates = plateSet('3mf');
+// SERVICE_DUMP=<folder> keeps the files the service made, to compare with the program's by eye
+if (process.env.SERVICE_DUMP) {
+  const { writeFileSync } = await import('node:fs');
+  for (const d of [...exported.downloads, ...stlPlates, ...threePlates]) writeFileSync(join(process.env.SERVICE_DUMP, d.name), bytesOf(d));
+}
+const platesStl = hashes(stlPlates);
+const plates3mf = hashes(threePlates);
+if (Object.keys(platesStl).length === 0 || Object.keys(plates3mf).length === 0) throw new Error('platesExport made no plates');
+let noTemplate = '';
+try { call('platesExport', '', { list: gridded.id }); } catch (e) { noTemplate = String(e.message ?? e); }
+if (JSON.parse(noTemplate).status !== 422 || !noTemplate.includes('Bambu Studio project')) throw new Error(`a Bambu plate set was not refused by name: ${noTemplate.slice(0, 300)}`);
+const listFile = listPath();
+const listText = listDoc().text;
+// the map's tiers, built in the call and kept: the page asks, is told on the stream, then reads the mesh by key and revision
+const tierKey = call('tiersWant', '', { scope: 'node', wants: [{ tile: mine.id, tier: 'low' }] }).keys[0];
+const tierEvent = JSON.parse(service.events()).find((e) => e.type === 'tier' && e.key === tierKey);
+if (!tierEvent || tierEvent.error) throw new Error(`no tier was announced for ${tierKey}: ${JSON.stringify(tierEvent)}`);
+const tierMesh = service.call_bytes('tierResult', '', JSON.stringify({ key: tierKey, docRev: tierEvent.docRev }));
+if (new TextDecoder().decode(tierMesh.subarray(0, 4)) !== 'DTM2') throw new Error('the kept tier is not a DTM2 payload');
+if (service.call_bytes('tierResult', '', JSON.stringify({ key: tierKey, docRev: tierEvent.docRev + 9 })).length !== 0) throw new Error('a tier of another revision was given');
+// the messages as text
+if (typeof call('messages', '', {}).text !== 'string') throw new Error('messages did not answer text');
 // the folder verbs: a folder made, the copy moved into it, trashed and put back, the folder renamed
 if (call('newFolder', '', { root: 0, dir: '', name: 'rooms' }).dir !== 'rooms') throw new Error('newFolder did not make rooms');
 const moved = call('moveTile', mine.id, { root: 0, dir: 'rooms' });
@@ -122,5 +168,12 @@ console.log(
     stlSha256: built.stlSha256,
     triangles: built.record.audit.triangles,
     meshBytes: mesh.length,
+    exportedStlSha256: sha(bytesOf(stlDownload).subarray(80)),
+    listFile: listFile.split('/').pop(),
+    tileFile: soil.path.split('/').pop(),
+    tileSource: SOIL,
+    listText,
+    platesStl,
+    plates3mf,
   }),
 );

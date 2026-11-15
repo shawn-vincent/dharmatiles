@@ -80,12 +80,13 @@ async function recordPlate() {
   sheet({ busy: false });
 }
 
-async function doExport() {
+/** @param {string} [format] bambu, stl or 3mf: the printer's own when none */
+async function doExport(format) {
   const t = tile();
   if (!t || ui().exporting.busy) return;
   exporting({ busy: true, files: null, saved: false, error: null, failures: [] });
   try {
-    const r = await host.platesExport(t.id);
+    const r = await host.platesExport(t.id, typeof format === 'string' ? format : undefined);
     if (r.status !== 200) { exporting({ error: r.body?.error || `could not export (${r.status})` }); if (r.status !== 0) failed(`Could not export ${stem(t)}`, r); }
     else {
       // the program writes its files where it does; the browser editor's answer is files for the browser to save

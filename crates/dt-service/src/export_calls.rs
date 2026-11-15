@@ -136,6 +136,9 @@ pub const EXPORT_TILE: Verb<ExportReq, ExportRes> = Verb::new("exportTile");
 #[serde(deny_unknown_fields)]
 pub struct PlatesExportReq {
     pub list: String,
+    /// `bambu`, `stl` or `3mf`: what the files are; the printer's own (a Bambu project for a Bambu printer, else one STL
+    /// per plate) when none is named.
+    pub format: Option<String>,
 }
 
 /// The plates made.
@@ -215,8 +218,17 @@ pub fn export_tile(
     }))
 }
 
+/// The files as downloads: a browser saves a file by its name alone, not under the folders `out/` would hold it in.
 fn downloads(files: &[File]) -> Vec<Download> {
-    files.iter().map(|(n, b)| Download::of(n, b)).collect()
+    files
+        .iter()
+        .map(|(n, b)| {
+            let name = std::path::Path::new(n)
+                .file_name()
+                .map_or_else(|| n.clone(), |f| f.to_string_lossy().into_owned());
+            Download::of(&name, b)
+        })
+        .collect()
 }
 
 /// The plates of a plan, made.
@@ -245,10 +257,13 @@ pub fn plate_files(
     host: &impl PlatesHost,
     plan: &Plan,
     document: &str,
+    format: Option<&str>,
     step: &mut dyn FnMut(usize, usize, &str),
 ) -> Result<PlateFiles, Vec<Diag>> {
     let s = &plan.settings;
-    let format = Format::for_printer(&s.machine);
+    let format = format
+        .map_or_else(|| Ok(Format::for_printer(&s.machine)), Format::from_word)
+        .map_err(|e| vec![Diag::plain(dt_lang::codes::PLATES, e)])?;
     // before anything builds
     let template = if format == Format::Bambu {
         match host.bambu_template(&s.machine) {
@@ -327,8 +342,8 @@ pub fn export_plates(
         .map_err(|e| Refusal::failure(Status::Internal, format!("cannot read {path}: {e}")))?;
     let (_, plan) = plan_from(host, &path, &text, &Overrides::default())
         .map_err(|u| Refusal::of_mistakes(&u.1))?;
-    let made =
-        plate_files(host, &plan, &path, &mut |_, _, _| {}).map_err(|e| Refusal::of_mistakes(&e))?;
+    let made = plate_files(host, &plan, &path, v.format.as_deref(), &mut |_, _, _| {})
+        .map_err(|e| Refusal::of_mistakes(&e))?;
     Ok(PlatesExported {
         files: Vec::new(),
         downloads: downloads(&made.files),

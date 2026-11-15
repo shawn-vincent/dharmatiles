@@ -461,8 +461,8 @@ export function browserHost(requests = createRequests()) {
     platesShow: (list, plate) => call('platesShow', { list, plate }),
     /** Set a word of the list's `plates` line; value null removes it. @param {Req<'platesSet'>} body */
     platesSet: (body) => call('platesSet', body),
-    /** Build every piece in full and write the plates. @param {string} list */
-    platesExport: (list) => call('platesExport', { list }),
+    /** Build every piece in full and write the plates (`format`: bambu, stl or 3mf; the printer's own when none). @param {string} list @param {string} [format] */
+    platesExport: (list, format) => call('platesExport', { list, format: format ?? null }),
     /** @param {Req<'listsNew'>} body */
     listsNew: (body) => call('listsNew', body),
     /** One more copy of a tile in a list (a new list when none is named). @param {Req<'listsAdd'>} body */
@@ -790,8 +790,8 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     platesShow: (list, plate) => call('platesShow', { list, plate }),
     /** @param {Req<'platesSet'>} body */
     platesSet: (body) => call('platesSet', body),
-    /** @param {string} list */
-    platesExport: (list) => call('platesExport', { list }),
+    /** @param {string} list @param {string} [format] */
+    platesExport: (list, format) => call('platesExport', { list, format: format ?? null }),
     /** @param {Req<'listsNew'>} body */
     listsNew: (body) => call('listsNew', body),
     /** @param {Req<'listsAdd'>} body */

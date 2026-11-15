@@ -193,7 +193,8 @@ const Export = (/** @type {PlannedProps} */ { m, p, act }) => {
   const busy = x.busy;
   const files = x.files;
   return html`<${Section} title="" cls="pl-export">
-    <button type="button" class="btn on" disabled=${busy || (p.mode === 'multicolour' && !p.slotCheck.ok)} title=${bambu ? 'One Bambu Studio project holding every plate' : 'One file per plate: every slicer reads an STL'} onClick=${act.doExport}>${busy ? 'Exporting…' : bambu ? 'Export Bambu project' : `Export ${plural(p.layout.length, 'STL')}`}</button>
+    <button type="button" class="btn on" disabled=${busy || (p.mode === 'multicolour' && !p.slotCheck.ok)} title=${bambu ? 'One Bambu Studio project holding every plate' : 'One file per plate: every slicer reads an STL'} onClick=${() => act.doExport()}>${busy ? 'Exporting…' : bambu ? 'Export Bambu project' : `Export ${plural(p.layout.length, 'STL')}`}</button>
+    ${bambu ? null : html`<button type="button" class="btn" disabled=${busy} title="One painted 3MF per plate, for a slicer that paints by material" onClick=${() => act.doExport('3mf')}>${`Export ${plural(p.layout.length, '3MF')}`}</button>`}
     <p class="note">${busy ? 'Building every piece in full, through the gate…' : bambu ? 'Every plate in one project; paint per triangle in multicolour.' : 'One STL per plate; single colour needs no paint.'}</p>
     ${x.error ? html`<p class="note bad">${x.error}</p>` : null}
     ${x.failures.map((/** @type {string} */ f, /** @type {number} */ i) => html`<p class="note bad" key=${i}>${`Gate: ${f}`}</p>`)}

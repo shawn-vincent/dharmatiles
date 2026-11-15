@@ -51,6 +51,7 @@ pub(crate) enum SideJob {
     ExportPlates {
         id: TileId,
         path: String,
+        format: Option<String>,
         reply: mpsc::Sender<Result<api::Out<plates::PlatesExported>, Interrupted>>,
     },
     /// A piece's low build for a crown's look at it ([`scene::crowns`]).
@@ -98,9 +99,15 @@ impl SideJob {
             Self::ExportTile { tile, req, reply } => {
                 answer(&reply, guarded(|| edit::export_now(shared, &tile, &req)))
             }
-            Self::ExportPlates { id, path, reply } => {
-                answer(&reply, guarded(|| plates::export_now(shared, &id, &path)))
-            }
+            Self::ExportPlates {
+                id,
+                path,
+                format,
+                reply,
+            } => answer(
+                &reply,
+                guarded(|| plates::export_now(shared, &id, &path, format.as_deref())),
+            ),
             Self::Crown { path, opts, reply } => answer(
                 &reply,
                 guarded(|| {

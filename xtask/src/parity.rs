@@ -7,7 +7,7 @@
 //! in one and fail in the other. The rest of what makes the two sides one: the engine's transcendental maths is
 //! `libm`'s everywhere (clippy's `disallowed-methods`), glam is scalar, and obvhs builds its BVH sequentially.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::Value;
@@ -237,9 +237,18 @@ fn run_service(root: &Path) -> Result<(), String> {
     let bundle = target.join("parity-bundle");
     crate::wasm::run_wasm(root, &[bundle.display().to_string()])?;
     let job = format!("{SERVICE_TILE}@db");
+    // the files the service made are kept here, to compare with the program's
+    let dump = target.join("service-dump");
+    match std::fs::remove_dir_all(&dump) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("cannot clear {}: {e}", dump.display())),
+    }
+    std::fs::create_dir_all(&dump).map_err(|e| format!("{}: {e}", dump.display()))?;
     let line = String::from_utf8(capture(
         Command::new("node")
             .current_dir(root)
+            .env("SERVICE_DUMP", &dump)
             .arg("xtask/service.mjs")
             .arg(&bundle)
             .arg(&job),
@@ -278,6 +287,14 @@ fn run_service(root: &Path) -> Result<(), String> {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
+    // the same tile exported as a download is the same STL
+    if browser["exportedStlSha256"].as_str() != Some(native.as_str()) {
+        return Err(format!(
+            "service: exportTile's STL is not `dharmatiles build`'s for {SERVICE_TILE}\n  service: {}\n  program: {native}",
+            browser["exportedStlSha256"]
+        ));
+    }
+    service_plates(root, &target, &scratch, &dump, &browser)?;
     let said = browser["stlSha256"]
         .as_str()
         .ok_or_else(|| format!("service: the worker's answer has no stlSha256: {browser}"))?;
@@ -291,6 +308,114 @@ fn run_service(root: &Path) -> Result<(), String> {
             "service: the worker's service and `dharmatiles build` differ on {SERVICE_TILE}\n  service: {browser}\n  program: {native}"
         ))
     }
+}
+
+/// The plates the service made (one STL and one 3MF per plate, for the print list it holds) are the program's, byte for byte:
+/// the list's text is put in a scratch home with the tile it names, and `dharmatiles plates` lays it out in both formats.
+fn service_plates(
+    root: &Path,
+    target: &Path,
+    scratch: &Path,
+    dump: &Path,
+    browser: &Value,
+) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    let home = scratch.join("home");
+    std::fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
+    let tile_file = browser["tileSource"]
+        .as_str()
+        .ok_or("service: no tileSource in the worker's answer")?
+        .trim_start_matches("lib:");
+    // the list names the worker's copy of the tile (`home:1x1-grass 2`): the program's home holds it by the same name
+    let name = browser["tileFile"]
+        .as_str()
+        .ok_or("service: no tileFile in the worker's answer")?;
+    let write = |p: PathBuf, text: &[u8]| {
+        std::fs::write(&p, text).map_err(|e| format!("cannot write {}: {e}", p.display()))
+    };
+    write(
+        home.join(name),
+        &std::fs::read(root.join("library").join(tile_file))
+            .map_err(|e| format!("cannot read the library's {tile_file}: {e}"))?,
+    )?;
+    let list_name = browser["listFile"]
+        .as_str()
+        .ok_or("service: no listFile in the worker's answer")?;
+    let list_text = browser["listText"]
+        .as_str()
+        .ok_or("service: no listText in the worker's answer")?;
+    let list = home.join(list_name);
+    write(list.clone(), list_text.as_bytes())?;
+    let title = Path::new(list_name)
+        .file_stem()
+        .ok_or("the list has no name")?
+        .to_string_lossy()
+        .into_owned();
+    for (format, key) in [("stl", "platesStl"), ("3mf", "plates3mf")] {
+        let out = scratch.join(format!("plates-{format}"));
+        capture(
+            Command::new(target.join("release/dharmatiles"))
+                .current_dir(root)
+                .env("DT_HOME", &home)
+                .env("DT_CACHE", scratch.join("cache"))
+                .args(["plates"])
+                .arg(&list)
+                .args(["--no-cache", "--all", "--format", format, "--out"])
+                .arg(&out),
+        )?;
+        let said = browser[key]
+            .as_object()
+            .ok_or_else(|| format!("service: no {key} in the worker's answer"))?;
+        for (file, hash) in said {
+            let path = out.join("plates").join(&title).join(file);
+            let bytes = std::fs::read(&path)
+                .map_err(|e| format!("cannot read the program's {}: {e}", path.display()))?;
+            let same = if file.ends_with(".stl") {
+                // an STL's 80-byte header names the document it was made from: the list's path, which is not the worker's
+                let native: String = Sha256::digest(&bytes[80..])
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect();
+                hash.as_str() == Some(native.as_str())
+            } else {
+                // a 3MF is a zip of its model and two small files; the model names the engine that made it (the program's
+                // is named by its git version, the worker's by the engine crate's), so that line is the one thing left out
+                model_of(&path)? == model_of(&dump.join(file))?
+            };
+            if !same {
+                return Err(format!(
+                    "service: the plate {file} ({format}) is not the program's (the worker's is kept in {})",
+                    dump.display()
+                ));
+            }
+        }
+        println!(
+            "service: {} {format} plate file(s) are the program's{}",
+            said.len(),
+            if format == "3mf" {
+                ": the same model in every byte but the name of the engine that made it"
+            } else {
+                ", byte for byte after the header that names the list's path"
+            }
+        );
+    }
+    Ok(())
+}
+
+/// The model of a 3MF, without the line that names the engine.
+fn model_of(file: &Path) -> Result<String, String> {
+    let text = String::from_utf8(capture(
+        Command::new("unzip")
+            .args(["-p"])
+            .arg(file)
+            .arg("3D/3dmodel.model"),
+    )?)
+    .map_err(|e| format!("{}: not UTF-8: {e}", file.display()))?;
+    Ok(text
+        .lines()
+        .filter(|l| !l.contains(r#"<metadata name="Application">"#))
+        .collect::<Vec<_>>()
+        .join("\n"))
 }
 
 /// `operator new` asked for all but a few hundred bytes of the 4 GB a wasm32 module can address says what it asked for

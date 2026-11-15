@@ -1005,7 +1005,12 @@ sizeMm: [number, number] | null,
  */
 datumZ: number | null, };
 
-type PlatesExportReq = { list: string, };
+type PlatesExportReq = { list: string, 
+/**
+ * `bambu`, `stl` or `3mf`: what the files are; the printer's own (a Bambu project for a Bambu printer, else one STL
+ * per plate) when none is named.
+ */
+format?: string | null, };
 
 type PlatesExported = { 
 /**

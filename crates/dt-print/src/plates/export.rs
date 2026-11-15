@@ -33,6 +33,21 @@ impl Format {
         }
     }
 
+    /// The format a word names: `bambu`, `stl` or `3mf`.
+    ///
+    /// # Errors
+    /// The word is none of them, said in words.
+    pub fn from_word(word: &str) -> Result<Self, String> {
+        match word {
+            "bambu" => Ok(Self::Bambu),
+            "stl" => Ok(Self::Stl),
+            "3mf" => Ok(Self::ThreeMf),
+            w => Err(format!(
+                "`{w}` is not a format: use `bambu`, `stl` or `3mf`"
+            )),
+        }
+    }
+
     /// What a printer's profile asks for: a Bambu project for a Bambu printer,
     /// else one STL per plate.
     #[must_use]
