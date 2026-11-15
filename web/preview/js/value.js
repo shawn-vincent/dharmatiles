@@ -7,15 +7,6 @@
 /** Whether a control's value is a number or an expression: the program says so (`numeric`) for every control it describes. */
 export const isNumeric = (/** @type {{ numeric?: boolean }} */ c) => c.numeric === true;
 
-/** A written KDL string's text: quotes off, escapes undone. */
-export function unquote(/** @type {string} */ written) {
-  const t = written.trim();
-  const raw = t.match(/^(#+)"([\s\S]*)"\1$/);
-  if (raw) return raw[2];
-  if (!/^"[\s\S]*"$/.test(t)) return t;
-  return t.slice(1, -1).replace(/\\(u\{([0-9a-fA-F]+)\}|[\s\S])/g, (/** @type {string} */ _, /** @type {string} */ e, /** @type {string | undefined} */ hex) => (hex ? String.fromCodePoint(parseInt(hex, 16)) : ((/** @type {Record<string, string>} */ ({ n: '\n', r: '\r', t: '\t', s: ' ' }))[e] ?? e)));
-}
-
 // what a typed value is, to say which forms it can switch between; the program writes it (a typed value is sent as a number, a switch or words)
 const NUMBER = /^(\(\w+\))?-?\d+(\.\d+)?$/;
 // format 1 writes a unit after a number (`8dmm`, `0.5sq`, `40deg`, `25%`); the unit words are the program's (`setUnits`, from its language table)

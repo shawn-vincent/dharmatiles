@@ -98,7 +98,12 @@ fn write_map(path: &str, opts: &dt_eval::Options, to: &Path) -> Result<(), Strin
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     }
-    let json = serde_json::to_string(&map).map_err(|e| e.to_string())?;
+    let map = map.ok_or_else(|| format!("{path} has no tile to make a map of"))?;
+    let poster = dt_eval::map::PosterMap {
+        square_mm: opts.units().square_mm,
+        map,
+    };
+    let json = serde_json::to_string(&poster).map_err(|e| e.to_string())?;
     std::fs::write(to, json).map_err(|e| format!("cannot write {}: {e}", to.display()))
 }
 

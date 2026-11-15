@@ -546,7 +546,15 @@ type ListsRemoveReq = { list: string, id: string, docRev: number, };
 
 type ListsRestoreReq = { list: string, text: string, docRev: number, };
 
-type MapControl = { name: string, text: string, span: [number, number], };
+type MapControl = { name: string, text: string, span: [number, number], 
+/**
+ * The value with its quotes off and its escapes undone.
+ */
+plain: string, 
+/**
+ * The whole control, `name=value` as written, and where.
+ */
+whole: Written, };
 
 type MapLine = { name: string, pts: Array<[number, number]>, 
 /**
@@ -999,6 +1007,12 @@ type PlatesWritten = { planned: false, writable: boolean, printer: string, label
 
 type PointSlot = { "arg": number } | { "control": string };
 
+type PosterMap = { 
+/**
+ * The square's size on the target the poster was made for, mm.
+ */
+squareMm: number, map: TileMap, };
+
 type PrintedItem = { element: string, control: string, typed: string, };
 
 type PrintedReq = { text: string, items: Array<PrintedItem>, };
@@ -1114,7 +1128,11 @@ type RootJson = { index: number, label: string,
  */
 kind: string, path: string | null, role: string, writable: boolean, exists: boolean, };
 
-type Run = { at: number, text: string, span: [number, number] | null, };
+type Run = { at: number, text: string, 
+/**
+ * `text` as words (one string's quotes off), as for a [`Written`].
+ */
+plain: string, span: [number, number] | null, };
 
 type SaveReq = { text: string, 
 /**
@@ -1540,7 +1558,11 @@ type Trashed = {
  */
 rev: number, dir: string | null, path: string | null, undo: number, };
 
-type UnwrittenControl = { control: string, text: string, from: string, };
+type UnwrittenControl = { control: string, text: string, 
+/**
+ * `text` as words: one string's quotes off, its escapes undone.
+ */
+plain: string, from: string, };
 
 type WeightingArg = { name: string, default: number | null, least: number, 
 /**
@@ -1566,9 +1588,21 @@ type WordJson = { word: string, about: string,
  */
 sets: { [key in string]: number }, level: string | null, };
 
-type Written = { text: string, span: [number, number], };
+type Written = { text: string, span: [number, number], plain: string, };
 
-type WrittenControl = { name: string, text: string, span: [number, number], 
+type WrittenControl = { name: string, 
+/**
+ * The whole control as written (`name=value`, or the line `name value`), and its span.
+ */
+text: string, span: [number, number], 
+/**
+ * The value alone, as written.
+ */
+value: string, 
+/**
+ * The value as words: one string's quotes off, its escapes undone.
+ */
+plain: string, 
 /**
  * The file it is written in, when not the entry's own.
  */
@@ -1578,7 +1612,11 @@ file: string | null,
  */
 from: string | null, };
 
-type WrittenPlace = { name: string, text: string, span: [number, number], };
+type WrittenPlace = { name: string, text: string, 
+/**
+ * `text` as words: one string's quotes off, its escapes undone.
+ */
+plain: string, span: [number, number], };
 
 type WrittenPoint = { text: string, span: [number, number], at: [number, number] | null, };
 

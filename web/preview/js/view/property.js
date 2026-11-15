@@ -13,8 +13,8 @@
 // The value being typed is the field's own (a draft); a new state of the document is drawn over the page as it is, so the
 // typing, the caret and the focus stay where they are.
 
-import { parseValue, valueOf } from '../lens.js';
-import { asNumber, asRange, debounce, formOf, unquote } from '../value.js';
+import { parseValue } from '../lens.js';
+import { asNumber, asRange, debounce, formOf } from '../value.js';
 import { html, useEffect, useRef, useState } from './html.js';
 import { inheritedPhrase } from './sheet.js';
 
@@ -50,11 +50,11 @@ export const simpleWeightings = (/** @type {import('../api').WeightingJson[] | n
 export function PropertyPage({ model, api }) {
   const { c, s } = model;
   const ro = !(api.writable() || api.canMine?.());
-  const v = s ? valueOf(s.text, c.name) : null;
+  const v = s ? { text: s.value, plain: s.plain } : null;
   // what it is where nothing is written: the program's (`model.inherited`), said as a phrase
   const dflt = inheritedPhrase(model.inherited ?? null);
   const shown = v ? v.text : '';
-  const written0 = unquote(shown);
+  const written0 = v ? v.plain : '';
   const [draft, setDraft] = useState(/** @type {string | null} */ (null)); // typed, not yet committed
   const [check, setCheck] = useState('');
   const input = useRef(/** @type {HTMLInputElement | null} */ (null));

@@ -155,10 +155,6 @@ export function ordinal(n) {
   return `${n}${/** @type {Record<number, string>} */ ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] ?? 'th'}`;
 }
 
-/** "1x1" or `"2x1"` (as written) as 1×1. */
-/** @param {string | null | undefined} written */
-export const sizeWords = (written) => String(written ?? '').replace(/"/g, '').replace(/x/i, '×');
-
 /** @type {Record<string, string>} */
 const SYSTEM = { db: 'DungeonBlocks', ol: 'OpenLOCK' };
 /** @param {string} s */

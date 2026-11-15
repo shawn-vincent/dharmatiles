@@ -14,9 +14,9 @@
  * program says it prints differently on this target (`printed`: its ends, mm, from `/api/tiles/ID/check`; null where it
  * prints as written) `7dmm (prints 5.08 mm)`.  The page writes no unit word of its own: a bare number stays bare.
  */
-/** @param {{ text: string } | null | undefined} distance @param {string[] | null | undefined} printed */
+/** @param {{ plain: string } | null | undefined} distance @param {string[] | null | undefined} printed */
 export function describeDistance(distance, printed) {
-  const text = String(distance?.text ?? '').replace(/^"|"$/g, '');
+  const text = distance?.plain ?? '';
   if (!printed?.length) return text;
   return `${text} (prints ${printed.join('–')} mm)`;
 }
@@ -65,12 +65,12 @@ export function placeChoices(places, self, current) {
 
 /**
  * The groups of a region's sheet that its clauses make: for each `within`, its distance and its place; for each
- * `except`, the regions.  Each {clause, heading, controls (the lens's schema), written (settings as `name=text`
- * with spans)}; `as` turns a {name, text, span} into the setting the lens reads; `row(node, name)` is the
+ * `except`, the regions.  Each {clause, heading, controls (the lens's schema), written (settings: value, words and span
+ * as the program sent them)}; `as(name, {text, span, plain})` turns a written value into the setting the lens reads; `row(node, name)` is the
  * program's row for a control of a clause node (`within`'s distance, `except`'s regions): what it measures,
  * its help, whether it is required.  The words it may be are the tile's own, so they are added here.
  * @param {{ name: string }} m @param {RegionSheet} sh @param {import('../api').TileMap | null | undefined} map
- * @param {(s: { name: string, text: string, span: [number, number] }) => any} as @param {(node: string, name: string) => Record<string, any> | undefined} row
+ * @param {(name: string, w: { text: string, span: [number, number], plain: string }) => any} as @param {(node: string, name: string) => Record<string, any> | undefined} row
  */
 export function clauseGroups(m, sh, map, as, row) {
   const regions = (map?.regions || []).filter((r) => r.name !== m.name).map((r) => ({ word: r.name, about: `the region ${r.name}` }));
@@ -83,15 +83,15 @@ export function clauseGroups(m, sh, map, as, row) {
     let controls;
     if (c.kind === 'except') {
       controls = [{ ...row('except', 'except'), words: regions }];
-      if (c.regions?.span) written.push(as({ name: 'except', text: c.regions.text, span: c.regions.span }));
+      if (c.regions?.span) written.push(as('except', { text: c.regions.text, span: c.regions.span, plain: c.regions.plain }));
     } else {
       // written through the server's edit route, not by replacing the text under the pointer: `viaSet`
       controls = [
         { ...row('within', 'distance'), viaSet: true },
         { ...row('within', 'of'), viaSet: true, words: placeChoices(map?.places, m.name, c.of?.text) },
       ];
-      if (c.distance?.span) written.push(as({ name: 'distance', text: c.distance.text, span: c.distance.span }));
-      if (c.of?.span) written.push(as({ name: 'of', text: c.of.written, span: c.of.span }));
+      if (c.distance?.span) written.push(as('distance', c.distance));
+      if (c.of?.span) written.push(as('of', { text: c.of.written, span: c.of.span, plain: c.of.text }));
     }
     groups.push({ clause: c, heading: clauseTitle(c), controls, written });
   }

@@ -17,8 +17,8 @@
 // file}`).  What the user is in the middle of is the row's own: the number being scrubbed, the value being typed.  A new
 // state of the document is drawn over the sheet as it is, so neither is lost or held back.
 
-import { carriesUnit, parseValue, valueOf, wordControlNeedsSelect } from '../lens.js';
-import { asNumber, asRange, debounce, isNumeric, unquote, valueItems } from '../value.js';
+import { carriesUnit, parseValue, wordControlNeedsSelect } from '../lens.js';
+import { asNumber, asRange, debounce, isNumeric, valueItems } from '../value.js';
 import { html, render, useEffect, useRef, useState } from './html.js';
 import { Icon } from './icons.js';
 import { SizeGridBox, parseSize } from './size-grid.js';
@@ -27,8 +27,8 @@ import { SeedDice, SeedStrip, candidates, newSeed } from './seed-strip.js';
 
 /** @typedef {Partial<import('../api').ControlJson> & { name: string, label?: string, viaSet?: boolean }} Control  a control as the sheet's row has it: the program's schema entry (or just a name) */
 /** @typedef {import('../api').WrittenControl} Setting  a control written in the document */
-/** @typedef {{ text: string, from: string }} Inherited  what an unwritten control shows, and where it comes from */
-/** @typedef {ReturnType<typeof valueOf>} Value  a written control's value part */
+/** @typedef {{ text: string, plain: string, from: string }} Inherited  what an unwritten control shows (as written, and as words), and where it comes from */
+/** @typedef {{ text: string, plain: string }} Value  a written control's value part: as written, and as words (the program sends both) */
 /**
  * One group of the sheet: a thing's controls.  `schema` is the element's (or node's) own, `written` what the document writes,
  * `defaults` what the program says each unwritten control is, `set` writes a control of a group that is not an entry's node, `remove` the ✕ beside the heading.
@@ -61,18 +61,18 @@ const dflt = (/** @type {Control} */ c) => c.default1 ?? c.default;
  * written (`g.defaults`: the value a build uses and what it comes from: "default", "style brick", "parts/edges", or no `from`
  * when `text` says what leaving it out means); the tile's own nodes show their schema's default or its `absent` words.  The
  * page works nothing out.  Null where nothing says, which the row shows as a mistake, never as a blank.
- * @param {{ defaults?: {control: string, text: string, from: string}[] }} g
+ * @param {{ defaults?: {control: string, text: string, plain: string, from: string}[] }} g
  * @param {Control} c
  * @returns {Inherited | null}
  */
 export function inheritedOf(g, c) {
   if (g.defaults) {
     const d = g.defaults.find((x) => x.control === c.name);
-    return d ? { text: d.text, from: d.from } : null;
+    return d ? { text: d.text, plain: d.plain, from: d.from } : null;
   }
   const v = dflt(c);
-  if (v) return { text: v, from: 'default' };
-  return c.absent ? { text: c.absent, from: '' } : null;
+  if (v) return { text: v, plain: v, from: 'default' };
+  return c.absent ? { text: c.absent, plain: c.absent, from: '' } : null;
 }
 /**
  * An element's controls as the sheet's rows: a group's sub-controls are rows of their own, named by their path
@@ -97,6 +97,10 @@ const fromText = (/** @type {string} */ from) => (from === 'default' ? 'default'
 export const inheritedPhrase = (/** @type {{text: string, from: string} | null} */ inh) => (!inh ? '' : !inh.from ? inh.text : inh.from === 'default' ? `default ${inh.text}` : `${inh.text} (${fromText(inh.from)})`);
 /** The value an unwritten control shows to the cell: its text where that is a value, else nothing (the words say what leaving it out means). */
 const valueIn = (/** @type {{text: string, from: string} | null} */ inh) => (inh?.from ? inh.text : '');
+/** The same as words. */
+const plainIn = (/** @type {{plain: string, from: string} | null} */ inh) => (inh?.from ? inh.plain : '');
+/** The words of what a control shows: its written value's, else its inherited one's. */
+const wordsShown = (/** @type {Value | null} */ v, /** @type {Inherited | null} */ inh) => (v ? v.plain : plainIn(inh));
 
 // a die showing five
 
@@ -108,7 +112,7 @@ function TypeIn(/** @type {{ g: Group, c: Control, s?: Setting, v: Value | null,
   // a number, range or expression: typed bare, quoted as it is written
   const num = isNumeric(c);
   const shown = v ? v.text : valueIn(inh);
-  const initial = text || num ? unquote(shown) : shown;
+  const initial = text || num ? wordsShown(v, inh) : shown;
   const [val, setVal] = useState(initial);
   const [caret, setCaret] = useState(initial.length);
   const [pick, setPick] = useState(0);
@@ -182,7 +186,7 @@ function TypeIn(/** @type {{ g: Group, c: Control, s?: Setting, v: Value | null,
     if (c.unit === 'size') {
       const pointed = st.current.pointed;
       render(html`<${SizeGridBox} pick=${pointed ?? parseSize(val)} full=${false} input=${input.current}
-        onPoint=${(/** @type {[number, number] | null} */ p) => { st.current.pointed = p; const f = p ? `"${p[0]}x${p[1]}"` : st.current.typed; st.current.val = f; setVal(f); }} onTake=${(/** @type {[number, number]} */ p) => { st.current.val = `"${p[0]}x${p[1]}"`; finish(true); }} />`, mount.current);
+        onPoint=${(/** @type {[number, number] | null} */ p) => { st.current.pointed = p; const f = p ? `${p[0]}x${p[1]}` : st.current.typed; st.current.val = f; setVal(f); }} onTake=${(/** @type {[number, number]} */ p) => { st.current.val = `${p[0]}x${p[1]}`; finish(true); }} />`, mount.current);
     } else if (num) {
       render(html`<${ValuePopBox} c=${c} dflt=${inheritedPhrase(inh)} input=${input.current} typed=${val} items=${items} index=${pick} check=${check}
         onForm=${(/** @type {string} */ f) => { const next = f === 'number' ? asNumber(val) : asRange(val); set(next); write?.(next); askLater.current(next); input.current?.focus(); }} onPick=${(/** @type {number} */ k) => take(k)} />`, mount.current);
@@ -241,11 +245,8 @@ function ValueCell(/** @type {{ g: Group, c: Control, s?: Setting, v: Value | nu
   const drag = useRef(/** @type {any} */ (null));
   const moved = useRef(false);
   const shownRaw = v ? v.text : valueIn(inh);
-  // a quoted value shows without its quotes ("20%" reads as 20%, like 100%); they stay in the text, hidden, so a scrub rewrites them as written
-  const pre = c.unit === 'text' || c.unit === 'raw' ? '' : (shownRaw.match(/^#?"/) || [''])[0];
-  const post = pre ? (shownRaw.slice(pre.length).match(/"#?$/) || [''])[0] : '';
-  // a description reads as its words: no quotes, no escapes
-  const body = c.unit === 'text' ? unquote(shownRaw) : shownRaw.slice(pre.length, shownRaw.length - post.length);
+  // a value reads as its words ("20%" reads as 20%, a description with no quotes and no escapes): the program sends them; only a raw one shows as written
+  const body = c.unit === 'raw' ? shownRaw : wordsShown(v, inh);
   /** @type {({ text: string, num?: undefined, k?: undefined } | { text: string, num: string, k: number })[]} */
   const parts = [];
   let last = 0, k = 0;
@@ -270,7 +271,7 @@ function ValueCell(/** @type {{ g: Group, c: Control, s?: Setting, v: Value | nu
     return html`${first && first !== parts[4].text ? afterNumber(first) : ''}–`;
   };
   /** The value as the row shows it now: with the numbers of a drag in place of the written ones. */
-  const textNow = (/** @type {Record<number, string> | null} */ l) => `${pre}${parts.map((p) => (p.num != null ? (l?.[p.k] ?? p.num) : p.text)).join('')}${post}`;
+  const textNow = (/** @type {Record<number, string> | null} */ l) => parts.map((p) => (p.num != null ? (l?.[p.k] ?? p.num) : p.text)).join('');
 
   const scrub = (/** @type {any} */ p) => ({
     onPointerDown: (/** @type {any} */ e) => {
@@ -323,12 +324,12 @@ function ValueCell(/** @type {{ g: Group, c: Control, s?: Setting, v: Value | nu
   return html`${typing
     ? html`<${TypeIn} g=${g} c=${c} s=${s} v=${v} inh=${inh} api=${api} put=${put} onDone=${() => setTyping(false)} />`
     : html`<span class=${`val${ro ? ' ro' : ''}`} onClick=${() => { if (!moved.current && !ro) setTyping(true); }}>
-      ${pre ? html`<span class="q">${pre}</span>` : null}${parts.map((p, i) => (p.num != null
+      ${parts.map((p, i) => (p.num != null
         ? html`<span class=${`num${drag.current?.k === p.k ? ' active' : ''}`} key=${i} ...${ro ? {} : scrub(p)}>${none && liveOf(p) === '0' ? 'none' : liveOf(p)}</span>`
-        : tidy && i === 2 ? between(p.text) : i > 0 && parts[i - 1].num != null ? afterNumber(p.text) : p.text))}${post ? html`<span class="q">${post}</span>` : null}${!shownRaw ? html`<span class=${inh ? 'absent' : 'unit lost'}>${inh ? inh.text : `no default for ${c.name}`}</span>` : null}</span>`}
+        : tidy && i === 2 ? between(p.text) : i > 0 && parts[i - 1].num != null ? afterNumber(p.text) : p.text))}${!shownRaw ? html`<span class=${inh ? 'absent' : 'unit lost'}>${inh ? inh.text : `no default for ${c.name}`}</span>` : null}</span>`}
     ${dice ? html`<${SeedDice} roll=${roll} onRoll=${() => put(g, c.name, newSeed())} />` : null}
     ${unit ? html`<span class="unit">${unit}</span>` : null}
-    ${printed ? html`<${PrintedSize} g=${g} c=${c} s=${s} v=${v} ro=${ro} body=${unquote(shownRaw)} printed=${printed} api=${api} put=${put} />` : null}`;
+    ${printed ? html`<${PrintedSize} g=${g} c=${c} s=${s} v=${v} ro=${ro} body=${body} printed=${printed} api=${api} put=${put} />` : null}`;
 }
 
 // ---- the entries that keep their own seed ---------------------------------------------------------------------
@@ -374,7 +375,7 @@ function Row(/** @type {{ g: Group, c: Control, s?: Setting, editable: boolean, 
   const ro = !editable || (s && s.file);
   // a value written in a part the entry calls (`lawn` writes the grass) is inherited too: from that part, and not the entry's to change here
   const via = s?.file ? (s.from ?? s.file) : null;
-  const v = s ? valueOf(s.text, c.name) : null;
+  const v = s ? { text: s.value, plain: s.plain } : null;
   // what an unwritten control is: the value a build uses, and where it comes from (shown quietly beside it)
   const inh = s ? null : inheritedOf(g, c);
   if (!s && !inh) console.error(`the sheet has no default for ${g.schema?.name ?? ''} ${c.name}: the program's table needs one`);
@@ -382,14 +383,14 @@ function Row(/** @type {{ g: Group, c: Control, s?: Setting, editable: boolean, 
   const words = c.words?.length ? c.words : null;
   let cell;
   if (words && c.unit === 'several') {
-    const cur = new Set(shown.split(/\s+/).filter(Boolean).map((/** @type {string} */ w) => unquote(w)));
+    const cur = new Set(wordsShown(v, inh).split(/\s+/).filter(Boolean));
     cell = html`<span class="words">${words.map((w) => {
       const on = cur.has(w.word);
       return html`<button type="button" key=${w.word} class=${on ? 'on' : undefined} title=${w.about || ''} disabled=${ro} aria-pressed=${String(on)}
         onClick=${() => { const next = new Set(cur); if (on) next.delete(w.word); else next.add(w.word); put(g, c.name, words.map((x) => x.word).filter((x) => next.has(x))); }}>${w.word}</button>`;
     })}</span>`;
   } else if (words && !isNumeric(c)) {
-    const cur = shown.replace(/^"|"$/g, '');
+    const cur = wordsShown(v, inh);
     if (wordControlNeedsSelect(words)) {
       const known = words.some((w) => w.word === cur);
       cell = html`<select class="word-select" disabled=${ro} value=${known ? cur : ''} title=${words.find((w) => w.word === cur)?.about || c.about || ''} onChange=${(/** @type {Event} */ e) => put(g, c.name, /** @type {HTMLSelectElement} */ (e.target).value)}>
@@ -429,7 +430,7 @@ function printedWanted(/** @type {SheetModel} */ model) {
     for (const c of g.schema.controls || []) {
       if (c.unit !== 'dmm' && c.unit !== 'height') continue;
       const w = g.written.find((/** @type {any} */ x) => x.name === c.name);
-      const typed = unquote(w ? valueOf(w.text, c.name).text : valueIn(inheritedOf(g, c)));
+      const typed = w ? w.plain : plainIn(inheritedOf(g, c));
       if (typed) out.push({ key: printedKey(g, c), element: g.schema.name, control: c.name, typed });
     }
   }
@@ -469,7 +470,7 @@ export function Sheet(/** @type {{ model: SheetModel | null | undefined, api: Sh
       const s = writtenBy.get(c.name);
       if (!s && (c.expert || c.taken === false) && !more) { hidden++; continue; }
       const p = printed[printedKey(g, c)];
-      const typedNow = unquote(s ? valueOf(s.text, c.name).text : valueIn(inheritedOf(g, c)));
+      const typedNow = s ? s.plain : plainIn(inheritedOf(g, c));
       rows.push(html`<${Row} key=${`${gi}.${c.name}`} g=${g} c=${c} s=${s} editable=${editable} api=${api} put=${put} model=${model} printed=${p ? { ...p, stale: p.typed !== typedNow } : null} />`);
     }
     // written controls the schema does not know (a definition's arguments)

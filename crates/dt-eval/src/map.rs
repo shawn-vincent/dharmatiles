@@ -10,6 +10,18 @@ pub type Xy = [f64; 2];
 /// A byte span in a document: its start and its length.
 pub type Span = [usize; 2];
 
+/// The file a poster's map is kept in (`posters/KEY.map.json`): the tile's map and the build target's square, which the
+/// marks are drawn on.  The square is the target's, so it travels with the map made for that target: a `TileMap` is
+/// the same type in the editor, where the target arrives with every check (`Target.squareMm`), and holding the size
+/// there too would be a second source of it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PosterMap {
+    /// The square's size on the target the poster was made for, mm.
+    pub square_mm: f64,
+    pub map: TileMap,
+}
+
 /// The map of a tile: what the editor's overlay and the site's cards draw.  One type for every reader (the page,
 /// the site, the poster files); its TypeScript type, `TileMap`, is generated from this one.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -38,21 +50,51 @@ pub struct Language {
     pub functions: Vec<String>,
 }
 
-/// A written value: its text as written and its byte span.
+/// A written value: its text as written, its byte span, and the value as words (quotes off, escapes undone).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Written {
     pub text: String,
     pub span: Span,
+    pub plain: String,
 }
 
-/// A control written on a node: its name, its value as written and the value's span.
+impl Written {
+    fn new(text: String, span: Span) -> Self {
+        Self {
+            plain: dt_doc::nodeid::plain_of(&text),
+            text,
+            span,
+        }
+    }
+}
+
+/// A control written on a node: its name, its value as written and the value's span, the value as words, and the whole
+/// control (name through value) as written with its span.  The page edits at the spans and shows the words; it works out
+/// neither.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MapControl {
     pub name: String,
     pub text: String,
     pub span: Span,
+    /// The value with its quotes off and its escapes undone.
+    pub plain: String,
+    /// The whole control, `name=value` as written, and where.
+    pub whole: Written,
+}
+
+impl MapControl {
+    /// A control whose whole text (`name=value`, or the line `name value`) is at `whole`, in `text`.
+    fn at(text: &str, name: &str, whole: [usize; 2], value: (String, [usize; 2])) -> Self {
+        Self {
+            name: name.to_owned(),
+            plain: dt_doc::nodeid::plain_of(&value.0),
+            text: value.0,
+            span: value.1,
+            whole: Written::new(text[whole[0]..whole[0] + whole[1]].to_owned(), whole),
+        }
+    }
 }
 
 /// The arguments of a node's child, as one run of text; the span is none when there are no arguments.
@@ -61,6 +103,8 @@ pub struct MapControl {
 pub struct Run {
     pub at: usize,
     pub text: String,
+    /// `text` as words (one string's quotes off), as for a [`Written`].
+    pub plain: String,
     pub span: Option<Span>,
 }
 
@@ -343,16 +387,7 @@ fn entry_value(text: &str, e: &kdl::KdlEntry) -> (String, [usize; 2]) {
 /// `name value` line inside it (not `skip`): each name, its value as
 /// written and the value's byte span.
 fn controls_of(text: &str, node: &kdl::KdlNode, skip: &[&str]) -> Vec<MapControl> {
-    let value = |e: &kdl::KdlEntry| entry_value(text, e);
-    let mut out = Vec::new();
-    for e in node.entries().iter().filter(|e| e.name().is_some()) {
-        let (t, span) = value(e);
-        out.push(MapControl {
-            name: e.name().map_or_else(String::new, |k| k.value().to_owned()),
-            text: t,
-            span,
-        });
-    }
+    let mut out = entries_of(text, node);
     for c in node
         .children()
         .map(kdl::KdlDocument::nodes)
@@ -365,15 +400,31 @@ fn controls_of(text: &str, node: &kdl::KdlNode, skip: &[&str]) -> Vec<MapControl
         if let [e] = c.entries()
             && e.name().is_none()
         {
-            let (t, span) = value(e);
-            out.push(MapControl {
-                name: name.to_owned(),
-                text: t,
-                span,
-            });
+            let sp = c.span();
+            let raw = &text[sp.offset()..sp.offset() + sp.len()];
+            let lead = raw.len() - raw.trim_start().len();
+            let whole = [sp.offset() + lead, raw.trim().len()];
+            out.push(MapControl::at(text, name, whole, entry_value(text, e)));
         }
     }
     out
+}
+
+/// A node's `name=value` properties, each as a control.
+fn entries_of(text: &str, node: &kdl::KdlNode) -> Vec<MapControl> {
+    node.entries()
+        .iter()
+        .filter_map(|e| {
+            let name = e.name()?.value();
+            let (start, end) = dt_doc::nodeid::entry_range(text, e);
+            Some(MapControl::at(
+                text,
+                name,
+                [start, end - start],
+                entry_value(text, e),
+            ))
+        })
+        .collect()
 }
 
 /// The arguments of `node`'s first `child` line, as one run of text: the
@@ -391,6 +442,7 @@ fn run_of(text: &str, c: &kdl::KdlNode) -> Run {
         return Run {
             at: c.name().span().offset(),
             text: String::new(),
+            plain: String::new(),
             span: None,
         };
     };
@@ -406,14 +458,10 @@ fn run_of(text: &str, c: &kdl::KdlNode) -> Run {
     let (_, end) = lead(b);
     Run {
         at: c.name().span().offset(),
+        plain: dt_doc::nodeid::plain_of(&text[start..end]),
         text: text[start..end].to_owned(),
         span: Some([start, end - start]),
     }
-}
-
-/// A written value with its quotes taken off.
-fn unquoted(t: &str) -> String {
-    t.trim_matches('"').to_owned()
 }
 
 /// What a region's body writes, clause by clause in the order written: its
@@ -450,16 +498,16 @@ fn clauses(
                 let printed = dist.as_ref().and_then(|(t, _)| {
                     dt_doc::printed::printed_size(
                         dt_doc::schema::Axis::Dmm,
-                        &unquoted(t),
+                        &dt_doc::nodeid::plain_of(t),
                         units,
                         Some(consts),
                     )
                 });
                 out.push(Clause::Within {
                     at,
-                    distance: dist.map(|(text, span)| Written { text, span }),
+                    distance: dist.map(|(text, span)| Written::new(text, span)),
                     of: of.map(|(t, span)| OfPlace {
-                        text: unquoted(&t),
+                        text: dt_doc::nodeid::plain_of(&t),
                         written: t,
                         span,
                     }),
@@ -602,7 +650,7 @@ fn within_markers(t: &crate::Tile, node: &kdl::KdlNode, text: &str, rd: Reading)
                 .iter()
                 .find(|e| e.name().is_some_and(|n| n.value() == "of"))?;
             let (w, span) = entry_value(text, e);
-            let w = unquoted(&w);
+            let w = dt_doc::nodeid::plain_of(&w);
             let name = w.trim();
             let is_point = t.heights.points.contains_key(name)
                 || BUILTIN_POINTS.contains(&name)
@@ -806,11 +854,7 @@ pub fn json(
     // the tile node itself, for the property sheet when nothing is selected
     let own = node.map(|n| {
         let at = n.name().span().offset();
-        let controls: Vec<MapControl> = dt_doc::nodeid::props_at(text, at)
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(name, text, span)| MapControl { name, text, span })
-            .collect();
+        let controls = entries_of(text, n);
         let child = |name: &str| {
             n.children()
                 .and_then(|c| c.nodes().iter().find(|k| k.name().value() == name))
@@ -822,10 +866,7 @@ pub fn json(
                 let whole = &text[sp.offset()..sp.offset() + sp.len()];
                 let lead = whole.len() - whole.trim_start().len();
                 let v = whole.trim();
-                Written {
-                    text: v.to_owned(),
-                    span: [sp.offset() + lead, v.len()],
-                }
+                Written::new(v.to_owned(), [sp.offset() + lead, v.len()])
             });
             About {
                 at: a.name().span().offset(),

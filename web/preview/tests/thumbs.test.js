@@ -1,6 +1,7 @@
 // The thumbnail service (js/thumbs.js): at most five pictures at a time, a cache keyed by everything that makes a
 // picture a different one, nothing built that nobody waits for, and the seed strip (view/sheet.js) built on it.
 import test from 'node:test';
+import { setting } from './setting.js';
 import assert from 'node:assert/strict';
 import { signal } from '@preact/signals-core';
 import { install, until } from './dom.js';
@@ -110,7 +111,7 @@ test('the seed strip shows the current seed first and four new ones, marks one y
   const schema = { name: 'tile', controls: [{ name: 'seed', unit: 'number', numeric: true, default: '1' }] };
   const model = {
     title: 't', kind: 'tile', slim: true,
-    groups: [{ at: 10, schema, written: [{ name: 'seed', text: 'seed=97', span: [20, 7] }] }],
+    groups: [{ at: 10, schema, written: [setting('seed', 'seed=97', [20, 7])] }],
     seedStrip: { svc, spec: { tile: 't', rev: '1' }, current: 97, owned: new Set([97]), onError: (e) => { throw e; } },
   };
   const calls = [];
@@ -156,7 +157,7 @@ test('the seed row says which entries keep their own seed, from the stack items,
   const opened = [];
   const model = {
     title: 't', kind: 'tile', slim: true,
-    groups: [{ at: 10, schema, written: [{ name: 'seed', text: 'seed=97', span: [20, 7] }] }],
+    groups: [{ at: 10, schema, written: [setting('seed', 'seed=97', [20, 7])] }],
     seedStrip: { svc, spec: { tile: 't', rev: '1' }, current: 97, owned: new Set(), onError: (e) => { throw e; } },
     seedPins: pinsOf([stack[1]]), openEntry: (id) => opened.push(id),
   };

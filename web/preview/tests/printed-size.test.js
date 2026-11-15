@@ -7,6 +7,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { signal } from '@preact/signals-core';
 import { install, press, rendered, type, until } from './dom.js';
+import { setting } from './setting.js';
 
 const root = install();
 const { render, html } = await import('../js/view/html.js');
@@ -20,7 +21,7 @@ const schema = { name: 'rock', controls: [
   { name: 'count', unit: 'count', numeric: true, about: 'how many' },
   { name: 'top', unit: 'height', numeric: true },
 ] };
-const model = (rows) => ({ title: 'rock', kind: 'rock', groups: [{ at: 10, schema, written: rows.map(([name, text, span]) => ({ name, text, span })) }] });
+const model = (rows) => ({ title: 'rock', kind: 'rock', groups: [{ at: 10, schema, written: rows.map(([name, text, span]) => setting(name, text, span)) }] });
 
 function world(rows, printedAnswer) {
   const m = signal(model(rows));

@@ -1,9 +1,17 @@
 // When the spans the page holds (the stack's, the map's) may be applied to
-// the text shown.  A span is a byte range of the text one check read; once
-// the text moves on, or the check found a mistake (the last good stack
-// stays), the spans describe older text and writing at them corrupts the
-// document.  So an edit that is driven by a span waits for a clean check of
-// exactly the text on screen.
+// the text shown.  A span is a byte range of the text one check read; the page
+// holds only spans the program sent and works none out (every span here is
+// the program's, whole: a control's from its name through its value).  But
+// the program sends them for the text it checked, and that stays the text
+// the page holds until the next check answers: once the text moves on, or the
+// check found a mistake (the last good stack stays), the spans describe older
+// text and writing at them corrupts the document.  So an edit that is driven
+// by a span waits for a clean check of exactly the text on screen.  This guard
+// is the one case the program's spans do not cover by themselves.
+
+/** A span the program sent, `[offset, length]`, as the bytes `[start, end)`. */
+/** @param {[number, number]} span @returns {[number, number]} */
+export const spanRange = (span) => [span[0], span[0] + span[1]];
 
 export const STALE_NOTE = 'Finish the edit in the source first: the sheet and the map wait for a clean check of what is written.';
 

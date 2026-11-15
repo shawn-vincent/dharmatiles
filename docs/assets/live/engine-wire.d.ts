@@ -235,7 +235,15 @@ type Language = { names: Array<string>, units: Array<string>, functions: Array<s
 
 type LineSheet = { at: number, controls: Array<MapControl>, through: Run | null, };
 
-type MapControl = { name: string, text: string, span: [number, number], };
+type MapControl = { name: string, text: string, span: [number, number], 
+/**
+ * The value with its quotes off and its escapes undone.
+ */
+plain: string, 
+/**
+ * The whole control, `name=value` as written, and where.
+ */
+whole: Written, };
 
 type MapLine = { name: string, pts: Array<[number, number]>, 
 /**
@@ -321,7 +329,11 @@ collapsed: number,
  */
 dropped: number, };
 
-type Run = { at: number, text: string, span: [number, number] | null, };
+type Run = { at: number, text: string, 
+/**
+ * `text` as words (one string's quotes off), as for a [`Written`].
+ */
+plain: string, span: [number, number] | null, };
 
 type Stage = { 
 /**
@@ -419,7 +431,7 @@ left_out: { [key in string]: number },
  */
 cache: CacheUse, };
 
-type Written = { text: string, span: [number, number], };
+type Written = { text: string, span: [number, number], plain: string, };
 
 type WrittenPoint = { text: string, span: [number, number], at: [number, number] | null, };
 
