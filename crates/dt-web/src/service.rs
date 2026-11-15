@@ -1565,7 +1565,8 @@ mod tests {
 
     /// A fresh seed asked of a map in a service that was given `entropy`: the seed the piece was given.
     fn fresh_seed(service: &Service, name: &str) -> u64 {
-        let tile = tile_id("lib:tiles/ground/1x1-grass.dtile");
+        // a plain soil tile: the test is about the seed, and the map builds the piece it is given
+        let tile = tile_id("lib:tiles/ground/1x1-soil.dtile");
         let made: Listed = serde_json::from_str(
             &service
                 .call(
