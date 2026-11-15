@@ -92,9 +92,11 @@ fn observe(path: &str) -> Observed {
         .num_threads(2)
         .build()
         .unwrap();
+    let t0 = std::time::Instant::now();
     let built = pool
         .install(|| build_with(&Library, path, &opts, &progress))
         .unwrap_or_else(|e| panic!("{path}: {e:?}"));
+    dt_testkit::log_build(path, t0.elapsed().as_secs_f64(), &built);
     tracker.finish();
     let status = log.lock().unwrap().clone();
     let subs = observer.subs.lock().unwrap().clone();

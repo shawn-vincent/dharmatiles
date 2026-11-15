@@ -69,6 +69,8 @@
   <li><b>Test builds run several at once.</b> A memo build runs on its own two-thread pool (so the pool is never the whole machine, and a match with the golden hashes, recorded from plain builds, proves threads change nothing), and <code>memo::prebuild</code> builds a list of tiles six at a time.</li>
 </ul>
 
+<p>The tile binary, one run at load 30 to 45 (so the seconds are inflated, the shares are not): 358 user CPU-s, 155 builds. The torture set&rsquo;s own builds are 103 s of the 354 s of build time summed, the other 251 s are builds made by single tests (84 of them small in-memory documents, 112 s: the same dirt, lift and audit each time). By stage: dirt 20 percent, union 17, audit 13, lift 9, wall 9, cliff 8, grass 7, tree 5. A grass or reeds tile&rsquo;s union is the largest single stage (grass-flowers: union 7.3 s against grass 2.3). Taken out so far: the placement test at 32, 48 and 128 cells reads only where things stand, so it builds low (no union, no gate). Not yet found: a cut of a third; the dirt&rsquo;s clod stamping (serial, one <code>atan2</code> and a few <code>cos</code> and <code>pow</code> for each cell of each lobe) and the union are where the CPU is, and neither can change a byte.</p>
+
 <h2 id="build">Where a build's time goes</h2>
 <p>A build is mostly serial: alone on the machine, the biggest library tile (<code>cliffs/2x2-cliff-corner</code>, 22.5 s) keeps 4.6 of the 12 cores busy on average. Its peak memory is 7.8 GB; the 2×2 wall curve's 7.1 GB, the 2×2 cliff canyon's 6.3 GB. The aim is a ceiling near 1 GB for a library tile; <code>1x1-grass</code> peaks at 1.9 GB, in the union.</p>
 <div class="tbl"><table>
@@ -116,7 +118,7 @@
 <tr><td>A build's stages</td><td><code>dharmatiles build &lt;tile&gt; --no-cache --json</code>: <code>stage_secs</code>, each element of the stack and the union, lift and audit</td></tr>
 <tr><td>Where a build's CPU goes</td><td>start the build in the background and run <code>sample &lt;pid&gt; 18 1 -file out.txt</code> (macOS): the call tree, and the functions by samples at the top of the stack; leave out the waits (<code>__psynch_cvwait</code>, <code>semaphore_wait_trap</code>, <code>swtch_pri</code>, TBB's backoff) to read the busy share</td></tr>
 <tr><td>The sweep at another pool shape</td><td><code>DT_BASELINE_ONLY=cliff</code> (an element's tiles, or <code>lib:</code> paths) on <code>the_library_builds_as_the_baseline_says</code>, with <code>WORKERS</code> changed</td></tr>
-<tr><td>Which test spends a test binary's build time</td><td>log each build's thread name (the test's name), path and seconds from <code>build_checked</code> for one run, and sum by test</td></tr>
+<tr><td>Which test spends a test binary&rsquo;s build time</td><td><code>DT_TEST_TIMES=1</code> on the tile tests: one <code>TIMES</code> line to stderr per build (the test that asked first, the path, seconds, each stage&rsquo;s seconds); sum by test, by path or by stage. Seconds are wall seconds, so read them from a quiet machine: at load 40 a plain dirt tile reads 0.9 s that is 0.07 s alone</td></tr>
 <tr><td>The browser's tile against the program's</td><td><code>cargo xtask parity</code></td></tr>
 <tr><td>The checks' history</td><td><code>dt-times.tsv</code> in the git common folder (<code>git rev-parse --git-common-dir</code>)</td></tr>
 </tbody>
