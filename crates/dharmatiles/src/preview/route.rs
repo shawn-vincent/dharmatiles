@@ -54,10 +54,6 @@ pub struct TestIdle {
     pub pending: usize,
 }
 
-/// `POST /api/tiles/ID/build`: asked for.
-#[derive(Serialize)]
-pub struct Accepted {}
-
 /// What to send back.
 pub(super) enum Reply {
     Json(&'static str, super::api::Body),
@@ -233,10 +229,10 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             if let Some(on) = req.param("debug") {
                 shared.set_marks(id, on == "1");
             }
-            if shared.want(id) {
-                Reply::Json("202 Accepted", super::api::ok(&Accepted {}).1)
-            } else {
-                fail::refused("404 Not Found", "no such tile").into()
+            // the service's `build`: asked for, answered at once; the record comes on the event stream
+            match dt_service::build_calls::build(shared, id, dt_service::build_calls::BuildReq {}) {
+                Ok(accepted) => Reply::Json("202 Accepted", super::api::ok(&accepted).1),
+                Err(refusal) => super::api::refusal_reply(refusal).into(),
             }
         }
         // the docs from the folder they are installed in: the editor's Explain opens the copy that matches the program

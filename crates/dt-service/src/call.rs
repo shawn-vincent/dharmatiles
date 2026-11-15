@@ -27,6 +27,95 @@ impl<Q, S> Verb<Q, S> {
     }
 }
 
+/// How a refusal is told, in the service's words: a transport maps each to its own (HTTP: 400, 403, 404, 409, 422, 500).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Status {
+    /// The request is not a request (a missing reading, a bad name).
+    BadRequest,
+    /// Refused: not that file.
+    Forbidden,
+    /// There is no such thing.
+    NotFound,
+    /// The file moved on.
+    Conflict,
+    /// The document does not read.
+    Unprocessable,
+    /// The service could not do it.
+    Internal,
+}
+
+/// Whose fault: what the user asked, or what the program tried.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fault {
+    Refused,
+    Failure,
+}
+
+/// A call that ran and said no, with everything its HTTP or message form carries: the transport turns it into its own
+/// reply.  The one error type of the tile verbs, so a handler's refusal is not a transport's reply.
+#[derive(Debug)]
+pub struct Refusal {
+    pub status: Status,
+    pub fault: Fault,
+    pub message: String,
+    /// What was under it (an I/O error's words).
+    pub causes: Vec<String>,
+    /// A conflict: the file as it is now, and its revision.
+    pub text: Option<String>,
+    pub doc_rev: Option<u64>,
+    /// An unreadable document: its mistakes, each at its place.
+    pub errors: Option<Vec<dt_eval::Mistake>>,
+}
+
+impl Refusal {
+    /// The request was wrong.
+    #[must_use]
+    pub fn refused(status: Status, message: impl Into<String>) -> Self {
+        Self::new(status, Fault::Refused, message)
+    }
+
+    /// The program could not.
+    #[must_use]
+    pub fn failure(status: Status, message: impl Into<String>) -> Self {
+        Self::new(status, Fault::Failure, message)
+    }
+
+    fn new(status: Status, fault: Fault, message: impl Into<String>) -> Self {
+        Self {
+            status,
+            fault,
+            message: message.into(),
+            causes: Vec::new(),
+            text: None,
+            doc_rev: None,
+            errors: None,
+        }
+    }
+
+    /// With the error under it, as the causes.
+    #[must_use]
+    pub fn caused_by(mut self, err: &(dyn std::error::Error + 'static)) -> Self {
+        let mut e: Option<&(dyn std::error::Error + 'static)> = Some(err);
+        while let Some(x) = e {
+            self.causes.push(x.to_string());
+            e = x.source();
+        }
+        self
+    }
+
+    /// A document that does not read: 422, its mistakes each at its place, and the first one's words as the message.
+    #[must_use]
+    pub fn of_mistakes(errs: &[dt_eval::Diag]) -> Self {
+        let message = errs.first().map_or_else(
+            || "the document does not read".to_owned(),
+            |d| d.message.clone(),
+        );
+        let mut r = Self::refused(Status::Unprocessable, message);
+        r.errors = Some(errs.iter().map(dt_eval::Mistake::from).collect());
+        r
+    }
+}
+
 /// Why a call did not run to an answer.
 #[derive(Debug, PartialEq, Eq)]
 pub enum CallError<E> {

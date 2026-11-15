@@ -38,7 +38,7 @@ pub mod step {
     /// `cargo xtask wasm --check`: clippy for the browser over the crates it builds (warm, the release parity build
     /// shares none of it).
     pub const WASM_CHECK: f64 = 60.0;
-    /// `cargo xtask parity --service`: the worker's service under Node (check, then build, by verb) and the program's
+    /// `cargo xtask parity --service`: the worker's service under Node (check, save, then build, by verb) and the program's
     /// own build of the same tile, on the bundle parity just built.
     pub const SERVICE: f64 = 60.0;
 }

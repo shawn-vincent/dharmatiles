@@ -1,89 +1,42 @@
-//! The owner of every document file the editor writes: one [`Doc`] per path,
-//! holding a revision (`docRev`, a number that only rises) and the lock that
-//! every read-modify-write of the file takes.
-//!
-//! The file is the truth; the `Doc` is who may say what it holds.  Every
-//! reader that needs text and its revision together ([`Docs::read`]) and
-//! every writer ([`Docs::edit`]) goes through it, and each looks at the file
-//! under the lock: a text that is not the one the `Doc` last wrote or read
-//! was changed from outside (a text editor, another program), and that is a
-//! new revision too.  So a revision names one text, and a higher one is
-//! a later one, whoever made the change.  A write the program makes is told to the owner at once
-//! ([`Docs::telling`]); the watcher's look at modified times, for a change made outside it, reads a changed file
-//! through [`Docs::read`], which is how an outside change gets its revision.
-//!
-//! An edit made against a revision (`expect`) is refused with a 409 (and the
-//! current text and revision) when the file has moved on; an edit that names
-//! no revision is for the few calls that add to a file without reading it
-//! (a tile put on a print list from the tile's own level).
+//! The program's view of the documents the editor writes: [`dt_service::docs::Docs`] (the revisions, the lock, the
+//! conflict) with the program's errors, a [`Reply`], where the service's are a [`dt_service::call::Refusal`].  The
+//! service's tile calls read `Shared::docs` through [`dt_service::tile_host::TileHost`]; the places, plates and
+//! lists that are still the binary's read it through the methods here.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use dt_service::docs::DocFail;
 
 use super::api::Reply;
 use super::storage::{DiskStorage, Storage};
-use super::{fail, lock};
 
 /// The documents the editor has read or written.
-#[derive(Default)]
-pub(super) struct Docs {
-    docs: Mutex<HashMap<String, Arc<Doc>>>,
-    /// Told of every file the program writes, so the tiles that read it are built again at once.
-    saved: Option<super::owner::Owner>,
-    /// Where the files are read and written.
-    storage: Option<Arc<dyn Storage>>,
-}
-
-/// One document: its revision and what it last held, behind the lock.
-#[derive(Default)]
-pub(super) struct Doc {
-    state: Mutex<State>,
-}
-
-#[derive(Default)]
-struct State {
-    rev: u64,
-    hash: Option<u64>,
-}
-
-impl State {
-    /// `text` is what the file holds now: a revision of its own unless it is what was last seen.
-    fn observe(&mut self, text: &str) {
-        let h = dt_eval::doc::text_hash(text);
-        if self.hash != Some(h) {
-            self.hash = Some(h);
-            self.rev += 1;
-        }
-    }
-}
+pub(super) struct Docs(dt_service::docs::Docs);
 
 /// What an edit did.
-pub(super) struct Edited {
-    /// The text it replaced.
-    pub before: String,
-    /// The text it wrote.
-    pub after: String,
-    /// The revision the file has now.
-    pub rev: u64,
+pub(super) use dt_service::docs::Edited;
+
+impl Default for Docs {
+    /// On the disk, and told to nobody.
+    fn default() -> Self {
+        Self(dt_service::docs::Docs::new(Arc::new(DiskStorage), None))
+    }
 }
 
 impl Docs {
     /// Documents whose every write is told to the owner ([`super::owner::Command::Saved`]).
     pub(super) fn telling(owner: super::owner::Owner, storage: Arc<dyn Storage>) -> Self {
-        Self {
-            docs: Mutex::default(),
-            saved: Some(owner),
-            storage: Some(storage),
-        }
+        Self(dt_service::docs::Docs::new(
+            storage,
+            Some(Box::new(move |path| {
+                owner.send(super::owner::Command::Saved(path.to_owned()));
+            })),
+        ))
     }
 
-    /// The files' storage: the disk, unless a host gave one.
-    fn files(&self) -> &dyn Storage {
-        self.storage.as_deref().unwrap_or(&DiskStorage)
-    }
-
-    fn doc(&self, path: &str) -> Arc<Doc> {
-        Arc::clone(lock(&self.docs).entry(path.to_owned()).or_default())
+    /// The service's documents, for the tile calls that moved there.
+    pub(super) fn service(&self) -> &dt_service::docs::Docs {
+        &self.0
     }
 
     /// The text of `path` and its revision, read together under the lock.
@@ -91,11 +44,7 @@ impl Docs {
     /// # Errors
     /// The file cannot be read.
     pub(super) fn read(&self, path: &str) -> std::io::Result<(String, u64)> {
-        let doc = self.doc(path);
-        let mut st = lock(&doc.state);
-        let text = self.files().read_text(std::path::Path::new(path))?;
-        st.observe(&text);
-        Ok((text, st.rev))
+        self.0.read(path)
     }
 
     /// The revision of `path` now (what a reply that wrote nothing says).
@@ -103,84 +52,24 @@ impl Docs {
     /// # Errors
     /// The reply to send: the file cannot be read.
     pub(super) fn rev(&self, path: &str) -> Result<u64, Reply> {
-        self.read(path)
-            .map(|(_, r)| r)
-            .map_err(|e| read_failed(path, &e))
+        self.0.rev(path).map_err(super::api::refusal_reply)
     }
 
-    /// Edit `path` under its lock: `f` is given the text and answers the new
-    /// text and what to add to the reply.  With `expect`, the edit is refused
-    /// (409, the current text and revision) unless the file is at that
-    /// revision.  The new text is written whole or not at all.
+    /// Edit `path` under its lock (see [`dt_service::docs::Docs::edit`]).
     ///
     /// # Errors
-    /// The reply to send: the file cannot be read or written, the revision
-    /// is stale, or `f` refused.
+    /// The reply to send: the file cannot be read or written, the revision is stale, or `f` refused.
     pub(super) fn edit<X>(
         &self,
         path: &str,
         expect: Option<u64>,
         f: impl FnOnce(&str) -> Result<(String, X), Reply>,
     ) -> Result<(Edited, X), Reply> {
-        let doc = self.doc(path);
-        let mut st = lock(&doc.state);
-        let before = self
-            .files()
-            .read_text(std::path::Path::new(path))
-            .map_err(|e| read_failed(path, &e))?;
-        st.observe(&before);
-        if let Some(want) = expect
-            && want != st.rev
-        {
-            return Err(stale(&before, st.rev));
-        }
-        let (after, extra) = f(&before)?;
-        // an edit that changes nothing is not a revision
-        if after != before {
-            self.files()
-                .write_text(std::path::Path::new(path), &after)
-                .map_err(|e| {
-                    fail::failure_from(
-                        "500 Internal Server Error",
-                        format!("cannot write {path}: {e}"),
-                        &e,
-                    )
-                })?;
-            st.hash = Some(dt_eval::doc::text_hash(&after));
-            st.rev += 1;
-            if let Some(owner) = &self.saved {
-                owner.send(super::owner::Command::Saved(path.to_owned()));
-            }
-        }
-        Ok((
-            Edited {
-                before,
-                after,
-                rev: st.rev,
-            },
-            extra,
-        ))
+        self.0.edit(path, expect, f).map_err(|e| match e {
+            DocFail::Service(r) => super::api::refusal_reply(r),
+            DocFail::Caller(reply) => reply,
+        })
     }
-}
-
-/// The 409 for an edit made against a revision the file has left.
-pub(super) fn stale(now: &str, rev: u64) -> Reply {
-    fail::refused_with(
-        "409 Conflict",
-        "The file changed since this edit was made (in another tab or your text editor); the edit would lose that change.",
-        |b| {
-            b.text = Some(now.to_owned());
-            b.doc_rev = Some(rev);
-        },
-    )
-}
-
-pub(super) fn read_failed(path: &str, e: &std::io::Error) -> Reply {
-    fail::failure_from(
-        "500 Internal Server Error",
-        format!("cannot read {path}: {e}"),
-        e,
-    )
 }
 
 #[cfg(test)]

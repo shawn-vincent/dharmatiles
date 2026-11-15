@@ -64,41 +64,23 @@ use std::path::{Path, PathBuf};
 use dt_eval::Source;
 use serde::{Deserialize, Serialize};
 
-use super::api::{Out, Reply, TileRef};
+use super::api::{Out, Reply, TileRef, TileRefReply};
 use super::places::{Listed, Nothing};
 use super::queue::Outcome;
 use super::roots::personal_home;
 use super::storage::Storage;
 use super::*;
 pub use dt_service::api::DraftTier;
+pub(super) use dt_service::edit_calls::EDIT_PATH;
+pub(super) use dt_service::tile_calls::text_rev;
 pub use dt_service::tile_calls::{CheckRes, TextReq};
 
 // ---- the calls' types ------------------------------------------------------------------
+// The edit family (`edit`, `save`) is the service's: its types and its handlers are in `dt_service::edit_calls`.
 
-// The edit's wire types and the one function that makes an edit are below the transport (`dt_service::edit`): the
-// browser engine's `edit_tile` calls the same.
 #[cfg(test)]
-pub use dt_service::edit::{EditOp, InsertPlace, PointSlot, Scalar};
-pub use dt_service::edit::{EditReq, EditRes};
-pub(super) use dt_service::tile_calls::text_rev;
-
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct SaveReq {
-    pub text: String,
-    /// The revision of the file the text was made from.
-    pub doc_rev: u64,
-    pub file: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct SaveRes {
-    pub doc_rev: u64,
-}
+pub use dt_service::edit_calls::{EditOp, InsertPlace, PointSlot, Scalar};
+pub use dt_service::edit_calls::{EditReq, EditRes, SaveReq, SaveRes};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -563,19 +545,6 @@ pub(super) fn step(shared: &Shared, tile: &TileRef, v: StepReq) -> super::route:
     super::route::Reply::Bytes(Arc::new(body))
 }
 
-/// The seams of the edge contract, read from the library on disk.
-fn edge_seams() -> Result<dt_doc::seams::SeamTable, Reply> {
-    match dt_eval::doc::read(&dt_eval::Library, dt_eval::doc::EDGES) {
-        Ok(r) => r.file.doc.seams.clone().ok_or_else(|| {
-            fail::failure(
-                "500 Internal Server Error",
-                "the edge contract has no `seams` block",
-            )
-        }),
-        Err(es) => Err(fail::mistakes(&es)),
-    }
-}
-
 /// The file stem for a tile name: the name as written, with only what a
 /// file name cannot hold (path separators, `:`, control characters)
 /// turned into `-`, and no leading dot.  A tile's file name is its name.
@@ -902,55 +871,14 @@ pub(super) fn printed_set(shared: &Shared, v: PrintedSetReq) -> Out<PrintedSetRe
         .map_err(|e| fail::refused("422 Unprocessable Entity", e.0))
 }
 
-/// Where the document an edit is read as stands, for a reader that needs a place to resolve a `use` from: the
-/// library's tiles folder, so a part is found as it is from a library tile.
-const EDIT_PATH: &str = "lib:tiles/edit.dtile";
-
-/// How an edit that cannot be made is told: the mistakes it would have added are a 422's `errors`, so the page
-/// says why in the words it says any mistake in (`whyOf`); any other refusal is its words.
+/// How an edit that cannot be made is told (see [`dt_service::edit_calls::refusal`]), as the reply.
 pub(super) fn refusal(e: &dt_doc::ops::EditError) -> Reply {
-    use dt_doc::ops::EditError;
-    let EditError::Adds(added) = e else {
-        return fail::refused("422 Unprocessable Entity", e.to_string());
-    };
-    let list: Vec<dt_eval::Mistake> = added
-        .iter()
-        .map(|f| dt_eval::Mistake {
-            code: f.code.clone(),
-            message: f.message.clone(),
-            file: None,
-            line: None,
-            column: None,
-            help: Some(
-                "The edit was not made: it would add a mistake the text does not have.".to_owned(),
-            ),
-            fix: None,
-            unexpected: false,
-        })
-        .collect();
-    let message = added
-        .first()
-        .map_or_else(|| e.to_string(), |f| f.message.clone());
-    fail::refused_with("422 Unprocessable Entity", message, |b| {
-        b.errors = Some(list)
-    })
+    super::api::refusal_reply(dt_service::edit_calls::refusal(e))
 }
 
 /// `/api/edit`: [`dt_service::edit::apply`] with this program's reader, and its failures as the replies the page reads.
 pub(super) fn edit(shared: &Shared, req: EditReq) -> Out<EditRes> {
-    use dt_service::edit::Failure;
-    let opts = shared.options();
-    let reader = dt_eval::Evaluated {
-        base: &dt_eval::Files,
-        path: EDIT_PATH,
-        opts: &opts,
-    };
-    dt_service::edit::apply(&reader, &req, &edge_seams).map_err(|f| match f {
-        Failure::Bad(m) => bad(m),
-        Failure::Stale => fail::refused("409 Conflict", dt_service::edit::STALE),
-        Failure::Seams(r) => r,
-        Failure::Refused(e) => refusal(&e),
-    })
+    super::api::out(dt_service::edit_calls::edit(shared, req))
 }
 
 pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
@@ -965,33 +893,9 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
         .map_err(|e| fail::failure("500 Internal Server Error", e.0))
 }
 
-/// May the editor write `file`?  Never the library, nor a read-only file.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "permitted silence: a best-effort filesystem probe (a missing or unreadable file means none yet, read again on the next call)"
-)]
-pub(super) fn writable(storage: &dyn Storage, file: &str) -> bool {
-    !file.starts_with(dt_eval::LIB)
-        && storage
-            .stat(Path::new(file))
-            .is_ok_and(|m| m.is_file() && !m.readonly)
-}
-
-/// `/api/tiles/ID/save` `{text, docRev, file?}`: the text written, if the file is
-/// still at the revision the page edited it from (else a 409 with the file's
-/// current text and revision).  Answers the revision the file has now.
+/// `/api/tiles/ID/save` `{text, docRev, file?}` (see [`dt_service::edit_calls::save`]).
 pub(super) fn save(shared: &Shared, t: &TileRef, v: SaveReq) -> Out<SaveRes> {
-    let file = t.file(v.file.as_deref())?;
-    if !writable(shared.storage.as_ref(), &file) {
-        return Err(fail::refused(
-            "403 Forbidden",
-            "this file is read only: a library tile is copied into My tiles when it is first changed",
-        ));
-    }
-    let (e, ()) = shared
-        .docs
-        .edit(&file, Some(v.doc_rev), |_| Ok((v.text, ())))?;
-    Ok(SaveRes { doc_rev: e.rev })
+    super::api::out(dt_service::edit_calls::save(shared, t, v))
 }
 
 /// `use "parts/grass"` in a library tile names a library file; in a copy it must say so (`use "lib:parts/grass"`).

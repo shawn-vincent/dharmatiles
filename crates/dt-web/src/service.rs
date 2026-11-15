@@ -1,23 +1,40 @@
-//! The editor's service in a web worker: the same verbs the program answers over HTTP (`dt_service::tile_calls`),
-//! called by name with a JSON request, over a [`MemStorage`] holding the tiles the page hands it.
+//! The editor's service in a web worker: the same verbs the program answers over HTTP, called by name with a JSON
+//! request, over a [`MemStorage`] holding the tiles the page hands it.
 //!
 //! `Service::call(verb, tile, request)` is the whole transport: it reads the request as the verb's type, calls the
-//! service's [`Table`], and writes the answer as the verb's response type.  `check` is the program's own
-//! (`dt_service::tile_calls::check`, one function for both); `buildNow` is the worker's build, run inline in the call
-//! (the program queues a build on a lane and answers 202, so it is a verb of its own, not a second meaning of
-//! `build`).  What a check found is said as messages, which `events()` hands the page and clears.  One worker is one
-//! service; the library is the one [`crate::set_library`] was given.
+//! service's [`Table`], and writes the answer as the verb's response type.  `check`, `edit`, `save` and `build` are the
+//! program's own (`dt_service::tile_calls`, `edit_calls`, `build_calls`: one function each for both transports),
+//! written on [`TileHost`], which this worker's [`Ctx`] implements.
+//!
+//! `build` is the HTTP verb with its one meaning: it asks for the tile to be built and answers at once; the worker
+//! host runs what the service queued ([`Inner::run_queued`], the same `Take` a lane makes in the program) right after
+//! the call returns, and the record arrives through the event stream, as for HTTP.  `events()` hands the page what the
+//! stream said since the last pull (JSON stream events: a tile's state, with its record; the messages a check found).
+//! One worker is one service; the library is the one [`crate::set_library`] was given.
 
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
 use dt_eval::{Options, Source, Tier, TileRecord};
 use dt_lang::System;
-use dt_service::call::{CallError, Table, Verb};
+use dt_service::build_calls::{self, Accepted, BUILD, BuildReq};
+use dt_service::call::{CallError, Refusal, Table, Verb};
+use dt_service::clock::ManualClock;
+use dt_service::edit_calls::{self, EDIT, EditReq, EditRes, SAVE, SaveReq, SaveRes};
+use dt_service::host::{Alarm, Host};
 use dt_service::message::{Message, Scope};
+use dt_service::owner::{Command, Core, Setup, Subscribed};
+use dt_service::patch::Patch;
+use dt_service::queue::{Finished, Job, Taken, Taking};
+use dt_service::roots::{Root, RootKind};
 use dt_service::storage::{MemStorage, Storage};
-use dt_service::tile_calls::{self, CHECK, CheckHost, Failed, TextReq};
+use dt_service::tile::{Slot, tile_id};
+use dt_service::tile_calls::{self, CHECK, CheckHost, TextReq};
+use dt_service::tile_host::{TileHost, TileRef};
 use dt_value::LockExt;
 use serde::{Deserialize, Serialize};
 
@@ -26,38 +43,111 @@ use wasm_bindgen::prelude::*;
 
 use crate::{JsError, LIBRARY, MAIN, build_with, stl_sha256, system_of};
 
-/// `buildNow` takes the target the tile is built for (`db` or `ol`).
-#[derive(Deserialize, Serialize, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct BuildNowReq {
-    pub system: String,
-}
+/// The folder the worker's tiles are listed under.
+const FOLDER: &str = "/memory/My tiles";
 
-/// What a build came to: the program's own record, and the hash of the STL's triangles (empty when the gate
-/// stopped the build: only a build that passed has an STL).
+/// What a build came to, as the worker keeps it beside the stream's record: the hash of the STL's triangles (empty
+/// when the gate stopped the build: only a build that passed has an STL).  `built(path)` answers it.
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct BuildNowRes {
+pub struct BuiltRes {
     pub record: TileRecord,
     pub passed: bool,
     pub stl_bytes: usize,
     pub stl_sha256: String,
 }
 
-/// The worker's build, as a verb.
-pub const BUILD_NOW: Verb<BuildNowReq, BuildNowRes> = Verb::new("buildNow");
+/// The worker as the service's host: alarms are kept for the page, and time is what the page winds.
+#[derive(Default)]
+struct WebHost {
+    alarms: std::sync::Mutex<Vec<String>>,
+}
 
-/// What a call runs on: the store, the target and the place a check's messages go; and the tile it is about.
-struct Ctx {
+impl Alarm for WebHost {
+    fn alarm(&self, msg: &str) {
+        self.alarms.lock_unpoisoned().push(msg.to_owned());
+    }
+
+    fn alarm_once(&self, msg: &str) {
+        let mut a = self.alarms.lock_unpoisoned();
+        if !a.iter().any(|m| m == msg) {
+            a.push(msg.to_owned());
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    /// `Date.now()`: the worker's wall clock, which wasm has no `SystemTime` for.
+    #[wasm_bindgen(js_namespace = Date, js_name = now)]
+    fn date_now() -> f64;
+}
+
+impl Host for WebHost {
+    type Job = ();
+    type Failure = String;
+
+    #[cfg(target_arch = "wasm32")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Date.now() is whole milliseconds since 1970, positive"
+    )]
+    fn now_ms(&self) -> u64 {
+        date_now() as u64
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn now_ms(&self) -> u64 {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "milliseconds since 1970 fit a u64 for 500 million years"
+        )]
+        let ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("the clock is after 1970")
+            .as_millis() as u64;
+        ms
+    }
+}
+
+/// Everything one worker is: the store, the documents, the owner's state, the stream, and what builds came to.
+struct Inner {
     storage: Arc<MemStorage>,
-    system: System,
-    said: Arc<Mutex<Vec<Message>>>,
+    docs: dt_service::docs::Docs,
+    system: Cell<System>,
+    core: RefCell<Core<WebHost>>,
+    stream: Receiver<String>,
+    built: RefCell<BTreeMap<String, BuiltRes>>,
+    ticket: Cell<u64>,
+    seq: Cell<u64>,
+}
+
+/// What one call runs on: the worker, the tile it is about and the options it reads it with.
+struct Ctx {
+    inner: Rc<Inner>,
     tile: String,
+    options: Options,
+}
+
+/// The library as the page's engine reads it: every `lib:` path of what [`crate::set_library`] was given.
+struct Lib;
+
+impl Source for Lib {
+    fn read(&self, path: &str) -> Result<String, String> {
+        LIBRARY.with(|lib| {
+            lib.borrow()
+                .get(path)
+                .cloned()
+                .ok_or_else(|| format!("the page's library has no `{path}`"))
+        })
+    }
 }
 
 /// The document is `tile.dtile` ([`MAIN`]); every other path is a library file, as the page's engine reads them.
 struct Doc<'a> {
-    library: &'a BTreeMap<String, String>,
     text: &'a str,
 }
 
@@ -66,124 +156,229 @@ impl Source for Doc<'_> {
         if path == MAIN {
             return Ok(self.text.to_owned());
         }
-        self.library
-            .get(path)
-            .cloned()
-            .ok_or_else(|| format!("the page's library has no `{path}`"))
+        Lib.read(path)
     }
 }
 
-/// A check's host: the options (the library's default printer, on the call's target) and where messages go.
-struct Checking<'a> {
-    ctx: &'a Ctx,
-    options: Options,
-}
-
-impl CheckHost for Checking<'_> {
-    fn options(&self) -> Options {
-        self.options.clone()
-    }
-
-    fn report(&self, _id: &str, _scope: Scope, make: impl FnOnce(&str) -> Vec<Message>) {
-        let tile = &self.ctx.tile;
-        let name = Path::new(tile)
-            .file_stem()
-            .map_or_else(|| tile.clone(), |s| s.to_string_lossy().into_owned());
-        self.ctx.said.lock_unpoisoned().extend(make(&name));
-    }
-}
-
-fn options_in(source: &dyn Source, system: System) -> Result<Options, Failed> {
-    let mut o = Options::in_source(source).map_err(|ds| {
-        Failed(format!(
-            "the library's default printer does not read: {}",
-            ds.iter()
-                .map(|d| d.message.as_str())
-                .collect::<Vec<_>>()
-                .join("; ")
-        ))
-    })?;
-    o.system = system;
-    Ok(o)
-}
-
-/// Run `f` on the document `text` (or, with none, the tile's text from the store) read through the library.
-fn with_doc<T>(
-    ctx: &Ctx,
-    text: Option<String>,
-    f: impl FnOnce(&Doc<'_>) -> Result<T, Failed>,
-) -> Result<T, Failed> {
-    let text = match text {
-        Some(t) => t,
-        None => ctx
-            .storage
-            .read_text(Path::new(&ctx.tile))
-            .map_err(|e| Failed(format!("cannot read {}: {e}", ctx.tile)))?,
-    };
-    LIBRARY.with(|lib| {
-        f(&Doc {
-            library: &lib.borrow(),
-            text: &text,
+impl Inner {
+    /// Ask the owner: `make` is given where the answer goes, and the owner answers in the same step.
+    fn ask<R>(&self, make: impl FnOnce(Sender<R>) -> Command<WebHost>) -> Result<R, Refusal> {
+        let (tx, rx) = channel();
+        self.core.borrow_mut().apply(make(tx));
+        rx.try_recv().map_err(|e| {
+            Refusal::failure(
+                dt_service::call::Status::Internal,
+                format!("the owner did not answer in the same step: {e}"),
+            )
         })
-    })
-}
+    }
 
-fn check(ctx: &Ctx, req: TextReq) -> Result<tile_calls::CheckRes, Failed> {
-    with_doc(ctx, Some(req.text), |doc| {
-        let host = Checking {
-            ctx,
-            options: options_in(doc, ctx.system)?,
+    /// The worker host's lane: take what the service queued, run it, and say how it went on the stream, until
+    /// nothing is queued.  The program's lanes do the same on threads.
+    fn run_queued(&self) -> Result<(), Refusal> {
+        loop {
+            let ticket = self.ticket.get() + 1;
+            self.ticket.set(ticket);
+            let (tx, rx) = channel();
+            self.core.borrow_mut().apply(Command::Take {
+                ticket,
+                kind: Taking::Main { eager: false },
+                reply: tx,
+            });
+            match rx.try_recv() {
+                Ok(Taken::Job(Job::Full(id, _))) => self.build_job(&id)?,
+                Ok(_) => {
+                    return Err(Refusal::failure(
+                        dt_service::call::Status::Internal,
+                        "the worker was given a job that is not a tile's build",
+                    ));
+                }
+                Err(TryRecvError::Empty) => {
+                    // nothing queued: this lane's request does not wait on
+                    self.ask(|r| Command::Withdraw(ticket, r))?;
+                    return Ok(());
+                }
+                Err(TryRecvError::Disconnected) => {
+                    return Err(Refusal::failure(
+                        dt_service::call::Status::Internal,
+                        "the owner's answer was dropped",
+                    ));
+                }
+            }
+        }
+    }
+
+    /// One full build: what the program's lane does with a tile, said as patches.
+    fn build_job(&self, id: &str) -> Result<(), Refusal> {
+        let facts = self
+            .ask(|r| Command::Facts(id.to_owned(), r))?
+            .ok_or_else(|| Refusal::refused(dt_service::call::Status::NotFound, "no such tile"))?;
+        let edit = |patch: Patch| {
+            self.core
+                .borrow_mut()
+                .apply(Command::Edit(id.to_owned(), Box::new(patch)));
         };
-        tile_calls::check(&host, doc, MAIN)
-    })
-}
-
-fn build_now(ctx: &Ctx, req: BuildNowReq) -> Result<BuildNowRes, Failed> {
-    let system = req.system.parse::<System>().map_err(Failed)?;
-    with_doc(ctx, None, |doc| {
-        let (built, opts) = build_with(
-            doc,
-            system,
+        edit(Patch::Begin);
+        let files = BTreeMap::from([(facts.path.clone(), None)]);
+        let text = self
+            .storage
+            .read_text(Path::new(&facts.path))
+            .map_err(|e| {
+                Refusal::failure(
+                    dt_service::call::Status::Internal,
+                    format!("cannot read {}: {e}", facts.path),
+                )
+            })?;
+        let doc_rev = self
+            .docs
+            .read(&facts.path)
+            .map_err(|e| dt_service::docs::read_failed(&facts.path, &e))?
+            .1;
+        match build_with(
+            &Doc { text: &text },
+            self.system.get(),
             None,
             0,
             Tier::Full,
             &dt_eval::Progress::none(),
             None,
-        )
-        .map_err(|ds| {
-            Failed(format!(
-                "{} did not build: {}",
-                ctx.tile,
+        ) {
+            Err(ds) => edit(Patch::BuildFailed {
+                errors: dt_eval::mistakes(&ds),
+                failure: None,
+                files,
+            }),
+            Ok((built, opts)) => {
+                let passed = built.verdict(&opts.printer).passed();
+                let (stl_sha256, stl_bytes) = passed
+                    .as_ref()
+                    .map_or_else(|| (String::new(), 0), stl_sha256);
+                let build_s = built.report.stage_secs.iter().map(|s| s.1).sum();
+                let record = TileRecord::of(&built, &opts.printer, build_s);
+                self.built.borrow_mut().insert(
+                    facts.path,
+                    BuiltRes {
+                        record: record.clone(),
+                        passed: passed.is_some(),
+                        stl_bytes,
+                        stl_sha256,
+                    },
+                );
+                // the worker keeps no view of the mesh: the page's mesh comes from its own build call
+                edit(Patch::BuildReady {
+                    problem: Vec::new(),
+                    record,
+                    mesh: Arc::new(Vec::new()),
+                    doc_rev,
+                    files,
+                });
+            }
+        }
+        self.core
+            .borrow_mut()
+            .apply(Command::Finish(Finished::Full(id.to_owned())));
+        Ok(())
+    }
+}
+
+impl CheckHost for Ctx {
+    fn options(&self) -> Options {
+        self.options.clone()
+    }
+
+    fn report(&self, _id: &str, scope: Scope, make: impl FnOnce(&str) -> Vec<Message>) {
+        let id = tile_id(&self.tile);
+        let name = Path::new(&self.tile)
+            .file_stem()
+            .map_or_else(|| self.tile.clone(), |s| s.to_string_lossy().into_owned());
+        let found = make(&name);
+        self.inner
+            .core
+            .borrow_mut()
+            .apply(Command::Report { id, scope, found });
+    }
+}
+
+impl TileHost for Ctx {
+    fn docs(&self) -> &dt_service::docs::Docs {
+        &self.inner.docs
+    }
+
+    fn storage(&self) -> &dyn Storage {
+        self.inner.storage.as_ref()
+    }
+
+    fn library(&self) -> &dyn Source {
+        &Lib
+    }
+
+    fn want(&self, id: &str) -> Result<bool, Refusal> {
+        self.inner.ask(|r| Command::Want(id.to_owned(), r))
+    }
+}
+
+impl Ctx {
+    fn tile_ref(&self) -> TileRef {
+        TileRef {
+            id: tile_id(&self.tile),
+            path: self.tile.clone(),
+            files: BTreeMap::new(),
+        }
+    }
+}
+
+fn options_in(source: &dyn Source, system: System) -> Result<Options, Refusal> {
+    let mut o = Options::in_source(source).map_err(|ds| {
+        Refusal::failure(
+            dt_service::call::Status::Internal,
+            format!(
+                "the library's default printer does not read: {}",
                 ds.iter()
-                    .map(|d| format!("{d:?}"))
+                    .map(|d| d.message.as_str())
                     .collect::<Vec<_>>()
                     .join("; ")
-            ))
-        })?;
-        let passed = built.verdict(&opts.printer).passed();
-        let (stl_sha256, stl_bytes) = passed
-            .as_ref()
-            .map_or_else(|| (String::new(), 0), stl_sha256);
-        let build_s = built.report.stage_secs.iter().map(|s| s.1).sum();
-        Ok(BuildNowRes {
-            record: TileRecord::of(&built, &opts.printer, build_s),
-            passed: passed.is_some(),
-            stl_bytes,
-            stl_sha256,
-        })
-    })
+            ),
+        )
+    })?;
+    o.system = system;
+    Ok(o)
+}
+
+fn check(ctx: &Ctx, req: TextReq) -> Result<tile_calls::CheckRes, Refusal> {
+    tile_calls::check(ctx, &Doc { text: &req.text }, MAIN)
+        .map_err(|e| Refusal::failure(dt_service::call::Status::Internal, e.0))
+}
+
+fn edit(ctx: &Ctx, req: EditReq) -> Result<EditRes, Refusal> {
+    edit_calls::edit(ctx, req)
+}
+
+fn save(ctx: &Ctx, req: SaveReq) -> Result<SaveRes, Refusal> {
+    let saved = edit_calls::save(ctx, &ctx.tile_ref(), req)?;
+    // the program's documents tell its owner of a write; here the worker does, so the tile builds again
+    ctx.inner
+        .core
+        .borrow_mut()
+        .apply(Command::Saved(ctx.tile.clone()));
+    Ok(saved)
+}
+
+fn build(ctx: &Ctx, req: BuildReq) -> Result<Accepted, Refusal> {
+    build_calls::build(ctx, &tile_id(&ctx.tile), req)
 }
 
 /// The verbs a worker answers, once.
-fn table() -> Table<Ctx, Failed> {
+fn table() -> Table<Ctx, Refusal> {
     Table::default()
         .with(&CHECK, check)
-        .with(&BUILD_NOW, build_now)
+        .with(&EDIT, edit)
+        .with(&SAVE, save)
+        .with(&BUILD, build)
 }
 
 /// Read `request` as the verb's request type, call it, and write the answer.
 fn run<Q, S>(
-    table: &Table<Ctx, Failed>,
+    table: &Table<Ctx, Refusal>,
     ctx: &Ctx,
     verb: &Verb<Q, S>,
     request: &str,
@@ -197,7 +392,7 @@ where
     match table.call(ctx, verb, req) {
         Ok(answer) => serde_json::to_string(&answer)
             .map_err(|e| JsError::new(&format!("cannot write the answer: {e}"))),
-        Err(CallError::Refused(Failed(why))) => Err(JsError::new(&why)),
+        Err(CallError::Refused(r)) => Err(JsError::new(&r.message)),
         Err(e) => Err(JsError::new(&format!("the call table is wrong: {e:?}"))),
     }
 }
@@ -205,40 +400,89 @@ where
 /// The service in a worker.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct Service {
-    storage: Arc<MemStorage>,
-    system: Mutex<System>,
-    said: Arc<Mutex<Vec<Message>>>,
-    table: Table<Ctx, Failed>,
-}
-
-impl Default for Service {
-    fn default() -> Self {
-        Self::new()
-    }
+    inner: Rc<Inner>,
+    table: Table<Ctx, Refusal>,
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl Service {
-    /// An empty service: no tiles, the DungeonBlocks target.  The library comes from [`crate::set_library`].
+    /// An empty service: no tiles, the DungeonBlocks target.  The library must be set ([`crate::set_library`]) first:
+    /// the owner's target is the library's default printer.
+    ///
+    /// # Errors
+    /// The library has no default printer that reads, or the owner did not answer its first listener.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            storage: Arc::new(MemStorage::default()),
-            system: Mutex::new(System::Db),
-            said: Arc::new(Mutex::new(Vec::new())),
+    pub fn new() -> Result<Self, JsError> {
+        let target = options_in(&Lib, System::Db).map_err(|r| JsError::new(&r.message))?;
+        let storage = Arc::new(MemStorage::default());
+        let mut core = Core::new(
+            Setup {
+                tiles: Vec::new(),
+                roots: vec![Root::new(
+                    "My tiles",
+                    RootKind::Dir(Path::new(FOLDER).into()),
+                )],
+                target,
+                home: None,
+                epoch: "worker".to_owned(),
+            },
+            storage.clone(),
+            Arc::new(WebHost::default()),
+            Arc::new(ManualClock::default()),
+        );
+        let (tx, rx) = channel();
+        core.apply(Command::Subscribe {
+            epoch: None,
+            since: None,
+            reply: tx,
+        });
+        let Subscribed { rx: stream, .. } = rx
+            .try_recv()
+            .map_err(|e| JsError::new(&format!("the owner did not answer a subscription: {e}")))?;
+        let docs = dt_service::docs::Docs::new(storage.clone(), None);
+        Ok(Self {
+            inner: Rc::new(Inner {
+                storage,
+                docs,
+                system: Cell::new(System::Db),
+                core: RefCell::new(core),
+                stream,
+                built: RefCell::new(BTreeMap::new()),
+                ticket: Cell::new(0),
+                seq: Cell::new(0),
+            }),
             table: table(),
-        }
+        })
     }
 
-    /// Put a tile's text in the store at `path` (a later `put` is a save).
+    /// Put a tile's text in the store at `path`: the tile is listed the first time, and a later `put` is a save
+    /// from outside (the tile is built again).
     ///
     /// # Errors
     /// The store cannot be written.
     pub fn put(&self, path: &str, text: &str) -> Result<(), JsError> {
-        self.storage
+        self.inner
+            .storage
             .write_text(Path::new(path), text)
-            .map_err(|e| JsError::new(&format!("cannot write {path}: {e}")))
+            .map_err(|e| JsError::new(&format!("cannot write {path}: {e}")))?;
+        let seq = self.inner.seq.get() + 1;
+        self.inner.seq.set(seq);
+        let (tx, rx) = channel();
+        self.inner.core.borrow_mut().apply(Command::Reconcile {
+            found: Vec::new(),
+            fresh: vec![Slot::in_root(path, 0, None)],
+            changed_elsewhere: false,
+            seq,
+            read: Vec::new(),
+            reply: tx,
+        });
+        rx.try_recv()
+            .map_err(|e| JsError::new(&format!("the owner did not list {path}: {e}")))?;
+        self.inner
+            .core
+            .borrow_mut()
+            .apply(Command::Saved(path.to_owned()));
+        Ok(())
     }
 
     /// Choose the build target for the calls that follow (`db` or `ol`).
@@ -246,37 +490,55 @@ impl Service {
     /// # Errors
     /// Not a target.
     pub fn set_target(&self, system: &str) -> Result<(), JsError> {
-        *self.system.lock_unpoisoned() = system_of(system)?;
+        self.inner.system.set(system_of(system)?);
         Ok(())
     }
 
-    /// Call the verb `verb` about the tile stored at `tile`, with `request` (JSON), and answer JSON.
+    /// Call the verb `verb` about the tile stored at `tile`, with `request` (JSON), and answer JSON.  What the call
+    /// queued (`build`) is run before this returns, and its result is on the stream (`events`).
     ///
     /// # Errors
     /// No such verb, a request that is not the verb's, or the call refused or failed: its words.
     pub fn call(&self, verb: &str, tile: &str, request: &str) -> Result<String, JsError> {
+        let options =
+            options_in(&Lib, self.inner.system.get()).map_err(|r| JsError::new(&r.message))?;
         let ctx = Ctx {
-            storage: self.storage.clone(),
-            system: *self.system.lock_unpoisoned(),
-            said: self.said.clone(),
+            inner: self.inner.clone(),
             tile: tile.to_owned(),
+            options,
         };
-        match verb {
+        let answer = match verb {
             v if v == CHECK.name => run(&self.table, &ctx, &CHECK, request),
-            v if v == BUILD_NOW.name => run(&self.table, &ctx, &BUILD_NOW, request),
+            v if v == EDIT.name => run(&self.table, &ctx, &EDIT, request),
+            v if v == SAVE.name => run(&self.table, &ctx, &SAVE, request),
+            v if v == BUILD.name => run(&self.table, &ctx, &BUILD, request),
             other => Err(JsError::new(&format!("no such call: {other}"))),
-        }
+        }?;
+        // the worker host's turn: what the call queued is built now, and the stream says how it went
+        self.inner
+            .run_queued()
+            .map_err(|r| JsError::new(&r.message))?;
+        Ok(answer)
     }
 
-    /// What the calls since the last pull said (a check's mistakes and notes), as a JSON array of messages; they are
-    /// handed over once.
+    /// What a finished build came to, for the tile at `path` (its record, whether it passed, the STL's hash): the
+    /// worker's own note beside the stream's record.
     ///
     /// # Errors
-    /// A message that cannot be written.
-    pub fn events(&self) -> Result<String, JsError> {
-        let said = std::mem::take(&mut *self.said.lock_unpoisoned());
-        let said: Vec<_> = said.iter().map(Message::wire).collect();
-        serde_json::to_string(&said)
-            .map_err(|e| JsError::new(&format!("cannot write the events: {e}")))
+    /// The tile has not been built here, or the answer cannot be written.
+    pub fn built(&self, path: &str) -> Result<String, JsError> {
+        let built = self.inner.built.borrow();
+        let b = built
+            .get(path)
+            .ok_or_else(|| JsError::new(&format!("{path} has not been built here")))?;
+        serde_json::to_string(b).map_err(|e| JsError::new(&format!("cannot write the answer: {e}")))
+    }
+
+    /// What the stream said since the last pull, as a JSON array of stream events (a tile's state with its record, the
+    /// messages a check found); they are handed over once.
+    #[must_use]
+    pub fn events(&self) -> String {
+        let said: Vec<String> = self.inner.stream.try_iter().collect();
+        format!("[{}]", said.join(","))
     }
 }

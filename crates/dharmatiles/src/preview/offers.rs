@@ -13,7 +13,7 @@ use dt_elements::{Child, Plan};
 use dt_eval::plan::{Refusal, schedule};
 use serde::{Deserialize, Serialize};
 
-use super::api::{Mistake, Out, TileRef};
+use super::api::{Mistake, Out, TileRef, TileRefReply};
 use super::edit::{Overlay, bad};
 use super::*;
 
