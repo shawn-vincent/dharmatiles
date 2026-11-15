@@ -75,7 +75,7 @@ addEventListener('DOMContentLoaded', async () => {
     book = await r.json();
   } catch (e) {
     // the key under each picture still reads without its boxes: say why they are missing
-    console.error(`the callouts of the editor's pictures need assets/shots/shots.json (${e.message}); serve docs/ over http`);
+    console.error(`the callouts of the editor's pictures need assets/shots/shots.json (${e instanceof Error ? e.message : String(e)}); serve docs/ over http`);
     return;
   }
   for (const fig of figs) {
@@ -92,11 +92,11 @@ addEventListener('DOMContentLoaded', async () => {
       if (!box) { console.error(`picture "${fig.dataset.shot}" has no callout "${li.dataset.at}"`); return; }
       const pin = document.createElement('li');
       pin.className = 'pin' + (box.y > shot.h * 0.9 ? ' foot' : '');
-      const pct = (v, of) => `${(100 * v / of).toFixed(3)}%`;
+      const pct = (/** @type {number} */ v, /** @type {number} */ of) => `${(100 * v / of).toFixed(3)}%`;
       pin.style.cssText = `left:${pct(box.x, shot.w)};top:${pct(box.y, shot.h)};width:${pct(box.w, shot.w)};height:${pct(box.h, shot.h)}`;
       pin.innerHTML = `<b>${i + 1}</b>`;
       pins.append(pin);
-      const on = (v) => () => pin.classList.toggle('on', v);
+      const on = (/** @type {boolean} */ v) => () => pin.classList.toggle('on', v);
       li.addEventListener('mouseenter', on(true));
       li.addEventListener('mouseleave', on(false));
     });

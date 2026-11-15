@@ -40,6 +40,7 @@ export class LiteViewer {
   }
 
   /** A mesh (`positions`, `colours`: three floats a corner, three corners a triangle) on a tile of `footprint` mm. */
+  /** @param {Float32Array} positions @param {Float32Array} colours @param {[number, number]} footprint @param {{ keepView?: boolean }} [opts] */
   setMesh(positions, colours, footprint, { keepView = true } = {}) {
     const first = !this.mesh;
     if (this.mesh) { this.mesh.geometry.dispose(); this.scene.remove(this.mesh); }
@@ -65,6 +66,7 @@ export class LiteViewer {
     this.invalidate();
   }
 
+  /** @param {number} w @param {number} h */
   resize(w, h) {
     if (!w || !h) return;
     const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -90,6 +92,7 @@ export class LiteViewer {
   }
 
   /** Where the point (x, y, z) mm of the tile falls on the canvas, in CSS pixels. */
+  /** @param {number} x @param {number} y @param {number} [z] */
   project(x, y, z = 0) {
     const v = new THREE.Vector3(x, y, z).project(this.camera);
     return { x: ((v.x + 1) / 2) * this.size.w, y: ((1 - v.y) / 2) * this.size.h };

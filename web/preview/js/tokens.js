@@ -14,6 +14,7 @@ function watch() {
 }
 
 /** The value of the CSS custom property `name` on the root (empty when unset). */
+/** @param {string} name */
 export function token(name) {
   if (!watching) watch();
   let v = cache.get(name);

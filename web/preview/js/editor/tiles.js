@@ -14,6 +14,7 @@ import { doc, renameable, server, stem, tile, view, whenListed } from './stores.
 
 // A first tile: valid, printable ground in My tiles (or in the folder the browser is at, `into`:
 // {root, dir, name}), ready for the same text/lens/direct edits as every other tile.
+/** @type {{ root: number, dir: string } | null} */
 let makingIn = null;
 /**
  * @param {{ root: number | null, dir?: string, name?: string } | null} [into]
@@ -64,7 +65,7 @@ export function startRename() {
   $('tilebtn').before(input);
   input.focus(); input.select();
   let done = false;
-  const finish = async (commit) => {
+  const finish = async (/** @type {boolean} */ commit) => {
     if (done) return;
     const name = input.value.trim();
     if (!commit || !name || name === stem(t)) { done = true; input.remove(); $('tilebtn').hidden = false; doc.set({ note: null }); return; }
@@ -101,6 +102,7 @@ export function startRename() {
 let minting = false;
 
 /** The copy is deleted and the library tile is shown again (the toast's Undo). */
+/** @param {{ id: string, name: string }} copy @param {{ id: string, name: string }} lib */
 async function undoMine(copy, lib) {
   abandonChanges();
   await select(lib.id, true);
@@ -169,7 +171,7 @@ export function init() {
     $('new-note').textContent = 'Making the tile…';
     let r;
     try {
-      r = await host.newTile($('new-name').value, $('new-size').value, makingIn);
+      r = await host.newTile($('new-name').value, $('new-size').value, makingIn ?? undefined);
     } catch (e) {
       ok.disabled = false;
       $('new-note').textContent = 'The tile could not be made.';

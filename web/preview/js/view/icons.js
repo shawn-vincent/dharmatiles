@@ -52,27 +52,34 @@ const CAMERAS = {
 /** name -> the svg's inner markup, on a 24 grid. */
 export const ICONS = { ...LUCIDE, ...CAMERAS };
 /** The icon of a camera preset (a name of VIEWS in viewer/consts.js). */
-export const cameraIcon = (view) => `view-${view === 'painted' ? 'iso' : view}`;
+export const cameraIcon = (/** @type {string} */ view) => `view-${view === 'painted' ? 'iso' : view}`;
 
 let uid = 0;
 /** The markup of an icon (a camera's clip path gets an id of its own: two of one icon in a page must not share it). */
+/** @param {string} name */
 function inner(name) {
-  const g = ICONS[name];
+  const g = /** @type {Record<string, string | undefined>} */ (ICONS)[name];
   if (g == null) throw new Error(`icons.js: there is no icon named "${name}"`);
   return g.includes('CROPID') ? g.replaceAll('CROPID', `crop${++uid}`) : g;
 }
 
 /** An icon as a string of svg (for markup built by hand). */
+/** @param {string} name @param {number} [size] */
 export function iconSvg(name, size = 16) {
   return `<svg class="ico${name.startsWith('view-') ? ' cam' : ''}" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${inner(name)}</svg>`;
 }
 
 /** An icon as a component: `<${Icon} name="chevron-right" />`; `size` is 16 (14 inline, 20 for a camera). */
+/** @param {{ name: string, size?: number }} p */
 export function Icon({ name, size = 16 }) {
   return html`<svg class=${`ico${name.startsWith('view-') ? ' cam' : ''}`} viewBox="0 0 24 24" width=${size} height=${size} aria-hidden="true" dangerouslySetInnerHTML=${{ __html: inner(name) }} />`;
 }
 
 /** Draw the icon of every `<i data-icon="name" [data-size="14"]>` under `root` (index.html's own marks). */
+/** @param {ParentNode} root */
 export function fillIcons(root) {
-  for (const el of root.querySelectorAll('i[data-icon]')) el.outerHTML = iconSvg(el.dataset.icon, Number(el.dataset.size) || 16);
+  for (const el of root.querySelectorAll('i[data-icon]')) {
+    if (!(el instanceof HTMLElement) || !el.dataset.icon) throw new Error('icons.js: an <i data-icon> has no icon name');
+    el.outerHTML = iconSvg(el.dataset.icon, Number(el.dataset.size) || 16);
+  }
 }

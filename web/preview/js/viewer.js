@@ -33,6 +33,8 @@ export { VIEWS } from './viewer/consts.js';
  * }} ViewerParts
  */
 
+/** What the viewer frames and rules a grid from: the plans that have a size (a tile, an STL, a print list); a model with no size is not one. @typedef {Extract<import('./api').TilePlan, { sizeMm: unknown }>} ViewPlan */
+
 /** What `Viewer` extends: nothing at run time (the methods are on `Viewer.prototype`), `ViewerParts` to the checker. */
 const Parts = /** @type {new () => ViewerParts} */ (class {});
 
@@ -77,7 +79,7 @@ export class Viewer extends Parts {
     this.fxTarget = /** @type {Record<string, number>} */ ({ ...this.fx });
     this.fadeTween = /** @type {number | null} */ (null);
     this.regionLayer = /** @type {{focus: boolean, group: THREE.Group & {children: THREE.Mesh[]}} | null} */ (null); // {focus, group}: the selected region flat at zero, or every region faint (setRegionLayer)
-    const pair = (alpha, mode) => {
+    const pair = (/** @type {number} */ alpha, /** @type {number} */ mode) => {
       const u = { ...this.uniforms, uMode: { value: mode }, uGhost: { value: alpha } };
       return {
         u,
@@ -121,7 +123,7 @@ export class Viewer extends Parts {
     this.showOverhang = true;
     this.showPaint = true;
     this.showGrid = true;
-    this.plan = null;
+    this.plan = /** @type {ViewPlan | null} */ (null);
     this.debug = null; // the payload's debug marks (the grass's), drawn while showDebug
     this.clouds = null; // the payload's clouds: what a selected top= or pin is drawn from
     this.debugGroup = /** @type {THREE.Group | null} */ (null);
@@ -162,7 +164,7 @@ export class Viewer extends Parts {
     this.render();
   }
 
-  /** Swap in a parsed payload in place: the camera stays where it is. */
+  /** Swap in a parsed payload in place: the camera stays where it is. @param {import('./payload.js').Payload} payload */
   setMesh(payload) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(payload.positions, 3));
@@ -203,9 +205,11 @@ export class Viewer extends Parts {
   }
 
   /** How the debug layer's colours are read: `fn(token)` gives a CSS colour (the theme's `--dbg-…`). */
+  /** @param {(token: string) => string} fn */
   setDebugColours(fn) { this.debugColour = fn; this.buildDebug(); this.buildCloud(); this.draw(); }
 
   /** Show or hide the debug layer (the payload's `debug`: grass starts and spines; the clouds, the payload's `clouds`, are drawn as part of the selection, setCloud). */
+  /** @param {boolean} on */
   setDebugShown(on) { this.showDebug = on; this.buildDebug(); this.draw(); }
 
   clear() {
@@ -217,6 +221,7 @@ export class Viewer extends Parts {
   }
 
   /** The tile's squares, for the grid at the square size. */
+  /** @param {ViewPlan | null} plan */
   setPlan(plan) { this.plan = plan; this.buildGrid(); this.draw(); }
 
   /**
@@ -231,12 +236,13 @@ export class Viewer extends Parts {
    *   plan   the tile's squares (the grid, and the frame before its mesh is in).
    *   box    a map: the world box of its pieces and grid.
    *   focus  a map: the box of the piece the Close view frames.
+   * @param {ReturnType<typeof import('./editor/framing.js').describe>} d
    */
   describe(d) {
     const was = this.desc;
     this.desc = null; // what is dropped and set below does not move the camera: the one refit at the end does
     if (!d || d.doc !== was?.doc) this.clear();
-    const plan = d?.plan ?? null;
+    const plan = d?.plan && 'sizeMm' in d.plan ? d.plan : null;
     if (JSON.stringify(plan) !== JSON.stringify(this.plan)) this.setPlan(plan);
     this.sceneBox = d?.kind === 'map' ? d.box : null;
     this.desc = d;
@@ -252,7 +258,7 @@ export class Viewer extends Parts {
     const a = this.fr.step(step);
     if (a.do === 'restore') this.restoreCamera(a.camera);
     else if (a.do === 'frame') {
-      const focus = a.view === 'close' && d.kind === 'map' && d.focus ? { ...d.focus, fit: true } : null;
+      const focus = a.view === 'close' && d?.kind === 'map' && d.focus ? { ...d.focus, fit: true } : null;
       this.place(a.view, focus ?? a.box, a.animate);
     }
     this.publishFraming();
@@ -274,9 +280,10 @@ export class Viewer extends Parts {
     // a map: the pieces placed
     if (this.sceneOn && this.sceneBox) return this.sceneBox;
     // a plate: the bed is what is framed, with the pieces' height
-    const bed = this.payload?.meta?.bed;
-    if (bed) return { lo: [0, 0, 0], hi: [bed[0], bed[1], Math.max(this.payload.meta.hi[2], 1)] };
-    if (this.payload) return { lo: this.payload.meta.lo, hi: this.payload.meta.hi };
+    const meta = this.payload?.meta;
+    const bed = meta?.bed;
+    if (meta && bed) return { lo: [0, 0, 0], hi: [bed[0], bed[1], Math.max(meta.hi[2], 1)] };
+    if (meta) return { lo: meta.lo, hi: meta.hi };
     // a plan with a size (a print list whose printer names no bed has none)
     if (this.plan?.sizeMm) return { lo: [0, 0, 0], hi: [...this.plan.sizeMm, 1] };
     return null;
@@ -284,6 +291,7 @@ export class Viewer extends Parts {
 
   /** What the camera frames: `bounds()`, except that a tile still building is followed: its footprint grown to take in each sketch. */
   frameBox() {
+    if (!this.desc) throw new Error('the viewer was asked for its frame with nothing described');
     if (this.desc.kind === 'map') return this.desc.box;
     if (this.payload) return this.bounds();
     // no plan, no footprint: nothing to frame yet (the program has not said how big the tile is)
@@ -296,18 +304,23 @@ export class Viewer extends Parts {
     return b;
   }
 
+  /** @param {boolean} on */
   setOverhang(on) { this.showOverhang = on; this.refreshPaint(); }
 
+  /** @param {boolean} on */
   setPaint(on) { this.showPaint = on; this.refreshPaint(); }
 
+  /** @param {boolean} on */
   setWireframe(on) { this.material.wireframe = on; this.draw(); }
 
+  /** @param {boolean} on */
   setGrid(on) { this.showGrid = on; if (this.grid) this.grid.visible = on && !this.backdrop.on(); this.backdrop.setGrid(on); this.draw(); }
 
   /**
    * What is under canvas point (x, y) in CSS pixels: {entry, piece}, or
    * null for the plate.  One pixel rendered with the pick pass, so it is
    * exactly what the eye sees there, whatever is in front.
+   * @param {number} x @param {number} y
    */
   pick(x, y) {
     if (!this.pickPixel(x, y)) return null;
@@ -344,7 +357,7 @@ export class Viewer extends Parts {
     return q ? { p: [q.x, q.y, q.z], onTile: false } : null;
   }
 
-  /** Render the pick scene's one pixel under (x, y) into pickBytes. */
+  /** Render the pick scene's one pixel under (x, y) into pickBytes. @param {number} x @param {number} y */
   pickPixel(x, y) {
     if (!this.pickMesh && !this.sceneOn) return false;
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
@@ -363,6 +376,7 @@ export class Viewer extends Parts {
   }
 
   /** Fade what isn't selected (on by default). */
+  /** @param {boolean} on */
   setFade(on) { this.fade = !!on; this.applyFade(); this.draw(); }
 
   /** The centre of what entry (and piece) made, for flying to it; null when it has no triangles. @param {number} entry @param {number | null} [piece] */
@@ -386,9 +400,9 @@ export class Viewer extends Parts {
   /** The gate-painted face the user should inspect first. */
   worstFlagged() { return this.payload ? worstFlagged(this.payload) : null; }
 
-  /** Where world point `p` falls on the canvas, in CSS pixels. */
+  /** Where world point `p` falls on the canvas, in CSS pixels. @param {ArrayLike<number>} p */
   project(p) {
-    const v = new THREE.Vector3(...p).project(this.camera);
+    const v = new THREE.Vector3(p[0], p[1], p[2]).project(this.camera);
     return { x: ((v.x + 1) / 2) * this.canvas.clientWidth, y: ((1 - v.y) / 2) * this.canvas.clientHeight };
   }
 
@@ -414,15 +428,18 @@ export class Viewer extends Parts {
   }
 
   /** The camera's direction, to a quarter of a degree: a signal that changes only when it does. */
+  /** @param {number} elev @param {number} azim */
   publishPose(elev, azim) {
     const e = Math.round(elev * 4) / 4, a = Math.round(azim * 4) / 4, c = this.lookFrom.peek();
     if (c.elev !== e || c.azim !== a) this.lookFrom.value = { elev: e, azim: a };
   }
 
   /** `fn()` after every draw; the result removes it.  Every part that draws over the view adds its own. */
+  /** @param {() => void} fn */
   onRenderHook(fn) { return this.renderHooks.add(fn); }
 
   /** `fn()` when the person moves the view (not when the program does); the result removes it. */
+  /** @param {() => void} fn */
   onUserViewChangeHook(fn) { return this.userViewHooks.add(fn); }
 
   // The one-slot properties these hooks replaced: assigning one would drop the others, so it is an error.

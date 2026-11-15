@@ -26,12 +26,14 @@ export const CLASSES = [
 const byClass = new Map(CLASSES.map((c) => [c[0], c]));
 
 /** A class's [token, label, kind]; an unknown class (a newer server) shows under its own name in the flow colour. */
+/** @param {string} cls */
 export function classInfo(cls) {
   const c = byClass.get(cls);
   return c ? { token: c[1], label: c[2], kind: c[3] } : { token: '--dbg-flow', label: cls, kind: 'line' };
 }
 
 /** Polylines `[[x, y, z, …], …]` as segment pairs: a Float32Array of 6 numbers per segment. */
+/** @param {Array<ArrayLike<number> & { slice(a: number, b: number): ArrayLike<number> }>} trails */
 export function segments(trails) {
   let n = 0;
   for (const t of trails) n += Math.max(0, t.length / 3 - 1);
@@ -39,7 +41,7 @@ export function segments(trails) {
   let o = 0;
   for (const t of trails) {
     for (let k = 3; k < t.length; k += 3) {
-      out.set(t.subarray ? t.subarray(k - 3, k + 3) : t.slice(k - 3, k + 3), o);
+      out.set(t.slice(k - 3, k + 3), o);
       o += 6;
     }
   }
@@ -49,6 +51,7 @@ export function segments(trails) {
 /**
  * The layer's legend: one row per class drawn, in CLASSES order, with its
  * count.  `[{token, label, kind, n}]`.
+ * @param {import('./api').DebugMarks | null | undefined} debug
  */
 export function legendRows(debug) {
   if (!debug) return [];
@@ -59,7 +62,7 @@ export function legendRows(debug) {
     if (!seen.has(cls)) continue;
     const info = classInfo(cls);
     const kind = debug.dots?.[cls] ? 'dot' : 'line';
-    const n = kind === 'dot' ? debug.dots[cls].length / 3 : debug.trails[cls].length;
+    const n = kind === 'dot' ? (debug.dots?.[cls]?.length ?? 0) / 3 : (debug.trails?.[cls]?.length ?? 0);
     if (n > 0) rows.push({ ...info, kind, n });
   }
   return rows;

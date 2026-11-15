@@ -73,7 +73,7 @@ class DtExample extends HTMLElement {
       // the poster was of another tile
       this.querySelector('.dtx-poster')?.remove();
     } catch (e) {
-      throw new Error(`the playground's address holds a source that cannot be read: ${e.message}`);
+      throw new Error(`the playground's address holds a source that cannot be read: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -91,7 +91,7 @@ class DtExample extends HTMLElement {
       const p = document.createElement('p');
       p.className = 'dtx-fail';
       p.setAttribute('role', 'alert');
-      p.textContent = `This example could not start: ${e.message}`;
+      p.textContent = `This example could not start: ${e instanceof Error ? e.message : String(e)}`;
       this.prepend(p);
       throw e;
     }

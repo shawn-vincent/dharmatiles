@@ -11,14 +11,21 @@ function ctx2d(cv){ const c=cv.getContext("2d"); if(!c) throw new Error("This br
 function byId(id){ const e=document.getElementById(id); if(!e) throw new Error("The page has no element #"+id+"."); return e; }
 /** The demo's canvas: every demo's markup has one. @param {ParentNode} root @returns {HTMLCanvasElement} */
 function canvasIn(root){ const c=root.querySelector("canvas"); if(!c) throw new Error("The demo's markup has no canvas."); return c; }
+/** A seeded stream of numbers in [0, 1). @param {number} s @returns {() => number} */
 function rng(s){ return function(){ s|=0; s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+/** @param {number} i @param {number} j @param {number} s */
 function h2(i,j,s){ let h=Math.imul(i,374761393)+Math.imul(j,668265263)+Math.imul(s,1442695041)|0; h=Math.imul(h^(h>>>13),1274126177); h^=h>>>16; return (h>>>0)/4294967296; }
+/** @param {number} x @param {number} y @param {number} s */
 function vn(x,y,s){ const i=Math.floor(x), j=Math.floor(y), fx=x-i, fy=y-j, u=fx*fx*(3-2*fx), v=fy*fy*(3-2*fy);
   const a=h2(i,j,s), b=h2(i+1,j,s), c=h2(i,j+1,s), d=h2(i+1,j+1,s); return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v; }
+/** @param {number} x @param {number} y @param {number} s @param {number} [o] */
 function fbm(x,y,s,o=4){ let a=0,amp=1,f=1,n=0; for(let k=0;k<o;k++){ a+=amp*vn(x*f,y*f,s+k*17); n+=amp; amp*=.5; f*=2.03; } return a/n; }
+/** @param {number} e0 @param {number} e1 @param {number} x */
 const smooth=(e0,e1,x)=>{ const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0))); return t*t*(3-2*t); };
+/** @param {number} a @param {number} b @param {number} k */
 function smax(a,b,k){ const h=Math.max(k-Math.abs(a-b),0)/k; return Math.max(a,b)+h*h*k*.25; }
 /* shade a heightfield H (n x n, mm) with cell size c (mm) into canvas using colour fn */
+/** @param {HTMLCanvasElement} cv @param {ArrayLike<number>} H @param {number} n @param {number} c @param {(i: number, j: number, k: number) => number[]} colAt */
 function shade(cv, H, n, c, colAt){
   const off=document.createElement("canvas"); off.width=n; off.height=n; const ox=ctx2d(off); const img=ox.createImageData(n,n);
   const L=[-.55,-.6,.58]; const ln=Math.hypot(...L); L[0]/=ln; L[1]/=ln; L[2]/=ln;
@@ -32,10 +39,13 @@ function shade(cv, H, n, c, colAt){
   ox.putImageData(img,0,0); const ctx=ctx2d(cv); ctx.imageSmoothingEnabled=true; ctx.drawImage(off,0,0,cv.width,cv.height);
 }
 /* generic stepper */
+/** A part of a demo's markup, by selector: every demo's markup has the steps list and the play button. @param {ParentNode} root @param {string} sel @returns {HTMLElement} */
+function partIn(root,sel){ const e=root.querySelector(sel); if(!e) throw new Error("The demo's markup has no "+sel+"."); return /** @type {HTMLElement} */ (e); }
+/** @param {HTMLElement} root @param {string[]} steps @param {(step: number) => void} draw */
 function stepper(root, steps, draw){
-  const ol=root.querySelector("ol.steps"); const btn=root.querySelector("[data-play]"); let cur=steps.length-1, timer=null;
+  const ol=partIn(root,"ol.steps"); const btn=partIn(root,"[data-play]"); let cur=steps.length-1, timer=/** @type {ReturnType<typeof setInterval> | null} */ (null);
   steps.forEach((s,i)=>{ const li=document.createElement("li"); li.textContent=s; li.tabIndex=0; li.addEventListener("click",()=>{stop(); go(i);}); li.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); stop(); go(i);} }); ol.appendChild(li); });
-  function go(i){ cur=i; [...ol.children].forEach((li,k)=>li.classList.toggle("on",k===i)); draw(i); }
+  /** @param {number} i */ function go(i){ cur=i; [...ol.children].forEach((li,k)=>li.classList.toggle("on",k===i)); draw(i); }
   function stop(){ if(timer){ clearInterval(timer); timer=null; btn.textContent="Play"; } }
   btn.addEventListener("click",()=>{ if(timer){ stop(); return; } btn.textContent="Pause"; go(0); timer=setInterval(()=>{ if(cur>=steps.length-1){ stop(); return; } go(cur+1); },2200); });
   go(cur);
@@ -47,19 +57,23 @@ function stepper(root, steps, draw){
   const n=240, mm=40/n; // 40 mm field
   const R=rng(11); const cx=20, cy=20, rx=12.5, ry=9.5, ht=9;
   // dome profile (never widens upward)
-  const dome=new Float32Array(n*n), grad=[];
+  const dome=new Float32Array(n*n);
+  /** @param {number} x @param {number} y */
   const domeAt=(x,y)=>{ const ux=(x-cx)/rx, uy=(y-cy)/ry; const ang=Math.atan2(uy,ux); const lump=1+.06*Math.cos(2*ang+1)+.05*Math.cos(3*ang+2)+.03*Math.cos(5*ang);
     const r=Math.pow(Math.pow(Math.abs(ux),2.6)+Math.pow(Math.abs(uy),2.6),1/2.6)/lump; return r>=1?-1:ht*Math.pow(1-Math.pow(r,2.2),.55); };
   for(let j=0;j<n;j++) for(let i=0;i<n;i++) dome[j*n+i]=domeAt(i*mm,j*mm);
   // facet seeds: blue noise with mixed radii on dome
+  /** @type {{x:number,y:number,r:number,z:number}[]} */
   const seeds=[]; for(let t=0;t<3000 && seeds.length<46;t++){ const x=cx+(R()*2-1)*rx, y=cy+(R()*2-1)*ry; const z=domeAt(x,y); if(z<.3) continue;
     const r=.9+R()*1.6; if(seeds.every(s=>Math.hypot(s.x-x,s.y-y)>(s.r+r)*1.25)) seeds.push({x,y,r,z}); }
   seeds.sort((a,b)=>b.r-a.r);
   const planes=seeds.map(s=>{ const e=.05; let gx=(domeAt(s.x+e,s.y)-domeAt(s.x-e,s.y))/(2*e), gy=(domeAt(s.x,s.y+e)-domeAt(s.x,s.y-e))/(2*e);
     const tilt=.25; gx+= (R()*2-1)*tilt; gy+=(R()*2-1)*tilt; return {x:s.x,y:s.y,z:s.z+.15,gx,gy}; });
+  /** @type {{x:number,y:number,z:number,gx:number,gy:number}[]} */
   const chips=[]; for(let k=0;k<9;k++){ const a=R()*Math.PI*2; const x=cx+Math.cos(a)*rx*.82, y=cy+Math.sin(a)*ry*.82; const z=domeAt(x,y);
     if(z<=0) continue; chips.push({x,y,z:z-.35,gx:-Math.cos(a)*2.4,gy:-Math.sin(a)*2.4}); }
   const steps=["Profile body: a hull that never widens going up, with lumps that depend only on angle","Facet planes: blue-noise seeds with mixed radii, each a tilted tangent plane","Chips: small steep planes at sharp corners and edges, capped volume","Grain: fBm along the normal, faded toward the base","Seat: set into the ground under it, below the lowest point of its footprint"];
+  /** @param {number} step @param {number} count */
   function build(step, count){
     const H=new Float32Array(n*n), mat=new Uint8Array(n*n);
     for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const k=j*n+i, x=i*mm, y=j*mm; let z=dome[k];
@@ -71,10 +85,12 @@ function stepper(root, steps, draw){
     }
     return {H,mat};
   }
+  /** @type {number | null} */
   let anim=null;
+  /** @param {number} step */
   function draw(step){
     if(anim) cancelAnimationFrame(anim);
-    const paint=(count)=>{ const {H,mat}=build(step,count); const cv2=cv; cv2.width=480; cv2.height=480*0.75;
+    const paint=(/** @type {number} */ count)=>{ const {H,mat}=build(step,count); const cv2=cv; cv2.width=480; cv2.height=480*0.75;
       const tmp=document.createElement("canvas"); tmp.width=n; tmp.height=n;
       shade(tmp,H,n,mm,(i,j,k)=>mat[k]?[168,172,182]:(step>=4?[150,116,80]:[205,208,200]));
       const ctx=ctx2d(cv); ctx.drawImage(tmp,0,n*.125,n,n*.75,0,0,cv.width,cv.height); };
@@ -88,12 +104,11 @@ function stepper(root, steps, draw){
   const root=document.getElementById("d-cliff"); if(!root) return; const cv=canvasIn(root), ctx=ctx2d(cv);
   const W=70, Hh=40, s=8; const R=rng(7);
   // target T(x): tiers + gully
-  const T=[]; let x=0; const tiers=[]; while(x<W){ const w=8+R()*9; const h=[27,31,34,37][Math.floor(R()*4)]; tiers.push([x,Math.min(W,x+w),h]); x+=w; }
+  /** @type {number[]} */ const T=[]; let x=0; const tiers=[]; while(x<W){ const w=8+R()*9; const h=[27,31,34,37][Math.floor(R()*4)]; tiers.push([x,Math.min(W,x+w),h]); x+=w; }
   for(let i=0;i<W;i++){ const t=/** @type {number[]} */ (tiers.find(t=>i>=t[0]&&i<t[1])); /* the tiers cover 0..W */ let h=t[2]; if(i>=40&&i<44) h-=7; T.push(h); }
-  const zone=i=>Math.exp(-((i-22)**2)/(2*36)); // shattered zone near x=22
+  const zone=(/** @type {number} */ i)=>Math.exp(-((i-22)**2)/(2*36)); // shattered zone near x=22
   // gravity stack
   const S=new Array(W).fill(0);
-  /** @type {Array<{x0:number,x1:number,z0:number,z1:number,k:number,col?:number,d?:number[]}>} */
   /** @type {{x0:number,x1:number,z0:number,z1:number,k:number,col:number,d:number[]}[]} */
   const stones=[];
   for(let guard=0;guard<400;guard++){
@@ -107,17 +122,21 @@ function stepper(root, steps, draw){
     stones.push({x0:a,x1:b+1,z0:bz,z1:top,k:stones.length,col:0,d:[0,0,0,0]}); for(let i=a;i<=b;i++) S[i]=top;
   }
   // columns: union stones whose footprints overlap >=60%
-  const par=stones.map((_,i)=>i); const f=i=>par[i]===i?i:(par[i]=f(par[i]));
+  const par=stones.map((_,i)=>i); const f=/** @type {(i: number) => number} */ (i=>par[i]===i?i:(par[i]=f(par[i])));
   stones.forEach((A,i)=>stones.forEach((B,j)=>{ if(j<=i) return; if(Math.abs(B.z0-A.z1)<.01||Math.abs(A.z0-B.z1)<.01){ const ov=Math.min(A.x1,B.x1)-Math.max(A.x0,B.x0); if(ov>=.6*Math.min(A.x1-A.x0,B.x1-B.x0)) par[f(i)]=f(j); } }));
   stones.forEach(st=>{ st.col=f(st.k); st.d=[R()*.7,R()*.7,R()*.5,R()*.5]; });
   // cracks: random walks inside stones, mostly steep
+  /** @type {{pts:number[][],lip:boolean}[]} */
   const cracks=[]; stones.forEach(st=>{ if((st.x1-st.x0)*(st.z1-st.z0)<30 || R()<.35) return; let px=st.x0+(st.x1-st.x0)*(.3+R()*.4), pz=st.z0+(st.z1-st.z0)*(.4+R()*.3); const pts=[[px,pz]]; let ang=Math.PI/2+(R()-.5)*.9;
     for(let k=0;k<60;k++){ ang+= (R()-.5)*.5; px+=Math.cos(ang)*.8; pz+=Math.sin(ang)*.8; pts.push([px,pz]); if(px<=st.x0+.2||px>=st.x1-.2||pz>=st.z1-.1||pz<=st.z0+.1) break; }
     cracks.push({pts,lip:R()<.5}); });
+  /** @type {{x:number,r:number,a:number}[]} */
   const scree=[]; for(let k=0;k<60;k++){ const xx=R()*W, r=.4+R()*R()*2.2; scree.push({x:xx,r,a:R()*6}); }
   const steps=["Form: a target heightfield T with tiers and a gully; shattered zones shrink stone size","Gravity stack: fill the lowest pocket, snap footprints, redraw heights so tops never align","Columns: union-find over stones sharing at least 60% of a footprint","Hidden core: support eroded by 2 mm, so joints show a dark recess, not daylight","Dress: battered planes and chamfers, accepted only under the cut guard (no fins under 1.2 mm)","Crack network: random walks grow until both ends meet an edge, cut as V-grooves with optional lips","Grain, scree and dirt: an even fine grain; scree at the foot (a scatter against the cliff); dirt lodged on the tops"];
-  const Y=z=>cv.height-14-z*s*.75, X=i=>i*s;
+  const Y=(/** @type {number} */ z)=>cv.height-14-z*s*.75, X=(/** @type {number} */ i)=>i*s;
+  /** @type {number | null} */
   let anim=null;
+  /** @param {number} step @param {number} [upto] */
   function draw(step, upto){
     const css=getComputedStyle(document.documentElement); const fg=css.getPropertyValue("--fg").trim(), muted=css.getPropertyValue("--muted").trim(), alert=css.getPropertyValue("--alert").trim();
     ctx.clearRect(0,0,cv.width,cv.height);
@@ -142,6 +161,7 @@ function stepper(root, steps, draw){
       for(let i=0;i<W;i++){ ctx.fillStyle="#8a6640"; ctx.fillRect(X(i),Y(S[i])-2,s,3); } }
     ctx.fillStyle=fg; ctx.font="12px IBM Plex Mono, monospace"; ctx.fillText(step===0?"T(x), shattered zone shaded":step===1?`${N}/${stones.length} stones`:"",8,16);
   }
+  /** @param {number} step */
   function go(step){ if(anim) cancelAnimationFrame(anim); if(step===1){ let c=0; const tick=()=>{ c+=1; draw(1,c); if(c<stones.length) anim=requestAnimationFrame(()=>setTimeout(tick,22)); }; tick(); } else draw(step); }
   stepper(root,steps,go);
 })();
@@ -150,24 +170,32 @@ function stepper(root, steps, draw){
 (() => {
   const root=document.getElementById("d-grass"); if(!root) return; const cv=canvasIn(root), ctx=ctx2d(cv);
   const W=70, px=cv.width/W; const th0=-.45; const R=rng(21);
+  /** @typedef {{x:number,y:number,a:number,b:number}} Lens  an eye-shaped clearing */
+  /** @type {Lens[]} */
   const lenses=[{x:22,y:46,a:7,b:3.2},{x:50,y:22,a:6,b:2.8}];
-  const lensM=(L,x,y)=>{ const c=Math.cos(th0), s=Math.sin(th0); const dx=x-L.x, dy=y-L.y; const u=dx*c+dy*s, v=-dx*s+dy*c; return {m:Math.abs(u)/L.a+(v/L.b)**2, u, v}; };
+  const lensM=(/** @type {Lens} */ L,/** @type {number} */ x,/** @type {number} */ y)=>{ const c=Math.cos(th0), s=Math.sin(th0); const dx=x-L.x, dy=y-L.y; const u=dx*c+dy*s, v=-dx*s+dy*c; return {m:Math.abs(u)/L.a+(v/L.b)**2, u, v}; };
+  /** @param {number} x @param {number} y @param {number} mode */
   function theta(x,y,mode){ let t=th0+(fbm(x/22,y/22,4,3)-.5)*1.4; if(mode>=1){ const sAlong=x*Math.cos(th0)+y*Math.sin(th0); t+=.36*Math.sin(2*Math.PI*sAlong/15+.7); } return t; }
+  /** @param {number} x @param {number} y @param {number} mode @returns {[number, number]} */
   function dir(x,y,mode){ let t=theta(x,y,mode); let vx=Math.cos(t), vy=Math.sin(t);
     if(mode>=2){ for(const L of lenses){ const q=lensM(L,x,y); if(q.m<3.2){ const f=Math.exp(-(q.m-1)*1.3); const px_=-Math.sin(th0), py_=Math.cos(th0); const side=Math.tanh(q.v/L.b*1.5)||1; vx+=px_*side*f*1.4; vy+=py_*side*f*1.4; } } const m=Math.hypot(vx,vy); vx/=m; vy/=m; }
     return [vx,vy]; }
-  const inLens=(x,y)=>lenses.some(L=>lensM(L,x,y).m<1);
+  const inLens=(/** @type {number} */ x,/** @type {number} */ y)=>lenses.some(L=>lensM(L,x,y).m<1);
   function hills(){ const n=140, H=new Float32Array(n*n); for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const x=i/n*W,y=j/n*W; H[j*n+i]=7*Math.max(0,fbm(x/12,y/12,8,3)-.4); }
     const tmp=document.createElement("canvas"); tmp.width=cv.width; tmp.height=cv.height; shade(tmp,H,n,W/n,()=>[150,120,86]); ctx.drawImage(tmp,0,0); }
+  /** @param {number} mode */
   function arrows(mode){ ctx.strokeStyle="rgba(20,30,25,.8)"; ctx.lineWidth=1.2; for(let y=2;y<W;y+=3.5) for(let x=2;x<W;x+=3.5){ if(mode>=2&&inLens(x,y)) continue; const [vx,vy]=dir(x,y,mode); const L=1.4;
       ctx.beginPath(); ctx.moveTo((x-vx*L)*px,(y-vy*L)*px); ctx.lineTo((x+vx*L)*px,(y+vy*L)*px); ctx.stroke(); ctx.beginPath(); ctx.arc((x+vx*L)*px,(y+vy*L)*px,1.6,0,7); ctx.fillStyle="rgba(20,30,25,.9)"; ctx.fill(); } }
   function lensDraw(){ for(const L of lenses){ ctx.save(); ctx.translate(L.x*px,L.y*px); ctx.rotate(th0); ctx.beginPath(); for(let k=0;k<=60;k++){ const u=-L.a+2*L.a*k/60; const v=L.b*Math.sqrt(Math.max(0,1-Math.abs(u)/L.a)); ctx.lineTo(u*px,v*px); } for(let k=60;k>=0;k--){ const u=-L.a+2*L.a*k/60; const v=-L.b*Math.sqrt(Math.max(0,1-Math.abs(u)/L.a)); ctx.lineTo(u*px,v*px); } ctx.closePath(); ctx.fillStyle="rgba(120,86,52,.85)"; ctx.fill(); ctx.restore(); } }
   // strands
+  /** @type {number[][]} */
   const seeds=[]; const sp=1.9; for(let y=0;y<W;y+=sp) for(let x=0;x<W;x+=sp) seeds.push([x+R()*sp, y+R()*sp, 15+R()*15]);
+  /** @param {number} x @param {number} y @param {number} len */
   function trace(x,y,len){ const pts=[[x,y]]; const h=.5; for(let d=0; d<len; d+=h){ const [a,b]=dir(x,y,2); const [c,e]=dir(x+a*h/2,y+b*h/2,2); x+=c*h; y+=e*h; if(x<1||y<1||x>W-1||y>W-1||inLens(x,y)) break; pts.push([x,y]); } return pts; }
+  /** @type {number[][][] | null} */
   let strands=null;
   function getStrands(){ if(!strands) strands=seeds.map(s=>trace(s[0],s[1],s[2])); return strands; }
-  function blades(){ const st=getStrands(); const Rb=rng(5); const all=[];
+  function blades(){ const st=getStrands(); const Rb=rng(5); const all=/** @type {{pts:number[][],key:number}[]} */ ([]);
     st.forEach(p=>{ for(let r=0;r<p.length-3;r+=Math.round(3.4+Rb()*1.5)){ const L=Math.min(p.length-1-r, Math.round(8+Rb()*4)); if(L<3) continue; all.push({pts:p.slice(r,r+L+1),key:p[r][0]*Math.cos(th0)+p[r][1]*Math.sin(th0)}); } });
     all.sort((a,b)=>a.key-b.key);
     for(const b of all){ const q=b.pts, n=q.length; const left=[],right=[];
@@ -177,6 +205,7 @@ function stepper(root, steps, draw){
       ctx.fillStyle="#7f9a4c"; ctx.fill(); ctx.strokeStyle="rgba(30,45,20,.75)"; ctx.lineWidth=.9; ctx.stroke();
       ctx.strokeStyle="rgba(230,240,190,.55)"; ctx.lineWidth=.8; ctx.beginPath(); q.slice(0,n-1).forEach((p,i)=>i?ctx.lineTo(p[0]*px,p[1]*px):ctx.moveTo(p[0]*px,p[1]*px)); ctx.stroke(); } }
   const steps=["Hills: rises-only noise, slope capped at 34°, feathered to the 3.4 mm edge level","Direction field: one angle per point (regional noise), so no vortices are possible","In-phase meander: A·sin(2πs/15 mm) along the flow coordinate s","Clearings: eye-shaped lenses aligned to the flow, which parts upstream and rejoins","Strands: Poisson seeds 1.9 mm apart, traced 15–30 mm with RK2","Blades: fronds along each strand, shingled upstream first, shortened (never sliced) at clearings"];
+  /** @param {number} step */
   function draw(step){ ctx.clearRect(0,0,cv.width,cv.height); hills(); if(step>=3) lensDraw();
     if(step===1) arrows(0); else if(step===2) arrows(1); else if(step===3) arrows(2);
     if(step===4){ ctx.strokeStyle="rgba(25,40,20,.75)"; ctx.lineWidth=1; for(const p of getStrands()){ ctx.beginPath(); p.forEach((q,i)=>i?ctx.lineTo(q[0]*px,q[1]*px):ctx.moveTo(q[0]*px,q[1]*px)); ctx.stroke(); } }
@@ -196,8 +225,9 @@ function stepper(root, steps, draw){
   const n=200, W=70, c=W/n; let wob=1;
   /** @type {string | undefined} */
   let mode="sc";
-  const xs=y=>22+3*Math.sin(y/9)+4*(fbm(3,y/14,2,3)-.5)*2;
-  const rc={x:44,y:34}; const rr=a=>5*(1+.12*Math.cos(3*a+1)+.08*Math.cos(5*a));
+  const xs=(/** @type {number} */ y)=>22+3*Math.sin(y/9)+4*(fbm(3,y/14,2,3)-.5)*2;
+  const rc={x:44,y:34}; const rr=(/** @type {number} */ a)=>5*(1+.12*Math.cos(3*a+1)+.08*Math.cos(5*a));
+  /** @param {number} d @param {number} lo @param {number} hi @param {number} nc @param {number} p @param {number} x @param {number} y @param {number} [sharpLong] */
   function train(d,lo,hi,nc,p,x,y,sharpLong){ let s=0, n2=0; for(let k=0;k<nc;k++){ const lam= nc===1?lo: lo*Math.pow(hi/lo,k/(nc-1)); const a=Math.pow(lam,1.4);
       const D=30*Math.log(1+d/30); const wobA= wob*.06*d*Math.pow(lam/hi,-.3)*(fbm(x/9,y/9,p+k,2)-.5)*2;
       let ph=2*Math.PI*D/lam + wobA + k*1.7 + p; let cc=Math.cos(ph); const sh = lam<(lo+hi)/2 ? .9 : (sharpLong??.15); cc = cc + sh*.45*(cc*cc-.5); s+=a*cc; n2+=a; } return s/n2; }
@@ -229,10 +259,13 @@ function stepper(root, steps, draw){
   const root=document.getElementById("d-dirt"); if(!root) return; const cv=canvasIn(root);
   const n=220, W=35, c=W/n; const R=rng(9);
   const U=new Float32Array(n*n); for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const x=i*c,y=j*c; U[j*n+i]=1.6*smooth(.45,.85,fbm(x/9,y/9,2,3)); }
+  /** @type {{x:number,y:number,r:number,h:number,a:number,b:number,cc:number}[]} */
   const clods=[]; for(let t=0;t<4000&&clods.length<520;t++){ const x=R()*W,y=R()*W; const P=Math.max(.3,smooth(.35,.7,fbm(x/7,y/7,6,3))); if(R()>P) continue; const r=.35+1.15*Math.pow(R(),2); clods.push({x,y,r,h:Math.min(.45,.32*r),a:R()*6,b:R()*6,cc:R()*6}); }
   clods.sort((a,b)=>b.r-a.r);
+  /** @type {{x:number,y:number,r:number,K:number,u:number[],s:number[],hp:number}[]} */
   const pebs=[]; for(let t=0;t<3000&&pebs.length<70;t++){ const x=R()*W,y=R()*W; const low=1-U[Math.floor(y/c)*n+Math.floor(x/c)]/1.6; if(R()>.25+low*.75) continue; const big=pebs.length<10; const r=big?1.1+R()*1.1:.25+R()*.5; const K=5+Math.floor(R()*4); const u=[]; for(let k=0;k<K;k++) u.push(2*Math.PI*k/K+R()*.5); pebs.push({x,y,r,K,u,s:u.map(()=>1+.35*R()),hp:r*(big?.42:.55)}); }
   const steps=["Undulation: rises-only swell, at most 1.6 mm, flat plains between","Soil roughness: fine noise over the whole surface","Clods: lumpy crumbs in patches (density never below 0.3), largest first, joined by smooth max","Grit: fine roughness of about 0.45 mm and sparse sand grains","Pebbles: faceted caps from tilted tangent planes, half-sunk in low ground, filleted with smooth max"];
+  /** @param {number} step */
   function draw(step){ const H=new Float32Array(n*n), mat=new Uint8Array(n*n);
     for(let k=0;k<n*n;k++){ const i=k%n,j=(k/n)|0, x=i*c,y=j*c; H[k]=U[k]+(step>=1?(fbm(x/1.1,y/1.1,3,3)-.5)*.22:0); }
     if(step>=2){ for(const q of clods){ const i0=Math.max(0,Math.floor((q.x-q.r*1.3)/c)), i1=Math.min(n-1,Math.ceil((q.x+q.r*1.3)/c)), j0=Math.max(0,Math.floor((q.y-q.r*1.3)/c)), j1=Math.min(n-1,Math.ceil((q.y+q.r*1.3)/c)); const base=H[Math.min(n-1,Math.floor(q.y/c))*n+Math.min(n-1,Math.floor(q.x/c))];

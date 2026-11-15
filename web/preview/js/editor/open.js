@@ -16,10 +16,12 @@ import { isEntry, isMapView, placeAt, server, stackIndex, stem, tile, tileById, 
 
 // ---- choosing a tile ---------------------------------------------------
 
+/** @type {string | null} */
 let at = null;             // the tile the view is set up for
 let started = false;       // the first list of tiles has been looked at
 
 /** Show tile `id` (null: none); false if unsaved changes were kept instead. */
+/** @param {string | null} id @param {boolean} [guarded] */
 export async function select(id, guarded = false) {
   const cur = view.get();
   if (!guarded && id !== cur.tileId && !(await canLeave())) return false;
@@ -72,8 +74,10 @@ function follow() {
 }
 
 let loadToken = 0;
+/** @param {import('./stores.js').ServerTile} t */
 async function loadMesh(t) {
   const token = ++loadToken, { epoch } = server.get(), version = t.meshVersion, docRev = t.docRev ?? 0;
+  if (version == null) throw new Error(`the mesh of ${t.name} was asked for before the program had one`);
   try {
     const buf = await host.fetchMesh(t.id, docRev);
     // the program's mesh is of another revision (null), the page moved on, or the tile did: not shown

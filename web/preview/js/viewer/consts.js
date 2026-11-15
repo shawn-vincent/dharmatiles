@@ -67,12 +67,12 @@ void main() {
   gl_FragColor = vec4(uInk, a);
 }`;
 export const NARROW_FOV = 3; // the near-orthographic end of the projection tween
-export const easeInOutCubic = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+export const easeInOutCubic = (/** @type {number} */ u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
 export const reduceMotion = () => {
   try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; /* no media queries: motion is not reduced */ }
 };
-export const rad = (d) => (d * Math.PI) / 180;
-export const dirv = (elev, azim) => new THREE.Vector3(
+export const rad = (/** @type {number} */ d) => (d * Math.PI) / 180;
+export const dirv = (/** @type {number} */ elev, /** @type {number} */ azim) => new THREE.Vector3(
   Math.cos(rad(elev)) * Math.cos(rad(azim)), Math.cos(rad(elev)) * Math.sin(rad(azim)), Math.sin(rad(elev)));
 
 export const VERT = `

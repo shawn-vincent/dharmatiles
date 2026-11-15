@@ -17,12 +17,16 @@ export const MAX_LAYERS = 3;
 /** A `hi` above every dither value: the layer keeps all that is left. */
 export const ALL = 2;
 
-/** A fresh state for a piece: no fade running (one layer, or none). */
+/** One picture a piece shows, by what made it (a geometry, or a name): when it began. @template K @typedef {{ key: K, t0: number }} Layer */
+/** @template K @typedef {{ layers: Layer<K>[] }} Fade */
+
+/** A fresh state for a piece: no fade running (one layer, or none). @returns {Fade<any>} the keys are the caller's (the viewer's geometries; the tests' names) */
 export const newFade = () => ({ layers: [] });
 
 /**
  * Begin a swap at `now` (ms) from the key `outgoing` to `incoming`.  Layers are `{key, t0}`, newest first; the
  * first swap puts the old key under the new one.
+ * @template K @param {Fade<K>} fade @param {number} now @param {K} outgoing @param {K} incoming
  */
 export function swap(fade, now, outgoing, incoming) {
   if (fade.layers.length === 0) fade.layers.push({ key: outgoing, t0: now });
@@ -31,13 +35,14 @@ export function swap(fade, now, outgoing, incoming) {
 }
 
 /** Eased progress of a layer at `now`. */
-export const progress = (layer, now, ms = CROSSFADE_MS) => easeInOutCubic(Math.min(1, Math.max(0, (now - layer.t0) / ms)));
+export const progress = (/** @type {Layer<unknown>} */ layer, /** @type {number} */ now, ms = CROSSFADE_MS) => easeInOutCubic(Math.min(1, Math.max(0, (now - layer.t0) / ms)));
 
 /**
  * The dither interval `[lo, hi)` each layer draws at `now`, newest first.  A layer that has finished takes all
  * that is left, so everything older is empty: those layers are dropped from the state in place.  The oldest
  * layer's `hi` is `ALL`.  Together the intervals cover [0, 1) exactly once.
  */
+/** @param {Fade<unknown>} fade @param {number} now @param {number} [ms] */
 export function intervals(fade, now, ms) {
   const ps = fade.layers.map((l) => progress(l, now, ms));
   const done = ps.findIndex((p) => p >= 1);
@@ -53,4 +58,4 @@ export function intervals(fade, now, ms) {
 }
 
 /** Whether a fade is on: more than one layer held. */
-export const running = (fade) => fade.layers.length > 1;
+export const running = (/** @type {Fade<unknown>} */ fade) => fade.layers.length > 1;

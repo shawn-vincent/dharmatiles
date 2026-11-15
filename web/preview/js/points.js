@@ -4,9 +4,10 @@
 // `"(0.5sq, 0.25sq)"`.  Nothing here reads a point back: the program's map
 // gives where each written point is.
 
-const round = (v) => String(Math.round(v * 100) / 100);
+const round = (/** @type {number} */ v) => String(Math.round(v * 100) / 100);
 
 /** The point `q` (squares from the south-west corner) as it is written, quotes included. */
+/** @param {number[]} q @param {number} rows */
 export function pointText(q, rows) {
   return `"(${round(q[0])}sq, ${round(rows - q[1])}sq)"`;
 }
@@ -16,11 +17,13 @@ export function pointText(q, rows) {
  * `at=` takes exactly one point (a range there is `dt::place`), so a drag
  * writes where it ended, as a click does.
  */
+/** @param {number[]} q @param {number} rows */
 export function placeText(q, rows) {
   return `at=${pointText(q, rows)}`;
 }
 
 /** The point as a label (no quotes), in the document's own words. */
+/** @param {number[]} q @param {number} rows */
 export function pointLabel(q, rows) {
   return pointText(q, rows).slice(1, -1);
 }

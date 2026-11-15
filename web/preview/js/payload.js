@@ -88,6 +88,7 @@ export function piecesByKey(payload) {
  * Entry 0 means no owner; a real entry is stored +1. Uint16 is exact for
  * every practical stack and half the memory of the old float attribute.
  */
+/** @param {Uint16Array} entry @param {Uint16Array} piece */
 export function ownerVertices(entry, piece) {
   const who = new Uint16Array(6 * entry.length);
   for (let t = 0; t < entry.length; t++) {
@@ -103,6 +104,7 @@ export function ownerVertices(entry, piece) {
 /**
  * The triangles the gate painted: `{t, red}`, red past the steepest angle and orange in the band.  The one reading of the
  * painted mesh against its clean twin: the worst face and the underside plan both come from here.
+ * @param {Payload} payload
  */
 export function* flaggedTriangles(payload) {
   const p = payload.painted, c = payload.clean;
@@ -118,13 +120,14 @@ export function* flaggedTriangles(payload) {
  * outline.  Seen from below the tile is turned over about its y axis, so x runs the other way (`hi.x - x`).  The plan is of the
  * program's own flags (the gate's painted faces), never a second classification; the areas are the gate's to give.  Null when
  * the mesh has no flagged face or no tile outline.
+ * @param {Payload} payload
  * @returns {{ width: number, height: number, red: string, orange: string, reds: number, oranges: number } | null}
  */
 export function undersidePlan(payload) {
   const lo = payload.meta?.lo, hi = payload.meta?.hi; // the mesh's own box, in the header of every mesh
   if (!lo || !hi) return null;
   const q = payload.positions;
-  const r = (n) => Math.round(n * 100) / 100;
+  const r = (/** @type {number} */ n) => Math.round(n * 100) / 100;
   const out = { width: hi[0] - lo[0], height: hi[1] - lo[1], red: '', orange: '', reds: 0, oranges: 0 };
   for (const { t, red } of flaggedTriangles(payload)) {
     const k = 9 * t;
@@ -138,6 +141,7 @@ export function undersidePlan(payload) {
 /**
  * The largest face painted by the gate, red before orange. Returns its owner
  * and bounds so the editor can explain a verdict by taking the user there.
+ * @param {Payload} payload
  */
 export function worstFlagged(payload) {
   let best = null;
@@ -161,7 +165,7 @@ export function worstFlagged(payload) {
   return best;
 }
 
-/** @returns {Payload} */
+/** @param {ArrayBuffer} buffer @returns {Payload} */
 export function parsePayload(buffer) {
   const head = new DataView(buffer);
   const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));

@@ -61,8 +61,8 @@ export function ribbonTriangles(/** @type {Pts} */ pts, /** @type {number} */ sq
 /** The outline of a region's lattice cells as ribbons (mm; not along the tile's own border). */
 export function outlineTriangles(/** @type {MapRegion} */ r, /** @type {TileMap} */ m, /** @type {number} */ sq, half = 0.5) {
   const step = 1 / m.cells, segs = [];
-  const set = (i, j) => i >= 0 && j >= 0 && i < r.nx && j < r.ny && r.bits[j * r.nx + i] === '1';
-  const clampX = (v) => Math.min(m.cols, Math.max(0, v)), clampY = (v) => Math.min(m.rows, Math.max(0, v));
+  const set = (/** @type {number} */ i, /** @type {number} */ j) => i >= 0 && j >= 0 && i < r.nx && j < r.ny && r.bits[j * r.nx + i] === '1';
+  const clampX = (/** @type {number} */ v) => Math.min(m.cols, Math.max(0, v)), clampY = (/** @type {number} */ v) => Math.min(m.rows, Math.max(0, v));
   for (let j = 0; j < r.ny; j++) for (let i = 0; i < r.nx; i++) {
     if (!set(i, j)) continue;
     const x0 = clampX((i - 0.5) * step), x1 = clampX((i + 0.5) * step), y0 = clampY((j - 0.5) * step), y1 = clampY((j + 0.5) * step);

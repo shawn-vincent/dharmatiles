@@ -24,7 +24,7 @@ export const KINDS = [
   ['table', 'Table', 'A wooden tabletop'],
   ['plain', 'Plain', 'Only the plate and the grid'],
 ];
-const KIND_INDEX = { wilderness: 0, cavern: 1, table: 2 };
+const KIND_INDEX = /** @type {Record<string, number>} */ ({ wilderness: 0, cavern: 1, table: 2 });
 const MAX_RECTS = 64;
 
 const NOISE = `
@@ -237,6 +237,7 @@ export class Backdrop {
   on() { return this.kind !== 'plain'; }
 
   /** Choose the kind (`wilderness`, `cavern`, `table` or `plain`). */
+  /** @param {string} kind */
   setKind(kind) {
     this.kind = KIND_INDEX[kind] === undefined ? 'plain' : kind;
     this.uniforms.uKind.value = KIND_INDEX[this.kind] ?? 0;
@@ -244,6 +245,7 @@ export class Backdrop {
   }
 
   /** Daylight (0) or dusk (1): the dark theme's backdrop is evening. */
+  /** @param {number} n */
   setNight(n) { this.night = n; this.uniforms.uNight.value = n; this.palette(); }
 
   /** The colours that belong to the kind and the hour. */
@@ -260,6 +262,7 @@ export class Backdrop {
   }
 
   /** The ground: the world box of what stands on it (lo and hi, mm), its square, and the plane's height. */
+  /** @param {{ lo: number[], hi: number[] }} box @param {number} sq @param {number} z */
   setGround(box, sq, z) {
     const u = this.uniforms;
     u.uCentre.value.set((box.lo[0] + box.hi[0]) / 2, (box.lo[1] + box.hi[1]) / 2);
@@ -271,9 +274,11 @@ export class Backdrop {
   }
 
   /** Show the grid on the ground (the view's Grid switch). */
+  /** @param {boolean} on */
   setGrid(on) { this.uniforms.uGrid.value = on ? 1 : 0; }
 
   /** The footprints standing on the ground, `[x0, y0, x1, y1]` each (mm): they cast a soft shadow. */
+  /** @param {number[][]} rects */
   setRects(rects) {
     const n = Math.min(rects.length, MAX_RECTS);
     this.uniforms.uN.value = n;
@@ -281,13 +286,14 @@ export class Backdrop {
   }
 
   /** Draw the backdrop for the viewer's camera: its pose, a far clip that reaches the horizon. */
+  /** @param {THREE.WebGLRenderer} renderer @param {THREE.PerspectiveCamera | THREE.OrthographicCamera} camera */
   render(renderer, camera) {
     const u = this.uniforms;
     u.uEye.value.copy(camera.position);
     let c;
-    if (camera.isOrthographicCamera) {
+    if (camera instanceof THREE.OrthographicCamera) {
       c = this.ortho;
-      for (const k of ['left', 'right', 'top', 'bottom', 'zoom']) c[k] = camera[k];
+      for (const k of /** @type {const} */ (['left', 'right', 'top', 'bottom', 'zoom'])) c[k] = camera[k];
       c.near = 1; c.far = 4e6;
     } else {
       c = this.cam;

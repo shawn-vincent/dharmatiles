@@ -54,7 +54,7 @@ export function nodeId(at) {
 
 /**
  * A control written on the node at byte `at`, or taken out (`value` null).
- * @param {number | null} at @param {string} name @param {string | null} value
+ * @param {number | null} at @param {string} name @param {string | number | boolean | null} value what `parseValue` (js/lens.js) makes of the typed word
  * @returns {Promise<boolean | undefined>}
  */
 export async function setControl(at, name, value) {
@@ -89,7 +89,7 @@ export async function tileEdit(body, label) {
  * @returns {Promise<void>}
  */
 export async function muteAt(byte, label = 'Entry') {
-  if (!doc.get().writable) return makeMine({ run: () => muteAt(byte, label) });
+  if (!doc.get().writable) { await makeMine({ run: () => muteAt(byte, label) }); return; }
   if (!spansUsable()) return;
   const id = nodeId(byte);
   if (id == null) return;
@@ -107,7 +107,7 @@ export async function muteAt(byte, label = 'Entry') {
  * @returns {Promise<void>}
  */
 export async function removeAt(byte, label = 'Entry') {
-  if (!doc.get().writable) return makeMine({ run: () => removeAt(byte, label) });
+  if (!doc.get().writable) { await makeMine({ run: () => removeAt(byte, label) }); return; }
   if (!spansUsable()) return;
   const id = nodeId(byte);
   if (id == null) return;
@@ -224,7 +224,8 @@ async function insertEntry(place, offer) {
   const r = await editCall(body);
   if (r.status !== 200) { refused(`Could not add ${offer.name}`, r); return; }
   doc.set({ selectAt: r.body.at });
-  edited(r.body.text, 'lens', `Added ${offer.name}`, byteToIndex(r.body.text, r.body.at));
+  // the program says where the new entry is (`at`); a reply with no place leaves the caret where it was
+  edited(r.body.text, 'lens', `Added ${offer.name}`, r.body.at == null ? null : byteToIndex(r.body.text, r.body.at));
   askDraft();
   toast(`Added ${offer.name}`, () => undo(-1));
 }

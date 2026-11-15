@@ -29,9 +29,9 @@
       "DOM.Iterable"
     ],
     "types": [],
-    "strict": false,
+    "strict": true,
     "strictNullChecks": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "skipLibCheck": false
   },
   "include": [

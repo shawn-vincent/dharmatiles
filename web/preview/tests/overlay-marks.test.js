@@ -16,7 +16,7 @@ test('every line, point, region and fill point is a mark with its source span', 
 
 test('the caret on a point lights that point; between points it lights the line; outside any mark, nothing', () => {
   const marks = marksOf(MAP);
-  const at = (needle, plus = 1) => TEXT.indexOf(needle) + plus;
+  const at = (/** @type {string} */ needle, plus = 1) => TEXT.indexOf(needle) + plus;
   assert.equal(markAtOffset(marks, TEXT, at('"(1sq, 0.4sq)"')), 'point:shore#1');
   assert.equal(markAtOffset(marks, TEXT, at('"(0sq, 0.4sq)"')), 'point:shore#0');
   assert.equal(markAtOffset(marks, TEXT, at('through')), 'line:shore');

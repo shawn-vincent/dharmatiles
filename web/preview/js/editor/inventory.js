@@ -23,8 +23,9 @@ import { colourKept, haveBlockModel, inventoryPanel, inventoryUi, pickedColour }
 import { isInventory, server, tile, view } from './stores.js';
 import { docs } from './docs.js';
 
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (/** @type {number} */ n, /** @type {string} */ one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** @param {string} c */
 function rememberColour(c) {
   try { localStorage.setItem('dt-inventory-colour', c); } catch { /* private mode: the log's last colour answers next time */ }
   colourKept.value += 1;
@@ -37,22 +38,27 @@ export function today() {
 }
 
 /** What the program refused, in words (see `whyOf`), as a toast where it was asked. */
+/** @param {import('../host.js').Reply<any> | null | undefined} r @param {string} what */
 export function say(r, what) {
   toast(`${what}: ${whyOf(r)}`, null, { ms: 9000 });
 }
 
 /** Is this a tile (not a model, a print list or the inventory)? */
-export const isTileDoc = (t) => !!t && /\.dtile$/i.test(t.path);
+export const isTileDoc = (/** @type {{ path: string } | null | undefined} */ t) => !!t && /\.dtile$/i.test(t.path);
 
 /** The strip under the crumbs. */
 export function contextLines() {
   const t = tile();
-  const p = t?.plan?.inventory;
+  const p = t?.plan && 'inventory' in t.plan ? t.plan.inventory : undefined;
   if (t?.status === 'failed') return ['This inventory does not read.', 'Source shows the file; the messages say where'];
   if (!p) return ['Reading the inventory…'];
-  return [`${plural(p.pieces.filter((x) => x.have > 0).length, 'piece')} on the shelf`];
+  return [`${plural(p.pieces.filter((/** @type {{ have: number }} */ x) => x.have > 0).length, 'piece')} on the shelf`];
 }
 
+/**
+ * One of the buttons' calls: its answer's body, or null after saying what went wrong.
+ * @template T @param {string} label @param {() => Promise<import('../host.js').Reply<T>>} run @returns {Promise<T | null>}
+ */
 async function act(label, run) {
   try {
     const r = await run();
@@ -61,6 +67,7 @@ async function act(label, run) {
   } catch (e) { showError(label, e); return null; }
 }
 
+/** @param {import('./stores.js').ServerTile} t @param {import('../api').ColourWord} colour @param {HTMLButtonElement} button */
 async function haveThis(t, colour, button) {
   button.disabled = true;
   try {
@@ -76,7 +83,7 @@ const edit = (/** @type {(s: any) => any} */ f) => { const t = tile(); if (t) in
 
 /** What the buttons do. */
 export const buttons = {
-  pickColour: (/** @type {string} */ c) => { pickedColour.value = c; rememberColour(c); },
+  pickColour: (/** @type {import('../api').ColourWord} */ c) => { pickedColour.value = c; rememberColour(c); },
   haveThis,
   setFace: (/** @type {string} */ face) => edit(() => ({ face })),
   filter: (/** @type {any} */ patch) => edit((s) => ({ filters: { ...(s.filters ?? { system: null, colour: null, show: 'all' }), ...patch } })),
@@ -102,7 +109,7 @@ export const buttons = {
  * writes one good print for the tile's current seed, the target system and the colour mode picked here; it works
  * without any export.
  */
-export const haveBlock = (t) => html`<${HaveBlock} t=${t} m=${haveBlockModel} act=${buttons} />`;
+export const haveBlock = (/** @type {import('./stores.js').ServerTile} */ t) => html`<${HaveBlock} t=${t} m=${haveBlockModel} act=${buttons} />`;
 
 /** Wire this part of the page (once, at load). */
 export function init() {

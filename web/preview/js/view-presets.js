@@ -6,10 +6,10 @@ export const PINNED_VIEWS = ['painted', 'top', 'front', 'close'];
 /** How near a camera must be to a preset's direction to count as at it, degrees. */
 export const AT_DEGREES = 2;
 
-const rad = (d) => (d * Math.PI) / 180;
-const dir = (elev, azim) => [Math.cos(rad(elev)) * Math.cos(rad(azim)), Math.cos(rad(elev)) * Math.sin(rad(azim)), Math.sin(rad(elev))];
+const rad = (/** @type {number} */ d) => (d * Math.PI) / 180;
+const dir = (/** @type {number} */ elev, /** @type {number} */ azim) => [Math.cos(rad(elev)) * Math.cos(rad(azim)), Math.cos(rad(elev)) * Math.sin(rad(azim)), Math.sin(rad(elev))];
 /** The angle between two camera directions, degrees. */
-const between = (a, b) => (Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))) * 180) / Math.PI;
+const between = (/** @type {number[]} */ a, /** @type {number[]} */ b) => (Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))) * 180) / Math.PI;
 
 /**
  * The preset the camera is at, or null: the one whose direction is within AT_DEGREES of the camera's (`elev`, `azim`, degrees, as

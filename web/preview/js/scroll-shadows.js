@@ -14,6 +14,7 @@ export const SCROLLERS = [
 const EPS = 1;
 
 /** Which edges have content beyond them: {t, b, l, r}. */
+/** @param {Element} m */
 export function edges(m) {
   return {
     t: m.scrollTop > EPS,
@@ -23,9 +24,10 @@ export function edges(m) {
   };
 }
 
+/** @param {Element} el */
 function paint(el) {
   const e = edges(el);
-  for (const k of ['t', 'b', 'l', 'r']) el.classList.toggle('sh-' + k, e[k]);
+  for (const k of /** @type {const} */ (['t', 'b', 'l', 'r'])) el.classList.toggle('sh-' + k, e[k]);
 }
 
 export function init(root = document.body, selectors = SCROLLERS) {

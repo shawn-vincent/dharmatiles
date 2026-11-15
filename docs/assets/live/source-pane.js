@@ -42,6 +42,7 @@ export class SourcePane {
   get text() { return this.area.value; }
 
   /** Replace the whole text (a control wrote the source, or the example was reset). */
+  /** @param {string} text */
   set(text) {
     this.area.value = text;
     this.#paint();
@@ -76,12 +77,14 @@ export class SourcePane {
   #probe;
 
   /** Mark ranges of the text: [{from, to, cls}] with cls `err`, `note`, `lit` or `pin`. */
+  /** @param {{ from: number, to: number, cls: string }[]} ranges */
   mark(ranges) {
     this.ranges = ranges;
     this.#paint();
   }
 
   /** Put the caret on a line (1-based) and bring it into view: a message's "go to line". */
+  /** @param {number} line */
   showLine(line) {
     const lines = this.area.value.split('\n');
     const at = lines.slice(0, line - 1).reduce((n, l) => n + l.length + 1, 0);

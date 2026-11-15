@@ -27,7 +27,7 @@ function fillTriangles(c, tris, project, z) {
 }
 
 /** A small label with a ground of its own, so it reads over any picture. */
-function tag(/** @type {CanvasRenderingContext2D} */ c, x, y, text, fill, ink) {
+function tag(/** @type {CanvasRenderingContext2D} */ c, /** @type {number} */ x, /** @type {number} */ y, /** @type {string} */ text, /** @type {string} */ fill, /** @type {string} */ ink) {
   c.font = '500 12px "JetBrains Mono", monospace';
   const w = c.measureText(text).width + 10;
   c.globalAlpha = 0.94;
@@ -123,6 +123,7 @@ export function renderMarks(c, { map, sq, drawn, squares = false, project, zAt =
     if (lit && mark.text) labelled.push({ px: { x: p.x + 11, y: p.y - 6 }, text: mark.text, fill, ink: mark.kind === 'fill' ? onRef : onPoint });
   }
   // labels keep clear of each other: a few steps up when one is taken
+  /** @type {{ x0: number, x1: number, y0: number, y1: number }[]} */
   const taken = [];
   c.font = '500 12px "JetBrains Mono", monospace';
   for (const l of labelled) {
@@ -141,7 +142,7 @@ export function renderMarks(c, { map, sq, drawn, squares = false, project, zAt =
  * @param {{ map: import('./api').TileMap | null, sq: number, drawn: Drawn[], project: Project, zAt?: (x: number, y: number) => number }} o
  * @returns {string | null}
  */
-export function markAtPoint({ map, sq, drawn, project, zAt = () => 0 }, x, y, px = 9) {
+export function markAtPoint({ map, sq, drawn, project, zAt = () => 0 }, /** @type {number} */ x, /** @type {number} */ y, px = 9) {
   if (!map) return null;
   const at = (/** @type {number[]} */ q) => project(q[0] * sq, q[1] * sq, zAt(q[0] * sq, q[1] * sq) + 0.3);
   let best = null, d = px;
@@ -171,7 +172,7 @@ export function markAtPoint({ map, sq, drawn, project, zAt = () => 0 }, x, y, px
  * The region (id) holding tile point (mx, my) in mm, among the drawn marks: the last listed wins, as the editor's does.
  * @param {{ map: import('./api').TileMap | null, sq: number, drawn: Drawn[] }} o
  */
-export function regionAtTile({ map, sq, drawn }, mx, my) {
+export function regionAtTile({ map, sq, drawn }, /** @type {number} */ mx, /** @type {number} */ my) {
   if (!map) return null;
   const i = Math.round((mx / sq) * map.cells), j = Math.round((my / sq) * map.cells);
   let hit = null;

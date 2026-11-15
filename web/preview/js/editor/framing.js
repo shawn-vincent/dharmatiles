@@ -17,6 +17,7 @@ import * as model from './model.js';
 import { view } from './stores.js';
 
 /** The world box a map is framed on: the pieces' footprints and the grid, the ground to a little over the tallest. */
+/** @param {import('../map-model.js').Piece[]} ps @param {import('../api').SceneJson} scene */
 export function frameBox(ps, scene) {
   const b = M.bounds(ps);
   let lo = b ? [...b.lo] : [0, 0], hi = b ? [...b.hi] : [0, 0];

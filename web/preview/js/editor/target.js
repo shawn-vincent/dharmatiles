@@ -19,9 +19,10 @@ import { chooserFor } from './printer-chooser.js';
 import { isMapView, isPlates, server, tile } from './stores.js';
 import { steps } from '../steps.js';
 
-const SYSTEMS = { db: 'DungeonBlocks', ol: 'OpenLOCK' };
+const SYSTEMS = /** @type {Record<string, string>} */ ({ db: 'DungeonBlocks', ol: 'OpenLOCK' });
 
 /** The target in words, such as `DungeonBlocks, default printer`. */
+/** @param {{ system: string, printer: string }} target */
 export function targetLabel({ system, printer }) {
   return `${SYSTEMS[system] || system}, ${printer === 'default' ? 'default printer' : `printer ${printer}`}`;
 }
@@ -54,12 +55,13 @@ function bind() {
     const current = d ? d.name : printer;
     const names = printers.some((p) => p.name === current) ? printers : [...printers, { name: current, mine: false, bed: null }];
     const t = tile();
-    const onPick = d ? (name) => chooseFor(t.id, name) : (name) => choose({ printer: name });
+    const onPick = d ? (/** @type {string} */ name) => chooseFor(t.id, name) : (/** @type {string} */ name) => choose({ printer: name });
     render(chooserFor({ printers: names, current, onPick, needBed: !!d, skey: 'target' }), $('target-printers'));
   });
 }
 
 /** A print list's or a map's own printer: its plates line, as its plates panel sets it. */
+/** @param {string} id @param {string} name */
 async function chooseFor(id, name) {
   // a change to the document, like any other: against the revision held, one step of the history; the answer's
   // scene names the new printer, and the chip and the status line read it there at once
@@ -67,6 +69,7 @@ async function chooseFor(id, name) {
   if (r) toast(r.note, () => undoToast(id, r.entry));
 }
 
+/** @param {import('../api').Req<'POST /api/target'>} body */
 async function choose(body) {
   const r = await host.setTarget(body);
   if (r.status !== 200) {
@@ -78,6 +81,10 @@ async function choose(body) {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  for (const b of kids($('target-system'))) b.onclick = () => choose({ system: b.dataset.sys });
+  for (const b of kids($('target-system'))) {
+    const system = b.dataset.sys;
+    if (system !== 'db' && system !== 'ol') throw new Error(`the target card's system button names no system: ${system}`);
+    b.onclick = () => choose({ system });
+  }
   bind();
 }

@@ -8,12 +8,13 @@
 export const STALE_NOTE = 'Finish the edit in the source first: the sheet and the map wait for a clean check of what is written.';
 
 /** The index in `text` of byte `b` (the program counts bytes of UTF-8; the page's strings count UTF-16 units). */
+/** @param {string} text @param {number} b */
 export function byteToIndex(text, b) {
   if (!/[^\x00-\x7f]/.test(text)) return b;
   let bytes = 0;
   for (let i = 0; i < text.length; i++) {
     if (bytes >= b) return i;
-    const c = text.codePointAt(i);
+    const c = text.codePointAt(i) ?? 0;
     bytes += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
     if (c >= 0x10000) i++;
   }
@@ -26,6 +27,7 @@ export function byteToIndex(text, b) {
  */
 export function byteIndexer(text) {
   if (!/[^\x00-\x7f]/.test(text)) return (b) => b;
+  /** @type {number[]} */
   const at = [];
   let bytes = 0;
   for (let i = 0; i < text.length; i++) {
@@ -40,6 +42,7 @@ export function byteIndexer(text) {
 }
 
 /** `d` is the doc store's state; `tileId` the tile shown. True when its spans describe its text exactly. */
+/** @param {import('./editor/stores.js').DocState} d @param {string | null} tileId */
 export function spansFresh(d, tileId) {
   return d.text != null && d.checked === d.text && d.ok === true
     && d.tileId === tileId && d.checkedFile === d.file && d.checkedTile === d.tileId;

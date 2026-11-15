@@ -7,11 +7,15 @@ import { signal } from '@preact/signals-core';
 import { docs } from './docs.js';
 import { isPlates, tile, view } from './stores.js';
 
-const chosen = signal(new Map());     // document path -> 'map' | 'plates' (the session's choice)
+/** @typedef {'map' | 'plates'} DocMode */
+const chosen = signal(/** @type {Map<string, DocMode>} */ (new Map()));     // document path -> 'map' | 'plates' (the session's choice)
 
-/** The mode of tile `t` whose document state is `scene`: null where it is not a .dmap or its scene has not come. */
+/**
+ * The mode of tile `t` whose document state is `scene`: null where it is not a .dmap or its scene has not come.
+ * @param {{ path: string } | null | undefined} t @param {import('../api').SceneJson | null | undefined} scene @param {Map<string, DocMode>} [choice]
+ */
 export function modeFor(t, scene, choice = chosen.value) {
-  if (!isPlates(t)) return null;
+  if (!t || !isPlates(t)) return null;
   return choice.get(t.path) ?? (scene ? (scene.map ? 'map' : 'plates') : null);
 }
 
@@ -20,9 +24,10 @@ view.derive('dmode', () => {
   return modeFor(t, t ? docs.scene(t.id) : null);
 });
 
-const remember = (path, mode) => { chosen.value = new Map(chosen.value).set(path, mode); };
+const remember = (/** @type {string} */ path, /** @type {DocMode} */ mode) => { chosen.value = new Map(chosen.value).set(path, mode); };
 
 /** The title bar's Map or Plates: the same document, the other view. */
+/** @param {DocMode} mode */
 export function chooseMode(mode) {
   const t = tile();
   if (!isPlates(t)) return;

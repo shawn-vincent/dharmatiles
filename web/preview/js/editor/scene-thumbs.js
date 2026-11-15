@@ -121,6 +121,7 @@ export function seedStripOf({ tile, system, current, owned }) {
  * A picture of tile `id` (a data URL), or null when it could not be made (the reason is shown where it is
  * asked for).  `key` names the tile and its look (its mesh version) so a changed tile is drawn again; `plate` is the theme's.
  */
+/** @param {string} id @param {string} key @param {string} [plate] */
 export function pictureOf(id, key, plate) {
   return thumbs.picture({ tile: id, tier: 'super-low', rev: key, plate, w: W, h: H });
 }

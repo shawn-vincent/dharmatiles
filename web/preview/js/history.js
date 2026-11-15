@@ -1,11 +1,13 @@
 const LIMIT = 76;
 
+/** @param {string} text */
 function clipped(text) {
   const one = text.replace(/\t/g, '    ').replace(/\n/g, ' ↵ ').trim();
   if (!one) return null;
   return one.length > LIMIT ? `${one.slice(0, LIMIT - 1)}…` : one;
 }
 
+/** @param {string[]} lines */
 function excerpt(lines) {
   const useful = lines.map((line) => line.trim()).filter(Boolean);
   if (!useful.length) return null;
@@ -13,6 +15,7 @@ function excerpt(lines) {
   return clipped(useful.length > 2 ? `${shown} … +${useful.length - 2} lines` : shown);
 }
 
+/** @param {string} before @param {string} after */
 function changedPart(before, after) {
   let start = 0;
   while (start < before.length && start < after.length && before[start] === after[start]) start++;
@@ -52,7 +55,7 @@ export function describeChange(before = '', after = '', kind = 'edit', custom = 
       : fragments.removed ? 'Deleted text' : fragments.added ? 'Typed'
         : before !== after ? 'Changed spacing' : 'Edited';
   }
-  const names = { lens: 'Changed properties', view: 'Changed tile', disk: 'Disk change' };
+  const names = /** @type {Record<string, string>} */ ({ lens: 'Changed properties', view: 'Changed tile', disk: 'Disk change' });
   return {
     title: `${action || names[kind] || 'Edited'} on line ${line}`,
     line,

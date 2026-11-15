@@ -8,6 +8,7 @@
 import { byteToIndex } from '../../editor/js/spans.js';
 
 /** What a slider covers when the page does not say (`controls="wobble:0..12"`): [min, max, step]. */
+/** @type {Record<string, [number, number, number]>} */
 const RANGES = { wobble: [0, 12, 0.5], width: [2, 30, 1], seed: [1, 999, 1] };
 
 /**
@@ -48,6 +49,7 @@ export function readValue(text) {
 }
 
 /** The slider's range for a control: the page's, else the name's own, else from zero to twice the value (at least 10). */
+/** @param {{ name: string, min: number | null, max: number | null }} c @param {number} current */
 export function rangeOf(c, current) {
   const d = RANGES[c.name];
   const min = c.min ?? d?.[0] ?? 0;
@@ -67,6 +69,6 @@ export function writeValue(source, at, value) {
   const written = read.quoted ? `"${number}${read.unit}"` : `${number}${read.unit}`;
   const from = byteToIndex(source, at.span[0]);
   const to = byteToIndex(source, at.span[0] + at.span[1]);
-  const bytes = (s) => new TextEncoder().encode(s).length;
+  const bytes = (/** @type {string} */ s) => new TextEncoder().encode(s).length;
   return { text: source.slice(0, from) + written + source.slice(to), span: [at.span[0], bytes(written)], written };
 }

@@ -114,7 +114,7 @@ function Row(/** @type {{ row: MessageRow, m: Model, act: Actions }} */ { row, m
   const here = msg.span ? `${msg.span.file.split('/').slice(-1)[0]}:${msg.span.line}:${msg.span.col}` : null;
   // the sentence first; the code, a name for looking up, last and quiet.  A row with a place goes to it when clicked.
   return html`<div class=${`msg ${msg.severity}${dim ? ' dim' : ''}${lit ? ' lit' : ''}${line ? ' goes' : ''}`} data-seq=${msg.seq} ref=${(/** @type {HTMLElement | null} */ el) => { if (el && lit) el.scrollIntoView({ block: 'nearest' }); }}
-      title=${line ? 'Show the line in the source' : undefined} role=${line ? 'button' : undefined} tabIndex=${line ? 0 : undefined} onKeyDown=${line ? (/** @type {KeyboardEvent} */ e) => { if (e.key === 'Enter' && e.target === e.currentTarget) line(); } : undefined} onClick=${line ? (e) => { if (!e.target.closest('.acts') && !e.target.closest('.report-pane')) line(); } : undefined}>
+      title=${line ? 'Show the line in the source' : undefined} role=${line ? 'button' : undefined} tabIndex=${line ? 0 : undefined} onKeyDown=${line ? (/** @type {KeyboardEvent} */ e) => { if (e.key === 'Enter' && e.target === e.currentTarget) line(); } : undefined} onClick=${line ? (/** @type {MouseEvent} */ e) => { const from = /** @type {Element} */ (e.target); if (!from.closest('.acts') && !from.closest('.report-pane')) line(); } : undefined}>
     <i class=${`dot ${msg.severity}`}></i>
     <div class="body"><div class="head"><span class="text">${serverOf(msg)?.origin === 'page' ? 'The page: ' : ''}${tickWords(msg.text)}</span></div>
       ${msg.help ? html`<div class="help">${tickWords(msg.help)}</div>` : null}

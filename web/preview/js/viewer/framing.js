@@ -46,7 +46,7 @@ const sameBox = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 export function createFraming() {
   /** key -> {camera, view}: the user's last view of a document in a mode. */
   const saved = new Map();
-  /** What the camera is on now: {key, view, held, asked, box, finished, following} (null: nothing yet). */
+  /** What the camera is on now (null: nothing yet).  @type {{ key: string, view: string, held: boolean, asked: { animate?: boolean } | null, box: Box, finished: boolean, following: boolean } | null} */
   let cur = null;
 
   /** @param {string} view @param {Box} box @param {boolean} animate @returns {{do: 'frame', view: string, box: Box, animate: boolean}} */
