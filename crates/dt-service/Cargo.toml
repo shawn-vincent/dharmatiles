@@ -19,5 +19,10 @@ serde.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true
 
+# The browser's Manifold (wasm-cxx-shim) only for the browser, as in dt-web: on the host the engine is the program's
+# own, built once with the same features.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dt-eval = { workspace = true, features = ["wasm"] }
+
 [lints]
 workspace = true
