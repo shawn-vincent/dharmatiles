@@ -75,7 +75,7 @@ export const piecesOf = (inv, canon) => (inv?.pieces || []).filter((p) => canon 
  */
 export function tileHave(inv, canon, system) {
   const ps = piecesOf(inv, canon).filter((p) => p.system === system);
-  const out = { have: 0, single: 0, multi: 0, seeds: [], printed: 0, failed: 0, gone: 0, edited: false, missing: false, any: ps.length > 0 };
+  const out = { have: 0, single: 0, multi: 0, seeds: /** @type {{ seed: *, colour: *, have: * }[]} */ ([]), printed: 0, failed: 0, gone: 0, edited: false, missing: false, any: ps.length > 0 };
   for (const p of ps) {
     out.printed += p.printed; out.failed += p.failed; out.gone += p.gone;
     out.missing ||= !!p.missing;

@@ -34,7 +34,7 @@ export const kindOf = (path) => {
 };
 
 /** The file's name without its extension (`2x1-cliff`; an `.stl` and a `.dmap` keep their suffix, as the menu always showed an `.stl`). */
-export const stemOf = (path) => String(path || '').replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.dtile$/i, '');
+export const stemOf = (path) => /** @type {string} */ (String(path || '').replace(/^lib:/, '').split(/[\\/]/).pop()).replace(/\.dtile$/i, ''); // split always yields a piece
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const slashes = (s) => String(s || '').replace(/\\/g, '/');
@@ -71,8 +71,9 @@ function prefixOf(r) {
 export function relOf(r, path) {
   const p = slashes(path);
   const pre = prefixOf(r);
+  // split always yields a piece, so `pop` is never undefined here
   if (pre == null) return [p.split('/').pop()];
-  const rest = p.startsWith(pre) ? p.slice(pre.length) : p.split('/').pop();
+  const rest = p.startsWith(pre) ? p.slice(pre.length) : /** @type {string} */ (p.split('/').pop());
   return rest.split('/').filter(Boolean);
 }
 
@@ -143,6 +144,7 @@ export function levelOf({ roots, tiles, folders = [], root, dir = '', query = ''
 }
 
 /** Does the level `{root, dir}` exist (the place is listed, and the folder is one of it)? */
+/** @param {{ roots: *[], tiles: *[], folders?: string[], root: number, dir?: string }} p */
 export function levelExists({ roots, tiles, folders = [], root, dir = '' }) {
   const r = (roots || [])[root];
   if (!r) return false;
@@ -150,9 +152,13 @@ export function levelExists({ roots, tiles, folders = [], root, dir = '' }) {
 }
 
 /** The level `level` stands for among what the program lists now: itself, else the nearest of its parents that is there (a place taken off, a folder trashed). */
+/**
+ * @param {{ roots: *[], tiles: *[], folders?: string[] }} state
+ * @param {{ root: number | null, dir?: string }} level
+ */
 export function settledLevel({ roots, tiles, folders = [] }, level) {
   let l = level;
-  while (l.root != null && !levelExists({ roots, tiles, folders, root: l.root, dir: l.dir })) l = parentLevel(l);
+  while (l.root != null && !levelExists({ roots, tiles, folders, root: l.root, dir: l.dir })) l = /** @type {{ root: number | null, dir: string }} */ (parentLevel(l)); // a level with a place always has a parent
   return l;
 }
 

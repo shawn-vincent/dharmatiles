@@ -26,6 +26,14 @@ test('both tsconfigs check every JavaScript file they include', () => {
   }
 });
 
+test('null is checked: strictNullChecks is on in the page and the site, and the tests inherit it', () => {
+  for (const name of ['tsconfig.json', 'tsconfig.site.json']) {
+    assert.equal(config(name).compilerOptions.strictNullChecks, true, `${name} must have strictNullChecks on`);
+  }
+  assert.equal(config('tsconfig.tests.json').extends, './tsconfig.json', 'the tests must take the page\'s settings');
+  assert.notEqual(config('tsconfig.tests.json').compilerOptions.strictNullChecks, false);
+});
+
 test('the tests are checked too, and the map they draw is the whole fixture the program is held to', () => {
   const tests = config('tsconfig.tests.json');
   assert.ok(tests.include.includes('tests/*.js'), 'tsconfig.tests.json must include the tests');

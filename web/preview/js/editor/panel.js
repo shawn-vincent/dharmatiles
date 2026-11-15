@@ -217,7 +217,7 @@ export function init() {
   texts.cb.onFix = (fix, file) => applyFix(fix, file);
   texts.cb.onMarkClick = (line) => {
     const id = tileId();
-    const hit = log.inFile(id, texts.file).find((m) => m.span.line === line);
+    const hit = log.inFile(id, texts.file).find((m) => m.span?.line === line);
     if (!hit) return;
     lit.value = hit.seq;
     if (!view.get().panel) togglePanel(true);

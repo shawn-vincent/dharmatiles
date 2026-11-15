@@ -36,7 +36,7 @@ export function describe() {
   if (!t) return null;
   const { mode, pick } = view.get();
   const kind = model.mapOn.value ? 'map' : model.platesOn.value ? 'plates' : 'tile';
-  const d = { doc: t.id, key: `${kind}:${t.path}`, kind, view: mode, asked: pick, fresh: t.meshVersion == null, plan: planOf(t), box: null, focus: null };
+  const d = { doc: t.id, key: `${kind}:${t.path}`, kind, view: mode, asked: pick, fresh: t.meshVersion == null, plan: planOf(t), box: /** @type {*} */ (null), focus: /** @type {*} */ (null) };
   if (kind === 'map' && model.scene.value) {
     const ps = model.pieces.value;
     d.box = frameBox(ps, model.scene.value);

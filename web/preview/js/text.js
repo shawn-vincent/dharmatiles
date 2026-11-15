@@ -264,7 +264,11 @@ export class TextPane {
     this.applyMarks();
   }
 
-  /** Replace the text (a change made elsewhere: the view, undo); the caret stays near where it was. */
+  /**
+   * Replace the text (a change made elsewhere: the view, undo); the caret stays near where it was.
+   * @param {string} text
+   * @param {number | null} [caret]
+   */
   setText(text, caret = null) {
     const s = this.view.state.selection.main;
     const clamp = (n) => Math.min(n, text.length);

@@ -240,7 +240,7 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
   };
   // the text between the two numbers of a tidy range: the first unit only where the ends differ
   const between = (/** @type {string} */ text) => {
-    const first = text.match(/^[A-Za-z%]*/)[0];
+    const first = /** @type {RegExpMatchArray} */ (text.match(/^[A-Za-z%]*/))[0]; // the pattern matches the empty string too
     return html`${first && first !== parts[4].text ? afterNumber(first) : ''}–`;
   };
   /** The value as the row shows it now: with the numbers of a drag in place of the written ones. */
@@ -282,6 +282,7 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
     onPointerUp: () => finishScrub(),
     onPointerCancel: () => finishScrub(),
   });
+  const liveOf = (/** @type {*} */ p) => (p.k != null ? live?.[p.k] : undefined) ?? p.num;
   const finishScrub = () => {
     const d = drag.current;
     if (!d) return;
@@ -297,7 +298,7 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
     ? html`<${TypeIn} g=${g} c=${c} s=${s} v=${v} inh=${inh} api=${api} put=${put} onDone=${() => setTyping(false)} />`
     : html`<span class=${`val${ro ? ' ro' : ''}`} onClick=${() => { if (!moved.current && !ro) setTyping(true); }}>
       ${pre ? html`<span class="q">${pre}</span>` : null}${parts.map((p, i) => (p.num != null
-        ? html`<span class=${`num${drag.current?.k === p.k ? ' active' : ''}`} key=${i} ...${ro ? {} : scrub(p)}>${none && (live?.[p.k] ?? p.num) === '0' ? 'none' : (live?.[p.k] ?? p.num)}</span>`
+        ? html`<span class=${`num${drag.current?.k === p.k ? ' active' : ''}`} key=${i} ...${ro ? {} : scrub(p)}>${none && liveOf(p) === '0' ? 'none' : liveOf(p)}</span>`
         : tidy && i === 2 ? between(p.text) : i > 0 && parts[i - 1].num != null ? afterNumber(p.text) : p.text))}${post ? html`<span class="q">${post}</span>` : null}${!shownRaw ? html`<span class=${inh ? 'absent' : 'unit lost'}>${inh ? inh.text : `no default for ${c.name}`}</span>` : null}</span>`}
     ${dice ? html`<${SeedDice} roll=${roll} onRoll=${() => put(g, c.name, newSeed())} />` : null}
     ${unit ? html`<span class="unit">${unit}</span>` : null}

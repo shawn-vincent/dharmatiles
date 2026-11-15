@@ -11,6 +11,7 @@ import { Thumb } from '../thumbs.js';
  * as it is now and as the row would leave it: the program builds each text low, one at a time off the edit's path, and
  * what the menu no longer shows is not built (js/thumbs.js).  A text with a mistake in it says so in place of a picture.
  */
+/** @param {{ items: *[], onPick: *, pictures?: { svc: *, spec: (text: *) => *, now: *, onError: * } | null }} p */
 export function HistoryMenu({ items, onPick, pictures = null }) {
   return html`${items.map(({ entry, target, distance, direction, text }) => html`<button type="button" key=${`${direction}${target}`} class=${pictures ? 'with-pic' : undefined} title=${`${direction} to ${entry.label}`} onClick=${() => onPick(direction, target)}>
     ${pictures && text != null ? html`<span class="pics" aria-hidden="true"><${Thumb} svc=${pictures.svc} spec=${pictures.spec(pictures.now)} className="h-pic" onError=${pictures.onError} /><i class="h-to"></i><${Thumb} svc=${pictures.svc} spec=${pictures.spec(text)} className="h-pic" onError=${pictures.onError} /></span>` : null}

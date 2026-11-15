@@ -35,6 +35,7 @@ export async function drawOnPoster(host) {
     canvas.width = Math.round(r.width * dpr);
     canvas.height = Math.round(r.height * dpr);
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('This browser gave no 2D canvas for the poster overlay.');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const fw = map.cols * SQUARE_MM, fh = map.rows * SQUARE_MM;
     const project = (x, y) => ({ x: (x / fw) * r.width, y: (1 - y / fh) * r.height });

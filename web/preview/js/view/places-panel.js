@@ -85,7 +85,10 @@ const dotClass = (t) => {
 const Text = ({ label, sub }) => html`<span class="tx"><span class="nm" title=${label}>${label}</span>${sub ? html`<span class="sub">${sub}</span>` : null}</span>`;
 const Label = ({ title, hint }) => html`<div class="cap flab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
 
-/** A row: its button, and its ⋯ when `menuTitle` says it has a menu.  `drop` makes it a place a tile can be let go. */
+/**
+ * A row: its button, and its ⋯ when `menuTitle` says it has a menu.  `drop` makes it a place a tile can be let go.
+ * @param {{ kind: string, id: *, name?: string, menuTitle?: string, on: *, sel?: boolean, drop?: { root: *, dir: string } | null, cls?: string, onOpen?: *, title?: string, children?: * }} p
+ */
 function Row({ kind, id, name, menuTitle, on, sel = false, drop = null, cls = '', onOpen, title, children }) {
   return html`<div class=${`orwrap${sel ? ' sel' : ''}`} data-drop-root=${drop ? String(drop.root) : undefined} data-drop-dir=${drop ? drop.dir : undefined}>
     <button type="button" class=${`orow ${cls}`} role="option" data-kind=${kind} data-id=${String(id)} title=${title} onClick=${onOpen}>${children}</button>
@@ -264,7 +267,7 @@ export function FolderList({ d, on, ghost = false }) {
  */
 export function Levels({ d, on, scrolls, arrived }) {
   const key = keyOf(d.level);
-  const last = useRef({ key, depth: folderDepth(d.level), d, ghost: null });
+  const last = useRef({ key, depth: folderDepth(d.level), d, ghost: /** @type {{ d: *, dir: number, scroll: number } | null} */ (null) });
   const cur = useRef(/** @type {HTMLElement | null} */ (null));
   const old = useRef(/** @type {HTMLElement | null} */ (null));
   const [, redraw] = useState(0);

@@ -29,7 +29,11 @@ const el = (tag, cls, text) => {
 /** The print lists the program lists. */
 export const lists = () => server.get().tiles.filter((t) => /\.dmap$/i.test(t.path));
 
-/** Open a document by its id, on the editor page. */
+/**
+ * Open a document by its id, on the editor page.
+ * @param {string} id
+ * @param {"map" | null} [mode]
+ */
 async function openId(id, mode = null) {
   const { select } = await import('./open.js');
   if (mode) { const t = server.get().tiles.find((x) => x.id === id); if (t) (await import('./scene.js')).setChosen(t.path, mode); }

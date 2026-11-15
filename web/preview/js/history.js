@@ -26,6 +26,12 @@ function changedPart(before, after) {
 }
 
 /** A compact, display-ready account of one text history step. */
+/**
+ * @param {string} [before]
+ * @param {string} [after]
+ * @param {string} [kind]
+ * @param {string | null} [custom]
+ */
 export function describeChange(before = '', after = '', kind = 'edit', custom = null) {
   const oldLines = before.split('\n'), newLines = after.split('\n');
   let start = 0;
@@ -39,6 +45,7 @@ export function describeChange(before = '', after = '', kind = 'edit', custom = 
     ? changedPart(removedLines[0], addedLines[0])
     : { removed: excerpt(removedLines), added: excerpt(addedLines) };
   const line = Math.max(1, start + 1);
+  /** @type {string | null} */
   let action = custom;
   if (!action && kind === 'type') {
     action = fragments.removed && fragments.added ? 'Replaced text'

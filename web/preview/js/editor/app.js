@@ -17,7 +17,12 @@ export const host = browserHost();
 export const viewer = new Viewer(/** @type {HTMLCanvasElement} */ ($('canvas')));
 
 let toastTimer = 0;
-/** A line over the view with, optionally, one action (`label` defaults to Undo); it goes after `ms`. */
+/**
+ * A line over the view with, optionally, one action (`label` defaults to Undo); it goes after `ms`.
+ * @param {string} message
+ * @param {(() => void) | null} [action]
+ * @param {{ label?: string, ms?: number }} [opts]
+ */
 export function toast(message, action = null, { label = 'Undo', ms = 5000 } = {}) {
   const box = $('toast');
   clearTimeout(toastTimer);
@@ -41,5 +46,8 @@ export const pickView = (name, animate = true) => view.set({ pick: { name, anima
 // from the library tile's text is still right in it).
 let mineHandler = null;
 export const onMakeMine = (fn) => { mineHandler = fn; };
-/** Copy the library tile shown into My tiles and make the change `replay` makes there; false (nothing is done) when no part can. */
+/**
+ * Copy the library tile shown into My tiles and make the change `replay` makes there; false (nothing is done) when no part can.
+ * @param {{ patch?: *, run?: () => Promise<*> } | null} [replay]
+ */
 export function makeMine(replay = null) { return mineHandler ? mineHandler(replay) : false; }

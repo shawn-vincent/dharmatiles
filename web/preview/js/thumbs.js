@@ -95,7 +95,8 @@ export function createThumbs({ host, draw, valid = () => true, limit = LIMIT, sc
       const key = thumbKey(spec);
       let e = cache.get(key);
       if (!e) {
-        /** @type {any} */ let resolve, reject;
+        /** @type {any} */ let resolve = null;
+        /** @type {any} */ let reject = null;
         const promise = new Promise((a, b) => { resolve = a; reject = b; });
         e = { promise, spec, wanted: 0, started: false, resolve, reject };
         cache.set(key, e);

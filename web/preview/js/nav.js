@@ -19,7 +19,11 @@
 
 const entryLike = (s) => s?.kind === 'entry' || s?.kind === 'region' || s?.kind === 'line';
 
-/** How deep `sel` (and the open `control`) is: 0 the tile, 1 a thing of it, 2 one control of that. */
+/**
+ * How deep `sel` (and the open `control`) is: 0 the tile, 1 a thing of it, 2 one control of that.
+ * @param {*} sel
+ * @param {{ name: string, group?: number } | null} [control]
+ */
 export function depthOf(sel, control = null) {
   if (!entryLike(sel)) return 0;
   return control ? 2 : 1;
@@ -62,6 +66,7 @@ export const mapLevelOf = ({ pieces = 0, prop = null, add = null }) => (prop && 
  * Add is a step below the map, and each folder it walks is one deeper than the one it came from.  Every depth the shell, the crumbs and
  * the slide use comes from here.
  */
+/** @param {string} id @param {FolderAt | null} [folder] */
 export const levelDepth = (id, folder = null) => LEVELS[id].depth + (LEVELS[id].folders ? folderDepth(folder) : 0);
 
 /**
@@ -81,6 +86,7 @@ export function slideBetween(from, to) {
 export const slideDir = (a, b) => Math.sign(b - a);
 
 /** How deep a folder level is: Places 0, a place 1, a folder in it 2, its subfolder 3. */
+/** @param {FolderAt | null | undefined} l */
 export const folderDepth = (l) => (l?.root == null ? 0 : 1 + (l.dir ? l.dir.split('/').length : 0));
 
 /**
@@ -90,7 +96,11 @@ export const folderDepth = (l) => (l?.root == null ? 0 : 1 + (l.dir ? l.dir.spli
  */
 export const trailDepth = (folder, levelDepth = 0) => folderDepth(folder) + 1 + levelDepth;
 
-/** The key a level keeps its scroll position under. */
+/**
+ * The key a level keeps its scroll position under.
+ * @param {*} sel
+ * @param {{ name: string, group?: number } | null} [control]
+ */
 export function levelKey(sel, control = null) {
   if (!entryLike(sel)) return 'tile';
   const at = `${sel.kind}:${sel.id}`;
@@ -169,8 +179,8 @@ export function moveRow(i, key, count) {
 // ---- the crumbs and the strip --------------------------------------------------
 
 /** The crumbs of a folder path: `Places`, the place (`root`), a crumb for each folder below it (`dir`), each saying where it goes (`place`: `{root, dir}`; null for Places). */
-/** @typedef {{root: number | null, dir: string}} FolderAt */
-/** @typedef {{root: number | null, label: string, dir: string}} FolderPlace */
+/** @typedef {{root: number | null, dir?: string}} FolderAt */
+/** @typedef {{root: number | null, label: string, dir?: string}} FolderPlace */
 /** @typedef {{id: string, label: string, depth: number, place?: FolderAt | null, add?: FolderAt, current?: boolean}} Crumb */
 /** @param {FolderPlace | null} place @returns {Crumb[]} */
 function folderCrumbs(place) {
@@ -195,6 +205,7 @@ function folderCrumbs(place) {
  * pieces) and 2 one control of it (`control`, a name: a tile's control, or a piece's property).
  * On a map's Add step (`add`: the folder it is at, `{root, label, dir}`, or null at Places) the crumbs below the map are `Add` and the
  * folders it walks, Places first; each says where it goes (`add`: `{root, dir}`), at the depth `levelDepth` gives it, and the last is current.
+ * @param {{ place?: FolderPlace | null, tileName?: string | null, depth?: number, what?: string, control?: string, add?: FolderPlace | null }} p
  */
 export function crumbsFor({ place = null, tileName = null, depth = 0, what = '', control = '', add = undefined }) {
   const out = folderCrumbs(place);
@@ -219,6 +230,7 @@ export function crumbsFor({ place = null, tileName = null, depth = 0, what = '',
  * parent's own panel.  `tile` is `{entries, lines, regions}` (the name is the crumb's, the size and seed the tile level's rows, the target the title bar's chip: each fact has one home); `entry` is
  * `{standing: {n, of}, place}` for a stack entry, or `{note}` for a line or a region; `value` is
  * the control's current value at depth 2.
+ * @param {{ depth: number, tile: { entries?: number, lines?: number, regions?: number } | null, entry?: { standing?: { n: number, of: number } | null, place?: string, note?: string } | null, thing?: string, control?: string | null | undefined, value?: string }} p
  */
 export function contextFor({ depth, tile, entry = null, thing = '', control = null, value = '' }) {
   const t = tile || {};
@@ -255,8 +267,10 @@ export function selOfAt(at) {
  * `pieces` (the ids, comma by comma), `prop`, and `add` and `adir` (the folder the Add step is at: a place's key, empty at Places, and the
  * folder below it) for a map's levels.  `add` is that folder as `{place, dir}` (folders.js `placeParams`), or null.  (A folder level's,
  * `place` and `dir`, is js/folders.js.)
+ * @param {{ sel: *, control: { name: string, group?: number } | null, face: string, pieces?: string[] | null, prop?: string | null, add?: { place: string, dir?: string } | null }} p
  */
 export function levelParams({ sel, control, face, pieces = null, prop = null, add = null }) {
+  /** @type {Record<string, string>} */
   const p = {};
   if (pieces?.length) {
     p.pieces = pieces.join(',');

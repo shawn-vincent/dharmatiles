@@ -49,12 +49,30 @@ function el(tag, cls = '', attrs = {}) {
 }
 
 export class Card {
+  // the parts #build() makes, named here so their types hold everywhere (`#build` runs in the constructor, before any use)
+  /** @type {HTMLElement} */ view;
+  /** @type {HTMLElement | null} */ poster;
+  /** @type {HTMLCanvasElement} */ gl;
+  /** @type {HTMLCanvasElement} */ ov;
+  /** @type {HTMLElement} */ badge;
+  /** @type {HTMLElement} */ msgs;
+  /** @type {HTMLElement} */ controlsBox;
+  /** @type {HTMLElement} */ sourceBox;
+  /** @type {SourcePane} */ pane;
+  /** @type {HTMLAnchorElement} */ openLink;
+  /** @type {import('../../../web/preview/js/view/status-line.js').StatusParts} */ sl;
+  /** @type {import('@preact/signals-core').Signal<number>} */ rev;
+  /** @type {import('@preact/signals-core').Signal<any>} */ tileState;
+  /** @type {import('@preact/signals-core').Signal<any>} */ progressSig;
+  /** @type {any} the signals the messages list draws from (`#model`) */ model;
+  /** @type {LiteViewer | null} */ viewer = null;
+
   /** @param {HTMLElement} host the <dt-example> @param {import('./engine.js').Engine} engine */
   constructor(host, engine) {
     this.host = host;
     this.engine = engine;
     this.id = `card-${++serial}`;
-    this.name = (host.getAttribute('src') ?? 'tile').split('/').pop().replace(/\.dtile$/, '');
+    this.name = /** @type {string} */ ((host.getAttribute('src') ?? 'tile').split('/').pop()).replace(/\.dtile$/, ''); // split always yields a piece
     this.system = host.getAttribute('system') ?? 'db';
     setExplainBase(new URL('e/', engine.root).href);
 
@@ -73,12 +91,15 @@ export class Card {
     this.fullAt = null;
     this.wantDownload = false;
     this.status = 'waking';
+    /** @type {any} the worker's progress event, as it last said */
     this.progress = null;
     this.queuedBehind = 0;
     this.log = new CardLog(this.id, () => engine.version);
     this.moment = {
       toggles: new Set((host.getAttribute('overlay') ?? '').split(/[\s,]+/).filter(Boolean)),
-      pinned: new Set(), hover: null, caret: null,
+      pinned: new Set(),
+      hover: /** @type {string | null} */ (null),
+      caret: /** @type {string | null} */ (null),
     };
     this.pinSpec = host.getAttribute('highlight') ?? '';
     this.controls = parseControls(host.getAttribute('controls') ?? '');
@@ -169,8 +190,8 @@ export class Card {
   /** The model the editor's messages list draws from: signals over this card's own log. */
   #model() {
     this.rev = signal(0);
-    this.tileState = signal({ id: this.id, name: this.name, status: 'idle', path: 'tile.dtile', shown: null, errors: [] });
-    this.progressSig = signal(null);
+    this.tileState = signal({ id: this.id, name: this.name, status: 'idle', path: 'tile.dtile', shown: /** @type {{ checked: boolean, draft: boolean } | null} */ (null), errors: [] });
+    this.progressSig = signal(/** @type {any} */ (null));
     return {
       open: signal(false),
       view: computed(() => { void this.rev.value; return this.log.view(); }),
@@ -180,7 +201,7 @@ export class Card {
       tile: computed(() => this.tileState.value),
       progress: computed(() => this.progressSig.value),
       angles: signal({ overhangDeg: 55, steepestDeg: 65 }),
-      shown: signal(null),
+      shown: signal(/** @type {boolean | null} */ (null)),
       file: signal('tile.dtile'),
       text: signal(this.text),
     };
@@ -252,7 +273,8 @@ export class Card {
 
   /** Where a point of the tile falls on the overlay: the camera's, or the poster's own top view before there is a mesh. */
   #projector() {
-    if (this.viewer && this.mesh) return (x, y, z = 0) => this.viewer.project(x, y, z);
+    const viewer = this.viewer;
+    if (viewer && this.mesh) return (x, y, z = 0) => viewer.project(x, y, z);
     const [fw, fh] = this.mesh?.footprint ?? this.#guessFootprint();
     const { w, h } = this.size ?? { w: 1, h: 1 };
     const s = Math.min(w / fw, h / fh);
@@ -271,6 +293,7 @@ export class Card {
     if (!this.ov || !this.size) return;
     const dpr = this.ov.width / (this.size.w || 1);
     const ctx = this.ov.getContext('2d');
+    if (!ctx) throw new Error('This browser gave no 2D canvas for the overlay.');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const moment = { toggles: this.moment.toggles, pinned: this.moment.pinned, hover: this.moment.hover, caret: this.moment.caret };
     this.drawnNow = drawn(this.marks, moment);

@@ -16,6 +16,7 @@ const between = (a, b) => (Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1]
  * `VIEWS` writes them), the nearest if two are; `prefer` (the preset the framing last placed it on) wins a tie.  The state follows the camera, not the click: an orbit that
  * comes back to a preset lights it, and one that leaves puts it out.
  * @param {Array<[string, string, number, number, boolean]>} views
+ * @param {number} elev @param {number} azim @param {string | null} [prefer]
  */
 export function presetAt(views, elev, azim, prefer = null) {
   const cam = dir(elev, azim);

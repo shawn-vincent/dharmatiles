@@ -32,7 +32,7 @@ export function contextLines() {
   if (!p) return [t?.status === 'building' ? 'Laying out the plates…' : 'A print list that does not plan yet: mend it, or choose a printer here.'];
   if (!p.planned) return ['This list does not plan yet.', 'label' in p && p.label ? `For the ${p.label}` : 'Choose a printer'];
   const n = p.layout.length;
-  return [`${plural(p.layout.reduce((a, x) => a + x.pieces.length, 0), 'piece')} on ${plural(n, 'plate')}`, `${mm(p.bed[0])} × ${mm(p.bed[1])} mm · ${p.mode === 'single' ? 'single colour' : 'multicolour'}`];
+  return [`${plural(p.layout.reduce((a, x) => a + x.pieces.length, 0), 'piece')} on ${plural(n, 'plate')}`, `${p.bed ? `${mm(p.bed[0])} × ${mm(p.bed[1])} mm` : 'no bed size'} · ${p.mode === 'single' ? 'single colour' : 'multicolour'}`];
 }
 
 const ui = () => platesUi.value.value;

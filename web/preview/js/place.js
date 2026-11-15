@@ -16,6 +16,7 @@
 // A tool stays in hand until Esc (placing places again at each click);
 // the others put down what they made and select it.
 
+import { need } from './dom.js';
 import { pointLabel, placeText, pointText } from './points.js';
 
 const WORDS = [
@@ -69,7 +70,9 @@ export class Tools {
     this.ui = ui; // {bar, input, list, chip}
     this.api = api;
     this.tool = null;
+    /** @type {{ h: any, steps: any, z: any, moved: boolean, key: string, q: any } | null} the handle being dragged */
     this.drag = null;
+    /** @type {{ items: any[][], i: number }} */
     this.list = { items: [], i: 0 };
     this.listen();
   }
@@ -101,8 +104,8 @@ export class Tools {
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', String(i === this.list.i));
       li.innerHTML = '<i class="sw"></i><b></b><span></span>';
-      li.querySelector('b').textContent = name;
-      li.querySelector('span').textContent = about || '';
+      need(li, 'b').textContent = name;
+      need(li, 'span').textContent = about || '';
       li.onpointerdown = (e) => { e.preventDefault(); this.ui.input.value = name; this.take(); };
       list.append(li);
     });
@@ -159,7 +162,7 @@ export class Tools {
   }
 
   // ---- the pointer ------------------------------------------------------
-  /** Squares under canvas point (x, y), or null. */
+  /** Squares under canvas point (x, y), or null. @param {number} x @param {number} y @param {number | null} [planeZ] */
   at(x, y, planeZ = null) {
     const hit = this.viewer.pointAt(x, y, planeZ);
     if (!hit) return null;
@@ -328,6 +331,7 @@ export class Tools {
 
   dragTo(e) {
     const d = this.drag;
+    if (!d) return; // no handle is held
     const [x, y] = this.xy(e);
     const p = this.at(x, y, d.z);
     if (!p) return;
@@ -345,7 +349,7 @@ export class Tools {
   letGo() {
     const d = this.drag;
     this.drag = null;
-    if (d.moved) d.steps.end(d.q);
+    if (d?.moved) d.steps.end(d.q);
   }
 
   // ---- drawing --------------------------------------------------------------
