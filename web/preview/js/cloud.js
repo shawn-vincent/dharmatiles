@@ -21,9 +21,9 @@ import { byteToIndex } from './text.js';
  * sends each entry's clouds, read off what it parsed, so a comment, a hidden
  * (`/-`) node or a raw string holds none, and a call's `top=` is the cloud of
  * the tree inside the definition.  This only turns bytes into characters.
- * @param {string} text
+ * @param {string | null} text
  * @param {StackItem[]} items
- * @param {string} file
+ * @param {string | null} file
  */
 export function cloudsIn(text, items, file) {
   if (!text) return [];

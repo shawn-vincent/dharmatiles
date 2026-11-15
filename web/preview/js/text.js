@@ -22,7 +22,10 @@ import { iconSvg } from './view/icons.js';
 import { byteIndexer } from './spans.js';
 export { byteToIndex } from './spans.js';
 
-/** The indentation for a new line at `pos`: the line above's, one level more after `{`, one less before `}`. */
+/**
+ * The indentation for a new line at `pos`: the line above's, one level more after `{`, one less before `}`.
+ * @param {string} text @param {number} pos
+ */
 export function indentFor(text, pos) {
   const start = text.lastIndexOf('\n', pos - 1) + 1;
   const rest = text.slice(pos, (text.indexOf('\n', pos) + 1 || text.length + 1) - 1);
@@ -41,7 +44,10 @@ export function indentFor(text, pos) {
   return n;
 }
 
-/** For a line ending in `{`, the offset of its matching `}` (strings and comments skipped), else null. */
+/**
+ * For a line ending in `{`, the offset of its matching `}` (strings and comments skipped), else null.
+ * @param {string} text @param {number} from
+ */
 export function braceEnd(text, from) {
   let depth = 0;
   for (let i = from; i < text.length; i++) {
@@ -59,6 +65,7 @@ export function braceEnd(text, from) {
 // program for the pieces of the text (`/api/tokens`) and lays them on as marks.  Marks move with the text as it is
 // edited, so a keystroke never shows the line plain while the answer is on its way.  The classes (`tk-node`, …) are
 // coloured by docs/assets/theme.css, shared with the site.
+/** @type {import('../vendor/codemirror.js').StateEffectType<import('../vendor/codemirror.js').DecorationSet>} */
 const setColour = StateEffect.define();
 const colour = StateField.define({
   create: () => Decoration.none,
@@ -89,8 +96,11 @@ export function colourRanges(text, res) {
 
 // soft wrap: a wrapped line's continuation sits one level under its own indentation
 const hanging = ViewPlugin.fromClass(class {
+  /** @param {import('../vendor/codemirror.js').EditorView} view */
   constructor(view) { this.decorations = this.build(view); }
+  /** @param {import('../vendor/codemirror.js').ViewUpdate} u */
   update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+  /** @param {import('../vendor/codemirror.js').EditorView} view */
   build(view) {
     const b = new RangeSetBuilder();
     for (const { from, to } of view.visibleRanges) {
@@ -106,6 +116,11 @@ const hanging = ViewPlugin.fromClass(class {
 }, { decorations: (v) => v.decorations });
 
 // the page's marks: the selected entry's lines, the hovered entry's, the lines with mistakes
+/**
+ * Lines to mark: the selected entry's (`sel`) and the hovered one's (`hov`) as [first, last] or null, the lines with mistakes and with notes.
+ * @typedef {{ sel: [number, number] | null, hov: [number, number] | null, errs: number[], notes?: number[] }} MarkLines
+ */
+/** @type {import('../vendor/codemirror.js').StateEffectType<MarkLines>} */
 const setMarks = StateEffect.define();
 const marks = StateField.define({
   create: () => Decoration.none,
@@ -115,7 +130,8 @@ const marks = StateField.define({
       if (!e.is(setMarks)) continue;
       const { sel, hov, errs, notes = [] } = e.value;
       const doc = tr.state.doc, b = new RangeSetBuilder();
-      const inside = (r, n) => r && n >= r[0] && n <= r[1];
+      /** @param {[number, number] | null} r @param {number} n */
+      const inside = (r, n) => !!r && n >= r[0] && n <= r[1];
       const err = new Set(errs), note = new Set(notes);
       for (let n = 1; n <= doc.lines; n++) {
         const cls = [inside(sel, n) && 'ln-sel', !inside(sel, n) && inside(hov, n) && 'ln-hov', err.has(n) && 'ln-err', !err.has(n) && note.has(n) && 'ln-note'].filter(Boolean);
@@ -140,6 +156,19 @@ const folds = foldService.of((state, from) => {
 
 const QUIET = 'dt-quiet'; // a change made by the page, not by typing
 
+/** @typedef {{ from: number, to: number, insert: string }} TextChange */
+/** @typedef {{ line: number, message?: string, severity?: string, id?: number, file?: string | null, fix?: import('./api').FixJson | null }} LineMark a mistake or note on a line */
+/**
+ * What the pane tells the page, and asks of it (all optional but `tokens`; the selection part adds `onCaretLine` and `onHoverLine` later).
+ * @typedef {{
+ *   onCaretLine?: (n: number) => void, onHoverLine?: (n: number | null) => void, onCaret?: () => void,
+ *   onEdit?: (text: string, kind: string) => void, onReadOnly?: (change: TextChange) => void,
+ *   onKey?: (e: KeyboardEvent) => boolean | void, onHistory?: (step: number) => void,
+ *   onMarkClick?: (line: number) => void, onFix?: (fix: import('./api').FixJson, file: string | null) => void,
+ *   tokens: (text: string) => Promise<{ classes: string[], pieces: number[] } | null>,
+ * }} TextCallbacks
+ */
+
 export class TextPane {
   /**
    * `code` is the element the editor fills.  Callbacks: onCaretLine(n) when
@@ -148,14 +177,20 @@ export class TextPane {
    * they try to type or paste into a file they cannot write (the change they meant: `insert` over the selection), onKey(e) first, for
    * completion (return true when it took the key), onHistory(step), and `tokens(text)`: the program's colouring of a text
    * (`{classes, pieces}` as `/api/tokens` answers, or null when there is none to lay on; a failure it has said itself).
+   * @param {HTMLElement} code
+   * @param {TextCallbacks} cb
    */
   constructor(code, cb) {
     this.code = code;
     this.cb = cb;
+    /** @type {string | null} */
     this.file = null;
+    /** @type {string | null} */
     this.text = null;
     this.writable = false;
+    /** @type {{ sel?: [number, number] | null, hov?: [number, number] | null, errs?: (number | LineMark)[] }} */
     this.marks = {};
+    /** @type {number | null} */
     this.hovered = null;
     this.colourRev = 0;
     this.ro = new Compartment();
@@ -203,12 +238,13 @@ export class TextPane {
   /** The button of a mark's fix, in the tooltip of the gutter's mark and of the underline: `onFix(fix, file)`.  A press on a mark in the gutter: `onMarkClick(line)`, which opens the message it points to. */
   watchMarks() {
     this.code.addEventListener('click', (e) => {
-      if (!e.target.closest?.('.cm-lint-marker')) return;
+      if (!(/** @type {Element} */ (e.target)).closest?.('.cm-lint-marker')) return;
       const at = this.view.posAtCoords({ x: e.clientX, y: e.clientY }, false);
       if (at != null) this.cb.onMarkClick?.(this.view.state.doc.lineAt(at).number);
     });
   }
 
+  /** @param {import('../vendor/codemirror.js').ViewUpdate} u */
   updated(u) {
     const quiet = u.transactions.some((tr) => tr.isUserEvent(QUIET));
     if (u.docChanged) {
@@ -236,13 +272,17 @@ export class TextPane {
     this.view.dispatch({ effects: setColour.of(deco), userEvent: QUIET });
   }
 
-  /** Change the document from the page (not typing): only the changed middle, so folds and scroll stay. */
+  /**
+   * Change the document from the page (not typing): only the changed middle, so folds and scroll stay.
+   * @param {string} text @param {{ anchor: number, head?: number }} [selection]
+   */
   replace(text, selection) {
     const old = this.view.state.doc.toString();
     let a = 0;
     while (a < old.length && a < text.length && old[a] === text[a]) a++;
     let b = 0;
     while (b < old.length - a && b < text.length - a && old[old.length - 1 - b] === text[text.length - 1 - b]) b++;
+    /** @type {import('../vendor/codemirror.js').TransactionSpec} */
     const spec = { userEvent: QUIET };
     if (a !== old.length || a !== text.length) spec.changes = { from: a, to: old.length - b, insert: text.slice(a, text.length - b) };
     if (selection) spec.selection = selection;
@@ -250,7 +290,10 @@ export class TextPane {
     this.text = text;
   }
 
-  /** Show `text` from `file`; the caret and scroll stay when it is the same file. */
+  /**
+   * Show `text` from `file`; the caret and scroll stay when it is the same file.
+   * @param {string | null} file @param {string} text @param {boolean} [writable]
+   */
   show(file, text, writable) {
     const same = file === this.file;
     this.writable = !!writable;
@@ -271,18 +314,26 @@ export class TextPane {
    */
   setText(text, caret = null) {
     const s = this.view.state.selection.main;
+    /** @param {number} n */
     const clamp = (n) => Math.min(n, text.length);
     this.replace(text, caret != null ? { anchor: caret } : { anchor: clamp(s.anchor), head: clamp(s.head) });
   }
 
-  /** Type `s` over [from, to] (the caret's selection by default), as if typed. */
+  /**
+   * Type `s` over [from, to] (the caret's selection by default), as if typed.
+   * @param {string} s @param {number} [from] @param {number} [to]
+   */
   insert(s, from = this.view.state.selection.main.from, to = this.view.state.selection.main.to) {
     this.view.dispatch({ changes: { from, to, insert: s }, selection: { anchor: from + s.length }, userEvent: 'input.complete' });
   }
 
   clear() { this.file = null; this.replace(''); }
 
-  /** The change typing (or pasting) `insert` would make over the selection: {from, to, insert}. */
+  /**
+   * The change typing (or pasting) `insert` would make over the selection: {from, to, insert}.
+   * @param {string} insert
+   * @returns {TextChange}
+   */
   typed(insert) {
     const { from, to } = this.view.state.selection.main;
     return { from, to, insert };
@@ -306,7 +357,10 @@ export class TextPane {
 
   focus() { this.view.focus(); }
 
-  /** Put the caret at the start of line `n` (from 1) and bring it into view: a move the page made, which tells no one. */
+  /**
+   * Put the caret at the start of line `n` (from 1) and bring it into view: a move the page made, which tells no one.
+   * @param {number} n
+   */
   placeCaret(n) {
     const doc = this.view.state.doc;
     if (n < 1 || n > doc.lines) return;
@@ -316,6 +370,7 @@ export class TextPane {
   }
 
   /** Mark lines: `sel` and `hov` are [first, last] (1-based) or null; `errs` line numbers or {line, message, severity ('error', the default, or 'warning' for a note), id (the message it points to)}. */
+  /** @param {[number, number] | null} sel @param {[number, number] | null} hov @param {(number | LineMark)[]} [errs] */
   mark(sel, hov, errs = []) {
     this.marks = { sel, hov, errs };
     this.applyMarks();
@@ -325,12 +380,21 @@ export class TextPane {
     const { sel = null, hov = null, errs = [] } = this.marks;
     const doc = this.view.state.doc;
     const list = (errs || []).map((e) => (typeof e === 'number' ? { line: e } : e)).filter((e) => e.line >= 1 && e.line <= doc.lines);
-    const diags = list.map((e) => { const l = doc.line(e.line); return { from: l.from, to: l.to, severity: e.severity === 'warning' ? 'warning' : 'error', message: e.message || 'A mistake on this line', id: e.id, actions: e.fix ? [{ name: e.fix.label, apply: () => this.cb.onFix?.(e.fix, e.file ?? null) }] : undefined }; });
+    const diags = list.map((e) => {
+      const l = doc.line(e.line), fix = e.fix;
+      /** @type {'error' | 'warning'} */
+      const severity = e.severity === 'warning' ? 'warning' : 'error';
+      return { from: l.from, to: l.to, severity, message: e.message || 'A mistake on this line', id: e.id, actions: fix ? [{ name: fix.label, apply: () => this.cb.onFix?.(fix, e.file ?? null) }] : undefined };
+    });
+    /** @param {'error' | 'warning'} sev */
     const lines = (sev) => list.filter((e) => (e.severity === 'warning') === (sev === 'warning')).map((e) => e.line);
     this.view.dispatch(setDiagnostics(this.view.state, diags), { effects: setMarks.of({ sel, hov, errs: lines('error'), notes: lines('warning') }), userEvent: QUIET });
   }
 
-  /** Scroll so line `n` is in view, unless it already is. */
+  /**
+   * Scroll so line `n` is in view, unless it already is.
+   * @param {number} n
+   */
   reveal(n) {
     const doc = this.view.state.doc;
     if (n < 1 || n > doc.lines) return;

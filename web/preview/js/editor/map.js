@@ -129,7 +129,8 @@ async function insertNode(place, node, { select: sel } = {}) {
   if (sel) view.set({ sel, source: null }); else doc.set({ selectAt: r.body.at });
   edited(r.body.text, 'view', `Added ${node.trim().split(/\s+/)[0]}`, byteToIndex(r.body.text, r.body.at));
   askDraft();
-  const l = texts.text.slice(0, byteToIndex(texts.text, r.body.at)).split('\n').length;
+  const text = /** @type {string} */ (texts.text); // an edit was just written into it
+  const l = text.slice(0, byteToIndex(text, r.body.at)).split('\n').length;
   texts.reveal(l);
 }
 
