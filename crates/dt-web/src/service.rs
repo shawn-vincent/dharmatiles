@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 use dt_eval::{Options, Source, Tier, TileRecord};
 use dt_lang::System;
 use dt_service::build_calls::{self, Accepted, BUILD, BuildReq};
-use dt_service::call::{CallError, Refusal, Status, Table, Verb};
+use dt_service::call::{CallError, JsonError, Refusal, Status, Table, Verb};
 use dt_service::clock::ManualClock;
 use dt_service::draft_calls::{
     self, DRAFT, DraftAsk, DraftReq, Drafted, Mesh, STEP, StepReq, Stepped,
@@ -1114,49 +1114,49 @@ fn text(ctx: &Ctx, req: FileReq) -> Result<Option<TextRes>, Refusal> {
 /// The verbs a worker answers, once.
 fn table() -> Table<Ctx, Refusal> {
     Table::default()
-        .with(&CHECK, check)
-        .with(&EDIT, edit)
-        .with(&SAVE, save)
-        .with(&BUILD, build)
+        .with_json(&CHECK, check)
+        .with_json(&EDIT, edit)
+        .with_json(&SAVE, save)
+        .with_json(&BUILD, build)
         .with(&DRAFT, draft)
         .with(&STEP, step)
-        .with(&NAMES, names)
-        .with(&TOKENS, tokens)
-        .with(&CHECK_VALUE, check_value)
-        .with(&PRINTED, printed)
-        .with(&PRINTED_SET, printed_set)
-        .with(&OFFERS, offers)
-        .with(&ABOUT, about)
-        .with(&ELEMENTS, elements)
-        .with(&LANGUAGE, language)
-        .with(&TEXT, text)
-        .with(&MINE, mine)
-        .with(&NEW_TILE, new_tile)
-        .with(&NEW_FOLDER, new_folder)
-        .with(&RENAME_FOLDER, rename_folder)
-        .with(&TRASH_FOLDER, trash_folder)
-        .with(&TRASH_TILE, trash_tile)
-        .with(&UNDO_TRASH, undo_trash)
-        .with(&MOVE_TILE, move_tile)
-        .with(&DUPLICATE_TILE, duplicate_tile)
-        .with(&RENAME, rename)
-        .with(&DELETE_TILE, delete_tile)
-        .with(&SET_TARGET, set_target)
-        .with(&LISTS_NEW, lists_new)
-        .with(&LISTS_ADD, lists_add)
-        .with(&LISTS_COUNT, lists_count)
-        .with(&LISTS_REMOVE, lists_remove)
-        .with(&LISTS_RESTORE, lists_restore)
-        .with(&MAPS_ADD, maps_add)
-        .with(&MAPS_SET, maps_set)
-        .with(&MAPS_BATCH, maps_batch)
-        .with(&MAPS_DUP, maps_dup)
-        .with(&MAPS_REMOVE, maps_remove)
-        .with(&MAPS_PIN, maps_pin)
-        .with(&MAPS_UNPIN, maps_unpin)
-        .with(&MAPS_UNPIN_ALL, maps_unpin_all)
-        .with(&PLATES_SHOW, plates_show)
-        .with(&PLATES_SET, plates_set)
+        .with_json(&NAMES, names)
+        .with_json(&TOKENS, tokens)
+        .with_json(&CHECK_VALUE, check_value)
+        .with_json(&PRINTED, printed)
+        .with_json(&PRINTED_SET, printed_set)
+        .with_json(&OFFERS, offers)
+        .with_json(&ABOUT, about)
+        .with_json(&ELEMENTS, elements)
+        .with_json(&LANGUAGE, language)
+        .with_json(&TEXT, text)
+        .with_json(&MINE, mine)
+        .with_json(&NEW_TILE, new_tile)
+        .with_json(&NEW_FOLDER, new_folder)
+        .with_json(&RENAME_FOLDER, rename_folder)
+        .with_json(&TRASH_FOLDER, trash_folder)
+        .with_json(&TRASH_TILE, trash_tile)
+        .with_json(&UNDO_TRASH, undo_trash)
+        .with_json(&MOVE_TILE, move_tile)
+        .with_json(&DUPLICATE_TILE, duplicate_tile)
+        .with_json(&RENAME, rename)
+        .with_json(&DELETE_TILE, delete_tile)
+        .with_json(&SET_TARGET, set_target)
+        .with_json(&LISTS_NEW, lists_new)
+        .with_json(&LISTS_ADD, lists_add)
+        .with_json(&LISTS_COUNT, lists_count)
+        .with_json(&LISTS_REMOVE, lists_remove)
+        .with_json(&LISTS_RESTORE, lists_restore)
+        .with_json(&MAPS_ADD, maps_add)
+        .with_json(&MAPS_SET, maps_set)
+        .with_json(&MAPS_BATCH, maps_batch)
+        .with_json(&MAPS_DUP, maps_dup)
+        .with_json(&MAPS_REMOVE, maps_remove)
+        .with_json(&MAPS_PIN, maps_pin)
+        .with_json(&MAPS_UNPIN, maps_unpin)
+        .with_json(&MAPS_UNPIN_ALL, maps_unpin_all)
+        .with_json(&PLATES_SHOW, plates_show)
+        .with_json(&PLATES_SET, plates_set)
 }
 
 /// What a call answered: JSON, or (a draft, a step) the page's bytes.
@@ -1191,26 +1191,6 @@ where
             format!("the call table is wrong: {e:?}"),
         )),
     }
-}
-
-/// [`run`], with the answer written as JSON.
-fn run_json<Q, S>(
-    table: &Table<Ctx, Refusal>,
-    ctx: &Ctx,
-    verb: &Verb<Q, S>,
-    request: &str,
-) -> Result<Answered, Refusal>
-where
-    Q: serde::de::DeserializeOwned + 'static,
-    S: Serialize + 'static,
-{
-    let answer = run(table, ctx, verb, request)?;
-    serde_json::to_string(&answer)
-        .map(Answered::Json)
-        .map_err(|e| {
-            Refusal::failure(Status::Internal, format!("cannot write the answer: {e}"))
-                .caused_by(&e)
-        })
 }
 
 /// The service in a worker.
@@ -1345,61 +1325,24 @@ impl Service {
             options,
         };
         let t = &self.table;
-        macro_rules! json {
-            ($($v:ident),* $(,)?) => {
-                match verb {
-                    $( n if n == $v.name => run_json(t, &ctx, &$v, request), )*
-                    "draft" => run(t, &ctx, &DRAFT, request).map(|m| Answered::Bytes(m.0.as_ref().clone())),
-                    "step" => run(t, &ctx, &STEP, request)
-                        .and_then(|s| s.bytes())
-                        .map(Answered::Bytes),
-                    other => Err(Refusal::refused(Status::NotFound, format!("no such call: {other}"))),
-                }
-            };
-        }
-        let answer = json![
-            CHECK,
-            EDIT,
-            SAVE,
-            BUILD,
-            NAMES,
-            TOKENS,
-            CHECK_VALUE,
-            PRINTED,
-            PRINTED_SET,
-            OFFERS,
-            ABOUT,
-            ELEMENTS,
-            LANGUAGE,
-            TEXT,
-            MINE,
-            NEW_TILE,
-            NEW_FOLDER,
-            RENAME_FOLDER,
-            TRASH_FOLDER,
-            TRASH_TILE,
-            UNDO_TRASH,
-            MOVE_TILE,
-            DUPLICATE_TILE,
-            RENAME,
-            DELETE_TILE,
-            SET_TARGET,
-            LISTS_NEW,
-            LISTS_ADD,
-            LISTS_COUNT,
-            LISTS_REMOVE,
-            LISTS_RESTORE,
-            MAPS_ADD,
-            MAPS_SET,
-            MAPS_BATCH,
-            MAPS_DUP,
-            MAPS_REMOVE,
-            MAPS_PIN,
-            MAPS_UNPIN,
-            MAPS_UNPIN_ALL,
-            PLATES_SHOW,
-            PLATES_SET,
-        ]?;
+        let answer = match verb {
+            // the two verbs that answer the page's bytes
+            "draft" => run(t, &ctx, &DRAFT, request).map(|m| Answered::Bytes(m.0.as_ref().clone())),
+            "step" => run(t, &ctx, &STEP, request)
+                .and_then(|s| s.bytes())
+                .map(Answered::Bytes),
+            // every other verb is a row of the table that reads its request and writes its answer as JSON
+            other => match t.call_json(&ctx, other, request) {
+                Some(Ok(json)) => Ok(Answered::Json(json)),
+                Some(Err(JsonError::BadRequest(m))) => Err(Refusal::refused(Status::BadRequest, m)),
+                Some(Err(JsonError::Refused(r))) => Err(r),
+                Some(Err(JsonError::Unwritable(m))) => Err(Refusal::failure(Status::Internal, m)),
+                None => Err(Refusal::refused(
+                    Status::NotFound,
+                    format!("no such call: {other}"),
+                )),
+            },
+        }?;
         // the worker host's turn: what the call queued is built now, and the stream says how it went
         self.inner.run_queued()?;
         Ok(answer)

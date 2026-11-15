@@ -67,8 +67,19 @@ const snapshot = JSON.parse(service.snapshot());
 if (!snapshot.roots.some((r) => r.kind === 'library') || snapshot.tiles.length === 0) throw new Error('the snapshot lists no library');
 const mine = JSON.parse(service.call('mine', `lib:${tile.replace(/^lib:/, '')}`, '{}'));
 if (!mine.tile || !mine.path.startsWith('/memory/My tiles/')) throw new Error(`mine did not list a copy: ${JSON.stringify(mine)}`);
-// the folder verbs: a folder made, the copy moved into it, trashed and put back, the folder renamed
 const call = (verb, id, body) => JSON.parse(service.call(verb, id, JSON.stringify(body)));
+// a print list and a map: made, filled, planned in the worker and settings changed, as the page asks
+const listed = call('listsAdd', '', { tile: mine.id });
+if (!listed.made || listed.count !== 1) throw new Error(`listsAdd did not make a list: ${JSON.stringify(listed)}`);
+const gridded = call('listsNew', '', { name: 'Map', map: true });
+const piece = call('mapsAdd', '', { list: gridded.id, tile: mine.id, at: '(1sq, 0sq)', docRev: JSON.parse(service.call('text', gridded.id, '{}')).docRev });
+if (piece.scene?.placed !== 1 || piece.scene.pieces[0].error) throw new Error(`mapsAdd did not place a piece: ${JSON.stringify(piece.scene)}`);
+const planned = call('platesSet', gridded.id, { list: gridded.id, key: 'printer', value: 'bambu/x1c', docRev: piece.docRev });
+if (!planned.text.includes('bambu/x1c')) throw new Error('platesSet did not write the printer');
+const planOf = (id) => JSON.parse(service.snapshot()).tiles.find((t) => t.id === id)?.plan;
+const plan = planOf(gridded.id);
+if (plan?.kind !== 'plates' || plan.plates?.planned !== true) throw new Error(`the map was not planned in the worker: ${JSON.stringify(plan)?.slice(0, 300)}`);
+// the folder verbs: a folder made, the copy moved into it, trashed and put back, the folder renamed
 if (call('newFolder', '', { root: 0, dir: '', name: 'rooms' }).dir !== 'rooms') throw new Error('newFolder did not make rooms');
 const moved = call('moveTile', mine.id, { root: 0, dir: 'rooms' });
 if (!moved.path.startsWith('/memory/My tiles/rooms/')) throw new Error(`moveTile did not move the copy: ${JSON.stringify(moved)}`);
@@ -80,6 +91,15 @@ if (call('renameFolder', '', { root: 0, dir: 'rooms', name: 'halls' }).dir !== '
 let readOnly = '';
 try { call('newFolder', '', { root: 1, dir: '', name: 'x' }); } catch (e) { readOnly = String(e.message ?? e); }
 if (JSON.parse(readOnly).status !== 403) throw new Error(`a folder in the library was not refused: ${readOnly}`);
+// every verb the page's table says the worker answers is a row of the service: asked with no body it refuses the request (400), never "no such call"
+const { WORKER_VERBS } = await import(new URL('../web/preview/js/worker-calls.js', import.meta.url).href);
+for (const verb of WORKER_VERBS) {
+  try {
+    service.call(verb, path, '"not a request"');
+  } catch (e) {
+    if (String(e.message ?? e).includes('no such call')) throw new Error(`the page's table says the worker answers ${verb}, and the service has no such call`);
+  }
+}
 // a verb the service does not have is refused loudly, never answered empty
 let refused = '';
 try {

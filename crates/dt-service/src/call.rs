@@ -260,15 +260,32 @@ pub enum CallError<E> {
 /// A row with its types erased: `None` when the request is not of the row's type.
 type Erased<C, E> = Box<dyn Fn(&C, Box<dyn Any>) -> Option<Result<Box<dyn Any>, E>> + Send + Sync>;
 
+/// A row that reads its request from JSON and writes its answer as JSON: what a transport that carries JSON (a web
+/// worker's messages) calls by the verb's name.
+type JsonRow<C, E> = Box<dyn Fn(&C, &str) -> Result<String, JsonError<E>> + Send + Sync>;
+
+/// Why a call made by JSON did not give JSON.
+#[derive(Debug)]
+pub enum JsonError<E> {
+    /// The request is not the verb's type: the reader's words.
+    BadRequest(String),
+    /// The call ran and refused.
+    Refused(E),
+    /// The answer could not be written as JSON: the writer's words (a bug).
+    Unwritable(String),
+}
+
 /// The calls the service answers, by name.
 pub struct Table<C, E> {
     rows: BTreeMap<&'static str, Erased<C, E>>,
+    json: BTreeMap<&'static str, JsonRow<C, E>>,
 }
 
 impl<C: 'static, E: 'static> Default for Table<C, E> {
     fn default() -> Self {
         Self {
             rows: BTreeMap::new(),
+            json: BTreeMap::new(),
         }
     }
 }
@@ -297,6 +314,47 @@ impl<C: 'static, E: 'static> Table<C, E> {
             "the call {name} is a row of the table twice"
         );
         self
+    }
+
+    /// A row that is also called by JSON ([`Table::call_json`]): the one place a verb that a JSON transport answers is
+    /// written, so the transport holds no list of verbs.
+    ///
+    /// # Panics
+    /// The name is already a row.
+    #[must_use]
+    pub fn with_json<Q, S>(mut self, verb: &Verb<Q, S>, f: fn(&C, Q) -> Result<S, E>) -> Self
+    where
+        Q: serde::de::DeserializeOwned + 'static,
+        S: serde::Serialize + 'static,
+        E: 'static,
+    {
+        let name = verb.name;
+        let row: JsonRow<C, E> = Box::new(move |ctx, request| {
+            let req: Q = serde_json::from_str(request)
+                .map_err(|e| JsonError::BadRequest(format!("{name} does not take this: {e}")))?;
+            let answer = f(ctx, req).map_err(JsonError::Refused)?;
+            serde_json::to_string(&answer).map_err(|e| {
+                JsonError::Unwritable(format!("cannot write the answer of {name}: {e}"))
+            })
+        });
+        assert!(
+            self.json.insert(name, row).is_none(),
+            "the call {name} is a JSON row of the table twice"
+        );
+        self.with(verb, f)
+    }
+
+    /// Answer the verb called `name` for the JSON `request`, with its answer as JSON.  `None`: no such JSON row.
+    ///
+    /// # Errors
+    /// [`JsonError`]: the request is not the verb's, the call refused, or the answer cannot be written.
+    pub fn call_json(
+        &self,
+        ctx: &C,
+        name: &str,
+        request: &str,
+    ) -> Option<Result<String, JsonError<E>>> {
+        self.json.get(name).map(|row| row(ctx, request))
     }
 
     /// Whether `name` is a row.
@@ -385,5 +443,22 @@ mod tests {
             table.call(&1, &wrong_in, "x".to_owned()),
             Err(CallError::WrongTypes("double"))
         );
+    }
+
+    #[test]
+    fn a_json_row_reads_its_request_and_writes_its_answer_by_the_verbs_name() {
+        let table = Table::default().with_json(&DOUBLE, double);
+        assert!(matches!(table.call_json(&1, "double", "4"), Some(Ok(a)) if a == "9"));
+        // a typed call still reaches the same row
+        assert_eq!(table.call(&1, &DOUBLE, 4), Ok(9));
+        assert!(matches!(
+            table.call_json(&1, "double", "\"four\""),
+            Some(Err(JsonError::BadRequest(m))) if m.starts_with("double does not take this")
+        ));
+        assert!(matches!(
+            table.call_json(&1, "double", "400"),
+            Some(Err(JsonError::Refused(m))) if m == "too big"
+        ));
+        assert!(table.call_json(&1, "nope", "4").is_none());
     }
 }
