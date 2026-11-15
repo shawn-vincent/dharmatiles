@@ -132,10 +132,11 @@ function actionButtons(d) {
   const buttons = [];
   if (d.level.root == null) buttons.push(mk('Add a folder…', 'Choose a folder of tiles on this computer to list here', addPlace));
   else if (d.writable) {
+    const root = d.level.root; // a place, not Places
     buttons.push(mk('New tile', 'A new tile in this folder', () => openNewTile({ root: d.level.root, dir: d.level.dir, name: placeName(d) })));
     buttons.push(mk('New folder', 'A new folder in this folder', (b) => newFolder(b)));
-    buttons.push(mk('New map', 'A new map (.dmap) in this folder: tiles placed on a grid, to see the scene before anything prints', (b) => newList(d.level.root, d.level.dir, b, placeName(d), true)));
-    buttons.push(mk('New print list', 'A new print list (.dmap) in this folder: the tiles to print, laid out for a printer', (b) => newList(d.level.root, d.level.dir, b, placeName(d))));
+    buttons.push(mk('New map', 'A new map (.dmap) in this folder: tiles placed on a grid, to see the scene before anything prints', (b) => newList(root, d.level.dir, b, placeName(d), true)));
+    buttons.push(mk('New print list', 'A new print list (.dmap) in this folder: the tiles to print, laid out for a printer', (b) => newList(root, d.level.dir, b, placeName(d))));
   }
   return buttons;
 }
