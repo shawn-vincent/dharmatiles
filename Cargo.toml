@@ -48,8 +48,12 @@ kdl = { version = "6.7.1", default-features = false, features = ["span"] }
 miette = { version = "7.6.0", default-features = false }
 owo-colors = { version = "4.4.0", default-features = false }
 bytemuck = "1.23.0"
-glam = "0.34.2"
-obvhs = { version = "0.4.0", features = ["parallel"] }
+# glam's scalar maths on every target: its NEON/SSE/simd128 dot and cross sum in another order than the scalar code,
+# so the same ray cast gave different hits natively and in the browser. obvhs has no `parallel` feature for the same
+# reason: its parallel build lays the BVH out differently from the sequential one the browser runs, and a tie at a
+# shared edge then goes to another triangle. Both are held by `cargo xtask parity`.
+glam = { version = "0.34.2", features = ["scalar-math"] }
+obvhs = { version = "0.4.0" }
 parry3d = "0.31.1"
 rayon = "1.12.0"
 # Mesh backend. Parallelism is a compile-time choice (TBB): dt-geom turns it on

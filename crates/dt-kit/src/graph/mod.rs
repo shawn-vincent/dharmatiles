@@ -326,11 +326,11 @@ mod tests {
                 assert!((g.radii[i] - 1.0).abs() < 1e-12);
             } else {
                 let s: f64 = ch[i].iter().map(|&c| g.radii[c].powi(3)).sum();
-                assert!((g.radii[i] - s.cbrt()).abs() < 1e-9);
+                assert!((g.radii[i] - libm::cbrt(s)).abs() < 1e-9);
             }
         }
         // 20 ends of radius 1 under exponent 3: the root is 20^(1/3)
-        assert!((g.radii[0] - 20f64.cbrt()).abs() < 1e-9);
+        assert!((g.radii[0] - libm::cbrt(20.0)).abs() < 1e-9);
     }
 
     #[test]

@@ -361,7 +361,7 @@ impl Element for Grass {
         let mud = water_dist.as_ref().map(|dist| {
             let n = lat.noise(seed.key("mud"), MUD_SIGMA_MM * s);
             Field::from_fn(&frame, |x, y| {
-                let width = MUD_MAX_MM * s * (n.sample(x, y) * 0.5).clamp(0.0, 1.0).powf(0.8);
+                let width = MUD_MAX_MM * s * libm::pow((n.sample(x, y) * 0.5).clamp(0.0, 1.0), 0.8);
                 let (i, j) = dist.node(x, y);
                 let d = dist.z[j * dist.nx + i];
                 if d > 0.0 && width > 0.2 * s {

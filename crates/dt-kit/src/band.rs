@@ -1407,7 +1407,7 @@ mod tests {
         (0..100 * 100)
             .map(|k| {
                 let (i, j) = ((k % 100) as f64, (k / 100) as f64);
-                let v = (0.07 * i).sin() * (0.05 * j).cos() + 0.001 * i;
+                let v = libm::sin(0.07 * i) * libm::cos(0.05 * j) + 0.001 * i;
                 v * v * v
             })
             .collect()

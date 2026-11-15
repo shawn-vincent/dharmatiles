@@ -472,7 +472,7 @@ fn the_dirt_sides_are_relief_behind_the_plane_on(paths: &[&str]) {
             );
         }
         // no face above the floor leans out past the overhang (55 degrees)
-        let limit = -55.0_f64.to_radians().sin();
+        let limit = -libm::sin(55.0_f64.to_radians());
         for t in &m.triangles {
             let v = t.map(|i| m.positions[i as usize]);
             let near = v

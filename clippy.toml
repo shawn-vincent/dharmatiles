@@ -1,1 +1,36 @@
 allow-unwrap-in-tests = true
+
+# One maths: the engine's transcendental functions are the `libm` crate's on every target, never std's (the
+# platform's libm natively, compiler-builtins' in the browser: not bit-equal). See docs/standards/rules.html.
+disallowed-methods = [
+    { path = "f64::sin", reason = "use libm::sin (one maths on every target)" },
+    { path = "f64::cos", reason = "use libm::cos (one maths on every target)" },
+    { path = "f64::tan", reason = "use libm::tan (one maths on every target)" },
+    { path = "f64::asin", reason = "use libm::asin (one maths on every target)" },
+    { path = "f64::acos", reason = "use libm::acos (one maths on every target)" },
+    { path = "f64::atan", reason = "use libm::atan (one maths on every target)" },
+    { path = "f64::atan2", reason = "use libm::atan2 (one maths on every target)" },
+    { path = "f64::sin_cos", reason = "use libm::sincos (one maths on every target)" },
+    { path = "f64::sinh", reason = "use libm::sinh (one maths on every target)" },
+    { path = "f64::cosh", reason = "use libm::cosh (one maths on every target)" },
+    { path = "f64::tanh", reason = "use libm::tanh (one maths on every target)" },
+    { path = "f64::exp", reason = "use libm::exp (one maths on every target)" },
+    { path = "f64::exp2", reason = "use libm::exp2 (one maths on every target)" },
+    { path = "f64::exp_m1", reason = "use libm::expm1 (one maths on every target)" },
+    { path = "f64::ln", reason = "use libm::log (one maths on every target)" },
+    { path = "f64::ln_1p", reason = "use libm::log1p (one maths on every target)" },
+    { path = "f64::log", reason = "use libm::log (one maths on every target)" },
+    { path = "f64::log2", reason = "use libm::log2 (one maths on every target)" },
+    { path = "f64::log10", reason = "use libm::log10 (one maths on every target)" },
+    { path = "f64::powf", reason = "use libm::pow (one maths on every target)" },
+    { path = "f64::cbrt", reason = "use libm::cbrt (one maths on every target)" },
+    { path = "f64::hypot", reason = "use libm::hypot (one maths on every target)" },
+    { path = "f32::sin", reason = "use libm::sinf (one maths on every target)" },
+    { path = "f32::cos", reason = "use libm::cosf (one maths on every target)" },
+    { path = "f32::tan", reason = "use libm::tanf (one maths on every target)" },
+    { path = "f32::atan2", reason = "use libm::atan2f (one maths on every target)" },
+    { path = "f32::exp", reason = "use libm::expf (one maths on every target)" },
+    { path = "f32::ln", reason = "use libm::logf (one maths on every target)" },
+    { path = "f32::powf", reason = "use libm::powf (one maths on every target)" },
+    { path = "f32::hypot", reason = "use libm::hypotf (one maths on every target)" },
+]

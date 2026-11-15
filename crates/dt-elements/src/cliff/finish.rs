@@ -369,7 +369,7 @@ pub fn plan_column(
         let t = [(far[0] - piv[0]) / l, (far[1] - piv[1]) / l, 0.0];
         let psi = rng
             .uniform(DRESS_YAW_DEG.0, DRESS_YAW_DEG.1)
-            .min((DRESS_MAX_MM / l).min(1.0).asin().to_degrees())
+            .min(libm::asin((DRESS_MAX_MM / l).min(1.0)).to_degrees())
             .to_radians();
         let nh = [
             m[0] * libm::cos(psi) + t[0] * libm::sin(psi),
@@ -420,7 +420,7 @@ pub fn support_cone(r: &Placed) -> Result<Option<dt_kit::TriMesh>, dt_kit::KitEr
     if poly.len() < 3 {
         return Ok(None);
     }
-    let slope = SEAT_SLOPE_DEG.to_radians().tan();
+    let slope = libm::tan(SEAT_SLOPE_DEG.to_radians());
     let b = bounds(&poly);
     let (mut lo, mut hi) = (0.0, 0.5 * (b[2] - b[0]).min(b[3] - b[1]));
     for _ in 0..12 {

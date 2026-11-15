@@ -32,7 +32,7 @@ fn earth_top(b: &Built, r: f64) -> f64 {
         }
         for &i in t {
             let p = b.export.mesh.positions[i as usize];
-            if (p[0] - 17.5).hypot(p[1] - 17.5) <= r {
+            if libm::hypot(p[0] - 17.5, p[1] - 17.5) <= r {
                 top = top.max(p[2]);
             }
         }

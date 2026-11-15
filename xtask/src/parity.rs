@@ -4,7 +4,8 @@
 //! of its STL's triangles) for a fixed set of tiles under Node, runs the same function natively, and fails on
 //! any difference, naming the tile. Manifold is C++ on both sides, built with floating-point contraction off
 //! (`-ffp-contract=off`, third_party/manifold-csg-sys), so a fused multiply-add cannot make a borderline tile pass
-//! in one and fail in the other.
+//! in one and fail in the other. The rest of what makes the two sides one: the engine's transcendental maths is
+//! `libm`'s everywhere (clippy's `disallowed-methods`), glam is scalar, and obvhs builds its BVH sequentially.
 
 use std::path::Path;
 use std::process::Command;
@@ -25,14 +26,11 @@ pub const SET: &[&str] = &[
     "lib:tests/shapes/1x2-diagonal.dtile@db",
     "lib:tests/ground/1x1-soil.dtile@ol",
     "lib:tiles/ground/1x1-grass.dtile@db",
+    "lib:tests/cliffs/1x1-cliff-needles.dtile@db",
+    "lib:tests/cliffs/1x1-cliff-canyon.dtile@ol",
+    "lib:tests/cliffs/1x1-cliff-escarpment.dtile@ol",
+    "lib:tests/cliffs/1x1-cliff-plateau.dtile@ol",
 ];
-
-/// Tiles the two sides are known to build differently, `tile@system`, each with why: built and shown on every run,
-/// and they do not fail it. The one listed is finding 9 of the architecture review, open: the browser's
-/// Manifold (wasm-cxx-shim's libm) and the program's (the Mac's libm) are not bit-equal in every trigonometric
-/// call, and `1x1-cliff-needles` (hull, smooth and offset in its stack) is where it shows. A tile that turns out
-/// the same fails the run until it is taken off this list, so the list never goes stale.
-pub const KNOWN_DIFFERENT: &[&str] = &["lib:tests/cliffs/1x1-cliff-needles.dtile@db"];
 
 pub fn run_parity(root: &Path) -> Result<(), String> {
     let target =
@@ -40,11 +38,7 @@ pub fn run_parity(root: &Path) -> Result<(), String> {
     let bundle = target.join("parity-bundle");
     crate::wasm::run_wasm(root, &[bundle.display().to_string()])?;
 
-    let jobs: Vec<String> = SET
-        .iter()
-        .chain(KNOWN_DIFFERENT)
-        .map(|s| (*s).to_owned())
-        .collect();
+    let jobs: Vec<String> = SET.iter().map(|s| (*s).to_owned()).collect();
     let lines = |out: Vec<u8>| {
         String::from_utf8(out)
             .map(|s| s.lines().map(str::to_owned).collect::<Vec<_>>())
@@ -84,28 +78,15 @@ pub fn run_parity(root: &Path) -> Result<(), String> {
     }
     let mut different = Vec::new();
     for ((job, b), n) in jobs.iter().zip(&browser).zip(&native) {
-        let known = KNOWN_DIFFERENT.contains(&job.as_str());
-        match (b == n, known) {
-            (true, false) => println!("same      {job}"),
-            (false, true) => println!("known     {job}: still different (finding 9, open)"),
-            (false, false) => {
-                println!("DIFFERENT {job}");
-                different.push(describe(job, b, n));
-            }
-            (true, true) => {
-                println!("SAME      {job}");
-                different.push(format!(
-                    "  {job}: now the same in the browser and the program; take it off KNOWN_DIFFERENT in xtask/src/parity.rs"
-                ));
-            }
+        if b == n {
+            println!("same      {job}");
+        } else {
+            println!("DIFFERENT {job}");
+            different.push(describe(job, b, n));
         }
     }
     if different.is_empty() {
-        println!(
-            "parity: {} tiles the same byte for byte, {} known differences",
-            jobs.len() - KNOWN_DIFFERENT.len(),
-            KNOWN_DIFFERENT.len()
-        );
+        println!("parity: {} tiles the same byte for byte", jobs.len());
         Ok(())
     } else {
         Err(format!(

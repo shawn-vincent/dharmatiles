@@ -193,7 +193,7 @@ impl Rgb {
 
     /// A round-capped stroke from `a` to `b`, `width` px wide.
     pub fn stroke(&mut self, a: (f64, f64), b: (f64, f64), width: f64, c: [u8; 3]) {
-        let n = ((b.0 - a.0).hypot(b.1 - a.1) * 2.0).ceil().max(1.0) as usize;
+        let n = (libm::hypot(b.0 - a.0, b.1 - a.1) * 2.0).ceil().max(1.0) as usize;
         for i in 0..=n {
             let t = i as f64 / n as f64;
             self.disc(a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t, width / 2.0, c);

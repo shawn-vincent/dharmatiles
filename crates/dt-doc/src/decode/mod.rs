@@ -1809,7 +1809,7 @@ impl<'k> Decoder<'k> {
             return None;
         }
         // past this angle a layer steps out more than one line
-        let reach = (line.value / layer.value).atan().to_degrees();
+        let reach = libm::atan(line.value / layer.value).to_degrees();
         if steepest.value > reach {
             self.err(
                 dt_lang::codes::PRINTER,
@@ -1818,7 +1818,7 @@ impl<'k> Decoder<'k> {
                     "at {}° a {} mm layer steps out {:.2} mm, more than one {} mm line, so it would not rest on the layer below",
                     steepest.value,
                     layer.value,
-                    layer.value * steepest.value.to_radians().tan(),
+                    layer.value * libm::tan(steepest.value.to_radians()),
                     line.value
                 ),
                 "too steep",

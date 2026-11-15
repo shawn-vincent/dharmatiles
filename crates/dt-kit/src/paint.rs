@@ -76,7 +76,7 @@ fn gated(z: &[f64], nx: usize, ny: usize, sigma: f64, blurred: Vec<f64>) -> Vec<
     // the weight of a tap by its squared distance in nodes (a whole number),
     // each the one value the tap's own `exp` gives
     let weight: Vec<f64> = (0..=2 * reach * reach)
-        .map(|d2| (-(d2 as f64) / (2.0 * sigma * sigma)).exp())
+        .map(|d2| libm::exp(-(d2 as f64) / (2.0 * sigma * sigma)))
         .collect();
     let mut out = blurred;
     // every node reads `z` and writes its own: the nodes are independent,
@@ -87,8 +87,8 @@ fn gated(z: &[f64], nx: usize, ny: usize, sigma: f64, blurred: Vec<f64>) -> Vec<
         let away = (0..12).any(|a| {
             let t = f64::from(a) * std::f64::consts::TAU / 12.0;
             let (ii, jj) = (
-                (i as f64 + reach as f64 * t.cos()).round() as i64,
-                (j as f64 + reach as f64 * t.sin()).round() as i64,
+                (i as f64 + reach as f64 * libm::cos(t)).round() as i64,
+                (j as f64 + reach as f64 * libm::sin(t)).round() as i64,
             );
             ii >= 0
                 && jj >= 0
@@ -533,10 +533,13 @@ pub fn paint_mesh(
             // a little contrast: the darks deeper, the pale edges brighter
             let t = ((t - 0.5) * 1.25 + 0.5).clamp(0.0, 1.0);
             // drybrush is sparing: most of a surface stays in the base tones
-            let t = t.powf(match m {
-                Material::Grass | Material::Flower => 1.5,
-                _ => 2.0,
-            });
+            let t = libm::powf(
+                t,
+                match m {
+                    Material::Grass | Material::Flower => 1.5,
+                    _ => 2.0,
+                },
+            );
             palette.sample(ramp_name(m, brick), t)
         })
         .collect();
@@ -588,7 +591,7 @@ mod tests {
             for i in 0..=n {
                 let (x, y) = (f64::from(i), f64::from(j));
                 let d2 = (x - 6.0).powi(2) + (y - 6.0).powi(2);
-                m.positions.push([x, y, 3.0 * (-d2 / 4.0).exp()]);
+                m.positions.push([x, y, 3.0 * libm::exp(-d2 / 4.0)]);
             }
         }
         let at = |i: u32, j: u32| j * (n + 1) + i;

@@ -779,8 +779,10 @@ mod tests {
 
     fn two_layers() -> (usize, usize, Vec<f32>, Vec<f32>) {
         let (nx, ny) = (81, 61);
-        let e = field(nx, ny, |x, y| 3.0 + 0.5 * (x * 0.4).sin() * (y * 0.3).cos());
-        let w = field(nx, ny, |x, _| 3.2 + 0.05 * (x * 2.0).sin() - 0.09 * x);
+        let e = field(nx, ny, |x, y| {
+            3.0 + 0.5 * libm::sinf(x * 0.4) * libm::cosf(y * 0.3)
+        });
+        let w = field(nx, ny, |x, _| 3.2 + 0.05 * libm::sinf(x * 2.0) - 0.09 * x);
         (nx, ny, e, w)
     }
 
@@ -804,8 +806,10 @@ mod tests {
     #[test]
     fn three_layers_meet_watertight() {
         let (nx, ny) = (81, 61);
-        let a = field(nx, ny, |x, y| 3.0 + 0.4 * (x * 0.5).sin() * (y * 0.4).cos());
-        let b = field(nx, ny, |x, _| 3.3 + 0.05 * (x * 2.0).sin() - 0.1 * x);
+        let a = field(nx, ny, |x, y| {
+            3.0 + 0.4 * libm::sinf(x * 0.5) * libm::cosf(y * 0.4)
+        });
+        let b = field(nx, ny, |x, _| 3.3 + 0.05 * libm::sinf(x * 2.0) - 0.1 * x);
         let c = field(nx, ny, |_, y| 2.2 + 0.12 * y);
         let layers = [Layer::new(&a, 1), Layer::new(&b, 2), Layer::new(&c, 3)];
         let m = lift_stack(&lat(nx, ny, Round::F32), &layers, &Sides::flat()).unwrap();
@@ -897,7 +901,7 @@ mod tests {
 
     fn lumps(p: [f64; 3]) -> f64 {
         // sharp, deep, uneven lumps: the worst case for the one pass
-        let a = (p[0] * 2.7 + p[1] * 1.9).sin() * (p[2] * 3.9).cos();
+        let a = libm::sin(p[0] * 2.7 + p[1] * 1.9) * libm::cos(p[2] * 3.9);
         if a > 0.0 { 1.0 } else { 0.0 }
     }
 

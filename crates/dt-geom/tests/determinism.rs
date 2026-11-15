@@ -183,7 +183,7 @@ fn pipeline(root: Seed) -> Hashes {
     let libm: Vec<f64> = height
         .par_iter()
         .enumerate()
-        .map(|(i, &h)| (h * 7.3 + i as f64 * 1e-3).sin() * (-h).exp())
+        .map(|(i, &h)| libm::sin(h * 7.3 + i as f64 * 1e-3) * libm::exp(-h))
         .collect();
 
     // 2. scatter: one keyed candidate per 16×16-cell block, kept where the

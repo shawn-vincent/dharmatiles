@@ -27,7 +27,7 @@ fn codes(e: &[Diag]) -> Vec<&'static str> {
 
 fn unit(a: [f64; 2], b: [f64; 2]) -> [f64; 2] {
     let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
-    let l = dx.hypot(dy);
+    let l = libm::hypot(dx, dy);
     [dx / l, dy / l]
 }
 

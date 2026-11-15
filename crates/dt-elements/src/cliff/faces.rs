@@ -556,7 +556,7 @@ pub fn plan_faces(rng: &mut Rng, cols: &mut [Column], placed: &[Placed]) {
 
 fn level(c: &Line) -> bool {
     let (a, b) = (c.first(), c.last());
-    (b[1] - a[1]).abs() < CRACK_LEVEL_DEG.to_radians().tan() * (b[0] - a[0]).abs()
+    (b[1] - a[1]).abs() < libm::tan(CRACK_LEVEL_DEG.to_radians()) * (b[0] - a[0]).abs()
 }
 
 #[allow(clippy::too_many_lines)]
@@ -669,12 +669,7 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
         .map(|_| rng.uniform(FACET_TILT_DEG.0, FACET_TILT_DEG.1))
         .collect();
     let k: Vec<f64> = (0..nl)
-        .map(|l| {
-            tilt[l]
-                .to_radians()
-                .tan()
-                .min(FACET_MM.2 / (hi[l] - lo[l]).max(1e-3))
-        })
+        .map(|l| libm::tan(tilt[l].to_radians()).min(FACET_MM.2 / (hi[l] - lo[l]).max(1e-3)))
         .collect();
     let mut tt = cell_grid(nu, nz, 0.0_f64);
     for q in 0..nu * nz {

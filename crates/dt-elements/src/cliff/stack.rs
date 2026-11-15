@@ -635,7 +635,7 @@ pub fn stack(
         let ym = pts.iter().map(|p| p.1).sum::<f64>() / pts.len() as f64;
         let mut coef = fit_plane(&pts, xm, ym);
         let g = libm::hypot(coef[1], coef[2]);
-        let gmax = tilt.to_radians().tan();
+        let gmax = libm::tan(tilt.to_radians());
         if g > gmax {
             coef[1] *= gmax / g;
             coef[2] *= gmax / g;
@@ -666,8 +666,9 @@ pub fn stack(
         let mut h = match hr {
             None => finish(rng, tgt + 1.0),
             Some(hr) => {
-                let v =
-                    rng.uniform(hr.0, hr.1) * s_scale * (sz * form.mass * lo).powf(ZONE_SIZE_H_EXP);
+                let v = rng.uniform(hr.0, hr.1)
+                    * s_scale
+                    * libm::pow(sz * form.mass * lo, ZONE_SIZE_H_EXP);
                 finish(rng, v)
             }
         };

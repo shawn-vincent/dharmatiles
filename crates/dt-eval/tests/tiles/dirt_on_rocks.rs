@@ -42,7 +42,7 @@ fn tops(b: &Built, r: f64) -> (f64, f64) {
             }
             for &i in t {
                 let p = b.export.mesh.positions[i as usize];
-                if (p[0] - MID[0]).hypot(p[1] - MID[1]) <= r {
+                if libm::hypot(p[0] - MID[0], p[1] - MID[1]) <= r {
                     top = top.max(p[2]);
                 }
             }
@@ -116,7 +116,7 @@ fn earth_beside_rock(b: &Built, near: f64, far: f64) -> (f64, usize) {
         .filter(|e| {
             let d = rock
                 .iter()
-                .map(|r| (e[0] - r[0]).hypot(e[1] - r[1]))
+                .map(|r| libm::hypot(e[0] - r[0], e[1] - r[1]))
                 .fold(f64::MAX, f64::min);
             d >= near && d <= far
         })

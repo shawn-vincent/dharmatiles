@@ -61,7 +61,7 @@ fn a_low_build_places_everything_where_the_full_build_does() {
         let (a, b) = (of(full, true), of(low, true));
         assert_eq!(a.len(), b.len(), "{path}: clearings");
         for (p, q) in a.iter().zip(&b) {
-            let d = (p.at[0] - q.at[0]).hypot(p.at[1] - q.at[1]);
+            let d = libm::hypot(p.at[0] - q.at[0], p.at[1] - q.at[1]);
             assert!(d < 3.0, "{path}: a clearing moved {d:.2} mm");
         }
         anything += full.report.placed.len();
@@ -143,7 +143,7 @@ fn drift(full: &Built, other: &Built) -> (usize, usize, f64) {
         let near = b
             .iter()
             .filter(|q| q.kind == p.kind)
-            .map(|q| (q.at[0] - p.at[0]).hypot(q.at[1] - p.at[1]))
+            .map(|q| libm::hypot(q.at[0] - p.at[0], q.at[1] - p.at[1]))
             .fold(f64::INFINITY, f64::min);
         worst = worst.max(near);
     }

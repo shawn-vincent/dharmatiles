@@ -715,7 +715,7 @@ impl Reader<'_> {
                             "within a millimetre of the side",
                         )
                         .suggest(span, &written(to))
-                        .moving((to[0] - p[0]).hypot(to[1] - p[1]))
+                        .moving(libm::hypot(to[0] - p[0], to[1] - p[1]))
                         .also(Some("a line that reaches a side ends exactly on it, so it meets the next tile's")),
                     );
                     return;

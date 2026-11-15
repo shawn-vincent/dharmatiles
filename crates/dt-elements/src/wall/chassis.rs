@@ -71,7 +71,7 @@ impl Laid<'_> {
         let h = |x: f64, y: f64| self.heave.sample(x, y);
         let gx = (h(hi[0], at[1]) - h(lo[0], at[1])) / (hi[0] - lo[0]).max(1e-6);
         let gy = (h(at[0], hi[1]) - h(at[0], lo[1])) / (hi[1] - lo[1]).max(1e-6);
-        let size = gx.hypot(gy);
+        let size = libm::hypot(gx, gy);
         let k = if size > self.tilt_max {
             self.tilt_max / size
         } else {
