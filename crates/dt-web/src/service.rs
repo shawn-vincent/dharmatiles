@@ -289,12 +289,20 @@ impl Inner {
                     .map(|p| Slot::in_root(p, *r, self.roots[*r].group(p)))
             })
             .collect();
+        // the folders of the places, empty ones too (the program's rescan reads them the same way)
+        let folders: BTreeMap<usize, Vec<String>> = self
+            .roots
+            .iter()
+            .enumerate()
+            .filter_map(|(r, root)| Some((r, root.scan_folders(self.storage.as_ref())?)))
+            .collect();
+        let folders_changed = self.ask(|r| Command::SetFolders(folders, r))?;
         let seq = self.seq.get() + 1;
         self.seq.set(seq);
         self.ask(|reply| Command::Reconcile {
             found,
             fresh,
-            changed_elsewhere: false,
+            changed_elsewhere: folders_changed,
             seq,
             read: Vec::new(),
             reply,
@@ -917,6 +925,10 @@ impl Service {
     pub fn new() -> Result<Self, JsError> {
         let target = options_in(&Lib, System::Db).map_err(|r| JsError::new(&r.message))?;
         let storage = Arc::new(MemStorage::default());
+        // My tiles is there from the start: a folder is made inside a folder that exists
+        storage
+            .create_dir_all(Path::new(FOLDER))
+            .map_err(|e| JsError::new(&format!("cannot make {FOLDER}: {e}")))?;
         // the library the page handed over lists as the Library place: its `lib:tiles/` documents
         let library: Vec<String> = LIBRARY.with(|l| {
             l.borrow()

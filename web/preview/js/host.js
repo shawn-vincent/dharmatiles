@@ -504,9 +504,9 @@ export function browserHost(requests = createRequests()) {
 // `workerHost` is `browserHost` with no server: the same methods, answered by the editor's service running in a web worker
 // (js/editor-worker.js: the engine `cargo xtask wasm` makes, with dt-web's `Service`, the same verbs the program answers over
 // HTTP).  A call is its verb and its request as JSON; a refusal comes back as the same status and error body HTTP sends, so
-// the page reads one shape from either host.  What the service does not answer yet (the places on a disk, the plates, the
-// inventory, the maps' table, a build target other than the default, writing an STL) is refused in words, by name: never
-// answered empty.
+// the page reads one shape from either host.  What the service does not answer yet (a folder chooser and the places on a disk,
+// the plates, print lists and maps, the inventory, the printers, a printer other than the library's, writing an STL, the
+// tiers' map) is refused in words, by name: never answered empty.
 
 /** The words of a call the browser editor does not answer. @param {string} what */
 const unavailableIn = (what) => `${what} is not in the browser editor yet: it needs the program (dharmatiles preview)`;
@@ -524,10 +524,27 @@ const WORKER_VERBS = new Set(['check', 'edit', 'save', 'names', 'tokens', 'check
 /** @typedef {Extract<FromWorker, { id: number, ok: true }>} WorkerAnswer */
 
 /**
+ * The website's folder, when the page is opened from it (`?site=` and the folder as the page's address says it): the engine is
+ * its `engine/` and the error pages its `e/`.  None when the page has its own `engine/` beside it (`cargo xtask editor`).
+ * @param {string} [search] @param {string} [here] the page's address
+ * @returns {string | null} an absolute address ending in /
+ */
+export function siteBase(search = location.search, here = location.href) {
+  const site = new URLSearchParams(search).get('site');
+  return site ? new URL(site.endsWith('/') ? site : `${site}/`, here).href : null;
+}
+
+/**
+ * The folder the engine's files are in: the website's `engine/`, else the `engine/` beside the page.
+ * @param {string} [search] @param {string} [here] the page's address
+ */
+export const engineBase = (search = location.search, here = location.href) => new URL('engine/', siteBase(search, here) ?? here).href;
+
+/**
  * The editor's worker: starts it, hands the engine's folder over, and answers each message to its caller.
  * @param {string} [base] the folder `engine.json` is in, ending in /
  */
-export function startEditorWorker(base = '/engine/') {
+export function startEditorWorker(base = engineBase()) {
   const worker = new Worker(new URL('./editor-worker.js', import.meta.url), { type: 'module' });
   let next = 0;
   /** @type {Map<number, { resolve: (a: WorkerAnswer) => void, reject: (e: Error) => void }>} */

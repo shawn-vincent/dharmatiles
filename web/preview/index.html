@@ -4,17 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>dharmatiles</title>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="stylesheet" href="/theme.css">
-<link rel="stylesheet" href="/style.css">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="style.css">
 <script type="importmap">
 { "imports": {
-  "three": "/vendor/three.module.min.js",
-  "preact": "/vendor/preact.mjs",
-  "preact/hooks": "/vendor/preact-hooks.mjs",
-  "htm": "/vendor/htm.mjs",
-  "@preact/signals": "/vendor/preact-signals.mjs",
-  "@preact/signals-core": "/vendor/preact-signals-core.mjs"
+  "three": "./vendor/three.module.min.js",
+  "preact": "./vendor/preact.mjs",
+  "preact/hooks": "./vendor/preact-hooks.mjs",
+  "htm": "./vendor/htm.mjs",
+  "@preact/signals": "./vendor/preact-signals.mjs",
+  "@preact/signals-core": "./vendor/preact-signals-core.mjs",
+  "/vendor/OrbitControls.js": "./vendor/OrbitControls.js"
 } }
 </script>
 </head>
@@ -280,6 +281,6 @@
   window.addEventListener('unhandledrejection', function (e) { fail(String(e.reason && e.reason.message || e.reason)); });
 })();
 </script>
-<script type="module" src="/js/main.js" onerror="dtBootFail('Could not load the editor\'s scripts (a file is missing, or the program stopped). See the browser console for which.')"></script>
+<script type="module" src="js/main.js" onerror="dtBootFail('Could not load the editor\'s scripts (a file is missing, or the program stopped). See the browser console for which.')"></script>
 </body>
 </html>

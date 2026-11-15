@@ -92,11 +92,15 @@ commands:
            (needs wasm-bindgen-cli; uses wasm-opt when installed); --check
            only checks dt-lang, dt-value, dt-doc and dt-web still compile
            for wasm32-unknown-unknown
-  editor <out-dir>
+  editor [--site | --page] <out-dir>
            the editor page as static files with no program behind it: the
            page, the site's visual system and the engine bundle (wasm, in
            <out-dir>/engine); any static server over <out-dir> serves it,
-           and ?host=worker runs the editor's service in a web worker. A heavy job
+           and ?host=worker runs the editor's service in a web worker.
+           --site lays the whole website (docs/, the editor at editor/, the
+           engine at engine/) so a page's "Open in the editor" links work;
+           --page lays only the editor's page (no engine), for the site's
+           build, which has the engine from its own job. A heavy job
   parity   the same tile in the browser as in the program: builds the wasm
            bundle, builds a fixed set of tiles under Node and natively, and
            fails on any difference in a tile's STL hash, audit numbers or

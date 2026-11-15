@@ -348,9 +348,19 @@ fn reference(element: &ElementJson, tiles: &[(String, String)]) -> String {
         for (path, _) in used {
             let file = path.rsplit('/').next().unwrap_or(path);
             let lib = path.trim_start_matches("library/");
+            // a shipped tile opens in the browser editor, which runs in the page with no program (the test tiles are not
+            // in its library)
+            let open = if lib.starts_with("tiles/") {
+                format!(
+                    " · <a class=\"open-editor\" href=\"../editor/index.html?host=worker&amp;site=../#tile=lib%3A{}\">Open in the editor</a>",
+                    lib.replace('/', "%2F")
+                )
+            } else {
+                String::new()
+            };
             let _ = writeln!(
                 s,
-                "  <li><a href=\"{SOURCE}{path}\"><code>{file}</code></a> <span class=\"muted small\">lib:{lib}</span></li>"
+                "  <li><a href=\"{SOURCE}{path}\"><code>{file}</code></a> <span class=\"muted small\">lib:{lib}{open}</span></li>"
             );
         }
         let _ = writeln!(s, "</ul>");

@@ -67,6 +67,19 @@ const snapshot = JSON.parse(service.snapshot());
 if (!snapshot.roots.some((r) => r.kind === 'library') || snapshot.tiles.length === 0) throw new Error('the snapshot lists no library');
 const mine = JSON.parse(service.call('mine', `lib:${tile.replace(/^lib:/, '')}`, '{}'));
 if (!mine.tile || !mine.path.startsWith('/memory/My tiles/')) throw new Error(`mine did not list a copy: ${JSON.stringify(mine)}`);
+// the folder verbs: a folder made, the copy moved into it, trashed and put back, the folder renamed
+const call = (verb, id, body) => JSON.parse(service.call(verb, id, JSON.stringify(body)));
+if (call('newFolder', '', { root: 0, dir: '', name: 'rooms' }).dir !== 'rooms') throw new Error('newFolder did not make rooms');
+const moved = call('moveTile', mine.id, { root: 0, dir: 'rooms' });
+if (!moved.path.startsWith('/memory/My tiles/rooms/')) throw new Error(`moveTile did not move the copy: ${JSON.stringify(moved)}`);
+const trashed = call('trashTile', moved.id ?? moved.path, {});
+if (!Number.isInteger(trashed.undo)) throw new Error(`trashTile did not number its undo: ${JSON.stringify(trashed)}`);
+const back = call('undoTrash', '', { undo: trashed.undo });
+if (back.path !== moved.path) throw new Error(`undoTrash did not put the copy back: ${JSON.stringify(back)}`);
+if (call('renameFolder', '', { root: 0, dir: 'rooms', name: 'halls' }).dir !== 'halls') throw new Error('renameFolder did not rename rooms');
+let readOnly = '';
+try { call('newFolder', '', { root: 1, dir: '', name: 'x' }); } catch (e) { readOnly = String(e.message ?? e); }
+if (JSON.parse(readOnly).status !== 403) throw new Error(`a folder in the library was not refused: ${readOnly}`);
 // a verb the service does not have is refused loudly, never answered empty
 let refused = '';
 try {

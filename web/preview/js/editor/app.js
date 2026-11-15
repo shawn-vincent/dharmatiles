@@ -3,7 +3,8 @@
 // (the stores themselves are in stores.js).
 
 import { need } from '../dom.js';
-import { chooseHost } from '../host.js';
+import { chooseHost, siteBase } from '../host.js';
+import { setExplainBase } from '../messages.js';
 import { Viewer } from '../viewer.js';
 import { view } from './stores.js';
 
@@ -38,6 +39,9 @@ import { view } from './stores.js';
  */
 export const $ = (id) => /** @type {any} */ (need(document, `#${id}`)); // the conditional type is the table's reading of the id, which a body cannot state
 export const host = chooseHost();
+// opened from the website: an error's page is the site's own, which this page has no program to serve
+const site = siteBase();
+if (site) setExplainBase(new URL('e/', site).href);
 /** The one viewer. */
 export const viewer = new Viewer(/** @type {HTMLCanvasElement} */ ($('canvas')));
 

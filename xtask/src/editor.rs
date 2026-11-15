@@ -37,12 +37,10 @@ fn copy(from: &Path, to: &Path) -> Result<(), String> {
     }
 }
 
-/// `cargo xtask editor <out-dir>`.
-pub fn run(root: &Path, args: &[String]) -> Result<(), String> {
-    let [out] = args else {
-        return Err("usage: cargo xtask editor <out-dir>".to_owned());
-    };
-    let out = PathBuf::from(out);
+/// The page and what it reads, laid out in `out`: `index.html`, its style, the visual system it shares with the site, its
+/// scripts and the vendored libraries.  Every reference in `index.html` is relative, so the same files work at the root of a
+/// static server and in a folder of the website.
+fn lay_page(root: &Path, out: &Path) -> Result<(), String> {
     let page = root.join("web/preview");
     let assets = root.join("docs/assets");
     for (from, to) in [
@@ -57,11 +55,44 @@ pub fn run(root: &Path, args: &[String]) -> Result<(), String> {
     ] {
         copy(&from, &out.join(to))?;
     }
-    // the engine: one build, the same bundle the site's cards run
-    wasm::run_wasm(root, &[out.join("engine").to_string_lossy().into_owned()])?;
-    println!(
-        "the editor is in {0}: serve it with any static server, e.g.\n  python3 -m http.server --directory {0} --bind 127.0.0.1 7931\nand open http://127.0.0.1:7931/index.html?host=worker",
-        out.display()
-    );
     Ok(())
+}
+
+/// `cargo xtask editor [--site | --page] <out-dir>`.
+pub fn run(root: &Path, args: &[String]) -> Result<(), String> {
+    let usage = "usage: cargo xtask editor [--site | --page] <out-dir>";
+    let (mode, out) = match args {
+        [out] => ("", out),
+        [mode, out] if mode == "--site" || mode == "--page" => (mode.as_str(), out),
+        _ => return Err(usage.to_owned()),
+    };
+    let out = PathBuf::from(out);
+    let engine =
+        |dir: &Path| wasm::run_wasm(root, &[dir.join("engine").to_string_lossy().into_owned()]);
+    match mode {
+        // only the page's files: what the website's build adds to the pages it already has, beside the engine its own job builds
+        "--page" => lay_page(root, &out),
+        // the website as the program ships it (docs/, the editor at `editor/`, the engine at `engine/`), for a static server
+        // over it: the pages' "Open in the editor" links work
+        "--site" => {
+            copy(&root.join("docs"), &out)?;
+            lay_page(root, &out.join("editor"))?;
+            engine(&out)?;
+            println!(
+                "the site is in {0}: serve it with any static server, e.g.\n  python3 -m http.server --directory {0} --bind 127.0.0.1 7931\nand open http://127.0.0.1:7931/elements/rock.html",
+                out.display()
+            );
+            Ok(())
+        }
+        _ => {
+            lay_page(root, &out)?;
+            // the engine: one build, the same bundle the site's cards run
+            engine(&out)?;
+            println!(
+                "the editor is in {0}: serve it with any static server, e.g.\n  python3 -m http.server --directory {0} --bind 127.0.0.1 7931\nand open http://127.0.0.1:7931/index.html?host=worker",
+                out.display()
+            );
+            Ok(())
+        }
+    }
 }

@@ -12,6 +12,6 @@ export function resolve(specifier, context, next) {
   const site = specifier.match(/^(?:\.\.\/)+editor\/(js|vendor)\/(.*)$/);
   if (site) return next(pathToFileURL(`${root}${site[1]}/${site[2]}`).href, context);
   const to = imports[specifier];
-  if (to) return next(pathToFileURL(root.replace(/\/$/, '') + to).href, context);
+  if (to) return next(pathToFileURL(root + to.replace(/^\.?\//, '')).href, context);
   return next(specifier, context);
 }

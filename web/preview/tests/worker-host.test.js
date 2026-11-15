@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { workerHost } from '../js/host.js';
+import { workerHost, engineBase, siteBase } from '../js/host.js';
+
+test('the engine is the website\'s own when the page is opened from it, else the one beside the page', () => {
+  const here = 'https://shawn.example/dharmatiles/editor/index.html';
+  assert.equal(engineBase('?host=worker', here), 'https://shawn.example/dharmatiles/editor/engine/');
+  assert.equal(engineBase('?host=worker&site=%2E%2E', here), 'https://shawn.example/dharmatiles/engine/');
+  assert.equal(engineBase('?site=%2E%2E%2F', here), 'https://shawn.example/dharmatiles/engine/');
+  assert.equal(siteBase('?site=%2E%2E%2F', here), 'https://shawn.example/dharmatiles/');
+  assert.equal(siteBase('?host=worker', here), null);
+});
 
 /**
  * A stand-in for the editor's worker (js/editor-worker.js): `answers` is what the service says to each verb, by name; the calls it
