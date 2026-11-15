@@ -69,7 +69,7 @@ async function chooseFor(id, name) {
   if (r) toast(r.note, () => undoToast(id, r.entry));
 }
 
-/** @param {import('../api').Req<'POST /api/target'>} body */
+/** @param {import('../api').Req<'setTarget'>} body */
 async function choose(body) {
   const r = await host.setTarget(body);
   if (r.status !== 200) {

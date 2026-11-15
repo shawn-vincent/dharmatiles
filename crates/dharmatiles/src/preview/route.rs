@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use super::api::ok;
 use super::http::{Request, loopback};
+use super::routes::{is_api, resolve};
 use super::{Shared, assets, calls, fail};
 
 /// `GET /api/session`: this run's token, which every `POST` must carry.
@@ -82,13 +83,6 @@ impl From<(&'static str, super::api::Body)> for Reply {
     }
 }
 
-/// `/api/tiles/ID/rest` → `(ID, rest)`.
-pub(super) fn tile_route(path: &str) -> Option<(&str, &str)> {
-    let rest = path.strip_prefix("/api/tiles/")?;
-    let (id, what) = rest.split_once('/')?;
-    (!id.is_empty()).then_some((id, what))
-}
-
 /// With `DT_WEB` set to `web/preview`, the page's own files (only the
 /// paths the program serves) are read from there on every request, so the
 /// page can be worked on without rebuilding the program.
@@ -127,10 +121,11 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         )
         .into();
     }
-    let tile = tile_route(&req.path);
+    let (verb, id) =
+        resolve(&req.method, &req.path).map_or((None, None), |(r, id)| (Some(r.verb), id));
     // every POST: this run's token, from a loopback page (the build call too:
     // a page of any other site must not make the editor build)
-    if req.path.starts_with("/api/") && req.method == "POST" {
+    if is_api(&req.path) && req.method == "POST" {
         let origin_ok = req
             .origin
             .as_deref()
@@ -142,7 +137,7 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             )
             .into();
         }
-        if !matches!(tile, Some((_, "build"))) {
+        if verb != Some("build") {
             return calls::dispatch(shared, &req.path, &req.body);
         }
     }
@@ -152,21 +147,21 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             Reply::Bytes,
         )
     };
-    match (req.method.as_str(), req.path.as_str(), tile) {
-        ("GET", "/api/events", _) => Reply::Events(Resume {
+    match (verb, id) {
+        (Some("events"), _) => Reply::Events(Resume {
             epoch: req.param("epoch").map(str::to_owned),
             since: req.param("since").and_then(|s| s.parse().ok()),
         }),
         #[cfg(any(test, feature = "test-routes"))]
-        ("GET", "/api/test-panic", _) => panic!("a test panic in a route"),
+        (Some("testPanic"), _) => panic!("a test panic in a route"),
         #[cfg(any(test, feature = "test-routes"))]
         #[cfg(any(test, feature = "test-routes"))]
-        ("GET", "/api/test-idle", _) => ok(&TestIdle {
+        (Some("testIdle"), _) => ok(&TestIdle {
             pending: shared.pending(),
         })
         .into(),
         #[cfg(any(test, feature = "test-routes"))]
-        ("GET", "/api/test-failure", _) => {
+        (Some("testFailure"), _) => {
             let e = fail::Layered::demo();
             fail::failure_from(
                 "500 Internal Server Error",
@@ -175,25 +170,25 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             )
             .into()
         }
-        ("GET", "/api/messages/report", _) => {
+        (Some("messagesReport"), _) => {
             super::messages::report(shared, &|k| req.param(k).map(str::to_owned))
         }
-        ("GET", "/api/messages", _) => {
+        (Some("messages"), _) => {
             super::messages::read(shared, &|k| req.param(k).map(str::to_owned))
         }
-        ("GET", "/api/session", _) => ok(&SessionRes {
+        (Some("session"), _) => ok(&SessionRes {
             token: shared.token.clone(),
         })
         .into(),
-        ("GET", "/api/about", _) => ok(&AboutRes {
+        (Some("about"), _) => ok(&AboutRes {
             version: env!("DT_ENGINE_VERSION").to_owned(),
             formats: dt_doc::header::formats(),
         })
         .into(),
-        ("GET", "/api/elements", _) => ok(&crate::elements::all_json()).into(),
-        ("GET", "/api/language", _) => ok(&crate::elements::language_json()).into(),
-        ("GET", "/api/tiles", _) => ok(&shared.snapshot()).into(),
-        ("GET", _, Some((id, "mesh"))) => {
+        (Some("elements"), _) => ok(&crate::elements::all_json()).into(),
+        (Some("language"), _) => ok(&crate::elements::language_json()).into(),
+        (Some("snapshot"), _) => ok(&shared.snapshot()).into(),
+        (Some("mesh"), Some(id)) => {
             let Some(asked) = req.param("docRev").and_then(|s| s.parse::<u64>().ok()) else {
                 return fail::refused(
                     "400 Bad Request",
@@ -208,7 +203,7 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         }
         // `?tier=low` or `?tier=super-low`: the tile's mesh at that tier, from the
         // cache or built, for a map that draws by distance.  Never checked.
-        ("GET", "/api/tiers/result", _) => {
+        (Some("tierResult"), _) => {
             let Some(key) = req.param("key") else {
                 return fail::refused("400 Bad Request", "give the key of the tier").into();
             };
@@ -218,13 +213,13 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
                 Err(now) => super::stale_mesh(now).into(),
             }
         }
-        ("GET", _, Some((id, "sketch"))) => bytes(
+        (Some("sketch"), Some(id)) => bytes(
             req.param("id")
                 .and_then(|k| k.parse().ok())
                 .and_then(|k| shared.sketch_mesh(id, k)),
             "no such sketch",
         ),
-        ("GET", _, Some((id, "text"))) => match shared.text(id, req.param("file")) {
+        (Some("text"), Some(id)) => match shared.text(id, req.param("file")) {
             Ok(Some(v)) => ok(&v).into(),
             Ok(None) => fail::refused("404 Not Found", "no such file").into(),
             Err(e) => fail::failure(
@@ -233,7 +228,7 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             )
             .into(),
         },
-        ("POST", _, Some((id, "build"))) => {
+        (Some("build"), Some(id)) => {
             // `?debug=1` or `?debug=0`: the page has the debug layer on or off for this tile
             if let Some(on) = req.param("debug") {
                 shared.set_marks(id, on == "1");
@@ -245,10 +240,12 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             }
         }
         // the docs from the folder they are installed in: the editor's Explain opens the copy that matches the program
-        ("GET", p, _) if p.starts_with("/docs/") => super::local_docs::serve(p),
-        ("GET", p, _) => match dev_asset(p) {
+        (None, _) if req.method == "GET" && req.path.starts_with("/docs/") => {
+            super::local_docs::serve(&req.path)
+        }
+        (None, _) if req.method == "GET" => match dev_asset(&req.path) {
             Some((ctype, body)) => Reply::Asset(ctype, Cow::Owned(body)),
-            None => match assets::find(p) {
+            None => match assets::find(&req.path) {
                 Some((ctype, body)) => Reply::Asset(ctype, Cow::Borrowed(body)),
                 None => fail::refused("404 Not Found", "not found").into(),
             },

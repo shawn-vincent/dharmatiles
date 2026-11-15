@@ -1620,70 +1620,70 @@ plain: string, span: [number, number], };
 
 type WrittenPoint = { text: string, span: [number, number], at: [number, number] | null, };
 
-/** Every call that writes: its request body and its answer. */
+/** Every call made with a body, by its name: its request body and its answer. */
 export interface Calls {
-  "POST /api/edit": { req: EditReq; res: EditRes };
-  "POST /api/names": { req: NamesReq; res: NamesRes };
-  "POST /api/tokens": { req: TokensReq; res: TokensRes };
-  "POST /api/check-value": { req: CheckValueReq; res: CheckValueRes };
-  "POST /api/printed-set": { req: PrintedSetReq; res: PrintedSetRes };
-  "POST /api/new": { req: NewReq; res: Listed };
-  "POST /api/messages": { req: PageMessageReq; res: Done };
-  "POST /api/target": { req: TargetReq; res: TargetRes };
-  "POST /api/reveal": { req: RevealReq; res: Done };
-  "POST /api/places/add": { req: Nothing; res: PlacesAddRes };
-  "POST /api/places/remove": { req: PlacesRemoveReq; res: Changed };
-  "POST /api/folders/new": { req: FolderNamedReq; res: FolderDone };
-  "POST /api/folders/rename": { req: FolderNamedReq; res: FolderDone };
-  "POST /api/folders/trash": { req: FolderReq; res: Trashed };
-  "POST /api/trash/undo": { req: TrashUndoReq; res: Restored };
-  "POST /api/tiers/want": { req: TiersWantReq; res: TiersWantRes };
-  "POST /api/printers/scan": { req: PrintersScanReq; res: PrintersScanRes };
-  "POST /api/printers/import": { req: PrintersImportReq; res: PrintersImportRes };
-  "POST /api/plates/show": { req: PlatesShowReq; res: Done };
-  "POST /api/plates/set": { req: PlatesSetReq; res: ListEdited };
-  "POST /api/plates/export": { req: PlatesExportReq; res: PlatesExported };
-  "POST /api/inventory/have": { req: InventoryHaveReq; res: InventoryWrote };
-  "POST /api/inventory/record": { req: InventoryRecordReq; res: InventoryWrote };
-  "POST /api/inventory/gone": { req: InventoryGoneReq; res: InventoryWrote };
-  "POST /api/inventory/relink": { req: InventoryRelinkReq; res: InventoryWrote };
-  "POST /api/inventory/reprint": { req: InventoryReprintReq; res: InventoryReprinted };
-  "POST /api/lists/new": { req: ListsNewReq; res: Listed };
-  "POST /api/lists/add": { req: ListsAddReq; res: ListsAddRes };
-  "POST /api/lists/count": { req: ListsCountReq; res: ListEdited };
-  "POST /api/lists/remove": { req: ListsRemoveReq; res: ListEdited };
-  "POST /api/lists/restore": { req: ListsRestoreReq; res: ListEdited };
-  "POST /api/maps/add": { req: MapsAddReq; res: MapsPieced };
-  "POST /api/maps/set": { req: MapsSetReq; res: ListEdited };
-  "POST /api/maps/batch": { req: MapsBatchReq; res: MapsBatched };
-  "POST /api/maps/dup": { req: MapsDupReq; res: MapsPieced };
-  "POST /api/maps/remove": { req: MapsPieceReq; res: ListEdited };
-  "POST /api/maps/pin": { req: MapsPinReq; res: MapsPieced };
-  "POST /api/maps/unpin": { req: MapsPieceReq; res: ListEdited };
-  "POST /api/maps/unpin-all": { req: MapsListReq; res: ListEdited };
-  "POST /api/tiles/:id/check": { req: TextReq; res: CheckRes };
-  "POST /api/tiles/:id/printed": { req: PrintedReq; res: PrintedRes };
-  "POST /api/tiles/:id/save": { req: SaveReq; res: SaveRes };
-  "POST /api/tiles/:id/mine": { req: Nothing; res: Listed };
-  "POST /api/tiles/:id/delete": { req: Nothing; res: Deleted };
-  "POST /api/tiles/:id/rename": { req: RenameReq; res: Listed };
-  "POST /api/tiles/:id/move": { req: TileMoveReq; res: ListedIn };
-  "POST /api/tiles/:id/duplicate": { req: Nothing; res: ListedIn };
-  "POST /api/tiles/:id/trash": { req: Nothing; res: Trashed };
-  "POST /api/tiles/:id/export": { req: ExportReq; res: ExportRes };
-  "POST /api/tiles/:id/offers": { req: OffersReq; res: OffersRes };
-  "POST /api/tiles/:id/draft": { req: DraftReq; res: ArrayBuffer };
-  "POST /api/tiles/:id/step": { req: StepReq; res: ArrayBuffer };
+  "edit": { req: EditReq; res: EditRes };
+  "names": { req: NamesReq; res: NamesRes };
+  "tokens": { req: TokensReq; res: TokensRes };
+  "checkValue": { req: CheckValueReq; res: CheckValueRes };
+  "printedSet": { req: PrintedSetReq; res: PrintedSetRes };
+  "newTile": { req: NewReq; res: Listed };
+  "reportMessage": { req: PageMessageReq; res: Done };
+  "setTarget": { req: TargetReq; res: TargetRes };
+  "reveal": { req: RevealReq; res: Done };
+  "addPlace": { req: Nothing; res: PlacesAddRes };
+  "removePlace": { req: PlacesRemoveReq; res: Changed };
+  "newFolder": { req: FolderNamedReq; res: FolderDone };
+  "renameFolder": { req: FolderNamedReq; res: FolderDone };
+  "trashFolder": { req: FolderReq; res: Trashed };
+  "undoTrash": { req: TrashUndoReq; res: Restored };
+  "tiersWant": { req: TiersWantReq; res: TiersWantRes };
+  "printersScan": { req: PrintersScanReq; res: PrintersScanRes };
+  "printersImport": { req: PrintersImportReq; res: PrintersImportRes };
+  "platesShow": { req: PlatesShowReq; res: Done };
+  "platesSet": { req: PlatesSetReq; res: ListEdited };
+  "platesExport": { req: PlatesExportReq; res: PlatesExported };
+  "inventoryHave": { req: InventoryHaveReq; res: InventoryWrote };
+  "inventoryRecord": { req: InventoryRecordReq; res: InventoryWrote };
+  "inventoryGone": { req: InventoryGoneReq; res: InventoryWrote };
+  "inventoryRelink": { req: InventoryRelinkReq; res: InventoryWrote };
+  "inventoryReprint": { req: InventoryReprintReq; res: InventoryReprinted };
+  "listsNew": { req: ListsNewReq; res: Listed };
+  "listsAdd": { req: ListsAddReq; res: ListsAddRes };
+  "listsCount": { req: ListsCountReq; res: ListEdited };
+  "listsRemove": { req: ListsRemoveReq; res: ListEdited };
+  "listsRestore": { req: ListsRestoreReq; res: ListEdited };
+  "mapsAdd": { req: MapsAddReq; res: MapsPieced };
+  "mapsSet": { req: MapsSetReq; res: ListEdited };
+  "mapsBatch": { req: MapsBatchReq; res: MapsBatched };
+  "mapsDup": { req: MapsDupReq; res: MapsPieced };
+  "mapsRemove": { req: MapsPieceReq; res: ListEdited };
+  "mapsPin": { req: MapsPinReq; res: MapsPieced };
+  "mapsUnpin": { req: MapsPieceReq; res: ListEdited };
+  "mapsUnpinAll": { req: MapsListReq; res: ListEdited };
+  "check": { req: TextReq; res: CheckRes };
+  "printed": { req: PrintedReq; res: PrintedRes };
+  "save": { req: SaveReq; res: SaveRes };
+  "mine": { req: Nothing; res: Listed };
+  "deleteTile": { req: Nothing; res: Deleted };
+  "rename": { req: RenameReq; res: Listed };
+  "moveTile": { req: TileMoveReq; res: ListedIn };
+  "duplicateTile": { req: Nothing; res: ListedIn };
+  "trashTile": { req: Nothing; res: Trashed };
+  "exportTile": { req: ExportReq; res: ExportRes };
+  "offers": { req: OffersReq; res: OffersRes };
+  "draft": { req: DraftReq; res: ArrayBuffer };
+  "step": { req: StepReq; res: ArrayBuffer };
 }
 
-/** Every read: its answer. */
+/** Every read, by its name: its answer. */
 export interface Reads {
-  "GET /api/session": SessionRes;
-  "GET /api/about": AboutRes;
-  "GET /api/elements": Array<ElementJson>;
-  "GET /api/language": LanguageJson;
-  "GET /api/tiles": Snapshot;
-  "GET /api/tiles/:id/text": TextRes;
+  "session": SessionRes;
+  "about": AboutRes;
+  "elements": Array<ElementJson>;
+  "language": LanguageJson;
+  "snapshot": Snapshot;
+  "text": TextRes;
 }
 
 /** The request body of call `R`. */

@@ -14,7 +14,8 @@ use super::http::{Request, respond};
 
 use super::api::Body;
 use super::fail;
-use super::route::{Reply, Resume, route, tile_route};
+use super::route::{Reply, Resume, route};
+use super::routes::tile_shape;
 
 /// Accept connections on `listener` in a background thread.
 pub fn spawn(listener: TcpListener, shared: Arc<Shared>) {
@@ -81,7 +82,7 @@ fn send_json(conn: &mut TcpStream, status: &'static str, body: &Body) {
 /// internal failure is only in the page.
 pub(super) fn answer(shared: &Shared, req: &Request) -> Reply {
     let route_name = format!("{} {}", req.method, req.path);
-    let tile = tile_route(&req.path).map(|(id, _)| id.to_owned());
+    let tile = tile_shape(&req.path).map(|(id, _)| id.to_owned());
     let reply = fail::answering(route_name, tile, || {
         match std::panic::catch_unwind(AssertUnwindSafe(|| route(shared, req))) {
             Ok(r) => r,
@@ -95,7 +96,7 @@ pub(super) fn answer(shared: &Shared, req: &Request) -> Reply {
     match &reply {
         Reply::Json(status, body) if status.starts_with('5') => {
             // the one error path: a failure of the program's own is a message in the stream too
-            let id = tile_route(&req.path).map(|(id, _)| id.to_owned());
+            let id = tile_shape(&req.path).map(|(id, _)| id.to_owned());
             let name = id.as_deref().and_then(|i| shared.name_of(i));
             // every 5xx is built by the one error path, so its body is an `ErrorBody`: say it when it is not
             let error = body.failed().map_or_else(

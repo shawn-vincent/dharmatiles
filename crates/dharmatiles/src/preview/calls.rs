@@ -1,87 +1,97 @@
-//! The table of the page's calls: one row for each `POST` the editor makes,
-//! with the function that answers it and its request and response types.
+//! The table of the page's calls: one row for each call the editor makes, named by what it does (`save`,
+//! `mapsSet`), with the function that answers it and its request and response types.
 //! [`super::api`] makes the dispatch and the TypeScript from it, so a call
 //! that is not a row here is not a call, and a row has exactly one type for
 //! what it takes and one for what it gives.
 
 use super::api::{Reply, TileRef, calls, reply, request};
 use super::edit::{self, DraftReq};
-use super::route::{self, tile_route};
+use super::route;
+use super::routes::{resolve, tile_shape};
 use super::{Shared, fail, inventory, lists, lock, maps, offers, places, plates, printers, tiers};
 
 calls! {
     post {
-        "/api/edit" => edit::edit : edit::EditReq => edit::EditRes;
-        "/api/names" => edit::names : edit::NamesReq => edit::NamesRes;
-        "/api/tokens" => edit::tokens : edit::TokensReq => edit::TokensRes;
-        "/api/check-value" => edit::check_value : edit::CheckValueReq => edit::CheckValueRes;
-        "/api/printed-set" => edit::printed_set : edit::PrintedSetReq => edit::PrintedSetRes;
-        "/api/new" => edit::new_tile : edit::NewReq => places::Listed;
-        "/api/messages" => edit::page_message : edit::PageMessageReq => edit::Done;
-        "/api/target" => edit::target : edit::TargetReq => edit::TargetRes;
-        "/api/reveal" => edit::reveal : edit::RevealReq => edit::Done;
-        "/api/places/add" => places::add_place : places::Nothing => places::PlacesAddRes;
-        "/api/places/remove" => places::remove_place : places::PlacesRemoveReq => places::Changed;
-        "/api/folders/new" => places::new_folder : places::FolderNamedReq => places::FolderDone;
-        "/api/folders/rename" => places::rename_folder : places::FolderNamedReq => places::FolderDone;
-        "/api/folders/trash" => places::trash_folder : places::FolderReq => places::Trashed;
-        "/api/trash/undo" => places::undo_trash : places::TrashUndoReq => places::Restored;
-        "/api/tiers/want" => tiers::want : tiers::TiersWantReq => tiers::TiersWantRes;
-        "/api/printers/scan" => printers::scan : printers::PrintersScanReq => printers::PrintersScanRes;
-        "/api/printers/import" => printers::import : printers::PrintersImportReq => printers::PrintersImportRes;
-        "/api/plates/show" => plates::show : plates::PlatesShowReq => edit::Done;
-        "/api/plates/set" => plates::set : plates::PlatesSetReq => lists::ListEdited;
-        "/api/plates/export" => plates::export : plates::PlatesExportReq => plates::PlatesExported;
-        "/api/inventory/have" => inventory::have : inventory::InventoryHaveReq => inventory::InventoryWrote;
-        "/api/inventory/record" => inventory::record : inventory::InventoryRecordReq => inventory::InventoryWrote;
-        "/api/inventory/gone" => inventory::gone : inventory::InventoryGoneReq => inventory::InventoryWrote;
-        "/api/inventory/relink" => inventory::relink : inventory::InventoryRelinkReq => inventory::InventoryWrote;
-        "/api/inventory/reprint" => inventory::reprint : inventory::InventoryReprintReq => inventory::InventoryReprinted;
-        "/api/lists/new" => lists::new_list : lists::ListsNewReq => places::Listed;
-        "/api/lists/add" => lists::add : lists::ListsAddReq => lists::ListsAddRes;
-        "/api/lists/count" => lists::set_count : lists::ListsCountReq => lists::ListEdited;
-        "/api/lists/remove" => lists::remove : lists::ListsRemoveReq => lists::ListEdited;
-        "/api/lists/restore" => lists::restore : lists::ListsRestoreReq => lists::ListEdited;
-        "/api/maps/add" => maps::add : maps::MapsAddReq => maps::MapsPieced;
-        "/api/maps/set" => maps::set : maps::MapsSetReq => lists::ListEdited;
-        "/api/maps/batch" => maps::batch : maps::MapsBatchReq => maps::MapsBatched;
-        "/api/maps/dup" => maps::dup : maps::MapsDupReq => maps::MapsPieced;
-        "/api/maps/remove" => maps::remove : maps::MapsPieceReq => lists::ListEdited;
-        "/api/maps/pin" => maps::pin : maps::MapsPinReq => maps::MapsPieced;
-        "/api/maps/unpin" => maps::unpin : maps::MapsPieceReq => lists::ListEdited;
-        "/api/maps/unpin-all" => maps::unpin_all : maps::MapsListReq => lists::ListEdited;
+        "edit" => edit::edit : edit::EditReq => edit::EditRes;
+        "names" => edit::names : edit::NamesReq => edit::NamesRes;
+        "tokens" => edit::tokens : edit::TokensReq => edit::TokensRes;
+        "checkValue" => edit::check_value : edit::CheckValueReq => edit::CheckValueRes;
+        "printedSet" => edit::printed_set : edit::PrintedSetReq => edit::PrintedSetRes;
+        "newTile" => edit::new_tile : edit::NewReq => places::Listed;
+        "reportMessage" => edit::page_message : edit::PageMessageReq => edit::Done;
+        "setTarget" => edit::target : edit::TargetReq => edit::TargetRes;
+        "reveal" => edit::reveal : edit::RevealReq => edit::Done;
+        "addPlace" => places::add_place : places::Nothing => places::PlacesAddRes;
+        "removePlace" => places::remove_place : places::PlacesRemoveReq => places::Changed;
+        "newFolder" => places::new_folder : places::FolderNamedReq => places::FolderDone;
+        "renameFolder" => places::rename_folder : places::FolderNamedReq => places::FolderDone;
+        "trashFolder" => places::trash_folder : places::FolderReq => places::Trashed;
+        "undoTrash" => places::undo_trash : places::TrashUndoReq => places::Restored;
+        "tiersWant" => tiers::want : tiers::TiersWantReq => tiers::TiersWantRes;
+        "printersScan" => printers::scan : printers::PrintersScanReq => printers::PrintersScanRes;
+        "printersImport" => printers::import : printers::PrintersImportReq => printers::PrintersImportRes;
+        "platesShow" => plates::show : plates::PlatesShowReq => edit::Done;
+        "platesSet" => plates::set : plates::PlatesSetReq => lists::ListEdited;
+        "platesExport" => plates::export : plates::PlatesExportReq => plates::PlatesExported;
+        "inventoryHave" => inventory::have : inventory::InventoryHaveReq => inventory::InventoryWrote;
+        "inventoryRecord" => inventory::record : inventory::InventoryRecordReq => inventory::InventoryWrote;
+        "inventoryGone" => inventory::gone : inventory::InventoryGoneReq => inventory::InventoryWrote;
+        "inventoryRelink" => inventory::relink : inventory::InventoryRelinkReq => inventory::InventoryWrote;
+        "inventoryReprint" => inventory::reprint : inventory::InventoryReprintReq => inventory::InventoryReprinted;
+        "listsNew" => lists::new_list : lists::ListsNewReq => places::Listed;
+        "listsAdd" => lists::add : lists::ListsAddReq => lists::ListsAddRes;
+        "listsCount" => lists::set_count : lists::ListsCountReq => lists::ListEdited;
+        "listsRemove" => lists::remove : lists::ListsRemoveReq => lists::ListEdited;
+        "listsRestore" => lists::restore : lists::ListsRestoreReq => lists::ListEdited;
+        "mapsAdd" => maps::add : maps::MapsAddReq => maps::MapsPieced;
+        "mapsSet" => maps::set : maps::MapsSetReq => lists::ListEdited;
+        "mapsBatch" => maps::batch : maps::MapsBatchReq => maps::MapsBatched;
+        "mapsDup" => maps::dup : maps::MapsDupReq => maps::MapsPieced;
+        "mapsRemove" => maps::remove : maps::MapsPieceReq => lists::ListEdited;
+        "mapsPin" => maps::pin : maps::MapsPinReq => maps::MapsPieced;
+        "mapsUnpin" => maps::unpin : maps::MapsPieceReq => lists::ListEdited;
+        "mapsUnpinAll" => maps::unpin_all : maps::MapsListReq => lists::ListEdited;
     }
     tile {
         "check" => edit::check : edit::TextReq => edit::CheckRes;
         "printed" => edit::printed : edit::PrintedReq => edit::PrintedRes;
         "save" => edit::save : edit::SaveReq => edit::SaveRes;
         "mine" => edit::mine : places::Nothing => places::Listed;
-        "delete" => edit::delete : places::Nothing => edit::Deleted;
+        "deleteTile" => edit::delete : places::Nothing => edit::Deleted;
         "rename" => edit::rename : edit::RenameReq => places::Listed;
-        "move" => places::move_tile : places::TileMoveReq => places::ListedIn;
-        "duplicate" => places::duplicate_tile : places::Nothing => places::ListedIn;
-        "trash" => places::trash_tile : places::Nothing => places::Trashed;
-        "export" => edit::export : edit::ExportReq => edit::ExportRes;
+        "moveTile" => places::move_tile : places::TileMoveReq => places::ListedIn;
+        "duplicateTile" => places::duplicate_tile : places::Nothing => places::ListedIn;
+        "trashTile" => places::trash_tile : places::Nothing => places::Trashed;
+        "exportTile" => edit::export : edit::ExportReq => edit::ExportRes;
         "offers" => offers::offers : offers::OffersReq => offers::OffersRes;
     }
     get {
-        "/api/session" => route::SessionRes;
-        "/api/about" => route::AboutRes;
-        "/api/elements" => Vec<dt_doc::wire::ElementJson>;
-        "/api/language" => dt_doc::wire::LanguageJson;
-        "/api/tiles" => super::api::Snapshot;
-        "/api/tiles/:id/text" => route::TextRes;
+        "session" => route::SessionRes;
+        "about" => route::AboutRes;
+        "elements" => Vec<dt_doc::wire::ElementJson>;
+        "language" => dt_doc::wire::LanguageJson;
+        "snapshot" => super::api::Snapshot;
+        "text" => route::TextRes;
     }
 }
 
-/// The reply to a `POST` of the editor, by its path: a call in the table, or a
-/// refusal that says there is no such call (404) or no such tile (404).
+/// The reply to a `POST` of the editor, by its path: the path is read as the call it is (the one table of
+/// [`super::routes`]) and the call is answered by name; or a refusal that says there is no such call (404) or no
+/// such tile (404).
 pub(super) fn dispatch(shared: &Shared, path: &str, body: &[u8]) -> route::Reply {
-    if let Some(r) = post(shared, path, body) {
-        return r.into();
+    let resolved = resolve("POST", path);
+    if let Some((r, None)) = resolved
+        && let Some(reply) = post_verb(shared, r.verb, path, body)
+    {
+        return reply.into();
     }
-    let Some((id, what)) = tile_route(path) else {
-        return fail::refused("404 Not Found", "no such call").into();
+    // a call about a tile: the id is in the route, and a tile that is not listed is refused before the call is known
+    let (verb, id) = match resolved {
+        Some((r, Some(id))) => (r.verb, id),
+        _ => match tile_shape(path) {
+            Some((id, _)) => ("", id),
+            None => return fail::refused("404 Not Found", "no such call").into(),
+        },
     };
     let Some(tile) = lock(&shared.tiles)
         .iter()
@@ -95,20 +105,20 @@ pub(super) fn dispatch(shared: &Shared, path: &str, body: &[u8]) -> route::Reply
         return fail::refused("404 Not Found", "no such tile").into();
     };
     // the draft answers a mesh, so it is not a row of the table
-    if what == "draft" {
+    if verb == "draft" {
         return match request::<DraftReq>(path, body) {
             Ok(r) => edit::draft(shared, &tile, r),
             Err(e) => e.into(),
         };
     }
     // a step answers a head and a mesh, so it is not a row of the table either
-    if what == "step" {
+    if verb == "step" {
         return match request::<edit::StepReq>(path, body) {
             Ok(r) => edit::step(shared, &tile, r),
             Err(e) => e.into(),
         };
     }
-    tile_post(shared, &tile, what, path, body)
+    tile_verb(shared, &tile, verb, path, body)
         .unwrap_or_else(|| fail::refused("404 Not Found", "no such call"))
         .into()
 }
@@ -137,9 +147,15 @@ mod tests {
         format!("{h:016x}")
     }
 
+    /// What the stamp is of: the types, and the HTTP transport's table of routes (which the page reads from the same file).
+    fn contract_text() -> String {
+        super::typescript() + &super::super::routes::javascript()
+    }
+
     fn stamp_js(stamp: &str) -> String {
         format!(
-            "// Generated by the Rust test the_page_contract_is_current from js/api.d.ts: do not edit.  The program reads this\n// file when it is compiled and the page when it loads; a page whose stamp is not the program's is from another build.\nexport const CONTRACT = '{stamp}';\n"
+            "// Generated by the Rust test the_page_contract_is_current from js/api.d.ts and the HTTP routes: do not edit.  The program reads this\n// file when it is compiled and the page when it loads; a page whose stamp is not the program's is from another build.\nexport const CONTRACT = '{stamp}';\n{}",
+            super::super::routes::javascript()
         )
     }
 
@@ -150,7 +166,7 @@ mod tests {
     )]
     fn the_page_contract_is_current() {
         let want = super::typescript();
-        let want_js = stamp_js(&stamp_of(&want));
+        let want_js = stamp_js(&stamp_of(&contract_text()));
         if std::env::var_os("DT_CONTRACT").is_some_and(|v| v == "write") {
             std::fs::write(file(), &want).unwrap();
             std::fs::write(stamp_file(), &want_js).unwrap();
@@ -173,8 +189,116 @@ mod tests {
         assert!(stamp.bytes().all(|b| b.is_ascii_hexdigit()), "{stamp:?}");
         assert_eq!(
             stamp,
-            stamp_of(&super::typescript()),
+            stamp_of(&contract_text()),
             "the compiled-in stamp is the contract's"
+        );
+    }
+
+    /// Every call of the table has one route, every route one call of the table (or is one of the calls that
+    /// answer bytes or a stream, which are not typed), and no two calls share a name or a method and route.
+    #[test]
+    fn every_call_has_one_route_and_every_route_a_call() {
+        use super::super::routes::ROUTES;
+        let untyped = [
+            "draft",
+            "step",
+            "build",
+            "mesh",
+            "sketch",
+            "tierResult",
+            "events",
+            "messages",
+            "messagesReport",
+            "testPanic",
+            "testIdle",
+            "testFailure",
+        ];
+        for verb in super::VERBS {
+            let n = ROUTES.iter().filter(|r| r.verb == *verb).count();
+            assert_eq!(n, 1, "the call {verb} has {n} routes");
+        }
+        for r in ROUTES {
+            assert!(
+                super::VERBS.contains(&r.verb) || untyped.contains(&r.verb),
+                "the route {} {} names a call ({}) that is not in the table",
+                r.method.as_str(),
+                r.path,
+                r.verb
+            );
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for r in ROUTES {
+            assert!(
+                seen.insert((r.method.as_str(), r.path)),
+                "{} {} is twice",
+                r.method.as_str(),
+                r.path
+            );
+            assert!(
+                r.verb.chars().all(|c| c.is_ascii_alphanumeric())
+                    && r.verb.starts_with(|c: char| c.is_ascii_lowercase()),
+                "{}: a call is named in camelCase",
+                r.verb
+            );
+        }
+    }
+
+    /// A route string is written in the HTTP transport's table, nowhere else: not in the program's code (comments and
+    /// the tests, which speak HTTP, aside) and not in the page's, whose HTTP host reads the table from `contract.js`.
+    #[test]
+    fn the_routes_are_written_once() {
+        fn code_of(text: &str) -> String {
+            // a file's tests are what follows its `#[cfg(test)] mod tests`
+            let text = text.split("#[cfg(test)]\nmod tests").next().unwrap_or(text);
+            text.lines()
+                .filter(|l| {
+                    let t = l.trim_start();
+                    !(t.starts_with("//") || t.starts_with('*') || t.starts_with("/*"))
+                })
+                .map(|l| l.split(" // ").next().unwrap_or(l))
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+        fn files(dir: &std::path::Path, ext: &str, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(dir).unwrap() {
+                let p = e.unwrap().path();
+                if p.is_dir() {
+                    if !(p.ends_with("node_modules") || p.ends_with("tests")) {
+                        files(&p, ext, out);
+                    }
+                } else if p.extension().is_some_and(|x| x == ext) {
+                    out.push(p);
+                }
+            }
+        }
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut rs = Vec::new();
+        files(&root.join("src"), "rs", &mut rs);
+        let mut js = Vec::new();
+        files(&root.join("../../web/preview/js"), "js", &mut js);
+        let mut bad = Vec::new();
+        for p in rs.iter().chain(&js) {
+            let name = p.file_name().unwrap().to_string_lossy();
+            // the table; the generated contract; the tests' files
+            if name == "routes.rs"
+                || name == "contract.js"
+                || name == "tests.rs"
+                || name == "host.js"
+            {
+                continue;
+            }
+            if code_of(&std::fs::read_to_string(p).unwrap()).contains("/api/") {
+                bad.push(p.display().to_string());
+            }
+        }
+        // the page's HTTP host reads the table; it writes no route of its own
+        let host = std::fs::read_to_string(root.join("../../web/preview/js/host.js")).unwrap();
+        if code_of(&host).contains("/api/") {
+            bad.push("web/preview/js/host.js".to_owned());
+        }
+        assert!(
+            bad.is_empty(),
+            "a route is written outside src/preview/routes.rs: {bad:?}"
         );
     }
 }

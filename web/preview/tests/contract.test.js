@@ -46,7 +46,7 @@ test('a field renamed in the contract fails in the page, in the code that used i
 });
 
 test('a route that is not in the contract cannot be called', () => {
-  const r = checkWith((t) => t.replace('"POST /api/maps/set"', '"POST /api/maps/changed"'));
+  const r = checkWith((t) => t.replace('"mapsSet"', '"mapsChanged"'));
   assert.notEqual(r.status, 0);
   assert.match(r.out, /host\.js/);
 });

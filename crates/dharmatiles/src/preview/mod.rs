@@ -46,6 +46,7 @@ mod assets;
 pub(crate) mod http;
 mod queue;
 mod route;
+mod routes;
 
 /// Where a tile's build stands.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

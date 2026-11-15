@@ -7,26 +7,26 @@
 /** @template {keyof import('./api').Calls} R @typedef {Omit<import('./api').Req<R>, 'list' | 'docRev'>} Body */
 
 export const steps = {
-  /** @param {Body<'POST /api/lists/count'>} body */
+  /** @param {Body<'listsCount'>} body */
   listsCount: (body) => ({ name: /** @type {const} */ ('listsCount'), body }),
-  /** @param {Body<'POST /api/lists/remove'>} body */
+  /** @param {Body<'listsRemove'>} body */
   listsRemove: (body) => ({ name: /** @type {const} */ ('listsRemove'), body }),
-  /** @param {Body<'POST /api/maps/add'>} body */
+  /** @param {Body<'mapsAdd'>} body */
   mapsAdd: (body) => ({ name: /** @type {const} */ ('mapsAdd'), body }),
-  /** @param {Body<'POST /api/maps/set'>} body */
+  /** @param {Body<'mapsSet'>} body */
   mapsSet: (body) => ({ name: /** @type {const} */ ('mapsSet'), body }),
-  /** @param {Body<'POST /api/maps/batch'>} body */
+  /** @param {Body<'mapsBatch'>} body */
   mapsBatch: (body) => ({ name: /** @type {const} */ ('mapsBatch'), body }),
-  /** @param {Body<'POST /api/maps/dup'>} body */
+  /** @param {Body<'mapsDup'>} body */
   mapsDup: (body) => ({ name: /** @type {const} */ ('mapsDup'), body }),
-  /** @param {Body<'POST /api/maps/remove'>} body */
+  /** @param {Body<'mapsRemove'>} body */
   mapsRemove: (body) => ({ name: /** @type {const} */ ('mapsRemove'), body }),
-  /** @param {Body<'POST /api/maps/pin'>} body */
+  /** @param {Body<'mapsPin'>} body */
   mapsPin: (body) => ({ name: /** @type {const} */ ('mapsPin'), body }),
-  /** @param {Body<'POST /api/maps/unpin'>} body */
+  /** @param {Body<'mapsUnpin'>} body */
   mapsUnpin: (body) => ({ name: /** @type {const} */ ('mapsUnpin'), body }),
-  /** @param {Body<'POST /api/maps/unpin-all'>} body */
+  /** @param {Body<'mapsUnpinAll'>} body */
   mapsUnpinAll: (body) => ({ name: /** @type {const} */ ('mapsUnpinAll'), body }),
-  /** @param {Body<'POST /api/plates/set'>} body */
+  /** @param {Body<'platesSet'>} body */
   platesSet: (body) => ({ name: /** @type {const} */ ('platesSet'), body }),
 };

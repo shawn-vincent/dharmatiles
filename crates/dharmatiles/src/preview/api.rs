@@ -289,22 +289,23 @@ pub fn contract() -> &'static str {
     value.unwrap_or(FILE)
 }
 
-/// The calls the page makes, each with its request and response type.  Makes
-/// the dispatch (`post`, for the `POST`s, and `tile_post` for those under
-/// `/api/tiles/ID/`) and, in tests, the TypeScript of the whole contract.
+/// The calls the page makes, each named by what it does and with its request and response type.  Makes the
+/// dispatch (`post_verb`, for the calls that are not about one tile, and `tile_verb` for those that are) and, in
+/// tests, the TypeScript of the whole contract, keyed by those names.  Which method and route a name is, is the
+/// HTTP transport's business ([`super::routes`]).
 ///
 /// A function of the first kind is `fn(&Shared, Req) -> Out<Res>`, of the
 /// second `fn(&Shared, &TileRef, Req) -> Out<Res>`.
 macro_rules! calls {
     (
-        post { $( $path:literal => $f:path : $req:ty => $res:ty; )* }
-        tile { $( $what:literal => $tf:path : $treq:ty => $tres:ty; )* }
-        get { $( $gpath:literal => $gres:ty; )* }
+        post { $( $verb:literal => $f:path : $req:ty => $res:ty; )* }
+        tile { $( $tverb:literal => $tf:path : $treq:ty => $tres:ty; )* }
+        get { $( $gverb:literal => $gres:ty; )* }
     ) => {
-        /// The reply to a `POST` that is not under a tile, when `path` is one of the calls.
-        pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Option<Reply> {
-            match path {
-                $( $path => Some(match request::<$req>(path, body) {
+        /// The reply to the call `verb`, when it is one that is not about a tile.  `path` names the request in a refusal.
+        pub(super) fn post_verb(shared: &Shared, verb: &str, path: &str, body: &[u8]) -> Option<Reply> {
+            match verb {
+                $( $verb => Some(match request::<$req>(path, body) {
                     Ok(r) => reply($f(shared, r)),
                     Err(e) => e,
                 }), )*
@@ -312,16 +313,20 @@ macro_rules! calls {
             }
         }
 
-        /// The reply to a `POST` under `/api/tiles/ID/`, when `what` is one of the calls.
-        pub(super) fn tile_post(shared: &Shared, tile: &TileRef, what: &str, path: &str, body: &[u8]) -> Option<Reply> {
-            match what {
-                $( $what => Some(match request::<$treq>(path, body) {
+        /// The reply to the call `verb` about `tile`.
+        pub(super) fn tile_verb(shared: &Shared, tile: &TileRef, verb: &str, path: &str, body: &[u8]) -> Option<Reply> {
+            match verb {
+                $( $tverb => Some(match request::<$treq>(path, body) {
                     Ok(r) => reply($tf(shared, tile, r)),
                     Err(e) => e,
                 }), )*
                 _ => None,
             }
         }
+
+        /// Every typed call's name: the table's rows (a test holds that each has a route).
+        #[cfg(test)]
+        pub(super) const VERBS: &[&str] = &[ $( $verb, )* $( $tverb, )* $( $gverb, )* ];
 
         /// The TypeScript of every type the calls (and the other typed routes) name.
         #[cfg(test)]
@@ -332,17 +337,17 @@ macro_rules! calls {
             $(
                 all.add::<$req>();
                 all.add::<$res>();
-                routes.push_str(&format!("  \"POST {}\": {{ req: {}; res: {} }};\n", $path, <$req>::name(&all.cfg), <$res>::name(&all.cfg)));
+                routes.push_str(&format!("  \"{}\": {{ req: {}; res: {} }};\n", $verb, <$req>::name(&all.cfg), <$res>::name(&all.cfg)));
             )*
             $(
                 all.add::<$treq>();
                 all.add::<$tres>();
-                routes.push_str(&format!("  \"POST /api/tiles/:id/{}\": {{ req: {}; res: {} }};\n", $what, <$treq>::name(&all.cfg), <$tres>::name(&all.cfg)));
+                routes.push_str(&format!("  \"{}\": {{ req: {}; res: {} }};\n", $tverb, <$treq>::name(&all.cfg), <$tres>::name(&all.cfg)));
             )*
             let mut reads = String::new();
             $(
                 all.add::<$gres>();
-                reads.push_str(&format!("  \"GET {}\": {};\n", $gpath, <$gres>::name(&all.cfg)));
+                reads.push_str(&format!("  \"{}\": {};\n", $gverb, <$gres>::name(&all.cfg)));
             )*
             crate::preview::api::extra_types(&mut all, &mut routes);
             crate::preview::api::finish(&all, &routes, &reads)
@@ -388,9 +393,9 @@ pub(super) fn finish(all: &Collect, routes: &str, reads: &str) -> String {
          ",
     );
     out.push_str(&all.declarations());
-    out.push_str("/** Every call that writes: its request body and its answer. */\nexport interface Calls {\n");
+    out.push_str("/** Every call made with a body, by its name: its request body and its answer. */\nexport interface Calls {\n");
     out.push_str(routes);
-    out.push_str("}\n\n/** Every read: its answer. */\nexport interface Reads {\n");
+    out.push_str("}\n\n/** Every read, by its name: its answer. */\nexport interface Reads {\n");
     out.push_str(reads);
     out.push_str(
         "}\n\n/** The request body of call `R`. */\nexport type Req<R extends keyof Calls> = Calls[R][\"req\"];\n\n\
@@ -421,13 +426,13 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     all.add::<crate::message::ServerData>();
     all.add::<crate::message::DiagData>();
     routes.push_str(&format!(
-        "  \"POST /api/tiles/:id/draft\": {{ req: {}; res: ArrayBuffer }};\n",
+        "  \"draft\": {{ req: {}; res: ArrayBuffer }};\n",
         super::edit::DraftReq::name(&all.cfg)
     ));
     all.add::<super::edit::StepReq>();
     all.add::<super::edit::StepHead>();
     routes.push_str(&format!(
-        "  \"POST /api/tiles/:id/step\": {{ req: {}; res: ArrayBuffer }};\n",
+        "  \"step\": {{ req: {}; res: ArrayBuffer }};\n",
         super::edit::StepReq::name(&all.cfg)
     ));
 }
