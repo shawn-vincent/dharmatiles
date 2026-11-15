@@ -422,9 +422,11 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         .map_or_else(|| base.system, |s| s.value);
     let colour = colour_of(list, &printer, home);
     let names = names_of(list);
-    let tiles = lock(&shared.tiles)
-        .iter()
-        .map(|t| t.path.clone())
+    let tiles = shared
+        .owner
+        .ask(super::owner::Command::Paths)
+        .into_iter()
+        .map(|(_, p)| p)
         .collect::<Vec<_>>();
     let mut diags = Vec::new();
     let mut pieces = Vec::new();

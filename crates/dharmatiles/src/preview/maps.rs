@@ -28,7 +28,7 @@ use super::api::Out;
 use super::lists::{ListEdited, ListErr, bad, edit_list};
 use super::placing::{Geom, Near, Resolver, SeedWord, at_word};
 use super::scene::SceneJson;
-use super::{Shared, fail, lock, scene};
+use super::{Shared, fail, scene};
 
 // ---- the calls' types ------------------------------------------------------------------
 
@@ -300,10 +300,8 @@ fn scene_at(shared: &Shared, path: &str, list: &dt_doc::map::PrintList, rev: u64
 
 /// `/api/maps/add`.
 pub(super) fn add(shared: &Shared, v: MapsAddReq) -> Out<MapsPieced> {
-    let Some(tile_path) = lock(&shared.tiles)
-        .iter()
-        .find(|t| t.id == v.tile)
-        .map(|t| t.path.clone())
+    let Some(tile_path) = shared
+        .path_of(&v.tile)
         .filter(|p| p.to_ascii_lowercase().ends_with(".dtile"))
     else {
         return Err(fail::refused("404 Not Found", "no such tile"));

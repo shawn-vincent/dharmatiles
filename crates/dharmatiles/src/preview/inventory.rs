@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use super::api::{Out, Reply};
 use super::messages::Scope;
 use super::plan::{InventoryDoc, InventoryRead, PlatesPanel, TilePlan};
-use super::{Shared, State, fail, lock, messages};
+use super::{Shared, State, fail, messages};
 use crate::inventory::{pieces_of, state_of};
 use crate::inventory_wire::{ColourWord, InventoryState};
 use crate::message::{Kind, Message, MessageData, Severity};
@@ -162,7 +162,7 @@ pub(super) fn snapshot(home: Option<&Path>) -> InventoryState {
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     let files = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
     let writable = std::fs::metadata(path).is_ok_and(|m| !m.permissions().readonly());
-    let skeleton = |inventory: InventoryRead| {
+    let skeleton = move |inventory: InventoryRead| {
         TilePlan::Inventory(InventoryDoc {
             writable,
             inventory,
@@ -172,15 +172,16 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         shared.report(id, Scope::Check, |name| {
             messages::of_errors(&errs, Scope::Check, id, name, &[])
         });
-        shared.update(id, |t| {
+        let (files, text) = (files.clone(), text.to_owned());
+        shared.update(id, move |t| {
             t.status = State::Failed;
             t.progress = None;
             t.shown = None;
             t.errors = super::api::mistakes(&errs);
-            t.files = files.clone();
+            t.files = files;
             t.mesh = None;
             t.plan = Some(skeleton(InventoryRead {
-                text: text.to_owned(),
+                text,
                 pieces: Vec::new(),
                 problems: super::api::mistakes(&errs),
             }));
@@ -220,13 +221,13 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
             ),
         )]
     });
-    shared.update(id, |t| {
+    shared.update(id, move |t| {
         t.status = State::Ready;
         t.progress = None;
         t.shown = None;
         t.errors.clear();
         t.failure = None;
-        t.files = files.clone();
+        t.files = files;
         t.mesh = None;
         t.plan = Some(skeleton(InventoryRead {
             text,
@@ -333,10 +334,7 @@ fn write(shared: &Shared, about: &str, lines: &[String], said: &str) -> Out<Inve
 }
 
 fn slot_path(shared: &Shared, id: &str) -> Option<String> {
-    lock(&shared.tiles)
-        .iter()
-        .find(|t| t.id == id)
-        .map(|t| t.path.clone())
+    shared.path_of(id)
 }
 
 fn plural(n: usize, one: &str) -> String {
@@ -400,14 +398,13 @@ pub(super) fn have(shared: &Shared, v: InventoryHaveReq) -> Out<InventoryWrote> 
 pub(super) fn record(shared: &Shared, v: InventoryRecordReq) -> Out<InventoryWrote> {
     let id = v.list.as_str();
     let (path, plan) = {
-        let tiles = lock(&shared.tiles);
-        let Some(t) = tiles
-            .iter()
-            .find(|t| t.id == id && super::plates::is_plates(&t.path))
-        else {
+        let Some(path) = shared.path_of(id).filter(|p| super::plates::is_plates(p)) else {
             return Err(fail::refused("404 Not Found", "no such print list"));
         };
-        (t.path.clone(), t.plan.clone())
+        let plan = shared
+            .owner
+            .ask(|r| super::owner::Command::Plan(id.to_owned(), r));
+        (path, plan)
     };
     let Some(TilePlan::Plates(doc)) = plan else {
         return Err(bad(

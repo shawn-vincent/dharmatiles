@@ -594,11 +594,10 @@ pub(super) fn add_place(shared: &Shared, _: Nothing) -> Out<PlacesAddRes> {
         return Err(fail::failure("500 Internal Server Error", e));
     }
     let root = Root::new(&label_of(&real), RootKind::Dir(real.clone())).with_role(Role::Added);
-    let (index, label) = {
-        let mut roots = lock(&shared.roots);
-        roots.push(root);
-        (roots.len() - 1, label_of(&real))
-    };
+    let index = shared
+        .owner
+        .ask(|r| super::owner::Command::AddRoot(root, r));
+    let label = label_of(&real);
     shared.rescan_held();
     announce(shared);
     Ok(PlacesAddRes::Added(Box::new(PlaceAdded {
@@ -639,32 +638,9 @@ pub(super) fn remove_place(shared: &Shared, req: PlacesRemoveReq) -> Out<Changed
     if let Err(e) = save_places(&settings, &kept) {
         return Err(fail::failure("500 Internal Server Error", e));
     }
-    let gone: Vec<TileId> = {
-        let mut tiles = lock(&shared.tiles);
-        let mut gone = Vec::new();
-        tiles.retain(|t| {
-            let here = t.root == i;
-            if here {
-                gone.push(t.id.clone());
-            }
-            !here
-        });
-        for t in tiles.iter_mut().filter(|t| t.root > i) {
-            t.root -= 1;
-        }
-        lock(&shared.roots).remove(i);
-        let mut folders = lock(&shared.folders);
-        *folders = std::mem::take(&mut *folders)
-            .into_iter()
-            .filter(|(r, _)| *r != i)
-            .map(|(r, v)| (if r > i { r - 1 } else { r }, v))
-            .collect();
-        gone
-    };
-    for id in &gone {
-        shared.forget(id);
-        lock(&shared.events).messages.forget(id);
-    }
+    shared
+        .owner
+        .ask(|r| super::owner::Command::RemoveRoot(i, r));
     announce(shared);
     Ok(Changed { rev: shared.told() })
 }
@@ -798,11 +774,9 @@ fn trashed(
     path: Option<String>,
 ) -> Out<Trashed> {
     let to = into_trash(shared, from)?;
-    let undo = {
-        let mut kept = lock(&shared.trashed);
-        kept.push((from.to_path_buf(), to));
-        kept.len() - 1
-    };
+    let undo = shared
+        .owner
+        .ask(|r| super::owner::Command::Trash(from.to_path_buf(), to, r));
     Ok(Trashed {
         rev: rescanned(shared),
         dir,
@@ -833,7 +807,9 @@ pub(super) fn trash_tile(shared: &Shared, tile: &super::api::TileRef, _: Nothing
 
 /// `POST /api/trash/undo` `{undo}`: what was trashed goes back where it was, when that place is free.
 pub(super) fn undo_trash(shared: &Shared, req: TrashUndoReq) -> Out<Restored> {
-    let entry = lock(&shared.trashed).get(req.undo).cloned();
+    let entry = shared
+        .owner
+        .ask(|r| super::owner::Command::Trashed(req.undo, r));
     let Some((from, to)) = entry else {
         return Err(refuse(
             "404 Not Found",

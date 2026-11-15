@@ -84,16 +84,12 @@ fn build_failure(what: &str, message: String) -> fail::ServerError {
 
 /// Build tile `id`: plan pass, then geometry, pushing each result.
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, opts: &Options) {
-    let Some(path) = lock(&shared.tiles)
-        .iter()
-        .find(|t| t.id == id)
-        .map(|t| t.path.clone())
-    else {
+    let Some(path) = shared.path_of(id) else {
         return;
     };
     // the stream says a build is under way until this function ends, however it does
     let _building = shared.building(id);
-    shared.update(id, |t| {
+    shared.update(id, move |t| {
         t.status = State::Building;
         t.stale = false;
         t.errors.clear();
@@ -133,13 +129,14 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 }
                 found
             });
-            shared.update(id, |t| {
+            let files = rec.files();
+            shared.update(id, move |t| {
                 t.status = State::Failed;
                 t.progress = None;
                 t.sketches.clear();
                 t.errors = errors;
                 t.failure = failure;
-                t.files = rec.files();
+                t.files = files;
                 // a build the cache kept was only on show until this one landed
                 if t.shown.take().is_some() {
                     t.mesh = None;
@@ -185,7 +182,8 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         None => (None, Vec::new()),
     };
     if let Some(p) = &plan {
-        shared.update(id, |t| t.plan = Some(p.clone()));
+        let p = p.clone();
+        shared.update(id, move |t| t.plan = Some(p));
     }
     // what the plan pass found: the notes (dt::steep, dt::edge) that never reached the page before
     plan_stack.replace(stack.clone());
@@ -243,9 +241,10 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         Ok(built) => built,
         Err(panic) if panic.is::<Superseded>() => {
             tell!("cancelled superseded build of {path}");
-            shared.update(id, |t| {
+            let files = latest.files.clone();
+            shared.update(id, move |t| {
                 t.progress = None;
-                t.files = latest.files.clone();
+                t.files = files;
             });
             return;
         }
@@ -257,9 +256,10 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     };
     if latest.changed() {
         tell!("discarded superseded build of {path}");
-        shared.update(id, |t| {
+        let files = latest.files.clone();
+        shared.update(id, move |t| {
             t.progress = None;
-            t.files = latest.files.clone();
+            t.files = files;
         });
         return;
     }
@@ -297,9 +297,10 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             };
             if latest.changed() {
                 tell!("discarded superseded view of {path}");
-                shared.update(id, |t| {
+                let files = latest.files.clone();
+                shared.update(id, move |t| {
                     t.progress = None;
-                    t.files = latest.files.clone();
+                    t.files = files;
                 });
                 return;
             }
@@ -340,10 +341,11 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 }
                 found
             });
-            shared.update(id, |t| {
+            let (problem, files) = (shared.palette_problem(), watched(&rec, shared));
+            shared.update(id, move |t| {
                 t.status = State::Ready;
                 // what to say beside a good build: the palette
-                t.errors = shared.palette_problem();
+                t.errors = problem;
                 t.progress = None;
                 t.sketches.clear();
                 t.record = Some(record);
@@ -351,7 +353,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 t.mesh_version += 1;
                 t.doc_rev = Some(doc_rev);
                 t.shown = None;
-                t.files = watched(&rec, shared);
+                t.files = files;
             });
         }
     }
@@ -374,11 +376,7 @@ pub(super) fn show_stored(
 ) {
     use dt_store::Tier;
     let key = store.key(reads, path, opts);
-    if store.contains(&key)
-        || lock(&shared.tiles)
-            .iter()
-            .any(|t| t.id == id && t.mesh.is_some())
-    {
+    if store.contains(&key) || shared.facts(id).is_some_and(|t| t.has_mesh) {
         return;
     }
     let want = dt_kit::debug::Collect {
@@ -442,17 +440,18 @@ pub(super) fn show_stored(
     shared.report(id, Scope::Build, |name| {
         vec![messages::of_shown(&note, kind, id, name)]
     });
-    shared.update(id, |t| {
+    let (rev, kind, note) = (shared.rev_of(path), kind.to_owned(), note.clone());
+    shared.update(id, move |t| {
         if t.mesh.is_none() {
             // an earlier build, shown while the new one runs (`shown` says so): labelled with the revision now, so
             // the page can fetch it; it is never mistaken for the build, which replaces it
-            t.doc_rev = Some(shared.rev_of(path));
+            t.doc_rev = Some(rev);
             t.mesh = Some(Arc::new(bytes));
             t.mesh_version += 1;
             // a low or super-low build is not yet checked: the status line says so
             t.shown = Some(super::api::Shown {
-                kind: kind.to_owned(),
-                note: note.clone(),
+                kind,
+                note,
                 checked: !draft,
                 tier: Some(if draft { "low" } else { "full" }.to_owned()),
             });
@@ -488,10 +487,12 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
                 &[],
             )
         });
-        shared.update(id, |t| {
+        let errors = super::api::mistakes(&[Diag::plain(dt_lang::codes::SOURCE, msg)]);
+        let files = files.clone();
+        shared.update(id, move |t| {
             t.status = State::Failed;
-            t.errors = super::api::mistakes(&[Diag::plain(dt_lang::codes::SOURCE, msg)]);
-            t.files = files.clone();
+            t.errors = errors;
+            t.files = files;
         });
     };
     let mesh = match std::fs::read(path) {
@@ -545,7 +546,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
     let record =
         dt_eval::TileRecord::of_stl(path, a.summary(&opts.printer), t0.elapsed().as_secs_f64());
     shared.report(id, Scope::Build, |name| messages::of_stl(&record, id, name));
-    shared.update(id, |t| {
+    shared.update(id, move |t| {
         t.status = State::Ready;
         t.plan = Some(plan);
         t.record = Some(record);
@@ -624,8 +625,7 @@ impl dt_kit::Reporter for Cancelled {
 /// One worker lane: take jobs from the queue until `stop`.
 fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
     while !stop.load(Ordering::Relaxed) {
-        shared.rescan_due();
-        let Some(job) = shared.next_job(eager) else {
+        let Some(job) = shared.next_job_within(eager, LANE_WAIT) else {
             continue;
         };
         // the target the page chose now, for this job; the clouds are always
@@ -658,10 +658,7 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
                 if let Err(panic) = ran
                     && !panic.is::<Superseded>()
                 {
-                    let what = lock(&shared.tiles)
-                        .iter()
-                        .find(|t| t.id == *id)
-                        .map_or_else(|| id.clone(), |t| t.path.clone());
+                    let what = shared.path_of(id).unwrap_or_else(|| id.clone());
                     let (d, failure) = panicked(&what, panic.as_ref());
                     shared.report(id, Scope::Build, |name| {
                         let mut found = messages::of_errors(
@@ -681,12 +678,13 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
                         }
                         found
                     });
-                    shared.update(id, |t| {
+                    let (errors, detail) = (super::api::mistakes(&[d]), failure.detail());
+                    shared.update(id, move |t| {
                         t.status = State::Failed;
                         t.progress = None;
                         t.sketches.clear();
-                        t.errors = super::api::mistakes(&[d]);
-                        t.failure = Some(failure.detail());
+                        t.errors = errors;
+                        t.failure = Some(detail);
                     });
                 }
             }
@@ -699,6 +697,7 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
 /// build (and no two full builds run at once), until `stop`.
 pub fn work(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
     std::thread::scope(|s| {
+        s.spawn(|| watch(shared, stop));
         s.spawn(|| lane(shared, eager, stop));
         // the lanes of the rest of the building (tiers, exports): see [`queue`]
         for side in [queue::Lane::Tier, queue::Lane::Tier, queue::Lane::Export] {
@@ -706,6 +705,20 @@ pub fn work(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
         }
         lane(shared, eager, stop);
     });
+}
+
+/// The one place the program polls: every [`POLL`], the files of the tiles built are looked at for a change made
+/// outside it, and every [`RESCAN`] the folders for a tile that came or went.
+fn watch(shared: &Arc<Shared>, stop: &AtomicBool) {
+    let mut scanned: Option<Instant> = None;
+    while !stop.load(Ordering::Relaxed) {
+        if scanned.is_none_or(|t| t.elapsed() >= RESCAN) {
+            scanned = Some(Instant::now());
+            shared.rescan();
+        }
+        shared.look_for_changes();
+        std::thread::sleep(POLL);
+    }
 }
 
 /// A lane for the work that is not a tile's own build: it takes the jobs of its kind, one after another.  A job

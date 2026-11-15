@@ -8,7 +8,7 @@ use super::api::{Reply, TileRef, calls, reply, request};
 use super::edit::{self, DraftReq};
 use super::route;
 use super::routes::{resolve, tile_shape};
-use super::{Shared, fail, inventory, lists, lock, maps, offers, places, plates, printers, tiers};
+use super::{Shared, fail, inventory, lists, maps, offers, places, plates, printers, tiers};
 
 calls! {
     post {
@@ -93,15 +93,11 @@ pub(super) fn dispatch(shared: &Shared, path: &str, body: &[u8]) -> route::Reply
             None => return fail::refused("404 Not Found", "no such call").into(),
         },
     };
-    let Some(tile) = lock(&shared.tiles)
-        .iter()
-        .find(|t| t.id == id)
-        .map(|t| TileRef {
-            id: t.id.clone(),
-            path: t.path.clone(),
-            files: t.files.clone(),
-        })
-    else {
+    let Some(tile) = shared.facts(id).map(|t| TileRef {
+        id: id.to_owned(),
+        path: t.path,
+        files: t.files,
+    }) else {
         return fail::refused("404 Not Found", "no such tile").into();
     };
     // the draft answers a mesh, so it is not a row of the table

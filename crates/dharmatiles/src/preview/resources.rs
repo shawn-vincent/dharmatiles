@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::api::{self, FolderJson, RootJson, TileSummary};
+use super::api::{FolderJson, RootJson, TileSummary};
 use super::plan::PrinterRow;
 use super::*;
 use crate::inventory_wire::InventoryState;
@@ -21,13 +21,15 @@ use crate::inventory_wire::InventoryState;
 #[derive(Default)]
 pub(super) struct Told {
     /// Each resource's last event, as sent (what a page that resumes is sent again).
-    events: BTreeMap<&'static str, String>,
+    pub(super) events: BTreeMap<&'static str, String>,
     /// Each resource's value as text, to see whether it changed.
-    values: BTreeMap<&'static str, String>,
+    pub(super) values: BTreeMap<&'static str, String>,
     /// Each resource's own revision.
-    revs: BTreeMap<&'static str, u64>,
+    pub(super) revs: BTreeMap<&'static str, u64>,
+    /// The reading each resource read on another thread was told from ([`Command::Publish`]).
+    pub(super) read_at: BTreeMap<&'static str, u64>,
     /// The tiles listed, in order.
-    ids: Vec<TileId>,
+    pub(super) ids: Vec<TileId>,
 }
 
 /// The places: where tiles come from and the folders in them.
@@ -86,7 +88,7 @@ pub struct ResourceEvent {
 }
 
 impl Resource {
-    fn name(&self) -> &'static str {
+    pub(super) fn name(&self) -> &'static str {
         match self {
             Self::Places(_) => "places",
             Self::Target(_) => "target",
@@ -98,41 +100,6 @@ impl Resource {
 }
 
 impl Shared {
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
-    )]
-    pub(super) fn places_value(&self) -> Places {
-        Places {
-            roots: lock(&self.roots)
-                .iter()
-                .enumerate()
-                .map(|(i, r)| r.json(i))
-                .collect(),
-            folders: lock(&self.folders)
-                .iter()
-                .flat_map(|(r, v)| {
-                    v.iter().map(move |p| FolderJson {
-                        root: *r,
-                        path: p.clone(),
-                    })
-                })
-                .collect(),
-            home: std::env::var("HOME").ok(),
-        }
-    }
-
-    pub(super) fn target_value(&self) -> Target {
-        let t = self.options();
-        Target {
-            system: t.system,
-            overhang_deg: t.printer.overhang_deg,
-            steepest_deg: t.printer.steepest_deg,
-            square_mm: dt_kit::Frame::for_system(t.system, 1, 1).square_mm,
-            printer: t.printer.name.clone(),
-        }
-    }
-
     pub(super) fn printers_value(&self) -> Vec<PrinterRow> {
         plates::printer_rows(self.home.as_deref())
     }
@@ -141,86 +108,28 @@ impl Shared {
         inventory::snapshot(self.home.as_deref())
     }
 
-    /// Say what changed among the places, the target, the inventory and the list of tiles (and the printers when
-    /// `printers`: they are read from disk, so only a call that changed them asks).  Only a resource whose value
-    /// differs from what the pages were last told is sent.
-    pub(super) fn publish(&self, printers: bool) {
-        let tiles = lock(&self.tiles);
-        self.publish_locked(&tiles, printers);
-    }
-
-    /// [`Shared::publish`], with the tiles locked by the caller.
-    pub(super) fn publish_locked(&self, tiles: &[Slot], printers: bool) {
-        let mut now = vec![
-            Resource::Places(self.places_value()),
-            Resource::Target(self.target_value()),
-            Resource::Inventory(self.inventory_value()),
-        ];
+    /// The resources the owner cannot read itself (it reads no disk), as they are now: the inventory (and the printers
+    /// when `printers`: they are read from disk, so only a call that changed them asks), with the number of the
+    /// reading.  The owner tells the ones that differ from what the pages were last told, and none that was read
+    /// before one it has told already.
+    pub(super) fn resources_read(&self, printers: bool) -> (u64, Vec<Resource>) {
+        let seq = self.read_seq.fetch_add(1, Ordering::SeqCst);
+        let mut now = vec![Resource::Inventory(self.inventory_value())];
         if printers {
             now.push(Resource::Printers(self.printers_value()));
         }
-        let mut ev = lock(&self.events);
-        let ids: Vec<TileId> = tiles.iter().map(|t| t.id.clone()).collect();
-        if ids != ev.told.ids {
-            let added = tiles
-                .iter()
-                .filter(|t| !ev.told.ids.contains(&t.id))
-                .map(Slot::summary)
-                .collect();
-            now.push(Resource::List(List {
-                ids: ids.clone(),
-                added,
-            }));
-            ev.told.ids = ids;
-        }
-        for r in now {
-            let name = r.name();
-            // a list is told when its ids changed (decided above); the rest when their value did
-            let text = match &r {
-                Resource::List(l) => Ok(l.ids.join(",")),
-                other => serde_json::to_string(other),
-            };
-            match text {
-                Ok(text) => {
-                    if ev.told.values.get(name) == Some(&text) {
-                        continue;
-                    }
-                    ev.told.values.insert(name, text);
-                }
-                // said, and sent all the same: a value that cannot be written is never taken for one unchanged
-                Err(e) => {
-                    tell!(
-                        "error: preview: the {name} resource could not be written to compare: {e}"
-                    );
-                    ev.told.values.remove(name);
-                }
-            }
-            let res_rev = {
-                let n = ev.told.revs.entry(name).or_insert(0);
-                *n += 1;
-                *n
-            };
-            let rev = ev.bump(Change::Resource(name));
-            let event = api::StreamEvent::Resource(ResourceEvent {
-                rev,
-                res_rev,
-                resource: r,
-            });
-            match serde_json::to_string(&event) {
-                Ok(s) => {
-                    ev.told.events.insert(name, s);
-                }
-                Err(e) => tell!("error: preview: a resource could not be written: {e}"),
-            }
-            ev.send(&event);
-        }
+        (seq, now)
     }
 
-    /// The events a page that resumes is sent again for the resources named: the last of each.
-    pub(super) fn resource_events(ev: &Events, names: &[&'static str]) -> Vec<String> {
-        names
-            .iter()
-            .filter_map(|n| ev.told.events.get(n).cloned())
-            .collect()
+    /// Say what changed among the places, the target, the inventory and the list of tiles (and the printers when
+    /// `printers`).  Only a resource whose value differs from what the pages were last told is sent.
+    pub(super) fn publish(&self, printers: bool) {
+        let (seq, read) = self.resources_read(printers);
+        self.owner.send(owner::Command::Publish { seq, read });
+    }
+
+    /// Every tile as the queue sees it ([`owner::Row`]).
+    pub(super) fn rows(&self) -> Vec<owner::Row> {
+        self.owner.ask(owner::Command::Rows)
     }
 }
