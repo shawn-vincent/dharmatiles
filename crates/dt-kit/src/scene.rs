@@ -1860,8 +1860,10 @@ mod tests {
     /// rim and the corners included, whatever the relief does there.
     #[test]
     fn laid_grain_never_rises_above_the_shape() {
-        let wave = |x: f64, y: f64| 0.6 * (x * 0.9).sin() * (y * 1.3).cos() + 0.3 * (x * 4.0).sin();
-        let shape_z = |x: f64, y: f64| 3.4 + 0.5 * (x * 0.2).sin() + 0.1 * y;
+        let wave = |x: f64, y: f64| {
+            0.6 * libm::sin(x * 0.9) * libm::cos(y * 1.3) + 0.3 * libm::sin(x * 4.0)
+        };
+        let shape_z = |x: f64, y: f64| 3.4 + 0.5 * libm::sin(x * 0.2) + 0.1 * y;
         for round in [0.0, 0.2] {
             let (scene, parts) = grained(shape_z, wave, 1.0, round);
             let top = scene.surface_field().unwrap();
@@ -1883,7 +1885,7 @@ mod tests {
     /// stands, rim included).
     #[test]
     fn the_edge_height_is_a_ceiling_the_grain_reaches() {
-        let bumps = |x: f64, y: f64| 0.5 * (0.5 + 0.5 * (x * 3.0).sin() * (y * 2.5).cos());
+        let bumps = |x: f64, y: f64| 0.5 * (0.5 + 0.5 * libm::sin(x * 3.0) * libm::cos(y * 2.5));
         let (scene, _) = grained(|_, _| 3.4, bumps, 1.0, 0.0);
         let top = scene.surface_field().unwrap();
         let max = top.z.iter().fold(f32::MIN, |a, &b| a.max(b));
@@ -1903,7 +1905,7 @@ mod tests {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn the_set_in_is_local_to_the_grain() {
         let spike = |x: f64, y: f64| {
-            if (x - 5.0).hypot(y - 5.0) < 1.5 {
+            if libm::hypot(x - 5.0, y - 5.0) < 1.5 {
                 0.4
             } else {
                 0.0

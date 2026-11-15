@@ -11,6 +11,7 @@ publish.workspace = true
 [features]
 wasm = ["dt-kit/wasm", "dt-elements/wasm"]
 [dependencies]
+libm.workspace = true
 dt-doc.workspace = true
 dt-lang.workspace = true
 dt-geom.workspace = true

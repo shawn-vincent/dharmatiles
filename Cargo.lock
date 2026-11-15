@@ -434,6 +434,7 @@ dependencies = [
  "dt-lang",
  "dt-value",
  "kdl",
+ "libm",
  "miette",
  "serde",
  "ts-rs",
@@ -463,6 +464,7 @@ dependencies = [
  "dt-value",
  "insta",
  "kdl",
+ "libm",
  "memory-stats",
  "miette",
  "rayon",
@@ -1097,10 +1099,8 @@ dependencies = [
  "glam 0.34.2",
  "half",
  "log",
- "rayon",
  "rdst",
  "static_assertions",
- "thread_local",
 ]
 
 [[package]]
@@ -1282,7 +1282,6 @@ dependencies = [
  "block-pseudorand",
  "criterion",
  "partition",
- "rayon",
  "tikv-jemallocator",
  "voracious_radix_sort",
 ]
@@ -1613,15 +1612,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thread_local"
-version = "1.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
-dependencies = [
- "cfg-if",
-]
-
-[[package]]
 name = "tikv-jemalloc-sys"
 version = "0.5.4+5.3.0-patched"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1938,6 +1928,7 @@ dependencies = [
  "dt-doc",
  "dt-lang",
  "jpeg-encoder",
+ "libm",
  "png",
  "serde",
  "serde_json",

@@ -143,7 +143,7 @@ impl<'a> Resolver<'a> {
                         if self.clash(g, boxat(x, y)) {
                             continue;
                         }
-                        let d = f64::from(dx).hypot(f64::from(dy));
+                        let d = libm::hypot(f64::from(dx), f64::from(dy));
                         if best.is_none_or(|b| d < b.2) {
                             best = Some((x, y, d));
                         }

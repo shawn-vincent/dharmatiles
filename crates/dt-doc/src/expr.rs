@@ -2124,8 +2124,8 @@ mod tests {
         for k in -20..=20 {
             let d = f64::from(k) * 37.5;
             let (s, c) = (sin_deg(d), cos_deg(d));
-            assert!((s - d.to_radians().sin()).abs() < 1e-12, "sin {d}");
-            assert!((c - d.to_radians().cos()).abs() < 1e-12, "cos {d}");
+            assert!((s - libm::sin(d.to_radians())).abs() < 1e-12, "sin {d}");
+            assert!((c - libm::cos(d.to_radians())).abs() < 1e-12, "cos {d}");
         }
         assert_eq!(sin_deg(0.0), 0.0);
         assert!((cos_deg(720.0) - 1.0).abs() < 1e-15);

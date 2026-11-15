@@ -290,7 +290,7 @@ mod tests {
             for i in 0..nx {
                 let (x, y) = (i as f64 * 0.25, j as f64 * 0.25);
                 // a smooth hill, a sharp ridge, and a flat plain
-                let hill = 2.0 * (-((x - 6.0).powi(2) + (y - 5.0).powi(2)) / 8.0).exp();
+                let hill = 2.0 * libm::exp(-((x - 6.0).powi(2) + (y - 5.0).powi(2)) / 8.0);
                 let ridge = (0.6 - (x - 12.0).abs()).max(0.0);
                 #[allow(clippy::cast_possible_truncation)]
                 let v = (3.0 + hill + ridge) as f32;

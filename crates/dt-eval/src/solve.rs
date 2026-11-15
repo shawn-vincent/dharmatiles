@@ -186,14 +186,14 @@ impl Eval<'_> {
     fn on_disc(&self, c: &Coords<'_>, d: Disc, name: &str, unit: UnitWord, v: &Vars) -> f64 {
         let (x, y) = (v.x.lo, v.y.lo);
         let (dx, dy) = (x - d.centre[0], y - d.centre[1]);
-        let dist = dx.hypot(dy);
+        let dist = libm::hypot(dx, dy);
         match name {
             "x" => c.unit_of(x - (d.centre[0] - d.radius), 2.0 * d.radius, unit),
             "y" => c.unit_of(d.centre[1] + d.radius - y, 2.0 * d.radius, unit),
             "d" if unit == UnitWord::Pct => (dist / d.radius.max(1e-9)).min(1.0),
             "d" => c.unit_of((d.radius - dist).max(0.0), 0.0, unit),
             _ => {
-                let turn = ((-dy).atan2(dx) / std::f64::consts::TAU).rem_euclid(1.0);
+                let turn = (libm::atan2(-dy, dx) / std::f64::consts::TAU).rem_euclid(1.0);
                 match unit {
                     UnitWord::Deg => turn * 360.0,
                     UnitWord::Rad => turn * std::f64::consts::TAU,

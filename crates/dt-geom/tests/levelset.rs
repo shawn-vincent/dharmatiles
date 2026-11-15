@@ -17,8 +17,9 @@ use dt_geom::{Bounds, Solid};
 #[ignore = "a stress run of the vendored Manifold patch (about a minute)"]
 fn thin_level_sets_never_fault_and_keep_their_volume() {
     // a slab 0.6 mm thick across a 30 mm box, meshed at 0.3 mm
-    let sdf =
-        |p: [f64; 3]| 0.3 - (p[2] - 4.0 - 0.8 * (0.4 * p[0]).sin() * (0.4 * p[1]).cos()).abs();
+    let sdf = |p: [f64; 3]| {
+        0.3 - (p[2] - 4.0 - 0.8 * libm::sin(0.4 * p[0]) * libm::cos(0.4 * p[1])).abs()
+    };
     let bounds = Bounds {
         min: [0.0, 0.0, 0.0],
         max: [30.0, 30.0, 9.0],

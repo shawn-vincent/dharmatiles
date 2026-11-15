@@ -164,7 +164,7 @@ impl RegionField {
             let mut acc = vec![0.0];
             for w in pts.windows(2) {
                 let last = acc.last().copied().unwrap_or(0.0);
-                acc.push(last + (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]));
+                acc.push(last + libm::hypot(w[1][0] - w[0][0], w[1][1] - w[0][1]));
             }
             (pts.clone(), acc)
         });
@@ -217,7 +217,7 @@ impl RegionField {
             (0..self.deepest.len()).max_by(|&a, &b| self.deepest[a].total_cmp(&self.deepest[b]))?;
         let c = self.centre[piece];
         let r = d * self.deepest[piece];
-        let (sin, cos) = a_deg.to_radians().sin_cos();
+        let (sin, cos) = libm::sincos(a_deg.to_radians());
         // east is +x, south is -y
         Some([(c[0] + r * cos) / self.per, (c[1] - r * sin) / self.per])
     }
@@ -235,7 +235,7 @@ impl RegionField {
         #[allow(clippy::cast_precision_loss)]
         let (i, j) = ((k % self.nx) as f64, (k / self.nx) as f64);
         // east is +x, south is -y: a quarter turn points straight down
-        let angle = (c[1] - j).atan2(i - c[0]);
+        let angle = libm::atan2(c[1] - j, i - c[0]);
         let t = angle / std::f64::consts::TAU;
         if t < 0.0 { t + 1.0 } else { t }
     }

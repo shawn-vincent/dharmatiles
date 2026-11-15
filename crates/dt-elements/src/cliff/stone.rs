@@ -166,7 +166,7 @@ fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Pie
         return Ok(rock);
     }
     let seat_mid = bv[bv.len() / 2];
-    let slope = SEAT_SLOPE_DEG.to_radians().tan();
+    let slope = libm::tan(SEAT_SLOPE_DEG.to_radians());
     // the outline the bevel starts from: the rock at the bevel's top, and
     // wherever its sides flare out below that
     let zs = [seat_mid + BEVEL_MM, lo + 0.05].map(|z| z.clamp(lo + 0.05, hi - 0.05));

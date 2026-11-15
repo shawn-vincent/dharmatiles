@@ -337,7 +337,7 @@ mod tests {
         assert!((b.iter().sum::<f64>() - 1.0).abs() < 1e-9);
         // separable Gaussian: value at (dx, dy) ∝ exp(-(dx²+dy²)/2σ²)
         let ratio = b[20 * 41 + 22] / b[20 * 41 + 20];
-        assert!((ratio - (-0.5f64).exp()).abs() < 1e-3, "{ratio}");
+        assert!((ratio - libm::exp(-0.5)).abs() < 1e-3, "{ratio}");
     }
 
     #[test]

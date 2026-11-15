@@ -507,7 +507,7 @@ pub fn audit_rounded(
 #[must_use]
 pub fn draft(mesh: TriMesh, printer: &Printer, skip: &[bool]) -> (Export, Audit) {
     let lo = bounds(&mesh).map_or(0.0, |(lo, _)| lo[2]);
-    let sin = |d: f64| d.to_radians().sin();
+    let sin = |d: f64| libm::sin(d.to_radians());
     let (s_over, s_steep) = (sin(printer.overhang_deg), sin(printer.steepest_deg));
     let n = mesh.triangles.len();
     let (mut overhang, mut band) = (vec![false; n], vec![false; n]);
@@ -632,7 +632,7 @@ mod tests {
             let centre = [r + c[0] * (10.0 - 2.0 * r), r + c[1] * (10.0 - 2.0 * r)];
             for i in 0..=n {
                 let a = (180.0 + 90.0 * k as f64 + 90.0 * i as f64 / n as f64).to_radians();
-                ring.push([centre[0] + r * a.cos(), centre[1] + r * a.sin()]);
+                ring.push([centre[0] + r * libm::cos(a), centre[1] + r * libm::sin(a)]);
             }
         }
         let m = ring.len() as u32;
@@ -772,7 +772,7 @@ mod tests {
 
     /// A post whose underside leans out at `deg` from vertical.
     fn leaning(deg: f64) -> TriMesh {
-        let rise = 4.0 / deg.to_radians().tan();
+        let rise = 4.0 / libm::tan(deg.to_radians());
         let prof = [[0.0, 0.0], [2.0, 0.0], [6.0, rise], [6.0, 5.0], [0.0, 5.0]];
         prism(&prof, &[[0, 1, 2], [0, 2, 3], [0, 3, 4]])
     }

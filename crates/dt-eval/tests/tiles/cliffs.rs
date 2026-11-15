@@ -72,7 +72,7 @@ fn top_of(b: &Built, material: Material, disc: Option<([f64; 2], f64)>) -> f64 {
         }
         for &i in t {
             let p = b.export.mesh.positions[i as usize];
-            if disc.is_none_or(|(c, r)| (p[0] - c[0]).hypot(p[1] - c[1]) <= r) {
+            if disc.is_none_or(|(c, r)| libm::hypot(p[0] - c[0], p[1] - c[1]) <= r) {
                 top = top.max(p[2]);
             }
         }

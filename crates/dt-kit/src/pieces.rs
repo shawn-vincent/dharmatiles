@@ -140,7 +140,7 @@ impl<'a> Pieces<'a> {
                 0.0
             };
             let g = [dir[0] * f, dir[1] * f];
-            let size = g[0].hypot(g[1]);
+            let size = libm::hypot(g[0], g[1]);
             if best.is_none_or(|(_, s)| size > s + 1e-12) {
                 best = Some((g, size));
             }

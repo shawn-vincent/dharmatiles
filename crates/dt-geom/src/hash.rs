@@ -88,7 +88,7 @@ mod tests {
         }
         for q in 0..200 {
             let (x, y) = ((q as f64 * 1.7) % 52.0 - 1.0, (q as f64 * 2.9) % 42.0 - 1.0);
-            let near = |d: &[f64; 3]| (d[0] - x).hypot(d[1] - y) < 2.0 + d[2];
+            let near = |d: &[f64; 3]| libm::hypot(d[0] - x, d[1] - y) < 2.0 + d[2];
             let brute = pts.iter().any(near);
             assert_eq!(h.any_near(x, y, 2.7, near), brute, "({x},{y})");
         }

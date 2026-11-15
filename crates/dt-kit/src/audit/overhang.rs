@@ -229,7 +229,7 @@ impl Slices {
             } else {
                 return false;
             };
-            (x - cx).hypot(y - cy) > round - ROUND_SLACK_MM
+            libm::hypot(x - cx, y - cy) > round - ROUND_SLACK_MM
         };
         (0..nx * ny)
             .filter(|&col| {
