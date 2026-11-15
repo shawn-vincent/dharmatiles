@@ -24,7 +24,31 @@ use dt_doc::units::Units;
 use dt_eval::{Diag, Options, Source};
 use dt_value::{Rng, Seed};
 use serde::Serialize;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+
+/// Off the browser (the host's tests), an error is its message: wasm-bindgen is a dependency of the browser
+/// build only, so the host build is the program's own (its proc macros would otherwise turn on another
+/// `syn`, and every crate that derives serde would be compiled a second time for the tests).
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug)]
+pub struct JsError(String);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl JsError {
+    /// An error saying `message`.
+    #[must_use]
+    pub fn new(message: &str) -> Self {
+        Self(message.to_owned())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl std::fmt::Display for JsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
 
 /// The path the page's document is read as.
 const MAIN: &str = "tile.dtile";
@@ -37,7 +61,7 @@ thread_local! {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 extern "C" {
     #[wasm_bindgen(js_namespace = performance, js_name = now)]
     fn performance_now() -> f64;
@@ -49,7 +73,7 @@ fn clock_secs() -> f64 {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 extern "C" {
     #[wasm_bindgen(js_namespace = console, js_name = error)]
     fn console_error(message: &str);
@@ -61,7 +85,7 @@ extern "C" {
 ///
 /// # Errors
 /// The text is not a JSON object of strings.
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn set_library(json: &str) -> Result<(), JsError> {
     let map: BTreeMap<String, String> = serde_json::from_str(json)
         .map_err(|e| JsError::new(&format!("the library is not a JSON object of text: {e}")))?;
@@ -331,7 +355,7 @@ fn json<T: Serialize>(v: &T) -> Result<String, JsError> {
 ///
 /// # Errors
 /// An unknown target, or the library was never set.
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn analyze(text: &str, system: &str) -> Result<String, JsError> {
     let (db, ol) = (units_for("db")?, units_for("ol")?);
     LIBRARY.with(|lib| {
@@ -410,7 +434,7 @@ struct Checked {
 ///
 /// # Errors
 /// An unknown target, or the library was never set.
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
     let units = units_for(system)?;
     LIBRARY.with(|lib| {
@@ -463,7 +487,7 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
 ///
 /// # Errors
 /// The fix is not that JSON, or the text no longer reads what the fix was made for.
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn fix_tile(text: &str, fix: &str) -> Result<String, JsError> {
     #[derive(serde::Deserialize)]
     struct FixIn {
@@ -498,7 +522,7 @@ pub fn fix_tile(text: &str, fix: &str) -> Result<String, JsError> {
 ///
 /// # Errors
 /// The library was never set, or its heights do not read.
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn printed(typed: &str) -> Result<String, JsError> {
     let (db, ol) = (units_for("db")?, units_for("ol")?);
     LIBRARY.with(|lib| {
@@ -539,7 +563,7 @@ pub fn printed(typed: &str) -> Result<String, JsError> {
 }
 
 /// A tile as the page draws it: three floats a corner, a colour a corner.
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct Tile {
     meta: String,
     stl: Vec<u8>,
@@ -547,10 +571,10 @@ pub struct Tile {
     colours: Vec<f32>,
 }
 
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl Tile {
     /// What the build found, as JSON.
-    #[wasm_bindgen(getter)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter))]
     #[must_use]
     pub fn meta(&self) -> String {
         self.meta.clone()
@@ -558,14 +582,14 @@ impl Tile {
 
     /// The binary STL a printer is given: made for a full-detail build
     /// (`cells` 0) and empty for a draft, which is never exported.
-    #[wasm_bindgen(getter)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter))]
     #[must_use]
     pub fn stl(&self) -> Vec<u8> {
         self.stl.clone()
     }
 
     /// Corner positions, mm, three floats each, three corners a triangle.
-    #[wasm_bindgen(getter)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter))]
     #[must_use]
     pub fn positions(&self) -> Vec<f32> {
         self.positions.clone()
@@ -573,7 +597,7 @@ impl Tile {
 
     /// Corner colours, linear 0 to 1, three floats each: the editor's paint
     /// (overhang past the band red, the 55 to 65 degree band orange).
-    #[wasm_bindgen(getter)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter))]
     #[must_use]
     pub fn colours(&self) -> Vec<f32> {
         self.colours.clone()
@@ -651,7 +675,7 @@ pub fn build_with(
 }
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 extern "C" {
     /// The page's worker hears each stage: `globalThis.dtProgress(fraction, label, done, total)`.
     #[wasm_bindgen(js_namespace = globalThis, js_name = dtProgress)]
@@ -740,7 +764,7 @@ fn stl_hash(bytes: &[u8]) -> (String, usize) {
 ///
 /// # Errors
 /// An unknown target, or the library was never set.
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn build_tile(
     text: &str,
     system: &str,
@@ -861,7 +885,7 @@ struct Explored {
 /// # Errors
 /// The value is not one range with odds (the program's own refusal, in
 /// words), or `bins` is 0.
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn explore(
     typed: &str,
     system: &str,

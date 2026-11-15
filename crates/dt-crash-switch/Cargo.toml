@@ -1,0 +1,16 @@
+[package]
+name = "dt-crash-switch"
+description = "dharmatiles: the crash switch the CLI's exit-code tests drive (DT_TEST_PANIC), on only in their builds"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+# Only the dharmatiles crate's dev-dependencies turn it on, so no shipped program has it.
+on = []
+
+[lints]
+workspace = true

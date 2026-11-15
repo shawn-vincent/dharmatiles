@@ -23,13 +23,15 @@ sha2.workspace = true
 miette.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-wasm-bindgen = "=0.2.130"
 
 # The browser's Manifold (wasm-cxx-shim) only for the browser: on the host,
 # where `cargo test --workspace` builds dt-web beside the program, the engine
 # and Manifold are the program's own, built once.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 dt-eval = { workspace = true, features = ["wasm"] }
+# the browser's bindings, only for the browser: on the host its proc macros would ask for another `syn`, and every
+# crate of the program that derives serde would be built twice (feature drift)
+wasm-bindgen = "=0.2.130"
 
 # The workspace forbids unsafe code; wasm-bindgen's generated glue is unsafe,
 # so this crate takes the workspace's clippy lints and leaves that one out.

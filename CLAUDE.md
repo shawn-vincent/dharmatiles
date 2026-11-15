@@ -58,7 +58,7 @@ CI is off. Run the tests locally on this Mac only; do not wait on or re-enable G
 
 ## Architecture
 
-Thirteen crates under `crates/`:
+Fourteen crates under `crates/`:
 
 | Crate | Role |
 |---|---|
@@ -72,6 +72,7 @@ Thirteen crates under `crates/`:
 | `dt-par` | Parallel iteration for the engine: rayon everywhere but the browser, where the same calls run in order. |
 | `dt-store` | The disk cache of builds: a finished `Built` kept under a SHA-256 key (the `sha2` crate, over `dt-eval`'s canonical form of everything the build read), and the stored build calls (`build_stored`, `build_tier`) that read it. It sits above `dt-eval`, which knows nothing of it. |
 | `dt-print` | A built tile on its way to a printer, above the engine: print lists, plates and the packer, the inventory, binary STL, 3MF and Bambu Studio projects, and the CPU renderer that draws `build --png` and the contact sheets (its only readers are those outputs). |
+| `dt-crash-switch` | The crash switch the CLI's exit-code tests drive (`DT_TEST_PANIC`), a leaf only the program depends on: its `on` feature is turned on by dharmatiles' dev-dependencies alone, so it reaches this crate and the binary and nothing else (a test-only feature anywhere lower would build every crate above it twice). |
 | `dt-testkit` | What the tests share, a dev-dependency only (the program does not carry it): `build`, one build of a document kept for everything the build reads (the source's content, the path, every field of `Options`), so a test run never builds the same tile twice. dt-eval's, dt-store's and dharmatiles' tests use it. |
 | `dt-web` | The browser build (`cargo xtask wasm`): the language crates and the engine on `wasm32-unknown-unknown`, left out of a plain `cargo build`. |
 | `dharmatiles` | The CLI. |

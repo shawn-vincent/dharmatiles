@@ -50,7 +50,7 @@ pub(crate) fn build(
         // A panic in one tile is a bug, but it must not end the sweep: it is
         // reported against the tile by name, and the next tile builds.
         let (c, r) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            dt_eval::crash_switch::panic_in_tile(p);
+            dt_crash_switch::panic_in_tile(p);
             build_one(&Files, p, opts, out, extras, json)
         }))
         .unwrap_or_else(|panic| {

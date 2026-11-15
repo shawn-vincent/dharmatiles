@@ -113,7 +113,7 @@ fn main() -> ExitCode {
     let cli = Cli::from_arg_matches(&Cli::command().version(cli::version_line()).get_matches())
         .unwrap_or_else(|e| e.exit());
     // the crash switch of the exit-code tests; nothing in a shipped build
-    dt_eval::crash_switch::panic_in_main();
+    dt_crash_switch::panic_in_main();
     disk_library();
     // no command: browse your tiles and the library in the browser
     let command = cli.command.unwrap_or(Command::Preview {

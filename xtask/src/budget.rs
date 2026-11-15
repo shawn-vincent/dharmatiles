@@ -1,6 +1,6 @@
 //! Every xtask command, and every step of a check, is timed against a budget: it prints how long it took against
 //! its budget, every run is logged to `dt-times.tsv` in the repository's common git folder (shared by the
-//! worktrees), and a run past its budget says OVER BUDGET loudly, on both streams, so a slow creep is noticed the
+//! worktrees), and a run past its budget says OVER BUDGET loudly, on stderr, so a slow creep is noticed the
 //! day it starts and not when a change takes half an hour (Shawn, 14 Nov 2026: "all the build steps and checks
 //! should be timed, print their runtimes, and if over budget complain so we notice").
 //!
@@ -118,7 +118,7 @@ pub fn record(root: &Path, what: &str, secs: f64, budget: f64, ok: bool) -> Resu
             (secs / budget - 1.0) * 100.0,
             log.display()
         );
-        println!("{banner}");
+        // on stderr, which a pipe or a `-q` does not swallow; the check's table marks it OVER on stdout too
         eprintln!("{banner}");
     } else {
         println!("[time] {what} {how} {secs:.0} s of its {budget:.0} s");

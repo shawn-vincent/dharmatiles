@@ -10,8 +10,6 @@ publish.workspace = true
 build = "build.rs"
 
 [features]
-default = ["manifold-parallel"]
-manifold-parallel = ["dt-eval/manifold-parallel"]
 # Off in every shipped build: two routes that fail on purpose (`/api/test-panic`,
 # `/api/test-failure`), to see the error panel working.  The tests have them anyway.
 test-routes = []
@@ -22,6 +20,7 @@ dt-doc.workspace = true
 dt-lang.workspace = true
 kdl.workspace = true
 dt-eval.workspace = true
+dt-crash-switch.workspace = true
 dt-store.workspace = true
 dt-print.workspace = true
 dt-kit.workspace = true
@@ -33,11 +32,17 @@ owo-colors.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 
+# Feature unification, not a use: the tests' `tempfile` (insta's) turns on rustix's `fs`, and rustix is under
+# miette (`terminal_size`), so without asking for `fs` here too the program's build and the tests' differ and every
+# crate above miette is built twice for every change (feature drift).
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1.6", default-features = false, features = ["std", "fs"] }
+
 [dev-dependencies]
 ts-rs.workspace = true
 dt-testkit.workspace = true
 # Test builds only: the DT_TEST_PANIC crash switch the exit-code tests drive.
-dt-eval = { workspace = true, features = ["test-panic"] }
+dt-crash-switch = { workspace = true, features = ["on"] }
 
 [lints]
 workspace = true
