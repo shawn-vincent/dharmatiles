@@ -6,6 +6,7 @@
 // the strip under the crumbs.  A setting is a word of the list's `plates` line: changing it rewrites that line in the
 // file (the program does, `POST /api/plates/set`), and the list builds again.  Docs: docs/plates.html.
 
+import { kids } from '../dom.js';
 import { effect } from '@preact/signals-core';
 import { failed, showError } from '../problems.js';
 import { html, render } from '../view/html.js';
@@ -117,7 +118,7 @@ function pickMode(mode) {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  for (const b of $('modes').children) b.onclick = () => pickMode(b.dataset.mode);
+  for (const b of kids($('modes'))) b.onclick = () => pickMode(b.dataset.mode);
   render(html`<${PlatesPanel} m=${platesPanel} act=${act} />`, $('lens-plates'));
   // the title bar's switch and the page's class follow the document in view (bound to the model, not stored)
   effect(() => {
@@ -127,7 +128,7 @@ export function init() {
     // lit for a document the switch names; the inventory and the folders are none of the three, so nothing is lit
     const none = !t || isInventory(t) || view.get().page === 'browse';
     const now = none ? null : doc ? (isMapView() ? 'map' : 'plates') : 'tile';
-    for (const b of $('modes').children) b.setAttribute('aria-pressed', String(b.dataset.mode === now));
+    for (const b of kids($('modes'))) b.setAttribute('aria-pressed', String(b.dataset.mode === now));
     document.body.classList.toggle('plates', doc); // the tile's Place or draw box is not for a print list or a map
   });
 }

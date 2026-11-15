@@ -2,6 +2,7 @@
 // sidebar's two pages, light and dark, the projection, the panes and the
 // keyboard.
 
+import { maybe } from '../dom.js';
 import { effect, signal, untracked } from '@preact/signals-core';
 import { Layout } from '../layout.js';
 import { CopyButton } from '../view/copy-button.js';
@@ -59,7 +60,7 @@ function bindPopovers() {
     const open = view.get().popover;
     for (const [btn, pop] of popovers) {
       $(pop).hidden = pop !== open;
-      $(btn).setAttribute('aria-expanded', pop === open);
+      $(btn).setAttribute('aria-expanded', String(pop === open));
     }
   });
 }
@@ -129,7 +130,7 @@ function toggleTheme() {
 // perspective or orthographic: remembered across reloads (a per-viewer convenience)
 function setProjection(ortho, animated = true) {
   viewer.setOrtho(ortho, animated);
-  $('b-proj').firstChild.textContent = ortho ? 'Orthographic ' : 'Perspective ';
+  /** @type {Node} */ ($('b-proj').firstChild).textContent = ortho ? 'Orthographic ' : 'Perspective '; // the button's first child is its label text
   try { localStorage.setItem('dt-preview-ortho', ortho ? '1' : '0'); } catch { /* private mode */ }
 }
 // the panel: beside the view (one level at a time, or the source), or hidden; the title bar's one panel button (or \\) shows or hides it
@@ -151,7 +152,7 @@ async function showAbout() {
     $('about-semver').textContent = v.semver;
     $('about-build').textContent = v.build;
     $('about-dirty').hidden = !v.dirty;
-    let slot = $('about-version').querySelector('.copy-slot');
+    let slot = maybe($('about-version'), '.copy-slot');
     if (!slot) { slot = document.createElement('span'); slot.className = 'copy-slot'; slot.style.display = 'contents'; $('about-version').append(slot); }
     render(html`<${CopyButton} text=${a.version} title="Copy the version" />`, slot);
     // Formats are major versions, written "0.x": any version starting with 0.
@@ -199,7 +200,7 @@ export function init() {
     $('lg-red').textContent = `Over ${steepestDeg}°: small patches allowed, more fails`;
   });
   toggle('t-overhang', (on) => viewer.setOverhang(on));
-  $('t-paint').onchange = (e) => setPaint(e.target.checked);
+  $('t-paint').onchange = () => setPaint($('t-paint').checked);
   try { if (localStorage.getItem('dt-preview-paint') === '0') setPaint(false); } catch { /* private mode: the default stands */ }
   if (/paint=off/.test(location.hash)) { $('t-paint').checked = false; viewer.setPaint(false); } // #paint=off previews grey without saving
   toggle('t-wire', (on) => viewer.setWireframe(on));
@@ -219,7 +220,7 @@ export function init() {
   // (up a level of the trail first, as Esc and ⌘[ do: the tile's levels and the map's, then the folder)
   $('back').onclick = () => { if (!goUp()) view.set({ pageAt: 'browse' }); };
   addEventListener('pointerdown', (e) => {
-    if (popovers.some(([b, p]) => $(p).contains(e.target) || $(b).contains(e.target))) return;
+    if (popovers.some(([b, p]) => $(p).contains(/** @type {Node | null} */ (e.target)) || $(b).contains(/** @type {Node | null} */ (e.target)))) return;
     closePopovers();
   });
   $('theme').onclick = toggleTheme;
@@ -228,7 +229,7 @@ export function init() {
   $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
   try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* private mode: the default stands */ }
   $('panelbtn').onclick = () => layout.toggle();
-  $('t-right').onchange = (e) => layout.set({ side: e.target.checked ? 'right' : 'left' });
+  $('t-right').onchange = () => layout.set({ side: $('t-right').checked ? 'right' : 'left' });
   $('b-keys').onclick = showKeys;
   $('b-about').onclick = showAbout;
   addEventListener('keydown', (e) => {

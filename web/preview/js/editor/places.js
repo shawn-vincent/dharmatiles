@@ -12,6 +12,7 @@
 // to the program, which checks it again; the page never sends a path, only a place's number, a folder's
 // path below it and a tile's id.  The list is updated from the program's answer, which carries the list.
 
+import { all, maybe } from '../dom.js';
 import { effect } from '@preact/signals-core';
 import { fillCrumbs, keepEnd, pinEnd } from '../crumbs.js';
 import { html, render } from '../view/html.js';
@@ -82,10 +83,11 @@ export function goUpFolder() {
 
 /** @param {{ kind: string, id: string } | null} [match] */
 function focusRow(match = null) {
-  const list = $('folder')?.querySelector('.flist');
+  const folder = document.getElementById('folder'); // drawn by the places panel, so it may not be there
+  const list = folder && maybe(folder, '.flist');
   if (!list) return;
-  const all = [...list.querySelectorAll('.orow')];
-  const row = (match && all.find((r) => r.dataset.kind === match.kind && r.dataset.id === match.id)) || all.find((r) => r.parentElement.classList.contains('sel')) || all[0];
+  const rows = all(list, '.orow');
+  const row = (match && rows.find((r) => r.dataset.kind === match.kind && r.dataset.id === match.id)) || rows.find((r) => r.parentElement?.classList.contains('sel')) || rows[0];
   (row || $('folder')).focus({ preventScroll: true });
 }
 
@@ -440,11 +442,11 @@ function rowAction(action, kind, id, anchor) {
 /** The arrows move between rows; → opens a folder or place, ← goes up. */
 function onListKey(e) {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
-  const row = e.target.closest?.('.orow');
-  const all = [...$('folder').querySelectorAll('.orow')];
+  const row = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest?.('.orow'));
+  const rows = all($('folder'), '.orow');
   if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
     e.preventDefault();
-    all[moveRow(row ? all.indexOf(row) : -1, e.key, all.length)]?.focus();
+    rows[moveRow(row ? rows.indexOf(row) : -1, e.key, rows.length)]?.focus();
   } else if (e.key === 'ArrowRight' && row && row.dataset.kind !== 'tile') {
     e.preventDefault(); row.click();
   } else if (e.key === 'ArrowLeft') {
@@ -459,7 +461,7 @@ export function init() {
   keepEnd($('bcrumb-scroll'));
   keepEnd($('crumb-scroll'));
   $('bback').onclick = () => { if (!goUpFolder()) $('folder').focus(); };
-  $('folder-vp').addEventListener('keydown', (e) => { if (e.target.closest?.('#folder')) onListKey(e); });
+  $('folder-vp').addEventListener('keydown', (e) => { if (/** @type {Element} */ (e.target).closest?.('#folder')) onListKey(e); });
   $('filter').oninput = () => view.set({ query: $('filter').value });
   $('filter').onkeydown = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); focusRow(); return; }
@@ -469,7 +471,7 @@ export function init() {
       if (tile()) view.set({ pageAt: 'edit' }); else goUpFolder();
       return;
     }
-    if (e.key === 'Enter') $('folder').querySelector('.orow[data-kind="tile"], .orow')?.click();
+    if (e.key === 'Enter') maybe($('folder'), '.orow[data-kind="tile"], .orow')?.click();
   };
   $('forward').onclick = () => { if (tile()) view.set({ pageAt: 'edit' }); };
   bind();

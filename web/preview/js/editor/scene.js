@@ -386,7 +386,7 @@ export function init() {
   viewer.onRenderHook(() => { cameraMoved(); drawTags(); });
   try { pillsOn = pillsWanted(localStorage.getItem('dt-pills')); } catch { /* private mode: the default stands */ }
   $('t-pills').checked = pillsOn;
-  $('t-pills').onchange = (e) => { pillsOn = e.target.checked; try { localStorage.setItem('dt-pills', pillsOn ? '1' : '0'); } catch { /* private mode */ } viewer.draw(); };
+  $('t-pills').onchange = () => { pillsOn = $('t-pills').checked; try { localStorage.setItem('dt-pills', pillsOn ? '1' : '0'); } catch { /* private mode */ } viewer.draw(); };
   server.subscribe(['tiles', 'inventory'], sync);
   view.subscribe(['tileId', 'dmode'], sync);
   view.subscribe(['msel'], () => { evaluate(true); });

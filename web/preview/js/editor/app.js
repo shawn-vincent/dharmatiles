@@ -2,16 +2,41 @@
 // The editor's core: the host, the 3D view, and the little every part shares
 // (the stores themselves are in stores.js).
 
+import { need } from '../dom.js';
 import { browserHost } from '../host.js';
 import { Viewer } from '../viewer.js';
 import { view } from './stores.js';
 
 /**
- * An element of the page by its id.  The one DOM lookup boundary of the editor: the page's markup (index.html) is not typed,
- * so an id is taken to be the element it names there, whatever its kind (an input, a dialog, a button), and is `any`.
- * @param {string} id @returns {any}
+ * The kinds of the page's elements that are not a plain `HTMLElement` (an input, a dialog, a canvas, a form, a button), by
+ * id, as index.html marks them up (a test holds this table to the markup).  Any other id is an `HTMLElement`.
+ * @typedef {{
+ *   'filter': HTMLInputElement, 't-paint': HTMLInputElement, 't-overhang': HTMLInputElement, 't-wire': HTMLInputElement,
+ *   't-grid': HTMLInputElement, 't-fade': HTMLInputElement, 't-pills': HTMLInputElement, 't-debug': HTMLInputElement,
+ *   't-right': HTMLInputElement, 'export-3mf': HTMLInputElement, 'place-in': HTMLInputElement, 'new-name': HTMLInputElement,
+ *   'new-size': HTMLInputElement,
+ *   'new-dialog': HTMLDialogElement, 'keys': HTMLDialogElement, 'about': HTMLDialogElement, 'leave-dialog': HTMLDialogElement,
+ *   'canvas': HTMLCanvasElement, 'over': HTMLCanvasElement,
+ *   'new-form': HTMLFormElement,
+ *   'undo': HTMLButtonElement, 'undo-drop': HTMLButtonElement, 'redo': HTMLButtonElement, 'redo-drop': HTMLButtonElement,
+ *   'target': HTMLButtonElement, 'export': HTMLButtonElement, 'panelbtn': HTMLButtonElement, 'msgbtn': HTMLButtonElement,
+ *   'theme': HTMLButtonElement, 'bback': HTMLButtonElement, 'forward': HTMLButtonElement, 'back': HTMLButtonElement,
+ *   'tilebtn': HTMLButtonElement, 'part-back': HTMLButtonElement, 'dispbtn': HTMLButtonElement, 'b-proj': HTMLButtonElement,
+ *   'b-keys': HTMLButtonElement, 'b-about': HTMLButtonElement, 'export-reveal': HTMLButtonElement, 'export-go': HTMLButtonElement,
+ *   'msg-close': HTMLButtonElement, 'sb-main': HTMLButtonElement, 'empty-new': HTMLButtonElement, 'choose': HTMLButtonElement,
+ *   'new-cancel': HTMLButtonElement, 'new-ok': HTMLButtonElement, 'leave-discard': HTMLButtonElement,
+ * }} IdKinds
  */
-export const $ = (id) => document.getElementById(id);
+
+/**
+ * An element of the page by its id.  The one DOM lookup boundary of the editor: an id the page has is the element it names,
+ * typed by `IdKinds`, and one it does not have throws, naming it (js/dom.js `need`).  Ask `document.getElementById` for an
+ * element that may not be there yet (one a component draws).
+ * @template {string} K
+ * @param {K} id
+ * @returns {K extends keyof IdKinds ? IdKinds[K] : HTMLElement}
+ */
+export const $ = (id) => /** @type {any} */ (need(document, `#${id}`)); // the conditional type is the table's reading of the id, which a body cannot state
 export const host = browserHost();
 /** The one viewer. */
 export const viewer = new Viewer(/** @type {HTMLCanvasElement} */ ($('canvas')));
@@ -26,8 +51,8 @@ let toastTimer = 0;
 export function toast(message, action = null, { label = 'Undo', ms = 5000 } = {}) {
   const box = $('toast');
   clearTimeout(toastTimer);
-  box.querySelector('span').textContent = message;
-  const button = box.querySelector('button');
+  need(box, 'span').textContent = message;
+  const button = need(box, 'button');
   button.hidden = !action;
   button.textContent = label;
   button.onclick = action ? () => { box.hidden = true; action(); } : null;

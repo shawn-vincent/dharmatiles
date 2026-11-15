@@ -8,6 +8,7 @@
 // printer, "this map", and the card's printer list changes that one: what the chip names is what
 // you pick.  The base system stays the target tiles build for.
 
+import { kids } from '../dom.js';
 import { failed } from '../problems.js';
 import { printerOf } from '../doc-views.js';
 import { $, host, toast } from './app.js';
@@ -48,7 +49,7 @@ function bind() {
     }
     $('target-for').hidden = !d;
     if (d) $('target-for').textContent = `The printer below is this ${d.what}'s (its plates line). Tiles you open build for ${targetLabel({ system, printer })}; the base system here is theirs.`;
-    for (const b of $('target-system').children) b.classList.toggle('on', b.dataset.sys === system);
+    for (const b of kids($('target-system'))) b.classList.toggle('on', b.dataset.sys === system);
     // the server lists them; one that has gone from disk is still the chosen one until it is changed
     const current = d ? d.name : printer;
     const names = printers.some((p) => p.name === current) ? printers : [...printers, { name: current, mine: false, bed: null }];
@@ -77,6 +78,6 @@ async function choose(body) {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  for (const b of $('target-system').children) b.onclick = () => choose({ system: b.dataset.sys });
+  for (const b of kids($('target-system'))) b.onclick = () => choose({ system: b.dataset.sys });
   bind();
 }

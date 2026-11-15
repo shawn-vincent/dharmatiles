@@ -55,7 +55,7 @@ export async function renameTile(t, name) {
 
 export function startRename() {
   const t = tile();
-  if (!renameable(t) || $('rename')) return;
+  if (!renameable(t) || document.getElementById('rename')) return; // the rename field is there only while it is open
   view.set({ popover: null });
   const input = document.createElement('input');
   input.id = 'rename'; input.type = 'text'; input.value = stem(t); input.maxLength = 80;

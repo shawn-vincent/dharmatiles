@@ -21,6 +21,7 @@
 // reduced motion reads (all of it js/slide.js, which the folder levels and the step between a folder and a document use too, `showPage`).  A view never shows or hides itself, never animates and never says which level is on screen (a test reads the
 // views for it); a level added later is a row of `LEVELS`, a section of the page and a view.
 
+import { all, kids, maybe } from '../dom.js';
 import {
   ADD_PANES, LEVELS, caretLineFor, contextFor, crumbsFor, depthOf, folderDepth, levelDepth, levelKey, levelOfHash, moveRow, orderStack, parseHash, placeOf,
   sameLevel, slideBetween, slideDir, standing, tileLevelOf, trailDepth, up as levelUp,
@@ -266,14 +267,14 @@ function renderCrumbs() {
   renderInto(html`<${DeepCrumbs} crumbs=${list.filter((c) => c.depth >= 1)} go=${goCrumb} />`, $('crumbs-deep'));
   // where you are is the end of the path: it stays in view when the path is longer than the bar
   pinEnd($('crumb-scroll'));
-  for (const b of $('face').children) {
+  for (const b of kids($('face'))) {
     if (b.dataset.face === 'tile') {
       b.textContent = 'Outline'; // what the panel shows, whatever the document is (the title bar's switch names the document)
       b.title = isPlates(t) ? (isMapView() ? 'The map: its pieces, inventory and settings (⌘3)' : 'The plates: printer, mode and each plate (⌘3)') : 'The tile, level by level (⌘3)';
     } else b.title = isPlates(t) ? 'The source of the map (⌘1)' : isInventory(t) ? 'The source of the inventory (⌘1)' : 'The source of the tile (⌘1)';
     const on = b.dataset.face === face;
     b.classList.toggle('on', on);
-    b.setAttribute('aria-pressed', on);
+    b.setAttribute('aria-pressed', String(on));
   }
 }
 
@@ -321,7 +322,7 @@ function renderContext() {
 /** Put the keyboard in level `id`: its first row (the tile's rows, the map's; the Add step's folders and pictures before its list of pieces), else the level itself. */
 function focusLevel(id) {
   const pane = paneEl(id);
-  const first = pane.querySelector('.flvl .orow, .flvl .acard') || pane.querySelector(ROWS);
+  const first = maybe(pane, '.flvl .orow, .flvl .acard') || maybe(pane, ROWS);
   (first || pane).focus({ preventScroll: true });
 }
 
@@ -376,7 +377,7 @@ export function showPage(edit, animate) {
   const away = (el) => { el.classList.add('off'); };
   if (first) { away(out); return; }
   slide({ scope: $('track'), to, out, dir, animate, leave: away });
-  if (had) afterSlide(() => { if (pageIsEdit === edit) { if (edit) focusLevel(shown.id); else ($('folder').querySelector('.orwrap.sel .orow, .orow') || $('folder')).focus({ preventScroll: true }); } });
+  if (had) afterSlide(() => { if (pageIsEdit === edit) { if (edit) focusLevel(shown.id); else (maybe($('folder'), '.orwrap.sel .orow, .orow') || $('folder')).focus({ preventScroll: true }); } });
 }
 
 let lastLevel = null, lastTile = null, lastKey = null;
@@ -414,7 +415,7 @@ function render() {
 }
 /** Back up at the top of a document: the row the keyboard came from (the entry's, the piece's), when the shell still has it. */
 function returnRow(id) {
-  const rows = [...paneEl(id).querySelectorAll(ROWS)];
+  const rows = all(paneEl(id), ROWS);
   if (isMapView()) {
     // up from a folder of the Add step: the row of the folder it left; else the piece the level was left from
     const left = leftMap?.add;
@@ -561,11 +562,12 @@ export function init() {
   started = true;
   // the tile browser is a level above the tile: its crumb is the back button already
   $('tilebtn').onclick = () => goDepth(0);
-  for (const b of $('face').children) b.onclick = () => setFace(b.dataset.face);
+  for (const b of kids($('face'))) b.onclick = () => setFace(/** @type {'tile' | 'source'} */ (b.dataset.face));
   for (const id of Object.keys(LEVELS)) {
     paneEl(id).addEventListener('scroll', (e) => {
       const l = shellLevel();
-      if (l && l.id === id && e.target.matches?.(SCROLLS)) scrolls.set(memoryKey(l), e.target.scrollTop);
+      const t = /** @type {HTMLElement} */ (e.target);
+      if (l && l.id === id && t.matches?.(SCROLLS)) scrolls.set(memoryKey(l), t.scrollTop);
     }, true);
   }
   $('lvl-tile').addEventListener('focusin', rowFocus);
