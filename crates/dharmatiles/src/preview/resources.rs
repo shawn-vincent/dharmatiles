@@ -173,13 +173,24 @@ impl Shared {
             let name = r.name();
             // a list is told when its ids changed (decided above); the rest when their value did
             let text = match &r {
-                Resource::List(l) => l.ids.join(","),
-                other => serde_json::to_string(other).unwrap_or_default(),
+                Resource::List(l) => Ok(l.ids.join(",")),
+                other => serde_json::to_string(other),
             };
-            if ev.told.values.get(name) == Some(&text) {
-                continue;
+            match text {
+                Ok(text) => {
+                    if ev.told.values.get(name) == Some(&text) {
+                        continue;
+                    }
+                    ev.told.values.insert(name, text);
+                }
+                // said, and sent all the same: a value that cannot be written is never taken for one unchanged
+                Err(e) => {
+                    tell!(
+                        "error: preview: the {name} resource could not be written to compare: {e}"
+                    );
+                    ev.told.values.remove(name);
+                }
             }
-            ev.told.values.insert(name, text);
             let res_rev = {
                 let n = ev.told.revs.entry(name).or_insert(0);
                 *n += 1;
