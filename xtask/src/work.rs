@@ -460,6 +460,16 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             }),
         ));
     }
+    if full {
+        steps.push((
+            "cargo xtask parity --service: the worker's service under Node, check then build by verb, the same STL as the program (a heavy job)".into(),
+            budget::step::SERVICE,
+            Box::new(|| {
+                heavy_lock(root)?;
+                crate::parity::run_parity(root, &["--service".to_owned()])
+            }),
+        ));
+    }
     if p.page {
         steps.push((
             "npm test (web/preview)".into(),

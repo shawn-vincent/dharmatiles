@@ -14,12 +14,7 @@ use dt_eval::Diag;
 
 use crate::{ERROR, OK, report};
 
-/// The documentation site with its trailing slash.  It is derived from the repository address in `Cargo.toml`
-/// ([`dt_lang::codes::site_base`]), the one place the address is written.
-#[must_use]
-pub fn docs() -> String {
-    format!("{}/", dt_lang::codes::site_base())
-}
+pub use dt_service::stack::docs;
 
 /// List every element, or one element's controls.
 pub fn run(name: Option<&str>, json: bool) -> u8 {

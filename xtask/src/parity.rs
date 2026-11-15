@@ -45,6 +45,9 @@ pub fn run_parity(root: &Path, args: &[String]) -> Result<(), String> {
     if args.iter().any(|a| a == "--too-big") {
         return run_too_big(root);
     }
+    if args.iter().any(|a| a == "--service") {
+        return run_service(root);
+    }
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), Into::into);
     let bundle = target.join("parity-bundle");
@@ -218,4 +221,77 @@ fn run_too_big(root: &Path) -> Result<(), String> {
         out.status,
         String::from_utf8_lossy(&out.stderr)
     ))
+}
+
+/// The tile the service's Node test puts in the worker's service.
+const SERVICE_TILE: &str = "lib:tiles/ground/1x1-grass.dtile";
+
+/// `cargo xtask parity --service`: the editor's service as a web worker will run it, under Node.  The bundle's
+/// `Service` is given one library tile and called by verb: `check`, then `buildNow`.  The program builds the same
+/// tile (`dharmatiles build`), and the two STLs' triangles must have the same SHA-256.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: an environment fact that is not readable is the meaning (the default target folder)"
+)]
+fn run_service(root: &Path) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    let target =
+        std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), Into::into);
+    let bundle = target.join("parity-bundle");
+    crate::wasm::run_wasm(root, &[bundle.display().to_string()])?;
+    let job = format!("{SERVICE_TILE}@db");
+    let line = String::from_utf8(capture(
+        Command::new("node")
+            .current_dir(root)
+            .arg("xtask/service.mjs")
+            .arg(&bundle)
+            .arg(&job),
+    )?)
+    .map_err(|e| format!("not UTF-8: {e}"))?;
+    let browser: Value =
+        serde_json::from_str(line.trim()).map_err(|e| format!("service: {e}: {line}"))?;
+    // the program's own build of the same tile, in a scratch folder of its own (never the user's out/ or cache)
+    let scratch = target.join("service-scratch");
+    match std::fs::remove_dir_all(&scratch) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("cannot clear {}: {e}", scratch.display())),
+    }
+    let status = Command::new("cargo")
+        .current_dir(root)
+        .args(["build", "-q", "--release", "-p", "dharmatiles"])
+        .status()
+        .map_err(|e| format!("cargo build: {e}"))?;
+    if !status.success() {
+        return Err(format!("cargo build -p dharmatiles failed: {status}"));
+    }
+    let out = scratch.join("out");
+    capture(
+        Command::new(target.join("release/dharmatiles"))
+            .current_dir(root)
+            .env("DT_HOME", scratch.join("home"))
+            .env("DT_CACHE", scratch.join("cache"))
+            .args(["build", SERVICE_TILE, "--no-cache", "--out"])
+            .arg(&out),
+    )?;
+    let stl_path = out.join("db/ground/1x1-grass-db.stl");
+    let stl = std::fs::read(&stl_path)
+        .map_err(|e| format!("cannot read {}: {e}", stl_path.display()))?;
+    let native: String = Sha256::digest(&stl[80..])
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let said = browser["stlSha256"].as_str().ok_or_else(|| {
+        format!("service: the worker's answer has no stlSha256: {browser}")
+    })?;
+    if said == native && browser["passed"] == Value::Bool(true) {
+        println!(
+            "service: check then buildNow by verb under Node gave the program's STL for {SERVICE_TILE} ({native})"
+        );
+        Ok(())
+    } else {
+        Err(format!(
+            "service: the worker's service and `dharmatiles build` differ on {SERVICE_TILE}\n  service: {browser}\n  program: {native}"
+        ))
+    }
 }

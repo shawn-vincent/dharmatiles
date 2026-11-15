@@ -57,6 +57,8 @@ impl std::fmt::Display for JsError {
     }
 }
 
+pub mod service;
+
 /// The path the page's document is read as.
 const MAIN: &str = "tile.dtile";
 

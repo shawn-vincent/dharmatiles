@@ -64,7 +64,8 @@ use std::path::{Path, PathBuf};
 use dt_eval::Source;
 use serde::{Deserialize, Serialize};
 
-use super::api::{Mistake, Out, Reply, TileRef};
+use super::api::{Out, Reply, TileRef};
+pub use dt_service::tile_calls::{CheckRes, TextReq};
 use super::places::{Listed, Nothing};
 use super::queue::Outcome;
 use super::roots::personal_home;
@@ -222,10 +223,7 @@ pub struct EditReq {
     pub op: EditOp,
 }
 
-/// The revision of a text that a check names its nodes by: what an edit must carry back.
-pub(super) fn text_rev(text: &str) -> String {
-    format!("{:016x}", super::tiers::fnv(text))
-}
+pub(super) use dt_service::tile_calls::text_rev;
 
 /// The text after an edit, and (for a change that leaves a node to select) the node: its id and the byte it starts at.
 #[derive(Serialize, Deserialize, Debug)]
@@ -234,61 +232,6 @@ pub struct EditRes {
     pub text: String,
     pub id: Option<String>,
     pub at: Option<usize>,
-}
-
-/// What is read of a document: the check's (and the lists') verdict.  A
-/// document that does not read is an answer here, not a failure: the text pane
-/// shows its mistakes as you type.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct CheckRes {
-    pub ok: bool,
-    pub errors: Vec<Mistake>,
-    pub stack: Option<Vec<stack::StackItem>>,
-    pub map: Option<dt_eval::map::TileMap>,
-    /// Every node of the text that was read, by the id an edit names it with (`/api/edit`), for a tile.
-    pub nodes: Vec<NodeJson>,
-    /// The revision of the text those nodes were read from; an edit names them with it (`EditReq::read`).
-    #[serde(rename = "nodesRev")]
-    #[cfg_attr(test, ts(rename = "nodesRev"))]
-    pub nodes_rev: Option<String>,
-}
-
-/// One node of a tile's text: the id an edit names it by, what it is, and where its text is.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct NodeJson {
-    pub id: String,
-    /// The node's name as written (`rock`).
-    pub what: String,
-    /// The first word of a node that names itself (`shore` of `line shore`).
-    pub name: Option<String>,
-    /// The byte its text starts at.
-    pub at: usize,
-    /// Its length in bytes.
-    pub len: usize,
-}
-
-impl From<dt_doc::nodeid::Node> for NodeJson {
-    fn from(n: dt_doc::nodeid::Node) -> Self {
-        Self {
-            id: n.id,
-            what: n.what,
-            name: n.name,
-            at: n.at,
-            len: n.len,
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
-#[serde(deny_unknown_fields)]
-pub struct TextReq {
-    pub text: String,
-    /// A file the tile uses, instead of its own document.
-    pub file: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -1299,78 +1242,7 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
         return Ok(super::lists::check_text(shared, tile, &text));
     }
     let src = Overlay(BTreeMap::from([(file.to_owned(), text)]));
-    let opts = shared.options();
-    let id = tile_id(tile);
-    // what this check found is said in the stream too: its mistakes, and the notes that were never shown
-    let said = |scope, errs: &[dt_eval::Diag]| {
-        shared.report(&id, scope, |name| {
-            messages::of_errors(errs, scope, &id, name, &[])
-        });
-    };
-    let unread = |errs: &[dt_eval::Diag]| CheckRes {
-        ok: false,
-        errors: api::mistakes(errs),
-        stack: None,
-        map: None,
-        nodes: Vec::new(),
-        nodes_rev: None,
-    };
-    match dt_eval::check(&src, tile, &opts) {
-        Ok(c) => {
-            let stack = match c
-                .tile
-                .as_ref()
-                .map(|t| stack::items(t, c.solved.as_ref(), opts.system))
-            {
-                Some(Err(e)) => {
-                    return Err(fail::failure(
-                        "500 Internal Server Error",
-                        format!("cannot describe the stack of {tile}: {e}"),
-                    ));
-                }
-                Some(Ok(items)) => Some(items),
-                None => None,
-            };
-            let own = src.read(tile).map_err(|e| {
-                fail::failure(
-                    "500 Internal Server Error",
-                    format!("cannot read {tile}: {e}"),
-                )
-            })?;
-            let map = match dt_eval::map::json(&c, &own, opts.units()) {
-                Ok(m) => m,
-                Err(errs) => {
-                    said(messages::Scope::Check, &errs);
-                    return Ok(unread(&errs));
-                }
-            };
-            shared.report(&id, messages::Scope::Check, |name| {
-                messages::of_check(&c, &id, name, stack.as_deref().unwrap_or(&[]))
-            });
-            Ok(CheckRes {
-                ok: true,
-                errors: Vec::new(),
-                stack,
-                map,
-                // the tile's own text read as KDL: it read, or the check would not have got here
-                nodes: dt_doc::nodeid::table(&own)
-                    .map_err(|e| {
-                        fail::failure(
-                            "500 Internal Server Error",
-                            format!("cannot list the nodes of {tile}: {e}"),
-                        )
-                    })?
-                    .into_iter()
-                    .map(NodeJson::from)
-                    .collect(),
-                nodes_rev: Some(text_rev(&own)),
-            })
-        }
-        Err(errs) => {
-            said(messages::Scope::Check, &errs);
-            Ok(unread(&errs))
-        }
-    }
+    dt_service::tile_calls::check(shared, &src, tile).map_err(|e| fail::failure("500 Internal Server Error", e.0))
 }
 
 /// May the editor write `file`?  Never the library, nor a read-only file.

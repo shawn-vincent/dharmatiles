@@ -190,6 +190,21 @@ pub struct Shared {
     storage: Arc<dyn storage::Storage>,
 }
 
+impl dt_service::tile_calls::CheckHost for Shared {
+    fn options(&self) -> Options {
+        Self::options(self)
+    }
+
+    fn report(
+        &self,
+        id: &str,
+        scope: dt_service::message::Scope,
+        make: impl FnOnce(&str) -> Vec<dt_service::message::Message>,
+    ) {
+        Self::report(self, id, scope, make);
+    }
+}
+
 /// Held while a tile builds: dropping it ends the build's progress message.
 struct BuildingGuard {
     shared: Arc<Shared>,
