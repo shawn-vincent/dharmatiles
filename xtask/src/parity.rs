@@ -41,7 +41,10 @@ pub const SET: &[&str] = &[
     clippy::disallowed_methods,
     reason = "permitted silence: an environment fact that is not readable is the meaning (the shard count falls back to 4)"
 )]
-pub fn run_parity(root: &Path) -> Result<(), String> {
+pub fn run_parity(root: &Path, args: &[String]) -> Result<(), String> {
+    if args.iter().any(|a| a == "--too-big") {
+        return run_too_big(root);
+    }
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), Into::into);
     let bundle = target.join("parity-bundle");
@@ -185,4 +188,34 @@ fn capture(cmd: &mut Command) -> Result<Vec<u8>, String> {
     } else {
         Err(format!("{cmd:?} failed: {}", out.status))
     }
+}
+
+/// `cargo xtask parity --too-big`: a 2x2 cliff needs more than the 4 GB a wasm32 module can address, and must say so:
+/// the run fails, and its answer names the stage and the module's memory, not a memory fault. (About 100 s, so it
+/// is not in the parity set.)
+fn run_too_big(root: &Path) -> Result<(), String> {
+    let target =
+        std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), Into::into);
+    let bundle = target.join("parity-bundle");
+    crate::wasm::run_wasm(root, &[bundle.display().to_string()])?;
+    let out = Command::new("node")
+        .current_dir(root)
+        .arg("xtask/parity.mjs")
+        .arg(&bundle)
+        .arg("lib:tiles/cliffs/2x2-cliff-corner.dtile@db")
+        .output()
+        .map_err(|e| format!("node: {e}"))?;
+    let said = String::from_utf8_lossy(&out.stdout);
+    if !out.status.success()
+        && said.contains("out of memory in the union stage")
+        && said.contains("a browser tab can give it")
+    {
+        println!("too-big: the 2x2 cliff stopped with its stage and memory:\n{said}");
+        return Ok(());
+    }
+    Err(format!(
+        "parity --too-big: a 2x2 cliff should stop in the browser naming the stage and the memory; it gave status {}, stdout {said}, stderr {}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    ))
 }

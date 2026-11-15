@@ -116,3 +116,16 @@ pub fn batch_in_order(parts: &[Solid], op: BoolOp) -> Solid {
     }
     Solid::batch(parts, op)
 }
+
+/// [`batch_in_order`] that takes the parts (see [`Solid::batch_owned`]).
+///
+/// # Panics
+/// In debug builds, if the parts break rule 5.
+#[must_use]
+pub fn batch_in_order_owned(parts: Vec<Solid>, op: BoolOp) -> Solid {
+    #[cfg(debug_assertions)]
+    if let Err(e) = check_source_order(&parts) {
+        panic!("batch_in_order_owned: {e}");
+    }
+    Solid::batch_owned(parts, op)
+}

@@ -1662,3 +1662,51 @@ unsafe extern "C" {
         args: *mut std::ffi::c_void,
     );
 }
+
+// ── An allocation the kernel could not get ──────────────────────────────
+
+static CONTEXT: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+/// Say what the kernel is working for (a build stage's name), so a failed
+/// allocation can name it. The last name set stands.
+pub fn set_context(what: &str) {
+    // a poisoned lock still holds the last name: the report wants it
+    let mut c = CONTEXT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    c.clear();
+    c.push_str(what);
+}
+
+/// The kernel's vectors call this (patch 0004, `manifold::AllocChecked`) when
+/// `malloc` gave nothing, or a size overflowed `size_t`. Without it the null
+/// was written through and the program faulted somewhere else ("memory
+/// access out of bounds" in the browser): now it stops here, saying what
+/// asked for how much, and, in the browser, how big the module's memory is
+/// against the 4 GB a wasm32 module can reach.
+#[unsafe(no_mangle)]
+pub extern "C" fn manifold_alloc_failed(bytes: usize) -> ! {
+    let what = CONTEXT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    let stage = if what.is_empty() {
+        String::new()
+    } else {
+        format!(" in the {what} stage")
+    };
+    #[cfg(target_arch = "wasm32")]
+    let held = format!(
+        ", the module's memory then {} MB of the 4096 MB a browser tab can give it",
+        core::arch::wasm32::memory_size::<0>() * 65536 / (1 << 20)
+    );
+    #[cfg(not(target_arch = "wasm32"))]
+    let held = String::new();
+    let asked = if bytes == usize::MAX {
+        "a size that overflows the address space".to_owned()
+    } else {
+        format!("{} MB", bytes.div_ceil(1 << 20))
+    };
+    panic!(
+        "out of memory{stage}: the geometry kernel asked for {asked} and got none{held}. \
+         This tile is too big for this device; build it in the program"
+    );
+}

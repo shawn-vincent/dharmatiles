@@ -448,7 +448,7 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             budget::step::PARITY,
             Box::new(|| {
                 heavy_lock(root)?;
-                crate::parity::run_parity(root)
+                crate::parity::run_parity(root, &[])
             }),
         ));
     }

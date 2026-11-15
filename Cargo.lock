@@ -487,6 +487,7 @@ dependencies = [
  "glam 0.34.2",
  "libm",
  "manifold-csg",
+ "manifold-csg-sys",
  "obvhs",
  "serde_json",
 ]

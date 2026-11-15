@@ -7,7 +7,7 @@
     reason = "lattice indices (a coordinate over the cell, clamped into 0..n; `as` saturates) and f32 mesh values (single precision is the mesh format); the cells per square is clamped to 4096 before it becomes a u32"
 )]
 
-use dt_geom::{BoolOp, Grid, IdBlock, Mask, TriMesh, batch_in_order};
+use dt_geom::{BoolOp, Grid, IdBlock, Mask, TriMesh, batch_in_order_owned};
 use dt_value::Seed;
 
 use crate::KitError;
@@ -976,6 +976,15 @@ impl Parts {
         hash
     }
 
+    /// Every part's solid, in build order, each part left holding the empty
+    /// solid: the union consumes them.
+    fn take_solids(&mut self) -> Vec<dt_geom::Solid> {
+        self.parts
+            .iter_mut()
+            .map(|p| std::mem::replace(&mut p.solid.0, dt_geom::Solid::empty()))
+            .collect()
+    }
+
     /// Reserve `n` slots of one material, in sequence.
     ///
     /// # Errors
@@ -1598,11 +1607,15 @@ impl Scene {
     /// [`KitError::Untraced`] if a triangle has no material, or the
     /// kernel's status.
     pub fn union(&mut self) -> Result<(TriMesh, Vec<Material>), KitError> {
-        let solids: Vec<dt_geom::Solid> =
-            self.built.parts.iter().map(|p| p.solid.0.clone()).collect();
-        let all = batch_in_order(&solids, BoolOp::Union);
+        // the scene gives up its solids (tags, sources and slots stay: the
+        // trace reads those): the kernel's tree is then their only holder,
+        // so each input is freed as its merge consumes it, and none is held
+        // through the export and the audit
+        let solids = self.built.take_solids();
+        let all = batch_in_order_owned(solids, BoolOp::Union);
         all.status().map_err(KitError::Mesh)?;
         let mesh = all.to_tri_mesh();
+        drop(all);
         self.record("union", mesh.content_hash());
         let materials = self.built.material_of(&mesh)?;
         Ok((mesh, materials))

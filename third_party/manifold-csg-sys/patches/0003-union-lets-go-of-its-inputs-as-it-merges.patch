@@ -1,0 +1,15 @@
+diff --git a/src/csg_tree.cpp b/src/csg_tree.cpp
+index 78417de..705b159 100644
+--- a/src/csg_tree.cpp
++++ b/src/csg_tree.cpp
+@@ -769,6 +769,10 @@ std::shared_ptr<CsgLeafNode> CsgOpNode::ToLeafNode(
+       if (!frame->op_node->cache_) {
+         switch (frame->op_node->op_) {
+           case OpType::Add:
++            // The children are held by `positive_children` now: let go of
++            // the node's own references, so an input is freed once its
++            // merge has consumed it and not when the whole union ends.
++            impl->clear();
+             *impl = {BatchUnion(frame->positive_children, ctx)};
+             break;
+           case OpType::Intersect: {
