@@ -1,0 +1,72 @@
+diff --git a/src/vec.h b/src/vec.h
+index a316a3b..66d4879 100644
+--- a/src/vec.h
++++ b/src/vec.h
+@@ -38,6 +38,22 @@
+ 
+ namespace manifold {
+ 
++// Defined by the program (manifold-csg-sys): reports that an allocation of
++// `bytes` failed, and stops. It does not return.
++extern "C" [[noreturn]] void manifold_alloc_failed(size_t bytes);
++
++// `malloc` for `n` elements of `T`, never null: a request too big for
++// size_t, or one the allocator cannot meet, stops with its size. (The
++// ASSERT after each call compiles to nothing without exceptions, so a null
++// was written through: in the browser, a memory fault far from its cause.)
++template <typename T>
++inline T* AllocChecked(size_t n) {
++  if (n > SIZE_MAX / sizeof(T)) manifold_alloc_failed(SIZE_MAX);
++  T* p = reinterpret_cast<T*>(malloc(n * sizeof(T)));
++  if (p == nullptr) manifold_alloc_failed(n * sizeof(T));
++  return p;
++}
++
+ struct Empty {};
+ 
+ template <typename T, bool shared = false>
+@@ -119,7 +135,7 @@ class Vec : public VecView<T> {
+     this->capacity_ = this->size_;
+     auto policy = autoPolicy(this->size_);
+     if (this->size_ != 0) {
+-      this->ptr_ = reinterpret_cast<T*>(malloc(this->size_ * sizeof(T)));
++      this->ptr_ = AllocChecked<T>(this->size_);
+       ASSERT(this->ptr_ != nullptr, std::bad_alloc());
+       TracyAllocS(this->ptr_, this->size_ * sizeof(T), 3);
+       copy(policy, vec.begin(), vec.end(), this->ptr_);
+@@ -149,7 +165,7 @@ class Vec : public VecView<T> {
+     this->size_ = other.size_;
+     this->capacity_ = other.size_;
+     if (this->size_ != 0) {
+-      this->ptr_ = reinterpret_cast<T*>(malloc(this->size_ * sizeof(T)));
++      this->ptr_ = AllocChecked<T>(this->size_);
+       ASSERT(this->ptr_ != nullptr, std::bad_alloc());
+       TracyAllocS(this->ptr_, this->size_ * sizeof(T), 3);
+       manifold::copy(other.begin(), other.end(), this->ptr_);
+@@ -164,7 +180,7 @@ class Vec : public VecView<T> {
+     this->size_ = other.size_;
+     this->capacity_ = other.size_;
+     if (this->size_ != 0) {
+-      this->ptr_ = reinterpret_cast<T*>(malloc(this->size_ * sizeof(T)));
++      this->ptr_ = AllocChecked<T>(this->size_);
+       ASSERT(this->ptr_ != nullptr, std::bad_alloc());
+       TracyAllocS(this->ptr_, this->size_ * sizeof(T), 3);
+       manifold::copy(other.begin(), other.end(), this->ptr_);
+@@ -221,7 +237,7 @@ class Vec : public VecView<T> {
+   void reserve(size_t n) {
+     AssertUnique();
+     if (n > capacity_) {
+-      T* newBuffer = reinterpret_cast<T*>(malloc(n * sizeof(T)));
++      T* newBuffer = AllocChecked<T>(n);
+       ASSERT(newBuffer != nullptr, std::bad_alloc());
+       TracyAllocS(newBuffer, n * sizeof(T), 3);
+       if (this->size_ > 0)
+@@ -271,7 +287,7 @@ class Vec : public VecView<T> {
+     AssertUnique();
+     T* newBuffer = nullptr;
+     if (this->size_ > 0) {
+-      newBuffer = reinterpret_cast<T*>(malloc(this->size_ * sizeof(T)));
++      newBuffer = AllocChecked<T>(this->size_);
+       ASSERT(newBuffer != nullptr, std::bad_alloc());
+       TracyAllocS(newBuffer, this->size_ * sizeof(T), 3);
+       manifold::copy(this->ptr_, this->ptr_ + this->size_, newBuffer);

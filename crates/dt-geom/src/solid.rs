@@ -116,6 +116,23 @@ impl Solid {
         Self(Manifold::batch_boolean(&ms, op(o)))
     }
 
+    /// [`Solid::batch`] that takes the parts: the caller's handles are gone
+    /// when the batch is made, so the kernel's own tree is the only holder
+    /// of its inputs while it evaluates (nothing the caller keeps pins an
+    /// input after the kernel has consumed it). Evaluation is lazy: it runs
+    /// at the first read of the result (`status`, an export).
+    #[must_use]
+    pub fn batch_owned(parts: Vec<Self>, o: BoolOp) -> Self {
+        let ms: Vec<Manifold> = parts.into_iter().map(|p| p.0).collect();
+        Self(Manifold::batch_boolean(&ms, op(o)))
+    }
+
+    /// The empty solid.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self(Manifold::empty())
+    }
+
     /// Keep the part on the side of the plane where `normal · x ≥ offset`.
     #[must_use]
     pub fn trim_by_plane(&self, normal: [f64; 3], offset: f64) -> Self {

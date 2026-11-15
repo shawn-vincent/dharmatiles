@@ -21,6 +21,7 @@ libm.workspace = true
 # Manifold's C++ library (v3.5.3): needs git, cmake and a C++ compiler;
 # the first build compiles Manifold (and TBB off the browser).
 manifold-csg = { workspace = true }
+manifold-csg-sys = { workspace = true }
 
 # rayon through dt-par: the one place that runs it sequentially in the browser
 rayon = { package = "dt-par", path = "../dt-par" }

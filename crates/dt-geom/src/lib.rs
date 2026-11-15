@@ -42,9 +42,15 @@ pub use iv::Iv;
 pub use mesh::{BOX_TRIANGLES, BoolOp, Bounds, Fnv, MeshError, TriMesh, half_space};
 pub use raster::{Mask, draw_line, fill, fill_polygons};
 pub use rays::{Hit, ObvhsRays, Ray};
-pub use source::{IdBlock, batch_in_order};
+pub use source::{IdBlock, batch_in_order, batch_in_order_owned};
 pub use stack::{
     CORNER_BLEND_MM, Lattice, Layer, LayerRelief, Round, Sides, lift_stack, rim_profile,
 };
 
 pub use solid::Solid;
+
+/// Say which build stage the kernel is working for: if it cannot get
+/// memory, its error names the stage.
+pub fn set_kernel_context(what: &str) {
+    manifold_csg_sys::set_context(what);
+}

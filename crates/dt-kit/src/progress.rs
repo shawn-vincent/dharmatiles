@@ -103,6 +103,8 @@ impl Progress {
 
     /// A stage begins.
     pub fn begin(&self, key: &str, label: &str) {
+        // the kernel names this stage if it runs out of memory in it
+        dt_geom::set_kernel_context(key);
         self.send(&Event::Begin { key, label });
     }
 
