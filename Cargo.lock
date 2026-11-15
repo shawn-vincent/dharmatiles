@@ -599,6 +599,7 @@ dependencies = [
  "dt-lang",
  "dt-print",
  "dt-service",
+ "dt-store",
  "dt-value",
  "miette",
  "serde",

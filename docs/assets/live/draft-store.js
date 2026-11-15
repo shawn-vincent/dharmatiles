@@ -3,7 +3,8 @@
 //
 //   what      the low-tier build and the check's answer of an example as the page wrote it (never an edited text, never a full
 //             build: a full build is tens of MB and a phone may not make one)
-//   key       the engine's hash and the text (limits.js `storeKey`): a mesh an older engine made is a wrong tile, so an entry
+//   key       dt-store's key, made by the engine (engine.js `keyOf`; it covers the document, everything it read, the options and the
+//             engine's hash): a mesh an older engine made is a wrong tile, so an entry
 //             of another engine is never found, and is deleted when the store is opened
 //   bound     `MAX_ENTRIES` entries, the oldest used first out
 //

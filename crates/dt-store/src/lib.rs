@@ -97,6 +97,38 @@ impl Key {
     }
 }
 
+/// The key of building `path` with `opts` at `tier`, by an engine named `engine`, given every file the build read
+/// (see [`Tracked`]).  The one maker of a build's key: the disk cache ([`Store::key`]) calls it, and so does the
+/// browser's worker (dt-web's `stored_key`, compiled into the wasm) to key what it keeps between visits, so a key is
+/// made one way wherever it is made.  Pure: it reads no disk and no clock.
+#[must_use]
+pub fn make_key(engine: &str, reads: &Reads, path: &str, opts: &Options, tier: Tier) -> Key {
+    let target = opts.target();
+    let mut c = Canon::new();
+    c.field("format", &FORMAT)
+        .field("engine", &engine)
+        .field("tier", tier.name())
+        .field("system", opts.system.word())
+        .field("printer", &opts.printer.name)
+        .field("printer-values", &opts.printer)
+        .field("seed", &opts.seed)
+        .field("cells", &opts.cells)
+        .field("path", path);
+    for (p, t) in &reads.0 {
+        c.field("file", p).field("text", t);
+    }
+    let id = hex_of(c.bytes())[..32].to_owned();
+    let mut s = Canon::new();
+    s.put(path).put(&target).put(tier.name());
+    Key {
+        id,
+        slot: hex_of(s.bytes())[..16].to_owned(),
+        path: path.to_owned(),
+        target,
+        tier,
+    }
+}
+
 /// Every file a build read, by path, with its text.
 #[derive(Clone, Debug, Default)]
 pub struct Reads(Vec<(String, String)>);
@@ -351,30 +383,7 @@ impl Store {
     }
 
     fn key_for(&self, reads: &Reads, path: &str, opts: &Options, tier: Tier) -> Key {
-        let target = opts.target();
-        let mut c = Canon::new();
-        c.field("format", &FORMAT)
-            .field("engine", &self.engine)
-            .field("tier", tier.name())
-            .field("system", opts.system.word())
-            .field("printer", &opts.printer.name)
-            .field("printer-values", &opts.printer)
-            .field("seed", &opts.seed)
-            .field("cells", &opts.cells)
-            .field("path", path);
-        for (p, t) in &reads.0 {
-            c.field("file", p).field("text", t);
-        }
-        let id = hex_of(c.bytes())[..32].to_owned();
-        let mut s = Canon::new();
-        s.put(path).put(&target).put(tier.name());
-        Key {
-            id,
-            slot: hex_of(s.bytes())[..16].to_owned(),
-            path: path.to_owned(),
-            target,
-            tier,
-        }
+        make_key(&self.engine, reads, path, opts, tier)
     }
 
     /// The key of the same build at `tier`.  (Entries of different tiers

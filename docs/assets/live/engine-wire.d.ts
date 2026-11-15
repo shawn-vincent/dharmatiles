@@ -545,5 +545,6 @@ export interface Engine {
   printed(typed: string): string;
   build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null): EngineTile;
   forget_card(card: string): void;
+  store_key(text: string, engine: string, system: string, seed: number | null, cells: number, tier: string): string | null;
   explore(typed: string, system: string, bins: number, draws: number, seed: number): string;
 }

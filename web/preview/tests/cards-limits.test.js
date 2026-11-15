@@ -2,7 +2,7 @@
 // engine's waiting line and workers driven with a stand-in worker and fetch.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ByteCache, CACHE_BYTES, costWords, deviceVerdict, keptBytes, runawayMs, storeKey } from '../../../docs/assets/live/limits.js';
+import { ByteCache, CACHE_BYTES, costWords, deviceVerdict, keptBytes, runawayMs } from '../../../docs/assets/live/limits.js';
 import { Engine } from '../../../docs/assets/live/engine.js';
 import { DraftStore, MAX_ENTRIES, oldestOver } from '../../../docs/assets/live/draft-store.js';
 
@@ -33,10 +33,7 @@ test('a kept result weighs its arrays, so 64 MB holds dozens of drafts but not t
   assert.ok(f.size <= 1, `${f.size} full-sized results kept`);
 });
 
-test('the store key carries the engine: a draft of another engine is a different key; the store keeps the newest', () => {
-  assert.notEqual(storeKey('aaaa', 'db', 'tile'), storeKey('bbbb', 'db', 'tile'));
-  assert.notEqual(storeKey('aaaa', 'db', 'tile'), storeKey('aaaa', 'ol', 'tile'));
-  assert.notEqual(storeKey('aaaa', 'db', 'ab'), storeKey('aaaa', 'dba', 'b'));
+test('the store keeps the newest drafts', () => {
   assert.deepEqual(oldestOver([{ at: 3 }, { at: 1 }, { at: 2 }], 2).map((e) => e.at), [1]);
   assert.equal(oldestOver([{ at: 1 }], MAX_ENTRIES).length, 0);
 });

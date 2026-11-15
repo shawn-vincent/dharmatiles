@@ -20,6 +20,8 @@ dt-value.workspace = true
 dt-eval.workspace = true
 dt-kit.workspace = true
 dt-print.workspace = true
+# the one key maker: what the page keeps between visits is keyed by the program's own key function (stored_key)
+dt-store.workspace = true
 # the service the worker runs: the same verbs the program answers over HTTP, over a store in memory (no `inspect`)
 dt-service.workspace = true
 sha2.workspace = true

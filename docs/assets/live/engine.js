@@ -16,10 +16,11 @@
 //   - a draft builds through its card's step cache in the worker (dt-web `build_tile`'s card), dropped with the worker
 //   - a build is stopped, and the card told, at three times its estimate (`runawayMs`), not at a fixed four minutes
 //   - the files carry their hashes (engine.json) and are kept by the Cache API; an example's draft is kept between visits
-//     in IndexedDB under the engine's hash (draft-store.js)
+//     in IndexedDB under the key dt-store makes (the engine's own key function, asked of the worker: `keyOf`), which holds the engine's
+//     hash, so a mesh an older engine made is never found (draft-store.js)
 
 import { Queue } from './queue.js';
-import { ByteCache, CACHE_BYTES, keptBytes, runawayMs, storeKey } from './limits.js';
+import { ByteCache, CACHE_BYTES, keptBytes, runawayMs } from './limits.js';
 import { engineFile } from './engine-files.js';
 import { DraftStore } from './draft-store.js';
 
@@ -31,7 +32,7 @@ import { DraftStore } from './draft-store.js';
 /** @typedef {import('./engine-manifest').EngineManifest} EngineManifest */
 /** What a card asks for: the source, the target and seed, and its own version; a full build also says the CPU seconds the check estimated it at (`Checked.fullCost`), which its runaway limit is made from. @typedef {{text: string, system: string, seed: number | null, version: number, cpuSecs?: number}} FullAsk */
 /** An edit also says the cells and tier (a full build is the finest), and whether the text is the page's own (`persist`: its draft is kept between visits). @typedef {FullAsk & {cells: number, tier: string, persist?: boolean}} EditAsk */
-/** An ask, made a job: the kind it is, the steps it takes, the key it is cached by, and the card it came from. @typedef {Omit<JobSpec, 'card'> & {kind: 'edit' | 'full', version: number, key?: string, cpuSecs?: number, persist?: boolean, card?: string | null}} Job */
+/** An ask, made a job: the kind it is, the steps it takes, the key it is cached by, and the card it came from. @typedef {Omit<JobSpec, 'card'> & {kind: 'edit' | 'full', version: number, key?: string, storeKey?: string | null, cpuSecs?: number, persist?: boolean, card?: string | null}} Job */
 /** The mesh of a build, as kept and as told: what the worker's `built` carries, less its job. @typedef {Pick<BuiltMsg, 'meta' | 'positions' | 'colours' | 'stl' | 'ms'>} Built */
 /** What the engine keeps of a job's key: the check's answer and the build. @typedef {{checked?: import('./engine-wire').Checked, built?: Built}} Kept */
 /**
@@ -93,6 +94,8 @@ export class Engine {
     this.fixes = new Map();
     /** @type {Map<string, {resolve: (made: import('./engine-wire').Edited) => void, reject: (e: Error) => void}>} edits asked of the worker, by id */
     this.edits = new Map();
+    /** @type {Map<string, {resolve: (key: string | null) => void, reject: (e: Error) => void}>} store keys asked of the worker, by id */
+    this.keys = new Map();
   }
 
   /** The engine's manifest (`engine.json`: the hashed names of its files and its hash), read fresh each visit, once. */
@@ -164,6 +167,8 @@ export class Engine {
     this.fixes.clear();
     for (const f of this.edits.values()) f.reject(new Error('the engine was restarted before the edit was made'));
     this.edits.clear();
+    for (const k of this.keys.values()) k.reject(new Error('the engine was restarted before the key was made'));
+    this.keys.clear();
     const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     this.worker = worker;
     return new Promise((resolve, reject) => {
@@ -210,6 +215,24 @@ export class Engine {
     return new Promise((resolve, reject) => {
       this.edits.set(id, { resolve, reject });
       Engine.post(worker, { type: 'edit', id, req, system });
+    });
+  }
+
+  /**
+   * The key `job`'s draft is kept under between visits: dt-store's key function in the engine (the program's disk cache's one key
+   * maker), over the document and everything it read, the options and the engine's hash.  Null when the text does not read.
+   * It waits behind a build the worker is running.
+   * @param {Job} job @returns {Promise<string | null>}
+   */
+  async keyOf(job) {
+    await this.start();
+    const m = await this.manifest();
+    const id = `key-${++this.serial}`;
+    const worker = this.worker;
+    if (!worker) throw new Error('The engine has no worker to make the key.');
+    return new Promise((resolve, reject) => {
+      this.keys.set(id, { resolve, reject });
+      Engine.post(worker, { type: 'key', id, engine: m.hash, text: job.text, system: job.system, seed: job.seed, cells: job.cells, tier: job.tier });
     });
   }
 
@@ -263,11 +286,12 @@ export class Engine {
       return;
     }
     if (job.kind === 'edit' && job.persist) {
-      // the page's own example: a draft kept from an earlier visit (made by this engine) is shown without waking the engine
-      this.#draftStore().then((store) => store?.get(storeKey(this.manifestHash(), job.system, job.text)) ?? null).then((kept) => {
+      // the page's own example: a draft kept from an earlier visit (made by this engine) is shown without building it.  Its key is
+      // the engine's (dt-store's), made after the engine reads the text, so the engine is up before the store is asked.
+      this.#lookUp(job).then(({ storeKey, kept }) => {
         if (this.versions.get(card) !== job.version) return; // edited again while the store was read
         if (kept?.checked && kept.built) { this.cache.set(key, kept); this.#serve(card, job, kept); return; }
-        this.queue.put(card, { ...job, key });
+        this.queue.put(card, { ...job, key, storeKey });
         this.#pump(card);
       });
       return;
@@ -276,10 +300,21 @@ export class Engine {
     this.#pump(card);
   }
 
-  /** The engine's hash, once its manifest is read (a store only exists after that). */
-  manifestHash() {
-    if (!this.hash) throw new Error('The engine\'s manifest was not read before a draft was looked up.');
-    return this.hash;
+  /**
+   * The draft kept for `job` and the key to keep it under: `storeKey` null when the text does not read or the engine cannot say (the
+   * job then builds as it would have, and the build's own answers show why).
+   * @param {Job} job @returns {Promise<{storeKey: string | null, kept: Kept | null}>}
+   */
+  async #lookUp(job) {
+    let storeKey;
+    try {
+      storeKey = await this.keyOf(job);
+    } catch {
+      // the job's own run starts the engine again and says what went wrong, loudly; a key that could not be made only means no draft is kept
+      return { storeKey: null, kept: null };
+    }
+    const store = await this.#draftStore();
+    return { storeKey, kept: storeKey === null || !store ? null : await store.get(storeKey) };
   }
 
   /** Tell `card` what `kept` holds, as the events a build would. @param {string} card @param {Job} job @param {Kept} kept */
@@ -361,6 +396,14 @@ export class Engine {
       else edit.reject(new Error(`the worker answered an edit with a "${m.type}" message`));
       return;
     }
+    const keyAsk = fixId === undefined ? undefined : this.keys.get(fixId);
+    if (fixId !== undefined && keyAsk) {
+      this.keys.delete(fixId);
+      if (m.type === 'keyed') keyAsk.resolve(m.key);
+      else if (m.type === 'error') keyAsk.reject(new Error(m.message));
+      else keyAsk.reject(new Error(`the worker answered a key with a "${m.type}" message`));
+      return;
+    }
     const r = this.running;
     if (!r || m.id !== r.id) return;
     const { card, job } = r;
@@ -380,7 +423,7 @@ export class Engine {
       if (current) this.#emit(card, { type: 'built', version: job.version, kind: job.kind, ...built, cached: false });
       if (job.persist && job.kind === 'edit') {
         const kept = this.cache.get(key);
-        if (kept) this.#draftStore().then((store) => store?.put(storeKey(this.manifestHash(), job.system, job.text), kept));
+        if (kept && job.storeKey) { const at = job.storeKey; this.#draftStore().then((store) => store?.put(at, kept)); }
       }
       if (job.kind === 'full') this.#finishFresh(r, current); else this.#finish(r, current);
     } else if (m.type === 'idle') {

@@ -736,13 +736,54 @@ pub fn build_with(
     progress: &dt_eval::Progress,
     cache: Option<&dt_eval::Cache>,
 ) -> Result<(dt_eval::Built, Options), Vec<Diag>> {
+    let opts = build_options(source, system, seed, cells, tier)?;
+    let built = dt_eval::build_cached(source, MAIN, &opts, progress, cache)?;
+    Ok((built, opts))
+}
+
+/// The options of a build in the page (see [`build_with`]): made here once, so what a build is told and what its
+/// key ([`stored_key`]) covers cannot differ.
+///
+/// # Errors
+/// The library's default printer does not read.
+pub fn build_options(
+    source: &dyn Source,
+    system: System,
+    seed: Option<u64>,
+    cells: u32,
+    tier: Tier,
+) -> Result<Options, Vec<Diag>> {
     let mut opts = Options::in_source(source)?;
     opts.tier = tier;
     opts.system = system;
     opts.seed = seed;
     opts.cells = (cells > 0).then_some(cells);
-    let built = dt_eval::build_cached(source, MAIN, &opts, progress, cache)?;
-    Ok((built, opts))
+    Ok(opts)
+}
+
+/// The key a build of the page's document is kept under between visits: dt-store's own key ([`dt_store::make_key`], the
+/// one the program's disk cache uses), made from every file the check read and the options the build is given.  `engine`
+/// names the engine (the page gives its hash), so a mesh an older engine made is never found.  A document that does not
+/// check has no key (its mistakes are the check's answer).
+///
+/// # Errors
+/// The document's mistakes, as the program's diagnostics.
+pub fn stored_key(
+    source: &dyn Source,
+    engine: &str,
+    system: System,
+    seed: Option<u64>,
+    cells: u32,
+    tier: Tier,
+) -> Result<String, Vec<Diag>> {
+    let tracked = dt_store::Tracked::new(source);
+    let opts = build_options(&tracked, system, seed, cells, tier)?;
+    dt_eval::check(&tracked, MAIN, &opts)?;
+    Ok(
+        dt_store::make_key(engine, &tracked.reads(), MAIN, &opts, tier)
+            .id()
+            .to_owned(),
+    )
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -961,7 +1002,8 @@ pub fn build_tile(
 }
 
 /// What `cargo xtask parity` compares between the browser and the program for one tile: the build's gate verdict
-/// and every number it judged, and the SHA-256 of the STL's triangles.  Made here, once, and called by both.
+/// and every number it judged, the SHA-256 of the STL's triangles, and the key the build is kept under.  Made here,
+/// once, and called by both.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParityLine {
@@ -974,6 +1016,48 @@ pub struct ParityLine {
     pub passed: bool,
     pub stl_bytes: usize,
     pub stl_sha256: String,
+    /// The key the page keeps this build under ([`stored_key`], the engine named [`PARITY_ENGINE`]): the browser's
+    /// must be the program's.
+    pub key: String,
+}
+
+/// The engine name the parity run keys with: both sides name the same one.
+pub const PARITY_ENGINE: &str = "parity";
+
+/// The key of the page's document `text` for `system`, `seed` (none: the tile's own), `cells` and `tier`, by the engine
+/// the page names ([`stored_key`]): what the page's worker keeps a draft under between visits.  `None` when the
+/// document does not read: its mistakes are the check's answer, which the page shows.
+///
+/// # Errors
+/// An unknown target or tier, or the library was never set.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn store_key(
+    text: &str,
+    engine: &str,
+    system: &str,
+    seed: Option<u32>,
+    cells: u32,
+    tier: &str,
+) -> Result<Option<String>, JsError> {
+    let system = system_of(system)?;
+    let tier = tier.parse::<Tier>().map_err(|e| JsError::new(&e))?;
+    LIBRARY.with(|lib| {
+        let lib = lib.borrow();
+        if !lib.contains_key(HEIGHTS) {
+            return Err(JsError::new(
+                "the library has no parts/heights.dtile: call set_library first",
+            ));
+        }
+        let source = Overlay {
+            library: &lib,
+            text,
+        };
+        match stored_key(&source, engine, system, seed.map(u64::from), cells, tier) {
+            Ok(key) => Ok(Some(key)),
+            // a document with mistakes has no key; the check shows the mistakes
+            Err(_) => Ok(None),
+        }
+    })
 }
 
 /// Build the library tile `tile` for `system_word` as the page does (its own seed, the finest cells, full tier) and
@@ -1023,6 +1107,8 @@ pub fn parity_line(tile: &str, system_word: &str) -> Result<String, JsError> {
             passed: passed.is_some(),
             stl_bytes,
             stl_sha256,
+            key: stored_key(&source, PARITY_ENGINE, system, None, 0, Tier::Full)
+                .map_err(|ds| JsError::new(&format!("{tile} has no key: {ds:?}")))?,
         })
     })
 }
@@ -1155,6 +1241,51 @@ mod tests {
         LIBRARY.with(|l| *l.borrow_mut() = m);
     }
 
+    /// The page's key is dt-store's own: made for the same document, options and engine it is the one the program's
+    /// store makes, and it moves with everything a build reads or is told (never serving an older engine's mesh).
+    #[test]
+    fn the_pages_key_is_the_programs_key() {
+        lib();
+        let text = LIBRARY.with(|l| l.borrow()["lib:tiles/ground/1x1-grass.dtile"].clone());
+        let key = |text: &str, engine: &str, seed: Option<u32>, cells: u32, tier: &str| {
+            store_key(text, engine, "db", seed, cells, tier)
+                .unwrap()
+                .expect("the tile reads")
+        };
+        let base = key(&text, "e1", None, 24, "low");
+        // the program's store, for the same reads and options
+        let programs = LIBRARY.with(|l| {
+            let lib = l.borrow();
+            let source = Overlay {
+                library: &lib,
+                text: &text,
+            };
+            let tracked = dt_store::Tracked::new(&source);
+            let opts = build_options(&tracked, System::Db, None, 24, Tier::Low).unwrap();
+            dt_eval::check(&tracked, MAIN, &opts).unwrap();
+            dt_store::Store::new("unused", "e1")
+                .key(&tracked.reads(), MAIN, &opts)
+                .id()
+                .to_owned()
+        });
+        assert_eq!(base, programs);
+        assert_eq!(base, key(&text, "e1", None, 24, "low"));
+        for other in [
+            key(&text, "e2", None, 24, "low"),
+            key(&text, "e1", Some(5), 24, "low"),
+            key(&text, "e1", None, 12, "low"),
+            key(&text, "e1", None, 24, "draft"),
+            key(&format!("{text}\n"), "e1", None, 24, "low"),
+        ] {
+            assert_ne!(base, other);
+        }
+        // a document with a mistake has no key
+        assert_eq!(
+            store_key("tile size=\"", "e1", "db", None, 24, "low").unwrap(),
+            None
+        );
+    }
+
     #[test]
     fn a_range_is_drawn_with_the_programs_odds() {
         let v: Explored =
@@ -1221,7 +1352,7 @@ mod tests {
              version(): string;\n  set_library(json: string): void;\n  analyze(text: string, system: string): string;\n  \
              check_tile(text: string, system: string): string;\n  fix_tile(text: string, fix: string): string;\n  edit_tile(req: string, system: string): string;\n  \
              printed(typed: string): string;\n  \
-             build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null): EngineTile;\n  forget_card(card: string): void;\n  \
+             build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null): EngineTile;\n  forget_card(card: string): void;\n  store_key(text: string, engine: string, system: string, seed: number | null, cells: number, tier: string): string | null;\n  \
              explore(typed: string, system: string, bins: number, draws: number, seed: number): string;\n}\n",
         );
         out

@@ -7,8 +7,6 @@
 //   costWords      the estimate as the Full detail button says it
 //   deviceVerdict  whether this device can carry that estimate, from what the browser says of itself; it picks the default
 //                  and the wording, and never hides the cost
-//   storeKey       the key a draft is kept between visits under: the engine's hash and the text, so a mesh from an
-//                  older engine is never found
 
 /** The result cache's size, bytes.  A draft (the low tier, about 24 cells) is under 2 MB of arrays, so about 30 of them. */
 export const CACHE_BYTES = 64 * 1024 * 1024;
@@ -111,7 +109,3 @@ export const deviceVerdict = (cost, device) => {
   }
   return { fits: true, why: '' };
 };
-
-/** The key a kept draft is stored under.  The engine's hash is in it: a mesh the engine of another version made is not found. */
-/** @param {string} engine @param {string} system @param {string} text */
-export const storeKey = (engine, system, text) => `${engine}\u0000${system}\u0000${text}`;
