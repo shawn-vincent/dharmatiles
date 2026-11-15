@@ -17,26 +17,27 @@ import { tileById, view } from './stores.js';
 
 /** What the panel's buttons do. */
 export const act = {
-  select: (ids, add) => select(ids, add),
-  hover: (ids) => hoverPieces(ids),
+  select: (/** @type {string[]} */ ids, add = false) => select(ids, add),
+  hover: (/** @type {string[]} */ ids) => hoverPieces(ids),
   /** Change how this map's list is sorted, filtered or searched: view state, kept for the map (sort and filter) across visits. */
-  list: (patch) => {
+  list: (/** @type {import('../map-list.js').How} */ patch) => {
     const id = view.get().tileId;
     if (id == null) return;
     const next = { ...mapPanel.list.value, ...patch };
     view.set({ mlist: { ...view.get().mlist, [id]: next } });
     keep(id, next);
   },
-  setProp: (kind) => view.set({ mprop: kind }),
+  setProp: (/** @type {'bottom' | 'seed' | 'print' | null} */ kind) => view.set({ mprop: kind }),
   // the Add step (docs/maps.html): the folders it walks are levels of the map's trail (editor/levels.js), opened by pressing one
   openAdd: () => goAdd(),
-  addFilter: (query) => view.set({ addQuery: query }),
+  addFilter: (/** @type {string} */ query) => view.set({ addQuery: query }),
   /** What a row or a picture of the pane does: open a place or a folder, put a tile on the map (pressed, or dragged and dropped on the view). */
+  /** @type {import('../view/places-panel.js').AddHandlers} */
   addOn: {
     place: (i) => goAdd({ root: i, dir: '' }),
     folder: (dir) => goAdd({ root: addLevel.value.root, dir }),
     tile: (id) => { const t = tileById(id); if (t) E.addTile(t); },
-    dragTile: (e, t) => { e.dataTransfer.setData(TILE_MIME, t.id); e.dataTransfer.effectAllowed = 'copy'; },
+    dragTile: (e, t) => { if (!e.dataTransfer) return; e.dataTransfer.setData(TILE_MIME, t.id); e.dataTransfer.effectAllowed = 'copy'; },
     picture: (t, plate) => pictureOf(t.id, String(t.meshVersion ?? 0), plate),
     pictureFailed: (e) => showError('Could not draw the picture of a tile', e),
   },

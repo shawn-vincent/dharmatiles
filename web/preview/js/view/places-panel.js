@@ -33,10 +33,10 @@ import { plural } from './widgets.js';
  *   place: (index: number) => void,
  *   folder: (dir: string) => void,
  *   tile: (id: string) => void,
- *   menu: (kind: string, id: string, anchor: HTMLElement) => void,
- *   act: (action: string, kind: string, id: string, anchor: HTMLElement) => void,
- *   canDrop: (id: string, target: Level & { root: number }) => { ok: boolean, why?: string },
- *   drop: (id: string, target: Level & { root: number }) => void,
+ *   menu?: (kind: string, id: string, anchor: HTMLElement) => void,
+ *   act?: (action: string, kind: string, id: string, anchor: HTMLElement) => void,
+ *   canDrop?: (id: string, target: Level & { root: number }) => { ok: boolean, why?: string },
+ *   drop?: (id: string, target: Level & { root: number }) => void,
  * }} RowHandlers
  */
 /**

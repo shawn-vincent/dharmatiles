@@ -15,21 +15,26 @@ import { flashAdded } from './model.js';
 import { pieceAt, sceneNow, selected, select } from './scene.js';
 import { steps as stepsOf } from '../steps.js';
 
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** @typedef {import('../documents.js').DocState} DocState */
+/** @typedef {import('../documents.js').Change} Change */
+/** @typedef {import('../api').PieceWords} PieceWords */
+
+const plural = (/** @type {number} */ n, /** @type {string} */ one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const listId = () => tile()?.id;
-const asNote = (what, n) => `${what} ${plural(n, 'piece')}`;
+const asNote = (/** @type {string} */ what, /** @type {number} */ n) => `${what} ${plural(n, 'piece')}`;
 
 /** The pieces of the map in `state`, as that state has them. */
-const piecesIn = (state) => piecesOf(state?.plan?.scene ?? null, server.get().tiles);
+const piecesIn = (/** @type {DocState | null | undefined} */ state) => piecesOf(state?.plan?.scene ?? null, server.get().tiles);
 /** The pieces `ids` names in `state` (one that is not there any more is not returned). */
-const lookup = (state, ids) => {
+const lookup = (/** @type {DocState | null | undefined} */ state, /** @type {string[]} */ ids) => {
   const by = new Map(piecesIn(state).map((p) => [p.id, p]));
-  return ids.map((id) => by.get(id)).filter(Boolean);
+  return ids.flatMap((id) => { const p = by.get(id); return p ? [p] : []; });
 };
 
 /**
  * Make a change to the map in view: `build(state)` is called when its turn comes (after any change still on its
  * way) with the map's state as it is then, and answers `{label, note, steps}` or null.  The toast says `note`.
+ * @param {(state: DocState | null) => Change} build
  */
 async function change(build) {
   const id = listId();
@@ -40,15 +45,21 @@ async function change(build) {
   return r.last;
 }
 
-const batch = (edits) => stepsOf.mapsBatch({ edits });
+const batch = (/** @type {{ id: string, set: PieceWords }[]} */ edits) => stepsOf.mapsBatch({ edits });
 
-/** Set words of the pieces named in `edits` (each `{id, set}`) in one change; `note` says what was done. */
+/**
+ * Set words of the pieces named in `edits` (each `{id, set}`) in one change; `note` says what was done.
+ * @param {string} label @param {string} note @param {{ id: string, set: PieceWords }[]} edits
+ */
 export function setWords(label, note, edits) {
   if (!edits.length) return null;
   return change(() => ({ label, note, steps: [batch(edits)] }));
 }
 
-/** A piece's own words. */
+/**
+ * A piece's own words.
+ * @param {string} id @param {PieceWords} set @param {string} [note]
+ */
 export const setPiece = (id, set, note) => change((state) => {
   const [p] = lookup(state, [id]);
   if (!p) return null;
@@ -59,9 +70,11 @@ export const setPiece = (id, set, note) => change((state) => {
  * Turn pieces a quarter (`dir` 1 clockwise, -1 counter-clockwise).  One piece goes to the nearest free place its new
  * footprint fits, which the program settles in the write; several turn where they stand.
  */
+/** @param {string[]} ids @param {number} dir */
 export function turn(ids, dir) {
   return change((state) => {
-    const ps = lookup(state, ids).filter((p) => p.at);
+    const ps = lookup(state, ids).filter(M.isPlaced);
+    /** @type {{ id: string, set: PieceWords }[]} */
     const edits = ps.map((p) => {
       const rot = M.turned(p.rot, dir);
       const sq = M.snapSquares(p, p.at[0], p.at[1]);
@@ -69,29 +82,32 @@ export function turn(ids, dir) {
     });
     if (!edits.length) return null;
     const what = ps.length === 1 ? `Turned ${ps[0].name}` : asNote('Turned', ps.length);
-    return { label: 'Could not turn the piece', note: (a) => (a[0]?.shifted ? `${what}; it moved to the nearest free place` : what), steps: [batch(edits)] };
+    return { label: 'Could not turn the piece', note: (/** @type {any[]} */ a) => (a[0]?.shifted ? `${what}; it moved to the nearest free place` : what), steps: [batch(edits)] };
   });
 }
 
 /** Put pieces down at places (squares of each piece), `moves`: [{id, x, y, rot?}]; one piece's place taken is the nearest free one (the program settles it). */
+/** @param {{ id: string, x: number, y: number, rot?: number | null }[]} moves @param {string} [note] */
 export function moveTo(moves, note) {
   return change((state) => {
     const ps = piecesIn(state);
-    const ms = moves.map((m) => ({ ...m, p: ps.find((q) => q.id === m.id) })).filter((m) => m.p);
+    const ms = moves.flatMap((m) => { const p = ps.find((q) => q.id === m.id); return p ? [{ ...m, p }] : []; });
+    /** @type {{ id: string, set: PieceWords }[]} */
     const edits = ms.map((m) => ({
       id: m.id,
       set: { ...(ms.length === 1 ? { near: { x: m.x, y: m.y } } : { at: M.atWord(m.x, m.y) }), ...(m.rot != null ? { rot: m.rot } : {}) },
     }));
     if (!edits.length) return null;
     const what = note ?? (ms.length === 1 ? `Moved ${ms[0].p.name}` : asNote('Moved', ms.length));
-    return { label: 'Could not move the piece', note: (a) => (a[0]?.shifted ? `${what} to the nearest free place` : what), steps: [batch(edits)] };
+    return { label: 'Could not move the piece', note: (/** @type {any[]} */ a) => (a[0]?.shifted ? `${what} to the nearest free place` : what), steps: [batch(edits)] };
   });
 }
 
 /** A copy of each piece, put next to it in the nearest free place (settled by the program, each after the last); it starts with the same seed. */
+/** @param {string[]} ids */
 export function duplicate(ids) {
   return change((state) => {
-    const ps = lookup(state, ids).filter((p) => p.at);
+    const ps = lookup(state, ids).filter(M.isPlaced);
     const steps = ps.map((p) => {
       const sq = M.snapSquares(p, p.at[0], p.at[1]);
       return stepsOf.mapsDup({ id: p.id, near: { x: sq.x + Math.round(p.size[0] / p.sq), y: sq.y } });
@@ -102,6 +118,7 @@ export function duplicate(ids) {
 }
 
 /** Take pieces off the map (each by its id: the ids the rest keep stay true while it goes). */
+/** @param {string[]} ids */
 export function remove(ids) {
   select([]);
   return change((state) => {
@@ -121,6 +138,7 @@ export function remove(ids) {
  * piece line with a seed of its own (one you do not own, not on the map), and the tray line's count goes down.
  * The program settles every place and seed in its own write.  One change, one Undo.
  */
+/** @param {string} id */
 export function place(id, all = false) {
   return change((state) => {
     const [p] = lookup(state, [id]);
@@ -136,14 +154,14 @@ export function place(id, all = false) {
     const steps = [stepsOf.listsCount({ id, count: Math.max(left, 1) })];
     const sys = sceneIn(state)?.system;
     for (let k = 0; k < (left > 0 ? n : n - 1); k++) {
-      steps.push(stepsOf.mapsAdd({ tile: p.tileId, near: corner, rot: 0, seedWord: 'fresh', ...(p.system && p.system !== sys ? { system: p.system } : {}) }));
+      steps.push(stepsOf.mapsAdd({ tile: /** @type {string} */ (p.tileId), near: corner, rot: 0, seedWord: 'fresh', ...(p.system && p.system !== sys ? { system: p.system } : {}) }));
     }
     if (left === 0) steps.push(stepsOf.mapsSet({ id, set: { near: corner, rot: p.rot ?? 0 } }));
     return { label: 'Could not place the piece', note: n === 1 ? `Placed ${p.name}` : `Placed ${n} × ${p.name}, each with a seed of its own`, steps };
   });
 }
 
-const sceneIn = (state) => state?.plan?.scene ?? null;
+const sceneIn = (/** @type {DocState | null | undefined} */ state) => state?.plan?.scene ?? null;
 
 // ---- seeds and variants -----------------------------------------------------------------------------
 
@@ -152,11 +170,13 @@ const sceneIn = (state) => state?.plan?.scene ?? null;
  * `all` (the whole board), `missing` (every piece you do not own: what you have stays as it is).  Each gets a
  * seed of its own; each is built (low first) and swaps in.
  */
+/** @param {string} scope */
 export function variants(scope) {
   return change((state) => {
     const ps = piecesIn(state);
     const all = ps.filter((p) => p.at && !p.error);
     const sel = selected();
+    /** @type {typeof all} */
     let who;
     if (scope === 'piece') who = sel;
     else if (scope === 'tile') who = all.filter((p) => sel.some((s) => s.canon === p.canon));
@@ -176,8 +196,8 @@ export function variants(scope) {
  * A tile from the Add tiles level goes on the map: at `want` (squares of its own system, from a drop) or the nearest free
  * place to the map's corner (the program settles the place).  It gets a seed you do not own, unless you own none of it
  * and the map does not use it: then the tile's own seed is already new (and is not written).
- * @param {*} t
- * @param {*} [want]
+ * @param {import('./stores.js').ServerTile} t
+ * @param {{ x: number, y: number } | null} [want]
  */
 export async function addTile(t, want = null) {
   if (!isMapView()) return null;
@@ -185,7 +205,7 @@ export async function addTile(t, want = null) {
     if (!sceneIn(state)) return null;
     return {
       label: 'Could not add the tile',
-      note: (a) => `Put ${t.name} on the map${a[0]?.seed != null ? ` (seed ${a[0].seed}, one you do not have)` : ''}`,
+      note: (/** @type {any[]} */ a) => `Put ${t.name} on the map${a[0]?.seed != null ? ` (seed ${a[0].seed}, one you do not have)` : ''}`,
       steps: [stepsOf.mapsAdd({ tile: t.id, near: want ?? { x: 0, y: 0 }, rot: 0, seedWord: 'if-needed' })],
     };
   });
@@ -195,6 +215,7 @@ export async function addTile(t, want = null) {
 }
 
 /** Take the selected piece's tile into Tile mode, with the map as the place Back returns to. */
+/** @param {string} id */
 export async function openTile(id) {
   const p = pieceAt(id);
   if (!p?.tileId) return;
@@ -206,9 +227,10 @@ export async function openTile(id) {
 export const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib:') && writableOf(t); };
 
 /** The keys: R turns, D duplicates, Backspace or Delete takes out.  (⌘Z is the page's one Undo, editor/document.js.) */
-export function onKey(e) {
+export function onKey(/** @type {KeyboardEvent} */ e) {
   if (!isMapView()) return;
-  const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable || e.target.tagName === 'SELECT';
+  const el = /** @type {HTMLElement} */ (e.target);
+  const typing = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable || el.tagName === 'SELECT';
   if (typing) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const ids = selected().map((p) => p.id);
