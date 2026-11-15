@@ -6,13 +6,13 @@
 // press, the same snap to a place, one change of the text with Undo.  A pinned piece wears a small pin pill.
 
 import { $, toast, viewer } from './app.js';
-import { docs, planOf, undoToast } from './docs.js';
+import { docs, plannedOf, undoToast, writableOf } from './docs.js';
 import { isPlatesView, tile, view } from './stores.js';
 import { steps } from '../steps.js';
 
-const plan = () => planOf(tile())?.plates ?? null;
+const plan = () => plannedOf(tile());
 const topDown = () => viewer.camera.position.clone().sub(viewer.controls.target).normalize().z > 0.93;
-const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib:') && (planOf(t)?.writable ?? true); };
+const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib:') && writableOf(t); };
 
 /** The piece of the plate in view that triangle owner `n` is: its layout row. */
 const rowOf = (n) => plan()?.layout?.[plan().view]?.pieces?.[n] ?? null;

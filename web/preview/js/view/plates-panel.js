@@ -1,3 +1,4 @@
+// @ts-check
 // The plates panel (docs/plates.html): a print list opens on the printer's bed; this panel holds the settings that
 // decide the layout, the plates with what is on each, the pins, the list's own pieces, what the inventory says, the
 // sheet after a print and Export.  A setting is a word of the list's `plates` line (act.set writes it).

@@ -124,6 +124,31 @@ pub struct StackItem {
     pub things: Vec<Thing>,
 }
 
+impl StackItem {
+    /// The one line an STL file's stack is: nothing is written on it, it names what the file is.
+    #[must_use]
+    pub fn stl_file() -> Self {
+        Self {
+            key: "stl".to_owned(),
+            label: "stl file".to_owned(),
+            element: "stl".to_owned(),
+            href: String::new(),
+            what: "stl".to_owned(),
+            seed: None,
+            file: String::new(),
+            span: [0, 0],
+            lines: [1, 1],
+            call: None,
+            controls: Vec::new(),
+            defaults: Vec::new(),
+            clouds: Vec::new(),
+            place: Vec::new(),
+            at: None,
+            things: Vec::new(),
+        }
+    }
+}
+
 /// The 1-based line a byte offset of `text` lies on.
 fn line_of(text: &str, o: usize) -> usize {
     text.get(..o.min(text.len()))

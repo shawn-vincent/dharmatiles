@@ -83,6 +83,7 @@ mod offers;
 pub mod payload;
 pub(crate) mod places;
 mod placing;
+pub(crate) mod plan;
 mod plates;
 mod printers;
 mod resources;
@@ -170,7 +171,7 @@ pub struct Slot {
     /// What a map's last reading said that is not a mistake (a crown over a taller neighbour): kept so a
     /// check of the text that finds nothing wrong does not take it from the stream.
     scene_notes: Vec<scene::Note>,
-    plan: Option<Value>,
+    plan: Option<plan::TilePlan>,
     record: Option<dt_eval::TileRecord>,
     errors: Vec<api::Mistake>,
     /// A build that panicked or could not be encoded, as the page gets it
@@ -258,7 +259,7 @@ impl Slot {
             group: self.group.clone(),
             size: self.size.clone(),
             status: self.status.as_str().to_owned(),
-            plan: self.plan.as_ref().map(api::camel_keys),
+            plan: self.plan.clone(),
             record: self.record.clone(),
             errors: self.errors.clone(),
             failure: self.failure.clone(),

@@ -29,7 +29,12 @@ use super::edit::Done;
 use super::header::{MeshHeader, MeshKind};
 use super::lists::ListEdited;
 use super::messages::Scope;
-use super::scene::{self, Note, Scene};
+use super::plan::{
+    ListPiece, PlanFrame, PlanHeld, PlanKind, PlanPlaced, PlanPlate, PlatesDoc, PlatesPanel,
+    PlatesPlanned, PlatesUnread, PlatesWritten, PrinterBroken, PrinterRead, PrinterRow, SlotCheck,
+    TilePlan,
+};
+use super::scene::{self, Note, Scene, SceneJson};
 use super::{Shared, State, edit, fail, lock, messages, payload};
 use crate::message::{Kind, Message, Severity};
 use crate::plates as cli;
@@ -197,86 +202,107 @@ fn plate_mesh(
 /// The settings as written, for a page that has no plan to show (the list
 /// does not plan): the panel still offers the printer and the mode, so the
 /// mistake can be mended there.
-fn loose_json(list: &dt_doc::map::PrintList, home: Option<&Path>) -> Value {
+fn written_panel(
+    list: &dt_doc::map::PrintList,
+    home: Option<&Path>,
+    writable: bool,
+) -> PlatesPanel {
     let pl = &list.plates;
     let printer = pl.printer.as_ref().map_or_else(
         || dt_doc::map::DEFAULT_PRINTER.to_owned(),
         |p| p.value.clone(),
     );
     let machine = dt_eval::printer_machine(&printer, home).ok();
-    json!({
-        "printer": printer,
-        "label": machine.as_ref().map(dt_eval::Machine::label),
-        "bed": machine.as_ref().and_then(|m| m.bed),
-        "slots": machine.as_ref().map(dt_eval::Machine::slot_count),
-        "mode": pl.mode.as_ref().map(|m| m.value.word()),
-        "group": pl.group.as_ref().map(|m| m.value.word()),
-        "gap": pl.gap.as_ref().map(|m| m.value),
-        "margin": pl.margin.as_ref().map(|m| m.value),
-        "printers": printers_json(home),
-        "check_inventory": pl.inventory.as_ref().is_none_or(|i| i.value),
-        "pieces": pieces_json(list),
-        "planned": false,
+    PlatesPanel::Written(PlatesWritten {
+        planned: false,
+        writable,
+        printer,
+        label: machine.as_ref().map(dt_eval::Machine::label),
+        bed: machine.as_ref().and_then(|m| m.bed),
+        slots: machine.as_ref().map(dt_eval::Machine::slot_count),
+        mode: pl.mode.as_ref().map(|m| m.value.word().to_owned()),
+        group: pl.group.as_ref().map(|m| m.value.word().to_owned()),
+        gap: pl.gap.as_ref().map(|m| m.value),
+        margin: pl.margin.as_ref().map(|m| m.value),
+        printers: printer_rows(home),
+        check_inventory: pl.inventory.as_ref().is_none_or(|i| i.value),
+        pieces: list_pieces(list),
     })
 }
 
 /// The list's own pieces, in the order written, for the panel to edit: the
 /// count, and taking one out, are edits of the list's text.
-pub(super) fn pieces_json(list: &dt_doc::map::PrintList) -> Value {
+pub(super) fn list_pieces(list: &dt_doc::map::PrintList) -> Vec<ListPiece> {
     let ids = dt_doc::map::piece_ids(list);
-    Value::Array(
-        list.pieces
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                json!({
-                    // the id the piece has, or the one the first edit of the file will write on it
-                    "tile": p.tile.value, "count": p.count.value,
-                    "id": ids[i],
-                    "pinned": list.plates.pins.iter().any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),
-                    "seed": p.seed.as_ref().map(|s| s.value),
-                    "system": p.system.as_ref().map(|s| s.value.clone()),
-                    "print": p.print.word(),
-                })
-            })
-            .collect(),
-    )
+    list.pieces
+        .iter()
+        .enumerate()
+        .map(|(i, p)| ListPiece {
+            tile: p.tile.value.clone(),
+            count: p.count.value,
+            // the id the piece has, or the one the first edit of the file will write on it
+            id: ids[i].clone(),
+            pinned: list
+                .plates
+                .pins
+                .iter()
+                .any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),
+            seed: p.seed.as_ref().map(|s| s.value),
+            system: p.system.as_ref().map(|s| s.value.clone()),
+            print: p.print.word().to_owned(),
+        })
+        .collect()
 }
 
 /// Every profile, for the choosers: brand, then model.  One with no bed
 /// (`default`, `fine`) is only floors: it builds tiles but cannot hold plates.
 /// A profile that does not read is still listed, with what is wrong with it,
 /// so it is never missing without a word.
-pub(super) fn printers_json(home: Option<&Path>) -> Vec<Value> {
-    let mut out = Vec::new();
-    for (name, kind) in dt_eval::printer_names(home) {
-        let mine = kind == dt_eval::ProfileKind::Mine;
-        match dt_eval::printer_machine(&name, home) {
-            Ok(m) => out.push(json!({
-                "name": name, "brand": m.brand, "model": m.model, "label": m.label(),
-                "bed": m.bed, "height": m.height, "slots": m.slot_count(), "verify": m.verify,
-                "zones": m.excluded.len(), "from_slicer": m.from_slicer, "mine": mine,
-            })),
-            Err(e) => out.push(json!({
-                "name": name, "brand": null, "model": null, "label": name, "bed": null,
-                "slots": 1, "mine": mine,
-                "broken": e.first().map_or_else(|| "does not read".to_owned(), |d| d.message.clone()),
-            })),
-        }
-    }
-    out
+pub(super) fn printer_rows(home: Option<&Path>) -> Vec<PrinterRow> {
+    dt_eval::printer_names(home)
+        .into_iter()
+        .map(|(name, kind)| {
+            let mine = kind == dt_eval::ProfileKind::Mine;
+            match dt_eval::printer_machine(&name, home) {
+                Ok(m) => PrinterRow::Read(PrinterRead {
+                    label: m.label(),
+                    slots: m.slot_count(),
+                    zones: m.excluded.len(),
+                    name,
+                    brand: m.brand,
+                    model: m.model,
+                    bed: m.bed,
+                    height: m.height,
+                    verify: m.verify,
+                    from_slicer: m.from_slicer,
+                    mine,
+                }),
+                Err(e) => PrinterRow::Broken(PrinterBroken {
+                    label: name.clone(),
+                    name,
+                    slots: 1,
+                    mine,
+                    broken: e
+                        .first()
+                        .map_or_else(|| "does not read".to_owned(), |d| d.message.clone()),
+                }),
+            }
+        })
+        .collect()
 }
 
 /// What the page's panel reads: the settings, the pieces and the plates.
-fn plates_json(
+#[allow(clippy::too_many_arguments)]
+fn plates_panel(
     plan: &Plan,
     layout: &Layout,
     boxes: &[Boxes],
     exact: &[bool],
     view: usize,
     writable: bool,
+    list: &dt_doc::map::PrintList,
     home: Option<&Path>,
-) -> Value {
+) -> PlatesPlanned {
     let s = &plan.settings;
     let need = plan
         .kinds
@@ -291,37 +317,102 @@ fn plates_json(
         })
         .max()
         .unwrap_or(0);
-    let mut j = cli::plan_json(plan);
-    let names = |v: &[Material]| v.iter().map(|m| m.name()).collect::<Vec<_>>();
-    j["kinds"] = Value::Array(
-        plan.kinds
+    let names = |v: &[Material]| v.iter().map(|m| m.name().to_owned()).collect::<Vec<_>>();
+    // each laid-out piece names its list piece by id, as an edit does
+    let ids = dt_doc::map::piece_ids(list);
+    PlatesPlanned {
+        planned: true,
+        title: plan.title.clone(),
+        printer: s.machine.name.clone(),
+        label: s.machine.label(),
+        bed: s.machine.bed,
+        excluded: s.machine.excluded.clone(),
+        slots: s.machine.slot_count(),
+        verify: s.machine.verify.clone(),
+        system: s.system.clone(),
+        mode: s.mode.word().to_owned(),
+        group: s.group.word().to_owned(),
+        gap: s.gap,
+        margin: s.margin,
+        turn: s.turn,
+        skipped: plan.skipped.clone(),
+        held: plan
+            .held
             .iter()
-            .enumerate()
-            .map(|(k, kind)| {
-                json!({
-                    "tile": kind.tile, "name": kind.name, "count": kind.count,
-                    "want": kind.want, "have": kind.have, "other_colour": kind.other_colour,
-                    "canon": kind.canon, "seed_used": kind.seed_used,
-                    "seed": kind.seed, "system": kind.system, "size": boxes[k].size,
-                    "height": boxes[k].height, "exact": exact[k],
-                    "filaments": names(if exact[k] { &boxes[k].filaments } else { &kind.estimate }),
-                })
+            .map(|(name, have)| PlanHeld {
+                name: name.clone(),
+                have: *have,
             })
             .collect(),
-    );
-    j["layout"] = cli::layout_json(plan, layout);
-    j["view"] = json!(view);
-    j["exact"] = json!(exact.iter().all(|e| *e));
-    j["grouping_cost"] = json!(layout.grouping_cost);
-    j["slot_check"] = json!({
-        "need": need, "have": s.machine.slot_count(),
-        "ok": s.mode == Mode::Single || need <= s.machine.slot_count() as usize,
-    });
-    j["writable"] = json!(writable);
-    j["format"] = json!(plates::export::Format::for_printer(&s.machine).word());
-    j["printers"] = json!(printers_json(home));
-    j["planned"] = json!(true);
-    j
+        check_inventory: s.check_inventory,
+        kinds: plan
+            .kinds
+            .iter()
+            .enumerate()
+            .map(|(k, kind)| PlanKind {
+                tile: kind.tile.clone(),
+                name: kind.name.clone(),
+                count: kind.count,
+                want: kind.want,
+                have: kind.have,
+                other_colour: kind.other_colour,
+                canon: kind.canon.clone(),
+                seed_used: kind.seed_used,
+                seed: kind.seed,
+                system: kind.system.clone(),
+                size: boxes[k].size,
+                height: boxes[k].height,
+                exact: exact[k],
+                filaments: names(if exact[k] {
+                    &boxes[k].filaments
+                } else {
+                    &kind.estimate
+                }),
+            })
+            .collect(),
+        layout: layout
+            .plates
+            .iter()
+            .enumerate()
+            .map(|(i, on)| PlanPlate {
+                plate: i + 1,
+                filaments: names(&layout.filaments[i]),
+                pieces: on
+                    .iter()
+                    .map(|p| {
+                        let piece = plan.kinds[p.kind].copies.get(p.copy).copied();
+                        PlanPlaced {
+                            kind: p.kind,
+                            copy: p.copy,
+                            name: plan.kinds[p.kind].name.clone(),
+                            x: p.at.x,
+                            y: p.at.y,
+                            w: p.at.w,
+                            d: p.at.d,
+                            turned: p.at.turned,
+                            piece,
+                            pinned: layout.pinned.contains(&(p.kind, p.copy)),
+                            id: piece.and_then(|i| ids.get(i)).cloned(),
+                        }
+                    })
+                    .collect(),
+            })
+            .collect(),
+        view,
+        exact: exact.iter().all(|e| *e),
+        grouping_cost: layout.grouping_cost,
+        slot_check: SlotCheck {
+            need,
+            have: s.machine.slot_count(),
+            ok: s.mode == Mode::Single || need <= s.machine.slot_count() as usize,
+        },
+        writable,
+        format: plates::export::Format::for_printer(&s.machine)
+            .word()
+            .to_owned(),
+        printers: printer_rows(home),
+        pieces: list_pieces(list),
+    }
 }
 
 /// Why a list did not plan: the list, if it read, and the mistakes.
@@ -437,14 +528,19 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         // the scene reaches the page now, before anything is built: a map shows its pieces
         // (as boxes, then their meshes) while its plates are still being laid out
         shared.update(id, |t| {
-            let mut plan = t.plan.clone().unwrap_or_else(|| {
-                let mut loose = loose_json(&list, shared.home.as_deref());
-                loose["writable"] = json!(true);
-                json!({"kind": "plates", "size_mm": [0, 0], "writable": true, "plates": loose})
-            });
-            plan["scene"] = sc.json.value();
-            plan["docRev"] = json!(rev);
-            t.plan = Some(plan);
+            // a plan already made keeps its panel: the scene and its revision are what this reading adds
+            if let Some(TilePlan::Plates(doc)) = &mut t.plan {
+                doc.scene = Some(sc.json.clone());
+                doc.doc_rev = rev;
+            } else {
+                t.plan = Some(TilePlan::Plates(Box::new(PlatesDoc {
+                    frame: unplanned_frame(shared),
+                    writable: true,
+                    plates: written_panel(&list, shared.home.as_deref(), true),
+                    scene: Some(sc.json.clone()),
+                    doc_rev: rev,
+                })));
+            }
         });
         if sc.pieces.iter().filter(|p| p.at.is_some()).count() > 1 {
             sc.notes = scene::crowns(shared, &sc);
@@ -472,7 +568,7 @@ fn rebuild_plates(
     seen: BTreeMap<String, Option<std::time::SystemTime>>,
 ) {
     let t0 = Instant::now();
-    let scene_json = scene.map(|s| s.json.value());
+    let scene_json = scene.map(|s| s.json.clone());
     let kept: Vec<Note> = scene.map_or_else(Vec::new, |s| s.notes.clone());
     shared.update(id, |t| t.scene_notes = kept);
     let no_notes = (Vec::new(), Vec::new());
@@ -506,11 +602,16 @@ fn rebuild_plates(
                 out
             }
         });
-        let mut loose = list.map_or_else(
-            || json!({"planned": false, "printers": printers_json(shared.home.as_deref())}),
-            |l| loose_json(l, shared.home.as_deref()),
+        let loose = list.map_or_else(
+            || {
+                PlatesPanel::Unread(PlatesUnread {
+                    planned: false,
+                    writable,
+                    printers: printer_rows(shared.home.as_deref()),
+                })
+            },
+            |l| written_panel(l, shared.home.as_deref(), writable),
         );
-        loose["writable"] = json!(writable);
         shared.update(id, |t| {
             t.status = if calm { State::Ready } else { State::Failed };
             t.progress = None;
@@ -522,10 +623,13 @@ fn rebuild_plates(
             };
             t.files = files.clone();
             t.mesh = None;
-            t.plan = Some(json!({
-                "kind": "plates", "plates": loose, "writable": writable, "size_mm": [0, 0],
-                "scene": scene_json, "docRev": rev,
-            }));
+            t.plan = Some(TilePlan::Plates(Box::new(PlatesDoc {
+                frame: unplanned_frame(shared),
+                writable,
+                plates: loose,
+                scene: scene_json.clone(),
+                doc_rev: rev,
+            })));
         });
     };
     let planned = match text {
@@ -604,33 +708,18 @@ fn rebuild_plates(
         |layout: &Layout, boxes: &[Boxes], parts: &[Shown], running: bool, note: Option<&str>| {
             let (mesh, painted, clean, owner) = plate_mesh(layout, parts, view, &palette);
             let exact: Vec<bool> = parts.iter().map(|p| p.full).collect();
-            let mut sp = shared_plan(
+            let sp = shared_plan(
                 &plan,
+                &list,
                 layout,
                 boxes,
                 &exact,
                 view,
                 writable,
                 shared.home.as_deref(),
+                scene_json.clone(),
+                rev,
             );
-            sp["plates"]["pieces"] = pieces_json(&list);
-            // each laid-out piece names its list piece by id, as an edit does
-            let ids = dt_doc::map::piece_ids(&list);
-            if let Some(plates) = sp["plates"]["layout"].as_array_mut() {
-                for pl in plates {
-                    if let Some(on) = pl["pieces"].as_array_mut() {
-                        for p in on {
-                            p["id"] = p["piece"]
-                                .as_u64()
-                                .and_then(|i| usize::try_from(i).ok())
-                                .and_then(|i| ids.get(i))
-                                .map_or(Value::Null, |i| json!(i));
-                        }
-                    }
-                }
-            }
-            sp["scene"] = scene_json.clone().unwrap_or(Value::Null);
-            sp["docRev"] = json!(rev);
             let mut meta = MeshHeader::new(MeshKind::Plates);
             meta.overhang_deg = Some(shared.options().printer.overhang_deg);
             meta.footprint = s.machine.bed;
@@ -838,23 +927,46 @@ fn rebuild_plates(
     });
 }
 
-/// The page's plan JSON for a finished layout.
+/// The page's plan for a finished layout.
+#[allow(clippy::too_many_arguments)]
 fn shared_plan(
     plan: &Plan,
+    list: &dt_doc::map::PrintList,
     layout: &Layout,
     boxes: &[Boxes],
     exact: &[bool],
     view: usize,
     writable: bool,
     home: Option<&Path>,
-) -> Value {
-    let bed = plan.settings.machine.bed.unwrap_or([0.0, 0.0]);
-    json!({
-        "kind": "plates", "tile": plan.title, "cols": 1, "rows": 1,
-        "square_mm": dt_kit::Frame::for_system(&plan.settings.system, 1, 1).square_mm,
-        "size_mm": bed, "datum_z": 0.0, "stack": [],
-        "plates": plates_json(plan, layout, boxes, exact, view, writable, home),
-    })
+    scene: Option<SceneJson>,
+    doc_rev: u64,
+) -> TilePlan {
+    TilePlan::Plates(Box::new(PlatesDoc {
+        frame: PlanFrame {
+            cols: 1,
+            rows: 1,
+            square_mm: dt_kit::Frame::for_system(&plan.settings.system, 1, 1).square_mm,
+            size_mm: plan.settings.machine.bed.unwrap_or([0.0, 0.0]),
+            datum_z: Some(0.0),
+        },
+        writable,
+        plates: PlatesPanel::Planned(Box::new(plates_panel(
+            plan, layout, boxes, exact, view, writable, list, home,
+        ))),
+        scene,
+        doc_rev,
+    }))
+}
+
+/// The frame of a list that has no layout: nothing is laid out, so the bed is no size.
+fn unplanned_frame(shared: &Shared) -> PlanFrame {
+    PlanFrame {
+        cols: 1,
+        rows: 1,
+        square_mm: dt_kit::Frame::for_system(&shared.options().system, 1, 1).square_mm,
+        size_mm: [0.0, 0.0],
+        datum_z: Some(0.0),
+    }
 }
 
 fn bad(msg: &str) -> (&'static str, Value) {

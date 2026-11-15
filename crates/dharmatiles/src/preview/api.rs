@@ -151,8 +151,7 @@ impl From<&dt_eval::Diag> for Mistake {
     }
 }
 
-/// A JSON document the engine writes (a tile's plan, a build's record, a
-/// mesh's header) with every field name in the contract's one convention,
+/// A JSON document the engine writes (the inventory's snapshot) with every field name in the contract's one convention,
 /// `camelCase`.  Done where such a document leaves for the page, so the
 /// engine keeps its own names and the page sees one style.
 #[must_use]
@@ -221,8 +220,8 @@ pub struct TileSummary {
     pub size: Option<String>,
     /// `idle`, `building`, `ready` or `failed`.
     pub status: String,
-    /// What the plan pass or the plates' layout said (the page reads it by name; see `js/doc-views.js`).
-    pub plan: Option<Json>,
+    /// What the plan pass, the plates' layout or the reading of the inventory said.
+    pub plan: Option<super::plan::TilePlan>,
     /// The build's record: audit, stages, timings (snake_case, as `dharmatiles build --json` prints it).
     pub record: Option<dt_eval::TileRecord>,
     pub errors: Vec<Mistake>,
@@ -294,7 +293,7 @@ pub struct Snapshot {
     pub epoch: String,
     pub system: String,
     pub printer: String,
-    pub printers: Vec<Json>,
+    pub printers: Vec<super::plan::PrinterRow>,
     pub overhang_deg: f64,
     pub steepest_deg: f64,
     pub square_mm: f64,

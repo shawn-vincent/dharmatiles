@@ -1,0 +1,323 @@
+//! A document's plan, as the page reads it (`TileSummary.plan`): one type, [`TilePlan`], with a variant for each kind
+//! of document that has one (a tile, an STL file, a print list or map, the inventory).  Every writer constructs it and
+//! every reader (Rust or the page, through the generated TypeScript) reads its fields; nothing patches or looks up by
+//! key.  The wire names are the page's, `camelCase`.
+
+use serde::Serialize;
+
+use super::api::Mistake;
+use super::scene::SceneJson;
+use super::stack::StackItem;
+
+/// Where a document stands: its squares, its size and the height of its zero.  The viewer rules the ground from it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanFrame {
+    pub cols: u32,
+    pub rows: u32,
+    pub square_mm: f64,
+    /// Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
+    pub size_mm: [f64; 2],
+    /// The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
+    /// the mesh's lowest point stands in.
+    pub datum_z: Option<f64>,
+}
+
+/// What the plan pass (or the layout, or the reading of the inventory) said about a document.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TilePlan {
+    /// A tile: its frame and its stack.
+    Tile {
+        #[serde(flatten)]
+        frame: PlanFrame,
+        stack: Vec<StackItem>,
+    },
+    /// An STL file: the frame its footprint says, and the one line a file's stack is.
+    Stl {
+        /// The file's name.
+        tile: String,
+        #[serde(flatten)]
+        frame: PlanFrame,
+        stack: Vec<StackItem>,
+    },
+    /// A print list or a map.
+    Plates(Box<PlatesDoc>),
+    /// The inventory.
+    Inventory(InventoryDoc),
+}
+
+/// A print list or map's plan: the panel, and the scene once it is read.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlatesDoc {
+    #[serde(flatten)]
+    pub frame: PlanFrame,
+    /// The file can be edited.
+    pub writable: bool,
+    pub plates: PlatesPanel,
+    /// The map as read; none while the file does not read as a list.
+    pub scene: Option<SceneJson>,
+    /// The revision of the file the scene (and the layout) is of.
+    pub doc_rev: u64,
+}
+
+/// What the plates' panel reads: a list that plans, one that does not (its settings as written), or one that did not
+/// read at all.  The page tells them by `planned` and by `printer`.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(untagged)]
+pub enum PlatesPanel {
+    Planned(Box<PlatesPlanned>),
+    Written(PlatesWritten),
+    Unread(PlatesUnread),
+}
+
+/// A list that does not plan: the settings as written, so the panel still offers the printer and the mode and the
+/// mistake can be mended there.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlatesWritten {
+    #[cfg_attr(test, ts(type = "false"))]
+    pub planned: bool,
+    pub writable: bool,
+    pub printer: String,
+    pub label: Option<String>,
+    pub bed: Option<[f64; 2]>,
+    pub slots: Option<u32>,
+    pub mode: Option<String>,
+    pub group: Option<String>,
+    pub gap: Option<f64>,
+    pub margin: Option<f64>,
+    pub printers: Vec<PrinterRow>,
+    pub check_inventory: bool,
+    pub pieces: Vec<ListPiece>,
+}
+
+/// A file that did not read as a list: only the printers to choose from.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlatesUnread {
+    #[cfg_attr(test, ts(type = "false"))]
+    pub planned: bool,
+    pub writable: bool,
+    pub printers: Vec<PrinterRow>,
+}
+
+/// A list that plans: the plan's settings and kinds, the layout and the checks on it.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlatesPlanned {
+    #[cfg_attr(test, ts(type = "true"))]
+    pub planned: bool,
+    pub title: String,
+    pub printer: String,
+    pub label: String,
+    pub bed: Option<[f64; 2]>,
+    pub excluded: Vec<[f64; 4]>,
+    pub slots: u32,
+    pub verify: Option<String>,
+    pub system: String,
+    pub mode: String,
+    pub group: String,
+    pub gap: f64,
+    pub margin: f64,
+    pub turn: bool,
+    pub skipped: Vec<String>,
+    pub held: Vec<PlanHeld>,
+    pub check_inventory: bool,
+    pub kinds: Vec<PlanKind>,
+    pub layout: Vec<PlanPlate>,
+    /// The plate on show, from 0.
+    pub view: usize,
+    /// Every piece's mesh is its full build.
+    pub exact: bool,
+    pub grouping_cost: Option<usize>,
+    pub slot_check: SlotCheck,
+    pub writable: bool,
+    /// How an export is written: `bambu`, `stl` or `3mf`.
+    pub format: String,
+    pub printers: Vec<PrinterRow>,
+    /// The list's own pieces, in the order written.
+    pub pieces: Vec<ListPiece>,
+}
+
+/// A piece the inventory already holds, left off.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanHeld {
+    pub name: String,
+    pub have: u32,
+}
+
+/// One distinct piece of a planned list.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanKind {
+    pub tile: String,
+    pub name: String,
+    pub count: u32,
+    pub want: u32,
+    pub have: u32,
+    pub other_colour: u32,
+    /// The tile as the inventory names it.
+    pub canon: String,
+    pub seed_used: u64,
+    pub seed: Option<u64>,
+    pub system: String,
+    /// Its footprint, mm.
+    pub size: [f64; 2],
+    pub height: f64,
+    /// Its filaments are the build's (not the stack's estimate).
+    pub exact: bool,
+    pub filaments: Vec<String>,
+}
+
+/// One plate: the filaments it needs and the pieces on it.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanPlate {
+    /// From 1.
+    pub plate: usize,
+    pub filaments: Vec<String>,
+    pub pieces: Vec<PlanPlaced>,
+}
+
+/// A piece on a plate, where it stands.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanPlaced {
+    /// Which of the list's [`PlanKind`]s.
+    pub kind: usize,
+    pub copy: usize,
+    pub name: String,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub d: f64,
+    pub turned: bool,
+    /// The list piece this copy is (an index into the list's pieces).
+    pub piece: Option<usize>,
+    pub pinned: bool,
+    /// That list piece's id, as an edit names it.
+    pub id: Option<String>,
+}
+
+/// Do the filaments the plates need fit the printer's slots.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct SlotCheck {
+    pub need: usize,
+    pub have: u32,
+    pub ok: bool,
+}
+
+/// A piece of a list, in the order written, for the panel to edit.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct ListPiece {
+    pub tile: String,
+    pub count: u32,
+    /// The id the piece has, or the one the first edit of the file will write on it.
+    pub id: String,
+    pub pinned: bool,
+    pub seed: Option<u64>,
+    pub system: Option<String>,
+    pub print: String,
+}
+
+/// A printer profile, for the choosers: brand, then model.  One with no bed (`default`, `fine`) is only floors.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(untagged)]
+pub enum PrinterRow {
+    /// A profile that reads.
+    Read(PrinterRead),
+    /// A profile that does not read, still listed with what is wrong with it.
+    Broken(PrinterBroken),
+}
+
+/// A printer profile that reads.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterRead {
+    pub name: String,
+    pub brand: Option<String>,
+    pub model: Option<String>,
+    pub label: String,
+    pub bed: Option<[f64; 2]>,
+    pub height: Option<f64>,
+    pub slots: u32,
+    pub verify: Option<String>,
+    pub zones: usize,
+    pub from_slicer: Option<String>,
+    pub mine: bool,
+}
+
+/// A printer profile that does not read.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterBroken {
+    pub name: String,
+    pub label: String,
+    pub slots: u32,
+    pub mine: bool,
+    /// What is wrong with it.
+    pub broken: String,
+}
+
+/// The inventory's plan: its source and the pieces it adds up to.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct InventoryDoc {
+    #[serde(flatten)]
+    pub frame: PlanFrame,
+    pub writable: bool,
+    pub inventory: InventoryRead,
+}
+
+/// What reading the inventory made.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct InventoryRead {
+    pub text: String,
+    pub pieces: Vec<InventoryRow>,
+    /// What is wrong with the file; empty when it reads.
+    pub problems: Vec<Mistake>,
+}
+
+/// A piece of the inventory: what is held, and whether its tile changed or is gone.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct InventoryRow {
+    pub tile: String,
+    pub seed: u64,
+    pub system: String,
+    pub colour: String,
+    pub have: u32,
+    pub printed: u32,
+    pub failed: u32,
+    pub gone: u32,
+    pub hash: Option<String>,
+    pub last: Option<String>,
+    pub edited: bool,
+    pub missing: bool,
+    pub lines: Vec<usize>,
+}

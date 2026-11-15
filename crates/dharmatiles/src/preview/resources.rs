@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use super::api::{self, FolderJson, Json, RootJson, TileSummary};
+use super::plan::PrinterRow;
 use super::*;
 
 /// What the pages were last told of each resource.
@@ -65,7 +66,7 @@ pub struct List {
 pub enum Resource {
     Places(Places),
     Target(Target),
-    Printers(Vec<Json>),
+    Printers(Vec<PrinterRow>),
     Inventory(Json),
     List(List),
 }
@@ -127,11 +128,8 @@ impl Shared {
         }
     }
 
-    pub(super) fn printers_value(&self) -> Vec<Json> {
-        plates::printers_json(self.home.as_deref())
-            .iter()
-            .map(api::camel_keys)
-            .collect()
+    pub(super) fn printers_value(&self) -> Vec<PrinterRow> {
+        plates::printer_rows(self.home.as_deref())
     }
 
     pub(super) fn inventory_value(&self) -> Json {

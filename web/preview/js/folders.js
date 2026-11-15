@@ -1,3 +1,4 @@
+// @ts-check
 // The folder levels (docs: preview.html, "Places and folders"): the levels above the tile.
 // The top is Places (My tiles, folders you added, the library, the tests); a place opens to
 // a folder level listing its subfolders and then its tiles; a subfolder is another level.

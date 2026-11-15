@@ -55,14 +55,6 @@ pub struct SceneJson {
     pub printer: String,
 }
 
-impl SceneJson {
-    /// The scene as JSON, for the places that carry it inside another document.
-    #[allow(clippy::expect_used)]
-    pub(super) fn value(&self) -> serde_json::Value {
-        serde_json::to_value(self).expect("a scene is plain data")
-    }
-}
-
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct SceneGrid {

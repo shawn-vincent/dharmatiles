@@ -1,6 +1,7 @@
 //! The worker: builds the tiles one at a time and rebuilds on change.
 
 use super::header::{MeshHeader, MeshKind};
+use super::plan::{PlanFrame, TilePlan};
 use super::*;
 use crate::message::{Kind, Scope, Severity};
 
@@ -157,16 +158,17 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         let frame = dt_kit::Frame::for_system(&opts.system, t.cols, t.rows);
         let [w, h] = frame.size_mm();
         let items = stack::items(t, checked.solved.as_ref(), &opts.system)?;
-        // typed in phase A3: plan (the stack items are typed; the rest of the plan is not yet)
-        let stack_json = serde_json::to_value(&items)
-            .map_err(|e| format!("cannot write the stack of the plan: {e}"))?;
-        let plan = json!({
-            "cols": t.cols, "rows": t.rows,
-            "square_mm": frame.square_mm, "size_mm": [w, h],
-            // the tile's zero height: where the base meets the tile body
-            "datum_z": 0.0,
-            "stack": stack_json,
-        });
+        let plan = TilePlan::Tile {
+            frame: PlanFrame {
+                cols: t.cols,
+                rows: t.rows,
+                square_mm: frame.square_mm,
+                size_mm: [w, h],
+                // the tile's zero height: where the base meets the tile body
+                datum_z: Some(0.0),
+            },
+            stack: items.clone(),
+        };
         Ok::<_, String>((plan, items))
     });
     let (plan, stack) = match stack_made {
@@ -524,12 +526,17 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
     let sq = dt_kit::Frame::for_system(&opts.system, 1, 1).square_mm;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let n = |v: f64| (libm::round(v / sq).max(1.0)) as u32;
-    let plan = json!({
-        "tile": path.rsplit('/').next().unwrap_or(path), "cols": n(footprint[0]), "rows": n(footprint[1]),
-        "square_mm": sq, "size_mm": footprint, "datum_z": Value::Null,
-        // typed in phase A3: plan
-        "stack": [{"label": "stl file", "element": "stl", "href": Value::Null}],
-    });
+    let plan = TilePlan::Stl {
+        tile: path.rsplit('/').next().unwrap_or(path).to_owned(),
+        frame: PlanFrame {
+            cols: n(footprint[0]),
+            rows: n(footprint[1]),
+            square_mm: sq,
+            size_mm: footprint,
+            datum_z: None,
+        },
+        stack: vec![stack::StackItem::stl_file()],
+    };
     let record =
         dt_eval::TileRecord::of_stl(path, a.summary(&opts.printer), t0.elapsed().as_secs_f64());
     shared.report(id, Scope::Build, |name| messages::of_stl(&record, id, name));
