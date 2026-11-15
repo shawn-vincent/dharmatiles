@@ -4,7 +4,6 @@
 // document, the checked text and the program's descriptions: each reads what it shows, so each is drawn again by itself
 // when that changes.  This part is what a level is made of (the models built from the document) and what its edits do.
 
-import { kdlString } from '../lens.js';
 import {
   addFrom, canMine, editable, moveEntry, muteAt, nodeId, stepEntry, openRowMenu, removeAt, renameMark, rowAction, setControl, takeFocusIndex, tileEdit,
 } from './rows.js';
@@ -139,9 +138,10 @@ function tileModel() {
     at: own.at,
     schema: tileRows(['about']),
     written: av ? [asWritten({ name: 'about', text: av.text, span: av.span })] : [],
+    // the program writes the string: the page sends the words
     set: (/** @type {any} */ _, /** @type {any} */ value) => (value == null
       ? about && tileEdit({ op: 'remove', id: nodeId(about.at) }, 'Took out the description')
-      : about ? null : tileEdit({ op: 'insert', place: 'tile', node: `about ${kdlString(String(value))}` }, 'Described the tile')),
+      : tileEdit({ op: 'about', value: String(value) }, 'Described the tile')),
   });
   // under the tile's own controls: what the inventory says of it and "I have this", then what it holds
   const tail = html`${isTileDoc(t) ? html`${haveBlock(t)}<${ListBlock} t=${t} lists=${lists()} addTo=${addTo} />` : null}${tileContents()}`;

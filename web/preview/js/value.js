@@ -1,18 +1,11 @@
 // @ts-check
 // A control's value as the sheet edits it: what may be typed, what it is
-// written as, and what can go at the caret.  No page here;
+// shaped as, and what can go at the caret.  The page never writes KDL: the program does.  No page here;
 // the sheet draws it (view/sheet.js).  Nothing here checks a value: the program's
 // check (dt_doc's `check_text`, by `/api/check-value`) is the only one.
 
 /** Whether a control's value is a number or an expression: the program says so (`numeric`) for every control it describes. */
 export const isNumeric = (/** @type {{ numeric?: boolean }} */ c) => c.numeric === true;
-
-/** `text` as a KDL v2 string. */
-export function kdlString(/** @type {string} */ text) {
-  /** @type {Record<string, string>} */
-  const esc = { '"': '\\"', '\\': '\\\\', '\n': '\\n', '\r': '\\r', '\t': '\\t' };
-  return `"${text.replace(/["\\\n\r\t\u0000-\u001f\u007f]/g, (/** @type {string} */ ch) => esc[ch] ?? `\\u{${ch.charCodeAt(0).toString(16)}}`)}"`;
-}
 
 /** A written KDL string's text: quotes off, escapes undone. */
 export function unquote(/** @type {string} */ written) {
@@ -23,8 +16,7 @@ export function unquote(/** @type {string} */ written) {
   return t.slice(1, -1).replace(/\\(u\{([0-9a-fA-F]+)\}|[\s\S])/g, (/** @type {string} */ _, /** @type {string} */ e, /** @type {string | undefined} */ hex) => (hex ? String.fromCodePoint(parseInt(hex, 16)) : ((/** @type {Record<string, string>} */ ({ n: '\n', r: '\r', t: '\t', s: ' ' }))[e] ?? e)));
 }
 
-// what KDL takes without quotes: a number (with a unit, `(h)1.2`), a word,
-// a switch; a word that KDL reads as something else is quoted
+// what a typed value is, to say which forms it can switch between; the program writes it (a typed value is sent as a number, a switch or words)
 const NUMBER = /^(\(\w+\))?-?\d+(\.\d+)?$/;
 // format 1 writes a unit after a number (`8dmm`, `0.5sq`, `40deg`, `25%`); the unit words are the program's (`setUnits`, from its language table)
 let UNITED = /^$/, UNITED_RANGE = /^$/;
@@ -36,16 +28,6 @@ export function setUnits(units) {
   UNITED_RANGE = new RegExp(`^-?\\d+(\\.\\d+)?${unit}\\s*\\.\\.\\s*-?\\d+(\\.\\d+)?${unit}$`);
 }
 const WORD = /^[A-Za-z_][\w-]*$/;
-const KEYWORD = new Set(['true', 'false', 'null', 'inf', 'nan']);
-
-/** A typed value as it goes in the text: bare when KDL takes it bare, else a string. */
-/** @param {string} typed */
-export function written(typed) {
-  const t = typed.trim();
-  if (!t || NUMBER.test(t) || t === '#true' || t === '#false') return t;
-  if (WORD.test(t) && !KEYWORD.has(t)) return t;
-  return kdlString(t);
-}
 
 /** What a typed value is: empty, a number, a range, a word or an expression. */
 /** @param {string} typed */

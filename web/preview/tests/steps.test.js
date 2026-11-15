@@ -11,9 +11,9 @@ const disk = { text: 'v=0', writable: true };
 const sent = [], edits = [], checks = [], gates = [];
 let refuse = null; // a status to answer the next step with
 const mesh = () => {
-  const json = new TextEncoder().encode(JSON.stringify({ triangles: 0 }).padEnd(16)); // a payload's own head is a multiple of four long
+  const json = new TextEncoder().encode(JSON.stringify({ triangles: 0, vertices: 0, palette: 0 }).padEnd(16)); // a payload's own head is a multiple of four long
   const b = new ArrayBuffer(8 + json.length);
-  new Uint8Array(b, 0, 4).set([...'DTM1'].map((c) => c.charCodeAt(0)));
+  new Uint8Array(b, 0, 4).set([...'DTM2'].map((c) => c.charCodeAt(0)));
   new DataView(b).setUint32(4, json.length, true);
   new Uint8Array(b, 8).set(json);
   return b;

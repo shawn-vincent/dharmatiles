@@ -103,7 +103,13 @@ pub(crate) fn run(paths: &[String], opts: &Options) -> Result<Outcome, String> {
             }
             for (file, fixes) in by_file {
                 let old = Mended(&texts).read(&file)?;
-                let done = dt_doc::ops::apply(
+                let reader = dt_eval::Evaluated {
+                    base: &Mended(&texts),
+                    path: &file,
+                    opts,
+                };
+                let done = dt_doc::ops::apply_with(
+                    &reader,
                     dt_doc::ops::Kind::Tile,
                     &old,
                     &dt_doc::ops::Op::Fix(&fixes),

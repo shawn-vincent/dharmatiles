@@ -688,10 +688,34 @@ fn fixes_are_laid_in_from_the_end_and_only_where_the_text_matches() {
 }
 
 #[test]
+fn the_description_is_replaced_or_written_and_the_program_quotes_it() {
+    let words = "A \"pool\" by the bank\nsecond line";
+    let none = "tile size=\"1x1\" {\n    stack { dirt }\n}\n";
+    let d = run(none, &Op::SetAbout { text: words }).unwrap();
+    assert!(
+        d.text.starts_with("tile size=\"1x1\" {\n    about \""),
+        "{}",
+        d.text
+    );
+    // it reads back as the words
+    let again = run(&d.text, &Op::SetAbout { text: "plain" }).unwrap();
+    assert!(
+        again.text.contains("about \"plain\"") || again.text.contains("about plain"),
+        "{}",
+        again.text
+    );
+    assert_eq!(again.text.matches("about").count(), 1);
+    let doc = KdlDocument::parse(&d.text).unwrap();
+    let node = nodeid::locate(&doc, "tile/about").unwrap();
+    assert_eq!(node.entries()[0].value().as_string(), Some(words));
+}
+
+#[test]
 fn overlapping_fixes_wait_and_a_repeat_is_made_once() {
     let t = "tile { stack { abcdef } }";
     let fixes = [fix(t, "abc", "1"), fix(t, "abc", "1"), fix(t, "bcd", "2")];
-    let d = run(t, &Op::Fix(&fixes)).unwrap();
+    // laid in by the tile's own operation: the words are not elements, which the checked `apply` would refuse
+    let d = super::apply(t, &Op::Fix(&fixes)).unwrap();
     assert_eq!(d.text, "tile { stack { 1def } }");
     assert_eq!(d.mended.unwrap().deferred, 1);
 }

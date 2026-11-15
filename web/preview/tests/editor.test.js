@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { suggest } from '../js/complete.js';
 import { browserHost } from '../js/host.js';
-import { kdlString, parseValue, unquote, valueOf, wordControlNeedsSelect } from '../js/lens.js';
+import { parseValue, unquote, valueOf, wordControlNeedsSelect } from '../js/lens.js';
 import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
 import { indentFor, braceEnd, colourRanges } from '../js/text.js';
@@ -11,7 +11,7 @@ import { byteIndexer, byteToIndex } from '../js/spans.js';
 import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
 import { PINNED_VIEWS, presetAt } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
-import { asNumber, asRange, debounce, formOf, setUnits, valueItems, written } from '../js/value.js';
+import { asNumber, asRange, debounce, formOf, setUnits, valueItems } from '../js/value.js';
 
 setUnits(['sq', 'mm', 'in', 'dmm', 'layer', 'deg', 'rad', 'pi']); // what the program's language table says
 
@@ -114,36 +114,38 @@ test('word controls become dropdowns before their buttons would wrap', () => {
   assert.equal(wordControlNeedsSelect(words('one very long choice', 'another')), true);
 });
 
-function payload(traced = true) {
-  let json = '{"triangles":1,"lo":[0,0,0],"hi":[1,1,0]}';
+// one triangle over three shared vertices, a palette of two colours (painted red, clean grey), entry 3 and piece 7
+function payload() {
+  let json = '{"triangles":1,"vertices":3,"palette":2,"lo":[0,0,0],"hi":[1,1,0]}';
   while ((8 + new TextEncoder().encode(json).length) % 4) json += ' ';
   const meta = new TextEncoder().encode(json);
-  const bytes = 8 + meta.length + 36 + 36 + 9 + 9 + (traced ? 4 : 0);
-  const buffer = new ArrayBuffer(bytes + ((4 - bytes % 4) % 4));
-  const u8 = new Uint8Array(buffer);
-  u8.set([68, 84, 77, 49]);
-  new DataView(buffer).setUint32(4, meta.length, true);
+  const buffer = new ArrayBuffer(8 + meta.length + 36 + 12 + 8 + 2 * 4);
+  const u8 = new Uint8Array(buffer), dv = new DataView(buffer);
+  u8.set([68, 84, 77, 50]); // DTM2
+  dv.setUint32(4, meta.length, true);
   u8.set(meta, 8);
-  if (traced) {
-    const at = 8 + meta.length + 36 + 36 + 9 + 9;
-    new DataView(buffer).setUint16(at, 3, true);
-    new DataView(buffer).setUint16(at + 2, 7, true);
-  }
+  let o = 8 + meta.length;
+  for (const x of [0, 0, 0, 2, 0, 0, 0, 3, 0]) { dv.setFloat32(o, x, true); o += 4; }
+  for (const i of [0, 1, 2]) { dv.setUint32(o, i, true); o += 4; }
+  u8.set([255, 0, 0, 128, 128, 128], o); o += 8;
+  for (const v of [0, 1, 3, 7]) { dv.setUint16(o, v, true); o += 2; } // painted, clean, entry, piece
   return buffer;
 }
 
-test('mesh payload exposes triangle owners without copying arrays', () => {
-  const got = parsePayload(payload(true));
+test('mesh payload exposes triangle owners without copying them', () => {
+  const got = parsePayload(payload());
   assert.equal(got.triangles, 1);
   assert.equal(got.entry[0], 3);
   assert.equal(got.piece[0], 7);
-  assert.equal(got.positions.buffer, got.entry.buffer);
+  assert.equal(got.entry.buffer, got.piece.buffer);
 });
 
-test('an old untraced mesh stays readable', () => {
-  const got = parsePayload(payload(false));
-  assert.equal(got.entry[0], NO_ENTRY);
-  assert.equal(got.piece[0], 0);
+test('an indexed mesh is laid out for the viewer: each corner its position, face normal and face colours', () => {
+  const got = parsePayload(payload());
+  assert.deepEqual([...got.positions], [0, 0, 0, 2, 0, 0, 0, 3, 0]);
+  assert.deepEqual([...got.normals], [0, 0, 1, 0, 0, 1, 0, 0, 1]);
+  assert.deepEqual([...got.painted], [255, 0, 0, 255, 0, 0, 255, 0, 0]);
+  assert.deepEqual([...got.clean], Array(3).fill([128, 128, 128]).flat());
 });
 
 test('GPU ownership is compact, repeated per corner and reserves zero for none', () => {
@@ -236,22 +238,9 @@ test('a brace folds to its own closing brace, skipping strings and comments', ()
   assert.equal(braceEnd('a {', 2), null);
 });
 
-test('a description is written as a KDL v2 string and read back the same', () => {
-  const s = 'A "pool" \\ by the bank\n\u0001';
-  const k = kdlString(s);
-  assert.equal(k, '"A \\"pool\\" \\\\ by the bank\\n\\u{1}"');
-  assert.equal(unquote(k), s);
+test('a written string is read back as its text', () => {
+  assert.equal(unquote('"A \\"pool\\" \\\\ by the bank\\n\\u{1}"'), 'A "pool" \\ by the bank\n\u0001');
   assert.equal(unquote('#"raw "quotes""#'), 'raw "quotes"');
-});
-
-test('a typed value is written bare when KDL takes it bare, else quoted', () => {
-  assert.equal(written('6'), '6');
-  assert.equal(written(' (h)1.2 '), '(h)1.2');
-  assert.equal(written('edge'), 'edge');
-  assert.equal(written('6..15'), '"6..15"');
-  assert.equal(written('ground - 1'), '"ground - 1"');
-  assert.equal(written('30%'), '"30%"');
-  assert.equal(written('inf'), '"inf"');
 });
 
 test('a value switches between one number and a range', () => {

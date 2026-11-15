@@ -25,7 +25,7 @@ use dt_doc::ops::{Kind, Op, Prop, apply};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::api::Out;
-use super::lists::{ListEdited, bad, edit_list};
+use super::lists::{ListEdited, ListErr, bad, edit_list};
 use super::placing::{Geom, Near, Resolver, SeedWord, at_word};
 use super::scene::SceneJson;
 use super::{Shared, fail, lock, scene};
@@ -359,7 +359,7 @@ pub(super) fn add(shared: &Shared, v: MapsAddReq) -> Out<MapsPieced> {
                 shifted = r.shifted;
                 dt_doc::map::parse_at(&at_word(x, y))?
             }
-            (None, None) => return Err("no place".to_owned()),
+            (None, None) => return Err("no place".to_owned().into()),
         };
         let seed = match (v.seed, v.seed_word, rs.as_mut()) {
             (Some(s), _, _) => Some(s),
@@ -378,7 +378,7 @@ pub(super) fn add(shared: &Shared, v: MapsAddReq) -> Out<MapsPieced> {
         };
         seed_given = seed;
         let line = dt_doc::map::placed_line(&id, &canon, at, rot, seed, system);
-        let new = apply(Kind::Map, text, &Op::Append(&[line])).map_err(|e| e.to_string())?;
+        let new = apply(Kind::Map, text, &Op::Append(&[line])).map_err(ListErr::from)?;
         Ok((new.text, id))
     })?;
     Ok(MapsPieced {
@@ -431,7 +431,7 @@ fn batch_edit(
                 None => props_of(set)?,
             };
             t = apply(Kind::Map, &t, &Op::SetPiece { id, edits: &words })
-                .map_err(|e| e.to_string())?
+                .map_err(ListErr::from)?
                 .text;
         }
         shifted = rs.as_ref().map_or(0, |r| r.shifted);
@@ -469,7 +469,7 @@ pub(super) fn dup(shared: &Shared, v: MapsDupReq) -> Out<MapsPieced> {
                 shifted = rs.shifted;
                 dt_doc::map::parse_at(&at_word(x, y))?
             }
-            (None, None) => return Err("no place".to_owned()),
+            (None, None) => return Err("no place".to_owned().into()),
         };
         let t = apply(
             Kind::Map,
@@ -480,7 +480,7 @@ pub(super) fn dup(shared: &Shared, v: MapsDupReq) -> Out<MapsPieced> {
                 at,
             },
         )
-        .map_err(|e| e.to_string())?
+        .map_err(ListErr::from)?
         .text;
         // a copy starts with the original's seed: the same piece until it is made a variant
         Ok((t, id))
@@ -498,7 +498,7 @@ pub(super) fn remove(shared: &Shared, v: MapsPieceReq) -> Out<ListEdited> {
     let (e, ()) = edit_list(shared, &v.list, v.doc_rev, |text, _| {
         apply(Kind::Map, text, &Op::Remove { id: &v.id })
             .map(|d| (d.text, ()))
-            .map_err(|e| e.to_string())
+            .map_err(ListErr::from)
     })?;
     Ok(e)
 }
@@ -511,7 +511,7 @@ pub(super) fn pin(shared: &Shared, v: MapsPinReq) -> Out<MapsPieced> {
     let turn = v.turn.unwrap_or(false);
     let (edited, id) = edit_list(shared, &v.list, v.doc_rev, |text, l| {
         if !dt_doc::map::piece_ids(l).contains(&v.id) {
-            return Err(format!("the map has no piece {}", v.id));
+            return Err(format!("the map has no piece {}", v.id).into());
         }
         let at = At {
             x: dt_doc::map::Len::Mm((v.x * 10.0).round() / 10.0),
@@ -527,7 +527,7 @@ pub(super) fn pin(shared: &Shared, v: MapsPinReq) -> Out<MapsPieced> {
                 turn,
             },
         )
-        .map_err(|e| e.to_string())?
+        .map_err(ListErr::from)?
         .text;
         Ok((t, v.id.clone()))
     })?;
@@ -544,7 +544,7 @@ pub(super) fn unpin(shared: &Shared, v: MapsPieceReq) -> Out<ListEdited> {
     let (e, ()) = edit_list(shared, &v.list, v.doc_rev, |text, _| {
         apply(Kind::Map, text, &Op::Unpin { id: &v.id })
             .map(|d| (d.text, ()))
-            .map_err(|e| e.to_string())
+            .map_err(ListErr::from)
     })?;
     Ok(e)
 }
@@ -554,7 +554,7 @@ pub(super) fn unpin_all(shared: &Shared, v: MapsListReq) -> Out<ListEdited> {
     let (e, ()) = edit_list(shared, &v.list, v.doc_rev, |text, _| {
         apply(Kind::Map, text, &Op::UnpinAll)
             .map(|d| (d.text, ()))
-            .map_err(|e| e.to_string())
+            .map_err(ListErr::from)
     })?;
     Ok(e)
 }

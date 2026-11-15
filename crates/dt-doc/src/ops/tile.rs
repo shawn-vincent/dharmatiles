@@ -57,6 +57,16 @@ pub(super) fn apply(text: &str, op: &Op) -> Result<Done, EditError> {
             // the node starts where it did: every change is inside it
             finish(lay(text, splices), node.span().offset())
         }
+        Op::SetAbout { text: words } => {
+            let value = KdlValue::String((*words).to_owned());
+            match nodeid::locate(&doc, "tile/about") {
+                Ok(node) => {
+                    let splices = vec![set_arg(text, node, 0, &value)?];
+                    finish(lay(text, splices), node.span().offset())
+                }
+                Err(_) => insert(text, &doc, Place::Tile, &format!("about {value}")),
+            }
+        }
         Op::SetArg { id, index, value } => {
             let node = nodeid::locate(&doc, id)?;
             let splices = vec![set_arg(text, node, *index, value)?];

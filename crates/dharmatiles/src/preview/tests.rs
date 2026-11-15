@@ -361,10 +361,14 @@ fn builds_a_tile_and_serves_its_mesh() {
     let h: header::MeshHeader = read(&body[8..8 + jl]);
     let n = h.triangles;
     assert_eq!(n as u64, record.audit.triangles as u64);
-    // positions, normals, painted, clean, entry, piece; padded to 4
+    // shared positions, indices, the palette (padded to 4), painted and clean palette indices, entry, piece
     assert_eq!(
         body.len(),
-        (8 + jl + n * (36 + 36 + 9 + 9 + 2 + 2)).next_multiple_of(4)
+        8 + jl + h.vertices * 12 + n * 12 + (3 * h.palette).next_multiple_of(4) + n * 8
+    );
+    assert!(
+        h.vertices < 3 * n,
+        "the vertices are shared between triangles"
     );
     assert_eq!(h.overhang_deg, Some(55.0));
     assert!(
@@ -765,14 +769,14 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
         op: edit::EditOp::Set {
             text: text.to_owned(),
             id,
-            name: "wear".to_owned(),
-            value: Some(edit::Scalar::Str("worn".to_owned())),
+            name: "clods".to_owned(),
+            value: Some(edit::Scalar::Str("many".to_owned())),
         },
     };
     let (h, v) = post::<_, edit::EditRes>(&r, "/api/edit", Some(&token), None, &e);
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v:?}");
     let edited = v.text;
-    assert_eq!(edited, text.replace("dirt\n", "dirt wear=worn\n"));
+    assert_eq!(edited, text.replace("dirt\n", "dirt clods=many\n"));
     // check-value: the reader's own check of a typed value, nothing else
     let cv = |control: &str, typed: &str| {
         let b = edit::CheckValueReq {
@@ -1016,8 +1020,8 @@ fn a_draft_is_a_request_answered_with_its_mesh() {
 fn a_newer_draft_of_a_tile_supersedes_the_older() {
     let shared = Shared::new(&[FLAT.to_owned()]);
     let id = tile_id(FLAT);
-    let first = shared.submit_draft(&id, FLAT, FLAT, "tile {}", false);
-    let second = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false);
+    let first = shared.submit_draft(&id, FLAT, FLAT, "tile {}", false, edit::DraftTier::Draft);
+    let second = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false, edit::DraftTier::Draft);
     assert!(matches!(first.recv().unwrap(), queue::Outcome::Superseded));
     // the other is still waiting, and is the next job
     assert!(second.try_recv().is_err());
@@ -1026,7 +1030,7 @@ fn a_newer_draft_of_a_tile_supersedes_the_older() {
     };
     assert_eq!(d.text, "tile { }");
     // a newer one stops it while it runs
-    let _third = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false);
+    let _third = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false, edit::DraftTier::Draft);
     assert!(d.cancel.load(Ordering::Relaxed));
     // and a draft goes ahead of a tile asked for
     assert!(shared.want(&id));
@@ -1584,11 +1588,18 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
         t.contains("region meadow") && t.contains("dirt at=meadow"),
         "{t}"
     );
-    let v = rename("tile/line shore", "pool");
-    assert!(
-        v.text.contains("line pool"),
-        "a line may share a region's name: {v:?}"
+    // a line may not take a region's name: the edit would add a mistake
+    let (head, body) = edit_refused(
+        &r,
+        &token,
+        Some(rev(text)),
+        edit::EditOp::Rename {
+            text: text.to_owned(),
+            id: "tile/line shore".to_owned(),
+            new: "pool".to_owned(),
+        },
     );
+    assert!(head.starts_with("HTTP/1.1 422"), "{head} {body:?}");
 }
 
 #[test]
@@ -2487,21 +2498,27 @@ fn an_entry_moves_whole_and_a_new_one_goes_between_two() {
         id: id.to_owned(),
         before: before.map(str::to_owned),
     };
-    let (dirt, grass) = ("tile/stack/dirt", "tile/stack/grass");
-    let v = edited(&r, &token, ROWS, mv(dirt, None));
+    let (dirt, grass, rock) = ("tile/stack/dirt", "tile/stack/grass", "tile/stack/rock");
+    let v = edited(&r, &token, ROWS, mv(rock, None));
     let moved = &v.text;
-    // the comment on top of it went with it, and the reply says where it now starts
+    // the reply says where it now starts
     assert!(
-        moved.contains("grass\n        // the soil\n        dirt\n    }"),
+        moved.contains("grass\n        rock at=\"(0.3sq, 0.4sq)\"\n    }"),
         "{v:?}"
     );
-    assert!(moved[v.at.unwrap()..].starts_with("dirt"), "{v:?}");
+    assert!(moved[v.at.unwrap()..].starts_with("rock"), "{v:?}");
     // before a sibling
-    let v = edited(&r, &token, ROWS, mv(grass, Some(dirt)));
+    let v = edited(&r, &token, ROWS, mv(grass, Some(rock)));
     assert!(
-        v.text
-            .contains("base\n        grass\n        // the soil\n        dirt"),
+        v.text.contains("dirt\n        grass\n        rock at"),
         "{v:?}"
+    );
+    // a move that would put the ground after what stands on it adds a mistake: refused, and the page is told which
+    let (head, body) = edit_refused(&r, &token, Some(rev(ROWS)), mv(dirt, None));
+    assert!(head.starts_with("HTTP/1.1 422"), "{head}");
+    assert!(
+        format!("{body:?}").contains(dt_lang::codes::ORDER),
+        "the refusal is the mistake the edit would add: {body:?}"
     );
     // a target that is not a sibling is refused in words
     let (head, body) = edit_refused(
@@ -2555,6 +2572,7 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
                 },
                 file: None,
                 debug: None,
+                tier: None,
             }),
         )
     };
@@ -2604,12 +2622,10 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
     );
     let (head, _) = step_parts(&body);
     assert!(head.text.contains("through west n }"), "{head:?}");
-    // a text the reader refuses is still edited: the head says there is no mesh
+    // an edit that would add a mistake is refused, with the mistake: nothing is drafted
     let (h, body) = step(rev(ROWS), set("bogus", edit::Scalar::Int(1)));
-    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
-    let (head, mesh) = step_parts(&body);
-    assert_eq!(head.draft, edit::StepDraft::Mistake);
-    assert!(mesh.is_empty());
+    assert!(h.starts_with("HTTP/1.1 422"), "{h}");
+    assert!(String::from_utf8_lossy(&body).contains(dt_lang::codes::UNKNOWN_CONTROL));
     // an edit read at another text is refused, and nothing is drafted
     let (h, _) = step(rev("other"), set("seed", edit::Scalar::Int(8)));
     assert!(h.starts_with("HTTP/1.1 409"), "{h}");
@@ -2640,13 +2656,13 @@ fn a_node_is_hidden_a_fix_is_laid_in_and_an_id_the_text_does_not_have_is_refused
     );
     assert_eq!(v.text, ROWS.replace("rock at", "/- rock at"));
     // the program's own fix goes in only where the text still reads what it saw (a fix names no node: no `read`)
-    let at = ROWS.find("dirt").unwrap();
+    let at = ROWS.find("rock").unwrap();
     let fix = || crate::message::FixJson {
         offset: at,
         len: 4,
-        was: "dirt".to_owned(),
-        replacement: "ground".to_owned(),
-        label: "Change to ground".to_owned(),
+        was: "rock".to_owned(),
+        replacement: "boulder".to_owned(),
+        label: "Change to boulder".to_owned(),
     };
     let (head, v) = edit_call(
         &r,
@@ -2658,13 +2674,13 @@ fn a_node_is_hidden_a_fix_is_laid_in_and_an_id_the_text_does_not_have_is_refused
         },
     );
     assert!(head.starts_with("HTTP/1.1 200"), "{head} {v:?}");
-    assert_eq!(v.text, ROWS.replacen("dirt", "ground", 1));
+    assert_eq!(v.text, ROWS.replacen("rock", "boulder", 1));
     let (head, v) = edit_refused(
         &r,
         &token,
         None,
         edit::EditOp::Fix {
-            text: ROWS.replacen("dirt", "soil", 1),
+            text: ROWS.replacen("rock", "stone", 1),
             fix: fix(),
         },
     );

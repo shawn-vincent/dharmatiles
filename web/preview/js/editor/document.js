@@ -255,7 +255,7 @@ export function steps(label, make) {
     if (!t || d.text == null || d.tileId !== t.id) return;
     const text = d.text;
     const read = readAt();
-    const r = await host.step(t.id, { edit: /** @type {any} */ ({ ...make(x), text, read }), file: d.file === t.path ? undefined : d.file, debug: view.get().debug });
+    const r = await host.step(t.id, { edit: /** @type {any} */ ({ ...make(x), text, read }), file: d.file === t.path ? undefined : d.file, debug: view.get().debug, tier: 'low' });
     if (r.status === 0) return; // the program is away: said by the chip
     if (r.status === 409) { check(); return; } // the text moved on past the nodes read: checked again, and the next step names them afresh
     if (r.status !== 200 || !('head' in r)) {

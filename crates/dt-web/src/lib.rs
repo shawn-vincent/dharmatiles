@@ -553,9 +553,28 @@ pub fn fix_tile(text: &str, fix: &str) -> Result<String, JsError> {
     let f: FixJson = serde_json::from_str(fix)
         .map_err(|e| JsError::new(&format!("the fix is not a FixJson: {e}")))?;
     let fixes = [dt_eval::Fix::from(&f)];
-    let done = dt_doc::ops::apply(dt_doc::ops::Kind::Tile, text, &dt_doc::ops::Op::Fix(&fixes))
+    // read as the page's own check reads (the library's heights and seams), so the mend is held to the same mistakes
+    LIBRARY.with(|lib| {
+        let lib = lib.borrow();
+        let source = Overlay {
+            library: &lib,
+            text,
+        };
+        let opts = options(&source, System::Db)?;
+        let reader = dt_eval::Evaluated {
+            base: &source,
+            path: MAIN,
+            opts: &opts,
+        };
+        let done = dt_doc::ops::apply_with(
+            &reader,
+            dt_doc::ops::Kind::Tile,
+            text,
+            &dt_doc::ops::Op::Fix(&fixes),
+        )
         .map_err(|e| JsError::new(&e.to_string()))?;
-    Ok(done.text)
+        Ok(done.text)
+    })
 }
 
 /// What a length prints on both targets, read against the library's heights:

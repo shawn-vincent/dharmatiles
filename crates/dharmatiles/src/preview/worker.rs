@@ -560,7 +560,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
 fn draft(shared: &Arc<Shared>, d: &queue::Draft, opts: &Options) {
     use queue::Outcome;
     let opts = Options {
-        tier: dt_eval::Tier::Draft,
+        tier: d.tier.build(),
         ..opts.clone()
     };
     let src = edit::Overlay(BTreeMap::from([(d.file.clone(), d.text.clone())]));

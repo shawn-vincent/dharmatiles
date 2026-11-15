@@ -1,15 +1,17 @@
 // @ts-check
 // Reads the binary mesh payload (see crates/dharmatiles/src/preview/payload.rs).
 //
-//   "DTM1" | u32 json_len | json (space padded to 4) |
-//   f32 positions[9n] | f32 normals[9n] | u8 painted[9n] | u8 clean[9n] |
-//   u16 entry[n] | u16 piece[n] | padding to 4
+//   "DTM2" | u32 json_len | json (space padded to 4) |
+//   f32 positions[3v] | u32 indices[3n] | u8 palette[3p] (padded to 4) |
+//   u16 painted[n] | u16 clean[n] | u16 entry[n] | u16 piece[n]
+//
+// The wire holds the shared vertices, the indices and one palette index for each face; `parsePayload` lays them out
+// as the viewer draws them (three vertices of each triangle, the face normal and the face's colour on each).
 //
 // entry is a place in the header's `stack`, the stack the mesh was built
 // from (the connector, when the tile has a base, is last; 65535 none);
 // piece counts the things within it (rock 0, rock 1 of a scatter).
-// Everything is a typed-array view onto the one buffer: no copies, no JSON
-// numbers.
+// The entry and piece lists are views onto the one buffer; the positions, normals and colours are made once, here.
 //
 // The text on screen may have moved on since the mesh was built (an entry
 // inserted, deleted, moved), so an entry number is only ever read against
@@ -169,18 +171,36 @@ export function worstFlagged(payload) {
 export function parsePayload(buffer) {
   const head = new DataView(buffer);
   const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));
-  if (magic !== 'DTM1') throw new Error('not a dharmatiles mesh payload');
+  if (magic !== 'DTM2') throw new Error('not a dharmatiles mesh payload');
   const jsonLen = head.getUint32(4, true);
   // the one place the header is read: it is the program's `MeshHeader`, written by serializing that type
   const meta = /** @type {MeshHeader} */ (JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 8, jsonLen))));
-  const n = meta.triangles;
+  const n = meta.triangles, v = meta.vertices, p = meta.palette;
   let o = 8 + jsonLen;
-  const positions = new Float32Array(buffer, o, 9 * n); o += 36 * n;
-  const normals = new Float32Array(buffer, o, 9 * n); o += 36 * n;
-  const painted = new Uint8Array(buffer, o, 9 * n); o += 9 * n;
-  const clean = new Uint8Array(buffer, o, 9 * n); o += 9 * n;
-  const traced = buffer.byteLength >= o + 4 * n;
-  const entry = traced ? new Uint16Array(buffer, o, n) : new Uint16Array(n).fill(NO_ENTRY);
-  const piece = traced ? new Uint16Array(buffer, o + 2 * n, n) : new Uint16Array(n);
+  const shared = new Float32Array(buffer, o, 3 * v); o += 12 * v;
+  const indices = new Uint32Array(buffer, o, 3 * n); o += 12 * n;
+  const palette = new Uint8Array(buffer, o, 3 * p); o += (3 * p + 3) & ~3;
+  const paintedAt = new Uint16Array(buffer, o, n); o += 2 * n;
+  const cleanAt = new Uint16Array(buffer, o, n); o += 2 * n;
+  const entry = new Uint16Array(buffer, o, n);
+  const piece = new Uint16Array(buffer, o + 2 * n, n);
+  const positions = new Float32Array(9 * n), normals = new Float32Array(9 * n);
+  const painted = new Uint8Array(9 * n), clean = new Uint8Array(9 * n);
+  for (let t = 0; t < n; t++) {
+    const k = 9 * t;
+    for (let a = 0; a < 3; a++) {
+      const i = 3 * indices[3 * t + a];
+      positions[k + 3 * a] = shared[i]; positions[k + 3 * a + 1] = shared[i + 1]; positions[k + 3 * a + 2] = shared[i + 2];
+      const pa = 3 * paintedAt[t], ca = 3 * cleanAt[t];
+      for (let c = 0; c < 3; c++) { painted[k + 3 * a + c] = palette[pa + c]; clean[k + 3 * a + c] = palette[ca + c]; }
+    }
+    const ax = positions[k + 3] - positions[k], ay = positions[k + 4] - positions[k + 1], az = positions[k + 5] - positions[k + 2];
+    const bx = positions[k + 6] - positions[k], by = positions[k + 7] - positions[k + 1], bz = positions[k + 8] - positions[k + 2];
+    const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+    const l = Math.hypot(nx, ny, nz);
+    for (let a = 0; a < 3; a++) {
+      normals[k + 3 * a] = l > 0 ? nx / l : 0; normals[k + 3 * a + 1] = l > 0 ? ny / l : 0; normals[k + 3 * a + 2] = l > 0 ? nz / l : 0;
+    }
+  }
   return { meta, triangles: n, positions, normals, painted, clean, entry, piece };
 }
