@@ -26,6 +26,7 @@ export function SeedDice({ roll, onRoll }) {
  * What the dice shows: five small pictures of the tile, the current one first.  A square marks a seed you own.  Choosing one
  * writes the seed, one step of history; choosing the current one writes nothing.  `s` is a `seedStripOf` model.
  */
+/** @param {{ s: ReturnType<typeof import('../editor/scene-thumbs.js').seedStripOf>, seeds: (number | null)[], ro: boolean, onPick: (seed: number | null) => void, onMore: () => void, onClose: () => void }} p */
 export function SeedStrip({ s, seeds, ro, onPick, onMore, onClose }) {
   return html`<div class="seed-strip" role="group" aria-label="Seeds to choose from">${seeds.map((seed) => {
     const now = seed === s.current;

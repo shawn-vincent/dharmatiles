@@ -61,7 +61,7 @@ export function toast(message, action = null, { label = 'Undo', ms = 5000 } = {}
 }
 
 /** Ask for one of the view presets: the view's preset and the ask are one write, and the viewer frames what it shows (editor/framing.js describes it). */
-export const pickView = (name, animate = true) => view.set({ pick: { name, animate }, mode: name });
+export const pickView = (/** @type {string} */ name, animate = true) => view.set({ pick: { name, animate }, mode: name });
 
 // A library tile is read only until the first change to it: that change copies
 // it into My tiles and is made there (tiles.js does the copy).  A part of the
@@ -69,10 +69,12 @@ export const pickView = (name, animate = true) => view.set({ pick: { name, anima
 // `replay(how)` makes the same change once the copy is open: `how.sameText` says
 // whether the copy's text is the library tile's, byte for byte (so a position
 // from the library tile's text is still right in it).
+/** @typedef {{ patch?: *, run?: () => Promise<*> }} Replay  the change to make once the copy is open */
+/** @type {((replay: Replay | null) => boolean | Promise<boolean>) | null} */
 let mineHandler = null;
-export const onMakeMine = (fn) => { mineHandler = fn; };
+export const onMakeMine = (/** @type {(replay: Replay | null) => boolean | Promise<boolean>} */ fn) => { mineHandler = fn; };
 /**
  * Copy the library tile shown into My tiles and make the change `replay` makes there; false (nothing is done) when no part can.
- * @param {{ patch?: *, run?: () => Promise<*> } | null} [replay]
+ * @param {Replay | null} [replay]
  */
 export function makeMine(replay = null) { return mineHandler ? mineHandler(replay) : false; }

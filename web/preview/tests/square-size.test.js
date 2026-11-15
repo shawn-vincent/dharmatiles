@@ -11,12 +11,13 @@ import { MAP } from './map-fixture.js';
 const roots = [new URL('../js/', import.meta.url).pathname, new URL('../../../docs/assets/live/', import.meta.url).pathname];
 
 /** Every .js file under those, as full paths. */
-const sources = () => roots.flatMap((root) => readdirSync(root, { recursive: true }).filter((f) => String(f).endsWith('.js')).map((f) => root + String(f)));
+const sources = () => roots.flatMap((root) => readdirSync(root, { recursive: true }).filter((/** @type {string | Buffer} */ f) => String(f).endsWith('.js')).map((/** @type {string | Buffer} */ f) => root + String(f)));
 
 test('no square size is guessed in the page or the site: no ?? 35, || 35, "= 35" default or 25.4 literal', () => {
+  /** @type {string[]} */
   const seen = [];
   for (const f of sources()) {
-    readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+    readFileSync(f, 'utf8').split('\n').forEach((/** @type {string} */ line, /** @type {number} */ i) => {
       if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
       if (/(\?\?|\|\|)\s*\[?35\b|\bsq\w*\s*=\s*35\b|\bsquare\s*=\s*35\b|\b25\.4\b/.test(line)) seen.push(`${f}:${i + 1}: ${line.trim()}`);
     });

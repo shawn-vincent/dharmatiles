@@ -18,6 +18,7 @@ export const MIN = { panel: 300, view: 360 };
 export const DEFAULTS = Object.freeze({ mode: 'edit', side: 'left', hidePanel: false, sidew: 440 });
 
 /** A layout from anything stored: unknown or broken fields fall back to the defaults. */
+/** @param {any} v whatever localStorage held (parsed JSON of unknown shape; a bad one falls back to the defaults) */
 export function normalise(v) {
   const o = { ...DEFAULTS };
   if (!v || typeof v !== 'object') return o;
@@ -29,6 +30,7 @@ export function normalise(v) {
 }
 
 /** The panel's width clamped so the view keeps its minimum in a window `w` wide. */
+/** @param {Arrangement} o @param {number} w */
 export function fit(o, w) {
   const r = { ...o };
   r.sidew = Math.min(Math.max(r.sidew, MIN.panel), Math.max(MIN.panel, w - MIN.view - SASH));
@@ -36,8 +38,9 @@ export function fit(o, w) {
 }
 
 /** The grid for a layout: `{columns, rows, areas}` as CSS strings. */
+/** @param {Arrangement} o */
 export function grid(o) {
-  const q = (row) => `"${row.join(' ')}"`;
+  const q = (/** @type {string[]} */ row) => `"${row.join(' ')}"`;
   if (o.hidePanel) return { columns: 'minmax(0, 1fr)', rows: '48px minmax(0, 1fr)', areas: [q(['title']), q(['view'])].join(' ') };
   const left = o.side === 'left';
   const cols = left ? [`${o.sidew}px`, `${SASH}px`, 'minmax(0, 1fr)'] : ['minmax(0, 1fr)', `${SASH}px`, `${o.sidew}px`];
@@ -76,6 +79,7 @@ export class Layout {
 
   get state() { return { ...this.o }; }
 
+  /** @param {Partial<Arrangement>} patch */
   set(patch) {
     const was = this.o.hidePanel;
     this.o = normalise({ ...this.o, ...patch });
@@ -90,7 +94,7 @@ export class Layout {
    * beside it resizes with the column.  Opening sets the final layout and reveals from the shut column; closing reveals to it and
    * then sets the final layout (the panel hidden).  The choice is saved and the buttons follow at once.
    */
-  reveal(hide) {
+  reveal(/** @type {boolean} */ hide) {
     const o = fit({ ...this.o, hidePanel: false }, this.app.clientWidth || innerWidth);
     const open = grid(o).columns;
     const shut = o.side === 'left' ? '0px 0px minmax(0px, 1fr)' : 'minmax(0px, 1fr) 0px 0px';
@@ -103,6 +107,7 @@ export class Layout {
       reveal({ target: this.app, property: 'gridTemplateColumns', from: shut, to: open });
     }
   }
+  /** @param {string} name */
   preset(name) { this.set({ hidePanel: name === 'look' }); }
   /** Whether the panel (the tile browser, the levels, the source) is showing. */
   get sideShown() { return this.narrow.matches || !this.o.hidePanel; }
@@ -135,6 +140,7 @@ export class Layout {
     this.onChange(this.o);
   }
 
+  /** @param {HTMLElement} s */
   drag(s) {
     s.addEventListener('dblclick', () => this.set({ sidew: DEFAULTS.sidew }));
     s.addEventListener('pointerdown', (e) => {
@@ -144,7 +150,7 @@ export class Layout {
       s.classList.add('on');
       document.body.classList.add('resizing');
       const rect = this.app.getBoundingClientRect();
-      const move = (ev) => {
+      const move = (/** @type {PointerEvent} */ ev) => {
         const fromLeft = ev.clientX - rect.left, fromRight = rect.right - ev.clientX;
         this.o.sidew = Math.round((this.o.side === 'left' ? fromLeft : fromRight) - SASH / 2);
         Object.assign(this.o, fit(this.o, rect.width));

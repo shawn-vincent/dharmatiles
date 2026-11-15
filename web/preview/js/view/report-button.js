@@ -49,7 +49,7 @@ export function ReportPane({ msg, act, close }) {
   };
   return html`<div class="report-pane" data-report="1">
     <div class="report-head">This is what will go in the issue${rep ? html`: <b>${rep.title}</b>` : ''}</div>
-    <label class="report-opt"><input type="checkbox" checked=${leaveOut} onChange=${(e) => setLeaveOut(e.currentTarget.checked)} /> Leave my tile's source out</label>
+    <label class="report-opt"><input type="checkbox" checked=${leaveOut} onChange=${(/** @type {Event} */ e) => setLeaveOut(/** @type {HTMLInputElement} */ (e.currentTarget).checked)} /> Leave my tile's source out</label>
     <div class="report-acts"><button type="button" class="btn primary" disabled=${!rep} onClick=${file}>Open GitHub issue</button><button type="button" class="btn" onClick=${close}>Close</button></div>
     ${rep?.truncated ? html`<div class="report-note">Too long for the address: the issue will say to paste the report, which is copied for you.</div>` : null}
     ${note ? html`<div class="report-note" role="status">${note}</div>` : null}

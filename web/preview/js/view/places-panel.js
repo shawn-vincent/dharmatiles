@@ -311,7 +311,9 @@ export function Levels(/** @type {{ d: FolderData, on: RowHandlers, scrolls: Map
     if (moved) arrived?.();
     if (!ghost || !moved || !cur.current || !old.current) return;
     old.current.scrollTop = ghost.scroll;
-    slide({ scope: cur.current.parentElement, to: cur.current, out: old.current, dir: ghost.dir, leave: () => { if (last.current.ghost === ghost) { last.current.ghost = null; redraw((n) => n + 1); } } });
+    const scope = cur.current.parentElement;
+    if (!scope) throw new Error('a folder level slid while it was not in the page');
+    slide({ scope, to: cur.current, out: old.current, dir: ghost.dir, leave: () => { if (last.current.ghost === ghost) { last.current.ghost = null; redraw((n) => n + 1); } } });
   }, [key]);
   return html`<div id="folder" class="flvl" role="listbox" aria-label="Places and folders" tabindex="-1" ref=${cur} onScroll=${(/** @type {Event} */ e) => scrolls.set(key, /** @type {HTMLElement} */ (e.currentTarget).scrollTop)}><${FolderList} d=${d} on=${on} /></div>
     ${ghost ? html`<div class="flvl ghost" ref=${old} inert=${true}><${FolderList} d=${ghost.d} on=${on} ghost=${true} /></div>` : null}`;

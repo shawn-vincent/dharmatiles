@@ -22,10 +22,11 @@ import { platesPanel, platesUi, plan } from './model.js';
 import { unpin, unpinAll } from './plates-pin.js';
 import { steps } from '../steps.js';
 
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const mm = (n) => `${Number(n).toFixed(1).replace(/\.0$/, '')}`;
+const plural = (/** @type {number} */ n, /** @type {string} */ one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const mm = (/** @type {number} */ n) => `${Number(n).toFixed(1).replace(/\.0$/, '')}`;
 
-let lastList = null, lastTile = null; // the print list and the tile last shown, for the title bar's switch
+/** @type {string | null} */ let lastList = null;
+/** @type {string | null} */ let lastTile = null; // the print list and the tile last shown, for the title bar's switch
 
 /** The strip under the crumbs: what is laid out, and the bed (the printer's name is the title bar's chip's). */
 export function contextLines() {
@@ -37,11 +38,13 @@ export function contextLines() {
 }
 
 const ui = () => platesUi.value.value;
-const change = (/** @type {(s: any) => any} */ edit) => { const t = tile(); if (t) platesUi.update(t.id, edit); };
-const exporting = (/** @type {any} */ patch) => change((s) => ({ exporting: { ...s.exporting, ...patch } }));
-const sheet = (/** @type {any} */ patch) => change((s) => ({ after: { ...s.after, ...patch } }));
+/** @typedef {import('./model.js').PlatesUiState} UiState */
+const change = (/** @type {(s: UiState) => Partial<UiState>} */ edit) => { const t = tile(); if (t) platesUi.update(t.id, edit); };
+const exporting = (/** @type {Partial<UiState['exporting']>} */ patch) => change((s) => ({ exporting: { ...s.exporting, ...patch } }));
+const sheet = (/** @type {Partial<UiState['after']>} */ patch) => change((s) => ({ after: { ...s.after, ...patch } }));
 
 /** A setting is a change to the list's document: the plates line's word, against the revision held, one step of the history. */
+/** @param {string} key @param {string | null} [value] */
 async function set(key, value) {
   const t = tile();
   if (!t) return;
@@ -51,6 +54,7 @@ async function set(key, value) {
   } catch (e) { showError(`Could not change ${key}`, e); }
 }
 
+/** @param {number} plate */
 async function show(plate) {
   const t = tile();
   if (!t) return;
@@ -89,7 +93,7 @@ async function doExport() {
 }
 
 /** What the panel's buttons do. */
-const act = {
+export const act = {
   set, show, unpin, unpinAll, setCount, removePiece, doExport, recordPlate, today,
   chooser: chooserFor,
   openSheet: (/** @type {number} */ plate) => sheet({ open: true, plate, bad: [] }),
@@ -100,6 +104,7 @@ const act = {
 };
 
 /** The title bar's switch: Tile, Map or Plates, following the document in view; pressing the other one goes to the last of its kind. */
+/** @param {'tile' | 'map' | 'plates'} mode */
 function pickMode(mode) {
   const here = isPlates(tile()) ? (isMapView() ? 'map' : 'plates') : 'tile';
   if (mode === here) return;
@@ -118,7 +123,11 @@ function pickMode(mode) {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  for (const b of kids($('modes'))) b.onclick = () => pickMode(b.dataset.mode);
+  for (const b of kids($('modes'))) {
+    const mode = b.dataset.mode;
+    if (mode !== 'tile' && mode !== 'map' && mode !== 'plates') throw new Error(`the title bar's mode button names no mode: ${mode}`);
+    b.onclick = () => pickMode(mode);
+  }
   render(html`<${PlatesPanel} m=${platesPanel} act=${act} />`, $('lens-plates'));
   // the title bar's switch and the page's class follow the document in view (bound to the model, not stored)
   effect(() => {

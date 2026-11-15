@@ -37,6 +37,7 @@ export function pairsNow() {
 }
 
 /** Write `pairs` over the address, keeping what it holds that is not the address's (the theme, the paint). */
+/** @param {Record<string, string | undefined>} pairs */
 function write(pairs) {
   const cur = parseHash(location.hash);
   const next = { ...cur };

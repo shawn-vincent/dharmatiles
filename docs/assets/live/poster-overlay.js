@@ -38,7 +38,7 @@ export async function drawOnPoster(host) {
     if (!ctx) throw new Error('This browser gave no 2D canvas for the poster overlay.');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const fw = map.cols * SQUARE_MM, fh = map.rows * SQUARE_MM;
-    const project = (x, y) => ({ x: (x / fw) * r.width, y: (1 - y / fh) * r.height });
+    const project = (/** @type {number} */ x, /** @type {number} */ y) => ({ x: (x / fw) * r.width, y: (1 - y / fh) * r.height });
     renderMarks(ctx, { map, sq: SQUARE_MM, drawn: drawn(marks, moment), squares: moment.toggles.has('squares'), project, size: { w: r.width, h: r.height } });
   };
   paint();

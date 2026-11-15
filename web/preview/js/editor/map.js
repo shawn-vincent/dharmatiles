@@ -20,10 +20,11 @@ export let tools = null;
 // ---- the map, the bar and its tools ----------------------------------------
 
 const overlay = new Overlay($('over'), viewer);
-const COLOUR = { water: '--water', dirt: '--earth', flagstones: '--stone', cliff: '--stone', planks: '--earth', grass: '--moss', reeds: '--moss', flower: '--bloom' };
+const COLOUR = /** @type {Record<string, string>} */ ({ water: '--water', dirt: '--earth', flagstones: '--stone', cliff: '--stone', planks: '--earth', grass: '--moss', reeds: '--moss', flower: '--bloom' });
 const cssVar = token; // cached: read once per theme, not once per entry per frame
 
 /** The ground's heights, from the surfaces the build made (what each is, from the mesh's own stack). */
+/** @param {import('../payload.js').Payload} p */
 function surfaceHeights(p) {
   const stack = meshStack(p);
   overlay.setHeights(p, (e) => elementNamed(stack[e]?.element)?.body === true, tile()?.plan?.sizeMm || p.meta.footprint);
@@ -72,14 +73,14 @@ function handles() {
     const slots = slotsOf(l?.points || [], nodes);
     return (l?.points || []).flatMap((p, k) => (p.at && slots[k].id != null ? [{
       q: p.at, label: `Moved a point of ${s.id}`, make: pointEdit(slots[k], true),
-      move(q) { if (l && !l.wobbleMm && l.pts.length === l.points.length) l.pts[k] = q; },
+      move(/** @type {import('../overlay.js').Q} */ q) { if (l && !l.wobbleMm && l.pts.length === l.points.length) l.pts[k] = [q[0], q[1]]; },
     }] : []));
   }
   if (s.kind === 'region') {
     const fills = mapNode(s)?.fills || [];
     const slots = slotsOf(fills, nodes);
     return fills.flatMap((f, k) => (f.at && slots[k].id != null ? [{
-      q: f.at, label: `Moved the fill point of ${s.id}`, make: pointEdit(slots[k], false), move(q) { f.at = q; },
+      q: f.at, label: `Moved the fill point of ${s.id}`, make: pointEdit(slots[k], false), move(/** @type {import('../overlay.js').Q} */ q) { f.at = [q[0], q[1]]; },
     }] : []));
   }
   if (isEntry(s)) {
@@ -115,7 +116,7 @@ function drawOverlay() {
 }
 
 /** Write a new node from a gesture in the view, then select it. */
-/** @param {any} place @param {any} node @param {{select?: any}} [opts] */
+/** @param {any} place @param {any} node @param {{select?: any}} [opts] @returns {Promise<unknown>} */
 async function insertNode(place, node, { select: sel } = {}) {
   const t = tile();
   if (!t) return;
@@ -128,10 +129,13 @@ async function insertNode(place, node, { select: sel } = {}) {
   const r = await editCall({ op: 'insert', text: doc.get().text, place, node });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be written' }); failed('Could not add to the tile', r); return; }
   if (sel) view.set({ sel, source: null }); else doc.set({ selectAt: r.body.at });
-  edited(r.body.text, 'view', `Added ${node.trim().split(/\s+/)[0]}`, byteToIndex(r.body.text, r.body.at));
+  // the program says where the new node is (`at`); a reply with no place leaves the caret and the scroll where they were
+  const at = r.body.at;
+  edited(r.body.text, 'view', `Added ${node.trim().split(/\s+/)[0]}`, at == null ? null : byteToIndex(r.body.text, at));
   askDraft();
+  if (at == null) return;
   const text = /** @type {string} */ (texts.text); // an edit was just written into it
-  const l = text.slice(0, byteToIndex(text, r.body.at)).split('\n').length;
+  const l = text.slice(0, byteToIndex(text, at)).split('\n').length;
   texts.reveal(l);
 }
 

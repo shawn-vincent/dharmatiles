@@ -20,18 +20,20 @@ export function HistoryMenu({ items, onPick, pictures = null }) {
 }
 
 /** Where the text stands in words; a file that changed on disk offers the two ways out. */
+/** @param {{ words: { text: string, bad?: boolean } | null, conflict: boolean, onTake: () => void, onKeep: () => void }} p */
 export function SaveState({ words, conflict, onTake, onKeep }) {
   if (conflict) return html`changed on disk: <button type="button" onClick=${onTake}>take the disk’s</button> or <button type="button" onClick=${onKeep}>keep mine</button>`;
   return words ? html`${words.text}` : null;
 }
 
 /** What the export did: that it is building, why it cannot, what was written (the files, the whole path on hover) or where it would write. */
+/** @param {{ busy: boolean, error: string | null, files: string[] | null, why: string | null, out: { shown: string } | null }} p */
 export function ExportWhy({ busy, error, files, why, out }) {
   if (busy) return html`Building through the gate…`;
   if (error) return html`${error}`;
   if (files) {
-    const shown = files.filter((f) => /\.(stl|3mf)$/.test(f));
-    return html`Written: ${shown.map((f, i) => html`<${Fragment} key=${f}>${i ? ', ' : ''}<code title=${f}>${f.split(/[\\/]/).slice(-3).join('/')}</code><//>`)}`;
+    const shown = files.filter((/** @type {string} */ f) => /\.(stl|3mf)$/.test(f));
+    return html`Written: ${shown.map((/** @type {string} */ f, /** @type {number} */ i) => html`<${Fragment} key=${f}>${i ? ', ' : ''}<code title=${f}>${f.split(/[\\/]/).slice(-3).join('/')}</code><//>`)}`;
   }
   return html`${why || (out ? `Writes to ${out.shown}` : 'Writes to out/, as dharmatiles build does.')}`;
 }

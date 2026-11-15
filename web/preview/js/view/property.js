@@ -21,6 +21,7 @@ import { inheritedPhrase } from './sheet.js';
 const CHECK_PAUSE_MS = 200;
 
 /** The range inside a weighting call (`low(3dmm .. 6dmm)` is `3dmm .. 6dmm`), or the text as it is. */
+/** @param {string} typed @param {string[]} names */
 export function innerRange(typed, names) {
   const t = typed.trim();
   const m = t.match(/^([A-Za-z_]\w*)\(([\s\S]*)\)$/);
@@ -37,11 +38,15 @@ export function innerRange(typed, names) {
 }
 
 /** `range` weighted by `name` with its defaults (flat is the range alone). */
-export const weightedAs = (range, name) => (name === 'flat' ? range : `${name}(${range})`);
+export const weightedAs = (/** @type {string} */ range, /** @type {string} */ name) => (name === 'flat' ? range : `${name}(${range})`);
 
 /** The weightings that can be written with nothing but a range: every argument has a default. */
-export const simpleWeightings = (list) => (list || []).filter((w) => !w.rest && (w.args || []).every((a) => a.default != null) && /^[a-z]+\(range/.test(w.call));
+export const simpleWeightings = (/** @type {import('../api').WeightingJson[] | null | undefined} */ list) => (list || []).filter((w) => !w.rest && (w.args || []).every((a) => a.default != null) && /^[a-z]+\(range/.test(w.call));
 
+/**
+ * @typedef {{ element: string | undefined, label: string, c: import('./sheet.js').Control, s: import('./sheet.js').Setting | undefined, at: number, inherited?: import('./sheet.js').Inherited | null, weightings?: import('../api').WeightingJson[], names?: { heights: string[] } }} PropertyModel
+ * @param {{ model: PropertyModel, api: import('./sheet.js').SheetApi }} p
+ */
 export function PropertyPage({ model, api }) {
   const { c, s } = model;
   const ro = !(api.writable() || api.canMine?.());
@@ -54,16 +59,17 @@ export function PropertyPage({ model, api }) {
   const [check, setCheck] = useState('');
   const input = useRef(/** @type {HTMLInputElement | null} */ (null));
   const asked = useRef(0);
-  const askLater = useRef(debounce((typed) => {
+  const askLater = useRef(debounce((/** @type {string} */ typed) => {
+    if (model.element === undefined) return; // a control of no element (the tile's own) has nothing to check it against
     const ask = ++asked.current;
-    api.checkValue?.(model.element, c.name, typed)?.then((why) => { if (ask === asked.current) setCheck(why || ''); });
+    api.checkValue?.(model.element, c.name, typed)?.then((/** @type {string | null} */ why) => { if (ask === asked.current) setCheck(why || ''); });
   }, CHECK_PAUSE_MS));
   useEffect(() => () => askLater.current.cancel(), []);
   const value = draft ?? written0;
   const weights = model.weightings || [];
-  const weightNames = weights.map((w) => w.name);
+  const weightNames = weights.map((/** @type {import('../api').WeightingJson} */ w) => w.name);
 
-  const commit = (text) => {
+  const commit = (/** @type {string} */ text) => {
     const next = text.trim();
     setDraft(null);
     if (next === written0.trim()) return;
@@ -81,17 +87,17 @@ export function PropertyPage({ model, api }) {
       ${c.about ? html`<p class="pabout">${c.about}</p>` : null}
       <div class="cap plab">Value</div>
       <div class="pfield"><input class="pin" ref=${input} type="text" spellcheck=${false} autocomplete="off" aria-label=${`${c.name}, as written`} value=${value} placeholder=${dflt || `no default for ${c.name}`} disabled=${ro}
-        onInput=${(e) => type(e.target.value)}
-        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(value); } if (e.key === 'Escape') { e.stopPropagation(); setDraft(null); input.current?.blur(); } }}
+        onInput=${(/** @type {Event} */ e) => type(/** @type {HTMLInputElement} */ (e.target).value)}
+        onKeyDown=${(/** @type {KeyboardEvent} */ e) => { if (e.key === 'Enter') { e.preventDefault(); commit(value); } if (e.key === 'Escape') { e.stopPropagation(); setDraft(null); input.current?.blur(); } }}
         onBlur=${() => { if (draft !== null) commit(draft); }} />
         <div class="pcheck" hidden=${!check}>${check}</div></div>
       ${c.ranges ? html`<div class="seg pforms"><button type="button" class=${formOf(value) === 'number' ? 'on' : undefined} disabled=${ro} onClick=${() => commit(asNumber(innerRange(value, weightNames).range))}>One number</button><button type="button" class=${form === 'range' && !name ? 'on' : undefined} disabled=${ro} onClick=${() => commit(asRange(innerRange(value, weightNames).range))}>A range</button></div>` : null}
       ${c.weighted && weights.length ? html`<div class="cap plab">How likely each value is</div>
-        <div class="words pweights">${simple.map((w) => html`<button type="button" key=${w.name} class=${name ? (w.name === name ? 'on' : undefined) : (w.name === 'flat' && form === 'range' ? 'on' : undefined)} title=${`${w.call}\n${w.about}`} disabled=${ro} data-weight=${w.name}
+        <div class="words pweights">${simple.map((/** @type {import('../api').WeightingJson} */ w) => html`<button type="button" key=${w.name} class=${name ? (w.name === name ? 'on' : undefined) : (w.name === 'flat' && form === 'range' ? 'on' : undefined)} title=${`${w.call}\n${w.about}`} disabled=${ro} data-weight=${w.name}
           onClick=${() => commit(weightedAs(formOf(innerRange(value, weightNames).range) === 'number' ? asRange(innerRange(value, weightNames).range) : innerRange(value, weightNames).range, w.name))}>${w.name}</button>`)}</div>
-        <details class="pmore"><summary>Every form</summary><dl class="pforms-help">${weights.map((w) => html`<dt key=${`t${w.name}`}>${w.call}</dt><dd key=${`d${w.name}`}>${w.about}</dd>`)}</dl></details>` : null}
+        <details class="pmore"><summary>Every form</summary><dl class="pforms-help">${weights.map((/** @type {import('../api').WeightingJson} */ w) => html`<dt key=${`t${w.name}`}>${w.call}</dt><dd key=${`d${w.name}`}>${w.about}</dd>`)}</dl></details>` : null}
       ${c.unit === 'height' && model.names?.heights?.length ? html`<div class="cap plab">Names you can use</div>
-        <div class="words pnames">${model.names.heights.map((n) => html`<button type="button" key=${n} disabled=${ro} onClick=${() => {
+        <div class="words pnames">${model.names.heights.map((/** @type {string} */ n) => html`<button type="button" key=${n} disabled=${ro} onClick=${() => {
           const el = input.current;
           const at = el?.selectionStart ?? value.length, to = el?.selectionEnd ?? at;
           type(value.slice(0, at) + n + value.slice(to));

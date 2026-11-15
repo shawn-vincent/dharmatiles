@@ -13,6 +13,7 @@ export function readKept() {
 }
 
 /** Remember a map's sort and filter. */
+/** @param {string} id @param {{ sort: string, filter: string }} choice */
 export function keep(id, { sort, filter }) {
   try { localStorage.setItem(KEY, JSON.stringify({ ...readKept(), [id]: { sort, filter } })); } catch { /* private mode: the choice lasts until the page closes */ }
 }

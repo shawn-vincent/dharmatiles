@@ -61,7 +61,7 @@ globalThis.dtProgress = (/** @type {string} */ tick) => {
   if (current != null) scope.postMessage({ type: 'progress', id: current, ...answer('dtProgress', tick) });
 };
 
-scope.onmessage = async (ev) => {
+scope.onmessage = async (/** @type {MessageEvent<ToWorker>} */ ev) => {
   const m = ev.data;
   try {
     if (m.type === 'init') {
@@ -76,7 +76,7 @@ scope.onmessage = async (ev) => {
       scope.postMessage({ type: 'fixed', id: m.id, text: engine.fix_tile(m.text, JSON.stringify(m.fix)) });
       return;
     }
-    if (m.type !== 'job') throw new Error(`the worker was sent a "${m.type}" message it does not know`);
+    if (m.type !== 'job') throw new Error(`the worker was sent a "${/** @type {{ type: string }} */ (m).type}" message it does not know`);
     if (!ready) throw new Error('the worker was given a job before it was ready');
     current = m.id;
     lastPanic = '';
@@ -99,6 +99,6 @@ scope.onmessage = async (ev) => {
   } catch (e) {
     current = null;
     // a trap or a throw is loud: the page shows it, never a blank view
-    scope.postMessage({ type: 'error', id: m.id, message: (lastPanic ? `${lastPanic}\n` : '') + String(e && e.message ? e.message : e), stack: e && e.stack ? String(e.stack) : '' });
+    scope.postMessage({ type: 'error', id: 'id' in m ? m.id : undefined, message: (lastPanic ? `${lastPanic}\n` : '') + (e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String(e.message) : String(e)), stack: e instanceof Error && e.stack ? e.stack : '' });
   }
 };

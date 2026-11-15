@@ -8,7 +8,10 @@ import { Icon } from './icons.js';
 const DONE_MS = 1600;
 const FAILED_MS = 5000;
 
-/** A copy button for `text` (a string, or a function giving one, or a promise of one, when pressed). */
+/**
+ * A copy button for `text` (a string, or a function giving one, or a promise of one, when pressed).
+ * @param {{ text: string | Promise<string> | (() => string | Promise<string>), label?: string, title?: string }} p
+ */
 export function CopyButton({ text, label = '', title = 'Copy' }) {
   const [phase, setPhase] = useState(/** @type {{kind: 'done' | 'failed', why?: string} | null} */ (null));
   const timer = useRef(0);

@@ -14,6 +14,9 @@
 /** @typedef {import('../../../web/preview/js/api').TileMap} TileMap (the repo's path; the site serves the page's code at `../../editor/js`, where api.d.ts is not published, so `tsc` reads it from here) */
 /** @typedef {import('../../../web/preview/js/api').BuildData} BuildData */
 /** @typedef {import('./engine-wire').Checked} Checked */
+/** @typedef {import('./engine.js').CardEvent} CardEvent */
+/** @typedef {import('./engine.js').Built} Built */
+/** @typedef {import('../../../web/preview/js/api').MessageJson} MessageJson */
 
 import { signal, computed } from '@preact/signals-core';
 import { buildStatusLine, paintStatusLine } from '../../editor/js/view/status-line.js';
@@ -25,6 +28,7 @@ import { markAtPoint, renderMarks } from '../../editor/js/overlay-render.js';
 import { heightAtGrid, heightGrid } from '../../editor/js/overlay-geometry.js';
 import { byteToIndex } from '../../editor/js/spans.js';
 import { DRAFT_CELLS, DRAFT_TIER } from './engine.js';
+import { messageOf } from '../../editor/js/problems.js';
 import { CardLog } from './site-log.js';
 import { SourcePane } from './source-pane.js';
 import { findControl, parseControls, rangeOf, readValue, writeValue } from './controls.js';
@@ -33,6 +37,7 @@ import { LiteViewer } from './viewer-lite.js';
 const TOGGLES = [['lines', 'Lines'], ['points', 'Points'], ['regions', 'Regions'], ['squares', 'Squares']];
 let serial = 0;
 /** The cards that hold a WebGL context, least recently used first: a page keeps only a few live. */
+/** @type {Card[]} */
 const holders = [];
 const MAX_CONTEXTS = 4;
 
@@ -49,7 +54,7 @@ function el(tag, cls = '', attrs = {}) {
 }
 
 export class Card {
-  // the parts #build() makes, named here so their types hold everywhere (`#build` runs in the constructor, before any use)
+  // the parts the constructor makes, named here so their types hold everywhere
   /** @type {HTMLElement} */ view;
   /** @type {HTMLElement | null} */ poster;
   /** @type {HTMLCanvasElement} */ gl;
@@ -83,6 +88,7 @@ export class Card {
     /** @type {Checked | null} the worker's check (dt-web's `Checked`, generated into engine-wire.d.ts) */
     this.checked = null;
     this.checkedText = null;
+    /** @type {ReturnType<typeof marksOf>} */
     this.marks = [];
     /** @type {TileMap | null} the program's map, one type for the page, the cards and the posters */
     this.map = null;
@@ -109,16 +115,11 @@ export class Card {
     this.seenErrors = new Set();
     this.debounce = 0;
 
-    this.#build();
-    this.handle = engine.register(this.id, (ev) => this.#engine(ev));
-    this.handle.focus();
-    this.#edit();
-  }
+    this.rev = signal(0);
+    this.tileState = signal({ id: this.id, name: this.name, status: 'idle', path: 'tile.dtile', shown: /** @type {{ checked: boolean, draft: boolean } | null} */ (null), errors: [] });
+    this.progressSig = signal(/** @type {any} */ (null));
 
-  // ---- the page ----------------------------------------------------------
-
-  #build() {
-    const host = this.host;
+    // the page: every part named above is made here, so the checker sees each one assigned
     host.dataset.state = 'waking';
     const grid = host.querySelector('.dtx-grid') ?? host.appendChild(el('div', 'dtx-grid'));
     this.view = /** @type {HTMLElement} */ (grid.querySelector('.dtx-view') ?? grid.appendChild(el('figure', 'dtx-view')));
@@ -180,8 +181,15 @@ export class Card {
 
     this.#sizeObserver();
     this.#pointer();
+  
+    this.handle = engine.register(this.id, (ev) => this.#engine(ev));
+    this.handle.focus();
+    this.#edit();
   }
 
+  // ---- the page ----------------------------------------------------------
+
+  /** @param {string} label @param {string} title @param {() => void} on */
   #button(label, title, on) {
     const b = el('button', 'btn sm', { type: 'button', title });
     b.textContent = label;
@@ -191,9 +199,6 @@ export class Card {
 
   /** The model the editor's messages list draws from: signals over this card's own log. */
   #model() {
-    this.rev = signal(0);
-    this.tileState = signal({ id: this.id, name: this.name, status: 'idle', path: 'tile.dtile', shown: /** @type {{ checked: boolean, draft: boolean } | null} */ (null), errors: [] });
-    this.progressSig = signal(/** @type {any} */ (null));
     return {
       open: signal(false),
       view: computed(() => { void this.rev.value; return this.log.view(); }),
@@ -211,21 +216,22 @@ export class Card {
 
   #act() {
     return {
-      setFilter: (id) => { this.model.filter.value = id; },
-      showLine: (_file, line) => this.pane.showLine(line),
+      setFilter: (/** @type {string} */ id) => { this.model.filter.value = id; },
+      showLine: (/** @type {string | null} */ _file, /** @type {number} */ line) => this.pane.showLine(line),
       openPanel: () => this.#fold(true),
       showNode: () => {},
-      dismiss: (seq) => { this.log.log.dismiss(seq); this.#touch(); },
-      details: (m, source) => detailsFor(m, { source }),
+      dismiss: (/** @type {number} */ seq) => { this.log.log.dismiss(seq); this.#touch(); },
+      details: (/** @type {MessageJson} */ m, /** @type {string | null} */ source) => detailsFor(m, { source }),
       canShowWorst: () => false,
       underside: () => null,
       showWorst: () => {},
-      applyFix: (m) => this.#applyFix(m),
-      allText: async () => this.model.view.value.rows.map((r) => `${r.m.severity}: ${r.m.code ?? ''} ${r.m.text}`).join('\n') || 'No messages.',
+      applyFix: (/** @type {MessageJson} */ m) => this.#applyFix(m),
+      allText: async () => this.model.view.value.rows.map((/** @type {{ m: MessageJson }} */ r) => `${r.m.severity}: ${r.m.code ?? ''} ${r.m.text}`).join('\n') || 'No messages.',
     };
   }
 
   /** The source with the program's fix laid in, by the engine (`Op::Fix`): the edit goes through the source like any other. */
+  /** @param {MessageJson} m */
   async #applyFix(m) {
     if (!m.fix) return;
     const was = this.text;
@@ -233,7 +239,7 @@ export class Card {
     try {
       next = await this.engine.fix(was, m.fix);
     } catch (e) {
-      this.log.failed(`The fix could not be made: ${e.message}`, e.stack ?? '');
+      this.log.failed(`The fix could not be made: ${messageOf(e)}`, e instanceof Error ? e.stack ?? '' : '');
       this.#touch();
       return;
     }
@@ -249,6 +255,7 @@ export class Card {
   }
 
   /** Fold the list open or shut. */
+  /** @param {boolean} open */
   #fold(open) {
     this.model.open.value = open;
     this.msgs.hidden = !open;
@@ -276,14 +283,14 @@ export class Card {
   /** Where a point of the tile falls on the overlay: the camera's, or the poster's own top view before there is a mesh. */
   #projector() {
     const viewer = this.viewer;
-    if (viewer && this.mesh) return (x, y, z = 0) => viewer.project(x, y, z);
+    if (viewer && this.mesh) return (/** @type {number} */ x, /** @type {number} */ y, z = 0) => viewer.project(x, y, z);
     const foot = this.mesh?.footprint ?? this.#mapFootprint();
     if (!foot) return null;
     const [fw, fh] = foot;
     const { w, h } = this.size ?? { w: 1, h: 1 };
     const s = Math.min(w / fw, h / fh);
     const ox = (w - fw * s) / 2, oy = (h - fh * s) / 2;
-    return (x, y) => ({ x: ox + x * s, y: oy + (fh - y) * s });
+    return (/** @type {number} */ x, /** @type {number} */ y) => ({ x: ox + x * s, y: oy + (fh - y) * s });
   }
 
   /** The footprint the check's map says, mm; none before a check has made a map. */
@@ -292,7 +299,7 @@ export class Card {
     return [this.map.cols * this.sq, this.map.rows * this.sq];
   }
 
-  #zAt = (x, y) => (this.viewer && this.heights ? heightAtGrid(this.heights, x, y, 4) : 0);
+  #zAt = (/** @type {number} */ x, /** @type {number} */ y) => (this.viewer && this.heights ? heightAtGrid(this.heights, x, y, 4) : 0);
 
   #paint() {
     if (!this.ov || !this.size) return;
@@ -333,7 +340,7 @@ export class Card {
   }
 
   #pointer() {
-    const over = (e) => {
+    const over = (/** @type {PointerEvent} */ e) => {
       if (e.buttons) return;
       const r = this.gl.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
@@ -351,6 +358,7 @@ export class Card {
     this.host.addEventListener('pointerdown', () => this.handle.focus(), true);
   }
 
+  /** @param {Built['positions']} positions @param {Built['colours']} colours @param {Built['meta']['footprint']} footprint */
   #showMesh(positions, colours, footprint) {
     if (!this.viewer) {
       // the canvas is shown before its context is made: a context made on a hidden canvas has nothing to draw into
@@ -395,6 +403,7 @@ export class Card {
     this.#touch();
   }
 
+  /** @param {boolean} download */
   #full(download) {
     this.wantDownload = download;
     this.status = 'building';
@@ -427,7 +436,9 @@ export class Card {
   }
 
   #save() {
-    const url = URL.createObjectURL(new Blob([this.stl], { type: 'model/stl' }));
+    const stl = this.stl;
+    if (!stl) throw new Error('A card was asked to save an STL it does not hold.'); // the callers check first
+    const url = URL.createObjectURL(new Blob([new Uint8Array(stl)], { type: 'model/stl' }));
     const a = el('a', '', { href: url, download: `${this.name}-${this.system}.stl` });
     document.body.append(a);
     a.click();
@@ -442,6 +453,7 @@ export class Card {
 
   // ---- what the engine says --------------------------------------------------
 
+  /** @param {CardEvent} ev */
   #engine(ev) {
     // a result for an older edit is dropped, never painted (the engine keeps it in its cache)
     if (ev.version !== this.version && ev.type !== 'queued') return;
@@ -483,11 +495,12 @@ export class Card {
         this.log.end();
         break;
       default:
-        throw new Error(`a card was told "${ev.type}", which it does not know`);
+        throw new Error(`a card was told "${/** @type {{ type: string }} */ (ev).type}", which it does not know`); // every known type is handled above
     }
     this.#touch();
   }
 
+  /** @param {Checked} result */
   #checked(result) {
     this.checked = result;
     this.checkedText = this.text;
@@ -511,6 +524,7 @@ export class Card {
     this.#paint();
   }
 
+  /** @param {Extract<CardEvent, { type: 'built' }>} ev */
   #built(ev) {
     const draft = ev.kind !== 'full';
     const meta = ev.meta;

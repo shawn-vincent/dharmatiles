@@ -9,6 +9,10 @@
 //   accept(reply, text) show a reply that is still current
 //   fail(err)           a request that threw
 
+/**
+ * @template R
+ * @param {{ text: () => string | null, request: (text: string) => Promise<R>, accept: (reply: R, text: string) => void, fail: (err: unknown) => void }} o
+ */
 export function createDrafter({ text, request, accept, fail }) {
   let drafting = false, again = false, epoch = 0;
   async function ask() {

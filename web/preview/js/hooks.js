@@ -6,15 +6,17 @@
 // order the parts start in decides nothing.
 
 export function hookSet() {
-  const fns = new Set();
+  const fns = /** @type {Set<(...args: any[]) => void>} */ (new Set());
   return {
     /** Add `fn`; the result removes it. */
+    /** @param {(...args: any[]) => void} fn */
     add(fn) {
       if (typeof fn !== 'function') throw new TypeError('a hook is a function');
       fns.add(fn);
       return () => { fns.delete(fn); };
     },
     /** Call every hook with `args`. */
+    /** @param {any[]} args handed to every hook (each hook set says what its hooks take) */
     run(...args) {
       let failure = null;
       for (const fn of [...fns]) {

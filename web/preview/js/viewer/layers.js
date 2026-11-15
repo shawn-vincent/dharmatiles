@@ -218,7 +218,7 @@ export const layersMethods = methods({
     const size = sg ? [sg.w, sg.h] : this.plan?.sizeMm;
     if (!size) return; // a print list whose printer names no bed: no ground to rule
     const [w, h] = size;
-    const z = (sg ? sg.z : (this.plan.datumZ ?? b.lo[2])) - GRID_BELOW_MM;
+    const z = (sg ? sg.z : (this.plan?.datumZ ?? b.lo[2])) - GRID_BELOW_MM;
     const reach = Math.max(w, h) * 6;
     const mat = new THREE.ShaderMaterial({
       uniforms: {
@@ -251,8 +251,9 @@ export const layersMethods = methods({
       this.bedGroup.traverse((/** @type {any} */ o) => { o.geometry?.dispose(); if (o.material) { this.fatMaterials.delete(o.material); o.material.dispose(); } });
       this.bedGroup = null;
     }
-    const bed = this.payload?.meta?.bed;
-    if (!bed) return;
+    const meta = this.payload?.meta;
+    const bed = meta?.bed;
+    if (!meta || !bed) return;
     const group = new THREE.Group();
     const ink = this.gridInk?.clone() ?? new THREE.Color(0.17, 0.2, 0.25);
     const z = (this.plan?.datumZ ?? 0) - GRID_BELOW_MM * 0.5;
@@ -286,7 +287,7 @@ export const layersMethods = methods({
     sm.renderOrder = 0; sm.frustumCulled = false;
     group.add(sm);
     rect(0, 0, bed[0], bed[1], 0, 2.5, 0.85);
-    for (const [x0, y0, x1, y1] of this.payload.meta.excluded ?? []) rect(x0, y0, x1, y1, 0.3, 1.5, 0.7);
+    for (const [x0, y0, x1, y1] of meta.excluded ?? []) rect(x0, y0, x1, y1, 0.3, 1.5, 0.7);
     this.bedGroup = group;
     this.scene.add(group);
   },

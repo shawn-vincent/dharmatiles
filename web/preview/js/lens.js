@@ -4,7 +4,7 @@
 import { kdlString, unquote } from './value.js';
 
 /** Does a written value carry its own unit (`3.5dmm`, `20%`, `45deg`)? */
-export const carriesUnit = (shown) => /\d\s*[a-zA-Z%°]/.test(String(shown ?? ''));
+export const carriesUnit = (/** @type {unknown} */ shown) => /\d\s*[a-zA-Z%°]/.test(String(shown ?? ''));
 
 export { kdlString, unquote };
 
@@ -13,6 +13,7 @@ export { kdlString, unquote };
  * The server gives the value's own span (`"6..10"`); a whole `name=value`
  * or child line `name value` is taken apart too.
  */
+/** @param {string} text @param {string} name */
 export function valueOf(text, name) {
   if (text.startsWith(`${name}=`)) return { at: name.length + 1, text: text.slice(name.length + 1) };
   const m = text.match(new RegExp(`^${name.replace(/[.+-]/g, '\\$&')}\\s+`));
@@ -22,6 +23,7 @@ export function valueOf(text, name) {
 }
 
 /** A typed value as JSON for the server: a number, a switch, or a string (quotes taken off). */
+/** @param {string} raw */
 export function parseValue(raw) {
   const t = raw.trim();
   if (/^-?\d+(\.\d+)?$/.test(t)) return Number(t);
@@ -31,6 +33,7 @@ export function parseValue(raw) {
 }
 
 /** Button choices stay direct only when they are certain to fit on one row. */
+/** @param {{ word: string }[]} words */
 export function wordControlNeedsSelect(words) {
   return words.length > 2 || words.reduce((n, word) => n + word.word.length, 0) > 18;
 }

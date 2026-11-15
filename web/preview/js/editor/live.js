@@ -13,24 +13,32 @@ import { host } from './app.js';
 import { doc, log, server, tile } from './stores.js';
 import { applyDocState } from './docs.js';
 
-const isList = (t) => /\.dmap$/i.test(t.path);
+const isList = (/** @type {{ path: string }} */ t) => /\.dmap$/i.test(t.path);
 /**
  * A tile as the server store keeps it: without its progress (kept apart) and, for a print list or a map, without
  * its plan, which is the document's state: it goes to the document module (the one place that holds it, and
  * takes it only if it is newer than what it holds).
  */
+/** @param {import('../api').TileSummary} t */
 const serverTile = (t) => {
   const { progress, plan, ...rest } = t;
   if (!isList(t)) return plan === undefined ? rest : { ...rest, plan };
-  if (plan?.docRev != null) applyDocState({ id: t.id, docRev: plan.docRev, plan });
+  if (plan && 'docRev' in plan && plan.docRev != null) applyDocState({ id: t.id, docRev: plan.docRev, plan });
   return rest;
 };
-const progressOf = (tiles) => Object.fromEntries(tiles.filter((t) => t.progress).map((t) => [t.id, t.progress]));
+/** @param {import('../api').TileSummary[]} tiles @returns {Record<string, import('../api').Progress>} */
+const progressOf = (tiles) => {
+  /** @type {Record<string, import('../api').Progress>} */
+  const out = {};
+  for (const t of tiles) if (t.progress) out[t.id] = t.progress;
+  return out;
+};
 
 // A build that failed with a bug or a failure the program reports
 // ({kind, message, causes, backtrace, ...}, the tile's `failure`) goes to the
 // error panel once, with the server's error as the cause of the page's.
 const reported = new Set();
+/** @param {import('../api').TileSummary} t */
 function reportFailure(t) {
   const f = t.failure;
   if (!f) return;
@@ -42,6 +50,7 @@ function reportFailure(t) {
 
 /** The messages store is told when a tile's build begins and ends: what it shows of the last build follows. */
 const building = new Set();
+/** @param {import('../api').TileSummary} t */
 function followBuild(t) {
   const now = t.status === 'building';
   if (now && !building.has(t.id)) { building.add(t.id); log.beginBuild(t.id); }
@@ -55,6 +64,7 @@ const streamRev = signal(-1);
  * Resolves true once the stream has reached revision `rev`: the page then holds what an answer's change told.  False
  * after a few seconds (the stream is down or behind): the caller says so, loudly.
  */
+/** @param {number} rev */
 export function reached(rev) {
   if (streamRev.peek() >= rev) return Promise.resolve(true);
   return new Promise((resolve) => {
@@ -69,6 +79,7 @@ export function reached(rev) {
  * The program's whole state, taken: the first event of a stream (a page that connects, or one whose stream cannot
  * resume).  Nothing else carries the whole: a call's answer says only the revision its change was told at (`reached`).
  */
+/** @param {import('../api').Snapshot} m */
 export function applySnapshot(m) {
   if (!sameBuild(m.contract)) { refuseOtherBuild(); return; } // a page of another build takes nothing from this program
   m.tiles.forEach(reportFailure);
@@ -121,6 +132,7 @@ export function applyResource(m) {
 /** Wire this part of the page (once, at load). */
 export function init() {
   // what a bug report should say about this run: the version is asked of the program once
+  /** @type {string | null} */
   let version = null;
   host.about().then((a) => { version = a.version; }).catch((e) => showError('Could not read the version', e));
   setEnvironment(() => {

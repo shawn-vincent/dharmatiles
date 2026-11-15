@@ -71,6 +71,7 @@ export class Engine {
     this.module = null;
     /** @type {string | null} the library's JSON, once `start` has it */
     this.library = null;
+    /** @type {Promise<Response | null> | null} the module's bytes, fetched ahead of the first touch (null: the fetch failed, `start` fetches again) */
     this.moduleBytes = null;
     /** @type {Map<string, {resolve: (text: string) => void, reject: (e: Error) => void}>} fixes asked of the worker, by id */
     this.fixes = new Map();
@@ -169,9 +170,13 @@ export class Engine {
   #remember(key, value) {
     this.cache.delete(key);
     this.cache.set(key, value);
-    while (this.cache.size > KEEP) this.cache.delete(this.cache.keys().next().value);
+    for (const oldest of this.cache.keys()) { // the oldest first: Map keeps the order they were put in
+      if (this.cache.size <= KEEP) break;
+      this.cache.delete(oldest);
+    }
   }
 
+  /** @param {string} card */
   #focus(card) {
     this.queue.focusOn(card);
     // a full build under way for another card cannot be paused: it is stopped when someone else is waiting
@@ -201,6 +206,7 @@ export class Engine {
   }
 
   /** Run the next job if the worker is free; otherwise tell the card it is waiting, and where in the line. */
+  /** @param {string} asked */
   #pump(asked) {
     if (!this.running) {
       const next = this.queue.next();
@@ -210,7 +216,11 @@ export class Engine {
     const kinds = ['edit', 'full'];
     for (const kind of kinds) {
       const n = this.queue.ahead(asked, kind);
-      if (n >= 0) this.#emit(asked, { type: 'queued', version: this.queue.pending(asked, kind).version, kind, behind: n + (this.running ? 1 : 0) });
+      if (n >= 0) {
+        const waiting = this.queue.pending(asked, kind);
+        if (!waiting) throw new Error(`the queue places a ${kind} job of ${asked} in line but holds none`);
+        this.#emit(asked, { type: 'queued', version: waiting.version, kind, behind: n + (this.running ? 1 : 0) });
+      }
     }
   }
 
@@ -226,7 +236,7 @@ export class Engine {
       await this.start();
     } catch (e) {
       this.running = null;
-      this.#emit(card, { type: 'failed', version: job.version, kind: job.kind, message: `The engine did not start: ${e.message}`, stack: e.stack ?? '' });
+      this.#emit(card, { type: 'failed', version: job.version, kind: job.kind, message: `The engine did not start: ${e instanceof Error ? e.message : String(e)}`, stack: e instanceof Error ? e.stack ?? '' : '' });
       this.started = null;
       return;
     }

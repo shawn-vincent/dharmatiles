@@ -125,7 +125,7 @@ export const platesPanel = {
   inventory,
   printers: computed(() => server.get().printers),
   /** The top-down picture of a kind of piece on a plate (null when its tile is not listed): `kind` is a plan's kind. */
-  picture: (/** @type {any} */ kind) => { const t = tileOfCanon(kind.canon); return t ? pictureFor(t, { system: kind.system, seed: kind.seed, ...pxBox(kind.size[0], kind.size[1], 72), view: 'top' }) : null; },
+  picture: (/** @type {import('../api').PlanKind} */ kind) => { const t = tileOfCanon(kind.canon); return t ? pictureFor(t, { system: kind.system, seed: kind.seed, ...pxBox(kind.size[0], kind.size[1], 72), view: 'top' }) : null; },
   // the printer the document names now (its own word, from its scene), the plan's only until that is there
   currentPrinter: computed(() => (tileNow.value && docs.scene(tileNow.value.id)?.printer) ?? (plan.value && 'printer' in plan.value ? plan.value.printer : undefined)),
   readOnly: computed(() => !(plan.value?.writable ?? writableOf(tileNow.value))),
@@ -239,7 +239,7 @@ const storedColour = () => {
   return null;
 };
 /** The colour mode picked at the tile level, until a print is added. */
-export const pickedColour = signal(/** @type {string | null} */ (null));
+export const pickedColour = signal(/** @type {import('../api').ColourWord | null} */ (null));
 /** Bumped when the remembered colour changes, so what reads it follows. */
 export const colourKept = signal(0);
 

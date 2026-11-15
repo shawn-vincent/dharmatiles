@@ -22,8 +22,10 @@ import { isInventory, isPlatesView, placeAt, server, tile, view } from './stores
 
 const viewEntries = new Map(VIEWS.map(([name, label], i) => [name, { label, n: i + 1 }]));
 
-const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
+/** @typedef {'t-paint' | 't-overhang' | 't-wire' | 't-grid' | 't-fade' | 't-debug'} SwitchId  the display menu's switches */
+const toggle = (/** @type {SwitchId} */ id, /** @type {(on: boolean) => void} */ fn) => { $(id).onchange = () => fn($(id).checked); };
 // paint on or off (grey plastic): remembered in the browser
+/** @param {boolean} on */
 function setPaint(on) {
   $('t-paint').checked = on;
   viewer.setPaint(on);
@@ -31,12 +33,13 @@ function setPaint(on) {
 }
 
 // the debug layer: off at every load; ⌃⌥D or the ⋯ menu
+/** @param {boolean} on */
 function setDebug(on) {
   $('t-debug').checked = on;
   view.set({ debug: on }); // the program collects the layer's marks for a tile only while it is on (build.js tells it)
   viewer.setDebugShown(on);
 }
-const cssToken = (t) => getComputedStyle(document.documentElement).getPropertyValue(t).trim();
+const cssToken = (/** @type {string} */ t) => getComputedStyle(document.documentElement).getPropertyValue(t).trim();
 /** What the debug layer holds now (null: the layer is off): the legend follows it. */
 const debugNow = signal(/** @type {any} */ (null));
 function bindDebugLegend() {
@@ -54,7 +57,7 @@ const popovers = [
   ['dispbtn', 'display'], ['export', 'export-card'], ['target', 'target-card'],
   ['undo-drop', 'undo-history'], ['redo-drop', 'redo-history'],
 ];
-const openPopover = (id) => view.set({ popover: view.get().popover === id ? null : id });
+const openPopover = (/** @type {string} */ id) => view.set({ popover: view.get().popover === id ? null : id });
 function bindPopovers() {
   effect(() => {
     const open = view.get().popover;
@@ -116,6 +119,7 @@ function bindBackdrop() {
     $('backdrops').title = isPlatesView() ? 'The plates are always drawn on the printer’s bed' : '';
   });
 }
+/** @param {string} kind */
 function chooseBackdrop(kind) {
   backdrop.value = kind;
   try { localStorage.setItem('dt-backdrop', kind); } catch { /* private mode: the choice lasts until the page is closed */ }
@@ -128,6 +132,7 @@ function toggleTheme() {
 }
 
 // perspective or orthographic: remembered across reloads (a per-viewer convenience)
+/** @param {boolean} ortho @param {boolean} [animated] */
 function setProjection(ortho, animated = true) {
   viewer.setOrtho(ortho, animated);
   /** @type {Node} */ ($('b-proj').firstChild).textContent = ortho ? 'Orthographic ' : 'Perspective '; // the button's first child is its label text
@@ -158,13 +163,14 @@ async function showAbout() {
     // Formats are major versions, written "0.x": any version starting with 0.
     $('about-formats').textContent = a.formats;
   } catch (e) {
-    err.textContent = `Could not read the version: ${e.message}`;
+    err.textContent = `Could not read the version: ${e instanceof Error ? e.message : String(e)}`;
     err.hidden = false;
     throw e;
   }
 }
 const showKeys = () => { closePopovers(); $('keys').showModal(); };
 /** ⌘1/⌘2/⌘3: put the keyboard in the source, the view or the tile's levels (showing the panel first). */
+/** @param {number} n */
 function focusPane(n) {
   if (n === 2) { $('canvas').focus(); return; }
   layout.showSide();
@@ -256,7 +262,7 @@ export function init() {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const n = Number(e.key);
     if (n >= 1 && n <= VIEWS.length) pickView(VIEWS[n - 1][0]);
-    const flip = (id) => { $(id).checked = !$(id).checked; $(id).onchange({ target: $(id) }); };
+    const flip = (/** @type {SwitchId} */ id) => { $(id).checked = !$(id).checked; $(id).dispatchEvent(new Event('change')); };
     if (e.key === 'c') setPaint(!$('t-paint').checked);
     if (e.key === 'o') flip('t-overhang');
     if (e.key === 'w') flip('t-wire');

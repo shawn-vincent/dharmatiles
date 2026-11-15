@@ -120,7 +120,7 @@ export const fadeMethods = methods({
     }
     const deep = focus ? REGION_FADE : FADE;
     const rest = selecting ? deep : hovering ? HOVER_REST : 1;
-    const target = { rest, keep: 1, leave: rest, lift: selecting ? HOVER_LIFT : 1, drop: rest };
+    const target = /** @type {Record<string, number>} */ ({ rest, keep: 1, leave: rest, lift: selecting ? HOVER_LIFT : 1, drop: rest });
     const t = this.fxTarget;
     // a selection's change takes a selection's time; a hover's, a hover's
     const selChange = selMoved || (t.rest !== rest && (t.rest === FADE || rest === FADE || t.rest === REGION_FADE || rest === REGION_FADE));

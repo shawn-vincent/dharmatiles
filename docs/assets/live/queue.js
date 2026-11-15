@@ -11,9 +11,11 @@
 //
 // A job is {kind: 'edit' | 'full', version, ...whatever the engine needs}.
 
+/** @typedef {import('./engine.js').Job} Job */
+
 export class Queue {
   constructor() {
-    /** @type {Map<string, { edit: any, full: any, at: number }>} */
+    /** @type {Map<string, { edit: Job | null, full: Job | null, at: number }>} */
     this.slots = new Map();
     /** @type {string | null} */
     this.focus = null;
@@ -21,6 +23,7 @@ export class Queue {
   }
 
   /** Hold `job` as the card's pending one of its kind.  A new edit makes a waiting full build stale: it is dropped. */
+  /** @param {string} card @param {Job} job */
   put(card, job) {
     const slot = this.slots.get(card) ?? { edit: null, full: null, at: 0 };
     slot[job.kind] = job;
@@ -30,6 +33,7 @@ export class Queue {
   }
 
   /** The card's pending job of `kind` is no longer wanted. */
+  /** @param {string} card @param {Job['kind']} kind */
   drop(card, kind) {
     const slot = this.slots.get(card);
     if (!slot) return;
@@ -38,9 +42,11 @@ export class Queue {
   }
 
   /** The card the reader touched last: it goes first. */
+  /** @param {string} card */
   focusOn(card) { this.focus = card; }
 
   /** The pending job of `card` of `kind`, if any. */
+  /** @param {string} card @param {Job['kind']} kind */
   pending(card, kind) { return this.slots.get(card)?.[kind] ?? null; }
 
   /** The order the waiting jobs would run in: [{card, job}], first first. */
@@ -65,10 +71,12 @@ export class Queue {
   }
 
   /** How many waiting jobs run before the card's job of `kind` (-1: it is not waiting). */
+  /** @param {string} card @param {Job['kind']} kind */
   ahead(card, kind) {
     return this.order().findIndex((x) => x.card === card && x.job.kind === kind);
   }
 }
 
 /** A result for version `got` when the card is at version `now` is stale: the card was edited again since it was asked. */
+/** @param {number} now @param {number} got */
 export const isStale = (now, got) => got !== now;

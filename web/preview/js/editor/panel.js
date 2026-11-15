@@ -46,6 +46,7 @@ export const model = {
 };
 
 /** Show line `line` of `file` (null: the tile's own) in the source: the panel turns to it. */
+/** @param {string | null} file @param {number} line */
 export async function showLine(file, line) {
   view.set({ pageAt: 'edit' });
   await openFile(file, null);
@@ -60,7 +61,7 @@ function showBar() {
   // on a map the line says what the shelf says of it, and that what is drawn is not yet checked
   const map = isMapView() && sceneNow() ? statusLines() : null;
   // the plates of a map may not lay out (a tile needs more filaments than the printer has): that is the plates' to say
-  const platesOnly = (t?.errors ?? []).every((e) => /^dt::(slots|plates|inventory|printer)$/.test(e.code));
+  const platesOnly = (t?.errors ?? []).every((/** @type {import('../api').Mistake} */ e) => /^dt::(slots|plates|inventory|printer)$/.test(e.code));
   const calm = map && (s.tone === 'ok' || s.tone === 'note' || (s.tone === 'bad' && platesOnly));
   // "draft · not yet checked" once, whoever knows it: the tile's shown build or the map's pieces
   const draft = s.unchecked || map?.notChecked ? 'draft · not yet checked' : '';
@@ -120,6 +121,7 @@ function bindPanel() {
  * Show or hide the panel with slide.js's one reveal: its height grows from nothing (or back), and --msgh, which the view's canvas
  * and the display menu take their room from, follows it frame by frame (the observer in `msgSash`).
  */
+/** @param {boolean} open @param {boolean} animate */
 function showMessages(open, animate) {
   const p = $('msgpanel');
   if (open) {
@@ -143,6 +145,7 @@ export function togglePanel(open = !view.get().panel) {
  * the program itself reported (a 5xx, a build that failed) is already there.  If the program cannot be
  * told (it is away) the page keeps the message itself, so it is never only on the console.
  */
+/** @param {string} what @param {unknown} err @param {import('../problems.js').Problem} entry */
 async function report(what, err, entry) {
   const se = serverErrorIn(err);
   if (se && (se.status == null || se.status >= 500)) return; // the program's own words: already in the stream
@@ -169,6 +172,7 @@ function msgSash() {
   s.title = 'Drag to resize; double-click to reset';
   p.prepend(s);
   const room = () => p.offsetParent?.clientHeight ?? innerHeight;
+  /** @param {number | null} h @param {boolean} save */
   const setH = (h, save) => {
     if (h == null) p.style.height = '';
     else p.style.height = `${fitMsgHeight(h, room() - 26)}px`;
@@ -191,7 +195,7 @@ function msgSash() {
     s.classList.add('on');
     document.body.classList.add('resizing-rows');
     const bottom = p.getBoundingClientRect().bottom;
-    const move = (ev) => setH(bottom - ev.clientY, false);
+    const move = (/** @type {PointerEvent} */ ev) => setH(bottom - ev.clientY, false);
     const up = () => {
       s.classList.remove('on');
       document.body.classList.remove('resizing-rows');

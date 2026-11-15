@@ -34,6 +34,22 @@ test('null is checked: strictNullChecks is on in the page and the site, and the 
   assert.notEqual(config('tsconfig.tests.json').compilerOptions.strictNullChecks, false);
 });
 
+test('strict is on, noImplicitAny and strictNullChecks with it, in the page and the site, and the tests inherit it', () => {
+  for (const name of ['tsconfig.json', 'tsconfig.site.json']) {
+    const o = config(name).compilerOptions;
+    assert.equal(o.strict, true, `${name} must have strict on`);
+    assert.equal(o.noImplicitAny, true, `${name} must have noImplicitAny on: every parameter says its type`);
+    assert.equal(o.strictNullChecks, true, `${name} must have strictNullChecks on`);
+    // the flags `strict` brings must not be switched off one by one
+    for (const flag of ['strictFunctionTypes', 'strictBindCallApply', 'strictPropertyInitialization', 'noImplicitThis', 'alwaysStrict', 'useUnknownInCatchVariables']) {
+      assert.notEqual(o[flag], false, `${name} must not turn ${flag} off`);
+    }
+  }
+  const tests = config('tsconfig.tests.json');
+  assert.equal(tests.extends, './tsconfig.json');
+  for (const flag of ['strict', 'noImplicitAny']) assert.notEqual(tests.compilerOptions[flag], false, `tsconfig.tests.json must not turn ${flag} off`);
+});
+
 test('the tests are checked too, and the map they draw is the whole fixture the program is held to', () => {
   const tests = config('tsconfig.tests.json');
   assert.ok(tests.include.includes('tests/*.js'), 'tsconfig.tests.json must include the tests');

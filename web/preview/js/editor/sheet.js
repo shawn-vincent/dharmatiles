@@ -81,9 +81,11 @@ const thingApi = {
 
 // the tile node's own controls: shown when nothing is selected, so the sheet is never empty.
 // What each is (its unit, help, default) is the program's; this only picks the rows
-const tileRows = (names) => ({ controls: names.map((n) => nodeControl('tile', n)).filter(Boolean) });
+const tileRows = (/** @type {string[]} */ names) => ({ controls: names.map((n) => nodeControl('tile', n)).filter((c) => c !== undefined) });
 // a written property as the sheet reads it: `name=value` and its span
-const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] });
+/** @typedef {import('../view/sheet.js').Group} Group */
+/** @param {{ name: string, text: string, span: [number, number] }} c @returns {import('../api').WrittenControl} the written part of the tile's own file: no other file, nothing inherited */
+const asWritten = (c) => ({ file: null, from: null, name: c.name, text: `${c.name}=${c.text}`, span: /** @type {[number, number]} */ ([c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1]) });
 
 /**
  * What the seed row's dice needs to show five candidates (view/seed-strip.js `SeedStrip`, the model `seedStripOf` makes for a map
@@ -128,6 +130,7 @@ function tileModel() {
   if (!t || !own || doc.get().file !== t.path) return null;
   const node = nodeNamed('tile');
   if (!node) return null; // the program's description of the tile is not here yet
+  /** @type {Group[]} */
   const groups = [{ at: own.at, schema: tileRows(['size', 'seed']), written: own.controls.map(asWritten) }];
   // the description: `about "…"` in the tile's body
   const about = own.about, av = about?.value;
@@ -146,7 +149,7 @@ function tileModel() {
 }
 
 /** A run of written text (a line's points, a region's lines) as a sheet setting. */
-const runWritten = (name, run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
+const runWritten = (/** @type {string} */ name, /** @type {{ text: string, span?: [number, number] } | null | undefined} */ run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
 
 /** A run of arguments (a `boundedBy`'s lines, an `except`'s regions) made `values`: the program writes them over the run's node. */
 function setArgs(/** @type {{span: [number, number]}} */ run, /** @type {string[]} */ values, /** @type {string} */ label) {
@@ -156,6 +159,11 @@ function setArgs(/** @type {{span: [number, number]}} */ run, /** @type {string[
 }
 
 /** Change one clause of a region (a `within`'s distance or place, an `except`'s regions), through the server's edit route like the other controls. */
+/**
+ * @param {ReturnType<typeof clauseGroups>[number]['clause']} clause @param {string} name
+ * @param {any} value what the control gives: a distance, a place, or the list of regions (by the clause's own control)
+ * @returns {Promise<unknown>}
+ */
 async function setClause(clause, name, value) {
   if (!doc.get().writable) return makeMine({ run: () => setClause(clause, name, value) });
   if (!spansUsable()) return;
@@ -176,6 +184,7 @@ async function setClause(clause, name, value) {
 }
 
 /** The sheet of a drawn line or a region: its name, its controls, its points. */
+/** @param {'line' | 'region'} kind @param {any} m the selected mark's model (editor/map.js `mapNode`) */
 function markModel(kind, m) {
   const t = tile(), sh = m?.sheet;
   if (!t || !sh || doc.get().file !== t.path) return null;
@@ -184,7 +193,8 @@ function markModel(kind, m) {
   // renaming goes through the server's edit route (`viaSet`), which renames every use of the name
   // the language lists a `name` control for a line and a region, so the row is whole
   const nameRow = /** @type {import('../api').ControlJson & { viaSet: boolean }} */ ({ ...nodeControl(kind, 'name'), viaSet: true });
-  const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0] }];
+  /** @type {import('../api').WrittenControl[]} */
+  const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0], file: null, from: null }];
   /** @type {(import('../api').ControlJson & { viaSet?: boolean })[]} */
   let controls;
   let set;
@@ -267,6 +277,7 @@ function entryModel(/** @type {any} */ s) {
   if (!it || !it.span || it.file !== file || !elements.length) return null;
   // the base line: no settings of its own; the build target (the system chip) picks the connector
   const base = it.element === 'connector';
+  /** @type {Group[]} */
   const groups = base ? [] : [{ at: it.span[0], schema: elementRows(it.what), written: it.controls || [], defaults: it.defaults }];
   for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementRows(th.what), written: th.controls || [], defaults: th.defaults });
   const actions = [];

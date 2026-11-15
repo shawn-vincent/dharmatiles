@@ -18,14 +18,16 @@ import { server, stem, tile, view } from './stores.js';
 
 const sketchCache = new Map(); // epoch:sketch id -> Promise of its payload, or null
 let sketchGen = 0;
+/** @type {string | null} */
 let asked = null; // the tile the program was last asked to build, with the run it was asked in
 
 /** The version of the tile's mesh the view holds, or null. */
-const shownVersion = (t) => {
+const shownVersion = (/** @type {{ id: string }} */ t) => {
   const s = view.get().shown;
   return s && s.id === t.id && s.epoch === server.get().epoch ? s.version : null;
 };
 
+/** @type {string | null} */
 let marksTold = null; // `tile|run|on`: what the program was last told of the debug layer
 
 /**
@@ -60,12 +62,14 @@ function showBuild() {
   syncSketches(t);
 }
 
+/** @param {import('./stores.js').ServerTile} t */
 async function syncSketches(t) {
   // a finished mesh on its way: the sketches stay until it lands
   if (t.status === 'ready' && t.meshVersion != null && shownVersion(t) !== t.meshVersion) return;
   const gen = ++sketchGen, { epoch } = server.get();
+  /** @type {import('../api').SketchRef[]} */
   const list = view.get().draft ? [] : (t.sketches || []);
-  const key = (k) => `${epoch}:${k.id}`;
+  const key = (/** @type {{ id: number }} */ k) => `${epoch}:${k.id}`;
   for (const k of list) {
     if (!sketchCache.has(key(k))) {
       // a failed fetch is not kept: the next sync asks again
@@ -76,7 +80,7 @@ async function syncSketches(t) {
       }));
     }
   }
-  const got = await Promise.all(list.map(async (k) => ({ id: k.id, rough: k.rough, payload: await sketchCache.get(key(k)) })));
+  const got = await Promise.all(list.map(async (/** @type {import('../api').SketchRef} */ k) => ({ id: k.id, rough: k.rough, payload: await sketchCache.get(key(k)) })));
   if (gen !== sketchGen || t.id !== view.get().tileId) return; // a newer list came
   const keep = new Set(list.map(key));
   for (const k of sketchCache.keys()) if (!keep.has(k)) sketchCache.delete(k);

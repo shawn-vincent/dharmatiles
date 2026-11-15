@@ -316,6 +316,7 @@ function renderContext() {
     const i = list.findIndex((m) => m.name === sel.id);
     entry = { note: i < 0 ? sel.kind : `${sel.kind} ${i + 1} of ${list.length}` };
   }
+  /** @type {(string | import('preact').VNode)[]} */
   let lines = contextFor({ depth, tile: tileInfo, entry, thing: depth === 2 ? thingName() : '', control: control?.name, value });
   const other = isPlates(t) || isInventory(t);
   // the one band of a level: the name of what the level is (24 px display), then one quiet line (what it is, where it stands, its help)
