@@ -24,17 +24,26 @@ const TILE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
     }
 }"#;
 
+/// Layer on or off, the build is the same at any lattice: a coarser one (a third of the full build's cells)
+/// is the same code on fewer cells, and the golden tiles prove it at the full lattice.
+fn base() -> Options {
+    Options {
+        cells: Some(48),
+        ..Options::default()
+    }
+}
+
 #[test]
 fn the_debug_layer_changes_nothing_built() {
     let m = common::memory(&[("probe.dtile", TILE)]);
-    let off = memo::build(&m, "probe.dtile", &Options::default()).unwrap();
+    let off = memo::build(&m, "probe.dtile", &base()).unwrap();
     let on = memo::build(
         &m,
         "probe.dtile",
         &Options {
             debug: true,
             clouds: true,
-            ..Options::default()
+            ..base()
         },
     )
     .unwrap();
