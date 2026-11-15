@@ -2517,7 +2517,7 @@ fn an_entry_moves_whole_and_a_new_one_goes_between_two() {
     let (head, body) = edit_refused(&r, &token, Some(rev(ROWS)), mv(dirt, None));
     assert!(head.starts_with("HTTP/1.1 422"), "{head}");
     assert!(
-        format!("{body:?}").contains("dt::order"),
+        format!("{body:?}").contains(dt_lang::codes::ORDER),
         "the refusal is the mistake the edit would add: {body:?}"
     );
     // a target that is not a sibling is refused in words
@@ -2625,7 +2625,7 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
     // an edit that would add a mistake is refused, with the mistake: nothing is drafted
     let (h, body) = step(rev(ROWS), set("bogus", edit::Scalar::Int(1)));
     assert!(h.starts_with("HTTP/1.1 422"), "{h}");
-    assert!(String::from_utf8_lossy(&body).contains("dt::unknown-control"));
+    assert!(String::from_utf8_lossy(&body).contains(dt_lang::codes::UNKNOWN_CONTROL));
     // an edit read at another text is refused, and nothing is drafted
     let (h, _) = step(rev("other"), set("seed", edit::Scalar::Int(8)));
     assert!(h.starts_with("HTTP/1.1 409"), "{h}");
