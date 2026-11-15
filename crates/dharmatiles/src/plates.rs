@@ -407,7 +407,7 @@ pub(crate) fn run(
         document: list_path.display().to_string(),
         document_hash: b0.record.document_hash,
         seed: 0,
-        system: s.system.clone(),
+        system: s.system,
         printer: s.machine.name.clone(),
     };
     let gate = builds.gate();

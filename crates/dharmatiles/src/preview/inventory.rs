@@ -445,7 +445,7 @@ pub(super) fn record(shared: &Shared, v: InventoryRecordReq) -> Out<InventoryWro
         let ident = Identity {
             tile: tile.to_owned(),
             seed: k.planned.seed_used,
-            system: k.planned.system.clone(),
+            system: k.planned.system,
             colour,
         };
         let hash = disk::tile_hash(tile, shared.home.as_deref());

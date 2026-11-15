@@ -356,7 +356,7 @@ fn mark_shelf(pieces: &mut [ScenePiece], home: Option<&Path>) -> (bool, usize, u
         let id = Identity {
             tile: p.canon.clone(),
             seed: p.seed_used,
-            system: p.system.clone(),
+            system: p.system,
             colour: if p.colour == "multi" {
                 Colour::Multi
             } else {
@@ -403,7 +403,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         .plates
         .system
         .as_ref()
-        .map_or_else(|| base.system.clone(), |s| s.value.clone());
+        .map_or_else(|| base.system, |s| s.value);
     let colour = colour_of(list, &printer, home);
     let names = names_of(list);
     let tiles = lock(&shared.tiles)
@@ -420,7 +420,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         let system = p
             .system
             .as_ref()
-            .map_or_else(|| default_system.clone(), |s| s.value.clone());
+            .map_or_else(|| default_system, |s| s.value);
         let sq = dt_kit::Frame::for_system(system, 1, 1).square_mm;
         let tpath = dt_print::plates::tile_path(&p.tile.value, dir, home);
         let mut error = tpath.as_ref().err().cloned();
@@ -528,7 +528,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             path: tpath.clone(),
             seed,
             seed_used,
-            system: system.clone(),
+            system,
             colour: colour.to_owned(),
             cols,
             rows,

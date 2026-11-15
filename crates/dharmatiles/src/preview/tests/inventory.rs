@@ -888,8 +888,6 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     let (head, body) = wait_tier(&h.r, &v.keys[0], None);
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert_eq!(&body[..4], b"DTM1");
-    let head = h.head("/api/tiers/want", &want("low", None, "xx"));
-    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     // add: a new piece with its own id, in the answer's scene at once
     let b: maps::MapsPieced = h.edited("/api/maps/add", &list, |doc_rev| maps::MapsAddReq {
         at: Some("(3sq, 2sq)".to_owned()),

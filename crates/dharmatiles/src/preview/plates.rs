@@ -249,7 +249,7 @@ pub(super) fn list_pieces(list: &dt_doc::map::PrintList) -> Vec<ListPiece> {
                 .iter()
                 .any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),
             seed: p.seed.as_ref().map(|s| s.value),
-            system: p.system.as_ref().map(|s| s.value.clone()),
+            system: p.system.as_ref().map(|s| s.value),
             print: p.print.word().to_owned(),
         })
         .collect()
@@ -1128,7 +1128,7 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
         document: path.clone(),
         document_hash: b0.record.document_hash,
         seed: 0,
-        system: s.system.clone(),
+        system: s.system,
         printer: s.machine.name.clone(),
     };
     // a piece that failed the gate is never written: the plates wait for it to pass
