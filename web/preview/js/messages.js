@@ -55,6 +55,7 @@ export const isProblem = (m) => m.severity === 'error' || m.severity === 'warnin
 /** @param {MessageJson} m */
 export const isRecord = (m) => m.kind === 'build' || m.kind === 'gate';
 const BUILD_KINDS = new Set(['build', 'gate', 'export', 'check', 'progress']);
+/** @type {Record<string, number>} */
 const ORDER = { error: 0, warning: 1, note: 2, info: 3 };
 
 /**
@@ -70,8 +71,9 @@ export const FILTERS = [
 ];
 
 /** `1 error · 1 warning · 2 notes`: the counts as the status line says them ('' when there is nothing). */
+/** @param {{ errors: number, warnings?: number, notes: number }} counts */
 export function countsText({ errors, warnings = 0, notes }) {
-  const n = (k, one) => `${k} ${one}${k === 1 ? '' : 's'}`;
+  const n = (/** @type {number} */ k, /** @type {string} */ one) => `${k} ${one}${k === 1 ? '' : 's'}`;
   return [errors && n(errors, 'error'), warnings && n(warnings, 'warning'), notes && n(notes, 'note')].filter(Boolean).join(' · ');
 }
 
@@ -80,10 +82,15 @@ export function createLog() {
   const version = signal(0);
   /** @type {Map<number, MessageJson>} */
   const items = new Map();       // seq -> message
+  /** @type {Map<string, { startSeq: number }>} */
   const builds = new Map();      // tile id -> {startSeq}: the build under way, and the newest message before it
+  /** @type {Map<string, MessageJson[]>} */
   const since = new Map();       // tile id -> messages cleared since the last build ended
+  /** @type {Map<string, MessageJson[]>} */
   const last = new Map();        // tile id -> messages cleared by the last build that ended
+  /** @type {Set<number>} */
   const dismissed = new Set();   // seqs the page put away (the program keeps them open)
+  /** @type {Set<() => void>} */
   const listeners = new Set();
   let local = 0;
   const notify = () => { version.value += 1; for (const fn of [...listeners]) fn(); };
@@ -102,39 +109,44 @@ export function createLog() {
       }
       notify();
     },
-    /** A message of the page's own (the program could not be told): kept with a seq of its own, below zero. */
+    /**
+     * A message of the page's own (the program could not be told): kept with a seq of its own, below zero.
+     * @param {Partial<MessageJson>} partial
+     */
     addLocal(partial) {
-      const m = {
+      const m = /** @type {MessageJson} */ ({
         seq: --local, t: new Date().toISOString(), kind: 'server', severity: 'error', scope: 'server', code: 'failure',
-        tile: '', tile_name: '', node: null, span: null, text: '', help: null, data: { origin: 'page' }, state: 'open', ...partial,
-      };
+        tile: '', tile_name: '', node: null, span: null, text: '', help: null, data: { type: 'server', origin: 'page', kind: 'failure', route: null, causes: [], backtrace: '', version: '' }, state: 'open', ...partial,
+      });
       items.set(m.seq, m);
       notify();
       return m;
     },
-    /** A build of `tile` begins: everything said so far is "from the last build". */
+    /** A build of `tile` begins: everything said so far is "from the last build". @param {string} tile */
     beginBuild(tile) {
       if (builds.has(tile)) return;
       builds.set(tile, { startSeq: maxSeq() });
       notify();
     },
     /** The build of `tile` ended: what it cleared is kept to say so, and the rest is full strength again. */
+    /** @param {string} tile */
     endBuild(tile) {
       if (!builds.delete(tile)) return;
       last.set(tile, since.get(tile) || []);
       since.delete(tile);
       notify();
     },
+    /** @param {number} seq */
     dismiss(seq) { dismissed.add(seq); notify(); },
-    /** A tile that left the list takes its messages with it. */
+    /** A tile that left the list takes its messages with it. @param {string} tile */
     forget(tile) {
       for (const [k, m] of [...items]) if (m.tile === tile) items.delete(k);
       builds.delete(tile); since.delete(tile); last.delete(tile);
       notify();
     },
     /** Tell `fn` after every change; returns the way to stop. */
-    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    byId: (seq) => { void version.value; return items.get(seq) ?? null; },
+    subscribe(/** @type {() => void} */ fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    byId: (/** @type {number} */ seq) => { void version.value; return items.get(seq) ?? null; },
     all: () => { void version.value; return [...items.values()]; },
 
     /**
@@ -145,15 +157,16 @@ export function createLog() {
      *   cleared  the messages the last build cleared (shown as one line while no build runs)
      *   counts   {errors, notes} of the open problems (the gate's failure counts as an error)
      *   running  a build is under way
+     * @param {string} tile
      */
     view(tile) {
       void version.value;
       const run = builds.get(tile);
       const mine = [...items.values()]
         .filter((m) => (m.tile === tile || m.tile === '') && m.state === 'open' && !dismissed.has(m.seq));
-      const dim = (m) => !!run && m.seq > 0 && m.seq <= run.startSeq;
+      const dim = (/** @type {MessageJson} */ m) => !!run && m.seq > 0 && m.seq <= run.startSeq;
       const rows = mine.filter((m) => !isRecord(m)).sort((a, b) => (ORDER[a.severity] - ORDER[b.severity]) || b.seq - a.seq).map((m) => ({ m, dim: dim(m) }));
-      const newest = (kind) => mine.filter((m) => m.kind === kind).sort((a, b) => b.seq - a.seq)[0] ?? null;
+      const newest = (/** @type {string} */ kind) => mine.filter((m) => m.kind === kind).sort((a, b) => b.seq - a.seq)[0] ?? null;
       const build = newest('build'), gate = newest('gate');
       const record = build || gate ? { build, gate, dim: !!run } : null;
       const problems = mine.filter(isProblem);
@@ -167,8 +180,9 @@ export function createLog() {
         },
       };
     },
-    /** The open messages of `tile` that point at stack entries, by entry key (the badges on a stack row read this). */
+    /** The open messages of `tile` that point at stack entries, by entry key (the badges on a stack row read this). @param {string} tile */
     byNode(tile) {
+      /** @type {Map<string, MessageJson[]>} */
       const out = new Map();
       for (const m of items.values()) {
         if (m.tile !== tile || m.state !== 'open' || !m.node || dismissed.has(m.seq)) continue;
@@ -176,7 +190,7 @@ export function createLog() {
       }
       return out;
     },
-    /** The open messages of `tile` with a span in `file`: what the source marks in its gutter. */
+    /** The open messages of `tile` with a span in `file`: what the source marks in its gutter. @param {string} tile @param {string | null} file */
     inFile(tile, file) {
       return [...items.values()].filter((m) => m.tile === tile && m.state === 'open' && m.span?.file === file && !dismissed.has(m.seq));
     },
@@ -211,6 +225,10 @@ export function tileLevelState(t, model, first) {
 }
 
 /** The rows `filter` ('all', 'errors', 'notes', 'build') keeps. */
+/**
+ * @template {{ m: MessageJson }} R
+ * @param {R[]} rows @param {string} filter
+ */
 export function filterRows(rows, filter) {
   const keep = FILTERS.find((f) => f[0] === filter)?.[2] ?? (() => true);
   return rows.filter((r) => keep(r.m));
@@ -267,7 +285,7 @@ export function statusOf(view, { t = null, live = true, p = null } = {}) {
 }
 
 /** The error shape `tileErrorDetails` takes, from a message about the tile. */
-const asTileError = (m) => ({
+const asTileError = (/** @type {MessageJson} */ m) => ({
   code: m.code ?? m.kind, file: m.span?.file ?? null, line: m.span?.line ?? null, column: m.span?.col ?? null,
   message: m.text, help: m.help, unexpected: m.kind === 'server',
 });
@@ -306,6 +324,7 @@ export async function detailsText(m, host, o = {}) {
 
 /** The messages panel's height, dragged to `h` px with `room` px above the status line: at least 96, and the view keeps 80 above it. */
 export const MSG_MIN = 96;
+/** @param {number} h @param {number} room */
 export function fitMsgHeight(h, room) {
   return Math.round(Math.max(MSG_MIN, Math.min(h, room - 80)));
 }

@@ -31,7 +31,7 @@ const viewOf = () => log.view(tileId());
 /** What the panel reads: the stream's view of the tile shown, which filter is on, and which message a mark in the source pointed to (lit for a moment). */
 const filter = signal('all');
 const lit = signal(/** @type {number | null} */ (null));
-const model = {
+export const model = {
   open: computed(() => !!view.get().panel),
   view: computed(viewOf),
   filter,
@@ -80,7 +80,7 @@ function showBar() {
 // ---- the panel ----------------------------------------------------------
 
 /** What the panel's buttons do. */
-const act = {
+export const act = {
   setFilter: (/** @type {string} */ id) => { filter.value = id; },
   showLine,
   openPanel: () => togglePanel(true),
@@ -155,7 +155,7 @@ async function report(what, err, entry) {
     const r = await host.reportMessage(body);
     if (r.status === 200) return;
   } catch { /* the program cannot be told: kept here below, with the reason it is the page's */ }
-  log.addLocal({ tile: body.tile, text: body.text, help: body.help, data: { origin: 'page', kind: 'bug', route: what, causes: body.causes, backtrace: body.backtrace } });
+  log.addLocal({ tile: body.tile, text: body.text, help: body.help, data: { type: 'server', origin: 'page', kind: 'bug', route: what, causes: body.causes, backtrace: body.backtrace, version: '' } });
 }
 
 /** The messages panel's top edge is a sash: drag it up or down, double-click to reset.  The height is remembered in this browser (dt-msgh). */
