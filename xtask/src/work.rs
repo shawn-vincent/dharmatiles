@@ -639,6 +639,31 @@ mod tests {
         assert!(!p.rust && !p.page);
     }
 
+    /// The real workspace: a change to printing (the files, the plates, the inventory) is above the engine, so it never
+    /// selects the engine's tests.  dt-eval once read dt-print for the renderer (a dev-dependency), and every such change
+    /// reran dt-eval's tile tests, the slowest binary of the check.
+    #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a test: the workspace's own metadata must read, and the test panics when it does not"
+    )]
+    fn a_printing_change_does_not_select_the_engines_tests() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .canonicalize()
+            .expect("the workspace folder resolves");
+        let real = packages(&root).expect("the workspace's metadata reads");
+        let p = plan(&files(&["crates/dt-print/src/inventory.rs"]), &real);
+        for engine in ["dt-eval", "dt-elements", "dt-kit", "dt-geom", "dt-doc"] {
+            assert!(
+                !p.tests.contains(engine),
+                "a change to dt-print selected {engine}: {:?}",
+                p.tests
+            );
+        }
+        assert!(p.tests.contains("dt-service") && p.tests.contains("dharmatiles"));
+    }
+
     #[test]
     fn docs_alone_check_the_docs() {
         let p = plan(&files(&["docs/guide/lines.html"]), &pkgs());

@@ -191,10 +191,11 @@ pub fn tests(root: &Path, cargo: Command, build: bool) -> Result<(), String> {
                     let mut mine = Vec::new();
                     loop {
                         // the guard is dropped at the end of this statement, before the binary runs
-                        let next = queue
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .next();
+                        let next = match queue.lock() {
+                            Ok(mut q) => q.next(),
+                            // another worker panicked: the queue is still whole, and that panic is reported below
+                            Err(poisoned) => poisoned.into_inner().next(),
+                        };
                         match next {
                             Some(b) => mine.push(run_one(b)),
                             None => return mine,
@@ -205,14 +206,13 @@ pub fn tests(root: &Path, cargo: Command, build: bool) -> Result<(), String> {
             .collect();
         running
             .into_iter()
-            .flat_map(|r| {
-                r.join().unwrap_or_else(|_| {
-                    vec![(
-                        "a test worker".to_owned(),
-                        0.0,
-                        Some("a test worker panicked".to_owned()),
-                    )]
-                })
+            .flat_map(|r| match r.join() {
+                Ok(ran) => ran,
+                Err(_) => vec![(
+                    "a test worker".to_owned(),
+                    0.0,
+                    Some("a test worker panicked".to_owned()),
+                )],
             })
             .collect()
     });
