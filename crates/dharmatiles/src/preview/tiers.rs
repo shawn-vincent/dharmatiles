@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::api::{Out, Reply};
+use super::api::{Out, Reply, TileRefReply};
 use super::owner::Command;
 use super::queue::Lane;
 use super::*;

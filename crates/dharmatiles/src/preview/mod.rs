@@ -205,6 +205,20 @@ impl dt_service::tile_calls::CheckHost for Shared {
     }
 }
 
+impl dt_service::tile_host::TileHost for Shared {
+    fn docs(&self) -> &dt_service::docs::Docs {
+        self.docs.service()
+    }
+
+    fn storage(&self) -> &dyn dt_service::storage::Storage {
+        self.storage.as_ref()
+    }
+
+    fn library(&self) -> &dyn dt_eval::Source {
+        &dt_eval::Files
+    }
+}
+
 /// Held while a tile builds: dropping it ends the build's progress message.
 struct BuildingGuard {
     shared: Arc<Shared>,

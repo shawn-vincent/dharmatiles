@@ -36,6 +36,8 @@
 pub mod api;
 pub mod call;
 pub mod clock;
+pub mod docs;
+pub mod edit_calls;
 pub mod events;
 pub mod host;
 pub mod inventory;
@@ -52,3 +54,4 @@ pub mod storage;
 pub mod tiers;
 pub mod tile;
 pub mod tile_calls;
+pub mod tile_host;

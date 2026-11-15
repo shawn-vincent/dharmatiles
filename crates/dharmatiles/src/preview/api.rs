@@ -203,26 +203,49 @@ macro_rules! calls {
 pub(super) use calls;
 
 /// The tile a call under `/api/tiles/ID/` is for.
-#[derive(Clone)]
-pub(crate) struct TileRef {
-    pub id: String,
-    pub path: String,
-    pub files: std::collections::BTreeMap<String, Option<std::time::SystemTime>>,
-}
+pub(crate) use dt_service::tile_host::TileRef;
 
-impl TileRef {
-    /// The file a call is for: the tile's own document, or a file its last
-    /// build read.
+/// What the program's handlers still say of a [`TileRef`]: its file, as a reply.
+pub(crate) trait TileRefReply {
+    /// The file a call is for: the tile's own document, or a file its last build read.
     ///
     /// # Errors
     /// 403: not a file of this tile.
-    pub(super) fn file(&self, asked: Option<&str>) -> Out<String> {
-        match asked {
-            None => Ok(self.path.clone()),
-            Some(f) if f == self.path || self.files.contains_key(f) => Ok(f.to_owned()),
-            Some(_) => Err(fail::refused("403 Forbidden", "not a file of this tile")),
-        }
+    fn file(&self, asked: Option<&str>) -> Out<String>;
+}
+
+impl TileRefReply for TileRef {
+    fn file(&self, asked: Option<&str>) -> Out<String> {
+        self.resolve_file(asked).map_err(refusal_reply)
     }
+}
+
+/// A service call's refusal as the HTTP reply: the status line, and the same error body every route sends.
+pub(super) fn refusal_reply(r: dt_service::call::Refusal) -> Reply {
+    use dt_service::call::{Fault, Status};
+    let status = match r.status {
+        Status::BadRequest => "400 Bad Request",
+        Status::Forbidden => "403 Forbidden",
+        Status::NotFound => "404 Not Found",
+        Status::Conflict => "409 Conflict",
+        Status::Unprocessable => "422 Unprocessable Entity",
+        Status::Internal => "500 Internal Server Error",
+    };
+    let mut e = match r.fault {
+        Fault::Refused => fail::ServerError::refused(status, r.message),
+        Fault::Failure => fail::ServerError::failure(status, r.message),
+    };
+    e.causes = r.causes;
+    e.reply_with(|b| {
+        b.text = r.text;
+        b.doc_rev = r.doc_rev;
+        b.errors = r.errors;
+    })
+}
+
+/// What a service call gave, as an [`Out`].
+pub(super) fn out<T>(r: Result<T, dt_service::call::Refusal>) -> Out<T> {
+    r.map_err(refusal_reply)
 }
 
 /// The gatherer of the contract's types is `dt_doc::contract::Contract`, shared with the site's engine contract.
