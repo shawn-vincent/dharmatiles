@@ -10,7 +10,7 @@
 #![expect(
     clippy::unwrap_used,
     clippy::cast_possible_truncation,
-    reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction"
+    reason = "a test: a failing unwrap is the failure; a test: a byte offset within the document under test"
 )]
 
 mod common;

@@ -33,7 +33,7 @@
 // indices throughout, on values that are small and checked in range.
 #![expect(
     clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    reason = "a count of the cliff's own chips"
 )]
 
 mod chips;

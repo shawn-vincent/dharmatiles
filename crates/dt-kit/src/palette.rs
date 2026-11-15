@@ -167,7 +167,7 @@ impl Palette {
                     };
                     #[expect(
                         clippy::cast_possible_truncation,
-                        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                        reason = "f32 colour channels in 0..=1"
                     )]
                     ramp.push((pos, c.map(|v| v as f32)));
                 }

@@ -620,7 +620,7 @@ fn independent(vals: &[&Val], iv: Iv, f: impl Fn(&[f64]) -> f64) -> Option<Weigh
         let r = f(&x);
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "a bin index clamped by `min(BINS - 1)`, and a lattice node of the solver's own grid"
         )]
         let bin = (((r - iv.lo) / width * BINS as f64).floor().max(0.0) as usize).min(BINS - 1);
         counts[bin] += 1.0;
@@ -802,7 +802,7 @@ impl Ground<'_> {
         let band = Band::from_fn(self.nx, self.ny, self.step, |px, py| {
             #[expect(
                 clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                reason = "a bin index clamped by `min(BINS - 1)`, and a lattice node of the solver's own grid"
             )]
             let (i, j) = (
                 (px / self.step).round() as usize,

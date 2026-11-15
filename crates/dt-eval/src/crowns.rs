@@ -52,7 +52,7 @@ impl CrownTops for Crowns<'_> {
         let per = f64::from(self.frame.cells_per_square);
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "a lattice node clamped non-negative and to the grid by `min(n - 1)`"
         )]
         let (i, j) = (
             ((tip.at[0] * per).round().max(0.0) as usize).min(nx - 1),

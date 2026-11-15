@@ -248,7 +248,7 @@ impl Tree {
         if let Some(v) = s.number("crown/clumps")? {
             #[expect(
                 clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                reason = "a tree's step count (its height over the step, times 4)"
             )]
             {
                 p.clumps = v.round() as usize;
@@ -443,7 +443,7 @@ impl Tree {
         let step = SEGMENT_MM * s;
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "a tree's step count (its height over the step, times 4)"
         )]
         let max_steps = (libm::ceil(height / step) as usize * 4).max(60);
         let traced = graph::colonise(

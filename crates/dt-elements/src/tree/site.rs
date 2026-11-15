@@ -3,6 +3,11 @@
 //! its unions leave (shared with the wall, which stands and cleans its
 //! stones the same way).
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "tree-site lattice nodes (a position over the step, clamped into the grid), a clearance radius in cells, and a random pick below a slice's length"
+)]
+
 use dt_kit::{Material, Placed, Rng, Scene, Solid, Spread, TriMesh, form, graph, scatter, union};
 
 use super::leaves;
@@ -209,10 +214,6 @@ pub(super) fn place(
         // nudged in so the crown stays on the tile, never clipped
         let x = (u * sq).clamp(m, w - m);
         let y = (v * sq).clamp(m, h - m);
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let node = |x: f64, y: f64| {
             let i = libm::round(x / step).clamp(0.0, (a.nx - 1) as f64) as usize;
             let j = libm::round(y / step).clamp(0.0, (a.ny - 1) as f64) as usize;
@@ -243,10 +244,6 @@ pub(super) fn place(
         }
     } else {
         let support = scene.support();
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let rr = libm::ceil(clear / step) as usize;
         let clear_of = |k: usize| -> bool {
             let Some(sup) = support else { return true };
@@ -275,10 +272,6 @@ pub(super) fn place(
             // nudged: the area's node nearest the tile's middle
             middle()?
         } else {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let i = rng.int(0, (pick.len() - 1) as i64) as usize;
             pick[i]
         };
@@ -290,10 +283,6 @@ pub(super) fn place(
 /// The ground (or what a stamped solid stands up to) under `(x, y)`.
 pub(super) fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
     let node = |f: &dt_kit::Grid| {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (i, j) = (
             libm::round(x / f.step).clamp(0.0, (f.nx - 1) as f64) as usize,
             libm::round(y / f.step).clamp(0.0, (f.ny - 1) as f64) as usize,
@@ -324,16 +313,8 @@ pub(super) fn scatter_sites(
     let frame = *scene.frame();
     let step = frame.step_mm();
     let support = scene.support();
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let rr = libm::ceil(clear / step) as usize;
     let node = |x: f64, y: f64| {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (i, j) = (
             (libm::round(x / step).max(0.0) as usize).min(area.nx - 1),
             (libm::round(y / step).max(0.0) as usize).min(area.ny - 1),

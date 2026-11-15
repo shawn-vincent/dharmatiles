@@ -10,7 +10,7 @@
 
 #![expect(
     clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    reason = "stand counts: a span or distance over the layer height or cell, a small count of layers or nodes"
 )]
 
 use dt_geom::TriMesh;
@@ -96,10 +96,6 @@ pub fn stand(
     let g = s.grid_mm;
     let lay = s.layer_mm;
     let lo = [lo[0] - 2.0 * g, lo[1] - 2.0 * g, lo[2] - lay];
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let count = |a: f64, b: f64, d: f64| (((b - a) / d).ceil().max(1.0) as usize) + 2;
     let (nx, ny, nz) = (
         count(lo[0], hi[0], g),
@@ -122,10 +118,6 @@ pub fn stand(
     // voxel stays if, for every j up to the span, material j layers down
     // lies within reach + (j − 1) × the cone's step
     let cone = lay / libm::tan(s.angle_deg.to_radians());
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let span = ((s.span_mm / lay) as usize).max(1);
     let mut keep = vec![false; nz * cols];
     let mut far: Vec<Vec<f64>> = Vec::with_capacity(nz);
@@ -266,7 +258,6 @@ fn voxels(
             let x1 = a[0].max(b[0]).max(c[0]);
             let y0 = a[1].min(b[1]).min(c[1]);
             let y1 = a[1].max(b[1]).max(c[1]);
-            #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
             let span = |v0: f64, v1: f64, o: f64, n: usize| {
                 let s = ((v0 - o) / g - 0.5).ceil().max(0.0) as usize;
                 let e = (((v1 - o) / g - 0.5).floor() as i64).min(n as i64 - 1);

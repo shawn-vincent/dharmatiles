@@ -13,6 +13,11 @@
 //! reads it through [`dt_eval::Source`], the same trait the program reads its
 //! disk through.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "progress ticks and mesh export: stage counts (a few dozen), f32 vertex coordinates (the page's format), and a histogram bin below `bins`"
+)]
+
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
@@ -759,10 +764,6 @@ impl dt_kit::Reporter for Ticks {
         use std::sync::atomic::Ordering::Relaxed;
         let total = self.total.max(1);
         let at = |done: usize, part: f64, label: &str| {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let (f, d, t) = (
                 ((done as f64 + part) / total as f64).clamp(0.0, 0.99),
                 done as u32,
@@ -889,7 +890,6 @@ pub fn build_tile(
         for t in &mesh.triangles {
             for &i in t {
                 for x in mesh.positions[i as usize] {
-                    #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
                     positions.push(x as f32);
                 }
             }
@@ -1064,10 +1064,6 @@ pub fn explore(
         // the top edge belongs to the last bin
         let k = (t * f64::from(bins)).floor().max(0.0);
         // 0 <= k <= bins, so the cast is exact
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let k = (k as usize).min(bins as usize - 1);
         counts[k] += 1;
     }

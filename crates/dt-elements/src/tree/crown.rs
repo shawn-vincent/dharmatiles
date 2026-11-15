@@ -266,7 +266,7 @@ pub fn n_groups(env: &Envelope, width: f64, height: f64) -> usize {
     let tall = round_half_even(env.crown_height() / height).max(1.0);
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "a crown's node count (around times tall, in the hundreds) and a random pick below it"
     )]
     let n = (around * tall) as usize;
     n.max(2)
@@ -286,7 +286,7 @@ pub fn groups(pts: &[[f64; 3]], k: usize, rng: &mut Rng, z_scale: f64) -> Vec<us
     for i in 0..k {
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "a crown's node count (around times tall, in the hundreds) and a random pick below it"
         )]
         let j = rng.int(i as i64, (n - 1) as i64) as usize;
         idx.swap(i, j);

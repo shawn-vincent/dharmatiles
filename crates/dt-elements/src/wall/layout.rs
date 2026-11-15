@@ -2,6 +2,11 @@
 //! bays × quoins as cells, then battlements and ruin as edits of the cell
 //! list.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "wall layout counts: a length over a brick or cut width (tens per wall)"
+)]
+
 use dt_kit::{Draw, Rng};
 
 /// A segment fails the layout's rules.
@@ -189,10 +194,6 @@ pub(crate) const MIN_BAY_FRAC: f64 = 0.45;
 /// Running bond: the least end closer, mm.
 const CLOSER_MIN: f64 = 1.5;
 
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-)]
 fn count(total: f64, lo: f64, hi: f64) -> usize {
     (libm::round(total / (0.5 * (lo + hi))) as usize).max(1)
 }
@@ -255,10 +256,6 @@ fn bay_cuts(t0: f64, t1: f64, bay: &Draw, prev: &[f64], min_bond: f64, rng: &mut
 }
 
 /// `_running_cuts`: a grid of `brick` mm phase-shifted by `offset`.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-)]
 fn running_cuts(t0: f64, t1: f64, brick: f64, offset: f64) -> Vec<f64> {
     let lo = libm::floor((t0 - offset) / brick) as i64;
     let hi = libm::ceil((t1 - offset) / brick) as i64;
@@ -417,10 +414,6 @@ pub(crate) fn crenellate(
     let wc_avg = 0.5 * (crenel.0 + crenel.1);
     let mut all = Vec::new();
     for seg in segs {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let n_c = (libm::round((seg.len - wm_avg) / (wm_avg + wc_avg)) as usize).max(1);
         let wm: Vec<f64> = (0..=n_c).map(|_| rng.uniform(merlon.0, merlon.1)).collect();
         let wc: Vec<f64> = (0..n_c).map(|_| rng.uniform(crenel.0, crenel.1)).collect();

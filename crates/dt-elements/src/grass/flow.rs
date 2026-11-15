@@ -6,6 +6,11 @@
 //! cannot form a whorl. Lengths here are mm at the reference square and
 //! scale with `s`; a blade is a printed thing and does not (see `mod.rs`).
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "flow-field cells and Poisson-disc tries: an extent over the cell or radius, bounded by the tile's size"
+)]
+
 use core::f64::consts::PI;
 
 use dt_kit::{Rng, Seed};
@@ -220,16 +225,8 @@ pub fn poisson_sites(
     (x0, y0, x1, y1): (f64, f64, f64, f64),
     r: f64,
 ) -> Vec<[f64; 2]> {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let tries = (30.0 * (x1 - x0) * (y1 - y0) / (r * r)) as usize;
     let cell = r / core::f64::consts::SQRT_2;
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let (gw, gh) = (
         ((x1 - x0) / cell) as usize + 1,
         ((y1 - y0) / cell) as usize + 1,
@@ -238,10 +235,6 @@ pub fn poisson_sites(
     let mut pts: Vec<[f64; 2]> = Vec::new();
     for _ in 0..tries {
         let p = [rng.uniform(x0, x1), rng.uniform(y0, y1)];
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (gi, gj) = (((p[0] - x0) / cell) as usize, ((p[1] - y0) / cell) as usize);
         let mut ok = true;
         'scan: for j in gj.saturating_sub(2)..(gj + 3).min(gh) {

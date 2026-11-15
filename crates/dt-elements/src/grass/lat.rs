@@ -158,7 +158,7 @@ impl Lat {
 pub fn kernel(sigma: f64) -> Vec<f64> {
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "a Gaussian's radius in cells (4 sigma, a handful)"
     )]
     let r = (4.0 * sigma + 0.5) as usize;
     let mut k: Vec<f64> = (0..=2 * r)

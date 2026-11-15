@@ -13,6 +13,11 @@
 //! 3rd to 97th percentile), so a tile with fine grass and a tile with
 //! coarse stones are both given their full range of tones.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "paint lattice nodes (a position over the step, clamped non-negative and to `n - 1`) and f32 colour ramp values already clamped to 0..=1"
+)]
+
 use dt_geom::TriMesh;
 use rayon::prelude::*;
 
@@ -65,10 +70,6 @@ const GATE_SAME_MM: f64 = 0.8;
 /// `blurred` (a Gaussian of `sigma` nodes over `z`) where a node stands near
 /// it; where it does not, the Gaussian over the nodes within [`GATE_MM`]
 /// of the node's own height.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-)]
 fn gated(z: &[f64], nx: usize, ny: usize, sigma: f64, blurred: Vec<f64>) -> Vec<f64> {
     let reach = (3.0 * sigma).ceil() as i64;
     // the weight of a tap by its squared distance in nodes (a whole number),
@@ -174,10 +175,6 @@ impl SurfacePaint {
     /// The ground's height under `c` (x, y), for grass and leaves to paint
     /// by their height above it.
     pub(crate) fn ground_z(&self, c: [f64; 3]) -> f64 {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let node = |v: f64, n: usize| (libm::round(v / self.step).max(0.0) as usize).min(n - 1);
         self.z[node(c[1], self.ny) * self.nx + node(c[0], self.nx)]
     }
@@ -191,16 +188,8 @@ impl SurfacePaint {
         if c[0] < -1e-6 || c[1] < -1e-6 || c[0] > w + 1e-6 || c[1] > h + 1e-6 {
             return None;
         }
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let node = |v: f64, n: usize| (libm::round(v / self.step).max(0.0) as usize).min(n - 1);
         let k = node(c[1], self.ny) * self.nx + node(c[0], self.nx);
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let t = (0.5 + 0.5 * (0.65 * self.wrel[k] / 0.5 + 0.35 * self.whi[k] / 0.9)).clamp(0.0, 1.0)
             as f32;
         Some(pal.sample("water", t))
@@ -215,10 +204,6 @@ impl SurfacePaint {
         if c[0] < -1e-6 || c[1] < -1e-6 || c[0] > w + 1e-6 || c[1] > h + 1e-6 || c[2] < 0.0 {
             return None;
         }
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let node = |v: f64, n: usize| (libm::round(v / self.step).max(0.0) as usize).min(n - 1);
         let k = node(c[1], self.ny) * self.nx + node(c[0], self.nx);
         let (zs, rel) = (self.z[k], self.rel[k]);
@@ -230,18 +215,10 @@ impl SurfacePaint {
         if (nz.abs() < 0.35 && c[2] < zs - 0.3) || c[2] < self.low - 0.3 {
             return Some(pal.sample("side", 0.0));
         }
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         if self.stone[k] || c[2] > zs + 0.06 {
             let t = (0.5 + 0.5 * nz - 0.4 + 0.6 * rel / 0.5) as f32;
             return Some(pal.sample("pebble", t));
         }
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let t = (0.5 + 0.7 * rel / 0.35 + 0.3 * self.rel2[k] / 1.0) as f32;
         Some(pal.sample("earth", t))
     }
@@ -320,9 +297,7 @@ fn relief(mesh: &TriMesh) -> (Vec<f32>, Vec<f32>) {
             let p = mesh.positions[i];
             let d = [0, 1, 2].map(|k| sum[i][k] / c - p[k]);
             let edge = (len[i] / c).max(1e-9);
-            #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
-            let r = (-(d[0] * nrm[0] + d[1] * nrm[1] + d[2] * nrm[2]) / edge) as f32;
-            r
+            (-(d[0] * nrm[0] + d[1] * nrm[1] + d[2] * nrm[2]) / edge) as f32
         })
         .collect();
     // a coarser scale: the fine relief averaged over the neighbours, twice
@@ -353,10 +328,6 @@ fn percentile(v: &mut [f32], share: f32) -> f32 {
     if v.is_empty() {
         return 0.0;
     }
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let k = ((v.len() - 1) as f32 * share).round() as usize;
     *v.select_nth_unstable_by(k, f32::total_cmp).1
 }
@@ -457,7 +428,6 @@ pub fn paint_mesh(
             ));
             let r = t.iter().map(|&i| fine[i as usize]).sum::<f32>() / 3.0;
             let rc = t.iter().map(|&i| coarse[i as usize]).sum::<f32>() / 3.0;
-            #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
             let (u, h) = (
                 (0.5 + 0.5 * n[2]) as f32,
                 surface.map_or(c[2], |s| c[2] - s.ground_z(c)) as f32,

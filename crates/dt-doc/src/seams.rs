@@ -178,7 +178,7 @@ impl SeamTable {
         }
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "k is clamped to 0..n on the lines above, and n is a u32 count of squares along the side"
         )]
         let k = k as u32;
         let at = along - f64::from(k);

@@ -112,7 +112,7 @@ impl Rng {
             let v = libm::round(self.normal(lambda, libm::sqrt(lambda)));
             #[expect(
                 clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                reason = "a Poisson draw above 30 clamped non-negative, far below u64::MAX"
             )]
             return v.max(0.0) as u64;
         }

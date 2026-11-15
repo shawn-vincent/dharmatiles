@@ -273,7 +273,7 @@ impl<'l, 'a> Mesher<'l, 'a> {
     /// A position rounded as the lattice says.
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "the stack mesher's lattice indices and single-precision heights, bounded by the lift's grid"
     )]
     fn rd(&self, v: f64) -> f64 {
         match self.round {
@@ -315,7 +315,7 @@ impl<'l, 'a> Mesher<'l, 'a> {
     /// (summed-area tables of the nodes showing each layer above the first).
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "the stack mesher's lattice indices and single-precision heights, bounded by the lift's grid"
     )]
     #[expect(
         clippy::disallowed_methods,
@@ -500,7 +500,7 @@ impl<'l, 'a> Mesher<'l, 'a> {
         clippy::cast_possible_truncation,
         clippy::float_cmp,
         clippy::many_single_char_names,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction; an exact comparison of a stored or sentinel value, not a computed one; see the code beside it"
+        reason = "the stack mesher's lattice indices and single-precision heights, bounded by the lift's grid; an exact comparison of a stored or sentinel value, not a computed one; see the code beside it"
     )]
     #[expect(
         clippy::disallowed_methods,
@@ -744,7 +744,7 @@ mod tests {
     #![expect(
         clippy::cast_possible_truncation,
         clippy::float_cmp,
-        reason = "a test: a failing unwrap is the failure; a grid index, count or small id in a bounded range: the value fits by construction; an exact comparison of a stored or sentinel value, not a computed one"
+        reason = "a test: a failing unwrap is the failure; the stack mesher's lattice indices and single-precision heights, bounded by the lift's grid; an exact comparison of a stored or sentinel value, not a computed one"
     )]
     use super::*;
     use crate::Solid;

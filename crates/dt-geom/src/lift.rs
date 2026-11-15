@@ -16,6 +16,11 @@
 //! Walls run from the perimeter vertices down to z = 0 and the bottom is
 //! a fan from its centre, as in [`crate::grid::lift`].
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "lift lattice cells (a coordinate in cells floored or ceiled inside the grid) and f32 heights in mm"
+)]
+
 use rayon::prelude::*;
 
 use crate::grid::{Grid, LiftError};
@@ -198,10 +203,6 @@ impl Corners {
 /// The fan centre of a leaf: its middle, on the grid's bilinear surface.
 pub(crate) fn centre(g: &Grid, l: Leaf) -> [f64; 3] {
     let (ci, cj) = (0.5 * (l.i0 + l.i1) as f64, 0.5 * (l.j0 + l.j1) as f64);
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let (fi, fj) = (ci.floor() as usize, cj.floor() as usize);
     let (ti, tj) = (ci - libm::floor(ci), cj - libm::floor(cj));
     let (i1, j1) = ((fi + 1).min(g.nx - 1), (fj + 1).min(g.ny - 1));
@@ -238,10 +239,6 @@ fn fan_error(z: &impl Fn(usize, usize) -> f64, g: &Grid, verts: &Corners, l: Lea
         }
         let lo = |k: usize| a[k].min(b[k]).min(c[k]);
         let hi = |k: usize| a[k].max(b[k]).max(c[k]);
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (i0, i1, j0, j1) = (
             lo(0).ceil() as usize,
             hi(0).floor() as usize,
@@ -293,10 +290,6 @@ mod tests {
                 // a smooth hill, a sharp ridge, and a flat plain
                 let hill = 2.0 * libm::exp(-((x - 6.0).powi(2) + (y - 5.0).powi(2)) / 8.0);
                 let ridge = (0.6 - (x - 12.0).abs()).max(0.0);
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-                )]
                 let v = (3.0 + hill + ridge) as f32;
                 g.z[j * nx + i] = v;
             }

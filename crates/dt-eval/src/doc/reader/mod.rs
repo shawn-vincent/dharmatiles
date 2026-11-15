@@ -874,10 +874,11 @@ pub(super) fn pin_decl(p: &model::Pin, from: &Provenance) -> PinDecl {
 /// never 0.33; anything else a decimal.
 fn squares(v: f64) -> String {
     let thirds = v * 3.0;
-    if (thirds - thirds.round()).abs() < 1e-9 {
+    // a length within 2^50 thirds is exact in an i64; anything longer is written as a decimal
+    if (thirds - thirds.round()).abs() < 1e-9 && thirds.abs() < 1e15 {
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "bounded by the test above: |thirds| < 1e15 fits an i64 exactly"
         )]
         let n = thirds.round() as i64;
         if n % 3 == 0 {
@@ -894,7 +895,7 @@ fn share(v: f64) -> String {
     if (thirds - thirds.round()).abs() < 1e-9 && (thirds.round() - 1.0).abs() < 0.5 + 1.0 {
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "bounded by the test above: thirds is within 1.5 of 1, so 0..=2"
         )]
         let n = thirds.round() as i64;
         return match n {

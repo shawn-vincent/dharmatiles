@@ -315,7 +315,7 @@ impl CellMm {
     pub fn mm(v: f64) -> Self {
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "micrometres clamped to 1..=1e6 on the same line"
         )]
         let um = (v * 1000.0).round().clamp(1.0, 1e6) as u32;
         Self(um)

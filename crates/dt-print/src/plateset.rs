@@ -331,7 +331,7 @@ pub fn bambu_columns(n: usize) -> usize {
     let r = v.round();
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "a packing row or column count of a bed of at most a few hundred mm"
     )]
     let c = if v > r { r as usize + 1 } else { r as usize };
     c.max(1)

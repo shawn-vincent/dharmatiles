@@ -16,6 +16,11 @@
 //! back toward the face so the rounded bottom is a chamfer-like curve the
 //! printer can lay, and proudness is held to the stone below.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "fieldstone counts: a length over a millimetre-scale spacing (at most a wall's length), and a hundredth-of-a-millimetre key"
+)]
+
 use dt_kit::form::{Relief, relief_radial, subdivide};
 use dt_kit::{KitError, Rng, Seed, TriMesh};
 
@@ -88,10 +93,6 @@ pub(crate) struct Field {
 }
 
 fn quant(v: f64) -> u64 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let k = libm::round(v * 100.0) as i64;
     k.cast_unsigned()
 }
@@ -223,10 +224,6 @@ fn coping_cells(segs: &[Seg], t: f64, z0: f64, h: f64, s: f64, rng: &mut Rng) ->
             t1 = b;
         }
         let span = t1 - t0;
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let n = (libm::round(span / (0.5 * (COPING_W.0 + COPING_W.1) * s)) as usize).max(1);
         let w: Vec<f64> = (0..n)
             .map(|_| rng.uniform(COPING_W.0, COPING_W.1))
@@ -511,10 +508,6 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
     let left = side(c.t0, c.end0, -ov0, 1.0, c.crack_w[0]);
     let right = side(c.t1, c.end1, ov1, -1.0, c.crack_w[1]);
     let bedline = |z: f64, ta: f64, tb: f64| -> Vec<[f64; 2]> {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let n = ((libm::fabs(tb - ta) / (4.0 * s)) as usize + 2).max(2);
         (0..n)
             .map(|k| {
@@ -755,10 +748,6 @@ fn segmentize(p: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
     for i in 0..n {
         let (a, b) = (p[i], p[(i + 1) % n]);
         let l = len2(sub(b, a));
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let k = (libm::ceil(l / step) as usize).max(1);
         for j in 0..k {
             let f = j as f64 / k as f64;

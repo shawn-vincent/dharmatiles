@@ -778,7 +778,7 @@ fn cura(install: &Install, problems: &mut Vec<String>) -> Vec<Candidate> {
             );
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "the extruder count is clamped to 1..=32 on the line above"
         )]
         // clamped to 1..=32 just above
         let extruders =

@@ -58,7 +58,7 @@ pub(crate) fn line(prefix: &str, name: &str, s: &Status, width: usize) -> String
     let pct = (s.fraction * 100.0).floor().clamp(0.0, 100.0);
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "a bar of BAR cells: the filled count is clamped by `min(BAR)`"
     )]
     let filled = ((s.fraction * BAR as f64).floor() as usize).min(BAR);
     let bar: String = "#".repeat(filled) + &"-".repeat(BAR - filled);

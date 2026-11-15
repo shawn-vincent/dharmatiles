@@ -2,6 +2,11 @@
 //! by area) and the tagged solids elements add, with the source-ID block and
 //! material table of `dt_geom::source`.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "lattice indices (a coordinate over the cell, clamped into 0..n; `as` saturates) and f32 mesh values (single precision is the mesh format); the cells per square is clamped to 4096 before it becomes a u32"
+)]
+
 use dt_geom::{BoolOp, Grid, IdBlock, Mask, TriMesh, batch_in_order};
 use dt_value::Seed;
 
@@ -42,12 +47,7 @@ pub const OPENLOCK_SQUARE_MM: f64 = 25.4;
 /// the square: the one rule for a point's cell, clamped to the lattice.
 #[must_use]
 pub fn node_of(per: f64, v: f64, n: usize) -> usize {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
-    let k = (v * per).round().clamp(0.0, (n - 1) as f64) as usize;
-    k
+    (v * per).round().clamp(0.0, (n - 1) as f64) as usize
 }
 
 impl Frame {
@@ -130,10 +130,6 @@ impl Frame {
     #[must_use]
     pub fn with_cell(mut self, cell_mm: f64) -> Self {
         if cell_mm > 0.0 {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let n = libm::ceil(self.square_mm / cell_mm - 1e-9).min(4096.0) as u32;
             self.cells_per_square = self.cells_per_square.max(n);
         }
@@ -144,10 +140,6 @@ impl Frame {
     /// column and row ranges: `(i0..i1, j0..j1)`, empty where the box is
     /// off the tile.
     #[must_use]
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     pub fn node_range(
         &self,
         lo: [f64; 2],
@@ -701,10 +693,6 @@ impl Terrain {
             .tops
             .get_or_insert_with(|| Grid::filled(nx, ny, step, f32::NEG_INFINITY));
         for (z, &t) in g.z.iter_mut().zip(tops).filter(|(_, t)| t.is_finite()) {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             let t = t as f32;
             *z = z.max(t);
         }
@@ -719,10 +707,6 @@ impl Terrain {
         if s.z[k] == f32::NEG_INFINITY {
             self.under[k] = under;
         }
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let z = top_mm as f32;
         s.z[k] = s.z[k].max(z);
     }
@@ -864,10 +848,6 @@ impl Terrain {
         let n = self.land.z.len();
         let shape = spec.shape.field();
         let (off, cap) = self.set_in(spec);
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let mut top: Vec<f32> = (0..n)
             .map(|k| {
                 let s = shape.z[k];
@@ -882,10 +862,6 @@ impl Terrain {
             // (the distance to the nearest edge, so it is mitred at a corner)
             let rim = crate::rim(&self.frame);
             let r = spec.round_mm;
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-            )]
             for k in (0..n).filter(|&k| spec.mask.bits[k] && rim.z[k] < r) {
                 let drop = dt_geom::rim_profile(rim.z[k], r);
                 let thick = f64::from(top[k]) - f64::from(self.land.z[k]);
@@ -1654,10 +1630,6 @@ fn lift_layers(
     // where a fluid is absent its top lies this far under the last land
     // laid: only where the stack mesher puts the layer's boundary on an
     // edge it crosses (what shows is the layer's `present`, not the gap)
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let under = (ABSENT_UNDER_MM * frame.scale()) as f32;
     let final_land: &[f32] = ordered
         .iter()
@@ -1708,10 +1680,6 @@ fn lift_layers(
             }),
         })
         .collect();
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let sides = dt_geom::Sides {
         column_nodes: (libm::round(SIDE_WAVE_MM / land.step) as usize).max(1),
         row_mm: 1.6 * printer.layer_mm,
@@ -1924,10 +1892,6 @@ mod tests {
     /// The set-in is local: far from a stand of grain the surface is not
     /// moved, near it it is moved by about the grain's height.
     #[test]
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     fn the_set_in_is_local_to_the_grain() {
         let spike = |x: f64, y: f64| {
             if libm::hypot(x - 5.0, y - 5.0) < 1.5 {

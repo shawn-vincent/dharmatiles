@@ -16,6 +16,11 @@
 //! hundred faces, watertight by construction, and meshing is a pure
 //! function of the frond (blades are built in parallel, gathered in order).
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "blade line counts (clamped to MAX_LINES) and a path index below the path's length"
+)]
+
 use dt_kit::TriMesh;
 
 use super::fronds::{Frond, TRACE_STEP_MM};
@@ -51,15 +56,10 @@ fn softmin(a: f64, b: f64) -> f64 {
 
 /// Line counts per layer: a lens, 2 at the keel, 1 on top, +1 a layer at most.
 fn lines(n_layers: usize, half_w: f64) -> Vec<i64> {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let n_max = (libm::round(2.0 * half_w / LINE_W_MM) as i64).clamp(MAX_LINES.0, MAX_LINES.1);
     let mut n: Vec<i64> = (0..n_layers)
         .map(|k| {
             let a = core::f64::consts::PI * (k as f64 + 0.5) / n_layers as f64;
-            #[expect(clippy::cast_possible_truncation, reason = "a grid index, count or small id in a bounded range: the value fits by construction")]
             let v = libm::round(n_max as f64 * libm::pow(libm::sin(a), LENS_EXP)) as i64;
             v.max(1)
         })
@@ -75,10 +75,6 @@ fn lines(n_layers: usize, half_w: f64) -> Vec<i64> {
 /// The spine at arc length `u` and its unit left normal.
 fn spine(path: &[[f64; 2]], u: f64) -> ([f64; 2], [f64; 2]) {
     let f = (u / TRACE_STEP_MM).clamp(0.0, (path.len() - 1) as f64);
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let i = (f as usize).min(path.len() - 2);
     let t = f - i as f64;
     let (a, b) = (path[i], path[i + 1]);

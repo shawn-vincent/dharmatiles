@@ -582,7 +582,7 @@ impl<'a> Plan<'a> {
                 let k = self.c.frame.step_mm() / band.lo().step;
                 #[expect(
                     clippy::cast_possible_truncation,
-                    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+                    reason = "a lattice node: an index scaled by the resolution ratio and clamped to the grid, or a position over the step"
                 )]
                 let (i, j) = (
                     ((i as f64 * k).round() as usize).min(bx - 1),
@@ -931,7 +931,7 @@ fn trace_entries(scene: &Scene, mesh: &dt_kit::TriMesh, plan: &Plan<'_>) -> (Vec
         let (x, y) = ((a[0] + b[0] + d[0]) / 3.0, (a[1] + b[1] + d[1]) / 3.0);
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+            reason = "a lattice node: an index scaled by the resolution ratio and clamped to the grid, or a position over the step"
         )]
         let (i, j) = (
             (x / step).round().max(0.0) as usize,

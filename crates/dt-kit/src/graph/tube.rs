@@ -111,7 +111,7 @@ fn tube(
     let length = arc[64];
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "tube segment counts (a length over the step, at least 4) and a ring index clamped to 63"
     )]
     let steps = (libm::ceil(length / style.step_mm) as usize).max(4);
     // the overlap into the parent: straight back along its tangent
@@ -231,7 +231,7 @@ fn interp_arc(arc: &[f64], t: f64) -> f64 {
     let x = t * 64.0;
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "tube segment counts (a length over the step, at least 4) and a ring index clamped to 63"
     )]
     let k = (x.floor() as usize).min(63);
 

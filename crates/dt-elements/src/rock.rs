@@ -27,6 +27,11 @@
 //! 0.55 mm under the median there. It is measured after: `seat_gap_max` is
 //! the most any foot hovers over the land, `seat_gap_stones` how many do.
 
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "rock lattice nodes (a position over the step, clamped into the area), a random pick below a count (`rng.int(0, i)`), and a stone count in the tens"
+)]
+
 use dt_kit::Kind;
 use dt_kit::vec3::{cross, dot, norm, sub};
 use dt_kit::{
@@ -173,10 +178,6 @@ fn tilted(rng: &mut Rng, n: [f64; 3], max_deg: f64) -> [f64; 3] {
 fn permutation(rng: &mut Rng, n: usize) -> Vec<usize> {
     let mut v: Vec<usize> = (0..n).collect();
     for i in (1..n).rev() {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let j = rng.int(0, i as i64) as usize;
         v.swap(i, j);
     }
@@ -427,10 +428,6 @@ pub fn make_stone(rng: &mut Rng, d: f64, mix: [f64; 4], low: bool) -> Result<Sto
         rock = c;
         chips += 1;
     }
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     Ok(Stone {
         convex: rock.compact(),
         facets,
@@ -629,10 +626,6 @@ pub(crate) fn add_items(
     let s = scene.frame().scale();
     let slack = scene.frame().step_mm();
     let n: usize = items.iter().map(|(it, _, _)| it.stones.len()).sum();
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-    )]
     let slots = scene
         .slots(n as u32, Material::Rock)
         .map_err(LookError::build)?;
@@ -1048,10 +1041,6 @@ pub(crate) fn place(
     let area = &open_area(scene, ctx, reach);
     let step = frame.step_mm();
     let inside = |x: f64, y: f64| {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (i, j) = (
             (libm::round(x / step).max(0.0) as usize).min(area.nx - 1),
             (libm::round(y / step).max(0.0) as usize).min(area.ny - 1),
@@ -1121,10 +1110,6 @@ fn place_at_foot(
         {
             continue;
         }
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "a grid index, count or small id in a bounded range: the value fits by construction"
-        )]
         let (gi, gj) = (
             (libm::round(at[0] / step).max(0.0) as usize).min(area.nx - 1),
             (libm::round(at[1] / step).max(0.0) as usize).min(area.ny - 1),

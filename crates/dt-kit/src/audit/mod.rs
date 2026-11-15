@@ -622,7 +622,7 @@ mod tests {
     /// plan by `r`: a prism on a ring of arc points.
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "f32 mesh coordinates of the audit's test plate"
     )]
     fn rounded_plate(r: f64) -> TriMesh {
         let n = 24;

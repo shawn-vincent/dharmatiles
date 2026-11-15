@@ -131,7 +131,7 @@ pub fn relax(band: &Band, scale: f64) -> Relaxed {
 
 #[expect(
     clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    reason = "a count of relax rounds the caller bounds"
 )]
 fn relax_rounds(band: &Band, scale: f64, rounds: usize) -> Relaxed {
     let (lo, hi) = (band.lo(), band.hi());

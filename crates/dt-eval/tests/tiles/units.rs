@@ -239,7 +239,7 @@ fn node(c: &Checked, x: f64, y: f64) -> usize {
     let (nx, _) = frame.nodes();
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+        reason = "a test: a node of the test's own small grid"
     )]
     let (i, j) = ((x * per).round() as usize, (y * per).round() as usize);
     j * nx + i

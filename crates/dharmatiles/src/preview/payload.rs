@@ -31,7 +31,7 @@
 // f64 mesh coordinates to f32 for the GPU, and colours 0..1 to bytes.
 #![expect(
     clippy::cast_possible_truncation,
-    reason = "a grid index, count or small id in a bounded range: the value fits by construction"
+    reason = "mesh sizes and f32 positions of the view payload (the page's format)"
 )]
 
 use dt_eval::Built;
