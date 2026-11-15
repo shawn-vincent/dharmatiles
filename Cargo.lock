@@ -544,7 +544,15 @@ dependencies = [
 name = "dt-service"
 version = "1.0.0"
 dependencies = [
+ "dt-doc",
+ "dt-eval",
+ "dt-kit",
+ "dt-lang",
+ "dt-print",
  "dt-value",
+ "serde",
+ "serde_json",
+ "ts-rs",
 ]
 
 [[package]]

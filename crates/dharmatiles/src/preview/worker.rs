@@ -3,7 +3,7 @@
 use super::header::{MeshHeader, MeshKind};
 use super::plan::{PlanGround, PlanSquares, TilePlan};
 use super::*;
-use crate::message::{Kind, Origin, Scope, Severity};
+use dt_service::message::{Kind, Origin, Scope, Severity};
 
 /// A progress reporter that also notices when any source read by the plan
 /// pass changes. Progress events are safe interruption boundaries in the
@@ -314,7 +314,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             shared.report(id, Scope::Build, |name| {
                 let mut found = messages::of_build(&record, b.report.reused, id, name);
                 for m in messages::of_errors(&palette, Scope::Build, id, name, &[]) {
-                    found.push(crate::message::Message {
+                    found.push(dt_service::message::Message {
                         severity: Severity::Warning,
                         ..m
                     });

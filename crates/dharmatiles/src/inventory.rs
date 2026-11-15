@@ -14,8 +14,8 @@ use dt_eval::Diag;
 use dt_print::inventory as disk;
 
 use crate::cli::InventoryAction;
-use crate::inventory_wire::{InventoryRow, InventoryState};
 use crate::{ERROR, OK, report};
+use dt_service::inventory::{InventoryRow, InventoryState};
 
 /// The command's choices, as the words the command line gives them.
 pub(crate) struct Choice {

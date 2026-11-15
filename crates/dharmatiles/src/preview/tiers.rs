@@ -573,7 +573,7 @@ impl Shared {
 
     /// A piece could not be built: an error in the panel of every document that wants it, never only on the stream.
     fn tier_failed(&self, r: &Ready, message: &str, errs: &[dt_eval::Diag]) {
-        use crate::message::{Kind, Message, Scope, Severity};
+        use dt_service::message::{Kind, Message, Scope, Severity};
         let docs = self.docs_wanting(&r.key);
         let piece = self.name_of(&r.tile).unwrap_or_else(|| r.tile.clone());
         let doing = {

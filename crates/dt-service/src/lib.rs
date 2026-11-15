@@ -5,5 +5,14 @@
 //! program's disk, or a [`storage::MemStorage`] in a worker), and time through a [`clock::Clock`], so the same code
 //! builds for `wasm32-unknown-unknown`.  `cargo build -p dt-service --target wasm32-unknown-unknown` holds that.
 
+pub mod api;
 pub mod clock;
+pub mod inventory;
+pub mod message;
+pub mod patch;
+pub mod plan;
+pub mod resources;
+pub mod scene;
+pub mod stack;
 pub mod storage;
+pub mod tile;

@@ -10,11 +10,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-// the program's own type for the inventory's state and rows, taken in whole: `list --json` writes it, and the tests read the
-// output by deserializing it, never by key
-#[allow(dead_code, reason = "used by one build configuration only")]
-#[path = "../src/inventory_wire.rs"]
-mod inventory_wire;
+// the inventory's state and rows are `dt_service::inventory`'s types: `list --json` writes them, and the tests read the
+// output by deserializing them, never by key
 
 // and for `plates --json`, the same way
 #[allow(dead_code, reason = "used by one build configuration only")]
@@ -22,7 +19,7 @@ mod inventory_wire;
 mod cli_wire;
 
 use cli_wire::PlatesChecked;
-use inventory_wire::{ColourWord, InventoryRow, InventoryState};
+use dt_service::inventory::{ColourWord, InventoryRow, InventoryState};
 
 const EXE: &str = env!("CARGO_BIN_EXE_dharmatiles");
 const FLAT: &str = "lib:tests/ground/1x1-flat";

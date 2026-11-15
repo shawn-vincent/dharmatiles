@@ -18,9 +18,9 @@ fn a_finished_builds_gate_message_carries_the_audit_summary_the_page_is_tested_w
     let said = super::messages::of_stl(&record, "id", "name");
     let gate = said
         .iter()
-        .find(|m| m.kind == crate::message::Kind::Gate)
+        .find(|m| m.kind == dt_service::message::Kind::Gate)
         .expect("a gate message");
-    let Some(crate::message::MessageData::Gate(carried)) = gate.wire().data else {
+    let Some(dt_service::message::MessageData::Gate(carried)) = gate.wire().data else {
         panic!("a gate message carries the audit summary");
     };
     assert_eq!(carried, summary, "a gate message's data is the summary");
@@ -28,7 +28,7 @@ fn a_finished_builds_gate_message_carries_the_audit_summary_the_page_is_tested_w
 
 #[test]
 fn the_message_fixture_is_what_the_program_writes() {
-    let messages: Vec<crate::message::MessageJson> =
+    let messages: Vec<dt_service::message::MessageJson> =
         serde_json::from_str(MESSAGES).expect("the fixture is a list of messages");
     let written = serde_json::to_value(&messages).expect("messages write as JSON");
     let fixture: serde_json::Value = serde_json::from_str(MESSAGES).expect("the fixture is JSON");
@@ -41,7 +41,7 @@ fn the_message_fixture_is_what_the_program_writes() {
     assert!(
         messages.iter().any(|m| matches!(
             &m.data,
-            Some(crate::message::MessageData::Gate(g)) if *g == summary
+            Some(dt_service::message::MessageData::Gate(g)) if *g == summary
         )),
         "a gate message with the gate fixture's numbers"
     );

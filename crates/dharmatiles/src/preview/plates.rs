@@ -28,7 +28,6 @@ use super::edit::Done;
 use super::header::{MeshHeader, MeshKind};
 use super::lists::ListEdited;
 use super::messages::Scope;
-use super::patch::Patch;
 use super::plan::{
     ListPiece, PlanGround, PlanKind, PlanPlate, PlanSettings, PlannedKind, PlatesDoc, PlatesPanel,
     PlatesPlanned, PlatesUnread, PlatesWritten, PrinterBroken, PrinterRead, PrinterRow, SlotCheck,
@@ -36,8 +35,9 @@ use super::plan::{
 };
 use super::scene::{self, Note, Scene, SceneJson};
 use super::{Shared, edit, fail, messages, payload};
-use crate::message::{Kind, LayoutData, Message, MessageData, PlateFilesData, Severity};
 use crate::plates as cli;
+use dt_service::message::{Kind, LayoutData, Message, MessageData, PlateFilesData, Severity};
+use dt_service::patch::Patch;
 
 // ---- the calls' types ------------------------------------------------------------------
 

@@ -1,4 +1,4 @@
-//! What the preview says happened, as [messages](crate::message): the
+//! What the preview says happened, as [messages](dt_service::message): the
 //! makers of each kind from what a check, a build, an export or a failure
 //! returns, and the route that reads the stream (`GET /api/messages`).
 //! [`super::Shared::report`] and [`super::Shared::say`] put them in the log
@@ -7,12 +7,12 @@
 use dt_eval::Diag;
 
 use super::api::ErrorDetail;
-pub(super) use crate::message::Scope;
-use crate::message::{
+use dt_eval::TileRecord;
+pub(super) use dt_service::message::Scope;
+use dt_service::message::{
     BuildData, CheckData, ExportData, Kind, Message, MessageData, MessagesRes, Origin, ServerData,
     Severity, ShownData, render,
 };
-use dt_eval::TileRecord;
 
 use super::Shared;
 use super::route::Reply;

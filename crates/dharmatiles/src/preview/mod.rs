@@ -12,7 +12,7 @@
 //! | `GET /api/tiles/ID/text` | the tile's document (or `?file=` one it read) for the text pane |
 //! | `POST /api/tiles/ID/build[?debug=1\|0]` | build a tile that has not been built yet; `debug` says whether the page has the debug layer on for it (its marks are collected only then; turned on for a built tile, it is built again) |
 //! | `POST /api/tiles/ID/draft` `{text, file?, debug?}` | build the posted text quickly; the reply is its mesh |
-//! | `GET /api/events?epoch=E&since=N` | server-sent events: a snapshot (or, resuming, what changed since revision N), then one event per change; every kept [message](crate::message) follows it, then each as it is said (`message` events) |
+//! | `GET /api/events?epoch=E&since=N` | server-sent events: a snapshot (or, resuming, what changed since revision N), then one event per change; every kept [message](dt_service::message) follows it, then each as it is said (`message` events) |
 //! | `GET /api/messages?tile=&since=&format=text\|json` | the stream's messages, as the page and an assistant read them: a tile's (id, path or name), after sequence number `since`; also `state=open\|cleared`, `kind=`, `severity=` |
 //! | `GET /api/session` | this run's token, which every other `POST` must carry |
 //! | `GET /api/about` | the application version and the tile formats it reads, for the About box |
@@ -51,27 +51,6 @@ mod queue;
 mod route;
 mod routes;
 
-/// Where a tile's build stands.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum State {
-    /// Not built yet: built when it is chosen.
-    Idle,
-    Building,
-    Ready,
-    Failed,
-}
-
-impl State {
-    /// As the page reads it.
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Idle => "idle",
-            Self::Building => "building",
-            Self::Ready => "ready",
-            Self::Failed => "failed",
-        }
-    }
-}
 pub(crate) mod api;
 mod calls;
 mod docs;
@@ -85,8 +64,6 @@ mod maps;
 mod messages;
 mod offers;
 mod owner;
-mod patch;
-use patch::Patch;
 pub mod payload;
 pub(crate) mod places;
 mod placing;
@@ -118,6 +95,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use dt_eval::progress::{StageInfo, Status, Timings, Tracker, plan_stages};
 use dt_eval::{Diag, Options};
+use dt_service::patch::Patch;
 
 use crate::watch::{Recording, mtime};
 
@@ -152,149 +130,7 @@ fn stale_mesh(rev: u64) -> (&'static str, api::Body) {
 /// What a tile's size and seed are remembered by: its path, the seed asked, the system and its file's time.
 type SceneCheck = (String, Option<u64>, dt_lang::System, Option<SystemTime>);
 
-/// A tile's name for the page: 16 hex digits of a hash of its path.  The
-/// same path is the same id for as long as it is listed, and across runs.
-type TileId = String;
-
-pub(crate) fn tile_id(path: &str) -> TileId {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in path.bytes() {
-        h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
-    }
-    format!("{h:016x}")
-}
-
-/// One served tile.
-pub struct Slot {
-    id: TileId,
-    path: String,
-    /// Its name: the file name, without `.dtile`.
-    name: String,
-    /// The root it is listed under, and its group there.
-    root: usize,
-    group: Option<String>,
-    /// The size the document writes for the tile (`2x1`), read when the tile
-    /// is listed: for the folder rows, before any build.
-    size: Option<String>,
-    status: State,
-    /// A print list: the plate in view, from 0.
-    plate: usize,
-    /// What a map's last reading said that is not a mistake (a crown over a taller neighbour): kept so a
-    /// check of the text that finds nothing wrong does not take it from the stream.
-    scene_notes: Vec<scene::Note>,
-    plan: Option<plan::TilePlan>,
-    record: Option<dt_eval::TileRecord>,
-    errors: Vec<api::Mistake>,
-    /// A build that panicked or could not be encoded, as the page gets it
-    /// ([`fail::ServerError`]); the page shows it in the error panel.
-    failure: Option<api::ErrorDetail>,
-    mesh: Option<Arc<Vec<u8>>>,
-    mesh_version: u64,
-    /// The revision of the document the mesh is of (the tile's file, or the print list's): a mesh is asked for by it,
-    /// and one of another revision is refused, so an older build cannot be shown for a newer text.
-    doc_rev: Option<u64>,
-    /// The build's progress (a `progress` event's body) while building.
-    progress: Option<api::Progress>,
-    /// Files the last build read, with their times.
-    files: BTreeMap<String, Option<SystemTime>>,
-    /// Built for a target that is not the chosen one any more.
-    stale: bool,
-    /// While the first build runs: the mesh on show is not this tile's
-    /// build but one the cache kept (see [`api::Shown`]), so the page says
-    /// "rebuilding".  Gone when the build ends.
-    shown: Option<api::Shown>,
-    /// The page has the debug layer on for this tile: its builds collect the
-    /// layer's marks (grass starts, spines) too.  Set by `POST …/build?debug=1`.
-    marks: bool,
-    /// While it builds: what each stage has made so far, for the page to
-    /// show as it goes (see [`worker`]).  Gone when the build ends.
-    sketches: Vec<Sketch>,
-}
-
-/// One stage's sketch while a build runs: a later one of the same stage
-/// replaces it (the cliff's rough boxes, then its stones).
-struct Sketch {
-    stage: String,
-    id: u64,
-    rough: bool,
-    mesh: Arc<Vec<u8>>,
-}
-
-impl Slot {
-    #[cfg(test)]
-    fn new(path: &str) -> Self {
-        Self::in_root(path, 0, lib_group(path))
-    }
-
-    fn in_root(path: &str, root: usize, group: Option<String>) -> Self {
-        let name = path
-            .rsplit(['/', ':'])
-            .next()
-            .unwrap_or(path)
-            .trim_end_matches(".dtile")
-            .trim_end_matches(".dmap")
-            .trim_end_matches(".dinv")
-            .to_owned();
-        Self {
-            id: tile_id(path),
-            path: path.to_owned(),
-            name,
-            root,
-            group,
-            size: None,
-            status: State::Idle,
-            plate: 0,
-            scene_notes: Vec::new(),
-            plan: None,
-            record: None,
-            errors: Vec::new(),
-            failure: None,
-            mesh: None,
-            mesh_version: 0,
-            doc_rev: None,
-            progress: None,
-            files: BTreeMap::new(),
-            stale: false,
-            shown: None,
-            marks: false,
-            sketches: Vec::new(),
-        }
-    }
-
-    fn summary(&self) -> api::TileSummary {
-        api::TileSummary {
-            id: self.id.clone(),
-            path: self.path.clone(),
-            name: self.name.clone(),
-            root: self.root,
-            group: self.group.clone(),
-            size: self.size.clone(),
-            status: self.status.as_str().to_owned(),
-            plan: self.plan.clone(),
-            record: self.record.clone(),
-            errors: self.errors.clone(),
-            failure: self.failure.clone(),
-            progress: self.progress.clone(),
-            mesh_version: self.mesh.as_ref().map(|_| self.mesh_version),
-            doc_rev: self.mesh.as_ref().and(self.doc_rev),
-            mesh_bytes: self.mesh.as_ref().map(|m| m.len()),
-            sketches: self
-                .sketches
-                .iter()
-                .map(|k| api::SketchRef {
-                    id: k.id,
-                    rough: k.rough,
-                })
-                .collect(),
-            shown: self.shown.clone(),
-        }
-    }
-
-    #[cfg(test)]
-    fn changed(&self) -> bool {
-        self.row().changed()
-    }
-}
+pub(crate) use dt_service::tile::{Facts, Row, Sketch, Slot, State, TileId, tile_id};
 
 /// What changed, as the event log remembers it.
 enum Change {
@@ -310,8 +146,8 @@ struct Events {
     rev: u64,
     log: VecDeque<(u64, Change)>,
     clients: Vec<Sender<String>>,
-    /// What happened to each tile ([`crate::message`]): kept here so it is sent in step with the changes.
-    messages: crate::message::Log,
+    /// What happened to each tile ([`dt_service::message`]): kept here so it is sent in step with the changes.
+    messages: dt_service::message::Log,
     /// What the pages were last told of each resource.
     told: resources::Told,
 }
@@ -701,7 +537,7 @@ impl Shared {
     }
 
     /// What the owner knows of tile `id` besides its summary; none when it is not listed.
-    fn facts(&self, id: &str) -> Option<owner::Facts> {
+    fn facts(&self, id: &str) -> Option<Facts> {
         self.owner.ask(|r| owner::Command::Facts(id.to_owned(), r))
     }
 
@@ -722,8 +558,8 @@ impl Shared {
     fn report(
         &self,
         id: &str,
-        scope: crate::message::Scope,
-        make: impl FnOnce(&str) -> Vec<crate::message::Message>,
+        scope: dt_service::message::Scope,
+        make: impl FnOnce(&str) -> Vec<dt_service::message::Message>,
     ) {
         let Some(name) = self.name_of(id) else { return };
         self.owner.send(owner::Command::Report {
@@ -734,7 +570,7 @@ impl Shared {
     }
 
     /// One message with nothing to clear (a failure of the server's or the page's), said now.
-    fn say(&self, m: crate::message::Message) {
+    fn say(&self, m: dt_service::message::Message) {
         self.owner.send(owner::Command::Say(Box::new(m)));
     }
 
@@ -828,7 +664,7 @@ impl Shared {
 
     /// Change tile `id` and tell every listening browser; a tile that is
     /// not listed is left alone.
-    fn update(&self, id: &str, patch: patch::Patch) {
+    fn update(&self, id: &str, patch: Patch) {
         self.owner.edit(id, patch);
     }
 

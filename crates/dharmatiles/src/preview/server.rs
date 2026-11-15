@@ -112,7 +112,7 @@ pub(super) fn answer(shared: &Shared, req: &Request) -> Reply {
             shared.say(super::messages::of_server_error(
                 &error,
                 (id.as_deref().unwrap_or(""), name.as_deref().unwrap_or("")),
-                crate::message::Origin::Server,
+                dt_service::message::Origin::Server,
             ));
             tell!(
                 "error: preview: {} {}: {status}: {}",

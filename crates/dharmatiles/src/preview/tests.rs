@@ -11,8 +11,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::message::{MessageData, Origin};
 use dt_eval::{Options, Source};
+use dt_service::message::{MessageData, Origin};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -20,6 +20,16 @@ use serde_json::Value;
 use super::api::{ErrorBody, Snapshot, StreamEvent, TileSummary};
 use super::plan::{PlatesPanel, PlatesPlanned, TilePlan};
 use super::*;
+
+/// A slot of a path, in the first root, as the library would list it.
+fn slot(path: &str) -> Slot {
+    Slot::in_root(path, 0, lib_group(path))
+}
+
+/// A slot whose files changed (or whose target did): it is built again.
+fn slot_changed(t: &Slot) -> bool {
+    t.row().changed(mtime)
+}
 
 mod inventory;
 mod map_wire;
@@ -483,11 +493,8 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
 
 #[test]
 fn the_slot_name_comes_from_the_file_until_the_plan_is_read() {
-    assert_eq!(
-        Slot::new("lib:tiles/ground/1x1-grass.dtile").name,
-        "1x1-grass"
-    );
-    assert_eq!(Slot::new("my/tiles/a.dtile").name, "a");
+    assert_eq!(slot("lib:tiles/ground/1x1-grass.dtile").name, "1x1-grass");
+    assert_eq!(slot("my/tiles/a.dtile").name, "a");
     let _ = Shared::new(&[]).snapshot();
 }
 
@@ -1817,7 +1824,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     // one tile has been built
     assert_eq!(shared.snapshot().tiles.len(), 0);
     shared.tiles_with(|tiles| {
-        let mut t = Slot::new("lib:tests/ground/1x1-flat.dtile");
+        let mut t = slot("lib:tests/ground/1x1-flat.dtile");
         t.status = State::Ready;
         tiles.push(t);
     });
@@ -1829,7 +1836,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     assert!((snap.overhang_deg - 50.0).abs() < 1e-9);
     assert!((snap.steepest_deg - 62.0).abs() < 1e-9);
     // the built tile is stale: it builds again for the new target
-    assert!(shared.tiles_with(|t| t.iter().all(|t| t.stale && t.changed())));
+    assert!(shared.tiles_with(|t| t.iter().all(|t| t.stale && slot_changed(t))));
     assert_eq!(shared.options().target(), "db-mine");
     // and the choice is in the home, for the next run
     let kept = crate::library::remembered_target(&dir).unwrap().unwrap();
@@ -2245,15 +2252,15 @@ fn check_text(r: &Running, token: &str, text: &str) -> edit::CheckRes {
     v
 }
 
-fn messages(r: &Running, query: &str) -> Vec<crate::message::MessageJson> {
+fn messages(r: &Running, query: &str) -> Vec<dt_service::message::MessageJson> {
     let (head, body) = get(r, &format!("/api/messages?{query}"));
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
-    read::<crate::message::MessagesRes>(&body).messages
+    read::<dt_service::message::MessagesRes>(&body).messages
 }
 
 #[test]
 fn a_note_from_the_checker_reaches_the_stream_and_the_messages_route() {
-    use crate::message::{MessageState, Scope, Severity};
+    use dt_service::message::{MessageState, Scope, Severity};
     let (r, _, token) = editable("note", STEEP);
     let v = check_text(&r, &token, STEEP);
     assert!(v.ok, "{v:?}");
@@ -2303,7 +2310,7 @@ fn a_note_from_the_checker_reaches_the_stream_and_the_messages_route() {
 
 #[test]
 fn a_new_check_clears_what_it_no_longer_reports() {
-    use crate::message::Kind;
+    use dt_service::message::Kind;
     let (r, _, token) = editable("clear", STEEP);
     let broken = STEEP.replace("        dirt {", "        durt {");
     let v = check_text(&r, &token, &broken);
@@ -2328,7 +2335,7 @@ fn a_new_check_clears_what_it_no_longer_reports() {
 
 #[test]
 fn a_build_says_its_timing_and_the_gates_numbers_and_progress_is_not_kept() {
-    use crate::message::{Kind, Severity};
+    use dt_service::message::{Kind, Severity};
     let r = start(&[FLAT], true);
     let t = wait_for(&r, "the build", |t| t.status == "ready");
     let id = t.id.clone();
@@ -2359,7 +2366,7 @@ fn a_build_says_its_timing_and_the_gates_numbers_and_progress_is_not_kept() {
 
 #[test]
 fn a_failure_of_the_server_and_one_the_page_reports_are_messages_too() {
-    use crate::message::Severity;
+    use dt_service::message::Severity;
     let r = start(&[], false);
     let (head, _) = get(&r, "/api/test-failure");
     assert!(head.starts_with("HTTP/1.1 500"), "{head}");
@@ -2381,7 +2388,7 @@ fn a_failure_of_the_server_and_one_the_page_reports_are_messages_too() {
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     let found = messages(&r, "kind=server");
     assert_eq!(found.len(), 2, "{found:?}");
-    let server_data = |m: &crate::message::MessageJson| match &m.data {
+    let server_data = |m: &dt_service::message::MessageJson| match &m.data {
         Some(MessageData::Server(d)) => d.clone(),
         other => panic!("a server message carries its failure: {other:?}"),
     };
@@ -2437,7 +2444,7 @@ fn a_mistake_in_the_document_has_no_report() {
 
 #[test]
 fn a_mistake_the_build_finds_is_a_message_at_its_entry_and_a_fixed_build_clears_it() {
-    use crate::message::Scope;
+    use dt_service::message::Scope;
     let tree = |trunk: &str| {
         format!(
             "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=4 {{\n    stack {{\n        base\n        dirt\n        tree at=center top=\"$bottom + 22dmm\" {{\n            trunk height=\"{trunk}\"\n        }}\n    }}\n}}\n"
@@ -2661,7 +2668,7 @@ fn a_node_is_hidden_a_fix_is_laid_in_and_an_id_the_text_does_not_have_is_refused
     assert_eq!(v.text, ROWS.replace("rock at", "/- rock at"));
     // the program's own fix goes in only where the text still reads what it saw (a fix names no node: no `read`)
     let at = ROWS.find("rock").unwrap();
-    let fix = || crate::message::FixJson {
+    let fix = || dt_service::message::FixJson {
         offset: at,
         len: 4,
         was: "rock".to_owned(),
@@ -3424,7 +3431,7 @@ fn a_job_that_panics_on_a_lane_is_raised_again_in_its_request() {
 #[test]
 fn a_maps_pieces_loading_is_one_job_of_its_document_said_as_progress_and_in_the_messages_and_ending_cleanly()
  {
-    use crate::message::{Kind, MessageState};
+    use dt_service::message::{Kind, MessageState};
     let r = start(&[FLAT], false);
     let id = id0(&r);
     let token = token_of(&r);
@@ -3694,7 +3701,7 @@ tile size="1x1" seed=97 {
 #[test]
 fn a_listed_tile_with_a_document_mistake_reaches_every_picture_as_the_tiles_mistake_with_its_code()
 {
-    use crate::message::Kind;
+    use dt_service::message::Kind;
     let dir = std::env::temp_dir().join(format!("dt-pic-mistake-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

@@ -31,12 +31,11 @@
 
 use dt_eval::Diag;
 
-use crate::preview::stack::StackItem;
+use crate::stack::StackItem;
 use serde_json::Value;
 
 /// What the message is.  A closed list, so a reader can rely on it.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     /// A build is under way (never kept once it ends; the ticks are `progress` events).
@@ -58,7 +57,7 @@ pub enum Kind {
 }
 
 impl Kind {
-    pub(crate) fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Progress => "progress",
             Self::Check => "check",
@@ -73,9 +72,17 @@ impl Kind {
 }
 
 #[derive(
-    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, serde::Serialize, serde::Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    ts_rs::TS,
 )]
-#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     Error,
@@ -85,7 +92,7 @@ pub enum Severity {
 }
 
 impl Severity {
-    pub(crate) fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Error => "error",
             Self::Warning => "warning",
@@ -97,8 +104,7 @@ impl Severity {
 
 /// What reports a message, and so what clears it: a new report of the same
 /// scope for the same tile replaces the last.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Scope {
     /// A check (the plan pass of a build, or the editor's check of the text).
@@ -113,7 +119,7 @@ pub enum Scope {
 
 /// One thing that happened.
 #[derive(Clone, Debug)]
-pub(crate) struct Message {
+pub struct Message {
     /// Order in the stream (0 until the log takes it).
     pub seq: u64,
     /// Milliseconds since 1970 (0 until the log takes it).
@@ -146,8 +152,7 @@ pub(crate) struct Message {
 pub use dt_eval::FixJson;
 
 /// Where in a file a message points: in the log and on the wire, one type.
-#[derive(Clone, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, PartialEq, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct Span {
     pub file: String,
     pub line: usize,
@@ -158,8 +163,7 @@ pub struct Span {
 }
 
 /// `open` until a later report of the scope no longer says it, then `cleared`.
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageState {
     Open,
@@ -171,8 +175,7 @@ pub enum MessageState {
 /// `snake_case` everywhere it appears (the page's other JSON is `camelCase`: see `api.rs`).  `data` is
 /// the numbers of the kind, one [`MessageData`] variant for each sort of message that has any, tagged by `type`
 /// (a message of a kind with none has `null`).
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct MessageJson {
     /// Order in the stream.
     pub seq: u64,
@@ -207,16 +210,14 @@ pub struct MessageJson {
 }
 
 /// `GET /api/messages` as JSON.
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct MessagesRes {
     pub epoch: String,
     pub messages: Vec<MessageJson>,
 }
 
 /// The `data` of a finished build's `build` message.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct BuildData {
     pub build_s: f64,
     pub triangles: usize,
@@ -233,8 +234,7 @@ pub struct BuildData {
 }
 
 /// Who found a failure of the program's own.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Origin {
     /// The server's own code (a route, the build worker).
@@ -246,7 +246,7 @@ pub enum Origin {
 }
 
 impl Origin {
-    pub(crate) fn word(self) -> &'static str {
+    pub fn word(self) -> &'static str {
         match self {
             Self::Server => "server",
             Self::Page => "page",
@@ -256,8 +256,7 @@ impl Origin {
 }
 
 /// The `data` of a `server` message: a failure of the program's own, or the page's.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct ServerData {
     pub origin: Origin,
     /// `refused`, `failure` or `bug` (see `preview::fail`).
@@ -270,8 +269,7 @@ pub struct ServerData {
 }
 
 /// The `data` of a `check` message: what the plan read.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct CheckData {
     pub cols: u32,
     pub rows: u32,
@@ -279,16 +277,14 @@ pub struct CheckData {
 }
 
 /// The `data` of the build message that says which earlier build is shown while the tile builds.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct ShownData {
     /// What is shown: an earlier build of the tile, or the library's stored preview.
     pub shown: String,
 }
 
 /// The `data` of an `export` message: where the files went, and for which target.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct ExportData {
     pub files: Vec<String>,
     pub target: String,
@@ -296,8 +292,7 @@ pub struct ExportData {
 }
 
 /// The `data` of the message that says plates were laid out.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct LayoutData {
     /// How many tiles are drafts, not yet checked.
     pub low: usize,
@@ -306,8 +301,7 @@ pub struct LayoutData {
 }
 
 /// The `data` of the message that says plate files were written.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct PlateFilesData {
     pub files: Vec<String>,
     pub format: String,
@@ -316,8 +310,7 @@ pub struct PlateFilesData {
 
 /// The numbers a message carries, one variant for each sort that has any, tagged by `type`.  Made where the message is,
 /// read by matching: nothing reads a message's data by key.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MessageData {
     /// A check read the tile.
@@ -335,7 +328,7 @@ pub enum MessageData {
     /// Plate files written.
     PlateFiles(PlateFilesData),
     /// Lines added to the inventory.
-    Inventory(crate::preview::inventory::InventoryWrote),
+    Inventory(crate::inventory::InventoryWrote),
     /// An `error` or a `note`.
     Diag(DiagData),
     /// A failure of the program's own, or the page's.
@@ -366,20 +359,19 @@ impl MessageData {
 }
 
 /// The `data` of an `error` or a `note`.
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct DiagData {
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(test, ts(optional))]
+    #[ts(optional)]
     pub label: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(test, ts(optional))]
+    #[ts(optional)]
     pub unexpected: Option<bool>,
 }
 
 impl Message {
     /// A message about `tile` (an id) called `name`.
-    pub(crate) fn new(
+    pub fn new(
         kind: Kind,
         severity: Severity,
         scope: Scope,
@@ -410,27 +402,27 @@ impl Message {
     }
 
     #[must_use]
-    pub(crate) fn code(mut self, code: &str) -> Self {
+    pub fn code(mut self, code: &str) -> Self {
         self.code = Some(code.to_owned());
         self
     }
 
     #[must_use]
-    pub(crate) fn help(mut self, help: Option<&str>) -> Self {
+    pub fn help(mut self, help: Option<&str>) -> Self {
         self.help = help.map(str::to_owned);
         self
     }
 
     /// The tile file it is about and what was being done.
     #[must_use]
-    pub(crate) fn about(mut self, file: &str, doing: impl Into<String>) -> Self {
+    pub fn about(mut self, file: &str, doing: impl Into<String>) -> Self {
         self.file = Some(file.to_owned());
         self.doing = Some(doing.into());
         self
     }
 
     #[must_use]
-    pub(crate) fn data(mut self, data: MessageData) -> Self {
+    pub fn data(mut self, data: MessageData) -> Self {
         self.data = Some(data);
         self
     }
@@ -439,7 +431,7 @@ impl Message {
     /// codes only the program can raise, a failure of its own), or a note
     /// (`as_note`).  `stack` is the plan's stack items, from which the entry
     /// the span lies in is found.
-    pub(crate) fn from_diag(
+    pub fn from_diag(
         d: &Diag,
         scope: Scope,
         as_note: bool,
@@ -447,7 +439,7 @@ impl Message {
         name: &str,
         stack: &[StackItem],
     ) -> Self {
-        let unexpected = !crate::build::is_document_error(d.code);
+        let unexpected = !dt_eval::is_document_error(d.code);
         let (kind, severity) = if as_note {
             (Kind::Note, Severity::Note)
         } else if unexpected {
@@ -500,7 +492,7 @@ impl Message {
     }
 
     /// The stable JSON form, as its type (the contract's `MessageJson`).
-    pub(crate) fn wire(&self) -> MessageJson {
+    pub fn wire(&self) -> MessageJson {
         MessageJson {
             seq: self.seq,
             t: iso(self.at_ms),
@@ -531,7 +523,7 @@ impl Message {
     /// Did the program go wrong, rather than the maker?  A failure or bug of its own (kind `server`), a gate failure (the
     /// geometry is the program's), or a diagnostic the registry calls a failure or the build marked unexpected.  A mistake
     /// in the document, a note and the records are never a defect.
-    pub(crate) fn reportable(&self) -> bool {
+    pub fn reportable(&self) -> bool {
         match self.kind {
             Kind::Server => true,
             Kind::Gate => self.severity == Severity::Error,
@@ -549,7 +541,7 @@ impl Message {
 
     /// [`Message::wire`] as a JSON value (the form a test reads).
     #[cfg(test)]
-    pub(crate) fn json(&self) -> Value {
+    pub fn json(&self) -> Value {
         serde_json::to_value(self.wire()).expect("a message is plain data")
     }
 
@@ -574,7 +566,7 @@ impl Message {
     /// The one text form, for the panel's Copy, the command line and an
     /// assistant: a header (`10:41:40.771 error dt::look tree-err tile/tree/0
     /// tree-err.dtile:8:9`), then the words, `help:` and the numbers, indented.
-    pub(crate) fn text(&self) -> String {
+    pub fn text(&self) -> String {
         let mut head = vec![clock(self.at_ms), self.severity.as_str().to_owned()];
         if let Some(c) = &self.code {
             head.push(c.clone());
@@ -674,7 +666,7 @@ impl Message {
 }
 
 /// The text form of several messages, in the order given, a blank line apart.
-pub(crate) fn render(messages: &[&Message]) -> String {
+pub fn render(messages: &[&Message]) -> String {
     messages
         .iter()
         .map(|m| m.text())
@@ -751,14 +743,14 @@ fn iso(ms: u64) -> String {
 }
 
 /// The code of the progress message of a map's pieces loading (a build's has none).
-pub(crate) const JOB: &str = "pieces";
+pub const JOB: &str = "pieces";
 
 /// How many messages a tile keeps: the oldest cleared ones go first.
 const KEPT: usize = 200;
 
 /// Every tile's messages, in the order they happened.
 #[derive(Default)]
-pub(crate) struct Log {
+pub struct Log {
     seq: u64,
     items: Vec<Message>,
 }
@@ -777,7 +769,7 @@ impl Log {
     /// new ones are opened.  A progress message of the tile is dropped (not
     /// kept) when a `Build` is reported.  Returns the messages that changed
     /// (new, or newly cleared), to send.
-    pub(crate) fn report(
+    pub fn report(
         &mut self,
         at_ms: u64,
         tile: &str,
@@ -810,7 +802,7 @@ impl Log {
     }
 
     /// One message with nothing to clear (a failure of the server's, the page's).
-    pub(crate) fn say(&mut self, at_ms: u64, m: Message) -> Message {
+    pub fn say(&mut self, at_ms: u64, m: Message) -> Message {
         let tile = m.tile.clone();
         let m = self.take(m, at_ms);
         self.trim(&tile);
@@ -818,18 +810,18 @@ impl Log {
     }
 
     /// The build of `tile` begins: its progress message (dropped when it ends).
-    pub(crate) fn begin_progress(&mut self, at_ms: u64, m: Message) -> Message {
+    pub fn begin_progress(&mut self, at_ms: u64, m: Message) -> Message {
         self.take(m, at_ms)
     }
 
     /// The build of `tile` ended: its progress message is dropped, and said so
     /// (cleared, for the page to remove it), never kept.
-    pub(crate) fn end_progress(&mut self, tile: &str) -> Vec<Message> {
+    pub fn end_progress(&mut self, tile: &str) -> Vec<Message> {
         self.end_progress_where(tile, |m| m.code.as_deref() != Some(JOB))
     }
 
     /// The loading of a map's pieces ended: its progress message is dropped the same way.
-    pub(crate) fn end_job(&mut self, tile: &str) -> Vec<Message> {
+    pub fn end_job(&mut self, tile: &str) -> Vec<Message> {
         self.end_progress_where(tile, |m| m.code.as_deref() == Some(JOB))
     }
 
@@ -848,7 +840,7 @@ impl Log {
     }
 
     /// Tile `tile` has gone: its messages with it.
-    pub(crate) fn forget(&mut self, tile: &str) {
+    pub fn forget(&mut self, tile: &str) {
         self.items.retain(|m| m.tile != tile);
     }
 
@@ -867,13 +859,13 @@ impl Log {
     }
 
     /// Every message, oldest first.
-    pub(crate) fn all(&self) -> &[Message] {
+    pub fn all(&self) -> &[Message] {
         &self.items
     }
 
     /// The messages asked for: of `tile` (an id, a path or a name) when given,
     /// after `since`, filtered by `keep`.
-    pub(crate) fn query<'a>(
+    pub fn query<'a>(
         &'a self,
         tile: Option<&str>,
         since: u64,

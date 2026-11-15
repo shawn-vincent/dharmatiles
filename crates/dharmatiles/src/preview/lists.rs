@@ -196,9 +196,9 @@ pub(super) fn check_text(shared: &Shared, tile: &str, text: &str) -> CheckRes {
                 notes
                     .iter()
                     .map(|n| {
-                        crate::message::Message::new(
-                            crate::message::Kind::Note,
-                            crate::message::Severity::Note,
+                        dt_service::message::Message::new(
+                            dt_service::message::Kind::Note,
+                            dt_service::message::Severity::Note,
                             Scope::Check,
                             &id,
                             name,

@@ -2,12 +2,19 @@
 //! and tells the change in the same step.  The owner holds no function of its callers: a patch is a value, so it can
 //! cross a thread, a channel or a worker boundary as it is.
 
-use super::*;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::SystemTime;
+
+use crate::api;
+use crate::plan;
+use crate::scene;
+use crate::tile::{Sketch, Slot, State};
 
 type Files = BTreeMap<String, Option<SystemTime>>;
 
 /// One change to one tile.
-pub(super) enum Patch {
+pub enum Patch {
     /// A build begins: it is building, nothing stale, nothing shown of the last.
     Begin,
     /// The plan pass's plan.
@@ -94,14 +101,13 @@ pub(super) enum Patch {
     PlateZero,
     /// A stage's sketch, in place of its last.
     Sketch(Sketch),
-    /// Only a state (the tests').
-    #[cfg(test)]
+    /// Only a state: what a test sets to see the listing change.
     Status(State),
 }
 
 impl Patch {
     /// Do the change to `t`.
-    pub(super) fn apply(self, t: &mut Slot) {
+    pub fn apply(self, t: &mut Slot) {
         match self {
             Self::Begin => {
                 t.status = State::Building;
@@ -269,7 +275,6 @@ impl Patch {
                 }
             }
             Self::PlateZero => t.plate = 0,
-            #[cfg(test)]
             Self::Status(s) => t.status = s,
             Self::Sketch(s) => {
                 t.sketches.retain(|k| k.stage != s.stage);

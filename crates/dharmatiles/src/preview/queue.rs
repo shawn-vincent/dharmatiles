@@ -487,7 +487,7 @@ impl Shared {
             + self
                 .rows()
                 .iter()
-                .filter(|t| t.building || t.changed())
+                .filter(|t| t.building || t.changed(mtime))
                 .count()
     }
 
@@ -579,7 +579,7 @@ impl Shared {
         let (finished, rows) = self.owner.ask(Command::Watch);
         let ids = rows
             .iter()
-            .filter(|r| r.changed())
+            .filter(|r| r.changed(mtime))
             .map(|r| r.id.clone())
             .collect();
         self.owner.send(Command::Changed { finished, ids });

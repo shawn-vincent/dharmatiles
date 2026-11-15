@@ -55,7 +55,7 @@ pub(super) struct Core {
     trashed: Vec<(std::path::PathBuf, std::path::PathBuf)>,
     /// The inventory as the last scan told it, so a change made outside the program (the file edited by hand) is told
     /// too.
-    inventory_seen: Option<crate::inventory_wire::InventoryState>,
+    inventory_seen: Option<dt_service::inventory::InventoryState>,
     epoch: String,
     /// Where the places are looked at (whether a folder is there); the owner reads nothing else from it.
     storage: Arc<dyn Storage>,
@@ -65,7 +65,7 @@ pub(super) struct Core {
 /// answered with what it holds ([`Held`]).
 pub(super) struct Outside {
     pub printers: Vec<plan::PrinterRow>,
-    pub inventory: crate::inventory_wire::InventoryState,
+    pub inventory: dt_service::inventory::InventoryState,
 }
 
 /// What the owner holds of a snapshot, at one moment: the tiles, the places, the target and the stream's revision.
@@ -111,43 +111,6 @@ pub(super) struct Subscribed {
     pub messages: Vec<String>,
 }
 
-/// What a caller reads of one tile, besides its summary.
-pub(super) struct Facts {
-    pub path: String,
-    pub name: String,
-    pub files: BTreeMap<String, Option<SystemTime>>,
-    pub plate: usize,
-    pub has_mesh: bool,
-    pub marks: bool,
-}
-
-/// One tile as the queue sees it: enough to pick what to build, and to see whether its files changed.
-#[derive(Clone)]
-pub(super) struct Row {
-    pub id: TileId,
-    pub root: usize,
-    pub idle: bool,
-    /// Read only by the tests' idle check.
-    #[cfg_attr(
-        not(any(test, feature = "test-routes")),
-        expect(
-            dead_code,
-            reason = "only `pending` reads it, and that is the tests' idle check"
-        )
-    )]
-    pub building: bool,
-    pub stale: bool,
-    /// The files its last build read (empty while it is idle).
-    pub files: BTreeMap<String, Option<SystemTime>>,
-}
-
-impl Row {
-    /// Built, and a file it read has changed (or the target did): it is built again.
-    pub(super) fn changed(&self) -> bool {
-        !self.idle && (self.stale || self.files.iter().any(|(f, t)| mtime(f) != *t))
-    }
-}
-
 /// How a running build or a map's job says it began, as the message that stays until it ends.
 pub(super) struct Begin {
     pub id: TileId,
@@ -177,9 +140,9 @@ pub(super) enum Command {
     Messages {
         tile: Option<String>,
         since: u64,
-        reply: Sender<Vec<crate::message::Message>>,
+        reply: Sender<Vec<dt_service::message::Message>>,
     },
-    Message(u64, Sender<Option<crate::message::Message>>),
+    Message(u64, Sender<Option<dt_service::message::Message>>),
     /// What the owner holds of a snapshot, now.
     Snapshot(Sender<Held>),
     /// A new listener: registered at once, so no event after this reaches the stream without it.
@@ -198,7 +161,7 @@ pub(super) enum Command {
     /// Something was moved to the Trash (where it was, where it is): answers the number its Undo goes by.
     Trash(std::path::PathBuf, std::path::PathBuf, Sender<usize>),
     /// The inventory as it is now: answers whether it differs from the last one seen.
-    SeeInventory(Box<crate::inventory_wire::InventoryState>, Sender<bool>),
+    SeeInventory(Box<dt_service::inventory::InventoryState>, Sender<bool>),
     /// Tile `id` is asked for; false when it is not listed.
     Want(TileId, Sender<bool>),
     /// A draft joins the queue; answered once it has (so the older one is already answered).
@@ -251,10 +214,10 @@ pub(super) enum Command {
     EndProgress(TileId),
     Report {
         id: TileId,
-        scope: crate::message::Scope,
-        found: Vec<crate::message::Message>,
+        scope: dt_service::message::Scope,
+        found: Vec<dt_service::message::Message>,
     },
-    Say(Box<crate::message::Message>),
+    Say(Box<dt_service::message::Message>),
     /// Tell the resources that differ from what the pages were last told: the places, the target and the list from the
     /// owner's own state, `read` (the inventory, the printers) as the caller read them at read number `seq` (a value
     /// read before one already told is not told: the pages never go back to an older reading).
@@ -300,7 +263,7 @@ impl Owner {
                 rev: 1,
                 log: VecDeque::new(),
                 clients: Vec::new(),
-                messages: crate::message::Log::default(),
+                messages: dt_service::message::Log::default(),
                 told: resources::Told::default(),
             },
             roots,
@@ -655,7 +618,7 @@ impl Core {
     }
 
     /// A message about a tile names the tile's file when it names none of its own: a copy of it says which file.
-    fn name_file(&self, m: &mut crate::message::Message) {
+    fn name_file(&self, m: &mut dt_service::message::Message) {
         if m.file.is_none() {
             m.file = self.slot(&m.tile).map(|t| t.path.clone());
         }
@@ -686,7 +649,7 @@ impl Core {
                     self.begin_message(&Begin {
                         id: doc,
                         text: |name| format!("Loading the pieces of {name}"),
-                        code: Some(crate::message::JOB),
+                        code: Some(dt_service::message::JOB),
                     });
                 }
             }
@@ -727,7 +690,7 @@ impl Core {
     }
 
     fn begin_message(&mut self, b: &Begin) {
-        use crate::message::{Kind, Message, Scope, Severity};
+        use dt_service::message::{Kind, Message, Scope, Severity};
         let Some(name) = self.slot(&b.id).map(|t| t.name.clone()) else {
             return;
         };
@@ -747,7 +710,7 @@ impl Core {
     }
 
     /// Tell every listener of `changed` messages.
-    fn send_messages(&mut self, changed: &[crate::message::Message]) {
+    fn send_messages(&mut self, changed: &[dt_service::message::Message]) {
         let rev = self.events.rev;
         for m in changed {
             self.events.send(&api::StreamEvent::Message {
@@ -1072,34 +1035,5 @@ impl Subscription {
     pub(super) fn try_iter(&self) -> impl Iterator<Item = String> + '_ {
         let head: Vec<String> = self.head.borrow_mut().drain(..).collect();
         head.into_iter().chain(self.rx.try_iter())
-    }
-}
-
-impl Slot {
-    fn facts(&self) -> Facts {
-        Facts {
-            path: self.path.clone(),
-            name: self.name.clone(),
-            files: self.files.clone(),
-            plate: self.plate,
-            has_mesh: self.mesh.is_some(),
-            marks: self.marks,
-        }
-    }
-
-    pub(super) fn row(&self) -> Row {
-        let idle = self.status == State::Idle;
-        Row {
-            id: self.id.clone(),
-            root: self.root,
-            idle,
-            building: self.status == State::Building,
-            stale: self.stale,
-            files: if idle {
-                BTreeMap::new()
-            } else {
-                self.files.clone()
-            },
-        }
     }
 }

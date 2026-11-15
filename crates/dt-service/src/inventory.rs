@@ -7,9 +7,8 @@ use dt_doc::inventory::Colour;
 use serde::{Deserialize, Serialize};
 
 /// The colour mode a print was made in.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(optional_fields = nullable))]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, ts_rs::TS)]
+#[ts(optional_fields = nullable)]
 #[serde(rename_all = "lowercase")]
 pub enum ColourWord {
     Single,
@@ -35,8 +34,7 @@ impl From<Colour> for ColourWord {
 }
 
 /// A piece of the inventory: what is held, and whether its tile changed or is gone.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InventoryRow {
     pub tile: String,
@@ -56,8 +54,7 @@ pub struct InventoryRow {
 
 /// What the program knows of the inventory: where it is, the pieces it adds up to, the colour mode last used, and what is
 /// wrong with it when it does not read.  A state carries only what it has: no home folder has no path.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, ts_rs::TS)]
 #[serde(
     tag = "state",
     rename_all = "camelCase",
@@ -100,4 +97,11 @@ impl InventoryState {
             _ => &[],
         }
     }
+}
+
+/// Lines added to the inventory.
+#[derive(Clone, Debug, Serialize, Deserialize, ts_rs::TS)]
+pub struct InventoryWrote {
+    pub lines: Vec<String>,
+    pub file: String,
 }

@@ -26,13 +26,14 @@ use serde::{Deserialize, Serialize};
 
 use super::api::{Out, Reply};
 use super::messages::Scope;
-use super::patch::Patch;
 use super::plan::{InventoryDoc, InventoryRead, PlatesPanel, TilePlan};
 use super::{Shared, fail, messages};
 use crate::inventory::{pieces_of, state_of};
-use crate::inventory_wire::{ColourWord, InventoryState};
-use crate::message::{Kind, Message, MessageData, Severity};
 use dt_doc::map::Mode;
+pub use dt_service::inventory::InventoryWrote;
+use dt_service::inventory::{ColourWord, InventoryState};
+use dt_service::message::{Kind, Message, MessageData, Severity};
+use dt_service::patch::Patch;
 
 // ---- the calls' types ------------------------------------------------------------------
 
@@ -101,14 +102,6 @@ pub struct InventoryReprintReq {
     pub list: Option<String>,
     /// The revision of the list the caller last saw, when it has the list open.
     pub doc_rev: Option<u64>,
-}
-
-/// Lines added to the inventory.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct InventoryWrote {
-    pub lines: Vec<String>,
-    pub file: String,
 }
 
 /// A piece put in a print list again.

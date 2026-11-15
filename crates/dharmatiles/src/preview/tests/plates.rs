@@ -182,7 +182,11 @@ fn a_file_that_changes_while_a_plan_is_made_is_a_change_the_worker_still_sees() 
     crate::preview::plates::rebuild(&shared, &id, &path);
     let slot_changed = {
         let id = id.clone();
-        shared.tiles_with(move |t| t.iter().find(|t| t.id == id).is_some_and(Slot::changed))
+        shared.tiles_with(move |t| {
+            t.iter()
+                .find(|t| t.id == id)
+                .is_some_and(super::slot_changed)
+        })
     };
     assert!(
         slot_changed,

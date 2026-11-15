@@ -5,8 +5,8 @@
 //! it is left out.  A URL past [`URL_LIMIT`] carries a short body that says to paste the report, and the full report goes to
 //! the clipboard (the page) or to a file (the command line).
 
-use crate::message::{Kind, Message, MessageData, Origin, Scope, ServerData, Severity};
 use crate::preview::fail::Panic;
+use dt_service::message::{Kind, Message, MessageData, Origin, Scope, ServerData, Severity};
 
 /// Where the issue is filed.
 const ISSUES: &str = "https://github.com/shawn-vincent/dharmatiles/issues/new";

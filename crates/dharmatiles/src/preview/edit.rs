@@ -203,7 +203,7 @@ pub enum EditOp {
     /// The program's own fix for a mistake laid in.
     Fix {
         text: String,
-        fix: crate::message::FixJson,
+        fix: dt_service::message::FixJson,
     },
 }
 
@@ -602,7 +602,7 @@ pub(super) fn page_message(shared: &Shared, v: PageMessageReq) -> Out<Done> {
     shared.say(messages::of_server_error(
         &error,
         (tile, &name),
-        crate::message::Origin::Page,
+        dt_service::message::Origin::Page,
     ));
     Ok(Done {})
 }

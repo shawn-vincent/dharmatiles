@@ -102,12 +102,22 @@ fn a_scan_a_new_file_and_a_delete_need_no_disk() {
     assert!(!Path::new("/memory").exists(), "the test touched the disk");
 }
 
-/// The owner and the documents reach files only through [`Storage`]: a scan of their source finds no `std::fs`.
+/// The owner, the documents and all of `dt-service` reach files only through [`Storage`]: a scan of their source
+/// finds no `std::fs`.
 #[test]
 fn the_owner_and_the_documents_make_no_std_fs_call() {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/preview");
-    for file in ["owner.rs", "docs.rs", "patch.rs"] {
-        let text = std::fs::read_to_string(src.join(file)).expect("a source file reads");
+    let preview = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/preview");
+    let service = Path::new(env!("CARGO_MANIFEST_DIR")).join("../dt-service/src");
+    let mut files = vec![preview.join("owner.rs"), preview.join("docs.rs")];
+    for entry in std::fs::read_dir(&service).expect("dt-service's source lists") {
+        let path = entry.expect("an entry reads").path();
+        if path.extension().is_some_and(|e| e == "rs") {
+            files.push(path);
+        }
+    }
+    assert!(files.len() > 10, "the scan found {files:?}");
+    for file in files {
+        let text = std::fs::read_to_string(&file).expect("a source file reads");
         // the tests at the foot of a file may use the disk
         let code = text
             .split("#[cfg(test)]\nmod tests")
@@ -117,7 +127,8 @@ fn the_owner_and_the_documents_make_no_std_fs_call() {
             let body = line.trim_start();
             assert!(
                 body.starts_with("//") || !(body.contains("std::fs") || body.contains("fs::")),
-                "{file}:{} reaches the disk, not Storage: {line}",
+                "{}:{} reaches the disk, not Storage: {line}",
+                file.display(),
                 n + 1
             );
         }

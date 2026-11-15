@@ -10,12 +10,9 @@
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
-
-use super::api::{FolderJson, RootJson, TileSummary};
 use super::plan::PrinterRow;
 use super::*;
-use crate::inventory_wire::InventoryState;
+use dt_service::inventory::InventoryState;
 
 /// What the pages were last told of each resource.
 #[derive(Default)]
@@ -32,72 +29,7 @@ pub(super) struct Told {
     pub(super) ids: Vec<TileId>,
 }
 
-/// The places: where tiles come from and the folders in them.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct Places {
-    pub roots: Vec<RootJson>,
-    pub folders: Vec<FolderJson>,
-    pub home: Option<String>,
-}
-
-/// The build target the page chose.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct Target {
-    pub system: dt_lang::System,
-    pub printer: String,
-    pub overhang_deg: f64,
-    pub steepest_deg: f64,
-    /// One square's side on the chosen system, mm (35 DungeonBlocks, 25.4 OpenLOCK): the page's only source for it.
-    pub square_mm: f64,
-}
-
-/// The tiles listed, in order, with the state of the ones that joined since the pages were last told.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct List {
-    pub ids: Vec<String>,
-    pub added: Vec<TileSummary>,
-}
-
-/// One resource and its value.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(tag = "name", content = "value", rename_all = "camelCase")]
-pub enum Resource {
-    Places(Places),
-    Target(Target),
-    Printers(Vec<PrinterRow>),
-    Inventory(InventoryState),
-    List(List),
-}
-
-/// A resource on the event stream.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceEvent {
-    /// The stream's revision (for resuming).
-    pub rev: u64,
-    /// The resource's own revision: it rises when this resource changes and not otherwise.
-    pub res_rev: u64,
-    #[serde(flatten)]
-    pub resource: Resource,
-}
-
-impl Resource {
-    pub(super) fn name(&self) -> &'static str {
-        match self {
-            Self::Places(_) => "places",
-            Self::Target(_) => "target",
-            Self::Printers(_) => "printers",
-            Self::Inventory(_) => "inventory",
-            Self::List(_) => "list",
-        }
-    }
-}
+pub use dt_service::resources::*;
 
 impl Shared {
     pub(super) fn printers_value(&self) -> Vec<PrinterRow> {
@@ -128,8 +60,8 @@ impl Shared {
         self.owner.send(owner::Command::Publish { seq, read });
     }
 
-    /// Every tile as the queue sees it ([`owner::Row`]).
-    pub(super) fn rows(&self) -> Vec<owner::Row> {
+    /// Every tile as the queue sees it ([`Row`]).
+    pub(super) fn rows(&self) -> Vec<Row> {
         self.owner.ask(owner::Command::Rows)
     }
 }
