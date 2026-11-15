@@ -114,6 +114,24 @@ problems: Array<string>, };
 
 type CallAt = { file: string, span: [number, number], };
 
+type CandidateJson = { 
+/**
+ * The profile name it would be written under.
+ */
+name: string, brand: string, model: string, 
+/**
+ * The slicer's own name for it.
+ */
+profile: string, bed: [number, number], height: number | null, nozzle: number | null, slots: number, 
+/**
+ * Keep-out zones on the bed.
+ */
+zones: number, 
+/**
+ * You already have a profile of that name.
+ */
+have: boolean, };
+
 type Changed = { 
 /**
  * The stream's revision once the change was told: the page has the change when its stream reaches it.
@@ -430,8 +448,6 @@ problems: Array<string>, };
 
 type InventoryWrote = { lines: Array<string>, file: string, };
 
-type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null;
-
 type Kind = "progress" | "check" | "build" | "gate" | "error" | "note" | "export" | "server";
 
 type Language = { names: Array<string>, units: Array<string>, functions: Array<string>, };
@@ -696,7 +712,7 @@ tile: string, tile_name: string,
 /**
  * The stack entry it is about (its key).
  */
-node: string | null, span: SpanJson | null, text: string, help: string | null, 
+node: string | null, span: Span | null, text: string, help: string | null, 
 /**
  * An edit that mends it (a button in the page), when the program has one.
  */
@@ -859,11 +875,7 @@ root: number, };
 
 type PlanHeld = { name: string, have: number, };
 
-type PlanKind = { tile: string, name: string, count: number, want: number, have: number, otherColour: number, 
-/**
- * The tile as the inventory names it.
- */
-canon: string, seedUsed: number, seed: number | null, system: string, 
+type PlanKind = { 
 /**
  * Its footprint, mm.
  */
@@ -871,11 +883,15 @@ size: [number, number], height: number,
 /**
  * Its filaments are the build's (not the stack's estimate).
  */
-exact: boolean, filaments: Array<string>, };
+exact: boolean, filaments: Array<string>, tile: string, name: string, count: number, want: number, have: number, otherColour: number, 
+/**
+ * The tile as the inventory names it.
+ */
+canon: string, seedUsed: number, seed: number | null, system: string, };
 
 type PlanPlaced = { 
 /**
- * Which of the list's [`PlanKind`]s.
+ * Which of the list's kinds.
  */
 kind: number, copy: number, name: string, x: number, y: number, w: number, d: number, turned: boolean, 
 /**
@@ -929,7 +945,7 @@ failures: Array<string>, plates: number, totalS: number, out: string, };
 
 type PlatesPanel = PlatesPlanned | PlatesWritten | PlatesUnread;
 
-type PlatesPlanned = { planned: true, title: string, printer: string, label: string, bed: [number, number] | null, excluded: Array<[number, number, number, number]>, slots: number, verify: string | null, system: string, mode: string, group: string, gap: number, margin: number, turn: boolean, skipped: Array<string>, held: Array<PlanHeld>, checkInventory: boolean, kinds: Array<PlanKind>, layout: Array<PlanPlate>, 
+type PlatesPlanned = { planned: true, kinds: Array<PlanKind>, layout: Array<PlanPlate>, 
 /**
  * The plate on show, from 0.
  */
@@ -945,7 +961,7 @@ format: string, printers: Array<PrinterRow>,
 /**
  * The list's own pieces, in the order written.
  */
-pieces: Array<ListPiece>, };
+pieces: Array<ListPiece>, title: string, printer: string, label: string, bed: [number, number] | null, excluded: Array<[number, number, number, number]>, slots: number, verify: string | null, system: string, mode: string, group: string, gap: number, margin: number, turn: boolean, skipped: Array<string>, held: Array<PlanHeld>, checkInventory: boolean, };
 
 type PlatesSetReq = { list: string, 
 /**
@@ -996,6 +1012,10 @@ type PrinterRead = { name: string, brand: string | null, model: string | null, l
 type PrinterRow = PrinterRead | PrinterBroken;
 
 type PrinterWritten = { name: string, 
+/**
+ * Where the profile is.
+ */
+path: string, 
 /**
  * The user's own profile of that name was kept.
  */
@@ -1096,7 +1116,7 @@ type SaveRes = { docRev: number, };
 
 type Scalar = boolean | number | number | string;
 
-type ScanJson = { slicer: string, title: string, version: string, label: string, models: Array<JsonValue>, 
+type ScanJson = { slicer: string, title: string, version: string, label: string, models: Array<CandidateJson>, 
 /**
  * What could not be read, each in words.
  */
@@ -1228,7 +1248,11 @@ type Snapshot = {
  */
 contract: string, rev: number, epoch: string, system: string, printer: string, printers: Array<PrinterRow>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: InventoryState, tiles: Array<TileSummary>, };
 
-type SpanJson = { file: string, line: number, col: number, offset: number, len: number, };
+type Span = { file: string, line: number, col: number, 
+/**
+ * Byte offset and length in the file's text.
+ */
+offset: number, len: number, };
 
 type StackItem = { 
 /**

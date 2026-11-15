@@ -524,7 +524,9 @@ dependencies = [
  "flate2",
  "libm",
  "png",
+ "serde",
  "serde_json",
+ "ts-rs",
 ]
 
 [[package]]

@@ -22,7 +22,7 @@ pub struct PrintersScanReq {
 }
 
 /// The slicers installed, or one slicer's models.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(untagged)]
 pub enum PrintersScanRes {
@@ -33,12 +33,23 @@ pub enum PrintersScanRes {
     Models(crate::printers::ScanJson),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct SlicerFound {
     pub slicer: String,
     pub label: String,
     pub title: String,
+}
+
+impl SlicerFound {
+    /// A slicer found here, as the page and `printers import --json` say it.
+    pub(crate) fn of(i: &slicers::Install) -> Self {
+        Self {
+            slicer: i.slicer.word().to_owned(),
+            label: i.label(),
+            title: i.slicer.title().to_owned(),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -58,12 +69,25 @@ pub struct PrintersImportRes {
     pub written: Vec<PrinterWritten>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct PrinterWritten {
     pub name: String,
+    /// Where the profile is.
+    pub path: String,
     /// The user's own profile of that name was kept.
     pub kept: bool,
+}
+
+impl PrinterWritten {
+    /// A profile `slicers::write` wrote or kept.
+    pub(crate) fn of(w: &slicers::Written) -> Self {
+        Self {
+            name: w.name.clone(),
+            path: w.path.display().to_string(),
+            kept: w.outcome == Outcome::Kept,
+        }
+    }
 }
 
 /// `/api/printers/scan` `{slicer?}`: without a slicer, the ones installed;
@@ -73,14 +97,7 @@ pub(super) fn scan(_: &Shared, v: PrintersScanReq) -> Out<PrintersScanRes> {
     let Some(word) = v.slicer.as_deref() else {
         let f = cli::found().map_err(|e| fail::failure("500 Internal Server Error", e))?;
         return Ok(PrintersScanRes::Slicers {
-            slicers: f
-                .iter()
-                .map(|i| SlicerFound {
-                    slicer: i.slicer.word().to_owned(),
-                    label: i.label(),
-                    title: i.slicer.title().to_owned(),
-                })
-                .collect(),
+            slicers: f.iter().map(SlicerFound::of).collect(),
         });
     };
     let i = cli::install_of(word, None).map_err(|e| bad(&e))?;
@@ -116,12 +133,6 @@ pub(super) fn import(shared: &Shared, v: PrintersImportReq) -> Out<PrintersImpor
     .map_err(|e| fail::failure("500 Internal Server Error", e))?;
     shared.announce();
     Ok(PrintersImportRes {
-        written: done
-            .iter()
-            .map(|w| PrinterWritten {
-                name: w.name.clone(),
-                kept: w.outcome == Outcome::Kept,
-            })
-            .collect(),
+        written: done.iter().map(PrinterWritten::of).collect(),
     })
 }

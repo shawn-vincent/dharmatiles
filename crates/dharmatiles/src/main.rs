@@ -33,6 +33,15 @@ macro_rules! tell {
     ($($t:tt)*) => { $crate::emit(&mut std::io::stderr().lock(), format_args!($($t)*)) };
 }
 
+/// One value to stdout as one line of JSON: the type is the document.
+#[allow(clippy::expect_used)]
+fn say_json<T: serde::Serialize>(t: &T) {
+    say!(
+        "{}",
+        serde_json::to_string(t).expect("a report is plain data")
+    );
+}
+
 /// Write one line.  When the reader has gone (`dharmatiles check … | head`)
 /// the pipe is closed: stop quietly with 0, as `cat` does, instead of
 /// panicking (101).  Any other write error is ignored, as there is
@@ -51,6 +60,7 @@ mod build;
 mod cache;
 mod check;
 mod cli;
+mod cli_wire;
 mod elements;
 mod explain;
 mod fix;
@@ -70,7 +80,7 @@ mod terminal;
 mod watch;
 
 pub(crate) use audit::{read_stl, stl_corner_round, stl_footprint};
-pub(crate) use build::{Extras, build_one, errors_json, report};
+pub(crate) use build::{Extras, build_one, report};
 pub(crate) use library::{all_library_tiles, library_tiles};
 use library::{disk_library, options, out_dir};
 

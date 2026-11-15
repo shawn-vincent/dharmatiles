@@ -5,9 +5,12 @@
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
 
+use crate::cli_wire::{
+    CacheCleared, CacheEntryRow, CacheOff, CacheShown, CacheStatus, Failed, PreviewKept,
+    PreviewTile, PreviewsReport,
+};
 use dt_eval::{Files, Options, Progress};
 use dt_store::Store;
-use serde_json::json;
 
 use crate::cli::CacheAction;
 use crate::{BUG, ERROR, OK};
@@ -61,7 +64,7 @@ pub(crate) fn run(action: Option<CacheAction>, json: bool) -> u8 {
         Ok(Some(s)) => s,
         Ok(None) => {
             if json {
-                say!("{}", json!({"enabled": false}));
+                crate::say_json(&CacheStatus::Off(CacheOff { enabled: false }));
             } else {
                 say!("the build cache is off (DT_CACHE=off)");
             }
@@ -93,18 +96,15 @@ fn show(store: &Store, json: bool) -> u8 {
         }
     };
     if json {
-        say!(
-            "{}",
-            json!({
-                "enabled": true,
-                "folder": store.dir().display().to_string(),
-                "engine": store.engine(),
-                "entries": stats.entries,
-                "bytes": stats.bytes,
-                "strays": stats.strays,
-                "limit_bytes": store.limit(),
-            })
-        );
+        crate::say_json(&CacheStatus::Shown(CacheShown {
+            enabled: true,
+            folder: store.dir().display().to_string(),
+            engine: store.engine().to_owned(),
+            entries: stats.entries,
+            bytes: stats.bytes,
+            strays: stats.strays,
+            limit_bytes: store.limit(),
+        }));
         return OK;
     }
     say!("folder   {}", store.dir().display());
@@ -129,18 +129,19 @@ fn list(store: &Store, json: bool) -> u8 {
         }
     };
     if json {
-        say!(
-            "{}",
-            json!(
-                entries
-                    .iter()
-                    .map(|e| json!({
-                        "path": e.path, "target": e.target, "tier": e.tier,
-                        "engine": e.engine, "triangles": e.triangles,
-                        "bytes": e.bytes, "file": e.file.display().to_string(),
-                    }))
-                    .collect::<Vec<_>>()
-            )
+        crate::say_json(
+            &entries
+                .iter()
+                .map(|e| CacheEntryRow {
+                    path: e.path.clone(),
+                    target: e.target.clone(),
+                    tier: e.tier.clone(),
+                    engine: e.engine.clone(),
+                    triangles: e.triangles,
+                    bytes: e.bytes,
+                    file: e.file.display().to_string(),
+                })
+                .collect::<Vec<_>>(),
         );
         return OK;
     }
@@ -168,7 +169,7 @@ fn clear(store: &Store, json: bool) -> u8 {
     match store.clear() {
         Ok((n, bytes)) => {
             if json {
-                say!("{}", json!({"removed": n, "bytes": bytes}));
+                crate::say_json(&CacheCleared { removed: n, bytes });
             } else {
                 say!(
                     "cleared the build cache: {n} entries, {} ({})",
@@ -220,10 +221,12 @@ fn previews(store: &Store, system: &str, printer: &str, into: Option<PathBuf>, j
     }
     let total = t0.elapsed().as_secs_f64();
     if json {
-        say!(
-            "{}",
-            json!({"ok": code == OK, "folder": target.dir().display().to_string(), "tiles": report, "total_s": total})
-        );
+        crate::say_json(&PreviewsReport {
+            ok: code == OK,
+            folder: target.dir().display().to_string(),
+            tiles: report,
+            total_s: total,
+        });
     } else {
         tell!(
             "previews of {} tiles for {} in {} ({total:.1} s)",
@@ -262,7 +265,7 @@ fn preview_one(
     opts: &Options,
     (n, of): (usize, usize),
     json: bool,
-) -> (u8, serde_json::Value) {
+) -> (u8, PreviewTile) {
     let t0 = Instant::now();
     let built = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         stored_preview(store, path, opts)
@@ -276,7 +279,8 @@ fn preview_one(
                 "kept already"
             } else {
                 "built"
-            };
+            }
+            .to_owned();
             if !json {
                 tell!(
                     "[{n}/{of}] {path}: {how}, {} triangles, {:.2} s",
@@ -286,8 +290,13 @@ fn preview_one(
             }
             (
                 OK,
-                json!({"path": path, "ok": true, "how": how, "triangles": b.audit.triangles,
-                       "problems": problems}),
+                PreviewTile::Kept(PreviewKept {
+                    path: path.to_owned(),
+                    ok: true,
+                    how,
+                    triangles: b.audit.triangles,
+                    problems,
+                }),
             )
         }
         Ok(Err(errs)) => {
@@ -296,7 +305,7 @@ fn preview_one(
             }
             (
                 ERROR,
-                json!({"path": path, "ok": false, "errors": crate::errors_json(&errs)}),
+                PreviewTile::Failed(Failed::of(path, dt_eval::mistakes(&errs))),
             )
         }
         Err(panic) => {
@@ -306,7 +315,10 @@ fn preview_one(
             );
             (
                 BUG,
-                json!({"path": path, "ok": false, "errors": [{"code": dt_lang::codes::PANIC, "message": msg}]}),
+                PreviewTile::Failed(Failed::of(
+                    path,
+                    dt_eval::mistakes(&[dt_eval::Diag::plain(dt_lang::codes::PANIC, msg)]),
+                )),
             )
         }
     }

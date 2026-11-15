@@ -1652,10 +1652,10 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     assert!(lock(&shared.tiles).iter().all(|t| t.stale && t.changed()));
     assert_eq!(shared.options().target(), "db-mine");
     // and the choice is in the home, for the next run
-    let (sys, printer) = crate::library::remembered_target(&dir).unwrap();
+    let kept = crate::library::remembered_target(&dir).unwrap().unwrap();
     assert_eq!(
-        (sys.as_deref(), printer.as_deref()),
-        (Some("db"), Some("mine"))
+        (kept.system.as_str(), kept.printer.as_str()),
+        ("db", "mine")
     );
     assert!(shared.set_target(Some("ol"), None).is_ok());
     assert_eq!(shared.options().target(), "ol-mine");

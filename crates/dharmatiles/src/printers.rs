@@ -3,8 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 
 use crate::cli::PrintersAction;
 use crate::slicers::{self, Candidate, Install, Outcome, Scan, Slicer};
@@ -57,36 +56,55 @@ pub(crate) fn library_has(name: &str) -> bool {
     dt_eval::printer_names(None).iter().any(|(n, _)| n == name)
 }
 
-/// A candidate as the page and `--json` show it.
-pub(crate) fn candidate_json(c: &Candidate, home: Option<&Path>) -> Value {
+/// A model a slicer knows, as the page and `--json` show it.
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CandidateJson {
+    /// The profile name it would be written under.
+    pub name: String,
+    pub brand: String,
+    pub model: String,
+    /// The slicer's own name for it.
+    pub profile: String,
+    pub bed: [f64; 2],
+    pub height: Option<f64>,
+    pub nozzle: Option<f64>,
+    pub slots: u32,
+    /// Keep-out zones on the bed.
+    pub zones: usize,
+    /// You already have a profile of that name.
+    pub have: bool,
+}
+
+pub(crate) fn candidate_json(c: &Candidate, home: Option<&Path>) -> CandidateJson {
     let name = slicers::name_of(c);
-    let mine = home.is_some_and(|h| h.join("printers").join(format!("{name}.dtile")).exists());
-    json!({
-        "name": name, "brand": c.brand, "model": c.model, "profile": c.profile,
-        "bed": c.bed, "height": c.height, "nozzle": c.nozzle, "slots": c.slots,
-        "zones": c.excluded.len(), "have": mine,
-    })
+    let have = home.is_some_and(|h| h.join("printers").join(format!("{name}.dtile")).exists());
+    CandidateJson {
+        name,
+        brand: c.brand.clone(),
+        model: c.model.clone(),
+        profile: c.profile.clone(),
+        bed: c.bed,
+        height: c.height,
+        nozzle: c.nozzle,
+        slots: c.slots,
+        zones: c.excluded.len(),
+        have,
+    }
 }
 
 /// What a scan of one slicer found: what `--json` prints and the page reads.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub(crate) struct ScanJson {
     pub slicer: String,
     pub title: String,
     pub version: String,
     pub label: String,
-    pub models: Vec<Value>,
+    pub models: Vec<CandidateJson>,
     /// What could not be read, each in words.
     pub problems: Vec<String>,
-}
-
-impl ScanJson {
-    /// As JSON, for `--json`.
-    #[allow(clippy::expect_used)]
-    pub(crate) fn value(&self) -> Value {
-        serde_json::to_value(self).expect("a scan is plain data")
-    }
 }
 
 pub(crate) fn scan_json(s: &Scan, home: Option<&Path>) -> ScanJson {
@@ -102,6 +120,13 @@ pub(crate) fn scan_json(s: &Scan, home: Option<&Path>) -> ScanJson {
             .collect(),
         problems: s.problems.clone(),
     }
+}
+
+/// What `printers import --json` prints after writing: what was written and what could not be read.
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub(crate) struct PrintersImported {
+    pub written: Vec<crate::preview::printers::PrinterWritten>,
+    pub problems: Vec<String>,
 }
 
 fn size_words(c: &Candidate) -> String {
@@ -163,10 +188,12 @@ fn import(
         return match found() {
             Ok(f) => {
                 if json {
-                    say!(
-                        "{}",
-                        json!({"slicers": f.iter().map(|i| json!({"slicer": i.slicer.word(), "label": i.label()})).collect::<Vec<_>>()})
-                    );
+                    crate::say_json(&crate::preview::printers::PrintersScanRes::Slicers {
+                        slicers: f
+                            .iter()
+                            .map(crate::preview::printers::SlicerFound::of)
+                            .collect(),
+                    });
                 } else if f.is_empty() {
                     say!(
                         "No slicer found here. Name a profiles folder with `printers import <bambu|orca|prusa|cura> --path DIR`."
@@ -210,7 +237,7 @@ fn import(
     let writing = !list && (all || !models.is_empty());
     if !writing {
         if json {
-            say!("{}", scan_json(&scan, Some(&home)).value());
+            crate::say_json(&scan_json(&scan, Some(&home)));
         } else {
             say!("{}: {} models", install.label(), scan.candidates.len());
             for c in &scan.candidates {
@@ -238,10 +265,13 @@ fn import(
     match slicers::write(&chosen, &install, &home, &library_has, force) {
         Ok(done) => {
             if json {
-                say!(
-                    "{}",
-                    json!({"written": done.iter().map(|w| json!({"name": w.name, "path": w.path, "kept": w.outcome == Outcome::Kept})).collect::<Vec<_>>(), "problems": scan.problems})
-                );
+                crate::say_json(&PrintersImported {
+                    written: done
+                        .iter()
+                        .map(crate::preview::printers::PrinterWritten::of)
+                        .collect(),
+                    problems: scan.problems.clone(),
+                });
             } else {
                 for w in &done {
                     match w.outcome {

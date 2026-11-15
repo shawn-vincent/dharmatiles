@@ -138,24 +138,30 @@ pub(crate) fn out_dir(out: Option<PathBuf>) -> PathBuf {
 /// The file in the user's home that remembers the build target.
 const TARGET_FILE: &str = "target.json";
 
-/// The target the title bar's chip last chose: `(system, printer)`; both
-/// `None` before any choice (no file yet).
+/// The build target the title bar's chip last chose, as `target.json` holds it: the one type of that file, read and
+/// written only here.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct RememberedTarget {
+    pub system: String,
+    pub printer: String,
+}
+
+/// The target the title bar's chip last chose; none before any choice (no file yet).
 ///
 /// # Errors
 /// The file is there but cannot be read or is not the JSON this program wrote.
 pub(crate) fn remembered_target(
     home: &std::path::Path,
-) -> Result<(Option<String>, Option<String>), String> {
+) -> Result<Option<RememberedTarget>, String> {
     let file = home.join(TARGET_FILE);
     let text = match std::fs::read_to_string(&file) {
         Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((None, None)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(format!("cannot read {}: {e}", file.display())),
     };
-    let v: serde_json::Value = serde_json::from_str(&text)
-        .map_err(|e| format!("{} is not valid JSON: {e}", file.display()))?;
-    let get = |k: &str| v[k].as_str().map(str::to_owned);
-    Ok((get("system"), get("printer")))
+    serde_json::from_str(&text)
+        .map(Some)
+        .map_err(|e| format!("{} is not valid JSON: {e}", file.display()))
 }
 
 /// Remember the target in the user's home (made if need be).
@@ -167,7 +173,12 @@ pub(crate) fn remember_target(
     system: &str,
     printer: &str,
 ) -> Result<(), String> {
-    let text = serde_json::json!({"system": system, "printer": printer}).to_string() + "\n";
+    let text = serde_json::to_string(&RememberedTarget {
+        system: system.to_owned(),
+        printer: printer.to_owned(),
+    })
+    .map_err(|e| e.to_string())?
+        + "\n";
     let file = home.join(TARGET_FILE);
     std::fs::create_dir_all(home)
         .and_then(|()| dt_eval::atomic::write_atomic(&file, text))
@@ -189,12 +200,13 @@ pub(crate) fn preview_options(
     printer: Option<&str>,
 ) -> Result<Options, String> {
     let home = crate::preview::roots::personal_home()?;
-    let (rs, rp) = remembered_target(&home).unwrap_or_else(|e| {
+    let remembered = remembered_target(&home).unwrap_or_else(|e| {
         // the remembered target is a convenience: say it is not used, and
         // build for the default (never silently)
         tell!("note: {e}; using the default build target");
-        (None, None)
+        None
     });
+    let (rs, rp) = remembered.map_or((None, None), |t| (Some(t.system), Some(t.printer)));
     let sys = system
         .map(str::to_owned)
         .or(rs)

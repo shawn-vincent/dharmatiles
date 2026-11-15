@@ -112,46 +112,7 @@ pub struct ErrorContext {
     pub at_ms: u64,
 }
 
-/// One mistake of a document, at its place.
-#[derive(Serialize, Clone)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct Mistake {
-    pub code: String,
-    pub message: String,
-    pub file: Option<String>,
-    pub line: Option<usize>,
-    pub column: Option<usize>,
-    pub help: Option<String>,
-    /// An edit that mends it, when the program has one.
-    pub fix: Option<crate::message::FixJson>,
-    /// A failure of the program, not of the document: shown as a bug.
-    pub unexpected: bool,
-}
-
-impl From<&dt_eval::Diag> for Mistake {
-    fn from(d: &dt_eval::Diag) -> Self {
-        let (file, line, column) = d
-            .location()
-            .map_or((None, None, None), |(f, l, c)| (Some(f), Some(l), Some(c)));
-        Self {
-            code: d.code.to_owned(),
-            message: d.message.clone(),
-            file,
-            line,
-            column,
-            help: d.help.clone(),
-            fix: d.fix.as_deref().map(crate::message::FixJson::from),
-            unexpected: !crate::build::is_document_error(d.code),
-        }
-    }
-}
-
-/// The mistakes of a document as the contract's type.
-#[must_use]
-pub fn mistakes(errs: &[dt_eval::Diag]) -> Vec<Mistake> {
-    errs.iter().map(Mistake::from).collect()
-}
+pub use dt_eval::{Mistake, mistakes};
 
 /// A build's progress while it runs (a `progress` event's body).
 #[derive(Serialize, Clone, Default)]

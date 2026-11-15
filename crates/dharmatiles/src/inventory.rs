@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 use dt_doc::inventory::{self as doc, Colour, Identity};
 use dt_eval::Diag;
 use dt_print::inventory as disk;
-use serde_json::json;
 
 use crate::cli::InventoryAction;
 use crate::inventory_wire::{InventoryRow, InventoryState};
@@ -78,10 +77,7 @@ fn home() -> Result<PathBuf, String> {
 
 fn fail(errs: &[Diag], json: bool) -> u8 {
     if json {
-        say!(
-            "{}",
-            json!({"ok": false, "errors": crate::errors_json(errs)})
-        );
+        crate::say_json(&crate::cli_wire::Refused::of(dt_eval::mistakes(errs)));
     } else {
         report(errs);
     }
@@ -338,10 +334,11 @@ fn write_lines(
     match disk::append(home, &lines) {
         Ok(p) => {
             if c.json {
-                say!(
-                    "{}",
-                    json!({"ok": true, "file": p.display().to_string(), "lines": lines})
-                );
+                crate::say_json(&crate::cli_wire::InventoryAdded {
+                    ok: true,
+                    file: p.display().to_string(),
+                    lines: lines.clone(),
+                });
             } else {
                 for l in &lines {
                     tell!("added: {l}");

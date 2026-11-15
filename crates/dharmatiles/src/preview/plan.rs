@@ -9,6 +9,7 @@ use super::api::Mistake;
 use super::scene::SceneJson;
 use super::stack::StackItem;
 pub use crate::inventory_wire::InventoryRow;
+pub use dt_print::plates::wire::{PlanPlate, PlanSettings, PlannedKind};
 
 /// A tile's squares, across and up: what a tile and an STL file's footprint have, and a print list does not.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -129,22 +130,9 @@ pub struct PlatesUnread {
 pub struct PlatesPlanned {
     #[cfg_attr(test, ts(type = "true"))]
     pub planned: bool,
-    pub title: String,
-    pub printer: String,
-    pub label: String,
-    pub bed: Option<[f64; 2]>,
-    pub excluded: Vec<[f64; 4]>,
-    pub slots: u32,
-    pub verify: Option<String>,
-    pub system: String,
-    pub mode: String,
-    pub group: String,
-    pub gap: f64,
-    pub margin: f64,
-    pub turn: bool,
-    pub skipped: Vec<String>,
-    pub held: Vec<PlanHeld>,
-    pub check_inventory: bool,
+    /// The plan: its settings, and what it leaves off.
+    #[serde(flatten)]
+    pub settings: PlanSettings,
     pub kinds: Vec<PlanKind>,
     pub layout: Vec<PlanPlate>,
     /// The plate on show, from 0.
@@ -161,69 +149,19 @@ pub struct PlatesPlanned {
     pub pieces: Vec<ListPiece>,
 }
 
-/// A piece the inventory already holds, left off.
-#[derive(Clone, Serialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct PlanHeld {
-    pub name: String,
-    pub have: u32,
-}
-
 /// One distinct piece of a planned list.
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PlanKind {
-    pub tile: String,
-    pub name: String,
-    pub count: u32,
-    pub want: u32,
-    pub have: u32,
-    pub other_colour: u32,
-    /// The tile as the inventory names it.
-    pub canon: String,
-    pub seed_used: u64,
-    pub seed: Option<u64>,
-    pub system: String,
+    #[serde(flatten)]
+    pub planned: PlannedKind,
     /// Its footprint, mm.
     pub size: [f64; 2],
     pub height: f64,
     /// Its filaments are the build's (not the stack's estimate).
     pub exact: bool,
     pub filaments: Vec<String>,
-}
-
-/// One plate: the filaments it needs and the pieces on it.
-#[derive(Clone, Serialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct PlanPlate {
-    /// From 1.
-    pub plate: usize,
-    pub filaments: Vec<String>,
-    pub pieces: Vec<PlanPlaced>,
-}
-
-/// A piece on a plate, where it stands.
-#[derive(Clone, Serialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct PlanPlaced {
-    /// Which of the list's [`PlanKind`]s.
-    pub kind: usize,
-    pub copy: usize,
-    pub name: String,
-    pub x: f64,
-    pub y: f64,
-    pub w: f64,
-    pub d: f64,
-    pub turned: bool,
-    /// The list piece this copy is (an index into the list's pieces).
-    pub piece: Option<usize>,
-    pub pinned: bool,
-    /// That list piece's id, as an edit names it.
-    pub id: Option<String>,
 }
 
 /// Do the filaments the plates need fit the printer's slots.

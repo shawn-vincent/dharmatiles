@@ -30,7 +30,7 @@ use super::header::{MeshHeader, MeshKind};
 use super::lists::ListEdited;
 use super::messages::Scope;
 use super::plan::{
-    ListPiece, PlanGround, PlanHeld, PlanKind, PlanPlaced, PlanPlate, PlatesDoc, PlatesPanel,
+    ListPiece, PlanGround, PlanKind, PlanPlate, PlanSettings, PlannedKind, PlatesDoc, PlatesPanel,
     PlatesPlanned, PlatesUnread, PlatesWritten, PrinterBroken, PrinterRead, PrinterRow, SlotCheck,
     TilePlan,
 };
@@ -322,44 +322,13 @@ fn plates_panel(
     let ids = dt_doc::map::piece_ids(list);
     PlatesPlanned {
         planned: true,
-        title: plan.title.clone(),
-        printer: s.machine.name.clone(),
-        label: s.machine.label(),
-        bed: s.machine.bed,
-        excluded: s.machine.excluded.clone(),
-        slots: s.machine.slot_count(),
-        verify: s.machine.verify.clone(),
-        system: s.system.clone(),
-        mode: s.mode.word().to_owned(),
-        group: s.group.word().to_owned(),
-        gap: s.gap,
-        margin: s.margin,
-        turn: s.turn,
-        skipped: plan.skipped.clone(),
-        held: plan
-            .held
-            .iter()
-            .map(|(name, have)| PlanHeld {
-                name: name.clone(),
-                have: *have,
-            })
-            .collect(),
-        check_inventory: s.check_inventory,
+        settings: PlanSettings::of(plan),
         kinds: plan
             .kinds
             .iter()
             .enumerate()
             .map(|(k, kind)| PlanKind {
-                tile: kind.tile.clone(),
-                name: kind.name.clone(),
-                count: kind.count,
-                want: kind.want,
-                have: kind.have,
-                other_colour: kind.other_colour,
-                canon: kind.canon.clone(),
-                seed_used: kind.seed_used,
-                seed: kind.seed,
-                system: kind.system.clone(),
+                planned: PlannedKind::of(kind),
                 size: boxes[k].size,
                 height: boxes[k].height,
                 exact: exact[k],
@@ -370,34 +339,7 @@ fn plates_panel(
                 }),
             })
             .collect(),
-        layout: layout
-            .plates
-            .iter()
-            .enumerate()
-            .map(|(i, on)| PlanPlate {
-                plate: i + 1,
-                filaments: names(&layout.filaments[i]),
-                pieces: on
-                    .iter()
-                    .map(|p| {
-                        let piece = plan.kinds[p.kind].copies.get(p.copy).copied();
-                        PlanPlaced {
-                            kind: p.kind,
-                            copy: p.copy,
-                            name: plan.kinds[p.kind].name.clone(),
-                            x: p.at.x,
-                            y: p.at.y,
-                            w: p.at.w,
-                            d: p.at.d,
-                            turned: p.at.turned,
-                            piece,
-                            pinned: layout.pinned.contains(&(p.kind, p.copy)),
-                            id: piece.and_then(|i| ids.get(i)).cloned(),
-                        }
-                    })
-                    .collect(),
-            })
-            .collect(),
+        layout: PlanPlate::of_layout(plan, layout, &ids),
         view,
         exact: exact.iter().all(|e| *e),
         grouping_cost: layout.grouping_cost,

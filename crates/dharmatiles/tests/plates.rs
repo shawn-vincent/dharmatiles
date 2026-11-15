@@ -7,6 +7,14 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// the program's own types for what `--json` prints, taken in whole: the tests read the output by deserializing them, never by
+// key
+#[allow(dead_code)]
+#[path = "../src/cli_wire.rs"]
+mod cli_wire;
+
+use cli_wire::{PlatesChecked, PlatesReport};
+
 const EXE: &str = env!("CARGO_BIN_EXE_dharmatiles");
 
 fn scratch(name: &str) -> PathBuf {
@@ -75,12 +83,12 @@ fn the_plan_says_the_printer_and_checks_the_filaments_before_any_build() {
         ],
     );
     assert_eq!(code, 0, "{err}");
-    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-    assert_eq!(v["plan"]["printer"], "bambu/x1c-ams");
-    assert_eq!(v["plan"]["slots"], 4);
-    assert_eq!(v["plan"]["mode"], "multicolour", "the AMS default");
-    assert_eq!(v["plan"]["kinds"].as_array().unwrap().len(), 2);
-    assert_eq!(v["plan"]["kinds"][0]["count"], 2);
+    let v: PlatesChecked = serde_json::from_str(&out).unwrap();
+    assert_eq!(v.plan.settings.printer, "bambu/x1c-ams");
+    assert_eq!(v.plan.settings.slots, 4);
+    assert_eq!(v.plan.settings.mode, "multicolour", "the AMS default");
+    assert_eq!(v.plan.kinds.len(), 2);
+    assert_eq!(v.plan.kinds[0].count, 2);
 }
 
 #[test]
@@ -165,10 +173,10 @@ fn an_sv06_list_is_one_stl_per_plate_and_the_x1c_fits_more_on_a_plate() {
         err.contains("plate 1: 30 piece(s)") && !err.contains("plate 2"),
         "{err}"
     );
-    let record: serde_json::Value =
+    let record: PlatesReport =
         serde_json::from_slice(&std::fs::read(dir.join("kit.plates.json")).unwrap()).unwrap();
-    assert_eq!(record["plates"].as_array().unwrap().len(), 1);
-    assert_eq!(record["format"], "stl");
+    assert_eq!(record.plates.len(), 1);
+    assert_eq!(record.format, "stl");
 }
 
 #[test]
