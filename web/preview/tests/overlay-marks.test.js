@@ -49,7 +49,7 @@ test('offsets count bytes in the map and code units in a text area', () => {
   assert.equal(byteOffset(text, 1), 2);
   assert.equal(byteToIndex(text, 2), 1);
   assert.equal(byteToIndex(text, 0), 0);
-  const marks = marksOf({ lines: [{ name: 'x', span: [0, 7], points: [{ span: [2, 5], at: [0, 0] }] }], regions: [] });
+  const marks = marksOf({ lines: [{ name: 'x', span: [0, 7], points: [{ span: [2, 5], at: [0, 0] }] }], regions: [], points: [] });
   // the quote after the accent is at code unit 1, byte 2: the point
   assert.equal(markAtOffset(marks, text, 2), 'point:x#0');
   assert.deepEqual(sourceRange(marks[1], text), [1, 6]);

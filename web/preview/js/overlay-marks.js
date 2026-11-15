@@ -35,27 +35,27 @@ const spanOf = (s) => (Array.isArray(s) && s.length === 2 ? [s[0], s[1]] : null)
 /**
  * Every mark of a map: a line and each of its points, a region and each of its fill points, each named point.  A point's `at`
  * is where it is, in squares, or null when the build did not place it.
- * @param {any} map the program's map JSON (null: no marks)
+ * @param {import("./api").TileMap | null} map the program's map (null: no marks)
  * @returns {Mark[]}
  */
 export function marksOf(map) {
   /** @type {Mark[]} */
   const out = [];
   if (!map) return out;
-  for (const l of map.lines ?? []) {
+  for (const l of map.lines) {
     out.push({ id: `line:${l.name}`, kind: 'line', name: l.name, index: null, span: spanOf(l.span), at: null, parent: null, text: null });
-    (l.points ?? []).forEach((/** @type {any} */ p, /** @type {number} */ k) => out.push({
-      id: `point:${l.name}#${k}`, kind: 'point', name: l.name, index: k, span: spanOf(p.span), at: p.at ?? null, parent: `line:${l.name}`, text: p.text ?? null,
+    l.points.forEach((p, k) => out.push({
+      id: `point:${l.name}#${k}`, kind: 'point', name: l.name, index: k, span: spanOf(p.span), at: p.at, parent: `line:${l.name}`, text: p.text,
     }));
   }
-  for (const r of map.regions ?? []) {
+  for (const r of map.regions) {
     out.push({ id: `region:${r.name}`, kind: 'region', name: r.name, index: null, span: spanOf(r.span), at: null, parent: null, text: null });
-    (r.fills ?? []).forEach((/** @type {any} */ p, /** @type {number} */ k) => out.push({
-      id: `fill:${r.name}#${k}`, kind: 'fill', name: r.name, index: k, span: spanOf(p.span), at: p.at ?? null, parent: `region:${r.name}`, text: p.text ?? null,
+    r.fills.forEach((p, k) => out.push({
+      id: `fill:${r.name}#${k}`, kind: 'fill', name: r.name, index: k, span: spanOf(p.span), at: p.at, parent: `region:${r.name}`, text: p.text,
     }));
   }
-  for (const p of map.points ?? []) {
-    out.push({ id: `point:${p.name}`, kind: 'point', name: p.name, index: null, span: spanOf(p.span), at: p.at ?? null, parent: null, text: null });
+  for (const p of map.points) {
+    out.push({ id: `point:${p.name}`, kind: 'point', name: p.name, index: null, span: spanOf(p.span), at: p.at, parent: null, text: null });
   }
   return out;
 }

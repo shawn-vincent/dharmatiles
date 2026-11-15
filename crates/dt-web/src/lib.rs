@@ -415,15 +415,16 @@ pub fn analyze(text: &str, system: &str) -> Result<String, JsError> {
 /// What a check of the page's document found, for the cards: its mistakes and
 /// notes (the same fields as [`analyze`]'s diagnostics, so the page draws one
 /// kind of message), the draft lattice's map (the editor's overlay JSON, from
-/// [`dt_eval::map::json`], the one producer the program's server uses too) and
+/// [`dt_eval::map::TileMap`], made by the one constructor the program's server uses too) and
 /// what one square is on the target.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Checked {
     ok: bool,
     errors: Vec<Diagnostic>,
     notes: Vec<Diagnostic>,
     /// The tile's map, or null when the document has no tile or did not read.
-    map: serde_json::Value,
+    map: Option<dt_eval::map::TileMap>,
     /// One square's side on the target, mm.
     square_mm: f64,
 }
@@ -456,7 +457,7 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
                     ok: false,
                     errors: ds.iter().map(diagnostic).collect(),
                     notes: Vec::new(),
-                    map: serde_json::Value::Null,
+                    map: None,
                     square_mm: units.square_mm,
                 });
             }
@@ -474,7 +475,7 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
                 ok: false,
                 errors: ds.iter().map(diagnostic).collect(),
                 notes,
-                map: serde_json::Value::Null,
+                map: None,
                 square_mm: units.square_mm,
             }),
         }

@@ -1,13 +1,20 @@
+// @ts-check
 // What a region's property sheet shows, from what its source says
 // (docs/guide/regions.html): a region is its boundedBy and fill (the paint
 // bucket), plus each `within` clause, less what it `except`s.  Pure: the sheet
 // (sheet.js) adds the writers.
+
+/** @typedef {import('../api').TileMap} TileMap */
+/** @typedef {import('../api').MapRegion} MapRegion */
+/** @typedef {import('../api').RegionSheet} RegionSheet */
+/** @typedef {import('../api').Clause} Clause */
 
 /**
  * A written distance as the sheet reads it: the value as written (`7dmm`, `[8dmm .. 14dmm]`, `shoreMm * 2`), and where the
  * program says it prints differently on this target (`printed`: its ends, mm, from `/api/tiles/ID/check`; null where it
  * prints as written) `7dmm (prints 5.08 mm)`.  The page writes no unit word of its own: a bare number stays bare.
  */
+/** @param {{ text: string } | null | undefined} distance @param {string[] | null | undefined} printed */
 export function describeDistance(distance, printed) {
   const text = String(distance?.text ?? '').replace(/^"|"$/g, '');
   if (!printed?.length) return text;
@@ -15,12 +22,14 @@ export function describeDistance(distance, printed) {
 }
 
 /** The one-line heading of a clause: `within 8-14 mm of westEdge`, `except crag`. */
+/** @param {Clause} c */
 export function clauseTitle(c) {
   if (c.kind === 'except') return `except ${c.regions?.text || '…'}`;
   return `within ${describeDistance(c.distance, c.printed)} of ${c.of?.text || '…'}`;
 }
 
 /** Which kind of region the source makes: `bucket` (lines and fill points), `places` (within and except only), or `mixed`. */
+/** @param {RegionSheet | null | undefined} sh */
 export function regionKind(sh) {
   const clauses = sh?.clauses || [];
   if (!clauses.length) return 'bucket';
@@ -28,6 +37,7 @@ export function regionKind(sh) {
 }
 
 /** How the clauses combine, in plain words. */
+/** @param {RegionSheet | null | undefined} sh */
 export function combineNote(sh) {
   const clauses = sh?.clauses || [];
   const within = clauses.some((c) => c.kind === 'within'), except = clauses.some((c) => c.kind === 'except');

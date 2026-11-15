@@ -10,6 +10,8 @@
 // The editor's files are read from `<site>/editor/js` and `<site>/editor/vendor`, one URL for web/preview/js and vendor that every place serving
 // the site provides (the deploy job, the program's docs route), so the site reads the code the program ships: there is no copy.
 
+/** @typedef {import('../../../web/preview/js/api').TileMap} TileMap (the repo's path; the site serves the page's code at `../../editor/js`, where api.d.ts is not published, so `tsc` reads it from here) */
+
 import { signal, computed } from '@preact/signals-core';
 import { buildStatusLine, paintStatusLine } from '../../editor/js/view/status-line.js';
 import { MessagesBody } from '../../editor/js/view/messages-panel.js';
@@ -53,9 +55,11 @@ export class Card {
     this.original = (code?.textContent ?? '').replace(/\n$/, '\n');
     this.text = this.original;
     this.version = 0;
+    /** @type {{ ok: boolean, errors: any[], notes: any[], map: TileMap | null, squareMm: number } | null} the worker's check (dt-web `Checked`) */
     this.checked = null;
     this.checkedText = null;
     this.marks = [];
+    /** @type {TileMap | null} the program's map, one type for the page, the cards and the posters */
     this.map = null;
     this.mesh = null;
     this.heights = null;
@@ -250,7 +254,7 @@ export class Card {
   }
 
   #guessFootprint() {
-    const sq = this.checked?.square_mm ?? 35;
+    const sq = this.checked?.squareMm ?? 35;
     return [(this.map?.cols ?? 1) * sq, (this.map?.rows ?? 1) * sq];
   }
 
@@ -265,7 +269,7 @@ export class Card {
     this.drawnNow = drawn(this.marks, moment);
     const squares = this.moment.toggles.has('squares');
     renderMarks(ctx, {
-      map: this.map, sq: this.checked?.square_mm ?? 35, drawn: this.drawnNow, squares,
+      map: this.map, sq: this.checked?.squareMm ?? 35, drawn: this.drawnNow, squares,
       project: this.#projector(), zAt: this.#zAt, size: this.size,
     });
     this.#markSource();
@@ -295,7 +299,7 @@ export class Card {
       if (e.buttons) return;
       const r = this.gl.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
-      const o = { map: this.map, sq: this.checked?.square_mm ?? 35, drawn: this.drawnNow ?? [], project: this.#projector(), zAt: this.#zAt };
+      const o = { map: this.map, sq: this.checked?.squareMm ?? 35, drawn: this.drawnNow ?? [], project: this.#projector(), zAt: this.#zAt };
       // a shown point or line under the pointer lights its source (a region is lit from the source or its toggle)
       this.moment.hover = markAtPoint(o, x, y);
       this.#paint();

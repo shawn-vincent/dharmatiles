@@ -2,6 +2,8 @@
 // `DT_CONTRACT=write cargo test -p dharmatiles --bins the_page_contract_is_current`.
 // Do not edit: a test fails when this file is not what the Rust types say.
 
+type About = { at: number, value: Written | null, };
+
 type AboutRes = { version: string, formats: string, };
 
 type AuditSummary = { 
@@ -116,7 +118,7 @@ type Changed = {
  */
 rev: number, };
 
-type CheckRes = { ok: boolean, errors: Array<Mistake>, stack: Array<JsonValue> | null, map: JsonValue | null, 
+type CheckRes = { ok: boolean, errors: Array<Mistake>, stack: Array<JsonValue> | null, map: TileMap | null, 
 /**
  * Every node of the text that was read, by the id an edit names it with (`/api/edit`), for a tile.
  */
@@ -129,6 +131,8 @@ nodesRev: string | null, };
 type CheckValueReq = { element: string, control: string, typed: string, };
 
 type CheckValueRes = { message: string | null, label: string | null, help: string | null, };
+
+type Clause = { "kind": "within", at: number, distance: Written | null, of: OfPlace | null, printed: Array<string> | null, } | { "kind": "except", at: number, regions: Run, };
 
 type ColourWord = "single" | "multi";
 
@@ -236,6 +240,10 @@ type FolderReq = { root: number,
  */
 dir: string, };
 
+type Height = { name: string, value: number | null, text: string, from: HeightFrom, };
+
+type HeightFrom = "library" | "tile" | "override";
+
 type HeightName = { name: string, dmm: number, own: boolean, };
 
 type InsertPlace = "stack" | "tile" | "before" | "in";
@@ -289,6 +297,10 @@ type InventoryWrote = { lines: Array<string>, file: string, };
 type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null;
 
 type Kind = "progress" | "check" | "build" | "gate" | "error" | "note" | "export" | "server";
+
+type Language = { names: Array<string>, units: Array<string>, functions: Array<string>, };
+
+type LineSheet = { at: number, controls: Array<MapControl>, through: Run | null, };
 
 type List = { ids: Array<string>, added: Array<TileSummary>, };
 
@@ -349,6 +361,20 @@ map?: boolean | null, };
 type ListsRemoveReq = { list: string, id: string, docRev: number, };
 
 type ListsRestoreReq = { list: string, text: string, docRev: number, };
+
+type MapControl = { name: string, text: string, span: [number, number], };
+
+type MapLine = { name: string, pts: Array<[number, number]>, 
+/**
+ * How far the line may wander, printed mm on this target.
+ */
+wobbleMm: number | null, span: [number, number] | null, markers: Array<Marker>, points: Array<WrittenPoint>, sheet: LineSheet | null, };
+
+type MapRegion = { name: string, boundedBy: Array<string>, nx: number, ny: number, 
+/**
+ * One `0` or `1` for each lattice node.
+ */
+bits: string, span: [number, number] | null, markers: Array<Marker>, fills: Array<WrittenPoint>, sheet: RegionSheet | null, refs: Array<PlaceRef>, };
 
 type MapsAddReq = { list: string, tile: string, 
 /**
@@ -412,6 +438,18 @@ plate: number, x: number, y: number, turn?: boolean | null, docRev: number, };
 
 type MapsSetReq = { list: string, id: string, set: PieceWords, docRev: number, };
 
+type Marker = { 
+/**
+ * The source as written.
+ */
+label: string, kind: MarkerKind, at: [number, number] | null, span: [number, number] | null, 
+/**
+ * True when it lies somewhere in a range, so `at` is only the middle of where it may land.
+ */
+ranged: boolean, };
+
+type MarkerKind = "literal" | "name";
+
 type MessageJson = { 
 /**
  * Order in the stream.
@@ -465,6 +503,8 @@ fix: FixJson | null,
  */
 unexpected: boolean, };
 
+type NamedPoint = { name: string, at: [number, number], span: [number, number], };
+
 type NamesReq = { text: string, };
 
 type NamesRes = { ok: boolean, message: string | null, defs: Array<string>, regions: Array<string>, lines: Array<string>, points: Array<string>, };
@@ -500,6 +540,8 @@ at: number,
 len: number, };
 
 type Nothing = Record<string, never>;
+
+type OfPlace = { text: string, written: string, span: [number, number], };
 
 type Offer = { name: string, family: string, about: string, 
 /**
@@ -555,11 +597,17 @@ bottom?: string | null, seed?: number | null,
  */
 print?: string | null, system?: string | null, };
 
+type Place = { name: string, kind: PlaceKind, };
+
 type PlaceAdded = { added: boolean, root: number, label: string, path: string, 
 /**
  * The stream's revision once the change was told: the page has the change when its stream reaches it.
  */
 rev: number, };
+
+type PlaceKind = "edge" | "line" | "region" | "tile" | "point";
+
+type PlaceRef = { "kind": "point", name: string, at: [number, number], } | { "kind": "tile", name: string, pts: Array<[number, number]> | null, } | { "kind": "edge", name: string, pts: Array<[number, number]>, } | { "kind": "line", name: string, pts: Array<[number, number]>, } | { "kind": "region", name: string, } | { "kind": "unknown", name: string, };
 
 type Places = { roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, };
 
@@ -636,6 +684,8 @@ what: string, fraction: number, label: string, key: string,
  */
 count: [string, number, number] | null, elapsedS: number, etaS: number | null, estimateS: number | null, };
 
+type RegionSheet = { at: number, boundedBy: Run | null, fill: Run | null, clauses: Array<Clause>, };
+
 type RenameReq = { name: string, };
 
 type Repairs = { 
@@ -693,6 +743,8 @@ type RootJson = { index: number, label: string,
  * `files`, `dir` or `library`.
  */
 kind: string, path: string | null, role: string, writable: boolean, exists: boolean, };
+
+type Run = { at: number, text: string, span: [number, number] | null, };
 
 type SaveReq = { text: string, 
 /**
@@ -898,7 +950,23 @@ doc?: string | null, wants: Array<TierWant>, };
 
 type TiersWantRes = { keys: Array<string>, };
 
+type TileMap = { language: Language, cols: number, rows: number, 
+/**
+ * Lattice nodes per square of every region's bits.
+ */
+cells: number, lines: Array<MapLine>, regions: Array<MapRegion>, 
+/**
+ * The tile's own `point` declarations.
+ */
+points: Array<NamedPoint>, places: Array<Place>, 
+/**
+ * The tile node itself; none when the document has no `tile` node.
+ */
+tile: TileNode | null, };
+
 type TileMoveReq = { root: number, dir: string, };
+
+type TileNode = { at: number, controls: Array<MapControl>, about: About | null, heights: Array<Height>, };
 
 type TileRecord = { 
 /**
@@ -992,11 +1060,9 @@ type Trashed = {
  */
 rev: number, dir: string | null, path: string | null, undo: number, };
 
-type Written = { name: string, 
-/**
- * The user's own profile of that name was kept.
- */
-kept: boolean, };
+type Written = { text: string, span: [number, number], };
+
+type WrittenPoint = { text: string, span: [number, number], at: [number, number] | null, };
 
 /** Every call that writes: its request body and its answer. */
 export interface Calls {

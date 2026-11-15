@@ -1,3 +1,4 @@
+// @ts-check
 // What the tile level holds, as rows: the stack drawn as the tile stands, the top of the tile first and the base last (the
 // reverse of the order it is written and built in; each row's number is its place in that order), and the lines and
 // regions that shape the tile.  Each row is one button that opens its thing's level; beside it a ⋯ button opens the
@@ -49,6 +50,7 @@ const Bar = ({ band, axis }) => {
 };
 
 /** What a region says of itself in a few words: what bounds it, or its clauses. */
+/** @param {import('../api').MapRegion} m */
 export function regionSummary(m) {
   const sh = m.sheet;
   if (!sh) return 'region';
@@ -59,6 +61,7 @@ export function regionSummary(m) {
 }
 
 /** What a line says of itself: its points. */
+/** @param {import('../api').MapLine} m */
 export const lineSummary = (m) => (m.points?.length ? plural(m.points.length, 'point') : 'line');
 
 // ---- the pictures a Shape row wears --------------------------------------------------------

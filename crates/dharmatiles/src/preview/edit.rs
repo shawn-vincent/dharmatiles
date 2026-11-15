@@ -237,7 +237,7 @@ pub struct CheckRes {
     pub ok: bool,
     pub errors: Vec<Mistake>,
     pub stack: Option<Vec<Json>>,
-    pub map: Option<Json>,
+    pub map: Option<dt_eval::map::TileMap>,
     /// Every node of the text that was read, by the id an edit names it with (`/api/edit`), for a tile.
     pub nodes: Vec<NodeJson>,
     /// The revision of the text those nodes were read from; an edit names them with it (`EditReq::read`).
@@ -1317,7 +1317,7 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
                 ok: true,
                 errors: Vec::new(),
                 stack: stack.map(|s| s.iter().map(api::camel_keys).collect()),
-                map: Some(api::camel_keys(&map)),
+                map,
                 // the tile's own text read as KDL: it read, or the check would not have got here
                 nodes: dt_doc::nodeid::table(&own)
                     .map_err(|e| {
