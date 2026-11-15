@@ -31,18 +31,11 @@ fn heard_by(store: &MemStore) -> Heard {
 }
 
 fn build(store: &MemStore, opts: &Options) -> CacheState {
-    build_stored(
-        &Library,
-        FLAT,
-        opts,
-        &Progress::none(),
-        None,
-        Some(store),
-    )
-    .unwrap()
-    .report
-    .cache
-    .state
+    build_stored(&Library, FLAT, opts, &Progress::none(), None, Some(store))
+        .unwrap()
+        .report
+        .cache
+        .state
 }
 
 #[test]
@@ -116,13 +109,25 @@ fn the_limit_and_the_order_of_eviction_are_the_stores() {
     };
     build(&store, &seeded(1));
     build(&store, &seeded(2));
-    assert_eq!(build(&store, &seeded(1)), CacheState::Hit, "seed 1 is the newest use now");
+    assert_eq!(
+        build(&store, &seeded(1)),
+        CacheState::Hit,
+        "seed 1 is the newest use now"
+    );
     build(&store, &seeded(3));
     assert_eq!(store.len(), 2);
     let drops = told.lock().unwrap().iter().filter(|h| !h.3).count();
     assert_eq!(drops, 1, "one entry went, and was told");
-    assert_eq!(build(&store, &seeded(1)), CacheState::Hit, "the one used last stayed");
-    assert_eq!(build(&store, &seeded(2)), CacheState::Miss, "the least recently used went");
+    assert_eq!(
+        build(&store, &seeded(1)),
+        CacheState::Hit,
+        "the one used last stayed"
+    );
+    assert_eq!(
+        build(&store, &seeded(2)),
+        CacheState::Miss,
+        "the least recently used went"
+    );
 
     // a smaller limit on load keeps the newest
     let entries: Vec<(Vec<u8>, u64)> = told

@@ -1271,16 +1271,17 @@ mod tests {
     fn the_pages_key_is_the_programs_key() {
         lib();
         let text = LIBRARY.with(|l| l.borrow()["lib:tiles/ground/1x1-grass.dtile"].clone());
-        let key_at = |path: &str, text: &str, engine: &str, seed: Option<u64>, cells: u32, tier: Tier| {
-            LIBRARY.with(|l| {
-                let lib = l.borrow();
-                let source = Overlay {
-                    library: &lib,
-                    text,
-                };
-                stored_key(&source, path, engine, System::Db, seed, cells, tier)
-            })
-        };
+        let key_at =
+            |path: &str, text: &str, engine: &str, seed: Option<u64>, cells: u32, tier: Tier| {
+                LIBRARY.with(|l| {
+                    let lib = l.borrow();
+                    let source = Overlay {
+                        library: &lib,
+                        text,
+                    };
+                    stored_key(&source, path, engine, System::Db, seed, cells, tier)
+                })
+            };
         let key = |text: &str, engine: &str, seed: Option<u64>, cells: u32, tier: Tier| {
             key_at(MAIN, text, engine, seed, cells, tier).unwrap()
         };
@@ -1315,7 +1316,15 @@ mod tests {
         // a tile names the tile's own
         assert_ne!(
             base,
-            key_at("lib:tiles/ground/1x1-grass.dtile", &text, "e1", None, 24, Tier::Low).unwrap()
+            key_at(
+                "lib:tiles/ground/1x1-grass.dtile",
+                &text,
+                "e1",
+                None,
+                24,
+                Tier::Low
+            )
+            .unwrap()
         );
         // a document with a mistake has no key
         assert!(key_at(MAIN, "tile size=\"", "e1", None, 24, Tier::Low).is_err());

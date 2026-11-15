@@ -89,11 +89,7 @@ struct World {
 impl World {
     /// The one build of a tile in this host, the lane's and an export's alike: the tile's own path, the caller's options,
     /// and the kept builds.
-    fn build_tile(
-        &self,
-        path: &str,
-        opts: &Options,
-    ) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
+    fn build_tile(&self, path: &str, opts: &Options) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
         dt_store::build_stored(
             &self.tiles,
             path,
