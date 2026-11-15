@@ -7,7 +7,7 @@
 //   api.sq()                        mm per square; api.size() [cols, rows]
 //   api.map()                       the map (lines, regions) of the text now
 //   api.writable()                  may the file be changed? (else api.makeMine(replay))
-//   api.insert(place, node)         write `node` into the stack or the tile's body
+//   api.insert(place, node)         write the typed `node` (newnode.js) into the stack or the tile's body: the program writes its text
 //   api.steps(label, make)          a change at pointer speed (a handle): {to(q), end(q), cancel()}, made by the program
 //   api.handles()                   the selection's handles: [{q, label, make(q) (the program's edit of the point), move?}]
 //   api.redraw(scene)               the overlay, with the tool's drawing
@@ -17,11 +17,14 @@
 // the others put down what they made and select it.
 
 import { need } from './dom.js';
-import { pointLabel, placeText, pointText } from './points.js';
+import { pointLabel } from './points.js';
+import { node, parseExtra, point, word } from './newnode.js';
 
 /** @typedef {import('./overlay.js').Q} Q */
 /** @typedef {import('./overlay.js').OverlayScene} OverlayScene */
 /** @typedef {import('./api').ElementJson} Element */
+/** @typedef {import('./api').NewNode} NewNode */
+/** @typedef {import('./api').NewValue} NewValue */
 /** @typedef {[string, string, string]} Choice  a name the bar offers, what it is, and its family */
 /** @typedef {{ q: Q, word: string | null }} Snapped */
 /** @typedef {{ kind: string, name: string, el: Element | undefined, extra: string, points: Snapped[] }} Tool  the tool in hand */
@@ -33,7 +36,7 @@ import { pointLabel, placeText, pointText } from './points.js';
  * @typedef {{
  *   elements: () => Element[], defs: () => string[], sq: () => number | undefined, size: () => number[], map: () => import('./api').TileMap | null,
  *   writable: () => boolean, makeMine: (replay: { run?: () => any } | null) => any,
- *   insert: (place: string, node: string, opts?: { lens?: string, select?: any }) => Promise<any>,
+ *   insert: (place: string, node: NewNode, opts?: { lens?: string, select?: any }) => Promise<any>,
  *   steps: (label: string, make: (x: any) => Record<string, any>) => Steps | null, handles: () => Handle[], redraw: (scene: OverlayScene) => void, note: (text: string) => void,
  * }} ToolsApi
  */
@@ -62,7 +65,9 @@ export function snap(/** @type {Q} */ q, /** @type {number[]} */ [cols, rows]) {
   return { q: [Math.min(cols, Math.max(0, x)), Math.min(rows, Math.max(0, y))], word: null };
 }
 /** A snapped point as written: its word, else a pair. */
-const written = (/** @type {Snapped} */ s, /** @type {number} */ rows) => s.word || pointText(s.q, rows);
+const written = (/** @type {Snapped} */ s) => (s.word ? word(s.word) : point(s.q));
+/** A snapped point's key, to drop a point put down twice. */
+const keyOf = (/** @type {Snapped} */ s) => s.word || `${s.q[0]},${s.q[1]}`;
 
 /**
  * The nearest tile edge's word to `q`.
@@ -313,27 +318,35 @@ export class Tools {
   /** @param {Press} press @param {{ q: Q, z: number }} p @param {number} x @param {number} y */
   async act(press, p, x, y) {
     const t = /** @type {Tool} */ (this.tool); // a press is only made while a tool is in hand
-    const node = (/** @type {string} */ more) => [t.name, t.extra, more].filter(Boolean).join(' ');
+    // the user's extra words in the bar (`size=6..10`) are values of the node
+    const made = (/** @type {import('./api').NewControl[]} */ ...more) => {
+      const x = parseExtra(t.extra);
+      return node(t.name, { args: x.args, controls: [...x.controls, ...more] });
+    };
     const size = this.api.size();
     if (t.kind === 'place') {
-      const at = placeText(p.q, size[1]);
-      await this.api.insert('stack', node(at));
+      await this.api.insert('stack', made({ name: 'at', value: point(p.q) }));
       this.paint();
     } else if (t.kind === 'scatter') {
       const r = this.overlay.regionAt(press.q);
       const child = t.extra && !t.extra.includes('=') ? t.extra.split(/\s+/)[0] : 'rock';
-      const more = t.extra && t.extra.includes('=') ? ` ${t.extra}` : '';
+      const more = t.extra && t.extra.includes('=') ? parseExtra(t.extra) : { args: [], controls: [] };
       this.stop();
-      await this.api.insert('stack', `scatter${r ? ` at=${r}` : ''} count=3${more} {\n    ${child}\n}`, { lens: 'count' });
+      await this.api.insert('stack', node('scatter', {
+        args: more.args,
+        controls: [...(r ? [{ name: 'at', value: word(r) }] : []), { name: 'count', value: { int: 3 } }, ...more.controls],
+        children: [node(child)],
+        spread: true,
+      }), { lens: 'count' });
     } else if (t.kind === 'paint') {
       const r = this.overlay.regionAt(p.q);
       this.stop();
-      await this.api.insert('stack', node(r ? `at=${r}` : ''));
+      await this.api.insert('stack', made(...(r ? [{ name: 'at', value: word(r) }] : [])));
     } else if (t.kind === 'run') {
       const l = this.overlay.lineAt(x, y, 14);
       const along = l || edgeOf(p.q, size);
       this.stop();
-      await this.api.insert('stack', node(`at=${along}`));
+      await this.api.insert('stack', made({ name: 'at', value: word(along) }));
     } else if (t.kind === 'line') {
       t.points.push(snap(p.q, size));
       this.paint();
@@ -342,22 +355,26 @@ export class Tools {
       if (!lines.length) { this.api.note('Draw a line first: a region is an area the lines enclose'); return; }
       const name = fresh('area-1', (this.api.map()?.regions || []).map((r) => r.name));
       this.stop();
-      const fill = pointText(p.q, size[1]);
-      await this.api.insert('tile', `region ${name} { boundedBy ${lines.join(' ')}; fill ${fill} }`, { select: { kind: 'region', id: name } });
+      await this.api.insert('tile', node('region', {
+        args: [word(name)],
+        children: [node('boundedBy', { args: lines.map(word) }), node('fill', { args: [point(p.q)] })],
+      }), { select: { kind: 'region', id: name } });
     }
   }
 
   async endLine() {
     const t = /** @type {Tool} */ (this.tool); // asked while a line is being drawn
     // a double-click's two clicks put the last point down twice
-    const rows = this.api.size()[1];
-    const w = (/** @type {Snapped} */ p) => written(p, rows);
-    const pts = t.points.filter((p, i) => i === 0 || w(p) !== w(t.points[i - 1]));
+    const pts = t.points.filter((p, i) => i === 0 || keyOf(p) !== keyOf(t.points[i - 1]));
     if (pts.length < 2) { this.api.note('A line needs two points at least'); return; }
     const name = fresh(t.extra && !t.extra.includes('=') ? t.extra.split(/\s+/)[0] : 'line-1', (this.api.map()?.lines || []).map((l) => l.name));
-    const extra = t.extra.includes('=') ? ` ${t.extra}` : '';
+    const more = t.extra.includes('=') ? parseExtra(t.extra) : { args: [], controls: [] };
     this.stop();
-    await this.api.insert('tile', `line ${name}${extra} { through ${pts.map(w).join(' ')} }`, { select: { kind: 'line', id: name } });
+    await this.api.insert('tile', node('line', {
+      args: [word(name), ...more.args],
+      controls: more.controls,
+      children: [node('through', { args: pts.map(written) })],
+    }), { select: { kind: 'line', id: name } });
   }
 
   // ---- handles ------------------------------------------------------------

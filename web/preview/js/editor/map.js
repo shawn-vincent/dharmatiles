@@ -124,12 +124,12 @@ async function insertNode(place, node, { select: sel } = {}) {
     if (doc.get().file !== t.path) return;
   }
   if (!spansUsable()) return;
-  const r = await editCall({ op: 'insert', text: doc.get().text, place, node });
+  const r = await editCall({ op: 'make', text: doc.get().text, place, node });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be written' }); failed('Could not add to the tile', r); return; }
   if (sel) view.set({ sel, source: null }); else doc.set({ selectAt: r.body.at });
   // the program says where the new node is (`at`); a reply with no place leaves the caret and the scroll where they were
   const at = r.body.at;
-  edited(r.body.text, 'view', `Added ${node.trim().split(/\s+/)[0]}`, at == null ? null : byteToIndex(r.body.text, at));
+  edited(r.body.text, 'view', `Added ${node.name}`, at == null ? null : byteToIndex(r.body.text, at));
   askDraft();
   if (at == null) return;
   const text = /** @type {string} */ (texts.text); // an edit was just written into it

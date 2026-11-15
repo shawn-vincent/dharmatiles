@@ -305,6 +305,15 @@ pub enum Op<'a> {
         /// The node.
         node: &'a str,
     },
+    /// A new node described by its parts (an element or a `line`, a `region`, with its arguments, controls and
+    /// children), written in a place: the program writes every word, quote and point, so no page makes the text
+    /// of a node.  (Tile.)
+    Make {
+        /// Where it goes.
+        place: Place<'a>,
+        /// The node.
+        node: &'a NewNode,
+    },
     /// A node moved whole (its children, the comment lines above it and a comment after it on its line) to
     /// stand before its sibling `before`, or last.  (Tile.)
     Move {
@@ -349,6 +358,50 @@ pub enum Slot<'a> {
     Arg(usize),
     /// The control of this name (`at`).
     Control(&'a str),
+}
+
+/// A value of a new node, by what it is: the program writes it as the document does.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub enum NewValue {
+    /// A name or a word of the language (a region, a line, `north`): bare when the document reads it as itself, else a string.
+    Word(String),
+    /// A string, quoted (`"6..10"`).
+    Text(String),
+    /// A whole number.
+    Int(i64),
+    /// A number.
+    Num(f64),
+    /// A switch.
+    Bool(bool),
+    /// A point, in squares from the south-west corner: written as the document writes a point.
+    Point([f64; 2]),
+}
+
+/// A control of a new node: `name=value`.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize, ts_rs::TS)]
+#[serde(deny_unknown_fields)]
+pub struct NewControl {
+    /// The control's name.
+    pub name: String,
+    /// Its value.
+    pub value: NewValue,
+}
+
+/// A node to write ([`Op::Make`]).
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize, ts_rs::TS)]
+#[serde(deny_unknown_fields)]
+pub struct NewNode {
+    /// Its name (`rock`, `scatter`, `line`).
+    pub name: String,
+    /// Its positional arguments, in order.
+    pub args: Vec<NewValue>,
+    /// Its controls, in order.
+    pub controls: Vec<NewControl>,
+    /// Its children, in order.
+    pub children: Vec<NewNode>,
+    /// Whether the children stand on lines of their own (else they follow on its line: `line a { through p q }`).
+    pub spread: bool,
 }
 
 /// Where [`Op::Insert`] puts a node.
@@ -478,6 +531,7 @@ fn map_op(text: &str, op: &Op) -> Result<Done, EditError> {
         | Op::SetArgs { .. }
         | Op::SetPoint { .. }
         | Op::Insert { .. }
+        | Op::Make { .. }
         | Op::Move { .. }
         | Op::Take { .. }
         | Op::TakeChildren { .. }

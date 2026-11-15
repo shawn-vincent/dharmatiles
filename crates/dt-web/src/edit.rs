@@ -39,6 +39,7 @@ pub fn edit_tile(req: &str, system: &str) -> Result<String, JsError> {
     let text = match &req.op {
         dt_service::edit::EditOp::Set { text, .. }
         | dt_service::edit::EditOp::Insert { text, .. }
+        | dt_service::edit::EditOp::Make { text, .. }
         | dt_service::edit::EditOp::Move { text, .. }
         | dt_service::edit::EditOp::Remove { text, .. }
         | dt_service::edit::EditOp::RemoveChildren { text, .. }

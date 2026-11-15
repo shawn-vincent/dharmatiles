@@ -266,6 +266,33 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
             .contains("seed=1")
     );
 
+    // edit: a node made from its parts (the place tool), the program writing the words and the point
+    let made = table
+        .call(
+            &w,
+            &EDIT,
+            EditReq {
+                read: checked.nodes_rev.clone(),
+                op: EditOp::Make {
+                    text: TILE.to_owned(),
+                    node: dt_doc::ops::NewNode {
+                        name: "rock".to_owned(),
+                        args: vec![],
+                        controls: vec![dt_doc::ops::NewControl {
+                            name: "at".to_owned(),
+                            value: dt_doc::ops::NewValue::Point([0.5, 0.5]),
+                        }],
+                        children: vec![],
+                        spread: false,
+                    },
+                    place: None,
+                    id: None,
+                },
+            },
+        )
+        .expect("the node is made");
+    assert!(made.text.contains("rock at=\"(0.5sq,"), "{}", made.text);
+
     // save: against the revision the page edited from; an older save is a conflict that names the file
     let (_, rev) = w.docs.read(PATH).expect("the tile reads");
     let saved = table

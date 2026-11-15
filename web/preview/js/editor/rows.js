@@ -13,6 +13,7 @@ import {
   addPlace, canStep, idAtByte, idFlaw, idOf, landing, markId, movedNote, nameOf, orderRefusal, ownNode, planMove, refusalLine, stepSlot, writtenIn,
 } from '../rows.js';
 import { byteToIndex } from '../text.js';
+import { node as newNode, point, word } from '../newnode.js';
 import { host, makeMine, toast } from './app.js';
 import { editCall, askDraft, edited, spansUsable, undo } from './document.js';
 import { doc, isEntry, markSel, stackItems, tile, view } from './stores.js';
@@ -284,10 +285,11 @@ function freeName(base) {
 export async function addMark(kind) {
   if (!editable()) { toast('This part is read only: change the tile’s own text'); return; }
   const name = freeName(kind);
+  const rows = tile()?.plan?.rows || 1;
   const node = kind === 'line'
-    ? `line ${name} { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }`
-    : `region ${name} { within "8dmm" of=northEdge }`;
-  if (await tileEdit({ op: 'insert', place: 'tile', node }, `Added ${kind} ${name}`)) {
+    ? newNode('line', { args: [word(name)], children: [newNode('through', { args: [point([0, rows - 0.5]), point([1, rows - 0.5])] })] })
+    : newNode('region', { args: [word(name)], children: [newNode('within', { args: [{ text: '8dmm' }], controls: [{ name: 'of', value: word('northEdge') }] })] });
+  if (await tileEdit({ op: 'make', place: 'tile', node }, `Added ${kind} ${name}`)) {
     view.set({ sel: markSel(/** @type {MarkKind} */ (kind), name) });
     toast(`Added ${kind} ${name}`, () => undo(-1));
   }

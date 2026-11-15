@@ -9,7 +9,7 @@
 use kdl::{KdlDocument, KdlNode, KdlValue};
 use miette::SourceSpan;
 
-use super::{Done, EditError, Mended, Op, Place, Slot};
+use super::{Done, EditError, Mended, NewNode, NewValue, Op, Place, Slot};
 use crate::error::Fix;
 use crate::nodeid::{self, entry_range, value_range};
 use crate::seams::Snapped;
@@ -113,6 +113,10 @@ pub(super) fn apply(text: &str, op: &Op) -> Result<Done, EditError> {
             finish(lay(text, splices), node.span().offset())
         }
         Op::Insert { place, node } => insert(text, &doc, *place, node),
+        Op::Make { place, node } => {
+            let written = make(&doc, node)?;
+            insert(text, &doc, *place, &written)
+        }
         Op::Move { id, before } => move_node(text, &doc, id, *before),
         Op::Take { id } => {
             let (at, end) = line_range(text, nodeid::locate(&doc, id)?.span());
@@ -217,6 +221,77 @@ fn tile_size(doc: &KdlDocument) -> Result<(u32, u32), EditError> {
 fn pair_text(p: [f64; 2], rows: u32) -> String {
     let round = |v: f64| (v * 100.0).round() / 100.0 + 0.0;
     format!("({}sq, {}sq)", round(p[0]), round(f64::from(rows) - p[1]))
+}
+
+/// A name the document reads as a node or control name: letters, digits, `_`, `-`, starting with a letter.
+fn plain_name(s: &str) -> Result<&str, EditError> {
+    let ok = s.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'));
+    if ok {
+        Ok(s)
+    } else {
+        Err(EditError::BadName(format!(
+            "`{s}` is not a name the document can write"
+        )))
+    }
+}
+
+/// A new node's value as the document writes it.
+fn value_text(v: &NewValue, rows: u32) -> String {
+    match v {
+        NewValue::Word(w) => word_or_string(w),
+        NewValue::Text(t) => KdlValue::String(t.clone()).to_string(),
+        NewValue::Int(i) => KdlValue::Integer(i128::from(*i)).to_string(),
+        NewValue::Bool(b) => KdlValue::Bool(*b).to_string(),
+        NewValue::Num(x) => KdlValue::Float(*x).to_string(),
+        NewValue::Point(q) => KdlValue::String(pair_text(*q, rows)).to_string(),
+    }
+}
+
+/// A new node as the lines of KDL [`insert`] writes (unindented).
+fn make(doc: &KdlDocument, node: &NewNode) -> Result<String, EditError> {
+    // a point is counted from the north-west corner, so a node with one needs the tile's size
+    let rows = if has_point(node) { tile_size(doc)?.1 } else { 0 };
+    render(node, rows, "")
+}
+
+fn has_point(n: &NewNode) -> bool {
+    n.args
+        .iter()
+        .chain(n.controls.iter().map(|c| &c.value))
+        .any(|v| matches!(v, NewValue::Point(_)))
+        || n.children.iter().any(has_point)
+}
+
+fn render(n: &NewNode, rows: u32, ind: &str) -> Result<String, EditError> {
+    let mut out = plain_name(&n.name)?.to_owned();
+    for a in &n.args {
+        out.push(' ');
+        out.push_str(&value_text(a, rows));
+    }
+    for c in &n.controls {
+        out.push_str(&format!(
+            " {}={}",
+            plain_name(&c.name)?,
+            value_text(&c.value, rows)
+        ));
+    }
+    if n.children.is_empty() {
+        return Ok(out);
+    }
+    if n.spread {
+        let inner = format!("{ind}{INDENT}");
+        out.push_str(" {\n");
+        for c in &n.children {
+            out.push_str(&format!("{inner}{}\n", render(c, rows, &inner)?));
+        }
+        out.push_str(&format!("{ind}}}"));
+    } else {
+        let kids: Result<Vec<_>, _> = n.children.iter().map(|c| render(c, rows, ind)).collect();
+        out.push_str(&format!(" {{ {} }}", kids?.join("; ")));
+    }
+    Ok(out)
 }
 
 // ---- controls ------------------------------------------------------------------------------------

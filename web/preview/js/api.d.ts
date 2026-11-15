@@ -266,7 +266,7 @@ type EditReq = {
 /**
  * The `nodesRev` of the check the ids come from.
  */
-read?: string | null, } & ({ "op": "set", text: string, id: string, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, id?: string | null, } | { "op": "move", text: string, id: string, before?: string | null, } | { "op": "remove", text: string, id: string, } | { "op": "remove-children", text: string, id: string, names: Array<string>, } | { "op": "rename", text: string, id: string, new: string, } | { "op": "about", text: string, value: string, } | { "op": "arg", text: string, id: string, index: number, value: Scalar, } | { "op": "args", text: string, id: string, values: Array<string>, } | { "op": "point", text: string, id: string, slot: PointSlot, q: [number, number], snap?: boolean | null, } | { "op": "hide", text: string, id: string, } | { "op": "fix", text: string, fix: FixJson, });
+read?: string | null, } & ({ "op": "set", text: string, id: string, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, id?: string | null, } | { "op": "make", text: string, node: NewNode, place?: InsertPlace | null, id?: string | null, } | { "op": "move", text: string, id: string, before?: string | null, } | { "op": "remove", text: string, id: string, } | { "op": "remove-children", text: string, id: string, names: Array<string>, } | { "op": "rename", text: string, id: string, new: string, } | { "op": "about", text: string, value: string, } | { "op": "arg", text: string, id: string, index: number, value: Scalar, } | { "op": "args", text: string, id: string, values: Array<string>, } | { "op": "point", text: string, id: string, slot: PointSlot, q: [number, number], snap?: boolean | null, } | { "op": "hide", text: string, id: string, } | { "op": "fix", text: string, fix: FixJson, });
 
 type EditRes = { text: string, id: string | null, at: number | null, };
 
@@ -779,6 +779,38 @@ type NamesRes = { ok: boolean, message: string | null, defs: Array<string>, regi
 
 type Near = { x: number, y: number, };
 
+type NewControl = { 
+/**
+ * The control's name.
+ */
+name: string, 
+/**
+ * Its value.
+ */
+value: NewValue, };
+
+type NewNode = { 
+/**
+ * Its name (`rock`, `scatter`, `line`).
+ */
+name: string, 
+/**
+ * Its positional arguments, in order.
+ */
+args: Array<NewValue>, 
+/**
+ * Its controls, in order.
+ */
+controls: Array<NewControl>, 
+/**
+ * Its children, in order.
+ */
+children: Array<NewNode>, 
+/**
+ * Whether the children stand on lines of their own (else they follow on its line: `line a { through p q }`).
+ */
+spread: boolean, };
+
 type NewReq = { name?: string | null, 
 /**
  * Squares across and up, like `2x1`.
@@ -788,6 +820,8 @@ size?: string | null,
  * The folder place and the folder in it, when not My tiles.
  */
 root?: number | null, dir?: string | null, };
+
+type NewValue = { "word": string } | { "text": string } | { "int": number } | { "num": number } | { "bool": boolean } | { "point": [number, number] };
 
 type NodeJson = { id: string, 
 /**

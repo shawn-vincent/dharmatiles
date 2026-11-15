@@ -66,3 +66,27 @@ test('the scan fails on text made by hand: a planted quote or byte count is caug
   assert.deepEqual(makesText('const t = `"${n}${unit}"`;'), ['writes a quoted value in a template']);
   assert.deepEqual(makesText(`const total = a + bytesOf(b);`), []);
 });
+
+// The editor's place tool and the marks it adds hold to it too: a node is the typed parts of `NewNode` (js/newnode.js) and the program's
+// `make` edit writes its words, quotes and points.  No tool builds a node as a string.
+const TOOLS = ['place.js', 'points.js', 'newnode.js', 'editor/map.js', 'editor/rows.js'].map((f) => join(js, f));
+const NODE_AS_TEXT = [
+  [/\b(?:insert|tileEdit)\([^;]*[`'"](?:line|region|scatter|rock|tree|wall)\s/, 'hands a node as a string'],
+  [/`[^`]*\b(?:at|through|boundedBy|fill|count)[= ][^`]*\$\{/, 'a template builds a node'],
+  [/\bsq\)?["'`]\s*\)?;?\s*$|sq,\s*\$\{|\$\{[^}]*\}sq/m, 'writes a point with its unit'],
+];
+const buildsNodeText = (src) => NODE_AS_TEXT.filter(([re]) => re.test(src)).map(([, why]) => why);
+
+test('the place tool and the marks make no node text: a node is typed parts the program writes', () => {
+  for (const p of TOOLS) {
+    // a hover label is shown, never written
+    const src = code(p).split('\n').filter((l) => !/\blabel\b/.test(l)).join('\n').replace(/export function pointLabel[\s\S]*?\n}\n/, '');
+    assert.deepEqual(buildsNodeText(src), [], `${name(p)} makes node text`);
+  }
+});
+
+test('the scan fails on a node made as a string', () => {
+  assert.deepEqual(buildsNodeText('await this.api.insert(\'stack\', `scatter at=${r} count=3`)'), ['hands a node as a string', 'a template builds a node']);
+  assert.deepEqual(buildsNodeText('const fill = `${a}sq`;'), ['writes a point with its unit']);
+  assert.deepEqual(buildsNodeText("await this.api.insert('stack', made(point(q)))"), []);
+});

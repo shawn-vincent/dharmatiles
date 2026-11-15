@@ -1,29 +1,14 @@
-// How a point on the tile is written in the document.  The page works in
+// How a point on the tile is shown in the place tool's label.  The page works in
 // squares from the south-west corner, as the program's geometry does; a
 // document counts from the north-west corner and writes units:
-// `"(0.5sq, 0.25sq)"`.  Nothing here reads a point back: the program's map
-// gives where each written point is.
+// `(0.5sq, 0.25sq)`.  This is a label only: the page never writes a point into
+// a document.  A tool puts a point in a typed edit (`point([x, y])`,
+// newnode.js) and the program writes it.
 
 const round = (/** @type {number} */ v) => String(Math.round(v * 100) / 100);
 
-/** The point `q` (squares from the south-west corner) as it is written, quotes included. */
-/** @param {number[]} q @param {number} rows */
-export function pointText(q, rows) {
-  return `"(${round(q[0])}sq, ${round(rows - q[1])}sq)"`;
-}
-
-/**
- * What a placed thing writes for its place: `at=` and one point.  A thing's
- * `at=` takes exactly one point (a range there is `dt::place`), so a drag
- * writes where it ended, as a click does.
- */
-/** @param {number[]} q @param {number} rows */
-export function placeText(q, rows) {
-  return `at=${pointText(q, rows)}`;
-}
-
-/** The point as a label (no quotes), in the document's own words. */
+/** The point as a label, in the document's own words. */
 /** @param {number[]} q @param {number} rows */
 export function pointLabel(q, rows) {
-  return pointText(q, rows).slice(1, -1);
+  return `(${round(q[0])}sq, ${round(rows - q[1])}sq)`;
 }

@@ -878,3 +878,122 @@ fn a_dragged_point_on_the_outline_keeps_the_seam_rule() {
     );
     assert!(drag([0.7, 0.3]).contains("(0.7sq, 0.7sq)"));
 }
+
+// ---- a node made from its parts ------------------------------------------------------------------------
+
+mod make {
+    use super::super::super::{NewControl, NewNode, NewValue};
+    use super::*;
+
+    fn n(name: &str) -> NewNode {
+        NewNode {
+            name: name.to_owned(),
+            args: vec![],
+            controls: vec![],
+            children: vec![],
+            spread: false,
+        }
+    }
+    fn at(v: NewValue) -> NewControl {
+        NewControl {
+            name: "at".to_owned(),
+            value: v,
+        }
+    }
+
+    #[test]
+    fn a_thing_at_a_point_is_written_from_the_corner_the_document_counts_from() {
+        let mut rock = n("rock");
+        rock.controls = vec![
+            NewControl {
+                name: "size".to_owned(),
+                value: NewValue::Word("6..10".to_owned()),
+            },
+            at(NewValue::Point([0.5, 0.25])),
+        ];
+        let d = run(
+            MAP,
+            &Op::Make {
+                place: Place::Stack,
+                node: &rock,
+            },
+        )
+        .expect("made");
+        assert!(
+            d.text
+                .contains("rock size=\"6..10\" at=\"(0.5sq, 0.75sq)\"\n"),
+            "{}",
+            d.text
+        );
+        assert_eq!(d.id.as_deref(), Some("tile/stack/rock#2"));
+    }
+
+    #[test]
+    fn a_scatter_stands_its_child_on_a_line_of_its_own() {
+        let mut s = n("scatter");
+        s.controls = vec![
+            at(NewValue::Word("bank".to_owned())),
+            NewControl {
+                name: "count".to_owned(),
+                value: NewValue::Int(3),
+            },
+        ];
+        s.children = vec![n("rock")];
+        s.spread = true;
+        let d = run(
+            T,
+            &Op::Make {
+                place: Place::Stack,
+                node: &s,
+            },
+        )
+        .expect("made");
+        assert!(
+            d.text
+                .contains("        scatter at=bank count=3 {\n            rock\n        }\n"),
+            "{}",
+            d.text
+        );
+    }
+
+    #[test]
+    fn a_line_follows_its_children_on_its_own_line_and_words_are_quoted_only_when_they_must_be() {
+        let mut through = n("through");
+        through.args = vec![
+            NewValue::Word("south-west".to_owned()),
+            NewValue::Point([1.0, 0.5]),
+        ];
+        let mut line = n("line");
+        line.args = vec![NewValue::Word("line-2".to_owned())];
+        line.children = vec![through];
+        let d = run(
+            MAP,
+            &Op::Make {
+                place: Place::Tile,
+                node: &line,
+            },
+        )
+        .expect("made");
+        assert!(
+            d.text
+                .contains("    line line-2 { through south-west \"(1sq, 0.5sq)\" }\n"),
+            "{}",
+            d.text
+        );
+    }
+
+    #[test]
+    fn a_name_the_document_cannot_write_is_refused() {
+        let bad = n("rock at=\"x\"");
+        assert!(matches!(
+            run(
+                T,
+                &Op::Make {
+                    place: Place::Stack,
+                    node: &bad
+                }
+            ),
+            Err(EditError::BadName(_))
+        ));
+    }
+}

@@ -75,6 +75,14 @@ pub enum EditOp {
         place: Option<InsertPlace>,
         id: Option<String>,
     },
+    /// A new node made from its parts (what the editor's place tool puts down): the program writes its words, quotes
+    /// and points.  `place` and `id` are as for `Insert`.
+    Make {
+        text: String,
+        node: dt_doc::ops::NewNode,
+        place: Option<InsertPlace>,
+        id: Option<String>,
+    },
     /// A node moved whole to stand before its sibling `before`, or last.
     Move {
         text: String,
@@ -188,6 +196,19 @@ impl<E: std::fmt::Display> std::fmt::Display for Failure<E> {
     }
 }
 
+/// Where a node goes: the place named, and the id it needs.
+fn place_of<E>(place: Option<InsertPlace>, id: Option<&str>) -> Result<Place<'_>, Failure<E>> {
+    let named = |what: &str| {
+        id.ok_or_else(|| Failure::Bad(format!("give the id of the node to write {what}")))
+    };
+    Ok(match place.unwrap_or(InsertPlace::Stack) {
+        InsertPlace::In => Place::In(named("into")?),
+        InsertPlace::Before => Place::Before(named("above")?),
+        InsertPlace::Tile => Place::Tile,
+        InsertPlace::Stack => Place::Stack,
+    })
+}
+
 /// Make `req`: its op as a `dt_doc::ops::Op` applied to the tile text it carries, read by `reader`.  `seams` gives the
 /// edge-seam table, asked for only by a point edit that snaps.
 ///
@@ -210,6 +231,7 @@ pub fn apply<E>(
     let v = &req.op;
     let text_of = match v {
         EditOp::Insert { text, .. }
+        | EditOp::Make { text, .. }
         | EditOp::Move { text, .. }
         | EditOp::Remove { text, .. }
         | EditOp::RemoveChildren { text, .. }
@@ -237,17 +259,17 @@ pub fn apply<E>(
             place,
             id,
         } => {
-            let named = |what: &str| {
-                id.as_deref()
-                    .ok_or_else(|| bad(format!("give the id of the node to write {what}")))
-            };
-            let place = match place.unwrap_or(InsertPlace::Stack) {
-                InsertPlace::In => Place::In(named("into")?),
-                InsertPlace::Before => Place::Before(named("above")?),
-                InsertPlace::Tile => Place::Tile,
-                InsertPlace::Stack => Place::Stack,
-            };
+            let place = place_of::<E>(*place, id.as_deref())?;
             made(text, Op::Insert { place, node })
+        }
+        EditOp::Make {
+            text,
+            node,
+            place,
+            id,
+        } => {
+            let place = place_of::<E>(*place, id.as_deref())?;
+            made(text, Op::Make { place, node })
         }
         EditOp::Move { text, id, before } => made(
             text,
