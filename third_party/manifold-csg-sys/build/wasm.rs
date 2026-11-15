@@ -247,6 +247,22 @@ fn which(name: &str) -> Option<PathBuf> {
     Some(PathBuf::from(path.lines().next()?.trim()))
 }
 
+/// Every `patches/*.patch`, by name, as a cmake list (`;`-joined absolute paths).
+fn carried_patches() -> String {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("patches");
+    let mut patches: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
+        .map(|e| e.unwrap_or_else(|e| panic!("cannot read an entry of {}: {e}", dir.display())).path())
+        .filter(|p| p.extension().is_some_and(|x| x == "patch"))
+        .collect();
+    patches.sort();
+    patches
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
 pub fn build_wasm_unknown_unknown() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src/lib.rs");
@@ -419,15 +435,11 @@ pub fn build_wasm_unknown_unknown() {
             // declarations target the host's (newer) C API surface and
             // the wasm link fails with unresolved imports.
             &format!("-DMANIFOLD_GIT_TAG={}", crate::MANIFOLD_VERSION),
-            // dharmatiles: the host lane's carried Manifold patch (the level
-            // set's resize read of vertPos[-1]) applies here too, so the
-            // browser builds the Manifold the program does.
-            &format!(
-                "-DDT_MANIFOLD_PATCH={}",
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("patches/0001-levelset-resize-reads-no-last-vert.patch")
-                    .display()
-            ),
+            // dharmatiles: every Manifold patch the host lane carries (the
+            // level set's read of vertPos[-1], the edge dedupe's one order)
+            // applies here too, so the browser builds the Manifold the
+            // program does.  A cmake list: `;`-joined, in name order.
+            &format!("-DDT_MANIFOLD_PATCH={}", carried_patches()),
         ])
         .args(crate::cmake_launcher_args())
         .status()

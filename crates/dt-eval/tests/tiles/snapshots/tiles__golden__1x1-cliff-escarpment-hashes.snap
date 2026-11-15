@@ -69,14 +69,14 @@ af9133438c6fb2bc  cliff:tile/cliff/0
 3ab44f4bb30892f5  cliff:tile/cliff/0
 bb9cab2b6e6214ea  cliff:tile/cliff/0
 197a290be9b88fe1  cliff:tile/cliff/0
-ab541721a54f6d88  cliff:tile/cliff/0
+cf7cbd9cb0e95e46  cliff:tile/cliff/0
 310308852199321c  cliff:tile/cliff/0
 ec019aed8489ea02  cliff:tile/cliff/0
 de177363a1823bf0  cliff:tile/cliff/0
 f0301b10566ba3e4  cliff:tile/cliff/0
 bc967749d6284499  cliff:tile/cliff/0
 02c67467ad02debe  cliff:tile/cliff/0
-664b7825ba73ea85  cliff:tile/cliff/0
+40a2980b17da415d  cliff:tile/cliff/0
 69e242c8af7d4f81  surface
 bc5c0e6f6fa1ddb3  terrain:tile/terrain
 87cff35723a3d942  rock:tile/scatter/1
@@ -104,5 +104,5 @@ b51d7fd92b3c61f3  rock:tile/scatter/1
 318a146a38892281  rock:tile/scatter/1
 fd169195a875960c  rock:tile/scatter/1
 a9f0c2c38831617d  connector:tile/connector
-acfd39006ad61d17  union
-21b811921f2d3ffe  export
+2d679fc1b6608d2f  union
+6c8d6c51665e620e  export
