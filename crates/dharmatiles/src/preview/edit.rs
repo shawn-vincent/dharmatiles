@@ -67,7 +67,6 @@ use serde::{Deserialize, Serialize};
 use super::api::{Out, Reply, TileRef, TileRefReply};
 use super::places::{Listed, Nothing};
 use super::roots::personal_home;
-use super::storage::Storage;
 use super::*;
 pub use dt_service::api::DraftTier;
 pub use dt_service::draft_calls::{DraftReq, StepReq};
@@ -230,22 +229,6 @@ pub(super) fn target(shared: &Shared, v: TargetReq) -> Out<TargetRes> {
     super::api::out(dt_service::target_calls::set_target(shared, v))
 }
 
-pub(super) fn tile_name(name: Option<&str>) -> Result<String, Reply> {
-    dt_service::place_calls::tile_name(name).map_err(super::api::refusal_reply)
-}
-
-/// A document written new, whatever its extension (a print list is `dmap`): see [`dt_service::place_calls::write_new`].
-pub(super) fn write_new_ext(
-    storage: &dyn Storage,
-    dir: &Path,
-    stem: &str,
-    ext: &str,
-    text: &[u8],
-) -> Result<PathBuf, (&'static str, super::api::Body)> {
-    dt_service::place_calls::write_new(storage, dir, stem, ext, text)
-        .map_err(super::api::refusal_reply)
-}
-
 pub(super) fn listed(shared: &Shared, dest: &Path) -> Listed {
     shared.rescan();
     let path = dest.to_string_lossy().into_owned();
@@ -337,11 +320,6 @@ pub(super) fn printed(shared: &Shared, t: &TileRef, v: PrintedReq) -> Out<Printe
 /// `/api/printed-set` (see [`dt_service::read_calls::printed_set`]).
 pub(super) fn printed_set(shared: &Shared, v: PrintedSetReq) -> Out<PrintedSetRes> {
     super::api::out(dt_service::read_calls::printed_set(shared, &v))
-}
-
-/// How an edit that cannot be made is told (see [`dt_service::edit_calls::refusal`]), as the reply.
-pub(super) fn refusal(e: &dt_doc::ops::EditError) -> Reply {
-    super::api::refusal_reply(dt_service::edit_calls::refusal(e))
 }
 
 /// `/api/edit`: [`dt_service::edit::apply`] with this program's reader, and its failures as the replies the page reads.

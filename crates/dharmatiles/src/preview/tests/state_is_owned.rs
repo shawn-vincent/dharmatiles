@@ -32,7 +32,8 @@ const ALLOWED: &[(&str, &str)] = &[
 ];
 
 /// The fields of `Shared` that are behind a lock: the shared caches, and the places gate (a lock held across disk and the chooser).
-const SHARED_LOCKS: &[&str] = &["gate", "build_caches", "scene_checks"];
+/// (A map reading's memory is the service's own type, `SceneMemo`, which keeps its lock inside.)
+const SHARED_LOCKS: &[&str] = &["gate", "build_caches"];
 
 fn rust_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
     let entries = std::fs::read_dir(dir).expect("the preview's source folder is readable");

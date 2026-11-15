@@ -53,7 +53,10 @@ pub use diag::{Diag, Fix};
 pub use doc::{Region, Tile, Within};
 pub use dt_doc::lower::{RangeRefusal, Ranged, ranged, weighting_flaw_in};
 pub use dt_kit::Progress;
-pub use machine::{Machine, ProfileKind, printer_machine, printer_names, printer_profile};
+pub use machine::{
+    InSource, Machine, OnDisk, ProfileKind, Profiles, printer_machine, printer_machine_in,
+    printer_names, printer_profile, printer_profile_in,
+};
 pub use mistake::{FixJson, Mistake, is_document_error, mistakes};
 pub use options::{DRAFT_CELLS, Options, Profile, Tier};
 pub use reader::Evaluated;

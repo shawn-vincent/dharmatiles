@@ -14,7 +14,7 @@ use dt_kit::Printer;
 
 use crate::diag::Diag;
 use crate::doc;
-use crate::source::{self, Files, Library};
+use crate::source::{self, Files, Library, Source};
 
 /// Where a printer profile is kept.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +88,61 @@ pub fn printer_names(home: Option<&Path>) -> Vec<(String, ProfileKind)> {
     found.into_iter().collect()
 }
 
+/// Where printer profiles are looked up: the one question a profile's reading asks, so the program (the disk) and the
+/// browser (the library its page was handed) answer it each their way.
+pub trait Profiles {
+    /// Where profile `name` is read from (the source and the path in it); none when there is no such profile.
+    fn find(&self, name: &str) -> Option<(&dyn Source, String)>;
+    /// Every profile there is, by name.
+    fn names(&self) -> Vec<(String, ProfileKind)>;
+}
+
+/// The profiles on the disk: `<home>/printers/<name>.dtile` if there is one, else the library's.
+#[derive(Clone, Copy, Debug)]
+pub struct OnDisk<'a> {
+    pub home: Option<&'a Path>,
+}
+
+impl Profiles for OnDisk<'_> {
+    fn find(&self, name: &str) -> Option<(&dyn Source, String)> {
+        let mine = self
+            .home
+            .map(|h| h.join("printers").join(format!("{name}.dtile")));
+        if let Some(f) = mine.filter(|f| f.is_file()) {
+            return Some((&Files, f.to_string_lossy().into_owned()));
+        }
+        let lib = format!("lib:printers/{name}.dtile");
+        source::library_file(&lib)
+            .is_some_and(|f| f.is_file())
+            .then_some((&Library as &dyn Source, lib))
+    }
+
+    fn names(&self) -> Vec<(String, ProfileKind)> {
+        printer_names(self.home)
+    }
+}
+
+/// The library's profiles only, read from `source` (the browser's library: no folder of one's own to look in); `names`
+/// are the library's profiles, by name.
+pub struct InSource<'a> {
+    pub source: &'a dyn Source,
+    pub names: &'a [String],
+}
+
+impl Profiles for InSource<'_> {
+    fn find(&self, name: &str) -> Option<(&dyn Source, String)> {
+        let lib = format!("lib:printers/{name}.dtile");
+        self.source.read(&lib).is_ok().then_some((self.source, lib))
+    }
+
+    fn names(&self) -> Vec<(String, ProfileKind)> {
+        self.names
+            .iter()
+            .map(|n| (n.clone(), ProfileKind::Library))
+            .collect()
+    }
+}
+
 /// A printer profile as read: the gate's floors and the machine.
 struct Loaded {
     floors: [f64; 5],
@@ -96,7 +151,7 @@ struct Loaded {
 
 /// The profile called `name`, with `from` followed and the floors and
 /// machine words a profile leaves out taken from the one it starts from.
-fn load(name: &str, home: Option<&Path>, depth: u8) -> Result<Loaded, Vec<Diag>> {
+fn load(name: &str, profiles: &dyn Profiles, depth: u8) -> Result<Loaded, Vec<Diag>> {
     if !profile_name_ok(name) {
         return Err(vec![
             Diag::plain(dt_lang::codes::PRINTER, format!("`{name}` is not a printer name")).help(
@@ -104,24 +159,17 @@ fn load(name: &str, home: Option<&Path>, depth: u8) -> Result<Loaded, Vec<Diag>>
             ),
         ]);
     }
-    let mine = home.map(|h| h.join("printers").join(format!("{name}.dtile")));
-    let p = if let Some(f) = mine.filter(|f| f.is_file()) {
-        doc::printer_doc(&Files, &f.to_string_lossy())?
-    } else {
-        let lib = format!("lib:printers/{name}.dtile");
-        if source::library_file(&lib).is_some_and(|f| f.is_file()) {
-            doc::printer_doc(&Library, &lib)?
-        } else {
-            let have: Vec<String> = printer_names(home).into_iter().map(|(n, _)| n).collect();
-            return Err(vec![
-                Diag::plain(
-                    dt_lang::codes::PRINTER,
-                    format!("no printer profile `{name}`"),
-                )
-                .help(format!("the profiles are: {}", have.join(", "))),
-            ]);
-        }
+    let Some((src, path)) = profiles.find(name) else {
+        let have: Vec<String> = profiles.names().into_iter().map(|(n, _)| n).collect();
+        return Err(vec![
+            Diag::plain(
+                dt_lang::codes::PRINTER,
+                format!("no printer profile `{name}`"),
+            )
+            .help(format!("the profiles are: {}", have.join(", "))),
+        ]);
     };
+    let p = doc::printer_doc(src, &path)?;
     let mut floors = [
         p.line.value,
         p.layer.value,
@@ -159,7 +207,7 @@ fn load(name: &str, home: Option<&Path>, depth: u8) -> Result<Loaded, Vec<Diag>>
                 .help("`from` names another profile, which may not lead back here"),
             ]);
         }
-        let base = load(parent, home, depth + 1)?;
+        let base = load(parent, profiles, depth + 1)?;
         for (i, f) in floors.iter_mut().enumerate() {
             if !p.floors_given[i] {
                 *f = base.floors[i];
@@ -188,7 +236,15 @@ fn load(name: &str, home: Option<&Path>, depth: u8) -> Result<Loaded, Vec<Diag>>
 /// # Errors
 /// Why there is no such profile, or it does not decode.
 pub fn printer_profile(name: &str, home: Option<&Path>) -> Result<Printer, Vec<Diag>> {
-    let f = load(name, home, 0)?.floors;
+    printer_profile_in(&OnDisk { home }, name)
+}
+
+/// [`printer_profile`], with the profiles found where `profiles` says.
+///
+/// # Errors
+/// Why there is no such profile, or it does not decode.
+pub fn printer_profile_in(profiles: &dyn Profiles, name: &str) -> Result<Printer, Vec<Diag>> {
+    let f = load(name, profiles, 0)?.floors;
     Ok(Printer::new(f[0], f[1], f[2], f[4]).steepest(f[3]))
 }
 
@@ -197,7 +253,15 @@ pub fn printer_profile(name: &str, home: Option<&Path>) -> Result<Printer, Vec<D
 /// # Errors
 /// Why there is no such profile, or it does not decode.
 pub fn printer_machine(name: &str, home: Option<&Path>) -> Result<Machine, Vec<Diag>> {
-    Ok(load(name, home, 0)?.machine)
+    printer_machine_in(&OnDisk { home }, name)
+}
+
+/// [`printer_machine`], with the profiles found where `profiles` says.
+///
+/// # Errors
+/// Why there is no such profile, or it does not decode.
+pub fn printer_machine_in(profiles: &dyn Profiles, name: &str) -> Result<Machine, Vec<Diag>> {
+    Ok(load(name, profiles, 0)?.machine)
 }
 
 /// The machine of a printer profile, as plates see it: what to lay out on

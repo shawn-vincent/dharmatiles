@@ -483,7 +483,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         .ok()
         .and_then(|t| cli::read_list_text(Path::new(path), t).ok());
     let scene = list.map(|list| {
-        let mut sc = scene::read(shared, path, &list, rev);
+        let mut sc = scene::read(&**shared, path, &list, rev);
         // the scene reaches the page now, before anything is built: a map shows its pieces
         // (as boxes, then their meshes) while its plates are still being laid out
         let json = sc.json.clone();

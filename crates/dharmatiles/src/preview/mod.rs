@@ -66,7 +66,6 @@ mod offers;
 mod owner;
 pub use dt_service::payload;
 pub(crate) mod places;
-mod placing;
 pub(crate) mod plan;
 mod plates;
 pub(crate) mod printers;
@@ -124,9 +123,6 @@ fn stale_mesh(rev: u64) -> (&'static str, api::Body) {
     )
 }
 
-/// What a tile's size and seed are remembered by: its path, the seed asked, the system and its file's time.
-type SceneCheck = (String, Option<u64>, dt_lang::System, Option<SystemTime>);
-
 #[cfg(test)]
 pub(crate) use dt_service::tile::State;
 pub(crate) use dt_service::tile::{Facts, Row, Sketch, Slot, TileId, tile_id};
@@ -183,7 +179,7 @@ pub struct Shared {
     /// shows while the new one runs.  None: no disk cache (the tests').
     store: Option<Arc<dt_store::Store>>,
     /// A tile's size and seed as a map's piece reads them, by tile, seed, system and the file's time ([`scene`]).
-    scene_checks: Mutex<BTreeMap<SceneCheck, (u32, u32, u64)>>,
+    scene_checks: dt_service::scene_read::SceneMemo,
     /// The owner of each document file: its revision and its lock ([`docs`]).
     docs: docs::Docs,
     /// Where tiles' files are read, written and trashed ([`storage`]).
@@ -320,6 +316,58 @@ impl dt_service::folder_calls::PlaceHost for Shared {
     }
 }
 
+impl dt_service::scene_read::SceneHost for Shared {
+    fn tiles_home(&self) -> Option<std::path::PathBuf> {
+        self.home.clone()
+    }
+
+    fn tile_source(&self) -> &dyn dt_eval::Source {
+        &dt_eval::Files
+    }
+
+    fn tile_paths(&self) -> Vec<String> {
+        self.owner
+            .ask(owner::Command::Paths)
+            .into_iter()
+            .map(|(_, p)| p)
+            .collect()
+    }
+
+    fn machine(&self, printer: &str) -> Result<dt_eval::Machine, Vec<dt_eval::Diag>> {
+        dt_eval::printer_machine(printer, self.home.as_deref())
+    }
+
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a probe where an inventory that does not read counts as none here; the snapshot says what is wrong with it"
+    )]
+    fn shelf(&self) -> Option<dt_doc::inventory::Inventory> {
+        self.home
+            .as_deref()
+            .and_then(|h| dt_print::inventory::load(h).ok().flatten())
+            .map(|l| l.inventory)
+    }
+
+    fn scene_memo(&self) -> &dt_service::scene_read::SceneMemo {
+        &self.scene_checks
+    }
+}
+
+impl dt_service::list_calls::ListHost for Shared {
+    fn path_of(&self, id: &str) -> Option<String> {
+        Self::path_of(self, id)
+    }
+
+    fn list_changed(&self, path: &str) {
+        plates::again(self, &tile_id(path));
+    }
+
+    fn scene_notes(&self, id: &str) -> Vec<dt_service::scene::Note> {
+        self.owner
+            .ask(|r| owner::Command::SceneNotes(id.to_owned(), r))
+    }
+}
+
 impl dt_service::target_calls::TargetHost for Shared {
     fn set_target(
         &self,
@@ -434,7 +482,7 @@ impl Shared {
             sketch_seq: std::sync::atomic::AtomicU64::new(0),
             build_caches: Mutex::new(VecDeque::new()),
             store: None,
-            scene_checks: Mutex::new(BTreeMap::new()),
+            scene_checks: dt_service::scene_read::SceneMemo::default(),
             docs: docs::Docs::telling(owner, Arc::clone(&storage)),
             storage,
         };

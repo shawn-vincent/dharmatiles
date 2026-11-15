@@ -12,12 +12,10 @@ use std::hash::{BuildHasher, Hasher};
 
 use serde::{Deserialize, Serialize};
 
-use super::Shared;
-use super::scene::{SceneJson, ScenePiece};
+use crate::scene::{SceneJson, ScenePiece};
 
 /// A wish for a place: the point, in squares of the piece's own system.
-#[derive(Deserialize, Serialize, Clone, Copy, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Deserialize, Serialize, Clone, Copy, Debug, ts_rs::TS)]
 #[serde(deny_unknown_fields)]
 pub struct Near {
     pub x: f64,
@@ -25,8 +23,7 @@ pub struct Near {
 }
 
 /// What a new piece's seed is to be when none is given.
-#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq, ts_rs::TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum SeedWord {
     /// One nobody owns and the map does not use.
@@ -37,7 +34,7 @@ pub enum SeedWord {
 
 /// What a piece takes up of the map: its size, its square and the height it stands at.
 #[derive(Clone, Copy)]
-pub(super) struct Geom {
+pub struct Geom {
     pub w: f64,
     pub d: f64,
     pub sq: f64,
@@ -45,7 +42,7 @@ pub(super) struct Geom {
 }
 
 impl Geom {
-    pub(super) fn of(p: &ScenePiece) -> Self {
+    pub fn of(p: &ScenePiece) -> Self {
         Self {
             w: p.size[0],
             d: p.size[1],
@@ -73,8 +70,9 @@ fn overlaps(a: [f64; 4], b: [f64; 4]) -> bool {
 }
 
 /// Settles intents against one map, in the order the edit asks.
-pub(super) struct Resolver<'a> {
-    shared: &'a Shared,
+pub struct Resolver {
+    /// What the user owns, when an inventory exists and reads.
+    shelf: Option<dt_doc::inventory::Inventory>,
     scene: SceneJson,
     /// The footprints taken, with the height each stands at: the pieces placed (but those the edit moves) and those it placed.
     taken: Vec<(f64, [f64; 4])>,
@@ -84,9 +82,14 @@ pub(super) struct Resolver<'a> {
     pub shifted: usize,
 }
 
-impl<'a> Resolver<'a> {
+impl Resolver {
     /// `leave`: the pieces this edit moves, which do not stand in the way of their own new places.
-    pub(super) fn new(shared: &'a Shared, scene: SceneJson, leave: &[&str]) -> Self {
+    #[must_use]
+    pub fn new(
+        shelf: Option<dt_doc::inventory::Inventory>,
+        scene: SceneJson,
+        leave: &[&str],
+    ) -> Self {
         let taken = scene
             .pieces
             .iter()
@@ -97,7 +100,7 @@ impl<'a> Resolver<'a> {
             })
             .collect();
         Self {
-            shared,
+            shelf,
             scene,
             taken,
             given: BTreeMap::new(),
@@ -105,11 +108,11 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    pub(super) fn scene(&self) -> &SceneJson {
+    pub fn scene(&self) -> &SceneJson {
         &self.scene
     }
 
-    pub(super) fn piece(&self, id: &str) -> Result<&ScenePiece, String> {
+    pub fn piece(&self, id: &str) -> Result<&ScenePiece, String> {
         self.scene
             .pieces
             .iter()
@@ -128,7 +131,7 @@ impl<'a> Resolver<'a> {
     ///
     /// # Errors
     /// There is no free place within 40 squares.
-    pub(super) fn place(&mut self, g: &Geom, rot: i64, want: Near) -> Result<(f64, f64), String> {
+    pub fn place(&mut self, g: &Geom, rot: i64, want: Near) -> Result<(f64, f64), String> {
         let boxat = |x: f64, y: f64| footprint([x * g.sq, y * g.sq], g, rot);
         let found = if self.clash(g, boxat(want.x, want.y)) {
             let mut found = None;
@@ -165,17 +168,9 @@ impl<'a> Resolver<'a> {
     }
 
     /// The seeds you own of this tile in this system and colour mode.
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "permitted silence: a probe where an inventory that does not read owns nothing here; the snapshot reports what is wrong with it"
-    )]
     fn owned(&self, canon: &str, system: dt_lang::System, colour: &str) -> BTreeSet<u64> {
         use dt_doc::inventory::Colour;
-        let Some(home) = self.shared.home.as_deref() else {
-            return BTreeSet::new();
-        };
-        // an inventory that does not read owns nothing here; the snapshot says what is wrong with it
-        let Some(l) = dt_print::inventory::load(home).ok().flatten() else {
+        let Some(l) = &self.shelf else {
             return BTreeSet::new();
         };
         let colour = if colour == "multi" {
@@ -183,8 +178,7 @@ impl<'a> Resolver<'a> {
         } else {
             Colour::Single
         };
-        l.inventory
-            .pieces()
+        l.pieces()
             .iter()
             .filter(|p| {
                 p.have > 0 && p.id.tile == canon && p.id.system == system && p.id.colour == colour
@@ -198,7 +192,7 @@ impl<'a> Resolver<'a> {
     ///
     /// # Errors
     /// None was found in a thousand tries.
-    pub(super) fn fresh(
+    pub fn fresh(
         &mut self,
         canon: &str,
         system: dt_lang::System,
@@ -227,7 +221,7 @@ impl<'a> Resolver<'a> {
 
     /// Does this tile in this system have a seed you own, or a piece on the map?  (A new piece of it then needs a fresh one.)
     /// Gives the map's piece's seed when there is one.
-    pub(super) fn taken_seed(
+    pub fn taken_seed(
         &self,
         canon: &str,
         system: dt_lang::System,
@@ -262,7 +256,7 @@ fn random() -> u64 {
 }
 
 /// `(2sq, 1.5sq)`: a place as the document writes it, in the piece's own squares.
-pub(super) fn at_word(x: f64, y: f64) -> String {
+pub fn at_word(x: f64, y: f64) -> String {
     let num = |v: f64| format!("{}", (v * 1000.0).round() / 1000.0);
     format!("({}sq, {}sq)", num(x), num(y))
 }
@@ -270,7 +264,7 @@ pub(super) fn at_word(x: f64, y: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preview::scene::{HeightName, SceneJson};
+    use crate::scene::{HeightName, SceneJson};
 
     fn piece(id: &str, at: Option<[f64; 2]>, size: [f64; 2], bottom: f64, seed: u64) -> ScenePiece {
         ScenePiece {
@@ -332,9 +326,8 @@ mod tests {
 
     #[test]
     fn the_nearest_free_place_is_the_wish_when_it_is_free_else_the_nearest_square_that_is() {
-        let shared = Shared::new(&[]);
         let a = piece("a", Some([0.0, 0.0]), [35.0, 35.0], 0.0, 1);
-        let mut rs = Resolver::new(&shared, scene(vec![a]), &[]);
+        let mut rs = Resolver::new(None, scene(vec![a]), &[]);
         assert_eq!(
             rs.place(&G, 0, Near { x: 3.0, y: 0.0 }).unwrap(),
             (3.0, 0.0)
@@ -355,9 +348,8 @@ mod tests {
 
     #[test]
     fn a_piece_at_another_height_is_not_in_the_way_and_a_turned_one_is_searched_turned() {
-        let shared = Shared::new(&[]);
         let a = piece("a", Some([0.0, 0.0]), [35.0, 35.0], 0.0, 1);
-        let mut rs = Resolver::new(&shared, scene(vec![a]), &[]);
+        let mut rs = Resolver::new(None, scene(vec![a]), &[]);
         let high = Geom { bottom: 33.0, ..G };
         assert_eq!(
             rs.place(&high, 0, Near { x: 0.0, y: 0.0 }).unwrap(),
@@ -366,7 +358,7 @@ mod tests {
         );
         // a 2x1 turned stands 1x2: beside a wall at (1, 0) it fits at (0, 0)
         let wall = piece("w", Some([35.0, 0.0]), [35.0, 35.0], 0.0, 2);
-        let mut rs = Resolver::new(&shared, scene(vec![wall]), &[]);
+        let mut rs = Resolver::new(None, scene(vec![wall]), &[]);
         let long = Geom {
             w: 70.0,
             d: 35.0,
@@ -378,7 +370,7 @@ mod tests {
         );
         // the pieces an edit moves do not stand in the way of their own new places
         let mover = piece("m", Some([0.0, 0.0]), [35.0, 35.0], 0.0, 3);
-        let mut rs = Resolver::new(&shared, scene(vec![mover]), &["m"]);
+        let mut rs = Resolver::new(None, scene(vec![mover]), &["m"]);
         assert_eq!(
             rs.place(&G, 0, Near { x: 0.0, y: 0.0 }).unwrap(),
             (0.0, 0.0)
@@ -387,9 +379,8 @@ mod tests {
 
     #[test]
     fn a_fresh_seed_is_not_the_tiles_own_not_on_the_map_and_not_repeated() {
-        let shared = Shared::new(&[]);
         let a = piece("a", Some([0.0, 0.0]), [35.0, 35.0], 0.0, 4);
-        let mut rs = Resolver::new(&shared, scene(vec![a]), &[]);
+        let mut rs = Resolver::new(None, scene(vec![a]), &[]);
         let mut seen = BTreeSet::new();
         for _ in 0..200 {
             let s = rs

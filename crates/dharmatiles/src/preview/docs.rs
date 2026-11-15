@@ -47,14 +47,6 @@ impl Docs {
         self.0.read(path)
     }
 
-    /// The revision of `path` now (what a reply that wrote nothing says).
-    ///
-    /// # Errors
-    /// The reply to send: the file cannot be read.
-    pub(super) fn rev(&self, path: &str) -> Result<u64, Reply> {
-        self.0.rev(path).map_err(super::api::refusal_reply)
-    }
-
     /// Edit `path` under its lock (see [`dt_service::docs::Docs::edit`]).
     ///
     /// # Errors

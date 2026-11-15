@@ -130,3 +130,31 @@ test('the folder, trash and target calls are the service\'s verbs, with their re
   assert.deepEqual(await said(host.deleteTile('t')), ['deleteTile', 't', {}]);
   assert.deepEqual(await said(host.setTarget({ system: 'ol' })), ['setTarget', '', { system: 'ol' }]);
 });
+
+test('the print list and map calls are the service\'s verbs, with the request the page writes and no tile of their own', async () => {
+  const edited = { list: 'l', path: 'p.dmap', before: null, text: 't', docRev: 2, scene: null };
+  const ok = (body) => () => ({ ok: true, json: JSON.stringify(body), events: '[]' });
+  const answers = Object.fromEntries(['listsCount', 'listsRemove', 'listsRestore', 'mapsSet', 'mapsRemove', 'mapsUnpin', 'mapsUnpinAll'].map((v) => [v, ok(edited)]));
+  const piece = { ...edited, id: 'p1', shifted: 0, seed: null };
+  const engine = fakeEngine({
+    ...answers,
+    listsNew: ok({ path: 'p.dmap', id: null, tile: null }),
+    listsAdd: ok({ ...edited, count: 1, made: false }),
+    mapsAdd: ok(piece), mapsDup: ok(piece), mapsPin: ok(piece), mapsBatch: ok({ ...edited, changed: 1, shifted: 0 }),
+  });
+  const host = workerHost(undefined, engine);
+  const said = async (call) => { const r = await call; assert.equal(r.status, 200); const m = engine.calls.at(-1); return [m.verb, m.tile, JSON.parse(m.request)]; };
+  assert.deepEqual(await said(host.listsNew({ name: 'x', map: true })), ['listsNew', '', { name: 'x', map: true }]);
+  assert.deepEqual(await said(host.listsAdd({ tile: 't', list: 'l', docRev: 1 })), ['listsAdd', '', { tile: 't', list: 'l', docRev: 1 }]);
+  assert.deepEqual(await said(host.listsCount({ list: 'l', id: 'p1', count: 2, docRev: 2 })), ['listsCount', '', { list: 'l', id: 'p1', count: 2, docRev: 2 }]);
+  assert.deepEqual(await said(host.listsRemove({ list: 'l', id: 'p1', docRev: 2 })), ['listsRemove', '', { list: 'l', id: 'p1', docRev: 2 }]);
+  assert.deepEqual(await said(host.listsRestore({ list: 'l', text: 't', docRev: 2 })), ['listsRestore', '', { list: 'l', text: 't', docRev: 2 }]);
+  assert.deepEqual(await said(host.mapsAdd({ list: 'l', tile: 't', at: '(0sq, 0sq)', docRev: 2 })), ['mapsAdd', '', { list: 'l', tile: 't', at: '(0sq, 0sq)', docRev: 2 }]);
+  assert.equal((await said(host.mapsSet({ list: 'l', id: 'p1', set: { rot: 90 }, docRev: 2 })))[0], 'mapsSet');
+  assert.equal((await said(host.mapsBatch({ list: 'l', edits: [], docRev: 2 })))[0], 'mapsBatch');
+  assert.equal((await said(host.mapsDup({ list: 'l', id: 'p1', at: '(1sq, 0sq)', docRev: 2 })))[0], 'mapsDup');
+  assert.equal((await said(host.mapsRemove({ list: 'l', id: 'p1', docRev: 2 })))[0], 'mapsRemove');
+  assert.equal((await said(host.mapsPin({ list: 'l', id: 'p1', plate: 1, x: 1, y: 1, docRev: 2 })))[0], 'mapsPin');
+  assert.equal((await said(host.mapsUnpin({ list: 'l', id: 'p1', docRev: 2 })))[0], 'mapsUnpin');
+  assert.equal((await said(host.mapsUnpinAll({ list: 'l', docRev: 2 })))[0], 'mapsUnpinAll');
+});

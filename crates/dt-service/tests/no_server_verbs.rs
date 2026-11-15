@@ -72,6 +72,66 @@ struct World {
     options: Options,
     /// What `moved` was told: (from, to, a folder).
     moves: RefCell<Vec<(std::path::PathBuf, std::path::PathBuf, bool)>>,
+    tiles: Tiles,
+    /// What a map's reading remembers.
+    memo: dt_service::scene_read::SceneMemo,
+    /// The lists whose plates were asked to be planned again.
+    planned: RefCell<Vec<String>>,
+}
+
+/// A map's pieces' tiles: the store, then the library from the checkout.
+struct Tiles(Arc<MemStorage>);
+
+impl Source for Tiles {
+    fn read(&self, path: &str) -> Result<String, String> {
+        Mem(&self.0).read(path)
+    }
+}
+
+impl dt_service::scene_read::SceneHost for World {
+    fn tiles_home(&self) -> Option<std::path::PathBuf> {
+        Some("/memory/My tiles".into())
+    }
+
+    fn tile_source(&self) -> &dyn Source {
+        &self.tiles
+    }
+
+    fn tile_paths(&self) -> Vec<String> {
+        vec![PATH.to_owned()]
+    }
+
+    fn machine(&self, printer: &str) -> Result<dt_eval::Machine, Vec<dt_eval::Diag>> {
+        dt_eval::printer_machine(printer, None)
+    }
+
+    fn shelf(&self) -> Option<dt_doc::inventory::Inventory> {
+        None
+    }
+
+    fn scene_memo(&self) -> &dt_service::scene_read::SceneMemo {
+        &self.memo
+    }
+}
+
+impl dt_service::list_calls::ListHost for World {
+    fn path_of(&self, id: &str) -> Option<String> {
+        // the lists this test made are listed by their file: the id is the path's
+        self.mem
+            .list(Path::new("/memory/My tiles"))
+            .expect("the folder lists")
+            .into_iter()
+            .map(|e| e.path.to_string_lossy().into_owned())
+            .find(|p| tile_id(p) == id)
+    }
+
+    fn list_changed(&self, path: &str) {
+        self.planned.borrow_mut().push(path.to_owned());
+    }
+
+    fn scene_notes(&self, _: &str) -> Vec<dt_service::scene::Note> {
+        Vec::new()
+    }
 }
 
 /// The tile's own file from the store; everything else (`lib:`) from the library.
@@ -299,10 +359,13 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
     );
     let w = World {
         docs: Docs::new(mem.clone(), None),
+        tiles: Tiles(mem.clone()),
         mem,
         core: RefCell::new(core),
         options: Options::default(),
         moves: RefCell::new(Vec::new()),
+        memo: dt_service::scene_read::SceneMemo::default(),
+        planned: RefCell::new(Vec::new()),
     };
     let table = table();
     let id = tile_id(PATH);
@@ -467,10 +530,13 @@ fn world() -> World {
     );
     World {
         docs: Docs::new(mem.clone(), None),
+        tiles: Tiles(mem.clone()),
         mem,
         core: RefCell::new(core),
         options: Options::default(),
         moves: RefCell::new(Vec::new()),
+        memo: dt_service::scene_read::SceneMemo::default(),
+        planned: RefCell::new(Vec::new()),
     }
 }
 
@@ -783,4 +849,251 @@ fn the_folder_and_tile_verbs_change_the_places_with_no_server_and_no_disk() {
             Status::BadRequest
         );
     }
+}
+
+#[test]
+fn print_lists_and_maps_are_edited_by_verb_with_no_server_and_no_disk() {
+    use dt_service::list_calls::{
+        self, ListsAddReq, ListsCountReq, ListsNewReq, ListsRemoveReq, ListsRestoreReq,
+    };
+    use dt_service::map_calls::{
+        self, MapsAddReq, MapsPieceReq, MapsPinReq, MapsSetReq, PieceWords,
+    };
+    let w = world();
+    let tile = tile_id(PATH);
+
+    // a new print list is made in My tiles, never over a file
+    let made = list_calls::new_list(
+        &w,
+        ListsNewReq {
+            name: Some("Mine".to_owned()),
+            root: None,
+            dir: None,
+            map: None,
+        },
+    )
+    .expect("a list is made");
+    assert_eq!(made.path, "/memory/My tiles/Mine.dmap");
+    let again = list_calls::new_list(
+        &w,
+        ListsNewReq {
+            name: Some("Mine".to_owned()),
+            root: None,
+            dir: None,
+            map: None,
+        },
+    )
+    .expect("a second list of the name takes another");
+    assert_eq!(again.path, "/memory/My tiles/Mine 2.dmap");
+    let list = tile_id(&made.path);
+
+    // a tile put in it: one piece of the library's tile, and again raises the count
+    let one = list_calls::add(
+        &w,
+        ListsAddReq {
+            tile: tile.clone(),
+            list: Some(list.clone()),
+            seed: None,
+            system: None,
+            doc_rev: None,
+        },
+    )
+    .expect("the tile is added");
+    assert_eq!((one.count, one.made), (1, false));
+    assert!(one.edited.text.contains("home:b"), "{}", one.edited.text);
+    let two = list_calls::add(
+        &w,
+        ListsAddReq {
+            tile: tile.clone(),
+            list: Some(list.clone()),
+            seed: None,
+            system: None,
+            doc_rev: Some(one.edited.doc_rev),
+        },
+    )
+    .expect("the same piece again");
+    assert_eq!(two.count, 2);
+    assert!(
+        w.planned.borrow().contains(&made.path),
+        "the plates are planned again"
+    );
+
+    // a count, edited against the revision the page saw; the id the first edit wrote is named
+    let counted = list_calls::set_count(
+        &w,
+        ListsCountReq {
+            list: list.clone(),
+            id: "p1".to_owned(),
+            count: 5,
+            doc_rev: two.edited.doc_rev,
+        },
+    )
+    .expect("the count is set");
+    assert!(counted.text.contains("count=5"), "{}", counted.text);
+    assert!(
+        counted
+            .before
+            .as_deref()
+            .is_some_and(|b| b.contains("count=2"))
+    );
+    // an older revision is a conflict that names the file as it is now, with the scene
+    let stale = list_calls::set_count(
+        &w,
+        ListsCountReq {
+            list: list.clone(),
+            id: "p1".to_owned(),
+            count: 9,
+            doc_rev: two.edited.doc_rev,
+        },
+    )
+    .expect_err("the file moved on");
+    assert_eq!(stale.status, Status::Conflict);
+    let c = stale.conflict.expect("the conflict carries the file");
+    assert_eq!(c.doc_rev, counted.doc_rev);
+    assert!(c.scene.is_some(), "and the scene as it reads now");
+    // Undo: the text written back, if the file is still at the revision
+    let undone = list_calls::restore(
+        &w,
+        ListsRestoreReq {
+            list: list.clone(),
+            text: counted.before.clone().expect("a before"),
+            doc_rev: counted.doc_rev,
+        },
+    )
+    .expect("the change is taken back");
+    assert!(undone.text.contains("count=2"));
+    let removed = list_calls::remove(
+        &w,
+        ListsRemoveReq {
+            list: list.clone(),
+            id: "p1".to_owned(),
+            doc_rev: undone.doc_rev,
+        },
+    )
+    .expect("the piece is removed");
+    assert!(!removed.text.contains("home:b"), "{}", removed.text);
+    let nowhere = list_calls::remove(
+        &w,
+        ListsRemoveReq {
+            list: "nope".to_owned(),
+            id: "p1".to_owned(),
+            doc_rev: 1,
+        },
+    )
+    .expect_err("no such list");
+    assert_eq!(nowhere.status, Status::NotFound);
+    // a text that does not read as a list is refused with its mistakes, and nothing is written
+    let bad = list_calls::restore(
+        &w,
+        ListsRestoreReq {
+            list: list.clone(),
+            text: "not a list".to_owned(),
+            doc_rev: removed.doc_rev,
+        },
+    )
+    .expect_err("it does not read");
+    assert_eq!(bad.status, Status::Unprocessable);
+    assert!(bad.errors.is_some());
+
+    // a map: a grid, and a piece placed on it, read as a scene with no build
+    let map = list_calls::new_list(
+        &w,
+        ListsNewReq {
+            name: Some("Map".to_owned()),
+            root: None,
+            dir: None,
+            map: Some(true),
+        },
+    )
+    .expect("a map is made");
+    let map_id = tile_id(&map.path);
+    let (_, rev) = w.docs.read(&map.path).expect("the map reads");
+    let placed = map_calls::add(
+        &w,
+        MapsAddReq {
+            list: map_id.clone(),
+            tile: tile.clone(),
+            at: Some("(1sq, 0sq)".to_owned()),
+            near: None,
+            rot: None,
+            seed: None,
+            seed_word: None,
+            system: None,
+            doc_rev: rev,
+        },
+    )
+    .expect("the piece is placed");
+    let scene = placed.edited.scene.as_ref().expect("the scene is read");
+    assert!(scene.map && scene.placed == 1, "{scene:?}");
+    assert_eq!(scene.pieces[0].tile, "home:b");
+    assert_eq!(scene.pieces[0].at, Some([35.0, 0.0]));
+    assert_eq!(scene.pieces[0].error, None);
+    // the nearest free square: the wish is taken, so it goes beside
+    let (_, rev) = w.docs.read(&map.path).expect("the map reads");
+    let near = map_calls::add(
+        &w,
+        MapsAddReq {
+            list: map_id.clone(),
+            tile: tile.clone(),
+            at: None,
+            near: Some(dt_service::placing::Near { x: 1.0, y: 0.0 }),
+            rot: None,
+            seed: None,
+            seed_word: None,
+            system: None,
+            doc_rev: rev,
+        },
+    )
+    .expect("the second piece is placed near");
+    assert_eq!(near.shifted, 1);
+    // a piece's words are set, and it is pinned to a plate
+    let set = map_calls::set(
+        &w,
+        MapsSetReq {
+            list: map_id.clone(),
+            id: placed.id.clone(),
+            set: PieceWords {
+                rot: Some(Some(90)),
+                ..PieceWords::default()
+            },
+            doc_rev: near.edited.doc_rev,
+        },
+    )
+    .expect("the piece is turned");
+    assert!(set.text.contains("rot=90"), "{}", set.text);
+    let pinned = map_calls::pin(
+        &w,
+        MapsPinReq {
+            list: map_id.clone(),
+            id: placed.id.clone(),
+            plate: 1,
+            x: 10.04,
+            y: 20.0,
+            turn: None,
+            doc_rev: set.doc_rev,
+        },
+    )
+    .expect("the piece is pinned");
+    assert!(pinned.edited.text.contains("pin"), "{}", pinned.edited.text);
+    let unpinned = map_calls::unpin(
+        &w,
+        MapsPieceReq {
+            list: map_id.clone(),
+            id: placed.id,
+            doc_rev: pinned.edited.doc_rev,
+        },
+    )
+    .expect("the pin is taken off");
+    assert!(!unpinned.text.contains("pin"), "{}", unpinned.text);
+    // a piece that is not there, and a wish that is both places
+    let no_piece = map_calls::remove(
+        &w,
+        MapsPieceReq {
+            list: map_id,
+            id: "zz".to_owned(),
+            doc_rev: unpinned.doc_rev,
+        },
+    )
+    .expect_err("no such piece");
+    assert_eq!(no_piece.status, Status::BadRequest);
 }

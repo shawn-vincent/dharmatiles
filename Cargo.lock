@@ -554,6 +554,7 @@ dependencies = [
  "dt-testkit",
  "dt-value",
  "kdl",
+ "libm",
  "miette",
  "serde",
  "serde_json",

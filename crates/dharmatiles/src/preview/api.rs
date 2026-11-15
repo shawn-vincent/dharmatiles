@@ -251,6 +251,7 @@ pub(super) fn refusal_reply(r: dt_service::call::Refusal) -> Reply {
         if let Some(c) = r.conflict {
             b.text = Some(c.text);
             b.doc_rev = Some(c.doc_rev);
+            b.scene = c.scene.map(|s| *s);
         }
         b.errors = r.errors.map(Vec::from);
         b.superseded = superseded;

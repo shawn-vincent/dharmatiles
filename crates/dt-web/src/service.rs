@@ -34,6 +34,15 @@ use dt_service::folder_calls::{
     TRASH_TILE, TileMoveReq, TrashUndoReq, Trashed, UNDO_TRASH,
 };
 use dt_service::host::{Alarm, Host};
+use dt_service::list_calls::{
+    self, LISTS_ADD, LISTS_COUNT, LISTS_NEW, LISTS_REMOVE, LISTS_RESTORE, ListEdited, ListHost,
+    ListsAddReq, ListsAddRes, ListsCountReq, ListsNewReq, ListsRemoveReq, ListsRestoreReq,
+};
+use dt_service::map_calls::{
+    self, MAPS_ADD, MAPS_BATCH, MAPS_DUP, MAPS_PIN, MAPS_REMOVE, MAPS_SET, MAPS_UNPIN,
+    MAPS_UNPIN_ALL, MapsAddReq, MapsBatchReq, MapsBatched, MapsDupReq, MapsListReq, MapsPieceReq,
+    MapsPieced, MapsPinReq, MapsSetReq,
+};
 use dt_service::message::{Message, Scope};
 use dt_service::owner::{Command, Core, Outside, Setup, Subscribed};
 use dt_service::patch::Patch;
@@ -47,6 +56,7 @@ use dt_service::read_calls::{
     TokensRes,
 };
 use dt_service::roots::{Role, Root, RootKind};
+use dt_service::scene_read::{SceneHost, SceneMemo};
 use dt_service::storage::{MemStorage, Storage};
 use dt_service::target_calls::{self, SET_TARGET, TargetHost, TargetReq, TargetRes};
 use dt_service::tile::{Slot, tile_id};
@@ -232,6 +242,10 @@ struct Inner {
     built: RefCell<BTreeMap<String, BuiltRes>>,
     ticket: Cell<u64>,
     seq: Cell<u64>,
+    /// Where a map's pieces' tiles are read from: the store, then the library.
+    tiles: StoreAndLib,
+    /// What a reading of a map remembers between readings.
+    memo: SceneMemo,
 }
 
 /// What one call runs on: the worker, the tile it is about and the options it reads it with.
@@ -253,6 +267,31 @@ impl Source for Lib {
                 .ok_or_else(|| format!("the page's library has no `{path}`"))
         })
     }
+}
+
+/// A path of the store as the page's engine reads it, and every `lib:` path from the library: what a map's pieces name.
+struct StoreAndLib(Arc<MemStorage>);
+
+impl Source for StoreAndLib {
+    fn read(&self, path: &str) -> Result<String, String> {
+        if path.starts_with(dt_eval::LIB) {
+            return Lib.read(path);
+        }
+        self.0
+            .read_text(Path::new(path))
+            .map_err(|e| format!("cannot read `{path}`: {e}"))
+    }
+}
+
+/// The library's printer profiles by name (`default`, `bambu/x1c`), as the page handed the library over.
+fn library_printers() -> Vec<String> {
+    LIBRARY.with(|l| {
+        l.borrow()
+            .keys()
+            .filter_map(|k| k.strip_prefix("lib:printers/")?.strip_suffix(".dtile"))
+            .map(str::to_owned)
+            .collect()
+    })
 }
 
 /// The document is `tile.dtile` ([`MAIN`]); every other path is a library file, as the page's engine reads them.
@@ -368,6 +407,27 @@ impl Inner {
         };
         edit(Patch::Begin);
         let files = BTreeMap::from([(facts.path.clone(), None)]);
+        // a print list or the inventory is not a tile: planning plates is not in the browser editor yet, and the page is told so
+        // (never a tile's build of a document that is not one)
+        if list_calls::is_plates(&facts.path) || list_calls::is_inventory(&facts.path) {
+            let what = if list_calls::is_plates(&facts.path) {
+                "a print list's plates are"
+            } else {
+                "the inventory is"
+            };
+            edit(Patch::BuildFailed {
+                errors: dt_eval::mistakes(&[dt_eval::Diag::plain(
+                    dt_lang::codes::PLATES,
+                    format!("{what} not planned in the browser editor yet"),
+                )
+                .help(
+                    "the list can be edited here (its tiles, counts and settings); laying it out needs the program (dharmatiles preview)",
+                )]),
+                failure: None,
+                files,
+            });
+            return Ok(());
+        }
         // a library tile is read from the library the page handed over, and has no revision to edit against
         let (text, doc_rev) = if facts.path.starts_with(dt_eval::LIB) {
             (
@@ -636,6 +696,68 @@ impl PlaceHost for Ctx {
     }
 }
 
+impl SceneHost for Ctx {
+    fn tiles_home(&self) -> Option<std::path::PathBuf> {
+        Some(std::path::PathBuf::from(FOLDER))
+    }
+
+    fn tile_source(&self) -> &dyn Source {
+        &self.inner.tiles
+    }
+
+    fn tile_paths(&self) -> Vec<String> {
+        self.inner
+            .ask(Command::Paths)
+            .expect("the owner answers paths in the same step")
+            .into_iter()
+            .map(|(_, p)| p)
+            .collect()
+    }
+
+    fn machine(&self, printer: &str) -> Result<dt_eval::Machine, Vec<dt_eval::Diag>> {
+        dt_eval::printer_machine_in(
+            &dt_eval::InSource {
+                source: &Lib,
+                names: &library_printers(),
+            },
+            printer,
+        )
+    }
+
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a probe where an inventory that is not there or does not read counts as none here; the snapshot says what is wrong with it"
+    )]
+    fn shelf(&self) -> Option<dt_doc::inventory::Inventory> {
+        let path = Path::new(FOLDER).join(dt_doc::inventory::FILE);
+        let text = self.inner.storage.read_text(&path).ok()?;
+        dt_doc::inventory::decode(&path.to_string_lossy(), &text).ok()
+    }
+
+    fn scene_memo(&self) -> &SceneMemo {
+        &self.inner.memo
+    }
+}
+
+impl ListHost for Ctx {
+    fn path_of(&self, id: &str) -> Option<String> {
+        self.inner
+            .ask(|r| Command::Facts(id.to_owned(), r))
+            .expect("the owner answers facts in the same step")
+            .map(|f| f.path)
+    }
+
+    fn list_changed(&self, _path: &str) {
+        // the plates are not planned in the browser yet: a list's plan is not on the stream
+    }
+
+    fn scene_notes(&self, id: &str) -> Vec<dt_service::scene::Note> {
+        self.inner
+            .ask(|r| Command::SceneNotes(id.to_owned(), r))
+            .expect("the owner answers scene notes in the same step")
+    }
+}
+
 impl TargetHost for Ctx {
     fn set_target(
         &self,
@@ -700,6 +822,12 @@ fn options_in(source: &dyn Source, system: System) -> Result<Options, Refusal> {
 }
 
 fn check(ctx: &Ctx, req: TextReq) -> Result<tile_calls::CheckRes, Refusal> {
+    // a print list or the inventory is read by its own decoder: its mistakes, at their text
+    if req.file.is_none()
+        && (list_calls::is_plates(&ctx.tile) || list_calls::is_inventory(&ctx.tile))
+    {
+        return Ok(list_calls::check_text(ctx, &ctx.tile, &req.text));
+    }
     tile_calls::check(ctx, &Doc { text: &req.text }, MAIN)
         .map_err(|e| Refusal::failure(dt_service::call::Status::Internal, e.0))
 }
@@ -816,6 +944,58 @@ fn set_target(ctx: &Ctx, req: TargetReq) -> Result<TargetRes, Refusal> {
     target_calls::set_target(ctx, req)
 }
 
+fn lists_new(ctx: &Ctx, req: ListsNewReq) -> Result<Listed, Refusal> {
+    list_calls::new_list(ctx, req)
+}
+
+fn lists_add(ctx: &Ctx, req: ListsAddReq) -> Result<ListsAddRes, Refusal> {
+    list_calls::add(ctx, req)
+}
+
+fn lists_count(ctx: &Ctx, req: ListsCountReq) -> Result<ListEdited, Refusal> {
+    list_calls::set_count(ctx, req)
+}
+
+fn lists_remove(ctx: &Ctx, req: ListsRemoveReq) -> Result<ListEdited, Refusal> {
+    list_calls::remove(ctx, req)
+}
+
+fn lists_restore(ctx: &Ctx, req: ListsRestoreReq) -> Result<ListEdited, Refusal> {
+    list_calls::restore(ctx, req)
+}
+
+fn maps_add(ctx: &Ctx, req: MapsAddReq) -> Result<MapsPieced, Refusal> {
+    map_calls::add(ctx, req)
+}
+
+fn maps_set(ctx: &Ctx, req: MapsSetReq) -> Result<ListEdited, Refusal> {
+    map_calls::set(ctx, req)
+}
+
+fn maps_batch(ctx: &Ctx, req: MapsBatchReq) -> Result<MapsBatched, Refusal> {
+    map_calls::batch(ctx, req)
+}
+
+fn maps_dup(ctx: &Ctx, req: MapsDupReq) -> Result<MapsPieced, Refusal> {
+    map_calls::dup(ctx, req)
+}
+
+fn maps_remove(ctx: &Ctx, req: MapsPieceReq) -> Result<ListEdited, Refusal> {
+    map_calls::remove(ctx, req)
+}
+
+fn maps_pin(ctx: &Ctx, req: MapsPinReq) -> Result<MapsPieced, Refusal> {
+    map_calls::pin(ctx, req)
+}
+
+fn maps_unpin(ctx: &Ctx, req: MapsPieceReq) -> Result<ListEdited, Refusal> {
+    map_calls::unpin(ctx, req)
+}
+
+fn maps_unpin_all(ctx: &Ctx, req: MapsListReq) -> Result<ListEdited, Refusal> {
+    map_calls::unpin_all(ctx, req)
+}
+
 fn text(ctx: &Ctx, req: FileReq) -> Result<Option<TextRes>, Refusal> {
     read_calls::text(ctx, &ctx.tile_ref(), req.file.as_deref())
 }
@@ -851,6 +1031,19 @@ fn table() -> Table<Ctx, Refusal> {
         .with(&RENAME, rename)
         .with(&DELETE_TILE, delete_tile)
         .with(&SET_TARGET, set_target)
+        .with(&LISTS_NEW, lists_new)
+        .with(&LISTS_ADD, lists_add)
+        .with(&LISTS_COUNT, lists_count)
+        .with(&LISTS_REMOVE, lists_remove)
+        .with(&LISTS_RESTORE, lists_restore)
+        .with(&MAPS_ADD, maps_add)
+        .with(&MAPS_SET, maps_set)
+        .with(&MAPS_BATCH, maps_batch)
+        .with(&MAPS_DUP, maps_dup)
+        .with(&MAPS_REMOVE, maps_remove)
+        .with(&MAPS_PIN, maps_pin)
+        .with(&MAPS_UNPIN, maps_unpin)
+        .with(&MAPS_UNPIN_ALL, maps_unpin_all)
 }
 
 /// What a call answered: JSON, or (a draft, a step) the page's bytes.
@@ -967,6 +1160,8 @@ impl Service {
         let docs = dt_service::docs::Docs::new(storage.clone(), None);
         let service = Self {
             inner: Rc::new(Inner {
+                tiles: StoreAndLib(storage.clone()),
+                memo: SceneMemo::default(),
                 storage,
                 host,
                 roots,
@@ -1068,6 +1263,19 @@ impl Service {
             RENAME,
             DELETE_TILE,
             SET_TARGET,
+            LISTS_NEW,
+            LISTS_ADD,
+            LISTS_COUNT,
+            LISTS_REMOVE,
+            LISTS_RESTORE,
+            MAPS_ADD,
+            MAPS_SET,
+            MAPS_BATCH,
+            MAPS_DUP,
+            MAPS_REMOVE,
+            MAPS_PIN,
+            MAPS_UNPIN,
+            MAPS_UNPIN_ALL,
         ]?;
         // the worker host's turn: what the call queued is built now, and the stream says how it went
         self.inner.run_queued()?;

@@ -25,7 +25,7 @@
 import { serverErrorOf } from './server-error.js';
 import { createRequests, SUPERSEDED } from './requests.js';
 import { ROUTES } from './contract.js';
-
+import { WORKER_VERBS, refusalOf } from './worker-calls.js';
 /** @typedef {import('./api').Calls} Calls */
 /** @typedef {import('./api').Reads} Reads */
 /** @template {keyof import('./api').Calls} R @typedef {import('./api').Req<R>} Req */
@@ -504,21 +504,14 @@ export function browserHost(requests = createRequests()) {
 // `workerHost` is `browserHost` with no server: the same methods, answered by the editor's service running in a web worker
 // (js/editor-worker.js: the engine `cargo xtask wasm` makes, with dt-web's `Service`, the same verbs the program answers over
 // HTTP).  A call is its verb and its request as JSON; a refusal comes back as the same status and error body HTTP sends, so
-// the page reads one shape from either host.  What the service does not answer yet (a folder chooser and the places on a disk,
-// the plates, print lists and maps, the inventory, the printers, a printer other than the library's, writing an STL, the
-// tiers' map) is refused in words, by name: never answered empty.
-
-/** The words of a call the browser editor does not answer. @param {string} what */
-const unavailableIn = (what) => `${what} is not in the browser editor yet: it needs the program (dharmatiles preview)`;
+// the page reads one shape from either host.  Which calls the service answers is one table (js/worker-calls.js); a call it does
+// not answer (what only the program can do, or what is not in the worker yet) is refused in words, by name: never answered empty.
 
 /**
  * A refusal the page reads like any other, made here.
  * @param {number} status @param {string} message @returns {Reply<any>}
  */
 const refusedReply = (status, message) => replyOf(status, { error: { kind: 'refused', message, help: null, causes: [], backtrace: '', context: {} } });
-
-/** The verbs the worker's service answers by their HTTP name (the others are refused by `unavailableIn`). */
-const WORKER_VERBS = new Set(['check', 'edit', 'save', 'names', 'tokens', 'checkValue', 'printed', 'printedSet', 'offers', 'newTile', 'mine', 'rename', 'deleteTile', 'newFolder', 'renameFolder', 'trashFolder', 'moveTile', 'duplicateTile', 'trashTile', 'undoTrash', 'setTarget']);
 
 /** @typedef {import('./editor-worker.js').FromWorker} FromWorker */
 /** @typedef {Extract<FromWorker, { id: number, ok: true }>} WorkerAnswer */
@@ -628,7 +621,7 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
   /** @template {keyof Calls} R @param {R} route @param {Req<R>} body @param {string} [id] @returns {Promise<Reply<Res<R>>>} */
   const send = async (route, body, id) => WORKER_VERBS.has(route)
     ? callVerb(route, body, id)
-    : refusedReply(501, unavailableIn(`\`${route}\``));
+    : refusedReply(501, refusalOf(route));
   /** @template {keyof Calls} R @param {R} route @param {Req<R>} body @param {string} [id] @returns {Promise<Reply<Res<R>>>} */
   const call = async (route, body, id) => {
     const key = LATEST[route]?.(body, id);
@@ -649,10 +642,8 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     const r = await serve({ op: 'bytes', verb, tile: id, request: JSON.stringify(body) });
     return 'refused' in r ? r.refused : { status: 200, buffer: bufferOf(/** @type {Uint8Array} */ (r.answer.bytes)) };
   };
-  /** @param {string} what @returns {() => Promise<Reply<any>>} */
-  const no = (what) => async () => refusedReply(501, unavailableIn(what));
-  /** @param {string} what @returns {() => Promise<never>} */
-  const noText = (what) => async () => { throw new Error(unavailableIn(what)); };
+  /** A text call the worker does not answer: it throws the words of its refusal. @param {keyof typeof ROUTES} call @returns {() => Promise<never>} */
+  const noText = (call) => async () => { throw new Error(refusalOf(call)); };
 
   return {
     /** @param {StreamHandlers} handlers */
@@ -673,7 +664,8 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
       if ('refused' in r) throw new Error(`mesh: ${r.refused.error?.message}`, { cause: r.refused.error });
       return r.answer.mesh ? bufferOf(r.answer.mesh) : null;
     },
-    tiersWant: no('the map\'s tiers'),
+    /** @param {Req<'tiersWant'>} body */
+    tiersWant: (body) => call('tiersWant', body),
     async tierResult() { return null; /* no tier is ever announced here, so none is ready */ },
     async fetchSketch() { return null; /* a build here keeps no sketches */ },
     /** @param {string} id */
@@ -731,13 +723,14 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
       console.error(`the page reports: ${body.text}`, body);
       return { status: 200, body: {} };
     },
-    messagesText: noText('the messages as text'),
-    messageText: noText('a message as text'),
-    messageReport: noText('a defect report'),
+    messagesText: noText('messages'),
+    messageText: noText('messages'),
+    messageReport: noText('messagesReport'),
     /** @param {string} name @param {string} size @param {{root: number, dir: string}} [into] */
     newTile: (name, size, into) => call('newTile', { name, size, ...(into ? { root: into.root, dir: into.dir } : {}) }),
-    addPlace: no('adding a folder'),
-    removePlace: no('removing a place'),
+    addPlace: () => call('addPlace', {}),
+    /** @param {number} root */
+    removePlace: (root) => call('removePlace', { root }),
     /** @param {number} root @param {string} dir @param {string} name */
     newFolder: (root, dir, name) => call('newFolder', { root, dir, name }),
     /** @param {number} root @param {string} dir @param {string} name */
@@ -756,31 +749,56 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     edit: (body) => call('edit', body),
     /** @param {Req<'setTarget'>} body */
     setTarget: (body) => call('setTarget', body),
-    printersScan: no('the printers'),
-    printersImport: no('importing a printer'),
-    exportTile: no('writing an STL'),
-    reveal: no('showing a file'),
-    platesShow: no('the plates'),
-    platesSet: no('the plates'),
-    platesExport: no('the plates'),
-    listsNew: no('print lists'),
-    listsAdd: no('print lists'),
-    listsCount: no('print lists'),
-    listsRemove: no('print lists'),
-    listsRestore: no('print lists'),
-    mapsAdd: no('maps'),
-    mapsSet: no('maps'),
-    mapsBatch: no('maps'),
-    mapsDup: no('maps'),
-    mapsRemove: no('maps'),
-    mapsPin: no('maps'),
-    mapsUnpin: no('maps'),
-    mapsUnpinAll: no('maps'),
-    inventoryHave: no('the inventory'),
-    inventoryRecord: no('the inventory'),
-    inventoryGone: no('the inventory'),
-    inventoryRelink: no('the inventory'),
-    inventoryReprint: no('the inventory'),
+    /** @param {string} [slicer] */
+    printersScan: (slicer) => call('printersScan', slicer ? { slicer } : {}),
+    /** @param {Req<'printersImport'>} body */
+    printersImport: (body) => call('printersImport', body),
+    /** @param {string} id @param {Req<'exportTile'>} body */
+    exportTile: (id, body) => call('exportTile', body, id),
+    /** @param {string} path */
+    reveal: (path) => call('reveal', { path }),
+    /** @param {string} list @param {number} plate */
+    platesShow: (list, plate) => call('platesShow', { list, plate }),
+    /** @param {Req<'platesSet'>} body */
+    platesSet: (body) => call('platesSet', body),
+    /** @param {string} list */
+    platesExport: (list) => call('platesExport', { list }),
+    /** @param {Req<'listsNew'>} body */
+    listsNew: (body) => call('listsNew', body),
+    /** @param {Req<'listsAdd'>} body */
+    listsAdd: (body) => call('listsAdd', body),
+    /** @param {Req<'listsCount'>} body */
+    listsCount: (body) => call('listsCount', body),
+    /** @param {Req<'listsRemove'>} body */
+    listsRemove: (body) => call('listsRemove', body),
+    /** @param {Req<'listsRestore'>} body */
+    listsRestore: (body) => call('listsRestore', body),
+    /** @param {Req<'mapsAdd'>} body */
+    mapsAdd: (body) => call('mapsAdd', body),
+    /** @param {Req<'mapsSet'>} body */
+    mapsSet: (body) => call('mapsSet', body),
+    /** @param {Req<'mapsBatch'>} body */
+    mapsBatch: (body) => call('mapsBatch', body),
+    /** @param {Req<'mapsDup'>} body */
+    mapsDup: (body) => call('mapsDup', body),
+    /** @param {Req<'mapsRemove'>} body */
+    mapsRemove: (body) => call('mapsRemove', body),
+    /** @param {Req<'mapsPin'>} body */
+    mapsPin: (body) => call('mapsPin', body),
+    /** @param {Req<'mapsUnpin'>} body */
+    mapsUnpin: (body) => call('mapsUnpin', body),
+    /** @param {Req<'mapsUnpinAll'>} body */
+    mapsUnpinAll: (body) => call('mapsUnpinAll', body),
+    /** @param {Req<'inventoryHave'>} body */
+    inventoryHave: (body) => call('inventoryHave', body),
+    /** @param {Req<'inventoryRecord'>} body */
+    inventoryRecord: (body) => call('inventoryRecord', body),
+    /** @param {Req<'inventoryGone'>} body */
+    inventoryGone: (body) => call('inventoryGone', body),
+    /** @param {Req<'inventoryRelink'>} body */
+    inventoryRelink: (body) => call('inventoryRelink', body),
+    /** @param {Req<'inventoryReprint'>} body */
+    inventoryReprint: (body) => call('inventoryReprint', body),
   };
 }
 

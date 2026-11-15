@@ -21,6 +21,7 @@ dt-elements.workspace = true
 dt-kit.workspace = true
 dt-print.workspace = true
 kdl.workspace = true
+libm.workspace = true
 miette.workspace = true
 serde.workspace = true
 serde_json.workspace = true

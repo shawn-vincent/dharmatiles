@@ -185,6 +185,7 @@ pub fn stale(now: &str, rev: u64) -> Refusal {
     r.conflict = Some(Box::new(crate::call::Conflict {
         text: now.to_owned(),
         doc_rev: rev,
+        scene: None,
     }));
     r
 }

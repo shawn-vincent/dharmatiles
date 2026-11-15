@@ -7,11 +7,11 @@ use std::fmt::Debug;
 use super::plates::plates_planned;
 use super::*;
 use crate::preview::inventory as calls_inventory;
-use crate::preview::placing::Near;
 use crate::preview::resources::Resource;
 use crate::preview::scene::{SceneJson, ScenePiece};
 use crate::preview::{lists, maps, places, tiers};
 use dt_service::inventory::{ColourWord, InventoryRow, InventoryState};
+use dt_service::placing::Near;
 
 struct Home {
     dir: std::path::PathBuf,

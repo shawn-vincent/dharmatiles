@@ -99,10 +99,12 @@ pub struct Refusal {
 }
 
 /// A file that moved on: what it holds now and the revision that is.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Conflict {
     pub text: String,
     pub doc_rev: u64,
+    /// A map's conflict: the map as it now reads, so the page takes the current state at once.
+    pub scene: Option<Box<crate::scene::SceneJson>>,
 }
 
 /// What the program was at when it failed: the work (`draft worker`) and the tile it was for.
@@ -236,7 +238,7 @@ impl Refusal {
                 },
                 text: self.conflict.as_ref().map(|c| c.text.clone()),
                 doc_rev: self.conflict.as_ref().map(|c| c.doc_rev),
-                scene: None,
+                scene: self.conflict.and_then(|c| c.scene).map(|s| *s),
                 errors: self.errors.map(Vec::from),
                 superseded: self.superseded.then_some(true),
             },
