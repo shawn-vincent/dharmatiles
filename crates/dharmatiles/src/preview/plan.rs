@@ -9,18 +9,26 @@ use super::api::Mistake;
 use super::scene::SceneJson;
 use super::stack::StackItem;
 
-/// Where a document stands: its squares, its size and the height of its zero.  The viewer rules the ground from it.
+/// A tile's squares, across and up: what a tile and an STL file's footprint have, and a print list does not.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
-pub struct PlanFrame {
+pub struct PlanSquares {
     pub cols: u32,
     pub rows: u32,
+}
+
+/// The ground a document stands on, which the viewer rules: its square, its size and the height of its zero.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanGround {
     pub square_mm: f64,
-    /// Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
-    pub size_mm: [f64; 2],
-    /// The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
-    /// the mesh's lowest point stands in.
+    /// Width by depth, mm: a tile's, or a print list's printer's bed; none when its printer names no bed (nothing is
+    /// made up for it).
+    pub size_mm: Option<[f64; 2]>,
+    /// The zero height: where a tile's base meets its body, or a bed's top.  None for an STL file, which has no zero of
+    /// its own: the mesh's lowest point stands in.
     pub datum_z: Option<f64>,
 }
 
@@ -32,7 +40,9 @@ pub enum TilePlan {
     /// A tile: its frame and its stack.
     Tile {
         #[serde(flatten)]
-        frame: PlanFrame,
+        squares: PlanSquares,
+        #[serde(flatten)]
+        ground: PlanGround,
         stack: Vec<StackItem>,
     },
     /// An STL file: the frame its footprint says, and the one line a file's stack is.
@@ -40,7 +50,9 @@ pub enum TilePlan {
         /// The file's name.
         tile: String,
         #[serde(flatten)]
-        frame: PlanFrame,
+        squares: PlanSquares,
+        #[serde(flatten)]
+        ground: PlanGround,
         stack: Vec<StackItem>,
     },
     /// A print list or a map.
@@ -55,7 +67,7 @@ pub enum TilePlan {
 #[serde(rename_all = "camelCase")]
 pub struct PlatesDoc {
     #[serde(flatten)]
-    pub frame: PlanFrame,
+    pub ground: PlanGround,
     /// The file can be edited.
     pub writable: bool,
     pub plates: PlatesPanel,
@@ -285,8 +297,6 @@ pub struct PrinterBroken {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct InventoryDoc {
-    #[serde(flatten)]
-    pub frame: PlanFrame,
     pub writable: bool,
     pub inventory: InventoryRead,
 }

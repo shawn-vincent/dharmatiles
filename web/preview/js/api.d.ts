@@ -360,16 +360,7 @@ type HeightName = { name: string, dmm: number, own: boolean, };
 
 type InsertPlace = "stack" | "tile" | "before" | "in";
 
-type InventoryDoc = { writable: boolean, inventory: InventoryRead, cols: number, rows: number, squareMm: number, 
-/**
- * Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
- */
-sizeMm: [number, number], 
-/**
- * The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
- * the mesh's lowest point stands in.
- */
-datumZ: number | null, };
+type InventoryDoc = { writable: boolean, inventory: InventoryRead, };
 
 type InventoryGoneReq = { tile: string, seed: number, system: SystemWord, colour: ColourWord, note?: string | null, on?: string | null, };
 
@@ -886,14 +877,15 @@ scene: SceneJson | null,
 /**
  * The revision of the file the scene (and the layout) is of.
  */
-docRev: number, cols: number, rows: number, squareMm: number, 
+docRev: number, squareMm: number, 
 /**
- * Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
+ * Width by depth, mm: a tile's, or a print list's printer's bed; none when its printer names no bed (nothing is
+ * made up for it).
  */
-sizeMm: [number, number], 
+sizeMm: [number, number] | null, 
 /**
- * The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
- * the mesh's lowest point stands in.
+ * The zero height: where a tile's base meets its body, or a bed's top.  None for an STL file, which has no zero of
+ * its own: the mesh's lowest point stands in.
  */
 datumZ: number | null, };
 
@@ -1345,12 +1337,13 @@ type TileNode = { at: number, controls: Array<MapControl>, about: About | null, 
 
 type TilePlan = { "kind": "tile", stack: Array<StackItem>, cols: number, rows: number, squareMm: number, 
 /**
- * Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
+ * Width by depth, mm: a tile's, or a print list's printer's bed; none when its printer names no bed (nothing is
+ * made up for it).
  */
-sizeMm: [number, number], 
+sizeMm: [number, number] | null, 
 /**
- * The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
- * the mesh's lowest point stands in.
+ * The zero height: where a tile's base meets its body, or a bed's top.  None for an STL file, which has no zero of
+ * its own: the mesh's lowest point stands in.
  */
 datumZ: number | null, } | { "kind": "stl", 
 /**
@@ -1358,12 +1351,13 @@ datumZ: number | null, } | { "kind": "stl",
  */
 tile: string, stack: Array<StackItem>, cols: number, rows: number, squareMm: number, 
 /**
- * Width by depth, mm (a print list's is its printer's bed; the inventory's is nothing).
+ * Width by depth, mm: a tile's, or a print list's printer's bed; none when its printer names no bed (nothing is
+ * made up for it).
  */
-sizeMm: [number, number], 
+sizeMm: [number, number] | null, 
 /**
- * The tile's zero height: where the base meets the tile body.  None for an STL file, which has no zero of its own:
- * the mesh's lowest point stands in.
+ * The zero height: where a tile's base meets its body, or a bed's top.  None for an STL file, which has no zero of
+ * its own: the mesh's lowest point stands in.
  */
 datumZ: number | null, } | { "kind": "plates" } & PlatesDoc | { "kind": "inventory" } & InventoryDoc;
 

@@ -30,7 +30,7 @@ use super::header::{MeshHeader, MeshKind};
 use super::lists::ListEdited;
 use super::messages::Scope;
 use super::plan::{
-    ListPiece, PlanFrame, PlanHeld, PlanKind, PlanPlaced, PlanPlate, PlatesDoc, PlatesPanel,
+    ListPiece, PlanGround, PlanHeld, PlanKind, PlanPlaced, PlanPlate, PlatesDoc, PlatesPanel,
     PlatesPlanned, PlatesUnread, PlatesWritten, PrinterBroken, PrinterRead, PrinterRow, SlotCheck,
     TilePlan,
 };
@@ -534,7 +534,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
                 doc.doc_rev = rev;
             } else {
                 t.plan = Some(TilePlan::Plates(Box::new(PlatesDoc {
-                    frame: unplanned_frame(shared),
+                    ground: unplanned_ground(shared),
                     writable: true,
                     plates: written_panel(&list, shared.home.as_deref(), true),
                     scene: Some(sc.json.clone()),
@@ -624,7 +624,7 @@ fn rebuild_plates(
             t.files = files.clone();
             t.mesh = None;
             t.plan = Some(TilePlan::Plates(Box::new(PlatesDoc {
-                frame: unplanned_frame(shared),
+                ground: unplanned_ground(shared),
                 writable,
                 plates: loose,
                 scene: scene_json.clone(),
@@ -942,11 +942,9 @@ fn shared_plan(
     doc_rev: u64,
 ) -> TilePlan {
     TilePlan::Plates(Box::new(PlatesDoc {
-        frame: PlanFrame {
-            cols: 1,
-            rows: 1,
+        ground: PlanGround {
             square_mm: dt_kit::Frame::for_system(&plan.settings.system, 1, 1).square_mm,
-            size_mm: plan.settings.machine.bed.unwrap_or([0.0, 0.0]),
+            size_mm: plan.settings.machine.bed,
             datum_z: Some(0.0),
         },
         writable,
@@ -958,13 +956,11 @@ fn shared_plan(
     }))
 }
 
-/// The frame of a list that has no layout: nothing is laid out, so the bed is no size.
-fn unplanned_frame(shared: &Shared) -> PlanFrame {
-    PlanFrame {
-        cols: 1,
-        rows: 1,
+/// The ground of a list that has no layout: the system's square, and no bed (no printer is read).
+fn unplanned_ground(shared: &Shared) -> PlanGround {
+    PlanGround {
         square_mm: dt_kit::Frame::for_system(&shared.options().system, 1, 1).square_mm,
-        size_mm: [0.0, 0.0],
+        size_mm: None,
         datum_z: Some(0.0),
     }
 }

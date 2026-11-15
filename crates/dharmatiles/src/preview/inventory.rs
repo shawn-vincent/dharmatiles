@@ -27,7 +27,7 @@ use serde_json::{Value, json};
 
 use super::api::{Out, Reply};
 use super::messages::Scope;
-use super::plan::{InventoryDoc, InventoryRead, PlanFrame, PlatesPanel, TilePlan};
+use super::plan::{InventoryDoc, InventoryRead, PlatesPanel, TilePlan};
 use super::{Shared, State, fail, lock, messages};
 use crate::errors_json;
 use crate::message::{Kind, Message, Severity};
@@ -221,13 +221,6 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     let writable = std::fs::metadata(path).is_ok_and(|m| !m.permissions().readonly());
     let skeleton = |inventory: InventoryRead| {
         TilePlan::Inventory(InventoryDoc {
-            frame: PlanFrame {
-                cols: 1,
-                rows: 1,
-                square_mm: 35.0,
-                size_mm: [0.0, 0.0],
-                datum_z: Some(0.0),
-            },
             writable,
             inventory,
         })

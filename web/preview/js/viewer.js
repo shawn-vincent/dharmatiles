@@ -254,7 +254,8 @@ export class Viewer {
     const bed = this.payload?.meta?.bed;
     if (bed) return { lo: [0, 0, 0], hi: [bed[0], bed[1], Math.max(this.payload.meta.hi[2], 1)] };
     if (this.payload) return { lo: this.payload.meta.lo, hi: this.payload.meta.hi };
-    if (this.plan) return { lo: [0, 0, 0], hi: [...this.plan.sizeMm, 1] };
+    // a plan with a size (a print list whose printer names no bed has none)
+    if (this.plan?.sizeMm) return { lo: [0, 0, 0], hi: [...this.plan.sizeMm, 1] };
     return null;
   }
 

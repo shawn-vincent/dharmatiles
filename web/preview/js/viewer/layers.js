@@ -215,7 +215,9 @@ export const layersMethods = {
     const sg = this.sceneOn ? this.sceneGridSpec : null;
     const sq = sg ? sg.sq : this.plan?.squareMm;
     if (!b || !sq) return;
-    const [w, h] = sg ? [sg.w, sg.h] : this.plan.sizeMm;
+    const size = sg ? [sg.w, sg.h] : this.plan?.sizeMm;
+    if (!size) return; // a print list whose printer names no bed: no ground to rule
+    const [w, h] = size;
     const z = (sg ? sg.z : (this.plan.datumZ ?? b.lo[2])) - GRID_BELOW_MM;
     const reach = Math.max(w, h) * 6;
     const mat = new THREE.ShaderMaterial({

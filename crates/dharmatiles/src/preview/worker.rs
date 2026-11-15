@@ -1,7 +1,7 @@
 //! The worker: builds the tiles one at a time and rebuilds on change.
 
 use super::header::{MeshHeader, MeshKind};
-use super::plan::{PlanFrame, TilePlan};
+use super::plan::{PlanGround, PlanSquares, TilePlan};
 use super::*;
 use crate::message::{Kind, Scope, Severity};
 
@@ -159,11 +159,13 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         let [w, h] = frame.size_mm();
         let items = stack::items(t, checked.solved.as_ref(), &opts.system)?;
         let plan = TilePlan::Tile {
-            frame: PlanFrame {
+            squares: PlanSquares {
                 cols: t.cols,
                 rows: t.rows,
+            },
+            ground: PlanGround {
                 square_mm: frame.square_mm,
-                size_mm: [w, h],
+                size_mm: Some([w, h]),
                 // the tile's zero height: where the base meets the tile body
                 datum_z: Some(0.0),
             },
@@ -528,11 +530,13 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
     let n = |v: f64| (libm::round(v / sq).max(1.0)) as u32;
     let plan = TilePlan::Stl {
         tile: path.rsplit('/').next().unwrap_or(path).to_owned(),
-        frame: PlanFrame {
+        squares: PlanSquares {
             cols: n(footprint[0]),
             rows: n(footprint[1]),
+        },
+        ground: PlanGround {
             square_mm: sq,
-            size_mm: footprint,
+            size_mm: Some(footprint),
             datum_z: None,
         },
         stack: vec![stack::StackItem::stl_file()],
