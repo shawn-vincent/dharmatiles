@@ -213,12 +213,12 @@ const folderOpenIn = (root, dir) => {
  * After the open tile's file moved: the tile at its new path is opened again, on the level it was at (and the
  * page it was on: its old path left the list as the new one joined, so for a moment no tile was shown).
  */
-/** @param {string} path @param {ReturnType<typeof levelSnapshot> | null} here @param {boolean} editing */
+/** @param {string} path @param {import('../nav.js').LevelAsk | null} here @param {boolean} editing */
 async function followOpen(path, here, editing) {
   const t = await whenListedWhere((x) => x.path === path);
   if (!t) return;
   await select(t.id, true);
-  restoreLevel(here);
+  if (here) restoreLevel(here);
   if (editing) view.set({ pageAt: 'edit' });
 }
 
