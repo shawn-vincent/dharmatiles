@@ -77,6 +77,9 @@ struct World {
     memo: dt_service::scene_read::SceneMemo,
     /// The lists whose plates were asked to be planned again.
     planned: RefCell<Vec<String>>,
+    /// The patches the plates' calls made, and the plate the view was put on.
+    patched: RefCell<Vec<String>>,
+    plate: RefCell<Option<usize>>,
 }
 
 /// A map's pieces' tiles: the store, then the library from the checkout.
@@ -101,16 +104,67 @@ impl dt_service::scene_read::SceneHost for World {
         vec![PATH.to_owned()]
     }
 
-    fn machine(&self, printer: &str) -> Result<dt_eval::Machine, Vec<dt_eval::Diag>> {
-        dt_eval::printer_machine(printer, None)
+    fn profiles(&self) -> Box<dyn dt_eval::Profiles + '_> {
+        Box::new(dt_eval::OnDisk { home: None })
     }
 
-    fn shelf(&self) -> Option<dt_doc::inventory::Inventory> {
-        None
+    fn inventory(&self) -> Result<Option<dt_doc::inventory::Inventory>, Vec<dt_eval::Diag>> {
+        Ok(None)
     }
 
     fn scene_memo(&self) -> &dt_service::scene_read::SceneMemo {
         &self.memo
+    }
+}
+
+impl dt_service::plates_calls::PlatesHost for World {
+    fn update(&self, _id: &str, patch: Patch) {
+        let name = match patch {
+            Patch::PlateZero => "PlateZero",
+            Patch::MarkStale => "MarkStale",
+            _ => "other",
+        };
+        self.patched.borrow_mut().push(name.to_owned());
+    }
+
+    fn seconds(&self) -> f64 {
+        0.0
+    }
+
+    fn plate_in_view(&self, _id: &str) -> usize {
+        self.plate.borrow().unwrap_or(0)
+    }
+
+    fn set_plate(&self, _id: &str, plate: usize) {
+        *self.plate.borrow_mut() = Some(plate);
+    }
+
+    fn palette(&self) -> dt_kit::Palette {
+        dt_kit::Palette::default()
+    }
+
+    fn inventory_path(&self) -> Option<String> {
+        None
+    }
+
+    fn modified(&self, _path: &str) -> Option<std::time::SystemTime> {
+        None
+    }
+
+    fn full_kept(&self, _path: &str, _opts: &Options) -> bool {
+        false
+    }
+
+    fn build_piece(
+        &self,
+        path: &str,
+        opts: &Options,
+    ) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
+        dt_eval::build_cached(&self.tiles, path, opts, &dt_eval::Progress::none(), None)
+    }
+
+    fn crown_build(&self, _path: &str, _opts: Options) -> Option<dt_eval::Built> {
+        None
     }
 }
 
@@ -366,6 +420,8 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
         moves: RefCell::new(Vec::new()),
         memo: dt_service::scene_read::SceneMemo::default(),
         planned: RefCell::new(Vec::new()),
+        patched: RefCell::new(Vec::new()),
+        plate: RefCell::new(None),
     };
     let table = table();
     let id = tile_id(PATH);
@@ -537,6 +593,8 @@ fn world() -> World {
         moves: RefCell::new(Vec::new()),
         memo: dt_service::scene_read::SceneMemo::default(),
         planned: RefCell::new(Vec::new()),
+        patched: RefCell::new(Vec::new()),
+        plate: RefCell::new(None),
     }
 }
 
@@ -1096,4 +1154,71 @@ fn print_lists_and_maps_are_edited_by_verb_with_no_server_and_no_disk() {
     )
     .expect_err("no such piece");
     assert_eq!(no_piece.status, Status::BadRequest);
+}
+
+#[test]
+fn the_plates_settings_and_the_plate_in_view_are_set_by_verb_with_no_server_and_no_disk() {
+    use dt_service::list_calls::{self, ListsNewReq};
+    use dt_service::plates_calls::{self, PlatesSetReq, PlatesShowReq};
+    let w = world();
+    let made = list_calls::new_list(
+        &w,
+        ListsNewReq {
+            name: Some("Plates".to_owned()),
+            root: None,
+            dir: None,
+            map: None,
+        },
+    )
+    .expect("a list is made");
+    let list = tile_id(&made.path);
+    let (_, rev) = w.docs.read(&made.path).expect("the list reads");
+    let set = |key: &str, value: Option<&str>, doc_rev: u64| {
+        plates_calls::set(
+            &w,
+            PlatesSetReq {
+                list: list.clone(),
+                key: key.to_owned(),
+                value: value.map(str::to_owned),
+                doc_rev,
+            },
+        )
+    };
+    // a word of the plates line is written, and the list is laid out again (marked stale: building from now)
+    let one = set("printer", Some("bambu/x1c"), rev).expect("the printer is set");
+    assert!(one.text.contains("bambu/x1c"), "{}", one.text);
+    let patches = w.patched.borrow().join(" ");
+    assert!(
+        patches.contains("PlateZero") && patches.contains("MarkStale"),
+        "{patches}"
+    );
+    // a word that is not a setting, or does not read, is refused and nothing is written
+    let nope = set("colour", Some("red"), one.doc_rev).expect_err("not a setting");
+    assert_eq!(nope.status, Status::BadRequest);
+    let odd = set("mode", Some("rainbow"), one.doc_rev).expect_err("not a mode");
+    assert_eq!(odd.status, Status::BadRequest);
+    // a file that moved on is a conflict that names it
+    let stale = set("gap", Some("3mm"), rev).expect_err("the file moved on");
+    assert_eq!(stale.status, Status::Conflict);
+    // a word taken off
+    let off = set("printer", None, one.doc_rev).expect("the word is taken off");
+    assert!(!off.text.contains("bambu/x1c"), "{}", off.text);
+    // the plate in view is the owner's, and the list is laid out again
+    plates_calls::show(
+        &w,
+        PlatesShowReq {
+            list: list.clone(),
+            plate: 2,
+        },
+    )
+    .expect("the plate is shown");
+    assert_eq!(*w.plate.borrow(), Some(2));
+    plates_calls::show(
+        &w,
+        PlatesShowReq {
+            list: "nope".to_owned(),
+            plate: 0,
+        },
+    )
+    .expect_err("no such list");
 }

@@ -241,18 +241,12 @@ impl Resolver {
     }
 }
 
-#[expect(
-    clippy::disallowed_methods,
-    reason = "permitted silence: a clock before 1970 or a missing mtime reads as zero (a stamp, never data)"
-)]
+/// A number nobody chose: the keys a hasher is made with (the system's entropy where there is one; in a web page, keys that
+/// differ from one call to the next, which is all a seed that merely has to be new needs; a web page has no clock to read).
 fn random() -> u64 {
-    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-    h.write_u128(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos()),
-    );
-    h.finish()
+    std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish()
 }
 
 /// `(2sq, 1.5sq)`: a place as the document writes it, in the piece's own squares.

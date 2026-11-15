@@ -25,7 +25,7 @@ test('the verbs the worker answers are the service ones made with a body, and no
 test('a call the worker does not answer says what was asked and why: the program, or not yet', () => {
   assert.match(refusalOf('addPlace'), /^adding a folder as a place needs the program/);
   assert.match(refusalOf('reveal'), /^showing a file in the file manager needs the program/);
-  assert.match(refusalOf('platesShow'), /^the plates is not in the browser editor yet/);
+  assert.match(refusalOf('platesExport'), /^the plates is not in the browser editor yet/);
   assert.throws(() => refusalOf('check'), /answered by the worker's service/);
 });
 

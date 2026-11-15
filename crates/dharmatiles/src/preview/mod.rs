@@ -333,19 +333,17 @@ impl dt_service::scene_read::SceneHost for Shared {
             .collect()
     }
 
-    fn machine(&self, printer: &str) -> Result<dt_eval::Machine, Vec<dt_eval::Diag>> {
-        dt_eval::printer_machine(printer, self.home.as_deref())
+    fn profiles(&self) -> Box<dyn dt_eval::Profiles + '_> {
+        Box::new(dt_eval::OnDisk {
+            home: self.home.as_deref(),
+        })
     }
 
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "permitted silence: a probe where an inventory that does not read counts as none here; the snapshot says what is wrong with it"
-    )]
-    fn shelf(&self) -> Option<dt_doc::inventory::Inventory> {
-        self.home
-            .as_deref()
-            .and_then(|h| dt_print::inventory::load(h).ok().flatten())
-            .map(|l| l.inventory)
+    fn inventory(&self) -> Result<Option<dt_doc::inventory::Inventory>, Vec<dt_eval::Diag>> {
+        match self.home.as_deref() {
+            Some(h) => Ok(dt_print::inventory::load(h)?.map(|l| l.inventory)),
+            None => Ok(None),
+        }
     }
 
     fn scene_memo(&self) -> &dt_service::scene_read::SceneMemo {
@@ -365,6 +363,98 @@ impl dt_service::list_calls::ListHost for Shared {
     fn scene_notes(&self, id: &str) -> Vec<dt_service::scene::Note> {
         self.owner
             .ask(|r| owner::Command::SceneNotes(id.to_owned(), r))
+    }
+}
+
+impl dt_service::plates_calls::PlatesHost for Shared {
+    fn update(&self, id: &str, patch: dt_service::patch::Patch) {
+        Self::update(self, id, patch);
+    }
+
+    fn plate_in_view(&self, id: &str) -> usize {
+        self.facts(id).map_or(0, |t| t.plate)
+    }
+
+    fn set_plate(&self, id: &str, plate: usize) {
+        self.owner
+            .send(owner::Command::SetPlate(id.to_owned(), plate));
+    }
+
+    fn palette(&self) -> dt_kit::Palette {
+        Self::palette(self)
+    }
+
+    fn seconds(&self) -> f64 {
+        static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+        START.get_or_init(Instant::now).elapsed().as_secs_f64()
+    }
+
+    fn inventory_path(&self) -> Option<String> {
+        self.home.as_deref().map(|h| {
+            dt_print::inventory::path_in(h)
+                .to_string_lossy()
+                .into_owned()
+        })
+    }
+
+    fn modified(&self, path: &str) -> Option<SystemTime> {
+        crate::watch::mtime(path)
+    }
+
+    fn full_kept(&self, path: &str, opts: &Options) -> bool {
+        let Some(store) = self.store.as_deref() else {
+            return false;
+        };
+        let tracked = dt_store::Tracked::new(&dt_eval::Files);
+        // a tile that does not check cannot be built; its error comes with the build
+        if dt_eval::check(&tracked, path, opts).is_err() {
+            return false;
+        }
+        store.contains(&store.key(&tracked.reads(), path, opts))
+    }
+
+    fn build_piece(
+        &self,
+        path: &str,
+        opts: &Options,
+    ) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
+        dt_store::build_stored(
+            &dt_eval::Files,
+            path,
+            opts,
+            &dt_eval::Progress::none(),
+            None,
+            self.store.as_deref(),
+        )
+    }
+
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a piece that does not build has no shape to crowd; its failure is shown on that piece by its own build"
+    )]
+    fn crown_build(&self, path: &str, opts: Options) -> Option<dt_eval::Built> {
+        // a piece's low build is a job on the tier lane, like the page's own look at it
+        let jobkey = format!("tier|crown|{path}|{:?}|{}", opts.seed, opts.system);
+        let path = path.to_owned();
+        let on_lane = self.on_lane(
+            queue::Lane::Tier,
+            jobkey,
+            self.rev_of(&path),
+            "",
+            move |reply| queue::SideJob::Crown { path, opts, reply },
+        );
+        match on_lane {
+            // a piece that does not build has no shape to crowd (its failure is shown on that piece by its own build)
+            Ok(built) => built.ok(),
+            // a newer reading of the map is on its way and will look again
+            Err(queue::Interrupted::Superseded) => None,
+            Err(queue::Interrupted::Panicked(pn)) => std::panic::resume_unwind(pn),
+        }
+    }
+
+    #[cfg(test)]
+    fn after_seen(&self, path: &str) {
+        plates::after_seen(path);
     }
 }
 

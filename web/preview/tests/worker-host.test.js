@@ -60,7 +60,7 @@ test('a refusal comes back as the HTTP error body: its status, its words, and wh
 
 test('what the service does not answer yet is refused in words, by name, never answered empty', async () => {
   const host = workerHost(undefined, fakeEngine({}));
-  const r = await host.platesShow('list', 0);
+  const r = await host.platesExport('list');
   assert.equal(r.status, 501);
   assert.match(r.body.error, /the plates is not in the browser editor yet/);
   await assert.rejects(() => host.messagesText('abc'), /the messages as text is not in the browser editor yet/);

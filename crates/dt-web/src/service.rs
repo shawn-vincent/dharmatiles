@@ -16,8 +16,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
+use std::sync::{Arc, Mutex};
 
 use dt_eval::{Options, Source, Tier, TileRecord};
 use dt_lang::System;
@@ -48,12 +48,15 @@ use dt_service::owner::{Command, Core, Outside, Setup, Subscribed};
 use dt_service::patch::Patch;
 use dt_service::payload;
 use dt_service::place_calls::{self, Listed, MINE, NEW_TILE, NewReq};
+use dt_service::plates_calls::{
+    self, PLATES_SET, PLATES_SHOW, PlatesHost, PlatesSetReq, PlatesShowReq,
+};
 use dt_service::queue::{Finished, Job, Taken, Taking};
 use dt_service::read_calls::{
-    self, ABOUT, AboutRes, CHECK_VALUE, CheckValueReq, CheckValueRes, ELEMENTS, LANGUAGE, NAMES,
-    NamesReq, NamesRes, Nothing, OFFERS, OffersReq, OffersRes, PRINTED, PRINTED_SET, PrintedReq,
-    PrintedRes, PrintedSetReq, PrintedSetRes, TEXT, TOKENS, TextReq as FileReq, TextRes, TokensReq,
-    TokensRes,
+    self, ABOUT, AboutRes, CHECK_VALUE, CheckValueReq, CheckValueRes, Done, ELEMENTS, LANGUAGE,
+    NAMES, NamesReq, NamesRes, Nothing, OFFERS, OffersReq, OffersRes, PRINTED, PRINTED_SET,
+    PrintedReq, PrintedRes, PrintedSetReq, PrintedSetRes, TEXT, TOKENS, TextReq as FileReq,
+    TextRes, TokensReq, TokensRes,
 };
 use dt_service::roots::{Role, Root, RootKind};
 use dt_service::scene_read::{SceneHost, SceneMemo};
@@ -246,6 +249,10 @@ struct Inner {
     tiles: StoreAndLib,
     /// What a reading of a map remembers between readings.
     memo: SceneMemo,
+    /// The library's printer profiles, by name.
+    printers: Vec<String>,
+    /// The paths the documents wrote since the stream last heard: the worker host tells the owner before it runs what is queued.
+    written: Arc<Mutex<Vec<String>>>,
 }
 
 /// What one call runs on: the worker, the tile it is about and the options it reads it with.
@@ -362,7 +369,13 @@ impl Inner {
 
     /// The worker host's lane: take what the service queued, run it, and say how it went on the stream, until
     /// nothing is queued.  The program's lanes do the same on threads.
-    fn run_queued(&self) -> Result<(), Refusal> {
+    fn run_queued(self: &Rc<Self>) -> Result<(), Refusal> {
+        // what the documents wrote is told to the owner, so the tiles and lists that read it are built again (the program's
+        // documents tell its owner the same way)
+        let written: Vec<String> = std::mem::take(&mut *self.written.lock_unpoisoned());
+        for path in written {
+            self.core.borrow_mut().apply(Command::Saved(path));
+        }
         loop {
             let ticket = self.ticket.get() + 1;
             self.ticket.set(ticket);
@@ -396,7 +409,7 @@ impl Inner {
     }
 
     /// One full build: what the program's lane does with a tile, said as patches.
-    fn build_job(&self, id: &str) -> Result<(), Refusal> {
+    fn build_job(self: &Rc<Self>, id: &str) -> Result<(), Refusal> {
         let facts = self
             .ask(|r| Command::Facts(id.to_owned(), r))?
             .ok_or_else(|| Refusal::refused(dt_service::call::Status::NotFound, "no such tile"))?;
@@ -407,21 +420,28 @@ impl Inner {
         };
         edit(Patch::Begin);
         let files = BTreeMap::from([(facts.path.clone(), None)]);
-        // a print list or the inventory is not a tile: planning plates is not in the browser editor yet, and the page is told so
-        // (never a tile's build of a document that is not one)
-        if list_calls::is_plates(&facts.path) || list_calls::is_inventory(&facts.path) {
-            let what = if list_calls::is_plates(&facts.path) {
-                "a print list's plates are"
-            } else {
-                "the inventory is"
+        // a print list is planned, not built: its scene and its plates are patches of its own (the program's lane does the same)
+        if list_calls::is_plates(&facts.path) {
+            let ctx = Ctx {
+                inner: self.clone(),
+                tile: facts.path.clone(),
+                options: options_in(&Lib, self.system.get())?,
             };
+            plates_calls::rebuild(&ctx, id, &facts.path);
+            self.core
+                .borrow_mut()
+                .apply(Command::Finish(Finished::Full(id.to_owned())));
+            return Ok(());
+        }
+        // the inventory is not a tile either: it is not read in the browser editor yet, and the page is told so
+        if list_calls::is_inventory(&facts.path) {
             edit(Patch::BuildFailed {
                 errors: dt_eval::mistakes(&[dt_eval::Diag::plain(
-                    dt_lang::codes::PLATES,
-                    format!("{what} not planned in the browser editor yet"),
+                    dt_lang::codes::INVENTORY,
+                    "the inventory is not read in the browser editor yet",
                 )
                 .help(
-                    "the list can be edited here (its tiles, counts and settings); laying it out needs the program (dharmatiles preview)",
+                    "it needs the program (dharmatiles preview): the inventory is a file in your tiles folder",
                 )]),
                 failure: None,
                 files,
@@ -714,24 +734,27 @@ impl SceneHost for Ctx {
             .collect()
     }
 
-    fn machine(&self, printer: &str) -> Result<dt_eval::Machine, Vec<dt_eval::Diag>> {
-        dt_eval::printer_machine_in(
-            &dt_eval::InSource {
-                source: &Lib,
-                names: &library_printers(),
-            },
-            printer,
-        )
+    fn profiles(&self) -> Box<dyn dt_eval::Profiles + '_> {
+        Box::new(dt_eval::InSource {
+            source: &Lib,
+            names: &self.inner.printers,
+        })
     }
 
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "permitted silence: a probe where an inventory that is not there or does not read counts as none here; the snapshot says what is wrong with it"
-    )]
-    fn shelf(&self) -> Option<dt_doc::inventory::Inventory> {
+    fn inventory(&self) -> Result<Option<dt_doc::inventory::Inventory>, Vec<dt_eval::Diag>> {
         let path = Path::new(FOLDER).join(dt_doc::inventory::FILE);
-        let text = self.inner.storage.read_text(&path).ok()?;
-        dt_doc::inventory::decode(&path.to_string_lossy(), &text).ok()
+        if !self.inner.storage.exists(&path) {
+            return Ok(None);
+        }
+        let text = self.inner.storage.read_text(&path).map_err(|e| {
+            vec![dt_eval::Diag::plain(
+                dt_lang::codes::INVENTORY,
+                format!("cannot read {}: {e}", path.display()),
+            )]
+        })?;
+        dt_doc::inventory::decode(&path.to_string_lossy(), &text)
+            .map(Some)
+            .map_err(|e| e.iter().map(dt_eval::Diag::from).collect())
     }
 
     fn scene_memo(&self) -> &SceneMemo {
@@ -755,6 +778,91 @@ impl ListHost for Ctx {
         self.inner
             .ask(|r| Command::SceneNotes(id.to_owned(), r))
             .expect("the owner answers scene notes in the same step")
+    }
+}
+
+impl PlatesHost for Ctx {
+    fn update(&self, id: &str, patch: Patch) {
+        self.inner
+            .core
+            .borrow_mut()
+            .apply(Command::Edit(id.to_owned(), Box::new(patch)));
+    }
+
+    fn plate_in_view(&self, id: &str) -> usize {
+        self.inner
+            .ask(|r| Command::Facts(id.to_owned(), r))
+            .expect("the owner answers facts in the same step")
+            .map_or(0, |f| f.plate)
+    }
+
+    fn set_plate(&self, id: &str, plate: usize) {
+        self.inner
+            .core
+            .borrow_mut()
+            .apply(Command::SetPlate(id.to_owned(), plate));
+    }
+
+    fn palette(&self) -> dt_kit::Palette {
+        dt_kit::Palette::default()
+    }
+
+    fn seconds(&self) -> f64 {
+        // the page's clock (a web page has no `Instant`): milliseconds are small enough for a float to hold exactly
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "milliseconds since the epoch are below 2^53"
+        )]
+        let ms = WebHost::default().now_ms() as f64;
+        ms / 1000.0
+    }
+
+    fn inventory_path(&self) -> Option<String> {
+        Some(
+            Path::new(FOLDER)
+                .join(dt_doc::inventory::FILE)
+                .to_string_lossy()
+                .into_owned(),
+        )
+    }
+
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a store that keeps no times (or a file it cannot stat) gives none: the file is as it was, and the plan reads it anyway"
+    )]
+    fn modified(&self, path: &str) -> Option<std::time::SystemTime> {
+        self.inner
+            .storage
+            .stat(Path::new(path))
+            .ok()
+            .and_then(|e| e.modified)
+    }
+
+    fn full_kept(&self, _path: &str, _opts: &Options) -> bool {
+        // the worker keeps no cache of builds between calls
+        false
+    }
+
+    fn build_piece(
+        &self,
+        path: &str,
+        opts: &Options,
+    ) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
+        dt_eval::build_cached(
+            &self.inner.tiles,
+            path,
+            opts,
+            &dt_eval::Progress::none(),
+            None,
+        )
+    }
+
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a probe where a piece that does not build has no shape to crowd; the failure is shown on that piece by its own build"
+    )]
+    fn crown_build(&self, path: &str, opts: Options) -> Option<dt_eval::Built> {
+        self.build_piece(path, &opts).ok()
     }
 }
 
@@ -837,13 +945,8 @@ fn edit(ctx: &Ctx, req: EditReq) -> Result<EditRes, Refusal> {
 }
 
 fn save(ctx: &Ctx, req: SaveReq) -> Result<SaveRes, Refusal> {
-    let saved = edit_calls::save(ctx, &ctx.tile_ref(), req)?;
-    // the program's documents tell its owner of a write; here the worker does, so the tile builds again
-    ctx.inner
-        .core
-        .borrow_mut()
-        .apply(Command::Saved(ctx.tile.clone()));
-    Ok(saved)
+    // the write is told to the owner by the documents: the tile builds again when the call is done
+    edit_calls::save(ctx, &ctx.tile_ref(), req)
 }
 
 fn build(ctx: &Ctx, req: BuildReq) -> Result<Accepted, Refusal> {
@@ -996,6 +1099,14 @@ fn maps_unpin_all(ctx: &Ctx, req: MapsListReq) -> Result<ListEdited, Refusal> {
     map_calls::unpin_all(ctx, req)
 }
 
+fn plates_show(ctx: &Ctx, req: PlatesShowReq) -> Result<Done, Refusal> {
+    plates_calls::show(ctx, req)
+}
+
+fn plates_set(ctx: &Ctx, req: PlatesSetReq) -> Result<ListEdited, Refusal> {
+    plates_calls::set(ctx, req)
+}
+
 fn text(ctx: &Ctx, req: FileReq) -> Result<Option<TextRes>, Refusal> {
     read_calls::text(ctx, &ctx.tile_ref(), req.file.as_deref())
 }
@@ -1044,6 +1155,8 @@ fn table() -> Table<Ctx, Refusal> {
         .with(&MAPS_PIN, maps_pin)
         .with(&MAPS_UNPIN, maps_unpin)
         .with(&MAPS_UNPIN_ALL, maps_unpin_all)
+        .with(&PLATES_SHOW, plates_show)
+        .with(&PLATES_SET, plates_set)
 }
 
 /// What a call answered: JSON, or (a draft, a step) the page's bytes.
@@ -1157,9 +1270,17 @@ impl Service {
         let Subscribed { rx: stream, .. } = rx
             .try_recv()
             .map_err(|e| JsError::new(&format!("the owner did not answer a subscription: {e}")))?;
-        let docs = dt_service::docs::Docs::new(storage.clone(), None);
+        let written = Arc::new(Mutex::new(Vec::new()));
+        let docs = dt_service::docs::Docs::new(storage.clone(), {
+            let told = written.clone();
+            Some(Box::new(move |path: &str| {
+                told.lock_unpoisoned().push(path.to_owned());
+            }))
+        });
         let service = Self {
             inner: Rc::new(Inner {
+                written,
+                printers: library_printers(),
                 tiles: StoreAndLib(storage.clone()),
                 memo: SceneMemo::default(),
                 storage,
@@ -1276,6 +1397,8 @@ impl Service {
             MAPS_PIN,
             MAPS_UNPIN,
             MAPS_UNPIN_ALL,
+            PLATES_SHOW,
+            PLATES_SET,
         ]?;
         // the worker host's turn: what the call queued is built now, and the stream says how it went
         self.inner.run_queued()?;

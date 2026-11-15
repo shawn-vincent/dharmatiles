@@ -31,15 +31,33 @@ pub trait SceneHost: TileHost {
     fn tile_source(&self) -> &dyn Source;
     /// The path of every tile the host lists.
     fn tile_paths(&self) -> Vec<String>;
-    /// A printer profile's machine, by name.
+    /// Where printer profiles are found.
+    fn profiles(&self) -> Box<dyn dt_eval::Profiles + '_>;
+    /// What the user owns: the inventory, `None` where there is none yet.
     ///
     /// # Errors
-    /// The profile is not there, or does not decode.
-    fn machine(&self, printer: &str) -> Result<Machine, Vec<Diag>>;
-    /// What the user owns, when an inventory exists and reads.
-    fn shelf(&self) -> Option<dt_doc::inventory::Inventory>;
+    /// The inventory is there and cannot be read, or has mistakes (each at its text).
+    fn inventory(&self) -> Result<Option<dt_doc::inventory::Inventory>, Vec<Diag>>;
     /// What a reading of a map remembers between readings.
     fn scene_memo(&self) -> &SceneMemo;
+}
+
+/// A printer profile's machine, by name.
+///
+/// # Errors
+/// The profile is not there, or does not decode.
+pub fn machine(host: &impl SceneHost, printer: &str) -> Result<Machine, Vec<Diag>> {
+    dt_eval::printer_machine_in(&*host.profiles(), printer)
+}
+
+/// What the user owns as a map's reading sees it.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a probe where an inventory that does not read counts as none here; the snapshot and the plan report what is wrong with it"
+)]
+#[must_use]
+pub fn shelf(host: &impl SceneHost) -> Option<dt_doc::inventory::Inventory> {
+    host.inventory().ok().flatten()
 }
 
 /// A tile's size and seed as a piece reads them, by tile, seed, system and the file's time.
@@ -167,7 +185,7 @@ fn height_names(list: &PrintList, lib: &dyn Source) -> Vec<HeightName> {
 )]
 fn colour_of(list: &PrintList, printer: &str, host: &impl SceneHost) -> &'static str {
     use dt_doc::map::Mode;
-    let slots = host.machine(printer).map_or(1, |m| m.slot_count());
+    let slots = machine(host, printer).map_or(1, |m| m.slot_count());
     let mode = list.plates.mode.as_ref().map_or(
         if slots > 1 {
             Mode::Multicolour
@@ -436,7 +454,7 @@ pub fn read(host: &impl SceneHost, path: &str, list: &PrintList, rev: u64) -> Sc
         rows: g.rows,
     });
     let bounds = (placed > 0).then(|| [lo[0], lo[1], hi[0], hi[1]]);
-    let (shelf_exists, have, to_print) = mark_shelf(&mut out, host.shelf());
+    let (shelf_exists, have, to_print) = mark_shelf(&mut out, shelf(host));
     let square_mm = dt_kit::Frame::for_system(default_system, 1, 1).square_mm;
     let json = SceneJson {
         shelf_exists,

@@ -502,6 +502,11 @@ pub struct TextReq {
 #[serde(deny_unknown_fields)]
 pub struct Nothing {}
 
+/// A call that has nothing to give back but that it was done.
+#[derive(Serialize, Deserialize, Debug, ts_rs::TS)]
+#[ts(type = "Record<string, never>")]
+pub struct Done {}
+
 /// `about`: the host's version, and the formats the language reads.
 #[must_use]
 pub fn about<H: TileHost>(host: &H) -> AboutRes {

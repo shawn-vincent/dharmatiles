@@ -5,8 +5,10 @@
 
 use std::sync::Arc;
 
+#[cfg(test)]
 use dt_service::docs::DocFail;
 
+#[cfg(test)]
 use super::api::Reply;
 use super::storage::{DiskStorage, Storage};
 
@@ -14,6 +16,7 @@ use super::storage::{DiskStorage, Storage};
 pub(super) struct Docs(dt_service::docs::Docs);
 
 /// What an edit did.
+#[cfg(test)]
 pub(super) use dt_service::docs::Edited;
 
 impl Default for Docs {
@@ -51,6 +54,7 @@ impl Docs {
     ///
     /// # Errors
     /// The reply to send: the file cannot be read or written, the revision is stale, or `f` refused.
+    #[cfg(test)]
     pub(super) fn edit<X>(
         &self,
         path: &str,

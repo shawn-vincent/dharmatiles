@@ -7,7 +7,7 @@ use dt_kit::{Frame, Printer};
 
 use crate::diag::Diag;
 use crate::doc;
-use crate::machine::printer_profile;
+
 use crate::source::{Library, Source};
 
 /// How to build.
@@ -173,9 +173,21 @@ impl Options {
     /// # Errors
     /// Why there is no such profile, or it does not decode.
     pub fn use_printer(&mut self, name: &str, home: Option<&Path>) -> Result<(), Vec<Diag>> {
+        self.use_printer_in(name, &crate::machine::OnDisk { home })
+    }
+
+    /// [`Options::use_printer`], with the profiles found where `profiles` says.
+    ///
+    /// # Errors
+    /// Why there is no such profile, or it does not decode.
+    pub fn use_printer_in(
+        &mut self,
+        name: &str,
+        profiles: &dyn crate::machine::Profiles,
+    ) -> Result<(), Vec<Diag>> {
         self.printer = Profile {
             name: name.to_owned(),
-            gate: printer_profile(name, home)?,
+            gate: crate::machine::printer_profile_in(profiles, name)?,
         };
         Ok(())
     }

@@ -32,7 +32,8 @@
 //! | the tile calls that need no transport: [`tile_calls`] (`check`), [`edit_calls`] (`edit`, `save`), [`build_calls`] (`build`) | seam | here: each is one function the program's HTTP handler and the web worker's `Service` (dt-web) both call, written on [`tile_host::TileHost`] (documents, storage, library, `want`, and a check's options and report); a refusal is a typed [`call::Refusal`] the transport maps; [`docs`] holds the documents' revisions and lock |
 //! | the draft, reading and place calls: [`draft_calls`] (`draft`, `step`, on the host's draft lane), [`read_calls`] (`names`, `tokens`, `checkValue`, `printed`, `printedSet`, `offers`, `about`, `elements`, `language`, `text`; the schema's JSON is [`elements_json`]), [`place_calls`] (`newTile`, `mine`) | seam | here: written on [`tile_host::TileHost`] like the others; the host also gives its `version`, the first `snapshot`, My tiles (`home`) and the listing of what was written (`listed`) |
 //! | the print list and map calls: [`list_calls`] (`listsNew`, `listsAdd`, `listsCount`, `listsRemove`, `listsRestore`, and a list's `check`), [`map_calls`] (`mapsAdd`, `mapsSet`, `mapsBatch`, `mapsDup`, `mapsRemove`, `mapsPin`, `mapsUnpin`, `mapsUnpinAll`), with [`scene_read`] (a map read as a scene, no geometry) and [`placing`] (the nearest free square, a fresh seed) | seam | here: written on [`list_calls::ListHost`] (a [`scene_read::SceneHost`] and a [`folder_calls::PlaceHost`]: where My tiles is, where a piece's tile is read from, a printer's machine, the shelf, what a reading remembers, and the plates planned again after an edit) |
-//! | `tell!`, `lock`, `watch::mtime`, `fail`, the HTTP `Reply` and `Body`, the plates, inventory and printers handlers of `calls!` and the build lanes' jobs | transport | stay in the binary; moving those handlers behind a host is what is left |
+//! | planning a print list or a map: [`plates_calls`] (`rebuild`, `platesShow`, `platesSet`, a map's crowns) | seam | here: written on [`plates_calls::PlatesHost`] (a [`list_calls::ListHost`] that also takes the owner's patches, builds a piece, knows the files' times and keeps its own clock); the program builds on its lanes and disk cache, the worker in its own turn |
+//! | `tell!`, `lock`, `watch::mtime`, `fail`, the HTTP `Reply` and `Body`, the plates' export, the inventory and printers handlers of `calls!` and the build lanes' jobs | transport | stay in the binary; moving those handlers behind a host is what is left |
 //!
 //! The wire types are written once, here, and `web/preview/js/api.d.ts` is generated from them (`ts-rs`), so a
 //! rename fails `tsc` in the page.
@@ -60,6 +61,7 @@ pub mod payload;
 pub mod place_calls;
 pub mod placing;
 pub mod plan;
+pub mod plates_calls;
 pub mod queue;
 pub mod read_calls;
 pub mod resources;

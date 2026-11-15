@@ -28,6 +28,7 @@ fn plan_with(
         sources: &Files,
         list_dir: Some(Path::new("/nowhere")),
         home: None,
+        profiles: &dt_eval::OnDisk { home: None },
         base: &base,
         shelf,
     };

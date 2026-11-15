@@ -28,31 +28,6 @@ pub(super) fn check_text(shared: &Shared, tile: &str, text: &str) -> CheckRes {
     calls::check_text(shared, tile, text)
 }
 
-/// What a call that changed a list answers (see [`ListEdited`]).
-pub(super) fn done(
-    shared: &Shared,
-    path: &str,
-    e: &super::docs::Edited,
-    note: Option<&str>,
-) -> ListEdited {
-    calls::done(shared, path, e, note)
-}
-
-/// A refusal because the file moved on carries the file's scene as it is now, so the page takes the current state at
-/// once, not when the worker's next word comes.
-pub(super) fn with_current(shared: &Shared, path: &str, reply: Reply) -> Reply {
-    let (status, body) = reply;
-    match body {
-        super::api::Body::Failed(mut b) if status.starts_with("409") => {
-            if let (Some(text), Some(rev)) = (&b.text, b.doc_rev) {
-                b.scene = dt_service::scene_read::scene_of(shared, path, text, rev);
-            }
-            (status, super::api::Body::Failed(b))
-        }
-        body => (status, body),
-    }
-}
-
 /// `/api/lists/new`.
 pub(super) fn new_list(shared: &Shared, v: ListsNewReq) -> Out<super::places::Listed> {
     out(calls::new_list(shared, v))

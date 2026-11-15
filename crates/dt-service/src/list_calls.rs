@@ -248,7 +248,7 @@ pub fn check_text(host: &impl ListHost, tile: &str, text: &str) -> CheckRes {
 /// The printer last chosen (the title bar's), where it holds a bed.
 fn printer_for(host: &impl ListHost) -> String {
     let name = host.options().printer.name;
-    match host.machine(&name) {
+    match crate::scene_read::machine(host, &name) {
         Ok(m) if m.bed.is_some() => name,
         _ => DEFAULT_PRINTER.to_owned(),
     }

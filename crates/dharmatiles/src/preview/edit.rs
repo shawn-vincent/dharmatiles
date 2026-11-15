@@ -105,11 +105,7 @@ pub struct RevealReq {
     pub path: String,
 }
 
-/// A call that has nothing to give back but that it was done.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(type = "Record<string, never>"))]
-pub struct Done {}
+pub use dt_service::read_calls::Done;
 
 /// `/api/messages`: the page reports a failure of its own.
 #[derive(Deserialize, Serialize, Debug)]

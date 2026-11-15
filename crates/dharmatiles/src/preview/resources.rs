@@ -16,7 +16,9 @@ pub use dt_service::resources::*;
 
 impl Shared {
     pub(super) fn printers_value(&self) -> Vec<PrinterRow> {
-        plates::printer_rows(self.home.as_deref())
+        plates::printer_rows(&dt_eval::OnDisk {
+            home: self.home.as_deref(),
+        })
     }
 
     pub(super) fn inventory_value(&self) -> InventoryState {

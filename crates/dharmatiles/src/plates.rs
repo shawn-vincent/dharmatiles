@@ -157,7 +157,7 @@ pub(crate) fn build_all(
     let mut printers = Vec::new();
     for (k, kind) in plan.kinds.iter().enumerate() {
         step(k + 1, plan.kinds.len(), &kind.name);
-        let opts = plan.options(k, base, home)?;
+        let opts = plan.options(k, base, &dt_eval::OnDisk { home })?;
         let opts = dt_eval::Options {
             tier: dt_store::Tier::Full,
             ..opts
@@ -307,6 +307,9 @@ pub(crate) fn run(
         sources: &Files,
         list_dir: dir.or(Some(Path::new("."))),
         home: home.as_deref(),
+        profiles: &dt_eval::OnDisk {
+            home: home.as_deref(),
+        },
         base: &base,
         shelf: shelf.as_ref(),
     };

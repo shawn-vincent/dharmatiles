@@ -19,7 +19,7 @@ use dt_doc::map::{DEFAULT_PRINTER, Group, Mode, PrintList, PrintMode};
 use dt_kit::Material;
 
 use dt_eval::source::{LIB, Source};
-use dt_eval::{Diag, Machine, Options, printer_machine};
+use dt_eval::{Diag, Machine, Options};
 use pack::{Item, Packing, Placed, Spec};
 
 /// What a caller says beyond the list itself (the command line's words).
@@ -54,6 +54,8 @@ pub struct Context<'a> {
     pub list_dir: Option<&'a Path>,
     /// `home:` and your own printers: `$DT_HOME`, else `~/dharmatiles`.
     pub home: Option<&'a Path>,
+    /// Where printer profiles are found (yours beside `home` and the library's on the disk, or the library a page was handed).
+    pub profiles: &'a dyn dt_eval::Profiles,
     /// Build options to start from: the engine label, and the cells.
     pub base: &'a Options,
     /// What you have printed (the inventory in `home`, read), or `None` where
@@ -200,7 +202,7 @@ impl Plan {
         &self,
         k: usize,
         base: &Options,
-        home: Option<&Path>,
+        profiles: &dyn dt_eval::Profiles,
     ) -> Result<Options, Vec<Diag>> {
         let kind = &self.kinds[k];
         let mut o = Options {
@@ -208,7 +210,7 @@ impl Plan {
             seed: kind.seed.or(base.seed),
             ..base.clone()
         };
-        o.use_printer(&self.settings.machine.name, home)?;
+        o.use_printer_in(&self.settings.machine.name, profiles)?;
         Ok(o)
     }
 
@@ -313,7 +315,7 @@ pub fn plan(
         .clone()
         .or_else(|| pl.printer.as_ref().map(|p| p.value.clone()))
         .unwrap_or_else(|| DEFAULT_PRINTER.to_owned());
-    let machine = match printer_machine(&printer, ctx.home) {
+    let machine = match dt_eval::printer_machine_in(ctx.profiles, &printer) {
         Ok(m) => Some(m),
         Err(mut e) => {
             // a mistake in the list's own `printer=` points there
