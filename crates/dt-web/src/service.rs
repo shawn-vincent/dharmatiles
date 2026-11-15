@@ -643,8 +643,8 @@ impl TileHost for Ctx {
             .ask(Command::Snapshot)
             .expect("the owner answers a snapshot in the same step");
         held.with(Outside {
-            // a worker has no slicers to scan
-            printers: Vec::new(),
+            // the library's printer profiles (a worker has no slicers of your own to scan)
+            printers: plates_calls::printer_rows(&*SceneHost::profiles(self)),
             inventory: inventory_calls::snapshot(self),
         })
     }
