@@ -34,6 +34,12 @@ use dt_service::folder_calls::{
     TRASH_TILE, TileMoveReq, TrashUndoReq, Trashed, UNDO_TRASH,
 };
 use dt_service::host::{Alarm, Host};
+use dt_service::inventory::InventoryWrote;
+use dt_service::inventory_calls::{
+    self, INVENTORY_GONE, INVENTORY_HAVE, INVENTORY_RECORD, INVENTORY_RELINK, INVENTORY_REPRINT,
+    InventoryGoneReq, InventoryHaveReq, InventoryHost, InventoryRecordReq, InventoryRelinkReq,
+    InventoryReprintReq, InventoryReprinted,
+};
 use dt_service::list_calls::{
     self, LISTS_ADD, LISTS_COUNT, LISTS_NEW, LISTS_REMOVE, LISTS_RESTORE, ListEdited, ListHost,
     ListsAddReq, ListsAddRes, ListsCountReq, ListsNewReq, ListsRemoveReq, ListsRestoreReq,
@@ -253,6 +259,8 @@ struct Inner {
     printers: Vec<String>,
     /// The paths the documents wrote since the stream last heard: the worker host tells the owner before it runs what is queued.
     written: Arc<Mutex<Vec<String>>>,
+    /// The stream a fresh seed is drawn from: the entropy the page gave at the start, advanced at every draw.
+    entropy: Cell<u64>,
 }
 
 /// What one call runs on: the worker, the tile it is about and the options it reads it with.
@@ -343,14 +351,19 @@ impl Inner {
             .filter_map(|(r, root)| Some((r, root.scan_folders(self.storage.as_ref())?)))
             .collect();
         let folders_changed = self.ask(|r| Command::SetFolders(folders, r))?;
+        // the inventory is the page's too: a log written since is told with the list
+        let inventory =
+            inventory_calls::snapshot_in(&self.docs, &self.tiles, Some(Path::new(FOLDER)));
+        let inventory_changed =
+            self.ask(|r| Command::SeeInventory(Box::new(inventory.clone()), r))?;
         let seq = self.seq.get() + 1;
         self.seq.set(seq);
         self.ask(|reply| Command::Reconcile {
             found,
             fresh,
-            changed_elsewhere: folders_changed,
+            changed_elsewhere: folders_changed || inventory_changed,
             seq,
-            read: Vec::new(),
+            read: vec![dt_service::resources::Resource::Inventory(inventory)],
             reply,
         })
     }
@@ -433,19 +446,17 @@ impl Inner {
                 .apply(Command::Finish(Finished::Full(id.to_owned())));
             return Ok(());
         }
-        // the inventory is not a tile either: it is not read in the browser editor yet, and the page is told so
+        // the inventory is not a tile either: it is read, not built (the program's lane does the same)
         if list_calls::is_inventory(&facts.path) {
-            edit(Patch::BuildFailed {
-                errors: dt_eval::mistakes(&[dt_eval::Diag::plain(
-                    dt_lang::codes::INVENTORY,
-                    "the inventory is not read in the browser editor yet",
-                )
-                .help(
-                    "it needs the program (dharmatiles preview): the inventory is a file in your tiles folder",
-                )]),
-                failure: None,
-                files,
-            });
+            let ctx = Ctx {
+                inner: self.clone(),
+                tile: facts.path.clone(),
+                options: options_in(&Lib, self.system.get())?,
+            };
+            inventory_calls::rebuild(&ctx, id, &facts.path);
+            self.core
+                .borrow_mut()
+                .apply(Command::Finish(Finished::Full(id.to_owned())));
             return Ok(());
         }
         // a library tile is read from the library the page handed over, and has no revision to edit against
@@ -623,9 +634,9 @@ impl TileHost for Ctx {
             .ask(Command::Snapshot)
             .expect("the owner answers a snapshot in the same step");
         held.with(Outside {
-            // a worker has no slicers to scan and no home folder to keep an inventory in
+            // a worker has no slicers to scan
             printers: Vec::new(),
-            inventory: dt_service::inventory::InventoryState::Unavailable,
+            inventory: inventory_calls::snapshot(self),
         })
     }
 
@@ -711,8 +722,13 @@ impl PlaceHost for Ctx {
             .expect("the owner answers a summary in the same step")
     }
 
-    fn moved(&self, _: &Path, _: &Path, _: bool) {
-        // a worker keeps no inventory of prints, so nothing follows a tile that moves
+    fn moved(&self, from: &Path, to: &Path, folder: bool) {
+        // what you have printed follows a tile that moves
+        if folder {
+            inventory_calls::note_folder_rename(self, from, to);
+        } else {
+            inventory_calls::note_rename(self, from, to);
+        }
     }
 }
 
@@ -742,23 +758,22 @@ impl SceneHost for Ctx {
     }
 
     fn inventory(&self) -> Result<Option<dt_doc::inventory::Inventory>, Vec<dt_eval::Diag>> {
-        let path = Path::new(FOLDER).join(dt_doc::inventory::FILE);
-        if !self.inner.storage.exists(&path) {
-            return Ok(None);
-        }
-        let text = self.inner.storage.read_text(&path).map_err(|e| {
-            vec![dt_eval::Diag::plain(
-                dt_lang::codes::INVENTORY,
-                format!("cannot read {}: {e}", path.display()),
-            )]
-        })?;
-        dt_doc::inventory::decode(&path.to_string_lossy(), &text)
-            .map(Some)
-            .map_err(|e| e.iter().map(dt_eval::Diag::from).collect())
+        inventory_calls::read_inventory(self)
     }
 
     fn scene_memo(&self) -> &SceneMemo {
         &self.inner.memo
+    }
+
+    fn entropy(&self) -> u64 {
+        // a web page has no system to ask: the numbers come from what the page gave (`crypto.getRandomValues`), each
+        // one the next of a splitmix64 stream, so no two draws of a worker are the same
+        let next = self.inner.entropy.get().wrapping_add(0x9E37_79B9_7F4A_7C15);
+        self.inner.entropy.set(next);
+        let mut z = next;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
     }
 }
 
@@ -863,6 +878,28 @@ impl PlatesHost for Ctx {
     )]
     fn crown_build(&self, path: &str, opts: Options) -> Option<dt_eval::Built> {
         self.build_piece(path, &opts).ok()
+    }
+}
+
+impl InventoryHost for Ctx {
+    fn today(&self) -> String {
+        dt_print::inventory::date_of(
+            i64::try_from(WebHost::default().now_ms() / 86_400_000)
+                .expect("a day count since 1970 fits an i64"),
+        )
+    }
+
+    fn say(&self, m: Message) {
+        self.inner
+            .core
+            .borrow_mut()
+            .apply(Command::Say(Box::new(m)));
+    }
+
+    fn plan_of(&self, id: &str) -> Option<dt_service::plan::TilePlan> {
+        self.inner
+            .ask(|r| Command::Plan(id.to_owned(), r))
+            .expect("the owner answers a plan in the same step")
     }
 }
 
@@ -1107,6 +1144,26 @@ fn plates_set(ctx: &Ctx, req: PlatesSetReq) -> Result<ListEdited, Refusal> {
     plates_calls::set(ctx, req)
 }
 
+fn inventory_have(ctx: &Ctx, req: InventoryHaveReq) -> Result<InventoryWrote, Refusal> {
+    inventory_calls::have(ctx, req)
+}
+
+fn inventory_record(ctx: &Ctx, req: InventoryRecordReq) -> Result<InventoryWrote, Refusal> {
+    inventory_calls::record(ctx, req)
+}
+
+fn inventory_gone(ctx: &Ctx, req: InventoryGoneReq) -> Result<InventoryWrote, Refusal> {
+    inventory_calls::gone(ctx, req)
+}
+
+fn inventory_relink(ctx: &Ctx, req: InventoryRelinkReq) -> Result<InventoryWrote, Refusal> {
+    inventory_calls::relink(ctx, req)
+}
+
+fn inventory_reprint(ctx: &Ctx, req: InventoryReprintReq) -> Result<InventoryReprinted, Refusal> {
+    inventory_calls::reprint(ctx, req)
+}
+
 fn text(ctx: &Ctx, req: FileReq) -> Result<Option<TextRes>, Refusal> {
     read_calls::text(ctx, &ctx.tile_ref(), req.file.as_deref())
 }
@@ -1157,6 +1214,11 @@ fn table() -> Table<Ctx, Refusal> {
         .with_json(&MAPS_UNPIN_ALL, maps_unpin_all)
         .with_json(&PLATES_SHOW, plates_show)
         .with_json(&PLATES_SET, plates_set)
+        .with_json(&INVENTORY_HAVE, inventory_have)
+        .with_json(&INVENTORY_RECORD, inventory_record)
+        .with_json(&INVENTORY_GONE, inventory_gone)
+        .with_json(&INVENTORY_RELINK, inventory_relink)
+        .with_json(&INVENTORY_REPRINT, inventory_reprint)
 }
 
 /// What a call answered: JSON, or (a draft, a step) the page's bytes.
@@ -1203,12 +1265,32 @@ pub struct Service {
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl Service {
     /// An empty service: no tiles, the DungeonBlocks target.  The library must be set ([`crate::set_library`]) first:
-    /// the owner's target is the library's default printer.
+    /// the owner's target is the library's default printer.  `entropy` is real randomness from the page
+    /// (`crypto.getRandomValues`, at least eight bytes): a fresh seed is drawn from it, since a web page's worker has
+    /// no system to ask and a seed that is new must differ from one reload to the next.
     ///
     /// # Errors
-    /// The library has no default printer that reads, or the owner did not answer its first listener.
+    /// The library has no default printer that reads, the entropy is short, or the owner did not answer its first listener.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
-    pub fn new() -> Result<Self, JsError> {
+    pub fn new(entropy: &[u8]) -> Result<Self, JsError> {
+        if entropy.len() < 8 {
+            return Err(JsError::new(
+                "the page gave fewer than eight bytes of entropy for fresh seeds",
+            ));
+        }
+        let entropy = entropy
+            .chunks(8)
+            .map(|c| {
+                let mut b = [0u8; 8];
+                b[..c.len()].copy_from_slice(c);
+                u64::from_le_bytes(b)
+            })
+            .fold(0u64, |acc, w| {
+                (acc ^ w)
+                    .rotate_left(23)
+                    .wrapping_mul(0x2545_F491_4F6C_DD1D)
+            });
+
         let target = options_in(&Lib, System::Db).map_err(|r| JsError::new(&r.message))?;
         let storage = Arc::new(MemStorage::default());
         // My tiles is there from the start: a folder is made inside a folder that exists
@@ -1273,6 +1355,7 @@ impl Service {
                 built: RefCell::new(BTreeMap::new()),
                 ticket: Cell::new(0),
                 seq: Cell::new(0),
+                entropy: Cell::new(entropy),
             }),
             table: table(),
         };
@@ -1473,5 +1556,68 @@ impl Service {
     pub fn events(&self) -> String {
         let said: Vec<String> = self.inner.stream.try_iter().collect();
         format!("[{}]", said.join(","))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A fresh seed asked of a map in a service that was given `entropy`: the seed the piece was given.
+    fn fresh_seed(service: &Service, name: &str) -> u64 {
+        let tile = tile_id("lib:tiles/ground/1x1-grass.dtile");
+        let made: Listed = serde_json::from_str(
+            &service
+                .call(
+                    "listsNew",
+                    "",
+                    &format!(r#"{{"name":"{name}","map":true}}"#),
+                )
+                .expect("a map is made"),
+        )
+        .expect("the answer reads");
+        let list = made.id.expect("the map is listed");
+        let added: dt_service::map_calls::MapsPieced = serde_json::from_str(
+            &service
+                .call(
+                    "mapsAdd",
+                    "",
+                    &format!(
+                        r#"{{"list":"{list}","tile":"{tile}","at":"(1sq, 1sq)","seedWord":"fresh","docRev":1}}"#
+                    ),
+                )
+                .map_err(|e| e.to_string())
+                .expect("a piece is added"),
+        )
+        .expect("the answer reads");
+        added.seed.expect("a fresh seed was asked for, and given")
+    }
+
+    /// The page gives its worker real randomness; a fresh seed is drawn from it, so two reloads of the page (two
+    /// services, other entropy) and two edits of one service are not given the same seed, and the same entropy is the
+    /// same stream (what a test can hold).
+    #[test]
+    fn fresh_seeds_come_from_what_the_page_gave_and_differ() {
+        crate::tests::lib();
+        let bytes = |n: u8| -> Vec<u8> {
+            (0..32u8)
+                .map(|i| n.wrapping_mul(31).wrapping_add(i))
+                .collect()
+        };
+        let a = Service::new(&bytes(1)).expect("a service");
+        let (first, second) = (fresh_seed(&a, "One"), fresh_seed(&a, "Two"));
+        assert_ne!(first, second, "two edits of one worker repeated a seed");
+        let reloaded = Service::new(&bytes(2)).expect("a service");
+        assert_ne!(
+            first,
+            fresh_seed(&reloaded, "One"),
+            "a reload of the page repeated a seed"
+        );
+        let same = Service::new(&bytes(1)).expect("a service");
+        assert_eq!(first, fresh_seed(&same, "One"), "one entropy is one stream");
+        assert!(
+            Service::new(&[1, 2, 3]).is_err(),
+            "a page that gives no entropy is refused, never given a constant"
+        );
     }
 }

@@ -22,7 +22,7 @@ impl Shared {
     }
 
     pub(super) fn inventory_value(&self) -> InventoryState {
-        inventory::snapshot(self.home.as_deref())
+        inventory::snapshot(self)
     }
 
     /// The resources the owner cannot read itself (it reads no disk), as they are now: the inventory (and the printers

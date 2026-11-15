@@ -3,25 +3,14 @@
 //! [`Shared`] and a web worker's `Service` both are; what is here is each answered as the HTTP reply.
 
 use super::Shared;
-use super::api::{Out, Reply, out};
+use super::api::{Out, out};
 use super::edit::CheckRes;
 use dt_service::list_calls as calls;
 
 pub use dt_service::list_calls::{
     ListEdited, ListsAddReq, ListsAddRes, ListsCountReq, ListsNewReq, ListsRemoveReq,
-    ListsRestoreReq, Put,
+    ListsRestoreReq,
 };
-
-/// One more copy of `want` in a list (see [`dt_service::list_calls::put`]), its refusal as the reply.
-pub(super) fn put(
-    shared: &Shared,
-    want: &dt_doc::map::Want,
-    list: Option<&str>,
-    rev: Option<u64>,
-    mode: Option<dt_doc::map::Mode>,
-) -> Result<Put, Reply> {
-    calls::put(shared, want, list, rev, mode).map_err(super::api::refusal_reply)
-}
 
 /// `/api/tiles/ID/check` for a print list or the inventory (see [`dt_service::list_calls::check_text`]).
 pub(super) fn check_text(shared: &Shared, tile: &str, text: &str) -> CheckRes {

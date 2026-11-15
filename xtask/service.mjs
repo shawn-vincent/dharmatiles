@@ -19,7 +19,7 @@ if (text === undefined) throw new Error(`${tile} is not in the library`);
 // the worker's host hears a build's progress as it happens: one StreamEvent a stage
 const streamed = [];
 globalThis.dtStream = (json) => streamed.push(JSON.parse(json));
-const service = new engine.Service();
+const service = new engine.Service(crypto.getRandomValues(new Uint8Array(32)));
 service.set_target(system);
 const path = `/memory/My tiles/${tile.split('/').pop()}`;
 service.put(path, text);

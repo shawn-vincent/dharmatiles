@@ -40,6 +40,10 @@ pub trait SceneHost: TileHost {
     fn inventory(&self) -> Result<Option<dt_doc::inventory::Inventory>, Vec<Diag>>;
     /// What a reading of a map remembers between readings.
     fn scene_memo(&self) -> &SceneMemo;
+    /// A number nobody chose, new at every call: what a fresh seed is drawn from.  The program asks the system for it;
+    /// a web page has no system to ask, so the page hands its worker real randomness (`crypto.getRandomValues`) and the
+    /// worker draws from that.
+    fn entropy(&self) -> u64;
 }
 
 /// A printer profile's machine, by name.

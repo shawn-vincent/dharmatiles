@@ -80,6 +80,8 @@ struct World {
     /// The patches the plates' calls made, and the plate the view was put on.
     patched: RefCell<Vec<String>>,
     plate: RefCell<Option<usize>>,
+    /// What the inventory's calls said on the stream.
+    said: RefCell<Vec<String>>,
 }
 
 /// A map's pieces' tiles: the store, then the library from the checkout.
@@ -109,11 +111,29 @@ impl dt_service::scene_read::SceneHost for World {
     }
 
     fn inventory(&self) -> Result<Option<dt_doc::inventory::Inventory>, Vec<dt_eval::Diag>> {
-        Ok(None)
+        dt_service::inventory_calls::read_inventory(self)
     }
 
     fn scene_memo(&self) -> &dt_service::scene_read::SceneMemo {
         &self.memo
+    }
+
+    fn entropy(&self) -> u64 {
+        self.said.borrow().len() as u64 + 1
+    }
+}
+
+impl dt_service::inventory_calls::InventoryHost for World {
+    fn today(&self) -> String {
+        "2026-11-12".to_owned()
+    }
+
+    fn say(&self, m: Message) {
+        self.said.borrow_mut().push(m.text);
+    }
+
+    fn plan_of(&self, _id: &str) -> Option<dt_service::plan::TilePlan> {
+        None
     }
 }
 
@@ -422,6 +442,7 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
         planned: RefCell::new(Vec::new()),
         patched: RefCell::new(Vec::new()),
         plate: RefCell::new(None),
+        said: RefCell::new(Vec::new()),
     };
     let table = table();
     let id = tile_id(PATH);
@@ -595,6 +616,7 @@ fn world() -> World {
         planned: RefCell::new(Vec::new()),
         patched: RefCell::new(Vec::new()),
         plate: RefCell::new(None),
+        said: RefCell::new(Vec::new()),
     }
 }
 
@@ -1221,4 +1243,172 @@ fn the_plates_settings_and_the_plate_in_view_are_set_by_verb_with_no_server_and_
         },
     )
     .expect_err("no such list");
+}
+
+#[test]
+fn the_inventory_is_read_and_added_to_by_verb_through_the_store_with_no_server_and_no_disk() {
+    use dt_service::inventory::{ColourWord, InventoryState};
+    use dt_service::inventory_calls::{
+        self, InventoryGoneReq, InventoryHaveReq, InventoryRelinkReq, InventoryReprintReq,
+    };
+    let w = world();
+    let tile = tile_id(PATH);
+    let home = Path::new("/memory/My tiles");
+
+    // no log yet: nothing is made until the first line is written
+    assert!(matches!(
+        inventory_calls::snapshot(&w),
+        InventoryState::Absent { .. }
+    ));
+    assert!(!w.mem.exists(&inventory_calls::path_in(home)));
+
+    // one good print: the file is made with its header, in the store
+    let wrote = inventory_calls::have(
+        &w,
+        InventoryHaveReq {
+            tile: tile.clone(),
+            colour: ColourWord::Single,
+            system: None,
+            seed: None,
+            count: Some(2),
+            on: None,
+        },
+    )
+    .expect("a print is added");
+    assert_eq!(wrote.lines.len(), 2);
+    assert_eq!(wrote.file, "/memory/My tiles/inventory.dinv");
+    let text = w
+        .mem
+        .read_text(&inventory_calls::path_in(home))
+        .expect("the log is in the store");
+    assert!(text.contains("2026-11-12"), "{text}");
+    assert!(text.contains("home:b"), "{text}");
+    let InventoryState::Read { pieces, .. } = inventory_calls::snapshot(&w) else {
+        panic!("the log reads");
+    };
+    assert_eq!(pieces.len(), 1);
+    assert_eq!(
+        (pieces[0].have, pieces[0].edited, pieces[0].missing),
+        (2, false, false)
+    );
+    assert!(
+        w.said.borrow().iter().any(|m| m.contains("Added 2")),
+        "{:?}",
+        w.said.borrow()
+    );
+
+    // the tile changes after it was printed: the piece says so
+    w.mem
+        .write_text(Path::new(PATH), &format!("{TILE}\n// edited\n"))
+        .expect("the tile is written");
+    let InventoryState::Read { pieces, .. } = inventory_calls::snapshot(&w) else {
+        panic!("the log reads");
+    };
+    assert!(
+        pieces[0].edited,
+        "a tile edited since it was printed says so"
+    );
+
+    // one is lost; none of a piece you do not have can be
+    let p = pieces[0].clone();
+    inventory_calls::gone(
+        &w,
+        InventoryGoneReq {
+            tile: p.tile.clone(),
+            seed: p.seed,
+            system: p.system,
+            colour: ColourWord::Single,
+            note: Some("dropped".to_owned()),
+            on: None,
+        },
+    )
+    .expect("one is marked gone");
+    let refused = inventory_calls::gone(
+        &w,
+        InventoryGoneReq {
+            tile: p.tile.clone(),
+            seed: p.seed + 1,
+            system: p.system,
+            colour: ColourWord::Single,
+            note: None,
+            on: None,
+        },
+    )
+    .expect_err("there is none of that seed");
+    assert_eq!(refused.status, Status::Conflict);
+    let bad_date = inventory_calls::gone(
+        &w,
+        InventoryGoneReq {
+            tile: p.tile.clone(),
+            seed: p.seed,
+            system: p.system,
+            colour: ColourWord::Single,
+            note: None,
+            on: Some("yesterday-ish".to_owned()),
+        },
+    )
+    .expect_err("not a date");
+    assert_eq!(bad_date.status, Status::BadRequest);
+
+    // a tile that moves: the log follows it with a `renamed` line
+    inventory_calls::note_rename(
+        &w,
+        Path::new(PATH),
+        Path::new("/memory/My tiles/glade/b.dtile"),
+    );
+    let after = w
+        .mem
+        .read_text(&inventory_calls::path_in(home))
+        .expect("the log is in the store");
+    assert!(after.contains("home:glade/b"), "{after}");
+
+    // a re-link to a listed tile (the old path is the one the log knows now)
+    let relinked = inventory_calls::relink(
+        &w,
+        InventoryRelinkReq {
+            from: "home:glade/b".to_owned(),
+            to: tile.clone(),
+            on: None,
+        },
+    )
+    .expect("the path is re-linked");
+    assert!(relinked.lines[0].contains("home:b"), "{:?}", relinked.lines);
+
+    // a reprint goes into a new list beside the tiles, with `print=always` for a piece still on the shelf
+    let reprinted = inventory_calls::reprint(
+        &w,
+        InventoryReprintReq {
+            tile: "home:b".to_owned(),
+            seed: p.seed,
+            system: p.system,
+            colour: ColourWord::Single,
+            list: None,
+            doc_rev: None,
+        },
+    )
+    .expect("a reprint makes a list");
+    assert!(reprinted.made && reprinted.always, "{reprinted:?}");
+    assert!(reprinted.text.contains("home:b"), "{}", reprinted.text);
+
+    // a log that does not read is never added to: its mistakes are the answer
+    w.mem
+        .write_text(&inventory_calls::path_in(home), "not a log {")
+        .expect("the log is spoilt");
+    let e = inventory_calls::have(
+        &w,
+        InventoryHaveReq {
+            tile,
+            colour: ColourWord::Single,
+            system: None,
+            seed: None,
+            count: None,
+            on: None,
+        },
+    )
+    .expect_err("the log does not read");
+    assert_eq!(e.status, Status::Unprocessable);
+    assert!(matches!(
+        inventory_calls::snapshot(&w),
+        InventoryState::Broken { .. }
+    ));
 }

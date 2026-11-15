@@ -319,8 +319,14 @@ pub fn add(host: &impl ListHost, v: MapsAddReq) -> Result<MapsPieced, Refusal> {
     let (edited, id) = edit_list(host, &v.list, v.doc_rev, |text, l| {
         let id = dt_doc::map::next_id(l);
         let needs_scene = v.near.is_some() || v.seed_word.is_some();
-        let mut rs = needs_scene
-            .then(|| Resolver::new(shelf(host), scene_at(host, &path, l, v.doc_rev), &[]));
+        let mut rs = needs_scene.then(|| {
+            Resolver::new(
+                host.entropy(),
+                shelf(host),
+                scene_at(host, &path, l, v.doc_rev),
+                &[],
+            )
+        });
         let sys = system.unwrap_or_else(|| {
             rs.as_ref()
                 .map_or_else(Default::default, |r| r.scene().system)
@@ -421,8 +427,14 @@ fn batch_edit(
         .collect();
     let mut shifted = 0;
     let (edited, ()) = edit_list(host, list, doc_rev, |text, l| {
-        let mut rs =
-            intents.then(|| Resolver::new(shelf(host), scene_at(host, &path, l, doc_rev), &leave));
+        let mut rs = intents.then(|| {
+            Resolver::new(
+                host.entropy(),
+                shelf(host),
+                scene_at(host, &path, l, doc_rev),
+                &leave,
+            )
+        });
         let mut t = text.to_owned();
         for (id, set) in edits {
             let words = match rs.as_mut() {
@@ -465,7 +477,12 @@ pub fn dup(host: &impl ListHost, v: MapsDupReq) -> Result<MapsPieced, Refusal> {
         let at = match (&v.at, v.near) {
             (Some(a), _) => dt_doc::map::parse_at(a)?,
             (None, Some(near)) => {
-                let mut rs = Resolver::new(shelf(host), scene_at(host, &path, l, v.doc_rev), &[]);
+                let mut rs = Resolver::new(
+                    host.entropy(),
+                    shelf(host),
+                    scene_at(host, &path, l, v.doc_rev),
+                    &[],
+                );
                 let p = rs.piece(&v.id)?.clone();
                 let (x, y) = rs.place(&Geom::of(&p), p.rot.unwrap_or(0), near)?;
                 shifted = rs.shifted;

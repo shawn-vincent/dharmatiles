@@ -32,7 +32,7 @@
  *   default: (init: { module_or_path: BufferSource | WebAssembly.Module }) => Promise<unknown>,
  *   set_library: (json: string) => void,
  *   version: () => string,
- *   Service: new () => {
+ *   Service: new (entropy: Uint8Array) => {
  *     call(verb: string, tile: string, request: string): string,
  *     call_bytes(verb: string, tile: string, request: string): Uint8Array,
  *     mesh(tile: string, docRev: number): Uint8Array | undefined,
@@ -84,7 +84,8 @@ scope.onmessage = async (/** @type {MessageEvent<ToWorker>} */ ev) => {
       const engine = /** @type {Engine} */ (await import(m.glue));
       await engine.default({ module_or_path: m.module });
       engine.set_library(m.library);
-      service = new engine.Service();
+      // a worker has no system to ask for a number nobody chose: the page gives real randomness, a fresh seed is drawn from it
+      service = new engine.Service(crypto.getRandomValues(new Uint8Array(32)));
       scope.postMessage({ type: 'ready', version: engine.version() });
       scope.postMessage({ id: m.id, ok: true, events: '[]' });
       return;

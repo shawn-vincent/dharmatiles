@@ -69,7 +69,12 @@ pub(crate) fn shelf_for(
     let Some(home) = home.filter(|_| looks) else {
         return Ok(None);
     };
-    Ok(dt_print::inventory::load(home)?.map(|l| dt_doc::inventory::Shelf::of(&l.inventory)))
+    let docs = dt_service::docs::Docs::new(
+        std::sync::Arc::new(crate::preview::storage::DiskStorage),
+        None,
+    );
+    Ok(dt_service::inventory_calls::load(&docs, home)?
+        .map(|l| dt_doc::inventory::Shelf::of(&l.inventory)))
 }
 
 /// A list's name: its file's stem.

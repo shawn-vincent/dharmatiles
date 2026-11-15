@@ -33,7 +33,8 @@
 //! | the draft, reading and place calls: [`draft_calls`] (`draft`, `step`, on the host's draft lane), [`read_calls`] (`names`, `tokens`, `checkValue`, `printed`, `printedSet`, `offers`, `about`, `elements`, `language`, `text`; the schema's JSON is [`elements_json`]), [`place_calls`] (`newTile`, `mine`) | seam | here: written on [`tile_host::TileHost`] like the others; the host also gives its `version`, the first `snapshot`, My tiles (`home`) and the listing of what was written (`listed`) |
 //! | the print list and map calls: [`list_calls`] (`listsNew`, `listsAdd`, `listsCount`, `listsRemove`, `listsRestore`, and a list's `check`), [`map_calls`] (`mapsAdd`, `mapsSet`, `mapsBatch`, `mapsDup`, `mapsRemove`, `mapsPin`, `mapsUnpin`, `mapsUnpinAll`), with [`scene_read`] (a map read as a scene, no geometry) and [`placing`] (the nearest free square, a fresh seed) | seam | here: written on [`list_calls::ListHost`] (a [`scene_read::SceneHost`] and a [`folder_calls::PlaceHost`]: where My tiles is, where a piece's tile is read from, a printer's machine, the shelf, what a reading remembers, and the plates planned again after an edit) |
 //! | planning a print list or a map: [`plates_calls`] (`rebuild`, `platesShow`, `platesSet`, a map's crowns) | seam | here: written on [`plates_calls::PlatesHost`] (a [`list_calls::ListHost`] that also takes the owner's patches, builds a piece, knows the files' times and keeps its own clock); the program builds on its lanes and disk cache, the worker in its own turn |
-//! | `tell!`, `lock`, `watch::mtime`, `fail`, the HTTP `Reply` and `Body`, the plates' export, the inventory and printers handlers of `calls!` and the build lanes' jobs | transport | stay in the binary; moving those handlers behind a host is what is left |
+//! | the inventory: [`inventory_calls`] (the one reader and writer of `inventory.dinv`, `inventoryHave`, `inventoryRecord`, `inventoryGone`, `inventoryRelink`, `inventoryReprint`, an opened `.dinv`) | seam | here: written on [`inventory_calls::InventoryHost`] (a [`plates_calls::PlatesHost`] that also knows today's date, says a message and gives a list's plan); the files are the host's [`docs::Docs`] over its [`storage::Storage`] |
+//! | `tell!`, `lock`, `watch::mtime`, `fail`, the HTTP `Reply` and `Body`, the plates' export, the printers handlers of `calls!` and the build lanes' jobs | transport | stay in the binary; moving those handlers behind a host is what is left |
 //!
 //! The wire types are written once, here, and `web/preview/js/api.d.ts` is generated from them (`ts-rs`), so a
 //! rename fails `tsc` in the page.
@@ -52,6 +53,7 @@ pub mod folder_calls;
 pub mod header;
 pub mod host;
 pub mod inventory;
+pub mod inventory_calls;
 pub mod list_calls;
 pub mod map_calls;
 pub mod message;

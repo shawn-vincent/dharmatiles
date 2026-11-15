@@ -113,6 +113,46 @@ impl Docs {
         Ok((text, st.rev))
     }
 
+    /// Is there a file at `path`?
+    ///
+    /// # Errors
+    /// The store cannot say.
+    pub fn exists(&self, path: &str) -> std::io::Result<bool> {
+        match self.storage.stat(Path::new(path)) {
+            Ok(_) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Make the file at `path` with `text` (its folder too, when it is not there): never over a file that is there.
+    /// The text is written whole or not at all, and told like any write.
+    ///
+    /// # Errors
+    /// The file is there already (a document is added to with [`Docs::edit`]), or cannot be written.
+    pub fn create(&self, path: &str, text: &str) -> std::io::Result<()> {
+        let doc = self.doc(path);
+        let mut st = doc.state.lock_unpoisoned();
+        if self.exists(path)? {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("{path} is there already"),
+            ));
+        }
+        if let Some(dir) = Path::new(path)
+            .parent()
+            .filter(|d| !d.as_os_str().is_empty())
+        {
+            self.storage.create_dir_all(dir)?;
+        }
+        self.storage.write_text(Path::new(path), text)?;
+        st.observe(text);
+        if let Some(told) = &self.told {
+            told(path);
+        }
+        Ok(())
+    }
+
     /// The revision of `path` now (what a reply that wrote nothing says).
     ///
     /// # Errors

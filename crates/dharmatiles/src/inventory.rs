@@ -16,6 +16,7 @@ use dt_print::inventory as disk;
 use crate::cli::InventoryAction;
 use crate::{ERROR, OK, report};
 use dt_service::inventory::{InventoryRow, InventoryState};
+use dt_service::inventory_calls as calls;
 
 /// The command's choices, as the words the command line gives them.
 pub(crate) struct Choice {
@@ -61,16 +62,12 @@ fn date_of(on: Option<&str>) -> Result<String, String> {
     }
 }
 
-/// The colour mode last used in the log (what `have` assumes), else single.
-pub(crate) fn last_colour(inv: &doc::Inventory) -> Colour {
-    inv.entries
-        .iter()
-        .rev()
-        .find_map(|e| match e {
-            doc::Entry::Print { id, .. } | doc::Entry::Gone { id, .. } => Some(id.colour),
-            doc::Entry::Renamed { .. } => None,
-        })
-        .unwrap_or(Colour::Single)
+/// The command line's documents: the disk, with nobody to tell of a write.
+fn docs() -> dt_service::docs::Docs {
+    dt_service::docs::Docs::new(
+        std::sync::Arc::new(crate::preview::storage::DiskStorage),
+        None,
+    )
 }
 
 fn home() -> Result<PathBuf, String> {
@@ -87,7 +84,7 @@ fn fail(errs: &[Diag], json: bool) -> u8 {
 }
 
 fn read(home: &Path) -> Result<(doc::Inventory, Option<PathBuf>), Vec<Diag>> {
-    Ok(match disk::load(home)? {
+    Ok(match calls::load(&docs(), home)? {
         Some(l) => (l.inventory, Some(l.path)),
         None => (doc::Inventory::empty(), None),
     })
@@ -164,7 +161,7 @@ fn list(home: &Path, c: &Choice, tile: Option<&str>, failures: bool) -> u8 {
             return ERROR;
         }
     };
-    let state = match state_of(home) {
+    let state = match calls::state_of(&docs(), &dt_eval::Files, home) {
         Ok(x) => x,
         Err(e) => return fail(&e, c.json),
     };
@@ -273,7 +270,7 @@ fn write_lines(
     home: &Path,
     c: &Choice,
     tiles: &[String],
-    make: &dyn Fn(&Identity, &disk::Named, &str) -> Vec<String>,
+    make: &dyn Fn(&Identity, &calls::Named, &str) -> Vec<String>,
     verb: &str,
 ) -> u8 {
     let system = match system_of(c.system.as_deref().or(Some(dt_lang::System::Db.word()))) {
@@ -305,11 +302,19 @@ fn write_lines(
         Ok(x) => x,
         Err(e) => return fail(&e, c.json),
     };
-    let colour = colour.unwrap_or_else(|| last_colour(&inv));
+    let colour = colour.unwrap_or_else(|| calls::last_colour(&inv));
     let cwd = std::env::current_dir().ok();
     let mut lines = Vec::new();
     for t in tiles {
-        match disk::name_tile(t, cwd.as_deref(), Some(home), system, c.seed) {
+        match calls::name_tile(
+            &dt_eval::Files,
+            &dt_eval::Options::default(),
+            t,
+            cwd.as_deref(),
+            Some(home),
+            system,
+            c.seed,
+        ) {
             Ok(n) => {
                 let id = Identity {
                     tile: n.canon.clone(),
@@ -333,7 +338,7 @@ fn write_lines(
             Err(e) => return fail(&e, c.json),
         }
     }
-    match disk::append(home, &lines) {
+    match calls::append(&docs(), env!("CARGO_PKG_VERSION"), home, &lines) {
         Ok(p) => {
             if c.json {
                 crate::say_json(&crate::cli_wire::InventoryAdded {
@@ -404,7 +409,7 @@ pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
             from,
         } => {
             let c = choice(system, colour, seed, on, note);
-            let once = |id: &Identity, n: &disk::Named, on: &str| {
+            let once = |id: &Identity, n: &calls::Named, on: &str| {
                 doc::print_line(
                     id,
                     !failed,
@@ -414,7 +419,7 @@ pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
                     c.note.as_deref(),
                 )
             };
-            let many = |id: &Identity, n: &disk::Named, on: &str| {
+            let many = |id: &Identity, n: &calls::Named, on: &str| {
                 vec![once(id, n, on); count.max(1) as usize]
             };
             write_lines(&home, &c, &tiles, &many, "have")
@@ -428,7 +433,7 @@ pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
             note,
         } => {
             let c = choice(system, colour, seed, on, note);
-            let mk = |id: &Identity, _: &disk::Named, on: &str| {
+            let mk = |id: &Identity, _: &calls::Named, on: &str| {
                 vec![doc::gone_line(id, on, c.note.as_deref())]
             };
             write_lines(&home, &c, &tiles, &mk, "gone")
@@ -443,12 +448,18 @@ pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
             };
             let cwd = std::env::current_dir().ok();
             // the old name need not be a tile any more; the new one must be
-            let to =
-                match disk::name_tile(&new, cwd.as_deref(), Some(&home), dt_lang::System::Db, None)
-                {
-                    Ok(n) => n.canon,
-                    Err(e) => return fail(&e, json),
-                };
+            let to = match calls::name_tile(
+                &dt_eval::Files,
+                &dt_eval::Options::default(),
+                &new,
+                cwd.as_deref(),
+                Some(&home),
+                dt_lang::System::Db,
+                None,
+            ) {
+                Ok(n) => n.canon,
+                Err(e) => return fail(&e, json),
+            };
             let from = if old.starts_with("lib:") || old.starts_with("home:") {
                 old.trim_end_matches(".dtile").to_owned()
             } else {
@@ -465,7 +476,12 @@ pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
                 );
                 return ERROR;
             }
-            match disk::append(&home, &[doc::renamed_line(&from, &to, &on)]) {
+            match calls::append(
+                &docs(),
+                env!("CARGO_PKG_VERSION"),
+                &home,
+                &[doc::renamed_line(&from, &to, &on)],
+            ) {
                 Ok(p) => {
                     tell!("{from} is now {to}: {}", p.display());
                     OK
@@ -474,50 +490,4 @@ pub(crate) fn run(action: Option<InventoryAction>, json: bool) -> u8 {
             }
         }
     }
-}
-
-/// The inventory's rows as the page and `list --json` read them: every piece with what is held, and whether its tile
-/// changed or is gone.
-pub(crate) fn pieces_of(inv: &doc::Inventory, home: &Path) -> Vec<InventoryRow> {
-    inv.pieces()
-        .into_iter()
-        .map(|p| InventoryRow {
-            edited: p.have > 0 && disk::edited_since(&p.id.tile, p.hash.as_deref(), Some(home)),
-            missing: !disk::tile_exists(&p.id.tile, Some(home)),
-            colour: p.id.colour.into(),
-            tile: p.id.tile,
-            seed: p.id.seed,
-            system: p.id.system,
-            have: p.have,
-            printed: p.printed,
-            failed: p.failed,
-            gone: p.gone,
-            hash: p.hash,
-            last: p.last,
-            lines: p.lines,
-        })
-        .collect()
-}
-
-/// The inventory in `home`, as its state: absent until the first line is written, or read.  A file that does not read is
-/// the diagnostics it made.
-pub(crate) fn state_of(home: &Path) -> Result<InventoryState, Vec<Diag>> {
-    let path = disk::path_in(home);
-    let path_text = path.to_string_lossy().into_owned();
-    let id = crate::preview::tile_id(&path_text);
-    let home_text = home.to_string_lossy().into_owned();
-    Ok(match disk::load(home)? {
-        None => InventoryState::Absent {
-            home: home_text,
-            path: path_text,
-            id,
-        },
-        Some(l) => InventoryState::Read {
-            home: home_text,
-            path: path_text,
-            id,
-            pieces: pieces_of(&l.inventory, home),
-            last_colour: last_colour(&l.inventory).into(),
-        },
-    })
 }

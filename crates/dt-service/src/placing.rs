@@ -8,7 +8,6 @@
 //! The edit's answer says where each piece went and which seed it got.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::hash::{BuildHasher, Hasher};
 
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +75,8 @@ pub struct Resolver {
     scene: SceneJson,
     /// The footprints taken, with the height each stands at: the pieces placed (but those the edit moves) and those it placed.
     taken: Vec<(f64, [f64; 4])>,
+    /// The stream fresh seeds are drawn from: a word the host gave (its entropy), advanced for every number drawn.
+    entropy: u64,
     /// Seeds handed out in this edit, by tile and system.
     given: BTreeMap<(String, dt_lang::System), BTreeSet<u64>>,
     /// How many places went to a square other than the one wished.
@@ -83,9 +84,12 @@ pub struct Resolver {
 }
 
 impl Resolver {
-    /// `leave`: the pieces this edit moves, which do not stand in the way of their own new places.
+    /// `entropy`: a number nobody chose, from [`crate::scene_read::SceneHost::entropy`]: the host's own source, since what a
+    /// seed that merely has to be new is drawn from differs by where the program runs.  `leave`: the pieces this edit
+    /// moves, which do not stand in the way of their own new places.
     #[must_use]
     pub fn new(
+        entropy: u64,
         shelf: Option<dt_doc::inventory::Inventory>,
         scene: SceneJson,
         leave: &[&str],
@@ -103,6 +107,7 @@ impl Resolver {
             shelf,
             scene,
             taken,
+            entropy,
             given: BTreeMap::new(),
             shifted: 0,
         }
@@ -210,13 +215,22 @@ impl Resolver {
             .collect();
         used.extend(self.given.get(&key).into_iter().flatten());
         for _ in 0..1000 {
-            let s = 1 + random() % 99_998;
+            let s = 1 + self.draw() % 99_998;
             if !owned.contains(&s) && !used.contains(&s) && Some(s) != own {
                 self.given.entry(key).or_default().insert(s);
                 return Ok(s);
             }
         }
         Err("no free seed in a thousand tries".to_owned())
+    }
+
+    /// The next number of the stream (splitmix64: every word of a stream is its own).
+    fn draw(&mut self) -> u64 {
+        self.entropy = self.entropy.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.entropy;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
     }
 
     /// Does this tile in this system have a seed you own, or a piece on the map?  (A new piece of it then needs a fresh one.)
@@ -239,14 +253,6 @@ impl Resolver {
             None
         }
     }
-}
-
-/// A number nobody chose: the keys a hasher is made with (the system's entropy where there is one; in a web page, keys that
-/// differ from one call to the next, which is all a seed that merely has to be new needs; a web page has no clock to read).
-fn random() -> u64 {
-    std::collections::hash_map::RandomState::new()
-        .build_hasher()
-        .finish()
 }
 
 /// `(2sq, 1.5sq)`: a place as the document writes it, in the piece's own squares.
@@ -321,7 +327,7 @@ mod tests {
     #[test]
     fn the_nearest_free_place_is_the_wish_when_it_is_free_else_the_nearest_square_that_is() {
         let a = piece("a", Some([0.0, 0.0]), [35.0, 35.0], 0.0, 1);
-        let mut rs = Resolver::new(None, scene(vec![a]), &[]);
+        let mut rs = Resolver::new(7, None, scene(vec![a]), &[]);
         assert_eq!(
             rs.place(&G, 0, Near { x: 3.0, y: 0.0 }).unwrap(),
             (3.0, 0.0)
@@ -343,7 +349,7 @@ mod tests {
     #[test]
     fn a_piece_at_another_height_is_not_in_the_way_and_a_turned_one_is_searched_turned() {
         let a = piece("a", Some([0.0, 0.0]), [35.0, 35.0], 0.0, 1);
-        let mut rs = Resolver::new(None, scene(vec![a]), &[]);
+        let mut rs = Resolver::new(7, None, scene(vec![a]), &[]);
         let high = Geom { bottom: 33.0, ..G };
         assert_eq!(
             rs.place(&high, 0, Near { x: 0.0, y: 0.0 }).unwrap(),
@@ -352,7 +358,7 @@ mod tests {
         );
         // a 2x1 turned stands 1x2: beside a wall at (1, 0) it fits at (0, 0)
         let wall = piece("w", Some([35.0, 0.0]), [35.0, 35.0], 0.0, 2);
-        let mut rs = Resolver::new(None, scene(vec![wall]), &[]);
+        let mut rs = Resolver::new(7, None, scene(vec![wall]), &[]);
         let long = Geom {
             w: 70.0,
             d: 35.0,
@@ -364,7 +370,7 @@ mod tests {
         );
         // the pieces an edit moves do not stand in the way of their own new places
         let mover = piece("m", Some([0.0, 0.0]), [35.0, 35.0], 0.0, 3);
-        let mut rs = Resolver::new(None, scene(vec![mover]), &["m"]);
+        let mut rs = Resolver::new(7, None, scene(vec![mover]), &["m"]);
         assert_eq!(
             rs.place(&G, 0, Near { x: 0.0, y: 0.0 }).unwrap(),
             (0.0, 0.0)
@@ -374,7 +380,7 @@ mod tests {
     #[test]
     fn a_fresh_seed_is_not_the_tiles_own_not_on_the_map_and_not_repeated() {
         let a = piece("a", Some([0.0, 0.0]), [35.0, 35.0], 0.0, 4);
-        let mut rs = Resolver::new(None, scene(vec![a]), &[]);
+        let mut rs = Resolver::new(7, None, scene(vec![a]), &[]);
         let mut seen = BTreeSet::new();
         for _ in 0..200 {
             let s = rs

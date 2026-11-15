@@ -340,14 +340,19 @@ impl dt_service::scene_read::SceneHost for Shared {
     }
 
     fn inventory(&self) -> Result<Option<dt_doc::inventory::Inventory>, Vec<dt_eval::Diag>> {
-        match self.home.as_deref() {
-            Some(h) => Ok(dt_print::inventory::load(h)?.map(|l| l.inventory)),
-            None => Ok(None),
-        }
+        dt_service::inventory_calls::read_inventory(self)
     }
 
     fn scene_memo(&self) -> &dt_service::scene_read::SceneMemo {
         &self.scene_checks
+    }
+
+    fn entropy(&self) -> u64 {
+        use std::hash::{BuildHasher, Hasher};
+        // the keys a hasher is made with: the system's entropy, different at every call
+        std::collections::hash_map::RandomState::new()
+            .build_hasher()
+            .finish()
     }
 }
 
@@ -455,6 +460,20 @@ impl dt_service::plates_calls::PlatesHost for Shared {
     #[cfg(test)]
     fn after_seen(&self, path: &str) {
         plates::after_seen(path);
+    }
+}
+
+impl dt_service::inventory_calls::InventoryHost for Shared {
+    fn today(&self) -> String {
+        dt_print::inventory::today()
+    }
+
+    fn say(&self, m: dt_service::message::Message) {
+        Self::say(self, m);
+    }
+
+    fn plan_of(&self, id: &str) -> Option<dt_service::plan::TilePlan> {
+        self.owner.ask(|r| owner::Command::Plan(id.to_owned(), r))
     }
 }
 
@@ -882,7 +901,7 @@ impl Shared {
         let folders_changed = self.owner.ask(|r| owner::Command::SetFolders(folders, r));
         // the inventory is the page's too: edited by hand, or by the command line, it is told
         let inventory_changed = {
-            let now = inventory::snapshot(self.home.as_deref());
+            let now = inventory::snapshot(self);
             self.owner
                 .ask(|r| owner::Command::SeeInventory(Box::new(now), r))
         };
