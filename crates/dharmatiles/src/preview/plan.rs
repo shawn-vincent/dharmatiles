@@ -8,6 +8,7 @@ use serde::Serialize;
 use super::api::Mistake;
 use super::scene::SceneJson;
 use super::stack::StackItem;
+pub use crate::inventory_wire::InventoryRow;
 
 /// A tile's squares, across and up: what a tile and an STL file's footprint have, and a print list does not.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -310,24 +311,4 @@ pub struct InventoryRead {
     pub pieces: Vec<InventoryRow>,
     /// What is wrong with the file; empty when it reads.
     pub problems: Vec<Mistake>,
-}
-
-/// A piece of the inventory: what is held, and whether its tile changed or is gone.
-#[derive(Clone, Serialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct InventoryRow {
-    pub tile: String,
-    pub seed: u64,
-    pub system: String,
-    pub colour: String,
-    pub have: u32,
-    pub printed: u32,
-    pub failed: u32,
-    pub gone: u32,
-    pub hash: Option<String>,
-    pub last: Option<String>,
-    pub edited: bool,
-    pub missing: bool,
-    pub lines: Vec<usize>,
 }

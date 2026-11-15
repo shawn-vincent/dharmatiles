@@ -10,7 +10,7 @@ import {
 const P = (tile, seed, system, colour, have, extra = {}) => ({ tile, seed, system, colour, have, printed: have, failed: 0, gone: 0, hash: null, last: '2026-11-09', edited: false, missing: false, lines: [], ...extra });
 
 const inv = {
-  exists: true, home: '/Users/x/dharmatiles', path: '/Users/x/dharmatiles/inventory.dinv',
+  state: 'read', home: '/Users/x/dharmatiles', path: '/Users/x/dharmatiles/inventory.dinv', id: 'ab6ca6099010d82a', lastColour: 'single',
   pieces: [
     P('lib:tiles/ground/1x1-grass', 97, 'db', 'multi', 1),
     P('lib:tiles/ground/1x1-grass', 12, 'db', 'multi', 0, { printed: 1, gone: 1 }),
@@ -59,7 +59,7 @@ test('the pills: have, need, none without an inventory, edited since printing in
   assert.equal(pill(inv, 'lib:tiles/walls/1x1-wall-stone.dtile', 'ol').kind, 'need');
   assert.match(pill(inv, 'lib:tiles/cliffs/2x1-cliff.dtile', 'db').title, /edited since printing/);
   assert.equal(pill(inv, row('meadows/glade'), 'db').text, 'have 1', 'a tile in My tiles is found by its home: name');
-  assert.equal(pill({ exists: false, pieces: [] }, 'lib:tiles/x.dtile', 'db'), null, 'no inventory yet: nothing to have or need');
+  assert.equal(pill({ state: 'absent', home: '/Users/x/dharmatiles', path: '/Users/x/dharmatiles/inventory.dinv', id: 'ab6ca6099010d82a' }, 'lib:tiles/x.dtile', 'db'), null, 'no inventory yet: nothing to have or need');
   assert.equal(pill(null, 'lib:tiles/x.dtile', 'db'), null);
 });
 
@@ -104,6 +104,9 @@ test('a tile that moved offers the same name first', () => {
 
 test('the source is shown with line numbers', () => {
   assert.deepEqual(numbered('a\nb\n'), [[1, 'a'], [2, 'b']]);
-  assert.equal(exists({ exists: true }), true);
+  assert.equal(exists({ state: 'read' }), true);
+  assert.equal(exists({ state: 'broken' }), true);
+  assert.equal(exists({ state: 'absent' }), false);
+  assert.equal(exists({ state: 'unavailable' }), false);
   assert.equal(exists(null), false);
 });

@@ -64,7 +64,7 @@ use std::path::{Path, PathBuf};
 use dt_eval::Source;
 use serde::{Deserialize, Serialize};
 
-use super::api::{Json, Mistake, Out, Reply, TileRef};
+use super::api::{Mistake, Out, Reply, TileRef};
 use super::places::{Listed, Nothing};
 use super::queue::Outcome;
 use super::roots::personal_home;
@@ -487,7 +487,7 @@ pub struct PageMessageReq {
     pub what: Option<String>,
     pub text: String,
     pub help: Option<String>,
-    pub causes: Option<Json>,
+    pub causes: Option<Vec<String>>,
     pub backtrace: Option<String>,
 }
 
@@ -579,15 +579,7 @@ pub(super) fn page_message(shared: &Shared, v: PageMessageReq) -> Out<Done> {
         kind: "bug".to_owned(),
         message: v.text,
         help: v.help,
-        causes: v
-            .causes
-            .as_ref()
-            .and_then(Value::as_array)
-            .map_or_else(Vec::new, |a| {
-                a.iter()
-                    .filter_map(|c| c.as_str().map(str::to_owned))
-                    .collect()
-            }),
+        causes: v.causes.unwrap_or_default(),
         backtrace: v.backtrace.unwrap_or_default(),
         context: api::ErrorContext {
             route: v.what,
@@ -597,9 +589,9 @@ pub(super) fn page_message(shared: &Shared, v: PageMessageReq) -> Out<Done> {
         },
     };
     shared.say(messages::of_server_error(
-        &fail::to_value(&error),
+        &error,
         (tile, &name),
-        "page",
+        crate::message::Origin::Page,
     ));
     Ok(Done {})
 }

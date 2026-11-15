@@ -22,8 +22,8 @@
 //!   there, 409 for a file that moved on, 422 for a document that does not
 //!   read, 500 for what the program could not do.  A 200 is a success.
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::fail;
@@ -33,10 +33,6 @@ pub(super) type Reply = (&'static str, Value);
 
 /// What a route's function gives: its answer, or the reply that refuses.
 pub(super) type Out<T> = Result<T, Reply>;
-
-/// A JSON value the contract does not describe further (a mesh's build
-/// record, an element's schema: read by the page as data, never by name).
-pub type Json = Value;
 
 /// A request body as its type.
 ///
@@ -92,7 +88,7 @@ pub struct ErrorBody {
 }
 
 /// The error itself.
-#[derive(Serialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorDetail {
@@ -106,7 +102,7 @@ pub struct ErrorDetail {
 }
 
 /// What the server was doing.
-#[derive(Serialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorContext {
@@ -149,37 +145,6 @@ impl From<&dt_eval::Diag> for Mistake {
             unexpected: !crate::build::is_document_error(d.code),
         }
     }
-}
-
-/// A JSON document the engine writes (the inventory's snapshot) with every field name in the contract's one convention,
-/// `camelCase`.  Done where such a document leaves for the page, so the
-/// engine keeps its own names and the page sees one style.
-#[must_use]
-pub fn camel_keys(v: &Value) -> Value {
-    match v {
-        Value::Object(o) => {
-            Value::Object(o.iter().map(|(k, x)| (camel(k), camel_keys(x))).collect())
-        }
-        Value::Array(a) => Value::Array(a.iter().map(camel_keys).collect()),
-        other => other.clone(),
-    }
-}
-
-/// `size_mm` as `sizeMm`; a name with no underscore as it is.
-fn camel(k: &str) -> String {
-    let mut out = String::with_capacity(k.len());
-    let mut up = false;
-    for c in k.chars() {
-        if c == '_' && !out.is_empty() {
-            up = true;
-        } else if up {
-            out.extend(c.to_uppercase());
-            up = false;
-        } else {
-            out.push(c);
-        }
-    }
-    out
 }
 
 /// The mistakes of a document as the contract's type.
@@ -300,7 +265,7 @@ pub struct Snapshot {
     pub roots: Vec<RootJson>,
     pub folders: Vec<FolderJson>,
     pub home: Option<String>,
-    pub inventory: Json,
+    pub inventory: crate::inventory_wire::InventoryState,
     pub tiles: Vec<TileSummary>,
 }
 

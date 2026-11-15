@@ -24,14 +24,14 @@ import { detailsOf, environmentText, tileErrorDetails } from './problems.js';
 /** @typedef {import('./api').BuildData} BuildData */
 /** @typedef {import('./api').ServerData} ServerData */
 
-// A message's `data` is the numbers of its kind (api.rs, `MessageJson`): these are the readings that pair a kind with its type, once,
-// here; the program makes each kind's data from the one type (crate::message), and a test holds the pairing.
+// A message's `data` is one variant of `MessageData`, tagged by `type` (api.rs, `MessageJson`); these are the readings of the three
+// variants the page reads by name.  The program makes each variant from its one type (crate::message).
 /** @param {MessageJson | null | undefined} m @returns {AuditSummary | null} */
-export const gateOf = (m) => (m?.kind === 'gate' ? /** @type {AuditSummary} */ (m.data) : null);
+export const gateOf = (m) => (m?.data?.type === 'gate' ? m.data : null);
 /** @param {MessageJson | null | undefined} m @returns {BuildData | null} */
-export const buildOf = (m) => (m?.kind === 'build' && m.code == null ? /** @type {BuildData} */ (m.data) : null); // (a build's note about the cache has a code and no numbers)
+export const buildOf = (m) => (m?.data?.type === 'build' ? m.data : null);
 /** @param {MessageJson} m @returns {ServerData | null} */
-export const serverOf = (m) => (m.kind === 'server' ? /** @type {ServerData} */ (m.data) : null);
+export const serverOf = (m) => (m.data?.type === 'server' ? m.data : null);
 
 /**
  * Where a message's code is explained: the copy of its error page that the program serves from the docs it was installed with
@@ -284,13 +284,13 @@ export function detailsFor(m, { source = null, env } = {}) {
   const d = serverOf(m);
   if (d) {
     const se = new ServerError({
-      kind: d.kind || 'failure', message: m.text, help: m.help, causes: d.causes || [], backtrace: d.backtrace || '',
+      kind: d.kind || 'failure', message: m.text, help: m.help, causes: d.causes, backtrace: d.backtrace,
       context: { route: d.route || null, tile: m.tile_name || m.tile || null, version: d.version || null },
     });
     return detailsOf(d.route || (d.origin === 'page' ? 'The page' : 'The server'), new Error(m.text, { cause: se }), ...(env ? [env] : []));
   }
   if (isProblem(m)) return tileErrorDetails(asTileError(m), opts);
-  return `${m.text}${m.data && Object.keys(m.data).length ? `\n${JSON.stringify(m.data)}` : ''}`;
+  return `${m.text}${m.data ? `\n${JSON.stringify(m.data)}` : ''}`;
 }
 
 /**

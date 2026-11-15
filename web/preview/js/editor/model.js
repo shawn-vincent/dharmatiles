@@ -15,7 +15,7 @@ import { computed, signal } from '@preact/signals-core';
 import * as M from '../map-model.js';
 import { listFrom } from '../map-list.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
-import { canonOf, pill as invPill, systemName } from '../inventory.js';
+import { canonOf, homeOf, lastColourOf, pill as invPill, systemName } from '../inventory.js';
 import { showError } from '../problems.js';
 import { seedStripOf, thumbs } from './scene-thumbs.js';
 import { levelOf, placesOf, settledLevel, whereIs, writable } from '../folders.js';
@@ -91,7 +91,7 @@ export function pictureFor(t, o = {}) {
 }
 
 /** The listed tile a tile's canonical name (js/inventory.js `canonOf`) is, or undefined. @param {string} canon */
-const tileOfCanon = (canon) => { const home = server.get().inventory?.home; return server.get().tiles.find((x) => canonOf(x.path, home) === canon); };
+const tileOfCanon = (canon) => { const home = homeOf(server.get().inventory); return server.get().tiles.find((x) => canonOf(x.path, home) === canon); };
 
 /** The plates of the list shown, as the program last planned them (null while it has not). */
 export const plan = computed(() => (isPlates(tileNow.value) ? panelOf(tileNow.value) : null));
@@ -238,15 +238,15 @@ export const colourKept = signal(0);
 const dataOf = (t) => {
   const snap = server.get().inventory;
   const own = t.plan?.inventory;
-  if (snap?.exists && snap.path === t.path && !snap.problems) return { ...snap, text: own?.text ?? '', home: snap.home };
-  return { pieces: own?.pieces ?? [], text: own?.text ?? '', problems: own?.problems, home: snap?.home ?? '' };
+  if (snap?.state === 'read' && snap.path === t.path) return { pieces: snap.pieces, text: own?.text ?? '', problems: undefined, home: snap.home };
+  return { pieces: own?.pieces ?? [], text: own?.text ?? '', problems: own?.problems, home: homeOf(snap) };
 };
 
 /** What the tile level's inventory block reads. */
 export const haveBlockModel = {
   inventory,
   system: computed(() => server.get().system),
-  colour: computed(() => { void colourKept.value; return pickedColour.value ?? storedColour() ?? server.get().inventory?.lastColour ?? 'single'; }),
+  colour: computed(() => { void colourKept.value; return pickedColour.value ?? storedColour() ?? lastColourOf(server.get().inventory) ?? 'single'; }),
 };
 
 /** What the inventory's own view reads. */

@@ -55,8 +55,16 @@ export const shelfBadge = (p) => `×${p.have}`;
 /** A tile of the log as a short name: the last part of its path. */
 export const nameOf = (canon) => String(canon).replace(/^(lib|home):/, '').split('/').pop();
 
-/** Does the program say there is an inventory (its file exists)? */
-export const exists = (inv) => !!inv?.exists;
+/** @typedef {import('./api').InventoryState} InventoryState */
+
+/** Does the program say there is an inventory (its file exists, whether it reads or not)? @param {InventoryState | null | undefined} inv */
+export const exists = (inv) => inv?.state === 'read' || inv?.state === 'broken';
+
+/** My tiles' folder, as the inventory says it (empty where there is no home folder). @param {InventoryState | null | undefined} inv */
+export const homeOf = (inv) => (inv && inv.state !== 'unavailable' ? inv.home : '');
+
+/** The colour mode the log last used, when it reads. @param {InventoryState | null | undefined} inv */
+export const lastColourOf = (inv) => (inv?.state === 'read' ? inv.lastColour : null);
 
 /** The pieces of the inventory that are about `canon` (any system), or all of them. */
 export const piecesOf = (inv, canon) => (inv?.pieces || []).filter((p) => canon == null || p.tile === canon);
@@ -100,8 +108,8 @@ export function haveLine(h) {
  * system; none when there is no inventory yet (nothing to have or need).  The title says which system and what.
  */
 export function pill(inv, path, system) {
-  if (!exists(inv) || !inv.pieces) return null;
-  const h = tileHave(inv, canonOf(path, inv.home), system);
+  if (!exists(inv)) return null;
+  const h = tileHave(inv, canonOf(path, homeOf(inv)), system);
   const sys = systemName(system);
   if (!h.have) return { kind: 'need', text: 'need', title: `None on your shelf for ${sys}${h.failed ? `; ${plural(h.failed, 'failed print')} kept in the log` : ''}` };
   return { kind: 'have', text: `have ${h.have}`, title: `${haveLine(h)} (${sys})${h.edited ? '; edited since printing' : ''}` };

@@ -23,7 +23,7 @@ import { openMenu } from '../menu.js';
 import { crumbsFor, moveRow, parseHash } from '../nav.js';
 import { afterSlide } from '../slide.js';
 import { copiedNote } from '../mine.js';
-import { systemName } from '../inventory.js';
+import { exists, systemName } from '../inventory.js';
 import { failed, showError, whyOf } from '../problems.js';
 import { $, host, toast } from './app.js';
 import { canLeave } from './document.js';
@@ -148,7 +148,7 @@ function bind() {
     $('bback').title = d.level.root == null ? 'Places is the top' : 'Up a level (⌘[)';
     const lines = contextForFolder({ roots: d.roots, level: d.level, view: d.view, home: d.home });
     // the pills are for one system, the title bar's chip: said once, where they are
-    if (d.level.root != null && d.inventory?.exists && d.view?.items.length && lines.length) lines[0] = `${lines[0]} · have and need for ${systemName(d.system)}`;
+    if (d.level.root != null && exists(d.inventory) && d.view?.items.length && lines.length) lines[0] = `${lines[0]} · have and need for ${systemName(d.system)}`;
     render(html`<${ContextLines} lines=${lines} />`, $('bctx-lines'));
     render(html`<${FolderActions} buttons=${actionButtons(d)} />`, $('folder-actions'));
   });

@@ -74,7 +74,7 @@ mod docs;
 mod edit;
 pub(crate) mod fail;
 pub mod header;
-mod inventory;
+pub(crate) mod inventory;
 mod lists;
 mod local_docs;
 mod maps;
@@ -145,7 +145,7 @@ type SceneCheck = (String, Option<u64>, String, Option<SystemTime>);
 /// same path is the same id for as long as it is listed, and across runs.
 type TileId = String;
 
-fn tile_id(path: &str) -> TileId {
+pub(crate) fn tile_id(path: &str) -> TileId {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in path.bytes() {
         h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
@@ -378,9 +378,9 @@ pub struct Shared {
     /// unchanged opens from it, and an earlier build of one that changed
     /// shows while the new one runs.  None: no disk cache (the tests').
     store: Option<Arc<dt_store::Store>>,
-    /// The inventory as the last snapshot told it (text), so a change made
+    /// The inventory as the last snapshot told it, so a change made
     /// outside the program (the file edited by hand) is told too.
-    inventory_seen: Mutex<String>,
+    inventory_seen: Mutex<Option<crate::inventory_wire::InventoryState>>,
     /// The tiers the page wants of a map's pieces, what is building and what is built ([`tiers`]).
     tier_book: Mutex<tiers::TierBook>,
     /// A tile's size and seed as a map's piece reads them, by tile, seed, system and the file's time ([`scene`]).
@@ -485,7 +485,7 @@ impl Shared {
             sketch_seq: std::sync::atomic::AtomicU64::new(0),
             build_caches: Mutex::new(VecDeque::new()),
             store: None,
-            inventory_seen: Mutex::new(String::new()),
+            inventory_seen: Mutex::new(None),
             tier_book: Mutex::new(tiers::TierBook::default()),
             scene_checks: Mutex::new(BTreeMap::new()),
             docs: docs::Docs::default(),
@@ -885,11 +885,11 @@ impl Shared {
         let mut removed = Vec::new();
         // the inventory is the page's too: edited by hand, or by the command line, it is told
         let inventory_changed = {
-            let now = inventory::snapshot(self.home.as_deref()).to_string();
+            let now = inventory::snapshot(self.home.as_deref());
             let mut seen = lock(&self.inventory_seen);
-            let differs = *seen != now;
+            let differs = seen.as_ref() != Some(&now);
             if differs {
-                *seen = now;
+                *seen = Some(now);
             }
             differs
         };

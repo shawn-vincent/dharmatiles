@@ -55,6 +55,7 @@ mod elements;
 mod explain;
 mod fix;
 mod inventory;
+mod inventory_wire;
 mod library;
 mod mcp;
 mod message;

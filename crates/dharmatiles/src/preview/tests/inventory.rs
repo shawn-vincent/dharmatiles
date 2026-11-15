@@ -3,6 +3,7 @@
 //! and what the plates make of it.  A scratch home of the test's own.
 
 use super::*;
+use crate::inventory_wire::{ColourWord, InventoryRow, InventoryState};
 
 struct Home {
     dir: std::path::PathBuf,
@@ -89,8 +90,15 @@ impl Home {
         tiles(&self.r)
     }
 
-    fn inventory(&self) -> Value {
-        self.snapshot()["inventory"].clone()
+    /// The snapshot's inventory, as its type.
+    fn inventory(&self) -> InventoryState {
+        serde_json::from_value(self.snapshot()["inventory"].clone())
+            .expect("the snapshot's inventory is an InventoryState")
+    }
+
+    /// The first piece the snapshot's inventory holds.
+    fn first_piece(&self) -> InventoryRow {
+        self.inventory().pieces()[0].clone()
     }
 
     fn tile(&self, f: &str) -> Option<Value> {
@@ -141,7 +149,7 @@ const KIT: &str = "dharmatiles version=1\nmap {\n    piece \"home:glade\" count=
 fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     let h = start_home("have", &[("glade.dtile", GLADE)]);
     // no inventory yet: nothing is made
-    assert_eq!(h.inventory()["exists"], false);
+    assert!(matches!(h.inventory(), InventoryState::Absent { .. }));
     assert!(!h.dir.join("inventory.dinv").exists());
     // a call needs the token
     let body = serde_json::json!({"tile": h.id("glade.dtile"), "colour": "single"}).to_string();
@@ -172,17 +180,18 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     );
     // the snapshot: one piece, held, at the tile's own seed
     let inv = h.inventory();
-    assert_eq!(inv["exists"], true);
-    assert_eq!(inv["pieces"][0]["tile"], "home:glade");
+    let InventoryState::Read { last_colour, .. } = &inv else {
+        panic!("the inventory reads: {inv:?}");
+    };
+    let piece = &inv.pieces()[0];
+    assert_eq!(piece.tile, "home:glade");
+    assert_eq!((piece.seed, piece.have), (5, 1));
+    assert!(!piece.edited);
     assert_eq!(
-        (
-            inv["pieces"][0]["seed"].as_u64(),
-            inv["pieces"][0]["have"].as_u64()
-        ),
-        (Some(5), Some(1))
+        *last_colour,
+        ColourWord::Multi,
+        "the colour the log last used"
     );
-    assert_eq!(inv["pieces"][0]["edited"], false);
-    assert_eq!(inv["lastColour"], "multi", "the colour the log last used");
     // the file is a tile of My tiles now, opened as an inventory
     let t = h.wait("inventory.dinv", "the inventory document", |t| {
         t["status"] == "ready" && t["plan"]["kind"] == "inventory"
@@ -197,15 +206,15 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     // the tile edited since it was printed: information only, it still counts
     std::fs::write(h.dir.join("glade.dtile"), format!("{GLADE}// edited\n")).unwrap();
     h.shared.rescan();
-    let inv = h.inventory();
-    assert_eq!(inv["pieces"][0]["edited"], true);
-    assert_eq!(inv["pieces"][0]["have"], 1);
+    let piece = h.first_piece();
+    assert!(piece.edited);
+    assert_eq!(piece.have, 1);
     // a second print of the same piece is a second piece; a mistake in the file is never added to
     h.ok(
         "/api/inventory/have",
         serde_json::json!({"tile": h.id("glade.dtile"), "colour": "multi"}),
     );
-    assert_eq!(h.inventory()["pieces"][0]["have"], 2);
+    assert_eq!(h.first_piece().have, 2);
     let good = h.text();
     std::fs::write(
         h.dir.join("inventory.dinv"),
@@ -259,14 +268,8 @@ fn the_sheet_after_a_print_adds_the_plate_good_and_failed_and_the_plates_shrink(
         text.contains("colour=single"),
         "the list prints in single colour: {text}"
     );
-    let inv = h.inventory();
-    assert_eq!(
-        (
-            inv["pieces"][0]["have"].as_u64(),
-            inv["pieces"][0]["failed"].as_u64()
-        ),
-        (Some(2), Some(1))
-    );
+    let piece = h.first_piece();
+    assert_eq!((piece.have, piece.failed), (2, 1));
     // the list is laid out again against the shelf: one to print, two in the inventory
     let t = h.wait("kit.dmap", "the plates against the shelf", |t| {
         t["status"] == "ready" && t["plan"]["plates"]["kinds"][0]["have"] == 2
@@ -327,8 +330,8 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         b["note"] = "dropped on the floor".into();
         b
     });
-    assert_eq!(h.inventory()["pieces"][0]["have"], 1);
-    assert_eq!(h.inventory()["pieces"][0]["gone"], 1);
+    let piece = h.first_piece();
+    assert_eq!((piece.have, piece.gone), (1, 1));
     let after = h.text();
     assert!(
         after.starts_with(before.trim_end().trim_end_matches('}')),
@@ -354,15 +357,9 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         "{}",
         h.text()
     );
-    let inv = h.inventory();
-    assert_eq!(
-        (
-            inv["pieces"][0]["tile"].as_str(),
-            inv["pieces"][0]["have"].as_u64()
-        ),
-        (Some("home:meadow"), Some(1))
-    );
-    assert_eq!(inv["pieces"][0]["missing"], false);
+    let piece = h.first_piece();
+    assert_eq!((piece.tile.as_str(), piece.have), ("home:meadow", 1));
+    assert!(!piece.missing);
     // a tile moved into a folder follows too (the move route)
     std::fs::create_dir_all(h.dir.join("sets")).unwrap();
     h.shared.rescan();
@@ -371,7 +368,7 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         serde_json::json!({"root": 0, "dir": "sets"}),
     );
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
-    assert_eq!(h.inventory()["pieces"][0]["tile"], "home:sets/meadow");
+    assert_eq!(h.first_piece().tile, "home:sets/meadow");
     // moved by hand, outside the editor: the path is not there any more, and one click re-links it
     std::fs::rename(
         h.dir.join("sets/meadow.dtile"),
@@ -379,16 +376,12 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
     )
     .unwrap();
     h.shared.rescan();
-    let inv = h.inventory();
-    assert_eq!(inv["pieces"][0]["missing"], true);
+    assert!(h.first_piece().missing);
     h.ok("/api/inventory/relink", serde_json::json!({"from": "home:sets/meadow", "to": h.id("clearing.dtile"), "on": "2026-11-11"}));
-    let inv = h.inventory();
+    let piece = h.first_piece();
     assert_eq!(
-        (
-            inv["pieces"][0]["tile"].as_str(),
-            inv["pieces"][0]["missing"].clone()
-        ),
-        (Some("home:clearing"), serde_json::json!(false))
+        (piece.tile.as_str(), piece.missing),
+        ("home:clearing", false)
     );
     assert!(
         h.text()

@@ -26,7 +26,7 @@ import { firstError, tileLevelState } from '../messages.js';
 import { Unread } from '../view/messages-panel.js';
 import { showLine } from './panel.js';
 import { haveBlock, isTileDoc } from './inventory.js';
-import { canonOf, tileHave } from '../inventory.js';
+import { canonOf, homeOf, tileHave } from '../inventory.js';
 import { token } from '../tokens.js';
 import { seedStripOf } from './scene-thumbs.js';
 import { addTo, lists } from './lists.js';
@@ -93,7 +93,7 @@ function seedStrip(/** @type {any} */ t, /** @type {any} */ own) {
   const written = own.controls.find((/** @type {any} */ c) => c.name === 'seed');
   const n = written ? Number(String(written.text).replace(/"/g, '')) : NaN;
   const inv = server.get().inventory;
-  const have = tileHave(inv, canonOf(t.path, inv?.home), server.get().system);
+  const have = tileHave(inv, canonOf(t.path, homeOf(inv)), server.get().system);
   return seedStripOf({ tile: t.id, system: server.get().system, current: Number.isFinite(n) ? n : null, owned: have.seeds.map((/** @type {any} */ x) => x.seed) });
 }
 

@@ -5,10 +5,13 @@
 //! and on the event stream; this module only makes them.
 
 use dt_eval::Diag;
-use serde_json::{Value, json};
 
+use super::api::ErrorDetail;
 pub(super) use crate::message::Scope;
-use crate::message::{BuildData, Kind, Message, MessagesRes, ServerData, Severity, render};
+use crate::message::{
+    BuildData, CheckData, ExportData, Kind, Message, MessageData, MessagesRes, Origin, ServerData,
+    Severity, ShownData, render,
+};
 use dt_eval::TileRecord;
 
 use super::route::Reply;
@@ -40,7 +43,11 @@ pub(super) fn of_check(
                     t.stack.len()
                 ),
             )
-            .data(json!({"cols": t.cols, "rows": t.rows, "entries": t.stack.len()})),
+            .data(MessageData::Check(CheckData {
+                cols: t.cols,
+                rows: t.rows,
+                entries: t.stack.len(),
+            })),
         );
     }
     out.extend(
@@ -93,8 +100,8 @@ pub(super) fn of_build(record: &TileRecord, reused: usize, id: &str, name: &str)
     } else {
         format!("Built in {secs:.1} s{kept}")
     };
-    let build =
-        Message::new(Kind::Build, Severity::Info, Scope::Build, id, name, text).typed(&BuildData {
+    let build = Message::new(Kind::Build, Severity::Info, Scope::Build, id, name, text).data(
+        MessageData::Build(BuildData {
             build_s: record.build_s,
             triangles: record.audit.triangles,
             target: target.to_owned(),
@@ -102,7 +109,8 @@ pub(super) fn of_build(record: &TileRecord, reused: usize, id: &str, name: &str)
             reused,
             cache: if hit { "hit" } else { "miss" }.to_owned(),
             made_s: hit.then_some(made),
-        });
+        }),
+    );
     let mut out = out_of_gate(build, &record.audit, id, name);
     for problem in &cache.problems {
         out.push(
@@ -136,7 +144,9 @@ pub(super) fn of_shown(note: &str, kind: &str, id: &str, name: &str) -> Message 
         format!("Showing {note} while the tile builds"),
     )
     .code("cache")
-    .data(json!({"shown": kind}))
+    .data(MessageData::Shown(ShownData {
+        shown: kind.to_owned(),
+    }))
 }
 
 /// A problem the cache met before the build began (a damaged entry it
@@ -180,7 +190,7 @@ fn out_of_gate(build: Message, a: &dt_kit::AuditSummary, id: &str, name: &str) -
         ))
     }
     .code("gate")
-    .typed(a);
+    .data(MessageData::Gate(a.clone()));
     vec![build, gate]
 }
 
@@ -213,33 +223,37 @@ pub(super) fn of_export(record: &TileRecord, files: &[String], id: &str, name: &
         name,
         format!("Exported {} for {target}", shown.join(", ")),
     )
-    .data(json!({"files": files, "target": target, "build_s": record.build_s}))
+    .data(MessageData::Export(ExportData {
+        files: files.to_vec(),
+        target: target.to_owned(),
+        build_s: record.build_s,
+    }))
 }
 
 /// A failure of the program's own, as the one error path makes it
 /// ([`super::fail::ServerError::json`]): `error` is its body, `tile` the tile
 /// it was about, if any.  `origin` says who found it: `server` or `page`.
-pub(super) fn of_server_error(error: &Value, tile: (&str, &str), origin: &str) -> Message {
-    let kind = error["kind"].as_str().unwrap_or("failure");
+pub(super) fn of_server_error(error: &ErrorDetail, tile: (&str, &str), origin: Origin) -> Message {
+    let kind = error.kind.as_str();
     let mut m = Message::new(
         Kind::Server,
         Severity::Error,
         Scope::Server,
         tile.0,
         tile.1,
-        error["message"].as_str().unwrap_or("a failure"),
+        error.message.clone(),
     )
     .code(if kind == "bug" { "bug" } else { "failure" })
-    .help(error["help"].as_str());
-    m.doing = error["context"]["route"].as_str().map(str::to_owned);
-    m = m.typed(&ServerData {
-        origin: origin.to_owned(),
+    .help(error.help.as_deref());
+    m.doing.clone_from(&error.context.route);
+    m = m.data(MessageData::Server(ServerData {
+        origin,
         kind: kind.to_owned(),
-        route: error["context"]["route"].as_str().map(str::to_owned),
-        causes: error["causes"].clone(),
-        backtrace: error["backtrace"].clone(),
-        version: error["context"]["version"].as_str().map(str::to_owned),
-    });
+        route: error.context.route.clone(),
+        causes: error.causes.clone(),
+        backtrace: error.backtrace.clone(),
+        version: error.context.version.clone(),
+    }));
     m
 }
 
