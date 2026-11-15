@@ -1,3 +1,4 @@
+// @ts-check
 // The viewer's layers over the mesh: the debug dots, the clouds, the region map, the
 // grid and the build's sketches.
 //

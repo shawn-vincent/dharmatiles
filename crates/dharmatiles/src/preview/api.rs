@@ -235,7 +235,22 @@ pub struct TileSummary {
     pub mesh_bytes: Option<usize>,
     pub sketches: Vec<SketchRef>,
     /// While the first build runs: the mesh on show is an earlier one (`kind`, `note`).
-    pub shown: Option<Json>,
+    pub shown: Option<Shown>,
+}
+
+/// The mesh on show while a build runs, and what it is (see [`TileSummary::shown`]).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct Shown {
+    /// What the mesh is of: `earlier` (a full build the cache kept), `preview` (a stored low tier, or the plates' drafts).
+    pub kind: String,
+    /// Words for the status line.
+    pub note: String,
+    /// Whether the gate has checked the mesh on show: a draft has not been.
+    pub checked: bool,
+    /// `low` or `full`, for a build on show; a plates preview has no tier.
+    pub tier: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -397,6 +412,8 @@ pub(super) struct Collect {
     pub cfg: ts_rs::Config,
     seen: std::collections::BTreeSet<std::any::TypeId>,
     decls: std::collections::BTreeMap<String, String>,
+    /// The Rust type behind each TypeScript name: two types with one name would leave the page one of them, unsaid.
+    named: std::collections::BTreeMap<String, &'static str>,
 }
 
 #[cfg(test)]
@@ -407,6 +424,7 @@ impl Default for Collect {
             cfg: ts_rs::Config::default().with_large_int("number"),
             seen: std::collections::BTreeSet::new(),
             decls: std::collections::BTreeMap::new(),
+            named: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -419,7 +437,20 @@ impl Collect {
         }
         // a builtin (a number, a string, an array) has no declaration of its own
         if T::output_path().is_some() {
-            self.decls.insert(T::ident(&self.cfg), T::decl(&self.cfg));
+            let name = T::ident(&self.cfg);
+            let decl = T::decl(&self.cfg);
+            let rust = std::any::type_name::<T>();
+            // two Rust types may share a name only when they say the same thing to the page (ts-rs's own JSON
+            // value and serde_json's; a generic type's instances)
+            if let Some(was) = self.decls.get(&name) {
+                assert_eq!(
+                    was, &decl,
+                    "two types are `{name}` in the page contract ({} and {rust}), and the page would see one of them: rename one",
+                    self.named[&name]
+                );
+            }
+            self.named.insert(name.clone(), rust);
+            self.decls.insert(name, decl);
         }
         struct V<'a>(&'a mut Collect);
         impl ts_rs::TypeVisitor for V<'_> {
@@ -460,6 +491,8 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     use ts_rs::TS;
     all.add::<super::edit::DraftReq>();
     all.add::<ErrorBody>();
+    // the header of every mesh: the page reads it off the front of the bytes a draft, a step or a mesh route sends
+    all.add::<super::header::MeshHeader>();
     all.add::<super::resources::ResourceEvent>();
     all.add::<StreamEvent>();
     all.add::<crate::message::MessagesRes>();

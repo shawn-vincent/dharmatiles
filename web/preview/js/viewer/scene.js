@@ -1,3 +1,4 @@
+// @ts-check
 // The viewer's scene: a map's pieces, each its tile's mesh placed by a matrix, in the one 3D view.
 //
 // Methods of `Viewer`, installed on its prototype by `viewer.js`: they run with `this` the viewer.  The page
@@ -253,6 +254,7 @@ export const sceneMethods = {
     this.useGeometry(p, gid);
     if (!from || p.entry === from || reduceMotion()) { this.clearFade(p); return; }
     // the outgoing mesh draws in every pass the piece does, with the piece's own `uWho` and role
+    /** @type {any} */
     const o = { ...this.sceneLayer(from.geometry, p.who, p.role, { value: new THREE.Vector2(0, ALL) }), entry: from };
     o.xf = o.render.material.uniforms.uXf;
     for (const m of [o.render, ...o.ghosts]) m.matrix.copy(p.render.matrix);

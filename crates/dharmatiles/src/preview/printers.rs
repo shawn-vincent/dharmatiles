@@ -55,12 +55,12 @@ pub struct PrintersImportReq {
 #[derive(Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct PrintersImportRes {
-    pub written: Vec<Written>,
+    pub written: Vec<PrinterWritten>,
 }
 
 #[derive(Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
-pub struct Written {
+pub struct PrinterWritten {
     pub name: String,
     /// The user's own profile of that name was kept.
     pub kept: bool,
@@ -118,7 +118,7 @@ pub(super) fn import(shared: &Shared, v: PrintersImportReq) -> Out<PrintersImpor
     Ok(PrintersImportRes {
         written: done
             .iter()
-            .map(|w| Written {
+            .map(|w| PrinterWritten {
                 name: w.name.clone(),
                 kept: w.outcome == Outcome::Kept,
             })

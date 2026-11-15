@@ -12,6 +12,7 @@ use crate::message::{BuildData, Kind, Message, MessagesRes, ServerData, Severity
 use dt_eval::TileRecord;
 
 use super::route::Reply;
+use super::stack::StackItem;
 use super::{Shared, lock};
 
 /// What a check says: that it read the tile, and each note it made
@@ -21,7 +22,7 @@ pub(super) fn of_check(
     c: &dt_eval::Checked,
     id: &str,
     name: &str,
-    stack: &[Value],
+    stack: &[StackItem],
 ) -> Vec<Message> {
     let mut out = Vec::new();
     if let Some(t) = &c.tile {
@@ -56,7 +57,7 @@ pub(super) fn of_errors(
     scope: Scope,
     id: &str,
     name: &str,
-    stack: &[Value],
+    stack: &[StackItem],
 ) -> Vec<Message> {
     errs.iter()
         .map(|d| Message::from_diag(d, scope, false, id, name, stack))

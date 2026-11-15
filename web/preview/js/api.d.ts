@@ -112,13 +112,15 @@ made_by: string | null,
  */
 problems: Array<string>, };
 
+type CallAt = { file: string, span: [number, number], };
+
 type Changed = { 
 /**
  * The stream's revision once the change was told: the page has the change when its stream reaches it.
  */
 rev: number, };
 
-type CheckRes = { ok: boolean, errors: Array<Mistake>, stack: Array<JsonValue> | null, map: TileMap | null, 
+type CheckRes = { ok: boolean, errors: Array<Mistake>, stack: Array<StackItem> | null, map: TileMap | null, 
 /**
  * Every node of the text that was read, by the id an edit names it with (`/api/edit`), for a tile.
  */
@@ -134,7 +136,53 @@ type CheckValueRes = { message: string | null, label: string | null, help: strin
 
 type Clause = { "kind": "within", at: number, distance: Written | null, of: OfPlace | null, printed: Array<string> | null, } | { "kind": "except", at: number, regions: Run, };
 
+type CloudAt = { 
+/**
+ * `top` or `pin`.
+ */
+kind: string, file: string, span: [number, number], 
+/**
+ * A pin's place among its entry's pins.
+ */
+pin: number | null, };
+
+type CloudColumns = { 
+/**
+ * An entry's key.
+ */
+owner: string, class: string, 
+/**
+ * `x, y, low, high, rolled, shade low, shade high, shade rolled`, for each column.
+ */
+v: Array<number>, };
+
+type CloudSheet = { 
+/**
+ * An entry's key (`tile/dirt/0`).
+ */
+owner: string, class: string, nx: number, ny: number, step: number, 
+/**
+ * Row by row, `nx` by `ny`: the height, or none where the sheet has no node.
+ */
+z: Array<number | null>, 
+/**
+ * 0 to 1, one for each node.
+ */
+shade: Array<number>, };
+
+type Clouds = { sheets: Array<CloudSheet>, columns: Array<CloudColumns>, thinned: boolean, };
+
 type ColourWord = "single" | "multi";
+
+type DebugMarks = { 
+/**
+ * By class: `[x, y, z, …]`.
+ */
+dots: { [key in string]: Array<number> }, 
+/**
+ * By class: polylines, each `[x, y, z, …]`.
+ */
+trails: { [key in string]: Array<Array<number>> }, thinned: boolean, };
 
 type Deleted = { path: string, };
 
@@ -450,6 +498,72 @@ ranged: boolean, };
 
 type MarkerKind = "literal" | "name";
 
+type MeshHeader = { kind: MeshKind, 
+/**
+ * How many triangles the arrays hold (set when the mesh is encoded).
+ */
+triangles: number, 
+/**
+ * The mesh's own box, mm (set when the mesh is encoded).
+ */
+lo: [number, number, number], hi: [number, number, number], 
+/**
+ * The printer's overhang angle; a sketch has none.
+ */
+overhangDeg: number | null, 
+/**
+ * The tile's footprint, mm; a sketch has none.
+ */
+footprint: [number, number] | null, 
+/**
+ * Faces the gate painted red, and orange; a build and a draft have them.
+ */
+overhangFaces: number | null, bandFaces: number | null, 
+/**
+ * Whether the gate checked what this mesh shows: a low or super-low build, a sketch has not been.
+ */
+checked: boolean, 
+/**
+ * The gate's failures; empty when it passes or did not check.
+ */
+failures: Array<string>, 
+/**
+ * A draft's mesh was thinned.
+ */
+thinned: boolean, 
+/**
+ * A sketch is drawn rough.
+ */
+rough: boolean, 
+/**
+ * The tier: a map piece's name, or a plate's (`full`, `mixed`, `low`).
+ */
+tier: string | null, 
+/**
+ * The revision of the document a map piece is of.
+ */
+docRev: number | null, 
+/**
+ * A map piece's own box, mm.
+ */
+tileLo: [number, number, number] | null, tileHi: [number, number, number] | null, 
+/**
+ * The stack the mesh was built from; empty for a mesh made without one.
+ */
+stack: Array<MeshStackEntry>, clouds: Clouds | null, debug: DebugMarks | null, 
+/**
+ * A plate's printer bed, mm, and the zones kept clear, `[x0, y0, x1, y1]`.
+ */
+bed: [number, number] | null, excluded: Array<[number, number, number, number]> | null, 
+/**
+ * Which plate is shown, and how many there are.
+ */
+plate: number | null, plates: number | null, };
+
+type MeshKind = "build" | "draft" | "mapPiece" | "sketch" | "stl" | "plates";
+
+type MeshStackEntry = { index: number, key: string, label: string, element: string, what: string, z: [number, number] | null, };
+
 type MessageJson = { 
 /**
  * Order in the stream.
@@ -661,13 +775,19 @@ type PrintedSetRes = { typed: string, };
 
 type PrintedSize = { ends: Array<string>, editable: boolean, };
 
+type PrinterWritten = { name: string, 
+/**
+ * The user's own profile of that name was kept.
+ */
+kept: boolean, };
+
 type PrintersImportReq = { slicer: string, 
 /**
  * The profile names of the models to write.
  */
 names: Array<string>, force?: boolean | null, };
 
-type PrintersImportRes = { written: Array<Written>, };
+type PrintersImportRes = { written: Array<PrinterWritten>, };
 
 type PrintersScanReq = { slicer?: string | null, };
 
@@ -848,6 +968,24 @@ type Severity = "error" | "warning" | "note" | "info";
 
 type ShelfMark = { state: string, text: string, };
 
+type Shown = { 
+/**
+ * What the mesh is of: `earlier` (a full build the cache kept), `preview` (a stored low tier, or the plates' drafts).
+ */
+kind: string, 
+/**
+ * Words for the status line.
+ */
+note: string, 
+/**
+ * Whether the gate has checked the mesh on show: a draft has not been.
+ */
+checked: boolean, 
+/**
+ * `low` or `full`, for a build on show; a plates preview has no tier.
+ */
+tier: string | null, };
+
 type SketchRef = { id: number, rough: boolean, };
 
 type SlicerFound = { slicer: string, label: string, title: string, };
@@ -859,6 +997,37 @@ type Snapshot = {
 contract: string, rev: number, epoch: string, system: string, printer: string, printers: Array<JsonValue>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: JsonValue, tiles: Array<TileSummary>, };
 
 type SpanJson = { file: string, line: number, col: number, offset: number, len: number, };
+
+type StackItem = { 
+/**
+ * The entry's id ([`dt_eval::doc::Entry::id`]): what the page keeps to find the entry again whatever the stack
+ * looks like later.
+ */
+key: string, label: string, element: string, 
+/**
+ * The page on the site that documents the element.
+ */
+href: string, 
+/**
+ * The word that places it (`dirt`, `scatter`), or `base`.
+ */
+what: string, 
+/**
+ * The seed the entry pins (`seed=`): the page says which entries keep their own.
+ */
+seed: number | null, file: string, 
+/**
+ * Where it is written: byte offset and length.
+ */
+span: [number, number], 
+/**
+ * First and last line (1-based).
+ */
+lines: [number, number], call: CallAt | null, controls: Array<WrittenControl>, defaults: Array<UnwrittenControl>, clouds: Array<CloudAt>, place: Array<WrittenPlace>, 
+/**
+ * Where a fixed `at=` point is, in squares from the south-west corner, as the program reads it.
+ */
+at: [number, number] | null, things: Array<Thing>, };
 
 type Stage = { 
 /**
@@ -921,6 +1090,12 @@ type TextRes = { file: string, text: string, writable: boolean,
  * The revision of the file the text is of; 0 for a library file.
  */
 docRev: number, };
+
+type Thing = { what: string, 
+/**
+ * The offset its name starts at: a node is addressed by it.
+ */
+at: number, controls: Array<WrittenControl>, defaults: Array<UnwrittenControl>, };
 
 type TierWant = { tile: string, 
 /**
@@ -1046,7 +1221,7 @@ docRev: number | null, meshBytes: number | null, sketches: Array<SketchRef>,
 /**
  * While the first build runs: the mesh on show is an earlier one (`kind`, `note`).
  */
-shown: JsonValue | null, };
+shown: Shown | null, };
 
 type TokensReq = { text: string, };
 
@@ -1060,7 +1235,21 @@ type Trashed = {
  */
 rev: number, dir: string | null, path: string | null, undo: number, };
 
+type UnwrittenControl = { control: string, text: string, from: string, };
+
 type Written = { text: string, span: [number, number], };
+
+type WrittenControl = { name: string, text: string, span: [number, number], 
+/**
+ * The file it is written in, when not the entry's own.
+ */
+file: string | null, 
+/**
+ * Written in a part the entry calls: what the sheet says it comes from.
+ */
+from: string | null, };
+
+type WrittenPlace = { name: string, text: string, span: [number, number], };
 
 type WrittenPoint = { text: string, span: [number, number], at: [number, number] | null, };
 

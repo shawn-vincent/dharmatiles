@@ -1,12 +1,13 @@
 //! The preview's stack line: each entry named by what it places, with a
 //! link to that thing's page on the documentation site, and where it is
 //! written (`file`, byte `span`, 1-based `lines`) so the editor can light
-//! its text when its geometry is picked.
+//! its text when its geometry is picked.  An entry is a [`StackItem`]: one
+//! type for the check's answer, the plan and every reader (its TypeScript
+//! type is generated from it).
 
 use dt_eval::doc::{Entry, Named, Origin, Tile};
 use dt_eval::solve::{SolveReport, SolvedTop};
 use dt_eval::unwritten::{Unwritten, library_name, unwritten};
-use serde_json::{Value, json};
 
 pub use crate::elements::docs;
 
@@ -21,14 +22,115 @@ pub fn page(element: &str) -> String {
     }
 }
 
-fn item(label: String, element: &str) -> Value {
-    json!({ "label": label, "element": element, "href": format!("{}{}", docs(), page(element)) })
+/// A control written on an entry: its name, the text written (`size="6dmm .. 10dmm"`, or a child line `height 35`),
+/// its byte span, and the file it is in when that is not the entry's own (a definition's controls are written in the
+/// definition's file).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct WrittenControl {
+    pub name: String,
+    pub text: String,
+    pub span: [usize; 2],
+    /// The file it is written in, when not the entry's own.
+    pub file: Option<String>,
+    /// Written in a part the entry calls: what the sheet says it comes from.
+    pub from: Option<String>,
 }
 
-/// The tile's stack as `{key, label, element, href, …}` items, in written
-/// order, ending with the base when the stack has a `base` line.  `key` is
-/// the entry's id ([`dt_eval::doc::Entry::id`]): what the page keeps to
-/// find the entry again whatever the stack looks like later.
+/// What a control shows where nothing is written.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct UnwrittenControl {
+    pub control: String,
+    pub text: String,
+    pub from: String,
+}
+
+/// A cloud an entry writes (`top=`, a pin): where its text is.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct CloudAt {
+    /// `top` or `pin`.
+    pub kind: String,
+    pub file: String,
+    pub span: [usize; 2],
+    /// A pin's place among its entry's pins.
+    pub pin: Option<usize>,
+}
+
+/// A property of an entry as written, for the map's handles (`at=bank`).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct WrittenPlace {
+    pub name: String,
+    pub text: String,
+    pub span: [usize; 2],
+}
+
+/// Where an entry made by a definition call is called, as the document writes it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct CallAt {
+    pub file: String,
+    pub span: [usize; 2],
+}
+
+/// One thing of a scatter, with its own controls, for the lens.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct Thing {
+    pub what: String,
+    /// The offset its name starts at: a node is addressed by it.
+    pub at: usize,
+    pub controls: Vec<WrittenControl>,
+    pub defaults: Vec<UnwrittenControl>,
+}
+
+/// One entry of a tile's stack: what it is, where it is written and what its controls are.  The base line is one too,
+/// with nothing written on it but its words (`controls`, `defaults`, `clouds`, `place` and `things` are empty).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct StackItem {
+    /// The entry's id ([`dt_eval::doc::Entry::id`]): what the page keeps to find the entry again whatever the stack
+    /// looks like later.
+    pub key: String,
+    pub label: String,
+    pub element: String,
+    /// The page on the site that documents the element.
+    pub href: String,
+    /// The word that places it (`dirt`, `scatter`), or `base`.
+    pub what: String,
+    /// The seed the entry pins (`seed=`): the page says which entries keep their own.
+    pub seed: Option<u64>,
+    pub file: String,
+    /// Where it is written: byte offset and length.
+    pub span: [usize; 2],
+    /// First and last line (1-based).
+    pub lines: [usize; 2],
+    pub call: Option<CallAt>,
+    pub controls: Vec<WrittenControl>,
+    pub defaults: Vec<UnwrittenControl>,
+    pub clouds: Vec<CloudAt>,
+    pub place: Vec<WrittenPlace>,
+    /// Where a fixed `at=` point is, in squares from the south-west corner, as the program reads it.
+    pub at: Option<[f64; 2]>,
+    pub things: Vec<Thing>,
+}
+
+/// The 1-based line a byte offset of `text` lies on.
+fn line_of(text: &str, o: usize) -> usize {
+    text.get(..o.min(text.len()))
+        .map_or(1, |t| t.matches('\n').count() + 1)
+}
+
+/// The tile's stack as [`StackItem`]s, in written order, ending with the base when the stack has a `base` line.
 ///
 /// Each entry also says what its controls are where nothing is written
 /// (`defaults`, see [`dt_eval::unwritten`]): `solved` is what the solver made
@@ -42,7 +144,7 @@ pub fn items(
     tile: &Tile,
     solved: Option<&SolveReport>,
     system: &str,
-) -> Result<Vec<Value>, String> {
+) -> Result<Vec<StackItem>, String> {
     let names = tile.names(system);
     let mut out = Vec::with_capacity(names.len());
     for (k, (e, named)) in tile.stack.iter().zip(&names).enumerate() {
@@ -52,70 +154,62 @@ pub fn items(
         out.push(entry(e, named, top)?);
     }
     if let Some(span) = tile.base_span {
-        let mut v = base(system);
-        v["key"] = json!(names.last().map(|n| n.id.as_str()));
-        v["what"] = json!("base");
-        v["file"] = json!(tile.src.name());
-        let text = tile.src.inner();
-        let line = |o: usize| {
-            text.get(..o.min(text.len()))
-                .map_or(1, |t| t.matches('\n').count() + 1)
-        };
+        let key = names
+            .last()
+            .ok_or_else(|| "the stack has a base line but no name for it".to_owned())?
+            .id
+            .as_str()
+            .to_owned();
+        let (label, page) = dt_eval::doc::base_label(system);
         let (start, len) = (span.offset(), span.len());
-        v["span"] = json!([start, len]);
-        v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
-        out.push(v);
+        let text = tile.src.inner();
+        out.push(StackItem {
+            key,
+            label: label.to_owned(),
+            element: "connector".to_owned(),
+            href: format!("{}elements/{page}.html", docs()),
+            what: "base".to_owned(),
+            seed: None,
+            file: tile.src.name().to_owned(),
+            span: [start, len],
+            lines: [
+                line_of(text, start),
+                line_of(text, start + len.saturating_sub(1)),
+            ],
+            call: None,
+            controls: Vec::new(),
+            defaults: Vec::new(),
+            clouds: Vec::new(),
+            place: Vec::new(),
+            at: None,
+            things: Vec::new(),
+        });
     }
     Ok(out)
 }
 
-/// The base line's connector for the build target: its label and page.
-#[must_use]
-pub fn base(system: &str) -> Value {
-    let (label, page) = dt_eval::doc::base_label(system);
-    json!({
-        "label": label, "element": "connector",
-        "href": format!("{}elements/{page}.html", docs()),
-    })
-}
-
 /// What a control shows where nothing is written, as the page reads it.
-fn defaults_json(list: &[Unwritten]) -> Vec<Value> {
+fn defaults_of(list: &[Unwritten]) -> Vec<UnwrittenControl> {
     list.iter()
-        .map(|u| json!({ "control": u.control, "text": u.text, "from": u.from }))
+        .map(|u| UnwrittenControl {
+            control: u.control.clone(),
+            text: u.text.clone(),
+            from: u.from.clone(),
+        })
         .collect()
 }
 
-fn entry(e: &Entry, named: &Named, top: Option<&SolvedTop>) -> Result<Value, String> {
+fn entry(e: &Entry, named: &Named, top: Option<&SolvedTop>) -> Result<StackItem, String> {
     let what = e.what.value.as_str();
-    let mut v = item(named.label.clone(), &named.element);
-    v["key"] = json!(named.id.as_str());
-    v["what"] = json!(what);
-    // the seed the entry pins (`seed=`), from the decoded entry: the page says which entries keep their own
-    v["seed"] = json!(e.seed);
-    v["file"] = json!(e.src.name());
     let (start, len) = (e.span.offset(), e.span.len());
     let text = e.src.inner();
-    let line = |o: usize| {
-        text.get(..o.min(text.len()))
-            .map_or(1, |t| t.matches('\n').count() + 1)
-    };
-    v["span"] = json!([start, len]);
-    v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
-    // an entry a definition call makes: the call, as the document writes it
-    v["call"] = json!(e.call.as_ref().map(|(src, span)| json!({
-        "file": src.name(),
-        "span": [span.offset(), span.len()],
-    })));
-    v["controls"] = json!(settings(&e.controls, e.src.name())?);
+    let controls = settings(&e.controls, e.src.name())?;
     let missing = unwritten(what, &e.controls, &e.children, top).map_err(|err| {
         format!(
             "the `{what}` entry at byte {start} of {}: {err}",
             e.src.name()
         )
     })?;
-    v["defaults"] = json!(defaults_json(&missing));
-    v["clouds"] = json!(clouds(e)?);
     // where it is put (at=), as written, for the map's handles
     const PLACE: [&str; 1] = ["at"];
     let props = dt_doc::nodeid::props_at(text, e.what.span.offset()).map_err(|err| {
@@ -125,19 +219,6 @@ fn entry(e: &Entry, named: &Named, top: Option<&SolvedTop>) -> Result<Value, Str
             e.src.name()
         )
     })?;
-    v["place"] = json!(
-        props
-            .into_iter()
-            .filter(|(n, ..)| PLACE.contains(&n.as_str()))
-            .map(|(name, text, span)| json!({ "name": name, "text": text, "span": span }))
-            .collect::<Vec<_>>()
-    );
-    // where a fixed `at=` point is, in squares from the south-west corner,
-    // as the program reads it (the page never reads a written point)
-    v["at"] =
-        json!(e.at.as_ref().and_then(|d| {
-            (d[0].is_point() && d[1].is_point()).then(|| [d[0].lo(), d[1].lo()])
-        }));
     // a scatter's things, each with its own controls, for the lens; a
     // node is addressed by the offset its name starts at
     let mut things = Vec::with_capacity(e.children.len());
@@ -148,15 +229,48 @@ fn entry(e: &Entry, named: &Named, top: Option<&SolvedTop>) -> Result<Value, Str
                 c.what.value
             )
         })?;
-        things.push(json!({
-            "what": c.what.value,
-            "at": c.what.span.offset(),
-            "controls": settings(&c.controls, e.src.name())?,
-            "defaults": defaults_json(&missing),
-        }));
+        things.push(Thing {
+            what: c.what.value.clone(),
+            at: c.what.span.offset(),
+            controls: settings(&c.controls, e.src.name())?,
+            defaults: defaults_of(&missing),
+        });
     }
-    v["things"] = json!(things);
-    Ok(v)
+    Ok(StackItem {
+        key: named.id.as_str().to_owned(),
+        label: named.label.clone(),
+        element: named.element.clone(),
+        href: format!("{}{}", docs(), page(&named.element)),
+        what: what.to_owned(),
+        // the seed the entry pins, from the decoded entry
+        seed: e.seed,
+        file: e.src.name().to_owned(),
+        span: [start, len],
+        lines: [
+            line_of(text, start),
+            line_of(text, start + len.saturating_sub(1)),
+        ],
+        // an entry a definition call makes: the call, as the document writes it
+        call: e.call.as_ref().map(|(src, span)| CallAt {
+            file: src.name().to_owned(),
+            span: [span.offset(), span.len()],
+        }),
+        controls,
+        defaults: defaults_of(&missing),
+        clouds: clouds(e)?,
+        place: props
+            .into_iter()
+            .filter(|(n, ..)| PLACE.contains(&n.as_str()))
+            .map(|(name, text, span)| WrittenPlace { name, text, span })
+            .collect(),
+        // where a fixed `at=` point is, in squares from the south-west corner,
+        // as the program reads it (the page never reads a written point)
+        at: e
+            .at
+            .as_ref()
+            .and_then(|d| (d[0].is_point() && d[1].is_point()).then(|| [d[0].lo(), d[1].lo()])),
+        things,
+    })
 }
 
 /// The text of `span` in `src`.
@@ -175,15 +289,17 @@ fn written(src: &dt_eval::diag::Src, span: miette::SourceSpan) -> Result<&str, S
 /// of a scatter, each with the file it is written in and its byte span.  They
 /// are read off the parsed entry, so a comment, a hidden (`/-`) node or a raw
 /// string holds none.  `pin` is a pin's place among its entry's pins.
-fn clouds(e: &Entry) -> Result<Vec<Value>, String> {
+fn clouds(e: &Entry) -> Result<Vec<CloudAt>, String> {
     let cloud =
         |kind: &str, src: &dt_eval::diag::Src, span: miette::SourceSpan, pin: Option<usize>| {
             // a node's span may run on past its last word
             let text = written(src, span)?;
-            Ok::<_, String>(json!({
-                "kind": kind, "file": src.name(),
-                "span": [span.offset(), text.trim_end().len()], "pin": pin,
-            }))
+            Ok::<_, String>(CloudAt {
+                kind: kind.to_owned(),
+                file: src.name().to_owned(),
+                span: [span.offset(), text.trim_end().len()],
+                pin,
+            })
         };
     let mut out = Vec::new();
     if let Some(t) = &e.top {
@@ -205,7 +321,7 @@ fn clouds(e: &Entry) -> Result<Vec<Value>, String> {
 /// written (`size="6dmm .. 10dmm"`, or a child line `height 35`) and its byte
 /// span, and the file it is in (a definition's controls are written in the
 /// definition's file).
-fn settings(controls: &[dt_eval::doc::Setting], file: &str) -> Result<Vec<Value>, String> {
+fn settings(controls: &[dt_eval::doc::Setting], file: &str) -> Result<Vec<WrittenControl>, String> {
     controls
         .iter()
         .filter(|c| c.origin == Origin::Written)
@@ -219,14 +335,14 @@ fn settings(controls: &[dt_eval::doc::Setting], file: &str) -> Result<Vec<Value>
                     c.src.name()
                 )
             })?;
-            Ok(json!({
-                "name": c.name,
-                "text": written,
-                "span": [o, l],
-                "file": (c.src.name() != file).then(|| c.src.name()),
+            Ok(WrittenControl {
+                name: c.name.clone(),
+                text: written.to_owned(),
+                span: [o, l],
+                file: (c.src.name() != file).then(|| c.src.name().to_owned()),
                 // written in a part the entry calls: what the sheet says it comes from
-                "from": (c.src.name() != file).then(|| library_name(c.src.name())),
-            }))
+                from: (c.src.name() != file).then(|| library_name(c.src.name())),
+            })
         })
         .collect()
 }
@@ -242,7 +358,7 @@ mod tests {
         super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), system)
             .unwrap()
             .iter()
-            .map(|v| v["label"].as_str().unwrap().to_owned())
+            .map(|v| v.label.clone())
             .collect()
     }
 
@@ -271,9 +387,9 @@ mod tests {
         )
         .unwrap();
         let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
-        let seed = |what: &str| items.iter().find(|v| v["what"] == what).unwrap()["seed"].clone();
-        assert_eq!(seed("wall"), 11);
-        assert!(seed("dirt").is_null());
+        let seed = |what: &str| items.iter().find(|v| v.what == what).unwrap().seed;
+        assert_eq!(seed("wall"), Some(11));
+        assert_eq!(seed("dirt"), None);
     }
 
     #[test]
@@ -316,25 +432,21 @@ mod tests {
         super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db")
             .unwrap()
             .iter()
-            .filter(|v| v["key"] != "tile/connector")
+            .filter(|v| v.key != "tile/connector")
             .map(|v| {
-                let cs = v["clouds"]
-                    .as_array()
-                    .unwrap()
+                let cs = v
+                    .clouds
                     .iter()
                     .map(|c| {
-                        let (o, l) = (
-                            c["span"][0].as_u64().unwrap() as usize,
-                            c["span"][1].as_u64().unwrap() as usize,
-                        );
-                        let kind = match c["pin"].as_u64() {
+                        let [o, l] = c.span;
+                        let kind = match c.pin {
                             Some(k) => format!("pin {k}"),
-                            None => c["kind"].as_str().unwrap().to_owned(),
+                            None => c.kind.clone(),
                         };
                         (kind, text[o..o + l].to_owned())
                     })
                     .collect();
-                (v["key"].as_str().unwrap().to_owned(), cs)
+                (v.key.clone(), cs)
             })
             .collect()
     }
@@ -385,13 +497,10 @@ mod tests {
         );
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
         let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
-        let tree = items.iter().find(|v| v["what"] == "tree").unwrap();
-        let cloud = &tree["clouds"][0];
+        let tree = items.iter().find(|v| v.what == "tree").unwrap();
+        let cloud = &tree.clouds[0];
         let text = c.file.src.inner();
-        let (o, l) = (
-            cloud["span"][0].as_u64().unwrap() as usize,
-            cloud["span"][1].as_u64().unwrap() as usize,
-        );
+        let [o, l] = cloud.span;
         assert_eq!(&text[o..o + l], "top = \"$bottom + 30dmm\"");
     }
 
@@ -407,13 +516,8 @@ mod tests {
         );
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
         let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
-        let top = items[0]["controls"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|c| c["name"] == "top")
-            .unwrap();
-        assert_eq!(top["text"], "top=\"$groundHeight + 1dmm\"");
+        let top = items[0].controls.iter().find(|c| c.name == "top").unwrap();
+        assert_eq!(top.text, "top=\"$groundHeight + 1dmm\"");
     }
 
     /// A word written stands for numbers (`height full` for the wall top),
@@ -432,25 +536,16 @@ mod tests {
         );
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
         let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
-        let wall = items.iter().find(|v| v["what"] == "wall").unwrap();
-        let written: Vec<&str> = wall["controls"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|c| c["name"].as_str().unwrap())
-            .collect();
+        let wall = items.iter().find(|v| v.what == "wall").unwrap();
+        let written: Vec<&str> = wall.controls.iter().map(|c| c.name.as_str()).collect();
         assert_eq!(written, ["style", "height"], "no `height.height`");
-        let of = |item: &serde_json::Value, control: &str| -> (String, String) {
-            let d = item["defaults"]
-                .as_array()
-                .unwrap()
+        let of = |item: &super::StackItem, control: &str| -> (String, String) {
+            let d = item
+                .defaults
                 .iter()
-                .find(|d| d["control"] == control)
+                .find(|d| d.control == control)
                 .unwrap_or_else(|| panic!("no default for {control}"));
-            (
-                d["text"].as_str().unwrap().to_owned(),
-                d["from"].as_str().unwrap().to_owned(),
-            )
+            (d.text.clone(), d.from.clone())
         };
         assert_eq!(
             of(wall, "stones/height"),
@@ -461,18 +556,12 @@ mod tests {
             ("7dmm".to_owned(), "default".to_owned())
         );
         // a body's top is the band the solver used, from the library's edges
-        let dirt = items.iter().find(|v| v["what"] == "dirt").unwrap();
+        let dirt = items.iter().find(|v| v.what == "dirt").unwrap();
         let (top, from) = of(dirt, "top");
         assert!(top.contains("$groundHeight"), "{top}");
         assert_eq!(from, "parts/edges");
         // what is written is not in the list
-        assert!(
-            wall["defaults"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .all(|d| d["control"] != "style")
-        );
+        assert!(wall.defaults.iter().all(|d| d.control != "style"));
     }
 
     #[test]
@@ -484,7 +573,7 @@ mod tests {
         )
         .unwrap();
         for v in super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "ol").unwrap() {
-            assert!(v["href"].as_str().unwrap().starts_with(&super::docs()));
+            assert!(v.href.starts_with(&super::docs()));
         }
     }
 }

@@ -73,6 +73,7 @@ mod calls;
 mod docs;
 mod edit;
 pub(crate) mod fail;
+pub mod header;
 mod inventory;
 mod lists;
 mod local_docs;
@@ -88,7 +89,7 @@ mod resources;
 pub(crate) mod roots;
 mod scene;
 mod server;
-mod stack;
+pub(crate) mod stack;
 mod tiers;
 mod worker;
 
@@ -187,9 +188,9 @@ pub struct Slot {
     /// Built for a target that is not the chosen one any more.
     stale: bool,
     /// While the first build runs: the mesh on show is not this tile's
-    /// build but one the cache kept (`{"kind": "earlier" | "preview",
-    /// "note": …}`), so the page says "rebuilding".  Gone when the build ends.
-    shown: Option<Value>,
+    /// build but one the cache kept (see [`api::Shown`]), so the page says
+    /// "rebuilding".  Gone when the build ends.
+    shown: Option<api::Shown>,
     /// The page has the debug layer on for this tile: its builds collect the
     /// layer's marks (grass starts, spines) too.  Set by `POST …/build?debug=1`.
     marks: bool,

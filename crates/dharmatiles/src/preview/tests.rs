@@ -2854,7 +2854,7 @@ mod stored {
             &opts,
         );
         assert_eq!(
-            slot(&next, &path, |t| t.shown.clone().unwrap()["kind"].clone()),
+            slot(&next, &path, |t| t.shown.clone().unwrap().kind),
             "earlier"
         );
         assert_eq!(slot(&next, &path, |t| t.mesh.clone().unwrap()), old_mesh);
@@ -2875,7 +2875,12 @@ mod stored {
         assert!(said.iter().any(|t| t.starts_with("Built in")), "{said:?}");
 
         // a tile that then does not read leaves no stale view behind
-        lock(&next.tiles)[0].shown = Some(json!({"kind": "earlier", "note": "x"}));
+        lock(&next.tiles)[0].shown = Some(api::Shown {
+            kind: "earlier".to_owned(),
+            note: "x".to_owned(),
+            checked: true,
+            tier: None,
+        });
         std::fs::write(&tile, "tile {").unwrap();
         rebuild(&next, &path);
         assert_eq!(slot(&next, &path, |t| t.status), State::Failed);
@@ -2910,7 +2915,7 @@ mod stored {
             &opts,
         );
         assert_eq!(
-            slot(&shared, FLAT, |t| t.shown.clone().unwrap()["kind"].clone()),
+            slot(&shared, FLAT, |t| t.shown.clone().unwrap().kind),
             "preview"
         );
         assert!(
@@ -2920,7 +2925,7 @@ mod stored {
         );
         // a low build on show has not been through the gate: the status line says so
         let shown = slot(&shared, FLAT, |t| t.shown.clone().unwrap());
-        assert_eq!(shown["checked"], false);
+        assert!(!shown.checked);
         rebuild(&shared, FLAT);
         assert!(slot(&shared, FLAT, |t| t.shown.is_none()));
         assert_eq!(slot(&shared, FLAT, |t| t.status), State::Ready);
