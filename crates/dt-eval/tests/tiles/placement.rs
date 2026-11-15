@@ -114,7 +114,12 @@ fn stand_where_they_did(cells: &[u32]) {
         let full = built(path);
         assert!(!full.report.placed.is_empty(), "{path}");
         for &cells in cells {
-            let other = with(path, |o| o.cells = Some(cells));
+            // a low build keeps every placement of the full one (the test above), so the coarse lattice is built low:
+            // only where things stand is read, not the union or the gate
+            let other = with(path, |o| {
+                o.cells = Some(cells);
+                o.tier = dt_eval::Tier::Low;
+            });
             assert_eq!(
                 full.report.placed, other.report.placed,
                 "{path} at {cells} cells"

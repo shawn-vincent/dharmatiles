@@ -152,7 +152,33 @@ pub fn timed<S: Reads>(
         // the memo's one build: every other test build reads it
         let result = dt_eval::build(src, path, opts);
         let secs = t0.elapsed().as_secs_f64();
+        if let Ok(b) = &result {
+            log_build(path, secs, b);
+        }
         Box::leak(Box::new(Made { result, secs }))
     });
     (made.result.as_ref(), made.secs)
+}
+
+/// With `DT_TEST_TIMES` set, one line per build to stderr (past the harness's capture): the test that asked first,
+/// the path, the seconds and each stage's seconds, to see which tests and tiles the CPU goes to.
+pub fn log_build(path: &str, secs: f64, b: &Built) {
+    if std::env::var_os("DT_TEST_TIMES").is_none() {
+        return;
+    }
+    use std::io::Write as _;
+    let stages: Vec<String> = b
+        .report
+        .stage_secs
+        .iter()
+        .map(|(k, v)| format!("{k}={v:.2}"))
+        .collect();
+    let line = format!(
+        "TIMES\t{}\t{path}\t{secs:.2}\t{}\n",
+        std::thread::current().name().unwrap_or("?"),
+        stages.join(" ")
+    );
+    std::io::stderr()
+        .write_all(line.as_bytes())
+        .expect("stderr takes the line");
 }
