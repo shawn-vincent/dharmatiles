@@ -54,4 +54,7 @@ pub trait TileHost: CheckHost {
     fn storage(&self) -> &dyn crate::storage::Storage;
     /// What a tile's other files (`lib:` paths) are read from.
     fn library(&self) -> &dyn Source;
+    /// Ask for tile `id` to be built next: false when there is no such tile.  The build runs on the host's lane and
+    /// its record comes on the event stream.
+    fn want(&self, id: &str) -> bool;
 }

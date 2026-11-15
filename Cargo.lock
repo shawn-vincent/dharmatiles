@@ -551,6 +551,7 @@ dependencies = [
  "dt-lang",
  "dt-print",
  "dt-value",
+ "kdl",
  "miette",
  "serde",
  "serde_json",

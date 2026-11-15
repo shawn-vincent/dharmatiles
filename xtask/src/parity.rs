@@ -227,7 +227,7 @@ fn run_too_big(root: &Path) -> Result<(), String> {
 const SERVICE_TILE: &str = "lib:tiles/ground/1x1-grass.dtile";
 
 /// `cargo xtask parity --service`: the editor's service as a web worker will run it, under Node.  The bundle's
-/// `Service` is given one library tile and called by verb: `check`, then `buildNow`.  The program builds the same
+/// `Service` is given one library tile and called by verb: `check`, `save`, then `build` (the HTTP verb: the record comes on the event stream).  The program builds the same
 /// tile (`dharmatiles build`), and the two STLs' triangles must have the same SHA-256.
 fn run_service(root: &Path) -> Result<(), String> {
     use sha2::{Digest, Sha256};
@@ -282,7 +282,7 @@ fn run_service(root: &Path) -> Result<(), String> {
         .ok_or_else(|| format!("service: the worker's answer has no stlSha256: {browser}"))?;
     if said == native && browser["passed"] == Value::Bool(true) {
         println!(
-            "service: check then buildNow by verb under Node gave the program's STL for {SERVICE_TILE} ({native})"
+            "service: check, save and build by verb under Node gave the program's STL for {SERVICE_TILE} ({native})"
         );
         Ok(())
     } else {

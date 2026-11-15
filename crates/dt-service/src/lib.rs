@@ -34,6 +34,7 @@
 //! rename fails `tsc` in the page.
 
 pub mod api;
+pub mod build_calls;
 pub mod call;
 pub mod clock;
 pub mod docs;

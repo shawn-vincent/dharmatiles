@@ -217,6 +217,10 @@ impl dt_service::tile_host::TileHost for Shared {
     fn library(&self) -> &dyn dt_eval::Source {
         &dt_eval::Files
     }
+
+    fn want(&self, id: &str) -> bool {
+        Self::want(self, id)
+    }
 }
 
 /// Held while a tile builds: dropping it ends the build's progress message.

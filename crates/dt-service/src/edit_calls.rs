@@ -9,8 +9,7 @@ use crate::tile_calls::text_rev;
 use crate::tile_host::{TileHost, TileRef};
 
 /// A control's or argument's value: a number, a string or a switch.
-#[derive(Deserialize, Clone, Serialize, Debug)]
-#[derive(ts_rs::TS)]
+#[derive(Deserialize, Clone, Serialize, Debug, ts_rs::TS)]
 #[ts(optional_fields = nullable)]
 #[serde(untagged)]
 pub enum Scalar {
@@ -32,8 +31,7 @@ impl Scalar {
 }
 
 /// Where a new node goes.
-#[derive(Deserialize, Clone, Copy, Serialize, Debug)]
-#[derive(ts_rs::TS)]
+#[derive(Deserialize, Clone, Copy, Serialize, Debug, ts_rs::TS)]
 #[ts(optional_fields = nullable)]
 #[serde(rename_all = "kebab-case")]
 pub enum InsertPlace {
@@ -48,8 +46,7 @@ pub enum InsertPlace {
 }
 
 /// Which value of a node a point is written to.
-#[derive(Deserialize, Clone, Serialize, Debug)]
-#[derive(ts_rs::TS)]
+#[derive(Deserialize, Clone, Serialize, Debug, ts_rs::TS)]
 #[ts(optional_fields = nullable)]
 #[serde(rename_all = "camelCase")]
 pub enum PointSlot {
@@ -61,8 +58,7 @@ pub enum PointSlot {
 
 /// `/api/edit`: a text edit, one kind by `op`, made by `dt_doc::ops` to the node the `id` names (the ids a check
 /// lists in its `nodes`).  An id the text does not have is refused.  Nothing is written to disk.
-#[derive(Deserialize, Serialize, Debug)]
-#[derive(ts_rs::TS)]
+#[derive(Deserialize, Serialize, Debug, ts_rs::TS)]
 #[ts(optional_fields = nullable)]
 #[serde(tag = "op", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum EditOp {
@@ -145,8 +141,7 @@ pub enum EditOp {
 /// `/api/edit`: an edit and the revision of the text its ids were read at (`CheckRes::nodes_rev`).  An edit whose `text`
 /// is not that text is refused with a 409, so an id like `rock#2` never names another node than the one the page saw.  Only
 /// the program's own fix names no node, and needs no `read`.
-#[derive(Deserialize, Serialize, Debug)]
-#[derive(ts_rs::TS)]
+#[derive(Deserialize, Serialize, Debug, ts_rs::TS)]
 #[ts(optional_fields = nullable)]
 pub struct EditReq {
     /// The `nodesRev` of the check the ids come from.
@@ -157,16 +152,14 @@ pub struct EditReq {
 }
 
 /// The text after an edit, and (for a change that leaves a node to select) the node: its id and the byte it starts at.
-#[derive(Serialize, Deserialize, Debug)]
-#[derive(ts_rs::TS)]
+#[derive(Serialize, Deserialize, Debug, ts_rs::TS)]
 pub struct EditRes {
     pub text: String,
     pub id: Option<String>,
     pub at: Option<usize>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-#[derive(ts_rs::TS)]
+#[derive(Deserialize, Serialize, Debug, ts_rs::TS)]
 #[ts(optional_fields = nullable)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SaveReq {
@@ -176,8 +169,7 @@ pub struct SaveReq {
     pub file: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[derive(ts_rs::TS)]
+#[derive(Serialize, Deserialize, Debug, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveRes {
     pub doc_rev: u64,

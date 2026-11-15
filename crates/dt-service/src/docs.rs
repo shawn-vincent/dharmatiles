@@ -93,7 +93,12 @@ impl Docs {
     }
 
     fn doc(&self, path: &str) -> Arc<Doc> {
-        Arc::clone(self.docs.lock_unpoisoned().entry(path.to_owned()).or_default())
+        Arc::clone(
+            self.docs
+                .lock_unpoisoned()
+                .entry(path.to_owned())
+                .or_default(),
+        )
     }
 
     /// The text of `path` and its revision, read together under the lock.

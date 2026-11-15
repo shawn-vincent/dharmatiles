@@ -78,9 +78,9 @@ pub use dt_service::tile_calls::{CheckRes, TextReq};
 // ---- the calls' types ------------------------------------------------------------------
 // The edit family (`edit`, `save`) is the service's: its types and its handlers are in `dt_service::edit_calls`.
 
-pub use dt_service::edit_calls::{
-    EditOp, EditReq, EditRes, InsertPlace, PointSlot, SaveReq, SaveRes, Scalar,
-};
+#[cfg(test)]
+pub use dt_service::edit_calls::{EditOp, InsertPlace, PointSlot, Scalar};
+pub use dt_service::edit_calls::{EditReq, EditRes, SaveReq, SaveRes};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -891,7 +891,6 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
     dt_service::tile_calls::check(shared, &src, tile)
         .map_err(|e| fail::failure("500 Internal Server Error", e.0))
 }
-
 
 /// `/api/tiles/ID/save` `{text, docRev, file?}` (see [`dt_service::edit_calls::save`]).
 pub(super) fn save(shared: &Shared, t: &TileRef, v: SaveReq) -> Out<SaveRes> {

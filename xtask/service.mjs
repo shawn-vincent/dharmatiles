@@ -1,5 +1,6 @@
-// The service under Node: load the wasm bundle, put one library tile into the worker's `Service`, and call `check`
-// then `buildNow` by verb, as the page's worker will. Prints one JSON line: what the calls answered. Usage:
+// The service under Node: load the wasm bundle, put one library tile into the worker's `Service`, and call `check`,
+// `save` and `build` by verb, as the page's worker will: `build` is HTTP's verb (it queues the job, the worker host
+// runs it, and the record arrives on the event stream). Prints one JSON line: what the calls answered. Usage:
 //   node service.mjs <bundle-dir> <tile>@<system>
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,8 +22,18 @@ const path = `/memory/My tiles/${tile.split('/').pop()}`;
 service.put(path, text);
 const checked = JSON.parse(service.call('check', path, JSON.stringify({ text })));
 if (!checked.ok) throw new Error(`check: ${tile} does not read: ${JSON.stringify(checked.errors)}`);
-const built = JSON.parse(service.call('buildNow', path, JSON.stringify({ system })));
+// a save of the same text names the revision it was made from, and answers the revision the file has now
+const saved = JSON.parse(service.call('save', path, JSON.stringify({ text, docRev: 1 })));
+// build: the same verb as HTTP's. It answers that it was asked; the record comes on the stream.
+const accepted = service.call('build', path, '{}');
+if (accepted !== '{}') throw new Error(`build did not answer Accepted: ${accepted}`);
 const events = JSON.parse(service.events());
+const ready = events.find((e) => e.type === 'tile' && e.tile.status === 'ready');
+if (ready === undefined) throw new Error(`no tile event said the build was ready: ${JSON.stringify(events.map((e) => e.type))}`);
+const built = JSON.parse(service.built(path));
+if (JSON.stringify(ready.tile.record.audit) !== JSON.stringify(built.record.audit)) {
+  throw new Error('the stream\'s record is not the build\'s');
+}
 // a verb the service does not have is refused loudly, never answered empty
 let refused = '';
 try {
@@ -39,6 +50,7 @@ console.log(
     nodes: checked.nodes.length,
     stack: checked.stack.length,
     events: events.length,
+    docRev: saved.docRev,
     passed: built.passed,
     stlBytes: built.stlBytes,
     stlSha256: built.stlSha256,
