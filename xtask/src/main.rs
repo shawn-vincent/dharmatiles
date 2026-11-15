@@ -134,7 +134,9 @@ fn command(args: &[String]) -> Result<(), String> {
         Some("wasm") => {
             work::heavy_lock(&root()).and_then(|()| wasm::run_wasm(&root(), &args[1..]))
         }
-        Some("parity") => work::heavy_lock(&root()).and_then(|()| parity::run_parity(&root())),
+        Some("parity") => {
+            work::heavy_lock(&root()).and_then(|()| parity::run_parity(&root(), &args[1..]))
+        }
         Some("release") => release::run_release(&root(), &args[1..]),
         Some("help" | "-h" | "--help") => {
             println!("{USAGE}");

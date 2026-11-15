@@ -11,7 +11,17 @@ const manifest = JSON.parse(readFileSync(join(dir, 'engine.json'), 'utf8'));
 const engine = await import(pathToFileURL(join(dir, manifest.js)).href);
 await engine.default({ module_or_path: readFileSync(join(dir, manifest.wasm)) });
 engine.set_library(readFileSync(join(dir, manifest.library), 'utf8'));
+// a build that cannot get memory panics with what it asked for and the stage (the engine's panic hook prints it
+// on the console) and then traps: the trap is reported with that text, as a line of its own, and the run fails
+const said = [];
+const log = console.error;
+console.error = (...a) => { said.push(a.join(' ')); log(...a); };
 for (const job of jobs) {
   const [tile, system] = job.split('@');
-  console.log(engine.parity_line(tile, system));
+  try {
+    console.log(engine.parity_line(tile, system));
+  } catch (e) {
+    console.log(JSON.stringify({ tile: job, error: said.join('\n') || String(e) }));
+    process.exit(1);
+  }
 }
