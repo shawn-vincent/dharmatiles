@@ -25,7 +25,8 @@ test('no square size is guessed in the page or the site: no ?? 35, || 35, "= 35"
 });
 
 test('an overlay without the program\'s square size draws no map', () => {
-  const o = new Overlay({ getContext: () => ({}) }, {});
+  // a stand-in canvas and viewer: this test draws nothing, so neither is read
+  const o = new Overlay(/** @type {any} */ ({ getContext: () => ({}) }), /** @type {any} */ ({}));
   const map = { ...MAP, cols: 1, rows: 1, regions: [], lines: [] };
   o.setMap(map, undefined);
   assert.equal(o.map, null);
