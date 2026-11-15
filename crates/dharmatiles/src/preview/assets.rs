@@ -87,6 +87,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/documents.js"),
     ),
     (
+        "/js/dom.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/dom.js"),
+    ),
+    (
         "/js/editor/docs.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/editor/docs.js"),

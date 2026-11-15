@@ -86,6 +86,8 @@ export class Card {
     this.marks = [];
     /** @type {TileMap | null} the program's map, one type for the page, the cards and the posters */
     this.map = null;
+    /** @type {number | null} mm per square of the map shown: the check's that made the map, kept with it */
+    this.sq = null;
     this.mesh = null;
     this.heights = null;
     this.fullAt = null;
@@ -275,16 +277,19 @@ export class Card {
   #projector() {
     const viewer = this.viewer;
     if (viewer && this.mesh) return (x, y, z = 0) => viewer.project(x, y, z);
-    const [fw, fh] = this.mesh?.footprint ?? this.#guessFootprint();
+    const foot = this.mesh?.footprint ?? this.#mapFootprint();
+    if (!foot) return null;
+    const [fw, fh] = foot;
     const { w, h } = this.size ?? { w: 1, h: 1 };
     const s = Math.min(w / fw, h / fh);
     const ox = (w - fw * s) / 2, oy = (h - fh * s) / 2;
     return (x, y) => ({ x: ox + x * s, y: oy + (fh - y) * s });
   }
 
-  #guessFootprint() {
-    const sq = this.checked?.squareMm ?? 35;
-    return [(this.map?.cols ?? 1) * sq, (this.map?.rows ?? 1) * sq];
+  /** The footprint the check's map says, mm; none before a check has made a map. */
+  #mapFootprint() {
+    if (!this.map || this.sq == null) return null;
+    return [this.map.cols * this.sq, this.map.rows * this.sq];
   }
 
   #zAt = (x, y) => (this.viewer && this.heights ? heightAtGrid(this.heights, x, y, 4) : 0);
@@ -298,9 +303,12 @@ export class Card {
     const moment = { toggles: this.moment.toggles, pinned: this.moment.pinned, hover: this.moment.hover, caret: this.moment.caret };
     this.drawnNow = drawn(this.marks, moment);
     const squares = this.moment.toggles.has('squares');
+    // nothing is drawn over a tile no check has mapped: there is no square size to draw it at
+    const project = this.#projector();
+    if (this.sq == null || !project) return void this.#markSource();
     renderMarks(ctx, {
-      map: this.map, sq: this.checked?.squareMm ?? 35, drawn: this.drawnNow, squares,
-      project: this.#projector(), zAt: this.#zAt, size: this.size,
+      map: this.map, sq: this.sq, drawn: this.drawnNow, squares,
+      project, zAt: this.#zAt, size: this.size,
     });
     this.#markSource();
   }
@@ -329,7 +337,9 @@ export class Card {
       if (e.buttons) return;
       const r = this.gl.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
-      const o = { map: this.map, sq: this.checked?.squareMm ?? 35, drawn: this.drawnNow ?? [], project: this.#projector(), zAt: this.#zAt };
+      const project = this.#projector();
+      if (this.sq == null || !project) return;
+      const o = { map: this.map, sq: this.sq, drawn: this.drawnNow ?? [], project, zAt: this.#zAt };
       // a shown point or line under the pointer lights its source (a region is lit from the source or its toggle)
       this.moment.hover = markAtPoint(o, x, y);
       this.#paint();
@@ -467,6 +477,7 @@ export class Card {
     this.log.checked(result);
     if (result.map) {
       this.map = result.map;
+      this.sq = result.squareMm;
       this.marks = marksOf(result.map);
       const pins = parsePins(this.pinSpec, this.marks);
       this.moment.pinned = pins.ids;

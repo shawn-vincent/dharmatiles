@@ -7,15 +7,16 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { Overlay } from '../js/overlay.js';
 import { MAP } from './map-fixture.js';
 
-const root = new URL('../js/', import.meta.url).pathname;
+/** The page's code and the site's live scripts, which draw the same marks. */
+const roots = [new URL('../js/', import.meta.url).pathname, new URL('../../../docs/assets/live/', import.meta.url).pathname];
 
-/** Every .js file under web/preview/js, as paths relative to it. */
-const sources = () => readdirSync(root, { recursive: true }).filter((f) => String(f).endsWith('.js')).map(String);
+/** Every .js file under those, as full paths. */
+const sources = () => roots.flatMap((root) => readdirSync(root, { recursive: true }).filter((f) => String(f).endsWith('.js')).map((f) => root + String(f)));
 
-test('no square size is guessed in the page: no ?? 35, || 35, "= 35" default or 25.4 literal', () => {
+test('no square size is guessed in the page or the site: no ?? 35, || 35, "= 35" default or 25.4 literal', () => {
   const seen = [];
   for (const f of sources()) {
-    readFileSync(root + f, 'utf8').split('\n').forEach((line, i) => {
+    readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
       if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
       if (/(\?\?|\|\|)\s*\[?35\b|\bsq\w*\s*=\s*35\b|\bsquare\s*=\s*35\b|\b25\.4\b/.test(line)) seen.push(`${f}:${i + 1}: ${line.trim()}`);
     });
