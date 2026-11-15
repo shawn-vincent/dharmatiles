@@ -136,7 +136,15 @@ squareMm: number,
  * page can say so before it tries, and refuse on a device that cannot carry it; null when the document
  * has no tile that reads.
  */
-fullCost: FullCost | null, };
+fullCost: FullCost | null, 
+/**
+ * Every node of the text, by the id an edit names it with (`edit_tile`); empty when the document did not read.
+ */
+nodes: Array<NodeJson>, 
+/**
+ * The revision of the text those nodes were read from: what an edit carries as `read`.
+ */
+nodesRev: string | null, };
 
 type Clause = { "kind": "within", at: number, distance: Written | null, of: OfPlace | null, printed: Array<string> | null, } | { "kind": "except", at: number, regions: Run, };
 
@@ -171,6 +179,18 @@ volume_mm3: number,
  * Its bounding box, mm (low corner, high corner): where to element.
  */
 bounds: [[number, number, number], [number, number, number]], };
+
+type EditReq = { 
+/**
+ * The `nodesRev` of the check the ids come from.
+ */
+read?: string | null, } & ({ "op": "set", text: string, id: string, name: string, value?: Scalar | null, } | { "op": "insert", text: string, node: string, place?: InsertPlace | null, id?: string | null, } | { "op": "move", text: string, id: string, before?: string | null, } | { "op": "remove", text: string, id: string, } | { "op": "remove-children", text: string, id: string, names: Array<string>, } | { "op": "rename", text: string, id: string, new: string, } | { "op": "about", text: string, value: string, } | { "op": "arg", text: string, id: string, index: number, value: Scalar, } | { "op": "args", text: string, id: string, values: Array<string>, } | { "op": "point", text: string, id: string, slot: PointSlot, q: [number, number], snap?: boolean | null, } | { "op": "hide", text: string, id: string, } | { "op": "fix", text: string, fix: FixJson, });
+
+type Edited = { 
+/**
+ * The revision of `made.text` (`EditReq::read` of an edit made to it).
+ */
+rev: string, text: string, id: string | null, at: number | null, };
 
 type Explored = { 
 /**
@@ -231,6 +251,8 @@ type Height = { name: string, value: number | null, text: string, from: HeightFr
 
 type HeightFrom = "library" | "tile" | "override";
 
+type InsertPlace = "stack" | "tile" | "before" | "in";
+
 type Language = { names: Array<string>, units: Array<string>, functions: Array<string>, };
 
 type LineSheet = { at: number, controls: Array<MapControl>, through: Run | null, };
@@ -271,6 +293,24 @@ type MarkerKind = "literal" | "name";
 
 type NamedPoint = { name: string, at: [number, number], span: [number, number], };
 
+type NodeJson = { id: string, 
+/**
+ * The node's name as written (`rock`).
+ */
+what: string, 
+/**
+ * The first word of a node that names itself (`shore` of `line shore`).
+ */
+name: string | null, 
+/**
+ * The byte its text starts at.
+ */
+at: number, 
+/**
+ * Its length in bytes.
+ */
+len: number, };
+
 type OfPlace = { text: string, written: string, span: [number, number], };
 
 type OutlineControl = { name: string, 
@@ -294,6 +334,8 @@ type Place = { name: string, kind: PlaceKind, };
 type PlaceKind = "edge" | "line" | "region" | "tile" | "point";
 
 type PlaceRef = { "kind": "point", name: string, at: [number, number], } | { "kind": "tile", name: string, pts: Array<[number, number]> | null, } | { "kind": "edge", name: string, pts: Array<[number, number]>, } | { "kind": "line", name: string, pts: Array<[number, number]>, } | { "kind": "region", name: string, } | { "kind": "unknown", name: string, };
+
+type PointSlot = { "arg": number } | { "control": string };
 
 type PrintedBoth = { 
 /**
@@ -334,6 +376,8 @@ type Run = { at: number, text: string,
  * `text` as words (one string's quotes off), as for a [`Written`].
  */
 plain: string, span: [number, number] | null, };
+
+type Scalar = boolean | number | number | string;
 
 type Stage = { 
 /**
@@ -441,6 +485,7 @@ export interface Answers {
   check_tile: Checked;
   explore: Explored;
   printed: PrintedBoth | null;
+  edit_tile: Edited;
   "build_tile().meta": BuildMeta;
   "dtProgress": StageTick;
 }
@@ -462,6 +507,7 @@ export interface Engine {
   analyze(text: string, system: string): string;
   check_tile(text: string, system: string): string;
   fix_tile(text: string, fix: string): string;
+  edit_tile(req: string, system: string): string;
   printed(typed: string): string;
   build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null): EngineTile;
   forget_card(card: string): void;

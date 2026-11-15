@@ -31,7 +31,7 @@ import { DRAFT_CELLS, DRAFT_TIER } from './engine.js';
 import { messageOf } from '../../editor/js/problems.js';
 import { CardLog } from './site-log.js';
 import { SourcePane } from './source-pane.js';
-import { findControl, parseControls, rangeOf, readValue, writeValue } from './controls.js';
+import { findControl, parseControls, rangeOf, readValue, setOp } from './controls.js';
 import { LiteViewer } from './viewer-lite.js';
 import { costWords, deviceVerdict } from './limits.js';
 
@@ -89,6 +89,10 @@ export class Card {
     /** @type {Checked | null} the worker's check (dt-web's `Checked`, generated into engine-wire.d.ts) */
     this.checked = null;
     this.checkedText = null;
+    /** @type {Promise<void>} the edits asked of the engine, in order (`#edit`) */
+    this.editing = Promise.resolve();
+    /** @type {{ text: string, rev: string } | null} the text the last edit made and its fingerprint, which the next edit is read at */
+    this.made = null;
     /** @type {ReturnType<typeof marksOf>} */
     this.marks = [];
     /** @type {TileMap | null} the program's map, one type for the page, the cards and the posters */
@@ -268,6 +272,31 @@ export class Card {
     this.text = next;
     this.pane.set(next);
     this.#edited();
+  }
+
+  /**
+   * Edit the source through the engine: `make` builds the typed edit for the text and fingerprint the edit is made at; the program
+   * makes the new text (`Engine.edit`).  Edits run one at a time, each at the text and fingerprint the last one answered (or the
+   * last check's, while none has), so a drag is a run of edits that never names a node in a text it was not read from.  A refusal is
+   * said in the card's messages, never dropped.
+   * @param {(text: string, rev: string) => import('./engine-wire').EditReq} make
+   */
+  #editSource(make) {
+    this.editing = this.editing.then(async () => {
+      // the fingerprint is of the text now: the last edit's, or the last check's when no typing has happened since it
+      const rev = this.made?.text === this.text ? this.made.rev : this.checkedText === this.text ? this.checked?.nodesRev : null;
+      if (!rev) { this.log.failed('The source has changed since the program read it, so it is not edited: the control works again after the next check.', ''); this.#touch(); return; }
+      try {
+        const made = await this.engine.edit(make(this.text, rev), this.system);
+        this.made = { text: made.text, rev: made.rev };
+        this.text = made.text;
+        this.pane.set(made.text);
+        this.#edited();
+      } catch (e) {
+        this.log.failed(`The edit could not be made: ${messageOf(e)}`, e instanceof Error ? e.stack ?? '' : '');
+        this.#touch();
+      }
+    });
   }
 
   /** Fold the list open or shut. */
@@ -603,7 +632,7 @@ export class Card {
     if (!this.controls.length) return;
     this.controlsBox.textContent = '';
     for (const c of this.controls) {
-      const at = findControl(this.map, c.name);
+      const at = findControl(this.map, this.checked?.nodes, c.name);
       if (!at) {
         const note = el('div', 'dtx-control missing');
         note.textContent = `${c.name}: not written in this source`;
@@ -619,14 +648,11 @@ export class Card {
       const input = el('input', '', { type: 'range', min: String(min), max: String(max), step: String(step), value: String(read.value), 'aria-label': c.name });
       const out = el('output');
       out.textContent = `${read.value}${read.unit}`;
-      let span = at.span, textNow = at.text;
+      // a run of drags is a run of edits, made one after another: each reads the fingerprint the one before answered
       input.addEventListener('input', () => {
-        const w = writeValue(this.text, { text: textNow, span }, Number(input.value));
-        span = w.span; textNow = w.written;
-        this.text = w.text;
-        this.pane.set(w.text);
-        out.textContent = `${Number(input.value)}${read.unit}`;
-        this.#edited();
+        const value = Number(input.value);
+        out.textContent = `${value}${read.unit}`;
+        this.#editSource((text, rev) => setOp(text, rev, { id: at.id, name: c.name, unit: read.unit }, value));
       });
       row.append(name, input, out);
       if (c.name === 'seed') {
