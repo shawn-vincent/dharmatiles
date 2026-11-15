@@ -36,6 +36,7 @@ ts-rs.workspace = true
 # and Manifold are the program's own, built once.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 dt-eval = { workspace = true, features = ["wasm"] }
+dt-geom.workspace = true
 # the browser's bindings, only for the browser: on the host its proc macros would ask for another `syn`, and every
 # crate of the program that derives serde would be built twice (feature drift)
 wasm-bindgen = "=0.2.130"

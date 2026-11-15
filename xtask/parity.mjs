@@ -17,6 +17,16 @@ const said = [];
 const log = console.error;
 console.error = (...a) => { said.push(a.join(' ')); log(...a); };
 for (const job of jobs) {
+  // `probe-new:<bytes>`: the C++ runtime's operator new asked for that many bytes (see `cargo xtask parity --too-big`)
+  if (job.startsWith('probe-new:')) {
+    try {
+      engine.probe_operator_new(Number(job.slice('probe-new:'.length)));
+      console.log(JSON.stringify({ tile: job, error: 'operator new gave the bytes' }));
+    } catch (e) {
+      console.log(JSON.stringify({ tile: job, error: said.join('\n') || String(e) }));
+    }
+    process.exit(1);
+  }
   const [tile, system] = job.split('@');
   try {
     console.log(engine.parity_line(tile, system));

@@ -592,6 +592,7 @@ version = "1.0.0"
 dependencies = [
  "dt-doc",
  "dt-eval",
+ "dt-geom",
  "dt-kit",
  "dt-lang",
  "dt-print",

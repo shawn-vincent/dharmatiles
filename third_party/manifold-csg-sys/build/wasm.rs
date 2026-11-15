@@ -498,39 +498,44 @@ pub fn build_wasm_unknown_unknown() {
     // emit it via cargo:rustc-link-lib=static and let cargo control
     // link order alongside the other archives.
 
-    let extras_o = out_dir.join("libcxx-extras.o");
+    // Two files make the archive: libcxx-extras.cpp (the libc++ source-file symbols) and operator-new.cpp (the global
+    // operator new/delete, which say what failed where the shim's trapped without a word).  Both are listed in
+    // `rerun-if-changed=wasm32-uu` above.
     let extras_a = out_dir.join("libcxx_extras.a");
-    let extras_cpp = wasm_dir.join("libcxx-extras.cpp");
-
-    let status = Command::new(&clangpp)
-        .args([
-            "--target=wasm32-unknown-unknown",
-            "-std=c++17",
-            "-Os",
-            "-fno-exceptions",
-            "-fno-rtti",
-            "-nostdlib",
-            "-nostdinc++",
-            "-nostdlibinc",
-        ])
-        .arg(format!("-isystem{}", wasm_dir.join("include").display()))
-        .arg(format!("-isystem{}", libcxx_headers.display()))
-        .arg(format!(
-            "-isystem{}",
-            shim_src.join("libm/include").display()
-        ))
-        .arg(format!(
-            "-isystem{}",
-            shim_src.join("libc/include").display()
-        ))
-        .arg("-c")
-        .arg(&extras_cpp)
-        .arg("-o")
-        .arg(&extras_o)
-        .status()
-        .expect("failed to compile libcxx-extras.cpp");
-    if !status.success() {
-        bail_with_diagnostics(&ctx, "libcxx-extras compile", &out_dir);
+    let mut extras_objects = Vec::new();
+    for stem in ["libcxx-extras", "operator-new"] {
+        let object = out_dir.join(format!("{stem}.o"));
+        let status = Command::new(&clangpp)
+            .args([
+                "--target=wasm32-unknown-unknown",
+                "-std=c++17",
+                "-Os",
+                "-fno-exceptions",
+                "-fno-rtti",
+                "-nostdlib",
+                "-nostdinc++",
+                "-nostdlibinc",
+            ])
+            .arg(format!("-isystem{}", wasm_dir.join("include").display()))
+            .arg(format!("-isystem{}", libcxx_headers.display()))
+            .arg(format!(
+                "-isystem{}",
+                shim_src.join("libm/include").display()
+            ))
+            .arg(format!(
+                "-isystem{}",
+                shim_src.join("libc/include").display()
+            ))
+            .arg("-c")
+            .arg(wasm_dir.join(format!("{stem}.cpp")))
+            .arg("-o")
+            .arg(&object)
+            .status()
+            .unwrap_or_else(|e| panic!("failed to compile {stem}.cpp: {e}"));
+        if !status.success() {
+            bail_with_diagnostics(&ctx, &format!("{stem} compile"), &out_dir);
+        }
+        extras_objects.push(object);
     }
 
     let _ = std::fs::remove_file(&extras_a);
@@ -544,7 +549,7 @@ pub fn build_wasm_unknown_unknown() {
     let status = Command::new(&llvm_ar)
         .args(["rcs"])
         .arg(&extras_a)
-        .arg(&extras_o)
+        .args(&extras_objects)
         .status()
         .unwrap_or_else(|e| panic!("failed to run {} for libcxx-extras: {e}", llvm_ar.display()));
     if !status.success() {

@@ -1710,3 +1710,19 @@ pub extern "C" fn manifold_alloc_failed(bytes: usize) -> ! {
          This tile is too big for this device; build it in the program"
     );
 }
+
+// ── The C++ runtime's operator new, made to fail ────────────────────────
+
+#[cfg(target_arch = "wasm32")]
+unsafe extern "C" {
+    fn manifold_csg_probe_operator_new(bytes: usize);
+}
+
+/// Ask the C++ runtime's global `operator new` (wasm32-uu/operator-new.cpp) for `bytes` and free them again.  A request the
+/// module's memory cannot meet stops through [`manifold_alloc_failed`], saying its size and the stage, as a failing
+/// Manifold allocation does; `cargo xtask parity --too-big` uses it to see that.  Browser build only.
+#[cfg(target_arch = "wasm32")]
+pub fn probe_operator_new(bytes: usize) {
+    // SAFETY: defined in wasm32-uu/operator-new.cpp: it takes a size, allocates and frees it (or stops without returning).
+    unsafe { manifold_csg_probe_operator_new(bytes) }
+}

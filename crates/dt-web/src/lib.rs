@@ -95,6 +95,15 @@ fn card_cache(card: &str) -> std::rc::Rc<dt_eval::Cache> {
     })
 }
 
+/// Ask the C++ runtime's `operator new` for `bytes`: one the module's memory cannot give stops with its stage, size and memory
+/// (the program's panic, then the trap), as a failing Manifold allocation does.  `cargo xtask parity --too-big` calls it to
+/// see that.  A function of the test, not of a page.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn probe_operator_new(bytes: u32) {
+    dt_geom::probe_operator_new(bytes as usize);
+}
+
 /// Drop `card`'s step cache (the card was removed from the page).
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn forget_card(card: &str) {

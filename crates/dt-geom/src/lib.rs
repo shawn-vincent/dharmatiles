@@ -33,6 +33,9 @@ pub mod source;
 pub mod stack;
 pub mod vec3;
 
+#[cfg(target_arch = "wasm32")]
+pub use manifold_csg_sys::probe_operator_new;
+
 pub use convex::Convex;
 pub use filter::{Structuring, blur, blur_recursive, dilate, erode, quantile};
 pub use geodesic::geodesic;
