@@ -298,18 +298,21 @@ pub fn written_value<'a>(written: &'a str, name: &str) -> &'a str {
 #[must_use]
 pub fn plain_of(written: &str) -> String {
     let t = written.trim();
-    if t.starts_with('"') || t.starts_with("#\"") {
-        if let Ok(doc) = format!("n {t}").parse::<kdl::KdlDocument>() {
-            if let Some([e]) = doc.nodes().first().map(kdl::KdlNode::entries) {
-                if e.name().is_none() {
-                    if let Some(s) = e.value().as_string() {
-                        return s.to_owned();
-                    }
-                }
-            }
-        }
+    if !(t.starts_with('"') || t.starts_with("#\"")) {
+        return t.to_owned();
     }
-    t.to_owned()
+    // one string argument: a document of a node with that one entry
+    let one = format!("n {t}")
+        .parse::<kdl::KdlDocument>()
+        .ok()
+        .and_then(|doc| {
+            let node = doc.nodes().first()?;
+            let [e] = node.entries() else { return None };
+            e.name()
+                .is_none()
+                .then(|| e.value().as_string().map(str::to_owned))?
+        });
+    one.unwrap_or_else(|| t.to_owned())
 }
 
 /// The properties written on the node at byte `offset`: each name, its value as written, and the value's byte

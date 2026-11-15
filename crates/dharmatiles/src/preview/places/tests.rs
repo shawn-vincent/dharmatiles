@@ -1,8 +1,8 @@
 //! The places and what is done in them: every call refuses what is outside a
 //! place the user owns, and does no more than it says.
 
-use super::*;
 use super::super::edit::NewReq;
+use super::*;
 use dt_eval::Options;
 
 const TILE: &str =
@@ -307,59 +307,29 @@ fn a_folder_is_made_renamed_and_trashed_inside_a_place_only() {
         vec!["dungeon".to_owned()],
         "listed at once"
     );
-    done(&new_folder(
-        &shared,
-        &named(0, "dungeon", "combo"),
-    ));
+    done(&new_folder(&shared, &named(0, "dungeon", "combo")));
     assert_eq!(
         folders_of(&shared, 0),
         vec!["dungeon".to_owned(), "dungeon/combo".to_owned()]
     );
     // never over what is there
-    refused(
-        &new_folder(&shared, &named(0, "", "dungeon")),
-        "409",
-    );
+    refused(&new_folder(&shared, &named(0, "", "dungeon")), "409");
     // a name is a name: slashes become dashes, nothing hidden or empty
     let r = new_folder(&shared, &named(0, "", "a/b"));
     assert_eq!(ok::<FolderDone>(&r).dir, "a-b");
-    refused(
-        &new_folder(&shared, &named(0, "", "   ")),
-        "400",
-    );
+    refused(&new_folder(&shared, &named(0, "", "   ")), "400");
     let r = new_folder(&shared, &named(0, "", ".."));
     refused(&r, "400");
-    refused(
-        &new_folder(&shared, &named(0, "", "out")),
-        "400",
-    );
+    refused(&new_folder(&shared, &named(0, "", "out")), "400");
 
-    let r = rename_folder(
-        &shared,
-        &named(0, "dungeon/combo", "fights"),
-    );
+    let r = rename_folder(&shared, &named(0, "dungeon/combo", "fights"));
     assert_eq!(ok::<FolderDone>(&r).dir, "dungeon/fights");
     assert!(home.join("dungeon/fights").is_dir() && !home.join("dungeon/combo").exists());
     // another folder's name is free in this one
-    done(&rename_folder(
-        &shared,
-        &named(0, "dungeon/fights", "a-b"),
-    ));
-    done(&rename_folder(
-        &shared,
-        &named(0, "dungeon/a-b", "fights"),
-    ));
-    refused(
-        &rename_folder(
-            &shared,
-            &named(0, "dungeon", "a-b"),
-        ),
-        "409",
-    );
-    refused(
-        &rename_folder(&shared, &named(0, "", "x")),
-        "400",
-    );
+    done(&rename_folder(&shared, &named(0, "dungeon/fights", "a-b")));
+    done(&rename_folder(&shared, &named(0, "dungeon/a-b", "fights")));
+    refused(&rename_folder(&shared, &named(0, "dungeon", "a-b")), "409");
+    refused(&rename_folder(&shared, &named(0, "", "x")), "400");
 
     // trash: into the Trash, with an Undo that puts it back, and not over something there again
     let r = trash_folder(&shared, &folder(0, "dungeon"));
@@ -367,29 +337,20 @@ fn a_folder_is_made_renamed_and_trashed_inside_a_place_only() {
     assert!(!home.join("dungeon").exists());
     assert!(trash.join("dungeon/fights").is_dir());
     assert!(!folders_of(&shared, 0).contains(&"dungeon".to_owned()));
-    done(&undo_trash(&shared, &TrashUndoReq { undo: undo }));
+    done(&undo_trash(&shared, &TrashUndoReq { undo }));
     assert!(home.join("dungeon/fights").is_dir());
-    refused(&undo_trash(&shared, &TrashUndoReq { undo: undo }), "409");
+    refused(&undo_trash(&shared, &TrashUndoReq { undo }), "409");
     refused(&undo_trash(&shared, &TrashUndoReq { undo: 99 }), "404");
     // the place itself is not trashed
-    refused(
-        &trash_folder(&shared, &folder(0, "")),
-        "400",
-    );
+    refused(&trash_folder(&shared, &folder(0, "")), "400");
 }
 
 #[test]
 fn a_call_refuses_a_place_it_may_not_touch_and_a_path_that_leaves_one() {
     let (shared, home, _, _) = serve("refuse");
     // the library is read only, whatever is asked; so is a place that is not there
-    refused(
-        &new_folder(&shared, &named(1, "", "x")),
-        "403",
-    );
-    refused(
-        &new_folder(&shared, &named(7, "", "x")),
-        "404",
-    );
+    refused(&new_folder(&shared, &named(1, "", "x")), "403");
+    refused(&new_folder(&shared, &named(7, "", "x")), "404");
     refused(
         &call_body(
             &shared,
@@ -425,25 +386,15 @@ fn a_call_refuses_a_place_it_may_not_touch_and_a_path_that_leaves_one() {
             !outside.join("x").exists(),
             "nothing was made outside the place"
         );
-        refused(
-            &trash_folder(&shared, &folder(0, "escape")),
-            "403",
-        );
-        refused(
-            &rename_folder(&shared, &named(0, "escape", "y")),
-            "403",
-        );
+        refused(&trash_folder(&shared, &folder(0, "escape")), "403");
+        refused(&rename_folder(&shared, &named(0, "escape", "y")), "403");
         assert!(outside.join("secret.dtile").exists());
         // and a tile in it is not a tile of the place
         let through = home.join("escape/secret.dtile");
         refused(&trash_tile(&shared, &through.to_string_lossy()), "400");
         refused(&duplicate_tile(&shared, &through.to_string_lossy()), "400");
         refused(
-            &move_tile(
-                &shared,
-                &through.to_string_lossy(),
-                &to_dir(0, ""),
-            ),
+            &move_tile(&shared, &through.to_string_lossy(), &to_dir(0, "")),
             "400",
         );
         assert!(outside.join("secret.dtile").exists());
@@ -470,24 +421,12 @@ fn a_tile_is_moved_copied_and_trashed_only_when_it_is_one_of_the_places() {
     );
     std::fs::write(home.join("Pond.dtile"), TILE).unwrap();
     shared.rescan();
-    refused(
-        &move_tile(&shared, &pond, &to_dir(0, "ponds")),
-        "409",
-    );
+    refused(&move_tile(&shared, &pond, &to_dir(0, "ponds")), "409");
     assert!(Path::new(&pond).exists(), "the clash moved nothing");
     // a folder that is not there, one that climbs, the library
-    refused(
-        &move_tile(&shared, &pond, &to_dir(0, "nope")),
-        "404",
-    );
-    refused(
-        &move_tile(&shared, &pond, &to_dir(0, "../")),
-        "400",
-    );
-    refused(
-        &move_tile(&shared, &pond, &to_dir(1, "")),
-        "403",
-    );
+    refused(&move_tile(&shared, &pond, &to_dir(0, "nope")), "404");
+    refused(&move_tile(&shared, &pond, &to_dir(0, "../")), "400");
+    refused(&move_tile(&shared, &pond, &to_dir(1, "")), "403");
     // to its own folder: nothing to do
     done(&move_tile(&shared, &pond, &to_dir(0, "")));
 
@@ -512,7 +451,7 @@ fn a_tile_is_moved_copied_and_trashed_only_when_it_is_one_of_the_places() {
     let undo = ok::<Trashed>(&r).undo;
     assert!(!Path::new(&pond).exists() && trash.join("Pond.dtile").exists());
     assert!(shared.summary(&tile_id(&pond)).is_none());
-    let r = undo_trash(&shared, &TrashUndoReq { undo: undo });
+    let r = undo_trash(&shared, &TrashUndoReq { undo });
     assert!(ok::<Restored>(&r).id.is_some(), "{r:?}");
     assert!(Path::new(&pond).exists() && !trash.join("Pond.dtile").exists());
     // trashing again beside what is in the Trash already: its own name
@@ -536,10 +475,7 @@ fn a_tile_is_moved_copied_and_trashed_only_when_it_is_one_of_the_places() {
     ] {
         refused(&trash_tile(&shared, &p), "400");
         refused(&duplicate_tile(&shared, &p), "400");
-        refused(
-            &move_tile(&shared, &p, &to_dir(0, "")),
-            "400",
-        );
+        refused(&move_tile(&shared, &p, &to_dir(0, "")), "400");
     }
     assert!(home.join("notes.txt").exists());
 }
