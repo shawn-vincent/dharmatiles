@@ -1,0 +1,18 @@
+[package]
+name = "dt-render"
+description = "The CPU preview renderer: a depth-buffered rasteriser with flat shading and per-face paint, for build --png and the contact sheets. Its own crate so a change to printing (the files, the plates, the inventory) does not select the engine's tests that read a render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+dt-geom.workspace = true
+dt-value.workspace = true
+libm.workspace = true
+png.workspace = true
+
+[lints]
+workspace = true

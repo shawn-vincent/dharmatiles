@@ -427,7 +427,7 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
                 "the build: every test binary the checks run".into(),
                 budget::build(root),
                 Box::new(move || {
-                    crate::lanes::tests(build(), true)?;
+                    crate::lanes::tests(root, build(), true)?;
                     if full {
                         dt_eval_full(root, true)?;
                     }
@@ -436,9 +436,9 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             ),
         );
         steps.push((
-            "the tests, in lanes (dt-eval's tile tests and dharmatiles' each beside every other binary)".into(),
+            "the tests (every binary from one queue, the slowest of the last run first)".into(),
             budget::step::TESTS,
-            Box::new(move || crate::lanes::tests(tests(), false)),
+            Box::new(move || crate::lanes::tests(root, tests(), false)),
         ));
     }
     if full {
@@ -509,6 +509,13 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
     }
     for (k, (what, budget, _)) in steps.iter().enumerate() {
         println!("  {}. {what} (budget {budget:.0} s)", k + 1);
+    }
+    if !p.tests.is_empty() && !full {
+        // what the change selects, so a selection wider than the change is seen
+        println!(
+            "  the tests of: {}",
+            p.tests.iter().cloned().collect::<Vec<_>>().join(", ")
+        );
     }
     if args.iter().any(|a| a == "--plan") {
         return Ok(());

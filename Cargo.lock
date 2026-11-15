@@ -383,6 +383,7 @@ dependencies = [
  "dt-kit",
  "dt-lang",
  "dt-print",
+ "dt-render",
  "dt-service",
  "dt-store",
  "dt-testkit",
@@ -462,7 +463,7 @@ dependencies = [
  "dt-geom",
  "dt-kit",
  "dt-lang",
- "dt-print",
+ "dt-render",
  "dt-testkit",
  "dt-value",
  "insta",
@@ -534,11 +535,19 @@ dependencies = [
  "dt-lang",
  "dt-value",
  "flate2",
- "libm",
- "png",
  "serde",
  "serde_json",
  "ts-rs",
+]
+
+[[package]]
+name = "dt-render"
+version = "1.0.0"
+dependencies = [
+ "dt-geom",
+ "dt-value",
+ "libm",
+ "png",
 ]
 
 [[package]]

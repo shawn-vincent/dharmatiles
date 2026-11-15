@@ -13,6 +13,7 @@ default-members = [
     "crates/dt-kit",
     "crates/dt-lang",
     "crates/dt-print",
+    "crates/dt-render",
     "crates/dt-service",
     "crates/dt-store",
     "crates/dt-value",
@@ -43,6 +44,7 @@ dt-crash-switch = { path = "crates/dt-crash-switch" }
 dt-store = { path = "crates/dt-store" }
 dt-service = { path = "crates/dt-service" }
 dt-print = { path = "crates/dt-print" }
+dt-render = { path = "crates/dt-render" }
 # Dev-dependency only: the one build memo the tests share.
 dt-testkit = { path = "crates/dt-testkit" }
 # KDL v2 only: `kdlv1`/`v1-fallback` stay off, and serde is not needed.

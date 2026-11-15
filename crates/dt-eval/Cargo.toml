@@ -30,8 +30,8 @@ ts-rs.workspace = true
 memory-stats.workspace = true
 
 [dev-dependencies]
-# the golden tests draw the PNG renders (a dev-dependency cycle: dt-print builds on dt-eval)
-dt-print.workspace = true
+# the golden tests draw the PNG renders (the renderer is its own crate: a change to printing does not select these tests)
+dt-render.workspace = true
 insta.workspace = true
 # the one build memo the tests share (a dev-dependency cycle: dt-testkit builds on dt-eval)
 dt-testkit.workspace = true

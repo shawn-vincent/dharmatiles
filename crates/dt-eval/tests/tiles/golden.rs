@@ -22,7 +22,7 @@
 
 use crate::memo;
 use dt_eval::{Built, Library, Options};
-use dt_print::{VIEWS, render};
+use dt_render::{VIEWS, render};
 
 use super::memo::{built, hashes, prebuild};
 

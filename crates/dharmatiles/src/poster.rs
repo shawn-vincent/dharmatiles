@@ -13,7 +13,7 @@
 use std::path::{Path, PathBuf};
 
 use dt_eval::{Files, Progress, Source, check};
-use dt_print::{VIEWS, render};
+use dt_render::{VIEWS, render};
 use dt_store::{Store, Tier, Tracked};
 
 use crate::{ERROR, OK};

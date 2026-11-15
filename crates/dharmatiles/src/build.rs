@@ -5,7 +5,8 @@ use std::time::Instant;
 
 use crate::cli_wire::{BuildReport, BuildTile, Failed, Printed};
 use dt_eval::{Built, Diag, Files, Options, Source, Verdict};
-use dt_print::{VIEWS, render, stl};
+use dt_print::stl;
+use dt_render::{VIEWS, render};
 
 use crate::{AUDIT_FAILED, BUG, ERROR, OK, progress};
 

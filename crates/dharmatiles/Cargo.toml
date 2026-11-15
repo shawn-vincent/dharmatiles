@@ -25,6 +25,7 @@ dt-eval.workspace = true
 dt-crash-switch.workspace = true
 dt-store.workspace = true
 dt-print.workspace = true
+dt-render.workspace = true
 dt-kit.workspace = true
 dt-elements.workspace = true
 libm.workspace = true

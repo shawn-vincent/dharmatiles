@@ -6,8 +6,9 @@
 //! slicer reads: binary STL ([`stl`]), 3MF painted by material ([`threemf`]),
 //! Bambu Studio projects ([`bambu`]), whole plates of either ([`plateset`]).
 //! The CPU renderer that draws the four preview PNGs of `build --png` and
-//! the contact sheets is here too ([`render`]): its only readers are those
-//! two outputs.  The painter that colours a face (`dt_kit::paint_mesh`, the
+//! the contact sheets is `dt-render`, a crate of its own (it needs no print
+//! code, and a change to printing must not select the tests that read a
+//! render).  The painter that colours a face (`dt_kit::paint_mesh`, the
 //! palette) stays in `dt-kit`, because the editor and the browser build show
 //! the same colours and neither prints.
 //!
@@ -18,7 +19,6 @@ pub mod bambu;
 pub mod inventory;
 pub mod plates;
 pub mod plateset;
-pub mod render;
 pub mod stl;
 pub mod threemf;
 
@@ -27,6 +27,5 @@ pub use plateset::{
     PlatePart, PlateSet, PlateStand, bambu_columns, bambu_plate_origin, bambu_plates, box_of,
     filaments_of, plate_3mf, plate_stl, stand_positions,
 };
-pub use render::{Image, VIEWS, View, render};
 pub use stl::stl;
 pub use threemf::threemf;
