@@ -114,36 +114,38 @@ test('word controls become dropdowns before their buttons would wrap', () => {
   assert.equal(wordControlNeedsSelect(words('one very long choice', 'another')), true);
 });
 
-function payload(traced = true) {
-  let json = '{"triangles":1,"lo":[0,0,0],"hi":[1,1,0]}';
+// one triangle over three shared vertices, a palette of two colours (painted red, clean grey), entry 3 and piece 7
+function payload() {
+  let json = '{"triangles":1,"vertices":3,"palette":2,"lo":[0,0,0],"hi":[1,1,0]}';
   while ((8 + new TextEncoder().encode(json).length) % 4) json += ' ';
   const meta = new TextEncoder().encode(json);
-  const bytes = 8 + meta.length + 36 + 36 + 9 + 9 + (traced ? 4 : 0);
-  const buffer = new ArrayBuffer(bytes + ((4 - bytes % 4) % 4));
-  const u8 = new Uint8Array(buffer);
-  u8.set([68, 84, 77, 49]);
-  new DataView(buffer).setUint32(4, meta.length, true);
+  const buffer = new ArrayBuffer(8 + meta.length + 36 + 12 + 8 + 2 * 4);
+  const u8 = new Uint8Array(buffer), dv = new DataView(buffer);
+  u8.set([68, 84, 77, 50]); // DTM2
+  dv.setUint32(4, meta.length, true);
   u8.set(meta, 8);
-  if (traced) {
-    const at = 8 + meta.length + 36 + 36 + 9 + 9;
-    new DataView(buffer).setUint16(at, 3, true);
-    new DataView(buffer).setUint16(at + 2, 7, true);
-  }
+  let o = 8 + meta.length;
+  for (const x of [0, 0, 0, 2, 0, 0, 0, 3, 0]) { dv.setFloat32(o, x, true); o += 4; }
+  for (const i of [0, 1, 2]) { dv.setUint32(o, i, true); o += 4; }
+  u8.set([255, 0, 0, 128, 128, 128], o); o += 8;
+  for (const v of [0, 1, 3, 7]) { dv.setUint16(o, v, true); o += 2; } // painted, clean, entry, piece
   return buffer;
 }
 
-test('mesh payload exposes triangle owners without copying arrays', () => {
-  const got = parsePayload(payload(true));
+test('mesh payload exposes triangle owners without copying them', () => {
+  const got = parsePayload(payload());
   assert.equal(got.triangles, 1);
   assert.equal(got.entry[0], 3);
   assert.equal(got.piece[0], 7);
-  assert.equal(got.positions.buffer, got.entry.buffer);
+  assert.equal(got.entry.buffer, got.piece.buffer);
 });
 
-test('an old untraced mesh stays readable', () => {
-  const got = parsePayload(payload(false));
-  assert.equal(got.entry[0], NO_ENTRY);
-  assert.equal(got.piece[0], 0);
+test('an indexed mesh is laid out for the viewer: each corner its position, face normal and face colours', () => {
+  const got = parsePayload(payload());
+  assert.deepEqual([...got.positions], [0, 0, 0, 2, 0, 0, 0, 3, 0]);
+  assert.deepEqual([...got.normals], [0, 0, 1, 0, 0, 1, 0, 0, 1]);
+  assert.deepEqual([...got.painted], [255, 0, 0, 255, 0, 0, 255, 0, 0]);
+  assert.deepEqual([...got.clean], Array(3).fill([128, 128, 128]).flat());
 });
 
 test('GPU ownership is compact, repeated per corner and reserves zero for none', () => {

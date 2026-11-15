@@ -1159,29 +1159,6 @@ pub(super) fn printed_set(shared: &Shared, v: PrintedSetReq) -> Out<PrintedSetRe
 /// library's tiles folder, so a part is found as it is from a library tile.
 const EDIT_PATH: &str = "lib:tiles/edit.dtile";
 
-/// The mistakes of a tile as the whole check finds them (its `use`s, heights and the plan of its stack), so that
-/// an edit is held to what the page would show: [`dt_doc::ops::Checked`] compares the old text's with the new's.
-struct Evaluated<'a>(&'a dt_eval::Options);
-
-impl dt_doc::ops::Reader for Evaluated<'_> {
-    fn mistakes(&self, kind: dt_doc::ops::Kind, text: &str) -> Vec<dt_doc::ops::Flaw> {
-        if kind != dt_doc::ops::Kind::Tile {
-            return dt_doc::ops::Plain.mistakes(kind, text);
-        }
-        let src = Overlay(BTreeMap::from([(EDIT_PATH.to_owned(), text.to_owned())]));
-        match dt_eval::check(&src, EDIT_PATH, self.0) {
-            Ok(_) => Vec::new(),
-            Err(errs) => errs
-                .iter()
-                .map(|d| dt_doc::ops::Flaw {
-                    code: d.code.to_owned(),
-                    message: d.message.clone(),
-                })
-                .collect(),
-        }
-    }
-}
-
 /// How an edit that cannot be made is told: the mistakes it would have added are a 422's `errors`, so the page
 /// says why in the words it says any mistake in (`whyOf`); any other refusal is its words.
 pub(super) fn refusal(e: &dt_doc::ops::EditError) -> Reply {
@@ -1215,7 +1192,11 @@ pub(super) fn refusal(e: &dt_doc::ops::EditError) -> Reply {
 pub(super) fn edit(shared: &Shared, req: EditReq) -> Out<EditRes> {
     use dt_doc::ops::{Kind, Op, Place, apply_with};
     let opts = shared.options();
-    let reader = Evaluated(&opts);
+    let reader = dt_eval::Evaluated {
+        base: &dt_eval::Files,
+        path: EDIT_PATH,
+        opts: &opts,
+    };
     let made = |text: &str, op: Op| match apply_with(&reader, Kind::Tile, text, &op) {
         Ok(d) => Ok(EditRes {
             text: d.text,
@@ -1468,7 +1449,11 @@ fn pin_uses(
     opts: &dt_eval::Options,
 ) -> Result<String, Reply> {
     use dt_doc::ops::{Kind, Op, apply_with};
-    let reader = Evaluated(opts);
+    let reader = dt_eval::Evaluated {
+        base: &dt_eval::Files,
+        path: EDIT_PATH,
+        opts,
+    };
     let refused = |e: dt_doc::ops::EditError| refusal(&e);
     let uses = dt_doc::uses("tile", text).map_err(|errs| {
         fail::mistakes(&errs.iter().map(dt_eval::Diag::from).collect::<Vec<_>>())
