@@ -1016,8 +1016,8 @@ fn a_draft_is_a_request_answered_with_its_mesh() {
 fn a_newer_draft_of_a_tile_supersedes_the_older() {
     let shared = Shared::new(&[FLAT.to_owned()]);
     let id = tile_id(FLAT);
-    let first = shared.submit_draft(&id, FLAT, FLAT, "tile {}", false);
-    let second = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false);
+    let first = shared.submit_draft(&id, FLAT, FLAT, "tile {}", false, edit::DraftTier::Draft);
+    let second = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false, edit::DraftTier::Draft);
     assert!(matches!(first.recv().unwrap(), queue::Outcome::Superseded));
     // the other is still waiting, and is the next job
     assert!(second.try_recv().is_err());
@@ -1026,7 +1026,7 @@ fn a_newer_draft_of_a_tile_supersedes_the_older() {
     };
     assert_eq!(d.text, "tile { }");
     // a newer one stops it while it runs
-    let _third = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false);
+    let _third = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false, edit::DraftTier::Draft);
     assert!(d.cancel.load(Ordering::Relaxed));
     // and a draft goes ahead of a tile asked for
     assert!(shared.want(&id));
@@ -2569,6 +2569,7 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
                 },
                 file: None,
                 debug: None,
+                tier: None,
             }),
         )
     };

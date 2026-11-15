@@ -43,6 +43,8 @@ pub(super) struct Draft {
     pub text: String,
     /// The page has the debug layer on: collect its marks.
     pub marks: bool,
+    /// How coarse to build it.
+    pub tier: super::edit::DraftTier,
     pub cancel: Arc<AtomicBool>,
     pub reply: mpsc::Sender<Outcome>,
 }
@@ -154,6 +156,7 @@ impl Shared {
         file: &str,
         text: &str,
         marks: bool,
+        tier: super::edit::DraftTier,
     ) -> Receiver<Outcome> {
         let (reply, rx) = mpsc::channel();
         let mut q = lock(&self.queue);
@@ -176,6 +179,7 @@ impl Shared {
             file: file.to_owned(),
             text: text.to_owned(),
             marks,
+            tier,
             cancel: Arc::new(AtomicBool::new(false)),
             reply,
         });

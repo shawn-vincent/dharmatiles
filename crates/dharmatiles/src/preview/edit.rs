@@ -621,7 +621,14 @@ pub(super) fn draft(shared: &Shared, tile: &TileRef, v: DraftReq) -> super::rout
         Err(e) => return e.into(),
     };
     match shared
-        .submit_draft(&tile.id, &tile.path, &file, &v.text, v.debug == Some(true))
+        .submit_draft(
+            &tile.id,
+            &tile.path,
+            &file,
+            &v.text,
+            v.debug == Some(true),
+            DraftTier::Draft,
+        )
         .recv_timeout(Duration::from_secs(120))
     {
         Ok(Outcome::Mesh(mesh)) => super::route::Reply::Bytes(mesh),
@@ -655,6 +662,32 @@ pub struct StepReq {
     /// A file the tile uses, instead of its own document.
     pub file: Option<String>,
     pub debug: Option<bool>,
+    /// How coarse the draft is: `low` while a drag is going on (the step has to keep up with the pointer), left out
+    /// (the usual draft) for the step that ends it and for every other change.
+    pub tier: Option<DraftTier>,
+}
+
+/// The tiers a draft is built at.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "kebab-case")]
+pub enum DraftTier {
+    /// The editor's usual draft ([`dt_eval::Tier::Draft`]).
+    #[default]
+    Draft,
+    /// Coarser, for a drag in progress ([`dt_eval::Tier::Low`]): the same places, less detail.
+    Low,
+}
+
+impl DraftTier {
+    /// The build tier it asks for.
+    #[must_use]
+    pub const fn build(self) -> dt_eval::Tier {
+        match self {
+            Self::Draft => dt_eval::Tier::Draft,
+            Self::Low => dt_eval::Tier::Low,
+        }
+    }
 }
 
 /// What became of the draft of a step.
@@ -710,6 +743,7 @@ pub(super) fn step(shared: &Shared, tile: &TileRef, v: StepReq) -> super::route:
             &file,
             &head.text,
             v.debug == Some(true),
+            v.tier.unwrap_or_default(),
         )
         .recv_timeout(Duration::from_secs(120))
     {
