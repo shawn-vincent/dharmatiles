@@ -4,6 +4,8 @@
 
 # dharmatiles
 
+<p align="center"><strong><a href="https://shawn-vincent.github.io/dharmatiles/">shawn-vincent.github.io/dharmatiles</a></strong>: the website, with the guide, every element and live tiles</p>
+
 3D-printable tabletop terrain tiles from a few lines of text.
 
 You describe a tile in a short `.dtile` document: where the lines run, which regions they make, and what goes in each one. `dharmatiles` grows the geometry from that description (dirt with clods and pebbles, grass that parts round rocks, water that ripples off its shores, stone walls, cliffs, trees) and writes an STL that prints base down with no supports.
