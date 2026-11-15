@@ -34,7 +34,7 @@ function onDown(e) {
   const sel = view.get().msel.includes(hit) ? view.get().msel : [hit];
   if (!view.get().msel.includes(hit)) select([hit]);
   // what is picked up now, as it stands now: the drag follows these ids and puts them down by id
-  const ps = pieces().filter((p) => sel.includes(p.id) && p.at);
+  const ps = pieces().filter((p) => sel.includes(p.id)).filter(M.isPlaced);
   if (!ps.length) return;
   const z = ps[0].bottomMm || 0;
   const pt = mapPoint(e, z);

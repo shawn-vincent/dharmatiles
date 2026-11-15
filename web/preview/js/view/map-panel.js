@@ -24,7 +24,17 @@ import { Icon } from './icons.js';
 import { SeedDice, SeedStrip, candidates } from './seed-strip.js';
 import { Button, Section, Seg, plural } from './widgets.js';
 
-/** The last non-empty value of `v`: a level leaving the screen keeps what it showed while it slides out. */
+/** @typedef {typeof import('../editor/model.js').mapPanel} MapModel  what the levels read */
+/** @typedef {typeof import('../editor/scene-panel.js').act} MapActions  what the buttons do */
+/** @typedef {import('../doc-views.js').Piece} Piece */
+/** @typedef {import('../map-list.js').Row<Piece>} ListRow  a tile's row of the piece list */
+/** @typedef {{ m: MapModel, act: MapActions }} LevelProps */
+
+/**
+ * The last non-empty value of `v`: a level leaving the screen keeps what it showed while it slides out.
+ * @template T
+ * @param {T | null} v
+ */
 function held(v) {
   const last = useRef(v);
   if (v) last.current = v;
@@ -32,20 +42,21 @@ function held(v) {
 }
 
 /** The have or to-print pill of a piece (caution yellow where only the other colour mode is on the shelf). */
+/** @type {Record<string, string>} */
 const TITLES = {
   have: 'A print you own is this piece (tile, seed, system and colour mode): it is left off the plates',
   need: 'It prints',
   other: 'You own this tile and seed in the other colour mode; it prints unless you leave it off',
   skip: 'print=skip: it stays on the map and off the plates',
 };
-export const Pill = ({ state }) => {
+export const Pill = (/** @type {{ state: string }} */ { state }) => {
   const word = { have: 'have', need: 'to print', other: 'have, other colour', skip: 'left off' }[state] ?? state;
   const title = TITLES[state];
   return html`<span class=${`ipill ${state === 'have' ? 'have' : state === 'other' ? 'caution' : 'need'}`} title=${title}>${word}</span>`;
 };
 
 /** The have, to-print and caution pills of a row of the list: what the shelf says of its pieces (the states are apart: a piece is in one). */
-const RowPills = ({ row }) => html`<span class="mp-pills">
+const RowPills = (/** @type {{ row: ListRow }} */ { row }) => html`<span class="mp-pills">
   ${row.skip ? html`<${Pill} state="skip" />` : null}
   ${row.have ? html`<span class="ipill have" title=${TITLES.have}>${`${row.have} have`}</span>` : null}
   ${row.toPrint - row.other ? html`<span class="ipill need" title=${TITLES.need}>${`${row.toPrint - row.other} to print`}</span>` : null}
@@ -58,7 +69,7 @@ const RowPills = ({ row }) => html`<span class="mp-pills">
  * is selected: so it reads the selection the same wherever the selection was made.  `compact` is the Add tiles level's list: the
  * rows alone (no sort, filter or search), the row of the tile just put on the map lit for a moment and kept in view.
  */
-function PieceList({ m, act, compact = false }) {
+function PieceList(/** @type {LevelProps & { compact?: boolean }} */ { m, act, compact = false }) {
   const ro = m.readOnly.value;
   const ps = m.pieces.value;
   const how = m.list.value;
@@ -78,23 +89,23 @@ function PieceList({ m, act, compact = false }) {
   }, [key]);
   // the row of a tile just put down is brought into view in the list above the folders
   useEffect(() => { if (fresh) box.current?.querySelector('.mp-group.just0, .mp-group.just1')?.scrollIntoView({ block: 'nearest' }); }, [fresh, added?.n]);
-  const Row = (row) => {
+  const Row = (/** @type {ListRow} */ row) => {
     const on = row.ids.some((id) => picked.has(id));
     const hot = fresh && row.pieces.some((p) => p.tileId === added.tileId);
     return html`<button type="button" class=${`mp-group${on ? ' on' : ''}${hot ? ` just${added.n % 2}` : ''}`} key=${row.key} aria-pressed=${String(on)} title=${`Select the ${plural(row.pieces.length, 'piece')} of ${row.name}`}
       data-ids=${row.ids.join(',')} onClick=${() => act.select(row.ids)} onPointerEnter=${() => act.hover(row.ids)} onPointerLeave=${() => act.hover([])} onFocus=${() => act.hover(row.ids)} onBlur=${() => act.hover([])}>
       <b>${row.name}</b><span class="mp-n">${`× ${row.count}`}</span><${RowPills} row=${row} /></button>`;
   };
-  const Head = ({ text, n, note }) => html`<h4 class="cap mp-h" title=${note}>${text}<span class="mp-n">${n}</span></h4>`;
-  const Wrap = compact ? ({ children }) => html`<div class="mp-compact"><h4 class="cap mp-h">${ps.length ? 'On the map' : 'Nothing on the map yet'}<span class="mp-n">${ps.length ? plural(ps.filter((p) => p.at).length, 'piece') : ''}</span></h4>${children}</div>`
-    : ({ children }) => html`<${Section} title=${ps.length ? 'Pieces' : 'No pieces yet'}>${children}<//>`;
+  const Head = (/** @type {{ text: string, n: number, note?: string }} */ { text, n, note }) => html`<h4 class="cap mp-h" title=${note}>${text}<span class="mp-n">${n}</span></h4>`;
+  const Wrap = compact ? (/** @type {{ children?: any }} */ { children }) => html`<div class="mp-compact"><h4 class="cap mp-h">${ps.length ? 'On the map' : 'Nothing on the map yet'}<span class="mp-n">${ps.length ? plural(ps.filter((p) => p.at).length, 'piece') : ''}</span></h4>${children}</div>`
+    : (/** @type {{ children?: any }} */ { children }) => html`<${Section} title=${ps.length ? 'Pieces' : 'No pieces yet'}>${children}<//>`;
   return html`<${Wrap}>
     ${ps.length ? null : html`<p class="note">${compact ? 'Press a tile below to put it on the map.' : 'Press Add tiles and put tiles on the map.'} Each is a piece with a place, a turn and a seed; nothing prints until you ask for the plates.</p>`}
     ${ps.length ? html`
-      ${compact ? null : html`<${Seg} label="Sort" options=${SORTS} current=${how.sort} on=${(v) => act.list({ sort: v })} />
-      <${Seg} label="Show" options=${FILTERS} current=${how.filter} on=${(v) => act.list({ filter: v })} />
+      ${compact ? null : html`<${Seg} label="Sort" options=${SORTS} current=${how.sort} on=${(/** @type {string} */ v) => act.list({ sort: v })} />
+      <${Seg} label="Show" options=${FILTERS} current=${how.filter} on=${(/** @type {string} */ v) => act.list({ filter: v })} />
       <div class="pl-field"><span class="pl-lab">Find</span>
-        <${Field} type="search" commit="input" placeholder="Part of a tile’s name" spellcheck=${false} aria-label="Find a tile on the map by name" value=${how.query} onCommit=${(v) => act.list({ query: v })} /></div>`}
+        <${Field} type="search" commit="input" placeholder="Part of a tile’s name" spellcheck=${false} aria-label="Find a tile on the map by name" value=${how.query} onCommit=${(/** @type {string} */ v) => act.list({ query: v })} /></div>`}
       <div class="mp-list" ref=${box}>
         ${secs.shown ? null : html`<p class="note">No piece matches.</p>`}
         ${secs.placed.length ? html`<${Head} text="Placed" n=${secs.placed.reduce((n, r) => n + r.count, 0)} />${secs.placed.map((r) => Row(r))}` : null}
@@ -115,9 +126,9 @@ function PieceList({ m, act, compact = false }) {
  * the pointer on one lights it in the view.  Everything here is the scene's own numbers: `scene.bounds`, `scene.grid`, each
  * piece's `at`, `size` and `rot`; the page works out only where on the strip they fall.
  */
-export function MapPlan({ m, act }) {
+export function MapPlan(/** @type {LevelProps} */ { m, act }) {
   const sc = m.scene.value;
-  const ps = m.pieces.value.filter((p) => p.at);
+  const ps = m.pieces.value.filter(M.isPlaced);
   if (!ps.length) return null;
   const marks = m.marks.value;
   const picked = new Set(m.selected.value.map((p) => p.id));
@@ -127,13 +138,15 @@ export function MapPlan({ m, act }) {
   const x0 = Math.min(0, b?.[0] ?? 0), y0 = Math.min(0, b?.[1] ?? 0);
   const x1 = Math.max((sc?.grid?.cols ?? 0) * sq, b?.[2] ?? 0), y1 = Math.max((sc?.grid?.rows ?? 0) * sq, b?.[3] ?? 0);
   const W = x1 - x0, H = y1 - y0;
-  const state = (p) => marks.get(p.id)?.state ?? 'need';
-  const n = (s) => ps.filter((p) => state(p) === s).length;
+  const state = (/** @type {Piece} */ p) => marks.get(p.id)?.state ?? 'need';
+  const n = (/** @type {string} */ s) => ps.filter((p) => state(p) === s).length;
+  /** @type {string[]} */
   const lines = [];
   for (let x = Math.ceil(x0 / sq) * sq; x <= x1 + 1e-6; x += sq) lines.push(`M${x - x0} 0V${H}`);
   for (let y = Math.ceil(y0 / sq) * sq; y <= y1 + 1e-6; y += sq) lines.push(`M0 ${y - y0}H${W}`);
+  /** @type {Record<string, string>} */
   const word = { have: 'on your shelf', need: 'to print', other: 'have, other colour', skip: 'left off' };
-  const item = (s, text) => (n(s) ? html`<li><i class=${`mplan-sw ${s}`}></i>${`${n(s)} ${text}`}</li>` : null);
+  const item = (/** @type {string} */ s, /** @type {string} */ text) => (n(s) ? html`<li><i class=${`mplan-sw ${s}`}></i>${`${n(s)} ${text}`}</li>` : null);
   return html`<div class="mplan-wrap">
     <div class="mplan" style=${`aspect-ratio: ${W} / ${H}`} role="group" aria-label="The map from above">
       <svg class="mplan-grid" viewBox=${`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true"><path d=${lines.join('')} /></svg>
@@ -142,12 +155,12 @@ export function MapPlan({ m, act }) {
         const turned = (((Math.round(p.rot || 0) % 360) + 360) % 360) % 180 === 90;
         const [fw, fd] = turned ? [p.size[1], p.size[0]] : p.size;
         const pic = m.picture ? m.picture(p) : null;
-        const at = (v, o, len) => `${((v - o) / len) * 100}%`;
+        const at = (/** @type {number} */ v, /** @type {number} */ o, /** @type {number} */ len) => `${((v - o) / len) * 100}%`;
         const on = picked.has(p.id);
         return html`<button type="button" key=${p.id} class=${`mplan-p ${s}${on ? ' on' : ''}`} aria-pressed=${String(on)}
           style=${`left:${at(p.at[0], x0, W)};top:${at(p.at[1], y0, H)};width:${(fw / W) * 100}%;height:${(fd / H) * 100}%`}
           title=${`${p.name}${p.id ? ` · ${p.id}` : ''} · ${M.placeWords(p)} · ${word[s] ?? s}`}
-          onClick=${(e) => act.select([p.id], e.shiftKey)} onPointerEnter=${() => act.hover([p.id])} onPointerLeave=${() => act.hover([])} onFocus=${() => act.hover([p.id])} onBlur=${() => act.hover([])}>
+          onClick=${(/** @type {MouseEvent} */ e) => act.select([p.id], e.shiftKey)} onPointerEnter=${() => act.hover([p.id])} onPointerLeave=${() => act.hover([])} onFocus=${() => act.hover([p.id])} onBlur=${() => act.hover([])}>
           ${pic ? html`<span class="mplan-img" style=${`width:${(p.size[0] / fw) * 100}%;height:${(p.size[1] / fd) * 100}%;transform:translate(-50%,-50%) rotate(${p.rot || 0}deg)`}><${Thumb} svc=${pic.svc} spec=${pic.spec} className="mplan-pic" onError=${pic.onError} /></span>` : null}
           <i class="mplan-mark"></i></button>`;
       })}
@@ -158,7 +171,7 @@ export function MapPlan({ m, act }) {
     </ul></div>`;
 }
 
-function MapView({ m, act }) {
+function MapView(/** @type {LevelProps} */ { m, act }) {
   const ro = m.readOnly.value;
   const ps = m.pieces.value;
   const sc = m.scene.value;
@@ -182,7 +195,7 @@ function MapView({ m, act }) {
     <//>`;
 }
 
-function PieceView({ m, act, sel }) {
+function PieceView(/** @type {LevelProps & { sel: Piece[] }} */ { m, act, sel }) {
   const ro = m.readOnly.value;
   const states = m.marks.value;
   const sc = m.scene.value;
@@ -210,7 +223,7 @@ function PieceView({ m, act, sel }) {
         <button type="button" class="mp-prop" title="Which variant of the tile: a new one, or one you already have" onClick=${() => act.setProp('seed')}>
           <span class="pl-lab">Seed</span><span class="mp-val">${String(p.seedUsed)}</span><span class="mp-go"><${Icon} name="chevron-right" size=${14} /></span></button>
         <${Seg} label="Print" options=${[['missing', 'If missing', 'Print it unless your inventory has it'], ['always', 'Always', 'Print it whatever you have'], ['skip', 'Skip', 'Leave it off the plates']]} current=${p.print}
-          on=${(v) => act.setPiece(p.id, { print: v }, `${p.name}: print ${v === 'missing' ? 'if missing' : v}`)} disabled=${ro} />`}
+          on=${(/** @type {string} */ v) => act.setPiece(p.id, { print: v }, `${p.name}: print ${v === 'missing' ? 'if missing' : v}`)} disabled=${ro} />`}
     <//>
     <${Section} title="Variants">
       <div class="mp-row wrap">
@@ -229,36 +242,36 @@ function PieceView({ m, act, sel }) {
 }
 
 /** A piece's seed: the field, the dice and the strip of five candidates the tile level's seed row draws (view/seed-strip.js). */
-function PieceSeed({ p, ro, act, strip }) {
+function PieceSeed(/** @type {{ p: Piece, ro: boolean, act: MapActions, strip: ReturnType<MapModel['seedStrip']> }} */ { p, ro, act, strip }) {
   const [seeds, setSeeds] = useState(/** @type {(number | null)[] | null} */ (null));
   // a strip is of one piece: another piece starts with it closed
   useEffect(() => setSeeds(null), [p.id]);
   return html`<div class="pl-field"><span class="pl-lab">Seed</span>
       <span class="seed-in"><${Field} type="number" min="0" step="1" disabled=${ro} aria-label="Seed" value=${String(p.seedUsed)}
-        onCommit=${(v) => { if (v !== '') act.setPiece(p.id, { seed: Number(v) }, `${p.name}: seed ${v}`); }} />
+        onCommit=${(/** @type {string} */ v) => { if (v !== '') act.setPiece(p.id, { seed: Number(v) }, `${p.name}: seed ${v}`); }} />
       ${strip && !ro ? html`<${SeedDice} roll=${() => setSeeds(seeds ? null : candidates(strip.current))} />` : null}</span></div>
     ${strip && seeds ? html`<${SeedStrip} s=${strip} seeds=${seeds} ro=${ro}
       onPick=${(/** @type {number | null} */ x) => { setSeeds(null); if (x !== strip.current && x != null) act.setPiece(p.id, { seed: x }, `${p.name}: seed ${x}`); }}
       onMore=${() => setSeeds(candidates(strip.current))} onClose=${() => setSeeds(null)} />` : null}`;
 }
 
-function PropView({ m, act, p, kind }) {
+function PropView(/** @type {LevelProps & { p: Piece, kind: string }} */ { m, act, p, kind }) {
   const ro = m.readOnly.value;
   const sc = m.scene.value;
   const inv = m.inventory.value;
   if (kind === 'bottom') {
-    const choose = (name, text, sub) => {
+    const choose = (/** @type {string | null} */ name, /** @type {string} */ text, /** @type {string} */ sub) => {
       const on = (p.bottom ?? null) === name;
       return html`<button type="button" key=${name ?? 'ground'} class=${`mp-choice${on ? ' on' : ''}`} aria-pressed=${String(on)} disabled=${ro} onClick=${() => act.setPiece(p.id, { bottom: name }, `${p.name}: ${text}`)}><b>${text}</b><span class="mp-sub">${sub}</span></button>`;
     };
     return html`<${Section} title="Bottom">
       <p class="note">How high the tile’s zero (its ground level) stands above the map’s ground. At zero the connector is under the ground; a raised piece hangs its connector in the air, and a riser under it comes later.</p>
       ${choose(null, 'Ground level', 'zero')}
-      ${(sc?.heights ?? []).filter((h) => /Height$/.test(h.name)).map((n) => choose(`$${n.name}`, `$${n.name}`, `${Number(n.dmm.toFixed(2))} dmm`))}
+      ${(sc?.heights ?? []).filter((/** @type {import('../api').HeightName} */ h) => /Height$/.test(h.name)).map((/** @type {import('../api').HeightName} */ n) => choose(`$${n.name}`, `$${n.name}`, `${Number(n.dmm.toFixed(2))} dmm`))}
       <div class="pl-field"><span class="pl-lab">A length</span>
         <${Field} type="text" placeholder="20dmm" spellcheck=${false} disabled=${ro} aria-label="A bottom as a length with units"
           value=${p.bottom && !p.bottom.startsWith('$') ? p.bottom : ''}
-          onCommit=${(v) => { if (v.trim()) act.setPiece(p.id, { bottom: v.trim() }, `${p.name}: ${v.trim()}`); }} /></div>
+          onCommit=${(/** @type {string} */ v) => { if (v.trim()) act.setPiece(p.id, { bottom: v.trim() }, `${p.name}: ${v.trim()}`); }} /></div>
     <//>`;
   }
   if (kind === 'seed') {
@@ -288,7 +301,7 @@ function PropView({ m, act, p, kind }) {
  * trail and the step to another folder is the shell's slide between this section and the other one (`slot`): this draws a folder, and keeps
  * it while it slides out.  On a short panel the list folds to one line (the style sheet does it by the panel's height; both are in the page).
  */
-function AddView({ m, act, slot }) {
+function AddView(/** @type {LevelProps & { slot: number }} */ { m, act, slot }) {
   const live = m.add.value;
   const a = held(live && live.slot === slot ? live : null);
   const placed = m.pieces.value.filter((p) => p.at).length;
@@ -305,7 +318,7 @@ function AddView({ m, act, slot }) {
 }
 
 /** What every level of the map draws inside its section: nothing when it is not the map's turn, the wait while the scene has not come, else the level. */
-function Body({ m, children, bare = false }) {
+function Body(/** @type {{ m: MapModel, children?: any, bare?: boolean }} */ { m, children, bare = false }) {
   if (!m.tile.value || !m.on.value) return null;
   if (bare) return !m.scene.value ? html`<div class="body"><div class="empty">${m.waiting.value}</div></div>` : children;
   return html`<div class="body">
@@ -316,21 +329,21 @@ function Body({ m, children, bare = false }) {
 }
 
 /** The map level. */
-export const MapLevel = ({ m, act }) => html`<${Body} m=${m}><${MapView} m=${m} act=${act} /><//>`;
+export const MapLevel = (/** @type {LevelProps} */ { m, act }) => html`<${Body} m=${m}><${MapView} m=${m} act=${act} /><//>`;
 
 /** The piece level: the selected piece, or the last one while the level slides out. */
-export function PieceLevel({ m, act }) {
+export function PieceLevel(/** @type {LevelProps} */ { m, act }) {
   const sel = held(m.selected.value.length ? m.selected.value : null);
   return html`<${Body} m=${m}>${sel ? html`<${PieceView} m=${m} act=${act} sel=${sel} />` : null}<//>`;
 }
 
 /** The Add step's level in section `slot` (0 or 1: nav.js `ADD_PANES`): nothing to add to on a map that cannot be changed here. */
-export function AddLevel({ m, act, slot }) {
+export function AddLevel(/** @type {LevelProps & { slot: number }} */ { m, act, slot }) {
   return html`<${Body} m=${m} bare=${true}>${m.readOnly.value ? html`<div class="body"><p class="note">This file cannot be changed here, so no tile can be added to it.</p></div>` : html`<${AddView} m=${m} act=${act} slot=${slot} />`}<//>`;
 }
 
 /** The property level: the property open on the selected piece, or the last one while the level slides out. */
-export function PropLevel({ m, act }) {
+export function PropLevel(/** @type {LevelProps} */ { m, act }) {
   const sel = held(m.selected.value.length ? m.selected.value : null);
   const kind = held(m.mprop.value);
   return html`<${Body} m=${m}>${sel && kind ? html`<${PropView} m=${m} act=${act} p=${sel[0]} kind=${kind} />` : null}<//>`;

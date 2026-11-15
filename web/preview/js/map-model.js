@@ -95,7 +95,12 @@ export const bounds = (/** @type {Placed[]} */ pieces) => {
 // `scene.have`, `scene.toPrint`: crates/dharmatiles/src/preview/scene.rs `mark_shelf`); the page draws it.
 
 /** `Map(id -> {state, text})` of what the program says of each piece with a word: have, need, other or skip. */
-export const marks = (/** @type {Pick<Piece, 'id' | 'shelf'>[]} */ pieces) => new Map(pieces.filter((p) => p.shelf).map((p) => [p.id, p.shelf]));
+export const marks = (/** @type {Pick<Piece, 'id' | 'shelf'>[]} */ pieces) => {
+  /** @type {Map<string, import('./api').ShelfMark>} */
+  const out = new Map();
+  for (const p of pieces) if (p.shelf) out.set(p.id, p.shelf);
+  return out;
+};
 
 /** `3 in inventory · 11 to print`, or `11 to print` where there is no inventory: the program's numbers, said. */
 /** @param {Pick<import('./api').SceneJson, 'toPrint' | 'shelfExists' | 'have'> | null | undefined} scene */
@@ -247,7 +252,12 @@ export const label = (/** @type {Pick<Piece, 'id' | 'name'>} */ p) => (p.id ? `$
 export const turned = (/** @type {number} */ rot, /** @type {number} */ dir) => norm(rot + 90 * dir);
 
 /** A piece as the page draws it on a plate pin: nothing here, see js/editor/plates.js. */
-export const isPlaced = (/** @type {Pick<Piece, 'at'>} */ p) => !!p.at;
+/**
+ * @template {Pick<Piece, 'at'>} P
+ * @param {P} p
+ * @returns {p is P & { at: [number, number] }}
+ */
+export const isPlaced = (p) => !!p.at;
 
 /** The groups of the map's pieces by tile: [{canon, name, pieces}], in the order the tiles first appear. */
 /**
