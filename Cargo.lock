@@ -546,6 +546,7 @@ name = "dt-service"
 version = "1.0.0"
 dependencies = [
  "dt-doc",
+ "dt-elements",
  "dt-eval",
  "dt-kit",
  "dt-lang",

@@ -80,6 +80,8 @@ pub fn of_command(root: &Path, name: &str, args: &[String]) -> Option<f64> {
             warm_or_cold(root, "wasm32-unknown-unknown/debug", 60.0, COLD_BUILD)
         }
         "wasm" => warm_or_cold(root, "wasm32-unknown-unknown/release", 60.0, COLD_BUILD),
+        // the page's files and the browser bundle
+        "editor" => warm_or_cold(root, "wasm32-unknown-unknown/release", 90.0, COLD_BUILD),
         // the browser bundle, then the parity set built twice, in Node and natively (single-threaded wasm sets the time)
         "parity" => warm_or_cold(
             root,

@@ -96,9 +96,18 @@ const reply = async (r, path) => {
   try { body = JSON.parse(raw); } catch (e) {
     if (r.ok) throw new Error(`${path}: the program answered ${r.status} with something that is not JSON`, { cause: e });
   }
-  const error = serverErrorOf(r.status, body, raw);
-  if (!error) return { status: r.status, body };
-  return { status: r.status, body: { ...(body && typeof body === 'object' ? body : {}), error: error.message }, error };
+  return replyOf(r.status, body, raw);
+};
+
+/**
+ * A status and the body it came with, as the page's {@link Reply}: a failure carries the program's ServerError as `error`.
+ * @param {number} status @param {any} body the parsed JSON, or null @param {string} [raw]
+ * @returns {Reply<any>}
+ */
+const replyOf = (status, body, raw = '') => {
+  const error = serverErrorOf(status, body, raw);
+  if (!error) return { status, body };
+  return { status, body: { ...(body && typeof body === 'object' ? body : {}), error: error.message }, error };
 };
 
 /**
@@ -137,6 +146,34 @@ const noAnswer = (error, superseded) => /** @type {Reply<T>} */ (/** @type {unkn
 
 /** What a call answers when a newer one of its key took its place: nothing happened, and nothing is said. */
 const superseded = () => noAnswer('a newer request took its place', true);
+
+/**
+ * The page's one reader of the event stream, for either host: what the program (or the worker's service) sends is its StreamEvent
+ * type (api.rs), and each kind goes to the handler that takes it.  `seen` is what a stream that drops resumes from: this run's
+ * epoch and the last revision the page took.
+ * @typedef {{
+ *   onSnapshot: (s: Snapshot) => void, onTile: (t: TileSummary) => void,
+ *   onProgress: (id: string, p: import('./api').Progress) => void,
+ *   onMessage: (m: MessageJson) => void, onState: (s: 'live' | 'offline') => void,
+ *   onTier?: (m: TierEvent) => void,
+ *   onResource?: (m: ResourceEvent) => void,
+ *   onRev?: (rev: number, fresh: boolean) => void,
+ * }} StreamHandlers
+ * @param {StreamHandlers} handlers @param {{ epoch: string | null, rev: number | null }} seen
+ * @returns {(m: StreamEvent) => void}
+ */
+const followStream = ({ onSnapshot, onTile, onProgress, onMessage, onState, onTier, onResource, onRev }, seen) => (m) => {
+  if (m.type !== 'progress' && m.type !== 'message' && m.type !== 'tier' && m.rev != null) seen.rev = m.rev;
+  if (m.type === 'snapshot') { seen.epoch = m.epoch; onState('live'); onSnapshot(m); }
+  else if (m.type === 'resumed') onState('live');
+  else if (m.type === 'tile') onTile(m.tile);
+  else if (m.type === 'progress') onProgress(m.id, m.progress);
+  else if (m.type === 'message') onMessage(m.message);
+  else if (m.type === 'tier') onTier?.(m);
+  else if (m.type === 'resource') onResource?.(m);
+  // what the page holds now includes this revision (a snapshot starts the count again: another run's revisions restart)
+  if (m.type !== 'progress' && m.type !== 'message' && m.type !== 'tier' && m.rev != null) onRev?.(m.rev, m.type === 'snapshot');
+};
 
 /** @param {ReturnType<typeof createRequests>} [requests] */
 export function browserHost(requests = createRequests()) {
@@ -236,39 +273,16 @@ export function browserHost(requests = createRequests()) {
     // drops or is refused, it is closed and opened again a second later, for
     // as long as the page is open.  The server back may be a new one, with a
     // new token: it is fetched afresh.
-    /**
-     * @param {{
-     *   onSnapshot: (s: Snapshot) => void, onTile: (t: TileSummary) => void,
-     *   onProgress: (id: string, p: import('./api').Progress) => void,
-     *   onMessage: (m: MessageJson) => void, onState: (s: 'live' | 'offline') => void,
-     *   onTier?: (m: TierEvent) => void,
-     *   onResource?: (m: ResourceEvent) => void,
-     *   onRev?: (rev: number, fresh: boolean) => void,
-     * }} handlers
-     */
-    connect({ onSnapshot, onTile, onProgress, onMessage, onState, onTier, onResource, onRev }) {
-      /** @type {string | null} */
-      let epoch = null;
-      /** @type {number | null} */
-      let rev = null;
+    /** @param {StreamHandlers} handlers */
+    connect(handlers) {
+      const seen = { epoch: /** @type {string | null} */ (null), rev: /** @type {number | null} */ (null) };
+      const follow = followStream(handlers, seen);
       const open = () => {
-        const q = epoch != null && rev != null ? `?epoch=${epoch}&since=${rev}` : '';
+        const q = seen.epoch != null && seen.rev != null ? `?epoch=${seen.epoch}&since=${seen.rev}` : '';
         const es = new EventSource(`${urlOf('events')}${q}`);
-        es.onmessage = (e) => {
-          // the stream's one boundary: what the program sends is its StreamEvent type (api.rs), and the page reads it as that
-          const m = /** @type {StreamEvent} */ (JSON.parse(e.data));
-          if (m.type !== 'progress' && m.type !== 'message' && m.type !== 'tier' && m.rev != null) rev = m.rev;
-          if (m.type === 'snapshot') { epoch = m.epoch; onState('live'); onSnapshot(m); }
-          else if (m.type === 'resumed') onState('live');
-          else if (m.type === 'tile') onTile(m.tile);
-          else if (m.type === 'progress') onProgress(m.id, m.progress);
-          else if (m.type === 'message') onMessage(m.message);
-          else if (m.type === 'tier') onTier?.(m);
-          else if (m.type === 'resource') onResource?.(m);
-          // what the page holds now includes this revision (a snapshot starts the count again: another run's revisions restart)
-          if (m.type !== 'progress' && m.type !== 'message' && m.type !== 'tier' && m.rev != null) onRev?.(m.rev, m.type === 'snapshot');
-        };
-        es.onerror = () => { es.close(); token = null; onState('offline'); setTimeout(open, 1000); };
+        // the stream's one boundary: what the program sends is its StreamEvent type (api.rs), and the page reads it as that
+        es.onmessage = (e) => follow(/** @type {StreamEvent} */ (JSON.parse(e.data)));
+        es.onerror = () => { es.close(); token = null; handlers.onState('offline'); setTimeout(open, 1000); };
       };
       open();
     },
@@ -485,3 +499,263 @@ export function browserHost(requests = createRequests()) {
     inventoryReprint: (body) => call('inventoryReprint', body),
   };
 }
+
+// ---- the service in a web worker ------------------------------------------------------------------------------------
+// `workerHost` is `browserHost` with no server: the same methods, answered by the editor's service running in a web worker
+// (js/editor-worker.js: the engine `cargo xtask wasm` makes, with dt-web's `Service`, the same verbs the program answers over
+// HTTP).  A call is its verb and its request as JSON; a refusal comes back as the same status and error body HTTP sends, so
+// the page reads one shape from either host.  What the service does not answer yet (the places on a disk, the plates, the
+// inventory, the maps' table, a build target other than the default, writing an STL) is refused in words, by name: never
+// answered empty.
+
+/** The words of a call the browser editor does not answer. @param {string} what */
+const unavailableIn = (what) => `${what} is not in the browser editor yet: it needs the program (dharmatiles preview)`;
+
+/**
+ * A refusal the page reads like any other, made here.
+ * @param {number} status @param {string} message @returns {Reply<any>}
+ */
+const refusedReply = (status, message) => replyOf(status, { error: { kind: 'refused', message, help: null, causes: [], backtrace: '', context: {} } });
+
+/** The verbs the worker's service answers by their HTTP name (the others are refused by `unavailableIn`). */
+const WORKER_VERBS = new Set(['check', 'edit', 'save', 'names', 'tokens', 'checkValue', 'printed', 'printedSet', 'offers', 'newTile', 'mine']);
+
+/** @typedef {import('./editor-worker.js').FromWorker} FromWorker */
+/** @typedef {Extract<FromWorker, { id: number, ok: true }>} WorkerAnswer */
+
+/**
+ * The editor's worker: starts it, hands the engine's folder over, and answers each message to its caller.
+ * @param {string} [base] the folder `engine.json` is in, ending in /
+ */
+export function startEditorWorker(base = '/engine/') {
+  const worker = new Worker(new URL('./editor-worker.js', import.meta.url), { type: 'module' });
+  let next = 0;
+  /** @type {Map<number, { resolve: (a: WorkerAnswer) => void, reject: (e: Error) => void }>} */
+  const pending = new Map();
+  /** @type {((json: string) => void)[]} */
+  const streams = [];
+  /** @param {Error} e */
+  const failAll = (e) => { for (const p of pending.values()) p.reject(e); pending.clear(); };
+  worker.onmessage = (ev) => {
+    const m = /** @type {FromWorker} */ (ev.data);
+    if ('type' in m) { if (m.type === 'stream') for (const f of streams) f(m.json); return; }
+    const p = pending.get(m.id);
+    pending.delete(m.id);
+    if (!p) return;
+    if (m.ok) { p.resolve(m); return; }
+    // a refusal is a reply of the page's own kind: its words and status travel as the error's `refusal`
+    const e = new Error(m.refusal ? 'the service refused' : m.message ?? 'the editor worker failed');
+    /** @type {any} */ (e).refusal = m.refusal ?? null;
+    /** @type {any} */ (e).events = m.events;
+    p.reject(e);
+  };
+  worker.onerror = (ev) => failAll(new Error(`the editor worker stopped: ${ev.message || 'it could not start'}`));
+  /** @param {Record<string, unknown>} msg @returns {Promise<WorkerAnswer>} */
+  const ask = (msg) => new Promise((resolve, reject) => { const id = next++; pending.set(id, { resolve, reject }); worker.postMessage({ id, ...msg }); });
+  // the page fetches the engine (the one place it reaches the network), the worker is handed it compiled
+  /** @param {string} file */
+  const get = async (file) => {
+    const r = await rawFetch(`${base}${file}`);
+    if (!r.ok) throw new Error(`cannot fetch ${base}${file}: ${r.status}`);
+    return r;
+  };
+  const ready = (async () => {
+    const manifest = /** @type {{ js: string, wasm: string, library: string }} */ (await (await get('engine.json')).json());
+    const [bytes, library] = await Promise.all([get(manifest.wasm).then((r) => r.arrayBuffer()), get(manifest.library).then((r) => r.text())]);
+    const module = await WebAssembly.compile(bytes);
+    return ask({ op: 'init', glue: new URL(manifest.js, new URL(base, location.href)).href, module, library });
+  })();
+  return { ask, ready, onStream: (/** @type {(json: string) => void} */ f) => { streams.push(f); } };
+}
+
+/**
+ * The browser host: the same methods as `browserHost`, answered by the editor's service in a web worker.
+ * @param {ReturnType<typeof createRequests>} [requests] @param {ReturnType<typeof startEditorWorker>} [engine]
+ * @returns {ReturnType<typeof browserHost>}
+ */
+export function workerHost(requests = createRequests(), engine = startEditorWorker()) {
+  /** @type {((m: StreamEvent) => void) | null} */
+  let follow = null;
+  /** @type {StreamEvent[]} the stream's events from before the page connected (progress, a call's messages) */
+  const backlog = [];
+  /** @param {StreamEvent} event */
+  const hear = (event) => { if (follow) follow(event); else backlog.push(event); };
+  /** @param {string} events the JSON array of events a call made */
+  const hearAll = (events) => { for (const e of /** @type {StreamEvent[]} */ (JSON.parse(events))) hear(e); };
+  engine.onStream((json) => hear(/** @type {StreamEvent} */ (JSON.parse(json))));
+
+  /**
+   * One ask of the service, with the events it made told in order.  A refusal is the page's reply, not a throw: `{refused}`.
+   * @param {Record<string, unknown>} msg
+   * @returns {Promise<{ answer: WorkerAnswer } | { refused: Reply<any> }>}
+   */
+  const serve = async (msg) => {
+    await engine.ready;
+    try {
+      const answer = await engine.ask(msg);
+      hearAll(answer.events);
+      return { answer };
+    } catch (e) {
+      const { refusal, events } = /** @type {{ refusal?: string | null, events?: string }} */ (e);
+      if (events) hearAll(events);
+      if (!refusal) throw e;
+      const r = /** @type {{ status: number, body: any }} */ (JSON.parse(refusal));
+      return { refused: replyOf(r.status, r.body) };
+    }
+  };
+  /** The JSON a verb answered, as a reply. @param {string} verb @param {unknown} body @param {string} [id] @returns {Promise<Reply<any>>} */
+  const callVerb = async (verb, body, id) => {
+    const r = await serve({ op: 'call', verb, tile: id ?? '', request: JSON.stringify(body) });
+    return 'refused' in r ? r.refused : { status: 200, body: JSON.parse(r.answer.json ?? 'null') };
+  };
+  /** @template {keyof Calls} R @param {R} route @param {Req<R>} body @param {string} [id] @returns {Promise<Reply<Res<R>>>} */
+  const send = async (route, body, id) => WORKER_VERBS.has(route)
+    ? callVerb(route, body, id)
+    : refusedReply(501, unavailableIn(`\`${route}\``));
+  /** @template {keyof Calls} R @param {R} route @param {Req<R>} body @param {string} [id] @returns {Promise<Reply<Res<R>>>} */
+  const call = async (route, body, id) => {
+    const key = LATEST[route]?.(body, id);
+    if (key === undefined) return send(route, body, id);
+    const r = await requests.latest(key, () => send(route, body, id));
+    return r === SUPERSEDED ? superseded() : r;
+  };
+  /** A read the service answers as JSON: its answer, or a thrown error with the refusal's words. @param {string} verb @param {unknown} body @param {string} [id] */
+  const read = async (verb, body, id) => {
+    const r = await callVerb(verb, body, id);
+    if (r.error) throw new Error(`${verb}: ${r.error.message}`, { cause: r.error });
+    return r.body;
+  };
+  /** @param {Uint8Array} b @returns {ArrayBuffer} */
+  const bufferOf = (b) => /** @type {ArrayBuffer} */ (b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+  /** The bytes a verb answered (a draft's mesh, a step's head and mesh). @param {string} verb @param {unknown} body @param {string} id */
+  const bytesOf = async (verb, body, id) => {
+    const r = await serve({ op: 'bytes', verb, tile: id, request: JSON.stringify(body) });
+    return 'refused' in r ? r.refused : { status: 200, buffer: bufferOf(/** @type {Uint8Array} */ (r.answer.bytes)) };
+  };
+  /** @param {string} what @returns {() => Promise<Reply<any>>} */
+  const no = (what) => async () => refusedReply(501, unavailableIn(what));
+  /** @param {string} what @returns {() => Promise<never>} */
+  const noText = (what) => async () => { throw new Error(unavailableIn(what)); };
+
+  return {
+    /** @param {StreamHandlers} handlers */
+    connect(handlers) {
+      const seen = { epoch: /** @type {string | null} */ (null), rev: /** @type {number | null} */ (null) };
+      const mine = followStream(handlers, seen);
+      serve({ op: 'snapshot' }).then((r) => {
+        if ('refused' in r) throw new Error(`the service's snapshot: ${r.refused.error?.message}`, { cause: r.refused.error });
+        // the snapshot is the whole state: what the stream said before it is in it, so only what came after is told
+        backlog.length = 0;
+        mine({ ...JSON.parse(r.answer.json ?? 'null'), type: 'snapshot' });
+        follow = mine;
+      }).catch((e) => { handlers.onState('offline'); throw e; }); // an unhandled rejection lands in the error panel
+    },
+    /** @param {string} id @param {number} docRev @returns {Promise<ArrayBuffer | null>} */
+    async fetchMesh(id, docRev) {
+      const r = await serve({ op: 'mesh', tile: id, docRev });
+      if ('refused' in r) throw new Error(`mesh: ${r.refused.error?.message}`, { cause: r.refused.error });
+      return r.answer.mesh ? bufferOf(r.answer.mesh) : null;
+    },
+    tiersWant: no('the map\'s tiers'),
+    async tierResult() { return null; /* no tier is ever announced here, so none is ready */ },
+    async fetchSketch() { return null; /* a build here keeps no sketches */ },
+    /** @param {string} id */
+    async build(id) {
+      const r = await callVerb('build', {}, id);
+      if (r.error) throw new Error(`build: ${r.error.message}`, { cause: r.error });
+    },
+    /** @param {string} id @param {string} [file] @returns {Promise<import('./api').TextRes | null>} */
+    text: (id, file) => read('text', file ? { file } : {}, id),
+    /** @returns {Promise<import('./api').AboutRes>} */
+    about: () => read('about', {}),
+    /** @returns {Promise<Reads['elements']>} */
+    elements: () => read('elements', {}),
+    /** @returns {Promise<Reads['language']>} */
+    language: () => read('language', {}),
+    /** @param {string} text */
+    names: (text) => call('names', { text }),
+    /** @param {string} text */
+    tokens: (text) => call('tokens', { text }),
+    /** @param {string} id @param {Req<'check'>} body */
+    check: (id, body) => call('check', body, id),
+    /** @param {string} id @param {Req<'offers'>} body */
+    offers: (id, body) => call('offers', body, id),
+    /** @param {string} element @param {string} control @param {string} typed */
+    checkValue: (element, control, typed) => call('checkValue', { element, control, typed }),
+    /** @param {string} id @param {Req<'printed'>} body */
+    printed: (id, body) => call('printed', body, id),
+    /** @param {Req<'printedSet'>} body */
+    printedSet: (body) => call('printedSet', body),
+    /** @param {string} id @param {Req<'draft'>} body @returns {Promise<{status: number, buffer: ArrayBuffer} | Reply<{}>>} */
+    async draft(id, body) {
+      const r = await requests.latest(`draft:${id}`, () => bytesOf('draft', body, id));
+      return r === SUPERSEDED ? superseded() : r;
+    },
+    /** @param {string} id @param {Req<'step'>} body @returns {Promise<{status: number, head: import('./api').StepHead, buffer: ArrayBuffer} | Reply<{}>>} */
+    async step(id, body) {
+      const r = await bytesOf('step', body, id);
+      if (!('buffer' in r)) return r;
+      const n = new DataView(r.buffer).getUint32(0);
+      const head = JSON.parse(new TextDecoder().decode(new Uint8Array(r.buffer, 4, n)));
+      return { status: r.status, head, buffer: r.buffer.slice(4 + n) };
+    },
+    requests,
+    /** @param {string} id @param {Req<'save'>} body */
+    save: (id, body) => call('save', body, id),
+    rename: no('renaming a tile'),
+    /** @param {string} id */
+    mine: (id) => call('mine', {}, id),
+    deleteTile: no('deleting a tile'),
+    /** @param {Req<'reportMessage'>} body @returns {Promise<Reply<{}>>} */
+    async reportMessage(body) {
+      // the browser editor has no message stream of the program's to join: the page's own failure goes to the console, loudly
+      console.error(`the page reports: ${body.text}`, body);
+      return { status: 200, body: {} };
+    },
+    messagesText: noText('the messages as text'),
+    messageText: noText('a message as text'),
+    messageReport: noText('a defect report'),
+    /** @param {string} name @param {string} size @param {{root: number, dir: string}} [into] */
+    newTile: (name, size, into) => call('newTile', { name, size, ...(into ? { root: into.root, dir: into.dir } : {}) }),
+    addPlace: no('adding a folder'),
+    removePlace: no('removing a place'),
+    newFolder: no('a new folder'),
+    renameFolder: no('renaming a folder'),
+    trashFolder: no('trashing a folder'),
+    moveTile: no('moving a tile'),
+    duplicateTile: no('duplicating a tile'),
+    trashTile: no('trashing a tile'),
+    undoTrash: no('undoing a trash'),
+    /** @param {Req<'edit'>} body */
+    edit: (body) => call('edit', body),
+    setTarget: no('another build target'),
+    printersScan: no('the printers'),
+    printersImport: no('importing a printer'),
+    exportTile: no('writing an STL'),
+    reveal: no('showing a file'),
+    platesShow: no('the plates'),
+    platesSet: no('the plates'),
+    platesExport: no('the plates'),
+    listsNew: no('print lists'),
+    listsAdd: no('print lists'),
+    listsCount: no('print lists'),
+    listsRemove: no('print lists'),
+    listsRestore: no('print lists'),
+    mapsAdd: no('maps'),
+    mapsSet: no('maps'),
+    mapsBatch: no('maps'),
+    mapsDup: no('maps'),
+    mapsRemove: no('maps'),
+    mapsPin: no('maps'),
+    mapsUnpin: no('maps'),
+    mapsUnpinAll: no('maps'),
+    inventoryHave: no('the inventory'),
+    inventoryRecord: no('the inventory'),
+    inventoryGone: no('the inventory'),
+    inventoryRelink: no('the inventory'),
+    inventoryReprint: no('the inventory'),
+  };
+}
+
+/** The host the page talks through: the program's (HTTP), or, with `?host=worker`, the service in a web worker with no server. @param {string} [search] @returns {ReturnType<typeof browserHost>} */
+export const chooseHost = (search = location.search) => new URLSearchParams(search).get('host') === 'worker' ? workerHost() : browserHost();

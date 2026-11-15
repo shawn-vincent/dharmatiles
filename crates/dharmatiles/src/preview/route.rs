@@ -27,25 +27,9 @@ pub struct SessionRes {
     pub token: String,
 }
 
-/// `GET /api/about`: the program's version and the tile formats it reads.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct AboutRes {
-    pub version: String,
-    pub formats: String,
-}
-
-/// `GET /api/tiles/ID/text`: a document's text for the text pane.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
-pub struct TextRes {
-    pub file: String,
-    pub text: String,
-    pub writable: bool,
-    /// The revision of the file the text is of; 0 for a library file.
-    pub doc_rev: u64,
-}
+#[cfg(test)]
+pub use dt_service::read_calls::AboutRes;
+pub use dt_service::read_calls::TextRes;
 
 /// `GET /api/test-idle`: how much work is not finished (0: idle).
 #[cfg(any(test, feature = "test-routes"))]
@@ -176,13 +160,9 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             token: shared.token.clone(),
         })
         .into(),
-        (Some("about"), _) => ok(&AboutRes {
-            version: env!("DT_ENGINE_VERSION").to_owned(),
-            formats: dt_doc::header::formats(),
-        })
-        .into(),
-        (Some("elements"), _) => ok(&crate::elements::all_json()).into(),
-        (Some("language"), _) => ok(&crate::elements::language_json()).into(),
+        (Some("about"), _) => ok(&dt_service::read_calls::about(shared)).into(),
+        (Some("elements"), _) => ok(&dt_service::read_calls::elements()).into(),
+        (Some("language"), _) => ok(&dt_service::read_calls::language()).into(),
         (Some("snapshot"), _) => ok(&shared.snapshot()).into(),
         (Some("mesh"), Some(id)) => {
             let Some(asked) = req.param("docRev").and_then(|s| s.parse::<u64>().ok()) else {
@@ -218,11 +198,7 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         (Some("text"), Some(id)) => match shared.text(id, req.param("file")) {
             Ok(Some(v)) => ok(&v).into(),
             Ok(None) => fail::refused("404 Not Found", "no such file").into(),
-            Err(e) => fail::failure(
-                "500 Internal Server Error",
-                format!("cannot read the file: {e}"),
-            )
-            .into(),
+            Err(refusal) => super::api::refusal_reply(refusal).into(),
         },
         (Some("build"), Some(id)) => {
             // `?debug=1` or `?debug=0`: the page has the debug layer on or off for this tile

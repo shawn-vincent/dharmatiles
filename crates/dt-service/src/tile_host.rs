@@ -60,4 +60,30 @@ pub trait TileHost: CheckHost {
     /// # Errors
     /// [`Refusal`]: the owner could not be asked.
     fn want(&self, id: &str) -> Result<bool, Refusal>;
+
+    /// Build a draft for the page on the host's draft lane and wait for it: the program queues it ahead of its full
+    /// builds (a newer draft of the tile replaces an older), a worker builds it in its own turn.
+    ///
+    /// # Errors
+    /// [`Refusal`]: the draft panicked or its view could not be made (a bug or a failure, not a mistake in the text).
+    fn draft(
+        &self,
+        ask: crate::draft_calls::DraftAsk,
+    ) -> Result<crate::draft_calls::Drafted, Refusal>;
+
+    /// The program's version, as the page's About and an error's context say it.
+    fn version(&self) -> String;
+
+    /// Every tile's state and the rest of what a page is told, as a stream's first message holds it.
+    fn snapshot(&self) -> crate::api::Snapshot;
+
+    /// My tiles: the folder a new tile or a copy of a library tile is written in (made when it is not there yet).
+    ///
+    /// # Errors
+    /// [`Refusal`]: there is no such folder and it cannot be made.
+    fn home(&self) -> Result<std::path::PathBuf, Refusal>;
+
+    /// Say that `dest` was written: list it (the host rescans its places), ask for it to be built next, and give the tile
+    /// as it now stands.
+    fn listed(&self, dest: &std::path::Path) -> crate::place_calls::Listed;
 }

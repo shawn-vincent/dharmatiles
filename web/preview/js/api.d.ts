@@ -244,7 +244,15 @@ type DiagData = { label?: string, unexpected?: boolean, };
 
 type Done = Record<string, never>;
 
-type DraftReq = { text: string, file?: string | null, debug?: boolean | null, };
+type DraftReq = { text: string, 
+/**
+ * A file the tile uses, instead of its own document.
+ */
+file?: string | null, 
+/**
+ * Ask for the debug layer's marks too.
+ */
+debug?: boolean | null, };
 
 type DraftTier = "draft" | "low";
 
@@ -1367,7 +1375,7 @@ rev: string, draft: StepDraft, };
 
 type StepReq = { 
 /**
- * The edit, as `/api/edit` takes it (with the `read` of the text it is made to).
+ * The edit, as `edit` takes it (with the `read` of the text it is made to).
  */
 edit: EditReq, 
 /**

@@ -44,11 +44,37 @@ pub enum Status {
     Internal,
 }
 
+impl Status {
+    /// The status as HTTP numbers it (and as a worker's reply numbers it, so the page reads one set of numbers).
+    #[must_use]
+    pub const fn code(self) -> u16 {
+        match self {
+            Self::BadRequest => 400,
+            Self::Forbidden => 403,
+            Self::NotFound => 404,
+            Self::Conflict => 409,
+            Self::Unprocessable => 422,
+            Self::Internal => 500,
+        }
+    }
+}
+
 /// Whose fault: what the user asked, or what the program tried.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fault {
     Refused,
     Failure,
+    /// A panic or a bug in the program: it travels with the words of the panic ([`Refusal::backtrace`]).
+    Bug,
+}
+
+/// What a bug says beyond its words: what to do about it, and where it happened.
+#[derive(Debug, Clone, Default)]
+pub struct BugDetail {
+    /// What to do about it (copy the details into a report).
+    pub help: Option<String>,
+    /// The stack at the panic.
+    pub backtrace: String,
 }
 
 /// A call that ran and said no, with everything its HTTP or message form carries: the transport turns it into its own
@@ -64,7 +90,11 @@ pub struct Refusal {
     pub text: Option<String>,
     pub doc_rev: Option<u64>,
     /// An unreadable document: its mistakes, each at its place.
-    pub errors: Option<Vec<dt_eval::Mistake>>,
+    pub errors: Option<Box<[dt_eval::Mistake]>>,
+    /// What a bug adds (boxed: a refusal is returned by every call, and almost none is a bug).
+    pub bug: Option<Box<BugDetail>>,
+    /// A newer request of the same kind took this one's place: nothing is wrong, nothing is said.
+    pub superseded: bool,
 }
 
 impl Refusal {
@@ -89,7 +119,31 @@ impl Refusal {
             text: None,
             doc_rev: None,
             errors: None,
+            bug: None,
+            superseded: false,
         }
+    }
+
+    /// A bug: the program panicked doing it.  `message` is the panic's words, `backtrace` its place.
+    #[must_use]
+    pub fn bug(status: Status, message: impl Into<String>, backtrace: impl Into<String>) -> Self {
+        let mut r = Self::new(status, Fault::Bug, message);
+        r.bug = Some(Box::new(BugDetail {
+            help: Some(
+                "This is a bug in dharmatiles, not in your tile. Copy the details into a bug report."
+                    .to_owned(),
+            ),
+            backtrace: backtrace.into(),
+        }));
+        r
+    }
+
+    /// A newer request took this one's place (a conflict that is not a mistake).
+    #[must_use]
+    pub fn superseded(message: impl Into<String>) -> Self {
+        let mut r = Self::refused(Status::Conflict, message);
+        r.superseded = true;
+        r
     }
 
     /// With the error under it, as the causes.
@@ -113,6 +167,50 @@ impl Refusal {
         let mut r = Self::refused(Status::Unprocessable, message);
         r.errors = Some(errs.iter().map(dt_eval::Mistake::from).collect());
         r
+    }
+}
+
+/// A refusal as a worker tells the page: the status number and the error body, the same body an HTTP error carries
+/// (`ErrorBody`), so the page reads one shape from either host.
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct RefusalReply {
+    pub status: u16,
+    pub body: crate::api::ErrorBody,
+}
+
+impl Refusal {
+    /// This refusal as the page reads it: `route` is the call, `tile` the tile it was about, and `at_ms` the time.
+    #[must_use]
+    pub fn reply(self, route: &str, tile: Option<&str>, version: &str, at_ms: u64) -> RefusalReply {
+        let kind = match self.fault {
+            Fault::Refused => "refused",
+            Fault::Failure => "failure",
+            Fault::Bug => "bug",
+        };
+        let bug = self.bug.unwrap_or_default();
+        RefusalReply {
+            status: self.status.code(),
+            body: crate::api::ErrorBody {
+                error: crate::api::ErrorDetail {
+                    kind: kind.to_owned(),
+                    message: self.message,
+                    help: bug.help,
+                    causes: self.causes,
+                    backtrace: bug.backtrace,
+                    context: crate::api::ErrorContext {
+                        route: Some(route.to_owned()),
+                        tile: tile.map(str::to_owned),
+                        version: version.to_owned(),
+                        at_ms,
+                    },
+                },
+                text: self.text,
+                doc_rev: self.doc_rev,
+                scene: None,
+                errors: self.errors.map(Vec::from),
+                superseded: self.superseded.then_some(true),
+            },
+        }
     }
 }
 

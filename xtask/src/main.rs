@@ -6,6 +6,7 @@ use std::process::{Command, ExitCode};
 mod budget;
 mod codes;
 mod docs;
+mod editor;
 mod guide;
 mod highlight;
 mod image;
@@ -91,6 +92,11 @@ commands:
            (needs wasm-bindgen-cli; uses wasm-opt when installed); --check
            only checks dt-lang, dt-value, dt-doc and dt-web still compile
            for wasm32-unknown-unknown
+  editor <out-dir>
+           the editor page as static files with no program behind it: the
+           page, the site's visual system and the engine bundle (wasm, in
+           <out-dir>/engine); any static server over <out-dir> serves it,
+           and ?host=worker runs the editor's service in a web worker. A heavy job
   parity   the same tile in the browser as in the program: builds the wasm
            bundle, builds a fixed set of tiles under Node and natively, and
            fails on any difference in a tile's STL hash, audit numbers or
@@ -134,6 +140,7 @@ fn command(args: &[String]) -> Result<(), String> {
         Some("wasm") => {
             work::heavy_lock(&root()).and_then(|()| wasm::run_wasm(&root(), &args[1..]))
         }
+        Some("editor") => work::heavy_lock(&root()).and_then(|()| editor::run(&root(), &args[1..])),
         Some("parity") => {
             work::heavy_lock(&root()).and_then(|()| parity::run_parity(&root(), &args[1..]))
         }

@@ -3,7 +3,7 @@
 // (the stores themselves are in stores.js).
 
 import { need } from '../dom.js';
-import { browserHost } from '../host.js';
+import { chooseHost } from '../host.js';
 import { Viewer } from '../viewer.js';
 import { view } from './stores.js';
 
@@ -37,7 +37,7 @@ import { view } from './stores.js';
  * @returns {K extends keyof IdKinds ? IdKinds[K] : HTMLElement}
  */
 export const $ = (id) => /** @type {any} */ (need(document, `#${id}`)); // the conditional type is the table's reading of the id, which a body cannot state
-export const host = browserHost();
+export const host = chooseHost();
 /** The one viewer. */
 export const viewer = new Viewer(/** @type {HTMLCanvasElement} */ ($('canvas')));
 

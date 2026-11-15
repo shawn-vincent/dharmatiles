@@ -136,6 +136,14 @@ extern "C" {
     fn console_error(message: &str);
 }
 
+/// Say `message` where the page's worker picks it up: the console in the browser, stderr off it.
+pub(crate) fn report_console(message: &str) {
+    #[cfg(target_arch = "wasm32")]
+    console_error(message);
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("{message}");
+}
+
 /// The engine's version: the program's own (`Cargo.toml`), which a failure the page reports names, as the program's do.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[must_use]
@@ -814,7 +822,7 @@ pub struct StageTick {
 
 /// How many stages a build of `source` will announce: its stack, the union and the audit.  A document that
 /// does not check has no count: its diagnostics are the build's answer, shown the way a failed build's are.
-fn stage_total(source: &dyn Source, system: System) -> Result<usize, Vec<Diag>> {
+pub(crate) fn stage_total(source: &dyn Source, system: System) -> Result<usize, Vec<Diag>> {
     let mut opts = Options::in_source(source)?;
     opts.system = system;
     let checked = dt_eval::check(source, MAIN, &opts)?;

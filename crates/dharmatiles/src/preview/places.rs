@@ -38,11 +38,7 @@ use super::*;
 // ---- the calls' types ------------------------------------------------------------------
 
 /// A call with nothing to say besides which tile it is for.
-#[derive(Deserialize, Serialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[cfg_attr(test, ts(type = "Record<string, never>"))]
-#[serde(deny_unknown_fields)]
-pub struct Nothing {}
+pub use dt_service::read_calls::Nothing;
 
 #[derive(Deserialize, Serialize, Debug)]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -140,14 +136,7 @@ pub struct Restored {
     pub rev: u64,
 }
 
-/// A file that appeared or moved: where, and which tile it is.
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-pub struct Listed {
-    pub path: String,
-    pub id: Option<String>,
-    pub tile: Option<TileSummary>,
-}
+pub use dt_service::place_calls::Listed;
 
 /// [`Listed`], with the list as it now is.
 #[derive(Serialize, Deserialize, Debug)]

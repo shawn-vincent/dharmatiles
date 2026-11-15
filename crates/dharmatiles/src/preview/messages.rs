@@ -276,7 +276,10 @@ pub(super) fn report(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) ->
             Err(e) => {
                 return super::fail::failure(
                     "500 Internal Server Error",
-                    format!("the tile's source could not be read for the report: {e}"),
+                    format!(
+                        "the tile's source could not be read for the report: {}",
+                        e.message
+                    ),
                 )
                 .into();
             }
