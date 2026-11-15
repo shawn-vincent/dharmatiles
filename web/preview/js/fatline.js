@@ -9,7 +9,7 @@
  * (the colour and opacity at A, then at B).  Each segment is four vertices:
  * A and B twice, with the side each is pushed to, and six indices.
  */
-export function fatGeometry(pos, rgba) {
+export function fatGeometry(/** @type {Float32Array} */ pos, /** @type {Float32Array} */ rgba) {
   const n = Math.floor(pos.length / 6);
   const position = new Float32Array(12 * n), other = new Float32Array(12 * n);
   const side = new Float32Array(4 * n), color = new Float32Array(16 * n);

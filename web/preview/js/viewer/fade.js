@@ -5,11 +5,12 @@
 // with `this` the viewer.
 
 import * as THREE from 'three';
-import { FADE, FADE_IN, FADE_OUT, HOVER_LIFT, HOVER_REST, HOVER_S, PULSE, PULSE_S, REGION_FADE, SKETCH_ROUGH, STALE, easeInOutCubic, reduceMotion } from './consts.js';
+import { FADE, FADE_IN, FADE_OUT, HOVER_LIFT, HOVER_REST, HOVER_S, PULSE, PULSE_S, REGION_FADE, SKETCH_ROUGH, STALE, easeInOutCubic, reduceMotion, methods } from './consts.js';
+/** @typedef {import('./consts.js').Pick} Pick */
 
-export const fadeMethods = {
+export const fadeMethods = methods({
   /** The mesh shown is an older build's (a new one is being built): fade all of it. */
-  setStale(on) {
+  /** @param {unknown} on */ setStale(on) {
     if (this.stale === !!on) return;
     this.stale = !!on;
     this.applyFade();
@@ -27,7 +28,7 @@ export const fadeMethods = {
   /** Breathe what stands for work still going, for as long as there is any. */
   pulse() {
     if (this.pulseRaf || !this.pulsing()) return;
-    const tick = (now) => {
+    /** @param {number} now */ const tick = (now) => {
       const w = 1 + PULSE * Math.sin((now / 1000) * ((2 * Math.PI) / PULSE_S));
       const going = this.pulsing();
       this.sketchLooks.rough.u.uGhost.value = SKETCH_ROUGH * (going ? w : 1);
@@ -69,8 +70,8 @@ export const fadeMethods = {
   },
 
   /** Tint the selection and the hovered thing: each {entry, piece} (piece null: the whole entry) or null. */
-  setHighlight(sel, hov) {
-    const put = (u, w) => u.value.set(w ? w.entry : -1, w && w.piece != null ? w.piece : -1);
+  /** @param {Pick | null} sel @param {Pick | null} hov */ setHighlight(sel, hov) {
+    /** @param {{value: THREE.Vector2}} u @param {Pick | null} w */ const put = (u, w) => u.value.set(w ? w.entry : -1, w && w.piece != null ? w.piece : -1);
     put(this.uniforms.uSel, sel);
     put(this.uniforms.uHov, hov);
     this.applyFade();
@@ -94,13 +95,13 @@ export const fadeMethods = {
     const keep = u.uKeep.value, leave = u.uLeave.value, lift = u.uLift.value, drop = u.uDrop.value;
     const can = this.fade && !stale && !sketched;
     u.uTintSel.value = can ? 0 : 1;
-    const same = (a, b) => a.x === b.x && a.y === b.y;
+    /** @param {THREE.Vector2} a @param {THREE.Vector2} b */ const same = (a, b) => a.x === b.x && a.y === b.y;
     // a selected region is the selected item: nothing in the tile stands out, all of it fades deeper
     const focus = !!this.regionLayer?.focus;
     const selecting = can && (sel.x >= 0 || focus);
     const hovering = can && hov.x >= 0 && !same(hov, sel);
     // where a thing stands now, whichever slot holds it
-    const now = (w) => (same(w, keep) ? fx.keep : same(w, leave) ? fx.leave : same(w, lift) ? fx.lift : same(w, drop) ? fx.drop : fx.rest);
+    /** @param {THREE.Vector2} w */ const now = (w) => (same(w, keep) ? fx.keep : same(w, leave) ? fx.leave : same(w, lift) ? fx.lift : same(w, drop) ? fx.drop : fx.rest);
     let moved = false, selMoved = false;
     if (selecting && !same(sel, keep)) {
       // the selection moves: the new one rises from where it stands, the old one sinks
@@ -123,7 +124,7 @@ export const fadeMethods = {
     const t = this.fxTarget;
     // a selection's change takes a selection's time; a hover's, a hover's
     const selChange = selMoved || (t.rest !== rest && (t.rest === FADE || rest === FADE || t.rest === REGION_FADE || rest === REGION_FADE));
-    const retarget = Object.keys(target).some((k) => t[k] !== target[k]);
+    const retarget = Object.keys(target).some((k) => /** @type {Record<string, number>} */ (t)[k] !== target[k]);
     if (!can || reduceMotion()) this.fadeTo(target, 0);
     // a hover moves less than a selection: timed against its own full move
     else if (moved || retarget) {
@@ -134,7 +135,7 @@ export const fadeMethods = {
   },
 
   /** Ease the rest and each thing standing out of it to `target` over `seconds` (0: at once); a move shorter than `full` takes its share of the time. */
-  fadeTo(target, seconds, full = 1 - FADE) {
+  /** @param {Record<string, number>} target @param {number} seconds @param {number} [full] */ fadeTo(target, seconds, full = 1 - FADE) {
     if (this.fadeTween) cancelAnimationFrame(this.fadeTween);
     this.fadeTween = null;
     this.fxTarget = target;
@@ -144,7 +145,7 @@ export const fadeMethods = {
     // part of the way there already: the rest of the time, not all of it
     const ms = seconds * 1000 * Math.min(1, far / full);
     const t0 = performance.now();
-    const tick = (now) => {
+    /** @param {number} now */ const tick = (now) => {
       const e = easeInOutCubic(Math.min(1, (now - t0) / ms));
       for (const k of Object.keys(target)) this.fx[k] = from[k] + (target[k] - from[k]) * e;
       this.fadeTween = e < 1 ? requestAnimationFrame(tick) : null;
@@ -201,8 +202,8 @@ export const fadeMethods = {
   },
 
   /** The theme's accent (`--accent`), used to tint selected geometry. */
-  setAccent(css) {
+  /** @param {string} css */ setAccent(css) {
     this.uniforms.uAccent.value.setStyle(css); // a bad theme token is a bug: let it throw to the page's error panel
     this.draw();
   }
-};
+});

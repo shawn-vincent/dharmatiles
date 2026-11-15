@@ -195,7 +195,7 @@ function boxPayload(w, d, h) {
   const pos = [], nor = [];
   for (const [a, b, c, e, n] of faces) for (const k of [a, b, c, a, c, e]) { pos.push(...v[k]); nor.push(...n); }
   const colour = new Uint8Array(pos.length).fill(170);
-  return { positions: new Float32Array(pos), normals: new Float32Array(nor), painted: colour, clean: colour, triangles: 12, meta: {} };
+  return { positions: new Float32Array(pos), normals: new Float32Array(nor), painted: colour, clean: colour, triangles: 12, meta: /** @type {any} */ ({}) /* a box has no header */ };
 }
 
 /**

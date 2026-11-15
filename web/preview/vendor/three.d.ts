@@ -151,6 +151,7 @@ export declare class Object3D {
   renderOrder: number;
   frustumCulled: boolean;
   matrixAutoUpdate: boolean;
+  matrix: any; // a Matrix4 (elements, copy, fromArray): the page sets a piece's from an array and reads its elements
   userData: Record<string, any>;
   children: Object3D[];
   parent: Object3D | null;
@@ -160,7 +161,7 @@ export declare class Object3D {
   lookAt(x: number | Vector3, y?: number, z?: number): void;
   updateMatrixWorld(force?: boolean): void;
   updateMatrix(): void;
-  traverse(callback: (object: Object3D) => void): void;
+  traverse(callback: (object: any) => void): void; // any: the page reads `geometry` and `material` of the Mesh, Points and LineSegments it visits
 }
 export declare class Group extends Object3D {}
 export declare class HemisphereLight extends Object3D {
@@ -202,6 +203,8 @@ export declare class PerspectiveCamera extends Camera {
 export declare class OrthographicCamera extends Camera {
   constructor(left?: number, right?: number, top?: number, bottom?: number, near?: number, far?: number);
   left: number; right: number; top: number; bottom: number; near: number; far: number; zoom: number;
+  setViewOffset(fullWidth: number, fullHeight: number, x: number, y: number, width: number, height: number): void;
+  clearViewOffset(): void;
 }
 
 export declare class Texture {}

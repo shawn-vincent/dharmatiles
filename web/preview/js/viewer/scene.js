@@ -10,8 +10,11 @@
 // so a geometry has no per-piece attribute.
 
 import * as THREE from 'three';
-import { FRAG, PICK_FRAG, reduceMotion } from './consts.js';
+import { FRAG, PICK_FRAG, reduceMotion, methods } from './consts.js';
 import { ALL, CROSSFADE_MS, intervals, newFade, running, swap } from './crossfade.js';
+/** @typedef {import('./consts.js').SceneGeom} SceneGeom */
+/** @typedef {import('./consts.js').SceneOut} SceneOut */
+/** @typedef {import('./consts.js').ScenePiece} ScenePiece */
 
 const VERT_S = `
 attribute vec3 paint; uniform vec2 uWho;
@@ -41,12 +44,12 @@ void main() {
   if (d < uXf.x || d >= uXf.y) discard;`;
 const FRAG_S = FRAG.replace('void main() {', DITHER);
 const MASK_S = 'void main() { gl_FragColor = vec4(1.0); }';
-const grey = (n) => new Uint8Array(n).fill(168);
+const grey = (/** @type {number} */ n) => new Uint8Array(n).fill(168);
 
 /** The map's ground, just under z = 0 so a tile's own surface at zero does not fight it. */
 const GROUND_MASK_Z = -0.05;
 
-export const sceneMethods = {
+export const sceneMethods = methods({
   initScene() {
     this.sceneOn = false;
     this.sceneGroup = new THREE.Group();
@@ -89,7 +92,7 @@ export const sceneMethods = {
   },
 
   /** Show the map's pieces instead of the tile (or the plate): the tile's own mesh steps aside. */
-  setSceneOn(on) {
+  /** @param {boolean} on */ setSceneOn(on) {
     if (this.sceneOn === !!on) return;
     this.sceneOn = !!on;
     this.sceneGroup.visible = this.scenePickGroup.visible = this.sceneMaskGroup.visible = this.sceneOn;
@@ -114,10 +117,10 @@ export const sceneMethods = {
   },
 
   /** The ground grid the scene draws: squares of `sq` mm over a `w` by `h` map centred at (cx, cy). */
-  setSceneGrid(spec) { this.sceneGridSpec = spec; if (this.sceneOn) { this.buildGrid(); this.draw(); } },
+  /** @param {any} spec {sq, w, h, cx, cy} */ setSceneGrid(spec) { this.sceneGridSpec = spec; if (this.sceneOn) { this.buildGrid(); this.draw(); } },
 
   /** A tile mesh at a tier, a parsed payload, kept under `gid` (replacing what was). */
-  setSceneGeometry(gid, payload) {
+  /** @param {string} gid @param {Omit<import('../payload.js').Payload, 'entry' | 'piece'>} payload */ setSceneGeometry(gid, payload) {
     this.dropSceneGeometry(gid);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(payload.positions, 3));
@@ -131,7 +134,7 @@ export const sceneMethods = {
     for (const p of this.scenePieces.values()) if (p.gid === gid) this.useGeometry(p, gid);
   },
 
-  dropSceneGeometry(gid) {
+  /** @param {string} gid */ dropSceneGeometry(gid) {
     const e = this.sceneGeoms.get(gid);
     if (!e) return;
     this.sceneGeoms.delete(gid);
@@ -140,13 +143,13 @@ export const sceneMethods = {
   },
 
   /** A crossfade is done with a geometry: it is freed if it was dropped meanwhile. */
-  releaseSceneEntry(e) {
+  /** @param {SceneGeom} e */ releaseSceneEntry(e) {
     e.held--;
     if (e.held === 0 && e.dropped) { this.sceneHeld.delete(e); e.geometry.dispose(); }
   },
 
   /** The paint to show for a geometry, as `currentPaint` does for the tile's mesh. */
-  scenePaint(e) {
+  /** @param {SceneGeom} e */ scenePaint(e) {
     if (this.showPaint) return this.showOverhang ? e.painted : e.clean;
     if (!e.grey) {
       const flagged = new Uint8Array(e.clean.array.length);
@@ -169,7 +172,7 @@ export const sceneMethods = {
    * Choose the backdrop (`wilderness`, `cavern`, `table`, `plain`): it is the place the tiles stand in, for the map
    * and for a tile alike; the plates keep the printer's bed (the page asks for `plain` there).
    */
-  setBackdropKind(kind) {
+  /** @param {string} kind */ setBackdropKind(kind) {
     this.backdrop.setKind(kind);
     this.backdrop.setGrid(this.showGrid);
     if (this.grid) this.grid.visible = this.showGrid && !this.backdrop.on();
@@ -178,7 +181,7 @@ export const sceneMethods = {
   },
 
   /** Daylight or dusk: the dark theme's backdrop is evening. */
-  setBackdropNight(n) { this.backdrop.setNight(n); this.draw(); },
+  /** @param {number} n */ setBackdropNight(n) { this.backdrop.setNight(n); this.draw(); },
 
   /**
    * The ground under what is shown, with a soft shadow round each footprint.  The map's ground is at z = 0 and
@@ -235,9 +238,9 @@ export const sceneMethods = {
 
   /** The geometry ids kept, with their triangles. */
   sceneGeometryIds() { return [...this.sceneGeoms.keys()]; },
-  sceneTriangles(gid) { return this.sceneGeoms.get(gid)?.triangles ?? 0; },
+  /** @param {string} gid */ sceneTriangles(gid) { return this.sceneGeoms.get(gid)?.triangles ?? 0; },
 
-  useGeometry(p, gid) {
+  /** @param {ScenePiece} p @param {string} gid */ useGeometry(p, gid) {
     const e = this.sceneGeoms.get(gid);
     if (!e) return;
     for (const m of [p.render, p.pick, p.mask, ...p.ghosts]) m.geometry = e.geometry;
@@ -249,7 +252,7 @@ export const sceneMethods = {
    * A piece that shows a mesh changes to another: the old one stays drawn, under the new, while the dither hands
    * its pixels over (crossfade.js).  Reduced motion, or nothing shown before, swaps at once.
    */
-  swapGeometry(p, gid) {
+  /** @param {ScenePiece} p @param {string} gid */ swapGeometry(p, gid) {
     const from = p.shown && p.entry && p.entry.geometry === p.render.geometry ? p.entry : null;
     this.useGeometry(p, gid);
     if (!from || p.entry === from || reduceMotion()) { this.clearFade(p); return; }
@@ -271,14 +274,15 @@ export const sceneMethods = {
    * One layer of a piece: its own mesh and the fade's four passes (the tile's: the selection first, then the rest),
    * the model matrix put in; they share one dither interval `xf`, so the layer is dithered in every pass it draws.
    */
-  sceneLayer(geometry, who, role, xf) {
-    const mk = (uniforms, uWho, extra = {}) => {
+  /** @param {THREE.BufferGeometry} geometry @param {{value: THREE.Vector2}} who @param {{value: THREE.Vector2}} role @param {{value: THREE.Vector2}} xf */ sceneLayer(geometry, who, role, xf) {
+    /** @param {Record<string, {value: any}>} uniforms @param {{value: THREE.Vector2}} uWho @param {Record<string, boolean>} [extra] */ const mk = (uniforms, uWho, extra = {}) => {
       const m = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: { ...uniforms, uWho, uXf: xf }, vertexShader: VERT_S, fragmentShader: FRAG_S, side: THREE.DoubleSide, ...extra }));
       m.frustumCulled = false; m.matrixAutoUpdate = false;
       return m;
     };
     const render = mk(this.sceneUniforms, who);
     const ghosts = [[this.lit, true], [this.lit, false], [this.ghost, true], [this.ghost, false]].map(([pair, depth], k) => {
+      pair = /** @type {typeof this.lit} */ (pair);
       const m = mk(pair.u, role, depth ? { colorWrite: false } : { transparent: true, depthWrite: false });
       m.renderOrder = 1 + k;
       return m;
@@ -288,18 +292,18 @@ export const sceneMethods = {
   },
 
   /** The outgoing meshes a piece holds are as many as its layers less the newest. */
-  trimOuts(p) {
-    while (p.outs.length > p.fade.layers.length - 1 && p.outs.length > 0) this.dropOut(p.outs.pop());
+  /** @param {ScenePiece} p */ trimOuts(p) {
+    while (p.outs.length > p.fade.layers.length - 1 && p.outs.length > 0) this.dropOut(/** @type {SceneOut} */ (p.outs.pop()));
   },
 
-  dropOut(o) {
+  /** @param {SceneOut} o */ dropOut(o) {
     this.sceneGroup.remove(o.render, ...o.ghosts);
     for (const m of [o.render, ...o.ghosts]) m.material.dispose();
     this.releaseSceneEntry(o.entry);
   },
 
   /** Take a piece's crossfade away at once. */
-  clearFade(p) {
+  /** @param {ScenePiece} p */ clearFade(p) {
     for (const o of p.outs) this.dropOut(o);
     p.outs.length = 0;
     p.fade.layers.length = 0;
@@ -312,7 +316,7 @@ export const sceneMethods = {
   /** Step every crossfade to now; keep stepping, a frame at a time, only while one runs. */
   crossfadeTick() {
     if (this.crossfadeRaf) return;
-    const step = (now) => {
+    /** @param {number} now */ const step = (now) => {
       this.crossfadeRaf = 0;
       let on = false;
       for (const p of this.scenePieces.values()) {
@@ -320,7 +324,7 @@ export const sceneMethods = {
         const iv = intervals(p.fade, now, this.crossfadeMs);
         this.trimOuts(p);
         p.xf.value.set(iv[0][0], iv[0][1]);
-        p.outs.forEach((o, i) => o.xf.value.set(iv[i + 1][0], iv[i + 1][1]));
+        p.outs.forEach((/** @type {SceneOut} */ o, /** @type {number} */ i) => o.xf.value.set(iv[i + 1][0], iv[i + 1][1]));
         if (running(p.fade)) on = true; else p.fade.layers.length = 0;
       }
       this.draw();
@@ -333,7 +337,7 @@ export const sceneMethods = {
    * The pieces drawn: `[{index, gid, matrix}]` (gid null: nothing yet; the piece is not drawn).  A piece the
    * list no longer has goes; one that is there keeps its meshes and only takes its new matrix and geometry.
    */
-  setScenePieces(list) {
+  /** @param {{index: number, gid: string | null, matrix: number[]}[]} list */ setScenePieces(list) {
     const keep = new Set(list.map((p) => p.index));
     for (const [i, p] of this.scenePieces) {
       if (keep.has(i)) continue;
@@ -346,7 +350,7 @@ export const sceneMethods = {
       let p = this.scenePieces.get(index);
       if (!p) {
         const who = { value: new THREE.Vector2(index + 1, 0) };
-        const mk = (frag) => new THREE.ShaderMaterial({ uniforms: { uWho: who }, vertexShader: VERT_S, fragmentShader: frag, side: THREE.DoubleSide });
+        const mk = (/** @type {string} */ frag) => new THREE.ShaderMaterial({ uniforms: { uWho: who }, vertexShader: VERT_S, fragmentShader: frag, side: THREE.DoubleSide });
         const empty = new THREE.BufferGeometry();
         // a piece's role in the fade rides in its own `uWho`: 1 selected, 2 under the pointer, 3 the rest (setSceneHighlight)
         const role = { value: new THREE.Vector2(3, 0) };
@@ -366,7 +370,7 @@ export const sceneMethods = {
         this.sceneGroup.add(p.render, ...ghosts); this.scenePickGroup.add(p.pick); this.sceneMaskGroup.add(p.mask);
         this.scenePieces.set(index, p);
       }
-      for (const m of [p.render, p.pick, p.mask, ...p.ghosts, ...p.outs.flatMap((o) => [o.render, ...o.ghosts])]) m.matrix.fromArray(matrix);
+      for (const m of [p.render, p.pick, p.mask, ...p.ghosts, ...p.outs.flatMap((/** @type {SceneOut} */ o) => [o.render, ...o.ghosts])]) m.matrix.fromArray(matrix);
       const shown = gid != null && this.sceneGeoms.has(gid);
       const wasShown = p.shown;
       p.shown = shown;
@@ -379,10 +383,10 @@ export const sceneMethods = {
   },
 
   /** What a piece is to the fade: 1 selected, 2 under the pointer (and not selected), 3 the rest. */
-  roleOf(i) { return this.sceneSel.has(i) ? 1 : this.sceneHov.has(i) ? 2 : 3; },
+  /** @param {number} i */ roleOf(i) { return this.sceneSel.has(i) ? 1 : this.sceneHov.has(i) ? 2 : 3; },
 
   /** A piece is on show as itself, or as the fade's passes while something is selected or on its way in or out. */
-  showPiece(p) {
+  /** @param {ScenePiece} p */ showPiece(p) {
     p.render.visible = p.shown && !this.sceneFaded;
     for (const g of p.ghosts) g.visible = p.shown && this.sceneFaded;
     p.pick.visible = p.shown;
@@ -393,7 +397,7 @@ export const sceneMethods = {
   },
 
   /** The fade says whether the pieces are drawn as themselves or through its passes (fade.js `showFade`). */
-  showSceneFade(on) {
+  /** @param {boolean} on */ showSceneFade(on) {
     if (this.sceneFaded === on) return;
     this.sceneFaded = on;
     for (const p of this.scenePieces.values()) this.showPiece(p);
@@ -405,7 +409,7 @@ export const sceneMethods = {
    * is told "something is selected" and "something is under the pointer", and each piece is given its role in it.
    * Where the fade is off, the selection's tint (one piece) and the hover's remain, as they were.
    */
-  setSceneHighlight(sel, hov) {
+  /** @param {Iterable<number>} sel @param {Set<number> | number} hov */ setSceneHighlight(sel, hov) {
     this.sceneSel = new Set(sel);
     this.sceneHov = hov instanceof Set ? hov : new Set(hov >= 0 ? [hov] : []);
     const hovered = [...this.sceneHov].filter((i) => !this.sceneSel.has(i));
@@ -428,10 +432,10 @@ export const sceneMethods = {
    * A rectangle on the bed (`{x0, y0, x1, y1}`, mm) in the accent, a translucent fill with its edge: where a piece
    * being dragged on a plate would stand.  Null takes it away.
    */
-  setGhostRect(r) {
+  /** @param {{x0: number, y0: number, x1: number, y1: number} | null} r */ setGhostRect(r) {
     if (this.ghostRectGroup) {
       this.scene.remove(this.ghostRectGroup);
-      this.ghostRectGroup.traverse((o) => { o.geometry?.dispose(); if (o.material) { this.fatMaterials.delete(o.material); o.material.dispose(); } });
+      this.ghostRectGroup.traverse((/** @type {any} */ o) => { o.geometry?.dispose(); if (o.material) { this.fatMaterials.delete(o.material); o.material.dispose(); } });
       this.ghostRectGroup = null;
     }
     if (r) {
@@ -459,8 +463,8 @@ export const sceneMethods = {
   },
 
   /** The piece under canvas point (x, y), CSS pixels, or -1. */
-  scenePick(x, y) {
+  /** @param {number} x @param {number} y */ scenePick(x, y) {
     const h = this.pick(x, y);
     return h ? h.entry : -1;
   },
-};
+});

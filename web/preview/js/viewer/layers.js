@@ -11,9 +11,9 @@ import { cloudOf, columnGeometry, shadeAlpha, SHADE_COLUMN, SHADE_SHEET, sheetGe
 import { FAT_FRAG, FAT_VERT, fatGeometry } from '../fatline.js';
 
 const BED_MM = 4; // how thick the printer's bed is drawn
-import { CLOUD_CONTOUR_PX, CLOUD_HOVER, CLOUD_SPAN_PX, CONTOUR_ALPHA, DOT_FRAG, DOT_VERT, GRID_BELOW_MM, GRID_FRAG } from './consts.js';
+import { CLOUD_CONTOUR_PX, CLOUD_HOVER, CLOUD_SPAN_PX, CONTOUR_ALPHA, DOT_FRAG, DOT_VERT, GRID_BELOW_MM, GRID_FRAG, methods } from './consts.js';
 
-export const layersMethods = {
+export const layersMethods = methods({
   /** The debug layer's objects, made again from `this.debug` while it is shown. */
   buildDebug() {
     if (this.debugGroup) {
@@ -25,8 +25,8 @@ export const layersMethods = {
     this.onDebugChange?.(this.showDebug ? d : null);
     if (!this.showDebug || !d) return;
     const group = new THREE.Group();
-    const colour = (token) => new THREE.Color().setStyle(this.debugColour(token)); // a bad token is a bug: let it throw
-    const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
+    /** @param {string} token */ const colour = (token) => new THREE.Color().setStyle(this.debugColour(token)); // a bad token is a bug: let it throw
+    /** @param {THREE.Object3D} o @param {number} order */ const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
     // then the marks, over everything: they lie on the ground under the blades
     const marks = { depthTest: false, depthWrite: false, transparent: true };
     for (const [cls, trails] of Object.entries(d.trails ?? {})) {
@@ -59,7 +59,7 @@ export const layersMethods = {
    * branch tip or stone with the rolled height marked.  The hovered one is
    * quieter.
    */
-  setCloud(sel, hov) {
+  /** @param {any} sel @param {any} hov a stack entry of the payload's clouds, or null */ setCloud(sel, hov) {
     if (this.cloudSel === sel && this.cloudHov === hov) return;
     this.cloudSel = sel;
     this.cloudHov = hov;
@@ -68,7 +68,7 @@ export const layersMethods = {
   },
 
   /** Segments drawn `px` CSS pixels wide (see fatline.js): `pos` six numbers a segment, `rgba` four a vertex (two a segment). */
-  fatLines(pos, rgba, px) {
+  /** @param {Float32Array} pos @param {Float32Array} rgba @param {number} px */ fatLines(pos, rgba, px) {
     const f = fatGeometry(pos, rgba);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(f.position, 3));
@@ -103,7 +103,7 @@ export const layersMethods = {
     // the cloud's own colour, not the selection's accent: a rock's cloud sits on the rock's outline
     const c = new THREE.Color().setStyle(this.debugColour('--cloud')); // a bad token is a bug: let it throw
     const plate = new THREE.Color(this.debugColour('--plate'));
-    const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
+    /** @param {THREE.Object3D} o @param {number} order */ const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
     // drawn over the solids, as a selected place is: the low sheet is
     // under the ground it bounds
     const flat = { depthTest: false, depthWrite: false, transparent: true };
@@ -155,7 +155,7 @@ export const layersMethods = {
    * off (or a stale mesh) it can't be seen inside the solid, so it is
    * drawn over the tile instead.
    */
-  setRegionLayer(layer) {
+  /** @param {any} layer the regions to draw, from the page (`{focus, regions}`) */ setRegionLayer(layer) {
     if (this.regionLayer?.group) {
       this.scene.remove(this.regionLayer.group);
       for (const m of this.regionLayer.group.children) { m.geometry.dispose(); m.material.dispose(); }
@@ -176,7 +176,7 @@ export const layersMethods = {
       }
       group.position.z = layer.z;
       this.scene.add(group);
-      this.regionLayer = { focus: !!layer.focus, group };
+      this.regionLayer = { focus: !!layer.focus, group: /** @type {THREE.Group & {children: THREE.Mesh[]}} */ (group) }; // the group holds only the region meshes added above
     }
     this.applyFade();
     this.draw();
@@ -248,7 +248,7 @@ export const layersMethods = {
   buildBed() {
     if (this.bedGroup) {
       this.scene.remove(this.bedGroup);
-      this.bedGroup.traverse((o) => { o.geometry?.dispose(); if (o.material) { this.fatMaterials.delete(o.material); o.material.dispose(); } });
+      this.bedGroup.traverse((/** @type {any} */ o) => { o.geometry?.dispose(); if (o.material) { this.fatMaterials.delete(o.material); o.material.dispose(); } });
       this.bedGroup = null;
     }
     const bed = this.payload?.meta?.bed;
@@ -256,7 +256,7 @@ export const layersMethods = {
     const group = new THREE.Group();
     const ink = this.gridInk?.clone() ?? new THREE.Color(0.17, 0.2, 0.25);
     const z = (this.plan?.datumZ ?? 0) - GRID_BELOW_MM * 0.5;
-    const rect = (x0, y0, x1, y1, fill, px, alpha) => {
+    /** @param {number} x0 @param {number} y0 @param {number} x1 @param {number} y1 @param {number} fill @param {number} px @param {number} alpha */ const rect = (x0, y0, x1, y1, fill, px, alpha) => {
       // the edge, drawn a few pixels wide whatever the zoom
       const c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
       const pos = new Float32Array(24), rgba = new Float32Array(32);
@@ -292,14 +292,14 @@ export const layersMethods = {
   },
 
   /** Set the grid's opacity independently of the tile's paint. */
-  setGridDim(v) {
+  /** @param {number} v */ setGridDim(v) {
     this.gridDim = v;
     if (this.grid) this.grid.material.uniforms.uDim.value = v;
     this.draw();
   },
 
   /** The theme's grid ink: dark by day, pale against Moonpool's twilight. */
-  setGridColor(css) {
+  /** @param {string} css */ setGridColor(css) {
     this.gridInk ??= new THREE.Color(0.17, 0.2, 0.25);
     this.gridInk.setStyle(css); // a bad theme token is a bug: let it throw to the page's error panel
     if (this.grid) this.grid.material.uniforms.uInk.value.copy(this.gridInk);
@@ -308,7 +308,7 @@ export const layersMethods = {
   },
 
   /** The sketches of a build running: [{id, rough, payload}], replacing those shown. */
-  setSketches(list) {
+  /** @param {{id: number, rough: boolean, payload: import('../payload.js').Payload}[]} list */ setSketches(list) {
     const want = new Set(list.map((k) => k.id));
     for (const [id, k] of this.sketches) {
       if (want.has(id)) continue;
@@ -340,6 +340,6 @@ export const layersMethods = {
 
   /** The bounds of each sketch shown: [{lo, hi}]. */
   sketchBounds() {
-    return [...this.sketches.values()].map((k) => k.bounds).filter(Boolean);
+    return [...this.sketches.values()].flatMap((k) => (k.bounds ? [k.bounds] : []));
   }
-};
+});

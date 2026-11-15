@@ -7,6 +7,32 @@ THREE.ColorManagement.enabled = false; // colours are already display values
 // [name, label, elevation deg, azimuth deg (round from +x), close-up?]
 // painted/top/low/close are the contact sheet's four views.
 /** @type {Array<[string, string, number, number, boolean]>} */
+/** @typedef {{entry: number, piece?: number | null}} Pick  a thing the page selects or hovers: a stack entry, or one piece of it */
+/** @typedef {{dir: THREE.Vector3, target: THREE.Vector3, dist: number}} Pose3  a camera pose: unit direction from the target, target, perspective-equivalent distance */
+
+/**
+ * A geometry the map's scene holds: a tile mesh at a tier, shared by the pieces that show it.  Its THREE parts are
+ * `any` where three's declared subset (vendor/three.d.ts) does not reach.
+ * @typedef {{geometry: THREE.BufferGeometry, painted: THREE.BufferAttribute, clean: THREE.BufferAttribute, triangles: number,
+ *   grey: any, meta: import('../api').MeshHeader, held: number, dropped: boolean}} SceneGeom
+ */
+/** @typedef {{render: THREE.Mesh, ghosts: THREE.Mesh[], xf: {value: THREE.Vector2}, entry: SceneGeom}} SceneOut  a mesh on its way out of a crossfade */
+/**
+ * A piece of the map in the scene: its meshes (own, pick, mask and the fade's ghosts), the geometry it shows, and its crossfade.
+ * @typedef {{gid: string | null, shown: boolean, role: {value: THREE.Vector2}, who: {value: THREE.Vector2}, xf: {value: THREE.Vector2},
+ *   entry: SceneGeom | null, fade: any, outs: SceneOut[], render: THREE.Mesh, ghosts: THREE.Mesh[], pick: THREE.Mesh, mask: THREE.Mesh, index?: number}} ScenePiece
+ */
+
+/**
+ * A method table of the viewer (camera.js, fade.js, layers.js, scene.js): `this` in each method is the viewer, and the
+ * table keeps its own type (`typeof table`), which viewer.js reads to say what the class gains.
+ * @template T
+ * @param {T & ThisType<import('../viewer.js').Viewer>} table
+ * @returns {T}
+ */
+export const methods = (table) => table;
+
+/** @type {[string, string, number, number, boolean][]} the named views: [key, label, elevation, azimuth, close] */
 export const VIEWS = [
   ['painted', 'Iso', 40, -120, false],
   ['top', 'Top', 89, -90, false],

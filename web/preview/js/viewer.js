@@ -22,9 +22,14 @@ export { VIEWS } from './viewer/consts.js';
  * geometry and its looks are THREE objects, and no types are vendored for three, so those are `any`.
  * @typedef {typeof cameraMethods & typeof fadeMethods & typeof layersMethods & typeof sceneMethods & {
  *   controls: import('/vendor/OrbitControls.js').OrbitControls,
- *   sceneOn: boolean, sceneSel: Set<number>, groundMask: any, groundOn: boolean, groundZ?: number, bedGroup?: any, tween?: {done?: () => void, raf: number} | null,
+ *   sceneOn: boolean, sceneSel: Set<number>, groundMask: any, groundOn: boolean, groundZ?: number, bedGroup?: any, tween?: {done?: (() => void) | null, raf: number} | null,
  *   maxDistance?: number | null, onDebugChange?: (debug: object | null) => void,
- *   sceneGeoms: Map<string, {geometry: any, painted: any, clean: any, triangles: number, grey: any}>,
+ *   sceneGeoms: Map<string, import('./viewer/consts.js').SceneGeom>,
+ *   scenePieces: Map<number, import('./viewer/consts.js').ScenePiece>, sceneGroup: THREE.Group, scenePickGroup: THREE.Group, sceneMaskGroup: THREE.Group, sceneFaded: boolean,
+ *   tileHighlight: {sel: THREE.Vector2, hov: THREE.Vector2} | null, sceneBox: any, sceneGridSpec: any, sceneHeld: Set<import('./viewer/consts.js').SceneGeom>, sceneHov: Set<number>,
+ *   sceneUniforms: Record<string, {value: any}>, crossfadeMs: number, crossfadeRaf: number, ghostRectGroup: any,
+ *   samples: {t: number, az: number, pol: number}[], dragging: boolean, coast: any, orbit: boolean, pulseRaf: number,
+ *   gridInk?: THREE.Color, gridDim?: number, painted: THREE.BufferAttribute, clean: THREE.BufferAttribute,
  * }} ViewerParts
  */
 
@@ -50,7 +55,7 @@ export class Viewer extends Parts {
     for (const c of [this.persp, this.ortho]) c.up.set(0, 0, 1); // tiles are z-up
     this.orthoHalf = 1; // half the frustum's height at zoom 1, mm
     this.isOrtho = false;
-    this.camera = this.persp;
+    this.camera = /** @type {THREE.PerspectiveCamera | THREE.OrthographicCamera} */ (this.persp);
     this.makeControls(new THREE.Vector3());
     this.initInertia();
     this.uniforms = {
@@ -68,10 +73,10 @@ export class Viewer extends Parts {
     this.stale = false; // the mesh shown is an older build's: all of it fades
     // how much shows now (1 solid, FADE faded) of the rest, the selection
     // and the thing it just left; each eases to its own target
-    this.fx = { rest: 1, keep: 1, leave: 1, lift: 1, drop: 1 };
-    this.fxTarget = { ...this.fx };
-    this.fadeTween = null;
-    this.regionLayer = null; // {focus, group}: the selected region flat at zero, or every region faint (setRegionLayer)
+    this.fx = /** @type {Record<string, number>} */ ({ rest: 1, keep: 1, leave: 1, lift: 1, drop: 1 });
+    this.fxTarget = /** @type {Record<string, number>} */ ({ ...this.fx });
+    this.fadeTween = /** @type {number | null} */ (null);
+    this.regionLayer = /** @type {{focus: boolean, group: THREE.Group & {children: THREE.Mesh[]}} | null} */ (null); // {focus, group}: the selected region flat at zero, or every region faint (setRegionLayer)
     const pair = (alpha, mode) => {
       const u = { ...this.uniforms, uMode: { value: mode }, uGhost: { value: alpha } };
       return {
@@ -85,10 +90,10 @@ export class Viewer extends Parts {
     this.ghostColour = this.ghost.colour;
     // the selection, drawn before the rest so it shows through it
     this.lit = pair(1, 4);
-    this.ghosts = [];
+    this.ghosts = /** @type {THREE.Mesh[]} */ ([]);
     // while a build runs: each stage's parts, and rough stand-ins, faded
     this.sketchLooks = { parts: pair(SKETCH_PARTS, 3), rough: pair(SKETCH_ROUGH, 3) };
-    this.sketches = new Map(); // id -> {geometry, meshes}
+    this.sketches = /** @type {Map<number, {geometry: THREE.BufferGeometry, meshes: THREE.Mesh[], rough: boolean, bounds?: {lo: number[], hi: number[]} | null}>} */ (new Map()); // id -> {geometry, meshes}
     this.pickMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: PICK_FRAG, side: THREE.DoubleSide });
     this.pickScene = new THREE.Scene();
     this.pickTarget = new THREE.WebGLRenderTarget(1, 1);
@@ -111,7 +116,7 @@ export class Viewer extends Parts {
     this.pointUniforms = { uLo: { value: new THREE.Vector3() }, uSpan: { value: new THREE.Vector3(1, 1, 1) } };
     this.pointMaterial = new THREE.ShaderMaterial({ uniforms: this.pointUniforms, vertexShader: VERT, fragmentShader: POINT_FRAG, side: THREE.DoubleSide });
     this.mesh = null;
-    this.grid = null;
+    this.grid = /** @type {any} */ (null); // a THREE mesh whose ShaderMaterial uniforms layers.js reads and writes
     this.payload = null;
     this.showOverhang = true;
     this.showPaint = true;
@@ -119,15 +124,15 @@ export class Viewer extends Parts {
     this.plan = null;
     this.debug = null; // the payload's debug marks (the grass's), drawn while showDebug
     this.clouds = null; // the payload's clouds: what a selected top= or pin is drawn from
-    this.debugGroup = null;
+    this.debugGroup = /** @type {THREE.Group | null} */ (null);
     this.showDebug = false;
-    this.cloudSel = null; // the stack entry whose cloud is selected (setCloud), and the one hovered
-    this.cloudHov = null;
-    this.cloudGroup = null;
+    this.cloudSel = /** @type {any} */ (null); // an entry of the payload's clouds (layers.js setCloud) // the stack entry whose cloud is selected (setCloud), and the one hovered
+    this.cloudHov = /** @type {any} */ (null);
+    this.cloudGroup = /** @type {THREE.Group | null} */ (null);
     this.fatRes = { value: new THREE.Vector2(1, 1) }; // the canvas in device pixels, for lines drawn a width on screen
     this.fatDpr = 1;
     this.fatMaterials = new Set();
-    this.debugColour = () => '#808080'; // the page gives the theme's tokens (setDebugColours)
+    this.debugColour = /** @type {(token: string) => string} */ (() => '#808080'); // the page gives the theme's tokens (setDebugColours)
     this.initScene();
     this.backdrop = new Backdrop();
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -164,7 +169,7 @@ export class Viewer extends Parts {
     g.setAttribute('normal', new THREE.BufferAttribute(payload.normals, 3));
     this.painted = new THREE.BufferAttribute(payload.painted, 3, true);
     this.clean = new THREE.BufferAttribute(payload.clean, 3, true);
-    this.grey = null;
+    this.grey = /** @type {any} */ (null); // {plain, flagged}: unpainted attributes made by currentPaint
     g.setAttribute('paint', this.currentPaint());
     // who made each triangle, on its three corners
     const who = ownerVertices(payload.entry, payload.piece);
@@ -421,9 +426,9 @@ export class Viewer extends Parts {
   onUserViewChangeHook(fn) { return this.userViewHooks.add(fn); }
 
   // The one-slot properties these hooks replaced: assigning one would drop the others, so it is an error.
-  set onRender(_) { throw new Error('viewer.onRender is gone: add a hook with viewer.onRenderHook(fn)'); }
+  set onRender(/** @type {unknown} */ _) { throw new Error('viewer.onRender is gone: add a hook with viewer.onRenderHook(fn)'); }
 
-  set onUserViewChange(_) { throw new Error('viewer.onUserViewChange is gone: add a hook with viewer.onUserViewChangeHook(fn)'); }
+  set onUserViewChange(/** @type {unknown} */ _) { throw new Error('viewer.onUserViewChange is gone: add a hook with viewer.onUserViewChangeHook(fn)'); }
 
   /** The tile's own mesh (and what stands on it) does not show under a map's pieces. */
   hideTileMesh() {

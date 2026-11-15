@@ -6,9 +6,12 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from '/vendor/OrbitControls.js';
-import { FOV, NARROW_FOV, VIEWS, dirv, easeInOutCubic, rad, reduceMotion } from './consts.js';
+import { FOV, NARROW_FOV, VIEWS, dirv, easeInOutCubic, rad, reduceMotion, methods } from './consts.js';
+/** @typedef {import('./consts.js').Pose3} Pose3 */
+/** @typedef {import('./framing.js').Box} Box */
+/** @typedef {import('./framing.js').Pose} Pose */
 
-export const cameraMethods = {
+export const cameraMethods = methods({
   /** The orthographic frustum: its height from `orthoHalf`, its width from the aspect. */
   fitOrtho() {
     const a = this.persp.aspect;
@@ -19,7 +22,7 @@ export const cameraMethods = {
   },
 
   /** Orbit controls on the active camera, aimed at `target`. */
-  makeControls(target) {
+  /** @param {THREE.Vector3} target */ makeControls(target) {
     if (this.controls) this.controls.dispose();
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = false;
@@ -45,12 +48,12 @@ export const cameraMethods = {
   },
 
   /** Run `step(eased 0..1)` over `seconds`; `done` runs once at the end (or when cut short by the user). */
-  animate(seconds, step, done) {
+  /** @param {number} seconds @param {(e: number) => void} step @param {(() => void) | null} [done] */ animate(seconds, step, done) {
     this.cancelTween(false);
     const t0 = performance.now();
     const tween = { done, raf: 0 };
     this.tween = tween;
-    const tick = (now) => {
+    /** @param {number} now */ const tick = (now) => {
       if (this.tween !== tween) return;
       const u = Math.min(1, (now - t0) / (seconds * 1000));
       step(easeInOutCubic(u));
@@ -63,7 +66,7 @@ export const cameraMethods = {
   },
 
   /** Stop a running tween; with `finish`, run its `done` (a projection switch lands where it was going). */
-  cancelTween(finish) {
+  /** @param {boolean} finish */ cancelTween(finish) {
     this.stopCoast();
     const t = this.tween;
     if (!t) return;
@@ -126,7 +129,7 @@ export const cameraMethods = {
     if (speed < 0.15) return;
     const tau = 0.3 + 0.9 * Math.min(1, speed / 8);
     this.coast = { v, tau, t: now, raf: 0 };
-    const tick = (tNow) => {
+    /** @param {number} tNow */ const tick = (tNow) => {
       const k = this.coast;
       if (!k) return;
       const dt2 = Math.min(0.05, Math.max(0, (tNow - k.t) / 1000));
@@ -166,13 +169,13 @@ export const cameraMethods = {
    * ease separately.  Up stays +z, so the path does not roll through Top
    * or Under.  A new call starts from wherever the last one had got to.
    */
-  flyTo(to) {
+  /** @param {Pose3} to */ flyTo(to) {
     this.hold(); // a flight somebody asked for is their view now
     this.flyToPose(to);
   },
 
   /** The flight itself (what the camera does by itself is `place`; this one does not take the view from the framing). */
-  flyToPose(to) {
+  /** @param {Pose3} to */ flyToPose(to) {
     const from = this.pose();
     const q = new THREE.Quaternion().setFromUnitVectors(from.dir, to.dir);
     if (Math.abs(q.w) < 1e-6) { // opposite ends: turn about the vertical, not any axis
@@ -181,7 +184,7 @@ export const cameraMethods = {
     const angle = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
     const travel = from.target.distanceTo(to.target) / Math.max(from.dist, 1);
     const seconds = Math.min(0.9, 0.6 + 0.2 * (angle / Math.PI) + 0.1 * Math.min(1, travel));
-    const apply = (dir, target, dist) => {
+    /** @param {THREE.Vector3} dir @param {THREE.Vector3} target @param {number} dist */ const apply = (dir, target, dist) => {
       this.placeEquivalent(target, dir, dist);
       this.controls.target.copy(target);
       this.controls.update();
@@ -211,7 +214,7 @@ export const cameraMethods = {
    * size.  The orthographic frustum comes from the perspective distance and
    * field of view; zooming it later changes `.zoom`, not the distance.
    */
-  setOrtho(on, animated = false) {
+  /** @param {boolean} on @param {boolean} [animated] */ setOrtho(on, animated = false) {
     if (on === this.isOrtho) return;
     if (animated && !reduceMotion() && !this.tween) return this.projectionTween(on);
     const target = this.controls.target.clone();
@@ -230,10 +233,10 @@ export const cameraMethods = {
    * of view while backing away, so the apparent size holds and the view
    * flattens into the orthographic one (and the reverse).
    */
-  projectionTween(toOrtho) {
+  /** @param {boolean} toOrtho */ projectionTween(toOrtho) {
     const p = this.pose();
     const hh = p.dist * Math.tan(rad(FOV / 2)); // half the view's height at the target, mm
-    const set = (fov) => {
+    /** @param {number} fov */ const set = (fov) => {
       const dist = hh / Math.tan(rad(fov / 2));
       this.persp.fov = fov;
       this.persp.position.copy(p.target).addScaledVector(p.dir, dist);
@@ -262,7 +265,7 @@ export const cameraMethods = {
   },
 
   /** Put the active camera on the view at perspective `dist` from `target` along `dir`. */
-  placeEquivalent(target, dir, dist) {
+  /** @param {THREE.Vector3} target @param {THREE.Vector3} dir @param {number} dist */ placeEquivalent(target, dir, dist) {
     const c = this.camera;
     c.position.copy(target).addScaledVector(dir, dist);
     c.near = Math.max(0.1, dist / 200);
@@ -277,7 +280,7 @@ export const cameraMethods = {
   },
 
   /** Put the camera on preset `name`, framing `b` (as render.rs does); the framing decides when (viewer/framing.js, `refit`). */
-  place(name, b, animate) {
+  /** @param {string} name @param {(Box & {fit?: boolean}) | null} b @param {boolean} [animate] */ place(name, b, animate) {
     const v = VIEWS.find((x) => x[0] === name);
     if (!v || !b) return;
     const [, , elev, azim, close] = v;
@@ -311,7 +314,7 @@ export const cameraMethods = {
   },
 
   /** The camera put back as it was (the framing's restore of the user's saved view). */
-  restoreCamera(c) {
+  /** @param {Pose} c */ restoreCamera(c) {
     this.cancelTween(false);
     const t = new THREE.Vector3().fromArray(c.t);
     const p = new THREE.Vector3().fromArray(c.p);
@@ -323,8 +326,8 @@ export const cameraMethods = {
   },
 
   /** Let a left drag orbit (true), or keep it for a tool (false). */
-  setOrbit(on) {
+  /** @param {boolean} on */ setOrbit(on) {
     this.orbit = on;
     this.controls.enableRotate = on;
   }
-};
+});
