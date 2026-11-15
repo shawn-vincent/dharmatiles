@@ -1,15 +1,15 @@
 //! Where things go: tile edges, corners, points and edge paths.
 //!
 //! Positions are in squares from the south-west corner, x running east
-//! and y running north.  A point is a quoted pair (`"0.65,1"`); either
-//! coordinate may be a range (`"0.6..1.4,0.6..1.4"`), drawn once from the
-//! tile seed.  A corner word (`north-west`) or an edge word (`north`, the
-//! middle of that edge) stands in for a point.  An edge path is one or
+//! and y running north.  A point is written `"(0.65sq, 1sq)"` and read by
+//! the decoder (`decode::Reader::point`); either coordinate may be a range,
+//! drawn once from the tile seed.  A corner word (`north-west`) or an edge
+//! word (`north`, the middle of that edge) stands in for a point.  An edge path is one or
 //! more edge words, quoted when there are several (`at="north west"`).
 
 use std::fmt;
 
-use crate::expr::{self, Expr, ExprError};
+use crate::expr::{Expr, ExprError};
 
 /// A tile edge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -338,70 +338,6 @@ pub fn top_commas(s: &str) -> Vec<usize> {
     out
 }
 
-/// Parse a point: `"x,y"`, a corner word or an edge word.
-///
-/// # Errors
-/// What is wrong, with the byte range inside `s`.
-pub fn parse_point(s: &str) -> Result<Point, PlaceError> {
-    // "(x, y)": the pair may be written in parentheses
-    let open = s.len() - s.trim_start().len();
-    let t = s.trim();
-    if t.starts_with('(') && encloses(t) && t.contains(',') {
-        let inner = &t[1..t.len() - 1];
-        return parse_point(inner)
-            .map_err(|e| perr(e.message, e.start + open + 1, e.end + open + 1));
-    }
-    let t = s.trim();
-    if let Some(c) = Corner::parse(t) {
-        return Ok(Point::Corner(c));
-    }
-    if let Some(e) = Edge::parse(t) {
-        return Ok(Point::Edge(e));
-    }
-    // the pair's comma is the one outside every call and bracket: a weighted
-    // coordinate such as `low(0..1, 3)` has commas of its own
-    let commas = top_commas(s);
-    let Some(&comma) = commas.first() else {
-        if t.contains(' ') && t.split_whitespace().count() == 2 {
-            return Err(perr(
-                "a point's two numbers are separated by a comma: \"x,y\"",
-                0,
-                s.len(),
-            ));
-        }
-        return Err(perr(
-            "a point is a quoted pair \"x,y\" in squares, a corner (north-west, …) or an edge (north, …)",
-            0,
-            s.len(),
-        ));
-    };
-    if let Some(&at) = commas.get(1) {
-        return Err(perr("a point has two coordinates", at, at + 1));
-    }
-    let coord = |part: &str, offset: usize| -> Result<Expr, PlaceError> {
-        let x = expr::parse(part).map_err(|e| perr(e.message, e.start + offset, e.end + offset))?;
-        if let Some(n) = x.names().first() {
-            let at = part.find(n).unwrap_or(0) + offset;
-            return Err(perr(
-                format!("a point is in squares, not `{n}`"),
-                at,
-                at + n.len(),
-            ));
-        }
-        if x.has_percent() {
-            return Err(perr(
-                "a point is in squares, not percent",
-                offset,
-                offset + part.len(),
-            ));
-        }
-        Ok(x)
-    };
-    let x = coord(&s[..comma], 0)?;
-    let y = coord(&s[comma + 1..], comma + 1)?;
-    Ok(Point::Pair { x, y })
-}
-
 /// Parse an edge path: one or more edge words, each meeting the next at
 /// a corner (`"north west"`).  Anything else is returned as `None`, to be
 /// read as a line name.
@@ -452,54 +388,6 @@ pub fn parse_edges(s: &str) -> Result<Option<Vec<Edge>>, PlaceError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn pairs_corners_and_edges() {
-        let p = parse_point("0.65,1").unwrap();
-        assert_eq!(p.bounds(1.0, 2.0).unwrap(), ((0.65, 0.65), (1.0, 1.0)));
-        let p = parse_point("0.6..1.4, 0.6..1.4").unwrap();
-        assert!(p.is_range());
-        assert_eq!(p.bounds(2.0, 2.0).unwrap(), ((0.6, 1.4), (0.6, 1.4)));
-        assert_eq!(
-            parse_point("north-west").unwrap(),
-            Point::Corner(Corner::NorthWest)
-        );
-        let p = parse_point("south").unwrap();
-        assert_eq!(p.bounds(1.0, 2.0).unwrap(), ((0.5, 0.5), (0.0, 0.0)));
-    }
-
-    #[test]
-    fn a_coordinate_may_hold_commas_of_its_own() {
-        for src in [
-            "low(0.3..0.7, 3), 0.5",
-            "0.5,[0.4, 0.6:2]",
-            "mix(bell(0.3..0.7), 1, flat(0.3..0.7), 1),steps(0.2..0.8, 1, 2)",
-        ] {
-            let Point::Pair { x, y } = parse_point(src).unwrap() else {
-                panic!("{src}")
-            };
-            assert!(x.is_range() || y.is_range(), "{src}");
-        }
-        // a third top-level comma is still a third coordinate
-        let e = parse_point("low(0.3..0.7, 3), 0.5, 1").unwrap_err();
-        assert!(e.message.contains("two coordinates"), "{e:?}");
-        // the parenthesised pair is the pair, not a call's parenthesis
-        assert!(parse_point("(1, 2)").is_ok());
-        assert!(matches!(
-            parse_point("(0.1), (0.2)").unwrap(),
-            Point::Pair { .. }
-        ));
-    }
-
-    #[test]
-    fn bad_points() {
-        assert!(parse_point("1 1").unwrap_err().message.contains("comma"));
-        assert!(parse_point("1,2,3").is_err());
-        assert!(parse_point("up").is_err());
-        let e = parse_point("1,ground").unwrap_err();
-        assert_eq!((e.start, e.end), (2, 8));
-        assert!(parse_point("50%,1").is_err());
-    }
 
     #[test]
     fn edge_paths() {

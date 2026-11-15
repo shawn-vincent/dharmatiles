@@ -390,24 +390,15 @@ fn not_a_range(message: impl Into<String>, help: &str) -> RangeRefusal {
 
 /// Read `src`, a control's value, as one range with its odds, as the
 /// language reads it (the odds are never worked out outside the program).
+/// Its units (`low(1dmm .. 6dmm, 11)`) are lowered as the reader lowers
+/// them, so the range is in design millimetres at the 35 mm reference.
 ///
 /// # Errors
 /// The value does not parse, is not one range (a number, a sum, a name), or
 /// its weighting is refused (`dt::range`, `dt::weighting`) as a document's
 /// would be.
-pub fn ranged(src: &str) -> Result<Ranged, RangeRefusal> {
+pub fn ranged(src: &str, units: crate::units::Units) -> Result<Ranged, RangeRefusal> {
     let e = crate::expr::parse(src.trim()).map_err(|e| read_refusal(src, &e.message))?;
-    ranged_expr(src, &e)
-}
-
-/// [`ranged`] for a control value of format 1, which has units after its
-/// numbers (`low(1dmm .. 6dmm, 11)`): they are lowered as the reader lowers
-/// them, so the range is in design millimetres at the 35 mm reference.
-///
-/// # Errors
-/// As [`ranged`].
-pub fn ranged_in(src: &str, units: crate::units::Units) -> Result<Ranged, RangeRefusal> {
-    let e = crate::expr::parse_units(src.trim()).map_err(|e| read_refusal(src, &e.message))?;
     let e = crate::units::lower(&e, crate::units::Base::Dmm, units, None).map_err(|e| {
         RangeRefusal {
             code: e.code.to_owned(),
@@ -461,7 +452,7 @@ fn ranged_expr(src: &str, e: &Expr) -> Result<Ranged, RangeRefusal> {
 /// that names things only the document knows.
 #[must_use]
 pub fn weighting_flaw_in(src: &str, units: crate::units::Units) -> Option<RangeRefusal> {
-    let e = crate::expr::parse_units(src.trim()).ok()?;
+    let e = crate::expr::parse(src.trim()).ok()?;
     let e = crate::units::lower(&e, crate::units::Base::Dmm, units, None).ok()?;
     if e.range_count() == 0 {
         return None;
@@ -479,12 +470,12 @@ pub fn weighting_flaw_in(src: &str, units: crate::units::Units) -> Option<RangeR
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expr::parse_v2;
+    use crate::expr::parse_height;
 
     fn lets(defs: &[(&str, &str)]) -> Lets {
         let mut l = Lets::default();
         for (n, src) in defs {
-            let e = parse_v2(src).unwrap();
+            let e = parse_height(src).unwrap();
             l.nums
                 .push(((*n).to_owned(), e.sample(&|_| None, 0.5).unwrap()));
             if e.range_count() > 0 {
@@ -495,7 +486,7 @@ mod tests {
     }
 
     fn dist(src: &str, l: &Lets) -> Dist {
-        match lower(&parse_v2(src).unwrap(), l, 0).unwrap() {
+        match lower(&parse_height(src).unwrap(), l, 0).unwrap() {
             Part::Dist(d) => d,
             other => panic!("{src} is not one range: {other:?}"),
         }
@@ -526,7 +517,7 @@ mod tests {
     }
 
     fn draw(src: &str, l: &Lets) -> Draw {
-        match lower(&parse_v2(src).unwrap(), l, 0).unwrap() {
+        match lower(&parse_height(src).unwrap(), l, 0).unwrap() {
             Part::Draw(d) => d,
             other => panic!("{src} is not a sum: {other:?}"),
         }
@@ -545,16 +536,16 @@ mod tests {
         assert_eq!(draw("2 * ([1 .. 2] + [3 .. 4])", &l).bounds(), (8.0, 12.0));
         assert_eq!(draw("-([1 .. 2] + [3 .. 4])", &l).bounds(), (-6.0, -4.0));
         assert_eq!(draw("[1 .. 2] - [3 .. 4]", &l).bounds(), (-3.0, -1.0));
-        let e = lower(&parse_v2("3 / s").unwrap(), &l, 0).unwrap_err();
+        let e = lower(&parse_height("3 / s").unwrap(), &l, 0).unwrap_err();
         assert!(e.message.contains("divides by a range"), "{e:?}");
-        let e = lower(&parse_v2("s / s").unwrap(), &l, 0).unwrap_err();
+        let e = lower(&parse_height("s / s").unwrap(), &l, 0).unwrap_err();
         assert!(e.message.contains("divides by a range"), "{e:?}");
     }
 
     #[test]
     fn a_strength_out_of_range_is_dt_range() {
         let l = lets(&[]);
-        let e = lower(&parse_v2("low(1..6, -2)").unwrap(), &l, 0).unwrap_err();
+        let e = lower(&parse_height("low(1..6, -2)").unwrap(), &l, 0).unwrap_err();
         assert_eq!(e.code, dt_lang::codes::RANGE);
         assert_eq!(e.message, "low's ratio must be above 0, not -2");
     }
@@ -564,12 +555,14 @@ mod tests {
         // not reachable from a document (a name is declared first), but the
         // walk is bounded all the same
         let mut l = lets(&[]);
-        l.draws.push(("a".into(), parse_v2("[1 .. a]").unwrap()));
+        l.draws
+            .push(("a".into(), parse_height("[1 .. a]").unwrap()));
         assert!(lower(&Expr::Name("a".into()), &l, 0).is_err());
     }
 
     #[test]
     fn a_value_reads_as_one_range_and_says_what_it_is() {
+        let ranged = |s: &str| ranged(s, crate::units::Units::default());
         let r = ranged("low(1..6, 12.5)").unwrap();
         assert_eq!((r.function.as_str(), r.args.clone()), ("low", vec![12.5]));
         assert_eq!(r.dist.written(), "low(1..6, 12.5)");

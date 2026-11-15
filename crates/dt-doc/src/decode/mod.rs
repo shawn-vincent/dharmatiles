@@ -1306,7 +1306,7 @@ impl<'k> Decoder<'k> {
             return None;
         };
         let at = self.inner_at(e, s);
-        let x = match expr::parse_units(s) {
+        let x = match expr::parse(s) {
             Ok(x) => x,
             Err(err) => {
                 self.err(
@@ -1661,7 +1661,7 @@ impl<'k> Decoder<'k> {
             return None;
         };
         let at = self.inner_at(e, s);
-        let x = match expr::parse_units(s) {
+        let x = match expr::parse(s) {
             Ok(x) => x,
             Err(err) => {
                 self.err(

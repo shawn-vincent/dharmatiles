@@ -16,7 +16,7 @@
 use miette::SourceSpan;
 
 use crate::dim::Dim;
-use crate::expr::{Expr, Unit};
+use crate::expr::Expr;
 use crate::place::{Along, Point, Side};
 use crate::schema::{self, Control, Element, Kind, Word};
 
@@ -517,24 +517,16 @@ impl Setting {
 pub struct Num {
     /// The expression; a percent is divided by 100 when sampled.
     pub expr: Expr,
-    /// `(mm)` (a check) or `(h)` (wall tops).
-    pub unit: Option<Unit>,
 }
 
 impl Num {
-    /// The value at the DungeonBlocks reference for the uniform draw `u`:
-    /// `(h)` values are multiplied by [`schema::H_MM`].  Names resolve
-    /// through `env` (levels in mm, parameters).
+    /// The value at the DungeonBlocks reference for the uniform draw `u`.
+    /// Names resolve through `env` (levels in mm, parameters).
     ///
     /// # Errors
     /// The first name `env` does not know.
     pub fn sample(&self, env: &dyn Fn(&str) -> Option<f64>, u: f64) -> Result<f64, String> {
-        let v = self.expr.sample(env, u)?;
-        Ok(if self.unit == Some(Unit::H) {
-            v * schema::H_MM
-        } else {
-            v
-        })
+        self.expr.sample(env, u)
     }
 
     /// One number in mm at the reference, its names resolved as the tile's

@@ -901,7 +901,7 @@ fn narrow(r: &RegionRead<'_>, parents: usize) -> Option<miette::SourceSpan> {
             }
         }
         let end = end?;
-        if let Ok(e) = dt_doc::expr::parse_v2(&whole[start..end])
+        if let Ok(e) = dt_doc::expr::parse_height(&whole[start..end])
             && r.table.parent_flaw(&e, parents).is_some()
         {
             return Some(miette::SourceSpan::new((off + start).into(), end - start));

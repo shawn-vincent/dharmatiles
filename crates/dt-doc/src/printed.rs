@@ -4,7 +4,7 @@
 //! The editor shows each length as written (`7dmm`) and, beside it, what it
 //! prints on the current target (`5.08 mm` on OpenLOCK).  This is the one
 //! place that works it out: the value is read with the document's own
-//! reader ([`crate::expr::parse_units`]), its units lowered with the
+//! reader ([`crate::expr::parse`]), its units lowered with the
 //! target's square and layer ([`crate::units::lower`]), and the result
 //! evaluated by the one evaluator ([`Expr::eval`], through
 //! [`crate::consts::ConstTable::scalar`], so formulas, `$` heights and
@@ -17,7 +17,7 @@
 //! writes `6.89dmm`, and on DungeonBlocks writes `5dmm`.
 
 use crate::consts::ConstTable;
-use crate::expr::{BinOp, Expr, UnitWord, parse_units};
+use crate::expr::{BinOp, Expr, UnitWord, parse};
 use crate::schema::{Axis, SQUARE_MM};
 use crate::units::{Base, Units, Want, expect, lower};
 
@@ -123,7 +123,7 @@ pub fn printed_size(
     if !matches!(axis, Axis::Dmm | Axis::Height) {
         return None;
     }
-    let x = parse_units(typed.trim()).ok()?;
+    let x = parse(typed.trim()).ok()?;
     let names = |_: &str| None;
     expect(&x, Want::Length, &names, false).ok()?;
     if same_as_written(&x, units) {
@@ -165,7 +165,7 @@ pub fn set_printed(typed: &str, end: usize, mm: f64, units: Units) -> Result<Str
     if !mm.is_finite() {
         return refuse("a printed size is a number of mm");
     }
-    let x = parse_units(typed.trim()).map_err(|e| SetError(e.message))?;
+    let x = parse(typed.trim()).map_err(|e| SetError(e.message))?;
     let ends = match literal_ends(&x) {
         Some(e) if !typed.trim().starts_with('[') => e,
         _ => {

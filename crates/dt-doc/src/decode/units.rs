@@ -200,7 +200,7 @@ impl Decoder<'_> {
     /// One half of a point as written: a length (a `%` is a share of the
     /// frame's size across or down), kinds checked, plain names in place.
     fn half_expr(&mut self, text: &str, span: SourceSpan, ctx: &Ctx) -> Option<Expr> {
-        let parsed = match expr::parse_units(text) {
+        let parsed = match expr::parse(text) {
             Ok(x) => x,
             Err(err) => {
                 self.err(
@@ -338,7 +338,7 @@ impl Decoder<'_> {
         size: Option<(f64, f64)>,
         ctx: &Ctx,
     ) -> Option<Point> {
-        let parsed = match expr::parse_v2_units(t) {
+        let parsed = match expr::parse_height(t) {
             Ok(x) => x,
             Err(err) => {
                 self.err(

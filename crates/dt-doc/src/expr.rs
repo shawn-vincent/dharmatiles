@@ -1,61 +1,20 @@
-//! The small expression language used inside quoted values.
+//! The small expression language inside quoted values: a control's value
+//! (`size="low(1dmm .. 6dmm, 11)"`) and a height (`top="[1dmm .. 2dmm] + ground"`).
 //!
-//! ```text
-//! value  := sum ( ".." sum )?        a range "lo..hi", drawn afresh per thing
-//! sum    := prod ( ("+" | "-") prod )*
-//! prod   := unary ( ("*" | "/") unary )*
-//! unary  := "-" unary | atom
-//! atom   := number "%"? | name | "(" sum ")" | weighting
-//! weighting := ("flat" | "low" | "high" | "bell" | "peak")
-//!              "(" range ( "," number )* ")"
-//! range  := sum ".." sum | "[" sum ".." sum "]"
-//! ```
+//! The grammar is written once, in the language guide: `docs/guide/values.html`
+//! ("A quoted value is a tiny expression"), with the weightings on
+//! `docs/guide/weightings.html` and units on `docs/guide/units.html`.  This
+//! module is its one reader: [`parse`] reads a control's value and
+//! [`parse_height`] a height, which differs in three ways: its names are
+//! camelCase (a hyphen subtracts), a range is always in brackets, and it
+//! calls functions (`sin cos abs min max clamp smooth`, `parent`, the
+//! coordinates).  The word tables (functions, weightings, coordinates, units)
+//! are dt-lang's.
 //!
-//! Units are never written: every control knows its own unit, and
-//! sizes are design millimetres (dmm), at the DungeonBlocks reference.  `%` is the one
-//! suffix, because a share is a percent (`cover="85%"`).  An old
-//! `"4.5mm"` suffix and the `"1..6^2"` skew are gone; both give an error
-//! that says what to write instead (`4.5`, and `size="low(1..6, 4)"`).
-//!
-//! A name is a parameter of the enclosing definition or, where a level is
-//! expected, a named level (`ground`, `wall-top`, a tile's own `levels`).
-//! A weighting call (`low(1..6, 4)`) weights a range; it is read in both
-//! dialects.  Nothing else is a call in a quoted control value.
+//! [`Expr::eval`] is the one walk over what is read, and an [`Algebra`] says
+//! what it means: a plain number, a rolled value, or an interval with its odds.
 
 use std::fmt;
-
-/// A type annotation written before a plain value: `(mm)4.5` or `(h)1.2`.
-///
-/// `(mm)` is only a check: the value is millimetres either way.  `(h)`
-/// is the opt-in wall-relative scale, where 1 is the 33.1 mm wall top.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Unit {
-    /// `(mm)`: millimetres at the DungeonBlocks reference (a check only).
-    Mm,
-    /// `(h)`: fractions of the 33.1 mm wall top.
-    H,
-}
-
-impl Unit {
-    /// Parse an annotation word.
-    #[must_use]
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "mm" => Some(Self::Mm),
-            "h" => Some(Self::H),
-            _ => None,
-        }
-    }
-
-    /// The annotation as written, without parentheses.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Mm => "mm",
-            Self::H => "h",
-        }
-    }
-}
 
 /// A unit word (format 1): a length, an angle, `pi` (a plain number), or
 /// `%` as the unit a coordinate counts in.
@@ -188,7 +147,7 @@ pub enum Expr {
     },
     /// A function call, `cos(720 * x)`: `sin`, `cos` (degrees), `abs`,
     /// `min`, `max`, `clamp` and `smooth`; in format 1 also the coordinates
-    /// and `point` and `polar` ([`COORD_CALLS`]).  Only in [`parse_v2`]
+    /// and `point` and `polar` ([`COORD_CALLS`]).  Only in [`parse_height`]
     /// values (and format 1's).
     Call {
         /// The function.
@@ -262,7 +221,7 @@ enum Tok {
     Percent,
 }
 
-fn lex(src: &str, v2: bool, units: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
+fn lex(src: &str, v2: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
     let b = src.as_bytes();
     let mut out = Vec::new();
     let mut i = 0;
@@ -295,22 +254,6 @@ fn lex(src: &str, v2: bool, units: bool) -> Result<Vec<(Tok, usize, usize)>, Exp
             let percent = b.get(i) == Some(&b'%');
             if percent {
                 i += 1;
-            } else if !units && b.get(i).is_some_and(u8::is_ascii_alphabetic) {
-                // A unit glued on: "4.5mm".  Units are not written.
-                let unit_start = i;
-                while i < b.len() && b[i].is_ascii_alphabetic() {
-                    i += 1;
-                }
-                let unit = &src[unit_start..i];
-                return Err(ExprError {
-                    message: format!(
-                        "units are not written: `{text}{unit}` is just `{text}`; every control knows its unit (sizes are dmm, the design millimetre)"
-                    ),
-                    code: None,
-                    help: None,
-                    start: unit_start,
-                    end: i,
-                });
             }
             out.push((Tok::Num(value, percent), start, i));
             continue;
@@ -365,7 +308,7 @@ fn lex(src: &str, v2: bool, units: bool) -> Result<Vec<(Tok, usize, usize)>, Exp
                 i += 1;
                 Tok::Comma
             }
-            b'%' if units => {
+            b'%' => {
                 i += 1;
                 Tok::Percent
             }
@@ -394,8 +337,6 @@ struct Parser<'a> {
     pos: usize,
     len: usize,
     v2: bool,
-    /// Format 1: units follow numbers (`8dmm`), and the coordinate calls exist.
-    units: bool,
     /// A control value with two bare ranges or more, or one beside a bracket
     /// or a call: `..` binds tighter than `+ - * /`, so `1..2 + 3..4` is two
     /// ranges added.  Off, a bare range reaches over sums, as ever
@@ -528,15 +469,13 @@ impl Parser<'_> {
                     if self.v2
                         && (n == "parent"
                             || FUNCTIONS.iter().any(|(f, _)| *f == n)
-                            || (self.units && COORD_CALLS.iter().any(|(f, _)| *f == n)))
+                            || COORD_CALLS.iter().any(|(f, _)| *f == n))
                     {
                         return self.call(n);
                     }
                     return Err(unknown_function(&n, at, self.v2));
                 }
-                if self.units
-                    && let Some(u) = UnitWord::parse(&n)
-                {
+                if let Some(u) = UnitWord::parse(&n) {
                     // `pi` is a number; the other units follow a number
                     if u == UnitWord::Pi {
                         return self.juxtapose(Expr::Unit(u));
@@ -596,9 +535,6 @@ impl Parser<'_> {
     /// lists the units; a call's name, a minus and a `$` name are not units, so
     /// they never join (`sin (x)` stays a call, `a -b` subtracts).
     fn juxtapose(&mut self, mut e: Expr) -> Result<Expr, ExprError> {
-        if !self.units {
-            return Ok(e);
-        }
         loop {
             let at = self.here();
             let Some(Tok::Name(n)) = self.peek().cloned() else {
@@ -960,23 +896,21 @@ impl Parser<'_> {
     /// A call's argument: a value, or in format 1 a unit by itself (`sq`,
     /// `%`) where a coordinate counts in one.
     fn call_arg(&mut self) -> Result<Expr, ExprError> {
-        if self.units {
-            let ends = |t: Option<&(Tok, usize, usize)>| {
-                matches!(t.map(|t| &t.0), Some(Tok::Comma | Tok::RParen))
-            };
-            match self.peek().cloned() {
-                Some(Tok::Percent) if ends(self.toks.get(self.pos + 1)) => {
-                    self.pos += 1;
-                    return Ok(Expr::Unit(UnitWord::Pct));
-                }
-                Some(Tok::Name(n)) if ends(self.toks.get(self.pos + 1)) => {
-                    if let Some(u) = UnitWord::parse(&n) {
-                        self.pos += 1;
-                        return Ok(Expr::Unit(u));
-                    }
-                }
-                _ => {}
+        let ends = |t: Option<&(Tok, usize, usize)>| {
+            matches!(t.map(|t| &t.0), Some(Tok::Comma | Tok::RParen))
+        };
+        match self.peek().cloned() {
+            Some(Tok::Percent) if ends(self.toks.get(self.pos + 1)) => {
+                self.pos += 1;
+                return Ok(Expr::Unit(UnitWord::Pct));
             }
+            Some(Tok::Name(n)) if ends(self.toks.get(self.pos + 1)) => {
+                if let Some(u) = UnitWord::parse(&n) {
+                    self.pos += 1;
+                    return Ok(Expr::Unit(u));
+                }
+            }
+            _ => {}
         }
         self.sum()
     }
@@ -998,25 +932,6 @@ impl Parser<'_> {
         self.pos += 1; // the `)`
         Ok(Expr::Call { name, args })
     }
-}
-
-/// Parse an expression string.
-///
-/// # Errors
-/// Returns the first problem with its byte range inside `src`.
-pub fn parse(src: &str) -> Result<Expr, ExprError> {
-    parse_with(src, false)
-}
-
-/// Parse a height or length of the heights language: names are camelCase
-/// (a hyphen subtracts), a range is `[low .. high]` anywhere, and the
-/// functions `sin cos abs min max clamp smooth` are called with
-/// parentheses.
-///
-/// # Errors
-/// Returns the first problem with its byte range inside `src`.
-pub fn parse_v2(src: &str) -> Result<Expr, ExprError> {
-    parse_with(src, true)
 }
 
 /// True when a control value holds two bare ranges or more, or one beside
@@ -1041,37 +956,35 @@ fn binds_tight(toks: &[(Tok, usize, usize)]) -> bool {
     bare >= 2 || (bare == 1 && other)
 }
 
-/// [`parse`] a control value of format 1: the same, with units after
-/// numbers (`6dmm..10dmm`, `low(1dmm .. 6dmm, 11)`).
+/// Read a control's value: a number with its unit (`8dmm`, `2 pi rad`), a
+/// percent, a name, a range, a weighted range or a list
+/// (`docs/guide/values.html`).
 ///
 /// # Errors
 /// Returns the first problem with its byte range inside `src`.
-pub fn parse_units(src: &str) -> Result<Expr, ExprError> {
-    parse_full(src, false, true)
+pub fn parse(src: &str) -> Result<Expr, ExprError> {
+    parse_full(src, false)
 }
 
-/// [`parse_v2`] for format 1: units after numbers and juxtaposed (`8dmm`,
-/// `2 pi rad`, `(2 * pi) rad`), and the coordinate calls `x($tile, sq)`,
-/// `d($region, %)`, `a(…)`, `point(…)` and `polar(…)`.
+/// Read a height (`top=`, a pin, a `let`): as [`parse`], but its names are
+/// camelCase (a hyphen subtracts), a range is always in brackets, and it
+/// calls functions (`sin cos abs min max clamp smooth`, `parent`, and the
+/// coordinates `x($tile, sq)`, `d($region, %)`, `a(…)`, `point(…)`,
+/// `polar(…)`).
 ///
 /// # Errors
 /// Returns the first problem with its byte range inside `src`.
-pub fn parse_v2_units(src: &str) -> Result<Expr, ExprError> {
-    parse_full(src, true, true)
+pub fn parse_height(src: &str) -> Result<Expr, ExprError> {
+    parse_full(src, true)
 }
 
-fn parse_with(src: &str, v2: bool) -> Result<Expr, ExprError> {
-    parse_full(src, v2, false)
-}
-
-fn parse_full(src: &str, v2: bool, units: bool) -> Result<Expr, ExprError> {
-    let toks = lex(src, v2, units)?;
+fn parse_full(src: &str, v2: bool) -> Result<Expr, ExprError> {
+    let toks = lex(src, v2)?;
     let mut p = Parser {
         toks: &toks,
         pos: 0,
         len: src.len(),
         v2,
-        units,
         tight: !v2 && binds_tight(&toks),
     };
     let e = p.value()?;
@@ -1792,15 +1705,6 @@ mod tests {
     }
 
     #[test]
-    fn units_are_not_written() {
-        let err = parse("4.5mm").unwrap_err();
-        assert_eq!((err.start, err.end), (3, 5));
-        assert!(err.message.contains("units are not written"), "{err:?}");
-        assert!(err.message.contains("just `4.5`"), "{err:?}");
-        assert!(parse("1..6deg").is_err());
-    }
-
-    #[test]
     fn percent_divides() {
         let e = parse("20%").unwrap();
         assert!(close(e.sample(&none, 0.0).unwrap(), 0.2));
@@ -1887,31 +1791,36 @@ mod tests {
 
     #[test]
     fn heights_language() {
-        let e = parse_v2("groundHeight + [1 .. 2]").unwrap();
+        let e = parse_height("groundHeight + [1 .. 2]").unwrap();
         assert!(e.is_range());
         assert_eq!(e.names(), vec!["groundHeight"]);
         // a hyphen subtracts, it is never part of a name
-        let e = parse_v2("groundHeight-2").unwrap();
+        let e = parse_height("groundHeight-2").unwrap();
         assert_eq!(e.names(), vec!["groundHeight"]);
         let env = |n: &str| (n == "groundHeight").then_some(5.0);
         assert!(close(e.sample(&env, 0.0).unwrap(), 3.0));
         // a bare range is refused, with the brackets named
-        let err = parse_v2("1 .. 2").unwrap_err();
+        let err = parse_height("1 .. 2").unwrap_err();
         assert!(err.message.contains("brackets"), "{err:?}");
-        assert!(parse_v2("[1 .. 2").is_err());
-        assert!(parse_v2("[1]").is_err());
-        let e = parse_v2("clamp(x, 0, 1) + max(1, 2)").unwrap();
+        assert!(parse_height("[1 .. 2").is_err());
+        assert!(parse_height("[1]").is_err());
+        let e = parse_height("clamp(x, 0, 1) + max(1, 2)").unwrap();
         let env = |n: &str| (n == "x").then_some(3.0);
         assert!(close(e.sample(&env, 0.0).unwrap(), 3.0));
-        assert!(parse_v2("sin(1, 2)").unwrap().sample(&none, 0.0).is_err());
-        let err = parse_v2("tan(1)").unwrap_err();
+        assert!(
+            parse_height("sin(1, 2)")
+                .unwrap()
+                .sample(&none, 0.0)
+                .is_err()
+        );
+        let err = parse_height("tan(1)").unwrap_err();
         assert_eq!(err.code, Some(dt_lang::codes::VALUE));
         assert!(err.message.contains("unknown function `tan`"), "{err:?}");
         assert!(err.help.as_deref().unwrap().contains("sin, cos"), "{err:?}");
     }
 
     fn weighted(src: &str, v2: bool) -> (String, Vec<f64>, Expr) {
-        let e = if v2 { parse_v2(src) } else { parse(src) }.unwrap();
+        let e = if v2 { parse_height(src) } else { parse(src) }.unwrap();
         let Expr::Weighted {
             name, args, range, ..
         } = e
@@ -1939,11 +1848,11 @@ mod tests {
             }
         }
         // ends are expressions, names and ranges' arithmetic included
-        let e = parse_v2("low([groundHeight .. groundHeight + 2.5], 3)").unwrap();
+        let e = parse_height("low([groundHeight .. groundHeight + 2.5], 3)").unwrap();
         assert_eq!(e.names(), vec!["groundHeight", "groundHeight"]);
         assert_eq!(e.range_count(), 1);
         // a weighting sits in arithmetic in the heights language
-        let e = parse_v2("2 * low(1..6) + [-0.3 .. 0.3]").unwrap();
+        let e = parse_height("2 * low(1..6) + [-0.3 .. 0.3]").unwrap();
         assert_eq!(e.range_count(), 2);
         // it reads back
         for s in ["low(1..6, 11)", "bell(1..6, 0.2, 0.5)", "flat(2..4)"] {
@@ -1969,14 +1878,14 @@ mod tests {
             ("low(1..6, 2, 3)", false, "at most"),
             ("flat(1..6, 2)", true, "at most"),
         ] {
-            let err = if v2 { parse_v2(src) } else { parse(src) }.unwrap_err();
+            let err = if v2 { parse_height(src) } else { parse(src) }.unwrap_err();
             assert_eq!(err.code, Some(dt_lang::codes::WEIGHTING), "{src}: {err:?}");
             assert!(err.message.contains(what), "{src}: {err:?}");
             assert!(err.help.is_some(), "{src}");
         }
         for v2 in [false, true] {
             let err = if v2 {
-                parse_v2("bel(1..6)")
+                parse_height("bel(1..6)")
             } else {
                 parse("bel(1..6)")
             }
@@ -2062,7 +1971,7 @@ mod tests {
     #[test]
     fn the_rest_of_the_set_and_lists_parse_in_both_dialects() {
         for v2 in [false, true] {
-            let p = |src: &str| if v2 { parse_v2(src) } else { parse(src) };
+            let p = |src: &str| if v2 { parse_height(src) } else { parse(src) };
             for (src, name, args) in [
                 ("ends(1..6, 2, 0.25)", "ends", vec![2.0, 0.25]),
                 ("ends([1 .. 6])", "ends", vec![]),
@@ -2167,7 +2076,7 @@ mod tests {
         assert!(parse("flat(1..6)").unwrap().weighted().is_none());
         assert!(parse("low(1..6, 1)").unwrap().weighted().is_none());
         assert!(parse("1..6").unwrap().weighted().is_none());
-        let e = parse_v2("low([groundHeight .. groundHeight + 2.5]) + 1").unwrap();
+        let e = parse_height("low([groundHeight .. groundHeight + 2.5]) + 1").unwrap();
         assert_eq!(
             e.unweighted_text(),
             "[groundHeight .. groundHeight + 2.5] + 1"
@@ -2177,7 +2086,7 @@ mod tests {
     #[test]
     fn every_range_is_its_own_draw() {
         // two ranges, each at its own position: [1 .. 2] - [3 .. 4] is not -2
-        let e = parse_v2("[1 .. 2] - [3 .. 4]").unwrap();
+        let e = parse_height("[1 .. 2] - [3 .. 4]").unwrap();
         let mut seen = Vec::new();
         let at = [0.0, 1.0];
         let v = e

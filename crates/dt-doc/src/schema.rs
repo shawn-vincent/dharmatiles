@@ -234,7 +234,7 @@ impl Control {
             return Some(Value::Word(w));
         }
         let expr = crate::expr::parse(self.default).ok()?;
-        Some(Value::Num(Num { expr, unit: None }))
+        Some(Value::Num(Num { expr }))
     }
 
     /// The numbers it takes, for a table or a hint: "20 to 120",

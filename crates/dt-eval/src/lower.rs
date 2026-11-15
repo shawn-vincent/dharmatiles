@@ -10,11 +10,10 @@
 
 use dt_doc::expr::Expr;
 use dt_doc::model::{Num, Value};
-use dt_doc::schema;
 // the lowering itself is dt-doc's, so the browser rolls a range as a build does
 pub(crate) use dt_doc::lower::{Lets, Refused, coordinate};
 use dt_doc::lower::{Part, lower};
-use dt_value::{Dist, Draw, Op, Weighting};
+use dt_value::Weighting;
 
 /// A value lowered, and a note when a weighting could not matter.
 #[derive(Debug, Clone, PartialEq)]
@@ -59,16 +58,10 @@ pub(crate) const TREE_HEIGHT_MM: (f64, f64) = (20.0, 120.0);
 pub(crate) fn tree_top(e: &Expr, lets: &Lets) -> Result<(&'static str, Lowered), Refused> {
     let help = "a tree's top is `$bottom + 40dmm` (40dmm over the ground at its foot) or a height above zero such as `$groundHeight + 40dmm`";
     let Some(rest) = over_bottom(e).map_err(|m| Refused::mistake(m).with_help(help))? else {
-        let num = Num {
-            expr: e.clone(),
-            unit: None,
-        };
+        let num = Num { expr: e.clone() };
         return Ok(("top", number(&num, lets)?));
     };
-    let num = Num {
-        expr: rest,
-        unit: None,
-    };
+    let num = Num { expr: rest };
     let low = number(&num, lets)?;
     let (lo, hi) = match &low.value {
         dt_elements::Value::Number(v) => (*v, *v),
@@ -163,22 +156,10 @@ fn number(n: &Num, lets: &Lets) -> Result<Lowered, Refused> {
             dt_elements::Value::Number(n.mm(&lets.nums)?)
         }));
     }
-    let k = if n.unit == Some(dt_doc::expr::Unit::H) {
-        schema::H_MM
-    } else {
-        1.0
-    };
     match lower(&n.expr, lets, 0)? {
-        Part::Num(v) => Ok(Lowered::plain(dt_elements::Value::Number(v * k))),
-        Part::Draw(d) => Ok(Lowered::plain(dt_elements::Value::Draw(
-            if n.unit != Some(dt_doc::expr::Unit::H) {
-                d
-            } else {
-                Draw::Bin(Op::Mul, Box::new(d), Box::new(Draw::Num(k)))
-            },
-        ))),
+        Part::Num(v) => Ok(Lowered::plain(dt_elements::Value::Number(v))),
+        Part::Draw(d) => Ok(Lowered::plain(dt_elements::Value::Draw(d))),
         Part::Dist(d) => {
-            let d = Dist::new(d.lo * k, d.hi * k, d.weighting);
             let note = (d.is_point() && !matches!(d.weighting, Weighting::Flat))
                 .then(|| format!("`{}` has no width, so its weighting has no effect", n.expr));
             Ok(Lowered {

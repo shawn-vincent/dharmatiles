@@ -543,7 +543,7 @@ fn place_ref(t: &crate::Tile, name: &str, rd: Reading) -> PlaceRef {
 /// pair or a `name` (a corner or edge word, a declared or built-in point).
 /// A coordinate drawn from a range or written as an expression is placed
 /// where its range middles; a name nothing declares has no place.  The
-/// reading is the program's own ([`dt_doc::place::parse_point`]), not the page's.
+/// reading is the program's own (the decoder's), not the page's.
 fn locate(t: &crate::Tile, text: &str, rd: Reading) -> (MarkerKind, Option<[f64; 2]>) {
     use dt_doc::place::{BUILTIN_POINTS, Point, builtin_point};
     let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));

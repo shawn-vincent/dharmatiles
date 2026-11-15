@@ -159,7 +159,7 @@ impl Decoder<'_> {
         let expr = match e.value() {
             KdlValue::Integer(i) => Expr::num(i.to_string().parse().unwrap_or(f64::NAN)),
             KdlValue::Float(f) => Expr::num(*f),
-            KdlValue::String(s) => match expr::parse_v2_units(s) {
+            KdlValue::String(s) => match expr::parse_height(s) {
                 Ok(x) => x,
                 Err(err) => {
                     let at = self.inner_at(e, s);
@@ -1176,7 +1176,7 @@ impl Decoder<'_> {
             }
         };
         let at = self.inner_at(e, &text);
-        let x = match expr::parse_units(&text) {
+        let x = match expr::parse(&text) {
             Ok(x) => x,
             Err(err) => {
                 self.err(

@@ -658,7 +658,7 @@ fn factor(u: UnitWord, base: Base, units: Units) -> Result<f64, KindError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expr::{parse_units, parse_v2_units};
+    use crate::expr::{parse, parse_height};
 
     fn names(n: &str) -> Option<Kind> {
         match n {
@@ -670,7 +670,7 @@ mod tests {
     }
 
     fn k(s: &str) -> Result<Kind, KindError> {
-        kind_of(&parse_v2_units(s).unwrap(), &names, false)
+        kind_of(&parse_height(s).unwrap(), &names, false)
     }
 
     #[test]
@@ -718,11 +718,11 @@ mod tests {
 
     #[test]
     fn a_bare_number_says_what_to_write() {
-        let e = expect(&parse_units("8").unwrap(), Want::Length, &names, false).unwrap_err();
+        let e = expect(&parse("8").unwrap(), Want::Length, &names, false).unwrap_err();
         assert!(e.help.as_ref().unwrap().contains("8dmm or 8mm"), "{e:?}");
-        assert!(expect(&parse_units("0").unwrap(), Want::Length, &names, false).is_ok());
-        assert!(expect(&parse_units("0").unwrap(), Want::Angle, &names, false).is_ok());
-        let e = expect(&parse_units("90").unwrap(), Want::Angle, &names, false).unwrap_err();
+        assert!(expect(&parse("0").unwrap(), Want::Length, &names, false).is_ok());
+        assert!(expect(&parse("0").unwrap(), Want::Angle, &names, false).is_ok());
+        let e = expect(&parse("90").unwrap(), Want::Angle, &names, false).unwrap_err();
         assert!(e.help.as_ref().unwrap().contains("90deg"), "{e:?}");
     }
 
@@ -730,7 +730,7 @@ mod tests {
     fn lowered_to_the_reference() {
         let u = Units::default();
         let low = |s: &str, base| {
-            let e = parse_v2_units(s).unwrap();
+            let e = parse_height(s).unwrap();
             lower(&e, base, u, None)
                 .unwrap()
                 .sample(&|_| Some(1.0), 0.0)
@@ -751,7 +751,7 @@ mod tests {
             square_mm: 25.4,
             layer_mm: 0.2,
         };
-        let e = parse_v2_units("1mm").unwrap();
+        let e = parse_height("1mm").unwrap();
         let v = lower(&e, Base::Dmm, ol, None)
             .unwrap()
             .sample(&|_| None, 0.0)

@@ -898,7 +898,7 @@ pub fn explore(
         return Err(JsError::new("a histogram needs at least one bin"));
     }
     let units = units_for(system)?;
-    let r = dt_doc::lower::ranged_in(typed, units).map_err(|r| {
+    let r = dt_doc::lower::ranged(typed, units).map_err(|r| {
         let help = r.help.map(|h| format!(" ({h})")).unwrap_or_default();
         JsError::new(&format!("{}: {}{help}", r.code, r.message))
     })?;

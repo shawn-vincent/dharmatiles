@@ -209,7 +209,7 @@ fn unify(a: Dim, b: Dim, what: &str) -> Result<Dim, DimError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expr::parse_v2;
+    use crate::expr::parse_height;
 
     fn names(n: &str) -> Option<Dim> {
         match n {
@@ -222,7 +222,7 @@ mod tests {
     }
 
     fn dim(s: &str) -> Result<Dim, DimError> {
-        dim_of(&parse_v2(s).unwrap(), &names)
+        dim_of(&parse_height(s).unwrap(), &names)
     }
 
     #[test]

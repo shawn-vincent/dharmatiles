@@ -4,7 +4,7 @@ use kdl::{KdlEntry, KdlValue};
 
 use super::{Ctx, Decoder, sub_span, units, value_span};
 use crate::elements::TAGS;
-use crate::expr::{self, Expr, Unit};
+use crate::expr::{self, Expr};
 use crate::model::{Num, Spanned, Value};
 use crate::schema::{Axis, Control, Refusal, Word, did_you_mean};
 
@@ -176,46 +176,9 @@ impl Decoder<'_> {
             axis.describe()
         };
         if let Some(t) = e.ty() {
-            self.err(
-                dt_lang::codes::UNIT,
-                t.span(),
-                format!("`({})` is not written in format 1", t.value()),
-                "an annotation",
-            )
-            .help = Some(
-                "write the unit after the number, in a string: `\"4.5dmm\"`; `(h)` is gone"
-                    .to_owned(),
-            );
+            self.annotation(t);
             return None;
         }
-        let unit = match e.ty() {
-            None => None,
-            Some(t) => match Unit::parse(t.value()) {
-                Some(u) if axis == Axis::Dmm => Some(u),
-                Some(u) => {
-                    self.err(
-                        dt_lang::codes::UNIT,
-                        span,
-                        format!("`({})` doesn't fit `{owner} {name}`", u.as_str()),
-                        format!("{name} is {kind}"),
-                    )
-                    .help = Some(format!(
-                        "(mm) and (h) are for sizes and levels; write `{name}` without it"
-                    ));
-                    return None;
-                }
-                None => {
-                    self.err(
-                        dt_lang::codes::UNIT,
-                        t.span(),
-                        format!("`({})` is not an annotation", t.value()),
-                        "not (mm) or (h)",
-                    )
-                    .help = Some(UNIT_HELP.to_owned());
-                    return None;
-                }
-            },
-        };
         let (x, inner) = match e.value() {
             KdlValue::Null => {
                 self.err(
@@ -241,7 +204,7 @@ impl Decoder<'_> {
             }
             KdlValue::String(s) => {
                 let at = self.inner_at(e, s);
-                let parsed = expr::parse_units(s);
+                let parsed = expr::parse(s);
                 match parsed {
                     Ok(x) => (x, sub_span(span, at, at + s.len())),
                     Err(err) => {
@@ -372,33 +335,47 @@ impl Decoder<'_> {
                 .0
         };
         if x.names().is_empty()
-            && let Some(r) = range_flaw(&x, unit, axis, k, (owner, name))
+            && let Some(r) = range_flaw(&x, axis, k, (owner, name))
         {
             self.err(dt_lang::codes::RANGE, span, r.message, r.label)
                 .help = r.help;
             return None;
         }
         Some(Spanned {
-            value: Num { expr: x, unit },
+            value: Num { expr: x },
             span,
         })
+    }
+
+    /// A type annotation on a value (`(mm)4.5`): format 1 writes the unit
+    /// after the number instead.
+    fn annotation(&mut self, t: &kdl::KdlIdentifier) {
+        self.err(
+            dt_lang::codes::UNIT,
+            t.span(),
+            format!("`({})` is not written in format 1", t.value()),
+            "an annotation",
+        )
+        .help = Some("write the unit after the number, in a string: `\"4.5dmm\"`".to_owned());
     }
 
     /// A value nothing types: a parameter default whose parameter fills
     /// no known control, or an argument to such a parameter.
     pub(crate) fn untyped(&mut self, e: &KdlEntry) -> Option<Spanned<Value>> {
         let span = value_span(e);
-        let unit = e.ty().and_then(|t| Unit::parse(t.value()));
+        if let Some(t) = e.ty() {
+            self.annotation(t);
+            return None;
+        }
         let value = match e.value() {
             KdlValue::Bool(b) => Value::Bool(*b),
             v @ (KdlValue::Integer(_) | KdlValue::Float(_)) => Value::Num(Num {
                 expr: Expr::num(as_f64(v).unwrap_or(f64::NAN)),
-                unit,
             }),
             KdlValue::String(s) => {
                 // format 1: a value with a unit is read in the references
                 // (a length in design millimetres, an angle in degrees)
-                let parsed = expr::parse_units(s).and_then(|x| {
+                let parsed = expr::parse(s).and_then(|x| {
                     crate::units::lower(&x, crate::units::Base::Dmm, self.known.units(), None)
                         .map_err(|ke| expr::ExprError {
                             message: ke.message,
@@ -409,7 +386,7 @@ impl Decoder<'_> {
                         })
                 });
                 match parsed {
-                    Ok(x) if x.names().is_empty() => Value::Num(Num { expr: x, unit }),
+                    Ok(x) if x.names().is_empty() => Value::Num(Num { expr: x }),
                     _ => Value::Text(s.clone()),
                 }
             }
@@ -454,19 +431,12 @@ fn percent_flaw(
 /// limits (`(h)` is in wall tops, checked in mm).
 fn range_flaw(
     x: &Expr,
-    unit: Option<Unit>,
     axis: Axis,
     k: Option<&'static Control>,
     (owner, name): (&str, &str),
 ) -> Option<Refusal> {
     // Counts are whole; sensible limits catch slips.
     let (lo, hi) = x.bounds(&|_| None).ok()?;
-    let mult = if unit == Some(Unit::H) {
-        crate::schema::H_MM
-    } else {
-        1.0
-    };
-    let (lo, hi) = (lo * mult, hi * mult);
     match k {
         Some(k) => k.check(owner, lo, hi, x.is_range()),
         None => crate::schema::check(axis, None, true, (owner, name), (lo, hi, x.is_range())),
@@ -493,7 +463,7 @@ pub fn check_text_in(
     if t.is_empty() {
         return None;
     }
-    let x = match expr::parse_units(t) {
+    let x = match expr::parse(t) {
         Ok(x) => x,
         Err(_) if !axis.is_numeric() => return None,
         Err(e) => {
@@ -534,12 +504,8 @@ pub fn check_text_in(
     if !lowered.names().is_empty() {
         return None;
     }
-    range_flaw(&lowered, None, axis, Some(k), (owner, k.name))
+    range_flaw(&lowered, axis, Some(k), (owner, k.name))
 }
-
-/// What the reader says of an annotation that is not a unit.
-const UNIT_HELP: &str =
-    "units are not written; (mm)4.5 checks a size, and (h)1.2 is in wall tops of 33.1 mm";
 
 /// One line describing what a control takes, for help text.
 pub(crate) fn describe(k: &'static Control) -> String {

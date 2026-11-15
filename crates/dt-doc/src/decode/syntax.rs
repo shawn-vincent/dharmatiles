@@ -22,21 +22,16 @@ pub(crate) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<Doc
                 "KDL v1 keyword",
             )
             .maybe_help(Some(format!("write #{word}"))),
-            Some((at, word)) if unit_suffix(word).is_some() => {
-                let number = unit_suffix(word).unwrap_or(word);
-                DocError::new(
-                    src,
-                    dt_lang::codes::SYNTAX,
-                    SourceSpan::new(at.into(), word.len()),
-                    format!("`{word}` has a unit written on it"),
-                    "not a KDL number",
-                )
-                .maybe_help(Some(if text.lines().any(|l| l.trim_start().starts_with("dharmatiles version=1")) {
-                    format!("a value with a unit is a quoted string: \"{word}\"")
-                } else {
-                    format!("units are not written: write {number} (every control knows its unit; sizes are dmm, the design millimetre), or (mm){number} as a check")
-                }))
-            }
+            Some((at, word)) if unit_suffix(word).is_some() => DocError::new(
+                src,
+                dt_lang::codes::SYNTAX,
+                SourceSpan::new(at.into(), word.len()),
+                format!("`{word}` has a unit written on it"),
+                "not a KDL number",
+            )
+            .maybe_help(Some(format!(
+                "a value with a unit is a quoted string: \"{word}\""
+            ))),
             Some((at, word)) => DocError::new(
                 src,
                 dt_lang::codes::SYNTAX,

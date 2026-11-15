@@ -269,7 +269,7 @@ fn reach(c: &Checked, what: &str, child: Option<usize>, formula: &str) -> Vec<Di
     use std::sync::Arc;
     let text = format!("top=\"{formula}\"");
     let src: dt_eval::diag::Src = Arc::new(miette::NamedSource::new("r.dtile", text));
-    let expr = dt_doc::expr::parse_v2(formula).unwrap();
+    let expr = dt_doc::expr::parse_height(formula).unwrap();
     let tile = c.tile.as_ref().unwrap();
     let entry = tile
         .stack

@@ -5,7 +5,7 @@
 
 mod common;
 
-use dt_doc::expr::{parse_units, parse_v2_units};
+use dt_doc::expr::{parse, parse_height};
 use dt_doc::{DocError, Known, decode};
 
 fn known() -> Known {
@@ -65,10 +65,10 @@ fn units_follow_numbers_and_bind_tighter_than_multiplication() {
         "a(parent($region), deg)",
         "50%",
     ] {
-        parse_v2_units(good).unwrap_or_else(|e| panic!("{good}: {e:?}"));
+        parse_height(good).unwrap_or_else(|e| panic!("{good}: {e:?}"));
     }
     // `1/2rad` parses as one over two radians: the kind check refuses it
-    let e = parse_v2_units("1/2rad").unwrap().to_string();
+    let e = parse_height("1/2rad").unwrap().to_string();
     assert_eq!(e, "(1 / (2 * rad))");
     // other names side by side stay an error, and the units are listed
     for (bad, said) in [
@@ -77,33 +77,26 @@ fn units_follow_numbers_and_bind_tighter_than_multiplication() {
         ("8 foot", "foot"),
         ("4.5 mm foo", "foo"),
     ] {
-        let e = parse_v2_units(bad).unwrap_err();
+        let e = parse_height(bad).unwrap_err();
         assert!(e.message.contains(said), "{bad}: {e:?}");
         assert!(
             e.message.contains("not a unit") || e.message.contains("unexpected"),
             "{bad}: {e:?}"
         );
     }
-    let e = parse_v2_units("1e3").unwrap_err();
+    let e = parse_height("1e3").unwrap_err();
     assert!(e.help.unwrap().contains("scientific notation"));
     // minus never starts a factor
     assert_eq!(
-        parse_v2_units("3 -2dmm").unwrap().to_string(),
+        parse_height("3 -2dmm").unwrap().to_string(),
         "(3 - (2 * dmm))"
     );
-    assert!(parse_v2_units("90°").is_err());
+    assert!(parse_height("90°").is_err());
     // a weighting keeps its plain extra numbers
-    let w = parse_units("low(1dmm .. 6dmm, 11)").unwrap();
+    let w = parse("low(1dmm .. 6dmm, 11)").unwrap();
     assert!(w.to_string().contains("low("), "{w}");
     // a unit alone is not a value
-    assert!(parse_v2_units("mm").is_err());
-    // no units in format 0's parser: the old refusal stands
-    assert!(
-        dt_doc::expr::parse("4.5mm")
-            .unwrap_err()
-            .message
-            .contains("units are not written")
-    );
+    assert!(parse_height("mm").is_err());
 }
 
 #[test]
