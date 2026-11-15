@@ -218,6 +218,10 @@ impl dt_service::tile_host::TileHost for Shared {
         Ok(Self::want(self, id))
     }
 
+    fn set_marks(&self, id: &str, on: bool) -> Result<bool, dt_service::call::Refusal> {
+        Ok(Self::set_marks(self, id, on))
+    }
+
     /// The program's draft lane: queued ahead of every full build, replacing an older draft of the tile, and waited for.
     fn version(&self) -> String {
         env!("DT_ENGINE_VERSION").to_owned()
@@ -433,7 +437,7 @@ impl dt_service::plates_calls::PlatesHost for Shared {
             opts,
             &dt_eval::Progress::none(),
             None,
-            self.store.as_deref(),
+            self.store.as_deref().map(dt_store::Store::kept),
         )
     }
 

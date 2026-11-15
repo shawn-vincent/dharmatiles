@@ -405,7 +405,7 @@ pub(super) fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<Exp
         &opts,
         &dt_eval::Progress::none(),
         None,
-        shared.store.as_deref(),
+        shared.store.as_deref().map(dt_store::Store::kept),
     ) {
         Ok(b) => b,
         Err(errs) => {

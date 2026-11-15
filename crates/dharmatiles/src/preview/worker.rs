@@ -224,7 +224,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             opts,
             &reporter,
             Some(&cache),
-            shared.store.as_deref(),
+            shared.store.as_deref().map(dt_store::Store::kept),
         )
     })) {
         Ok(built) => built,
@@ -546,7 +546,7 @@ fn draft(shared: &Arc<Shared>, d: &queue::Draft, opts: &Options) {
     // the build and its encoding together: a panic in either must not end
     // the lane, or builds stop for the rest of the run
     let made = std::panic::catch_unwind(AssertUnwindSafe(|| {
-        let b = dt_eval::build_cached(&src, &d.path, &opts, &progress, Some(&cache))?;
+        let b = dt_store::build_stored(&src, &d.path, &opts, &progress, Some(&cache), None)?;
         Ok::<_, Vec<Diag>>(payload::from_draft(
             &b,
             opts.printer.overhang_deg,

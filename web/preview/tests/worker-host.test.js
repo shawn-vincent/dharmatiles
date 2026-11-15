@@ -197,3 +197,14 @@ test('the print list and map calls are the service\'s verbs, with the request th
   assert.equal((await said(host.mapsUnpin({ list: 'l', id: 'p1', docRev: 2 })))[0], 'mapsUnpin');
   assert.equal((await said(host.mapsUnpinAll({ list: 'l', docRev: 2 })))[0], 'mapsUnpinAll');
 });
+
+test('the debug layer\'s switch rides on the build call, as HTTP\'s ?debug=, and a build that does not say leaves it as it was', async () => {
+  const engine = fakeEngine({ build: () => ({ ok: true, json: '{}', events: '[]' }) });
+  const host = workerHost(undefined, engine);
+  await host.build('abc', { debug: true });
+  assert.equal(engine.calls.at(-1).request, JSON.stringify({ debug: true }));
+  await host.build('abc', { debug: false });
+  assert.equal(engine.calls.at(-1).request, JSON.stringify({ debug: false }));
+  await host.build('abc');
+  assert.equal(engine.calls.at(-1).request, '{}');
+});

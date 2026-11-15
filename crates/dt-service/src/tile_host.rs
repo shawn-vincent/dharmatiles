@@ -60,6 +60,13 @@ pub trait TileHost: CheckHost {
     /// # Errors
     /// [`Refusal`]: the owner could not be asked.
     fn want(&self, id: &str) -> Result<bool, Refusal>;
+    /// The page's debug layer is on (or off) for tile `id`: its builds collect the layer's marks only while it is on.
+    /// Turned on for a tile already built, the tile builds again (the last build kept no marks).  False when there is
+    /// no such tile.
+    ///
+    /// # Errors
+    /// [`Refusal`]: the owner could not be asked.
+    fn set_marks(&self, id: &str, on: bool) -> Result<bool, Refusal>;
 
     /// Build a draft for the page on the host's draft lane and wait for it: the program queues it ahead of its full
     /// builds (a newer draft of the tile replaces an older), a worker builds it in its own turn.

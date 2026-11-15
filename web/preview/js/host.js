@@ -692,9 +692,9 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     },
     // a build here runs inside one call, so there is no sketch of it to fetch while it builds: none, as the program says once the build has moved on
     async fetchSketch() { return null; },
-    /** @param {string} id */
-    async build(id) {
-      const r = await callVerb('build', {}, id);
+    /** @param {string} id @param {{debug?: boolean}} [opts]  `debug`: the debug layer is on for the tile, so its build collects the marks */
+    async build(id, { debug } = {}) {
+      const r = await callVerb('build', typeof debug === 'boolean' ? { debug } : {}, id);
       if (r.error) throw new Error(`build: ${r.error.message}`, { cause: r.error });
     },
     /** @param {string} id @param {string} [file] @returns {Promise<import('./api').TextRes | null>} */

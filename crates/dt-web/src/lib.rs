@@ -728,6 +728,16 @@ pub struct BuildMeta {
     pub record: Option<dt_eval::TileRecord>,
 }
 
+/// What a build in the page may lean on and collect beyond the document: the scene steps the last build left
+/// (`cache`), the builds kept between calls (`store`, read and written by [`dt_store::build_stored`], the one stored-build
+/// function the program's lanes call too) and whether to collect the debug layer's marks.
+#[derive(Default, Clone, Copy)]
+pub struct Via<'a> {
+    pub cache: Option<&'a dt_eval::Cache>,
+    pub store: Option<&'a dyn dt_store::Kept>,
+    pub debug: bool,
+}
+
 /// One build, as the program does it: the text of a document, a build
 /// target, a seed (negative keeps the tile's own) and cells per square (0
 /// keeps the build's finest).  The one function the browser and the native
@@ -742,10 +752,11 @@ pub fn build_with(
     cells: u32,
     tier: Tier,
     progress: &dt_eval::Progress,
-    cache: Option<&dt_eval::Cache>,
+    via: Via<'_>,
 ) -> Result<(dt_eval::Built, Options), Vec<Diag>> {
-    let opts = build_options(source, system, seed, cells, tier)?;
-    let built = dt_eval::build_cached(source, MAIN, &opts, progress, cache)?;
+    let mut opts = build_options(source, system, seed, cells, tier)?;
+    opts.debug = via.debug;
+    let built = dt_store::build_stored(source, MAIN, &opts, progress, via.cache, via.store)?;
     Ok((built, opts))
 }
 
@@ -941,7 +952,10 @@ pub fn build_tile(
                 cells,
                 tier,
                 &ticks(total),
-                cache.as_deref(),
+                Via {
+                    cache: cache.as_deref(),
+                    ..Via::default()
+                },
             )
         }) {
             Ok(b) => b,
@@ -1093,7 +1107,7 @@ pub fn parity_line(tile: &str, system_word: &str) -> Result<String, JsError> {
             0,
             Tier::Full,
             &dt_eval::Progress::none(),
-            None,
+            Via::default(),
         )
         .map_err(|ds| {
             JsError::new(&format!(

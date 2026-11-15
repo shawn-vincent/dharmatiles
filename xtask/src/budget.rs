@@ -39,7 +39,8 @@ pub mod step {
     /// shares none of it).
     pub const WASM_CHECK: f64 = 60.0;
     /// `cargo xtask parity --service`: the worker's service under Node (check, save, then build, by verb) and the program's
-    /// own build of the same tile, on the bundle parity just built.
+    /// own build of the same tile, on the bundle parity just built.  28 s warm, 37 s with a changed engine to bundle (15 Nov
+    /// 2026; 153 s before the service's tile was a pond and not the grass tile, which wasm built four times).
     pub const SERVICE: f64 = 60.0;
 }
 
@@ -82,13 +83,23 @@ pub fn of_command(root: &Path, name: &str, args: &[String]) -> Option<f64> {
         "wasm" => warm_or_cold(root, "wasm32-unknown-unknown/release", 60.0, COLD_BUILD),
         // the page's files and the browser bundle
         "editor" => warm_or_cold(root, "wasm32-unknown-unknown/release", 90.0, COLD_BUILD),
-        // the browser bundle, then the parity set built twice, in Node and natively (single-threaded wasm sets the time)
-        "parity" => warm_or_cold(
-            root,
-            "wasm32-unknown-unknown/release",
-            step::PARITY,
-            COLD_BUILD + step::PARITY,
-        ),
+        // the browser bundle, then the parity set built twice, in Node and natively (single-threaded wasm sets the time);
+        // `--service` and `--too-big` are runs of their own, held to their own (the table below the bundle's build)
+        "parity" => {
+            let own = if args.iter().any(|a| a == "--service") {
+                step::SERVICE
+            } else if args.iter().any(|a| a == "--too-big") {
+                step::TOO_BIG
+            } else {
+                step::PARITY
+            };
+            warm_or_cold(
+                root,
+                "wasm32-unknown-unknown/release",
+                own,
+                COLD_BUILD + own,
+            )
+        }
         // the checks, the release gate and the baseline of every tile
         "release" => 1200.0,
         _ => return None,

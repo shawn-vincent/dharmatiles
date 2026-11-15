@@ -128,7 +128,7 @@ impl Shared {
                 &r.opts,
                 &progress,
                 None,
-                self.store.as_deref(),
+                self.store.as_deref().map(dt_store::Store::kept),
             )
         }));
         let built = match ran {

@@ -224,8 +224,11 @@ fn run_too_big(root: &Path) -> Result<(), String> {
     ))
 }
 
-/// The tile the service's Node test puts in the worker's service.
-const SERVICE_TILE: &str = "lib:tiles/ground/1x1-grass.dtile";
+/// The tile the service's Node test puts in the worker's service.  A torture tile of water and ground (a pond, built
+/// in a second or two in single-threaded wasm): the service's calls are the same whatever the tile, and the engine's
+/// bytes for grass and the rest are what `cargo xtask parity` holds, so a full grass tile here only made this run
+/// build it over and over in wasm (measured 15 Nov 2026: 60 s of the run).
+const SERVICE_TILE: &str = "lib:tests/water/1x1-bands-pond.dtile";
 
 /// `cargo xtask parity --service`: the editor's service as a web worker will run it, under Node.  The bundle's
 /// `Service` is given one library tile and called by verb: `check`, `save`, then `build` (the HTTP verb: the record comes on the event stream).  The program builds the same
@@ -235,7 +238,12 @@ fn run_service(root: &Path) -> Result<(), String> {
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), Into::into);
     let bundle = target.join("parity-bundle");
+    let began = std::time::Instant::now();
     crate::wasm::run_wasm(root, &[bundle.display().to_string()])?;
+    eprintln!(
+        "service parity: the wasm bundle {:.1} s",
+        began.elapsed().as_secs_f64()
+    );
     let job = format!("{SERVICE_TILE}@db");
     // the files the service made are kept here, to compare with the program's
     let dump = target.join("service-dump");
@@ -245,48 +253,78 @@ fn run_service(root: &Path) -> Result<(), String> {
         Err(e) => return Err(format!("cannot clear {}: {e}", dump.display())),
     }
     std::fs::create_dir_all(&dump).map_err(|e| format!("{}: {e}", dump.display()))?;
-    let line = String::from_utf8(capture(
-        Command::new("node")
-            .current_dir(root)
-            .env("SERVICE_DUMP", &dump)
-            .arg("xtask/service.mjs")
-            .arg(&bundle)
-            .arg(&job),
-    )?)
-    .map_err(|e| format!("not UTF-8: {e}"))?;
-    let browser: Value =
-        serde_json::from_str(line.trim()).map_err(|e| format!("service: {e}: {line}"))?;
-    // the program's own build of the same tile, in a scratch folder of its own (never the user's out/ or cache)
+    // the program's own build of the same tile, in a scratch folder of its own (never the user's out/ or cache), runs
+    // beside the Node half: single-threaded wasm sets the run's time, and the program's half waits on nothing of it
     let scratch = target.join("service-scratch");
     match std::fs::remove_dir_all(&scratch) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(format!("cannot clear {}: {e}", scratch.display())),
     }
-    let status = Command::new("cargo")
-        .current_dir(root)
-        .args(["build", "-q", "--release", "-p", "dharmatiles"])
-        .status()
-        .map_err(|e| format!("cargo build: {e}"))?;
-    if !status.success() {
-        return Err(format!("cargo build -p dharmatiles failed: {status}"));
-    }
-    let out = scratch.join("out");
-    capture(
-        Command::new(target.join("release/dharmatiles"))
-            .current_dir(root)
-            .env("DT_HOME", scratch.join("home"))
-            .env("DT_CACHE", scratch.join("cache"))
-            .args(["build", SERVICE_TILE, "--no-cache", "--out"])
-            .arg(&out),
-    )?;
-    let stl_path = out.join("db/ground/1x1-grass-db.stl");
-    let stl =
-        std::fs::read(&stl_path).map_err(|e| format!("cannot read {}: {e}", stl_path.display()))?;
-    let native: String = Sha256::digest(&stl[80..])
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect();
+    let (browser, native) = std::thread::scope(|s| {
+        let node = s.spawn(|| {
+            let line = String::from_utf8(capture(
+                Command::new("node")
+                    .current_dir(root)
+                    .env("SERVICE_DUMP", &dump)
+                    .arg("xtask/service.mjs")
+                    .arg(&bundle)
+                    .arg(&job),
+            )?)
+            .map_err(|e| format!("not UTF-8: {e}"))?;
+            eprintln!(
+                "service parity: node done at {:.1} s",
+                began.elapsed().as_secs_f64()
+            );
+            serde_json::from_str::<Value>(line.trim()).map_err(|e| format!("service: {e}: {line}"))
+        });
+        let native = (|| {
+            let status = Command::new("cargo")
+                .current_dir(root)
+                .args(["build", "-q", "--release", "-p", "dharmatiles"])
+                .status()
+                .map_err(|e| format!("cargo build: {e}"))?;
+            if !status.success() {
+                return Err(format!("cargo build -p dharmatiles failed: {status}"));
+            }
+            eprintln!(
+                "service parity: program built at {:.1} s",
+                began.elapsed().as_secs_f64()
+            );
+            let out = scratch.join("out");
+            capture(
+                Command::new(target.join("release/dharmatiles"))
+                    .current_dir(root)
+                    .env("DT_HOME", scratch.join("home"))
+                    .env("DT_CACHE", scratch.join("cache"))
+                    .args(["build", SERVICE_TILE, "--no-cache", "--out"])
+                    .arg(&out),
+            )?;
+            // `<system>/<the tile's path under library/, without .dtile>-<system>.stl`
+            let stem = SERVICE_TILE
+                .trim_start_matches("lib:")
+                .trim_end_matches(".dtile");
+            let stl_path = out.join(format!("db/{stem}-db.stl"));
+            let stl = std::fs::read(&stl_path)
+                .map_err(|e| format!("cannot read {}: {e}", stl_path.display()))?;
+            eprintln!(
+                "service parity: program's tile built at {:.1} s",
+                began.elapsed().as_secs_f64()
+            );
+            Ok::<String, String>(
+                Sha256::digest(&stl[80..])
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect(),
+            )
+        })();
+        let browser = match node.join() {
+            Ok(done) => done,
+            Err(_) => Err("the node process's thread panicked".to_owned()),
+        };
+        (browser, native)
+    });
+    let (browser, native) = (browser?, native?);
     // the same tile exported as a download is the same STL
     if browser["exportedStlSha256"].as_str() != Some(native.as_str()) {
         return Err(format!(
@@ -295,6 +333,10 @@ fn run_service(root: &Path) -> Result<(), String> {
         ));
     }
     service_plates(root, &target, &scratch, &dump, &browser)?;
+    eprintln!(
+        "service parity: plates compared at {:.1} s",
+        began.elapsed().as_secs_f64()
+    );
     let said = browser["stlSha256"]
         .as_str()
         .ok_or_else(|| format!("service: the worker's answer has no stlSha256: {browser}"))?;

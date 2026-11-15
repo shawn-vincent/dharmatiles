@@ -260,6 +260,14 @@ impl TileHost for World {
         Ok(rx.try_recv().expect("the owner answered in the same step"))
     }
 
+    fn set_marks(&self, id: &str, on: bool) -> Result<bool, Refusal> {
+        let (tx, rx) = channel();
+        self.core
+            .borrow_mut()
+            .apply(Command::SetMarks(id.to_owned(), on, tx));
+        Ok(rx.try_recv().expect("the owner answered in the same step"))
+    }
+
     /// The test host's draft lane: a text that reads is a mesh (the bytes say which text), one that does not is a mistake.
     fn draft(&self, ask: DraftAsk) -> Result<Drafted, Refusal> {
         let src = Overlay {
@@ -572,7 +580,9 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
     }
 
     // build: the verb queues the job; the host's lane builds it; the record is in the tile and on the stream
-    table.call(&w, &BUILD, BuildReq {}).expect("asked for");
+    table
+        .call(&w, &BUILD, BuildReq::default())
+        .expect("asked for");
     w.run_queued();
     let (tx, rx) = channel();
     w.core.borrow_mut().apply(Command::Summary(id, tx));
@@ -583,6 +593,32 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
     assert_eq!(summary.status, "ready");
     let record = summary.record.expect("the build's record");
     assert!(record.audit.triangles > 0);
+    // the debug layer's switch rides on the verb: on for the tile (its next build collects the marks), off again, and a
+    // tile that is not there is a 404 whatever the switch says
+    let marks = |w: &World| {
+        let (tx, rx) = channel();
+        w.core.borrow_mut().apply(Command::Facts(tile_id(PATH), tx));
+        rx.try_recv()
+            .expect("answered")
+            .expect("the tile has facts")
+            .marks
+    };
+    assert!(!marks(&w));
+    table
+        .call(&w, &BUILD, BuildReq { debug: Some(true) })
+        .expect("asked for, the layer on");
+    assert!(marks(&w), "build with debug=true turns the layer on");
+    table
+        .call(&w, &BUILD, BuildReq { debug: Some(false) })
+        .expect("asked for, the layer off");
+    assert!(!marks(&w));
+    assert_eq!(
+        dt_service::build_calls::build(&w, "no-such-tile", BuildReq { debug: Some(true) })
+            .expect_err("no such tile")
+            .status,
+        Status::NotFound
+    );
+    w.run_queued();
     let told: Vec<String> = stream.try_iter().collect();
     assert!(
         told.iter()

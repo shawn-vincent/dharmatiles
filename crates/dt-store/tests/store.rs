@@ -30,7 +30,7 @@ fn temp(name: &str) -> PathBuf {
 const FLAT: &str = "lib:tests/ground/1x1-flat.dtile";
 
 fn stored(store: &Store, src: &dyn Source, path: &str, opts: &Options) -> Built {
-    build_stored(src, path, opts, &Progress::none(), None, Some(store)).unwrap()
+    build_stored(src, path, opts, &Progress::none(), None, Some(store.kept())).unwrap()
 }
 
 /// Everything about a build that anything reads, as text and bytes.
@@ -523,4 +523,58 @@ fn the_draft_tier_has_its_own_entries() {
     );
     assert_eq!(store.stats().unwrap().entries, 2);
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// The worker's memory is served by the same function as the disk cache: a hit is the bytes a build made, the marks the
+/// first build did not collect are built then and kept, and past its limit the least recently used go.
+#[test]
+fn a_memory_store_is_read_by_the_same_function_and_gives_the_same_bytes() {
+    let m = common::memory(&[("probe.dtile", PROBE)]);
+    let mem = dt_store::MemStore::new("test-engine", 64 << 20);
+    let build = |opts: &Options| {
+        build_stored(&m, "probe.dtile", opts, &Progress::none(), None, Some(&mem)).unwrap()
+    };
+    let plain = Options::default();
+    let fresh = memo::build(&m, "probe.dtile", &plain).unwrap();
+    let first = build(&plain);
+    assert_eq!(first.report.cache.state, CacheState::Miss);
+    same(&first, fresh);
+    let second = build(&plain);
+    assert_eq!(second.report.cache.state, CacheState::Hit);
+    same(&second, fresh);
+    assert_eq!(mem.len(), 1);
+    // the debug layer's marks: not in the kept build, so built and kept; then both are served from it
+    let marks = Options {
+        debug: true,
+        ..Options::default()
+    };
+    let wants = build(&marks);
+    assert_eq!(wants.report.cache.state, CacheState::Miss);
+    assert!(wants.report.debug.is_some());
+    assert_eq!(build(&marks).report.cache.state, CacheState::Hit);
+    assert!(build(&marks).report.debug.is_some());
+    let bare = build(&plain);
+    assert_eq!(bare.report.cache.state, CacheState::Hit);
+    assert!(bare.report.debug.is_none());
+    assert_eq!(mem.len(), 1, "the same key is one entry");
+    // another seed is another build; with room for one entry only, the earlier goes
+    let tiny = dt_store::MemStore::new("test-engine", 1);
+    let seeded = Options {
+        seed: Some(5),
+        ..Options::default()
+    };
+    for o in [&plain, &seeded] {
+        build_stored(&m, "probe.dtile", o, &Progress::none(), None, Some(&tiny)).unwrap();
+    }
+    assert_eq!(tiny.len(), 1, "past its limit the least recently used go");
+    let again = build_stored(
+        &m,
+        "probe.dtile",
+        &seeded,
+        &Progress::none(),
+        None,
+        Some(&tiny),
+    )
+    .unwrap();
+    assert_eq!(again.report.cache.state, CacheState::Hit);
 }

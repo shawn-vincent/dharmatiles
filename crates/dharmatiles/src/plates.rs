@@ -10,11 +10,11 @@ use std::time::Instant;
 
 use crate::cli_wire::{PlatesChecked, PlatesReport, Refused};
 use dt_doc::map::{Group, Mode, PrintList};
-use dt_eval::{Diag, Files, Options};
+use dt_eval::{Diag, Files};
 use dt_print::plates::builds::Builds;
 use dt_print::plates::export::Format;
 use dt_print::plates::wire::{PlanOnly, PlanPlate};
-use dt_print::plates::{self, Context, Overrides, Plan};
+use dt_print::plates::{self, Context, Overrides};
 use dt_store::Store;
 
 use crate::{AUDIT_FAILED, ERROR, OK, report};
@@ -110,29 +110,6 @@ pub(crate) fn template_for(
         dt_print::project_settings(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
     dt_print::bed_centre(&settings).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(Some(settings))
-}
-
-/// Build every distinct piece of a plan in full (through the cache when there is one), calling `step` before each
-/// with its number, the count and its name: [`Builds::of`] with the disk cache's build.
-///
-/// # Errors
-/// A piece that does not build.
-pub(crate) fn build_all(
-    plan: &Plan,
-    base: &Options,
-    home: Option<&Path>,
-    store: Option<&Store>,
-    step: &mut dyn FnMut(usize, usize, &str),
-) -> Result<Builds, Vec<Diag>> {
-    Builds::of(
-        plan,
-        base,
-        &dt_eval::OnDisk { home },
-        step,
-        &mut |path, opts| {
-            dt_store::build_stored(&Files, path, opts, &dt_eval::Progress::none(), None, store)
-        },
-    )
 }
 
 /// The settings words a caller may give, as the command line's.
@@ -323,15 +300,33 @@ pub(crate) fn run(
         );
     }
     let mut last = Instant::now();
-    let builds = build_all(&plan, &base, home.as_deref(), store, &mut |n, of, name| {
-        if !json {
-            tell!(
-                "[{n}/{of}] building {name} ({:.1} s)",
-                last.elapsed().as_secs_f64()
-            );
-        }
-        last = Instant::now();
-    });
+    // every distinct piece in full, through the disk cache when there is one: the one stored-build call the program's lanes use
+    let builds = Builds::of(
+        &plan,
+        &base,
+        &dt_eval::OnDisk {
+            home: home.as_deref(),
+        },
+        &mut |n, of, name| {
+            if !json {
+                tell!(
+                    "[{n}/{of}] building {name} ({:.1} s)",
+                    last.elapsed().as_secs_f64()
+                );
+            }
+            last = Instant::now();
+        },
+        &mut |path, opts| {
+            dt_store::build_stored(
+                &Files,
+                path,
+                opts,
+                &dt_eval::Progress::none(),
+                None,
+                store.map(dt_store::Store::kept),
+            )
+        },
+    );
     let builds = match builds {
         Ok(b) => b,
         Err(e) => return fail(&e, json),

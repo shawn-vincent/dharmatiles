@@ -474,10 +474,6 @@ impl Store {
     ///
     /// # Errors
     /// The folder or file cannot be written, in words.
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "permitted silence: a clock before 1970 or a missing mtime reads as zero (a stamp, never data)"
-    )]
     pub fn put(&self, key: &Key, built: &Built) -> Result<(), String> {
         let file = self.file_of(key);
         let dir = file
@@ -485,33 +481,7 @@ impl Store {
             .ok_or_else(|| format!("{} has no folder", file.display()))?;
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("cannot create the cache folder {}: {e}", dir.display()))?;
-        let body = codec::built_out(built);
-        let mut head = codec::Wr(Vec::new());
-        head.str(&key.id);
-        head.str(&key.path);
-        head.str(&key.target);
-        head.str(key.tier.name());
-        head.str(&self.engine);
-        head.u64(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_or(0, |d| d.as_secs()),
-        );
-        head.u64(built.audit.triangles as u64);
-        let head = head.0;
-        let mut out = Vec::with_capacity(head.len() + body.len() + 24);
-        out.extend_from_slice(MAGIC);
-        out.extend_from_slice(&FORMAT.to_le_bytes());
-        out.extend_from_slice(
-            &u32::try_from(head.len())
-                .map_err(|_| "a header too long")?
-                .to_le_bytes(),
-        );
-        out.extend_from_slice(&head);
-        out.extend_from_slice(&(body.len() as u64).to_le_bytes());
-        out.extend_from_slice(&body);
-        let sum = checksum(&out);
-        out.extend_from_slice(&sum.to_le_bytes());
+        let out = entry_bytes(&self.engine, key, built, now_secs())?;
         let tmp = dir.join(format!(
             ".tmp-{}-{}",
             std::process::id(),
@@ -858,6 +828,51 @@ fn parse_head(bytes: &[u8]) -> Result<Head, String> {
     Ok(head)
 }
 
+/// A whole entry as it is kept (the disk's file, or a memory store's bytes): magic, format, header, body, checksum.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "permitted silence: a clock before 1970 or a missing mtime reads as zero (a stamp, never data)"
+)]
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// `stamp` is when it was made, in seconds since 1970 (the caller's clock: a browser has no `SystemTime`).
+fn entry_bytes(engine: &str, key: &Key, built: &Built, stamp: u64) -> Result<Vec<u8>, String> {
+    let body = codec::built_out(built);
+    let mut head = codec::Wr(Vec::new());
+    head.str(&key.id);
+    head.str(&key.path);
+    head.str(&key.target);
+    head.str(key.tier.name());
+    head.str(engine);
+    head.u64(stamp);
+    head.u64(built.audit.triangles as u64);
+    let head = head.0;
+    let mut out = Vec::with_capacity(head.len() + body.len() + 24);
+    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(&FORMAT.to_le_bytes());
+    out.extend_from_slice(
+        &u32::try_from(head.len())
+            .map_err(|_| "a header too long")?
+            .to_le_bytes(),
+    );
+    out.extend_from_slice(&head);
+    out.extend_from_slice(&(body.len() as u64).to_le_bytes());
+    out.extend_from_slice(&body);
+    let sum = checksum(&out);
+    out.extend_from_slice(&sum.to_le_bytes());
+    Ok(out)
+}
+
+/// A whole entry's header and build, once its checksum holds ([`entry_bytes`] backwards).
+fn entry_read(bytes: &[u8]) -> Result<(Head, Built), String> {
+    let (head, body) = split(bytes)?;
+    Ok((head, codec::built_in(body)?))
+}
+
 /// A whole entry's header and body, once its checksum holds.
 fn split(bytes: &[u8]) -> Result<(Head, &[u8]), String> {
     let head = parse_head(bytes)?;
@@ -888,7 +903,164 @@ fn split(bytes: &[u8]) -> Result<(Head, &[u8]), String> {
     Ok((head, &bytes[body_at..end]))
 }
 
-/// [`build_cached`] and the disk cache: a build whose key (see [`Store::key`])
+/// Where finished builds are kept: [`build_stored`] reads and writes through this, so the program's disk cache
+/// ([`Store`]) and a browser worker's memory ([`MemStore`]) are served by the one function.  An implementation
+/// keeps a [`Built`] under a [`Key`] ([`make_key`] with [`Kept::engine`]) and gives back what a build with `want`
+/// would have made.
+pub trait Kept: Sync {
+    /// The engine identity the keys cover.
+    fn engine(&self) -> &str;
+
+    /// The build kept under `key` when it holds at least what `want` asks for; `Ok(None)`: nothing usable is kept.
+    ///
+    /// # Errors
+    /// A damaged or unreadable entry, in words (the entry is dropped, so the next build is real).
+    fn get(&self, key: &Key, want: Collect) -> Result<Option<Built>, String>;
+
+    /// Keep `built` under `key`.
+    ///
+    /// # Errors
+    /// The entry cannot be kept, in words.
+    fn put(&self, key: &Key, built: &Built) -> Result<(), String>;
+}
+
+impl Kept for Store {
+    fn engine(&self) -> &str {
+        &self.engine
+    }
+
+    fn get(&self, key: &Key, want: Collect) -> Result<Option<Built>, String> {
+        Store::get(self, key, want)
+    }
+
+    fn put(&self, key: &Key, built: &Built) -> Result<(), String> {
+        Store::put(self, key, built)
+    }
+}
+
+impl Store {
+    /// This store as what [`build_stored`] takes (for a caller that holds an `Option<&Store>`).
+    #[must_use]
+    pub fn kept(&self) -> &dyn Kept {
+        self
+    }
+}
+
+/// Builds kept in memory, as the same bytes the disk keeps: what a browser's worker holds between calls (a second
+/// build of an unchanged tile is read, not made), bounded by `limit` bytes with the least recently used going first.
+/// It reads no clock and no disk, so it builds for `wasm32-unknown-unknown`.
+pub struct MemStore {
+    engine: String,
+    limit: usize,
+    held: Mutex<MemHeld>,
+}
+
+#[derive(Default)]
+struct MemHeld {
+    /// key id to (bytes, last use)
+    entries: BTreeMap<String, (Vec<u8>, u64)>,
+    tick: u64,
+    bytes: usize,
+}
+
+impl MemHeld {
+    fn drop_entry(&mut self, id: &str) {
+        if let Some((b, _)) = self.entries.remove(id) {
+            self.bytes -= b.len();
+        }
+    }
+}
+
+impl MemStore {
+    /// A memory store for the engine `engine`, keeping at most `limit` bytes.
+    #[must_use]
+    pub fn new(engine: impl Into<String>, limit: usize) -> Self {
+        Self {
+            engine: engine.into(),
+            limit,
+            held: Mutex::new(MemHeld::default()),
+        }
+    }
+
+    /// How many builds are kept.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.held.lock_unpoisoned().entries.len()
+    }
+
+    /// Whether nothing is kept.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl Kept for MemStore {
+    fn engine(&self) -> &str {
+        &self.engine
+    }
+
+    fn get(&self, key: &Key, want: Collect) -> Result<Option<Built>, String> {
+        let mut h = self.held.lock_unpoisoned();
+        h.tick += 1;
+        let tick = h.tick;
+        let Some((bytes, used)) = h.entries.get_mut(&key.id) else {
+            return Ok(None);
+        };
+        *used = tick;
+        let read = entry_read(bytes);
+        let (head, built) = match read {
+            Ok(v) => v,
+            Err(why) => {
+                h.drop_entry(&key.id);
+                return Err(format!("the kept build is damaged ({why}); it is dropped"));
+            }
+        };
+        if head.key != key.id {
+            h.drop_entry(&key.id);
+            return Err("a kept build holds another key's build; it is dropped".to_owned());
+        }
+        if !collected(&built).covers(want) {
+            return Ok(None);
+        }
+        let mut built = trim(built, want);
+        built.report.cache.made_by = Some(head.engine);
+        Ok(Some(built))
+    }
+
+    fn put(&self, key: &Key, built: &Built) -> Result<(), String> {
+        let bytes = entry_bytes(&self.engine, key, built, 0)?;
+        let mut h = self.held.lock_unpoisoned();
+        h.tick += 1;
+        let tick = h.tick;
+        h.drop_entry(&key.id);
+        h.bytes += bytes.len();
+        h.entries.insert(key.id.clone(), (bytes, tick));
+        // past the limit the least recently used go first, never the one just kept
+        while h.bytes > self.limit {
+            let Some(oldest) = h
+                .entries
+                .iter()
+                .filter(|(id, _)| **id != key.id)
+                .min_by_key(|(_, (_, used))| *used)
+                .map(|(id, _)| id.clone())
+            else {
+                break;
+            };
+            h.drop_entry(&oldest);
+        }
+        Ok(())
+    }
+}
+
+/// The key of building `path` with `opts` at `tier` in `store`: [`make_key`] with the store's engine.
+fn key_in(store: &dyn Kept, reads: &Reads, path: &str, opts: &Options, tier: Tier) -> Key {
+    let mut o = opts.clone();
+    o.tier = tier;
+    make_key(store.engine(), reads, path, &o, tier)
+}
+
+/// [`build_cached`] and a store (the disk cache, or a worker's memory): a build whose key (see [`Store::key`])
 /// is kept is read, not made, and a build that is made is kept.  The result
 /// is the same, byte for byte, as without the store; [`Built::cache`] says
 /// which it was and what went wrong with the cache, if anything (a damaged
@@ -907,7 +1079,7 @@ fn stored_build(
     opts: &Options,
     progress: &Progress,
     cache: Option<&Cache>,
-    store: Option<&Store>,
+    store: Option<&dyn Kept>,
 ) -> Result<Built, Vec<Diag>> {
     let Some(store) = store else {
         return build_cached(sources, path, opts, progress, cache);
@@ -921,7 +1093,7 @@ fn stored_build(
         ..opts.clone()
     };
     let c = check(&tracked, path, &stored)?;
-    let key = store.key(&tracked.reads(), path, opts);
+    let key = key_in(store, &tracked.reads(), path, opts, opts.tier);
     let mut problems = Vec::new();
     let want = Collect {
         clouds: opts.clouds,
@@ -974,7 +1146,7 @@ pub fn build_stored(
     opts: &Options,
     progress: &Progress,
     cache: Option<&Cache>,
-    store: Option<&Store>,
+    store: Option<&dyn Kept>,
 ) -> Result<Built, Vec<Diag>> {
     let tier = opts.tier;
     let at = |t: Tier| Options {
@@ -992,7 +1164,7 @@ pub fn build_stored(
     let tracked = Tracked::new(sources);
     let o = at(Tier::Low);
     check(&tracked, path, &o)?;
-    let key = store.key_at(&tracked.reads(), path, &o, Tier::SuperLow);
+    let key = key_in(store, &tracked.reads(), path, &o, Tier::SuperLow);
     let want = Collect::default();
     let mut problems = Vec::new();
     match store.get(&key, want) {

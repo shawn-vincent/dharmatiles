@@ -150,7 +150,14 @@ pub(crate) fn build_one(
     let reporter = tracker
         .as_ref()
         .map_or_else(dt_eval::Progress::none, |(_, pr)| pr.clone());
-    let b = match dt_store::build_stored(sources, p, opts, &reporter, extras.cache, extras.store) {
+    let b = match dt_store::build_stored(
+        sources,
+        p,
+        opts,
+        &reporter,
+        extras.cache,
+        extras.store.map(dt_store::Store::kept),
+    ) {
         Ok(b) => b,
         Err(errs) => {
             if tracker.is_some() {

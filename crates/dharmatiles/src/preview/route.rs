@@ -201,12 +201,14 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             Err(refusal) => super::api::refusal_reply(refusal).into(),
         },
         (Some("build"), Some(id)) => {
-            // `?debug=1` or `?debug=0`: the page has the debug layer on or off for this tile
-            if let Some(on) = req.param("debug") {
-                shared.set_marks(id, on == "1");
-            }
+            // `?debug=1` or `?debug=0`: the page has the debug layer on or off for this tile (the service's `debug` field)
+            let debug = req.param("debug").map(|on| on == "1");
             // the service's `build`: asked for, answered at once; the record comes on the event stream
-            match dt_service::build_calls::build(shared, id, dt_service::build_calls::BuildReq {}) {
+            match dt_service::build_calls::build(
+                shared,
+                id,
+                dt_service::build_calls::BuildReq { debug },
+            ) {
                 Ok(accepted) => Reply::Json("202 Accepted", super::api::ok(&accepted).1),
                 Err(refusal) => super::api::refusal_reply(refusal).into(),
             }

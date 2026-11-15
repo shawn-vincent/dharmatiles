@@ -117,7 +117,7 @@ impl SideJob {
                         &opts,
                         &dt_eval::Progress::new(Arc::new(Cancelled(Arc::clone(cancel)))),
                         None,
-                        shared.store.as_deref(),
+                        shared.store.as_deref().map(dt_store::Store::kept),
                     )
                 }),
             ),

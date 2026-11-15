@@ -86,7 +86,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::{JsError, LIBRARY, MAIN, build_with, stage_total, stl_sha256, system_of};
+use crate::{JsError, LIBRARY, MAIN, Via, build_with, stage_total, stl_sha256, system_of};
 
 /// The folder the worker's tiles are listed under.
 const FOLDER: &str = "/memory/My tiles";
@@ -270,7 +270,14 @@ struct Inner {
     written: Arc<Mutex<Vec<String>>>,
     /// The stream a fresh seed is drawn from: the entropy the page gave at the start, advanced at every draw.
     entropy: Cell<u64>,
+    /// The finished builds this worker keeps between calls (the program's disk cache, in memory): a build of a tile
+    /// whose document, parts and target have not changed is read, not made.  Every full build, every plate's piece
+    /// and every tier goes through it by `dt_store::build_stored`.
+    kept: dt_store::MemStore,
 }
+
+/// The memory a worker keeps finished builds in (a browser tab holds the wasm's 4 GB, and a build is made in it as well).
+const KEPT_BYTES: usize = 256 << 20;
 
 /// What one call runs on: the worker, the tile it is about and the options it reads it with.
 struct Ctx {
@@ -510,7 +517,12 @@ impl Inner {
             0,
             Tier::Full,
             &progress,
-            None,
+            Via {
+                store: Some(&self.kept),
+                // the page's debug layer for this tile: its marks are collected only then (the program's lanes do the same)
+                debug: facts.marks,
+                ..Via::default()
+            },
         ) {
             Err(ds) => edit(Patch::BuildFailed {
                 errors: dt_eval::mistakes(&ds),
@@ -598,6 +610,10 @@ impl TileHost for Ctx {
         self.inner.ask(|r| Command::Want(id.to_owned(), r))
     }
 
+    fn set_marks(&self, id: &str, on: bool) -> Result<bool, Refusal> {
+        self.inner.ask(|r| Command::SetMarks(id.to_owned(), on, r))
+    }
+
     fn version(&self) -> String {
         crate::version()
     }
@@ -658,11 +674,12 @@ impl TileHost for Ctx {
             clouds: true,
             ..self.options.clone()
         };
-        let built = match dt_eval::build_cached(
+        let built = match dt_store::build_stored(
             &Doc { text: &ask.text },
             MAIN,
             &opts,
             &dt_eval::Progress::none(),
+            None,
             None,
         ) {
             Ok(b) => b,
@@ -869,9 +886,30 @@ impl PlatesHost for Ctx {
             .and_then(|e| e.modified)
     }
 
-    fn full_kept(&self, _path: &str, _opts: &Options) -> bool {
-        // the worker keeps no cache of builds between calls
-        false
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "permitted silence: a kept build that cannot be read is not kept for this question; the build that follows reads it again through `build_stored` and says what was wrong in its record's cache problems"
+    )]
+    fn full_kept(&self, path: &str, opts: &Options) -> bool {
+        // the same key a build would be read under (`dt_store::build_stored`, the worker's memory)
+        let tracked = dt_store::Tracked::new(&self.inner.tiles);
+        let full = Options {
+            tier: Tier::Full,
+            ..opts.clone()
+        };
+        dt_eval::check(&tracked, path, &full).is_ok()
+            && dt_store::Kept::get(
+                &self.inner.kept,
+                &dt_store::make_key(
+                    dt_store::Kept::engine(&self.inner.kept),
+                    &tracked.reads(),
+                    path,
+                    &full,
+                    Tier::Full,
+                ),
+                dt_kit::debug::Collect::default(),
+            )
+            .is_ok_and(|b| b.is_some())
     }
 
     fn build_piece(
@@ -879,12 +917,13 @@ impl PlatesHost for Ctx {
         path: &str,
         opts: &Options,
     ) -> Result<dt_eval::Built, Vec<dt_eval::Diag>> {
-        dt_eval::build_cached(
+        dt_store::build_stored(
             &self.inner.tiles,
             path,
             opts,
             &dt_eval::Progress::none(),
             None,
+            Some(&self.inner.kept),
         )
     }
 
@@ -1215,8 +1254,14 @@ fn tiers_want(ctx: &Ctx, req: TiersWantReq) -> Result<TiersWantRes, Refusal> {
             continue;
         }
         let sources = tier_calls::Sources::of(&r, &inner.tiles);
-        let built =
-            dt_eval::build_cached(&sources, &r.path, &r.opts, &dt_eval::Progress::none(), None);
+        let built = dt_store::build_stored(
+            &sources,
+            &r.path,
+            &r.opts,
+            &dt_eval::Progress::none(),
+            None,
+            Some(&inner.kept),
+        );
         match built {
             Ok(b) => match tier_calls::tier_bytes(b, &r, rev, &ctx.palette()) {
                 Ok(bytes) => {
@@ -1509,6 +1554,7 @@ impl Service {
                 ticket: Cell::new(0),
                 seq: Cell::new(0),
                 entropy: Cell::new(entropy),
+                kept: dt_store::MemStore::new(crate::version(), KEPT_BYTES),
             }),
             table: table(),
         };
