@@ -16,6 +16,7 @@
 //! | `Slot`, `State`, `Sketch`, `TileId`, `Row`, `Facts`, `Patch` | state | here: [`tile`], [`patch`]; `Row::changed` is given the time-of-file lookup, not read |
 //! | `api::{TileSummary, Progress, Shown, SketchRef, ErrorBody, ErrorDetail, Snapshot, StreamEvent, RootJson, FolderJson}` | contract | here: [`api`] |
 //! | `plan::*`, `scene::{SceneJson, Note, Placement}`, `resources::{Places, Target, List, Resource, ResourceEvent}` | contract | here: [`plan`], [`scene`], [`resources`] |
+//! | `EditReq`, `EditOp`, `EditRes`, `NodeJson`, `text_rev`, and the one function that makes an edit | contract | here: [`edit`]; `/api/edit` and the browser engine's `edit_tile` both call [`edit::apply`] |
 //! | `message::*`, `StackItem` and its parts, the inventory's wire types | contract | here: [`message`], [`stack`], [`inventory`] |
 //! | `Storage`, `Entry`, `Clock` | seam | here: [`storage`], [`clock`] |
 //! | `TileRecord`, `Mistake`, `Options`, `Diag`, `AuditSummary`, `Tier` | engine | `dt-eval`, `dt-kit`, `dt-store`, used from there |
@@ -36,6 +37,7 @@
 pub mod api;
 pub mod call;
 pub mod clock;
+pub mod edit;
 pub mod events;
 pub mod host;
 pub mod inventory;

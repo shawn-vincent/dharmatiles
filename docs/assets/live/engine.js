@@ -20,6 +20,7 @@
 
 import { Queue } from './queue.js';
 import { ByteCache, CACHE_BYTES, keptBytes, runawayMs, storeKey } from './limits.js';
+import { engineFile } from './engine-files.js';
 import { DraftStore } from './draft-store.js';
 
 // The messages to and from the worker are typed where worker.js makes and takes them.
@@ -90,6 +91,8 @@ export class Engine {
     this.moduleBytes = null;
     /** @type {Map<string, {resolve: (text: string) => void, reject: (e: Error) => void}>} fixes asked of the worker, by id */
     this.fixes = new Map();
+    /** @type {Map<string, {resolve: (made: import('./engine-wire').Edited) => void, reject: (e: Error) => void}>} edits asked of the worker, by id */
+    this.edits = new Map();
   }
 
   /** The engine's manifest (`engine.json`: the hashed names of its files and its hash), read fresh each visit, once. */
@@ -105,33 +108,15 @@ export class Engine {
   }
 
   /**
-   * A file of the engine, from the Cache API when this engine's copy is there, else fetched and kept (the name carries the file's hash,
-   * so a kept copy is never the wrong one; caches of other engines are removed).  The cache is a convenience: when it cannot be used the
-   * file is fetched as it always was.
+   * A file of the engine, from the Cache API when this engine's copy is there, else fetched and kept (engine-files.js: the cache is
+   * named by the manifest's hash, so a copy kept for another engine is never used and its cache is removed).  A copy that cannot be
+   * kept is said on the console, once for each file.
    * @param {string} name @returns {Promise<Response>}
    */
   async #file(name) {
     const m = await this.manifest();
-    const url = new URL(`engine/${name}`, this.root);
-    /** @type {Cache | null} */
-    let kept = null;
-    try {
-      kept = await globalThis.caches?.open(`dt-engine-${m.hash}`) ?? null;
-      const hit = await kept?.match(url);
-      if (hit) return hit;
-    } catch {
-      kept = null; // no Cache API here (an insecure page, blocked site data): fetch as usual
-    }
-    const r = await fetch(url);
-    if (r.ok && kept) {
-      try {
-        await kept.put(url, r.clone());
-        for (const k of await globalThis.caches.keys()) if (k.startsWith('dt-engine-') && k !== `dt-engine-${m.hash}`) await globalThis.caches.delete(k);
-      } catch {
-        // a copy that cannot be kept (quota) only means the next visit fetches it again
-      }
-    }
-    return r;
+    const host = { caches: globalThis.caches, fetch: (/** @type {URL} */ u) => fetch(u), say: (/** @type {string} */ msg) => console.warn(msg) };
+    return engineFile(host, m.hash, new URL(`engine/${name}`, this.root));
   }
 
   /** The between-visits store of drafts, for this engine; null when the manifest cannot be read (`start` says so, loudly) or IndexedDB is missing. */
@@ -177,6 +162,8 @@ export class Engine {
     // a fix waiting on the worker that is stopped is lost with it: said, not left hanging
     for (const f of this.fixes.values()) f.reject(new Error('the engine was restarted before the fix was made'));
     this.fixes.clear();
+    for (const f of this.edits.values()) f.reject(new Error('the engine was restarted before the edit was made'));
+    this.edits.clear();
     const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     this.worker = worker;
     return new Promise((resolve, reject) => {
@@ -206,6 +193,23 @@ export class Engine {
     return new Promise((resolve, reject) => {
       this.fixes.set(id, { resolve, reject });
       Engine.post(worker, { type: 'fix', id, text, fix });
+    });
+  }
+
+  /**
+   * An edit of a source, made by the program's own `dt_service::edit::apply` in the worker: `req` names a node by its id (from a
+   * check's `nodes`) and the fingerprint of the text the ids were read at (`nodesRev`, or the last edit's `rev`).  Answers the new
+   * text, the node and the new text's fingerprint; rejects with the program's words when the edit is stale, incomplete or refused.
+   * @param {import('./engine-wire').EditReq} req @param {string} system @returns {Promise<import('./engine-wire').Edited>}
+   */
+  async edit(req, system) {
+    await this.start();
+    const id = `edit-${++this.serial}`;
+    const worker = this.worker;
+    if (!worker) throw new Error('The engine has no worker to make the edit.');
+    return new Promise((resolve, reject) => {
+      this.edits.set(id, { resolve, reject });
+      Engine.post(worker, { type: 'edit', id, req, system });
     });
   }
 
@@ -347,6 +351,14 @@ export class Engine {
       if (m.type === 'fixed') fix.resolve(m.text);
       else if (m.type === 'error') fix.reject(new Error(m.message));
       else fix.reject(new Error(`the worker answered a fix with a "${m.type}" message`));
+      return;
+    }
+    const edit = fixId === undefined ? undefined : this.edits.get(fixId);
+    if (fixId !== undefined && edit) {
+      this.edits.delete(fixId);
+      if (m.type === 'edited') edit.resolve(m.made);
+      else if (m.type === 'error') edit.reject(new Error(m.message));
+      else edit.reject(new Error(`the worker answered an edit with a "${m.type}" message`));
       return;
     }
     const r = this.running;

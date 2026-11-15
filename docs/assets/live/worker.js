@@ -8,9 +8,12 @@
 //   checked  {id, result}          the check: mistakes, notes and the map (dt_eval::map, the program's one producer)
 //   built    {id, ...}             a mesh, painted, with the gate's findings (and the STL of a full build)
 //   fixed    {id, text}            the source with a mistake's fix laid in (dt_doc::ops Op::Fix, the program's one applier)
+//   edited   {id, made}            the source with an edit made (dt_service::edit::apply, the editor's one applier): `made` is the new text, the node and the text's fingerprint
 //   error    {id, message, stack}  a trap or a throw, loud: the page shows it
 //
 // A fix is `{type: 'fix', id, text, fix}` (`fix` is the check's mistake's `fix`); it answers `fixed`, or `error`.
+// An edit is `{type: 'edit', id, req, system}` (`req` is the typed `EditReq`: an op, the node it names by id, and the fingerprint
+// of the text the ids were read at); it answers `edited`, or `error` with the program's refusal.  The page never writes tile text.
 // A job is `{id, steps: ['check', 'build'], text, system, seed, cells}`.  `cells` is cells per square: a number for a draft, 0
 // for the build's own finest, the detail the printer is given.
 // The compiled module (docs/engine/, `cargo xtask wasm`) is not in the repo and its files carry their hashes in their names: the page
@@ -29,16 +32,18 @@ export {}; // a module worker
 /** @typedef {{type: 'init', module: WebAssembly.Module, library: string, glue: string}} InitMsg  to the worker: the compiled module, the library as JSON, and the URL of the glue made with the module */
 /** @typedef {{type: 'forget', card: string}} ForgetMsg  to the worker: a card left the page, drop its step cache */
 /** @typedef {{type: 'fix', id: string, text: string, fix: import('./engine-wire').FixJson}} FixMsg  to the worker: lay a mistake's fix into the source */
+/** @typedef {{type: 'edit', id: string, req: import('./engine-wire').EditReq, system: string}} EditMsg  to the worker: make an edit (the program's `edit_tile`) */
 /** @typedef {{type: 'job', id: number} & JobSpec} JobMsg  to the worker: one job */
-/** @typedef {InitMsg | FixMsg | JobMsg | ForgetMsg} ToWorker */
+/** @typedef {InitMsg | FixMsg | EditMsg | JobMsg | ForgetMsg} ToWorker */
 /** @typedef {{type: 'ready', version: string}} ReadyMsg */
 /** @typedef {{type: 'progress', id: number} & Answers['dtProgress']} ProgressMsg */
 /** @typedef {{type: 'checked', id: number, result: Answers['check_tile'], ms: number}} CheckedMsg */
 /** @typedef {{type: 'built', id: number, ms: number, meta: Answers['build_tile().meta'], positions: Float32Array, colours: Float32Array, stl: Uint8Array}} BuiltMsg */
 /** @typedef {{type: 'fixed', id: string, text: string}} FixedMsg */
+/** @typedef {{type: 'edited', id: string, made: Answers['edit_tile']}} EditedMsg */
 /** @typedef {{type: 'idle', id: number}} IdleMsg  the job is done and nothing was built (the check failed, or only the check was asked) */
 /** @typedef {{type: 'error', id: number | string | undefined, message: string, stack: string}} ErrorMsg */
-/** @typedef {ReadyMsg | ProgressMsg | CheckedMsg | BuiltMsg | FixedMsg | IdleMsg | ErrorMsg} FromWorker */
+/** @typedef {ReadyMsg | ProgressMsg | CheckedMsg | BuiltMsg | FixedMsg | EditedMsg | IdleMsg | ErrorMsg} FromWorker */
 
 /** The worker's own scope, which the `DOM` lib types as a window. */
 const scope = /** @type {{ postMessage(m: FromWorker, transfer?: Transferable[]): void, onmessage: ((ev: MessageEvent<ToWorker>) => unknown) | null }} */ (
@@ -80,6 +85,10 @@ scope.onmessage = async (/** @type {MessageEvent<ToWorker>} */ ev) => {
     }
     if (m.type === 'fix') {
       scope.postMessage({ type: 'fixed', id: m.id, text: engine.fix_tile(m.text, JSON.stringify(m.fix)) });
+      return;
+    }
+    if (m.type === 'edit') {
+      scope.postMessage({ type: 'edited', id: m.id, made: answer('edit_tile', engine.edit_tile(JSON.stringify(m.req), m.system)) });
       return;
     }
     if (m.type !== 'job') throw new Error(`the worker was sent a "${/** @type {{ type: string }} */ (m).type}" message it does not know`);

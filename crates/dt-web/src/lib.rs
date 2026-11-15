@@ -57,6 +57,7 @@ impl std::fmt::Display for JsError {
     }
 }
 
+pub mod edit;
 pub mod service;
 
 /// The path the page's document is read as.
@@ -93,6 +94,15 @@ fn card_cache(card: &str) -> std::rc::Rc<dt_eval::Cache> {
         }
         cache
     })
+}
+
+/// Ask the C++ runtime's `operator new` for `bytes`: one the module's memory cannot give stops with its stage, size and memory
+/// (the program's panic, then the trap), as a failing Manifold allocation does.  `cargo xtask parity --too-big` calls it to
+/// see that.  A function of the test, not of a page.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn probe_operator_new(bytes: u32) {
+    dt_geom::probe_operator_new(bytes as usize);
 }
 
 /// Drop `card`'s step cache (the card was removed from the page).
@@ -490,6 +500,10 @@ pub struct Checked {
     /// page can say so before it tries, and refuse on a device that cannot carry it; null when the document
     /// has no tile that reads.
     pub full_cost: Option<dt_eval::FullCost>,
+    /// Every node of the text, by the id an edit names it with (`edit_tile`); empty when the document did not read.
+    pub nodes: Vec<dt_service::edit::NodeJson>,
+    /// The revision of the text those nodes were read from: what an edit carries as `read`.
+    pub nodes_rev: Option<String>,
 }
 
 /// Check `text` for `system` and describe what the overlay draws: JSON
@@ -524,6 +538,8 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
                     map: None,
                     square_mm: units.square_mm,
                     full_cost: None,
+                    nodes: Vec::new(),
+                    nodes_rev: None,
                 });
             }
         };
@@ -536,6 +552,15 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
                 map,
                 square_mm: units.square_mm,
                 full_cost: checked.tile.as_ref().map(dt_eval::full_cost),
+                // the text read as KDL: it read, or the check would not have got here
+                nodes: dt_doc::nodeid::table(text)
+                    .map_err(|e| {
+                        JsError::new(&format!("cannot list the nodes of the document: {e}"))
+                    })?
+                    .into_iter()
+                    .map(dt_service::edit::NodeJson::from)
+                    .collect(),
+                nodes_rev: Some(dt_service::edit::text_rev(text)),
             }),
             Err(ds) => json(&Checked {
                 ok: false,
@@ -544,6 +569,8 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
                 map: None,
                 square_mm: units.square_mm,
                 full_cost: None,
+                nodes: Vec::new(),
+                nodes_rev: None,
             }),
         }
     })
@@ -1104,7 +1131,7 @@ mod tests {
         assert_eq!(super::cards_cached(), super::MAX_CARD_CACHES - 1);
     }
 
-    fn lib() {
+    pub(crate) fn lib() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
         let mut m = BTreeMap::new();
         for group in ["parts", "printers", "tiles"] {
@@ -1172,6 +1199,8 @@ mod tests {
         all.add::<PrintedBoth>();
         all.add::<StageTick>();
         all.add::<FixJson>();
+        all.add::<edit::Edited>();
+        all.add::<dt_service::edit::EditReq>();
         let mut out = String::from(
             "// Generated from crates/dt-web/src/lib.rs (the engine's answers and the types they name) by\n\
              // `DT_CONTRACT=write cargo test -p dt-web --lib the_engine_contract_is_current`.\n\
@@ -1182,7 +1211,7 @@ mod tests {
         out.push_str(
             "/** Each engine function that answers JSON, and what the JSON is. */\n\
              export interface Answers {\n  analyze: Analysis;\n  check_tile: Checked;\n  explore: Explored;\n  \
-             printed: PrintedBoth | null;\n  \"build_tile().meta\": BuildMeta;\n  \"dtProgress\": StageTick;\n}\n\n\
+             printed: PrintedBoth | null;\n  edit_tile: Edited;\n  \"build_tile().meta\": BuildMeta;\n  \"dtProgress\": StageTick;\n}\n\n\
              /** A built tile (`Tile`): its getters, as wasm-bindgen exports them. */\n\
              export interface EngineTile {\n  readonly meta: string;\n  readonly stl: Uint8Array;\n  \
              readonly positions: Float32Array;\n  readonly colours: Float32Array;\n  free(): void;\n}\n\n\
@@ -1190,7 +1219,7 @@ mod tests {
              beside the Rust functions they are, so a script is checked the same whether a build is on disk or not. */\n\
              export interface Engine {\n  default(init: { module_or_path: WebAssembly.Module | string }): Promise<unknown>;\n  \
              version(): string;\n  set_library(json: string): void;\n  analyze(text: string, system: string): string;\n  \
-             check_tile(text: string, system: string): string;\n  fix_tile(text: string, fix: string): string;\n  \
+             check_tile(text: string, system: string): string;\n  fix_tile(text: string, fix: string): string;\n  edit_tile(req: string, system: string): string;\n  \
              printed(typed: string): string;\n  \
              build_tile(text: string, system: string, seed: number | null, cells: number, tier: string, card: string | null): EngineTile;\n  forget_card(card: string): void;\n  \
              explore(typed: string, system: string, bins: number, draws: number, seed: number): string;\n}\n",

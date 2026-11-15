@@ -195,7 +195,8 @@ fn capture(cmd: &mut Command) -> Result<Vec<u8>, String> {
 
 /// `cargo xtask parity --too-big`: a 2x2 cliff needs more than the 4 GB a wasm32 module can address, and must say so:
 /// the run fails, and its answer names the stage and the module's memory, not a memory fault. (About 100 s, so it
-/// is not in the parity set.)
+/// is not in the parity set.)  Then the C++ runtime's `operator new` is asked for more than the module can give and must
+/// say the same, not trap without a word (`operator-new.cpp`).
 fn run_too_big(root: &Path) -> Result<(), String> {
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), Into::into);
@@ -214,7 +215,7 @@ fn run_too_big(root: &Path) -> Result<(), String> {
         && said.contains("a browser tab can give it")
     {
         println!("too-big: the 2x2 cliff stopped with its stage and memory:\n{said}");
-        return Ok(());
+        return run_operator_new_fails(root, &bundle);
     }
     Err(format!(
         "parity --too-big: a 2x2 cliff should stop in the browser naming the stage and the memory; it gave status {}, stdout {said}, stderr {}",
@@ -290,4 +291,30 @@ fn run_service(root: &Path) -> Result<(), String> {
             "service: the worker's service and `dharmatiles build` differ on {SERVICE_TILE}\n  service: {browser}\n  program: {native}"
         ))
     }
+}
+
+/// `operator new` asked for all but a few hundred bytes of the 4 GB a wasm32 module can address says what it asked for
+/// and the module's memory, in the words a failing Manifold allocation uses.
+fn run_operator_new_fails(root: &Path, bundle: &Path) -> Result<(), String> {
+    let out = Command::new("node")
+        .current_dir(root)
+        .arg("xtask/parity.mjs")
+        .arg(bundle)
+        .arg("probe-new:4294967000")
+        .output()
+        .map_err(|e| format!("node: {e}"))?;
+    let said = String::from_utf8_lossy(&out.stdout);
+    if !out.status.success()
+        && said.contains("out of memory")
+        && said.contains("the geometry kernel asked for 4096 MB")
+        && said.contains("a browser tab can give it")
+    {
+        println!("too-big: operator new said its size and the memory:\n{said}");
+        return Ok(());
+    }
+    Err(format!(
+        "parity --too-big: a failing operator new should say its size and the memory; it gave status {}, stdout {said}, stderr {}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    ))
 }

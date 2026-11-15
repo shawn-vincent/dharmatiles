@@ -37,14 +37,19 @@
 #include <new>
 #include <typeinfo>
 
+// Defined by the program (manifold-csg-sys): reports that an allocation of `bytes` failed, and stops. It does not return.
+extern "C" [[noreturn]] void manifold_alloc_failed(size_t bytes);
+
 // ---- std::nothrow + __throw_bad_alloc (from new_helpers.cpp) ----
 
 namespace std {  // intentionally NOT versioned (matches libc++ upstream)
 
 const nothrow_t nothrow{};
 
+// An allocation the C++ runtime refused to make (a size past what the address space can give): said, not a bare trap.
+// (`operator new`'s own failures are operator-new.cpp's; this one is libc++'s throw path for a request it can see is too big.)
 [[noreturn]] void __throw_bad_alloc() {
-    __builtin_trap();
+    manifold_alloc_failed(static_cast<size_t>(-1));
 }
 
 }  // namespace std

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Queue, isStale } from '../../../docs/assets/live/queue.js';
-import { findControl, parseControls, rangeOf, readValue, writeValue } from '../../../docs/assets/live/controls.js';
+import { findControl, parseControls, rangeOf, readValue, setOp } from '../../../docs/assets/live/controls.js';
 import { CardLog } from '../../../docs/assets/live/site-log.js';
 import { countsText, statusOf } from '../js/messages.js';
 
@@ -59,25 +59,28 @@ test('a page picks controls by name, with ranges of its own', () => {
   assert.deepEqual(rangeOf({ name: 'width', min: 4, max: 30 }, 10), { min: 4, max: 30, step: 1 });
 });
 
-test('a control finds its value in the map and writes it where it is written, keeping unit, quotes and the rest of the source', () => {
+test('a control finds its value and its node in the map, and the edit it asks is typed: an op by node id, with the fingerprint, no text', () => {
   const source = 'tile size="1x1" seed=97 {\n  line shore wobble="5dmm" { through "(0sq, 0.6sq)" "(1sq, 0.6sq)" }  // é\n}\n';
-  const at = (needle, len) => { const i = Buffer.from(source).indexOf(needle); return [i, len ?? needle.length]; };
+  const nodes = [{ id: 'tile', at: 0, len: source.length }, { id: 'tile/line shore', at: 28, len: 60 }];
   const map = {
-    lines: [{ name: 'shore', sheet: { controls: [{ name: 'wobble', text: '"5dmm"', span: at('"5dmm"') }] } }],
-    tile: { controls: [{ name: 'seed', text: '97', span: at('97') }] },
+    lines: [{ name: 'shore', sheet: { at: 28, controls: [{ name: 'wobble', text: '"5dmm"' }] } }],
+    tile: { at: 0, controls: [{ name: 'seed', text: '97' }] },
   };
-  const w = findControl(map, 'wobble');
+  const w = findControl(map, nodes, 'wobble');
   assert.equal(w.owner, 'line shore');
+  assert.equal(w.id, 'tile/line shore');
   assert.deepEqual(readValue(w.text), { value: 5, unit: 'dmm', quoted: true });
-  const next = writeValue(source, w, 8.5);
-  assert.equal(next.text, source.replace('"5dmm"', '"8.5dmm"'));
-  // a second change before the next check goes to the span the first one left
-  const again = writeValue(next.text, { text: next.written, span: next.span }, 2);
-  assert.equal(again.text, source.replace('"5dmm"', '"2dmm"'));
-  const s = findControl(map, 'seed');
-  assert.equal(writeValue(source, s, 12).text, source.replace('seed=97', 'seed=12'));
-  assert.equal(findControl(map, 'nothing'), null);
-  assert.equal(findControl(null, 'seed'), null);
+  // the op carries the value and its unit as a value, never as KDL: the program writes the quotes
+  assert.deepEqual(setOp(source, 'abc', { id: w.id, name: 'wobble', unit: 'dmm' }, 8.5), {
+    read: 'abc', op: 'set', text: source, id: 'tile/line shore', name: 'wobble', value: '8.5dmm',
+  });
+  const s = findControl(map, nodes, 'seed');
+  assert.equal(s.id, 'tile');
+  assert.equal(setOp(source, 'abc', { id: s.id, name: 'seed', unit: '' }, 12).value, 12);
+  assert.equal(findControl(map, nodes, 'nothing'), null);
+  assert.equal(findControl(null, nodes, 'seed'), null);
+  // a control whose node the check did not list cannot be edited by id: it is not offered
+  assert.equal(findControl(map, [], 'wobble'), null);
 });
 
 const diag = (over = {}) => ({ code: 'dt::unit', message: '`5` has no unit', label: 'here', help: 'write 5dmm', file: 'tile.dtile', span: [10, 1], span16: [10, 1], line: 2, col: 5, fix: null, ...over });
