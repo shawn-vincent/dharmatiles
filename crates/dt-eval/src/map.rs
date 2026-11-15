@@ -761,10 +761,6 @@ fn points(w: &[WrittenEntry], at: Option<&Vec<[f64; 2]>>) -> Vec<WrittenPoint> {
 ///
 /// # Errors
 /// The regions' masks could not be made.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "permitted silence: parsing where None is the meaning (a probe of a written word or an optional parameter); permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
-)]
 pub fn json(
     c: &crate::Checked,
     text: &str,

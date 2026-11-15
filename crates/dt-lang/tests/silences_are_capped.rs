@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 /// The sites in the workspace's Rust that keep a refused call under an expectation of that lint.
-const SILENCES: usize = 166;
+const SILENCES: usize = 165;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let entries = std::fs::read_dir(dir).expect("a readable directory");
