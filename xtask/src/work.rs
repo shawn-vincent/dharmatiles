@@ -452,7 +452,8 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             }),
         ));
         steps.push((
-            "cargo xtask wasm --check: the crates the browser builds, linted for the browser".into(),
+            "cargo xtask wasm --check: the crates the browser builds, linted for the browser"
+                .into(),
             budget::step::WASM_CHECK,
             Box::new(|| crate::wasm::check(root)),
         ));
