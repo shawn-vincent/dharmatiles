@@ -172,6 +172,9 @@ fn source_hash(root: &Path) -> String {
     reason = "permitted silence: an environment variable or directory that is not set or not readable is the meaning (the default applies)"
 )]
 fn main() {
+    if let Err(e) = page_files() {
+        panic!("the page's files: {e}");
+    }
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
     let root = Path::new(&manifest).join("../..");
     let version = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
@@ -224,4 +227,106 @@ fn main() {
     };
     println!("cargo::rustc-env=DT_ENGINE_VERSION={engine}");
     println!("cargo::rustc-env=DT_SOURCE_HASH={}", source_hash(&root));
+}
+
+/// The content type of a served file, by extension.  A kind not listed here fails the build: a type is never guessed.
+fn content_type(path: &Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
+        "html" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "svg" => "image/svg+xml",
+        "woff2" => "font/woff2",
+        "" if path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("LICENSE")) =>
+        {
+            "text/plain; charset=utf-8"
+        }
+        _ => panic!(
+            "no content type for the page file {}: add its extension to content_type in build.rs",
+            path.display()
+        ),
+    }
+}
+
+/// Every file under `dir`, sorted, into `out`.
+fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) -> Result<(), String> {
+    let err = |e: std::io::Error| format!("cannot read {}: {e}", dir.display());
+    let mut entries = Vec::new();
+    for e in std::fs::read_dir(dir).map_err(err)? {
+        entries.push(e.map_err(err)?.path());
+    }
+    entries.sort();
+    for p in entries {
+        if p.is_dir() {
+            walk(&p, out)?;
+        } else {
+            out.push(p);
+        }
+    }
+    Ok(())
+}
+
+/// `$OUT_DIR/page_files.rs`: the editor page's served files (see `preview/assets.rs`), written from the directories
+/// themselves.  Typings (`*.d.ts`, `*.d.mts`) and the vendor bundle's entry are for the source's editor, not the
+/// browser.  Re-runs only when something under the directories it reads changes (`web/preview` is never watched
+/// whole: its `node_modules` is large).
+fn page_files() -> Result<(), String> {
+    let var = |k: &str| std::env::var(k).map_err(|e| format!("{k}: {e}"));
+    let root = Path::new(&var("CARGO_MANIFEST_DIR")?).join("../..");
+    let out = var("OUT_DIR")?;
+    let web = root.join("web/preview");
+    let assets = root.join("docs/assets");
+    let mut entries: Vec<(String, std::path::PathBuf)> = vec![
+        ("/".to_owned(), web.join("index.html")),
+        ("/style.css".to_owned(), web.join("style.css")),
+        ("/favicon.svg".to_owned(), web.join("favicon.svg")),
+        ("/logo.svg".to_owned(), assets.join("logo.svg")),
+        ("/theme.css".to_owned(), assets.join("theme.css")),
+    ];
+    for (dir, base) in [
+        (web.join("js"), &web),
+        (web.join("vendor"), &web),
+        (assets.join("fonts"), &assets),
+    ] {
+        let mut files = Vec::new();
+        walk(&dir, &mut files)?;
+        for f in files {
+            let name = f.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if name.ends_with(".d.ts") || name.ends_with(".d.mts") || name.ends_with(".entry.js") {
+                continue;
+            }
+            let rel = f.strip_prefix(base).map_err(|e| e.to_string())?;
+            entries.push((
+                format!("/{}", rel.to_string_lossy().replace('\\', "/")),
+                f.clone(),
+            ));
+        }
+    }
+    let mut src = String::from("[\n");
+    for (url, file) in &entries {
+        let file = file
+            .canonicalize()
+            .map_err(|e| format!("page file {} is not readable: {e}", file.display()))?;
+        src.push_str(&format!(
+            "    ({url:?}, {:?}, include_bytes!({:?})),\n",
+            content_type(&file),
+            file.display().to_string()
+        ));
+    }
+    src.push_str("]\n");
+    std::fs::write(Path::new(&out).join("page_files.rs"), src)
+        .map_err(|e| format!("cannot write page_files.rs: {e}"))?;
+    for f in ["index.html", "style.css", "favicon.svg"] {
+        println!("cargo::rerun-if-changed={}", web.join(f).display());
+    }
+    for d in [web.join("js"), web.join("vendor"), assets.join("fonts")] {
+        println!("cargo::rerun-if-changed={}", d.display());
+    }
+    for f in ["logo.svg", "theme.css"] {
+        println!("cargo::rerun-if-changed={}", assets.join(f).display());
+    }
+    Ok(())
 }
