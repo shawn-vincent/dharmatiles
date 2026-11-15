@@ -23,7 +23,7 @@ export { VIEWS } from './viewer/consts.js';
  * @typedef {typeof cameraMethods & typeof fadeMethods & typeof layersMethods & typeof sceneMethods & {
  *   controls: import('/vendor/OrbitControls.js').OrbitControls,
  *   sceneOn: boolean, sceneSel: Set<number>, groundMask: any, groundOn: boolean, groundZ?: number, bedGroup?: any, tween?: {done?: () => void, raf: number} | null,
- *   maxDistance?: number, onDebugChange?: (debug: object | null) => void,
+ *   maxDistance?: number | null, onDebugChange?: (debug: object | null) => void,
  *   sceneGeoms: Map<string, {geometry: any, painted: any, clean: any, triangles: number, grey: any}>,
  * }} ViewerParts
  */
@@ -315,6 +315,7 @@ export class Viewer extends Parts {
    * The point under canvas point (x, y), mm: on the tile where the eye
    * sees it, else on the plane z = `planeZ` (the datum when not given);
    * null when the ray misses even that.  {p: [x, y, z], onTile}.
+   * @param {number} x @param {number} y @param {number | null} [planeZ]
    */
   pointAt(x, y, planeZ = null) {
     if (planeZ == null && this.pickMesh && this.payload) {
@@ -359,7 +360,7 @@ export class Viewer extends Parts {
   /** Fade what isn't selected (on by default). */
   setFade(on) { this.fade = !!on; this.applyFade(); this.draw(); }
 
-  /** The centre of what entry (and piece) made, for flying to it; null when it has no triangles. */
+  /** The centre of what entry (and piece) made, for flying to it; null when it has no triangles. @param {number} entry @param {number | null} [piece] */
   centreOf(entry, piece = null) {
     const p = this.payload;
     if (!p) return null;

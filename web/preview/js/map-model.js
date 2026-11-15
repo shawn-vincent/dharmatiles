@@ -22,6 +22,7 @@ export function footprint(p) {
 /** The 4 x 4 matrix (column-major, three.js's) that puts a piece's tile mesh where the piece stands, raised by its bottom (the tile's zero stands there; the connector is below it). */
 export function matrixOf(p) {
   const f = footprint(p);
+  if (!f) throw new Error('A piece with no place (`at`) has no matrix.');
   const th = (norm(p.rot) * Math.PI) / 180;
   const c = Math.round(Math.cos(th)), s = Math.round(Math.sin(th));
   const [w, d] = p.size;
@@ -41,6 +42,7 @@ export function toWorld(p, x, y, z = 0) {
 /** The box a placed piece fills in the world: its footprint, from `below` mm under its bottom (the tile's connector hangs below the tile's zero) to `top` mm over it. */
 export function worldBox(p, top = 8, below = 0) {
   const f = footprint(p);
+  if (!f) throw new Error('A piece with no place (`at`) has no box.');
   const z0 = p.bottomMm || 0;
   return { lo: [f[0], -f[3], z0 - below], hi: [f[2], -f[1], z0 + top] };
 }
@@ -130,6 +132,7 @@ export function staleKeys(held, pieces) {
  * it stays where it was, and a size that jitters inside the margin never changes the answer.  A selected piece
  * wants at least low.
  */
+/** @param {number} px @param {string | null} [was] @param {boolean} [selected] */
 export function wantedTier(px, was = null, selected = false) {
   let t = was ? Math.max(0, TIERS.indexOf(was)) : 0;
   while (t < 2 && px >= (t === 0 ? UP.low : UP.full)) t += 1;

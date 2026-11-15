@@ -176,7 +176,7 @@ export function init() {
   fillIcons(document); // index.html's own icon marks
   try {
     const saved = localStorage.getItem('dt-backdrop');
-    if (BACKDROPS.some(([k]) => k === saved)) backdrop.value = saved;
+    if (saved != null && BACKDROPS.some(([k]) => k === saved)) backdrop.value = saved;
   } catch { /* private mode: the default stands */ }
   bindBackdrop();
   // the view buttons: four cameras pinned in their places, and all nine in the display menu, the one the camera is at pressed

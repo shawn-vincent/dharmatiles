@@ -34,6 +34,7 @@ function setup() {
   return { renderer, canvas, u, material, camera, top, scene: new THREE.Scene() };
 }
 
+/** @param {ArrayBuffer} buffer @param {string} plate @param {number} [w] @param {number} [h] @param {'top' | null} [view] */
 function draw(buffer, plate, w = W, h = H, view = null) {
   gl ??= setup();
   const { renderer, canvas, u, material, camera, top, scene } = gl;
@@ -49,6 +50,7 @@ function draw(buffer, plate, w = W, h = H, view = null) {
   mesh.frustumCulled = false;
   scene.add(mesh);
   const lo = p.meta.tileLo, hi = p.meta.tileHi;
+  if (!lo || !hi) throw new Error('The mesh carries no tile box (meta.tileLo, meta.tileHi), so its picture cannot be framed.');
   const centre = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (Math.max(lo[2], -1) + hi[2]) / 2);
   const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - Math.max(lo[2], -1));
   const [elev, azim] = [40, -120];

@@ -76,6 +76,7 @@ function regionUrl(r) {
     const c = document.createElement('canvas');
     c.width = t.w; c.height = t.h;
     const ctx = c.getContext('2d');
+    if (!ctx) throw new Error('This browser gave no 2D canvas for the region picture.');
     const img = ctx.createImageData(t.w, t.h);
     for (let i = 0; i < t.a.length; i++) img.data[i * 4 + 3] = t.a[i]; // black, as opaque as the cell is covered
     ctx.putImageData(img, 0, 0);

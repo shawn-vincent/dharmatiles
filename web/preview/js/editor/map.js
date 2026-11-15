@@ -1,6 +1,7 @@
 // @ts-check
 // The map over the view, the bar and its tools.
 
+import { need } from '../dom.js';
 import { valueOf } from '../lens.js';
 import { Overlay } from '../overlay.js';
 import { Tools } from '../place.js';
@@ -13,7 +14,8 @@ import { idAtByte } from '../rows.js';
 import { meshStack } from '../payload.js';
 import { doc, elementNamed, isEntry, itemOf, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
 
-export let tools = null; // the bar's tools (below)
+/** @type {Tools | null} the bar's tools (below) */
+export let tools = null;
 
 // ---- the map, the bar and its tools ----------------------------------------
 
@@ -52,7 +54,7 @@ function slotsOf(list, nodes) {
   });
 }
 /** The program's edit of one point: `make(q)` is the body for a point moved to `q` (squares from the south-west corner). */
-const pointEdit = (/** @type {{id: string, slot: any}} */ { id, slot }, /** @type {boolean} */ snap) => (/** @type {number[]} */ q) => ({ op: 'point', id, slot, q, snap });
+const pointEdit = (/** @type {{id: string | null, slot: any}} */ { id, slot }, /** @type {boolean} */ snap) => (/** @type {number[]} */ q) => ({ op: 'point', id, slot, q, snap });
 
 /**
  * The selection's handles: a line's points, a region's fill points, a
@@ -82,7 +84,7 @@ function handles() {
   if (isEntry(s)) {
     const it = itemOf(s);
     const c = (it?.place || []).find((x) => x.name === 'at');
-    if (!c || it.file !== file) return [];
+    if (!it || !c || it.file !== file) return [];
     const v = valueOf(c.text, 'at');
     // a fixed point: where the program reads it (a written pair with units,
     // from the north-west; the program says where it is)
@@ -133,7 +135,7 @@ async function insertNode(place, node, { select: sel } = {}) {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  tools = new Tools($('canvas'), viewer, overlay, { bar: $('place'), input: $('place-in'), list: $('place-list'), chip: $('tool') }, {
+  const bar = new Tools($('canvas'), viewer, overlay, { bar: $('place'), input: $('place-in'), list: $('place-list'), chip: $('tool') }, {
     elements: () => server.get().elements,
     defs: () => doc.get().names?.defs ?? [],
     sq: () => tile()?.plan?.squareMm,
@@ -147,17 +149,18 @@ export function init() {
     redraw: () => drawOverlay(),
     note: (text) => { const h = $('hint'); h.textContent = text; h.style.display = 'block'; h.style.left = '12px'; h.style.top = '56px'; setTimeout(() => { h.style.display = 'none'; }, 2600); },
   });
-  $('tool').querySelector('button').onclick = () => tools.stop();
+  tools = bar;
+  need($('tool'), 'button').onclick = () => bar.stop();
   viewer.onRenderHook(drawOverlay);
   // the map follows the text's last good check and the selection; the ground's heights, the mesh shown
   doc.subscribe(['map', 'tileId'], drawOverlay);
-  view.subscribe(['sel', 'hov', 'tileId'], () => { tools.paint(); drawOverlay(); });
+  view.subscribe(['sel', 'hov', 'tileId'], () => { bar.paint(); drawOverlay(); });
   server.subscribe(['tiles'], drawOverlay);
   view.subscribe(['shown', 'draft'], () => { if (viewer.payload) surfaceHeights(viewer.payload); });
   // while a tool is placing, Esc, Enter and Backspace are its (before the page's own keys)
   addEventListener('keydown', (e) => {
     const at = /** @type {HTMLElement} */ (e.target);
     const typing = at.tagName === 'INPUT' || at.tagName === 'TEXTAREA' || at.isContentEditable;
-    if (!typing && tools.key(e)) e.preventDefault();
+    if (!typing && bar.key(e)) e.preventDefault();
   }, true);
 }

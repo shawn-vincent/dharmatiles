@@ -83,8 +83,10 @@ function Menu({ p }) {
     /** @type {any} */ (live.find((b) => !b.hasAttribute('aria-disabled')) || live[0])?.focus({ preventScroll: true });
   }, [p]);
   const onKeyDown = (/** @type {any} */ e) => {
+    if (!box.current) return; // not mounted: no keys to handle
     const live = [...box.current.querySelectorAll('.ritem')];
-    const i = live.indexOf(document.activeElement);
+    const active = document.activeElement;
+    const i = active ? live.indexOf(active) : -1;
     const go = (/** @type {number} */ k) => /** @type {any} */ (live[(k + live.length) % live.length])?.focus({ preventScroll: false });
     if (e.key === 'ArrowDown') go(i < 0 ? 0 : i + 1);
     else if (e.key === 'ArrowUp') go(i < 0 ? live.length - 1 : i - 1);

@@ -172,6 +172,7 @@ function environmentLines(env, version) {
  * words and help, the source line it points at when known, and the
  * environment.  Plain text, for the clipboard.
  */
+/** @param {*} e @param {{ source?: string | null, env?: * }} [opts] */
 export function tileErrorDetails(e, { source = null, env = collectEnvironment(globalThis, known()) } = {}) {
   const out = [e.unexpected ? 'dharmatiles bug report' : 'dharmatiles tile error', ''];
   out.push(`Code:     ${e.code}`);

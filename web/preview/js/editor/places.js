@@ -80,6 +80,7 @@ export function goUpFolder() {
   return true;
 }
 
+/** @param {{ kind: string, id: string } | null} [match] */
 function focusRow(match = null) {
   const list = $('folder')?.querySelector('.flist');
   if (!list) return;
@@ -204,10 +205,11 @@ async function renameFromList(t, name) {
 
 async function duplicate(t) {
   const r = await host.duplicateTile(t.id);
-  if (r.status !== 200) { refusal(`Could not copy ${stemOf(t.path)}`, r); return; }
+  if (r.status !== 200 || r.body.id == null) { refusal(`Could not copy ${stemOf(t.path)}`, r); return; }
   await take(r);
   const name = stemOf(r.body.path);
-  toast(`Made ${name}`, () => host.deleteTile(r.body.id).then((d) => { if (d.status !== 200) refusal(`Could not take ${name} away again`, d); }), { label: 'Undo' });
+  const madeId = r.body.id;
+  toast(`Made ${name}`, () => host.deleteTile(madeId).then((d) => { if (d.status !== 200) refusal(`Could not take ${name} away again`, d); }), { label: 'Undo' });
 }
 
 /** Move tile `t` into `target` ({root, dir}); the Undo moves it back. */
@@ -336,7 +338,8 @@ async function copyToMine(t) {
   const r = await host.mine(t.id);
   if (r.status !== 200 || r.body?.id == null) { refusal(`Could not copy ${stemOf(t.path)} into My tiles`, r); return; }
   const name = stemOf(r.body.path);
-  toast(copiedNote(name, null), () => host.deleteTile(r.body.id).then((d) => { if (d.status !== 200) refusal(`Could not take the copy ${name} away`, d); }), { ms: 8000 });
+  const copyId = r.body.id;
+  toast(copiedNote(name, null), () => host.deleteTile(copyId).then((d) => { if (d.status !== 200) refusal(`Could not take the copy ${name} away`, d); }), { ms: 8000 });
 }
 
 // ---- row menus and keys ----------------------------------------------------------------------------------------------

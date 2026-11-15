@@ -176,6 +176,8 @@ export function variants(scope) {
  * A tile from the Add tiles level goes on the map: at `want` (squares of its own system, from a drop) or the nearest free
  * place to the map's corner (the program settles the place).  It gets a seed you do not own, unless you own none of it
  * and the map does not use it: then the tile's own seed is already new (and is not written).
+ * @param {*} t
+ * @param {*} [want]
  */
 export async function addTile(t, want = null) {
   if (!isMapView()) return null;

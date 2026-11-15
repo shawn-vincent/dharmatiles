@@ -15,6 +15,9 @@ import { doc, renameable, server, stem, tile, view, whenListed } from './stores.
 // A first tile: valid, printable ground in My tiles (or in the folder the browser is at, `into`:
 // {root, dir, name}), ready for the same text/lens/direct edits as every other tile.
 let makingIn = null;
+/**
+ * @param {{ root: string | null, dir?: string, name?: string } | null} [into]
+ */
 export function openNewTile(into = null) {
   view.set({ popover: null });
   makingIn = into && into.root != null ? { root: into.root, dir: into.dir || '' } : null;
@@ -33,6 +36,8 @@ export function openNewTile(into = null) {
  * Rename tile `t`'s file (the open one is saved or kept first, keeps its history and its level, and is
  * opened again under its new name): {ok: true, id}, or {ok: false} with `r` the reply that refused it
  * (`kept` when unsaved changes were kept instead).
+ * @param {*} t @param {string} name
+ * @returns {Promise<{ ok: true, id: string, kept?: undefined, r?: undefined } | { ok: false, kept: true, r?: undefined } | { ok: false, r: *, kept?: undefined }>}
  */
 export async function renameTile(t, name) {
   const open = t.id === view.get().tileId;
@@ -113,7 +118,7 @@ async function undoMine(copy, lib) {
  * positions of the library tile's text, called only when the copy's text is the same) and say so.
  * False when this tile is not one that is copied (it says why instead).
  */
-async function mineIt(replay) {
+async function mineIt(/** @type {{ patch?: *, run?: () => Promise<*> } | null} */ replay) {
   const t = tile(), d = doc.get();
   if (!t) return false;
   if (!t.path.startsWith('lib:') || d.file !== t.path) {

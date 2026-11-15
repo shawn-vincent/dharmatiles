@@ -1,5 +1,5 @@
 {
-  "//": "The whole page is checked against the server's contract (js/api.d.ts, generated from the Rust types): every .js file under js/ is, with no file opting out (a test refuses `@ts-nocheck`), so a new file is checked from its first line.  `strict` is not on yet: `strictNullChecks` alone shows about 580 places and `noImplicitAny` about 5000 (callbacks and handlers with no types), so the next step is those two, one at a time.  The vendored libraries are typed by the .d.ts/.d.mts beside them (vendor/), and `paths` points at those.  `npm test` runs this before the page's tests.",
+  "//": "The whole page is checked against the server's contract (js/api.d.ts, generated from the Rust types): every .js file under js/ is, with no file opting out (a test refuses `@ts-nocheck`), so a new file is checked from its first line.  `strictNullChecks` is on (an element a lookup may not find is `need(root, selector)`, js/dom.js, which throws naming it; a value that can be null is handled or its type says so).  `strict` as a whole is not on yet: `noImplicitAny` shows about 5000 places (callbacks and handlers with no types), so that is the next step.  The vendored libraries are typed by the .d.ts/.d.mts beside them (vendor/), and `paths` points at those.  `npm test` runs this before the page's tests.",
   "compilerOptions": {
     "allowJs": true,
     "checkJs": true,
@@ -23,6 +23,7 @@
     ],
     "types": [],
     "strict": false,
+    "strictNullChecks": true,
     "noImplicitAny": false,
     "skipLibCheck": false
   },

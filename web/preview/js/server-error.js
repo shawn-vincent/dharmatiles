@@ -12,6 +12,7 @@
 // shows and copies the whole chain.
 
 export class ServerError extends Error {
+  /** @param {*} data @param {number | null} [status] */
   constructor(data, status = null) {
     super(data.message);
     this.name = 'ServerError';
@@ -34,6 +35,7 @@ export class ServerError extends Error {
  * messages, at the tile, with its place and help.
  */
 export class TileMistake extends Error {
+  /** @param {string} message @param {string | null} [code] */
   constructor(message, code = null) {
     super(message);
     this.name = 'TileMistake';

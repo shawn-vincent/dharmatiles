@@ -5,6 +5,7 @@
 // which file to show; it knows nothing of the selection or the view.
 
 import { suggest } from '../complete.js';
+import { need } from '../dom.js';
 import { effect, signal } from '@preact/signals-core';
 import { describeChange } from '../history.js';
 import { html, render } from '../view/html.js';
@@ -40,7 +41,7 @@ doc.derive('docRev', () => heldSource()?.rev ?? null);
 doc.derive('tileId', () => heldSource()?.tile ?? null);
 doc.derive('file', () => heldSource()?.file ?? null);
 
-const run = { lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, saving: false, openText: '' };
+const run = { lastKind: /** @type {string | null} */ (null), lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, saving: false, openText: '' };
 
 // The history is the page's one (js/doc-history.js): a tile's source is a document whose steps are made here,
 // typing and the lens, each `{before, after, label, change, caret}`; a print list or a map is a document the
@@ -137,6 +138,11 @@ function clearDocument() {
   shownSid.value = null;
   doc.set({ text: null, writable: false, stack: null, map: null, nodes: null, nodesRev: null, names: null, conflict: null, note: null });
 }
+/**
+ * @param {string} text
+ * @param {string} kind
+ * @param {string | null} [label]
+ */
 function record(text, kind, label = null) {
   // a document the program owns has its steps from the program: the source's saves (save() below)
   if (owned()) return;
@@ -173,6 +179,10 @@ export function undo(step) {
  * The user changed the text: `kind` is type, lens, view, or drag (a scrub
  * under way, kept out of the history until it ends).  `text` is put in the
  * pane unless typing put it there.
+ * @param {string} text
+ * @param {string} kind
+ * @param {string | null} [label]
+ * @param {number | null} [caret]
  */
 export function edited(text, kind, label = null, caret = null) {
   if (text !== texts.text) texts.setText(text, caret);
@@ -605,7 +615,7 @@ export function abandonChanges() {
 
 // ---- completion -------------------------------------------------------------
 
-const comp = { s: null, i: 0 };
+const comp = { s: /** @type {NonNullable<ReturnType<typeof suggest>> | null} */ (null), i: 0 };
 function openComp(force) {
   const elements = server.get().elements;
   if (!doc.get().writable || !elements.length) return closeComp();
@@ -617,14 +627,15 @@ function openComp(force) {
 function renderComp() {
   const box = $('comp');
   box.replaceChildren();
+  if (!comp.s) return;
   comp.s.items.forEach((it, i) => {
     const d = document.createElement('div');
     d.className = `it fam-${it.family || 'doc'}${i === comp.i ? ' on' : ''}`;
     d.setAttribute('role', 'option');
     d.setAttribute('aria-selected', String(i === comp.i));
     d.innerHTML = '<i class="sw"></i><span class="nm"></span><span class="ds"></span>';
-    d.querySelector('.nm').textContent = it.label;
-    d.querySelector('.ds').textContent = it.about || it.kind;
+    need(d, '.nm').textContent = it.label;
+    need(d, '.ds').textContent = it.about || it.kind;
     d.onpointerdown = (e) => { e.preventDefault(); comp.i = i; acceptComp(); };
     box.append(d);
   });
@@ -639,9 +650,9 @@ function renderComp() {
 }
 function closeComp() { comp.s = null; $('comp').hidden = true; }
 function acceptComp() {
-  const it = comp.s?.items[comp.i];
-  if (!it) return closeComp();
   const s = comp.s;
+  const it = s?.items[comp.i];
+  if (!s || !it) return closeComp();
   closeComp();
   texts.insert(it.insert, s.from, s.to);
 }

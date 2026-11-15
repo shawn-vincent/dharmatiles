@@ -17,7 +17,7 @@ import { targetLabel } from './target.js';
  * What the export has done for the target `target`: it says what was written only while the target is the one it was
  * written for (a new target makes it no longer the answer), so nothing has to clear it.
  */
-const exporting = signal({ busy: false, files: null, error: null, out: null, target: null });
+const exporting = signal(/** @type {{ busy: boolean, files: string[] | null, error: string | null, out: { out?: string } | null, target: string | null }} */ ({ busy: false, files: null, error: null, out: null, target: null }));
 const with3mf = signal(false); // the card's "Also a painted 3MF"
 const set = (/** @type {any} */ patch) => { exporting.value = { ...exporting.value, ...patch }; };
 const targetNow = () => targetLabel(server.get());

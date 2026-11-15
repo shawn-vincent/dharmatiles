@@ -149,6 +149,7 @@ const sameFolder = (a, b) => (a.root ?? null) === (b.root ?? null) && (a.dir || 
  * Go to the Add step at folder `level` (`{root, dir}`; the folder it was last at, else where it starts, with none): from the map it opens, from a
  * folder it is a step to another folder, which takes the other of the step's two sections so that the shell slides between them.  The one
  * way into the Add step, for a press on a row, a crumb, the keys and an address.
+ * @param {{ root?: number | null, dir?: string } | null} [level]
  */
 export function goAdd(level = null) {
   const { madd, addSlot } = view.get();
@@ -203,7 +204,11 @@ export function setFace(face, { focus = false } = {}) {
 }
 const sourceLine = (sel, byte) => (byte != null ? lineOfByte(byte) : sel?.kind === 'tile' ? null : caretLineFor(linesOf(sel)));
 
-/** Flip to the source with the caret on the selected thing's line, or on byte `at` (a control's own text). */
+/**
+ * Flip to the source with the caret on the selected thing's line, or on byte `at` (a control's own text).
+ * @param {*} sel
+ * @param {number | null} [at]
+ */
 export function showSourceAt(sel, at = null) {
   view.set({ face: 'source' });
   const n = sourceLine(sel, at);

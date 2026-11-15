@@ -99,7 +99,8 @@ export function sheetGeometry(s) {
   }
   const tri = [], edge = [], shade = [];
   const sh = (i, j) => (s.shade ? s.shade[j * nx + i] : 0.5);
-  const p = (i, j) => [i * step, j * step, at(i, j)];
+  // only a drawn cell is walked, and a drawn cell has all four corners set
+  const p = (i, j) => [i * step, j * step, /** @type {number} */ (at(i, j))];
   const cell = (i, j) => i >= 0 && j >= 0 && i < cx && j < cy && drawn[j * cx + i] === 1;
   for (let j = 0; j < cy; j++) {
     for (let i = 0; i < cx; i++) {

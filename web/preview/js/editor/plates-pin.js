@@ -15,7 +15,7 @@ const topDown = () => viewer.camera.position.clone().sub(viewer.controls.target)
 const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib:') && writableOf(t); };
 
 /** The piece of the plate in view that triangle owner `n` is: its layout row. */
-const rowOf = (n) => plan()?.layout?.[plan().view]?.pieces?.[n] ?? null;
+const rowOf = (/** @type {number} */ n) => { const p = plan(); return p?.layout?.[p.view]?.pieces?.[n] ?? null; };
 
 /** One change to the map or print list in view: an action on its document, with a toast whose Undo is the history's. */
 async function change(label, note, step) {
@@ -40,6 +40,7 @@ function onDown(e) {
   if (!isPlatesView() || e.button !== 0 || e.shiftKey || e.pointerType === 'touch' || !editable() || !topDown()) return;
   const p = plan();
   if (!p?.planned) return;
+  if (!p.bed) { toast('This printer names no bed size, so a piece cannot be pinned on it.', null, { ms: 6000 }); return; }
   const r = $('canvas').getBoundingClientRect();
   const h = viewer.pick(e.clientX - r.left, e.clientY - r.top);
   if (!h || h.entry < 0) return;
@@ -73,6 +74,7 @@ async function onUp() {
   if (!d) return;
   if (!d.moved || !d.to) { viewer.setGhostRect(null); return; }
   const p = plan();
+  if (!p?.bed) { viewer.setGhostRect(null); return; } // onDown has said why
   const bed = p.bed;
   try {
     await pin(d.row.id, p.view + 1, d.to.x, bed[1] - d.to.y - d.row.d, d.row.turned, d.row.name);

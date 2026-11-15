@@ -138,8 +138,8 @@ function markText() {
   // each points to its message), plus a mistake the check just found whose message has not arrived yet.
   const words = (m) => `${m.text}${m.help ? `. ${m.help[0].toUpperCase()}${m.help.slice(1)}` : ''}`;
   /** @type {Array<{line: number, message: string, severity: string, id?: number, fix: import('../api').FixJson | null, file: string | null}>} */
-  const errs = (tileId && texts.file ? log.inFile(tileId, texts.file) : []).filter((m) => m.span.line)
-    .map((m) => ({ line: m.span.line, message: words(m), severity: m.severity === 'error' ? 'error' : 'warning', id: m.seq, fix: m.fix ?? null, file: m.span.file }));
+  const errs = (tileId && texts.file ? log.inFile(tileId, texts.file) : [])
+    .flatMap((m) => (m.span?.line ? [{ line: m.span.line, message: words(m), severity: m.severity === 'error' ? 'error' : 'warning', id: m.seq, fix: m.fix ?? null, file: m.span.file }] : []));
   const found = [...(live ? d.errors : []), ...(!dirty() ? t?.errors || [] : [])];
   for (const e of found) {
     if ((e.file && e.file !== texts.file) || !e.line || errs.some((k) => k.line === e.line && k.severity === 'error')) continue;

@@ -32,7 +32,7 @@ export function clauseTitle(c) {
 /** @param {RegionSheet | null | undefined} sh */
 export function regionKind(sh) {
   const clauses = sh?.clauses || [];
-  if (!clauses.length) return 'bucket';
+  if (!sh || !clauses.length) return 'bucket';
   return sh.boundedBy || sh.fill ? 'mixed' : 'places';
 }
 

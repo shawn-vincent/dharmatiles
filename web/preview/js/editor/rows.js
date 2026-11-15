@@ -196,6 +196,9 @@ async function insertEntry(place, offer) {
 /**
  * The Add menu for list position `slot` (the end when left out): every element, those the plan lets stand
  * there first-class, the rest listed with the plan's reason.  Choosing one writes it and opens its level.
+ * @param {*} anchor
+ * @param {number | null} [slot]
+ * @param {{ phrase?: string | null, align?: string }} [opts]
  */
 export async function openAdd(anchor, slot = null, { phrase = null, align = 'left' } = {}) {
   const rows = list();
