@@ -207,9 +207,9 @@ else
     for lib in wasm-cxx-shim-build/libc/libwasm-cxx-shim-libc.a \
                wasm-cxx-shim-build/libcxx/libwasm-cxx-shim-libcxx.a \
                wasm-cxx-shim-build/libm/libwasm-cxx-shim-libm.a \
-               manifold-build-wasm32-uu/src/libmanifold.a \
-               manifold-build-wasm32-uu/bindings/c/libmanifoldc.a \
-               manifold-build-wasm32-uu/_deps/clipper2-build/libClipper2.a; do
+               manifold-build-wasm32-uu-*/src/libmanifold.a \
+               manifold-build-wasm32-uu-*/bindings/c/libmanifoldc.a \
+               manifold-build-wasm32-uu-*/_deps/clipper2-build/libClipper2.a; do
         if [ -f "$out_dir/$lib" ]; then
             size=$(wc -c < "$out_dir/$lib" | tr -d ' ')
             printf '  %s (%s bytes)\n' "$lib" "$size"
@@ -220,7 +220,7 @@ else
     # Pull a few interesting lines out of CMakeCache.txt — the full
     # file is huge and noisy; these tell us what compiler + flags
     # cmake locked in.
-    for cache in wasm-cxx-shim-build/CMakeCache.txt manifold-build-wasm32-uu/CMakeCache.txt; do
+    for cache in wasm-cxx-shim-build/CMakeCache.txt manifold-build-wasm32-uu-*/CMakeCache.txt; do
         path="$out_dir/$cache"
         if [ -f "$path" ]; then
             printf '\n--- %s (selected lines) ---\n' "$cache"
@@ -232,8 +232,8 @@ else
     # the gold-standard artifacts.
     for log in wasm-cxx-shim-build/CMakeFiles/CMakeError.log \
                wasm-cxx-shim-build/CMakeFiles/CMakeOutput.log \
-               manifold-build-wasm32-uu/CMakeFiles/CMakeError.log \
-               manifold-build-wasm32-uu/CMakeFiles/CMakeOutput.log; do
+               manifold-build-wasm32-uu-*/CMakeFiles/CMakeError.log \
+               manifold-build-wasm32-uu-*/CMakeFiles/CMakeOutput.log; do
         tail_file "$out_dir/$log" 200
     done
 fi

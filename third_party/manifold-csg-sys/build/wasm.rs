@@ -247,8 +247,8 @@ fn which(name: &str) -> Option<PathBuf> {
     Some(PathBuf::from(path.lines().next()?.trim()))
 }
 
-/// Every `patches/*.patch`, by name, as a cmake list (`;`-joined absolute paths).
-fn carried_patches() -> String {
+/// Every `patches/*.patch`, in name order.
+fn patch_files() -> Vec<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("patches");
     let mut patches: Vec<PathBuf> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
@@ -257,10 +257,37 @@ fn carried_patches() -> String {
         .collect();
     patches.sort();
     patches
+}
+
+/// The carried patches as a cmake list (`;`-joined absolute paths).
+fn carried_patches() -> String {
+    patch_files()
         .iter()
         .map(|p| p.display().to_string())
         .collect::<Vec<_>>()
         .join(";")
+}
+
+/// What the patch set is, as 16 hex digits (FNV-1a over each patch's name and bytes).  The Manifold source FetchContent
+/// fetches is patched once, when it is populated; a source populated under one patch set and patched again under another
+/// fails (`patch does not apply`: the old patches are already in it).  So the folder the wasm Manifold is fetched and built
+/// in is named by this: another patch set is another folder, fetched and patched fresh, by construction.
+fn patch_set_key() -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut eat = |bytes: &[u8]| {
+        for b in bytes {
+            h ^= u64::from(*b);
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+    };
+    for p in patch_files() {
+        let name = p.file_name().expect("a file read_dir listed has a name");
+        eat(name.as_encoded_bytes());
+        eat(&[0]);
+        eat(&std::fs::read(&p).unwrap_or_else(|e| panic!("cannot read {}: {e}", p.display())));
+        eat(&[0]);
+    }
+    format!("{h:016x}")
 }
 
 pub fn build_wasm_unknown_unknown() {
@@ -417,7 +444,8 @@ pub fn build_wasm_unknown_unknown() {
     // `<mutex>` stub) and calls the helper. See WASM_CXX_SHIM_TAG above
     // for the pinned version.
 
-    let manifold_build = out_dir.join("manifold-build-wasm32-uu");
+    // named by the patch set: see `patch_set_key`
+    let manifold_build = out_dir.join(format!("manifold-build-wasm32-uu-{}", patch_set_key()));
 
     let status = Command::new("cmake")
         .args([

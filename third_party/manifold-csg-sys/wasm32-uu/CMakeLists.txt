@@ -10,7 +10,7 @@
 #
 # Invoked from manifold-csg-sys/build.rs via:
 #
-#   cmake -S wasm32-uu/ -B <out>/manifold-build-wasm32-uu \
+#   cmake -S wasm32-uu/ -B <out>/manifold-build-wasm32-uu-<patch set> \
 #       -DCMAKE_TOOLCHAIN_FILE=<shim>/cmake/toolchain-wasm32.cmake \
 #       -DWASM_CXX_SHIM_DIR=<shim_src> \
 #       -DWASM32_UU_INC_DIR=<wasm32-uu/include> \
