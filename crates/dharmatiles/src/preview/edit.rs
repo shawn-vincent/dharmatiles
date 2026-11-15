@@ -1115,15 +1115,70 @@ pub(super) fn printed_set(shared: &Shared, v: PrintedSetReq) -> Out<PrintedSetRe
         .map_err(|e| fail::refused("422 Unprocessable Entity", e.0))
 }
 
-pub(super) fn edit(_: &Shared, req: EditReq) -> Out<EditRes> {
-    use dt_doc::ops::{Kind, Op, Place, apply};
-    let made = |text: &str, op: Op| match apply(Kind::Tile, text, &op) {
+/// Where the document an edit is read as stands, for a reader that needs a place to resolve a `use` from: the
+/// library's tiles folder, so a part is found as it is from a library tile.
+const EDIT_PATH: &str = "lib:tiles/edit.dtile";
+
+/// The mistakes of a tile as the whole check finds them (its `use`s, heights and the plan of its stack), so that
+/// an edit is held to what the page would show: [`dt_doc::ops::Checked`] compares the old text's with the new's.
+struct Evaluated<'a>(&'a dt_eval::Options);
+
+impl dt_doc::ops::Reader for Evaluated<'_> {
+    fn mistakes(&self, kind: dt_doc::ops::Kind, text: &str) -> Vec<dt_doc::ops::Flaw> {
+        if kind != dt_doc::ops::Kind::Tile {
+            return dt_doc::ops::Plain.mistakes(kind, text);
+        }
+        let src = Overlay(BTreeMap::from([(EDIT_PATH.to_owned(), text.to_owned())]));
+        match dt_eval::check(&src, EDIT_PATH, self.0) {
+            Ok(_) => Vec::new(),
+            Err(errs) => errs
+                .iter()
+                .map(|d| dt_doc::ops::Flaw {
+                    code: d.code.to_owned(),
+                    message: d.message.clone(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// How an edit that cannot be made is told: the mistakes it would have added are a 422's `errors`, so the page
+/// says why in the words it says any mistake in (`whyOf`); any other refusal is its words.
+pub(super) fn refusal(e: &dt_doc::ops::EditError) -> Reply {
+    use dt_doc::ops::EditError;
+    let EditError::Adds(added) = e else {
+        return fail::refused("422 Unprocessable Entity", e.to_string());
+    };
+    let list: Vec<dt_eval::Mistake> = added
+        .iter()
+        .map(|f| dt_eval::Mistake {
+            code: f.code.clone(),
+            message: f.message.clone(),
+            file: None,
+            line: None,
+            column: None,
+            help: Some("The edit was not made: it would add a mistake the text does not have.".to_owned()),
+            fix: None,
+            unexpected: false,
+        })
+        .collect();
+    let message = added
+        .first()
+        .map_or_else(|| e.to_string(), |f| f.message.clone());
+    fail::refused_with("422 Unprocessable Entity", message, |b| b.errors = Some(list))
+}
+
+pub(super) fn edit(shared: &Shared, req: EditReq) -> Out<EditRes> {
+    use dt_doc::ops::{Kind, Op, Place, apply_with};
+    let opts = shared.options();
+    let reader = Evaluated(&opts);
+    let made = |text: &str, op: Op| match apply_with(&reader, Kind::Tile, text, &op) {
         Ok(d) => Ok(EditRes {
             text: d.text,
             id: d.id,
             at: d.at,
         }),
-        Err(e) => Err(fail::refused("422 Unprocessable Entity", e.to_string())),
+        Err(e) => Err(refusal(&e)),
     };
     let v = &req.op;
     let text_of = match v {
@@ -1358,34 +1413,58 @@ pub(super) fn save(shared: &Shared, t: &TileRef, v: SaveReq) -> Out<SaveRes> {
     Ok(SaveRes { doc_rev: e.rev })
 }
 
-/// `use "parts/grass"` in a library tile names a library file; in a copy
-/// it must say so (`use "lib:parts/grass"`).  The build's files say which.
-fn pin_uses(text: &str, files: &BTreeMap<String, Option<SystemTime>>) -> String {
-    let mut out = String::with_capacity(text.len());
-    for line in text.split_inclusive('\n') {
-        let t = line.trim_start();
-        let pinned = t.strip_prefix("use ").and_then(|rest| {
-            let rest = rest.trim_start();
-            let target = rest.strip_prefix('"')?.split('"').next()?;
-            if target.starts_with(dt_eval::LIB) || target.starts_with('/') {
-                return None;
-            }
-            let want = format!("/{}", target.trim_end_matches(".dtile"));
-            let lib = files.keys().find(|f| {
-                f.starts_with(dt_eval::LIB)
-                    && (f.trim_end_matches(".dtile").ends_with(&want)
-                        || f.trim_end_matches(".dtile")
-                            == format!("{}{}", dt_eval::LIB, &want[1..]))
-            })?;
-            Some(line.replacen(
-                &format!("\"{target}\""),
-                &format!("\"{}\"", lib.trim_end_matches(".dtile")),
-                1,
-            ))
-        });
-        out.push_str(pinned.as_deref().unwrap_or(line));
+/// `use "parts/grass"` in a library tile names a library file; in a copy it must say so (`use "lib:parts/grass"`).
+/// The build's files say which.  Each `use` line is one [`Op::SetArg`](dt_doc::ops::Op::SetArg) through the
+/// checked `apply`, at the node the decoder says the line is: a `use` inside a string or a comment is not one.
+fn pin_uses(
+    text: &str,
+    files: &BTreeMap<String, Option<SystemTime>>,
+    opts: &dt_eval::Options,
+) -> Result<String, Reply> {
+    use dt_doc::ops::{Kind, Op, apply_with};
+    let reader = Evaluated(opts);
+    let refused = |e: dt_doc::ops::EditError| refusal(&e);
+    let uses = dt_doc::uses("tile", text).map_err(|errs| {
+        fail::mistakes(&errs.iter().map(dt_eval::Diag::from).collect::<Vec<_>>())
+    })?;
+    // every id is read from the text as it is now: a SetArg changes the bytes of its own value only, and the
+    // nodes keep their ids, so the table is read once
+    let table = dt_doc::nodeid::table(text).map_err(refused)?;
+    let mut out = text.to_owned();
+    for u in &uses {
+        let target = u.path.value.as_str();
+        if target.starts_with(dt_eval::LIB) || target.starts_with('/') {
+            continue;
+        }
+        let want = format!("/{}", target.trim_end_matches(".dtile"));
+        let Some(lib) = files.keys().find(|f| {
+            f.starts_with(dt_eval::LIB)
+                && (f.trim_end_matches(".dtile").ends_with(&want)
+                    || f.trim_end_matches(".dtile") == format!("{}{}", dt_eval::LIB, &want[1..]))
+        }) else {
+            continue;
+        };
+        let Some(node) = table.iter().find(|n| n.at == u.span.offset()) else {
+            return Err(fail::failure(
+                "500 Internal Server Error",
+                format!("the decoder's `use \"{target}\"` is at a byte no node starts at"),
+            ));
+        };
+        let value = kdl::KdlValue::String(lib.trim_end_matches(".dtile").to_owned());
+        out = apply_with(
+            &reader,
+            Kind::Tile,
+            &out,
+            &Op::SetArg {
+                id: &node.id,
+                index: 0,
+                value,
+            },
+        )
+        .map_err(refused)?
+        .text;
     }
-    out
+    Ok(out)
 }
 
 pub(super) fn mine(shared: &Shared, t: &TileRef, _: Nothing) -> Out<Listed> {
@@ -1405,7 +1484,7 @@ pub(super) fn mine(shared: &Shared, t: &TileRef, _: Nothing) -> Out<Listed> {
         .unwrap_or("tile")
         .trim_end_matches(".dtile")
         .to_owned();
-    let dest = write_new(&home(shared)?, &stem, &pin_uses(&text, files))?;
+    let dest = write_new(&home(shared)?, &stem, &pin_uses(&text, files, &shared.options())?)?;
     Ok(listed(shared, &dest))
 }
 
@@ -1609,10 +1688,17 @@ mod tests {
             ("lib:parts/grass.dtile".to_owned(), None),
         ]);
         let text = "// a\nuse \"parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile {}\n";
+        let opts = dt_eval::Options::default();
         assert_eq!(
-            pin_uses(text, &files),
+            pin_uses(text, &files, &opts).unwrap(),
             "// a\nuse \"lib:parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile {}\n"
         );
+        // a `use` in a comment or a string, or written with other spacing, is judged by the decoder
+        let odd = "about \"use \\\"parts/grass\\\" x\"\n// use \"parts/grass\" y\nuse   \"parts/grass\"   lawn\ntile {}\n";
+        let got = pin_uses(odd, &files, &opts).unwrap();
+        assert!(got.contains("use   \"lib:parts/grass\"   lawn"), "{got}");
+        assert!(got.contains("// use \"parts/grass\" y"), "{got}");
+        assert!(got.contains("about \"use \\\"parts/grass\\\" x\""), "{got}");
     }
 
     fn new_named(shared: &Shared, name: &str) -> Listed {

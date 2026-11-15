@@ -144,7 +144,31 @@ pub(super) fn bad(msg: &str) -> Reply {
 pub(super) fn edit_err(e: EditError) -> Reply {
     match e {
         EditError::Unread(d) => diags(&d),
+        // an edit the checked `apply` refuses for the mistake it would add is told as a mistake, at 422
+        e @ EditError::Adds(_) => super::edit::refusal(&e),
         e => bad(&e.to_string()),
+    }
+}
+
+/// Why a list's edit was not made: the reply the page gets.  A closure of [`edit_list`] gives one by `?` from
+/// words (a 400) or from an [`EditError`] (as [`edit_err`] tells it).
+pub(super) struct ListErr(Reply);
+
+impl From<String> for ListErr {
+    fn from(m: String) -> Self {
+        Self(bad(&m))
+    }
+}
+
+impl From<&str> for ListErr {
+    fn from(m: &str) -> Self {
+        Self(bad(m))
+    }
+}
+
+impl From<EditError> for ListErr {
+    fn from(e: EditError) -> Self {
+        Self(edit_err(e))
     }
 }
 
@@ -259,7 +283,7 @@ pub(super) fn edit_list<X>(
     shared: &Shared,
     id: &str,
     rev: u64,
-    f: impl FnOnce(&str, &dt_doc::map::PrintList) -> Result<(String, X), String>,
+    f: impl FnOnce(&str, &dt_doc::map::PrintList) -> Result<(String, X), ListErr>,
 ) -> Out<(ListEdited, X)> {
     let path = list_path(shared, id)?;
     let mut gave_note = None;
@@ -268,7 +292,7 @@ pub(super) fn edit_list<X>(
         let named = apply(Kind::Map, text, &Op::GiveIds).map_err(edit_err)?;
         let (named, gave) = (named.text, named.gave_ids);
         let list = dt_doc::map::decode(&path, &named).map_err(|e| diags(&e))?;
-        let (new, extra) = f(&named, &list).map_err(|m| bad(&m))?;
+        let (new, extra) = f(&named, &list).map_err(|e| e.0)?;
         dt_doc::map::decode(&path, &new).map_err(|e| diags(&e))?;
         if gave {
             gave_note = Some(GAVE_IDS);
@@ -463,7 +487,7 @@ pub(super) fn set_count(shared: &Shared, v: ListsCountReq) -> Out<ListEdited> {
             },
         )
         .map(|d| (d.text, ()))
-        .map_err(|e| e.to_string())
+        .map_err(ListErr::from)
     })?;
     Ok(e)
 }
@@ -473,7 +497,7 @@ pub(super) fn remove(shared: &Shared, v: ListsRemoveReq) -> Out<ListEdited> {
     let (e, ()) = edit_list(shared, &v.list, v.doc_rev, |t, _| {
         apply(Kind::Map, t, &Op::Remove { id: &v.id })
             .map(|d| (d.text, ()))
-            .map_err(|e| e.to_string())
+            .map_err(ListErr::from)
     })?;
     Ok(e)
 }

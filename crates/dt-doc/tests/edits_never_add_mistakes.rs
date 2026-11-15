@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use dt_doc::nodeid;
-use dt_doc::ops::{Kind, Mistake, Op, Place, Reader, apply_with};
+use dt_doc::ops::{Kind, Flaw, Op, Place, Reader, apply_with};
 use dt_doc::{Known, decode};
 use kdl::KdlValue;
 
@@ -38,10 +38,10 @@ impl Rng {
 struct Library(Known);
 
 impl Reader for Library {
-    fn mistakes(&self, _: Kind, text: &str) -> Vec<Mistake> {
+    fn mistakes(&self, _: Kind, text: &str) -> Vec<Flaw> {
         decode("tile", text, &self.0)
             .err()
-            .map(|e| e.iter().map(Mistake::from).collect())
+            .map(|e| e.iter().map(Flaw::from).collect())
             .unwrap_or_default()
     }
 }
@@ -142,7 +142,7 @@ fn one(reader: &Library, text: &str, r: &mut Rng) -> Option<Result<String, Strin
     })
 }
 
-fn set(reader: &Library, text: &str) -> BTreeSet<Mistake> {
+fn set(reader: &Library, text: &str) -> BTreeSet<Flaw> {
     reader.mistakes(Kind::Tile, text).into_iter().collect()
 }
 

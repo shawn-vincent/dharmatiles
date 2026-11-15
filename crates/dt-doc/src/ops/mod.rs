@@ -44,20 +44,20 @@ pub enum EditError {
     Unread(Vec<crate::error::DocError>),
     /// The edit would leave the text with a mistake the old text did not have: nothing is changed.  Held by
     /// [`Checked`], the one way an edit's text is made.
-    Adds(Vec<Mistake>),
+    Adds(Vec<Flaw>),
 }
 
 /// One mistake a document has, as an edit compares them: the code and the headline (not where, since an edit
 /// moves text).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Mistake {
+pub struct Flaw {
     /// The stable `dt::…` code.
     pub code: String,
     /// The headline.
     pub message: String,
 }
 
-impl From<&crate::error::DocError> for Mistake {
+impl From<&crate::error::DocError> for Flaw {
     fn from(d: &crate::error::DocError) -> Self {
         Self {
             code: d.code.to_owned(),
@@ -71,7 +71,7 @@ impl From<&crate::error::DocError> for Mistake {
 /// a reader of its own; [`Plain`] reads the text alone.
 pub trait Reader {
     /// The mistakes `text` has, read as a `kind` document.
-    fn mistakes(&self, kind: Kind, text: &str) -> Vec<Mistake>;
+    fn mistakes(&self, kind: Kind, text: &str) -> Vec<Flaw>;
 }
 
 /// The reader of a text alone: the decoder of its kind, with nothing known from outside the file.
@@ -79,14 +79,14 @@ pub trait Reader {
 pub struct Plain;
 
 impl Reader for Plain {
-    fn mistakes(&self, kind: Kind, text: &str) -> Vec<Mistake> {
+    fn mistakes(&self, kind: Kind, text: &str) -> Vec<Flaw> {
         let read = match kind {
             Kind::Tile => crate::decode("tile", text, &crate::Known::new()).map(drop),
             Kind::Map => map::decode("map", text).map(drop),
             Kind::Inventory => inventory::decode(inventory::FILE, text).map(drop),
         };
         read.err()
-            .map(|errs| errs.iter().map(Mistake::from).collect())
+            .map(|errs| errs.iter().map(Flaw::from).collect())
             .unwrap_or_default()
     }
 }
@@ -106,9 +106,9 @@ impl Checked {
         if done.text == before {
             return Ok(Self(done));
         }
-        let old: std::collections::BTreeSet<Mistake> =
+        let old: std::collections::BTreeSet<Flaw> =
             reader.mistakes(kind, before).into_iter().collect();
-        let mut added: Vec<Mistake> = reader
+        let mut added: Vec<Flaw> = reader
             .mistakes(kind, &done.text)
             .into_iter()
             .filter(|m| !old.contains(m))
