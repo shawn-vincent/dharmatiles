@@ -2,7 +2,6 @@
 // The map over the view, the bar and its tools.
 
 import { need } from '../dom.js';
-import { valueOf } from '../lens.js';
 import { Overlay } from '../overlay.js';
 import { Tools } from '../place.js';
 import { byteToIndex } from '../text.js';
@@ -87,10 +86,9 @@ function handles() {
     const it = itemOf(s);
     const c = (it?.place || []).find((x) => x.name === 'at');
     if (!it || !c || it.file !== file) return [];
-    const v = valueOf(c.text, 'at');
     // a fixed point: where the program reads it (a written pair with units,
-    // from the north-west; the program says where it is)
-    const q = /^"[^"]*[\d(]/.test(v.text) ? it.at : null;
+    // from the north-west; the program says where it is, and null for a name)
+    const q = it.at;
     const id = idAtByte(nodes, it.span?.[0]);
     if (!q || id == null) return [];
     return [{ q, label: `Moved ${it.label}`, make: pointEdit({ id, slot: { control: 'at' } }, false) }];

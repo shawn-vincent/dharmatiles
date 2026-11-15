@@ -81,10 +81,12 @@ const thingApi = {
 // the tile node's own controls: shown when nothing is selected, so the sheet is never empty.
 // What each is (its unit, help, default) is the program's; this only picks the rows
 const tileRows = (/** @type {string[]} */ names) => ({ controls: names.map((n) => nodeControl('tile', n)).filter((c) => c !== undefined) });
-// a written property as the sheet reads it: `name=value` and its span
+// a written property as the sheet reads it: the whole control and its span, the value and its words: all the program's
 /** @typedef {import('../view/sheet.js').Group} Group */
-/** @param {{ name: string, text: string, span: [number, number] }} c @returns {import('../api').WrittenControl} the written part of the tile's own file: no other file, nothing inherited */
-const asWritten = (c) => ({ file: null, from: null, name: c.name, text: `${c.name}=${c.text}`, span: /** @type {[number, number]} */ ([c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1]) });
+/** @param {import('../api').MapControl} c @returns {import('../api').WrittenControl} the written part of the tile's own file: no other file, nothing inherited */
+const asWritten = (c) => ({ file: null, from: null, name: c.name, text: c.whole.text, span: c.whole.span, value: c.text, plain: c.plain });
+/** A value the program sent with its span (a description, a run of arguments, a clause's part) as a setting: its span is the value's. */
+const valueSetting = (/** @type {string} */ name, /** @type {{ text: string, span: [number, number], plain: string }} */ w) => ({ file: null, from: null, name, text: w.text, span: w.span, value: w.text, plain: w.plain });
 
 /**
  * What the seed row's dice needs to show five candidates (view/seed-strip.js `SeedStrip`, the model `seedStripOf` makes for a map
@@ -92,7 +94,7 @@ const asWritten = (c) => ({ file: null, from: null, name: c.name, text: `${c.nam
  */
 function seedStrip(/** @type {any} */ t, /** @type {any} */ own) {
   const written = own.controls.find((/** @type {any} */ c) => c.name === 'seed');
-  const n = written ? Number(String(written.text).replace(/"/g, '')) : NaN;
+  const n = written ? Number(written.plain) : NaN;
   const inv = server.get().inventory;
   const have = tileHave(inv, canonOf(t.path, homeOf(inv)), server.get().system);
   return seedStripOf({ tile: t.id, system: server.get().system, current: Number.isFinite(n) ? n : null, owned: have.seeds.map((/** @type {any} */ x) => x.seed) });
@@ -137,7 +139,7 @@ function tileModel() {
     heading: 'Description',
     at: own.at,
     schema: tileRows(['about']),
-    written: av ? [asWritten({ name: 'about', text: av.text, span: av.span })] : [],
+    written: av ? [valueSetting('about', av)] : [],
     // the program writes the string: the page sends the words
     set: (/** @type {any} */ _, /** @type {any} */ value) => (value == null
       ? about && tileEdit({ op: 'remove', id: nodeId(about.at) }, 'Took out the description')
@@ -149,7 +151,7 @@ function tileModel() {
 }
 
 /** A run of written text (a line's points, a region's lines) as a sheet setting. */
-const runWritten = (/** @type {string} */ name, /** @type {{ text: string, span?: [number, number] } | null | undefined} */ run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
+const runWritten = (/** @type {string} */ name, /** @type {import('../api').Run | null | undefined} */ run) => (run?.span ? valueSetting(name, { text: run.text, span: run.span, plain: run.plain }) : null);
 
 /** A run of arguments (a `boundedBy`'s lines, an `except`'s regions) made `values`: the program writes them over the run's node. */
 function setArgs(/** @type {{span: [number, number]}} */ run, /** @type {string[]} */ values, /** @type {string} */ label) {
@@ -194,7 +196,7 @@ function markModel(kind, m) {
   // the language lists a `name` control for a line and a region, so the row is whole
   const nameRow = /** @type {import('../api').ControlJson & { viaSet: boolean }} */ ({ ...nodeControl(kind, 'name'), viaSet: true });
   /** @type {import('../api').WrittenControl[]} */
-  const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0], file: null, from: null }];
+  const written = [{ name: 'name', text: m.name, span: [sh.at, 0], value: m.name, plain: m.name, file: null, from: null }];
   /** @type {(import('../api').ControlJson & { viaSet?: boolean })[]} */
   let controls;
   let set;
@@ -224,7 +226,7 @@ function markModel(kind, m) {
       return null;
     };
     // each clause is a group with a × that takes it out of the source
-    const clauses = clauseGroups(m, sh, doc.get().map, asWritten, nodeControl).map((g) => ({
+    const clauses = clauseGroups(m, sh, doc.get().map, valueSetting, nodeControl).map((g) => ({
       at: g.clause.at, heading: g.heading, schema: { controls: g.controls }, written: g.written,
       set: (/** @type {string} */ name, /** @type {any} */ value) => setClause(g.clause, name, value),
       remove: { title: `Take out this ${g.clause.kind} clause`, run: () => tileEdit({ op: 'remove', id: nodeId(g.clause.at) }, `Took out a ${g.clause.kind} clause of ${m.name}`) },

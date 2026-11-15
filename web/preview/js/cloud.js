@@ -8,6 +8,7 @@
 // each with its entry's key, and the view draws the selected entry's.
 
 import { byteToIndex } from './text.js';
+import { spanRange } from './spans.js';
 
 /** @typedef {import('./api').Clouds} Clouds */
 /** @typedef {import('./api').CloudSheet} CloudSheet */
@@ -34,7 +35,8 @@ export function cloudsIn(text, items, file) {
     if (!it?.key) continue;
     for (const c of it.clouds ?? []) {
       if (c.file !== file) continue;
-      out.push({ key: it.key, from: byteToIndex(text, c.span[0]), to: byteToIndex(text, c.span[0] + c.span[1]), pin: c.pin ?? null });
+      const [start, end] = spanRange(c.span);
+      out.push({ key: it.key, from: byteToIndex(text, start), to: byteToIndex(text, end), pin: c.pin ?? null });
     }
   }
   return out.sort((a, b) => a.from - b.from);

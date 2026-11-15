@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { suggest } from '../js/complete.js';
 import { browserHost } from '../js/host.js';
-import { parseValue, unquote, valueOf, wordControlNeedsSelect } from '../js/lens.js';
+import { parseValue, wordControlNeedsSelect } from '../js/lens.js';
 import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
 import { indentFor, braceEnd, colourRanges } from '../js/text.js';
@@ -99,12 +99,9 @@ test('points snap to named corners and edge middles', () => {
 });
 
 test('lens values preserve their exact written value', () => {
-  assert.deepEqual(valueOf('size="6..10"', 'size'), { at: 5, text: '"6..10"' });
-  assert.deepEqual(valueOf('"6..10"', 'size'), { at: 0, text: '"6..10"' });
-  assert.deepEqual(valueOf('size "6..10"', 'size'), { at: 5, text: '"6..10"' });
   assert.equal(parseValue('7.5'), 7.5);
-  assert.equal(parseValue('#true'), true);
-  assert.equal(parseValue('"mossy"'), 'mossy');
+  assert.equal(parseValue('true'), true);
+  assert.equal(parseValue('mossy'), 'mossy');
 });
 
 test('word controls become dropdowns before their buttons would wrap', () => {
@@ -236,11 +233,6 @@ test('a brace folds to its own closing brace, skipping strings and comments', ()
   const t = 'stack {\n    about "a { b"\n    // }\n    rock\n}\nwater';
   assert.equal(braceEnd(t, t.indexOf('{')), t.lastIndexOf('}'));
   assert.equal(braceEnd('a {', 2), null);
-});
-
-test('a written string is read back as its text', () => {
-  assert.equal(unquote('"A \\"pool\\" \\\\ by the bank\\n\\u{1}"'), 'A "pool" \\ by the bank\n\u0001');
-  assert.equal(unquote('#"raw "quotes""#'), 'raw "quotes"');
 });
 
 test('a value switches between one number and a range', () => {

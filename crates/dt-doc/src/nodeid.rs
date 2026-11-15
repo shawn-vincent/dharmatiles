@@ -278,6 +278,43 @@ pub fn entry_range(text: &str, e: &kdl::KdlEntry) -> (usize, usize) {
     (o + lead, o + l - (whole.len() - whole.trim_end().len()))
 }
 
+/// A written control (`name=value`, or the line `name value`) without its name: the value as written.  A control whose
+/// text does not start with its (last) name is taken whole.
+#[must_use]
+pub fn written_value<'a>(written: &'a str, name: &str) -> &'a str {
+    let last = name.rsplit('/').next().unwrap_or(name);
+    let Some(rest) = written.strip_prefix(last) else {
+        return written.trim();
+    };
+    match rest.strip_prefix('=') {
+        Some(v) => v.trim(),
+        None if rest.starts_with(char::is_whitespace) => rest.trim(),
+        None => written.trim(),
+    }
+}
+
+/// A written value as its words: the quotes of one KDL string taken off and its escapes undone.  Anything that is not
+/// one string (a number, an expression, the words that say what an absent control means) is its text as written.
+#[must_use]
+pub fn plain_of(written: &str) -> String {
+    let t = written.trim();
+    if !(t.starts_with('"') || t.starts_with("#\"")) {
+        return t.to_owned();
+    }
+    // one string argument: a document of a node with that one entry
+    let one = format!("n {t}")
+        .parse::<kdl::KdlDocument>()
+        .ok()
+        .and_then(|doc| {
+            let node = doc.nodes().first()?;
+            let [e] = node.entries() else { return None };
+            e.name()
+                .is_none()
+                .then(|| e.value().as_string().map(str::to_owned))?
+        });
+    one.unwrap_or_else(|| t.to_owned())
+}
+
 /// The properties written on the node at byte `offset`: each name, its value as written, and the value's byte
 /// span `[start, length]`.
 ///

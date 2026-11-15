@@ -237,7 +237,7 @@ export const nodeControl = (/** @type {string} */ node, /** @type {string} */ na
 export const dirty = () => { const d = doc.get(); return d.text != null && d.base != null && d.text !== d.base; };
 
 /** A word of a stack entry's own controls (`at=bank` -> bank), or undefined. */
-export const controlText = (/** @type {Pick<StackItem, 'place' | 'controls'>} */ it, /** @type {string} */ name) => [...(it.place || []), ...(it.controls || [])].find((c) => c.name === name)?.text.replace(new RegExp(`^${name}=`), '').replace(/"/g, '');
+export const controlText = (/** @type {Pick<StackItem, 'place' | 'controls'>} */ it, /** @type {string} */ name) => [...(it.place || []), ...(it.controls || [])].find((c) => c.name === name)?.plain;
 /** The region an entry is put in (`at=bank` -> bank): its `at=` when that names one of the map's regions. */
 export const regionOf = (/** @type {Pick<StackItem, 'place' | 'controls'>} */ it) => {
   const at = controlText(it, 'at');

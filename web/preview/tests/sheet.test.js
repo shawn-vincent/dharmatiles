@@ -12,6 +12,7 @@ const { Sheet } = await import('../js/view/sheet.js');
 const { Outline } = await import('../js/view/outline.js');
 const { setUnits } = await import('../js/value.js');
 setUnits(['mm', 'dmm', 'sq']);
+import { setting } from './setting.js';
 
 const schema = { name: 'scatter', controls: [
   { name: 'perSquare', unit: 'count', numeric: true, default: '4', about: 'how many' },
@@ -19,7 +20,7 @@ const schema = { name: 'scatter', controls: [
   { name: 'flat', unit: 'switch' },
 ] };
 const model = (text) => ({
-  title: 'flowers', kind: 'scatter', groups: [{ at: 10, schema, written: text.map(([name, t, span]) => ({ name, text: t, span })) }], actions: [{ label: 'Delete', title: 'Delete it', run() {} }],
+  title: 'flowers', kind: 'scatter', groups: [{ at: 10, schema, written: text.map(([name, t, span]) => setting(name, t, span)) }], actions: [{ label: 'Delete', title: 'Delete it', run() {} }],
 });
 
 function world(written) {

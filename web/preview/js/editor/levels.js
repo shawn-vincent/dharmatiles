@@ -309,7 +309,7 @@ function renderContext() {
       const group = control.group ?? 0;
       const g = group === 0 ? it.controls : it.things?.[group - 1]?.controls;
       const w = g?.find((c) => c.name === control.name);
-      value = w ? w.text.replace(/^"|"$/g, '') : '';
+      value = w ? w.plain : '';
     }
   } else if (isMark(sel)) {
     const list = (sel.kind === 'line' ? map?.lines : map?.regions) || [];

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   atOf, badgeOf, buildHash, caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, levelParams, moveRow, orderStack, ordinal,
-  parseHash, placeOf, sameLevel, selOfAt, sizeWords, standing, up,
+  parseHash, placeOf, sameLevel, selOfAt, standing, up,
 } from '../js/nav.js';
 import { innerRange, simpleWeightings, weightedAs } from '../js/view/property.js';
 
@@ -40,7 +40,6 @@ test('up goes from a control to its thing and from a thing to the tile, and stop
 
 test('ordinals read as English', () => {
   assert.deepEqual([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 111].map(ordinal), ['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '101st', '111th']);
-  assert.equal(sizeWords('"2x1"'), '2×1');
 });
 
 const item = (key, over = {}) => ({ key, label: key, element: 'rock', what: 'rock', file: 'a.dtile', lines: [1, 1], place: [], ...over });

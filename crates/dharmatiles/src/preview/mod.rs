@@ -110,8 +110,6 @@ use std::time::{Duration, Instant, SystemTime};
 
 use dt_eval::progress::{StageInfo, Status, Timings, Tracker, plan_stages};
 use dt_eval::{Diag, Options};
-#[cfg(test)]
-use serde_json::json;
 
 use crate::watch::{Recording, mtime};
 

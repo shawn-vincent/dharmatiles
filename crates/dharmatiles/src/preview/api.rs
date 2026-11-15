@@ -406,6 +406,7 @@ pub(super) fn finish(all: &Collect, routes: &str, reads: &str) -> String {
 pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     use ts_rs::TS;
     all.add::<super::edit::DraftReq>();
+    all.add::<dt_eval::map::PosterMap>();
     all.add::<ErrorBody>();
     // the header of every mesh: the page reads it off the front of the bytes a draft, a step or a mesh route sends
     all.add::<super::header::MeshHeader>();

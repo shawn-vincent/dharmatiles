@@ -8,12 +8,12 @@ import { MAP, regionOf } from './map-fixture.js';
 
 test('a distance reads as the source says it, with the program\'s printed size only where it differs', () => {
   // DungeonBlocks: printed as written, the program sends none, and the page adds no unit word
-  assert.equal(describeDistance({ text: '"[8dmm .. 14dmm]"' }, null), '[8dmm .. 14dmm]');
-  assert.equal(describeDistance({ text: '"7dmm"' }, null), '7dmm');
-  assert.equal(describeDistance({ text: '6.5' }, null), '6.5', 'a bare number gets no mm from the page');
+  assert.equal(describeDistance({ plain: '[8dmm .. 14dmm]' }, null), '[8dmm .. 14dmm]');
+  assert.equal(describeDistance({ plain: '7dmm' }, null), '7dmm');
+  assert.equal(describeDistance({ plain: '6.5' }, null), '6.5', 'a bare number gets no mm from the page');
   // OpenLOCK: the program's answer is shown beside what is written
-  assert.equal(describeDistance({ text: '"7dmm"' }, ['5.08']), '7dmm (prints 5.08 mm)');
-  assert.equal(describeDistance({ text: '"[8dmm .. 14dmm]"' }, ['5.81', '10.16']), '[8dmm .. 14dmm] (prints 5.81–10.16 mm)');
+  assert.equal(describeDistance({ plain: '7dmm' }, ['5.08']), '7dmm (prints 5.08 mm)');
+  assert.equal(describeDistance({ plain: '[8dmm .. 14dmm]' }, ['5.81', '10.16']), '[8dmm .. 14dmm] (prints 5.81–10.16 mm)');
 });
 
 test('the clause line says no unit of its own: nothing in region-sheet.js writes mm or works out a size', () => {
@@ -28,8 +28,8 @@ test('the clause line says no unit of its own: nothing in region-sheet.js writes
 const places = [{ name: 'northEdge', kind: 'edge' }, { name: 'shore', kind: 'line' }, { name: 'crag', kind: 'region' }, { name: 'apron', kind: 'region' }, { name: 'center', kind: 'point' }];
 const crag = {
   clauses: [
-    { kind: 'within', at: 10, distance: { text: '"[8dmm .. 14dmm]"', span: [20, 10] }, of: { text: 'westEdge', written: 'westEdge', span: [34, 8] }, printed: null },
-    { kind: 'except', at: 50, regions: { text: 'pool', span: [57, 4] } },
+    { kind: 'within', at: 10, distance: { text: '"[8dmm .. 14dmm]"', span: [20, 10], plain: '[8dmm .. 14dmm]' }, of: { text: 'westEdge', written: 'westEdge', span: [34, 8] }, printed: null },
+    { kind: 'except', at: 50, regions: { text: 'pool', plain: 'pool', span: [57, 4] } },
   ],
 };
 
@@ -42,12 +42,12 @@ test('a region of places shows each clause and how they combine', () => {
   assert.match(combineNote(crag), /added together.*then the except regions taken away/);
   assert.match(combineNote({ clauses: [crag.clauses[1]] }), /^The whole tile, less the regions it excepts/);
   assert.match(combineNote({ boundedBy: { text: 'a' }, clauses: [] }), /enclose/);
-  const asW = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: c.span });
+  const asW = (name, w) => ({ name, text: w.text, span: w.span, value: w.text, plain: w.plain });
   const row = (node, name) => ({ name, unit: node === 'within' && name === 'distance' ? 'dmm' : 'word', required: true });
   const groups = clauseGroups({ name: 'crag' }, crag, { places, regions: [{ name: 'crag' }, { name: 'pool' }] }, asW, row);
   assert.equal(groups.length, 2);
   assert.deepEqual(groups[0].controls.map((c) => c.name), ['distance', 'of']);
-  assert.deepEqual(groups[0].written.map((w) => w.text), ['distance="[8dmm .. 14dmm]"', 'of=westEdge']);
+  assert.deepEqual(groups[0].written.map((w) => w.text), ['"[8dmm .. 14dmm]"', 'westEdge']);
   // the place is a choice among the tile's places, not the region itself, and keeps what is written
   assert.deepEqual(groups[0].controls[1].words.map((w) => w.word), ['westEdge', 'northEdge', 'shore', 'apron', 'center']);
   assert.deepEqual(groups[1].controls[0].words.map((w) => w.word), ['pool']);

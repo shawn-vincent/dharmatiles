@@ -30,8 +30,13 @@ pub fn page(element: &str) -> String {
 #[serde(rename_all = "camelCase")]
 pub struct WrittenControl {
     pub name: String,
+    /// The whole control as written (`name=value`, or the line `name value`), and its span.
     pub text: String,
     pub span: [usize; 2],
+    /// The value alone, as written.
+    pub value: String,
+    /// The value as words: one string's quotes off, its escapes undone.
+    pub plain: String,
     /// The file it is written in, when not the entry's own.
     pub file: Option<String>,
     /// Written in a part the entry calls: what the sheet says it comes from.
@@ -45,6 +50,8 @@ pub struct WrittenControl {
 pub struct UnwrittenControl {
     pub control: String,
     pub text: String,
+    /// `text` as words: one string's quotes off, its escapes undone.
+    pub plain: String,
     pub from: String,
 }
 
@@ -68,6 +75,8 @@ pub struct CloudAt {
 pub struct WrittenPlace {
     pub name: String,
     pub text: String,
+    /// `text` as words: one string's quotes off, its escapes undone.
+    pub plain: String,
     pub span: [usize; 2],
 }
 
@@ -219,6 +228,7 @@ fn defaults_of(list: &[Unwritten]) -> Vec<UnwrittenControl> {
         .map(|u| UnwrittenControl {
             control: u.control.clone(),
             text: u.text.clone(),
+            plain: dt_doc::nodeid::plain_of(&u.text),
             from: u.from.clone(),
         })
         .collect()
@@ -286,7 +296,12 @@ fn entry(e: &Entry, named: &Named, top: Option<&SolvedTop>) -> Result<StackItem,
         place: props
             .into_iter()
             .filter(|(n, ..)| PLACE.contains(&n.as_str()))
-            .map(|(name, text, span)| WrittenPlace { name, text, span })
+            .map(|(name, text, span)| WrittenPlace {
+                plain: dt_doc::nodeid::plain_of(&text),
+                name,
+                text,
+                span,
+            })
             .collect(),
         // where a fixed `at=` point is, in squares from the south-west corner,
         // as the program reads it (the page never reads a written point)
@@ -364,6 +379,8 @@ fn settings(controls: &[dt_eval::doc::Setting], file: &str) -> Result<Vec<Writte
                 name: c.name.clone(),
                 text: written.to_owned(),
                 span: [o, l],
+                value: dt_doc::nodeid::written_value(written, &c.name).to_owned(),
+                plain: dt_doc::nodeid::plain_of(dt_doc::nodeid::written_value(written, &c.name)),
                 file: (c.src.name() != file).then(|| c.src.name().to_owned()),
                 // written in a part the entry calls: what the sheet says it comes from
                 from: (c.src.name() != file).then(|| library_name(c.src.name())),

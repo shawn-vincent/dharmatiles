@@ -59,13 +59,12 @@ export function SizeGridBox(/** @type {{ pick: Size | null, full: boolean, input
 }
 
 /**
- * Put a size grid by `input` (a plain field of the page: its value is read and written here).  `quote`: the field
- * holds the size as a KDL string ("2x1"); off, bare (2x1).  `parent`: where the grid goes; inside an open dialog, which
+ * Put a size grid by `input` (a plain field of the page: its value is read and written here, bare: 2x1).  `parent`: where the grid goes; inside an open dialog, which
  * would cover it on the page.  Returns what closes it.
- * @param {HTMLInputElement} input @param {() => void} take @param {{ quote?: boolean, parent?: HTMLElement }} [opts]
+ * @param {HTMLInputElement} input @param {() => void} take @param {{ parent?: HTMLElement }} [opts]
  */
-export function openSizeGrid(input, take, { quote = true, parent = document.body } = {}) {
-  const fmt = (/** @type {Size} */ p) => (quote ? `"${p[0]}x${p[1]}"` : `${p[0]}x${p[1]}`);
+export function openSizeGrid(input, take, { parent = document.body } = {}) {
+  const fmt = (/** @type {Size} */ p) => `${p[0]}x${p[1]}`;
   const host = document.createElement('div');
   parent.append(host);
   let typed = input.value; // what the field holds apart from pointing
@@ -91,7 +90,7 @@ export function attachSizeGrid(input, { parent } = {}) {
   /** @type {(() => void) | null} */
   let close = null;
   const shut = () => { close?.(); close = null; };
-  const open = () => { if (!close) close = openSizeGrid(input, shut, { quote: false, parent }); };
+  const open = () => { if (!close) close = openSizeGrid(input, shut, { parent }); };
   input.addEventListener('focus', open);
   input.addEventListener('click', open);
   input.addEventListener('blur', shut);

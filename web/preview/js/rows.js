@@ -4,6 +4,7 @@
 // entry's id= is and what it may be called, and the small pictures the Shape rows
 // wear (a region's mask, a line's points).  The page part (editor/rows.js) sends
 // the edits; every rule about them is here, so it can be tested without one.
+import { spanRange } from './spans.js';
 
 /**
  * What these rules read of a stack entry (the program's `StackItem` has all of it): its key, what it is, and where it is written.
@@ -23,8 +24,8 @@ const isBase = (/** @type {Item} */ it) => it.what === 'base' || (it.element ===
 /** The bytes [start, end) of the node of `file` this entry stands for: its own node, or the call that made it; null when `file` does not write it. */
 /** @param {Item | null | undefined} it @param {string | null | undefined} file @returns {Range | null} */
 export function nodeRange(it, file) {
-  if (it?.call) return it.call.file === file ? [it.call.span[0], it.call.span[0] + it.call.span[1]] : null;
-  return it?.span && it.file === file ? [it.span[0], it.span[0] + it.span[1]] : null;
+  if (it?.call) return it.call.file === file ? spanRange(it.call.span) : null;
+  return it?.span && it.file === file ? spanRange(it.span) : null;
 }
 
 /** The byte of the node a hide, a delete or a name addresses: the entry's own, or the call that made it; null when `file` does not write it. */

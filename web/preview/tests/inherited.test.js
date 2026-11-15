@@ -3,6 +3,7 @@
 // from the element, from its schema's default, or in words for what leaving it out means); the page only shows it.  A control
 // the program says nothing about is shown as a mistake, loudly, never as a blank.  Editing an inherited value writes it.
 import test from 'node:test';
+import { setting, unwritten } from './setting.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { install, settle } from './dom.js';
@@ -28,13 +29,13 @@ const element = { name: 'wall', controls: [
 ] };
 const rows = { ...element, controls: rowsOf(element.controls) };
 const DEFAULTS = [
-  { control: 'style', text: 'cut-stone', from: 'default' },
-  { control: 'stones/height', text: '2.5dmm .. 3dmm', from: 'style brick' },
-  { control: 'stones/texture', text: "brick's own finish", from: 'style brick' },
-  { control: 'bond', text: 'irregular', from: 'style brick' },
-  { control: 'ruin', text: '0%', from: 'default' },
-  { control: 'shape', text: 'a mix of all three', from: '' },
-  { control: 'trunk/width', text: 'grows with the branches it carries', from: '' },
+  unwritten('style', 'cut-stone', 'default'),
+  unwritten('stones/height', '2.5dmm .. 3dmm', 'style brick'),
+  unwritten('stones/texture', "brick's own finish", 'style brick'),
+  unwritten('bond', 'irregular', 'style brick'),
+  unwritten('ruin', '0%', 'default'),
+  unwritten('shape', 'a mix of all three', ''),
+  unwritten('trunk/width', 'grows with the branches it carries', ''),
   // `odd` is not here: the program said nothing about it
 ];
 
@@ -59,7 +60,7 @@ test('a group has no row of its own: its sub-controls are rows named by their pa
 });
 
 test('an unwritten control shows what a build uses, faint, with where it comes from; a written one shows neither', async () => {
-  world([{ name: 'bond', text: 'bond running', span: [30, 12] }]);
+  world([setting('bond', 'bond=running', [30, 12])]);
   await settle();
   const h = rowOf('stones height');
   assert.ok(has(h, 'faint'));
@@ -122,8 +123,8 @@ test('writing an inherited value writes it: a word chosen, a number dragged', as
 });
 
 test('the tile\'s own nodes, which carry no program defaults, show their schema\'s default or its words', () => {
-  assert.deepEqual(inheritedOf({}, { name: 'size', default1: '1x1' }), { text: '1x1', from: 'default' });
-  assert.deepEqual(inheritedOf({}, { name: 'about', absent: 'no description' }), { text: 'no description', from: '' });
+  assert.deepEqual(inheritedOf({}, { name: 'size', default1: '1x1' }), { text: '1x1', plain: '1x1', from: 'default' });
+  assert.deepEqual(inheritedOf({}, { name: 'about', absent: 'no description' }), { text: 'no description', plain: 'no description', from: '' });
   assert.equal(inheritedOf({}, { name: 'x' }), null);
   assert.equal(inheritedOf({ defaults: [] }, { name: 'bond', default1: 'irregular' }), null, 'an entry takes only what the program says');
 });
