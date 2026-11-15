@@ -19,22 +19,37 @@
 
 import { isServerError, serverErrorOf } from './server-error.js';
 
+/** @typedef {import('./host.js').Reply<any>} Reply  what a call answered (host.js) */
+
+/** @typedef {{ side: 'page' | 'server' | 'other', title: string, message: string, help: string | null | undefined, context: string | null, causes: string[], trace: string[] }} Level  one error of a chain, to show and to copy */
+/** @typedef {{ what: string, message: string, kind: string, headline: string, help: string | null | undefined, detail: string | null, chain: Level[], details: string, count: number, open: boolean }} Problem  one failure in the panel */
+
+/** @type {Problem[]} */
 const entries = [];
+/** @type {Set<(entries: Problem[]) => void>} */
 const listeners = new Set();
 
-/** What an error says, in its own words. */
+/**
+ * What an error says, in its own words.  A thrown value can be anything, so `err` is unknown.
+ * @param {unknown} err
+ */
 export function messageOf(err) {
   if (err instanceof Error) return err.message || err.name;
   if (typeof err === 'string') return err;
-  if (err && typeof err === 'object' && typeof err.error === 'string') return err.error;
+  if (err && typeof err === 'object' && typeof /** @type {{ error?: unknown }} */ (err).error === 'string') return /** @type {{ error: string }} */ (err).error;
   try { return JSON.stringify(err) ?? String(err); } catch { return String(err); }
 }
 
 const BUG_HEADLINE = 'Something went wrong inside dharmatiles';
 
-/** The first of the server's errors in `err`'s chain of causes, or null. */
+/**
+ * The first of the server's errors in `err`'s chain of causes, or null.
+ * @param {unknown} err
+ */
 export function serverErrorIn(err) {
-  let e = err, depth = 0;
+  /** @type {unknown} */
+  let e = err;
+  let depth = 0;
   while (e != null && depth++ < 12) {
     if (isServerError(e)) return e;
     e = e instanceof Error ? e.cause : null;
@@ -48,6 +63,7 @@ export function serverErrorIn(err) {
  * which are the headline.  A bug (a server panic, or anything the page itself
  * threw: a TypeError, a bad reply) is just "something went wrong inside
  * dharmatiles", with what was being done, and the words in `detail`.
+ * @param {unknown} err
  */
 export function describe(err) {
   const se = serverErrorIn(err);
@@ -55,20 +71,26 @@ export function describe(err) {
   return { kind: 'bug', headline: BUG_HEADLINE, help: se?.help ?? null, detail: se ? se.message : rootMessage(err) };
 }
 
-/** The deepest error's words: what actually went wrong, under the page's "could not …". */
+/**
+ * The deepest error's words: what actually went wrong, under the page's "could not …".
+ * @param {unknown} err
+ */
 function rootMessage(err) {
-  let e = err, last = messageOf(err), depth = 0;
+  /** @type {unknown} */
+  let e = err;
+  let last = messageOf(err), depth = 0;
   while (e instanceof Error && e.cause != null && depth++ < 12) { e = e.cause; last = messageOf(e); }
   return last;
 }
 
 // The lines of a JS stack without its first line when that only repeats
 // "Name: message" (a message of several lines starts the stack with all of them).
+/** @param {Error} e */
 function stackLines(e) {
   const stack = typeof e.stack === 'string' ? e.stack : '';
   const head = `${e.name}: ${e.message}`;
   const body = stack.startsWith(head) ? stack.slice(head.length) : stack.split('\n').slice(1).join('\n');
-  return body.split('\n').map((l) => l.trimEnd()).filter(Boolean);
+  return body.split('\n').map((/** @type {string} */ l) => l.trimEnd()).filter(Boolean);
 }
 
 /**
@@ -76,17 +98,22 @@ function stackLines(e) {
  * copy: {side: 'page' | 'server' | 'other', title, message, help, context,
  * causes, trace}.  A page error's `trace` is its JS stack; a server error's is
  * the Rust backtrace, and it brings its own causes and what it was doing.
+ * @param {unknown} err
+ * @returns {Level[]}
  */
 export function chainOf(err) {
+  /** @type {Level[]} */
   const levels = [];
-  let e = err, depth = 0;
+  /** @type {unknown} */
+  let e = err;
+  let depth = 0;
   while (e != null && depth++ < 12) {
     if (isServerError(e)) {
       const c = e.context || {};
       const where = [c.route, c.tile ? `tile ${c.tile}` : null].filter(Boolean).join(', ');
       levels.push({
         side: 'server', title: `The server's error (${e.kind}${e.status ? `, ${e.status}` : ''})`, message: e.message,
-        help: e.help, context: where || null, causes: e.causes, trace: e.backtrace ? e.backtrace.split('\n').map((l) => l.trimEnd()).filter(Boolean) : [],
+        help: e.help, context: where || null, causes: e.causes, trace: e.backtrace ? e.backtrace.split('\n').map((/** @type {string} */ l) => l.trimEnd()).filter(Boolean) : [],
       });
     } else if (e instanceof Error) {
       levels.push({
@@ -131,13 +158,15 @@ export function collectEnvironment(g = globalThis, known = {}, now = new Date())
 /** @type {() => EnvKnown} */
 let known = () => ({});
 /** The editor says what it knows (`fn()` -> {version, system, printer, tile, file}); read when a failure happens. */
+/** @param {() => EnvKnown} fn */
 export function setEnvironment(fn) { known = fn; }
 
-const indent = (lines, by) => lines.map((l) => `${by}${l}`);
+const indent = (/** @type {string[]} */ lines, /** @type {string} */ by) => lines.map((l) => `${by}${l}`);
 
 /**
  * The report to paste into a bug report: what was being done, the whole
  * chain with both stacks, and the environment.  Plain text.
+ * @param {string} what @param {unknown} err @param {ReturnType<typeof collectEnvironment>} [env]
  */
 export function detailsOf(what, err, env = collectEnvironment(globalThis, known())) {
   const d = describe(err), se = serverErrorIn(err);
@@ -150,7 +179,7 @@ export function detailsOf(what, err, env = collectEnvironment(globalThis, known(
     out.push('', `[${i + 1}] ${l.title}`, `    ${l.message}`);
     if (l.help) out.push(`    help: ${l.help}`);
     if (l.context) out.push(`    while: ${l.context}`);
-    if (l.causes.length) out.push('    caused by:', ...indent(l.causes.map((c) => `- ${c}`), '      '));
+    if (l.causes.length) out.push('    caused by:', ...indent(l.causes.map((/** @type {string} */ c) => `- ${c}`), '      '));
     if (l.trace.length) out.push(`    ${l.side === 'server' ? 'backtrace (Rust)' : 'stack (JavaScript)'}:`, ...indent(l.trace, '      '));
     else if (l.side === 'server') out.push('    (the server sent no backtrace: this is a refusal it made without one)');
   });
@@ -158,7 +187,9 @@ export function detailsOf(what, err, env = collectEnvironment(globalThis, known(
 }
 
 /** The environment block of a report: version, target, tile, browser, screen, time, page. */
+/** @param {ReturnType<typeof collectEnvironment>} env @param {string | null} version */
 function environmentLines(env, version) {
+  /** @type {[string, string | null | undefined][]} */
   const rows = [
     ['dharmatiles', version], ['target system', env.system], ['printer', env.printer], ['tile', env.tile], ['file', env.file],
     ['browser', env.userAgent], ['platform', env.platform], ['screen', env.screen], ['time', env.time], ['page', env.url],
@@ -198,10 +229,11 @@ export function environmentText(env = collectEnvironment(globalThis, known())) {
   return environmentLines(env, env.version ?? null).join('\n');
 }
 
-/** The problems now, oldest first: {what, message, kind, headline, help, detail, chain, details, count, open}. */
+/** The problems now, oldest first. */
 export const problems = () => entries;
 
 /** Tell `fn` whenever the list changes; returns the way to stop. */
+/** @param {(entries: Problem[]) => void} fn */
 export function onProblems(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
@@ -209,19 +241,23 @@ export function onProblems(fn) {
 
 const changed = () => { for (const fn of listeners) fn(entries); };
 
+/** @type {((what: string, err: unknown, entry: Problem) => void) | null} */
 let reporter = null;
 /**
  * The editor says where a failure of the page's own goes besides here: `fn(what, err, entry)`
  * (editor/panel.js puts it in the program's stream of messages, where the messages panel
  * shows it and an assistant reads it).  Called once for each new failure.
  */
-export function setReporter(fn) { reporter = fn; }
+export function setReporter(/** @type {(what: string, err: unknown, entry: Problem) => void} */ fn) { reporter = fn; }
 
-/** Put one failure in the list of problems (and the stream): `what` was being done, `err` is what went wrong. */
+/**
+ * Put one failure in the list of problems (and the stream): `what` was being done, `err` is what went wrong.
+ * @param {string} what @param {unknown} err
+ */
 export function showError(what, err) {
   // a mistake in a tile's document is the tile's, not a failure: the program said it in the stream of messages (with its
   // code, file, place and help), and the picture or piece it was for shows it where it would have been
-  if (err?.mistake) { console.info(what, err.message); return; }
+  if (/** @type {{ mistake?: unknown } | null | undefined} */ (err)?.mistake) { console.info(what, messageOf(err)); return; }
   console.error(what, err);
   const d = describe(err);
   const message = serverErrorIn(err)?.message ?? messageOf(err);
@@ -237,6 +273,7 @@ export function showError(what, err) {
 }
 
 /** Take one entry (or, with no index, all of them) off the panel. */
+/** @param {Problem} [entry] */
 export function dismiss(entry) {
   if (entry) entries.splice(entries.indexOf(entry), 1);
   else entries.length = 0;
@@ -247,6 +284,7 @@ export function dismiss(entry) {
  * What a reply that is not a success says, in words, for where it was asked: a
  * document's first mistake with its help (a 422's `errors`), else the program's
  * message.  The one way the page reads a refusal.
+ * @param {Reply | null | undefined} r
  */
 export function whyOf(r) {
   const e = r?.body?.errors?.[0];
@@ -265,6 +303,7 @@ export function whyOf(r) {
  * for the caller to show where it was asked, and a lost connection (status
  * 0) is the chip's.  The panel's entry is the page's own error for `what`
  * with the program's error under it as its cause.
+ * @param {string} what @param {Reply} r
  */
 export function failed(what, r) {
   if (r.status === 0) return false;

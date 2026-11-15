@@ -44,9 +44,10 @@ export class TileMistake extends Error {
   }
 }
 
+/** @param {unknown} e @returns {e is ServerError} */
 export const isServerError = (e) => e instanceof ServerError;
 
-const shaped = (x) => x && typeof x === 'object' && typeof x.message === 'string' && ['refused', 'failure', 'bug'].includes(x.kind);
+const shaped = (/** @type {any} */ x) => x && typeof x === 'object' && typeof x.message === 'string' && ['refused', 'failure', 'bug'].includes(x.kind);
 
 /**
  * The error a reply says, as a ServerError, or null when it says none.
@@ -54,6 +55,7 @@ const shaped = (x) => x && typeof x === 'object' && typeof x.message === 'string
  * without the structure (the program's plain-text refusals, a proxy's page)
  * becomes one with the words it has and no trace, so there is one kind of
  * error to handle either way.
+ * @param {number} status @param {any} body @param {string} [raw]
  */
 export function serverErrorOf(status, body, raw = '') {
   if (status >= 200 && status < 400) return null;
