@@ -1,0 +1,23 @@
+{
+  "//": "The page's tests are checked too, so a fixture a test feeds the page is held to the page's types: the map is the whole `TileMap` of tests/fixtures/tile-map.json (tests/map-fixture.js, held to the Rust type by map_wire.rs).  Same settings as tsconfig.json; `node:` imports come from the Node types; the page's own files are read through their imports.  `npm test` runs this beside the other two.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "checkJs": false,
+    "rootDirs": [
+      "../../docs/editor/js",
+      "js",
+      "../../docs/editor/vendor",
+      "vendor"
+    ]
+  },
+  "include": [
+    "js/**/*.d.ts",
+    "tests/*.d.ts",
+    "tests/*.js"
+  ],
+  "exclude": [
+    "js/vendor",
+    "node_modules"
+  ]
+}

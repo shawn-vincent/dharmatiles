@@ -26,6 +26,18 @@ test('both tsconfigs check every JavaScript file they include', () => {
   }
 });
 
+test('the tests are checked too, and the map they draw is the whole fixture the program is held to', () => {
+  const tests = config('tsconfig.tests.json');
+  assert.ok(tests.include.includes('tests/*.js'), 'tsconfig.tests.json must include the tests');
+  // a test that feeds the overlay a map says `@ts-check` and builds it from the fixture, never by hand
+  for (const name of ['overlay-geometry', 'overlay-marks', 'square-size', 'map-fixture']) {
+    const f = join(here, 'tests', name === 'map-fixture' ? 'map-fixture.js' : `${name}.test.js`);
+    assert.match(readFileSync(f, 'utf8'), /^\/\/ @ts-check/, `${f} must be checked`);
+  }
+  const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'));
+  assert.match(pkg.scripts.test, /tsc -p tsconfig\.tests\.json/, 'npm test must run the tests\' tsc pass');
+});
+
 test('the page include covers every file under js/, so a new file is checked by default', () => {
   assert.ok(config('tsconfig.json').include.includes('js/**/*.js'));
 });

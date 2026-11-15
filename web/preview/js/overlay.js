@@ -20,16 +20,19 @@ export class Overlay {
     this.canvas = canvas;
     this.viewer = viewer;
     this.ctx = canvas.getContext('2d');
+    /** @type {import('./api').TileMap | null} */
     this.map = null;
     /** mm per square, the program's (null until a map is set with it: nothing is drawn). */
+    /** @type {number | null} */
     this.sq = null;
+    /** @type {import('./overlay-geometry.js').HeightGrid | null} */
     this.heights = null;
     this.scene = {};
   }
 
   /** The map to draw, at the program's square size; without the size there is nothing to draw it at, so no map. */
-  setMap(map, squareMm) {
-    this.sq = squareMm > 0 ? squareMm : null;
+  setMap(/** @type {import('./api').TileMap} */ map, /** @type {number | undefined} */ squareMm) {
+    this.sq = squareMm !== undefined && squareMm > 0 ? squareMm : null;
     this.map = this.sq ? map : null;
   }
 
@@ -50,13 +53,21 @@ export class Overlay {
 
   /** Where point `q` in squares falls on the canvas, on the ground (lifted `up` mm). */
   at(q, up = 0.25) {
-    const x = q[0] * this.sq, y = q[1] * this.sq;
+    const sq = this.squareMm();
+    const x = q[0] * sq, y = q[1] * sq;
     return this.viewer.project([x, y, this.heightAt(x, y) + up]);
   }
 
   /** Where point `q` in squares falls on the canvas at level zero, where regions lie. */
   atZero(q) {
-    return this.viewer.project([q[0] * this.sq, q[1] * this.sq, this.viewer.plan?.datumZ ?? 0]);
+    const sq = this.squareMm();
+    return this.viewer.project([q[0] * sq, q[1] * sq, this.viewer.plan?.datumZ ?? 0]);
+  }
+
+  /** The program's mm per square.  Only asked of an overlay that draws a map, which is only set with it (setMap), so a missing one is an error. */
+  squareMm() {
+    if (this.sq === null) throw new Error('the overlay has no square size from the program: nothing is drawn without one');
+    return this.sq;
   }
 
   /**
@@ -65,41 +76,44 @@ export class Overlay {
    * the tile round it), or all of them faint while a tool is held.
    */
   drawRegions(scene) {
-    const m = this.map, v = this.viewer;
+    const v = this.viewer, m = this.map;
     const z = v.plan?.datumZ ?? 0;
+    // the map and its square size are set together (setMap); none here when there is no map or it is switched off
+    const shown = m && scene.show !== false ? { m, sq: this.squareMm() } : null;
+    /** @type {Array<{ r: import('./api').MapRegion, sel: boolean }>} */
     const want = [];
-    if (m && scene.show !== false) {
-      for (const r of m.regions) {
+    if (shown) {
+      for (const r of shown.m.regions) {
         const sel = scene.selRegion === r.name;
         if (!sel && !scene.all) continue;
         want.push({ r, sel });
       }
     }
-    const line = m && scene.show !== false ? m.lines.find((l) => l.name === scene.selLine && l.pts.length > 1) : null;
+    const line = shown ? shown.m.lines.find((l) => l.name === scene.selLine && l.pts.length > 1) : null;
     const focus = want.some((w) => w.sel) || !!line;
     /** @type {Array<{positions: Float32Array, color: string, alpha: number, role?: string, dz?: number}>} */
-    const items = (focus ? want.filter((w) => w.sel) : want).map(({ r, sel }) => ({
-      positions: regionTriangles(r, m, this.sq),
-      color: sel ? css('--accent') : scene.tints?.[r.name] || css('--plate-ink'),
-      alpha: 0.16,
-    }));
-    // the selected line is a ribbon at zero, as a region is: its wobble's band under it, then the line
-    if (line) {
-      const half = lineHalf(m, this.sq);
-      if (line.wobbleMm) items.push({ positions: ribbonTriangles(line.pts, this.sq, line.wobbleMm, false, false), color: css('--accent'), role: 'fill', dz: 0.02, alpha: 0.18 });
-      items.push({ positions: ribbonTriangles(line.pts, this.sq, 1.5 * half), color: css('--accent'), alpha: 1, dz: 0.04 });
+    const items = [];
+    if (shown) {
+      const { m: sm, sq } = shown;
+      for (const { r, sel } of focus ? want.filter((w) => w.sel) : want) {
+        items.push({ positions: regionTriangles(r, sm, sq), color: sel ? css('--accent') : scene.tints?.[r.name] || css('--plate-ink'), alpha: 0.16 });
+      }
+      // the selected line is a ribbon at zero, as a region is: its wobble's band under it, then the line
+      if (line) {
+        const half = lineHalf(sm, sq);
+        if (line.wobbleMm) items.push({ positions: ribbonTriangles(line.pts, sq, line.wobbleMm, false, false), color: css('--accent'), role: 'fill', dz: 0.02, alpha: 0.18 });
+        items.push({ positions: ribbonTriangles(line.pts, sq, 1.5 * half), color: css('--accent'), alpha: 1, dz: 0.04 });
+      }
+      // the hovered place, as the selected one is drawn but quieter: it changes nothing else
+      const hr = sm.regions.find((r) => r.name === scene.hovRegion);
+      if (hr) items.push({ positions: regionTriangles(hr, sm, sq), color: css('--accent'), role: 'fill', alpha: 0.4 });
+      const hl = sm.lines.find((l) => l.name === scene.hovLine && l.pts.length > 1);
+      if (hl) items.push({ positions: ribbonTriangles(hl.pts, sq, 1.5 * lineHalf(sm, sq)), color: css('--accent'), role: 'fill', alpha: 0.7, dz: 0.04 });
+      const hp = sm.points?.find((p) => p.name === scene.hovPoint);
+      if (hp) items.push({ positions: discTriangles(hp.at, sq, 3 * lineHalf(sm, sq)), color: css('--accent'), role: 'fill', alpha: 0.9, dz: 0.04 });
+      // what the selected region is made from, drawn beside it
+      if (focus) for (const w of want) if (w.sel) items.push(...refItems(sm, w.r, sq, css('--ref')).map((i) => ({ ...i, alpha: i.role === 'fill' ? 0.22 : 1 })));
     }
-    // the hovered place, as the selected one is drawn but quieter: it changes nothing else
-    if (m && scene.show !== false) {
-      const hr = m.regions.find((r) => r.name === scene.hovRegion);
-      if (hr) items.push({ positions: regionTriangles(hr, m, this.sq), color: css('--accent'), role: 'fill', alpha: 0.4 });
-      const hl = m.lines.find((l) => l.name === scene.hovLine && l.pts.length > 1);
-      if (hl) items.push({ positions: ribbonTriangles(hl.pts, this.sq, 1.5 * lineHalf(m, this.sq)), color: css('--accent'), role: 'fill', alpha: 0.7, dz: 0.04 });
-      const hp = m.points?.find((p) => p.name === scene.hovPoint);
-      if (hp) items.push({ positions: discTriangles(hp.at, this.sq, 3 * lineHalf(m, this.sq)), color: css('--accent'), role: 'fill', alpha: 0.9, dz: 0.04 });
-    }
-    // what the selected region is made from, drawn beside it
-    if (focus) for (const w of want) if (w.sel) items.push(...refItems(m, w.r, this.sq, css('--ref')).map((i) => ({ ...i, alpha: i.role === 'fill' ? 0.22 : 1 })));
     const key = JSON.stringify([items.map((i) => [i.color, i.role, i.dz, i.positions.length, i.positions.reduce((a, x, n) => a + x * ((n % 97) + 1), 0)]), focus, z, m && [m.cols, m.rows, m.cells]]);
     if (key === this.regionKey) return;
     this.regionKey = key;
@@ -163,9 +177,11 @@ export class Overlay {
       }
       c.restore();
       c.globalAlpha = 1;
-      this.drawLabels(scene);
+      this.drawLabels(scene, m);
     }
-    // the tool's own drawing
+    // the tool's own drawing: it lies on the ground in squares, so without the program's square size there is nothing to draw it at (setMap)
+    if (this.sq === null) return;
+    const sq = this.sq;
     if (scene.box) {
       const [a, b] = scene.box;
       const q = [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]].map((p) => this.at(p));
@@ -185,7 +201,7 @@ export class Overlay {
       c.beginPath();
       for (let n = 0; n <= 32; n++) {
         const t = (n / 32) * Math.PI * 2;
-        const p = this.at([q[0] + (r * Math.cos(t)) / this.sq, q[1] + (r * Math.sin(t)) / this.sq]);
+        const p = this.at([q[0] + (r * Math.cos(t)) / sq, q[1] + (r * Math.sin(t)) / sq]);
         if (n) c.lineTo(p.x, p.y); else c.moveTo(p.x, p.y);
       }
       c.globalAlpha = 0.2; c.fill(); c.globalAlpha = 1; c.stroke();
@@ -210,8 +226,8 @@ export class Overlay {
    * (the source as written: coordinates, or the point's name), then the names: the line's or region's own, and what a region is made from.
    * Labels keep clear of each other and of the dots.
    */
-  drawLabels(scene) {
-    const m = this.map, c = this.ctx;
+  drawLabels(scene, /** @type {import('./api').TileMap} */ m) {
+    const c = this.ctx;
     const sel = m.regions.find((r) => r.name === scene.selRegion) || null;
     const line = m.lines.find((l) => l.name === scene.selLine) || null;
     const markers = ((sel || line)?.markers || []).filter((k) => k.at);
@@ -251,7 +267,7 @@ export class Overlay {
       taken.push({ x0: p.x - w / 2, y0: y - 17, x1: p.x + w / 2, y1: y + 1 });
       this.tag(p.x, y, text, tone);
     };
-    if (line) name(refAnchor({ kind: 'line', pts: line.pts }, m), line.name, true);
+    if (line) name(refAnchor({ kind: 'line', name: line.name, pts: line.pts }, m), line.name, true);
     if (sel) {
       name(regionAnchor(sel, m), sel.name, true);
       for (const ref of sel.refs || []) if (ref.kind !== 'point') name(refAnchor(ref, m), ref.name, 'ref');

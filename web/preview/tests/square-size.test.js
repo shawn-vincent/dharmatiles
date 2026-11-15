@@ -1,9 +1,11 @@
+// @ts-check
 // The square's size is the program's (`Target.squareMm`, 35 on DungeonBlocks, 25.4 on OpenLOCK): the page never guesses it.
 // A fallback to a number would silently draw the wrong grid on the other system.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { Overlay } from '../js/overlay.js';
+import { MAP } from './map-fixture.js';
 
 const root = new URL('../js/', import.meta.url).pathname;
 
@@ -23,7 +25,7 @@ test('no square size is guessed in the page: no ?? 35, || 35, "= 35" default or 
 
 test('an overlay without the program\'s square size draws no map', () => {
   const o = new Overlay({ getContext: () => ({}) }, {});
-  const map = { cols: 1, rows: 1, regions: [], lines: [] };
+  const map = { ...MAP, cols: 1, rows: 1, regions: [], lines: [] };
   o.setMap(map, undefined);
   assert.equal(o.map, null);
   assert.equal(o.sq, null);

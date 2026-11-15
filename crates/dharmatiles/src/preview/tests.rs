@@ -15,6 +15,7 @@ use serde_json::Value;
 use super::*;
 
 mod inventory;
+mod map_wire;
 mod messages_wire;
 mod plates;
 

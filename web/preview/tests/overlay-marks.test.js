@@ -1,3 +1,4 @@
+// @ts-check
 // The overlay's marks and their states (js/overlay-marks.js), and the lookups the caret and the pointer make: pure, from a map and
 // a text offset, down to a single point.
 import { test } from 'node:test';
@@ -5,26 +6,7 @@ import assert from 'node:assert/strict';
 import { byteToIndex } from '../js/spans.js';
 import { TOGGLES, byteOffset, drawn, markAtOffset, marksOf, parsePins, sourceRange, stateOf } from '../js/overlay-marks.js';
 import { heightAtGrid, heightGrid } from '../js/overlay-geometry.js';
-
-// tile size="1x1" { line shore { through "0,0.4" "1,0.4" } region pool { fill "0.5,0.2" } }
-const TEXT = 'tile size="1x1" {\n  line shore { through "0,0.4" "1,0.4" }\n  region pool { boundedBy shore; fill "0.5,0.2" }\n}\n';
-const span = (needle, nth = 0) => {
-  let at = -1;
-  for (let k = 0; k <= nth; k++) at = TEXT.indexOf(needle, at + 1);
-  return [at, needle.length];
-};
-const MAP = {
-  cols: 1, rows: 1, cells: 4,
-  lines: [{
-    name: 'shore', pts: [[0, 0.4], [1, 0.4]], span: span('line shore { through "0,0.4" "1,0.4" }'),
-    points: [{ text: '"0,0.4"', span: span('"0,0.4"'), at: [0, 0.4] }, { text: '"1,0.4"', span: span('"1,0.4"'), at: [1, 0.4] }],
-  }],
-  regions: [{
-    name: 'pool', nx: 5, ny: 5, bits: '0'.repeat(25), span: span('region pool { boundedBy shore; fill "0.5,0.2" }'),
-    fills: [{ text: '"0.5,0.2"', span: span('"0.5,0.2"'), at: [0.5, 0.2] }],
-  }],
-  points: [],
-};
+import { MAP, TEXT } from './map-fixture.js';
 
 test('every line, point, region and fill point is a mark with its source span', () => {
   const marks = marksOf(MAP);
@@ -35,13 +17,13 @@ test('every line, point, region and fill point is a mark with its source span', 
 test('the caret on a point lights that point; between points it lights the line; outside any mark, nothing', () => {
   const marks = marksOf(MAP);
   const at = (needle, plus = 1) => TEXT.indexOf(needle) + plus;
-  assert.equal(markAtOffset(marks, TEXT, at('"1,0.4"')), 'point:shore#1');
-  assert.equal(markAtOffset(marks, TEXT, at('"0,0.4"')), 'point:shore#0');
+  assert.equal(markAtOffset(marks, TEXT, at('"(1sq, 0.4sq)"')), 'point:shore#1');
+  assert.equal(markAtOffset(marks, TEXT, at('"(0sq, 0.4sq)"')), 'point:shore#0');
   assert.equal(markAtOffset(marks, TEXT, at('through')), 'line:shore');
   assert.equal(markAtOffset(marks, TEXT, at('boundedBy')), 'region:pool');
-  assert.equal(markAtOffset(marks, TEXT, at('fill "0.5')), 'region:pool');
-  assert.equal(markAtOffset(marks, TEXT, at('"0.5,0.2"')), 'fill:pool#0');
-  assert.equal(markAtOffset(marks, TEXT, 3), null, 'the tile header is no mark');
+  assert.equal(markAtOffset(marks, TEXT, at('fill "(0.5')), 'region:pool');
+  assert.equal(markAtOffset(marks, TEXT, at('"(0.5sq, 0.2sq)"')), 'fill:pool#0');
+  assert.equal(markAtOffset(marks, TEXT, 3), null, 'the format line is no mark');
 });
 
 test('offsets count bytes in the map and code units in a text area', () => {
@@ -49,12 +31,13 @@ test('offsets count bytes in the map and code units in a text area', () => {
   assert.equal(byteOffset(text, 1), 2);
   assert.equal(byteToIndex(text, 2), 1);
   assert.equal(byteToIndex(text, 0), 0);
-  const marks = marksOf({ lines: [{ name: 'x', span: [0, 7], points: [{ span: [2, 5], at: [0, 0] }] }], regions: [], points: [] });
+  const [line] = MAP.lines, [point] = line.points;
+  const marks = marksOf({ ...MAP, lines: [{ ...line, name: 'x', span: [0, 7], points: [{ ...point, span: [2, 5], at: [0, 0] }] }], regions: [], points: [] });
   // the quote after the accent is at code unit 1, byte 2: the point
   assert.equal(markAtOffset(marks, text, 2), 'point:x#0');
   assert.deepEqual(sourceRange(marks[1], text), [1, 6]);
   // a node's span ends with its newline: the range lit does not
-  assert.deepEqual(sourceRange({ span: [0, 7] }, 'ab { }\nrest'), [0, 6]);
+  assert.deepEqual(sourceRange({ ...marks[0], span: [0, 7] }, 'ab { }\nrest'), [0, 6]);
 });
 
 test('a mark is off, shown by its toggle or its lit parent, and lit when pinned, hovered or under the caret', () => {

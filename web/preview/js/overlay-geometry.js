@@ -4,10 +4,19 @@
 // (overlay-marks.js) say which to draw.
 
 /**
+ * @typedef {import('./api').TileMap} TileMap
+ * @typedef {import('./api').MapRegion} MapRegion
+ * @typedef {import('./api').PlaceRef} PlaceRef
+ * @typedef {ReadonlyArray<number>} Pt a point, in squares
+ * @typedef {ReadonlyArray<Pt>} Pts
+ * @typedef {{ z: Float32Array, nx: number, ny: number, w: number, h: number }} HeightGrid
+ */
+
+/**
  * A region's lattice cells as flat triangles (x, y in mm, z 0: the caller sets the height): one quad per run of set nodes in a row, clipped to the tile.
  * Returns a Float32Array of 9 numbers per triangle; `sq` is mm per square.
  */
-export function regionTriangles(r, m, sq) {
+export function regionTriangles(/** @type {MapRegion} */ r, /** @type {TileMap} */ m, /** @type {number} */ sq) {
   const out = [];
   const step = 1 / m.cells;
   for (let j = 0; j < r.ny; j++) {
@@ -32,7 +41,7 @@ export function regionTriangles(r, m, sq) {
  * Returns a Float32Array of triangles (9 numbers each); `closed` joins the last point to the first;
  * `curtain` false leaves out the upright strip (a flat band).
  */
-export function ribbonTriangles(pts, sq, half = 0.7, closed = false, curtain = true) {
+export function ribbonTriangles(/** @type {Pts} */ pts, /** @type {number} */ sq, half = 0.7, closed = false, curtain = true) {
   const out = [];
   const n = pts.length;
   for (let k = 0; k < (closed ? n : n - 1); k++) {
@@ -50,7 +59,7 @@ export function ribbonTriangles(pts, sq, half = 0.7, closed = false, curtain = t
 }
 
 /** The outline of a region's lattice cells as ribbons (mm; not along the tile's own border). */
-export function outlineTriangles(r, m, sq, half = 0.5) {
+export function outlineTriangles(/** @type {MapRegion} */ r, /** @type {TileMap} */ m, /** @type {number} */ sq, half = 0.5) {
   const step = 1 / m.cells, segs = [];
   const set = (i, j) => i >= 0 && j >= 0 && i < r.nx && j < r.ny && r.bits[j * r.nx + i] === '1';
   const clampX = (v) => Math.min(m.cols, Math.max(0, v)), clampY = (v) => Math.min(m.rows, Math.max(0, v));
@@ -71,7 +80,7 @@ export function outlineTriangles(r, m, sq, half = 0.5) {
 }
 
 /** A point (squares) as a flat disc of radius `rad` mm, with a ring round it as a ribbon's worth of height. */
-export function discTriangles(q, sq, rad = 1.6, sides = 20) {
+export function discTriangles(/** @type {Pt} */ q, /** @type {number} */ sq, rad = 1.6, sides = 20) {
   const out = [];
   const cx = q[0] * sq, cy = q[1] * sq;
   for (let k = 0; k < sides; k++) {
@@ -82,13 +91,13 @@ export function discTriangles(q, sq, rad = 1.6, sides = 20) {
 }
 
 /** Where to hang a label on a place (squares): the middle of a line, the point itself, the set cell nearest a region's centre. */
-export function refAnchor(ref, map) {
-  if (ref.at) return ref.at;
+export function refAnchor(/** @type {PlaceRef} */ ref, /** @type {TileMap} */ map) {
+  if (ref.kind === 'point') return ref.at;
   if (ref.kind === 'region') {
     const r = map.regions.find((x) => x.name === ref.name);
     return r ? regionAnchor(r, map) : null;
   }
-  const pts = ref.pts || [];
+  const pts = 'pts' in ref ? ref.pts || [] : []; // a tile with no outline has none
   if (pts.length < 2) return pts[0] || null;
   // a loop (all four edges, the tile) is labelled on its first side
   const closed = pts.length > 2 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1];
@@ -106,23 +115,25 @@ export function refAnchor(ref, map) {
 }
 
 /** The set cell of a region nearest its centre of mass, in squares (null for an empty region). */
-export function regionAnchor(r, m) {
+export function regionAnchor(/** @type {MapRegion} */ r, /** @type {TileMap} */ m) {
   const step = 1 / m.cells;
   let sx = 0, sy = 0, n = 0;
   for (let j = 0; j < r.ny; j++) for (let i = 0; i < r.nx; i++) if (r.bits[j * r.nx + i] === '1') { sx += i; sy += j; n++; }
   if (!n) return null;
   const cx = sx / n, cy = sy / n;
+  /** @type {[number, number] | null} */
   let best = null, d = Infinity;
   for (let j = 0; j < r.ny; j++) for (let i = 0; i < r.nx; i++) {
     if (r.bits[j * r.nx + i] !== '1') continue;
     const e = (i - cx) ** 2 + (j - cy) ** 2;
     if (e < d) { d = e; best = [i, j]; }
   }
+  if (!best) return null; // unreachable with n > 0, and says so
   return [Math.min(m.cols, Math.max(0, best[0] * step)), Math.min(m.rows, Math.max(0, best[1] * step))];
 }
 
 /** Half the width of a drawn line, mm: thin on a small tile, a little wider on a big one, so about the same on the screen. */
-export function lineHalf(map, sq) {
+export function lineHalf(/** @type {TileMap} */ map, /** @type {number} */ sq) {
   return Math.min(1, Math.max(0.3, 0.012 * Math.max(map.cols, map.rows) * sq));
 }
 
@@ -130,7 +141,7 @@ export function lineHalf(map, sq) {
  * The scene items for the places a region is made from (its `refs`): lines and edges as ribbons, a region
  * as a faint fill inside an outline (its points are markers, drawn with their labels).  Each {positions, color, role: 'line'|'fill', dz}.
  */
-export function refItems(map, region, sq, color) {
+export function refItems(/** @type {TileMap} */ map, /** @type {Pick<MapRegion, 'refs'>} */ region, /** @type {number} */ sq, /** @type {string} */ color) {
   const items = [];
   // thin on a small tile, a little wider on a big one: about the same on the screen
   const half = lineHalf(map, sq);
@@ -142,7 +153,7 @@ export function refItems(map, region, sq, color) {
       if (!r) continue;
       items.push({ positions: regionTriangles(r, map, sq), color, role: 'fill', dz: 0.04 });
       items.push({ positions: outlineTriangles(r, map, sq, 0.7 * half), color, role: 'line', dz: 0.08 });
-    } else if (ref.pts) {
+    } else if ('pts' in ref && ref.pts) {
       const loop = ref.kind === 'tile' || ref.name === 'edges';
       items.push({ positions: ribbonTriangles(ref.pts, sq, half), color, role: 'line', dz: 0.08, loop });
     }
@@ -188,7 +199,10 @@ export function heightGrid(P, triangles, footprint, keep = () => true) {
   return z[0] > -Infinity ? { z, nx, ny, w, h } : null;
 }
 
-/** The height of a `heightGrid` at (x, y) mm, or `fallback` without one. */
+/**
+ * The height of a `heightGrid` at (x, y) mm, or `fallback` without one.
+ * @param {HeightGrid | null} H @param {number} x @param {number} y @param {number} fallback
+ */
 export function heightAtGrid(H, x, y, fallback) {
   if (!H) return fallback;
   const i = Math.min(H.nx - 1, Math.max(0, Math.floor((x / H.w) * H.nx)));

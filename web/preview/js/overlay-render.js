@@ -44,7 +44,7 @@ function tag(/** @type {CanvasRenderingContext2D} */ c, x, y, text, fill, ink) {
  * Draw the marks.  `map` is the program's map JSON, `sq` mm per square, `drawn` what `drawn(marks, moment)` returned, `squares`
  * whether to draw the squares' grid.  `zAt(x, y)` is the ground's height under a point, mm (0 over a flat picture).
  * @param {CanvasRenderingContext2D} c
- * @param {{ map: any, sq: number, drawn: Drawn[], squares?: boolean, project: Project, zAt?: (x: number, y: number) => number, size: { w: number, h: number } }} o
+ * @param {{ map: import('./api').TileMap, sq: number, drawn: Drawn[], squares?: boolean, project: Project, zAt?: (x: number, y: number) => number, size: { w: number, h: number } }} o
  */
 export function renderMarks(c, { map, sq, drawn, squares = false, project, zAt = () => 0, size }) {
   c.clearRect(0, 0, size.w, size.h);
@@ -77,7 +77,7 @@ export function renderMarks(c, { map, sq, drawn, squares = false, project, zAt =
   for (const { mark, state } of list) {
     const lit = state === 'lit';
     if (mark.kind === 'region') {
-      const r = map.regions.find((/** @type {any} */ x) => x.name === mark.name);
+      const r = map.regions.find((x) => x.name === mark.name);
       if (!r) continue;
       c.fillStyle = lit ? accent : ink;
       c.globalAlpha = lit ? 0.42 : 0.2;
@@ -86,7 +86,7 @@ export function renderMarks(c, { map, sq, drawn, squares = false, project, zAt =
       const a = regionAnchor(r, map);
       if (a && lit) labelled.push({ at: a, text: r.name, fill: accent, ink: css('--on-accent') });
     } else if (mark.kind === 'line') {
-      const l = map.lines.find((/** @type {any} */ x) => x.name === mark.name);
+      const l = map.lines.find((x) => x.name === mark.name);
       if (!l || l.pts.length < 2) continue;
       const pts = l.pts.map((/** @type {number[]} */ q) => at(q));
       // how far it may wander: the band of its wobble, under the line
@@ -104,7 +104,7 @@ export function renderMarks(c, { map, sq, drawn, squares = false, project, zAt =
       c.setLineDash([]);
       c.globalAlpha = 1;
       if (lit) {
-        const a = refAnchor({ kind: 'line', pts: l.pts }, map);
+        const a = refAnchor({ kind: 'line', name: l.name, pts: l.pts }, map);
         if (a) labelled.push({ at: a, text: l.name, fill: accent, ink: css('--on-accent') });
       }
       void half;
@@ -138,7 +138,7 @@ export function renderMarks(c, { map, sq, drawn, squares = false, project, zAt =
 /**
  * Which mark is under canvas point (x, y): a shown point within `px`, else a shown line within `px`, else the region whose
  * cells hold it.  Only marks that are drawn can be pointed at.  Null for none.
- * @param {{ map: any, sq: number, drawn: Drawn[], project: Project, zAt?: (x: number, y: number) => number }} o
+ * @param {{ map: import('./api').TileMap, sq: number, drawn: Drawn[], project: Project, zAt?: (x: number, y: number) => number }} o
  * @returns {string | null}
  */
 export function markAtPoint({ map, sq, drawn, project, zAt = () => 0 }, x, y, px = 9) {
@@ -153,7 +153,7 @@ export function markAtPoint({ map, sq, drawn, project, zAt = () => 0 }, x, y, px
   if (best) return best;
   for (const { mark } of drawn) {
     if (mark.kind !== 'line') continue;
-    const l = map.lines.find((/** @type {any} */ k) => k.name === mark.name);
+    const l = map.lines.find((k) => k.name === mark.name);
     const pts = (l?.pts ?? []).map(at);
     for (let n = 1; n < pts.length; n++) {
       const a = pts[n - 1], b = pts[n];
@@ -169,7 +169,7 @@ export function markAtPoint({ map, sq, drawn, project, zAt = () => 0 }, x, y, px
 
 /**
  * The region (id) holding tile point (mx, my) in mm, among the drawn marks: the last listed wins, as the editor's does.
- * @param {{ map: any, sq: number, drawn: Drawn[] }} o
+ * @param {{ map: import('./api').TileMap, sq: number, drawn: Drawn[] }} o
  */
 export function regionAtTile({ map, sq, drawn }, mx, my) {
   if (!map) return null;
@@ -177,7 +177,7 @@ export function regionAtTile({ map, sq, drawn }, mx, my) {
   let hit = null;
   for (const { mark } of drawn) {
     if (mark.kind !== 'region') continue;
-    const r = map.regions.find((/** @type {any} */ k) => k.name === mark.name);
+    const r = map.regions.find((k) => k.name === mark.name);
     if (r && i >= 0 && j >= 0 && i < r.nx && j < r.ny && r.bits[j * r.nx + i] === '1') hit = mark.id;
   }
   return hit;
