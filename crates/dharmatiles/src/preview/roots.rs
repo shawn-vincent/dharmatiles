@@ -44,18 +44,10 @@ pub fn roots_for(paths: &[String]) -> Result<(Vec<Root>, Vec<String>), String> {
             && !lower.ends_with(".dtile")
             && !lower.ends_with(".stl")
         {
-            let prefix = format!("{}/", rest.trim_end_matches('/'));
-            let (name, group) = match prefix.strip_prefix("tests/") {
-                Some(g) => ("Tests", g),
-                None => ("Library", prefix.trim_start_matches("tiles/")),
-            };
-            let group = group.trim_end_matches('/');
-            let label = if group.is_empty() {
-                name.to_owned()
-            } else {
-                format!("{name}: {group}")
-            };
-            roots.push(Root::new(&label, RootKind::Library(prefix)));
+            roots.push(Root::library_group(&format!(
+                "{}/",
+                rest.trim_end_matches('/')
+            )));
         } else if !p.starts_with("lib:") && std::path::Path::new(p).is_dir() {
             roots.push(Root::new(p, RootKind::Dir(p.into())));
         } else {

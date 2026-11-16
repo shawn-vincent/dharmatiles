@@ -34,7 +34,10 @@ pub enum ThingRef {
     Entry { key: String, child: Option<u32> },
 }
 
-/// `buildThing`: draw one thing of `text` (the tile's document, or `file`, a file it uses) at each of `seeds`.
+/// `buildThing`: draw one thing at each of `seeds`.  `text` is the text the page holds of `file` (a file the tile uses), or of the
+/// tile's own document when there is none: it is laid over what the host stores, as a check's is.  What is read is the tile for an
+/// entry of its stack (a call of a thing a part defines is an entry of the tile, which the part's text may be being edited under),
+/// and the file for a `define` the page is in.
 #[derive(Deserialize, Serialize, Debug, ts_rs::TS)]
 #[ts(optional_fields = nullable)]
 #[serde(deny_unknown_fields)]
@@ -122,17 +125,29 @@ pub struct ThingRes {
 
 pub const BUILD_THING: Verb<ThingReq, ThingRes> = Verb::new("buildThing");
 
-/// Draw the thing `v.which` means in the document `src` holds at `document` (the tile's own file, or a part it uses), at each seed.
+/// Draw the thing `v.which` means, at each seed.  `base` is what the host stores (the tile, the parts it uses, the library) and
+/// `tile` the tile's own document in it; the request's text goes over `v.file`, or over the tile, and the thing is read from the
+/// tile for an entry, from `v.file` for a `define` (see [`ThingReq`]).
 ///
 /// # Errors
 /// [`Refusal`]: no seed or too many (400); no such define or entry (404); it is a layer, or the document does not read
 /// (422); a draw could not be made or encoded (500).
 pub fn build_thing<H: PlatesHost + CheckHost>(
     host: &H,
-    src: &dyn dt_eval::Source,
-    document: &str,
+    base: &dyn dt_eval::Source,
+    tile: &str,
     v: &ThingReq,
 ) -> Result<ThingRes, Refusal> {
+    let held = v.file.as_deref().unwrap_or(tile);
+    let document = match (&v.which, v.file.as_deref()) {
+        (ThingRef::Define { .. }, Some(file)) => file,
+        _ => tile,
+    };
+    let src = crate::read_calls::Overlay {
+        files: std::collections::BTreeMap::from([(held.to_owned(), v.text.clone())]),
+        base,
+    };
+    let src: &dyn dt_eval::Source = &src;
     if v.seeds.is_empty() || v.seeds.len() > MOST_DRAWS {
         return Err(Refusal::refused(
             Status::BadRequest,

@@ -434,3 +434,35 @@ impl Source for Probe<'_> {
         self.inner.read(path)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source::Memory;
+    use std::collections::BTreeMap;
+
+    const TILE: &str = "dharmatiles version=\"1.0.0\"\n\nuse \"parts/trees\" oak\n\ntile size=\"1x1\" seed=7 {\n    stack {\n        base\n        dirt\n        oak\n    }\n}\n";
+
+    /// A call of a definition of a thing, written as an entry of the tile, is that thing under the id the check gives the entry it
+    /// expands to (`tile/tree/0`): the page sends that id.
+    #[test]
+    fn a_called_thing_is_found_by_the_id_the_check_gives() {
+        let src = Memory(BTreeMap::from([(
+            "/t/mine.dtile".to_owned(),
+            TILE.to_owned(),
+        )]));
+        let opts = Options::default();
+        let read = doc::read_with(&src, "/t/mine.dtile", opts.units()).expect("reads");
+        let ids: Vec<String> = read
+            .tile
+            .expect("a tile")
+            .stack
+            .iter()
+            .map(|e| e.id.as_str().to_owned())
+            .collect();
+        assert!(ids.iter().any(|i| i == "tile/tree/0"), "{ids:?}");
+        let key = "tile/tree/0";
+        let s = subject(&src, "/t/mine.dtile", Which::Entry { key, child: None }, &opts);
+        assert!(s.is_ok(), "{:?}", s.err().map(|r| format!("{r:?}")));
+    }
+}

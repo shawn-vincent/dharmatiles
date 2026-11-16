@@ -471,12 +471,8 @@ fn table() -> Table<World, Refusal> {
             dt_service::draft_calls::step(w, &tile_ref(), r)
         })
         .with(&BUILD_THING, |w: &World, r: ThingReq| {
-            // the text the page holds is the document: a thing is read from it, not from the store
-            let src = dt_service::read_calls::Overlay {
-                files: BTreeMap::from([(PATH.to_owned(), r.text.clone())]),
-                base: &Mem(&w.mem),
-            };
-            dt_service::thing_calls::build_thing(w, &src, PATH, &r)
+            // the text the page holds goes over the store's
+            dt_service::thing_calls::build_thing(w, &Mem(&w.mem), PATH, &r)
         })
 }
 
@@ -1623,6 +1619,46 @@ fn thing_req(which: ThingRef, seeds: &[u64]) -> ThingReq {
         seeds: seeds.to_vec(),
         tier: None,
     }
+}
+
+/// A tile calls the oak a part defines, and the page is on the part (its text is `file`'s): the entry of the tile is the thing,
+/// drawn with the part's text as held (an edit of the part is seen), while the tile is read from the store.
+#[test]
+fn a_called_thing_is_drawn_with_the_text_of_the_part_the_page_is_on() {
+    let w = world();
+    let tile = "/memory/My tiles/oak.dtile";
+    let text = "dharmatiles version=\"1.0.0\"\n\nuse \"parts/trees\" oak\n\ntile size=\"1x1\" seed=7 {\n    stack {\n        base\n        dirt\n        oak\n    }\n}\n";
+    w.mem.write_text(Path::new(tile), text).expect("written");
+    let part = dt_eval::Files
+        .read("lib:parts/trees.dtile")
+        .expect("the part");
+    let draw = |part_text: &str| {
+        dt_service::thing_calls::build_thing(
+            &w,
+            &Mem(&w.mem),
+            tile,
+            &ThingReq {
+                text: part_text.to_owned(),
+                file: Some("lib:parts/trees.dtile".to_owned()),
+                which: ThingRef::Entry {
+                    key: "tile/tree/0".to_owned(),
+                    child: None,
+                },
+                seeds: vec![1],
+                tier: Some(dt_eval::Tier::Low),
+            },
+        )
+        .expect("the called oak is drawn")
+    };
+    let wide = draw(&part);
+    assert_eq!(wide.element, "tree");
+    let narrow = draw(&part.replace("width=\"44dmm\"", "width=\"30dmm\""));
+    assert!(
+        narrow.extent.most.x < wide.extent.most.x,
+        "the part's own text is what is drawn: {} then {}",
+        wide.extent.most.x,
+        narrow.extent.most.x
+    );
 }
 
 /// `buildThing`: a rock define at seeds 1 to 4, a rock entry and a scatter's child, and the refusals, by verb with no
