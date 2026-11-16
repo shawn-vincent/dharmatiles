@@ -23,14 +23,11 @@
 use core::f64::consts::{FRAC_PI_2, PI, TAU};
 use dt_kit::Kind;
 
-use dt_kit::{
-    Field, Material, Placed, Rng, Scene, Spread, Tag, TriMesh, form, scatter, signed_volume,
-};
+use dt_kit::{Field, Material, Placed, Rng, Scene, Seed, Solid, Tag, TriMesh, form, signed_volume};
 
 use crate::read::Settings;
-use crate::{
-    Child, Control, Ctx, Draw, Element, LookError, Plan, Read, Shown, Write, draw_text, num_text,
-};
+use crate::thing::{Box3, Drawn, Extent, Meets, Standing, Thing, Usual};
+use crate::{Control, Ctx, Draw, Element, LookError, Plan, Read, Write};
 
 const AZ: usize = 16;
 const EL: usize = 8;
@@ -55,8 +52,6 @@ pub struct Plant {
     stem: f64,
     dome: f64,
     petal: f64,
-    /// Its share of a scatter's mix.
-    weight: f64,
 }
 
 impl Plant {
@@ -65,7 +60,7 @@ impl Plant {
     /// # Errors
     /// [`LookError`] for a value of the wrong shape, or a size whose petals
     /// reach no further than the centre.
-    pub fn new(controls: &[Control], weight: f64) -> Result<Self, LookError> {
+    pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let s = Settings::new(controls);
         let mut f = Self {
             size: Draw::flat(SIZE_MM, SIZE_MM),
@@ -74,7 +69,6 @@ impl Plant {
             stem: 1.0,
             dome: 1.0,
             petal: 0.5,
-            weight,
         };
         f.size = s.dist_or("size", f.size)?;
         if let Some(n) = s.number("petals")? {
@@ -97,11 +91,6 @@ impl Plant {
             });
         }
         Ok(f)
-    }
-
-    /// Its share of a scatter's mix.
-    pub(crate) fn weight(&self) -> f64 {
-        self.weight
     }
 
     /// One draw of the size, then the reach: the centre to a petal's tip.
@@ -306,60 +295,6 @@ pub(crate) fn stand(
     Ok(())
 }
 
-/// Dart-throw the flowers' discs (each its reach, mm at the 35 mm square)
-/// into the entry's area: every disc dry, in the area and off what stands
-/// there. `gap` is mm at the 35 mm square.
-///
-/// `also` are discs (x, y, r) of other things already placed, kept clear of.
-pub(crate) fn place(
-    scene: &Scene,
-    area: &dt_kit::Mask,
-    rng: &mut Rng,
-    reaches: &[f64],
-    gap: f64,
-    also: &[[f64; 3]],
-) -> Result<Vec<Placed>, LookError> {
-    let frame = *scene.frame();
-    let s = frame.scale();
-    let [w, h] = frame.size_mm();
-    let (nx, _) = frame.nodes();
-    let Some((surface, _)) = scene.surface() else {
-        return Err(LookError::general(
-            "flowers have no ground to grow on",
-            "put a `ground` or `dirt` before them in the stack",
-        ));
-    };
-    let ground = Field::from(&surface);
-    let blocker = scene.standing(&[Kind::Rock, Kind::Tree, Kind::Wall], 0.45);
-    let wet = scene.wet().clone();
-    let radii: Vec<f64> = reaches.iter().map(|r| r * s).collect();
-    let widest = radii.iter().copied().fold(0.0, f64::max);
-    let spread = Spread {
-        tries: TRIES,
-        inset: [0.5 * s, 1.0],
-        confine: true,
-        gap: gap * s,
-        factor: 1.0,
-    };
-    let density = |x: f64, y: f64| {
-        // the flower's whole disc must be dry, in its area, off what stands there
-        let ok = (0..8).all(|k| {
-            let a = TAU * f64::from(k) / 8.0;
-            let (px, py) = (x + widest * libm::cos(a), y + widest * libm::sin(a));
-            let (i, j) = ground.node(px.clamp(0.0, w), py.clamp(0.0, h));
-            let q = j * nx + i;
-            area.bits[q] && !wet.bits[q] && !blocker.bits[q]
-        });
-        let (i, j) = ground.node(x, y);
-        if ok && area.bits[j * nx + i] {
-            1.0
-        } else {
-            0.0
-        }
-    };
-    Ok(scatter(&frame, rng, &radii, &spread, &density, also))
-}
-
 /// One flower: at `at=` a point, or somewhere in its region.
 #[derive(Clone, Debug)]
 pub struct Flower {
@@ -373,7 +308,7 @@ impl Flower {
     /// [`LookError`] for a control of the wrong shape or a size out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         Ok(Self {
-            plant: Plant::new(controls, 1.0)?,
+            plant: Plant::new(controls)?,
         })
     }
 }
@@ -421,7 +356,19 @@ impl Element for Flower {
                 }]
             }
             None => {
-                let placed = place(scene, ctx.area, &mut rng, &[outer], GAP_MM, &[])?;
+                let placed = crate::thing::place_group(
+                    scene,
+                    ctx,
+                    &mut rng,
+                    crate::LINE_REACH_MM,
+                    &crate::thing::Sites {
+                        radii: &[outer * s],
+                        gap: GAP_MM * s,
+                        meets: self.plant.meets(),
+                        plural: self.plant.plural(),
+                        avoid: &[],
+                    },
+                )?;
                 if placed.is_empty() {
                     return Err(LookError::build(format!(
                         "no room for a flower {:.1} mm wide here",
@@ -435,100 +382,109 @@ impl Element for Flower {
     }
 }
 
-/// `scatter { flower }`: many flowers, by count or per square.
-#[derive(Clone, Debug)]
-pub struct Scatter {
-    count: Option<Draw>,
-    per_square: Draw,
-    gap: f64,
+/// One draw of a flower: the plant and the reach it was drawn (mm at the
+/// 35 mm square).
+struct FlowerDraw {
+    plant: Plant,
     reach: f64,
-    plants: Vec<Plant>,
 }
 
-impl Scatter {
-    /// From its controls and its children (each a flower and its weight).
-    ///
-    /// # Errors
-    /// [`LookError`] for a child that is not a flower, or bad controls.
-    pub fn new(controls: &[Control], children: &[Child]) -> Result<Self, LookError> {
-        let set = Settings::new(controls);
-        let mut plants = Vec::new();
-        for ch in children {
-            if ch.name != "flower" {
-                return Err(LookError::general(
-                    format!("`{}` is not a flower", ch.name),
-                    "a scatter of flowers alone holds flowers; a mix goes through the mixed scatter",
-                ));
-            }
-            plants.push(Plant::new(&ch.controls, ch.weight)?);
-        }
-        if plants.is_empty() {
-            return Err(LookError::general(
-                "a scatter needs a child to say what it scatters",
-                "write `scatter perSquare=4 { flower }`",
-            ));
-        }
-        Ok(Self {
-            count: set.dist("count")?,
-            per_square: set.dist_or("perSquare", Draw::flat(PER_SQUARE, PER_SQUARE))?,
-            gap: set.number_or("gap", GAP_MM)?,
-            reach: set.number_or("reach", crate::LINE_REACH_MM)?,
-            plants,
-        })
-    }
-}
-
-impl Element for Scatter {
-    fn shown(&self) -> Vec<Shown> {
-        vec![
-            Shown::new("perSquare", draw_text(&self.per_square, "", 1.0), "default"),
-            Shown::new("gap", format!("{}dmm", num_text(self.gap)), "default"),
-            Shown::new("reach", format!("{}dmm", num_text(self.reach)), "default"),
-        ]
+impl Thing for Plant {
+    fn extent(&self) -> Extent {
+        // petals reaching `outer` from the centre, standing from the bed
+        // (sunk a hair) to the top of the stem and the higher cap
+        let up = self.stem + self.dome.max(self.petal) - SINK_MM;
+        Extent::new(
+            Box3::new(self.size.lo(), self.size.lo(), up),
+            Box3::new(self.size.hi(), self.size.hi(), up),
+        )
     }
 
-    fn plan(&self) -> Plan {
-        plan()
+    fn meets(&self) -> Meets {
+        Meets {
+            bedded: false,
+            dry: true,
+            upright: None,
+            tries: TRIES,
+            rim_mm: 0.5,
+        }
     }
 
-    fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
-        if ctx.against.is_some() {
-            return Err(LookError::general(
-                "flowers are not gathered at a foot",
-                "scatter flowers `at=` a region",
-            ));
+    fn usual(&self) -> Usual {
+        Usual {
+            gap_mm: GAP_MM,
+            per_square: Draw::flat(PER_SQUARE, PER_SQUARE),
+            reach_mm: Some(crate::LINE_REACH_MM),
+            stream: "flowers",
         }
-        let frame = *scene.frame();
-        let mut rng = Rng::new(ctx.seed.key("flowers"));
-        // at= a line: the band either side of it
-        let band = ctx.spread_area(&frame, self.reach);
-        let squares = ctx.spread_squares(&frame, &band);
-        // a whole number: the ends round and every one is as likely as any
-        let n = match &self.count {
-            Some(r) => r.int_by(1.0, &mut rng),
-            None => self.per_square.int_by(squares, &mut rng),
-        };
+    }
 
-        let n = n.clamp(0, 10_000) as usize;
-        let total: f64 = self.plants.iter().map(|p| p.weight).sum();
-        let mut flowers: Vec<(&Plant, f64)> = Vec::with_capacity(n);
-        for i in 0..n {
-            let mut r = Rng::new(ctx.seed.key("item").index(i as u64));
-            let mut u = r.random() * total;
-            let plant = self
-                .plants
-                .iter()
-                .find(|p| {
-                    let hit = u < p.weight;
-                    u -= p.weight;
-                    hit
-                })
-                .unwrap_or(&self.plants[self.plants.len() - 1]);
-            flowers.push((plant, plant.reach(&mut r)));
+    fn writes(&self) -> Kind {
+        Kind::Flowers
+    }
+
+    fn plural(&self) -> &'static str {
+        "flowers"
+    }
+
+    fn draw(
+        &self,
+        scene: &Scene,
+        _item: Seed,
+        rng: &mut Rng,
+        _at_foot: bool,
+    ) -> Result<Drawn, LookError> {
+        let reach = self.reach(rng);
+        Ok(Drawn::new(
+            reach * scene.frame().scale(),
+            FlowerDraw {
+                plant: self.clone(),
+                reach,
+            },
+        ))
+    }
+
+    fn make(
+        &self,
+        scene: &mut Scene,
+        _seed: Seed,
+        _printer: &dt_kit::Printer,
+    ) -> Result<Vec<Solid>, LookError> {
+        // a flower's size is its one draw: the middle of its range, alone
+        let outer = 0.25 * (self.size.lo() + self.size.hi());
+        let parts = self.meshes(outer, [0.0, 0.0], 0.0, 0.0, scene.frame().scale());
+        let slots = scene
+            .slots(
+                u32::try_from(parts.len()).map_err(LookError::build)?,
+                Material::Flower,
+            )
+            .map_err(LookError::build)?;
+        parts
+            .iter()
+            .enumerate()
+            .map(|(i, m)| form::solid(slots.get(dt_value::idx(i)), m).map_err(LookError::build))
+            .collect()
+    }
+
+    fn stand(
+        &self,
+        scene: &mut Scene,
+        ctx: &Ctx<'_>,
+        rng: &mut Rng,
+        placed: &[Standing<'_>],
+    ) -> Result<(), LookError> {
+        let mut drawn: Vec<(&Plant, f64)> = Vec::with_capacity(placed.len());
+        let mut at: Vec<Placed> = Vec::with_capacity(placed.len());
+        for (index, p) in placed.iter().enumerate() {
+            let d: &FlowerDraw = p.drawn.payload()?;
+            drawn.push((&d.plant, d.reach));
+            at.push(Placed {
+                index,
+                at: p.at,
+                r: p.r,
+            });
         }
-        let reaches: Vec<f64> = flowers.iter().map(|f| f.1).collect();
-        let placed = place(scene, &band, &mut rng, &reaches, self.gap, &[])?;
-        stand(scene, ctx, &mut rng, &flowers, &placed)
+        stand(scene, ctx, rng, &drawn, &at)
     }
 }
 
@@ -541,7 +497,7 @@ mod tests {
     /// where its apex is), from z = 3.3 to 5.3.
     #[test]
     fn a_flower_is_unchanged() {
-        let f = Plant::new(&[], 1.0).unwrap();
+        let f = Plant::new(&[]).unwrap();
         let parts = f.meshes(SIZE_MM / 2.0, [10.0, 10.0], 3.4, 0.0, 1.0);
         assert_eq!(parts.len(), 6);
         let v: Vec<f64> = parts.iter().map(signed_volume).collect();
@@ -562,7 +518,7 @@ mod tests {
             name: "size".into(),
             value: crate::Value::Number(3.0),
         };
-        let e = Plant::new(&[c], 1.0).unwrap_err();
+        let e = Plant::new(&[c]).unwrap_err();
         assert_eq!(e.control.as_deref(), Some("size"));
     }
 }

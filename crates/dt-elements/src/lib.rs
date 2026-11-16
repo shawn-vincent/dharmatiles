@@ -16,11 +16,11 @@ pub mod dirt;
 pub mod floor;
 pub mod flowers;
 pub mod grass;
-pub mod mixed;
 pub mod openlock;
 mod read;
 pub mod reeds;
 pub mod rock;
+pub mod thing;
 pub mod tree;
 pub mod wall;
 pub mod water;
@@ -28,6 +28,7 @@ pub mod water;
 pub use dt_kit::Kind;
 pub use dt_kit::{Dist, Draw, Op, Weighting};
 use dt_kit::{Mask, Scene, Seed};
+pub use thing::{Box3, Drawn, Extent, Meets, Standing, Thing, Upright, Usual};
 
 /// A control's value, as the document gave it (levels already resolved
 /// to mm by the evaluator).
@@ -576,17 +577,7 @@ static ELEMENTS: &[(&str, Builder)] = &[
     ("dirt", |_, c, _| Ok(Box::new(dirt::Dirt::new(c)?))),
     ("water", |_, c, _| Ok(Box::new(water::Water::new(c)?))),
     ("scatter", |_, c, ch| {
-        // one kind of thing builds as its own scatter; two or more are mixed
-        let kinds = mixed::kinds(ch);
-        if kinds >= 2 {
-            Ok(Box::new(mixed::Scatter::new(c, ch)?))
-        } else if !ch.is_empty() && ch.iter().all(|k| k.name == "flower") {
-            Ok(Box::new(flowers::Scatter::new(c, ch)?))
-        } else if !ch.is_empty() && ch.iter().all(|k| k.name == "tree") {
-            Ok(Box::new(tree::Scatter::new(c, ch)?))
-        } else {
-            Ok(Box::new(rock::Scatter::new(c, ch)?))
-        }
+        Ok(Box::new(thing::Scatter::new(c, ch)?))
     }),
     ("rock", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),
     ("stone", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),

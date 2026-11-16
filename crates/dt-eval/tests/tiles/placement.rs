@@ -104,6 +104,27 @@ fn thorough_grass_clearings_are_recorded() {
     );
 }
 
+/// A scatter that mixes things holds a definition of one thing as it holds the thing: the docs' demo is a rock
+/// definition and a flower definition in one scatter, and both stand.
+#[test]
+#[ignore = "thorough: cargo xtask check --full runs it (a document outside the torture set)"]
+fn thorough_a_mixed_scatter_holds_a_definition_thing() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/elements/demo/scatter-definition.dtile")
+        .display()
+        .to_string();
+    let mut opts = Options::in_source(&dt_eval::Files).unwrap();
+    opts.tier = dt_eval::Tier::Low;
+    let b = memo::build(&dt_eval::Files, &path, &opts).unwrap();
+    let mut kinds: Vec<&str> = b.report.placed.iter().map(|p| p.kind.name()).collect();
+    kinds.sort_unstable();
+    kinds.dedup();
+    assert!(
+        kinds.contains(&"rock") && kinds.contains(&"flowers"),
+        "the mix placed {kinds:?}"
+    );
+}
+
 /// What a coarser lattice leaves where it is: the rocks and flowers a tile
 /// scatters over its whole area stand at the same coordinates at 32 cells
 /// (the coarsest, and the quickest build; 48 and 128 are in

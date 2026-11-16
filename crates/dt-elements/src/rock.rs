@@ -1,6 +1,6 @@
 //! Rocks: chiselled convex rocks, the
-//! things `rock`, `stone`, `boulder` and `pebble`, and the `scatter` that
-//! places many of them.
+//! things `rock`, `stone`, `boulder` and `pebble`.  The one `scatter`
+//! ([`crate::thing`]) places many of them.
 //!
 //! A rock is made at the reference square, in fixed numbers:
 //!
@@ -35,12 +35,13 @@
 use dt_kit::Kind;
 use dt_kit::vec3::{cross, dot, norm, sub};
 use dt_kit::{
-    Convex, Disc, Grain, Material, Placed, Rng, Scene, SeatRule, Seed, Spread, Tag, TriMesh, grain,
-    hull, scatter, solid,
+    Convex, Disc, Grain, Material, Placed, Rng, Scene, SeatRule, Seed, Solid, Tag, TriMesh, grain,
+    hull, solid,
 };
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Draw, Element, LookError, Plan, Shown, Write, draw_text, num_text};
+use crate::thing::{Box3, Drawn, Extent, Meets, Standing, Thing, Usual};
+use crate::{Control, Ctx, Draw, Element, LookError, Plan, Read, Shown, Write, draw_text};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -496,28 +497,19 @@ pub fn make_item(
 }
 
 /// What one rock thing is: its kind, size range (reference mm) with its
-/// odds, family mix, and its weight in a scatter.
+/// odds and family mix.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Thing {
+pub struct Rock {
     /// `rock`, `stone`, `boulder` or `pebble`.
     pub kind: String,
     /// Its size range, and the odds along it.
     pub size: Draw,
     /// Dome, slab, block, wedge weights.
     pub mix: [f64; 4],
-    /// Its share of a scatter's mix.
-    pub weight: f64,
     /// How much of its width sinks under the ground, a share range.
     pub buried: Draw,
     /// Its `top=`: the tile's formula for it, when written.
     pub top: Option<crate::Formula>,
-}
-
-/// The things a rock element builds, with their default size (dt-doc's
-/// vocabulary: `rock` is 6..15).
-#[must_use]
-pub fn is_thing(name: &str) -> bool {
-    matches!(name, "rock" | "stone" | "boulder" | "pebble")
 }
 
 /// A share as the fraction the checked percent form lowers to.  A bare
@@ -541,17 +533,16 @@ fn share(d: Draw) -> Result<Draw, LookError> {
     Ok(d)
 }
 
-impl Thing {
+impl Rock {
     /// From a thing's controls (defaults already filled in).
     ///
     /// # Errors
     /// [`LookError`] for a control it does not take or a bad size.
-    pub fn new(kind: &str, controls: &[Control], weight: f64) -> Result<Self, LookError> {
+    pub fn new(kind: &str, controls: &[Control]) -> Result<Self, LookError> {
         let mut t = Self {
             kind: kind.to_owned(),
             size: Draw::flat(6.0, 15.0),
             mix: FAMILIES,
-            weight,
             buried: Draw::flat(0.0, 0.0),
             top: None,
         };
@@ -593,7 +584,7 @@ impl Thing {
     }
 
     /// One draw of the size: flat unless the size is weighted.
-    pub(crate) fn draw(&self, rng: &mut Rng) -> f64 {
+    pub(crate) fn size_draw(&self, rng: &mut Rng) -> f64 {
         self.size.draw(rng)
     }
 }
@@ -613,6 +604,18 @@ pub(crate) struct Tally {
     topped: usize,
 }
 
+/// One stone as a solid in its own frame: its base at z = 0, centred on the
+/// origin, its grain from `seed`.  A low build draws the stone as its hull:
+/// the facets, no grain.
+fn stone_solid(low: bool, st: &Stone, seed: Seed, slot: dt_kit::Slot) -> Result<Solid, LookError> {
+    let mesh = if low {
+        st.convex.to_tri_mesh()
+    } else {
+        grain(&st.convex, &Grain::default(), seed.value()).map_err(LookError::build)?
+    };
+    solid(slot, &mesh).map_err(LookError::build)
+}
+
 /// Build placed items into the scene: grain, seat on `ground`, add as
 /// rock solids owned by `owner`.
 pub(crate) fn add_items(
@@ -629,7 +632,6 @@ pub(crate) fn add_items(
     let slots = scene
         .slots(n as u32, Material::Rock)
         .map_err(LookError::build)?;
-    let g = Grain::default();
     let ticks = scene.progress().counter("stones", n, 0.0, 1.0);
     // seated on the land as it is laid, grain and all; a tile with no land
     // under it is the base
@@ -709,15 +711,8 @@ pub(crate) fn add_items(
             }
             None => f.stone,
         };
-        // a low build draws the stone as its hull: the facets, no grain
-        let mesh = if scene.low() {
-            st.convex.to_tri_mesh()
-        } else {
-            grain(&st.convex, &g, seed.index(u64::from(f.k)).value()).map_err(LookError::build)?
-        };
         built.push(
-            solid(slots.get(f.k), &mesh)
-                .map_err(LookError::build)?
+            stone_solid(scene.low(), &st, seed.index(u64::from(f.k)), slots.get(f.k))?
                 .turn(f.yaw, 1.0)
                 .translate([f.p[0], f.p[1], f.z0]),
         );
@@ -898,28 +893,19 @@ pub(crate) fn note(scene: &mut Scene, t: &Tally) {
     }
 }
 
-/// Discs (x, y, r) round every rock already in the scene.
-fn rocks_in(scene: &Scene) -> Vec<[f64; 3]> {
-    scene
-        .stands(&[Kind::Rock])
-        .iter()
-        .map(|s| [s.at[0], s.at[1], s.r])
-        .collect()
-}
-
 /// A rock thing on its own: one rock, at `at=` or somewhere in its area.
 pub struct Single {
-    thing: Thing,
+    thing: Rock,
 }
 
 impl Single {
     /// From its controls.
     ///
     /// # Errors
-    /// As [`Thing::new`].
+    /// As [`Rock::new`].
     pub fn new(kind: &str, controls: &[Control]) -> Result<Self, LookError> {
         Ok(Self {
-            thing: Thing::new(kind, controls, 1.0)?,
+            thing: Rock::new(kind, controls)?,
         })
     }
 }
@@ -939,7 +925,7 @@ impl Element for Single {
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
         let mut rng = Rng::new(ctx.seed.key("rock"));
-        let d = self.thing.draw(&mut rng);
+        let d = self.thing.size_draw(&mut rng);
         let mut item = make_item(&mut rng, d, self.thing.mix, false, false)?;
         item.top.clone_from(&self.thing.top);
         let yaw = rng.uniform(0.0, 360.0);
@@ -979,15 +965,19 @@ impl Element for Single {
                 a
             }
             None => {
-                let placed = place(
+                let placed = crate::thing::place_group(
                     scene,
                     ctx,
                     &mut rng,
-                    &[item.r * s],
-                    1.5 * s,
                     crate::LINE_REACH_MM,
-                    &[],
-                );
+                    &crate::thing::Sites {
+                        radii: &[item.r * s],
+                        gap: GAP_MM * s,
+                        meets: self.thing.meets(),
+                        plural: self.thing.plural(),
+                        avoid: &[],
+                    },
+                )?;
                 let Some(p) = placed.first() else {
                     return Err(LookError::build(format!(
                         "no room for a {} {d:.1} mm wide here",
@@ -1011,54 +1001,6 @@ impl Element for Single {
     }
 }
 
-/// The entry's area less the core of a cliff's stones: nothing is set down
-/// on it (it lies behind the stones, and what stood on it would be loose).
-fn open_area(scene: &Scene, ctx: &Ctx<'_>, reach: f64) -> dt_kit::Mask {
-    // at= a line: the band either side of it
-    let mut area = ctx.spread_area(scene.frame(), reach);
-    if let Some(rest) = scene.rest() {
-        for (a, c) in area.bits.iter_mut().zip(&rest.core.bits) {
-            *a &= !*c;
-        }
-    }
-    area
-}
-
-/// Dart-throw radii (world mm) into the entry's area, largest first.
-///
-/// `also` are discs (x, y, r) of other things already placed, kept clear
-/// of like the rocks that stand.
-pub(crate) fn place(
-    scene: &Scene,
-    ctx: &Ctx<'_>,
-    rng: &mut Rng,
-    radii: &[f64],
-    gap: f64,
-    reach: f64,
-    also: &[[f64; 3]],
-) -> Vec<Placed> {
-    let frame = *scene.frame();
-    let area = &open_area(scene, ctx, reach);
-    let step = frame.step_mm();
-    let inside = |x: f64, y: f64| {
-        let (i, j) = (
-            (libm::round(x / step).max(0.0) as usize).min(area.nx - 1),
-            (libm::round(y / step).max(0.0) as usize).min(area.ny - 1),
-        );
-        if area.bits[j * area.nx + i] { 1.0 } else { 0.0 }
-    };
-    let spread = Spread {
-        tries: DART_TRIES,
-        inset: [RIM_MM * frame.scale(), 1.0],
-        confine: true,
-        gap,
-        factor: 1.0,
-    };
-    let mut avoid = rocks_in(scene);
-    avoid.extend_from_slice(also);
-    scatter(&frame, rng, radii, &spread, &inside, &avoid)
-}
-
 /// Scree: each item (largest first) lands near the foot of `foot`, in a
 /// ground cell chosen by weight (shattered patches get more), its centre
 /// `d (½ − lean) + exponential(reach)` out from the face, clear of every
@@ -1068,15 +1010,15 @@ fn place_at_foot(
     ctx: &Ctx<'_>,
     rng: &mut Rng,
     foot: &crate::Foot,
-    items: &[Item],
-    kinds: &[&str],
+    items: &[&Item],
+    reaches: &[f64],
     reach: f64,
 ) -> Vec<Placed> {
     let frame = *scene.frame();
     let s = frame.scale();
     let step = frame.step_mm();
     let size = frame.size_mm();
-    let area = &open_area(scene, ctx, reach);
+    let area = &crate::thing::open_area(scene, ctx, reach);
     let total: f64 = foot.cells.iter().map(|c| c.2).sum();
     if foot.cells.is_empty() || total <= 0.0 {
         return Vec::new();
@@ -1084,7 +1026,7 @@ fn place_at_foot(
     let mut order: Vec<usize> = (0..items.len()).collect();
     order.sort_by(|&a, &b| items[b].r.total_cmp(&items[a].r));
     let mut out: Vec<Placed> = Vec::new();
-    let existing = rocks_in(scene);
+    let existing = crate::thing::rocks_in(scene);
     for i in order {
         let it = &items[i];
         let (d, r) = (2.0 * it.r * s, it.r * s);
@@ -1097,10 +1039,7 @@ fn place_at_foot(
             }
             u -= c.2;
         }
-        let rch = -(if kinds[i] == "boulder" { 0.3 } else { 1.0 })
-            * reach
-            * s
-            * libm::log(1.0 - rng.random());
+        let rch = -reaches[i] * reach * s * libm::log(1.0 - rng.random());
         let off = d * (0.5 - SCREE_LEAN) + rch;
         let at = [cell.0[0] + cell.1[0] * off, cell.0[1] + cell.1[1] * off];
         if !(r + 0.3 < at[0]
@@ -1134,163 +1073,185 @@ fn place_at_foot(
     out
 }
 
-/// `scatter { rock … }`: many rock things, by count or per square.
-pub struct Scatter {
-    count: Option<Draw>,
-    per_square: Draw,
-    gap: f64,
-    /// `at=foot(…)`: how far from the foot stones lie, mean mm; `at=` a
-    /// line: how far either side of it.  `None` is each one's default.
-    reach: Option<f64>,
-    things: Vec<Thing>,
-}
-
 /// Placements: 9 to 12 per 2×2, so 2.25 to 3 a square.
 pub(crate) const PER_SQUARE: Draw = Draw::flat(2.25, 3.0);
+/// How far rocks keep from one another when a scatter writes no `gap`, mm
+/// at the 35 mm square.
 const GAP_MM: f64 = 1.5;
 // scree: fallen stones at a cliff's foot
-const SCREE_REACH_MM: f64 = 4.0;
 const SCREE_LEAN: f64 = 0.35;
 const SCREE_GAP: f64 = 0.38;
+/// How far out from a foot scree lies when a scatter writes no `reach`, mean
+/// mm at the 35 mm square.
+const SCREE_REACH_MM: f64 = 4.0;
+/// How much nearer a boulder lies to the foot than a stone does.
+const BOULDER_REACH: f64 = 0.3;
 /// Scree takes the cliff's fragments: angular, no domes.
 const SCREE_MIX: [f64; 4] = [0.0, 0.2, 0.45, 0.35];
 
-impl Scatter {
-    /// From its controls and its children (each a thing and its weight).
-    ///
-    /// # Errors
-    /// [`LookError`] for a child that is not a rock thing, or bad controls.
-    pub fn new(controls: &[Control], children: &[crate::Child]) -> Result<Self, LookError> {
-        let set = Settings::new(controls);
-        let mut s = Self {
-            count: None,
-            per_square: PER_SQUARE,
-            gap: GAP_MM,
-            reach: None,
-            things: Vec::new(),
-        };
-        s.count = set.dist("count")?;
-        s.per_square = set.dist_or("perSquare", PER_SQUARE)?;
-        s.reach = set.number("reach")?;
-        s.gap = set.number_or("gap", s.gap)?;
-        for ch in children {
-            if !is_thing(&ch.name) {
-                return Err(LookError::general(
-                    format!("`{}` is not a rock thing", ch.name),
-                    "a scatter holds rocks (rock, stone, boulder, pebble), flowers and trees",
-                ));
-            }
-            s.things
-                .push(Thing::new(&ch.name, &ch.controls, ch.weight)?);
+/// One draw of a rock: its placement, and how far from a foot it lies.
+struct RockDraw {
+    item: Item,
+    /// Its share of the mean scree distance.
+    scree_reach: f64,
+}
+
+impl Rock {
+    /// The farthest a placement of a stone `d` mm wide reaches from its
+    /// centre, reference mm: the stone itself, or a cluster's farthest
+    /// companion (`make_item`).
+    fn most_reach(d: f64) -> f64 {
+        let dj = (d * CLUSTER_SIZE.1).max(MIN_STONE_MM);
+        (d / 2.0).max(CLUSTER_DIST.1 * (d / 2.0 + dj / 2.0) + dj / 2.0)
+    }
+
+    /// How much a boulder or stone lies out from a foot.
+    fn scree_reach(&self) -> f64 {
+        if self.kind == "boulder" {
+            BOULDER_REACH
+        } else {
+            1.0
         }
-        if s.things.is_empty() {
-            return Err(LookError::general(
-                "a scatter needs a child to say what it scatters",
-                "write `scatter perSquare=2 { rock }`",
-            ));
-        }
-        Ok(s)
     }
 }
 
-impl Element for Scatter {
-    /// The reach is none until it is placed: a line's or a foot's own.
-    fn shown(&self) -> Vec<Shown> {
-        let mut out = vec![
-            Shown::new("perSquare", draw_text(&self.per_square, "", 1.0), "default"),
-            Shown::new("gap", format!("{}dmm", num_text(self.gap)), "default"),
-        ];
-        if let Some(r) = self.reach {
-            out.push(Shown::new(
-                "reach",
-                format!("{}dmm", num_text(r)),
-                "default",
-            ));
-        }
-        out
-    }
-
-    fn plan(&self) -> Plan {
-        Plan {
-            writes: Write::Solid(Kind::Rock),
-            reads: Vec::new(),
-            cell_mm: None,
-        }
-    }
-
-    fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
-        let frame = *scene.frame();
-        let s = frame.scale();
-        let mut rng = Rng::new(ctx.seed.key("scatter"));
-        // gathered against a foot (scree), or spread over the area
-        let foot = match ctx.against {
-            Some(kind) => Some(ctx.foot(kind).ok_or_else(|| {
-                LookError::general(
-                    format!("nothing in this tile to gather against: no `{kind}`"),
-                    format!("add a `{kind}` to the stack, or remove `at=foot(…)`"),
-                )
-            })?),
-            None => None,
+impl Thing for Rock {
+    fn extent(&self) -> Extent {
+        let (lo, hi) = (self.size.lo(), self.size.hi());
+        // a stone's height: `body_points`' ratio of its width, capped, a
+        // slab lower, never under the floor; the grain's pad on top
+        let up = |d: f64, ratio: f64, slab: f64| {
+            ((d * ratio).min(HEIGHT_CAP_MM) * slab).max(HEIGHT_MIN_MM.min(0.55 * d))
         };
-        // squares the area covers
-
-        let line_reach = self.reach.unwrap_or(crate::LINE_REACH_MM);
-        let squares = foot.map_or_else(
-            || ctx.spread_squares(&frame, &ctx.spread_area(&frame, line_reach)),
-            |f| f.squares,
-        );
-        // a whole number: the ends round and every one is as likely as any
-        let n = match &self.count {
-            Some(r) => r.int_by(1.0, &mut rng),
-            None => self.per_square.int_by(squares, &mut rng),
-        };
-        let n = n.clamp(0, 10_000) as usize;
-        let total: f64 = self.things.iter().map(|t| t.weight).sum();
-        let mut items = Vec::with_capacity(n);
-        let mut kinds: Vec<&str> = Vec::with_capacity(n);
-        for i in 0..n {
-            let mut r = Rng::new(ctx.seed.key("item").index(i as u64));
-            let mut u = r.random() * total;
-            let thing = self
-                .things
-                .iter()
-                .find(|t| {
-                    let hit = u < t.weight;
-                    u -= t.weight;
-                    hit
-                })
-                .unwrap_or(&self.things[self.things.len() - 1]);
-            let d = thing.draw(&mut r);
-            let mut item = match foot {
-                Some(_) => make_item(&mut r, d, SCREE_MIX, false, true)?,
-                None => make_item(&mut r, d, thing.mix, true, thing.buried.hi() > 0.0)?,
-            };
-            item.bury = thing.buried.clone();
-            item.top.clone_from(&thing.top);
-            items.push(item);
-            kinds.push(thing.kind.as_str());
-        }
-        let radii: Vec<f64> = items.iter().map(|it| it.r * s).collect();
-        let placed = match foot {
-            Some(foot) => place_at_foot(
-                scene,
-                ctx,
-                &mut rng,
-                foot,
-                &items,
-                &kinds,
-                self.reach.unwrap_or(SCREE_REACH_MM),
+        Extent::new(
+            Box3::new(lo, lo, up(lo, HEIGHT_RATIO.0, SLAB_HEIGHT)),
+            Box3::new(
+                2.0 * Self::most_reach(hi),
+                2.0 * Self::most_reach(hi),
+                up(hi, HEIGHT_RATIO.1, 1.0).max(HEIGHT_MIN_MM) + 1.0,
             ),
-            None => place(scene, ctx, &mut rng, &radii, self.gap * s, line_reach, &[]),
+        )
+    }
+
+    fn meets(&self) -> Meets {
+        Meets {
+            bedded: true,
+            dry: false,
+            upright: None,
+            tries: DART_TRIES,
+            rim_mm: RIM_MM,
+        }
+    }
+
+    fn usual(&self) -> Usual {
+        Usual {
+            gap_mm: GAP_MM,
+            per_square: PER_SQUARE,
+            reach_mm: None,
+            stream: crate::thing::SCATTER_STREAM,
+        }
+    }
+
+    fn writes(&self) -> Kind {
+        Kind::Rock
+    }
+
+    fn reads(&self) -> &'static [Read] {
+        &[]
+    }
+
+    fn plural(&self) -> &'static str {
+        "rocks"
+    }
+
+    fn draw(
+        &self,
+        scene: &Scene,
+        _item: Seed,
+        rng: &mut Rng,
+        at_foot: bool,
+    ) -> Result<Drawn, LookError> {
+        let d = self.size_draw(rng);
+        let mut item = if at_foot {
+            make_item(rng, d, SCREE_MIX, false, true)?
+        } else {
+            make_item(rng, d, self.mix, true, self.buried.hi() > 0.0)?
         };
-        let posed: Vec<(&Item, [f64; 2], f64)> = placed
-            .iter()
-            .map(|p| (&items[p.index], p.at, rng.uniform(0.0, 360.0)))
-            .collect();
+        item.bury = self.buried.clone();
+        item.top.clone_from(&self.top);
+        Ok(Drawn::new(
+            item.r * scene.frame().scale(),
+            RockDraw {
+                item,
+                scree_reach: self.scree_reach(),
+            },
+        ))
+    }
+
+    fn make(
+        &self,
+        scene: &mut Scene,
+        seed: Seed,
+        _printer: &dt_kit::Printer,
+    ) -> Result<Vec<Solid>, LookError> {
+        let mut rng = Rng::new(seed.key("rock"));
+        let d = self.size_draw(&mut rng);
+        let item = make_item(&mut rng, d, self.mix, false, false)?;
+        let stone = item.stones[0].1.scaled(scene.frame().scale(), 1.0);
+        let slot = scene
+            .slots(1, Material::Rock)
+            .map_err(LookError::build)?
+            .get(0);
+        Ok(vec![stone_solid(scene.low(), &stone, seed, slot)?])
+    }
+
+    fn stand(
+        &self,
+        scene: &mut Scene,
+        ctx: &Ctx<'_>,
+        rng: &mut Rng,
+        placed: &[Standing<'_>],
+    ) -> Result<(), LookError> {
+        let mut posed: Vec<(&Item, [f64; 2], f64)> = Vec::with_capacity(placed.len());
+        for p in placed {
+            let d: &RockDraw = p.drawn.payload()?;
+            posed.push((&d.item, p.at, rng.uniform(0.0, 360.0)));
+        }
         let mut t = Tally::default();
         add_items(scene, ctx.path, ctx.seed, &posed, ctx.crowns, &mut t)?;
         note(scene, &t);
         Ok(())
+    }
+
+    fn gathers(&self) -> bool {
+        true
+    }
+
+    fn gather(
+        &self,
+        scene: &Scene,
+        ctx: &Ctx<'_>,
+        rng: &mut Rng,
+        foot: &crate::Foot,
+        reach: Option<f64>,
+        drawn: &[&Drawn],
+    ) -> Result<Vec<Placed>, LookError> {
+        let mut items = Vec::with_capacity(drawn.len());
+        let mut reaches = Vec::with_capacity(drawn.len());
+        for d in drawn {
+            let d: &RockDraw = d.payload()?;
+            items.push(&d.item);
+            reaches.push(d.scree_reach);
+        }
+        Ok(place_at_foot(
+            scene,
+            ctx,
+            rng,
+            foot,
+            &items,
+            &reaches,
+            reach.unwrap_or(SCREE_REACH_MM),
+        ))
     }
 }
 
@@ -1304,11 +1265,11 @@ mod tests {
             name: "buried".into(),
             value: crate::Value::Number(v),
         };
-        let ok = Thing::new("rock", &[c(0.3)], 1.0).unwrap();
+        let ok = Rock::new("rock", &[c(0.3)]).unwrap();
         assert_eq!(ok.buried, Draw::flat(0.3, 0.3));
         // 1 is 100%; 40 is not read as 40%
-        assert!(Thing::new("rock", &[c(1.0)], 1.0).is_ok());
-        let e = Thing::new("rock", &[c(40.0)], 1.0).unwrap_err();
+        assert!(Rock::new("rock", &[c(1.0)]).is_ok());
+        let e = Rock::new("rock", &[c(40.0)]).unwrap_err();
         assert_eq!(e.code, Some(dt_lang::codes::PERCENT));
         assert!(e.help.unwrap().contains("percent"));
     }

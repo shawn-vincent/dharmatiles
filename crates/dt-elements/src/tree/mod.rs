@@ -35,10 +35,9 @@ use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
 use crate::read::Settings;
-use crate::{
-    Control, Ctx, Degrees, Draw, Element, LookError, Plan, Read, Shown, Write, draw_text, num_text,
-};
-use site::{crumbs, fill_pockets, ground_at, ground_drop, place, scatter_sites};
+use crate::thing::{Box3, Drawn, Extent, Meets, Standing, Thing, Upright, Usual};
+use crate::{Control, Ctx, Degrees, Draw, Element, LookError, Plan, Read, Shown, Write, num_text};
+use site::{crumbs, fill_pockets, ground_at, ground_drop, place};
 pub(crate) use site::{drop_crumbs, ground_box};
 
 // The tree's fixed numbers, mm at the 35 mm square.
@@ -909,152 +908,126 @@ const LOW_SIDES: usize = 7;
 /// mm at the 35 mm square.
 const SCATTER_GAP_MM: f64 = 1.0;
 /// How many layouts a scatter of trees tries before it says they do not fit.
-const LAYOUTS: usize = 64;
+const LAYOUTS: u32 = 64;
+/// How far a trunk keeps from what is already stamped, mm at the 35 mm
+/// square.
+const STAMP_CLEAR_MM: f64 = 3.0;
+/// Darts a tree gets in one layout.
+const TREE_TRIES: u32 = 300;
 
-/// `scatter { tree … }`: many trees, by count or per square, each a tree
-/// of its own seed, crowns clear of one another.  Placed as a whole
-/// first (largest crown first), then grown one after another: every
-/// tree's slots are reserved in sequence, so the source ids do not depend
-/// on the threads.
-pub struct Scatter {
-    count: Option<Draw>,
-    per_square: Draw,
-    gap: f64,
-    reach: f64,
-    /// Each tree and its share of the mix.
-    trees: Vec<(Tree, f64)>,
+/// One draw of a tree: the tree and its own seed.
+struct TreeDraw {
+    tree: Tree,
+    seed: Seed,
 }
 
-impl Scatter {
-    /// From its controls and its children (each a tree and its weight).
-    ///
-    /// # Errors
-    /// [`LookError`] for a child that is not a tree, or bad controls.
-    pub fn new(controls: &[Control], children: &[crate::Child]) -> Result<Self, LookError> {
-        let set = Settings::new(controls);
-        let mut trees = Vec::new();
-        for ch in children {
-            if ch.name != "tree" {
-                return Err(LookError::general(
-                    format!("`{}` is not a tree", ch.name),
-                    "a scatter of trees alone holds trees; a mix goes through the mixed scatter",
-                ));
-            }
-            trees.push((Tree::new(&ch.controls)?, ch.weight));
-        }
-        if trees.is_empty() {
-            return Err(LookError::general(
-                "a scatter needs a child to say what it scatters",
-                "write `scatter count=3 { tree }`",
-            ));
-        }
-        Ok(Self {
-            count: set.dist("count")?,
-            per_square: set.dist_or("perSquare", Draw::flat(1.0, 1.0))?,
-            gap: set.number_or("gap", SCATTER_GAP_MM)?,
-            reach: set.number_or("reach", crate::LINE_REACH_MM)?,
-            trees,
-        })
-    }
-}
-
-impl Element for Scatter {
-    fn shown(&self) -> Vec<Shown> {
-        vec![
-            Shown::new("perSquare", draw_text(&self.per_square, "", 1.0), "default"),
-            Shown::new("gap", format!("{}dmm", num_text(self.gap)), "default"),
-            Shown::new("reach", format!("{}dmm", num_text(self.reach)), "default"),
-        ]
-    }
-
-    fn plan(&self) -> Plan {
-        Plan {
-            writes: Write::Solid(Kind::Tree),
-            reads: vec![Read::Solids(Kind::Terrain)],
-            cell_mm: None,
-        }
-    }
-
-    fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
-        if ctx.against.is_some() {
-            return Err(LookError::general(
-                "trees are not gathered at a foot",
-                "scatter trees `at=` a region or a line",
-            ));
-        }
-        let frame = *scene.frame();
-        let s = frame.scale();
-        let mut rng = Rng::new(ctx.seed.key("scatter"));
-        let area = ctx.spread_area(&frame, self.reach);
-        let squares = ctx.spread_squares(&frame, &area);
-        // a whole number: the ends round and every one is as likely as any
-        let n = match &self.count {
-            Some(r) => r.int_by(1.0, &mut rng),
-            None => self.per_square.int_by(squares, &mut rng),
+impl Thing for Tree {
+    fn extent(&self) -> Extent {
+        let p = &self.p;
+        // the crown's diameter, or the trunk's flared foot when that is wider
+        let across =
+            |crown: f64, trunk: Option<f64>| trunk.map_or(crown, |t| crown.max(t * (1.0 + FLARE)));
+        let (lo, hi) = (
+            across(p.width.lo(), p.trunk_width.as_ref().map(Draw::lo)),
+            across(p.width.hi(), p.trunk_width.as_ref().map(Draw::hi)),
+        );
+        // a tree with no `top=` stands its `height`; one with a `top=` any
+        // height a tree may
+        let (up_lo, up_hi) = if p.crown.is_none() {
+            (p.height.lo(), p.height.hi())
+        } else {
+            (MIN_HEIGHT_MM, MAX_HEIGHT_MM)
         };
-        let n = n.clamp(0, 10_000) as usize;
-        let total: f64 = self.trees.iter().map(|t| t.1).sum();
-        // each tree: which, its own seed, and the room its crown needs
-        let mut items: Vec<(&Tree, Seed)> = Vec::with_capacity(n);
-        let mut radii = Vec::with_capacity(n);
-        for i in 0..n {
-            let item = ctx.seed.key("item").index(i as u64);
-            let mut r = Rng::new(item);
-            let mut u = r.random() * total;
-            let (tree, _) = self
-                .trees
-                .iter()
-                .find(|t| {
-                    let hit = u < t.1;
-                    u -= t.1;
-                    hit
-                })
-                .unwrap_or(&self.trees[self.trees.len() - 1]);
-            radii.push(tree.footprint(scene, item)?);
-            items.push((tree, item));
-        }
-        let placed = lay_out(scene, &area, &mut rng, &radii, self.gap * s)?;
-        grow_all(scene, ctx, &items, &placed)
+        Extent::new(Box3::new(lo, lo, up_lo), Box3::new(hi, hi, up_hi))
     }
-}
 
-/// Dart-throw crowns of the given radii (world mm) into `area`, `gap`
-/// clear of one another (world mm), largest first.  Darts land where they
-/// land, and a tight row can fill up with a gap no crown fits: it is laid
-/// out again (the next draws of the same stream) until every tree has
-/// room, up to [`LAYOUTS`] times.
-///
-/// # Errors
-/// [`LookError`] naming how many fit, when not all do.
-pub(crate) fn lay_out(
-    scene: &Scene,
-    area: &dt_kit::Mask,
-    rng: &mut Rng,
-    radii: &[f64],
-    gap: f64,
-) -> Result<Vec<dt_kit::Placed>, LookError> {
-    let s = scene.frame().scale();
-    let n = radii.len();
-    let mut placed = Vec::new();
-    for _ in 0..LAYOUTS {
-        let layout = scatter_sites(scene, area, rng, radii, gap, 3.0 * s);
-        if layout.len() > placed.len() {
-            placed = layout;
-        }
-        if placed.len() == n {
-            break;
+    fn meets(&self) -> Meets {
+        Meets {
+            bedded: false,
+            dry: false,
+            upright: Some(Upright {
+                clear_mm: STAMP_CLEAR_MM,
+                layouts: LAYOUTS,
+            }),
+            tries: TREE_TRIES,
+            rim_mm: 0.0,
         }
     }
-    if placed.len() < n {
-        return Err(LookError::general(
+
+    fn usual(&self) -> Usual {
+        Usual {
+            gap_mm: SCATTER_GAP_MM,
+            per_square: Draw::flat(1.0, 1.0),
+            reach_mm: Some(crate::LINE_REACH_MM),
+            stream: crate::thing::SCATTER_STREAM,
+        }
+    }
+
+    fn writes(&self) -> Kind {
+        Kind::Tree
+    }
+
+    fn plural(&self) -> &'static str {
+        "trees"
+    }
+
+    fn draw(
+        &self,
+        scene: &Scene,
+        item: Seed,
+        _rng: &mut Rng,
+        _at_foot: bool,
+    ) -> Result<Drawn, LookError> {
+        Ok(Drawn::new(
+            self.footprint(scene, item)?,
+            TreeDraw {
+                tree: self.clone(),
+                seed: item,
+            },
+        ))
+    }
+
+    fn make(
+        &self,
+        scene: &mut Scene,
+        seed: Seed,
+        printer: &dt_kit::Printer,
+    ) -> Result<Vec<Solid>, LookError> {
+        let b = self.grow(scene, seed, [0.0, 0.0, 0.0], printer, None)?;
+        Ok(std::iter::once(b.solid).chain(b.more).collect())
+    }
+
+    fn stand(
+        &self,
+        scene: &mut Scene,
+        ctx: &Ctx<'_>,
+        _rng: &mut Rng,
+        placed: &[Standing<'_>],
+    ) -> Result<(), LookError> {
+        let mut items: Vec<(&Tree, Seed)> = Vec::with_capacity(placed.len());
+        let mut at: Vec<dt_kit::Placed> = Vec::with_capacity(placed.len());
+        for (index, p) in placed.iter().enumerate() {
+            let d: &TreeDraw = p.drawn.payload()?;
+            items.push((&d.tree, d.seed));
+            at.push(dt_kit::Placed {
+                index,
+                at: p.at,
+                r: p.r,
+            });
+        }
+        grow_all(scene, ctx, &items, &at)
+    }
+
+    /// Room for fewer trees than asked: crowns keep clear of one another and
+    /// the tile's edge.
+    fn no_room(&self, fit: usize, of: usize) -> LookError {
+        LookError::general(
             format!(
-                "room for {} of the {n} trees: crowns keep clear of one another and the tile's edge",
-                placed.len()
+                "room for {fit} of the {of} trees: crowns keep clear of one another and the tile's edge"
             ),
             "ask for fewer, make `gap` or the crown `width` smaller, or give a line more `reach`",
-        ));
+        )
     }
-    Ok(placed)
 }
 
 /// Grow each placed tree in turn (`items[p.index]`: its tree and its own
