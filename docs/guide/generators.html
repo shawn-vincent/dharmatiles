@@ -25,6 +25,8 @@
 <li><a href="#plainly">Say it plainly</a></li>
 <li><a href="#generators">An element is a thing or a layer</a></li>
 <li><a href="#thing-param">A param can hold a thing, and the caller passes it by name</a></li>
+<li><a href="#layer-param">A param can hold a layer, and a place word passes through it</a></li>
+<li><a href="#param-kind-written">A param's kind can be written: <code>kind=</code></a></li>
 <li><a href="#thing-properties">Properties written where a thing is used apply over its own</a></li>
 <li><a href="#thing-mix">A scatter holds several things by weight</a></li>
 <li><a href="#thing-refusals">A layer, a number or a nothing where a thing belongs is refused at the line</a></li>
@@ -96,20 +98,20 @@
 <section id="plainly">
 <h2>Say it plainly</h2>
 <p>Every element makes something, and it is one of two kinds. A <strong>thing</strong> is given its controls and a seed and makes one solid, with nothing else to look at: a rock, a stone, a boulder, a pebble, a flower, a tree, and a definition whose stack is exactly one of them. A <strong>layer</strong> also reads what the stack has built so far: dirt, ground, water and floors paint the ground, and a scatter, a wall or a cliff place their things on it.</p>
-<p>Because a thing needs nothing but its controls and a seed, it can be handed around by name. A definition says <code>param leaf pebble</code>, uses <code>leaf</code> like an element, and the caller says which thing with <code>leaf=boulder</code>. A layer cannot be handed around, and the program says so where it is written.</p>
+<p>Because a thing needs nothing but its controls and a seed, it can be handed around by name. A definition says <code>param leaf pebble</code>, uses <code>leaf</code> like an element, and the caller says which thing with <code>leaf=boulder</code>. A layer can be handed around too, <code>param ground dirt</code> and <code>ground=water</code>, but only into the stack, where it is used as an entry. Placing a thing makes it a layer, and nothing makes a layer a thing: a thing fits wherever a layer is wanted, and a layer never fits where a thing is. The program says so where it is written.</p>
 </section>
 <section id="the-rules">
 <h2>The rules</h2>
 <section class="rule">
 <h3 id="generators">An element is a thing or a layer</h3>
-<p>The element schema says which, once, and the element pages say it under <em>Kind</em>. A thing is what a <code>scatter</code> may hold and what <code>at=</code> places on its own; every other element is a layer. A definition is a thing when its stack is one thing, and a layer when it is anything else.</p>
+<p>The element schema says which, once, and the element pages say it under <em>Kind</em>. A thing is what a <code>scatter</code> may hold and what <code>at=</code> places on its own; every other element is a layer. A stack is a layer, and a definition is a thing only when its stack is exactly one thing with no place word on it (<code>at=</code> makes a placed thing a layer); anything else is a layer.</p>
 <div class="tbl"><table>
 <thead><tr><th>Kind</th><th>Takes</th><th>Elements</th></tr></thead>
 <tbody>
-<tr><td>thing</td><td>its controls and a seed</td><td><a href="../elements/rock.html"><code>rock</code></a>, <a href="../elements/stone.html"><code>stone</code></a>, <a href="../elements/boulder.html"><code>boulder</code></a>, <a href="../elements/pebble.html"><code>pebble</code></a>, <a href="../elements/flower.html"><code>flower</code></a>, <a href="../elements/tree.html"><code>tree</code></a>, and a definition of one of them</td></tr>
-<tr><td>layer</td><td>its controls, a seed and the scene so far</td><td>everything else: <a href="../elements/dirt.html"><code>dirt</code></a>, <code>ground</code>, <code>water</code>, <code>floor</code>, <a href="../elements/scatter.html"><code>scatter</code></a>, <code>grass</code>, <code>reeds</code>, <code>wall</code>, <code>cliff</code></td></tr>
+<tr><td>thing</td><td>its controls and a seed</td><td><a href="../elements/rock.html"><code>rock</code></a>, <a href="../elements/stone.html"><code>stone</code></a>, <a href="../elements/boulder.html"><code>boulder</code></a>, <a href="../elements/pebble.html"><code>pebble</code></a>, <a href="../elements/flower.html"><code>flower</code></a>, <a href="../elements/tree.html"><code>tree</code></a>, and a definition whose stack is exactly one of them, unplaced</td></tr>
+<tr><td>layer</td><td>its controls, a seed and the scene so far</td><td>everything else: <a href="../elements/dirt.html"><code>dirt</code></a>, <code>ground</code>, <code>water</code>, <code>floor</code>, <a href="../elements/scatter.html"><code>scatter</code></a>, <code>grass</code>, <code>reeds</code>, <code>wall</code>, <code>cliff</code>, a stack, and every other definition</td></tr>
 </tbody></table></div>
-<p>These are two more kinds, checked before anything is built as lengths and angles are (<a href="kinds.html">kinds</a>).</p>
+<p>These are two more kinds, checked before anything is built as lengths and angles are, by the same fit rule (<a href="kinds.html#generator-kinds">kinds</a>).</p>
 </section>
 <section class="rule">
 <h3 id="thing-param">A param can hold a thing, and the caller passes it by name</h3>
@@ -135,7 +137,53 @@
         <span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span>boulder-ish        <span class="tk-comment">// a definition of one thing</span>
     <span class="tk-punct">}</span>
 <span class="tk-punct">}</span></code></pre>
-<p>A param with no default must be given by the caller, as every param must. A thing param is a plain name, and not the name of an element or of a definition (it would call that instead). A definition that holds itself through a param is the same loop as one that calls itself (<a class="codelink" href="../e/loop.html"><code>dt::loop</code></a>): a thing never makes a thing that makes another.</p>
+<p>A param with no default must be given by the caller, as every param must, and must say what it holds (<a href="#param-kind-written">below</a>). A thing param is a plain name, and not the name of an element or of a definition (it would call that instead). A definition that holds itself through a param is the same loop as one that calls itself (<a class="codelink" href="../e/loop.html"><code>dt::loop</code></a>): a thing never makes a thing that makes another.</p>
+</section>
+<section class="rule">
+<h3 id="layer-param">A param can hold a layer, and a place word passes through it</h3>
+<p>A param holds a layer when its default names one (<code>param ground dirt</code>), when <code>kind=layer</code> says so, or when a caller passes one to a param that holds one. The caller passes a built-in layer (<code>water</code>), a part (<code>lawn</code>) or a thing (placing it makes it a layer), written bare. A layer param can only be used as a stack entry, and a place word passes through to it as it does on a part call: <code>shore ground=lawn at=bank</code> puts the lawn in the region <code>bank</code>, and a place written on the entry (<code>ground at=bank</code>) holds the same way. Its properties are read as if written on what was passed, once the call says which it is, as a thing param's are.</p>
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+
+<span class="tk-node">define</span> lawn <span class="tk-punct">{</span> <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span><span class="tk-punct">;</span> <span class="tk-node">grass</span> <span class="tk-punct">}</span> <span class="tk-punct">}</span>
+
+<span class="tk-node">define</span> shore <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> ground dirt
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">ground</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">7</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> edge <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">region</span> bank <span class="tk-punct">{</span> <span class="tk-node">boundedBy</span> edge<span class="tk-punct">;</span> <span class="tk-node">fill</span> <span class="tk-string">"(</span><span class="tk-number">0.9sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">shore</span> <span class="tk-property">ground</span><span class="tk-punct">=</span>lawn <span class="tk-property">at</span><span class="tk-punct">=</span>bank
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
+<p>Because the stack is read as the param filled it, the checks that read a whole stack run on it at the call, and point at the argument the caller wrote: a layer that reads what the stack does not make, or that is listed before what it needs, is <a class="codelink" href="../e/order.html"><code>dt::order</code></a> or <a class="codelink" href="../e/plan.html"><code>dt::plan</code></a> at <code>ground=…</code> in the call.</p>
+</section>
+<section class="rule">
+<h3 id="param-kind-written" data-explains="dt::kind"><!--gen:anchors--><span id="dt-kind"></span><!--/gen:anchors-->A param's kind can be written: <code>kind=</code></h3>
+<p>A param's kind is what it holds: a length, an angle, a plain number, a thing or a layer. Its default, the control it fills or how the definition uses it usually say so, and then <code>kind=</code> is optional. Write it when nothing else does, or to say it plainly: <code>param ground kind=layer</code>, <code>param leaf kind=thing</code>, <code>param reach kind=length</code>. The words are the kinds' own (<a href="kinds.html#generator-kinds">kinds</a>). When it is written, the default, every use and every caller's argument are checked against it, and a disagreement is <a class="codelink" href="../e/type.html"><code>dt::type</code></a> at the value, in the words of every kind mistake.</p>
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+
+<span class="tk-node">define</span> pile <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> leaf <span class="tk-property">kind</span><span class="tk-punct">=</span>thing
+    <span class="tk-node">param</span> reach <span class="tk-property">kind</span><span class="tk-punct">=</span>length <span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-punct">{</span> <span class="tk-node">leaf</span> <span class="tk-property">size</span><span class="tk-punct">=</span>reach <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">2</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">pile</span> <span class="tk-property">leaf</span><span class="tk-punct">=</span>pebble <span class="tk-property">reach</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2dmm</span><span class="tk-string">"</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
+<p>A param with no default, no written kind and nothing that decides it is <a class="codelink" href="../e/kind.html"><code>dt::kind</code></a>, saying to write <code>kind=</code>: a stack entry could be a thing or a layer, so <code>param ground</code> used only as <code>ground</code> needs <code>kind=layer</code>, while a scatter's child (<code>kind=thing</code> is implied) or a control it fills decides it. A <code>kind=</code> that is no kind a param holds (<code>kind=region</code>) is <a class="codelink" href="../e/kind.html"><code>dt::kind</code></a> too.</p>
 </section>
 <section class="rule">
 <h3 id="thing-properties">Properties written where a thing is used apply over its own</h3>
@@ -186,17 +234,19 @@
 <section class="rule">
 <h3 id="thing-refusals">A layer, a number or a nothing where a thing belongs is refused at the line</h3>
 <p>The kind is checked where the value is written, with what to write instead (<a class="codelink" href="../e/type.html"><code>dt::type</code></a>):</p>
-<pre data-fragment><code><span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span>dirt      <span class="tk-comment">// `dirt` is a layer, and `stand piece` is a thing</span>
-<span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span><span class="tk-number">3</span>         <span class="tk-comment">// `stand piece` is a thing, and a number is not</span>
-<span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span>boulder     <span class="tk-comment">// `boulder` is a thing, and `rock size` is a length</span></code></pre>
-<p>A name that is no element and no definition is <a class="codelink" href="../e/unknown-element.html"><code>dt::unknown-element</code></a>, a thing param left without a value <a class="codelink" href="../e/missing-control.html"><code>dt::missing-control</code></a>, and a layer written as a scatter's child <a class="codelink" href="../e/scatter.html"><code>dt::scatter</code></a> naming its kind: <code>dirt</code> is a layer, and a scatter holds things. A param is one kind: one used as a thing and as the value of a control, or as the value of two controls that are not alike (a length and a share), is <a class="codelink" href="../e/type.html"><code>dt::type</code></a> too, at the param, saying both.</p>
+<pre data-fragment><code><span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span>dirt      <span class="tk-comment">// `dirt` is a layer, and `stand piece` wants a thing</span>
+<span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span><span class="tk-number">3</span>         <span class="tk-comment">// `3` is a plain number, and `stand piece` wants a thing</span>
+<span class="tk-node">bank</span> <span class="tk-property">ground</span><span class="tk-punct">=</span><span class="tk-number">3</span>         <span class="tk-comment">// `3` is a plain number, and `bank ground` wants a layer</span>
+<span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span>boulder     <span class="tk-comment">// `boulder` is a thing, and `rock size` wants a length</span></code></pre>
+<p>A name that is no element and no definition is <a class="codelink" href="../e/unknown-element.html"><code>dt::unknown-element</code></a>, a thing param left without a value <a class="codelink" href="../e/missing-control.html"><code>dt::missing-control</code></a>, and a layer written as a scatter's child <a class="codelink" href="../e/scatter.html"><code>dt::scatter</code></a> naming its kind: <code>dirt</code> is a layer, and a scatter wants a thing. A part whose one entry is placed is a layer too, so <code>scatter count=4 {{ corner-rock }}</code> with <code>rock at="(0.1sq, 0.1sq)"</code> in <code>corner-rock</code> says <code>corner-rock</code> is a layer. A param is one kind: one used as a thing and as the value of a control, or as the value of two controls that are not alike (a length and a share), is <a class="codelink" href="../e/type.html"><code>dt::type</code></a> too, at the use, saying what it is and what wants it.</p>
 <p>The editor draws a thing on its own, with a strip of draws and the room it takes: <a href="../preview.html#thing">one thing alone</a>.</p>
 </section>
 </section>
 <section id="errors-explained">
 <h2>Errors this page explains</h2>
 <!-- gen:explains -->
-<p>This page explains no error codes.</p>
+<ul class="explains">
+<li><a class="codelink" href="../e/kind.html"><code>dt::kind</code></a> A parameter's kind is not a kind a parameter holds, or nothing says what it holds <a class="cp-in" href="#param-kind-written">The rule</a></li></ul>
 <!-- /gen:explains -->
 </section>
 <section id="next" class="next">

@@ -48,17 +48,27 @@ pub struct NamesRes {
     pub regions: Vec<String>,
     pub lines: Vec<String>,
     pub points: Vec<String>,
-    /// The definitions that are one thing: what a thing parameter may be given besides the thing elements.
-    pub things: Vec<String>,
-    /// The parameters that hold a thing, for completing `param=` with thing names.
-    pub thing_params: Vec<ThingParam>,
+    /// What each definition is as a generator, as a word of the language's one kind table (`thing` or `layer`): a
+    /// thing parameter may be given the things, a layer parameter the layers and the things.
+    pub kinds: Vec<DefKind>,
+    /// What each parameter holds (`kind` is a word of the kind table), for completing `param=` with the names that
+    /// fit: a thing slot offers things, a layer slot layers and things, a value slot values.
+    pub params: Vec<ParamKind>,
 }
 
-/// A parameter of a definition that holds a thing.
+/// A definition and what it is as a generator.
 #[derive(Serialize, Deserialize, Debug, ts_rs::TS)]
-pub struct ThingParam {
+pub struct DefKind {
+    pub name: String,
+    pub kind: String,
+}
+
+/// A parameter of a definition and what it holds.
+#[derive(Serialize, Deserialize, Debug, ts_rs::TS)]
+pub struct ParamKind {
     pub define: String,
     pub param: String,
+    pub kind: String,
 }
 
 /// A text to colour.
@@ -299,11 +309,22 @@ pub fn names(v: &NamesReq) -> NamesRes {
             regions: n.regions,
             lines: n.lines,
             points: n.points,
-            things: n.things,
-            thing_params: n
-                .thing_params
+            kinds: n
+                .kinds
                 .into_iter()
-                .map(|(define, param)| ThingParam { define, param })
+                .map(|(name, k)| DefKind {
+                    name,
+                    kind: k.word().to_owned(),
+                })
+                .collect(),
+            params: n
+                .params
+                .into_iter()
+                .map(|(define, param, k)| ParamKind {
+                    define,
+                    param,
+                    kind: k.word().to_owned(),
+                })
                 .collect(),
         },
         Err(e) => NamesRes {
@@ -313,8 +334,8 @@ pub fn names(v: &NamesReq) -> NamesRes {
             regions: Vec::new(),
             lines: Vec::new(),
             points: Vec::new(),
-            things: Vec::new(),
-            thing_params: Vec::new(),
+            kinds: Vec::new(),
+            params: Vec::new(),
         },
     }
 }

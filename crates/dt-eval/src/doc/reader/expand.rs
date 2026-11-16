@@ -4,11 +4,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use dt_doc::decode::Thing;
+use dt_doc::decode::Callable;
 use dt_doc::expr::Expr;
 use dt_doc::model::{self, Callee, Definition, Spanned};
 use dt_doc::place::{Along, Point};
 use dt_doc::schema::{PlaceWord, Role};
+use dt_doc::units::{Kind, misfit};
 use dt_kit::{Draw, EntryId, Seed};
 
 use crate::diag::{Diag, Src};
@@ -99,6 +100,17 @@ impl Reader<'_> {
             let Some(resolved) = self.resolve(e, scope) else {
                 continue;
             };
+            // where the entry is: a thing or layer parameter's entry is its
+            // argument at the call, so a mistake in what it makes (an order
+            // the plan refuses, say) points at the caller's own text
+            let site = match &e.callee {
+                Callee::Param(p) => scope
+                    .params
+                    .get(&p.name)
+                    .map(|b| (Arc::clone(&b.src), b.value.span)),
+                Callee::Element(_) | Callee::Definition(_) => None,
+            }
+            .unwrap_or_else(|| (Arc::clone(src), e.span));
             // the element a thing parameter stands for is the entry's name
             // from here on (its seed path above is the parameter's own)
             let what = match &resolved {
@@ -122,7 +134,7 @@ impl Reader<'_> {
                 Resolved::Element(element) => {
                     // a thing parameter's properties are typed here, where
                     // the thing is known
-                    let Some(bind) = self.bound(e, Thing::Element(element), scope) else {
+                    let Some(bind) = self.bound(e, Callable::Element(element), scope) else {
                         continue;
                     };
                     let (e, scope) = (&*bind.entry, &*bind.scope);
@@ -264,7 +276,12 @@ impl Reader<'_> {
                     for (word, span) in unplaced {
                         if let Some(span) = span {
                             ok = false;
-                            self.errors.push(misplaced(src, span, word, element.name));
+                            self.errors.push(misplaced(
+                                src,
+                                span,
+                                word,
+                                &format!("`{}`", element.name),
+                            ));
                         }
                     }
                     let mut children = Vec::new();
@@ -409,8 +426,8 @@ impl Reader<'_> {
                             line,
                             side,
                             children,
-                            src: Arc::clone(src),
-                            span: e.span,
+                            src: site.0,
+                            span: site.1,
                             call: if scope.depth > 0 {
                                 self.top.clone()
                             } else {
@@ -424,7 +441,7 @@ impl Reader<'_> {
                     }
                 }
                 Resolved::Definition(file, def) => {
-                    let Some(bind) = self.bound(e, Thing::Definition(&def), scope) else {
+                    let Some(bind) = self.bound(e, Callable::Definition(&def), scope) else {
                         continue;
                     };
                     let (e, scope) = (&*bind.entry, &*bind.scope);
@@ -535,48 +552,23 @@ impl Reader<'_> {
             Resolved::Element(cl) if cl.scattered => {
                 // a thing parameter's properties are typed here, where the
                 // thing is known
-                let bind = self.bound(c, Thing::Element(cl), scope)?;
+                let bind = self.bound(c, Callable::Element(cl), scope)?;
                 (cl, bind.scope.into_owned(), bind.entry.into_owned())
             }
             Resolved::Element(cl) => {
-                let layer = cl.generator() == dt_doc::schema::Generator::Layer;
-                self.errors.push(
-                    Diag::at(
-                        src,
-                        c.what.span,
-                        dt_lang::codes::NESTING,
-                        if layer {
-                            format!("`{}` is a layer, and a scatter holds things", cl.name)
-                        } else {
-                            format!("`{}` can't be scattered", cl.name)
-                        },
-                        "not a thing",
-                    )
-                    .help("a scatter holds rocks, flowers and trees"),
-                );
+                self.refuse_scatter_child(src, c.what.span, cl.name, cl.generator());
                 return None;
             }
             Resolved::Definition(file, def) => {
                 let name = &def.name.value;
                 let one = match def.stack.as_slice() {
-                    [one] if scope.depth < 64 => one,
+                    [one] if def.generator == Kind::Thing && scope.depth < 64 => one,
                     _ => {
-                        self.errors.push(
-                            Diag::at(
-                                src,
-                                c.what.span,
-                                dt_lang::codes::NESTING,
-                                format!("`{name}` is not one thing, so a scatter cannot hold it"),
-                                "not one thing",
-                            )
-                            .help(
-                                "a scatter holds a definition whose stack is one rock, flower or tree",
-                            ),
-                        );
+                        self.refuse_scatter_child(src, c.what.span, name, def.generator);
                         return None;
                     }
                 };
-                let bind = self.bound(c, Thing::Definition(&def), scope)?;
+                let bind = self.bound(c, Callable::Definition(&def), scope)?;
                 let (c, scope) = (&*bind.entry, &*bind.scope);
                 let top = self.call_top(c, &def, scope, pending);
                 let params = self.params(c, &def, &file, scope);
@@ -642,6 +634,33 @@ impl Reader<'_> {
         })
     }
 
+    /// A scatter child that is no thing: a layer (a built-in, or a part that
+    /// is more than one unplaced thing), said as every kind mistake is.
+    fn refuse_scatter_child(&mut self, src: &Src, span: SourceSpan, name: &str, have: Kind) {
+        let d = if have == Kind::Thing {
+            // a thing the scatter does not hold yet
+            Diag::at(
+                src,
+                span,
+                dt_lang::codes::NESTING,
+                format!("`{name}` can't be scattered"),
+                "not a thing",
+            )
+            .help("a scatter holds rocks, flowers and trees")
+        } else {
+            let ke = misfit(name, have, "a scatter", Kind::Thing);
+            Diag::at(
+                src,
+                span,
+                dt_lang::codes::NESTING,
+                ke.message,
+                "not a thing",
+            )
+            .maybe_help(ke.help)
+        };
+        self.errors.push(d);
+    }
+
     /// What an entry's name stands for: an element, a definition, or (for a
     /// thing parameter) the thing the caller passed, found in the file the
     /// caller wrote its name in.  `None` once the mistake is reported.
@@ -656,7 +675,7 @@ impl Reader<'_> {
                 Some(Bound {
                     value:
                         Spanned {
-                            value: Value::Thing(n),
+                            value: Value::Generator(_, n),
                             ..
                         },
                     file,
@@ -668,10 +687,13 @@ impl Reader<'_> {
                             src,
                             e.what.span,
                             dt_lang::codes::MISSING_CONTROL,
-                            format!("`{}` is a thing, and nothing was passed for it", p.name),
-                            "no thing",
+                            format!("`{}` holds a thing or a layer, and nothing was passed for it", p.name),
+                            "nothing passed",
                         )
-                        .help(format!("pass one at the call: `name {}=rock`", p.name)),
+                        .help(format!(
+                            "pass one at the call: `name {}=rock` for a thing, `name {}=dirt` for a layer",
+                            p.name, p.name
+                        )),
                     );
                     return None;
                 }

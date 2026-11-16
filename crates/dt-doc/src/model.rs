@@ -161,9 +161,11 @@ pub struct Definition {
     pub stack: Vec<Entry>,
     /// Solid, surface or both, from the stack.
     pub summary: Kind,
-    /// True when the stack is exactly one thing (an `oak`): it is then a
-    /// thing itself, placed with `at=` and scatterable.
-    pub thing: bool,
+    /// What the definition is as a generator, in the language's one kind
+    /// system: a thing when its stack is exactly one unplaced thing (an
+    /// `oak`, which is then scatterable and placed with `at=`), else a layer
+    /// (a stack is a layer).
+    pub generator: crate::units::Kind,
     /// The whole node.
     pub span: SourceSpan,
 }
@@ -204,9 +206,12 @@ pub struct Param {
     /// The control the parameter fills inside the definition (`grass
     /// length=length` makes `length` grass's length), if one was found.
     pub fill: Option<crate::decode::Fill>,
-    /// True when it holds a thing (`param leaf pebble`): a parameter written as
-    /// a stack entry or a scatter child, or whose default names a thing.
-    pub thing: bool,
+    /// What it holds, in the one kind system: a thing (`param leaf pebble`) or
+    /// a layer (`param ground dirt`) when it is written as an entry or a
+    /// scatter child, `kind=` says so, or its default names one; the kind of
+    /// the control it fills (a length, an angle, a plain number); `Any` when
+    /// nothing says yet.
+    pub kind: crate::units::Kind,
     /// The default as written, when no control was found to type it by: a
     /// thing parameter's entry may give it one at a call
     /// ([`crate::decode::type_late`]).
@@ -413,19 +418,19 @@ pub enum Callee {
     Element(&'static Element),
     /// A definition, from this file or a `use`.
     Definition(String),
-    /// A thing parameter of the enclosing definition, used as an entry
-    /// (`leaf`): the caller says which thing it is.
-    Param(ThingParam),
+    /// A parameter of the enclosing definition that holds a thing or a layer,
+    /// used as an entry (`leaf`, `ground`): the caller says which it is.
+    Param(GeneratorParam),
 }
 
-/// A thing parameter used as an entry, and what was written on that entry.
+/// A generator parameter used as an entry, and what was written on that entry.
 ///
-/// Which thing it is, and so what each property means, is known only at the
+/// Which generator it is, and so what each property means, is known only at the
 /// call, so the properties are kept as written and typed then, by the same
 /// function that types them on an element written directly
-/// ([`crate::decode::bind_thing`]).
+/// ([`crate::decode::bind_generator`]).
 #[derive(Debug, Clone)]
-pub struct ThingParam {
+pub struct GeneratorParam {
     /// The parameter's name.
     pub name: String,
     /// The properties and child lines written on the entry, in order.
@@ -506,6 +511,19 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// True when the entry says where it goes: a region, a line, a side, a
+    /// point or a foot.  Placing a thing lifts it to a layer, the only
+    /// promotion there is, so a part whose one entry is placed is a layer.
+    #[must_use]
+    pub fn is_placed(&self) -> bool {
+        let p = &self.place;
+        p.region.is_some()
+            || p.along.is_some()
+            || p.side.is_some()
+            || p.at.is_some()
+            || p.against.is_some()
+    }
+
     /// The built-in element, if this calls one.
     #[must_use]
     pub fn element(&self) -> Option<&'static Element> {
@@ -640,9 +658,10 @@ pub enum Value {
     Tag(String),
     /// The enclosing definition's parameter, filled in by the caller.
     Param(String),
-    /// A thing by name: the value of a thing parameter (`leaf=boulder`), an
-    /// element or a definition of one thing.
-    Thing(String),
+    /// A generator by name: the value of a thing or layer parameter
+    /// (`leaf=boulder`, `ground=floor`): an element, or a definition, with the
+    /// kind it is (a thing or a layer).
+    Generator(crate::units::Kind, String),
     /// Free text, or a definition argument nothing could type.
     Text(String),
 }

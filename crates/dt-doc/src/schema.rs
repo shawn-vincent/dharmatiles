@@ -83,6 +83,19 @@ impl Axis {
         )
     }
 
+    /// The kind of value a number of this axis is, in the language's one kind
+    /// system; `None` for an axis that holds no number.
+    #[must_use]
+    pub fn kind(self) -> Option<crate::units::Kind> {
+        use crate::units::Kind;
+        match self {
+            Axis::Dmm => Some(Kind::Length),
+            Axis::Deg => Some(Kind::Angle),
+            Axis::Share | Axis::Count | Axis::PerSquare | Axis::Number => Some(Kind::Plain),
+            _ => None,
+        }
+    }
+
     /// How the axis reads in an error message.
     #[must_use]
     pub fn describe(self) -> &'static str {
@@ -508,37 +521,17 @@ pub enum Role {
     Scatter,
 }
 
-/// The two kinds of generator.  A thing takes its controls and a seed and
-/// makes one solid in its own frame; a layer also reads the scene so far.
-/// Derived from [`Role`], so there is no second table: a thing is what is
-/// placed with `at=` and may be a scatter's child or a thing parameter's
-/// value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Generator {
-    /// One solid from its controls and a seed (`rock`, `tree`).
-    Thing,
-    /// Reads the scene so far (`dirt`, `water`, `scatter`, `wall`).
-    Layer,
-}
-
-impl Generator {
-    /// The word the docs and the editor use.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Generator::Thing => "thing",
-            Generator::Layer => "layer",
-        }
-    }
-}
-
 impl Role {
-    /// Thing or layer.
+    /// The two kinds of generator, in the language's one kind system
+    /// ([`Kind`](crate::units::Kind)): a thing takes its controls and a seed
+    /// and makes one solid in its own frame; a layer also reads the scene so
+    /// far.  Derived from the role, so there is no second table: a thing is
+    /// what a scatter may hold and a thing parameter may stand for.
     #[must_use]
-    pub fn generator(self) -> Generator {
+    pub fn generator(self) -> crate::units::Kind {
         match self {
-            Role::Thing => Generator::Thing,
-            Role::Surface | Role::Run | Role::Scatter => Generator::Layer,
+            Role::Thing => crate::units::Kind::Thing,
+            Role::Surface | Role::Run | Role::Scatter => crate::units::Kind::Layer,
         }
     }
 }
@@ -792,7 +785,7 @@ impl Element {
 
     /// Thing or layer.
     #[must_use]
-    pub fn generator(&self) -> Generator {
+    pub fn generator(&self) -> crate::units::Kind {
         self.role.generator()
     }
 

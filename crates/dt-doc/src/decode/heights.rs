@@ -258,11 +258,11 @@ impl Decoder<'_> {
         mode: Mode,
         span: miette::SourceSpan,
     ) -> Option<(Spanned<Expr>, Dim)> {
-        use crate::units::{Kind, Want};
+        use crate::units::Kind;
         let want = if mode == Mode::Const {
-            Want::Any
+            Kind::Any
         } else {
-            Want::Length
+            Kind::Length
         };
         let (lowered, kind) = self.check_lower(&expr, want, ctx, span, what)?;
         if kind == Kind::Point {
@@ -776,9 +776,14 @@ impl Decoder<'_> {
                 Role::Thing | Role::Run => Class::Thing,
                 Role::Surface | Role::Scatter => Class::Area,
             },
+            // what the call passes is not known here: a layer param may be
+            // given a thing, which is placed at a point, so it is read as one
             Callee::Param(_) => Class::Thing,
             Callee::Definition(d) => {
-                if self.def_info(d).is_some_and(|i| i.thing) {
+                if self
+                    .def_info(d)
+                    .is_some_and(|i| i.generator == crate::units::Kind::Thing)
+                {
                     Class::Thing
                 } else {
                     Class::Area
@@ -1198,7 +1203,7 @@ impl Decoder<'_> {
             }
         };
         let names = |_: &str| None;
-        match crate::units::expect(&x, crate::units::Want::Angle, &names, false).and_then(|_| {
+        match crate::units::expect(&x, crate::units::Kind::Angle, &names, false).and_then(|_| {
             crate::units::lower(&x, crate::units::Base::Dmm, self.known.units(), None)
         }) {
             Ok(l) => l.sample(&|_| None, 0.0).ok(),

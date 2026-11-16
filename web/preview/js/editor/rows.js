@@ -275,7 +275,7 @@ export async function openAdd(anchor, slot = null, { phrase = null, align = 'lef
 /** A name no line, region or point of the tile has yet: `line1`, `line2`… */
 /** @param {string} base */
 function freeName(base) {
-  const n = doc.get().names || { lines: [], regions: [], points: [], defs: [], things: [], thingParams: [] };
+  const n = doc.get().names || { lines: [], regions: [], points: [], defs: [], kinds: [], params: [] };
   const taken = new Set([...(n.lines || []), ...(n.regions || []), ...(n.points || []), ...(n.defs || [])]);
   for (let i = 1; ; i++) if (!taken.has(`${base}${i}`)) return `${base}${i}`;
 }

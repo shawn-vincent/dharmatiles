@@ -182,6 +182,14 @@ registry! {
         help: "move the `param` line into a `define`, or write a `let` in the tile",
         example: NONE,
     }
+    KIND "kind" Mistake {
+        summary: "A parameter's kind is not a kind a parameter holds, or nothing says what it holds",
+        help: "write `param name kind=thing`, `kind=layer`, `kind=length`, `kind=angle` or `kind=plain`, or give it a default",
+        example: ex!(
+            "dharmatiles version=\"1.0.0\"\ndefine shore {\n    param ground\n    stack { ground }\n}\ntile size=\"1x1\" {\n    stack { shore ground=dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ndefine shore {\n    param ground kind=layer\n    stack { ground }\n}\ntile size=\"1x1\" {\n    stack { shore ground=dirt }\n}\n"
+        ),
+    }
     DEFINE "define" Mistake {
         summary: "`define` takes only a name",
         help: "write `define name { … }` with nothing else on the line",

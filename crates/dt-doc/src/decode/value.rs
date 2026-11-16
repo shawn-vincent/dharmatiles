@@ -297,17 +297,15 @@ impl Decoder<'_> {
             if ok {
                 continue;
             }
-            if self.thing_kind(n) == Some(true) {
+            if let Some(have) = self.name_kind(n).filter(|k| k.is_generator()) {
                 let at = self.word_span(inner, n);
-                self.err(
-                    dt_lang::codes::TYPE,
-                    at,
-                    format!("`{n}` is a thing, and `{owner} {name}` is {kind}"),
-                    "a thing is not a number",
-                )
-                .help = Some(format!(
-                    "a thing goes where a parameter holds one (`param leaf {n}`, then `leaf` in the stack); `{name}` takes a number"
-                ));
+                let ke = crate::units::misfit(
+                    n,
+                    have,
+                    &format!("`{owner} {name}`"),
+                    super::units::want_of(axis),
+                );
+                self.err_kind(at, ke, "");
                 return None;
             }
             let mut cands: Vec<&str> = ctx.params.iter().map(String::as_str).collect();

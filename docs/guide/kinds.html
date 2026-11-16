@@ -24,6 +24,7 @@
 <li><a href="#result">The result</a></li>
 <li><a href="#plainly">Say it plainly</a></li>
 <li><a href="#kinds">Lengths, angles and plain numbers are checked apart</a></li>
+<li><a href="#generator-kinds">A thing and a layer are kinds too, and a thing fits where a layer is wanted</a></li>
 <li><a href="#written-printed">The editor shows a length as written and as printed</a></li>
 <li><a href="#errors-explained">Errors this page explains</a></li>
 <li><a href="#next">Next</a></li>
@@ -103,6 +104,19 @@
 <tr><td><code>$region + 1</code></td><td>error</td><td>a region is not a number</td></tr>
 </tbody></table></div>
 <p>A mismatch is <a class="codelink" href="../e/type.html"><code>dt::type</code></a>, a number missing its unit <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a>; both point at the value and say what to write. A <code>let</code> holds whatever its formula is, so <code>let reach "3dmm"</code> is a length wherever it is read and <code>let n 3</code> a plain number. A <code>param</code> takes its kind from the control it fills (<a href="parts.html#parts">parts</a>).</p>
+</section>
+<section class="rule">
+<h3 id="generator-kinds">A thing and a layer are kinds too, and a thing fits where a layer is wanted</h3>
+<p>The kinds are length, angle, plain number, region, point, and two more: <strong>thing</strong> and <strong>layer</strong> (<a href="generators.html">things and layers</a>). A thing makes one solid from its controls and a seed and reads nothing; a layer reads the scene so far and changes it. A stack of entries is a layer, a part that holds several entries is a layer, and a tile is the outermost one.</p>
+<p>One rule says whether a value of one kind fits where another is wanted, and every place that checks a name, a param, an entry or a scatter's child asks it: a kind fits itself; a thing fits where a layer is wanted, because placing a thing (<code>rock at=bank</code>) makes it a layer, and that is the only way from a thing to a layer; a layer never fits where a thing is wanted, because nothing makes a layer into a thing; and a number fits neither, nor either a number.</p>
+<div class="tbl"><table>
+<thead><tr><th>Where</th><th>Wants</th><th>A thing</th><th>A layer</th></tr></thead>
+<tbody>
+<tr><td>a stack entry, a <code>param ground kind=layer</code></td><td>a layer</td><td>fits (placed, it is a layer)</td><td>fits</td></tr>
+<tr><td>a scatter's child, a <code>param leaf kind=thing</code></td><td>a thing</td><td>fits</td><td>error: <code>dirt</code> is a layer, and a scatter wants a thing</td></tr>
+<tr><td>a length, an angle, a plain number</td><td>a number</td><td>error</td><td>error</td></tr>
+</tbody></table></div>
+<p>A mistake of kind is said one way wherever it is: <code>`dirt` is a layer, and `stand piece` wants a thing</code>, with what to write instead. A part is a thing only when its stack is exactly one thing with no place word on it; <code>define corner-rock</code> with <code>rock at="(0.1sq, 0.1sq)"</code> in its stack is a layer, because the rock is placed.</p>
 </section>
 <section class="rule">
 <h3 id="written-printed">The editor shows a length as written and as printed</h3>

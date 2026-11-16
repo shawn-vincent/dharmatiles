@@ -22,7 +22,7 @@ const PLACE = [
 ];
 const EDGES = ['north', 'south', 'east', 'west'];
 
-const NO_NAMES = { defs: [], regions: [], lines: [], points: [], things: [], thingParams: [] };
+const NO_NAMES = { defs: [], regions: [], lines: [], points: [], kinds: [], params: [] };
 
 /**
  * What can go at the caret: {from, to, items: [{label, insert, about, kind}]},
@@ -33,7 +33,7 @@ const NO_NAMES = { defs: [], regions: [], lines: [], points: [], things: [], thi
  * @param {import('./api').ElementJson[]} elements
  * @param {boolean} [force]
  * @param {import('./api').Language | null} [language]
- * @param {Partial<Pick<import('./api').NamesRes, 'defs' | 'regions' | 'lines' | 'points' | 'things' | 'thingParams'>>} [names]
+ * @param {Partial<Pick<import('./api').NamesRes, 'defs' | 'regions' | 'lines' | 'points' | 'kinds' | 'params'>>} [names]
  */
 export function suggest(caret, elements, force = false, language = null, names = NO_NAMES) {
   const before = caret.before;
@@ -62,11 +62,14 @@ export function suggest(caret, elements, force = false, language = null, names =
         ...EDGES.map((e) => ({ label: e, insert: e, about: 'a tile edge', kind: 'edge' })),
         ...n.points.map((q) => ({ label: q, insert: q, about: 'a point', kind: 'point' })),
       ];
-    } else if (n.thingParams.some((p) => p.define === node && p.param === ctl)) {
-      // a parameter that holds a thing: the thing elements and the document's things (a layer is not one)
+    } else if (n.params.some((p) => p.define === node && p.param === ctl && (p.kind === 'thing' || p.kind === 'layer'))) {
+      // a slot that holds a thing or a layer offers the names that fit it, as the program's one fit rule says: a thing slot
+      // the things (a layer is not one), a layer slot the layers and the things (placing a thing makes it a layer)
+      const want = /** @type {string} */ (n.params.find((p) => p.define === node && p.param === ctl)?.kind);
+      const fits = (/** @type {string | null} */ have) => have === want || (have === 'thing' && want === 'layer');
       items = [
-        ...elements.filter((e) => e.generator === 'thing').map((e) => ({ label: e.name, insert: e.name, about: `a thing: ${e.about}`, kind: 'thing', family: e.family })),
-        ...n.things.map((d) => ({ label: d, insert: d, about: 'a thing: a definition of one thing', kind: 'thing', family: 'plant' })),
+        ...elements.filter((e) => fits(e.generator)).map((e) => ({ label: e.name, insert: e.name, about: `${e.generator === 'thing' ? 'a thing' : 'a layer'}: ${e.about}`, kind: e.role, family: e.family })),
+        ...n.kinds.filter((d) => fits(d.kind)).map((d) => ({ label: d.name, insert: d.name, about: `${d.kind === 'thing' ? 'a thing' : 'a layer'}: a definition`, kind: 'definition', family: 'plant' })),
       ];
     } else {
       const c = el(node)?.controls.find((x) => x.name === ctl);

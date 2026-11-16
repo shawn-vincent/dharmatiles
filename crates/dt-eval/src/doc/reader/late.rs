@@ -16,7 +16,7 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use dt_doc::decode::{Fill, Thing, bind_thing, two_kinds, type_late};
+use dt_doc::decode::{Callable, Fill, bind_generator, two_kinds, type_late};
 use dt_doc::model::{self, Callee, Late, Param, Spanned, Value};
 
 use crate::diag::Diag;
@@ -117,7 +117,7 @@ impl Reader<'_> {
 
     /// An entry as the thing it calls: for a thing parameter's entry, what
     /// was written on it typed now the thing is known, by the decoder's own
-    /// function ([`dt_doc::decode::bind_thing`]), so a property gets exactly
+    /// function ([`dt_doc::decode::bind_generator`]), so a property gets exactly
     /// the checks it gets written on the element or definition itself; any
     /// other entry as it is.  The parameters of the definition that fill its
     /// controls are told them, and the scope has their values typed.  `None`
@@ -125,7 +125,7 @@ impl Reader<'_> {
     pub(super) fn bound<'e, 's>(
         &mut self,
         e: &'e model::Entry,
-        thing: Thing<'_>,
+        thing: Callable<'_>,
         scope: &'s Scope,
     ) -> Option<Bind<'e, 's>> {
         let Callee::Param(p) = &e.callee else {
@@ -134,7 +134,7 @@ impl Reader<'_> {
                 scope: Cow::Borrowed(scope),
             });
         };
-        let b = match bind_thing(e, p, thing, &scope.file.src, &scope.file.known) {
+        let b = match bind_generator(e, p, thing, &scope.file.src, &scope.file.known) {
             Ok(b) => b,
             Err(es) => {
                 self.errors.extend(es.iter().map(Diag::from));

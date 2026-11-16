@@ -13,14 +13,14 @@ use crate::expr::{self, Expr};
 use crate::framed::{Framed, FramedAt, fold, north_west};
 use crate::place::{Corner, Edge, Point};
 use crate::schema::Axis;
-use crate::units::{Base, Kind, KindError, Want, expect, lower};
+use crate::units::{Base, Kind, KindError, expect, lower};
 
 /// What a control's axis wants of a value.
-pub(crate) fn want_of(axis: Axis) -> Want {
+pub(crate) fn want_of(axis: Axis) -> Kind {
     match axis {
-        Axis::Dmm => Want::Length,
-        Axis::Deg => Want::Angle,
-        _ => Want::Plain,
+        Axis::Dmm => Kind::Length,
+        Axis::Deg => Kind::Angle,
+        _ => Kind::Plain,
     }
 }
 
@@ -65,8 +65,8 @@ impl Decoder<'_> {
                         self.param_controls.control(n).and_then(|k| k.value).map_or(
                             Kind::Any,
                             |a| match want_of(a) {
-                                Want::Length => Kind::Length,
-                                Want::Angle => Kind::Angle,
+                                Kind::Length => Kind::Length,
+                                Kind::Angle => Kind::Angle,
                                 _ => Kind::Plain,
                             },
                         )
@@ -80,7 +80,7 @@ impl Decoder<'_> {
     pub(crate) fn check_lower(
         &mut self,
         x: &Expr,
-        want: Want,
+        want: Kind,
         ctx: &Ctx,
         span: SourceSpan,
         what: &str,
@@ -228,7 +228,7 @@ impl Decoder<'_> {
     ) -> Option<Expr> {
         let x = self.plain_names_only(parsed, span, ctx)?;
         let names = |_: &str| None;
-        if let Err(ke) = expect(&x, Want::Length, &names, true) {
+        if let Err(ke) = expect(&x, Kind::Length, &names, true) {
             self.kind_error(&ke, span, what);
             return None;
         }
@@ -391,11 +391,11 @@ impl Decoder<'_> {
         let d = self.plain_names_only(&args[1], span, ctx)?;
         let a = self.plain_names_only(&args[2], span, ctx)?;
         let names = |_: &str| None;
-        if let Err(ke) = expect(&d, Want::Plain, &names, false) {
+        if let Err(ke) = expect(&d, Kind::Plain, &names, false) {
             self.kind_error(&ke, span, &what);
             return None;
         }
-        if let Err(ke) = expect(&a, Want::Angle, &names, false) {
+        if let Err(ke) = expect(&a, Kind::Angle, &names, false) {
             self.kind_error(&ke, span, &what);
             return None;
         }

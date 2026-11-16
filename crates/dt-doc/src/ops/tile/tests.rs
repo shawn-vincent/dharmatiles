@@ -1020,3 +1020,28 @@ fn a_thing_passed_by_name_is_a_control_like_any_other() {
     );
     assert!(out.contains("        stand\n"), "{out}");
 }
+
+#[test]
+fn names_say_what_each_definition_and_parameter_is_as_a_kind() {
+    use crate::units::Kind;
+    let text = "define boulder-ish { stack { boulder } }\n\
+        define placed { stack { rock at=\"(0.5sq, 0.5sq)\" } }\n\
+        define bank { param ground dirt\n param reach kind=length\n stack { ground } }\n\
+        define pile { param leaf kind=thing\n stack { scatter count=2 { leaf } } }\n\
+        tile size=\"1x1\" { stack { dirt } }\n";
+    let n = nodeid::names_in(text).unwrap();
+    let kind = |d: &str| n.kinds.iter().find(|(x, _)| x == d).map(|(_, k)| *k);
+    assert_eq!(kind("boulder-ish"), Some(Kind::Thing));
+    // a placed thing is a layer, and so is a stack of a layer
+    assert_eq!(kind("placed"), Some(Kind::Layer));
+    assert_eq!(kind("bank"), Some(Kind::Layer));
+    let param = |d: &str, p: &str| {
+        n.params
+            .iter()
+            .find(|(x, y, _)| x == d && y == p)
+            .map(|(_, _, k)| *k)
+    };
+    assert_eq!(param("bank", "ground"), Some(Kind::Layer));
+    assert_eq!(param("bank", "reach"), Some(Kind::Length));
+    assert_eq!(param("pile", "leaf"), Some(Kind::Thing));
+}

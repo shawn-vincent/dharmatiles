@@ -12,7 +12,7 @@
 //! `thing()`, and `Thing::make` is the one thing that makes solids.  A draw is not kept as a whole (the disk cache's key is
 //! made of a whole tile); what a thing keeps is its body (`dt_kit::Bodies`, the caller's shelf), as in a tile.
 
-use dt_doc::schema::Generator;
+use dt_doc::units::Kind;
 use dt_elements::{Control, Extent, Shown, Thing, Value};
 use dt_kit::{EntryId, Frame, Scene, Seed, Tag};
 use miette::SourceSpan;
@@ -93,12 +93,12 @@ pub fn subject(
             let Some(def) = own.file.doc.definition(name) else {
                 return Err(Refused::NoDefine(name.to_owned()));
             };
-            if !def.thing {
+            if def.generator != Kind::Thing {
                 // the first entry that is no thing is what makes it a layer
                 let element = def
                     .stack
                     .iter()
-                    .find(|e| !is_thing_word(&e.what.value))
+                    .find(|e| !names_thing_element(&e.what.value))
                     .or_else(|| def.stack.first())
                     .map_or_else(|| name.to_owned(), |e| e.what.value.clone());
                 return Err(Refused::Layer {
@@ -168,7 +168,7 @@ pub fn subject(
             }
         }
     };
-    if !is_thing_word(&element) {
+    if !names_thing_element(&element) {
         return Err(Refused::Layer {
             name: match which {
                 Which::Define(n) => n.to_owned(),
@@ -263,8 +263,8 @@ fn alone(
 }
 
 /// Whether the element named is a thing (the schema's own account: its role).
-fn is_thing_word(name: &str) -> bool {
-    dt_doc::schema::element(name).is_some_and(|e| e.generator() == Generator::Thing)
+fn names_thing_element(name: &str) -> bool {
+    dt_doc::schema::element(name).is_some_and(|e| e.generator() == Kind::Thing)
 }
 
 impl Subject {

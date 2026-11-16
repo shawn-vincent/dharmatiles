@@ -172,6 +172,30 @@ pub const LINE_ENDS_CONTROL: Control = c(
 .words(LINE_ENDS)
 .default("square");
 
+/// What `param reach kind=length` types its default and every caller's
+/// value by when nothing the definition does with the parameter names a
+/// control: the control of a bare length, angle or plain number.  A written
+/// kind is a control the parameter fills, so the one typing function reads
+/// it.
+pub static KIND_LENGTH: Control = c("length", Axis::Dmm, "a length").weighted();
+/// See [`KIND_LENGTH`].
+pub static KIND_ANGLE: Control = c("angle", Axis::Deg, "an angle").weighted();
+/// See [`KIND_LENGTH`].
+pub static KIND_PLAIN: Control = c("plain", Axis::Number, "a plain number").weighted();
+
+/// The control a written `kind=` types a number by; `None` for a kind that
+/// is no bare number (a thing, a layer, a region, a point).
+#[must_use]
+pub fn kind_control(k: crate::units::Kind) -> Option<&'static Control> {
+    use crate::units::Kind;
+    match k {
+        Kind::Length => Some(&KIND_LENGTH),
+        Kind::Angle => Some(&KIND_ANGLE),
+        Kind::Plain => Some(&KIND_PLAIN),
+        _ => None,
+    }
+}
+
 pub static LINE_CURVE_STATIC: Control = LINE_CURVE;
 /// See [`LINE_CURVE_STATIC`].
 pub static LINE_ENDS_STATIC: Control = LINE_ENDS_CONTROL;

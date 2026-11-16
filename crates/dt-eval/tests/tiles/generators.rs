@@ -124,7 +124,7 @@ fn a_number_for_a_thing_is_refused() {
     says(
         &refused(&doc(STAND, "        stand piece=3")),
         dt_lang::codes::TYPE,
-        "is a thing, and a number is not",
+        "`3` is a plain number, and `stand piece` wants a thing",
     );
 }
 
@@ -143,13 +143,14 @@ fn a_layer_written_as_a_scatter_child_names_its_kind() {
     says(
         &refused(&doc("", "        scatter count=2 { dirt }")),
         dt_lang::codes::SCATTER,
-        "is a layer, and a scatter holds things",
+        "is a layer, and a scatter wants a thing",
     );
 }
 
 #[test]
 fn a_thing_param_with_no_default_must_be_given() {
-    let parts = "define stand {\n    param piece\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}";
+    let parts =
+        "define stand {\n    param piece kind=thing\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}";
     says(
         &refused(&doc(parts, "        stand")),
         dt_lang::codes::MISSING_CONTROL,
@@ -578,4 +579,148 @@ fn thorough_one_definition_builds_two_things() {
     // a pebble stand and a boulder stand: both were placed
     let placed = b.report.placed.len();
     assert!(placed >= 8, "{placed} things placed");
+}
+
+// ---- layer params, and the one fit rule at every place ----------------------------------------
+
+const BANK: &str = "define bank {
+    param ground dirt
+    stack { ground }
+}";
+
+/// A tile with a region `pool` and the stack `stack` (a document to `check`).
+fn with_pool(parts: &str, stack: &str) -> String {
+    format!(
+        "dharmatiles version=\"1.0.0\"\n{parts}\ntile size=\"1x1\" seed=4 {{\n    line shore {{ through \"(0.5sq, 0sq)\" \"(0.5sq, 1sq)\" }}\n    region pool {{ boundedBy shore; fill \"(0.9sq, 0.5sq)\" }}\n    stack {{\n{stack}\n    }}\n}}\n"
+    )
+}
+
+fn names_of(text: &str) -> Vec<String> {
+    read(text)
+        .unwrap()
+        .tile
+        .unwrap()
+        .stack
+        .iter()
+        .map(|e| e.what.value.clone())
+        .collect()
+}
+
+#[test]
+fn a_layer_param_is_filled_by_a_built_in_and_by_a_part() {
+    let part = "define lawn { stack { dirt; grass } }";
+    let parts = format!("{part}\n{BANK}");
+    // its default
+    let t = names_of(&with_pool(&parts, "        base\n        bank at=pool"));
+    assert_eq!(t, ["dirt"]);
+    // a built-in layer, and a part (its entries inlined, in the place the call gave)
+    let t = names_of(&with_pool(
+        &parts,
+        "        base\n        bank ground=water at=pool",
+    ));
+    assert_eq!(t, ["water"]);
+    let t = names_of(&with_pool(
+        &parts,
+        "        base\n        bank ground=lawn at=pool",
+    ));
+    assert_eq!(t, ["dirt", "grass"]);
+    // a thing fits where a layer is wanted: it is placed there
+    let placed =
+        "define spot {\n    param ground kind=layer\n    stack { ground at=\"(0.5sq, 0.5sq)\" }\n}";
+    let t = names_of(&with_pool(
+        placed,
+        "        base\n        dirt\n        spot ground=rock",
+    ));
+    assert_eq!(t, ["dirt", "rock"]);
+}
+
+#[test]
+fn a_place_word_on_a_layer_param_passes_through_to_what_it_holds() {
+    let t = read(&with_pool(
+        BANK,
+        "        base\n        bank ground=water at=pool",
+    ))
+    .unwrap()
+    .tile
+    .unwrap();
+    let water = t.stack.iter().find(|e| e.what.value == "water").unwrap();
+    assert_eq!(water.area.as_ref().unwrap().value, "pool");
+}
+
+#[test]
+fn the_plan_checks_the_stack_as_a_layer_param_filled_it_at_the_callers_argument() {
+    // a rock listed before any ground stands on nothing: the order is refused
+    // at the argument the caller wrote, not at `ground` in the definition
+    let parts = "define stone-bed {\n    param ground kind=layer\n    stack { ground at=\"(0.5sq, 0.5sq)\" top=\"$bottom + 30dmm\" }\n}";
+    let text = with_pool(
+        parts,
+        "        base\n        stone-bed ground=tree\n        dirt",
+    );
+    let errors = refused(&text);
+    let d = errors
+        .iter()
+        .find(|e| e.code == dt_lang::codes::ORDER)
+        .unwrap_or_else(|| panic!("{errors:#?}"));
+    let (src, span) = d.at.as_ref().unwrap();
+    assert_eq!(
+        &src.inner()[span.offset()..span.offset() + span.len()],
+        "tree"
+    );
+    assert!(
+        span.offset() > text.find("tile size").unwrap(),
+        "at the call, not the definition"
+    );
+}
+
+#[test]
+fn a_layer_where_a_thing_is_wanted_is_refused_in_every_position() {
+    // a thing param's argument, a scatter's child, a layer param used as a child, a part placed
+    for (parts, stack, code, want) in [
+        (
+            STAND,
+            "        stand piece=water",
+            dt_lang::codes::TYPE,
+            "`water` is a layer, and `stand piece` wants a thing",
+        ),
+        (
+            "",
+            "        scatter count=2 { water }",
+            dt_lang::codes::SCATTER,
+            "`water` is a layer, and a scatter wants a thing",
+        ),
+        (
+            "define pile {\n    param ground dirt\n    stack { scatter count=2 { ground } }\n}",
+            "        pile",
+            dt_lang::codes::TYPE,
+            "`ground` is a layer, and a scatter wants a thing",
+        ),
+        (
+            "define corner-rock { stack { rock at=\"(0.1sq, 0.1sq)\" } }",
+            "        scatter count=4 { corner-rock }",
+            dt_lang::codes::SCATTER,
+            "`corner-rock` is a layer, and a scatter wants a thing",
+        ),
+    ] {
+        let errors = refused(&doc(parts, stack));
+        says(&errors, code, want);
+        // the quoting of a place word's mistake is not nested
+        assert!(
+            errors.iter().all(|e| !e.message.contains("`a scatter's `")),
+            "{errors:#?}"
+        );
+    }
+}
+
+#[test]
+fn a_layer_param_filled_by_a_number_or_a_wrong_kind_is_refused_at_the_call() {
+    let errors = refused(&with_pool(BANK, "        bank ground=3 at=pool"));
+    says(
+        &errors,
+        dt_lang::codes::TYPE,
+        "`3` is a plain number, and `bank ground` wants a layer",
+    );
+    let kinded = "define d {\n    param reach kind=length \"3dmm\"\n    stack { rock size=reach at=\"(0.5sq, 0.5sq)\" }\n}";
+    assert!(read(&doc(kinded, "        d reach=\"5dmm\"")).is_ok());
+    let errors = refused(&doc(kinded, "        d reach=\"5deg\""));
+    says(&errors, dt_lang::codes::TYPE, "angle");
 }

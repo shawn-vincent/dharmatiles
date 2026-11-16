@@ -7,16 +7,17 @@ use kdl::{KdlEntry, KdlNode, KdlValue};
 use miette::SourceSpan;
 
 use super::value::describe;
-use super::{Ctx, Decoder, Fill, spanned_name, value_span};
+use super::{Ctx, Decoder, Fill, Wanted, spanned_name, value_span};
 use crate::elements::renamed;
 use crate::error::{DocError, Src};
 use crate::known::{DefInfo, Known};
 use crate::model::{
-    Base, Callee, Definition, Entry, Form, Late, Place, Setting, Spanned, ThingParam, Value,
+    Base, Callee, Definition, Entry, Form, GeneratorParam, Late, Place, Setting, Spanned, Value,
     Written,
 };
 use crate::place::{Along, Side};
 use crate::schema::{self, Control, Kind, PlaceWord, Role, did_you_mean};
+use crate::units::{self, KindError, fits, misfit, misfit_text, wanted_help};
 
 /// Where an entry sits, which limits what it may be.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -36,8 +37,9 @@ const SCATTER_ONLY: [&str; 6] = ["count", "perSquare", "spread", "reach", "clump
 enum Target {
     Control(&'static Control),
     Param(Option<&'static Control>),
-    /// A parameter that holds a thing: its value is a thing's name.
-    Thing,
+    /// A parameter that holds a thing or a layer: its value is the name of
+    /// one, and what it must fit is its kind.
+    Generator(units::Kind),
     None,
 }
 
@@ -125,56 +127,77 @@ impl Decoder<'_> {
         out
     }
 
-    /// True when an entry is one thing: a thing element, or a definition of one.
-    pub(crate) fn is_thing(&self, e: &Entry) -> bool {
-        match &e.callee {
-            Callee::Element(l) => l.role == Role::Thing,
-            Callee::Definition(d) => self.def_info(d).is_some_and(|i| i.thing),
-            // a thing parameter holds a thing, by construction
-            Callee::Param(_) => true,
-        }
-    }
-
-    /// What a name is as a generator: `Some(true)` a thing (an element
-    /// placed with `at=`, or a definition of one thing), `Some(false)` a
-    /// layer, `None` no element or definition at all.
-    pub(crate) fn thing_kind(&self, name: &str) -> Option<bool> {
+    /// What a name is as a generator, in the one kind system: an element's
+    /// kind, a definition's (a thing only when its stack is exactly one
+    /// unplaced thing, else a layer; not known while it is still being
+    /// decoded in a loop), `None` for no element or definition at all.
+    pub(crate) fn name_kind(&self, name: &str) -> Option<units::Kind> {
         if let Some(l) = schema::element(name) {
-            return Some(l.generator() == schema::Generator::Thing);
+            return Some(l.generator());
         }
-        self.is_definition(name)
-            .then(|| self.def_info(name).is_some_and(|i| i.thing))
+        self.is_definition(name).then(|| {
+            self.def_info(name)
+                .map_or(units::Kind::Any, |i| i.generator)
+        })
     }
 
-    /// The value of a thing parameter, written `value` (as a default or an
-    /// argument): the name of a thing, or a parameter of the enclosing
-    /// definition that holds one.  `None` after the mistake is reported
-    /// where it is written.
-    pub(crate) fn thing_value(
+    /// What an entry's callee is as a generator: its name's kind, or for a
+    /// parameter what it says it holds (`Any` until the parameter line is
+    /// read, which checks every use against it).
+    pub(crate) fn callee_kind(&self, c: &Callee) -> units::Kind {
+        match c {
+            Callee::Element(l) => l.generator(),
+            Callee::Definition(d) => self.def_info(d).map_or(units::Kind::Any, |i| i.generator),
+            Callee::Param(p) => self
+                .declared
+                .get(&p.name)
+                .map_or(units::Kind::Any, |d| d.kind),
+        }
+    }
+
+    /// The error of a value of the wrong kind, as `misfit` words it, at
+    /// `span`; `because` says how the kind was fixed, when it was not
+    /// written there.
+    pub(crate) fn err_kind(&mut self, span: SourceSpan, ke: KindError, because: &str) {
+        let d = self.err(ke.code, span, ke.message, "wrong kind");
+        d.help = match (ke.help, because.is_empty()) {
+            (Some(h), true) => Some(h),
+            (Some(h), false) => Some(format!("{h} ({because})")),
+            (None, _) => (!because.is_empty()).then(|| because.to_owned()),
+        };
+    }
+
+    /// The value of a thing or layer parameter, written `value` (as a
+    /// default or an argument): the name of a generator that fits `want`, or
+    /// a parameter of the enclosing definition that holds one.  `None` after
+    /// the mistake is reported where it is written.
+    pub(crate) fn generator_value(
         &mut self,
         e: &KdlEntry,
         owner: &str,
         name: &str,
+        want: units::Kind,
         ctx: &Ctx,
     ) -> Option<Spanned<Value>> {
         let span = value_span(e);
+        let who = format!("`{owner} {name}`");
         let Some(s) = e.value().as_string() else {
-            self.err(
-                dt_lang::codes::TYPE,
-                span,
-                format!(
-                    "`{owner} {name}` is a thing, and {} is not",
-                    describe_kdl(e)
-                ),
-                "not a thing",
-            )
-            .help = Some(format!(
-                "pass the name of a thing: `{name}=rock`; the things are the elements `rock`, `stone`, `boulder`, `pebble`, `flower` and `tree`, and a definition of one of them"
-            ));
+            let written = e.value().to_string();
+            let ke = match e.value() {
+                KdlValue::Integer(_) | KdlValue::Float(_) => {
+                    misfit(&written, units::Kind::Plain, &who, want)
+                }
+                _ => misfit_text(&written, describe_kdl(e), &who, want, wanted_help(want)),
+            };
+            self.err_kind(span, ke, "");
             return None;
         };
         if ctx.params.iter().any(|p| p == s) {
-            self.thing_params.insert(s.to_owned());
+            self.wants.entry(s.to_owned()).or_default().push(Wanted {
+                who,
+                kind: want,
+                span,
+            });
             return Some(Spanned {
                 value: Value::Param(s.to_owned()),
                 span,
@@ -184,32 +207,13 @@ impl Decoder<'_> {
             value: s.to_owned(),
             span,
         };
-        match self.thing_kind(s) {
-            Some(true) => Some(Spanned {
-                value: Value::Thing(s.to_owned()),
+        match self.name_kind(s) {
+            Some(have) if fits(have, want) => Some(Spanned {
+                value: Value::Generator(have, s.to_owned()),
                 span,
             }),
-            Some(false) => {
-                let layer = schema::element(s).is_some();
-                self.err(
-                    dt_lang::codes::TYPE,
-                    span,
-                    if layer {
-                        format!("`{s}` is a layer, and `{owner} {name}` is a thing")
-                    } else {
-                        format!("`{s}` is not one thing, and `{owner} {name}` is a thing")
-                    },
-                    "a layer, not a thing",
-                )
-                .help = Some(if layer {
-                    format!(
-                        "a layer reads the scene so far (it paints the ground, or places things); a thing is one solid on its own: `{name}=rock`. Put `{s}` in the stack instead"
-                    )
-                } else {
-                    format!(
-                        "a thing is one rock, stone, flower or tree, or a definition whose stack is exactly one of them; `{s}` holds more"
-                    )
-                });
+            Some(have) => {
+                self.err_kind(span, misfit(s, have, &who, want), "");
                 None
             }
             None => {
@@ -250,27 +254,40 @@ impl Decoder<'_> {
         let owner = entry.what.value.clone();
         let element = entry.element();
 
-        if parent == Parent::Scatter && !self.is_thing(&entry) {
-            let help = if element.is_some_and(|l| l.role == Role::Scatter) {
-                "scatters don't nest; give the outer one several children instead".to_owned()
-            } else {
-                format!(
-                    "a scatter holds things (rock, stone, boulder, pebble, tree, or a definition of one); `{owner}` is not one"
-                )
+        if let Callee::Param(p) = &entry.callee {
+            // a parameter written as an entry is wanted as a thing in a
+            // scatter, as a layer (which a thing fits) in a stack
+            let (who, kind) = match parent {
+                Parent::Scatter => ("a scatter", units::Kind::Thing),
+                Parent::Stack | Parent::Surface => ("the stack", units::Kind::Layer),
             };
-            let layer = element.is_some_and(|l| l.generator() == schema::Generator::Layer);
-            self.err(
-                dt_lang::codes::SCATTER,
-                entry.what.span,
-                if layer {
-                    format!("`{owner}` is a layer, and a scatter holds things")
+            self.wants.entry(p.name.clone()).or_default().push(Wanted {
+                who: who.to_owned(),
+                kind,
+                span: entry.what.span,
+            });
+        }
+        if parent == Parent::Scatter {
+            let have = self.callee_kind(&entry.callee);
+            if !fits(have, units::Kind::Thing) {
+                let ke = misfit(&owner, have, "a scatter", units::Kind::Thing);
+                let help = if element.is_some_and(|l| l.role == Role::Scatter) {
+                    Some(
+                        "scatters don't nest; give the outer one several children instead"
+                            .to_owned(),
+                    )
                 } else {
-                    format!("`{owner}` can't be scattered")
-                },
-                "not a thing",
-            )
-            .help = Some(help);
-            return None;
+                    ke.help
+                };
+                self.err(
+                    dt_lang::codes::SCATTER,
+                    entry.what.span,
+                    ke.message,
+                    "not a thing",
+                )
+                .help = help;
+                return None;
+            }
         }
 
         for e in node.entries() {
@@ -433,10 +450,9 @@ impl Decoder<'_> {
         if self.is_definition(&what.value) {
             return Some(Callee::Definition(what.value.clone()));
         }
-        // a parameter written as an entry holds a thing
+        // a parameter written as an entry holds a thing or a layer
         if ctx.params.contains(&what.value) {
-            self.thing_params.insert(what.value.clone());
-            return Some(Callee::Param(ThingParam {
+            return Some(Callee::Param(GeneratorParam {
                 name: what.value.clone(),
                 written: Vec::new(),
                 ctx: Arc::new(ctx.clone()),
@@ -473,7 +489,7 @@ impl Decoder<'_> {
         match &entry.callee {
             Callee::Element(l) => l.control(name).map_or(Target::None, Target::Control),
             // what the parameter holds is known at the call: `control`
-            // keeps what is written, and `bind_thing` types it then
+            // keeps what is written, and `bind_generator` types it then
             Callee::Param(_) => Target::None,
             Callee::Definition(d) => match self.def_info(d) {
                 Some(info) => {
@@ -481,8 +497,8 @@ impl Decoder<'_> {
                         .iter()
                         .find(|p| p.name == name)
                         .map_or(Target::None, |p| {
-                            if p.thing {
-                                Target::Thing
+                            if p.kind.is_generator() {
+                                Target::Generator(p.kind)
                             } else {
                                 Target::Param(p.control)
                             }
@@ -690,7 +706,7 @@ impl Decoder<'_> {
         ctx: &Ctx,
     ) {
         // a thing parameter's entry: which thing it is, is known at the call,
-        // so keep what is written, for `bind_thing` to give to this function
+        // so keep what is written, for `bind_generator` to give to this function
         // again
         if let Callee::Param(p) = &mut entry.callee {
             p.written.push(Written {
@@ -717,7 +733,7 @@ impl Decoder<'_> {
         let (k, is_param) = match self.target(entry, &key.value) {
             Target::Control(k) => (Some(k), false),
             Target::Param(k) => (k, true),
-            Target::Thing => {
+            Target::Generator(want) => {
                 if let Some(first) = subs.first() {
                     self.err(
                         dt_lang::codes::CONTROL_NODE,
@@ -726,21 +742,32 @@ impl Decoder<'_> {
                         "here",
                     )
                     .help = Some(format!(
-                        "a thing is passed by name: `{owner} {}=rock`",
-                        key.value
+                        "a {} is passed by name: `{owner} {}={}`",
+                        want.word(),
+                        key.value,
+                        example(want)
                     ));
                 }
                 let Some(e) = value else {
                     self.err(
                         dt_lang::codes::TYPE,
                         key.span,
-                        format!("`{owner} {}` is a thing and has no value", key.value),
-                        "no thing",
+                        format!(
+                            "`{owner} {}` is {} and has no value",
+                            key.value,
+                            want.describe()
+                        ),
+                        format!("no {}", want.word()),
                     )
-                    .help = Some(format!("name a thing: `{owner} {}=rock`", key.value));
+                    .help = Some(format!(
+                        "name {}: `{owner} {}={}`",
+                        want.describe(),
+                        key.value,
+                        example(want)
+                    ));
                     return;
                 };
-                if let Some(v) = self.thing_value(e, &owner, &key.value, ctx) {
+                if let Some(v) = self.generator_value(e, &owner, &key.value, want, ctx) {
                     entry.controls.push(Setting {
                         name: key,
                         control: None,
@@ -939,7 +966,7 @@ impl Decoder<'_> {
     fn unknown_control(&mut self, entry: &Entry, key: &Spanned<String>) {
         let owner = entry.what.value.as_str();
         let name = key.value.as_str();
-        let thing = self.is_thing(entry);
+        let thing = fits(self.callee_kind(&entry.callee), units::Kind::Thing);
         let (controls, params): (&[Control], Vec<&str>) = match &entry.callee {
             Callee::Element(l) => (l.controls, Vec::new()),
             Callee::Param(_) => (&[], Vec::new()),
@@ -1178,6 +1205,15 @@ impl Decoder<'_> {
     }
 }
 
+/// A name that fits the kind, for a help.
+fn example(want: units::Kind) -> &'static str {
+    if want == units::Kind::Thing {
+        "rock"
+    } else {
+        "dirt"
+    }
+}
+
 /// A string value, bare or quoted.
 fn arg_value_str(e: &KdlEntry) -> Option<&str> {
     e.value().as_string()
@@ -1195,7 +1231,7 @@ fn describe_kdl(e: &KdlEntry) -> &'static str {
 
 /// What a thing parameter stands for, once the caller has said.
 #[derive(Clone, Copy)]
-pub enum Thing<'a> {
+pub enum Callable<'a> {
     /// A built-in thing element.
     Element(&'static schema::Element),
     /// A definition of one thing.
@@ -1217,17 +1253,17 @@ pub enum Thing<'a> {
 ///
 /// # Errors
 /// Every mistake in what was written, as the decoder gives it.
-pub fn bind_thing(
+pub fn bind_generator(
     entry: &Entry,
-    param: &ThingParam,
-    thing: Thing<'_>,
+    param: &GeneratorParam,
+    thing: Callable<'_>,
     src: &Src,
     known: &Known,
 ) -> Result<Bound, Vec<DocError>> {
     let mut d = Decoder::new(Arc::clone(src), known);
     let (callee, name) = match thing {
-        Thing::Element(l) => (Callee::Element(l), l.name.to_owned()),
-        Thing::Definition(def) => {
+        Callable::Element(l) => (Callee::Element(l), l.name.to_owned()),
+        Callable::Definition(def) => {
             d.local.insert(def.name.value.clone(), DefInfo::from(def));
             (
                 Callee::Definition(def.name.value.clone()),
