@@ -3,9 +3,9 @@
 //! ```kdl
 //! dharmatiles version="1.0.0"
 //! inventory {
-//!     print "lib:tiles/ground/1x1-grass" seed=97 system=db colour=multi result=ok on="2026-11-09" hash="3c1f9a4e" from="crossing/plate-1"
-//!     print "lib:tiles/cliffs/2x1-cliff" seed=4 system=db colour=multi result=failed on="2026-11-09" note="top layer stringing"
-//!     gone "lib:tiles/ground/1x1-grass" seed=97 system=db colour=multi on="2026-11-11" note="dropped on the floor"
+//!     print "lib:tiles/ground/1x1-grass" seed=97 system=db colour=multicolour result=ok on="2026-11-09" hash="3c1f9a4e" from="crossing/plate-1"
+//!     print "lib:tiles/cliffs/2x1-cliff" seed=4 system=db colour=multicolour result=failed on="2026-11-09" note="top layer stringing"
+//!     gone "lib:tiles/ground/1x1-grass" seed=97 system=db colour=multicolour on="2026-11-11" note="dropped on the floor"
 //!     renamed "home:meadow" to="home:meadows/glade"
 //! }
 //! ```
@@ -13,7 +13,7 @@
 //! The truth is the log: one line a print, a loss or a rename, never edited
 //! away.  Everything else (how many you have, which seeds) is worked out from
 //! it by [`Inventory::pieces`] and never stored.  A piece is the same piece
-//! when its tile, seed, system and colour mode are the same; two prints of
+//! when its tile, seed, system and colour are the same; two prints of
 //! one piece are two.  A failed print is kept (it says what your printer does
 //! badly) and does not count.
 //!
@@ -36,35 +36,8 @@ pub const EXT: &str = dt_lang::words::DINV;
 /// The file's name in My tiles.
 pub const FILE: &str = "inventory.dinv";
 
-/// Single colour or multicolour: part of what makes a piece the same piece.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Colour {
-    /// One filament, no paint.
-    Single,
-    /// Each material in its own filament.
-    Multi,
-}
-
-impl Colour {
-    /// As written.
-    #[must_use]
-    pub const fn word(self) -> &'static str {
-        match self {
-            Self::Single => "single",
-            Self::Multi => "multi",
-        }
-    }
-
-    /// From a word, or `multicolour` as the print list writes it.
-    #[must_use]
-    pub fn from_word(w: &str) -> Option<Self> {
-        match w {
-            "single" => Some(Self::Single),
-            "multi" | "multicolour" => Some(Self::Multi),
-            _ => None,
-        }
-    }
-}
+/// Single colour or multicolour: part of what makes a piece the same piece (the one kind, [`dt_lang::Colour`]).
+pub use dt_lang::Colour;
 
 /// What makes two prints the same piece.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -246,7 +219,7 @@ impl Inventory {
         out
     }
 
-    /// How many of a piece you have (its tile, seed, system and colour mode).
+    /// How many of a piece you have (its tile, seed, system and colour).
     #[must_use]
     pub fn have(&self, id: &Identity) -> u32 {
         self.pieces()
@@ -302,14 +275,11 @@ impl Shelf {
         self.have.get(id).copied().unwrap_or(0)
     }
 
-    /// How many of this tile and seed in the system, in the other colour mode.
+    /// How many of this tile and seed in the system, in the other colour.
     #[must_use]
     pub fn other_colour(&self, id: &Identity) -> u32 {
         let other = Identity {
-            colour: match id.colour {
-                Colour::Single => Colour::Multi,
-                Colour::Multi => Colour::Single,
-            },
+            colour: id.colour.other(),
             ..id.clone()
         };
         self.have(&other)
@@ -378,6 +348,32 @@ impl Reader {
         None
     }
 
+    /// A `colour` word: `single` or `multicolour`.  The old `multi` is refused with the fix that writes `multicolour`.
+    fn colour(&mut self, e: &KdlEntry) -> Option<Colour> {
+        let KdlValue::String(s) = e.value() else {
+            self.err(value_span(e), "`colour` takes a word", "not a word");
+            return None;
+        };
+        match s.parse::<Colour>() {
+            Ok(c) => Some(c),
+            Err(why) => {
+                let span = value_span(e);
+                let near = did_you_mean(s, Colour::words());
+                let err = self.err(span, format!("`{s}` is not a colour"), "not that");
+                if s == "multi" {
+                    err.mend(
+                        span,
+                        "multicolour",
+                        "`multi` is now `multicolour`: write `colour=multicolour`".to_owned(),
+                    );
+                } else {
+                    err.suggest_or(span, near, || why);
+                }
+                None
+            }
+        }
+    }
+
     fn date(&mut self, key: &str, e: &KdlEntry) -> Option<String> {
         let s = self.string(key, e)?;
         let b = s.as_bytes();
@@ -432,7 +428,7 @@ impl Reader {
                         .word("system", e, &dt_lang::System::words())
                         .and_then(|w| w.parse().ok());
                 }
-                "colour" => colour = self.word("colour", e, &["single", "multi"]),
+                "colour" => colour = self.colour(e),
                 other if keys.contains(&other) => rest.push((other.to_owned(), e.clone())),
                 other => {
                     self.err(k.span(), format!("`{node}` has no `{other}`"), "unknown")
@@ -497,7 +493,11 @@ impl Reader {
                 .iter()
                 .any(|e| e.name().is_some_and(|k| k.value() == "colour"))
         {
-            miss(self, "colour", "write `colour=single` or `colour=multi`");
+            miss(
+                self,
+                "colour",
+                "write `colour=single` or `colour=multicolour`",
+            );
         }
         let (tile, seed, system, colour) = (tile?, seed?, system?, colour?);
         Some((
@@ -505,7 +505,7 @@ impl Reader {
                 tile,
                 seed,
                 system,
-                colour: Colour::from_word(&colour)?,
+                colour,
             },
             rest,
         ))

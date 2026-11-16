@@ -196,7 +196,7 @@ shade: Array<number>, };
 
 type Clouds = { sheets: Array<CloudSheet>, columns: Array<CloudColumns>, thinned: boolean, };
 
-type ColourWord = "single" | "multi";
+type Colour = "single" | "multicolour";
 
 type ControlJson = { name: string, 
 /**
@@ -416,9 +416,9 @@ type InsertPlace = "stack" | "tile" | "before" | "in";
 
 type InventoryDoc = { writable: boolean, inventory: InventoryRead, };
 
-type InventoryGoneReq = { tile: string, seed: number, system: System, colour: ColourWord, note?: string | null, on?: string | null, };
+type InventoryGoneReq = { tile: string, seed: number, system: System, colour: Colour, note?: string | null, on?: string | null, };
 
-type InventoryHaveReq = { tile: string, colour: ColourWord, system?: System | null, seed?: number | null, count?: number | null, 
+type InventoryHaveReq = { tile: string, colour: Colour, system?: System | null, seed?: number | null, count?: number | null, 
 /**
  * The date, like 2026-11-09 (today when left out).
  */
@@ -450,7 +450,7 @@ from: string,
  */
 to: string, on?: string | null, };
 
-type InventoryReprintReq = { tile: string, seed: number, system: System, colour: ColourWord, 
+type InventoryReprintReq = { tile: string, seed: number, system: System, colour: Colour, 
 /**
  * The print list's id; none makes a new list.
  */
@@ -466,13 +466,13 @@ type InventoryReprinted = {
  */
 list: string, id: string, made: boolean, warning: string | null, always: boolean, before: string | null, text: string, docRev: number, note: string | null, };
 
-type InventoryRow = { tile: string, seed: number, system: System, colour: ColourWord, have: number, printed: number, failed: number, gone: number, hash: string | null, last: string | null, edited: boolean, missing: boolean, lines: Array<number>, };
+type InventoryRow = { tile: string, seed: number, system: System, colour: Colour, have: number, printed: number, failed: number, gone: number, hash: string | null, last: string | null, edited: boolean, missing: boolean, lines: Array<number>, };
 
 type InventoryState = { "state": "unavailable" } | { "state": "absent", home: string, 
 /**
  * Where the file will be.
  */
-path: string, id: string, } | { "state": "read", home: string, path: string, id: string, pieces: Array<InventoryRow>, lastColour: ColourWord, } | { "state": "broken", home: string, path: string, id: string, 
+path: string, id: string, } | { "state": "read", home: string, path: string, id: string, pieces: Array<InventoryRow>, lastColour: Colour, } | { "state": "broken", home: string, path: string, id: string, 
 /**
  * What is wrong with it, one line each.
  */
@@ -1064,11 +1064,11 @@ format: string, printers: Array<PrinterRow>,
 /**
  * The list's own pieces, in the order written.
  */
-pieces: Array<ListPiece>, title: string, printer: string, label: string, bed: [number, number] | null, excluded: Array<[number, number, number, number]>, slots: number, verify: string | null, system: System, mode: string, group: string, gap: number, margin: number, turn: boolean, skipped: Array<string>, held: Array<PlanHeld>, checkInventory: boolean, };
+pieces: Array<ListPiece>, title: string, printer: string, label: string, bed: [number, number] | null, excluded: Array<[number, number, number, number]>, slots: number, verify: string | null, system: System, colour: Colour, group: string, gap: number, margin: number, turn: boolean, skipped: Array<string>, held: Array<PlanHeld>, checkInventory: boolean, };
 
 type PlatesSetReq = { list: string, 
 /**
- * `printer`, `mode`, `group`, `gap`, `margin`, `turn`, `system` or `inventory`.
+ * `printer`, `colour`, `group`, `gap`, `margin`, `turn`, `system` or `inventory`.
  */
 key: string, 
 /**
@@ -1088,7 +1088,7 @@ plate: number, };
 
 type PlatesUnread = { planned: false, writable: boolean, printers: Array<PrinterRow>, };
 
-type PlatesWritten = { planned: false, writable: boolean, printer: string, label: string | null, bed: [number, number] | null, slots: number | null, mode: string | null, group: string | null, gap: number | null, margin: number | null, printers: Array<PrinterRow>, checkInventory: boolean, pieces: Array<ListPiece>, };
+type PlatesWritten = { planned: false, writable: boolean, printer: string, label: string | null, bed: [number, number] | null, slots: number | null, colour: Colour | null, group: string | null, gap: number | null, margin: number | null, printers: Array<PrinterRow>, checkInventory: boolean, pieces: Array<ListPiece>, };
 
 type PointSlot = { "arg": number } | { "control": string };
 
@@ -1263,9 +1263,9 @@ shelfExists: boolean,
  */
 have: number, toPrint: number, 
 /**
- * `single` or `multi`.
+ * The colour a plates line without its own would print in.
  */
-colour: string, system: System, 
+colour: Colour, system: System, 
 /**
  * The square of `system`, mm: where a tile dropped on the map lands.
  */
@@ -1287,7 +1287,7 @@ tile: string, canon: string, name: string,
 /**
  * The listed tile's id, when the tile is listed.
  */
-tileId: string | null, path: string, seed: number | null, seedUsed: number, system: System, colour: string, cols: number, rows: number, 
+tileId: string | null, path: string, seed: number | null, seedUsed: number, system: System, colour: Colour, cols: number, rows: number, 
 /**
  * One square, mm.
  */
@@ -1301,7 +1301,7 @@ size: [number, number], at: [number, number] | null, rot: number | null, bottomM
  */
 shelf: ShelfMark | null, 
 /**
- * The seeds you own of this piece's tile in its system and colour mode, and how many of each.
+ * The seeds you own of this piece's tile in its system and colour, and how many of each.
  */
 ownedSeeds: Array<OwnedSeed>, };
 

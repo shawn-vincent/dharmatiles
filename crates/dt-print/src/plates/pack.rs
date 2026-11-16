@@ -28,8 +28,9 @@
 //! Nothing here is random and nothing reads the clock: the same pieces give
 //! the same plates.
 
-use dt_doc::map::{Group, Mode};
+use dt_doc::map::Group;
 use dt_kit::Material;
+use dt_lang::Colour;
 
 /// What the packer needs to know of the bed and the settings.
 #[derive(Clone, Debug)]
@@ -48,7 +49,7 @@ pub struct Spec {
     /// Filaments the printer holds at once.
     pub slots: u32,
     /// Single colour or multicolour.
-    pub mode: Mode,
+    pub colour: Colour,
     /// How multicolour pieces are grouped.
     pub group: Group,
 }
@@ -211,7 +212,7 @@ fn by_size(items: &mut [&Item]) {
 
 /// The pins put down: each on its plate as it was dropped, or left out.
 fn put_pins(items: &[Item], pins: &[Pin], spec: &Spec) -> Packing {
-    let single = spec.mode == Mode::Single;
+    let single = spec.colour == Colour::Single;
     let [bw, bd] = spec.bed;
     let m = spec.margin;
     let mut out = Packing::default();
@@ -269,7 +270,7 @@ fn put_pins(items: &[Item], pins: &[Pin], spec: &Spec) -> Packing {
 /// First fit over every plate, for the order given, from `start` (the plates
 /// the pins made).
 fn first_fit(items: &[&Item], spec: &Spec, only_last: bool, start: &Packing) -> Packing {
-    let single = spec.mode == Mode::Single;
+    let single = spec.colour == Colour::Single;
     let mut out = start.clone();
     for it in items {
         if !single && it.filaments.len() > spec.slots as usize {
@@ -347,7 +348,7 @@ pub fn pack_with(items: &[Item], pins: &[Pin], spec: &Spec) -> Packing {
     let mut sized: Vec<&Item> = items.iter().collect();
     by_size(&mut sized);
     let mut by_area = first_fit(&sized, spec, false, &start);
-    if spec.mode == Mode::Single || spec.group == Group::Size {
+    if spec.colour == Colour::Single || spec.group == Group::Size {
         centre(&mut by_area, spec);
         return by_area;
     }
@@ -434,7 +435,7 @@ mod tests {
             margin: 5.0,
             turn: true,
             slots: 4,
-            mode: Mode::Single,
+            colour: Colour::Single,
             group: Group::Filament,
         }
     }
@@ -646,7 +647,7 @@ mod tests {
     #[test]
     fn multicolour_groups_pieces_that_share_filaments() {
         let mut s = spec(100.0);
-        s.mode = Mode::Multicolour;
+        s.colour = Colour::Multicolour;
         s.slots = 2;
         // a 100 mm bed holds 2 x 2 squares of 35 (2 x 35 + 3 = 73 inside 90)
         let mut items = Vec::new();
@@ -670,7 +671,7 @@ mod tests {
     #[test]
     fn a_plate_never_needs_more_filaments_than_the_printer_has() {
         let mut s = spec(256.0);
-        s.mode = Mode::Multicolour;
+        s.colour = Colour::Multicolour;
         s.slots = 2;
         let items = vec![
             coloured(0, 35.0, &[EARTH, GRASS]),
@@ -682,14 +683,14 @@ mod tests {
         assert_eq!(per_plate(&p), [1, 1, 1]);
         assert!(p.plates.iter().all(|p| p.filaments.len() <= 2));
         // single colour needs one filament, so one plate
-        s.mode = Mode::Single;
+        s.colour = Colour::Single;
         assert_eq!(per_plate(&pack(&items, &s)), [3]);
     }
 
     #[test]
     fn a_piece_that_needs_more_filaments_than_the_printer_has_is_refused() {
         let mut s = spec(256.0);
-        s.mode = Mode::Multicolour;
+        s.colour = Colour::Multicolour;
         s.slots = 1;
         let p = pack(&[coloured(0, 35.0, &[EARTH, GRASS])], &s);
         assert!(p.plates.is_empty());
@@ -703,7 +704,7 @@ mod tests {
         // filament set and three short of another
         let mut s = spec(100.0);
         s.bed = [100.0, 45.0];
-        s.mode = Mode::Multicolour;
+        s.colour = Colour::Multicolour;
         s.slots = 4;
         let long = |id| Item {
             id,

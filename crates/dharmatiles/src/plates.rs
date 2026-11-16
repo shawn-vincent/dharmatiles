@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crate::cli_wire::{PlatesChecked, PlatesReport, Refused};
-use dt_doc::map::{Group, Mode, PrintList};
+use dt_doc::map::{Group, PrintList};
 use dt_eval::{Diag, Files};
+use dt_lang::Colour;
 use dt_print::plates::builds::Builds;
 use dt_print::plates::export::Format;
 use dt_print::plates::wire::{PlanOnly, PlanPlate};
@@ -120,23 +121,13 @@ pub(crate) fn template_for(
 pub(crate) fn overrides(
     printer: Option<String>,
     system: Option<dt_lang::System>,
-    mode: Option<&str>,
+    colour: Option<Colour>,
     group: Option<&str>,
     gap: Option<f64>,
     margin: Option<f64>,
     turn: Option<&str>,
     all: bool,
 ) -> Result<Overrides, String> {
-    let mode = match mode {
-        None => None,
-        Some("single") => Some(Mode::Single),
-        Some("multicolour") => Some(Mode::Multicolour),
-        Some(m) => {
-            return Err(format!(
-                "`{m}` is not a mode: use `single` or `multicolour`"
-            ));
-        }
-    };
     let group = match group {
         None => None,
         Some("filament") => Some(Group::Filament),
@@ -156,7 +147,7 @@ pub(crate) fn overrides(
     Ok(Overrides {
         printer,
         system,
-        mode,
+        colour,
         group,
         gap,
         margin,
@@ -250,10 +241,7 @@ pub(crate) fn run(
             s.machine.bed.map_or(0.0, |b| b[0]),
             s.machine.bed.map_or(0.0, |b| b[1]),
             s.machine.slot_count(),
-            match s.mode {
-                Mode::Single => "single colour",
-                Mode::Multicolour => "multicolour",
-            }
+            s.colour.title()
         );
         if let Some(v) = &s.machine.verify {
             tell!("note: this printer's numbers are not yet checked against the maker ({v})");
@@ -409,7 +397,7 @@ pub(crate) fn run(
                 "plate {}: {} piece(s){}",
                 i + 1,
                 p.len(),
-                if s.mode == Mode::Multicolour {
+                if s.colour == Colour::Multicolour {
                     format!(
                         ", filaments {}",
                         layout.filaments[i]

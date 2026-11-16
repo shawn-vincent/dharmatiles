@@ -9,10 +9,12 @@
 //! server can all depend on it.
 
 pub mod codes;
+mod colour;
 pub mod highlight;
 mod system;
 pub mod words;
 
+pub use colour::Colour;
 pub use system::System;
 
 /// The land's steepest ease, degrees: what dirt's hills are made at, and what

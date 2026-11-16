@@ -3,35 +3,7 @@
 //! same names (`camelCase`) for the same things.  This file depends on nothing of the program's but the document crate, so the
 //! command line's own tests take it in whole (`#[path]`) to read the output by deserializing it.
 
-use dt_doc::inventory::Colour;
 use serde::{Deserialize, Serialize};
-
-/// The colour mode a print was made in.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, ts_rs::TS)]
-#[ts(optional_fields = nullable)]
-#[serde(rename_all = "lowercase")]
-pub enum ColourWord {
-    Single,
-    Multi,
-}
-
-impl From<ColourWord> for Colour {
-    fn from(c: ColourWord) -> Self {
-        match c {
-            ColourWord::Single => Self::Single,
-            ColourWord::Multi => Self::Multi,
-        }
-    }
-}
-
-impl From<Colour> for ColourWord {
-    fn from(c: Colour) -> Self {
-        match c {
-            Colour::Single => Self::Single,
-            Colour::Multi => Self::Multi,
-        }
-    }
-}
 
 /// A piece of the inventory: what is held, and whether its tile changed or is gone.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, ts_rs::TS)]
@@ -40,7 +12,7 @@ pub struct InventoryRow {
     pub tile: String,
     pub seed: u64,
     pub system: dt_lang::System,
-    pub colour: ColourWord,
+    pub colour: dt_lang::Colour,
     pub have: u32,
     pub printed: u32,
     pub failed: u32,
@@ -52,7 +24,7 @@ pub struct InventoryRow {
     pub lines: Vec<usize>,
 }
 
-/// What the program knows of the inventory: where it is, the pieces it adds up to, the colour mode last used, and what is
+/// What the program knows of the inventory: where it is, the pieces it adds up to, the colour last used, and what is
 /// wrong with it when it does not read.  A state carries only what it has: no home folder has no path.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, ts_rs::TS)]
 #[serde(
@@ -76,7 +48,7 @@ pub enum InventoryState {
         path: String,
         id: String,
         pieces: Vec<InventoryRow>,
-        last_colour: ColourWord,
+        last_colour: dt_lang::Colour,
     },
     /// The file exists and does not read.
     Broken {

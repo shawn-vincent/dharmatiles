@@ -7,7 +7,7 @@
 )]
 
 use dt_doc::inventory::{Colour, Shelf, decode as decode_inventory};
-use dt_doc::map::{Group, Mode, decode};
+use dt_doc::map::{Group, decode};
 use dt_eval::{Files, Options};
 use dt_kit::Material;
 use dt_print::plates::{self, Boxes, Context, Overrides};
@@ -67,7 +67,7 @@ fn a_list_resolves_its_tiles_merges_copies_and_takes_the_defaults() {
     // the printer a list that names none gets: the X1 Carbon with an AMS, multicolour
     let s = &p.settings;
     assert_eq!(s.machine.name, "bambu/x1c-ams");
-    assert_eq!((s.mode, s.group), (Mode::Multicolour, Group::Filament));
+    assert_eq!((s.colour, s.group), (Colour::Multicolour, Group::Filament));
     assert_eq!((s.gap, s.margin, s.turn), (3.0, 5.0, true));
     assert_eq!(s.system, dt_lang::System::Db);
     // a square is a square: 35 mm on DungeonBlocks, 25.4 on OpenLOCK
@@ -93,7 +93,7 @@ fn a_one_filament_printer_defaults_to_single_colour_and_a_word_overrides() {
     let l =
         "map {\n piece \"lib:tests/ground/1x1-flat\"\n}\nplates printer=\"sovol/sv06\" gap=\"4mm\"";
     let p = plan_of(l, &Overrides::default()).unwrap();
-    assert_eq!(p.settings.mode, Mode::Single);
+    assert_eq!(p.settings.colour, Colour::Single);
     assert_eq!(p.settings.gap, 4.0);
     let q = plan_of(
         l,
@@ -113,7 +113,7 @@ fn the_filament_estimate_never_leaves_a_material_out() {
     let p = plan_of(
         "map {\n piece \"lib:tests/plants/1x1-tree\"\n piece \"lib:tests/water/1x1-water+grass\"\n}",
         &Overrides {
-            mode: Some(Mode::Single),
+            colour: Some(Colour::Single),
             ..Overrides::default()
         },
     )
@@ -137,7 +137,7 @@ fn boxes(size: [f64; 2], f: &[Material]) -> Boxes {
 #[test]
 fn the_real_footprints_make_the_plates_and_a_crown_costs_room() {
     let p = plan_of(
-        "map {\n piece \"lib:tests/ground/1x1-flat\" count=30\n}\nplates printer=\"bambu/x1c\" mode=\"single\"",
+        "map {\n piece \"lib:tests/ground/1x1-flat\" count=30\n}\nplates printer=\"bambu/x1c\" colour=\"single\"",
         &Overrides::default(),
     )
     .unwrap();
@@ -172,7 +172,7 @@ fn what_cannot_be_laid_out_is_said_by_tile() {
     assert!(e[0].message.contains("250"), "{e:?}");
     // a build that needs more filaments than the printer has
     let m = plan_of(
-        "map {\n piece \"lib:tests/ground/1x1-flat\"\n}\nplates printer=\"bambu/x1c-ams\" mode=\"multicolour\"",
+        "map {\n piece \"lib:tests/ground/1x1-flat\"\n}\nplates printer=\"bambu/x1c-ams\" colour=\"multicolour\"",
         &Overrides::default(),
     )
     .unwrap();
@@ -232,7 +232,7 @@ fn a_piece_prints_only_what_the_inventory_lacks_of_that_exact_piece() {
     .unwrap()
     .kinds[0]
         .seed_used;
-    let shelf = shelf_of(&[(FLAT, seed, "db", Colour::Multi, 2)]);
+    let shelf = shelf_of(&[(FLAT, seed, "db", Colour::Multicolour, 2)]);
     let list = format!("map {{\n piece \"{FLAT}\" count=5\n}}");
     let p = plan_with(&list, &Overrides::default(), Some(&shelf)).unwrap();
     assert_eq!(
@@ -285,10 +285,10 @@ fn the_same_piece_means_tile_seed_system_and_colour_mode() {
     .kinds[0]
         .seed_used;
     let list = format!("map {{\n piece \"{FLAT}\" count=2\n}}");
-    // another seed, another system, another colour mode: none of them is this piece
+    // another seed, another system, another colour: none of them is this piece
     for (s, sys, c) in [
-        (seed + 1, "db", Colour::Multi),
-        (seed, "ol", Colour::Multi),
+        (seed + 1, "db", Colour::Multicolour),
+        (seed, "ol", Colour::Multicolour),
         (seed, "db", Colour::Single),
     ] {
         let shelf = shelf_of(&[(FLAT, s, sys, c, 2)]);
@@ -296,7 +296,7 @@ fn the_same_piece_means_tile_seed_system_and_colour_mode() {
         assert_eq!(p.kinds[0].count, 2, "{s} {sys} {}", c.word());
     }
     // a seed on the piece names the piece you own
-    let shelf = shelf_of(&[(FLAT, 9, "db", Colour::Multi, 1)]);
+    let shelf = shelf_of(&[(FLAT, 9, "db", Colour::Multicolour, 1)]);
     let p = plan_with(
         &format!("map {{\n piece \"{FLAT}\" seed=9 count=2\n}}"),
         &Overrides::default(),
@@ -307,10 +307,10 @@ fn the_same_piece_means_tile_seed_system_and_colour_mode() {
         (p.kinds[0].seed_used, p.kinds[0].have, p.kinds[0].count),
         (9, 1, 1)
     );
-    // the single-colour mode of the list counts single-colour prints
+    // the single-colour of the list counts single-colour prints
     let shelf = shelf_of(&[(FLAT, seed, "db", Colour::Single, 2)]);
     let single = plan_with(
-        &format!("{list}\nplates mode=single"),
+        &format!("{list}\nplates colour=single"),
         &Overrides::default(),
         Some(&shelf),
     );
@@ -337,7 +337,7 @@ fn a_multicolour_piece_wanted_where_only_single_colour_is_owned_still_prints_and
         Some(&shelf),
     )
     .unwrap();
-    assert_eq!(p.settings.mode, Mode::Multicolour);
+    assert_eq!(p.settings.colour, Colour::Multicolour);
     let k = &p.kinds[0];
     assert_eq!(
         (k.have, k.count, k.other_colour),
@@ -355,7 +355,7 @@ fn nothing_to_print_because_it_is_all_on_the_shelf_is_said_and_skip_still_skips(
     .unwrap()
     .kinds[0]
         .seed_used;
-    let shelf = shelf_of(&[(FLAT, seed, "db", Colour::Multi, 3)]);
+    let shelf = shelf_of(&[(FLAT, seed, "db", Colour::Multicolour, 3)]);
     let e = plan_with(
         &format!("map {{\n piece \"{FLAT}\" count=3\n}}"),
         &Overrides::default(),
@@ -399,7 +399,7 @@ fn a_winter_tree_has_no_leaf_material_so_it_fits_a_printer_with_fewer_filaments(
         let plan = plan_of(
             &format!("map {{\n piece \"{p}\"\n}}"),
             &Overrides {
-                mode: Some(Mode::Single),
+                colour: Some(Colour::Single),
                 ..Overrides::default()
             },
         )
@@ -412,7 +412,7 @@ fn a_winter_tree_has_no_leaf_material_so_it_fits_a_printer_with_fewer_filaments(
     // earth and wood fit a printer of three filaments where a leafy tree (earth, wood, leaf, rock?) may not
     let on = plan_of(
         &format!(
-            "map {{\n piece \"{bare}\"\n}}\nplates printer=\"prusa/mk4-mmu3\" mode=\"multicolour\""
+            "map {{\n piece \"{bare}\"\n}}\nplates printer=\"prusa/mk4-mmu3\" colour=\"multicolour\""
         ),
         &Overrides::default(),
     );
@@ -423,7 +423,7 @@ fn a_winter_tree_has_no_leaf_material_so_it_fits_a_printer_with_fewer_filaments(
 #[test]
 fn a_pinned_piece_stays_where_it_was_dropped_and_the_rest_pack_around_it() {
     let list = format!(
-        "map {{\n piece p1 \"{FLAT}\" at=\"(0sq, 0sq)\"\n piece p2 \"{FLAT}\" at=\"(1sq, 0sq)\"\n piece p3 \"{FLAT}\" at=\"(2sq, 0sq)\"\n piece p4 \"lib:tests/ground/1x1-soil\" at=\"(3sq, 0sq)\"\n}}\nplates printer=\"sovol/sv06\" mode=\"single\" {{\n pin p3 plate=1 at=\"(100mm, 20mm)\"\n pin p4 plate=2 at=\"(5mm, 5mm)\" turn=90\n}}"
+        "map {{\n piece p1 \"{FLAT}\" at=\"(0sq, 0sq)\"\n piece p2 \"{FLAT}\" at=\"(1sq, 0sq)\"\n piece p3 \"{FLAT}\" at=\"(2sq, 0sq)\"\n piece p4 \"lib:tests/ground/1x1-soil\" at=\"(3sq, 0sq)\"\n}}\nplates printer=\"sovol/sv06\" colour=\"single\" {{\n pin p3 plate=1 at=\"(100mm, 20mm)\"\n pin p4 plate=2 at=\"(5mm, 5mm)\" turn=90\n}}"
     );
     let p = plan_of(&list, &Overrides::default()).unwrap();
     // p1, p2 and p3 are copies of one tile: pieces, each its own copy
@@ -465,7 +465,7 @@ fn a_pinned_piece_stays_where_it_was_dropped_and_the_rest_pack_around_it() {
 #[test]
 fn a_pin_that_cannot_stand_where_it_says_is_left_out_and_said() {
     let list = format!(
-        "map {{\n piece p1 \"{FLAT}\" at=\"(0sq, 0sq)\"\n piece p2 \"{FLAT}\" at=\"(1sq, 0sq)\"\n piece p3 \"{FLAT}\" print=skip\n}}\nplates printer=\"sovol/sv06\" mode=\"single\" {{\n pin p1 plate=1 at=\"(50mm, 50mm)\"\n pin p2 plate=1 at=\"(60mm, 55mm)\"\n pin p3 plate=1 at=\"(1mm, 1mm)\"\n}}"
+        "map {{\n piece p1 \"{FLAT}\" at=\"(0sq, 0sq)\"\n piece p2 \"{FLAT}\" at=\"(1sq, 0sq)\"\n piece p3 \"{FLAT}\" print=skip\n}}\nplates printer=\"sovol/sv06\" colour=\"single\" {{\n pin p1 plate=1 at=\"(50mm, 50mm)\"\n pin p2 plate=1 at=\"(60mm, 55mm)\"\n pin p3 plate=1 at=\"(1mm, 1mm)\"\n}}"
     );
     let p = plan_of(&list, &Overrides::default()).unwrap();
     assert_eq!(p.loose_pins.len(), 1);

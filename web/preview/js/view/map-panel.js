@@ -41,12 +41,12 @@ function held(v) {
   return last.current;
 }
 
-/** The have or to-print pill of a piece (caution yellow where only the other colour mode is on the shelf). */
+/** The have or to-print pill of a piece (caution yellow where only the other colour is on the shelf). */
 /** @type {Record<string, string>} */
 const TITLES = {
-  have: 'A print you own is this piece (tile, seed, system and colour mode): it is left off the plates',
+  have: 'A print you own is this piece (tile, seed, system and colour): it is left off the plates',
   need: 'It prints',
-  other: 'You own this tile and seed in the other colour mode; it prints unless you leave it off',
+  other: 'You own this tile and seed in the other colour; it prints unless you leave it off',
   skip: 'print=skip: it stays on the map and off the plates',
 };
 export const Pill = (/** @type {{ state: string }} */ { state }) => {
@@ -284,7 +284,7 @@ function PropView(/** @type {LevelProps & { p: Piece, kind: string }} */ { m, ac
         ? html`<p class="inv-have">${h ? haveLine(h) : ''}</p>
           <div class="mp-chips">${mine.map((o) => html`<button type="button" key=${o.seed} class=${`mp-chip${o.seed === p.seedUsed ? ' on' : ''}`} title=${`Same as the ${o.have} you have: this piece is on your shelf`} aria-pressed=${String(o.seed === p.seedUsed)} disabled=${ro}
             onClick=${() => act.setPiece(p.id, { seed: o.seed }, `${p.name}: seed ${o.seed}, same as one you have`)}>${`${o.seed}${o.have > 1 ? ` ×${o.have}` : ''}`}</button>`)}</div>`
-        : html`<p class="note">You own none of this tile in this system and colour mode.</p>`}
+        : html`<p class="note">You own none of this tile in this system and colour.</p>`}
       <${PieceSeed} p=${p} ro=${ro} act=${act} strip=${strip} />
       <div class="mp-row wrap">
         <${Button} text="New variant" run=${() => act.variants('piece')} disabled=${ro} />

@@ -30,7 +30,7 @@ export const FILTERS = [
   ['all', 'All', 'Every piece'],
   ['print', 'To print', 'The pieces that print'],
   ['have', 'Have', 'The pieces a print you own stands for'],
-  ['other', 'Other colour', 'The pieces you own only in the other colour mode (they print)'],
+  ['other', 'Other colour', 'The pieces you own only in the other colour (they print)'],
 ];
 /** What a map's list shows until its user chooses: by name, every piece, no search. */
 export const DEFAULT_LIST = Object.freeze({ sort: 'name', filter: 'all', query: '' });

@@ -15,9 +15,10 @@ pub mod wire;
 
 use std::path::{Path, PathBuf};
 
-use dt_doc::inventory::{Colour, Identity, Shelf};
-use dt_doc::map::{DEFAULT_PRINTER, Group, Mode, PrintList, PrintMode};
+use dt_doc::inventory::{Identity, Shelf};
+use dt_doc::map::{DEFAULT_PRINTER, Group, PrintList, PrintMode};
 use dt_kit::Material;
+use dt_lang::Colour;
 
 use dt_eval::source::{LIB, Source};
 use dt_eval::{Diag, Machine, Options};
@@ -30,8 +31,8 @@ pub struct Overrides {
     pub printer: Option<String>,
     /// A base system in place of the list's.
     pub system: Option<dt_lang::System>,
-    /// A print mode in place of the list's.
-    pub mode: Option<Mode>,
+    /// A colour in place of the list's.
+    pub colour: Option<Colour>,
     /// A grouping in place of the list's.
     pub group: Option<Group>,
     /// Spacing and margin, mm.
@@ -72,7 +73,7 @@ pub struct Settings {
     /// The base system pieces are built for, where a piece names none.
     pub system: dt_lang::System,
     /// Single colour or multicolour.
-    pub mode: Mode,
+    pub colour: Colour,
     /// How multicolour pieces are grouped.
     pub group: Group,
     /// Between two pieces, mm.
@@ -109,7 +110,7 @@ pub struct Kind {
     pub want: u32,
     /// How many of those the inventory already holds, and so are left off.
     pub have: u32,
-    /// How many of this tile and seed you have in the other colour mode (a
+    /// How many of this tile and seed you have in the other colour (a
     /// piece wanted in multicolour and owned in single colour is `have, single
     /// colour`, and still prints unless you decide otherwise).
     pub other_colour: u32,
@@ -181,15 +182,6 @@ impl Kind {
             system: self.system,
             colour,
         }
-    }
-}
-
-/// The colour mode a print mode makes.
-#[must_use]
-pub const fn colour_of(mode: Mode) -> Colour {
-    match mode {
-        Mode::Single => Colour::Single,
-        Mode::Multicolour => Colour::Multi,
     }
 }
 
@@ -359,13 +351,13 @@ pub fn plan(
         .or_else(|| pl.system.as_ref().map(|s| s.value))
         .unwrap_or(ctx.base.system);
     let slots = machine.as_ref().map_or(1, Machine::slot_count);
-    let mode = ov
-        .mode
-        .or_else(|| pl.mode.as_ref().map(|m| m.value))
+    let colour = ov
+        .colour
+        .or_else(|| pl.colour.as_ref().map(|m| m.value))
         .unwrap_or(if slots > 1 {
-            Mode::Multicolour
+            Colour::Multicolour
         } else {
-            Mode::Single
+            Colour::Single
         });
     let group = ov
         .group
@@ -387,7 +379,6 @@ pub fn plan(
         .inventory
         .or_else(|| pl.inventory.as_ref().map(|g| g.value))
         .unwrap_or(true);
-    let colour = colour_of(mode);
 
     let mut kinds: Vec<Kind> = Vec::new();
     let mut skipped = Vec::new();
@@ -550,7 +541,7 @@ pub fn plan(
         });
     }
     // the printer's filaments, before anything builds
-    if mode == Mode::Multicolour {
+    if colour == Colour::Multicolour {
         for k in &kinds {
             if k.estimate.len() > slots as usize {
                 let names: Vec<&str> = k.estimate.iter().map(|m| m.name()).collect();
@@ -567,9 +558,9 @@ pub fn plan(
                     slots
                 );
                 let help = if slots == 1 {
-                    "print in single colour (`mode=\"single\"`), or choose a printer with an AMS such as bambu/x1c-ams".to_owned()
+                    "print in single colour (`colour=\"single\"`), or choose a printer with an AMS such as bambu/x1c-ams".to_owned()
                 } else {
-                    "print in single colour (`mode=\"single\"`), or choose a printer with more slots".to_owned()
+                    "print in single colour (`colour=\"single\"`), or choose a printer with more slots".to_owned()
                 };
                 errors.push(match span {
                     Some(s) => Diag::at(
@@ -632,7 +623,7 @@ pub fn plan(
         settings: Settings {
             machine,
             system,
-            mode,
+            colour,
             group,
             gap,
             margin,
@@ -735,7 +726,7 @@ pub fn spec_of(settings: &Settings) -> Result<Spec, Diag> {
         margin: settings.margin,
         turn: settings.turn,
         slots: settings.machine.slot_count(),
-        mode: settings.mode,
+        colour: settings.colour,
         group: settings.group,
     })
 }

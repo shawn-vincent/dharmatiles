@@ -3,9 +3,9 @@
 // of each system, the have and need pills, the lines the tile level and the plates say, and what the inventory
 // document's view lists once its filters are applied.  editor/inventory.js draws it.
 //
-// The program adds the log up (the pieces: tile, seed, system, colour mode, how many are on the shelf, how many
+// The program adds the log up (the pieces: tile, seed, system, colour, how many are on the shelf, how many
 // were printed, failed or lost); the page never counts a log itself.  A piece is the same piece when its tile,
-// seed, system and colour mode are the same: DungeonBlocks and OpenLOCK never count for each other, and a
+// seed, system and colour are the same: DungeonBlocks and OpenLOCK never count for each other, and a
 // multicolour piece wanted where only single colour is owned is "have, single colour", left for you to decide.
 
 /** @typedef {import('./api').InventoryRow} Row  one piece of the log, added up by the program */
@@ -16,7 +16,7 @@ const plural = (/** @type {number} */ n, /** @type {string} */ one, many = `${on
 
 export const SYSTEMS = [['db', 'DungeonBlocks'], ['ol', 'OpenLOCK']];
 export const systemName = (/** @type {string | null | undefined} */ s) => (s === 'ol' ? 'OpenLOCK' : 'DungeonBlocks');
-export const colourName = (/** @type {string} */ c) => (c === 'multi' ? 'multicolour' : 'single colour');
+export const colourName = (/** @type {string} */ c) => (c === 'multicolour' ? 'multicolour' : 'single colour');
 
 /**
  * How the log names a tile: `lib:tiles/ground/1x1-grass` for the library's, `home:meadows/glade` for one in
@@ -68,26 +68,26 @@ export const exists = (inv) => inv?.state === 'read' || inv?.state === 'broken';
 /** My tiles' folder, as the inventory says it (empty where there is no home folder). @param {InventoryState | null | undefined} inv */
 export const homeOf = (inv) => (inv && inv.state !== 'unavailable' ? inv.home : '');
 
-/** The colour mode the log last used, when it reads. @param {InventoryState | null | undefined} inv */
+/** The colour the log last used, when it reads. @param {InventoryState | null | undefined} inv */
 export const lastColourOf = (inv) => (inv?.state === 'read' ? inv.lastColour : null);
 
 /** The pieces of the inventory that are about `canon` (any system), or all of them. */
 export const piecesOf = (/** @type {Shelf} */ inv, /** @type {string | null | undefined} */ canon) => (inv && 'pieces' in inv ? inv.pieces || [] : []).filter((p) => canon == null || p.tile === canon);
 
 /**
- * What you have of a tile in a system: `{have, single, multi, seeds, printed, failed, gone, edited, missing}`;
+ * What you have of a tile in a system: `{have, single, multicolour, seeds, printed, failed, gone, edited, missing}`;
  * `seeds` are the distinct seeds on the shelf, each `{seed, colour, have}`, newest first as the log wrote them.
  */
 /** @param {Shelf} inv @param {string} canon @param {string} system */
 export function tileHave(inv, canon, system) {
   const ps = piecesOf(inv, canon).filter((p) => p.system === system);
-  const out = { have: 0, single: 0, multi: 0, seeds: /** @type {{ seed: *, colour: *, have: * }[]} */ ([]), printed: 0, failed: 0, gone: 0, edited: false, missing: false, any: ps.length > 0 };
+  const out = { have: 0, single: 0, multicolour: 0, seeds: /** @type {{ seed: *, colour: *, have: * }[]} */ ([]), printed: 0, failed: 0, gone: 0, edited: false, missing: false, any: ps.length > 0 };
   for (const p of ps) {
     out.printed += p.printed; out.failed += p.failed; out.gone += p.gone;
     out.missing ||= !!p.missing;
     if (p.have > 0) {
       out.have += p.have;
-      out[p.colour === 'multi' ? 'multi' : 'single'] += p.have;
+      out[p.colour] += p.have;
       out.seeds.push({ seed: p.seed, colour: p.colour, have: p.have });
       out.edited ||= !!p.edited;
     }
@@ -107,7 +107,7 @@ export const seedsText = (/** @type {{ seed: number, have: number }[]} */ seeds)
 /** @param {ReturnType<typeof tileHave>} h */
 export function haveLine(h) {
   if (!h.have) return h.failed || h.gone ? `none on the shelf (${[h.failed ? `${h.failed} failed` : '', h.gone ? `${h.gone} gone` : ''].filter(Boolean).join(', ')})` : 'none printed yet';
-  const modes = h.single && h.multi ? ` (${h.single} single colour, ${h.multi} multicolour)` : h.multi ? ' in multicolour' : '';
+  const modes = h.single && h.multicolour ? ` (${h.single} single colour, ${h.multicolour} multicolour)` : h.multicolour ? ' in multicolour' : '';
   return `${h.have} printed${modes} · seeds ${seedsText(h.seeds)}`;
 }
 
@@ -127,16 +127,16 @@ export function pill(inv, path, system) {
 /**
  * What one tile of a print list says against the shelf (the plates panel): the kind the plan sent
  * (`{want, have, count, otherColour}`) as `{kind, text}`: `have 2 · 1 to print`, or the caution
- * `have, single colour` where the shelf holds only the other colour mode.
- * @param {Pick<import('./api').PlanKind, 'have' | 'count' | 'otherColour'>} k @param {string | null} mode
+ * `have, single colour` where the shelf holds only the other colour.
+ * @param {Pick<import('./api').PlanKind, 'have' | 'count' | 'otherColour'>} k @param {string | null} colour
  */
-export function wantLine(k, mode) {
+export function wantLine(k, colour) {
   /** @type {string[]} */
   const parts = [];
   if (k.have > 0) parts.push(`have ${k.have}`);
   parts.push(`${k.count} to print`);
   const other = k.otherColour > 0 && k.have === 0;
-  if (other) parts.unshift(`have, ${mode === 'multicolour' ? 'single colour' : 'multicolour'}`);
+  if (other) parts.unshift(`have, ${colour === 'multicolour' ? 'single colour' : 'multicolour'}`);
   return { caution: other, text: parts.join(' · ') };
 }
 
@@ -153,7 +153,7 @@ export function plateTotals(p) {
 
 /** @typedef {{ system: string, colour: string | null, show: string }} Filters */
 
-/** The filters of the view: a system, a colour mode (null: both), and what to list (`have`, `off` the shelf, or `all`). */
+/** The filters of the view: a system, a colour (null: both), and what to list (`have`, `off` the shelf, or `all`). */
 export const defaultFilters = (/** @type {string | null | undefined} */ system) => ({ system: system || 'db', colour: null, show: 'all' });
 
 /** Does a piece pass the filters? */

@@ -30,7 +30,7 @@ fn a_print_list_opens_on_its_plates_and_its_settings_rewrite_its_file() {
     let file = dir.join("kit.dmap");
     std::fs::write(
         &file,
-        "dharmatiles version=1\nmap {\n    // forty flat squares\n    piece \"lib:tests/ground/1x1-flat\" count=40\n}\nplates printer=\"sovol/sv06\" mode=\"single\"\n",
+        "dharmatiles version=1\nmap {\n    // forty flat squares\n    piece \"lib:tests/ground/1x1-flat\" count=40\n}\nplates printer=\"sovol/sv06\" colour=\"single\"\n",
     )
     .unwrap();
     let path = file.to_string_lossy().into_owned();
@@ -43,7 +43,7 @@ fn a_print_list_opens_on_its_plates_and_its_settings_rewrite_its_file() {
     assert_eq!(plates_doc(&t).ground.size_mm, Some([220.0, 220.0]));
     assert_eq!(p.layout[0].pieces.len(), 25);
     assert_eq!(p.layout[1].pieces.len(), 15);
-    assert_eq!(p.settings.mode, "single");
+    assert_eq!(p.settings.colour, dt_lang::Colour::Single);
     assert!(p.slot_check.ok);
     assert_eq!(p.format, "stl", "the SV06 is not a Bambu machine");
     assert!(p.printers.len() > 25, "the chooser's profiles");
@@ -126,7 +126,7 @@ fn a_print_list_that_does_not_plan_still_offers_its_printers() {
     let file = dir.join("kit.dmap");
     std::fs::write(
         &file,
-        "dharmatiles version=1\nmap {\n piece \"lib:tests/plants/1x1-soil+grass\"\n}\nplates printer=\"sovol/sv06\" mode=\"multicolour\"\n",
+        "dharmatiles version=1\nmap {\n piece \"lib:tests/plants/1x1-soil+grass\"\n}\nplates printer=\"sovol/sv06\" colour=\"multicolour\"\n",
     )
     .unwrap();
     let path = file.to_string_lossy().into_owned();
@@ -160,7 +160,7 @@ fn a_file_that_changes_while_a_plan_is_made_is_a_change_the_worker_still_sees() 
     let file = dir.join("kit.dmap");
     std::fs::write(
         &file,
-        "dharmatiles version=1\nmap {\n    piece \"lib:tests/ground/1x1-flat\" at=\"(0sq, 0sq)\"\n}\nplates printer=\"sovol/sv06\" mode=\"single\"\n",
+        "dharmatiles version=1\nmap {\n    piece \"lib:tests/ground/1x1-flat\" at=\"(0sq, 0sq)\"\n}\nplates printer=\"sovol/sv06\" colour=\"single\"\n",
     )
     .unwrap();
     let path = file.to_string_lossy().into_owned();

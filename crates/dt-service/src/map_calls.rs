@@ -276,7 +276,7 @@ fn words_for(
         let s = rs.fresh(
             &piece.canon,
             piece.system,
-            &piece.colour,
+            piece.colour,
             Some(piece.seed_used),
         )?;
         words.push(("seed", i64::try_from(s).ok().map(Prop::Int)));
@@ -373,12 +373,12 @@ pub fn add(host: &impl ListHost, v: MapsAddReq) -> Result<MapsPieced, Refusal> {
             (Some(s), _, _) => Some(s),
             (None, Some(SeedWord::Fresh), Some(r)) => {
                 let (_, _, tile_seed, _) = own(sys)?;
-                Some(r.fresh(&canon, sys, &r.scene().colour.clone(), Some(tile_seed))?)
+                Some(r.fresh(&canon, sys, r.scene().colour, Some(tile_seed))?)
             }
             (None, Some(SeedWord::IfNeeded), Some(r)) => {
-                let colour = r.scene().colour.clone();
-                match r.taken_seed(&canon, sys, &colour) {
-                    Some(on_map) => Some(r.fresh(&canon, sys, &colour, on_map)?),
+                let colour = r.scene().colour;
+                match r.taken_seed(&canon, sys, colour) {
+                    Some(on_map) => Some(r.fresh(&canon, sys, colour, on_map)?),
                     None => None,
                 }
             }

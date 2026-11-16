@@ -776,7 +776,7 @@ fn rename(text: &str, doc: &KdlDocument, id: &str, new: &str) -> Result<Done, Ed
 /// The program's fixes laid into `text`, the text they were made for: each writes its replacement over its bytes,
 /// and only where the text still reads what the fix saw (`was`).  A fix that overlaps one already made waits
 /// (`deferred`), and the same fix twice is made once.
-fn fix(text: &str, fixes: &[Fix]) -> Result<Done, EditError> {
+pub(super) fn fix(text: &str, fixes: &[Fix]) -> Result<Done, EditError> {
     let mut order: Vec<&Fix> = fixes.iter().collect();
     order.sort_by_key(|f| (f.offset, f.len));
     order.dedup_by(|a, b| a.offset == b.offset && a.len == b.len && a.replacement == b.replacement);

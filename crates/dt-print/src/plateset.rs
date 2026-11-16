@@ -68,7 +68,7 @@ pub struct PlateSet<'a> {
     /// How many plates.
     pub plates: usize,
     /// Each material in its own filament, or one filament and no paint.
-    pub multicolour: bool,
+    pub colour: dt_lang::Colour,
     /// What the files say they were made from.
     pub record: &'a BuildRecord,
 }
@@ -235,7 +235,7 @@ pub fn plate_3mf(set: &PlateSet, plate: usize, palette: &Palette) -> Vec<u8> {
         esc(&set.record.engine),
         esc(set.title),
         plate + 1,
-        if set.multicolour {
+        if set.colour == dt_lang::Colour::Multicolour {
             "multicolour"
         } else {
             "single colour"
@@ -245,7 +245,7 @@ pub fn plate_3mf(set: &PlateSet, plate: usize, palette: &Palette) -> Vec<u8> {
         esc(&set.record.target())
     );
     x.push_str(" <resources>\n");
-    if set.multicolour {
+    if set.colour == dt_lang::Colour::Multicolour {
         x.push_str("  <basematerials id=\"1\">\n");
         for m in &used {
             let [r, g, b] = palette.colour(*m).map(byte);
@@ -270,7 +270,7 @@ pub fn plate_3mf(set: &PlateSet, plate: usize, palette: &Palette) -> Vec<u8> {
         vertices(&mut x, part.mesh, mid);
         x.push_str("    </vertices>\n    <triangles>\n");
         for (t, m) in part.mesh.triangles.iter().zip(part.materials) {
-            if set.multicolour {
+            if set.colour == dt_lang::Colour::Multicolour {
                 let u = used.iter().position(|q| q == m).unwrap_or(0);
                 let _ = writeln!(
                     x,
@@ -377,7 +377,7 @@ pub fn bambu_plates(
     }
     let used = used_of(set);
     // single colour has no materials to slot: one filament, the palette's single-colour grey
-    let fil = if set.multicolour {
+    let fil = if set.colour == dt_lang::Colour::Multicolour {
         filaments(&used)
     } else {
         Vec::new()
@@ -386,7 +386,7 @@ pub fn bambu_plates(
         let [r, g, b] = [r, g, b].map(byte);
         format!("#{r:02X}{g:02X}{b:02X}")
     };
-    let slots: Vec<String> = if set.multicolour {
+    let slots: Vec<String> = if set.colour == dt_lang::Colour::Multicolour {
         fil.iter().map(|m| hex(palette.colour(*m))).collect()
     } else {
         vec![hex(palette.single())]
@@ -418,7 +418,7 @@ pub fn bambu_plates(
         vertices(&mut o, part.mesh, mid);
         o.push_str("    </vertices>\n    <triangles>\n");
         for (t, m) in part.mesh.triangles.iter().zip(part.materials) {
-            if set.multicolour {
+            if set.colour == dt_lang::Colour::Multicolour {
                 let u = used.iter().position(|q| q == m).unwrap_or(0);
                 let _ = writeln!(
                     o,
@@ -504,7 +504,7 @@ pub fn bambu_plates(
         e = esc(&set.record.engine),
         n = set.plates,
         s = esc(&set.record.target()),
-        m = if set.multicolour {
+        m = if set.colour == dt_lang::Colour::Multicolour {
             format!(
                 "filaments {}",
                 fil.iter()

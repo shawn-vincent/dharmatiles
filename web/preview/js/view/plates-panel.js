@@ -39,14 +39,14 @@ const Printer = (/** @type {SectionProps} */ { m, p, ro, act }) => {
 <//>`;
 };
 
-const Mode = (/** @type {Omit<SectionProps, 'm'>} */ { p, ro, act }) => {
+const ColourSection = (/** @type {Omit<SectionProps, 'm'>} */ { p, ro, act }) => {
   const sc = p.planned ? p.slotCheck : null;
-  const mode = 'mode' in p ? p.mode : null;
+  const colour = 'colour' in p ? p.colour : null;
   const group = 'group' in p ? p.group : null;
-  return html`<${Section} title="Print mode">
-    <${Seg} label="Colour" options=${[['single', 'Single colour', 'One filament, no paint'], ['multicolour', 'Multicolour', 'Each material in its own filament']]} current=${mode} on=${(/** @type {string | null} */ v) => act.set('mode', v)} disabled=${ro} />
-    ${mode === 'multicolour' ? html`<${Seg} label="Group" options=${[['filament', 'By filament', 'Pieces that share filaments go together, then large to small'], ['size', 'By size', 'Large to small, whatever the filaments']]} current=${group} on=${(/** @type {string | null} */ v) => act.set('group', v)} disabled=${ro} />` : null}
-    ${mode === 'multicolour' && sc ? html`<${Note} cls=${sc.ok ? 'ok' : 'bad'}>${sc.ok ? `The most any piece needs is ${plural(sc.need, 'filament')}; the printer has ${sc.have}.` : `A piece needs ${sc.need} filaments; the printer has ${sc.have}. Print in single colour or choose a printer with more.`}<//>` : null}
+  return html`<${Section} title="Colour and grouping">
+    <${Seg} label="Colour" options=${[['single', 'Single colour', 'One filament, no paint'], ['multicolour', 'Multicolour', 'Each material in its own filament']]} current=${colour} on=${(/** @type {string | null} */ v) => act.set('colour', v)} disabled=${ro} />
+    ${colour === 'multicolour' ? html`<${Seg} label="Group" options=${[['filament', 'By filament', 'Pieces that share filaments go together, then large to small'], ['size', 'By size', 'Large to small, whatever the filaments']]} current=${group} on=${(/** @type {string | null} */ v) => act.set('group', v)} disabled=${ro} />` : null}
+    ${colour === 'multicolour' && sc ? html`<${Note} cls=${sc.ok ? 'ok' : 'bad'}>${sc.ok ? `The most any piece needs is ${plural(sc.need, 'filament')}; the printer has ${sc.have}.` : `A piece needs ${sc.need} filaments; the printer has ${sc.have}. Print in single colour or choose a printer with more.`}<//>` : null}
   <//>`;
 };
 
@@ -93,7 +93,7 @@ const Plates = (/** @type {PlannedProps} */ { m, p, act }) => {
       const what = [...counts].map(([n, c]) => `${c} × ${n}`).join(', ');
       return html`<button type="button" key=${pl.plate} class=${`pl-plate${on ? ' on' : ''}`} aria-pressed=${String(on)} title=${`${on ? 'On the bed in the view' : 'Show this plate on the bed'}: ${what}`} onClick=${() => { if (!on) act.show(i); }}>
         ${p.bed ? html`<${Bed} m=${m} p=${p} pl=${pl} />` : null}
-        <b>${`Plate ${pl.plate}`}</b><span class="pl-n">${plural(pl.pieces.length, 'piece')}</span>${p.mode === 'multicolour' && pl.filaments.length ? html`<span class="pl-fil">${pl.filaments.join(' · ')}</span>` : null}</button>`;
+        <b>${`Plate ${pl.plate}`}</b><span class="pl-n">${plural(pl.pieces.length, 'piece')}</span>${p.colour === 'multicolour' && pl.filaments.length ? html`<span class="pl-fil">${pl.filaments.join(' · ')}</span>` : null}</button>`;
     })}</div>
     ${p.groupingCost ? html`<p class="note warn">${`Grouping by filament takes ${plural(p.groupingCost, 'more plate')} than packing by size. `}<button type="button" class="linkish" onClick=${() => act.set('group', 'size')}>Pack by size only</button></p>` : null}
     <p class=${`note${low ? ' warn' : ' ok'}`}>${low
@@ -144,9 +144,9 @@ const Inventory = (/** @type {SectionProps} */ { m, p, ro, act }) => {
       const rows = [];
       for (const k of p.kinds) {
         if (!(k.have > 0 || k.otherColour > 0)) continue;
-        const w = wantLine(k, p.mode);
+        const w = wantLine(k, p.colour);
         const sys = k.system ? `${systemName(k.system)}, seed ${k.seedUsed}` : undefined;
-        const tip = w.caution ? `${sys || ''}${sys ? '. ' : ''}You have this tile and seed in the other colour mode; it prints unless you leave it off (print=skip) or switch the mode` : sys;
+        const tip = w.caution ? `${sys || ''}${sys ? '. ' : ''}You have this tile and seed in the other colour; it prints unless you leave it off (print=skip) or switch the mode` : sys;
         rows.push(html`<div class=${`pl-kind${w.caution ? ' caution' : ''}`} title=${tip} key=${`k${rows.length}`}><b>${k.name}</b><span class="pl-kw">${k.want > k.count ? `${k.want} wanted` : `${k.want}`}</span><span class="pl-kt">${w.text}</span></div>`);
       }
       for (const h of p.held) rows.push(html`<div class="pl-kind" key=${`h${rows.length}`}><b>${h.name}</b><span class="pl-kw">${`${h.have}`}</span><span class="pl-kt">${`have ${h.have} · none to print`}</span></div>`);
@@ -154,7 +154,7 @@ const Inventory = (/** @type {SectionProps} */ { m, p, ro, act }) => {
     }
   }
   return html`<${Section} title="Inventory" cls="pl-inv">
-    <${Seg} label="Print" options=${[['check', 'Only what I don’t have', 'The count, less what your inventory holds of that exact piece (tile, seed, system, colour mode)'], ['ignore', 'Everything', 'Every piece the list names, whatever you have']]} current=${check ? 'check' : 'ignore'} on=${(/** @type {string | null} */ v) => act.set('inventory', v)} disabled=${ro} />
+    <${Seg} label="Print" options=${[['check', 'Only what I don’t have', 'The count, less what your inventory holds of that exact piece (tile, seed, system, colour)'], ['ignore', 'Everything', 'Every piece the list names, whatever you have']]} current=${check ? 'check' : 'ignore'} on=${(/** @type {string | null} */ v) => act.set('inventory', v)} disabled=${ro} />
     ${body}
   <//>`;
 };
@@ -193,7 +193,7 @@ const Export = (/** @type {PlannedProps} */ { m, p, act }) => {
   const busy = x.busy;
   const files = x.files;
   return html`<${Section} title="" cls="pl-export">
-    <button type="button" class="btn on" disabled=${busy || (p.mode === 'multicolour' && !p.slotCheck.ok)} title=${bambu ? 'One Bambu Studio project holding every plate' : 'One file per plate: every slicer reads an STL'} onClick=${() => act.doExport()}>${busy ? 'Exporting…' : bambu ? 'Export Bambu project' : `Export ${plural(p.layout.length, 'STL')}`}</button>
+    <button type="button" class="btn on" disabled=${busy || (p.colour === 'multicolour' && !p.slotCheck.ok)} title=${bambu ? 'One Bambu Studio project holding every plate' : 'One file per plate: every slicer reads an STL'} onClick=${() => act.doExport()}>${busy ? 'Exporting…' : bambu ? 'Export Bambu project' : `Export ${plural(p.layout.length, 'STL')}`}</button>
     ${bambu ? null : html`<button type="button" class="btn" disabled=${busy} title="One painted 3MF per plate, for a slicer that paints by material" onClick=${() => act.doExport('3mf')}>${`Export ${plural(p.layout.length, '3MF')}`}</button>`}
     <p class="note">${busy ? 'Building every piece in full, through the gate…' : bambu ? 'Every plate in one project; paint per triangle in multicolour.' : 'One STL per plate; single colour needs no paint.'}</p>
     ${x.error ? html`<p class="note bad">${x.error}</p>` : null}
@@ -218,7 +218,7 @@ export function PlatesPanel(/** @type {PanelProps} */ { m, act }) {
         ${!p.planned ? html`<p class="note bad">This list does not plan yet. You can still choose the printer and the mode here.</p>${why}` : null}
         ${ro ? html`<p class="note">This file cannot be changed here.</p>` : null}
         ${p.planned ? html`<${Plates} m=${m} p=${p} act=${act} /><${Pins} p=${p} ro=${ro} act=${act} /><${Export} m=${m} p=${p} act=${act} /><${After} m=${m} p=${p} act=${act} />` : null}
-        <${Pieces} m=${m} p=${p} ro=${ro} act=${act} /><${Inventory} m=${m} p=${p} ro=${ro} act=${act} /><${Printer} m=${m} p=${p} ro=${ro} act=${act} /><${Mode} p=${p} ro=${ro} act=${act} />
+        <${Pieces} m=${m} p=${p} ro=${ro} act=${act} /><${Inventory} m=${m} p=${p} ro=${ro} act=${act} /><${Printer} m=${m} p=${p} ro=${ro} act=${act} /><${ColourSection} p=${p} ro=${ro} act=${act} />
         ${p.planned ? html`<${Spacing} p=${p} ro=${ro} act=${act} />` : null}`}
     </div>`;
 }

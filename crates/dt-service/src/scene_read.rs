@@ -181,24 +181,21 @@ fn height_names(list: &PrintList, lib: &dyn Source) -> Vec<HeightName> {
         .collect()
 }
 
-/// The mode a list's plates would be in, as `single` or `multi` (the
-/// inventory's word).
+/// The colour a list's plates would print in.
 #[expect(
     clippy::disallowed_methods,
     reason = "permitted silence: a probe where a printer that does not read counts as one slot; the plan reports the printer where it is named"
 )]
-fn colour_of(list: &PrintList, printer: &str, host: &impl SceneHost) -> &'static str {
-    use dt_doc::map::Mode;
+fn colour_of(list: &PrintList, printer: &str, host: &impl SceneHost) -> dt_lang::Colour {
     let slots = machine(host, printer).map_or(1, |m| m.slot_count());
-    let mode = list.plates.mode.as_ref().map_or(
+    list.plates.colour.as_ref().map_or(
         if slots > 1 {
-            Mode::Multicolour
+            dt_lang::Colour::Multicolour
         } else {
-            Mode::Single
+            dt_lang::Colour::Single
         },
         |m| m.value,
-    );
-    dt_print::plates::colour_of(mode).word()
+    )
 }
 
 /// Say what the shelf holds of each piece, in the order written: copies of one piece share what you own, so the first
@@ -210,7 +207,7 @@ fn mark_shelf(
     pieces: &mut [ScenePiece],
     loaded: Option<dt_doc::inventory::Inventory>,
 ) -> (bool, usize, usize) {
-    use dt_doc::inventory::{Colour, Identity, Shelf};
+    use dt_doc::inventory::{Identity, Shelf};
     let shelf = loaded.as_ref().map(Shelf::of);
     let exists = shelf.is_some();
     let mut left: BTreeMap<Identity, u32> = BTreeMap::new();
@@ -218,11 +215,7 @@ fn mark_shelf(
     for p in pieces.iter_mut().filter(|p| p.error.is_none()) {
         if let Some(l) = &loaded {
             let mut by: BTreeMap<u64, u32> = BTreeMap::new();
-            let colour = if p.colour == "multi" {
-                Colour::Multi
-            } else {
-                Colour::Single
-            };
+            let colour = p.colour;
             for q in l.pieces() {
                 if q.have > 0
                     && q.id.tile == p.canon
@@ -241,11 +234,7 @@ fn mark_shelf(
             tile: p.canon.clone(),
             seed: p.seed_used,
             system: p.system,
-            colour: if p.colour == "multi" {
-                Colour::Multi
-            } else {
-                Colour::Single
-            },
+            colour: p.colour,
         };
         let mark = |state: &str, text: &str| ShelfMark {
             state: state.to_owned(),
@@ -420,7 +409,7 @@ pub fn read(host: &impl SceneHost, path: &str, list: &PrintList, rev: u64) -> Sc
             seed,
             seed_used,
             system,
-            colour: colour.to_owned(),
+            colour,
             cols,
             rows,
             sq,
@@ -472,7 +461,7 @@ pub fn read(host: &impl SceneHost, path: &str, list: &PrintList, rev: u64) -> Sc
         placed,
         bounds,
         heights: height_names(list, host.library()),
-        colour: colour.to_owned(),
+        colour,
         system: default_system,
         square_mm,
         printer: printer.clone(),

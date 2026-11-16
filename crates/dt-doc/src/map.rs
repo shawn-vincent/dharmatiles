@@ -8,7 +8,7 @@
 //!     piece "lib:tiles/water/1x1-water-corridor+grass" count=4 seed=12
 //!     piece "home:meadows/glade" count=1 system="ol"
 //! }
-//! plates printer="bambu/x1c-ams" system="db" mode=multicolour group=filament gap="3mm" margin="5mm"
+//! plates printer="bambu/x1c-ams" system="db" colour=multicolour group=filament gap="3mm" margin="5mm"
 //! ```
 //!
 //! A print list is a map whose pieces have no place yet.  A piece with `at`
@@ -20,7 +20,7 @@
 //! piece (no `count`).  The
 //! map may say `grid cols=8 rows=5` and `let $plinth "20dmm"` (a name for
 //! heights).  The `plates` line names the printer profile, the base system,
-//! the print mode and the spacing, every word of it optional, and may hold
+//! the colour and the spacing, every word of it optional, and may hold
 //! `pin p4 plate=1 at="(0mm, 5mm)"` lines: pieces the packer keeps where they
 //! were dropped.  Decoding keeps spans and goes on past a mistake, as a
 //! tile's does, so a file's mistakes come together.
@@ -325,26 +325,6 @@ impl PrintMode {
     }
 }
 
-/// Single colour or multicolour.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mode {
-    /// One filament, no paint.
-    Single,
-    /// Each material in its own filament.
-    Multicolour,
-}
-
-impl Mode {
-    /// As written.
-    #[must_use]
-    pub const fn word(self) -> &'static str {
-        match self {
-            Self::Single => "single",
-            Self::Multicolour => "multicolour",
-        }
-    }
-}
-
 /// How multicolour pieces are put on plates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Group {
@@ -373,7 +353,7 @@ pub struct Plates {
     /// The printer profile (`bambu/x1c-ams`).
     pub printer: Option<Spanned<String>>,
     /// Single colour or multicolour.
-    pub mode: Option<Spanned<Mode>>,
+    pub colour: Option<Spanned<dt_lang::Colour>>,
     /// How multicolour pieces are grouped.
     pub group: Option<Spanned<Group>>,
     /// Between two pieces, mm.
@@ -396,7 +376,7 @@ impl Default for Plates {
         Self {
             system: None,
             printer: None,
-            mode: None,
+            colour: None,
             group: None,
             gap: None,
             margin: None,
@@ -436,7 +416,7 @@ const MAP_KEYS: [&str; 4] = ["about", "grid", "let", "piece"];
 const PLATES_KEYS: [&str; 8] = [
     "system",
     "printer",
-    "mode",
+    "colour",
     "group",
     "gap",
     "margin",
@@ -973,11 +953,25 @@ impl Reader {
                     }
                 }
                 "printer" => into.printer = self.string("printer", e),
+                "colour" => {
+                    let words: Vec<(&str, dt_lang::Colour)> = dt_lang::Colour::ALL
+                        .iter()
+                        .map(|c| (c.word(), *c))
+                        .collect();
+                    into.colour = self.word("colour", e, &words);
+                }
                 "mode" => {
-                    into.mode = self.word(
-                        "mode",
-                        e,
-                        &[("single", Mode::Single), ("multicolour", Mode::Multicolour)],
+                    let err = self.err(
+                        dt_lang::codes::MAP,
+                        k.span(),
+                        "`mode` is now `colour`",
+                        "old word",
+                    );
+                    err.mend(
+                        k.span(),
+                        "colour",
+                        "`mode` is now `colour`: write `colour=single` or `colour=multicolour`"
+                            .to_owned(),
                     );
                 }
                 "group" => {
@@ -1354,7 +1348,7 @@ pub fn placed_line(
 }
 
 /// A new print list's text: the pieces, laid out on `printer` (the default
-/// where none) for `system`, in `mode` where one is given.
+/// where none) for `system`, in `colour` where one is given.
 #[must_use]
 pub fn new_list(
     version: &str,
@@ -1362,7 +1356,7 @@ pub fn new_list(
     lines: &[String],
     printer: Option<&str>,
     system: dt_lang::System,
-    mode: Option<Mode>,
+    colour: Option<dt_lang::Colour>,
 ) -> String {
     let mut t = format!(
         "dharmatiles version={}\n\nmap {{\n    about {}\n",
@@ -1379,8 +1373,8 @@ pub fn new_list(
         t.push_str(&format!(" printer={}", crate::inventory::quote(p)));
     }
     t.push_str(&format!(" system={system}"));
-    if let Some(m) = mode {
-        t.push_str(&format!(" mode={}", m.word()));
+    if let Some(m) = colour {
+        t.push_str(&format!(" colour={}", m.word()));
     }
     t.push('\n');
     t

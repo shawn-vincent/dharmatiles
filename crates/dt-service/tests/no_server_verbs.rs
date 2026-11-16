@@ -1342,7 +1342,8 @@ fn the_plates_settings_and_the_plate_in_view_are_set_by_verb_with_no_server_and_
 
 #[test]
 fn the_inventory_is_read_and_added_to_by_verb_through_the_store_with_no_server_and_no_disk() {
-    use dt_service::inventory::{ColourWord, InventoryState};
+    use dt_lang::Colour;
+    use dt_service::inventory::InventoryState;
     use dt_service::inventory_calls::{
         self, InventoryGoneReq, InventoryHaveReq, InventoryRelinkReq, InventoryReprintReq,
     };
@@ -1362,7 +1363,7 @@ fn the_inventory_is_read_and_added_to_by_verb_through_the_store_with_no_server_a
         &w,
         InventoryHaveReq {
             tile: tile.clone(),
-            colour: ColourWord::Single,
+            colour: Colour::Single,
             system: None,
             seed: None,
             count: Some(2),
@@ -1412,7 +1413,7 @@ fn the_inventory_is_read_and_added_to_by_verb_through_the_store_with_no_server_a
             tile: p.tile.clone(),
             seed: p.seed,
             system: p.system,
-            colour: ColourWord::Single,
+            colour: Colour::Single,
             note: Some("dropped".to_owned()),
             on: None,
         },
@@ -1424,7 +1425,7 @@ fn the_inventory_is_read_and_added_to_by_verb_through_the_store_with_no_server_a
             tile: p.tile.clone(),
             seed: p.seed + 1,
             system: p.system,
-            colour: ColourWord::Single,
+            colour: Colour::Single,
             note: None,
             on: None,
         },
@@ -1437,7 +1438,7 @@ fn the_inventory_is_read_and_added_to_by_verb_through_the_store_with_no_server_a
             tile: p.tile.clone(),
             seed: p.seed,
             system: p.system,
-            colour: ColourWord::Single,
+            colour: Colour::Single,
             note: None,
             on: Some("yesterday-ish".to_owned()),
         },
@@ -1476,7 +1477,7 @@ fn the_inventory_is_read_and_added_to_by_verb_through_the_store_with_no_server_a
             tile: "home:b".to_owned(),
             seed: p.seed,
             system: p.system,
-            colour: ColourWord::Single,
+            colour: Colour::Single,
             list: None,
             doc_rev: None,
         },
@@ -1493,7 +1494,7 @@ fn the_inventory_is_read_and_added_to_by_verb_through_the_store_with_no_server_a
         &w,
         InventoryHaveReq {
             tile,
-            colour: ColourWord::Single,
+            colour: Colour::Single,
             system: None,
             seed: None,
             count: None,

@@ -271,7 +271,7 @@ plates printer="bambu/x1c-ams"
         let mut cmd = env.apply(Command::new(exe), root);
         cmd.args(["inventory", "have"])
             .args(a)
-            .args(["--colour", "multi"])
+            .args(["--colour", "multicolour"])
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         crate::run(&mut cmd)?;
@@ -282,7 +282,7 @@ plates printer="bambu/x1c-ams"
         "gone",
         "home:crossing/grass",
         "--colour",
-        "multi",
+        "multicolour",
         "--note",
         "dropped on the floor",
     ])

@@ -1,6 +1,6 @@
 //! `dharmatiles inventory`: what you have printed.
 //!
-//! `list` adds the log up (by tile, system and colour mode, with the seeds you
+//! `list` adds the log up (by tile, system and colour, with the seeds you
 //! have); `have` adds a good print of each tile named (or a failed one with
 //! `--failed`); `gone` marks one lost; `relink` says a tile has another path
 //! now.  The file is `inventory.dinv` in My tiles; nothing is made until the
@@ -9,8 +9,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use dt_doc::inventory::{self as doc, Colour, Identity};
+use dt_doc::inventory::{self as doc, Identity};
 use dt_eval::Diag;
+use dt_lang::Colour;
 use dt_print::inventory as disk;
 
 use crate::cli::InventoryAction;
@@ -21,20 +22,11 @@ use dt_service::inventory_calls as calls;
 /// The command's choices, as the words the command line gives them.
 pub(crate) struct Choice {
     pub(crate) system: Option<String>,
-    pub(crate) colour: Option<String>,
+    pub(crate) colour: Option<Colour>,
     pub(crate) seed: Option<u64>,
     pub(crate) on: Option<String>,
     pub(crate) note: Option<String>,
     pub(crate) json: bool,
-}
-
-fn colour_of(word: Option<&str>) -> Result<Option<Colour>, String> {
-    match word {
-        None => Ok(None),
-        Some(w) => Colour::from_word(w)
-            .map(Some)
-            .ok_or_else(|| format!("`{w}` is not a colour mode: use `single` or `multi`")),
-    }
 }
 
 fn system_of(word: Option<&str>) -> Result<Option<dt_lang::System>, String> {
@@ -90,7 +82,7 @@ fn read(home: &Path) -> Result<(doc::Inventory, Option<PathBuf>), Vec<Diag>> {
     })
 }
 
-/// One line of the table `list` prints: a tile, system and colour mode, the pieces of its seeds added up.
+/// One line of the table `list` prints: a tile, system and colour, the pieces of its seeds added up.
 struct Row {
     tile: String,
     system: dt_lang::System,
@@ -103,11 +95,11 @@ struct Row {
     missing: bool,
 }
 
-/// The table's lines from the pieces (the same rows the page reads, grouped by tile, system and colour mode).
+/// The table's lines from the pieces (the same rows the page reads, grouped by tile, system and colour).
 fn rows(pieces: &[InventoryRow]) -> Vec<Row> {
     let mut by: BTreeMap<(String, dt_lang::System, Colour), Row> = BTreeMap::new();
     for p in pieces {
-        let colour = Colour::from(p.colour);
+        let colour = p.colour;
         let r = by
             .entry((p.tile.clone(), p.system, colour))
             .or_insert_with(|| Row {
@@ -154,13 +146,7 @@ fn list(home: &Path, c: &Choice, tile: Option<&str>, failures: bool) -> u8 {
             return ERROR;
         }
     };
-    let colour = match colour_of(c.colour.as_deref()) {
-        Ok(x) => x,
-        Err(e) => {
-            tell!("error: {e}");
-            return ERROR;
-        }
-    };
+    let colour = c.colour;
     let state = match calls::state_of(&docs(), &dt_eval::Files, home) {
         Ok(x) => x,
         Err(e) => return fail(&e, c.json),
@@ -173,7 +159,7 @@ fn list(home: &Path, c: &Choice, tile: Option<&str>, failures: bool) -> u8 {
     let shown: Vec<InventoryRow> = all
         .iter()
         .filter(|p| system.as_ref().is_none_or(|s| &p.system == s))
-        .filter(|p| colour.is_none_or(|k| Colour::from(p.colour) == k))
+        .filter(|p| colour.is_none_or(|k| p.colour == k))
         .filter(|p| tile.is_none_or(|t| p.tile.contains(t)))
         .filter(|p| !failures || p.failed > 0)
         .cloned()
@@ -291,13 +277,7 @@ fn write_lines(
             return ERROR;
         }
     };
-    let colour = match colour_of(c.colour.as_deref()) {
-        Ok(x) => x,
-        Err(e) => {
-            tell!("error: {e}");
-            return ERROR;
-        }
-    };
+    let colour = c.colour;
     let (inv, _) = match read(home) {
         Ok(x) => x,
         Err(e) => return fail(&e, c.json),

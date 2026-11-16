@@ -5,7 +5,7 @@ import {
 } from '../js/map-model.js';
 
 const piece = (over = {}) => ({
-  id: 'p1', name: 'grass', canon: 'lib:tiles/ground/1x1-grass', seedUsed: 97, system: 'db', colour: 'multi', print: 'missing',
+  id: 'p1', name: 'grass', canon: 'lib:tiles/ground/1x1-grass', seedUsed: 97, system: 'db', colour: 'multicolour', print: 'missing',
   size: [35, 35], sq: 35, at: [0, 0], rot: 0, bottomMm: 0, ...over,
 });
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);

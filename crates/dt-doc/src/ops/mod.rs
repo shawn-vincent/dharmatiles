@@ -479,6 +479,11 @@ pub fn apply_with(reader: &dyn Reader, kind: Kind, text: &str, op: &Op) -> Resul
 }
 
 fn make(kind: Kind, text: &str, op: &Op) -> Result<Done, EditError> {
+    // the program's own fixes are laid in the text they were made for, whatever its kind: a document with a mistake is
+    // exactly the one that carries them, so they are made before it is read
+    if let Op::Fix(fixes) = op {
+        return tile::fix(text, fixes);
+    }
     match kind {
         Kind::Inventory => match op {
             Op::Append(lines) => {

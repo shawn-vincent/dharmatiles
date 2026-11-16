@@ -1,4 +1,4 @@
-// The inventory's model (js/inventory.js): how a tile is named in the log, what is had per system and colour mode,
+// The inventory's model (js/inventory.js): how a tile is named in the log, what is had per system and colour,
 // the pills, the plates' lines and what the document's view lists.
 
 import test from 'node:test';
@@ -12,11 +12,11 @@ const P = (tile, seed, system, colour, have, extra = {}) => ({ tile, seed, syste
 const inv = {
   state: 'read', home: '/Users/x/dharmatiles', path: '/Users/x/dharmatiles/inventory.dinv', id: 'ab6ca6099010d82a', lastColour: 'single',
   pieces: [
-    P('lib:tiles/ground/1x1-grass', 97, 'db', 'multi', 1),
-    P('lib:tiles/ground/1x1-grass', 12, 'db', 'multi', 0, { printed: 1, gone: 1 }),
+    P('lib:tiles/ground/1x1-grass', 97, 'db', 'multicolour', 1),
+    P('lib:tiles/ground/1x1-grass', 12, 'db', 'multicolour', 0, { printed: 1, gone: 1 }),
     P('lib:tiles/ground/1x1-grass', 7, 'ol', 'single', 2),
     P('lib:tiles/walls/1x1-wall-stone', 14, 'db', 'single', 1),
-    P('lib:tiles/cliffs/2x1-cliff', 4, 'db', 'multi', 1, { failed: 1, edited: true }),
+    P('lib:tiles/cliffs/2x1-cliff', 4, 'db', 'multicolour', 1, { failed: 1, edited: true }),
     P('home:meadows/glade', 3, 'db', 'single', 1, { missing: true }),
   ],
 };
@@ -33,7 +33,7 @@ test('a tile is named in the log the way the program names it', () => {
 test('what you have is per system: DungeonBlocks and OpenLOCK never count for each other', () => {
   const db = tileHave(inv, 'lib:tiles/ground/1x1-grass', 'db');
   assert.equal(db.have, 1);
-  assert.deepEqual(db.seeds, [{ seed: 97, colour: 'multi', have: 1 }]);
+  assert.deepEqual(db.seeds, [{ seed: 97, colour: 'multicolour', have: 1 }]);
   assert.equal(db.gone, 1);
   const ol = tileHave(inv, 'lib:tiles/ground/1x1-grass', 'ol');
   assert.equal(ol.have, 2);
@@ -47,7 +47,7 @@ test('the tile level says what is printed and which seeds', () => {
   assert.equal(haveLine(tileHave(inv, 'lib:tiles/nothing/x', 'db')), 'none printed yet');
   assert.match(haveLine({ have: 0, failed: 1, gone: 1, seeds: [] }), /none on the shelf \(1 failed, 1 gone\)/);
   assert.equal(seedsText([{ seed: 7, have: 2 }, { seed: 12, have: 1 }, { seed: 97, have: 1 }]), '7 ×2, 12, 97');
-  const mixed = tileHave({ pieces: [P('a', 1, 'db', 'single', 2), P('a', 2, 'db', 'multi', 1)] }, 'a', 'db');
+  const mixed = tileHave({ pieces: [P('a', 1, 'db', 'single', 2), P('a', 2, 'db', 'multicolour', 1)] }, 'a', 'db');
   assert.match(haveLine(mixed), /3 printed \(2 single colour, 1 multicolour\)/);
 });
 
