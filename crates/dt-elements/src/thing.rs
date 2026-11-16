@@ -1314,7 +1314,8 @@ mod tests {
                     let item = Seed::new(seed);
                     let d = t.draw(&scene, item, &mut Rng::new(item), false).unwrap();
                     let r = d.radius_mm() / s;
-                    if !(r >= 0.5 * e.least.x.min(e.least.y) - 1e-9 && r <= t.placed_reach() + 1e-9) {
+                    if !(r >= 0.5 * e.least.x.min(e.least.y) - 1e-9 && r <= t.placed_reach() + 1e-9)
+                    {
                         bad.push(format!(
                             "{name} seed {seed}: the disc {r} is outside {:.3} to {:.3}",
                             0.5 * e.least.x.min(e.least.y),

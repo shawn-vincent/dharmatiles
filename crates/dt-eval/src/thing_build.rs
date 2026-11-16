@@ -462,7 +462,12 @@ mod tests {
             .collect();
         assert!(ids.iter().any(|i| i == "tile/tree/0"), "{ids:?}");
         let key = "tile/tree/0";
-        let s = subject(&src, "/t/mine.dtile", Which::Entry { key, child: None }, &opts);
+        let s = subject(
+            &src,
+            "/t/mine.dtile",
+            Which::Entry { key, child: None },
+            &opts,
+        );
         assert!(s.is_ok(), "{:?}", s.err().map(|r| format!("{r:?}")));
     }
 }

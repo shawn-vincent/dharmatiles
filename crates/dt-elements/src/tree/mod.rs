@@ -925,9 +925,8 @@ impl Thing for Tree {
     fn placed_reach(&self) -> f64 {
         let p = &self.p;
         // the crown's diameter, or the trunk's flared foot when that is wider
-        let across = |crown: f64, trunk: Option<f64>| {
-            trunk.map_or(crown, |t| crown.max(t * (1.0 + FLARE)))
-        };
+        let across =
+            |crown: f64, trunk: Option<f64>| trunk.map_or(crown, |t| crown.max(t * (1.0 + FLARE)));
         0.5 * across(p.width.hi(), p.trunk_width.as_ref().map(Draw::hi))
     }
 
