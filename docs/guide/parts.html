@@ -17,14 +17,14 @@
 <header class="hero">
   <div class="eyebrow">The tile language &middot; guide</div>
   <h1>Parts</h1>
-  <p class="lede">A part is a named, reusable stack: a <code>define</code> in a parts file that a tile brings in with <code>use</code>.</p>
+  <p class="lede">A part is a name for a thing or a layer: a <code>let</code> with a body, in a parts file that a tile brings in with <code>use</code>.</p>
 </header>
 <div class="margin">
 <nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
 <li><a href="#result">The result</a></li>
 <li><a href="#plainly">Say it plainly</a></li>
 <li><a href="#use">A <code>use</code> line names the file and the definitions it brings in</a></li>
-<li><a href="#define">A <code>define</code> is a stack with params, called like an element</a></li>
+<li><a href="#let-body">A <code>let</code> with a body names a thing or a layer, called like an element</a></li>
 <li><a href="#param-kind">A param is a name of a kind, from <code>kind=</code> or its default</a></li>
 <li><a href="#expert">Expert controls live in parts files</a></li>
 <li><a href="#errors-explained">Errors this page explains</a></li>
@@ -61,12 +61,12 @@
 <!-- /gen:guide-nav -->
 </details></nav>
 </div>
-<article class="doc guide" data-elements="use define">
+<article class="doc guide" data-elements="use let">
 <section id="result">
 <h2>The result</h2>
 <dt-example src="examples/guide/worked-path.dtile" overlay="lines regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 2"><img class="dtx-poster" src="../posters/34789d071fd6e2c854f59377c4ea39b2.jpg" alt="The tile this source builds, from above" width="800" height="1600" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 2"><img class="dtx-poster" src="../posters/f6ed31b34343f9d3883d50dde5799948.jpg" alt="The tile this source builds, from above" width="800" height="1600" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
 <span class="tk-node">use</span> <span class="tk-string">"parts/grass"</span> lawn
 
@@ -110,12 +110,12 @@
 <p>A bare path such as <code>"parts/grass"</code> is the bundled library, and <code>"lib:parts/grass"</code> says so explicitly. <code>"./mine"</code> or <code>"../shared/x"</code> is a file in the author's project. Anything else is an error.</p>
 </section>
 <section class="rule">
-<h3 id="define" data-explains="dt::define dt::param"><!--gen:anchors--><span id="dt-define"></span><span id="dt-param"></span><!--/gen:anchors-->A <code>define</code> is a stack with params, called like an element</h3>
-<p>A <code>define</code> has <code>param</code> lines and one <code>stack</code>. It is called like an element; its params are set as properties, and a place (<code>at=</code>) passes through to the elements inside it. A definition can call another. A definition whose stack is one thing is itself a thing, so it can be placed with <code>at=</code> or scattered: <code>scatter count=2 { oak }</code>. Definitions that call each other in a loop are an error (<a class="codelink" href="../e/loop.html"><code>dt::loop</code></a>).</p>
+<h3 id="let-body" data-explains="dt::retired dt::param"><!--gen:anchors--><span id="dt-retired"></span><span id="dt-param"></span><!--/gen:anchors-->A <code>let</code> with a body names a thing or a layer, called like an element</h3>
+<p>A <code>let</code> with a body has <code>param</code> lines and either one entry written bare or one <code>stack</code>. The body says what it names: one bare entry that is an unplaced thing (<code>let oak { tree … }</code>) names a thing, so it can be placed with <code>at=</code> or scattered (<code>scatter count=2 { oak }</code>); any other bare entry, and every <code>stack</code>, names a layer. Several entries are written in a <code>stack</code>, which is always a layer. It is called like an element; its params are set as properties, and a place (<code>at=</code>) passes through to the elements inside it. A definition can call another. Definitions that call each other in a loop are an error (<a class="codelink" href="../e/loop.html"><code>dt::loop</code></a>). A <code>let</code> has a value or a body, never both, and a body is never empty. The old word for this was <code>define</code>: it is refused (<a class="codelink" href="../e/retired.html"><code>dt::retired</code></a>) with the fix of writing <code>let</code> over it.</p>
 <pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
 <span class="tk-comment">// library/parts/grass.dtile</span>
-<span class="tk-node">define</span> lawn <span class="tk-punct">{</span>
+<span class="tk-node">let</span> lawn <span class="tk-punct">{</span>
     <span class="tk-node">param</span> length <span class="tk-string">"</span><span class="tk-number">3.5dmm</span><span class="tk-string"> .. </span><span class="tk-number">6.5dmm</span><span class="tk-string">"</span>   <span class="tk-comment">// blade length along the ground</span>
     <span class="tk-node">param</span> height <span class="tk-string">"</span><span class="tk-number">1.5dmm</span><span class="tk-string"> .. </span><span class="tk-number">2dmm</span><span class="tk-string">"</span>     <span class="tk-comment">// how tall a blade stands over the ground</span>
     <span class="tk-node">param</span> clearings <span class="tk-number">0</span>                 <span class="tk-comment">// patches of bare earth per square</span>
@@ -127,7 +127,7 @@
 <span class="tk-punct">}</span>
 
 <span class="tk-comment">// Long, tall blades: the species of 2x2-grass-tree.</span>
-<span class="tk-node">define</span> long-grass <span class="tk-punct">{</span>
+<span class="tk-node">let</span> long-grass <span class="tk-punct">{</span>
     <span class="tk-node">stack</span> <span class="tk-punct">{</span>
         <span class="tk-node">lawn</span> <span class="tk-property">length</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string"> .. </span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2dmm</span><span class="tk-string"> .. </span><span class="tk-number">3dmm</span><span class="tk-string">"</span>
     <span class="tk-punct">}</span>
@@ -142,13 +142,11 @@
 <pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
 <span class="tk-comment">// library/parts/trees.dtile</span>
-<span class="tk-node">define</span> oak <span class="tk-punct">{</span>
-    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
-        <span class="tk-node">tree</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + </span><span class="tk-number">59dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span>
-            <span class="tk-node">trunk</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">18dmm</span><span class="tk-string">"</span>
-            <span class="tk-node">crown</span> <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">44dmm</span><span class="tk-string">"</span> <span class="tk-property">clumps</span><span class="tk-punct">=</span><span class="tk-number">60</span> <span class="tk-property">shape</span><span class="tk-punct">=</span>wide
-            <span class="tk-node">branch</span> <span class="tk-property">split</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">34deg</span><span class="tk-string">"</span> <span class="tk-property">eagerness</span><span class="tk-punct">=</span><span class="tk-number">0.6</span> <span class="tk-property">target</span><span class="tk-punct">=</span><span class="tk-number">0.25</span> <span class="tk-property">balance</span><span class="tk-punct">=</span><span class="tk-number">0.8</span> <span class="tk-property">exponent</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-property">minRadius</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">0.9dmm</span><span class="tk-string">"</span>
-        <span class="tk-punct">}</span>
+<span class="tk-node">let</span> oak <span class="tk-punct">{</span>
+    <span class="tk-node">tree</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + </span><span class="tk-number">59dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span>
+        <span class="tk-node">trunk</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">18dmm</span><span class="tk-string">"</span>
+        <span class="tk-node">crown</span> <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">44dmm</span><span class="tk-string">"</span> <span class="tk-property">clumps</span><span class="tk-punct">=</span><span class="tk-number">60</span> <span class="tk-property">shape</span><span class="tk-punct">=</span>wide
+        <span class="tk-node">branch</span> <span class="tk-property">split</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">34deg</span><span class="tk-string">"</span> <span class="tk-property">eagerness</span><span class="tk-punct">=</span><span class="tk-number">0.6</span> <span class="tk-property">target</span><span class="tk-punct">=</span><span class="tk-number">0.25</span> <span class="tk-property">balance</span><span class="tk-punct">=</span><span class="tk-number">0.8</span> <span class="tk-property">exponent</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-property">minRadius</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">0.9dmm</span><span class="tk-string">"</span>
     <span class="tk-punct">}</span>
 <span class="tk-punct">}</span></code></pre>
 <p>A call's <code>top=</code> is the tree's. A tile places one oak as <code>oak at="(1sq, 1sq)" top="$bottom + 60dmm"</code>, or several as <code>scatter count=2 { oak }</code>.</p>
@@ -159,8 +157,8 @@
 <!-- gen:explains -->
 <ul class="explains">
 <li><a class="codelink" href="../e/use.html"><code>dt::use</code></a> Files use each other round to themselves <a class="cp-in" href="#use">The rule</a></li>
-<li><a class="codelink" href="../e/define.html"><code>dt::define</code></a> <code>define</code> takes only a name <a class="cp-in" href="#define">The rule</a></li>
-<li><a class="codelink" href="../e/param.html"><code>dt::param</code></a> A tile has no parameters: only a definition does <a class="cp-in" href="#define">The rule</a></li></ul>
+<li><a class="codelink" href="../e/retired.html"><code>dt::retired</code></a> A word the language no longer has: it is written with the word that replaced it <a class="cp-in" href="#let-body">The rule</a></li>
+<li><a class="codelink" href="../e/param.html"><code>dt::param</code></a> A tile has no parameters: only a definition does <a class="cp-in" href="#let-body">The rule</a></li></ul>
 <!-- /gen:explains -->
 </section>
 <section id="next" class="next">

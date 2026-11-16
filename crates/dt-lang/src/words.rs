@@ -17,7 +17,7 @@
 /// What a word is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WordKind {
-    /// A node or property name the decoder matches (`tile`, `define`, `at`).
+    /// A node or property name the decoder matches (`tile`, `let`, `at`).
     Keyword,
     /// A control: a name written as `name=value` or as a child node, on an element, a node or a printer.
     Control,
@@ -87,6 +87,12 @@ macro_rules! words {
     };
 }
 
+/// Words the language no longer has, each with the word that replaced it.  Not in any table (no document may use
+/// them); the decoder refuses each where it is written (`dt::retired`) and says the new word.  A row lives one
+/// release: it is deleted in the release after the one that first refuses the word (`define`: the release that carries the
+/// `let` body, then the next), since My tiles may still hold it until then.
+pub const RETIRED: &[(&str, &str)] = &[("define", LET)];
+
 /// Every word of every table.
 pub fn all() -> impl Iterator<Item = &'static Word> {
     TABLES.iter().flat_map(|t| t.iter())
@@ -102,9 +108,8 @@ words! {
     /// The nodes and properties the decoder matches by word: it reads them by constant, and no literal of them is in the decoder.
     KEYWORDS Keyword {
         TILE "tile" "the one tile of a file: its size, seed and stack",
-        DEFINE "define" "a named part: a thing or a layer other nodes can call",
         USE "use" "bring definitions in from another file",
-        LET "let" "name a value",
+        LET "let" "name a value, a thing or a layer: its body tells which",
         OVERRIDE "override" "replace a library name for this file",
         PARAM "param" "a value a definition takes from its caller",
         POINT "point" "a named point of a tile",

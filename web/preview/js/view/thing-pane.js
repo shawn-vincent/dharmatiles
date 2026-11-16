@@ -21,7 +21,7 @@ export function ThingPane({ m }) {
   const set = (/** @type {number} */ n) => { m.seed.value = Math.max(1, Math.min(99999, Math.round(n) || 1)); };
   return html`
     <div class="card thing-card" role="region" aria-label="The thing">
-      <div class="thing-head"><span class="eyebrow">thing</span><b>${t.name}</b>${t.element !== 'define' && t.element !== t.name ? html`<span class="thing-of">${t.element}</span>` : null}${m.busy.value ? html`<span class="thing-busy" role="status">drawing…</span>` : null}</div>
+      <div class="thing-head"><span class="eyebrow">thing</span><b>${t.name}</b>${t.element !== 'let' && t.element !== t.name ? html`<span class="thing-of">${t.element}</span>` : null}${m.busy.value ? html`<span class="thing-busy" role="status">drawing…</span>` : null}</div>
       ${t.things.length > 1 ? html`<div class="seg thing-kids" role="group" aria-label="Which thing of the scatter">${t.things.map((/** @type {string} */ w, /** @type {number} */ i) => html`<button type="button" key=${i} aria-pressed=${String(i === t.child)} onClick=${() => { m.child.value = i; }}>${w}</button>`)}</div>` : null}
       <div class="thing-seed" role="group" aria-label="The draw">
         <span class="cap">Draw · seed</span>

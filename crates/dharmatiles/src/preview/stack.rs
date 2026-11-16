@@ -164,7 +164,7 @@ mod tests {
             [(
                 "t.dtile".to_owned(),
                 "dharmatiles version=\"1.0.0\"\n\
-                 define grove { stack { tree } }\n\
+                 let grove { tree }\n\
                  tile size=\"1x1\" seed=3 { stack { base\n dirt\n grove at=\"(0.5sq, 0.5sq)\" top = \"$bottom + 30dmm\" } }\n"
                     .to_owned(),
             )]

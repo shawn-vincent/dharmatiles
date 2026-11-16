@@ -3,7 +3,7 @@ dharmatiles version="1.0.0"
 // A body written inside a definition: the definition's dirt has a top and a pin of its own, and
 // the tile calls it by name. Check and build must agree.
 
-define knoll {
+let knoll {
     stack {
         dirt top="$groundHeight + 1.5dmm" bumpSize="10dmm" clods=none {
             pin top="$groundHeight + 4dmm" at=center

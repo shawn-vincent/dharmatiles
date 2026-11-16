@@ -158,8 +158,8 @@ fn a_block_scope_ends_with_its_block() {
 #[test]
 fn a_scope_changes_the_context_for_what_it_calls_only() {
     let parts = "dharmatiles version=1\n\
-        define smaller { stack { override $s \"2dmm\"\n scatter count=2 { rock size=\"$s\" } } }\n\
-        define plain { stack { scatter count=2 { rock size=\"$s\" } } }\n";
+        let smaller { stack { override $s \"2dmm\"\n scatter count=2 { rock size=\"$s\" } } }\n\
+        let plain { stack { scatter count=2 { rock size=\"$s\" } } }\n";
     let tile = tile1(
         "let $s \"5dmm\"\n stack { base\n smaller\n plain\n scatter count=2 { rock size=\"$s\" } }",
     )
@@ -177,7 +177,7 @@ fn a_scope_changes_the_context_for_what_it_calls_only() {
 #[test]
 fn a_definition_reads_the_context_of_its_caller_and_check_says_where_it_is_missing() {
     let parts = "dharmatiles version=1\n\
-        define stones { stack { scatter count=2 { rock size=\"$stoneSize\" } } }\n";
+        let stones { stack { scatter count=2 { rock size=\"$stoneSize\" } } }\n";
     let with = tile1("let $stoneSize \"6dmm\"\n stack { base\n stones }")
         .replace("tile size", "use \"./parts\" stones\ntile size");
     let c = check(
@@ -257,7 +257,7 @@ fn reserved_words_cannot_name_a_let() {
 #[test]
 fn a_param_hides_nothing_of_the_context() {
     let parts = "dharmatiles version=1\n\
-        define lawn { param length \"4dmm\"\n stack { scatter count=2 { rock size=length } } }\n";
+        let lawn { param length \"4dmm\"\n stack { scatter count=2 { rock size=length } } }\n";
     let tile = tile1("stack { base\n lawn length=\"7dmm\" }")
         .replace("tile size", "use \"./parts\" lawn\ntile size");
     let c = check(
@@ -267,7 +267,7 @@ fn a_param_hides_nothing_of_the_context() {
     )
     .unwrap_or_else(|e| panic!("{e:#?}"));
     assert_eq!(rock_sizes(&c), [7.0]);
-    let bad = "dharmatiles version=1\ndefine lawn { param high 4\n stack { base } }\n";
+    let bad = "dharmatiles version=1\nlet lawn { param high 4\n stack { base } }\n";
     let tile = tile1("stack { base }").replace("tile size", "use \"./parts\" lawn\ntile size");
     let e = check(
         &mem(&[("t.dtile", &tile), ("parts.dtile", bad)]),
@@ -282,7 +282,7 @@ fn a_param_hides_nothing_of_the_context() {
 #[test]
 fn a_part_of_format_0_is_refused_where_it_is_used_naming_the_release_that_migrates() {
     // not through `mem`: the part is read as written
-    let parts = "define lawn { stack { base } }\n";
+    let parts = "let lawn { stack { base } }\n";
     let tile = tile1("stack { base }").replace("tile size", "use \"./parts\" lawn\ntile size");
     let src = Memory(
         [("t.dtile", tile.as_str()), ("parts.dtile", parts)]

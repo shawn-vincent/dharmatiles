@@ -1,4 +1,4 @@
-//! Format 1 as dt-doc decodes it: `let` in any block and in a define,
+//! Format 1 as dt-doc decodes it: `let` in any block and in a body,
 //! reserved words, `$` names.
 
 #![expect(
@@ -29,12 +29,12 @@ fn tile(body: &str) -> String {
 }
 
 #[test]
-fn lets_work_in_any_block_and_in_a_define() {
+fn lets_work_in_any_block_and_in_a_body() {
     let doc = decode(
         "t.dtile",
         &format!(
             "dharmatiles version=1\n{}",
-            "define lawn { let $blade \"3dmm\"\n stack { override $blade \"4dmm\"\n scatter count=2 { let $q \"1dmm\"\n rock size=\"$q\" } } }\n"
+            "let lawn { let $blade \"3dmm\"\n stack { override $blade \"4dmm\"\n scatter count=2 { let $q \"1dmm\"\n rock size=\"$q\" } } }\n"
         ),
         &known(),
     )

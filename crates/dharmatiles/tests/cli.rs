@@ -270,7 +270,7 @@ fn watch_rebuilds_when_a_used_file_changes() {
     let tile = d.join("t.dtile");
     std::fs::write(
         &parts,
-        "dharmatiles version=1\ndefine raised { stack { rock size=\"6dmm\" } }\n",
+        "dharmatiles version=1\nlet raised { stack { rock size=\"6dmm\" } }\n",
     )
     .unwrap();
     std::fs::write(
@@ -327,7 +327,7 @@ fn watch_rebuilds_when_a_used_file_changes() {
     std::thread::sleep(std::time::Duration::from_millis(1100));
     std::fs::write(
         &parts,
-        "dharmatiles version=1\ndefine raised { stack { rock size=\"7dmm\" } }\n",
+        "dharmatiles version=1\nlet raised { stack { rock size=\"7dmm\" } }\n",
     )
     .unwrap();
     wait_for("changed:", &mut seen);

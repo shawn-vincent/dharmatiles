@@ -1,6 +1,6 @@
 dharmatiles version="1.0.0"
 
-// The define page's picture: one definition, lawn, called three ways.
+// The let page's picture: one `let` with a body, lawn, called three ways.
 use "parts/grass" lawn long-grass
 
 tile size="1x1" seed=6 {

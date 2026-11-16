@@ -13,11 +13,13 @@
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>let</h1>
-  <p class="lede">A name for a value. <code>let</code> adds a name; <code>override</code> replaces a <code>$</code> name, such as one of the library's heights, for its block. A <code>$</code> name is read from the context every formula is called with; a plain name is read where it was written.</p>
+  <p class="lede">A name for a value, a thing or a layer: the body tells which. <code>let</code> adds a name; <code>override</code> replaces a <code>$</code> name, such as one of the library's heights, for its block. A <code>$</code> name is read from the context every formula is called with; a plain name is read where it was written.</p>
 </header>
 <div class="margin">
+<figure class="shot"><img src="img/el-let.jpg" alt="A tile in three strips of grass: a full lawn on the left, a thin patchy lawn in the middle, long tall blades on the right." width="848" height="615"><figcaption>One <code>let</code> with a body, <code>lawn</code>, called three ways, left to right: with its defaults, with <code>cover="35%" clearings=6</code>, and through <code>long-grass</code>, a definition that calls <code>lawn</code> with longer blades. From <code>docs/elements/demo/let.dtile</code>.</figcaption></figure>
 <nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
   <li><a href="#use">Writing it</a></li>
+  <li><a href="#body">A thing or a layer</a></li>
   <li><a href="#reference">Reference</a></li>
   <li><a href="#notes">Notes</a></li>
 </ol></details></nav>
@@ -34,7 +36,41 @@
     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">base</span><span class="tk-punct">;</span> <span class="tk-node">dirt</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"knollTop"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>center <span class="tk-punct">}</span> <span class="tk-punct">}</span>
 <span class="tk-punct">}</span></code></pre>
 <p>A value is an expression: numbers with their units, plain and <code>$</code> names, <code>$x</code> and <code>$y</code> (squares), <code>$bottom</code> (the surface under a body), <code>+ - * /</code>, a range in brackets <code>[a .. b]</code> anywhere, and the functions <code>sin cos</code> (of an angle), <code>abs</code>, <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>. Trigonometry is computed in the program, so a build gives the same bits on every machine.</p>
+<h2 id="body">A thing or a layer</h2>
+<p>A <code>let</code> with a body names a thing or a layer in a parts file, and a tile calls it like an element. Its <code>param</code> lines are the controls a caller can set. The body is one entry written bare, or a <code>stack</code> of several. What the body is decides what the name is: one bare entry that is an unplaced thing names a thing, which can be placed with <code>at=</code> or scattered; any other bare entry, and every <code>stack</code>, names a layer.</p>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+
+<span class="tk-comment">// library/parts/grass.dtile</span>
+<span class="tk-node">let</span> lawn <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> length <span class="tk-string">"</span><span class="tk-number">3.5dmm</span><span class="tk-string"> .. </span><span class="tk-number">6.5dmm</span><span class="tk-string">"</span>   <span class="tk-comment">// blade length along the ground</span>
+    <span class="tk-node">param</span> height <span class="tk-string">"</span><span class="tk-number">1.5dmm</span><span class="tk-string"> .. </span><span class="tk-number">2dmm</span><span class="tk-string">"</span>     <span class="tk-comment">// how tall a blade stands</span>
+    <span class="tk-node">param</span> clearings <span class="tk-number">0</span>                 <span class="tk-comment">// patches of bare earth per square</span>
+    <span class="tk-node">param</span> cover <span class="tk-string">"</span><span class="tk-number">100%</span><span class="tk-string">"</span>                <span class="tk-comment">// share of the ground grassed over</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">grass</span> <span class="tk-property">length</span><span class="tk-punct">=</span>length <span class="tk-property">height</span><span class="tk-punct">=</span>height <span class="tk-property">clearings</span><span class="tk-punct">=</span>clearings <span class="tk-property">cover</span><span class="tk-punct">=</span>cover
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+
+<span class="tk-node">let</span> long-grass <span class="tk-punct">{</span>                   <span class="tk-comment">// a definition can call another</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">lawn</span> <span class="tk-property">length</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string"> .. </span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2dmm</span><span class="tk-string"> .. </span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
+<p>A tile then writes <code>use "parts/grass" lawn</code> and <code>lawn cover="80%"</code> in its stack. A thing is the one thing that needs no <code>stack</code>:</p>
+<pre><code><span class="tk-comment">// library/parts/trees.dtile: a bare thing, so it can be scattered</span>
+<span class="tk-node">let</span> oak <span class="tk-punct">{</span>
+    <span class="tk-node">tree</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + </span><span class="tk-number">59dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">trunk</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">18dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
+<p>A <code>let</code> has a value or a body, never both, and a body is never empty. The old word for a body was <code>define</code>; it is refused (<a class="codelink" href="../e/retired.html"><code>dt::retired</code></a>) and the fix writes <code>let</code> over it.</p>
 <h2 id="reference">Reference</h2>
+<h3>A <code>let</code> with a body</h3>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>let NAME</code></td><td>a name</td><td>—</td><td>What callers write. <strong>Required.</strong></td></tr>
+<tr><td><code>param NAME</code></td><td>a default, or none</td><td>—</td><td>A control callers may set. A name of a kind, from <code>kind=</code> or else its default's: <code>param length "3.5dmm .. 6.5dmm"</code> is a length, <code>param clearings 0</code> a plain number, and a caller that writes <code>length=5</code> is asked for <code>5dmm</code> (<a class="codelink" href="../e/unit.html"><code>dt::unit</code></a>). Usable anywhere a <code>let</code> of its kind may be, in a formula as well as a control's whole value. With no default, write <code>kind=</code>, and the caller must give it.</td></tr>
+<tr><td>one entry, bare</td><td>an element or a name</td><td>—</td><td>What it makes. A bare unplaced thing names a thing; any other bare entry names a layer. <strong>Exactly one</strong>, and not beside a <code>stack</code>.</td></tr>
+<tr><td><code>stack</code></td><td></td><td>—</td><td>What it makes, when there are several entries. A stack is always a layer. <strong>One</strong>, and not beside a bare entry.</td></tr>
+</tbody></table></div>
+<h3>The library's heights</h3>
 <div class="tbl"><table>
 <thead><tr><th>Library height</th><th>Value</th><th>Meaning</th></tr></thead>
 <tbody>
@@ -51,13 +87,14 @@
 </tbody></table></div>
 <p>They come from <code>library/parts/heights.dtile</code>, and every tile sees them without a <code>use</code> line.</p>
 <h2 id="notes">Notes</h2>
+<p><strong>Calling a body.</strong> A place given to the call (<code>at=</code>) passes through to the elements inside, and a call's <code>top=</code> is the height of the tree inside it (<code>oak top="$bottom + 40dmm"</code>). Expert controls, such as a tree's <code>branch</code> knobs, are allowed only in parts files. Parts that call each other in a loop are an error (<a class="codelink" href="../e/loop.html"><code>dt::loop</code></a>). A tile has no params. A part has no tile of its own, so a point it writes (<code>"(50%, 0.5sq)"</code>) is worked out at each place it is called, and a <code>$</code> name it reads comes from its caller: <code>check</code> refuses a call whose context lacks one. A <code>let</code> with a body is written at the top level of a file.</p>
 <p><strong>Two kinds of name.</strong> A <code>$</code> name is read from the context: the library installs its heights at the root, an element sets <code>$x $y $d $a $bottom $region</code> at each point it builds, and <code>let $name</code> installs one of your own for its block. A plain name (<code>let knollTop …</code>, a definition's <code>param</code>) is declared once, where it is written, and never passed to a definition you call. <code>let $name</code> on a name the context already has is refused (<a class="codelink" href="../e/name.html"><code>dt::name</code></a>) and the message offers <code>override</code>; <code>override</code> of a name nothing installed, or of one an element sets, is refused. A plain name that is a word of the language (<code>x y d a parent</code>, a function, a weighting or a unit) is refused too. <code>let</code> and <code>override</code> work in any block, such as <code>scatter { override $treeLine "30dmm"; tree … }</code>, and hold for that block and everything called from it.</p>
 <p><strong>An override reaches library expressions.</strong> A <code>$</code> name is read where it is used, so overriding <code>$waterSurfaceHeight</code> at the top of a tile moves <code>$waterEdgeHeight</code> with it. An override of a name that does not exist is refused, with a nearby name if there is one, so a misspelt override is caught instead of doing nothing. Overriding an edge height means the tile no longer meets standard tiles without a step. <code>dharmatiles check --explain</code> lists each override (<code>override $waterBedHeight 0.4dmm → 0.8dmm</code>).</p>
 <p><strong>Kinds.</strong> A length carries its unit (<code>4dmm</code>), an angle <code>deg</code>, and a count or a fraction is a plain number; the kinds are checked before any build. <code>$x</code> and <code>$y</code> are squares counted, plain numbers, so <code>$groundHeight + $x</code> is refused (<a class="codelink" href="../e/type.html"><code>dt::type</code></a>); scale them with a length or inside <code>sin</code> or <code>cos</code>, as the tide does. A range is a set: <code>[0dmm .. 1dmm] - [0dmm .. 1dmm]</code> is <code>[-1dmm .. 1dmm]</code>. See <a href="../guide/units.html#units">units and kinds</a>.</p>
 <!-- gen:seen -->
 <section class="seen">
 <h2 id="seen">Seen from the language</h2>
-<p>The guide pages that use <code>let</code>: <a href="../guide/tile.html">The tile document</a>, <a href="../guide/values.html">Values and ranges</a>, <a href="../guide/names.html">Names</a>.</p>
+<p>The guide pages that use <code>let</code>: <a href="../guide/tile.html">The tile document</a>, <a href="../guide/values.html">Values and ranges</a>, <a href="../guide/names.html">Names</a>, <a href="../guide/parts.html">Parts</a>, <a href="../guide/generators.html">Things and layers</a>.</p>
 </section>
 <!-- /gen:seen -->
 </article>

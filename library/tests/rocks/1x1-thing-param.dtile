@@ -4,7 +4,7 @@ dharmatiles version="1.0.0"
 // otherwise) and uses it as an entry, as a scatter child and with a property written over
 // the thing's own. A test tile.
 
-define stand {
+let stand {
     param piece pebble
     stack {
         piece at="(0.3sq, 0.5sq)"

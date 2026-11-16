@@ -153,7 +153,7 @@ pub fn fits(have: Kind, want: Kind) -> bool {
 pub fn misfit(name: &str, have: Kind, who: &str, want: Kind) -> KindError {
     let help = match (have, want) {
         (Kind::Layer, Kind::Thing) => format!(
-            "a layer reads the scene so far (it paints the ground, or places things); a thing is one solid on its own: a rock, a flower or a tree, or a part whose stack is exactly one of them with no `at=` (a placed thing is a layer). Put `{name}` in the stack instead, and give {who} a thing"
+            "a layer reads the scene so far (it paints the ground, or places things); a thing is one solid on its own: a rock, a flower or a tree, or a `let` whose body is one of them written bare, with no `at=` (a placed thing is a layer, and so is a `stack`). Put `{name}` in the stack instead, and give {who} a thing"
         ),
         (Kind::Thing | Kind::Layer, Kind::Layer | Kind::Thing) => format!(
             "`{name}` is {}; {who} wants {}",
@@ -186,7 +186,7 @@ pub fn misfit_text(name: &str, have: &str, who: &str, want: Kind, help: String) 
 #[must_use]
 pub fn wanted_help(want: Kind) -> String {
     match want {
-        Kind::Thing => "pass the name of a thing: the elements `rock`, `stone`, `boulder`, `pebble`, `flower` and `tree`, and a part whose stack is exactly one of them".to_owned(),
+        Kind::Thing => "pass the name of a thing: the elements `rock`, `stone`, `boulder`, `pebble`, `flower` and `tree`, and a `let` whose body is one of them written bare".to_owned(),
         Kind::Layer => "pass the name of a layer or a thing: an element such as `dirt` or `floor`, or a part".to_owned(),
         k => format!("write {}", k.describe()),
     }

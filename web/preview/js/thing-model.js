@@ -7,7 +7,7 @@
 export const STRIP = 12;
 
 /**
- * Which thing of the document the page is on: a `define` that is one thing, or a stack entry that is one (a rock, a tree, a flower, a
+ * Which thing of the document the page is on: a `let` whose body is one thing, or a stack entry that is one (a rock, a tree, a flower, a
  * call of a definition of one), or one of the things a scatter holds.  This is the request's `which` (`ThingRef`), and what to call it.
  * @typedef {{ which: import('./api').ThingRef, name: string, element: string, things: string[], child: number | null }} Target
  */
@@ -26,10 +26,10 @@ export const STRIP = 12;
  */
 export function targetOf(s) {
   if (!s.thingFile) return null;
-  const define = () => {
+  const letBody = () => {
     const names = s.things ?? [];
-    const n = (s.nodes ?? []).find((x) => x.what === 'define' && x.name != null && names.includes(x.name) && x.at <= s.caret && s.caret <= x.at + x.len);
-    return n ? /** @type {Target} */ ({ which: { kind: 'define', name: /** @type {string} */ (n.name) }, name: /** @type {string} */ (n.name), element: 'define', things: [], child: null }) : null;
+    const n = (s.nodes ?? []).find((x) => x.what === 'let' && x.name != null && names.includes(x.name) && x.at <= s.caret && s.caret <= x.at + x.len);
+    return n ? /** @type {Target} */ ({ which: { kind: 'let', name: /** @type {string} */ (n.name) }, name: /** @type {string} */ (n.name), element: 'let', things: [], child: null }) : null;
   };
   const entry = () => {
     const it = s.item;
@@ -43,7 +43,7 @@ export function targetOf(s) {
     return null;
   };
   // in the source, the caret says; in the levels, the selection does
-  return s.face === 'source' ? define() ?? entry() : entry() ?? define();
+  return s.face === 'source' ? letBody() ?? entry() : entry() ?? letBody();
 }
 
 /** The seeds of the strip's page `page` (from 0): twelve in a row, the first page seeds 1 to 12. @param {number} page */

@@ -19,17 +19,17 @@
 <div>
 <section>
 <h2 id="help">What to do</h2>
-<p data-part="help">Move the <code>param</code> line into a <code>define</code>, or write a <code>let</code> in the tile.</p>
+<p data-part="help">Move the <code>param</code> line into a <code>let</code> with a body, or write a <code>let</code> in the tile.</p>
 </section>
 </div>
 <section>
 <h2 id="rule">The rule</h2>
-<blockquote class="rule"><p>A <code>define</code> has <code>param</code> lines and one <code>stack</code>. It is called like an element; its params are set as properties, and a place (<code>at=</code>) passes through to the elements inside it. A definition can call another. A definition whose stack is one thing is itself a thing, so it can be placed with <code>at=</code> or scattered: <code>scatter count=2 { oak }</code>. Definitions that call each other in a loop are an error (<a class="codelink" href="loop.html"><code>dt::loop</code></a>).</p></blockquote>
-<p class="cp-in"><a href="../guide/parts.html#dt-param">Read it in context: Parts · A define is a stack with params, called like an element</a></p>
+<blockquote class="rule"><p>A <code>let</code> with a body has <code>param</code> lines and either one entry written bare or one <code>stack</code>. The body says what it names: one bare entry that is an unplaced thing (<code>let oak { tree … }</code>) names a thing, so it can be placed with <code>at=</code> or scattered (<code>scatter count=2 { oak }</code>); any other bare entry, and every <code>stack</code>, names a layer. Several entries are written in a <code>stack</code>, which is always a layer. It is called like an element; its params are set as properties, and a place (<code>at=</code>) passes through to the elements inside it. A definition can call another. Definitions that call each other in a loop are an error (<a class="codelink" href="loop.html"><code>dt::loop</code></a>). A <code>let</code> has a value or a body, never both, and a body is never empty. The old word for this was <code>define</code>: it is refused (<a class="codelink" href="retired.html"><code>dt::retired</code></a>) with the fix of writing <code>let</code> over it.</p></blockquote>
+<p class="cp-in"><a href="../guide/parts.html#dt-param">Read it in context: Parts · A let with a body names a thing or a layer, called like an element</a></p>
 </section>
 </div>
 <footer class="cp-foot">
-<span>Explained with it: <a href="define.html"><code>dt::define</code></a></span>
+<span>Explained with it: <a href="retired.html"><code>dt::retired</code></a></span>
 <span><a href="../errors.html">Every error code</a></span>
 <span>Offline: <code>dharmatiles explain dt::param</code></span>
 </footer>

@@ -78,9 +78,10 @@ fn defaults_seams_and_printer_are_refused_outside_their_file_kind() {
     let printer = format!("{own}printer mine {{\n}}\n");
     assert!(said_has(&printer, "`printer` is not written in a tile"));
     // a parts file holds defaults and seams, a printer file holds its printer
-    let part = "dharmatiles version=1\ndefine lawn {\n    stack {\n        grass\n    }\n}\ndefaults {\n}\n";
+    let part =
+        "dharmatiles version=1\nlet lawn {\n    stack {\n        grass\n    }\n}\ndefaults {\n}\n";
     snippet(part);
-    let part_printer = "dharmatiles version=1\ndefine lawn {\n    stack {\n        grass\n    }\n}\nprinter mine {\n}\n";
+    let part_printer = "dharmatiles version=1\nlet lawn {\n    stack {\n        grass\n    }\n}\nprinter mine {\n}\n";
     assert!(said_has(
         part_printer,
         "`printer` is not written in a parts file"

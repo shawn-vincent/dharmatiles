@@ -4,7 +4,7 @@
 //! An id is the path of steps from the top of the file, joined by `/`:
 //!
 //! - `tile/stack/rock#2`: the second `rock` among its siblings (the first is plain `rock`);
-//! - `tile/line shore`, `tile/region pool`, `tile/point home`, `define grass/stack`: a node that names itself with
+//! - `tile/line shore`, `tile/region pool`, `tile/point home`, `let grass/stack`: a node that names itself with
 //!   its first word is that name (it keeps its id when nodes are added, taken out or moved);
 //! - `tile/stack/rock id=old-oak`: a node that carries an `id=` is that id, for the same reason.
 //!
@@ -17,7 +17,7 @@ use kdl::{KdlDocument, KdlNode};
 use crate::ops::EditError;
 
 /// Nodes that name themselves with their first word.
-const NAMED: [&str; 4] = ["line", "region", "point", "define"];
+const NAMED: [&str; 4] = ["line", "region", "point", "let"];
 
 /// A word an id can carry: letters, digits, `-`, `_`, `.`.
 fn plain(s: &str) -> bool {
@@ -181,7 +181,7 @@ pub fn id_at(text: &str, at: usize) -> Result<String, EditError> {
 /// and a string hold none: these are the parser's nodes.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Names {
-    /// `define NAME`, and the names a `use` brings in.
+    /// `let NAME { … }`, and the names a `use` brings in (the decoder's, not the walk's).
     pub defs: Vec<String>,
     /// `region NAME`.
     pub regions: Vec<String>,
@@ -190,8 +190,8 @@ pub struct Names {
     /// `point NAME`.
     pub points: Vec<String>,
     /// What each definition of this document is as a generator, in the
-    /// language's one kind system: a thing when its stack is exactly one
-    /// unplaced thing (an element, another such definition, or a parameter
+    /// language's one kind system: a thing when its body is one
+    /// unplaced thing written bare (an element, another such definition, or a parameter
     /// that holds one), else a layer.
     pub kinds: Vec<(String, crate::units::Kind)>,
     /// What each parameter holds, as (definition, parameter, kind): a
@@ -216,14 +216,6 @@ pub fn names_in(text: &str) -> Result<Names, EditError> {
                     .and_then(|e| e.value().as_string())
             };
             match n.name().value() {
-                "define" => out.defs.extend(arg(0).map(str::to_owned)),
-                "use" => out.defs.extend(
-                    n.entries()
-                        .iter()
-                        .filter(|e| e.name().is_none())
-                        .skip(1)
-                        .filter_map(|e| e.value().as_string().map(str::to_owned)),
-                ),
                 "region" => out.regions.extend(arg(0).map(str::to_owned)),
                 "line" => out.lines.extend(arg(0).map(str::to_owned)),
                 "point" => out.points.extend(arg(0).map(str::to_owned)),
@@ -237,122 +229,32 @@ pub fn names_in(text: &str) -> Result<Names, EditError> {
     let mut out = Names::default();
     let doc = parse(text)?;
     walk(doc.nodes(), &mut out);
-    kinds_in(doc.nodes(), &mut out);
+    definitions_in(text, &mut out);
     Ok(out)
 }
 
-/// What the definitions are and what the parameters hold, read from the
-/// nodes as they stand (a text being typed has no decode): the rules the
-/// decoder holds, in the one kind system.  A definition is a thing when its
-/// stack is exactly one unplaced thing; a parameter holds what `kind=` says,
-/// else what its default names, else what its use asks.
-fn kinds_in(nodes: &[KdlNode], out: &mut Names) {
+/// The definitions, and what each is and what its parameters hold, as the decoder settled them: whether a node is a
+/// definition (`decode::is_part`), a body's kind (`Decoder::generator_of`) and a parameter's (`declare_params`) are the
+/// decoder's, so a text being typed is asked, not read again by a copy of those rules.  The names a `use` brings in are
+/// definitions too, and, like a name the decoder did not settle, are [`Kind::Any`], said outright, never left out or
+/// guessed.  A text the decoder makes no document of (no header yet) has none of these.
+fn definitions_in(text: &str, out: &mut Names) {
     use crate::units::Kind;
-    let defines: Vec<&KdlNode> = nodes
-        .iter()
-        .filter(|n| n.name().value() == "define")
-        .collect();
-    let name_of = |d: &KdlNode| {
-        d.entries()
-            .first()
-            .and_then(|e| e.value().as_string())
-            .map(str::to_owned)
+    let (Some(doc), _) = crate::decode::decode_partial("names", text, &crate::known::Known::new())
+    else {
+        return;
     };
-    for d in &defines {
-        if let Some(dn) = name_of(d) {
-            out.kinds.push((dn, Kind::Layer));
+    for d in doc.definitions.iter().filter(|d| d.header().is_none()) {
+        out.defs.push(d.name.value.clone());
+        out.kinds.push((d.name.value.clone(), d.generator));
+        for p in &d.params {
+            out.params
+                .push((d.name.value.clone(), p.name.value.clone(), p.kind));
         }
     }
-    let kind_of = |out: &Names, def: &str, name: &str| -> Option<Kind> {
-        crate::schema::element(name)
-            .map(|e| e.generator())
-            .or_else(|| {
-                out.params
-                    .iter()
-                    .find(|(d, p, _)| d == def && p == name)
-                    .map(|(_, _, k)| *k)
-            })
-            .or_else(|| out.kinds.iter().find(|(d, _)| d == name).map(|(_, k)| *k))
-    };
-    // to a fixpoint: a default names a definition whose kind is being found
-    for _ in 0..=defines.len() {
-        let before = out.clone();
-        out.params.clear();
-        for d in &defines {
-            let Some(dn) = name_of(d) else { continue };
-            let param_nodes: Vec<&KdlNode> = d
-                .iter_children()
-                .filter(|c| c.name().value() == "param")
-                .collect();
-            let names: Vec<String> = param_nodes
-                .iter()
-                .filter_map(|p| p.entries().first().and_then(|e| e.value().as_string()))
-                .map(str::to_owned)
-                .collect();
-            // how each parameter is used in the stack
-            let mut used: Vec<(String, Kind)> = Vec::new();
-            fn entries(n: &KdlNode, names: &[String], used: &mut Vec<(String, Kind)>) {
-                for c in n.iter_children() {
-                    if names.iter().any(|p| p == c.name().value()) {
-                        let kind = if n.name().value() == "scatter" {
-                            Kind::Thing
-                        } else {
-                            Kind::Layer
-                        };
-                        used.push((c.name().value().to_owned(), kind));
-                    }
-                    entries(c, names, used);
-                }
-            }
-            for st in d.iter_children().filter(|c| c.name().value() == "stack") {
-                entries(st, &names, &mut used);
-            }
-            for p in &param_nodes {
-                let Some(name) = p.entries().first().and_then(|e| e.value().as_string()) else {
-                    continue;
-                };
-                let written = p
-                    .entry("kind")
-                    .and_then(|e| e.value().as_string())
-                    .and_then(Kind::from_word)
-                    .filter(|k| k.holdable());
-                let default = p
-                    .entries()
-                    .iter()
-                    .filter(|e| e.name().is_none())
-                    .nth(1)
-                    .and_then(|e| e.value().as_string())
-                    .and_then(|v| kind_of(&before, &dn, v))
-                    .filter(|k| k.is_generator());
-                let used_as = used
-                    .iter()
-                    .filter(|(u, _)| u == name)
-                    .map(|(_, k)| *k)
-                    .max_by_key(|k| u8::from(*k == Kind::Thing));
-                if let Some(k) = written.or(default).or(used_as) {
-                    out.params.push((dn.clone(), name.to_owned(), k));
-                }
-            }
-        }
-        // a definition is a thing: a stack of one unplaced entry that is one
-        for d in &defines {
-            let Some(dn) = name_of(d) else { continue };
-            let stack: Vec<&KdlNode> = d
-                .iter_children()
-                .filter(|c| c.name().value() == "stack")
-                .flat_map(|s| s.iter_children())
-                .filter(|c| !matches!(c.name().value(), "let" | "override"))
-                .collect();
-            let placed = |n: &KdlNode| n.entry("at").is_some() || n.entry("side").is_some();
-            let is = matches!(stack.as_slice(), [one]
-                if !placed(one) && kind_of(out, &dn, one.name().value()) == Some(Kind::Thing));
-            if let Some(k) = out.kinds.iter_mut().find(|(n, _)| *n == dn) {
-                k.1 = if is { Kind::Thing } else { Kind::Layer };
-            }
-        }
-        if *out == before {
-            break;
-        }
+    for n in doc.uses.iter().flat_map(|u| &u.names) {
+        out.defs.push(n.value.clone());
+        out.kinds.push((n.value.clone(), Kind::Any));
     }
 }
 

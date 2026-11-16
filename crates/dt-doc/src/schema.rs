@@ -150,7 +150,7 @@ pub struct Control {
     pub subs: &'static [Control],
     /// Whether it must be given.
     pub required: bool,
-    /// Expert controls are accepted in `define`s (parts files) and
+    /// Expert controls are accepted in a `let` body (parts files) and
     /// refused in tiles.
     pub expert: bool,
     /// The numbers it takes, as the element reads them: mm at the

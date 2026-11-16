@@ -1,13 +1,13 @@
 //! A thing built alone: the thing editor's build.
 //!
-//! A **thing** (`dt_elements::Thing`: a rock, a tree, a flower, a definition whose stack is one of them) is made from its
+//! A **thing** (`dt_elements::Thing`: a rock, a tree, a flower, a `let` whose body is one of them written bare) is made from its
 //! own controls and a seed and reads nothing, so it can be drawn on its own, in its own frame (the origin where it meets
-//! what holds it, +z up), with no tile and no base.  [`subject`] finds the thing a document means (a `define` by name, or
+//! what holds it, +z up), with no tile and no base.  [`subject`] finds the thing a document means (a `let` by name, or
 //! one entry or one child of a scatter by the id the check gave it) and reads its controls as the reader made them;
 //! [`Subject::draw`] makes one draw of it at a seed, joins its parts and puts it through the gate's overhang paint, as a
 //! [`Built`] the page's one mesh payload is made from.
 //!
-//! There is no second reader and no second build: a definition is read by the reader as a one-entry tile that calls it
+//! There is no second reader and no second build: a `let` with a body is read by the reader as a one-entry tile that calls it
 //! (so its params, defaults and imports mean what they mean in a tile), the entry's controls go to the element's own
 //! `thing()`, and `Thing::make` is the one thing that makes solids.  A draw is not kept as a whole (the disk cache's key is
 //! made of a whole tile); what a thing keeps is its body (`dt_kit::Bodies`, the caller's shelf), as in a tile.
@@ -27,8 +27,8 @@ use crate::source::Source;
 /// Which thing of a document is meant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Which<'a> {
-    /// A `define` of that name, called with its defaults.
-    Define(&'a str),
+    /// A `let` with a body, of that name, called with its defaults.
+    Let(&'a str),
     /// A stack entry of the tile by its id ([`doc::Entry::id`], what a check's stack gives as `key`): one thing of it
     /// when `child` is given and the entry is a scatter.
     Entry {
@@ -44,8 +44,10 @@ pub enum Which<'a> {
 pub enum Refused {
     /// The document, or the definition's call, does not read: each problem at its text.
     Mistakes(Vec<Diag>),
-    /// The document has no definition of that name.
-    NoDefine(String),
+    /// The document has no `let` with a body of that name.
+    NoLet(String),
+    /// The name is a `let` of a value (a number, a length, a point), which is drawn as nothing.
+    Value(String),
     /// The document's tile has no entry of that id (or the scatter no such child).
     NoEntry(String),
     /// What was named is a layer (it reads what is under it and changes it), not a thing.
@@ -89,9 +91,12 @@ pub fn subject(
         .map_err(|e| Refused::Mistakes(vec![Diag::plain(dt_lang::codes::BUILD, e)]))?;
     let hash = doc::text_hash(&text);
     let (element, settings, at) = match which {
-        Which::Define(name) => {
+        Which::Let(name) => {
             let Some(def) = own.file.doc.definition(name) else {
-                return Err(Refused::NoDefine(name.to_owned()));
+                if own.file.doc.consts.iter().any(|c| c.name.value == name) {
+                    return Err(Refused::Value(name.to_owned()));
+                }
+                return Err(Refused::NoLet(name.to_owned()));
             };
             if def.generator != Kind::Thing {
                 // the first entry that is no thing is what makes it a layer
@@ -171,7 +176,7 @@ pub fn subject(
     if !names_thing_element(&element) {
         return Err(Refused::Layer {
             name: match which {
-                Which::Define(n) => n.to_owned(),
+                Which::Let(n) => n.to_owned(),
                 Which::Entry { key, .. } => key.to_owned(),
             },
             element,

@@ -64,17 +64,17 @@
 <!-- /gen:guide-nav -->
 </details></nav>
 </div>
-<article class="doc guide" data-elements="rock stone boulder pebble flower tree scatter dirt define">
+<article class="doc guide" data-elements="rock stone boulder pebble flower tree scatter dirt let">
 <section id="result">
 <h2>The result</h2>
 <dt-example src="examples/guide/generators.dtile" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/17bd2fa08ffce5faaed41951d2da9af4.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/18e184b5d32c9402f56f100dcb1829e0.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
 <span class="tk-comment">// A thing passed by name.  `stand` holds a thing in `piece`: a pebble unless the caller says</span>
 <span class="tk-comment">// otherwise.  It puts one on the ground and scatters three more, so the same recipe draws a</span>
 <span class="tk-comment">// pebble stand and, called with `piece=boulder`, a boulder stand.</span>
-<span class="tk-node">define</span> stand <span class="tk-punct">{</span>
+<span class="tk-node">let</span> stand <span class="tk-punct">{</span>
     <span class="tk-node">param</span> piece pebble
     <span class="tk-node">stack</span> <span class="tk-punct">{</span>
         <span class="tk-node">piece</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0.3sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
@@ -97,28 +97,28 @@
 </section>
 <section id="plainly">
 <h2>Say it plainly</h2>
-<p>Every element makes something, and it is one of two kinds. A <strong>thing</strong> is given its controls and a seed and makes one solid, with nothing else to look at: a rock, a stone, a boulder, a pebble, a flower, a tree, and a definition whose stack is exactly one of them. A <strong>layer</strong> also reads what the stack has built so far: dirt, ground, water and floors paint the ground, and a scatter, a wall or a cliff place their things on it.</p>
+<p>Every element makes something, and it is one of two kinds. A <strong>thing</strong> is given its controls and a seed and makes one solid, with nothing else to look at: a rock, a stone, a boulder, a pebble, a flower, a tree, and a <code>let</code> whose body is one of them written bare. A <strong>layer</strong> also reads what the stack has built so far: dirt, ground, water and floors paint the ground, and a scatter, a wall or a cliff place their things on it.</p>
 <p>Because a thing needs nothing but its controls and a seed, it can be handed around by name. A definition says <code>param leaf pebble</code>, uses <code>leaf</code> like an element, and the caller says which thing with <code>leaf=boulder</code>. A layer can be handed around too, <code>param ground dirt</code> and <code>ground=water</code>, but only into the stack, where it is used as an entry. Placing a thing makes it a layer, and nothing makes a layer a thing: a thing fits wherever a layer is wanted, and a layer never fits where a thing is. The program says so where it is written.</p>
 </section>
 <section id="the-rules">
 <h2>The rules</h2>
 <section class="rule">
 <h3 id="generators">An element is a thing or a layer</h3>
-<p>The element schema says which, once, and the element pages say it under <em>Kind</em>. A thing is what a <code>scatter</code> may hold and what <code>at=</code> places on its own; every other element is a layer. A stack is a layer, and a definition is a thing only when its stack is exactly one thing with no place word on it (<code>at=</code> makes a placed thing a layer); anything else is a layer.</p>
+<p>The element schema says which, once, and the element pages say it under <em>Kind</em>. A thing is what a <code>scatter</code> may hold and what <code>at=</code> places on its own; every other element is a layer. A <code>stack</code> is always a layer, whatever it holds. A <code>let</code> names a thing only when its body is one entry written bare, an unplaced thing (<code>let oak { tree … }</code>; <code>at=</code> makes a placed thing a layer); anything else is a layer. Naming a stack of one thing is therefore a layer, and the bare form is the one way to name a thing.</p>
 <div class="tbl"><table>
 <thead><tr><th>Kind</th><th>Takes</th><th>Elements</th></tr></thead>
 <tbody>
-<tr><td>thing</td><td>its controls and a seed</td><td><a href="../elements/rock.html"><code>rock</code></a>, <a href="../elements/stone.html"><code>stone</code></a>, <a href="../elements/boulder.html"><code>boulder</code></a>, <a href="../elements/pebble.html"><code>pebble</code></a>, <a href="../elements/flower.html"><code>flower</code></a>, <a href="../elements/tree.html"><code>tree</code></a>, and a definition whose stack is exactly one of them, unplaced</td></tr>
+<tr><td>thing</td><td>its controls and a seed</td><td><a href="../elements/rock.html"><code>rock</code></a>, <a href="../elements/stone.html"><code>stone</code></a>, <a href="../elements/boulder.html"><code>boulder</code></a>, <a href="../elements/pebble.html"><code>pebble</code></a>, <a href="../elements/flower.html"><code>flower</code></a>, <a href="../elements/tree.html"><code>tree</code></a>, and a <code>let</code> whose body is one of them written bare, unplaced</td></tr>
 <tr><td>layer</td><td>its controls, a seed and the scene so far</td><td>everything else: <a href="../elements/dirt.html"><code>dirt</code></a>, <code>ground</code>, <code>water</code>, <code>floor</code>, <a href="../elements/scatter.html"><code>scatter</code></a>, <code>grass</code>, <code>reeds</code>, <code>wall</code>, <code>cliff</code>, a stack, and every other definition</td></tr>
 </tbody></table></div>
 <p>These are two more kinds, checked before anything is built as lengths and angles are, by the same fit rule (<a href="kinds.html#generator-kinds">kinds</a>).</p>
 </section>
 <section class="rule">
 <h3 id="thing-param">A param can hold a thing, and the caller passes it by name</h3>
-<p>A <code>param</code> holds a thing when its default names one, or when the definition writes it as an entry or as a scatter's child. The caller passes another thing by its name, an element or a definition of one thing, written bare. Inside the definition the param's name calls the thing it holds, so one recipe serves every thing handed to it:</p>
+<p>A <code>param</code> holds a thing when its default names one, or when the definition writes it as an entry or as a scatter's child. The caller passes another thing by its name, an element or a <code>let</code> of one bare thing, written bare. Inside the definition the param's name calls the thing it holds, so one recipe serves every thing handed to it:</p>
 <pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-<span class="tk-node">define</span> stand <span class="tk-punct">{</span>
+<span class="tk-node">let</span> stand <span class="tk-punct">{</span>
     <span class="tk-node">param</span> piece pebble
     <span class="tk-node">stack</span> <span class="tk-punct">{</span>
         <span class="tk-node">piece</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0.3sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
@@ -126,7 +126,7 @@
     <span class="tk-punct">}</span>
 <span class="tk-punct">}</span>
 
-<span class="tk-node">define</span> boulder-ish <span class="tk-punct">{</span> <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">boulder</span> <span class="tk-punct">}</span> <span class="tk-punct">}</span>
+<span class="tk-node">let</span> boulder-ish <span class="tk-punct">{</span> <span class="tk-node">boulder</span> <span class="tk-punct">}</span>
 
 <span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">12</span> <span class="tk-punct">{</span>
     <span class="tk-node">stack</span> <span class="tk-punct">{</span>
@@ -144,9 +144,9 @@
 <p>A param holds a layer when its default names one (<code>param ground dirt</code>), when <code>kind=layer</code> says so, or when a caller passes one to a param that holds one. The caller passes a built-in layer (<code>water</code>), a part (<code>lawn</code>) or a thing (placing it makes it a layer), written bare. A layer param can only be used as a stack entry, and a place word passes through to it as it does on a part call: <code>shore ground=lawn at=bank</code> puts the lawn in the region <code>bank</code>, and a place written on the entry (<code>ground at=bank</code>) holds the same way. Its properties are read as if written on what was passed, once the call says which it is, as a thing param's are.</p>
 <pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-<span class="tk-node">define</span> lawn <span class="tk-punct">{</span> <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span><span class="tk-punct">;</span> <span class="tk-node">grass</span> <span class="tk-punct">}</span> <span class="tk-punct">}</span>
+<span class="tk-node">let</span> lawn <span class="tk-punct">{</span> <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span><span class="tk-punct">;</span> <span class="tk-node">grass</span> <span class="tk-punct">}</span> <span class="tk-punct">}</span>
 
-<span class="tk-node">define</span> shore <span class="tk-punct">{</span>
+<span class="tk-node">let</span> shore <span class="tk-punct">{</span>
     <span class="tk-node">param</span> ground dirt
     <span class="tk-node">stack</span> <span class="tk-punct">{</span>
         <span class="tk-node">ground</span>
@@ -169,7 +169,7 @@
 <p>Being a name, a param goes anywhere a <code>let</code> of its kind may: as a control's whole value (<code>count=n</code>), in a formula (<code>count="n + 1"</code>), and, for a thing or a layer, as an entry. Each use is checked against its kind where it is written, the default and every caller's argument against it at the call, and a disagreement is <a class="codelink" href="../e/type.html"><code>dt::type</code></a> (or <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a> for a number missing its unit) in the words of every kind mistake: <code>rock size=n</code> with <code>param n 3</code> says that <code>n</code> is a plain number and <code>rock size</code> wants a length.</p>
 <pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-<span class="tk-node">define</span> pile <span class="tk-punct">{</span>
+<span class="tk-node">let</span> pile <span class="tk-punct">{</span>
     <span class="tk-node">param</span> leaf <span class="tk-property">kind</span><span class="tk-punct">=</span>thing
     <span class="tk-node">param</span> reach <span class="tk-property">kind</span><span class="tk-punct">=</span>length <span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span>
     <span class="tk-node">param</span> extra <span class="tk-number">2</span>
@@ -195,7 +195,7 @@
 <p>The call that passes the thing passes a name and nothing else: <code>stand piece=boulder</code> cannot reach into the boulder. A thing is tuned where it is used, so two uses of one param in one definition may tune it twice. A thing's own seed is the call path's, like every entry's (<a href="seeds.html">seeds</a>): two definitions that take the same thing draw it differently, and an entry written beside another does not move its draw.</p>
 <pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-<span class="tk-node">define</span> stand <span class="tk-punct">{</span>
+<span class="tk-node">let</span> stand <span class="tk-punct">{</span>
     <span class="tk-node">param</span> piece pebble
     <span class="tk-node">stack</span> <span class="tk-punct">{</span>
         <span class="tk-node">piece</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">1dmm</span><span class="tk-string"> .. </span><span class="tk-number">2dmm</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0.3sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
@@ -216,7 +216,7 @@
 <p>A scatter's children are a list of things, and each one placed picks its child by <code>weight=</code>. A child may be a thing param, and a definition of one thing, as well as an element. This is as far as the language goes: a thing is written once, passed by name or written as a child, or one of several weighted children. It is never a thing that returns a thing.</p>
 <pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-<span class="tk-node">define</span> pile <span class="tk-punct">{</span>
+<span class="tk-node">let</span> pile <span class="tk-punct">{</span>
     <span class="tk-node">param</span> bit pebble
     <span class="tk-node">stack</span> <span class="tk-punct">{</span>
         <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">6</span> <span class="tk-punct">{</span>

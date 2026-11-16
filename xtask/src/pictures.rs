@@ -3,7 +3,7 @@
 //!
 //! - `el-line-straight.jpg`, `el-line.jpg`: `line.dtile` from above with
 //!   wobble 0 and 5, its points and the straight path through them in brass
-//! - `el-region.jpg`, `el-use.jpg`, `el-define.jpg`: those demos, painted
+//! - `el-region.jpg`, `el-use.jpg`, `el-let.jpg`: those demos, painted
 //! - `el-stack-1.jpg` … `el-stack-6.jpg`: `stack.dtile` with its first
 //!   1 … 6 stack lines
 //! - `el-wall-*.jpg`: the wall page's families, from library tiles and demos
@@ -126,7 +126,7 @@ pub fn run(root: &Path, only: &[String]) -> Result<(), String> {
         }
     }
 
-    for stem in ["region", "use", "define"] {
+    for stem in ["region", "use", "let"] {
         if want(stem) {
             save(view(stem, None, "painted")?, &format!("el-{stem}.jpg"), 900)?;
         }

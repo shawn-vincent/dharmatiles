@@ -46,10 +46,21 @@ use heights::{Mode, PlaceKind};
 /// # Errors
 /// Every problem found, each pointing at its text with a hint.
 pub fn decode(name: &str, text: &str, known: &Known) -> Result<Document, Vec<DocError>> {
+    match decode_partial(name, text, known) {
+        (Some(doc), errors) if errors.is_empty() => Ok(doc),
+        (_, errors) => Err(errors),
+    }
+}
+
+/// [`decode`] that also gives the document it made when the file has mistakes (what could be read of it), for what
+/// asks about a text being typed: the names and kinds it makes.  `None` when the file is not KDL v2 or its header
+/// stops the reading.
+#[must_use]
+pub fn decode_partial(name: &str, text: &str, known: &Known) -> (Option<Document>, Vec<DocError>) {
     let src = Arc::new(NamedSource::new(name, text.to_owned()));
     let kdl = match KdlDocument::parse(text) {
         Ok(d) => d,
-        Err(e) => return Err(syntax::syntax_errors(&src, text, &e)),
+        Err(e) => return (None, syntax::syntax_errors(&src, text, &e)),
     };
     // the header line first: a format this program doesn't read stops here,
     // since the rest of the file may not mean what this decoder thinks
@@ -58,7 +69,7 @@ pub fn decode(name: &str, text: &str, known: &Known) -> Result<Document, Vec<Doc
         .iter()
         .any(|e| e.code == dt_lang::codes::FORMAT_NEWER)
     {
-        return Err(header_errors);
+        return (None, header_errors);
     }
     // this decoder reads format 1 only
     if header
@@ -67,17 +78,13 @@ pub fn decode(name: &str, text: &str, known: &Known) -> Result<Document, Vec<Doc
     {
         let mut errors = header_errors;
         errors.push(crate::header::format_old(&src, &kdl, header.as_ref()));
-        return Err(errors);
+        return (None, errors);
     }
     let mut d = Decoder::new(src, known);
     d.errors.extend(header_errors);
     let mut doc = d.document(&kdl);
     doc.header = header;
-    if d.errors.is_empty() {
-        Ok(doc)
-    } else {
-        Err(d.errors)
-    }
+    (Some(doc), d.errors)
 }
 
 /// Only the `use` lines of a file, so an evaluator can load what a file
@@ -163,7 +170,7 @@ pub(crate) struct Ctx {
     pub places: Vec<(String, PlaceKind)>,
     /// The tile's size, inside a tile.
     pub size: Option<(u32, u32)>,
-    /// Inside a `tile` (expert controls are refused) or a `define`.
+    /// Inside a `tile` (expert controls are refused) or a `let` body.
     pub in_tile: bool,
 }
 
@@ -171,13 +178,13 @@ pub(crate) struct Decoder<'k> {
     pub src: Src,
     pub errors: Vec<DocError>,
     pub known: &'k Known,
-    /// Every `define` in this file, decoded or not yet.
+    /// Every `let` with a body in this file, decoded or not yet.
     pub local_names: HashSet<String>,
     /// This file's definitions decoded so far.
     pub local: HashMap<String, DefInfo>,
     /// Definitions brought in by `use` lines: name → (info, file).
     pub imported: HashMap<String, (DefInfo, String)>,
-    /// While decoding a define: what each parameter is wanted as where it is
+    /// While decoding a `let` body: what each parameter is wanted as where it is
     /// used as a generator (written as an entry or a scatter child, or
     /// passed to a thing or layer parameter of a call).
     pub wants: HashMap<String, Vec<Wanted>>,
@@ -227,6 +234,23 @@ pub(crate) fn spanned_name(node: &KdlNode) -> Spanned<String> {
     Spanned {
         value: node.name().value().to_owned(),
         span: node.name().span(),
+    }
+}
+
+/// The word that replaced a retired one (`define`, now `let`).
+fn retired(word: &str) -> Option<&'static str> {
+    words::RETIRED
+        .iter()
+        .find(|(old, _)| *old == word)
+        .map(|(_, new)| *new)
+}
+
+/// Whether a top-level node names a thing or a layer: a `let` with a body (a `let` with a value names a value).
+/// The one test of it; `define`, the word it replaced, is read the same so its refusal leaves nothing else wrong.
+fn is_part(n: &KdlNode) -> bool {
+    match n.name().value() {
+        words::LET => n.children().is_some(),
+        w => retired(w).is_some() && n.children().is_some(),
     }
 }
 
@@ -290,7 +314,7 @@ impl<'k> Decoder<'k> {
         crate::error::locate(self.text(), outer, word)
     }
 
-    /// The node's first argument as a name (`define lawn`), or an error.
+    /// The node's first argument as a name (`let lawn { … }`), or an error.
     fn name_arg(&mut self, node: &KdlNode, what: &str) -> Option<Spanned<String>> {
         if let Some(e) = node.entries().first()
             && let Some(s) = arg_str(e)
@@ -322,7 +346,7 @@ impl<'k> Decoder<'k> {
             header: None,
         };
         for n in kdl.nodes() {
-            if n.name().value() == words::DEFINE
+            if is_part(n)
                 && let Some(name) = n.entries().first().and_then(arg_str)
             {
                 self.local_names.insert(name.to_owned());
@@ -344,7 +368,7 @@ impl<'k> Decoder<'k> {
             .nodes()
             .iter()
             .enumerate()
-            .filter(|(_, n)| matches!(n.name().value(), words::DEFINE | words::TILE))
+            .filter(|(_, n)| is_part(n) || n.name().value() == words::TILE)
             .collect();
         let mut order: Vec<usize> = Vec::new();
         let mut state: HashMap<usize, u8> = HashMap::new();
@@ -357,7 +381,7 @@ impl<'k> Decoder<'k> {
                 continue;
             };
             if let Some(d) = self.definition(node) {
-                if matches!(d.kind, DefKind::Define) {
+                if matches!(d.kind, DefKind::Let) {
                     self.local.insert(d.name.value.clone(), DefInfo::from(&d));
                 }
                 decoded.push((i, d));
@@ -377,6 +401,7 @@ impl<'k> Decoder<'k> {
         };
         for n in kdl.nodes() {
             if matches!(n.name().value(), words::LET | words::OVERRIDE)
+                && !is_part(n)
                 && let Some(c) = self.const_node(n, &mut file_ctx, &[])
             {
                 doc.consts.push(c);
@@ -423,7 +448,7 @@ impl<'k> Decoder<'k> {
         // part; `defaults`, `seams` and `printer` each belong to one kind and mean nothing in another
         let has = |w: &str| kdl.nodes().iter().any(|n| n.name().value() == w);
         let is_tile = has(words::TILE);
-        let has_parts = is_tile || has(words::DEFINE);
+        let has_parts = is_tile || kdl.nodes().iter().any(is_part);
         let is_printer = !is_tile && has(words::PRINTER);
         for n in kdl.nodes() {
             match n.name().value() {
@@ -459,12 +484,20 @@ impl<'k> Decoder<'k> {
                         "put the `printer` in its own file under printers/, and pick it with `--printer NAME`".to_owned(),
                     );
                 }
-                words::USE
-                | words::DEFINE
-                | words::TILE
-                | words::LET
-                | words::OVERRIDE
-                | words::DEFAULTS => {}
+                old if retired(old).is_some() => {
+                    // a retired word is refused where it is written, whatever its shape, with the new word as the
+                    // fix; with a body it is read as what it was, so nothing else goes wrong
+                    let span = n.name().span();
+                    let new = retired(old).unwrap_or(words::LET);
+                    self.err(
+                        dt_lang::codes::RETIRED,
+                        span,
+                        format!("`{old}` is written `{new}`"),
+                        "the old word",
+                    )
+                    .mend(span, new, format!("`{old}` is gone: write `{new}`"));
+                }
+                words::USE | words::TILE | words::LET | words::OVERRIDE | words::DEFAULTS => {}
                 words::SEAMS => doc.seams = self.seams(n),
                 // read and checked by `header`
                 crate::header::NODE => {}
@@ -475,7 +508,6 @@ impl<'k> Decoder<'k> {
                         other,
                         [
                             words::USE,
-                            words::DEFINE,
                             words::TILE,
                             words::PRINTER,
                             words::LET,
@@ -488,7 +520,7 @@ impl<'k> Decoder<'k> {
                         dt_lang::codes::UNKNOWN_NODE,
                         span,
                         format!("unknown top-level node `{other}`"),
-                        "not use, define, tile, printer, let, override or defaults",
+                        "not use, tile, printer, let, override or defaults",
                     )
                     .advise_old(span, other, first, near, || {
                         schema::element(other)
@@ -532,8 +564,7 @@ impl<'k> Decoder<'k> {
             refs(n, &self.local_names, &mut called);
             for name in called {
                 if let Some((j, _)) = defs.iter().find(|(_, d)| {
-                    d.name().value() == words::DEFINE
-                        && d.entries().first().and_then(arg_str) == Some(name.as_str())
+                    is_part(d) && d.entries().first().and_then(arg_str) == Some(name.as_str())
                 }) {
                     self.visit(*j, defs, state, order);
                 }
@@ -680,14 +711,14 @@ impl<'k> Decoder<'k> {
         } else {
             for e in node.entries().iter().skip(1) {
                 self.err(
-                    dt_lang::codes::DEFINE,
+                    dt_lang::codes::VALUE,
                     e.span(),
-                    "`define` takes only a name",
-                    "unexpected",
+                    "a `let` is a value or a body, not both",
+                    "a value beside a body",
                 )
-                .help = Some("parameters go inside: `param length 10`".to_owned());
+                .help = Some("`let name value` names a value, `let name { … }` a thing or a layer; parameters go inside the body: `param length 10`".to_owned());
             }
-            DefKind::Define
+            DefKind::Let
         };
         let mut def = Definition {
             name,
@@ -755,7 +786,10 @@ impl<'k> Decoder<'k> {
         };
         let mut stacks = 0;
         let mut params: Vec<&KdlNode> = Vec::new();
-        for n in body.nodes() {
+        // a body's one entry written bare, with no `stack` round it
+        let mut bare: Vec<(&KdlNode, String)> = Vec::new();
+        let steps = crate::nodeid::steps(body.nodes());
+        for (n, entry_step) in body.nodes().iter().zip(steps) {
             match n.name().value() {
                 words::PARAM if !is_tile => params.push(n),
                 words::PARAM => {
@@ -766,7 +800,7 @@ impl<'k> Decoder<'k> {
                         "in a tile",
                     )
                     .help = Some(
-                        "parameters belong to a `define`; a tile writes its values directly"
+                        "parameters belong to a `let` body; a tile writes its values directly"
                             .to_owned(),
                     );
                 }
@@ -810,6 +844,14 @@ impl<'k> Decoder<'k> {
                         def.base = Some(b);
                     }
                 }
+                other
+                    if !is_tile
+                        && (schema::element(other).is_some()
+                            || self.is_definition(other)
+                            || ctx.params.iter().any(|p| p == other)) =>
+                {
+                    bare.push((n, entry_step));
+                }
                 other => {
                     let words = [
                         words::PARAM,
@@ -823,8 +865,6 @@ impl<'k> Decoder<'k> {
                     ];
                     let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(other, words);
-                    let inside = (schema::element(other).is_some() || self.is_definition(other))
-                        .then(|| format!("`{other}` goes inside `stack {{ … }}`"));
                     let span = n.name().span();
                     self.err(
                         dt_lang::codes::UNKNOWN_NODE,
@@ -833,10 +873,43 @@ impl<'k> Decoder<'k> {
                             "unknown node `{other}` in a {}",
                             if is_tile { words::TILE } else { "definition" }
                         ),
-                        "not about, let, override, point, line, region or stack",
+                        "not about, param, let, override, point, line, region, stack or an entry",
                     )
-                    .advise(span, first, near, || inside);
+                    .advise(span, first, near, || None);
                 }
+            }
+        }
+        if body.nodes().is_empty() && !is_tile {
+            self.err(
+                dt_lang::codes::STACK,
+                node.span(),
+                "a body is empty",
+                "nothing in it",
+            )
+            .help = Some("a body is one entry, or a `stack { … }` of several".to_owned());
+        }
+        // A body is a `stack` or one entry written bare (a thing needs no wrapper); several entries are a stack.
+        if let Some((first, _)) = bare.first()
+            && (stacks > 0 || bare.len() > 1)
+        {
+            let (what, help) = if stacks > 0 {
+                (
+                    "a body is a `stack` or one entry, not both",
+                    "put this entry inside the `stack { … }`",
+                )
+            } else {
+                (
+                    "several entries are a stack",
+                    "write them inside `stack { … }`; only a body of one entry is written bare",
+                )
+            };
+            let at = if stacks > 0 { first } else { &bare[1].0 };
+            self.err(dt_lang::codes::STACK, at.name().span(), what, "here")
+                .help = Some(help.to_owned());
+        } else if let [(n, entry_step)] = bare.as_slice() {
+            let path = vec![step.clone()];
+            if let Some(e) = self.entry(n, &ctx, entry::Parent::Stack, &path, entry_step.clone()) {
+                def.stack.push(e);
             }
         }
         // Parameters last: their defaults are typed by the controls they fill.
@@ -846,7 +919,7 @@ impl<'k> Decoder<'k> {
             }
         }
         def.summary = Kind::of(def.stack.iter().map(|e| e.kind));
-        def.generator = self.generator_of(&def);
+        def.generator = self.generator_of(&def, stacks == 0 && bare.len() == 1);
         Some(def)
     }
 
@@ -1320,11 +1393,12 @@ impl<'k> Decoder<'k> {
         }
     }
 
-    /// What a definition is as a generator: a thing when its stack is
-    /// exactly one unplaced thing, else a layer (a stack is a layer).
-    fn generator_of(&self, def: &Definition) -> crate::units::Kind {
+    /// What a definition is as a generator, the one rule: a thing when its body is one entry written bare that is an
+    /// unplaced thing (an element, a definition, or a param that holds one); anything else is a layer, and a `stack`
+    /// always is one, whatever it holds.
+    fn generator_of(&self, def: &Definition, bare: bool) -> crate::units::Kind {
         match def.stack.as_slice() {
-            [one] => {
+            [one] if bare => {
                 let kind = match &one.callee {
                     Callee::Param(p) => def
                         .params

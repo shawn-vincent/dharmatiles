@@ -425,7 +425,7 @@ fn two_calls_of_one_definition_are_two_bodies() {
     // the calls share the text of the definition's dirt, so a body cannot be
     // found by where it is written
     let text = "dharmatiles version=\"1.0.0\"\n\
-        define patch { stack { dirt top=\"$dirtEdgeHeight + 2dmm\" clods=none } }\n\
+        let patch { stack { dirt top=\"$dirtEdgeHeight + 2dmm\" clods=none } }\n\
         tile size=\"2x1\" seed=3 seams=free {\n\
         line mid { through \"(1sq, 0)\" \"(1sq, 1sq)\" }\n\
         region west { boundedBy mid; fill \"(0.5sq, 0.5sq)\" }\n\

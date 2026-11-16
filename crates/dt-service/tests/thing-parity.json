@@ -1,5 +1,5 @@
 {
-  "text": "dharmatiles version=\"1.0.0\"\n\ndefine bluff {\n    stack {\n        rock size=\"6dmm .. 10dmm\"\n    }\n}\n\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n    }\n}\n",
+  "text": "dharmatiles version=\"1.0.0\"\n\nlet bluff {\n    rock size=\"6dmm .. 10dmm\"\n}\n\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n    }\n}\n",
   "name": "bluff",
   "seeds": [
     1,

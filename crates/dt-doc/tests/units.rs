@@ -162,9 +162,9 @@ fn units_and_kinds_in_control_values() {
     ok(&tile("stack { base\n dirt maxSlope=\"35deg\" }"));
     ok(&tile("stack { base\n dirt maxSlope=\"0.6 rad\" }"));
     // an expert control, so in a part
-    ok("dharmatiles version=1\ndefine oak { stack { tree { branch split=\"34deg\" } } }\n");
+    ok("dharmatiles version=1\nlet oak { stack { tree { branch split=\"34deg\" } } }\n");
     refused(
-        "dharmatiles version=1\ndefine oak { stack { tree { branch split=34 } } }\n",
+        "dharmatiles version=1\nlet oak { stack { tree { branch split=34 } } }\n",
         dt_lang::codes::UNIT,
         "34deg",
     );
@@ -471,14 +471,14 @@ fn a_printer_and_a_slope_take_units() {
 fn a_point_in_a_part_waits_for_the_call() {
     // a part has no tile to flip against: its point is kept as written and
     // worked out where it is called
-    ok("dharmatiles version=1\ndefine knoll { stack { rock at=\"(50%, 50%)\" } }\n");
+    ok("dharmatiles version=1\nlet knoll { stack { rock at=\"(50%, 50%)\" } }\n");
     refused(
-        "dharmatiles version=1\ndefine knoll { stack { rock at=\"0.5,0.5\" } }\n",
+        "dharmatiles version=1\nlet knoll { stack { rock at=\"0.5,0.5\" } }\n",
         dt_lang::codes::POINT,
         "parentheses",
     );
     refused(
-        "dharmatiles version=1\ndefine knoll { stack { rock at=\"point($tile, 50%, 1mm + 2sq * 3sq)\" } }\n",
+        "dharmatiles version=1\nlet knoll { stack { rock at=\"point($tile, 50%, 1mm + 2sq * 3sq)\" } }\n",
         dt_lang::codes::TYPE,
         "length by a length",
     );

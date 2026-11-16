@@ -14,7 +14,7 @@
   <div class="eyebrow"><i class="fam-mark fam-plant" title="moss: a plant"></i>Element · thing</div>
   <h1>tree</h1>
   <p class="lede">One deciduous tree: a twisting barked trunk that forks into branches, each ending in a rounded clump of foliage covered in separate, chunky leaves. The look is slightly cartoonish. Every branch climbs at least 26° and every leaf on an underside lies flat, so the tree prints without supports.</p>
-  <p class="small">A ready-made tree is a <a href="define.html">definition</a>: <code>use "parts/trees" oak</code>. Several trees are a <a href="scatter.html"><code>scatter</code></a>: <code>scatter count=2 { oak }</code>, or a row along a line: <code>scatter at=road count=3 reach="3dmm" { oak }</code>. A scatter of trees keeps every crown clear of the others; a single tree <code>at=</code> a line is refused, a line has no one place on it.</p>
+  <p class="small">A ready-made tree is a <a href="let.html">definition</a>: <code>use "parts/trees" oak</code>. Several trees are a <a href="scatter.html"><code>scatter</code></a>: <code>scatter count=2 { oak }</code>, or a row along a line: <code>scatter at=road count=3 reach="3dmm" { oak }</code>. A scatter of trees keeps every crown clear of the others; a single tree <code>at=</code> a line is refused, a line has no one place on it.</p>
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v"><code>40dmm</code> tall by default (20 to 120 over its foot); crown about <code>30dmm</code> across</div></div>
     <div><div class="k">Variants</div><div class="v">leafy, foliage clumps only, or bare (winter)</div></div>
@@ -78,7 +78,7 @@
     <span class="tk-node">stack</span> <span class="tk-punct">{</span>
         <span class="tk-node">base</span>
         <span class="tk-node">dirt</span>
-        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">2</span> <span class="tk-punct">{</span> <span class="tk-node">oak</span> <span class="tk-punct">}</span>                         <span class="tk-comment">// a definition whose stack is one thing is a thing</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">2</span> <span class="tk-punct">{</span> <span class="tk-node">oak</span> <span class="tk-punct">}</span>                         <span class="tk-comment">// a <code>let</code> whose body is one bare thing is a thing</span>
         <span class="tk-node">oak</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$bottom</span><span class="tk-string"> + </span><span class="tk-number">60dmm</span><span class="tk-string">"</span>       <span class="tk-comment">// a call's top= is its tree's</span>
     <span class="tk-punct">}</span>
 <span class="tk-punct">}</span></code></pre>

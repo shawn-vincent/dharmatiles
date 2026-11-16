@@ -61,7 +61,7 @@
 <!-- /gen:guide-nav -->
 </details></nav>
 </div>
-<article class="doc guide" data-elements="tile stack let use define printer edges">
+<article class="doc guide" data-elements="tile stack let use printer edges">
 <section id="result">
 <h2>The result</h2>
 <dt-example src="examples/guide/flat.dtile" controls="seed">
@@ -97,7 +97,7 @@
   <li><code>point</code>, <code>line</code> and <code>region</code>: places, for tiles divided into areas;</li>
   <li><code>stack</code>: exactly one, listing the elements and definitions that make the tile.</li>
 </ul>
-<p>Between the header and the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>defaults</code> (the edge contract). Anything else at the top level is an error.</p>
+<p>Between the header and the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>let</code> nodes with a body. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>defaults</code> (the edge contract). Anything else at the top level is an error.</p>
 </section>
 <section class="rule">
 <h3 id="header" data-explains="dt::format-0 dt::format-newer dt::header dt::header-version dt::header-twice dt::header-first"><!--gen:anchors--><span id="dt-format-0"></span><span id="dt-format-newer"></span><span id="dt-header"></span><span id="dt-header-version"></span><span id="dt-header-twice"></span><span id="dt-header-first"></span><!--/gen:anchors-->A document starts with a header line</h3>
@@ -118,8 +118,8 @@
   <dt>element</dt><dd>Anything a document can write: the document's own (<code>tile</code>, <code>line</code>, <code>region</code>, <code>stack</code>, …) and the built-in terrain (<code>dirt</code>, <code>grass</code>, <code>rock</code>, <code>tree</code>, <code>wall</code>, <code>cliff</code>, …), plus <code>scatter</code>. Each has a page in the <a href="../elements/index.html">elements reference</a>.</dd>
   <dt>control</dt><dd>A setting of an element, written as a property (<code>height="40dmm"</code>) or as a child line (<code>height "40dmm"</code>).</dd>
   <dt>group</dt><dd data-explains="dt::group"><!--gen:anchors--><span id="dt-group"></span><!--/gen:anchors-->A control that holds only sub-controls, written as properties on its own line: <code>leaf length="4.5dmm" width="3dmm"</code>.</dd>
-  <dt>thing</dt><dd>One solid object: a rock, a tree, or a definition whose stack is one thing (an <code>oak</code>).</dd>
-  <dt>definition</dt><dd>A named, reusable stack (<code>define lawn { … }</code>) that a tile calls like an element.</dd>
+  <dt>thing</dt><dd>One solid object: a rock, a tree, or a <code>let</code> whose body is one thing written bare (an <code>oak</code>).</dd>
+  <dt>definition</dt><dd>A <code>let</code> with a body (<code>let lawn { … }</code>): a named thing or layer that a tile calls like an element.</dd>
 </dl>
 </section>
 </section>

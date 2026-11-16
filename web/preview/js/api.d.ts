@@ -803,8 +803,9 @@ type NamesReq = { text: string, };
 
 type NamesRes = { ok: boolean, message: string | null, defs: Array<string>, regions: Array<string>, lines: Array<string>, points: Array<string>, 
 /**
- * What each definition is as a generator, as a word of the language's one kind table (`thing` or `layer`): a
- * thing parameter may be given the things, a layer parameter the layers and the things.
+ * What each definition is as a generator, as a word of the language's one kind table (`thing` or `layer`; `any`
+ * when the text does not settle it, as a name a `use` brings in): a thing parameter may be given the things, a
+ * layer parameter the layers and the things.
  */
 kinds: Array<DefKind>, 
 /**
@@ -911,7 +912,7 @@ type OwnedSeed = { seed: number, have: number, };
 
 type PageMessageReq = { tile?: string | null, what?: string | null, text: string, help?: string | null, causes?: Array<string> | null, backtrace?: string | null, };
 
-type ParamKind = { define: string, param: string, kind: string, };
+type ParamKind = { owner: string, param: string, kind: string, };
 
 type PieceEdit = { id: string, set: PieceWords, };
 
@@ -1493,7 +1494,7 @@ mesh: string, };
 
 type ThingExtent = { least: Dims, most: Dims, leastDmm: Dims, mostDmm: Dims, };
 
-type ThingRef = { "kind": "define", name: string, } | { "kind": "entry", key: string, child: number | null, };
+type ThingRef = { "kind": "let", name: string, } | { "kind": "entry", key: string, child: number | null, };
 
 type ThingReq = { text: string, 
 /**

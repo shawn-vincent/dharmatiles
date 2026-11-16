@@ -928,7 +928,7 @@ fn every_control_of_every_element_and_node_has_one_shape_on_the_wire() {
 fn the_names_a_text_makes_come_from_the_parser() {
     let r = start(&[], false);
     let t = session_token(&r);
-    let text = "// define fake\ndefine meadow { stack { dirt } }\ntile size=\"1x1\" {\n    region pool { fill \"1,1\" }\n    stack { meadow }\n}\n";
+    let text = "dharmatiles version=\"1.0.0\"\n// let fake { }\nlet meadow { stack { dirt } }\ntile size=\"1x1\" {\n    region pool { fill \"1,1\" }\n    stack { meadow }\n}\n";
     let (h, v) = post::<_, edit::NamesRes>(
         &r,
         "/api/names",
@@ -948,7 +948,7 @@ fn the_names_a_text_makes_come_from_the_parser() {
         Some(&t),
         None,
         &edit::NamesReq {
-            text: "define {".to_owned(),
+            text: "let {".to_owned(),
         },
     );
     assert!(!v.ok);
@@ -2878,7 +2878,7 @@ fn every_element_can_be_offered_with_nothing_set() {
 
 #[test]
 fn an_entry_a_definition_call_makes_says_which_call_so_it_can_be_moved() {
-    let text = "dharmatiles version=\"1.0.0\"\n\ndefine knoll {\n    stack {\n        dirt top=\"$groundHeight + 1.5dmm\" clods=none\n    }\n}\n\ntile size=\"1x1\" seed=6 {\n    stack {\n        base\n        knoll\n        rock at=\"(0.3sq, 0.4sq)\"\n    }\n}\n";
+    let text = "dharmatiles version=\"1.0.0\"\n\nlet knoll {\n    stack {\n        dirt top=\"$groundHeight + 1.5dmm\" clods=none\n    }\n}\n\ntile size=\"1x1\" seed=6 {\n    stack {\n        base\n        knoll\n        rock at=\"(0.3sq, 0.4sq)\"\n    }\n}\n";
     let (r, _, token) = editable("call", text);
     let v = check_text(&r, &token, text);
     assert!(v.ok, "{v:?}");
