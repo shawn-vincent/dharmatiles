@@ -29,3 +29,6 @@ docs/posters/
 
 # coverage runs (llvm-profdata input)
 *.profraw
+
+# requests and answers passed between Claude sessions (local only)
+/context-requests/
