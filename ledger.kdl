@@ -46,5 +46,4 @@ violation "collision:size" principle="one-job" found="5a7b2db9" note="`size` is 
 violation "collision:slabs" principle="one-job" found="5a7b2db9" note="`slabs` is a Count (slabs across a square) on flagstones and a weight (a Number) of a cliff's rock"
 violation "collision:smooth" principle="one-job" found="5a7b2db9" note="`smooth` is a choice (one smooth curve, planed boards) and a function (smoothstep)"
 violation "collision:top" principle="one-job" found="5a7b2db9" note="`top` is a height (the band a body fills, how high a thing stands) on most elements and a Word (crenellations) on a wall"
-violation "audit:rock-buried-alone-ignored" principle="check-equals-build" found="11aeffa9" note="`rock buried=60%` written on a lone rock builds the same rock as 0%: Single::build (rock.rs:985) never sets the bury, only a scatter's draw does (rock.rs:1241); check says ok and the control is silently ignored"
 violation "audit:rock-wear-check-accepts" principle="check-equals-build" found="11aeffa9" note="`wear` on a rock: check accepts it, the build refuses it (422); the schema offers a control the element cannot make"
