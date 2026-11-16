@@ -449,12 +449,10 @@ pub fn weighting_flaw_in(src: &str, units: crate::units::Units) -> Option<RangeR
         return None;
     }
     let r = lower(&e, &Lets::default(), 0).err()?;
-    matches!(r.code, dt_lang::codes::RANGE | dt_lang::codes::WEIGHTING).then(|| {
-        RangeRefusal {
-            code: r.code.to_owned(),
-            message: r.message,
-            help: r.help,
-        }
+    matches!(r.code, dt_lang::codes::RANGE | dt_lang::codes::WEIGHTING).then(|| RangeRefusal {
+        code: r.code.to_owned(),
+        message: r.message,
+        help: r.help,
     })
 }
 

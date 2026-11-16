@@ -284,7 +284,10 @@ mod tests {
         ));
         for bad in ["a", "tidy:a", "audit:", ":a"] {
             let t = OK.replace("audit:a", bad);
-            assert!(matches!(Ledger::parse(&t), Err(LedgerError::BadId { .. })), "{bad}");
+            assert!(
+                matches!(Ledger::parse(&t), Err(LedgerError::BadId { .. })),
+                "{bad}"
+            );
         }
         assert!(matches!(
             Ledger::parse("violation {"),
