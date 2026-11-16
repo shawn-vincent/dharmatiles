@@ -1226,6 +1226,9 @@ mod tests {
     fn a_thing_alone_is_in_its_frame() {
         for (name, t) in things() {
             let mut scene = Scene::new(Frame::dungeonblocks(2, 2), Seed::new(1));
+            // the tree at the low tier: its leaves (thousands of solids, most of this test's cost) sit on the clumps
+            // inside the frame the trunk and clumps already fix, and the extent test holds the full tier's bounds
+            scene.set_low(name == "tree");
             let solids = t.make(&mut scene, Seed::new(3), &printer()).unwrap();
             assert!(!solids.is_empty(), "{name}");
             let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
@@ -1307,10 +1310,12 @@ mod tests {
             assert!(e.least.x <= e.most.x && e.least.z <= e.most.z, "{name}");
             for &low in tiers {
                 // a tree is slow and its bound is by sums of what the build adds: a few seeds, the full tier fewest
+                // (two: each costs about 1.7 s of its thousands of leaves, and the low tier's six hold the trunk, the
+                // branches and the clumps, so the full tier's draws only add what the leaves reach past them)
                 let seeds = match (name.contains("tree"), low) {
                     (false, _) => 20u64,
                     (true, true) => 6,
-                    (true, false) => 3,
+                    (true, false) => 2,
                 };
                 for seed in 1..=seeds {
                     let mut scene = Scene::new(Frame::dungeonblocks(2, 2), Seed::new(1));

@@ -2418,7 +2418,7 @@ fn a_mistake_the_build_finds_is_a_message_at_its_entry_and_a_fixed_build_clears_
     use dt_service::message::Scope;
     let tree = |trunk: &str| {
         format!(
-            "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=4 {{\n    stack {{\n        base\n        dirt\n        tree at=center top=\"$bottom + 22dmm\" {{\n            trunk height=\"{trunk}\"\n        }}\n    }}\n}}\n"
+            "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=4 {{\n    stack {{\n        base\n        dirt\n        tree at=center top=\"$bottom + 22dmm\" {{\n            trunk height=\"{trunk}\"\n            crown width=\"14dmm\" clumps=8\n            leaves bare\n        }}\n    }}\n}}\n"
         )
     };
     let (r, path, _) = editable("look", &tree("40dmm"));
@@ -2539,7 +2539,10 @@ fn step_parts(body: &[u8]) -> (edit::StepHead, Vec<u8>) {
 
 #[test]
 fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
-    let (r, _, token) = editable("step", ROWS);
+    // the step drafts every request: the tile is ROWS without its grass (which the edits never touch and the draft would
+    // grow each time), so each draft is cheap and every assertion holds
+    let rows = ROWS.replace("        grass\n", "");
+    let (r, _, token) = editable("step", &rows);
     let path = format!("/api/tiles/{}/step", id0(&r));
     let step = |read: String, op: edit::EditOp| {
         post_raw(
@@ -2559,13 +2562,13 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
         )
     };
     let set = |name: &str, value: edit::Scalar| edit::EditOp::Set {
-        text: ROWS.to_owned(),
+        text: rows.clone(),
         id: "tile/stack/rock".to_owned(),
         name: name.to_owned(),
         value: Some(value),
     };
     // a control: the head says the new text and its revision, the mesh follows
-    let (h, body) = step(rev(ROWS), set("seed", edit::Scalar::Int(7)));
+    let (h, body) = step(rev(&rows), set("seed", edit::Scalar::Int(7)));
     assert!(h.starts_with("HTTP/1.1 200"), "{h}");
     let (head, mesh) = step_parts(&body);
     assert!(
@@ -2605,7 +2608,7 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
     let (head, _) = step_parts(&body);
     assert!(head.text.contains("through west n }"), "{head:?}");
     // an edit that would add a mistake is refused, with the mistake: nothing is drafted
-    let (h, body) = step(rev(ROWS), set("bogus", edit::Scalar::Int(1)));
+    let (h, body) = step(rev(&rows), set("bogus", edit::Scalar::Int(1)));
     assert!(h.starts_with("HTTP/1.1 422"), "{h}");
     assert!(String::from_utf8_lossy(&body).contains(dt_lang::codes::UNKNOWN_CONTROL));
     // an edit read at another text is refused, and nothing is drafted
@@ -2613,9 +2616,9 @@ fn a_step_edits_and_drafts_in_one_request_and_a_stale_one_is_refused() {
     assert!(h.starts_with("HTTP/1.1 409"), "{h}");
     // an id the text does not have is a 422 in words
     let (h, _) = step(
-        rev(ROWS),
+        rev(&rows),
         edit::EditOp::Set {
-            text: ROWS.to_owned(),
+            text: rows.clone(),
             id: "tile/stack/nothing".to_owned(),
             name: "seed".to_owned(),
             value: Some(edit::Scalar::Int(8)),

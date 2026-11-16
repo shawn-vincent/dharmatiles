@@ -110,7 +110,8 @@ fn a_hit_is_the_same_bytes_as_a_fresh_build() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
-/// The debug probe: clouds, marks (with their classes), a surface, water.
+/// The debug probe: clouds, marks (with their classes), a surface, water.  The pins make the marks and the surface; no
+/// grass, which only made the probe slow (about 15 builds of it across three tests) and which no assertion reads.
 const PROBE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
     line shore wobble="5dmm" { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
     region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
@@ -122,7 +123,6 @@ const PROBE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
             pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand
             pin top="$waterBedHeight" at=pool
         }
-        grass at=bank
         water
     }
 }"#;
