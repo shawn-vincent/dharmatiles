@@ -6,7 +6,8 @@
     reason = "a test: a failing unwrap is the failure"
 )]
 
-use dt_doc::map::{Group, Mode, decode};
+use dt_doc::map::{Group, decode};
+use dt_lang::Colour;
 
 const LIST: &str = r#"dharmatiles version="1.0.0"
 map {
@@ -16,7 +17,7 @@ map {
     piece "home:meadows/glade" print=skip
     piece "lib:tiles/walls/1x1-wall-stone" at="(4sq, 1sq)" rot=90 bottom="20dmm"
 }
-plates printer="bambu/x1c-ams" system="db" mode="multicolour" group="filament" gap="3mm" margin="5mm" turn="allowed"
+plates printer="bambu/x1c-ams" system="db" colour="multicolour" group="filament" gap="3mm" margin="5mm" turn="allowed"
 "#;
 
 fn errors(text: &str) -> Vec<(String, String)> {
@@ -54,7 +55,7 @@ fn a_print_list_reads_pieces_and_plates() {
     assert_eq!(l.pieces[3].at.as_ref().unwrap().value, "(4sq, 1sq)");
     let pl = &l.plates;
     assert_eq!(pl.printer.as_ref().unwrap().value, "bambu/x1c-ams");
-    assert_eq!(pl.mode.as_ref().unwrap().value, Mode::Multicolour);
+    assert_eq!(pl.colour.as_ref().unwrap().value, Colour::Multicolour);
     assert_eq!(pl.group.as_ref().unwrap().value, Group::Filament);
     assert_eq!(pl.gap.as_ref().unwrap().value, 3.0);
     assert_eq!(pl.margin.as_ref().unwrap().value, 5.0);
@@ -68,7 +69,7 @@ fn every_word_of_the_plates_line_is_optional() {
         "dharmatiles version=1\nmap {\n piece \"lib:tiles/ground/1x1-grass\"\n}\n",
     )
     .unwrap();
-    assert!(l.plates.printer.is_none() && l.plates.mode.is_none() && l.plates.gap.is_none());
+    assert!(l.plates.printer.is_none() && l.plates.colour.is_none() && l.plates.gap.is_none());
     assert_eq!(l.pieces[0].count.value, 1);
 }
 
@@ -109,8 +110,8 @@ fn mistakes_are_shown_at_their_text_with_a_hint() {
     assert!(m.contains("unit") || m.contains("gap"));
     let (m, _) = one("map {\n piece \"a\"\n}\nplates gap=\"3\"");
     assert!(m.contains("length"));
-    let (m, _) = one("map {\n piece \"a\"\n}\nplates mode=\"colourful\"");
-    assert!(m.contains("not a mode"));
+    let (m, _) = one("map {\n piece \"a\"\n}\nplates colour=\"colourful\"");
+    assert!(m.contains("not a colour"));
     let (m, h) = one("map {\n piece \"a\"\n}\nplates {\n pin p1 plate=1 at=\"(0mm, 0mm)\"\n}");
     assert!(
         m.contains("no piece is called") && h.contains("id"),
@@ -120,14 +121,29 @@ fn mistakes_are_shown_at_their_text_with_a_hint() {
     assert!(m.contains("one plates line"));
     let (m, _) = one("tile size=\"1x1\" {\n}");
     assert!(m.contains("unknown top-level node"));
-    let (m, _) = one("plates mode=\"single\"");
+    let (m, _) = one("plates colour=\"single\"");
     assert!(m.contains("no `map`"));
+}
+
+#[test]
+fn the_old_mode_word_is_refused_with_the_fix_that_writes_colour() {
+    let text = "dharmatiles version=1\nmap {\n piece \"a\"\n}\nplates mode=\"multicolour\"";
+    let e = decode("m.dmap", text).unwrap_err();
+    let mode = e
+        .iter()
+        .find(|d| d.message.contains("`mode` is now `colour`"))
+        .expect("the mistake");
+    let fix = mode.fix.as_ref().expect("a fix");
+    assert_eq!(
+        (fix.was.as_str(), fix.replacement.as_str()),
+        ("mode", "colour")
+    );
 }
 
 #[test]
 fn a_mistake_in_every_place_comes_together() {
     let e = errors(
-        "dharmatiles version=1\nmap {\n piece \"a\" count=0\n piece \"b\" seed=-1\n piece\n}\nplates mode=\"x\" gap=\"9\"\n",
+        "dharmatiles version=1\nmap {\n piece \"a\" count=0\n piece \"b\" seed=-1\n piece\n}\nplates colour=\"x\" gap=\"9\"\n",
     );
     assert!(e.len() >= 5, "{e:?}");
 }

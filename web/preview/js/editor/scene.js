@@ -292,7 +292,7 @@ export function statusLines() {
 let pillsOn = false; // off until the user turns them on: the list in the panel carries the shelf's words
 const tags = new Map(); // piece id -> its element
 
-/** A small pill over each piece the program has a word for: have (on your shelf), to print, or the caution of the other colour mode. */
+/** A small pill over each piece the program has a word for: have (on your shelf), to print, or the caution of the other colour. */
 function drawTags() {
   const box = $('mpills');
   if (!mounted || !pillsOn) { if (box.childElementCount) { box.replaceChildren(); tags.clear(); } return; }

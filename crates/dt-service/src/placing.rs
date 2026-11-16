@@ -172,16 +172,15 @@ impl Resolver {
         Ok((x, y))
     }
 
-    /// The seeds you own of this tile in this system and colour mode.
-    fn owned(&self, canon: &str, system: dt_lang::System, colour: &str) -> BTreeSet<u64> {
-        use dt_doc::inventory::Colour;
+    /// The seeds you own of this tile in this system and colour.
+    fn owned(
+        &self,
+        canon: &str,
+        system: dt_lang::System,
+        colour: dt_lang::Colour,
+    ) -> BTreeSet<u64> {
         let Some(l) = &self.shelf else {
             return BTreeSet::new();
-        };
-        let colour = if colour == "multi" {
-            Colour::Multi
-        } else {
-            Colour::Single
         };
         l.pieces()
             .iter()
@@ -201,7 +200,7 @@ impl Resolver {
         &mut self,
         canon: &str,
         system: dt_lang::System,
-        colour: &str,
+        colour: dt_lang::Colour,
         own: Option<u64>,
     ) -> Result<u64, String> {
         let owned = self.owned(canon, system, colour);
@@ -239,7 +238,7 @@ impl Resolver {
         &self,
         canon: &str,
         system: dt_lang::System,
-        colour: &str,
+        colour: dt_lang::Colour,
     ) -> Option<Option<u64>> {
         let on_map = self
             .scene
@@ -278,7 +277,7 @@ mod tests {
             seed: None,
             seed_used: seed,
             system: dt_lang::System::Db,
-            colour: "single".to_owned(),
+            colour: dt_lang::Colour::Single,
             cols: 1,
             rows: 1,
             sq: 35.0,
@@ -310,7 +309,7 @@ mod tests {
             shelf_exists: false,
             have: 0,
             to_print: 0,
-            colour: "single".to_owned(),
+            colour: dt_lang::Colour::Single,
             system: dt_lang::System::Db,
             square_mm: 35.0,
             printer: "default".to_owned(),
@@ -384,7 +383,12 @@ mod tests {
         let mut seen = BTreeSet::new();
         for _ in 0..200 {
             let s = rs
-                .fresh("home:t", dt_lang::System::Db, "single", Some(5))
+                .fresh(
+                    "home:t",
+                    dt_lang::System::Db,
+                    dt_lang::Colour::Single,
+                    Some(5),
+                )
                 .unwrap();
             assert!(s != 4 && s != 5 && (1..=99_998).contains(&s));
             assert!(seen.insert(s), "a seed repeated within an edit");

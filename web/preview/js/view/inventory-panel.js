@@ -30,7 +30,7 @@ export function HaveBlock(/** @type {{ t: import('../editor/stores.js').ServerTi
   return html`<section class="inv-block"><h3 class="cap">${`Inventory · ${systemName(system)}`}</h3>
     <p class=${`inv-have${h.have ? '' : ' none'}`}>${exists(inv) ? haveLine(h) : 'No inventory yet. The first print you add makes the file.'}</p>
     ${h.edited ? html`<p class="inv-edited" title="The tile changed since the print you have was made. It still counts as had; this is only to tell you.">Edited since printing</p>` : null}
-    <div class="inv-ask"><${Seg} label="Colour" options=${[['single', 'Single colour', 'One filament, no paint'], ['multi', 'Multicolour', 'Each material in its own filament']]} current=${colour} on=${(/** @type {string | null} */ c) => { if (c !== 'single' && c !== 'multi') throw new Error(`the colour switch offered ${c}`); act.pickColour(c); }} />
+    <div class="inv-ask"><${Seg} label="Colour" options=${[['single', 'Single colour', 'One filament, no paint'], ['multicolour', 'Multicolour', 'Each material in its own filament']]} current=${colour} on=${(/** @type {string | null} */ c) => { if (c !== 'single' && c !== 'multicolour') throw new Error(`the colour switch offered ${c}`); act.pickColour(c); }} />
       <button type="button" class="btn" title=${`Add one good print of this tile (its seed now, ${systemName(system)}, ${colourName(colour)}) to your inventory, without exporting anything`} onClick=${(/** @type {MouseEvent} */ e) => act.haveThis(t, colour, /** @type {HTMLButtonElement} */ (e.currentTarget))}>I have this</button></div>
   </section>`;
 }
@@ -108,7 +108,7 @@ export function InventoryPanel(/** @type {{ m: PanelModel, act: Actions }} */ { 
       ${face === 'source' ? html`<${Source} text=${d.text} />` : !failed ? html`
         <div class="inv-filters">
           <${Seg} label="System" options=${SYSTEMS.map(([v, n]) => [v, n, `Only ${n} pieces: DungeonBlocks and OpenLOCK never count for each other`])} current=${f.system} on=${(/** @type {string} */ v) => act.filter({ system: v })} />
-          <${Seg} label="Colour" options=${[[null, 'Both'], ['single', 'Single'], ['multi', 'Multi']]} current=${f.colour} on=${(/** @type {string | null} */ v) => act.filter({ colour: v })} />
+          <${Seg} label="Colour" options=${[[null, 'Both'], ['single', 'Single'], ['multicolour', 'Multicolour']]} current=${f.colour} on=${(/** @type {string | null} */ v) => act.filter({ colour: v })} />
           <${Seg} label="Show" options=${[['all', 'All'], ['have', 'On the shelf'], ['off', 'Not on the shelf']]} current=${f.show} on=${(/** @type {string} */ v) => act.filter({ show: v })} />
         </div>
         <p class="inv-totals">${gs.length ? totalsLine(gs) : 'Nothing matches these filters.'}</p>

@@ -14,7 +14,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use dt_doc::map::Mode;
 use dt_eval::{Built, Diag, Options, Tier};
 use dt_kit::{Material, TriMesh};
 use dt_print::plates::{self, Boxes, Context, Layout, Overrides, Plan};
@@ -55,7 +54,7 @@ pub struct PlatesShowReq {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PlatesSetReq {
     pub list: String,
-    /// `printer`, `mode`, `group`, `gap`, `margin`, `turn`, `system` or `inventory`.
+    /// `printer`, `colour`, `group`, `gap`, `margin`, `turn`, `system` or `inventory`.
     pub key: String,
     /// The word; null takes it off.
     pub value: Option<String>,
@@ -210,7 +209,7 @@ fn plate_mesh(
 }
 
 /// The settings as written, for a page that has no plan to show (the list
-/// does not plan): the panel still offers the printer and the mode, so the
+/// does not plan): the panel still offers the printer and the colour, so the
 /// mistake can be mended there.
 #[expect(
     clippy::disallowed_methods,
@@ -234,7 +233,7 @@ fn written_panel(
         label: machine.as_ref().map(dt_eval::Machine::label),
         bed: machine.as_ref().and_then(|m| m.bed),
         slots: machine.as_ref().map(dt_eval::Machine::slot_count),
-        mode: pl.mode.as_ref().map(|m| m.value.word().to_owned()),
+        colour: pl.colour.as_ref().map(|m| m.value),
         group: pl.group.as_ref().map(|m| m.value.word().to_owned()),
         gap: pl.gap.as_ref().map(|m| m.value),
         margin: pl.margin.as_ref().map(|m| m.value),
@@ -364,7 +363,7 @@ fn plates_panel(
         slot_check: SlotCheck {
             need,
             have: s.machine.slot_count(),
-            ok: s.mode == Mode::Single || need <= s.machine.slot_count() as usize,
+            ok: s.colour == dt_lang::Colour::Single || need <= s.machine.slot_count() as usize,
         },
         writable,
         format: plates::export::Format::for_printer(&s.machine)
@@ -1006,7 +1005,7 @@ fn with_word(path: &str, text: &str, key: &str, value: Option<&str>) -> Result<S
     Ok(doc.to_string())
 }
 
-/// `platesSet`: change a word of the `plates` line (the printer, the mode, the grouping, the gap, the margin, turns, the
+/// `platesSet`: change a word of the `plates` line (the printer, the colour, the grouping, the gap, the margin, turns, the
 /// system); the file is the document, so it is rewritten and the list builds again.  A value of null removes the word.
 ///
 /// # Errors
@@ -1017,7 +1016,7 @@ pub fn set(host: &impl PlatesHost, v: PlatesSetReq) -> Result<ListEdited, Refusa
     let key = v.key.as_str();
     if ![
         "printer",
-        "mode",
+        "colour",
         "group",
         "gap",
         "margin",

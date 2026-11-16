@@ -85,7 +85,7 @@ pub enum PlatesPanel {
     Unread(PlatesUnread),
 }
 
-/// A list that does not plan: the settings as written, so the panel still offers the printer and the mode and the
+/// A list that does not plan: the settings as written, so the panel still offers the printer and the colour and the
 /// mistake can be mended there.
 #[derive(Clone, Debug, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
@@ -97,7 +97,7 @@ pub struct PlatesWritten {
     pub label: Option<String>,
     pub bed: Option<[f64; 2]>,
     pub slots: Option<u32>,
-    pub mode: Option<String>,
+    pub colour: Option<dt_lang::Colour>,
     pub group: Option<String>,
     pub gap: Option<f64>,
     pub margin: Option<f64>,

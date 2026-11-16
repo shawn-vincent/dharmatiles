@@ -10,7 +10,8 @@ use crate::preview::inventory as calls_inventory;
 use crate::preview::resources::Resource;
 use crate::preview::scene::{SceneJson, ScenePiece};
 use crate::preview::{lists, maps, places, tiers};
-use dt_service::inventory::{ColourWord, InventoryRow, InventoryState};
+use dt_lang::Colour;
+use dt_service::inventory::{InventoryRow, InventoryState};
 use dt_service::placing::Near;
 
 struct Home {
@@ -153,7 +154,7 @@ impl Home {
     fn have_req(
         &self,
         f: &str,
-        colour: ColourWord,
+        colour: Colour,
         on: Option<&str>,
     ) -> calls_inventory::InventoryHaveReq {
         calls_inventory::InventoryHaveReq {
@@ -195,7 +196,7 @@ fn piece_of<'a>(s: &'a SceneJson, id: &str) -> &'a ScenePiece {
 }
 
 /// A piece of the inventory as the calls name it (the glade, seed 5, DungeonBlocks).
-fn gone_req(tile: &str, colour: ColourWord) -> calls_inventory::InventoryGoneReq {
+fn gone_req(tile: &str, colour: Colour) -> calls_inventory::InventoryGoneReq {
     calls_inventory::InventoryGoneReq {
         tile: tile.to_owned(),
         seed: 5,
@@ -206,7 +207,7 @@ fn gone_req(tile: &str, colour: ColourWord) -> calls_inventory::InventoryGoneReq
     }
 }
 
-fn reprint_req(colour: ColourWord, list: Option<String>) -> calls_inventory::InventoryReprintReq {
+fn reprint_req(colour: Colour, list: Option<String>) -> calls_inventory::InventoryReprintReq {
     calls_inventory::InventoryReprintReq {
         tile: "home:clearing".to_owned(),
         seed: 5,
@@ -292,7 +293,7 @@ fn folder_new_req(name: &str) -> places::FolderNamedReq {
 
 const GLADE: &str =
     "dharmatiles version=1\ntile size=\"1x1\" seed=5 {\n    stack {\n        dirt\n    }\n}\n";
-const KIT: &str = "dharmatiles version=1\nmap {\n    piece \"home:glade\" count=3\n}\nplates printer=\"sovol/sv06\" mode=\"single\"\n";
+const KIT: &str = "dharmatiles version=1\nmap {\n    piece \"home:glade\" count=3\n}\nplates printer=\"sovol/sv06\" colour=\"single\"\n";
 
 #[test]
 fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
@@ -301,7 +302,7 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     assert!(matches!(h.inventory(), InventoryState::Absent { .. }));
     assert!(!h.dir.join("inventory.dinv").exists());
     // a call needs the token
-    let body = h.have_req("glade.dtile", ColourWord::Single, None);
+    let body = h.have_req("glade.dtile", Colour::Single, None);
     assert!(post_head(&h.r, "/api/inventory/have", None, None, &body).starts_with("HTTP/1.1 403"));
     // a bad colour is refused, nothing written (a word no type can say, so the body is the wire's own)
     let raw = format!(r#"{{"tile":{:?},"colour":"rainbow"}}"#, h.id("glade.dtile"));
@@ -311,13 +312,13 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     // a print list or the inventory is not a tile
     let v: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        &h.have_req("glade.dtile", ColourWord::Multi, Some("2026-11-12")),
+        &h.have_req("glade.dtile", Colour::Multicolour, Some("2026-11-12")),
     );
     assert_eq!(v.lines.len(), 1);
     let text = h.text();
     assert!(
         text.contains(
-            "print \"home:glade\" seed=5 system=db colour=multi result=ok on=\"2026-11-12\" hash=\""
+            "print \"home:glade\" seed=5 system=db colour=multicolour result=ok on=\"2026-11-12\" hash=\""
         ),
         "{text}"
     );
@@ -332,7 +333,7 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     assert!(!piece.edited);
     assert_eq!(
         *last_colour,
-        ColourWord::Multi,
+        Colour::Multicolour,
         "the colour the log last used"
     );
     // the file is a tile of My tiles now, opened as an inventory
@@ -353,7 +354,7 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     // a second print of the same piece is a second piece; a mistake in the file is never added to
     let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        &h.have_req("glade.dtile", ColourWord::Multi, None),
+        &h.have_req("glade.dtile", Colour::Multicolour, None),
     );
     assert_eq!(h.first_piece().have, 2);
     let good = h.text();
@@ -364,7 +365,7 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
     .unwrap();
     let (head, v) = h.refused(
         "/api/inventory/have",
-        &h.have_req("glade.dtile", ColourWord::Multi, None),
+        &h.have_req("glade.dtile", Colour::Multicolour, None),
     );
     assert!(head.starts_with("HTTP/1.1 422"), "{head} {v:?}");
     let errors = v.errors.as_ref().expect("the file's mistakes");
@@ -474,7 +475,7 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         "/api/inventory/have",
         &calls_inventory::InventoryHaveReq {
             count: Some(2),
-            ..h.have_req("glade.dtile", ColourWord::Single, Some("2026-11-09"))
+            ..h.have_req("glade.dtile", Colour::Single, Some("2026-11-09"))
         },
     );
     let before = h.text();
@@ -484,7 +485,7 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         &calls_inventory::InventoryGoneReq {
             on: Some("2026-11-10".to_owned()),
             note: Some("dropped on the floor".to_owned()),
-            ..gone_req("home:glade", ColourWord::Single)
+            ..gone_req("home:glade", Colour::Single)
         },
     );
     let piece = h.first_piece();
@@ -498,7 +499,7 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
     assert!(
         h.head(
             "/api/inventory/gone",
-            &gone_req("home:glade", ColourWord::Multi)
+            &gone_req("home:glade", Colour::Multicolour)
         )
         .starts_with("HTTP/1.1 409")
     );
@@ -575,7 +576,7 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
     h.shared.rescan();
     let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        &h.have_req("old/pond.dtile", ColourWord::Single, None),
+        &h.have_req("old/pond.dtile", Colour::Single, None),
     );
     let (head, _): (String, places::FolderDone) = h.call(
         "/api/folders/rename",
@@ -595,7 +596,7 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
     // reprint: a piece you still have goes into the list with print=always, its recorded seed and system
     let v: calls_inventory::InventoryReprinted = h.ok(
         "/api/inventory/reprint",
-        &reprint_req(ColourWord::Single, Some(h.id("kit.dmap"))),
+        &reprint_req(Colour::Single, Some(h.id("kit.dmap"))),
     );
     assert_eq!((v.always, v.made), (true, false));
     let kit = std::fs::read_to_string(h.dir.join("kit.dmap")).unwrap();
@@ -607,14 +608,14 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
         kit.contains("plates printer=\"sovol/sv06\""),
         "the rest is kept: {kit}"
     );
-    // a piece you have none of is a plain piece; no list makes a new one, laid out for the piece's colour mode
+    // a piece you have none of is a plain piece; no list makes a new one, laid out for the piece's colour
     let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/gone",
-        &gone_req("home:clearing", ColourWord::Single),
+        &gone_req("home:clearing", Colour::Single),
     );
     let v: calls_inventory::InventoryReprinted = h.ok(
         "/api/inventory/reprint",
-        &reprint_req(ColourWord::Multi, None),
+        &reprint_req(Colour::Multicolour, None),
     );
     assert!(v.made);
     let made = std::fs::read_to_string(&v.list).unwrap();
@@ -623,15 +624,15 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
             && !made.contains("always"),
         "{made}"
     );
-    assert!(made.contains("system=db mode=multicolour"), "{made}");
+    assert!(made.contains("system=db colour=multicolour"), "{made}");
     assert!(
         dt_doc::map::decode("reprint.dmap", &made).is_ok(),
         "it reads as a print list"
     );
-    // a list with a different colour mode is warned about, not refused
+    // a list with a different colour is warned about, not refused
     let v: calls_inventory::InventoryReprinted = h.ok(
         "/api/inventory/reprint",
-        &reprint_req(ColourWord::Multi, Some(h.id("kit.dmap"))),
+        &reprint_req(Colour::Multicolour, Some(h.id("kit.dmap"))),
     );
     let warning = v.warning.as_deref().unwrap_or_default();
     assert!(
@@ -840,7 +841,7 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     assert!(c.ok, "{c:?}");
 }
 
-const TOWN: &str = "dharmatiles version=1\nmap {\n    grid cols=4 rows=3\n    let $step \"4dmm\"\n    piece p1 \"home:glade\" at=\"(0sq, 0sq)\" rot=0\n    piece p2 \"home:glade\" at=\"(1sq, 0sq)\" rot=90 seed=9 bottom=\"$step + 1mm\"\n    piece p3 \"home:glade\" at=\"(2sq, 1sq)\" rot=0 bottom=\"$wallHeight\"\n}\nplates printer=\"sovol/sv06\" mode=\"single\"\n";
+const TOWN: &str = "dharmatiles version=1\nmap {\n    grid cols=4 rows=3\n    let $step \"4dmm\"\n    piece p1 \"home:glade\" at=\"(0sq, 0sq)\" rot=0\n    piece p2 \"home:glade\" at=\"(1sq, 0sq)\" rot=90 seed=9 bottom=\"$step + 1mm\"\n    piece p3 \"home:glade\" at=\"(2sq, 1sq)\" rot=0 bottom=\"$wallHeight\"\n}\nplates printer=\"sovol/sv06\" colour=\"single\"\n";
 
 #[test]
 fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
@@ -1111,7 +1112,7 @@ fn the_scene_says_which_pieces_the_shelf_leaves_off_and_how_many_print() {
     // one good print of the tile's own seed: the first piece of that seed in the order written is the one you have
     let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        &h.have_req("glade.dtile", ColourWord::Single, Some("2026-11-12")),
+        &h.have_req("glade.dtile", Colour::Single, Some("2026-11-12")),
     );
     let t = h.wait("town.dmap", "the shelf", |t| {
         scene(t).is_some_and(|s| s.shelf_exists)
@@ -1198,7 +1199,7 @@ fn fresh_seeds_are_not_owned_not_on_the_map_and_not_repeated_within_an_edit() {
     // one good print of seed 5 is on the shelf: a fresh seed is not that one, nor 9 (p2), in any piece of one batch
     let _: calls_inventory::InventoryWrote = h.ok(
         "/api/inventory/have",
-        &h.have_req("glade.dtile", ColourWord::Single, Some("2026-11-12")),
+        &h.have_req("glade.dtile", Colour::Single, Some("2026-11-12")),
     );
     let fresh = maps::PieceWords {
         fresh_seed: Some(true),

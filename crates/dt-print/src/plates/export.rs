@@ -93,7 +93,7 @@ fn set_of<'a>(
         parts,
         stands,
         plates: layout.plates.len(),
-        multicolour: plan.settings.mode == dt_doc::map::Mode::Multicolour,
+        colour: plan.settings.colour,
         record,
     }
 }

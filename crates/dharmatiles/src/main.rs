@@ -122,8 +122,28 @@ fn main() -> ExitCode {
         tell!("this is a bug in dharmatiles: {e}");
         return ExitCode::from(BUG);
     }
-    let cli = Cli::from_arg_matches(&Cli::command().version(cli::version_line()).get_matches())
-        .unwrap_or_else(|e| e.exit());
+    let matches = match Cli::command()
+        .version(cli::version_line())
+        .try_get_matches()
+    {
+        Ok(m) => m,
+        Err(e) => {
+            // a boundary message, not a flag: `--mode` was the plates' word for what is now `--colour`
+            let said_mode = std::env::args().any(|a| a == "--mode" || a.starts_with("--mode="));
+            let unknown = e.kind() == clap::error::ErrorKind::UnknownArgument;
+            let code = e.exit_code();
+            if let Err(io) = e.print() {
+                tell!("error: cannot write the command line's mistake: {io}");
+            }
+            if said_mode && unknown {
+                tell!(
+                    "`--mode` is now `--colour`: write `--colour single` or `--colour multicolour`"
+                );
+            }
+            return ExitCode::from(u8::try_from(code).unwrap_or(ERROR));
+        }
+    };
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     // the crash switch of the exit-code tests; nothing in a shipped build
     dt_crash_switch::panic_in_main();
     disk_library();
@@ -255,7 +275,7 @@ fn main() -> ExitCode {
             list,
             printer,
             system,
-            mode,
+            colour,
             group,
             gap,
             margin,
@@ -272,7 +292,7 @@ fn main() -> ExitCode {
             let ov = match plates::overrides(
                 printer,
                 system,
-                mode.as_deref(),
+                colour,
                 group.as_deref(),
                 gap,
                 margin,

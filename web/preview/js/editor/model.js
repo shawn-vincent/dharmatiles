@@ -230,16 +230,16 @@ export const inventoryUi = {
   },
 };
 
-/** The colour mode last used for "I have this": remembered in the browser, else the one the log last wrote, else single. */
+/** The colour last used for "I have this": remembered in the browser, else the one the log last wrote, else single. */
 const storedColour = () => {
   try {
     const c = localStorage.getItem('dt-inventory-colour');
-    if (c === 'single' || c === 'multi') return c;
+    if (c === 'single' || c === 'multicolour') return c;
   } catch { /* private mode, or nothing kept: the log's own last colour answers */ }
   return null;
 };
-/** The colour mode picked at the tile level, until a print is added. */
-export const pickedColour = signal(/** @type {import('../api').ColourWord | null} */ (null));
+/** The colour picked at the tile level, until a print is added. */
+export const pickedColour = signal(/** @type {import('../api').Colour | null} */ (null));
 /** Bumped when the remembered colour changes, so what reads it follows. */
 export const colourKept = signal(0);
 

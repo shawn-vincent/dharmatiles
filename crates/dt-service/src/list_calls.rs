@@ -15,7 +15,7 @@
 
 use std::path::PathBuf;
 
-use dt_doc::map::{DEFAULT_PRINTER, Mode, Want};
+use dt_doc::map::{DEFAULT_PRINTER, Want};
 use dt_doc::ops::{EditError, Kind, Op, apply};
 use dt_eval::Diag;
 use serde::{Deserialize, Serialize};
@@ -379,7 +379,7 @@ pub struct Put {
 }
 
 /// One more copy of `want` in the list `list` (a listed `.dmap`'s id), or in a new list in My tiles when none is named;
-/// `mode` lays a new list out in that colour mode.  With `rev` the add is made against that revision of the list (a
+/// `colour` lays a new list out in that colour.  With `rev` the add is made against that revision of the list (a
 /// caller looking at the list names it); without, it puts one piece at the end of a list the caller has not read (the
 /// tile's own level).
 ///
@@ -390,7 +390,7 @@ pub fn put(
     want: &Want,
     list: Option<&str>,
     rev: Option<u64>,
-    mode: Option<Mode>,
+    colour: Option<dt_lang::Colour>,
 ) -> Result<Put, Refusal> {
     if let Some(id) = list {
         let path = list_path(host, id)?;
@@ -431,7 +431,7 @@ pub fn put(
         )],
         Some(&printer_for(host)),
         host.options().system,
-        mode,
+        colour,
     );
     let dest = write_new(host.storage(), &home, "Print list", "dmap", text.as_bytes())?;
     let rev = host.docs().rev(&dest.to_string_lossy())?;

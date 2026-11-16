@@ -13,12 +13,12 @@ const LOG: &str = r#"dharmatiles version="1.0.0"
 
 // a log
 inventory {
-    print "lib:tiles/ground/1x1-grass" seed=97 system=db colour=multi result=ok on="2026-11-09" hash="3c1f9a4e" from="crossing/plate-1"
-    print "lib:tiles/ground/1x1-grass" seed=12 system=db colour=multi result=ok on="2026-11-09" hash="3c1f9a4e"
+    print "lib:tiles/ground/1x1-grass" seed=97 system=db colour=multicolour result=ok on="2026-11-09" hash="3c1f9a4e" from="crossing/plate-1"
+    print "lib:tiles/ground/1x1-grass" seed=12 system=db colour=multicolour result=ok on="2026-11-09" hash="3c1f9a4e"
     print "lib:tiles/walls/1x1-wall-stone" seed=14 system=db colour=single result=ok on="2026-11-09" hash="a07d22b1"
-    print "lib:tiles/cliffs/2x1-cliff" seed=4 system=db colour=multi result=failed on="2026-11-09" note="top layer stringing"
-    print "lib:tiles/cliffs/2x1-cliff" seed=4 system=db colour=multi result=ok on="2026-11-10"
-    gone "lib:tiles/ground/1x1-grass" seed=12 system=db colour=multi on="2026-11-11" note="dropped on the floor"
+    print "lib:tiles/cliffs/2x1-cliff" seed=4 system=db colour=multicolour result=failed on="2026-11-09" note="top layer stringing"
+    print "lib:tiles/cliffs/2x1-cliff" seed=4 system=db colour=multicolour result=ok on="2026-11-10"
+    gone "lib:tiles/ground/1x1-grass" seed=12 system=db colour=multicolour on="2026-11-11" note="dropped on the floor"
 }
 "#;
 
@@ -35,9 +35,9 @@ fn id(tile: &str, seed: u64, system: &str, colour: Colour) -> Identity {
 fn the_log_adds_up_and_nothing_is_stored() {
     let inv = decode("inventory.dinv", LOG).unwrap();
     assert_eq!(inv.entries.len(), 6);
-    let grass97 = id("lib:tiles/ground/1x1-grass", 97, "db", Colour::Multi);
-    let grass12 = id("lib:tiles/ground/1x1-grass", 12, "db", Colour::Multi);
-    let cliff = id("lib:tiles/cliffs/2x1-cliff", 4, "db", Colour::Multi);
+    let grass97 = id("lib:tiles/ground/1x1-grass", 97, "db", Colour::Multicolour);
+    let grass12 = id("lib:tiles/ground/1x1-grass", 12, "db", Colour::Multicolour);
+    let cliff = id("lib:tiles/cliffs/2x1-cliff", 4, "db", Colour::Multicolour);
     assert_eq!(inv.have(&grass97), 1);
     assert_eq!(inv.have(&grass12), 0, "gone takes it away");
     assert_eq!(
@@ -86,7 +86,7 @@ fn a_piece_is_tile_seed_system_and_colour_and_two_prints_are_two() {
             None
         ),
         print_line(
-            &id(t, 1, "db", Colour::Multi),
+            &id(t, 1, "db", Colour::Multicolour),
             true,
             "2026-11-09",
             None,
@@ -101,16 +101,16 @@ fn a_piece_is_tile_seed_system_and_colour_and_two_prints_are_two() {
         1,
         "DungeonBlocks and OpenLOCK never count for each other"
     );
-    assert_eq!(inv.have(&id(t, 1, "db", Colour::Multi)), 1);
+    assert_eq!(inv.have(&id(t, 1, "db", Colour::Multicolour)), 1);
     assert_eq!(inv.have(&id(t, 2, "db", Colour::Single)), 0);
     let shelf = Shelf::of(&inv);
     assert_eq!(shelf.have(&id(t, 1, "db", Colour::Single)), 2);
     assert_eq!(
-        shelf.other_colour(&id(t, 1, "ol", Colour::Multi)),
+        shelf.other_colour(&id(t, 1, "ol", Colour::Multicolour)),
         1,
         "a multicolour piece wanted where only single colour is owned"
     );
-    assert_eq!(shelf.other_colour(&id(t, 7, "ol", Colour::Multi)), 0);
+    assert_eq!(shelf.other_colour(&id(t, 7, "ol", Colour::Multicolour)), 0);
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn a_rename_carries_the_prints_to_the_new_path() {
     let text = format!(
         "dharmatiles version=1\ninventory {{\n{}\n{}\n{}\n{}\n}}\n",
         print_line(
-            &id("home:old", 5, "db", Colour::Multi),
+            &id("home:old", 5, "db", Colour::Multicolour),
             true,
             "2026-11-09",
             Some("aabbccdd"),
@@ -136,7 +136,7 @@ fn a_rename_carries_the_prints_to_the_new_path() {
             None
         ),
         print_line(
-            &id("home:new", 5, "db", Colour::Multi),
+            &id("home:new", 5, "db", Colour::Multicolour),
             true,
             "2026-11-09",
             None,
@@ -145,7 +145,7 @@ fn a_rename_carries_the_prints_to_the_new_path() {
         ),
         renamed_line("home:old", "home:new", "2026-11-10"),
         print_line(
-            &id("home:new", 6, "db", Colour::Multi),
+            &id("home:new", 6, "db", Colour::Multicolour),
             true,
             "2026-11-11",
             None,
@@ -155,12 +155,12 @@ fn a_rename_carries_the_prints_to_the_new_path() {
     );
     let inv = decode("i.dinv", &text).unwrap();
     assert_eq!(
-        inv.have(&id("home:new", 5, "db", Colour::Multi)),
+        inv.have(&id("home:new", 5, "db", Colour::Multicolour)),
         2,
         "the old path's print joined the new one"
     );
-    assert_eq!(inv.have(&id("home:old", 5, "db", Colour::Multi)), 0);
-    assert_eq!(inv.have(&id("home:new", 6, "db", Colour::Multi)), 1);
+    assert_eq!(inv.have(&id("home:old", 5, "db", Colour::Multicolour)), 0);
+    assert_eq!(inv.have(&id("home:new", 6, "db", Colour::Multicolour)), 1);
     assert_eq!(
         inv.pieces()
             .iter()
@@ -250,6 +250,24 @@ fn mistakes(text: &str) -> Vec<(String, String)> {
     e.iter()
         .map(|d| (d.message.clone(), d.help.clone().unwrap_or_default()))
         .collect()
+}
+
+#[test]
+fn the_old_multi_word_is_refused_with_the_fix_that_writes_multicolour() {
+    let text = "dharmatiles version=1\ninventory {\n print \"a\" seed=1 system=db colour=multi result=ok on=\"2026-11-09\"\n}\n";
+    let e = decode("i.dinv", text).unwrap_err();
+    let fix = e[0].fix.as_ref().expect("a fix");
+    assert!(
+        e[0].help
+            .as_deref()
+            .unwrap_or("")
+            .contains("`multi` is now `multicolour`"),
+        "{e:?}"
+    );
+    assert_eq!(
+        (fix.was.as_str(), fix.replacement.as_str()),
+        ("multi", "multicolour")
+    );
 }
 
 #[test]

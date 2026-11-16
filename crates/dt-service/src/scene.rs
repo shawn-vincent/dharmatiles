@@ -24,8 +24,8 @@ pub struct SceneJson {
     /// The pieces the inventory leaves off (`shelf.state` is `have`) and the pieces that print.
     pub have: usize,
     pub to_print: usize,
-    /// `single` or `multi`.
-    pub colour: String,
+    /// The colour a plates line without its own would print in.
+    pub colour: dt_lang::Colour,
     pub system: dt_lang::System,
     /// The square of `system`, mm: where a tile dropped on the map lands.
     pub square_mm: f64,
@@ -64,7 +64,7 @@ pub struct ScenePiece {
     pub seed: Option<u64>,
     pub seed_used: u64,
     pub system: dt_lang::System,
-    pub colour: String,
+    pub colour: dt_lang::Colour,
     pub cols: u32,
     pub rows: u32,
     /// One square, mm.
@@ -81,7 +81,7 @@ pub struct ScenePiece {
     pub error: Option<String>,
     /// What the shelf says of the piece (none for a piece with a mistake).
     pub shelf: Option<ShelfMark>,
-    /// The seeds you own of this piece's tile in its system and colour mode, and how many of each.
+    /// The seeds you own of this piece's tile in its system and colour, and how many of each.
     pub owned_seeds: Vec<OwnedSeed>,
 }
 
@@ -93,7 +93,7 @@ pub struct OwnedSeed {
 }
 
 /// What the inventory says of a piece: `have` (a print you own is this piece), `need` (it prints), `other` (you own
-/// it in the other colour mode: it still prints), `skip` (`print=skip`).
+/// it in the other colour: it still prints), `skip` (`print=skip`).
 #[derive(Clone, Serialize, Deserialize, Debug, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ShelfMark {

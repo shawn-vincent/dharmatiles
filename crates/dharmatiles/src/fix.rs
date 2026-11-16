@@ -72,8 +72,9 @@ pub(crate) fn run(paths: &[String], opts: &Options) -> Result<Outcome, String> {
     let (mut changes, mut remaining, mut bound) = (Vec::new(), Vec::new(), false);
     for path in paths {
         for round in 0..=ROUNDS {
-            let errs = match dt_eval::check(&Mended(&texts), path, opts) {
-                Ok(_) => break,
+            let kind = kind_of(path);
+            let errs = match checked(&Mended(&texts), kind, path, opts)? {
+                Ok(()) => break,
                 Err(e) => e,
             };
             // the fixes, by the file they mend; a file that is the library's is not ours to write
@@ -108,13 +109,9 @@ pub(crate) fn run(paths: &[String], opts: &Options) -> Result<Outcome, String> {
                     path: &file,
                     opts,
                 };
-                let done = dt_doc::ops::apply_with(
-                    &reader,
-                    dt_doc::ops::Kind::Tile,
-                    &old,
-                    &dt_doc::ops::Op::Fix(&fixes),
-                )
-                .map_err(|e| format!("{file}: {e}"))?;
+                let done =
+                    dt_doc::ops::apply_with(&reader, kind, &old, &dt_doc::ops::Op::Fix(&fixes))
+                        .map_err(|e| format!("{file}: {e}"))?;
                 let mended = done
                     .mended
                     .as_ref()
@@ -149,7 +146,44 @@ pub(crate) fn run(paths: &[String], opts: &Options) -> Result<Outcome, String> {
     })
 }
 
-/// The `.dtile` files at `args`: a file as given, a folder's own and its folders'.
+/// What a path's extension says its document is: a print list, an inventory, or (anything else) a tile.
+fn kind_of(path: &str) -> dt_doc::ops::Kind {
+    use dt_doc::ops::Kind;
+    match Path::new(path).extension().and_then(|x| x.to_str()) {
+        Some(dt_lang::words::DMAP) => Kind::Map,
+        Some(dt_lang::words::DINV) => Kind::Inventory,
+        _ => Kind::Tile,
+    }
+}
+
+/// Read and check the document at `path`, as its kind is read: a tile is planned, a print list or an inventory decoded.
+/// The outer error is a file that cannot be read; the inner is the document's own mistakes.
+fn checked(
+    src: &Mended,
+    kind: dt_doc::ops::Kind,
+    path: &str,
+    opts: &Options,
+) -> Result<Result<(), Vec<Diag>>, String> {
+    use dt_doc::ops::Kind;
+    let docs = |e: &[dt_doc::DocError]| e.iter().map(Diag::from).collect::<Vec<_>>();
+    Ok(match kind {
+        Kind::Tile => dt_eval::check(src, path, opts).map(|_| ()),
+        Kind::Map => {
+            let text = src.read(path)?;
+            dt_doc::map::decode(path, &text)
+                .map(|_| ())
+                .map_err(|e| docs(&e))
+        }
+        Kind::Inventory => {
+            let text = src.read(path)?;
+            dt_doc::inventory::decode(path, &text)
+                .map(|_| ())
+                .map_err(|e| docs(&e))
+        }
+    })
+}
+
+/// The `.dtile`, `.dmap` and `.dinv` files at `args`: a file as given, a folder's own and its folders'.
 fn gather(args: &[String]) -> Result<Vec<String>, String> {
     fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
         let said = |e: std::io::Error| format!("cannot read folder `{}`: {e}", dir.display());
@@ -168,7 +202,15 @@ fn gather(args: &[String]) -> Result<Vec<String>, String> {
             }
             if p.is_dir() {
                 walk(&p, out)?;
-            } else if p.extension().is_some_and(|x| x == dt_lang::words::DTILE) {
+            } else if p.extension().is_some_and(|x| {
+                [
+                    dt_lang::words::DTILE,
+                    dt_lang::words::DMAP,
+                    dt_lang::words::DINV,
+                ]
+                .iter()
+                .any(|w| x == *w)
+            }) {
                 out.push(p);
             }
         }
@@ -206,7 +248,10 @@ pub(crate) fn fix(paths: &[String], opts: &Options, write: bool) -> u8 {
         }
     };
     if files.is_empty() {
-        tell!("error: no .dtile documents at {}", paths.join(", "));
+        tell!(
+            "error: no .dtile, .dmap or .dinv documents at {}",
+            paths.join(", ")
+        );
         return ERROR;
     }
     let out = match run(&files, opts) {

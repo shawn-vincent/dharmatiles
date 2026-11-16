@@ -512,6 +512,7 @@ name = "dt-lang"
 version = "1.0.0"
 dependencies = [
  "serde",
+ "serde_json",
  "ts-rs",
 ]
 

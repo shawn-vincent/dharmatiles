@@ -22,7 +22,6 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use dt_doc::inventory::{self as doc, Colour, Identity, Inventory};
-use dt_doc::map::Mode;
 use dt_eval::{Diag, Source};
 use dt_print::inventory as names;
 use serde::{Deserialize, Serialize};
@@ -30,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use crate::call::{Refusal, Status, Verb};
 use crate::docs::{DocFail, Docs};
 pub use crate::inventory::InventoryWrote;
-use crate::inventory::{ColourWord, InventoryRow, InventoryState};
+use crate::inventory::{InventoryRow, InventoryState};
 use crate::list_calls::{is_inventory, is_plates};
 use crate::message::{Kind, Message, MessageData, Scope, Severity};
 use crate::patch::Patch;
@@ -47,7 +46,7 @@ use crate::tile::tile_id;
 #[serde(deny_unknown_fields)]
 pub struct InventoryHaveReq {
     pub tile: String,
-    pub colour: ColourWord,
+    pub colour: Colour,
     pub system: Option<dt_lang::System>,
     pub seed: Option<u64>,
     pub count: Option<u64>,
@@ -76,7 +75,7 @@ pub struct InventoryGoneReq {
     pub tile: String,
     pub seed: u64,
     pub system: dt_lang::System,
-    pub colour: ColourWord,
+    pub colour: Colour,
     pub note: Option<String>,
     pub on: Option<String>,
 }
@@ -101,7 +100,7 @@ pub struct InventoryReprintReq {
     pub tile: String,
     pub seed: u64,
     pub system: dt_lang::System,
-    pub colour: ColourWord,
+    pub colour: Colour,
     /// The print list's id; none makes a new list.
     pub list: Option<String>,
     /// The revision of the list the caller last saw, when it has the list open.
@@ -301,7 +300,7 @@ pub fn name_tile(
     })
 }
 
-/// The colour mode last used in the log (what `have` assumes), else single.
+/// The colour last used in the log (what `have` assumes), else single.
 #[must_use]
 pub fn last_colour(inv: &Inventory) -> Colour {
     inv.entries
@@ -323,7 +322,7 @@ pub fn pieces_of(inv: &Inventory, source: &dyn Source, home: &Path) -> Vec<Inven
         .map(|p| InventoryRow {
             edited: p.have > 0 && edited_since(source, &p.id.tile, p.hash.as_deref(), Some(home)),
             missing: tile_hash(source, &p.id.tile, Some(home)).is_none(),
-            colour: p.id.colour.into(),
+            colour: p.id.colour,
             tile: p.id.tile,
             seed: p.id.seed,
             system: p.id.system,
@@ -363,13 +362,13 @@ pub fn state_of(
             path: path_text,
             id,
             pieces: pieces_of(&l.inventory, source, home),
-            last_colour: last_colour(&l.inventory).into(),
+            last_colour: last_colour(&l.inventory),
         },
     })
 }
 
 /// The inventory in `home` as the page reads it, in every snapshot: where it is, the pieces it adds up to (with whether
-/// their tile changed or is gone), the colour mode last used, and what is wrong with it if it does not read.
+/// their tile changed or is gone), the colour last used, and what is wrong with it if it does not read.
 #[must_use]
 pub fn snapshot_in(docs: &Docs, source: &dyn Source, home: Option<&Path>) -> InventoryState {
     let Some(home) = home else {
@@ -606,7 +605,7 @@ pub fn have(host: &impl InventoryHost, v: InventoryHaveReq) -> Result<InventoryW
         return Err(Refusal::refused(Status::NotFound, "no such tile"));
     };
     let system = system_of(host, v.system);
-    let colour: Colour = v.colour.into();
+    let colour: Colour = v.colour;
     let on = date_of(host, v.on.as_deref())?;
     let count = usize::try_from(v.count.unwrap_or(1).clamp(1, 100))
         .expect("a count of at most 100 fits a usize");
@@ -643,18 +642,14 @@ pub fn have(host: &impl InventoryHost, v: InventoryHaveReq) -> Result<InventoryW
             },
             named.seed,
             system.title(),
-            if colour == Colour::Multi {
-                "multicolour"
-            } else {
-                "single colour"
-            }
+            colour.title()
         ),
     )
 }
 
 /// `inventoryRecord`: the sheet after a print.  Every piece on the plate (as the plates' panel showed it) is added as `ok`
 /// except the failed ones, by their place in the plate's list, which are added as `failed`.  The tile, seed, system and
-/// colour mode are the plan's, the date is the page's, the hash is the tile's document now, and `from` names the list and
+/// colour are the plan's, the date is the page's, the hash is the tile's document now, and `from` names the list and
 /// plate.
 ///
 /// # Errors
@@ -683,11 +678,7 @@ pub fn record(host: &impl InventoryHost, v: InventoryRecordReq) -> Result<Invent
         return Err(bad("a failed piece is not on the plate"));
     }
     let on = date_of(host, v.on.as_deref())?;
-    let colour = if p.settings.mode == Mode::Multicolour.word() {
-        Colour::Multi
-    } else {
-        Colour::Single
-    };
+    let colour = p.settings.colour;
     let title = Path::new(&path)
         .file_stem()
         .map_or_else(|| "plates".to_owned(), |s| s.to_string_lossy().into_owned());
@@ -743,7 +734,7 @@ pub fn gone(host: &impl InventoryHost, v: InventoryGoneReq) -> Result<InventoryW
         tile: v.tile.clone(),
         seed: v.seed,
         system: v.system,
-        colour: v.colour.into(),
+        colour: v.colour,
     };
     match load(host.docs(), &home) {
         Ok(Some(l)) if l.inventory.have(&ident) > 0 => {}
@@ -930,7 +921,7 @@ pub fn reprint(
     v: InventoryReprintReq,
 ) -> Result<InventoryReprinted, Refusal> {
     let (tile, seed, system) = (v.tile.as_str(), v.seed, v.system);
-    let colour: Colour = v.colour.into();
+    let colour: Colour = v.colour;
     let home = home_of(host)?;
     let have = match load(host.docs(), &home) {
         Ok(Some(l)) => l.inventory.have(&Identity {
@@ -942,21 +933,17 @@ pub fn reprint(
         Ok(None) => 0,
         Err(e) => return Err(Refusal::of_mistakes(&e)),
     };
-    let mode = match colour {
-        Colour::Single => Mode::Single,
-        Colour::Multi => Mode::Multicolour,
-    };
-    // a list laid out in another colour mode is warned about, not refused
+    // a list laid out in another colour is warned about, not refused
     let list = v.list.as_deref();
     let warning = list
         .and_then(|id| host.path_of(id))
         .and_then(|path| host.storage().read_text(Path::new(&path)).ok().map(|t| (path, t)))
         .and_then(|(path, t)| dt_doc::map::decode(&path, &t).ok())
-        .and_then(|l| l.plates.mode.as_ref().filter(|m| m.value != mode).map(|m| {
+        .and_then(|l| l.plates.colour.as_ref().filter(|m| m.value != colour).map(|m| {
             format!(
-                "this list prints in {}, and the piece you have is {}: the inventory counts the colour mode, so it will not see it as the one you have",
-                m.value.word(),
-                if colour == Colour::Multi { "multicolour" } else { "single colour" }
+                "this list prints in {}, and the piece you have is {}: the inventory counts the colour, so it will not see it as the one you have",
+                m.value.title(),
+                colour.title()
             )
         }));
     let want = dt_doc::map::Want {
@@ -965,7 +952,7 @@ pub fn reprint(
         system: Some(system),
         always: have > 0,
     };
-    let put = crate::list_calls::put(host, &want, list, v.doc_rev, Some(mode))?;
+    let put = crate::list_calls::put(host, &want, list, v.doc_rev, Some(colour))?;
     announce(host);
     let id = tile_id(&put.path.to_string_lossy());
     if put.made {

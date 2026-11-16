@@ -55,7 +55,7 @@ fn two_plates<'a>(
     b: &'a TriMesh,
     bm: &'a [Material],
     r: &'a BuildRecord,
-    multicolour: bool,
+    colour: dt_lang::Colour,
 ) -> PlateSet<'a> {
     let stand = |part, plate, x, y, turned| PlateStand {
         part,
@@ -85,7 +85,7 @@ fn two_plates<'a>(
             stand(0, 1, 45.0, 5.0, false),
         ],
         plates: 2,
-        multicolour,
+        colour,
         record: r,
     }
 }
@@ -117,7 +117,7 @@ fn a_turned_piece_lies_where_the_packer_put_it_resting_on_the_bed() {
     let a = cuboid([100.0, -50.0, -3.0], 20.0, 10.0, 5.0);
     let am = vec![Material::Earth; 12];
     let r = record();
-    let set = two_plates(&a, &am, &a, &am, &r, false);
+    let set = two_plates(&a, &am, &a, &am, &r, dt_lang::Colour::Single);
     let m = baked(&set, 0);
     // two copies: one at (5, 5), one turned at (45, 5) whose box is 10 wide, 20 deep
     let b = |from: usize| {
@@ -156,7 +156,7 @@ fn a_bambu_project_holds_every_plate_its_instances_and_its_paint() {
     let b = cuboid([0.0, 0.0, 0.0], 10.0, 10.0, 5.0);
     let bm = vec![Material::Water; 12];
     let r = record();
-    let set = two_plates(&a, &am, &b, &bm, &r, true);
+    let set = two_plates(&a, &am, &b, &bm, &r, dt_lang::Colour::Multicolour);
     let z = bambu_plates(&set, &Palette::default(), TEMPLATE, [256.0, 256.0]).unwrap();
     let model = text(&z, "3D/3dmodel.model");
     // an object each for two distinct parts, a build item for every copy
@@ -189,7 +189,7 @@ fn a_bambu_project_holds_every_plate_its_instances_and_its_paint() {
         serde_json::from_str(&text(&z, "Metadata/project_settings.config")).unwrap();
     assert_eq!(cfg["filament_colour"].as_array().unwrap().len(), 3);
     // single colour: one slot, no paint at all
-    let single = two_plates(&a, &am, &b, &bm, &r, false);
+    let single = two_plates(&a, &am, &b, &bm, &r, dt_lang::Colour::Single);
     let z = bambu_plates(&single, &Palette::default(), TEMPLATE, [256.0, 256.0]).unwrap();
     assert!(!text(&z, "3D/Objects/object_1.model").contains("paint_color"));
     let cfg: serde_json::Value =
@@ -212,7 +212,7 @@ fn a_template_for_another_bed_is_refused() {
     let a = cuboid([0.0; 3], 20.0, 10.0, 5.0);
     let am = vec![Material::Earth; 12];
     let r = record();
-    let set = two_plates(&a, &am, &a, &am, &r, false);
+    let set = two_plates(&a, &am, &a, &am, &r, dt_lang::Colour::Single);
     let e = bambu_plates(&set, &Palette::default(), TEMPLATE, [180.0, 180.0]).unwrap_err();
     assert!(e.contains("256") && e.contains("180"), "{e}");
 }
@@ -224,14 +224,14 @@ fn a_plain_3mf_per_plate_has_its_objects_and_items() {
     let b = cuboid([0.0; 3], 10.0, 10.0, 5.0);
     let bm = vec![Material::Water; 12];
     let r = record();
-    let set = two_plates(&a, &am, &b, &bm, &r, true);
+    let set = two_plates(&a, &am, &b, &bm, &r, dt_lang::Colour::Multicolour);
     let z = plate_3mf(&set, 1, &Palette::default());
     let m = text(&z, "3D/3dmodel.model");
     assert_eq!(m.matches("<object ").count(), 2);
     assert_eq!(m.matches("<item ").count(), 2);
     assert!(m.contains("paint_color"));
     let one = plate_3mf(
-        &two_plates(&a, &am, &b, &bm, &r, false),
+        &two_plates(&a, &am, &b, &bm, &r, dt_lang::Colour::Single),
         1,
         &Palette::default(),
     );
@@ -259,7 +259,7 @@ fn every_piece_lies_within_its_footprint_in_the_export_and_in_the_view() {
     let (lo, hi) = box_of(&full);
     let am = vec![Material::Earth; 12];
     let r = record();
-    let set = two_plates(&full, &am, &full, &am, &r, false);
+    let set = two_plates(&full, &am, &full, &am, &r, dt_lang::Colour::Single);
     for plate in 0..2 {
         // the export: the plate's STL is the baked mesh; read each piece's box back
         let baked = baked(&set, plate);

@@ -3,7 +3,7 @@
 // beside your tiles.  Three parts of the page speak of it:
 //
 //   * the tile level (`haveBlock`): "3 printed · seeds 7, 12, 97" and **I have this**, which adds one good print
-//     of the tile's current seed, in the colour mode you pick (the last one you used by default);
+//     of the tile's current seed, in the colour you pick (the last one you used by default);
 //   * the folder rows' have and need pills (view/places-panel.js, from js/inventory.js);
 //   * the inventory document's own view (view/inventory-panel.js): its pieces grouped by tile with the filters
 //     (system, colour, have), the per-line actions (gone, reprint), a tile that moved with its one-click re-link,
@@ -67,7 +67,7 @@ async function act(label, run) {
   } catch (e) { showError(label, e); return null; }
 }
 
-/** @param {import('./stores.js').ServerTile} t @param {import('../api').ColourWord} colour @param {HTMLButtonElement} button */
+/** @param {import('./stores.js').ServerTile} t @param {import('../api').Colour} colour @param {HTMLButtonElement} button */
 async function haveThis(t, colour, button) {
   button.disabled = true;
   try {
@@ -83,7 +83,7 @@ const edit = (/** @type {(s: any) => any} */ f) => { const t = tile(); if (t) in
 
 /** What the buttons do. */
 export const buttons = {
-  pickColour: (/** @type {import('../api').ColourWord} */ c) => { pickedColour.value = c; rememberColour(c); },
+  pickColour: (/** @type {import('../api').Colour} */ c) => { pickedColour.value = c; rememberColour(c); },
   haveThis,
   setFace: (/** @type {string} */ face) => edit(() => ({ face })),
   filter: (/** @type {any} */ patch) => edit((s) => ({ filters: { ...(s.filters ?? { system: null, colour: null, show: 'all' }), ...patch } })),
@@ -106,7 +106,7 @@ export const buttons = {
 
 /**
  * What the inventory says of this tile, and the one button that adds to it, for the tile level's sheet.  `I have this`
- * writes one good print for the tile's current seed, the target system and the colour mode picked here; it works
+ * writes one good print for the tile's current seed, the target system and the colour picked here; it works
  * without any export.
  */
 export const haveBlock = (/** @type {import('./stores.js').ServerTile} */ t) => html`<${HaveBlock} t=${t} m=${haveBlockModel} act=${buttons} />`;

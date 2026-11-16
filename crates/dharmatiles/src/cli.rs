@@ -86,16 +86,16 @@ pub(crate) enum PrintersAction {
 /// What `dharmatiles inventory` does.
 #[derive(Subcommand)]
 pub(crate) enum InventoryAction {
-    /// What you have, by tile, system and colour mode, with the seeds held
+    /// What you have, by tile, system and colour, with the seeds held
     /// (the default).  Shows one system: DungeonBlocks unless you say
     /// `--system ol` or `--system all`.
     List {
         /// `db`, `ol` or `all` (default `db`).
         #[arg(long)]
         system: Option<String>,
-        /// Only `single` or `multi` colour prints.
+        /// Only `single` or `multicolour` prints.
         #[arg(long)]
-        colour: Option<String>,
+        colour: Option<dt_lang::Colour>,
         /// Only tiles whose path has this text in it.
         #[arg(long)]
         tile: Option<String>,
@@ -105,7 +105,7 @@ pub(crate) enum InventoryAction {
     },
     /// Add a print of each tile named: a good one, or with `--failed` one
     /// that failed (kept in the log, not counted).  The seed is the tile's
-    /// own unless you give one; the colour mode is the last you used.
+    /// own unless you give one; the colour is the last you used.
     Have {
         /// Tiles: `lib:tiles/ground/1x1-grass`, `home:meadows/glade` or a path.
         #[arg(required = true)]
@@ -116,9 +116,9 @@ pub(crate) enum InventoryAction {
         /// `db` or `ol` (default `db`).
         #[arg(long)]
         system: Option<String>,
-        /// `single` or `multi` (default: the last colour mode you wrote).
+        /// `single` or `multicolour` (default: the last colour you wrote).
         #[arg(long)]
-        colour: Option<String>,
+        colour: Option<dt_lang::Colour>,
         /// It failed: keep the line, do not count it.
         #[arg(long)]
         failed: bool,
@@ -147,9 +147,9 @@ pub(crate) enum InventoryAction {
         /// `db` or `ol` (default `db`).
         #[arg(long)]
         system: Option<String>,
-        /// `single` or `multi` (default: the last colour mode you wrote).
+        /// `single` or `multicolour` (default: the last colour you wrote).
         #[arg(long)]
-        colour: Option<String>,
+        colour: Option<dt_lang::Colour>,
         /// The date (default: today, UTC).
         #[arg(long)]
         on: Option<String>,
@@ -246,7 +246,7 @@ pub(crate) enum Command {
         /// the list's (default: multicolour when the printer holds more than
         /// one filament).
         #[arg(long)]
-        mode: Option<String>,
+        colour: Option<dt_lang::Colour>,
         /// `filament` (pieces sharing filaments together, then large to
         /// small) or `size` (large to small alone).
         #[arg(long)]

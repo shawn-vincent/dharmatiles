@@ -60,7 +60,7 @@ fn the_plan_says_the_printer_and_checks_the_filaments_before_any_build() {
     let d = scratch("check");
     let l = list(
         &d,
-        "map {\n piece \"lib:tests/plants/1x1-soil+grass\" count=2\n piece \"lib:tests/ground/1x1-flat\"\n}\nplates printer=\"sovol/sv06\" mode=\"multicolour\"",
+        "map {\n piece \"lib:tests/plants/1x1-soil+grass\" count=2\n piece \"lib:tests/ground/1x1-flat\"\n}\nplates printer=\"sovol/sv06\" colour=\"multicolour\"",
     );
     // a one-filament printer in multicolour: refused with the count, before a build
     let (code, _, err) = run(&d, &[l.to_str().unwrap(), "--check"]);
@@ -69,7 +69,7 @@ fn the_plan_says_the_printer_and_checks_the_filaments_before_any_build() {
     assert!(err.contains("this printer has 1"), "{err}");
     assert!(err.contains("kit.dmap"), "{err}");
     // single colour passes, and the AMS printer
-    let (code, _, err) = run(&d, &[l.to_str().unwrap(), "--check", "--mode", "single"]);
+    let (code, _, err) = run(&d, &[l.to_str().unwrap(), "--check", "--colour", "single"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         err.contains("Sovol SV06") && err.contains("220 x 220"),
@@ -89,7 +89,11 @@ fn the_plan_says_the_printer_and_checks_the_filaments_before_any_build() {
     let v: PlatesChecked = serde_json::from_str(&out).unwrap();
     assert_eq!(v.plan.settings.printer, "bambu/x1c-ams");
     assert_eq!(v.plan.settings.slots, 4);
-    assert_eq!(v.plan.settings.mode, "multicolour", "the AMS default");
+    assert_eq!(
+        v.plan.settings.colour,
+        dt_lang::Colour::Multicolour,
+        "the AMS default"
+    );
     assert_eq!(v.plan.kinds.len(), 2);
     assert_eq!(v.plan.kinds[0].count, 2);
 }
