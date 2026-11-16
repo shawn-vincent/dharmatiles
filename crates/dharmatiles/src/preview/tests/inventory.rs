@@ -29,8 +29,11 @@ fn start_home(name: &str, files: &[(&str, &str)]) -> Home {
     }
     let roots =
         vec![Root::new("My tiles", RootKind::Dir(dir.clone())).with_role(roots::Role::Home)];
-    let shared =
-        Arc::new(Shared::with_roots(roots, &[], &Options::default()).with_home(dir.clone()));
+    let shared = Arc::new(
+        Shared::with_roots(roots, &[], &Options::default())
+            .with_home(dir.clone())
+            .with_store(Some(kept_store(name))),
+    );
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let addr = listener.local_addr().unwrap();
     server::spawn(listener, Arc::clone(&shared));

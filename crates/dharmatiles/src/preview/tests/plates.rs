@@ -34,7 +34,7 @@ fn a_print_list_opens_on_its_plates_and_its_settings_rewrite_its_file() {
     )
     .unwrap();
     let path = file.to_string_lossy().into_owned();
-    let r = start(&[&path], true);
+    let r = start_kept(&[&path], true, "plates-view");
     let t = wait_for(&r, "the plates, built in full", |t| {
         t.status == "ready" && plates_planned(t).is_some_and(|p| p.exact)
     });
