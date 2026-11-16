@@ -372,41 +372,32 @@ fn forwarded(control: &str, default: &str, arg: Option<&str>, levels: usize) -> 
     doc(&parts, &format!("        {call}"))
 }
 
-/// The refusal of `control=value` written on a pebble, as the user reads it.
-fn direct_refusal(control: &str, value: &str) -> Vec<Read> {
-    reads(&refused(&doc(
-        "",
-        &format!("        pebble {control}={value} at=\"(0.5sq, 0.5sq)\""),
-    )))
-}
-
+/// A param of kind length is told its kind at the call: a value of another kind
+/// is refused at the argument the caller wrote, through any number of
+/// definitions that pass the param on, whatever control it ends up in.
 #[test]
-fn a_param_forwarded_into_a_thing_param_is_typed_by_the_control_it_fills() {
+fn a_param_forwarded_into_a_thing_param_is_typed_by_its_kind() {
     use dt_lang::codes;
-    let cases: [(&str, &str, &str); 4] = [
+    let cases: [(&str, &str, &str); 3] = [
         // a length with no unit
         ("size", "5", codes::UNIT),
         // an angle where a length is
         ("size", "\"5deg\"", codes::TYPE),
-        // out of its range
+        // out of the control's own range, which the control holds when it reads the value
         ("size", "\"900dmm\"", codes::RANGE),
-        // a word it does not have
-        ("shape", "jagged", codes::CHOICE),
     ];
     for (control, value, code) in cases {
-        let direct = direct_refusal(control, value);
-        assert!(direct.iter().any(|r| r.0 == code), "{direct:#?}");
         for levels in 0..3 {
             // the call's argument, through `levels` definitions
             let text = forwarded(control, "\"3dmm\"", Some(value), levels);
-            let through = reads(&refused(&text));
-            assert_eq!(
-                through, direct,
-                "`{control}={value}` through {levels} levels of forwarding"
+            let errors = refused(&text);
+            assert!(
+                errors.iter().any(|d| d.code == code),
+                "`{control}={value}` through {levels} levels: wanted {code}: {errors:#?}"
             );
             // pointing at the call's argument, the line the user wrote
             let call = text.find("tile size").unwrap();
-            for d in refused(&text) {
+            for d in &errors {
                 let (_, span) = d.at.as_ref().unwrap();
                 assert!(span.offset() > call, "{:?} points at the define", d.message);
             }
@@ -414,18 +405,29 @@ fn a_param_forwarded_into_a_thing_param_is_typed_by_the_control_it_fills() {
     }
 }
 
+/// The kind a param holds is its default's, and a use that does not fit it is
+/// refused where it is written, as `units::misfit` words it: a plain default
+/// used as a length.
 #[test]
-fn a_default_forwarded_into_a_thing_param_is_typed_by_the_control_it_fills() {
+fn a_param_used_where_its_kind_does_not_fit_is_refused_at_the_use() {
     for levels in 0..3 {
-        // the default is the mistake, and is where it is written
         let text = forwarded("size", "5", None, levels);
-        let through = reads(&refused(&text));
-        assert_eq!(through, direct_refusal("size", "5"), "{levels} levels");
-        let call = text.find("tile size").unwrap();
-        for d in refused(&text) {
-            let (_, span) = d.at.as_ref().unwrap();
-            assert!(span.offset() < call, "{:?} points at the call", d.message);
-        }
+        let errors = refused(&text);
+        let want = dt_doc::units::misfit(
+            "s",
+            dt_doc::units::Kind::Plain,
+            "`pebble size`",
+            dt_doc::units::Kind::Length,
+        );
+        let d = errors
+            .iter()
+            .find(|d| d.message == want.message)
+            .unwrap_or_else(|| panic!("{levels} levels: {errors:#?}"));
+        assert_eq!(d.code, want.code);
+        // at the `s` in the definition, before the call
+        let (src, span) = d.at.as_ref().unwrap();
+        assert_eq!(&src.inner()[span.offset()..span.offset() + span.len()], "s");
+        assert!(span.offset() < text.find("tile size").unwrap());
     }
 }
 
@@ -441,11 +443,7 @@ fn controls(text: &str) -> Vec<String> {
 
 #[test]
 fn a_valid_forwarded_value_reads_as_written_on_the_thing() {
-    let cases: [(&str, &str); 3] = [
-        ("size", "\"1.5dmm\""),
-        ("size", "\"1dmm .. 2dmm\""),
-        ("shape", "angular"),
-    ];
+    let cases: [(&str, &str); 2] = [("size", "\"1.5dmm\""), ("size", "\"1dmm .. 2dmm\"")];
     for (control, value) in cases {
         let direct = controls(&doc(
             "",
@@ -467,56 +465,55 @@ fn a_valid_forwarded_value_reads_as_written_on_the_thing() {
     assert_eq!(controls(&forwarded("size", "\"1dmm\"", None, 2)), direct);
 }
 
-/// The one refusal a param that fills two controls of different kinds gets:
-/// at the param, `dt::type`, saying both.
-fn two_kinds_refused(parts: &str, call: &str, both: [&str; 2]) {
+/// A param is one kind, so a use that wants another is refused at the use, as
+/// `units::misfit` words it: the length `s` where a share is wanted.
+fn misfit_at_the_use(parts: &str, call: &str, who: &str) {
     let text = doc(parts, call);
     let errors = refused(&text);
-    let kinds: Vec<&Diag> = errors
+    let want = dt_doc::units::misfit(
+        "s",
+        dt_doc::units::Kind::Length,
+        who,
+        dt_doc::units::Kind::Plain,
+    );
+    let d = errors
         .iter()
-        .filter(|e| e.code == dt_lang::codes::TYPE)
-        .collect();
-    assert!(!kinds.is_empty(), "{errors:#?}");
-    for d in &kinds {
-        for name in both {
-            assert!(d.message.contains(name), "{name} in {:?}", d.message);
-        }
-        // at the param, in the definition's text
-        let (src, span) = d.at.as_ref().unwrap();
-        let at = &src.inner()[span.offset()..span.offset() + span.len()];
-        assert_eq!(at, "s", "{:?}", d.message);
-        assert!(span.offset() < text.find("tile size").unwrap());
-    }
+        .find(|e| e.message == want.message)
+        .unwrap_or_else(|| panic!("{errors:#?}"));
+    assert_eq!(d.code, dt_lang::codes::TYPE);
+    let (src, span) = d.at.as_ref().unwrap();
+    assert_eq!(&src.inner()[span.offset()..span.offset() + span.len()], "s");
+    assert!(span.offset() < text.find("tile size").unwrap());
 }
 
 #[test]
-fn a_param_that_fills_two_controls_of_different_kinds_is_refused_at_the_param() {
+fn a_param_is_one_kind_so_a_use_of_another_is_refused_at_the_use() {
     let at = "at=\"(0.5sq, 0.5sq)\"";
     // both written in the definition: a length and a share
-    two_kinds_refused(
+    misfit_at_the_use(
         &format!(
             "define both {{\n    param s \"1dmm\"\n    stack {{\n        pebble size=s {at}\n        pebble buried=s {at}\n    }}\n}}"
         ),
         "        both",
-        ["pebble size", "pebble buried"],
+        "`pebble buried`",
     );
-    // both on a thing param's entries: known when the call says the thing
+    // on a thing param's entries: known when the call says the thing
     for call in ["        both", "        both s=\"2dmm\""] {
-        two_kinds_refused(
+        misfit_at_the_use(
             &format!(
                 "define both {{\n    param piece pebble\n    param s \"1dmm\"\n    stack {{\n        piece size=s {at}\n        piece buried=s {at}\n    }}\n}}"
             ),
             call,
-            ["pebble size", "pebble buried"],
+            "`pebble buried`",
         );
     }
     // one written on an element, one on the thing param's entry
-    two_kinds_refused(
+    misfit_at_the_use(
         &format!(
             "define both {{\n    param piece pebble\n    param s \"1dmm\"\n    stack {{\n        rock size=s {at}\n        piece buried=s {at}\n    }}\n}}"
         ),
         "        both",
-        ["rock size", "pebble buried"],
+        "`pebble buried`",
     );
 }
 

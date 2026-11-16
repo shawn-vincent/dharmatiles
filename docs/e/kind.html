@@ -19,7 +19,7 @@
 <h2 id="said">What the program says</h2>
 <pre class="said no-hl"><code><span class="a-31">dt::kind</span>
 
-  <span class="a-31">×</span> `ground` has no default, and nothing says what it holds
+  <span class="a-31">×</span> `ground` has no default, and no `kind=`
    ╭─[<span class="a-36 a-b a-u">example.dtile:3:11</span>]
  <span class="a-d">2</span> │ <span class="tk-node">define</span> shore <span class="tk-punct">{</span>
  <span class="a-d">3</span> │     <span class="tk-node">param</span> ground
@@ -27,8 +27,10 @@
    ·              <span class="a-35 a-b">╰── </span><span class="a-35 a-b">no kind</span>
  <span class="a-d">4</span> │     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">ground</span> <span class="tk-punct">}</span>
    ╰────
-<span class="a-36">  help: </span>write its kind: `param ground kind=thing`, `kind=layer` or
-        `kind=length` (or `angle`, `plain`); or give it a default
+<span class="a-36">  help: </span>a parameter holds a value of a kind: write `param ground kind=thing`,
+        `kind=layer`, `kind=length`, `kind=angle` or `kind=plain`, or give it
+        a default (a number, `"5dmm"`, or the name of a thing), whose kind it
+        takes
         explain: https://shawn-vincent.github.io/dharmatiles/e/kind
         offline: dharmatiles explain dt::kind</code></pre>
 </section>
@@ -64,7 +66,7 @@
 </div>
 <section>
 <h2 id="rule">The rule</h2>
-<blockquote class="rule"><p>A param's kind is what it holds: a length, an angle, a plain number, a thing or a layer. Its default, the control it fills or how the definition uses it usually say so, and then <code>kind=</code> is optional. Write it when nothing else does, or to say it plainly: <code>param ground kind=layer</code>, <code>param leaf kind=thing</code>, <code>param reach kind=length</code>. The words are the kinds' own (kinds). When it is written, the default, every use and every caller's argument are checked against it, and a disagreement is <a class="codelink" href="type.html"><code>dt::type</code></a> at the value, in the words of every kind mistake.</p></blockquote>
+<blockquote class="rule"><p>A param is a name of a kind: a length, an angle, a plain number, a thing or a layer. The kind is settled once, at the param, and never from where the param is used. <code>kind=</code> says it: <code>param ground kind=layer</code>, <code>param leaf kind=thing</code>, <code>param reach kind=length</code>. With no <code>kind=</code>, it is the kind of its default: <code>param n 3</code> is a plain number, <code>param w "5dmm"</code> a length, <code>param leaf pebble</code> a thing. The words are the kinds' own (kinds).</p></blockquote>
 <p class="cp-in"><a href="../guide/generators.html#dt-kind">Read it in context: Things and layers · A param's kind can be written: kind=</a></p>
 </section>
 </div>

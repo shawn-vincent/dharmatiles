@@ -16,9 +16,9 @@ use crate::source::Source;
 
 use super::model::*;
 
+mod bind;
 mod controls;
 mod expand;
-mod late;
 
 /// A document as read: the file, and its tile if it has one.
 #[derive(Debug)]
@@ -60,8 +60,6 @@ pub fn read_with(
     let mut r = Reader {
         units,
         counts: BTreeMap::new(),
-        told: Vec::new(),
-        arg_ids: 0,
         sources,
         files: BTreeMap::new(),
         loading: Vec::new(),
@@ -206,9 +204,6 @@ struct Bound {
     src: Src,
     /// The file whose names the value reads: where a thing's name is found.
     file: Arc<File>,
-    /// How it was written and what it may yet be told (`late.rs`); `None`
-    /// for a value written in an entry.
-    arg: Option<Arc<late::Arg>>,
 }
 
 /// What an entry's name stands for once the parameters are bound: a built-in
@@ -260,10 +255,6 @@ struct Reader<'s> {
     /// How many entries of each element are in the stack so far: an entry
     /// without an `id=` is named by its count.
     counts: BTreeMap<String, usize>,
-    /// What each parameter's value was told of its controls (`late.rs`).
-    told: Vec<late::Told>,
-    /// How many values were given a record in `told`.
-    arg_ids: usize,
 }
 
 /// The most stack entries a tile may expand to, definitions inlined.  A

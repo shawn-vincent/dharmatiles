@@ -201,7 +201,7 @@ impl Definition {
 pub struct Param {
     /// Its name.
     pub name: Spanned<String>,
-    /// Its default, typed by the control it fills when that is known.
+    /// Its default, typed by the control of its kind.
     pub default: Option<Spanned<Value>>,
     /// The control the parameter fills inside the definition (`grass
     /// length=length` makes `length` grass's length), if one was found.
@@ -212,38 +212,40 @@ pub struct Param {
     /// the control it fills (a length, an angle, a plain number); `Any` when
     /// nothing says yet.
     pub kind: crate::units::Kind,
-    /// The default as written, when no control was found to type it by: a
-    /// thing parameter's entry may give it one at a call
-    /// ([`crate::decode::type_late`]).
-    pub late: Option<Late>,
 }
 
 impl Param {
+    /// The `let` a call binds this parameter to when it holds a number and
+    /// is given one: the body reads the parameter by its name, in a formula
+    /// as well as a control's whole value.  `None` for a thing or a layer.
+    #[must_use]
+    pub fn as_const(&self, value: &Spanned<Value>) -> Option<Const> {
+        let Value::Num(n) = &value.value else {
+            return None;
+        };
+        let dim = match self.kind {
+            crate::units::Kind::Length => Dim::Mm,
+            crate::units::Kind::Angle => Dim::Angle,
+            crate::units::Kind::Plain => Dim::Scalar,
+            _ => return None,
+        };
+        Some(Const {
+            kind: ConstKind::Let,
+            name: self.name.clone(),
+            value: Spanned {
+                value: n.expr.clone(),
+                span: value.span,
+            },
+            dim,
+            span: self.name.span,
+        })
+    }
+
     /// The control the parameter fills, which types its default and a
     /// caller's value.
     #[must_use]
     pub fn control(&self) -> Option<&'static Control> {
         self.fill.as_ref().map(|f| f.control)
-    }
-}
-
-/// A value written where the control it fills was not known (a definition
-/// call's argument for a parameter that fills no control the definition
-/// names, or such a parameter's default): kept as written, to be typed
-/// where the control is known, by the very function that types it on an
-/// element ([`crate::decode::type_late`]).
-#[derive(Debug, Clone)]
-pub struct Late {
-    pub(crate) entry: KdlEntry,
-    pub(crate) ctx: Arc<crate::decode::Ctx>,
-}
-
-impl Late {
-    pub(crate) fn of(entry: &KdlEntry, ctx: &crate::decode::Ctx) -> Self {
-        Self {
-            entry: entry.clone(),
-            ctx: Arc::new(ctx.clone()),
-        }
     }
 }
 
@@ -584,9 +586,6 @@ pub struct Setting {
     pub form: Form,
     /// The whole text: `name=value`, or the child node.
     pub span: SourceSpan,
-    /// The value as written, for an argument whose parameter fills no known
-    /// control: a thing parameter's entry may give it one at the call.
-    pub late: Option<Late>,
 }
 
 impl Setting {

@@ -1,6 +1,9 @@
 //! Values: one entry's value, typed by the control it sets.
 
 use kdl::{KdlEntry, KdlValue};
+use miette::SourceSpan;
+
+use crate::units::{fits, misfit};
 
 use super::{Ctx, Decoder, sub_span, units, value_span};
 use crate::elements::TAGS;
@@ -21,6 +24,48 @@ fn as_f64(v: &KdlValue) -> Option<f64> {
 }
 
 impl Decoder<'_> {
+    /// A parameter written as a control's whole value: its kind, settled where
+    /// the parameter is declared, must fit what the control takes.  A mistake
+    /// is reported at the use.
+    fn param_use(
+        &mut self,
+        param: &str,
+        axis: Axis,
+        owner: &str,
+        name: &str,
+        span: SourceSpan,
+        ctx: &Ctx,
+    ) {
+        let Some(d) = ctx.kinds.get(param) else {
+            // its parameter line says what is wrong
+            return;
+        };
+        let who = format!("`{owner} {name}`");
+        let want = match axis {
+            Axis::Height => Some(crate::units::Kind::Length),
+            a => a.kind(),
+        };
+        match want {
+            Some(want) if !fits(d.kind, want) => {
+                self.err_kind(span, misfit(param, d.kind, &who, want), &d.because);
+            }
+            Some(_) => {}
+            None => {
+                self.err(
+                    dt_lang::codes::TYPE,
+                    span,
+                    format!(
+                        "`{param}` is {}, and {who} wants {}",
+                        d.kind.describe(),
+                        axis.describe()
+                    ),
+                    "wrong kind",
+                )
+                .help = Some(d.because.clone());
+            }
+        }
+    }
+
     /// A control's value: a word, a parameter, or a value of its axis.
     pub(crate) fn value(
         &mut self,
@@ -34,7 +79,7 @@ impl Decoder<'_> {
         let span = value_span(e);
         if let Some(s) = e.value().as_string() {
             if ctx.params.iter().any(|p| p == s) {
-                self.param_controls.record(s, k, owner, name);
+                self.param_use(s, axis, owner, name, span, ctx);
                 return Some(Spanned {
                     value: Value::Param(s.to_owned()),
                     span,
@@ -431,8 +476,11 @@ fn percent_flaw(
     (owner, name): (&str, &str),
     kind: &str,
 ) -> Option<(&'static str, Refusal)> {
-    // a share is a percent or a plain fraction; a percent is refused elsewhere
-    if axis != Axis::Share && x.has_percent() {
+    // a share is a percent or a plain fraction; a percent is refused elsewhere,
+    // except where a parameter holds a plain number (`param cover "100%"`):
+    // `50%` is a plain number, and the control it ends up in holds it to its own
+    let by_kind = k.is_some_and(|k| std::ptr::eq(k, &crate::elements::KIND_PLAIN));
+    if axis != Axis::Share && !by_kind && x.has_percent() {
         return Some((
             dt_lang::codes::PERCENT,
             Refusal {

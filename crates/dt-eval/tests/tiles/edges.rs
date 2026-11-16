@@ -146,13 +146,14 @@ fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
 
 #[test]
 fn a_value_out_of_range_is_refused_when_read() {
-    // a parameter is checked at the call, against the control it feeds
+    // a parameter's argument is a length (its kind, checked at the call), and the control it feeds holds it to its
+    // own range when it reads it, at the argument the caller wrote
     let e = errors(
         "dharmatiles version=1; define tall {\n    param size \"6dmm..9dmm\"\n    stack { rock size=size }\n}\n\
          tile size=\"1x1\" { stack { dirt; tall size=\"250dmm\" } }\n",
     );
     assert!(
-        e[0].message.starts_with("`tall size` is "),
+        e[0].message.starts_with("`rock size` is "),
         "{}",
         e[0].message
     );

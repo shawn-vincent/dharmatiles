@@ -48,31 +48,20 @@ pub(crate) fn dim_of_kind(k: Kind) -> Dim {
 impl Decoder<'_> {
     /// What a name measures where `ctx` is read: the point names, the
     /// regions, the library's heights and the scope's constants; a
-    /// parameter by the control it fills; `None` for a `$` name a caller
+    /// parameter by what it holds; `None` for a `$` name a caller
     /// installs, which `check` settles where it is called.
     pub(crate) fn kind_of_name(&self, ctx: &Ctx, n: &str) -> Option<Kind> {
         match n {
             "$x" | "$y" | "$d" | "$a" | "$_y" | "x" | "y" => Some(Kind::Plain),
             "$bottom" | "bottom" => Some(Kind::Length),
             "$region" | "$tile" => Some(Kind::Region),
-            _ => ctx
-                .consts
-                .iter()
-                .rev()
-                .find(|(k, _)| k == n)
-                .map(|(_, d)| kind_of_dim(*d))
-                .or_else(|| {
-                    ctx.params.iter().any(|p| p == n).then(|| {
-                        self.param_controls.control(n).and_then(|k| k.value).map_or(
-                            Kind::Any,
-                            |a| match want_of(a) {
-                                Kind::Length => Kind::Length,
-                                Kind::Angle => Kind::Angle,
-                                _ => Kind::Plain,
-                            },
-                        )
-                    })
-                }),
+            _ => ctx.kinds.get(n).map(|d| d.kind).or_else(|| {
+                ctx.consts
+                    .iter()
+                    .rev()
+                    .find(|(k, _)| k == n)
+                    .map(|(_, d)| kind_of_dim(*d))
+            }),
         }
     }
 
