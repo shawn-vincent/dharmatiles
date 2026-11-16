@@ -50,7 +50,7 @@ fn build(src: &dyn Source, store: &dyn Kept) -> Built {
         None,
         Some(store),
     )
-    .unwrap_or_else(|e| panic!("{e:#?}"))
+    .unwrap()
 }
 
 /// What a build did for its things, as three numbers.
@@ -127,8 +127,7 @@ fn another_target_does_not_read_a_thing_built_for_this_one() {
         ..Options::default()
     };
     let at = |o: &Options| {
-        build_stored(&src, "t.dtile", o, &Progress::none(), None, Some(&mem))
-            .unwrap_or_else(|e| panic!("{e:#?}"))
+        build_stored(&src, "t.dtile", o, &Progress::none(), None, Some(&mem)).unwrap()
     };
     let db = at(&Options::default());
     let other = at(&ol);

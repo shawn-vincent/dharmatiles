@@ -671,14 +671,12 @@ fn stone_of(
 /// once; `None`: each stone is grained from its own place in the build.
 pub(crate) fn add_items(
     scene: &mut Scene,
-    owner: &dt_kit::EntryId,
-    seed: Seed,
+    ctx: &Ctx<'_>,
     items: &[(&Item, [f64; 2], f64)],
     variants: &[Option<Seed>],
-    crowns: Option<&dyn crate::CrownTops>,
-    bodies: &Bodies<'_>,
     tally: &mut Tally,
 ) -> Result<(), LookError> {
+    let (owner, seed, crowns, bodies) = (ctx.path, ctx.seed, ctx.crowns, ctx.things);
     let s = scene.frame().scale();
     let slack = scene.frame().step_mm();
     let n: usize = items.iter().map(|(it, _, _)| it.stones.len()).sum();
@@ -1047,16 +1045,7 @@ impl Element for Single {
             }
         };
         let mut t = Tally::default();
-        add_items(
-            scene,
-            ctx.path,
-            ctx.seed,
-            &[(&item, at, yaw)],
-            &[None],
-            ctx.crowns,
-            ctx.things,
-            &mut t,
-        )?;
+        add_items(scene, ctx, &[(&item, at, yaw)], &[None], &mut t)?;
         note(scene, &t);
         Ok(())
     }
@@ -1291,9 +1280,7 @@ impl Thing for Rock {
         // a copy of a variant is grained from the variant's seed
         let variants: Vec<Option<Seed>> = placed.iter().map(|p| p.drawn.variant()).collect();
         let mut t = Tally::default();
-        add_items(
-            scene, ctx.path, ctx.seed, &posed, &variants, ctx.crowns, ctx.things, &mut t,
-        )?;
+        add_items(scene, ctx, &posed, &variants, &mut t)?;
         note(scene, &t);
         Ok(())
     }

@@ -9,10 +9,6 @@
     clippy::unwrap_used,
     reason = "a test: a failing unwrap is the failure"
 )]
-#![expect(
-    clippy::disallowed_methods,
-    reason = "a test: a failed build panics with its diagnostics named"
-)]
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -35,7 +31,7 @@ fn pebbles(words: &str) -> &'static Built {
     );
     let src = Memory(BTreeMap::from([("t.dtile".to_owned(), text)]));
     let opts = dt_testkit::seeded(&Options::default());
-    memo::build(&src, "t.dtile", &opts).unwrap_or_else(|e| panic!("{e:#?}"))
+    memo::build(&src, "t.dtile", &opts).unwrap()
 }
 
 /// The stones that stand, and how many different shapes they are (by footprint).
