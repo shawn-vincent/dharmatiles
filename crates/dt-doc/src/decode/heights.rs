@@ -604,6 +604,19 @@ impl Decoder<'_> {
             ConstKind::Let
         };
         let kw = n.name().value().to_owned();
+        if n.children().is_some() {
+            // a body names a thing or a layer, which only a file's top level holds so far (a ledger line)
+            self.err(
+                dt_lang::codes::VALUE,
+                n.span(),
+                format!("a `{kw}` with a body is written at the top level of a file"),
+                "inside a block",
+            )
+            .help = Some(
+                "move it out to the top of the file, above the tile; inside a block `let` names a value: `let groundHeight 5`".to_owned(),
+            );
+            return None;
+        }
         let (name_e, value_e) = match n.entries() {
             [a, b] if a.name().is_none() && b.name().is_none() => (a, b),
             _ => {

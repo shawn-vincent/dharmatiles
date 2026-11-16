@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { STRIP, boxText, bytesOf, extentText, frameOf, num, stripSeeds, targetOf } from '../js/thing-model.js';
 
 const nodes = [
-  { id: 'define bluff', what: 'define', name: 'bluff', at: 29, len: 68 },
-  { id: 'define wet', what: 'define', name: 'wet', at: 100, len: 40 },
+  { id: 'let bluff', what: 'let', name: 'bluff', at: 29, len: 68 },
+  { id: 'let wet', what: 'let', name: 'wet', at: 100, len: 40 },
   { id: 'tile', what: 'tile', name: null, at: 150, len: 200 },
 ];
 const rock = { key: 'tile/rock/0', label: 'rock', element: 'rock', things: [] };
@@ -15,7 +15,7 @@ const base = { thingFile: true, face: /** @type {'tile' | 'source'} */ ('tile'),
 
 test('the cursor in a define that is one thing is that thing; in a layer define, or outside every define, it is none', () => {
   const at = (/** @type {number} */ caret) => targetOf({ ...base, face: 'source', caret });
-  assert.deepEqual(at(40)?.which, { kind: 'define', name: 'bluff' });
+  assert.deepEqual(at(40)?.which, { kind: 'let', name: 'bluff' });
   assert.equal(at(40)?.name, 'bluff');
   assert.equal(at(110), null, '`wet` is a layer: not in the things');
   assert.equal(at(160), null, 'the tile is no define');
@@ -38,11 +38,11 @@ test('a selected entry that is a thing is that thing, by its key; a scatter offe
 
 test('in the source the caret speaks first, in the levels the selection does', () => {
   const both = { ...base, item: rock, generator: 'thing', caret: 40 };
-  assert.equal(targetOf({ ...both, face: 'source' })?.which.kind, 'define');
+  assert.equal(targetOf({ ...both, face: 'source' })?.which.kind, 'let');
   assert.equal(targetOf({ ...both, face: 'tile' })?.which.kind, 'entry');
   // with nothing under the caret the source falls back to the selection, and the levels to the caret
   assert.equal(targetOf({ ...both, face: 'source', caret: 5 })?.which.kind, 'entry');
-  assert.equal(targetOf({ ...base, face: 'tile', caret: 40 })?.which.kind, 'define');
+  assert.equal(targetOf({ ...base, face: 'tile', caret: 40 })?.which.kind, 'let');
 });
 
 test('a print list, a map or the inventory has no thing', () => {

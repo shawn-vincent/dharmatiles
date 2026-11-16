@@ -48,8 +48,9 @@ pub struct NamesRes {
     pub regions: Vec<String>,
     pub lines: Vec<String>,
     pub points: Vec<String>,
-    /// What each definition is as a generator, as a word of the language's one kind table (`thing` or `layer`): a
-    /// thing parameter may be given the things, a layer parameter the layers and the things.
+    /// What each definition is as a generator, as a word of the language's one kind table (`thing` or `layer`; `any`
+    /// when the text does not settle it, as a name a `use` brings in): a thing parameter may be given the things, a
+    /// layer parameter the layers and the things.
     pub kinds: Vec<DefKind>,
     /// What each parameter holds (`kind` is a word of the kind table), for completing `param=` with the names that
     /// fit: a thing slot offers things, a layer slot layers and things, a value slot values.
@@ -66,7 +67,7 @@ pub struct DefKind {
 /// A parameter of a definition and what it holds.
 #[derive(Serialize, Deserialize, Debug, ts_rs::TS)]
 pub struct ParamKind {
-    pub define: String,
+    pub of: String,
     pub param: String,
     pub kind: String,
 }
@@ -320,8 +321,8 @@ pub fn names(v: &NamesReq) -> NamesRes {
             params: n
                 .params
                 .into_iter()
-                .map(|(define, param, k)| ParamKind {
-                    define,
+                .map(|(of, param, k)| ParamKind {
+                    of,
                     param,
                     kind: k.word().to_owned(),
                 })

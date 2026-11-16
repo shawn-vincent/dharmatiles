@@ -116,7 +116,7 @@
 <tr><td>a scatter's child, a <code>param leaf kind=thing</code></td><td>a thing</td><td>fits</td><td>error: <code>dirt</code> is a layer, and a scatter wants a thing</td></tr>
 <tr><td>a length, an angle, a plain number</td><td>a number</td><td>error</td><td>error</td></tr>
 </tbody></table></div>
-<p>A mistake of kind is said one way wherever it is: <code>`dirt` is a layer, and `stand piece` wants a thing</code>, with what to write instead. A part is a thing only when its stack is exactly one thing with no place word on it; <code>define corner-rock</code> with <code>rock at="(0.1sq, 0.1sq)"</code> in its stack is a layer, because the rock is placed.</p>
+<p>A mistake of kind is said one way wherever it is: <code>`dirt` is a layer, and `stand piece` wants a thing</code>, with what to write instead. A part is a thing only when its body is one thing written bare with no place word on it; <code>let corner-rock</code> with <code>rock at="(0.1sq, 0.1sq)"</code> as its body is a layer, because the rock is placed, and so is any part written with a <code>stack</code>.</p>
 </section>
 <section class="rule">
 <h3 id="written-printed">The editor shows a length as written and as printed</h3>

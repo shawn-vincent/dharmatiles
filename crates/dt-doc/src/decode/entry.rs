@@ -128,8 +128,8 @@ impl Decoder<'_> {
     }
 
     /// What a name is as a generator, in the one kind system: an element's
-    /// kind, a definition's (a thing only when its stack is exactly one
-    /// unplaced thing, else a layer; not known while it is still being
+    /// kind, a definition's (a thing only when its body is one
+    /// unplaced thing written bare, else a layer; not known while it is still being
     /// decoded in a loop), `None` for no element or definition at all.
     pub(crate) fn name_kind(&self, name: &str) -> Option<units::Kind> {
         if let Some(l) = schema::element(name) {
@@ -224,7 +224,7 @@ impl Decoder<'_> {
         }
     }
 
-    fn entry(
+    pub(super) fn entry(
         &mut self,
         node: &KdlNode,
         ctx: &Ctx,

@@ -27,11 +27,11 @@ use dt_eval::{Diag, Memory, Options, check};
 use crate::{common, golden, memo};
 
 /// The ways a document can say a value of some kind: the columns of the table.  The guide's forms today:
-/// naming (`let`, `define`, `region`), a param of the kind, a place word (`at=`), a scatter's child, an `override`
+/// naming (`let`, `region`), a param of the kind, a place word (`at=`), a scatter's child, an `override`
 /// and `use` from a part.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Form {
-    /// Name it: a `let` for a number or a point, a `define` for a thing or a layer, a `region` for a region.
+    /// Name it: a `let` for a number or a point (a value), a thing or a layer (a body), a `region` for a region.
     Name,
     /// Pass it as a `param amount kind=…` of a definition.
     Param,
@@ -121,9 +121,11 @@ fn naming(kind: Kind, s: &Sample, name: &str) -> (String, String) {
             (format!("    let {name} {}\n", s.value), String::new())
         }
         Kind::Region => (String::new(), String::new()),
-        Kind::Thing | Kind::Layer => (
+        // a thing is named by a bare body of one thing; a stack is always a layer
+        Kind::Thing => (String::new(), format!("let {name} {{ {} }}\n", s.value)),
+        Kind::Layer => (
             String::new(),
-            format!("define {name} {{ stack {{ {} }} }}\n", s.value),
+            format!("let {name} {{ stack {{ {} }} }}\n", s.value),
         ),
         Kind::Zero | Kind::Any => unreachable!(),
     }
@@ -147,7 +149,7 @@ fn cell(kind: Kind, form: Form) -> Vec<(&'static str, String)> {
             vec![(
                 "t.dtile",
                 format!(
-                    "{HEAD}define d {{ param amount kind={}; stack {{ {} }} }}\n{}",
+                    "{HEAD}let d {{ param amount kind={}; stack {{ {} }} }}\n{}",
                     kind.word(),
                     entry("amount"),
                     tile("", &call, s.ground)
@@ -170,7 +172,7 @@ fn cell(kind: Kind, form: Form) -> Vec<(&'static str, String)> {
             vec![(
                 "t.dtile",
                 format!(
-                    "{HEAD}define d {{ param amount kind={}; stack {{ {} }} }}\n{}",
+                    "{HEAD}let d {{ param amount kind={}; stack {{ {} }} }}\n{}",
                     kind.word(),
                     entry,
                     tile("", &call, s.ground)
@@ -383,7 +385,7 @@ fn check_equals_build_on_the_torture_set() {
 #[test]
 fn a_param_is_a_name_in_a_formula_in_check_and_in_build() {
     // the part reads `n + 1`: `n` is a plain number (its default's kind), so check and build both accept it
-    let part = "define bit { param n 3; stack { scatter count=\"n + 1\" { rock } } }\n";
+    let part = "let bit { param n 3; stack { scatter count=\"n + 1\" { rock } } }\n";
     let t = format!("{HEAD}{part}{}", tile("", "bit", false));
     let src = common::memory(&[("t.dtile", &t)]);
     let (seen, built) = agree("n + 1", &src, true);
@@ -412,7 +414,7 @@ fn counts(text: &str) -> Vec<String> {
 
 #[test]
 fn a_param_in_a_formula_means_the_value_the_call_gave_it() {
-    let part = "define bit { param n 3; stack { scatter count=\"n + 1\" { rock } } }\n";
+    let part = "let bit { param n 3; stack { scatter count=\"n + 1\" { rock } } }\n";
     let stack = "        bit\n        bit n=5\n        bit n=\"k * 2\"";
     let text = format!("{HEAD}{part}{}", tile("    let k 2\n", stack, false));
     let by_hand = |n: &str| {
@@ -432,7 +434,7 @@ fn a_param_in_a_formula_means_the_value_the_call_gave_it() {
 #[test]
 fn a_param_is_a_whole_value_and_a_place_and_a_formula() {
     // a whole value, and a name in the same line's formula; the caller's name is a `let`
-    let part = "define bit { param n 3; stack { scatter count=n { rock size=\"n * 1dmm\" } } }\n";
+    let part = "let bit { param n 3; stack { scatter count=n { rock size=\"n * 1dmm\" } } }\n";
     let t = format!("{HEAD}{part}{}", tile("", "bit n=2", false));
     let src = common::memory(&[("t.dtile", &t)]);
     assert!(found(&src).is_empty(), "{:#?}", found(&src));
@@ -444,7 +446,7 @@ fn a_param_is_a_whole_value_and_a_place_and_a_formula() {
 fn a_param_with_no_kind_is_refused_at_the_param_and_not_read_from_its_use() {
     for param in ["param n", "param n angular", "param n #true"] {
         let t = format!(
-            "{HEAD}define bit {{ {param}; stack {{ scatter count=n {{ rock }} }} }}\n{}",
+            "{HEAD}let bit {{ {param}; stack {{ scatter count=n {{ rock }} }} }}\n{}",
             tile("", "bit n=2", false)
         );
         let src = common::memory(&[("t.dtile", &t)]);
@@ -478,7 +480,7 @@ fn a_param_used_where_its_kind_does_not_fit_is_refused_as_misfit_words_it() {
     ];
     for (param, entry, want) in cases {
         let t = format!(
-            "{HEAD}define bit {{ {param}; stack {{ {entry} }} }}\n{}",
+            "{HEAD}let bit {{ {param}; stack {{ {entry} }} }}\n{}",
             tile("", "bit", false)
         );
         let src = common::memory(&[("t.dtile", &t)]);
@@ -495,7 +497,7 @@ fn a_param_used_where_its_kind_does_not_fit_is_refused_as_misfit_words_it() {
     }
     // an argument of the wrong kind, at the call
     let t = format!(
-        "{HEAD}define bit {{ param n 3; stack {{ scatter count=n {{ rock }} }} }}\n{}",
+        "{HEAD}let bit {{ param n 3; stack {{ scatter count=n {{ rock }} }} }}\n{}",
         tile("", "bit n=\"4dmm\"", false)
     );
     let src = common::memory(&[("t.dtile", &t)]);

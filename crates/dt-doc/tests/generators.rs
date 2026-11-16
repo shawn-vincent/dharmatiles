@@ -36,7 +36,7 @@ fn doc(define: &str, stack: &str) -> String {
 }
 
 const STAND: &str =
-    "define stand {\n    param piece pebble\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}";
+    "let stand {\n    param piece pebble\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}";
 
 fn ok(text: &str) {
     let e = errors(text);
@@ -87,8 +87,8 @@ fn a_param_that_names_a_thing_holds_one() {
     assert!(matches!(&stand.stack[0].callee, Callee::Param(p) if p.name == "piece"));
     // placed (`at=`), the entry is a layer, so the define is one
     assert_eq!(stand.generator, Kind::Layer);
-    // a define whose stack is exactly one unplaced thing is that thing
-    let plain = "define one {\n    param piece pebble\n    stack { piece }\n}";
+    // a body that is one unplaced thing, written bare, is that thing
+    let plain = "let one {\n    param piece pebble\n    piece\n}";
     let d = decode(
         "t.dtile",
         &format!(
@@ -103,7 +103,7 @@ fn a_param_that_names_a_thing_holds_one() {
 #[test]
 fn a_param_that_says_it_holds_a_thing_holds_one_with_no_default() {
     let kinded =
-        "define stand {\n    param piece kind=thing\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}";
+        "let stand {\n    param piece kind=thing\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}";
     ok(&doc(kinded, "        stand piece=rock"));
     refused(
         &doc(kinded, "        stand"),
@@ -115,11 +115,11 @@ fn a_param_that_says_it_holds_a_thing_holds_one_with_no_default() {
 #[test]
 fn a_thing_is_passed_by_name_and_by_a_definition() {
     ok(&doc(STAND, "        stand piece=boulder"));
-    let mine = format!("define my-rock {{ stack {{ rock }} }}\n{STAND}");
+    let mine = format!("let my-rock {{ rock }}\n{STAND}");
     ok(&doc(&mine, "        stand piece=my-rock"));
     // a thing parameter passed on to another definition's
     let on = format!(
-        "{STAND}\ndefine outer {{\n    param holds boulder\n    stack {{ stand piece=holds }}\n}}"
+        "{STAND}\nlet outer {{\n    param holds boulder\n    stack {{ stand piece=holds }}\n}}"
     );
     ok(&doc(&on, "        outer holds=rock"));
 }
@@ -137,7 +137,7 @@ fn a_layer_is_not_a_thing() {
         "`scatter` is a layer",
     );
     // a definition holding more than one thing is not one
-    let two = format!("define two {{ stack {{ rock; rock }} }}\n{STAND}");
+    let two = format!("let two {{ stack {{ rock; rock }} }}\n{STAND}");
     refused(
         &doc(&two, "        stand piece=two"),
         dt_lang::codes::TYPE,
@@ -163,7 +163,7 @@ fn a_number_is_not_a_thing_and_a_thing_is_not_a_number() {
         dt_lang::codes::TYPE,
         "`boulder` is a thing",
     );
-    let sized = "define sized {\n    param by \"8dmm\"\n    stack { rock size=by }\n}";
+    let sized = "let sized {\n    param by \"8dmm\"\n    stack { rock size=by }\n}";
     refused(
         &doc(sized, "        sized by=boulder"),
         dt_lang::codes::TYPE,
@@ -175,7 +175,7 @@ fn a_number_is_not_a_thing_and_a_thing_is_not_a_number() {
 fn a_param_is_one_kind() {
     refused(
         &doc(
-            "define both {\n    param what kind=layer\n    stack { rock size=what; what }\n}",
+            "let both {\n    param what kind=layer\n    stack { rock size=what; what }\n}",
             "        both what=dirt",
         ),
         dt_lang::codes::TYPE,
@@ -186,7 +186,7 @@ fn a_param_is_one_kind() {
 #[test]
 fn a_thing_param_is_not_named_like_an_element() {
     refused(
-        "dharmatiles version=\"1.0.0\"\ndefine d {\n    param rock pebble\n    stack { dirt }\n}\n",
+        "dharmatiles version=\"1.0.0\"\nlet d {\n    param rock pebble\n    stack { dirt }\n}\n",
         dt_lang::codes::NAME,
         "is the name of an element or a definition",
     );
@@ -204,7 +204,7 @@ fn a_layer_in_a_scatter_names_its_kind() {
 #[test]
 fn a_thing_that_holds_itself_is_a_loop() {
     refused(
-        "dharmatiles version=\"1.0.0\"\ndefine fern {\n    param leaf fern\n    stack { leaf at=\"(0.5sq, 0.5sq)\" }\n}\n",
+        "dharmatiles version=\"1.0.0\"\nlet fern {\n    param leaf fern\n    stack { leaf at=\"(0.5sq, 0.5sq)\" }\n}\n",
         dt_lang::codes::LOOP,
         "calls itself",
     );
@@ -214,7 +214,7 @@ fn a_thing_that_holds_itself_is_a_loop() {
 fn what_is_written_on_a_thing_param_is_typed_when_the_thing_is_known() {
     use dt_doc::decode::{Callable, bind_generator};
     let text = doc(
-        "define stand {\n    param piece pebble\n    stack { piece size=5 at=\"(0.5sq, 0.5sq)\" }\n}",
+        "let stand {\n    param piece pebble\n    stack { piece size=5 at=\"(0.5sq, 0.5sq)\" }\n}",
         "        stand",
     );
     // which thing it is, is not known where it is written: nothing is refused
@@ -274,7 +274,7 @@ fn thing_and_layer_are_kinds_beside_length_and_angle() {
     assert!(fits(Kind::Zero, Kind::Length) && !fits(Kind::Zero, Kind::Thing));
 }
 
-const GROUND: &str = "define bank {\n    param ground dirt\n    stack { ground }\n}";
+const GROUND: &str = "let bank {\n    param ground dirt\n    stack { ground }\n}";
 
 #[test]
 fn a_param_can_hold_a_layer() {
@@ -288,7 +288,7 @@ fn a_param_can_hold_a_layer() {
     assert_eq!(bank.generator, Kind::Layer);
     // a built-in layer and a part are passed by name, a thing too (placing lifts it)
     ok(&doc(GROUND, "        bank ground=water"));
-    let part = format!("define lawn {{ stack {{ dirt; grass }} }}\n{GROUND}");
+    let part = format!("let lawn {{ stack {{ dirt; grass }} }}\n{GROUND}");
     ok(&doc(&part, "        bank ground=lawn"));
     ok(&doc(GROUND, "        bank ground=rock"));
     // a number is not a layer
@@ -298,14 +298,13 @@ fn a_param_can_hold_a_layer() {
         "`3` is a plain number, and `bank ground` wants a layer",
     );
     // and a place word passes through a layer param as on a part call
-    let placed = "define bank {\n    param ground dirt\n    stack { ground at=north }\n}";
+    let placed = "let bank {\n    param ground dirt\n    stack { ground at=north }\n}";
     ok(&doc(placed, "        bank"));
 }
 
 #[test]
 fn a_layer_never_fits_where_a_thing_is_wanted() {
-    let leaf =
-        "define pile {\n    param leaf kind=thing\n    stack { scatter count=2 { leaf } }\n}";
+    let leaf = "let pile {\n    param leaf kind=thing\n    stack { scatter count=2 { leaf } }\n}";
     ok(&doc(leaf, "        pile leaf=rock"));
     refused(
         &doc(leaf, "        pile leaf=dirt"),
@@ -313,7 +312,7 @@ fn a_layer_never_fits_where_a_thing_is_wanted() {
         "`dirt` is a layer, and `pile leaf` wants a thing",
     );
     // a layer param used as a scatter's child
-    let both = "define pile {\n    param ground dirt\n    stack { scatter count=2 { ground } }\n}";
+    let both = "let pile {\n    param ground dirt\n    stack { scatter count=2 { ground } }\n}";
     refused(
         &doc(both, "        pile"),
         dt_lang::codes::TYPE,
@@ -321,7 +320,7 @@ fn a_layer_never_fits_where_a_thing_is_wanted() {
     );
     // a layer param passed on to a thing param
     let on = format!(
-        "{STAND}\ndefine outer {{\n    param holds kind=layer\n    stack {{ stand piece=holds }}\n}}"
+        "{STAND}\nlet outer {{\n    param holds kind=layer\n    stack {{ stand piece=holds }}\n}}"
     );
     refused(
         &doc(&on, "        outer holds=dirt"),
@@ -329,7 +328,7 @@ fn a_layer_never_fits_where_a_thing_is_wanted() {
         "`holds` is a layer, and `stand piece` wants a thing",
     );
     // a part whose one entry is placed is a layer, not a thing
-    let placed = "define corner-rock { stack { rock at=\"(0.1sq, 0.1sq)\" } }";
+    let placed = "let corner-rock { stack { rock at=\"(0.1sq, 0.1sq)\" } }";
     refused(
         &doc(placed, "        scatter count=4 { corner-rock }"),
         dt_lang::codes::SCATTER,
@@ -341,17 +340,17 @@ fn a_layer_never_fits_where_a_thing_is_wanted() {
 fn a_written_kind_agrees_with_a_default_a_use_and_a_caller() {
     // agreeing
     ok(&doc(
-        "define d {\n    param reach kind=length \"3dmm\"\n    stack { rock size=reach }\n}",
+        "let d {\n    param reach kind=length \"3dmm\"\n    stack { rock size=reach }\n}",
         "        d reach=\"5dmm\"",
     ));
     ok(&doc(
-        "define d {\n    param leaf kind=thing pebble\n    stack { leaf at=\"(0.5sq, 0.5sq)\" }\n}",
+        "let d {\n    param leaf kind=thing pebble\n    stack { leaf at=\"(0.5sq, 0.5sq)\" }\n}",
         "        d leaf=rock",
     ));
     // a default of another kind
     refused(
         &doc(
-            "define d {\n    param reach kind=length 3\n    stack { rock size=reach }\n}",
+            "let d {\n    param reach kind=length 3\n    stack { rock size=reach }\n}",
             "        d",
         ),
         dt_lang::codes::UNIT,
@@ -359,7 +358,7 @@ fn a_written_kind_agrees_with_a_default_a_use_and_a_caller() {
     );
     refused(
         &doc(
-            "define d {\n    param ground kind=layer 3\n    stack { ground }\n}",
+            "let d {\n    param ground kind=layer 3\n    stack { ground }\n}",
             "        d",
         ),
         dt_lang::codes::TYPE,
@@ -367,7 +366,7 @@ fn a_written_kind_agrees_with_a_default_a_use_and_a_caller() {
     );
     refused(
         &doc(
-            "define d {\n    param leaf kind=thing dirt\n    stack { leaf at=\"(0.5sq, 0.5sq)\" }\n}",
+            "let d {\n    param leaf kind=thing dirt\n    stack { leaf at=\"(0.5sq, 0.5sq)\" }\n}",
             "        d",
         ),
         dt_lang::codes::TYPE,
@@ -376,7 +375,7 @@ fn a_written_kind_agrees_with_a_default_a_use_and_a_caller() {
     // a use that disagrees
     refused(
         &doc(
-            "define d {\n    param reach kind=angle\n    stack { rock size=reach }\n}",
+            "let d {\n    param reach kind=angle\n    stack { rock size=reach }\n}",
             "        d reach=\"5deg\"",
         ),
         dt_lang::codes::TYPE,
@@ -385,7 +384,7 @@ fn a_written_kind_agrees_with_a_default_a_use_and_a_caller() {
     // a caller's argument that disagrees
     refused(
         &doc(
-            "define d {\n    param reach kind=length\n    stack { rock size=reach }\n}",
+            "let d {\n    param reach kind=length\n    stack { rock size=reach }\n}",
             "        d reach=\"5deg\"",
         ),
         dt_lang::codes::TYPE,
@@ -394,7 +393,7 @@ fn a_written_kind_agrees_with_a_default_a_use_and_a_caller() {
     // a kind that is no parameter's
     refused(
         &doc(
-            "define d {\n    param p kind=region 1\n    stack { dirt }\n}",
+            "let d {\n    param p kind=region 1\n    stack { dirt }\n}",
             "        d",
         ),
         dt_lang::codes::KIND,
@@ -406,7 +405,7 @@ fn a_written_kind_agrees_with_a_default_a_use_and_a_caller() {
 fn a_param_that_nothing_decides_says_to_write_its_kind() {
     refused(
         &doc(
-            "define d {\n    param p\n    stack { dirt }\n}",
+            "let d {\n    param p\n    stack { dirt }\n}",
             "        d p=1",
         ),
         dt_lang::codes::KIND,
@@ -415,7 +414,7 @@ fn a_param_that_nothing_decides_says_to_write_its_kind() {
     // an entry does not decide thing or layer: it is said
     refused(
         &doc(
-            "define d {\n    param ground\n    stack { ground }\n}",
+            "let d {\n    param ground\n    stack { ground }\n}",
             "        d ground=dirt",
         ),
         dt_lang::codes::KIND,
@@ -476,7 +475,7 @@ fn the_kind_word_layer_is_read_as_a_kind_not_as_the_unit() {
     // `layer` is also a unit word, so it cannot name a param ...
     refused(
         &doc(
-            "define d {\n    param layer dirt\n    stack { dirt }\n}",
+            "let d {\n    param layer dirt\n    stack { dirt }\n}",
             "        d",
         ),
         dt_lang::codes::NAME,
@@ -485,4 +484,124 @@ fn the_kind_word_layer_is_read_as_a_kind_not_as_the_unit() {
     // ... but written as `kind=layer` it is the kind
     let kinded = GROUND.replace("param ground dirt", "param ground kind=layer");
     ok(&doc(&kinded, "        bank ground=dirt"));
+}
+
+// ---- the body decides the kind (U2b) --------------------------------------------------------------------------
+
+fn kind_of(part: &str, name: &str) -> Kind {
+    match decode("t.dtile", &doc(part, "        dirt"), &known()) {
+        Ok(d) => d.definition(name).unwrap().generator,
+        Err(e) => panic!("{part}\n{e:#?}"),
+    }
+}
+
+#[test]
+fn only_a_bare_unplaced_thing_is_a_thing_and_a_stack_is_always_a_layer() {
+    assert_eq!(
+        kind_of("let bluff {\n    rock size=\"6dmm\"\n}", "bluff"),
+        Kind::Thing
+    );
+    // the same entry in a stack is a layer
+    assert_eq!(
+        kind_of("let bluff {\n    stack { rock size=\"6dmm\" }\n}", "bluff"),
+        Kind::Layer
+    );
+    // a bare layer is a layer, and a placed thing is one
+    assert_eq!(kind_of("let bank {\n    dirt\n}", "bank"), Kind::Layer);
+    assert_eq!(
+        kind_of("let spot {\n    rock at=\"(0.5sq, 0.5sq)\"\n}", "spot"),
+        Kind::Layer
+    );
+    // a bare call of a param has the param's kind: a layer param is a layer, a thing param a thing
+    assert_eq!(
+        kind_of("let a {\n    param p kind=layer\n    p\n}", "a"),
+        Kind::Layer
+    );
+    assert_eq!(
+        kind_of("let b {\n    param p kind=thing\n    p\n}", "b"),
+        Kind::Thing
+    );
+    // a bare call of a definition that is a thing
+    assert_eq!(
+        kind_of(
+            "let bluff {\n    rock\n}\nlet again {\n    bluff\n}",
+            "again"
+        ),
+        Kind::Thing
+    );
+}
+
+#[test]
+fn a_param_and_a_let_of_a_value_are_not_entries() {
+    // the one entry is the grass: the param is the body's own
+    let part = "let lawn {\n    param length \"3dmm\"\n    grass length=length\n}";
+    assert_eq!(kind_of(part, "lawn"), Kind::Layer);
+    let with_let =
+        "let lawn {\n    let cover \"50%\"\n    param length \"3dmm\"\n    grass length=length\n}";
+    ok(&doc(with_let, "        lawn"));
+}
+
+#[test]
+fn a_body_is_one_bare_entry_or_a_stack_never_several_and_never_both() {
+    refused(
+        &doc("let two {\n    dirt\n    grass\n}", "        two"),
+        dt_lang::codes::STACK,
+        "several entries are a stack",
+    );
+    refused(
+        &doc(
+            "let both {\n    dirt\n    stack { grass }\n}",
+            "        both",
+        ),
+        dt_lang::codes::STACK,
+        "not both",
+    );
+    refused(
+        &doc("let nothing { }", "        dirt"),
+        dt_lang::codes::STACK,
+        "empty",
+    );
+}
+
+#[test]
+fn a_let_is_a_value_or_a_body_not_both() {
+    refused(
+        &doc("let reach \"5dmm\" {\n    dirt\n}", "        dirt"),
+        dt_lang::codes::VALUE,
+        "a value or a body",
+    );
+    ok(&doc("let reach \"5dmm\"", "        dirt"));
+}
+
+#[test]
+fn define_is_retired_whatever_its_shape_and_the_error_carries_the_fix() {
+    for old in [
+        "define lawn {\n    grass\n}",
+        "define lawn \"5\"",
+        "define lawn",
+    ] {
+        let e = errors(&doc(old, "        dirt"));
+        let hit = e
+            .iter()
+            .find(|e| e.code == dt_lang::codes::RETIRED)
+            .unwrap_or_else(|| panic!("{old}\n{e:#?}"));
+        assert!(hit.message.contains("`define` is written `let`"), "{old}");
+        assert!(
+            hit.fix.is_some(),
+            "{old}: the fix writes `let` over the word"
+        );
+    }
+    // with a body it is read as what it was, so the one mistake is the word
+    let e = errors(&doc("define lawn {\n    grass\n}", "        lawn"));
+    assert_eq!(e.len(), 1, "{e:#?}");
+}
+
+#[test]
+fn a_let_with_a_body_inside_a_block_is_refused_in_words() {
+    let text = "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    let bluff {\n        rock\n    }\n    stack { dirt }\n}\n";
+    refused(
+        text,
+        dt_lang::codes::VALUE,
+        "written at the top level of a file",
+    );
 }

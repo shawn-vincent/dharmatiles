@@ -21,7 +21,7 @@
 
   <span class="a-31">×</span> `ground` has no default, and no `kind=`
    ╭─[<span class="a-36 a-b a-u">example.dtile:3:11</span>]
- <span class="a-d">2</span> │ <span class="tk-node">define</span> shore <span class="tk-punct">{</span>
+ <span class="a-d">2</span> │ <span class="tk-node">let</span> shore <span class="tk-punct">{</span>
  <span class="a-d">3</span> │     <span class="tk-node">param</span> ground
    · <span class="a-35 a-b">          ───┬──</span>
    ·              <span class="a-35 a-b">╰── </span><span class="a-35 a-b">no kind</span>
@@ -45,7 +45,7 @@
 <div class="cp-pair">
 <figure class="broken"><figcaption>Gives <code>dt::kind</code></figcaption>
 <pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
-<span class="tk-node">define</span> shore <span class="tk-punct">{</span>
+<span class="tk-node">let</span> shore <span class="tk-punct">{</span>
     <span class="tk-node">param</span> <mark class="del">ground</mark>
     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">ground</span> <span class="tk-punct">}</span>
 <span class="tk-punct">}</span>
@@ -54,7 +54,7 @@
 <span class="tk-punct">}</span></code></pre></figure>
 <figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
 <pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
-<span class="tk-node">define</span> shore <span class="tk-punct">{</span>
+<span class="tk-node">let</span> shore <span class="tk-punct">{</span>
     <span class="tk-node">param</span> <mark class="ins">ground <span class="tk-property">kind</span><span class="tk-punct">=</span>layer</mark>
     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">ground</span> <span class="tk-punct">}</span>
 <span class="tk-punct">}</span>

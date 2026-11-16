@@ -34,7 +34,7 @@ fn lets_work_in_any_block_and_in_a_define() {
         "t.dtile",
         &format!(
             "dharmatiles version=1\n{}",
-            "define lawn { let $blade \"3dmm\"\n stack { override $blade \"4dmm\"\n scatter count=2 { let $q \"1dmm\"\n rock size=\"$q\" } } }\n"
+            "let lawn { let $blade \"3dmm\"\n stack { override $blade \"4dmm\"\n scatter count=2 { let $q \"1dmm\"\n rock size=\"$q\" } } }\n"
         ),
         &known(),
     )

@@ -58,7 +58,7 @@ const SRC: &str = "// top\nthing a=1   b=\"x\" { // note\n    kid 4.5 // keep\n 
 
 #[test]
 fn a_node_is_named_by_its_path_its_name_or_its_id() {
-    let t = "define grass { stack { blade } }\ntile size=\"1x1\" {\n    line shore { through \"0,0\" }\n    region pool { fill \"1,1\" }\n    stack {\n        dirt\n        rock id=old-oak\n        rock\n        scatter count=2 { rock size=\"6..10\" }\n        scatter\n    }\n}\n";
+    let t = "let grass { stack { blade } }\ntile size=\"1x1\" {\n    line shore { through \"0,0\" }\n    region pool { fill \"1,1\" }\n    stack {\n        dirt\n        rock id=old-oak\n        rock\n        scatter count=2 { rock size=\"6..10\" }\n        scatter\n    }\n}\n";
     let ids: Vec<String> = nodeid::table(t)
         .unwrap()
         .into_iter()
@@ -67,9 +67,9 @@ fn a_node_is_named_by_its_path_its_name_or_its_id() {
     assert_eq!(
         ids,
         [
-            "define grass",
-            "define grass/stack",
-            "define grass/stack/blade",
+            "let grass",
+            "let grass/stack",
+            "let grass/stack/blade",
             "tile",
             "tile/line shore",
             "tile/line shore/through",
@@ -728,7 +728,7 @@ fn overlapping_fixes_wait_and_a_repeat_is_made_once() {
 
 #[test]
 fn names_come_from_nodes_not_from_text() {
-    let text = "// define fake\ndefine meadow { stack { dirt } }\nuse \"lib:parts/trees\" oak elm\n\
+    let text = "// let fake { }\nlet meadow { stack { dirt } }\nuse \"lib:parts/trees\" oak elm\n\
         tile size=\"1x1\" {\n about \"a line Foo\"\n line shore { through \"0,0\" }\n\
         /- region ghost { fill \"1,1\" }\n region pool { fill \"1,1\" }\n point p \"1,1\"\n}\n";
     let n = nodeid::names_in(text).unwrap();
@@ -736,7 +736,7 @@ fn names_come_from_nodes_not_from_text() {
     assert_eq!(n.lines, ["shore"]);
     assert_eq!(n.regions, ["pool"]);
     assert_eq!(n.points, ["p"]);
-    assert!(nodeid::names_in("define {").is_err());
+    assert!(nodeid::names_in("let {").is_err());
 }
 
 #[test]
@@ -1002,7 +1002,7 @@ mod make {
 
 #[test]
 fn a_thing_passed_by_name_is_a_control_like_any_other() {
-    let text = "define stand {\n    param piece pebble\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}\ntile size=\"1x1\" {\n    stack {\n        stand piece=rock\n    }\n}\n";
+    let text = "let stand {\n    param piece pebble\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}\ntile size=\"1x1\" {\n    stack {\n        stand piece=rock\n    }\n}\n";
     // the node is named by its path, and the thing by its word, written bare
     let id = "tile/stack/stand";
     let out = set(text, id, "piece", "boulder");
@@ -1024,14 +1024,20 @@ fn a_thing_passed_by_name_is_a_control_like_any_other() {
 #[test]
 fn names_say_what_each_definition_and_parameter_is_as_a_kind() {
     use crate::units::Kind;
-    let text = "define boulder-ish { stack { boulder } }\n\
-        define placed { stack { rock at=\"(0.5sq, 0.5sq)\" } }\n\
-        define bank { param ground dirt\n param reach kind=length\n stack { ground } }\n\
-        define pile { param leaf kind=thing\n stack { scatter count=2 { leaf } } }\n\
+    let text = "dharmatiles version=\"1.0.0\"\n\
+        let boulder-ish { boulder }\n\
+        let boulder-two { stack { boulder } }\n\
+        let placed { stack { rock at=\"(0.5sq, 0.5sq)\" } }\n\
+        let bank { param ground dirt\n param reach kind=length\n stack { ground } }\n\
+        let pile { param leaf kind=thing\n stack { scatter count=2 { leaf } } }\n\
+        let named { param leaf kind=thing\n leaf }\n\
+        use \"parts/trees\" oak\n\
         tile size=\"1x1\" { stack { dirt } }\n";
     let n = nodeid::names_in(text).unwrap();
     let kind = |d: &str| n.kinds.iter().find(|(x, _)| x == d).map(|(_, k)| *k);
     assert_eq!(kind("boulder-ish"), Some(Kind::Thing));
+    // a stack is a layer, whatever it holds; only a bare unplaced thing names a thing
+    assert_eq!(kind("boulder-two"), Some(Kind::Layer));
     // a placed thing is a layer, and so is a stack of a layer
     assert_eq!(kind("placed"), Some(Kind::Layer));
     assert_eq!(kind("bank"), Some(Kind::Layer));
@@ -1044,4 +1050,7 @@ fn names_say_what_each_definition_and_parameter_is_as_a_kind() {
     assert_eq!(param("bank", "ground"), Some(Kind::Layer));
     assert_eq!(param("bank", "reach"), Some(Kind::Length));
     assert_eq!(param("pile", "leaf"), Some(Kind::Thing));
+    // a bare call of a thing param is that thing; a name a `use` brings in is said to be unknown, not left out
+    assert_eq!(kind("named"), Some(Kind::Thing));
+    assert_eq!(kind("oak"), Some(Kind::Any));
 }

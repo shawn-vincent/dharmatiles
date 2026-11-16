@@ -26,9 +26,9 @@ pub const MOST_DRAWS: usize = 48;
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, ts_rs::TS)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum ThingRef {
-    /// A `define` of that name, called with its params at their defaults.
+    /// A `let` with a body, of that name, called with its params at their defaults.
     #[serde(rename_all = "camelCase")]
-    Define { name: String },
+    Let { name: String },
     /// A stack entry by the id a check gave it (`StackItem::key`); `child` is one of a scatter's things, by its place.
     #[serde(rename_all = "camelCase")]
     Entry { key: String, child: Option<u32> },
@@ -37,7 +37,7 @@ pub enum ThingRef {
 /// `buildThing`: draw one thing at each of `seeds`.  `text` is the text the page holds of `file` (a file the tile uses), or of the
 /// tile's own document when there is none: it is laid over what the host stores, as a check's is.  What is read is the tile for an
 /// entry of its stack (a call of a thing a part defines is an entry of the tile, which the part's text may be being edited under),
-/// and the file for a `define` the page is in.
+/// and the file for a `let` the page is in.
 #[derive(Deserialize, Serialize, Debug, ts_rs::TS)]
 #[ts(optional_fields = nullable)]
 #[serde(deny_unknown_fields)]
@@ -127,10 +127,10 @@ pub const BUILD_THING: Verb<ThingReq, ThingRes> = Verb::new("buildThing");
 
 /// Draw the thing `v.which` means, at each seed.  `base` is what the host stores (the tile, the parts it uses, the library) and
 /// `tile` the tile's own document in it; the request's text goes over `v.file`, or over the tile, and the thing is read from the
-/// tile for an entry, from `v.file` for a `define` (see [`ThingReq`]).
+/// tile for an entry, from `v.file` for a `let` (see [`ThingReq`]).
 ///
 /// # Errors
-/// [`Refusal`]: no seed or too many (400); no such define or entry (404); it is a layer, or the document does not read
+/// [`Refusal`]: no seed or too many (400); no such let or entry (404); it is a layer, or the document does not read
 /// (422); a draw could not be made or encoded (500).
 pub fn build_thing<H: PlatesHost + CheckHost>(
     host: &H,
@@ -140,7 +140,7 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
 ) -> Result<ThingRes, Refusal> {
     let held = v.file.as_deref().unwrap_or(tile);
     let document = match (&v.which, v.file.as_deref()) {
-        (ThingRef::Define { .. }, Some(file)) => file,
+        (ThingRef::Let { .. }, Some(file)) => file,
         _ => tile,
     };
     let src = crate::read_calls::Overlay {
@@ -157,7 +157,7 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
     let mut opts = host.options();
     opts.tier = v.tier.unwrap_or_default();
     let which = match &v.which {
-        ThingRef::Define { name } => dt_eval::thing_build::Which::Define(name),
+        ThingRef::Let { name } => dt_eval::thing_build::Which::Let(name),
         ThingRef::Entry { key, child } => dt_eval::thing_build::Which::Entry {
             key,
             child: child.map(|c| c as usize),
@@ -165,16 +165,20 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
     };
     let subject = dt_eval::thing_build::subject(src, document, which, &opts).map_err(|r| match r {
         dt_eval::thing_build::Refused::Mistakes(errs) => Refusal::of_mistakes(&errs),
-        dt_eval::thing_build::Refused::NoDefine(n) => {
-            Refusal::refused(Status::NotFound, format!("there is no `define {n}` here"))
+        dt_eval::thing_build::Refused::NoLet(n) => {
+            Refusal::refused(Status::NotFound, format!("there is no `let {n} {{ … }}` here"))
         }
+        dt_eval::thing_build::Refused::Value(n) => Refusal::refused(
+            Status::Unprocessable,
+            format!("`{n}` is a `let` of a value, not a thing: only a `let` with a body that is one bare thing is drawn alone"),
+        ),
         dt_eval::thing_build::Refused::NoEntry(k) => {
             Refusal::refused(Status::NotFound, format!("there is no entry `{k}` here"))
         }
         dt_eval::thing_build::Refused::Layer { name, element } => Refusal::refused(
             Status::Unprocessable,
             format!(
-                "`{name}` is a layer (`{element}` reads what is under it and changes it), not a thing: only a rock, a tree, a flower or a definition of one is drawn alone"
+                "`{name}` is a layer (`{element}` reads what is under it and changes it), not a thing: only a rock, a tree, a flower or a `let` that is one of them written bare is drawn alone"
             ),
         ),
     })?;

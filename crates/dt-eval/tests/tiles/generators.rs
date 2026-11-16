@@ -44,7 +44,7 @@ fn says(errors: &[Diag], code: &str, want: &str) {
     );
 }
 
-const STAND: &str = "define stand {
+const STAND: &str = "let stand {
     param piece pebble
     stack {
         piece at=\"(0.3sq, 0.5sq)\"
@@ -72,8 +72,8 @@ fn a_thing_param_stands_for_its_default_and_for_what_the_caller_passes() {
 
 #[test]
 fn a_definition_can_be_the_thing() {
-    let parts = "define boulder-ish { stack { boulder } }
-define grove {
+    let parts = "let boulder-ish { stack { boulder } }
+let grove {
     param shape boulder-ish
     stack { shape at=\"(0.5sq, 0.5sq)\" }
 }";
@@ -83,7 +83,7 @@ define grove {
 
 #[test]
 fn a_property_written_where_it_is_used_applies_over_the_things_own() {
-    let parts = "define stand {
+    let parts = "let stand {
     param piece pebble
     stack { piece size=\"1dmm .. 2dmm\" at=\"(0.5sq, 0.5sq)\" }
 }";
@@ -130,7 +130,7 @@ fn a_number_for_a_thing_is_refused() {
 
 #[test]
 fn a_thing_for_a_number_is_refused() {
-    let parts = "define sized {\n    param by \"8dmm\"\n    stack { rock size=by }\n}";
+    let parts = "let sized {\n    param by \"8dmm\"\n    stack { rock size=by }\n}";
     says(
         &refused(&doc(parts, "        sized by=boulder")),
         dt_lang::codes::TYPE,
@@ -150,7 +150,7 @@ fn a_layer_written_as_a_scatter_child_names_its_kind() {
 #[test]
 fn a_thing_param_with_no_default_must_be_given() {
     let parts =
-        "define stand {\n    param piece kind=thing\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}";
+        "let stand {\n    param piece kind=thing\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}";
     says(
         &refused(&doc(parts, "        stand")),
         dt_lang::codes::MISSING_CONTROL,
@@ -169,7 +169,7 @@ fn an_unknown_thing_name_is_refused_at_the_call() {
 
 #[test]
 fn a_thing_that_holds_itself_is_a_loop() {
-    let parts = "define fern {\n    param leaf fern\n    stack { leaf at=\"(0.5sq, 0.5sq)\" }\n}";
+    let parts = "let fern {\n    param leaf fern\n    stack { leaf at=\"(0.5sq, 0.5sq)\" }\n}";
     says(
         &refused(&doc(parts, "        fern")),
         dt_lang::codes::LOOP,
@@ -214,7 +214,7 @@ fn entry(callee: &str, line: &str, block: &str) -> String {
 fn same_refusal(thing: &str, line: &str, block: &str) -> Vec<Read> {
     let direct = refused(&doc("", &format!("        {}", entry(thing, line, block))));
     let parts = format!(
-        "define stand {{\n    param piece {thing}\n    stack {{\n        {}\n    }}\n}}",
+        "let stand {{\n    param piece {thing}\n    stack {{\n        {}\n    }}\n}}",
         entry("piece", line, block)
     );
     let text = doc(&parts, "        stand");
@@ -289,7 +289,7 @@ fn a_group_control_on_a_thing_param_is_refused_as_on_the_element() {
 
 #[test]
 fn a_tree_passed_as_a_thing_takes_its_groups() {
-    let parts = "define grove {
+    let parts = "let grove {
     param piece tree
     stack {
         piece at=\"(0.5sq, 0.5sq)\" {
@@ -331,15 +331,15 @@ fn a_tree_passed_as_a_thing_takes_its_groups() {
 
 #[test]
 fn a_definition_passed_as_a_thing_types_its_arguments_as_a_call_does() {
-    let parts = "define bit {
+    let parts = "let bit {
     param width \"3dmm\"
     stack { pebble size=width at=\"(0.5sq, 0.5sq)\" }
 }
-define stand {
+let stand {
     param piece bit
     stack { piece width=5 }
 }
-define direct { stack { bit width=5 } }";
+let direct { stack { bit width=5 } }";
     let through = refused(&doc(parts, "        stand"));
     let call = refused(&doc(parts, "        direct"));
     let one = |e: &[Diag]| {
@@ -358,13 +358,13 @@ define direct { stack { bit width=5 } }";
 /// default `default`), through `levels` definitions that pass `s` on.
 fn forwarded(control: &str, default: &str, arg: Option<&str>, levels: usize) -> String {
     let mut parts = format!(
-        "define stand {{\n    param piece pebble\n    param s {default}\n    stack {{\n        piece {control}=s at=\"(0.5sq, 0.5sq)\"\n    }}\n}}\n"
+        "let stand {{\n    param piece pebble\n    param s {default}\n    stack {{\n        piece {control}=s at=\"(0.5sq, 0.5sq)\"\n    }}\n}}\n"
     );
     let mut callee = "stand".to_owned();
     for k in 0..levels {
         let name = format!("pass{k}");
         parts += &format!(
-            "define {name} {{\n    param piece pebble\n    param s {default}\n    stack {{ {callee} piece=piece s=s }}\n}}\n"
+            "let {name} {{\n    param piece pebble\n    param s {default}\n    stack {{ {callee} piece=piece s=s }}\n}}\n"
         );
         callee = name;
     }
@@ -492,7 +492,7 @@ fn a_param_is_one_kind_so_a_use_of_another_is_refused_at_the_use() {
     // both written in the definition: a length and a share
     misfit_at_the_use(
         &format!(
-            "define both {{\n    param s \"1dmm\"\n    stack {{\n        pebble size=s {at}\n        pebble buried=s {at}\n    }}\n}}"
+            "let both {{\n    param s \"1dmm\"\n    stack {{\n        pebble size=s {at}\n        pebble buried=s {at}\n    }}\n}}"
         ),
         "        both",
         "`pebble buried`",
@@ -501,7 +501,7 @@ fn a_param_is_one_kind_so_a_use_of_another_is_refused_at_the_use() {
     for call in ["        both", "        both s=\"2dmm\""] {
         misfit_at_the_use(
             &format!(
-                "define both {{\n    param piece pebble\n    param s \"1dmm\"\n    stack {{\n        piece size=s {at}\n        piece buried=s {at}\n    }}\n}}"
+                "let both {{\n    param piece pebble\n    param s \"1dmm\"\n    stack {{\n        piece size=s {at}\n        piece buried=s {at}\n    }}\n}}"
             ),
             call,
             "`pebble buried`",
@@ -510,7 +510,7 @@ fn a_param_is_one_kind_so_a_use_of_another_is_refused_at_the_use() {
     // one written on an element, one on the thing param's entry
     misfit_at_the_use(
         &format!(
-            "define both {{\n    param piece pebble\n    param s \"1dmm\"\n    stack {{\n        rock size=s {at}\n        piece buried=s {at}\n    }}\n}}"
+            "let both {{\n    param piece pebble\n    param s \"1dmm\"\n    stack {{\n        rock size=s {at}\n        piece buried=s {at}\n    }}\n}}"
         ),
         "        both",
         "`pebble buried`",
@@ -532,7 +532,7 @@ fn seeds(text: &str, what: &str) -> Vec<Option<u64>> {
 
 #[test]
 fn two_definitions_sharing_one_thing_draw_differently() {
-    let parts = "define fern {\n    param leaf pebble\n    stack { leaf at=\"(0.3sq, 0.5sq)\" }\n}\ndefine shrub {\n    param leaf pebble\n    stack { leaf at=\"(0.7sq, 0.5sq)\" }\n}";
+    let parts = "let fern {\n    param leaf pebble\n    stack { leaf at=\"(0.3sq, 0.5sq)\" }\n}\nlet shrub {\n    param leaf pebble\n    stack { leaf at=\"(0.7sq, 0.5sq)\" }\n}";
     // the same pin on two calls is the same path under each: pins are for pinning
     let s = seeds(
         &doc(parts, "        fern seed=3\n        shrub seed=3"),
@@ -557,8 +557,8 @@ fn two_definitions_sharing_one_thing_draw_differently() {
 
 #[test]
 fn a_call_pins_each_thing_by_its_path_and_a_sibling_does_not_move_it() {
-    let one = "define cluster {\n    param bit pebble\n    stack {\n        bit at=\"(0.3sq, 0.5sq)\"\n        bit at=\"(0.6sq, 0.5sq)\"\n    }\n}";
-    let two = "define cluster {\n    param bit pebble\n    stack {\n        rock at=\"(0.9sq, 0.9sq)\"\n        bit at=\"(0.3sq, 0.5sq)\"\n        bit at=\"(0.6sq, 0.5sq)\"\n    }\n}";
+    let one = "let cluster {\n    param bit pebble\n    stack {\n        bit at=\"(0.3sq, 0.5sq)\"\n        bit at=\"(0.6sq, 0.5sq)\"\n    }\n}";
+    let two = "let cluster {\n    param bit pebble\n    stack {\n        rock at=\"(0.9sq, 0.9sq)\"\n        bit at=\"(0.3sq, 0.5sq)\"\n        bit at=\"(0.6sq, 0.5sq)\"\n    }\n}";
     let a = seeds(&doc(one, "        cluster seed=9"), "pebble");
     let b = seeds(&doc(two, "        cluster seed=9"), "pebble");
     assert_eq!(a.len(), 2);
@@ -580,7 +580,7 @@ fn thorough_one_definition_builds_two_things() {
 
 // ---- layer params, and the one fit rule at every place ----------------------------------------
 
-const BANK: &str = "define bank {
+const BANK: &str = "let bank {
     param ground dirt
     stack { ground }
 }";
@@ -605,7 +605,7 @@ fn names_of(text: &str) -> Vec<String> {
 
 #[test]
 fn a_layer_param_is_filled_by_a_built_in_and_by_a_part() {
-    let part = "define lawn { stack { dirt; grass } }";
+    let part = "let lawn { stack { dirt; grass } }";
     let parts = format!("{part}\n{BANK}");
     // its default
     let t = names_of(&with_pool(&parts, "        base\n        bank at=pool"));
@@ -623,7 +623,7 @@ fn a_layer_param_is_filled_by_a_built_in_and_by_a_part() {
     assert_eq!(t, ["dirt", "grass"]);
     // a thing fits where a layer is wanted: it is placed there
     let placed =
-        "define spot {\n    param ground kind=layer\n    stack { ground at=\"(0.5sq, 0.5sq)\" }\n}";
+        "let spot {\n    param ground kind=layer\n    stack { ground at=\"(0.5sq, 0.5sq)\" }\n}";
     let t = names_of(&with_pool(
         placed,
         "        base\n        dirt\n        spot ground=rock",
@@ -648,7 +648,7 @@ fn a_place_word_on_a_layer_param_passes_through_to_what_it_holds() {
 fn the_plan_checks_the_stack_as_a_layer_param_filled_it_at_the_callers_argument() {
     // a rock listed before any ground stands on nothing: the order is refused
     // at the argument the caller wrote, not at `ground` in the definition
-    let parts = "define stone-bed {\n    param ground kind=layer\n    stack { ground at=\"(0.5sq, 0.5sq)\" top=\"$bottom + 30dmm\" }\n}";
+    let parts = "let stone-bed {\n    param ground kind=layer\n    stack { ground at=\"(0.5sq, 0.5sq)\" top=\"$bottom + 30dmm\" }\n}";
     let text = with_pool(
         parts,
         "        base\n        stone-bed ground=tree\n        dirt",
@@ -686,13 +686,13 @@ fn a_layer_where_a_thing_is_wanted_is_refused_in_every_position() {
             "`water` is a layer, and a scatter wants a thing",
         ),
         (
-            "define pile {\n    param ground dirt\n    stack { scatter count=2 { ground } }\n}",
+            "let pile {\n    param ground dirt\n    stack { scatter count=2 { ground } }\n}",
             "        pile",
             dt_lang::codes::TYPE,
             "`ground` is a layer, and a scatter wants a thing",
         ),
         (
-            "define corner-rock { stack { rock at=\"(0.1sq, 0.1sq)\" } }",
+            "let corner-rock { stack { rock at=\"(0.1sq, 0.1sq)\" } }",
             "        scatter count=4 { corner-rock }",
             dt_lang::codes::SCATTER,
             "`corner-rock` is a layer, and a scatter wants a thing",
@@ -716,8 +716,19 @@ fn a_layer_param_filled_by_a_number_or_a_wrong_kind_is_refused_at_the_call() {
         dt_lang::codes::TYPE,
         "`3` is a plain number, and `bank ground` wants a layer",
     );
-    let kinded = "define d {\n    param reach kind=length \"3dmm\"\n    stack { rock size=reach at=\"(0.5sq, 0.5sq)\" }\n}";
+    let kinded = "let d {\n    param reach kind=length \"3dmm\"\n    stack { rock size=reach at=\"(0.5sq, 0.5sq)\" }\n}";
     assert!(read(&doc(kinded, "        d reach=\"5dmm\"")).is_ok());
     let errors = refused(&doc(kinded, "        d reach=\"5deg\""));
     says(&errors, dt_lang::codes::TYPE, "angle");
+}
+
+#[test]
+fn a_bare_thing_is_a_scatter_child_and_a_stack_of_one_thing_is_a_layer_that_is_refused_there() {
+    // `let bluff { rock }` is a thing: a scatter may hold it
+    let bare = "let bluff {\n    rock\n}";
+    read(&doc(bare, "        scatter count=2 { bluff }")).unwrap();
+    // the same rock in a `stack` is a layer, and a scatter holds things
+    let stacked = "let bluff {\n    stack { rock }\n}";
+    let e = refused(&doc(stacked, "        scatter count=2 { bluff }"));
+    says(&e, dt_lang::codes::SCATTER, "is a layer");
 }

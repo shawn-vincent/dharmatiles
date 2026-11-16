@@ -28,8 +28,8 @@ export function targetOf(s) {
   if (!s.thingFile) return null;
   const define = () => {
     const names = s.things ?? [];
-    const n = (s.nodes ?? []).find((x) => x.what === 'define' && x.name != null && names.includes(x.name) && x.at <= s.caret && s.caret <= x.at + x.len);
-    return n ? /** @type {Target} */ ({ which: { kind: 'define', name: /** @type {string} */ (n.name) }, name: /** @type {string} */ (n.name), element: 'define', things: [], child: null }) : null;
+    const n = (s.nodes ?? []).find((x) => x.what === 'let' && x.name != null && names.includes(x.name) && x.at <= s.caret && s.caret <= x.at + x.len);
+    return n ? /** @type {Target} */ ({ which: { kind: 'let', name: /** @type {string} */ (n.name) }, name: /** @type {string} */ (n.name), element: 'let', things: [], child: null }) : null;
   };
   const entry = () => {
     const it = s.item;

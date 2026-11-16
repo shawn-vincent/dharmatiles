@@ -13,7 +13,7 @@
 
 const WORDS = [
   ['stack', 'the entries, in build order'], ['region', 'an area bounded by lines'], ['line', 'a line through points'],
-  ['define', 'a definition of your own'], ['use', 'definitions from another file'], ['param', 'a definition\'s parameter'],
+  ['let', 'a name for a value, a thing or a layer'], ['use', 'definitions from another file'], ['param', 'a definition\'s parameter'],
   ['about', 'a sentence about the tile'], ['through', 'the points a line passes'], ['boundedBy', 'the lines round a region'], ['fill', 'a point inside a region'],
 ];
 const PLACE = [
@@ -62,10 +62,10 @@ export function suggest(caret, elements, force = false, language = null, names =
         ...EDGES.map((e) => ({ label: e, insert: e, about: 'a tile edge', kind: 'edge' })),
         ...n.points.map((q) => ({ label: q, insert: q, about: 'a point', kind: 'point' })),
       ];
-    } else if (n.params.some((p) => p.define === node && p.param === ctl && (p.kind === 'thing' || p.kind === 'layer'))) {
+    } else if (n.params.some((p) => p.of === node && p.param === ctl && (p.kind === 'thing' || p.kind === 'layer'))) {
       // a slot that holds a thing or a layer offers the names that fit it, as the program's one fit rule says: a thing slot
       // the things (a layer is not one), a layer slot the layers and the things (placing a thing makes it a layer)
-      const want = /** @type {string} */ (n.params.find((p) => p.define === node && p.param === ctl)?.kind);
+      const want = /** @type {string} */ (n.params.find((p) => p.of === node && p.param === ctl)?.kind);
       const fits = (/** @type {string | null} */ have) => have === want || (have === 'thing' && want === 'layer');
       items = [
         ...elements.filter((e) => fits(e.generator)).map((e) => ({ label: e.name, insert: e.name, about: `${e.generator === 'thing' ? 'a thing' : 'a layer'}: ${e.about}`, kind: e.role, family: e.family })),

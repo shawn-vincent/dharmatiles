@@ -563,7 +563,7 @@ fn a_points_in_a_part_are_worked_out_at_each_call_site() {
     // each: a part has no tile of its own
     let at = |size: &str| {
         let text = format!(
-            "dharmatiles version=1\ndefine knoll {{\n stack {{ rock at=\"(50%, 25%)\" size=\"8dmm\" }}\n}}\ntile size=\"{size}\" seed=3 seams=free {{\n stack {{ base\n dirt\n knoll }}\n}}\n"
+            "dharmatiles version=1\nlet knoll {{\n stack {{ rock at=\"(50%, 25%)\" size=\"8dmm\" }}\n}}\ntile size=\"{size}\" seed=3 seams=free {{\n stack {{ base\n dirt\n knoll }}\n}}\n"
         );
         let c = ok(&text);
         let tile = c.tile.as_ref().unwrap();

@@ -179,21 +179,24 @@ registry! {
     }
     PARAM "param" Mistake {
         summary: "A tile has no parameters: only a definition does",
-        help: "move the `param` line into a `define`, or write a `let` in the tile",
+        help: "move the `param` line into a `let` with a body, or write a `let` in the tile",
         example: NONE,
     }
     KIND "kind" Mistake {
         summary: "A parameter's kind is not a kind a parameter holds, or nothing says what it holds",
         help: "write `param name kind=thing`, `kind=layer`, `kind=length`, `kind=angle` or `kind=plain`, or give it a default",
         example: ex!(
-            "dharmatiles version=\"1.0.0\"\ndefine shore {\n    param ground\n    stack { ground }\n}\ntile size=\"1x1\" {\n    stack { shore ground=dirt }\n}\n",
-            "dharmatiles version=\"1.0.0\"\ndefine shore {\n    param ground kind=layer\n    stack { ground }\n}\ntile size=\"1x1\" {\n    stack { shore ground=dirt }\n}\n"
+            "dharmatiles version=\"1.0.0\"\nlet shore {\n    param ground\n    stack { ground }\n}\ntile size=\"1x1\" {\n    stack { shore ground=dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\nlet shore {\n    param ground kind=layer\n    stack { ground }\n}\ntile size=\"1x1\" {\n    stack { shore ground=dirt }\n}\n"
         ),
     }
-    DEFINE "define" Mistake {
-        summary: "`define` takes only a name",
-        help: "write `define name { … }` with nothing else on the line",
-        example: NONE,
+    RETIRED "retired" Mistake {
+        summary: "A word the language no longer has: it is written with the word that replaced it",
+        help: "write the new word the error names (`define` is now `let`)",
+        example: ex!(
+            "dharmatiles version=\"1.0.0\"\ndefine lawn {\n    dirt\n}\ntile size=\"1x1\" {\n    stack { lawn }\n}\n",
+            "dharmatiles version=\"1.0.0\"\nlet lawn {\n    dirt\n}\ntile size=\"1x1\" {\n    stack { lawn }\n}\n"
+        ),
     }
     MISSING_NAME "missing-name" Mistake {
         summary: "This node needs a name",

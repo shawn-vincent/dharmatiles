@@ -1609,7 +1609,7 @@ fn the_lanes_build_and_an_export_of_the_same_tile_are_one_key_and_one_entry() {
     );
 }
 
-const THINGS: &str = "dharmatiles version=\"1.0.0\"\n\ndefine bluff {\n    stack {\n        rock size=\"6dmm .. 10dmm\"\n    }\n}\n\ndefine wet {\n    stack {\n        dirt\n    }\n}\n\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n        rock size=\"5dmm .. 8dmm\"\n        scatter count=2 {\n            rock size=\"3dmm .. 4dmm\"\n        }\n    }\n}\n";
+const THINGS: &str = "dharmatiles version=\"1.0.0\"\n\nlet bluff {\n    rock size=\"6dmm .. 10dmm\"\n}\n\nlet reach \"5dmm\"\n\nlet wet {\n    stack {\n        dirt\n    }\n}\n\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n        rock size=\"5dmm .. 8dmm\"\n        scatter count=2 {\n            rock size=\"3dmm .. 4dmm\"\n        }\n    }\n}\n";
 
 fn thing_req(which: ThingRef, seeds: &[u64]) -> ThingReq {
     ThingReq {
@@ -1667,7 +1667,7 @@ fn a_called_thing_is_drawn_with_the_text_of_the_part_the_page_is_on() {
 fn a_thing_is_drawn_alone_at_each_seed_by_verb_with_no_server() {
     let w = world();
     let table = table();
-    let define = || ThingRef::Define {
+    let define = || ThingRef::Let {
         name: "bluff".to_owned(),
     };
     let res = table
@@ -1817,16 +1817,25 @@ fn a_thing_is_drawn_alone_at_each_seed_by_verb_with_no_server() {
     assert_eq!(r.status, Status::Unprocessable);
     assert!(r.message.contains("layer"), "{}", r.message);
     let r = refused(
-        ThingRef::Define {
+        ThingRef::Let {
             name: "wet".to_owned(),
         },
         &[1],
     );
     assert_eq!(r.status, Status::Unprocessable);
     assert!(r.message.contains("`wet` is a layer"), "{}", r.message);
+    // a `let` of a value is no thing: a typed refusal that says so, not "no such let"
+    let r = refused(
+        ThingRef::Let {
+            name: "reach".to_owned(),
+        },
+        &[1],
+    );
+    assert_eq!(r.status, Status::Unprocessable);
+    assert!(r.message.contains("a `let` of a value"), "{}", r.message);
     // a name that is no define, and no seed
     let r = refused(
-        ThingRef::Define {
+        ThingRef::Let {
             name: "nope".to_owned(),
         },
         &[1],
@@ -1866,7 +1875,7 @@ fn the_programs_thing_draws_are_the_golden_the_worker_is_held_to() {
             ThingReq {
                 text: golden.text.clone(),
                 file: None,
-                which: ThingRef::Define {
+                which: ThingRef::Let {
                     name: golden.name.clone(),
                 },
                 seeds: golden.seeds.clone(),

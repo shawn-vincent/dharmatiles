@@ -21,9 +21,9 @@ const names = {
     { name: 'lawn', kind: 'layer' },
   ],
   params: [
-    { define: 'stand', param: 'piece', kind: 'thing' },
-    { define: 'bank', param: 'ground', kind: 'layer' },
-    { define: 'bank', param: 'reach', kind: 'length' },
+    { of: 'stand', param: 'piece', kind: 'thing' },
+    { of: 'bank', param: 'ground', kind: 'layer' },
+    { of: 'bank', param: 'reach', kind: 'length' },
   ],
 };
 function caret(text) {

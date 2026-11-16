@@ -155,7 +155,7 @@ fn a_parts_file_checks_but_does_not_build() {
 
 #[test]
 fn use_paths_name_the_library_or_the_project() {
-    let raised = "dharmatiles version=1\ndefine raised { stack { rock size=\"10dmm\" at=\"(0.5sq, 0.5sq)\" } }\n";
+    let raised = "dharmatiles version=1\nlet raised { stack { rock size=\"10dmm\" at=\"(0.5sq, 0.5sq)\" } }\n";
     let src = mem(&[
         ("lib:parts/raised.dtile", raised),
         ("proj/parts/raised.dtile", raised),
@@ -197,7 +197,7 @@ fn use_paths_name_the_library_or_the_project() {
 fn definition_parameters_take_arguments_and_defaults() {
     let src = mem(&[(
         "t.dtile",
-        "dharmatiles version=\"1.0.0\"; define sized {\n  param by \"8dmm\"\n  stack { rock size=by }\n}\ntile size=\"1x1\" {\n  stack { dirt; sized by=\"6dmm\" }\n}\n",
+        "dharmatiles version=\"1.0.0\"; let sized {\n  param by \"8dmm\"\n  stack { rock size=by }\n}\ntile size=\"1x1\" {\n  stack { dirt; sized by=\"6dmm\" }\n}\n",
     )]);
     let t = check(&src, "t.dtile", &legacy()).unwrap().tile.unwrap();
     assert_eq!(
@@ -225,7 +225,7 @@ fn imports_inline_definitions_and_lets_resolve() {
     let src = mem(&[
         (
             "parts/flats.dtile",
-            "dharmatiles version=1\ndefine raised { stack { rock size=\"10dmm\" at=\"(0.5sq, 0.5sq)\" } }\n",
+            "dharmatiles version=1\nlet raised { stack { rock size=\"10dmm\" at=\"(0.5sq, 0.5sq)\" } }\n",
         ),
         (
             "tiles/t.dtile",
@@ -455,7 +455,7 @@ fn a_seed_wobbles_the_lines_again() {
 
 #[test]
 fn a_wall_in_a_definition_needs_its_place_from_the_call() {
-    let def = "dharmatiles version=\"1.0.0\"; define ruin-corner {\n    stack {\n        wall style=cut-stone\n    }\n}\n";
+    let def = "dharmatiles version=\"1.0.0\"; let ruin-corner {\n    stack {\n        wall style=cut-stone\n    }\n}\n";
     let without = format!(
         "{def}tile size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner\n    }}\n}}\n"
     );
@@ -598,7 +598,7 @@ fn a_scatter_along_a_line_reaches_half_its_width_unless_told() {
 fn a_scatter_holds_a_definition_of_one_thing() {
     let text = |size: &str| {
         format!(
-            "dharmatiles version=\"1.0.0\"; define boulder {{\n param size \"6dmm .. 9dmm\"\n stack {{ rock size=size }}\n}}\ndefine oak {{\n stack {{ boulder size=\"{size}\" }}\n}}\n{}",
+            "dharmatiles version=\"1.0.0\"; let boulder {{\n param size \"6dmm .. 9dmm\"\n stack {{ rock size=size }}\n}}\nlet oak {{\n stack {{ boulder size=\"{size}\" }}\n}}\n{}",
             tile_with(
                 "stack {\n base\n dirt\n scatter count=3 { boulder size=\"7dmm .. 10dmm\" weight=2; flower }\n }"
             )

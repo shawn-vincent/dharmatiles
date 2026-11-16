@@ -199,7 +199,7 @@ fn with_part(part: &str) -> Memory {
     ]))
 }
 
-const PART: &str = "dharmatiles version=\"1.0.0\"\ndefine mine {\n    stack {\n        dirt top=\"3.4dmm\" clods=none\n    }\n}\n";
+const PART: &str = "dharmatiles version=\"1.0.0\"\nlet mine {\n    stack {\n        dirt top=\"3.4dmm\" clods=none\n    }\n}\n";
 
 fn key_of(store: &Store, src: &dyn Source, path: &str, opts: &Options) -> dt_store::Key {
     let tracked = dt_store::Tracked::new(src);

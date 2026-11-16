@@ -127,8 +127,8 @@ pub struct TileHeader {
 /// Whether a definition is a tile or a reusable part.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DefKind {
-    /// `define name { … }`
-    Define,
+    /// `let name { … }`: a thing or a layer
+    Let,
     /// `tile size="2x1" seed=… { … }` (named by its file)
     Tile(TileHeader),
 }
@@ -138,7 +138,7 @@ pub enum DefKind {
 pub struct Definition {
     /// Its name.
     pub name: Spanned<String>,
-    /// Tile or define.
+    /// Tile or `let`.
     pub kind: DefKind,
     /// A description (`about "…"`), trimmed.
     pub about: Option<String>,
@@ -162,9 +162,9 @@ pub struct Definition {
     /// Solid, surface or both, from the stack.
     pub summary: Kind,
     /// What the definition is as a generator, in the language's one kind
-    /// system: a thing when its stack is exactly one unplaced thing (an
+    /// system: a thing when its body is one unplaced thing written bare (an
     /// `oak`, which is then scatterable and placed with `at=`), else a layer
-    /// (a stack is a layer).
+    /// (a `stack` is always a layer).
     pub generator: crate::units::Kind,
     /// The whole node.
     pub span: SourceSpan,
@@ -176,7 +176,7 @@ impl Definition {
     pub fn header(&self) -> Option<TileHeader> {
         match self.kind {
             DefKind::Tile(h) => Some(h),
-            DefKind::Define => None,
+            DefKind::Let => None,
         }
     }
 

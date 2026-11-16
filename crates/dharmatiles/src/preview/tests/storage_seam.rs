@@ -72,7 +72,7 @@ fn a_scan_a_new_file_and_a_delete_need_no_disk() {
     let mem = MemStorage::with(home.join("a.dtile").to_str().unwrap(), TILE);
     mem.write_text(&home.join("sub/b.dtile"), TILE).unwrap();
     // a part is not a tile; a hidden folder and build output are not listed
-    mem.write_text(&home.join("part.dtile"), "define x { }\n")
+    mem.write_text(&home.join("part.dtile"), "let x { }\n")
         .unwrap();
     mem.write_text(&home.join(".hidden/c.dtile"), TILE).unwrap();
     mem.write_text(&home.join("out/d.dtile"), TILE).unwrap();

@@ -72,3 +72,30 @@ fn a_library_tile_with_its_header_taken_off_is_refused_as_format_0() {
         "{shown}"
     );
 }
+
+/// What `names_in` costs a keystroke: it decodes the text (`decode_partial`) for the kinds, where it used to only parse.
+/// Every library file, timed; the longest must stay far inside a keystroke's budget (it prints the numbers).
+#[test]
+fn the_names_a_text_makes_cost_a_keystroke_little() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
+    let mut all = Vec::new();
+    files(&root, &mut all);
+    let (mut worst, mut total) = (std::time::Duration::ZERO, std::time::Duration::ZERO);
+    for path in &all {
+        let text = std::fs::read_to_string(path).unwrap();
+        let start = std::time::Instant::now();
+        let _ = dt_doc::nodeid::names_in(&text);
+        let took = start.elapsed();
+        total += took;
+        worst = worst.max(took);
+    }
+    println!(
+        "names_in over {} library files: mean {:?}, worst {worst:?}",
+        all.len(),
+        total / u32::try_from(all.len()).unwrap()
+    );
+    assert!(
+        worst < std::time::Duration::from_millis(50),
+        "names_in took {worst:?} on one file"
+    );
+}

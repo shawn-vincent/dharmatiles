@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>dt::retired</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<main class="wrap codepage mistake">
+<header class="hero">
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
+  <h1>dt::retired</h1>
+  <p class="lede" data-part="summary">A word the language no longer has: it is written with the word that replaced it.</p>
+</header>
+<section class="said" aria-labelledby="said">
+<h2 id="said">What the program says</h2>
+<pre class="said no-hl"><code><span class="a-31">dt::retired</span>
+
+  <span class="a-31">×</span> `define` is written `let`
+   ╭─[<span class="a-36 a-b a-u">example.dtile:2:1</span>]
+ <span class="a-d">1</span> │ <span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+ <span class="a-d">2</span> │ <span class="tk-node">define</span> lawn <span class="tk-punct">{</span>
+   · <span class="a-35 a-b">───┬──</span>
+   ·    <span class="a-35 a-b">╰── </span><span class="a-35 a-b">the old word</span>
+ <span class="a-d">3</span> │     <span class="tk-node">dirt</span>
+   ╰────
+<span class="a-36">  help: </span>`define` is gone: write `let`
+        explain: https://shawn-vincent.github.io/dharmatiles/e/retired
+        offline: dharmatiles explain dt::retired</code></pre>
+</section>
+<div class="cp-grid">
+<div>
+<section>
+<h2 id="help">What to do</h2>
+<p data-part="help">Write the new word the error names (<code>define</code> is now <code>let</code>).</p>
+</section>
+<section>
+<h2 id="example">Broken, then fixed</h2>
+<div class="cp-pair">
+<figure class="broken"><figcaption>Gives <code>dt::retired</code></figcaption>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<mark class="del"><span class="tk-node">define</span></mark> lawn <span class="tk-punct">{</span>
+    <span class="tk-node">dirt</span>
+<span class="tk-punct">}</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">lawn</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
+<figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<mark class="ins"><span class="tk-node">let</span></mark> lawn <span class="tk-punct">{</span>
+    <span class="tk-node">dirt</span>
+<span class="tk-punct">}</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">lawn</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
+</div>
+</section>
+</div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>A <code>let</code> with a body has <code>param</code> lines and either one entry written bare or one <code>stack</code>. The body says what it names: one bare entry that is an unplaced thing (<code>let oak { tree … }</code>) names a thing, so it can be placed with <code>at=</code> or scattered (<code>scatter count=2 { oak }</code>); any other bare entry, and every <code>stack</code>, names a layer. Several entries are written in a <code>stack</code>, which is always a layer. It is called like an element; its params are set as properties, and a place (<code>at=</code>) passes through to the elements inside it. A definition can call another. Definitions that call each other in a loop are an error (<a class="codelink" href="loop.html"><code>dt::loop</code></a>). A <code>let</code> has a value or a body, never both, and a body is never empty. The old word for this was <code>define</code>: it is refused (<a class="codelink" href="retired.html"><code>dt::retired</code></a>) with the fix of writing <code>let</code> over it.</p></blockquote>
+<p class="cp-in"><a href="../guide/parts.html#dt-retired">Read it in context: Parts · A let with a body names a thing or a layer, called like an element</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span>Explained with it: <a href="param.html"><code>dt::param</code></a></span>
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::retired</code></span>
+</footer>
+</main>
+</body>
+</html>
