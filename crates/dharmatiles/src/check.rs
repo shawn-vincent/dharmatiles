@@ -48,7 +48,7 @@ pub(crate) fn check(paths: &[String], opts: &Options, json: bool, explain: bool)
                             .map(|(f, l, c)| format!("{f}:{l}:{c}: "))
                             .unwrap_or_default();
                         tell!("  note [{}] {at}{}", d.code, d.message);
-                        if let Some(h) = &d.help {
+                        if let Some(h) = d.help.as_deref().filter(|h| !h.trim().is_empty()) {
                             tell!("    help: {h}");
                         }
                     }

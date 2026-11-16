@@ -985,7 +985,7 @@ impl Decoder<'_> {
                 "a {owner} is one {owner}; how many and how spread is a scatter's job: `scatter {name}=… {{ {owner} }}`"
             ))
         } else if owner == "tree" && (name == words::SIZE || name == "height") {
-            Some("a tree's height is its `top`, mm above zero like every top, and `bottom` is the ground at its foot: `tree size=40` is `tree top=\"bottom + 40\"`".to_owned())
+            Some("a tree's height is its `top=`, a length above zero like every top, where `$bottom` is the ground at its foot: `top=\"$bottom + 40dmm\"` is a 40dmm tree wherever it stands; the crown's width is `crown width`".to_owned())
         } else if owner == "flower" && name == "radius" {
             Some("a flower's measure is its `size`, the width across the petals (twice the old radius): write `flower size=…`".to_owned())
         } else if name == "debug" {

@@ -123,7 +123,7 @@
 <p>The button reads <em>Copied</em> when the text is on the clipboard. When the browser refuses the clipboard, it says so beside the button, and the details stay open to select by hand.</p>
 
 <h2 id="stream">One stream of what happened</h2>
-<p>Errors are one kind of thing the preview learns about a tile, and the rest (a check read it, a build took 2.1 s, the gate's numbers, a note, an export) is the same sort of thing, so they travel as one <strong>message</strong> (<code>crates/dharmatiles/src/message.rs</code>) on the event stream, and every surface is a view of it. A surface never holds a message of its own: fix the cause and the row, the mark in the source and the count go with it.</p>
+<p>Errors are one kind of thing the preview learns about a tile, and the rest (a check read it, a build took 2.1 s, the gate's numbers, a note, an export) is the same sort of thing, so they travel as one <strong>message</strong> (<code>crates/dt-service/src/message.rs</code>) on the event stream, and every surface is a view of it. A surface never holds a message of its own: fix the cause and the row, the mark in the source and the count go with it.</p>
 <div class="tbl"><table>
 <thead><tr><th>Field</th><th>What it holds</th></tr></thead>
 <tbody>

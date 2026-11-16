@@ -15,6 +15,7 @@ mod ledger;
 mod live;
 mod nav;
 mod parity;
+mod paths;
 mod pictures;
 mod release;
 mod shots;

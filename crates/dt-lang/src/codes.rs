@@ -664,8 +664,10 @@ pub fn explain_lines(id: &str) -> String {
 
 /// What a terminal prints as an error's help: the help itself (when there is one), then the explain lines.
 #[must_use]
+///
+/// A help with nothing in it is no help: it is left out, so a terminal never prints a bare `help:` line.
 pub fn help_with_explain(help: Option<&str>, id: &str) -> String {
-    match help {
+    match help.filter(|h| !h.trim().is_empty()) {
         Some(h) => format!("{h}\n{}", explain_lines(id)),
         None => explain_lines(id),
     }
@@ -674,6 +676,18 @@ pub fn help_with_explain(help: Option<&str>, id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_blank_help_is_never_printed() {
+        for blank in [Some(""), Some("  \n"), None] {
+            let text = help_with_explain(blank, TYPE);
+            assert!(
+                text.starts_with("explain: "),
+                "a blank help leaves a bare line: {text:?}"
+            );
+        }
+        assert!(help_with_explain(Some("write 1"), TYPE).starts_with("write 1\nexplain: "));
+    }
 
     #[test]
     fn every_code_is_unique_and_spelt_alike() {

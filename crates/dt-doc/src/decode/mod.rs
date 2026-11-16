@@ -470,8 +470,46 @@ impl<'k> Decoder<'k> {
             .help = Some("put each tile in its own file".to_owned());
         }
 
+        // a document is a tile when it holds a `tile`, else a printer profile when it holds a `printer`, else a
+        // part; `defaults`, `seams` and `printer` each belong to one kind and mean nothing in another
+        let has = |w: &str| kdl.nodes().iter().any(|n| n.name().value() == w);
+        let is_tile = has(words::TILE);
+        let has_parts = is_tile || has(words::DEFINE);
+        let is_printer = !is_tile && has(words::PRINTER);
         for n in kdl.nodes() {
             match n.name().value() {
+                words::DEFAULTS | words::SEAMS if is_tile || is_printer => {
+                    let word = n.name().value();
+                    let own = if is_tile {
+                        "a tile"
+                    } else {
+                        "a printer profile"
+                    };
+                    let help = if word == words::DEFAULTS {
+                        "defaults belong in a parts file that a tile `use`s (the library's edges part holds the shared ones); a tile sets its own tops and pins in its own lines"
+                    } else {
+                        "a seam table belongs in a parts file that a tile `use`s (the library's edges part holds it); a tile's own `seams=` word says whether its lines are held to it"
+                    };
+                    self.err(
+                        dt_lang::codes::UNKNOWN_NODE,
+                        n.name().span(),
+                        format!("`{word}` is not written in {own}"),
+                        "read nowhere here, so refused",
+                    )
+                    .help = Some(help.to_owned());
+                }
+                words::PRINTER if has_parts => {
+                    let own = if is_tile { "a tile" } else { "a parts file" };
+                    self.err(
+                        dt_lang::codes::UNKNOWN_NODE,
+                        n.name().span(),
+                        format!("`printer` is not written in {own}"),
+                        "a printer profile is a file of its own",
+                    )
+                    .help = Some(
+                        "put the `printer` in its own file under printers/, and pick it with `--printer NAME`".to_owned(),
+                    );
+                }
                 words::USE
                 | words::DEFINE
                 | words::TILE
