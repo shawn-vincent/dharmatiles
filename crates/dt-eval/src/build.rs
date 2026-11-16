@@ -123,6 +123,8 @@ pub struct Report {
     /// Whether the disk cache was used for this build, and what
     /// went wrong with it, if anything.
     pub cache: CacheUse,
+    /// What the build did for its things: made, copied, read from the shelf.
+    pub things: dt_kit::ThingUse,
 }
 
 /// A finished build: the [`Product`] and the [`Report`] beside it.  A build
@@ -252,7 +254,7 @@ pub fn build_cached(
         .read(path)
         .map_err(|e| vec![Diag::plain(dt_lang::codes::SOURCE, e)])?;
     let c = check(sources, path, opts)?;
-    build_checked(&c, path, &text, opts, progress, cache)
+    build_checked(&c, path, &text, opts, progress, cache, None)
 }
 
 /// A checked document through the plan, the union and the gate: `text` is the
@@ -269,6 +271,7 @@ pub fn build_checked(
     opts: &Options,
     progress: &Progress,
     cache: Option<&Cache>,
+    shelf: Option<&dyn dt_kit::Shelf>,
 ) -> Result<Built, Vec<Diag>> {
     let Some(tile) = &c.tile else {
         return Err(vec![
@@ -279,7 +282,7 @@ pub fn build_checked(
     if !tile.pending.is_empty() {
         return Err(tile.pending.clone());
     }
-    let plan = Plan::new(c, tile, opts)?;
+    let plan = Plan::new(c, tile, opts, shelf)?;
     let ran = plan.run(progress, cache)?;
     let built = plan.finish(path, text, ran, progress)?;
     Ok(built)
@@ -337,6 +340,8 @@ struct Plan<'a> {
     plan_stage: Stage,
     /// Works trees' `top=` formulas out at their branch tips.
     crowns: crowns::Crowns<'a>,
+    /// The things this build sets down, each made once (kept on the shelf when it has one).
+    bodies: dt_kit::Bodies<'a>,
 }
 
 /// The scene after the last step, and how it got there.
@@ -360,7 +365,12 @@ impl<'a> Plan<'a> {
         })
     }
 
-    fn new(c: &'a Checked, tile: &'a Tile, opts: &'a Options) -> Result<Self, Vec<Diag>> {
+    fn new(
+        c: &'a Checked,
+        tile: &'a Tile,
+        opts: &'a Options,
+        shelf: Option<&'a dyn dt_kit::Shelf>,
+    ) -> Result<Self, Vec<Diag>> {
         let root = Seed::new(c.seed);
         let Some(solved) = c.solved.as_ref() else {
             return Err(build_error("the tile was not solved".to_owned()));
@@ -440,6 +450,7 @@ impl<'a> Plan<'a> {
                 }),
                 frame: c.frame,
             },
+            bodies: dt_kit::Bodies::new(shelf),
             stages: progress::stage_keys(tile, &c.steps),
             plan_stage: Stage {
                 name: "plan".to_owned(),
@@ -538,6 +549,7 @@ impl<'a> Plan<'a> {
             under: self.under.get(i).and_then(Option::as_ref),
             draft: self.opts.tier == crate::Tier::Draft,
             crowns: Some(&self.crowns),
+            things: &self.bodies,
         }
     }
 
@@ -872,7 +884,12 @@ impl<'a> Plan<'a> {
                 clouds: opts.clouds.then(|| cloud_part(scene.collected())).flatten(),
                 debug: opts.debug.then(|| mark_part(scene.collected())).flatten(),
                 placed: scene.placed().to_vec(),
-                cache: CacheUse::default(),
+                // what went wrong with the shelf of things; the store adds its own
+                cache: CacheUse {
+                    problems: self.bodies.finish(),
+                    ..CacheUse::default()
+                },
+                things: self.bodies.used(),
             },
         };
         // a low build keeps to its budget: a cliff's carving is more than a

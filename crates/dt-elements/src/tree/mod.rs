@@ -987,12 +987,15 @@ impl Thing for Tree {
         ))
     }
 
-    fn make(
+    fn make_with(
         &self,
         scene: &mut Scene,
         seed: Seed,
         printer: &dt_kit::Printer,
+        _bodies: &dt_kit::Bodies<'_>,
     ) -> Result<Vec<Solid>, LookError> {
+        // a tree is grown where it stands (see `Tree::grow`: its sink, its footing and its
+        // `top=` read the ground and the tile), so it is not kept as a body
         let b = self.grow(scene, seed, [0.0, 0.0, 0.0], printer, None)?;
         Ok(std::iter::once(b.solid).chain(b.more).collect())
     }

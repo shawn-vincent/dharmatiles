@@ -35,8 +35,8 @@
 use dt_kit::Kind;
 use dt_kit::vec3::{cross, dot, norm, sub};
 use dt_kit::{
-    Convex, Disc, Grain, Material, Placed, Rng, Scene, SeatRule, Seed, Solid, Tag, TriMesh, grain,
-    hull, solid,
+    Bodies, Body, BodyPart, Convex, Disc, Grain, Material, Placed, Rng, Scene, SeatRule, Seed,
+    Solid, Tag, ThingId, TriMesh, grain, hull,
 };
 
 use crate::read::Settings;
@@ -619,26 +619,64 @@ pub(crate) struct Tally {
     topped: usize,
 }
 
-/// One stone as a solid in its own frame: its base at z = 0, centred on the
-/// origin, its grain from `seed`.  A low build draws the stone as its hull:
-/// the facets, no grain.
-fn stone_solid(low: bool, st: &Stone, seed: Seed, slot: dt_kit::Slot) -> Result<Solid, LookError> {
+/// What one stone's body is made from: whether it is drawn as its hull (a
+/// low build), the seed of its grain and its hull, the polytope's mesh with
+/// its scaling and `top=` stretch already in it.  Nothing else reads into a
+/// stone's body, so two stones with this id are the same stone, wherever
+/// and in whatever build they are made.
+fn stone_id(low: bool, hull: &TriMesh, seed: Seed) -> ThingId {
+    ThingId::new("rock", |c| {
+        c.put(&low)
+            .put(&seed.value())
+            .put(&hull.positions)
+            .put(&hull.triangles);
+    })
+}
+
+/// One stone in its own frame: its base at z = 0, centred on the origin, its
+/// grain from `seed`.  A low build draws the stone as its hull: the facets,
+/// no grain.
+fn stone_body(low: bool, st: &Stone, hull: TriMesh, seed: Seed) -> Result<Body, LookError> {
     let mesh = if low {
-        st.convex.to_tri_mesh()
+        hull
     } else {
         grain(&st.convex, &Grain::default(), seed.value()).map_err(LookError::build)?
     };
-    solid(slot, &mesh).map_err(LookError::build)
+    Ok(Body {
+        parts: vec![BodyPart {
+            material: Material::Rock,
+            mesh,
+        }],
+    })
+}
+
+/// The stone's body from `bodies`, built at most once for what it is made
+/// from; `variant` when it is a copy of one that others copy too.
+fn stone_of(
+    bodies: &Bodies<'_>,
+    low: bool,
+    st: &Stone,
+    seed: Seed,
+    variant: bool,
+) -> Result<std::sync::Arc<Body>, LookError> {
+    let hull = st.convex.to_tri_mesh();
+    let id = stone_id(low, &hull, seed);
+    bodies.body(&id, variant, || stone_body(low, st, hull, seed))
 }
 
 /// Build placed items into the scene: grain, seat on `ground`, add as
-/// rock solids owned by `owner`.
+/// rock solids owned by `owner`.  `variants[i]` is the variant item `i` is a
+/// copy of (`variants=` on a scatter): its stones are grained from the
+/// variant's seed, so every placement of the variant is the same shape, built
+/// once; `None`: each stone is grained from its own place in the build.
 pub(crate) fn add_items(
     scene: &mut Scene,
     owner: &dt_kit::EntryId,
     seed: Seed,
     items: &[(&Item, [f64; 2], f64)],
+    variants: &[Option<Seed>],
     crowns: Option<&dyn crate::CrownTops>,
+    bodies: &Bodies<'_>,
     tally: &mut Tally,
 ) -> Result<(), LookError> {
     let s = scene.frame().scale();
@@ -662,6 +700,9 @@ pub(crate) fn add_items(
         /// Where its foot is set, mm.
         z0: f64,
         k: u32,
+        /// The seed of its grain, and whether it is a variant's.
+        grain: Seed,
+        shared: bool,
     }
     let mut feet: Vec<Foot> = Vec::with_capacity(n);
     let mut k = 0u32;
@@ -669,7 +710,7 @@ pub(crate) fn add_items(
         tally.placements += 1;
         tally.clusters += usize::from(item.stones.len() > 1);
         let (sn, cs) = (libm::sin(yaw.to_radians()), libm::cos(yaw.to_radians()));
-        for (off, stone) in &item.stones {
+        for (j, (off, stone)) in item.stones.iter().enumerate() {
             let st = stone.scaled(s, 1.0);
             let o = [off[0] * s, off[1] * s];
             let p = [at[0] + cs * o[0] - sn * o[1], at[1] + sn * o[0] + cs * o[1]];
@@ -692,6 +733,8 @@ pub(crate) fn add_items(
                 yaw: *yaw,
                 z0,
                 k,
+                grain: variants[ii].map_or_else(|| seed.index(u64::from(k)), |v| v.index(j as u64)),
+                shared: variants[ii].is_some(),
             });
             tally.facets.push(stone.facets);
             tally.chips.push(stone.chips);
@@ -726,10 +769,10 @@ pub(crate) fn add_items(
             }
             None => f.stone,
         };
-        built.push(
-            stone_solid(scene.low(), &st, seed.index(u64::from(f.k)), slots.get(f.k))?
-                .turn(f.yaw, 1.0)
-                .translate([f.p[0], f.p[1], f.z0]),
+        let body = stone_of(bodies, scene.low(), &st, f.grain, f.shared)?;
+        built.extend(
+            body.set_down(&slots, f.k, f.yaw, 1.0, [f.p[0], f.p[1], f.z0])
+                .map_err(LookError::build)?,
         );
         ticks.tick();
     }
@@ -1009,7 +1052,9 @@ impl Element for Single {
             ctx.path,
             ctx.seed,
             &[(&item, at, yaw)],
+            &[None],
             ctx.crowns,
+            ctx.things,
             &mut t,
         )?;
         note(scene, &t);
@@ -1204,21 +1249,21 @@ impl Thing for Rock {
         ))
     }
 
-    fn make(
+    fn make_with(
         &self,
         scene: &mut Scene,
         seed: Seed,
         _printer: &dt_kit::Printer,
+        bodies: &Bodies<'_>,
     ) -> Result<Vec<Solid>, LookError> {
         let mut rng = Rng::new(seed.key("rock"));
         let d = self.size_draw(&mut rng);
         let item = make_item(&mut rng, d, self.mix, false, false)?;
         let stone = item.stones[0].1.scaled(scene.frame().scale(), 1.0);
-        let slot = scene
-            .slots(1, Material::Rock)
-            .map_err(LookError::build)?
-            .get(0);
-        Ok(vec![stone_solid(scene.low(), &stone, seed, slot)?])
+        let slots = scene.slots(1, Material::Rock).map_err(LookError::build)?;
+        stone_of(bodies, scene.low(), &stone, seed, false)?
+            .set_down(&slots, 0, 0.0, 1.0, [0.0; 3])
+            .map_err(LookError::build)
     }
 
     fn stand(
@@ -1243,8 +1288,12 @@ impl Thing for Rock {
                 rng.uniform(0.0, 360.0),
             ));
         }
+        // a copy of a variant is grained from the variant's seed
+        let variants: Vec<Option<Seed>> = placed.iter().map(|p| p.drawn.variant()).collect();
         let mut t = Tally::default();
-        add_items(scene, ctx.path, ctx.seed, &posed, ctx.crowns, &mut t)?;
+        add_items(
+            scene, ctx.path, ctx.seed, &posed, &variants, ctx.crowns, ctx.things, &mut t,
+        )?;
         note(scene, &t);
         Ok(())
     }
@@ -1319,6 +1368,30 @@ mod tests {
                 assert!(f.normal[2] >= FACET_MIN_NZ - 1e-9 || f.normal[2] < -0.999);
             }
         }
+    }
+
+    /// A stone's body is made from its hull, the seed of its grain and whether it is drawn as its hull: any of them
+    /// changes its id, and the same stone made twice has the same one.
+    #[test]
+    fn a_stones_id_is_what_its_body_is_made_from() {
+        let stone = |seed: u64, d: f64| {
+            let mut rng = Rng::new(Seed::new(seed));
+            make_stone(&mut rng, d, FAMILIES, false).unwrap()
+        };
+        let (a, b) = (stone(1, 8.0), stone(2, 8.0));
+        let id = |st: &Stone, low: bool, grain: u64| {
+            stone_id(low, &st.convex.to_tri_mesh(), Seed::new(grain))
+        };
+        assert_eq!(id(&a, false, 5), id(&stone(1, 8.0), false, 5));
+        assert_ne!(id(&a, false, 5), id(&b, false, 5), "its hull");
+        assert_ne!(id(&a, false, 5), id(&a, false, 6), "its grain's seed");
+        assert_ne!(id(&a, false, 5), id(&a, true, 5), "a low build's hull");
+        // a stone stretched up (`near height`, `top=`) is another hull
+        assert_ne!(
+            id(&a, false, 5),
+            id(&a.scaled(1.0, 1.3), false, 5),
+            "its stretch"
+        );
     }
 
     #[test]

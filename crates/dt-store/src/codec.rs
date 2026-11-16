@@ -15,7 +15,8 @@ use std::sync::Mutex;
 use dt_kit::Look;
 use dt_kit::debug::{Column, Debug, Dot, Sheet, Trail};
 use dt_kit::{
-    Audit, BuildRecord, Dropped, EntryId, Export, Grid, Kind, Mask, Material, Stage, TriMesh,
+    Audit, Body, BodyPart, BuildRecord, Dropped, EntryId, Export, Grid, Kind, Mask, Material,
+    Stage, TriMesh,
 };
 
 use dt_eval::doc::Named;
@@ -234,6 +235,15 @@ impl<'a> Rd<'a> {
 
 /// A debug mark's class, which a build holds as a `&'static str`: read
 /// back, the few distinct words are kept for the run (each leaked once).
+/// The material numbered `m`.
+fn material_of(m: u8) -> R<Material> {
+    MATERIALS
+        .iter()
+        .copied()
+        .find(|k| *k as u8 == m)
+        .ok_or_else(|| format!("no material numbered {m}"))
+}
+
 fn intern(s: &str) -> &'static str {
     static POOL: Mutex<BTreeSet<&'static str>> = Mutex::new(BTreeSet::new());
     let mut pool = POOL.lock_unpoisoned();
@@ -540,6 +550,38 @@ pub(super) fn built_out(b: &Built) -> Vec<u8> {
     w.0
 }
 
+/// A thing's body as bytes: its parts, each a material and a mesh.
+pub(super) fn body_out(b: &Body) -> Vec<u8> {
+    let mut w = Wr(Vec::with_capacity(
+        b.parts
+            .iter()
+            .map(|p| p.mesh.positions.len() * 24 + p.mesh.triangles.len() * 12 + 128)
+            .sum(),
+    ));
+    w.usize(b.parts.len());
+    for p in &b.parts {
+        w.u8(p.material as u8);
+        mesh_out(&mut w, &p.mesh);
+    }
+    w.0
+}
+
+/// A body from `bytes`, as [`body_out`] wrote it.
+pub(super) fn body_in(bytes: &[u8]) -> R<Body> {
+    let mut r = Rd::new(bytes);
+    let n = r.len(1)?;
+    let mut parts = Vec::with_capacity(n);
+    for _ in 0..n {
+        let material = material_of(r.u8()?)?;
+        parts.push(BodyPart {
+            material,
+            mesh: mesh_in(&mut r)?,
+        });
+    }
+    r.done()?;
+    Ok(Body { parts })
+}
+
 /// A build from `bytes`, as [`built_out`] wrote it.
 pub(super) fn built_in(bytes: &[u8]) -> R<Built> {
     let mut r = Rd::new(bytes);
@@ -549,13 +591,7 @@ pub(super) fn built_in(bytes: &[u8]) -> R<Built> {
     let materials = r
         .take(n)?
         .iter()
-        .map(|&m| {
-            MATERIALS
-                .iter()
-                .copied()
-                .find(|k| *k as u8 == m)
-                .ok_or_else(|| format!("no material numbered {m}"))
-        })
+        .map(|&m| material_of(m))
         .collect::<R<Vec<_>>>()?;
     let audit = audit_in(&mut r)?;
     let stages = (0..r.len(8)?)
@@ -684,6 +720,8 @@ pub(super) fn built_in(bytes: &[u8]) -> R<Built> {
             debug,
             placed,
             cache: CacheUse::default(),
+            // a build read back made nothing and read no things: this run's alone, like `reused`
+            things: dt_kit::ThingUse::default(),
         },
     })
 }

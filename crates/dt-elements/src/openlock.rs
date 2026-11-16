@@ -454,6 +454,7 @@ mod tests {
             calm_mm: None,
             draft: false,
             crowns: None,
+            things: &dt_kit::Bodies::new(None),
         };
         OpenLock::default().build(&mut scene, &ctx).unwrap();
         scene.parts()[0].solid.volume()

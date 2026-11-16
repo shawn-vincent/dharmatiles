@@ -6,11 +6,13 @@
 //! - [`weighting`]: a range's odds ([`Weighting`], [`Dist`]): one draw, any
 //!   width.
 
+pub mod canon;
 pub mod index;
 pub mod seed;
 pub mod sync;
 pub mod weighting;
 
+pub use canon::{Canon, Canonical};
 pub use index::{idx, idx8};
 pub use seed::{Rng, Seed};
 pub use sync::LockExt;

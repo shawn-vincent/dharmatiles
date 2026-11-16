@@ -69,6 +69,25 @@
         <span class="tk-punct">}</span>
     <span class="tk-punct">}</span>
 <span class="tk-punct">}</span></code></pre>
+<h2 id="variants">Variants: built once, copied</h2>
+<p>Left alone, every thing a scatter places is its own draw: its own size and its own shape, each built once. A cover of two thousand pebbles is two thousand builds. <code>variants=K</code> says the things are drawn as one of <code>K</code> variants instead: each placement picks a variant, each variant is built once, and every placement of it is that body copied, turned about its own axis and set down where it stands. The pebbles still fall as the pattern says and still turn every which way; there are only <code>K</code> shapes among them, so the build makes <code>K</code> bodies and copies the rest.</p>
+<dl class="defs">
+  <dt>What it saves</dt><dd>The work of building. A copy costs a turn and a move, so a cover with <code>variants=12</code> builds twelve pebbles however many it places. The final union still holds every copy and the gate still checks the whole mesh, so the size of the result and the time of the union do not change. The build record says how many bodies a build made, copied and read (<code>things</code>).</dd>
+  <dt>What a variant is</dt><dd>One draw of the thing, from a stream of its own keyed by the thing and the variant's number, so every copy of a variant is the same draw, and asking for more variants moves none of the first. A rock's variant is its placement (a stone, or a cluster of stones), each stone grained from the variant's seed; a flower's is its size and petals.</dd>
+  <dt>What a copy cannot do</dt><dd>A rock a <code>near</code> block stands taller, or that has a <code>top=</code>, is another shape and is built as its own. Only rocks are copied. <a href="flower.html">Flowers</a> are built where they stand (a flower built at the origin and moved is the same flower to a hair's breadth, and that hair moved the repair counts of a meadow's union), and <a href="tree.html">trees</a> are grown where they stand (their sink into the ground, their footing and their <code>top=</code> read the tile): <code>variants</code> on either still draws only that many shapes, but builds each placement where it stands.</dd>
+  <dt>Unset</dt><dd>Every placement is its own draw, as before; a tile that does not write <code>variants</code> builds the same bytes.</dd>
+</dl>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">5</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">300</span> <span class="tk-property">pattern</span><span class="tk-punct">=</span>cover <span class="tk-property">variants</span><span class="tk-punct">=</span><span class="tk-number">12</span> <span class="tk-punct">{</span>
+            <span class="tk-node">pebble</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">1.2dmm</span><span class="tk-string"> .. </span><span class="tk-number">2.2dmm</span><span class="tk-string">"</span>
+        <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference scatter -->
 <div class="facts">
@@ -89,6 +108,7 @@
 <tr id="c-cover"><td><code>cover</code></td><td>percent, 0% to 100%</td><td><code>100%</code></td><td>share of the places that keep a thing</td></tr>
 <tr id="c-clearings"><td><code>clearings</code></td><td>per square, 0 to 20, or a range, or a weighted range</td><td><code>0</code></td><td>round patches left bare, to a square</td></tr>
 <tr id="c-clearingWidth"><td><code>clearingWidth</code></td><td>length (dmm), over 0, or a range, or a weighted range</td><td><code>6dmm .. 14dmm</code></td><td>how wide a clearing is, drawn for each</td></tr>
+<tr id="c-variants"><td><code>variants</code></td><td>count, 1 to 256</td><td><span class="muted">every placement is its own draw</span></td><td>draw each thing as one of this many variants, each built once and copied turned and placed</td></tr>
 <tr id="c-near"><td><code>near</code></td><td>group</td><td>—</td><td>things that answer to what is already in the tile: taller, or fewer, within reach of it</td></tr>
 <tr id="c-near-of"><td><code>near of</code></td><td>word</td><td>—</td><td>what the things answer to <strong>Required.</strong><dl class="words"><dt><code>rock</code></dt><dd>rocks, stones, boulders and pebbles</dd><dt><code>wall</code></dt><dd>walls</dd><dt><code>tree</code></dt><dd>tree trunks</dd><dt><code>cliff</code></dt><dd>cliffs</dd><dt><code>standing</code></dt><dd>rocks, walls, trunks and cliffs</dd><dt><code>water</code></dt><dd>the water's edge</dd></dl></td></tr>
 <tr id="c-near-reach"><td><code>near reach</code></td><td>length (dmm), over 0, or a range, or a weighted range</td><td><code>6dmm .. 12dmm</code></td><td>how far out from it a thing is changed, drawn for each: a range is a soft edge</td></tr>

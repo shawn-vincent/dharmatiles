@@ -21,7 +21,7 @@ use dt_elements::Foot;
 use dt_kit::{Frame, Scene};
 
 use crate::build::Job;
-use crate::canon::Canon;
+use crate::canon::{Canon, fnv};
 use crate::doc::{Entry, Setting, Tile};
 use crate::options::Options;
 use crate::plan::Step;
@@ -137,7 +137,7 @@ pub(crate) fn base_key(
             .field("squares", squares)
             .field("nx", nx);
     }
-    c.fnv()
+    fnv(&c)
 }
 
 /// Each step's key: the one before it and what the step itself reads.
@@ -171,7 +171,7 @@ pub(crate) fn step_keys(base: u64, tile: &Tile, steps: &[Step], jobs: &[Job]) ->
                         .field("regions", &job.regions_hash);
                 }
             }
-            h = c.fnv();
+            h = fnv(&c);
             h
         })
         .collect()
