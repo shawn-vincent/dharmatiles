@@ -13,11 +13,11 @@
 //! made of a whole tile): it is the thing's own key's job to keep it, when it has one.
 
 use dt_doc::schema::Generator;
-use dt_elements::{Extent, Shown, Thing};
+use dt_elements::{Control, Extent, Shown, Thing, Value};
 use dt_kit::{EntryId, Frame, Scene, Seed, Tag};
 use miette::SourceSpan;
 
-use crate::build::{Built, CacheUse, Product, Report};
+use crate::build::{Built, CacheUse, Product, Report, gate, join};
 use crate::check::controls_of;
 use crate::diag::{Diag, Src};
 use crate::doc;
@@ -119,7 +119,7 @@ pub fn subject(
             };
             (
                 e.what.value.clone(),
-                controls_of(&e.controls),
+                alone(&e.what.value, controls_of(&e.controls), e.top.as_ref(), &e.table),
                 (e.src.clone(), e.what.span),
             )
         }
@@ -133,7 +133,7 @@ pub fn subject(
             match child {
                 None => (
                     e.what.value.clone(),
-                    controls_of(&e.controls),
+                    alone(&e.what.value, controls_of(&e.controls), e.top.as_ref(), &e.table),
                     (e.src.clone(), e.what.span),
                 ),
                 Some(i) => {
@@ -142,7 +142,7 @@ pub fn subject(
                     };
                     (
                         c.what.value.clone(),
-                        controls_of(&c.controls),
+                        alone(&c.what.value, controls_of(&c.controls), c.top.as_ref(), &c.table),
                         (e.src.clone(), c.what.span),
                     )
                 }
@@ -158,6 +158,13 @@ pub fn subject(
             element,
         });
     }
+    let settings = settings.map_err(|why| {
+        Refused::Mistakes(vec![
+            Diag::at(&at.0, at.1, dt_lang::codes::BUILD, why, "this thing").help(
+                "draw the tile to see it in its place: a `top=` that reads where the thing stands is the tile's to work out",
+            ),
+        ])
+    })?;
     let thing = dt_elements::thing::thing(&element, &settings).map_err(|le| {
         Refused::Mistakes(vec![
             Diag::at(
@@ -190,17 +197,66 @@ pub fn subject(
     })
 }
 
+/// A thing's controls for drawing it alone.  A tree's `top=` is a height over the ground at its foot, worked out by the tile it
+/// stands in (`$bottom + 59dmm`); alone it stands on ground at zero, so its `top` is that formula with `$bottom` at zero, as the
+/// `height` the tree takes without a tile.  A `top=` that reads where the tree stands (`$x`, `$region`) has no place alone: refused,
+/// in words.
+fn alone(
+    element: &str,
+    mut controls: Vec<Control>,
+    top: Option<&doc::Top>,
+    table: &dt_doc::consts::ConstTable,
+) -> Result<Vec<Control>, String> {
+    if element != "tree" {
+        return Ok(controls);
+    }
+    let Some(expr) = top.and_then(|t| t.crown.as_ref()) else {
+        return Ok(controls);
+    };
+    controls.retain(|c| c.name != "top");
+    let eval = crate::solve::Eval {
+        table,
+        coords: None,
+        disc: None,
+    };
+    let vars = crate::solve::Vars {
+        x: dt_geom::Iv::point(0.0),
+        y: dt_geom::Iv::point(0.0),
+        bottom: dt_geom::Iv::point(0.0),
+        k: 0,
+    };
+    let v = eval
+        .iv(expr, &vars, 0)
+        .map_err(|f| format!("this tree's `top` cannot be worked out alone: {}", f.message))?;
+    let height = if (v.iv.hi - v.iv.lo).abs() < 1e-9 {
+        Value::Number(v.iv.lo)
+    } else {
+        Value::Range(v.iv.lo, v.iv.hi)
+    };
+    controls.push(Control {
+        name: "height".to_owned(),
+        value: height,
+    });
+    Ok(controls)
+}
+
 /// Whether the element named is a thing (the schema's own account: its role).
 fn is_thing_word(name: &str) -> bool {
     dt_doc::schema::element(name).is_some_and(|e| e.generator() == Generator::Thing)
 }
 
 impl Subject {
-    /// The room it takes, mm as printed for `opts`' target (the extent is written in mm at the 35 mm square).
+    /// The room it takes as a document writes it: dmm, which is mm at the 35 mm square whatever the target.
+    #[must_use]
+    pub fn written(&self) -> Extent {
+        self.thing.extent()
+    }
+
+    /// The room it takes, mm as printed for `opts`' target (dmm scales with the system's square).
     #[must_use]
     pub fn extent(&self, opts: &Options) -> Extent {
         let s = Frame::for_system(opts.system, 1, 1).scale();
-        let e = self.thing.extent();
+        let e = self.written();
         let scaled = |b: dt_elements::Box3| dt_elements::Box3::new(b.x * s, b.y * s, b.z * s);
         Extent::new(scaled(e.least), scaled(e.most))
     }
@@ -222,6 +278,8 @@ impl Subject {
             )
         };
         let mut scene = Scene::new(frame, Seed::new(seed));
+        // a low draw has less detail (a tree as blobs), as a tile's low build has
+        scene.set_low(opts.tier.is_low());
         let solids = self
             .thing
             .make(&mut scene, Seed::new(seed), &opts.printer)
@@ -247,7 +305,7 @@ impl Subject {
                 s,
             );
         }
-        let (mesh, mats) = scene.union().map_err(|e| vec![at(e.to_string())])?;
+        let (mesh, mats) = join(&mut scene, opts.tier).map_err(|e| vec![at(e.to_string())])?;
         let most = self.extent(opts).most;
         let footprint = [most.x, most.y];
         // the band every element gets: the printer's overhang to its steepest
@@ -255,8 +313,16 @@ impl Subject {
             max_deg: opts.printer.steepest_deg,
             ..dt_kit::HangBand::DEFAULT
         };
-        let (export, audit) =
-            dt_kit::audit_rounded(&mesh, footprint, 0.0, &opts.printer, &mats, Some(&band));
+        let (export, audit) = gate(
+            mesh,
+            &mats,
+            opts.tier,
+            footprint,
+            0.0,
+            &opts.printer,
+            &band,
+            &[],
+        );
         let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
         let built = Built {
             product: Product {
@@ -273,7 +339,7 @@ impl Subject {
                 },
                 out: std::path::PathBuf::new(),
                 footprint,
-                checked: true,
+                checked: opts.tier.checked(),
             },
             report: Report {
                 stages: scene.stages().to_vec(),

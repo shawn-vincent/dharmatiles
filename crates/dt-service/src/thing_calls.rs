@@ -44,6 +44,9 @@ pub struct ThingReq {
     pub which: ThingRef,
     /// One seed for the view, or many for the strip; each is drawn on its own.
     pub seeds: Vec<u64>,
+    /// How finely: `full` (joined and through the gate's overhang paint: what prints) when left out, `low` for a quick look (a
+    /// tree takes tens of seconds at full, and a fraction of one at low, as in a tile).
+    pub tier: Option<dt_eval::Tier>,
 }
 
 /// A box, mm as printed on the build's target: along the main axis, across it, and up.
@@ -64,11 +67,15 @@ impl From<dt_elements::Box3> for Dims {
     }
 }
 
-/// The room a thing takes: the smallest and the largest box it can draw, mm as printed.
+/// The room a thing takes: the smallest and the largest box it can draw, mm as printed on the target, and the same two as
+/// the document writes them (dmm: 1/35 of a square, so they scale with the system where the printed ones do).
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
 pub struct ThingExtent {
     pub least: Dims,
     pub most: Dims,
+    pub least_dmm: Dims,
+    pub most_dmm: Dims,
 }
 
 /// A control as the thing was built with it: its name, the value as a document writes it, and where it comes from.
@@ -88,6 +95,8 @@ pub struct ThingDraw {
     pub triangles: usize,
     /// This draw's own box, mm as printed.
     pub size: Dims,
+    /// Whether the gate checked this draw: a full one is, a low one is not (each face flagged by its angle alone).
+    pub checked: bool,
     /// The mesh payload (`web/preview/js/payload.js` reads it), as standard base64: an answer is JSON.
     pub mesh: String,
 }
@@ -107,7 +116,7 @@ pub struct ThingRes {
 
 pub const BUILD_THING: Verb<ThingReq, ThingRes> = Verb::new("buildThing");
 
-/// Draw the thing `v.which` means in the document `src` holds at `tile`, at each seed.
+/// Draw the thing `v.which` means in the document `src` holds at `document` (the tile's own file, or a part it uses), at each seed.
 ///
 /// # Errors
 /// [`Refusal`]: no seed or too many (400); no such define or entry (404); it is a layer, or the document does not read
@@ -115,7 +124,7 @@ pub const BUILD_THING: Verb<ThingReq, ThingRes> = Verb::new("buildThing");
 pub fn build_thing<H: PlatesHost + CheckHost>(
     host: &H,
     src: &dyn dt_eval::Source,
-    tile: &str,
+    document: &str,
     v: &ThingReq,
 ) -> Result<ThingRes, Refusal> {
     if v.seeds.is_empty() || v.seeds.len() > MOST_DRAWS {
@@ -124,7 +133,8 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
             format!("ask for 1 to {MOST_DRAWS} draws, not {}", v.seeds.len()),
         ));
     }
-    let opts = host.options();
+    let mut opts = host.options();
+    opts.tier = v.tier.unwrap_or_default();
     let which = match &v.which {
         ThingRef::Define { name } => dt_eval::thing_build::Which::Define(name),
         ThingRef::Entry { key, child } => dt_eval::thing_build::Which::Entry {
@@ -132,7 +142,7 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
             child: child.map(|c| c as usize),
         },
     };
-    let subject = dt_eval::thing_build::subject(src, tile, which, &opts).map_err(|r| match r {
+    let subject = dt_eval::thing_build::subject(src, document, which, &opts).map_err(|r| match r {
         dt_eval::thing_build::Refused::Mistakes(errs) => Refusal::of_mistakes(&errs),
         dt_eval::thing_build::Refused::NoDefine(n) => {
             Refusal::refused(Status::NotFound, format!("there is no `define {n}` here"))
@@ -148,7 +158,7 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
         ),
     })?;
     let palette = host.palette();
-    let e = subject.extent(&opts);
+    let (e, written) = (subject.extent(&opts), subject.written());
     let mut draws = Vec::with_capacity(v.seeds.len());
     for &seed in &v.seeds {
         let built = subject
@@ -170,6 +180,7 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
                 y: hi[1] - lo[1],
                 z: hi[2] - lo[2],
             },
+            checked: built.checked,
             mesh: base64(&mesh),
         });
     }
@@ -187,6 +198,8 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
         extent: ThingExtent {
             least: e.least.into(),
             most: e.most.into(),
+            least_dmm: written.least.into(),
+            most_dmm: written.most.into(),
         },
         draws,
     })

@@ -1477,11 +1477,15 @@ triangles: number,
  */
 size: Dims, 
 /**
+ * Whether the gate checked this draw: a full one is, a low one is not (each face flagged by its angle alone).
+ */
+checked: boolean, 
+/**
  * The mesh payload (`web/preview/js/payload.js` reads it), as standard base64: an answer is JSON.
  */
 mesh: string, };
 
-type ThingExtent = { least: Dims, most: Dims, };
+type ThingExtent = { least: Dims, most: Dims, leastDmm: Dims, mostDmm: Dims, };
 
 type ThingParam = { define: string, param: string, };
 
@@ -1495,7 +1499,12 @@ file?: string | null, which: ThingRef,
 /**
  * One seed for the view, or many for the strip; each is drawn on its own.
  */
-seeds: Array<number>, };
+seeds: Array<number>, 
+/**
+ * How finely: `full` (joined and through the gate's overhang paint: what prints) when left out, `low` for a quick look (a
+ * tree takes tens of seconds at full, and a fraction of one at low, as in a tile).
+ */
+tier?: Tier | null, };
 
 type ThingRes = { 
 /**

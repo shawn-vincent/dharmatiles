@@ -151,6 +151,45 @@ impl std::ops::DerefMut for Built {
 /// No stack entry made this triangle.
 pub const NO_ENTRY: u16 = u16::MAX;
 
+/// The parts of a scene as one mesh with each triangle's material: a full build joins them (the union), a draft or a low build
+/// leaves them as they are.  The one place a tier decides this: a tile's build and a thing drawn alone both call it.
+///
+/// # Errors
+/// [`dt_kit::KitError`] from the kernel, or a triangle with no material.
+pub(crate) fn join(
+    scene: &mut Scene,
+    tier: crate::options::Tier,
+) -> Result<(dt_kit::TriMesh, Vec<dt_kit::Material>), dt_kit::KitError> {
+    if tier.checked() {
+        scene.union()
+    } else {
+        scene.soup_since(0)
+    }
+}
+
+/// The gate of a joined mesh, by tier: a full build is put through the audit; a draft or low build is not (each face is flagged by
+/// its angle alone, `dt_kit::draft`, and `skip` marks faces left unflagged).  The one place a tier decides this.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the audit's own inputs: the mesh and its materials, the tier, the footprint and its rounding, the printer, the band and the faces to skip"
+)]
+pub(crate) fn gate(
+    mesh: dt_kit::TriMesh,
+    mats: &[dt_kit::Material],
+    tier: crate::options::Tier,
+    footprint: [f64; 2],
+    corner_round_mm: f64,
+    printer: &dt_kit::Printer,
+    band: &dt_kit::HangBand,
+    skip: &[bool],
+) -> (dt_kit::Export, dt_kit::Audit) {
+    if tier.checked() {
+        dt_kit::audit_rounded(&mesh, footprint, corner_round_mm, printer, mats, Some(band))
+    } else {
+        dt_kit::draft(mesh, printer, skip)
+    }
+}
+
 impl Built {
     /// Per-face paint for previews and PNG renders: the acrylic ramps of
     /// the default palette, overhangs red and the tolerance band orange.
@@ -762,12 +801,7 @@ impl<'a> Plan<'a> {
                 (e.what.value.as_str(), style)
             })),
         };
-        let (mesh, mats) = if !opts.tier.checked() {
-            scene.soup_since(0)
-        } else {
-            scene.union()
-        }
-        .map_err(|e| build_error(e.to_string()))?;
+        let (mesh, mats) = join(&mut scene, opts.tier).map_err(|e| build_error(e.to_string()))?;
         let (entry_in, piece_in) = trace_entries(&scene, &mesh, self);
         progress.end(progress::UNION);
         stage_secs.push((progress::UNION.to_owned(), t_stage.elapsed_secs()));
@@ -784,22 +818,20 @@ impl<'a> Plan<'a> {
             max_deg: opts.printer.steepest_deg,
             ..dt_kit::HangBand::DEFAULT
         };
-        let (export, audit) = if !opts.tier.checked() {
-            // the base is the same in every draft: its sockets are not flagged
-            // the stack holds at most `MAX_ENTRIES` (10 000) entries, the reader's `dt::too-many`, so this fits a u16
-            let base = u16::try_from(tile.stack.len()).unwrap_or(NO_ENTRY);
-            let skip: Vec<bool> = entry_in.iter().map(|&e| e == base).collect();
-            dt_kit::draft(mesh, &opts.printer, &skip)
-        } else {
-            dt_kit::audit_rounded(
-                &mesh,
-                footprint,
-                c.frame.corner_round_mm(),
-                &opts.printer,
-                &mats,
-                Some(&band),
-            )
-        };
+        // the base is the same in every draft: its sockets are not flagged
+        // the stack holds at most `MAX_ENTRIES` (10 000) entries, the reader's `dt::too-many`, so this fits a u16
+        let base = u16::try_from(tile.stack.len()).unwrap_or(NO_ENTRY);
+        let skip: Vec<bool> = entry_in.iter().map(|&e| e == base).collect();
+        let (export, audit) = gate(
+            mesh,
+            &mats,
+            opts.tier,
+            footprint,
+            c.frame.corner_round_mm(),
+            &opts.printer,
+            &band,
+            &skip,
+        );
         progress.end(progress::AUDIT);
         stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed_secs()));
         stage_peak_mb.extend(

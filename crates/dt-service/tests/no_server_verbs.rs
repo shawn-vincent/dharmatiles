@@ -1592,6 +1592,7 @@ fn thing_req(which: ThingRef, seeds: &[u64]) -> ThingReq {
         file: None,
         which,
         seeds: seeds.to_vec(),
+        tier: None,
     }
 }
 
@@ -1640,6 +1641,13 @@ fn a_thing_is_drawn_alone_at_each_seed_by_verb_with_no_server() {
         .call(&w, &BUILD_THING, thing_req(define(), &[3]))
         .expect("one seed");
     assert_eq!(bytes(&again.draws[0]), bytes(&res.draws[2]));
+
+    // a low draw is a quick look, not the gate's: it says so
+    assert!(res.draws.iter().all(|d| d.checked), "a full draw is checked");
+    let mut quick = thing_req(define(), &[3]);
+    quick.tier = Some(dt_eval::Tier::Low);
+    let quick = table.call(&w, &BUILD_THING, quick).expect("a low draw");
+    assert!(!quick.draws[0].checked);
 
     // an entry of the tile, and one of a scatter's things, by the id the stack gives them
     let read = dt_eval::doc::read_with(
