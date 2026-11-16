@@ -44,6 +44,7 @@
 
 mod audit;
 mod band;
+mod canon;
 pub mod curve;
 pub mod debug;
 mod entry;
@@ -64,6 +65,7 @@ mod shape;
 pub mod span;
 mod stand;
 mod stone;
+mod things;
 
 pub use audit::{
     Audit, AuditSummary, Dropped, Export, Hang, HangBand, Printer, Repairs, audit, audit_banded,
@@ -98,6 +100,7 @@ pub use scene::{
 pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};
 pub use stand::{Stand, Stood, stand};
 pub use stone::{Grain, grain, hull, solid};
+pub use things::{Bodies, Body, BodyPart, Shelf, ThingId, ThingUse};
 
 /// Why a kit operation failed.
 #[derive(Clone, Debug, PartialEq)]

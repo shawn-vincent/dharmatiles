@@ -10,6 +10,7 @@
 //! [`tree`]. Bases: [`connector`] (DungeonBlocks) and [`openlock`].
 
 pub mod base;
+mod canon;
 pub mod cliff;
 pub mod connector;
 pub mod dirt;
@@ -385,6 +386,10 @@ pub struct Ctx<'a> {
     /// Works a tree's `top=` formula out at each branch tip; `None` where
     /// the build has no tile (the element's own tests).
     pub crowns: Option<&'a dyn CrownTops>,
+    /// The bodies of the things this build sets down: each thing is built in
+    /// its own frame once and set down by [`dt_kit::Body::set_down`], and
+    /// kept for the builds after.
+    pub things: &'a dt_kit::Bodies<'a>,
 }
 
 /// Which side of a drawn line a thing stands on, as you walk it.

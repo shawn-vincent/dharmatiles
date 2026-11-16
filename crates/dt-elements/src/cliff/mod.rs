@@ -451,6 +451,7 @@ mod tests {
             calm_mm: None,
             draft: false,
             crowns: None,
+            things: &dt_kit::Bodies::new(None),
         };
         cliff.pile_plan(&frame, &ctx).unwrap()
     }

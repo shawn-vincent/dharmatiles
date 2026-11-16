@@ -264,6 +264,16 @@ pub enum Side {
     Centre,
 }
 
+impl dt_value::Canonical for Side {
+    fn canon(&self, c: &mut dt_value::Canon) {
+        c.tag(match self {
+            Side::Left => b'l',
+            Side::Right => b'r',
+            Side::Centre => b'c',
+        });
+    }
+}
+
 impl Side {
     /// The words, in help order.
     pub const WORDS: [&'static str; 3] = ["left", "right", "centre"];

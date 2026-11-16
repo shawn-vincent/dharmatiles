@@ -42,5 +42,6 @@ mod trace;
 mod tree_crowns;
 mod units;
 mod unwritten;
+mod variants;
 mod walls;
 mod weighting;

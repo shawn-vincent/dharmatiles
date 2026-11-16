@@ -35,9 +35,12 @@
 )]
 
 use std::any::{Any, TypeId};
-use std::sync::{Mutex, OnceLock};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 
-use dt_kit::{Falls, Field, Kind, Mask, Placed, Rng, Scene, Scope, Seed, Solid, Spread, scatter};
+use dt_kit::{
+    Bodies, Falls, Field, Kind, Mask, Placed, Rng, Scene, Scope, Seed, Solid, Spread, scatter,
+};
 
 use crate::flowers::Plant;
 use crate::read::Settings;
@@ -140,12 +143,18 @@ pub struct Usual {
 /// The keyed stream a scatter draws from, unless its things all name another.
 pub const SCATTER_STREAM: &str = "scatter";
 
+/// The most variants of a thing a scatter may ask for.
+pub const MAX_VARIANTS: u32 = 256;
+
 /// One draw of a thing: the room it asks for and what its own stand reads
 /// back.  What is inside is the thing's own; the scatter reads only the
-/// radius.
+/// radius.  Cloned cheaply: the payload is shared, so a variant drawn once is handed to
+/// every placement of it.
+#[derive(Clone)]
 pub struct Drawn {
     radius_mm: f64,
-    payload: Box<dyn Any + Send + Sync>,
+    payload: Arc<dyn Any + Send + Sync>,
+    variant: Option<Seed>,
 }
 
 impl Drawn {
@@ -154,8 +163,23 @@ impl Drawn {
     pub fn new<T: Any + Send + Sync>(radius_mm: f64, payload: T) -> Self {
         Self {
             radius_mm,
-            payload: Box::new(payload),
+            payload: Arc::new(payload),
+            variant: None,
         }
+    }
+
+    /// This draw is a copy of the variant drawn from `seed` (a scatter's
+    /// `variants=`): every placement of it is the same shape, built once.
+    #[must_use]
+    pub fn of_variant(mut self, seed: Seed) -> Self {
+        self.variant = Some(seed);
+        self
+    }
+
+    /// The variant it is a copy of, when a scatter drew it as one.
+    #[must_use]
+    pub fn variant(&self) -> Option<Seed> {
+        self.variant
     }
 
     /// The disc's radius, world mm.
@@ -237,12 +261,27 @@ pub trait Thing: Send + Sync {
     ///
     /// # Errors
     /// [`LookError`] when it cannot be built.
+    fn make_with(
+        &self,
+        scene: &mut Scene,
+        seed: Seed,
+        printer: &dt_kit::Printer,
+        bodies: &Bodies<'_>,
+    ) -> Result<Vec<Solid>, LookError>;
+
+    /// [`Thing::make_with`] with nothing kept: the body is built, not looked
+    /// for.  The same path, so what is made is the same either way.
+    ///
+    /// # Errors
+    /// As [`Thing::make_with`].
     fn make(
         &self,
         scene: &mut Scene,
         seed: Seed,
         printer: &dt_kit::Printer,
-    ) -> Result<Vec<Solid>, LookError>;
+    ) -> Result<Vec<Solid>, LookError> {
+        self.make_with(scene, seed, printer, &Bodies::new(None))
+    }
 
     /// Set down every draw of this family at once, in the order given: each
     /// moved into place, seated on the ground and added to the scene.  `rng`
@@ -743,6 +782,9 @@ pub struct Scatter {
     clearing_width: Draw,
     /// What the things answer to.
     near: Option<Near>,
+    /// `variants=`: each thing is drawn as one of this many variants, each
+    /// built once and copied.  `None`: every placement is its own draw.
+    variants: Option<u32>,
     children: Vec<(Box<dyn Thing>, f64)>,
 }
 
@@ -816,6 +858,7 @@ impl Scatter {
             clearings: set.dist_or("clearings", Draw::flat(0.0, 0.0))?,
             clearing_width: set.dist_or("clearingWidth", Draw::flat(6.0, 14.0))?,
             near,
+            variants: Self::variants_of(&set)?,
             count: set.dist("count")?,
             per_square: set.dist_or("perSquare", usual.per_square)?,
             gap: set.number_or("gap", pattern.usual_gap(usual.gap_mm))?,
@@ -823,6 +866,22 @@ impl Scatter {
             stream,
             children: made,
         })
+    }
+
+    /// `variants=`, a whole number from 1 to [`MAX_VARIANTS`].
+    fn variants_of(set: &Settings<'_>) -> Result<Option<u32>, LookError> {
+        let Some(v) = set.number("variants")? else {
+            return Ok(None);
+        };
+        let n = libm::round(v);
+        if (v - n).abs() > 1e-9 || !(1.0..=f64::from(MAX_VARIANTS)).contains(&n) {
+            return Err(LookError::control(
+                "variants",
+                format!("`variants` is a whole number from 1 to {MAX_VARIANTS}, not {v}"),
+                "write `variants=12`, or leave it out for every placement its own draw".into(),
+            ));
+        }
+        Ok(Some(n as u32))
     }
 
     /// Whether it asks for anything the dart-throw or the stand does not do
@@ -984,6 +1043,8 @@ impl Element for Scatter {
 
         // each item picks its child and draws its size from its own stream
         let mut drawn: Vec<(usize, Drawn)> = Vec::with_capacity(n);
+        // each variant is drawn once, and handed to every placement of it
+        let mut variants: HashMap<(usize, i64), Drawn> = HashMap::new();
         for i in 0..n {
             let item = ctx.seed.key("item").index(i as u64);
             let mut r = Rng::new(item);
@@ -997,12 +1058,33 @@ impl Element for Scatter {
                     hit
                 })
                 .unwrap_or(self.children.len() - 1);
-            drawn.push((
-                k,
-                self.children[k]
-                    .0
-                    .draw(scene, item, &mut r, foot.is_some())?,
-            ));
+            let thing = &self.children[k].0;
+            let d = match self.variants {
+                None => thing.draw(scene, item, &mut r, foot.is_some())?,
+                Some(v) => {
+                    // which variant of this child, from the item's own stream;
+                    // the variant is then drawn from a stream of its own, keyed
+                    // by the child and the variant, so every copy of it is the
+                    // same draw (and adding a variant moves no other)
+                    let j = r.int(0, i64::from(v) - 1);
+                    match variants.get(&(k, j)) {
+                        Some(d) => d.clone(),
+                        None => {
+                            let variant = ctx
+                                .seed
+                                .key("variant")
+                                .index(k as u64)
+                                .index(j.unsigned_abs());
+                            let d = thing
+                                .draw(scene, variant, &mut Rng::new(variant), foot.is_some())?
+                                .of_variant(variant);
+                            variants.insert((k, j), d.clone());
+                            d
+                        }
+                    }
+                }
+            };
+            drawn.push((k, d));
         }
 
         // the things that are built together: one family each, the one whose

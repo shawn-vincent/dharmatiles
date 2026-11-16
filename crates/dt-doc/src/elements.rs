@@ -970,6 +970,13 @@ static SCATTER: &[Control] = &[
     .over(0.0, f64::INFINITY)
     .weighted()
     .default("6 .. 14"),
+    c(
+        "variants",
+        Axis::Count,
+        "draw each thing as one of this many variants, each built once and copied turned and placed",
+    )
+    .limits(1.0, 256.0)
+    .absent("every placement is its own draw"),
     group(
         "near",
         &[

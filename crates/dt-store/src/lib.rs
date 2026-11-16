@@ -43,6 +43,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dt_kit::debug::Collect;
+use dt_kit::{Body, Shelf, ThingId};
 use sha2::{Digest, Sha256};
 
 use dt_eval::canon::Canon;
@@ -103,20 +104,44 @@ impl Key {
 /// made one way wherever it is made.  Pure: it reads no disk and no clock.
 #[must_use]
 pub fn make_key(engine: &str, reads: &Reads, path: &str, opts: &Options, tier: Tier) -> Key {
-    let target = opts.target();
     let mut c = Canon::new();
-    c.field("format", &FORMAT)
-        .field("engine", &engine)
-        .field("tier", tier.name())
-        .field("system", opts.system.word())
-        .field("printer", &opts.printer.name)
-        .field("printer-values", &opts.printer)
-        .field("seed", &opts.seed)
+    key_head(&mut c, engine, opts, tier);
+    c.field("seed", &opts.seed)
         .field("cells", &opts.cells)
         .field("path", path);
     for (p, t) in &reads.0 {
         c.field("file", p).field("text", t);
     }
+    keyed(&c, path, opts, tier)
+}
+
+/// The key of the body of a thing (`id`: the canonical form of everything its builder reads) at the build target
+/// `opts` names, at `tier`, by an engine named `engine`.  The same maker as a tile's ([`make_key`]): the head of the
+/// key (the cache format, the engine, the tier, the target's system and every number of its printer) is one function
+/// ([`key_head`]) and so is the end of it ([`keyed`]), so a thing is keyed as a tile is and a change to how either is
+/// keyed is a change to both.  Pure: it reads no disk and no clock.
+#[must_use]
+pub fn make_thing_key(engine: &str, id: &ThingId, opts: &Options, tier: Tier) -> Key {
+    let mut c = Canon::new();
+    key_head(&mut c, engine, opts, tier);
+    c.field("thing", id.kind());
+    c.str("made-from").raw(id.canon());
+    keyed(&c, &format!("thing:{}", id.kind()), opts, tier)
+}
+
+/// What every key begins with: the format, the engine, the tier and the build target.
+fn key_head(c: &mut Canon, engine: &str, opts: &Options, tier: Tier) {
+    c.field("format", &FORMAT)
+        .field("engine", &engine)
+        .field("tier", tier.name())
+        .field("system", opts.system.word())
+        .field("printer", &opts.printer.name)
+        .field("printer-values", &opts.printer);
+}
+
+/// A key from what was written into `c`: the digest, and the slot (`path` at the target and tier) it is filed under.
+fn keyed(c: &Canon, path: &str, opts: &Options, tier: Tier) -> Key {
+    let target = opts.target();
     let id = hex_of(c.bytes())[..32].to_owned();
     let mut s = Canon::new();
     s.put(path).put(&target).put(tier.name());
@@ -504,6 +529,80 @@ impl Store {
         self.evict(Some(&file))
     }
 
+    /// The body of a thing kept under `key` ([`make_thing_key`]).  `Ok(None)`: none is kept.  Its use is noted.
+    ///
+    /// # Errors
+    /// The entry is damaged or cannot be read: said in words, and the entry removed (so the next build makes the body
+    /// again).
+    pub fn get_body(&self, key: &Key) -> Result<Option<Body>, String> {
+        let file = self.file_of(key);
+        let bytes = match std::fs::read(&file) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => {
+                return Err(format!(
+                    "cannot read the cache entry {}: {e}",
+                    file.display()
+                ));
+            }
+        };
+        let (head, body) = match split(&bytes) {
+            Ok(v) => v,
+            Err(why) => return self.damaged(&file, &why),
+        };
+        if head.key != key.id {
+            return self.damaged(&file, "it holds another key's body");
+        }
+        match codec::body_in(body) {
+            Ok(b) => {
+                self.touch(&file);
+                Ok(Some(b))
+            }
+            Err(why) => self.damaged(&file, &why),
+        }
+    }
+
+    /// Keep `body` under `key`, written to a temporary name and renamed so no reader sees half of it.  Unlike
+    /// [`Store::put`] it does not sync the file or look at the folder's size: a body is made again if it is lost, and
+    /// a cover of thousands would otherwise scan the folder for each (the size limit is [`Store::evict`]'s, once, when
+    /// the build is over: [`Kept::settle`]).
+    ///
+    /// # Errors
+    /// The folder or file cannot be written, in words.
+    pub fn put_body(&self, key: &Key, body: &Body) -> Result<(), String> {
+        let file = self.file_of(key);
+        let dir = file
+            .parent()
+            .ok_or_else(|| format!("{} has no folder", file.display()))?;
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("cannot create the cache folder {}: {e}", dir.display()))?;
+        let out = entry_of(
+            &self.engine,
+            key,
+            codec::body_out(body),
+            body.triangles() as u64,
+            now_secs(),
+        )?;
+        let tmp = dir.join(format!(
+            ".tmp-{}-{}",
+            std::process::id(),
+            TEMPS.fetch_add(1, Ordering::Relaxed)
+        ));
+        let written = std::fs::write(&tmp, &out).and_then(|()| std::fs::rename(&tmp, &file));
+        if let Err(e) = written {
+            let cleaned = match std::fs::remove_file(&tmp) {
+                Ok(()) => String::new(),
+                Err(c) if c.kind() == std::io::ErrorKind::NotFound => String::new(),
+                Err(c) => format!(" (and {} could not be removed: {c})", tmp.display()),
+            };
+            return Err(format!(
+                "cannot write the cache entry {}: {e}{cleaned}",
+                file.display()
+            ));
+        }
+        Ok(())
+    }
+
     /// Bring the folder under its size limit by removing the least recently
     /// used entries (and any stray temporary an hour old), never `keep`.
     ///
@@ -841,7 +940,24 @@ fn now_secs() -> u64 {
 
 /// `stamp` is when it was made, in seconds since 1970 (the caller's clock: a browser has no `SystemTime`).
 fn entry_bytes(engine: &str, key: &Key, built: &Built, stamp: u64) -> Result<Vec<u8>, String> {
-    let body = codec::built_out(built);
+    entry_of(
+        engine,
+        key,
+        codec::built_out(built),
+        built.audit.triangles as u64,
+        stamp,
+    )
+}
+
+/// A whole entry round `body` (what [`codec`] wrote of a build or of a thing's body): `triangles` is what the header
+/// says it holds.
+fn entry_of(
+    engine: &str,
+    key: &Key,
+    body: Vec<u8>,
+    triangles: u64,
+    stamp: u64,
+) -> Result<Vec<u8>, String> {
     let mut head = codec::Wr(Vec::new());
     head.str(&key.id);
     head.str(&key.path);
@@ -849,7 +965,7 @@ fn entry_bytes(engine: &str, key: &Key, built: &Built, stamp: u64) -> Result<Vec
     head.str(key.tier.name());
     head.str(engine);
     head.u64(stamp);
-    head.u64(built.audit.triangles as u64);
+    head.u64(triangles);
     let head = head.0;
     let mut out = Vec::with_capacity(head.len() + body.len() + 24);
     out.extend_from_slice(MAGIC);
@@ -922,6 +1038,26 @@ pub trait Kept: Sync {
     /// # Errors
     /// The entry cannot be kept, in words.
     fn put(&self, key: &Key, built: &Built) -> Result<(), String>;
+
+    /// The body of a thing kept under `key` ([`make_thing_key`]); `Ok(None)`: none is kept.  A thing's body is an entry
+    /// of the same store as a build, under the same limit and the same order of eviction.
+    ///
+    /// # Errors
+    /// A damaged or unreadable entry, in words (the entry is dropped, so the next build makes the body again).
+    fn get_body(&self, key: &Key) -> Result<Option<Body>, String>;
+
+    /// Keep a thing's `body` under `key`.
+    ///
+    /// # Errors
+    /// The entry cannot be kept, in words.
+    fn put_body(&self, key: &Key, body: &Body) -> Result<(), String>;
+
+    /// A build is over: bring the store under its size limit once, after the bodies it kept without looking (a cover
+    /// keeps thousands).
+    ///
+    /// # Errors
+    /// The store cannot be brought under its limit, in words.
+    fn settle(&self) -> Result<(), String>;
 }
 
 impl Kept for Store {
@@ -935,6 +1071,18 @@ impl Kept for Store {
 
     fn put(&self, key: &Key, built: &Built) -> Result<(), String> {
         Store::put(self, key, built)
+    }
+
+    fn get_body(&self, key: &Key) -> Result<Option<Body>, String> {
+        Store::get_body(self, key)
+    }
+
+    fn put_body(&self, key: &Key, body: &Body) -> Result<(), String> {
+        Store::put_body(self, key, body)
+    }
+
+    fn settle(&self) -> Result<(), String> {
+        self.evict(None)
     }
 }
 
@@ -1087,27 +1235,9 @@ impl Kept for MemStore {
     }
 
     fn get(&self, key: &Key, want: Collect) -> Result<Option<Built>, String> {
-        let mut h = self.held.lock_unpoisoned();
-        h.tick += 1;
-        let tick = h.tick;
-        let Some((bytes, used)) = h.entries.get_mut(&key.id) else {
+        let Some((head, built)) = self.read(key, entry_read, "build")? else {
             return Ok(None);
         };
-        *used = tick;
-        let read = entry_read(bytes);
-        let (head, built) = match read {
-            Ok(v) => v,
-            Err(why) => {
-                h.drop_entry(&key.id);
-                self.tell(Change::Drop { id: &key.id });
-                return Err(format!("the kept build is damaged ({why}); it is dropped"));
-            }
-        };
-        if head.key != key.id {
-            h.drop_entry(&key.id);
-            self.tell(Change::Drop { id: &key.id });
-            return Err("a kept build holds another key's build; it is dropped".to_owned());
-        }
         if !collected(&built).covers(want) {
             return Ok(None);
         }
@@ -1117,7 +1247,77 @@ impl Kept for MemStore {
     }
 
     fn put(&self, key: &Key, built: &Built) -> Result<(), String> {
-        let bytes = entry_bytes(&self.engine, key, built, 0)?;
+        self.keep(key, entry_bytes(&self.engine, key, built, 0)?)
+    }
+
+    fn get_body(&self, key: &Key) -> Result<Option<Body>, String> {
+        Ok(self
+            .read(
+                key,
+                |bytes| {
+                    let (head, body) = split(bytes)?;
+                    Ok((head, codec::body_in(body)?))
+                },
+                "body",
+            )?
+            .map(|(_, body)| body))
+    }
+
+    fn put_body(&self, key: &Key, body: &Body) -> Result<(), String> {
+        self.keep(
+            key,
+            entry_of(
+                &self.engine,
+                key,
+                codec::body_out(body),
+                body.triangles() as u64,
+                0,
+            )?,
+        )
+    }
+
+    fn settle(&self) -> Result<(), String> {
+        // `keep` brings the memory under its limit at each entry: nothing to do after
+        Ok(())
+    }
+}
+
+impl MemStore {
+    /// The entry kept under `key`, decoded by `decode`; its use is noted.  A damaged entry, or one that holds another
+    /// key's, is dropped and said (`what` it was).
+    fn read<T>(
+        &self,
+        key: &Key,
+        decode: impl FnOnce(&[u8]) -> Result<(Head, T), String>,
+        what: &str,
+    ) -> Result<Option<(Head, T)>, String> {
+        let mut h = self.held.lock_unpoisoned();
+        h.tick += 1;
+        let tick = h.tick;
+        let Some((bytes, used)) = h.entries.get_mut(&key.id) else {
+            return Ok(None);
+        };
+        *used = tick;
+        let (head, value) = match decode(bytes) {
+            Ok(v) => v,
+            Err(why) => {
+                h.drop_entry(&key.id);
+                self.tell(Change::Drop { id: &key.id });
+                return Err(format!("the kept {what} is damaged ({why}); it is dropped"));
+            }
+        };
+        if head.key != key.id {
+            h.drop_entry(&key.id);
+            self.tell(Change::Drop { id: &key.id });
+            return Err(format!(
+                "a kept {what} holds another key's {what}; it is dropped"
+            ));
+        }
+        Ok(Some((head, value)))
+    }
+
+    /// Keep an entry's `bytes` under `key`, the memory brought under its limit (never the entry just kept).
+    fn keep(&self, key: &Key, bytes: Vec<u8>) -> Result<(), String> {
         let mut h = self.held.lock_unpoisoned();
         h.tick += 1;
         let tick = h.tick;
@@ -1133,6 +1333,48 @@ impl Kept for MemStore {
             self.tell(Change::Drop { id: &id });
         }
         Ok(())
+    }
+}
+
+/// A store as the shelf a build keeps its things on (`dt_kit::Shelf`): the one call that gives the engine a place for
+/// bodies.  A thing's body is read and kept as an entry of `store` (the disk's [`Store`], the browser's [`MemStore`]),
+/// under the key [`make_thing_key`] makes from the store's engine and the build target `opts` names, so what a build
+/// made of a thing is what the next build with the same target reads, and two targets never answer each other.
+///
+/// ```ignore
+/// let shelf = Shelved::new(&store, &opts);
+/// let bodies = Bodies::new(Some(&shelf));
+/// let solids = thing.make_with(&mut scene, seed, &printer, &bodies)?;
+/// let problems = bodies.finish(); // a damaged entry dropped, a body that could not be kept
+/// ```
+pub struct Shelved<'a> {
+    store: &'a dyn Kept,
+    opts: &'a Options,
+}
+
+impl<'a> Shelved<'a> {
+    /// `store` as the shelf of a build for the target and tier `opts` names.
+    #[must_use]
+    pub fn new(store: &'a dyn Kept, opts: &'a Options) -> Self {
+        Self { store, opts }
+    }
+
+    fn key(&self, id: &ThingId) -> Key {
+        make_thing_key(self.store.engine(), id, self.opts, self.opts.tier)
+    }
+}
+
+impl Shelf for Shelved<'_> {
+    fn read(&self, id: &ThingId) -> Result<Option<Body>, String> {
+        self.store.get_body(&self.key(id))
+    }
+
+    fn keep(&self, id: &ThingId, body: &Body) -> Result<(), String> {
+        self.store.put_body(&self.key(id), body)
+    }
+
+    fn settle(&self) -> Result<(), String> {
+        self.store.settle()
     }
 }
 
@@ -1192,7 +1434,10 @@ fn stored_build(
         Ok(None) => {}
         Err(e) => problems.push(e),
     }
-    let mut b = build_checked(&c, path, &text, &stored, progress, cache)?;
+    // the tile's things are kept on the same store, one entry for each
+    let shelf = Shelved::new(store, &stored);
+    let mut b = build_checked(&c, path, &text, &stored, progress, cache, Some(&shelf))?;
+    problems.append(&mut b.report.cache.problems);
     if let Err(e) = store.put(&key, &b) {
         problems.push(e);
     }
