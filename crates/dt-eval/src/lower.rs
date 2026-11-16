@@ -43,14 +43,16 @@ pub(crate) fn element_value(v: &Value, lets: &Lets) -> Result<Lowered, Refused> 
                 "the parameter `{p}` has no value here"
             )));
         }
-        Value::Thing(t) => {
-            return Err(Refused {
-                code: dt_lang::codes::TYPE,
-                ..Refused::mistake(format!(
-                    "`{t}` is a thing, and a control takes a number or a word"
-                ))
-            }
-            .with_help("a thing is used as an entry of the definition that holds it"));
+        Value::Generator(kind, t) => {
+            let ke = dt_doc::units::misfit(t, *kind, "a control", dt_doc::units::Kind::Plain);
+            let refused = Refused {
+                code: ke.code,
+                ..Refused::mistake(ke.message)
+            };
+            return Err(match ke.help {
+                Some(h) => refused.with_help(h),
+                None => refused,
+            });
         }
     })
 }

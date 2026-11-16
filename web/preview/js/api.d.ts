@@ -238,6 +238,8 @@ dots: { [key in string]: Array<number> },
  */
 trails: { [key in string]: Array<Array<number>> }, thinned: boolean, };
 
+type DefKind = { name: string, kind: string, };
+
 type Deleted = { path: string, };
 
 type DiagData = { label?: string, unexpected?: boolean, };
@@ -801,13 +803,15 @@ type NamesReq = { text: string, };
 
 type NamesRes = { ok: boolean, message: string | null, defs: Array<string>, regions: Array<string>, lines: Array<string>, points: Array<string>, 
 /**
- * The definitions that are one thing: what a thing parameter may be given besides the thing elements.
+ * What each definition is as a generator, as a word of the language's one kind table (`thing` or `layer`): a
+ * thing parameter may be given the things, a layer parameter the layers and the things.
  */
-things: Array<string>, 
+kinds: Array<DefKind>, 
 /**
- * The parameters that hold a thing, for completing `param=` with thing names.
+ * What each parameter holds (`kind` is a word of the kind table), for completing `param=` with the names that
+ * fit: a thing slot offers things, a layer slot layers and things, a value slot values.
  */
-thingParams: Array<ThingParam>, };
+params: Array<ParamKind>, };
 
 type Near = { x: number, y: number, };
 
@@ -906,6 +910,8 @@ type Origin = "server" | "page" | "cli";
 type OwnedSeed = { seed: number, have: number, };
 
 type PageMessageReq = { tile?: string | null, what?: string | null, text: string, help?: string | null, causes?: Array<string> | null, backtrace?: string | null, };
+
+type ParamKind = { define: string, param: string, kind: string, };
 
 type PieceEdit = { id: string, set: PieceWords, };
 
@@ -1486,8 +1492,6 @@ checked: boolean,
 mesh: string, };
 
 type ThingExtent = { least: Dims, most: Dims, leastDmm: Dims, mostDmm: Dims, };
-
-type ThingParam = { define: string, param: string, };
 
 type ThingRef = { "kind": "define", name: string, } | { "kind": "entry", key: string, child: number | null, };
 

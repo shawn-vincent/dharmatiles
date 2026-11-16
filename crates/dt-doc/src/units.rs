@@ -59,6 +59,12 @@ pub enum Kind {
     /// Not known until the definition is called (a `$` name a caller
     /// installs, a parameter that fills no control): it fits any.
     Any,
+    /// A thing: controls and a seed make one solid in its own frame, and
+    /// it reads nothing (`rock`, `tree`, a definition of one).
+    Thing,
+    /// A layer: reads the scene so far and changes it (`dirt`, `water`, a
+    /// stack, a part).
+    Layer,
 }
 
 impl Kind {
@@ -72,21 +78,118 @@ impl Kind {
             Kind::Region => "a region",
             Kind::Point => "a point",
             Kind::Zero | Kind::Any => "a number",
+            Kind::Thing => "a thing",
+            Kind::Layer => "a layer",
         }
+    }
+
+    /// The kind words, written as `kind=` on a `param`: the one table.
+    pub const WORDS: &'static [(&'static str, Kind)] = &[
+        ("length", Kind::Length),
+        ("angle", Kind::Angle),
+        ("plain", Kind::Plain),
+        ("region", Kind::Region),
+        ("point", Kind::Point),
+        ("thing", Kind::Thing),
+        ("layer", Kind::Layer),
+    ];
+
+    /// The kind a word names.
+    #[must_use]
+    pub fn from_word(word: &str) -> Option<Kind> {
+        Self::WORDS
+            .iter()
+            .find(|(w, _)| *w == word)
+            .map(|(_, k)| *k)
+    }
+
+    /// The word for the kind, as written in `kind=` (`any` and a bare zero
+    /// have none of their own).
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        Self::WORDS
+            .iter()
+            .find(|(_, k)| *k == self)
+            .map_or("any", |(w, _)| w)
+    }
+
+    /// True for a generator: a thing or a layer.
+    #[must_use]
+    pub fn is_generator(self) -> bool {
+        matches!(self, Kind::Thing | Kind::Layer)
+    }
+
+    /// True when a value of this kind can be a parameter's: a length, an
+    /// angle, a plain number, a thing or a layer.
+    #[must_use]
+    pub fn holdable(self) -> bool {
+        matches!(
+            self,
+            Kind::Length | Kind::Angle | Kind::Plain | Kind::Thing | Kind::Layer
+        )
     }
 }
 
-/// What a place wants of a value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Want {
-    /// A length (a size, a height).
-    Length,
-    /// An angle.
-    Angle,
-    /// A plain number (a count, a share).
-    Plain,
-    /// Whatever it measures (a `let` holds any).
-    Any,
+/// Whether a value of kind `have` fits where kind `want` is wanted.  The one
+/// answer, asked at every place a name, a parameter, an entry or a child is
+/// checked: a kind fits itself; anything fits `Any`, and `Any` (not known
+/// until the call) fits anything; a bare zero fits a length, an angle or a
+/// plain number; a thing fits where a layer is wanted, because placing a thing
+/// makes it a layer; a layer never fits where a thing is wanted.
+#[must_use]
+pub fn fits(have: Kind, want: Kind) -> bool {
+    have == want
+        || have == Kind::Any
+        || want == Kind::Any
+        || (have == Kind::Zero && matches!(want, Kind::Length | Kind::Angle | Kind::Plain))
+        || (have == Kind::Thing && want == Kind::Layer)
+}
+
+/// A value of the wrong kind where `who` wants `want`: the message and the
+/// help every such mistake gives, one wording whatever the place.  `name` is
+/// what was written (`dirt`), `have` what it is, `who` what wants it
+/// (`` `stand piece` ``, `a scatter`).
+#[must_use]
+pub fn misfit(name: &str, have: Kind, who: &str, want: Kind) -> KindError {
+    let help = match (have, want) {
+        (Kind::Layer, Kind::Thing) => format!(
+            "a layer reads the scene so far (it paints the ground, or places things); a thing is one solid on its own: a rock, a flower or a tree, or a part whose stack is exactly one of them with no `at=` (a placed thing is a layer). Put `{name}` in the stack instead, and give {who} a thing"
+        ),
+        (Kind::Thing | Kind::Layer, Kind::Layer | Kind::Thing) => format!(
+            "`{name}` is {}; {who} wants {}",
+            have.describe(),
+            want.describe()
+        ),
+        (Kind::Thing | Kind::Layer, _) => format!(
+            "a {} goes in the stack, or where a parameter holds one (`param leaf kind={}`, then `leaf` in the stack); {who} takes {}",
+            have.word(),
+            have.word(),
+            want.describe()
+        ),
+        _ => wanted_help(want),
+    };
+    misfit_text(name, have.describe(), who, want, help)
+}
+
+/// [`misfit`] for something written that has no kind of its own (a yes or
+/// no, nothing): `have` is how it reads in the message.
+#[must_use]
+pub fn misfit_text(name: &str, have: &str, who: &str, want: Kind, help: String) -> KindError {
+    KindError {
+        code: dt_lang::codes::TYPE,
+        message: format!("`{name}` is {have}, and {who} wants {}", want.describe()),
+        help: Some(help),
+    }
+}
+
+/// What to write where a kind is wanted.
+#[must_use]
+pub fn wanted_help(want: Kind) -> String {
+    match want {
+        Kind::Thing => "pass the name of a thing: the elements `rock`, `stone`, `boulder`, `pebble`, `flower` and `tree`, and a part whose stack is exactly one of them".to_owned(),
+        Kind::Layer => "pass the name of a layer or a thing: an element such as `dirt` or `floor`, or a part".to_owned(),
+        k => format!("write {}", k.describe()),
+    }
 }
 
 /// Why a value does not measure what it should.
@@ -193,6 +296,14 @@ fn number(k: Kind, what: &str) -> Result<Kind, KindError> {
         Kind::Point => err(
             format!("a point is not a number, and {what} needs one"),
             "a point is written alone: \"(0.5sq, 1sq)\", \"point($tile, 50%, 0)\"".to_owned(),
+        ),
+        Kind::Thing => err(
+            format!("a thing is not a number, and {what} needs one"),
+            "a thing is placed in the stack, not worked out".to_owned(),
+        ),
+        Kind::Layer => err(
+            format!("a layer is not a number, and {what} needs one"),
+            "a layer goes in the stack, not in a formula".to_owned(),
         ),
         k => Ok(k),
     }
@@ -386,7 +497,7 @@ fn call_kind(
             )?;
             region(&args[0])?;
             for half in &args[1..] {
-                expect_kind(kind(half)?, Want::Length, half)?;
+                expect_kind(kind(half)?, Kind::Length, half)?;
             }
             Ok(Kind::Point)
         }
@@ -396,8 +507,8 @@ fn call_kind(
                 "`polar($tile, 40%, 90deg)`: the frame, how far out, the angle round",
             )?;
             region(&args[0])?;
-            expect_kind(kind(&args[1])?, Want::Plain, &args[1])?;
-            expect_kind(kind(&args[2])?, Want::Angle, &args[2])?;
+            expect_kind(kind(&args[1])?, Kind::Plain, &args[1])?;
+            expect_kind(kind(&args[2])?, Kind::Angle, &args[2])?;
             Ok(Kind::Point)
         }
         _ => {
@@ -443,36 +554,23 @@ fn call_kind(
 
 /// Whether kind `k` is what a place wants, with the help a bare number
 /// gets (`write 8dmm or 8mm`).
-fn expect_kind(k: Kind, want: Want, e: &Expr) -> Result<(), KindError> {
+fn expect_kind(k: Kind, want: Kind, e: &Expr) -> Result<(), KindError> {
     let k = number(k, "this")?;
-    let ok = matches!(
-        (want, k),
-        (_, Kind::Zero | Kind::Any)
-            | (Want::Any, _)
-            | (Want::Length, Kind::Length)
-            | (Want::Angle, Kind::Angle)
-            | (Want::Plain, Kind::Plain)
-    );
-    if ok {
+    if fits(k, want) {
         return Ok(());
     }
     let bare = matches!(e, Expr::Num { percent: false, .. });
-    let wanted = match want {
-        Want::Length => "a length",
-        Want::Angle => "an angle",
-        Want::Plain => "a plain number",
-        Want::Any => "a number",
-    };
+    let wanted = want.describe();
     // a range of bare numbers, `6..10`
-    if let (Want::Length | Want::Angle, Kind::Plain, Expr::Range { lo, hi }) = (want, k, e)
+    if let (Kind::Length | Kind::Angle, Kind::Plain, Expr::Range { lo, hi }) = (want, k, e)
         && matches!(**lo, Expr::Num { percent: false, .. })
         && matches!(**hi, Expr::Num { percent: false, .. })
     {
-        let unit = if want == Want::Length { "dmm" } else { "deg" };
+        let unit = if want == Kind::Length { "dmm" } else { "deg" };
         return unit_err(
             format!(
                 "`{e}` has no units, and a {} is written with one",
-                if want == Want::Length {
+                if want == Kind::Length {
                     "length"
                 } else {
                     "angle"
@@ -482,19 +580,19 @@ fn expect_kind(k: Kind, want: Want, e: &Expr) -> Result<(), KindError> {
         );
     }
     match (want, k) {
-        (Want::Length, Kind::Plain) if bare => unit_err(
+        (Kind::Length, Kind::Plain) if bare => unit_err(
             format!("`{e}` has no unit, and a length is written with one"),
             format!("write {e}dmm or {e}mm (`dmm` is 1/35 of a square: 1 mm on DungeonBlocks; `mm` is a printed millimetre)"),
         ),
-        (Want::Length, Kind::Plain) => err(
+        (Kind::Length, Kind::Plain) => err(
             format!("`{e}` is a plain number, and a length is wanted"),
             "a length has a unit: `8dmm`, `8mm`, `0.5sq`; multiply a length by a plain number to scale it".to_owned(),
         ),
-        (Want::Angle, Kind::Plain) if bare => unit_err(
+        (Kind::Angle, Kind::Plain) if bare => unit_err(
             format!("`{e}` has no unit, and an angle is written with one"),
             format!("write {e}deg, or `2 pi rad` for a turn"),
         ),
-        (Want::Plain, Kind::Length) => err(
+        (Kind::Plain, Kind::Length) => err(
             format!("`{e}` is a length, and a plain number is wanted"),
             "divide a length by a length for a plain number, or write the number alone".to_owned(),
         ),
@@ -509,10 +607,10 @@ fn expect_kind(k: Kind, want: Want, e: &Expr) -> Result<(), KindError> {
 ///
 /// # Errors
 /// What measures nothing, or the wrong thing.
-pub fn expect(e: &Expr, want: Want, names: Names<'_>, pct_length: bool) -> Result<Kind, KindError> {
+pub fn expect(e: &Expr, want: Kind, names: Names<'_>, pct_length: bool) -> Result<Kind, KindError> {
     let k = kind_of(e, names, pct_length)?;
     // a `let` holds anything: a region too
-    if want != Want::Any {
+    if want != Kind::Any {
         expect_kind(k, want, e)?;
     }
     Ok(k)
@@ -721,11 +819,11 @@ mod tests {
 
     #[test]
     fn a_bare_number_says_what_to_write() {
-        let e = expect(&parse("8").unwrap(), Want::Length, &names, false).unwrap_err();
+        let e = expect(&parse("8").unwrap(), Kind::Length, &names, false).unwrap_err();
         assert!(e.help.as_ref().unwrap().contains("8dmm or 8mm"), "{e:?}");
-        assert!(expect(&parse("0").unwrap(), Want::Length, &names, false).is_ok());
-        assert!(expect(&parse("0").unwrap(), Want::Angle, &names, false).is_ok());
-        let e = expect(&parse("90").unwrap(), Want::Angle, &names, false).unwrap_err();
+        assert!(expect(&parse("0").unwrap(), Kind::Length, &names, false).is_ok());
+        assert!(expect(&parse("0").unwrap(), Kind::Angle, &names, false).is_ok());
+        let e = expect(&parse("90").unwrap(), Kind::Angle, &names, false).unwrap_err();
         assert!(e.help.as_ref().unwrap().contains("90deg"), "{e:?}");
     }
 

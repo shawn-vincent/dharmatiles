@@ -64,7 +64,7 @@ const on = computed(() => {
     generator: it ? elementNamed(it.element)?.generator ?? null : null,
     child: child.value,
     nodes: d.nodes,
-    things: d.names?.things ?? null,
+    things: d.names ? d.names.kinds.filter((k) => k.kind === 'thing').map((k) => k.name) : null,
     caret: caret.value,
   });
 });

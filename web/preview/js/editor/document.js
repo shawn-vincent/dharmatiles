@@ -374,8 +374,8 @@ async function askNames() {
   if (r.status === 0) return; // the server is away, or a newer reading took its place: the names it had stay
   if (failed('Could not read the names in the text', r)) return;
   if (!r.body?.ok) return;
-  const { defs, regions, lines, points, things, thingParams } = r.body;
-  doc.set({ names: { defs, regions, lines, points, things, thingParams } });
+  const { defs, regions, lines, points, kinds, params } = r.body;
+  doc.set({ names: { defs, regions, lines, points, kinds, params } });
 }
 
 function changed(dragging = false) {

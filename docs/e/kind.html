@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>dt::kind</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<main class="wrap codepage mistake">
+<header class="hero">
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
+  <h1>dt::kind</h1>
+  <p class="lede" data-part="summary">A parameter's kind is not a kind a parameter holds, or nothing says what it holds.</p>
+</header>
+<section class="said" aria-labelledby="said">
+<h2 id="said">What the program says</h2>
+<pre class="said no-hl"><code><span class="a-31">dt::kind</span>
+
+  <span class="a-31">×</span> `ground` has no default, and nothing says what it holds
+   ╭─[<span class="a-36 a-b a-u">example.dtile:3:11</span>]
+ <span class="a-d">2</span> │ <span class="tk-node">define</span> shore <span class="tk-punct">{</span>
+ <span class="a-d">3</span> │     <span class="tk-node">param</span> ground
+   · <span class="a-35 a-b">          ───┬──</span>
+   ·              <span class="a-35 a-b">╰── </span><span class="a-35 a-b">no kind</span>
+ <span class="a-d">4</span> │     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">ground</span> <span class="tk-punct">}</span>
+   ╰────
+<span class="a-36">  help: </span>write its kind: `param ground kind=thing`, `kind=layer` or
+        `kind=length` (or `angle`, `plain`); or give it a default
+        explain: https://shawn-vincent.github.io/dharmatiles/e/kind
+        offline: dharmatiles explain dt::kind</code></pre>
+</section>
+<div class="cp-grid">
+<div>
+<section>
+<h2 id="help">What to do</h2>
+<p data-part="help">Write <code>param name kind=thing</code>, <code>kind=layer</code>, <code>kind=length</code>, <code>kind=angle</code> or <code>kind=plain</code>, or give it a default.</p>
+</section>
+<section>
+<h2 id="example">Broken, then fixed</h2>
+<div class="cp-pair">
+<figure class="broken"><figcaption>Gives <code>dt::kind</code></figcaption>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">define</span> shore <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> <mark class="del">ground</mark>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">ground</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">shore</span> <span class="tk-property">ground</span><span class="tk-punct">=</span>dirt <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
+<figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">define</span> shore <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> <mark class="ins">ground <span class="tk-property">kind</span><span class="tk-punct">=</span>layer</mark>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">ground</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">shore</span> <span class="tk-property">ground</span><span class="tk-punct">=</span>dirt <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
+</div>
+</section>
+</div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>A param's kind is what it holds: a length, an angle, a plain number, a thing or a layer. Its default, the control it fills or how the definition uses it usually say so, and then <code>kind=</code> is optional. Write it when nothing else does, or to say it plainly: <code>param ground kind=layer</code>, <code>param leaf kind=thing</code>, <code>param reach kind=length</code>. The words are the kinds' own (kinds). When it is written, the default, every use and every caller's argument are checked against it, and a disagreement is <a class="codelink" href="type.html"><code>dt::type</code></a> at the value, in the words of every kind mistake.</p></blockquote>
+<p class="cp-in"><a href="../guide/generators.html#dt-kind">Read it in context: Things and layers · A param's kind can be written: kind=</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::kind</code></span>
+</footer>
+</main>
+</body>
+</html>

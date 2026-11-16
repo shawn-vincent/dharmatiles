@@ -192,7 +192,7 @@ export const view = createStore(/** @type {ViewState} */ ({
  *   tileId: string | null, file: string | null, base: string | null, text: string | null, writable: boolean, docRev: number | null,
  *   checked: string | null, checkedFile: string | null, checkedTile: string | null, ok: boolean, errors: import('../api').Mistake[],
  *   stack: StackItem[] | null, map: TileMap | null, nodesRev: string | null, nodes: import('../api').NodeJson[] | null,
- *   names: Pick<import('../api').NamesRes, 'defs' | 'regions' | 'lines' | 'points' | 'things' | 'thingParams'> | null,
+ *   names: Pick<import('../api').NamesRes, 'defs' | 'regions' | 'lines' | 'points' | 'kinds' | 'params'> | null,
  *   note: string | null, conflict: string | null, saving: boolean, selectAt: number | null,
  * }} DocState
  */

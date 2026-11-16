@@ -111,13 +111,14 @@ pub fn printer(sources: &dyn Source, path: &str) -> Result<dt_kit::Printer, Vec<
     )
 }
 
-/// A place word an element does not take, where it is written.
+/// A place word an element does not take, where it is written; `on` is what
+/// it was written on, as it reads in the message (`` `rock` ``, `` a scatter's `rock` ``).
 pub(super) fn misplaced(src: &Src, span: SourceSpan, word: &str, on: &str) -> Diag {
     Diag::at(
         src,
         span,
         dt_lang::codes::PLACE,
-        format!("`{word}` does not place `{on}`"),
+        format!("`{word}` does not place {on}"),
         "not a place word for this",
     )
     .help("a scattered thing is placed by its scatter: put `at=` on the `scatter` line")

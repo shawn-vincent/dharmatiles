@@ -19,7 +19,7 @@
 use crate::consts::ConstTable;
 use crate::expr::{BinOp, Expr, UnitWord, parse};
 use crate::schema::{Axis, SQUARE_MM};
-use crate::units::{Base, Units, Want, expect, lower};
+use crate::units::{Base, Kind, Units, expect, lower};
 
 /// What a length prints.
 #[derive(Debug, Clone, PartialEq)]
@@ -129,7 +129,7 @@ pub fn printed_size(
     }
     let x = parse(typed.trim()).ok()?;
     let names = |_: &str| None;
-    expect(&x, Want::Length, &names, false).ok()?;
+    expect(&x, Kind::Length, &names, false).ok()?;
     if same_as_written(&x, units) {
         return None;
     }

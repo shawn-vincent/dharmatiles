@@ -8,7 +8,7 @@ mod machine;
 pub(crate) mod syntax;
 mod units;
 mod value;
-pub use entry::{Bound, Thing, bind_thing, type_late};
+pub use entry::{Bound, Callable, bind_generator, type_late};
 pub use units::point_text;
 pub use value::check_text_in;
 
@@ -23,11 +23,12 @@ use crate::error::{DocError, Src};
 use crate::expr;
 use crate::known::{DefInfo, Known};
 use crate::model::{
-    Base, Curve, DefKind, Definition, Document, Ends, Late, Line, Param, Printer, Region, Source,
-    Spanned, TileHeader, Use, Within,
+    Base, Callee, Curve, DefKind, Definition, Document, Ends, Late, Line, Param, Printer, Region,
+    Source, Spanned, TileHeader, Use, Within,
 };
 use crate::place::{Corner, Edge, Point};
 use crate::schema::{self, Axis, Control, Kind, MAX_SQUARES, did_you_mean};
+use crate::units::{fits, misfit};
 use heights::{Mode, PlaceKind};
 
 /// Decode one KDL v2 file.  `name` labels the source in diagnostics.
@@ -96,6 +97,29 @@ pub fn uses(name: &str, text: &str) -> Result<Vec<Use>, Vec<DocError>> {
     } else {
         Err(d.errors)
     }
+}
+
+/// What a parameter is wanted as, where a definition uses it as a thing or a
+/// layer: checked against what the parameter holds ([`crate::units::fits`])
+/// once its parameter line is read.
+#[derive(Debug, Clone)]
+pub(crate) struct Wanted {
+    /// What wants it, as it reads in a message (`a scatter`, `` `stand piece` ``).
+    pub who: String,
+    /// The kind it is wanted as.
+    pub kind: crate::units::Kind,
+    /// Where it is used.
+    pub span: SourceSpan,
+}
+
+/// What a parameter says it holds before its uses are read.
+#[derive(Debug, Clone)]
+pub(crate) struct Declared {
+    pub kind: crate::units::Kind,
+    /// True for `kind=`, false for a default that names a thing or a layer.
+    pub written: bool,
+    /// How it was said, for the help of a mistake (`` `kind=layer` ``).
+    pub because: String,
 }
 
 /// What two uses of one parameter ask of it, in words: the message of
@@ -191,9 +215,14 @@ pub(crate) struct Decoder<'k> {
     pub imported: HashMap<String, (DefInfo, String)>,
     /// While decoding a define: each parameter → the controls it fills.
     pub param_controls: Fills,
-    /// While decoding a define: the parameters that hold a thing (written as
-    /// an entry, or passed to a thing parameter of a call).
-    pub thing_params: HashSet<String>,
+    /// While decoding a define: what each parameter is wanted as where it is
+    /// used as a generator (written as an entry or a scatter child, or
+    /// passed to a thing or layer parameter of a call).
+    pub wants: HashMap<String, Vec<Wanted>>,
+    /// While decoding a define: what each parameter says it holds before
+    /// its uses are read (`kind=`, or a default that names a thing or a
+    /// layer).
+    pub declared: HashMap<String, Declared>,
     /// The `base` line of the stack last decoded.
     pub stack_base: Option<Base>,
     /// The `let`s of the stack block last decoded (format 1).
@@ -274,7 +303,8 @@ impl<'k> Decoder<'k> {
             local: HashMap::new(),
             imported: HashMap::new(),
             param_controls: Fills::default(),
-            thing_params: HashSet::new(),
+            wants: HashMap::new(),
+            declared: HashMap::new(),
             stack_base: None,
             stack_consts: Vec::new(),
             frame_region: None,
@@ -667,7 +697,7 @@ impl<'k> Decoder<'k> {
             base: None,
             stack: Vec::new(),
             summary: Kind::Surface,
-            thing: false,
+            generator: crate::units::Kind::Layer,
             span: node.span(),
         };
         let size = def.header().map(|h| (h.cols, h.rows));
@@ -712,7 +742,8 @@ impl<'k> Decoder<'k> {
         }
 
         self.param_controls = Fills::default();
-        self.thing_params.clear();
+        self.wants.clear();
+        self.declare_params(body);
         let step = if is_tile {
             "tile".to_owned()
         } else {
@@ -804,7 +835,7 @@ impl<'k> Decoder<'k> {
             }
         }
         def.summary = Kind::of(def.stack.iter().map(|e| e.kind));
-        def.thing = def.stack.len() == 1 && self.is_thing(&def.stack[0]);
+        def.generator = self.generator_of(&def);
         Some(def)
     }
 
@@ -1086,21 +1117,118 @@ impl<'k> Decoder<'k> {
             return None;
         }
         let fills = self.param_controls.of(&name.value).to_vec();
+        let positional: Vec<&KdlEntry> =
+            n.entries().iter().filter(|e| e.name().is_none()).collect();
+        let mut written: Option<SourceSpan> = None;
+        for e in n.entries().iter().filter(|e| e.name().is_some()) {
+            let key = e.name().map_or("", |k| k.value());
+            if key == "kind" {
+                written = Some(value_span(e));
+                if !e
+                    .value()
+                    .as_string()
+                    .and_then(crate::units::Kind::from_word)
+                    .is_some_and(crate::units::Kind::holdable)
+                {
+                    self.err(
+                        dt_lang::codes::KIND,
+                        value_span(e),
+                        "a parameter's `kind=` is one of length, angle, plain, thing or layer",
+                        "not a kind a parameter holds",
+                    )
+                    .help = Some("write `param ground kind=layer`, `param leaf kind=thing` or `param reach kind=length`".to_owned());
+                }
+            } else {
+                self.err(
+                    dt_lang::codes::PARAM,
+                    e.span(),
+                    format!("a parameter has no property `{key}`"),
+                    "unknown",
+                )
+                .help = Some(
+                    "a parameter is `param name default`, with `kind=` as its one property"
+                        .to_owned(),
+                );
+            }
+        }
+        // what it says it holds: a written `kind=`, else a default naming a
+        // thing or a layer (when no control types the default)
+        let decl = self
+            .declared
+            .get(&name.value)
+            .cloned()
+            .filter(|d| d.written || fills.is_empty());
+        let wants = self.wants.remove(&name.value).unwrap_or_default();
+        // what the controls it fills say it is
+        let fill_kind = fills.first().map(|f| {
+            f.control
+                .value
+                .and_then(Axis::kind)
+                .unwrap_or(crate::units::Kind::Any)
+        });
+        // a written kind that is a number types the parameter when no control does
+        let fills = if fills.is_empty()
+            && let Some(d) = decl.as_ref().filter(|d| d.written)
+            && let Some(control) = crate::elements::kind_control(d.kind)
+        {
+            vec![Fill {
+                param: name.value.clone(),
+                control,
+                owner: "param".to_owned(),
+                name: format!("kind={}", d.kind.word()),
+            }]
+        } else {
+            fills
+        };
         let control = fills.first().map(|f| f.control);
-        let used_as_thing = self.thing_params.contains(&name.value);
-        if used_as_thing && let Some(f) = fills.first() {
-            self.err(
-                dt_lang::codes::TYPE,
-                name.span,
-                format!(
-                    "`{}` is used as a thing and as a value of `{} {}`",
-                    name.value, f.owner, f.name
-                ),
-                "two kinds",
-            )
-            .help = Some(
-                "a parameter holds a number or a thing, not both; use two parameters".to_owned(),
-            );
+        let kind = decl
+            .as_ref()
+            .map(|d| d.kind)
+            .or(fill_kind)
+            .unwrap_or_else(|| {
+                if wants.iter().any(|w| w.kind == crate::units::Kind::Thing) {
+                    crate::units::Kind::Thing
+                } else {
+                    crate::units::Kind::Any
+                }
+            });
+        // a written kind that a control it fills disagrees with
+        for f in self.param_controls.of(&name.value).to_vec() {
+            let want = f
+                .control
+                .value
+                .and_then(Axis::kind)
+                .unwrap_or(crate::units::Kind::Plain);
+            if let Some(d) = decl.as_ref().filter(|d| d.written)
+                && !fits(d.kind, want)
+            {
+                self.err_kind(
+                    name.span,
+                    misfit(
+                        &name.value,
+                        d.kind,
+                        &format!("`{} {}`", f.owner, f.name),
+                        want,
+                    ),
+                    &d.because,
+                );
+            }
+        }
+        // what each use of it as a generator wants
+        for w in &wants {
+            let have = if decl.is_some() || fill_kind.is_some() {
+                kind
+            } else {
+                crate::units::Kind::Any
+            };
+            if !fits(have, w.kind) {
+                let because = match (&decl, fills.first()) {
+                    (Some(d), _) => d.because.clone(),
+                    (None, Some(f)) => format!("it is a value of `{} {}`", f.owner, f.name),
+                    (None, None) => String::new(),
+                };
+                self.err_kind(w.span, misfit(&name.value, have, &w.who, w.kind), &because);
+            }
         }
         if let Some(first) = fills.first()
             && let Some(other) = fills.iter().find(|f| !f.control.alike(first.control))
@@ -1111,7 +1239,7 @@ impl<'k> Decoder<'k> {
             );
         }
         if control.is_none()
-            && self.thing_default(n)
+            && decl.as_ref().is_some_and(|d| !d.written)
             && (self.is_definition(&name.value) || schema::element(&name.value).is_some())
         {
             self.err(
@@ -1121,18 +1249,16 @@ impl<'k> Decoder<'k> {
                 "a thing parameter is a plain name",
             )
             .help = Some(
-                "a parameter that holds a thing is written as an entry, and an element's own name would call the element: choose another name, such as `leaf`".to_owned(),
+                "a parameter that holds a thing or a layer is written as an entry, and an element's own name would call the element: choose another name, such as `leaf`".to_owned(),
             );
         }
-        let mut thing = used_as_thing;
         let mut late = None;
-        let default = match n.entries() {
+        let default = match positional.as_slice() {
             [_] => None,
-            [_, e] if e.name().is_none() => match control {
+            [_, e] => match control {
                 Some(k) => self.value(e, k, "param", &name.value, ctx),
-                None if used_as_thing || self.thing_default(n) => {
-                    thing = true;
-                    self.thing_value(e, &name.value, "param", ctx)
+                None if kind.is_generator() => {
+                    self.generator_value(e, "param", &name.value, kind, ctx)
                 }
                 None => {
                     late = Some(Late::of(e, ctx));
@@ -1150,23 +1276,93 @@ impl<'k> Decoder<'k> {
                 None
             }
         };
+        // no default, no kind written, nothing it is used as decides it
+        if positional.len() == 1
+            && written.is_none()
+            && kind == crate::units::Kind::Any
+            && fills.is_empty()
+        {
+            self.err(
+                dt_lang::codes::KIND,
+                name.span,
+                format!(
+                    "`{}` has no default, and nothing says what it holds",
+                    name.value
+                ),
+                "no kind",
+            )
+            .help = Some(format!(
+                "write its kind: `param {} kind=thing`, `kind=layer` or `kind=length` (or `angle`, `plain`); or give it a default",
+                name.value
+            ));
+        }
         Some(Param {
             name,
             default,
             fill: fills.into_iter().next(),
-            thing,
+            kind,
             late,
         })
     }
 
-    /// True when the default of a `param` node is the name of a thing.
-    fn thing_default(&self, n: &KdlNode) -> bool {
-        match n.entries() {
-            [_, e] if e.name().is_none() => e
-                .value()
-                .as_string()
-                .is_some_and(|s| self.thing_kind(s) == Some(true)),
-            _ => false,
+    /// Before the stack is read: what each parameter says it holds, by its
+    /// written `kind=` or a default that names a thing or a layer.
+    fn declare_params(&mut self, body: &KdlDocument) {
+        self.declared.clear();
+        for n in body.nodes().iter().filter(|n| n.name().value() == "param") {
+            let positional: Vec<&KdlEntry> =
+                n.entries().iter().filter(|e| e.name().is_none()).collect();
+            let Some(name) = positional.first().and_then(|e| e.value().as_string()) else {
+                continue;
+            };
+            let declared = if let Some(k) = n.entry("kind") {
+                k.value()
+                    .as_string()
+                    .and_then(crate::units::Kind::from_word)
+                    .filter(|k| k.holdable())
+                    .map(|kind| Declared {
+                        kind,
+                        written: true,
+                        because: format!("`kind={}` says so", kind.word()),
+                    })
+            } else {
+                positional
+                    .get(1)
+                    .and_then(|e| e.value().as_string())
+                    .and_then(|d| self.name_kind(d).map(|k| (d, k)))
+                    .filter(|(_, k)| k.is_generator())
+                    .map(|(d, kind)| Declared {
+                        kind,
+                        written: false,
+                        because: format!("its default `{d}` is {}", kind.describe()),
+                    })
+            };
+            if let Some(d) = declared {
+                self.declared.insert(name.to_owned(), d);
+            }
+        }
+    }
+
+    /// What a definition is as a generator: a thing when its stack is
+    /// exactly one unplaced thing, else a layer (a stack is a layer).
+    fn generator_of(&self, def: &Definition) -> crate::units::Kind {
+        match def.stack.as_slice() {
+            [one] => {
+                let kind = match &one.callee {
+                    Callee::Param(p) => def
+                        .params
+                        .iter()
+                        .find(|q| q.name.value == p.name)
+                        .map_or(crate::units::Kind::Any, |q| q.kind),
+                    c => self.callee_kind(c),
+                };
+                if kind == crate::units::Kind::Thing && !one.is_placed() {
+                    crate::units::Kind::Thing
+                } else {
+                    crate::units::Kind::Layer
+                }
+            }
+            _ => crate::units::Kind::Layer,
         }
     }
 
@@ -1437,7 +1633,7 @@ impl<'k> Decoder<'k> {
 
     /// An angle written as a string with its unit (`"30deg"`), degrees.
     fn printer_angle(&mut self, e: &KdlEntry) -> Option<f64> {
-        use crate::units::{Base, Want, expect, lower};
+        use crate::units::{Base, Kind, expect, lower};
         let span = value_span(e);
         let KdlValue::String(s) = e.value() else {
             self.err(
@@ -1464,7 +1660,7 @@ impl<'k> Decoder<'k> {
             }
         };
         let names = |_: &str| None;
-        match expect(&x, Want::Angle, &names, false)
+        match expect(&x, Kind::Angle, &names, false)
             .and_then(|_| lower(&x, Base::Mm, self.known.units(), None))
         {
             Ok(l) => match l.sample(&|_| None, 0.0) {
@@ -1792,7 +1988,7 @@ impl<'k> Decoder<'k> {
         reason = "permitted silence: a probe where None means not a form this reads; the checker reports the real diagnostic where the user wrote it"
     )]
     fn printer_value(&mut self, key: &str, e: &KdlEntry) -> Option<f64> {
-        use crate::units::{Base, Want, expect, lower};
+        use crate::units::{Base, Kind, expect, lower};
         let span = value_span(e);
         let KdlValue::String(s) = e.value() else {
             self.err(
@@ -1823,9 +2019,9 @@ impl<'k> Decoder<'k> {
             }
         };
         let want = if matches!(key, "overhang" | "steepest") {
-            Want::Angle
+            Kind::Angle
         } else {
-            Want::Length
+            Kind::Length
         };
         let names = |_: &str| None;
         match expect(&x, want, &names, false)

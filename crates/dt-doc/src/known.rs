@@ -9,8 +9,8 @@
 use std::collections::BTreeMap;
 
 use crate::model::{Const, ConstKind, Definition, Document};
-use crate::schema::{Control, Kind};
-use crate::units::Units;
+use crate::schema::{self, Control};
+use crate::units::{Kind, Units};
 
 /// What a call needs to know about a definition in another file.
 #[derive(Debug, Clone)]
@@ -18,9 +18,9 @@ pub struct DefInfo {
     /// Its parameters, in order.
     pub params: Vec<ParamInfo>,
     /// Solid, surface or both.
-    pub kind: Kind,
-    /// True when it is one thing (placed with `at=`, scatterable).
-    pub thing: bool,
+    pub kind: schema::Kind,
+    /// A thing when it is one unplaced thing (scatterable), else a layer.
+    pub generator: Kind,
 }
 
 /// A parameter of a definition.
@@ -32,8 +32,9 @@ pub struct ParamInfo {
     pub has_default: bool,
     /// The control it fills, which types a caller's value.
     pub control: Option<&'static Control>,
-    /// True when it holds a thing: a caller passes a thing's name.
-    pub thing: bool,
+    /// What it holds: a caller's argument must fit it
+    /// ([`crate::units::fits`]).
+    pub kind: Kind,
 }
 
 impl From<&Definition> for DefInfo {
@@ -46,11 +47,11 @@ impl From<&Definition> for DefInfo {
                     name: p.name.value.clone(),
                     has_default: p.default.is_some(),
                     control: p.control(),
-                    thing: p.thing,
+                    kind: p.kind,
                 })
                 .collect(),
             kind: d.summary,
-            thing: d.thing,
+            generator: d.generator,
         }
     }
 }
