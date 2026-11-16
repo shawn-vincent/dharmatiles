@@ -7,9 +7,10 @@
 //! each draw (`Subject::draw`: `Thing::make`, the join and the gate's overhang paint) and answers each as the page's one
 //! mesh payload ([`crate::payload::from_built`]).
 //!
-//! A thing's draw is **not kept**: the build store's key is made of a whole tile (its text, path and target), and a
-//! thing has no key of its own yet.  Every call builds again, which is cheap for one thing (a rock is a few tenths of a
-//! second) and is what keeps the view live as the document is typed.
+//! A thing's draw is not kept as a whole (the build store's key is made of a whole tile), but its **body** is, as in a tile:
+//! the host's shelf ([`PlatesHost::thing_shelf`]: the disk store, or the worker's memory) holds each rock under the thing's
+//! own key, so asking for a seed again reads the body and builds nothing ([`ThingRes::used`] says how many of each).  A
+//! tree or a flower is built where it stands, so it is built every time.
 
 use serde::{Deserialize, Serialize};
 
@@ -112,6 +113,11 @@ pub struct ThingRes {
     pub extent: ThingExtent,
     /// One for each seed asked, in order.
     pub draws: Vec<ThingDraw>,
+    /// What the draws did for their bodies: made, and read from the shelf (a seed asked again is read, not made).
+    pub used: dt_kit::ThingUse,
+    /// What went wrong with the shelf (a damaged entry dropped and made again, a body that could not be kept), in words: the
+    /// draws are real either way, and the page shows each of these.
+    pub problems: Vec<String>,
 }
 
 pub const BUILD_THING: Verb<ThingReq, ThingRes> = Verb::new("buildThing");
@@ -159,10 +165,12 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
     })?;
     let palette = host.palette();
     let (e, written) = (subject.extent(&opts), subject.written());
+    let shelf = host.thing_shelf(&opts);
+    let bodies = dt_kit::Bodies::new(shelf.as_deref());
     let mut draws = Vec::with_capacity(v.seeds.len());
     for &seed in &v.seeds {
         let built = subject
-            .draw(seed, &opts)
+            .draw(seed, &opts, &bodies)
             .map_err(|errs| Refusal::of_mistakes(&errs))?;
         let mesh = crate::payload::from_built(&built, opts.printer.overhang_deg, &palette)
             .map_err(|e| {
@@ -184,6 +192,7 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
             mesh: base64(&mesh),
         });
     }
+    let problems = bodies.finish();
     Ok(ThingRes {
         element: subject.element.clone(),
         shown: subject
@@ -202,5 +211,7 @@ pub fn build_thing<H: PlatesHost + CheckHost>(
             most_dmm: written.most.into(),
         },
         draws,
+        used: bodies.used(),
+        problems,
     })
 }

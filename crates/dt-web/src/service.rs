@@ -903,6 +903,10 @@ impl PlatesHost for Ctx {
             .is_ok_and(|b| b.is_some())
     }
 
+    fn thing_shelf<'a>(&'a self, opts: &'a Options) -> Option<Box<dyn dt_kit::Shelf + 'a>> {
+        Some(Box::new(dt_store::Shelved::new(&*self.inner.kept, opts)))
+    }
+
     fn build_piece(
         &self,
         path: &str,

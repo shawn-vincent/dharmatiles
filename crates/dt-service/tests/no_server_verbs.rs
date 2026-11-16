@@ -85,6 +85,25 @@ struct World {
     said: RefCell<Vec<String>>,
     /// The finished builds this host keeps (the worker's memory store): its lane and its exports build through it.
     kept: dt_store::MemStore,
+    /// A test's switch: the shelf of things reads every entry as damaged.
+    damaged_shelf: std::cell::Cell<bool>,
+}
+
+/// A shelf whose entries all read as damaged: what a thing build says of it, loudly.
+struct DamagedShelf<'a>(dt_store::Shelved<'a>);
+
+impl dt_kit::Shelf for DamagedShelf<'_> {
+    fn read(&self, _id: &dt_kit::ThingId) -> Result<Option<dt_kit::Body>, String> {
+        Err("an entry of the shelf is damaged".to_owned())
+    }
+
+    fn keep(&self, id: &dt_kit::ThingId, body: &dt_kit::Body) -> Result<(), String> {
+        self.0.keep(id, body)
+    }
+
+    fn settle(&self) -> Result<(), String> {
+        self.0.settle()
+    }
 }
 
 impl World {
@@ -195,6 +214,14 @@ impl dt_service::plates_calls::PlatesHost for World {
 
     fn full_kept(&self, _path: &str, _opts: &Options) -> bool {
         false
+    }
+
+    fn thing_shelf<'a>(&'a self, opts: &'a Options) -> Option<Box<dyn dt_kit::Shelf + 'a>> {
+        let shelf = dt_store::Shelved::new(&self.kept, opts);
+        if self.damaged_shelf.get() {
+            return Some(Box::new(DamagedShelf(shelf)));
+        }
+        Some(Box::new(shelf))
     }
 
     fn build_piece(
@@ -484,6 +511,7 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
         plate: RefCell::new(None),
         said: RefCell::new(Vec::new()),
         kept: dt_store::MemStore::new("test", 64 << 20),
+        damaged_shelf: std::cell::Cell::new(false),
     };
     let table = table();
     let id = tile_id(PATH);
@@ -687,6 +715,7 @@ fn world() -> World {
         plate: RefCell::new(None),
         said: RefCell::new(Vec::new()),
         kept: dt_store::MemStore::new("test", 64 << 20),
+        damaged_shelf: std::cell::Cell::new(false),
     }
 }
 
@@ -1643,6 +1672,32 @@ fn a_thing_is_drawn_alone_at_each_seed_by_verb_with_no_server() {
         .call(&w, &BUILD_THING, thing_req(define(), &[3]))
         .expect("one seed");
     assert_eq!(bytes(&again.draws[0]), bytes(&res.draws[2]));
+    // the bodies are kept, as in a tile: the first call made its four rocks, and asking for a seed again reads its body
+    assert_eq!(
+        (res.used.built, res.used.kept),
+        (4, 0),
+        "four rocks made: {:?}",
+        res.used
+    );
+    assert_eq!(
+        (again.used.built, again.used.kept),
+        (0, 1),
+        "a seed asked again is read, not made: {:?}",
+        again.used
+    );
+    assert!(res.problems.is_empty() && again.problems.is_empty());
+    // a shelf that cannot be read is told in the answer, and the draw is made all the same, the same bytes
+    w.damaged_shelf.set(true);
+    let hurt = table
+        .call(&w, &BUILD_THING, thing_req(define(), &[3]))
+        .expect("a draw is made past a damaged shelf");
+    w.damaged_shelf.set(false);
+    assert_eq!(bytes(&hurt.draws[0]), bytes(&res.draws[2]));
+    assert_eq!((hurt.used.built, hurt.used.kept), (1, 0));
+    assert_eq!(
+        hurt.problems,
+        vec!["an entry of the shelf is damaged".to_owned()]
+    );
 
     // a low draw is a quick look, not the gate's: it says so
     assert!(

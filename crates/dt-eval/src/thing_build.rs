@@ -9,8 +9,8 @@
 //!
 //! There is no second reader and no second build: a definition is read by the reader as a one-entry tile that calls it
 //! (so its params, defaults and imports mean what they mean in a tile), the entry's controls go to the element's own
-//! `thing()`, and `Thing::make` is the one thing that makes solids.  A build here is not kept (the disk cache's key is
-//! made of a whole tile): it is the thing's own key's job to keep it, when it has one.
+//! `thing()`, and `Thing::make` is the one thing that makes solids.  A draw is not kept as a whole (the disk cache's key is
+//! made of a whole tile); what a thing keeps is its body (`dt_kit::Bodies`, the caller's shelf), as in a tile.
 
 use dt_doc::schema::Generator;
 use dt_elements::{Control, Extent, Shown, Thing, Value};
@@ -288,7 +288,12 @@ impl Subject {
     ///
     /// # Errors
     /// The thing could not be made, joined or drawn.
-    pub fn draw(&self, seed: u64, opts: &Options) -> Result<Built, Vec<Diag>> {
+    pub fn draw(
+        &self,
+        seed: u64,
+        opts: &Options,
+        bodies: &dt_kit::Bodies<'_>,
+    ) -> Result<Built, Vec<Diag>> {
         let frame = Frame::for_system(opts.system, 1, 1);
         let at = |message: String| {
             Diag::at(
@@ -304,7 +309,7 @@ impl Subject {
         scene.set_low(opts.tier.is_low());
         let solids = self
             .thing
-            .make(&mut scene, Seed::new(seed), &opts.printer)
+            .make_with(&mut scene, Seed::new(seed), &opts.printer, bodies)
             .map_err(|le| {
                 vec![
                     Diag::at(

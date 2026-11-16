@@ -157,7 +157,11 @@ async function run(t, at, pageAt) {
     if (failed('Could not draw the thing', r)) { problem.value = null; return null; }
     if (r.status !== 200) { problem.value = wordsOf(r); return null; }
     problem.value = null;
-    return /** @type {import('../api').ThingRes} */ (r.body);
+    const res = /** @type {import('../api').ThingRes} */ (r.body);
+    // the draws are real, but what went wrong with the shelf of kept bodies (a damaged entry dropped, one that could not be kept)
+    // is said where every failure is, not left in the answer
+    if (res.problems.length) showError('A kept thing could not be read or kept', new Error(res.problems.join('; ')));
+    return res;
   };
   /** The view shows a draw: the viewer is told what it shows first (it drops what it holds of another document), then the mesh. @param {import('../api').ThingRes} res */
   const show = (res) => {

@@ -82,6 +82,9 @@ pub trait PlatesHost: ListHost {
     fn modified(&self, path: &str) -> Option<SystemTime>;
     /// Is the full build of the tile at `path` for `opts` already kept?
     fn full_kept(&self, path: &str, opts: &Options) -> bool;
+    /// The shelf a thing's bodies are kept on, for builds with `opts` (the store the host keeps its builds in, through
+    /// `dt_store::Shelved`): `None` for a host that keeps nothing.
+    fn thing_shelf<'a>(&'a self, opts: &'a Options) -> Option<Box<dyn dt_kit::Shelf + 'a>>;
     /// The tile at `path` built for `opts` (kept when the host has a cache).
     ///
     /// # Errors
