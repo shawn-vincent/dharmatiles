@@ -175,11 +175,11 @@ fn a_number_is_not_a_thing_and_a_thing_is_not_a_number() {
 fn a_param_is_one_kind() {
     refused(
         &doc(
-            "define both {\n    param what\n    stack { rock size=what; what at=\"(0.5sq, 0.5sq)\" }\n}",
-            "        both what=rock",
+            "define both {\n    param what kind=layer\n    stack { rock size=what; what }\n}",
+            "        both what=dirt",
         ),
         dt_lang::codes::TYPE,
-        "`what` is a length, and the stack wants a layer",
+        "`what` is a layer, and `rock size` wants a length",
     );
 }
 
@@ -239,8 +239,8 @@ fn what_is_written_on_a_thing_param_is_typed_when_the_thing_is_known() {
     );
     // and with its unit it is a pebble's size, typed
     let bound = bind(&text.replace("size=5", "size=\"5dmm\"")).unwrap();
-    assert!(matches!(bound.entry.callee, Callee::Element(l) if l.name == "pebble"));
-    assert!(matches!(bound.entry.value("size"), Some(Value::Num(_))));
+    assert!(matches!(bound.callee, Callee::Element(l) if l.name == "pebble"));
+    assert!(matches!(bound.value("size"), Some(Value::Num(_))));
 }
 
 // ---- one kind system, one fit function ----------------------------------------------------------

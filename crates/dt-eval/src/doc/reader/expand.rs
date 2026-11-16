@@ -470,8 +470,7 @@ impl Reader<'_> {
                         depth: scope.depth + 1,
                     };
                     // a definition's own `let`s and `override`s hold for its body
-                    let inner = self.scoped(&inner, &def.consts);
-                    let inner = self.scoped(&inner, &def.stack_consts);
+                    let inner = self.scoped_def(&inner, &def);
                     self.expand(&def.stack, &inner, out, pending);
                 }
             }
@@ -584,8 +583,7 @@ impl Reader<'_> {
                     id: None,
                     depth: scope.depth + 1,
                 };
-                let inner = self.scoped(&inner, &def.consts);
-                let inner = self.scoped(&inner, &def.stack_consts);
+                let inner = self.scoped_def(&inner, &def);
                 let mut child = self.scatter_child(one, &inner, pending, owner, index)?;
                 // the call's own name is where it is shown
                 child.what.span = c.what.span;

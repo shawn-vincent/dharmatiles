@@ -35,6 +35,8 @@ enum Form {
     Name,
     /// Pass it as a `param amount kind=…` of a definition.
     Param,
+    /// Read a param's name in a formula (`amount + 1`) where a number is wanted.
+    ParamFormula,
     /// Place it: written as an entry with `at=`.
     Place,
     /// Scatter it: written as a scatter's child.
@@ -46,9 +48,10 @@ enum Form {
 }
 
 impl Form {
-    const ALL: [Form; 6] = [
+    const ALL: [Form; 7] = [
         Form::Name,
         Form::Param,
+        Form::ParamFormula,
         Form::Place,
         Form::ScatterChild,
         Form::Override,
@@ -59,6 +62,7 @@ impl Form {
         match self {
             Form::Name => "name",
             Form::Param => "param",
+            Form::ParamFormula => "param-formula",
             Form::Place => "place",
             Form::ScatterChild => "scatter-child",
             Form::Override => "override",
@@ -146,6 +150,29 @@ fn cell(kind: Kind, form: Form) -> Vec<(&'static str, String)> {
                     "{HEAD}define d {{ param amount kind={}; stack {{ {} }} }}\n{}",
                     kind.word(),
                     entry("amount"),
+                    tile("", &call, s.ground)
+                ),
+            )]
+        }
+        Form::ParamFormula => {
+            // the formula reads the param by its name and adds one of its own kind
+            let formula = match kind {
+                Kind::Length => "\"amount + 1dmm\"",
+                Kind::Angle => "\"amount + 1deg\"",
+                _ => "\"amount + 1\"",
+            };
+            let entry = match kind {
+                Kind::Length | Kind::Angle | Kind::Plain => entry(formula),
+                // a thing, a layer, a region or a point is no number to add to
+                _ => format!("scatter count={formula} {{ rock }}"),
+            };
+            let call = format!("d amount={}", s.value);
+            vec![(
+                "t.dtile",
+                format!(
+                    "{HEAD}define d {{ param amount kind={}; stack {{ {} }} }}\n{}",
+                    kind.word(),
+                    entry,
                     tile("", &call, s.ground)
                 ),
             )]
@@ -241,8 +268,13 @@ fn rule(kind: Kind, form: Form) -> Rule {
             ],
             "a `$` name holds a formula, a number; a region, a point, a thing or a layer is not one",
         ),
+        // a thing or a layer is no number: a formula that reads it is refused where it is read
+        (ParamFormula, Kind::Thing | Kind::Layer) => refuses(
+            &[c::TYPE],
+            "a param that holds a thing or a layer is no number, so a formula that adds to it is refused at the use",
+        ),
         // a param holds a length, an angle, a plain number, a thing or a layer
-        (Param, Kind::Region | Kind::Point) => refuses(
+        (Param | ParamFormula, Kind::Region | Kind::Point) => refuses(
             &[c::KIND],
             "a param holds a length, an angle, a plain number, a thing or a layer (Kind::holdable), so `kind=` names no region or point",
         ),
@@ -349,14 +381,134 @@ fn check_equals_build_on_the_torture_set() {
 }
 
 #[test]
-fn check_equals_build_on_a_name_a_part_does_not_have() {
-    // the part reads `n + 1`: a param is a whole value, never a name in a formula, so both refuse it, at one place
+fn a_param_is_a_name_in_a_formula_in_check_and_in_build() {
+    // the part reads `n + 1`: `n` is a plain number (its default's kind), so check and build both accept it
     let part = "define bit { param n 3; stack { scatter count=\"n + 1\" { rock } } }\n";
     let t = format!("{HEAD}{part}{}", tile("", "bit", false));
     let src = common::memory(&[("t.dtile", &t)]);
-    let (seen, _) = agree("n + 1", &src, false);
-    assert_eq!(seen.len(), 1, "{seen:#?}");
-    assert_eq!(seen[0].code, dt_lang::codes::VALUE);
+    let (seen, built) = agree("n + 1", &src, true);
+    assert!(seen.is_empty(), "{seen:#?}");
+    assert!(matches!(built, Outcome::Built | Outcome::Geometry));
+}
+
+/// The `count` of each scatter in a tile, as the reader made it.
+fn counts(text: &str) -> Vec<String> {
+    let src = common::memory(&[("t.dtile", text)]);
+    let checked = check(&src, "t.dtile", &Options::default()).unwrap();
+    checked
+        .tile
+        .unwrap()
+        .stack
+        .iter()
+        .filter(|e| e.what.value == "scatter")
+        .flat_map(|e| {
+            e.controls
+                .iter()
+                .filter(|c| c.name == "count")
+                .map(|c| format!("{:?}", c.value))
+        })
+        .collect()
+}
+
+#[test]
+fn a_param_in_a_formula_means_the_value_the_call_gave_it() {
+    let part = "define bit { param n 3; stack { scatter count=\"n + 1\" { rock } } }\n";
+    let stack = "        bit\n        bit n=5\n        bit n=\"k * 2\"";
+    let text = format!("{HEAD}{part}{}", tile("    let k 2\n", stack, false));
+    let by_hand = |n: &str| {
+        let text = format!(
+            "{HEAD}{}",
+            tile("", &format!("scatter count=\"{n}\" {{ rock }}"), false)
+        );
+        counts(&text).pop().unwrap()
+    };
+    let got = counts(&text);
+    assert_eq!(
+        got,
+        [by_hand("3 + 1"), by_hand("5 + 1"), by_hand("2 * 2 + 1")]
+    );
+}
+
+#[test]
+fn a_param_is_a_whole_value_and_a_place_and_a_formula() {
+    // a whole value, and a name in the same line's formula; the caller's name is a `let`
+    let part = "define bit { param n 3; stack { scatter count=n { rock size=\"n * 1dmm\" } } }\n";
+    let t = format!("{HEAD}{part}{}", tile("", "bit n=2", false));
+    let src = common::memory(&[("t.dtile", &t)]);
+    assert!(found(&src).is_empty(), "{:#?}", found(&src));
+}
+
+/// A param's kind is its default's, or `kind=`, and never what it is used for: a document in which that would be
+/// needed says to write `kind=`, at the param.
+#[test]
+fn a_param_with_no_kind_is_refused_at_the_param_and_not_read_from_its_use() {
+    for param in ["param n", "param n angular", "param n #true"] {
+        let t = format!(
+            "{HEAD}define bit {{ {param}; stack {{ scatter count=n {{ rock }} }} }}\n{}",
+            tile("", "bit n=2", false)
+        );
+        let src = common::memory(&[("t.dtile", &t)]);
+        let seen = found(&src);
+        let d = seen
+            .iter()
+            .find(|d| d.code == dt_lang::codes::KIND)
+            .unwrap_or_else(|| panic!("{param}: {seen:#?}"));
+        let (s, span) = d.at.as_ref().unwrap();
+        assert_eq!(&s.inner()[span.offset()..span.offset() + span.len()], "n");
+        assert!(d.help.as_deref().unwrap().contains("kind="), "{d:#?}");
+    }
+}
+
+#[test]
+fn a_param_used_where_its_kind_does_not_fit_is_refused_as_misfit_words_it() {
+    // a length where a count is wanted, in a formula and as a whole value, and an argument of the wrong kind
+    let cases = [
+        // (param line, use, who, have, want)
+        ("param w \"3dmm\"", "scatter count=\"w + 1\" { rock }", None),
+        (
+            "param w \"3dmm\"",
+            "scatter count=w { rock }",
+            Some(("w", Kind::Length, "`scatter count`", Kind::Plain)),
+        ),
+        (
+            "param n 3",
+            "rock size=n",
+            Some(("n", Kind::Plain, "`rock size`", Kind::Length)),
+        ),
+    ];
+    for (param, entry, want) in cases {
+        let t = format!(
+            "{HEAD}define bit {{ {param}; stack {{ {entry} }} }}\n{}",
+            tile("", "bit", false)
+        );
+        let src = common::memory(&[("t.dtile", &t)]);
+        let seen = found(&src);
+        assert!(
+            seen.iter()
+                .any(|d| d.code == dt_lang::codes::TYPE || d.code == dt_lang::codes::UNIT),
+            "{param} {entry}: {seen:#?}"
+        );
+        if let Some((name, have, who, wants)) = want {
+            let m = misfit(name, have, who, wants);
+            assert!(seen.iter().any(|d| d.message == m.message), "{seen:#?}");
+        }
+    }
+    // an argument of the wrong kind, at the call
+    let t = format!(
+        "{HEAD}define bit {{ param n 3; stack {{ scatter count=n {{ rock }} }} }}\n{}",
+        tile("", "bit n=\"4dmm\"", false)
+    );
+    let src = common::memory(&[("t.dtile", &t)]);
+    let seen = found(&src);
+    let d = seen
+        .iter()
+        .find(|d| d.code == dt_lang::codes::TYPE)
+        .unwrap_or_else(|| panic!("{seen:#?}"));
+    let (s, span) = d.at.as_ref().unwrap();
+    assert_eq!(
+        &s.inner()[span.offset()..span.offset() + span.len()],
+        "\"4dmm\""
+    );
 }
 
 /// One cell, read.  Returns whether it is broken: it should work and does not (check refuses it, or, when `build_ok`,
