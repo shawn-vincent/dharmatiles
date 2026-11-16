@@ -928,7 +928,7 @@ fn every_control_of_every_element_and_node_has_one_shape_on_the_wire() {
 fn the_names_a_text_makes_come_from_the_parser() {
     let r = start(&[], false);
     let t = session_token(&r);
-    let text = "// let fake { }\nlet meadow { stack { dirt } }\ntile size=\"1x1\" {\n    region pool { fill \"1,1\" }\n    stack { meadow }\n}\n";
+    let text = "dharmatiles version=\"1.0.0\"\n// let fake { }\nlet meadow { stack { dirt } }\ntile size=\"1x1\" {\n    region pool { fill \"1,1\" }\n    stack { meadow }\n}\n";
     let (h, v) = post::<_, edit::NamesRes>(
         &r,
         "/api/names",

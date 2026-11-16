@@ -731,4 +731,10 @@ fn a_bare_thing_is_a_scatter_child_and_a_stack_of_one_thing_is_a_layer_that_is_r
     let stacked = "let bluff {\n    stack { rock }\n}";
     let e = refused(&doc(stacked, "        scatter count=2 { bluff }"));
     says(&e, dt_lang::codes::SCATTER, "is a layer");
+    // the one mistake is said once: the scatter is not also told it has nothing to scatter
+    assert!(
+        e.iter().all(|d| !d.message.contains("children say")),
+        "{:#?}",
+        e.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
 }

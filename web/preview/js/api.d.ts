@@ -912,7 +912,7 @@ type OwnedSeed = { seed: number, have: number, };
 
 type PageMessageReq = { tile?: string | null, what?: string | null, text: string, help?: string | null, causes?: Array<string> | null, backtrace?: string | null, };
 
-type ParamKind = { of: string, param: string, kind: string, };
+type ParamKind = { owner: string, param: string, kind: string, };
 
 type PieceEdit = { id: string, set: PieceWords, };
 

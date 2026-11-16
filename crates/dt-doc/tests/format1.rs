@@ -1,4 +1,4 @@
-//! Format 1 as dt-doc decodes it: `let` in any block and in a define,
+//! Format 1 as dt-doc decodes it: `let` in any block and in a body,
 //! reserved words, `$` names.
 
 #![expect(
@@ -29,7 +29,7 @@ fn tile(body: &str) -> String {
 }
 
 #[test]
-fn lets_work_in_any_block_and_in_a_define() {
+fn lets_work_in_any_block_and_in_a_body() {
     let doc = decode(
         "t.dtile",
         &format!(

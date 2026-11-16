@@ -338,6 +338,9 @@ impl Decoder<'_> {
             }
         }
         let ctx = block_ctx.as_ref().unwrap_or(ctx);
+        // a scatter's children that were written and refused (their mistake is said): the scatter is not also
+        // told it has nothing to scatter, which only follows from them
+        let mut refused = 0usize;
         for (c, step) in kids.iter().zip(steps) {
             if is_const_node(c) {
                 continue;
@@ -413,6 +416,8 @@ impl Decoder<'_> {
             } else if element.is_some_and(|l| l.role == Role::Scatter) {
                 if let Some(child) = self.entry(c, ctx, Parent::Scatter, &entry.path, step) {
                     entry.children.push(child);
+                } else {
+                    refused += 1;
                 }
             } else if is_scatter && holds {
                 if let Some(child) = self.entry(c, ctx, Parent::Surface, &entry.path, step) {
@@ -439,7 +444,7 @@ impl Decoder<'_> {
             }
         }
 
-        self.check_entry(&mut entry, ctx);
+        self.check_entry(&mut entry, ctx, refused);
         Some(entry)
     }
 
@@ -797,7 +802,7 @@ impl Decoder<'_> {
                 "not in a tile",
             )
             .help = Some(format!(
-                "a tile sets it with `crown branching=open|normal|dense`; `{}` is accepted in parts files, inside a `define`",
+                "a tile sets it with `crown branching=open|normal|dense`; `{}` is accepted in parts files, inside a `let` with a body",
                 k.name
             ));
             return;
@@ -1024,7 +1029,7 @@ impl Decoder<'_> {
     }
 
     /// Checks across one entry's place words, controls and children.
-    fn check_entry(&mut self, entry: &mut Entry, ctx: &Ctx) {
+    fn check_entry(&mut self, entry: &mut Entry, ctx: &Ctx, refused: usize) {
         let owner = entry.what.value.clone();
         let span = entry.what.span;
         let element = entry.element();
@@ -1107,7 +1112,7 @@ impl Decoder<'_> {
             }
         }
         if element.is_some_and(|l| l.role == Role::Scatter) {
-            self.check_scatter(entry);
+            self.check_scatter(entry, refused);
         }
         entry.kind = match (&entry.callee, element) {
             (_, Some(l)) if l.role == Role::Scatter => {
@@ -1129,7 +1134,7 @@ impl Decoder<'_> {
 
     // The advice below stays text: "how many" is a choice (`count` or `perSquare`), so no one edit mends it and no fix is made
     // (a fix is only made where the edit is unambiguous: `DocError::advise_old`, `suggest`).
-    fn check_scatter(&mut self, entry: &Entry) {
+    fn check_scatter(&mut self, entry: &Entry, refused: usize) {
         let span = entry.what.span;
         let count = entry.control("count");
         let per = entry.control("perSquare");
@@ -1188,7 +1193,7 @@ impl Decoder<'_> {
                     .to_owned(),
             );
         }
-        if entry.children.is_empty() {
+        if entry.children.is_empty() && refused == 0 {
             self.err(
                 dt_lang::codes::SCATTER,
                 span,
@@ -1285,7 +1290,7 @@ pub fn bind_generator(
             &w.ctx,
         );
     }
-    d.check_entry(&mut bound, &param.ctx);
+    d.check_entry(&mut bound, &param.ctx, 0);
     if d.errors.is_empty() {
         Ok(bound)
     } else {

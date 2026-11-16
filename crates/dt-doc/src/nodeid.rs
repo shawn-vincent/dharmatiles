@@ -181,7 +181,7 @@ pub fn id_at(text: &str, at: usize) -> Result<String, EditError> {
 /// and a string hold none: these are the parser's nodes.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Names {
-    /// `let NAME { … }`, and the names a `use` brings in.
+    /// `let NAME { … }`, and the names a `use` brings in (the decoder's, not the walk's).
     pub defs: Vec<String>,
     /// `region NAME`.
     pub regions: Vec<String>,
@@ -216,14 +216,6 @@ pub fn names_in(text: &str) -> Result<Names, EditError> {
                     .and_then(|e| e.value().as_string())
             };
             match n.name().value() {
-                "let" if n.children().is_some() => out.defs.extend(arg(0).map(str::to_owned)),
-                "use" => out.defs.extend(
-                    n.entries()
-                        .iter()
-                        .filter(|e| e.name().is_none())
-                        .skip(1)
-                        .filter_map(|e| e.value().as_string().map(str::to_owned)),
-                ),
                 "region" => out.regions.extend(arg(0).map(str::to_owned)),
                 "line" => out.lines.extend(arg(0).map(str::to_owned)),
                 "point" => out.points.extend(arg(0).map(str::to_owned)),
@@ -237,31 +229,32 @@ pub fn names_in(text: &str) -> Result<Names, EditError> {
     let mut out = Names::default();
     let doc = parse(text)?;
     walk(doc.nodes(), &mut out);
-    kinds_in(text, &mut out);
+    definitions_in(text, &mut out);
     Ok(out)
 }
 
-/// What the definitions are and what the parameters hold, as the decoder settled them: the one place a body's kind is
-/// told (`Decoder::generator_of`) and a parameter's (`declare_params`), so a text being typed is asked, not read again
-/// by a copy of those rules.  A name the decoder did not settle (the text stops it, or a `use` brought it in from a
-/// file this text alone does not hold) is [`Kind::Any`], said outright, never left out or guessed.
-fn kinds_in(text: &str, out: &mut Names) {
+/// The definitions, and what each is and what its parameters hold, as the decoder settled them: whether a node is a
+/// definition (`decode::is_part`), a body's kind (`Decoder::generator_of`) and a parameter's (`declare_params`) are the
+/// decoder's, so a text being typed is asked, not read again by a copy of those rules.  The names a `use` brings in are
+/// definitions too, and, like a name the decoder did not settle, are [`Kind::Any`], said outright, never left out or
+/// guessed.  A text the decoder makes no document of (no header yet) has none of these.
+fn definitions_in(text: &str, out: &mut Names) {
     use crate::units::Kind;
-    if let (Some(doc), _) =
-        crate::decode::decode_partial("names", text, &crate::known::Known::new())
-    {
-        for d in doc.definitions.iter().filter(|d| d.header().is_none()) {
-            out.kinds.push((d.name.value.clone(), d.generator));
-            for p in &d.params {
-                out.params
-                    .push((d.name.value.clone(), p.name.value.clone(), p.kind));
-            }
+    let (Some(doc), _) = crate::decode::decode_partial("names", text, &crate::known::Known::new())
+    else {
+        return;
+    };
+    for d in doc.definitions.iter().filter(|d| d.header().is_none()) {
+        out.defs.push(d.name.value.clone());
+        out.kinds.push((d.name.value.clone(), d.generator));
+        for p in &d.params {
+            out.params
+                .push((d.name.value.clone(), p.name.value.clone(), p.kind));
         }
     }
-    for name in &out.defs {
-        if !out.kinds.iter().any(|(k, _)| k == name) {
-            out.kinds.push((name.clone(), Kind::Any));
-        }
+    for n in doc.uses.iter().flat_map(|u| &u.names) {
+        out.defs.push(n.value.clone());
+        out.kinds.push((n.value.clone(), Kind::Any));
     }
 }
 

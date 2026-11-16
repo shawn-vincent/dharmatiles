@@ -1,13 +1,13 @@
 //! A thing built alone: the thing editor's build.
 //!
-//! A **thing** (`dt_elements::Thing`: a rock, a tree, a flower, a definition whose stack is one of them) is made from its
+//! A **thing** (`dt_elements::Thing`: a rock, a tree, a flower, a `let` whose body is one of them written bare) is made from its
 //! own controls and a seed and reads nothing, so it can be drawn on its own, in its own frame (the origin where it meets
 //! what holds it, +z up), with no tile and no base.  [`subject`] finds the thing a document means (a `let` by name, or
 //! one entry or one child of a scatter by the id the check gave it) and reads its controls as the reader made them;
 //! [`Subject::draw`] makes one draw of it at a seed, joins its parts and puts it through the gate's overhang paint, as a
 //! [`Built`] the page's one mesh payload is made from.
 //!
-//! There is no second reader and no second build: a definition is read by the reader as a one-entry tile that calls it
+//! There is no second reader and no second build: a `let` with a body is read by the reader as a one-entry tile that calls it
 //! (so its params, defaults and imports mean what they mean in a tile), the entry's controls go to the element's own
 //! `thing()`, and `Thing::make` is the one thing that makes solids.  A draw is not kept as a whole (the disk cache's key is
 //! made of a whole tile); what a thing keeps is its body (`dt_kit::Bodies`, the caller's shelf), as in a tile.

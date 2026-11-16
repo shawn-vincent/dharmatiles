@@ -13,12 +13,12 @@ const scatter = { key: 'tile/scatter/0', label: 'pebbles and rocks', element: 'p
 /** The page's state where nothing is selected and the cursor is at the start. */
 const base = { thingFile: true, face: /** @type {'tile' | 'source'} */ ('tile'), item: null, generator: null, child: 0, nodes, things: ['bluff'], caret: 0 };
 
-test('the cursor in a define that is one thing is that thing; in a layer define, or outside every define, it is none', () => {
+test('the cursor in a let body that is one thing is that thing; in a layer let, or outside every let, it is none', () => {
   const at = (/** @type {number} */ caret) => targetOf({ ...base, face: 'source', caret });
   assert.deepEqual(at(40)?.which, { kind: 'let', name: 'bluff' });
   assert.equal(at(40)?.name, 'bluff');
   assert.equal(at(110), null, '`wet` is a layer: not in the things');
-  assert.equal(at(160), null, 'the tile is no define');
+  assert.equal(at(160), null, 'the tile is no let body');
   assert.equal(at(5), null);
   // the ends of the node are in it
   assert.ok(at(29) && at(97));

@@ -67,7 +67,7 @@ pub struct DefKind {
 /// A parameter of a definition and what it holds.
 #[derive(Serialize, Deserialize, Debug, ts_rs::TS)]
 pub struct ParamKind {
-    pub of: String,
+    pub owner: String,
     pub param: String,
     pub kind: String,
 }
@@ -321,8 +321,8 @@ pub fn names(v: &NamesReq) -> NamesRes {
             params: n
                 .params
                 .into_iter()
-                .map(|(of, param, k)| ParamKind {
-                    of,
+                .map(|(owner, param, k)| ParamKind {
+                    owner,
                     param,
                     kind: k.word().to_owned(),
                 })

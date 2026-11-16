@@ -728,7 +728,7 @@ fn overlapping_fixes_wait_and_a_repeat_is_made_once() {
 
 #[test]
 fn names_come_from_nodes_not_from_text() {
-    let text = "// let fake { }\nlet meadow { stack { dirt } }\nuse \"lib:parts/trees\" oak elm\n\
+    let text = "dharmatiles version=\"1.0.0\"\n// let fake { }\nlet meadow { stack { dirt } }\nuse \"lib:parts/trees\" oak elm\n\
         tile size=\"1x1\" {\n about \"a line Foo\"\n line shore { through \"0,0\" }\n\
         /- region ghost { fill \"1,1\" }\n region pool { fill \"1,1\" }\n point p \"1,1\"\n}\n";
     let n = nodeid::names_in(text).unwrap();
@@ -1053,4 +1053,14 @@ fn names_say_what_each_definition_and_parameter_is_as_a_kind() {
     // a bare call of a thing param is that thing; a name a `use` brings in is said to be unknown, not left out
     assert_eq!(kind("named"), Some(Kind::Thing));
     assert_eq!(kind("oak"), Some(Kind::Any));
+}
+
+#[test]
+fn a_retired_define_with_a_body_is_a_definition_like_the_let_it_was() {
+    let n = nodeid::names_in(
+        "dharmatiles version=\"1.0.0\"\ndefine old { rock }\nlet value \"5dmm\"\n",
+    )
+    .unwrap();
+    assert_eq!(n.defs, ["old"], "the value `let` is no definition");
+    assert_eq!(n.kinds, [("old".to_owned(), crate::units::Kind::Thing)]);
 }

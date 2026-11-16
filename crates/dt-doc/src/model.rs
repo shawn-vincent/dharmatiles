@@ -37,7 +37,7 @@ pub struct Spanned<T> {
 pub struct Document {
     /// `use "parts/grass" lawn long-grass` lines, in order.
     pub uses: Vec<Use>,
-    /// `define` and `tile` nodes, in file order.
+    /// `let` nodes with a body, and the `tile`, in file order.
     pub definitions: Vec<Definition>,
     /// A `printer` profile (library/printers/*.dtile).
     pub printer: Option<Printer>,

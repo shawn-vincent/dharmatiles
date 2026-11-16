@@ -2,7 +2,7 @@
 // One thing alone (docs/preview.html, "One thing alone"): a rock, a tree, a flower, a definition of one, drawn at a seed in its own
 // frame with no tile and no base, in a view of its own beside the tile's, with a strip of draws, the room it takes and its controls.
 //
-// What is shown is worked out, never stored: the cursor in a `define`, or the selected entry, is the thing (`targetOf`), the source
+// What is shown is worked out, never stored: the cursor in a `let` body, or the selected entry, is the thing (`targetOf`), the source
 // the page holds is what is drawn, and a change to any of them draws it again.  That is how the tile's own view follows an edit
 // (`doc.text` is what the draft is of), so the thing view follows the same signals; the one call, `buildThing`, is superseded by
 // the next of its kind in the host (js/host.js LATEST), so a stale draw is never taken.  A draw is not a tile's draft: it is not
