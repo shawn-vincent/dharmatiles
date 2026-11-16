@@ -176,6 +176,182 @@ fn a_thing_that_holds_itself_is_a_loop() {
     );
 }
 
+/// A refusal as the user reads it: its code, words and the text it points at
+/// (not where in the file: a document and its twin differ in offsets).
+type Read = (&'static str, String, String, Option<String>, String);
+
+fn reads(errors: &[Diag]) -> Vec<Read> {
+    errors
+        .iter()
+        .map(|d| {
+            let (src, span) = d.at.as_ref().unwrap();
+            let text = &src.inner()[span.offset()..span.offset() + span.len()];
+            (
+                d.code,
+                d.message.clone(),
+                d.label.clone(),
+                d.help.clone(),
+                text.to_owned(),
+            )
+        })
+        .collect()
+}
+
+/// `callee` written with `line` on its line and `block` as its child lines.
+fn entry(callee: &str, line: &str, block: &str) -> String {
+    let block = if block.is_empty() {
+        String::new()
+    } else {
+        format!(" {{\n{block}\n        }}")
+    };
+    format!("{callee} {line} at=\"(0.5sq, 0.5sq)\"{block}")
+}
+
+/// A refusal of what is written on `thing`, and the same text written on a
+/// thing parameter standing for it: the same code, words and text pointed
+/// at, the latter inside the definition, where it is written.
+fn same_refusal(thing: &str, line: &str, block: &str) -> Vec<Read> {
+    let direct = refused(&doc("", &format!("        {}", entry(thing, line, block))));
+    let parts = format!(
+        "define stand {{\n    param piece {thing}\n    stack {{\n        {}\n    }}\n}}",
+        entry("piece", line, block)
+    );
+    let text = doc(&parts, "        stand");
+    let through = refused(&text);
+    assert_eq!(
+        reads(&through),
+        reads(&direct),
+        "`{thing} {line} {block}` through a thing parameter"
+    );
+    // pointing at the use site: the define's text, not the call's
+    let call = text.rfind("stand").unwrap();
+    for d in &through {
+        let (_, span) = d.at.as_ref().unwrap();
+        assert!(span.offset() < call, "{:?} points at the call", d.message);
+    }
+    reads(&direct)
+}
+
+#[test]
+fn a_property_on_a_thing_param_is_refused_as_on_the_element() {
+    use dt_lang::codes;
+    let cases: [(&str, &str, &str); 8] = [
+        // a length with no unit
+        ("pebble", "size=5", codes::UNIT),
+        // an angle where a length is
+        ("pebble", "size=\"5deg\"", codes::TYPE),
+        // out of its range
+        ("pebble", "size=\"900dmm\"", codes::RANGE),
+        // a percent past a hundred
+        ("pebble", "buried=\"150%\"", codes::RANGE),
+        // a word it does not have
+        ("pebble", "shape=jagged", codes::CHOICE),
+        // a control it does not have
+        ("pebble", "wobble=3", codes::UNKNOWN_CONTROL),
+        // written twice
+        ("pebble", "size=\"2dmm\" size=\"3dmm\"", codes::DUPLICATE),
+        // a group written as a property
+        ("tree", "crown=1", codes::GROUP),
+    ];
+    for (thing, line, code) in cases {
+        let r = same_refusal(thing, line, "");
+        assert!(
+            r.iter().any(|r| r.0 == code),
+            "`{thing} {line}` wanted {code}, got {r:#?}"
+        );
+    }
+}
+
+#[test]
+fn a_group_control_on_a_thing_param_is_refused_as_on_the_element() {
+    use dt_lang::codes;
+    let cases: [(&str, &str); 5] = [
+        // a sub-control with no unit
+        ("            crown width=5", codes::UNIT),
+        // out of its range
+        ("            crown width=\"900dmm\"", codes::RANGE),
+        // a word it does not have
+        ("            crown shape=pointy", codes::CHOICE),
+        // a sub-control it does not have
+        ("            crown wibble=3", codes::UNKNOWN_CONTROL),
+        // a group given a value of its own
+        ("            trunk 3", codes::GROUP),
+    ];
+    for (block, code) in cases {
+        let r = same_refusal("tree", "", block);
+        assert!(
+            r.iter().any(|r| r.0 == code),
+            "`{block}` wanted {code}, got {r:#?}"
+        );
+    }
+}
+
+#[test]
+fn a_tree_passed_as_a_thing_takes_its_groups() {
+    let parts = "define grove {
+    param piece tree
+    stack {
+        piece at=\"(0.5sq, 0.5sq)\" {
+            trunk height=\"10dmm\" width=\"3dmm\"
+            crown width=\"20dmm\" shape=cone
+        }
+    }
+}";
+    let t = read(&doc(parts, "        grove")).unwrap().tile.unwrap();
+    let tree = t.stack.iter().find(|e| e.what.value == "tree").unwrap();
+    let names: Vec<&str> = tree.controls.iter().map(|c| c.name.as_str()).collect();
+    for want in ["crown/width", "crown/shape", "trunk/height", "trunk/width"] {
+        assert!(names.contains(&want), "{want} in {names:?}");
+    }
+    // the same as written on the tree itself
+    let direct = read(&doc(
+        "",
+        "        tree at=\"(0.5sq, 0.5sq)\" {
+            trunk height=\"10dmm\" width=\"3dmm\"
+            crown width=\"20dmm\" shape=cone
+        }",
+    ))
+    .unwrap()
+    .tile
+    .unwrap();
+    let direct = direct
+        .stack
+        .iter()
+        .find(|e| e.what.value == "tree")
+        .unwrap();
+    let show = |e: &dt_eval::doc::Entry| {
+        e.controls
+            .iter()
+            .map(|c| format!("{} {:?}", c.name, c.value))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(show(tree), show(direct));
+}
+
+#[test]
+fn a_definition_passed_as_a_thing_types_its_arguments_as_a_call_does() {
+    let parts = "define bit {
+    param width \"3dmm\"
+    stack { pebble size=width at=\"(0.5sq, 0.5sq)\" }
+}
+define stand {
+    param piece bit
+    stack { piece width=5 }
+}
+define direct { stack { bit width=5 } }";
+    let through = refused(&doc(parts, "        stand"));
+    let call = refused(&doc(parts, "        direct"));
+    let one = |e: &[Diag]| {
+        reads(e)
+            .into_iter()
+            .filter(|r| r.0 == dt_lang::codes::UNIT)
+            .map(|r| (r.1, r.2, r.4))
+            .collect::<Vec<_>>()
+    };
+    assert!(!one(&through).is_empty(), "{through:#?}");
+    assert_eq!(one(&through), one(&call));
+}
+
 /// The seeds of the entries of a tile, by element.
 fn seeds(text: &str, what: &str) -> Vec<Option<u64>> {
     read(text)

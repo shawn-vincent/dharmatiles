@@ -8,6 +8,7 @@ mod machine;
 pub(crate) mod syntax;
 mod units;
 mod value;
+pub use entry::{Thing, bind_thing};
 pub use units::point_text;
 pub use value::check_text_in;
 
@@ -98,7 +99,7 @@ pub fn uses(name: &str, text: &str) -> Result<Vec<Use>, Vec<DocError>> {
 }
 
 /// Names visible inside one definition body.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub(crate) struct Ctx {
     pub params: Vec<String>,
     pub lines: Vec<String>,

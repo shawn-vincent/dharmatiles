@@ -1,9 +1,11 @@
 //! Expanding a stack: definitions inlined, parameters bound, scatter
 //! children made.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use dt_doc::decode::{Thing, bind_thing};
 use dt_doc::expr::Expr;
 use dt_doc::model::{self, Callee, Definition, Spanned};
 use dt_doc::place::{Along, Point};
@@ -119,18 +121,12 @@ impl Reader<'_> {
             });
             match resolved {
                 Resolved::Element(element) => {
-                    // a thing parameter's properties are checked here, where
+                    // a thing parameter's properties are typed here, where
                     // the thing is known
-                    let over;
-                    let e = if matches!(e.callee, Callee::Param(_)) {
-                        let Some(o) = self.over_element(e, element, src) else {
-                            continue;
-                        };
-                        over = o;
-                        &over
-                    } else {
-                        e
+                    let Some(e) = self.bound(e, Thing::Element(element), scope) else {
+                        continue;
                     };
+                    let e = &*e;
                     if !dt_elements::built().any(|n| n == element.name) {
                         pending.push(not_yet(
                             src,
@@ -429,9 +425,10 @@ impl Reader<'_> {
                     }
                 }
                 Resolved::Definition(file, def) => {
-                    if matches!(e.callee, Callee::Param(_)) && !self.over_definition(e, &def, src) {
+                    let Some(e) = self.bound(e, Thing::Definition(&def), scope) else {
                         continue;
-                    }
+                    };
+                    let e = &*e;
                     if scope.depth > 64 {
                         self.errors.push(Diag::at(
                             src,
@@ -546,13 +543,9 @@ impl Reader<'_> {
         let resolved = self.resolve(c, scope)?;
         let (cl, inner, thing) = match resolved {
             Resolved::Element(cl) if cl.scattered => {
-                // a thing parameter's properties are checked here, where
-                // the thing is known
-                let thing = if matches!(c.callee, Callee::Param(_)) {
-                    self.over_element(c, cl, src)?
-                } else {
-                    c.clone()
-                };
+                // a thing parameter's properties are typed here, where the
+                // thing is known
+                let thing = self.bound(c, Thing::Element(cl), scope)?.into_owned();
                 (cl, scope.clone(), thing)
             }
             Resolved::Element(cl) => {
@@ -593,9 +586,7 @@ impl Reader<'_> {
                         return None;
                     }
                 };
-                if matches!(c.callee, Callee::Param(_)) && !self.over_definition(c, &def, src) {
-                    return None;
-                }
+                let c = &*self.bound(c, Thing::Definition(&def), scope)?;
                 let top = self.call_top(c, &def, scope, pending);
                 let inner = Scope {
                     file: Arc::clone(&file),
@@ -669,7 +660,7 @@ impl Reader<'_> {
             Callee::Definition(name) => {
                 return self.find_definition(&scope.file, name, e, src);
             }
-            Callee::Param(p) => match scope.params.get(p) {
+            Callee::Param(p) => match scope.params.get(&p.name) {
                 Some(Bound {
                     value:
                         Spanned {
@@ -685,10 +676,10 @@ impl Reader<'_> {
                             src,
                             e.what.span,
                             dt_lang::codes::MISSING_CONTROL,
-                            format!("`{p}` is a thing, and nothing was passed for it"),
+                            format!("`{}` is a thing, and nothing was passed for it", p.name),
                             "no thing",
                         )
-                        .help(format!("pass one at the call: `name {p}=rock`")),
+                        .help(format!("pass one at the call: `name {}=rock`", p.name)),
                     );
                     return None;
                 }
@@ -720,75 +711,27 @@ impl Reader<'_> {
         Some(Resolved::Definition(file, Box::new(def)))
     }
 
-    /// The properties written on a thing parameter's entry, over the
-    /// element it stands for: each is a control of that element, read as the
-    /// element's own (the one written here wins, the rest are its defaults).
-    /// A name the element does not take is refused here, at the line.
-    fn over_element(
+    /// An entry as the thing it calls: for a thing parameter's entry, what
+    /// was written on it typed now the thing is known, by the decoder's own
+    /// function ([`dt_doc::decode::bind_thing`]), so a property gets exactly
+    /// the checks it gets written on the element or definition itself;
+    /// any other entry as it is.  `None` once the mistakes are reported.
+    fn bound<'e>(
         &mut self,
-        e: &model::Entry,
-        element: &'static dt_doc::schema::Element,
-        src: &Src,
-    ) -> Option<model::Entry> {
-        let mut over = e.clone();
-        let mut ok = true;
-        for s in &mut over.controls {
-            match element.control(&s.name.value) {
-                Some(c) => s.control = Some(c),
-                None => {
-                    ok = false;
-                    let names: Vec<&str> = element.controls.iter().map(|c| c.name).collect();
-                    self.errors.push(
-                        Diag::at(
-                            src,
-                            s.name.span,
-                            dt_lang::codes::UNKNOWN_CONTROL,
-                            format!(
-                                "`{}` has no control `{}`, and `{}` stands for a `{}` here",
-                                element.name, s.name.value, e.what.value, element.name
-                            ),
-                            "unknown control",
-                        )
-                        .help(format!(
-                            "`{}` takes: {}",
-                            element.name,
-                            names.join(", ")
-                        )),
-                    );
-                }
+        e: &'e model::Entry,
+        thing: Thing<'_>,
+        scope: &Scope,
+    ) -> Option<Cow<'e, model::Entry>> {
+        let Callee::Param(p) = &e.callee else {
+            return Some(Cow::Borrowed(e));
+        };
+        match bind_thing(e, p, thing, &scope.file.src, &scope.file.known) {
+            Ok(b) => Some(Cow::Owned(b)),
+            Err(es) => {
+                self.errors.extend(es.iter().map(Diag::from));
+                None
             }
         }
-        ok.then_some(over)
-    }
-
-    /// The properties written on a thing parameter's entry, over the
-    /// definition it stands for: each is one of its parameters.
-    fn over_definition(&mut self, e: &model::Entry, def: &Definition, src: &Src) -> bool {
-        let mut ok = true;
-        for s in &e.controls {
-            if !def.params.iter().any(|p| p.name.value == s.name.value) {
-                ok = false;
-                let names: Vec<&str> = def.params.iter().map(|p| p.name.value.as_str()).collect();
-                self.errors.push(
-                    Diag::at(
-                        src,
-                        s.name.span,
-                        dt_lang::codes::UNKNOWN_CONTROL,
-                        format!(
-                            "`{}` has no parameter `{}`, and `{}` stands for it here",
-                            def.name.value, s.name.value, e.what.value
-                        ),
-                        "unknown parameter",
-                    )
-                    .help(if names.is_empty() {
-                        format!("`{}` takes no parameters", def.name.value)
-                    } else {
-                        format!("`{}` takes: {}", def.name.value, names.join(", "))
-                    }),
-                );
-            }
-        }
-        ok
     }
 
     /// The strip a surface follows when it is placed `at=` `along`: the

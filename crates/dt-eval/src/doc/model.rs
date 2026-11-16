@@ -46,6 +46,9 @@ pub struct File {
     pub src: Src,
     /// What dt-doc made of it.
     pub doc: Document,
+    /// What it saw when it was decoded: a thing parameter's properties are
+    /// typed later, by the same decoder, with the same view.
+    pub known: dt_doc::Known,
 }
 
 /// Where a control an element is given came from.

@@ -336,6 +336,7 @@ impl Reader<'_> {
                     path: path.to_owned(),
                     src,
                     doc,
+                    known,
                 });
                 self.files.insert(path.to_owned(), Arc::clone(&f));
                 Some(f)

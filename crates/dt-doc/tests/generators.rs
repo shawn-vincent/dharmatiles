@@ -83,7 +83,7 @@ fn a_param_that_names_a_thing_holds_one() {
     assert!(p.thing);
     assert!(matches!(&p.default.as_ref().unwrap().value, Value::Thing(n) if n == "pebble"));
     // and its use as an entry calls the parameter
-    assert!(matches!(&stand.stack[0].callee, Callee::Param(n) if n == "piece"));
+    assert!(matches!(&stand.stack[0].callee, Callee::Param(p) if p.name == "piece"));
     // a define whose stack is one such entry is a thing itself
     assert!(stand.thing);
 }
@@ -201,4 +201,37 @@ fn a_thing_that_holds_itself_is_a_loop() {
         dt_lang::codes::LOOP,
         "calls itself",
     );
+}
+
+#[test]
+fn what_is_written_on_a_thing_param_is_typed_when_the_thing_is_known() {
+    use dt_doc::decode::{Thing, bind_thing};
+    let text = doc(
+        "define stand {\n    param piece pebble\n    stack { piece size=5 at=\"(0.5sq, 0.5sq)\" }\n}",
+        "        stand",
+    );
+    // which thing it is, is not known where it is written: nothing is refused
+    ok(&text);
+    let k = known();
+    let pebble = element("pebble").unwrap();
+    let bind = |text: &str| {
+        let d = decode("t.dtile", text, &k).unwrap();
+        let e = d.definition("stand").unwrap().stack[0].clone();
+        let Callee::Param(p) = &e.callee else {
+            panic!("a thing parameter");
+        };
+        let src = std::sync::Arc::new(miette::NamedSource::new("t.dtile", text.to_owned()));
+        bind_thing(&e, p, Thing::Element(pebble), &src, &k)
+    };
+    // given a thing, it is read as written on the thing: a pebble's length
+    // with no unit
+    let errors = bind(&text).unwrap_err();
+    assert!(
+        errors.iter().any(|e| e.code == dt_lang::codes::UNIT),
+        "{errors:#?}"
+    );
+    // and with its unit it is a pebble's size, typed
+    let bound = bind(&text.replace("size=5", "size=\"5dmm\"")).unwrap();
+    assert!(matches!(bound.callee, Callee::Element(l) if l.name == "pebble"));
+    assert!(matches!(bound.value("size"), Some(Value::Num(_))));
 }

@@ -1,13 +1,19 @@
 //! Stack entries: elements, definition calls and scatters, with their place
 //! words and controls in either form (on the line, or child lines).
 
+use std::sync::Arc;
+
 use kdl::{KdlEntry, KdlNode, KdlValue};
 use miette::SourceSpan;
 
 use super::value::describe;
 use super::{Ctx, Decoder, spanned_name, value_span};
 use crate::elements::renamed;
-use crate::model::{Base, Callee, Entry, Form, Place, Setting, Spanned, Value};
+use crate::error::{DocError, Src};
+use crate::known::{DefInfo, Known};
+use crate::model::{
+    Base, Callee, Definition, Entry, Form, Place, Setting, Spanned, ThingParam, Value, Written,
+};
 use crate::place::{Along, Side};
 use crate::schema::{self, Control, Kind, PlaceWord, Role, did_you_mean};
 
@@ -324,7 +330,12 @@ impl Decoder<'_> {
             let target = self.target(&entry, &key.value);
             let is_scatter = key.value == "scatter";
             let holds = element.is_some_and(|l| l.holds_scatter);
-            if !matches!(target, Target::None) {
+            // on a thing parameter's entry every child line is a control, to
+            // be typed at the call (the place words are the entry's own)
+            let written = matches!(entry.callee, Callee::Param(_))
+                && PlaceWord::parse(&key.value).is_none()
+                && !matches!(key.value.as_str(), "seed" | "id" | "weight");
+            if written || !matches!(target, Target::None) {
                 let args: Vec<&KdlEntry> =
                     c.entries().iter().filter(|e| e.name().is_none()).collect();
                 let props: Vec<&KdlEntry> =
@@ -424,7 +435,11 @@ impl Decoder<'_> {
         // a parameter written as an entry holds a thing
         if ctx.params.contains(&what.value) {
             self.thing_params.insert(what.value.clone());
-            return Some(Callee::Param(what.value.clone()));
+            return Some(Callee::Param(ThingParam {
+                name: what.value.clone(),
+                written: Vec::new(),
+                ctx: Arc::new(ctx.clone()),
+            }));
         }
         let name = what.value.as_str();
         let first = if let Some(h) = renamed(name) {
@@ -456,9 +471,9 @@ impl Decoder<'_> {
     fn target(&self, entry: &Entry, name: &str) -> Target {
         match &entry.callee {
             Callee::Element(l) => l.control(name).map_or(Target::None, Target::Control),
-            // what the parameter holds is known at the call: the reader
-            // checks these properties against that thing
-            Callee::Param(_) => Target::Param(None),
+            // what the parameter holds is known at the call: `control`
+            // keeps what is written, and `bind_thing` types it then
+            Callee::Param(_) => Target::None,
             Callee::Definition(d) => match self.def_info(d) {
                 Some(info) => {
                     info.params
@@ -673,6 +688,20 @@ impl Decoder<'_> {
         span: SourceSpan,
         ctx: &Ctx,
     ) {
+        // a thing parameter's entry: which thing it is, is known at the call,
+        // so keep what is written, for `bind_thing` to give to this function
+        // again
+        if let Callee::Param(p) = &mut entry.callee {
+            p.written.push(Written {
+                name: key,
+                form,
+                value: value.cloned(),
+                subs: subs.to_vec(),
+                span,
+                ctx: Arc::new(ctx.clone()),
+            });
+            return;
+        }
         let owner = entry.what.value.clone();
         if entry.controls.iter().any(|s| s.name.value == key.value) {
             self.err(
@@ -1158,5 +1187,72 @@ fn describe_kdl(e: &KdlEntry) -> &'static str {
         KdlValue::Integer(_) | KdlValue::Float(_) => "a number",
         KdlValue::Null => "nothing",
         KdlValue::String(_) => "a string",
+    }
+}
+
+/// What a thing parameter stands for, once the caller has said.
+#[derive(Clone, Copy)]
+pub enum Thing<'a> {
+    /// A built-in thing element.
+    Element(&'static schema::Element),
+    /// A definition of one thing.
+    Definition(&'a Definition),
+}
+
+/// A thing parameter's entry as the entry of the thing it stands for: what
+/// was written on it (`piece size=5`, `crown width=4`) read by the very
+/// function that reads the same text written on that element or definition,
+/// so a property is checked the same way wherever it is written: its kind
+/// and unit, its range, its words, a group's sub-controls, a missing
+/// required one, with the same code and words, at the text written.
+///
+/// `src` is the text the entry is in, and `known` what that file saw when it
+/// was decoded.
+///
+/// # Errors
+/// Every mistake in what was written, as the decoder gives it.
+pub fn bind_thing(
+    entry: &Entry,
+    param: &ThingParam,
+    thing: Thing<'_>,
+    src: &Src,
+    known: &Known,
+) -> Result<Entry, Vec<DocError>> {
+    let mut d = Decoder::new(Arc::clone(src), known);
+    let (callee, name) = match thing {
+        Thing::Element(l) => (Callee::Element(l), l.name.to_owned()),
+        Thing::Definition(def) => {
+            d.local.insert(def.name.value.clone(), DefInfo::from(def));
+            (
+                Callee::Definition(def.name.value.clone()),
+                def.name.value.clone(),
+            )
+        }
+    };
+    let mut bound = Entry {
+        what: Spanned {
+            value: name,
+            span: entry.what.span,
+        },
+        callee,
+        controls: Vec::new(),
+        ..entry.clone()
+    };
+    for w in &param.written {
+        d.control(
+            &mut bound,
+            w.name.clone(),
+            w.form,
+            w.value.as_ref(),
+            &w.subs,
+            w.span,
+            &w.ctx,
+        );
+    }
+    d.check_entry(&mut bound, &param.ctx);
+    if d.errors.is_empty() {
+        Ok(bound)
+    } else {
+        Err(d.errors)
     }
 }

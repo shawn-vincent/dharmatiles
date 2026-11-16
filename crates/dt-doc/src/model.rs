@@ -13,6 +13,9 @@
 //! defaults are the evaluator's job; [`crate::schema::Control::scaling`]
 //! and [`crate::schema::Control::default`] say how.
 
+use std::sync::Arc;
+
+use kdl::KdlEntry;
 use miette::SourceSpan;
 
 use crate::dim::Dim;
@@ -379,7 +382,35 @@ pub enum Callee {
     Definition(String),
     /// A thing parameter of the enclosing definition, used as an entry
     /// (`leaf`): the caller says which thing it is.
-    Param(String),
+    Param(ThingParam),
+}
+
+/// A thing parameter used as an entry, and what was written on that entry.
+///
+/// Which thing it is, and so what each property means, is known only at the
+/// call, so the properties are kept as written and typed then, by the same
+/// function that types them on an element written directly
+/// ([`crate::decode::bind_thing`]).
+#[derive(Debug, Clone)]
+pub struct ThingParam {
+    /// The parameter's name.
+    pub name: String,
+    /// The properties and child lines written on the entry, in order.
+    pub(crate) written: Vec<Written>,
+    /// What the entry sees: the names its values may read.
+    pub(crate) ctx: Arc<crate::decode::Ctx>,
+}
+
+/// One control written on a thing parameter's entry: the KDL as written,
+/// with the names in view where it was.
+#[derive(Debug, Clone)]
+pub(crate) struct Written {
+    pub name: Spanned<String>,
+    pub form: Form,
+    pub value: Option<KdlEntry>,
+    pub subs: Vec<KdlEntry>,
+    pub span: SourceSpan,
+    pub ctx: Arc<crate::decode::Ctx>,
 }
 
 /// The place words written on an entry.
