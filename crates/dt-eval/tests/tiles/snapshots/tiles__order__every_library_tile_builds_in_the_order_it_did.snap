@@ -1,6 +1,5 @@
 ---
 source: crates/dt-eval/tests/tiles/order.rs
-assertion_line: 24
 expression: text
 ---
 lib:tests/cliffs/1x1-cliff-canyon.dtile: [Entry(0), Entry(1), Entry(2), Entry(3), Lift, Entry(4), Entry(5), Entry(6)]
@@ -30,6 +29,8 @@ lib:tests/ground/1x1-no-base.dtile: [Entry(0), Lift]
 lib:tests/ground/1x1-soil.dtile: [Entry(0), Lift, Entry(1)]
 lib:tests/ground/2x2-dirt.dtile: [Entry(0), Lift, Entry(1)]
 lib:tests/ground/2x2-hill.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
+lib:tests/patterns/1x1-flower-clumps.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entry(3)]
+lib:tests/patterns/1x1-pebble-cover.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entry(3)]
 lib:tests/plants/1x1-grass-flowers.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entry(3)]
 lib:tests/plants/1x1-grove-small.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/plants/1x1-soil+grass.dtile: [Entry(0), Lift, Entry(1), Entry(2)]

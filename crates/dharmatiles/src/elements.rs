@@ -271,8 +271,9 @@ mod tests {
     fn a_planned_control_is_not_taken() {
         let scatter = schema::element("scatter").expect("scatter");
         let count = scatter.control("count").expect("count");
-        let spread = scatter.control("spread").expect("spread");
+        let rock = schema::element("rock").expect("rock");
+        let wear = rock.control("wear").expect("wear");
         assert!(taken(Some(scatter), "count", count));
-        assert!(!taken(Some(scatter), "spread", spread));
+        assert!(!taken(Some(rock), "wear", wear));
     }
 }

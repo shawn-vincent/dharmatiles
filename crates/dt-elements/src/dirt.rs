@@ -398,6 +398,7 @@ fn clod_layer(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, base: &Field) -> (
         confine: false,
         gap: 0.0,
         factor: CLOD_OVERLAP,
+        apart: true,
     };
     let placed = scatter(
         frame,
@@ -715,6 +716,7 @@ fn place_pebbles(
         confine: true,
         gap: PEB_GAP_MM,
         factor: 1.0,
+        apart: true,
     };
     // a pebble sits on ground it can lie on: none on a face steeper than
     // PEB_SIT_DEG (the ground seen over about a pebble's width)

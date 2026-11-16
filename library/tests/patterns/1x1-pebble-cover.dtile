@@ -1,0 +1,14 @@
+dharmatiles version="1.0.0"
+
+tile size="1x1" seed=5 {
+    about "A cover of pebbles with bare clearings, thinner at the foot of a rock, which they stand taller beside. A test tile."
+    stack {
+        base
+        dirt
+        rock at="(0.5sq, 0.5sq)" size="9dmm"
+        scatter perSquare=300 pattern=cover cover="85%" clearings=3 clearingWidth="6dmm .. 9dmm" {
+            pebble size="1.2dmm .. 2.2dmm"
+            near of=rock reach="4dmm .. 9dmm" height="1.6 .. 2" thin="30%"
+        }
+    }
+}

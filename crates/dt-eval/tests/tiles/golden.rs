@@ -67,6 +67,8 @@ pub const TILES: &[&str] = &[
     "lib:tests/ground/1x1-cloud-dirt.dtile",
     "lib:tests/water/1x1-cloud-water.dtile",
     "lib:tests/rocks/2x2-rock-clouds.dtile",
+    "lib:tests/patterns/1x1-pebble-cover.dtile",
+    "lib:tests/patterns/1x1-flower-clumps.dtile",
 ];
 
 /// The tiles that held goldens before the torture set and are not in it: their snapshots are kept and checked by

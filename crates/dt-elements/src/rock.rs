@@ -453,6 +453,21 @@ pub struct Item {
     pub top: Option<crate::Formula>,
 }
 
+impl Item {
+    /// The item stretched up `z` times (across as drawn).
+    #[must_use]
+    pub fn taller(&self, z: f64) -> Self {
+        Self {
+            stones: self
+                .stones
+                .iter()
+                .map(|(o, st)| (*o, st.scaled(1.0, z)))
+                .collect(),
+            ..self.clone()
+        }
+    }
+}
+
 /// One stone, or (a quarter of the time when `clusters`) a cluster of 2
 /// to 4; `low` as for [`make_stone`].
 ///
@@ -976,6 +991,7 @@ impl Element for Single {
                         meets: self.thing.meets(),
                         plural: self.thing.plural(),
                         avoid: &[],
+                        shape: &crate::thing::PLAIN,
                     },
                 )?;
                 let Some(p) = placed.first() else {
@@ -1212,15 +1228,29 @@ impl Thing for Rock {
         rng: &mut Rng,
         placed: &[Standing<'_>],
     ) -> Result<(), LookError> {
-        let mut posed: Vec<(&Item, [f64; 2], f64)> = Vec::with_capacity(placed.len());
+        // an item stood taller is its stones stretched up (only where asked)
+        let mut taller: Vec<Option<Item>> = Vec::with_capacity(placed.len());
         for p in placed {
             let d: &RockDraw = p.drawn.payload()?;
-            posed.push((&d.item, p.at, rng.uniform(0.0, 360.0)));
+            taller.push(((p.tall - 1.0).abs() > f64::EPSILON).then(|| d.item.taller(p.tall)));
+        }
+        let mut posed: Vec<(&Item, [f64; 2], f64)> = Vec::with_capacity(placed.len());
+        for (p, tall) in placed.iter().zip(&taller) {
+            let d: &RockDraw = p.drawn.payload()?;
+            posed.push((
+                tall.as_ref().unwrap_or(&d.item),
+                p.at,
+                rng.uniform(0.0, 360.0),
+            ));
         }
         let mut t = Tally::default();
         add_items(scene, ctx.path, ctx.seed, &posed, ctx.crowns, &mut t)?;
         note(scene, &t);
         Ok(())
+    }
+
+    fn grows_tall(&self) -> bool {
+        true
     }
 
     fn gathers(&self) -> bool {
