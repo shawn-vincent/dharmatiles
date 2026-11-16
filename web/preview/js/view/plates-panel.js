@@ -146,7 +146,7 @@ const Inventory = (/** @type {SectionProps} */ { m, p, ro, act }) => {
         if (!(k.have > 0 || k.otherColour > 0)) continue;
         const w = wantLine(k, p.colour);
         const sys = k.system ? `${systemName(k.system)}, seed ${k.seedUsed}` : undefined;
-        const tip = w.caution ? `${sys || ''}${sys ? '. ' : ''}You have this tile and seed in the other colour; it prints unless you leave it off (print=skip) or switch the mode` : sys;
+        const tip = w.caution ? `${sys || ''}${sys ? '. ' : ''}You have this tile and seed in the other colour; it prints unless you leave it off (print=skip) or switch the colour` : sys;
         rows.push(html`<div class=${`pl-kind${w.caution ? ' caution' : ''}`} title=${tip} key=${`k${rows.length}`}><b>${k.name}</b><span class="pl-kw">${k.want > k.count ? `${k.want} wanted` : `${k.want}`}</span><span class="pl-kt">${w.text}</span></div>`);
       }
       for (const h of p.held) rows.push(html`<div class="pl-kind" key=${`h${rows.length}`}><b>${h.name}</b><span class="pl-kw">${`${h.have}`}</span><span class="pl-kt">${`have ${h.have} · none to print`}</span></div>`);

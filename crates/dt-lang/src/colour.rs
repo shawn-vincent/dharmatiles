@@ -23,23 +23,18 @@ pub enum Colour {
     Multicolour,
 }
 
-/// Each colour and the word that names it: the one table the words are read from and written by.
-const WORDS: [(Colour, &str); 2] = [
-    (Colour::Single, "single"),
-    (Colour::Multicolour, "multicolour"),
-];
-
 impl Colour {
     /// Every colour, in the order the words list them.
     pub const ALL: [Self; 2] = [Self::Single, Self::Multicolour];
 
-    /// The word that names it (`single`, `multicolour`): the command line's, the wire's and a document's.
+    /// The word that names it (`single`, `multicolour`): the command line's, the wire's and a document's.  The one
+    /// place the words are written (serde's lowercase names agree, held by a test).
     #[must_use]
-    pub fn word(self) -> &'static str {
-        WORDS
-            .iter()
-            .find(|(c, _)| *c == self)
-            .map_or("", |(_, w)| w)
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Single => "single",
+            Self::Multicolour => "multicolour",
+        }
     }
 
     /// What it is called in a sentence: `single colour`, `multicolour`.
@@ -63,7 +58,7 @@ impl Colour {
     /// The words, as a list for a message (`single or multicolour`).
     #[must_use]
     pub fn words() -> Vec<&'static str> {
-        WORDS.iter().map(|(_, w)| *w).collect()
+        Self::ALL.iter().map(|c| c.word()).collect()
     }
 }
 
@@ -78,10 +73,9 @@ impl std::str::FromStr for Colour {
 
     /// The one place a colour's word is read.
     fn from_str(word: &str) -> Result<Self, String> {
-        WORDS
-            .iter()
-            .find(|(_, w)| *w == word)
-            .map(|(c, _)| *c)
+        Self::ALL
+            .into_iter()
+            .find(|c| c.word() == word)
             .ok_or_else(|| {
                 let hint = if word == "multi" {
                     ": write `multicolour`"
@@ -111,5 +105,15 @@ mod tests {
                 .unwrap_err()
                 .contains("multicolour")
         );
+    }
+
+    #[test]
+    fn the_wire_names_are_the_words() {
+        for c in Colour::ALL {
+            assert_eq!(
+                serde_json::to_string(&c).unwrap(),
+                format!("\"{}\"", c.word())
+            );
+        }
     }
 }

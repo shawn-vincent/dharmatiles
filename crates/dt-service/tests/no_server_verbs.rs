@@ -1310,9 +1310,9 @@ fn the_plates_settings_and_the_plate_in_view_are_set_by_verb_with_no_server_and_
         "{patches}"
     );
     // a word that is not a setting, or does not read, is refused and nothing is written
-    let nope = set("colour", Some("red"), one.doc_rev).expect_err("not a setting");
+    let nope = set("bed", Some("1x1mm"), one.doc_rev).expect_err("not a setting");
     assert_eq!(nope.status, Status::BadRequest);
-    let odd = set("mode", Some("rainbow"), one.doc_rev).expect_err("not a mode");
+    let odd = set("colour", Some("rainbow"), one.doc_rev).expect_err("not a colour");
     assert_eq!(odd.status, Status::BadRequest);
     // a file that moved on is a conflict that names it
     let stale = set("gap", Some("3mm"), rev).expect_err("the file moved on");

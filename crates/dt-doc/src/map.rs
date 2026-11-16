@@ -460,6 +460,43 @@ impl Reader {
         }
     }
 
+    /// A `colour` word, read by [`dt_lang::Colour`]'s one parser: `single` or `multicolour`.  The old `multi` is refused
+    /// with the fix that writes `multicolour`.
+    fn colour(&mut self, e: &KdlEntry) -> Option<Spanned<dt_lang::Colour>> {
+        let span = value_span(e);
+        let KdlValue::String(s) = e.value() else {
+            self.err(
+                dt_lang::codes::MAP,
+                span,
+                "`colour` takes a word",
+                "not a word",
+            );
+            return None;
+        };
+        match s.parse::<dt_lang::Colour>() {
+            Ok(value) => Some(Spanned { value, span }),
+            Err(why) => {
+                let err = self.err(
+                    dt_lang::codes::MAP,
+                    span,
+                    format!("`{s}` is not a colour"),
+                    "not that",
+                );
+                if s == "multi" {
+                    err.mend(
+                        span,
+                        "multicolour",
+                        "`multi` is now `multicolour`: write `colour=multicolour`".to_owned(),
+                    );
+                } else {
+                    let near = did_you_mean(s, dt_lang::Colour::words());
+                    err.suggest_or(span, near, || why);
+                }
+                None
+            }
+        }
+    }
+
     /// A property that is a word out of `words`, bare or quoted.
     fn word<T: Copy>(
         &mut self,
@@ -954,11 +991,7 @@ impl Reader {
                 }
                 "printer" => into.printer = self.string("printer", e),
                 "colour" => {
-                    let words: Vec<(&str, dt_lang::Colour)> = dt_lang::Colour::ALL
-                        .iter()
-                        .map(|c| (c.word(), *c))
-                        .collect();
-                    into.colour = self.word("colour", e, &words);
+                    into.colour = self.colour(e);
                 }
                 "mode" => {
                     let err = self.err(

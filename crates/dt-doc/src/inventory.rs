@@ -250,7 +250,7 @@ fn piece_of<'a>(out: &'a mut Vec<Piece>, id: &Identity) -> &'a mut Piece {
 }
 
 /// What you have of each piece, by tile, for quick questions (the pills, the
-/// plates): `(single, multi)` for a tile, seed and system.
+/// plates): `(single, multicolour)` for a tile, seed and system.
 #[derive(Debug, Clone, Default)]
 pub struct Shelf {
     have: BTreeMap<Identity, u32>,
@@ -358,7 +358,6 @@ impl Reader {
             Ok(c) => Some(c),
             Err(why) => {
                 let span = value_span(e);
-                let near = did_you_mean(s, Colour::words());
                 let err = self.err(span, format!("`{s}` is not a colour"), "not that");
                 if s == "multi" {
                     err.mend(
@@ -367,6 +366,7 @@ impl Reader {
                         "`multi` is now `multicolour`: write `colour=multicolour`".to_owned(),
                     );
                 } else {
+                    let near = did_you_mean(s, Colour::words());
                     err.suggest_or(span, near, || why);
                 }
                 None

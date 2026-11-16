@@ -90,7 +90,7 @@ fn a_print_list_opens_on_its_plates_and_its_settings_rewrite_its_file() {
     // a word the plates line has not, or a value it cannot read, is refused and not written
     for (key, value, why) in [
         ("bed", "1x1mm", "not a setting"),
-        ("mode", "rainbow", "not a mode"),
+        ("colour", "rainbow", "not a colour"),
     ] {
         // a refusal asks no revision of its own: the key and the value are what is wrong
         let (head, _) = post_err(
@@ -134,7 +134,7 @@ fn a_print_list_that_does_not_plan_still_offers_its_printers() {
     let t = wait_for(&r, "the refusal", |t| t.status == "failed");
     assert_eq!(t.errors[0].code, dt_lang::codes::SLOTS);
     assert!(t.errors[0].message.contains("this printer has 1"));
-    // the panel can still mend it: the printer and the mode are offered
+    // the panel can still mend it: the printer and the colour are offered
     let PlatesPanel::Written(w) = &plates_doc(&t).plates else {
         panic!(
             "a list that does not plan is its settings as written: {:?}",
