@@ -39,7 +39,7 @@ pub(crate) fn element_value(v: &Value, lets: &Lets) -> Result<Lowered, Refused> 
         )),
         Value::Tag(t) | Value::Text(t) => Lowered::plain(dt_elements::Value::Word(t.clone())),
         Value::Param(p) => {
-            return Err(Refused::value(format!(
+            return Err(Refused::mistake(format!(
                 "the parameter `{p}` has no value here"
             )));
         }

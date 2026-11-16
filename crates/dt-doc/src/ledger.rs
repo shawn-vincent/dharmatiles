@@ -40,10 +40,14 @@ pub const PRINCIPLES: [&str; 13] = [
     "check-equals-build",
 ];
 
+/// The categories an id may start with (`<category>:<slug>`): the closed list.
+pub const CATEGORIES: [&str; 4] = ["audit", "hole", "collision", "disagree"];
+
 /// One known violation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Violation {
-    /// The key a test looks up: `hole:<kind>:<form>`, `collision:<word>`, `disagree:<case>`, `audit:<slug>`.
+    /// The key a test looks up: `<category>:<slug>`, the category one of [`CATEGORIES`] (`hole:<kind>:<form>`,
+    /// `collision:<word>`, `disagree:<case>`, `audit:<slug>`).
     pub id: String,
     /// One of [`PRINCIPLES`].
     pub principle: String,
@@ -70,6 +74,8 @@ pub enum LedgerError {
     BadNode { line: usize, why: String },
     /// Two violations with one id.
     DuplicateId(String),
+    /// An id that is not `<category>:<slug>` with a category from [`CATEGORIES`].
+    BadId { id: String },
     /// A principle outside [`PRINCIPLES`].
     UnknownPrinciple { id: String, principle: String },
     /// A case and the ledger disagree ([`Ledger::expect`]).
@@ -83,6 +89,11 @@ impl fmt::Display for LedgerError {
             Self::NotKdl(why) => write!(f, "{FILE} is not KDL v2: {why}"),
             Self::BadNode { line, why } => write!(f, "{FILE}, line {line}: {why}"),
             Self::DuplicateId(id) => write!(f, "{FILE} lists `{id}` twice"),
+            Self::BadId { id } => write!(
+                f,
+                "{FILE}: the id `{id}` is not `<category>:<slug>` with a category from: {}",
+                CATEGORIES.join(", ")
+            ),
             Self::UnknownPrinciple { id, principle } => write!(
                 f,
                 "{FILE}: `{id}` names the principle `{principle}`, which is none of: {}",
@@ -212,6 +223,12 @@ fn violation(text: &str, n: &KdlNode) -> Result<Violation, LedgerError> {
     let principle = need(&props[0], "principle")?;
     let found = need(&props[1], "found")?;
     let note = need(&props[2], "note")?;
+    if id
+        .split_once(':')
+        .is_none_or(|(c, slug)| !CATEGORIES.contains(&c) || slug.is_empty())
+    {
+        return Err(LedgerError::BadId { id });
+    }
     if !PRINCIPLES.contains(&principle.as_str()) {
         return Err(LedgerError::UnknownPrinciple { id, principle });
     }
@@ -262,9 +279,13 @@ mod tests {
             Err(LedgerError::UnknownPrinciple { .. })
         ));
         assert!(matches!(
-            Ledger::parse("violation \"a\" principle=\"one-job\" found=\"x\"\n"),
+            Ledger::parse("violation \"audit:a\" principle=\"one-job\" found=\"x\"\n"),
             Err(LedgerError::BadNode { .. })
         ));
+        for bad in ["a", "tidy:a", "audit:", ":a"] {
+            let t = OK.replace("audit:a", bad);
+            assert!(matches!(Ledger::parse(&t), Err(LedgerError::BadId { .. })), "{bad}");
+        }
         assert!(matches!(
             Ledger::parse("violation {"),
             Err(LedgerError::NotKdl(_))

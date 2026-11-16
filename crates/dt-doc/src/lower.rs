@@ -76,28 +76,16 @@ pub struct Refused {
     pub code: &'static str,
     pub message: String,
     pub help: Option<String>,
-    /// A mistake in the document, shown where it was made.  A soft one is a
-    /// name with no value yet (a definition's parameter): `check` accepts it
-    /// and `build` refuses it.
-    pub hard: bool,
 }
 
 impl Refused {
-    /// A name with no value yet.
-    pub fn value(message: impl Into<String>) -> Self {
+    /// A mistake in the document, shown where it was made: `check` and `build` both refuse it, since there is
+    /// one reading of a value and it is the same in both.
+    pub fn mistake(message: impl Into<String>) -> Self {
         Self {
             code: dt_lang::codes::VALUE,
             message: message.into(),
             help: None,
-            hard: false,
-        }
-    }
-
-    /// A mistake in the document.
-    pub fn mistake(message: impl Into<String>) -> Self {
-        Self {
-            hard: true,
-            ..Self::value(message)
         }
     }
 
@@ -109,7 +97,7 @@ impl Refused {
 
 impl From<String> for Refused {
     fn from(message: String) -> Self {
-        Self::value(message)
+        Self::mistake(message)
     }
 }
 
@@ -333,7 +321,6 @@ fn refused(w: dt_value::WeightingError) -> Refused {
         code: w.code,
         message: w.message,
         help: Some(w.help),
-        hard: true,
     }
 }
 
@@ -462,7 +449,7 @@ pub fn weighting_flaw_in(src: &str, units: crate::units::Units) -> Option<RangeR
         return None;
     }
     let r = lower(&e, &Lets::default(), 0).err()?;
-    (r.hard && matches!(r.code, dt_lang::codes::RANGE | dt_lang::codes::WEIGHTING)).then(|| {
+    matches!(r.code, dt_lang::codes::RANGE | dt_lang::codes::WEIGHTING).then(|| {
         RangeRefusal {
             code: r.code.to_owned(),
             message: r.message,
