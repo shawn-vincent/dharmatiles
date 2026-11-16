@@ -903,6 +903,10 @@ impl PlatesHost for Ctx {
             .is_ok_and(|b| b.is_some())
     }
 
+    fn thing_shelf<'a>(&'a self, opts: &'a Options) -> Option<Box<dyn dt_kit::Shelf + 'a>> {
+        Some(Box::new(dt_store::Shelved::new(&*self.inner.kept, opts)))
+    }
+
     fn build_piece(
         &self,
         path: &str,
@@ -1331,17 +1335,13 @@ fn inventory_record(ctx: &Ctx, req: InventoryRecordReq) -> Result<InventoryWrote
 }
 
 fn build_thing(ctx: &Ctx, req: ThingReq) -> Result<ThingRes, Refusal> {
-    // the thing is read from the file the text is of: the document (`tile.dtile`), or a part it uses, laid over the library
-    match req.file.as_deref() {
-        None => thing_calls::build_thing(ctx, &Doc { text: &req.text }, MAIN, &req),
-        Some(file) => {
-            let src = dt_service::read_calls::Overlay {
-                files: BTreeMap::from([(file.to_owned(), req.text.clone())]),
-                base: &Lib,
-            };
-            thing_calls::build_thing(ctx, &src, file, &req)
-        }
-    }
+    // the text is of the tile (in the store, or the library) or a part it uses, laid over what the worker holds
+    thing_calls::build_thing(
+        ctx,
+        &StoreAndLib(ctx.inner.storage.clone()),
+        &ctx.tile,
+        &req,
+    )
 }
 
 fn inventory_gone(ctx: &Ctx, req: InventoryGoneReq) -> Result<InventoryWrote, Refusal> {
@@ -1498,11 +1498,12 @@ impl Service {
         storage
             .create_dir_all(Path::new(FOLDER))
             .map_err(|e| JsError::new(&format!("cannot make {FOLDER}: {e}")))?;
-        // the library the page handed over lists as the Library place: its `lib:tiles/` documents
+        // the library the page handed over lists as the Library place (its `lib:tiles/` documents) and as `Library: parts` (the
+        // definitions the tiles `use`, which open as documents of their own: a thing is edited where it is defined)
         let library: Vec<String> = LIBRARY.with(|l| {
             l.borrow()
                 .keys()
-                .filter(|k| k.starts_with("lib:tiles/"))
+                .filter(|k| k.starts_with("lib:tiles/") || k.starts_with("lib:parts/"))
                 .cloned()
                 .collect()
         });
@@ -1510,6 +1511,7 @@ impl Service {
         let roots = vec![
             Root::new("My tiles", RootKind::Dir(Path::new(FOLDER).into())).with_role(Role::Home),
             Root::new("Library", RootKind::Library("tiles/".to_owned())),
+            Root::library_group("parts/"),
         ];
         let host = Arc::new(WebHost::default());
         let mut core = Core::new(

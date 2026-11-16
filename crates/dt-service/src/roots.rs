@@ -74,6 +74,24 @@ impl Root {
         }
     }
 
+    /// The library's documents under `lib:` + `prefix` (`tiles/water/`, `tests/ground/`, `parts/`: ends in a slash) as a place of
+    /// their own, named as the program names it when the command line asks for that group (`lib:parts`): `Library: parts`.
+    /// The program's `roots_for` and a web worker's roots both make it here, so a part opens the same wherever it is listed.
+    #[must_use]
+    pub fn library_group(prefix: &str) -> Self {
+        let (name, group) = match prefix.strip_prefix("tests/") {
+            Some(g) => ("Tests", g),
+            None => ("Library", prefix.trim_start_matches("tiles/")),
+        };
+        let group = group.trim_end_matches('/');
+        let label = if group.is_empty() {
+            name.to_owned()
+        } else {
+            format!("{name}: {group}")
+        };
+        Self::new(&label, RootKind::Library(prefix.to_owned()))
+    }
+
     /// The same place, with another role (My tiles, an added folder).
     #[must_use]
     pub fn with_role(mut self, role: Role) -> Self {

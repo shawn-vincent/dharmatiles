@@ -18,7 +18,7 @@ import { token } from '../tokens.js';
 import { failed, showError } from '../problems.js';
 import { drawMesh } from './scene-thumbs.js';
 import { $, host } from './app.js';
-import { doc, elementNamed, isInventory, isPlates, itemOf, server, tile, view } from './stores.js';
+import { copiedFrom, doc, elementNamed, isInventory, isPlates, itemOf, server, tile, view } from './stores.js';
 import { texts } from './document.js';
 import { STRIP, bytesOf, frameOf, stripSeeds, targetOf } from '../thing-model.js';
 import { html, render } from '../view/html.js';
@@ -157,7 +157,11 @@ async function run(t, at, pageAt) {
     if (failed('Could not draw the thing', r)) { problem.value = null; return null; }
     if (r.status !== 200) { problem.value = wordsOf(r); return null; }
     problem.value = null;
-    return /** @type {import('../api').ThingRes} */ (r.body);
+    const res = /** @type {import('../api').ThingRes} */ (r.body);
+    // the draws are real, but what went wrong with the shelf of kept bodies (a damaged entry dropped, one that could not be kept)
+    // is said where every failure is, not left in the answer
+    if (res.problems.length) showError('A kept thing could not be read or kept', new Error(res.problems.join('; ')));
+    return res;
   };
   /** The view shows a draw: the viewer is told what it shows first (it drops what it holds of another document), then the mesh. @param {import('../api').ThingRes} res */
   const show = (res) => {
@@ -213,11 +217,17 @@ export function init() {
   texts.cb.onCaret = () => { prior?.(); caret.value = texts.selectionStart; };
   effect(() => { const t = on.value; if (t) untracked(() => { held.value = t; }); });
   // another tile holds none of the last tile's things: what is held is let go, and the thing view stays only where the new tile's own
-  // cursor or selection is on a thing (the first edit of a library tile makes a copy of it, a tile of its own, with the selection kept)
+  // cursor or selection is on a thing.  The one tile that is held across is the copy a first edit of a library tile makes (a tile of
+  // its own, with the same entries under the same keys and the same definitions): the view stays on its thing, as the typing goes on
   let tileWas = '';
   effect(() => {
     const id = tile()?.id ?? '';
-    untracked(() => { if (id !== tileWas) { tileWas = id; held.value = null; } });
+    untracked(() => {
+      if (id === tileWas) return;
+      const copy = copiedFrom.value;
+      if (!(copy && copy.from === tileWas && copy.to === id)) held.value = null;
+      tileWas = id;
+    });
   });
   // a new thing starts from the first seed, the first page and the first of a scatter's things
   let was = '';

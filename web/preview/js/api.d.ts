@@ -1522,7 +1522,16 @@ extent: ThingExtent,
 /**
  * One for each seed asked, in order.
  */
-draws: Array<ThingDraw>, };
+draws: Array<ThingDraw>, 
+/**
+ * What the draws did for their bodies: made, and read from the shelf (a seed asked again is read, not made).
+ */
+used: ThingUse, 
+/**
+ * What went wrong with the shelf (a damaged entry dropped and made again, a body that could not be kept), in words: the
+ * draws are real either way, and the page shows each of these.
+ */
+problems: Array<string>, };
 
 type ThingUse = { 
 /**

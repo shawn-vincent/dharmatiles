@@ -10,7 +10,7 @@ import { copiedNote } from '../mine.js';
 import { attachSizeGrid } from '../view/size-grid.js';
 import { levelSnapshot, restoreLevel } from './levels.js';
 import { select } from './open.js';
-import { doc, renameable, server, stem, tile, view, whenListed } from './stores.js';
+import { copiedFrom, doc, renameable, server, stem, tile, view, whenListed } from './stores.js';
 
 // A first tile: valid, printable ground in My tiles (or in the folder the browser is at, `into`:
 // {root, dir, name}), ready for the same text/lens/direct edits as every other tile.
@@ -138,6 +138,7 @@ async function mineIt(/** @type {{ patch?: *, run?: () => Promise<*> } | null} *
       return false;
     }
     const copy = { id: r.body.id, name: stem({ path: r.body.path }) };
+    copiedFrom.value = { from: lib.id, to: copy.id };
     if (!(await whenListed(copy.id))) { showError('The copy did not appear', new Error(`${copy.name} was made but is not in the list`)); return false; }
     const here = levelSnapshot(); // the copy opens on the same level (its entries have the same keys)
     await select(copy.id, true);

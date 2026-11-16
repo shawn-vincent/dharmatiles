@@ -31,7 +31,7 @@ export function ThingPane({ m }) {
         <button type="button" class="dice" aria-label="Roll a new seed" title="Roll a new seed: another draw" onClick=${() => set(1 + Math.floor(Math.random() * 9999))}><${Icon} name="dice" size=${16} /></button>
       </div>
       ${m.problem.value ? html`<p class="thing-problem" role="alert">${m.problem.value}</p>` : null}
-      ${d ? html`<${Extent} e=${d.extent} size=${d.draws[0].size} triangles=${d.draws[0].triangles} />` : null}
+      ${d ? html`<${Extent} e=${d.extent} size=${d.draws[0].size} triangles=${d.draws[0].triangles} kept=${d.draws.length === 1 && d.used.kept > 0} />` : null}
       ${d && !d.draws[0].checked ? html`<p class="thing-draft" role="status">Draft · not yet checked: the gate's overhang paint comes with the full draw. <button type="button" class="linkish" disabled=${m.busy.value} onClick=${() => m.drawFull()}>Draw in full</button></p>` : null}
       ${d && d.shown.length ? html`<dl class="thing-controls" aria-label="Controls as built">${d.shown.map((/** @type {import('../api').ThingControl} */ c) => html`<div key=${c.control}><dt>${c.control}</dt><dd>${c.text}<span class="from"> from ${c.from}</span></dd></div>`)}</dl>` : null}
       <div class="seg thing-looks" role="group" aria-label="Look from">${VIEWS.filter((v) => LOOKS.includes(v[0])).map((v) => html`<button type="button" key=${v[0]} aria-pressed=${String(look === v[0])} onClick=${() => m.describe(JSON.stringify(t.which), v[0])}>${v[1]}</button>`)}</div>
@@ -46,14 +46,14 @@ export function ThingPane({ m }) {
 /**
  * The room the thing takes: the smallest and the largest box it can draw, as the two outlines in the view, each in printed mm
  * beside the dmm the document writes.
- * @param {{ e: import('../api').ThingExtent, size: import('../api').Dims, triangles: number }} p
+ * @param {{ e: import('../api').ThingExtent, size: import('../api').Dims, triangles: number, kept: boolean }} p  `kept`: the one draw was read from the shelf of kept bodies, not made now
  */
-function Extent({ e, size, triangles }) {
+function Extent({ e, size, triangles, kept }) {
   const lo = extentText(e.least, e.leastDmm), hi = extentText(e.most, e.mostDmm);
   const now = extentText(size, size);
   return html`<dl class="thing-extent" aria-label="The room it takes">
     <div><dt><i class="sw least" aria-hidden="true"></i>smallest</dt><dd>${lo.printed}<span class="from"> (${lo.written} written)</span></dd></div>
     <div><dt><i class="sw most" aria-hidden="true"></i>largest</dt><dd>${hi.printed}<span class="from"> (${hi.written} written)</span></dd></div>
-    <div><dt>this draw</dt><dd>${now.printed}<span class="from"> · ${triangles} triangles</span></dd></div>
+    <div><dt>this draw</dt><dd>${now.printed}<span class="from"> · ${triangles} triangles${kept ? ' · kept' : ''}</span></dd></div>
   </dl>`;
 }

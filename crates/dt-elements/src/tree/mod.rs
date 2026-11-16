@@ -922,15 +922,44 @@ struct TreeDraw {
 }
 
 impl Thing for Tree {
-    fn extent(&self) -> Extent {
+    fn placed_reach(&self) -> f64 {
         let p = &self.p;
         // the crown's diameter, or the trunk's flared foot when that is wider
         let across =
             |crown: f64, trunk: Option<f64>| trunk.map_or(crown, |t| crown.max(t * (1.0 + FLARE)));
+        0.5 * across(p.width.hi(), p.trunk_width.as_ref().map(Draw::hi))
+    }
+
+    fn extent(&self) -> Extent {
+        let p = &self.p;
+        // how far past a branch tip the tree stands, from what `grow` does with it:
+        // a group of tips is pushed out `BULGE_MM`, its clump stands a clump's radius
+        // past the tip and a leaf its length past the clump
+        let bulge = if p.clumps_on { BULGE_MM } else { 0.0 };
+        let clump = if p.clumps_on { p.clump_size.hi() } else { 0.0 };
+        let leaf = if p.clumps_on && p.leaves {
+            p.leaf_length.hi()
+        } else {
+            0.0
+        };
+        let past = bulge + clump + leaf;
+        // the crown's width is the tips' diameter; the trunk's flared foot may be wider
+        let across = |crown: f64, trunk: Option<f64>, past: f64| {
+            let crown = crown + 2.0 * past;
+            trunk.map_or(crown, |t| crown.max(t * (1.0 + FLARE)))
+        };
         let (lo, hi) = (
-            across(p.width.lo(), p.trunk_width.as_ref().map(Draw::lo)),
-            across(p.width.hi(), p.trunk_width.as_ref().map(Draw::hi)),
+            across(p.width.lo(), p.trunk_width.as_ref().map(Draw::lo), 0.0),
+            across(p.width.hi(), p.trunk_width.as_ref().map(Draw::hi), past),
         );
+        // the tips are held `cap` under the top, and a clump stands that far over its
+        // tip, so a tree's own top is under what it was asked for, by at most the cap;
+        // and over it by a leaf's length
+        let cap = if p.clumps_on {
+            CAP_CLUMPS * p.clump_size.hi() + CAP_MM
+        } else {
+            0.0
+        };
         // a tree with no `top=` stands its `height`; one with a `top=` any
         // height a tree may
         let (up_lo, up_hi) = if p.crown.is_none() {
@@ -938,7 +967,10 @@ impl Thing for Tree {
         } else {
             (MIN_HEIGHT_MM, MAX_HEIGHT_MM)
         };
-        Extent::new(Box3::new(lo, lo, up_lo), Box3::new(hi, hi, up_hi))
+        Extent::new(
+            Box3::new(lo, lo, (up_lo - cap).max(0.0)),
+            Box3::new(hi, hi, up_hi + leaf),
+        )
     }
 
     fn meets(&self) -> Meets {

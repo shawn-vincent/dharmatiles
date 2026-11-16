@@ -427,6 +427,11 @@ impl dt_service::plates_calls::PlatesHost for Shared {
         store.contains(&store.key(&tracked.reads(), path, opts))
     }
 
+    fn thing_shelf<'a>(&'a self, opts: &'a Options) -> Option<Box<dyn dt_kit::Shelf + 'a>> {
+        let store = self.store.as_deref()?;
+        Some(Box::new(dt_store::Shelved::new(store.kept(), opts)))
+    }
+
     fn build_piece(
         &self,
         path: &str,

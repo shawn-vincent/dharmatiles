@@ -14,10 +14,10 @@
     5712
   ],
   "meshSha256": [
-    "17175cb6938d02962e18f2c7fa4f44fe7a090ee3435b1cc09848dd137e2dce27",
-    "30d41d19b101dc6a1a1733a03e764c621251cba9ab9c301068c269a53b3f1aba",
-    "9845ee0b496e4fc13319482abf9f2ad21f93d61d90ea9b857f24f6cf03ac8f08",
-    "37743d59f5253c57f815a25d4abf2b5ad8f5dbf876d5465212aa64ae58a11304"
+    "b4f1080e4d2663767740f3d30c5fe3d071f4a80184f4be43f545570fd2f495cb",
+    "c9d2cce4d73d2304fd55c373279bf9cdffb2c7b657139f0a62ee81581effb52b",
+    "a260f20f3c7297ce9ddd2d6f1273f7d34491a276f4dbe0bb7401ff1aa8adaf14",
+    "aab7f7eb6c33b249cdcecc87df35b931af05e31f79070eb178e1ee144c996e1b"
   ],
   "extent": {
     "least": {
@@ -26,8 +26,8 @@
       "z": 2.5
     },
     "most": {
-      "x": 20.4,
-      "y": 20.4,
+      "x": 13.021,
+      "y": 13.021,
       "z": 9.5
     },
     "leastDmm": {
@@ -36,8 +36,8 @@
       "z": 2.5
     },
     "mostDmm": {
-      "x": 20.4,
-      "y": 20.4,
+      "x": 13.021,
+      "y": 13.021,
       "z": 9.5
     }
   }

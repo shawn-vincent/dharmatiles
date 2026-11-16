@@ -208,6 +208,9 @@ export const doc = createStore(/** @type {DocState} */ ({
   selectAt: null,      // the byte of a node a gesture just wrote: select it once it is checked
 }));
 
+/** The copy a first edit of a library tile made (editor/tiles.js `mineIt`): the copy `to` is the tile `from` made yours, with the same entries under the same keys and the same definitions, so what is held of one is held of the other. */
+export const copiedFrom = signal(/** @type {{ from: string, to: string } | null} */ (null));
+
 // ---- selectors ---------------------------------------------------------------
 
 const byId = new WeakMap();

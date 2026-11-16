@@ -9,8 +9,8 @@
 //!
 //! There is no second reader and no second build: a definition is read by the reader as a one-entry tile that calls it
 //! (so its params, defaults and imports mean what they mean in a tile), the entry's controls go to the element's own
-//! `thing()`, and `Thing::make` is the one thing that makes solids.  A build here is not kept (the disk cache's key is
-//! made of a whole tile): it is the thing's own key's job to keep it, when it has one.
+//! `thing()`, and `Thing::make` is the one thing that makes solids.  A draw is not kept as a whole (the disk cache's key is
+//! made of a whole tile); what a thing keeps is its body (`dt_kit::Bodies`, the caller's shelf), as in a tile.
 
 use dt_doc::schema::Generator;
 use dt_elements::{Control, Extent, Shown, Thing, Value};
@@ -288,7 +288,12 @@ impl Subject {
     ///
     /// # Errors
     /// The thing could not be made, joined or drawn.
-    pub fn draw(&self, seed: u64, opts: &Options) -> Result<Built, Vec<Diag>> {
+    pub fn draw(
+        &self,
+        seed: u64,
+        opts: &Options,
+        bodies: &dt_kit::Bodies<'_>,
+    ) -> Result<Built, Vec<Diag>> {
         let frame = Frame::for_system(opts.system, 1, 1);
         let at = |message: String| {
             Diag::at(
@@ -304,7 +309,7 @@ impl Subject {
         scene.set_low(opts.tier.is_low());
         let solids = self
             .thing
-            .make(&mut scene, Seed::new(seed), &opts.printer)
+            .make_with(&mut scene, Seed::new(seed), &opts.printer, bodies)
             .map_err(|le| {
                 vec![
                     Diag::at(
@@ -427,5 +432,42 @@ impl Source for Probe<'_> {
             return Ok(self.text.clone());
         }
         self.inner.read(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source::Memory;
+    use std::collections::BTreeMap;
+
+    const TILE: &str = "dharmatiles version=\"1.0.0\"\n\nuse \"parts/trees\" oak\n\ntile size=\"1x1\" seed=7 {\n    stack {\n        base\n        dirt\n        oak\n    }\n}\n";
+
+    /// A call of a definition of a thing, written as an entry of the tile, is that thing under the id the check gives the entry it
+    /// expands to (`tile/tree/0`): the page sends that id.
+    #[test]
+    fn a_called_thing_is_found_by_the_id_the_check_gives() {
+        let src = Memory(BTreeMap::from([(
+            "/t/mine.dtile".to_owned(),
+            TILE.to_owned(),
+        )]));
+        let opts = Options::default();
+        let read = doc::read_with(&src, "/t/mine.dtile", opts.units()).expect("reads");
+        let ids: Vec<String> = read
+            .tile
+            .expect("a tile")
+            .stack
+            .iter()
+            .map(|e| e.id.as_str().to_owned())
+            .collect();
+        assert!(ids.iter().any(|i| i == "tile/tree/0"), "{ids:?}");
+        let key = "tile/tree/0";
+        let s = subject(
+            &src,
+            "/t/mine.dtile",
+            Which::Entry { key, child: None },
+            &opts,
+        );
+        assert!(s.is_ok(), "{:?}", s.err().map(|r| format!("{r:?}")));
     }
 }

@@ -85,6 +85,25 @@ struct World {
     said: RefCell<Vec<String>>,
     /// The finished builds this host keeps (the worker's memory store): its lane and its exports build through it.
     kept: dt_store::MemStore,
+    /// A test's switch: the shelf of things reads every entry as damaged.
+    damaged_shelf: std::cell::Cell<bool>,
+}
+
+/// A shelf whose entries all read as damaged: what a thing build says of it, loudly.
+struct DamagedShelf<'a>(dt_store::Shelved<'a>);
+
+impl dt_kit::Shelf for DamagedShelf<'_> {
+    fn read(&self, _id: &dt_kit::ThingId) -> Result<Option<dt_kit::Body>, String> {
+        Err("an entry of the shelf is damaged".to_owned())
+    }
+
+    fn keep(&self, id: &dt_kit::ThingId, body: &dt_kit::Body) -> Result<(), String> {
+        self.0.keep(id, body)
+    }
+
+    fn settle(&self) -> Result<(), String> {
+        self.0.settle()
+    }
 }
 
 impl World {
@@ -195,6 +214,14 @@ impl dt_service::plates_calls::PlatesHost for World {
 
     fn full_kept(&self, _path: &str, _opts: &Options) -> bool {
         false
+    }
+
+    fn thing_shelf<'a>(&'a self, opts: &'a Options) -> Option<Box<dyn dt_kit::Shelf + 'a>> {
+        let shelf = dt_store::Shelved::new(&self.kept, opts);
+        if self.damaged_shelf.get() {
+            return Some(Box::new(DamagedShelf(shelf)));
+        }
+        Some(Box::new(shelf))
     }
 
     fn build_piece(
@@ -444,12 +471,8 @@ fn table() -> Table<World, Refusal> {
             dt_service::draft_calls::step(w, &tile_ref(), r)
         })
         .with(&BUILD_THING, |w: &World, r: ThingReq| {
-            // the text the page holds is the document: a thing is read from it, not from the store
-            let src = dt_service::read_calls::Overlay {
-                files: BTreeMap::from([(PATH.to_owned(), r.text.clone())]),
-                base: &Mem(&w.mem),
-            };
-            dt_service::thing_calls::build_thing(w, &src, PATH, &r)
+            // the text the page holds goes over the store's
+            dt_service::thing_calls::build_thing(w, &Mem(&w.mem), PATH, &r)
         })
 }
 
@@ -484,6 +507,7 @@ fn a_tile_is_checked_edited_saved_and_built_by_verb_with_no_server_and_no_disk()
         plate: RefCell::new(None),
         said: RefCell::new(Vec::new()),
         kept: dt_store::MemStore::new("test", 64 << 20),
+        damaged_shelf: std::cell::Cell::new(false),
     };
     let table = table();
     let id = tile_id(PATH);
@@ -687,6 +711,7 @@ fn world() -> World {
         plate: RefCell::new(None),
         said: RefCell::new(Vec::new()),
         kept: dt_store::MemStore::new("test", 64 << 20),
+        damaged_shelf: std::cell::Cell::new(false),
     }
 }
 
@@ -1596,6 +1621,46 @@ fn thing_req(which: ThingRef, seeds: &[u64]) -> ThingReq {
     }
 }
 
+/// A tile calls the oak a part defines, and the page is on the part (its text is `file`'s): the entry of the tile is the thing,
+/// drawn with the part's text as held (an edit of the part is seen), while the tile is read from the store.
+#[test]
+fn a_called_thing_is_drawn_with_the_text_of_the_part_the_page_is_on() {
+    let w = world();
+    let tile = "/memory/My tiles/oak.dtile";
+    let text = "dharmatiles version=\"1.0.0\"\n\nuse \"parts/trees\" oak\n\ntile size=\"1x1\" seed=7 {\n    stack {\n        base\n        dirt\n        oak\n    }\n}\n";
+    w.mem.write_text(Path::new(tile), text).expect("written");
+    let part = dt_eval::Files
+        .read("lib:parts/trees.dtile")
+        .expect("the part");
+    let draw = |part_text: &str| {
+        dt_service::thing_calls::build_thing(
+            &w,
+            &Mem(&w.mem),
+            tile,
+            &ThingReq {
+                text: part_text.to_owned(),
+                file: Some("lib:parts/trees.dtile".to_owned()),
+                which: ThingRef::Entry {
+                    key: "tile/tree/0".to_owned(),
+                    child: None,
+                },
+                seeds: vec![1],
+                tier: Some(dt_eval::Tier::Low),
+            },
+        )
+        .expect("the called oak is drawn")
+    };
+    let wide = draw(&part);
+    assert_eq!(wide.element, "tree");
+    let narrow = draw(&part.replace("width=\"44dmm\"", "width=\"30dmm\""));
+    assert!(
+        narrow.extent.most.x < wide.extent.most.x,
+        "the part's own text is what is drawn: {} then {}",
+        wide.extent.most.x,
+        narrow.extent.most.x
+    );
+}
+
 /// `buildThing`: a rock define at seeds 1 to 4, a rock entry and a scatter's child, and the refusals, by verb with no
 /// server and no disk.
 #[test]
@@ -1643,6 +1708,32 @@ fn a_thing_is_drawn_alone_at_each_seed_by_verb_with_no_server() {
         .call(&w, &BUILD_THING, thing_req(define(), &[3]))
         .expect("one seed");
     assert_eq!(bytes(&again.draws[0]), bytes(&res.draws[2]));
+    // the bodies are kept, as in a tile: the first call made its four rocks, and asking for a seed again reads its body
+    assert_eq!(
+        (res.used.built, res.used.kept),
+        (4, 0),
+        "four rocks made: {:?}",
+        res.used
+    );
+    assert_eq!(
+        (again.used.built, again.used.kept),
+        (0, 1),
+        "a seed asked again is read, not made: {:?}",
+        again.used
+    );
+    assert!(res.problems.is_empty() && again.problems.is_empty());
+    // a shelf that cannot be read is told in the answer, and the draw is made all the same, the same bytes
+    w.damaged_shelf.set(true);
+    let hurt = table
+        .call(&w, &BUILD_THING, thing_req(define(), &[3]))
+        .expect("a draw is made past a damaged shelf");
+    w.damaged_shelf.set(false);
+    assert_eq!(bytes(&hurt.draws[0]), bytes(&res.draws[2]));
+    assert_eq!((hurt.used.built, hurt.used.kept), (1, 0));
+    assert_eq!(
+        hurt.problems,
+        vec!["an entry of the shelf is damaged".to_owned()]
+    );
 
     // a low draw is a quick look, not the gate's: it says so
     assert!(
