@@ -369,6 +369,8 @@ fn agree(label: &str, src: &Memory, build_ok: bool) -> (Vec<Diag>, Outcome) {
 #[test]
 fn check_equals_build_on_the_torture_set() {
     // a torture tile builds (the memo panics on one that does not), so `check` must find nothing in it
+    // the builds side by side (as the golden tests ask them), so this test is not the one that builds the set in a row
+    memo::prebuild(golden::TILES);
     for path in golden::TILES {
         memo::built(path);
         let c = match check(&dt_eval::Library, path, &Options::default()) {
