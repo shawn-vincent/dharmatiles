@@ -16,7 +16,7 @@ use crate::decode::{syntax, value_span};
 use crate::error::{DocError, Src};
 
 /// The node's name.
-pub const NODE: &str = "dharmatiles";
+pub const NODE: &str = dt_lang::words::DHARMATILES;
 
 /// The document format this program reads: the only one.  A document of an
 /// older format (no header, or `version=0`) is refused with help to run

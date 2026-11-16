@@ -39,7 +39,7 @@ use crate::model::Spanned;
 use crate::schema::did_you_mean;
 
 /// The file extension of a print list.
-pub const EXT: &str = "dmap";
+pub const EXT: &str = dt_lang::words::DMAP;
 
 /// The printer a print list that names none is laid out for: the X1 Carbon
 /// with an AMS (the page's question 15, answered by its recommendation).

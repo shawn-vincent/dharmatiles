@@ -13,10 +13,11 @@
 <header class="hero">
   <div class="eyebrow">The tile language &middot; guide</div>
   <h1>Cheat sheet</h1>
-  <p class="lede">Every word of the language on one page: the units, functions, weightings, coordinates and <code>$</code> names, the library&rsquo;s heights and the seam words. Nothing here is typed: <code>cargo xtask docs</code> writes it from the program&rsquo;s own word tables, so it cannot say what the program does not.</p>
+  <p class="lede">Every word of the language on one page: the keywords, units, functions, weightings, coordinates and <code>$</code> names, the library&rsquo;s heights and the seam words. Nothing here is typed: <code>cargo xtask docs</code> writes it from the program&rsquo;s own word registry and tables, so it cannot say what the program does not.</p>
 </header>
 <div class="margin">
 <nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#keywords">Keywords</a></li>
 <li><a href="#units">Units</a></li>
 <li><a href="#functions">Functions</a></li>
 <li><a href="#weightings">Weightings</a></li>
@@ -56,6 +57,33 @@
 </div>
 <article class="doc guide cheat">
 <section>
+<h2 id="keywords">Keywords</h2>
+<div class="tbl"><table>
+<thead><tr><th>Word</th><th>Is</th></tr></thead>
+<tbody>
+<tr><td><code>tile</code></td><td>the one tile of a file: its size, seed and stack</td></tr>
+<tr><td><code>define</code></td><td>a named part: a thing or a layer other nodes can call</td></tr>
+<tr><td><code>use</code></td><td>bring definitions in from another file</td></tr>
+<tr><td><code>let</code></td><td>name a value</td></tr>
+<tr><td><code>override</code></td><td>replace a library name for this file</td></tr>
+<tr><td><code>param</code></td><td>a value a definition takes from its caller</td></tr>
+<tr><td><code>point</code></td><td>a named point of a tile</td></tr>
+<tr><td><code>line</code></td><td>a line drawn through points</td></tr>
+<tr><td><code>region</code></td><td>an area of the tile</td></tr>
+<tr><td><code>stack</code></td><td>what the tile is made of, in the order it is built</td></tr>
+<tr><td><code>defaults</code></td><td>values every element of a kind starts from</td></tr>
+<tr><td><code>printer</code></td><td>a printer profile</td></tr>
+<tr><td><code>seams</code></td><td>the edge contract: the seam words along a square edge</td></tr>
+<tr><td><code>within</code></td><td>a clause of a region: all that lies within a distance of a place</td></tr>
+<tr><td><code>except</code></td><td>a clause of a region: regions taken out of it</td></tr>
+<tr><td><code>kind</code></td><td>what kind of value a param takes</td></tr>
+<tr><td><code>at</code></td><td>where an entry goes: a region, a line, a point or a place word</td></tr>
+<tr><td><code>id</code></td><td>a name an entry is edited by</td></tr>
+<tr><td><code>weight</code></td><td>how often a child of a scatter is drawn</td></tr>
+<tr><td><code>dharmatiles</code></td><td>the header line that says a file is a dharmatiles document</td></tr>
+</tbody></table></div>
+<p class="muted small">Read it in <a href="syntax.html">Syntax</a>.</p></section>
+<section>
 <h2 id="units">Units</h2>
 <div class="tbl"><table>
 <thead><tr><th>Unit</th><th>Is</th></tr></thead>
@@ -74,21 +102,21 @@
 <section>
 <h2 id="functions">Functions</h2>
 <div class="tbl"><table>
-<thead><tr><th>Word</th><th>Takes</th><th>Kind</th></tr></thead>
+<thead><tr><th>Word</th><th>Takes</th><th>Is</th></tr></thead>
 <tbody>
-<tr><td><code>sin</code></td><td>1</td><td>of numbers</td></tr>
-<tr><td><code>cos</code></td><td>1</td><td>of numbers</td></tr>
-<tr><td><code>abs</code></td><td>1</td><td>of numbers</td></tr>
-<tr><td><code>min</code></td><td>2</td><td>of numbers</td></tr>
-<tr><td><code>max</code></td><td>2</td><td>of numbers</td></tr>
-<tr><td><code>clamp</code></td><td>3</td><td>of numbers</td></tr>
-<tr><td><code>smooth</code></td><td>1</td><td>of numbers</td></tr>
-<tr><td><code>x</code></td><td>2</td><td>of a region and a unit, or a frame and two numbers</td></tr>
-<tr><td><code>y</code></td><td>2</td><td>of a region and a unit, or a frame and two numbers</td></tr>
-<tr><td><code>d</code></td><td>2</td><td>of a region and a unit, or a frame and two numbers</td></tr>
-<tr><td><code>a</code></td><td>2</td><td>of a region and a unit, or a frame and two numbers</td></tr>
-<tr><td><code>point</code></td><td>3</td><td>of a region and a unit, or a frame and two numbers</td></tr>
-<tr><td><code>polar</code></td><td>3</td><td>of a region and a unit, or a frame and two numbers</td></tr>
+<tr><td><code>sin</code></td><td>1</td><td>the sine of an angle</td></tr>
+<tr><td><code>cos</code></td><td>1</td><td>the cosine of an angle</td></tr>
+<tr><td><code>abs</code></td><td>1</td><td>the size of a number without its sign</td></tr>
+<tr><td><code>min</code></td><td>2</td><td>the lesser of two numbers</td></tr>
+<tr><td><code>max</code></td><td>2</td><td>the greater of two numbers</td></tr>
+<tr><td><code>clamp</code></td><td>3</td><td>a number held between two bounds</td></tr>
+<tr><td><code>smooth</code></td><td>1</td><td>smoothstep: an easing from 0 to 1</td></tr>
+<tr><td><code>x</code></td><td>2</td><td>across: where a point is, or the across of a region in a unit</td></tr>
+<tr><td><code>y</code></td><td>2</td><td>down: where a point is, or the down of a region in a unit</td></tr>
+<tr><td><code>d</code></td><td>2</td><td>how far from the middle</td></tr>
+<tr><td><code>a</code></td><td>2</td><td>the angle round the middle</td></tr>
+<tr><td><code>point</code></td><td>3</td><td>a point in a frame, from two numbers</td></tr>
+<tr><td><code>polar</code></td><td>3</td><td>a point in a frame, from a distance and an angle</td></tr>
 <tr><td><code>parent</code></td><td>1</td><td>the region that holds a region</td></tr>
 </tbody></table></div>
 <p class="muted small">The coordinates are <code>x</code> <code>y</code> <code>d</code> <code>a</code> <code>parent</code>.</p>
@@ -96,16 +124,16 @@
 <section>
 <h2 id="weightings">Weightings</h2>
 <div class="tbl"><table>
-<thead><tr><th>Word</th><th>Numbers after the range</th></tr></thead>
+<thead><tr><th>Word</th><th>Numbers after the range</th><th>Is</th></tr></thead>
 <tbody>
-<tr><td><code>flat</code></td><td>0</td></tr>
-<tr><td><code>low</code></td><td>1</td></tr>
-<tr><td><code>high</code></td><td>1</td></tr>
-<tr><td><code>bell</code></td><td>2</td></tr>
-<tr><td><code>peak</code></td><td>2</td></tr>
-<tr><td><code>ends</code></td><td>2</td></tr>
-<tr><td><code>steps</code></td><td>the weight of each step</td></tr>
-<tr><td><code>mix</code></td><td>parts and their weights in pairs</td></tr>
+<tr><td><code>flat</code></td><td>0</td><td>a weighting: every value equally likely</td></tr>
+<tr><td><code>low</code></td><td>1</td><td>a weighting: low values likelier</td></tr>
+<tr><td><code>high</code></td><td>1</td><td>a weighting: high values likelier</td></tr>
+<tr><td><code>bell</code></td><td>2</td><td>a weighting: values near the middle likelier</td></tr>
+<tr><td><code>peak</code></td><td>2</td><td>a weighting: values near a chosen peak likelier</td></tr>
+<tr><td><code>ends</code></td><td>2</td><td>a weighting: values near the ends likelier</td></tr>
+<tr><td><code>steps</code></td><td>the weight of each step</td><td>a weighting: one weight for each step</td></tr>
+<tr><td><code>mix</code></td><td>parts and their weights in pairs</td><td>a weighting: parts drawn by weight</td></tr>
 </tbody></table></div>
 <p class="muted small">Read it in <a href="weightings.html">Weighted ranges</a>.</p></section>
 <section>

@@ -96,6 +96,12 @@
   <li>A release needs an audit commit newer than the last release tag, or <code>--skip audit "reason"</code>, whose reason is written into the changelog entry.</li>
 </ul>
 
+<h2 id="words">Words</h2>
+<ul class="rules">
+  <li><strong>Every word is a row of one registry.</strong> <code>crates/dt-lang/src/words.rs</code> holds a row (<code>Word</code>: the word, its one meaning, its kind) for each keyword, control, choice, function, unit, element, service verb, command, flag and file kind. The decoder matches a keyword by its constant (<code>words::TILE</code>), never by a string, as every diagnostic uses its code by constant; a table that lives elsewhere (a function's argument count, an element's controls, the command line's clap derive) is checked against the registry, and the guide&rsquo;s cheat sheet is written from it.</li>
+  <li><strong>One word, one job.</strong> The vocabulary tests fail on a word used and not registered, a word registered and not used, a word registered twice in a kind, a keyword written as a string in the decoder, a tile-language word that is two kinds of word, and a control name that measures two things. A word that already does two jobs is listed in <code>ledger.kdl</code> as <code>collision:&lt;word&gt;</code>, and the test allows exactly those.</li>
+</ul>
+
 <h2 id="project">The project</h2>
 <ul class="rules">
   <li>Nothing is swallowed and nothing is hidden: your mistakes are shown where you made them, the program's are shown loudly, and no fallback quietly changes what is built. See <a href="errors.html">errors</a>.</li>

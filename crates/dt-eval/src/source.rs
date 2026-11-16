@@ -132,7 +132,7 @@ fn kdl_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), Strin
         let p = e.map_err(list)?.path();
         if p.is_dir() {
             kdl_files(root, &p, out)?;
-        } else if p.extension().is_some_and(|x| x == "dtile")
+        } else if p.extension().is_some_and(|x| x == dt_lang::words::DTILE)
             && let Ok(rel) = p.strip_prefix(root)
         {
             out.push(format!("{LIB}{}", rel.to_string_lossy().replace('\\', "/")));

@@ -8,10 +8,17 @@ mod machine;
 pub(crate) mod syntax;
 mod units;
 mod value;
+#[cfg(test)]
+mod vocabulary;
+
+/// The settings a printer profile takes besides its machine (`machine::KEYS`).
+pub(crate) const PRINTER_KEYS: [&str; 5] =
+    [words::LINE_SETTING, "layer", "overhang", "steepest", "gap"];
 pub use entry::{Bound, Callable, bind_generator, type_late};
 pub use units::point_text;
 pub use value::check_text_in;
 
+use dt_lang::words;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -89,7 +96,7 @@ pub fn uses(name: &str, text: &str) -> Result<Vec<Use>, Vec<DocError>> {
     let out: Vec<Use> = kdl
         .nodes()
         .iter()
-        .filter(|n| n.name().value() == "use")
+        .filter(|n| n.name().value() == words::USE)
         .filter_map(|n| d.use_line(n))
         .collect();
     if d.errors.is_empty() {
@@ -281,7 +288,7 @@ fn refs(node: &KdlNode, names: &HashSet<String>, out: &mut Vec<String>) {
         // a thing passed by name (`shrub leaf=fern-leaf`) or a thing
         // parameter's default (`param leaf fern-leaf`) is a call too
         for e in c.entries() {
-            let by_name = e.name().is_some() || c.name().value() == "param";
+            let by_name = e.name().is_some() || c.name().value() == words::PARAM;
             if by_name
                 && let Some(s) = e.value().as_string()
                 && names.contains(s)
@@ -366,7 +373,7 @@ impl<'k> Decoder<'k> {
             header: None,
         };
         for n in kdl.nodes() {
-            if n.name().value() == "define"
+            if n.name().value() == words::DEFINE
                 && let Some(name) = n.entries().first().and_then(arg_str)
             {
                 self.local_names.insert(name.to_owned());
@@ -374,7 +381,7 @@ impl<'k> Decoder<'k> {
         }
         // `use` lines first: definitions see them.
         for n in kdl.nodes() {
-            if n.name().value() == "use"
+            if n.name().value() == words::USE
                 && let Some(u) = self.use_line(n)
             {
                 self.import(&u);
@@ -388,7 +395,7 @@ impl<'k> Decoder<'k> {
             .nodes()
             .iter()
             .enumerate()
-            .filter(|(_, n)| matches!(n.name().value(), "define" | "tile"))
+            .filter(|(_, n)| matches!(n.name().value(), words::DEFINE | words::TILE))
             .collect();
         let mut order: Vec<usize> = Vec::new();
         let mut state: HashMap<usize, u8> = HashMap::new();
@@ -420,7 +427,7 @@ impl<'k> Decoder<'k> {
             ..Ctx::default()
         };
         for n in kdl.nodes() {
-            if matches!(n.name().value(), "let" | "override")
+            if matches!(n.name().value(), words::LET | words::OVERRIDE)
                 && let Some(c) = self.const_node(n, &mut file_ctx, &[])
             {
                 doc.consts.push(c);
@@ -436,8 +443,8 @@ impl<'k> Decoder<'k> {
             }
         }
         for n in kdl.nodes() {
-            if n.name().value() == "defaults" {
-                let path = vec!["defaults".to_owned()];
+            if n.name().value() == words::DEFAULTS {
+                let path = vec![words::DEFAULTS.to_owned()];
                 doc.defaults.extend(self.entries(n, &defaults_ctx, &path));
             }
         }
@@ -465,17 +472,28 @@ impl<'k> Decoder<'k> {
 
         for n in kdl.nodes() {
             match n.name().value() {
-                "use" | "define" | "tile" | "let" | "override" | "defaults" => {}
-                "seams" => doc.seams = self.seams(n),
+                words::USE
+                | words::DEFINE
+                | words::TILE
+                | words::LET
+                | words::OVERRIDE
+                | words::DEFAULTS => {}
+                words::SEAMS => doc.seams = self.seams(n),
                 // read and checked by `header`
                 crate::header::NODE => {}
-                "printer" => doc.printer = self.printer(n),
+                words::PRINTER => doc.printer = self.printer(n),
                 other => {
                     let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(
                         other,
                         [
-                            "use", "define", "tile", "printer", "let", "defaults", "seams",
+                            words::USE,
+                            words::DEFINE,
+                            words::TILE,
+                            words::PRINTER,
+                            words::LET,
+                            words::DEFAULTS,
+                            words::SEAMS,
                         ],
                     );
                     let span = n.name().span();
@@ -527,7 +545,7 @@ impl<'k> Decoder<'k> {
             refs(n, &self.local_names, &mut called);
             for name in called {
                 if let Some((j, _)) = defs.iter().find(|(_, d)| {
-                    d.name().value() == "define"
+                    d.name().value() == words::DEFINE
                         && d.entries().first().and_then(arg_str) == Some(name.as_str())
                 }) {
                     self.visit(*j, defs, state, order);
@@ -660,11 +678,11 @@ impl<'k> Decoder<'k> {
     }
 
     fn definition(&mut self, node: &KdlNode) -> Option<Definition> {
-        let is_tile = node.name().value() == "tile";
+        let is_tile = node.name().value() == words::TILE;
         // A tile is named by its file: the node is just `tile`.
         let name = if is_tile {
             Spanned {
-                value: "tile".to_owned(),
+                value: words::TILE.to_owned(),
                 span: node.name().span(),
             }
         } else {
@@ -714,9 +732,9 @@ impl<'k> Decoder<'k> {
         for n in body.nodes() {
             let first = n.entries().first().and_then(arg_str).map(str::to_owned);
             match (n.name().value(), first) {
-                ("param", Some(p)) => ctx.params.push(p),
-                ("line", Some(l)) => ctx.lines.push(l),
-                ("region", Some(r)) => ctx.regions.push(r),
+                (words::PARAM, Some(p)) => ctx.params.push(p),
+                (words::LINE, Some(l)) => ctx.lines.push(l),
+                (words::REGION, Some(r)) => ctx.regions.push(r),
                 _ => {}
             }
         }
@@ -727,12 +745,12 @@ impl<'k> Decoder<'k> {
         let taken = self.declare_places(body, &mut ctx);
         for n in body.nodes() {
             match n.name().value() {
-                "let" | "override" => {
+                words::LET | words::OVERRIDE => {
                     if let Some(c) = self.const_node(n, &mut ctx, &taken) {
                         def.consts.push(c);
                     }
                 }
-                "point" => {
+                words::POINT => {
                     if let Some(p) = self.point_node(n, &ctx) {
                         def.points.push(p);
                     }
@@ -745,7 +763,7 @@ impl<'k> Decoder<'k> {
         self.wants.clear();
         self.declare_params(body);
         let step = if is_tile {
-            "tile".to_owned()
+            words::TILE.to_owned()
         } else {
             format!("{} {}", node.name().value(), def.name.value)
         };
@@ -753,8 +771,8 @@ impl<'k> Decoder<'k> {
         let mut params: Vec<&KdlNode> = Vec::new();
         for n in body.nodes() {
             match n.name().value() {
-                "param" if !is_tile => params.push(n),
-                "param" => {
+                words::PARAM if !is_tile => params.push(n),
+                words::PARAM => {
                     self.err(
                         dt_lang::codes::PARAM,
                         n.name().span(),
@@ -766,7 +784,7 @@ impl<'k> Decoder<'k> {
                             .to_owned(),
                     );
                 }
-                "about" => match n.entries().first().and_then(arg_str) {
+                words::ABOUT => match n.entries().first().and_then(arg_str) {
                     Some(t) => def.about = Some(t.trim().to_owned()),
                     None => {
                         self.err(
@@ -777,18 +795,18 @@ impl<'k> Decoder<'k> {
                         );
                     }
                 },
-                "let" | "override" | "point" => {}
-                "line" => {
+                words::LET | words::OVERRIDE | words::POINT => {}
+                words::LINE => {
                     if let Some(l) = self.line(n, &ctx) {
                         def.lines.push(l);
                     }
                 }
-                "region" => {
+                words::REGION => {
                     if let Some(r) = self.region(n, &ctx) {
                         def.regions.push(r);
                     }
                 }
-                "stack" => {
+                words::STACK => {
                     stacks += 1;
                     if stacks > 1 {
                         self.err(
@@ -799,7 +817,7 @@ impl<'k> Decoder<'k> {
                         )
                         .help = Some("put every entry in the first `stack { … }`".to_owned());
                     }
-                    let path = vec![step.clone(), "stack".to_owned()];
+                    let path = vec![step.clone(), words::STACK.to_owned()];
                     def.stack.extend(self.entries(n, &ctx, &path));
                     def.stack_consts.append(&mut self.stack_consts);
                     if let Some(b) = self.stack_base.take() {
@@ -808,7 +826,14 @@ impl<'k> Decoder<'k> {
                 }
                 other => {
                     let words = [
-                        "param", "about", "let", "override", "point", "line", "region", "stack",
+                        words::PARAM,
+                        words::ABOUT,
+                        words::LET,
+                        words::OVERRIDE,
+                        words::POINT,
+                        words::LINE,
+                        words::REGION,
+                        words::STACK,
                     ];
                     let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(other, words);
@@ -820,7 +845,7 @@ impl<'k> Decoder<'k> {
                         span,
                         format!(
                             "unknown node `{other}` in a {}",
-                            if is_tile { "tile" } else { "definition" }
+                            if is_tile { words::TILE } else { "definition" }
                         ),
                         "not about, let, override, point, line, region or stack",
                     )
@@ -938,7 +963,7 @@ impl<'k> Decoder<'k> {
                         }
                     }
                 }
-                "corner" => {
+                words::CORNER => {
                     for e in es.iter().filter(|e| e.name().is_some()) {
                         let corner = e
                             .name()
@@ -1021,7 +1046,7 @@ impl<'k> Decoder<'k> {
                 continue;
             };
             match key.value() {
-                "size" => {
+                words::SIZE => {
                     let parsed = e.value().as_string().and_then(|s| {
                         let (c, r) = s.split_once('x')?;
                         let c: u32 = c.trim().parse().ok()?;
@@ -1056,13 +1081,13 @@ impl<'k> Decoder<'k> {
                         }
                     }
                 }
-                "seed" => match seed_value(e) {
+                words::SEED => match seed_value(e) {
                     Ok(i) => h.seed = Some(i),
                     Err((msg, label)) => {
                         self.err(dt_lang::codes::SEED, value_span(e), msg, label);
                     }
                 },
-                "seams" => match e.value().as_string() {
+                words::SEAMS => match e.value().as_string() {
                     Some("free") => h.seams_free = true,
                     _ => {
                         self.err(
@@ -1078,7 +1103,7 @@ impl<'k> Decoder<'k> {
                 },
                 other => {
                     let first = crate::elements::renamed(other).map(str::to_owned);
-                    let near = did_you_mean(other, ["size", "seed", "seams"]);
+                    let near = did_you_mean(other, [words::SIZE, words::SEED, words::SEAMS]);
                     self.err(
                         dt_lang::codes::UNKNOWN_CONTROL,
                         key.span(),
@@ -1122,7 +1147,7 @@ impl<'k> Decoder<'k> {
         let mut written: Option<SourceSpan> = None;
         for e in n.entries().iter().filter(|e| e.name().is_some()) {
             let key = e.name().map_or("", |k| k.value());
-            if key == "kind" {
+            if key == words::KIND {
                 written = Some(value_span(e));
                 if !e
                     .value()
@@ -1174,7 +1199,7 @@ impl<'k> Decoder<'k> {
             vec![Fill {
                 param: name.value.clone(),
                 control,
-                owner: "param".to_owned(),
+                owner: words::PARAM.to_owned(),
                 name: format!("kind={}", d.kind.word()),
             }]
         } else {
@@ -1256,9 +1281,9 @@ impl<'k> Decoder<'k> {
         let default = match positional.as_slice() {
             [_] => None,
             [_, e] => match control {
-                Some(k) => self.value(e, k, "param", &name.value, ctx),
+                Some(k) => self.value(e, k, words::PARAM, &name.value, ctx),
                 None if kind.is_generator() => {
-                    self.generator_value(e, "param", &name.value, kind, ctx)
+                    self.generator_value(e, words::PARAM, &name.value, kind, ctx)
                 }
                 None => {
                     late = Some(Late::of(e, ctx));
@@ -1309,13 +1334,17 @@ impl<'k> Decoder<'k> {
     /// written `kind=` or a default that names a thing or a layer.
     fn declare_params(&mut self, body: &KdlDocument) {
         self.declared.clear();
-        for n in body.nodes().iter().filter(|n| n.name().value() == "param") {
+        for n in body
+            .nodes()
+            .iter()
+            .filter(|n| n.name().value() == words::PARAM)
+        {
             let positional: Vec<&KdlEntry> =
                 n.entries().iter().filter(|e| e.name().is_none()).collect();
             let Some(name) = positional.first().and_then(|e| e.value().as_string()) else {
                 continue;
             };
-            let declared = if let Some(k) = n.entry("kind") {
+            let declared = if let Some(k) = n.entry(words::KIND) {
                 k.value()
                     .as_string()
                     .and_then(crate::units::Kind::from_word)
@@ -1367,7 +1396,7 @@ impl<'k> Decoder<'k> {
     }
 
     fn line(&mut self, n: &KdlNode, ctx: &Ctx) -> Option<Line> {
-        let name = self.name_arg(n, "line")?;
+        let name = self.name_arg(n, words::LINE)?;
         if Edge::parse(&name.value).is_some() || Corner::parse(&name.value).is_some() {
             self.err(
                 dt_lang::codes::LINE,
@@ -1390,13 +1419,13 @@ impl<'k> Decoder<'k> {
         };
         let mut word_set: [bool; 2] = [false, false];
         let mut set = |this: &mut Self, key: &str, kspan: SourceSpan, e: &KdlEntry| {
-            if key == "curve" || key == "ends" {
-                let k: &'static Control = if key == "curve" {
+            if key == words::CURVE || key == words::ENDS_CONTROL {
+                let k: &'static Control = if key == words::CURVE {
                     &crate::elements::LINE_CURVE_STATIC
                 } else {
                     &crate::elements::LINE_ENDS_STATIC
                 };
-                let i = usize::from(key == "ends");
+                let i = usize::from(key == words::ENDS_CONTROL);
                 if word_set[i] {
                     this.err(
                         dt_lang::codes::DUPLICATE,
@@ -1407,7 +1436,7 @@ impl<'k> Decoder<'k> {
                     return;
                 }
                 word_set[i] = true;
-                if let Some(v) = this.value(e, k, "line", key, ctx)
+                if let Some(v) = this.value(e, k, words::LINE, key, ctx)
                     && let crate::model::Value::Word(w) = v.value
                 {
                     match w.word {
@@ -1419,13 +1448,20 @@ impl<'k> Decoder<'k> {
                 return;
             }
             let slot = match key {
-                "width" => &mut line.width,
-                "wobble" => &mut line.wobble,
+                words::WIDTH => &mut line.width,
+                words::WOBBLE => &mut line.wobble,
                 other => {
                     let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(
                         other,
-                        ["width", "wobble", "closed", "through", "curve", "ends"],
+                        [
+                            words::WIDTH,
+                            words::WOBBLE,
+                            words::CLOSED,
+                            words::THROUGH,
+                            words::CURVE,
+                            words::ENDS_CONTROL,
+                        ],
                     );
                     this.err(
                         dt_lang::codes::UNKNOWN_CONTROL,
@@ -1447,7 +1483,16 @@ impl<'k> Decoder<'k> {
                 return;
             }
             // a wobble is a length that may name a `let`
-            *slot = this.num(e, Axis::Dmm, key == "wobble", false, None, "line", key, ctx);
+            *slot = this.num(
+                e,
+                Axis::Dmm,
+                key == words::WOBBLE,
+                false,
+                None,
+                words::LINE,
+                key,
+                ctx,
+            );
         };
         let mut closed: Option<bool> = None;
         let mut set_closed = |this: &mut Self, kspan: SourceSpan, e: &KdlEntry| {
@@ -1475,7 +1520,7 @@ impl<'k> Decoder<'k> {
         };
         for e in n.entries().iter().skip(1) {
             match e.name() {
-                Some(k) if k.value() == "closed" => set_closed(self, k.span(), e),
+                Some(k) if k.value() == words::CLOSED => set_closed(self, k.span(), e),
                 Some(k) => set(self, k.value(), k.span(), e),
                 None => {
                     self.err(
@@ -1488,20 +1533,20 @@ impl<'k> Decoder<'k> {
             }
         }
         for c in n.iter_children() {
-            if c.name().value() == "through" {
+            if c.name().value() == words::THROUGH {
                 let points = c.entries().iter().filter(|e| e.name().is_none()).count();
                 let mut mark = crate::model::Mark::default();
                 for e in c.entries().iter().filter(|e| e.name().is_some()) {
                     self.through_mark(e, points, &mut mark);
                 }
                 for e in c.entries().iter().filter(|e| e.name().is_none()) {
-                    if let Some(p) = self.point(e, "through", ctx) {
+                    if let Some(p) = self.point(e, words::THROUGH, ctx) {
                         line.through.push(p);
                         line.marks.push(mark.clone());
                     }
                 }
             } else if let [e] = c.entries()
-                && c.name().value() == "closed"
+                && c.name().value() == words::CLOSED
             {
                 set_closed(self, c.name().span(), e);
             } else if let [e] = c.entries() {
@@ -1517,12 +1562,24 @@ impl<'k> Decoder<'k> {
                 .advise(
                     c.name().span(),
                     None,
-                    did_you_mean(other, ["through", "width", "wobble", "curve", "ends"]),
+                    did_you_mean(
+                        other,
+                        [
+                            words::THROUGH,
+                            words::WIDTH,
+                            words::WOBBLE,
+                            words::CURVE,
+                            words::ENDS_CONTROL,
+                        ],
+                    ),
                     || None,
                 );
             }
         }
-        if line.through.len() < 2 && n.iter_children().any(|c| c.name().value() == "through") {
+        if line.through.len() < 2
+            && n.iter_children()
+                .any(|c| c.name().value() == words::THROUGH)
+        {
             self.err(
                 dt_lang::codes::LINE,
                 line.name.span,
@@ -1537,7 +1594,8 @@ impl<'k> Decoder<'k> {
         line.closed = closed.unwrap_or(false);
         if line.closed
             && line.through.len() < 3
-            && n.iter_children().any(|c| c.name().value() == "through")
+            && n.iter_children()
+                .any(|c| c.name().value() == words::THROUGH)
         {
             self.err(
                 dt_lang::codes::LINE,
@@ -1547,7 +1605,11 @@ impl<'k> Decoder<'k> {
             )
             .help = Some("a loop needs a corner to turn: add a point, or open the line".to_owned());
         }
-        if line.through.is_empty() && !n.iter_children().any(|c| c.name().value() == "through") {
+        if line.through.is_empty()
+            && !n
+                .iter_children()
+                .any(|c| c.name().value() == words::THROUGH)
+        {
             self.err(
                 dt_lang::codes::LINE,
                 line.name.span,
@@ -1564,8 +1626,8 @@ impl<'k> Decoder<'k> {
     fn through_mark(&mut self, e: &KdlEntry, points: usize, mark: &mut crate::model::Mark) {
         let Some(key) = e.name() else { return };
         let (kspan, span) = (key.span(), value_span(e));
-        if !matches!(key.value(), "corner" | "heading" | "pull") {
-            let near = did_you_mean(key.value(), ["corner", "heading", "pull"]);
+        if !matches!(key.value(), words::CORNER | words::HEADING | words::PULL) {
+            let near = did_you_mean(key.value(), [words::CORNER, words::HEADING, words::PULL]);
             self.err(
                 dt_lang::codes::UNKNOWN_CONTROL,
                 kspan,
@@ -1594,7 +1656,7 @@ impl<'k> Decoder<'k> {
             return;
         }
         match key.value() {
-            "corner" => match e.value() {
+            words::CORNER => match e.value() {
                 KdlValue::Bool(b) => mark.corner = *b,
                 _ => {
                     self.err(
@@ -1605,7 +1667,7 @@ impl<'k> Decoder<'k> {
                     );
                 }
             },
-            "pull" => {
+            words::PULL => {
                 let v = match e.value() {
                     KdlValue::Float(f) => Some(*f),
                     KdlValue::Integer(i) => Some(*i as f64),
@@ -1683,7 +1745,7 @@ impl<'k> Decoder<'k> {
     }
 
     fn region(&mut self, n: &KdlNode, ctx: &Ctx) -> Option<Region> {
-        let name = self.name_arg(n, "region")?;
+        let name = self.name_arg(n, words::REGION)?;
         let mut region = Region {
             name,
             bounded_by: Vec::new(),
@@ -1694,16 +1756,16 @@ impl<'k> Decoder<'k> {
         };
         for c in n.iter_children() {
             match c.name().value() {
-                "within" => {
+                words::WITHIN => {
                     if let Some(w) = self.within_node(c, ctx) {
                         region.within.push(w);
                     }
                 }
-                "except" => {
+                words::EXCEPT => {
                     for e in c.entries() {
                         let span = value_span(e);
                         match arg_str(e) {
-                            Some(r) if ctx.regions.iter().any(|x| x == r) || r == "tile" => {
+                            Some(r) if ctx.regions.iter().any(|x| x == r) || r == words::TILE => {
                                 region.except.push(Spanned {
                                     value: r.to_owned(),
                                     span,
@@ -1741,7 +1803,7 @@ impl<'k> Decoder<'k> {
                         .help = Some("write `except path`".to_owned());
                     }
                 }
-                "boundedBy" => {
+                words::BOUNDED_BY => {
                     for e in c.entries() {
                         let span = value_span(e);
                         match arg_str(e) {
@@ -1774,9 +1836,9 @@ impl<'k> Decoder<'k> {
                         }
                     }
                 }
-                "fill" => {
+                words::FILL => {
                     for e in c.entries() {
-                        if let Some(p) = self.point(e, "fill", ctx) {
+                        if let Some(p) = self.point(e, words::FILL, ctx) {
                             region.fills.push(p);
                         }
                     }
@@ -1792,7 +1854,10 @@ impl<'k> Decoder<'k> {
                 }
                 other => {
                     let first = crate::elements::renamed(other).map(str::to_owned);
-                    let near = did_you_mean(other, ["boundedBy", "fill", "within", "except"]);
+                    let near = did_you_mean(
+                        other,
+                        [words::BOUNDED_BY, words::FILL, words::WITHIN, words::EXCEPT],
+                    );
                     self.err(
                         dt_lang::codes::UNKNOWN_NODE,
                         c.name().span(),
@@ -1807,7 +1872,7 @@ impl<'k> Decoder<'k> {
         // that only excepts starts from the whole tile
         let shaped = !region.within.is_empty() || !region.except.is_empty();
         let has = |w: &str| n.iter_children().any(|c| c.name().value() == w);
-        if region.bounded_by.is_empty() && !has("boundedBy") && !shaped {
+        if region.bounded_by.is_empty() && !has(words::BOUNDED_BY) && !shaped {
             self.err(
                 dt_lang::codes::REGION,
                 region.name.span,
@@ -1819,7 +1884,7 @@ impl<'k> Decoder<'k> {
                     .to_owned(),
             );
         }
-        if region.fills.is_empty() && !has("fill") && (!shaped || has("boundedBy")) {
+        if region.fills.is_empty() && !has(words::FILL) && (!shaped || has(words::BOUNDED_BY)) {
             self.err(
                 dt_lang::codes::REGION,
                 region.name.span,
@@ -1845,8 +1910,8 @@ impl<'k> Decoder<'k> {
                         .map(|(x, _)| x);
                     mm.as_ref()?;
                 }
-                Some("of") if of.is_none() => {
-                    of = Some(self.place_value(e, ctx, "of")?.0);
+                Some(words::OF) if of.is_none() => {
+                    of = Some(self.place_value(e, ctx, words::OF)?.0);
                 }
                 _ => {
                     self.err(
@@ -2036,9 +2101,9 @@ impl<'k> Decoder<'k> {
     }
 
     fn printer(&mut self, n: &KdlNode) -> Option<Printer> {
-        let name = self.name_arg(n, "printer")?;
+        let name = self.name_arg(n, words::PRINTER)?;
         let mut vals: [Option<Spanned<f64>>; 5] = [None, None, None, None, None];
-        const KEYS: [&str; 5] = ["line", "layer", "overhang", "steepest", "gap"];
+        const KEYS: [&str; 5] = PRINTER_KEYS;
         let mut machine = crate::model::Machine::default();
         let mut set = |this: &mut Self, key: &str, kspan: SourceSpan, e: &KdlEntry| {
             let Some(i) = KEYS.iter().position(|k| *k == key) else {
