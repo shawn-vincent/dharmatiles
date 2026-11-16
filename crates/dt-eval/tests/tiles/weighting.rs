@@ -588,7 +588,9 @@ fn a_lone_rock_is_buried_as_a_scattered_one_is() {
     let lone = |v: &str| {
         hash(&tile(
             "",
-            &format!("        dirt\n        rock at=\"(0.5sq, 0.5sq)\" size=\"9dmm\" buried=\"{v}\""),
+            &format!(
+                "        dirt\n        rock at=\"(0.5sq, 0.5sq)\" size=\"9dmm\" buried=\"{v}\""
+            ),
         ))
     };
     let none = lone("0%");
