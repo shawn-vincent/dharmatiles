@@ -584,6 +584,21 @@ fn how_deep_a_rock_is_buried_takes_a_weighting() {
 }
 
 #[test]
+fn a_lone_rock_is_buried_as_a_scattered_one_is() {
+    let lone = |v: &str| {
+        hash(&tile(
+            "",
+            &format!(
+                "        dirt\n        rock at=\"(0.5sq, 0.5sq)\" size=\"9dmm\" buried=\"{v}\""
+            ),
+        ))
+    };
+    let none = lone("0%");
+    assert_ne!(lone("60%"), none, "a lone rock ignores `buried`");
+    assert_ne!(lone("60%"), lone("30%"), "a lone rock ignores how deep");
+}
+
+#[test]
 fn a_walls_courses_and_bays_take_a_weighting() {
     takes_a_weighting(
         |v| {

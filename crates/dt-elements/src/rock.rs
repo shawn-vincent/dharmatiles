@@ -549,6 +549,19 @@ fn share(d: Draw) -> Result<Draw, LookError> {
 }
 
 impl Rock {
+    /// One drawn item of this rock, `d` mm wide: the one way a lone rock and a
+    /// scatter's rock are made, with the `buried` and `top=` it was written
+    /// with (a buried rock is built at the low tier, as scree is).
+    ///
+    /// # Errors
+    /// As [`make_item`].
+    fn item(&self, rng: &mut Rng, d: f64, clusters: bool) -> Result<Item, LookError> {
+        let mut item = make_item(rng, d, self.mix, clusters, self.buried.hi() > 0.0)?;
+        item.bury = self.buried.clone();
+        item.top.clone_from(&self.top);
+        Ok(item)
+    }
+
     /// From a thing's controls (defaults already filled in).
     ///
     /// # Errors
@@ -982,8 +995,7 @@ impl Element for Single {
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
         let mut rng = Rng::new(ctx.seed.key("rock"));
         let d = self.thing.size_draw(&mut rng);
-        let mut item = make_item(&mut rng, d, self.thing.mix, false, false)?;
-        item.top.clone_from(&self.thing.top);
+        let item = self.thing.item(&mut rng, d, false)?;
         let yaw = rng.uniform(0.0, 360.0);
         let s = scene.frame().scale();
         let sq = scene.frame().square_mm;
@@ -1233,13 +1245,14 @@ impl Thing for Rock {
         at_foot: bool,
     ) -> Result<Drawn, LookError> {
         let d = self.size_draw(rng);
-        let mut item = if at_foot {
-            make_item(rng, d, SCREE_MIX, false, true)?
+        let item = if at_foot {
+            let mut item = make_item(rng, d, SCREE_MIX, false, true)?;
+            item.bury = self.buried.clone();
+            item.top.clone_from(&self.top);
+            item
         } else {
-            make_item(rng, d, self.mix, true, self.buried.hi() > 0.0)?
+            self.item(rng, d, true)?
         };
-        item.bury = self.buried.clone();
-        item.top.clone_from(&self.top);
         Ok(Drawn::new(
             item.r * scene.frame().scale(),
             RockDraw {
