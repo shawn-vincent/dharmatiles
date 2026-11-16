@@ -191,11 +191,33 @@ pub struct Spread {
     pub gap: f64,
     /// See `gap`.
     pub factor: f64,
-    /// `true`: things keep `gap` and `factor` from one another and from
-    /// `avoid`; `false` (a cover): only from `avoid`, so the things may
-    /// touch and overlap and no spacing is checked among them.
-    pub apart: bool,
+    /// How the things fall.
+    pub falls: Falls,
 }
+
+/// How [`scatter`]'s things fall.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Falls {
+    /// Things keep `gap` and `factor` from one another and from `avoid`,
+    /// each dart at random.
+    Apart,
+    /// A cover: things keep `gap` and `factor` only from `avoid`, so they
+    /// may touch and overlap and no spacing is checked among them. The
+    /// darts are not random: dart `n` is the `n`th point of a low-discrepancy
+    /// sequence (shifted at random, from the stream), so any patch of the
+    /// area holds its share of the darts, however many, and none heaps up
+    /// or leaves a wide bare space. The sequence's third coordinate says
+    /// whether the dart is kept, so a thinned cover is as even.
+    Even,
+}
+
+/// The plastic number's powers, 1/ρ, 1/ρ² and 1/ρ³: the steps of a three
+/// dimensional Kronecker sequence (Roberts' R3), the most even of its kind.
+const R3: [f64; 3] = [
+    0.819_172_513_396_164_5,
+    0.671_043_606_703_789_3,
+    0.549_700_477_901_970_3,
+];
 
 /// A thing [`scatter`] placed.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -235,16 +257,39 @@ pub fn scatter(
     let mut order: Vec<usize> = (0..radii.len()).collect();
     order.sort_by(|&a, &b| radii[b].total_cmp(&radii[a]));
     let mut out = Vec::new();
+    // an even fall's shift of the sequence, and how many darts are thrown
+    let shift = (spread.falls == Falls::Even).then(|| [rng.random(), rng.random(), rng.random()]);
+    let mut darts = 0u32;
     for k in order {
         let r = radii[k];
         let inset = spread.inset[0] + spread.inset[1] * r;
         for _ in 0..spread.tries {
-            let (x, y) = if spread.confine {
-                (rng.uniform(inset, w - inset), rng.uniform(inset, h - inset))
-            } else {
-                (rng.uniform(0.0, w), rng.uniform(0.0, h))
+            darts += 1;
+            let (x, y, keep) = match shift {
+                Some(shift) => {
+                    let n = f64::from(darts);
+                    let u = |c: usize| (shift[c] + n * R3[c]).fract();
+                    let (lo, hi) = if spread.confine {
+                        ([inset, inset], [w - inset, h - inset])
+                    } else {
+                        ([0.0, 0.0], [w, h])
+                    };
+                    (
+                        lo[0] + u(0) * (hi[0] - lo[0]),
+                        lo[1] + u(1) * (hi[1] - lo[1]),
+                        u(2),
+                    )
+                }
+                None => {
+                    let (x, y) = if spread.confine {
+                        (rng.uniform(inset, w - inset), rng.uniform(inset, h - inset))
+                    } else {
+                        (rng.uniform(0.0, w), rng.uniform(0.0, h))
+                    };
+                    (x, y, rng.random())
+                }
             };
-            if rng.random() > density(x, y) {
+            if keep > density(x, y) {
                 continue;
             }
             if x.min(w - x).min(y).min(h - y) < inset {
@@ -256,7 +301,7 @@ pub fn scatter(
             if hash.any_near(x, y, reach, clash) {
                 continue;
             }
-            if spread.apart {
+            if spread.falls == Falls::Apart {
                 hash.insert(x, y, r);
             }
             out.push(Placed {
@@ -388,7 +433,7 @@ mod tests {
             confine: true,
             gap: 0.25,
             factor: 1.0,
-            apart: true,
+            falls: Falls::Apart,
         };
         let placed = scatter(
             &f,
