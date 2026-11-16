@@ -371,6 +371,11 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
             run(cargo().current_dir(root).args(["test", "-q", "--release", "-p", "dt-lang"]))
         }),
     ));
+    steps.push((
+        "the ledger: a change only shrinks ledger.kdl, except an audit commit".into(),
+        budget::step::LEDGER,
+        Box::new(|| crate::ledger::ratchet(root)),
+    ));
     if p.rust {
         steps.push((
             "cargo fmt --check".into(),

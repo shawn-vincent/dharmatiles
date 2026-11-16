@@ -23,6 +23,8 @@ pub const COLD_BUILD: f64 = 300.0;
 /// ([`build`]), so the steps after it time only their own work.
 pub mod step {
     pub const SCANS: f64 = 15.0;
+    /// `ledger.kdl` read at every commit since the merge-base: a few git calls.
+    pub const LEDGER: f64 = 10.0;
     pub const FMT: f64 = 10.0;
     pub const CLIPPY: f64 = 30.0;
     pub const TESTS: f64 = 60.0;

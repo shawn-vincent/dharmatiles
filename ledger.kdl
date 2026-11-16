@@ -1,0 +1,8 @@
+violation "audit:check-build-n-plus-1" principle="check-equals-build" found="94927dcd" note="a part with `param n 3` and `scatter count=\"n + 1\"` passes check with a false 'need elements not built yet'; build refuses it: unknown name n"
+violation "audit:top-level-defaults-ignored" principle="check-equals-build" found="94927dcd" note="`defaults` in your own tile is silently ignored: check says ok and --explain shows only the library's default applied"
+violation "audit:two-expression-languages" principle="orthogonality" found="94927dcd" note="`rock size=\"sin(30deg) * 5dmm\"` says unknown function sin and lists weightings; sin exists only in heights"
+violation "audit:layer-unit-collides-kind" principle="one-job" found="94927dcd" note="`layer` is already a unit, so a param cannot be called layer, and the new layer kind collides with it"
+violation "audit:three-colour-types" principle="one-way" found="94927dcd" note="Colour in dt-doc, a hand-written mirror ColourWord in dt-service, and Mode in the map format: one two-valued concept, three types and spellings"
+violation "audit:element-knowledge-in-printing" principle="one-way" found="94927dcd" note="dt-print/src/plates/mod.rs matches element names to materials by hand: element knowledge outside the schema"
+violation "audit:undo-after-make-hard-deletes" principle="one-job" found="94927dcd" note="the Undo after Make or Copy is a hard delete (places.js), where delete is always the Trash"
+violation "audit:phone-messages-panel-overlap" principle="completeness" found="94927dcd" note="on a phone the messages panel's text overlaps its picture and the Copy button is clipped"
