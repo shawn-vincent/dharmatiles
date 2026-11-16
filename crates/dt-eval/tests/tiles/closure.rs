@@ -296,7 +296,7 @@ fn geometry(d: &Diag) -> bool {
 }
 
 /// What the build did with a document `check` accepted.
-enum Built {
+enum Outcome {
     /// It was not built (the build is heavy, and this is the warm test).
     Skipped,
     /// It built.
@@ -307,10 +307,10 @@ enum Built {
 
 /// `check` and `build` of a document name the same mistakes.  A document `check` accepts is built only when
 /// `build_ok` says to (the build is heavy); one it refuses is refused by the build at the read, which is cheap.
-fn agree(label: &str, src: &Memory, build_ok: bool) -> (Vec<Diag>, Built) {
+fn agree(label: &str, src: &Memory, build_ok: bool) -> (Vec<Diag>, Outcome) {
     let seen = found(src);
     if seen.is_empty() && !build_ok {
-        return (seen, Built::Skipped);
+        return (seen, Outcome::Skipped);
     }
     match memo::build(src, "t.dtile", &Options::default()) {
         Ok(_) => {
@@ -318,16 +318,16 @@ fn agree(label: &str, src: &Memory, build_ok: bool) -> (Vec<Diag>, Built) {
                 seen.is_empty(),
                 "{label}: check refuses what build accepts: {seen:#?}"
             );
-            (seen, Built::Built)
+            (seen, Outcome::Built)
         }
-        Err(errs) if seen.is_empty() && errs.iter().all(geometry) => (seen, Built::Geometry),
+        Err(errs) if seen.is_empty() && errs.iter().all(geometry) => (seen, Outcome::Geometry),
         Err(errs) => {
             let mut a: Vec<_> = seen.iter().map(mark).collect();
             let mut b: Vec<_> = errs.iter().map(mark).collect();
             a.sort_unstable();
             b.sort_unstable();
             assert_eq!(a, b, "{label}: check and build name different mistakes");
-            (seen, Built::Skipped)
+            (seen, Outcome::Skipped)
         }
     }
 }
@@ -337,8 +337,10 @@ fn check_equals_build_on_the_torture_set() {
     // a torture tile builds (the memo panics on one that does not), so `check` must find nothing in it
     for path in golden::TILES {
         memo::built(path);
-        let c = check(&dt_eval::Library, path, &Options::default())
-            .unwrap_or_else(|e| panic!("{path}: build accepts it and check refuses: {e:#?}"));
+        let c = match check(&dt_eval::Library, path, &Options::default()) {
+            Ok(c) => c,
+            Err(e) => panic!("{path}: build accepts it and check refuses: {e:#?}"),
+        };
         assert!(
             c.pending().is_empty(),
             "{path}: build accepts it and check sets something aside"
@@ -365,7 +367,7 @@ fn judge(c: &Cell, build_ok: bool) -> bool {
     let (seen, built) = agree(&label, &src, build_ok);
     match rule(c.kind, c.form) {
         Rule::Works => {
-            if matches!(built, Built::Geometry) {
+            if matches!(built, Outcome::Geometry) {
                 return true;
             }
             !seen.is_empty()
