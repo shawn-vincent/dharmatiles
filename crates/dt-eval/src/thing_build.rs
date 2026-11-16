@@ -83,7 +83,11 @@ pub fn subject(
 ) -> Result<Subject, Refused> {
     let units = opts.units();
     let own = doc::read_with(sources, path, units).map_err(Refused::Mistakes)?;
-    let hash = sources.read(path).map_or(0, |t| doc::text_hash(&t));
+    // the document was read just now: a read that fails here is a failure, said as one
+    let text = sources
+        .read(path)
+        .map_err(|e| Refused::Mistakes(vec![Diag::plain(dt_lang::codes::BUILD, e)]))?;
+    let hash = doc::text_hash(&text);
     let (element, settings, at) = match which {
         Which::Define(name) => {
             let Some(def) = own.file.doc.definition(name) else {
@@ -119,7 +123,12 @@ pub fn subject(
             };
             (
                 e.what.value.clone(),
-                alone(&e.what.value, controls_of(&e.controls), e.top.as_ref(), &e.table),
+                alone(
+                    &e.what.value,
+                    controls_of(&e.controls),
+                    e.top.as_ref(),
+                    &e.table,
+                ),
                 (e.src.clone(), e.what.span),
             )
         }
@@ -133,7 +142,12 @@ pub fn subject(
             match child {
                 None => (
                     e.what.value.clone(),
-                    alone(&e.what.value, controls_of(&e.controls), e.top.as_ref(), &e.table),
+                    alone(
+                        &e.what.value,
+                        controls_of(&e.controls),
+                        e.top.as_ref(),
+                        &e.table,
+                    ),
                     (e.src.clone(), e.what.span),
                 ),
                 Some(i) => {
@@ -142,7 +156,12 @@ pub fn subject(
                     };
                     (
                         c.what.value.clone(),
-                        alone(&c.what.value, controls_of(&c.controls), c.top.as_ref(), &c.table),
+                        alone(
+                            &c.what.value,
+                            controls_of(&c.controls),
+                            c.top.as_ref(),
+                            &c.table,
+                        ),
                         (e.src.clone(), c.what.span),
                     )
                 }
@@ -225,9 +244,12 @@ fn alone(
         bottom: dt_geom::Iv::point(0.0),
         k: 0,
     };
-    let v = eval
-        .iv(expr, &vars, 0)
-        .map_err(|f| format!("this tree's `top` cannot be worked out alone: {}", f.message))?;
+    let v = eval.iv(expr, &vars, 0).map_err(|f| {
+        format!(
+            "this tree's `top` cannot be worked out alone: {}",
+            f.message
+        )
+    })?;
     let height = if (v.iv.hi - v.iv.lo).abs() < 1e-9 {
         Value::Number(v.iv.lo)
     } else {

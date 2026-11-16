@@ -75,10 +75,10 @@ use dt_service::roots::{Role, Root, RootKind};
 use dt_service::scene_read::{SceneHost, SceneMemo};
 use dt_service::storage::{MemStorage, Storage};
 use dt_service::target_calls::{self, SET_TARGET, TargetHost, TargetReq, TargetRes};
+use dt_service::thing_calls::{self, BUILD_THING, ThingReq, ThingRes};
 use dt_service::tier_calls::{self, TIERS_WANT, TierResultReq, TiersWantReq, TiersWantRes};
 use dt_service::tiers::BookOp;
 use dt_service::tile::{Slot, tile_id};
-use dt_service::thing_calls::{self, BUILD_THING, ThingReq, ThingRes};
 use dt_service::tile_calls::{self, CHECK, CheckHost, TextReq};
 use dt_service::tile_host::{TileHost, TileRef};
 use dt_value::LockExt;
@@ -1331,8 +1331,17 @@ fn inventory_record(ctx: &Ctx, req: InventoryRecordReq) -> Result<InventoryWrote
 }
 
 fn build_thing(ctx: &Ctx, req: ThingReq) -> Result<ThingRes, Refusal> {
-    let src = Doc { text: &req.text };
-    thing_calls::build_thing(ctx, &src, MAIN, &req)
+    // the thing is read from the file the text is of: the document (`tile.dtile`), or a part it uses, laid over the library
+    match req.file.as_deref() {
+        None => thing_calls::build_thing(ctx, &Doc { text: &req.text }, MAIN, &req),
+        Some(file) => {
+            let src = dt_service::read_calls::Overlay {
+                files: BTreeMap::from([(file.to_owned(), req.text.clone())]),
+                base: &Lib,
+            };
+            thing_calls::build_thing(ctx, &src, file, &req)
+        }
+    }
 }
 
 fn inventory_gone(ctx: &Ctx, req: InventoryGoneReq) -> Result<InventoryWrote, Refusal> {

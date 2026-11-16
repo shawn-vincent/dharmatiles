@@ -14,5 +14,7 @@ pub(super) fn build_thing(shared: &Shared, t: &TileRef, v: ThingReq) -> Out<Thin
     // the thing is read from the file the text is of: the tile's own, or a part it uses
     let file = t.file(v.file.as_deref())?;
     let src = Overlay(BTreeMap::from([(file.clone(), v.text.clone())]));
-    super::api::out(dt_service::thing_calls::build_thing(shared, &src, &file, &v))
+    super::api::out(dt_service::thing_calls::build_thing(
+        shared, &src, &file, &v,
+    ))
 }

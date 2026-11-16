@@ -32,7 +32,7 @@ export function ThingPane({ m }) {
       </div>
       ${m.problem.value ? html`<p class="thing-problem" role="alert">${m.problem.value}</p>` : null}
       ${d ? html`<${Extent} e=${d.extent} size=${d.draws[0].size} triangles=${d.draws[0].triangles} />` : null}
-      ${d && !d.draws[0].checked ? html`<p class="thing-draft" role="status">Draft · not yet checked: the gate's overhang paint comes when the full draw lands.</p>` : null}
+      ${d && !d.draws[0].checked ? html`<p class="thing-draft" role="status">Draft · not yet checked: the gate's overhang paint comes with the full draw. <button type="button" class="linkish" disabled=${m.busy.value} onClick=${() => m.drawFull()}>Draw in full</button></p>` : null}
       ${d && d.shown.length ? html`<dl class="thing-controls" aria-label="Controls as built">${d.shown.map((/** @type {import('../api').ThingControl} */ c) => html`<div key=${c.control}><dt>${c.control}</dt><dd>${c.text}<span class="from"> from ${c.from}</span></dd></div>`)}</dl>` : null}
       <div class="seg thing-looks" role="group" aria-label="Look from">${VIEWS.filter((v) => LOOKS.includes(v[0])).map((v) => html`<button type="button" key=${v[0]} aria-pressed=${String(look === v[0])} onClick=${() => m.describe(JSON.stringify(t.which), v[0])}>${v[1]}</button>`)}</div>
     </div>

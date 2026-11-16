@@ -920,7 +920,8 @@ body:not(.map) #mpills { display: none; }
 .thing-strip .seed-card { flex: 0 0 104px; }
 .thing-more { flex: none; display: flex; flex-direction: column; gap: 6px; justify-content: center; }
 @media (max-width: 560px) {
-  .thing-card { max-height: calc(100% - 150px); width: calc(100% - 20px); }
+  .thing-card { top: 52px; max-height: calc(100% - 52px - 132px); width: calc(100% - 20px); }
+  .thing-controls, .thing-looks, .thing-draft { display: none; }
   .thing-strip .seed-card { flex-basis: 84px; }
   .thing-extent > div, .thing-controls > div { grid-template-columns: 5.5em minmax(0, 1fr); }
 }

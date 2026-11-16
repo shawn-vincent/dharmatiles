@@ -44,11 +44,16 @@ export const drawn = signal(/** @type {Drawn | null} */ (null));
 export const pics = signal(/** @type {Pic[]} */ ([]));
 /** Why there is no thing to show (a mistake in the source, a layer): the program's words. */
 export const problem = signal(/** @type {string | null} */ (null));
+/** The view shows a draw the gate has not checked yet (a low one): the pane offers to draw it in full. */
+export const later = signal(false);
 /** A draw is being made. */
 export const busy = signal(false);
 
-/** The thing the cursor or the selection is on (null: none). */
-export const target = computed(() => {
+/** The thing the last cursor or selection was on, kept while the thing view is the view: typing moves the cursor out of the nodes the last check read, and the view must not drop the thing under the edit. */
+const held = signal(/** @type {import('../thing-model.js').Target | null} */ (null));
+
+/** The thing the cursor or the selection is on now (null: none). */
+const on = computed(() => {
   const t = tile();
   const d = doc.get(), v = view.get();
   const it = itemOf(v.sel) ?? null;
@@ -63,6 +68,9 @@ export const target = computed(() => {
     caret: caret.value,
   });
 });
+
+/** The thing the page is on: the one under the cursor or the selection, or, with the thing view the view, the one it was last on. */
+export const target = computed(() => on.value ?? (shown.value ? held.value : null));
 
 /** The key of the thing, so a new one starts from the first seed and the first page: what is drawn is a different thing. */
 const keyOf = (/** @type {import('../thing-model.js').Target | null} */ t) => (t ? JSON.stringify(t.which) : '');
@@ -115,6 +123,10 @@ function payloadOf(d, e) {
 }
 
 let generation = 0;
+/** How long a low draw may take for the gate's draw to follow it at once, ms. */
+const QUICK_MS = 400;
+/** Draws the view in full: made by the last run, so it is of that run's source and seed (a newer run replaces it). */
+let fullNow = /** @type {(() => Promise<void>) | null} */ (null);
 /** @type {ReturnType<typeof setTimeout> | null} */
 let timer = null;
 
@@ -133,6 +145,7 @@ function wordsOf(r) {
  */
 async function run(t, at, pageAt) {
   const mine = ++generation;
+  fullNow = null;
   const tl = tile(), d = doc.get();
   if (!tl || d.text == null) return;
   const base = { text: d.text, file: d.file === tl.path ? undefined : (d.file ?? undefined), which: t.which };
@@ -154,18 +167,34 @@ async function run(t, at, pageAt) {
     v.setMesh(payloadOf(res.draws[0], res.extent));
     drawOutlines(res.extent);
   };
+  /** The view again at the gate's tier, replacing the low one only if the source and the seed are still the ones drawn. */
+  const full = async () => {
+    busy.value = true;
+    try {
+      const res = await ask([at], 'full');
+      if (res) { show(res); later.value = false; }
+    } catch (e) {
+      showError('Could not draw the thing in full', e);
+    } finally {
+      if (mine === generation) busy.value = false;
+    }
+  };
   try {
-    // quick first, as a tile's draft is: the view and the strip at a low tier, then the view again at the gate's (a tree takes
-    // tens of seconds there, a rock a fraction of one), replaced only if the source and the seed are still the ones drawn
+    // quick first, as a tile's draft is: the view and the strip at a low tier.  A thing that draws quickly is then drawn at the
+    // gate's tier at once; one that does not (a tree takes tens of seconds there, a rock a fraction of one) waits to be asked
+    // (`drawFull`), so the next edit is not made to wait behind it
+    const began = performance.now();
     const low = await ask([at], 'low');
     if (!low) return;
+    const quick = performance.now() - began < QUICK_MS;
     show(low);
+    later.value = true;
+    fullNow = full;
     const many = await ask(stripSeeds(pageAt), 'low');
     if (!many) return;
     const box = frameOf(many.extent.most);
     pics.value = many.draws.map((x) => ({ seed: x.seed, triangles: x.triangles, url: drawMesh(bytesOf(x.mesh), box) }));
-    const full = await ask([at], 'full');
-    if (full) show(full);
+    if (quick) await full();
   } catch (e) {
     showError('Could not draw the thing', e);
   } finally {
@@ -173,10 +202,22 @@ async function run(t, at, pageAt) {
   }
 }
 
+/** Draw the thing in view at the gate's tier now (the draft's button). */
+export function drawFull() {
+  if (fullNow) void fullNow();
+}
+
 /** Wire this part of the page (once, at load). */
 export function init() {
   const prior = texts.cb.onCaret;
   texts.cb.onCaret = () => { prior?.(); caret.value = texts.selectionStart; };
+  effect(() => { const t = on.value; if (t) untracked(() => { held.value = t; }); });
+  // another tile starts with its own tile's view
+  let tileWas = '';
+  effect(() => {
+    const id = tile()?.id ?? '';
+    untracked(() => { if (id !== tileWas) { tileWas = id; held.value = null; shown.value = false; } });
+  });
   // a new thing starts from the first seed, the first page and the first of a scatter's things
   let was = '';
   effect(() => {
@@ -208,5 +249,5 @@ export function init() {
     if (!on || !t) return;
     timer = setTimeout(() => { void run(t, at, pageAt); }, 150);
   });
-  render(html`<${ThingPane} m=${{ target, shown, seed, page, child, drawn, pics, problem, busy, describe, lookFrom, STRIP }} />`, $('thing-panel'));
+  render(html`<${ThingPane} m=${{ target, shown, seed, page, child, drawn, pics, problem, busy, later, drawFull, describe, lookFrom, STRIP }} />`, $('thing-panel'));
 }

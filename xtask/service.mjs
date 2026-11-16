@@ -194,6 +194,22 @@ try {
 }
 if (!refused.includes('no such call')) throw new Error(`an unknown verb was not refused: ${refused}`);
 lap('folders, verbs');
+// buildThing: a rock define drawn alone at seeds 1 to 4 is the program's, byte for byte.  The golden is what the program's own test
+// (crates/dt-service/tests/no_server_verbs.rs) holds its draws to, so the worker's answer is held to the program's through it:
+// the SHA-256 of each mesh payload, the triangles and the extent.
+const thingGolden = JSON.parse(readFileSync(new URL('../crates/dt-service/tests/thing-parity.json', import.meta.url), 'utf8'));
+const drawn = call('buildThing', path, { text: thingGolden.text, which: { kind: 'define', name: thingGolden.name }, seeds: thingGolden.seeds });
+const thingNow = { triangles: drawn.draws.map((d) => d.triangles), meshSha256: drawn.draws.map((d) => sha(Buffer.from(d.mesh, 'base64'))), extent: drawn.extent };
+for (const k of ['triangles', 'meshSha256', 'extent']) {
+  if (JSON.stringify(thingNow[k]) !== JSON.stringify(thingGolden[k])) throw new Error(`buildThing: the worker's ${k} are not the program's\n  worker:  ${JSON.stringify(thingNow[k])}\n  program: ${JSON.stringify(thingGolden[k])}`);
+}
+// a layer is refused, typed; a thing that is not there is not found
+for (const [which, status] of [[{ kind: 'define', name: 'nope' }, 404]]) {
+  let said = '';
+  try { call('buildThing', path, { text: thingGolden.text, which, seeds: [1] }); } catch (e) { said = String(e.message ?? e); }
+  if (JSON.parse(said).status !== status) throw new Error(`buildThing of ${JSON.stringify(which)} was not a ${status}: ${said.slice(0, 200)}`);
+}
+lap('buildThing');
 console.log(
   JSON.stringify({
     tile,

@@ -1,0 +1,44 @@
+{
+  "text": "dharmatiles version=\"1.0.0\"\n\ndefine bluff {\n    stack {\n        rock size=\"6dmm .. 10dmm\"\n    }\n}\n\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n    }\n}\n",
+  "name": "bluff",
+  "seeds": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "triangles": [
+    4892,
+    8758,
+    7358,
+    5712
+  ],
+  "meshSha256": [
+    "17175cb6938d02962e18f2c7fa4f44fe7a090ee3435b1cc09848dd137e2dce27",
+    "30d41d19b101dc6a1a1733a03e764c621251cba9ab9c301068c269a53b3f1aba",
+    "9845ee0b496e4fc13319482abf9f2ad21f93d61d90ea9b857f24f6cf03ac8f08",
+    "37743d59f5253c57f815a25d4abf2b5ad8f5dbf876d5465212aa64ae58a11304"
+  ],
+  "extent": {
+    "least": {
+      "x": 6.0,
+      "y": 6.0,
+      "z": 2.5
+    },
+    "most": {
+      "x": 20.4,
+      "y": 20.4,
+      "z": 9.5
+    },
+    "leastDmm": {
+      "x": 6.0,
+      "y": 6.0,
+      "z": 2.5
+    },
+    "mostDmm": {
+      "x": 20.4,
+      "y": 20.4,
+      "z": 9.5
+    }
+  }
+}
