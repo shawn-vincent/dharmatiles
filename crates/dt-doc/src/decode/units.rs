@@ -5,6 +5,7 @@
 //! millimetres, angles in degrees, points in squares from the south-west
 //! corner); the language's side of the boundary is here.
 
+use dt_lang::words;
 use miette::SourceSpan;
 
 use super::{Ctx, Decoder, sub_span};
@@ -364,7 +365,7 @@ impl Decoder<'_> {
             return None;
         };
         if args.len() != 3 {
-            let help = if name == "point" {
+            let help = if name == words::POINT {
                 "`point($tile, 50%, 2sq)`: the frame, then across and down"
             } else {
                 "`polar($tile, 40%, 90deg)`: the frame, how far out, the angle round"
@@ -379,7 +380,7 @@ impl Decoder<'_> {
             return None;
         }
         let what = format!("`{name}`");
-        if name == "point" {
+        if name == words::POINT {
             let x = self.length_half(&args[1], span, ctx, &what)?;
             let y = self.length_half(&args[2], span, ctx, &what)?;
             return self.framed_xy(&args[0], x, y, span, size);
@@ -526,7 +527,7 @@ pub fn point_text(
     units: crate::units::Units,
 ) -> Result<Point, String> {
     let known = crate::known::Known::new().with_units(units);
-    let src = std::sync::Arc::new(miette::NamedSource::new("point", text.to_owned()));
+    let src = std::sync::Arc::new(miette::NamedSource::new(words::POINT, text.to_owned()));
     let mut d = Decoder::new(src, &known);
     let ctx = Ctx {
         size: Some(size),

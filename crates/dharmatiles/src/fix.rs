@@ -168,7 +168,7 @@ fn gather(args: &[String]) -> Result<Vec<String>, String> {
             }
             if p.is_dir() {
                 walk(&p, out)?;
-            } else if p.extension().is_some_and(|x| x == "dtile") {
+            } else if p.extension().is_some_and(|x| x == dt_lang::words::DTILE) {
                 out.push(p);
             }
         }

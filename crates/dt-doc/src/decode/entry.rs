@@ -1,6 +1,7 @@
 //! Stack entries: elements, definition calls and scatters, with their place
 //! words and controls in either form (on the line, or child lines).
 
+use dt_lang::words;
 use std::sync::Arc;
 
 use kdl::{KdlEntry, KdlNode, KdlValue};
@@ -45,7 +46,7 @@ enum Target {
 
 /// A `let` or `override` node.
 pub(super) fn is_const_node(n: &KdlNode) -> bool {
-    matches!(n.name().value(), "let" | "override")
+    matches!(n.name().value(), words::LET | words::OVERRIDE)
 }
 
 impl Decoder<'_> {
@@ -352,7 +353,7 @@ impl Decoder<'_> {
             // be typed at the call (the place words are the entry's own)
             let written = matches!(entry.callee, Callee::Param(_))
                 && PlaceWord::parse(&key.value).is_none()
-                && !matches!(key.value.as_str(), "seed" | "id" | "weight");
+                && !matches!(key.value.as_str(), words::SEED | words::ID | words::WEIGHT);
             if written || !matches!(target, Target::None) {
                 let args: Vec<&KdlEntry> =
                     c.entries().iter().filter(|e| e.name().is_none()).collect();
@@ -393,7 +394,7 @@ impl Decoder<'_> {
                     ctx,
                 );
             } else if PlaceWord::parse(&key.value).is_some()
-                || matches!(key.value.as_str(), "seed" | "id" | "weight")
+                || matches!(key.value.as_str(), words::SEED | words::ID | words::WEIGHT)
             {
                 match c.entries() {
                     [e] if e.name().is_none() && c.children().is_none() => {
@@ -535,7 +536,7 @@ impl Decoder<'_> {
             );
         };
         match word {
-            "seed" => {
+            words::SEED => {
                 if entry.place.seed.is_some() {
                     dup(self);
                 } else {
@@ -548,7 +549,7 @@ impl Decoder<'_> {
                 }
                 return true;
             }
-            "id" => {
+            words::ID => {
                 match e.value().as_string() {
                     Some(s)
                         if s.is_empty()
@@ -578,7 +579,7 @@ impl Decoder<'_> {
                 }
                 return true;
             }
-            "weight" => {
+            words::WEIGHT => {
                 if parent != Parent::Scatter {
                     self.err(
                         dt_lang::codes::WEIGHT,
@@ -983,7 +984,7 @@ impl Decoder<'_> {
             Some(format!(
                 "a {owner} is one {owner}; how many and how spread is a scatter's job: `scatter {name}=… {{ {owner} }}`"
             ))
-        } else if owner == "tree" && (name == "size" || name == "height") {
+        } else if owner == "tree" && (name == words::SIZE || name == "height") {
             Some("a tree's height is its `top`, mm above zero like every top, and `bottom` is the ground at its foot: `tree size=40` is `tree top=\"bottom + 40\"`".to_owned())
         } else if owner == "flower" && name == "radius" {
             Some("a flower's measure is its `size`, the width across the petals (twice the old radius): write `flower size=…`".to_owned())
@@ -1009,7 +1010,7 @@ impl Decoder<'_> {
                     }
                 }
             }
-            names.push("seed");
+            names.push(words::SEED);
             near = did_you_mean(name, names.iter().copied()).map(str::to_owned);
             takes = Some(format!("`{owner}` takes: {}", names.join(", ")));
             None

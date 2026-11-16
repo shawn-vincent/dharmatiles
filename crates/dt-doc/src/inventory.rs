@@ -31,7 +31,7 @@ use crate::error::{DocError, Src};
 use crate::schema::did_you_mean;
 
 /// The file extension of an inventory.
-pub const EXT: &str = "dinv";
+pub const EXT: &str = dt_lang::words::DINV;
 
 /// The file's name in My tiles.
 pub const FILE: &str = "inventory.dinv";

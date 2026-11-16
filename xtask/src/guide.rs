@@ -541,6 +541,12 @@ fn cheat_sheet(
         BODY_SETS, COORD_CALLS, COORDINATES, FUNCTIONS, LAND_SLOPE_DEG, POINT_NAMES, REGION_NAMES,
         REGION_SETS, TREE_SETS, UNITS, WATER_SETTLE_MM, WEIGHTINGS,
     };
+    // what a function, weighting or coordinate means: the registry's row, never a sentence of this file's own
+    let meaning = |word: &str| -> Result<&'static str, String> {
+        dt_lang::words::find(dt_lang::words::WordKind::Function, word)
+            .map(|w| w.meaning)
+            .ok_or_else(|| format!("{word} is in a word table and not in dt-lang/src/words.rs"))
+    };
     let more = |stem: &str| -> String {
         if order.iter().any(|s| s == stem) {
             format!(
@@ -558,15 +564,29 @@ fn cheat_sheet(
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n\
 <title>Cheat sheet</title>\n<link rel=\"stylesheet\" href=\"../assets/site.css\">\n<script src=\"../assets/site.js\"></script>\n</head>\n<body>\n{nav}\n\
 <div class=\"wrap doc-layout\">\n<header class=\"hero\">\n  <div class=\"eyebrow\">The tile language &middot; guide</div>\n  <h1>Cheat sheet</h1>\n  \
-<p class=\"lede\">Every word of the language on one page: the units, functions, weightings, coordinates and <code>$</code> names, the library&rsquo;s heights and the seam words. Nothing here is typed: <code>cargo xtask docs</code> writes it from the program&rsquo;s own word tables, so it cannot say what the program does not.</p>\n</header>\n\
+<p class=\"lede\">Every word of the language on one page: the keywords, units, functions, weightings, coordinates and <code>$</code> names, the library&rsquo;s heights and the seam words. Nothing here is typed: <code>cargo xtask docs</code> writes it from the program&rsquo;s own word registry and tables, so it cannot say what the program does not.</p>\n</header>\n\
 <div class=\"margin\">\n<nav class=\"toc\" aria-label=\"On this page\"><details open><summary>On this page</summary><ol>\n\
-<li><a href=\"#units\">Units</a></li>\n<li><a href=\"#functions\">Functions</a></li>\n<li><a href=\"#weightings\">Weightings</a></li>\n<li><a href=\"#dollar\"><code>$</code> names</a></li>\n<li><a href=\"#heights\">The library&rsquo;s heights</a></li>\n<li><a href=\"#seams\">Seam words</a></li>\n<li><a href=\"#numbers\">Numbers</a></li>\n</ol>\n\
+<li><a href=\"#keywords\">Keywords</a></li>\n<li><a href=\"#units\">Units</a></li>\n<li><a href=\"#functions\">Functions</a></li>\n<li><a href=\"#weightings\">Weightings</a></li>\n<li><a href=\"#dollar\"><code>$</code> names</a></li>\n<li><a href=\"#heights\">The library&rsquo;s heights</a></li>\n<li><a href=\"#seams\">Seam words</a></li>\n<li><a href=\"#numbers\">Numbers</a></li>\n</ol>\n\
 <p class=\"toc-h\">The guide</p>\n<ol class=\"guide-pages\">\n<li><a href=\"../language.html\">The map</a></li>\n"
     );
     for stem in order {
         let _ = writeln!(s, "<li><a href=\"{stem}.html\">{}</a></li>", titles[stem]);
     }
     s.push_str("<li><a href=\"cheat-sheet.html\" aria-current=\"page\">Cheat sheet</a></li>\n</ol>\n</details></nav>\n</div>\n<article class=\"doc guide cheat\">\n");
+
+    // keywords: the registry's rows
+    s.push_str("<section>\n<h2 id=\"keywords\">Keywords</h2>\n<div class=\"tbl\"><table>\n<thead><tr><th>Word</th><th>Is</th></tr></thead>\n<tbody>\n");
+    for w in dt_lang::words::KEYWORDS {
+        let _ = writeln!(
+            s,
+            "<tr><td><code>{}</code></td><td>{}</td></tr>",
+            w.word,
+            esc(w.meaning)
+        );
+    }
+    s.push_str("</tbody></table></div>\n");
+    s.push_str(&more("syntax"));
+    s.push_str("</section>\n");
 
     // units
     s.push_str("<section>\n<h2 id=\"units\">Units</h2>\n<div class=\"tbl\"><table>\n<thead><tr><th>Unit</th><th>Is</th></tr></thead>\n<tbody>\n");
@@ -584,22 +604,18 @@ fn cheat_sheet(
     s.push_str("</section>\n");
 
     // functions
-    s.push_str("<section>\n<h2 id=\"functions\">Functions</h2>\n<div class=\"tbl\"><table>\n<thead><tr><th>Word</th><th>Takes</th><th>Kind</th></tr></thead>\n<tbody>\n");
-    for (n, a) in FUNCTIONS {
+    s.push_str("<section>\n<h2 id=\"functions\">Functions</h2>\n<div class=\"tbl\"><table>\n<thead><tr><th>Word</th><th>Takes</th><th>Is</th></tr></thead>\n<tbody>\n");
+    for (n, a) in FUNCTIONS.into_iter().chain(COORD_CALLS) {
         let _ = writeln!(
             s,
-            "<tr><td><code>{n}</code></td><td>{a}</td><td>of numbers</td></tr>"
-        );
-    }
-    for (n, a) in COORD_CALLS {
-        let _ = writeln!(
-            s,
-            "<tr><td><code>{n}</code></td><td>{a}</td><td>of a region and a unit, or a frame and two numbers</td></tr>"
+            "<tr><td><code>{n}</code></td><td>{a}</td><td>{}</td></tr>",
+            esc(meaning(n)?)
         );
     }
     let _ = writeln!(
         s,
-        "<tr><td><code>parent</code></td><td>1</td><td>the region that holds a region</td></tr>\n</tbody></table></div>\n<p class=\"muted small\">The coordinates are {}.</p>",
+        "<tr><td><code>parent</code></td><td>1</td><td>{}</td></tr>\n</tbody></table></div>\n<p class=\"muted small\">The coordinates are {}.</p>",
+        esc(meaning("parent")?),
         COORDINATES
             .iter()
             .map(|c| format!("<code>{c}</code>"))
@@ -610,14 +626,18 @@ fn cheat_sheet(
     s.push_str("</section>\n");
 
     // weightings
-    s.push_str("<section>\n<h2 id=\"weightings\">Weightings</h2>\n<div class=\"tbl\"><table>\n<thead><tr><th>Word</th><th>Numbers after the range</th></tr></thead>\n<tbody>\n");
+    s.push_str("<section>\n<h2 id=\"weightings\">Weightings</h2>\n<div class=\"tbl\"><table>\n<thead><tr><th>Word</th><th>Numbers after the range</th><th>Is</th></tr></thead>\n<tbody>\n");
     for (n, a) in WEIGHTINGS {
         let takes = match (n, a) {
             ("mix", _) => "parts and their weights in pairs".to_owned(),
             (_, usize::MAX) => "the weight of each step".to_owned(),
             (_, a) => a.to_string(),
         };
-        let _ = writeln!(s, "<tr><td><code>{n}</code></td><td>{takes}</td></tr>");
+        let _ = writeln!(
+            s,
+            "<tr><td><code>{n}</code></td><td>{takes}</td><td>{}</td></tr>",
+            esc(meaning(n)?)
+        );
     }
     s.push_str("</tbody></table></div>\n");
     s.push_str(&more("weightings"));

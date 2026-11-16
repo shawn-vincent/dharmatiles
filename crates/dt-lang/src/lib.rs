@@ -11,6 +11,7 @@
 pub mod codes;
 pub mod highlight;
 mod system;
+pub mod words;
 
 pub use system::System;
 

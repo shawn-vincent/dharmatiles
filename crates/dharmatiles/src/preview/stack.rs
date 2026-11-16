@@ -73,7 +73,7 @@ mod tests {
                     let p = e.unwrap().path();
                     if p.is_dir() {
                         dirs.push(p);
-                    } else if p.extension().is_some_and(|x| x == "dtile") {
+                    } else if p.extension().is_some_and(|x| x == dt_lang::words::DTILE) {
                         let rel = p
                             .strip_prefix(&root)
                             .unwrap()

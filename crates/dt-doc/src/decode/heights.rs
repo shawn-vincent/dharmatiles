@@ -3,6 +3,7 @@
 //! (names, types and order).  Today's elements are decoded as before; this
 //! reads the words they now also take.
 
+use dt_lang::words;
 use kdl::{KdlEntry, KdlNode, KdlValue};
 
 use super::entry::Parent;
@@ -375,7 +376,7 @@ impl Decoder<'_> {
                 self.point1(s, span, at, ctx)?
             };
             if let place::Point::Framed(f) = p {
-                if what == "point" || what == "of" {
+                if what == words::POINT || what == words::OF {
                     self.err(
                         dt_lang::codes::POINT,
                         span,
@@ -597,7 +598,7 @@ impl Decoder<'_> {
         ctx: &mut Ctx,
         taken: &[String],
     ) -> Option<Const> {
-        let kind = if n.name().value() == "override" {
+        let kind = if n.name().value() == words::OVERRIDE {
             ConstKind::Override
         } else {
             ConstKind::Let
@@ -695,7 +696,7 @@ impl Decoder<'_> {
         if !self.declared_name(&name) {
             return None;
         }
-        let (r, _) = self.place_value(value_e, ctx, "point")?;
+        let (r, _) = self.place_value(value_e, ctx, words::POINT)?;
         match r.value {
             PlaceRef::Point(x, y) => Some(PointDecl {
                 name,
@@ -723,9 +724,9 @@ impl Decoder<'_> {
         let mut taken: Vec<String> = Vec::new();
         for n in body.nodes() {
             let kind = match n.name().value() {
-                "point" => PlaceKind::Point,
-                "line" => PlaceKind::Line,
-                "region" => PlaceKind::Region,
+                words::POINT => PlaceKind::Point,
+                words::LINE => PlaceKind::Line,
+                words::REGION => PlaceKind::Region,
                 _ => continue,
             };
             let Some(e) = n.entries().first().filter(|e| arg_str(e).is_some()) else {
@@ -912,7 +913,7 @@ impl Decoder<'_> {
         };
         let Some(s) = e.value().as_string() else {
             if can_point {
-                entry.place.at = self.point(e, "at", ctx);
+                entry.place.at = self.point(e, words::AT, ctx);
             } else {
                 self.err(
                     dt_lang::codes::PLACE,
@@ -973,7 +974,7 @@ impl Decoder<'_> {
             Ok(Some(edges)) => {
                 // one edge word on a thing is the middle of that edge
                 if edges.len() == 1 && can_point && !can_line {
-                    entry.place.at = self.point(e, "at", ctx);
+                    entry.place.at = self.point(e, words::AT, ctx);
                 } else if can_line {
                     entry.place.along = Some(Spanned {
                         value: Along::Edges(edges),
@@ -1003,7 +1004,7 @@ impl Decoder<'_> {
 
         // a name, or a literal point in brackets
         if t.starts_with('(') || is_ident(t) {
-            let Some((r, kind)) = self.place_value(e, ctx, "at") else {
+            let Some((r, kind)) = self.place_value(e, ctx, words::AT) else {
                 return;
             };
             match kind {
@@ -1081,7 +1082,7 @@ impl Decoder<'_> {
 
         // today's quoted pair, or a corner word
         if can_point {
-            entry.place.at = self.point(e, "at", ctx);
+            entry.place.at = self.point(e, words::AT, ctx);
         } else {
             self.place_refusal(entry, span, t, "a point", can_line);
         }
@@ -1301,7 +1302,7 @@ impl Decoder<'_> {
                         }
                     }
                 }
-                Some("at") => {
+                Some(words::AT) => {
                     if at.is_some() {
                         self.err(
                             dt_lang::codes::DUPLICATE,
@@ -1311,7 +1312,7 @@ impl Decoder<'_> {
                         );
                         ok = false;
                     } else {
-                        match self.place_value(e, ctx, "at") {
+                        match self.place_value(e, ctx, words::AT) {
                             Some((r, _)) => at = Some(r),
                             None => ok = false,
                         }
