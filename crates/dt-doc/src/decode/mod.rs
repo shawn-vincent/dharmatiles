@@ -8,7 +8,7 @@ mod machine;
 pub(crate) mod syntax;
 mod units;
 mod value;
-pub use entry::{Thing, bind_thing};
+pub use entry::{Bound, Thing, bind_thing, type_late};
 pub use units::point_text;
 pub use value::check_text_in;
 
@@ -23,7 +23,7 @@ use crate::error::{DocError, Src};
 use crate::expr;
 use crate::known::{DefInfo, Known};
 use crate::model::{
-    Base, Curve, DefKind, Definition, Document, Ends, Line, Param, Printer, Region, Source,
+    Base, Curve, DefKind, Definition, Document, Ends, Late, Line, Param, Printer, Region, Source,
     Spanned, TileHeader, Use, Within,
 };
 use crate::place::{Corner, Edge, Point};
@@ -98,6 +98,66 @@ pub fn uses(name: &str, text: &str) -> Result<Vec<Use>, Vec<DocError>> {
     }
 }
 
+/// What two uses of one parameter ask of it, in words: the message of
+/// the refusal of a parameter that fills two controls that are not alike.
+pub fn two_kinds(param: &str, a: &Fill, b: &Fill) -> String {
+    format!(
+        "`{param}` is used as a value of `{} {}` and of `{} {}`, which are not the same kind",
+        a.owner, a.name, b.owner, b.name
+    )
+}
+
+/// One control a parameter fills: which, on what, written as what.
+#[derive(Debug, Clone)]
+pub struct Fill {
+    /// The parameter.
+    pub param: String,
+    /// The control.
+    pub control: &'static Control,
+    /// What it is a control of (`pebble`, a definition's name).
+    pub owner: String,
+    /// The name it was written under.
+    pub name: String,
+}
+
+/// Each parameter of the definition being decoded, and every control it
+/// fills: the first types its default and its callers' values, and a second
+/// that is not alike is refused at the parameter.
+#[derive(Debug, Default)]
+pub struct Fills(HashMap<String, Vec<Fill>>);
+
+impl Fills {
+    pub(crate) fn record(
+        &mut self,
+        param: &str,
+        control: &'static Control,
+        owner: &str,
+        name: &str,
+    ) {
+        self.0.entry(param.to_owned()).or_default().push(Fill {
+            param: param.to_owned(),
+            control,
+            owner: owner.to_owned(),
+            name: name.to_owned(),
+        });
+    }
+
+    /// Where a parameter was found to fill something: every fill, in order.
+    pub(crate) fn of(&self, param: &str) -> &[Fill] {
+        self.0.get(param).map_or(&[], Vec::as_slice)
+    }
+
+    /// The control that types a parameter: the first it fills.
+    pub(crate) fn control(&self, param: &str) -> Option<&'static Control> {
+        self.of(param).first().map(|f| f.control)
+    }
+
+    /// Every fill, parameter by parameter.
+    pub(crate) fn all(&self) -> impl Iterator<Item = &Fill> {
+        self.0.values().flatten()
+    }
+}
+
 /// Names visible inside one definition body.
 #[derive(Default, Clone, Debug)]
 pub(crate) struct Ctx {
@@ -129,8 +189,8 @@ pub(crate) struct Decoder<'k> {
     pub local: HashMap<String, DefInfo>,
     /// Definitions brought in by `use` lines: name → (info, file).
     pub imported: HashMap<String, (DefInfo, String)>,
-    /// While decoding a define: each parameter → the control it fills.
-    pub param_controls: HashMap<String, &'static Control>,
+    /// While decoding a define: each parameter → the controls it fills.
+    pub param_controls: Fills,
     /// While decoding a define: the parameters that hold a thing (written as
     /// an entry, or passed to a thing parameter of a call).
     pub thing_params: HashSet<String>,
@@ -213,7 +273,7 @@ impl<'k> Decoder<'k> {
             local_names: HashSet::new(),
             local: HashMap::new(),
             imported: HashMap::new(),
-            param_controls: HashMap::new(),
+            param_controls: Fills::default(),
             thing_params: HashSet::new(),
             stack_base: None,
             stack_consts: Vec::new(),
@@ -651,7 +711,7 @@ impl<'k> Decoder<'k> {
             }
         }
 
-        self.param_controls.clear();
+        self.param_controls = Fills::default();
         self.thing_params.clear();
         let step = if is_tile {
             "tile".to_owned()
@@ -1025,20 +1085,29 @@ impl<'k> Decoder<'k> {
                 );
             return None;
         }
-        let control = self.param_controls.get(&name.value).copied();
+        let fills = self.param_controls.of(&name.value).to_vec();
+        let control = fills.first().map(|f| f.control);
         let used_as_thing = self.thing_params.contains(&name.value);
-        if used_as_thing && let Some(k) = control {
+        if used_as_thing && let Some(f) = fills.first() {
             self.err(
                 dt_lang::codes::TYPE,
                 name.span,
                 format!(
-                    "`{}` is used as a thing and as a value of `{}`",
-                    name.value, k.name
+                    "`{}` is used as a thing and as a value of `{} {}`",
+                    name.value, f.owner, f.name
                 ),
                 "two kinds",
             )
             .help = Some(
                 "a parameter holds a number or a thing, not both; use two parameters".to_owned(),
+            );
+        }
+        if let Some(first) = fills.first()
+            && let Some(other) = fills.iter().find(|f| !f.control.alike(first.control))
+        {
+            self.err(dt_lang::codes::TYPE, name.span, two_kinds(&name.value, first, other), "two kinds")
+                .help = Some(
+                "a parameter is one kind of value, so it fills controls of one kind; use two parameters".to_owned(),
             );
         }
         if control.is_none()
@@ -1056,6 +1125,7 @@ impl<'k> Decoder<'k> {
             );
         }
         let mut thing = used_as_thing;
+        let mut late = None;
         let default = match n.entries() {
             [_] => None,
             [_, e] if e.name().is_none() => match control {
@@ -1064,7 +1134,10 @@ impl<'k> Decoder<'k> {
                     thing = true;
                     self.thing_value(e, &name.value, "param", ctx)
                 }
-                None => self.untyped(e),
+                None => {
+                    late = Some(Late::of(e, ctx));
+                    self.untyped(e)
+                }
             },
             _ => {
                 self.err(
@@ -1080,8 +1153,9 @@ impl<'k> Decoder<'k> {
         Some(Param {
             name,
             default,
-            control,
+            fill: fills.into_iter().next(),
             thing,
+            late,
         })
     }
 

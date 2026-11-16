@@ -62,14 +62,14 @@ impl Decoder<'_> {
                 .map(|(_, d)| kind_of_dim(*d))
                 .or_else(|| {
                     ctx.params.iter().any(|p| p == n).then(|| {
-                        self.param_controls
-                            .get(n)
-                            .and_then(|k| k.value)
-                            .map_or(Kind::Any, |a| match want_of(a) {
+                        self.param_controls.control(n).and_then(|k| k.value).map_or(
+                            Kind::Any,
+                            |a| match want_of(a) {
                                 Want::Length => Kind::Length,
                                 Want::Angle => Kind::Angle,
                                 _ => Kind::Plain,
-                            })
+                            },
+                        )
                     })
                 }),
         }

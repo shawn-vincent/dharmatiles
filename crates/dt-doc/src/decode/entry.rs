@@ -7,12 +7,13 @@ use kdl::{KdlEntry, KdlNode, KdlValue};
 use miette::SourceSpan;
 
 use super::value::describe;
-use super::{Ctx, Decoder, spanned_name, value_span};
+use super::{Ctx, Decoder, Fill, spanned_name, value_span};
 use crate::elements::renamed;
 use crate::error::{DocError, Src};
 use crate::known::{DefInfo, Known};
 use crate::model::{
-    Base, Callee, Definition, Entry, Form, Place, Setting, Spanned, ThingParam, Value, Written,
+    Base, Callee, Definition, Entry, Form, Late, Place, Setting, Spanned, ThingParam, Value,
+    Written,
 };
 use crate::place::{Along, Side};
 use crate::schema::{self, Control, Kind, PlaceWord, Role, did_you_mean};
@@ -747,6 +748,7 @@ impl Decoder<'_> {
                         subs: Vec::new(),
                         form,
                         span,
+                        late: None,
                     });
                 }
                 return;
@@ -794,6 +796,7 @@ impl Decoder<'_> {
             subs: Vec::new(),
             form,
             span,
+            late: None,
         };
         // The value.
         match (value, k) {
@@ -818,30 +821,29 @@ impl Decoder<'_> {
                 }
             }
             (Some(e), None) => {
+                // no control to type it by here: a name of the definition's
+                // own parameters is passed on as that parameter; any other
+                // value is kept as written too, for a thing parameter's
+                // entry to give it a control at the call
                 setting.value = self.untyped(e);
+                match &setting.value {
+                    Some(Spanned {
+                        value: Value::Text(s),
+                        span,
+                    }) if ctx.params.iter().any(|p| p == s) => {
+                        setting.value = Some(Spanned {
+                            value: Value::Param(s.clone()),
+                            span: *span,
+                        });
+                    }
+                    Some(_) => setting.late = Some(Late::of(e, ctx)),
+                    None => {}
+                }
             }
             (None, Some(k)) if k.is_group() && form == Form::Property => {
                 // unreachable: a property always has a value
             }
             (None, _) => {}
-        }
-        // Record a parameter passed straight through to a definition's
-        // parameter, so the outer one is typed too.
-        if is_param
-            && let (
-                Some(k),
-                Some(Spanned {
-                    value: Value::Text(s),
-                    ..
-                }),
-            ) = (k, &setting.value)
-            && ctx.params.iter().any(|p| p == s)
-        {
-            self.param_controls.entry(s.clone()).or_insert(k);
-            setting.value = Some(Spanned {
-                value: Value::Param(s.clone()),
-                span: setting.value.as_ref().map_or(span, |v| v.span),
-            });
         }
         // Sub-controls.
         for e in subs {
@@ -890,6 +892,7 @@ impl Decoder<'_> {
                     subs: Vec::new(),
                     form: Form::Property,
                     span: e.span(),
+                    late: None,
                 });
             }
         }
@@ -1207,7 +1210,10 @@ pub enum Thing<'a> {
 /// required one, with the same code and words, at the text written.
 ///
 /// `src` is the text the entry is in, and `known` what that file saw when it
-/// was decoded.
+/// was decoded.  Besides the entry it gives the controls the entry fills with
+/// the definition's own parameters (`piece size=s` fills `size` with `s`), for
+/// the caller to type the arguments of those parameters by, with
+/// [`type_late`].
 ///
 /// # Errors
 /// Every mistake in what was written, as the decoder gives it.
@@ -1217,7 +1223,7 @@ pub fn bind_thing(
     thing: Thing<'_>,
     src: &Src,
     known: &Known,
-) -> Result<Entry, Vec<DocError>> {
+) -> Result<Bound, Vec<DocError>> {
     let mut d = Decoder::new(Arc::clone(src), known);
     let (callee, name) = match thing {
         Thing::Element(l) => (Callee::Element(l), l.name.to_owned()),
@@ -1251,8 +1257,50 @@ pub fn bind_thing(
     }
     d.check_entry(&mut bound, &param.ctx);
     if d.errors.is_empty() {
-        Ok(bound)
+        Ok(Bound {
+            entry: bound,
+            fills: d.param_controls.all().cloned().collect(),
+        })
     } else {
         Err(d.errors)
+    }
+}
+
+/// A thing parameter's entry bound to the thing it stands for.
+#[derive(Debug)]
+pub struct Bound {
+    /// The entry, as written on the thing.
+    pub entry: Entry,
+    /// The controls it fills with the definition's own parameters.
+    pub fills: Vec<Fill>,
+}
+
+/// A value written where its control was not known (a call's argument, a
+/// parameter's default), typed now that a control is: by the very function
+/// that types it written on the element, so it gets the same checks with the
+/// same code, words and help, pointing at the text written.  `owner` and
+/// `name` are what the control is of and as what it is written
+/// ([`Fill::owner`], [`Fill::name`]); `src` is the text the value is in and
+/// `known` what that file saw when it was decoded.
+///
+/// # Errors
+/// Every mistake in the value, as the decoder gives it.
+pub fn type_late(
+    late: &Late,
+    fill: &Fill,
+    src: &Src,
+    known: &Known,
+) -> Result<Spanned<Value>, Vec<DocError>> {
+    let mut d = Decoder::new(Arc::clone(src), known);
+    let typed = d.value(
+        &late.entry,
+        fill.control,
+        &fill.owner,
+        &fill.name,
+        &late.ctx,
+    );
+    match typed {
+        Some(v) if d.errors.is_empty() => Ok(v),
+        _ => Err(d.errors),
     }
 }

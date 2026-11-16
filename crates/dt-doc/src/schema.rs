@@ -165,6 +165,19 @@ pub struct Control {
 }
 
 impl Control {
+    /// True when a value written for one control suits the other: the same
+    /// measure and the same words.  A parameter that fills two controls
+    /// fills two that are alike.
+    #[must_use]
+    pub fn alike(&self, other: &Control) -> bool {
+        self.value == other.value
+            && self
+                .words
+                .iter()
+                .map(|w| w.word)
+                .eq(other.words.iter().map(|w| w.word))
+    }
+
     /// A sub-control by name.
     #[must_use]
     pub fn sub(&'static self, name: &str) -> Option<&'static Control> {

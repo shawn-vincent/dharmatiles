@@ -45,7 +45,7 @@ impl From<&Definition> for DefInfo {
                 .map(|p| ParamInfo {
                     name: p.name.value.clone(),
                     has_default: p.default.is_some(),
-                    control: p.control,
+                    control: p.control(),
                     thing: p.thing,
                 })
                 .collect(),

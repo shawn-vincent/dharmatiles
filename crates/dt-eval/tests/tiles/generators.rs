@@ -352,6 +352,173 @@ define direct { stack { bit width=5 } }";
     assert_eq!(one(&through), one(&call));
 }
 
+/// A definition `stand` with a thing param `piece` and a param `s` that
+/// fills `piece`'s `control`, called with `s=arg` (or, with no `arg`, its
+/// default `default`), through `levels` definitions that pass `s` on.
+fn forwarded(control: &str, default: &str, arg: Option<&str>, levels: usize) -> String {
+    let mut parts = format!(
+        "define stand {{\n    param piece pebble\n    param s {default}\n    stack {{\n        piece {control}=s at=\"(0.5sq, 0.5sq)\"\n    }}\n}}\n"
+    );
+    let mut callee = "stand".to_owned();
+    for k in 0..levels {
+        let name = format!("pass{k}");
+        parts += &format!(
+            "define {name} {{\n    param piece pebble\n    param s {default}\n    stack {{ {callee} piece=piece s=s }}\n}}\n"
+        );
+        callee = name;
+    }
+    let call = arg.map_or(callee.clone(), |a| format!("{callee} s={a}"));
+    doc(&parts, &format!("        {call}"))
+}
+
+/// The refusal of `control=value` written on a pebble, as the user reads it.
+fn direct_refusal(control: &str, value: &str) -> Vec<Read> {
+    reads(&refused(&doc(
+        "",
+        &format!("        pebble {control}={value} at=\"(0.5sq, 0.5sq)\""),
+    )))
+}
+
+#[test]
+fn a_param_forwarded_into_a_thing_param_is_typed_by_the_control_it_fills() {
+    use dt_lang::codes;
+    let cases: [(&str, &str, &str); 4] = [
+        // a length with no unit
+        ("size", "5", codes::UNIT),
+        // an angle where a length is
+        ("size", "\"5deg\"", codes::TYPE),
+        // out of its range
+        ("size", "\"900dmm\"", codes::RANGE),
+        // a word it does not have
+        ("shape", "jagged", codes::CHOICE),
+    ];
+    for (control, value, code) in cases {
+        let direct = direct_refusal(control, value);
+        assert!(direct.iter().any(|r| r.0 == code), "{direct:#?}");
+        for levels in 0..3 {
+            // the call's argument, through `levels` definitions
+            let text = forwarded(control, "\"3dmm\"", Some(value), levels);
+            let through = reads(&refused(&text));
+            assert_eq!(
+                through, direct,
+                "`{control}={value}` through {levels} levels of forwarding"
+            );
+            // pointing at the call's argument, the line the user wrote
+            let call = text.find("tile size").unwrap();
+            for d in refused(&text) {
+                let (_, span) = d.at.as_ref().unwrap();
+                assert!(span.offset() > call, "{:?} points at the define", d.message);
+            }
+        }
+    }
+}
+
+#[test]
+fn a_default_forwarded_into_a_thing_param_is_typed_by_the_control_it_fills() {
+    for levels in 0..3 {
+        // the default is the mistake, and is where it is written
+        let text = forwarded("size", "5", None, levels);
+        let through = reads(&refused(&text));
+        assert_eq!(through, direct_refusal("size", "5"), "{levels} levels");
+        let call = text.find("tile size").unwrap();
+        for d in refused(&text) {
+            let (_, span) = d.at.as_ref().unwrap();
+            assert!(span.offset() < call, "{:?} points at the call", d.message);
+        }
+    }
+}
+
+/// What a pebble's controls are, by name and value.
+fn controls(text: &str) -> Vec<String> {
+    let t = read(text).unwrap().tile.unwrap();
+    let e = t.stack.iter().find(|e| e.what.value == "pebble").unwrap();
+    e.controls
+        .iter()
+        .map(|c| format!("{} {:?}", c.name, c.value))
+        .collect()
+}
+
+#[test]
+fn a_valid_forwarded_value_reads_as_written_on_the_thing() {
+    let cases: [(&str, &str); 3] = [
+        ("size", "\"1.5dmm\""),
+        ("size", "\"1dmm .. 2dmm\""),
+        ("shape", "angular"),
+    ];
+    for (control, value) in cases {
+        let direct = controls(&doc(
+            "",
+            &format!("        pebble {control}={value} at=\"(0.5sq, 0.5sq)\""),
+        ));
+        for levels in 0..3 {
+            let through = controls(&forwarded(control, "\"1dmm\"", Some(value), levels));
+            assert_eq!(
+                through, direct,
+                "`{control}={value}` through {levels} levels"
+            );
+        }
+    }
+    // the default, with no argument
+    let direct = controls(&doc(
+        "",
+        "        pebble size=\"1dmm\" at=\"(0.5sq, 0.5sq)\"",
+    ));
+    assert_eq!(controls(&forwarded("size", "\"1dmm\"", None, 2)), direct);
+}
+
+/// The one refusal a param that fills two controls of different kinds gets:
+/// at the param, `dt::type`, saying both.
+fn two_kinds_refused(parts: &str, call: &str, both: [&str; 2]) {
+    let text = doc(parts, call);
+    let errors = refused(&text);
+    let kinds: Vec<&Diag> = errors
+        .iter()
+        .filter(|e| e.code == dt_lang::codes::TYPE)
+        .collect();
+    assert!(!kinds.is_empty(), "{errors:#?}");
+    for d in &kinds {
+        for name in both {
+            assert!(d.message.contains(name), "{name} in {:?}", d.message);
+        }
+        // at the param, in the definition's text
+        let (src, span) = d.at.as_ref().unwrap();
+        let at = &src.inner()[span.offset()..span.offset() + span.len()];
+        assert_eq!(at, "s", "{:?}", d.message);
+        assert!(span.offset() < text.find("tile size").unwrap());
+    }
+}
+
+#[test]
+fn a_param_that_fills_two_controls_of_different_kinds_is_refused_at_the_param() {
+    let at = "at=\"(0.5sq, 0.5sq)\"";
+    // both written in the definition: a length and a share
+    two_kinds_refused(
+        &format!(
+            "define both {{\n    param s \"1dmm\"\n    stack {{\n        pebble size=s {at}\n        pebble buried=s {at}\n    }}\n}}"
+        ),
+        "        both",
+        ["pebble size", "pebble buried"],
+    );
+    // both on a thing param's entries: known when the call says the thing
+    for call in ["        both", "        both s=\"2dmm\""] {
+        two_kinds_refused(
+            &format!(
+                "define both {{\n    param piece pebble\n    param s \"1dmm\"\n    stack {{\n        piece size=s {at}\n        piece buried=s {at}\n    }}\n}}"
+            ),
+            call,
+            ["pebble size", "pebble buried"],
+        );
+    }
+    // one written on an element, one on the thing param's entry
+    two_kinds_refused(
+        &format!(
+            "define both {{\n    param piece pebble\n    param s \"1dmm\"\n    stack {{\n        rock size=s {at}\n        piece buried=s {at}\n    }}\n}}"
+        ),
+        "        both",
+        ["rock size", "pebble buried"],
+    );
+}
+
 /// The seeds of the entries of a tile, by element.
 fn seeds(text: &str, what: &str) -> Vec<Option<u64>> {
     read(text)

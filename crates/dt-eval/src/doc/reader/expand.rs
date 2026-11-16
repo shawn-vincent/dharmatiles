@@ -1,11 +1,10 @@
 //! Expanding a stack: definitions inlined, parameters bound, scatter
 //! children made.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use dt_doc::decode::{Thing, bind_thing};
+use dt_doc::decode::Thing;
 use dt_doc::expr::Expr;
 use dt_doc::model::{self, Callee, Definition, Spanned};
 use dt_doc::place::{Along, Point};
@@ -14,7 +13,7 @@ use dt_kit::{Draw, EntryId, Seed};
 
 use crate::diag::{Diag, Src};
 
-use super::controls::{bind, property_span};
+use super::controls::property_span;
 use super::*;
 
 impl Reader<'_> {
@@ -123,10 +122,10 @@ impl Reader<'_> {
                 Resolved::Element(element) => {
                     // a thing parameter's properties are typed here, where
                     // the thing is known
-                    let Some(e) = self.bound(e, Thing::Element(element), scope) else {
+                    let Some(bind) = self.bound(e, Thing::Element(element), scope) else {
                         continue;
                     };
-                    let e = &*e;
+                    let (e, scope) = (&*bind.entry, &*bind.scope);
                     if !dt_elements::built().any(|n| n == element.name) {
                         pending.push(not_yet(
                             src,
@@ -425,10 +424,10 @@ impl Reader<'_> {
                     }
                 }
                 Resolved::Definition(file, def) => {
-                    let Some(e) = self.bound(e, Thing::Definition(&def), scope) else {
+                    let Some(bind) = self.bound(e, Thing::Definition(&def), scope) else {
                         continue;
                     };
-                    let e = &*e;
+                    let (e, scope) = (&*bind.entry, &*bind.scope);
                     if scope.depth > 64 {
                         self.errors.push(Diag::at(
                             src,
@@ -439,7 +438,7 @@ impl Reader<'_> {
                         ));
                         continue;
                     }
-                    let params = Self::params(e, &def, &file, scope);
+                    let params = self.params(e, &def, &file, scope);
                     let top = self.call_top(e, &def, scope, pending);
                     let inner = Scope {
                         file: Arc::clone(&file),
@@ -495,6 +494,7 @@ impl Reader<'_> {
     /// What a call of `def` (defined in `file`) binds its parameters to: the
     /// call's arguments, else the parameters' defaults.
     pub(super) fn params(
+        &mut self,
         e: &model::Entry,
         def: &Definition,
         file: &Arc<File>,
@@ -502,18 +502,8 @@ impl Reader<'_> {
     ) -> BTreeMap<String, Bound> {
         let mut params = BTreeMap::new();
         for p in &def.params {
-            let arg = e
-                .control(&p.name.value)
-                .and_then(|s| s.value.as_ref())
-                .map(|v| bind(v, &scope.file.src, scope))
-                .or_else(|| {
-                    p.default.as_ref().map(|v| Bound {
-                        value: v.clone(),
-                        src: Arc::clone(&file.src),
-                        file: Arc::clone(file),
-                    })
-                });
-            if let Some(a) = arg {
+            let written = e.control(&p.name.value);
+            if let Some(a) = self.arg(p, written, file, scope) {
                 params.insert(p.name.value.clone(), a);
             }
         }
@@ -545,8 +535,8 @@ impl Reader<'_> {
             Resolved::Element(cl) if cl.scattered => {
                 // a thing parameter's properties are typed here, where the
                 // thing is known
-                let thing = self.bound(c, Thing::Element(cl), scope)?.into_owned();
-                (cl, scope.clone(), thing)
+                let bind = self.bound(c, Thing::Element(cl), scope)?;
+                (cl, bind.scope.into_owned(), bind.entry.into_owned())
             }
             Resolved::Element(cl) => {
                 let layer = cl.generator() == dt_doc::schema::Generator::Layer;
@@ -586,11 +576,13 @@ impl Reader<'_> {
                         return None;
                     }
                 };
-                let c = &*self.bound(c, Thing::Definition(&def), scope)?;
+                let bind = self.bound(c, Thing::Definition(&def), scope)?;
+                let (c, scope) = (&*bind.entry, &*bind.scope);
                 let top = self.call_top(c, &def, scope, pending);
+                let params = self.params(c, &def, &file, scope);
                 let inner = Scope {
                     file: Arc::clone(&file),
-                    params: Self::params(c, &def, &file, scope),
+                    params,
                     lets: scope.lets.clone(),
                     area: None,
                     at: None,
@@ -709,29 +701,6 @@ impl Reader<'_> {
             return None;
         };
         Some(Resolved::Definition(file, Box::new(def)))
-    }
-
-    /// An entry as the thing it calls: for a thing parameter's entry, what
-    /// was written on it typed now the thing is known, by the decoder's own
-    /// function ([`dt_doc::decode::bind_thing`]), so a property gets exactly
-    /// the checks it gets written on the element or definition itself;
-    /// any other entry as it is.  `None` once the mistakes are reported.
-    fn bound<'e>(
-        &mut self,
-        e: &'e model::Entry,
-        thing: Thing<'_>,
-        scope: &Scope,
-    ) -> Option<Cow<'e, model::Entry>> {
-        let Callee::Param(p) = &e.callee else {
-            return Some(Cow::Borrowed(e));
-        };
-        match bind_thing(e, p, thing, &scope.file.src, &scope.file.known) {
-            Ok(b) => Some(Cow::Owned(b)),
-            Err(es) => {
-                self.errors.extend(es.iter().map(Diag::from));
-                None
-            }
-        }
     }
 
     /// The strip a surface follows when it is placed `at=` `along`: the

@@ -203,10 +203,43 @@ pub struct Param {
     pub default: Option<Spanned<Value>>,
     /// The control the parameter fills inside the definition (`grass
     /// length=length` makes `length` grass's length), if one was found.
-    pub control: Option<&'static Control>,
+    pub fill: Option<crate::decode::Fill>,
     /// True when it holds a thing (`param leaf pebble`): a parameter written as
     /// a stack entry or a scatter child, or whose default names a thing.
     pub thing: bool,
+    /// The default as written, when no control was found to type it by: a
+    /// thing parameter's entry may give it one at a call
+    /// ([`crate::decode::type_late`]).
+    pub late: Option<Late>,
+}
+
+impl Param {
+    /// The control the parameter fills, which types its default and a
+    /// caller's value.
+    #[must_use]
+    pub fn control(&self) -> Option<&'static Control> {
+        self.fill.as_ref().map(|f| f.control)
+    }
+}
+
+/// A value written where the control it fills was not known (a definition
+/// call's argument for a parameter that fills no control the definition
+/// names, or such a parameter's default): kept as written, to be typed
+/// where the control is known, by the very function that types it on an
+/// element ([`crate::decode::type_late`]).
+#[derive(Debug, Clone)]
+pub struct Late {
+    pub(crate) entry: KdlEntry,
+    pub(crate) ctx: Arc<crate::decode::Ctx>,
+}
+
+impl Late {
+    pub(crate) fn of(entry: &KdlEntry, ctx: &crate::decode::Ctx) -> Self {
+        Self {
+            entry: entry.clone(),
+            ctx: Arc::new(ctx.clone()),
+        }
+    }
 }
 
 /// A drawn line: `line trail width=9 wobble=3 { through south "0.65,1" north }`.
@@ -533,6 +566,9 @@ pub struct Setting {
     pub form: Form,
     /// The whole text: `name=value`, or the child node.
     pub span: SourceSpan,
+    /// The value as written, for an argument whose parameter fills no known
+    /// control: a thing parameter's entry may give it one at the call.
+    pub late: Option<Late>,
 }
 
 impl Setting {

@@ -232,6 +232,6 @@ fn what_is_written_on_a_thing_param_is_typed_when_the_thing_is_known() {
     );
     // and with its unit it is a pebble's size, typed
     let bound = bind(&text.replace("size=5", "size=\"5dmm\"")).unwrap();
-    assert!(matches!(bound.callee, Callee::Element(l) if l.name == "pebble"));
-    assert!(matches!(bound.value("size"), Some(Value::Num(_))));
+    assert!(matches!(bound.entry.callee, Callee::Element(l) if l.name == "pebble"));
+    assert!(matches!(bound.entry.value("size"), Some(Value::Num(_))));
 }

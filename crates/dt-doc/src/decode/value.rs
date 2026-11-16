@@ -34,7 +34,7 @@ impl Decoder<'_> {
         let span = value_span(e);
         if let Some(s) = e.value().as_string() {
             if ctx.params.iter().any(|p| p == s) {
-                self.param_controls.entry(s.to_owned()).or_insert(k);
+                self.param_controls.record(s, k, owner, name);
                 return Some(Spanned {
                     value: Value::Param(s.to_owned()),
                     span,
