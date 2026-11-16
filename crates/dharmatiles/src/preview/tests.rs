@@ -56,13 +56,37 @@ fn start(paths: &[&str], eager: bool) -> Running {
 
 /// [`start`] for the build target `opts`.
 fn start_with(paths: &[&str], eager: bool, opts: &Options) -> Running {
+    run_shared(paths, eager, opts, None)
+}
+
+/// [`start`] with a build store in a folder of its own, as the program runs: a list's plates are planned again
+/// after every edit, and a piece built before is read from the store, not made again. Without one each plan
+/// builds every piece twice (low, then full) from nothing.
+fn start_kept(paths: &[&str], eager: bool, name: &str) -> Running {
+    run_shared(paths, eager, &Options::default(), Some(kept_store(name)))
+}
+
+/// A build store in an empty temporary folder named for the test.
+fn kept_store(name: &str) -> dt_store::Store {
+    let dir = std::env::temp_dir().join(format!("dt-view-store-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dt_store::Store::new(&dir, "test")
+}
+
+fn run_shared(
+    paths: &[&str],
+    eager: bool,
+    opts: &Options,
+    store: Option<dt_store::Store>,
+) -> Running {
     let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
     let roots = if paths.is_empty() {
         Vec::new()
     } else {
         vec![Root::new("Files", RootKind::Files)]
     };
-    let shared = Arc::new(Shared::with_roots(roots, &paths, opts));
+    let shared = Arc::new(Shared::with_roots(roots, &paths, opts).with_store(store));
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let addr = listener.local_addr().unwrap();
     server::spawn(listener, Arc::clone(&shared));
