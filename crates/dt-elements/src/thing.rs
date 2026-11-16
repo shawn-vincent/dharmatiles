@@ -37,7 +37,7 @@
 use std::any::{Any, TypeId};
 use std::sync::{Mutex, OnceLock};
 
-use dt_kit::{Field, Kind, Mask, Placed, Rng, Scene, Seed, Solid, Spread, scatter};
+use dt_kit::{Falls, Field, Kind, Mask, Placed, Rng, Scene, Seed, Solid, Spread, scatter};
 
 use crate::flowers::Plant;
 use crate::read::Settings;
@@ -458,7 +458,7 @@ fn one_layout(
         confine: true,
         gap,
         factor: 1.0,
-        apart: shape.apart(),
+        falls: shape.falls(),
     };
     Ok(scatter(&frame, rng, radii, &spread, &density, avoid))
 }
@@ -517,6 +517,14 @@ pub enum Pattern {
 }
 
 impl Pattern {
+    /// The room a thing keeps from what already stands when `gap` is not
+    /// written, `thing_mm` being its own: a cover's things lie against what
+    /// stands (touching it, never in it), so the rule for how near they come
+    /// is one: `gap`, which is 0 under a cover and the thing's own otherwise.
+    fn usual_gap(self, thing_mm: f64) -> f64 {
+        if self == Self::Cover { 0.0 } else { thing_mm }
+    }
+
     fn from_word(w: &str) -> Result<Self, LookError> {
         match w {
             "spaced" => Ok(Self::Spaced),
@@ -594,10 +602,14 @@ impl Shape {
         }
     }
 
-    /// Whether things keep their room from one another.
+    /// How the things fall: a cover's evenly and unchecked among them, any
+    /// other pattern's at random and kept apart.
     #[must_use]
-    pub fn apart(&self) -> bool {
-        self.pattern != Pattern::Cover
+    pub fn falls(&self) -> Falls {
+        match self.pattern {
+            Pattern::Cover => Falls::Even,
+            Pattern::Spaced | Pattern::Clumped => Falls::Apart,
+        }
     }
 }
 
@@ -740,6 +752,7 @@ impl Scatter {
             SCATTER_STREAM
         };
         let set = Settings::new(controls);
+        let pattern = Pattern::from_word(set.word("pattern")?.unwrap_or("spaced"))?;
         let near = match set.word("near/of")? {
             Some(word) => Some(Near {
                 kinds: near_kinds(word)?,
@@ -763,7 +776,7 @@ impl Scatter {
             });
         }
         Ok(Self {
-            pattern: Pattern::from_word(set.word("pattern")?.unwrap_or("spaced"))?,
+            pattern,
             clumps: set.dist_or("clumps", Draw::flat(3.0, 3.0))?,
             spread: set.dist_or("spread", Draw::flat(3.0, 8.0))?,
             cover: set.number_or("cover", 1.0)?,
@@ -772,7 +785,7 @@ impl Scatter {
             near,
             count: set.dist("count")?,
             per_square: set.dist_or("perSquare", usual.per_square)?,
-            gap: set.number_or("gap", usual.gap_mm)?,
+            gap: set.number_or("gap", pattern.usual_gap(usual.gap_mm))?,
             reach: set.number("reach")?.or(usual.reach_mm),
             stream,
             children: made,
@@ -1227,7 +1240,7 @@ mod tests {
             confine: true,
             gap: 0.0,
             factor: 1.0,
-            apart: shape.apart(),
+            falls: shape.falls(),
         };
         let clearings = vec![[10.0, 10.0, 4.0], [25.0, 20.0, 5.0]];
         let bare: f64 = clearings
@@ -1276,6 +1289,138 @@ mod tests {
         assert_eq!(all.len(), 400);
     }
 
+    /// How many of `placed` fall in each cell of a 4 by 4 grid of the tile.
+    fn grid_counts(placed: &[Placed]) -> [usize; 16] {
+        let mut cells = [0usize; 16];
+        for p in placed {
+            let (i, j) = ((p.at[0] / 8.75) as usize, (p.at[1] / 8.75) as usize);
+            cells[j.min(3) * 4 + i.min(3)] += 1;
+        }
+        cells
+    }
+
+    /// A cover is even: in every cell of a 4 by 4 grid of the tile, whatever
+    /// the seed, the places are within a quarter of the cell's share. Darts at
+    /// random are not (the same count, thrown at random, heaps some cells and
+    /// leaves others bare by far more), which is what made a cover look like
+    /// piles with bare ground between.
+    #[test]
+    fn a_cover_is_even_where_random_darts_are_not() {
+        let frame = Frame::dungeonblocks(1, 1);
+        let radii = vec![0.4; 300];
+        let shape = cover_shape(0.85, Vec::new());
+        let spread = |falls| Spread {
+            tries: 1,
+            inset: [0.0, 1.0],
+            confine: true,
+            gap: 0.0,
+            factor: 1.0,
+            falls,
+        };
+        let worst = |falls, seed: u64| {
+            let mut rng = Rng::new(Seed::new(seed));
+            let placed = scatter(
+                &frame,
+                &mut rng,
+                &radii,
+                &spread(falls),
+                &|x, y| shape.weight(x, y),
+                &[],
+            );
+            let share = placed.len() as f64 / 16.0;
+            let cells = grid_counts(&placed);
+            cells
+                .iter()
+                .map(|&c| (c as f64 - share).abs() / share)
+                .fold(0.0, f64::max)
+        };
+        let mut random_worst: f64 = 0.0;
+        for seed in 1..=16u64 {
+            let even = worst(Falls::Even, seed);
+            assert!(
+                even < 0.25,
+                "seed {seed}: a cell is {even:.2} off its share"
+            );
+            random_worst = random_worst.max(worst(Falls::Apart, seed));
+        }
+        assert!(
+            random_worst > 0.5,
+            "random darts are uneven, or this test shows nothing: {random_worst:.2}"
+        );
+    }
+
+    /// Under a cover things lie against what stands, touching and never
+    /// in it, so a fringe at its foot has something to stand beside: the
+    /// nearest items touch the rock's disc, and those within reach stand
+    /// taller by the `near` height while those past it do not.
+    #[test]
+    fn a_covers_fringe_lands_at_the_foot_and_is_taller() {
+        let frame = Frame::dungeonblocks(1, 1);
+        let (nx, ny) = frame.nodes();
+        let step = frame.step_mm();
+        let (cx, cy, rock) = (17.5, 17.5, 4.0);
+        let mask: Vec<bool> = (0..nx * ny)
+            .map(|k| {
+                let (x, y) = ((k % nx) as f64 * step, (k / nx) as f64 * step);
+                libm::hypot(x - cx, y - cy) < rock
+            })
+            .collect();
+        let (dist, _) = dt_kit::distance(&frame, &mask);
+        let near = Nearness {
+            rule: Near {
+                kinds: Some(&[Kind::Rock]),
+                reach: Draw::flat(4.0, 9.0),
+                height: Draw::flat(1.3, 1.6),
+                thin: 0.0,
+            },
+            dist,
+            scale: frame.scale(),
+        };
+        let gap = Pattern::Cover.usual_gap(1.5);
+        assert!(
+            gap.abs() < f64::EPSILON,
+            "a cover's gap is 0 unless written"
+        );
+        assert!((Pattern::Spaced.usual_gap(1.5) - 1.5).abs() < f64::EPSILON);
+        let radii = vec![0.5; 400];
+        let shape = cover_shape(1.0, Vec::new());
+        let mut rng = Rng::new(Seed::new(3));
+        let placed = scatter(
+            &frame,
+            &mut rng,
+            &radii,
+            &Spread {
+                tries: 1,
+                inset: [0.0, 1.0],
+                confine: true,
+                gap,
+                factor: 1.0,
+                falls: shape.falls(),
+            },
+            &|x, y| shape.weight(x, y),
+            &[[cx, cy, rock]],
+        );
+        let mut at_the_foot = 0;
+        for p in &placed {
+            let out = libm::hypot(p.at[0] - cx, p.at[1] - cy) - rock - p.r;
+            assert!(out >= 0.0, "in the rock: {:?}", p.at);
+            let item = Seed::new(7).index(p.index as u64);
+            let tall = near.answer(item, p.at).unwrap();
+            if out < 0.6 {
+                at_the_foot += 1;
+            }
+            if out + p.r < 4.0 {
+                assert!(
+                    (1.3..=1.6).contains(&tall),
+                    "{tall} at {out:.2} from the foot"
+                );
+            } else if out + p.r >= 9.0 {
+                assert!((tall - 1.0).abs() < f64::EPSILON, "{tall} past the reach");
+            }
+        }
+        assert!(at_the_foot >= 2, "{at_the_foot} items touch the rock");
+    }
+
     /// A clumped pattern puts its places inside the clumps and nowhere else.
     #[test]
     fn clumps_hold_every_place() {
@@ -1293,7 +1438,7 @@ mod tests {
             confine: true,
             gap: 0.2,
             factor: 1.0,
-            apart: shape.apart(),
+            falls: shape.falls(),
         };
         let mut rng = Rng::new(Seed::new(2));
         let placed = scatter(
