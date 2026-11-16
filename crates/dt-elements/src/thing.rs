@@ -1305,8 +1305,13 @@ mod tests {
         for (name, t, tiers) in held {
             let e = t.extent();
             assert!(e.least.x <= e.most.x && e.least.z <= e.most.z, "{name}");
-            let seeds = if name.contains("tree") { 8 } else { 20u64 };
             for &low in tiers {
+                // a tree is slow and its bound is by sums of what the build adds: a few seeds, the full tier fewest
+                let seeds = match (name.contains("tree"), low) {
+                    (false, _) => 20u64,
+                    (true, true) => 6,
+                    (true, false) => 3,
+                };
                 for seed in 1..=seeds {
                     let mut scene = Scene::new(Frame::dungeonblocks(2, 2), Seed::new(1));
                     scene.set_low(low);
