@@ -1,0 +1,30 @@
+# The files where dharmatiles' languages are defined: the tile language,
+# its vocabulary, the page's contract, the formats, the CLI and the site's
+# reference. An edit here may add a word, a kind, a form or a verb, so the
+# language-surface hook (~/.claude/hooks/language-surface.py) reminds the
+# agent of the language-design check, once per file per session.
+# One glob per line, relative to the repository root.
+
+crates/dt-lang/src/**
+crates/dt-doc/src/elements.rs
+crates/dt-doc/src/units.rs
+crates/dt-doc/src/decode/**
+crates/dt-doc/src/inventory.rs
+crates/dt-doc/src/map.rs
+crates/dt-doc/src/ops.rs
+crates/dt-doc/src/nodeid.rs
+crates/dt-elements/src/thing.rs
+crates/dt-service/src/api.rs
+crates/dt-service/src/call.rs
+crates/dt-service/src/*_calls.rs
+crates/dharmatiles/src/cli*.rs
+crates/dharmatiles/src/main.rs
+crates/dharmatiles/src/mcp.rs
+web/preview/js/worker-calls.js
+web/preview/js/api.d.ts
+web/preview/index.html
+docs/guide/*.html
+docs/language.html
+docs/elements/*.html
+docs/standards/*.html
+library/parts/**
