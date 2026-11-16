@@ -92,6 +92,7 @@ pub fn summary_json(l: &'static Element) -> ElementSummary {
     ElementSummary {
         name: l.name.to_owned(),
         role: role(l.role).to_owned(),
+        generator: l.generator().as_str().to_owned(),
         about: l.about.to_owned(),
         href: format!("{}elements/{}.html", docs(), l.name),
         family: l.family.as_str().to_owned(),

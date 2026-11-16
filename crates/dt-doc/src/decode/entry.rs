@@ -29,6 +29,8 @@ const SCATTER_ONLY: [&str; 6] = ["count", "perSquare", "spread", "reach", "clump
 enum Target {
     Control(&'static Control),
     Param(Option<&'static Control>),
+    /// A parameter that holds a thing: its value is a thing's name.
+    Thing,
     None,
 }
 
@@ -121,6 +123,92 @@ impl Decoder<'_> {
         match &e.callee {
             Callee::Element(l) => l.role == Role::Thing,
             Callee::Definition(d) => self.def_info(d).is_some_and(|i| i.thing),
+            // a thing parameter holds a thing, by construction
+            Callee::Param(_) => true,
+        }
+    }
+
+    /// What a name is as a generator: `Some(true)` a thing (an element
+    /// placed with `at=`, or a definition of one thing), `Some(false)` a
+    /// layer, `None` no element or definition at all.
+    pub(crate) fn thing_kind(&self, name: &str) -> Option<bool> {
+        if let Some(l) = schema::element(name) {
+            return Some(l.generator() == schema::Generator::Thing);
+        }
+        self.is_definition(name)
+            .then(|| self.def_info(name).is_some_and(|i| i.thing))
+    }
+
+    /// The value of a thing parameter, written `value` (as a default or an
+    /// argument): the name of a thing, or a parameter of the enclosing
+    /// definition that holds one.  `None` after the mistake is reported
+    /// where it is written.
+    pub(crate) fn thing_value(
+        &mut self,
+        e: &KdlEntry,
+        owner: &str,
+        name: &str,
+        ctx: &Ctx,
+    ) -> Option<Spanned<Value>> {
+        let span = value_span(e);
+        let Some(s) = e.value().as_string() else {
+            self.err(
+                dt_lang::codes::TYPE,
+                span,
+                format!(
+                    "`{owner} {name}` is a thing, and {} is not",
+                    describe_kdl(e)
+                ),
+                "not a thing",
+            )
+            .help = Some(format!(
+                "pass the name of a thing: `{name}=rock`; the things are the elements `rock`, `stone`, `boulder`, `pebble`, `flower` and `tree`, and a definition of one of them"
+            ));
+            return None;
+        };
+        if ctx.params.iter().any(|p| p == s) {
+            self.thing_params.insert(s.to_owned());
+            return Some(Spanned {
+                value: Value::Param(s.to_owned()),
+                span,
+            });
+        }
+        let what = Spanned {
+            value: s.to_owned(),
+            span,
+        };
+        match self.thing_kind(s) {
+            Some(true) => Some(Spanned {
+                value: Value::Thing(s.to_owned()),
+                span,
+            }),
+            Some(false) => {
+                let layer = schema::element(s).is_some();
+                self.err(
+                    dt_lang::codes::TYPE,
+                    span,
+                    if layer {
+                        format!("`{s}` is a layer, and `{owner} {name}` is a thing")
+                    } else {
+                        format!("`{s}` is not one thing, and `{owner} {name}` is a thing")
+                    },
+                    "a layer, not a thing",
+                )
+                .help = Some(if layer {
+                    format!(
+                        "a layer reads the scene so far (it paints the ground, or places things); a thing is one solid on its own: `{name}=rock`. Put `{s}` in the stack instead"
+                    )
+                } else {
+                    format!(
+                        "a thing is one rock, stone, flower or tree, or a definition whose stack is exactly one of them; `{s}` holds more"
+                    )
+                });
+                None
+            }
+            None => {
+                self.callee(&what, ctx);
+                None
+            }
         }
     }
 
@@ -133,7 +221,7 @@ impl Decoder<'_> {
         step: String,
     ) -> Option<Entry> {
         let what = spanned_name(node);
-        let callee = self.callee(&what)?;
+        let callee = self.callee(&what, ctx)?;
         let mut path = path.to_vec();
         path.push(step);
         let mut entry = Entry {
@@ -163,10 +251,15 @@ impl Decoder<'_> {
                     "a scatter holds things (rock, stone, boulder, pebble, tree, or a definition of one); `{owner}` is not one"
                 )
             };
+            let layer = element.is_some_and(|l| l.generator() == schema::Generator::Layer);
             self.err(
                 dt_lang::codes::SCATTER,
                 entry.what.span,
-                format!("`{owner}` can't be scattered"),
+                if layer {
+                    format!("`{owner}` is a layer, and a scatter holds things")
+                } else {
+                    format!("`{owner}` can't be scattered")
+                },
                 "not a thing",
             )
             .help = Some(help);
@@ -321,12 +414,17 @@ impl Decoder<'_> {
     }
 
     /// Resolve an entry's name to an element or a visible definition.
-    fn callee(&mut self, what: &Spanned<String>) -> Option<Callee> {
+    fn callee(&mut self, what: &Spanned<String>, ctx: &Ctx) -> Option<Callee> {
         if let Some(l) = schema::element(&what.value) {
             return Some(Callee::Element(l));
         }
         if self.is_definition(&what.value) {
             return Some(Callee::Definition(what.value.clone()));
+        }
+        // a parameter written as an entry holds a thing
+        if ctx.params.contains(&what.value) {
+            self.thing_params.insert(what.value.clone());
+            return Some(Callee::Param(what.value.clone()));
         }
         let name = what.value.as_str();
         let first = if let Some(h) = renamed(name) {
@@ -358,12 +456,22 @@ impl Decoder<'_> {
     fn target(&self, entry: &Entry, name: &str) -> Target {
         match &entry.callee {
             Callee::Element(l) => l.control(name).map_or(Target::None, Target::Control),
+            // what the parameter holds is known at the call: the reader
+            // checks these properties against that thing
+            Callee::Param(_) => Target::Param(None),
             Callee::Definition(d) => match self.def_info(d) {
-                Some(info) => info
-                    .params
-                    .iter()
-                    .find(|p| p.name == name)
-                    .map_or(Target::None, |p| Target::Param(p.control)),
+                Some(info) => {
+                    info.params
+                        .iter()
+                        .find(|p| p.name == name)
+                        .map_or(Target::None, |p| {
+                            if p.thing {
+                                Target::Thing
+                            } else {
+                                Target::Param(p.control)
+                            }
+                        })
+                }
                 // A definition in a loop: accept its arguments untyped.
                 None => Target::Param(None),
             },
@@ -579,6 +687,41 @@ impl Decoder<'_> {
         let (k, is_param) = match self.target(entry, &key.value) {
             Target::Control(k) => (Some(k), false),
             Target::Param(k) => (k, true),
+            Target::Thing => {
+                if let Some(first) = subs.first() {
+                    self.err(
+                        dt_lang::codes::CONTROL_NODE,
+                        first.span(),
+                        format!("`{}` takes one value", key.value),
+                        "here",
+                    )
+                    .help = Some(format!(
+                        "a thing is passed by name: `{owner} {}=rock`",
+                        key.value
+                    ));
+                }
+                let Some(e) = value else {
+                    self.err(
+                        dt_lang::codes::TYPE,
+                        key.span,
+                        format!("`{owner} {}` is a thing and has no value", key.value),
+                        "no thing",
+                    )
+                    .help = Some(format!("name a thing: `{owner} {}=rock`", key.value));
+                    return;
+                };
+                if let Some(v) = self.thing_value(e, &owner, &key.value, ctx) {
+                    entry.controls.push(Setting {
+                        name: key,
+                        control: None,
+                        value: Some(v),
+                        subs: Vec::new(),
+                        form,
+                        span,
+                    });
+                }
+                return;
+            }
             Target::None => {
                 self.unknown_control(entry, &key);
                 return;
@@ -767,6 +910,7 @@ impl Decoder<'_> {
         let thing = self.is_thing(entry);
         let (controls, params): (&[Control], Vec<&str>) = match &entry.callee {
             Callee::Element(l) => (l.controls, Vec::new()),
+            Callee::Param(_) => (&[], Vec::new()),
             Callee::Definition(d) => (
                 &[],
                 self.def_info(d)
@@ -925,6 +1069,7 @@ impl Decoder<'_> {
             }
             (Callee::Definition(d), None) => self.def_info(d).map_or(Kind::Mixed, |i| i.kind),
             (Callee::Element(l), None) => l.kind(),
+            (Callee::Param(_), None) => Kind::Solid,
         };
     }
 
@@ -1004,4 +1149,14 @@ impl Decoder<'_> {
 /// A string value, bare or quoted.
 fn arg_value_str(e: &KdlEntry) -> Option<&str> {
     e.value().as_string()
+}
+
+/// What a written value is, for a message: `a number`, `a yes or no`.
+fn describe_kdl(e: &KdlEntry) -> &'static str {
+    match e.value() {
+        KdlValue::Bool(_) => "a yes or no",
+        KdlValue::Integer(_) | KdlValue::Float(_) => "a number",
+        KdlValue::Null => "nothing",
+        KdlValue::String(_) => "a string",
+    }
 }

@@ -22,6 +22,7 @@ mod documents;
 mod edges;
 mod floors;
 mod format1;
+mod generators;
 mod golden;
 mod heights;
 mod memo;

@@ -495,6 +495,41 @@ pub enum Role {
     Scatter,
 }
 
+/// The two kinds of generator.  A thing takes its controls and a seed and
+/// makes one solid in its own frame; a layer also reads the scene so far.
+/// Derived from [`Role`], so there is no second table: a thing is what is
+/// placed with `at=` and may be a scatter's child or a thing parameter's
+/// value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Generator {
+    /// One solid from its controls and a seed (`rock`, `tree`).
+    Thing,
+    /// Reads the scene so far (`dirt`, `water`, `scatter`, `wall`).
+    Layer,
+}
+
+impl Generator {
+    /// The word the docs and the editor use.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Generator::Thing => "thing",
+            Generator::Layer => "layer",
+        }
+    }
+}
+
+impl Role {
+    /// Thing or layer.
+    #[must_use]
+    pub fn generator(self) -> Generator {
+        match self {
+            Role::Thing => Generator::Thing,
+            Role::Surface | Role::Run | Role::Scatter => Generator::Layer,
+        }
+    }
+}
+
 /// Solid or surface, for planning: every solid is planned before
 /// anything grows, and surfaces grow round every solid wherever they are
 /// listed.
@@ -740,6 +775,12 @@ impl Element {
     #[must_use]
     pub fn has_top(&self) -> bool {
         self.body.is_some() || self.cloud_top
+    }
+
+    /// Thing or layer.
+    #[must_use]
+    pub fn generator(&self) -> Generator {
+        self.role.generator()
     }
 
     /// A control by name.

@@ -765,7 +765,7 @@ impl Decoder<'_> {
     fn is_tree_like(&self, entry: &Entry) -> bool {
         match &entry.callee {
             Callee::Element(l) => crate::words::takes_cloud_top(l.name),
-            Callee::Definition(_) => self.class_of(entry) == Class::Thing,
+            Callee::Definition(_) | Callee::Param(_) => self.class_of(entry) == Class::Thing,
         }
     }
 
@@ -776,6 +776,7 @@ impl Decoder<'_> {
                 Role::Thing | Role::Run => Class::Thing,
                 Role::Surface | Role::Scatter => Class::Area,
             },
+            Callee::Param(_) => Class::Thing,
             Callee::Definition(d) => {
                 if self.def_info(d).is_some_and(|i| i.thing) {
                     Class::Thing

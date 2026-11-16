@@ -997,3 +997,26 @@ mod make {
         ));
     }
 }
+
+// ---- a thing passed by name ------------------------------------------------------------------------
+
+#[test]
+fn a_thing_passed_by_name_is_a_control_like_any_other() {
+    let text = "define stand {\n    param piece pebble\n    stack { piece at=\"(0.5sq, 0.5sq)\" }\n}\ntile size=\"1x1\" {\n    stack {\n        stand piece=rock\n    }\n}\n";
+    // the node is named by its path, and the thing by its word, written bare
+    let id = "tile/stack/stand";
+    let out = set(text, id, "piece", "boulder");
+    assert!(out.contains("stand piece=boulder"), "{out}");
+    // and the edit keeps what it does not name
+    assert_eq!(out.replace("boulder", "rock"), text);
+    // taken off, the param is its default again
+    let out = go(
+        text,
+        &Op::SetControl {
+            id,
+            name: "piece",
+            value: None,
+        },
+    );
+    assert!(out.contains("        stand\n"), "{out}");
+}

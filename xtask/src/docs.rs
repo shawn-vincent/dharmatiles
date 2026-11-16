@@ -258,10 +258,10 @@ fn prose(s: &str) -> String {
 
 fn role_text(role: &str) -> &'static str {
     match role {
-        "surface" => "a surface: it paints the ground of its area",
+        "surface" => "a layer, a surface: it paints the ground of its area",
         "thing" => "a thing: one solid, standing on the surface",
-        "run" => "a run: built along a tile edge or a drawn line",
-        "scatter" => "a scatter: many things, placed; its children say what",
+        "run" => "a layer, a run: built along a tile edge or a drawn line",
+        "scatter" => "a layer, a scatter: many things, placed; its children say what",
         _ => "an element",
     }
 }

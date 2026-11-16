@@ -22,7 +22,7 @@ const PLACE = [
 ];
 const EDGES = ['north', 'south', 'east', 'west'];
 
-const NO_NAMES = { defs: [], regions: [], lines: [], points: [] };
+const NO_NAMES = { defs: [], regions: [], lines: [], points: [], things: [], thingParams: [] };
 
 /**
  * What can go at the caret: {from, to, items: [{label, insert, about, kind}]},
@@ -33,7 +33,7 @@ const NO_NAMES = { defs: [], regions: [], lines: [], points: [] };
  * @param {import('./api').ElementJson[]} elements
  * @param {boolean} [force]
  * @param {import('./api').Language | null} [language]
- * @param {{ defs?: string[], regions?: string[], lines?: string[], points?: string[] }} [names]
+ * @param {Partial<Pick<import('./api').NamesRes, 'defs' | 'regions' | 'lines' | 'points' | 'things' | 'thingParams'>>} [names]
  */
 export function suggest(caret, elements, force = false, language = null, names = NO_NAMES) {
   const before = caret.before;
@@ -61,6 +61,12 @@ export function suggest(caret, elements, force = false, language = null, names =
         ...n.lines.map((l) => ({ label: l, insert: l, about: 'a line', kind: 'line' })),
         ...EDGES.map((e) => ({ label: e, insert: e, about: 'a tile edge', kind: 'edge' })),
         ...n.points.map((q) => ({ label: q, insert: q, about: 'a point', kind: 'point' })),
+      ];
+    } else if (n.thingParams.some((p) => p.define === node && p.param === ctl)) {
+      // a parameter that holds a thing: the thing elements and the document's things (a layer is not one)
+      items = [
+        ...elements.filter((e) => e.generator === 'thing').map((e) => ({ label: e.name, insert: e.name, about: `a thing: ${e.about}`, kind: 'thing', family: e.family })),
+        ...n.things.map((d) => ({ label: d, insert: d, about: 'a thing: a definition of one thing', kind: 'thing', family: 'plant' })),
       ];
     } else {
       const c = el(node)?.controls.find((x) => x.name === ctl);

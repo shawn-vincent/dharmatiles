@@ -130,6 +130,9 @@ pub(crate) struct Decoder<'k> {
     pub imported: HashMap<String, (DefInfo, String)>,
     /// While decoding a define: each parameter → the control it fills.
     pub param_controls: HashMap<String, &'static Control>,
+    /// While decoding a define: the parameters that hold a thing (written as
+    /// an entry, or passed to a thing parameter of a call).
+    pub thing_params: HashSet<String>,
     /// The `base` line of the stack last decoded.
     pub stack_base: Option<Base>,
     /// The `let`s of the stack block last decoded (format 1).
@@ -185,6 +188,17 @@ fn refs(node: &KdlNode, names: &HashSet<String>, out: &mut Vec<String>) {
         if names.contains(c.name().value()) {
             out.push(c.name().value().to_owned());
         }
+        // a thing passed by name (`shrub leaf=fern-leaf`) or a thing
+        // parameter's default (`param leaf fern-leaf`) is a call too
+        for e in c.entries() {
+            let by_name = e.name().is_some() || c.name().value() == "param";
+            if by_name
+                && let Some(s) = e.value().as_string()
+                && names.contains(s)
+            {
+                out.push(s.to_owned());
+            }
+        }
         refs(c, names, out);
     }
 }
@@ -199,6 +213,7 @@ impl<'k> Decoder<'k> {
             local: HashMap::new(),
             imported: HashMap::new(),
             param_controls: HashMap::new(),
+            thing_params: HashSet::new(),
             stack_base: None,
             stack_consts: Vec::new(),
             frame_region: None,
@@ -636,6 +651,7 @@ impl<'k> Decoder<'k> {
         }
 
         self.param_controls.clear();
+        self.thing_params.clear();
         let step = if is_tile {
             "tile".to_owned()
         } else {
@@ -1009,10 +1025,44 @@ impl<'k> Decoder<'k> {
             return None;
         }
         let control = self.param_controls.get(&name.value).copied();
+        let used_as_thing = self.thing_params.contains(&name.value);
+        if used_as_thing && let Some(k) = control {
+            self.err(
+                dt_lang::codes::TYPE,
+                name.span,
+                format!(
+                    "`{}` is used as a thing and as a value of `{}`",
+                    name.value, k.name
+                ),
+                "two kinds",
+            )
+            .help = Some(
+                "a parameter holds a number or a thing, not both; use two parameters".to_owned(),
+            );
+        }
+        if control.is_none()
+            && self.thing_default(n)
+            && (self.is_definition(&name.value) || schema::element(&name.value).is_some())
+        {
+            self.err(
+                dt_lang::codes::NAME,
+                name.span,
+                format!("`{}` is the name of an element or a definition", name.value),
+                "a thing parameter is a plain name",
+            )
+            .help = Some(
+                "a parameter that holds a thing is written as an entry, and an element's own name would call the element: choose another name, such as `leaf`".to_owned(),
+            );
+        }
+        let mut thing = used_as_thing;
         let default = match n.entries() {
             [_] => None,
             [_, e] if e.name().is_none() => match control {
                 Some(k) => self.value(e, k, "param", &name.value, ctx),
+                None if used_as_thing || self.thing_default(n) => {
+                    thing = true;
+                    self.thing_value(e, &name.value, "param", ctx)
+                }
                 None => self.untyped(e),
             },
             _ => {
@@ -1030,7 +1080,19 @@ impl<'k> Decoder<'k> {
             name,
             default,
             control,
+            thing,
         })
+    }
+
+    /// True when the default of a `param` node is the name of a thing.
+    fn thing_default(&self, n: &KdlNode) -> bool {
+        match n.entries() {
+            [_, e] if e.name().is_none() => e
+                .value()
+                .as_string()
+                .is_some_and(|s| self.thing_kind(s) == Some(true)),
+            _ => false,
+        }
     }
 
     fn line(&mut self, n: &KdlNode, ctx: &Ctx) -> Option<Line> {

@@ -201,6 +201,9 @@ pub struct Param {
     /// The control the parameter fills inside the definition (`grass
     /// length=length` makes `length` grass's length), if one was found.
     pub control: Option<&'static Control>,
+    /// True when it holds a thing (`param leaf pebble`): a parameter written as
+    /// a stack entry or a scatter child, or whose default names a thing.
+    pub thing: bool,
 }
 
 /// A drawn line: `line trail width=9 wobble=3 { through south "0.65,1" north }`.
@@ -374,6 +377,9 @@ pub enum Callee {
     Element(&'static Element),
     /// A definition, from this file or a `use`.
     Definition(String),
+    /// A thing parameter of the enclosing definition, used as an entry
+    /// (`leaf`): the caller says which thing it is.
+    Param(String),
 }
 
 /// The place words written on an entry.
@@ -441,7 +447,7 @@ impl Entry {
     pub fn element(&self) -> Option<&'static Element> {
         match self.callee {
             Callee::Element(l) => Some(l),
-            Callee::Definition(_) => None,
+            Callee::Definition(_) | Callee::Param(_) => None,
         }
     }
 
@@ -567,6 +573,9 @@ pub enum Value {
     Tag(String),
     /// The enclosing definition's parameter, filled in by the caller.
     Param(String),
+    /// A thing by name: the value of a thing parameter (`leaf=boulder`), an
+    /// element or a definition of one thing.
+    Thing(String),
     /// Free text, or a definition argument nothing could type.
     Text(String),
 }

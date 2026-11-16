@@ -189,6 +189,13 @@ pub struct Names {
     pub lines: Vec<String>,
     /// `point NAME`.
     pub points: Vec<String>,
+    /// The definitions of this document that are one thing (a stack of one
+    /// thing element, or of one of these, or of a thing parameter).
+    pub things: Vec<String>,
+    /// The parameters that hold a thing, as (definition, parameter): one
+    /// written as an entry of the definition's stack or a scatter's child,
+    /// or whose default names a thing.
+    pub thing_params: Vec<(String, String)>,
 }
 
 /// The names `text` makes (see [`Names`]).
@@ -225,8 +232,104 @@ pub fn names_in(text: &str) -> Result<Names, EditError> {
         }
     }
     let mut out = Names::default();
-    walk(parse(text)?.nodes(), &mut out);
+    let doc = parse(text)?;
+    walk(doc.nodes(), &mut out);
+    things_in(doc.nodes(), &mut out);
     Ok(out)
+}
+
+/// The things of a document, read from its nodes as they stand (a text being
+/// typed has no decode): the same rule the decoder holds, a definition is a
+/// thing when its stack is exactly one thing, and a parameter holds a thing
+/// when it is written as an entry or its default names one.
+fn things_in(nodes: &[KdlNode], out: &mut Names) {
+    let is_thing_element = |n: &str| {
+        crate::schema::element(n).is_some_and(|e| e.generator() == crate::schema::Generator::Thing)
+    };
+    let defines: Vec<&KdlNode> = nodes
+        .iter()
+        .filter(|n| n.name().value() == "define")
+        .collect();
+    let param_names = |d: &KdlNode| -> Vec<String> {
+        d.iter_children()
+            .filter(|c| c.name().value() == "param")
+            .filter_map(|c| {
+                c.entries()
+                    .first()
+                    .and_then(|e| e.value().as_string())
+                    .map(str::to_owned)
+            })
+            .collect()
+    };
+    let stack_of = |d: &KdlNode| -> Vec<String> {
+        d.iter_children()
+            .filter(|c| c.name().value() == "stack")
+            .flat_map(|s| s.iter_children())
+            .filter(|c| !matches!(c.name().value(), "let" | "override"))
+            .map(|c| c.name().value().to_owned())
+            .collect()
+    };
+    // thing parameters: written as an entry or a scatter's child, or with a thing's name as default
+    for d in &defines {
+        let Some(dn) = d.entries().first().and_then(|e| e.value().as_string()) else {
+            continue;
+        };
+        let params = param_names(d);
+        let mut used: Vec<String> = Vec::new();
+        fn entries(n: &KdlNode, params: &[String], used: &mut Vec<String>) {
+            for c in n.iter_children() {
+                if params.iter().any(|p| p == c.name().value()) {
+                    used.push(c.name().value().to_owned());
+                }
+                entries(c, params, used);
+            }
+        }
+        for st in d.iter_children().filter(|c| c.name().value() == "stack") {
+            entries(st, &params, &mut used);
+        }
+        for p in d.iter_children().filter(|c| c.name().value() == "param") {
+            let name = p.entries().first().and_then(|e| e.value().as_string());
+            let default = p
+                .entries()
+                .iter()
+                .filter(|e| e.name().is_none())
+                .nth(1)
+                .and_then(|e| e.value().as_string());
+            if let Some(name) = name
+                && (used.iter().any(|u| u == name)
+                    || default.is_some_and(|v| {
+                        is_thing_element(v)
+                            || defines.iter().any(|o| {
+                                o.entries().first().and_then(|e| e.value().as_string()) == Some(v)
+                            })
+                    }))
+            {
+                out.thing_params.push((dn.to_owned(), name.to_owned()));
+            }
+        }
+    }
+    // things: a stack of one entry that is a thing element, a thing definition or a thing parameter (to a fixpoint)
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for d in &defines {
+            let Some(dn) = d.entries().first().and_then(|e| e.value().as_string()) else {
+                continue;
+            };
+            if out.things.iter().any(|t| t == dn) {
+                continue;
+            }
+            let stack = stack_of(d);
+            let is = matches!(stack.as_slice(), [one]
+                if is_thing_element(one)
+                    || out.things.iter().any(|t| t == one)
+                    || out.thing_params.iter().any(|(def, p)| def == dn && p == one));
+            if is {
+                out.things.push(dn.to_owned());
+                changed = true;
+            }
+        }
+    }
 }
 
 /// The innermost node whose text holds byte `offset`.

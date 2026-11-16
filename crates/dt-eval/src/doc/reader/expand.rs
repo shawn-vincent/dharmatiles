@@ -95,18 +95,42 @@ impl Reader<'_> {
                 (Some(i), None) => Some(i.value.clone()),
                 (None, None) => None,
             };
+            let Some(resolved) = self.resolve(e, scope) else {
+                continue;
+            };
+            // the element a thing parameter stands for is the entry's name
+            // from here on (its seed path above is the parameter's own)
+            let what = match &resolved {
+                Resolved::Element(l) => Spanned {
+                    value: l.name.to_owned(),
+                    span: e.what.span,
+                },
+                Resolved::Definition(..) => e.what.clone(),
+            };
             // who this entry is, in seed paths: by its id, else by how many
             // entries of its element come before it in the whole stack
             let entry_id = EntryId::new(&match &id {
-                Some(i) => format!("tile/{}/{i}", e.what.value),
+                Some(i) => format!("tile/{}/{i}", what.value),
                 None => format!(
                     "tile/{}/{}",
-                    e.what.value,
-                    self.counts.get(&e.what.value).copied().unwrap_or(0)
+                    what.value,
+                    self.counts.get(&what.value).copied().unwrap_or(0)
                 ),
             });
-            match &e.callee {
-                Callee::Element(element) => {
+            match resolved {
+                Resolved::Element(element) => {
+                    // a thing parameter's properties are checked here, where
+                    // the thing is known
+                    let over;
+                    let e = if matches!(e.callee, Callee::Param(_)) {
+                        let Some(o) = self.over_element(e, element, src) else {
+                            continue;
+                        };
+                        over = o;
+                        &over
+                    } else {
+                        e
+                    };
                     if !dt_elements::built().any(|n| n == element.name) {
                         pending.push(not_yet(
                             src,
@@ -300,7 +324,7 @@ impl Reader<'_> {
                                 &t.value,
                                 t.span,
                                 src,
-                                Reads::At(&e.what.value),
+                                Reads::At(&what.value),
                             );
                             let prop = property_span(src, t.span, "top");
                             top = Some(Top {
@@ -337,7 +361,7 @@ impl Reader<'_> {
                                 &p.top.value,
                                 p.top.span,
                                 src,
-                                Reads::At(&e.what.value),
+                                Reads::At(&what.value),
                             );
                             pins.push(pin_decl(p, &from));
                         }
@@ -349,7 +373,7 @@ impl Reader<'_> {
                         pending.push(not_yet(
                             src,
                             t.span,
-                            &format!("`top=` on `{}` is", e.what.value),
+                            &format!("`top=` on `{}` is", what.value),
                         ));
                     }
                     // a scatter along a line with a width covers its strip: half
@@ -372,10 +396,10 @@ impl Reader<'_> {
                             area: area.clone(),
                             ..scope.clone()
                         };
-                        *self.counts.entry(e.what.value.clone()).or_default() += 1;
+                        *self.counts.entry(what.value.clone()).or_default() += 1;
                         out.push(Entry {
                             id: entry_id,
-                            what: e.what.clone(),
+                            what,
                             area,
                             seed,
                             label: e.label.as_ref().map(|l| l.value.clone()),
@@ -404,17 +428,10 @@ impl Reader<'_> {
                         }
                     }
                 }
-                Callee::Definition(name) => {
-                    let Some((file, def)) = self.definition(&scope.file, name) else {
-                        self.errors.push(Diag::at(
-                            src,
-                            e.what.span,
-                            dt_lang::codes::UNKNOWN_NAME,
-                            format!("cannot find the definition `{name}`"),
-                            "not loaded",
-                        ));
+                Resolved::Definition(file, def) => {
+                    if matches!(e.callee, Callee::Param(_)) && !self.over_definition(e, &def, src) {
                         continue;
-                    };
+                    }
                     if scope.depth > 64 {
                         self.errors.push(Diag::at(
                             src,
@@ -462,7 +479,7 @@ impl Reader<'_> {
         if let Some(t) = &e.top {
             let holds_tree = def.stack.iter().any(|x| match &x.callee {
                 Callee::Element(el) => dt_doc::words::takes_cloud_top(el.name),
-                Callee::Definition(_) => true,
+                Callee::Definition(_) | Callee::Param(_) => true,
             });
             if !holds_tree {
                 pending.push(not_yet(
@@ -496,6 +513,7 @@ impl Reader<'_> {
                     p.default.as_ref().map(|v| Bound {
                         value: v.clone(),
                         src: Arc::clone(&file.src),
+                        file: Arc::clone(file),
                     })
                 });
             if let Some(a) = arg {
@@ -525,32 +543,38 @@ impl Reader<'_> {
             &child_scope
         };
         let src = &scope.file.src;
-        let (cl, inner, thing) = match &c.callee {
-            Callee::Element(cl) if cl.scattered => (*cl, scope.clone(), c.clone()),
-            Callee::Element(cl) => {
+        let resolved = self.resolve(c, scope)?;
+        let (cl, inner, thing) = match resolved {
+            Resolved::Element(cl) if cl.scattered => {
+                // a thing parameter's properties are checked here, where
+                // the thing is known
+                let thing = if matches!(c.callee, Callee::Param(_)) {
+                    self.over_element(c, cl, src)?
+                } else {
+                    c.clone()
+                };
+                (cl, scope.clone(), thing)
+            }
+            Resolved::Element(cl) => {
+                let layer = cl.generator() == dt_doc::schema::Generator::Layer;
                 self.errors.push(
                     Diag::at(
                         src,
                         c.what.span,
                         dt_lang::codes::NESTING,
-                        format!("`{}` can't be scattered", cl.name),
+                        if layer {
+                            format!("`{}` is a layer, and a scatter holds things", cl.name)
+                        } else {
+                            format!("`{}` can't be scattered", cl.name)
+                        },
                         "not a thing",
                     )
                     .help("a scatter holds rocks, flowers and trees"),
                 );
                 return None;
             }
-            Callee::Definition(name) => {
-                let Some((file, def)) = self.definition(&scope.file, name) else {
-                    self.errors.push(Diag::at(
-                        src,
-                        c.what.span,
-                        dt_lang::codes::UNKNOWN_NAME,
-                        format!("cannot find the definition `{name}`"),
-                        "not loaded",
-                    ));
-                    return None;
-                };
+            Resolved::Definition(file, def) => {
+                let name = &def.name.value;
                 let one = match def.stack.as_slice() {
                     [one] if scope.depth < 64 => one,
                     _ => {
@@ -569,6 +593,9 @@ impl Reader<'_> {
                         return None;
                     }
                 };
+                if matches!(c.callee, Callee::Param(_)) && !self.over_definition(c, &def, src) {
+                    return None;
+                }
                 let top = self.call_top(c, &def, scope, pending);
                 let inner = Scope {
                     file: Arc::clone(&file),
@@ -630,6 +657,138 @@ impl Reader<'_> {
             table: inner.lets.table.clone().unwrap_or_default(),
             weight: c.place.weight.as_ref().map_or(1.0, |w| w.value),
         })
+    }
+
+    /// What an entry's name stands for: an element, a definition, or (for a
+    /// thing parameter) the thing the caller passed, found in the file the
+    /// caller wrote its name in.  `None` once the mistake is reported.
+    pub(super) fn resolve(&mut self, e: &model::Entry, scope: &Scope) -> Option<Resolved> {
+        let src = &scope.file.src;
+        let (name, file) = match &e.callee {
+            Callee::Element(l) => return Some(Resolved::Element(l)),
+            Callee::Definition(name) => {
+                return self.find_definition(&scope.file, name, e, src);
+            }
+            Callee::Param(p) => match scope.params.get(p) {
+                Some(Bound {
+                    value:
+                        Spanned {
+                            value: Value::Thing(n),
+                            ..
+                        },
+                    file,
+                    ..
+                }) => (n.clone(), Arc::clone(file)),
+                _ => {
+                    self.errors.push(
+                        Diag::at(
+                            src,
+                            e.what.span,
+                            dt_lang::codes::MISSING_CONTROL,
+                            format!("`{p}` is a thing, and nothing was passed for it"),
+                            "no thing",
+                        )
+                        .help(format!("pass one at the call: `name {p}=rock`")),
+                    );
+                    return None;
+                }
+            },
+        };
+        if let Some(l) = dt_doc::schema::element(&name) {
+            return Some(Resolved::Element(l));
+        }
+        self.find_definition(&file, &name, e, src)
+    }
+
+    fn find_definition(
+        &mut self,
+        file: &Arc<File>,
+        name: &str,
+        e: &model::Entry,
+        src: &Src,
+    ) -> Option<Resolved> {
+        let Some((file, def)) = self.definition(file, name) else {
+            self.errors.push(Diag::at(
+                src,
+                e.what.span,
+                dt_lang::codes::UNKNOWN_NAME,
+                format!("cannot find the definition `{name}`"),
+                "not loaded",
+            ));
+            return None;
+        };
+        Some(Resolved::Definition(file, Box::new(def)))
+    }
+
+    /// The properties written on a thing parameter's entry, over the
+    /// element it stands for: each is a control of that element, read as the
+    /// element's own (the one written here wins, the rest are its defaults).
+    /// A name the element does not take is refused here, at the line.
+    fn over_element(
+        &mut self,
+        e: &model::Entry,
+        element: &'static dt_doc::schema::Element,
+        src: &Src,
+    ) -> Option<model::Entry> {
+        let mut over = e.clone();
+        let mut ok = true;
+        for s in &mut over.controls {
+            match element.control(&s.name.value) {
+                Some(c) => s.control = Some(c),
+                None => {
+                    ok = false;
+                    let names: Vec<&str> = element.controls.iter().map(|c| c.name).collect();
+                    self.errors.push(
+                        Diag::at(
+                            src,
+                            s.name.span,
+                            dt_lang::codes::UNKNOWN_CONTROL,
+                            format!(
+                                "`{}` has no control `{}`, and `{}` stands for a `{}` here",
+                                element.name, s.name.value, e.what.value, element.name
+                            ),
+                            "unknown control",
+                        )
+                        .help(format!(
+                            "`{}` takes: {}",
+                            element.name,
+                            names.join(", ")
+                        )),
+                    );
+                }
+            }
+        }
+        ok.then_some(over)
+    }
+
+    /// The properties written on a thing parameter's entry, over the
+    /// definition it stands for: each is one of its parameters.
+    fn over_definition(&mut self, e: &model::Entry, def: &Definition, src: &Src) -> bool {
+        let mut ok = true;
+        for s in &e.controls {
+            if !def.params.iter().any(|p| p.name.value == s.name.value) {
+                ok = false;
+                let names: Vec<&str> = def.params.iter().map(|p| p.name.value.as_str()).collect();
+                self.errors.push(
+                    Diag::at(
+                        src,
+                        s.name.span,
+                        dt_lang::codes::UNKNOWN_CONTROL,
+                        format!(
+                            "`{}` has no parameter `{}`, and `{}` stands for it here",
+                            def.name.value, s.name.value, e.what.value
+                        ),
+                        "unknown parameter",
+                    )
+                    .help(if names.is_empty() {
+                        format!("`{}` takes no parameters", def.name.value)
+                    } else {
+                        format!("`{}` takes: {}", def.name.value, names.join(", "))
+                    }),
+                );
+            }
+        }
+        ok
     }
 
     /// The strip a surface follows when it is placed `at=` `along`: the

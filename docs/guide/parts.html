@@ -52,6 +52,7 @@
 <li><a href="clouds.html">Clouds</a></li>
 <li><a href="seeds.html">Seeds</a></li>
 <li><a href="parts.html" aria-current="page">Parts</a></li>
+<li><a href="generators.html">Things and layers</a></li>
 <li><a href="gate.html">Overhang and the gate</a></li>
 <li><a href="errors.html">Reading errors</a></li>
 <li><a href="worked.html">Worked tiles</a></li>
@@ -134,7 +135,7 @@
 </section>
 <section class="rule">
 <h3 id="param-kind">A param takes its kind from its default or the control it fills</h3>
-<p>A param takes its kind from its default or, with none, from the control it fills: <code>param length "3.5dmm .. 6.5dmm"</code> is a length, <code>param clearings 0</code> a plain number, and a caller that writes <code>length=5</code> gets <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a> asking for <code>5dmm</code>. A param without a default must be given by the caller. A tile has no params. Expert controls live in parts files:</p>
+<p>A param takes its kind from its default or, with none, from the control it fills: <code>param length "3.5dmm .. 6.5dmm"</code> is a length, <code>param clearings 0</code> a plain number, and a caller that writes <code>length=5</code> gets <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a> asking for <code>5dmm</code>. A param whose default names a thing (<code>param leaf pebble</code>), or that the definition writes as an entry, holds a thing: the caller passes another by name (<code>shrub leaf=boulder</code>), as <a href="generators.html">things and layers</a> says. A param without a default must be given by the caller. A tile has no params. Expert controls live in parts files:</p>
 </section>
 <section class="rule">
 <h3 id="expert">Expert controls live in parts files</h3>
@@ -164,7 +165,7 @@
 </section>
 <section id="next" class="next">
 <h2>Next</h2>
-<p>Next: <a href="gate.html">overhang and the gate</a>, what every build is checked against before it is written.</p>
+<p>Next: <a href="generators.html">things and layers</a>, what an element makes and how a thing is passed by name.</p>
 </section>
 </article>
 </div>

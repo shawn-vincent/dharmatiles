@@ -200,6 +200,15 @@ enum Reads<'a> {
 struct Bound {
     value: Spanned<Value>,
     src: Src,
+    /// The file whose names the value reads: where a thing's name is found.
+    file: Arc<File>,
+}
+
+/// What an entry's name stands for once the parameters are bound: a built-in
+/// element, or a definition and the file it was found in.
+enum Resolved {
+    Element(&'static dt_doc::schema::Element),
+    Definition(Arc<File>, Box<Definition>),
 }
 
 /// What an inlined definition's entries see.

@@ -1,0 +1,23 @@
+dharmatiles version="1.0.0"
+
+// A thing passed by name: `stand` holds a thing in `piece` (a pebble unless the caller says
+// otherwise) and uses it as an entry, as a scatter child and with a property written over
+// the thing's own. A test tile.
+
+define stand {
+    param piece pebble
+    stack {
+        piece at="(0.3sq, 0.5sq)"
+        scatter count=3 { piece size="1dmm .. 2dmm" }
+    }
+}
+
+tile size="1x1" seed=12 {
+    about "One definition, two things: stand with its pebble and stand with a boulder. A test tile."
+    stack {
+        base
+        dirt
+        stand
+        stand piece=boulder
+    }
+}

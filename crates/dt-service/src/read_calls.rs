@@ -40,6 +40,7 @@ pub struct NamesReq {
 /// The names a text makes; `ok` false (and `message`) when it does not parse: its
 /// mistakes are the check's to show, and the page keeps the names it had.
 #[derive(Serialize, Deserialize, Debug, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
 pub struct NamesRes {
     pub ok: bool,
     pub message: Option<String>,
@@ -47,6 +48,17 @@ pub struct NamesRes {
     pub regions: Vec<String>,
     pub lines: Vec<String>,
     pub points: Vec<String>,
+    /// The definitions that are one thing: what a thing parameter may be given besides the thing elements.
+    pub things: Vec<String>,
+    /// The parameters that hold a thing, for completing `param=` with thing names.
+    pub thing_params: Vec<ThingParam>,
+}
+
+/// A parameter of a definition that holds a thing.
+#[derive(Serialize, Deserialize, Debug, ts_rs::TS)]
+pub struct ThingParam {
+    pub define: String,
+    pub param: String,
 }
 
 /// A text to colour.
@@ -287,6 +299,12 @@ pub fn names(v: &NamesReq) -> NamesRes {
             regions: n.regions,
             lines: n.lines,
             points: n.points,
+            things: n.things,
+            thing_params: n
+                .thing_params
+                .into_iter()
+                .map(|(define, param)| ThingParam { define, param })
+                .collect(),
         },
         Err(e) => NamesRes {
             ok: false,
@@ -295,6 +313,8 @@ pub fn names(v: &NamesReq) -> NamesRes {
             regions: Vec::new(),
             lines: Vec::new(),
             points: Vec::new(),
+            things: Vec::new(),
+            thing_params: Vec::new(),
         },
     }
 }
