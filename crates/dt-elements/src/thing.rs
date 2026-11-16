@@ -221,8 +221,17 @@ pub struct Standing<'a> {
 
 /// A thing: made from its controls and a seed, in its own frame.
 pub trait Thing: Send + Sync {
-    /// The smallest and largest box it can draw.
+    /// The smallest and largest box of one of it alone (what [`Thing::make`]
+    /// builds): the room the thing editor shows, which every such draw stands
+    /// inside.
     fn extent(&self) -> Extent;
+
+    /// The farthest the largest disc a draw asks of a scatter reaches, mm at
+    /// the 35 mm square: what placement spaces by.  This is the radius
+    /// [`Thing::draw`] gives, at its largest, so it is the footprint a
+    /// scatter keeps clear (a rock's includes the stones of a cluster, a
+    /// tree's the crown's disc) and may be more or less than the extent's.
+    fn placed_reach(&self) -> f64;
 
     /// How it meets the ground.
     fn meets(&self) -> Meets;
@@ -1097,7 +1106,7 @@ impl Element for Scatter {
         }
         let mut groups: Vec<Group> = Vec::new();
         for (i, (k, d)) in drawn.iter().enumerate() {
-            let reach = self.children[*k].0.extent().most_reach();
+            let reach = self.children[*k].0.placed_reach();
             match groups.iter_mut().find(|g| g.family == d.family()) {
                 Some(g) => {
                     g.reach = g.reach.max(reach);
@@ -1243,44 +1252,91 @@ mod tests {
         }
     }
 
-    /// The extent holds every draw: the room asked for lies between its
-    /// boxes, at every seed from 1 to 20.
+    /// The farthest a solid's vertex stands from the z axis, and its top.
+    fn reach_and_top(solids: &[Solid]) -> (f64, f64) {
+        let mut reach = 0.0f64;
+        let mut top = f64::NEG_INFINITY;
+        for sol in solids {
+            let m = sol.mesh();
+            for p in &m.positions {
+                reach = reach.max(libm::hypot(p[0], p[1]));
+                top = top.max(p[2]);
+            }
+        }
+        (reach, top)
+    }
+
+    /// The extent holds every draw: what `make` builds alone stands inside the
+    /// largest box (round the origin, up from the ground), and the disc a draw
+    /// asks of a scatter inside the reach placement spaces by, at every seed
+    /// from 1 to 20.  Every word of `THINGS` is held (a new thing cannot skip
+    /// it): each plain at the low tier, where a tree is cheap (it has no
+    /// leaves, so only what the full build adds is left out), and small ones
+    /// at both tiers.
     #[test]
     fn the_extent_bounds_every_draw() {
+        let size = |lo: f64, hi: f64| written("size", Value::Range(lo, hi));
+        let small_tree = [
+            written("crown/width", Value::Range(10.0, 16.0)),
+            written("trunk/height", Value::Number(8.0)),
+            written("height", Value::Range(24.0, 30.0)),
+        ];
+        // (name, thing, the tiers it is held at)
+        let mut held: Vec<(String, Box<dyn Thing>, &[bool])> = Vec::new();
+        for (name, _) in THINGS {
+            held.push(((*name).into(), thing(name, &[]).unwrap(), &[true]));
+        }
         for (name, t) in things() {
-            let mut scene = Scene::new(Frame::dungeonblocks(2, 2), Seed::new(1));
-            let s = scene.frame().scale();
+            held.push((format!("ranged {name}"), t, &[true]));
+        }
+        held.push((
+            "small tree".into(),
+            thing("tree", &small_tree).unwrap(),
+            &[true, false],
+        ));
+        held.push((
+            "small flower".into(),
+            thing("flower", &[size(5.0, 7.0)]).unwrap(),
+            &[true, false],
+        ));
+        let mut bad: Vec<String> = Vec::new();
+        for (name, t, tiers) in held {
             let e = t.extent();
             assert!(e.least.x <= e.most.x && e.least.z <= e.most.z, "{name}");
-            for seed in 1..=20u64 {
-                let item = Seed::new(seed);
-                let mut rng = Rng::new(item);
-                let d = t.draw(&scene, item, &mut rng, false).unwrap();
-                let r = d.radius_mm() / s;
-                assert!(
-                    r >= 0.5 * e.least.x.min(e.least.y) - 1e-9 && r <= e.most_reach() + 1e-9,
-                    "{name} seed {seed}: reach {r} outside {:.3} to {:.3}",
-                    0.5 * e.least.x.min(e.least.y),
-                    e.most_reach()
-                );
-            }
-            // the solid's own top lies between the least and most height
-            if name != "tree" {
-                for seed in 1..=20u64 {
-                    let solids = t.make(&mut scene, Seed::new(seed), &printer()).unwrap();
-                    let top = solids
-                        .iter()
-                        .map(|sol| sol.bounds().unwrap().1[2])
-                        .fold(f64::NEG_INFINITY, f64::max);
-                    assert!(
-                        top >= e.least.z - 1e-9 && top <= e.most.z + 1e-9,
-                        "{name} seed {seed}: top {top} outside {} to {}",
-                        e.least.z,
-                        e.most.z
-                    );
+            let seeds = if name.contains("tree") { 8 } else { 20u64 };
+            for &low in tiers {
+                for seed in 1..=seeds {
+                    let mut scene = Scene::new(Frame::dungeonblocks(2, 2), Seed::new(1));
+                    scene.set_low(low);
+                    let s = scene.frame().scale();
+                    let item = Seed::new(seed);
+                    let d = t.draw(&scene, item, &mut Rng::new(item), false).unwrap();
+                    let r = d.radius_mm() / s;
+                    if !(r >= 0.5 * e.least.x.min(e.least.y) - 1e-9 && r <= t.placed_reach() + 1e-9) {
+                        bad.push(format!(
+                            "{name} seed {seed}: the disc {r} is outside {:.3} to {:.3}",
+                            0.5 * e.least.x.min(e.least.y),
+                            t.placed_reach()
+                        ));
+                    }
+                    let solids = t.make(&mut scene, item, &printer()).unwrap();
+                    let (reach, top) = reach_and_top(&solids);
+                    if reach > e.most_reach() + 1e-9 {
+                        bad.push(format!(
+                            "{name} seed {seed} (low {low}): it reaches {reach:.2} mm from its middle, the extent says {:.2}",
+                            e.most_reach()
+                        ));
+                    }
+                    if !(top >= e.least.z - 1e-9 && top <= e.most.z + 1e-9) {
+                        bad.push(format!(
+                            "{name} seed {seed} (low {low}): top {top:.2} outside {} to {}",
+                            e.least.z, e.most.z
+                        ));
+                    }
                 }
             }
         }
+        assert!(bad.is_empty(), "{}", bad.join("\n"));
     }
 
     /// How a thing meets the ground is data the placer reads: rocks are

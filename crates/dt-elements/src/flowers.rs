@@ -400,6 +400,10 @@ struct FlowerDraw {
 }
 
 impl Thing for Plant {
+    fn placed_reach(&self) -> f64 {
+        0.5 * self.size.hi()
+    }
+
     fn extent(&self) -> Extent {
         // petals reaching `outer` from the centre, standing from the bed
         // (sunk a hair) to the top of the stem and the higher cap

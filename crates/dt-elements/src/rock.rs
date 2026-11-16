@@ -1165,7 +1165,18 @@ impl Rock {
     }
 }
 
+/// How far a stone's footprint reaches from its middle, in half-widths: a block's
+/// squarest corner (`footprint_radius` at 45 degrees with the exponent 3, the most
+/// any family's footprint reaches) times the grain's lump (`body_points`: four
+/// waves, each of a width of `LUMP_AMP / 2` on average, so at most twice
+/// `LUMP_AMP` for all but the rarest stones).  The facets and chips only cut.
+const STONE_REACH: f64 = 1.1225 * (1.0 + 2.0 * LUMP_AMP);
+
 impl Thing for Rock {
+    fn placed_reach(&self) -> f64 {
+        Self::most_reach(self.size.hi())
+    }
+
     fn extent(&self) -> Extent {
         let (lo, hi) = (self.size.lo(), self.size.hi());
         // a stone's height: `body_points`' ratio of its width, capped, a
@@ -1176,8 +1187,8 @@ impl Thing for Rock {
         Extent::new(
             Box3::new(lo, lo, up(lo, HEIGHT_RATIO.0, SLAB_HEIGHT)),
             Box3::new(
-                2.0 * Self::most_reach(hi),
-                2.0 * Self::most_reach(hi),
+                STONE_REACH * hi,
+                STONE_REACH * hi,
                 up(hi, HEIGHT_RATIO.1, 1.0).max(HEIGHT_MIN_MM) + 1.0,
             ),
         )
@@ -1324,6 +1335,23 @@ impl Thing for Rock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A stone alone stays inside the reach its extent names, over many
+    /// more seeds than the extent test's (the one share-loose number: the
+    /// lump of a stone has no hard end).
+    #[test]
+    fn a_stone_stays_inside_its_reach() {
+        for seed in 1..=400u64 {
+            let mut rng = Rng::new(Seed::new(seed));
+            let st = make_stone(&mut rng, 10.0, FAMILIES, false).unwrap();
+            assert!(
+                st.radius() <= STONE_REACH * 5.0,
+                "seed {seed}: reach {} over {}",
+                st.radius(),
+                STONE_REACH * 5.0
+            );
+        }
+    }
 
     #[test]
     fn buried_is_a_share_never_a_loose_percent() {
