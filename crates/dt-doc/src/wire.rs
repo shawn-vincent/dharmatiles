@@ -17,6 +17,8 @@ pub struct ElementSummary {
     pub name: String,
     /// `surface`, `thing`, `run` or `scatter`.
     pub role: String,
+    /// `thing` (one solid from its controls and a seed) or `layer` (reads the scene so far), from the role.
+    pub generator: String,
     pub about: String,
     /// The element's page on the site.
     pub href: String,

@@ -1,0 +1,21 @@
+dharmatiles version="1.0.0"
+
+// A thing passed by name.  `stand` holds a thing in `piece`: a pebble unless the caller says
+// otherwise.  It puts one on the ground and scatters three more, so the same recipe draws a
+// pebble stand and, called with `piece=boulder`, a boulder stand.
+define stand {
+    param piece pebble
+    stack {
+        piece at="(0.3sq, 0.5sq)"
+        scatter count=3 { piece }
+    }
+}
+
+tile size="1x1" seed=12 {
+    stack {
+        base
+        dirt
+        stand
+        stand piece=boulder
+    }
+}

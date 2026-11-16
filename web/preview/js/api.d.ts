@@ -304,7 +304,11 @@ weightings: Array<WeightingJson>, name: string,
 /**
  * `surface`, `thing`, `run` or `scatter`.
  */
-role: string, about: string, 
+role: string, 
+/**
+ * `thing` (one solid from its controls and a seed) or `layer` (reads the scene so far), from the role.
+ */
+generator: string, about: string, 
 /**
  * The element's page on the site.
  */
@@ -793,7 +797,15 @@ type NamedPoint = { name: string, at: [number, number], span: [number, number], 
 
 type NamesReq = { text: string, };
 
-type NamesRes = { ok: boolean, message: string | null, defs: Array<string>, regions: Array<string>, lines: Array<string>, points: Array<string>, };
+type NamesRes = { ok: boolean, message: string | null, defs: Array<string>, regions: Array<string>, lines: Array<string>, points: Array<string>, 
+/**
+ * The definitions that are one thing: what a thing parameter may be given besides the thing elements.
+ */
+things: Array<string>, 
+/**
+ * The parameters that hold a thing, for completing `param=` with thing names.
+ */
+thingParams: Array<ThingParam>, };
 
 type Near = { x: number, y: number, };
 
@@ -1450,6 +1462,8 @@ type Thing = { what: string,
  * The offset its name starts at: a node is addressed by it.
  */
 at: number, controls: Array<WrittenControl>, defaults: Array<UnwrittenControl>, };
+
+type ThingParam = { define: string, param: string, };
 
 type Tier = "full" | "draft" | "low" | "super-low";
 

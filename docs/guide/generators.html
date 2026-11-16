@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Things and layers</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Things and layers</h1>
+  <p class="lede">An element is a generator, and there are two kinds: a thing makes one solid on its own, and a layer reads the scene so far. A thing can be passed by name.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#generators">An element is a thing or a layer</a></li>
+<li><a href="#thing-param">A param can hold a thing, and the caller passes it by name</a></li>
+<li><a href="#thing-properties">Properties written where a thing is used apply over its own</a></li>
+<li><a href="#thing-mix">A scatter holds several things by weight</a></li>
+<li><a href="#thing-refusals">A layer, a number or a nothing where a thing belongs is refused at the line</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="syntax.html">Syntax</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="seams.html">Seams</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="kinds.html">Kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="defaults.html">Defaults and the edge contract</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="generators.html" aria-current="page">Things and layers</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="rock stone boulder pebble flower tree scatter dirt define">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/guide/generators.dtile" controls="seed">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/17bd2fa08ffce5faaed41951d2da9af4.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+
+<span class="tk-comment">// A thing passed by name.  `stand` holds a thing in `piece`: a pebble unless the caller says</span>
+<span class="tk-comment">// otherwise.  It puts one on the ground and scatters three more, so the same recipe draws a</span>
+<span class="tk-comment">// pebble stand and, called with `piece=boulder`, a boulder stand.</span>
+<span class="tk-node">define</span> stand <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> piece pebble
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">piece</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0.3sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-punct">{</span> <span class="tk-node">piece</span> <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">12</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">stand</span>
+        <span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span>boulder
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>One definition, two stands: <code>stand</code> holds a thing in <code>piece</code>, a pebble by default, and the second call passes a boulder.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>Every element makes something, and it is one of two kinds. A <strong>thing</strong> is given its controls and a seed and makes one solid, with nothing else to look at: a rock, a stone, a boulder, a pebble, a flower, a tree, and a definition whose stack is exactly one of them. A <strong>layer</strong> also reads what the stack has built so far: dirt, ground, water and floors paint the ground, and a scatter, a wall or a cliff place their things on it.</p>
+<p>Because a thing needs nothing but its controls and a seed, it can be handed around by name. A definition says <code>param leaf pebble</code>, uses <code>leaf</code> like an element, and the caller says which thing with <code>leaf=boulder</code>. A layer cannot be handed around, and the program says so where it is written.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="generators">An element is a thing or a layer</h3>
+<p>The element schema says which, once, and the element pages say it under <em>Kind</em>. A thing is what a <code>scatter</code> may hold and what <code>at=</code> places on its own; every other element is a layer. A definition is a thing when its stack is one thing, and a layer when it is anything else.</p>
+<div class="tbl"><table>
+<thead><tr><th>Kind</th><th>Takes</th><th>Elements</th></tr></thead>
+<tbody>
+<tr><td>thing</td><td>its controls and a seed</td><td><a href="../elements/rock.html"><code>rock</code></a>, <a href="../elements/stone.html"><code>stone</code></a>, <a href="../elements/boulder.html"><code>boulder</code></a>, <a href="../elements/pebble.html"><code>pebble</code></a>, <a href="../elements/flower.html"><code>flower</code></a>, <a href="../elements/tree.html"><code>tree</code></a>, and a definition of one of them</td></tr>
+<tr><td>layer</td><td>its controls, a seed and the scene so far</td><td>everything else: <a href="../elements/dirt.html"><code>dirt</code></a>, <code>ground</code>, <code>water</code>, <code>floor</code>, <a href="../elements/scatter.html"><code>scatter</code></a>, <code>grass</code>, <code>reeds</code>, <code>wall</code>, <code>cliff</code></td></tr>
+</tbody></table></div>
+<p>These are two more kinds, checked before anything is built as lengths and angles are (<a href="kinds.html">kinds</a>).</p>
+</section>
+<section class="rule">
+<h3 id="thing-param">A param can hold a thing, and the caller passes it by name</h3>
+<p>A <code>param</code> holds a thing when its default names one, or when the definition writes it as an entry or as a scatter's child. The caller passes another thing by its name, an element or a definition of one thing, written bare. Inside the definition the param's name calls the thing it holds, so one recipe serves every thing handed to it:</p>
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+
+<span class="tk-node">define</span> stand <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> piece pebble
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">piece</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0.3sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-punct">{</span> <span class="tk-node">piece</span> <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+
+<span class="tk-node">define</span> boulder-ish <span class="tk-punct">{</span> <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">boulder</span> <span class="tk-punct">}</span> <span class="tk-punct">}</span>
+
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">12</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">stand</span>                          <span class="tk-comment">// its pebble</span>
+        <span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span>boulder            <span class="tk-comment">// an element</span>
+        <span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span>boulder-ish        <span class="tk-comment">// a definition of one thing</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
+<p>A param with no default must be given by the caller, as every param must. A thing param is a plain name, and not the name of an element or of a definition (it would call that instead). A definition that holds itself through a param is the same loop as one that calls itself (<a class="codelink" href="../e/loop.html"><code>dt::loop</code></a>): a thing never makes a thing that makes another.</p>
+</section>
+<section class="rule">
+<h3 id="thing-properties">Properties written where a thing is used apply over its own</h3>
+<p>The properties written on the entry that calls a thing param, <code>piece size="1dmm .. 2dmm"</code>, are the thing's own controls, read as if they were written on the thing itself. The one written there wins; what is not written there is the thing's own default (for a definition, its params' defaults). A property the thing does not take is refused at the line, with what the thing takes.</p>
+<p>The call that passes the thing passes a name and nothing else: <code>stand piece=boulder</code> cannot reach into the boulder. A thing is tuned where it is used, so two uses of one param in one definition may tune it twice. A thing's own seed is the call path's, like every entry's (<a href="seeds.html">seeds</a>): two definitions that take the same thing draw it differently, and an entry written beside another does not move its draw.</p>
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+
+<span class="tk-node">define</span> stand <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> piece pebble
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">piece</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">1dmm</span><span class="tk-string"> .. </span><span class="tk-number">2dmm</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0.3sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+        <span class="tk-node">piece</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2dmm</span><span class="tk-string"> .. </span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0.6sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">stand</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
+</section>
+<section class="rule">
+<h3 id="thing-mix">A scatter holds several things by weight</h3>
+<p>A scatter's children are a list of things, and each one placed picks its child by <code>weight=</code>. A child may be a thing param, and a definition of one thing, as well as an element. This is as far as the language goes: a thing is written once, passed by name or written as a child, or one of several weighted children. It is never a thing that returns a thing.</p>
+<pre data-doc><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+
+<span class="tk-node">define</span> pile <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> bit pebble
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">6</span> <span class="tk-punct">{</span>
+            <span class="tk-node">bit</span> <span class="tk-property">weight</span><span class="tk-punct">=</span><span class="tk-number">5</span>
+            <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string"> .. </span><span class="tk-number">5dmm</span><span class="tk-string">"</span> <span class="tk-property">weight</span><span class="tk-punct">=</span><span class="tk-number">1</span>
+        <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
+
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">5</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">pile</span> <span class="tk-property">bit</span><span class="tk-punct">=</span>stone
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
+</section>
+<section class="rule">
+<h3 id="thing-refusals">A layer, a number or a nothing where a thing belongs is refused at the line</h3>
+<p>The kind is checked where the value is written, with what to write instead (<a class="codelink" href="../e/type.html"><code>dt::type</code></a>):</p>
+<pre data-fragment><code><span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span>dirt      <span class="tk-comment">// `dirt` is a layer, and `stand piece` is a thing</span>
+<span class="tk-node">stand</span> <span class="tk-property">piece</span><span class="tk-punct">=</span><span class="tk-number">3</span>         <span class="tk-comment">// `stand piece` is a thing, and a number is not</span>
+<span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span>boulder     <span class="tk-comment">// `boulder` is a thing, and `rock size` is a length</span></code></pre>
+<p>A name that is no element and no definition is <a class="codelink" href="../e/unknown-element.html"><code>dt::unknown-element</code></a>, a thing param left without a value <a class="codelink" href="../e/missing-control.html"><code>dt::missing-control</code></a>, and a layer written as a scatter's child <a class="codelink" href="../e/scatter.html"><code>dt::scatter</code></a> naming its kind: <code>dirt</code> is a layer, and a scatter holds things. A param is one kind: one used as a thing and as the value of a control is <a class="codelink" href="../e/type.html"><code>dt::type</code></a> too.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<p>This page explains no error codes.</p>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="gate.html">overhang and the gate</a>, what every build is checked against before it is written.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

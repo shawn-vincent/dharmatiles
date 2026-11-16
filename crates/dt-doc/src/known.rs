@@ -32,6 +32,8 @@ pub struct ParamInfo {
     pub has_default: bool,
     /// The control it fills, which types a caller's value.
     pub control: Option<&'static Control>,
+    /// True when it holds a thing: a caller passes a thing's name.
+    pub thing: bool,
 }
 
 impl From<&Definition> for DefInfo {
@@ -44,6 +46,7 @@ impl From<&Definition> for DefInfo {
                     name: p.name.value.clone(),
                     has_default: p.default.is_some(),
                     control: p.control,
+                    thing: p.thing,
                 })
                 .collect(),
             kind: d.summary,

@@ -338,6 +338,7 @@ pub(super) fn bind(v: &Spanned<Value>, src: &Src, scope: &Scope) -> Bound {
     Bound {
         value: v.clone(),
         src: Arc::clone(src),
+        file: Arc::clone(&scope.file),
     }
 }
 

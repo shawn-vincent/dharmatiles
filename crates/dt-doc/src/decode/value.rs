@@ -297,6 +297,19 @@ impl Decoder<'_> {
             if ok {
                 continue;
             }
+            if self.thing_kind(n) == Some(true) {
+                let at = self.word_span(inner, n);
+                self.err(
+                    dt_lang::codes::TYPE,
+                    at,
+                    format!("`{n}` is a thing, and `{owner} {name}` is {kind}"),
+                    "a thing is not a number",
+                )
+                .help = Some(format!(
+                    "a thing goes where a parameter holds one (`param leaf {n}`, then `leaf` in the stack); `{name}` takes a number"
+                ));
+                return None;
+            }
             let mut cands: Vec<&str> = ctx.params.iter().map(String::as_str).collect();
             if lets {
                 cands.extend(ctx.consts.iter().map(|(l, _)| l.as_str()));
