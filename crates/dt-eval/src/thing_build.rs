@@ -380,6 +380,7 @@ impl Subject {
                 clouds: None,
                 debug: None,
                 placed: Vec::new(),
+                things: dt_kit::ThingUse::default(),
                 cache: CacheUse::default(),
             },
         };

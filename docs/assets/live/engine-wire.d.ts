@@ -435,6 +435,20 @@ done: number, total: number, };
 
 type System = "db" | "ol";
 
+type ThingUse = { 
+/**
+ * Bodies made.
+ */
+built: number, 
+/**
+ * Bodies a variant had already made in this build, copied.
+ */
+shared: number, 
+/**
+ * Bodies read from the shelf (made by an earlier build).
+ */
+kept: number, };
+
 type TileInfo = { name: string, cols: number, rows: number, seed: number | null, about: string | null, };
 
 type TileMap = { language: Language, cols: number, rows: number, 
@@ -507,7 +521,11 @@ left_out: { [key in string]: number },
 /**
  * What the disk cache did.
  */
-cache: CacheUse, };
+cache: CacheUse, 
+/**
+ * What the build did for its things: made, copied, read from the shelf.
+ */
+things: ThingUse, };
 
 type Written = { text: string, span: [number, number], plain: string, };
 

@@ -41,6 +41,8 @@ pub struct TileRecord {
     pub left_out: BTreeMap<String, usize>,
     /// What the disk cache did.
     pub cache: CacheUse,
+    /// What the build did for its things: made, copied, read from the shelf.
+    pub things: dt_kit::ThingUse,
 }
 
 impl TileRecord {
@@ -82,6 +84,7 @@ impl TileRecord {
             stats,
             left_out: b.report.left_out.iter().cloned().collect(),
             cache: b.report.cache.clone(),
+            things: b.report.things,
         }
     }
 
@@ -102,6 +105,7 @@ impl TileRecord {
             stats: BTreeMap::new(),
             left_out: BTreeMap::new(),
             cache: CacheUse::default(),
+            things: dt_kit::ThingUse::default(),
         }
     }
 

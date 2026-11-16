@@ -65,5 +65,10 @@
     "state": "miss",
     "made_by": null,
     "problems": []
+  },
+  "things": {
+    "built": 0,
+    "shared": 0,
+    "kept": 0
   }
 }

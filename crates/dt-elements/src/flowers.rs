@@ -454,13 +454,17 @@ impl Thing for Plant {
         ))
     }
 
-    fn make(
+    fn make_with(
         &self,
         scene: &mut Scene,
         _seed: Seed,
         _printer: &dt_kit::Printer,
+        _bodies: &dt_kit::Bodies<'_>,
     ) -> Result<Vec<Solid>, LookError> {
-        // a flower's size is its one draw: the middle of its range, alone
+        // a flower is built where it stands, from `meshes` at its place (a body built at the origin and moved
+        // there is the same flower to a hair's breadth, which moved the gate's repair counts in a meadow of
+        // grass past their budgets), so it is not kept as a body.  Alone it is the one `meshes`, at the origin,
+        // its size the middle of its range.
         let outer = 0.25 * (self.size.lo() + self.size.hi());
         let parts = self.meshes(outer, [0.0, 0.0], 0.0, 0.0, scene.frame().scale());
         let slots = scene

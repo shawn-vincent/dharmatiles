@@ -1524,6 +1524,20 @@ extent: ThingExtent,
  */
 draws: Array<ThingDraw>, };
 
+type ThingUse = { 
+/**
+ * Bodies made.
+ */
+built: number, 
+/**
+ * Bodies a variant had already made in this build, copied.
+ */
+shared: number, 
+/**
+ * Bodies read from the shelf (made by an earlier build).
+ */
+kept: number, };
+
 type Tier = "full" | "draft" | "low" | "super-low";
 
 type TierWant = { tile: string, 
@@ -1652,7 +1666,11 @@ left_out: { [key in string]: number },
 /**
  * What the disk cache did.
  */
-cache: CacheUse, };
+cache: CacheUse, 
+/**
+ * What the build did for its things: made, copied, read from the shelf.
+ */
+things: ThingUse, };
 
 type TileSummary = { id: string, path: string, name: string, 
 /**
