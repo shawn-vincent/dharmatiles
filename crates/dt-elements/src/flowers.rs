@@ -405,9 +405,9 @@ impl Thing for Plant {
     }
 
     fn extent(&self) -> Extent {
-        // petals reaching `outer` from the centre, standing from the bed
-        // (sunk a hair) to the top of the stem and the higher cap
-        let up = self.stem + self.dome.max(self.petal) - SINK_MM;
+        // petals reaching `outer` from the centre, from the bed (sunk a hair)
+        // to the top of the stem and the higher cap: the height of the box
+        let up = self.stem + self.dome.max(self.petal);
         Extent::new(
             Box3::new(self.size.lo(), self.size.lo(), up),
             Box3::new(self.size.hi(), self.size.hi(), up),

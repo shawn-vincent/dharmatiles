@@ -1252,18 +1252,20 @@ mod tests {
         }
     }
 
-    /// The farthest a solid's vertex stands from the z axis, and its top.
-    fn reach_and_top(solids: &[Solid]) -> (f64, f64) {
+    /// The farthest a solid's vertex stands from the z axis, its top, and its foot (under the ground, for a thing that is sunk
+    /// into it).
+    fn reach_top_foot(solids: &[Solid]) -> (f64, f64, f64) {
         let mut reach = 0.0f64;
-        let mut top = f64::NEG_INFINITY;
+        let (mut top, mut foot) = (f64::NEG_INFINITY, f64::INFINITY);
         for sol in solids {
             let m = sol.mesh();
             for p in &m.positions {
                 reach = reach.max(libm::hypot(p[0], p[1]));
                 top = top.max(p[2]);
+                foot = foot.min(p[2]);
             }
         }
-        (reach, top)
+        (reach, top, foot)
     }
 
     /// The extent holds every draw: what `make` builds alone stands inside the
@@ -1320,16 +1322,18 @@ mod tests {
                         ));
                     }
                     let solids = t.make(&mut scene, item, &printer()).unwrap();
-                    let (reach, top) = reach_and_top(&solids);
+                    let (reach, top, foot) = reach_top_foot(&solids);
                     if reach > e.most_reach() + 1e-9 {
                         bad.push(format!(
                             "{name} seed {seed} (low {low}): it reaches {reach:.2} mm from its middle, the extent says {:.2}",
                             e.most_reach()
                         ));
                     }
-                    if !(top >= e.least.z - 1e-9 && top <= e.most.z + 1e-9) {
+                    // the box of the draw as the card reports it (its foot, under the ground where it is sunk, to its top)
+                    let tall = top - foot;
+                    if !(tall >= e.least.z - 1e-9 && tall <= e.most.z + 1e-9) {
                         bad.push(format!(
-                            "{name} seed {seed} (low {low}): top {top:.2} outside {} to {}",
+                            "{name} seed {seed} (low {low}): its box is {tall:.2} tall (foot {foot:.2}), outside {} to {}",
                             e.least.z, e.most.z
                         ));
                     }
