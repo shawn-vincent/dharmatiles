@@ -305,14 +305,55 @@ fn rebuilt_matches_committed(root: &Path) -> Result<(), String> {
     ))
 }
 
+/// The checks a release may be told to skip, each with its reason.
+const SKIPPABLE: [&str; 2] = ["tests", "audit"];
+
+/// The words of a release's arguments, and its `--skip <check> "<reason>"` overrides; `None` when one is
+/// malformed (no check, an unknown check, no reason).
+/// A release's words and its skips (a check and its reason).
+type Parsed<'a> = (Vec<&'a String>, Vec<(String, String)>);
+
+fn split_skips(args: &[String]) -> Option<Parsed<'_>> {
+    let mut words = Vec::new();
+    let mut skips = Vec::new();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        if a == "--skip" {
+            let check = it.next()?;
+            let reason = it.next()?;
+            if !SKIPPABLE.contains(&check.as_str()) || reason.trim().is_empty() {
+                return None;
+            }
+            skips.push((check.clone(), reason.trim().to_owned()));
+        } else if !a.starts_with("--") {
+            words.push(a);
+        }
+    }
+    Some((words, skips))
+}
+
+/// The summary with each skipped check and its reason written after it, for the changelog entry.
+fn with_skips(summary: &str, skips: &[(String, String)]) -> String {
+    let mut s = summary.trim().to_owned();
+    for (check, why) in skips {
+        let why = why.replace('&', "&amp;").replace('<', "&lt;");
+        s.push_str(&format!(" Skipped {check}: {why}."));
+    }
+    s
+}
+
 pub fn run_release(root: &Path, args: &[String]) -> Result<(), String> {
     let flag = |f: &str| args.iter().any(|a| a == f);
-    let words: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
-    let [version, summary] = words[..] else {
-        return Err(
-            "usage: cargo xtask release <version> \"<summary>\" [--no-tests] [--no-push]".into(),
-        );
+    let usage = || {
+        "usage: cargo xtask release <version> \"<summary>\" [--skip tests|audit \"<reason>\"]... [--no-push]"
+            .to_owned()
     };
+    let (words, skips) = split_skips(args).ok_or_else(usage)?;
+    let [version, summary] = words[..] else {
+        return Err(usage());
+    };
+    let skipped = |c: &str| skips.iter().any(|(k, _)| k == c);
+    let summary = &with_skips(summary, &skips);
     let v = Version::parse(version).ok_or_else(|| format!("not a version: {version}"))?;
     let tag = format!("v{v}");
 
@@ -360,7 +401,10 @@ pub fn run_release(root: &Path, args: &[String]) -> Result<(), String> {
         ],
     )?;
     crate::docs::run(root, true)?;
-    if !flag("--no-tests") {
+    if !skipped("audit") {
+        crate::ledger::audited_since_last_release(root)?;
+    }
+    if !skipped("tests") {
         cargo(root, &["test", "--release", "--workspace"])?;
         rebuilt_matches_committed(root)?;
         // the browser's tile is the program's: the wasm bundle against the native build, byte for byte
@@ -406,6 +450,29 @@ mod tests {
         month: 11,
         day: 7,
     };
+
+    #[test]
+    fn a_skip_is_a_known_check_and_a_reason() {
+        let a = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        let ok = a(&[
+            "1.0.1",
+            "Sum",
+            "--skip",
+            "tests",
+            "known failure",
+            "--no-push",
+        ]);
+        let (w, s) = split_skips(&ok).unwrap();
+        assert_eq!((w.len(), s.len()), (2, 1));
+        assert_eq!(with_skips("Sum", &s), "Sum Skipped tests: known failure.");
+        for bad in [
+            &["--skip", "tests"][..],
+            &["--skip", "docs", "why"],
+            &["--skip", "audit", " "],
+        ] {
+            assert!(split_skips(&a(bad)).is_none(), "{bad:?}");
+        }
+    }
 
     #[test]
     fn versions_order_and_parse() {

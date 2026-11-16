@@ -22,6 +22,7 @@
   <li><a href="#builds">Builds</a></li>
   <li><a href="#elements">Elements</a></li>
   <li><a href="#pictures">Pictures</a></li>
+  <li><a href="#ledger">The ledger</a></li>
   <li><a href="#project">The project</a></li>
 </ol></details></nav>
 </div>
@@ -86,6 +87,13 @@
   <li>Every render paints overhang red and the band orange. On a model those colours mean overhang and nothing else; the interface's own red (<code>--err</code>) marks errors and destructive actions.</li>
   <li>Tiles are shown on the plate (#D9E0EB), whole, never cropped.</li>
   <li>The site and the preview share one <a href="visual-system.html">visual system</a>.</li>
+</ul>
+
+<h2 id="ledger">The ledger</h2>
+<ul class="rules">
+  <li><strong>One file lists every known violation of the language principles.</strong> <code>ledger.kdl</code>, at the repository root, holds one <code>violation</code> node for each: <code>violation "audit:layer-unit" principle="one-job" found="94927dcd" note="…"</code>. The id is what a test looks up (<code>hole:&lt;kind&gt;:&lt;form&gt;</code>, <code>collision:&lt;word&gt;</code>, <code>disagree:&lt;case&gt;</code>, <code>audit:&lt;slug&gt;</code>), the principle is one word of a closed list, and <code>found</code> is the commit the finding was recorded against. The file is read in one place, <code>dt_doc::ledger::Ledger</code>.</li>
+  <li><strong>The ledger only shrinks.</strong> A test reads its known exceptions with <code>Ledger::expect(id, still_broken)</code>: a listed case that now works fails (&ldquo;fixed: remove it from <code>ledger.kdl</code>&rdquo;), and a broken case that is not listed fails (&ldquo;new violation&rdquo;). An id is added only by an audit commit, one that changes <code>ledger.kdl</code> alone; <code>cargo xtask check</code> fails a commit that adds an id and changes any other file, and names it.</li>
+  <li>A release needs an audit commit newer than the last release tag, or <code>--skip audit "reason"</code>, whose reason is written into the changelog entry.</li>
 </ul>
 
 <h2 id="project">The project</h2>

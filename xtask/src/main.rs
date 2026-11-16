@@ -11,6 +11,7 @@ mod guide;
 mod highlight;
 mod image;
 mod lanes;
+mod ledger;
 mod live;
 mod nav;
 mod parity;
@@ -75,15 +76,18 @@ commands:
            of every diagnostic code; --check changes nothing and fails if
            stale, if a code has no explaining section, if a marker names no
            code, or if an error page or anchor is missing
-  release <version> "<summary>" [--no-tests] [--no-push]
-           refuses a dirty working tree (commit first); unless --no-tests,
+  release <version> "<summary>" [--skip tests|audit "<reason>"] [--no-push]
+           refuses a dirty working tree (commit first); unless --skip tests,
            also rebuilds tests/baseline/library-db.tsv and the element
            pictures from the committed tree and refuses if they differ;
            number a release: the changes under docs/changelog.d/ become
            <version>'s entry in the changelog, newest first, dated today
            and led by <summary>, and their files are deleted; Cargo.toml's
            version is bumped; fmt, clippy, docs --check and the tests run
-           (--no-tests skips the tests); the docs are written again for the
+           (--skip tests "<reason>" skips the tests); refuses unless an audit
+           commit (one touching only ledger.kdl) is newer than the last
+           v* tag (--skip audit "<reason>" skips that); a skip's reason is
+           written into the changelog entry; the docs are written again for the
            new version (the examples' poster names carry it); then one commit, the tag
            v<version>, and a push of both (--no-push keeps them local)
   wasm <out-dir> | --check
