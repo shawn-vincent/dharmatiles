@@ -60,7 +60,9 @@ impl Diag {
     /// With a hint.
     #[must_use]
     pub fn help(mut self, help: impl Into<String>) -> Self {
-        self.help = Some(help.into());
+        let help = help.into();
+        // a help with nothing in it is no help (see `dt_lang::codes::help_with_explain`)
+        self.help = (!help.trim().is_empty()).then_some(help);
         self
     }
 
@@ -164,5 +166,20 @@ impl Diagnostic for Diag {
             Some(self.label.clone()),
             *span,
         ))))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_blank_help_is_not_kept_and_never_prints_bare() {
+        let d = Diag::plain(dt_lang::codes::POINT, "m").help("");
+        assert_eq!(d.help, None);
+        let text = miette::Diagnostic::help(&d)
+            .expect("explain lines")
+            .to_string();
+        assert!(text.starts_with("explain: "), "{text:?}");
     }
 }

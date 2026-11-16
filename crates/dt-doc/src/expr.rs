@@ -592,15 +592,25 @@ fn unknown_function(name: &str, (start, end): (usize, usize), v2: bool) -> ExprE
             .collect::<Vec<_>>()
             .join(", ");
         format!("functions are {fns}; weightings are {weightings}")
+    } else if FUNCTIONS.iter().any(|(f, _)| *f == name) {
+        // the word exists, in the other expression language: say where it is read
+        let fns = FUNCTIONS
+            .iter()
+            .map(|(f, _)| *f)
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "`{name}` is a function of heights ({fns}), read only where a height is written, such as `top=\"$bottom + 20dmm * sin(30deg)\"`; this control takes numbers, units and weightings: {weightings}"
+        )
     } else {
         format!("weightings are {weightings}: size=\"low(1dmm .. 6dmm, 4)\"")
     };
-    ExprError::coded(
-        dt_lang::codes::VALUE,
-        format!("unknown function `{name}`"),
-        help,
-        (start, end),
-    )
+    let message = if !v2 && FUNCTIONS.iter().any(|(f, _)| *f == name) {
+        format!("`{name}` is not read in this control")
+    } else {
+        format!("unknown function `{name}`")
+    };
+    ExprError::coded(dt_lang::codes::VALUE, message, help, (start, end))
 }
 
 impl Parser<'_> {

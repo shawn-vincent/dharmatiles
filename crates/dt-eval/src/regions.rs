@@ -735,10 +735,20 @@ impl RegionTree {
                         "point into a region that covers ground".to_owned(),
                     ));
                 };
-                let pair = f
-                    .xy_in([b.x0, b.y0, b.x1, b.y1], units)
-                    .map_err(|ke| (ke.message, ke.help.unwrap_or_default()))?;
-                let (x, y) = pair.ok_or_else(|| (String::new(), String::new()))?;
+                let pair = f.xy_in([b.x0, b.y0, b.x1, b.y1], units).map_err(|ke| {
+                    (
+                        ke.message,
+                        ke.help.unwrap_or_else(|| {
+                            "write the point's x and y as numbers with units".to_owned()
+                        }),
+                    )
+                })?;
+                let (x, y) = pair.ok_or_else(|| {
+                    (
+                        "a point written with x and y has no x and y to read".to_owned(),
+                        "this is a bug in the program: report it".to_owned(),
+                    )
+                })?;
                 Ok([sample(&x)?, sample(&y)?])
             }
             dt_doc::framed::FramedAt::Polar { d, a_deg } => {

@@ -442,10 +442,21 @@ pub fn check(
             } else {
                 shown(lo)
             };
+            // a bare number is a fraction, so a share written as 50 is 5000%: say what was read and what was meant
+            let help = if axis == Axis::Share && hi > 1.0 {
+                let bare = fmt(hi);
+                format!(
+                    "a share is a fraction from 0 to 1 or a percent from 0% to 100%; a bare {bare} is read as {}%, so write `{name}=\"{bare}%\"` for {bare}% or `{name}={}` for a fraction",
+                    fmt(hi * 100.0),
+                    fmt(hi / 100.0),
+                )
+            } else {
+                format!("`{name}` takes {limits}")
+            };
             return refuse(
                 format!("`{owner} {name}` is {limits}, not {written}"),
                 "out of range",
-                Some(format!("`{name}` takes {limits}")),
+                Some(help),
             );
         }
         Ok(())

@@ -26,6 +26,7 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
     crate::shots::check(root)?;
     crate::release::check_changes(root)?;
     crate::nav::run(root, check)?;
+    crate::paths::check(root)?;
     let bin = crate::program(root, true)?;
     crate::codes::run(root, check, &bin)?;
     crate::live::run(root, check)?;
