@@ -37,7 +37,7 @@
 use std::any::{Any, TypeId};
 use std::sync::{Mutex, OnceLock};
 
-use dt_kit::{Falls, Field, Kind, Mask, Placed, Rng, Scene, Seed, Solid, Spread, scatter};
+use dt_kit::{Falls, Field, Kind, Mask, Placed, Rng, Scene, Scope, Seed, Solid, Spread, scatter};
 
 use crate::flowers::Plant;
 use crate::read::Settings;
@@ -348,6 +348,9 @@ pub(crate) fn rocks_in(scene: &Scene) -> Vec<[f64; 3]> {
         .collect()
 }
 
+/// What a dry thing keeps off: the rocks, trees and walls already in the scene.
+const BLOCKERS: &[Kind] = &[Kind::Rock, Kind::Tree, Kind::Wall];
+
 /// What a dry thing's darts are checked against, read from the scene once.
 struct Dry {
     ground: Field,
@@ -381,6 +384,7 @@ fn one_layout(
     area: &Mask,
     rng: &mut Rng,
     sites: &Sites<'_>,
+    outline: Option<&Field>,
 ) -> Result<Vec<Placed>, LookError> {
     let Sites {
         radii,
@@ -403,7 +407,7 @@ fn one_layout(
         };
         Some(Dry {
             ground: Field::from(&surface),
-            blocker: scene.standing(&[Kind::Rock, Kind::Tree, Kind::Wall], 0.45),
+            blocker: scene.standing(BLOCKERS, NEAR_ABOVE_MM),
             wet: scene.wet().clone(),
             widest: radii.iter().copied().fold(0.0, f64::max),
         })
@@ -415,7 +419,9 @@ fn one_layout(
     let support = scene.support();
     let rr = clear.map_or(0, |c| libm::ceil(c / step) as usize);
     let (nx, ny) = (area.nx, area.ny);
-    let density = |x: f64, y: f64| -> f64 {
+    // where a thing could stand at all: in its area, dry, clear of what is
+    // stamped; a dart elsewhere is no place
+    let fits = |x: f64, y: f64| -> bool {
         if let Some(d) = &dry {
             // the whole disc must be dry, in its area, off what stands there
             let ok = (0..8).all(|k| {
@@ -423,21 +429,17 @@ fn one_layout(
                 let (px, py) = (x + d.widest * libm::cos(a), y + d.widest * libm::sin(a));
                 let (i, j) = d.ground.node(px.clamp(0.0, w), py.clamp(0.0, h));
                 let q = j * nx + i;
-                area.bits[q] && !d.wet.bits[q] && !d.blocker.bits[q]
+                area.bits[q] && !d.wet.bits[q] && (outline.is_some() || !d.blocker.bits[q])
             });
             let (i, j) = d.ground.node(x, y);
-            return if ok && area.bits[j * nx + i] {
-                shape.weight(x, y)
-            } else {
-                0.0
-            };
+            return ok && area.bits[j * nx + i];
         }
         let (i, j) = (
             (libm::round(x / step).max(0.0) as usize).min(nx - 1),
             (libm::round(y / step).max(0.0) as usize).min(ny - 1),
         );
         if !area.bits[j * nx + i] {
-            return 0.0;
+            return false;
         }
         if let (Some(c), Some(sup)) = (clear, support) {
             for jj in j.saturating_sub(rr)..=(j + rr).min(ny - 1) {
@@ -445,13 +447,15 @@ fn one_layout(
                     let d =
                         libm::hypot((ii as f64 - i as f64) * step, (jj as f64 - j as f64) * step);
                     if d <= c && sup.z[jj * nx + ii].is_finite() {
-                        return 0.0;
+                        return false;
                     }
                 }
             }
         }
-        shape.weight(x, y)
+        true
     };
+    // how likely a place is kept: the thinning, which leaves a thing out
+    let density = |x: f64, y: f64| shape.weight(x, y);
     let spread = Spread {
         tries: shape.tries(meets.tries),
         inset: [meets.rim_mm * s, 1.0],
@@ -460,7 +464,12 @@ fn one_layout(
         factor: 1.0,
         falls: shape.falls(),
     };
-    Ok(scatter(&frame, rng, radii, &spread, &density, avoid))
+    let scope = Scope {
+        density: &density,
+        fits: &fits,
+        outline,
+    };
+    Ok(scatter(&frame, rng, radii, &spread, &scope, avoid))
 }
 
 /// Dart-throw discs of `radii` (world mm) into the entry's area by how
@@ -481,7 +490,21 @@ pub(crate) fn place_group(
     sites: &Sites<'_>,
 ) -> Result<Vec<Placed>, LookError> {
     let area = open_area(scene, ctx, reach);
-    let mut avoid = if sites.meets.bedded {
+    // what a thing keeps clear of (a bedded one the rocks, a dry one the rocks,
+    // trees and walls): a spaced or clumped pattern keeps the disc of each (its
+    // bounds, and a dry thing's ring), a cover the outline of each, the footprint
+    // `near` measures from, so a cover lies against them on every side and leaves
+    // no halo on a short one
+    let cover = sites.shape.pattern == Pattern::Cover;
+    let kinds: Vec<Kind> = Kind::ALL
+        .iter()
+        .copied()
+        .filter(|k| {
+            (sites.meets.bedded && *k == Kind::Rock) || (sites.meets.dry && BLOCKERS.contains(k))
+        })
+        .collect();
+    let outline = (cover && !kinds.is_empty()).then(|| footprint_distance(scene, &kinds));
+    let mut avoid = if sites.meets.bedded && !cover {
         rocks_in(scene)
     } else {
         Vec::new()
@@ -494,7 +517,7 @@ pub(crate) fn place_group(
     let layouts = sites.meets.upright.map_or(1, |u| u.layouts);
     let mut placed = Vec::new();
     for _ in 0..layouts {
-        let layout = one_layout(scene, &area, rng, &sites)?;
+        let layout = one_layout(scene, &area, rng, &sites, outline.as_ref())?;
         if layout.len() > placed.len() {
             placed = layout;
         }
@@ -596,9 +619,10 @@ impl Shape {
         match self.pattern {
             Pattern::Spaced => base,
             Pattern::Clumped => base * CLUMP_TRIES,
-            // a dart that lands in a clearing, or where the cover is thin,
-            // is a thing that is not there
-            Pattern::Cover => 1,
+            // a dart where nothing could stand (off the area, in a rock) is
+            // thrown again; one in a clearing, or where the cover is thin, is
+            // a thing that is not there (and is not thrown again)
+            Pattern::Cover => base,
         }
     }
 
@@ -639,13 +663,22 @@ const STANDING: &[Kind] = &[Kind::Rock, Kind::Wall, Kind::Tree, Kind::Cliff];
 /// How far up a solid its footprint is read, mm (what `standing` reads).
 const NEAR_ABOVE_MM: f64 = 0.45;
 
+/// How far (mm) every point is from the **footprint** of the solids of
+/// `kinds` already in the scene: the one answer to "where is the rock", read
+/// by `near` and by a cover's keep-clear alike.  A solid's footprint is its
+/// slice [`NEAR_ABOVE_MM`] over its lowest point (where it meets the ground,
+/// not its bounds).
+fn footprint_distance(scene: &Scene, kinds: &[Kind]) -> Field {
+    let mask = scene.standing(kinds, NEAR_ABOVE_MM);
+    dt_kit::distance(scene.frame(), &mask.bits).0
+}
+
 impl Nearness {
     fn measure(rule: &Near, scene: &Scene) -> Self {
-        let mask = match rule.kinds {
-            Some(kinds) => scene.standing(kinds, NEAR_ABOVE_MM),
-            None => scene.wet().clone(),
+        let dist = match rule.kinds {
+            Some(kinds) => footprint_distance(scene, kinds),
+            None => dt_kit::distance(scene.frame(), &scene.wet().bits).0,
         };
-        let (dist, _) = dt_kit::distance(scene.frame(), &mask.bits);
         Self {
             rule: rule.clone(),
             dist,
@@ -1263,7 +1296,7 @@ mod tests {
                     &mut rng,
                     &radii,
                     &spread(&shape),
-                    &|x, y| shape.weight(x, y),
+                    &Scope::with_density(&|x, y| shape.weight(x, y)),
                     &[],
                 );
                 let n = placed.len() as f64;
@@ -1285,7 +1318,14 @@ mod tests {
         // and a cover is dense: nothing is kept apart
         let dense = cover_shape(1.0, Vec::new());
         let mut rng = Rng::new(Seed::new(1));
-        let all = scatter(&frame, &mut rng, &radii, &spread(&dense), &|_, _| 1.0, &[]);
+        let all = scatter(
+            &frame,
+            &mut rng,
+            &radii,
+            &spread(&dense),
+            &Scope::with_density(&|_, _| 1.0),
+            &[],
+        );
         assert_eq!(all.len(), 400);
     }
 
@@ -1324,7 +1364,7 @@ mod tests {
                 &mut rng,
                 &radii,
                 &spread(falls),
-                &|x, y| shape.weight(x, y),
+                &Scope::with_density(&|x, y| shape.weight(x, y)),
                 &[],
             );
             let share = placed.len() as f64 / 16.0;
@@ -1397,7 +1437,7 @@ mod tests {
                 factor: 1.0,
                 falls: shape.falls(),
             },
-            &|x, y| shape.weight(x, y),
+            &Scope::with_density(&|x, y| shape.weight(x, y)),
             &[[cx, cy, rock]],
         );
         let mut at_the_foot = 0;
@@ -1446,7 +1486,7 @@ mod tests {
             &mut rng,
             &radii,
             &spread,
-            &|x, y| shape.weight(x, y),
+            &Scope::with_density(&|x, y| shape.weight(x, y)),
             &[],
         );
         assert!(placed.len() > 30, "{} places", placed.len());

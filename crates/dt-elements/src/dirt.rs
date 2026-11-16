@@ -30,8 +30,8 @@
 
 use dt_kit::OnFrame;
 use dt_kit::{
-    Band, Banded, Falls, Field, Noise, Placed, Plane, Rng, Scale, Scene, Seed, Spread, cap, noise,
-    rim, scatter, smax, smooth,
+    Band, Banded, Falls, Field, Noise, Placed, Plane, Rng, Scale, Scene, Scope, Seed, Spread, cap,
+    noise, rim, scatter, smax, smooth,
 };
 
 use crate::read::Settings;
@@ -405,7 +405,7 @@ fn clod_layer(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, base: &Field) -> (
         &mut rng,
         &radii,
         &spread,
-        &|x, y| dens.sample(x, y),
+        &Scope::with_density(&|x, y| dens.sample(x, y)),
         &[],
     );
     let mut out = base.clone();
@@ -733,7 +733,7 @@ fn place_pebbles(
         &mut rng,
         &radii,
         &spread,
-        &|x, y| c.sample(x, y) * keep.sample(x, y) * sits.sample(x, y),
+        &Scope::with_density(&|x, y| c.sample(x, y) * keep.sample(x, y) * sits.sample(x, y)),
         &[],
     );
     let seat = z.blur(PEB_SEAT_SIGMA_MM);

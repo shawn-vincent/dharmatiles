@@ -219,6 +219,10 @@ const R3: [f64; 3] = [
     0.549_700_477_901_970_3,
 ];
 
+/// How many times an even fall's dart is moved out along the outline's distance to
+/// come to rest against it (each move is the whole way on a straight outline).
+const LEAN_STEPS: usize = 4;
+
 /// A thing [`scatter`] placed.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Placed {
@@ -230,18 +234,59 @@ pub struct Placed {
     pub r: f64,
 }
 
+/// What [`scatter`] reads of the place at a dart: how likely it is kept,
+/// where nothing could stand, and how far a place is from what stands.
+#[derive(Clone, Copy)]
+pub struct Scope<'a> {
+    /// How likely a dart at `(x, y)` is kept (in [0, 1]): the thinning of the
+    /// places, a share of them left out.
+    pub density: &'a dyn Fn(f64, f64) -> f64,
+    /// Whether a thing could stand at `(x, y)` at all (the area, dry ground):
+    /// where it cannot, a dart is no place and the thing is thrown again.
+    pub fits: &'a dyn Fn(f64, f64) -> bool,
+    /// The distance (mm) from `(x, y)` to the outline of what stands: an
+    /// `avoid` of its real shape rather than a disc.  A thing of radius `r`
+    /// keeps `gap + factor·r` from it.  An even fall reads it, and a dart that
+    /// falls nearer is moved straight out to that distance, so the things lie
+    /// against the outline all along it; other falls keep to `avoid`'s discs.
+    pub outline: Option<&'a Field>,
+}
+
+fn anywhere(_x: f64, _y: f64) -> bool {
+    true
+}
+
+impl<'a> Scope<'a> {
+    /// A ground that holds a thing anywhere, kept as `density` says.
+    #[must_use]
+    pub fn with_density(density: &'a dyn Fn(f64, f64) -> f64) -> Self {
+        Self {
+            density,
+            fits: &anywhere,
+            outline: None,
+        }
+    }
+}
+
 /// **scatter**: things of the given radii placed largest first (stable),
 /// each by up to `spread.tries` darts, a dart kept with probability
-/// `density(x, y)` (in [0, 1]) where it keeps its spacing from everything
-/// placed before and from `avoid` (discs `x, y, r`). Returns what was
-/// placed, in placement order.
+/// `scope.density(x, y)` (in [0, 1]) where it keeps its spacing from
+/// everything placed before and from `avoid` (discs `x, y, r`). Returns
+/// what was placed, in placement order.
+///
+/// A dart where `scope.fits` says no thing could stand, or too near the
+/// tile's edge, `avoid` or (for an even fall) `scope.outline`, is no place:
+/// the thing is thrown again.  An even fall throws it at the next point of
+/// the sequence that is nobody's yet, so a place that cannot stand is a point
+/// found elsewhere, not a hole, and the count holds; only the thinning by
+/// `density` leaves a thing out.
 #[must_use]
 pub fn scatter(
     frame: &Frame,
     rng: &mut Rng,
     radii: &[f64],
     spread: &Spread,
-    density: &dyn Fn(f64, f64) -> f64,
+    scope: &Scope<'_>,
     avoid: &[[f64; 3]],
 ) -> Vec<Placed> {
     let [w, h] = frame.size_mm();
@@ -257,17 +302,21 @@ pub fn scatter(
     let mut order: Vec<usize> = (0..radii.len()).collect();
     order.sort_by(|&a, &b| radii[b].total_cmp(&radii[a]));
     let mut out = Vec::new();
-    // an even fall's shift of the sequence, and how many darts are thrown
+    // the way out of the outline, an even fall's
+    let lean = (spread.falls == Falls::Even)
+        .then(|| scope.outline.map(Field::gradient))
+        .flatten();
+    // an even fall's shift of the sequence
     let shift = (spread.falls == Falls::Even).then(|| [rng.random(), rng.random(), rng.random()]);
-    let mut darts = 0u32;
-    for k in order {
+    for (rank, k) in order.into_iter().enumerate() {
         let r = radii[k];
         let inset = spread.inset[0] + spread.inset[1] * r;
-        for _ in 0..spread.tries {
-            darts += 1;
-            let (x, y, keep) = match shift {
+        for attempt in 0..spread.tries {
+            let (mut x, mut y, keep) = match shift {
                 Some(shift) => {
-                    let n = f64::from(darts);
+                    // the thing's own point is its rank's; thrown again, a
+                    // point after every thing's first
+                    let n = (rank + 1 + attempt as usize * radii.len()) as f64;
                     let u = |c: usize| (shift[c] + n * R3[c]).fract();
                     let (lo, hi) = if spread.confine {
                         ([inset, inset], [w - inset, h - inset])
@@ -289,17 +338,43 @@ pub fn scatter(
                     (x, y, rng.random())
                 }
             };
-            if keep > density(x, y) {
-                continue;
-            }
-            if x.min(w - x).min(y).min(h - y) < inset {
-                continue;
+            // a dart that falls within a thing's reach of the outline lies against it
+            if let (Some(o), Some((gx, gy))) = (scope.outline, &lean) {
+                let want = spread.gap + spread.factor * r;
+                for _ in 0..LEAN_STEPS {
+                    let d = o.sample(x, y);
+                    let (a, b) = (gx.sample(x, y), gy.sample(x, y));
+                    let m = libm::hypot(a, b);
+                    // inside the outline the distance is flat: no way out
+                    if d >= want || m < 1e-9 {
+                        break;
+                    }
+                    x += a / m * (want - d);
+                    y += b / m * (want - d);
+                }
             }
             let clash = |d: &[f64; 3]| {
                 libm::hypot(d[0] - x, d[1] - y) < spread.gap + spread.factor * (r + d[2])
             };
-            if hash.any_near(x, y, reach, clash) {
-                continue;
+            let barred = || {
+                x.min(w - x).min(y).min(h - y) < inset
+                    || !(scope.fits)(x, y)
+                    || hash.any_near(x, y, reach, clash)
+                    || (spread.falls == Falls::Even
+                        && scope
+                            .outline
+                            .is_some_and(|o| o.sample(x, y) < spread.gap + spread.factor * r))
+            };
+            let thinned = keep > (scope.density)(x, y);
+            match spread.falls {
+                // a dart that is thinned or barred is a try spent
+                Falls::Apart if thinned || barred() => continue,
+                Falls::Apart => {}
+                // a dart that cannot stand is thrown again; one that is
+                // thinned is the thing left out
+                Falls::Even if barred() => continue,
+                Falls::Even if thinned => break,
+                Falls::Even => {}
             }
             if spread.falls == Falls::Apart {
                 hash.insert(x, y, r);
@@ -440,7 +515,7 @@ mod tests {
             &mut rng,
             &radii,
             &spread,
-            &|_, _| 1.0,
+            &Scope::with_density(&|_, _| 1.0),
             &[[17.5, 17.5, 3.0]],
         );
         assert!(placed.len() > 50);
@@ -451,6 +526,60 @@ mod tests {
                 assert!(q.r >= p.r, "largest first");
                 assert!(libm::hypot(p.at[0] - q.at[0], p.at[1] - q.at[1]) >= 0.25 + p.r + q.r);
             }
+        }
+    }
+
+    /// An even fall is thrown again where nothing could stand, so its count
+    /// holds, and a dart that falls within reach of an outline lies against it.
+    #[test]
+    fn an_even_fall_throws_a_barred_dart_again_and_leans_on_an_outline() {
+        let f = frame(35.0);
+        let (nx, ny) = f.nodes();
+        // a narrow wall, 3 mm by 12 mm, at the middle
+        let wall: Vec<bool> = (0..nx * ny)
+            .map(|q| {
+                let (x, y) = ((q % nx) as f64 * f.step_mm(), (q / nx) as f64 * f.step_mm());
+                (16.0..19.0).contains(&x) && (11.5..23.5).contains(&y)
+            })
+            .collect();
+        let (outline, _) = distance(&f, &wall);
+        let radii = vec![0.8; 300];
+        let spread = Spread {
+            tries: 20,
+            inset: [0.0, 1.0],
+            confine: true,
+            gap: 0.0,
+            factor: 1.0,
+            falls: Falls::Even,
+        };
+        // the left half only is ground a thing could stand on
+        let left = |x: f64, _y: f64| x < 17.5;
+        let scope = Scope {
+            density: &|_, _| 1.0,
+            fits: &left,
+            outline: Some(&outline),
+        };
+        for seed in 1..=4u64 {
+            let mut rng = Rng::new(Seed::new(seed));
+            let placed = scatter(&f, &mut rng, &radii, &spread, &scope, &[]);
+            // every thing found a place on the half that fits, none in the wall
+            assert_eq!(placed.len(), 300, "seed {seed}");
+            let mut nearest = f64::MAX;
+            for p in &placed {
+                assert!(left(p.at[0], p.at[1]));
+                let gap = outline.sample(p.at[0], p.at[1]) - p.r;
+                assert!(gap >= -0.2, "a thing in the wall: {gap}");
+                nearest = nearest.min(gap);
+            }
+            // and the nearest lies against it
+            assert!(nearest < 0.3, "seed {seed}: nearest gap {nearest}");
+            // along the wall's length: a thing against its left face at many
+            // heights, not one place
+            let against = placed
+                .iter()
+                .filter(|p| outline.sample(p.at[0], p.at[1]) - p.r < 0.3 && p.at[0] > 14.0)
+                .count();
+            assert!(against >= 5, "seed {seed}: {against} against the wall");
         }
     }
 

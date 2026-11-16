@@ -80,8 +80,8 @@ pub use dt_lang::smooth;
 pub use dt_value::{Dist, Draw, Op, Rng, Seed, WEIGHTINGS, Weighting, WeightingFn};
 pub use entry::EntryId;
 pub use field::{
-    Falls, Field, Noise, OnFrame, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise,
-    noise_at, rim, scatter, smax,
+    Falls, Field, Noise, OnFrame, Placed, Plane, Scale, Scope, Spread, cap, distance, geodesic,
+    noise, noise_at, rim, scatter, smax,
 };
 pub use land::{Disc, Land, STEEPEST_GROUND_DEG, Seat, SeatRule, THINGS, seat_on};
 pub use outline::Outline;
