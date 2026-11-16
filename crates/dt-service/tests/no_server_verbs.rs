@@ -30,6 +30,7 @@ use dt_service::read_calls::{self, Nothing, Overlay};
 use dt_service::roots::{Root, RootKind};
 use dt_service::storage::{MemStorage, Storage};
 use dt_service::tile::{Slot, tile_id};
+use dt_service::thing_calls::{BUILD_THING, ThingRef, ThingReq};
 use dt_service::tile_calls::{CHECK, CheckHost, TextReq};
 use dt_service::tile_host::{TileHost, TileRef};
 
@@ -441,6 +442,14 @@ fn table() -> Table<World, Refusal> {
         })
         .with(&STEP, |w: &World, r| {
             dt_service::draft_calls::step(w, &tile_ref(), r)
+        })
+        .with(&BUILD_THING, |w: &World, r: ThingReq| {
+            // the text the page holds is the document: a thing is read from it, not from the store
+            let src = dt_service::read_calls::Overlay {
+                files: BTreeMap::from([(PATH.to_owned(), r.text.clone())]),
+                base: &Mem(&w.mem),
+            };
+            dt_service::thing_calls::build_thing(w, &src, PATH, &r)
         })
 }
 
@@ -1573,4 +1582,152 @@ fn the_lanes_build_and_an_export_of_the_same_tile_are_one_key_and_one_entry() {
         1,
         "the export kept a second entry: another key"
     );
+}
+
+const THINGS: &str = "dharmatiles version=\"1.0.0\"\n\ndefine bluff {\n    stack {\n        rock size=\"6dmm .. 10dmm\"\n    }\n}\n\ndefine wet {\n    stack {\n        dirt\n    }\n}\n\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n        rock size=\"5dmm .. 8dmm\"\n        scatter count=2 {\n            rock size=\"3dmm .. 4dmm\"\n        }\n    }\n}\n";
+
+fn thing_req(which: ThingRef, seeds: &[u64]) -> ThingReq {
+    ThingReq {
+        text: THINGS.to_owned(),
+        file: None,
+        which,
+        seeds: seeds.to_vec(),
+    }
+}
+
+/// `buildThing`: a rock define at seeds 1 to 4, a rock entry and a scatter's child, and the refusals, by verb with no
+/// server and no disk.
+#[test]
+fn a_thing_is_drawn_alone_at_each_seed_by_verb_with_no_server() {
+    let w = world();
+    let table = table();
+    let define = || ThingRef::Define {
+        name: "bluff".to_owned(),
+    };
+    let res = table
+        .call(&w, &BUILD_THING, thing_req(define(), &[1, 2, 3, 4]))
+        .expect("a rock define is drawn");
+    assert_eq!(res.element, "rock");
+    assert_eq!(res.draws.len(), 4);
+    let e = res.extent;
+    assert!(e.least.x <= e.most.x && e.least.z <= e.most.z, "{e:?}");
+    assert!(
+        res.shown.iter().any(|c| c.control == "buried" && c.from == "default"),
+        "the controls as built: {:?}",
+        res.shown
+    );
+    let bytes = |d: &dt_service::thing_calls::ThingDraw| {
+        dt_service::export_calls::unbase64(&d.mesh).expect("base64")
+    };
+    for d in &res.draws {
+        assert!(
+            d.triangles > 20,
+            "seed {} has {} triangles",
+            d.seed,
+            d.triangles
+        );
+        assert_eq!(&bytes(d)[..4], dt_service::payload::MAGIC);
+        // frame z up: the thing's own box lies within its extent
+        assert!(d.size.z > 0.0 && d.size.z <= e.most.z + 1e-6, "{d:?} {e:?}");
+    }
+    assert_ne!(
+        bytes(&res.draws[0]),
+        bytes(&res.draws[1]),
+        "two seeds, two rocks"
+    );
+    // a draw is the same wherever it is asked: one seed alone is the strip's draw of that seed
+    let again = table
+        .call(&w, &BUILD_THING, thing_req(define(), &[3]))
+        .expect("one seed");
+    assert_eq!(bytes(&again.draws[0]), bytes(&res.draws[2]));
+
+    // an entry of the tile, and one of a scatter's things, by the id the stack gives them
+    let read = dt_eval::doc::read_with(
+        &dt_eval::Memory(BTreeMap::from([(PATH.to_owned(), THINGS.to_owned())])),
+        PATH,
+        Options::default().units(),
+    )
+    .expect("reads");
+    let keys: Vec<String> = read
+        .tile
+        .expect("a tile")
+        .stack
+        .iter()
+        .map(|e| e.id.as_str().to_owned())
+        .collect();
+    let rock = keys
+        .iter()
+        .find(|k| k.contains("rock"))
+        .expect("a rock entry");
+    let one = table
+        .call(
+            &w,
+            &BUILD_THING,
+            thing_req(
+                ThingRef::Entry {
+                    key: rock.clone(),
+                    child: None,
+                },
+                &[1],
+            ),
+        )
+        .expect("an entry is drawn");
+    assert_eq!(one.element, "rock");
+    let scatter = keys
+        .iter()
+        .find(|k| k.contains("scatter"))
+        .expect("a scatter");
+    let child = table
+        .call(
+            &w,
+            &BUILD_THING,
+            thing_req(
+                ThingRef::Entry {
+                    key: scatter.clone(),
+                    child: Some(0),
+                },
+                &[1],
+            ),
+        )
+        .expect("a scatter's thing is drawn");
+    assert!(
+        child.extent.most.x < one.extent.most.x,
+        "the child is the smaller rock"
+    );
+    let refused = |which: ThingRef, seeds: &[u64]| match table.call(
+        &w,
+        &BUILD_THING,
+        thing_req(which, seeds),
+    ) {
+        Err(CallError::Refused(r)) => r,
+        other => panic!("refused: {:?}", other.map(|r| r.element)),
+    };
+    // the scatter itself, and a define of a layer, are layers
+    let r = refused(
+        ThingRef::Entry {
+            key: scatter.clone(),
+            child: None,
+        },
+        &[1],
+    );
+    assert_eq!(r.status, Status::Unprocessable);
+    assert!(r.message.contains("layer"), "{}", r.message);
+    let r = refused(
+        ThingRef::Define {
+            name: "wet".to_owned(),
+        },
+        &[1],
+    );
+    assert_eq!(r.status, Status::Unprocessable);
+    assert!(r.message.contains("`wet` is a layer"), "{}", r.message);
+    // a name that is no define, and no seed
+    let r = refused(
+        ThingRef::Define {
+            name: "nope".to_owned(),
+        },
+        &[1],
+    );
+    assert_eq!(r.status, Status::NotFound);
+    let r = refused(define(), &[]);
+    assert_eq!(r.status, Status::BadRequest);
 }

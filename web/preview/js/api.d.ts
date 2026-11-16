@@ -242,6 +242,8 @@ type Deleted = { path: string, };
 
 type DiagData = { label?: string, unexpected?: boolean, };
 
+type Dims = { x: number, y: number, z: number, };
+
 type Done = Record<string, never>;
 
 type Download = { name: string, mediaType: string, data: string, };
@@ -1463,7 +1465,55 @@ type Thing = { what: string,
  */
 at: number, controls: Array<WrittenControl>, defaults: Array<UnwrittenControl>, };
 
+type ThingControl = { control: string, text: string, from: string, };
+
+type ThingDraw = { seed: number, 
+/**
+ * The triangles of the mesh.
+ */
+triangles: number, 
+/**
+ * This draw's own box, mm as printed.
+ */
+size: Dims, 
+/**
+ * The mesh payload (`web/preview/js/payload.js` reads it), as standard base64: an answer is JSON.
+ */
+mesh: string, };
+
+type ThingExtent = { least: Dims, most: Dims, };
+
 type ThingParam = { define: string, param: string, };
+
+type ThingRef = { "kind": "define", name: string, } | { "kind": "entry", key: string, child: number | null, };
+
+type ThingReq = { text: string, 
+/**
+ * A file the tile uses, instead of its own document.
+ */
+file?: string | null, which: ThingRef, 
+/**
+ * One seed for the view, or many for the strip; each is drawn on its own.
+ */
+seeds: Array<number>, };
+
+type ThingRes = { 
+/**
+ * The element it is (`rock`).
+ */
+element: string, 
+/**
+ * Its controls as built.
+ */
+shown: Array<ThingControl>, 
+/**
+ * The smallest and largest box it can draw.
+ */
+extent: ThingExtent, 
+/**
+ * One for each seed asked, in order.
+ */
+draws: Array<ThingDraw>, };
 
 type Tier = "full" | "draft" | "low" | "super-low";
 
@@ -1751,6 +1801,7 @@ export interface Calls {
   "trashTile": { req: Nothing; res: Trashed };
   "exportTile": { req: ExportReq; res: ExportRes };
   "offers": { req: OffersReq; res: OffersRes };
+  "buildThing": { req: ThingReq; res: ThingRes };
   "draft": { req: DraftReq; res: ArrayBuffer };
   "step": { req: StepReq; res: ArrayBuffer };
 }

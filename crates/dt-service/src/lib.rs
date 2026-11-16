@@ -78,6 +78,7 @@ pub mod storage;
 pub mod target_calls;
 pub mod tier_calls;
 pub mod tiers;
+pub mod thing_calls;
 pub mod tile;
 pub mod tile_calls;
 pub mod tile_host;

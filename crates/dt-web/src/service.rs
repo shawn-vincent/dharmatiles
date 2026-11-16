@@ -78,6 +78,7 @@ use dt_service::target_calls::{self, SET_TARGET, TargetHost, TargetReq, TargetRe
 use dt_service::tier_calls::{self, TIERS_WANT, TierResultReq, TiersWantReq, TiersWantRes};
 use dt_service::tiers::BookOp;
 use dt_service::tile::{Slot, tile_id};
+use dt_service::thing_calls::{self, BUILD_THING, ThingReq, ThingRes};
 use dt_service::tile_calls::{self, CHECK, CheckHost, TextReq};
 use dt_service::tile_host::{TileHost, TileRef};
 use dt_value::LockExt;
@@ -1329,6 +1330,11 @@ fn inventory_record(ctx: &Ctx, req: InventoryRecordReq) -> Result<InventoryWrote
     inventory_calls::record(ctx, req)
 }
 
+fn build_thing(ctx: &Ctx, req: ThingReq) -> Result<ThingRes, Refusal> {
+    let src = Doc { text: &req.text };
+    thing_calls::build_thing(ctx, &src, MAIN, &req)
+}
+
 fn inventory_gone(ctx: &Ctx, req: InventoryGoneReq) -> Result<InventoryWrote, Refusal> {
     inventory_calls::gone(ctx, req)
 }
@@ -1360,6 +1366,7 @@ fn table() -> Table<Ctx, Refusal> {
         .with_json(&PRINTED, printed)
         .with_json(&PRINTED_SET, printed_set)
         .with_json(&OFFERS, offers)
+        .with_json(&BUILD_THING, build_thing)
         .with_json(&ABOUT, about)
         .with_json(&ELEMENTS, elements)
         .with_json(&LANGUAGE, language)

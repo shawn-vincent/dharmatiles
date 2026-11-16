@@ -35,6 +35,7 @@ mod reader;
 mod record;
 pub mod regions;
 pub mod solve;
+pub mod thing_build;
 pub mod source;
 pub mod tiers;
 pub mod unwritten;
