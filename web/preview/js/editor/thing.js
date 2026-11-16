@@ -212,11 +212,12 @@ export function init() {
   const prior = texts.cb.onCaret;
   texts.cb.onCaret = () => { prior?.(); caret.value = texts.selectionStart; };
   effect(() => { const t = on.value; if (t) untracked(() => { held.value = t; }); });
-  // another tile starts with its own tile's view
+  // another tile holds none of the last tile's things: what is held is let go, and the thing view stays only where the new tile's own
+  // cursor or selection is on a thing (the first edit of a library tile makes a copy of it, a tile of its own, with the selection kept)
   let tileWas = '';
   effect(() => {
     const id = tile()?.id ?? '';
-    untracked(() => { if (id !== tileWas) { tileWas = id; held.value = null; shown.value = false; } });
+    untracked(() => { if (id !== tileWas) { tileWas = id; held.value = null; } });
   });
   // a new thing starts from the first seed, the first page and the first of a scatter's things
   let was = '';
