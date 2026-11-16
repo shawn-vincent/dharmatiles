@@ -189,6 +189,10 @@ pub struct Standing<'a> {
     pub at: [f64; 2],
     /// Its disc's radius, world mm.
     pub r: f64,
+    /// How many times taller than drawn it stands (1 where nothing near it
+    /// asks for more; only a thing that [`Thing::grows_tall`] is handed
+    /// another).
+    pub tall: f64,
 }
 
 /// A thing: made from its controls and a seed, in its own frame.
@@ -253,6 +257,13 @@ pub trait Thing: Send + Sync {
         rng: &mut Rng,
         placed: &[Standing<'_>],
     ) -> Result<(), LookError>;
+
+    /// Whether it can be stood taller than it was drawn ([`Standing::tall`]),
+    /// as a scatter's `near` asks.  Stretching only up can never add an
+    /// overhang.
+    fn grows_tall(&self) -> bool {
+        false
+    }
 
     /// Whether it can be gathered at a foot (`at=foot(…)`).
     fn gathers(&self) -> bool {
@@ -359,6 +370,8 @@ pub(crate) struct Sites<'a> {
     pub plural: &'a str,
     /// Discs kept clear of.
     pub avoid: &'a [[f64; 3]],
+    /// Where darts are kept ([`PLAIN`] for one thing placed alone).
+    pub shape: &'a Shape,
 }
 
 /// One dart-throw of `sites` into `area`: largest first, each `gap` clear
@@ -375,6 +388,7 @@ fn one_layout(
         meets,
         plural,
         avoid,
+        shape,
     } = *sites;
     let frame = *scene.frame();
     let s = frame.scale();
@@ -413,7 +427,7 @@ fn one_layout(
             });
             let (i, j) = d.ground.node(x, y);
             return if ok && area.bits[j * nx + i] {
-                1.0
+                shape.weight(x, y)
             } else {
                 0.0
             };
@@ -436,14 +450,15 @@ fn one_layout(
                 }
             }
         }
-        1.0
+        shape.weight(x, y)
     };
     let spread = Spread {
-        tries: meets.tries,
+        tries: shape.tries(meets.tries),
         inset: [meets.rim_mm * s, 1.0],
         confine: true,
         gap,
         factor: 1.0,
+        apart: shape.apart(),
     };
     Ok(scatter(&frame, rng, radii, &spread, &density, avoid))
 }
@@ -490,6 +505,158 @@ pub(crate) fn place_group(
     Ok(placed)
 }
 
+/// How a scatter's places fall.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pattern {
+    /// Kept apart, the room each takes between them.
+    Spaced,
+    /// Gathered in clumps, kept apart within each.
+    Clumped,
+    /// A dense cover: nothing is checked among them.
+    Cover,
+}
+
+impl Pattern {
+    fn from_word(w: &str) -> Result<Self, LookError> {
+        match w {
+            "spaced" => Ok(Self::Spaced),
+            "clumped" => Ok(Self::Clumped),
+            "cover" => Ok(Self::Cover),
+            other => Err(LookError::build(format!("no pattern `{other}`"))),
+        }
+    }
+}
+
+/// How many more darts a thing gets in a clumped pattern: a dart lands in a
+/// clump a fifth of the time or so.
+const CLUMP_TRIES: u32 = 8;
+
+/// Where darts are kept: the one place the pattern, the clearings and the
+/// cover are decided, read by the one dart-throw ([`one_layout`]) whatever
+/// the pattern.  Discs are (x, y, r), world mm.
+#[derive(Clone, Debug)]
+pub struct Shape {
+    /// How the places fall.
+    pub pattern: Pattern,
+    /// A clumped pattern's clumps, each with the reach it drew.
+    pub clumps: Vec<[f64; 3]>,
+    /// Round patches left bare.
+    pub clearings: Vec<[f64; 3]>,
+    /// The share of darts that keep a thing.
+    pub cover: f64,
+}
+
+/// Spaced, no clearings, all the cover: what a thing placed alone is placed
+/// by, and a scatter that writes nothing of this.
+pub static PLAIN: Shape = Shape {
+    pattern: Pattern::Spaced,
+    clumps: Vec::new(),
+    clearings: Vec::new(),
+    cover: 1.0,
+};
+
+impl Shape {
+    /// How likely a dart at (x, y) is kept, 0 to 1: none in a clearing, the
+    /// cover's share elsewhere, and in a clumped pattern fading from a
+    /// clump's middle to nothing at its reach.
+    #[must_use]
+    pub fn weight(&self, x: f64, y: f64) -> f64 {
+        if self
+            .clearings
+            .iter()
+            .any(|c| libm::hypot(c[0] - x, c[1] - y) < c[2])
+        {
+            return 0.0;
+        }
+        let clump = if self.pattern == Pattern::Clumped {
+            self.clumps
+                .iter()
+                .map(|c| {
+                    let f = libm::hypot(c[0] - x, c[1] - y) / c[2];
+                    (1.0 - f * f).max(0.0)
+                })
+                .fold(0.0, f64::max)
+        } else {
+            1.0
+        };
+        clump * self.cover
+    }
+
+    /// Darts each thing gets, where its thing's own is `base`.
+    #[must_use]
+    pub fn tries(&self, base: u32) -> u32 {
+        match self.pattern {
+            Pattern::Spaced => base,
+            Pattern::Clumped => base * CLUMP_TRIES,
+            // a dart that lands in a clearing, or where the cover is thin,
+            // is a thing that is not there
+            Pattern::Cover => 1,
+        }
+    }
+
+    /// Whether things keep their room from one another.
+    #[must_use]
+    pub fn apart(&self) -> bool {
+        self.pattern != Pattern::Cover
+    }
+}
+
+/// What a scatter's things answer to: a `near` block.
+#[derive(Clone, Debug)]
+struct Near {
+    /// The kinds of solid in the scene (none: the water's edge).
+    kinds: Option<&'static [Kind]>,
+    /// How far out it changes a thing, drawn for each, reference mm.
+    reach: Draw,
+    /// How many times taller it stands.
+    height: Draw,
+    /// The share of things within reach left out.
+    thin: f64,
+}
+
+/// What stood in the scene before a scatter, as distances from it.
+struct Nearness {
+    rule: Near,
+    dist: Field,
+    scale: f64,
+}
+
+/// Rocks, walls, trunks and cliffs: `near of=standing`.
+const STANDING: &[Kind] = &[Kind::Rock, Kind::Wall, Kind::Tree, Kind::Cliff];
+
+/// How far up a solid its footprint is read, mm (what `standing` reads).
+const NEAR_ABOVE_MM: f64 = 0.45;
+
+impl Nearness {
+    fn measure(rule: &Near, scene: &Scene) -> Self {
+        let mask = match rule.kinds {
+            Some(kinds) => scene.standing(kinds, NEAR_ABOVE_MM),
+            None => scene.wet().clone(),
+        };
+        let (dist, _) = dt_kit::distance(scene.frame(), &mask.bits);
+        Self {
+            rule: rule.clone(),
+            dist,
+            scale: scene.frame().scale(),
+        }
+    }
+
+    /// What the item whose own seed is `item` does where it stands at `at`
+    /// (world mm): `None` if it is left out, else how many times taller it
+    /// stands.  Draws the same turns of the item's `near` stream whether or
+    /// not it is near.
+    fn answer(&self, item: Seed, at: [f64; 2]) -> Option<f64> {
+        let mut r = Rng::new(item.key("near"));
+        let reach = self.rule.reach.draw(&mut r) * self.scale;
+        let tall = self.rule.height.draw(&mut r);
+        let left_out = r.random() < self.rule.thin;
+        if self.dist.sample(at[0], at[1]) >= reach {
+            return Some(1.0);
+        }
+        (!left_out).then_some(tall)
+    }
+}
+
 /// The slice of kinds `kinds` (in [`Kind::ALL`] order) as `Write::Solids`
 /// holds it: one slice for each distinct set, made once and kept (a build
 /// has a handful of distinct sets in all).
@@ -519,7 +686,34 @@ pub struct Scatter {
     reach: Option<f64>,
     /// The keyed stream it draws from.
     stream: &'static str,
+    /// How the places fall.
+    pattern: Pattern,
+    /// Clumps to a square, and how far each reaches (reference mm).
+    clumps: Draw,
+    spread: Draw,
+    /// The share of darts that keep a thing, and the clearings: to a
+    /// square, and how wide each is (reference mm).
+    cover: f64,
+    clearings: Draw,
+    clearing_width: Draw,
+    /// What the things answer to.
+    near: Option<Near>,
     children: Vec<(Box<dyn Thing>, f64)>,
+}
+
+/// The things a `near of=…` word stands for.
+fn near_kinds(word: &str) -> Result<Option<&'static [Kind]>, LookError> {
+    Ok(match word {
+        "rock" => Some(&[Kind::Rock]),
+        "wall" => Some(&[Kind::Wall]),
+        "tree" => Some(&[Kind::Tree]),
+        "cliff" => Some(&[Kind::Cliff]),
+        "standing" => Some(STANDING),
+        "water" => None,
+        other => {
+            return Err(LookError::build(format!("`near` has no kind `{other}`")));
+        }
+    })
 }
 
 impl Scatter {
@@ -546,7 +740,36 @@ impl Scatter {
             SCATTER_STREAM
         };
         let set = Settings::new(controls);
+        let near = match set.word("near/of")? {
+            Some(word) => Some(Near {
+                kinds: near_kinds(word)?,
+                reach: set.dist_or("near/reach", Draw::flat(6.0, 12.0))?,
+                height: set.dist_or("near/height", Draw::flat(1.0, 1.0))?,
+                thin: set.number_or("near/thin", 0.0)?,
+            }),
+            None => None,
+        };
+        if let Some(n) = &near
+            && ((n.height.lo() - 1.0).abs() > f64::EPSILON
+                || (n.height.hi() - 1.0).abs() > f64::EPSILON)
+            && let Some(c) = made.iter().find(|c| !c.0.grows_tall())
+        {
+            return Err(LookError {
+                control: Some("near/height".to_owned()),
+                ..LookError::general(
+                    format!("{} do not grow taller", c.0.plural()),
+                    "leave `height` out of `near`, or thin them with `thin=`",
+                )
+            });
+        }
         Ok(Self {
+            pattern: Pattern::from_word(set.word("pattern")?.unwrap_or("spaced"))?,
+            clumps: set.dist_or("clumps", Draw::flat(3.0, 3.0))?,
+            spread: set.dist_or("spread", Draw::flat(3.0, 8.0))?,
+            cover: set.number_or("cover", 1.0)?,
+            clearings: set.dist_or("clearings", Draw::flat(0.0, 0.0))?,
+            clearing_width: set.dist_or("clearingWidth", Draw::flat(6.0, 14.0))?,
+            near,
             count: set.dist("count")?,
             per_square: set.dist_or("perSquare", usual.per_square)?,
             gap: set.number_or("gap", usual.gap_mm)?,
@@ -554,6 +777,62 @@ impl Scatter {
             stream,
             children: made,
         })
+    }
+
+    /// Whether it asks for anything the dart-throw or the stand does not do
+    /// at a foot.
+    fn shaped(&self) -> bool {
+        self.pattern != Pattern::Spaced
+            || self.cover < 1.0
+            || self.clearings.hi() > 0.0
+            || self.near.is_some()
+    }
+
+    /// The places' shape, from keyed streams of their own (the scatter's
+    /// stream is not touched): clumps and clearings drawn over `area`,
+    /// which holds `squares` squares.
+    fn shape(&self, scene: &Scene, area: &Mask, squares: f64, seed: Seed) -> Shape {
+        let frame = scene.frame();
+        let s = frame.scale();
+        let [w, h] = frame.size_mm();
+        let step = frame.step_mm();
+        // a disc's middle somewhere in the area (a try in a hundred that
+        // finds none leaves the disc out: nothing could stand there)
+        let middle = |rng: &mut Rng| {
+            (0..100).find_map(|_| {
+                let (x, y) = (rng.uniform(0.0, w), rng.uniform(0.0, h));
+                let i = (libm::round(x / step) as usize).min(area.nx - 1);
+                let j = (libm::round(y / step) as usize).min(area.ny - 1);
+                area.bits[j * area.nx + i].then_some((x, y))
+            })
+        };
+        let discs = |key: &str, n: i64, reach: &Draw, half: f64| {
+            let mut rng = Rng::new(seed.key(key));
+            (0..n.clamp(0, 1_000))
+                .filter_map(|_| {
+                    let (x, y) = middle(&mut rng)?;
+                    Some([x, y, reach.draw(&mut rng) * half * s])
+                })
+                .collect::<Vec<_>>()
+        };
+        let clumps = if self.pattern == Pattern::Clumped {
+            let n = self
+                .clumps
+                .int_by(squares, &mut Rng::new(seed.key("clump count")))
+                .max(1);
+            discs("clumps", n, &self.spread, 1.0)
+        } else {
+            Vec::new()
+        };
+        let n = self
+            .clearings
+            .int_by(squares, &mut Rng::new(seed.key("clearing count")));
+        Shape {
+            pattern: self.pattern,
+            clumps,
+            clearings: discs("clearings", n, &self.clearing_width, 0.5),
+            cover: self.cover,
+        }
     }
 
     /// The refusal when something that cannot be gathered at a foot is
@@ -634,15 +913,21 @@ impl Element for Scatter {
             }
             None => None,
         };
+        if foot.is_some() && self.shaped() {
+            return Err(LookError::general(
+                "a scatter at a foot gathers its own way: it takes no `pattern`, `cover`, `clearings` or `near`",
+                "scatter `at=` a region or a line to shape the places",
+            ));
+        }
         let frame = *scene.frame();
         let s = frame.scale();
         let mut rng = Rng::new(ctx.seed.key(self.stream));
         let line_reach = self.reach.unwrap_or(crate::LINE_REACH_MM);
         // squares the area covers
-        let squares = foot.map_or_else(
-            || ctx.spread_squares(&frame, &ctx.spread_area(&frame, line_reach)),
-            |f| f.squares,
-        );
+        let area = ctx.spread_area(&frame, line_reach);
+        let squares = foot.map_or_else(|| ctx.spread_squares(&frame, &area), |f| f.squares);
+        let shape = self.shape(scene, &area, squares, ctx.seed.key("pattern"));
+        let nearness = self.near.as_ref().map(|n| Nearness::measure(n, scene));
         // a whole number: the ends round and every one is as likely as any
         let n = match &self.count {
             Some(r) => r.int_by(1.0, &mut rng),
@@ -721,6 +1006,7 @@ impl Element for Scatter {
                             meets,
                             plural: leader.plural(),
                             avoid: &discs,
+                            shape: &shape,
                         },
                     )?;
                     if meets.upright.is_some() && placed.len() < radii.len() {
@@ -729,15 +1015,27 @@ impl Element for Scatter {
                     placed
                 }
             };
-            discs.extend(placed.iter().map(|p| [p.at[0], p.at[1], p.r]));
-            let standing: Vec<Standing<'_>> = placed
-                .iter()
-                .map(|p| Standing {
+            // what is near an item changes it, or leaves it out
+            let mut standing: Vec<Standing<'_>> = Vec::with_capacity(placed.len());
+            for p in &placed {
+                let tall = match &nearness {
+                    None => 1.0,
+                    Some(near) => {
+                        let item = ctx.seed.key("item").index(g.items[p.index] as u64);
+                        match near.answer(item, p.at) {
+                            Some(tall) => tall,
+                            None => continue,
+                        }
+                    }
+                };
+                standing.push(Standing {
                     drawn: members[p.index],
                     at: p.at,
                     r: p.r,
-                })
-                .collect();
+                    tall,
+                });
+            }
+            discs.extend(standing.iter().map(|p| [p.at[0], p.at[1], p.r]));
             leader.stand(scene, ctx, &mut rng, &standing)?;
         }
         Ok(())
@@ -905,5 +1203,205 @@ mod tests {
             Write::Solids(&[Kind::Rock, Kind::Flowers, Kind::Tree])
         );
         assert_eq!(mix.reads, vec![Read::Solids(Kind::Terrain)]);
+    }
+
+    fn cover_shape(cover: f64, clearings: Vec<[f64; 3]>) -> Shape {
+        Shape {
+            pattern: Pattern::Cover,
+            clumps: Vec::new(),
+            clearings,
+            cover,
+        }
+    }
+
+    /// Places of a cover (one dart each, nothing spaced) at 400 a square
+    /// land at that density whatever the seed, less the cover's share, and
+    /// none in a clearing.
+    #[test]
+    fn a_cover_keeps_its_density_and_leaves_its_clearings_bare() {
+        let frame = Frame::dungeonblocks(1, 1);
+        let radii = vec![0.4; 400];
+        let spread = |shape: &Shape| Spread {
+            tries: shape.tries(30),
+            inset: [0.0, 1.0],
+            confine: true,
+            gap: 0.0,
+            factor: 1.0,
+            apart: shape.apart(),
+        };
+        let clearings = vec![[10.0, 10.0, 4.0], [25.0, 20.0, 5.0]];
+        let bare: f64 = clearings
+            .iter()
+            .map(|c| std::f64::consts::PI * c[2] * c[2])
+            .sum();
+        let kept_area = 35.0 * 35.0 - bare;
+        for (cover, clear) in [(1.0, Vec::new()), (0.85, clearings.clone())] {
+            let shape = cover_shape(cover, clear.clone());
+            let area = if clear.is_empty() {
+                35.0 * 35.0
+            } else {
+                kept_area
+            };
+            let expected = 400.0 * cover * area / (35.0 * 35.0);
+            for seed in 1..=8u64 {
+                let mut rng = Rng::new(Seed::new(seed));
+                let placed = scatter(
+                    &frame,
+                    &mut rng,
+                    &radii,
+                    &spread(&shape),
+                    &|x, y| shape.weight(x, y),
+                    &[],
+                );
+                let n = placed.len() as f64;
+                assert!(
+                    (n - expected).abs() < 0.2 * expected,
+                    "cover {cover}, seed {seed}: {n} places, expected about {expected:.0}"
+                );
+                for p in &placed {
+                    assert!(
+                        clear
+                            .iter()
+                            .all(|c| libm::hypot(c[0] - p.at[0], c[1] - p.at[1]) >= c[2]),
+                        "a place in a clearing: {:?}",
+                        p.at
+                    );
+                }
+            }
+        }
+        // and a cover is dense: nothing is kept apart
+        let dense = cover_shape(1.0, Vec::new());
+        let mut rng = Rng::new(Seed::new(1));
+        let all = scatter(&frame, &mut rng, &radii, &spread(&dense), &|_, _| 1.0, &[]);
+        assert_eq!(all.len(), 400);
+    }
+
+    /// A clumped pattern puts its places inside the clumps and nowhere else.
+    #[test]
+    fn clumps_hold_every_place() {
+        let frame = Frame::dungeonblocks(1, 1);
+        let shape = Shape {
+            pattern: Pattern::Clumped,
+            clumps: vec![[8.0, 8.0, 4.0], [26.0, 24.0, 5.0]],
+            clearings: Vec::new(),
+            cover: 1.0,
+        };
+        let radii = vec![0.3; 60];
+        let spread = Spread {
+            tries: shape.tries(30),
+            inset: [0.0, 1.0],
+            confine: true,
+            gap: 0.2,
+            factor: 1.0,
+            apart: shape.apart(),
+        };
+        let mut rng = Rng::new(Seed::new(2));
+        let placed = scatter(
+            &frame,
+            &mut rng,
+            &radii,
+            &spread,
+            &|x, y| shape.weight(x, y),
+            &[],
+        );
+        assert!(placed.len() > 30, "{} places", placed.len());
+        for p in &placed {
+            assert!(
+                shape
+                    .clumps
+                    .iter()
+                    .any(|c| libm::hypot(c[0] - p.at[0], c[1] - p.at[1]) < c[2]),
+                "a place outside every clump: {:?}",
+                p.at
+            );
+        }
+    }
+
+    /// What is near changes an item only within its reach: always inside the
+    /// reach's low end, never past its high end, softly between.
+    #[test]
+    fn what_is_near_changes_items_only_within_reach() {
+        let frame = Frame::dungeonblocks(1, 1);
+        let (nx, ny) = frame.nodes();
+        let step = frame.step_mm();
+        // a solid disc 3 mm across in the middle of the tile
+        let mask: Vec<bool> = (0..nx * ny)
+            .map(|k| {
+                let (x, y) = ((k % nx) as f64 * step, (k / nx) as f64 * step);
+                libm::hypot(x - 17.5, y - 17.5) < 1.5
+            })
+            .collect();
+        let (dist, _) = dt_kit::distance(&frame, &mask);
+        let near = Nearness {
+            rule: Near {
+                kinds: Some(&[Kind::Rock]),
+                reach: Draw::flat(6.0, 12.0),
+                height: Draw::flat(2.0, 2.0),
+                thin: 0.0,
+            },
+            dist,
+            scale: frame.scale(),
+        };
+        let from = |d: f64| [17.5 + 1.5 + d, 17.5];
+        for seed in 1..=40u64 {
+            let item = Seed::new(seed);
+            assert_eq!(
+                near.answer(item, from(4.0)),
+                Some(2.0),
+                "inside the low end"
+            );
+            assert_eq!(
+                near.answer(item, from(13.5)),
+                Some(1.0),
+                "past the high end"
+            );
+        }
+        let changed = |d: f64| {
+            (1..=400u64)
+                .filter(|&seed| near.answer(Seed::new(seed), from(d)) == Some(2.0))
+                .count()
+        };
+        let (a, b) = (changed(7.5), changed(10.5));
+        assert!(
+            a > b && a > 100 && b > 20,
+            "a soft edge: {a} at 7.5, {b} at 10.5 of 400"
+        );
+        // thinning leaves items out, only within reach
+        let thin = Nearness {
+            rule: Near {
+                thin: 1.0,
+                ..near.rule.clone()
+            },
+            dist: near.dist.clone(),
+            scale: near.scale,
+        };
+        assert_eq!(thin.answer(Seed::new(1), from(4.0)), None);
+        assert_eq!(thin.answer(Seed::new(1), from(13.5)), Some(1.0));
+    }
+
+    /// The pattern, the cover and `near` read as written, and a tree is
+    /// refused a height it cannot take.
+    #[test]
+    fn the_pattern_controls_are_read() {
+        let ok = Scatter::new(
+            &[
+                written("pattern", Value::Word("cover".into())),
+                written("cover", Value::Number(0.85)),
+                written("near/of", Value::Word("standing".into())),
+                written("near/height", Value::Range(1.5, 2.0)),
+            ],
+            &[child("flower")],
+        );
+        assert!(ok.is_ok());
+        let Err(e) = Scatter::new(
+            &[
+                written("near/of", Value::Word("rock".into())),
+                written("near/height", Value::Range(1.5, 2.0)),
+            ],
+            &[child("tree")],
+        ) else {
+            panic!("trees do not grow taller")
+        };
+        assert_eq!(e.control.as_deref(), Some("near/height"));
     }
 }

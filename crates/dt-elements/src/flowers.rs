@@ -244,7 +244,7 @@ pub(crate) fn stand(
     scene: &mut Scene,
     ctx: &Ctx<'_>,
     rng: &mut Rng,
-    flowers: &[(&Plant, f64)],
+    flowers: &[(&Plant, f64, f64)],
     placed: &[Placed],
 ) -> Result<(), LookError> {
     let frame = *scene.frame();
@@ -260,7 +260,7 @@ pub(crate) fn stand(
     let mut parts: Vec<TriMesh> = Vec::new();
     for p in placed {
         scene.place(Kind::Flowers, p.at, p.r);
-        let (plant, outer) = flowers[p.index];
+        let (plant, outer, tall) = flowers[p.index];
         let reach = outer * s;
         let low = (0..9)
             .map(|k| {
@@ -273,7 +273,16 @@ pub(crate) fn stand(
             })
             .fold(f64::INFINITY, f64::min);
         let angle = rng.uniform(0.0, TAU);
-        parts.extend(plant.meshes(outer, p.at, low, angle, s));
+        let mut meshes = plant.meshes(outer, p.at, low, angle, s);
+        if (tall - 1.0).abs() > f64::EPSILON {
+            // stood taller: stretched up from the ground it grows from
+            for m in &mut meshes {
+                for v in &mut m.positions {
+                    v[2] = low + (v[2] - low) * tall;
+                }
+            }
+        }
+        parts.extend(meshes);
     }
     let slots = scene
         .slots(
@@ -367,6 +376,7 @@ impl Element for Flower {
                         meets: self.plant.meets(),
                         plural: self.plant.plural(),
                         avoid: &[],
+                        shape: &crate::thing::PLAIN,
                     },
                 )?;
                 if placed.is_empty() {
@@ -378,7 +388,7 @@ impl Element for Flower {
                 placed
             }
         };
-        stand(scene, ctx, &mut rng, &[(&self.plant, outer)], &placed)
+        stand(scene, ctx, &mut rng, &[(&self.plant, outer, 1.0)], &placed)
     }
 }
 
@@ -473,11 +483,11 @@ impl Thing for Plant {
         rng: &mut Rng,
         placed: &[Standing<'_>],
     ) -> Result<(), LookError> {
-        let mut drawn: Vec<(&Plant, f64)> = Vec::with_capacity(placed.len());
+        let mut drawn: Vec<(&Plant, f64, f64)> = Vec::with_capacity(placed.len());
         let mut at: Vec<Placed> = Vec::with_capacity(placed.len());
         for (index, p) in placed.iter().enumerate() {
             let d: &FlowerDraw = p.drawn.payload()?;
-            drawn.push((&d.plant, d.reach));
+            drawn.push((&d.plant, d.reach, p.tall));
             at.push(Placed {
                 index,
                 at: p.at,
@@ -485,6 +495,10 @@ impl Thing for Plant {
             });
         }
         stand(scene, ctx, rng, &drawn, &at)
+    }
+
+    fn grows_tall(&self) -> bool {
+        true
     }
 }
 

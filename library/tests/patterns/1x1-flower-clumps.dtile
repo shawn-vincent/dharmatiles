@@ -1,0 +1,14 @@
+dharmatiles version="1.0.0"
+
+tile size="1x1" seed=3 {
+    about "Flowers in clumps, taller where they grow close to a rock. A test tile."
+    stack {
+        base
+        dirt
+        rock at="(0.7sq, 0.3sq)" size="8dmm"
+        scatter perSquare=24 pattern=clumped clumps="2 .. 3" spread="5dmm .. 8dmm" {
+            flower size="4dmm .. 6dmm" petals=5 centre="1.2dmm" stem="1dmm" dome="1dmm" petal="0.5dmm"
+            near of=rock reach="6dmm .. 12dmm" height="1.3 .. 1.6"
+        }
+    }
+}

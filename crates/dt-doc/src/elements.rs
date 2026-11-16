@@ -880,6 +880,33 @@ static CLIFF: &[Control] = &[
 
 // ---- scatter ------------------------------------------------------------
 
+static SCATTER_PATTERN: &[Word] = &[
+    w(
+        "spaced",
+        "things kept apart, the room each takes between them",
+        &[],
+    ),
+    w(
+        "clumped",
+        "things gathered in clumps, kept apart within each",
+        &[],
+    ),
+    w(
+        "cover",
+        "a dense cover: no spacing among things, as many as the density says",
+        &[],
+    ),
+];
+
+static NEAR_OF: &[Word] = &[
+    w("rock", "rocks, stones, boulders and pebbles", &[]),
+    w("wall", "walls", &[]),
+    w("tree", "tree trunks", &[]),
+    w("cliff", "cliffs", &[]),
+    w("standing", "rocks, walls, trunks and cliffs", &[]),
+    w("water", "the water's edge", &[]),
+];
+
 static SCATTER: &[Control] = &[
     c("count", Axis::Count, "how many, in total")
         .limits(0.0, 10_000.0)
@@ -892,11 +919,28 @@ static SCATTER: &[Control] = &[
     )
     .weighted(),
     c(
+        "pattern",
+        Axis::Word,
+        "how the places fall: kept apart, in clumps, or a dense cover",
+    )
+    .words(SCATTER_PATTERN)
+    .default("spaced"),
+    c(
+        "clumps",
+        Axis::PerSquare,
+        "with pattern=clumped: how many clumps to a square",
+    )
+    .limits(0.0, 200.0)
+    .weighted()
+    .default("3"),
+    c(
         "spread",
         Axis::Dmm,
-        "a cluster within this distance of a point",
+        "with pattern=clumped: how far from its middle a clump reaches, drawn for each clump",
     )
-    .planned(),
+    .over(0.0, f64::INFINITY)
+    .weighted()
+    .default("3 .. 8"),
     c(
         "reach",
         Axis::Dmm,
@@ -904,11 +948,60 @@ static SCATTER: &[Control] = &[
     )
     .absent("where the rocks stand: a foot's or a line's own"),
     c(
-        "clumps",
-        Axis::PerSquare,
-        "gathers them into clumps; default spread evenly",
+        "cover",
+        Axis::Share,
+        "share of the places that keep a thing",
     )
-    .planned(),
+    .limits(0.0, 1.0)
+    .default("100%"),
+    c(
+        "clearings",
+        Axis::PerSquare,
+        "round patches left bare, to a square",
+    )
+    .limits(0.0, 20.0)
+    .weighted()
+    .default("0"),
+    c(
+        "clearingWidth",
+        Axis::Dmm,
+        "how wide a clearing is, drawn for each",
+    )
+    .over(0.0, f64::INFINITY)
+    .weighted()
+    .default("6 .. 14"),
+    group(
+        "near",
+        &[
+            c("of", Axis::Word, "what the things answer to")
+                .words(NEAR_OF)
+                .required(),
+            c(
+                "reach",
+                Axis::Dmm,
+                "how far out from it a thing is changed, drawn for each: a range is a soft edge",
+            )
+            .over(0.0, f64::INFINITY)
+            .weighted()
+            .default("6 .. 12"),
+            c(
+                "height",
+                Axis::Number,
+                "how many times taller a thing within reach stands",
+            )
+            .over(0.0, f64::INFINITY)
+            .weighted()
+            .default("1"),
+            c(
+                "thin",
+                Axis::Share,
+                "the share of things within reach that are left out",
+            )
+            .limits(0.0, 1.0)
+            .default("0%"),
+        ],
+        "things that answer to what is already in the tile: taller, or fewer, within reach of it",
+    ),
     c("gap", Axis::Dmm, "least space between neighbours"),
 ];
 

@@ -191,6 +191,10 @@ pub struct Spread {
     pub gap: f64,
     /// See `gap`.
     pub factor: f64,
+    /// `true`: things keep `gap` and `factor` from one another and from
+    /// `avoid`; `false` (a cover): only from `avoid`, so the things may
+    /// touch and overlap and no spacing is checked among them.
+    pub apart: bool,
 }
 
 /// A thing [`scatter`] placed.
@@ -252,7 +256,9 @@ pub fn scatter(
             if hash.any_near(x, y, reach, clash) {
                 continue;
             }
-            hash.insert(x, y, r);
+            if spread.apart {
+                hash.insert(x, y, r);
+            }
             out.push(Placed {
                 index: k,
                 at: [x, y],
@@ -382,6 +388,7 @@ mod tests {
             confine: true,
             gap: 0.25,
             factor: 1.0,
+            apart: true,
         };
         let placed = scatter(
             &f,
