@@ -99,6 +99,18 @@ impl Checked {
     }
 }
 
+/// The controls an entry or a child is given, as its element takes them: the one conversion from what the reader made to
+/// what an element reads (the plan, and the thing build, both use it).
+pub(crate) fn controls_of(settings: &[doc::Setting]) -> Vec<Control> {
+    settings
+        .iter()
+        .map(|c| Control {
+            name: c.name.clone(),
+            value: c.value.clone(),
+        })
+        .collect()
+}
+
 /// **check**: read `path` and plan it (no geometry).
 ///
 /// # Errors
@@ -129,22 +141,13 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     let mut elements: Vec<Box<dyn Element>> = Vec::new();
     let mut areas = Vec::new();
     for e in &tile.stack {
-        let as_controls = |settings: &[doc::Setting]| -> Vec<Control> {
-            settings
-                .iter()
-                .map(|c| Control {
-                    name: c.name.clone(),
-                    value: c.value.clone(),
-                })
-                .collect()
-        };
-        let controls = as_controls(&e.controls);
+        let controls = controls_of(&e.controls);
         let children: Vec<dt_elements::Child> = e
             .children
             .iter()
             .map(|c| dt_elements::Child {
                 name: c.what.value.clone(),
-                controls: as_controls(&c.controls),
+                controls: controls_of(&c.controls),
                 weight: c.weight,
             })
             .collect();

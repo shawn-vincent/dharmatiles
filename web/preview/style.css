@@ -887,3 +887,41 @@ body:not(.map) #mpills { display: none; }
 .mp-tag.have { background: color-mix(in srgb, var(--accent) 78%, var(--bg)); color: var(--on-accent, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, #000), 0 1px 3px rgba(0, 0, 0, .3); }
 .mp-tag.need { color: var(--muted); font-weight: 500; }
 .mp-tag.caution { box-shadow: inset 3px 0 0 var(--caution), inset 0 0 0 1px var(--line-2), 0 1px 3px rgba(0, 0, 0, .25); }
+
+/* ---- one thing alone: the thing's own view beside the tile's ---- */
+#thing-switch { width: max-content; }
+#thingview { position: absolute; inset: 0 0 calc(26px + var(--msgh)) 0; z-index: 2; background: var(--plate); }
+#thingview[hidden] { display: none; }
+#view.thing-on #canvas, #view.thing-on #over, #view.thing-on #views, #view.thing-on #dispbtn, #view.thing-on #mpills, #view.thing-on #ppins, #view.thing-on #place { visibility: hidden; }
+#thing-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+#thing-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+#thing-panel { position: absolute; inset: 0; pointer-events: none; }
+#thing-panel > * { pointer-events: auto; }
+.thing-card { position: absolute; left: 10px; top: 10px; z-index: 4; width: min(320px, calc(100% - 20px)); max-height: calc(100% - 190px); overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 10px 12px; }
+.thing-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.thing-head b { font-family: var(--f-code); overflow-wrap: anywhere; }
+.thing-of, .thing-busy, .thing-card .from { color: var(--muted); }
+.thing-seed { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.thing-seed input { width: 5.5em; height: var(--h-sm); box-sizing: border-box; font: var(--fs-s)/var(--lh-s) var(--f-code); color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 0 6px; }
+.thing-seed .btn { height: var(--h-sm); padding: 0 10px; }
+.thing-seed .dice { flex: none; width: var(--h-sm); height: var(--h-sm); display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--muted); cursor: pointer; padding: 0; }
+.thing-seed .dice:hover { color: var(--accent); border-color: var(--accent); }
+.thing-draft { margin: 0; color: var(--muted); font: var(--fs-s)/var(--lh-s) var(--f-body); }
+.thing-problem { margin: 0; padding: 6px 8px; border-radius: var(--r); box-shadow: inset 0 0 0 1px var(--err); color: var(--ink); overflow-wrap: anywhere; }
+.thing-extent, .thing-controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; margin: 0; font: var(--fs-s)/var(--lh-s) var(--f-body); }
+.thing-extent > div, .thing-controls > div { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: 6px; }
+.thing-extent dt, .thing-controls dt { color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.thing-extent dd, .thing-controls dd { margin: 0; font-family: var(--f-code); overflow-wrap: anywhere; }
+.thing-extent .from, .thing-controls .from { font-family: var(--f-body); }
+.thing-extent .from { display: block; }
+.thing-extent .sw { display: inline-block; flex: none; width: 18px; height: 8px; box-sizing: border-box; background: var(--plate); border-top: 3px solid var(--plate-ink); border-radius: var(--r-mark); }
+.thing-extent .sw.most { border-top-color: var(--accent); }
+.thing-strip { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; gap: 6px; align-items: stretch; padding: 8px 10px 10px; overflow-x: auto; overscroll-behavior-x: contain; background: linear-gradient(0deg, color-mix(in srgb, var(--plate) 92%, transparent), transparent); }
+.thing-strip .seed-card { flex: 0 0 104px; }
+.thing-more { flex: none; display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+@media (max-width: 560px) {
+  .thing-card { top: 52px; max-height: calc(100% - 52px - 132px); width: calc(100% - 20px); }
+  .thing-controls, .thing-looks, .thing-draft { display: none; }
+  .thing-strip .seed-card { flex-basis: 84px; }
+  .thing-extent > div, .thing-controls > div { grid-template-columns: 5.5em minmax(0, 1fr); }
+}

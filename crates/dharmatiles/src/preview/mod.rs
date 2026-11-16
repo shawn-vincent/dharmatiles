@@ -75,6 +75,7 @@ mod scene;
 mod server;
 pub(crate) mod stack;
 pub mod storage;
+mod things;
 mod tiers;
 mod worker;
 

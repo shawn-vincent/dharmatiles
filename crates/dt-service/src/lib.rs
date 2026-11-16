@@ -76,6 +76,7 @@ pub mod scene_read;
 pub mod stack;
 pub mod storage;
 pub mod target_calls;
+pub mod thing_calls;
 pub mod tier_calls;
 pub mod tiers;
 pub mod tile;

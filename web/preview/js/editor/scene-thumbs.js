@@ -34,8 +34,8 @@ function setup() {
   return { renderer, canvas, u, material, camera, top, scene: new THREE.Scene() };
 }
 
-/** @param {ArrayBuffer} buffer @param {string} plate @param {number} [w] @param {number} [h] @param {'top' | null} [view] */
-function draw(buffer, plate, w = W, h = H, view = null) {
+/** @param {ArrayBuffer} buffer @param {string} plate @param {number} [w] @param {number} [h] @param {'top' | null} [view] @param {{ lo: number[], hi: number[] } | null} [box] the box to frame, where the mesh does not carry its tile's (a thing alone) */
+function draw(buffer, plate, w = W, h = H, view = null, box = null) {
   gl ??= setup();
   const { renderer, canvas, u, material, camera, top, scene } = gl;
   renderer.setSize(w, h, false);
@@ -49,7 +49,7 @@ function draw(buffer, plate, w = W, h = H, view = null) {
   const mesh = new THREE.Mesh(g, material);
   mesh.frustumCulled = false;
   scene.add(mesh);
-  const lo = p.meta.tileLo, hi = p.meta.tileHi;
+  const lo = box?.lo ?? p.meta.tileLo, hi = box?.hi ?? p.meta.tileHi;
   if (!lo || !hi) throw new Error('The mesh carries no tile box (meta.tileLo, meta.tileHi), so its picture cannot be framed.');
   const centre = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (Math.max(lo[2], -1) + hi[2]) / 2);
   const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - Math.max(lo[2], -1));
@@ -86,6 +86,15 @@ function draw(buffer, plate, w = W, h = H, view = null) {
   scene.remove(mesh);
   g.dispose();
   return url;
+}
+
+/**
+ * A picture of a mesh the page already holds (a thing drawn alone: the editor's strip of draws), framed on `box`: the same
+ * renderer, the same paint, the overhang red as everywhere.  Returns a data URL.
+ * @param {ArrayBuffer} buffer @param {{ lo: number[], hi: number[] }} box @param {number} [w] @param {number} [h]
+ */
+export function drawMesh(buffer, box, w = W, h = H) {
+  return draw(buffer, token('--plate') || '#D9E0EB', w, h, null, box);
 }
 
 /**

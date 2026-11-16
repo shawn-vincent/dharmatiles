@@ -29,6 +29,7 @@ use dt_service::queue::{Finished, Job, Taken, Taking};
 use dt_service::read_calls::{self, Nothing, Overlay};
 use dt_service::roots::{Root, RootKind};
 use dt_service::storage::{MemStorage, Storage};
+use dt_service::thing_calls::{BUILD_THING, ThingRef, ThingReq};
 use dt_service::tile::{Slot, tile_id};
 use dt_service::tile_calls::{CHECK, CheckHost, TextReq};
 use dt_service::tile_host::{TileHost, TileRef};
@@ -441,6 +442,14 @@ fn table() -> Table<World, Refusal> {
         })
         .with(&STEP, |w: &World, r| {
             dt_service::draft_calls::step(w, &tile_ref(), r)
+        })
+        .with(&BUILD_THING, |w: &World, r: ThingReq| {
+            // the text the page holds is the document: a thing is read from it, not from the store
+            let src = dt_service::read_calls::Overlay {
+                files: BTreeMap::from([(PATH.to_owned(), r.text.clone())]),
+                base: &Mem(&w.mem),
+            };
+            dt_service::thing_calls::build_thing(w, &src, PATH, &r)
         })
 }
 
@@ -1572,5 +1581,236 @@ fn the_lanes_build_and_an_export_of_the_same_tile_are_one_key_and_one_entry() {
         w.kept.len(),
         1,
         "the export kept a second entry: another key"
+    );
+}
+
+const THINGS: &str = "dharmatiles version=\"1.0.0\"\n\ndefine bluff {\n    stack {\n        rock size=\"6dmm .. 10dmm\"\n    }\n}\n\ndefine wet {\n    stack {\n        dirt\n    }\n}\n\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n        rock size=\"5dmm .. 8dmm\"\n        scatter count=2 {\n            rock size=\"3dmm .. 4dmm\"\n        }\n    }\n}\n";
+
+fn thing_req(which: ThingRef, seeds: &[u64]) -> ThingReq {
+    ThingReq {
+        text: THINGS.to_owned(),
+        file: None,
+        which,
+        seeds: seeds.to_vec(),
+        tier: None,
+    }
+}
+
+/// `buildThing`: a rock define at seeds 1 to 4, a rock entry and a scatter's child, and the refusals, by verb with no
+/// server and no disk.
+#[test]
+fn a_thing_is_drawn_alone_at_each_seed_by_verb_with_no_server() {
+    let w = world();
+    let table = table();
+    let define = || ThingRef::Define {
+        name: "bluff".to_owned(),
+    };
+    let res = table
+        .call(&w, &BUILD_THING, thing_req(define(), &[1, 2, 3, 4]))
+        .expect("a rock define is drawn");
+    assert_eq!(res.element, "rock");
+    assert_eq!(res.draws.len(), 4);
+    let e = res.extent;
+    assert!(e.least.x <= e.most.x && e.least.z <= e.most.z, "{e:?}");
+    assert!(
+        res.shown
+            .iter()
+            .any(|c| c.control == "buried" && c.from == "default"),
+        "the controls as built: {:?}",
+        res.shown
+    );
+    let bytes = |d: &dt_service::thing_calls::ThingDraw| {
+        dt_service::export_calls::unbase64(&d.mesh).expect("base64")
+    };
+    for d in &res.draws {
+        assert!(
+            d.triangles > 20,
+            "seed {} has {} triangles",
+            d.seed,
+            d.triangles
+        );
+        assert_eq!(&bytes(d)[..4], dt_service::payload::MAGIC);
+        // frame z up: the thing's own box lies within its extent
+        assert!(d.size.z > 0.0 && d.size.z <= e.most.z + 1e-6, "{d:?} {e:?}");
+    }
+    assert_ne!(
+        bytes(&res.draws[0]),
+        bytes(&res.draws[1]),
+        "two seeds, two rocks"
+    );
+    // a draw is the same wherever it is asked: one seed alone is the strip's draw of that seed
+    let again = table
+        .call(&w, &BUILD_THING, thing_req(define(), &[3]))
+        .expect("one seed");
+    assert_eq!(bytes(&again.draws[0]), bytes(&res.draws[2]));
+
+    // a low draw is a quick look, not the gate's: it says so
+    assert!(
+        res.draws.iter().all(|d| d.checked),
+        "a full draw is checked"
+    );
+    let mut quick = thing_req(define(), &[3]);
+    quick.tier = Some(dt_eval::Tier::Low);
+    let quick = table.call(&w, &BUILD_THING, quick).expect("a low draw");
+    assert!(!quick.draws[0].checked);
+
+    // an entry of the tile, and one of a scatter's things, by the id the stack gives them
+    let read = dt_eval::doc::read_with(
+        &dt_eval::Memory(BTreeMap::from([(PATH.to_owned(), THINGS.to_owned())])),
+        PATH,
+        Options::default().units(),
+    )
+    .expect("reads");
+    let keys: Vec<String> = read
+        .tile
+        .expect("a tile")
+        .stack
+        .iter()
+        .map(|e| e.id.as_str().to_owned())
+        .collect();
+    let rock = keys
+        .iter()
+        .find(|k| k.contains("rock"))
+        .expect("a rock entry");
+    let one = table
+        .call(
+            &w,
+            &BUILD_THING,
+            thing_req(
+                ThingRef::Entry {
+                    key: rock.clone(),
+                    child: None,
+                },
+                &[1],
+            ),
+        )
+        .expect("an entry is drawn");
+    assert_eq!(one.element, "rock");
+    let scatter = keys
+        .iter()
+        .find(|k| k.contains("scatter"))
+        .expect("a scatter");
+    let child = table
+        .call(
+            &w,
+            &BUILD_THING,
+            thing_req(
+                ThingRef::Entry {
+                    key: scatter.clone(),
+                    child: Some(0),
+                },
+                &[1],
+            ),
+        )
+        .expect("a scatter's thing is drawn");
+    assert!(
+        child.extent.most.x < one.extent.most.x,
+        "the child is the smaller rock"
+    );
+    let refused = |which: ThingRef, seeds: &[u64]| match table.call(
+        &w,
+        &BUILD_THING,
+        thing_req(which, seeds),
+    ) {
+        Err(CallError::Refused(r)) => r,
+        other => panic!("refused: {:?}", other.map(|r| r.element)),
+    };
+    // the scatter itself, and a define of a layer, are layers
+    let r = refused(
+        ThingRef::Entry {
+            key: scatter.clone(),
+            child: None,
+        },
+        &[1],
+    );
+    assert_eq!(r.status, Status::Unprocessable);
+    assert!(r.message.contains("layer"), "{}", r.message);
+    let r = refused(
+        ThingRef::Define {
+            name: "wet".to_owned(),
+        },
+        &[1],
+    );
+    assert_eq!(r.status, Status::Unprocessable);
+    assert!(r.message.contains("`wet` is a layer"), "{}", r.message);
+    // a name that is no define, and no seed
+    let r = refused(
+        ThingRef::Define {
+            name: "nope".to_owned(),
+        },
+        &[1],
+    );
+    assert_eq!(r.status, Status::NotFound);
+    let r = refused(define(), &[]);
+    assert_eq!(r.status, Status::BadRequest);
+}
+
+/// What `cargo xtask parity --service` holds the worker's `buildThing` to: the program's draws of a rock define at seeds 1 to 4
+/// (this test, native), as the triangles, the SHA-256 of each mesh payload and the extent.  The file is the one definition of
+/// the document and of the answer; `DT_THING_GOLDEN=write` rewrites the answer from this run.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ThingGolden {
+    text: String,
+    name: String,
+    seeds: Vec<u64>,
+    triangles: Vec<usize>,
+    mesh_sha256: Vec<String>,
+    extent: Option<dt_service::thing_calls::ThingExtent>,
+}
+
+#[test]
+fn the_programs_thing_draws_are_the_golden_the_worker_is_held_to() {
+    use sha2::{Digest, Sha256};
+    let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/thing-parity.json");
+    let golden: ThingGolden =
+        serde_json::from_str(&std::fs::read_to_string(&file).expect("the golden file"))
+            .expect("the golden file reads");
+    let w = world();
+    let table = table();
+    let res = table
+        .call(
+            &w,
+            &BUILD_THING,
+            ThingReq {
+                text: golden.text.clone(),
+                file: None,
+                which: ThingRef::Define {
+                    name: golden.name.clone(),
+                },
+                seeds: golden.seeds.clone(),
+                tier: None,
+            },
+        )
+        .expect("the golden's thing is drawn");
+    let made = ThingGolden {
+        text: golden.text.clone(),
+        name: golden.name.clone(),
+        seeds: golden.seeds.clone(),
+        triangles: res.draws.iter().map(|d| d.triangles).collect(),
+        mesh_sha256: res
+            .draws
+            .iter()
+            .map(|d| {
+                let bytes = dt_service::export_calls::unbase64(&d.mesh).expect("base64");
+                Sha256::digest(bytes)
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect()
+            })
+            .collect(),
+        extent: Some(res.extent),
+    };
+    if std::env::var_os("DT_THING_GOLDEN").is_some_and(|v| v == "write") {
+        std::fs::write(
+            &file,
+            serde_json::to_string_pretty(&made).expect("writes") + "\n",
+        )
+        .expect("the golden file is written");
+        return;
+    }
+    assert_eq!(
+        made, golden,
+        "the program's draws are not the golden's: if the engine changed on purpose, run DT_THING_GOLDEN=write cargo test -p dt-service --test no_server_verbs the_programs_thing"
     );
 }

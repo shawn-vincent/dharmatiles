@@ -75,6 +75,7 @@ use dt_service::roots::{Role, Root, RootKind};
 use dt_service::scene_read::{SceneHost, SceneMemo};
 use dt_service::storage::{MemStorage, Storage};
 use dt_service::target_calls::{self, SET_TARGET, TargetHost, TargetReq, TargetRes};
+use dt_service::thing_calls::{self, BUILD_THING, ThingReq, ThingRes};
 use dt_service::tier_calls::{self, TIERS_WANT, TierResultReq, TiersWantReq, TiersWantRes};
 use dt_service::tiers::BookOp;
 use dt_service::tile::{Slot, tile_id};
@@ -1329,6 +1330,20 @@ fn inventory_record(ctx: &Ctx, req: InventoryRecordReq) -> Result<InventoryWrote
     inventory_calls::record(ctx, req)
 }
 
+fn build_thing(ctx: &Ctx, req: ThingReq) -> Result<ThingRes, Refusal> {
+    // the thing is read from the file the text is of: the document (`tile.dtile`), or a part it uses, laid over the library
+    match req.file.as_deref() {
+        None => thing_calls::build_thing(ctx, &Doc { text: &req.text }, MAIN, &req),
+        Some(file) => {
+            let src = dt_service::read_calls::Overlay {
+                files: BTreeMap::from([(file.to_owned(), req.text.clone())]),
+                base: &Lib,
+            };
+            thing_calls::build_thing(ctx, &src, file, &req)
+        }
+    }
+}
+
 fn inventory_gone(ctx: &Ctx, req: InventoryGoneReq) -> Result<InventoryWrote, Refusal> {
     inventory_calls::gone(ctx, req)
 }
@@ -1360,6 +1375,7 @@ fn table() -> Table<Ctx, Refusal> {
         .with_json(&PRINTED, printed)
         .with_json(&PRINTED_SET, printed_set)
         .with_json(&OFFERS, offers)
+        .with_json(&BUILD_THING, build_thing)
         .with_json(&ABOUT, about)
         .with_json(&ELEMENTS, elements)
         .with_json(&LANGUAGE, language)

@@ -37,6 +37,8 @@ dt-eval = { workspace = true, features = ["wasm"] }
 dt-testkit.workspace = true
 # the test host's kept builds: the lane and an export of a tile share one entry (no_server_verbs)
 dt-store.workspace = true
+# the thing parity golden: the SHA-256 of each draw's mesh
+sha2.workspace = true
 
 [lints]
 workspace = true

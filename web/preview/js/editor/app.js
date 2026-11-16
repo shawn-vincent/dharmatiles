@@ -17,7 +17,7 @@ import { view } from './stores.js';
  *   't-right': HTMLInputElement, 'export-3mf': HTMLInputElement, 'place-in': HTMLInputElement, 'new-name': HTMLInputElement,
  *   'new-size': HTMLInputElement,
  *   'new-dialog': HTMLDialogElement, 'keys': HTMLDialogElement, 'about': HTMLDialogElement, 'leave-dialog': HTMLDialogElement,
- *   'canvas': HTMLCanvasElement, 'over': HTMLCanvasElement,
+ *   'canvas': HTMLCanvasElement, 'over': HTMLCanvasElement, 'thing-canvas': HTMLCanvasElement,
  *   'new-form': HTMLFormElement,
  *   'undo': HTMLButtonElement, 'undo-drop': HTMLButtonElement, 'redo': HTMLButtonElement, 'redo-drop': HTMLButtonElement,
  *   'target': HTMLButtonElement, 'export': HTMLButtonElement, 'panelbtn': HTMLButtonElement, 'msgbtn': HTMLButtonElement,

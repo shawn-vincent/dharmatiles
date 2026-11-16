@@ -99,6 +99,7 @@ pub(super) static ROUTES: &[Route] = &[
     post("trashTile", "/api/tiles/:id/trash"),
     post("exportTile", "/api/tiles/:id/export"),
     post("offers", "/api/tiles/:id/offers"),
+    post("buildThing", "/api/tiles/:id/build-thing"),
     // a tile's calls that answer bytes, or only say they were heard
     post("draft", "/api/tiles/:id/draft"),
     post("step", "/api/tiles/:id/step"),

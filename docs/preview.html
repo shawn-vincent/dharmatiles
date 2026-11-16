@@ -36,6 +36,7 @@
   <li><a href="#run">Run it</a></li>
   <li><a href="#shows">What it shows</a></li>
   <li><a href="#panel">The panel</a></li>
+  <li><a href="#thing">One thing alone</a></li>
   <li><a href="#places">Places and folders</a></li>
   <li><a href="#select">Selecting</a></li>
   <li><a href="#edit">Editing</a></li>
@@ -129,6 +130,22 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
   <li><strong>Names and seeds.</strong> A row is called what it does, <code>dirt in bank</code>, until it is given an <code>id=</code>; <em>Rename…</em> writes (or changes, or with an empty name takes out) that <code>id=</code> and the row shows it. An entry&rsquo;s seed is keyed by its path, <code>tile/dirt/0</code> by the count of dirts before it, or <code>tile/dirt/bank</code> by its id, so naming an entry draws its look again once, and then it keeps that look whatever is added, taken out or moved. A move never writes an <code>id=</code> for you: a move across another entry of the same element and no id swaps their counts and so their looks, and the line over the view says so (<q>name them to keep each</q>).</li>
   <li><strong>Pictures in the Shape.</strong> A region wears its mask as the build paints it (the program&rsquo;s own cells, in the tile&rsquo;s shape, north up), a line its points; a region that covers nothing has a dashed frame.</li>
 </ul>
+<h2 id="thing">One thing alone</h2>
+<p>A thing (a <code>rock</code>, a <code>tree</code>, a <code>flower</code>, or a <code>define</code> whose stack is one of them) is made from its own controls and a seed and reads nothing, so it can be looked at without a tile. When the cursor in the source is inside such a <code>define</code>, or the selection is on such an entry (or, on a <code>scatter</code>, one of the things it holds), a <em>Thing</em> switch appears beside <em>Tile</em> at the top of the view. Press it and the view shows that thing alone, standing on the plate with no ground and no base, in the same viewer and the same paint as the tile, overhang red as everywhere. <em>Tile</em> brings the tile back; the thing stays where it was while you edit elsewhere, and goes when you open another tile.</p>
+<ul>
+  <li><strong>The draw.</strong> One seed at a time: the field beside <em>Draw &middot; seed</em>, the arrows and the dice choose it. The origin is where the thing meets what holds it, and up is up.</li>
+  <li><strong>The strip.</strong> Under the view, twelve draws, seeds 1 to 12, each a picture by the page&rsquo;s own renderer. Press one to make it the view&rsquo;s seed; <em>More draws</em> shows the next twelve.</li>
+  <li><strong>The room it takes.</strong> The smallest and the largest box the thing can draw are two outlines round the origin (the smallest dark, the largest in the accent) and two lines in the card: each in printed mm for the build target, with the <code>dmm</code> the document writes beside it, never the one as the other (<code>dmm</code> is 1/35 of a square and scales with the system; <code>mm</code> is what prints).</li>
+  <li><strong>The controls as built.</strong> What the element worked out that the document does not write, from where it comes.</li>
+  <li><strong>Live.</strong> It follows the source as you type: each change draws it again, and a draw that a newer change has overtaken is dropped. A draw is quick first (a low draw, as the tile&rsquo;s draft is, <em>Draft &middot; not yet checked</em>) and then drawn in full, through the gate&rsquo;s overhang paint. A thing that draws slowly, such as a tree, waits to be asked: <em>Draw in full</em> in the note.</li>
+</ul>
+<p>A <code>tree</code>&rsquo;s <code>top=</code> is a height over the ground the tile gives it, so alone it stands on ground at zero: <code>$bottom + 59dmm</code> is 59&nbsp;dmm tall. A <code>top=</code> that reads where the tree stands has no place alone and is refused in words. A layer (<code>dirt</code>, <code>water</code>, <code>grass</code>, a <code>scatter</code> itself, a <code>define</code> of layers) is not a thing and is not offered; asked for anyway it is refused, and the guide says why (<a href="guide/generators.html#generators">things and layers</a>). The program and the browser editor answer the one verb, <code>buildThing</code>, with the same code, and a draw is not kept in the cache of builds.</p>
+<ul class="rules">
+  <li>A thing is drawn alone in its own frame: the origin where it meets what holds it, +z up, +x its main axis.</li>
+  <li>The smallest and largest box are the thing&rsquo;s own account of the room it takes; the view draws them, it works nothing out.</li>
+  <li>A seed is the thing&rsquo;s only chance: the same source and the same seed draw the same thing, in the program and in the browser.</li>
+</ul>
+
 <h2 id="places">Places and folders</h2>
 <p>Above the tile are the folder levels, in the same panel with the same slide, crumbs and strip. <strong>Places</strong> is the top: <em>My tiles</em>, any folder you have added, then the <em>Library</em> and <em>Tests</em> (read only). A place opens to a <strong>folder level</strong>: its subfolders first, each with how many tiles are under it, then the tiles in it, each with its name, its size (<q>2×1</q>) and a small picture of its footprint, the squares across and up, and a dot for its build. A subfolder is another level; a filter above the list searches the whole place, at any depth, and says where each match is. The strip under the crumbs says how many tiles the folder holds (<q>14 tiles (2 here) · 3 folders</q>) and where it is on disk, as a short path (<q>~/dharmatiles/dungeon/combo</q>); the library's says <q>library · tiles/ground · read only</q>. <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Home</kbd> <kbd>End</kbd> move between rows, <kbd>→</kbd> or <kbd>Enter</kbd> opens, <kbd>←</kbd> or <kbd>⌘[</kbd> goes up a level (from a place to Places, from a tile to its folder), <kbd>⌘]</kbd> goes back to the tile you left.</p>
 <figure class="shot" data-shot="folder">

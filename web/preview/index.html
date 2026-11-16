@@ -102,9 +102,14 @@
   <main id="view">
     <canvas id="canvas" tabindex="0" aria-label="3D tile view"></canvas>
     <canvas id="over" aria-hidden="true"></canvas>
+    <section id="thingview" hidden aria-label="One thing, drawn alone">
+      <canvas id="thing-canvas" tabindex="0" aria-label="3D view of one thing, with no tile"></canvas>
+      <div id="thing-panel"></div>
+    </section>
     <div id="mpills" aria-hidden="true"></div>
     <div id="ppins" aria-hidden="true"></div>
     <div id="viewbar">
+      <div class="seg" id="thing-switch" role="group" aria-label="What the view shows" hidden><button type="button" data-thing="tile" aria-pressed="true" title="The tile">Tile</button><button type="button" data-thing="thing" aria-pressed="false" title="The thing the cursor or the selection is on, drawn alone">Thing</button></div>
       <div class="seg" id="views" role="group" aria-label="Views"></div>
       <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display" aria-label="Display"><i data-icon="ellipsis" data-size="16"></i></button>
       <div id="display" class="menu" hidden>

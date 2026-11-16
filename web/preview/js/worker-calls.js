@@ -67,6 +67,7 @@ export const WORKER_CALLS = {
   trashTile: 'service',
   exportTile: 'service',
   offers: 'service',
+  buildThing: 'service',
   draft: 'service',
   step: 'service',
   build: 'service',

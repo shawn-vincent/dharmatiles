@@ -36,6 +36,7 @@ mod record;
 pub mod regions;
 pub mod solve;
 pub mod source;
+pub mod thing_build;
 pub mod tiers;
 pub mod unwritten;
 mod verdict;

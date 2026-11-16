@@ -130,6 +130,8 @@ const LATEST = {
   'tokens': () => 'tokens',
   'check': (_b, id) => `check:${id}`,
   'offers': (_b, id) => `offers:${id}`,
+  // the view of a thing and its strip of draws are two asks, each replaced by the next of its own kind
+  'buildThing': (b, id) => `thing:${id}:${b.seeds.length > 1 ? 'strip' : 'view'}`,
   'draft': (_b, id) => `draft:${id}`,
   'checkValue': (b) => `check-value:${b.element}.${b.control}`,
   'printed': (_b, id) => `printed:${id}`,
@@ -369,6 +371,8 @@ export function browserHost(requests = createRequests()) {
     check: (id, body) => call('check', body, id),
     /** What the Add menu may offer at a place of the stack. @param {string} id @param {Req<'offers'>} body */
     offers: (id, body) => call('offers', body, id),
+    /** One thing of the tile alone, drawn at each seed. @param {string} id @param {Req<'buildThing'>} body */
+    buildThing: (id, body) => call('buildThing', body, id),
     /** What the reader refuses in a typed value. @param {string} element @param {string} control @param {string} typed */
     checkValue: (element, control, typed) => call('checkValue', { element, control, typed }),
     /** What each written length prints on the build target. @param {string} id @param {Req<'printed'>} body */
@@ -713,6 +717,8 @@ export function workerHost(requests = createRequests(), engine = startEditorWork
     check: (id, body) => call('check', body, id),
     /** @param {string} id @param {Req<'offers'>} body */
     offers: (id, body) => call('offers', body, id),
+    /** @param {string} id @param {Req<'buildThing'>} body */
+    buildThing: (id, body) => call('buildThing', body, id),
     /** @param {string} element @param {string} control @param {string} typed */
     checkValue: (element, control, typed) => call('checkValue', { element, control, typed }),
     /** @param {string} id @param {Req<'printed'>} body */

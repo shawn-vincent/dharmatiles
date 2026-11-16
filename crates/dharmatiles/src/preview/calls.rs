@@ -8,7 +8,9 @@ use super::api::{Reply, TileRef, called, calls, reply, request};
 use super::edit::{self, DraftReq};
 use super::route;
 use super::routes::{resolve, tile_shape};
-use super::{Shared, fail, inventory, lists, maps, offers, places, plates, printers, tiers};
+use super::{
+    Shared, fail, inventory, lists, maps, offers, places, plates, printers, things, tiers,
+};
 use dt_service::draft_calls;
 
 calls! {
@@ -65,6 +67,7 @@ calls! {
         "trashTile" => places::trash_tile : places::Nothing => places::Trashed;
         "exportTile" => edit::export : edit::ExportReq => edit::ExportRes;
         "offers" => offers::offers : offers::OffersReq => offers::OffersRes;
+        "buildThing" => things::build_thing : things::ThingReq => things::ThingRes;
     }
     get {
         "session" => route::SessionRes;
