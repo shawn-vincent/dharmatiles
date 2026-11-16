@@ -65,11 +65,7 @@ impl Reader<'_> {
             {
                 let mut d = Diag::at(&at, t.span, why.code, why.message, "here");
                 d.help = why.help;
-                if why.hard {
-                    self.errors.push(d);
-                } else {
-                    pending.push(d);
-                }
+                self.errors.push(d);
                 return None;
             }
             out.push(Setting {
@@ -183,15 +179,10 @@ impl Reader<'_> {
                         }
                         value
                     }
-                    Err((why, hard)) => {
+                    Err(why) => {
                         ok = false;
-                        // a mistake is shown where it was made; a name with
-                        // no value yet waits for its caller
-                        if hard {
-                            self.errors.push(*why);
-                        } else {
-                            pending.push(*why);
-                        }
+                        // a mistake is shown where it was made
+                        self.errors.push(*why);
                         continue;
                     }
                 };
@@ -320,11 +311,11 @@ pub(super) fn push_setting(
 
 /// A written value for a built element: a range stays a range (the element
 /// draws from it), a weighted range keeps its odds.
-pub(super) fn value(b: &Bound, lets: &Lets) -> Result<Lowered, (Box<Diag>, bool)> {
+pub(super) fn value(b: &Bound, lets: &Lets) -> Result<Lowered, Box<Diag>> {
     element_value(&b.value.value, lets).map_err(|why| {
         let mut d = Diag::at(&b.src, b.value.span, why.code, why.message, "here");
         d.help = why.help;
-        (Box::new(d), why.hard)
+        Box::new(d)
     })
 }
 

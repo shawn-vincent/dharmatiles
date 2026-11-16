@@ -11,6 +11,7 @@ mod common;
 mod baseline;
 mod cache;
 mod cliffs;
+mod closure;
 mod clouds;
 mod code_examples;
 mod debug;
