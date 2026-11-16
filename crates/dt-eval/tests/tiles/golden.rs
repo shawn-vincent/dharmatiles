@@ -299,12 +299,21 @@ fn no_base_line_means_no_base() {
             .iter()
             .fold(f64::INFINITY, |lo, p| lo.min(p[2]))
     };
+    // the default system's build is the observed one every test shares (the observers change nothing: see `memo`),
+    // so only the other system builds here
+    let of = |path: &str, opts: &Options| -> &'static Built {
+        if opts.system == Options::default().system {
+            memo::built(path)
+        } else {
+            memo::build(&Library, path, opts).unwrap()
+        }
+    };
     for system in ["db", "ol"] {
         let opts = Options {
             system: system.parse().unwrap(),
             ..Options::default()
         };
-        let none = memo::build(&Library, "lib:tests/ground/1x1-no-base.dtile", &opts).unwrap();
+        let none = of("lib:tests/ground/1x1-no-base.dtile", &opts);
         assert!(none.audit.failures(&opts.printer).is_empty(), "{system}");
         assert!(none.audit.watertight && none.audit.holes == 0);
         assert!(min_z(none).abs() < 1e-6, "{system}: flat from zero");
@@ -314,7 +323,7 @@ fn no_base_line_means_no_base() {
                 .all(|m| *m != dt_kit::Material::Connector),
             "{system}: a connector part"
         );
-        let some = memo::build(&Library, "lib:tests/ground/1x1-flat.dtile", &opts).unwrap();
+        let some = of("lib:tests/ground/1x1-flat.dtile", &opts);
         assert!(min_z(some) < -6.9, "{system}: the base is under zero");
         assert!(some.audit.failures(&opts.printer).is_empty(), "{system}");
     }
