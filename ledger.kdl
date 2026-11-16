@@ -43,3 +43,4 @@ violation "collision:size" principle="one-job" found="5a7b2db9" note="`size` is 
 violation "collision:slabs" principle="one-job" found="5a7b2db9" note="`slabs` is a Count (slabs across a square) on flagstones and a weight (a Number) of a cliff's rock"
 violation "collision:smooth" principle="one-job" found="5a7b2db9" note="`smooth` is a choice (one smooth curve, planed boards) and a function (smoothstep)"
 violation "collision:top" principle="one-job" found="5a7b2db9" note="`top` is a height (the band a body fills, how high a thing stands) on most elements and a Word (crenellations) on a wall"
+violation "audit:let-body-top-level-only" principle="orthogonality" found="431d239e" note="a `let` with a body names a thing or a layer only at the top level of a file; inside a tile, a stack or another body it is refused (dt::value), where a value `let` works in any block, so a part cannot be local to a tile or another part"
