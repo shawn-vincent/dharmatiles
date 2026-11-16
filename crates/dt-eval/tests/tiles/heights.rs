@@ -412,7 +412,8 @@ fn a_body_inside_a_definition_checks_and_builds() {
     let solved = c.solved.as_ref().unwrap();
     assert_eq!(solved.bodies.len(), 1);
     assert!(solved.bodies[0].written);
-    let built = memo::build(&Library, path, &o).unwrap_or_else(|e| panic!("{e:#?}"));
+    // the shared observed build: the observers change nothing (see `memo`)
+    let built = memo::built(path);
     assert!(
         built.audit.failures(&o.printer).is_empty(),
         "{:?}",
