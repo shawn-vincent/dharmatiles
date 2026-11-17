@@ -21,6 +21,7 @@ reference/*
 # our own look references (outside projects stay ignored)
 !reference/cliffs/
 !reference/grass/
+!reference/stone/
 
 # the page checker (web/preview, `npm install` there)
 node_modules
