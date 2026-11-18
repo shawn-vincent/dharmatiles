@@ -2,19 +2,9 @@
 .xp{margin:18px 0 28px;--body:var(--display)}
 /* the viewer: always in view, the width of the content column */
 .xview{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line);padding:0 0 6px}
-.xview .xcv{position:relative;height:min(40vh,520px);min-height:240px}
+.xview .xcv{position:relative;height:min(46vh,560px);min-height:240px}
 .xview .xcv canvas{display:block;width:100%;height:100%;object-fit:contain;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
 .xview .xcv canvas[hidden]{display:none}
-.xstrip{display:flex;flex-wrap:wrap;gap:2px 16px;align-items:center;padding:4px 2px 0}
-.xvopts{display:flex;flex-wrap:wrap;gap:2px 16px;align-items:center;flex:1 1 100%}
-.xvbtn{display:none;background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);font:600 12px var(--display);padding:4px 10px;cursor:pointer;margin:2px 0}
-.xstrip .cl{flex:0 0 auto}
-.xstrip .cl .seg2{flex:0 0 auto}
-.xstrip .seg2 button{flex:0 0 auto;padding:0 12px;overflow:visible;text-overflow:clip}
-.xstrip .cl.strip{flex:1 1 100%}
-.xstrip .cl.strip .seg2{display:flex;flex:1 1 auto;min-width:0}
-.xstrip .cl.strip .seg2 button{flex:1 1 0;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;padding:0 4px}
-.xstrip .cl.strip .seg2 .ddi svg{width:20px;height:15px;stroke:currentColor;fill:none;stroke-width:1.4}
 .xleg{font:500 12.5px/1.35 var(--display);color:var(--muted);padding:3px 2px 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* Setup: the wall to start from */
 .xsetup{display:grid;grid-template-columns:104px minmax(0,1fr);gap:4px 14px;align-items:start;margin:14px 0}
@@ -28,7 +18,7 @@
 .phd{display:flex;align-items:center}
 .ph0{display:flex;gap:10px;align-items:center;text-align:left;background:none;border:0;padding:10px 12px;flex:1;min-width:0;cursor:pointer;color:var(--ink);font:inherit}
 .pn{flex:0 0 26px;height:26px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font:700 13px var(--display)}
-.pt b{display:block;font:700 17px/1.2 var(--display)}.pt small{display:block;color:var(--muted);font:500 12px/1.35 var(--display)}
+.pt{min-width:0;flex:1}.pt b{display:block;font:700 17px/1.2 var(--display)}.pt small{display:block;color:var(--muted);font:500 12px/1.35 var(--display)}
 .pc{margin-left:auto;transition:transform .15s;color:var(--muted)}.pnl.open .pc{transform:rotate(180deg)}
 .prs{margin-right:12px;background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;font:600 12px var(--display);padding:4px 9px;cursor:pointer}
 .prs:hover{color:var(--ink);border-color:var(--muted)}
@@ -74,19 +64,14 @@
 .xmeasure>summary{cursor:pointer;font:700 14px var(--display);padding:6px 0}.xmeasure>summary small{color:var(--muted);font-weight:500;margin-left:8px}
 .xmeasure .in{overflow-x:auto;font-size:12px}
 /* wide: all four panels are open, the caret is hidden */
-@media(min-width:900px){.pc{display:none}}
 /* narrow: one column, the panels open one at a time */
 @media(max-width:899px){
   .xpanels{grid-template-columns:minmax(0,1fr);gap:10px}
   .xcol{gap:10px}
-  .pnl:not(.open) .pb{display:none}
   .xview .xcv{height:min(32vh,80vw);min-height:190px}
-  .xvbtn{display:inline-block}.xvopts{display:none}.xvopts.open{display:flex}
-  .xstrip .cl.strip .seg2 .ddi{display:none}.xstrip .cl.strip .cll{display:none}.xstrip .seg2 button{font-size:12px;padding:0 2px}
-  .xsetup{grid-template-columns:72px minmax(0,1fr)}
+  .xvbtn{display:inline-block}.xvopts{display:none}  .xstrip .cl.strip .seg2 .ddi{display:none}.xstrip .cl.strip .cll{display:none}  .xsetup{grid-template-columns:72px minmax(0,1fr)}
   .xleg{display:none}
-  .xstrip{gap:0 10px}
-}
+  }
 /* the Rock panel is the rock library's own panel (rock/panel.js, shared with Weathered Stone); this is the skin the cliff page lays over it so its stages read like the other groups. Nothing here touches the library or its page. */
 #xp-rock .stg{border:1px solid var(--line);border-radius:10px;padding:8px 12px 10px;margin:12px 0;background:var(--bg)}
 #xp-rock .stg.open>.shead{background:var(--bg)}
@@ -110,3 +95,62 @@
 nav.toc .toc-sub .tgl{display:block;margin:8px 0 2px;font:700 11px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 /* generated tables: scroll sideways inside their own box on a phone */
 .tw{overflow-x:auto;margin:0 0 22px;max-width:100%}.tw table{min-width:560px}
+/* the view controls: one icon on the canvas opens them; the Level strip is a compact chip along the bottom */
+.xview .xcv .ovl-opts{left:6px;top:56px}
+.vpop{position:absolute;left:6px;top:106px;z-index:7;width:min(360px,calc(100% - 70px));display:flex;flex-direction:column;gap:6px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.28)}
+.vpop[hidden]{display:none}
+.vlevel{position:absolute;left:6px;bottom:6px;z-index:5;max-width:calc(100% - 64px);background:color-mix(in srgb,var(--surface) 82%,transparent);border-radius:8px}
+.vlevel .cl{min-height:0}.vlevel .cl .cll{display:none}
+.vlevel .seg2{flex:0 0 auto;border-color:var(--line)}
+.vlevel .seg2 button{min-height:30px;padding:0 8px;font-size:12px;background:transparent;flex:0 0 auto}
+.vlevel .seg2 button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.vlevel .seg2 .ddi{display:none}
+/* the one build record: the status chip spins while the rock builds; its popover lists the steps in build order */
+.gd.run{background:#8a93a3;position:relative}
+.gd .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+@media(prefers-reduced-motion:reduce){.gd .spin{animation:none}}
+.xview .gpop{width:min(560px,calc(100% - 12px))}
+.gpop h4{margin:10px 0 4px;font:700 12px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.gpop table td:nth-child(3){font-size:12px;color:var(--muted)}
+.gpop td:first-child{white-space:nowrap}.gpop td.n{white-space:nowrap}.gpop th{font-size:11px;padding:5px 8px}.gpop td{padding:5px 8px}
+/* every group is a card: collapsed it is one line of its current state (what differs from the preset in bold), expanded it shows its controls */
+.pnl:not(.open)>.pb{display:none}
+.psum{display:block;margin-top:3px;font:500 12px/1.35 var(--display);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psum i{font-style:normal;font-weight:700;color:var(--ink)}
+.pnl.open .psum{display:none}
+.grp>.gh,.stg .nm[role=button]{cursor:pointer}
+.gsum{display:block;order:4;flex:1 1 100%;font:500 12.5px/1.4 var(--display);color:var(--muted)}
+.chg{color:var(--ink);font-weight:700;background:var(--stone-soft);border-radius:4px;padding:0 4px}
+.bg{font:700 10.5px var(--display);letter-spacing:.08em;text-transform:uppercase;background:var(--ink);color:var(--bg);border-radius:4px;padding:1px 5px;margin-right:4px}
+.grp:not(.collapsed) .gsum,.stg:not(.collapsed) .gsum{display:none}
+.grp.collapsed>.gb,.grp.collapsed>.more,.grp.collapsed .gl{display:none}
+.grp.collapsed{padding-bottom:8px}
+.grp>.gh::after{content:"\25BE";margin-left:auto;order:2;color:var(--muted);transition:transform .15s}
+.grp:not(.collapsed)>.gh::after{transform:rotate(180deg)}
+.gtools{order:3}
+#xp-rock .stg.collapsed>.shead>.sl,#xp-rock .stg.collapsed>.shead>output,#xp-rock .stg.collapsed>.mset,#xp-rock .stg.collapsed>.sset{display:none}
+#xp-rock .stg .nm .gsum{margin-top:2px}
+/* the area cards' magenta views: top, side and front, small, so a collapsed card stays one row */
+.pth{display:flex;gap:4px;margin-left:auto;flex:0 0 auto}
+.pth canvas{width:56px;height:44px;border-radius:6px;background:var(--bg);border:1px solid var(--line)}
+.pnl.open .pth{display:none}
+.pth+.pc{margin-left:6px}
+@media(max-width:520px){.pth canvas{width:40px;height:32px}}
+.pnl:not(.open) .pt small{display:none}
+.pnl:not(.open) .psum{margin-top:1px}
+/* a step: its rule, its pictures, a short how, a short why */
+.step .lead{margin:4px 0 10px}
+.sfigs{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;margin:8px 0 12px}
+.sfigs>figure{flex:1 1 240px;max-width:420px;margin:0}
+.sfigs>figure.sfig-wide{flex:1 1 100%;max-width:none}
+.sfigs figcaption{font:500 13px/1.4 var(--display);margin-top:4px;color:var(--muted)}
+.sfigs .phfig .ph,.sfigs button.ph.flip{max-width:100%}
+.sfigs figure>img{width:100%;height:auto;display:block;border-radius:8px}
+.sfigs .dgsvg{max-width:100%}
+.sfigs canvas.ex{max-width:100%}
+.step .why{padding:8px 12px;background:var(--stone-soft);border-radius:8px;font:500 15px/1.5 var(--display);max-width:70ch}
+.gstrip{display:grid;gap:14px;margin:14px 0}.grow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,.6fr);gap:10px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.grow h5{grid-column:1/-1;margin:0;font:700 15px var(--display)}.grow h5 span{font:400 14px var(--body);color:var(--muted)}
+.gs{width:100%;height:auto;display:block}.gs .cell{fill:none;stroke:var(--muted);stroke-width:.12;stroke-dasharray:.5 .4}.gs .ring{fill:var(--stone-soft);stroke:var(--stone);stroke-width:.2;stroke-linejoin:round}.gs .bandr{fill:var(--ochre-soft);stroke:none}.gs .inl{stroke:var(--ochre);stroke-width:.15;stroke-dasharray:.8 .5}
+.gs .hb{fill:var(--stone)}.gs .ax{stroke:var(--muted);stroke-width:.4}.gs .tx{font:5px var(--display);fill:var(--muted)}
+.gcap{font:500 14px/1.4 var(--display);color:var(--muted);margin:2px 0 0}@media(max-width:640px){.grow{grid-template-columns:1fr 1fr}.grow .fcol{grid-column:1/-1}}

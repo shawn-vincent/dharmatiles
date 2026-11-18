@@ -67,11 +67,14 @@ var Widgets=(function(){
     show();w.refresh=show;reg(show);return w}
   /* ---- group: a title, its one line, an optional on/off and Solo, the main rows, and a "more" fold ---- */
   function group(def){var g=el('section','grp'+(def.cls?' '+def.cls:''));if(def.id)g.setAttribute('data-group',def.id);
-    var head=el('div','gh');head.innerHTML='<b class="gt">'+def.title+'</b>'+(def.line?'<small class="gl">'+def.line+'</small>':'');g.appendChild(head);
+    var head=el('div','gh');head.innerHTML='<b class="gt">'+def.title+'</b>'+(def.line?'<small class="gl">'+def.line+'</small>':'')+'<span class="gsum"></span>';g.appendChild(head);g.classList.add('collapsed');
+    head.setAttribute('role','button');head.tabIndex=0;head.setAttribute('aria-expanded','false');
+    function flip(){var c=g.classList.toggle('collapsed');head.setAttribute('aria-expanded',String(!c))}
+    head.onclick=function(e){if(e.target.closest('.gtools'))return;flip()};head.onkeydown=function(e){if((e.key==='Enter'||e.key===' ')&&e.target===head){e.preventDefault();flip()}};
     var tools=el('span','gtools seg tri');head.insertBefore(tools,head.firstChild.nextSibling);
     var body=el('div','gb');g.appendChild(body);var more=null,morebody=null;
     function addMore(){if(more)return;more=el('details','more');more.innerHTML='<summary>more</summary>';morebody=el('div','gb');more.appendChild(morebody);g.appendChild(more)}
-    return {el:g,head:head,tools:tools,body:body,add:function(row,isMore){if(isMore){addMore();morebody.appendChild(row)}else body.appendChild(row)}}}
+    return {el:g,head:head,tools:tools,body:body,sum:head.querySelector('.gsum'),flip:flip,add:function(row,isMore){if(isMore){addMore();morebody.appendChild(row)}else body.appendChild(row)}}}
   /* on/off (a switch) and Solo, for a stage: the two are one pair of toggles in the header */
   function stageToggles(g,id,st){
     var sw=el('button','sw swt');sw.type='button';sw.setAttribute('role','switch');sw.setAttribute('aria-label',g.title+' on or off');sw.innerHTML='<i></i>';

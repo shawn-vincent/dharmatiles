@@ -33,6 +33,7 @@ function fillStepControls(){var rows={};Object.keys(CTL).forEach(function(k){var
   var dials={};if(typeof DIALS!=='undefined')DIALS.forEach(function(d){dials[d[0]]=d});
   [].forEach.call(document.querySelectorAll('.stepctl'),function(box){var id=box.getAttribute('data-step'),ks=rows[id]||[];if(!ks.length){box.innerHTML='<h4>Controls in this step</h4><p class="small">None of its own: it works from <b>setback</b> and <b>lip</b> and from the shapes the other steps make.</p>';return}
     var h='<h4>Controls in this step</h4><dl>';ks.forEach(function(k){var r=CTL[k],d=dials[k],meta='';if(d){var df=(typeof DEFAULTS!=='undefined')?DEFAULTS[k]:undefined;meta='<small>'+d[3]+' to '+d[4]+(d[6]?' '+d[6]:'')+(df!==undefined?'; default '+(Array.isArray(df)?df.slice(0,2).join(' to '):df):'')+'</small>'}
+      var pl=r.panel==='ui'?(['Preset','Scale','seed'].indexOf(k)>=0?'Setup':'Viewer'):((PANELS.filter(function(p){return p.id===r.panel})[0]||{}).title||'');if(pl)meta+='<small>'+pl+(r.panel==='ui'?'':' panel')+'</small>';
       h+='<dt data-ctlrow="'+k+'">'+r.name+meta+'</dt><dd>'+r.text+'</dd>'});box.innerHTML=h+'</dl>'})}
 window.addEventListener('load',function(){setTimeout(function(){fillStepControls();checkControls(document)},400)});
 

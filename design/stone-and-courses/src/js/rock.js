@@ -69,7 +69,7 @@ function cellOfBlock(g,b,pieces,ctx){
       if(tot<minSupport(ctx,cellA)){ctx.rep.dropped=(ctx.rep.dropped||0)+1;return null}
       parts=kept}}
   var cell=Stone.cell.area(parts,'s');
-  return {spec:cell.spec,origin:o,tops:tops}}
+  return {spec:cell.spec,origin:o,tops:tops,parts:parts}}
 function hullOfRings(rings,cx,cy){var pts=[];rings.forEach(function(R){R.forEach(function(q){pts.push([q[0]-cx,q[1]-cy])})});return pts.length>=3?hull2(pts):null}
 /* THE SUPPORT of a stone: where the stones it rests on really are, at the height its bed stands: the upward faces of their built meshes within SUPTOL of their top planes, as one area (Manifold's CrossSection). A stone on the ground has none to look at. */
 var SUPTOL=0.12;
@@ -95,7 +95,7 @@ function rockCtx(b,p,seq){var c={p:p,g:b.g,blocks:b.l2.blocks,memo:{},rep:b.rep,
 function rockScaled(P,f){if(f===1)return P;var Q=Object.assign({},P);
   Stone.controls.CONTROLS.forEach(function(c){if(c.stage==='stone'&&c.word!=='patch')return;if(c.unit==='mm')Q[c.key]=P[c.key]*f;else if(c.unit==='per cm')Q[c.key]=P[c.key]/f});return Q}
 function makeJob(b,p,grp,ctx){var c=cellOfBlock(b.g,grp.b,grp.pieces,ctx);if(!c)return null;
-  return {k:grp.k,block:grp.b,idx:grp.idx,origin:c.origin,spec:c.spec,tops:c.tops,P:rockScaled(Object.assign({},p.rock,{seed:hash(p.seed,777,grp.b.c,grp.b.i)|0}),b.g.f)}}
+  return {k:grp.k,block:grp.b,idx:grp.idx,origin:c.origin,spec:c.spec,tops:c.tops,parts:c.parts,P:rockScaled(Object.assign({},p.rock,{seed:hash(p.seed,777,grp.b.c,grp.b.i)|0}),b.g.f)}}
 /* a stone that is not built: its places are emptied (and its mirror's) */
 function dropRock(b,grp){grp.idx.forEach(function(ix){b.polys[ix]={faces:[],b:grp.b,empty:true};if(b.ym!=null)b.polys[ix+b.n0]={faces:[],b:grp.b,empty:true,mirror:true}})}
 /* the mesh of a job, in the wall's frame, as a solid the page draws and the union takes */
@@ -130,10 +130,10 @@ var RockRun=(function(){
     try{var n=Math.max(1,Math.min(12,(navigator.hardwareConcurrency||4)-1)),url=URL.createObjectURL(new Blob([document.getElementById('stonesrc').textContent+HANDLER],{type:'text/javascript'})),i;
       for(i=0;i<n;i++){var w=new Worker(url);w.onmessage=onmsg;w.onerror=function(ev){console.error('[rock] worker failed, building on the page thread',ev&&ev.message);dropWorkers()};workers.push(w)}}
     catch(e){console.error('[rock] no workers, building on the page thread',e);dropWorkers()}}
-  function dropWorkers(){workers.forEach(function(w){try{w.terminate()}catch(e){}});workers=[];if(!fallback){fallback=true;if(cur&&cur.done<cur.total)runMain(cur)}}
+  function dropWorkers(){workers.forEach(function(w){try{w.terminate()}catch(e){}});workers=[];if(!fallback){fallback=true;if(cur&&cur.done<cur.total)runMain(cur,cur.jobs.map(function(j,i){return i}).filter(function(i){return !cur.landed[i]}))}}   /* the stones still to land, in the page thread */
   function cacheSet(k,v){ROCKCACHE.delete(k);ROCKCACHE.set(k,v);if(ROCKCACHE.size>ROCKCACHE_MAX)ROCKCACHE.delete(ROCKCACHE.keys().next().value)}
-  function land(R,i,r){if(R.landed[i])return;R.landed[i]=1;var S0=placeRock(R.b,R.jobs[i],r);R.ctx.built[R.jobs[i].k]=S0;R.reports.push(r.report);R.done++;R.pendingC--;R.cb.onPlaced(R.done,R.total);if(R.pendingC<=0)setTimeout(function(){if(R===cur)nextCourse(R)},0)}
-  function finish(R){var sum={stones:R.total,cached:R.cached,wallMs:now()-R.t0,cuts:0,chunks:0,sampled:0,tris:0,islands:0,specks:0,sealed:0,refused:0,bad:0,cpuMs:0,workers:fallback?0:workers.length,down:0,band:0,red:0,dropped:R.dropped,courses:R.plan.courses.length,areaMs:R.areaMs};
+  function land(R,i,r){if(R.landed[i])return;R.landed[i]=1;var S0=placeRock(R.b,R.jobs[i],r);R.ctx.built[R.jobs[i].k]=S0;R.reports.push(r.report);if(R.cc){var sp=r.report.steps||{};R.cc.cuts+=sp.cuts?sp.cuts.ms:0;R.cc.chunks+=sp.chunks?sp.chunks.ms:0;R.cc.sampled+=sp.sampled?sp.sampled.ms:0}R.done++;R.pendingC--;R.cb.onPlaced(R.done,R.total);if(R.pendingC<=0)setTimeout(function(){if(R===cur)nextCourse(R)},0)}
+  function finish(R){var sum={stones:R.total,cached:R.cached,wallMs:now()-R.t0,cuts:0,chunks:0,sampled:0,tris:0,islands:0,specks:0,sealed:0,refused:0,bad:0,cpuMs:0,workers:fallback?0:workers.length,down:0,band:0,red:0,dropped:R.dropped,courses:R.plan.courses.length,areaMs:R.areaMs,courseLog:R.courseLog};
     R.reports.forEach(function(r){var s=r.steps||{};sum.cuts+=s.cuts?s.cuts.ms:0;sum.chunks+=s.chunks?s.chunks.ms:0;sum.sampled+=s.sampled?s.sampled.ms:0;sum.tris+=r.tris;sum.islands+=r.islands;sum.specks+=r.specks;sum.sealed+=r.sealed;sum.refused+=r.refused;sum.cpuMs+=r.ms;if(!r.inv.ok)sum.bad++;sum.down+=r.overhang.down;sum.band+=r.overhang.band;sum.red+=r.overhang.red});
     R.b.rep.dropped=R.dropped;R.b.bridges=R.ctx.bridgeLog;R.cb.onDone(sum)}
   function onmsg(e){var d=e.data;if(d.err){console.error('[rock] a stone failed: '+d.err);if(cur&&d.run===cur.run)cur.cb.onError(d.err);return}
@@ -142,8 +142,9 @@ var RockRun=(function(){
       setTimeout(function(){if(R!==cur)return;var res=makeStone(j.P,R.vox,Stone.cell.make(j.spec),true).res;
         cacheSet(j.key,res);land(R,k,res);i++;step()},0)})()}
   /* one course at a time (a course stands on the cut tops of the one below), the stones of a course in parallel: the cells of the next course are made from the meshes just landed; a stone with too little to stand on is not built */
-  function nextCourse(R){if(R.ci>=R.plan.courses.length){finish(R);return}
-    var grps=R.plan.courses[R.ci++],todo=[],hits=[],t0=now();
+  function nextCourse(R){if(R.cc){R.courseLog.push({course:R.cc.c,stones:R.cc.n,ms:now()-R.cc.t0,cuts:R.cc.cuts,chunks:R.cc.chunks,sampled:R.cc.sampled});R.cc=null}
+    if(R.ci>=R.plan.courses.length){finish(R);return}
+    var grps=R.plan.courses[R.ci++],todo=[],hits=[],t0=now();R.cc={c:grps[0].b.c,n:grps.length,t0:t0,cuts:0,chunks:0,sampled:0};
     var cj=courseJobs(R.b,R.ctx,grps);if(cj.dropped){R.dropped+=cj.dropped;R.done+=cj.dropped;R.cb.onPlaced(R.done,R.total)}
     cj.jobs.forEach(function(j){j.key=rockKey(j,R.vox);R.jobs.push(j);var idx=R.jobs.length-1,hit=ROCKCACHE.get(j.key);if(hit){R.cached++;hits.push([idx,hit])}else todo.push(idx)});
     R.areaMs+=now()-t0;R.pendingC=hits.length+todo.length;
@@ -154,7 +155,7 @@ var RockRun=(function(){
     todo.forEach(function(i){var j=R.jobs[i],w=workers[(Stone.rand.fnv(j.ck)>>>0)%workers.length];w.postMessage({run:R.run,jid:i,key:j.key,ck:j.ck,spec:j.spec,P:j.P,vox:R.vox})})}
   /* cb: { onPlaced(done,total), onDone(summary), onError(text) } */
   function start(b,vox,cb){
-    run++;var plan=rockPlan(b),R={run:run,plan:plan,ctx:Object.assign(rockCtx(b,b.p,true),{vox:vox,bridgeLog:[]}),jobs:[],total:plan.groups.length,done:0,cached:0,dropped:0,areaMs:0,ci:0,pendingC:0,t0:now(),reports:[],landed:[],cb:cb,b:b,vox:vox};cur=R;ensure();
+    run++;var plan=rockPlan(b),R={run:run,plan:plan,ctx:Object.assign(rockCtx(b,b.p,true),{vox:vox,bridgeLog:[]}),jobs:[],total:plan.groups.length,done:0,cached:0,dropped:0,areaMs:0,ci:0,pendingC:0,t0:now(),reports:[],landed:[],courseLog:[],cc:null,cb:cb,b:b,vox:vox};cur=R;ensure();
     if(!R.total){finish(R);return R}
     nextCourse(R);return R}
   function cancel(){run++;cur=null}

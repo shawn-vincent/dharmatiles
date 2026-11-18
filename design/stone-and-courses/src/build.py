@@ -12,7 +12,8 @@ def path(*p):
     f=os.path.normpath(os.path.join(H,*p));READ.add(f);return f
 rd=lambda *p:open(path(*p)).read()
 MAXTEXT=120_000   # a text file over this (without its images) is a mistake, not a page
-M=json.load(open(path('data','measured.json')))
+M=json.load(open(path('data','measured.json')));M.update({k:v for k,v in json.load(open(path('data','external.json'))).items() if not k.startswith('_')})
+_one=[r['stones'] for r in M['rows'] if r['tiles']==1];M['stones_min']=min(_one);M['stones_max']=max(_one)
 def tab(*a): return ''.join(a)
 # ---- the words, the panels and the preset names, read once from the live tables ----
 def node_json(js):
@@ -21,9 +22,13 @@ def node_json(js):
     return json.loads(subprocess.run(['node','-e',code],capture_output=True,text=True,check=True).stdout)
 TBL=node_json("{panels:PANELS,groups:GROUPS,rows:ROWS,presets:Object.keys(PRESETS).map(function(k){return {key:k,name:PRESETS[k].name,refuses:!!PRESETS[k].refuses}})}")
 PANEL={p['id']:p for p in TBL['panels']};GROUP={g['id']:g for g in TBL['groups']};PNAME={p['key']:p for p in TBL['presets']}
+# the model's own constants, read from the engine so the text cannot disagree with the code
+_c=subprocess.run(['node','-e',"var src=require('fs').readFileSync(%r,'utf8');console.log(JSON.stringify(new Function(src+';return {EDGE_MARGIN:EDGE_MARGIN,OVL:OVL,MOUTH:MOUTH,LINE:LINE,LAYER:LAYER,OVER:OVER,STEEP:STEEP,DIRT:DIRT,SQUARE:SQUARE,MINSTONE:MINSTONE,OLF:OLF}')()))"%path('js','engine.js')],capture_output=True,text=True,check=True).stdout
+CONST=json.loads(_c);CONST['SQUARE_OL']=round(CONST['SQUARE']*CONST['OLF'],1);CONST['OLF']=round(CONST['OLF'],4);CONST={k:('%g'%v) for k,v in CONST.items()}
 def fill(t,name):
     def f(m):
         k=m.group(1)
+        if k in CONST: return CONST[k]
         if k not in M or isinstance(M[k],(dict,list)): sys.exit('build: %s uses {{%s}} and data/measured.json has no such value'%(name,k))
         return str(M[k])
     t=re.sub(r'\{\{TABLE:(\w+)\}\}',lambda m:TABLES[m.group(1)](),t)
@@ -93,7 +98,7 @@ body=inline_imgs(body)
 css=rd('css','page.css')+rd('css','extra.css')+rd('css','panel.css')+rd('css','explorer.css')
 modules=re.search(r"MODULES = \[(.*?)\]",open(path(os.path.relpath(R,H),'load.js')).read()).group(1).replace("'",'').replace(' ','').split(',')
 stonesrc='\n;\n'.join(open(path(os.path.relpath(R,H),m+'.js')).read() for m in modules)
-live=['engine','graded','rock','union','ui','controls','widgets','presets','explorer','popups','figs','flips']
+live=['engine','graded','rock','union','ui','thumbs','controls','widgets','presets','explorer','popups','figs','flips']
 mine='\n'.join(rd('js',n+'.js') for n in live)
 def refs(pre):
     d={}

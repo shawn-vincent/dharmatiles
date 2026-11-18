@@ -3,8 +3,8 @@ function Explorer(root,REFS){
   var self=this,P=JSON.parse(JSON.stringify(DEFAULTS)),mode='shaded',stage=6,target=false,rowsOn=false,vmode='3d',cam=new Cam(32,22),cur=null,gate=null,thin=null,timer=0,presetKey='L',tier='draft',levelManual=false;
   var W=Widgets;
   /* ---- the markup: the viewer (canvas, its overlays, its strip), Setup, the four panels, Measure ---- */
-  var h='<div class="xp sp"><div class="xview"><div class="xcv sp"><canvas id="xp-cv" width="900" height="820"></canvas><canvas id="xp-el" width="900" height="820" hidden></canvas><div class="zoomv"><input data-ctl="zoom" type="range" id="xp-zoom" min="0.35" max="4" step="0.01" value="1" aria-label="zoom" title="zoom"></div><button type="button" class="ovl ovl-reset" data-ctl="reset" id="xp-zreset" title="reset view" aria-label="reset view">&#8634;</button><div class="xbusy" id="xp-rbusy" hidden><button type="button" class="xbtn" id="xp-rbtn" aria-label="Rock build record"><span class="spin" id="xp-rspin" aria-hidden="true"></span><span class="ic" id="xp-ric" hidden></span></button><span id="xp-rpct"></span></div><button type="button" class="ovl gdot" data-ctl="gate" id="xp-gdot" aria-label="Printability: measuring" aria-haspopup="dialog" aria-expanded="false"><span class="gd wait">&middot;</span></button><div class="gpop" id="xp-gpop" role="dialog" aria-label="Printability details" hidden><button type="button" class="gclose" id="xp-gclose" aria-label="close">&times;</button><div id="xp-gpb"></div></div><div class="vsw" id="xp-vsw" role="group" aria-label="view of the model"></div><div class="xpanel" id="xp-costs" hidden><div class="xstats" id="xp-st"></div></div><div class="xpanel" id="xp-lines" hidden><div class="xlines"><div><canvas id="xp-plan" width="560" height="560"></canvas><label class="ctl">layer height z <output id="xp-zo"></output><input type="range" id="xp-z" min="3.6" max="60" step="0.2" value="20"></label></div><div><canvas id="xp-sec" width="560" height="560"></canvas><label class="ctl">section at x <output id="xp-xo"></output><input type="range" id="xp-x" min="-17" max="17" step="0.5" value="0"></label></div></div><p class="small" id="xp-lnote"></p></div></div>'
-   +'<div class="xstrip" id="xp-strip"></div><div class="xleg" id="xp-leg"></div></div>'
+  var h='<div class="xp sp"><div class="xview"><div class="xcv sp"><canvas id="xp-cv" width="900" height="820"></canvas><canvas id="xp-el" width="900" height="820" hidden></canvas><div class="zoomv"><input data-ctl="zoom" type="range" id="xp-zoom" min="0.35" max="4" step="0.01" value="1" aria-label="zoom" title="zoom"></div><button type="button" class="ovl ovl-reset" data-ctl="reset" id="xp-zreset" title="reset view" aria-label="reset view">&#8634;</button><button type="button" class="ovl gdot" data-ctl="gate" id="xp-gdot" aria-label="Printability: measuring" aria-haspopup="dialog" aria-expanded="false"><span class="gd wait">&middot;</span></button><div class="gpop" id="xp-gpop" role="dialog" aria-label="Printability details" hidden><button type="button" class="gclose" id="xp-gclose" aria-label="close">&times;</button><div id="xp-gpb"></div></div><div class="vsw" id="xp-vsw" role="group" aria-label="view of the model"></div><div class="xpanel" id="xp-costs" hidden><div class="xstats" id="xp-st"></div></div><div class="xpanel" id="xp-lines" hidden><div class="xlines"><div><canvas id="xp-plan" width="560" height="560"></canvas><label class="ctl">layer height z <output id="xp-zo"></output><input type="range" id="xp-z" min="3.6" max="60" step="0.2" value="20"></label></div><div><canvas id="xp-sec" width="560" height="560"></canvas><label class="ctl">section at x <output id="xp-xo"></output><input type="range" id="xp-x" min="-17" max="17" step="0.5" value="0"></label></div></div><p class="small" id="xp-lnote"></p></div></div>'
+   +'<div class="xleg" id="xp-leg"></div></div>'
    +'<div class="pe" id="xp-pe" hidden><div><canvas id="xp-pl" width="560" height="420"></canvas><div class="small" id="xp-plc"></div></div><div><canvas id="xp-ev" width="560" height="420"></canvas><div class="small" id="xp-evc"></div></div></div>'
    +'<div class="xsetup" id="xp-setup"><figure class="xref"><img alt="reference panel" id="xp-ref"><figcaption id="xp-refc"></figcaption></figure><div class="xsetc" id="xp-setc"></div></div>'
    +'<div class="xpanels" id="xp-panels"></div>'
@@ -42,18 +42,32 @@ function Explorer(root,REFS){
       if(w==='off'){if(id==='front')tg.depth=0;else tg.s=0}else{tg.w=w;tg.a=dd.a!=null?dd.a:tg.a;tg.c=dd.c!=null?dd.c:tg.c;if(id==='front'){tg.depth=3;tg.bumps=6}else{tg.s=1;tg.bumps=6}}
       W.refreshAll();ST.change()};seg.appendChild(b)});return d}
   function el0(t,c){var e=document.createElement(t);if(c)e.className=c;return e}
+  /* ---- summaries: one function from a set of rows to their one line, read from the table; what differs from the preset is marked ---- */
+  var FRESH=null,FRESHROCK=null;
+  function changed(path){return JSON.stringify(W.getPath(P,path))!==JSON.stringify(W.getPath(FRESH,path))}
+  function token(r){var v=ST.get(r.path),txt;
+    var sh=function(x){return String(+(+x).toFixed(2))};
+    if(r.kind==='range'){v=v||[0,0];txt=sh(v[0])+'..'+sh(v[1])}
+    else if(r.kind==='num')txt=sh(v==null?0:v);
+    else if(r.kind==='weighting'){var base=r.path.slice(0,r.path.length-2);return {t:W.getPath(P,base+'.w'),c:['w','a','c'].some(function(x){return changed(base+'.'+x)}),w:1}}
+    else{var o=r.opts.filter(function(q){return q[0]===v})[0];txt=o?o[1]:String(v)}
+    var lab=r.kind==='choice'?'':(r.group?r.label.replace(new RegExp('^'+r.group+' ','i'),''):r.label)+' ';if(r.ctl==='band-stay'){lab='';txt=v?'stays behind':'free front'}
+    return {t:lab+txt,c:r.path==='tier'?tier!=='draft':changed(r.path)}}
+  function summaryOf(rows){return rows.filter(function(r){return !r.more}).map(function(r){var k=token(r);return k.c?'<b class="chg">'+k.t+'</b>':'<span>'+k.t+'</span>'}).join(' &middot; ')}
+  function badgeOf(state){var out='';if(!STAGE.on(state))out+='<b class="bg">off</b> ';else if(SOLO===state)out+='<b class="bg">solo</b> ';return out}
   function buildPanel(p){
     var sec=el0('section','pnl');sec.id='p-'+p.id;sec.setAttribute('data-level',p.level);
-    var hd=el0('button','ph0');hd.type='button';hd.setAttribute('data-ctl','panel-'+p.id);hd.innerHTML='<span class="pn">'+p.n+'</span><span class="pt"><b>'+p.title+'</b><small>'+p.line+'</small></span><span class="pc" aria-hidden="true">&#9662;</span>';
+    var hd=el0('button','ph0');hd.type='button';hd.setAttribute('data-ctl','panel-'+p.id);hd.innerHTML='<span class="pn">'+p.n+'</span><span class="pt"><b>'+p.title+'</b><small>'+p.line+'</small><span class="psum"></span></span>'+(p.id==='region'||p.id==='rockregion'?'<span class="pth" aria-hidden="true"><canvas width="112" height="88"></canvas><canvas width="112" height="88"></canvas><canvas width="112" height="88"></canvas></span>':'')+'<span class="pc" aria-hidden="true">&#9662;</span>';
     var rs=el0('button','prs');rs.type='button';rs.textContent='reset';rs.title='Set this panel\'s controls back to the preset\'s values';rs.onclick=function(e){e.stopPropagation();resetPanel(p.id)};
     var top=el0('div','phd');top.appendChild(hd);top.appendChild(rs);sec.appendChild(top);
-    var body=el0('div','pb');sec.appendChild(body);var groups={};
-    hd.onclick=function(){var narrow=window.matchMedia('(max-width:899px)').matches;if(narrow){var open=!sec.classList.contains('open');[].forEach.call(document.querySelectorAll('.pnl'),function(x){x.classList.remove('open')});sec.classList.toggle('open',open)}followLevel(p.level)};
+    var body=el0('div','pb');sec.appendChild(body);var groups={},prow=[],psum=hd.querySelector('.psum');
+    hd.onclick=function(){var open=!sec.classList.contains('open');if(window.matchMedia('(max-width:899px)').matches)[].forEach.call(document.querySelectorAll('.pnl'),function(x){x.classList.remove('open')});sec.classList.toggle('open',open);hd.setAttribute('aria-expanded',String(open));if(open)followLevel(p.level)};
     sec.addEventListener('focusin',function(){followLevel(p.level)});
     function into(g,more){return function(x){if(g)g.add(x,more);else{(more?moreOf(body):body).appendChild(x)}}}
     var moreBody=null;function moreOf(b){if(!moreBody){var d=el0('details','more');d.innerHTML='<summary>more</summary>';moreBody=el0('div','gb');d.appendChild(moreBody);b.appendChild(d)}return moreBody}
     ROWS.filter(function(r){return r.panel===p.id}).forEach(function(r){
-      var g=null;if(r.group){g=groups[r.group];if(!g){var gd=groupDef(r.group);g=groups[r.group]=W.group({id:gd.id,title:gd.title,line:gd.line});g.title=gd.title;g.el.querySelector('.gh').setAttribute('data-ctl','group-'+gd.id);if(gd.onoff)W.stageToggles(g,gd.state==='band'?'band':'outl',STAGE);body.appendChild(g.el)}}
+      var g=null;if(r.group){g=groups[r.group];if(!g){var gd=groupDef(r.group);g=groups[r.group]=W.group({id:gd.id,title:gd.title,line:gd.line});g.title=gd.title;g.rows=[];(function(g,gd){W.reg(function(){g.sum.innerHTML=(gd.onoff?badgeOf(gd.state==='band'?'band':'outl'):'')+summaryOf(g.rows)})})(g,gd);g.el.querySelector('.gh').setAttribute('data-ctl','group-'+gd.id);if(gd.onoff)W.stageToggles(g,gd.state==='band'?'band':'outl',STAGE);body.appendChild(g.el)}}
+      if(g)g.rows.push(r);else prow.push(r);
       var add=into(g,r.more);
       if(r.kind==='weighting')weightingRows(r,g,add);
       else if(r.kind==='num')add(W.num(r,ST));
@@ -61,6 +75,7 @@ function Explorer(root,REFS){
       else if(r.kind==='choice')add(W.choice({ctl:r.ctl,label:r.label,opts:function(){return r.opts.map(function(o){return {v:o[0],text:o[1]}})},get:function(){return ST.get(r.path)},set:function(v){ST.set(r.path,v);W.refreshAll();ST.change()},wide:r.ctl==='Quality'}))});
     if(groups.front)groups.front.body.appendChild(tryRow(groups.front,'front'));
     if(groups.outline)groups.outline.body.appendChild(tryRow(groups.outline,'outline'));
+    W.reg(function(){var t=summaryOf(prow),gs=Object.keys(groups).map(function(k){var gd=groupDef(k);return '<i>'+gd.title.toLowerCase()+'</i> '+(groups[k].rows.length?summaryOf(groups[k].rows):'')});psum.innerHTML=[t].concat(gs).filter(Boolean).join(' &middot; ')+(p.id==='rock'?(psum.innerHTML?' &middot; ':'')+rockSummary():'')});
     panelEl[p.id]=sec;return sec}
   /* the columns are the two pairs: wall scale (Region, Courses) and stone scale (Rock region, Rock) */
   var PN=$('xp-panels'),COLS={region:0,courses:0,rockregion:1,rock:1},cols=[el0('div','xcol'),el0('div','xcol')];cols.forEach(function(c){PN.appendChild(c)});PANELS.forEach(function(p){cols[COLS[p.id]].appendChild(buildPanel(p))});
@@ -68,7 +83,16 @@ function Explorer(root,REFS){
   (function(){var pb=panelEl.rock.querySelector('.pb'),d=el0('div','in');d.id='xp-rock';d.innerHTML='<div class="allrow"><span class="seg"><button type="button" id="allon">All on</button><button type="button" id="alloff">All off</button></span><span class="sl">all stages</span></div><details class="whole"><summary>Whole stone: patch size</summary><div class="sset" id="stoneset"></div></details><div id="stages"></div><p class="small" id="xp-rnote"></p>';pb.appendChild(d);
     var rr=panelEl.rockregion.querySelector('.pb'),f=el0('div','facts');f.id='xp-facts';rr.appendChild(f)})();
   var pn=Stone.panel.create({stages:$('stages'),allOn:$('allon'),allOff:$('alloff'),whole:$('stoneset'),wholeWords:['patch'],state:RP,changed:function(){if(RP.solo!==lastRockSolo){lastRockSolo=RP.solo;SOLO=RP.solo}W.refreshAll();areaSync();go()},onStatusClick:function(id,a){pn.openPanel(rockStageRecord(id),a)}});
-  panelEl.region.classList.add('open');
+
+  /* the rock's stages are cards too: collapsed they show their strength and main settings; a click on the name opens them. The panel is the rock library's own; this only adds a summary line and a fold to what it made. */
+  function stageSummary(sid){var C=Stone.controls,sr=C.strengthRow(sid),bits=[];function one(c,label){var v=RP.P[c.key],ch=FRESHROCK&&FRESHROCK[c.key]!==v,t=label+' '+(c.step>=1?Math.round(v):(+v).toFixed(c.step<0.1?2:1));return ch?'<b class="chg">'+t+'</b>':'<span>'+t+'</span>'}
+    bits.push(one(sr,sid==='cuts'?'strength':'strength'));C.settingsRows(sid).filter(function(c){return c.main}).forEach(function(c){bits.push(one(c,(c.label||c.word).replace('preserve ','keep ')))});
+    var b=RP.off[sid]?'<b class="bg">off</b> ':(RP.solo===sid||SOLO===sid)?'<b class="bg">solo</b> ':'';return b+bits.join(' &middot; ')}
+  function rockSummary(){var C=Stone.controls,on=C.STAGES.filter(function(s){return RP.P[s.id]>0&&!RP.off[s.id]}).map(function(s){return s.name.toLowerCase()});return (on.length?on.join(', '):'no stage on')}
+  Stone.controls.STAGES.forEach(function(s){var st=$('st_'+s.id);if(!st)return;st.classList.add('collapsed');var nm=st.querySelector('.nm'),sum=el0('span','gsum');nm.appendChild(sum);nm.setAttribute('role','button');nm.tabIndex=0;nm.setAttribute('aria-expanded','false');
+    function flip(){var c=st.classList.toggle('collapsed');nm.setAttribute('aria-expanded',String(!c))}
+    nm.addEventListener('click',function(e){if(e.target.closest('.info'))return;flip()});nm.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&e.target===nm){e.preventDefault();flip()}});
+    W.reg(function(){sum.innerHTML=stageSummary(s.id)})});
   function followLevel(l){if(levelManual||stage===l)return;stage=l;W.refreshAll();go()}
   /* a panel goes back to the preset's values: its rows, its stages' on/off, and (Rock) its stages */
   function resetPanel(id){var fresh=JSON.parse(JSON.stringify(DEFAULTS)),q=PRESETS[presetKey].p,i;for(i in q)fresh[i]=JSON.parse(JSON.stringify(q[i]));
@@ -79,17 +103,25 @@ function Explorer(root,REFS){
     GROUPS.forEach(function(g){if(g.panel===id&&g.onoff)AP.on[g.state==='band'?'band':'outl']=1});
     if(id==='rock'){RP.P=rockParams(PRESETS[presetKey].rock);RP.off={};RP.solo='';pn.sync()}
     SOLO='';RP.solo='';lastRockSolo='';areaSync();W.refreshAll();go()}
-  /* ---- the viewer's strip: View, Target, Rows, Projection, Level ---- */
-  var strip=$('xp-strip'),targetW,rowsW,levelW,viewW;
+  /* ---- the view controls: View, Target, Rows, Projection, Level ---- */
+  var targetW,rowsW,levelW,viewW;
   viewW=W.choice({ctl:'View',label:'View',list:true,optctl:'view-',opts:function(){return [['shaded','Shaded'],['over','Overhang'],['brush','Dry brush'],['lines','Lines']].map(function(o){return {v:o[0],text:o[1],img:W.iconFor('View',o[0])}})},get:function(){return mode},set:function(v){mode=v;draw()}});
   targetW=W.choice({ctl:'Target',label:'Target',opts:function(){return [{v:0,text:'Off'},{v:1,text:'On'}]},get:function(){return target||stage===0?1:0},set:function(v){target=!!v;draw()}});
   rowsW=W.choice({ctl:'Rows',label:'Rows',opts:function(){return [{v:0,text:'Off'},{v:1,text:'On'}]},get:function(){return rowsOn||stage===1?1:0},set:function(v){rowsOn=!!v;draw()}});
   var projW=W.choice({ctl:'Projection',label:'Projection',opts:function(){return [{v:1,text:'Perspective'},{v:0,text:'Orthographic'}]},get:function(){return PROJ.persp?1:0},set:function(v){PROJ.persp=!!v;draw()}});
   levelW=W.choice({ctl:'Level',label:'Level',strip:true,optctl:'level-',opts:function(){return [0,1,2,3,4,5,6].map(function(i){return {v:i,text:'L'+i,img:W.iconFor('Level',i),title:['L0 footprint and crest','L1 row planes','L2 blocks','L3 joints','L4 the rock','L5 foot','L6 union'][i]}})},get:function(){return stage},set:function(v){stage=v;levelManual=true;go()}});
-  var vopts=el0('div','xvopts');[viewW,targetW,rowsW,projW].forEach(function(w){vopts.appendChild(w)});
-  var vbtn=el0('button','xvbtn');vbtn.type='button';vbtn.textContent='View options';vbtn.setAttribute('aria-expanded','false');vbtn.onclick=function(){var o=!vopts.classList.contains('open');vopts.classList.toggle('open',o);vbtn.setAttribute('aria-expanded',String(o))};
-  strip.appendChild(vbtn);strip.appendChild(vopts);strip.appendChild(levelW);
-  function setPreset(k){presetKey=k;levelManual=false;P=JSON.parse(JSON.stringify(DEFAULTS));var q=PRESETS[k].p;for(var i in q)P[i]=JSON.parse(JSON.stringify(q[i]));P.seed=3;RP.P=rockParams(PRESETS[k].rock);RP.off={};RP.solo='';SOLO='';lastRockSolo='';AP.on={band:1,outl:1};pn.sync();sync();go()}
+  /* the view controls fold into one icon on the canvas (beside reset and the gate dot) and open as a small popover; the Level strip stays on the canvas as a compact chip, because it is used all the time */
+  var xcv=document.querySelector('#xp .xcv'),vpop=el0('div','vpop'),vbtn=el0('button','ovl ovl-reset ovl-opts');vpop.id='xp-vpop';vpop.hidden=true;vpop.setAttribute('role','dialog');vpop.setAttribute('aria-label','View options');
+  [viewW,targetW,rowsW,projW].forEach(function(w){vpop.appendChild(w)});
+  vbtn.type='button';vbtn.setAttribute('data-ctl','ViewOptions');vbtn.setAttribute('aria-label','View options');vbtn.setAttribute('aria-haspopup','dialog');vbtn.setAttribute('aria-expanded','false');vbtn.title='View options';
+  vbtn.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>';
+  function vpopShow(o){vpop.hidden=!o;vbtn.setAttribute('aria-expanded',String(o))}
+  vbtn.onclick=function(e){e.stopPropagation();vpopShow(vpop.hidden)};
+  document.addEventListener('click',function(e){if(!vpop.hidden&&!vpop.contains(e.target)&&!e.target.closest('.ddl'))vpopShow(false)});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!vpop.hidden){vpopShow(false);vbtn.focus()}});
+  var vlev=el0('div','vlevel');vlev.appendChild(levelW);
+  xcv.appendChild(vbtn);xcv.appendChild(vpop);xcv.appendChild(vlev);
+  function setPreset(k){presetKey=k;levelManual=false;P=JSON.parse(JSON.stringify(DEFAULTS));var q=PRESETS[k].p;for(var i in q)P[i]=JSON.parse(JSON.stringify(q[i]));P.seed=3;RP.P=rockParams(PRESETS[k].rock);RP.off={};RP.solo='';SOLO='';lastRockSolo='';AP.on={band:1,outl:1};FRESH=JSON.parse(JSON.stringify(P));FRESHROCK=JSON.parse(JSON.stringify(RP.P));pn.sync();sync();go()}
   var xrefLocal=null;function refSrc(k){var un=(xrefLocal!=null&&arguments[1])?xrefLocal:!!window.UNP;return (un&&window.REFSU&&window.REFSU[k])?window.REFSU[k]:REFS[k]}
   function sync(){W.refreshAll();areaSync();$('xp-ref').src=refSrc(LAST[presetKey],1);$('xp-refc').innerHTML=(['T','R','S','fHeight','fWear'].indexOf(presetKey)>=0?'No reference photo of its own; the nearest panel is shown. ':'Reference '+(presetKey==='N'?'forms N':presetKey==='Lf'?'forms L':'panel '+presetKey)+'. ')+PRESETS[presetKey].name+'.'}
 
@@ -149,7 +181,10 @@ function Explorer(root,REFS){
     c.fillStyle=ink;c.font='600 22px system-ui';c.fillText(Math.round(g.T)+' mm',X(0)-30,H-6)}
   /* the Rock region's rules, as facts, and what this build did with them */
   function facts(){var b=cur,e=$('xp-facts');if(!e||!b)return;e.innerHTML='<b>Support</b> the convex hull of the cut tops below the stone (shrink-wrapped; a gap inside it is a bridge, blue in the Overhang view).<br><b>Top</b> its row\'s top, under the crest.<br><b>Head joints</b> never move.'+'<br>'+(rockSum?rockSum.stones+' stones; ':'')+(b.rep.areaParts||0)+' outline parts.'}
-  function stats(){facts();var b=cur,r=b.rep,t=r.time,tr=r.tris,e=$('xp-st'),rows=[],tot=0,k;
+  /* the magenta views on the two area cards: Region draws the envelope; Rock region draws the stone the card picked (its cell, graded outline, support and top once the rock has it) */
+  function thumbs(){if(!cur)return;var rc=panelEl.region&&panelEl.region.querySelectorAll('.pth canvas'),sc=panelEl.rockregion&&panelEl.rockregion.querySelectorAll('.pth canvas');
+    try{if(rc&&rc.length===3&&cur.g.offs)regionThumbs(rc,cur);if(sc&&sc.length===3){var blk=pickStone(cur);if(blk){var R=RockRun.current,job=R&&R.b===cur?R.jobs.filter(function(j){return j.block===blk})[0]:null;if(job)stoneThumbs(sc,cur,job);else stoneCell(sc,cur,blk)}}}catch(e){console.error('[thumbs] '+e.message)}}
+  function stats(){facts();thumbs();var b=cur,r=b.rep,t=r.time,tr=r.tris,e=$('xp-st'),rows=[],tot=0,k;
     function f2(v){return v==null?'-':(v<10?v.toFixed(2):v.toFixed(1))}
     var steps=[['L0','Footprint and crest',t.L0,0,'cell grid '+b.g.cells+' x 4 B'],['L1','Row planes and sites',t.L1,0,r.courses+' rows, '+r.joints+' sites'],['L2','Courses and blocks',(t.L2||0)+(t.L2b||0),tr.L2,b.l2.blocks.length+' blocks; '+r.raised+' raised, '+r.dropped+' dropped'],['L3','Joints and grooves',t.L3,tr.L3,''],['L4','Facets and chips',t.L4,tr.L4,''],['L5','Foot band (handed on)',t.L5,0,(r.band||0)+' cells, '+(r.bandSquares||0).toFixed(2)+' squares of foot']];
     var h='<table><tr><th>Level<th class="n">ms (this browser)<th class="n">triangles added<th>note</tr>';
@@ -178,18 +213,38 @@ function Explorer(root,REFS){
     h+='</table><p class="small"><button type="button" id="xp-routes" class="rbtn">Time the four routes on this build</button> '+(ROUTES?'sequential '+ROUTES.seqMs.toFixed(1)+' ms, batch '+ROUTES.batchMs.toFixed(1)+' ms, row by row '+ROUTES.rowsMs.toFixed(1)+' ms, touching groups composed '+ROUTES.groupsMs.toFixed(1)+' ms ('+ROUTES.groups+' group'+(ROUTES.groups===1?'':'s')+'); median of 3, on '+ROUTES.n+' solids, measured here.':'Batch, one at a time, course by course, and by touching groups: measured on the build in front of you.')+'</p>';return h}
   function runRoutes(){if(!MF||!cur)return;ROUTES=studyUnion(cur,3,false);stats()}
   /* printability: one dot over the canvas (green passes, red fails, grey is measuring), a symbol in it, and a popover with the numbers */
-  function gateUI(){var dot=$('xp-gdot'),gd=dot.querySelector('.gd'),pb=$('xp-gpb'),v,txt,html;
-    if(stage<2){v='na';txt='no verdict at this level (nothing is built to print yet)';gd.textContent='\u2013';html='<p><b>No verdict at this level.</b> L0 and L1 are the target and the row planes: there is no stone to print yet. The gate judges the union, from L2 on.</p>'}
-    else if(!gate){v='wait';txt='measuring';gd.textContent='\u00b7';html='<p><b>Measuring the union...</b></p>'}
-    else{var ok=gate.status==='NoError'&&gate.bodies===1&&gate.bandPct<=0.1&&gate.redPct<=0.1;v=ok?'ok':'fail';txt=ok?'passes the gate':'fails the gate';gd.textContent=ok?'\u2713':'\u2715';
-      var t=thin,row=function(a,b2,good){return '<tr><td>'+a+'<td class="n '+(good===true?'ok':good===false?'bad':'')+'">'+b2+'</tr>'};
-      html='<p><b>'+(ok?'Passes':'Fails')+' the gate</b> (judged on the union of the '+'cliff, its core and the ground'+')</p><table>'+
+  /* ONE BUILD RECORD for one build: a status chip on the canvas (building, passes, fails) and one popover: the steps in build order with their times and counts (the region and courses steps, the rock course by course, the foot, the union) and the gate's verdict both ways. The rock library's own stage records (the number beside each stage) are unchanged. */
+  var rockProg='';
+  function fmtN(n){return n==null?'':(+n).toLocaleString()}
+  function recordHTML(){var b=cur,r=b.rep,t=r.time,tr=r.tris,S=rockSum,rows='',row=function(a,ms,note,cls){return '<tr'+(cls?' class="'+cls+'"':'')+'><td>'+a+'<td class="n">'+(ms==null?'':fmtMs(ms))+'<td>'+(note||'')+'</tr>'};
+    rows+=row('L0 footprint and crest',t.L0,'');rows+=row('L1 row planes and sites',t.L1,r.courses+' rows, '+r.joints+' sites');rows+=row('L2 courses and blocks',(t.L2||0)+(t.L2b||0),b.l2.blocks.length+' blocks; '+r.raised+' raised, '+r.dropped+' dropped; '+fmtN(tr.L2)+' triangles');rows+=row('L3 joints',t.L3,fmtN(tr.L3)+' triangles added');
+    if(stage>=4&&ROCK_ON(b.p)){
+      if(S){S.courseLog.forEach(function(c){rows+=row('L4 rock, course '+c.course,c.ms,c.stones+' stones'+(c.cuts?'; cuts '+fmtMs(c.cuts):'')+(c.chunks?'; chunks '+fmtMs(c.chunks):'')+(c.sampled?'; chips, pockets, grain, wear '+fmtMs(c.sampled):'')+' (cpu over the stones)')});
+        rows+=row('L4 rock, all courses',S.wallMs,S.stones+' stones, '+S.cached+' kept from an earlier build, '+fmtN(S.tris)+' triangles, built in '+RockRun.mode+' at '+Stone.controls.TIERS[tier]+' mm; '+fmtMs(S.cpuMs)+' of work added up'+(S.dropped?'; '+S.dropped+' stones dropped':''))}
+      else if(rockBusy)rows+=row('L4 rock',null,rockProg+'...')}
+    if(stage>=5&&t.L5!=null)rows+=row('L5 foot band',t.L5,(r.screeN||0)+' loose stones (the scene&rsquo;s own scatter)');
+    if(gate)rows+=row('L6 union',gate.tHull+gate.tUnion+gate.tMesh,gate.inputs+' solids, '+fmtN(gate.numTri)+' triangles; '+gate.status+', '+gate.bodies+' body'+(gate.bodies===1?'':'ies'),gate.status==='NoError'&&gate.bodies===1?'':'bad');
+    var h='<table><tr><th>Step<th class="n">Time<th>Count</tr>'+rows+'</table>';
+    if(S){var ok=!S.bad&&!S.islands;h+='<p class="gline">Rock checks: <span class="'+(ok?'ok':'bad')+'">'+(ok?'every check held on every stone':(S.bad?S.bad+' stones failed a check':'')+(S.islands?(S.bad?'; ':'')+S.islands+' loose parts':''))+'</span>. Specks '+(S.specks||'none')+', voids sealed inside a stone '+(S.sealed||'none')+'.</p>'}
+    return h}
+  function gateUI(light){var dot=$('xp-gdot'),gd=dot.querySelector('.gd'),pb=$('xp-gpb'),v,txt,html='',head='';
+    var running=rockBusy&&stage>=4;
+    if(stage<2){v='na';txt='no verdict at this level (nothing is built to print yet)';gd.textContent='\u2013';head='<p><b>No verdict at this level.</b> L0 and L1 are the target and the row planes: there is no stone to print yet. The gate judges the union, from L2 on.</p>'}
+    else if(running){v='run';txt='building: '+rockProg;gd.innerHTML='<span class="spin" aria-hidden="true"></span>';head='<p><b>Building: '+rockProg+'.</b> The gate judges the union when the last stone is in.</p>'}
+    else if(!gate){v='wait';txt='measuring';gd.textContent='\u00b7';head='<p><b>Measuring the union...</b></p>'}
+    else{var ok=gate.status==='NoError'&&gate.bodies===1&&gate.bandPct<=0.1&&gate.redPct<=0.1,ap=bridgeStats(gate.tris);v=ok?'ok':'fail';txt=ok?'passes the gate':'fails the gate';gd.textContent=ok?'\u2713':'\u2715';
+      head='<p><b>'+(ok?'Passes':'Fails')+' the gate</b> as it counts, and <b>'+(ap.pass?'passes':'fails')+'</b> with the bridge faces counted apart.</p>'}
+    dot.setAttribute('aria-label','Build: '+txt);dot.title='Build: '+txt+' (tap for the record)';gd.className='gd '+v;
+    if(light&&$('xp-gpop').hidden)return;
+    if(cur&&stage>=2)html+=recordHTML();
+    if(gate&&stage>=2){var t=thin,row=function(a,b2,good){return '<tr><td>'+a+'<td class="n '+(good===true?'ok':good===false?'bad':'')+'">'+b2+'</tr>'},ba=0;gate.tris.forEach(function(q){if(q.bridge)ba+=q.area});var ap2=bridgeStats(gate.tris);
+      html+='<h4>The gate, both ways</h4><table>'+
        row('overhang past 65&deg;, of the downward area ('+gate.downA.toFixed(0)+' mm&sup2;)',gate.redPct.toFixed(3)+' % (budget 0.1)',gate.redPct<=0.1)+
        row('overhang 55 to 65&deg;',gate.bandPct.toFixed(3)+' % (budget 0.1)',gate.bandPct<=0.1)+
-       (function(){var ba=0,bn=0;gate.tris.forEach(function(t){if(t.bridge){ba+=t.area;bn++}});var ap=bridgeStats(gate.tris);return ba?row('judged with the bridge faces counted apart (shown beside the gate, which counts them)',(ap.pass?'passes':'fails')+': '+ap.redApart.toFixed(3)+' % past 65&deg;, '+ap.bandApart.toFixed(3)+' % at 55 to 65&deg;',ap.pass)+row('of which bridges, painted blue: a flat underside over a gap between a stone\'s supports (the gate counts them)',ba.toFixed(0)+' mm&sup2; of the downward area',true):''})()+row('watertight, loose bodies',gate.status+', '+gate.bodies,gate.status==='NoError'&&gate.bodies===1)+
-       (t?row('parts that vanish under one 0.45 mm line (shown, not part of the verdict)',t.lostParts+' parts')+row('gaps under 0.2 mm a slicer closes (shown, not part of the verdict)',t.gapParts+' gaps'):row('thin parts and gaps','checking...'))+
-       row('the union','solids '+gate.inputs+', '+(gate.tHull+gate.tUnion+gate.tMesh).toFixed(1)+' ms, '+gate.numTri+' triangles')+'</table>'}
-    dot.setAttribute('aria-label','Printability: '+txt);dot.title='Printability: '+txt+' (tap for details)';gd.className='gd '+v;pb.innerHTML=html+'<p class="gcl"><button type="button" id="xp-gcosts">Costs view: every number of this build</button></p>'}
+       (ba?row('with the bridge faces counted apart (the gate counts them)',(ap2.pass?'passes':'fails')+': '+ap2.redApart.toFixed(3)+' % past 65&deg;, '+ap2.bandApart.toFixed(3)+' % at 55 to 65&deg;',ap2.pass)+row('bridges, painted blue: a flat underside over a gap between a stone\'s supports',ba.toFixed(0)+' mm&sup2; of the downward area',true):'')+
+       row('watertight, loose bodies',gate.status+', '+gate.bodies,gate.status==='NoError'&&gate.bodies===1)+
+       (t?row('parts that vanish under one printer line (shown, not part of the verdict)',t.lostParts+' parts')+row('gaps a slicer closes (shown, not part of the verdict)',t.gapParts+' gaps'):row('thin parts and gaps','checking...'))+'</table>'}
+    pb.innerHTML=head+html+'<p class="gcl"><button type="button" id="xp-gcosts">Costs view: every number of this build</button></p>'}
   function gpop(open){var p=$('xp-gpop'),d=$('xp-gdot');p.hidden=!open;d.setAttribute('aria-expanded',String(open))}
   $('xp-gdot').onclick=function(e){e.stopPropagation();gpop($('xp-gpop').hidden)};$('xp-gclose').onclick=function(){gpop(false)};
   document.addEventListener('click',function(e){var p=$('xp-gpop');if(!p.hidden&&!p.contains(e.target)&&e.target!==$('xp-gdot'))gpop(false)});document.addEventListener('keydown',function(e){if(e.key==='Escape')gpop(false)});
@@ -210,18 +265,9 @@ function Explorer(root,REFS){
   function rockStatus(sum,b){var Q=b.p.rock,ids=Stone.controls.STAGES.filter(function(s){return Q[s.id]>0}).map(function(s){return s.id}),samp=ids.filter(function(i){return STEPOF[i]==='sampled'});
     ids.forEach(function(id){var step=STEPOF[id],t=sum[step],bad=step==='sampled'?sum.islands:step==='chunks'?sum.bad+sum.sealed:sum.bad,names=samp.map(function(i){return pn.NAME[i]}).join(', ');
       pn.setStat(id,{mode:bad?'warn':'ok',ms:t,text:pn.NAME[id]+': '+(step==='sampled'&&samp.length>1?names+' share one sampling pass, ':'')+fmtMs(t)+' over '+sum.stones+' stones (cpu)'+(bad?'; '+bad+(step==='sampled'?' loose parts':' failed checks'):'; every check held on every stone')})})}
-  function rockUI(d,t){var box=$('xp-rbusy'),on=stage>=4&&ROCK_ON(P.rock?{rock:P.rock}:P);box.hidden=!(stage>=4&&P.rock&&ROCK_ON({rock:P.rock}));var sp=$('xp-rspin'),ic=$('xp-ric'),pc=$('xp-rpct');
-    sp.hidden=!rockBusy;ic.hidden=rockBusy||!rockSum;pc.hidden=!rockBusy;if(rockBusy){var q=RockRun.current;pc.textContent='stones '+(d!=null?d:(q?q.done:0))+' of '+(t!=null?t:(q?q.total:0))}
-    if(rockSum){var ok=!rockSum.bad&&!rockSum.islands;ic.className='ic '+(ok?'ok':'warn');ic.innerHTML=pn.ICON[ok?'ok':'warn']}
-    $('xp-rnote').textContent=rockErr?'A stone failed to build: '+rockErr.split('\n')[0]:(stage<4?'The rock acts from L4 on: this level shows the plain cells.':P.rock&&ROCK_ON({rock:P.rock})?'':'Every stage is at 0 or off: each stone is its cell, as the steps before made it.')}
-  function rockRecord(){var s=rockSum,b=cur,h='';if(!s)return {key:'build',title:'Rock build',mode:'ok',html:'<p>Not built yet.</p>'};
-    var pct=function(x){return s.down?(100*x/s.down).toFixed(2)+'%':'0%'};
-    h+='<p>'+s.stones+' stones, '+s.tris.toLocaleString()+' triangles, drawn at '+Stone.controls.TIERS[tier]+' mm. '+s.cached+' kept from an earlier build; the rest built in '+(RockRun.mode)+', '+fmtMs(s.wallMs)+' on the clock, '+fmtMs(s.cpuMs)+' of work added up.</p>';
-    h+='<p><b>Timings (added over the stones).</b> '+(s.cuts?'Outline cuts '+fmtMs(s.cuts)+'; ':'')+(s.chunks?'Chunks '+fmtMs(s.chunks)+'; ':'')+(s.sampled?'Chips, pockets, grain and wear (one sampling pass) '+fmtMs(s.sampled)+'.':'')+'</p>';
-    h+='<div class="scroll"><table class="chk"><tbody><tr class="'+(s.bad?'bad':'ok')+'"><td>proven</td><td>Every stone: nothing outside its cell, one body, no bare joint face</td><td>'+(s.bad?s.bad+' stones failed':'held on all '+s.stones)+'</td></tr><tr class="'+(s.islands?'bad':'ok')+'"><td>measured</td><td>Loose parts of a voxel or more</td><td>'+(s.islands||'none')+'</td></tr><tr class="ok"><td>measured</td><td>Specks under a voxel</td><td>'+(s.specks||'none')+'</td></tr><tr class="'+(s.sealed?'bad':'ok')+'"><td>measured</td><td>Voids sealed inside a stone</td><td>'+(s.sealed||'none')+'</td></tr><tr class="ok"><td>measured</td><td>Overhang of the stones alone, past 55 and 65 degrees of the downward area</td><td>'+pct(s.band+s.red)+', '+pct(s.red)+' (the gate judges the union)</td></tr></tbody></table></div>';
-    return {key:'build',title:'Rock build — '+((s.bad||s.islands)?'a check failed':'every check passed'),mode:(s.bad||s.islands)?'warn':'ok',html:h}}
+  function rockUI(d,t){var q=RockRun.current;rockProg=rockBusy?'stones '+(d!=null?d:(q?q.done:0))+' of '+(t!=null?t:(q?q.total:0)):'';
+    $('xp-rnote').textContent=rockErr?'A stone failed to build: '+rockErr.split('\n')[0]:(stage<4?'The rock acts from L4 on: this level shows the plain cells.':P.rock&&ROCK_ON({rock:P.rock})?'':'Every stage is at 0 or off: each stone is its cell, as the steps before made it.');gateUI(true)}
   function rockStageRecord(id){var st=pn.stat[id],s=rockSum;return {key:'stage:'+id,title:pn.NAME[id]+' — '+(st&&st.mode==='warn'?'a check failed':'every check passed'),mode:st&&st.mode||'ok',html:'<p>'+(st?st.text:'')+'.</p><p class="note">'+Stone.controls.strengthRow(id).show(P.rock)+'. Every stone is built by the same rock, with its own seed.</p>'}}
-  $('xp-rbtn').onclick=function(ev){ev.stopPropagation();if(rockSum)pn.openPanel(rockRecord(),$('xp-rbtn'))};
   function measure(){if(!MF||!cur||rockBusy)return;var b=cur;try{freeGate(gate);gate=unionOf(b);markBridges(gate.tris,b.bridges);if(ROCK_ON(b.p)&&stage>=4){gate.pairs=null;gate.pairsBox=null}else{var h2=hullsOf(b,false),P2=pairsOf(h2.list);gate.pairs=P2.real;gate.pairsBox=P2.cand;freeAll(h2.list)}gate.inTris=0;b.polys.forEach(function(P){gate.inTris+=triCount(P)});gate.inTris+=b.core.faces.reduce(function(a,F){return a+F.pts.length-2},0)+b.dirt.faces.reduce(function(a,F){return a+F.pts.length-2},0);var bs={};b.polys.forEach(function(P){if(P.b)bs[P.b.c+'_'+P.b.i]=1});gate.ins={pieces:b.polys.length,blocks:Object.keys(bs).length};
       if(b.scree.length){var sg=unionOf(b,true);gate.sceneMs=sg.tHull+sg.tUnion+sg.tMesh;gate.sceneTris=sg.numTri;freeGate(sg)}
       HIST.unshift({k:presetKey,tiles:P.tiles,sys:P.system,seed:P.seed,n:gate.inputs,pairs:gate.pairs,ms:gate.tHull+gate.tUnion+gate.tMesh,tris:gate.numTri,bt:gate.inTris});if(HIST.length>10)HIST.pop();var top=0;gate.tris.forEach(function(t){if(t.p[0][2]>top)top=t.p[0][2]});
