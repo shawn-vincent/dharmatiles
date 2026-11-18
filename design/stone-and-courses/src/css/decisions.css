@@ -1,0 +1,14 @@
+/* the decisions log: the page's tokens, a reading column, one entry per decision */
+.dpage{max-width:860px;margin:0 auto;padding-block:32px 96px}
+.dhead .kick{font-family:var(--display);letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:0 0 10px}
+.dnav{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 28px}.dnav a{padding:4px 12px;border:1px solid var(--line);border-radius:999px;font:700 13px var(--display);text-decoration:none;color:var(--ink);background:var(--surface)}
+.dpage section{margin-bottom:40px}
+.dpage h2{margin-top:0}
+.dec{border-top:1px solid var(--line);padding:14px 0 4px}
+.dec h3{margin:0 0 2px;font:700 19px/1.25 var(--display)}
+.when{margin:0 0 8px;font:600 13px var(--display);color:var(--muted);letter-spacing:.04em}
+.dec dl{display:grid;grid-template-columns:6.5em minmax(0,1fr);gap:4px 14px;margin:0 0 10px}
+.dec dt{font:700 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+.dec dd{margin:0}
+@media(max-width:600px){.dec dl{grid-template-columns:1fr;gap:0}.dec dd{margin:0 0 8px}}
+.dpage details{margin:10px 0}.dpage details .vb{padding:0 16px 10px;overflow-x:auto}

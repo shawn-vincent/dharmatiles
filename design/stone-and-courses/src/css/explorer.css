@@ -1,0 +1,112 @@
+/* ===== the explorer: a sticky viewer, Setup, the four panels, Measure. One layout for the whole editor; the model colours (red, orange, blue, magenta) are never used for the interface ===== */
+.xp{margin:18px 0 28px;--body:var(--display)}
+/* the viewer: always in view, the width of the content column */
+.xview{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line);padding:0 0 6px}
+.xview .xcv{position:relative;height:min(40vh,520px);min-height:240px}
+.xview .xcv canvas{display:block;width:100%;height:100%;object-fit:contain;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
+.xview .xcv canvas[hidden]{display:none}
+.xstrip{display:flex;flex-wrap:wrap;gap:2px 16px;align-items:center;padding:4px 2px 0}
+.xvopts{display:flex;flex-wrap:wrap;gap:2px 16px;align-items:center;flex:1 1 100%}
+.xvbtn{display:none;background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);font:600 12px var(--display);padding:4px 10px;cursor:pointer;margin:2px 0}
+.xstrip .cl{flex:0 0 auto}
+.xstrip .cl .seg2{flex:0 0 auto}
+.xstrip .seg2 button{flex:0 0 auto;padding:0 12px;overflow:visible;text-overflow:clip}
+.xstrip .cl.strip{flex:1 1 100%}
+.xstrip .cl.strip .seg2{display:flex;flex:1 1 auto;min-width:0}
+.xstrip .cl.strip .seg2 button{flex:1 1 0;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;padding:0 4px}
+.xstrip .cl.strip .seg2 .ddi svg{width:20px;height:15px;stroke:currentColor;fill:none;stroke-width:1.4}
+.xleg{font:500 12.5px/1.35 var(--display);color:var(--muted);padding:3px 2px 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* Setup: the wall to start from */
+.xsetup{display:grid;grid-template-columns:104px minmax(0,1fr);gap:4px 14px;align-items:start;margin:14px 0}
+.xsetup .xref{margin:0}.xsetup .xref img{width:100%;height:auto;border-radius:8px;display:block}.xsetup .xref figcaption{font-size:11px;color:var(--muted);line-height:1.3;margin-top:3px}
+.xsetc{display:grid;grid-template-columns:minmax(0,1fr);gap:6px 16px}
+.xsetc .r-num{max-width:260px}
+/* the four panels: the columns are the two pairs (wall scale, stone scale), the rows are region then filler */
+.xpanels{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 20px;align-items:start}
+.xcol{display:flex;flex-direction:column;gap:14px;min-width:0}
+.pnl{border:1px solid var(--line);border-radius:12px;background:var(--surface);min-width:0}
+.phd{display:flex;align-items:center}
+.ph0{display:flex;gap:10px;align-items:center;text-align:left;background:none;border:0;padding:10px 12px;flex:1;min-width:0;cursor:pointer;color:var(--ink);font:inherit}
+.pn{flex:0 0 26px;height:26px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font:700 13px var(--display)}
+.pt b{display:block;font:700 17px/1.2 var(--display)}.pt small{display:block;color:var(--muted);font:500 12px/1.35 var(--display)}
+.pc{margin-left:auto;transition:transform .15s;color:var(--muted)}.pnl.open .pc{transform:rotate(180deg)}
+.prs{margin-right:12px;background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;font:600 12px var(--display);padding:4px 9px;cursor:pointer}
+.prs:hover{color:var(--ink);border-color:var(--muted)}
+.pb{padding:2px 14px 14px}
+/* rows: one look for a number and a range */
+.r{margin:6px 0}
+.cl .seg2 button{padding:0 12px;white-space:nowrap;min-width:0;width:auto;max-width:none}
+.xp .allrow .sl{font:600 12px var(--display);color:var(--muted)}
+.xp .allrow .seg button{min-height:30px;font-size:12px;padding:0 10px}
+.rh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.rl{font:600 13px var(--display)}
+.rv{display:flex;align-items:baseline;gap:4px;color:var(--muted);font:500 12px var(--display);white-space:nowrap}
+.nb{width:4.4em;font:600 13px var(--display);text-align:right;background:transparent;color:var(--ink);border:0;border-bottom:1px dotted var(--muted);padding:0 2px;-moz-appearance:textfield}
+.nb::-webkit-outer-spin-button,.nb::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.nb:focus{outline:none;border-bottom:1px solid var(--ink)}
+.r .rs{width:100%;margin:0;height:30px}
+.r-num .rs::-webkit-slider-thumb{margin-top:-9px}
+.dash{margin:0 2px}
+.dual{position:relative;height:30px}
+.dual::before{content:"";position:absolute;left:14px;right:14px;top:10px;height:10px;border-radius:5px;background:var(--line);border:1px solid var(--muted);box-sizing:border-box}
+.dual .fill{position:absolute;top:10px;height:10px;background:var(--stone);border-radius:5px;margin:0 14px;pointer-events:none}
+.dual .rs{position:absolute;left:0;top:0;width:100%;height:30px;margin:0;background:transparent;pointer-events:none}
+.dual .rs::-webkit-slider-runnable-track{background:transparent;border-color:transparent}
+.dual .rs::-moz-range-track{background:transparent;border-color:transparent}
+.dual .rs::-webkit-slider-thumb{pointer-events:auto;margin-top:-9px}
+.dual .rs::-moz-range-thumb{pointer-events:auto}
+/* groups: a stage, a weighting, a panel's fold */
+.grp{border:1px solid var(--line);border-radius:10px;padding:8px 12px 10px;margin:12px 0;background:var(--bg)}
+.gh{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px}
+.gt{font:700 14px var(--display)}
+.gtools{margin-left:auto;display:inline-flex;gap:8px;align-items:center;order:2}
+.gl{flex:1 1 100%;order:3;color:var(--muted);font:500 12px/1.35 var(--display)}
+.grp.dim .gb{opacity:.45}
+.wrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:2px 14px;align-items:end;margin:8px 0}
+.wrow .cl{flex-direction:column;align-items:stretch;gap:2px}.wrow .cl .cll{flex:none}.wrow .r{margin:0}
+.more{margin-top:6px}.more>summary{cursor:pointer;color:var(--muted);font:600 12px var(--display);padding:4px 0}
+.more .gb{margin-top:2px}
+.facts{margin:12px 0 0;padding:8px 12px;border-left:3px solid var(--stone);color:var(--muted);font:500 12.5px/1.5 var(--display)}
+.facts b{color:var(--ink)}
+.bdg{color:var(--muted);font-weight:500;margin-left:6px;font-size:11px}
+/* Measure: the measuring tools, folded */
+.xmeasure{margin:18px 0 0;border:1px solid var(--line);border-radius:10px;padding:6px 14px}
+.xmeasure>summary{cursor:pointer;font:700 14px var(--display);padding:6px 0}.xmeasure>summary small{color:var(--muted);font-weight:500;margin-left:8px}
+.xmeasure .in{overflow-x:auto;font-size:12px}
+/* wide: all four panels are open, the caret is hidden */
+@media(min-width:900px){.pc{display:none}}
+/* narrow: one column, the panels open one at a time */
+@media(max-width:899px){
+  .xpanels{grid-template-columns:minmax(0,1fr);gap:10px}
+  .xcol{gap:10px}
+  .pnl:not(.open) .pb{display:none}
+  .xview .xcv{height:min(32vh,80vw);min-height:190px}
+  .xvbtn{display:inline-block}.xvopts{display:none}.xvopts.open{display:flex}
+  .xstrip .cl.strip .seg2 .ddi{display:none}.xstrip .cl.strip .cll{display:none}.xstrip .seg2 button{font-size:12px;padding:0 2px}
+  .xsetup{grid-template-columns:72px minmax(0,1fr)}
+  .xleg{display:none}
+  .xstrip{gap:0 10px}
+}
+/* the Rock panel is the rock library's own panel (rock/panel.js, shared with Weathered Stone); this is the skin the cliff page lays over it so its stages read like the other groups. Nothing here touches the library or its page. */
+#xp-rock .stg{border:1px solid var(--line);border-radius:10px;padding:8px 12px 10px;margin:12px 0;background:var(--bg)}
+#xp-rock .stg.open>.shead{background:var(--bg)}
+#xp-rock .nm b{font:700 14px var(--display)}
+#xp-rock .nm small{font:500 12px/1.35 var(--display)}
+#xp-rock .shead>output,#xp-rock .sset output{font:600 13px var(--display);color:var(--muted);font-variant-numeric:tabular-nums}
+#xp-rock .sset label{font:600 13px var(--display);margin:6px 0}
+#xp-rock .sset label span{font:600 13px var(--display)}
+#xp-rock input[type=range]{height:30px}
+#xp-rock input[type=range]::-webkit-slider-thumb{margin-top:-9px}
+#xp-rock .sset{border-left:0;padding-left:0}
+#xp-rock .nn,#xp-rock .shead>.num{font:700 15px var(--display)}
+#xp-rock details.whole{border:1px solid var(--line);border-radius:10px;padding:2px 12px;margin:10px 0;background:var(--bg)}
+#xp-rock details.whole summary{font:700 14px var(--display);padding:6px 0}
+#xp-rock .allrow .sl{font:600 12px var(--display)}
+/* the algorithm in four parts: a heading for each panel, then its steps */
+.agroup{margin:56px 0 6px;padding-top:14px;border-top:4px solid var(--ink)}
+.agroup h3{margin:0 0 4px;font:800 28px/1.15 var(--display);display:flex;align-items:center;gap:12px}
+.agroup .gn{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--bg);font:700 17px var(--display)}
+.agroup .glead{font:500 18px/1.45 var(--display);margin:0 0 4px}
+nav.toc .toc-sub .tgl{display:block;margin:8px 0 2px;font:700 11px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+/* generated tables: scroll sideways inside their own box on a phone */
+.tw{overflow-x:auto;margin:0 0 22px;max-width:100%}.tw table{min-width:560px}

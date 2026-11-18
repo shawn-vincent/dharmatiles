@@ -1,0 +1,4 @@
+(function(){function openFor(el){while(el){if(el.tagName==='DETAILS')el.open=true;el=el.parentElement}}
+function fromHash(){var id=decodeURIComponent(location.hash.slice(1));if(!id)return;var el=document.getElementById(id);if(el){openFor(el);setTimeout(function(){el.scrollIntoView()},60)}}
+addEventListener('hashchange',fromHash);document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href^="#"]');if(a){var el=document.getElementById(a.getAttribute('href').slice(1));if(el)openFor(el)}});
+var oa=document.getElementById('openall'),ca=document.getElementById('closeall');if(oa)oa.onclick=function(){[].forEach.call(document.querySelectorAll('details.top,details.sub'),function(d){d.open=true})};if(ca)ca.onclick=function(){[].forEach.call(document.querySelectorAll('details.top,details.sub'),function(d){d.open=false})};fromHash()})();

@@ -1,0 +1,13 @@
+<p class="one">Build the engine in this order. Each stage has a small torture tile and the check that gates it.</p>
+<ol>
+<li><b>Footprint and crest, then the row planes.</b> Torture tile: a J corner with dip 3. Check: planes never closer than 0.6 of a row.</li>
+<li><b>The partition.</b> Torture tile: an L footprint. Check: cells cover 100% of course 0.</li>
+<li><b>Rise and span.</b> Torture tile: preset T. Check: no cell reaches past its supports; no loose body.</li>
+<li><b>Prisms between planes, then joints.</b> Torture tile: preset S. Check: every bed is exactly the top below it.</li>
+<li><b>Weathering, then fitting.</b> Torture tile: forms L (lip) and E (ledges). Check: overhang budget.</li>
+<li><b>The union and the gate.</b> Check: the nine shipped presets pass in every seed.</li></ol>
+<h3>Questions for Shawn</h3>
+<ol><li>Is the seal out for good, or should something replace it so tilted rows can pass? (Gate now 50 of 114.)</li>
+<li>May <code>wander</code> be retired, and may <code>rise</code>, <code>span</code>, <code>dip</code> and <code>wave</code> go to an Orin review for the registry?</li>
+<li>Should a document be able to name its row planes?</li>
+<li>Is the union&rsquo;s cost (about 150 ms for a 1&times;1 L) a problem worth a round, or is reaching new forms first?</li></ol>

@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>Stone and Courses: how to build</title>
+<style>body{font:16px/1.55 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem;color:#1b2530}code,pre{font:14px ui-monospace,Menlo,monospace}pre{background:#eef1f5;padding:.7rem 1rem;overflow:auto}</style>
+<h1>Stone and Courses</h1>
+<p>The page and its decisions log are built from this folder alone, plus the shared rock library (<code>../../rock/src/</code> in the repo). Needs <code>python3</code> and <code>node</code>.</p>
+<pre>python3 build.py            # writes ../index.html and ../decisions.html, and MANIFEST.txt</pre>
+<ul>
+<li><b>text/</b> the page: <code>_order.txt</code> is its order and the four groups; <code>steps/</code> one file per step; <code>nav.json</code> the contents list. <code>{{name}}</code> is filled from <code>data/measured.json</code>; <code>{{TABLE:name}}</code> is a table made from it. A missing name, or a text file over 120 KB, stops the build.</li>
+<li><b>decisions/</b> the decisions log: <code>entries.html</code> and the old measurements kept as written.</li>
+<li><b>js/</b> the engine (<code>engine</code>, <code>graded</code>, <code>rock</code>, <code>union</code>), the viewer (<code>ui</code>), the one table of controls (<code>controls</code>), the components (<code>widgets</code>), the presets and the explorer.</li>
+<li><b>css/</b>, <b>img/</b>, <b>vendor/</b> (Manifold). <b>data/measured.json</b> is written by the sweep, never by hand.</li>
+<li><b>MANIFEST.txt</b> every file the last build read.</li>
+</ul>
+<p>The identity sweep that wrote <code>measured.json</code> (114 builds, hashes held against a baseline) lives with the design work, not here.</p>

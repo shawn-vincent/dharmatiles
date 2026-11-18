@@ -1,0 +1,10 @@
+<section id="plan"><h2>7 &middot; The plan</h2>
+<p>The Rust engine builds a cliff tile today as one dense mesh of grain: 0.54 to 3.2 million triangles, a 2&times;2 corner at 7.3 GB resident (the library baseline of 15 Nov, in docs/standards/performance.html; not measured here). This model builds a tile from about 100 to 450 convex pieces. It goes into the engine in this order; each stage has a small torture tile and the check that gates it.</p>
+<ol>
+<li>Footprint and crest, then the row planes. Torture tile: a J corner with dip 3. Check: planes never closer than 0.6 of a row.</li>
+<li>The partition. Torture tile: an L footprint. Check: cells cover 100% of course 0.</li>
+<li>Rise and span. Torture tile: preset T. Check: no cell reaches past its supports; no loose body.</li>
+<li>Prisms between planes, then joints. Torture tile: preset S. Check: every bed is exactly the top below it.</li>
+<li>The rock, then the graded outline and front. Torture tiles: forms L (lip) and E (ledges). Check: overhang budget.</li>
+<li>The union and the gate. Check: every shipped wall passes in every seed; today {{gate_apart}} of {{n_builds}} builds pass with bridges counted apart.</li>
+</ol></section>

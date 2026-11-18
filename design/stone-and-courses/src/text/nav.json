@@ -1,0 +1,36 @@
+[
+ {
+  "id": "claim",
+  "label": "1 · The editor"
+ },
+ {
+  "id": "algo",
+  "label": "2 · The algorithm",
+  "small": "fourteen steps",
+  "steps": true
+ },
+ {
+  "id": "tris",
+  "label": "3 · Triangles"
+ },
+ {
+  "id": "printing",
+  "label": "4 · Printing"
+ },
+ {
+  "id": "breaks",
+  "label": "5 · Where it breaks"
+ },
+ {
+  "id": "language",
+  "label": "6 · The language"
+ },
+ {
+  "id": "plan",
+  "label": "7 · The plan"
+ },
+ {
+  "id": "method",
+  "label": "Appendix"
+ }
+]

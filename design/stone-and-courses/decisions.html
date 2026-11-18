@@ -1,0 +1,267 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Stone and Courses: decisions</title><meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout concept: a field notebook. Sticky contents rail on the left, one reading column, figures that break out wider. */
+:root{
+  --bg:#f3f4f6; --surface:#ffffff; --ink:#1b2530; --muted:#556171; --line:#d3d9e1;
+  --stone:#3b5675; --stone-soft:#e3eaf3; --ochre:#9c5f1d; --ochre-soft:#f6ead8;
+  --over:#c8352b; --band:#d98a1f; --ok:#2b7a58; --ok-soft:#dff0e8; --bad-soft:#f9e1de;
+  --f-wall:#3f7fbf; --f-terr:#2e9d6a; --f-col:#8c5bc4; --f-lean:#16939b; --f-mass:#6f7a89; --f-cant:#c0489a;
+  --jv:#1d9ad6; --jb:#d6b400; --jd:#d6338c;
+  --display:"Archivo",system-ui,sans-serif; --body:"Literata",Georgia,serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#10151c; --surface:#18202a; --ink:#e7ebf1; --muted:#9ba7b6; --line:#2b3644;
+    --stone:#8db0da; --stone-soft:#202c3b; --ochre:#e0a257; --ochre-soft:#2e2517;
+    --over:#ff7468; --band:#f2a540; --ok:#59c79a; --ok-soft:#173226; --bad-soft:#3a1d1b;
+    --f-wall:#6fa8e6; --f-terr:#52c791; --f-col:#b18ae8; --f-lean:#3ac5cd; --f-mass:#9aa6b6; --f-cant:#e174bf;
+    --jv:#46b8f0; --jb:#f0d23a; --jd:#f06aae;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#10151c; --surface:#18202a; --ink:#e7ebf1; --muted:#9ba7b6; --line:#2b3644;
+  --stone:#8db0da; --stone-soft:#202c3b; --ochre:#e0a257; --ochre-soft:#2e2517;
+  --over:#ff7468; --band:#f2a540; --ok:#59c79a; --ok-soft:#173226; --bad-soft:#3a1d1b;
+  --f-wall:#6fa8e6; --f-terr:#52c791; --f-col:#b18ae8; --f-lean:#3ac5cd; --f-mass:#9aa6b6; --f-cant:#e174bf;
+  --jv:#46b8f0; --jb:#f0d23a; --jd:#f06aae;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:20px}
+body{background:var(--bg);color:var(--ink);font:19px/1.72 var(--body);margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:48px;padding-block:32px 96px}
+nav.toc{position:sticky;top:calc(20px + env(safe-area-inset-top,0px));align-self:start;font:600 15px/1.35 var(--display);max-height:calc(100vh - 40px);overflow:auto}
+nav.toc .k{font:700 12px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+nav.toc a{display:block;padding:7px 10px;border-left:3px solid var(--line);color:var(--ink);text-decoration:none}
+nav.toc a:hover,nav.toc a:focus-visible{border-left-color:var(--stone);background:var(--stone-soft);outline:none}
+nav.toc a small{display:block;font:400 13px var(--body);color:var(--muted)}
+main{min-width:0}
+main>section{margin-bottom:72px}
+h1{font:800 clamp(40px,6vw,66px)/1.02 var(--display);letter-spacing:-.02em;margin:0 0 14px;text-wrap:balance}
+h2{font:800 clamp(30px,4vw,40px)/1.1 var(--display);letter-spacing:-.01em;margin:0 0 18px;text-wrap:balance;padding-top:8px;border-top:4px solid var(--ink)}
+h3{font:700 24px/1.25 var(--display);margin:44px 0 10px;text-wrap:balance}
+h4{font:700 18px/1.3 var(--display);margin:28px 0 6px;text-transform:uppercase;letter-spacing:.06em;color:var(--stone)}
+p,ul,ol{max-width:70ch;margin:0 0 1.05em}
+li{margin-bottom:.4em}
+.lede{font:400 23px/1.55 var(--body);max-width:62ch;color:var(--ink)}
+.take{max-width:none;margin:0 0 28px;padding:18px 22px;background:var(--stone-soft);border-left:6px solid var(--stone);font:600 21px/1.45 var(--display);border-radius:0 8px 8px 0}
+.take b{display:block;font:700 12px var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--stone);margin-bottom:4px}
+dfn{font-style:normal;font-weight:600;border-bottom:2px dotted var(--stone)}
+code,.mono{font-family:var(--mono);font-size:.86em}
+:not(pre)>code{background:var(--stone-soft);padding:1px 6px;border-radius:4px}
+pre{background:#0f1720;color:#dfe8f3;padding:18px 20px;border-radius:8px;overflow:auto;font:15px/1.6 var(--mono);max-width:100%;margin:0 0 24px}
+pre .c{color:#7f93a8}
+pre .k{color:#ffd479}
+pre .n{color:#8fd0ff}
+figure{margin:34px 0}
+figure.wide{margin-inline:0}
+figcaption{font:500 17px/1.5 var(--display);color:var(--ink);margin-top:12px;max-width:80ch}
+figcaption b{color:var(--stone)}
+figcaption .sub{display:block;font:400 15px/1.5 var(--body);color:var(--muted);margin-top:4px}
+.stage{position:relative;line-height:0;border-radius:8px;overflow:hidden;background:#222}
+.stage img{display:block;width:100%;height:auto}
+.stage svg{position:absolute;inset:0;width:100%;height:100%}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.grid3,.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto}
+.diagram svg{display:block;width:100%;height:auto;min-width:560px}
+.diagram.nomin svg{min-width:0}
+svg text{font-family:var(--display);fill:var(--ink)}
+svg .m{fill:var(--muted)}
+svg .t{fill:#fff;stroke:#0b1017;stroke-width:4.5px;paint-order:stroke;font-weight:700;stroke-linejoin:round}
+table{border-collapse:collapse;width:100%;font:16px/1.45 var(--display);background:var(--surface);border:1px solid var(--line);border-radius:8px}
+th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font:700 13px var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--stone-soft)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto;margin:0 0 26px;max-width:100%}
+.tablewrap table{min-width:560px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:22px 0;padding:0}
+details>summary{cursor:pointer;padding:14px 18px;font:700 17px var(--display);list-style:none;display:flex;gap:10px;align-items:center}
+details>summary::before{content:"+";display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--stone);color:var(--surface);font-weight:800}
+details[open]>summary::before{content:"\2013"}
+details>summary:focus-visible{outline:3px solid var(--stone);outline-offset:2px}
+details>.in{padding:2px 20px 14px}
+.chip{display:inline-block;font:700 13px var(--display);padding:2px 9px;border-radius:99px;color:#fff;letter-spacing:.03em;white-space:nowrap}
+.c-wall{background:var(--f-wall)}.c-terr{background:var(--f-terr)}.c-col{background:var(--f-col)}.c-lean{background:var(--f-lean)}.c-mass{background:var(--f-mass)}.c-cant{background:var(--f-cant)}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--over);font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font:600 15px var(--display);margin:0 0 14px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{display:inline-block;width:22px;height:5px;border-radius:3px}
+.swatch{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px}
+.five{display:grid;gap:10px;margin:0 0 20px;padding:0;list-style:none;max-width:none;counter-reset:f}
+.five li{counter-increment:f;display:grid;grid-template-columns:40px 1fr;gap:12px;align-items:start;margin:0;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;font:500 18px/1.5 var(--display)}
+.five li::before{content:counter(f);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--bg);font:800 17px var(--display)}
+.five li b{font-weight:800}
+.small{font:400 16px/1.55 var(--body);color:var(--muted)}
+.theme{position:fixed;right:max(14px,env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:5}
+@media (max-width:1000px){
+  .wrap{grid-template-columns:1fr;gap:12px}
+  nav.toc{position:static;max-height:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px}
+  nav.toc .k{grid-column:1/-1;margin:0}
+  nav.toc a small{display:none}
+  body{font-size:18px}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+.levels{max-width:70ch}
+.live{display:grid;gap:12px;margin:14px 0 24px}
+.lsvg{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px}
+.lsvg svg{width:100%;height:auto;display:block}
+.lctl{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 14px 10px}
+.ctl label{display:flex;justify-content:space-between;gap:10px;font:600 16px var(--display);padding-top:8px}
+.ctl output{font-variant-numeric:tabular-nums;color:var(--stone);font-weight:800}
+.ctl input[type=range]{width:100%;height:44px;margin:0;accent-color:var(--stone)}
+.ctl select{width:100%;height:44px;font:600 16px var(--display);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:0 10px;margin:4px 0 6px}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;font:700 17px var(--display);background:var(--stone-soft);border-radius:10px;padding:10px 14px}
+.stats span{display:block;font:500 13px var(--body);color:var(--muted)}
+ol.qs{list-style:none;padding:0;max-width:none;display:grid;gap:8px}
+ol.qs li{margin:0;padding:12px 14px;background:var(--ochre-soft);border-left:5px solid var(--ochre);border-radius:0 8px 8px 0;font:500 17px/1.45 var(--display)}
+ol.qs li b{color:var(--ochre);margin-right:6px}
+@media (min-width:900px){.live{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:start}.live .lsvg{grid-row:span 2}}
+@media (max-width:1000px){
+ nav.toc{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;display:flex;gap:6px;overflow-x:auto;padding:8px 2px;background:var(--bg);border-bottom:1px solid var(--line);max-height:none;white-space:nowrap;-webkit-overflow-scrolling:touch}
+ nav.toc .k{display:none}
+ nav.toc a{border:1px solid var(--line);border-radius:99px;padding:8px 14px;background:var(--surface);flex:none;font-size:15px}
+ nav.toc a small{display:none}
+}
+@media (max-width:700px){.diagram.nomin svg{min-width:620px}h3{font-size:22px}.take{font-size:19px;padding:14px 16px}}
+.diagram.fit svg{min-width:0!important}
+.rate{display:grid;gap:10px;margin:0 0 20px}.rate>div{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--stone);border-radius:0 10px 10px 0;padding:12px 16px;font:500 17px/1.5 var(--display)}.rate ul{margin:6px 0 0;padding-left:20px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;padding:10px 0 4px}.presets button{min-height:44px;padding:0 16px;border-radius:99px;border:1px solid var(--stone);background:var(--surface);color:var(--ink);font:700 16px var(--display);cursor:pointer}.presets button:active,.presets button:focus-visible{background:var(--stone);color:var(--bg);outline:none}
+.chdr{font:800 13px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--stone);padding:14px 0 2px;border-top:1px solid var(--line);margin-top:8px}
+.chdr:first-child{border-top:0;margin-top:0;padding-top:6px}
+/* the decisions log: the page's tokens, a reading column, one entry per decision */
+.dpage{max-width:860px;margin:0 auto;padding-block:32px 96px}
+.dhead .kick{font-family:var(--display);letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:0 0 10px}
+.dnav{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 28px}.dnav a{padding:4px 12px;border:1px solid var(--line);border-radius:999px;font:700 13px var(--display);text-decoration:none;color:var(--ink);background:var(--surface)}
+.dpage section{margin-bottom:40px}
+.dpage h2{margin-top:0}
+.dec{border-top:1px solid var(--line);padding:14px 0 4px}
+.dec h3{margin:0 0 2px;font:700 19px/1.25 var(--display)}
+.when{margin:0 0 8px;font:600 13px var(--display);color:var(--muted);letter-spacing:.04em}
+.dec dl{display:grid;grid-template-columns:6.5em minmax(0,1fr);gap:4px 14px;margin:0 0 10px}
+.dec dt{font:700 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+.dec dd{margin:0}
+@media(max-width:600px){.dec dl{grid-template-columns:1fr;gap:0}.dec dd{margin:0 0 8px}}
+.dpage details{margin:10px 0}.dpage details .vb{padding:0 16px 10px;overflow-x:auto}
+</style>
+<main class="dpage">
+<header class="dhead"><p class="small kick">dharmatiles &middot; Stone and Courses</p><h1>Decisions</h1>
+<p class="lede">What was tried, what was chosen, and why. The main page says what the model is now; this page keeps the history. Dates are the days the work was done (a range where one entry covers several days).</p></header>
+<nav class="dnav" aria-label="Entries"><a href="#joints">Joints and seals</a><a href="#mesh">The rock&rsquo;s mesh</a><a href="#rules">Rock rules</a><a href="#cells">One cell, one stone</a><a href="#ui">The editor</a><a href="#words">Words</a><a href="#open">Open questions</a><a href="#old">Old measurements</a></nav>
+<section id="joints"><h2>Joints and seals</h2>
+<article class="dec"><h3>Joints made by insetting blocks</h3><p class="when">15 to 16 Nov 2026</p><dl><dt>Tried</dt><dd>Shrink every stone to leave a gap for the joint.</dd><dt>Chosen</dt><dd>Stones meet at their planes; the rock&rsquo;s wear opens the groove.</dd><dt>Why</dt><dd>Insetting moves a stone off the plane it has to meet.</dd></dl></article>
+<article class="dec"><h3>Mirrored sites to make faces</h3><p class="when">15 to 16 Nov 2026</p><dl><dt>Tried</dt><dd>Mirror the sites across the footprint so cells reach the face.</dd><dt>Chosen</dt><dd>Clip the cells to the footprint, then cut faces (step 3).</dd><dt>Why</dt><dd>Mirrored sites carve holes at re-entrant corners and make faces recede from the footprint.</dd></dl></article>
+<article class="dec"><h3>Exact shared planes between neighbours</h3><p class="when">15 to 16 Nov 2026</p><dl><dt>Tried</dt><dd>Neighbours share a plane exactly.</dd><dt>Chosen</dt><dd>A 0.15 mm plan overlap at joints.</dd><dt>Why</dt><dd>Coincident faces break the union.</dd></dl></article>
+<article class="dec"><h3>A seal under every stone</h3><p class="when">16 Nov 2026</p><dl><dt>Tried</dt><dd>A bed sink and an overlap along the row planes.</dd><dt>Chosen</dt><dd>No seal: stones meet exactly at their planes.</dd><dt>Why</dt><dd>The seal kept the gate green but added a slab at every row plane. The cost is thin overhang slivers where two outlines differ by a hair; they are listed under &ldquo;Where the model breaks&rdquo;.</dd></dl></article>
+<article class="dec"><h3>Roofs over joints</h3><p class="when">16 Nov 2026</p><dl><dt>Tried</dt><dd>A lean-to wedge roofing the top of every V between stones.</dd><dt>Chosen</dt><dd>The joint is only the groove the rock&rsquo;s wear leaves.</dd><dt>Why</dt><dd>The roofs looked wrong and were removed at Shawn&rsquo;s request.</dd></dl></article>
+</section>
+<section id="mesh"><h2>The rock&rsquo;s mesh</h2>
+<article class="dec"><h3>The sampled mesh straight into the union</h3><p class="when">17 Nov 2026</p><dl><dt>Tried</dt><dd>Hand the rock&rsquo;s surface-net mesh to the union as it came.</dd><dt>Chosen</dt><dd>The mesher takes the two outside corners of an alternating grid face in, so every mesh is a closed manifold.</dd><dt>Why</dt><dd>Surface nets leave an edge shared by four faces where a grid face alternates inside and outside, and the union refuses it.</dd></dl></article>
+<article class="dec"><h3>&ldquo;The union is the only expensive step&rdquo;</h3><p class="when">17 Nov 2026</p><dl><dt>Tried</dt><dd>Describing the cost that way.</dd><dt>Chosen</dt><dd>The union is the largest step, not the only one.</dd><dt>Why</dt><dd>The levels together cost about a quarter of it. Current numbers are on the page, from the sweep.</dd></dl></article>
+</section>
+<section id="rules"><h2>Rules for what the rock may do on a wall</h2>
+<article class="dec"><h3>Rounding a held bed edge</h3><p class="when">17 Nov 2026</p><dl><dt>Tried</dt><dd>Wear rounds every edge, the held bed included.</dd><dt>Chosen</dt><dd>A held face that leans down is not rounded.</dd><dt>Why</dt><dd>A rounded held bed hangs an arc past 55 degrees at every joint (0.2 to 1 % of the downward area).</dd></dl></article>
+<article class="dec"><h3>An outline cut into a held top or bed</h3><p class="when">17 Nov 2026</p><dl><dt>Tried</dt><dd>Cuts anywhere on the stone.</dd><dt>Chosen</dt><dd>A cut may not touch a held face that faces up or down, nor make a pocket no air reaches. The cuts stage has preserve top, sides and bottom.</dd><dt>Why</dt><dd>A cut into a held top left the stone above a flat roof over a notch (17 % red on preset L).</dd></dl></article>
+<article class="dec"><h3>Chips and chunks on a wall stone</h3><p class="when">17 Nov 2026</p><dl><dt>Tried</dt><dd>Chips and chunks in the wall&rsquo;s default rock.</dd><dt>Chosen</dt><dd>Both stay in the panel and are off in every wall.</dd><dt>Why</dt><dd>A chip is a plane and an ellipsoid, and the ellipsoid&rsquo;s underside is a roof; a chunk set back under the one above is a ledge. Both fail the gate (3 to 50 % red).</dd></dl></article>
+<article class="dec"><h3>Grain and pockets on a chamfer</h3><p class="when">17 Nov 2026</p><dl><dt>Tried</dt><dd>Grain and pockets everywhere.</dd><dt>Chosen</dt><dd>They fade out on a face that leans down past 37 degrees.</dd><dt>Why</dt><dd>A face the facing rule leaves at 48 degrees was roughened past 55.</dd></dl></article>
+<article class="dec"><h3>A chamfer along a lip edge</h3><p class="when">17 Nov 2026</p><dl><dt>Tried</dt><dd>Size the chamfer from the lip&rsquo;s own edge.</dd><dt>Chosen</dt><dd>Chamfer from each supporting cell&rsquo;s top outline (step 9).</dd><dt>Why</dt><dd>It was sized from the wrong support.</dd></dl></article>
+<article class="dec"><h3>The rock cut and chamfered per wall preset</h3><p class="when">17 Nov 2026</p><dl><dt>Tried</dt><dd>The same rock on every wall.</dd><dt>Chosen</dt><dd>The default (cuts, a little grain, wear) on the plain walls; a spire, a lip or a tilted row loses its cuts.</dd><dt>Why</dt><dd>A cut on a tapering or overhanging cell leaves the stone above a roof over a notch.</dd></dl></article>
+</section>
+<section id="cells"><h2>One cell, one stone</h2>
+<article class="dec"><h3>Splitting a stone to its supports</h3><p class="when">18 Nov 2026</p><dl><dt>Tried</dt><dd>Cut each cell into pieces, one for every stone it rests on.</dd><dt>Chosen</dt><dd>A cell is one Voronoi cell. Only a lip row still splits. What a stone bears on is the rock&rsquo;s business: its bed carries the convex hull of the cut tops below it (a shrink wrap), and a gap inside the hull is a bridge.</dd><dt>Why</dt><dd>Pieces made extra joints and slivers. Bridges are painted blue in the Overhang view and measured apart from the gate; the gate itself is unchanged.</dd></dl></article>
+<article class="dec"><h3>One body again</h3><p class="when">18 Nov 2026</p><dl><dt>Chosen</dt><dd>Every wall is one body. Each stone&rsquo;s top is set when it is built: its row top plus the crest planes. The crest is graded and uses its whole band. The magenta target draws each course&rsquo;s front line.</dd><dt>Why</dt><dd>Loose bodies were the failure that most often hid under a passing count.</dd></dl></article>
+<article class="dec"><h3>Rock lengths scale with the system</h3><p class="when">18 Nov 2026</p><dl><dt>Tried</dt><dd>The wall&rsquo;s lengths scaled under OpenLOCK (0.7257); the rock&rsquo;s millimetres did not.</dd><dt>Chosen</dt><dd>Every length of every rock stage scales with the system, and a density per centimetre grows by the same factor. The 57 OpenLOCK builds changed; the 57 DungeonBlocks builds did not.</dd><dt>Why</dt><dd>Under 25.4 mm the stones kept full-size strata, pockets and chips. Gate passes under OpenLOCK moved from 6 to 9 (as the dot judges) and from 33 to 36 (bridges apart).</dd></dl></article>
+</section>
+<section id="ui"><h2>The editor</h2>
+<article class="dec"><h3>Four panels, two pairs</h3><p class="when">18 Nov 2026</p><dl><dt>Chosen</dt><dd>Region, Courses, Rock region, Rock: the region and what fills it at the scale of the wall, then at the scale of one stone. Preset, Scale and seed are Setup; the view is the viewer. Four kinds of control: number, range, choice, group.</dd><dt>Why</dt><dd>Every control has one place. A review by Orin ruled on the titles: Region (not Area) because <code>region</code> is the tile language&rsquo;s word; Courses (not Wall) because <code>wall</code> is an element; Setup (not Build) because <code>build</code> is a verb of the program.</dd></dl></article>
+<article class="dec"><h3>The Failure list</h3><p class="when">18 Nov 2026</p><dl><dt>Tried</dt><dd>A second list of four walls turned until the gate refused them.</dd><dt>Chosen</dt><dd>Two of them are presets marked &ldquo;refuses&rdquo;; the sweep asserts the gate refuses them. The other two were the walls M and O at their default seed.</dd><dt>Why</dt><dd>A failure is a preset that fails the gate. A heading that says every marked wall fails would have been false: the sweep shows some real walls fail in most builds.</dd></dl></article>
+<article class="dec"><h3>The crest has no on/off</h3><p class="when">18 Nov 2026</p><dl><dt>Chosen</dt><dd>The crest is always on; the flat weighting is its plainest form. Its hidden switch and Solo are removed.</dd><dt>Why</dt><dd>There is no wall without a top line, so there is no identity to switch to.</dd></dl></article>
+<article class="dec"><h3>The union lab</h3><p class="when">18 Nov 2026</p><dl><dt>Chosen</dt><dd>The union watch and the four-route timing moved from among the controls to a folded Measure tool under the panels.</dd><dt>Why</dt><dd>They read the build and change nothing, so they are not controls; nothing was removed.</dd></dl></article>
+<article class="dec"><h3>Step 3&rsquo;s text</h3><p class="when">18 Nov 2026</p><dl><dt>Found</dt><dd>One paragraph repeated between every character of Step 3 (1.6 MB), which also lost its photographs.</dd><dt>Chosen</dt><dd>Restored. The build is now from the folder&rsquo;s own files and stops on a text file over 120 KB or an unfilled number.</dd></dl></article>
+</section>
+<section id="words"><h2>Words</h2>
+<article class="dec"><h3>gap, bevel, facet, tilt and chip</h3><p class="when">17 to 18 Nov 2026</p><dl><dt>Chosen</dt><dd>Removed from the wall and its presets. A stone&rsquo;s weathering is the rock&rsquo;s six stages, one word each, as on the Weathered Stone page. The 0.6 mm margin from the tile edge, which <code>gap</code> also set, is a constant of the tile; the joint&rsquo;s lower mouth is another.</dd><dt>Why</dt><dd>The wall had a second way to bevel, facet, tilt and chip a stone. Nothing read the five preset keys.</dd></dl></article>
+<article class="dec"><h3>rise, span, dip and wave; wander</h3><p class="when">17 Nov 2026</p><dl><dt>Chosen</dt><dd>Four new words, one meaning each: rise (the chance a stone carries on into the next row), span (the chance neighbours of one height join), dip (the tilt of the row planes) and wave (their waviness). <code>height</code>, <code>bond</code>, <code>setback</code> and <code>regularity</code> are reused. <code>wander</code> (a random height for each stone in its row) is redundant with variation in the planes and can be retired.</dd><dt>Status</dt><dd>These words wait for an Orin review before they enter the registry.</dd></dl></article>
+<article class="dec"><h3>The rock&rsquo;s region: an area and a top, or a box</h3><p class="when">17 Nov 2026</p><dl><dt>Chosen</dt><dd>The box (<code>width</code>, <code>breadth</code>, <code>height</code>) is an area that is a rectangle, a seat and a top at the height; the code makes it that way, so there is one path. The author can still write either.</dd><dt>Status</dt><dd>Flagged for Shawn&rsquo;s ruling that both stay for now.</dd></dl></article>
+</section>
+<section id="open"><h2>Open questions</h2>
+<ol><li>Is the seal out for good, or should something replace it so that tilted rows can pass?</li><li>May <code>wander</code> be retired, and may rise, span, dip and wave go to an Orin review for the registry?</li><li>Should a document be able to name its row planes?</li><li>Is the union&rsquo;s cost (about 857 ms for a 1&times;1 L) a problem worth a round, or is reaching new forms first?</li></ol>
+</section>
+<section id="old"><h2>Old measurements</h2>
+<p class="small">Measured on 17 Nov 2026 in this page&rsquo;s engine under Node, before the graded stages, one body and the bridge measure. They describe a model that no longer exists; the page&rsquo;s current numbers come from the sweep. Kept as written.</p>
+<details><summary>Per-step costs, from each step of the algorithm</summary><div class="vb"><p class="small"><b>a-viewer</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>What<th>Cost</tr><tr><td>time<td class="n">0 ms: the viewer redraws a stored mesh</tr><tr><td>triangles added<td class="n">0</tr></table><p class="small">The build costs are in each step below; the Costs view in the editor shows them for the wall on screen.</p></div>
+<div class="vb"><p class="small"><b>a-footprint</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>Preset L, DungeonBlocks<th>1&times;1<th>2&times;1<th>4&times;1</tr><tr><td>time<td class="n">0.0 ms<td class="n">0.0 ms<td class="n">0.0 ms</tr></table><p class="small">Measured in this page's engine under Node, median of 8 seeds, on the machine that built the page (other work was running, so read these as orders of magnitude). One call, a few numbers.</p></div>
+<div class="vb"><p class="small"><b>a-planes</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>Preset L, DungeonBlocks<th>1&times;1<th>2&times;1<th>4&times;1</tr><tr><td>time<td class="n">0.1 ms<td class="n">0.0 ms<td class="n">0.1 ms</tr></table><p class="small">Measured in this page's engine under Node, median of 8 seeds, on the machine that built the page (other work was running, so read these as orders of magnitude). This step makes no triangles.</p></div>
+<div class="vb"><p class="small"><b>a-subdivide</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>Preset L, DungeonBlocks<th>1&times;1<th>2&times;1<th>4&times;1</tr><tr><td>cells, rise, span and the prisms together (L2)<td class="n">1.5 ms<td class="n">4.0 ms<td class="n">14 ms</tr><tr><td>triangles in the prisms<td class="n">840 tri<td class="n">1920 tri<td class="n">3824 tri</tr></table><p class="small">Measured in this page's engine under Node, median of 8 seeds, on the machine that built the page (other work was running, so read these as orders of magnitude). Subdividing, rise, span and the prism of step 6 are timed as one level.</p></div>
+<div class="vb"><p class="small"><b>a-front</b></p><h4 class="sh">Cost</h4>
+<table class="cost"><tr><th>Preset L, 1&times;1, serial on one thread (Node)<th class="n">today<th class="n">both stages on</tr><tr><td>drawing the areas (main thread)<td class="n">3 ms<td class="n">26 ms</tr><tr><td>rock, draft 0.5 mm, work added up<td class="n">606 ms<td class="n">768 ms</tr><tr><td>union and gate, draft<td class="n">988 ms<td class="n">1109 ms</tr><tr><td>rock, fine 0.3 mm<td class="n">1744 ms<td class="n">2297 ms</tr><tr><td>union and gate, fine<td class="n">2473 ms<td class="n">2856 ms</tr><tr><td>triangles in the union, draft<td class="n">86,322<td class="n">95,116</tr></table><p class="small">Stages off (every new control at 0) the build is the same bytes and the same times. The browser numbers of the last round (workers, draft 102 ms of rock on the clock, 845 ms union and gate; fine 342 ms and 2109 ms) were not re-measured here.</p>
+</div>
+<div class="vb"><p class="small"><b>a-rise</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>Preset L, DungeonBlocks<th>1&times;1<th>2&times;1<th>4&times;1</tr><tr><td>level L2 time (steps 3 to 6 together)<td class="n">1.5 ms<td class="n">4.0 ms<td class="n">14 ms</tr><tr><td>triangles added by this step<td class="n">0.0 tri<td class="n">0.0 tri<td class="n">0.0 tri</tr></table><p class="small">Measured in this page's engine under Node, median of 8 seeds, on the machine that built the page (other work was running, so read these as orders of magnitude). The roll itself is a few microseconds a stone; it is timed inside L2.</p></div>
+<div class="vb"><p class="small"><b>a-span</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>Preset L, DungeonBlocks<th>1&times;1<th>2&times;1<th>4&times;1</tr><tr><td>level L2 time (steps 3 to 6 together)<td class="n">1.5 ms<td class="n">4.0 ms<td class="n">14 ms</tr><tr><td>triangles added by this step<td class="n">0.0 tri<td class="n">0.0 tri<td class="n">0.0 tri</tr></table><p class="small">Measured in this page's engine under Node, median of 8 seeds, on the machine that built the page (other work was running, so read these as orders of magnitude). One roll per touching pair; it is timed inside L2.</p></div>
+<div class="vb"><p class="small"><b>a-build</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>Preset L, DungeonBlocks<th>1&times;1<th>2&times;1<th>4&times;1</tr><tr><td>prisms: triangles (L2)<td class="n">840 tri<td class="n">1920 tri<td class="n">3824 tri</tr><tr><td>level L2 time (with steps 3 to 5)<td class="n">1.5 ms<td class="n">4.0 ms<td class="n">14 ms</tr></table><p class="small">Measured in this page's engine under Node, median of 8 seeds, on the machine that built the page (other work was running, so read these as orders of magnitude). </p></div>
+<div class="vb"><p class="small"><b>a-joints</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>What<th>Cost</tr><tr><td>time<td class="n">about 0 ms: the marks come from step 3</tr><tr><td>triangles added<td class="n">0</tr></table></div>
+<div class="vb"><p class="small"><b>a-outline</b></p><h4 class="sh">Cost</h4>
+<p class="small">The area for each stone is drawn on the page thread in the order of the courses (about 0.6 ms a stone); the stones are built in the workers as before. More parts mean more planes to the rock: the work added up grows about a quarter at draft.</p>
+</div>
+<div class="vb"><p class="small"><b>a-weather</b></p><h4 class="sh">Cost</h4>
+<table class="cost"><tr><th>Measured here, this browser<th class="n">stones<th class="n">cells (L0 to L3)<th class="n">rock, on the clock<th class="n">rock, work added up<th class="n">union and gate<th class="n">triangles</tr><tr><td>L, 1&times;1, draft<td class="n">62<td class="n">2 ms<td class="n">102 ms<td class="n">782 ms<td class="n">845 ms<td class="n">239,036<tr><td>R, 1&times;1 (the heaviest), draft<td class="n">132<td class="n">9 ms<td class="n">280 ms<td class="n">1.25 s<td class="n">1.51 s<td class="n">381,780<tr><td>L, 4&times;1 (the 2&times;2 stand-in), draft<td class="n">163<td class="n">9 ms<td class="n">361 ms<td class="n">2.38 s<td class="n">3.01 s<td class="n">890,368<tr><td>J2, a 2&times;2 corner, draft<td class="n">192<td class="n">12 ms<td class="n">316 ms<td class="n">1.66 s<td class="n">2.64 s<td class="n">728,860<tr><td>L, 1&times;1, fine<td class="n">57<td class="n">2 ms<td class="n">342 ms<td class="n">1.88 s<td class="n">2.11 s<td class="n">699,880<tr><td>R, 1&times;1 (the heaviest), fine<td class="n">116<td class="n">7 ms<td class="n">720 ms<td class="n">2.78 s<td class="n">3.29 s<td class="n">981,556<tr><td>L, 4&times;1 (the 2&times;2 stand-in), fine<td class="n">138<td class="n">9 ms<td class="n">912 ms<td class="n">6.97 s<td class="n">6.87 s<td class="n">2,375,972<tr><td>J2, a 2&times;2 corner, fine<td class="n">208<td class="n">15 ms<td class="n">1.83 s<td class="n">5.86 s<td class="n">7.12 s<td class="n">2,135,812</table>
+<p class="small">What dominates: at draft, on a 1&times;1 L the rock takes 102 ms on the clock (782 ms of work added over its stones, spread over the workers) and the union and gate 845 ms; the cells cost 2 ms. At fine (0.3 mm) the rock is 2.4 times the draft work, and the union (about 2.6 times the triangles) 2109 ms. The union takes the longest on the big walls; the rock scales with the stones and the workers.</p></div>
+<div class="vb"><p class="small"><b>a-fit</b></p><h4 class="sh">Cost</h4><p class="small">Included in the L3 and L4 times: a few extra clips per stone.</p></div>
+<div class="vb"><p class="small"><b>a-foot</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>Preset L, DungeonBlocks<th>1&times;1<th>2&times;1<th>4&times;1</tr><tr><td>level L5 + scatter time<td class="n">0.4 ms<td class="n">0.8 ms<td class="n">1.8 ms</tr><tr><td>stones: triangles<td class="n">528 tri<td class="n">1040 tri<td class="n">2284 tri</tr></table><p class="small">Measured in this page's engine under Node, median of 8 seeds, on the machine that built the page (other work was running, so read these as orders of magnitude). </p></div>
+<div class="vb"><p class="small"><b>a-union</b></p><h4 class="sh">Cost</h4><table class="cost"><tr><th>Preset L, DungeonBlocks<th>1&times;1<th>2&times;1<th>4&times;1</tr><tr><td>hulls + union + mesh<td class="n">54 ms<td class="n">107 ms<td class="n">209 ms</tr><tr><td>triangles out<td class="n">2138 tri<td class="n">4570 tri<td class="n">8752 tri</tr><tr><td>solids in<td class="n">69 <td class="n">134 <td class="n">250 </tr></table><p class="small">Measured in this page's engine under Node, median of 8 seeds, on the machine that built the page (other work was running, so read these as orders of magnitude). The union is the largest step of the build.</p></div></details>
+<details><summary>The gate before and after the front band and the stone outline</summary><div class="vb"><p class="small"><b>a-front</b></p><h4 class="sh">The gate, before and after</h4><p><b>It fails.</b> Today 50 of 114 builds pass (the same 50 as before this step). With the front band at depth 2 dmm only 2 of 114 pass, with or without the stay-behind rule; the median build overshoots the overhang budget (past 65 degrees: 0.23% of the downward area against 0.1%; 55 to 65 degrees: 0.35%) and 6 builds split into more than one body. The cause is not the cut itself: with the rock switched off the banded wall is at the edge of the budget (preset L: 0.10%), and the wall&rsquo;s rule for what lies under a bed (step 9: the lower mouth measured from the top of the cell below, with its facets and chips) knows only the old straight front. A stone&rsquo;s bed now meets the rounded top edge of the stone under it along new edges, and the facet this step adds along them (with no measurement of the stone below) is not enough. <b>Proposed rule:</b> read the lower stone&rsquo;s actual banded top outline in step 9 (its <code>tsList</code> entry is the cell&rsquo;s today) so the mouth is sized as it is for a straight edge. Not built; it needs the gate to confirm it.</p><div class="tablewrap"><table class="cost"><tr><th>Preset<th class="n">today<th class="n">front band<th class="n">front, rule off<th class="n">stone outline<th class="n">both</tr><tr><td>L<td class="n">1/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>B<td class="n">1/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>E<td class="n">3/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>M<td class="n">3/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>G<td class="n">3/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6 (1 err)</tr><tr><td>O<td class="n">6/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>F<td class="n">4/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>A<td class="n">4/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>N<td class="n">5/6<td class="n">1/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>D<td class="n">1/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>K<td class="n">1/6<td class="n">0/6<td class="n">0/6<td class="n">0/6 (1 err)<td class="n">0/6</tr><tr><td>Lf<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>J<td class="n">3/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>J2<td class="n">4/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6 (1 err)</tr><tr><td>C<td class="n">1/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>P<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>T<td class="n">5/6<td class="n">1/6<td class="n">1/6<td class="n">0/6<td class="n">0/6</tr><tr><td>R<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6<td class="n">0/6</tr><tr><td>S<td class="n">5/6<td class="n">0/6<td class="n">1/6<td class="n">0/6<td class="n">0/6</tr><tr><td><b>all</b><td class="n"><b>50/114</b><td class="n"><b>2/114</b><td class="n"><b>2/114</b><td class="n"><b>0/114</b><td class="n"><b>0/114</b></tr></table></div><p class="small">Builds that pass the gate, of 6 for each preset (3 seeds, both systems), draft 0.5 mm, preset rock settings. Front band: depth 2 dmm, bell, 4 bumps per square. Outline: strength 0.5, bell, 4 bumps, core 0.35. Three builds of the 570 stop with an error (a mesh that is not manifold, or an array too long) and count as failures; the page shows such an error where it happens.</p>
+</div>
+<div class="vb"><p class="small"><b>a-outline</b></p><h4 class="sh">The gate, before and after</h4><p><b>It fails, more than the front band.</b> With the outline at strength 0.5, 0 of 114 builds pass (today 50), the median overshoots at 0.53% past 65 degrees and 0.80% from 55 to 65, and 20 builds split into more than one body. The same cause as the front band, at more edges (the support clip gives a stone on a stone a free edge wherever the stone below is smaller), and more parts to a stone (a median of six against one). The table above is the sweep for both stages. <b>Proposed rule:</b> the same lower-mouth rule from the banded outline of the stone below, and parts that are nearly convex are kept as one part.</p>
+</div></details>
+<details><summary>The gate over the presets (Step 11)</summary><div class="vb"><p class="small"><b>a-union</b></p><details class="deep"><summary>Deep numbers: the gate over the presets</summary><p>Over all 19 presets and both systems, 8 seeds, flat planes: 7 of 304 builds pass. Failures are overhang (297 builds) and loose bodies (16); watertight never fails. There is no seal and no roof over a joint, so a flat ceiling stands over every V and thin slivers appear where two outlines differ by a hair. See where the model breaks.</p></details></div></details>
+<details><summary>Triangles per wall</summary><p class="one">A 1&times;1 cliff is 32.7 to 213.7 thousand triangles after the union (median over 8 seeds, by preset).</p>
+<div class="tw"><table><tr><th>Preset (DungeonBlocks)<th class="n">solids in the union<th class="n">triangles written<th class="n">triangles out<th class="n">union time<th class="n">gate, DB<th class="n">gate, OL</tr><tr><td>L wall<td class="n">51<td class="n">233448<td class="n">98984<td class="n">822 ms<td class="n">1 / 3<td class="n">0 / 3<tr><td>B ragged wall<td class="n">61<td class="n">231988<td class="n">96254<td class="n">810 ms<td class="n">1 / 3<td class="n">0 / 3<tr><td>E terrace<td class="n">20<td class="n">83372<td class="n">41206<td class="n">251 ms<td class="n">3 / 3<td class="n">0 / 3<tr><td>M columns<td class="n">24<td class="n">162000<td class="n">71282<td class="n">505 ms<td class="n">2 / 3<td class="n">1 / 3<tr><td>G leaning<td class="n">76<td class="n">214780<td class="n">84180<td class="n">714 ms<td class="n">3 / 3<td class="n">0 / 3<tr><td>O chunky<td class="n">6<td class="n">96748<td class="n">55088<td class="n">205 ms<td class="n">3 / 3<td class="n">3 / 3<tr><td>F sheer wall<td class="n">28<td class="n">187876<td class="n">78390<td class="n">560 ms<td class="n">3 / 3<td class="n">1 / 3<tr><td>A low massif<td class="n">18<td class="n">73824<td class="n">33008<td class="n">228 ms<td class="n">3 / 3<td class="n">1 / 3<tr><td>N masonry wall<td class="n">12<td class="n">28700<td class="n">50440<td class="n">317 ms<td class="n">3 / 3<td class="n">2 / 3<tr><td>D cap course<td class="n">57<td class="n">247532<td class="n">86898<td class="n">859 ms<td class="n">1 / 3<td class="n">0 / 3<tr><td>K deep lip<td class="n">57<td class="n">222620<td class="n">92154<td class="n">789 ms<td class="n">1 / 3<td class="n">0 / 3<tr><td>Lf cantilevers<td class="n">64<td class="n">232852<td class="n">93738<td class="n">845 ms<td class="n">0 / 3<td class="n">0 / 3<tr><td>J corner<td class="n">80<td class="n">283392<td class="n">99658<td class="n">1034 ms<td class="n">3 / 3<td class="n">0 / 3<tr><td>J corner, 2x2<td class="n">162<td class="n">680320<td class="n">213660<td class="n">2527 ms<td class="n">2 / 3<td class="n">2 / 3<tr><td>C spire<td class="n">58<td class="n">106696<td class="n">54866<td class="n">410 ms<td class="n">1 / 3<td class="n">0 / 3<tr><td>P spire<td class="n">23<td class="n">51220<td class="n">32660<td class="n">159 ms<td class="n">0 / 3<td class="n">0 / 3<tr><td>T tall beside short<td class="n">41<td class="n">234064<td class="n">130828<td class="n">987 ms<td class="n">2 / 3<td class="n">3 / 3<tr><td>R fieldstone, tilted rows<td class="n">472<td class="n">391080<td class="n">173428<td class="n">1659 ms<td class="n">0 / 3<td class="n">0 / 3<tr><td>S near slab<td class="n">28<td class="n">228520<td class="n">123430<td class="n">841 ms<td class="n">3 / 3<td class="n">2 / 3</table></div>
+<p class="note">Medians of 8 seeds, measured in this page&rsquo;s engine under Node; the gate columns count seeds that pass. The steps' own times and triangles are in each step above; the Costs view in the editor shows them for the wall on screen. Today&rsquo;s Rust engine makes 0.54 to 3.2 million triangles for a cliff tile (library baseline, 15 Nov), mostly grain, which this model does not make.</p>
+<h3>Where the triangles are</h3><p>Preset L, 1&times;1: of the 98984 triangles the union keeps, 16794 face up, 60807 face sideways and 8719 face down (the ground bed is not counted). More, smaller stones cost more: R (472 solids) takes 1659 ms against 822 ms for L; T and S, with fewer, taller or wider stones, take about half.</p></details>
+<details><summary>Where the model breaks (before the bridge measure)</summary><p class="one">The gate passes 50 of 114 builds across 19 presets, both systems and 3 seeds; the nine shipped presets pass 30 of 54. Flat rows are close; tilted and waved rows fail.</p>
+<ul>
+<li><b>No seal, by Shawn&rsquo;s choice.</b> Stones meet exactly at their planes. Where two stones&rsquo; outlines differ by a hair (a chamfer or the rock&rsquo;s wear on either), the union leaves thin down-facing slivers that count as overhang past 65 degrees: 64 builds fail on overhang and 0 on loose bodies; watertight never fails. Passes by preset (DungeonBlocks and OpenLOCK): L wall 1 and 0, B ragged wall 1 and 0, E terrace 3 and 0, M columns 2 and 1, G leaning 3 and 0, O chunky 3 and 3, F sheer wall 3 and 1, A low massif 3 and 1, N masonry wall 3 and 2, D cap course 1 and 0, K deep lip 1 and 0, Lf cantilevers 0 and 0, J corner 3 and 0, J corner, 2x2 2 and 2, C spire 1 and 0, P spire 0 and 0, T tall beside short 2 and 3, R fieldstone, tilted rows 0 and 0, S near slab 3 and 2.</li>
+<li><b>A groove has a roof.</b> Wear opens a groove along every joint, and the stone above the groove is a flat ceiling over it. The rock leaves a held bed sharp (the chamfer of step 9 is the roof), but a chip is a cut with its own roof: <b>chips and chunks are off in every preset</b> because they fail the gate (on preset L, chips 8 per cm: 1.6 % red; chunks 0.5: 2.2 % red and two bodies).</li>
+<li><b>Cells the rock cannot save.</b> The spires, the lips, the tilted rows and the courses of D, J and R fail the gate with every stage at 0: their cells already hang (the chamfers of step 9 were written to read the facets of the old step 8). The rock is held to no cuts on them.</li>
+<li><b>Tilted and waved rows.</b> Every piece of every stone has its bed on a different facet, so the slivers are everywhere: <code>dip</code> 3 or <code>wave</code> 1 and up pass in no build I measured. Row planes draw correctly and blocks follow them.</li>
+<li><b>Tall stones that touch only along an edge</b> are loose bodies; they fail whenever the roll makes one.</li>
+<li><b>A lip stone never rises</b>, so a tall lip is not reachable. <b>A stone with a hole, or a ring,</b> is not reachable: cells are convex.</li>
+<li><b>Planes cannot be named.</b> They are drawn at random; a document cannot give a wall a known rake or a step in its rows.</li>
+
+<li><b>Cost.</b> Many small stones are expensive: R takes 1659 ms for a 1&times;1 against 822 for L.</li>
+<li><b>Photos not yet reached.</b> No preset reproduces the fine surface of the references (cracks, lichen, wear); the rock makes broken faces, rounded edges and grain; the cracks, lichen and staining of the photographs are not reached.</li></ul>
+<p>The editor&rsquo;s Failure menu loads a preset with one dial turned until the gate refuses it, so each refusal can be looked at.</p></details>
+<details><summary>The language page&rsquo;s design check</summary><p class="one">These are the words an author writes, each with one meaning. The editor&rsquo;s drop-downs and switches are inputs too, read from the same table as the pop-ups.</p>
+<div id="wordtable"></div>
+<h3>Design check for the four newest words</h3>
+<div class="tw"><table><tr><th>Question<th>Answer</tr>
+<tr><td>Words<td><b>Reused:</b> <code>height</code> (a row&rsquo;s minimum and maximum), <code>bond</code>, <code>setback</code>, <code>regularity</code>. <b>New, one meaning each:</b> <code>rise</code> (chance a stone carries on into the next row), <code>span</code> (chance neighbours of one height join), <code>dip</code> (tilt of the row planes), <code>wave</code> (waviness of the row planes). The wall&rsquo;s <code>dip</code> leans the row planes; the rock&rsquo;s strata <code>dip</code> is not a wall word (the courses are the strata, each stone takes its bed&rsquo;s lean). These four wait for an Orin review before they enter the registry.
+<tr><td>Redundant<td><code>wander</code> (a random height for each stone in its row): a stone&rsquo;s top is a plane, and variation belongs to the planes; it can be retired. Not redundant: <code>bond</code> (joints between rows) and <code>regularity</code> (cell shape); <code>rise</code> is not <code>bond</code> at 0, because a carried-up cell keeps a joint and a risen stone does not. The scatter&rsquo;s <code>clump</code> is a pattern of where things fall, a different thing.
+<tr><td>Kinds<td>A row plane is data of the build, not a kind a document can name, pass or override. Naming planes (a list of heights and tilts) would make it one; left open.
+<tr><td>One meaning, two forms<td>The rock&rsquo;s region is an <code>area</code> and a <code>top</code> (the words of <code>at=</code> and <code>top=</code>) or a box, <code>width</code>, <code>breadth</code>, <code>height</code>: the box is an area that is a rectangle, a seat and a top at the height, and the code makes it that way (one path), but the author can still write either. Flagged for Shawn&rsquo;s ruling that both stay for now.
+<tr><td>Removed<td><code>gap</code>, <code>bevel</code>, <code>facet</code>, <code>tilt</code> and <code>chip</code>: the stone&rsquo;s weathering is the rock&rsquo;s six stages (one word each, as on the Weathered Stone page). The wall keeps no second way to bevel, facet, tilt or chip a stone. The 0.6 mm margin from the tile edge, which <code>gap</code> also set, is a constant of the tile (<code>EDGE_MARGIN</code>), and the joint&rsquo;s lower mouth is the constant <code>MOUTH</code>.
+<tr><td>Kernel<td>Everything reduces to what exists: a partition per row, a roll per stone from the same seeded stream, a prism cut by two planes.
+<tr><td>Second paths<td>A column of stacked cells (<code>bond</code> near 0) and a risen stone differ only by the groove the rock&rsquo;s wear opens; <code>wander</code> and plane variation both vary heights.
+<tr><td>Holes<td>Rise and span on sloped planes; a lip stone that rises.</tr></table></div></details>
+<details><summary>The plan and its questions</summary><p class="one">Build the engine in this order. Each stage has a small torture tile and the check that gates it.</p>
+<ol>
+<li><b>Footprint and crest, then the row planes.</b> Torture tile: a J corner with dip 3. Check: planes never closer than 0.6 of a row.</li>
+<li><b>The partition.</b> Torture tile: an L footprint. Check: cells cover 100% of course 0.</li>
+<li><b>Rise and span.</b> Torture tile: preset T. Check: no cell reaches past its supports; no loose body.</li>
+<li><b>Prisms between planes, then joints.</b> Torture tile: preset S. Check: every bed is exactly the top below it.</li>
+<li><b>Weathering, then fitting.</b> Torture tile: forms L (lip) and E (ledges). Check: overhang budget.</li>
+<li><b>The union and the gate.</b> Check: the nine shipped presets pass in every seed.</li></ol>
+<h3>Questions for Shawn</h3>
+<ol><li>Is the seal out for good, or should something replace it so tilted rows can pass? (Gate now 50 of 114.)</li>
+<li>May <code>wander</code> be retired, and may <code>rise</code>, <code>span</code>, <code>dip</code> and <code>wave</code> go to an Orin review for the registry?</li>
+<li>Should a document be able to name its row planes?</li>
+<li>Is the union&rsquo;s cost (about 150 ms for a 1&times;1 L) a problem worth a round, or is reaching new forms first?</li></ol></details>
+</section>
+
+</main>

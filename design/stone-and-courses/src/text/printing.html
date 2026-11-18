@@ -1,0 +1,10 @@
+<section id="printing"><h2>4 &middot; Printing</h2>
+<p class="one">A printer lays 0.45 mm lines in 0.2 mm layers. A face that leans out more than 55 degrees is orange; more than 65 is red. The gate allows 0.1% of the downward area in each band. OpenLOCK (25.4 mm) prints every length at 0.7257 of its DungeonBlocks value, but the 0.45 mm line does not shrink.</p>
+<p>Every printing rule is made by construction in one step, so most of what the gate would refuse is never built. What still fails is listed in Where the model breaks.</p>
+<div class="tw"><table><tr><th>Rule<th>Step<th>What it guarantees</tr>
+<tr><td>Set back first<td><a href="#a-subdivide">3, subdividing a row</a><td>a stone is never wider than what it stands on, except where step 9 chamfers it</tr>
+<tr><td>A bed is the top below it<td><a href="#a-build">6, building a stone</a><td>no flat ceiling between two stones (no seal: stones meet exactly)</tr>
+<tr><td>The rock stays off held faces<td><a href="#a-weather">8, the rock</a><td>a cut never touches a held top or bed, a held bed is not rounded, a chip never sits on its edge, and grain and pockets fade out on a face that leans down past 37 degrees: nothing the rock does makes a stone hang further</tr>
+<tr><td>Chamfered beds<td><a href="#a-fit">9, fitting to what is below</a><td>a bed over a cut-back edge is chamfered at 48 to 51 degrees, before the rock sees the cell</tr>
+<tr><td>The gate<td><a href="#a-union">11, the union and the gate</a><td>watertight, one body, overhang within budget, or the build is refused</tr></table></div>
+<p>The editor&rsquo;s Lines view shows the slice a slicer would cut at any height, and the section through the wall; parts thinner than one line are marked. These are shown, not part of the gate&rsquo;s verdict.</p></section>
