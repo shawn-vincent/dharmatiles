@@ -1,12 +1,11 @@
 /* ===== the union lab: the cliff's join, measured by route. The same hulls go into every route. ===== */
 function bbOf(m){var b=m.boundingBox();return {min:b.min,max:b.max}}
 function bbTouch(a,b,e){return a.min[0]<=b.max[0]+e&&b.min[0]<=a.max[0]+e&&a.min[1]<=b.max[1]+e&&b.min[1]<=a.max[1]+e&&a.min[2]<=b.max[2]+e&&b.min[2]<=a.max[2]+e}
-/* hulls of what the cliff owns: its blocks, the core behind them, and the ground it stands on; with the foot's stones when the scene's join is asked for */
-function hullsOf(b,withFoot){
+/* hulls of what the cliff owns: its blocks, the core behind them, and the ground it stands on */
+function hullsOf(b){
   var Mf=MF.Manifold,t0=now(),L=[],K=[];
   function H(P,key){if(P.mesh){var mm=meshManifold(P);L.push(mm);K.push(key);return}var v=verts(P);if(v.length<4)return;var m=Mf.hull(v);L.push(m);K.push(key)}
   b.polys.forEach(function(P){H(P,P.b?'c'+P.b.c:'x')});
-  if(withFoot)b.scree.forEach(function(P){H(P,'foot')});
   H(b.core,'core');H(b.dirt,'ground');
   return {list:L,keys:K,ms:now()-t0}}
 /* a rock's mesh as a solid: its vertices merged, then read as a manifold (a surface that is not closed is refused here, loudly) */
@@ -30,8 +29,8 @@ function routeRows(h){var by={},i,M=MF.Manifold,parts=[];h.list.forEach(function
   Object.keys(by).forEach(function(k){parts.push(by[k].length>1?M.union(by[k]):by[k][0])});return M.union(parts)}
 function routeGroups(h,groups){var M=MF.Manifold,parts=groups.map(function(g){return g.length>1?M.union(g.map(function(i){return h.list[i]})):h.list[g[0]]});return parts.length>1?M.compose(parts):parts[0]}
 /* one full measurement of a build: the cliff's union by each route */
-function studyUnion(b,reps,withFoot){
-  reps=reps||3;var h=hullsOf(b,withFoot),o={n:h.list.length,hullMs:h.ms},P=pairsOf(h.list);
+function studyUnion(b,reps){
+  reps=reps||3;var h=hullsOf(b),o={n:h.list.length,hullMs:h.ms},P=pairsOf(h.list);
   o.pairsBox=P.cand;o.pairs=P.real;
   var gr=groupsOf(P.bb);o.groups=gr.length;
   var t=timeIt(function(){return routeBatch(h)},reps);o.batchMs=t.ms;o.outTris=t.res.numTri();

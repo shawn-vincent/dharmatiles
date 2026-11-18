@@ -5,7 +5,6 @@ steps/a-viewer
 GROUP:region
 steps/a-footprint
 steps/a-front
-steps/a-foot
 GROUP:courses
 steps/a-planes
 steps/a-subdivide

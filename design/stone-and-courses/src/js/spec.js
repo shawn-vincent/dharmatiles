@@ -1,7 +1,7 @@
 /* ===== THE SPEC: one text form of everything Shawn sees, read and written in this one place (the page and the Node harness both use it) =====
    Format: `key value ...` lines in sections, '#' starts a comment. A line is a key and its numbers or word; a range is its numbers ("top 48 60"; "width 5 13 0.8" has the skew third). The header has the build, preset, system, seed, view; then [region] [courses] [rockregion] [rock]. A value that differs from the preset ends with "# preset <its value>". [result] and [problems] follow and are never read back: copy, load, copy gives identical text up to [result]. */
 var Spec=(function(){
-  var NAME='stone-and-courses spec 4';   /* 4: rock.preset joins [rock]; 3: quality moved to the header (it was a row of [rock]); 2: setback became recess. A spec of another version is refused, never read silently. */
+  var NAME='stone-and-courses spec 5';   /* 5: scree went (a key); 4: rock.preset joins [rock]; 3: quality moved to the header (it was a row of [rock]); 2: setback became recess. A spec of another version is refused, never read silently. */
   function num(v){return String(+(+v).toFixed(6))}
   function fmt(v){return Array.isArray(v)?v.map(num).join(' '):(typeof v==='number'?num(v):String(v))}
   function get(o,path){var s=path.split(/[.\[\]]+/).filter(function(x){return x!==''}),v=o,i;for(i=0;i<s.length;i++){if(v==null)return undefined;v=v[/^\d+$/.test(s[i])?+s[i]:s[i]]}return v}

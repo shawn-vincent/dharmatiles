@@ -12,7 +12,7 @@ function plateTris(W,T,z){var out=[],x0=-T/2,x1=T/2,y0=-W/2,y1=W/2,q=function(a,
   q([x0,y0,z],[x1,y0,z],[x1,y1,z],[x0,y1,z],[0,0,1]);return out}
 var LIGHT=unit([-0.55,-0.5,0.7]),FILL=unit([0.8,-0.3,0.25]);
 function pack(r,g,b){r=Math.max(0,Math.min(255,r|0));g=Math.max(0,Math.min(255,g|0));b=Math.max(0,Math.min(255,b|0));return (255<<24)|(b<<16)|(g<<8)|r}
-var MAT={stone:[150,154,164],scree:[135,138,146],core:[96,101,110],dirt:[150,121,92],fig:[78,98,150],figskin:[226,186,156],hl:[214,60,160],figbase:[58,58,64]};
+var MAT={stone:[150,154,164],core:[96,101,110],dirt:[150,121,92],fig:[78,98,150],figskin:[226,186,156],hl:[214,60,160],figbase:[58,58,64]};
 function colorOf(t,mode,dark){
   var lam=Math.max(0,dot(t.n,LIGHT)),base=MAT[t.tag]||MAT.stone,j=1+(((t.id|0)*37%11)-5)*0.015,k;
   if(t.tag==='hl'){k=0.75+0.3*lam;return pack(base[0]*k,base[1]*k,base[2]*k)}
@@ -86,9 +86,9 @@ function render(cv,tris,cam,scale,center,bg,mode,ground){
     buf.set(out)}
   ctx.putImageData(img,0,0)}
 /* ---- the gate on the union (Manifold), and the line floors on its slices ---- */
-function unionOf(b,withFoot){
-  /* L6: the join of what the cliff owns (its blocks, lean-to wedges, the core behind them and the ground under them). The foot's stones belong to the scene's scatter and join only when withFoot asks for the scene's join. */
-  var Mf=MF.Manifold,i,t0=now(),h=hullsOf(b,withFoot),list=h.list,keep=list.slice();
+function unionOf(b){
+  /* L5: the join of what the cliff owns (its blocks, lean-to wedges, the core behind them and the ground under them). */
+  var Mf=MF.Manifold,i,t0=now(),h=hullsOf(b),list=h.list,keep=list.slice();
   var t1=now(),u=Mf.union(list);u.numTri();var t2=now(),mesh=u.getMesh(),vp=mesh.vertProperties,np=mesh.numProp,tv=mesh.triVerts,tris=[];
   for(i=0;i<tv.length;i+=3){var a=[vp[tv[i]*np],vp[tv[i]*np+1],vp[tv[i]*np+2]],bb=[vp[tv[i+1]*np],vp[tv[i+1]*np+1],vp[tv[i+1]*np+2]],c=[vp[tv[i+2]*np],vp[tv[i+2]*np+1],vp[tv[i+2]*np+2]],n=unit(cross(sub(bb,a),sub(c,a)));
     tris.push({p:[a,bb,c],n:n,tag:'stone',kind:'union',ang:overAng(n),area:areaOf([a,bb,c])})}

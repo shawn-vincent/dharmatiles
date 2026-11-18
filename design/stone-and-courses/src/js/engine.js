@@ -1,4 +1,4 @@
-/* ===== the stone engine of this page: L0 to L5, convex polytopes written straight, one union at the end ===== */
+/* ===== the stone engine of this page: L0 to L4, convex polytopes written straight, one union at the end ===== */
 var OVL=0.15;
 /* the tile's edge constants: the wall stands this far inside the tile edge (the fit of a tile beside its neighbour), and the joint's lower mouth is chamfered this deep so a stone over a stone prints (step 7) */
 var EDGE_MARGIN=0.6,MOUTH=0.72;
@@ -70,7 +70,6 @@ var DEFAULTS={
   depth:22,                       /* region depth behind the face, dmm */
   top:[44,58],                    /* crest band above the dirt, dmm (L0) */
   width:[6,14,1.2],height:[10,16,1.2],bond:[0.05,0.6],shift:[0.25,0.5],recess:[0,1.2],wander:0.15,
-  scree:30,screeSize:[1,7,1.5],screeReach:5,
   rise:0,span:0,dip:0,wave:0,
   regularity:0.3,
   /* graded areas (steps 3a and 7a): both off at 0, so the wall is exactly what it was */
@@ -190,40 +189,6 @@ function finish(p,g,b,pieces,stage,rep){
 /* a joint that no block above carries up is roofed: a lean-to wedge filling the top of its V, its underside at 48 degrees from vertical, hanging from one wall.
    The block that bridges the joint then has no flat ceiling, and no tip is printed in air. */
 function mirrorY(P,ym){return {b:P.b,faces:P.faces.map(function(F){return {n:[F.n[0],-F.n[1],F.n[2]],kind:F.kind,pts:F.pts.map(function(q){return [q[0],2*ym-q[1],q[2]]}).reverse()}})}}
-/* ===== L5, the foot band: what the cliff hands on. The cliff stops at its blocks; the scatter below is the scene's own entry ===== */
-/* The foot as the engine plans it (dt-elements Foot: cells with a position, an outward direction and a weight, and the squares' worth of length).
-   It is read from L0 and L2 alone: the first course's blocks, where they meet the ground. The weight is the crest's height over the run (0.5 to 1.5): rubble collects under the tall parts. */
-function footBand(p,g,l2){
-  var f=g.f,step=0.5,cells=[],xs=[],lo=1e9,hi=-1e9,x;
-  var first=l2.blocks.filter(function(b){return b.c===0});
-  for(x=g.x0+step/2;x<g.x1;x+=step){var T=g.crest(x);if(T<lo)lo=T;if(T>hi)hi=T}
-  for(x=g.x0+step/2;x<g.x1;x+=step){
-    var on=first.some(function(b){return b.x0<=x&&x<=b.x1});if(!on)continue;
-    var w=0.5+(hi>lo?(g.crest(x)-lo)/(hi-lo):0.5);
-    cells.push({x:x,y:g.y0,dir:[0,-1],w:w})}
-  return {kind:'cliff',cells:cells,squares:cells.length*step/g.W,wmax:1.5,y:g.y0,reach:p.screeReach*f}
-}
-/* ===== the scene's scatter at=foot(cliff): its own stack entry, reading only the band ===== */
-function footScatter(p,g,band,rep){
-  var f=g.f,out=[],placed=[],r=R(p.seed,5),n=Math.round(p.scree*f*f*p.tiles),i,t,j,sizes=[];
-  for(i=0;i<n;i++)sizes.push(Math.max(2.6,draw(r,[p.screeSize[0]*f,p.screeSize[1]*f,p.screeSize[2]])));
-  sizes.sort(function(a,b){return b-a});
-  if(!band.cells.length)return out;
-  var cum=[],acc=0;band.cells.forEach(function(c){acc+=c.w;cum.push(acc)});
-  sizes.forEach(function(s,si){
-    var ok=false,x,y;
-    for(t=0;t<40&&!ok;t++){var u=r()*cum[cum.length-1],lo=0,hi=cum.length-1;while(lo<hi){var mid=(lo+hi)>>1;if(cum[mid]<u)lo=mid+1;else hi=mid}var c=band.cells[lo];ok=true;
-      x=Math.max(g.x0+s*0.5,Math.min(g.x1-s*0.5,c.x));y=c.y+c.dir[1]*0.3+c.dir[1]*band.reach*Math.pow(r(),1.2);ok=y>-g.W/2+s*0.5;
-      for(j=0;ok&&j<placed.length;j++)if(Math.hypot(x-placed[j][0],y-placed[j][1])<(placed[j][2]+s)*0.5*0.8)ok=false}
-    if(!ok)return;placed.push([x,y,s]);
-    var rs=R(p.seed,500,si),h=s*(0.5+0.4*rs()),d=s*(0.7+0.4*rs()),Q=box(x-s/2,x+s/2,y-d/2,y+d/2,DIRT-0.4*h,DIRT-0.4*h+h),k;
-    for(k=0;k<6;k++){var nv=unit([rs()*2-1,rs()*2-1,rs()*1.2-0.15]);if(nv[2]<-0.2)nv[2]=-0.2;nv=unit(nv);
-      var q=clip(Q,nv,dot(nv,[x,y,DIRT-0.4*h+h*0.45])+s*(0.22+0.16*rs()),'scree');if(q)Q=q}
-    var zmin=1e9;Q.faces.forEach(function(F){F.pts.forEach(function(q){if(q[2]<zmin)zmin=q[2]})});
-    if(zmin>DIRT-0.15){rep.screeLoose=(rep.screeLoose||0)+1;placed.pop();return}
-    Q.scree=true;out.push(Q)});
-  return out;
-}
 /* ===== the whole build, timed by level; returns polytopes and a record ===== */
 function now(){return (typeof performance!=='undefined'?performance:Date).now()}
 function build(p,stage){
@@ -251,13 +216,10 @@ function build(p,stage){
   polys=kept;var n0=polys.length,ym=g.y0+g.D/2;
   if(p.faces===2){var m2=polys.map(function(P){return mirrorY(P,ym)});polys=polys.concat(m2)}
   rep.blocks=polys.length;
-  var scree=[],band=null;rep.tris.L5=0;if(stage>=5){t0=now();band=footBand(p,g,l2);rep.time.L5=now()-t0;rep.band=band.cells.length;rep.bandSquares=band.squares;
-    /* the scene's own entry, listed after the cliff: not the cliff's, so it is timed and counted apart */
-    if(p.scree>0){t0=now();scree=footScatter(p,g,band,rep);rep.time.scatter=now()-t0;var ts=0;scree.forEach(function(P){ts+=triCount(P)});rep.tris.scatter=ts;rep.screeN=scree.length}}
   var core=box(-1,1,g.y0+8,g.y0+9,DIRT-1.5,DIRT-0.5);core.core=true;
   var dirt=box(g.x0,g.x1,-g.W/2,g.W/2,0,DIRT);dirt.dirt=true;
-  var bytes=0;polys.forEach(function(P){bytes+=verts(P).length*12+P.faces.length*16});rep.bytes.polys=bytes;var sb=0;scree.forEach(function(P){sb+=verts(P).length*12+P.faces.length*16});rep.bytes.scatter=sb;
-  return {n0:n0,ym:p.faces===2?ym:null,g:g,l1:j,l2:l2,band:band,polys:polys,scree:scree,core:core,dirt:dirt,rep:rep,p:p};
+  var bytes=0;polys.forEach(function(P){bytes+=verts(P).length*12+P.faces.length*16});rep.bytes.polys=bytes;
+  return {n0:n0,ym:p.faces===2?ym:null,g:g,l1:j,l2:l2,polys:polys,core:core,dirt:dirt,rep:rep,p:p};
 }
 /* ===== L1 and L2 as cells: a convex partition of the footprint, a convex prism for each cell ===== */
 /* clip a convex polygon (a list of [x,y]) to n.p <= d */
@@ -455,5 +417,5 @@ function prism(poly,zb,zt){var F=[],n=poly.length,i,cw=polyArea(poly)<0?poly.sli
 function overAng(n){return n[2]<0?Math.asin(Math.min(1,-n[2]))*180/PI:0}
 function trisOf(list,tag){var out=[],i,j,k,F,pts;
   for(i=0;i<list.length;i++){var P=list[i];if(P.mesh){meshTris(P,tag||'stone').forEach(function(q){out.push(q)});continue}for(j=0;j<P.faces.length;j++){F=P.faces[j];pts=F.pts;
-    for(k=1;k<pts.length-1;k++)out.push({p:[pts[0],pts[k],pts[k+1]],n:F.n,tag:tag||(P.scree?'scree':P.core?'core':P.dirt?'dirt':'stone'),kind:F.kind,id:(P.b?P.b.c*131+P.b.i*7:i),ang:overAng(F.n)})}}
+    for(k=1;k<pts.length-1;k++)out.push({p:[pts[0],pts[k],pts[k+1]],n:F.n,tag:tag||(P.core?'core':P.dirt?'dirt':'stone'),kind:F.kind,id:(P.b?P.b.c*131+P.b.i*7:i),ang:overAng(F.n)})}}
   return out}

@@ -1,7 +1,7 @@
 /* The figures of the algorithm part. Each is drawn at load by this page's own engine, so a figure shows what the engine does, not a picture of it. A placeholder is <div class="dg" data-dg="name" data-a='{...}'> (an SVG diagram) or <canvas class="ex" data-a='{...}'> (a small render). */
 (function(){
 var COL=['#3b82c4','#d9a400','#c9348c','#3aa57a','#8e6fd6','#2aa3ae'];
-function mk(p,ov){return Object.assign(JSON.parse(JSON.stringify(DEFAULTS)),JSON.parse(JSON.stringify(PRESETS[p].p)),ov||{},{seed:(ov&&ov.seed)||3,system:'db',scree:(ov&&ov.scree!=null)?ov.scree:0})}
+function mk(p,ov){return Object.assign(JSON.parse(JSON.stringify(DEFAULTS)),JSON.parse(JSON.stringify(PRESETS[p].p)),ov||{},{seed:(ov&&ov.seed)||3,system:'db'})}
 function pts(P,T){return P.map(function(q){return T(q[0],q[1]).join(',')}).join(' ')}
 function svg(w,h,body,cls){return '<svg class="'+(cls||'dgsvg')+'" viewBox="0 0 '+w+' '+h+'" role="img">'+body+'</svg>'}
 function txt(x,y,s,o){o=o||{};return '<text x="'+x+'" y="'+y+'" text-anchor="'+(o.a||'start')+'" class="dt'+(o.c?' '+o.c:'')+'">'+s+'</text>'}
@@ -54,7 +54,7 @@ dg.span=function(el,a){var b=build(mk(a.p||'S',Object.assign({wander:0,seed:a.se
   bl.forEach(function(o,i){s+='<polygon points="'+pts(o.polyT,X)+'" fill="'+COL[f(i)%COL.length]+'" fill-opacity=".35" class="dcell2"/>';o.polyT.forEach(function(q,e){var p=X(q[0],q[1]),r=X(o.polyT[(e+1)%o.polyT.length][0],o.polyT[(e+1)%o.polyT.length][1]);s+='<line x1="'+p[0]+'" y1="'+p[1]+'" x2="'+r[0]+'" y2="'+r[1]+'" class="'+(o.tags[e]==='m'?'dmerged':o.tags[e]==='n'?'djoint':'dfree')+'"/>'})});
   s+=txt(8,14,'row 0, span '+(a.span!=null?a.span:0.7)+': one colour = one stone')+txt(8,P.h-6,'thick = joint; grey = free face');el.innerHTML=svg(P.w,P.h,s)};
 function exTris(b,a){var out=[];b.polys.forEach(function(P){var hl=false,t=trisOf([P],'stone');if(a.hl&&!hl)t.forEach(function(q){if((a.hl==='groove'&&q.kind==='jbevel')||(a.hl==='joint'&&q.kind==='joint')||(a.hl==='facet'&&(q.kind==='facet'||q.kind==='chip')))q.tag='hl'});out=out.concat(t)});
-  if(a.scree&&b.scree)b.scree.forEach(function(P){out=out.concat(trisOf([P],'hl'))});return out}
+  return out}
 function exDraw(cv,a){var p=mk(a.p||'L',a.ov||{}),b=build(p,Math.max(2,a.st||4)),tris=(a.target||a.rows)?figureTris(b.g.T/2+16*b.g.f,-b.g.W/2+14*b.g.f,0):exTris(b,a),f=b.g.f,cam=new Cam(a.az==null?30:a.az,a.el==null?20:a.el),W=cv.width,H=cv.height,span=Math.max(82*f,(b.g.T+34*f)*0.9)*(a.span||1),sc=(a.zoom||1)*(H/span)/W,ctr=a.center||[1.5*f,0,25*f];
   if(!a.target&&!a.rows)tris=tris.concat(plateTris(b.g.W,b.g.T,DIRT));render(cv,tris,cam,sc,ctr,pack(238,240,244),a.mode||'shaded',{dark:isDarkTheme(),grid:true,z:DIRT-0.02,S:SQUARE*f,ox:-b.g.T/2,oy:-b.g.W/2,fx:0,fy:0,size:SQUARE*f,px:1});if(a.target)drawTargetCore(cv,cam,b,sc,ctr);if(a.rows)drawRowsCore(cv,cam,b,sc,ctr)}
 window.drawFigures=function(){[].forEach.call(document.querySelectorAll('.dg'),function(el){var a={};try{a=JSON.parse(el.getAttribute('data-a')||'{}')}catch(e){console.error('[figs] bad data-a',el.getAttribute('data-dg'))}var f=dg[el.getAttribute('data-dg')];if(!f){console.error('[figs] no figure '+el.getAttribute('data-dg'));return}try{f(el,a)}catch(e){console.error('[figs] '+el.getAttribute('data-dg')+': '+e.message)}});

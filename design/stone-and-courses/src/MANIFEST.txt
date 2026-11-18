@@ -116,7 +116,6 @@ src/text/plan.html
 src/text/printing.html
 src/text/steps/a-build.html
 src/text/steps/a-fit.html
-src/text/steps/a-foot.html
 src/text/steps/a-footprint.html
 src/text/steps/a-front.html
 src/text/steps/a-joints.html
