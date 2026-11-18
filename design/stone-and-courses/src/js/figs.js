@@ -33,6 +33,10 @@ dg.subdivide=function(el,a){var b=build(mk(a.p||'L',Object.assign({wander:0},a.o
   var sites=b.l1.pts[0];sites.forEach(function(q){var p=X(q[0],q[1]);s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3" class="dsite"/>'});
   s+=txt(8,14,'course 0: solid; course 1: dashed, set back')+txt(8,P.h-6,'dots: the sites; the outline is the footprint');
   el.innerHTML=svg(P.w,P.h,s)};
+dg.faces=function(el,a){function one(free,label){var b=build(mk('C',{wander:0,recess:[0,4],free:free}),2),g=b.g,P=planPoly(b),X=P.X,s='';
+    b.l2.blocks.filter(function(x){return x.c===0}).forEach(function(o){s+='<polygon points="'+pts(o.polyT,X)+'" class="dcell"/>'});
+    s+='<polygon points="'+pts(g.fp,X)+'" class="dfp0"/>';s+=txt(8,14,label);return svg(P.w,P.h,s)}
+  el.innerHTML='<div class="dgrow">'+one({front:1,back:0,sides:0},'front only')+one({front:1,back:1,sides:1},'front, back and sides')+'</div>'};
 dg.recess=function(el,a){var b=build(mk(a.p||'L',Object.assign({wander:0,recess:[0,4]},a.ov||{})),2),g=b.g,P=planPoly(b),X=P.X,s='';
   b.l2.blocks.filter(function(x){return x.c===0}).forEach(function(o){s+='<polygon points="'+pts(o.polyT,X)+'" class="dcell"/>'});
   s+='<polygon points="'+pts(g.fp,X)+'" class="dfp0"/>';

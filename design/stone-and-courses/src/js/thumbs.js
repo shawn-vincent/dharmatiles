@@ -16,7 +16,7 @@
     for(i=pts.length-1;i>=0;i--){while(up.length>1&&cr(up[up.length-2],up[up.length-1],pts[i])<=0)up.pop();up.push(pts[i])}
     lo.pop();up.pop();return lo.concat(up)}
   /* REGION: the envelope the target draws: the footprint, the crest, and each course's front line */
-  window.regionThumbs=function(cvs,b){var g=b.g,fp=g.fp,loft=frontLoft(b),top=[],side=[],front=[],i;
+  window.regionThumbs=function(cvs,b){var g=b.g,fp=g.fp,loft=faceLoft(b),top=[],side=[],front=[],i;
     top.push({pts:fp,closed:true});loft.forEach(function(L){top.push({pts:L.pts,faint:true,w:.7})});
     var ys=fp.map(function(q){return q[1]}),y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys),xs=fp.map(function(q){return q[0]}),x0=Math.min.apply(null,xs),x1=Math.max.apply(null,xs),zt=DIRT+g.topHi,crest=[];
     for(i=0;i<=40;i++){var x=x0+(x1-x0)*i/40;crest.push([x,g.crest(x)])}
@@ -25,7 +25,7 @@
     (g.planes||[]).forEach(function(pl,c){if(c>0&&pl.z<zt)front.push({pts:[[x0,pl.z],[x1,pl.z]],faint:true,w:.6})});
     /* side: the ground, the crest's highest section and each course's front stepping back */
     var hi=0;crest.forEach(function(q){if(q[1]>hi)hi=q[1]});side.push({pts:[[y0,DIRT],[y1,DIRT],[y1,hi],[y0,hi]],closed:true,fill:true});
-    var byC={};loft.forEach(function(L){var my=1e9;L.pts.forEach(function(q){if(q[1]<my)my=q[1]});byC[L.c]=[my,L.z0,L.z1]});
+    var byC={};loft.filter(function(L){return L.face==='front'}).forEach(function(L){var my=1e9;L.pts.forEach(function(q){if(q[1]<my)my=q[1]});byC[L.c]=[my,L.z0,L.z1]});
     Object.keys(byC).forEach(function(c){var r=byC[c];side.push({pts:[[r[0],r[1]],[r[0],Math.min(r[2],hi)]],w:1.1})});
     paint(cvs[0],top);paint(cvs[1],side);paint(cvs[2],front)};
   /* ROCK REGION: one stone's region as the rock gets it: its cell, the graded outline, the support it bears on, and its top (the row's top under the crest planes) */

@@ -99,4 +99,4 @@
 .bpanel .note{color:var(--mut);font-size:.8rem}
 .bpanel .bx{position:absolute;right:.4rem;top:.35rem;background:none;border:0;font:600 1.3rem/1 var(--body);color:var(--mut);cursor:pointer;padding:.1rem .4rem}
 .bpanel table.chk{margin-top:.4rem}
-.sp,.bpanel{--rule:var(--line);--acc:var(--stone);--acc2:var(--stone);--soft:var(--stone-soft);--disp:var(--display);--mut:var(--muted);--panel:var(--surface);--stickTop:6px}.xcv .xbusy{left:auto;right:56px;top:9px;z-index:5}.sp .xbusy .xbtn{color:var(--ink)}
+.sp,.bpanel{--rule:var(--line);--acc:var(--stone);--acc2:var(--stone);--soft:var(--stone-soft);--disp:var(--display);--mut:var(--muted);--panel:var(--surface);--stickTop:6px}.xcv .xbusy{left:auto;right:56px;top:9px;z-index:5}.sp .xbusy .xbtn{color:var(--ink)}.cl.dead .seg2 button:disabled{opacity:.4;cursor:not-allowed}

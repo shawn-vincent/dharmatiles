@@ -117,12 +117,12 @@ function thinCheck(u,zmax){
     out.lostArea+=la;out.gapArea+=ga;out.slices++;[cs,er,op,lost,cl,gap].forEach(function(o){try{o.delete()}catch(e){}})}
   out.t=now()-t0;return out}
 
-/* each course's front line, in plan (x, y), with the heights of the plane under it and over it: the same functions the build cuts to (GR.Gat with the front band on, the footprint's straight front otherwise). The target draws it as a loft and the Region card draws it as thin lines, from this one place. */
-function frontLoft(b){var g=b.g,out=[];if(!g.offs||!g.planes)return out;var f=g.f,band=typeof GR!=='undefined'&&b.p&&GR.bandOn(b.p);
-  GR.frontEdges(g).forEach(function(ei){var E=g.edges[ei],lo=Math.min(E.a[0],E.b[0]),hi=Math.max(E.a[0],E.b[0]),c,nC=g.planes.length-1;
+/* each course's face line, in plan (x, y), with the heights of the plane under it and over it: the same functions the build cuts to (GR.Gat with the front band on, the footprint's straight front otherwise). The target draws it as a loft and the Region card draws it as thin lines, from this one place. */
+function faceLoft(b){var g=b.g,out=[];if(!g.offs||!g.planes)return out;var f=g.f,band=typeof GR!=='undefined'&&b.p&&GR.bandOn(b.p);
+  GR.faceEdges(b.p,g).forEach(function(ei){var E=g.edges[ei],pa=GR.rot(E,E.a[0],E.a[1]),pb=GR.rot(E,E.b[0],E.b[1]),lo=Math.min(pa[0],pb[0]),hi=Math.max(pa[0],pb[0]),c,nC=g.planes.length-1;
     for(c=0;c<nC;c++){var z0=g.planes[c].z,z1=g.planes[c+1].z,pts=[],x;if(z0>DIRT+g.topHi)break;
-      for(x=lo;x<=hi+1e-6;x+=Math.max(0.6*f,(hi-lo)/80)){var xx=Math.min(hi,x);pts.push([xx,band?GR.Gat(b.p,g,c,ei,xx):GR.baseY(g,c,ei)])}
-      out.push({c:c,z0:z0,z1:Math.min(z1,DIRT+g.topHi),pts:pts})}});return out}
+      for(x=lo;x<=hi+1e-6;x+=Math.max(0.6*f,(hi-lo)/80)){var xx=Math.min(hi,x);pts.push(GR.unrot(E,xx,band?GR.Gat(b.p,g,c,ei,xx):GR.baseY(g,c,ei)))}
+      out.push({c:c,face:E.face,z0:z0,z1:Math.min(z1,DIRT+g.topHi),pts:pts})}});return out}
 /* the magenta target: the footprint, the squares and the crest envelope of a build, drawn over a canvas (the editor's Target switch and the step figures both call it) */
 function drawTargetCore(cv,cam,b,sc,ce){var g=b.g,f=g.f,ctx=cv.getContext('2d'),B=cam.basis(),s=sc*cv.width,dk=isDarkTheme(),lw=Math.max(1,cv.width/640);
   var PR=projOf(cam,cv.height,s,ce);function P(x,y,z){var d=[x-ce[0],y-ce[1],z-ce[2]],k=PR.persp?PR.D/Math.max(0.05*PR.D,PR.D-(d[0]*B.c[0]+d[1]*B.c[1]+d[2]*B.c[2])):1;return [(d[0]*B.r[0]+d[1]*B.r[1]+d[2]*B.r[2])*s*k+cv.width/2,cv.height/2-(d[0]*B.u[0]+d[1]*B.u[1]+d[2]*B.u[2])*s*k]}
@@ -136,7 +136,7 @@ function drawTargetCore(cv,cam,b,sc,ce){var g=b.g,f=g.f,ctx=cv.getContext('2d'),
   for(k=1;k<4;k++){var yy=y0+(y1-y0)*k/4,cr=[];for(i=0;i<n;i++){var a2=fp[i],b2=fp[(i+1)%n];if((a2[1]<=yy)!==(b2[1]<=yy))cr.push(a2[0]+(b2[0]-a2[0])*(yy-a2[1])/(b2[1]-a2[1]))}cr.sort(function(p,q){return p-q});for(i=0;i+1<cr.length;i+=2){var pts=[];for(var x=cr[i];x<=cr[i+1]+1e-6;x+=Math.max(0.8*f,(cr[i+1]-cr[i])/60))pts.push(P(x,yy,g.crest(x)));pts.push(P(cr[i+1],yy,g.crest(cr[i+1])));line(pts,0.8*lw,0.45)}}
   for(i=0;i<n;i++){line(edgePts(fp[i],fp[(i+1)%n],true),1.8*lw,0.95);line([P(fp[i][0],fp[i][1],DIRT),P(fp[i][0],fp[i][1],g.crest(fp[i][0]))],1.2*lw,0.8)}
   /* the front, course by course: with the front band on, each course's front edge is its own graded line between today's front and the outer front (the same functions the build cuts to: GR.Gat), drawn as a stepped loft from the ground up to the crest; with the band off (depth 0) there is nothing here and the target is the footprint's wall as before */
-  if(typeof GR!=='undefined'&&b.p&&GR.bandOn(b.p)){frontLoft(b).forEach(function(L){var p0=L.pts.map(function(q){return P(q[0],q[1],L.z0)}),p1=L.pts.map(function(q){return P(q[0],q[1],L.z1)});
+  if(typeof GR!=='undefined'&&b.p&&GR.bandOn(b.p)){faceLoft(b).forEach(function(L){var p0=L.pts.map(function(q){return P(q[0],q[1],L.z0)}),p1=L.pts.map(function(q){return P(q[0],q[1],L.z1)});
       ctx.beginPath();p0.forEach(function(q,j){j?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1])});p1.slice().reverse().forEach(function(q){ctx.lineTo(q[0],q[1])});ctx.closePath();ctx.fillStyle='rgba('+col+',0.10)';ctx.fill();
       line(p1,1.1*lw,0.6)})}
   /* the footprint on the ground, and the tile's squares */

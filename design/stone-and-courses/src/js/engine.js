@@ -6,6 +6,16 @@ var EDGE_MARGIN=0.6,MOUTH=0.72;
 var SQUARE=35,MINSTONE=4,MINCELLW=2;   /* the least a cell may be across (mm at the 35 mm square): a needle of a cell cannot hold the rock's wear and grain, which break its tip off as a loose speck */
 var LINE=0.45,LAYER=0.2,GAPMIN=0.2,OVER=55,STEEP=65,OLF=0.7257142857142856,DIRT=3.4,PI=Math.PI;
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+/* THE FREE FACES. A footprint edge faces front, back, left or right (the dominant axis of its normal); it is a seam when the wall goes on into the neighbouring tile or the hill is behind it (L0 tags it; the cell edge keeps the tag 'x'). Recess, the face band and the lip act on a free face (not a seam) whose switch p.free is on: front, back, or sides (left and right are two draws of the one switch). */
+var FACES=['front','back','left','right'];
+function faceOf(n){return Math.abs(n[0])>Math.abs(n[1])?(n[0]<0?'left':'right'):(n[1]<0?'front':'back')}
+var FN=[[0,-1],[0,1],[-1,0],[1,0]];
+/* an edge (sloped ones too, as support outlines are) faces a switched-on face when its normal points that way: a lip stands out over it */
+function toward(p,n){return FACES.some(function(fc,d){return faceOn(p,fc)&&n[0]*FN[d][0]+n[1]*FN[d][1]>0.3})}
+function faceD(face){return FACES.indexOf(face)}
+function faceOn(p,face){var F=p.free||{front:1,back:0,sides:0};return face==='front'?!!F.front:face==='back'?!!F.back&&!p.wall:!!F.sides}
+/* the one key a face's line is drawn from: the front's is the legacy key, every other face adds its direction */
+function faceKey(seed,tag,c,face){var d=faceD(face);return d>0?hash(seed,tag,c,d):hash(seed,tag,c)}
 function hash(){var h=2166136261,i;for(i=0;i<arguments.length;i++){h^=(arguments[i]|0)+0x9e3779b9;h=Math.imul(h,16777619);h^=h>>>13;}return h>>>0}
 function R(){var r=mulberry(hash.apply(null,arguments));r();r();return r}
 function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
@@ -26,7 +36,7 @@ function box(x0,x1,y0,y1,z0,z1){
   q([-1,0,0],[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]);q([1,0,0],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]);
   q([0,-1,0],[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]);q([0,1,0],[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]);
   q([0,0,-1],[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0]);q([0,0,1],[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]);
-  F[2].kind='front';F[5].kind='top';F[4].kind='bed';
+  F[5].kind='top';F[4].kind='bed';
   return {faces:F};
 }
 function clip(P,n,d,kind){
@@ -66,7 +76,7 @@ function noise1(seed,x,wl){var u=x/wl,i=Math.floor(u),f=u-i,a=R(seed,i)(),b=R(se
 
 /* ===== the parameters: lengths in dmm (scale with the system), angles in degrees ===== */
 var DEFAULTS={
-  system:'db',tiles:1,seed:3,faces:1,
+  system:'db',tiles:1,seed:3,wall:0,free:{front:1,back:0,sides:0},
   depth:22,                       /* region depth behind the face, dmm */
   top:[44,58],                    /* crest band above the dirt, dmm (L0) */
   width:[6,14,1.2],height:[10,16,1.2],bond:[0.05,0.6],shift:[0.25,0.5],recess:[0,1.2],wander:0.15,
@@ -98,17 +108,17 @@ function envHeight(g,b){var x0=b.x0,x1=b.x1,k,i,sum=0,N=12,T0=1e9,env=null;
 function sc(p){return p.system==='ol'?OLF:1}
 /* ===== L0 footprint and crest ===== */
 function L0(p){
-  var f=sc(p),W0=SQUARE*f,W=W0*(p.rows||1),T=W0*p.tiles,fr=(p.front==null?9:p.front),y0=-W/2+fr*f,m=EDGE_MARGIN,D=Math.min(p.depth*f,W/2-m-y0),topLo=p.top[0]*f,topHi=p.top[1]*f;
+  var f=sc(p),W0=SQUARE*f,W=W0*(p.rows||1),T=W0*p.tiles,fr=(p.frontOffset==null?9:p.frontOffset),y0=-W/2+fr*f,m=EDGE_MARGIN,D=Math.min(p.depth*f,W/2-m-y0),topLo=p.top[0]*f,topHi=p.top[1]*f;
   /* THE CREST is graded, the one rule of steps 3a and 7a along the wall: a smooth wobble along x (bumps a square), ranked, each rank (i + 0.5) / N through the weighting's quantile to t in 0..1, the crest DIRT + low + (high - low) x t. The band is used whole, ends included, whatever the seed; the wobble only decides where the highs and lows fall. */
   var CR=p.crest||{},cb=CR.bumps||2.5,cw=GR.wOf({w:CR.w||'flat',a:CR.a,c:CR.c}),cN=Math.max(24,Math.ceil(T/W0*cb*12)),cwob=GR.lineWobble(hash(p.seed,11,3),cb,W0),cxs=[],cvs=[],ck;
   for(ck=0;ck<cN;ck++){var cx0=-T/2+T*ck/(cN-1);cxs.push(cx0);cvs.push(cwob(cx0))}
   var ctt=GR.ranked(cvs,cw);
   function crest(x){var u=(x+T/2)/T*(cN-1);if(u<=0)return DIRT+topLo+(topHi-topLo)*ctt[0];if(u>=cN-1)return DIRT+topLo+(topHi-topLo)*ctt[cN-1];var i=Math.floor(u),w2=u-i;return DIRT+topLo+(topHi-topLo)*(ctt[i]+(ctt[i+1]-ctt[i])*w2)}
   var fx=p.foot?{xl:-p.foot[0]*f/2,xr:p.foot[0]*f/2,y0:-p.foot[1]*f/2,yb:p.foot[1]*f/2}:null;
-  var X0=fx?fx.xl:-T/2+m,X1=fx?fx.xr:T/2-m,Y0=fx?fx.y0:y0,Y1=fx?fx.yb:y0+D,fp=[[X0,Y0],[X1,Y0],[X1,Y1],[X0,Y1]];
+  var X0=fx?fx.xl:-T/2+m,X1=fx?fx.xr:T/2-m,Y0=fx?fx.y0:y0,Y1=fx?fx.yb:y0+D,fp=[[X0,Y0],[X1,Y0],[X1,Y1],[X0,Y1]],seam=fx?[0,0,0,0]:[0,1,1,1];
   /* a region that is not a rectangle: the J corner is an L, a rectangle with a wing standing out of its end toward the front */
-  if(p.wing){var ww=p.wing[0]*f,wl=Math.min(p.wing[1]*f,Y0-(-W/2+m)-1);fp=[[X0,Y0],[X1-ww,Y0],[X1-ww,Y0-wl],[X1,Y0-wl],[X1,Y1],[X0,Y1]]}
-  return {fp:fp,f:f,T:T,W:W,x0:-T/2,x1:T/2,xl:fx?fx.xl:-T/2+m,xr:fx?fx.xr:T/2-m,m:m,y0:fx?fx.y0:y0,D:fx?fx.yb-fx.y0:D,yb:fx?fx.yb:y0+D,free:!!fx,crest:crest,topLo:topLo,topHi:topHi,cells:Math.round(W*T/0.25)};
+  if(p.wing){var ww=p.wing[0]*f,wl=Math.min(p.wing[1]*f,Y0-(-W/2+m)-1);fp=[[X0,Y0],[X1-ww,Y0],[X1-ww,Y0-wl],[X1,Y0-wl],[X1,Y1],[X0,Y1]];seam=[0,0,0,1,1,1]}
+  return {fp:fp,seam:seam.map(Boolean),f:f,T:T,W:W,x0:-T/2,x1:T/2,xl:fx?fx.xl:-T/2+m,xr:fx?fx.xr:T/2-m,m:m,y0:fx?fx.y0:y0,D:fx?fx.yb-fx.y0:D,yb:fx?fx.yb:y0+D,free:!!fx,crest:crest,topLo:topLo,topHi:topHi,cells:Math.round(W*T/0.25)};
 }
 /* ===== the polytope of one block, at stage 2 (boxes), 3 (joints) or 4 (facets) ===== */
 function blockPoly(p,g,b,stage,rep){
@@ -197,7 +207,9 @@ function build(p,stage){
   t0=now();g=L0(p);rep.time.L0=now()-t0;
   t0=now();j=L1c(p,g,rep);rep.time.L1=now()-t0;rep.tris.L1=0;
   var nj=0;j.pts.forEach(function(P){nj+=P.length});rep.joints=nj;rep.courses=j.pts.length;
-  {var FPo=g.fp,ar=0,ii;for(ii=0;ii<FPo.length;ii++){var qa=FPo[ii],qb=FPo[(ii+1)%FPo.length];ar+=qa[0]*qb[1]-qb[0]*qa[1]}if(ar<0)g.fp=FPo.slice().reverse();g.edges=g.fp.map(function(a,ii){var b2=g.fp[(ii+1)%g.fp.length],e=[b2[0]-a[0],b2[1]-a[1]],l=Math.hypot(e[0],e[1])||1,n=[e[1]/l,-e[0]/l];return {a:a,b:b2,l:l,t:[e[0]/l,e[1]/l],n:n,front:n[1]<-0.5,maxOut:n[1]<0?(a[1]+g.W/2-g.m-0.6)/(-n[1]):1e9}})}
+  {var FPo=g.fp,ar=0,ii;for(ii=0;ii<FPo.length;ii++){var qa=FPo[ii],qb=FPo[(ii+1)%FPo.length];ar+=qa[0]*qb[1]-qb[0]*qa[1]}if(ar<0){var nn0=FPo.length,sm0=g.seam;g.fp=FPo.slice().reverse();g.seam=g.fp.map(function(q,i3){return sm0[(nn0-2-i3+nn0)%nn0]})}
+    /* the one table of the footprint's edges: its face, whether it is a seam, and how far its normal runs to the tile's margin (a lip may stand out that far) */
+    g.edges=g.fp.map(function(a,ii){var b2=g.fp[(ii+1)%g.fp.length],e=[b2[0]-a[0],b2[1]-a[1]],l=Math.hypot(e[0],e[1])||1,n=[e[1]/l,-e[0]/l],my=n[1]<0?(a[1]+g.W/2-g.m-0.6)/(-n[1]):n[1]>0?(g.W/2-g.m-0.6-a[1])/n[1]:1e9,mx=n[0]<0?(a[0]-g.xl-0.6)/(-n[0]):n[0]>0?(g.xr-0.6-a[0])/n[0]:1e9;return {a:a,b:b2,l:l,t:[e[0]/l,e[1]/l],n:n,face:faceOf(n),seam:g.seam[ii],maxOut:Math.min(my,mx)}})}
   t0=now();l2=L2c(p,g,j,rep);rep.time.L2=now()-t0;
   /* the face of the block below, for a projection's corbel */
   var byCol={};l2.blocks.forEach(function(b){(byCol[b.c]=byCol[b.c]||[]).push(b)});
@@ -214,12 +226,12 @@ function build(p,stage){
   if(stage>=3){rep.time.L3=tm[3]-tm[2];rep.tris.L3=tri[3]-tri[2]}
   /* L4 is the rock's (rock.js): its time and triangles are written when the stones arrive */
   polys=kept;var n0=polys.length,ym=g.y0+g.D/2;
-  if(p.faces===2){var m2=polys.map(function(P){return mirrorY(P,ym)});polys=polys.concat(m2)}
+  if(p.wall===1){var m2=polys.map(function(P){return mirrorY(P,ym)});polys=polys.concat(m2)}
   rep.blocks=polys.length;
   var core=box(-1,1,g.y0+8,g.y0+9,DIRT-1.5,DIRT-0.5);core.core=true;
   var dirt=box(g.x0,g.x1,-g.W/2,g.W/2,0,DIRT);dirt.dirt=true;
   var bytes=0;polys.forEach(function(P){bytes+=verts(P).length*12+P.faces.length*16});rep.bytes.polys=bytes;
-  return {n0:n0,ym:p.faces===2?ym:null,g:g,l1:j,l2:l2,polys:polys,core:core,dirt:dirt,rep:rep,p:p};
+  return {n0:n0,ym:p.wall===1?ym:null,g:g,l1:j,l2:l2,polys:polys,core:core,dirt:dirt,rep:rep,p:p};
 }
 /* ===== L1 and L2 as cells: a convex partition of the footprint, a convex prism for each cell ===== */
 /* clip a convex polygon (a list of [x,y]) to n.p <= d */
@@ -238,7 +250,7 @@ function clipTagged(P,n,d,tag){var out=[],i,a,b,sa,sb,t,q;
     else if(sb<=1e-9){t=sa/(sa-sb);out.push({p:[a.p[0]+(b.p[0]-a.p[0])*t,a.p[1]+(b.p[1]-a.p[1])*t],e:a.e})}}
   return out}
 /* a cell clipped to another cell's outline: its joints stay joints (grown by the overlap), its free edges stay free */
-function clipByCell(C,o,grow,fg){var R2=C,i,m=o.polyT.length;for(i=0;i<m&&R2;i++){var a=o.polyT[i],b=o.polyT[(i+1)%m],e=[b[0]-a[0],b[1]-a[1]],l=Math.hypot(e[0],e[1])||1,n=[e[1]/l,-e[0]/l],joint=o.tags[i]==='n'||o.tags[i]==='m';R2=clipCellTagged(R2,n,n[0]*a[0]+n[1]*a[1]+(joint?grow:(fg&&n[1]<-0.3?fg:0)),joint?'n':'g')}return R2}
+function clipByCell(C,o,grow,fg,p){var R2=C,i,m=o.polyT.length;for(i=0;i<m&&R2;i++){var a=o.polyT[i],b=o.polyT[(i+1)%m],e=[b[0]-a[0],b[1]-a[1]],l=Math.hypot(e[0],e[1])||1,n=[e[1]/l,-e[0]/l],joint=o.tags[i]==='n'||o.tags[i]==='m';R2=clipCellTagged(R2,n,n[0]*a[0]+n[1]*a[1]+(joint?grow:(fg&&o.tags[i]!=='x'&&toward(p,n)?fg:0)),joint?'n':'g')}return R2}
 function clipCellTagged(C,n,d,tag){var P=C.pts.map(function(q,i){return {p:q,e:C.tags[i]}}),R2=clipTagged(P,n,d+1e-6,tag||'g');if(R2.length<3)return null;return {pts:R2.map(function(v){return v.p}),tags:R2.map(function(v){return v.e})}}
 /* the Voronoi cell of site k among sites (real points first, then ghosts); grow moves the bisectors of real neighbours outward (the overlap that keeps the union free of coincident faces) */
 function voronoiCell(sites,k,nReal,X0,X1,Y0,Y1,grow,reach){var p=sites[k],C=[{p:[X0,Y0],e:'b'},{p:[X1,Y0],e:'e'},{p:[X1,Y1],e:'k'},{p:[X0,Y1],e:'e'}],j;
@@ -298,8 +310,8 @@ function convexParts(fp){var n=fp.length,V=[],i,tris=[],guard=0;for(i=0;i<n;i++)
         if(convex){parts.splice(y,1);parts[x]=M;merged=true;break outer}}}}}
   return parts.map(function(M){return {v:M.map(function(w){return fp[w]}),fi:M.map(function(w,t){var nx=M[(t+1)%M.length];return nx===(w+1)%n?w:-1})}})}
 /* the cell of site k in a convex part of the footprint: the part's outer edges moved by the course's offsets, its cut edges joints, the bisectors of the other sites joints (grown by grow) */
-function cellIn(sites,k,pt,off,grow,reach){var p=sites[k],C=[{p:[-1e4,-1e4],e:'g'},{p:[1e4,-1e4],e:'g'},{p:[1e4,1e4],e:'g'},{p:[-1e4,1e4],e:'g'}],m=pt.v.length,i,j;
-  for(i=0;i<m;i++){var a=pt.v[i],b=pt.v[(i+1)%m],e=[b[0]-a[0],b[1]-a[1]],l=Math.hypot(e[0],e[1]);if(l<1e-9)continue;var n=[e[1]/l,-e[0]/l],fi=pt.fi[i],s=fi>=0?off[fi]:grow;C=clipTagged(C,n,n[0]*a[0]+n[1]*a[1]+s,fi>=0?'g':'n');if(C.length<3)return null}
+function cellIn(sites,k,pt,off,grow,reach,seam){var p=sites[k],C=[{p:[-1e4,-1e4],e:'g'},{p:[1e4,-1e4],e:'g'},{p:[1e4,1e4],e:'g'},{p:[-1e4,1e4],e:'g'}],m=pt.v.length,i,j;
+  for(i=0;i<m;i++){var a=pt.v[i],b=pt.v[(i+1)%m],e=[b[0]-a[0],b[1]-a[1]],l=Math.hypot(e[0],e[1]);if(l<1e-9)continue;var n=[e[1]/l,-e[0]/l],fi=pt.fi[i],s=fi>=0?off[fi]:grow;C=clipTagged(C,n,n[0]*a[0]+n[1]*a[1]+s,fi>=0?(seam[fi]?'x':'g'):'n');if(C.length<3)return null}
   for(j=0;j<sites.length;j++){if(j===k)continue;var q=sites[j],dx=q[0]-p[0],dy=q[1]-p[1],dd=Math.hypot(dx,dy);if(dd>reach||dd<1e-9)continue;var nn=[dx/dd,dy/dd],d=nn[0]*(p[0]+q[0])/2+nn[1]*(p[1]+q[1])/2+grow;C=clipTagged(C,nn,d,'n');if(C.length<3)return null}
   var D=[],ii;for(ii=0;ii<C.length;ii++){var nx2=C[(ii+1)%C.length];if(Math.abs(C[ii].p[0]-nx2.p[0])+Math.abs(C[ii].p[1]-nx2.p[1])<1e-7)continue;D.push(C[ii])}
   if(D.length<3)return null;
@@ -324,31 +336,39 @@ function sameTop(row){var seen=[];row.forEach(function(b){var G=b.mg;if(!G||seen
 function stoneKeys(kept){kept.forEach(function(b){var G=b.mg,L=b;if(G)for(var i=0;i<G.m.length;i++)if(kept.indexOf(G.m[i])>=0){L=G.m[i];break}b.sk=L.c+'_'+L.i})}
 /* the row a block ends on (a block that rises through several rows starts on c and ends on c2) */
 function cE(b){return b.c2==null?b.c:b.c2}
-function freeEdges(poly,tags){var fe=[],m=poly.length,i;for(i=0;i<m;i++)if(tags[i]!=='n'&&tags[i]!=='m'){var a=poly[i],b2=poly[(i+1)%m],e=[b2[0]-a[0],b2[1]-a[1]],l=Math.hypot(e[0],e[1]);if(l>0.6)fe.push({a:a,b:b2,n:[e[1]/l,-e[0]/l],l:l})}return fe}
+function freeEdges(poly,tags){var fe=[],m=poly.length,i;for(i=0;i<m;i++)if(tags[i]!=='n'&&tags[i]!=='m'){var a=poly[i],b2=poly[(i+1)%m],e=[b2[0]-a[0],b2[1]-a[1]],l=Math.hypot(e[0],e[1]);if(l>0.6){var nn=[e[1]/l,-e[0]/l];fe.push({a:a,b:b2,n:nn,l:l,face:faceOf(nn),seam:tags[i]==='x'})}}return fe}
 /* STEP 5a: the recess is each stone's (it was a step back of the whole row; the word was renamed because the meaning changed). After the stones of a course are made, carried up (rise) and joined (span), the stones that have a free front edge are set back by an amount of their own, drawn from the recess range by the graded rule along the course: the stones (a joined stone is one) are ranked by a smooth wobble along the front and each rank is mapped through the recess's weighting. A stone's front edges move back by its amount (its cell is cut by a plane parallel to each); a head joint that this opens, where a neighbour now stands further back, becomes a free face. A joined stone moves as one. A lip row keeps its own rule. */
 function recessStones(p,g,row,merges,c,f,rep,prev){var lo=p.recess[0]*f,hi=p.recess[1]*f;if(!(hi>0)||!row.length)return;
   var par=row.map(function(b,i){return i});function find(i){while(par[i]!==i){par[i]=par[par[i]];i=par[i]}return i}
   merges.forEach(function(m){par[find(m[0])]=find(m[1])});
-  function frontEdges(b){return b.fe.filter(function(e){return e.n[1]<-0.7})}
+  /* the edges a recess moves: free (not a seam) and on a face whose switch is on */
+  function onEdges(b){return b.fe.filter(function(e){return !e.seam&&faceOn(p,e.face)})}
   var groups={};row.forEach(function(b,i){var r=find(i);(groups[r]=groups[r]||[]).push(b)});
-  var gl=Object.keys(groups).map(function(k){return groups[k]}).filter(function(G){return G.some(function(b){return frontEdges(b).length})});
-  if(!gl.length)return;
-  gl.forEach(function(G){var s=0;G.forEach(function(b){s+=b.cx[0]});G.x=s/G.length});gl.sort(function(a,b){return a.x-b.x});
-  var sb=p.sbw||{w:'flat',bumps:2.5},wob=GR.lineWobble(hash(p.seed,9301,c),sb.bumps||2.5,SQUARE*f),t=GR.ranked(gl.map(function(G){return wob(G.x)}),GR.wOf(sb)),setb=new Map();
-  /* a stone never stands in front of the stone it rests on: its recess is at least the largest recess among the stones under it that it overlaps (so there is no overhang from the recess itself, which is the stay-behind of the front band, per stone). The recess does not accumulate: it is the largest under it, never their sum, and never more than the range's top. */
-  gl.forEach(function(G,gi){var s=lo+(hi-lo)*t[gi];
-    if(prev)G.forEach(function(b){prev.forEach(function(o){if(o.recess>s&&polyOverlap(b.polyT,o.polyT)>0.4)s=Math.min(o.recess,hi)})});
-    G.forEach(function(b){setb.set(b,s);b.recess=s});
-    G.forEach(function(b){var C={pts:b.polyT,tags:b.tags},X=b.CXo||{pts:b.poly,tags:b.tags},ok=true;
-      frontEdges(b).forEach(function(e){if(!ok)return;var d=e.n[0]*e.a[0]+e.n[1]*e.a[1]-s,C2=clipCellTagged(C,e.n,d,'g'),X2=clipCellTagged(X,e.n,d,'g');if(!C2||!X2||Math.abs(polyArea(C2.pts))<1.0){ok=false;return}C=C2;X=X2});
-      if(!ok){rep.recessSkipped=(rep.recessSkipped||0)+1;setb.set(b,0);return}
-      b.polyT=C.pts;b.tags=C.tags;b.poly=X.pts;b.CXo=X;b.fe=freeEdges(b.polyT,b.tags);b.front=b.fe.length>0;b.cx=polyCentroid(b.polyT);var xs=b.polyT.map(function(q){return q[0]});b.x0=Math.min.apply(null,xs);b.x1=Math.max.apply(null,xs);rep.recess=(rep.recess||0)+1})});
+  var all=Object.keys(groups).map(function(k){return groups[k]}),amt=new Map(),setb=new Map();
+  var sb=p.sbw||{w:'flat',bumps:2.5};
+  /* one amount for each stone and each face direction it has a free edge on: the stones (a joined stone is one) that have such an edge are ranked along the face by a smooth wobble (the front's key is the legacy one, every other face adds its direction) and each rank is mapped through the recess's weighting */
+  FACES.forEach(function(face,d){
+    var gl=all.filter(function(G){return G.some(function(b){return onEdges(b).some(function(e){return e.face===face})})});if(!gl.length)return;
+    var side=face==='left'||face==='right',ax=side?1:0;
+    gl.forEach(function(G){var s=0;G.forEach(function(b){s+=b.cx[ax]});G.x=s/G.length});gl.sort(function(a,b){return a.x-b.x});
+    var wob=GR.lineWobble(faceKey(p.seed,9301,c,face),sb.bumps||2.5,SQUARE*f),t=GR.ranked(gl.map(function(G){return wob(G.x)}),GR.wOf(sb));
+    /* a stone never stands in front of the stone it rests on: its recess is at least the largest recess among the stones under it that it overlaps, on the same face (so there is no overhang from the recess itself, which is the stay-behind of the face band, per stone). The recess does not accumulate: it is the largest under it, never their sum, and never more than the range's top. */
+    gl.forEach(function(G,gi){var s=lo+(hi-lo)*t[gi];
+      if(prev)G.forEach(function(b){prev.forEach(function(o){if(o.recess&&o.recess[d]>s&&polyOverlap(b.polyT,o.polyT)>0.4)s=Math.min(o.recess[d],hi)})});
+      var a=amt.get(G)||[0,0,0,0];a[d]=s;amt.set(G,a);G.forEach(function(b){b.recess=b.recess||[0,0,0,0];b.recess[d]=s})})});
+  all.forEach(function(G){var a=amt.get(G);if(!a)return;
+    G.forEach(function(b){setb.set(b,a.slice());
+      var C={pts:b.polyT,tags:b.tags},X=b.CXo||{pts:b.poly,tags:b.tags},ok=true;
+      onEdges(b).forEach(function(e){if(!ok)return;var s=a[faceD(e.face)],d=e.n[0]*e.a[0]+e.n[1]*e.a[1]-s,C2=clipCellTagged(C,e.n,d,'g'),X2=clipCellTagged(X,e.n,d,'g');if(!C2||!X2||Math.abs(polyArea(C2.pts))<1.0){ok=false;return}C=C2;X=X2});
+      if(!ok){rep.recessSkipped=(rep.recessSkipped||0)+1;setb.set(b,[0,0,0,0]);return}
+      b.polyT=C.pts;b.tags=C.tags;b.poly=X.pts;b.CXo=X;b.fe=freeEdges(b.polyT,b.tags);b.free=b.fe.length>0;b.cx=polyCentroid(b.polyT);var xs=b.polyT.map(function(q){return q[0]});b.x0=Math.min.apply(null,xs);b.x1=Math.max.apply(null,xs);rep.recess=(rep.recess||0)+1})});
+  function deeper(so,sb2){if(!so)return false;sb2=sb2||[0,0,0,0];return so.some(function(v,d){return v>sb2[d]+0.1})}
   /* a joint whose neighbour now stands further back is open to the air along it: a free face */
   function along(b,i,o){var a=b.polyT[i],e=b.polyT[(i+1)%b.polyT.length],dx=e[0]-a[0],dy=e[1]-a[1],l=Math.hypot(dx,dy)||1,j;
     for(j=0;j<o.polyT.length;j++){var a2=o.polyT[j],e2=o.polyT[(j+1)%o.polyT.length],ex=e2[0]-a2[0],ey=e2[1]-a2[1],l2=Math.hypot(ex,ey)||1;if((dx*ex+dy*ey)/(l*l2)>-0.99)continue;
       if(Math.abs((a[0]-a2[0])*ey-(a[1]-a2[1])*ex)/l2>0.4)continue;var t0=((a2[0]-a[0])*dx+(a2[1]-a[1])*dy)/l,t1=((e2[0]-a[0])*dx+(e2[1]-a[1])*dy)/l;if(Math.min(l,Math.max(t0,t1))-Math.max(0,Math.min(t0,t1))>0.3)return true}return false}
-  row.forEach(function(b){var ch=false;b.tags.forEach(function(tg,i){if(tg!=='n')return;row.forEach(function(o){if(o===b||find(row.indexOf(o))===find(row.indexOf(b)))return;if((setb.get(o)||0)>(setb.get(b)||0)+0.1&&along(b,i,o)){b.tags[i]='g';ch=true}})});
-    if(ch){b.fe=freeEdges(b.polyT,b.tags);b.front=b.fe.length>0;rep.openJoints=(rep.openJoints||0)+1}})}
+  row.forEach(function(b){var ch=false;b.tags.forEach(function(tg,i){if(tg!=='n')return;row.forEach(function(o){if(o===b||find(row.indexOf(o))===find(row.indexOf(b)))return;if(deeper(setb.get(o),setb.get(b))&&along(b,i,o)){b.tags[i]='g';ch=true}})});
+    if(ch){b.fe=freeEdges(b.polyT,b.tags);b.free=b.fe.length>0;rep.openJoints=(rep.openJoints||0)+1}})}
 function L2c(p,g,j,rep){
   var f=g.f,blocks=[],z=DIRT-0.4,prev=null,c,i,k,reg=p.regularity==null?0.3:p.regularity,prevF={},parts=convexParts(g.fp),ends={},reserved=[],ncr=j.pts.length,rise=p.rise||0,span=p.span||0,rv=R(p.seed,520);
   var xl=g.xl,xr=g.xr,yb=g.yb;
@@ -357,32 +377,32 @@ function L2c(p,g,j,rep){
     var P=j.pts[c],h=j.heights[c],row=[],cur={},lipOn=!!p.lip&&p.lip[1]>0&&c>0&&(p.lipAt==='top'||p.lipAt==null?c===j.pts.length-1:(p.lipAt||[]).indexOf(c)>=0);
     /* RULE (the partition fills the polygon): a course's cells are the Voronoi cells of its sites clipped by the course's polygon, the footprint moved in by the course's setback (or out by its lip) on each outer edge: no ghost sites, no mirrors, every outer edge of a cell lies on the polygon, and its corners belong to cells. A polygon that is not convex is cut into convex parts first, and a cell is clipped by each part. Everything that gives the stone its face (facets, chips, bevels, grooves) is cut afterwards. */
     /* a course has no offset of its own: its area is the footprint. Only a lip row stands out (by its own draw); the recess is each stone's, applied after the merges (recessStones). */
-    var rc=R(p.seed,210,c),off=g.edges.map(function(E){return lipOn&&E.front?Math.min(draw(rc,[p.lip[0]*f,p.lip[1]*f,0]),E.maxOut):0});
+    var rc=R(p.seed,210,c),off=g.edges.map(function(E){return lipOn&&!E.seam&&faceOn(p,E.face)?Math.min(draw(rc,[p.lip[0]*f,p.lip[1]*f,0]),E.maxOut):0});
     g.offs=g.offs||[];g.offs[c]=off.slice();   /* each course's offsets (only a lip's), for the front band (step 3a) */
     var resNow=reserved.filter(function(r){return r.end>=c}),sites=P.filter(function(q){return !resNow.some(function(r){return inPolyAny(r.poly,q[0],q[1])})}).map(function(q){return [q[0],q[1]]}),n=sites.length,reach=3.4*Math.max(j.sx,j.sy);
     /* a stone that rises through this row keeps its place: its site stays in the row as a ghost (it makes no cell), so the cells round it end on their bisectors with it, whole and convex, instead of being cut into wedges round its corners */
     P.forEach(function(q){if(resNow.some(function(r){return inPolyAny(r.poly,q[0],q[1])}))sites.push([q[0],q[1]])});
     /* RULE (a row is divided in the area the rows below left it): a stone that rises through this row keeps its footprint here, and the cells of the row are cut round it into convex parts */
     var CL=[];
-    for(k=0;k<n;k++)for(var pq0=0;pq0<parts.length;pq0++){var C0=cellIn(sites,k,parts[pq0],off,0,reach);if(!C0||Math.abs(polyArea(C0.pts))<1.0||minWidth2(C0.pts)<MINCELLW*f)continue;var CX0=cellIn(sites,k,parts[pq0],off,OVL,reach)||C0;var CV=carveRising(C0,CX0,resNow);if(!CV)continue;C0=CV.C;CX0=CV.CX;if(Math.abs(polyArea(C0.pts))<1.0||minWidth2(C0.pts)<MINCELLW*f)continue;
+    for(k=0;k<n;k++)for(var pq0=0;pq0<parts.length;pq0++){var C0=cellIn(sites,k,parts[pq0],off,0,reach,g.seam);if(!C0||Math.abs(polyArea(C0.pts))<1.0||minWidth2(C0.pts)<MINCELLW*f)continue;var CX0=cellIn(sites,k,parts[pq0],off,OVL,reach,g.seam)||C0;var CV=carveRising(C0,CX0,resNow);if(!CV)continue;C0=CV.C;CX0=CV.CX;if(Math.abs(polyArea(C0.pts))<1.0||minWidth2(C0.pts)<MINCELLW*f)continue;
       [{C:C0,CX:CX0}].forEach(function(q,qi){CL.push({k:k,pq:pq0*8+qi,C:q.C,CX:q.CX})})}
     for(var ci=0;ci<CL.length;ci++){k=CL[ci].k;var pq=CL[ci].pq,C=CL[ci].C,CX=CL[ci].CX;if(Math.abs(polyArea(C.pts))<1.0)continue;
       /* RULE (stand only on what holds you): a cell's footprint lies inside the footprints of the cells it rests on, on every free edge and over every hole. Where a cell would reach past them (more than 0.02 mm2), it is cut along its supports' own outlines into convex pieces, one for each support (a joint is carried up there, as the language's bond allows), so its bed is always over material and nothing hangs. The edges cut along a support's free edge are new free edges parallel to it. */
       var pieces=[{C:C,CX:CX}];
       var fg=lipOn?(p.lip[1]*f+0.3):0;
-      if(prev){var ov=prev.filter(function(o){return polyOverlap(C.pts,o.polyT)>0.4||(lipOn&&clipByCell(C,o,0,fg)&&polyOverlap((clipByCell(C,o,0,fg)||{pts:[]}).pts,C.pts)>0.4)}),sa=0;
-        ov.forEach(function(o){var X=clipByCell(C,o,0,fg);if(X)sa+=Math.abs(polyArea(X.pts))});
+      if(prev){var ov=prev.filter(function(o){return polyOverlap(C.pts,o.polyT)>0.4||(lipOn&&clipByCell(C,o,0,fg,p)&&polyOverlap((clipByCell(C,o,0,fg,p)||{pts:[]}).pts,C.pts)>0.4)}),sa=0;
+        ov.forEach(function(o){var X=clipByCell(C,o,0,fg,p);if(X)sa+=Math.abs(polyArea(X.pts))});
         if(!ov.length){rep.dropped++;rep.dNoSup=(rep.dNoSup||0)+1;continue}
         /* a lip row stands out on purpose, so it is still cut along its supports; every other cell stays one block, its Voronoi cell: what it stands on is the rock's business (a stone bears on the hull of the tops below it, step 8) */
-        if(lipOn){pieces=[];ov.forEach(function(o){var pc=clipByCell(C,o,0,fg),px=pc?clipByCell(CX,o,OVL,fg):null;if(pc&&px&&Math.abs(polyArea(pc.pts))>=3&&(!lipOn||polyOverlap(pc.pts,o.polyT)>=Math.max(1.5,0.35*Math.abs(polyArea(pc.pts)))))pieces.push({C:pc,CX:px,sup:o})});rep.split=(rep.split||0)+1;
+        if(lipOn){pieces=[];ov.forEach(function(o){var pc=clipByCell(C,o,0,fg,p),px=pc?clipByCell(CX,o,OVL,fg,p):null;if(pc&&px&&Math.abs(polyArea(pc.pts))>=3&&(!lipOn||polyOverlap(pc.pts,o.polyT)>=Math.max(1.5,0.35*Math.abs(polyArea(pc.pts)))))pieces.push({C:pc,CX:px,sup:o})});rep.split=(rep.split||0)+1;
         /* RULE (a cell is merged, not deleted): when every part over a support is under 3 mm2, the largest part stays if it is a stone's size (1.2 mm2), taking its support's outline; the rest of the cell's area goes to the neighbours' own cells */
-        if(!pieces.length&&!lipOn){var bestP=null,bestA=0;ov.forEach(function(o){var pc=clipByCell(C,o,0,fg),px=pc?clipByCell(CX,o,OVL,fg):null;if(pc&&px){var aa=Math.abs(polyArea(pc.pts));if(aa>bestA){bestA=aa;bestP={C:pc,CX:px,sup:o}}}});if(bestP&&bestA>=1.2){pieces.push(bestP);rep.merged=(rep.merged||0)+1}}
+        if(!pieces.length&&!lipOn){var bestP=null,bestA=0;ov.forEach(function(o){var pc=clipByCell(C,o,0,fg,p),px=pc?clipByCell(CX,o,OVL,fg,p):null;if(pc&&px){var aa=Math.abs(polyArea(pc.pts));if(aa>bestA){bestA=aa;bestP={C:pc,CX:px,sup:o}}}});if(bestP&&bestA>=1.2){pieces.push(bestP);rep.merged=(rep.merged||0)+1}}
         if(!pieces.length){rep.dropped++;rep.dPiece=(rep.dPiece||0)+1;continue}}}
       pieces.forEach(function(pcs,pi){var C=pcs.C,CX=pcs.CX;if(minWidth2(C.pts)<MINCELLW*f){rep.dropped++;rep.dThin=(rep.dThin||0)+1;return}
       var poly=C.pts,xs=poly.map(function(q){return q[0]}),x0=Math.min.apply(null,xs),x1=Math.max.apply(null,xs);
       var fe=freeEdges(poly,C.tags),m=poly.length;
-      var front=fe.length>0,rb=R(p.seed,300,c,(k*64+pq)*7+pi),hb=h*(1-p.wander)+h*(0.7+0.6*rb())*p.wander;
-      row.push({cap:lipOn,supC:pcs.sup,c:c,i:(k*64+pq)*7+pi,x0:x0,x1:x1,off:0,zb:z,zt:z+hb,hb:hb,poly:CX.pts,polyT:poly,tags:C.tags,fe:fe,front:front,cx:polyCentroid(poly),CXo:CX,F:null})})}
+      var free=fe.length>0,rb=R(p.seed,300,c,(k*64+pq)*7+pi),hb=h*(1-p.wander)+h*(0.7+0.6*rb())*p.wander;
+      row.push({cap:lipOn,supC:pcs.sup,c:c,i:(k*64+pq)*7+pi,x0:x0,x1:x1,off:0,zb:z,zt:z+hb,hb:hb,poly:CX.pts,polyT:poly,tags:C.tags,fe:fe,free:free,cx:polyCentroid(poly),CXo:CX,F:null})})}
     prevF=cur;
     if(prev){row.forEach(function(b){var hi=-1e9,ov=[];prev.forEach(function(o){if(polyOverlap(b.poly,o.poly)>0.02){ov.push(o);if(o.zt>hi)hi=o.zt}});
       if(hi>-1e8){var sup=0;/* RULE (a course is laid over the union of the tops below): every cell it overlaps is raised to the highest of them, so all of them hold it, and its support is their total, not only the tallest */
@@ -397,7 +417,7 @@ function L2c(p,g,j,rep){
     /* horizontal merge: neighbours that start and end on the same rows join on a roll; the shared edge stops being a joint (no groove) */
     var merges=[];
     if(span>0){var ia,ib;for(ia=0;ia<row.length;ia++)for(ib=ia+1;ib<row.length;ib++){var A=row[ia],B=row[ib];if(A.c2!==B.c2||A.cap||B.cap)continue;var hit=false,ea,eb;
-      for(ea=0;ea<A.polyT.length&&!hit;ea++){if(A.tags[ea]!=='n')continue;var a1=A.polyT[ea],a2=A.polyT[(ea+1)%A.polyT.length];for(eb=0;eb<B.polyT.length;eb++){if(B.tags[eb]!=='n')continue;var b1=B.polyT[eb],b2=B.polyT[(eb+1)%B.polyT.length];if(Math.hypot(a1[0]-b2[0],a1[1]-b2[1])<1e-3&&Math.hypot(a2[0]-b1[0],a2[1]-b1[1])<1e-3){hit=true;if(rv()<span){A.tags[ea]='m';B.tags[eb]='m';snapEdge(A,ea,B,eb);joinStone(A,B);A.fe=freeEdges(A.polyT,A.tags);B.fe=freeEdges(B.polyT,B.tags);A.front=A.fe.length>0;B.front=B.fe.length>0;rep.hmerged=(rep.hmerged||0)+1;merges.push([ia,ib])}break}}}}}
+      for(ea=0;ea<A.polyT.length&&!hit;ea++){if(A.tags[ea]!=='n')continue;var a1=A.polyT[ea],a2=A.polyT[(ea+1)%A.polyT.length];for(eb=0;eb<B.polyT.length;eb++){if(B.tags[eb]!=='n')continue;var b1=B.polyT[eb],b2=B.polyT[(eb+1)%B.polyT.length];if(Math.hypot(a1[0]-b2[0],a1[1]-b2[1])<1e-3&&Math.hypot(a2[0]-b1[0],a2[1]-b1[1])<1e-3){hit=true;if(rv()<span){A.tags[ea]='m';B.tags[eb]='m';snapEdge(A,ea,B,eb);joinStone(A,B);A.fe=freeEdges(A.polyT,A.tags);B.fe=freeEdges(B.polyT,B.tags);A.free=A.fe.length>0;B.free=B.fe.length>0;rep.hmerged=(rep.hmerged||0)+1;merges.push([ia,ib])}break}}}}}
     sameTop(row);
     if(!lipOn)recessStones(p,g,row,merges,c,f,rep,prev);
     row.forEach(function(b){blocks.push(b);(ends[b.c2]=ends[b.c2]||[]).push(b)});z+=h}
@@ -411,7 +431,7 @@ function L2c(p,g,j,rep){
 function prism(poly,zb,zt){var F=[],n=poly.length,i,cw=polyArea(poly)<0?poly.slice().reverse():poly;n=cw.length;
   F.push(mkFace([0,0,-1],cw.map(function(q){return [q[0],q[1],zb]}),'bed'));F.push(mkFace([0,0,1],cw.map(function(q){return [q[0],q[1],zt]}),'top'));
   for(i=0;i<n;i++){var a=cw[i],b=cw[(i+1)%n],e=[b[0]-a[0],b[1]-a[1]],l=Math.hypot(e[0],e[1]);if(l<1e-6)continue;var nn=[e[1]/l,-e[0]/l,0];
-    F.push(mkFace(nn,[[a[0],a[1],zb],[b[0],b[1],zb],[b[0],b[1],zt],[a[0],a[1],zt]],nn[1]<-0.7?'front':'side'))}
+    F.push(mkFace(nn,[[a[0],a[1],zb],[b[0],b[1],zb],[b[0],b[1],zt],[a[0],a[1],zt]],'side'))}
   return {faces:F}}
 /* ===== triangles for drawing: every face fan-triangulated, with its normal and overhang ===== */
 function overAng(n){return n[2]<0?Math.asin(Math.min(1,-n[2]))*180/PI:0}

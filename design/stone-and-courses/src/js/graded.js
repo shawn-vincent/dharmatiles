@@ -1,7 +1,7 @@
 /* ===== graded areas: the one rule that draws the crest, a course's front and a stone's outline =====
    A smooth wobble along the line (or round the circle) with a BUMPS control for how many wobbles; rank it (sort by wobble value, rank (i + 0.5) / N); map each rank through the weighting's quantile to t in 0..1; a point's distance is inner + gap x t.
    The weighting says how far, bumps says how many: the line has exactly the weighting's mix of distances, only where they fall changes. It is the rule a dirt top uses (Band::rolled), bent along a line or round a circle.
-   Three stages use it: the CREST (step 1), the FRONT BAND (step 3a: each course's front lies between today's front and one `depth` behind it) and the STONE OUTLINE (step 7a: each stone's footprint lies between a core and its cell).
+   Three stages use it: the CREST (step 1), the FRONT BAND (step 3a: each course's face lies between today's front and one `depth` behind it) and the STONE OUTLINE (step 7a: each stone's footprint lies between a core and its cell).
    The weighting formulas are crates/dt-value/src/weighting.rs (low, high, bell, peak, ends). */
 var GR=(function(){
   var TAU=Math.PI*2;
@@ -32,23 +32,29 @@ var GR=(function(){
     return function(x){var u=x/sq,v=0,m2;for(m2=0;m2<M;m2++)v+=Math.cos(TAU*ks[m2]*u+ph[m2]);return v*a}}
   var SPL=6;   /* points per bump along a line, and about the same round a stone */
   /* ===== the front band: course c's own graded line t_c(x), from its own keyed seed, in 0..1 (0 = today's front, 1 = `depth` behind it) ===== */
-  function frontLine(p,g,c){
-    var B=p.band,gg=g.gr=g.gr||{front:{}};if(gg.front[c])return gg.front[c];
-    var sq=SQUARE*g.f,x0=g.x0,x1=g.x1,len=x1-x0,bps=B.bumps,N=Math.max(8,Math.ceil(len/sq*bps*SPL)),f=lineWobble(hash(p.seed,9101,c),bps,sq),xs=[],vals=[],k;
+  /* a free face's own frame: x' along the face, y' out of the wall's inside (x' = -ny x + nx y, y' = -(nx x + ny y)). The front is the identity, so its code and its draws are what they always were; the other faces are the same code turned. */
+  function rot(E,x,y){return E.face==='front'?[x,y]:[-E.n[1]*x+E.n[0]*y,-(E.n[0]*x+E.n[1]*y)]}
+  function unrot(E,x,y){return E.face==='front'?[x,y]:[-E.n[1]*x-E.n[0]*y,E.n[0]*x-E.n[1]*y]}
+  /* the span of a face's lines: the tile along the wall for front and back, its depth for the sides */
+  function span(g,E){return E.face==='left'||E.face==='right'?[-g.W/2,g.W/2]:[g.x0,g.x1]}
+  function frontLine(p,g,c,ei){
+    var B=p.band,E=g.edges[ei],gg=g.gr=g.gr||{lines:{}},key=c+'_'+E.face;gg.lines=gg.lines||{};if(gg.lines[key])return gg.lines[key];
+    var sq=SQUARE*g.f,sp=span(g,E),x0=sp[0],x1=sp[1],len=x1-x0,bps=B.bumps,N=Math.max(8,Math.ceil(len/sq*bps*SPL)),f=lineWobble(faceKey(p.seed,9101,c,E.face),bps,sq),xs=[],vals=[],k;
     for(k=0;k<N;k++){var x=x0+(k+.5)/N*len;xs.push(x);vals.push(f(x))}
     var t=ranked(vals,wOf(B));
     var fn={xs:xs,t:t,at:function(x){if(x<=xs[0])return t[0];if(x>=xs[N-1])return t[N-1];var u=(x-x0)/len*N-.5,i=Math.max(0,Math.min(N-2,Math.floor(u))),w2=(x-xs[i])/(xs[i+1]-xs[i]);return t[i]+(t[i+1]-t[i])*w2}};
-    gg.front[c]=fn;return fn}
-  /* the baseline of course c's front edge ei (a horizontal front edge of the footprint): today's front line, y = the edge's y less the course's offset */
-  function baseY(g,c,ei){return g.edges[ei].a[1]-g.offs[c][ei]}
-  function frontEdges(g){if(g.gr&&g.gr.fe)return g.gr.fe;var o=[];g.edges.forEach(function(E,ei){if(E.front&&Math.abs(E.n[0])<1e-6&&E.n[1]<0)o.push(ei)});g.gr=g.gr||{front:{}};g.gr.fe=o;return o}
+    gg.lines[key]=fn;return fn}
+  /* the baseline of course c's face edge ei: the edge's line in its own frame (y' = -(n.a)), less the course's offset (a lip's) */
+  function baseY(g,c,ei){var E=g.edges[ei];return (E.face==='front'?E.a[1]:-(E.n[0]*E.a[0]+E.n[1]*E.a[1]))-g.offs[c][ei]}
+  /* the footprint edges the band acts on: free (not a seam) and on a face whose switch is on */
+  function faceEdges(p,g){if(g.gr&&g.gr.fe)return g.gr.fe;var o=[];g.edges.forEach(function(E,ei){if(!E.seam&&faceOn(p,E.face))o.push(ei)});g.gr=g.gr||{lines:{}};g.gr.fe=o;return o}
   /* the course's front stands, at each of the line's nodes, between baseY and baseY + depth. With the rule `stay` (default on) a course never stands in front of the one below where the unbanded wall does not
      either, so the band adds no overhang: node by node G_c = max(own line, G_(c-1)); every course's line is the same nodes, so each polyline is above the one under it everywhere, not only at the nodes. A lip course, which stands out on purpose, is left alone. */
   function nodesG(p,g,c,ei){var B=p.band,gg=g.gr,key=c+'_'+ei;gg.G=gg.G||{};if(gg.G[key])return gg.G[key];
-    var ln=frontLine(p,g,c),by=baseY(g,c,ei),D=B.depth*g.f,v=ln.t.map(function(t){return by+D*t});
+    var ln=frontLine(p,g,c,ei),by=baseY(g,c,ei),D=B.depth*g.f,v=ln.t.map(function(t){return by+D*t});
     if(B.stay&&c>0&&by>=baseY(g,c-1,ei)-1e-6){var pv=nodesG(p,g,c-1,ei);v=v.map(function(y,k){return Math.max(y,pv[k])})}
     return gg.G[key]=v}
-  function Gat(p,g,c,ei,x){var ln=frontLine(p,g,c),v=nodesG(p,g,c,ei),xs=ln.xs,N=xs.length;if(x<=xs[0])return v[0];if(x>=xs[N-1])return v[N-1];var u=(x-xs[0])/(xs[N-1]-xs[0])*(N-1),i=Math.max(0,Math.min(N-2,Math.floor(u)));return v[i]+(v[i+1]-v[i])*(x-xs[i])/(xs[i+1]-xs[i])}
+  function Gat(p,g,c,ei,x){var ln=frontLine(p,g,c,ei),v=nodesG(p,g,c,ei),xs=ln.xs,N=xs.length;if(x<=xs[0])return v[0];if(x>=xs[N-1])return v[N-1];var u=(x-xs[0])/(xs[N-1]-xs[0])*(N-1),i=Math.max(0,Math.min(N-2,Math.floor(u)));return v[i]+(v[i+1]-v[i])*(x-xs[i])/(xs[i+1]-xs[i])}
   /* ===== plan geometry, on Manifold's CrossSection ===== */
   function CSof(rings){return MF.CrossSection.ofPolygons(rings)}
   function area2(r){var s=0,i;for(i=0;i<r.length;i++){var a=r[i],b=r[(i+1)%r.length];s+=a[0]*b[1]-b[0]*a[1]}return s/2}
@@ -92,16 +98,22 @@ var GR=(function(){
   function stoneArea(ctx,b,jointsOf){
     var key=b.c+'_'+b.i;if(ctx.memo[key]!==undefined)return ctx.memo[key];
     var p=ctx.p,g=ctx.g,rep=ctx.rep,P0=ccw(b.poly.map(function(q){return [q[0],q[1]]})),joints=jointsOf(b,P0),changed=false,rings=[P0],i;
-    /* step 3a: the front band. The cell is cut to the epigraph of this course's front line over the free front edge it has. */
-    if(bandOn(p)){var fe=frontEdges(g),f=g.f;
-      var fr=null,xs=P0.map(function(q){return q[0]}),ys=P0.map(function(q){return q[1]}),x0=Math.min.apply(null,xs),x1=Math.max.apply(null,xs),y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys);
-      P0.forEach(function(a,ii){var b2=P0[(ii+1)%P0.length],ex=b2[0]-a[0],ey=b2[1]-a[1],l=Math.hypot(ex,ey)||1;
-        if(!jointOf(a,b2,joints)&&ex/l>0.9&&Math.abs(ey/l)<0.15&&fr===null){var xm=(a[0]+b2[0])/2,ym=(a[1]+b2[1])/2,best=null,bd=1e9;fe.forEach(function(ei){var E=g.edges[ei],lo=Math.min(E.a[0],E.b[0])-0.7,hi=Math.max(E.a[0],E.b[0])+0.7;if(xm<lo||xm>hi)return;var d=Math.abs(ym-baseY(g,b.c,ei));if(d<bd){bd=d;best=ei}});if(best!=null&&bd<3*f)fr=best}});
-      if(fr!==null){var E=g.edges[fr],lo=Math.min(E.a[0],E.b[0]),hi=Math.max(E.a[0],E.b[0]),ln=frontLine(p,g,b.c),ylow=y0-3,bp=[x0-1],q;
+    /* step 3a: the face band. The cell is cut to the epigraph of this course's line over each switched-on free face edge it has (written in the face's own frame, so a corner where two faces are on is cut by both). */
+    if(bandOn(p)){var fe=faceEdges(p,g),f=g.f,found={};
+      P0.forEach(function(a,ii){var b2=P0[(ii+1)%P0.length],ex=b2[0]-a[0],ey=b2[1]-a[1],l=Math.hypot(ex,ey)||1,nx=ey/l,ny=-ex/l;
+        if(jointOf(a,b2,joints))return;var xm=(a[0]+b2[0])/2,ym=(a[1]+b2[1])/2,cand={};
+        fe.forEach(function(ei){var E=g.edges[ei];if(found[E.face]!=null)return;if(nx*E.n[0]+ny*E.n[1]<=0.9||Math.abs(nx*E.t[0]+ny*E.t[1])>=0.15)return;
+          var m=rot(E,xm,ym),pa=rot(E,E.a[0],E.a[1]),pb=rot(E,E.b[0],E.b[1]),lo=Math.min(pa[0],pb[0])-0.7,hi=Math.max(pa[0],pb[0])+0.7;if(m[0]<lo||m[0]>hi)return;
+          var d=Math.abs(m[1]-baseY(g,b.c,ei)),cd=cand[E.face];if(!cd||d<cd.bd)cand[E.face]={ei:ei,bd:d}});
+        Object.keys(cand).forEach(function(fc){if(cand[fc].bd<3*f)found[fc]=cand[fc].ei})});
+      FACES.forEach(function(face){var fr=found[face];if(fr==null)return;
+        var E=g.edges[fr],R0=P0.map(function(q){return rot(E,q[0],q[1])}),xs=R0.map(function(q){return q[0]}),ys=R0.map(function(q){return q[1]}),x0=Math.min.apply(null,xs),x1=Math.max.apply(null,xs),y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys);
+        var pa=rot(E,E.a[0],E.a[1]),pb=rot(E,E.b[0],E.b[1]),lo=Math.min(pa[0],pb[0]),hi=Math.max(pa[0],pb[0]),ln=frontLine(p,g,b.c,fr),ylow=y0-3,bp=[x0-1],q;
         ln.xs.forEach(function(x){if(x>x0&&x<x1)bp.push(x)});bp.push(x1+1);
         var poly=bp.map(function(x){var y=Gat(p,g,b.c,fr,Math.max(lo,Math.min(hi,x)));return [x,Math.max(ylow,y)]});poly.push([x1+1,y1+4]);poly.push([x0-1,y1+4]);
-        var A=CSof([ccw(P0)]),Bq=CSof([ccw(poly)]),I=A.intersect(Bq),pl=I.toPolygons();A.delete();Bq.delete();I.delete();
-        if(pl.length){rings=pl.filter(function(r){return area2(r)>0});changed=true}}}
+        poly=poly.map(function(q2){return unrot(E,q2[0],q2[1])});
+        var A=CSof(rings.map(ccw)),Bq=CSof([ccw(poly)]),I=A.intersect(Bq),pl=I.toPolygons();A.delete();Bq.delete();I.delete();
+        if(pl.length){rings=pl.filter(function(r){return area2(r)>0});changed=true}})}
     /* step 7a: the stone's own outline, then cut to what holds it */
     if(outlOn(p)){var O=p.outl,f2=g.f,sd=hash(p.seed,9202,b.c,b.i);
       rings=rings.map(function(r){return shrinkRing(r,joints,{w:O.w,a:O.a,c:O.c,bumps:O.bumps,core:O.core},O.s,sd,f2)});changed=true;
@@ -115,5 +127,5 @@ var GR=(function(){
     var parts=[];rings.forEach(function(r){var roles=r.map(function(q,ii){return jointOf(q,r[(ii+1)%r.length],joints)?'joint':'surface'});
       convexParts(r).forEach(function(pt){parts.push({area:pt.v,edges:pt.fi.map(function(fi){return fi>=0?roles[fi]:'seam'})})})});
     rep.areaParts=(rep.areaParts||0)+parts.length;var res={rings:rings,parts:parts};ctx.memo[key]=res;return res}
-  return {frontEdges:frontEdges,simplify:simplify,CSof:CSof,area2:area2,ccw:ccw,unit:unit,WORDS:WORDS,WDEF:WDEF,WRANGE:WRANGE,HASC:HASC,wOf:wOf,ranked:ranked,circleWobble:circleWobble,lineWobble:lineWobble,frontLine:frontLine,Gat:Gat,baseY:baseY,shrinkRing:shrinkRing,stoneArea:stoneArea,bandOn:bandOn,outlOn:outlOn,areaOn:areaOn,SPL:SPL}
+  return {faceEdges:faceEdges,rot:rot,unrot:unrot,simplify:simplify,CSof:CSof,area2:area2,ccw:ccw,unit:unit,WORDS:WORDS,WDEF:WDEF,WRANGE:WRANGE,HASC:HASC,wOf:wOf,ranked:ranked,circleWobble:circleWobble,lineWobble:lineWobble,frontLine:frontLine,Gat:Gat,baseY:baseY,shrinkRing:shrinkRing,stoneArea:stoneArea,bandOn:bandOn,outlOn:outlOn,areaOn:areaOn,SPL:SPL}
 })();

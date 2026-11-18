@@ -46,7 +46,7 @@ function Explorer(root,REFS){
   function tryRow(g,id){   /* "try": read the weighting by eye, on this group only */
     var d=el0('div','allrow');d.innerHTML='<span class="sl">try</span><span class="seg"></span>';var seg=d.querySelector('.seg');
     ['low','high','ends','bell','off'].forEach(function(w){var b=el0('button');b.type='button';b.textContent=w;b.onclick=function(){var tg=P[groupDef(id).state],dd=GR.WDEF[w]||{};
-      if(w==='off'){if(id==='front')tg.depth=0;else tg.s=0}else{tg.w=w;tg.a=dd.a!=null?dd.a:tg.a;tg.c=dd.c!=null?dd.c:tg.c;if(id==='front'){tg.depth=3;tg.bumps=6}else{tg.s=1;tg.bumps=6}}
+      if(w==='off'){if(id==='band')tg.depth=0;else tg.s=0}else{tg.w=w;tg.a=dd.a!=null?dd.a:tg.a;tg.c=dd.c!=null?dd.c:tg.c;if(id==='band'){tg.depth=3;tg.bumps=6}else{tg.s=1;tg.bumps=6}}
       W.refreshAll();ST.change()};seg.appendChild(b)});return d}
   function el0(t,c){var e=document.createElement(t);if(c)e.className=c;return e}
   /* ---- summaries: one function from a set of rows to their one line, read from the table; what differs from the preset is marked ---- */
@@ -58,10 +58,16 @@ function Explorer(root,REFS){
     if(r.kind==='range'){v=v||[0,0];txt=num(v[0])+'\u2013'+num(v[1])}
     else if(r.kind==='num')txt=num(v==null?0:v);
     else if(r.kind==='weighting'){var base=r.path.slice(0,r.path.length-2);txt=W.getPath(P,base+'.w');full=(r.group||'')+' weighting '+txt;return {t:txt,full:full,c:['w','a','c'].some(function(x){return changed(base+'.'+x)}),key:r.key}}
-    else{var o=r.opts.filter(function(q){return q[0]===v})[0];txt=o?o[1]:String(v);txt=txt.replace(/^(\d)x(\d).*$/,'$1\u00d7$2').replace(/^2x2.*/,'2\u00d72').replace(/ \(.*\)$/,'').replace(/^Draft.*/,'draft').replace(/^Fine.*/,'fine');if(r.ctl==='band-stay')txt=v?'stays':'free'}
+    else{var o=r.opts.filter(function(q){return q[0]===v})[0];txt=o?o[1]:String(v);txt=txt.replace(/^(\d)x(\d).*$/,'$1\u00d7$2').replace(/^2x2.*/,'2\u00d72').replace(/ \(.*\)$/,'').replace(/^Draft.*/,'draft').replace(/^Fine.*/,'fine');if(r.ctl==='band-stay')txt=v?'stays':'free';if(/^free-/.test(r.ctl))txt=v?'on':'off'}
     if(r.ctl==='crest-bumps'||r.ctl==='band-bumps'||r.ctl==='outl-bumps'){sf=sh;sh=''}
     var t=(sh?sh+' ':'')+txt+(sf?sf:'');
     return {t:t,full:r.label+' '+txt+(r.unit?' '+r.unit:''),c:changed(r.path),key:r.key}}
+  /* a free-face switch with nothing to act on is greyed, with the reason (the checker and the page agree: the engine's faceOn and L0's seams say the same) */
+  function deadWhy(ctl){if(ctl==='free-back')return P.wall?'On a wall the back is the front mirrored: it takes the front\u2019s amounts.':(P.foot?'':'The wall goes on behind this footprint (a seam), so it has no free back.');
+    if(ctl==='free-sides')return (P.foot||P.wing)?'':'The sides of this footprint are seams (the wall goes on into the next tile), so it has no free sides.';return ''}
+  function faceLive(){return !!(P.free&&(P.free.front||(P.free.back&&!deadWhy('free-back'))||(P.free.sides&&!deadWhy('free-sides'))))}
+  /* an effect with an amount and no free face on does nothing: said, not silent */
+  function noFace(panel){if(faceLive())return false;return panel==='region'?(P.band&&P.band.depth>0):(((P.recess||[0,0])[1]>0)||((P.lip||[0,0])[1]>0))}
   function pick(rows){return rows.filter(function(r){return !r.more}).map(token).filter(function(k){return k.key||k.c})}
   function summaryOf(rows){return pick(rows).map(function(k){return k.c?'<b class="chg">'+k.t+'</b>':'<span>'+k.t+'</span>'}).join(' &middot; ')}
   function fullOf(rows){return rows.map(token).map(function(k){return k.full}).join(', ')}
@@ -83,11 +89,11 @@ function Explorer(root,REFS){
       if(r.kind==='weighting')weightingRows(r,g,add);
       else if(r.kind==='num')add(W.num(r,ST));
       else if(r.kind==='range')add(W.range(r,ST));
-      else if(r.kind==='choice')add(W.choice({ctl:r.ctl,label:r.label,opts:function(){return r.opts.map(function(o){return {v:o[0],text:o[1]}})},get:function(){return ST.get(r.path)},set:function(v){ST.set(r.path,v);W.refreshAll();ST.change()},wide:r.ctl==='Quality'}))});
-    if(groups.front)groups.front.body.appendChild(tryRow(groups.front,'front'));
+      else if(r.kind==='choice'){var cw=W.choice({ctl:r.ctl,label:r.label,opts:function(){return r.opts.map(function(o){return {v:o[0],text:o[1]}})},get:function(){return ST.get(r.path)},set:function(v){ST.set(r.path,v);W.refreshAll();ST.change()},wide:r.ctl==='Quality'});add(cw);if(/^free-/.test(r.ctl))W.reg(function(){var why=deadWhy(r.ctl);[].forEach.call(cw.querySelectorAll('button'),function(bt){bt.disabled=!!why;bt.title=why||''});cw.title=why||'';cw.classList.toggle('dead',!!why)})}});
+    if(groups.band)groups.band.body.appendChild(tryRow(groups.band,'band'));
     if(groups.outline)groups.outline.body.appendChild(tryRow(groups.outline,'outline'));
-    W.reg(function(){var t=summaryOf(prow),gs=Object.keys(groups).map(function(k){var gd=groupDef(k),g=groups[k],ks=pick(g.rows),sh=gd.id==='front'?'':(gd.id==='crest'?'crest':gd.id==='outline'?'outline':gd.title.toLowerCase());return (sh?'<i>'+sh+'</i> ':'')+ks.map(function(q){return q.c?'<b class="chg">'+q.t+'</b>':'<span>'+q.t+'</span>'}).join(' ')});
-      psum.innerHTML=[t].concat(gs).filter(Boolean).join(' &middot; ')+(p.id==='rock'?(psum.innerHTML?' &middot; ':'')+rockSummary():'');
+    W.reg(function(){var t=summaryOf(prow),gs=Object.keys(groups).map(function(k){var gd=groupDef(k),g=groups[k],ks=pick(g.rows),sh=gd.id==='band'?'':(gd.id==='crest'?'crest':gd.id==='outline'?'outline':gd.title.toLowerCase());return (sh?'<i>'+sh+'</i> ':'')+ks.map(function(q){return q.c?'<b class="chg">'+q.t+'</b>':'<span>'+q.t+'</span>'}).join(' ')});
+      psum.innerHTML=[t].concat(gs).concat(noFace(p.id)?['<b class="chg">no free face is on</b>']:[]).filter(Boolean).join(' &middot; ')+(p.id==='rock'?(psum.innerHTML?' &middot; ':'')+rockSummary():'');
       psum.title=[fullOf(prow)].concat(Object.keys(groups).map(function(k){return groupDef(k).title.toLowerCase()+': '+fullOf(groups[k].rows)})).filter(Boolean).join('; ')});
     panelEl[p.id]=sec;return sec}
   /* the columns are the two pairs: wall scale (Region, Courses) and stone scale (Rock region, Rock) */
@@ -186,7 +192,7 @@ function Explorer(root,REFS){
     var Se=Math.min((W-30)/g.T,(H-30)/(g.topHi+DIRT+4));
     function EX(x){return 15+(x-g.x0)*Se}function EY(z){return H-15-z*Se}
     d.fillStyle='rgba(150,121,92,.55)';d.fillRect(EX(g.x0),EY(DIRT),g.T*Se,DIRT*Se);d.lineWidth=1.5;
-    b.l2.blocks.forEach(function(x){if(cells&&!x.front)return;d.strokeStyle=ink;d.fillStyle='rgba(140,150,168,'+(0.18+0.04*(x.c%3))+')';
+    b.l2.blocks.forEach(function(x){if(cells&&!x.free)return;d.strokeStyle=ink;d.fillStyle='rgba(140,150,168,'+(0.18+0.04*(x.c%3))+')';
       {(x.fe||[]).forEach(function(e){var xa=Math.min(e.a[0],e.b[0]),xb=Math.max(e.a[0],e.b[0]);d.beginPath();d.rect(EX(xa),EY(x.zt),(xb-xa)*Se,(x.zt-x.zb)*Se);d.fillStyle='rgba(140,150,168,'+(0.12+0.5*Math.abs(e.n[0])+0.1*(x.c%3))+')';d.fill();d.stroke()})}
       });
     $('xp-evc').innerHTML='Elevation, from the front: every face of every block (a cell shows two or three angled faces; the more it turns from the front the darker the box).'}
