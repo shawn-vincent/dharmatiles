@@ -342,6 +342,24 @@ function cellIn(sites,k,pt,off,grow,reach){var p=sites[k],C=[{p:[-1e4,-1e4],e:'g
   var D=[],ii;for(ii=0;ii<C.length;ii++){var nx2=C[(ii+1)%C.length];if(Math.abs(C[ii].p[0]-nx2.p[0])+Math.abs(C[ii].p[1]-nx2.p[1])<1e-7)continue;D.push(C[ii])}
   if(D.length<3)return null;
   return {pts:D.map(function(v){return v.p}),tags:D.map(function(v){return v.e})}}
+/* RISE: NO OVERLAPS. A stone that rises through a row keeps its footprint there. The row's cells are the Voronoi cells of its sites (the rising stone's site stays as a ghost point), but the bisectors with a ghost point are not the stone's footprint, so a cell may reach into it. carveRising cuts each cell by the one edge line of the footprint that leaves it most (a convex cut, outside the footprint): the cell and the stone then share an edge (tagged a neighbour joint), never area. The grown copy keeps its overlap OVL past that edge, as every joint does. */
+function carveRising(C,CX,rising){var i;
+  for(i=0;i<rising.length&&C;i++){var F=rising[i].b.polyT;if(polyOverlap(C.pts,F)<0.02)continue;
+    var sg=polyArea(F)>=0?1:-1,m=F.length,best=null,bestA=-1,e;
+    for(e=0;e<m;e++){var a=F[e],b=F[(e+1)%m],ex=b[0]-a[0],ey=b[1]-a[1],l=Math.hypot(ex,ey)||1,n=[sg*ey/l,-sg*ex/l],d=n[0]*a[0]+n[1]*a[1];   /* n points out of the footprint, so keeping n.p >= d... clipCellTagged keeps n.p <= d: use -n */
+      var X=clipCellTagged(C,[-n[0],-n[1]],-d,'n');if(!X)continue;var ar=Math.abs(polyArea(X.pts));if(ar>bestA){bestA=ar;best={n:n,d:d}}}
+    if(!best)return null;
+    C=clipCellTagged(C,[-best.n[0],-best.n[1]],-best.d,'n');CX=CX&&clipCellTagged(CX,[-best.n[0],-best.n[1]],-(best.d-OVL),'n')||CX&&null}
+  return C?{C:C,CX:CX||C}:null}
+/* SPAN MAKES ONE STONE. A merge of neighbours is a group of cells that is one stone (b.mg: the group's members, shared). The shared edge is an interior edge: tagged 'm', it is no joint and no free face, and the rock builds the group as one stone, the cells' parts cut apart along it (a crack inside the stone, found by the rock's cell). snapEdge makes the two cells' copies of the shared edge the same line exactly (the match that found it is within 1e-3; the rock reads shared edges to 1e-5). */
+function snapEdge(A,ea,B,eb){var n=B.polyT.length,P=B.polyT.slice();P[eb]=A.polyT[(ea+1)%A.polyT.length].slice();P[(eb+1)%n]=A.polyT[ea].slice();B.polyT=P}
+/* the group is not an enumerable field of a cell (it holds the cells that hold it): a build record, a job and a spec stay plain data */
+function groupOf(b){if(!b.mg)Object.defineProperty(b,'mg',{value:{m:[b]},writable:true,enumerable:false,configurable:true});return b.mg}
+function joinStone(A,B){var ga=groupOf(A),gb=groupOf(B);if(ga===gb)return;gb.m.forEach(function(x){x.mg=ga;ga.m.push(x)})}
+/* a stone's cells share one top: the highest of them (raised, never lowered: the stones above rest on what is finally there). Their beds stay each on what it rests on. */
+function sameTop(row){var seen=[];row.forEach(function(b){var G=b.mg;if(!G||seen.indexOf(G)>=0)return;seen.push(G);var hi=-1e9;G.m.forEach(function(x){if(x.zt>hi)hi=x.zt});G.m.forEach(function(x){if(x.zt<hi){x.hb+=hi-x.zt;x.zt=hi}})})}
+/* the stone each cell belongs to, by key (the first cell of the group that is still standing); a cell alone is its own stone */
+function stoneKeys(kept){kept.forEach(function(b){var G=b.mg,L=b;if(G)for(var i=0;i<G.m.length;i++)if(kept.indexOf(G.m[i])>=0){L=G.m[i];break}b.sk=L.c+'_'+L.i})}
 /* the row a block ends on (a block that rises through several rows starts on c and ends on c2) */
 function cE(b){return b.c2==null?b.c:b.c2}
 function freeEdges(poly,tags){var fe=[],m=poly.length,i;for(i=0;i<m;i++)if(tags[i]!=='n'&&tags[i]!=='m'){var a=poly[i],b2=poly[(i+1)%m],e=[b2[0]-a[0],b2[1]-a[1]],l=Math.hypot(e[0],e[1]);if(l>0.6)fe.push({a:a,b:b2,n:[e[1]/l,-e[0]/l],l:l})}return fe}
@@ -384,7 +402,7 @@ function L2c(p,g,j,rep){
     P.forEach(function(q){if(resNow.some(function(r){return inPolyAny(r.poly,q[0],q[1])}))sites.push([q[0],q[1]])});
     /* RULE (a row is divided in the area the rows below left it): a stone that rises through this row keeps its footprint here, and the cells of the row are cut round it into convex parts */
     var CL=[];
-    for(k=0;k<n;k++)for(var pq0=0;pq0<parts.length;pq0++){var C0=cellIn(sites,k,parts[pq0],off,0,reach);if(!C0||Math.abs(polyArea(C0.pts))<1.0||minWidth2(C0.pts)<MINCELLW*f)continue;var CX0=cellIn(sites,k,parts[pq0],off,OVL,reach)||C0;
+    for(k=0;k<n;k++)for(var pq0=0;pq0<parts.length;pq0++){var C0=cellIn(sites,k,parts[pq0],off,0,reach);if(!C0||Math.abs(polyArea(C0.pts))<1.0||minWidth2(C0.pts)<MINCELLW*f)continue;var CX0=cellIn(sites,k,parts[pq0],off,OVL,reach)||C0;var CV=carveRising(C0,CX0,resNow);if(!CV)continue;C0=CV.C;CX0=CV.CX;if(Math.abs(polyArea(C0.pts))<1.0||minWidth2(C0.pts)<MINCELLW*f)continue;
       [{C:C0,CX:CX0}].forEach(function(q,qi){CL.push({k:k,pq:pq0*8+qi,C:q.C,CX:q.CX})})}
     for(var ci=0;ci<CL.length;ci++){k=CL[ci].k;var pq=CL[ci].pq,C=CL[ci].C,CX=CL[ci].CX;if(Math.abs(polyArea(C.pts))<1.0)continue;
       /* RULE (stand only on what holds you): a cell's footprint lies inside the footprints of the cells it rests on, on every free edge and over every hole. Where a cell would reach past them (more than 0.02 mm2), it is cut along its supports' own outlines into convex pieces, one for each support (a joint is carried up there, as the language's bond allows), so its bed is always over material and nothing hangs. The edges cut along a support's free edge are new free edges parallel to it. */
@@ -413,15 +431,17 @@ function L2c(p,g,j,rep){
     /* a cell that would stand above its crest is dropped now, so the next course rests only on cells that stay */
     row=row.filter(function(b){if(envHeight(g,b)<MINSTONE*f-1e-6){rep.dropped++;rep.dCrest=(rep.dCrest||0)+1;return false}return true});
     /* vertical merge: a stone rolls, again and again, to carry on into the next row */
-    row.forEach(function(b){var c2=c;if(!b.cap)while(c2<ncr-1&&rv()<rise)c2++;b.c2=c2;if(c2>c){var ex=0,q;for(q=c+1;q<=c2;q++)ex+=j.heights[q];b.zt+=ex;b.hb+=ex;reserved.push({poly:b.polyT,end:c2})}});
+    row.forEach(function(b){var c2=c;if(!b.cap)while(c2<ncr-1&&rv()<rise)c2++;b.c2=c2;if(c2>c){var ex=0,q;for(q=c+1;q<=c2;q++)ex+=j.heights[q];b.zt+=ex;b.hb+=ex;reserved.push({poly:b.polyT,b:b,end:c2})}});
     /* horizontal merge: neighbours that start and end on the same rows join on a roll; the shared edge stops being a joint (no groove) */
     var merges=[];
     if(span>0){var ia,ib;for(ia=0;ia<row.length;ia++)for(ib=ia+1;ib<row.length;ib++){var A=row[ia],B=row[ib];if(A.c2!==B.c2||A.cap||B.cap)continue;var hit=false,ea,eb;
-      for(ea=0;ea<A.polyT.length&&!hit;ea++){if(A.tags[ea]!=='n')continue;var a1=A.polyT[ea],a2=A.polyT[(ea+1)%A.polyT.length];for(eb=0;eb<B.polyT.length;eb++){if(B.tags[eb]!=='n')continue;var b1=B.polyT[eb],b2=B.polyT[(eb+1)%B.polyT.length];if(Math.hypot(a1[0]-b2[0],a1[1]-b2[1])<1e-3&&Math.hypot(a2[0]-b1[0],a2[1]-b1[1])<1e-3){hit=true;if(rv()<span){A.tags[ea]='m';B.tags[eb]='m';A.fe=freeEdges(A.polyT,A.tags);B.fe=freeEdges(B.polyT,B.tags);A.front=A.fe.length>0;B.front=B.fe.length>0;rep.hmerged=(rep.hmerged||0)+1;merges.push([ia,ib])}break}}}}}
+      for(ea=0;ea<A.polyT.length&&!hit;ea++){if(A.tags[ea]!=='n')continue;var a1=A.polyT[ea],a2=A.polyT[(ea+1)%A.polyT.length];for(eb=0;eb<B.polyT.length;eb++){if(B.tags[eb]!=='n')continue;var b1=B.polyT[eb],b2=B.polyT[(eb+1)%B.polyT.length];if(Math.hypot(a1[0]-b2[0],a1[1]-b2[1])<1e-3&&Math.hypot(a2[0]-b1[0],a2[1]-b1[1])<1e-3){hit=true;if(rv()<span){A.tags[ea]='m';B.tags[eb]='m';snapEdge(A,ea,B,eb);joinStone(A,B);A.fe=freeEdges(A.polyT,A.tags);B.fe=freeEdges(B.polyT,B.tags);A.front=A.fe.length>0;B.front=B.fe.length>0;rep.hmerged=(rep.hmerged||0)+1;merges.push([ia,ib])}break}}}}}
+    sameTop(row);
     if(!lipOn)recessStones(p,g,row,merges,c,f,rep,prev);
     row.forEach(function(b){blocks.push(b);(ends[b.c2]=ends[b.c2]||[]).push(b)});z+=h}
   var kept=[];
   blocks.forEach(function(b){if(envHeight(g,b)<MINSTONE*f-1e-6){rep.dropped++;rep.dCrest2=(rep.dCrest2||0)+1;return}kept.push(b)});
+  stoneKeys(kept);
   /* only a cell with nothing above it is cut to the crest: a cell under another is never lowered out from under it (that leaves a flat ceiling) */
   kept.forEach(function(b){var above=kept.some(function(o){return o.c>cE(b)&&polyOverlap(o.polyT,b.polyT)>0.2});if(!above)b.crest=true});
   return {blocks:kept}}

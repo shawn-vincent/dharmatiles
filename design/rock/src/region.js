@@ -40,7 +40,9 @@ var Stone = Stone || {};
   const coreOf = (g) => { const P = g.bear && g.bear.length >= 3 ? g.bear : g.pts, k = g.n[2] > 0.5 ? CORE_UP : CORE, c = [0, 0, 0]; for (const p of P) for (let a = 0; a < 3; a++) c[a] += p[a] / P.length; return P.map((p) => [c[0] + (p[0] - c[0]) * k, c[1] + (p[1] - c[1]) * k, c[2] + (p[2] - c[2]) * k]); };
   const caps = (cv) => { const cap = cv.faces[cv.faces.length - 1], byId = new Map(cv.faces.map((f) => [f.id, f])); return { cap, nb: cap.lab.map((id) => byId.get(id)).filter(Boolean) }; };
   /* the verdict on a cut that was made: 'ok', or why not */
-  function verdict(cv, st) { const { cap, nb } = caps(cv);
+  function verdict(cv, prev) { const { cap, nb } = caps(cv);
+    /* a cut never takes a whole held bed or top, or the seat (a stone on the ground stays on it): the cores of the faces the cut touches are guarded below, and a face the cut removes outright is no longer a face it touches */
+    if (prev) { const ids = new Set(cv.faces.map((f) => f.id)); if (prev.faces.some((f) => prev.held(f) && Math.abs(f.n[2]) > 0.5 && !ids.has(f.id))) return 'core'; }
     const side = (g) => g.role === 'joint' && cv.held(g) && Math.abs(g.n[2]) <= 0.5;   /* a head joint, between neighbours of one course: nothing bears on it, so it is as free as an outer face */
     if (!nb.some((g) => g.role === 'surface' || side(g))) return 'noSurface';
     if (nb.some((g) => g.role === 'joint' && typeof g.nb === 'string' && g.nb.startsWith('gseam:'))) return 'seam';   /* a crack between the parts of one stone is not an edge of it */
@@ -71,8 +73,8 @@ var Stone = Stone || {};
         const sup = b.support(n) - dot(n, c);                                    // how far the box reaches that way
         const t = 0.15 + Math.max(0, sup - minHalf) * Math.pow(bite, 1.1) * (0.6 + 0.4 * dr) + 0.5 * bite * dr;   // 0.15 mm is a nick; the rest grows with bite
         /* a cut that would take part of a bearing core is not dropped: its normal is turned down until the plane leaves the top (a cut at a bottom edge, 45 degrees at most from vertical), then its depth is halved until it stays outside the cores. A cut that makes a down-facing face is tilted to 45 degrees. */
-        const tryCut = (nn, tt) => { let nx = region.shave(nn, tt, b), vv = nx && nx !== region ? verdict(nx) : 'ok';
-          if (vv === 'tilt') { const h = Math.hypot(nn[0], nn[1]); if (h > 1e-6) { const m = [nn[0] / h * Math.cos(OVER), nn[1] / h * Math.cos(OVER), -Math.sin(OVER)]; nx = region.shave(m, tt, b); vv = nx && nx !== region ? verdict(nx) : 'ok'; if (vv === 'tilt') vv = 'core'; } }
+        const tryCut = (nn, tt) => { let nx = region.shave(nn, tt, b), vv = nx && nx !== region ? verdict(nx, region) : 'ok';
+          if (vv === 'tilt') { const h = Math.hypot(nn[0], nn[1]); if (h > 1e-6) { const m = [nn[0] / h * Math.cos(OVER), nn[1] / h * Math.cos(OVER), -Math.sin(OVER)]; nx = region.shave(m, tt, b); vv = nx && nx !== region ? verdict(nx, region) : 'ok'; if (vv === 'tilt') vv = 'core'; } }
           return [nx, vv]; };
         let [next, v] = tryCut(n, t);
         if (v === 'core') { const h = Math.hypot(n[0], n[1]); if (h > 1e-6 && n[2] > -Math.sin(30 * PI / 180)) { const lo = [n[0] / h * Math.cos(30 * PI / 180), n[1] / h * Math.cos(30 * PI / 180), -Math.sin(30 * PI / 180)]; [next, v] = tryCut(lo, t); } }

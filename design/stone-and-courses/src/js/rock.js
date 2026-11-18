@@ -17,14 +17,16 @@ function jointSegs(b,P0){var poly=b.polyT,m=poly.length,sg=polyArea(poly)>=0?1:-
 function mouthPlane(ax,ay,bx,by,bed){var ex=bx-ax,ey=by-ay,l=Math.hypot(ex,ey),n=[ey/l,-ex/l],db=MOUTH*Math.tan(rad(48)),hb=MOUTH,Lh=Math.hypot(hb,db),nn=[n[0]*hb/Lh,n[1]*hb/Lh,-db/Lh],mx=(ax+bx)/2,my=(ay+by)/2,
   zb=(bed.d-bed.n[0]*mx-bed.n[1]*my)/bed.n[2],gr=[-bed.n[0]/bed.n[2],-bed.n[1]/bed.n[2]],n2=[nn[0]-nn[2]*gr[0],nn[1]-nn[2]*gr[1],nn[2]];
   return {n:n2,d:n2[0]*mx+n2[1]*my+n2[2]*(zb+hb)}}
-function cellOfBlock(g,b,pieces,ctx){
+function cellOfBlock(g,b,pieces,ctx,nospec){
   var cx=b.cx[0],cy=b.cx[1],oz=1e9,poly=b.polyT,m=poly.length,sg=polyArea(poly)>=0?1:-1,i,j;
   pieces.forEach(function(Q){Q.faces.forEach(function(F){F.pts.forEach(function(q){if(q[2]<oz)oz=q[2]})})});
   var o=[cx,cy,oz],hasAbove=!!b.poly&&(g.byCol&&g.byCol[cE(b)+1]||[]).some(function(q){return polyOverlap(b.poly,q.poly)>0.02});
-  var P0=b.poly,m0=P0.length,sg0=polyArea(P0)>=0?1:-1;
+  var P0=b.poly,m0=P0.length,sg0=polyArea(P0)>=0?1:-1,inner=[];
+  /* the cell's interior edges (a span merge): the outline stops exactly on that line, so the neighbour's part shares the edge and the two are one stone cut apart */
+  for(j=0;j<m;j++)if(b.tags[j]==='m'){var ia=poly[j],ib=poly[(j+1)%m],ix=ib[0]-ia[0],iy=ib[1]-ia[1],il=Math.hypot(ix,iy)||1,inn=[sg*iy/il,-sg*ix/il];inner.push({n:inn,d:inn[0]*ia[0]+inn[1]*ia[1]})}
   /* the role of each edge of the outline: a neighbour edge or a merged edge is a joint, the rest are free */
   function roleOf(n,d){for(j=0;j<m;j++){var a=poly[j],c=poly[(j+1)%m],ex=c[0]-a[0],ey=c[1]-a[1],l=Math.hypot(ex,ey)||1,nx=sg*ey/l,ny=-sg*ex/l;
-      if(nx*n[0]+ny*n[1]>0.999&&Math.abs(n[0]*a[0]+n[1]*a[1]-d)<0.6)return (b.tags[j]==='n'||b.tags[j]==='m')?'joint':'surface'}return 'surface'}
+      if(nx*n[0]+ny*n[1]>0.999&&Math.abs(n[0]*a[0]+n[1]*a[1]-d)<0.6)return b.tags[j]==='n'?'joint':'surface'}return 'surface'}
   /* graded areas (steps 3a and 7a): when a stage that draws an outline is on and changes this stone, its area is that outline's convex parts, each cut by the piece's seams; otherwise the cell, as before */
   /* a top is held (the rock leaves it whole: no cut, chunk or wear takes it) where a stone stands on it, and free (cut like any other) where none does, so the stone above always has the plane it is cut to; a stone stands on what is left of the tops below it (ctx.seq: courses are built in order and each hands the next its cut tops), cut to that area, or not built when too little is left */
   var G0=ctx&&GR.areaOn(ctx.p)?GR.stoneArea(ctx,b,jointSegs):null,parts=[],tops=[];
@@ -33,6 +35,7 @@ function cellOfBlock(g,b,pieces,ctx){
     var outline=P0.map(function(q){return [q[0],q[1]]}),bed=null,top=null,planes=[],bA=-1,tA=-1,seams=[];
     Q.faces.forEach(function(F){var k=F.kind,n=F.n;
       if(k==='seam'){var d=dot(n,F.pts[0]);seams.push({n:n,d:d});outline=clipPoly(outline,n,d)}});
+    inner.forEach(function(L){outline=clipPoly(outline,L.n,L.d)});
     Q.faces.forEach(function(F){var k=F.kind,n=F.n,d=dot(n,F.pts[0])-dot(n,o),A=areaOf(F.pts);
       if(k==='seam'||k==='side'||k==='front')return;
       if(k==='bed'&&n[2]<-0.5&&A>bA){if(bed)planes.push({n:bed.n,d:bed.d});bA=A;bed={n:n,d:d};return}
@@ -41,6 +44,7 @@ function cellOfBlock(g,b,pieces,ctx){
     var bedO={n:0,v:bed&&{n:bed.n,d:bed.d,seat:b.c===0&&bed.n[2]<-0.999,over:OVL+(ctx&&ctx.seq&&b.c>0&&!ctx.exact?SUPTOL+0.5*(ctx.vox||0):0)}},topO=top&&{n:top.n,d:top.d+(hasAbove?OVL:0),held:hasAbove,over:OVL};if(top)tops.push({n:top.n,d:topO.d+dot(top.n,o)});   /* a top is a free face; where a stone stands on it, it still stands OVL further out, so the two overlap and the union has nothing coincident */   // a piece whose bed (or top) is wholly taken by a chamfer has none: the chamfer closes it
     if(G0){G0.parts.forEach(function(pt){var tg=pt.area.map(function(q,i){return {p:q,e:pt.edges[i]==='joint'?'n':pt.edges[i]==='seam'?'s':'g'}}),si;
         for(si=0;si<seams.length&&tg.length>2;si++)tg=clipTagged(tg,seams[si].n,seams[si].d,'s');
+        for(si=0;si<inner.length&&tg.length>2;si++)tg=clipTagged(tg,inner[si].n,inner[si].d,'s');
         if(tg.length<3)return;var ar=tg.map(function(v){return v.p}),ax=0,ii;for(ii=0;ii<ar.length;ii++){var u1=ar[ii],u2=ar[(ii+1)%ar.length];ax+=u1[0]*u2[1]-u2[0]*u1[1]}if(ax/2<0.05)return;
         /* a stone on a stone: the joint's lower mouth (step 9's rule, at the part's own free edges): a 48 degree facet along every free edge the wall did not already chamfer, so a bed never starts in front of the rounded top edge under it */
         var pl=planes,bedPoly=ar.map(function(q){return [q[0],q[1]]});if(b.c>0&&bedO.v){pl=planes.slice();tg.forEach(function(v,ii2){if(v.e!=='g')return;var a1=v.p,b1=tg[(ii2+1)%tg.length].p,ex=b1[0]-a1[0],ey=b1[1]-a1[1],l=Math.hypot(ex,ey);if(l<0.8)return;
@@ -68,13 +72,12 @@ function cellOfBlock(g,b,pieces,ctx){
         if(remSup<Math.max(1.5,0.15*remain)){ctx.rep.dropped=(ctx.rep.dropped||0)+1;ctx.rep.floating=(ctx.rep.floating||0)+1;return null}}
       if(tot<minSupport(ctx,cellA)){ctx.rep.dropped=(ctx.rep.dropped||0)+1;return null}
       parts=kept}}
-  var cell=Stone.cell.area(parts,'s');
-  return {spec:cell.spec,origin:o,tops:tops,parts:parts}}
+  return {spec:nospec?null:Stone.cell.area(parts,'s').spec,origin:o,tops:tops,parts:parts}}
 function hullOfRings(rings,cx,cy){var pts=[];rings.forEach(function(R){R.forEach(function(q){pts.push([q[0]-cx,q[1]-cy])})});return pts.length>=3?hull2(pts):null}
 /* THE SUPPORT of a stone: where the stones it rests on really are, at the height its bed stands: the upward faces of their built meshes within SUPTOL of their top planes, as one area (Manifold's CrossSection). A stone on the ground has none to look at. */
 var SUPTOL=0.12;
 function supportCS(ctx,b){if(!ctx.seq||b.c<1)return null;var sups=ctx.blocks.filter(function(o){return cE(o)===b.c-1&&polyOverlap(b.poly,o.poly)>0.02});if(!sups.length)return null;
-  var acc=null;sups.forEach(function(o){var k=o.c+'_'+o.i,cs=ctx.supMemo[k];if(cs===undefined){var S0=ctx.built[k];cs=null;
+  var acc=null;sups.forEach(function(o){var k=o.sk||o.c+'_'+o.i,cs=ctx.supMemo[k];if(cs===undefined){var S0=ctx.built[k];cs=null;
       if(S0&&S0.tops){var m=S0.mesh,P=m.pos,ix=m.idx,tp=S0.tops,rings=[],t,v,pl;
         for(t=0;t<ix.length;t+=3){var V=[ix[t]*3,ix[t+1]*3,ix[t+2]*3],A=[P[V[0]],P[V[0]+1],P[V[0]+2]],B=[P[V[1]],P[V[1]+1],P[V[1]+2]],C=[P[V[2]],P[V[2]+1],P[V[2]+2]],n=cross(sub(B,A),sub(C,A)),l=Math.sqrt(dot(n,n));if(l<1e-12||n[2]/l<0.8)continue;
           var near=false,tol=ctx.exact?SUPTOL:SUPTOL+0.5*(ctx.vox||0);for(pl=0;pl<tp.length&&!near;pl++){near=[A,B,C].every(function(q){var d=dot(tp[pl].n,q)-tp[pl].d;return d>-tol&&d<0.06+(ctx.exact?0:0.25*(ctx.vox||0))})}
@@ -85,7 +88,8 @@ function supportCS(ctx,b){if(!ctx.seq||b.c<1)return null;var sups=ctx.blocks.fil
   /* the support is smoothed: opened by 0.3 mm (thin slivers and jags go, and it only ever shrinks) and simplified, so the stone above gets a clean outline, not the sampled mesh's */
   if(!acc)return {empty:true};var sm=acc.offset(-0.3,'Round',2,8).offset(0.3,'Round',2,8).simplify(0.2);return sm.area()>1e-6?sm:{empty:true}}
 /* the stones of a build, grouped by course (the course a stone's bed is on): a stone's pieces share a block. */
-function rockPlan(b){var by={},order=[];b.polys.slice(0,b.n0).forEach(function(Q,i){if(!Q.b)return;var k=Q.b.c+'_'+Q.b.i;if(!by[k]){by[k]={k:k,b:Q.b,pieces:[],idx:[]};order.push(k)}by[k].pieces.push(Q);by[k].idx.push(i)});
+function rockPlan(b){var by={},order=[];b.polys.slice(0,b.n0).forEach(function(Q,i){if(!Q.b)return;var k=Q.b.sk||Q.b.c+'_'+Q.b.i;if(!by[k]){by[k]={k:k,b:Q.b,pieces:[],idx:[],mem:[]};order.push(k)}
+    if(k===Q.b.c+'_'+Q.b.i)by[k].b=Q.b;var mm=by[k].mem.filter(function(x){return x.b===Q.b})[0];if(!mm){mm={b:Q.b,pieces:[],idx:[]};by[k].mem.push(mm)}mm.pieces.push(Q);mm.idx.push(i);by[k].pieces.push(Q);by[k].idx.push(i)});
   var cs={};order.forEach(function(k){var c=by[k].b.c;(cs[c]=cs[c]||[]).push(by[k])});
   return {groups:order.map(function(k){return by[k]}),courses:Object.keys(cs).map(Number).sort(function(x,y){return x-y}).map(function(c){return cs[c]})}}
 /* the least a stone may stand on: 15% of its cell, and 4 mm2 for a cell that can spare it; a small cell (under 8 mm2) needs half of itself, so a stone small enough to be fully supported is not dropped for being small */
@@ -94,8 +98,17 @@ function rockCtx(b,p,seq){var c={p:p,g:b.g,blocks:b.l2.blocks,memo:{},rep:b.rep,
 /* the rock's lengths are reference mm at the 35 mm square, like the wall's dmm: under OpenLOCK (f = 0.7257) every stage's size shrinks with the stone, and a density per cm grows (the same number of chips along an edge). Hash change for the ol builds only; db has f = 1. */
 function rockScaled(P,f){if(f===1)return P;var Q=Object.assign({},P);
   Stone.controls.CONTROLS.forEach(function(c){if(c.stage==='stone'&&c.word!=='patch')return;if(c.unit==='mm')Q[c.key]=P[c.key]*f;else if(c.unit==='per cm')Q[c.key]=P[c.key]/f});return Q}
-function makeJob(b,p,grp,ctx){var c=cellOfBlock(b.g,grp.b,grp.pieces,ctx);if(!c)return null;
+function makeJob(b,p,grp,ctx){var c=grp.mem.length>1?joinCells(b.g,grp,ctx):cellOfBlock(b.g,grp.b,grp.pieces,ctx);if(!c)return null;
   return {k:grp.k,block:grp.b,idx:grp.idx,origin:c.origin,spec:c.spec,tops:c.tops,parts:c.parts,P:rockScaled(Object.assign({},p.rock,{seed:hash(p.seed,777,grp.b.c,grp.b.i)|0}),b.g.f)}}
+/* a stone of several cells (a span merge): each cell's parts, moved into the first standing cell's frame, are the parts of one stone (the rock finds the shared edges and cuts them apart as cracks inside it); a cell with nothing to stand on is left out of it, and the stone is not built only when none stands */
+function joinCells(g,grp,ctx){var rs=[],i;grp.mem.forEach(function(m){var r=cellOfBlock(g,m.b,m.pieces,ctx,true);if(r)rs.push(r)});if(!rs.length)return null;
+  var L=rs[0].origin,parts=[],tops=[];
+  rs.forEach(function(r){var dx=r.origin[0]-L[0],dy=r.origin[1]-L[1],dz=r.origin[2]-L[2];
+    function pl(q){return q&&Object.assign({},q,{d:q.d+q.n[0]*dx+q.n[1]*dy+q.n[2]*dz})}
+    function bear(q){return q&&q.bear?Object.assign({},q,{bear:q.bear.map(function(v){return [v[0]+dx,v[1]+dy]})}):q}
+    r.parts.forEach(function(pt){parts.push(Object.assign({},pt,{area:pt.area.map(function(v){return [v[0]+dx,v[1]+dy]}),bed:bear(pl(pt.bed)),top:bear(pl(pt.top)),planes:pt.planes.map(pl),seamTag:'gseam'}))});
+    r.tops.forEach(function(t){tops.push(t)})});
+  return {spec:Stone.cell.area(parts,'s').spec,origin:L,tops:tops,parts:parts}}
 /* a stone that is not built: its places are emptied (and its mirror's) */
 function dropRock(b,grp){grp.idx.forEach(function(ix){b.polys[ix]={faces:[],b:grp.b,empty:true};if(b.ym!=null)b.polys[ix+b.n0]={faces:[],b:grp.b,empty:true,mirror:true}})}
 /* the mesh of a job, in the wall's frame, as a solid the page draws and the union takes */

@@ -3,137 +3,11 @@
   {
    "key": "L",
    "tiles": 1,
-   "stones": 33,
-   "written": 185692,
-   "union_tris": 125368,
+   "stones": 32,
+   "written": 192092,
+   "union_tris": 130348,
    "union_ms": 857,
-   "rock_ms": 712,
-   "db": {
-    "of": 3,
-    "counted": 0,
-    "apart": 3
-   },
-   "ol": {
-    "of": 3,
-    "counted": 0,
-    "apart": 3
-   },
-   "worst_red_apart": 0.022,
-   "worst_band_apart": 0.052
-  },
-  {
-   "key": "B",
-   "tiles": 1,
-   "stones": 40,
-   "written": 193584,
-   "union_tris": 126062,
-   "union_ms": 898,
-   "rock_ms": 725,
-   "db": {
-    "of": 3,
-    "counted": 0,
-    "apart": 3
-   },
-   "ol": {
-    "of": 3,
-    "counted": 0,
-    "apart": 2
-   },
-   "worst_red_apart": 1.905,
-   "worst_band_apart": 0.05
-  },
-  {
-   "key": "E",
-   "tiles": 1,
-   "stones": 18,
-   "written": 78424,
-   "union_tris": 58668,
-   "union_ms": 354,
-   "rock_ms": 351,
-   "db": {
-    "of": 3,
-    "counted": 0,
-    "apart": 3
-   },
-   "ol": {
-    "of": 3,
-    "counted": 0,
-    "apart": 1
-   },
-   "worst_red_apart": 0.075,
-   "worst_band_apart": 0.218
-  },
-  {
-   "key": "M",
-   "tiles": 1,
-   "stones": 22,
-   "written": 132680,
-   "union_tris": 82562,
-   "union_ms": 554,
-   "rock_ms": 576,
-   "db": {
-    "of": 3,
-    "counted": 0,
-    "apart": 3
-   },
-   "ol": {
-    "of": 3,
-    "counted": 0,
-    "apart": 3
-   },
-   "worst_red_apart": 0.015,
-   "worst_band_apart": 0.049
-  },
-  {
-   "key": "G",
-   "tiles": 1,
-   "stones": 53,
-   "written": 194424,
-   "union_tris": 74938,
-   "union_ms": 837,
-   "rock_ms": 607,
-   "db": {
-    "of": 3,
-    "counted": 3,
-    "apart": 3
-   },
-   "ol": {
-    "of": 3,
-    "counted": 0,
-    "apart": 0
-   },
-   "worst_red_apart": 0.148,
-   "worst_band_apart": 0.233
-  },
-  {
-   "key": "O",
-   "tiles": 1,
-   "stones": 6,
-   "written": 82228,
-   "union_tris": 58804,
-   "union_ms": 271,
-   "rock_ms": 416,
-   "db": {
-    "of": 3,
-    "counted": 0,
-    "apart": 3
-   },
-   "ol": {
-    "of": 3,
-    "counted": 0,
-    "apart": 3
-   },
-   "worst_red_apart": 0.01,
-   "worst_band_apart": 0.009
-  },
-  {
-   "key": "F",
-   "tiles": 1,
-   "stones": 24,
-   "written": 160560,
-   "union_tris": 104636,
-   "union_ms": 671,
-   "rock_ms": 623,
+   "rock_ms": 870,
    "db": {
     "of": 3,
     "counted": 0,
@@ -145,16 +19,37 @@
     "apart": 3
    },
    "worst_red_apart": 0.023,
-   "worst_band_apart": 0.049
+   "worst_band_apart": 0.086
   },
   {
-   "key": "A",
+   "key": "B",
    "tiles": 1,
-   "stones": 15,
-   "written": 60064,
-   "union_tris": 48092,
-   "union_ms": 268,
-   "rock_ms": 297,
+   "stones": 34,
+   "written": 198060,
+   "union_tris": 131168,
+   "union_ms": 898,
+   "rock_ms": 976,
+   "db": {
+    "of": 3,
+    "counted": 0,
+    "apart": 3
+   },
+   "ol": {
+    "of": 3,
+    "counted": 0,
+    "apart": 2
+   },
+   "worst_red_apart": 1.915,
+   "worst_band_apart": 0.071
+  },
+  {
+   "key": "E",
+   "tiles": 1,
+   "stones": 18,
+   "written": 85536,
+   "union_tris": 60618,
+   "union_ms": 354,
+   "rock_ms": 483,
    "db": {
     "of": 3,
     "counted": 0,
@@ -165,17 +60,122 @@
     "counted": 0,
     "apart": 3
    },
-   "worst_red_apart": 0.03,
-   "worst_band_apart": 0.079
+   "worst_red_apart": 0.022,
+   "worst_band_apart": 0.057
+  },
+  {
+   "key": "M",
+   "tiles": 1,
+   "stones": 18,
+   "written": 135460,
+   "union_tris": 86738,
+   "union_ms": 554,
+   "rock_ms": 664,
+   "db": {
+    "of": 3,
+    "counted": 0,
+    "apart": 3
+   },
+   "ol": {
+    "of": 3,
+    "counted": 0,
+    "apart": 3
+   },
+   "worst_red_apart": 0.021,
+   "worst_band_apart": 0.051
+  },
+  {
+   "key": "G",
+   "tiles": 1,
+   "stones": 61,
+   "written": 246680,
+   "union_tris": 83816,
+   "union_ms": 837,
+   "rock_ms": 886,
+   "db": {
+    "of": 3,
+    "counted": 3,
+    "apart": 3
+   },
+   "ol": {
+    "of": 3,
+    "counted": 0,
+    "apart": 0
+   },
+   "worst_red_apart": 0.078,
+   "worst_band_apart": 0.151
+  },
+  {
+   "key": "O",
+   "tiles": 1,
+   "stones": 6,
+   "written": 86220,
+   "union_tris": 61528,
+   "union_ms": 271,
+   "rock_ms": 537,
+   "db": {
+    "of": 3,
+    "counted": 0,
+    "apart": 3
+   },
+   "ol": {
+    "of": 3,
+    "counted": 0,
+    "apart": 3
+   },
+   "worst_red_apart": 0.008,
+   "worst_band_apart": 0.021
+  },
+  {
+   "key": "F",
+   "tiles": 1,
+   "stones": 21,
+   "written": 152544,
+   "union_tris": 101998,
+   "union_ms": 671,
+   "rock_ms": 779,
+   "db": {
+    "of": 3,
+    "counted": 0,
+    "apart": 3
+   },
+   "ol": {
+    "of": 3,
+    "counted": 0,
+    "apart": 3
+   },
+   "worst_red_apart": 0.02,
+   "worst_band_apart": 0.029
+  },
+  {
+   "key": "A",
+   "tiles": 1,
+   "stones": 12,
+   "written": 53976,
+   "union_tris": 42586,
+   "union_ms": 268,
+   "rock_ms": 355,
+   "db": {
+    "of": 3,
+    "counted": 0,
+    "apart": 3
+   },
+   "ol": {
+    "of": 3,
+    "counted": 0,
+    "apart": 3
+   },
+   "worst_red_apart": 0.053,
+   "worst_band_apart": 0.063
   },
   {
    "key": "N",
    "tiles": 1,
    "stones": 6,
-   "written": 27844,
-   "union_tris": 44462,
+   "written": 28176,
+   "union_tris": 44162,
    "union_ms": 363,
-   "rock_ms": 176,
+   "rock_ms": 255,
    "db": {
     "of": 3,
     "counted": 0,
@@ -186,17 +186,17 @@
     "counted": 0,
     "apart": 3
    },
-   "worst_red_apart": 0.371,
-   "worst_band_apart": 0.088
+   "worst_red_apart": 0.456,
+   "worst_band_apart": 0.098
   },
   {
    "key": "D",
    "tiles": 1,
    "stones": 33,
-   "written": 187460,
-   "union_tris": 69476,
+   "written": 196812,
+   "union_tris": 75934,
    "union_ms": 779,
-   "rock_ms": 616,
+   "rock_ms": 788,
    "db": {
     "of": 3,
     "counted": 3,
@@ -205,19 +205,19 @@
    "ol": {
     "of": 3,
     "counted": 2,
-    "apart": 2
+    "apart": 3
    },
-   "worst_red_apart": 0.061,
-   "worst_band_apart": 0.114
+   "worst_red_apart": 0.069,
+   "worst_band_apart": 0.077
   },
   {
    "key": "K",
    "tiles": 1,
-   "stones": 34,
-   "written": 165144,
-   "union_tris": 110952,
+   "stones": 33,
+   "written": 179820,
+   "union_tris": 118464,
    "union_ms": 773,
-   "rock_ms": 619,
+   "rock_ms": 822,
    "db": {
     "of": 3,
     "counted": 0,
@@ -228,38 +228,38 @@
     "counted": 0,
     "apart": 3
    },
-   "worst_red_apart": 0.015,
-   "worst_band_apart": 0.079
+   "worst_red_apart": 0.037,
+   "worst_band_apart": 0.083
   },
   {
    "key": "Lf",
    "tiles": 1,
-   "stones": 44,
-   "written": 211548,
-   "union_tris": 90156,
+   "stones": 32,
+   "written": 162124,
+   "union_tris": 77674,
    "union_ms": 925,
-   "rock_ms": 677,
+   "rock_ms": 626,
    "db": {
     "of": 3,
-    "counted": 0,
-    "apart": 0
+    "counted": 1,
+    "apart": 3
    },
    "ol": {
     "of": 3,
     "counted": 0,
-    "apart": 0
+    "apart": 2
    },
-   "worst_red_apart": 0.28,
-   "worst_band_apart": 0.265
+   "worst_red_apart": 0.053,
+   "worst_band_apart": 0.194
   },
   {
    "key": "J",
    "tiles": 1,
-   "stones": 65,
-   "written": 262084,
-   "union_tris": 96018,
+   "stones": 60,
+   "written": 266540,
+   "union_tris": 98174,
    "union_ms": 1228,
-   "rock_ms": 744,
+   "rock_ms": 928,
    "db": {
     "of": 3,
     "counted": 0,
@@ -270,17 +270,17 @@
     "counted": 0,
     "apart": 0
    },
-   "worst_red_apart": 0.159,
-   "worst_band_apart": 0.197
+   "worst_red_apart": 0.125,
+   "worst_band_apart": 0.171
   },
   {
    "key": "J2",
    "tiles": 2,
-   "stones": 107,
-   "written": 573760,
-   "union_tris": 177218,
+   "stones": 101,
+   "written": 589552,
+   "union_tris": 180800,
    "union_ms": 2526,
-   "rock_ms": 1494,
+   "rock_ms": 1681,
    "db": {
     "of": 3,
     "counted": 3,
@@ -288,83 +288,83 @@
    },
    "ol": {
     "of": 3,
-    "counted": 3,
-    "apart": 3
+    "counted": 1,
+    "apart": 2
    },
-   "worst_red_apart": 0.043,
-   "worst_band_apart": 0.06
+   "worst_red_apart": 0.069,
+   "worst_band_apart": 0.108
   },
   {
    "key": "C",
    "tiles": 1,
-   "stones": 38,
-   "written": 99336,
-   "union_tris": 43474,
+   "stones": 36,
+   "written": 118096,
+   "union_tris": 47008,
    "union_ms": 483,
-   "rock_ms": 330,
+   "rock_ms": 449,
    "db": {
     "of": 3,
-    "counted": 0,
-    "apart": 1
+    "counted": 2,
+    "apart": 2
    },
    "ol": {
     "of": 3,
-    "counted": 1,
-    "apart": 1
+    "counted": 0,
+    "apart": 0
    },
-   "worst_red_apart": 0.15,
-   "worst_band_apart": 0.246
+   "worst_red_apart": 0.078,
+   "worst_band_apart": 0.196
   },
   {
    "key": "P",
    "tiles": 1,
-   "stones": 20,
-   "written": 52496,
-   "union_tris": 30262,
+   "stones": 21,
+   "written": 73788,
+   "union_tris": 42092,
    "union_ms": 241,
-   "rock_ms": 222,
+   "rock_ms": 343,
    "db": {
     "of": 3,
-    "counted": 1,
-    "apart": 1
+    "counted": 0,
+    "apart": 0
    },
    "ol": {
     "of": 3,
     "counted": 0,
     "apart": 0
    },
-   "worst_red_apart": 0.148,
-   "worst_band_apart": 0.309
+   "worst_red_apart": 0.133,
+   "worst_band_apart": 0.192
   },
   {
    "key": "T",
    "tiles": 1,
-   "stones": 22,
-   "written": 180800,
-   "union_tris": 93030,
+   "stones": 18,
+   "written": 171128,
+   "union_tris": 91644,
    "union_ms": 655,
-   "rock_ms": 583,
+   "rock_ms": 600,
    "db": {
     "of": 3,
-    "counted": 2,
+    "counted": 3,
     "apart": 3
    },
    "ol": {
     "of": 3,
-    "counted": 1,
+    "counted": 3,
     "apart": 3
    },
-   "worst_red_apart": 0.031,
-   "worst_band_apart": 0.072
+   "worst_red_apart": 0.044,
+   "worst_band_apart": 0.044
   },
   {
    "key": "R",
    "tiles": 1,
-   "stones": 97,
-   "written": 287024,
-   "union_tris": 118002,
+   "stones": 94,
+   "written": 315556,
+   "union_tris": 110466,
    "union_ms": 1449,
-   "rock_ms": 964,
+   "rock_ms": 1274,
    "db": {
     "of": 3,
     "counted": 0,
@@ -373,35 +373,35 @@
    "ol": {
     "of": 3,
     "counted": 0,
-    "apart": 0
+    "apart": 1
    },
-   "worst_red_apart": 0.643,
-   "worst_band_apart": 0.835
+   "worst_red_apart": 0.227,
+   "worst_band_apart": 0.196
   },
   {
    "key": "S",
    "tiles": 1,
-   "stones": 19,
-   "written": 175888,
-   "union_tris": 91988,
+   "stones": 17,
+   "written": 171632,
+   "union_tris": 93944,
    "union_ms": 617,
-   "rock_ms": 573,
+   "rock_ms": 682,
    "db": {
     "of": 3,
-    "counted": 2,
+    "counted": 3,
     "apart": 3
    },
    "ol": {
     "of": 3,
-    "counted": 2,
+    "counted": 3,
     "apart": 3
    },
-   "worst_red_apart": 0.092,
-   "worst_band_apart": 0.078
+   "worst_red_apart": 0.077,
+   "worst_band_apart": 0.045
   }
  ],
- "tri_min_k": 30.3,
- "tri_max_k": 126.1,
+ "tri_min_k": 42.1,
+ "tri_max_k": 131.2,
  "presets_measured": {
   "L": {
    "of": 6,
@@ -416,7 +416,7 @@
   "E": {
    "of": 6,
    "counted": 0,
-   "apart": 4
+   "apart": 6
   },
   "M": {
    "of": 6,
@@ -451,7 +451,7 @@
   "D": {
    "of": 6,
    "counted": 5,
-   "apart": 5
+   "apart": 6
   },
   "K": {
    "of": 6,
@@ -460,8 +460,8 @@
   },
   "Lf": {
    "of": 6,
-   "counted": 0,
-   "apart": 0
+   "counted": 1,
+   "apart": 5
   },
   "J": {
    "of": 6,
@@ -470,32 +470,32 @@
   },
   "J2": {
    "of": 6,
-   "counted": 6,
-   "apart": 6
+   "counted": 4,
+   "apart": 5
   },
   "C": {
    "of": 6,
-   "counted": 1,
+   "counted": 2,
    "apart": 2
   },
   "P": {
    "of": 6,
-   "counted": 1,
-   "apart": 1
+   "counted": 0,
+   "apart": 0
   },
   "T": {
    "of": 6,
-   "counted": 3,
+   "counted": 6,
    "apart": 6
   },
   "R": {
    "of": 6,
    "counted": 0,
-   "apart": 0
+   "apart": 1
   },
   "S": {
    "of": 6,
-   "counted": 4,
+   "counted": 6,
    "apart": 6
   }
  },
@@ -505,8 +505,8 @@
  ],
  "n_builds": 114,
  "n_presets": 19,
- "gate_counted": 23,
- "gate_apart": 79,
+ "gate_counted": 27,
+ "gate_apart": 86,
  "union_ms": 857,
  "workers": 1
 }
