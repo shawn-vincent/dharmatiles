@@ -80,7 +80,7 @@ var DEFAULTS={
   depth:22,                       /* region depth behind the face, dmm */
   top:[44,58],                    /* crest band above the dirt, dmm (L0) */
   width:[6,14,1.2],height:[10,16,1.2],bond:[0.05,0.6],shift:[0.25,0.5],recess:[0,1.2],wander:0.15,
-  rise:0,span:0,dip:0,wave:0,
+  rise:0,span:0,lean:[0,0],tilt:[0,0],wave:0,planes:{w:'flat',bumps:3},
   regularity:0.3,
   /* graded areas (steps 3a and 7a): both off at 0, so the wall is exactly what it was */
   sbw:{w:'flat',bumps:2.5},       /* the recess's weighting along a course (step 5a), like the crest's */
@@ -286,15 +286,23 @@ function L1c(p,g,rep){
         var ang=reg>=0.999?(rr()<0.5?0:PI):rr()*2*PI,nq=[Math.max(g.xl+0.3*sx,Math.min(g.xr-0.3*sx,q[0]+Math.cos(ang)*shiftAmt)),Math.max(minY+0.3*sy,Math.min(g.yb-0.3*sy,q[1]+Math.sin(ang)*shiftAmt)),-1-k];if(!inPolyAny(g.fp,nq[0],nq[1])){nq[0]=q[0];nq[1]=q[1]}
         var ok=true;cur.forEach(function(o){if(Math.hypot(o[0]-nq[0],o[1]-nq[1])<0.5*Math.min(sx,sy))ok=false});if(ok)cur.push(nq);else{cur.push([q[0],q[1],q[2]]);rep.shiftFail++}})}
     courses.push(cur);prevPts=cur}
-  /* RULE (the row planes come first): every boundary between rows is fixed for the whole wall before any block exists. A plane is its height, a tilt (up to dip degrees), and waves (sinusoids of up to wave mm across the wall, random in direction and wavelength, with value noise a third as strong); the bottom plane is the ground and stays flat. Any two planes are held at least 0.6 of the row's own height apart everywhere in the wall (a row is never thinner than its minimum). Blocks begin and end on these planes. */
-  var planes=[],zc0=DIRT-0.4,cxw=0,cyw=g.y0+g.D/2,rp=R(p.seed,500),tn=Math.tan(rad(p.dip||0)),amp=(p.wave||0)*f,pi2,k2;
-  for(pi2=0;pi2<=hs.length;pi2++){var an=rp()*2*PI,mg=tn*rp(),pl={z:zc0,gx:Math.cos(an)*mg,gy:Math.sin(an)*mg,s:(pi2===0||(!tn&&!amp))?0:1,waves:[],ns:p.seed*31+pi2,amp:amp,cx:cxw,cy:cyw,G:12*f};
-    for(k2=0;k2<2;k2++){var th=rp()*2*PI;pl.waves.push({a:amp*(k2===0?0.7:0.4)*(0.5+rp()),c:Math.cos(th),s:Math.sin(th),l:(30+60*rp())*f,ph:rp()*2*PI})}
-    planes.push(pl);if(pi2<hs.length)zc0+=hs[pi2]}
+  /* RULE (the row planes come first): every boundary between rows is fixed for the whole wall before any block exists. A plane is its height, a lean (degrees, side to side: the slope along the wall), a tilt (degrees, front to back: the slope into it) and waves (sinusoids of up to wave mm across the wall, random in direction and wavelength, with value noise a third as strong); the bottom plane is the ground and stays flat. Lean and tilt are each a range, drawn across the row planes by the graded rule (a smooth wobble up the wall, ranked, through the weighting). No two planes may come closer than 0.6 of the row's own height anywhere in the wall: BY CONSTRUCTION, the ranges are clipped before drawing so that |gx|*hx+|gy|*hy <= 0.2*hmin - (the waves' reach) for every plane (hx, hy: the footprint's reach from the plane's centre; half of that budget to each axis; hmin: the thinnest row, so the clip is the same for every plane); the old scaling loop is kept as an assertion and records rep.planeGuard if it ever fires. Blocks begin and end on these planes. */
+  var planes=[],zc0=DIRT-0.4,cxw=0,cyw=g.y0+g.D/2,rw=R(p.seed,503),amp=(p.wave||0)*f,pi2,k2,PL=p.planes||{},ln=p.lean||[0,0],tl=p.tilt||[0,0];
   var xs0=g.fp.map(function(q){return q[0]}),ys0=g.fp.map(function(q){return q[1]}),gx0=Math.min.apply(null,xs0),gx1=Math.max.apply(null,xs0),gy0=Math.min.apply(null,ys0),gy1=Math.max.apply(null,ys0);
+  var hxr=Math.max(Math.abs(gx0-cxw),Math.abs(gx1-cxw)),hyr=Math.max(Math.abs(gy0-cyw),Math.abs(gy1-cyw)),hmin=Math.min.apply(null,hs),reach=amp*(1.1*1.5+0.35),bud=Math.max(0,0.2*hmin-reach);
+  function clip(r,h){var lim=Math.atan(bud/(2*Math.max(h,1e-9)))*180/PI,lo=Math.min(r[0],r[1]),hi=Math.max(r[0],r[1]);return [Math.max(-lim,Math.min(lim,lo)),Math.max(-lim,Math.min(lim,hi))]}
+  var lnU=clip(ln,hxr),tlU=clip(tl,hyr);
+  function cl(a,b){return Math.abs(a[0]-b[0])>1e-9||Math.abs(a[1]-b[1])>1e-9}
+  if(cl([Math.min(ln[0],ln[1]),Math.max(ln[0],ln[1])],lnU)||cl([Math.min(tl[0],tl[1]),Math.max(tl[0],tl[1])],tlU)){rep.planes={clipped:{lean:{asked:[Math.min(ln[0],ln[1]),Math.max(ln[0],ln[1])],used:lnU},tilt:{asked:[Math.min(tl[0],tl[1]),Math.max(tl[0],tl[1])],used:tlU}},limit:{lean:Math.atan(bud/(2*hxr))*180/PI,tilt:Math.atan(bud/(2*hyr))*180/PI},why:'rows are never thinner than 0.6 of their own height'}}
+  var nP=hs.length,zr=[],zz=0,H=0,wS=GR.wOf({w:PL.w||'flat',a:PL.a,c:PL.c}),leanT=[],tiltT=[];
+  hs.forEach(function(h){H+=h;zz+=h;zr.push(zz-h/2)});
+  if(nP){var bp=PL.bumps||3,sqh=SQUARE*f,wl=GR.lineWobble(hash(p.seed,9501),bp,sqh),wt=GR.lineWobble(hash(p.seed,9502),bp,sqh);leanT=GR.ranked(zr.map(wl),wS);tiltT=GR.ranked(zr.map(wt),wS)}
+  for(pi2=0;pi2<=nP;pi2++){var li=pi2>0?lnU[0]+(lnU[1]-lnU[0])*leanT[pi2-1]:0,ti=pi2>0?tlU[0]+(tlU[1]-tlU[0])*tiltT[pi2-1]:0,pl={z:zc0,gx:Math.tan(rad(li)),gy:Math.tan(rad(ti)),s:(pi2===0||(!li&&!ti&&!amp))?0:1,waves:[],ns:p.seed*31+pi2,amp:amp,cx:cxw,cy:cyw,G:12*f};
+    for(k2=0;k2<2;k2++){var th=rw()*2*PI;pl.waves.push({a:amp*(k2===0?0.7:0.4)*(0.5+rw()),c:Math.cos(th),s:Math.sin(th),l:(30+60*rw())*f,ph:rw()*2*PI})}
+    planes.push(pl);if(pi2<hs.length)zc0+=hs[pi2]}
   for(pi2=1;pi2<planes.length;pi2++){var need=0.6*hs[pi2-1],guard2=0;
     while(guard2++<8){var dmin=1e9,ix,iy;for(ix=0;ix<=8;ix++)for(iy=0;iy<=8;iy++){var X=gx0+(gx1-gx0)*ix/8,Y=gy0+(gy1-gy0)*iy/8,dz=planes[pi2].z+planeOff(planes[pi2],X,Y)-(planes[pi2-1].z+planeOff(planes[pi2-1],X,Y));if(dz<dmin)dmin=dz}
-      if(dmin>=need)break;planes[pi2].s*=0.7;if(pi2>1)planes[pi2-1].s*=0.85}}
+      if(dmin>=need)break;rep.planeGuard=(rep.planeGuard||0)+1;planes[pi2].s*=0.7;if(pi2>1)planes[pi2-1].s*=0.85}}
   return {pts:courses,heights:hs,sx:sx,sy:sy,cells:true,planes:planes,cx:cxw,cy:cyw}}
 /* a polygon cut into convex parts: ear clipping, then neighbouring parts joined while they stay convex; an edge of a part that is an edge of the polygon keeps its index */
 function convexParts(fp){var n=fp.length,V=[],i,tris=[],guard=0;for(i=0;i<n;i++)V.push(i);

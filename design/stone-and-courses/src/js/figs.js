@@ -25,7 +25,7 @@ dg.planes=function(el,a){function one(ov,title){var b=build(mk('L',Object.assign
     L.planes.forEach(function(pl,i){var d='';for(var x=g.x0;x<=g.x1+1e-6;x+=1.5){var p=XZ(x,pl.z+planeOff(pl,x,y));d+=(d?' ':'')+p.join(',')}s+='<polyline points="'+d+'" class="dplane'+(i===0?' dground':'')+'"/>'});
     if(L.planes.length>2){var p0=XZ(g.x0,L.planes[2].z+planeOff(L.planes[2],g.x0,y));s+=txt(p0[0]+3,p0[1]-3,'row 2 plane')}
     s+=txt(12,18,title,{c:'dtb'});return svg(w,h,s)}
-  el.innerHTML='<div class="dgrow">'+one({},'flat rows')+one({dip:4,wave:2},'dip 4, wave 2')+'</div>'};
+  el.innerHTML='<div class="dgrow">'+one({},'flat rows')+one({lean:[0,8],tilt:[-5,5],wave:2},'lean 0..8, tilt -5..5, wave 2')+'</div>'};
 function planPoly(b,cs,o){var g=b.g,T=g.T,W=g.W,pad=5,k=400/(T+2*pad),h=Math.round((g.yb-g.y0+2*pad+3)*k);function X(x,y){return [(x+T/2+pad)*k,(g.yb+pad-y)*k]}return {X:X,k:k,h:h,w:400}}
 dg.subdivide=function(el,a){var b=build(mk(a.p||'L',Object.assign({wander:0},a.ov||{})),2),g=b.g,P=planPoly(b),X=P.X,s='';
   [0,1].forEach(function(c){b.l2.blocks.filter(function(x){return x.c===c}).forEach(function(o){s+='<polygon points="'+pts(o.polyT,X)+'" class="'+(c===0?'dcell':'dcell1')+'"/>'})});

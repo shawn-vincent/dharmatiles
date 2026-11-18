@@ -45,6 +45,8 @@ src/img/9b01d2defe.jpg
 src/img/b152f6409a.jpg
 src/img/c0cbf968ea.jpg
 src/img/cb31e5ed19.jpg
+src/img/planes-front.jpg
+src/img/planes-three-quarter.jpg
 src/img/ref/c2.jpg
 src/img/ref/c3.jpg
 src/img/ref/c4.jpg

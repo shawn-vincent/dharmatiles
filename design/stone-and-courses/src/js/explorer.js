@@ -67,6 +67,8 @@ function Explorer(root,REFS){
     if(ctl==='free-sides')return (P.foot||P.wing)?'':'The sides of this footprint are seams (the wall goes on into the next tile), so it has no free sides.';return ''}
   function faceLive(){return !!(P.free&&(P.free.front||(P.free.back&&!deadWhy('free-back'))||(P.free.sides&&!deadWhy('free-sides'))))}
   /* an effect with an amount and no free face on does nothing: said, not silent */
+  /* the row planes' clip, said: lean and tilt are limited to what keeps every row 0.6 of its own height thick; the build records the range asked and the one used */
+  function planesNote(){var q=cur&&cur.rep&&cur.rep.planes;if(!q||!q.clipped)return '';function f(a){return (+a[0].toFixed(2))+'..'+(+a[1].toFixed(2))}var o=[];['lean','tilt'].forEach(function(k){var c=q.clipped[k];if(c&&(Math.abs(c.asked[0]-c.used[0])>1e-9||Math.abs(c.asked[1]-c.used[1])>1e-9))o.push(k+' limited to '+f(c.used)+' deg by row height (asked '+f(c.asked)+')')});return o.join('; ')}
   function noFace(panel){if(faceLive())return false;return panel==='region'?(P.band&&P.band.depth>0):(((P.recess||[0,0])[1]>0)||((P.lip||[0,0])[1]>0))}
   function pick(rows){return rows.filter(function(r){return !r.more}).map(token).filter(function(k){return k.key||k.c})}
   function summaryOf(rows){return pick(rows).map(function(k){return k.c?'<b class="chg">'+k.t+'</b>':'<span>'+k.t+'</span>'}).join(' &middot; ')}
@@ -93,7 +95,7 @@ function Explorer(root,REFS){
     if(groups.band)groups.band.body.appendChild(tryRow(groups.band,'band'));
     if(groups.outline)groups.outline.body.appendChild(tryRow(groups.outline,'outline'));
     W.reg(function(){var t=summaryOf(prow),gs=Object.keys(groups).map(function(k){var gd=groupDef(k),g=groups[k],ks=pick(g.rows),sh=gd.id==='band'?'':(gd.id==='crest'?'crest':gd.id==='outline'?'outline':gd.title.toLowerCase());return (sh?'<i>'+sh+'</i> ':'')+ks.map(function(q){return q.c?'<b class="chg">'+q.t+'</b>':'<span>'+q.t+'</span>'}).join(' ')});
-      psum.innerHTML=[t].concat(gs).concat(noFace(p.id)?['<b class="chg">no free face is on</b>']:[]).filter(Boolean).join(' &middot; ')+(p.id==='rock'?(psum.innerHTML?' &middot; ':'')+rockSummary():'');
+      psum.innerHTML=[t].concat(gs).concat(noFace(p.id)?['<b class="chg">no free face is on</b>']:[]).concat(p.id==='courses'&&planesNote()?['<b class="chg">'+planesNote()+'</b>']:[]).filter(Boolean).join(' &middot; ')+(p.id==='rock'?(psum.innerHTML?' &middot; ':'')+rockSummary():'');
       psum.title=[fullOf(prow)].concat(Object.keys(groups).map(function(k){return groupDef(k).title.toLowerCase()+': '+fullOf(groups[k].rows)})).filter(Boolean).join('; ')});
     panelEl[p.id]=sec;return sec}
   /* the columns are the two pairs: wall scale (Region, Courses) and stone scale (Rock region, Rock) */
@@ -221,6 +223,7 @@ function Explorer(root,REFS){
     else{var ok=gate.status==='NoError'&&gate.bodies===1&&gate.bandPct<=0.1&&gate.redPct<=0.1,ap=bridgeStats(gate.tris);L.push('status '+(ok?'passes':'fails')+' the gate as counted; '+(ap.pass?'passes':'fails')+' with bridge faces apart');
       L.push('triangles '+gate.numTri+' bodies '+gate.bodies+' manifold '+gate.status);
       L.push('overhang past65 '+gate.redPct.toFixed(3)+'% band '+gate.bandPct.toFixed(3)+'% ; apart past65 '+ap.redApart.toFixed(3)+'% band '+ap.bandApart.toFixed(3)+'%')}
+    if(planesNote())L.push('planes '+planesNote());if(r.planeGuard)L.push('planes DEFECT: the guard scaled a plane '+r.planeGuard+' times');
     L.push('stones '+(rockSum?rockSum.stones:'-')+' dropped '+(r.dropped||0)+(rockSum?' cached '+rockSum.cached+' checks '+((rockSum.bad||rockSum.islands)?'FAILED bad '+rockSum.bad+' islands '+rockSum.islands:'held'):''));
     var tm=['L0 '+(t.L0||0),'L1 '+(t.L1||0),'L2 '+((t.L2||0)+(t.L2b||0)),'L3 '+(t.L3||0)];if(rockSum)tm.push('L4 '+rockSum.wallMs);if(gate)tm.push('L6 '+(gate.tHull+gate.tUnion+gate.tMesh));
     L.push('ms '+tm.map(function(x){var p=x.split(' ');return p[0]+' '+(+p[1]).toFixed(1)}).join(' '));return L.join('\n')}
@@ -316,7 +319,7 @@ function Explorer(root,REFS){
   function go(){var b;targetW.hidden=stage===0;rowsW.hidden=stage===1;W.refreshAll();
     P.rock=Stone.controls.effective(RP.P,RP.off,rockSolo());
     b=build(P,Math.max(stage,2)>=5?5:Math.max(stage,2));if(stage<2)b=build(P,2);
-    freeGate(gate);cur=b;gate=null;thin=null;clearTimeout(timer);RockRun.cancel();rockBusy=false;rockSum=null;rockErr=null;pn.clearStages();rockUI();draw();stats();gateUI();
+    freeGate(gate);cur=b;gate=null;thin=null;clearTimeout(timer);RockRun.cancel();rockBusy=false;rockSum=null;rockErr=null;pn.clearStages();rockUI();draw();stats();gateUI();W.refreshAll();
     if(stage>=4&&ROCK_ON(b.p)){startRock(b)}else{timer=setTimeout(measure,250)}}
   function startRock(b){var vox=Stone.controls.TIERS[tier];rockBusy=true;rockUI();
     Stone.controls.STAGES.forEach(function(s){if(b.p.rock[s.id]>0)pn.setStat(s.id,{mode:'run'})});

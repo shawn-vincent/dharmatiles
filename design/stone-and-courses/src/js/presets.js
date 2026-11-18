@@ -22,7 +22,7 @@ PRESETS.fHeight={name:'L, courses 4 to 6 high: thin courses, red',refuses:true,p
 PRESETS.fWear={name:'L, wear 0.9 mm and chips 14: grooves roofed over',refuses:true,p:PRESETS.L.p,rock:{wear:0.9,chips:14}};
 /* what the row planes and the merges reach that the older presets did not (each preset is the dials, nothing else) */
 PRESETS.T={name:'T tall stones beside one-row stones',p:Object.assign({},PRESETS.L.p,{rise:0.6,span:0.3,wander:0})};
-PRESETS.R={name:'R tilted rows, irregular fieldstone',p:Object.assign({},PRESETS.L.p,{regularity:0.05,width:[5,10,0.8],height:[8,12,1.0],bond:[0.5,0.9],dip:2,wander:0})};
+PRESETS.R={name:'R tilted rows, irregular fieldstone',p:Object.assign({},PRESETS.L.p,{regularity:0.05,width:[5,10,0.8],height:[8,12,1.0],bond:[0.5,0.9],lean:[-2,2],tilt:[-2,2],wander:0})};
 PRESETS.S={name:'S near-slab: few joints, tall and wide',p:Object.assign({},PRESETS.L.p,{rise:0.7,span:0.7,wander:0})};
 /* the rock of each wall preset, tuned by eye and by the gate (17 Nov): the default (WALLROCK: cuts, a little grain, wear) reads best and passes on the plain walls; a spire, a lip or a tilted row loses its cuts, because a cut on a tapering or overhanging cell leaves the stone above a roof over a notch */
 ['C','S','J2','G','P','Lf','D','J','T','R'].forEach(function(k){if(PRESETS[k])PRESETS[k].rock={cuts:0,wear:0.1,grain:0.1}});
