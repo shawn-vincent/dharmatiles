@@ -98,7 +98,7 @@ body=inline_imgs(body)
 css=rd('css','page.css')+rd('css','extra.css')+rd('css','panel.css')+rd('css','explorer.css')
 modules=re.search(r"MODULES = \[(.*?)\]",open(path(os.path.relpath(R,H),'load.js')).read()).group(1).replace("'",'').replace(' ','').split(',')
 stonesrc='\n;\n'.join(open(path(os.path.relpath(R,H),m+'.js')).read() for m in modules)
-live=['engine','graded','rock','union','ui','thumbs','controls','widgets','presets','explorer','popups','figs','flips']
+live=['problems','engine','graded','rock','union','ui','thumbs','controls','widgets','presets','spec','explorer','popups','figs','flips']
 mine='\n'.join(rd('js',n+'.js') for n in live)
 def refs(pre):
     d={}
@@ -107,7 +107,9 @@ def refs(pre):
         k=f[2:-4] if pre=='u_' else f[:-4]
         d[k]='data:image/jpeg;base64,'+base64.b64encode(open(path('img','ref',f),'rb').read()).decode()
     return json.dumps(d)
-MEASURED='window.MEASURED='+json.dumps({'presets':M['presets_measured']})+';\n'
+import hashlib
+BUILD_ID=hashlib.sha1((mine+css+body).encode()).hexdigest()[:8]   # names this build in a copied spec
+MEASURED='window.BUILD_ID="'+BUILD_ID+'";window.MEASURED='+json.dumps({'presets':M['presets_measured']})+';\n'
 mount=MEASURED+rd('js','mount.js').replace('{{REFS}}',refs('')).replace('{{REFSU}}',refs('u_'))
 out=('<meta charset="utf-8"><title>Stone and Courses</title><meta name="claude:viewport-fit-sides" content="cover">\n<style>'+css+'</style>\n<div class="wrap">\n'+nav()+'\n<main>\n'+body+'\n</main></div>\n'
  +'<script id="stonesrc">'+stonesrc+'</script>\n<script>'+open(path(os.path.relpath(R,H),'panel.js')).read()+'</script>\n'

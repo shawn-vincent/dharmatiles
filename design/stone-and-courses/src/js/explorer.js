@@ -3,7 +3,7 @@ function Explorer(root,REFS){
   var self=this,P=JSON.parse(JSON.stringify(DEFAULTS)),mode='shaded',stage=6,target=false,rowsOn=false,vmode='3d',cam=new Cam(32,22),cur=null,gate=null,thin=null,timer=0,presetKey='L',tier='draft',levelManual=false;
   var W=Widgets;
   /* ---- the markup: the viewer (canvas, its overlays, its strip), Setup, the four panels, Measure ---- */
-  var h='<div class="xp sp"><div class="xview"><div class="xcv sp"><canvas id="xp-cv" width="900" height="820"></canvas><canvas id="xp-el" width="900" height="820" hidden></canvas><div class="zoomv"><input data-ctl="zoom" type="range" id="xp-zoom" min="0.35" max="4" step="0.01" value="1" aria-label="zoom" title="zoom"></div><button type="button" class="ovl ovl-reset" data-ctl="reset" id="xp-zreset" title="reset view" aria-label="reset view">&#8634;</button><button type="button" class="ovl gdot" data-ctl="gate" id="xp-gdot" aria-label="Printability: measuring" aria-haspopup="dialog" aria-expanded="false"><span class="gd wait">&middot;</span></button><div class="gpop" id="xp-gpop" role="dialog" aria-label="Printability details" hidden><button type="button" class="gclose" id="xp-gclose" aria-label="close">&times;</button><div id="xp-gpb"></div></div><div class="vsw" id="xp-vsw" role="group" aria-label="view of the model"></div><div class="xpanel" id="xp-costs" hidden><div class="xstats" id="xp-st"></div></div><div class="xpanel" id="xp-lines" hidden><div class="xlines"><div><canvas id="xp-plan" width="560" height="560"></canvas><label class="ctl">layer height z <output id="xp-zo"></output><input type="range" id="xp-z" min="3.6" max="60" step="0.2" value="20"></label></div><div><canvas id="xp-sec" width="560" height="560"></canvas><label class="ctl">section at x <output id="xp-xo"></output><input type="range" id="xp-x" min="-17" max="17" step="0.5" value="0"></label></div></div><p class="small" id="xp-lnote"></p></div></div>'
+  var h='<div class="xp sp"><div class="xview"><div class="xcv sp"><canvas id="xp-cv" width="900" height="820"></canvas><canvas id="xp-el" width="900" height="820" hidden></canvas><div class="zoomv"><input data-ctl="zoom" type="range" id="xp-zoom" min="0.35" max="4" step="0.01" value="1" aria-label="zoom" title="zoom"></div><button type="button" class="ovl ovl-reset" data-ctl="reset" id="xp-zreset" title="reset view" aria-label="reset view">&#8634;</button><button type="button" class="ovl gdot" data-ctl="gate" id="xp-gdot" aria-label="Printability: measuring" aria-haspopup="dialog" aria-expanded="false"><span class="gd wait">&middot;</span></button><div class="gpop" id="xp-gpop" role="dialog" aria-label="Printability details" hidden><button type="button" class="gclose" id="xp-gclose" aria-label="close">&times;</button><div id="xp-gpb"></div></div><button type="button" class="ovl ovl-reset ovl-spec" data-ctl="CopySpec" id="xp-spec" title="Copy spec" aria-label="Copy spec"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="10" height="4" rx="1"/><path d="M8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2M8 12h8M8 16h6"/></svg></button><button type="button" class="ovl ovl-reset ovl-max" data-ctl="Maximize" id="xp-max" aria-pressed="false" title="Maximize" aria-label="Maximize the viewer"></button><div class="specbox" id="xp-specbox" role="dialog" aria-label="Spec" hidden><textarea id="xp-spectext" spellcheck="false" aria-label="Spec text"></textarea><div class="specrow"><button type="button" id="xp-speccopy">Copy</button><button type="button" id="xp-specload">Load this text</button><button type="button" id="xp-specclose">Close</button><span id="xp-specmsg" class="small"></span></div></div><div class="vsw" id="xp-vsw" role="group" aria-label="view of the model"></div><div class="xpanel" id="xp-costs" hidden><div class="xstats" id="xp-st"></div></div><div class="xpanel" id="xp-lines" hidden><div class="xlines"><div><canvas id="xp-plan" width="560" height="560"></canvas><label class="ctl">layer height z <output id="xp-zo"></output><input type="range" id="xp-z" min="3.6" max="60" step="0.2" value="20"></label></div><div><canvas id="xp-sec" width="560" height="560"></canvas><label class="ctl">section at x <output id="xp-xo"></output><input type="range" id="xp-x" min="-17" max="17" step="0.5" value="0"></label></div></div><p class="small" id="xp-lnote"></p></div></div>'
    +'<div class="xleg" id="xp-leg"></div></div>'
    +'<div class="pe" id="xp-pe" hidden><div><canvas id="xp-pl" width="560" height="420"></canvas><div class="small" id="xp-plc"></div></div><div><canvas id="xp-ev" width="560" height="420"></canvas><div class="small" id="xp-evc"></div></div></div>'
    +'<div class="xsetup" id="xp-setup"><figure class="xref"><img alt="reference panel" id="xp-ref"><figcaption id="xp-refc"></figcaption></figure><div class="xsetc" id="xp-setc"></div></div>'
@@ -11,6 +11,12 @@ function Explorer(root,REFS){
    +'<details class="xmeasure" id="xp-measure" data-ctl="Measure"><summary>Measure <small>the union by four routes, and the last builds</small></summary><div class="in" id="xp-mbody"></div></details></div>';
   root.innerHTML=h;
   var $=function(i){return document.getElementById(i)},cv=$('xp-cv'),el=$('xp-el');
+  /* the canvas fills the whole viewer box at any aspect ratio: its pixel size follows the box (device pixel ratio, capped because the renderer runs on the CPU), so nothing is stretched */
+  var xcv0=document.querySelector('#xp .xcv');
+  function sizeCanvas(){var r=xcv0.getBoundingClientRect(),w=Math.max(120,r.width),h=Math.max(100,r.height),q=Math.max(0.6,Math.min(window.devicePixelRatio||1,Math.sqrt(1.4e6/(w*h)))),pw=Math.round(w*q),ph=Math.round(h*q);
+    if(cv.width===pw&&cv.height===ph)return false;cv.width=pw;cv.height=ph;el.width=pw;el.height=ph;return true}
+  var rzT=0;if(window.ResizeObserver)new ResizeObserver(function(){clearTimeout(rzT);rzT=setTimeout(function(){if(sizeCanvas()&&cur)draw()},40)}).observe(xcv0);
+  sizeCanvas();
   /* ---- the rock: its params, switches and solo live here; the panel is the shared one (rock/panel.js); a change rebuilds the stones that it changes (their keys), and the page keeps the rest ---- */
   var RP={P:rockParams(null),off:{},solo:''},rockSum=null,rockBusy=false,rockErr=null,drawT=0,lastRockSolo='';
   /* ---- one Solo for the page: a graded stage or a rock stage; every other stage is then off ---- */
@@ -45,15 +51,19 @@ function Explorer(root,REFS){
   /* ---- summaries: one function from a set of rows to their one line, read from the table; what differs from the preset is marked ---- */
   var FRESH=null,FRESHROCK=null;
   function changed(path){return JSON.stringify(W.getPath(P,path))!==JSON.stringify(W.getPath(FRESH,path))}
-  function token(r){var v=ST.get(r.path),txt;
-    var sh=function(x){return String(+(+x).toFixed(2))};
-    if(r.kind==='range'){v=v||[0,0];txt=sh(v[0])+'..'+sh(v[1])}
-    else if(r.kind==='num')txt=sh(v==null?0:v);
-    else if(r.kind==='weighting'){var base=r.path.slice(0,r.path.length-2);return {t:W.getPath(P,base+'.w'),c:['w','a','c'].some(function(x){return changed(base+'.'+x)}),w:1}}
-    else{var o=r.opts.filter(function(q){return q[0]===v})[0];txt=o?o[1]:String(v)}
-    var lab=r.kind==='choice'?'':(r.group?r.label.replace(new RegExp('^'+r.group+' ','i'),''):r.label)+' ';if(r.ctl==='band-stay'){lab='';txt=v?'stays behind':'free front'}
-    return {t:lab+txt,c:r.path==='tier'?tier!=='draft':changed(r.path)}}
-  function summaryOf(rows){return rows.filter(function(r){return !r.more}).map(function(r){var k=token(r);return k.c?'<b class="chg">'+k.t+'</b>':'<span>'+k.t+'</span>'}).join(' &middot; ')}
+  /* a card's one line: values first, each with a tiny label or a symbol (from the table's `sh`), only the rows that define the card (`key`) and the ones that differ from the preset (bold); everything else is in the opened card and in the tooltip, which has the full names. */
+  function token(r){var v=ST.get(r.path),txt,full,sh=r.sh||'',sf='';
+    var num=function(x){return String(+(+x).toFixed(2))};
+    if(r.kind==='range'){v=v||[0,0];txt=num(v[0])+'\u2013'+num(v[1])}
+    else if(r.kind==='num')txt=num(v==null?0:v);
+    else if(r.kind==='weighting'){var base=r.path.slice(0,r.path.length-2);txt=W.getPath(P,base+'.w');full=(r.group||'')+' weighting '+txt;return {t:txt,full:full,c:['w','a','c'].some(function(x){return changed(base+'.'+x)}),key:r.key}}
+    else{var o=r.opts.filter(function(q){return q[0]===v})[0];txt=o?o[1]:String(v);txt=txt.replace(/^(\d)x(\d).*$/,'$1\u00d7$2').replace(/^2x2.*/,'2\u00d72').replace(/ \(.*\)$/,'').replace(/^Draft.*/,'draft').replace(/^Fine.*/,'fine');if(r.ctl==='band-stay')txt=v?'stays':'free'}
+    if(r.ctl==='crest-bumps'||r.ctl==='band-bumps'||r.ctl==='outl-bumps'){sf=sh;sh=''}
+    var t=(sh?sh+' ':'')+txt+(sf?sf:'');
+    return {t:t,full:r.label+' '+txt+(r.unit?' '+r.unit:''),c:r.path==='tier'?tier!=='draft':changed(r.path),key:r.key}}
+  function pick(rows){return rows.filter(function(r){return !r.more}).map(token).filter(function(k){return k.key||k.c})}
+  function summaryOf(rows){return pick(rows).map(function(k){return k.c?'<b class="chg">'+k.t+'</b>':'<span>'+k.t+'</span>'}).join(' &middot; ')}
+  function fullOf(rows){return rows.map(token).map(function(k){return k.full}).join(', ')}
   function badgeOf(state){var out='';if(!STAGE.on(state))out+='<b class="bg">off</b> ';else if(SOLO===state)out+='<b class="bg">solo</b> ';return out}
   function buildPanel(p){
     var sec=el0('section','pnl');sec.id='p-'+p.id;sec.setAttribute('data-level',p.level);
@@ -66,7 +76,7 @@ function Explorer(root,REFS){
     function into(g,more){return function(x){if(g)g.add(x,more);else{(more?moreOf(body):body).appendChild(x)}}}
     var moreBody=null;function moreOf(b){if(!moreBody){var d=el0('details','more');d.innerHTML='<summary>more</summary>';moreBody=el0('div','gb');d.appendChild(moreBody);b.appendChild(d)}return moreBody}
     ROWS.filter(function(r){return r.panel===p.id}).forEach(function(r){
-      var g=null;if(r.group){g=groups[r.group];if(!g){var gd=groupDef(r.group);g=groups[r.group]=W.group({id:gd.id,title:gd.title,line:gd.line});g.title=gd.title;g.rows=[];(function(g,gd){W.reg(function(){g.sum.innerHTML=(gd.onoff?badgeOf(gd.state==='band'?'band':'outl'):'')+summaryOf(g.rows)})})(g,gd);g.el.querySelector('.gh').setAttribute('data-ctl','group-'+gd.id);if(gd.onoff)W.stageToggles(g,gd.state==='band'?'band':'outl',STAGE);body.appendChild(g.el)}}
+      var g=null;if(r.group){g=groups[r.group];if(!g){var gd=groupDef(r.group);g=groups[r.group]=W.group({id:gd.id,title:gd.title,line:gd.line});g.title=gd.title;g.rows=[];(function(g,gd){W.reg(function(){g.sum.innerHTML=(gd.onoff?badgeOf(gd.state==='band'?'band':'outl'):'')+summaryOf(g.rows);g.sum.title=fullOf(g.rows)})})(g,gd);g.el.querySelector('.gh').setAttribute('data-ctl','group-'+gd.id);if(gd.onoff)W.stageToggles(g,gd.state==='band'?'band':'outl',STAGE);body.appendChild(g.el)}}
       if(g)g.rows.push(r);else prow.push(r);
       var add=into(g,r.more);
       if(r.kind==='weighting')weightingRows(r,g,add);
@@ -75,7 +85,9 @@ function Explorer(root,REFS){
       else if(r.kind==='choice')add(W.choice({ctl:r.ctl,label:r.label,opts:function(){return r.opts.map(function(o){return {v:o[0],text:o[1]}})},get:function(){return ST.get(r.path)},set:function(v){ST.set(r.path,v);W.refreshAll();ST.change()},wide:r.ctl==='Quality'}))});
     if(groups.front)groups.front.body.appendChild(tryRow(groups.front,'front'));
     if(groups.outline)groups.outline.body.appendChild(tryRow(groups.outline,'outline'));
-    W.reg(function(){var t=summaryOf(prow),gs=Object.keys(groups).map(function(k){var gd=groupDef(k);return '<i>'+gd.title.toLowerCase()+'</i> '+(groups[k].rows.length?summaryOf(groups[k].rows):'')});psum.innerHTML=[t].concat(gs).filter(Boolean).join(' &middot; ')+(p.id==='rock'?(psum.innerHTML?' &middot; ':'')+rockSummary():'')});
+    W.reg(function(){var t=summaryOf(prow),gs=Object.keys(groups).map(function(k){var gd=groupDef(k),g=groups[k],ks=pick(g.rows),sh=gd.id==='front'?'':(gd.id==='crest'?'crest':gd.id==='outline'?'outline':gd.title.toLowerCase());return (sh?'<i>'+sh+'</i> ':'')+ks.map(function(q){return q.c?'<b class="chg">'+q.t+'</b>':'<span>'+q.t+'</span>'}).join(' ')});
+      psum.innerHTML=[t].concat(gs).filter(Boolean).join(' &middot; ')+(p.id==='rock'?(psum.innerHTML?' &middot; ':'')+rockSummary():'');
+      psum.title=[fullOf(prow)].concat(Object.keys(groups).map(function(k){return groupDef(k).title.toLowerCase()+': '+fullOf(groups[k].rows)})).filter(Boolean).join('; ')});
     panelEl[p.id]=sec;return sec}
   /* the columns are the two pairs: wall scale (Region, Courses) and stone scale (Rock region, Rock) */
   var PN=$('xp-panels'),COLS={region:0,courses:0,rockregion:1,rock:1},cols=[el0('div','xcol'),el0('div','xcol')];cols.forEach(function(c){PN.appendChild(c)});PANELS.forEach(function(p){cols[COLS[p.id]].appendChild(buildPanel(p))});
@@ -85,13 +97,13 @@ function Explorer(root,REFS){
   var pn=Stone.panel.create({stages:$('stages'),allOn:$('allon'),allOff:$('alloff'),whole:$('stoneset'),wholeWords:['patch'],state:RP,changed:function(){if(RP.solo!==lastRockSolo){lastRockSolo=RP.solo;SOLO=RP.solo}W.refreshAll();areaSync();go()},onStatusClick:function(id,a){pn.openPanel(rockStageRecord(id),a)}});
 
   /* the rock's stages are cards too: collapsed they show their strength and main settings; a click on the name opens them. The panel is the rock library's own; this only adds a summary line and a fold to what it made. */
-  function stageSummary(sid){var C=Stone.controls,sr=C.strengthRow(sid),bits=[];function one(c,label){var v=RP.P[c.key],ch=FRESHROCK&&FRESHROCK[c.key]!==v,t=label+' '+(c.step>=1?Math.round(v):(+v).toFixed(c.step<0.1?2:1));return ch?'<b class="chg">'+t+'</b>':'<span>'+t+'</span>'}
-    bits.push(one(sr,sid==='cuts'?'strength':'strength'));C.settingsRows(sid).filter(function(c){return c.main}).forEach(function(c){bits.push(one(c,(c.label||c.word).replace('preserve ','keep ')))});
+  function stageSummary(sid){var C=Stone.controls,sr=C.strengthRow(sid),bits=[];function val(c){var v=RP.P[c.key];return c.step>=1?Math.round(v):String(+(+v).toFixed(2))}
+    bits.push('<span>'+val(sr)+'</span>');C.settingsRows(sid).filter(function(c){return c.main&&FRESHROCK&&FRESHROCK[c.key]!==RP.P[c.key]}).forEach(function(c){bits.push('<b class="chg">'+(c.label||c.word).replace('preserve ','keep ')+' '+val(c)+'</b>')});
     var b=RP.off[sid]?'<b class="bg">off</b> ':(RP.solo===sid||SOLO===sid)?'<b class="bg">solo</b> ':'';return b+bits.join(' &middot; ')}
-  function rockSummary(){var C=Stone.controls,on=C.STAGES.filter(function(s){return RP.P[s.id]>0&&!RP.off[s.id]}).map(function(s){return s.name.toLowerCase()});return (on.length?on.join(', '):'no stage on')}
+  function rockSummary(){var C=Stone.controls,on=C.STAGES.filter(function(s){return RP.P[s.id]>0&&!RP.off[s.id]}).map(function(s){return s.id});return on.length?on.join('+'):'none'}
   Stone.controls.STAGES.forEach(function(s){var st=$('st_'+s.id);if(!st)return;st.classList.add('collapsed');var nm=st.querySelector('.nm'),sum=el0('span','gsum');nm.appendChild(sum);nm.setAttribute('role','button');nm.tabIndex=0;nm.setAttribute('aria-expanded','false');
     function flip(){var c=st.classList.toggle('collapsed');nm.setAttribute('aria-expanded',String(!c))}
-    nm.addEventListener('click',function(e){if(e.target.closest('.info'))return;flip()});nm.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&e.target===nm){e.preventDefault();flip()}});
+    nm.addEventListener('click',function(e){if(e.target.closest('.info,.eye'))return;flip()});nm.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&e.target===nm){e.preventDefault();flip()}});
     W.reg(function(){sum.innerHTML=stageSummary(s.id)})});
   function followLevel(l){if(levelManual||stage===l)return;stage=l;W.refreshAll();go()}
   /* a panel goes back to the preset's values: its rows, its stages' on/off, and (Rock) its stages */
@@ -136,8 +148,10 @@ function Explorer(root,REFS){
     return tris.filter(function(t){return t.tag!=='dirt'})}
   /* the view's height covers the whole crest: 82 mm as before for a low crest, more when top is high (the target and the wall are never cut off by the canvas) */
   function vspan(b){var f=b.g.f;return Math.max(82*f,b.g.topHi+DIRT+22*f,(b.g.T+34*f)*0.9)}
-  function drawRows(b){var f=b.g.f,sc=cam.zoom*(cv.height/(b.view?b.view.span:vspan(b)))/cv.width,ce=b.view?b.view.center:[1.5*f,0,vspan(b)/2-16*f];drawRowsCore(cv,cam,b,sc,ce)}
-  function drawTarget(b){var f=b.g.f,sc=cam.zoom*(cv.height/(b.view?b.view.span:vspan(b)))/cv.width,ce=b.view?b.view.center:[1.5*f,0,vspan(b)/2-16*f];drawTargetCore(cv,cam,b,sc,ce)}
+  /* the model is fitted to the canvas's shorter side (the frame was drawn for a canvas a little wider than tall), so a wide or tall viewer only adds space around it */
+  function fitScale(span){return cam.zoom*(Math.min(cv.height,cv.width*0.91)/span)/cv.width}
+  function drawRows(b){var f=b.g.f,sc=fitScale(b.view?b.view.span:vspan(b)),ce=b.view?b.view.center:[1.5*f,0,vspan(b)/2-16*f];drawRowsCore(cv,cam,b,sc,ce)}
+  function drawTarget(b){var f=b.g.f,sc=fitScale(b.view?b.view.span:vspan(b)),ce=b.view?b.view.center:[1.5*f,0,vspan(b)/2-16*f];drawTargetCore(cv,cam,b,sc,ce)}
   function draw(){
     if(!cur)return;var b=cur,f=b.g.f;
     var vm=vmode;$('xp-costs').hidden=vm!=='costs';$('xp-lines').hidden=!(mode==='lines'&&vm==='3d');
@@ -145,7 +159,7 @@ function Explorer(root,REFS){
     if(vm==='costs'){return}
     if((stage<2&&mode==='lines')){cv.hidden=true;el.hidden=false;drawElev(b);$('xp-leg').textContent=stage===0?'L0: the crest map, a height at every column across the face':'L1: the joints of every course, carried up or shifted';}
     else{cv.hidden=false;el.hidden=true;
-      var tris=sceneTris(),big=Math.max(b.g.T+34*f,70*f);render(cv,tris,cam,cam.zoom*(cv.height/(b.view?b.view.span:vspan(b)))/cv.width,b.view?b.view.center:[1.5*f+0,0,vspan(b)/2-16*f],pack(238,240,244),mode==='lines'?'shaded':mode,{dark:isDarkTheme(),px:cv.width/Math.max(1,cv.clientWidth),grid:mode!=='lines',z:DIRT-0.02,S:SQUARE*f,ox:b.fig?0:-b.g.T/2,oy:b.fig?0:-b.g.W/2,fx:b.fig?17.5*f:0,fy:b.fig?17.5*f:0,size:SQUARE*f*(b.fig?1:Math.max(b.g.T,b.g.W)/(SQUARE*f))});
+      var tris=sceneTris(),big=Math.max(b.g.T+34*f,70*f);render(cv,tris,cam,fitScale(b.view?b.view.span:vspan(b)),b.view?b.view.center:[1.5*f+0,0,vspan(b)/2-16*f],pack(238,240,244),mode==='lines'?'shaded':mode,{dark:isDarkTheme(),px:cv.width/Math.max(1,cv.clientWidth),grid:mode!=='lines',z:DIRT-0.02,S:SQUARE*f,ox:b.fig?0:-b.g.T/2,oy:b.fig?0:-b.g.W/2,fx:b.fig?17.5*f:0,fy:b.fig?17.5*f:0,size:SQUARE*f*(b.fig?1:Math.max(b.g.T,b.g.W)/(SQUARE*f))});
       $('xp-leg').textContent=({shaded:'Drag to turn it. The 28 mm figure stands beside the tile.',over:'Green and grey: up to 55 degrees. Orange: 55 to 65. Red: past 65. Blue: a bridge, a flat underside over a gap between a stone\'s supports (the gate still counts it). '+(gate?'Judged on the union.':'Judged on the blocks; the union follows.'),brush:'Dry brush: a dark undercoat, a light coat on what looks up and on every worn edge.',lines:'Lines: see the slices below.'})[mode];if(stage===1)$('xp-leg').textContent='L1: the row planes, fixed for the whole wall before any block: each row between the height dial\'s min and max, tilted by dip, waved by wave. Drag to turn it.'}
     if(!cv.hidden&&(target||stage===0))drawTarget(b);
     if(!cv.hidden&&(rowsOn||stage===1))drawRows(b);
@@ -184,6 +198,46 @@ function Explorer(root,REFS){
   /* the magenta views on the two area cards: Region draws the envelope; Rock region draws the stone the card picked (its cell, graded outline, support and top once the rock has it) */
   function thumbs(){if(!cur)return;var rc=panelEl.region&&panelEl.region.querySelectorAll('.pth canvas'),sc=panelEl.rockregion&&panelEl.rockregion.querySelectorAll('.pth canvas');
     try{if(rc&&rc.length===3&&cur.g.offs)regionThumbs(rc,cur);if(sc&&sc.length===3){var blk=pickStone(cur);if(blk){var R=RockRun.current,job=R&&R.b===cur?R.jobs.filter(function(j){return j.block===blk})[0]:null;if(job)stoneThumbs(sc,cur,job);else stoneCell(sc,cur,blk)}}}catch(e){console.error('[thumbs] '+e.message)}}
+  /* ---- the spec: copy everything that is on screen as text, load it back from pasted text ---- */
+  var SPECT=null;function specTables(){return SPECT||(SPECT={ROWS:ROWS,PANELS:PANELS,rockKeys:Stone.controls.CONTROLS.filter(function(c){return c.stage!=='stone'||c.word==='patch'}).map(function(c){return c.key})})}
+  function snapshot(){var off=[];if(!AP.on.band)off.push('band');if(!AP.on.outl)off.push('outl');Stone.controls.STAGES.forEach(function(s){if(RP.off[s.id])off.push(s.id)});
+    return {build:window.BUILD_ID||'dev',preset:presetKey,system:P.system,seed:P.seed,level:stage,mode:mode,target:target,rows:rowsOn,projection:PROJ.persp?'perspective':'orthographic',off:off,solo:SOLO,P:P,FP:FRESH,tier:tier,rock:RP.P,frock:FRESHROCK}}
+  function specOnly(){return Spec.write(snapshot(),specTables())}
+  function resultText(){var b=cur,L=[];if(!b)return 'no build yet';var r=b.rep,t=r.time,tr=r.tris;
+    if(rockBusy)L.push('status building '+rockProg);else if(!gate)L.push('status '+(stage<2?'no verdict at this level':'measuring'));
+    else{var ok=gate.status==='NoError'&&gate.bodies===1&&gate.bandPct<=0.1&&gate.redPct<=0.1,ap=bridgeStats(gate.tris);L.push('status '+(ok?'passes':'fails')+' the gate as counted; '+(ap.pass?'passes':'fails')+' with bridge faces apart');
+      L.push('triangles '+gate.numTri+' bodies '+gate.bodies+' manifold '+gate.status);
+      L.push('overhang past65 '+gate.redPct.toFixed(3)+'% band '+gate.bandPct.toFixed(3)+'% ; apart past65 '+ap.redApart.toFixed(3)+'% band '+ap.bandApart.toFixed(3)+'%')}
+    L.push('stones '+(rockSum?rockSum.stones:'-')+' dropped '+(r.dropped||0)+(rockSum?' cached '+rockSum.cached+' checks '+((rockSum.bad||rockSum.islands)?'FAILED bad '+rockSum.bad+' islands '+rockSum.islands:'held'):''));
+    var tm=['L0 '+(t.L0||0),'L1 '+(t.L1||0),'L2 '+((t.L2||0)+(t.L2b||0)),'L3 '+(t.L3||0)];if(rockSum)tm.push('L4 '+rockSum.wallMs);if(t.L5!=null)tm.push('L5 '+t.L5);if(gate)tm.push('L6 '+(gate.tHull+gate.tUnion+gate.tMesh));
+    L.push('ms '+tm.map(function(x){var p=x.split(' ');return p[0]+' '+(+p[1]).toFixed(1)}).join(' '));return L.join('\n')}
+  function specText(){return specOnly()+'\n\n[result]\n'+resultText()+'\n\n[problems]\n'+((window.__problems&&window.__problems.length)?window.__problems.join('\n'):'none')+'\n'}
+  function loadSpec(text){var S=Spec.read(text),h=S.header;if(!h.preset||!PRESETS[h.preset[0]])throw new Error('the spec names no preset this page knows');
+    setPreset(h.preset[0]);if(h.system)P.system=h.system[0];if(h.seed)P.seed=+h.seed[0];
+    Object.keys(S.values).forEach(function(k){var f=Spec.get(FRESH,k);if(k==='tier'){tier=S.values[k][0];return}var v=S.values[k];Spec.set(P,k,Array.isArray(f)||(f===undefined&&v.length>1)?v.map(Number):typeof f==='number'||f===undefined?+v[0]:v[0])});
+    Object.keys(S.rock).forEach(function(k){RP.P[k]=+S.rock[k]});
+    AP.on={band:1,outl:1};RP.off={};(h.off||[]).forEach(function(id){if(id==='band'||id==='outl')AP.on[id]=0;else RP.off[id]=true});SOLO=(h.solo&&h.solo[0])||'';RP.solo=Stone.controls.STAGES.some(function(s){return s.id===SOLO})?SOLO:'';lastRockSolo=RP.solo;
+    if(h.level){stage=+h.level[0];levelManual=true}if(h.view)mode=h.view[0];target=h.target?h.target[0]==='1':false;rowsOn=h.rows?h.rows[0]==='1':false;if(h.projection)PROJ.persp=h.projection[0]!=='orthographic';
+    pn.sync();W.refreshAll();areaSync();go()}
+  (function(){var btn=$('xp-spec'),box=$('xp-specbox'),ta=$('xp-spectext'),msg=$('xp-specmsg');
+    function say(t){msg.textContent=t}
+    function copy(){ta.focus();ta.select();var done=function(){say('Copied to the clipboard.')},fail=function(){ta.focus();ta.select();say('The browser did not allow the clipboard here: the text is selected, press Cmd-C (Ctrl-C).')};
+      try{if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(ta.value).then(done,fail);else{if(document.execCommand&&document.execCommand('copy'))done();else fail()}}catch(e){fail()}}
+    btn.onclick=function(e){e.stopPropagation();if(!box.hidden){box.hidden=true;return}ta.value=specText();box.hidden=false;copy()};
+    $('xp-speccopy').onclick=function(){ta.value=ta.value.indexOf('[result]')>=0&&ta.dataset.edited!=='1'?specText():ta.value;copy()};
+    ta.addEventListener('input',function(){ta.dataset.edited='1';say('')});
+    $('xp-specload').onclick=function(){try{loadSpec(ta.value);ta.dataset.edited='0';say('Loaded. The page now shows this spec.')}catch(e){say('Could not load: '+e.message)}};
+    $('xp-specclose').onclick=function(){box.hidden=true};
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!box.hidden)box.hidden=true});
+    self.spec=specText;self.specOnly=specOnly;self.loadSpec=loadSpec})();
+  /* ---- maximize: the viewer's box becomes a fixed layer over the page (no Fullscreen API: the artifact frame may refuse it, so it is never asked). The same canvas, camera, selection and build stay; only the box changes, and the canvas follows it. Esc or the same button comes back. ---- */
+  (function(){var btn=$('xp-max'),xv=document.querySelector('#xp .xview'),on=false,svg=function(p){return '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>'},
+      EXPAND=svg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),COLLAPSE=svg('<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>');
+    function set(o){on=o;xv.style.minHeight=o?xv.offsetHeight+'px':'';xcv0.classList.toggle('xmax',o);document.documentElement.classList.toggle('xmaxed',o);btn.setAttribute('aria-pressed',String(o));btn.title=o?'Back to the page':'Maximize';btn.setAttribute('aria-label',o?'Back to the page':'Maximize the viewer');btn.innerHTML=o?COLLAPSE:EXPAND;
+      if(sizeCanvas()&&cur)draw()}
+    btn.innerHTML=EXPAND;btn.onclick=function(e){e.stopPropagation();set(!on)};
+    document.addEventListener('keydown',function(e){if(e.key!=='Escape'||!on)return;var open=['xp-vpop','xp-gpop','xp-specbox'].some(function(i){var n=$(i);return n&&!n.hidden});if(!open)set(false)},true);
+    self.maximize=set})();
   function stats(){facts();thumbs();var b=cur,r=b.rep,t=r.time,tr=r.tris,e=$('xp-st'),rows=[],tot=0,k;
     function f2(v){return v==null?'-':(v<10?v.toFixed(2):v.toFixed(1))}
     var steps=[['L0','Footprint and crest',t.L0,0,'cell grid '+b.g.cells+' x 4 B'],['L1','Row planes and sites',t.L1,0,r.courses+' rows, '+r.joints+' sites'],['L2','Courses and blocks',(t.L2||0)+(t.L2b||0),tr.L2,b.l2.blocks.length+' blocks; '+r.raised+' raised, '+r.dropped+' dropped'],['L3','Joints and grooves',t.L3,tr.L3,''],['L4','Facets and chips',t.L4,tr.L4,''],['L5','Foot band (handed on)',t.L5,0,(r.band||0)+' cells, '+(r.bandSquares||0).toFixed(2)+' squares of foot']];
@@ -310,5 +364,9 @@ function Explorer(root,REFS){
   (function(){var xr=$('xp-ref');xr.setAttribute('role','button');xr.tabIndex=0;xr.setAttribute('aria-pressed','false');xr.setAttribute('aria-label','Show unpainted');xr.style.cursor='pointer';
     function flip(){var k=LAST[presetKey];if(!(window.REFSU&&window.REFSU[k]))return;var cur=xrefLocal!=null?xrefLocal:!!window.UNP;xrefLocal=!cur;xr.src=refSrc(k,1);xr.setAttribute('aria-pressed',String(xrefLocal));xr.setAttribute('aria-label',xrefLocal?'Show painted':'Show unpainted')}
     xr.onclick=flip;xr.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();flip()}}})();
+  /* the explainers: one eye per place, opened only on a click. The rock panel's own "i" explanations become eyes here; the viewer's overlay buttons share one eye on the canvas. */
+  (function(){var xv=$('xp'),eo=makeEye('overlay',{name:'The viewer\'s buttons',html:['reset','zoom','ViewOptions','Level','gate','CopySpec','Maximize'].map(function(k){var r=CTL[k];return r?'<p><b>'+r.name+'</b> '+r.text+'</p>':''}).join('')});
+    eo.className+=' ovl ovl-reset ovl-eyebtn';eo.innerHTML=eo.innerHTML.replace('width="14" height="14"','width="22" height="22"');xcv0.appendChild(eo);
+    eyeRock($('xp-rock'));attachEyes(xv)})();
   setPreset('L');
 }

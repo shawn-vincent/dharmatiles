@@ -11,6 +11,7 @@ steps/a-planes
 steps/a-subdivide
 steps/a-rise
 steps/a-span
+steps/a-recess
 steps/a-build
 steps/a-joints
 GROUP:rockregion

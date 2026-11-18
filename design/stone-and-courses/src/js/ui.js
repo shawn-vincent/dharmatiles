@@ -33,7 +33,8 @@ function bindOrbit(cv,cam,redraw,onzoom){var drag=null,pts={},pd=0;
   cv.addEventListener('pointermove',function(e){if(!pts[e.pointerId])return;pts[e.pointerId]=[e.clientX,e.clientY,Date.now()];var lv=live();if(lv.length>=2){var a=pts[lv[0]],b=pts[lv[1]],d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(pd>0&&d>0)setZ(cam.zoom*d/pd);pd=d;drag=null;return}pd=0;if(!drag)begin(e);cam.az=drag[2]-(e.clientX-drag[0])*0.4;cam.el=Math.max(5,Math.min(80,drag[3]+(e.clientY-drag[1])*0.3));redraw()});
   function up(e){delete pts[e.pointerId];var ids=Object.keys(pts);pd=0;drag=ids.length===1?[pts[ids[0]][0],pts[ids[0]][1],cam.az,cam.el]:null}
   ['pointerup','pointercancel','lostpointercapture','pointerleave'].forEach(function(n){cv.addEventListener(n,up)});
-  cv.addEventListener('wheel',function(e){e.preventDefault();setZ(cam.zoom*Math.exp(-e.deltaY*0.0015))},{passive:false});
+  /* one rule for zoom: a pinch (on a trackpad the browser sends it as a wheel event with ctrl held; on touch, two fingers) and the zoom slider. A plain wheel or scroll over the canvas is not taken: the page scrolls. */
+  cv.addEventListener('wheel',function(e){if(!e.ctrlKey)return;e.preventDefault();setZ(cam.zoom*Math.exp(-e.deltaY*0.01))},{passive:false});
   cv.addEventListener('dblclick',function(){cam.reset()});
   cv.style.touchAction='none'}
 Cam.prototype.basis=function(){var a=rad(this.az),e=rad(this.el),c=[Math.sin(a)*Math.cos(e),-Math.cos(a)*Math.cos(e),Math.sin(e)],r=[Math.cos(a),Math.sin(a),0];return {c:c,r:r,u:cross(c,r)}};
@@ -116,7 +117,7 @@ function thinCheck(u,zmax){
     out.lostArea+=la;out.gapArea+=ga;out.slices++;[cs,er,op,lost,cl,gap].forEach(function(o){try{o.delete()}catch(e){}})}
   out.t=now()-t0;return out}
 
-/* each course's front line, in plan (x, y), with the heights of the plane under it and over it: the same functions the build cuts to (GR.Gat with the front band on, today's straight front moved by the course's setback otherwise). The target draws it as a loft and the Region card draws it as thin lines, from this one place. */
+/* each course's front line, in plan (x, y), with the heights of the plane under it and over it: the same functions the build cuts to (GR.Gat with the front band on, the footprint's straight front otherwise). The target draws it as a loft and the Region card draws it as thin lines, from this one place. */
 function frontLoft(b){var g=b.g,out=[];if(!g.offs||!g.planes)return out;var f=g.f,band=typeof GR!=='undefined'&&b.p&&GR.bandOn(b.p);
   GR.frontEdges(g).forEach(function(ei){var E=g.edges[ei],lo=Math.min(E.a[0],E.b[0]),hi=Math.max(E.a[0],E.b[0]),c,nC=g.planes.length-1;
     for(c=0;c<nC;c++){var z0=g.planes[c].z,z1=g.planes[c+1].z,pts=[],x;if(z0>DIRT+g.topHi)break;

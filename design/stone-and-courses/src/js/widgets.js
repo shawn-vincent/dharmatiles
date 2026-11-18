@@ -48,8 +48,8 @@ var Widgets=(function(){
   function choice(cfg){return (cfg.opts().length<=3||cfg.strip)&&!cfg.list?segmented({ctl:cfg.ctl,label:cfg.label,wide:cfg.wide,strip:cfg.strip,nolabel:cfg.nolabel,optctl:cfg.optctl,get:cfg.get,set:cfg.set,opts:cfg.opts()}):dropdown(cfg)}
   /* ---- num ---- */
   function num(def,st){var w=el('div','r r-num');w.setAttribute('data-ctl',def.ctl);
-    w.innerHTML='<div class="rh"><label class="rl"></label><span class="rv"><input type="number" class="nb" aria-label="'+def.label+'"><span class="un"></span></span></div><input type="range" class="rs" aria-label="'+def.label+'">';
-    var lab=w.querySelector('.rl'),nb=w.querySelector('.nb'),un=w.querySelector('.un'),rs=w.querySelector('.rs'),spec=def;
+    w.innerHTML='<div class="rh"><label class="rl"><span class="rt"></span></label><span class="rv"><input type="number" class="nb" aria-label="'+def.label+'"><span class="un"></span></span></div><input type="range" class="rs" aria-label="'+def.label+'">';
+    var lab=w.querySelector('.rt'),nb=w.querySelector('.nb'),un=w.querySelector('.un'),rs=w.querySelector('.rs'),spec=def;
     function apply(sp){spec=sp;lab.textContent=sp.label;un.textContent=sp.unit||'';[nb,rs].forEach(function(i){i.min=sp.min;i.max=sp.max;i.step=sp.step})}
     function show(){var v=st.get(def.path);if(v==null)v=spec.zero!=null?spec.zero:spec.min;nb.value=fmt(v,spec.step);rs.value=v}
     function put(v){v=Math.max(spec.min,Math.min(spec.max,+v));if(isNaN(v))return;st.set(def.path,v);show();st.change()}
@@ -70,7 +70,7 @@ var Widgets=(function(){
     var head=el('div','gh');head.innerHTML='<b class="gt">'+def.title+'</b>'+(def.line?'<small class="gl">'+def.line+'</small>':'')+'<span class="gsum"></span>';g.appendChild(head);g.classList.add('collapsed');
     head.setAttribute('role','button');head.tabIndex=0;head.setAttribute('aria-expanded','false');
     function flip(){var c=g.classList.toggle('collapsed');head.setAttribute('aria-expanded',String(!c))}
-    head.onclick=function(e){if(e.target.closest('.gtools'))return;flip()};head.onkeydown=function(e){if((e.key==='Enter'||e.key===' ')&&e.target===head){e.preventDefault();flip()}};
+    head.onclick=function(e){if(e.target.closest('.gtools,.eye'))return;flip()};head.onkeydown=function(e){if((e.key==='Enter'||e.key===' ')&&e.target===head){e.preventDefault();flip()}};
     var tools=el('span','gtools seg tri');head.insertBefore(tools,head.firstChild.nextSibling);
     var body=el('div','gb');g.appendChild(body);var more=null,morebody=null;
     function addMore(){if(more)return;more=el('details','more');more.innerHTML='<summary>more</summary>';morebody=el('div','gb');more.appendChild(morebody);g.appendChild(more)}

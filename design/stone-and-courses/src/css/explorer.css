@@ -154,3 +154,26 @@ nav.toc .toc-sub .tgl{display:block;margin:8px 0 2px;font:700 11px var(--display
 .gs{width:100%;height:auto;display:block}.gs .cell{fill:none;stroke:var(--muted);stroke-width:.12;stroke-dasharray:.5 .4}.gs .ring{fill:var(--stone-soft);stroke:var(--stone);stroke-width:.2;stroke-linejoin:round}.gs .bandr{fill:var(--ochre-soft);stroke:none}.gs .inl{stroke:var(--ochre);stroke-width:.15;stroke-dasharray:.8 .5}
 .gs .hb{fill:var(--stone)}.gs .ax{stroke:var(--muted);stroke-width:.4}.gs .tx{font:5px var(--display);fill:var(--muted)}
 .gcap{font:500 14px/1.4 var(--display);color:var(--muted);margin:2px 0 0}@media(max-width:640px){.grow{grid-template-columns:1fr 1fr}.grow .fcol{grid-column:1/-1}}
+.psum,.gsum{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.psum i{font-weight:600}
+.pt b{white-space:nowrap}
+/* copy spec: an icon beside the build chip, and a box with the text selected (also where a spec is pasted to load it) */
+.xview .xcv .ovl-spec{left:auto;right:56px;top:6px}
+.specbox{position:absolute;right:6px;top:56px;z-index:8;width:min(520px,calc(100% - 12px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 6px 24px rgba(0,0,0,.28)}
+.specbox[hidden]{display:none}
+.specbox textarea{display:block;width:100%;height:min(46vh,300px);resize:vertical;font:12px/1.4 var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px}
+.specrow{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px}
+.specrow button{font:600 13px var(--display);padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+/* maximize: the viewer's box covers the page (inside the safe areas); the colour spread paints the rest */
+.xview .xcv .ovl-max{left:auto;right:106px;top:6px}
+.xview .xcv.xmax{position:fixed;inset:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);height:auto;min-height:0;z-index:60;box-shadow:0 0 0 100vmax var(--bg)}
+.xview .xcv.xmax canvas{border-radius:0;border:0}
+html.xmaxed{overflow:hidden}
+/* the explainer's eye: tiny, muted until hovered, at the right of a label */
+.eye{display:inline-grid;place-items:center;width:20px;height:20px;padding:0;margin:0 0 0 6px;border:0;background:transparent;color:var(--muted);opacity:.5;cursor:pointer;border-radius:50%;vertical-align:middle;flex:0 0 auto}
+.eye:hover,.eye:focus-visible,.eye[aria-expanded=true]{opacity:1;color:var(--ink)}
+.eye:focus-visible{outline:2px solid var(--accent,#3b82f6)}
+.phd>.eye{margin:0 4px 0 0}
+.xview .xcv .ovl-eyebtn{left:auto;right:156px;top:6px;width:44px;height:44px;margin:0;opacity:1;color:#22304a}
+#ctl-card{z-index:90}
+.sp .info{display:none}
