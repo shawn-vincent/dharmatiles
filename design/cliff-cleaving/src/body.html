@@ -1,0 +1,111 @@
+<main>
+<p class="tag">Cliff language proposal</p>
+<h1>Cliff Cleaving</h1>
+<p class="lede">Every one of the 15 reference walls is one volume of rock cut by a few families of flat planes. Today's cliff words build a wall out of rows of stones. This page proposes one new node, <code>cleave</code>, that cuts the region with a family of planes, and retires about thirty words it replaces.</p>
+<p>Printing is a short note at the end. The test here is how close the look gets, and whether the same few words would fit a sixteenth photo.</p>
+
+<h2>What the references are made of</h2>
+<p>Each picture, in five plain words: massing (the shape of the whole), face, joints, crest, surface. They fall into three families.</p>
+{{FAMS}}
+<p>Debris at the foot (A, N, Lf and most of the others) is out of scope: the ground belongs to other elements.</p>
+
+<h2>Five ideas that explain all fifteen</h2>
+<p>Dots in the table show which ideas each picture needs. Idea 1 is in every one.</p>
+<div class="tblwrap">{{MATRIX}}</div>
+<div class="ideas">
+<div class="idea"><div>{{S1}}</div><div><h3>1. Joint sets</h3><p>A wall is a volume cut by families of near-parallel planes. A block is a cell between them. Horizontal planes give courses. Vertical planes give columns. A set tilted at 60 degrees gives the big slanted facets of D. A set's planes may run through the whole wall or stop at the next plane of another set; that one choice separates a grid, a running bond and loose fieldstone.</p></div></div>
+<div class="idea"><div>{{S2}}</div><div><h3>2. Depth per cell</h3><p>Each cell sits a step in front of or behind its neighbour along the set. Courses that each step back are terraces (E). Courses that step forward are a ledge or a cap (Lf, D, K). Neighbouring columns at different depths are the stepped front of O and the loose blocks of M.</p></div></div>
+<div class="idea"><div>{{S3}}</div><div><h3>3. The crest is a height per cell</h3><p>The top of the wall is a height function of position, sampled once per cell. Cells are discrete, so the crest is made of flat block tops: a skyline (M, B), steps (E), a diagonal ramp (G), a flat plateau (A, N). No separate crest machinery.</p></div></div>
+<div class="idea"><div>{{S4}}</div><div><h3>4. Hewn faces</h3><p>The references show flat faces, square edges and many small flat chips, where today's rock rounds every stone. The O generator tried cutting each block with many fine planes and always got rounded corners back. What worked was a separate surface step: keep the face's boundary flat so the block edges stay square, and break only the inside of the face into small flat facets. This is a finish on every free face, not a cut, so it is not part of <code>cleave</code>.</p></div></div>
+<div class="idea"><div>{{S5}}</div><div><h3>5. Lean and convergence</h3><p>A set's dip can wobble up the wall, and its planes can lean toward a point. That makes the leaning spires of P and the tilted rows of G without a word for either.</p></div></div>
+</div>
+<p>The footprint stays as it is. A corner (J), a free-standing wall (N), a tower (C) and a bay (K) are regions and a top, which the language already has.</p>
+
+<h2>The proposed words</h2>
+<p>A <code>cliff</code> takes <code>cleave</code> children: zero, one or many, in any order (a set of cuts, not a sequence). With none, the cliff is one flat-faced block filling its region.</p>
+<div class="tblwrap"><table>
+<thead><tr><th>Word</th><th>Meaning</th><th>Status</th></tr></thead><tbody>
+<tr><td><code>cleave</code></td><td>A family of near-parallel cut planes. A new kind, <code>Cut</code>, so it can be named with <code>let</code> and passed as a <code>param</code> like a thing or a layer.</td><td><span class="pill new">new</span></td></tr>
+<tr><td><code>dip</code></td><td>Angle of the planes from horizontal: 0 is bedding, 90 is vertical. A range wobbles from foot to crest.</td><td><span class="pill new">new row</span> rock already uses it</td></tr>
+<tr><td><code>facing</code></td><td>Direction the planes face in plan, as an angle measured from the outward normal of the nearest free face. Angle only.</td><td><span class="pill new">new row</span> rock already uses it</td></tr>
+<tr><td><code>toward</code></td><td>A point the planes lean toward. Replaces <code>facing</code> for converging sets.</td><td><span class="pill new">new</span></td></tr>
+<tr><td><code>spacing</code></td><td>Pitch between neighbouring planes, along their normal. Takes the same forms as <code>top</code>: a range, a weighted range, an expression.</td><td><span class="pill new">new</span></td></tr>
+<tr><td><code>bend</code></td><td>How far the planes of a set bend and drift.</td><td><span class="pill new">new</span></td></tr>
+<tr><td><code>carry</code></td><td>How far a plane of this set runs: 1 through the whole region, 0 only to the next plane of any other set.</td><td><span class="pill new">new row</span> rock already uses it</td></tr>
+<tr><td><code>setback</code></td><td>The step of each cell from the one before it along the set (up for bedding, along the wall for a cross set). Positive steps back, negative steps out. A range, so the walk is random.</td><td><span class="pill new">new row</span> rock already uses it</td></tr>
+<tr><td><code>hew</code></td><td>A rock finish stage for every free face: scatter jittered points over the face, keep its boundary flat, push the inside points a little along the face normal, join them into flat facets. Settings: <code>spacing</code> (distance between points, about 4.4dmm, the same pitch meaning as on a cleave) and the new <code>push</code> (how far a point moves along the normal, about 0.95dmm). Strength 0 changes nothing. It pins boundaries where <code>wear</code> rounds them, and runs before wear.</td><td><span class="pill new">new</span></td></tr>
+<tr><td><code>top</code>, <code>joints</code>, <code>bumpSize</code></td><td>Kept, each with its own meaning. <code>bumpSize</code> may be written on a <code>cleave</code> or on a weighted range, so <code>setback</code> and <code>bend</code> get a correlation length.</td><td>kept</td></tr>
+<tr><td><code>width</code> <code>height</code> <code>bond</code> <code>shift</code> <code>wander</code> <code>rise</code> <code>span</code> <code>regularity</code> <code>lean</code> <code>tilt</code> <code>wave</code> width skew, height skew, <code>planes.*</code></td><td>The row model. Spacing, dip, bend and carry hold each of them. Exact half-offset brick bond is lost: a carry below 1 is a chance, not an offset.</td><td><span class="pill old">retired</span></td></tr>
+<tr><td><code>recess</code> <code>lip</code> <code>sbw.*</code> <code>band.*</code></td><td>Setback, per cleave. A lip on one course is a negative step on that course.</td><td><span class="pill old">retired</span></td></tr>
+<tr><td><code>crest.bumps</code> <code>crest.w</code></td><td>A weighted range on <code>top</code>.</td><td><span class="pill old">retired</span></td></tr>
+<tr><td><code>free.*</code> <code>depth</code> <code>tiles</code> <code>wall</code></td><td>The region says them: a free face is any face that is not a seam, thickness is the region's own <code>within</code>, run and wall are its <code>at=</code>. Choosing which free faces get relief is lost until the region can say it.</td><td><span class="pill old">retired</span></td></tr>
+<tr><td><code>outl.*</code></td><td>Stay until phase 3, when the stone's own outline is a <code>cleave</code> on <code>rock</code>.</td><td>kept for now</td></tr>
+</tbody></table></div>
+<p>Count: ten words enter the registry (four already live in the rock's explorer panel), about thirty leave the cliff. Rock's <code>cuts</code> and <code>chunks</code> panels fold into <code>cleave</code> in phase 3, for the shape of the stone only. Texture is <code>hew</code>.</p>
+<pre><code>cliff at=crag top="[48dmm..60dmm]" {
+  cleave dip=0deg spacing="[11dmm..15dmm]" carry=0.35
+         setback="[0dmm..6dmm]"
+  cleave dip=90deg facing=0deg spacing="[10dmm..14dmm]" carry=0.35
+  rock { hew spacing=4.4dmm push=0.95dmm  chips=2 }
+}</code></pre>
+<p>That is the O generator's recipe in four lines: level courses with a depth push per block, joints that repeat the one below about a third of the time, hewn faces and one or two edge bites.</p>
+
+<h2>Four references in the proposed words</h2>
+<p>The schematics show what the sets cut. They are drawings of the idea, not renders: the engine is not touched on this page.</p>
+{{EX}}
+
+<h2>What stays out of reach</h2>
+<ul><li>Moss, painted wear and the grain of the stone surface: finish words, not massing.</li>
+<li>Exact brick bond in N: carry is a chance.</li>
+<li>Choosing which free face gets relief and which stays plain.</li>
+<li>The return face (a side face seen at an angle), chipped vertical edges and darkening in the crevices were also missing from the generator. A return face is the region's job. Hew keeps edges flat on purpose, so chipped edges need another step. Crevice darkening is paint, not shape. All three are open.</li></ul>
+
+<h2>Language check</h2>
+<div class="check">
+<h3>Words</h3><p><code>hew</code> is one job, "facets each free face flat, edges kept square", and differs from <code>pockets</code> (round dishes), <code>chips</code> (bites at edges) and <code>grain</code> (fine roughness). <code>cleave</code> is new and does one job: a family of planes. <code>dip</code>, <code>facing</code>, <code>carry</code>, <code>setback</code> are the rock's page words promoted to registry rows, each with one meaning that rock's <code>chunks</code> panel then shares. <code>toward</code>, <code>spacing</code>, <code>bend</code> are new, each for a thing no word names. <code>bond</code> is retired in favour of <code>carry</code>: one meaning, one word. <code>wander</code> is retired rather than reused, so no old document changes meaning silently. <code>spacing</code> (pitch) and <code>joints</code> (groove width) stay apart.</p>
+<h3>Kinds</h3><p>A new kind, <code>Cut</code>, with <code>units::fits</code> rules and a row in the closure test, so a cleave can be named, passed, overridden and imported like a thing or a layer. A cliff accepts any number of them.</p>
+<h3>Kernel</h3><p>A cliff reduces to: a region, a crest height, and a set of plane families. The old rows, bond, recess, lip, band, lean, tilt and crest bumps are all special cases of one family's spacing, dip, carry and setback.</p>
+<h3>Second paths</h3><p>One way to say each: no word has two spellings. The crest has one source, <code>top</code>; steps come from cell sampling and need no bedding set, so <code>top</code> means the same with any siblings.</p>
+<h3>Holes</h3><p>Closed: <code>Cut</code> gets every verb. <code>hew</code> follows the rock stage rules: strength zero is identity, with a closure cell and a torture tile. <code>hew</code> and <code>wear</code> both touch edges, so the order is fixed: hew pins, then wear rounds. Open: no way yet to say which free faces get relief; the interim <code>outl.*</code> words are a second path to the stone's outline until phase 3 removes them.</p>
+</div>
+
+<h2>Orin's ruling</h2>
+<div class="orin">
+<p><strong>Approve with changes.</strong> The kernel is sound: one node that cuts a volume replaces about thirty hand-tuned words. Six defects, and what changed in this page:</p>
+<ol>
+<li><strong><code>facing</code> had two meanings and a keyword.</strong> Now an angle only, measured from the nearest free face's outward normal; <code>front</code> is gone. A point is the new word <code>toward</code>.</li>
+<li><strong><code>setback</code> had two semantics.</strong> Now one: the step from the previous cell along the set, with the order and the sign stated.</li>
+<li><strong><code>bond</code> and <code>carry</code> were two words for one meaning.</strong> <code>bond</code> is retired. <code>carry</code> now says what it runs through: the planes of the other sets. The loss of exact brick bond is stated.</li>
+<li><strong><code>wander</code> reused a retired word for a new job.</strong> New word <code>bend</code>. Irregularity of spacing is the width of the spacing range. <code>bumpSize</code> is allowed on a cleave and on a weighted range.</li>
+<li><strong><code>cleave</code> was a second-class node.</strong> New kind <code>Cut</code>, so it can be named and passed. Order carries no meaning; zero cleaves is one flat block.</li>
+<li><strong><code>top</code> changed meaning with its siblings.</strong> Steps now come from sampling per cell, so <code>top</code> means the same in every cliff. <code>spacing</code> takes the same forms as <code>top</code>, so width and height skew are not lost.</li>
+</ol>
+<p><strong>Second ruling, on <code>hew</code>: approve with changes.</strong> <code>hew</code> is one job and not <code>pockets</code> or <code>chips</code> renamed (those remove volume; it facets a face), and it cannot be a mode of <code>cleave</code>. Changed: it no longer borrows the rock's <code>size</code> and <code>depth</code>, which the registry gives other meanings (a rock's width; the look of gaps). It uses <code>spacing</code> and a new <code>push</code>. The <code>hew</code> and <code>wear</code> order is now stated, and a closure cell and torture tile are called for.</p>
+<p>Also taken: the word count is ten new rows, not one; <code>outl.*</code> stays until phase 3; <code>tiles</code>, <code>wall</code>, <code>free.*</code> and <code>depth</code> are accounted for above; the interim losses are listed.</p>
+</div>
+
+<h2>What the O generator learned</h2>
+<p>A from-scratch generator for reference O, with no controls, built convex blocks from lists of planes and tried to match the picture. It bears on the proposal like this.</p>
+<ul>
+<li><strong>Idea 4 changed.</strong> Cutting finer planes into a block rounds its corners every time. Tilts above about 0.3 or more than three big chips bring the pillows back. Hewing the face (flat boundary, jittered facets inside) is what made the faces read as rock. It is now its own word, <code>hew</code>.</li>
+<li><strong>Massing carries more than texture.</strong> Level courses of 11 to 15dmm, a depth push per block of 0 to 6dmm and dark joints already read as O. Idea 2 holds, and <code>joints</code> matters.</li>
+<li><strong>Boxes at stepped height and depth</strong> were a lever of their own. That is a region with a <code>top</code> that varies per cell, as proposed.</li>
+<li><strong>About a third of vertical joints repeat the joint below.</strong> That is <code>carry</code> near 0.35, a number to estimate from a picture.</li>
+<li><strong>Weakest:</strong> a small cleave tilt and one to three edge bites. Small cap blocks on the top course helped break the skyline: a <code>spacing</code> that shrinks near the top.</li>
+<li><strong>A convex block is a list of planes</strong>, so a new reference needs only different plane distributions. That is the case for <code>cleave</code> as the one cutting word.</li>
+</ul>
+
+<h2>Recommended order</h2>
+<p>Ranked by what moved the look in the O generator, then by pictures reached.</p>
+<ol>
+<li><strong><code>hew</code> on every free face.</strong> The biggest single lever, and every picture has hewn rock. It needs no change to the wall model.</li>
+<li><strong>A depth push per block on level courses.</strong> <code>cleave</code> with <code>dip=0</code>, <code>spacing</code> and <code>setback</code>, plus <code>joints</code> dark. Reaches E, O, K, Lf, M.</li>
+<li><strong>Mass boxes at stepped height and depth.</strong> <code>top</code> sampled per cell. Reaches O, M, B, A, N.</li>
+<li><strong>Through-running vertical joints.</strong> A cross <code>cleave</code> with <code>carry</code> near 0.35. Reaches L, J, F, B, N.</li>
+<li><strong>Cap blocks on the top course</strong> (a smaller <code>spacing</code> near the top) and one to three edge bites.</li>
+<li><strong>Oblique set, then <code>toward</code> with a dip range.</strong> D, then P and G. These need joint sets that the generator did not need for O.</li>
+<li><strong>The <code>Cut</code> kind and the rock's fold-in</strong>, retiring <code>outl.*</code>.</li></ol>
+
+<h2>Printing risks</h2>
+<p>Not a requirement on the words, and not checked here. Two to watch: a negative setback is a cantilever, and a dip above 55 degrees leaning outward is an overhang. A cell may need a floor or a limit on how far it hangs.</p>
+</main>
