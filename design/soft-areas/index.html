@@ -129,6 +129,7 @@ svg .arrowhead { fill: var(--accent); }
 .stripgrid figure svg { min-width: 0; height: 30px; }
 .stripgrid figcaption { font: 11.5px var(--f-code); }
 .plots h4 { margin: 0 0 4px; font: 600 12px var(--f-code); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
+.rkh { margin: 10px 0 2px; font: 600 12px var(--f-code); color: var(--ink); } .rkrow { display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: center; } .rklab { font: 600 11.5px var(--f-code); color: var(--muted); } .rkrow canvas { width: 100%; height: auto; display: block; border: 1px solid var(--line-2); border-radius: 5px; } .rocks { overflow-x: auto; min-width: 0; } .rocks .rkrow { min-width: 620px; } #rkStripG svg, #rkStripR svg, #rkStripW svg { max-width: 330px; }
 .stepgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
 .stepgrid figure.fig { gap: 4px; } .stepgrid svg { min-width: 0; }
 .stephead { font: 600 12.5px var(--f-code); color: var(--ink); }
@@ -172,10 +173,12 @@ svg .cellk { fill: var(--stone); opacity: .85; stroke: var(--ink); stroke-width:
     <li><b>(g) The same sum, ranked together.</b> Add the fields into one roll and rank it through the combined odds. The whole exact, the parts not.</li>
     <li><b>(e) Threshold against coverage.</b> Areas only. A smooth field compared with a coverage curve, so the edge is wherever they cross. Can make islands and holes.</li>
     <li><b>(f) Edge displacement.</b> Areas only. Push the inner outline outward by a smooth 1D roll along the edge. Always one curve.</li>
+    <li><b>(h) Own wobble, no grading.</b> Rock outlines. A smooth wobble per stone, each point's value through its own cumulative probability and then the weighting, with no sorting. See the section on rock outlines.</li>
   </ul>
   <p>The page is long. In order:</p>
   <ol class="toc">
     <li><a href="#walk-sec">The foundation: today's cloud in six pictures</a></li>
+    <li><a href="#rocks">Rock outlines: three ways</a></li>
     <li><a href="#try">Try it: every option, every weighting</a></li>
     <li><a href="#discrete">Discrete draws: scatter and sites</a></li>
     <li><a href="#options">The options, one at a time, and which step of the six each changes</a></li>
@@ -216,6 +219,73 @@ svg .cellk { fill: var(--stone); opacity: .85; stroke: var(--ink); stroke-width:
     <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-kit/src/span.rs#L323">dirt calls it, span.rs:323</a>
     <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/docs/guide/clouds.html">guide/clouds</a>
   </div>
+</section>
+
+<section id="rocks">
+  <div class="sechead"><h2>Rock outlines: three ways</h2><span class="where">outlines only, no surfaces</span></div>
+  <p>A rock's outline is a closed curve between the rock's core and its cell. Pick points round the stone, give each a distance from the core to the cell edge with the weighting's odds, and join them with straight lines. Three ways to give each point its distance, in plain terms:</p>
+  <ul>
+    <li><b>Graded: grading on a curve (ranking).</b> Make one bumpy curve round the stone, sort its values, and hand out a fixed set of distances in that order. Every stone gets exactly the weighting's mix, and only the order differs. A dealt deck.</li>
+    <li><b>Each point rolls (option c).</b> Each point throws its own dice through the weighting. Every point's odds are right, but one stone's mix is only close, and neighbouring points are unrelated, so the outline can be a star.</li>
+    <li><b>Own wobble, no grading (a new option, h).</b> Make a smooth wobble per stone, with 2 or 3 bumps round it. Each point's wobble value goes through its own cumulative probability, then the weighting. No sorting. Neighbours stay alike, each stone is different, and the mix is exact only across many stones.</li>
+  </ul>
+  <div class="figrow">
+    <figure class="fig"><div class="stephead">Graded (f, ranked)</div><div class="mech" id="rkStripG"></div></figure>
+    <figure class="fig"><div class="stephead">Each point rolls (c)</div><div class="mech" id="rkStripR"></div></figure>
+    <figure class="fig"><div class="stephead">Own wobble, no grading (h)</div><div class="mech" id="rkStripW"></div></figure>
+  </div>
+  <p class="c" style="font-size:13.5px">The outline unrolled: angle round the stone across, distance from the core to the cell edge up. Ten points, <code>low(12)</code>. The graded method hands out the same ten values every time, so the wobble only decides where each one goes. The wobble method has no such deck: each point's value is its own.</p>
+  <h3>Eight stones under each method</h3>
+  <p>Each row is the same eight stones: the same seeds, the same wobble for graded and own wobble, and the same random numbers for the dice. Twelve points per stone, a wobble of 2 or 3 bumps. The grey disc is the core, the dashed ring is the cell edge.</p>
+  <div class="rocks" id="rkRows"></div>
+  <p class="rule"><b>What to see.</b> Graded and own-wobble stones look like siblings, because they share one wobble and differ only in how it becomes a distance. Their outlines are smooth and one-lobed. The difference is in the reach: every graded stone spans the same range of distances, from near the core out to near the cell edge under <code>flat</code> (the same deck every time), while own-wobble stones differ in how far they reach, and some are rounder. Rolled stones are the odd ones out: jagged, with sharp spikes beside short points, under <code>flat</code> and <code>high</code> as much as <code>low</code>. Under <code>low</code> all three are mostly near the core with a lobe or two, and under <code>high</code> mostly out to the cell with dents. With 12 points on 2 to 3 bumps there is no aliasing, so the stones differ only in character, not in whether they are stars.</p>
+  <h3>The dice and the deck</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Method</th><th>Does each point have the right odds?</th><th>Does one outline match the mix exactly?</th><th>Do outlines differ?</th><th>Are neighbours alike?</th><th>Stars?</th></tr>
+    <tr><td>Graded</td><td>Yes: each value comes from the exact deck</td><td>Yes, every one</td><td>Only in order: same values, rearranged</td><td>Yes</td><td>No stars, but every stone has the same shape of spikes</td></tr>
+    <tr><td>Each point rolls (c)</td><td>Yes: each point is a fair die</td><td>No: close only</td><td>Yes, a lot</td><td>No</td><td>Yes, more as points increase</td></tr>
+    <tr><td>Own wobble (h)</td><td>Yes in expectation: the wobble's own CDF is uniform</td><td>No: exact only across many stones</td><td>Yes</td><td>Yes, if there are enough points per bump</td><td>No, with about 5 or more points per bump; yes with fewer</td></tr>
+  </table></div>
+  <h3>Measured over 200 stones</h3>
+  <p>In Node, 200 stones per cell, <code>low(12)</code>, a wobble of 2 to 3 bumps. <b>Pooled gap</b>: the largest gap between all the stones' distances and the weighting (0 is exact; a fair draw of this many numbers is about 0.02 by chance). <b>One stone's mix gap</b>: how far one stone's own set of distances is from the weighting, on average (0 means every stone has exactly the weighting's mix). <b>Variety</b>: how much the stones differ in how spread out their distances are (0 means they are all alike). <b>Neighbour step</b>: the average jump in distance between neighbouring points (small means alike). <b>Sharp spike</b>: a point at least 0.3 of the range above both its neighbours. <b>Star-ish</b>: a stone with two or more.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Method</th><th>Points</th><th>Pooled gap</th><th>One stone's mix gap</th><th>Variety</th><th>Neighbour step</th><th>Sharp spikes per stone</th><th>Star-ish stones</th></tr>
+<tr><td>Graded (ranked)</td><td>6</td><td>0.083</td><td>0.000</td><td>0.000</td><td>0.37</td><td>1.00</td><td>0%</td></tr>
+<tr><td>Graded (ranked)</td><td>10</td><td>0.050</td><td>0.000</td><td>0.000</td><td>0.29</td><td>1.16</td><td>31%</td></tr>
+<tr><td>Graded (ranked)</td><td>16</td><td>0.031</td><td>0.000</td><td>0.000</td><td>0.20</td><td>0.20</td><td>1%</td></tr>
+<tr><td>Each point rolls</td><td>6</td><td>0.024</td><td>0.245</td><td>0.071</td><td>0.27</td><td>0.69</td><td>14%</td></tr>
+<tr><td>Each point rolls</td><td>10</td><td>0.014</td><td>0.209</td><td>0.056</td><td>0.28</td><td>1.14</td><td>34%</td></tr>
+<tr><td>Each point rolls</td><td>16</td><td>0.014</td><td>0.180</td><td>0.045</td><td>0.28</td><td>1.77</td><td>54%</td></tr>
+<tr><td>Own wobble, no grading</td><td>6</td><td>0.025</td><td>0.162</td><td>0.083</td><td>0.39</td><td>1.36</td><td>36%</td></tr>
+<tr><td>Own wobble, no grading</td><td>10</td><td>0.019</td><td>0.155</td><td>0.074</td><td>0.28</td><td>0.90</td><td>23%</td></tr>
+<tr><td>Own wobble, no grading</td><td>16</td><td>0.026</td><td>0.143</td><td>0.070</td><td>0.19</td><td>0.06</td><td>1%</td></tr>
+  </table></div>
+  <p>Star-ish stones under <code>flat</code> and <code>high(12)</code>, at 6, 10 and 16 points:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Method</th><th>flat 6</th><th>flat 10</th><th>flat 16</th><th>high 6</th><th>high 10</th><th>high 16</th></tr>
+<tr><td>Graded (ranked)</td><td>38%</td><td>8%</td><td>0%</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><td>Each point rolls</td><td>17%</td><td>26%</td><td>51%</td><td>4%</td><td>8%</td><td>21%</td></tr>
+<tr><td>Own wobble, no grading</td><td>42%</td><td>14%</td><td>0%</td><td>18%</td><td>1%</td><td>0%</td></tr>
+  </table></div>
+  <p><b>Reading the numbers.</b> The pooled gap of rolls and own wobble is at the level of chance (0.014 to 0.026), and the graded method is worse (0.03 to 0.083), because a fixed deck of few values cannot match a curve. One stone's mix is exact only for graded (0) and is 0.14 to 0.25 off for the others. Graded has no variety at all, and the other two have some. Neighbours are alike under graded and own wobble at 16 points (the step falls to 0.19 to 0.23) and not under rolls (0.28 to 0.34, whatever the points). Stars: rolled stones become star-ish as points are added (14%, 34%, 54% at 6, 10, 16 under <code>low</code>, and 17%, 26%, 51% under <code>flat</code>), and own-wobble stones stop being star-ish by 16 points (1% and 0%). Own wobble is star-ish at 6 points (36% under <code>low</code>, 42% under <code>flat</code>), because 6 points on 2 to 3 bumps leaves only 2 or 3 points on each bump, and the points alias. The spike count is a crude measure, and the pictures above are the better check.</p>
+  <h3>Try it</h3>
+  <div class="explorer">
+    <div class="bar">
+      <div class="grp"><span class="lab">Method</span><div class="seg" id="segRkM"><button data-v="graded" aria-pressed="false">graded</button><button data-v="rolls" aria-pressed="false">each point rolls</button><button data-v="wobble" aria-pressed="true">own wobble</button></div></div>
+      <div class="grp"><span class="lab">Weighting</span><div class="seg" id="segRkW"><button data-v="flat" aria-pressed="false">flat</button><button data-v="low" aria-pressed="true">low</button><button data-v="high" aria-pressed="false">high</button><button data-v="bell" aria-pressed="false">bell</button><button data-v="peak" aria-pressed="false">peak</button><button data-v="ends" aria-pressed="false">ends</button></div></div>
+    </div>
+    <div class="bar">
+      <label class="sl"><span>points</span><input id="rkP" type="range" min="4" max="24" value="10"><output id="rkOutP"></output></label>
+      <label class="sl"><span>bumps</span><input id="rkB" type="range" min="1" max="6" value="2"><output id="rkOutB"></output></label>
+      <label class="sl"><span>seed</span><input id="rkSeed" type="range" min="1" max="40" value="3"><output id="rkOutSeed"></output></label>
+    </div>
+    <canvas id="cvRocks" width="840" height="420" aria-label="A grid of eighteen rock outlines" style="width:100%;height:auto;display:block;border:1px solid var(--line-2);border-radius:5px;background:var(--plate)"></canvas>
+    <div class="readout"><div class="src" id="rkSrc"></div><div class="stats" id="rkStats"></div></div>
+    <p class="c" style="font-size:13.5px">Bumps is the wobble's lowest wave number round the stone; its waves are that and one more. Points is how many joined points each stone has. Try own wobble with 4 points on 3 bumps to see the aliasing, then 16 points.</p>
+  </div>
+  <h3>Recommendation for rock outlines, kept apart from the comparison</h3>
+  <p><b>Own wobble, no grading (h) wins, with one condition.</b> It has the pooled odds of fair dice (at the level of chance), every stone is different, neighbours are alike so there are no stars, and nothing about the stone depends on any other stone or on how many points it has beyond its own wobble. Graded loses on two counts: its pooled gap is worse (0.03 to 0.083) and every stone has the same mix, so the stones are rearrangements of one stone. Each point rolls loses on stars (half of the stones at 16 points) and on neighbours. The condition: about five or more points per bump of the wobble. With fewer the points alias and the stone is a star anyway (36% to 42% of stones at 6 points on 2 to 3 bumps). So the number of points should follow the bumps, which is a rule the rock owns. The costs of (h): a single stone's mix is 0.14 to 0.16 off the weighting, and the mix is exact only across many stones; and it is a third source for <code>u</code>, the wobble's own cumulative probability, beside rank and a roll.</p>
+  <p>This changes the earlier recommendation for rock outlines, from (c) to (h). It does not change tops. The rest of the decision, below, takes it into account.</p>
 </section>
 
 <section id="try">
@@ -383,7 +453,7 @@ svg .cellk { fill: var(--stone); opacity: .85; stroke: var(--ink); stroke-width:
   <h3>A rock's outline in a gap, <code>low(core .. cell)</code></h3>
   <p>The ring between the stone's core (inner) and its cell (outer), unrolled and wrapped. The edge should be one closed curve.</p>
   <div class="exrow" id="exRing"></div>
-  <p class="rule"><b>Which reads right.</b> (a), (b) and (e) give crescents and detached bits round the stone: a thresholded 2D field has islands and holes, and a stone's outline must be one closed curve. (c) gives one blob, faceted with straight joins and rounder with a spline, and the rock's cuts, chips and wear take off the corners. (f) is also one curve, but ranking forces a few long rays and many short ones on every stone, so each stone has the same spiky mix. (c) gives variety from stone to stone, and the frequency holds across the stones.</p>
+  <p class="rule"><b>Which reads right.</b> (a), (b) and (e) give crescents and detached bits round the stone: a thresholded 2D field has islands and holes, and a stone's outline must be one closed curve. (c) gives one blob, faceted with straight joins and rounder with a spline. (f) is also one curve, but ranking forces a few long rays and many short ones on every stone. Option (h), own wobble, is not in this row. It is in the section on rock outlines, with a row of eight stones under each method, and it is the one I would pick.</p>
   <h3>A cliff front, <code>low(face .. faceMax)</code></h3>
   <p>The straight front is the inner outline, the outer outline is below. The edge should step in and out along the front.</p>
   <div class="exrow" id="exFront"></div>
@@ -395,7 +465,7 @@ svg .cellk { fill: var(--stone); opacity: .85; stroke: var(--ink); stroke-width:
   <p>Partly. A surface and an outline differ in dimension and in how many nodes they have, and the weighting means the same for both. The answer in three cases:</p>
   <ul>
     <li><b>Many nodes of one smooth thing</b> (a dirt surface, a long edge): rank a smooth field. For a surface the nodes are 2D and this is (a). For a long edge the nodes lie along the arc and this is (f), which is (a) restricted to one dimension. One rule with a dimension.</li>
-    <li><b>A shape joined from a handful of points</b> (a rock's outline, 6 to 16 points): independent rolls joined, (c). Ranking over so few points gives every stone the same depths in a different order, and a pooled distribution that is further from the weighting than independent rolls are. Measured over 200 stones with <code>low(12)</code>: independent rolls give a pooled gap of 0.025, 0.019 and 0.010 at 6, 10 and 16 points per stone, and the stones differ (the spread of a stone's mean depth is 0.10, 0.07 and 0.06). Ranking the points gives pooled gaps of 0.083, 0.050 and 0.031 and no difference between stones (spread 0).</li>
+    <li><b>A short closed outline</b> (a rock's, 6 to 16 points): a smooth wobble per stone through its own cumulative probability, (h), with no sorting. Ranking over so few points hands every stone the same set of distances in a different order, and independent rolls leave neighbours unrelated, so the outline can be a star. Measured over 200 stones in the section on rock outlines: (h) is at the level of chance on the pooled odds, every stone differs, and it has no stars by 16 points on 2 to 3 bumps.</li>
     <li><b>A threshold of a 2D field</b> ((a), (b) or (e) used for an outline): neither. It makes islands and holes, which a single body's edge must not have. It fits a density, which is what a scatter already is.</li>
   </ul>
   <p>So the same option does not serve both, but one idea does. A weighting is a quantile map from a uniform number <code>u</code> to <code>t</code>. The options differ only in where <code>u</code> comes from: its rank among many nodes (a and f, stratified so the frequencies are exact), its own cumulative probability (b), or an independent roll (c). The criterion for choosing is <b>where the thing gets its neighbour relation</b>: from a smooth field, which ranks (a surface, a long edge), or from a join of separate points, which roll independently (a short closed outline). This is a second path for <code>u</code>, and the page says so. The code already has the precedent: a lone stone in a cloud draws its own roll (<code>rock.rs</code>), because a count of one ranks to a constant 0.5.</p>
@@ -728,11 +798,11 @@ tile size="1x1" seed=4 {
   <h3>1. How a weighted range becomes a surface or a curve</h3>
   <div class="tablewrap"><table>
     <tr><th>Package</th><th>Tops</th><th>Long edges</th><th>A rock's outline</th><th>What it costs</th></tr>
-    <tr><td><b>P1, recommended</b></td><td>(a), as today</td><td>(f), the same rule in one dimension</td><td>(c), independent points joined straight (Shawn's proposal)</td><td>Two sources for <code>u</code> under one meaning for a weighting, so two paths to carry. The rule: a field ranks, a join of points rolls independently. Measured: tops exact (0); a long edge exact; a rock outline pooled gap 0.01 to 0.025 and variety between stones.</td></tr>
-    <tr><td>P2</td><td>(a)</td><td>(f)</td><td>(f) on the angle</td><td>One path. Measured over 200 stones: pooled gap 0.03 to 0.083, and every stone has the same depths in a different order (variety 0).</td></tr>
-    <tr><td>P3</td><td>(b)</td><td>(b) in 1D</td><td>(c)</td><td>Local and tile-size independent, which suits maps. Frequencies are right only on average: measured gap 0.15 at one feature across a tile, 0.063 at two, 0.041 at three, 0.017 at eight.</td></tr>
+    <tr><td><b>P1, recommended</b></td><td>(a), as today</td><td>(f), the same rule in one dimension</td><td>(h), own wobble through its own cumulative probability, no grading</td><td>Three sources for <code>u</code> under one meaning for a weighting: a rank, a roll, and a field's own cumulative probability. The rule: a smooth field of many nodes ranks, a short closed outline uses its own wobble. Measured: tops exact (0); a rock outline at the level of chance, varied, no stars from 16 points.</td></tr>
+    <tr><td>P2</td><td>(a)</td><td>(f)</td><td>(f) on the angle, graded</td><td>One path. Measured over 200 stones: pooled gap 0.03 to 0.083, and every stone has the same depths in a different order (variety 0).</td></tr>
+    <tr><td>P3</td><td>(b)</td><td>(b) in 1D</td><td>(h)</td><td>Local and tile-size independent, which suits maps. Frequencies are right only on average: measured gap 0.15 at one feature across a tile, 0.063 at two, 0.041 at three, 0.017 at eight.</td></tr>
   </table></div>
-  <p><b>Recommendation: P1.</b> A top has many nodes of one smooth thing and a promise that heights come up as often as the weighting says, and (a) keeps that promise exactly and is already built, so nothing existing changes. A long edge is the same thing in one dimension, so (f) is not a new idea, and it is one curve with no islands. A rock's outline has a handful of points that are separate things. Ranking over six to sixteen points gives every stone the same mix of depths, and independent rolls (c) give variety from stone to stone with the frequency holding across the stones. The measurement above supports it: for a few points, independent rolls beat ranking on the pooled frequencies and give variety. They do lose on the joined curve of one stone (0.14 to 0.21 at three features across, against 0 for ranking a long field), which is why the recommendation is by what the thing is and not by the gap. It also matches the rock's interface, an area as convex parts. The trigger to revisit is maps: if tiles in a map must agree on a point whatever else is on the tile, (b) is the option that is local and independent of tile size.</p>
+  <p><b>Recommendation: P1.</b> A top has many nodes of one smooth thing and a promise that heights come up as often as the weighting says, and (a) keeps that promise exactly and is already built, so nothing existing changes. A long edge is the same thing in one dimension, so (f) is not a new idea, and it is one curve with no islands. A rock's outline is a short closed curve, and for it own wobble, (h), wins in the measurements of the section on rock outlines: its pooled odds are at the level of chance, every stone differs, neighbours are alike so there are no stars, and it does not depend on any other stone. Ranking the points (graded) has a worse pooled gap (0.03 to 0.083) and gives every stone the same mix. Independent rolls (c) make half the stones star-ish at 16 points. The condition is about five points per bump of the wobble. It is also what the rock's interface, an area as convex parts, can take. The trigger to revisit is maps: if tiles in a map must agree on a point whatever else is on the tile, (b) is the option that is local and independent of tile size.</p>
   <p>Not recommended: (e) and a 2D threshold for any outline, because a single body's edge must not have islands and holes. They fit a density, which a scatter already has.</p>
   <h3>2. Does a weighting say where the edge lands (A) or the coverage (B)?</h3>
   <p><b>Recommendation: A.</b> One meaning for a weighting across sizes, counts, tops and areas. B gives a plain band no softness and breaks continuity with the inner area for most weightings. The cost is that the right-hand curve is not what you type, which the labels, the flat example and the Coverage view answer.</p>
@@ -742,6 +812,7 @@ tile size="1x1" seed=4 {
   <ul>
     <li>Seeds (round 3): "a roll is a seed" is one rule with a qualification, a control's sum exact and a top's sum approximate under (d). Byte-identity is not claimed without a build run. The measurement is described as the mean over seeds of each seed's largest gap, with the worst seeds. The middle option (g) was added. <code>sin</code>, <code>cos</code> and <code>abs</code> of a cloud stay refused until the interval type has their images. A and B: "nearly agree" became "are close", and B as an editor input transform that stores A.</li>
     <li>The comparison (round 4): the P3 figure was wrong (0.1) and is now the measured 0.041 at three features. The criterion for rank versus independent rolls is stated as where a thing gets its neighbour relation, a field or a join, with the lone-stone precedent in the rock code, and it is called a second path for <code>u</code>. The rock claim is now measured over 200 stones. The (e) equivalence is stated for a uniform field. The walkthrough notes the finite-roll condition and the pooled mix of weightings. Node figures are labelled as Node.</li>
+    <li>Rock outlines (no Orin round, since no word or form changed): the section "Rock outlines: three ways" adds option (h), own wobble with no grading, and the rock recommendation moves from (c) to (h) on the measurements.</li>
   </ul>
   <h3>4. The area band's form</h3>
   <p>Unchanged by the above: <code>at="low(inner .. outer)"</code>, a kind <code>band</code> over regions, containment checked seed-free and conservative as <code>dt::band-outside</code>, a pin refusing a band.</p>
@@ -1438,6 +1509,60 @@ walkInit();
 new MutationObserver(() => walkRender()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => walkRender());
 document.fonts && document.fonts.ready.then(() => walkRender());
+</script>
+<script>
+"use strict";
+/* ================= rock outlines: three ways ================= */
+const RK = { method: "wobble", wname: "low", seed: 3, P: 10, bumps: 2 };
+const RKM = { graded: "Graded (ranked)", rolls: "Each point rolls", wobble: "Own wobble, no grading" };
+function rkW(name) { const d = WDEF[name]; return { name, a: d.a, c: d.c ?? .5 }; }
+function rkWobble(r, P, ph0, bumps) { const M = 8, ks = [], ph = []; for (let m = 0; m < M; m++) { ks.push(bumps + (r() < .5 ? 0 : 1)); ph.push(r() * TAU); } const a = Math.sqrt(2 / M);
+  const f = th => { let v = 0; for (let m = 0; m < M; m++) v += Math.cos(ks[m] * (th + ph0) + ph[m]); return v * a; }; return { f, vals: Array.from({ length: P }, (_, k) => f(TAU * k / P)) }; }
+function rkStone(method, w, P, bumps, seed) { const r = rng(seed * 131 + 7), ph0 = r() * TAU; let u, t;
+  if (method === "rolls") { u = Array.from({ length: P }, r); t = u.map(x => unit(w, x)); return { u, t, wob: null, ph0 }; }
+  const wb = rkWobble(r, P, ph0, bumps), g = wb.vals;
+  if (method === "graded") { const idx = [...g.keys()].sort((a, b) => g[a] - g[b] || a - b); u = new Array(P); idx.forEach((i, p) => { u[i] = (p + .5) / P; }); return { u, t: u.map(x => unit(w, x)), wob: wb, ph0 }; }
+  u = g.map(v => phi(v)); return { u, t: u.map(x => unit(w, x)), wob: wb, ph0 }; }
+function rkPoly(t, ph0, cx, cy, R, core) { return t.map((v, k) => { const th = ph0 + TAU * k / t.length, rr = R * (core + (1 - core) * v); return [cx + Math.cos(th) * rr, cy + Math.sin(th) * rr]; }); }
+function rkDrawStone(g, st, cx, cy, R) { const core = .32;
+  g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.setLineDash([3, 3]); g.strokeStyle = css("--line-2"); g.lineWidth = 1; g.stroke(); g.setLineDash([]);
+  const pts = rkPoly(st.t, st.ph0, cx, cy, R, core); g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fillStyle = css("--stone"); g.globalAlpha = .9; g.fill(); g.globalAlpha = 1; g.strokeStyle = css("--ink"); g.lineWidth = 1.4; g.stroke();
+  g.beginPath(); g.arc(cx, cy, R * core, 0, TAU); g.fillStyle = css("--accent"); g.globalAlpha = .28; g.fill(); g.globalAlpha = 1; g.strokeStyle = css("--accent"); g.lineWidth = 1; g.stroke(); }
+function rkRow(cv, method, wn, P, bumps, n, base) { const g = cv.getContext("2d"), W0 = cv.width, H0 = cv.height, w = rkW(wn); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = css("--plate"); g.fillRect(0, 0, W0, H0);
+  for (let s = 0; s < n; s++) rkDrawStone(g, rkStone(method, w, P, bumps, base + s), (s + .5) * W0 / n, H0 / 2, Math.min(H0, W0 / n) * .46); }
+function rkStrip(method, id) { const host = document.getElementById(id); if (!host) return; const w = rkW("low"), P = 10, bumps = 2, seed = 5, st = rkStone(method, w, P, bumps, seed), W0 = 300, ph = 66, gap = 22;
+  const X = k => 18 + (k + .5) / P * (W0 - 36), fr = (y0, label) => `<rect x="14" y="${y0}" width="${W0 - 28}" height="${ph}" style="fill:none;stroke:var(--line-2)"/><text x="14" y="${y0 - 5}">${label}</text>`, dot = (x, y, c) => `<circle cx="${x}" cy="${y}" r="3.8" style="fill:var(--${c})"/>`;
+  let a = "", y = 16;
+  if (method === "rolls") { a += fr(y, "1 a die for each point") + st.u.map((u, k) => dot(X(k), y + ph - u * ph, "water")).join(""); y += ph + gap;
+    a += fr(y, "2 each through the weighting: t") + st.t.map((t, k) => dot(X(k), y + ph - t * ph, "accent")).join(""); }
+  else { const g = st.wob;
+    // the wobble curve over the angle (phase aligned with the points)
+    const cp = Array.from({ length: 80 }, (_, i) => { const th = TAU * (i / 79) * (P - 1) / P; return `${(18 + (th / TAU) * (W0 - 36) + (W0 - 36) / (2 * P)).toFixed(1)},${(y + ph / 2 - g.f(th) * 11).toFixed(1)}`; });
+    a += fr(y, "1 a smooth wobble round the stone") + `<polyline points="${cp.join(" ")}" fill="none" stroke="var(--muted)" stroke-width="1.5"/>` + g.vals.map((v, k) => dot(X(k), y + ph / 2 - v * 11, "water")).join(""); y += ph + gap;
+    if (method === "graded") { a += fr(y, "2 ranked: sort, then (position + 0.5) / 10") + st.u.map((u, k) => dot(X(k), y + ph - u * ph, "water")).join(""); }
+    else { a += fr(y, "2 its own CDF, no sorting: erf of the value") + st.u.map((u, k) => dot(X(k), y + ph - u * ph, "water")).join(""); }
+    y += ph + gap; a += fr(y, "3 through the weighting: t") + st.t.map((t, k) => dot(X(k), y + ph - t * ph, "accent")).join(""); }
+  if (method === "rolls") { y += ph + gap; a += fr(y, "3 joined straight") + `<polyline points="${st.t.map((t, k) => `${X(k).toFixed(1)},${(y + ph - t * ph).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>` + st.t.map((t, k) => dot(X(k), y + ph - t * ph, "accent")).join(""); }
+  else { a += `<polyline points="${st.t.map((t, k) => `${X(k).toFixed(1)},${(y + ph - t * ph).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2"/>`; }
+  y += ph + 14; a += `<text x="14" y="${y}">up: distance from core to cell edge</text>`;
+  host.innerHTML = `<svg viewBox="0 0 ${W0} ${y + 6}" role="img" aria-label="${RKM[method]}">${a}</svg>`; }
+function rkExplorer() { const cv = document.getElementById("cvRocks"); if (!cv) return; const g = cv.getContext("2d"), w = rkW(RK.wname), cols = 6, rows = 3, cw = cv.width / cols, ch = cv.height / rows;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = css("--plate"); g.fillRect(0, 0, cv.width, cv.height);
+  const pool = [], F = cdfOf(w), steps = []; let sp = 0, n = 0;
+  for (let s = 0; s < cols * rows; s++) { const st = rkStone(RK.method, w, RK.P, RK.bumps, RK.seed * 100 + s); rkDrawStone(g, st, (s % cols + .5) * cw, (Math.floor(s / cols) + .5) * ch, Math.min(cw, ch) * .46); pool.push(...st.t); const P = st.t.length; for (let k = 0; k < P; k++) { const a = st.t[(k + P - 1) % P], b = st.t[k], c = st.t[(k + 1) % P]; if (b - a >= .3 && b - c >= .3) sp++; } n++; }
+  document.getElementById("rkStats").innerHTML = `<span>pooled gap to the weighting: <b>${ksOf(pool, w).toFixed(3)}</b></span><span>sharp spikes per stone: <b>${(sp / n).toFixed(2)}</b></span>`;
+  document.getElementById("rkSrc").textContent = `rock at="${wCall(w, "core .. cell")}"   // ${RKM[RK.method]}, ${RK.P} points, wobble ${RK.bumps} to ${RK.bumps + 1} bumps`; }
+function rkSync() { document.getElementById("rkOutP").textContent = RK.P; document.getElementById("rkOutB").textContent = RK.bumps; document.getElementById("rkOutSeed").textContent = RK.seed; }
+function rkStatic() { const host = document.getElementById("rkRows"); if (!host) return; let html = ""; for (const wn of ["flat", "low", "high"]) { html += `<h4 class="rkh">${wn === "flat" ? "flat" : wn === "low" ? "low(12)" : "high(12)"}</h4>`; for (const m of ["graded", "rolls", "wobble"]) html += `<div class="rkrow"><span class="rklab">${RKM[m]}</span><canvas width="960" height="120" data-m="${m}" data-w="${wn}"></canvas></div>`; }
+  host.innerHTML = html; host.querySelectorAll("canvas").forEach(cv => rkRow(cv, cv.dataset.m, cv.dataset.w, 12, 2, 8, 40)); }
+function rkInit() { rkStatic(); rkExplorer(); ["graded", "rolls", "wobble"].forEach((m, i) => rkStrip(m, "rkStrip" + "GRW"[i])); }
+(function () { const seg = (id, cb) => { const el = document.getElementById(id); if (el) el.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); cb(b.dataset.v); }); };
+  seg("segRkM", v => { RK.method = v; rkExplorer(); }); seg("segRkW", v => { RK.wname = v; rkExplorer(); });
+  const sl = (id, f) => { const el = document.getElementById(id); if (el) el.addEventListener("input", e => { f(+e.target.value); rkSync(); rkExplorer(); }); };
+  sl("rkP", v => RK.P = v); sl("rkB", v => RK.bumps = v); sl("rkSeed", v => RK.seed = v); rkSync(); rkInit(); })();
+new MutationObserver(() => rkInit()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => rkInit());
+document.fonts && document.fonts.ready.then(() => rkInit());
 </script>
 
 </body></html>
