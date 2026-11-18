@@ -68,7 +68,7 @@ function Explorer(root,REFS){
   function faceLive(){return !!(P.free&&(P.free.front||(P.free.back&&!deadWhy('free-back'))||(P.free.sides&&!deadWhy('free-sides'))))}
   /* an effect with an amount and no free face on does nothing: said, not silent */
   /* the row planes' clip, said: lean and tilt are limited to what keeps every row 0.6 of its own height thick; the build records the range asked and the one used */
-  function planesNote(){var q=cur&&cur.rep&&cur.rep.planes;if(!q||!q.clipped)return '';function f(a){return (+a[0].toFixed(2))+'..'+(+a[1].toFixed(2))}var o=[];['lean','tilt'].forEach(function(k){var c=q.clipped[k];if(c&&(Math.abs(c.asked[0]-c.used[0])>1e-9||Math.abs(c.asked[1]-c.used[1])>1e-9))o.push(k+' limited to '+f(c.used)+' deg by row height (asked '+f(c.asked)+')')});return o.join('; ')}
+  function planesNote(){var q=cur&&cur.rep&&cur.rep.planes;if(!q||!q.clipped)return '';function f(a){return (+a[0].toFixed(2))+'..'+(+a[1].toFixed(2))}var o=[];['lean','tilt'].forEach(function(k){var c=q.clipped[k];if(c&&(Math.abs(c.asked[0]-c.used[0])>1e-9||Math.abs(c.asked[1]-c.used[1])>1e-9))o.push(k+' limited to '+f(c.used)+' deg (asked '+f(c.asked)+')')});return o.length?o.join('; ')+': a row keeps its height in the middle and is never thinner than 0.2 of the thinnest row ('+(+q.floor.toFixed(1))+' mm)':''}
   function noFace(panel){if(faceLive())return false;return panel==='region'?(P.band&&P.band.depth>0):(((P.recess||[0,0])[1]>0)||((P.lip||[0,0])[1]>0))}
   function pick(rows){return rows.filter(function(r){return !r.more}).map(token).filter(function(k){return k.key||k.c})}
   function summaryOf(rows){return pick(rows).map(function(k){return k.c?'<b class="chg">'+k.t+'</b>':'<span>'+k.t+'</span>'}).join(' &middot; ')}
