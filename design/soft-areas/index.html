@@ -121,6 +121,30 @@ svg .fit { fill:none; stroke:var(--ink); stroke-width:2.4; }
 svg .minl { fill:none; stroke:var(--accent); stroke-width:2; }
 svg .maxl { fill:none; stroke:var(--muted); stroke-width:1.6; stroke-dasharray:7 5; }
 svg .arrowhead { fill: var(--accent); }
+.striprow { display: flex; flex-direction: column; gap: 4px; }
+.striplab { font: 600 12px var(--f-code); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.stripgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stripgrid figure { gap: 3px; overflow: visible; }
+.stripgrid canvas { width: 100%; height: auto; aspect-ratio: 8 / 5; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--plate); display: block; }
+.stripgrid figure svg { min-width: 0; height: 30px; }
+.stripgrid figcaption { font: 11.5px var(--f-code); }
+.plots h4 { margin: 0 0 4px; font: 600 12px var(--f-code); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
+.stepgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
+.stepgrid figure.fig { gap: 4px; } .stepgrid svg { min-width: 0; }
+.stephead { font: 600 12.5px var(--f-code); color: var(--ink); }
+.fourgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.fourgrid canvas, .exrow canvas, .gal canvas { width: 100%; height: auto; display: block; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--plate); }
+.fourgrid figure { gap: 3px; overflow: visible; } .fourgrid figcaption { font-size: 12px; }
+.exrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.exrow figure { gap: 3px; overflow: visible; } .exrow figcaption { font: 11.5px var(--f-code); }
+.gal { display: flex; flex-direction: column; gap: 6px; overflow-x: auto; }
+.galhead, .galrow { display: grid; grid-template-columns: 110px repeat(3, minmax(120px, 1fr)); gap: 6px; align-items: center; min-width: 520px; }
+.galhead b { font: 600 12px var(--f-code); color: var(--ink); } .gallab { font: 600 11.5px var(--f-code); color: var(--muted); }
+#optList { display: flex; flex-direction: column; gap: 14px; } #optList h3 { margin-top: 8px; } .mech svg { width: 100%; max-width: 600px; height: auto; display: block; min-width: 0; } .mech { overflow-x: auto; }
+.matrix td, .matrix th, .cmp td, .cmp th { font-size: 12.5px; } .matrix td.chg { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.cmp { min-width: 1100px; } .cgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.cgrid .cvbox canvas { aspect-ratio: auto; }
+ul.opts li, ol.toc li { max-width: 80ch; } ol.toc { columns: 1; }
 .cols2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
 .cols2 > div { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
 .cols2 h4 { margin: 0; font: 600 12px var(--f-code); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
@@ -132,13 +156,96 @@ svg .cellk { fill: var(--stone); opacity: .85; stroke: var(--ink); stroke-width:
 
 <main>
 <header>
-  <div class="eyebrow">Design · tile language · nothing built yet · for discussion</div>
+  <div class="eyebrow">Design · tile language · nothing is settled · for a decision</div>
   <h1>Soft areas</h1>
-  <p class="lede">An area written as two outlines, inner and outer, takes odds exactly as a top does. Inside the inner outline things fill the space for certain. In the gap the weighting says how likely they are, so a scatter thins out, a cliff's sites thin out into a ragged front, and each site's own outline is a weighted area again.</p>
+  <p class="lede">A weighted range says how often values come up. For a thing, such as a scatter or a stone, that is one roll, and it is easy. A dirt surface and a rock's outline are curves and surfaces, and the roll has to be turned into one. There are several ways to do that, with different looks and different costs. This page lays them out, draws them, and ends with the decision to make.</p>
 </header>
 
-<section id="explorer">
-  <div class="sechead"><h2>Try it</h2><span class="where">a prototype in this page, in browser JavaScript; the engine does none of this yet</span></div>
+<section id="question">
+  <div class="sechead"><h2>The question and the choices</h2></div>
+  <p>A weighting turns a number between 0 and 1 into a position along a range. To draw a whole surface or a whole outline from it, something has to supply a number at every point, and the number at neighbouring points must be related or the result is noise. <b>How a weighting becomes a surface or a curve</b> is the choice. The options, in one line each:</p>
+  <ul class="opts">
+    <li><b>(a) Rank a smooth field.</b> Today's top. Sort the field's values and use each value's rank as the number. Exact frequencies, neighbours alike.</li>
+    <li><b>(b) Quantile-map the field.</b> Use each value's own cumulative probability instead of its rank. Local and tile-size independent, exact only on average.</li>
+    <li><b>(c) Independent points, joined.</b> Roll each control point on its own and join them, straight or smooth. Explicit feature size. Exact at the points only.</li>
+    <li><b>(d) Sum of seeded fields.</b> One field per range in a formula, each ranked by its own weighting, then the arithmetic. Each part exact, the whole not.</li>
+    <li><b>(g) The same sum, ranked together.</b> Add the fields into one roll and rank it through the combined odds. The whole exact, the parts not.</li>
+    <li><b>(e) Threshold against coverage.</b> Areas only. A smooth field compared with a coverage curve, so the edge is wherever they cross. Can make islands and holes.</li>
+    <li><b>(f) Edge displacement.</b> Areas only. Push the inner outline outward by a smooth 1D roll along the edge. Always one curve.</li>
+  </ul>
+  <p>The page is long. In order:</p>
+  <ol class="toc">
+    <li><a href="#walk-sec">The foundation: today's cloud in six pictures</a></li>
+    <li><a href="#try">Try it: every option, every weighting</a></li>
+    <li><a href="#discrete">Discrete draws: scatter and sites</a></li>
+    <li><a href="#options">The options, one at a time, and which step of the six each changes</a></li>
+    <li><a href="#gallery">The same weighting under every option</a>, and <a href="#compare">the comparison table</a></li>
+    <li><a href="#examples">Three examples</a> and <a href="#both">whether one option serves both tops and areas</a></li>
+    <li><a href="#exists">What exists in the code</a></li>
+    <li><a href="#seed">Option (d) in detail, a roll is a seed</a> and <a href="#graphs">options (a), (b), (e) in detail, the two graphs</a></li>
+    <li><a href="#area-form">Area bands: the form and its checks</a> (the same whichever option is chosen)</li>
+    <li><a href="#decision">The decision</a>, with a recommendation</li>
+  </ol>
+</section>
+
+<section id="walk-sec">
+  <div class="sechead"><h2>The foundation: today's cloud in six pictures</h2><span class="where">Band::rolled, band.rs:424</span></div>
+  <p>Every option below is a variation of this one procedure, so it comes first. A <b>cloud</b> is a top (a surface) written with a weighting, such as <code>top="$groundHeight + low(0dmm .. 3dmm)"</code>. The solver gives the body a band, a low and a high at every node. The body supplies a smooth field of rolls. <code>Band::rolled</code> then decides how high each node stands inside the band, in six steps. The example is a side view of a dirt top: 14 nodes along a strip, a band, and a weighting you can change.</p>
+  <div class="seg" id="segWalk"><button data-v="flat" aria-pressed="false">flat</button><button data-v="low" aria-pressed="true">low(5)</button><button data-v="high" aria-pressed="false">high(5)</button><button data-v="bell" aria-pressed="false">bell(0.18)</button></div>
+  <div class="stepgrid" id="walk"></div>
+  <ol>
+    <li><b>The body's smooth field of rolls.</b> Dirt rolls hills, water rolls waves. How neighbouring nodes relate is the body's business. The only thing <code>rolled</code> needs is one number per node.</li>
+    <li><b>Which nodes take part.</b> Nodes the body's <code>take</code> refuses, that have no odds, or whose roll is not a finite number are left out. For dirt that means nodes with no room between low and high, such as the ones at a pin. They keep the body's own value.</li>
+    <li><b>Sort by roll.</b> Least roll first. Two nodes with the same roll (9 and 10 here) go in node order, so no thread can change the result.</li>
+    <li><b>Rank.</b> Each node gets <code>(position + 0.5) / count</code>. The ranks are evenly spaced from 0 to 1, whatever the rolls were. This is why the frequencies come out exact.</li>
+    <li><b>The weighting turns rank into t.</b> Its quantile curve is read at each rank (the node's own weighting: nodes under different pins can carry different ones, are ranked in one pool, and are exact only for the pooled mix). Evenly spaced ranks come out of <code>low</code> bunched near 0, so most nodes get a small <code>t</code>.</li>
+    <li><b>Height.</b> <code>lo + (hi - lo) * t</code>. Putting the field (dashed) beside the surface (solid) shows what the cloud does: the hills are in the same places and in the same order, and the heights are redistributed, mostly low with a few rises.</li>
+  </ol>
+  <h3>The same idea in 2D</h3>
+  <div class="fourgrid"><figure><canvas id="w2a" width="220" height="220"></canvas><figcaption>1 the body's field</figcaption></figure><figure><canvas id="w2b" width="220" height="220"></canvas><figcaption>3-4 its rank, 0 to 1: the same shapes, evenly spread</figcaption></figure><figure><canvas id="w2c" width="220" height="220"></canvas><figcaption>5 t, through the weighting: most of the tile is dark (low)</figcaption></figure><figure><canvas id="w2d" width="220" height="220"></canvas><figcaption>6 the surface, as banded heights: a few high hills over low ground</figcaption></figure></div>
+  <h3>Two properties that come from ranking</h3>
+  <p><b>Exact frequencies.</b> A smooth field and a lumpy one give the same histogram, because the ranks are the same whatever the field was. The bars are what was drawn and the line is the weighting.</p>
+  <div class="figrow" id="propExact"></div>
+  <p><b>Neighbours stay alike.</b> Ranking is monotone: a node with a greater roll gets a greater height. If the heights were drawn independently the surface would be noise.</p>
+  <div class="figrow" id="propAlike"></div>
+  <h3>The solver is untouched</h3>
+  <figure class="fig"><div id="pinFig"></div><figcaption>The band comes from the solver, from the body's own band and its pins. A pin forces a height and the band eases back to the body's own. The cloud does not change the band. It only chooses where inside it each node stands, and a node with no room keeps the pin.</figcaption></figure>
+  <div class="codelinks">
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-kit/src/band.rs#L424">rolled, band.rs:424</a>
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-kit/src/band.rs#L477">fit, :477</a>
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-kit/src/span.rs#L323">dirt calls it, span.rs:323</a>
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/docs/guide/clouds.html">guide/clouds</a>
+  </div>
+</section>
+
+<section id="try">
+  <div class="sechead"><h2>Try it: every option, every weighting</h2><span class="where">a prototype in this page, in browser JavaScript; the engine does none of this</span></div>
+  <div class="explorer">
+    <div class="bar">
+      <div class="grp"><span class="lab">Drawing</span><div class="seg" id="segCMode"><button data-v="surface" aria-pressed="true">A surface (a top)</button><button data-v="outline" aria-pressed="false">An outline (an area)</button></div></div>
+      <div class="grp"><span class="lab">Option</span><div class="seg" id="segCOpt"><button data-v="a" aria-pressed="true" title="Rank a smooth field">a rank</button><button data-v="b" aria-pressed="false" title="Quantile-map the field">b quantile</button><button data-v="c" aria-pressed="false" title="Independent points, joined">c points</button><button data-v="d" aria-pressed="false" title="Sum of seeded fields">d sum</button><button data-v="g" aria-pressed="false" title="Sum, ranked together">g sum ranked</button><button data-v="e" aria-pressed="false" title="Threshold against coverage">e threshold</button><button data-v="f" aria-pressed="false" title="Edge displacement">f edge</button></div></div>
+      <div class="grp"><span class="lab">Weighting</span><div class="seg" id="segCW"><button data-v="flat" aria-pressed="false">flat</button><button data-v="low" aria-pressed="true">low</button><button data-v="high" aria-pressed="false">high</button><button data-v="bell" aria-pressed="false">bell</button><button data-v="peak" aria-pressed="false">peak</button><button data-v="ends" aria-pressed="false">ends</button></div></div>
+    </div>
+    <div class="bar">
+      <label class="sl" id="cStrBox"><span id="cStrLab">ratio</span><input id="cStr" type="range" min="0" max="100" value="68"><output id="cOutStr"></output></label>
+      <label class="sl" id="cCenBox"><span>centre</span><input id="cCen" type="range" min="0" max="100" value="50"><output id="cOutCen"></output></label>
+      <label class="sl"><span>features</span><input id="cF" type="range" min="1" max="12" value="3"><output id="cOutF"></output></label>
+      <label class="sl"><span>seed</span><input id="cSeed" type="range" min="1" max="40" value="5"><output id="cOutSeed"></output></label>
+      <div class="grp" id="cJoinBox" hidden><span class="lab">Join</span><div class="seg" id="segCJoin"><button data-v="straight" aria-pressed="true">straight</button><button data-v="smooth" aria-pressed="false">smooth</button></div></div>
+      <div class="grp" id="cGeomBox" hidden><span class="lab">Plan</span><div class="seg" id="segCGeom"><button data-v="front" aria-pressed="true">a front</button><button data-v="pond" aria-pressed="false">a ring</button></div></div>
+    </div>
+    <div class="cgrid">
+      <div class="cvbox"><div class="cap"><span>Plan view</span><span>surface: height as colour, low blue to high brown · outline: inner area grey, gap kept in green</span></div><canvas id="cvPlan" width="480" height="360" aria-label="Plan view of the drawn surface or outline"></canvas></div>
+      <div class="cvbox"><div class="cap"><span>Side view</span><span>outline: the edge's depth along the edge, where it is one curve</span></div><canvas id="cvSide" width="480" height="130" aria-label="Side view" hidden></canvas><div id="cHist"></div></div>
+    </div>
+    <div class="readout"><div class="src" id="cSrc"></div><div class="stats" id="cStats"></div></div>
+    <p class="c" style="font-size:13.5px">Features is how many bumps fit across the tile. Surfaces are drawn on a 96 by 96 lattice (the tile has 128 nodes a square). Outlines are drawn on the gap unrolled, along the edge across and depth down, and the ring plan wraps it round a closed outline. The numbers are measured from what is drawn: the largest gap between the drawn values and the weighting (0 is exact), the share of the gap kept against what the odds say, and the detached islands and holes the edge makes.</p>
+  </div>
+</section>
+
+<section id="discrete">
+  <div class="sechead"><h2>Discrete draws: scatter and sites</h2><span class="where">the easy case</span></div>
+  <p>A scatter, a cliff's stones, a size or a count each need one roll per thing, and nothing joins the things up. The roll is ranked through the weighting for each candidate (so the share of candidates at each depth is exact) and the weighting says how deep a thing may stand. Inside the inner area things are certain. In the gap the chance of standing at depth <code>u</code> is one minus the weighting's running total. This explorer shows scatter, cliff stones and a dirt edge under an area band, with the stones' own outlines drawn as joined points (option c).</p>
   <div class="explorer">
     <div class="bar">
       <div class="grp"><span class="lab">Preset</span>
@@ -160,6 +267,7 @@ svg .cellk { fill: var(--stone); opacity: .85; stroke: var(--ink); stroke-width:
       <label class="sl"><span>seed</span><input id="slSeed" type="range" min="1" max="40" value="7"><output id="outSeed"></output></label>
       <label class="sl"><span>grain</span><input id="slGrain" type="range" min="3" max="40" value="14"><output id="outGrain"></output></label>
       <label class="sl"><span>points</span><input id="slPoints" type="range" min="3" max="24" value="10"><output id="outPoints"></output></label>
+      <div class="seg" id="segView"><button data-v="elements" aria-pressed="true">Elements</button><button data-v="coverage" aria-pressed="false">Coverage</button></div>
       <div class="seg"><button id="btnCell" aria-pressed="true">Weighted stone outline</button><button id="btnOutlines" aria-pressed="true">Show outlines</button></div>
     </div>
     <div class="cv2">
@@ -174,25 +282,139 @@ svg .cellk { fill: var(--stone); opacity: .85; stroke: var(--ink); stroke-width:
       <div class="stats" id="stats"></div>
     </div>
     <div class="plots">
-      <figure><div id="plotDensity"></div><figcaption>The weighting's density over the gap, from the inner outline (0) to the outer outline (1). The dotted line is flat.</figcaption></figure>
-      <figure><div id="plotMember"></div><figcaption>How likely a point at depth u is inside the area: one minus the weighting's running total. A scatter's density in the gap follows this curve, and so does the chance that a site stands there.</figcaption></figure>
+      <figure><h4>Where the edge lands</h4><div id="plotDensity"></div><figcaption>The weighting itself, over the gap from the inner outline (0) to the outer outline (1): how often the edge lands at each depth, as a top's weighting says where the surface lands. The dotted line is flat.</figcaption></figure>
+      <figure><h4>How likely a spot is covered</h4><div id="plotMember"></div><figcaption>A spot at depth u is covered when the edge lands beyond it, so this is one minus the weighting's running total. It always runs from 1 at the inner outline to 0 at the outer one. A scatter's density in the gap follows this curve, and so does the chance that a site stands there. The <i>Coverage</i> view paints it on the map.</figcaption></figure>
     </div>
+  </div>
+
+  <h3>The six weightings, side by side</h3><div id="strip"></div>
+  <p class="c" style="font-size:13.5px">Left to right: <code>flat</code>, <code>low(12)</code>, <code>high(12)</code>, <code>bell(0.12, 0.5)</code>, <code>peak(0.25, 0.8)</code>, <code>ends(3, 0.5)</code>. <code>low</code> thins the gap out fast, <code>high</code> fills most of it, <code>bell</code> is full to about the middle of the gap and then stops, <code>peak</code> is full to about 55% and then fades, <code>ends</code> thins to half and holds before it drops at the far end. This strip follows the preset, seed and outlines above.</p>
+</section>
+
+<section id="options">
+  <div class="sechead"><h2>The options, one at a time</h2><span class="where">each is a variation of the six steps</span></div>
+  <p>The table says which of the six steps each option changes. A highlighted cell is a step that is different from today's.</p>
+  <div class="tablewrap"><table class="matrix">
+    <tr><th>Step</th><th>(a) rank</th><th>(b) quantile</th><th>(c) points</th><th>(d) sum</th><th>(g) sum ranked</th><th>(e) threshold</th><th>(f) edge</th></tr>
+    <tr><td>1 the field</td><td>one smooth field over the nodes</td><td class="chg">a stationary Gaussian field, same everywhere</td><td class="chg">no field: an independent roll at each control point</td><td class="chg">one field per range, forked from the seed</td><td class="chg">the sum of the forked fields, one roll</td><td>a 2D field over the gap</td><td class="chg">a 1D field along the edge</td></tr>
+    <tr><td>2 who takes part</td><td>nodes with room</td><td>same</td><td class="chg">the control points</td><td>same, per field</td><td>same</td><td>nodes of the gap</td><td>nodes along the edge</td></tr>
+    <tr><td>3 sort</td><td>sort all</td><td class="chg">no sort</td><td class="chg">no sort</td><td>sort each field</td><td>sort the sum</td><td>sort all</td><td>sort along the edge</td></tr>
+    <tr><td>4 rank</td><td>(position + 0.5) / count</td><td class="chg">the field's own CDF, such as erf</td><td class="chg">the roll itself, already uniform</td><td>rank of each field</td><td>rank of the sum</td><td>rank</td><td>rank</td></tr>
+    <tr><td>5 weighting</td><td>the quantile curve</td><td>the quantile curve</td><td>the quantile curve, at the points</td><td>each range's own curve</td><td class="chg">the combined odds of the whole formula</td><td class="chg">compare with a coverage curve, no quantile map</td><td>the quantile curve</td></tr>
+    <tr><td>6 height</td><td>lo + (hi − lo)·t</td><td>same</td><td class="chg">t at the points, joined by a line or a spline</td><td class="chg">the arithmetic at each node</td><td>same</td><td class="chg">the edge is where field = coverage</td><td class="chg">the inner outline pushed out by t</td></tr>
+  </table></div>
+  <div id="optList">
+  <h3>(a) Rank a smooth field</h3>
+  <div class="mech" id="mechA"></div>
+  <p>This is today's top, picture for picture the six above. One smooth field, sorted, ranked, mapped through the weighting. <b>Strength:</b> frequencies are exact over the nodes that take part, whatever the field is, and neighbours stay alike. <b>Weakness:</b> the weighting reshapes the field. With <code>low</code> most nodes take a small <code>t</code>, so most of the surface lies in a low flat floor, and the few nodes with the greatest rolls stand up as spikes. Whether that reads as dirt is a question of look, and the pictures below show it. The result depends on every node of the tile: add area elsewhere and every rank changes.</p>
+  <h3>(b) Quantile-map the field per point</h3>
+  <div class="mech" id="mechB"></div>
+  <p>Skip steps 3 and 4. A Gaussian field's value at a point already says where it sits among all the values that field could take: its own cumulative probability, <code>erf</code> of the value. Use that as the number. <b>Strength:</b> it is local, so a point's height depends only on the field there, not on the rest of the tile, and it does not depend on the tile's size. <b>Weakness:</b> frequencies are exact only on average. A tile with few features can have far more high ground than the weighting says, because the field happens to be high over most of the tile. The page measures this below.</p>
+  <h3>(c) Independent rolls at control points, then join</h3>
+  <div class="mech" id="mechC"></div>
+  <p>Drop the field. Put control points where the feature size says, roll each on its own, put each through the weighting, and join them with straight lines or a spline. This is what was proposed for a rock's outline: pick points around the stone, join them. <b>Strength:</b> the feature size is explicit (the spacing), nothing depends on the rest of the tile, and the outline is always one curve with no islands. A pin is one more control point. <b>Weakness:</b> frequencies hold at the points and not along the curve. A straight join averages neighbours, which pulls the curve toward the middle of the range, and a spline can overshoot, so it is clamped. Neighbours are alike only as far as the join makes them.</p>
+  <h3>(d) Sum of seeded fields, one per range</h3>
+  <div class="mech" id="mechD"></div>
+  <p>The seed idea. A formula with two ranges, such as <code>[0 .. 1] + low(0 .. 1)</code>, gets a field for each range, forked from the node's seed and keyed by the range's place. Each is ranked through its own weighting and the arithmetic runs at each node. It is how controls already work, and it is the same mechanism as (a) with one field per range, as octaves. <b>Strength:</b> one rule for controls and tops, and most of the arithmetic a cloud refuses today becomes possible. <b>Weakness:</b> each range's frequencies are exact and the sum's are not. The section on seeds measures how far off.</p>
+  <h3>(g) The same sum, ranked together</h3>
+  <div class="mech" id="mechG"></div>
+  <p>A middle option. Add the forked fields into one roll with two patterns, rank that, and map it through the combined odds of the whole formula, as today's <code>independent</code> does with its quantile grid. <b>Strength:</b> the whole is exact, and the whole is what shows. <b>Weakness:</b> the parts are not exact, and it keeps the combining step that option (d) removes.</p>
+  <h3>(e) Threshold against coverage</h3>
+  <div class="mech" id="mechE"></div>
+  <p>This is area model B. Compare a smooth field with a coverage curve at each point of the gap: a point is in where the field is at most the coverage at its depth. The edge is wherever they cross. <b>Strength:</b> the curve written is the coverage you see. <b>Weakness:</b> a threshold of a 2D field is a level set, and level sets have islands (bits of area cut off from the main body) and holes (bare patches inside it). That may be wanted for a scatter's density and is wrong for a stone's outline. The same is true of (a) and (b) when they are used for an outline: a point of the gap is in where its depth is at most its <code>t</code>, which is the same threshold with coverage model A, so they also make islands and holes. The explorer counts them.</p>
+  <h3>(f) Edge displacement</h3>
+  <div class="mech" id="mechF"></div>
+  <p>Push the inner outline outward by a smooth 1D roll along the edge, ranked or quantile-mapped through the weighting. The edge is a function of arc length. <b>Strength:</b> always one curve, no islands or holes, and a 1D field is cheap. <b>Weakness:</b> it fixes the edge to one value of depth per position along it, so it cannot make a bay or an overhang. Where the gap is uneven the depth is a share of the local gap, so it never crosses the outer outline, and where the inner outline is concave the straight lines of the displacement can cross each other if the depth is measured in millimetres along a normal, which is why a share of the gap along the nearest-point line is used.</p>
+  <p class="c">Other options considered and left out. <b>Midpoint displacement</b> (split a segment, offset the middle, repeat) is option (c) with the feature size halved at each round, and each round's offset needs a range it can take, so the weighting would have to be applied to the offsets and not to the result. <b>A random walk</b> has no fixed range, so it needs clamping at the ends and the clamp becomes the shape.</p>
   </div>
 </section>
 
-<section class="summary" id="answer">
-  <h2>The answer in short</h2>
-  <ul>
-    <li><b>An area band takes odds exactly as a top does.</b> <code>at="[inner .. outer]"</code> is the plain band and <code>at="low(inner .. outer, 4)"</code> is a cloud, with the language's own weightings. The area holds the two outlines and the odds. It never rolls.</li>
-    <li><b>Each element rolls for itself, and the weighting places the roll.</b> That is <code>Band::rolled</code>: the element makes its own roll at each node (or each candidate), the rolls are ranked, and the weighting turns each rank into how far out that node may go. Two columns below set the top and the area side by side.</li>
-    <li><b>Scatter</b> places things at full density inside the inner area and with the weighting's density in the gap, so there are fewer where the odds are lower. <b>Cliffs, walls, columns and bricks</b> are sites with cells. Sites fill the inner area for certain and are placed in the gap by the weighting, which breaks the front up.</li>
-    <li><b>A site's outline in the gap is a weighted area again, drawn like a top.</b> Pick points around the stone, place each at a depth the weighting chooses, join them with straight lines. That polygon is the stone's area, as a soil top is nodes joined up, and the rock's own cuts, chips and wear take off the corners, so nothing else smooths it. The form is closed by intersection with one added piece, a core every stone keeps.</li>
-    <li><b>A plain band has no odds, as a plain top has none.</b> The element uses its own roll. Scatter and cliff sites roll white noise, so a plain band thins them in a straight line, and scatter needs no refusal. <code>flat(a .. b)</code> is the explicit ranked form. The value is a new kind, <code>band</code>, over places, so pins, <code>except</code>, <code>within of=</code> and <code>parent()</code> refuse it as a kind mistake. <code>dt::band-outside</code> stands.</li>
-  </ul>
+<section id="gallery">
+  <div class="sechead"><h2>The same weighting under every option</h2><span class="where">one seed, 3 features across, three weightings</span></div>
+  <h3>A dirt surface</h3>
+  <p>Each cell is a plan above and a section below, with low as blue and high as brown. The rows are the options and the columns are the weightings.</p>
+  <div class="gal" id="galSurf"></div>
+  <h3>An outline from above</h3>
+  <p>The gap between an inner and an outer outline unrolled into a rectangle, the inner area at the top. Green is the part kept. The dark line is the edge.</p>
+  <div class="gal" id="galOut"></div>
+  <p class="rule"><b>What to see.</b> For a surface, (a) and (b) are near twins at this size: the same field, mapped by rank or by its own cumulative probability. <code>low(12)</code> leaves most of the tile blue with a few brown rises, and <code>ends(3)</code> makes terraces, plateaus with steep sides, because the heights pile up at both ends. (c) is smoother and coarser, because a grid of five points across is all the detail there is. (d) and (g) show two patterns, broad hills with finer ones on top. For an outline, (a), (b) and (e) leave detached islands and holes, (c) and (f) are always one curve, and <code>flat</code> under (e) covers the whole gap, because the coverage curve is 1 everywhere.</p>
 </section>
-<section id="tops">
-  <div class="sechead"><h2>How tops work today</h2><span class="where">read from the code at commit 870b0b18</span></div>
-  <p>Three things look alike in a document and are three different mechanisms in the program. Your idea matches the third.</p>
+
+<section id="compare">
+  <div class="sechead"><h2>The comparison</h2><span class="where">the facts, without a recommendation</span></div>
+  <div class="tablewrap"><table class="cmp">
+    <tr><th>Option</th><th>Exact frequencies</th><th>Neighbours alike</th><th>Feature size, who controls it</th><th>Islands and holes</th><th>Local</th><th>Tile-size independent</th><th>Seams across tiles</th><th>Works for</th><th>At a pin</th><th>Cost</th></tr>
+    <tr><td>(a) rank</td><td>Always, over the nodes that take part</td><td>Yes</td><td>The body's field (<code>bumpSize</code>)</td><td>None for a surface. Yes for an outline drawn as a 2D threshold</td><td>No: every rank depends on every node</td><td>No</td><td>Ranks differ per tile; the edge contract pins tile edges</td><td>Both</td><td>Pinned nodes have no room, so they are left out and keep the pin</td><td>A sort per body</td></tr>
+    <tr><td>(b) quantile</td><td>On average only: measured below</td><td>Yes</td><td>The field's</td><td>As (a)</td><td>Yes</td><td>Yes</td><td>Match, if the field is keyed by world position</td><td>Both</td><td>The node keeps the band value</td><td>The least</td></tr>
+    <tr><td>(c) points</td><td>At the points only</td><td>Only as far as the join makes them</td><td>The point spacing, explicit</td><td>None for an outline. For a surface, none</td><td>Yes, each point alone</td><td>Yes</td><td>Match, if the points are keyed by world position</td><td>Outlines best; surfaces come out faceted or blobby</td><td>A pin is one more control point</td><td>Cheap</td></tr>
+    <tr><td>(d) sum</td><td>Each range exactly, the sum not</td><td>Yes</td><td>One per range</td><td>None for a surface</td><td>No</td><td>No</td><td>As (a)</td><td>Tops with several ranges</td><td>As (a)</td><td>A sort per range</td></tr>
+    <tr><td>(g) sum ranked</td><td>The whole exactly, the parts not</td><td>Yes</td><td>Each field's</td><td>None for a surface</td><td>No</td><td>No</td><td>As (a)</td><td>Tops with several ranges</td><td>As (a)</td><td>A sort, and the combined-odds grid</td></tr>
+    <tr><td>(e) threshold</td><td>In expectation, to the written coverage</td><td>Yes</td><td>The field's</td><td><b>Yes: islands and holes</b>, the same as (a) and (b) used as a threshold</td><td>With a quantile field yes, with a ranked one no</td><td>With a quantile field yes</td><td>As (b) or (a)</td><td>Areas only</td><td>Continuous only if the curve is 1 at the inner outline</td><td>As (a)</td></tr>
+    <tr><td>(f) edge</td><td>Exact along the edge</td><td>Yes</td><td>The 1D field's</td><td>None: one curve</td><td>Across yes; along the edge as (a)</td><td>As (a)</td><td>Match if the edge field is periodic or keyed</td><td>Outlines only</td><td>Force the depth at that position</td><td>The least, 1D</td></tr>
+  </table></div>
+  <h3>Measured</h3>
+  <p>Largest gap between the drawn heights and the weighting (0 is exact; 0.1 means that at some height a tenth of the nodes sit on the wrong side), mean over 24 seeds, <code>low(12)</code>, a 48 by 48 lattice. The explorer shows the same number for any seed.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Features across the tile</th><th>1</th><th>2</th><th>3</th><th>5</th><th>8</th></tr>
+    <tr><td>(a) rank</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+    <tr><td>(b) quantile</td><td>0.15</td><td>0.063</td><td>0.041</td><td>0.025</td><td>0.017</td></tr>
+    <tr><td>(c) points, straight</td><td>0.26</td><td>0.26</td><td>0.21</td><td>0.18</td><td>0.18</td></tr>
+    <tr><td>(c) points, smooth</td><td>0.19</td><td>0.19</td><td>0.14</td><td>0.11</td><td>0.11</td></tr>
+  </table></div>
+  <p>The numbers for rock outlines further down were measured over 200 simulated stones in Node, with <code>low(12)</code>. (b)'s gap does not depend on the weighting: it comes from the field having few features, so the field's own values are a small sample. It halves from one feature to two and keeps falling. (c) has few control points (twice the features, at least three), and its curve is a join of a handful of independent draws. The draws are exact in distribution and the joined curve is not, more so for <code>ends(3)</code> (0.28 to 0.35 for a straight join) than for <code>flat</code> (0.16 to 0.24). A longer edge has more points and does better.</p>
+  <p>For an outline of 3 features across, 24 seeds, share of the gap kept against what the weighting says, and detached islands and holes per outline:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Option</th><th>flat: kept (odds 0.50)</th><th>islands, holes</th><th>low(12): kept (odds 0.31)</th><th>islands, holes</th></tr>
+    <tr><td>(a) rank</td><td>0.51</td><td>2.2, 2.1</td><td>0.31</td><td>4.1, 0.6</td></tr>
+    <tr><td>(b) quantile</td><td>0.51</td><td>2.0, 2.2</td><td>0.31</td><td>3.6, 0.6</td></tr>
+    <tr><td>(e) coverage B</td><td>1.00 (flat has no fall-off)</td><td>0, 0</td><td>0.37</td><td>4.5, 0.8</td></tr>
+    <tr><td>(f) edge</td><td>0.50</td><td>0, 0</td><td>0.31</td><td>0, 0</td></tr>
+    <tr><td>(c) points, straight</td><td>0.53</td><td>0, 0</td><td>0.34</td><td>0, 0</td></tr>
+  </table></div>
+  <p>The sums (d) and (g) are measured in the section on seeds.</p>
+</section>
+
+<section id="examples">
+  <div class="sechead"><h2>Three examples</h2><span class="where">each option, <code>low</code>, one seed</span></div>
+  <h3>A dirt top, <code>low(0dmm .. 3dmm)</code></h3>
+  <p>Mostly low with a few rises is what the weighting asks for.</p>
+  <div class="exrow" id="exSurf"></div>
+  <p class="rule"><b>Which reads right.</b> (a) and (b) give what was asked, a low floor with a few rises, and (g) adds finer detail on the hills and reads most like soil to my eye. (d) is busier and its heights are not exactly the weighting. (c) is too smooth and too coarse for dirt: nothing in it is finer than the control spacing. I judged by eye and so should Shawn, with the pictures above and the explorer.</p>
+  <h3>A rock's outline in a gap, <code>low(core .. cell)</code></h3>
+  <p>The ring between the stone's core (inner) and its cell (outer), unrolled and wrapped. The edge should be one closed curve.</p>
+  <div class="exrow" id="exRing"></div>
+  <p class="rule"><b>Which reads right.</b> (a), (b) and (e) give crescents and detached bits round the stone: a thresholded 2D field has islands and holes, and a stone's outline must be one closed curve. (c) gives one blob, faceted with straight joins and rounder with a spline, and the rock's cuts, chips and wear take off the corners. (f) is also one curve, but ranking forces a few long rays and many short ones on every stone, so each stone has the same spiky mix. (c) gives variety from stone to stone, and the frequency holds across the stones.</p>
+  <h3>A cliff front, <code>low(face .. faceMax)</code></h3>
+  <p>The straight front is the inner outline, the outer outline is below. The edge should step in and out along the front.</p>
+  <div class="exrow" id="exFront"></div>
+  <p class="rule"><b>Which reads right.</b> If the front is a curve (a footprint a body fills), (c) and (f) give teeth that step in and out and stay in one piece. (a), (b) and (e) cut loose islands, which suit sites (blocks that fell forward) and not a body's edge. A cliff's front is made of stones, so it is the sites' own rolls that make it ragged (the discrete draws above), and a curve is needed only where a body such as dirt or a floor has an edge.</p>
+</section>
+
+<section id="both">
+  <div class="sechead"><h2>Does one option serve tops and areas?</h2></div>
+  <p>Partly. A surface and an outline differ in dimension and in how many nodes they have, and the weighting means the same for both. The answer in three cases:</p>
+  <ul>
+    <li><b>Many nodes of one smooth thing</b> (a dirt surface, a long edge): rank a smooth field. For a surface the nodes are 2D and this is (a). For a long edge the nodes lie along the arc and this is (f), which is (a) restricted to one dimension. One rule with a dimension.</li>
+    <li><b>A shape joined from a handful of points</b> (a rock's outline, 6 to 16 points): independent rolls joined, (c). Ranking over so few points gives every stone the same depths in a different order, and a pooled distribution that is further from the weighting than independent rolls are. Measured over 200 stones with <code>low(12)</code>: independent rolls give a pooled gap of 0.025, 0.019 and 0.010 at 6, 10 and 16 points per stone, and the stones differ (the spread of a stone's mean depth is 0.10, 0.07 and 0.06). Ranking the points gives pooled gaps of 0.083, 0.050 and 0.031 and no difference between stones (spread 0).</li>
+    <li><b>A threshold of a 2D field</b> ((a), (b) or (e) used for an outline): neither. It makes islands and holes, which a single body's edge must not have. It fits a density, which is what a scatter already is.</li>
+  </ul>
+  <p>So the same option does not serve both, but one idea does. A weighting is a quantile map from a uniform number <code>u</code> to <code>t</code>. The options differ only in where <code>u</code> comes from: its rank among many nodes (a and f, stratified so the frequencies are exact), its own cumulative probability (b), or an independent roll (c). The criterion for choosing is <b>where the thing gets its neighbour relation</b>: from a smooth field, which ranks (a surface, a long edge), or from a join of separate points, which roll independently (a short closed outline). This is a second path for <code>u</code>, and the page says so. The code already has the precedent: a lone stone in a cloud draws its own roll (<code>rock.rs</code>), because a count of one ranks to a constant 0.5.</p>
+</section>
+
+<section id="exists">
+  <div class="sechead"><h2>What exists in the code</h2><span class="where">read at commit cca053c4</span></div>
+  <p>Three things look alike in a document and are three different mechanisms in the program: a band, a draw and a cloud. Everything that exists today draws a cloud by option (a).</p>
+  <div class="tablewrap"><table>
+    <tr><th>Body</th><th>What it rolls</th><th>Option today</th><th>Where</th></tr>
+    <tr><td>Dirt</td><td>smooth hills: the smoothest surface in the band plus noise, then ranked through the odds</td><td>(a)</td><td><a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-kit/src/span.rs#L323">span.rs:323</a></td></tr>
+    <tr><td>Water</td><td>waves, ranked so crests and troughs come up as often as the odds say</td><td>(a)</td><td><a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-elements/src/water.rs#L412">water.rs:412</a></td></tr>
+    <tr><td>Floors, cliffs</td><td>one smooth heaved surface in the band (the same hills); a cloud's odds shape the heaved target</td><td>(a)</td><td><a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-elements/src/floor.rs#L216">floor.rs:216</a>, <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-elements/src/cliff/mod.rs#L190">cliff/mod.rs:190</a></td></tr>
+    <tr><td>Trees</td><td>one smooth roll over the branch tips, ranked through the odds</td><td>(a) over a point set</td><td><a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-elements/src/tree/mod.rs#L1125">tree/mod.rs:1125</a></td></tr>
+    <tr><td>Rocks (a <code>top=</code> cloud)</td><td>one smooth field over the tile's stones, ranked over the topped stones; a lone stone draws its own</td><td>(a) over a point set, or one independent roll</td><td><a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-elements/src/rock.rs#L842">rock.rs:842</a></td></tr>
+    <tr><td>Controls (a size, a count)</td><td>one roll per draw, a seed that forks for each later range</td><td>the seeded rule, (d) without fields</td><td><a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-value/src/weighting.rs#L1213">weighting.rs:1213</a></td></tr>
+    <tr><td>A formula with several ranges in a top</td><td>collapsed onto a 32 by 32 quantile grid into 32 bins, then one field ranked through it</td><td>a form of (g) with one pattern</td><td><a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-eval/src/solve.rs#L603">solve.rs:603</a></td></tr>
+    <tr><td>Area edges by <code>within "[a .. b]"</code></td><td>blocks 6 to 15 mm along the place, each as deep as a flat draw says</td><td>(c), with flat odds and blocky joins</td><td><a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-eval/src/places.rs#L152">places.rs:152</a></td></tr>
+  </table></div>
   <div class="figrow">
     <figure class="fig"><svg id="figBand" viewBox="0 0 300 170" role="img" aria-label="A band between two lines with pins"></svg>
       <figcaption><b>A band is a constraint.</b> A <code>top="[a .. b]"</code> is a low and a high at every node. Pins hold it to a height at a place and ease back to it. The solver finds the band; no dice are rolled.</figcaption></figure>
@@ -255,7 +477,90 @@ svg .cellk { fill: var(--stone); opacity: .85; stroke: var(--ink); stroke-width:
   </div>
 </section>
 
+<section id="seed">
+  <div class="sechead"><h2>A roll is a seed</h2><span class="where">one rule for controls, tops and area bands</span></div>
+  <p><b>One rule, with a qualification.</b> A control's sum is exact, because it draws numbers. A top's sum is approximate under (d), because it adds smooth fields that are correlated by chance, and exact under (g). The explorer never shows a convolution as if it were what a build makes. Shawn's question: a value with several ranges can take one draw for all of them or one draw per range, and each has consequences. The alternative is that one draw for the value is a seed, a random number generator that does the draws for every range inside it. Controls already work this way. Tops do not, and that is where the problem is.</p>
+  <h3>Controls already do it</h3>
+  <p><code>Draw::draw</code> clones the stream into a <code>base</code> and rolls. The first range reads the stream, as a lone range always did. Each later range draws from <code>base.fork(k)</code>, keyed by its place <code>k</code> in the formula. The arithmetic then runs on plain numbers. The stream moves by one draw however many ranges there are, so editing a value never moves what is drawn after it. This is the 11 Nov ruling, two ranges are two rolls everywhere, including <code>top=</code>.</p>
+  <div class="codelinks">
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-value/src/weighting.rs#L1213">roll, weighting.rs:1213</a>
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-value/src/weighting.rs#L1244">draw, :1244</a>
+  </div>
+  <h3>Tops do not, because a cloud gets one roll per node</h3>
+  <p>A body hands <code>Band::rolled</code> one smooth roll per node, and that one roll is ranked through one weighting. A formula with two ranges in a top therefore has to be collapsed first into one distribution. <code>independent</code> meets the ranges on a 32 by 32 grid of quantiles, counts the results into 32 bins, and makes a weighting out of the bins. Then one field is ranked through it. That costs three things:</p>
+  <ul>
+    <li><b>Refusals.</b> <code>dt::cloud</code> refuses a cloud times a range, division by a range, <code>sin</code>, <code>cos</code> and <code>abs</code> of a cloud, and a cloud at the end of a range (<code>CLOUD_RULE</code>, solve.rs:489, and the clouds guide).</li>
+    <li><b>One noise pattern</b>, even for <code>[0 .. 2] + [0 .. 2]</code>, where two would give octaves.</li>
+    <li><b>An approximation of its own</b>: the 32 bins. I measured it at under 0.02 (below).</li>
+  </ul>
+  <div class="codelinks">
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-eval/src/solve.rs#L603">independent, solve.rs:603</a>
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-eval/src/solve.rs#L496">arith, :496</a>
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-eval/src/solve.rs#L489">CLOUD_RULE, :489</a>
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/crates/dt-kit/src/band.rs#L424">rolled, band.rs:424</a>
+    <a href="https://github.com/shawn-vincent/dharmatiles/blob/cca053c4/docs/guide/clouds.html">guide/clouds</a>
+  </div>
+  <h3>The proposal: the body hands each node a seed</h3>
+  <figure class="fig"><svg id="figSeeded" viewBox="0 0 640 300" role="img" aria-label="Today's top: one field through the combined odds. A seeded top: a field per range, then arithmetic"></svg>
+    <figcaption>Left, a top today: one field, ranked through the combined odds of the whole formula. Right, a seeded top: each range forks its own smooth field from the node's seed, keyed by its place in the formula, ranks it through its own weighting, and the arithmetic runs at each node, as it does for controls.</figcaption></figure>
+  <p><b>Do existing hashes move?</b> A top with one bare range can keep today's path, the body's own field ranked, and build as it does now. Anything with arithmetic is different: a number added or multiplied, and <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>, are held on the two surfaces today, and per node they would reorder float operations and pile mass at the limit. So the honest claim is "identical up to float, with the goldens re-recorded", unless the new path is made to give today's values on one range and the torture goldens prove it. Keeping today's path beside the new one would be the second path this section says it removes. I grepped <code>library/</code>, test tiles included, and found no top or pin with two ranges. I did not run a build, so no identity is claimed.</p>
+  <p><b>The same rule for all three.</b> A roll is a seed, and everything inside it forks from it. For a control, the value's draw is the seed and each range forks. For a top, the node's roll is the seed and each range forks a field. For an area band, the element's roll is the seed: it forks one roll per candidate, and a gap stone's own seed forks the rolls for its outline points. One rule, stated once, and the area band does nothing the other two do not.</p>
+  <h3>Gains</h3>
+  <ul>
+    <li>One rule for controls, tops and area bands.</li>
+    <li>Most <code>dt::cloud</code> refusals can go: a cloud times a range, a cloud at the end of a range, and division of a cloud by a range. They exist because of the per-node cost of the combined odds. <code>sin</code>, <code>cos</code> and <code>abs</code> of a cloud stay, because the surfaces can fold and the pins and the solver need correct hulls, unless the interval type gains true images (<code>abs</code> is easy, <code>sin</code> and <code>cos</code> need their turning points). Division by a range that spans zero already returns a plain error.</li>
+    <li>Ranges inside ranges become possible: <code>[0 .. low(0 .. 3)]</code>, as the end is itself a draw at each node.</li>
+    <li>Two ranges give two noise patterns added, like octaves.</li>
+  </ul>
+  <h3>Costs, measured</h3>
+  <p>Ranking makes a cloud's frequencies exact. With separate fields (option d) each range is exact, but the sum is only approximately the combined odds, because two independent smooth fields on a small tile are correlated by chance. Ranking the sum through the combined odds (option g) keeps the whole exact and gives up the parts. I measured it in Node: two ranked smooth fields on the 128 by 128 lattice of a 1 by 1 tile, summed, compared with the true convolution of the two weightings, 60 seeds for each feature size. The number is the largest gap between the sum's cumulative share and the true one (0.07 means that at some height 7% of nodes sit on the wrong side).</p>
+  <div class="tablewrap"><table>
+    <tr><th>Features across the tile</th><th>flat + flat</th><th>low(4) + low(4)</th><th>low(4) + high(4)</th><th>bell + bell</th><th>worst seed of 60 (flat + flat)</th></tr>
+    <tr><td>1</td><td>0.14</td><td>0.13</td><td>0.13</td><td>0.12</td><td>0.32</td></tr>
+    <tr><td>2</td><td>0.10</td><td>0.10</td><td>0.10</td><td>0.09</td><td>0.18</td></tr>
+    <tr><td>3</td><td>0.07</td><td>0.07</td><td>0.07</td><td>0.07</td><td>0.18</td></tr>
+    <tr><td>5</td><td>0.05</td><td>0.05</td><td>0.05</td><td>0.05</td><td>0.11</td></tr>
+    <tr><td>7</td><td>0.04</td><td>0.04</td><td>0.04</td><td>0.04</td><td>0.08</td></tr>
+    <tr><td>10</td><td>0.03</td><td>0.03</td><td>0.03</td><td>0.03</td><td>0.05</td></tr>
+  </table></div>
+  <p>Today's method for the same sums (a Node re-implementation of it, not the Rust), one field through the combined 32-bin odds, is within 0.003 to 0.016 of the true convolution, which is the binning and nothing else. Each field's own distribution is exact in both. The mean of the sum's spread is 0.97 to 1.01 of the true spread, so only the shape moves, not the size. Each figure is the mean over 60 seeds of that seed's largest gap, so single seeds are worse: at about 2.5 features (a <code>bumpSize</code> of 14dmm on a 35 mm square) the mean is about 0.08, the 90th-percentile seed about 0.14 and the worst about 0.18, and at one feature the worst is 0.32. The table is for flat + flat in its last column. A 1 by 1 lattice is the worst case, since a larger tile has more features. The 0.016 for today's method comes from a Node re-implementation of the 32 by 32, 32-bin method, not the Rust, and it holds because ranking forces the distribution to the binned one, not because the grid is a better method. The cost is real on a 1 by 1 tile and falls with the feature count. It touches only formulas with more than one range, which are refused today, so no existing tile pays it. More fields per top (one per range) is cheap and I did not measure it.</p>
+  <h3>Language check for this section</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Question</th><th>Answer</th></tr>
+    <tr><td>Words</td><td>None. <code>fork</code> and the seed exist in the code and are not words of the language.</td></tr>
+    <tr><td>Forms</td><td>One becomes legal: a range inside a range, <code>[0 .. low(0 .. 3)]</code>. Nothing is added to the grammar for it, but the interval of an end must take the nested range's own interval, and <code>Kind</code> and <code>fits</code> must accept a cloud as an end of a range.</td></tr>
+    <tr><td>Refusals that go</td><td>Cloud times a range, a cloud at the end of a range, division of a cloud by a range. Stay: <code>sin</code>, <code>cos</code>, <code>abs</code> of a cloud, until the interval type has their images; division by a range that spans zero, which is already a plain error.</td></tr>
+    <tr><td>Codes</td><td><code>dt::cloud</code> shrinks to the folding functions that remain. It is retired, with its entry in <code>codes.rs</code> and its <code>docs/e</code> page, only if those refusals go too or move to a named code of their own. The ledger line needs a probe and the guide statement needs a test. <code>dt::weighting</code> and <code>dt::range</code> are unchanged.</td></tr>
+    <tr><td>Second paths</td><td>Removes one: the grid-and-bins combination (<code>independent</code>) beside the fork-and-arithmetic of controls.</td></tr>
+    <tr><td>Odds in the guide</td><td>A sum of two ranges in a top has exact parts and approximate odds as a whole, and the guide would say so.</td></tr>
+  </table></div>
+</section>
 
+<section id="graphs">
+  <div class="sechead"><h2>Why the two graphs run opposite</h2><span class="where">they answer two different questions</span></div>
+  <p><b>In the frame of the options:</b> model A is how options (a), (b) and (f) read a weighting, and model B is option (e). The graph under the explorer on the left is the weighting. It says <b>where the edge lands</b>, exactly as a weighting on a top says where the surface lands. The one on the right says <b>how likely a given spot is covered</b>. A spot is covered when the edge lands beyond it, so that curve always runs from 1 at the inner outline to 0 at the outer outline, whatever the weighting. The weighting only bends it.</p>
+  <figure class="fig"><svg id="figFlat" viewBox="0 0 640 230" role="img" aria-label="Flat: ten edges, each equally likely, and two spots"></svg>
+    <figcaption>A flat weighting. Ten edges land at equal spacing across the gap, one each tenth. A spot halfway across is covered by the five edges that land beyond it, so half the time. A spot 90% across is covered by one edge in ten. A flat left graph gives a falling straight line on the right.</figcaption></figure>
+  <p>With <code>high</code> (the case in Shawn's screenshot) edges usually land far out, so most spots are covered and the right curve bows up. With <code>low</code> the edge usually lands near the inner outline, so coverage drops fast. A top has the same right-hand curve implicitly: how likely a height is to lie under the surface is one minus the running total of its weighting. Nobody draws it for tops.</p>
+  <h3>The second reading</h3>
+  <p>Shawn's intuition is a second, coherent model. If I want things 100% likely near the edge I should write the odds there as 100%, and then say how they fall off. In that model, <b>B</b>, the curve you write is the coverage across the gap, scaled so its peak is 100%. The model in the page is <b>A</b>: the curve you write is where the edge lands, as on a top.</p>
+  <figure class="fig"><svg id="figModels" viewBox="0 0 640 300" role="img" aria-label="Coverage under model A and model B for each weighting"></svg>
+    <figcaption>Coverage across the gap, from the inner outline (left) to the outer (right), for each weighting. Solid: model A, one minus the running total. Dashed: model B, the written curve scaled to a peak of 1.</figcaption></figure>
+  <div class="tablewrap"><table>
+    <tr><th></th><th>A: the weighting says where the edge lands</th><th>B: the weighting is the coverage</th></tr>
+    <tr><td>Same as a top</td><td>Yes. One meaning for a weighting: how often each depth or height comes up.</td><td>No. A second meaning of the same word, so a weighting means "where" in a top and "how much covered" in an area.</td></tr>
+    <tr><td>Continuity with the inner area</td><td>Always. Coverage is 1 at the inner outline and 0 at the outer.</td><td>Only for a falling curve. <code>high(12)</code> gives about 8% just outside the inner area (25% at ratio 4) and 100% at the outer outline, a jump from 100% inside. <code>bell</code> and <code>peak</code> make a ring of cover away from it.</td></tr>
+    <tr><td>A plain band, no weighting</td><td>Thins in a straight line between the outlines.</td><td>No fall-off: everything to the outer outline is covered, so <code>[a .. b]</code> equals <code>at=b</code> and the inner outline means nothing.</td></tr>
+    <tr><td>The intuition "write 100% near the edge"</td><td>Write <code>low</code>: the edge lands near the inner outline, so near it coverage is nearly 1. To fill most of the gap, write <code>high</code>. It reads reversed until the labels and the Coverage view are known.</td><td>Direct. The curve is what you see.</td></tr>
+    <tr><td>For <code>low</code> and <code>high</code></td><td colspan="2">The two are close, because the curves are exponential. They part where a weighting is not monotone, and at the outer end, where A forces 0.</td></tr>
+  </table></div>
+  <p class="rule"><b>Recommendation: A.</b> The deciding point is one meaning for a weighting across sizes, counts, tops and areas. B would give a plain band no softness at all, and would break continuity for most weightings. The cost of A is real: the right-hand curve is not what you type, and <code>high</code> reads reversed. The page answers that with plain labels on the two graphs, the flat example above, and the Coverage view, which paints the right-hand curve on the map. If Shawn prefers B, the cheap form is an input-side transform in the editor that stores the A form: the same data, with no new word and no second stored form.</p>
+</section>
+
+<section id="area-form">
+  <div class="sechead"><h2>Area bands: the form and its checks</h2><span class="where">the same whichever option is chosen</span></div>
+  <p>Which option draws the edge does not change how an area band is written or checked. The sections below are the form, the kind, who rolls, what each element does with a band, the checks and the language check. The stone outline assumes option (c), points joined straight, and the page says where another option would change it.</p>
+</section>
 <section id="proposal">
   <div class="sechead"><h2>The proposal</h2><span class="where">every example here is a proposal; nothing in the repo runs it</span></div>
   <h3>An area band, plain or cloud</h3>
@@ -313,7 +618,6 @@ cliff at=frontBand top="$groundHeight + 35dmm"</code></pre>
   </ul>
   <p>A shared roll key, so that every element in a band draws one field, was considered and not recommended. Tops do not do it, elements roll different kinds of noise, and it would add a key to the area, which breaks "the area never rolls". <code>seed=</code> already pins an entry's own randomness.</p>
 </section>
-
 <section id="consumers">
   <div class="sechead"><h2>Each element, and what the cloud means to it</h2><span class="where">the explorer above draws the first three</span></div>
   <div class="figrow" id="cards"></div>
@@ -331,7 +635,6 @@ cliff at=frontBand top="$groundHeight + 35dmm"</code></pre>
    help: write the area you mean: `at=knoll` or `at=hill`</code></pre>
   <p><b>Scatter: refuse the plain band, or take it?</b> Take it. A plain band has no odds, and a scatter's roll is white noise, so unranked and ranked-flat give the same result: a straight fall-off across the gap. The earlier refusal was needed only while a band gave a scatter nothing to do. Elements that roll smooth fields (a dirt edge, a stone outline) keep their own field unranked under a plain band, as a plain top keeps the body's own field. <code>flat(a .. b)</code> is the explicit ranked form for them.</p>
 </section>
-
 <section id="outline">
   <div class="sechead"><h2>A site's outline is a weighted area, drawn like a top</h2></div>
   <p>A site in the gap stands because its roll was high enough. Its cell needs an outline, and Shawn's rule is that the outline is another weighted area with the same weighting, so a stone's outline leans toward the inner area more often than away. The outline is drawn the way a top's surface is drawn, as rolled points joined up.</p>
@@ -367,7 +670,6 @@ cliff at=frontBand top="$groundHeight + 35dmm"</code></pre>
   <p>Yes, with one piece added. Intersecting a band with a region gives a band: both ends are cut by the same region, and the weighting and the depth carry over. A cell wholly inside the inner area becomes <code>[C .. C]</code>, the plain region <code>C</code>. A cell wholly in the gap with no inner part has an empty inner area, which a band allows. Anything placed in a stone takes the band of its own cell the same way. The added piece is the core, and it is part of the stone's own band, not a constant: the stone's inner area is <code>core ∪ (cell ∩ inner)</code>, so its outline is a band of the same form. Without the core a point could roll the whole outline away from its own centre. The core is the cell's inscribed disc (question 4). The rolled points use the same ranking function as <code>Band::rolled</code>, applied to a list of points instead of a field of nodes: one function, not a second path.</p>
   <p><b>The rock's interface.</b> The Stone and Courses round made a cell an area and a top: <code>area</code> (convex polygons with roles <code>surface</code>, <code>joint</code>, <code>seam</code>), a <code>bed</code>, a <code>top</code> and <code>cuts</code>, with the box as the same region in another form. Here the polygon above is the cell's <code>area</code> and its <code>top</code> is a top band that may be a cloud, each rolled by the rock from its own seed. The interface does not change shape. Joint faces a neighbour holds stay joints and only free edges move, so held faces never move. I read the two round-2 briefs and not the rock code.</p>
 </section>
-
 <section id="check">
   <div class="sechead"><h2>The containment check and the refusals</h2></div>
   <ul>
@@ -381,7 +683,6 @@ cliff at=frontBand top="$groundHeight + 35dmm"</code></pre>
    │     14 nodes of `face` lie outside `faceMax` at seed 12, the first at (22.4, 31.0) mm
    help: move `faceMax` out, or `face` in</code></pre>
 </section>
-
 <section id="language">
   <div class="sechead"><h2>The language check</h2><span class="where">per ~/.claude/skills/language-design</span></div>
   <div class="tablewrap"><table>
@@ -393,9 +694,8 @@ cliff at=frontBand top="$groundHeight + 35dmm"</code></pre>
     <tr><td>Holes</td><td>Opens: <code>Band</code> over places for <code>at=</code>, <code>let</code> and <code>param</code>. Leaves as refusals the rules call for, each a <code>hole:</code> line in <code>closure.rs</code>: a band in <code>except</code>, <code>within of=</code>, <code>parent()</code>, a pin, a point.</td></tr>
   </table></div>
 </section>
-
-<section id="examples">
-  <div class="sechead"><h2>Written out</h2><span class="where">proposals, marked</span></div>
+<section id="examples2">
+  <div class="sechead"><h2>Area bands, written out</h2><span class="where">proposals, marked</span></div>
 <pre><code>// PROPOSAL: a cliff whose front thins out. Nothing runs this.
 tile size="2x1" seed=12 {
     line front    { through "(0.1sq, 0.45sq)" "(1.9sq, 0.45sq)" }
@@ -422,8 +722,32 @@ tile size="1x1" seed=4 {
 }</code></pre>
 </section>
 
+<section id="decision">
+  <div class="sechead"><h2>The decision</h2><span class="where">separate from the comparison above</span></div>
+  <p>Everything above is the comparison. The four decisions are in the order that lets you take 2 and 4 on their own and 1 and 3 together. This is what has to be decided, and my recommendation, kept apart from it. Nothing here is settled.</p>
+  <h3>1. How a weighted range becomes a surface or a curve</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Package</th><th>Tops</th><th>Long edges</th><th>A rock's outline</th><th>What it costs</th></tr>
+    <tr><td><b>P1, recommended</b></td><td>(a), as today</td><td>(f), the same rule in one dimension</td><td>(c), independent points joined straight (Shawn's proposal)</td><td>Two sources for <code>u</code> under one meaning for a weighting, so two paths to carry. The rule: a field ranks, a join of points rolls independently. Measured: tops exact (0); a long edge exact; a rock outline pooled gap 0.01 to 0.025 and variety between stones.</td></tr>
+    <tr><td>P2</td><td>(a)</td><td>(f)</td><td>(f) on the angle</td><td>One path. Measured over 200 stones: pooled gap 0.03 to 0.083, and every stone has the same depths in a different order (variety 0).</td></tr>
+    <tr><td>P3</td><td>(b)</td><td>(b) in 1D</td><td>(c)</td><td>Local and tile-size independent, which suits maps. Frequencies are right only on average: measured gap 0.15 at one feature across a tile, 0.063 at two, 0.041 at three, 0.017 at eight.</td></tr>
+  </table></div>
+  <p><b>Recommendation: P1.</b> A top has many nodes of one smooth thing and a promise that heights come up as often as the weighting says, and (a) keeps that promise exactly and is already built, so nothing existing changes. A long edge is the same thing in one dimension, so (f) is not a new idea, and it is one curve with no islands. A rock's outline has a handful of points that are separate things. Ranking over six to sixteen points gives every stone the same mix of depths, and independent rolls (c) give variety from stone to stone with the frequency holding across the stones. The measurement above supports it: for a few points, independent rolls beat ranking on the pooled frequencies and give variety. They do lose on the joined curve of one stone (0.14 to 0.21 at three features across, against 0 for ranking a long field), which is why the recommendation is by what the thing is and not by the gap. It also matches the rock's interface, an area as convex parts. The trigger to revisit is maps: if tiles in a map must agree on a point whatever else is on the tile, (b) is the option that is local and independent of tile size.</p>
+  <p>Not recommended: (e) and a 2D threshold for any outline, because a single body's edge must not have islands and holes. They fit a density, which a scatter already has.</p>
+  <h3>2. Does a weighting say where the edge lands (A) or the coverage (B)?</h3>
+  <p><b>Recommendation: A.</b> One meaning for a weighting across sizes, counts, tops and areas. B gives a plain band no softness and breaks continuity with the inner area for most weightings. The cost is that the right-hand curve is not what you type, which the labels, the flat example and the Coverage view answer.</p>
+  <h3>3. Seeds and multi-range tops</h3>
+  <p><b>Recommendation:</b> adopt "a roll is a seed" as the rule for controls, tops and area bands, and build it for tops only when a tile needs a two-range top. When it does, prefer (g), the sum ranked through the combined odds, over (d), because the whole surface is what shows and (g) keeps the whole exact. Under (g) the parts are not drawn separately, so there is no number for them: each range's own odds do not hold on their own, and the guide would say that. This rests on one unmeasured point, how a reader judges an exact whole against exact parts, so treat it as a lean. Keep <code>sin</code>, <code>cos</code> and <code>abs</code> refused until the interval type has their images.</p>
+  <h3>What the last two reviews changed</h3>
+  <ul>
+    <li>Seeds (round 3): "a roll is a seed" is one rule with a qualification, a control's sum exact and a top's sum approximate under (d). Byte-identity is not claimed without a build run. The measurement is described as the mean over seeds of each seed's largest gap, with the worst seeds. The middle option (g) was added. <code>sin</code>, <code>cos</code> and <code>abs</code> of a cloud stay refused until the interval type has their images. A and B: "nearly agree" became "are close", and B as an editor input transform that stores A.</li>
+    <li>The comparison (round 4): the P3 figure was wrong (0.1) and is now the measured 0.041 at three features. The criterion for rank versus independent rolls is stated as where a thing gets its neighbour relation, a field or a join, with the lone-stone precedent in the rock code, and it is called a second path for <code>u</code>. The rock claim is now measured over 200 stones. The (e) equivalence is stated for a uniform field. The walkthrough notes the finite-roll condition and the pooled mix of weightings. Node figures are labelled as Node.</li>
+  </ul>
+  <h3>4. The area band's form</h3>
+  <p>Unchanged by the above: <code>at="low(inner .. outer)"</code>, a kind <code>band</code> over regions, containment checked seed-free and conservative as <code>dt::band-outside</code>, a pin refusing a band.</p>
+</section>
 <section id="questions">
-  <div class="sechead"><h2>Open questions for Shawn</h2><span class="where">each with a recommendation</span></div>
+  <div class="sechead"><h2>Open questions on the area form</h2><span class="where">each with a recommendation</span></div>
   <ol class="qs">
     <li><b>What does a plain band mean?</b> Recommend no odds, as a plain top: the element uses its own roll, which for scatter and sites is uniform white noise, so it thins in a straight line. <code>flat(a .. b)</code> is the explicit ranked form. The alternative, a flat cloud for everything, would give <code>[a .. b]</code> a second meaning next to a plain top.</li>
     <li><b>Which roll for which element?</b> Recommend white noise for things and sites (an independent thinning with exact counts) and smooth noise for a body's edge and a stone's outline (patches), each the element's own, as dirt and flagstones choose theirs today.</li>
@@ -436,6 +760,8 @@ tile size="1x1" seed=4 {
     <li><b>How is containment checked, given wobble?</b> Recommend seed-free and conservative by default (the inner lines grown by their wobble inside the outer lines shrunk by theirs), with a named seed as the fallback. This keeps check equal to build at every seed.</li>
     <li><b>The ranged <code>within "[a .. b]"</code>.</b> It breaks "the area never rolls". Recommend a ledger line to retire it, with a migration that <code>dharmatiles fix</code> performs: rewrite it as a band over two rings. Removing it breaks existing tiles, so the line is closed only after the migration exists.</li>
     <li><b>Is <code>band</code> one kind for areas and tops?</b> Recommend yes: a top is a band over <code>Length</code> and an area a band over <code>Region</code>, one word and one set of rules. Doing it for tops is a cleanup and not needed for areas, so it can follow.</li>
+    <li><b>Does a weighting say where the edge lands (A), or the coverage directly (B)?</b> Recommend A: one meaning for a weighting, continuity with the inner area for every weighting, and a plain band that thins. The labels, the flat example and the Coverage view carry the explaining. If B is wanted, make it a way to write the same A curve in the editor.</li>
+    <li><b>Should tops, and area bands, move to seeded rolls (a field per range)?</b> Recommend adopting the rule "a roll is a seed" as the design for all three, and building it for tops only when a tile wants a two-range top or the <code>dt::cloud</code> refusals get in the way. Single-range tops stay byte-identical, so nothing has to move now. The cost is approximate odds for sums, about 0.08 at the feature counts of real dirt, and the guide must say so.</li>
     <li><b>Order of elements.</b> Recommend cliff, then scatter, then dirt, then water and grass, each schema's "takes" column saying so.</li>
   </ol>
   <h3>What the reviews changed</h3>
@@ -459,6 +785,7 @@ function cssRGB(name) {
   if (s[0] === "#") return [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
   const m = s.match(/[\d.]+/g); return [+m[0], +m[1], +m[2]];
 }
+const TAU = Math.PI * 2;
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 /* the language's weightings, mirrored for the prototype (crates/dt-value/src/weighting.rs) */
@@ -479,7 +806,7 @@ function unit(w, u) {
     case "bell": t = bellU(u, w.a, w.c); break; case "peak": t = peakU(u, w.a, w.c); break; case "ends": t = endsU(u, w.a, w.c); break; }
   return Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
 }
-const WDEF = { flat: {}, low: { a: 4 }, high: { a: 4 }, bell: { a: 0.2, c: 0.5 }, peak: { a: 0.5, c: 0.5 }, ends: { a: 1, c: 0.5 } };
+const WDEF = { flat: {}, low: { a: 12 }, high: { a: 12 }, bell: { a: 0.12, c: 0.5 }, peak: { a: 0.25, c: 0.8 }, ends: { a: 3, c: 0.5 } };
 const W = () => ({ name: S.wname, a: S.a, c: S.c });
 /* rolled: rank the rolls of the accepted items, and the weighting turns each rank into t (band.rs:424) */
 function rolled(rolls, take) {
@@ -491,11 +818,11 @@ function rolled(rolls, take) {
 }
 
 const GW = 320, GH = 200, N = GW * GH, HH = 0.625;
-const S = { preset: "cliff", consumer: "cliff", wname: "low", a: 4, c: 0.5, grain: 14, points: 10, seed: 7, cellOutline: true, outlines: true, main: [], max: [] };
+const S = { preset: "cliff", consumer: "cliff", wname: "low", a: 12, c: 0.5, view: "elements", grain: 14, points: 10, seed: 7, cellOutline: true, outlines: true, main: [], max: [] };
 const clone = p => p.map(q => q.slice());
 function blob(cx, cy, rx, ry, rs) { return rs.map((r, k) => { const th = k / rs.length * Math.PI * 2; return [cx + Math.cos(th) * rx * r, cy + Math.sin(th) * ry * r]; }); }
 const PRESETS = {
-  cliff: { main: [[.1, .1], [.9, .1], [.9, .36], [.1, .36]], max: [[.1, .1], [.9, .1], [.9, .5], [.1, .5]], consumer: "cliff", names: ["face", "faceMax"] },
+  cliff: { main: [[.1, .2], [.9, .2], [.9, .34], [.1, .34]], max: [[.1, .2], [.9, .2], [.9, .6], [.1, .6]], consumer: "cliff", names: ["face", "faceMax"] },
   pond: { main: blob(.5, .3, .2, .17, [1, .82, 1.05, .88, .78, 1.02, .92, .84, 1.0]), max: blob(.5, .3, .2, .17, [1.75, 1.5, 1.95, 1.45, 1.4, 1.9, 1.6, 1.5, 1.8]), consumer: "scatter", names: ["pool", "poolMax"] },
   path: { main: [[0, .26], [.25, .29], [.5, .25], [.75, .29], [1, .26], [1, .36], [.75, .38], [.5, .35], [.25, .39], [0, .36]],
           max: [[0, .17], [.25, .2], [.5, .14], [.75, .2], [1, .17], [1, .46], [.75, .5], [.5, .44], [.25, .5], [0, .46]], consumer: "body", names: ["trail", "trailMax"] }
@@ -544,7 +871,7 @@ function uAt(B, x, y) { const [dm, mi] = nearest(B.mainS, x, y), dM = nearest(B.
 function arrange(B, el, hardOnly) {
   const r = rng(S.seed * 104729 + 7), res = { sites: [], mask: new Uint8Array(N), lab: null, gapKept: 0, gapSites: 0, cand: 0 };
   if (el === "cliff") {
-    const ch = 0.045, sw = 0.095, cand = [];
+    const ch = 0.038, sw = 0.08, cand = [];
     for (let row = 0; row * ch + 0.07 < 0.62; row++) { const y0 = 0.07 + row * ch, off = (row % 2) * sw * .5;
       for (let x = -0.02 + off; x < 1.04; x += sw) cand.push({ x: x + (r() - .5) * sw * .55, y: y0 + ch * .5 + (r() - .5) * ch * .5, roll: r() }); }
     cand.forEach(c => { c.inX = at(B.inMax, c.x, c.y); c.inM = at(B.inMain, c.x, c.y); if (c.inX && !c.inM) c.u = uAt(B, c.x, c.y)[0]; });
@@ -582,7 +909,7 @@ function arrange(B, el, hardOnly) {
     return res;
   }
   // scatter: full density in the inner area; in the gap each dart rolls, the rolls are ranked, and a dart stands where its depth is within its t
-  const cand = []; for (let n = 0; n < 4200; n++) cand.push({ x: r(), y: r() * HH, r: 0.007 + r() * 0.011, roll: r() });
+  const cand = []; for (let n = 0; n < 6000; n++) cand.push({ x: r(), y: r() * HH, r: 0.009 + r() * 0.009, roll: r() });
   cand.forEach(c => { c.inX = at(B.inMax, c.x, c.y); c.inM = at(B.inMain, c.x, c.y); if (c.inX && !c.inM) c.u = uAt(B, c.x, c.y)[0]; });
   const gapC = cand.filter(c => c.inX && !c.inM), t = rolled(gapC.map(c => c.roll), () => true); gapC.forEach((c, i) => { c.t = t[i]; });
   const place = ok => { for (const c of cand) { if (c.used || !ok(c)) continue;
@@ -596,31 +923,40 @@ function arrange(B, el, hardOnly) {
 
 const cvH = document.getElementById("cvHard"), cvS = document.getElementById("cvSoft");
 const off = document.createElement("canvas"); off.width = GW; off.height = GH;
-function paint(cv, B, res, soft) {
+let covTab = null;
+function covTable() { const w = W(), K = 1024, ts = []; for (let i = 0; i < K; i++) ts.push(unit(w, (i + .5) / K)); ts.sort((p, q) => p - q);
+  const tab = new Float64Array(257); for (let i = 0; i <= 256; i++) { const u = i / 256; let lo = 0, hi = K; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < u) lo = m + 1; else hi = m; } tab[i] = 1 - lo / K; } return tab; }
+const cov = u => covTab[Math.min(256, Math.max(0, Math.round(u * 256)))];
+function paint(cv, B, res, soft, opt) {
+  opt = opt || {}; const cover = S.view === "coverage" && soft && !opt.bare; if (cover) covTab = covTable();
   const bg = cssRGB("--plate"), ink = cssRGB("--ink"), earth = cssRGB("--earth"), stone = cssRGB("--stone");
   const octx = off.getContext("2d"), img = octx.createImageData(GW, GH), d = img.data, mask = res.mask, lab = res.lab, scat = S.consumer === "scatter";
   for (let k = 0; k < N; k++) { const o = k * 4; let c = bg;
-    if (mask[k]) {
+    if (cover) { const acc = cssRGB("--accent"), p = B.inMain[k] ? 1 : B.inMax[k] ? cov(B.U[k]) : 0; c = [bg[0] + (acc[0] - bg[0]) * p, bg[1] + (acc[1] - bg[1]) * p, bg[2] + (acc[2] - bg[2]) * p]; }
+    else if (mask[k]) {
       if (S.consumer === "cliff") { const l = lab[k], v = l < 0 ? 0 : ((l * 2654435761 >>> 0) % 1000) / 1000, f = .78 + .3 * v; c = [stone[0] * f, stone[1] * f, stone[2] * f]; }
       else if (S.consumer === "body") c = earth;
       else c = [bg[0] * .93 + earth[0] * .07, bg[1] * .93 + earth[1] * .07, bg[2] * .93 + earth[2] * .07];
     }
     d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255; }
-  if (!scat) for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) { const k = j * GW + i, o = k * 4, m = mask[k];
+  if (!scat && !cover) for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) { const k = j * GW + i, o = k * 4, m = mask[k];
     const edge = m && ((i > 0 && !mask[k - 1]) || (i < GW - 1 && !mask[k + 1]) || (j > 0 && !mask[k - GW]) || (j < GH - 1 && !mask[k + GW]));
     if (edge) { d[o] = ink[0]; d[o + 1] = ink[1]; d[o + 2] = ink[2]; }
     else if (S.consumer === "cliff" && m && ((i < GW - 1 && mask[k + 1] && lab[k + 1] !== lab[k]) || (j < GH - 1 && mask[k + GW] && lab[k + GW] !== lab[k]))) { d[o] *= .45; d[o + 1] *= .45; d[o + 2] *= .45; } }
   octx.putImageData(img, 0, 0);
-  const g = cv.getContext("2d"); g.imageSmoothingEnabled = true; g.clearRect(0, 0, cv.width, cv.height); g.drawImage(off, 0, 0, cv.width, cv.height);
+  const g = cv.getContext("2d"); g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = true; g.clearRect(0, 0, cv.width, cv.height);
+  let Z = 1; if (opt.bare) { const xs = S.max.map(p => p[0]), ys = S.max.map(p => p[1]), bx0 = Math.min(...xs), bx1 = Math.max(...xs), by0 = Math.min(...ys), by1 = Math.max(...ys);
+    Z = Math.min(0.94 / Math.max(.05, bx1 - bx0), 0.94 * HH / Math.max(.05, by1 - by0)); g.translate(cv.width * (.5 - (bx0 + bx1) / 2 * Z), cv.width * (HH / 2 - (by0 + by1) / 2 * Z)); g.scale(Z, Z); }
+  g.drawImage(off, 0, 0, cv.width, cv.height);
   const sx = cv.width, P = p => [p[0] * sx, p[1] * sx];
-  if (scat) for (const s of res.sites) { g.beginPath(); g.arc(s.x * sx, s.y * sx, s.r * sx, 0, 7); g.fillStyle = css("--stone"); g.fill(); g.lineWidth = 1; g.strokeStyle = css("--ink"); g.globalAlpha = .8; g.stroke(); g.globalAlpha = 1; }
-  if (S.consumer === "cliff") for (const s of res.sites) { g.beginPath(); g.arc(s.x * sx, s.y * sx, 1.8, 0, 7); g.fillStyle = css("--ink"); g.fill(); }
-  if (S.consumer === "cliff" && soft && S.cellOutline && S.outlines) for (const pg of res.polys || []) { g.beginPath(); pg.forEach((p, i) => { const [x, y] = [p[0] * sx, p[1] * sx]; i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.lineWidth = 1; g.strokeStyle = css("--accent"); g.globalAlpha = .9; g.stroke(); g.globalAlpha = 1;
+  if (scat && !cover) for (const s of res.sites) { g.beginPath(); g.arc(s.x * sx, s.y * sx, s.r * sx, 0, 7); g.fillStyle = css("--stone"); g.fill(); g.lineWidth = 1 / Z; g.strokeStyle = css("--ink"); g.globalAlpha = .8; g.stroke(); g.globalAlpha = 1; }
+  if (S.consumer === "cliff" && !cover) for (const s of res.sites) { g.beginPath(); g.arc(s.x * sx, s.y * sx, 1.8, 0, 7); g.fillStyle = css("--ink"); g.fill(); }
+  if (S.consumer === "cliff" && soft && !cover && !opt.bare && S.cellOutline && S.outlines) for (const pg of res.polys || []) { g.beginPath(); pg.forEach((p, i) => { const [x, y] = [p[0] * sx, p[1] * sx]; i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.lineWidth = 1; g.strokeStyle = css("--accent"); g.globalAlpha = .9; g.stroke(); g.globalAlpha = 1;
     for (const p of pg) { g.beginPath(); g.arc(p[0] * sx, p[1] * sx, 2.2, 0, 7); g.fillStyle = css("--accent"); g.fill(); } }
   const poly = (pts, st, dash, wd) => { g.beginPath(); pts.forEach((p, i) => { const [x, y] = P(p); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.setLineDash(dash); g.lineWidth = wd; g.strokeStyle = st; g.stroke(); g.setLineDash([]); };
-  if (S.outlines) { poly(S.main, css("--accent"), [], 2); if (soft) poly(S.max, css("--muted"), [7, 5], 1.6); }
-  if (soft && S.outlines) for (const [pts, col] of [[S.max, css("--muted")], [S.main, css("--accent")]]) for (const p of pts) { const [x, y] = P(p); g.beginPath(); g.arc(x, y, 6, 0, 7); g.fillStyle = css("--raised"); g.fill(); g.lineWidth = 2; g.strokeStyle = col; g.stroke(); }
-  if (soft) for (const b of B.bad) { const [x, y] = P(b); g.beginPath(); g.arc(x, y, 3.2, 0, 7); g.fillStyle = css("--err"); g.fill(); }
+  if (S.outlines || opt.bare) { poly(S.main, css("--accent"), [], (opt.bare ? 1.6 : 2) / Z); if (soft) poly(S.max, css("--muted"), [7, 5], (opt.bare ? 1.4 : 1.6) / Z); }
+  if (soft && S.outlines && !opt.bare) for (const [pts, col] of [[S.max, css("--muted")], [S.main, css("--accent")]]) for (const p of pts) { const [x, y] = P(p); g.beginPath(); g.arc(x, y, 6, 0, 7); g.fillStyle = css("--raised"); g.fill(); g.lineWidth = 2; g.strokeStyle = col; g.stroke(); }
+  if (soft && !opt.bare) for (const b of B.bad) { const [x, y] = P(b); g.beginPath(); g.arc(x, y, 3.2, 0, 7); g.fillStyle = css("--err"); g.fill(); }
 }
 
 function callText() { const [a, b] = PRESETS[S.preset].names, f = x => +x.toFixed(2), w = S.wname;
@@ -642,8 +978,27 @@ function draw() {
   document.getElementById("src").textContent = sourceText();
   const share = B.gapPx ? (soft.gapKept / B.gapPx * 100).toFixed(0) : "0";
   document.getElementById("stats").innerHTML = `<span>gap covers <b>${(B.gapPx / GW / GW * 100).toFixed(1)}%</b> of the tile</span>` + (isC ? `<span>${soft.gapSites} of ${soft.cand} candidate sites stand</span>` : "") + (isS ? "" : `<span>the element took <b>${share}%</b> of the gap</span>`);
-  plots();
+  plots(); stripLater();
 }
+function spark(Sx) { const w = { name: Sx.wname, a: Sx.a, c: Sx.c }, K = 600, ts = []; for (let i = 0; i < K; i++) ts.push(unit(w, (i + .5) / K)); ts.sort((p, q) => p - q);
+  let d = ""; for (let i = 0; i <= 40; i++) { const u = i / 40; let lo = 0, hi = K; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < u) lo = m + 1; else hi = m; } d += (i ? "L" : "M") + (2 + u * 146).toFixed(1) + " " + (2 + 30 * (lo / K)).toFixed(1); }
+  return `<svg viewBox="0 0 150 34" width="100%" role="img" aria-label="coverage across the gap"><path d="${d}" fill="none" stroke="var(--accent)" stroke-width="1.8"/><line x1="2" x2="148" y1="32" y2="32" stroke="var(--line-2)"/></svg>`; }
+function buildStrip() {
+  const host = document.getElementById("strip"); if (!host) return; const save = { wname: S.wname, a: S.a, c: S.c, consumer: S.consumer };
+  const B = band(), names = ["flat", "low", "high", "bell", "peak", "ends"]; let html = "";
+  for (const el of ["scatter", "cliff"]) { html += `<div class="striprow"><div class="striplab">${el === "scatter" ? "Scatter" : "Cliff stones"}</div><div class="stripgrid">`;
+    for (const w of names) html += `<figure><canvas width="320" height="200" data-el="${el}" data-w="${w}"></canvas><figcaption></figcaption></figure>`;
+    html += `</div></div>`; }
+  host.innerHTML = html;
+  host.querySelectorAll("canvas").forEach(cv => { const el = cv.dataset.el, w = cv.dataset.w, d = WDEF[w];
+    S.wname = w; S.a = d.a; S.c = d.c ?? .5; S.consumer = el;
+    const res = arrange(B, el, false); paint(cv, B, res, true, { bare: true });
+    const [nm] = [w === "flat" ? "flat" : w === "low" || w === "high" ? `${w}(${d.a})` : w === "bell" ? `bell(${d.a}, ${d.c})` : w === "peak" ? `peak(${d.a}, ${d.c})` : `ends(${d.a}, ${d.c})`];
+    cv.nextElementSibling.innerHTML = `${nm} · ${res.gapSites} in the gap<br>` + spark(S);
+  });
+  Object.assign(S, save);
+}
+let stripTimer = null; function stripLater() { clearTimeout(stripTimer); stripTimer = setTimeout(() => { if (!drag) buildStrip(); }, 450); }
 function plots() {
   const w = W(), K = 800, ts = []; for (let i = 0; i < K; i++) ts.push(unit(w, (i + .5) / K));
   const Bn = 40, h = new Array(Bn).fill(0); ts.forEach(t => h[Math.min(Bn - 1, Math.floor(t * Bn))]++);
@@ -680,6 +1035,7 @@ document.getElementById("slSeed").addEventListener("input", e => { S.seed = +e.t
 document.getElementById("slGrain").addEventListener("input", e => { S.grain = +e.target.value; sync(); run(); });
 document.getElementById("slPoints").addEventListener("input", e => { S.points = +e.target.value; sync(); run(); });
 document.getElementById("btnOutlines").addEventListener("click", e => { S.outlines = !S.outlines; e.target.setAttribute("aria-pressed", S.outlines); run(); });
+seg("segView", v => { S.view = v; run(); });
 document.getElementById("btnCell").addEventListener("click", e => { S.cellOutline = !S.cellOutline; e.target.setAttribute("aria-pressed", S.cellOutline); run(); });
 
 let drag = null;
@@ -688,7 +1044,7 @@ cvS.addEventListener("pointerdown", e => { const [x, y] = world(e); let best = n
   for (const pts of [S.max, S.main]) pts.forEach((p, i) => { const d = Math.hypot(p[0] - x, p[1] - y); if (d < bd) { bd = d; best = { pts, i }; } });
   if (best) { drag = best; cvS.setPointerCapture(e.pointerId); cvS.style.cursor = "grabbing"; } });
 cvS.addEventListener("pointermove", e => { if (!drag) return; const [x, y] = world(e); drag.pts[drag.i] = [Math.min(1, Math.max(0, x)), Math.min(HH, Math.max(0, y))]; run(); });
-const endDrag = () => { drag = null; cvS.style.cursor = "grab"; };
+const endDrag = () => { drag = null; cvS.style.cursor = "grab"; stripLater(); };
 cvS.addEventListener("pointerup", endDrag); cvS.addEventListener("pointercancel", endDrag);
 
 /* small figures */
@@ -736,6 +1092,39 @@ function figs() {
     poly.forEach(p => { a += `<line class="ln" x1="${cx}" y1="${cy}" x2="${p[0]}" y2="${p[1]}" style="opacity:.25"/><circle class="dot" cx="${p[0]}" cy="${p[1]}" r="3.5"/>`; });
     a += `<text x="340" y="206">each point: a roll, ranked, placed by the weighting,</text><text x="340" y="220">at depth t across the gap, clamped by its cell. Joined by straight lines.</text><text x="340" y="236">The rock's cuts, chips and wear take off the corners.</text>`;
     sv("figSoil", a); }
+  // flat example
+  { let a = `<rect x="0" y="0" width="640" height="230" style="fill:var(--plate)"/>`;
+    const x0 = 60, x1 = 580, X = u => x0 + u * (x1 - x0);
+    a += `<line class="minl" x1="${x0}" x2="${x0}" y1="30" y2="150"/><line class="maxl" x1="${x1}" x2="${x1}" y1="30" y2="150"/><text x="${x0}" y="22" text-anchor="middle">inner outline</text><text x="${x1}" y="22" text-anchor="middle">outer outline</text>`;
+    for (let i = 0; i < 10; i++) { const u = (i + .5) / 10; a += `<line class="ln" x1="${X(u)}" x2="${X(u)}" y1="60" y2="${i < 5 ? 150 : 130}" style="opacity:.55"/><circle class="dot" cx="${X(u)}" cy="60" r="4"/>`; }
+    a += `<text x="${x0}" y="48">edges land here, one in each tenth (flat)</text>`;
+    for (const [u, lab, y] of [[.5, "spot at 50%: 5 of 10 edges land beyond it, covered half the time", 176], [.9, "spot at 90%: 1 of 10 beyond it, covered a tenth of the time", 204]]) a += `<line class="axis" x1="${x0}" x2="${x1}" y1="${y - 4}" y2="${y - 4}" style="opacity:.3"/><circle cx="${X(u)}" cy="${y - 4}" r="6" style="fill:var(--ink)"/><text x="${x0}" y="${y + 8}">${lab}</text>`;
+    sv("figFlat", a); }
+  // models A and B per weighting
+  { let a = `<rect x="0" y="0" width="640" height="300" style="fill:var(--plate)"/>`; const names = ["flat", "low", "high", "bell", "peak", "ends"], K = 1000;
+    names.forEach((nm, n) => { const d = WDEF[nm], w = { name: nm, a: d.a, c: d.c ?? .5 }, cx = 14 + (n % 3) * 208, cy = 24 + Math.floor(n / 3) * 136, pw = 180, ph = 92;
+      const ts = []; for (let i = 0; i < K; i++) ts.push(unit(w, (i + .5) / K)); ts.sort((p, q) => p - q);
+      const Bn = 50, h = new Array(Bn).fill(0); ts.forEach(t => h[Math.min(Bn - 1, Math.floor(t * Bn))]++); const mx = Math.max(...h);
+      let pa = "", pb = ""; for (let i = 0; i <= 50; i++) { const u = i / 50; let lo = 0, hi = K; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < u) lo = m + 1; else hi = m; }
+        const A = 1 - lo / K, Bv = h[Math.min(Bn - 1, Math.floor(u * Bn))] / mx; pa += (i ? "L" : "M") + (cx + u * pw).toFixed(1) + " " + (cy + ph * (1 - A)).toFixed(1); pb += (i ? "L" : "M") + (cx + u * pw).toFixed(1) + " " + (cy + ph * (1 - Bv)).toFixed(1); }
+      a += `<line class="axis" x1="${cx}" x2="${cx + pw}" y1="${cy + ph}" y2="${cy + ph}"/><line class="axis" x1="${cx}" x2="${cx}" y1="${cy}" y2="${cy + ph}"/><path d="${pb}" fill="none" stroke="var(--earth)" stroke-width="1.8" stroke-dasharray="5 3"/><path class="cv" d="${pa}"/><text x="${cx + 2}" y="${cy - 8}" class="ink">${nm}</text><text x="${cx}" y="${cy + ph + 12}">inner</text><text x="${cx + pw}" y="${cy + ph + 12}" text-anchor="end">outer</text>`; });
+    a += `<text x="14" y="296">solid: model A, 1 minus the running total · dashed: model B, the curve scaled to a peak of 1</text>`; sv("figModels", a); }
+  // a seeded top versus a top today
+  { let a = `<rect x="0" y="0" width="640" height="300" style="fill:var(--plate)"/>`;
+    const nz = (seed, n) => { const r = rng(seed), k = Array.from({ length: 6 }, r); return Array.from({ length: n }, (_, i) => { const x = i / (n - 1) * 5, i0 = Math.floor(Math.min(x, 4.999)), f = x - i0, s2 = f * f * (3 - 2 * f); return k[i0] * (1 - s2) + k[i0 + 1] * s2; }); };
+    const rank = (v, w) => { const idx = v.map((x, i) => [x, i]).sort((p, q) => p[0] - q[0]), out = new Array(v.length); idx.forEach(([x, i], r2) => { out[i] = w((r2 + .5) / v.length); }); return out; };
+    const n = 60, line = (v, x0, y0, wd, ht, cls) => `<polyline class="${cls}" fill="none" points="${v.map((t, i) => (x0 + i / (n - 1) * wd).toFixed(1) + "," + (y0 + ht * (1 - t)).toFixed(1)).join(" ")}"/>`;
+    const A = rank(nz(21, n), u => u), B = rank(nz(55, n), u => lowU(u, 5)); const sum = A.map((x, i) => (x + B[i]) / 2);
+    const comb = rank(nz(21, n), u => { const t = (lowU(u, 3) + u) / 2; return t; });
+    a += `<text x="14" y="18" class="ink">A top today</text><text x="14" y="34">one roll per node, one combined weighting</text>`;
+    a += `<rect x="14" y="48" width="280" height="62" style="fill:none;stroke:var(--line-2)"/>${line(nz(21, n), 14, 48, 280, 62, "raw")}<text x="18" y="124">the body's one roll</text>`;
+    a += `<rect x="14" y="136" width="280" height="40" style="fill:var(--panel);stroke:var(--line-2)"/><text x="22" y="153" class="ink">odds of [0 .. 2] + low(0 .. 2)</text><text x="22" y="168">32 × 32 quantiles, 32 bins</text>`;
+    a += `<rect x="14" y="190" width="280" height="86" style="fill:none;stroke:var(--line-2)"/>${line(comb, 14, 190, 280, 86, "surf")}<text x="18" y="290">one field, ranked through the combined odds</text>`;
+    a += `<text x="334" y="18" class="ink">A seeded top</text><text x="334" y="34">the node's roll is a seed; each range forks from it</text>`;
+    a += `<rect x="334" y="48" width="290" height="50" style="fill:none;stroke:var(--line-2)"/>${line(A, 334, 48, 290, 50, "hi")}<text x="338" y="110">range 1: field 0, ranked through flat</text>`;
+    a += `<rect x="334" y="122" width="290" height="50" style="fill:none;stroke:var(--line-2)"/>${line(B, 334, 122, 290, 50, "lo")}<text x="338" y="184">range 2: field 1, ranked through low</text>`;
+    a += `<rect x="334" y="198" width="290" height="62" style="fill:none;stroke:var(--line-2)"/>${line(sum, 334, 198, 290, 62, "surf")}<text x="338" y="274">the sum at each node, plain arithmetic</text><text x="338" y="290" class="ink">each range exact; the sum approximate</text>`;
+    sv("figSeeded", a); }
   // the cell composition figure
   const px = (x, y) => `${x},${y}`;
   const cellPoly = [[250,95],[330,88],[378,125],[352,178],[285,186],[236,140]];
@@ -772,6 +1161,283 @@ loadPreset("cliff"); setDefaults(); sync(); figs(); draw();
 new MutationObserver(() => { figs(); run(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { figs(); run(); });
 document.fonts && document.fonts.ready.then(run);
+</script>
+<script>
+"use strict";
+/* ================= continuous draws: how a weighting becomes a curve or a surface ================= */
+const OPTS = { a: "Rank a smooth field", b: "Quantile-map the field", c: "Independent points, joined", d: "Sum of seeded fields", e: "Threshold against coverage", f: "Edge displacement", g: "Sum of fields, ranked through the combined odds" };
+const SURF_OPTS = ["a", "b", "c", "d", "g"], OUT_OPTS = ["a", "b", "c", "e", "f"];
+function wOf(name) { const d = WDEF[name]; return { name, a: d.a, c: d.c ?? 0.5 }; }
+function cdfOf(w) { const K = 2000, ts = []; for (let i = 0; i < K; i++) ts.push(unit(w, (i + .5) / K)); ts.sort((p, q) => p - q);
+  return t => { let lo = 0, hi = K; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] <= t) lo = m + 1; else hi = m; } return lo / K; }; }
+function densityOf(w, B) { const K = 2000, h = new Array(B).fill(0); for (let i = 0; i < K; i++) h[Math.min(B - 1, Math.floor(unit(w, (i + .5) / K) * B))]++; return h.map(v => v / K * B); }
+function ksOf(vals, w) { const F = cdfOf(w), s = Array.from(vals).sort((p, q) => p - q), n = s.length; let d = 0; for (let i = 0; i < n; i += Math.max(1, (n / 400) | 0)) d = Math.max(d, Math.abs((i + .5) / n - F(s[i]))); return d; }
+/* stationary smooth Gaussian fields (sums of random cosines, integer wavenumbers along x so the fields tile) */
+function gfield1(n, F, seed) { const r = rng(seed * 7717 + 3), M = 24, ks = [], ph = []; for (let m = 0; m < M; m++) { ks.push(Math.max(1, Math.round(F * (0.5 + r())))); ph.push(r() * TAU); }
+  const a = Math.sqrt(2 / M), out = new Float64Array(n); for (let i = 0; i < n; i++) { let v = 0; for (let m = 0; m < M; m++) v += Math.cos(TAU * ks[m] * i / n + ph[m]); out[i] = v * a; } return out; }
+function gfield2(nx, ny, F, seed, aspect) { const r = rng(seed * 6151 + 11), M = 40, kx = [], ky = [], ph = [];
+  for (let m = 0; m < M; m++) { const mag = F * (0.5 + r()), th = r() * TAU; kx.push(Math.round(mag * Math.cos(th))); ky.push(mag * Math.sin(th) / aspect); ph.push(r() * TAU); }
+  const a = Math.sqrt(2 / M), out = new Float64Array(nx * ny); for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { let v = 0; for (let m = 0; m < M; m++) v += Math.cos(TAU * (kx[m] * i / nx + ky[m] * j / ny * aspect / 1) + ph[m]); out[j * nx + i] = v * a; } return out; }
+function rankU(f) { const idx = Array.from(f, (_, i) => i).sort((p, q) => f[p] - f[q] || p - q), out = new Float64Array(f.length); idx.forEach((i, r) => { out[i] = (r + .5) / f.length; }); return out; }
+const gaussU = f => Float64Array.from(f, v => phi(v));
+/* control points joined: periodic along x; straight (linear) or smooth (Catmull-Rom) */
+function joinPts(pts, n, join) { const P = pts.length, out = new Float64Array(n); for (let i = 0; i < n; i++) { const x = i / n * P, j = Math.floor(x), f = x - j, p0 = pts[(j - 1 + P) % P], p1 = pts[j % P], p2 = pts[(j + 1) % P], p3 = pts[(j + 2) % P];
+  out[i] = join === "straight" ? p1 + (p2 - p1) * f : 0.5 * ((2 * p1) + (-p0 + p2) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f + (-p0 + 3 * p1 - 3 * p2 + p3) * f * f * f);
+  out[i] = Math.min(1, Math.max(0, out[i])); } return out; }
+function ctrl1(n, F, w, seed, join) { const r = rng(seed * 997 + 5), P = Math.max(3, Math.round(2 * F)), pts = Array.from({ length: P }, () => unit(w, r())); return { t: joinPts(pts, n, join), pts }; }
+function ctrl2(n, F, w, seed, join) { const r = rng(seed * 991 + 9), P = Math.max(3, Math.round(F * 1.6)), g = Array.from({ length: P * P }, () => unit(w, r())), out = new Float64Array(n * n);
+  const sm = join === "smooth", cr = (p0, p1, p2, p3, f) => 0.5 * ((2 * p1) + (-p0 + p2) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f + (-p0 + 3 * p1 - 3 * p2 + p3) * f * f * f);
+  for (let j = 0; j < n; j++) { const y = j / n * P, jy = Math.floor(y), fy = y - jy; for (let i = 0; i < n; i++) { const x = i / n * P, ix = Math.floor(x), fx = x - ix; const row = d => { const jj = (jy + d + P) % P, G = k => g[jj * P + (k + P) % P]; return sm ? cr(G(ix - 1), G(ix), G(ix + 1), G(ix + 2), fx) : G(ix) + (G(ix + 1) - G(ix)) * fx; };
+    out[j * n + i] = Math.min(1, Math.max(0, sm ? cr(row(-1), row(0), row(1), row(2), fy) : row(0) + (row(1) - row(0)) * fy)); } } return { t: out }; }
+function combinedQ(w) { const G = 48, s = []; for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) s.push(0.5 * unit(w, (i + .5) / G) + 0.5 * unit(w, (j + .5) / G)); return s.sort((p, q) => p - q); }
+/* a surface: t in [0,1] at every node of an n by n lattice (a top between lo and hi) */
+function drawSurface(opt, w, F, seed, join, n) {
+  if (opt === "a") { const f = gfield2(n, n, F, seed, 1), U = rankU(f); return { t: Float64Array.from(U, u => unit(w, u)), raw: f, u: U }; }
+  if (opt === "b") { const f = gfield2(n, n, F, seed, 1), U = gaussU(f); return { t: Float64Array.from(U, u => unit(w, u)), raw: f, u: U }; }
+  if (opt === "c") return ctrl2(n, F, w, seed, join);
+  const f1 = gfield2(n, n, F, seed, 1), f2 = gfield2(n, n, 2 * F, seed + 101, 1);
+  if (opt === "g") { const f = Float64Array.from(f1, (v, i) => v + 0.5 * f2[i]), U = rankU(f), Q = combinedQ(w); return { t: Float64Array.from(U, u => Q[Math.min(Q.length - 1, Math.floor(u * Q.length))]), raw: f }; }
+  const U1 = rankU(f1), U2 = rankU(f2); return { t: Float64Array.from(U1, (u, i) => 0.5 * unit(w, u) + 0.5 * unit(w, U2[i])), raw: f1 };
+}
+/* an outline: the gap unrolled, nS along the edge by nU across it (u = 0 inner, 1 outer); member[j*nS+i] */
+function coverB(w) { const d = densityOf(w, 100), mx = Math.max(...d); return u => d[Math.min(99, Math.floor(u * 100))] / mx; }
+function drawOutline(opt, w, F, seed, join, nS, nU) {
+  const mem = new Uint8Array(nS * nU), asp = 0.3; let t = new Float64Array(nS), tAll = null;
+  const uOf = j => (j + .5) / nU;
+  if (opt === "a" || opt === "b" || opt === "e") { const f = gfield2(nS, nU, F, seed, asp), U = opt === "b" ? gaussU(f) : rankU(f), cb = opt === "e" ? coverB(w) : null; tAll = new Float64Array(nS * nU);
+    for (let j = 0; j < nU; j++) for (let i = 0; i < nS; i++) { const k = j * nS + i; tAll[k] = unit(w, U[k]); mem[k] = opt === "e" ? ((1 - U[k]) <= cb(uOf(j)) ? 1 : 0) : (uOf(j) <= tAll[k] ? 1 : 0); } }
+  else if (opt === "f") { const f = gfield1(nS, F, seed), U = rankU(f); for (let i = 0; i < nS; i++) t[i] = unit(w, U[i]); for (let j = 0; j < nU; j++) for (let i = 0; i < nS; i++) mem[j * nS + i] = uOf(j) <= t[i] ? 1 : 0; }
+  else { t = ctrl1(nS, F, w, seed, join).t; for (let j = 0; j < nU; j++) for (let i = 0; i < nS; i++) mem[j * nS + i] = uOf(j) <= t[i] ? 1 : 0; }
+  // statistics: share of the gap kept, detached islands, holes
+  let kept = 0; for (const m of mem) kept += m;
+  const seen = new Uint8Array(nS * nU); let islands = 0, holes = 0;
+  const flood = (k0, val) => { const st = [k0]; seen[k0] = 1; let touchIn = false, touchOut = false; while (st.length) { const k = st.pop(), i = k % nS, j = (k / nS) | 0; if (j === 0) touchIn = true; if (j === nU - 1) touchOut = true;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { let ii = i + di; const jj = j + dj; if (jj < 0 || jj >= nU) continue; ii = (ii + nS) % nS; const kk = jj * nS + ii; if (!seen[kk] && mem[kk] === val) { seen[kk] = 1; st.push(kk); } } } return { touchIn, touchOut }; };
+  for (let k = 0; k < nS * nU; k++) if (!seen[k]) { const v = mem[k], r = flood(k, v); if (v === 1 && !r.touchIn) islands++; if (v === 0 && !r.touchOut) holes++; }
+  const tt = tAll || t; return { mem, kept: kept / (nS * nU), islands, holes, t: tt };
+}
+function expectedCover(opt, w) { if (opt === "e") { const cb = coverB(w); let s = 0; for (let i = 0; i < 200; i++) s += cb((i + .5) / 200); return s / 200; } let s = 0; for (let i = 0; i < 400; i++) s += unit(w, (i + .5) / 400); return s / 400; }
+
+/* ---------- drawing helpers ---------- */
+function ramp(t, lo, hi, steps) { const q = steps ? Math.min(steps - 1, Math.floor(t * steps)) / (steps - 1) : t; return [lo[0] + (hi[0] - lo[0]) * q, lo[1] + (hi[1] - lo[1]) * q, lo[2] + (hi[2] - lo[2]) * q]; }
+function paintSurface(cv, res, n, withProfile) {
+  const lo = cssRGB("--water"), hi = cssRGB("--earth"), ink = cssRGB("--ink"), bg = cssRGB("--plate"), g = cv.getContext("2d"), W0 = cv.width, H0 = cv.height, ph = withProfile ? H0 * .68 : H0;
+  const im = g.createImageData(n, n); for (let k = 0; k < n * n; k++) { const c = ramp(res.t[k], lo, hi, 9); im.data[k * 4] = c[0]; im.data[k * 4 + 1] = c[1]; im.data[k * 4 + 2] = c[2]; im.data[k * 4 + 3] = 255; }
+  const o = document.createElement("canvas"); o.width = n; o.height = n; o.getContext("2d").putImageData(im, 0, 0); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = css("--plate"); g.fillRect(0, 0, W0, H0); g.imageSmoothingEnabled = true; g.drawImage(o, 0, 0, W0, ph - 2);
+  if (withProfile) { const y0 = ph + 6, h = H0 - y0 - 4, row = Math.floor(n / 2); g.strokeStyle = css("--line-2"); g.lineWidth = 1; g.strokeRect(.5, y0, W0 - 1, h);
+    g.beginPath(); for (let i = 0; i < n; i++) { const x = i / (n - 1) * W0, y = y0 + h * (1 - res.t[row * n + i]); i ? g.lineTo(x, y) : g.moveTo(x, y); } g.lineTo(W0, y0 + h); g.lineTo(0, y0 + h); g.closePath(); g.fillStyle = css("--earth"); g.globalAlpha = .55; g.fill(); g.globalAlpha = 1;
+    g.beginPath(); for (let i = 0; i < n; i++) { const x = i / (n - 1) * W0, y = y0 + h * (1 - res.t[row * n + i]); i ? g.lineTo(x, y) : g.moveTo(x, y); } g.strokeStyle = css("--ink"); g.lineWidth = 1.6; g.stroke();
+    g.strokeStyle = css("--line"); g.beginPath(); g.moveTo(0, ph - 2 + 3); g.lineTo(W0, ph - 2 + 3); g.stroke(); g.fillStyle = css("--muted"); g.font = "10px " + css("--f-code"); g.fillText("high", 4, y0 + 11); g.fillText("low", 4, y0 + h - 4); g.fillText("section along the middle row", W0 - 150, y0 + 11); }
+}
+function paintOutline(cv, o, nS, nU, plan, geom) { // the unrolled gap, or a plan of it
+  const g = cv.getContext("2d"), W0 = cv.width, H0 = cv.height, acc = cssRGB("--accent"), bg = cssRGB("--plate"), stone = cssRGB("--stone"), ink = cssRGB("--ink");
+  const img = g.createImageData(W0, H0), d = img.data, put = (p, c) => { d[p * 4] = c[0]; d[p * 4 + 1] = c[1]; d[p * 4 + 2] = c[2]; d[p * 4 + 3] = 255; };
+  const mix = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  const inner = mix(bg, stone, .8), inside = mix(bg, acc, .75), outside = mix(bg, acc, .08);
+  const memAt = (s, u) => { const i = Math.min(nS - 1, Math.max(0, Math.floor(s * nS))), j = Math.min(nU - 1, Math.max(0, Math.floor(u * nU))); return o.mem[j * nS + i]; };
+  const edgeAt = (s, u) => { const e = 1 / Math.max(W0, H0) * 1.2; return memAt(s, u) !== memAt(s, u + .018) || memAt(s, u) !== memAt(s + .004, u); };
+  for (let y = 0; y < H0; y++) for (let x = 0; x < W0; x++) { let c = bg;
+    if (!plan || geom === "front") { // inner area above (0.0 to 0.28), gap below
+      const gy0 = .22, gy1 = .94, v = (y / H0 - gy0) / (gy1 - gy0), s = x / W0;
+      if (v < 0) c = inner; else if (v <= 1) { c = memAt(s, v) ? inside : outside; if (memAt(s, v) !== memAt(s, v + 1.5 / ((gy1 - gy0) * H0)) || memAt(s, v) !== memAt(s + 1 / W0, v)) c = ink; } }
+    else { const cx = W0 / 2, cy = H0 / 2, sc = Math.min(W0, H0) / 2.05, dx = (x - cx) / sc, dy = (y - cy) / sc, rr = Math.hypot(dx, dy), th = (Math.atan2(dy, dx) / TAU + 1) % 1;
+      const rin = .3 * (1 + .12 * Math.sin(3 * th * TAU) + .06 * Math.sin(5 * th * TAU + 1)), rout = .92 * (1 + .08 * Math.sin(2 * th * TAU + 1.3));
+      if (rr <= rin) c = inner; else if (rr <= rout) { const v = (rr - rin) / (rout - rin); c = memAt(th, v) ? inside : outside; const rr2 = rr + 1.5 / sc, v2 = (rr2 - rin) / (rout - rin); if (memAt(th, v) !== memAt(th, v2) || memAt(th, v) !== memAt((th + 1.2 / (sc * 2)) % 1, v)) c = ink; } }
+    put(y * W0 + x, c); }
+  g.putImageData(img, 0, 0);
+}
+function paintCurve(cv, o, nS) { // side view of an outline: depth of the edge along the edge, where it is a curve
+  const g = cv.getContext("2d"), W0 = cv.width, H0 = cv.height; g.fillStyle = css("--plate"); g.fillRect(0, 0, W0, H0); g.strokeStyle = css("--line-2"); g.strokeRect(.5, .5, W0 - 1, H0 - 1);
+  g.fillStyle = css("--muted"); g.font = "10px " + css("--f-code"); g.fillText("outer", 5, 12); g.fillText("inner", 5, H0 - 5);
+  const curve = o.t.length === nS; if (!curve) { g.fillText("no single curve: the edge is a level set of a 2D field", 40, H0 / 2); return; }
+  g.beginPath(); for (let i = 0; i < nS; i++) { const x = i / (nS - 1) * W0, y = H0 - 6 - (H0 - 14) * o.t[i]; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.strokeStyle = css("--ink"); g.lineWidth = 1.8; g.stroke();
+}
+
+/* ---------- the explorer for continuous draws ---------- */
+const C = { mode: "surface", opt: "a", wname: "low", a: 12, c: .5, F: 3, seed: 5, join: "straight", geom: "front" };
+const NSURF = 96, NS = 200, NU = 56;
+function cw() { return { name: C.wname, a: C.a, c: C.c }; }
+function cDraw() {
+  const w = cw(), plan = document.getElementById("cvPlan"), side = document.getElementById("cvSide"), stats = document.getElementById("cStats"), hist = document.getElementById("cHist");
+  document.querySelectorAll("#segCOpt button").forEach(b => { const ok = (C.mode === "surface" ? SURF_OPTS : OUT_OPTS).includes(b.dataset.v); b.hidden = !ok; b.setAttribute("aria-pressed", b.dataset.v === C.opt); });
+  if (!(C.mode === "surface" ? SURF_OPTS : OUT_OPTS).includes(C.opt)) { C.opt = "a"; cDraw(); return; }
+  document.getElementById("cJoinBox").hidden = C.opt !== "c"; document.getElementById("cGeomBox").hidden = C.mode !== "outline";
+  const dens = densityOf(w, 24), cdf = cdfOf(w);
+  let tvals, note = "", html = "";
+  if (C.mode === "surface") { const r = drawSurface(C.opt, w, C.F, C.seed, C.join, NSURF); paintSurface(plan, r, NSURF, true); side.style.display = "none"; tvals = r.t;
+    html = `<span>realised heights vs the weighting: largest gap <b>${ksOf(tvals, w).toFixed(3)}</b></span>`; }
+  else { const o = drawOutline(C.opt, w, C.F, C.seed, C.join, NS, NU); side.style.display = "block"; paintOutline(plan, o, NS, NU, true, C.geom); paintCurve(side, o, NS);
+    const exp = expectedCover(C.opt, w); tvals = o.t.length === NS || C.opt === "a" || C.opt === "b" ? o.t : null;
+    html = `<span>gap kept <b>${(o.kept * 100).toFixed(0)}%</b> (the odds say ${(exp * 100).toFixed(0)}%)</span><span>detached islands <b>${o.islands}</b></span><span>holes <b>${o.holes}</b></span>` + (tvals ? `<span>edge depths vs the weighting: largest gap <b>${ksOf(tvals, w).toFixed(3)}</b></span>` : ""); }
+  stats.innerHTML = html;
+  const W1 = 300, H1 = 86, pl = 6, B = dens.length, mx = Math.max(1.6, ...dens) * 1.1; let bars = "";
+  if (tvals) { const h = new Array(B).fill(0); for (const v of tvals) h[Math.min(B - 1, Math.floor(v * B))]++; const hm = h.map(x => x / tvals.length * B);
+    bars = hm.map((v, i) => `<rect x="${pl + i / B * (W1 - 2 * pl)}" y="${H1 - 14 - (H1 - 24) * Math.min(1, v / mx)}" width="${(W1 - 2 * pl) / B - 1}" height="${(H1 - 24) * Math.min(1, v / mx)}" style="fill:var(--accent);opacity:.45"/>`).join(""); }
+  const line = dens.map((v, i) => (i ? "L" : "M") + (pl + (i + .5) / B * (W1 - 2 * pl)).toFixed(1) + " " + (H1 - 14 - (H1 - 24) * Math.min(1, v / mx)).toFixed(1)).join(" ");
+  hist.innerHTML = `<svg viewBox="0 0 ${W1} ${H1}" role="img" aria-label="Realised values against the weighting">${bars}<path d="${line}" fill="none" stroke="var(--ink)" stroke-width="1.6"/><line class="axis" x1="${pl}" x2="${W1 - pl}" y1="${H1 - 14}" y2="${H1 - 14}"/><text x="${pl}" y="${H1 - 3}">${C.mode === "surface" ? "low" : "inner"}</text><text x="${W1 - pl}" y="${H1 - 3}" text-anchor="end">${C.mode === "surface" ? "high" : "outer"}</text><text x="${W1 / 2}" y="10" text-anchor="middle">bars: what was drawn · line: the weighting</text></svg>`;
+  document.getElementById("cSrc").textContent = C.mode === "surface" ? `dirt top="$groundHeight + ${wCall(w, "0dmm .. 3dmm")}"` : `cliff at="${wCall(w, "face .. faceMax")}"`;
+}
+function wCall(w, range) { const f = x => +x.toFixed(2); if (w.name === "flat") return `[${range}]`; if (w.name === "low" || w.name === "high") return `${w.name}(${range}, ${f(w.a)})`; return `${w.name}(${range}, ${f(w.a)}, ${f(w.c)})`; }
+function cSync() { const sl = document.getElementById("cStr"), w = C.wname, sB = document.getElementById("cStrBox"), cB = document.getElementById("cCenBox"), lab = document.getElementById("cStrLab"); sB.hidden = w === "flat"; cB.hidden = !(w === "bell" || w === "peak" || w === "ends");
+  if (w === "low" || w === "high") { lab.textContent = "ratio"; C.a = Math.exp(Math.log(40) * sl.value / 100); } else if (w === "bell" || w === "peak") { lab.textContent = "spread"; C.a = .05 + .95 * sl.value / 100; } else if (w === "ends") { lab.textContent = "power"; C.a = 8 * sl.value / 100; }
+  C.c = document.getElementById("cCen").value / 100; document.getElementById("cOutStr").textContent = (+(C.a ?? 0).toFixed(2)).toString(); document.getElementById("cOutCen").textContent = C.c.toFixed(2); document.getElementById("cOutF").textContent = C.F; document.getElementById("cOutSeed").textContent = C.seed; }
+function cDefaults() { const d = WDEF[C.wname], sl = document.getElementById("cStr"); if (d.a !== undefined) { if (C.wname === "low" || C.wname === "high") sl.value = Math.round(Math.log(d.a) / Math.log(40) * 100); else if (C.wname === "ends") sl.value = Math.round(d.a / 8 * 100); else sl.value = Math.round((d.a - .05) / .95 * 100); } document.getElementById("cCen").value = Math.round((d.c ?? .5) * 100); }
+function cseg(id, cb) { const el = document.getElementById(id); el.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; cb(b.dataset.v); }); }
+let cPending = false; function cRun() { if (cPending) return; cPending = true; requestAnimationFrame(() => { cPending = false; cDraw(); }); }
+function cInit() {
+  cseg("segCMode", v => { C.mode = v; document.querySelectorAll("#segCMode button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v)); cRun(); });
+  cseg("segCOpt", v => { C.opt = v; cRun(); });
+  cseg("segCW", v => { C.wname = v; document.querySelectorAll("#segCW button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v)); cDefaults(); cSync(); cRun(); });
+  cseg("segCJoin", v => { C.join = v; document.querySelectorAll("#segCJoin button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v)); cRun(); });
+  cseg("segCGeom", v => { C.geom = v; document.querySelectorAll("#segCGeom button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v)); cRun(); });
+  for (const [id, f] of [["cStr", () => { }], ["cCen", () => { }]]) document.getElementById(id).addEventListener("input", () => { cSync(); cRun(); });
+  document.getElementById("cF").addEventListener("input", e => { C.F = +e.target.value; cSync(); cRun(); });
+  document.getElementById("cSeed").addEventListener("input", e => { C.seed = +e.target.value; cSync(); cRun(); });
+  cDefaults(); cSync(); cDraw();
+}
+/* ---------- galleries: the same weighting under every option ---------- */
+function gallery() {
+  const host = document.getElementById("galSurf"), host2 = document.getElementById("galOut"); if (!host || !host2) return; const ws = ["flat", "low", "ends"], F = 3, seed = 5;
+  const rows = [["a", "straight", "a  Rank a smooth field"], ["b", "straight", "b  Quantile-map"], ["c", "straight", "c  Points, straight"], ["c", "smooth", "c  Points, smooth"], ["d", "straight", "d  Two seeded fields"], ["g", "straight", "g  Sum, ranked together"]];
+  host.innerHTML = `<div class="galhead"><span></span>${ws.map(w => `<b>${w === "flat" ? "flat" : w === "low" ? "low(12)" : "ends(3, 0.5)"}</b>`).join("")}</div>` + rows.map(([o, j, lab]) => `<div class="galrow"><span class="gallab">${lab}</span>${ws.map(w => `<canvas width="240" height="240" data-o="${o}" data-j="${j}" data-w="${w}"></canvas>`).join("")}</div>`).join("");
+  host.querySelectorAll("canvas").forEach(cv => { const r = drawSurface(cv.dataset.o, wOf(cv.dataset.w), F, seed, cv.dataset.j, 64); paintSurface(cv, r, 64, true); });
+  const rows2 = [["a", "straight", "a  Rank a smooth field"], ["b", "straight", "b  Quantile-map"], ["c", "straight", "c  Points, straight"], ["c", "smooth", "c  Points, smooth"], ["e", "straight", "e  Threshold, coverage B"], ["f", "straight", "f  Edge displacement"]];
+  host2.innerHTML = `<div class="galhead"><span></span>${ws.map(w => `<b>${w === "flat" ? "flat" : w === "low" ? "low(12)" : "ends(3, 0.5)"}</b>`).join("")}</div>` + rows2.map(([o, j, lab]) => `<div class="galrow"><span class="gallab">${lab}</span>${ws.map(w => `<canvas width="300" height="170" data-o="${o}" data-j="${j}" data-w="${w}"></canvas>`).join("")}</div>`).join("");
+  host2.querySelectorAll("canvas").forEach(cv => { const o = drawOutline(cv.dataset.o, wOf(cv.dataset.w), F, seed, cv.dataset.j, 200, 56); paintOutline(cv, o, 200, 56, false, "front"); });
+}
+/* ---------- mechanism diagrams: raw, mapped, result, in one dimension ---------- */
+function mech(opt, id, wname, F) {
+  const host = document.getElementById(id); if (!host) return; const w = wOf(wname), n = 160, seed = 8, W0 = 420, ph = 56, gap = 16;
+  const poly = (v, y0, lo, hi, cls, st) => `<polyline class="${cls || ""}" fill="none" ${st || ""} points="${Array.from(v, (x, i) => (i / (v.length - 1) * (W0 - 20) + 10).toFixed(1) + "," + (y0 + ph - (x - lo) / (hi - lo) * ph).toFixed(1)).join(" ")}"/>`;
+  const frame = (y0, label) => `<rect x="10" y="${y0}" width="${W0 - 20}" height="${ph}" style="fill:none;stroke:var(--line-2)"/><text x="12" y="${y0 - 3}">${label}</text>`;
+  let a = "", y = 14, lines = [], H;
+  if (opt === "a" || opt === "b") { const f = gfield1(n, F, seed), U = opt === "a" ? rankU(f) : gaussU(f), t = Float64Array.from(U, u => unit(w, u));
+    a += frame(y, "step 1  one smooth field") + poly(f, y, -3, 3, "", 'stroke="var(--muted)" stroke-width="1.8"'); y += ph + gap;
+    a += frame(y, opt === "a" ? "steps 3-4  its rank, 0 to 1 (values replaced by their order)" : "steps 3-4 replaced  its own CDF, 0 to 1 (erf of the value)") + poly(U, y, 0, 1, "", 'stroke="var(--water)" stroke-width="1.8"'); y += ph + gap;
+    a += frame(y, "steps 5-6  the weighting turns that into t: low … high") + poly(t, y, 0, 1, "surf", 'stroke="var(--ink)" stroke-width="2"'); y += ph + 6; }
+  else if (opt === "c") { const P = Math.max(3, Math.round(2 * F)), r = rng(seed * 997 + 5), us = Array.from({ length: P }, r), ts = us.map(u => unit(w, u)), st = joinPts(ts, n, "straight"), sm = joinPts(ts, n, "smooth");
+    a += frame(y, "1  an independent roll at each control point"); us.forEach((u, i) => { a += `<circle cx="${10 + (i + .5) / P * (W0 - 20)}" cy="${y + ph - u * ph}" r="3.5" style="fill:var(--water)"/>`; }); y += ph + gap;
+    a += frame(y, "2  each through the weighting: t at the points") + ts.map((t, i) => `<circle cx="${10 + (i + .5) / P * (W0 - 20)}" cy="${y + ph - t * ph}" r="3.5" style="fill:var(--accent)"/>`).join(""); y += ph + gap;
+    a += frame(y, "3  joined: straight (solid) or smooth (dashed)") + poly(st, y, 0, 1, "surf", 'stroke="var(--ink)" stroke-width="2"') + poly(sm, y, 0, 1, "", 'stroke="var(--earth)" stroke-width="1.8" stroke-dasharray="5 3"'); y += ph + 6; }
+  else if (opt === "d") { const f1 = gfield1(n, F, seed), f2 = gfield1(n, 2 * F, seed + 101), t1 = Float64Array.from(rankU(f1), u => unit(w, u)), t2 = Float64Array.from(rankU(f2), u => unit(w, u)), t = t1.map((v, i) => .5 * v + .5 * t2[i]);
+    a += frame(y, "1  field 0 (forked from the seed) through the weighting: range 1") + poly(t1, y, 0, 1, "", 'stroke="var(--water)" stroke-width="1.8"'); y += ph + gap;
+    a += frame(y, "2  field 1, another fork, finer: range 2") + poly(t2, y, 0, 1, "", 'stroke="var(--earth)" stroke-width="1.8"'); y += ph + gap;
+    a += frame(y, "3  the arithmetic at each node: (range 1 + range 2) / 2") + poly(t, y, 0, 1, "surf", 'stroke="var(--ink)" stroke-width="2"'); y += ph + 6; }
+  else if (opt === "f") { const f = gfield1(n, F, seed), U = rankU(f), t = Float64Array.from(U, u => unit(w, u));
+    a += frame(y, "1  a smooth 1D roll along the edge (arc length)") + poly(f, y, -3, 3, "", 'stroke="var(--muted)" stroke-width="1.8"'); y += ph + gap;
+    a += frame(y, "2  ranked through the weighting: how far out the edge goes, 0 to 1") + poly(t, y, 0, 1, "", 'stroke="var(--water)" stroke-width="1.8"'); y += ph + gap;
+    a += frame(y, "3  the inner outline pushed out by that much: the one curve") + `<rect x="10" y="${y}" width="${W0 - 20}" height="${ph}" style="fill:var(--stone);opacity:.35"/>` + poly(t, y, 0, 1, "surf", 'stroke="var(--ink)" stroke-width="2"'); y += ph + 6; }
+  else if (opt === "g") { const f1 = gfield1(n, F, seed), f2 = gfield1(n, 2 * F, seed + 101), f = Float64Array.from(f1, (v, i) => v + 0.5 * f2[i]), Q = combinedQ(w), U = rankU(f), t = Float64Array.from(U, u => Q[Math.min(Q.length - 1, Math.floor(u * Q.length))]);
+    a += frame(y, "1  the sum of two forked fields: one body roll with two patterns") + poly(f, y, -4, 4, "", 'stroke="var(--muted)" stroke-width="1.8"'); y += ph + gap;
+    a += frame(y, "2  ranked, as today") + poly(rankU(f), y, 0, 1, "", 'stroke="var(--water)" stroke-width="1.8"'); y += ph + gap;
+    a += frame(y, "3  through the combined odds of the whole formula: the whole is exact") + poly(t, y, 0, 1, "surf", 'stroke="var(--ink)" stroke-width="2"'); y += ph + 6; }
+  else { // e: the threshold against coverage, one row of the unrolled gap
+    const f = gfield1(n, F, seed), U = rankU(f), cb = coverB(w);
+    a += frame(y, "1  a smooth field, as a rank 0 to 1, along a line across the gap") + poly(U, y, 0, 1, "", 'stroke="var(--muted)" stroke-width="1.8"'); y += ph + gap;
+    const cv = Array.from({ length: n }, (_, i) => cb(i / (n - 1)));
+    a += frame(y, "2  the coverage curve written, by depth (peak scaled to 1)") + poly(cv, y, 0, 1, "", 'stroke="var(--earth)" stroke-width="1.8"'); y += ph + gap;
+    a += frame(y, "3  in where field ≤ coverage: the edge is wherever they cross") + poly(U, y, 0, 1, "", 'stroke="var(--muted)" stroke-width="1.2"') + poly(cv, y, 0, 1, "", 'stroke="var(--earth)" stroke-width="1.2"') + Array.from({ length: n }, (_, i) => `<rect x="${10 + i / (n - 1) * (W0 - 20)}" y="${y + ph - 5}" width="${(W0 - 20) / n + .5}" height="5" style="fill:var(--accent);opacity:${U[i] <= cv[i] ? .9 : .08}"/>`).join(""); y += ph + 6; }
+  host.innerHTML = `<svg viewBox="0 0 ${W0} ${y}" role="img" aria-label="${OPTS[opt]}">${a}</svg>`;
+}
+function exampleRows() {
+  const w = wOf("low"), F = 3, seed = 5;
+  const s1 = document.getElementById("exSurf"), s2 = document.getElementById("exRing"), s3 = document.getElementById("exFront"); if (!s1 || !s2 || !s3) return;
+  const so = [["a", "straight", "a"], ["b", "straight", "b"], ["c", "straight", "c straight"], ["c", "smooth", "c smooth"], ["d", "straight", "d"], ["g", "straight", "g"]];
+  s1.innerHTML = so.map(([o, j, l]) => `<figure><canvas width="240" height="240" data-o="${o}" data-j="${j}"></canvas><figcaption>${l}</figcaption></figure>`).join("");
+  s1.querySelectorAll("canvas").forEach(cv => paintSurface(cv, drawSurface(cv.dataset.o, w, F, seed, cv.dataset.j, 64), 64, true));
+  const oo = [["a", "straight", "a"], ["b", "straight", "b"], ["c", "straight", "c straight"], ["c", "smooth", "c smooth"], ["e", "straight", "e"], ["f", "straight", "f"]];
+  for (const [host, geom, h] of [[s2, "pond", 240], [s3, "front", 150]]) { host.innerHTML = oo.map(([o, j, l]) => `<figure><canvas width="240" height="${h}" data-o="${o}" data-j="${j}"></canvas><figcaption>${l}</figcaption></figure>`).join("");
+    host.querySelectorAll("canvas").forEach(cv => { const r = drawOutline(cv.dataset.o, w, F, seed, cv.dataset.j, 200, 56); paintOutline(cv, r, 200, 56, geom === "pond", geom); }); }
+}
+function optInit() {
+  cInit(); gallery(); exampleRows(); [["a", "mechA", "low"], ["b", "mechB", "low"], ["c", "mechC", "low"], ["d", "mechD", "low"], ["g", "mechG", "low"], ["e", "mechE", "high"], ["f", "mechF", "low"]].forEach(([o, id, w]) => mech(o, id, w, 3));
+}
+optInit();
+new MutationObserver(() => { optInit(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => optInit());
+document.fonts && document.fonts.ready.then(() => optInit());
+</script>
+<script>
+"use strict";
+/* ============ the six steps of Band::rolled, drawn on one small example ============ */
+const WK = { n: 14, w: "low" };
+function wkW() { return WK.w === "flat" ? { name: "flat" } : WK.w === "low" ? { name: "low", a: 5 } : WK.w === "high" ? { name: "high", a: 5 } : { name: "bell", a: .18, c: .5 }; }
+function gfn1(F, seed) { const r = rng(seed * 7717 + 3), M = 24, ks = [], ph = []; for (let m = 0; m < M; m++) { ks.push(F * (0.5 + r())); ph.push(r() * TAU); } const a = Math.sqrt(2 / M); return x => { let v = 0; for (let m = 0; m < M; m++) v += Math.cos(TAU * ks[m] * x + ph[m]); return v * a; }; }
+function wkData() {
+  const n = WK.n, f = gfn1(2.4, 12), xs = Array.from({ length: n }, (_, i) => (i + .5) / n), r = xs.map(f), noRoom = new Set([4, 5]);
+  r[10] = r[9]; // a tie, broken by node order
+  const take = xs.map((_, i) => !noRoom.has(i)), idx = [...xs.keys()].filter(i => take[i]).sort((a, b) => r[a] - r[b] || a - b), m = idx.length;
+  const rank = new Array(n).fill(null), t = new Array(n).fill(null), pos = new Array(n).fill(null);
+  idx.forEach((i, p) => { pos[i] = p; rank[i] = (p + .5) / m; t[i] = unit(wkW(), rank[i]); });
+  const lo = .12, hi = .86, h = xs.map((_, i) => take[i] ? lo + (hi - lo) * t[i] : .5);
+  const mn = Math.min(...r), mx = Math.max(...r), scaled = r.map(v => lo + (hi - lo) * (v - mn) / (mx - mn));
+  return { n, f, xs, r, take, idx, m, rank, t, pos, lo, hi, h, scaled };
+}
+function wkSvg(step, d) {
+  const W0 = 300, H0 = 200, X = x => 14 + x * (W0 - 28), nodeY = v => 100 - v * 26;
+  const dot = (x, y, cls, extra) => `<circle cx="${x}" cy="${y}" r="4.2" style="${cls}" ${extra || ""}/>`;
+  const ink = "fill:var(--ink)", acc = "fill:var(--accent)", mut = "fill:var(--line-2);stroke:var(--muted)", wat = "fill:var(--water)";
+  const label = (x, y, t, a) => `<text x="${x}" y="${y}" ${a ? `text-anchor="${a}"` : ""}>${t}</text>`;
+  let s = "";
+  const fineCurve = () => { let p = ""; for (let i = 0; i <= 120; i++) { const x = i / 120; p += (i ? "L" : "M") + X(x).toFixed(1) + " " + nodeY(d.f(x)).toFixed(1); } return `<path d="${p}" fill="none" stroke="var(--muted)" stroke-width="1.6"/>`; };
+  if (step === 1) { s += `<line class="axis" x1="14" x2="${W0 - 14}" y1="160" y2="160"/>${fineCurve()}` + d.xs.map((x, i) => dot(X(x), nodeY(d.r[i]), acc)).join("") + d.xs.map((x, i) => label(X(x), 176, i, "middle")).join("") + label(14, 14, "the body's roll at each node", "") + label(14, 28, "(hills for dirt, waves for water)", ""); }
+  if (step === 2) { s += `<line class="axis" x1="14" x2="${W0 - 14}" y1="160" y2="160"/>${fineCurve()}` + d.xs.map((x, i) => d.take[i] ? dot(X(x), nodeY(d.r[i]), acc) : dot(X(x), nodeY(d.r[i]), mut)).join("") + d.xs.map((x, i) => label(X(x), 176, i, "middle")).join("") + label(14, 14, "take refuses nodes 4 and 5", "") + label(14, 28, "(a pin is here: no room)", "") + `<line x1="${X(d.xs[4])}" x2="${X(d.xs[5])}" y1="148" y2="148" stroke="var(--muted)" stroke-width="2"/>` + label(X((d.xs[4] + d.xs[5]) / 2), 142, "no room", "middle"); }
+  if (step === 3) { const m = d.m, top = 52, bot = 140, px = p => 14 + (p + .5) / m * (W0 - 28);
+    s += label(14, 14, "sort by roll, least first", "") + label(14, 28, "ties go in node order", "");
+    d.idx.forEach(i => { s += `<line x1="${X(d.xs[i])}" y1="${top + 6}" x2="${px(d.pos[i])}" y2="${bot - 6}" stroke="${(i === 9 || i === 10) ? "var(--accent)" : "var(--line-2)"}" stroke-width="${(i === 9 || i === 10) ? 2 : 1}"/>`; });
+    d.xs.forEach((x, i) => { s += dot(X(x), top, d.take[i] ? acc : mut); s += label(X(x), top - 8, i, "middle"); });
+    d.idx.forEach((i, p) => { s += dot(px(p), bot, acc) + label(px(p), bot + 14, i, "middle"); });
+    s += label(14, top + 22, "by place on the strip", "") + label(14, bot + 30, "by roll: least … greatest", "") + label(X(d.xs[9]), 90, "tie 9, 10", "middle"); }
+  if (step === 4) { const m = d.m, bot = 56, ax = 138, px = p => 14 + (p + .5) / m * (W0 - 28);
+    s += label(14, 14, "rank = (position + 0.5) / 12", "") + label(14, 28, "evenly spaced from 0 to 1", "");
+    d.idx.forEach((i, p) => { s += dot(px(p), bot, acc) + `<line x1="${px(p)}" x2="${px(p)}" y1="${bot + 5}" y2="${ax}" stroke="var(--line-2)"/>` + dot(px(p), ax, wat) + label(px(p), bot - 8, i, "middle"); });
+    s += `<line class="axis" x1="14" x2="${W0 - 14}" y1="${ax}" y2="${ax}"/>` + label(14, ax + 16, "0", "") + label(W0 - 14, ax + 16, "1", "end") + label(W0 / 2, ax + 32, "the ranks: the same gap between each pair", "middle"); }
+  if (step === 5) { const gx0 = 40, gy0 = 170, gw = 240, gh = 130, GX = u => gx0 + u * gw, GY = t => gy0 - t * gh;
+    let p = ""; for (let i = 0; i <= 100; i++) { const u = i / 100; p += (i ? "L" : "M") + GX(u).toFixed(1) + " " + GY(unit(wkW(), u)).toFixed(1); }
+    s += `<line class="axis" x1="${gx0}" x2="${gx0 + gw}" y1="${gy0}" y2="${gy0}"/><line class="axis" x1="${gx0}" x2="${gx0}" y1="${gy0}" y2="${gy0 - gh}"/><path d="${p}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
+    d.idx.forEach(i => { const u = d.rank[i], t = d.t[i]; s += `<line x1="${GX(u)}" x2="${GX(u)}" y1="${gy0}" y2="${GY(t)}" stroke="var(--line-2)"/><line x1="${GX(u)}" x2="${gx0}" y1="${GY(t)}" y2="${GY(t)}" stroke="var(--line-2)"/>` + dot(GX(u), gy0, wat) + dot(gx0, GY(t), acc); });
+    s += label(14, 12, "the weighting's quantile curve", "") + label(gx0 + gw, gy0 + 14, "rank", "end") + label(gx0 - 4, gy0 - gh + 4, "t", "end") + label(gx0 + 6, gy0 - gh - 6, WK.w === "low" ? "even ranks come out bunched near 0" : WK.w === "high" ? "even ranks come out bunched near 1" : WK.w === "bell" ? "even ranks come out bunched in the middle" : "flat: t equals the rank", ""); }
+  if (step === 6) { const lo = d.lo, hi = d.hi, Y = v => 180 - v * 160, pol = v => v.map((y, i) => `${X(d.xs[i]).toFixed(1)},${Y(y).toFixed(1)}`).join(" ");
+    s += `<rect x="14" y="${Y(hi)}" width="${W0 - 28}" height="${Y(lo) - Y(hi)}" style="fill:var(--accent);opacity:.12"/><line class="hi" x1="14" x2="${W0 - 14}" y1="${Y(hi)}" y2="${Y(hi)}"/><line class="lo" x1="14" x2="${W0 - 14}" y1="${Y(lo)}" y2="${Y(lo)}"/>`;
+    s += `<polyline points="${pol(d.scaled)}" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="4 3"/><polyline points="${pol(d.h)}" fill="none" stroke="var(--ink)" stroke-width="2.4"/>` + d.xs.map((x, i) => dot(X(x), Y(d.h[i]), d.take[i] ? acc : mut)).join("") + label(14, 12, "height = lo + (hi − lo) · t", "") + label(14, 26, "dashed: the field, scaled", "") + label(14, 38, "solid: the surface", "") + label(W0 - 14, Y(hi) - 4, "high", "end") + label(W0 - 14, Y(lo) + 12, "low", "end"); }
+  return `<svg viewBox="0 0 ${W0} ${H0}" role="img" aria-label="Step ${step} of the six">${s}</svg>`;
+}
+function walkRender() {
+  const d = wkData(), host = document.getElementById("walk"); if (!host) return;
+  const titles = ["1 The body's smooth field of rolls", "2 Which nodes take part", "3 Sort by roll", "4 Rank", "5 The weighting turns rank into t", "6 Height, in the band"];
+  host.innerHTML = titles.map((t, i) => `<figure class="fig"><div class="stephead">${t}</div>${wkSvg(i + 1, d)}</figure>`).join("");
+  // properties
+  const n = 400, B = 16, wv = wkW(), dens = densityOf(wv, B), mxd = Math.max(1.6, ...dens) * 1.1;
+  const fA = gfield1(n, 2, 4), fB = gfield1(n, 11, 9);
+  const prop = (f, lab) => { const U = rankU(f), t = Float64Array.from(U, u => unit(wv, u)), h = new Array(B).fill(0); t.forEach(v => h[Math.min(B - 1, Math.floor(v * B))]++);
+    const W0 = 300, H0 = 150, curve = Array.from(f, (v, i) => `${(14 + i / (n - 1) * (W0 - 28)).toFixed(1)},${(30 - v * 7).toFixed(1)}`).join(" ");
+    const bars = h.map((c, i) => { const hh = (c / n * B) / mxd * 80; return `<rect x="${14 + i / B * (W0 - 28)}" y="${140 - hh}" width="${(W0 - 28) / B - 2}" height="${hh}" style="fill:var(--accent);opacity:.5"/>`; }).join("");
+    const line = dens.map((v, i) => `${i ? "L" : "M"}${(14 + (i + .5) / B * (W0 - 28)).toFixed(1)} ${(140 - v / mxd * 80).toFixed(1)}`).join(" ");
+    return `<svg viewBox="0 0 ${W0} ${H0}" role="img" aria-label="${lab}"><text x="14" y="12" class="ink">${lab}</text><polyline points="${curve}" fill="none" stroke="var(--muted)" stroke-width="1.4"/><text x="14" y="52">its heights, after ranking:</text>${bars}<path d="${line}" fill="none" stroke="var(--ink)" stroke-width="1.8"/><line class="axis" x1="14" x2="${W0 - 14}" y1="140" y2="140"/><text x="14" y="149">low</text><text x="${W0 - 14}" y="149" text-anchor="end">high</text></svg>`; };
+  document.getElementById("propExact").innerHTML = `<figure class="fig">${prop(fA, "a smooth field")}</figure><figure class="fig">${prop(fB, "a lumpy field")}</figure>`;
+  const nn = 40, f = gfield1(nn, 2, 7), U = rankU(f), tr = Array.from(U, u => unit(wv, u)), r2 = rng(21), ts = Array.from({ length: nn }, () => unit(wv, r2())), W1 = 300, H1 = 150;
+  const surf = (t, lab) => `<svg viewBox="0 0 ${W1} ${H1}" role="img" aria-label="${lab}"><text x="14" y="12" class="ink">${lab}</text><rect x="14" y="26" width="${W1 - 28}" height="100" style="fill:var(--accent);opacity:.1"/><polyline fill="none" stroke="var(--ink)" stroke-width="2" points="${t.map((v, i) => `${(14 + i / (nn - 1) * (W1 - 28)).toFixed(1)},${(126 - v * 100).toFixed(1)}`).join(" ")}"/></svg>`;
+  const sc = `<svg viewBox="0 0 ${W1} ${H1}" role="img" aria-label="roll against height"><text x="14" y="12" class="ink">roll against height, ranked</text>${Array.from(f).map((v, i) => `<circle cx="${(14 + (v + 3) / 6 * (W1 - 28)).toFixed(1)}" cy="${(126 - tr[i] * 100).toFixed(1)}" r="2.6" style="fill:var(--accent)"/>`).join("")}<line class="axis" x1="14" x2="${W1 - 14}" y1="126" y2="126"/><text x="14" y="143">roll: least</text><text x="${W1 - 14}" y="143" text-anchor="end">greatest</text></svg>`;
+  document.getElementById("propAlike").innerHTML = `<figure class="fig">${sc}</figure><figure class="fig">${surf(tr, "ranked: neighbours alike")}</figure><figure class="fig">${surf(ts, "an independent t per node: scrambled")}</figure>`;
+  // the solver is untouched: a pin forces a height, the band eases back, the cloud picks inside it
+  const m = 44, xs = Array.from({ length: m }, (_, i) => i / (m - 1)), pinAt = .46, eas = x => { const d = Math.min(1, Math.abs(x - pinAt) / .22); const s = d * d * (3 - 2 * d); return s; };
+  const ownLo = .12, ownHi = .86, pinH = .52, lo = xs.map(x => pinH + (ownLo - pinH) * eas(x)), hi = xs.map(x => pinH + (ownHi - pinH) * eas(x));
+  const noise = gfield1(m, 3, 5), room = xs.map((_, i) => hi[i] - lo[i] >= .04), idx = [...xs.keys()].filter(i => room[i]).sort((a, b) => noise[a] - noise[b] || a - b), hs = xs.map((_, i) => (lo[i] + hi[i]) / 2);
+  idx.forEach((i, p) => { hs[i] = lo[i] + (hi[i] - lo[i]) * unit(wv, (p + .5) / idx.length); });
+  const Xp = x => 14 + x * (W1 - 28), Yp = v => 140 - v * 120, pl = (a) => xs.map((x, i) => `${Xp(x).toFixed(1)},${Yp(a[i]).toFixed(1)}`).join(" ");
+  { const PW = 620, Xq = x => 14 + x * (PW - 28), Yq = v => 140 - v * 120, pq = a => xs.map((x, i) => `${Xq(x).toFixed(1)},${Yq(a[i]).toFixed(1)}`).join(" ");
+    document.getElementById("pinFig").innerHTML = `<svg viewBox="0 0 ${PW} 170" role="img" aria-label="A pin forces a height and the band eases back; the cloud chooses inside the band"><polyline fill="none" stroke="var(--earth)" stroke-width="1.8" points="${pq(hi)}"/><polyline fill="none" stroke="var(--water)" stroke-width="1.8" points="${pq(lo)}"/><polyline fill="none" stroke="var(--ink)" stroke-width="2.2" points="${pq(hs)}"/><circle cx="${Xq(pinAt)}" cy="${Yq(pinH)}" r="4.5" style="fill:var(--ink)"/><text x="${Xq(pinAt) + 10}" y="${Yq(pinH) - 10}" class="ink">pin: no room, so no roll</text><text x="14" y="${Yq(ownHi) - 6}">high, from the solver</text><text x="14" y="${Yq(ownLo) + 14}">low, from the solver</text><text x="14" y="164">surface: the cloud's choice inside the band</text></svg>`; }
+  // 2D
+  const n2 = 44, f2 = gfield2(n2, n2, 2.4, 6, 1), U2 = rankU(f2), t2 = Float64Array.from(U2, u => unit(wv, u)), lo2 = cssRGB("--water"), hi2 = cssRGB("--earth");
+  const heat = (cv, arr, ramp) => { const g = cv.getContext("2d"), im = g.createImageData(n2, n2); for (let k = 0; k < n2 * n2; k++) { const c = ramp(arr[k]); im.data[k * 4] = c[0]; im.data[k * 4 + 1] = c[1]; im.data[k * 4 + 2] = c[2]; im.data[k * 4 + 3] = 255; } const o = document.createElement("canvas"); o.width = o.height = n2; o.getContext("2d").putImageData(im, 0, 0); g.imageSmoothingEnabled = true; g.drawImage(o, 0, 0, cv.width, cv.height); };
+  const grey = t => { const v = 40 + 190 * t; return [v, v, v]; }, mn = Math.min(...f2), mx = Math.max(...f2);
+  const cvs = ["w2a", "w2b", "w2c", "w2d"].map(id => document.getElementById(id)); if (cvs.every(Boolean)) { heat(cvs[0], Array.from(f2, v => (v - mn) / (mx - mn)), grey); heat(cvs[1], U2, grey); heat(cvs[2], t2, grey); heat(cvs[3], t2, t => ramp(t, lo2, hi2, 9)); }
+}
+function walkInit() { walkRender(); const el = document.getElementById("segWalk"); if (el && !el.dataset.on) { el.dataset.on = 1; el.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; WK.w = b.dataset.v; el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); walkRender(); }); } }
+walkInit();
+new MutationObserver(() => walkRender()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => walkRender());
+document.fonts && document.fonts.ready.then(() => walkRender());
 </script>
 
 </body></html>
