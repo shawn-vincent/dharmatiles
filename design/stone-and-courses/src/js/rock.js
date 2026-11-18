@@ -54,7 +54,8 @@ function cellOfBlock(g,b,pieces,ctx,nospec){
         parts.push({area:ar.map(function(q){return [q[0]-cx,q[1]-cy]}),edges:tg.map(function(v){return v.e==='n'?'joint':'surface'}),bed:bedO.v,top:topO,planes:pl,seamTag:'gseam'})});return}
     var area=outline.map(function(q){return [q[0]-cx,q[1]-cy]}),edges=[],ol=outline.length,so=polyArea(outline)>=0?1:-1;
     for(i=0;i<ol;i++){var a=outline[i],c=outline[(i+1)%ol],ex=c[0]-a[0],ey=c[1]-a[1],l=Math.hypot(ex,ey)||1,n=[so*ey/l,-so*ex/l];edges.push(roleOf(n,n[0]*a[0]+n[1]*a[1]))}
-    parts.push({area:area,edges:edges,bed:bedO.v,top:topO,planes:planes})});
+    /* the seams between the pieces of one stone on tilted planes are cracks the stone does not have: tagged gseam, as the graded areas' are, so no cut or wear treats one as an edge (the rock's rule, region.js) */
+    parts.push({area:area,edges:edges,bed:bedO.v,top:topO,planes:planes,seamTag:pieces.length>1?'gseam':undefined})});
   /* a stone on a stone: its bed must lie within what it stands on, SHRINK-WRAPPED: each part's bed carries `bear`, the convex hull of the cut tops below it (from their built meshes) intersected with the part. Holes and gaps between the supports inside the hull are bridged. A hull is convex, so there is no largest-piece limit: the bear is one convex polygon. The cuts stage cuts the bed to it; the part is not shrunk. A stone with nothing under it, or with less than the minimum hull area, is not built (the guard); a part the hull does not reach is left out of its stone. */
   if(ctx&&ctx.seq&&b.c>0){var sc=supportCS(ctx,b),cellA=Math.abs(polyArea(b.polyT)),tot=0,kept=[];
     if(sc){var HC=null;if(!sc.empty){var hp=[];sc.toPolygons().forEach(function(r){r.forEach(function(q){hp.push([q[0],q[1]])})});var hh=hp.length>=3?hull2(hp):null;if(hh&&hh.length>=3)HC=GR.CSof([hh])}
@@ -63,7 +64,8 @@ function cellOfBlock(g,b,pieces,ctx,nospec){
           pls.forEach(function(r){var a=GR.area2(r);A+=a;if(a>bA){bA=a;best=GR.simplify(GR.ccw(r))}});full=A>=0.995*GR.area2(ring);
           if(ctx.bridgeLog&&A>=1.0){var S=Pc.intersect(sc),gap=I.subtract(S),ga=gap.area();if(ga>0.05){var r0=0,r1=12,it;for(it=0;it<10;it++){var rm=(r0+r1)/2;if(gap.offset(-rm,'Round',2,8).area()>1e-6)r0=rm;else r1=rm}ctx.bridgeLog.push({k:b.c+'_'+b.i,c:b.c,zb:b.zb,area:+ga.toFixed(2),span:+(2*r0).toFixed(2),rings:gap.toPolygons().map(function(q){return q.map(function(v){return [+v[0].toFixed(2),+v[1].toFixed(2)]})})})}S.delete();gap.delete()}
           Pc.delete();I.delete()}
-        if(A<1.0||!best)return;tot+=A;
+        /* RULE (a stone's footprint has no holes): a part of a stone on tilted planes that the support hull reaches by under 1 mm2 stays in its stone, bedded on the little the hull reaches, as every part is; leaving it out cut a narrow V-notch to the stone (a crack no wider than a voxel, which the mesh drew as a razor fin that the union could not weld). Only a stone of one part is left out for under 1 mm2 */
+        if(!best||(A<1.0&&parts.length<2))return;if(A>=1.0)tot+=A;
         if(!full)pt=Object.assign({},pt,{bed:pt.bed&&Object.assign({},pt.bed,{bear:best.map(function(q){return [q[0]-cx,q[1]-cy]})})});kept.push(pt)});
       /* a stone the envelope has cut down to a thin piece must stand on a support under what is left of it, not only on the hull over a gap: the part of its footprint where it is at least the minimum stone height (4 mm at the 35 mm square) high (top under the envelope less its bed) must be over the real tops, by 15% of itself (and 1.5 mm2), else it is not built, so no stone is left floating */
       if(sc&&!sc.empty&&b.env&&tot>=minSupport(ctx,cellA)){var runs=[],xa=null,xs0=b.x0,xs1=b.x1,xq;for(xq=xs0;xq<=xs1+1e-9;xq+=0.25){var okx=Math.min(b.zt,g.crest(xq))-b.zb>=MINSTONE*g.f;if(okx&&xa===null)xa=xq;if((!okx||xq+0.25>xs1+1e-9)&&xa!==null){runs.push([xa,okx?xq:xq-0.25]);xa=null}}
