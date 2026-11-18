@@ -31,6 +31,7 @@ function Explorer(root,REFS){
   var setc=$('xp-setc');setc.appendChild(presetDD);
   var scaleC=W.choice({ctl:'Scale',label:'Scale',opts:function(){return [{v:'db',text:'35 mm',title:'DungeonBlocks'},{v:'ol',text:'25.4 mm',title:'OpenLOCK'}]},get:function(){return P.system},set:function(v){P.system=v;go()}});
   scaleC.title='The scale of a square: 35 mm is DungeonBlocks, 25.4 mm is OpenLOCK (the value the engine keys off as system).';setc.appendChild(scaleC);
+  setc.appendChild(W.choice({ctl:'Quality',label:'Quality',opts:function(){return [{v:'draft',text:'Draft 0.5 mm'},{v:'fine',text:'Fine 0.3 mm'}]},get:function(){return tier},set:function(v){tier=v;W.refreshAll();go()}}));
   setc.appendChild(W.num({ctl:'seed',path:'seed',label:'seed',min:1,max:99,step:1,unit:''},ST));
   /* ---- the four panels ---- */
   var panelEl={},WSEL=GR.WORDS;
@@ -49,7 +50,7 @@ function Explorer(root,REFS){
       W.refreshAll();ST.change()};seg.appendChild(b)});return d}
   function el0(t,c){var e=document.createElement(t);if(c)e.className=c;return e}
   /* ---- summaries: one function from a set of rows to their one line, read from the table; what differs from the preset is marked ---- */
-  var FRESH=null,FRESHROCK=null;
+  var FRESH=null,FRESHROCK=null,rockPreset='';
   function changed(path){return JSON.stringify(W.getPath(P,path))!==JSON.stringify(W.getPath(FRESH,path))}
   /* a card's one line: values first, each with a tiny label or a symbol (from the table's `sh`), only the rows that define the card (`key`) and the ones that differ from the preset (bold); everything else is in the opened card and in the tooltip, which has the full names. */
   function token(r){var v=ST.get(r.path),txt,full,sh=r.sh||'',sf='';
@@ -60,7 +61,7 @@ function Explorer(root,REFS){
     else{var o=r.opts.filter(function(q){return q[0]===v})[0];txt=o?o[1]:String(v);txt=txt.replace(/^(\d)x(\d).*$/,'$1\u00d7$2').replace(/^2x2.*/,'2\u00d72').replace(/ \(.*\)$/,'').replace(/^Draft.*/,'draft').replace(/^Fine.*/,'fine');if(r.ctl==='band-stay')txt=v?'stays':'free'}
     if(r.ctl==='crest-bumps'||r.ctl==='band-bumps'||r.ctl==='outl-bumps'){sf=sh;sh=''}
     var t=(sh?sh+' ':'')+txt+(sf?sf:'');
-    return {t:t,full:r.label+' '+txt+(r.unit?' '+r.unit:''),c:r.path==='tier'?tier!=='draft':changed(r.path),key:r.key}}
+    return {t:t,full:r.label+' '+txt+(r.unit?' '+r.unit:''),c:changed(r.path),key:r.key}}
   function pick(rows){return rows.filter(function(r){return !r.more}).map(token).filter(function(k){return k.key||k.c})}
   function summaryOf(rows){return pick(rows).map(function(k){return k.c?'<b class="chg">'+k.t+'</b>':'<span>'+k.t+'</span>'}).join(' &middot; ')}
   function fullOf(rows){return rows.map(token).map(function(k){return k.full}).join(', ')}
@@ -95,14 +96,21 @@ function Explorer(root,REFS){
   (function(){var pb=panelEl.rock.querySelector('.pb'),d=el0('div','in');d.id='xp-rock';d.innerHTML='<div class="allrow"><span class="seg"><button type="button" id="allon">All on</button><button type="button" id="alloff">All off</button></span><span class="sl">all stages</span></div><details class="whole"><summary>Whole stone: patch size</summary><div class="sset" id="stoneset"></div></details><div id="stages"></div><p class="small" id="xp-rnote"></p>';pb.appendChild(d);
     var rr=panelEl.rockregion.querySelector('.pb'),f=el0('div','facts');f.id='xp-facts';rr.appendChild(f)})();
   var pn=Stone.panel.create({stages:$('stages'),allOn:$('allon'),allOff:$('alloff'),whole:$('stoneset'),wholeWords:['patch'],state:RP,changed:function(){if(RP.solo!==lastRockSolo){lastRockSolo=RP.solo;SOLO=RP.solo}W.refreshAll();areaSync();go()},onStatusClick:function(id,a){pn.openPanel(rockStageRecord(id),a)}});
+  /* the Rock panel's preset row: a preset is a named set of values for a group's controls, here the rock library's own table (Stone.controls.PRESETS, the one Weathered Stone reads); it sets only the Rock panel's controls */
+  function rockPresetValues(k){var o=rockParams(PRESETS[presetKey].rock),q=Stone.controls.PRESETS[k].P;specTables().rockKeys.forEach(function(key){if(q[key]!==undefined)o[key]=q[key]});return o}
+  function applyRockPreset(k){rockPreset=k||'';RP.P=k?rockPresetValues(k):rockParams(PRESETS[presetKey].rock);RP.off={};RP.solo='';SOLO='';lastRockSolo='';FRESHROCK=JSON.parse(JSON.stringify(RP.P));pn.sync();W.refreshAll();areaSync();go()}
+  (function(){var host=panelEl.rock.querySelector('.pb'),dd=W.dropdown({ctl:'RockPreset',label:'Preset',wide:true,opts:function(){var RM=window.MEASURED&&MEASURED.rockPresets||{};function mark(k){var m=RM[k||'wall'];return m?' \u2014 '+(m.gate?'passes':'fails')+', '+m.bodies+(m.bodies===1?' body':' bodies')+', '+m.dropped+' dropped':''}return [{v:'',text:'the wall\'s own'+mark('')}].concat(Object.keys(Stone.controls.PRESETS).map(function(k){return {v:k,text:(Stone.controls.PRESETS[k].label||k)+mark(k)}}))},get:function(){return rockPreset},set:function(k){applyRockPreset(k)}});host.insertBefore(dd,host.firstChild);var nt=el0('p','rpnote');nt.textContent='The Weathered Stone looks were made for a lone stone, and many still break a wall. Each is marked with what it does on preset L (draft, seed 3).';host.insertBefore(nt,dd.nextSibling)})();
 
   /* the rock's stages are cards too: collapsed they show their strength and main settings; a click on the name opens them. The panel is the rock library's own; this only adds a summary line and a fold to what it made. */
   function stageSummary(sid){var C=Stone.controls,sr=C.strengthRow(sid),bits=[];function val(c){var v=RP.P[c.key];return c.step>=1?Math.round(v):String(+(+v).toFixed(2))}
     bits.push('<span>'+val(sr)+'</span>');C.settingsRows(sid).filter(function(c){return c.main&&FRESHROCK&&FRESHROCK[c.key]!==RP.P[c.key]}).forEach(function(c){bits.push('<b class="chg">'+(c.label||c.word).replace('preserve ','keep ')+' '+val(c)+'</b>')});
     var b=RP.off[sid]?'<b class="bg">off</b> ':(RP.solo===sid||SOLO===sid)?'<b class="bg">solo</b> ':'';return b+bits.join(' &middot; ')}
-  function rockSummary(){var C=Stone.controls,on=C.STAGES.filter(function(s){return RP.P[s.id]>0&&!RP.off[s.id]}).map(function(s){return s.id});return on.length?on.join('+'):'none'}
+  function rockSummary(){var C=Stone.controls,on=C.STAGES.filter(function(s){return RP.P[s.id]>0&&!RP.off[s.id]}).map(function(s){return s.id});return (rockPreset?rockPreset+' \u00b7 ':'')+(on.length?on.join('+'):'none')}
   Stone.controls.STAGES.forEach(function(s){var st=$('st_'+s.id);if(!st)return;st.classList.add('collapsed');var nm=st.querySelector('.nm'),sum=el0('span','gsum');nm.appendChild(sum);nm.setAttribute('role','button');nm.tabIndex=0;nm.setAttribute('aria-expanded','false');
-    function flip(){var c=st.classList.toggle('collapsed');nm.setAttribute('aria-expanded',String(!c))}
+    /* one way to expand: the card's header. The rock panel's own caret (the library's, kept for Weathered Stone) is hidden here; it still carries the state, so opening the card opens all of the stage's settings, the 'more' ones too, and the status number opens the card as it opened them */
+    var cb=st.querySelector('button.cb');function sync(){var open=cb.getAttribute('aria-expanded')==='true';st.classList.toggle('collapsed',!open);nm.setAttribute('aria-expanded',String(open))}
+    cb.addEventListener('click',sync);
+    function flip(){cb.click()}
     nm.addEventListener('click',function(e){if(e.target.closest('.info,.eye'))return;flip()});nm.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&e.target===nm){e.preventDefault();flip()}});
     W.reg(function(){sum.innerHTML=stageSummary(s.id)})});
   function followLevel(l){if(levelManual||stage===l)return;stage=l;W.refreshAll();go()}
@@ -110,10 +118,9 @@ function Explorer(root,REFS){
   function resetPanel(id){var fresh=JSON.parse(JSON.stringify(DEFAULTS)),q=PRESETS[presetKey].p,i;for(i in q)fresh[i]=JSON.parse(JSON.stringify(q[i]));
     ROWS.forEach(function(r){if(r.panel!==id)return;
       if(r.kind==='weighting'){var b=r.path.slice(0,r.path.length-2);['w','a','c'].forEach(function(x){ST.set(b+'.'+x,W.getPath(fresh,b+'.'+x))});return}
-      if(r.path==='tier'){tier='draft';return}
       var v=W.getPath(fresh,r.path);if(v!==undefined)ST.set(r.path,JSON.parse(JSON.stringify(v)));else delete P[r.path]});
     GROUPS.forEach(function(g){if(g.panel===id&&g.onoff)AP.on[g.state==='band'?'band':'outl']=1});
-    if(id==='rock'){RP.P=rockParams(PRESETS[presetKey].rock);RP.off={};RP.solo='';pn.sync()}
+    if(id==='rock'){RP.P=rockPreset?rockPresetValues(rockPreset):rockParams(PRESETS[presetKey].rock);RP.off={};RP.solo='';pn.sync()}
     SOLO='';RP.solo='';lastRockSolo='';areaSync();W.refreshAll();go()}
   /* ---- the view controls: View, Target, Rows, Projection, Level ---- */
   var targetW,rowsW,levelW,viewW;
@@ -133,7 +140,7 @@ function Explorer(root,REFS){
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!vpop.hidden){vpopShow(false);vbtn.focus()}});
   var vlev=el0('div','vlevel');vlev.appendChild(levelW);
   xcv.appendChild(vbtn);xcv.appendChild(vpop);xcv.appendChild(vlev);
-  function setPreset(k){presetKey=k;levelManual=false;P=JSON.parse(JSON.stringify(DEFAULTS));var q=PRESETS[k].p;for(var i in q)P[i]=JSON.parse(JSON.stringify(q[i]));P.seed=3;RP.P=rockParams(PRESETS[k].rock);RP.off={};RP.solo='';SOLO='';lastRockSolo='';AP.on={band:1,outl:1};FRESH=JSON.parse(JSON.stringify(P));FRESHROCK=JSON.parse(JSON.stringify(RP.P));pn.sync();sync();go()}
+  function setPreset(k){presetKey=k;levelManual=false;P=JSON.parse(JSON.stringify(DEFAULTS));var q=PRESETS[k].p;for(var i in q)P[i]=JSON.parse(JSON.stringify(q[i]));P.seed=3;rockPreset='';RP.P=rockParams(PRESETS[k].rock);RP.off={};RP.solo='';SOLO='';lastRockSolo='';AP.on={band:1,outl:1};FRESH=JSON.parse(JSON.stringify(P));FRESHROCK=JSON.parse(JSON.stringify(RP.P));pn.sync();sync();go()}
   var xrefLocal=null;function refSrc(k){var un=(xrefLocal!=null&&arguments[1])?xrefLocal:!!window.UNP;return (un&&window.REFSU&&window.REFSU[k])?window.REFSU[k]:REFS[k]}
   function sync(){W.refreshAll();areaSync();$('xp-ref').src=refSrc(LAST[presetKey],1);$('xp-refc').innerHTML=(['T','R','S','fHeight','fWear'].indexOf(presetKey)>=0?'No reference photo of its own; the nearest panel is shown. ':'Reference '+(presetKey==='N'?'forms N':presetKey==='Lf'?'forms L':'panel '+presetKey)+'. ')+PRESETS[presetKey].name+'.'}
 
@@ -201,7 +208,7 @@ function Explorer(root,REFS){
   /* ---- the spec: copy everything that is on screen as text, load it back from pasted text ---- */
   var SPECT=null;function specTables(){return SPECT||(SPECT={ROWS:ROWS,PANELS:PANELS,rockKeys:Stone.controls.CONTROLS.filter(function(c){return c.stage!=='stone'||c.word==='patch'}).map(function(c){return c.key})})}
   function snapshot(){var off=[];if(!AP.on.band)off.push('band');if(!AP.on.outl)off.push('outl');Stone.controls.STAGES.forEach(function(s){if(RP.off[s.id])off.push(s.id)});
-    return {build:window.BUILD_ID||'dev',preset:presetKey,system:P.system,seed:P.seed,level:stage,mode:mode,target:target,rows:rowsOn,projection:PROJ.persp?'perspective':'orthographic',off:off,solo:SOLO,P:P,FP:FRESH,tier:tier,rock:RP.P,frock:FRESHROCK}}
+    return {build:window.BUILD_ID||'dev',preset:presetKey,system:P.system,seed:P.seed,level:stage,mode:mode,target:target,rows:rowsOn,projection:PROJ.persp?'perspective':'orthographic',off:off,solo:SOLO,P:P,FP:FRESH,tier:tier,rock:RP.P,frock:FRESHROCK,rockPreset:rockPreset}}
   function specOnly(){return Spec.write(snapshot(),specTables())}
   function resultText(){var b=cur,L=[];if(!b)return 'no build yet';var r=b.rep,t=r.time,tr=r.tris;
     if(rockBusy)L.push('status building '+rockProg);else if(!gate)L.push('status '+(stage<2?'no verdict at this level':'measuring'));
@@ -214,7 +221,7 @@ function Explorer(root,REFS){
   function specText(){return specOnly()+'\n\n[result]\n'+resultText()+'\n\n[problems]\n'+((window.__problems&&window.__problems.length)?window.__problems.join('\n'):'none')+'\n'}
   function loadSpec(text){var S=Spec.read(text),h=S.header;if(!h.preset||!PRESETS[h.preset[0]])throw new Error('the spec names no preset this page knows');
     setPreset(h.preset[0]);if(h.system)P.system=h.system[0];if(h.seed)P.seed=+h.seed[0];
-    Object.keys(S.values).forEach(function(k){var f=Spec.get(FRESH,k);if(k==='tier'){tier=S.values[k][0];return}var v=S.values[k];Spec.set(P,k,Array.isArray(f)||(f===undefined&&v.length>1)?v.map(Number):typeof f==='number'||f===undefined?+v[0]:v[0])});
+    if(h.quality)tier=h.quality[0];var rp=S.values['rock.preset']&&S.values['rock.preset'][0];if(rp&&rp!=='none'&&Stone.controls.PRESETS[rp]){rockPreset=rp;RP.P=rockPresetValues(rp);FRESHROCK=JSON.parse(JSON.stringify(RP.P))}Object.keys(S.values).forEach(function(k){if(k==='rock.preset')return;var f=Spec.get(FRESH,k);var v=S.values[k];Spec.set(P,k,Array.isArray(f)||(f===undefined&&v.length>1)?v.map(Number):typeof f==='number'||f===undefined?+v[0]:v[0])});
     Object.keys(S.rock).forEach(function(k){RP.P[k]=+S.rock[k]});
     AP.on={band:1,outl:1};RP.off={};(h.off||[]).forEach(function(id){if(id==='band'||id==='outl')AP.on[id]=0;else RP.off[id]=true});SOLO=(h.solo&&h.solo[0])||'';RP.solo=Stone.controls.STAGES.some(function(s){return s.id===SOLO})?SOLO:'';lastRockSolo=RP.solo;
     if(h.level){stage=+h.level[0];levelManual=true}if(h.view)mode=h.view[0];target=h.target?h.target[0]==='1':false;rowsOn=h.rows?h.rows[0]==='1':false;if(h.projection)PROJ.persp=h.projection[0]!=='orthographic';

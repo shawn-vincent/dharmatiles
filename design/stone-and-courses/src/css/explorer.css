@@ -177,3 +177,7 @@ html.xmaxed{overflow:hidden}
 .xview .xcv .ovl-eyebtn{left:auto;right:156px;top:6px;width:44px;height:44px;margin:0;opacity:1;color:#22304a}
 #ctl-card{z-index:90}
 .sp .info{display:none}
+
+.rpnote{margin:.2rem 0 .5rem;font-size:.78rem;color:var(--muted,#667);line-height:1.35}
+
+#xp-rock .stg .num .cb{display:none}

@@ -26,7 +26,7 @@ function cellOfBlock(g,b,pieces,ctx){
   function roleOf(n,d){for(j=0;j<m;j++){var a=poly[j],c=poly[(j+1)%m],ex=c[0]-a[0],ey=c[1]-a[1],l=Math.hypot(ex,ey)||1,nx=sg*ey/l,ny=-sg*ex/l;
       if(nx*n[0]+ny*n[1]>0.999&&Math.abs(n[0]*a[0]+n[1]*a[1]-d)<0.6)return (b.tags[j]==='n'||b.tags[j]==='m')?'joint':'surface'}return 'surface'}
   /* graded areas (steps 3a and 7a): when a stage that draws an outline is on and changes this stone, its area is that outline's convex parts, each cut by the piece's seams; otherwise the cell, as before */
-  /* tops are free faces (cut like any other); a stone stands on what is left of the tops below it (ctx.seq: courses are built in order and each hands the next its cut tops), cut to that area, or not built when too little is left */
+  /* a top is held (the rock leaves it whole: no cut, chunk or wear takes it) where a stone stands on it, and free (cut like any other) where none does, so the stone above always has the plane it is cut to; a stone stands on what is left of the tops below it (ctx.seq: courses are built in order and each hands the next its cut tops), cut to that area, or not built when too little is left */
   var G0=ctx&&GR.areaOn(ctx.p)?GR.stoneArea(ctx,b,jointSegs):null,parts=[],tops=[];
   if(G0&&G0.dropped)return null;
   pieces.forEach(function(Q){
@@ -38,7 +38,7 @@ function cellOfBlock(g,b,pieces,ctx){
       if(k==='bed'&&n[2]<-0.5&&A>bA){if(bed)planes.push({n:bed.n,d:bed.d});bA=A;bed={n:n,d:d};return}
       if(k==='top'&&n[2]>0.5&&A>tA){if(top)planes.push({n:top.n,d:top.d});tA=A;top={n:n,d:d};return}
       planes.push({n:n,d:d})});
-    var bedO={n:0,v:bed&&{n:bed.n,d:bed.d,seat:b.c===0&&bed.n[2]<-0.999,over:OVL+(ctx&&ctx.seq&&b.c>0&&!ctx.exact?SUPTOL+0.5*(ctx.vox||0):0)}},topO=top&&{n:top.n,d:top.d+(hasAbove?OVL:0),held:false,over:OVL};if(top)tops.push({n:top.n,d:topO.d+dot(top.n,o)});   /* a top is a free face; where a stone stands on it, it still stands OVL further out, so the two overlap and the union has nothing coincident */   // a piece whose bed (or top) is wholly taken by a chamfer has none: the chamfer closes it
+    var bedO={n:0,v:bed&&{n:bed.n,d:bed.d,seat:b.c===0&&bed.n[2]<-0.999,over:OVL+(ctx&&ctx.seq&&b.c>0&&!ctx.exact?SUPTOL+0.5*(ctx.vox||0):0)}},topO=top&&{n:top.n,d:top.d+(hasAbove?OVL:0),held:hasAbove,over:OVL};if(top)tops.push({n:top.n,d:topO.d+dot(top.n,o)});   /* a top is a free face; where a stone stands on it, it still stands OVL further out, so the two overlap and the union has nothing coincident */   // a piece whose bed (or top) is wholly taken by a chamfer has none: the chamfer closes it
     if(G0){G0.parts.forEach(function(pt){var tg=pt.area.map(function(q,i){return {p:q,e:pt.edges[i]==='joint'?'n':pt.edges[i]==='seam'?'s':'g'}}),si;
         for(si=0;si<seams.length&&tg.length>2;si++)tg=clipTagged(tg,seams[si].n,seams[si].d,'s');
         if(tg.length<3)return;var ar=tg.map(function(v){return v.p}),ax=0,ii;for(ii=0;ii<ar.length;ii++){var u1=ar[ii],u2=ar[(ii+1)%ar.length];ax+=u1[0]*u2[1]-u2[0]*u1[1]}if(ax/2<0.05)return;

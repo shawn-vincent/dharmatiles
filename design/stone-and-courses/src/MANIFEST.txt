@@ -22,6 +22,7 @@ src/css/page.css
 src/css/panel.css
 src/data/external.json
 src/data/measured.json
+src/data/rockpresets.json
 src/decisions/entries.html
 src/decisions/verbatim-breaks.html
 src/decisions/verbatim-costs.html

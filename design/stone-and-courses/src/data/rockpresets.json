@@ -1,0 +1,86 @@
+{
+ "wall": {
+  "gate": false,
+  "apart": true,
+  "bodies": 1,
+  "stones": 32,
+  "dropped": 9
+ },
+ "cube": {
+  "gate": true,
+  "apart": true,
+  "bodies": 1,
+  "stones": 0,
+  "dropped": 8
+ },
+ "diag": {
+  "gate": false,
+  "apart": false,
+  "bodies": 4,
+  "stones": 32,
+  "dropped": 8
+ },
+ "vert": {
+  "gate": false,
+  "apart": false,
+  "bodies": 2,
+  "stones": 32,
+  "dropped": 9
+ },
+ "mass": {
+  "gate": false,
+  "apart": false,
+  "bodies": 5,
+  "stones": 32,
+  "dropped": 18
+ },
+ "lay": {
+  "gate": false,
+  "apart": false,
+  "bodies": 1,
+  "stones": 32,
+  "dropped": 12
+ },
+ "blk": {
+  "gate": false,
+  "apart": false,
+  "bodies": 2,
+  "stones": 32,
+  "dropped": 12
+ },
+ "pit": {
+  "gate": false,
+  "apart": false,
+  "bodies": 1,
+  "stones": 32,
+  "dropped": 15
+ },
+ "col": {
+  "gate": false,
+  "apart": false,
+  "bodies": 2,
+  "stones": 32,
+  "dropped": 8
+ },
+ "pln": {
+  "gate": false,
+  "apart": false,
+  "bodies": 1,
+  "stones": 32,
+  "dropped": 9
+ },
+ "one": {
+  "gate": false,
+  "apart": false,
+  "bodies": 2,
+  "stones": 32,
+  "dropped": 8
+ },
+ "starter": {
+  "gate": false,
+  "apart": false,
+  "bodies": 2,
+  "stones": 32,
+  "dropped": 9
+ }
+}
