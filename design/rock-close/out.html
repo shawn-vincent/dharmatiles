@@ -14,28 +14,11 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
 .box>*{position:absolute;inset:0;width:100%;height:100%;max-width:none;display:block}
 .box>img{object-fit:contain}
 .box>canvas{touch-action:none;cursor:grab}
-.box>.ctl{inset:auto 10px 10px 10px;width:auto;height:auto;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px 12px;padding:6px 12px;border-radius:6px;background:rgba(20,22,26,.55);color:#f2f3f5;font:13px/1.2 system-ui,sans-serif}
-.ctl output{min-width:6.4em;text-align:right;font-variant-numeric:tabular-nums}
-/* a slider with one or two handles: a drawn track and fill, the inputs over it showing only their handles */
-.rng{position:relative;height:22px}
-.rng::before,.rng>i{content:"";position:absolute;top:10px;height:2px;border-radius:1px}
-.rng::before{left:0;right:0;background:rgba(255,255,255,.3)}
-.rng>i{background:#9cc3ff}
-.rng input{position:absolute;inset:0;width:100%;height:100%;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
-.rng input::-webkit-slider-runnable-track{background:none;border:0}
-.rng input::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:#9cc3ff;border:0;cursor:pointer}
-.rng input::-moz-range-thumb{pointer-events:auto;width:14px;height:14px;border-radius:50%;background:#9cc3ff;border:0;cursor:pointer}
-.rng input::-moz-range-track{background:none}
-.rng input:focus-visible::-webkit-slider-thumb{outline:2px solid #fff;outline-offset:1px}
-.rng input:focus-visible::-moz-range-thumb{outline:2px solid #fff;outline-offset:1px}
 </style>
 <main>
   <div class="duo">
     <div class="box"><img src="img/block-ref.jpg" alt="The reference block: a smooth pale stone block, about twice as long as it is wide, its faces broken into broad scalloped facets with crisp ridges between them"></div>
-    <div class="box" id="stage"><canvas id="view" aria-label="Our model, drawn anew: the same block with every face broken into shallow dishes between crisp ridges that run over its edges, seen from the reference's camera. Drag to turn, double-click to return."></canvas><div class="ctl">
-      <span id="small-l">small turns</span><div class="rng"><i></i><input type="range" id="small" min="0" max="40" step="1" aria-labelledby="small-l"></div><output id="small-v"></output>
-      <span id="large-l">large turns</span><div class="rng"><i></i><input type="range" id="large" min="0" max="90" step="1" aria-labelledby="large-l"></div><output id="large-v"></output>
-    </div></div>
+    <div class="box" id="stage"><canvas id="view" aria-label="Our model, drawn anew: the same block with every face broken into shallow dishes between crisp ridges that run over its edges, seen from the reference's camera. Drag to turn, double-click to return."></canvas></div>
     <div class="box"><img src="img/block-lines.jpg" alt="The block's plain shape with the ridges traced off the reference drawn on its top, long face and left end as a net of dark lines"></div>
     <div class="box"><img src="img/block-scallop.jpg" alt="The model made from those traced ridges: the block's top, long face and left end scalloped into shallow dishes between the ridges, the block's own edges between those faces gone"></div>
   </div>
@@ -57,8 +40,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     cell: [1.2, 3.2],     /* a dish's half-width, smallest and largest: neighbouring dishes' centres are the sum of theirs apart */
     squash: 1.4,          /* dishes on the sides are this much wider than tall (the picture's are long and low, like courses) */
     stretch: 3,           /* each dish is drawn out along a direction of its own by up to this much, so the cells are uneven */
-    small: { every: [.6, 1.8], turn: 12 },   /* a ridge turns a little often: every so many mm, by up to so many degrees (a slider) */
-    large: { every: [4, 9], turn: 45 },      /* and a lot now and then (a slider) */
+    turns: { every: [.6, 1.8], most: 40 },   /* a ridge turns every so many mm, by up to so many degrees */
     round: 2.4,           /* the block's edges and corners are rounded this much */
     depthPerWidth: 1 / 7.5, deepest: 1.9,    /* a dish is as deep as its width times this, never deeper than that */
     fine: .12,            /* the surface's grid step, where the crests are drawn */
@@ -87,7 +69,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   /* a seeded stream (mulberry32): one for the dishes, one of its own for each ridge */
   const stream = (k) => { let a = k >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 
-  /* ---- made once ---- */
+  /* ---- the surface ---- */
   /* A grid over the six faces at about `step` mm, joined into one closed mesh where faces share an edge (faces that share an edge
      share its count of steps). For each point: where it is on the box (box), on the rounded block (base), the way out there (out),
      its neighbours (packed: nbr from off[k] to off[k + 1]) and, per face, the point at each grid place (ids). */
@@ -149,24 +131,21 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   }
   fine.near = nearest(fine); coarse.near = nearest(coarse);
 
-  /* ---- made on every change ---- */
-  /* The ridge between two dishes is a walk along the even line between them, from its middle outward both ways: straight, but
-     turning a little often (FEEL.small) and a lot now and then (FEEL.large). The small turns mostly steer back toward the even line,
-     the large ones go either way, so a ridge zigzags unevenly without wandering off. Kept as its offset toward the lower-numbered
-     dish, every DT mm along the line. */
+  /* The ridge between two dishes is a walk along the even line between them, from its middle outward both ways: straight runs
+     between turns (FEEL.turns), each turn mostly steering back toward the even line, so a ridge zigzags without wandering off.
+     Kept as its offset toward the lower-numbered dish, every DT mm along the line. */
   const SPAN = 16, DT = .05, NS = Math.round(2 * SPAN / DT) + 1, MID = (NS - 1) / 2, DEG = Math.PI / 180, STEEP = 70 * DEG;
-  let walks = new Map();
+  const walks = new Map();
   function walk(a, b) {
     const key = a * 4096 + b; let w = walks.get(key); if (w) return w;
-    const r = stream(FEEL.seed * 7919 + a * 104729 + b * 1299709), gap = (g) => g.every[0] + (g.every[1] - g.every[0]) * r(), start = (2 * r() - 1) * FEEL.small.turn * DEG;
+    const r = stream(FEEL.seed * 7919 + a * 104729 + b * 1299709), g = FEEL.turns, gap = () => g.every[0] + (g.every[1] - g.every[0]) * r(), start = (2 * r() - 1) * g.most * DEG;
     w = new Float32Array(NS);
-    for (const dir of [1, -1]) { let y = 0, phi = dir * start, small = gap(FEEL.small), large = gap(FEEL.large);
-      const turn = (g, toward) => { const t = g.turn * DEG * (.5 + .5 * r()), back = -Math.atan(y / 4), sign = r() < toward ? Math.sign(back - phi) || 1 : r() < .5 ? -1 : 1;
-        phi += sign * t; if (Math.abs(phi) > STEEP) phi -= 2 * sign * t; phi = Math.max(-STEEP, Math.min(STEEP, phi)); };
+    for (const dir of [1, -1]) { let y = 0, phi = dir * start, next = gap();
       for (let k = 1; k <= MID; k++) {
         y += Math.tan(phi) * DT; w[MID + dir * k] = y;
-        if ((small -= DT) <= 0) { small = gap(FEEL.small); turn(FEEL.small, .6); }
-        if ((large -= DT) <= 0) { large = gap(FEEL.large); turn(FEEL.large, .5); }
+        if ((next -= DT) > 0) continue; next = gap();
+        const t = g.most * DEG * (.5 + .5 * r()), back = -Math.atan(y / 4), sign = r() < .6 ? Math.sign(back - phi) || 1 : r() < .5 ? -1 : 1;
+        phi += sign * t; if (Math.abs(phi) > STEEP) phi -= 2 * sign * t; phi = Math.max(-STEEP, Math.min(STEEP, phi));
       } }
     walks.set(key, w); return w;
   }
@@ -208,7 +187,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
       xyz[3 * k] += 1.8 * (x / m - xyz[3 * k]); xyz[3 * k + 1] += 1.8 * (y / m - xyz[3 * k + 1]); xyz[3 * k + 2] += 1.8 * (z / m - xyz[3 * k + 2]); sag[k] += 1.8 * ((h + 1) / m - sag[k]);
     }
   }
-  /* On every change:
+  /* The surface:
      1. A rough solve on the coarse grid: each point's dish, pinned where it meets another dish, relaxed from the rounded block.
      2. The fine grid: each point's dish; pinned on one side of every ridge (the lower-numbered dish's points that touch another
         dish), so a ridge is a single line; the pinned points on the rounded block, each ridge smoothed along itself so the grid's
@@ -228,7 +207,6 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   /* the whole surface, steps 1 to 3, and the direction each point's dish goes down (the taut skin's way out, read from the coarse
      grid) */
   function shape() {
-    walks = new Map();
     partition(C, cDish, null);
     for (let k = 0; k < C.N; k++) { cPin[k] = 0; for (let e = C.off[k]; e < C.off[k + 1]; e++) if (cDish[C.nbr[e]] !== cDish[k]) { cPin[k] = 1; break; } }
     cXyz.set(C.base); cSag.fill(0); relax(C, cPin, cXyz, cSag, FEEL.sweeps.coarse);
@@ -275,21 +253,9 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   const key = new T.DirectionalLight(0xffffff, .5); key.position.set(-50, -34, 78); key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048); const sc = key.shadow.camera; sc.left = -40; sc.right = 40; sc.top = 40; sc.bottom = -40; sc.near = 10; sc.far = 300; scene.add(key);
   function draw() { renderer.render(scene, cam); }
-  function size() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); draw(); show(); }
+  function size() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); draw(); }
   canvas.addEventListener('dblclick', () => { home(); draw(); });
 
-  /* ---- the sliders: the surface follows as a handle moves (once per frame) ---- */
-  const $ = (id) => document.getElementById(id);
-  const SLIDERS = [
-    { id: 'small', get: () => FEEL.small.turn, set: (v) => { FEEL.small.turn = v; }, say: (v) => 'up to ' + v + '°' },
-    { id: 'large', get: () => FEEL.large.turn, set: (v) => { FEEL.large.turn = v; }, say: (v) => 'up to ' + v + '°' }
-  ];
-  const fill = (el, a, b) => { const i = el.querySelector('i'), inp = el.querySelector('input'), lo = +inp.min, hi = +inp.max, x = (v) => 7 + (v - lo) / (hi - lo) * (el.clientWidth - 14);
-    i.style.left = x(a) + 'px'; i.style.width = Math.max(0, x(b) - x(a)) + 'px'; };
-  function show() { SLIDERS.forEach(c => { const inp = $(c.id), said = c.say(+inp.value); $(c.id + '-v').textContent = said; inp.setAttribute('aria-valuetext', said); fill(inp.parentNode, +inp.min, +inp.value); }); }
-  let queued = false;
-  const again = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; shape(); draw(); }); };
-  SLIDERS.forEach(c => { const inp = $(c.id); inp.value = c.get(); inp.addEventListener('input', () => { c.set(+inp.value); show(); again(); }); });
   shape(); home(); size();
   if ('ResizeObserver' in window) new ResizeObserver(size).observe(stage); else window.addEventListener('resize', size);
 })();
