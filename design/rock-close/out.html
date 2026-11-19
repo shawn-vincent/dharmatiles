@@ -105,7 +105,7 @@ html{scroll-behavior:smooth}
     <label for="width">Flake width</label><input type="range" id="width" min="2" max="5" step="0.05"><output id="width-mm" for="width"></output>
     <label for="depth">Depth</label><input type="range" id="depth" min="0" max="1" step="0.01"><output id="depth-mm" for="depth"></output>
     <p class="fault" id="fault" role="alert" hidden></p>
-    <p class="help">Drag a view to turn it (on a phone, tap it first); click it, then scroll, to zoom; double-click to put it back. Built in <span class="num" id="t-build">–</span>.</p>
+    <p class="help">Drag a view to turn it (on a phone, tap it first); pinch to zoom; double-click to put it back. Built in <span class="num" id="t-build">–</span>.</p>
   </div>
 
   <ol class="steps" aria-label="The steps">
@@ -324,6 +324,10 @@ html{scroll-behavior:smooth}
      own canvas: a page of a dozen views stays within the browser's few WebGL contexts. */
   const R = new T.WebGLRenderer({ antialias: true, alpha: true }), DPR = Math.min(window.devicePixelRatio || 1, 2);
   const LIVE = new T.WebGLRenderer({ antialias: true, alpha: true }); LIVE.setPixelRatio(DPR);
+  /* Scrolling over a view scrolls the page, always; only a pinch zooms it. A trackpad's pinch comes as a wheel with ctrl held, a
+     touch screen's as two fingers, which the controls read themselves. This listener is the canvas's first, so it can keep a plain
+     scroll from them. */
+  LIVE.domElement.addEventListener('wheel', (e) => { if (!e.ctrlKey) e.stopImmediatePropagation(); });
   /* Something that goes wrong drawing is said on the page, where it can be read and sent, not only in the console */
   function report(where, e) {
     const p = document.getElementById('fault'); p.hidden = false;
@@ -655,11 +659,8 @@ html{scroll-behavior:smooth}
       if (active === v) return;
       if (active) { const was = active; active = null; controls.dispose(); controls = null; LIVE.domElement.remove(); paint(was); was.img.hidden = false; }
       active = v; v.img.hidden = true; v.box.appendChild(LIVE.domElement);
-      controls = new T.OrbitControls(v.cam, LIVE.domElement); controls.enablePan = false; controls.enableZoom = false; controls.target.copy(v.target); controls.update();
+      controls = new T.OrbitControls(v.cam, LIVE.domElement); controls.enablePan = false; controls.target.copy(v.target); controls.update();
       controls.addEventListener('change', () => { v.target.copy(controls.target); paint(v); });
-      /* scrolling the page over a view scrolls the page; once a view is clicked, scrolling over it zooms it, until the pointer leaves */
-      LIVE.domElement.onpointerdown = () => { if (controls) controls.enableZoom = true; };
-      LIVE.domElement.onpointerleave = () => { if (controls) controls.enableZoom = false; };
       LIVE.domElement.ondblclick = () => back(v, true);
       paint(v);
     }
