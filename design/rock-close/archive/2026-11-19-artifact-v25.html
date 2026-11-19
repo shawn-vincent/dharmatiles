@@ -1,0 +1,277 @@
+<title>Rock Up Close</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: the reference and our view as two equal squares, side by side on a desk, stacked on a phone. Nothing else on the page. */
+:root{--bg:#eceff2;--rule:#c8cfd8;--stage:#8c8c91;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161b;--rule:#303945;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12161b;--rule:#303945;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.duo{grid-template-columns:1fr}}
+.box{position:relative;aspect-ratio:1/1;width:100%;max-width:100%;border:1px solid var(--rule);background:var(--stage);overflow:hidden}
+.box>*{position:absolute;inset:0;width:100%;height:100%;max-width:none;display:block}
+.box>img{object-fit:contain}
+.box>canvas{touch-action:none;cursor:grab}
+.box>.ctl{inset:auto 10px 10px 10px;width:auto;height:auto;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px 12px;padding:6px 12px;border-radius:6px;background:rgba(20,22,26,.55);color:#f2f3f5;font:13px/1.2 system-ui,sans-serif}
+.ctl output{min-width:6.4em;text-align:right;font-variant-numeric:tabular-nums}
+/* a slider with one or two handles: a drawn track and fill, the inputs over it showing only their handles */
+.rng{position:relative;height:22px}
+.rng::before,.rng>i{content:"";position:absolute;top:10px;height:2px;border-radius:1px}
+.rng::before{left:0;right:0;background:rgba(255,255,255,.3)}
+.rng>i{background:#9cc3ff}
+.rng input{position:absolute;inset:0;width:100%;height:100%;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
+.rng input::-webkit-slider-runnable-track{background:none;border:0}
+.rng input::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:#9cc3ff;border:0;cursor:pointer}
+.rng input::-moz-range-thumb{pointer-events:auto;width:14px;height:14px;border-radius:50%;background:#9cc3ff;border:0;cursor:pointer}
+.rng input::-moz-range-track{background:none}
+.rng input:focus-visible::-webkit-slider-thumb{outline:2px solid #fff;outline-offset:1px}
+.rng input:focus-visible::-moz-range-thumb{outline:2px solid #fff;outline-offset:1px}
+/* the build's progress: a thin line along the top of the view */
+.box>.prog{inset:0 auto auto 0;height:2px;width:0;background:rgba(255,255,255,.75);opacity:0;transition:width .12s linear,opacity .5s}
+.box>.prog.on{opacity:1;transition:width .12s linear,opacity .1s}
+</style>
+<main>
+  <div class="duo">
+    <div class="box"><img src="../img/block-ref.jpg" alt="The reference block: a smooth pale stone block, about twice as long as it is wide, its faces broken into broad scalloped facets with crisp ridges between them"></div>
+    <div class="box" id="stage"><canvas id="view" aria-label="Our model, drawn anew: the same block with every face broken into shallow dishes between crisp ridges that run over its edges, seen from the reference's camera. Drag to turn, double-click to return."></canvas><div class="prog" id="prog"></div><div class="ctl">
+      <span id="small-l">small turns</span><div class="rng"><i></i><input type="range" id="small" min="0" max="40" step="1" aria-labelledby="small-l"></div><output id="small-v"></output>
+      <span id="large-l">large turns</span><div class="rng"><i></i><input type="range" id="large" min="0" max="90" step="1" aria-labelledby="large-l"></div><output id="large-v"></output>
+      <span id="sink-l">ridge sink</span><div class="rng"><i></i><input type="range" id="sink" min="0" max="2" step="0.05" aria-labelledby="sink-l"></div><output id="sink-v"></output>
+      <span id="sharp-l">sharpness</span><div class="rng"><i></i><input type="range" id="sharp" min="0" max="1" step="0.05" aria-labelledby="sharp-l"></div><output id="sharp-v"></output>
+      <span id="stretch-l">stretch</span><div class="rng"><i></i><input type="range" id="stretch" min="1" max="3" step="0.1" aria-labelledby="stretch-l"></div><output id="stretch-v"></output>
+    </div></div>
+    <div class="box"><img src="../img/block-lines.jpg" alt="The block's plain shape with the ridges traced off the reference drawn on its top, long face and left end as a net of dark lines"></div>
+    <div class="box"><img src="../img/block-scallop.jpg" alt="The model made from those traced ridges: the block's top, long face and left end scalloped into shallow dishes between the ridges, the block's own edges between those faces gone"></div>
+  </div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  'use strict';
+  /* The block and the camera were fitted to the reference picture: the block's outline against the rock's outline, and its top
+     corners against the rock's (the picture letterboxed in a square, as it is shown). The block tapers: its right end is wider
+     and taller than its left. Units are mm; z is up, x is the length, the near long face is -y. trace.py holds the same numbers. */
+  const BLOCK = { L: 32.6, left: { W: 14.8, H: 12.25 }, right: { W: 16.9, H: 15.3 } };
+  const CAM = { az: -33.75, el: 22.87, dist: 304.8, fov: 8, target: [-4.3, -6.66, 10.53] };
+  const T = THREE, stage = document.getElementById('stage'), canvas = document.getElementById('view');
+  if (!T) return;
+  const renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+  const scene = new T.Scene(), cam = new T.PerspectiveCamera(CAM.fov, 1, 10, 2000); cam.up.set(0, 0, 1);
+  function home() {
+    const a = CAM.az * Math.PI / 180, e = CAM.el * Math.PI / 180, t = CAM.target;
+    cam.position.set(t[0] + CAM.dist * Math.cos(e) * Math.sin(a), t[1] - CAM.dist * Math.cos(e) * Math.cos(a), t[2] + CAM.dist * Math.sin(e));
+    controls.target.set(t[0], t[1], t[2]); controls.update();
+  }
+  const controls = new T.OrbitControls(cam, canvas); controls.enablePan = false; controls.addEventListener('change', draw);
+  /* The block drawn anew: the same box, every face broken into shallow dishes between crisp ridges, as the model traced off the
+     picture has them, but the ridges made here rather than traced. All in mm at true size. */
+  const FEEL = {
+    seed: 7,
+    cell: [1.2, 3.2],     /* a dish's half-width, smallest and largest: neighbouring dishes' centres are the sum of theirs apart */
+    stretch: 1.8,         /* each dish is drawn out along a direction of its own by up to this much, so the cells are uneven (a slider) */
+    squash: 1.4,          /* dishes on the sides are this much wider than tall (the picture's are long and low, like courses) */
+    small: { every: [.6, 1.8], turn: 12 },   /* a ridge turns a little often: every so many mm, by up to so many degrees (a slider) */
+    large: { every: [4, 9], turn: 45 },      /* and a lot now and then (a slider) */
+    turn: [8, 30],        /* where two runs meet the ridge turns by between these many degrees (a slider) */
+    sink: { most: .5, across: [3, 7] },   /* a ridge's crest sinks by up to `most` mm, rising and falling over this many mm (a slider) */
+    round: 2.4,           /* the block's edges and corners are rounded this much before the ridges are laid on it */
+    grid: .12,            /* the surface's grid step */
+    depthPerWidth: 1 / 7.5, deepest: 1.9,  /* a dish is as deep as its width times this, never deeper than that */
+    sharp: .6             /* 0: a dish's walls curve evenly from crest to bottom; toward 1 they leave the crest steeper and the bottom flatter, so the ridges are sharper (a slider) */
+  };
+  const end = (x, e) => [[x, -e.W / 2, 0], [x, e.W / 2, 0], [x, e.W / 2, e.H], [x, -e.W / 2, e.H]];   /* near bottom, far bottom, far top, near top */
+  const A = end(-BLOCK.L / 2, BLOCK.left), B = end(BLOCK.L / 2, BLOCK.right), mat = new T.MeshStandardMaterial({ color: 0xececee, roughness: 1, metalness: 0 });
+  /* grid counts along the length, the width and the height; faces that share an edge share its count, so their points on it coincide */
+  const NL = Math.round(BLOCK.L / FEEL.grid), NW = Math.round((BLOCK.left.W + BLOCK.right.W) / 2 / FEEL.grid), NH = Math.round((BLOCK.left.H + BLOCK.right.H) / 2 / FEEL.grid);
+  /* the six faces: corners at (a, b) = (0,0) (1,0) (1,1) (0,1), counter-clockwise from outside */
+  const FACES = [
+    { nx: NL, ny: NW, c: [A[3], B[3], B[2], A[2]] },   /* top */
+    { nx: NL, ny: NH, c: [A[0], B[0], B[3], A[3]] },   /* near */
+    { nx: NL, ny: NH, c: [B[1], A[1], A[2], B[2]] },   /* far */
+    { nx: NW, ny: NH, c: [A[1], A[0], A[3], A[2]] },   /* left end */
+    { nx: NW, ny: NH, c: [B[0], B[1], B[2], B[3]] },   /* right end */
+    { nx: NL, ny: NW, c: [A[1], B[1], B[0], A[0]] }    /* bottom */
+  ];
+  const wAt = (a) => BLOCK.left.W + (BLOCK.right.W - BLOCK.left.W) * a, hAt = (a) => BLOCK.left.H + (BLOCK.right.H - BLOCK.left.H) * a;
+  /* the nearest point on the block with its edges and corners rounded by FEEL.round: the nearest point of the block shrunk by
+     the radius, then the radius out from it */
+  const rounded = (p) => { const r = FEEL.round, a = (p[0] + BLOCK.L / 2) / BLOCK.L, hw = wAt(a) / 2, H = hAt(a), cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const q = [cl(p[0], -BLOCK.L / 2 + r, BLOCK.L / 2 - r), cl(p[1], -hw + r, hw - r), cl(p[2], r, H - r)], d = [p[0] - q[0], p[1] - q[1], p[2] - q[2]], l = Math.hypot(d[0], d[1], d[2]) || 1;
+    return [q[0] + d[0] * r / l, q[1] + d[1] * r / l, q[2] + d[2] * r / l]; };
+  const at = (c, a, b) => [0, 1, 2].map(t => (c[0][t] * (1 - a) + c[1][t] * a) * (1 - b) + (c[3][t] * (1 - a) + c[2][t] * a) * b);
+  const sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]], cross = (u, v) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  FACES.forEach(f => { const c = f.c; f.area = (Math.hypot(...cross(sub(c[1], c[0]), sub(c[3], c[0]))) + Math.hypot(...cross(sub(c[1], c[2]), sub(c[3], c[2])))) / 2; });
+  /* the seeded stream: the same seed draws the same block */
+  let st = 0; const rnd = () => { st = (st + 0x6D2B79F5) >>> 0; let t = st; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const total = FACES.reduce((s, f) => s + f.area, 0);
+  const anywhere = () => { let r = rnd() * total, f = FACES[0]; for (const g of FACES) { f = g; if ((r -= g.area) < 0) break; } return at(f.c, rnd(), rnd()); };
+  /* distance as the dishes see it: height counts squash times, so a dish on a side is wider than tall */
+  const md = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], (p[2] - q[2]) * FEEL.squash);
+  /* a stream of its own for each ridge, so a change to one ridge leaves the others as they were */
+  const stream = (k) => { let a = k >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  /* the block's outward direction at a point of the box (across a face, at an edge or a corner, between the faces') */
+  const outward = (p) => { const r = FEEL.round, a = (p[0] + BLOCK.L / 2) / BLOCK.L, hw = wAt(a) / 2, H = hAt(a), cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const d = [p[0] - cl(p[0], -BLOCK.L / 2 + r, BLOCK.L / 2 - r), p[1] - cl(p[1], -hw + r, hw - r), p[2] - cl(p[2], r, H - r)], l = Math.hypot(d[0], d[1], d[2]) || 1; return [d[0] / l, d[1] / l, d[2] / l]; };
+  /* The ridges.
+     1. Dish centres are thrown at random over the whole surface, each with its own half-width, kept only where they clear the ones
+        before them; so the dishes are of mixed sizes and evenly spread. Each is drawn out along a direction of its own, by a
+        stretch of its own, so the cells are uneven and long in different ways.
+     2. The ridge between two dishes is a walk along the even line between them, from its middle outward both ways: straight,
+        but turning a little often (FEEL.small) and a lot now and then (FEEL.large). The small turns mostly steer back toward the
+        even line, the large ones go either way, so a ridge zigzags unevenly without wandering off.
+     3. Every point of the surface belongs to the dish it lies on the near side of every ridge for: of its three nearest dishes,
+        the one that wins against the others. Distances are taken through space, not along the surface, so a dish runs over the
+        block's edges and corners like any other place. */
+  function dishes() {
+    const centres = [];
+    for (let tries = 0; tries < 6000; tries++) { const p = anywhere(), r = FEEL.cell[0] + rnd() * (FEEL.cell[1] - FEEL.cell[0]);
+      if (centres.every(c => md(p, c.p) >= r + c.r)) centres.push({ p: p, r: r, spin: rnd(), pull: rnd() }); }
+    /* each dish's own direction (across the surface where it sits) and how much it is drawn out along it */
+    centres.forEach(c => { const n = outward(c.p), h = Math.abs(n[2]) < .9 ? [0, 0, 1] : [1, 0, 0], e1 = cross(n, h), l1 = Math.hypot(...e1), u = e1.map(v => v / l1), w = cross(n, u), a = c.spin * Math.PI;
+      c.axis = [0, 1, 2].map(t => u[t] * Math.cos(a) + w[t] * Math.sin(a)); c.long = 1 + (FEEL.stretch - 1) * c.pull; });
+    /* how far p is from a dish, in its half-widths: along the dish's direction distance counts less, by its stretch */
+    const reach = (p, c) => { const d = [p[0] - c.p[0], p[1] - c.p[1], (p[2] - c.p[2]) * FEEL.squash], al = d[0] * c.axis[0] + d[1] * c.axis[1] + d[2] * c.axis[2];
+      return Math.sqrt(Math.max(0, d[0] * d[0] + d[1] * d[1] + d[2] * d[2] - al * al) + (al / c.long) ** 2) / c.r; };
+    const SPAN = 16, DT = .05, NS = Math.round(2 * SPAN / DT) + 1, MID = (NS - 1) / 2, deg = Math.PI / 180, steep = 70 * deg;
+    const ridges = new Map();
+    function ridge(a, b) {   /* a < b: the ridge's offset from the even line toward a, along the line */
+      const key = a * 4096 + b; let w = ridges.get(key); if (w) return w;
+      const r = stream(FEEL.seed * 7919 + a * 104729 + b * 1299709); w = new Float32Array(NS);
+      const gap = (g) => g.every[0] + (g.every[1] - g.every[0]) * r(), start = (2 * r() - 1) * FEEL.small.turn * deg;
+      for (const dir of [1, -1]) { let y = 0, phi = dir * start, small = gap(FEEL.small), large = gap(FEEL.large);
+        const turn = (g, toward) => { const t = g.turn * deg * (.5 + .5 * r()), back = -Math.atan(y / 4), sign = r() < toward ? Math.sign(back - phi) || 1 : r() < .5 ? -1 : 1;
+          phi += sign * t; if (Math.abs(phi) > steep) phi -= 2 * sign * t; };
+        for (let k = 1; k <= MID; k++) {
+          y += Math.tan(phi) * DT; w[MID + dir * k] = y;
+          if ((small -= DT) <= 0) { small = gap(FEEL.small); turn(FEEL.small, .6); }   /* small turns: mostly back toward the line */
+          if ((large -= DT) <= 0) { large = gap(FEEL.large); turn(FEEL.large, .5); }   /* large ones: either way */
+        } }
+      ridges.set(key, w); return w;
+    }
+    /* does dish i win against dish j at p (n: the block's outward direction there)? */
+    function beats(p, n, i, j, vi, vj) {
+      const a = Math.min(i, j), b = Math.max(i, j), A = centres[a], B = centres[b], va = i === a ? vi : vj, vb = i === a ? vj : vi;
+      const toA = (vb - va) * (A.r + B.r) / 4, e = sub(B.p, A.p), u = cross(n, e), ul = Math.hypot(u[0], u[1], u[2]) || 1;
+      const t = ((p[0] - (A.p[0] + B.p[0]) / 2) * u[0] + (p[1] - (A.p[1] + B.p[1]) / 2) * u[1] + (p[2] - (A.p[2] + B.p[2]) / 2) * u[2]) / ul;
+      const w = ridge(a, b)[Math.max(0, Math.min(NS - 1, Math.round(MID + t / DT)))], aWins = toA > w;
+      return i === a ? aWins : !aWins;
+    }
+    return (p) => {
+      let i0 = -1, i1 = -1, i2 = -1, v0 = Infinity, v1 = Infinity, v2 = Infinity;
+      for (let k = 0; k < centres.length; k++) { const v = reach(p, centres[k]);
+        if (v < v0) { i2 = i1; v2 = v1; i1 = i0; v1 = v0; i0 = k; v0 = v; } else if (v < v1) { i2 = i1; v2 = v1; i1 = k; v1 = v; } else if (v < v2) { i2 = k; v2 = v; } }
+      const n = outward(p); let win = i0, vw = v0;
+      if (!beats(p, n, win, i1, vw, v1)) { win = i1; vw = v1; }
+      if (!beats(p, n, win, i2, vw, v2)) { win = i2; vw = v2; }
+      return win;
+    };
+  }
+  /* The six faces as one closed skin, their grids joined along the edges they share, laid on the block with its edges rounded.
+     Pinned points: one side of every ridge (the points of the lower-numbered dish that touch another dish), so each ridge is a single line.
+     1. The skin is pulled taut between its pinned points (each free point moves to the mean of its neighbours). Inside one face nothing
+        changes shape; where a dish runs over one of the block's edges or corners, the skin cuts straight across from ridge to ridge,
+        so the block's own edges and corners are gone and the ridges are the only edges left.
+     2. Between ridges the skin then sinks like a membrane pinned along them, so each dish is one smooth hollow, as deep as its width
+        times depthPerWidth.
+     The work is done in slices, handing the page back between them, so the view stays live and the progress line moves; a newer
+     build stops an older one. */
+  const prog = document.getElementById('prog');
+  let current = 0;
+  async function skin(token) {
+    let last = performance.now();
+    const tick = async (f) => { if (performance.now() - last < 40) return; prog.style.width = (100 * f).toFixed(1) + '%'; await new Promise(r => setTimeout(r, 0)); last = performance.now(); if (token !== current) throw 'stale'; };
+    st = FEEL.seed >>> 0;   /* every build draws from the start of the stream, so the dishes stay put while the ridges change */
+    const dishOf = dishes(), ids = new Map(), P = [], nbr = [], tris = [];
+    const node = (p) => { const k = Math.round(p[0] * 500) + ',' + Math.round(p[1] * 500) + ',' + Math.round(p[2] * 500); let v = ids.get(k); if (v === undefined) { v = nbr.length; ids.set(k, v); P.push(p[0], p[1], p[2]); nbr.push([]); } return v; };
+    const link = (a, b) => { if (!nbr[a].includes(b)) { nbr[a].push(b); nbr[b].push(a); } };
+    for (const f of FACES) {
+      const c = f.c, NX = f.nx, NY = f.ny, W = NX + 1, g = new Int32Array(W * (NY + 1));
+      for (let j = 0; j <= NY; j++) for (let i = 0; i <= NX; i++) g[j * W + i] = node(at(c, i / NX, j / NY));
+      for (let j = 0; j <= NY; j++) for (let i = 0; i <= NX; i++) { const k = g[j * W + i]; if (i < NX) link(k, g[j * W + i + 1]); if (j < NY) link(k, g[(j + 1) * W + i]); }
+      for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const k = j * W + i; tris.push(g[k], g[k + 1], g[k + W + 1], g[k], g[k + W + 1], g[k + W]); }
+      await tick(.05 * (FACES.indexOf(f) + 1) / FACES.length);
+    }
+    const N = nbr.length, dish = new Int32Array(N), pinned = new Uint8Array(N);
+    for (let k = 0; k < N; k++) { dish[k] = dishOf([P[3 * k], P[3 * k + 1], P[3 * k + 2]]); if ((k & 4095) === 0) await tick(.05 + .2 * k / N); }
+    for (let k = 0; k < N; k++) for (const m of nbr[k]) if (dish[m] > dish[k]) { pinned[k] = 1; break; }
+    /* every point onto the rounded block, so a ridge that crosses an edge bends over it rather than holding up the box's sharp edge */
+    for (let k = 0; k < N; k++) { const r = rounded([P[3 * k], P[3 * k + 1], P[3 * k + 2]]); P[3 * k] = r[0]; P[3 * k + 1] = r[1]; P[3 * k + 2] = r[2]; }
+    /* each ridge smoothed along itself (its points moved toward their ridge neighbours, then back onto the rounded block), so the
+       grid's staircase does not saw it */
+    for (let it = 0; it < 12; it++) { for (let k = 0; k < N; k++) { if (!pinned[k]) continue; let x = 0, y = 0, z = 0, m = 0;
+      for (const o of nbr[k]) if (pinned[o]) { x += P[3 * o]; y += P[3 * o + 1]; z += P[3 * o + 2]; m++; }
+      if (m < 2) continue; const r = rounded([(P[3 * k] + x / m) / 2, (P[3 * k + 1] + y / m) / 2, (P[3 * k + 2] + z / m) / 2]); P[3 * k] = r[0]; P[3 * k + 1] = r[1]; P[3 * k + 2] = r[2]; }
+      await tick(.25 + .03 * it / 12); }
+    /* the neighbours packed flat, for the two relaxations */
+    const off = new Int32Array(N + 1); for (let k = 0; k < N; k++) off[k + 1] = off[k] + nbr[k].length;
+    const adj = new Int32Array(off[N]); for (let k = 0; k < N; k++) adj.set(nbr[k], off[k]);
+    const free = []; for (let k = 0; k < N; k++) if (!pinned[k]) free.push(k);
+    const pos = new Float32Array(P), h = new Float32Array(N);
+    /* 1. taut between the pinned points */
+    for (let it = 0; it < 400; it++) { for (let q = 0; q < free.length; q++) { const k = free[q], a = off[k], b = off[k + 1], m = b - a; let x = 0, y = 0, z = 0; for (let e = a; e < b; e++) { const o = adj[e] * 3; x += pos[o]; y += pos[o + 1]; z += pos[o + 2]; }
+      const o = k * 3; pos[o] += 1.8 * (x / m - pos[o]); pos[o + 1] += 1.8 * (y / m - pos[o + 1]); pos[o + 2] += 1.8 * (z / m - pos[o + 2]); }
+      await tick(.28 + .36 * it / 400); }
+    /* how far each ridge point sinks: a smooth rise and fall over the block (a few waves of random direction and length, added),
+       spread evenly between the ridges (g), so a crest's sink fades into the slope beside it */
+    const sr = stream(FEEL.seed * 131 + 9), waves = []; for (let i = 0; i < 6; i++) { const z = 2 * sr() - 1, a = 2 * Math.PI * sr(), l = FEEL.sink.across[0] + (FEEL.sink.across[1] - FEEL.sink.across[0]) * sr(), k = 2 * Math.PI / l, c = Math.sqrt(1 - z * z);
+      waves.push([k * c * Math.cos(a), k * c * Math.sin(a), k * z, 2 * Math.PI * sr()]); }
+    const g = new Float32Array(N);
+    for (let k = 0; k < N; k++) if (pinned[k]) { let v = 0; for (const w of waves) v += Math.sin(w[0] * pos[3 * k] + w[1] * pos[3 * k + 1] + w[2] * pos[3 * k + 2] + w[3]); g[k] = FEEL.sink.most * Math.max(0, Math.min(1, .5 + v / 4)); }
+    /* 2. the membrane: h = 0 on the pinned points, the same curvature everywhere else; g relaxed alongside it */
+    for (let it = 0; it < 400; it++) { for (let q = 0; q < free.length; q++) { const k = free[q], a = off[k], b = off[k + 1], m = b - a; let s = 0, t = 0; for (let e = a; e < b; e++) { s += h[adj[e]]; t += g[adj[e]]; } h[k] += 1.86 * ((s + 1) / m - h[k]); g[k] += 1.86 * (t / m - g[k]); }
+      await tick(.64 + .34 * it / 400); }
+    /* each dish: its deepest value says how wide it is (a round dish of radius R reaches R squared / 4, in grid steps) */
+    const cellOf = new Int32Array(N).fill(-1), scale = [], stack = [];
+    for (let q = 0; q < free.length; q++) { const s0 = free[q]; if (cellOf[s0] >= 0) continue; const id = scale.length; let top = 0; stack.push(s0); cellOf[s0] = id;
+      while (stack.length) { const k = stack.pop(); if (h[k] > top) top = h[k]; for (let e = off[k]; e < off[k + 1]; e++) { const m = adj[e]; if (!pinned[m] && cellOf[m] < 0) { cellOf[m] = id; stack.push(m); } } }
+      scale.push(top > 0 ? [Math.min(FEEL.deepest, 4 * Math.sqrt(top) * FEEL.grid * FEEL.depthPerWidth), top] : [0, 1]); }
+    /* a dish's depth at a point: its share of the way down (h over the deepest h), raised to a power below 1 for sharpness */
+    const bow = 1 - .75 * FEEL.sharp, dip = (k) => { const c = scale[cellOf[k]]; return c[0] * Math.pow(Math.max(0, h[k] / c[1]), bow); };
+    const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setIndex(tris); geo.computeVertexNormals();
+    const nor = geo.attributes.normal.array;
+    /* Each point goes down by the deeper of its dish and the sink, blended over a tenth of a mm: a dish keeps its own depth
+       whatever its crests do, and a sunken crest only takes down the slope next to it. The dish along the surface's own normal;
+       the sink along the block's outward direction, which stays true where the ridge smoothing has bunched the grid up */
+    const deeper = (a, b) => (a + b + Math.sqrt((a - b) * (a - b) + .01)) / 2 - .05;
+    for (let k = 0; k < N; k++) { const o = k * 3, d = pinned[k] ? 0 : dip(k), all = Math.max(0, deeper(d, g[k])), n = outward([P[o], P[o + 1], P[o + 2]]), w = all - d;
+      pos[o] -= nor[o] * d + n[0] * w; pos[o + 1] -= nor[o + 1] * d + n[1] * w; pos[o + 2] -= nor[o + 2] * d + n[2] * w; }
+    geo.attributes.position.needsUpdate = true; geo.computeVertexNormals();
+    const m = new T.Mesh(geo, mat); m.castShadow = true; return m;
+  }
+  let block = null;
+  async function rebuild() {
+    const token = ++current, t0 = performance.now(); prog.style.width = '0'; prog.classList.add('on');
+    let m; try { m = await skin(token); } catch (e) { if (e === 'stale') return; throw e; }   /* a newer build took over */
+    if (block) { scene.remove(block); block.geometry.dispose(); } block = m; scene.add(block); draw();
+    prog.style.width = '100%'; prog.classList.remove('on'); window.__built = Math.round(performance.now() - t0);
+  }
+  /* the sliders: each fill drawn between its handles (or from the start to its one handle); a build when a handle is let go */
+  const $ = (id) => document.getElementById(id);
+  const SLIDERS = [
+    { id: 'small', get: () => FEEL.small.turn, set: (v) => { FEEL.small.turn = v; }, say: (v) => 'up to ' + v + '°' },
+    { id: 'large', get: () => FEEL.large.turn, set: (v) => { FEEL.large.turn = v; }, say: (v) => 'up to ' + v + '°' },
+    { id: 'sink', get: () => FEEL.sink.most, set: (v) => { FEEL.sink.most = v; }, say: (v) => 'up to ' + v.toFixed(2) + ' mm' },
+    { id: 'sharp', get: () => FEEL.sharp, set: (v) => { FEEL.sharp = v; }, say: (v) => Math.round(v * 100) + '%' },
+    { id: 'stretch', get: () => FEEL.stretch, set: (v) => { FEEL.stretch = v; }, say: (v) => v.toFixed(1) + '×' }
+  ];
+  const fill = (el, a, b) => { const i = el.querySelector('i'), inp = el.querySelector('input'), lo = +inp.min, hi = +inp.max, at = (v) => 7 + (v - lo) / (hi - lo) * (el.clientWidth - 14);
+    i.style.left = at(a) + 'px'; i.style.width = Math.max(0, at(b) - at(a)) + 'px'; };
+  function show() { SLIDERS.forEach(c => { const inp = $(c.id); $(c.id + '-v').textContent = c.say(+inp.value); fill(inp.parentNode, +inp.min, +inp.value); }); }
+  SLIDERS.forEach(c => { const inp = $(c.id); inp.value = c.get(); inp.addEventListener('input', show); inp.addEventListener('change', () => { c.set(+inp.value); rebuild(); }); });
+  const ground = new T.Mesh(new T.PlaneGeometry(600, 600), new T.ShadowMaterial({ opacity: .2 })); ground.receiveShadow = true; scene.add(ground);
+  /* soft light from above, as in the picture: a bright sky over a dimmer ground, and a lamp high up, to the left and a little in front,
+     so a dish is lit on the side that faces it */
+  scene.add(new T.HemisphereLight(0xffffff, 0x8c8c90, .66));
+  const key = new T.DirectionalLight(0xffffff, .5); key.position.set(-50, -34, 78); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048); const sc = key.shadow.camera; sc.left = -40; sc.right = 40; sc.top = 40; sc.bottom = -40; sc.near = 10; sc.far = 300; key.shadow.radius = 14; scene.add(key);
+  function draw() { renderer.render(scene, cam); }
+  function size() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); draw(); if (typeof show === 'function') show(); }
+  canvas.addEventListener('dblclick', () => { home(); draw(); });
+  home(); size(); show(); rebuild();
+  if ('ResizeObserver' in window) new ResizeObserver(size).observe(stage); else window.addEventListener('resize', size);
+})();
+</script>
