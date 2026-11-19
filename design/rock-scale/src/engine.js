@@ -122,7 +122,7 @@
     const x0 = b.x0, x1 = b.x1, y0 = b.y0, y1 = b.y1, z0 = b.z0, z1 = b.z1, lean = b.lean || {}, pl = [];
     const c = [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2];
     const faces = [['-x', [-1, 0, 0], [x0, c[1], c[2]]], ['+x', [1, 0, 0], [x1, c[1], c[2]]], ['-y', [0, -1, 0], [c[0], y0, c[2]]], ['+y', [0, 1, 0], [c[0], y1, c[2]]], ['-z', [0, 0, -1], [c[0], c[1], z0]], ['+z', [0, 0, 1], [c[0], c[1], z1]]];
-    faces.forEach(f => { const a = lean[f[0]] || 0; pl.push(a ? leaned(f[1], f[2], a * (r() < .5 ? -1 : 1) * (.4 + .6 * r()), r, f[0]) : P(f[1], dot(f[1], f[2]), f[0])); });
+    faces.forEach(f => { const a = lean[f[0]] || 0; if (!a && b.burn && (f[0] in lean)) { for (let q = 0; q < 5; q++) r(); } /* keep the random stream the same when a slider takes a lean to zero */ pl.push(a ? leaned(f[1], f[2], a * (r() < .5 ? -1 : 1) * (.4 + .6 * r()), r, f[0]) : P(f[1], dot(f[1], f[2]), f[0])); });
     return pl;
   }
   /* exact: plane through the points E - c*b (on face a) and E - c*a (on face b) */
@@ -213,7 +213,6 @@
     renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setClearColor(0x000000, 0); return renderer;
   }
-  const RELIEF = { k: 1 };
   function makeView(el, model, opt) {
     opt = opt || {};
     const canvas = el.querySelector('canvas'), ctx = canvas.getContext('2d'), scene = new T.Scene(), cam = new T.PerspectiveCamera(opt.fov || 28, 1, .5, 2000);
@@ -222,13 +221,13 @@
     scene.add(new T.HemisphereLight(0xf3f5fa, 0x7d7f88, opt.hemi == null ? .74 : opt.hemi));
     const key = new T.DirectionalLight(0xffffff, opt.key == null ? .5 : opt.key); scene.add(key); scene.add(key.target);
     const st = { az: opt.az == null ? -28 : opt.az, el: opt.el == null ? 38 : opt.el, d: (opt.dist || 1) * model.radius * 3.35, z: 0, flat: !!opt.flat };
-    const c0 = model.center, relK = opt.relief !== false;
+    let c0 = model.center, cur = model;
     function draw() {
       const r = getRenderer(), w = canvas.clientWidth || 400, h = canvas.clientHeight || 300, dpr = min(window.devicePixelRatio || 1, 2);
       if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
       r.setPixelRatio(1); r.setSize(canvas.width, canvas.height, false); cam.aspect = w / h; cam.updateProjectionMatrix();
       const a = rad(st.az), e = rad(st.el), d = st.d / (st.z || 1);
-      grp.scale.set(1, 1, relK ? RELIEF.k : 1); grp.position.set(0, 0, 0);
+      grp.position.set(0, 0, 0);
       cam.position.set(c0[0] + d * cos(e) * sin(a), c0[1] - d * cos(e) * cos(a), c0[2] * 1 + d * sin(e)); cam.lookAt(c0[0], c0[1], c0[2]);
       /* key light: soft, from the upper left front of the camera, so relief shows */
       const ka = a - rad(55), ke = rad(opt.keyEl || 42); key.position.set(c0[0] + 100 * cos(ke) * sin(ka), c0[1] - 100 * cos(ke) * cos(ka), c0[2] + 100 * sin(ke)); key.target.position.set(c0[0], c0[1], c0[2]);
@@ -244,8 +243,13 @@
     canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
     canvas.addEventListener('dblclick', () => { st.az = opt.az == null ? -28 : opt.az; st.el = opt.el == null ? 38 : opt.el; st.z = 0; ask(); });
     canvas.addEventListener('wheel', e => { if (!e.shiftKey && !e.ctrlKey && !e.altKey) return; e.preventDefault(); st.z = clamp((st.z || 1) * (e.deltaY < 0 ? 1.1 : .9), .5, 4); ask(); }, { passive: false });
-    return { draw: ask, now: draw, st: st };
+    /* swap the model for another one (a slider moved): the camera keeps its angles, and its distance follows the model's size */
+    function setModel(m) {
+      grp.children.slice().forEach(o => { grp.remove(o); if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+      m.meshes.forEach(o => grp.add(o)); st.d *= m.radius / cur.radius; cur = m; c0 = m.center; draw();
+    }
+    return { draw: ask, now: draw, st: st, setModel: setModel };
   }
 
-  G.Eng = { rng, hash2, sstep, lerp, clamp, vnoise, fbm, voronoi, polySD, distPath, distSeg, wander, jag, hfPatch, solidFromPlanes, blockPlanes, chamferExact, cutAt, leaned, P, norm, cross, dot, add, sub, mul, solidsMesh, makeView, RELIEF, rad };
+  G.Eng = { rng, hash2, sstep, lerp, clamp, vnoise, fbm, voronoi, polySD, distPath, distSeg, wander, jag, hfPatch, solidFromPlanes, blockPlanes, chamferExact, cutAt, leaned, P, norm, cross, dot, add, sub, mul, solidsMesh, makeView, rad };
 })(window);

@@ -54,7 +54,7 @@ P.append(prim('planes', 'Planes and facet changes', 'primitive 1 of 9',
    ('this model', '', 'me'),
    ('rule', 'creases wander ±1.6 mm; no two neighbouring planes parallel')],
   img('t_facet', 'Rock sheet, 2. Surface detail: Facet (plane)') + img('f_facet', 'Flat-rock sheet, C: Facet Change'),
-  'Three planes, 2.2° to 3.4°. Relief ×2 (see the switch above).'))
+  'At the flat sheet’s defaults, three planes 2.2° to 3.4°. At these real angles the creases are faint; the plane-change slider makes them plain.'))
 P.append(prim('breaks', 'Breaks and edges', 'primitive 2 of 9',
   'A break is where two planes meet. Its sharpness is a choice made edge by edge: seven in ten are eased, three in ten stay crisp. Sharp everywhere reads as a box, soft everywhere reads as a pebble. Left to right: sharp, crisp (0.45 mm), eased (2.4 mm in three tangent planes), eased with three corner chips.',
   'edges', None,
@@ -62,9 +62,10 @@ P.append(prim('breaks', 'Breaks and edges', 'primitive 2 of 9',
    ('chamfer, rock sheet', '0–2 mm, ×1.4 = 0–2.8 mm'),
    ('edge bevel, N and O sheet', '0.5–2.0 mm, ×1.4 = 0.7–2.8 mm'),
    ('top-front bevel (meso)', '2–6 mm, ×1.4 = 2.8–8.4; our O used 1.6–3.4'),
-   ('mix', '70% soft or worn, 30% crisp')],
+   ('mix', '70% soft or worn, 30% crisp'),
+   ('this model', '', 'me')],
   img('t_edge', 'Rock sheet, 2: Edge (break), 60–110°, chamfer 0–2') + img('t_b', 'Rock sheet, 1B: Breaks (edges)'),
-  'Four blocks, 11 × 11 × 9 mm. Relief switch does not apply.', cls='wide', relief='no', dist='1.2'))
+  'At the defaults, four blocks, 11 × 11 × 9 mm.', cls='wide', dist='1.2'))
 P.append(prim('steps', 'Steps and ledges', 'primitive 3 of 9',
   'Offsets and ledges come from fracture layers. A ledge is a tread (nearly level, tilted back a few degrees) and a riser (steep). The lip is never a straight line. Ledges give the silhouette its rhythm and give a base wide enough to stand on.',
   'steps', 'steps',
@@ -73,7 +74,7 @@ P.append(prim('steps', 'Steps and ledges', 'primitive 3 of 9',
    ('risers / treads', '70–90° / 0–10° (family guide)'),
    ('this model', '', 'me')],
   img('t_step', 'Rock sheet, 2: Step (ledge)') + img('t_c', 'Rock sheet, 1C: Steps (terraces)'),
-  'Three risers of about 3 mm; the flat treads, about 8 mm deep, tilt back 3°. Drawn at true height: the relief switch does not apply.', relief='no'))
+  'At the rock sheet’s defaults, three risers of about 3 mm; the flat treads, about 8 mm deep, tilt back 3°.'))
 P.append(prim('chips', 'Chips and notches', 'primitive 4 of 9',
   'A chip is a removal: a flat floor, a steep wall, an outline made of straight runs. It is one plane cut into the surface, so it stays one piece. Chips sit on exposed edges and corners far more than on faces.',
   'chip', 'chip',
@@ -82,7 +83,7 @@ P.append(prim('chips', 'Chips and notches', 'primitive 4 of 9',
    ('our corner chip', '0.12–0.3 of the piece’s narrow side, on 30% of top corners, 0–2 per block'),
    ('this model', '', 'me')],
   img('f_chip', 'Flat-rock sheet, C: Chip / Flake') + img('t_chip', 'Rock sheet, 2: Chip (notch)'),
-  'A chip 11 × 8 mm with a floor tilted 3° and a wall of 55°, and a second small one.'))
+  'At the flat sheet’s defaults, a chip 11 × 8 mm with a floor tilted 3.4° and a wall of 45°, and a second small one.'))
 P.append(prim('dishes', 'Dishes', 'primitive 5a of 9',
   'A dish is a shallow, broad, irregular scoop. It must not be round or evenly spaced; Shawn found the explorer’s round pockets “not quite organic and irregular enough”. This one is elliptical, turned off the grid, deeper on one side, with a rim that wanders.',
   'dish', 'dish',
@@ -90,7 +91,7 @@ P.append(prim('dishes', 'Dishes', 'primitive 5a of 9',
    ('rock sheet ×1.4', 'depth 0.7–7, width 4–35, depth to width 1:6 to 1:10'),
    ('this model', '', 'me')],
   img('f_dish', 'Flat-rock sheet, C: Shallow Dish / Scoop') + img('t_dish', 'Rock sheet, 2: Dish (depression)'),
-  'One elliptical dish, 25 × 16 mm.'))
+  'At the flat sheet’s defaults, one elliptical dish, 25 × 16 mm.'))
 P.append(prim('pits', 'Pits', 'primitive 5b of 9',
   'Pits are small, clustered, uneven in size. A lattice of identical pits is the mistake the sheets warn about (“avoid uniform pitting”). Nothing under 0.4 mm is printed, whatever the scale.',
   'pits', 'pits',
@@ -99,7 +100,7 @@ P.append(prim('pits', 'Pits', 'primitive 5b of 9',
    ('share of a face', 'one patch in three or four, never the whole face'),
    ('this model', '', 'me')],
   img('f_pit', 'Flat-rock sheet, C: Pitting') + img('t_e', 'Rock sheet, 1E: Pits (dishes)'),
-  '65 pits in three clusters, diameter 0.8 to 2.8 mm.'))
+  'At the flat sheet’s defaults, pits in three clusters, diameter 0.8 to 2.8 mm.'))
 P.append(prim('ridges', 'Ridges and swells', 'primitive 6 of 9',
   'A ridge is a raised band (a vein, a weathering line, a fracture pillar). Its crest is rounded or angular, and it fades out instead of ending in a cap. A swell is the same idea broad and round.',
   'ridge', 'ridge',
@@ -107,7 +108,7 @@ P.append(prim('ridges', 'Ridges and swells', 'primitive 6 of 9',
    ('rock sheet ×1.4', 'height 1.4–8.4, width 4.2–28'),
    ('this model', '', 'me')],
   img('f_ridge', 'Flat-rock sheet, C: Low Ridge / Swell') + img('t_ridge', 'Rock sheet, 2: Ridge'),
-  'An angular ridge that fades, and a round swell.'))
+  'At the flat sheet’s defaults, an angular ridge that fades, and a round swell.'))
 P.append(prim('cracks', 'Cracks and fissures', 'primitive 7 of 9',
   'A crack is a narrow groove that wanders and stops. It stops because it lives inside one block (persistence). A hairline of 0.1 mm cannot be printed, so a crack is at least 0.4 mm wide and reads by its dark shadow, with a small step across it where one side sits a little proud.',
   'crack', 'crack',
@@ -115,7 +116,7 @@ P.append(prim('cracks', 'Cracks and fissures', 'primitive 7 of 9',
    ('persistence', 'a crack ends inside a block; it never crosses a joint of the level above'),
    ('this model', '', 'me')],
   img('f_crack', 'Flat-rock sheet, C: Crack / Fissure') + img('f_close', 'Flat-rock sheet, B: the close-up, hairline crack at right'),
-  'A crack 0.7 mm wide, 1 mm deep, with a branch and a small step.'))
+  'At the defaults, a crack 0.7 mm wide, 1 mm deep, with a branch and a small step.'))
 P.append(prim('undulation', 'Undulation', 'primitive 8 of 9',
   'Undulation is the lowest, broadest relief: no feature in it stands out, and it is what stops a flat from looking machined. It is the macro layer of the flat-rock sheet.',
   'undul', 'undul',
@@ -123,7 +124,7 @@ P.append(prim('undulation', 'Undulation', 'primitive 8 of 9',
    ('total relief of a flat', '1.4–2.8 mm peak to low (to 4.2)'),
    ('this model', '', 'me')],
   img('f_profile', 'Flat-rock sheet, D: surface profile') + img('f_multi', 'Flat-rock sheet, F: macro, meso, micro'),
-  'Value noise, wavelength 20 mm, relief about 2 mm.'))
+  'At the defaults, value noise, wavelength 20 mm, relief about 2 mm.'))
 P.append(prim('grain', 'Grain and striation', 'primitive 9 of 9',
   'Grain is the finest layer. It is stretched along the bedding (striations follow the slab), and it is the last thing added, because it is only worth anything under strong detail. Below 0.4 mm the printer will not follow.',
   'grain', 'grain',
@@ -132,7 +133,7 @@ P.append(prim('grain', 'Grain and striation', 'primitive 9 of 9',
    ('share of the read', '5–10% (family guide)'),
    ('this model', '', 'me')],
   img('t_f', 'Rock sheet, 1F and the micro layer') + img('ap_tex', 'Family guide, 7: texture language (striated slabs)'),
-  'Striations at 14° and a fine grain, 20 × 20 mm.'))
+  'At the flat sheet’s defaults, striations at 14° and a fine grain, 20 × 20 mm.'))
 
 # ---------------------------------------------------------------- forms
 FORMS = [

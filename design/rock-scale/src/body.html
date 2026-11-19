@@ -2,14 +2,11 @@
   <div class="kick">Reference and specification &middot; 35 mm square</div>
   <h1>Rock at Every Scale</h1>
   <p class="lede">What makes a block of resin read as rock, from the silhouette down to the grain, with the numbers to build it. Nine primitives, the logic that assembles them, the mistakes of about twenty-five rounds on Walls N and O, and a recipe for building a wall from nothing.</p>
-  <p class="small">Every model on this page is built by code on the page (a heightfield or a set of half-spaces; three.js only draws it). Drag a model to turn it. Numbers are in mm at the 35 mm square; the generated sheets are drawn at 25 mm, so their millimetres are multiplied by 1.4 and their ratios kept. Sheet numbers are guidance, not measurements. Where a sheet and the unpainted photos disagree, the photos win, and the page says so.</p>
+  <p class="small">Every model on this page is built by code on the page (a heightfield or a set of half-spaces; three.js only draws it). Drag a model to turn it; move its sliders to change it. Numbers are in mm at the 35 mm square; the generated sheets are drawn at 25 mm, so their millimetres are multiplied by 1.4 and their ratios kept. Sheet numbers are guidance, not measurements. Where a sheet and the unpainted photos disagree, the photos win, and the page says so.</p>
 </header>
 <nav class="bar" aria-label="Sections">
   <div class="links">
     <a href="#scale">Scales</a><a href="#primitives">Primitives</a><a href="#formation">Formation</a><a href="#edges">Edges</a><a href="#patterns">Patterns</a><a href="#lessons">Lessons</a><a href="#recipe">Recipe</a><a href="#rebuild">Rebuild</a><a href="#language">Language</a>
-  </div>
-  <div class="relief" role="group" aria-label="Vertical relief of the surface models">relief
-    <button type="button" data-k="1" aria-pressed="false">true</button><button type="button" data-k="2" aria-pressed="true">&times;2</button><button type="button" data-k="3" aria-pressed="false">&times;3</button>
   </div>
 </nav>
 
@@ -56,11 +53,11 @@
 <section id="primitives">
   <div class="eyebrow">2 &middot; The primitives, one by one</div>
   <h2>Nine building blocks</h2>
-  <p>Each row is a model built for this page (left), a section cut through the same height function with its measurements (middle), the numbers at 35 mm, and the sheet panel it matches (right). The section is stretched vertically so the shape shows; its horizontal scale is true. All models are solid and closed.</p>
+  <p>Each row is a model built for this page (left), a section cut through the same height function with its measurements (middle), the numbers at 35 mm, and the sheet panel it matches (right). The section is drawn at true scale in both directions. Every model has sliders that run through the ranges beside it; where the flat-rock sheet and the rock sheet (or the rock sheet and the N and O sheets) give different ranges, a switch above the model chooses the sheet, and each sheet has its own model and defaults. All models are solid and closed.</p>
   {{PRIMS}}
   <div class="note warn"><b class="t">How well the models match their panels</b>
   <b>Close:</b> dish, pits, ridge, chip, crack, steps and the eight forms read the same as their sheet panels in kind, size and proportion (pits are a little small and shallow against the sheet&rsquo;s, whose rims are raised).
-  <b>Partial:</b> the facet change (the true angles are 1&ndash;5&deg;, so the crease shows only at relief &times;2 or more) and the blocks (eased edges, chips, courses), which are planar and clean where the photos are hewn: they carry planes, chamfers, bends and chips but not the photos&rsquo; fine broken facets. The shingled slabs read as shingles but are shorter and fatter than the photo&rsquo;s long blades. Skin and levels illustrate the idea; they do not try to look like the photos.
+  <b>Partial:</b> the facet change (the true angles are 1&ndash;5&deg;, so at the real angles the crease is faint) and the blocks (eased edges, chips, courses), which are planar and clean where the photos are hewn: they carry planes, chamfers, bends and chips but not the photos&rsquo; fine broken facets. The shingled slabs read as shingles but are shorter and fatter than the photo&rsquo;s long blades. Skin and levels illustrate the idea; they do not try to look like the photos.
   <b>Not matched:</b> the photographic roughness of the sheets&rsquo; close-ups, which a printed surface cannot carry (nothing under 0.4 mm).</div>
 </section>
 
@@ -104,11 +101,11 @@
   <p>The references are one body of rock that has broken along a few directions at several sizes, not pieces set side by side. A level is the same cutting again inside each cell of the level above. Only the face moves, so the mass stays one body: a piece moves its own share of the free face (set back and turned) and the rock behind stays whole. O calls it a skin over a core, N a riser against the rock behind.</p>
   <div class="cols2">
     <div>
-      <figure class="v3d" data-model="levels" data-az="-18" data-el="48"><canvas aria-label="3D model: three levels of cells"></canvas><figcaption>Three levels on one slab, 34 &times; 34 mm. No gaps; the base is shared.</figcaption></figure>
+      <figure class="v3d" data-model="levels" data-az="-18" data-el="48"><canvas aria-label="3D model: three levels of cells"></canvas><figcaption>Three levels on one slab, 34 &times; 34 mm, at the defaults. No gaps; the base is shared.</figcaption></figure>
       <div data-diagram="levels" style="margin-top:10px"></div>
     </div>
     <div>
-      <figure class="v3d" data-model="skin"><canvas aria-label="3D model: a block with a broken skin, cut away"></canvas><figcaption>A block 26 &times; 17 mm, cut away at the middle: the front skin in pieces over a darker core.</figcaption></figure>
+      <figure class="v3d" data-model="skin"><canvas aria-label="3D model: a block with a broken skin, cut away"></canvas><figcaption>A block 26 &times; 17 mm at the defaults, cut away at the middle: the front skin in pieces over a darker core.</figcaption></figure>
       <div data-diagram="skin" style="margin-top:10px"></div>
     </div>
   </div>
@@ -122,7 +119,7 @@
   <h3 style="margin-top:34px">Layering and shingling (N)</h3>
   <p>N is a ramp of long thin slabs bedded about 40&deg;, rising to the back right. The free face is the bed plane. Slabs are thin (2&ndash;5 mm) and recede inward by their own thickness, and each slab ends at its own line a drawn distance back, so the steps are the slab edges. The cross cut leans, but not far.</p>
   <div class="cols2">
-    <figure class="v3d" data-model="shingle"><canvas aria-label="3D model: shingled slabs"></canvas><figcaption>Five slabs on a 50&deg; bed plane, ten prisms, over one darker core.</figcaption></figure>
+    <figure class="v3d" data-model="shingle"><canvas aria-label="3D model: shingled slabs"></canvas><figcaption>At the defaults: six slabs on a 50&deg; bed plane, twelve prisms, over one darker core.</figcaption></figure>
     <div data-diagram="secN"></div>
   </div>
   <div class="cols3" style="margin-top:12px">{{N_CROPS}}</div>
@@ -130,7 +127,7 @@
   <h3 style="margin-top:34px">Stacked blocks, caps, shelves and tiers (O)</h3>
   <p>O is a stack of mostly vertical blocks on level beds. Three courses (the photo; the sheet says four of about .26 H). Each block is pushed back by its own amount, so the face steps in and out; one cell is recessed deep and the one above it is set forward, which makes the overhang. Small cap blocks on the top course break the skyline.</p>
   <div class="cols2">
-    <figure class="v3d" data-model="courses"><canvas aria-label="3D model: two courses with an overhang"></canvas><figcaption>Two courses, six blocks, one recess (7 mm) and the course above set forward (2&ndash;3 mm).</figcaption></figure>
+    <figure class="v3d" data-model="courses"><canvas aria-label="3D model: two courses with an overhang"></canvas><figcaption>At the defaults: two courses, six blocks, one recess (7 mm) and the course above set forward (2&ndash;3 mm).</figcaption></figure>
     <div data-diagram="secO"></div>
   </div>
   <div class="cols3" style="margin-top:12px">{{O_CROPS}}</div>
@@ -146,7 +143,7 @@
   <p>Vary edge sharpness: 70% soft or worn, 30% crisp (flat sheet, I). Eased edges and chips at corners and edges matter most; Shawn on our rounds: &ldquo;our corner chipping has good value here&rdquo;. A chamfer of 1 to 2 mm at the scale of a wall is the usual size, with a larger bevel of 1.6 to 3.4 mm along the top-front edge of most blocks.</p>
   <div class="cols2">
     <div data-diagram="edges"></div>
-    <figure class="v3d" data-model="chipped" data-relief="no"><canvas aria-label="3D model: a block with eased edges and chips"></canvas><figcaption>One block, 18 &times; 14 &times; 13 mm: faces leaning 1.5&ndash;4&deg;, top edges eased, a top-front bevel of 3 mm, a side bevel, three corner chips.</figcaption></figure>
+    <figure class="v3d" data-model="chipped"><canvas aria-label="3D model: a block with eased edges and chips"></canvas><figcaption>One block, 18 &times; 14 &times; 13 mm: at the defaults: faces leaning 1.5&ndash;4&deg;, top edges eased, a top-front bevel of 3 mm, a side bevel, three corner chips.</figcaption></figure>
   </div>
   <dl class="nums" style="max-width:820px">
     <dt>Soft edge</dt><dd>0.7&ndash;2.8 mm eased (3 tangent planes make a round with no new vertex count to speak of); the top-front edge 1.6&ndash;3.4</dd>

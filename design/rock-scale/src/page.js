@@ -6,29 +6,86 @@
   const f1 = (x) => (Math.round(x * 10) / 10).toString();
   const f2 = (x) => (Math.round(x * 100) / 100).toString();
 
-  /* ---------- 3D views, on demand ---------- */
+  /* ---------- 3D views, on demand, with the sliders of each model ---------- */
   const views = [];
+  const SPEC = window.SPEC || {};
+  const digits = (step) => step >= 1 ? 0 : step >= .1 ? 1 : step >= .01 ? 2 : 3;
+  const fmt = (v, s) => (+v).toFixed(digits(s.step)) + (s.unit && s.unit !== '1 :' ? (s.unit === '°' || s.unit === '×' ? s.unit : ' ' + s.unit) : '');
+  const params = (st) => Object.assign({}, st.spec[st.vi].fix, st.vals[st.vi]);
+  function h(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  /* the controls of one model: a sheet switch above the view (when the page's sheets give two ranges), and one slider per number under it */
+  function setupCtl(el) {
+    const name = el.dataset.model, spec = SPEC[name]; if (!spec) return;
+    const st = { name: name, spec: spec, vi: 0, vals: spec.map(v => { const o = {}; v.sl.forEach(s => { o[s.k] = s.def; }); return o; }), dirty: false, slow: false, t: 0 };
+    el._st = st;
+    const wrap = h('div', 'vw'); el.replaceWith(wrap);
+    if (spec.length > 1) {
+      const sw = h('div', 'seg'); sw.setAttribute('role', 'group'); sw.setAttribute('aria-label', 'Sheet whose ranges and defaults the model uses'); sw.appendChild(h('span', '', 'sheet'));
+      spec.forEach((v, i) => { const b = h('button', '', v.label); b.type = 'button'; b.setAttribute('aria-pressed', String(i === 0)); b.addEventListener('click', () => { st.vi = i; [].forEach.call(sw.querySelectorAll('button'), (x, j) => x.setAttribute('aria-pressed', String(j === i))); draw(); change(el); }); sw.appendChild(b); });
+      wrap.appendChild(sw);
+    }
+    wrap.appendChild(el);
+    const ctl = h('div', 'ctl'), grid = h('div', 'ctl-g'), head = h('div', 'ctl-h'); head.appendChild(h('span', '', 'parameters'));
+    const rs = h('button', 'ctl-reset', 'reset'); rs.type = 'button'; rs.addEventListener('click', () => { st.vals[st.vi] = {}; st.spec[st.vi].sl.forEach(s => { st.vals[st.vi][s.k] = s.def; }); draw(); change(el); }); head.appendChild(rs);
+    ctl.appendChild(head); ctl.appendChild(grid); wrap.appendChild(ctl);
+    function draw() {
+      grid.textContent = '';
+      st.spec[st.vi].sl.forEach(s => {
+        const id = 'sl-' + name + '-' + st.vi + '-' + s.k, row = h('div', 'ctl-r'), lab = h('label'), out = h('output'), inp = h('input');
+        lab.htmlFor = id; lab.appendChild(h('span', 'k', s.label)); out.id = id + '-o'; out.textContent = fmt(st.vals[st.vi][s.k], s); lab.appendChild(out);
+        inp.type = 'range'; inp.id = id; inp.min = s.min; inp.max = s.max; inp.step = s.step; inp.value = st.vals[st.vi][s.k]; inp.setAttribute('aria-describedby', id + '-o');
+        const rg = h('div', 'rg'); rg.appendChild(h('span', '', fmt(s.min, s))); rg.appendChild(h('span', '', fmt(s.max, s)));
+        inp.addEventListener('input', () => {
+          st.vals[st.vi][s.k] = +inp.value; out.textContent = fmt(inp.value, s); st.dirty = true;
+          if (!st.slow) { clearTimeout(st.t); st.t = setTimeout(() => change(el), 40); }
+        });
+        inp.addEventListener('change', () => { clearTimeout(st.t); if (st.dirty) change(el); });
+        row.appendChild(lab); row.appendChild(inp); row.appendChild(rg); grid.appendChild(row);
+      });
+    }
+    draw();
+  }
+  /* a slider moved, or the sheet changed: build the model again from the same parameters, and the section beside it */
+  function change(el) {
+    const st = el._st; st.dirty = false; if (!el._v) { showMe(el); return; }
+    const t0 = performance.now(), cap = el.querySelector('figcaption');
+    try { el._v.setModel(window.MODELS[st.name](params(st))); cap.textContent = captionFor(el); } catch (e) { cap.textContent = 'model failed: ' + e.message; console.error(st.name, e); }
+    st.slow = performance.now() - t0 > 150;   /* a slow model rebuilds when the slider is released, not while it moves */
+    profiles(el); showMe(el);
+  }
+  /* the printed caption describes the first sheet at its defaults; say so only while that is what is shown */
+  function atDefaults(st) { return st.spec[st.vi].sl.every(s => +st.vals[st.vi][s.k] === s.def); }
+  function captionFor(el) {
+    const st = el._st, v = st.spec[st.vi].label;
+    if (st.vi === 0 && atDefaults(st)) return el._cap;
+    return (v ? v.charAt(0).toUpperCase() + v.slice(1) + ', ' : 'Model, ') + (atDefaults(st) ? 'at its defaults.' : 'your settings (reset returns the defaults).');
+  }
+  function profiles(el) { const st = el._st, art = el.closest('.prim'), host = art && art.querySelector('[data-prof="' + st.name + '"]'); if (host && window.PROFILES[st.name]) el._facts = profile(host, params(st)); }
+  function showMe(el) {
+    const st = el._st, art = el.closest('.prim'), me = art && art.querySelector('.me'); if (!me) return;
+    const p = params(st), sum = st.spec[st.vi].sl.map(s => s.label + ' ' + fmt(p[s.k], s)).join(', '), v = st.spec[st.vi].label;
+    me.textContent = (v ? v + ': ' : '') + (el._facts || sum);
+  }
   function mount(el) {
     if (el._v) return;
-    const name = el.dataset.model, mk = window.MODELS[name];
-    if (!mk) { el.querySelector('figcaption').textContent = 'no model ' + name; return; }
-    let m;
-    try { m = mk(); } catch (e) { el.querySelector('figcaption').textContent = 'model failed: ' + e.message; console.error(name, e); return; }
+    const name = el.dataset.model, mk = window.MODELS[name], cap = el.querySelector('figcaption');
+    if (!mk) { cap.textContent = 'no model ' + name; return; }
+    el._cap = cap.textContent; let m;
+    try { m = mk(el._st ? params(el._st) : undefined); } catch (e) { cap.textContent = 'model failed: ' + e.message; console.error(name, e); return; }
     const c = mk.cam || {};
-    const v = Eng.makeView(el, m, { az: el.dataset.az != null ? +el.dataset.az : (c.az != null ? c.az : -28), el: el.dataset.el != null ? +el.dataset.el : (c.el != null ? c.el : 36), dist: el.dataset.dist != null ? +el.dataset.dist : (c.dist != null ? c.dist : 1), relief: el.dataset.relief !== 'no' && !mk.noRelief });
+    const v = Eng.makeView(el, m, { az: el.dataset.az != null ? +el.dataset.az : (c.az != null ? c.az : -28), el: el.dataset.el != null ? +el.dataset.el : (c.el != null ? c.el : 36), dist: el.dataset.dist != null ? +el.dataset.dist : (c.dist != null ? c.dist : 1) });
     el._v = v; views.push(v); v.now();
+    if (el._st) { cap.textContent = captionFor(el); profiles(el); showMe(el); }
   }
   function setupViews() {
     const els = [].slice.call(document.querySelectorAll('.v3d'));
+    els.forEach(setupCtl);
     if (!window.THREE || !window.MODELS) { els.forEach(e => { e.querySelector('figcaption').textContent = '3D needs three.js (blocked or offline)'; }); return; }
     if ('IntersectionObserver' in window) {
       const io = new IntersectionObserver((es) => { es.forEach(en => { if (en.isIntersecting) { io.unobserve(en.target); setTimeout(() => mount(en.target), 0); } }); }, { rootMargin: '400px 0px' });
       els.forEach(e => io.observe(e));
     } else els.forEach(mount);
     window.addEventListener('resize', () => { views.forEach(v => v.draw()); });
-    const bs = [].slice.call(document.querySelectorAll('.relief button'));
-    bs.forEach(b => b.addEventListener('click', () => { Eng.RELIEF.k = +b.dataset.k; bs.forEach(x => x.setAttribute('aria-pressed', String(x === b))); views.forEach(v => v.now()); }));
-    Eng.RELIEF.k = 2;
   }
 
   /* ---------- section profiles ---------- */
@@ -36,13 +93,13 @@
   function median(a) { const b = a.slice().sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; }
   function pct(a, q) { const b = a.slice().sort((x, y) => x - y); return b[Math.floor((b.length - 1) * q)]; }
   function el(tag, attrs, txt) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; return e; }
-  function profile(host) {
-    const id = host.dataset.prof, P = window.PROFILES[id]; if (!P) return;
+  function profile(host, p) {
+    host.textContent = '';
+    const id = host.dataset.prof, P = window.PROFILES[id](p);
     const n = 420, xs = [], ys = []; for (let i = 0; i <= n; i++) { const x = P.w * i / n; xs.push(x); ys.push(P.fn(x)); }
-    const W = 380, L = 34, R = 14, T = 34, sx = (W - L - R) / P.w;
+    const W = 380, L = 34, R = 14, T = 44, sx = (W - L - R) / P.w;
     const ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
-    let vex = P.vex; const maxpx = 96; if ((ymax - ymin) * sx * vex > maxpx) vex = maxpx / ((ymax - ymin) * sx);
-    const sy = sx * vex, hpx = (ymax - ymin) * sy, base = 16, H = T + hpx + base + 36;
+    const sy = sx, hpx = (ymax - ymin) * sy, base = 16, H = T + hpx + base + 36;
     const X = (x) => L + x * sx, Y = (y) => T + (ymax - y) * sy;
     const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + Math.round(H), class: 'prof', role: 'img', 'aria-label': 'Section profile of the ' + id + ' model' });
     /* scale bar and ground */
@@ -62,29 +119,29 @@
       dimV(xs[im], med, ys[im], f2(pk) + ' mm ' + (kind === 'dip' ? 'deep' : 'high'), 'r');
       facts = (kind === 'dip' ? 'depth ' : 'height ') + f2(pk) + ' mm, width ' + f1(wmm) + ' mm';
     } else if (kind === 'dips') {
-      facts = 'diameter 0.8 to 2.8 mm, depth 0.15 to 0.8 mm';
+      facts = (P.count || 0) + ' pits, ' + f1(p.dmin) + ' to ' + f1(Math.max(p.dmin, p.dmax)) + ' mm across, up to ' + f2(p.depth) + ' mm deep';
       const rel = ys.map(y => med - y); let k = 0; for (let i = 1; i < n && k < 2; i++) if (rel[i] > .12 && rel[i - 1] <= .12) { let j = i; while (j < n && rel[j] > .12) j++; const pk = Math.max.apply(null, rel.slice(i, j)); dimH(xs[i], xs[j], Y(med) - 6 - k * 0, f1(xs[j] - xs[i]) + ' mm'); k++; i = j; }
     } else if (kind === 'steps') {
       const dy = ys.map((y, i) => i ? (y - ys[i - 1]) : 0); let ris = [], i = 0; while (i < n) { if (dy[i] > .03) { let j = i; let tot = 0; while (j < n && dy[j] > .03) { tot += dy[j]; j++; } ris.push({ x: xs[i], x1: xs[j], h: tot, y0: ys[i - 1], y1: ys[j] }); i = j; } else i++; }
       ris.forEach((r, k) => { dimV(r.x1 + .8, r.y0, r.y0 + r.h, f1(r.h) + ' mm', 'r'); if (k < ris.length - 1) dimH(r.x1, ris[k + 1].x, Y(ymax) - 10 - (ris.length - 1 - k) * 0 + 0, f1(ris[k + 1].x - r.x1) + ' mm tread'); });
       facts = 'risers ' + f1(ris.reduce((a, r) => a + r.h, 0) / Math.max(1, ris.length)) + ' mm, treads about ' + f1(ris.length > 1 ? ris[1].x - ris[0].x1 : 0) + ' mm';
     } else if (kind === 'crease') {
-      const im = ys.indexOf(ymax), sl = (ys[im - 40] - ys[im - 60]) / (xs[im - 40] - xs[im - 60]), sr = (ys[im + 60] - ys[im + 40]) / (xs[im + 60] - xs[im + 40]);
+      const im = ys.indexOf(ymax), ci = (i) => Math.min(n, Math.max(0, i)), sl = (ys[ci(im - 40)] - ys[ci(im - 60)]) / ((xs[ci(im - 40)] - xs[ci(im - 60)]) || 1), sr = (ys[ci(im + 60)] - ys[ci(im + 40)]) / ((xs[ci(im + 60)] - xs[ci(im + 40)]) || 1);
       const ang = Math.atan(sl) * 180 / Math.PI + Math.atan(-sr) * 180 / Math.PI;
-      svg.appendChild(el('text', { x: X(xs[im]) + 8, y: Y(ymax) - 6, class: 'dimtxt' }, 'crease, planes differ by ' + f1(Math.abs(ang)) + '°'));
+      const late = X(xs[im]) > W * .5; svg.appendChild(el('text', { x: X(xs[im]) + (late ? -8 : 8), y: Y(ymax) - 6, class: 'dimtxt', 'text-anchor': late ? 'end' : 'start' }, 'crease, planes differ by ' + f1(Math.abs(ang)) + '°'));
       svg.appendChild(el('circle', { cx: X(xs[im]), cy: Y(ymax), r: 3, fill: 'none', stroke: 'var(--dim)' }));
       facts = 'plane change ' + f1(Math.abs(ang)) + ' degrees across a span of ' + f1(P.w * .8) + ' mm';
     } else if (kind === 'wave') {
-      dimV(xs[ys.indexOf(ymax)], ymax, ymin, f2(ymax - ymin) + ' mm peak to low', 'r'); facts = 'peak to low ' + f2(ymax - ymin) + ' mm over 36 mm';
+      dimV(xs[ys.indexOf(ymax)], ymax, ymin, f2(ymax - ymin) + ' mm peak to low', 'r'); facts = 'peak to low ' + f2(ymax - ymin) + ' mm over ' + P.w + ' mm';
     } else {
       dimV(P.w * .9, ymax, ymin, f2(ymax - ymin) + ' mm', 'l'); facts = 'texture amplitude ' + f2(ymax - ymin) + ' mm';
     }
-    /* scale: 5 mm bar, and the vertical exaggeration */
+    /* scale: 5 mm bar; the section is drawn at true scale */
     const by = T + hpx + base + 18; svg.appendChild(el('path', { d: 'M' + L + ',' + by + ' h' + 5 * sx + ' m0,-3 v6 m' + (-5 * sx) + ',-3 v6', class: 'dimline' })); svg.appendChild(el('text', { x: L + 5 * sx + 6, y: by + 3 }, '5 mm'));
-    svg.appendChild(el('text', { x: W - R, y: by + 3, 'text-anchor': 'end' }, 'vertical ×' + f1(vex) + ' (horizontal true)'));
+    svg.appendChild(el('text', { x: W - R, y: by + 3, 'text-anchor': 'end' }, 'true scale, both ways'));
     svg.appendChild(el('text', { x: L, y: 14, class: 'dimtxt' }, 'Section through the model'));
     host.appendChild(svg);
-    const cap = host.parentNode.querySelector('.me'); if (cap && facts) cap.textContent = facts;
+    return facts;
   }
 
   /* ---------- static diagrams ---------- */
@@ -202,8 +259,8 @@
   function diagrams() { [].slice.call(document.querySelectorAll('[data-diagram]')).forEach(h => { const f = D[h.dataset.diagram]; if (f) h.innerHTML = f(); }); }
 
   function init() {
-    [].slice.call(document.querySelectorAll('[data-prof]')).forEach(profile);
     diagrams(); setupViews();
+    [].slice.call(document.querySelectorAll('[data-prof]')).forEach(host => { const el = host.closest('.prim').querySelector('.v3d'); if (el && el._st) { profiles(el); showMe(el); } });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
