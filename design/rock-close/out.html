@@ -35,7 +35,6 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     <div class="box" id="stage"><canvas id="view" aria-label="Our model, drawn anew: the same block with every face broken into shallow dishes between crisp ridges that run over its edges, seen from the reference's camera. Drag to turn, double-click to return."></canvas><div class="ctl">
       <span id="small-l">small turns</span><div class="rng"><i></i><input type="range" id="small" min="0" max="40" step="1" aria-labelledby="small-l"></div><output id="small-v"></output>
       <span id="large-l">large turns</span><div class="rng"><i></i><input type="range" id="large" min="0" max="90" step="1" aria-labelledby="large-l"></div><output id="large-v"></output>
-      <span id="sharp-l">sharpness</span><div class="rng"><i></i><input type="range" id="sharp" min="0" max="1" step="0.05" aria-labelledby="sharp-l"></div><output id="sharp-v"></output>
     </div></div>
     <div class="box"><img src="img/block-lines.jpg" alt="The block's plain shape with the ridges traced off the reference drawn on its top, long face and left end as a net of dark lines"></div>
     <div class="box"><img src="img/block-scallop.jpg" alt="The model made from those traced ridges: the block's top, long face and left end scalloped into shallow dishes between the ridges, the block's own edges between those faces gone"></div>
@@ -62,7 +61,6 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     large: { every: [4, 9], turn: 45 },      /* and a lot now and then (a slider) */
     round: 2.4,           /* the block's edges and corners are rounded this much */
     depthPerWidth: 1 / 7.5, deepest: 1.9,    /* a dish is as deep as its width times this, never deeper than that */
-    sharp: .6,            /* 0: a dish curves evenly from crest to bottom; toward 1 its walls leave the crest steeper (a slider) */
     fine: .12,            /* the surface's grid step, where the crests are drawn */
     coarse: .42,          /* the grid step of a first, rough solve, which the fine grid then finishes */
     sweeps: { coarse: 120, fine: 15 }   /* passes of the relaxation on each grid */
@@ -217,7 +215,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
         staircase does not saw it. The free points start from the coarse answer read at their place (the sag scaled to fine
         steps), and a few fine passes finish it: what the rough solve got wrong is all small-scale, which is what passes undo fast.
      3. Each dish's deepest sag gives its width (a round dish of radius R sags R² / 4, in grid steps), so its full depth, and its
-        sag over that deepest is its profile: depth = full depth times profile, raised to a power below 1 for sharpness. The dish
+        sag over that deepest is its profile: depth = full depth times profile. The dish
         goes down along the taut skin's way out (read from the coarse grid, where it is smooth). */
   const C = coarse, F = fine, cDish = new Uint16Array(C.N), cPin = new Uint8Array(C.N), cXyz = new Float32Array(C.N * 3), cSag = new Float32Array(C.N);
   const fDish = new Uint16Array(F.N), fPin = new Uint8Array(F.N), xyz = new Float32Array(F.N * 3), sag = new Float32Array(F.N), top = new Float32Array(dishes.length);
@@ -227,9 +225,9 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   const cOut = new Float32Array(C.N * 3), dir = new Float32Array(F.N * 3);
   /* a fine point's dish is certain when the four coarse points around it are of one dish and none is on a ridge */
   const settled = (k) => { const a = from[4 * k], d = cDish[a]; for (let q = 4 * k; q < 4 * k + 4; q++) { const c = from[q]; if (cPin[c] || cDish[c] !== d) return -1; } return d; };
-  /* the ridges and the dishes' shapes: steps 1 and 2, and the direction each point's dish goes down (the taut skin's way out, read
-     from the coarse grid) */
-  function solve() {
+  /* the whole surface, steps 1 to 3, and the direction each point's dish goes down (the taut skin's way out, read from the coarse
+     grid) */
+  function shape() {
     walks = new Map();
     partition(C, cDish, null);
     for (let k = 0; k < C.N; k++) { cPin[k] = 0; for (let e = C.off[k]; e < C.off[k + 1]; e++) if (cDish[C.nbr[e]] !== cDish[k]) { cPin[k] = 1; break; } }
@@ -253,17 +251,12 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
       if (m < 2) continue; xyz[3 * k] = (xyz[3 * k] + x / m) / 2; xyz[3 * k + 1] = (xyz[3 * k + 1] + y / m) / 2; xyz[3 * k + 2] = (xyz[3 * k + 2] + z / m) / 2; onBlock(xyz, k); }
     relax(F, fPin, xyz, sag, FEEL.sweeps.fine);
     top.fill(0); for (let k = 0; k < F.N; k++) if (sag[k] > top[fDish[k]]) top[fDish[k]] = sag[k];
-  }
-  /* step 3: the depths, which the sharpness changes without the ridges moving */
-  function finish() {
-    const bow = 1 - .75 * FEEL.sharp, n = dir;
     for (let k = 0; k < F.N; k++) {
-      const tp = top[fDish[k]], full = Math.min(FEEL.deepest, 4 * Math.sqrt(tp) * FEEL.fine * FEEL.depthPerWidth), d = tp > 0 && sag[k] > 0 ? full * Math.pow(sag[k] / tp, bow) : 0;
-      for (let t = 0; t < 3; t++) pos[3 * k + t] = xyz[3 * k + t] - n[3 * k + t] * d;
+      const tp = top[fDish[k]], full = Math.min(FEEL.deepest, 4 * Math.sqrt(tp) * FEEL.fine * FEEL.depthPerWidth), d = tp > 0 && sag[k] > 0 ? full * sag[k] / tp : 0;
+      for (let t = 0; t < 3; t++) pos[3 * k + t] = xyz[3 * k + t] - dir[3 * k + t] * d;
     }
     geo.attributes.position.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere();
   }
-  function shape(all) { if (all) solve(); finish(); }
 
   /* ---- the view ---- */
   const renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
@@ -288,19 +281,16 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   /* ---- the sliders: the surface follows as a handle moves (once per frame) ---- */
   const $ = (id) => document.getElementById(id);
   const SLIDERS = [
-    { id: 'small', all: true, get: () => FEEL.small.turn, set: (v) => { FEEL.small.turn = v; }, say: (v) => 'up to ' + v + '°' },
-    { id: 'large', all: true, get: () => FEEL.large.turn, set: (v) => { FEEL.large.turn = v; }, say: (v) => 'up to ' + v + '°' },
-    { id: 'sharp', get: () => FEEL.sharp, set: (v) => { FEEL.sharp = v; }, say: (v) => Math.round(v * 100) + '%' }
+    { id: 'small', get: () => FEEL.small.turn, set: (v) => { FEEL.small.turn = v; }, say: (v) => 'up to ' + v + '°' },
+    { id: 'large', get: () => FEEL.large.turn, set: (v) => { FEEL.large.turn = v; }, say: (v) => 'up to ' + v + '°' }
   ];
   const fill = (el, a, b) => { const i = el.querySelector('i'), inp = el.querySelector('input'), lo = +inp.min, hi = +inp.max, x = (v) => 7 + (v - lo) / (hi - lo) * (el.clientWidth - 14);
     i.style.left = x(a) + 'px'; i.style.width = Math.max(0, x(b) - x(a)) + 'px'; };
   function show() { SLIDERS.forEach(c => { const inp = $(c.id), said = c.say(+inp.value); $(c.id + '-v').textContent = said; inp.setAttribute('aria-valuetext', said); fill(inp.parentNode, +inp.min, +inp.value); }); }
-  /* the ridges and the dishes' shapes are worked out again only for the sliders that move them (all); the others redo the depths */
-  let queued = 0;
-  const again = (all) => { if (queued) { queued = Math.max(queued, all ? 2 : 1); return; } queued = all ? 2 : 1;
-    requestAnimationFrame(() => { const a = queued === 2; queued = 0; shape(a); draw(); }); };
-  SLIDERS.forEach(c => { const inp = $(c.id); inp.value = c.get(); inp.addEventListener('input', () => { c.set(+inp.value); show(); again(c.all); }); });
-  shape(true); home(); size();
+  let queued = false;
+  const again = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; shape(); draw(); }); };
+  SLIDERS.forEach(c => { const inp = $(c.id); inp.value = c.get(); inp.addEventListener('input', () => { c.set(+inp.value); show(); again(); }); });
+  shape(); home(); size();
   if ('ResizeObserver' in window) new ResizeObserver(size).observe(stage); else window.addEventListener('resize', size);
 })();
 </script>
