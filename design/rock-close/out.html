@@ -88,8 +88,8 @@ html{scroll-behavior:smooth}
   </div>
 
   <div class="bar" role="group" aria-label="Texture settings">
-    <label for="width">Dish width</label><input type="range" id="width" min="2" max="16" step="0.1"><output id="width-mm" for="width"></output>
-    <label for="depth">Depth</label><input type="range" id="depth" min="0" max="1.5" step="0.01"><output id="depth-mm" for="depth"></output>
+    <label for="width">Dish width</label><input type="range" id="width" min="2" max="5" step="0.05"><output id="width-mm" for="width"></output>
+    <label for="depth">Depth</label><input type="range" id="depth" min="0" max="1" step="0.01"><output id="depth-mm" for="depth"></output>
     <p class="help">Drag a view to turn it; click it, then scroll, to zoom; double-click to put it back. Built in <span class="num" id="t-build">–</span>.</p>
   </div>
 
@@ -220,7 +220,7 @@ html{scroll-behavior:smooth}
      width, depths with the depth. At depth 0 the block is left exactly as it is. */
   const W0 = 5.4, D0 = .45;
   const FEEL = {
-    width: W0, depth: D0,
+    width: 5, depth: D0,   /* the controls run to 5 and 1 mm */
     seed: 7,
     cell: [2, 4],         /* a dish's half-width, smallest and largest (at width W0): neighbouring dishes' centres are the sum of theirs apart */
     squash: 1.4,          /* dishes on the sides are this much wider than tall (the picture's are long and low, like courses) */
