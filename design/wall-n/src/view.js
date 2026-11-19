@@ -1,6 +1,6 @@
 (function(){
 var T=THREE,GEN=window.GEN;
-var CAM={az:42,el:27,dist:138,fov:27,tx:19,ty:21,tz:15};   /* the picture's camera: tuned by eye against O */
+var CAM={az:20,el:27,dist:138,fov:27,tx:19,ty:21,tz:15};   /* the picture's camera: tuned by eye against O */
 (location.search.match(/[?&](az|el|dist|fov|tx|ty|tz)=(-?[\d.]+)/g)||[]).forEach(function(m){var k=m.slice(1).split('=');CAM[k[0]]=+k[1]});
 var camNow=Object.assign({},CAM);
 function cssv(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
@@ -10,9 +10,9 @@ function sceneOf(w,opt){
   var RUB=false;var CORE=false;function tri(a,b,c,n,k){var cx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),cy=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),cz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);if(cx*n[0]+cy*n[1]+cz*n[2]<0){var t=b;b=c;c=t}pos.push(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2]);for(var i=0;i<3;i++){nor.push(n[0],n[1],n[2]);col.push(k*(RUB?.9:.82),k*(RUB?.97:.95),k*(RUB?1.12:1.18))}}
   var r=GEN.rng(w.seed*31+5);
   w.blocks.forEach(function(b){
-    var bt=b.rub?.55:.44+.06*r();
+    var bt=b.rub?.55:.4+.06*r();
     RUB=!!b.rub;b.faces.forEach(function(f){
-      var p=f.poly,tone=bt*(0.94+0.12*r());
+      var p=f.poly,tone=bt*(0.94+0.12*r());if(/dbg=1/.test(location.search)&&!b.rub)tone=f.top?.9:.12;
       if(opt.stage&&opt.stage<=3)tone=.5+.4*((b.row*.37+(b.id||0)*.11)%1);
       var zc=0;p.forEach(function(q){zc+=q[2]});zc/=p.length;tone*=1-.13*Math.max(0,1-zc/22);
       if(f.tris){f.tris.forEach(function(T3){var ux=T3[1][0]-T3[0][0],uy=T3[1][1]-T3[0][1],uz=T3[1][2]-T3[0][2],vx=T3[2][0]-T3[0][0],vy=T3[2][1]-T3[0][1],vz=T3[2][2]-T3[0][2],nn=[uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx],l=Math.hypot(nn[0],nn[1],nn[2])||1;nn=[nn[0]/l,nn[1]/l,nn[2]/l];if(nn[0]*f.n[0]+nn[1]*f.n[1]+nn[2]*f.n[2]<0)nn=[-nn[0],-nn[1],-nn[2]];tri(T3[0],T3[1],T3[2],nn,tone*(.72+.56*r()))})}else{for(var i=1;i<p.length-1;i++)tri(p[0],p[i],p[i+1],f.n,tone)}})});
@@ -27,7 +27,7 @@ function sceneOf(w,opt){
     var base=new T.Mesh(new T.CylinderGeometry(8,8,1.5,24),new T.MeshLambertMaterial({color:0x222222}));base.rotation.x=Math.PI/2;base.position.set(0,0,.75);fg.add(base);
     var body=new T.Mesh(new T.CylinderGeometry(3.6,4.4,19,14),fm);body.rotation.x=Math.PI/2;body.position.set(0,0,11);fg.add(body);
     var head=new T.Mesh(new T.SphereGeometry(3,14,10),fm);head.position.set(0,0,24.9);fg.add(head);
-    fg.position.set(5,3,0);fg.scale.set(.8,.8,.8);sc.add(fg)}
+    fg.position.set(3,2,0);fg.scale.set(.8,.8,.8);sc.add(fg)}
   sc.add(new T.HemisphereLight(0xcfd9ee,0x2c2a28,.5));
   var d=new T.DirectionalLight(0xfff4e6,1.25);d.position.set(-60,-80,110);sc.add(d);
   var d2=new T.DirectionalLight(0xbfd0ff,.18);d2.position.set(80,-20,30);sc.add(d2);

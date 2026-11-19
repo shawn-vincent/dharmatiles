@@ -10,15 +10,15 @@ function sceneOf(w,opt){
   function tri(a,b,c,n,k){var cx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),cy=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),cz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);if(cx*n[0]+cy*n[1]+cz*n[2]<0){var t=b;b=c;c=t}pos.push(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2]);for(var i=0;i<3;i++){nor.push(n[0],n[1],n[2]);col.push(k*.9,k*.98,k*1.12)}}
   var r=GEN.rng(w.seed*31+5);
   w.blocks.forEach(function(b){
-    var bt=.27+.05*r();
+    var bt=(.27+.05*r())*(b.k||1);
     b.faces.forEach(function(f){
       var p=f.poly,tone=bt*(0.94+0.12*r());
       if(opt.stage&&opt.stage<=2)tone=.55+.35*((b.m*.37+b.row*.21)%1);
       var zc=0;p.forEach(function(q){zc+=q[2]});zc/=p.length;tone*=1-.13*Math.max(0,1-zc/22);
-      if(f.tris){f.tris.forEach(function(T3){var ux=T3[1][0]-T3[0][0],uy=T3[1][1]-T3[0][1],uz=T3[1][2]-T3[0][2],vx=T3[2][0]-T3[0][0],vy=T3[2][1]-T3[0][1],vz=T3[2][2]-T3[0][2],nn=[uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx],l=Math.hypot(nn[0],nn[1],nn[2])||1;nn=[nn[0]/l,nn[1]/l,nn[2]/l];if(nn[0]*f.n[0]+nn[1]*f.n[1]+nn[2]*f.n[2]<0)nn=[-nn[0],-nn[1],-nn[2]];tri(T3[0],T3[1],T3[2],nn,tone*(.8+.4*r()))})}else{for(var i=1;i<p.length-1;i++)tri(p[0],p[i],p[i+1],f.n,tone)}})});
+      if(f.tris){f.tris.forEach(function(T3){var ux=T3[1][0]-T3[0][0],uy=T3[1][1]-T3[0][1],uz=T3[1][2]-T3[0][2],vx=T3[2][0]-T3[0][0],vy=T3[2][1]-T3[0][1],vz=T3[2][2]-T3[0][2],nn=[uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx],l=Math.hypot(nn[0],nn[1],nn[2])||1;nn=[nn[0]/l,nn[1]/l,nn[2]/l];if(nn[0]*f.n[0]+nn[1]*f.n[1]+nn[2]*f.n[2]<0)nn=[-nn[0],-nn[1],-nn[2]];if(T3.nn)nn=T3.nn;tri(T3[0],T3[1],T3[2],nn,tone*((T3.k||(.8+.4*r()))*Math.max(.45,1+.35*Math.max(0,nn[2])+2.4*((nn[0]*-.33+nn[1]*-.74+nn[2]*.58)-(f.n[0]*-.33+f.n[1]*-.74+f.n[2]*.58)))))})}else{for(var i=1;i<p.length-1;i++)tri(p[0],p[i],p[i+1],f.n,tone)}})});
   var g=new T.BufferGeometry();
   g.setAttribute('position',new T.Float32BufferAttribute(pos,3));g.setAttribute('normal',new T.Float32BufferAttribute(nor,3));g.setAttribute('color',new T.Float32BufferAttribute(col,3));
-  var m=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true}));m.castShadow=true;m.receiveShadow=true;sc.add(m);
+  var m=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true,side:T.DoubleSide}));m.castShadow=true;m.receiveShadow=true;sc.add(m);
   w.cores.forEach(function(c){var k=new T.Mesh(new T.BoxGeometry(c[1]-c[0]-.4,6,c[2]),new T.MeshLambertMaterial({color:0x3a3f48}));k.position.set((c[0]+c[1])/2,31.2+3,c[2]/2);sc.add(k)});
   var plate=new T.Mesh(new T.BoxGeometry(35,35,3),new T.MeshLambertMaterial({color:0x6b625a}));plate.position.set(17.5,17.5,-1.5);plate.receiveShadow=true;sc.add(plate);
   if(opt.figure!==false){
