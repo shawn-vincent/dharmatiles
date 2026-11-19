@@ -1,6 +1,6 @@
 (function(){
 var T=THREE,GEN=window.GEN;
-var CAM={az:24,el:30,dist:150,fov:27,tx:18,ty:22,tz:24};   /* the picture's camera: tuned by eye against O */
+var CAM={az:-17,el:36,dist:150,fov:27,tx:15,ty:18,tz:16};   /* the picture's camera: tuned by eye against O */
 (location.search.match(/[?&](az|el|dist)=(-?[\d.]+)/g)||[]).forEach(function(m){var k=m.slice(1).split('=');CAM[k[0]]=+k[1]});
 var camNow=Object.assign({},CAM);
 function cssv(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
@@ -10,33 +10,33 @@ function sceneOf(w,opt){
   function tri(a,b,c,n,k){var cx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),cy=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),cz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);if(cx*n[0]+cy*n[1]+cz*n[2]<0){var t=b;b=c;c=t}pos.push(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2]);for(var i=0;i<3;i++){nor.push(n[0],n[1],n[2]);col.push(k*.9,k*.98,k*1.12)}}
   var r=GEN.rng(w.seed*31+5);
   w.blocks.forEach(function(b){
-    var bt=.5+.07*r();
+    var bt=.27+.05*r();
     b.faces.forEach(function(f){
       var p=f.poly,tone=bt*(0.94+0.12*r());
       if(opt.stage&&opt.stage<=2)tone=.55+.35*((b.m*.37+b.row*.21)%1);
       var zc=0;p.forEach(function(q){zc+=q[2]});zc/=p.length;tone*=1-.13*Math.max(0,1-zc/22);
-      if(f.tris){f.tris.forEach(function(T3){var ux=T3[1][0]-T3[0][0],uy=T3[1][1]-T3[0][1],uz=T3[1][2]-T3[0][2],vx=T3[2][0]-T3[0][0],vy=T3[2][1]-T3[0][1],vz=T3[2][2]-T3[0][2],nn=[uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx],l=Math.hypot(nn[0],nn[1],nn[2])||1;nn=[nn[0]/l,nn[1]/l,nn[2]/l];if(nn[0]*f.n[0]+nn[1]*f.n[1]+nn[2]*f.n[2]<0)nn=[-nn[0],-nn[1],-nn[2]];tri(T3[0],T3[1],T3[2],nn,tone*(.84+.32*r()))})}else{for(var i=1;i<p.length-1;i++)tri(p[0],p[i],p[i+1],f.n,tone)}})});
+      if(f.tris){f.tris.forEach(function(T3){var ux=T3[1][0]-T3[0][0],uy=T3[1][1]-T3[0][1],uz=T3[1][2]-T3[0][2],vx=T3[2][0]-T3[0][0],vy=T3[2][1]-T3[0][1],vz=T3[2][2]-T3[0][2],nn=[uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx],l=Math.hypot(nn[0],nn[1],nn[2])||1;nn=[nn[0]/l,nn[1]/l,nn[2]/l];if(nn[0]*f.n[0]+nn[1]*f.n[1]+nn[2]*f.n[2]<0)nn=[-nn[0],-nn[1],-nn[2]];tri(T3[0],T3[1],T3[2],nn,tone*(.8+.4*r()))})}else{for(var i=1;i<p.length-1;i++)tri(p[0],p[i],p[i+1],f.n,tone)}})});
   var g=new T.BufferGeometry();
   g.setAttribute('position',new T.Float32BufferAttribute(pos,3));g.setAttribute('normal',new T.Float32BufferAttribute(nor,3));g.setAttribute('color',new T.Float32BufferAttribute(col,3));
-  var m=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true}));sc.add(m);
-  w.cores.forEach(function(c){var k=new T.Mesh(new T.BoxGeometry(c[1]-c[0]-.4,6,c[2]),new T.MeshLambertMaterial({color:0x5a606b}));k.position.set((c[0]+c[1])/2,31.2+3,c[2]/2);sc.add(k)});
-  var plate=new T.Mesh(new T.BoxGeometry(35,35,3),new T.MeshLambertMaterial({color:0x6b625a}));plate.position.set(17.5,17.5,-1.5);sc.add(plate);
+  var m=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true}));m.castShadow=true;m.receiveShadow=true;sc.add(m);
+  w.cores.forEach(function(c){var k=new T.Mesh(new T.BoxGeometry(c[1]-c[0]-.4,6,c[2]),new T.MeshLambertMaterial({color:0x3a3f48}));k.position.set((c[0]+c[1])/2,31.2+3,c[2]/2);sc.add(k)});
+  var plate=new T.Mesh(new T.BoxGeometry(35,35,3),new T.MeshLambertMaterial({color:0x6b625a}));plate.position.set(17.5,17.5,-1.5);plate.receiveShadow=true;sc.add(plate);
   if(opt.figure!==false){
     var fm=new T.MeshLambertMaterial({color:0xc9a27a}),fg=new T.Group();
     var base=new T.Mesh(new T.CylinderGeometry(8,8,1.5,24),new T.MeshLambertMaterial({color:0x222222}));base.rotation.x=Math.PI/2;base.position.set(0,0,.75);fg.add(base);
     var body=new T.Mesh(new T.CylinderGeometry(3.6,4.4,19,14),fm);body.rotation.x=Math.PI/2;body.position.set(0,0,11);fg.add(body);
     var head=new T.Mesh(new T.SphereGeometry(3,14,10),fm);head.position.set(0,0,24.9);fg.add(head);
-    fg.position.set(3,7,0);sc.add(fg)}
-  sc.add(new T.HemisphereLight(0xcfd9ee,0x2c2a28,.5));
-  var d=new T.DirectionalLight(0xfff4e6,1.25);d.position.set(-60,-80,110);sc.add(d);
-  var d2=new T.DirectionalLight(0xbfd0ff,.18);d2.position.set(80,-20,30);sc.add(d2);
+    fg.position.set(-7,4,0);sc.add(fg)}
+  sc.add(new T.HemisphereLight(0xcfd9ee,0x3a3a42,.6));
+  var d=new T.DirectionalLight(0xfff4e6,1.6);d.position.set(-40,-90,85);d.target.position.set(18,20,20);sc.add(d.target);d.castShadow=true;d.shadow.mapSize.set(2048,2048);var sh=d.shadow.camera;sh.left=-45;sh.right=45;sh.top=45;sh.bottom=-45;sh.near=10;sh.far=250;d.shadow.bias=-.0008;sc.add(d);
+  var d2=new T.DirectionalLight(0xbfd0ff,.4);d2.position.set(80,-20,30);sc.add(d2);
   return sc}
 function camOf(c,aspect){
   var cam=new T.PerspectiveCamera(c.fov,aspect,1,800);cam.up.set(0,0,1);
   var a=c.az*Math.PI/180,e=c.el*Math.PI/180;
   cam.position.set(c.tx+Math.sin(a)*Math.cos(e)*c.dist,c.ty-Math.cos(a)*Math.cos(e)*c.dist,c.tz+Math.sin(e)*c.dist);cam.lookAt(c.tx,c.ty,c.tz);return cam}
-var live=new T.WebGLRenderer({canvas:document.getElementById('live'),antialias:true,preserveDrawingBuffer:true});
-var off=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+var live=new T.WebGLRenderer({canvas:document.getElementById('live'),antialias:true,preserveDrawingBuffer:true});live.shadowMap.enabled=!/noshadow/.test(location.search);
+var off=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});off.shadowMap.enabled=!/noshadow/.test(location.search);
 function bg(){return new T.Color(cssv('--stage')||'#d9e0eb')}
 function shoot(w,opt,W,H){
   off.setPixelRatio(1);off.setSize(W,H);off.setClearColor(bg());

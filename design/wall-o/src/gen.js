@@ -49,9 +49,14 @@ function hew(f,R,amp){
   /* orientation of the polygon in 2D, to test "inside with margin" */
   var area=0;for(i=0;i<poly2.length;i++){var A=poly2[i],B=poly2[(i+1)%poly2.length];area+=A[0]*B[1]-B[0]*A[1]}var sg=area>0?1:-1;
   function inside(q,m){for(var i=0;i<poly2.length;i++){var A=poly2[i],B=poly2[(i+1)%poly2.length],ex=B[0]-A[0],ey=B[1]-A[1],l=Math.hypot(ex,ey)||1,dd=sg*(ex*(q[1]-A[1])-ey*(q[0]-A[0]))/l;if(dd<m)return false}return true}
-  var sp=4.4;
+  /* FRACTURE: 3 planes across the face, each leaning by 0.12-0.3, combined by min (a crest) or max (a trough): the big planar facets and sharp cracks. */
+  var fr=[],mode=R()<.5?1:-1,np=2+Math.floor(R()*2);
+  for(i=0;i<np;i++){var an=R()*6.283,sl=.12+.18*R();fr.push({cx:mnx+(mxx-mnx)*R(),cy:mny+(mxy-mny)*R(),dx:Math.cos(an)*sl,dy:Math.sin(an)*sl,off:(R()-.5)*2.2})}
+  function edgeDist(q){var m=1e9;for(var i=0;i<poly2.length;i++){var A=poly2[i],B=poly2[(i+1)%poly2.length],ex=B[0]-A[0],ey=B[1]-A[1],l=Math.hypot(ex,ey)||1,dd=Math.abs(ex*(q[1]-A[1])-ey*(q[0]-A[0]))/l;if(dd<m)m=dd}return m}
+  function fracture(q){var best=null;fr.forEach(function(F){var v=F.dx*(q[0]-F.cx)+F.dy*(q[1]-F.cy)+F.off;if(best===null||(mode>0?v<best:v>best))best=v});return Math.max(-2.2,Math.min(2.2,best))}
+  var sp=3.5;
   for(var x=mnx+sp/2;x<mxx;x+=sp)for(var y=mny+sp/2;y<mxy;y+=sp){var q=[x+(R()-.5)*sp*.8,y+(R()-.5)*sp*.8];if(!inside(q,1.2))continue;
-    var h=(R()-.5)*2*amp;P2.push(q);P3.push([o[0]+u[0]*q[0]+v[0]*q[1]+n[0]*h,o[1]+u[1]*q[0]+v[1]*q[1]+n[1]*h,o[2]+u[2]*q[0]+v[2]*q[1]+n[2]*h]);disp.push(h)}
+    var h=(fracture(q)*(f.cut?.55:1)+(R()-.5)*amp*.7)*Math.min(1,edgeDist(q)/3);P2.push(q);P3.push([o[0]+u[0]*q[0]+v[0]*q[1]+n[0]*h,o[1]+u[1]*q[0]+v[1]*q[1]+n[1]*h,o[2]+u[2]*q[0]+v[2]*q[1]+n[2]*h]);disp.push(h)}
   if(P2.length<4)return null;
   return delaunay(P2).map(function(tr){return[P3[tr[0]],P3[tr[1]],P3[tr[2]]]})}
 
@@ -62,14 +67,14 @@ G.build=function(seed,upto){
   var R=rng(seed*7919+13),ur=function(a,b){return a+(b-a)*R()},pick=function(a){return a[Math.floor(R()*a.length)]};
   var W=35,YB=31,YF=14;               /* wall x 0..35, back at y=31, widest front at y=14 */
   /* 1 MASS: three big boxes, stepped in height (the skyline) and in depth */
-  var H=[ur(48,52),ur(42,48),ur(28,32)],X=[0,ur(13,15),ur(24,26),W],F=[ur(YF-1,YF+1),ur(YF+2,YF+4),ur(YF-5,YF-3)];
+  var H=[ur(38,42),ur(34,38),ur(37,41)],X=[0,ur(13,15),ur(24,26),W],F=[ur(YF-1,YF),ur(YF-.5,YF+1.5),ur(YF-3,YF-1)];
   var masses=[0,1,2].map(function(i){return{x0:X[i],x1:X[i+1],y0:F[i],y1:YB,z0:0,z1:H[i],m:i}});
   var blocks=masses.map(function(m){return{x0:m.x0,x1:m.x1,y0:m.y0,y1:m.y1,z0:m.z0,z1:m.z1,m:m.m,row:0,planes:[]}});
   if(upto<2)return fin(blocks,upto);
   /* 2 COURSES: each mass is cut by horizontal beds. Course heights are big (12-19 mm) and not shared between masses. */
   var rows=[];
   blocks.forEach(function(b){var z=0,k=0;
-    while(z<b.z1-1){var h=ur(11,15);if(b.z1-(z+h)<6)h=b.z1-z;rows.push({x0:b.x0,x1:b.x1,y0:b.y0,y1:b.y1,z0:z,z1:z+h,m:b.m,row:k,planes:[]});z+=h;k++}});
+    while(z<b.z1-1){var h=ur(11.5,14.5);if(b.z1-(z+h)<6.5)h=b.z1-z;rows.push({x0:b.x0,x1:b.x1,y0:b.y0,y1:b.y1,z0:z,z1:z+h,m:b.m,row:k,planes:[]});z+=h;k++}});
   blocks=rows;
   if(upto<3)return fin(blocks,upto);
   /* 3 JOINTS: vertical joints split each course into blocks 9-17 mm wide. A joint may run on through the course above (same x), or be staggered. */
@@ -79,7 +84,7 @@ G.build=function(seed,upto){
     var list=byMass[k].sort(function(a,b){return a.row-b.row}),prev=[];
     list.forEach(function(b){
       var w=b.x1-b.x0,js=[];
-      if(w>14){var cnt=Math.max(1,Math.round(w/12)-1);
+      if(w>15){var cnt=Math.max(1,Math.round(w/14)-1);
         for(var i=0;i<cnt;i++){var x=b.x0+w*(i+1)/(cnt+1)+ur(-w*.18,w*.18);
           if(prev.length&&R()<.35){var pj=pick(prev);if(pj>b.x0+4&&pj<b.x1-4)x=pj}  /* through-joint */
           else{prev.forEach(function(pj){if(Math.abs(pj-x)<3.2)x=pj+(x>pj?3.2:-3.2)})}   /* otherwise stagger */
@@ -92,13 +97,20 @@ G.build=function(seed,upto){
   if(upto<4)return fin(blocks,upto);
   /* 4 DEPTH: each block's face is pushed back a different amount; tops and beds jitter, so the face steps in and out. A block on top of another never leans past it. */
   blocks.forEach(function(b){
-    var step=pick([0,0,1.5,3,4.5,6]);b.y0=Math.min(b.y0+step,b.y1-7);
+    var step=pick([0,0,1,2,3.5]);
+    if(b.m===0&&b.row===1)step=ur(6,8);          /* the deep recess in the middle course ... */
+    if(b.m===0&&b.row>=2)step=ur(-3,-1.5);        /* ... under the block that overhangs it */
+    if(b.m===1&&b.row===0)step=ur(2,3.5);
+    b.y0=Math.min(b.y0+step,b.y1-7);
     if(b.row>0)b.z0-=0; var top=b.z1;
     b.z1=top+(b.z1>=H[b.m]-0.1?ur(-4.5,1.5):ur(-0.6,0.6));   /* the skyline blocks differ in height; beds stay level */
   });
   /* broken skyline: small cap blocks sit on the top course of each mass */
   blocks.slice().forEach(function(b){if(b.z1>=H[b.m]-6&&b.x1-b.x0>8&&R()<.6){var cw=ur(6,Math.min(10,b.x1-b.x0-1)),cx=ur(b.x0+.5,b.x1-cw-.5),ch=ur(3.5,6.5),cy=b.y0+ur(1,4);
     blocks.push({x0:cx,x1:cx+cw,y0:cy,y1:Math.min(b.y1,cy+ur(9,12)),z0:b.z1-.2,z1:b.z1+ch,m:b.m,row:b.row+1,planes:[]})}});
+  /* FOOT: a few small blocks of the same rock lie loose at the base, turned about z */
+  if(upto>=4){for(var fi=0,nf0=7;fi<nf0;fi++){var fw=ur(3.5,7),fd=ur(3.5,6.5),fh=ur(2.5,5),fx=ur(2,W-fw-1),fy=ur(5,12);
+    blocks.push({x0:fx,x1:fx+fw,y0:fy,y1:fy+fd,z0:0,z1:fh,m:3,row:0,rot:ur(-.7,.7),planes:[]})}}
   if(upto<5)return fin(blocks,upto);
   /* 5 CLEAVE: planar fractures. The front face is broken by 1-2 planes tilted a few degrees: the crack is the line where facets meet. Tops tilt slightly; side faces are cracked too. */
   blocks.forEach(function(b){
@@ -118,13 +130,21 @@ G.build=function(seed,upto){
       var sx=R()<.5?-1:1,top=R()<.72,sz=top?1:-1;
       var corner=[sx<0?b.x0:b.x1,b.y0,top?b.z1:b.z0+ur(1,(b.z1-b.z0)*.6)];
       var kind=R();
-      var nn,dep=ur(.8,2.4);
+      var nn,dep=ur(1.2,3.4);
       if(kind<.4)nn=[sx*ur(.6,1),-ur(.5,1),top?ur(.5,1.2):ur(-.2,.5)];        /* corner bite */
       else if(kind<.75)nn=[ur(-.3,.3),-ur(.6,1),top?1:ur(.1,.5)];             /* edge bite along top-front */
       else nn=[sx,ur(-.3,.2),top?ur(.4,1):ur(0,.5)];                           /* side/top edge */
       nn=norm(nn);
       b.planes.push(cut(nn,[corner[0]-nn[0]*dep,corner[1]-nn[1]*dep,corner[2]-nn[2]*dep],2));
     }
+  });
+  /* 6b BEVELS: the big breaks along edges. A chamfer plane through the top-front edge (depth 1.6-3.4), often one through a top side edge and a vertical edge; the foot blocks get them too. */
+  blocks.forEach(function(b){
+    var d=b.z1-b.z0,pw=b.x1-b.x0;
+    if(R()<.85)b.planes.push(cut([ur(-.15,.15),-1,ur(.9,1.5)],[(b.x0+b.x1)/2,b.y0+ur(0,.4),b.z1-ur(1.4,3.4)],3));
+    if(R()<.5){var sx=R()<.5?-1:1;b.planes.push(cut([sx*ur(.8,1.2),ur(-.2,.2),ur(.7,1.3)],[sx<0?b.x0+ur(1.2,3):b.x1-ur(1.2,3),(b.y0+b.y1)/2,b.z1],3))}
+    if(R()<.45){var sx2=R()<.5?-1:1;b.planes.push(cut([sx2*ur(.9,1.3),-1,ur(-.1,.25)],[sx2<0?b.x0:b.x1,b.y0+ur(1.2,3),(b.z0+b.z1)/2],3))}
+    if(R()<.3)b.planes.push(cut([ur(-.4,.4),-1,-ur(.6,1.2)],[(b.x0+b.x1)/2,b.y0+ur(0,.5),b.z0+ur(1.2,3)],3));
   });
   if(upto<7)return fin(blocks,upto);
   return fin(blocks,upto);
@@ -134,9 +154,11 @@ G.build=function(seed,upto){
       /* a hair of shrink so the joint reads as a dark line against the core */
       var g=up>=3?.3:0,bb={x0:b.x0+g,x1:b.x1-g,y0:b.y0,y1:b.y1,z0:b.z0+(up>=3?.25:0),z1:b.z1};
       var pl=boxPlanes(bb).concat(b.planes);
-      var fc=faces(pl);if(up>=7){var Rh=rng(seed*101+i*7+3);fc.forEach(function(f){f.tris=hew(f,Rh,f.cut?.6:.95)})}
+      if(b.rot){var c0=[(bb.x0+bb.x1)/2,(bb.y0+bb.y1)/2,0],cs=Math.cos(b.rot),sn=Math.sin(b.rot);
+        pl=pl.map(function(P){var n2=[P.n[0]*cs-P.n[1]*sn,P.n[0]*sn+P.n[1]*cs,P.n[2]];return{n:n2,d:P.d-dot(P.n,c0)+dot(n2,c0),cut:P.cut}})}
+      var fc=faces(pl);if(up>=7){var Rh=rng(seed*101+i*7+3);fc.forEach(function(f){f.tris=hew(f,Rh,f.cut?.8:1.1)})}
       out.push({id:i,m:b.m,row:b.row,box:bb,faces:fc})});
-    return{blocks:out,seed:seed,upto:up,H:H,cores:[[X[0],X[1],H[0]-6],[X[1],X[2],H[1]-6],[X[2],W,H[2]-6]]}}
+    return{blocks:out,seed:seed,upto:up,H:H,cores:[[X[0],X[1],H[0]-3],[X[1],X[2],H[1]-3],[X[2],W,H[2]-3]]}}
 };
 G.rng=rng;
 })(typeof window!=='undefined'?(window.GEN=window.GEN||{}):module.exports);

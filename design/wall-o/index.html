@@ -47,13 +47,13 @@ table{border-collapse:collapse;font-size:13px;width:100%}td,th{border-top:1px so
 <div class="step"><img data-stage="1" alt="Three big masses"><div><div class="tag">Mass</div><h2>Three big boxes</h2><p>The wall starts as three boxes side by side. Each has its own height, so the skyline steps down to the right, and its own front depth.</p></div></div>
 <div class="step"><img data-stage="2" alt="Masses cut into courses"><div><div class="tag">Courses</div><h2>Level beds</h2><p>Each mass is cut by horizontal beds, 8 to 13 mm apart. The courses of neighbouring masses do not line up.</p></div></div>
 <div class="step"><img data-stage="3" alt="Courses cut into blocks"><div><div class="tag">Joints</div><h2>Vertical joints, some running through</h2><p>Joints split each course into blocks. A joint either repeats the x of the one below, so it runs through two or more courses, or keeps 3 mm clear of it.</p></div></div>
-<div class="step"><img data-stage="4" alt="Blocks pushed to different depths"><div><div class="tag">Depth</div><h2>Push each block back by its own amount</h2><p>Each face moves back 0 to 7.5 mm. The wall now steps in and out, and the sides of the forward blocks show. Skyline blocks also differ in height.</p></div></div>
+<div class="step"><img data-stage="4" alt="Blocks pushed to different depths"><div><div class="tag">Depth</div><h2>Push each block back by its own amount</h2><p>Each face moves back 0 to 5 mm. One block in the middle course of the left column goes back 6 to 8 mm and the block above it comes forward 2 to 3 mm, so a recess sits under an overhang. A few small blocks of the same rock are laid at the foot. Skyline blocks also differ in height. A shadow map from the key light turns every recess and joint dark without any extra geometry.</p></div></div>
 <div class="step"><img data-stage="5" alt="Faces split along tilted planes"><div><div class="tag">Cleave</div><h2>Break faces along planes</h2><p>Each block is cut by one or two planes tilted a few degrees off the face, so the face becomes two flat facets that meet at a sharp crack. Tops tilt slightly; sides crack the same way.</p></div></div>
-<div class="step"><img data-stage="6" alt="Chipped edges"><div><div class="tag">Chips</div><h2>Bite corners and edges</h2><p>Two to four planes per block cut off corners and edges, 1.3 to 4 mm deep, mostly on the top and front. </p></div></div>
-<div class="step"><img data-stage="7" alt="Relief facets"><div><div class="tag">Hew</div><h2>Fill each face with flat facets</h2><p>Every face is filled with jittered points about 3.4 mm apart and joined into triangles. The face boundary stays flat, so the block keeps square edges. The inside points are pushed in or out by up to 0.6 mm. This is what makes a smooth plane read as hewn stone, and it is the generated wall above.</p></div></div>
+<div class="step"><img data-stage="6" alt="Chipped edges"><div><div class="tag">Chips</div><h2>Bite corners and edges</h2><p>Two to four planes per block cut off corners and edges, 1.2 to 3.4 mm deep, mostly on the top and front. Then a larger bevel: a chamfer plane 1.6 to 3.4 mm in along the top-front edge of most blocks, often another along a top side edge, a vertical edge or the bottom edge. The bevels are what make a block read chunky and broken, not cubic.</p></div></div>
+<div class="step"><img data-stage="7" alt="Relief facets"><div><div class="tag">Hew</div><h2>Fill each face with flat facets</h2><p>Every face is first bent by two or three planes across it, each leaning 0.12 to 0.3, joined by min or max, so it has a few big flat facets and sharp cracks. It is then filled with jittered points about 3.5 mm apart and joined into triangles. The face boundary stays flat, so the block keeps square edges. The inside points are pushed in or out by up to 1.5 mm (0.8 on cut faces), and each facet gets its own tone, so crevices go dark and ridges catch the light. This is what makes a smooth plane read as hewn stone, and it is the generated wall above.</p></div></div>
 
 </section>
-<section><h2>What is still off</h2><p>Faces are smooth planes where O is rough-hewn with many tiny facets. O's blocks are larger and fewer, with more square corners. The dark joint line between blocks is thin here and deep there. There is no colour, no weathering and no foot rubble, by choice. The figure is a plain stand-in 28 mm tall.</p></section>
+<section><h2>What is still off</h2><p>Round 3 (v7): each face now breaks along two or three crack planes into large flat facets, the left return face shows beside the figure, and the tone is a dark cool blue-grey. Still off: the facets are still triangle-shaped where O's are irregular polygons with ragged edges; the skyline is too regular; the joints are shadowed gaps and not deep model cuts; no paint wear, no brown dirt in the joints, no ground rubble but the few loose blocks.</p></section>
 <section><h2>What carries to the other references</h2><div class="scroll"><table><tr><th>Idea</th><th>Where it helps</th></tr>
 <tr><td>Mass boxes at stepped height and depth</td><td>M, D, K, A, E (stepped masses), O</td></tr>
 <tr><td>Courses, then through-running joints</td><td>L, B, F, J</td></tr>
@@ -114,9 +114,14 @@ function hew(f,R,amp){
   /* orientation of the polygon in 2D, to test "inside with margin" */
   var area=0;for(i=0;i<poly2.length;i++){var A=poly2[i],B=poly2[(i+1)%poly2.length];area+=A[0]*B[1]-B[0]*A[1]}var sg=area>0?1:-1;
   function inside(q,m){for(var i=0;i<poly2.length;i++){var A=poly2[i],B=poly2[(i+1)%poly2.length],ex=B[0]-A[0],ey=B[1]-A[1],l=Math.hypot(ex,ey)||1,dd=sg*(ex*(q[1]-A[1])-ey*(q[0]-A[0]))/l;if(dd<m)return false}return true}
-  var sp=4.4;
+  /* FRACTURE: 3 planes across the face, each leaning by 0.12-0.3, combined by min (a crest) or max (a trough): the big planar facets and sharp cracks. */
+  var fr=[],mode=R()<.5?1:-1,np=2+Math.floor(R()*2);
+  for(i=0;i<np;i++){var an=R()*6.283,sl=.12+.18*R();fr.push({cx:mnx+(mxx-mnx)*R(),cy:mny+(mxy-mny)*R(),dx:Math.cos(an)*sl,dy:Math.sin(an)*sl,off:(R()-.5)*2.2})}
+  function edgeDist(q){var m=1e9;for(var i=0;i<poly2.length;i++){var A=poly2[i],B=poly2[(i+1)%poly2.length],ex=B[0]-A[0],ey=B[1]-A[1],l=Math.hypot(ex,ey)||1,dd=Math.abs(ex*(q[1]-A[1])-ey*(q[0]-A[0]))/l;if(dd<m)m=dd}return m}
+  function fracture(q){var best=null;fr.forEach(function(F){var v=F.dx*(q[0]-F.cx)+F.dy*(q[1]-F.cy)+F.off;if(best===null||(mode>0?v<best:v>best))best=v});return Math.max(-2.2,Math.min(2.2,best))}
+  var sp=3.5;
   for(var x=mnx+sp/2;x<mxx;x+=sp)for(var y=mny+sp/2;y<mxy;y+=sp){var q=[x+(R()-.5)*sp*.8,y+(R()-.5)*sp*.8];if(!inside(q,1.2))continue;
-    var h=(R()-.5)*2*amp;P2.push(q);P3.push([o[0]+u[0]*q[0]+v[0]*q[1]+n[0]*h,o[1]+u[1]*q[0]+v[1]*q[1]+n[1]*h,o[2]+u[2]*q[0]+v[2]*q[1]+n[2]*h]);disp.push(h)}
+    var h=(fracture(q)*(f.cut?.55:1)+(R()-.5)*amp*.7)*Math.min(1,edgeDist(q)/3);P2.push(q);P3.push([o[0]+u[0]*q[0]+v[0]*q[1]+n[0]*h,o[1]+u[1]*q[0]+v[1]*q[1]+n[1]*h,o[2]+u[2]*q[0]+v[2]*q[1]+n[2]*h]);disp.push(h)}
   if(P2.length<4)return null;
   return delaunay(P2).map(function(tr){return[P3[tr[0]],P3[tr[1]],P3[tr[2]]]})}
 
@@ -127,14 +132,14 @@ G.build=function(seed,upto){
   var R=rng(seed*7919+13),ur=function(a,b){return a+(b-a)*R()},pick=function(a){return a[Math.floor(R()*a.length)]};
   var W=35,YB=31,YF=14;               /* wall x 0..35, back at y=31, widest front at y=14 */
   /* 1 MASS: three big boxes, stepped in height (the skyline) and in depth */
-  var H=[ur(48,52),ur(42,48),ur(28,32)],X=[0,ur(13,15),ur(24,26),W],F=[ur(YF-1,YF+1),ur(YF+2,YF+4),ur(YF-5,YF-3)];
+  var H=[ur(38,42),ur(34,38),ur(37,41)],X=[0,ur(13,15),ur(24,26),W],F=[ur(YF-1,YF),ur(YF-.5,YF+1.5),ur(YF-3,YF-1)];
   var masses=[0,1,2].map(function(i){return{x0:X[i],x1:X[i+1],y0:F[i],y1:YB,z0:0,z1:H[i],m:i}});
   var blocks=masses.map(function(m){return{x0:m.x0,x1:m.x1,y0:m.y0,y1:m.y1,z0:m.z0,z1:m.z1,m:m.m,row:0,planes:[]}});
   if(upto<2)return fin(blocks,upto);
   /* 2 COURSES: each mass is cut by horizontal beds. Course heights are big (12-19 mm) and not shared between masses. */
   var rows=[];
   blocks.forEach(function(b){var z=0,k=0;
-    while(z<b.z1-1){var h=ur(11,15);if(b.z1-(z+h)<6)h=b.z1-z;rows.push({x0:b.x0,x1:b.x1,y0:b.y0,y1:b.y1,z0:z,z1:z+h,m:b.m,row:k,planes:[]});z+=h;k++}});
+    while(z<b.z1-1){var h=ur(11.5,14.5);if(b.z1-(z+h)<6.5)h=b.z1-z;rows.push({x0:b.x0,x1:b.x1,y0:b.y0,y1:b.y1,z0:z,z1:z+h,m:b.m,row:k,planes:[]});z+=h;k++}});
   blocks=rows;
   if(upto<3)return fin(blocks,upto);
   /* 3 JOINTS: vertical joints split each course into blocks 9-17 mm wide. A joint may run on through the course above (same x), or be staggered. */
@@ -144,7 +149,7 @@ G.build=function(seed,upto){
     var list=byMass[k].sort(function(a,b){return a.row-b.row}),prev=[];
     list.forEach(function(b){
       var w=b.x1-b.x0,js=[];
-      if(w>14){var cnt=Math.max(1,Math.round(w/12)-1);
+      if(w>15){var cnt=Math.max(1,Math.round(w/14)-1);
         for(var i=0;i<cnt;i++){var x=b.x0+w*(i+1)/(cnt+1)+ur(-w*.18,w*.18);
           if(prev.length&&R()<.35){var pj=pick(prev);if(pj>b.x0+4&&pj<b.x1-4)x=pj}  /* through-joint */
           else{prev.forEach(function(pj){if(Math.abs(pj-x)<3.2)x=pj+(x>pj?3.2:-3.2)})}   /* otherwise stagger */
@@ -157,13 +162,20 @@ G.build=function(seed,upto){
   if(upto<4)return fin(blocks,upto);
   /* 4 DEPTH: each block's face is pushed back a different amount; tops and beds jitter, so the face steps in and out. A block on top of another never leans past it. */
   blocks.forEach(function(b){
-    var step=pick([0,0,1.5,3,4.5,6]);b.y0=Math.min(b.y0+step,b.y1-7);
+    var step=pick([0,0,1,2,3.5]);
+    if(b.m===0&&b.row===1)step=ur(6,8);          /* the deep recess in the middle course ... */
+    if(b.m===0&&b.row>=2)step=ur(-3,-1.5);        /* ... under the block that overhangs it */
+    if(b.m===1&&b.row===0)step=ur(2,3.5);
+    b.y0=Math.min(b.y0+step,b.y1-7);
     if(b.row>0)b.z0-=0; var top=b.z1;
     b.z1=top+(b.z1>=H[b.m]-0.1?ur(-4.5,1.5):ur(-0.6,0.6));   /* the skyline blocks differ in height; beds stay level */
   });
   /* broken skyline: small cap blocks sit on the top course of each mass */
   blocks.slice().forEach(function(b){if(b.z1>=H[b.m]-6&&b.x1-b.x0>8&&R()<.6){var cw=ur(6,Math.min(10,b.x1-b.x0-1)),cx=ur(b.x0+.5,b.x1-cw-.5),ch=ur(3.5,6.5),cy=b.y0+ur(1,4);
     blocks.push({x0:cx,x1:cx+cw,y0:cy,y1:Math.min(b.y1,cy+ur(9,12)),z0:b.z1-.2,z1:b.z1+ch,m:b.m,row:b.row+1,planes:[]})}});
+  /* FOOT: a few small blocks of the same rock lie loose at the base, turned about z */
+  if(upto>=4){for(var fi=0,nf0=7;fi<nf0;fi++){var fw=ur(3.5,7),fd=ur(3.5,6.5),fh=ur(2.5,5),fx=ur(2,W-fw-1),fy=ur(5,12);
+    blocks.push({x0:fx,x1:fx+fw,y0:fy,y1:fy+fd,z0:0,z1:fh,m:3,row:0,rot:ur(-.7,.7),planes:[]})}}
   if(upto<5)return fin(blocks,upto);
   /* 5 CLEAVE: planar fractures. The front face is broken by 1-2 planes tilted a few degrees: the crack is the line where facets meet. Tops tilt slightly; side faces are cracked too. */
   blocks.forEach(function(b){
@@ -183,13 +195,21 @@ G.build=function(seed,upto){
       var sx=R()<.5?-1:1,top=R()<.72,sz=top?1:-1;
       var corner=[sx<0?b.x0:b.x1,b.y0,top?b.z1:b.z0+ur(1,(b.z1-b.z0)*.6)];
       var kind=R();
-      var nn,dep=ur(.8,2.4);
+      var nn,dep=ur(1.2,3.4);
       if(kind<.4)nn=[sx*ur(.6,1),-ur(.5,1),top?ur(.5,1.2):ur(-.2,.5)];        /* corner bite */
       else if(kind<.75)nn=[ur(-.3,.3),-ur(.6,1),top?1:ur(.1,.5)];             /* edge bite along top-front */
       else nn=[sx,ur(-.3,.2),top?ur(.4,1):ur(0,.5)];                           /* side/top edge */
       nn=norm(nn);
       b.planes.push(cut(nn,[corner[0]-nn[0]*dep,corner[1]-nn[1]*dep,corner[2]-nn[2]*dep],2));
     }
+  });
+  /* 6b BEVELS: the big breaks along edges. A chamfer plane through the top-front edge (depth 1.6-3.4), often one through a top side edge and a vertical edge; the foot blocks get them too. */
+  blocks.forEach(function(b){
+    var d=b.z1-b.z0,pw=b.x1-b.x0;
+    if(R()<.85)b.planes.push(cut([ur(-.15,.15),-1,ur(.9,1.5)],[(b.x0+b.x1)/2,b.y0+ur(0,.4),b.z1-ur(1.4,3.4)],3));
+    if(R()<.5){var sx=R()<.5?-1:1;b.planes.push(cut([sx*ur(.8,1.2),ur(-.2,.2),ur(.7,1.3)],[sx<0?b.x0+ur(1.2,3):b.x1-ur(1.2,3),(b.y0+b.y1)/2,b.z1],3))}
+    if(R()<.45){var sx2=R()<.5?-1:1;b.planes.push(cut([sx2*ur(.9,1.3),-1,ur(-.1,.25)],[sx2<0?b.x0:b.x1,b.y0+ur(1.2,3),(b.z0+b.z1)/2],3))}
+    if(R()<.3)b.planes.push(cut([ur(-.4,.4),-1,-ur(.6,1.2)],[(b.x0+b.x1)/2,b.y0+ur(0,.5),b.z0+ur(1.2,3)],3));
   });
   if(upto<7)return fin(blocks,upto);
   return fin(blocks,upto);
@@ -199,16 +219,18 @@ G.build=function(seed,upto){
       /* a hair of shrink so the joint reads as a dark line against the core */
       var g=up>=3?.3:0,bb={x0:b.x0+g,x1:b.x1-g,y0:b.y0,y1:b.y1,z0:b.z0+(up>=3?.25:0),z1:b.z1};
       var pl=boxPlanes(bb).concat(b.planes);
-      var fc=faces(pl);if(up>=7){var Rh=rng(seed*101+i*7+3);fc.forEach(function(f){f.tris=hew(f,Rh,f.cut?.6:.95)})}
+      if(b.rot){var c0=[(bb.x0+bb.x1)/2,(bb.y0+bb.y1)/2,0],cs=Math.cos(b.rot),sn=Math.sin(b.rot);
+        pl=pl.map(function(P){var n2=[P.n[0]*cs-P.n[1]*sn,P.n[0]*sn+P.n[1]*cs,P.n[2]];return{n:n2,d:P.d-dot(P.n,c0)+dot(n2,c0),cut:P.cut}})}
+      var fc=faces(pl);if(up>=7){var Rh=rng(seed*101+i*7+3);fc.forEach(function(f){f.tris=hew(f,Rh,f.cut?.8:1.1)})}
       out.push({id:i,m:b.m,row:b.row,box:bb,faces:fc})});
-    return{blocks:out,seed:seed,upto:up,H:H,cores:[[X[0],X[1],H[0]-6],[X[1],X[2],H[1]-6],[X[2],W,H[2]-6]]}}
+    return{blocks:out,seed:seed,upto:up,H:H,cores:[[X[0],X[1],H[0]-3],[X[1],X[2],H[1]-3],[X[2],W,H[2]-3]]}}
 };
 G.rng=rng;
 })(typeof window!=='undefined'?(window.GEN=window.GEN||{}):module.exports);
 </script>
 <script>(function(){
 var T=THREE,GEN=window.GEN;
-var CAM={az:24,el:30,dist:150,fov:27,tx:18,ty:22,tz:24};   /* the picture's camera: tuned by eye against O */
+var CAM={az:-17,el:36,dist:150,fov:27,tx:15,ty:18,tz:16};   /* the picture's camera: tuned by eye against O */
 (location.search.match(/[?&](az|el|dist)=(-?[\d.]+)/g)||[]).forEach(function(m){var k=m.slice(1).split('=');CAM[k[0]]=+k[1]});
 var camNow=Object.assign({},CAM);
 function cssv(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
@@ -218,33 +240,33 @@ function sceneOf(w,opt){
   function tri(a,b,c,n,k){var cx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),cy=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),cz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);if(cx*n[0]+cy*n[1]+cz*n[2]<0){var t=b;b=c;c=t}pos.push(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2]);for(var i=0;i<3;i++){nor.push(n[0],n[1],n[2]);col.push(k*.9,k*.98,k*1.12)}}
   var r=GEN.rng(w.seed*31+5);
   w.blocks.forEach(function(b){
-    var bt=.5+.07*r();
+    var bt=.27+.05*r();
     b.faces.forEach(function(f){
       var p=f.poly,tone=bt*(0.94+0.12*r());
       if(opt.stage&&opt.stage<=2)tone=.55+.35*((b.m*.37+b.row*.21)%1);
       var zc=0;p.forEach(function(q){zc+=q[2]});zc/=p.length;tone*=1-.13*Math.max(0,1-zc/22);
-      if(f.tris){f.tris.forEach(function(T3){var ux=T3[1][0]-T3[0][0],uy=T3[1][1]-T3[0][1],uz=T3[1][2]-T3[0][2],vx=T3[2][0]-T3[0][0],vy=T3[2][1]-T3[0][1],vz=T3[2][2]-T3[0][2],nn=[uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx],l=Math.hypot(nn[0],nn[1],nn[2])||1;nn=[nn[0]/l,nn[1]/l,nn[2]/l];if(nn[0]*f.n[0]+nn[1]*f.n[1]+nn[2]*f.n[2]<0)nn=[-nn[0],-nn[1],-nn[2]];tri(T3[0],T3[1],T3[2],nn,tone*(.84+.32*r()))})}else{for(var i=1;i<p.length-1;i++)tri(p[0],p[i],p[i+1],f.n,tone)}})});
+      if(f.tris){f.tris.forEach(function(T3){var ux=T3[1][0]-T3[0][0],uy=T3[1][1]-T3[0][1],uz=T3[1][2]-T3[0][2],vx=T3[2][0]-T3[0][0],vy=T3[2][1]-T3[0][1],vz=T3[2][2]-T3[0][2],nn=[uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx],l=Math.hypot(nn[0],nn[1],nn[2])||1;nn=[nn[0]/l,nn[1]/l,nn[2]/l];if(nn[0]*f.n[0]+nn[1]*f.n[1]+nn[2]*f.n[2]<0)nn=[-nn[0],-nn[1],-nn[2]];tri(T3[0],T3[1],T3[2],nn,tone*(.8+.4*r()))})}else{for(var i=1;i<p.length-1;i++)tri(p[0],p[i],p[i+1],f.n,tone)}})});
   var g=new T.BufferGeometry();
   g.setAttribute('position',new T.Float32BufferAttribute(pos,3));g.setAttribute('normal',new T.Float32BufferAttribute(nor,3));g.setAttribute('color',new T.Float32BufferAttribute(col,3));
-  var m=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true}));sc.add(m);
-  w.cores.forEach(function(c){var k=new T.Mesh(new T.BoxGeometry(c[1]-c[0]-.4,6,c[2]),new T.MeshLambertMaterial({color:0x5a606b}));k.position.set((c[0]+c[1])/2,31.2+3,c[2]/2);sc.add(k)});
-  var plate=new T.Mesh(new T.BoxGeometry(35,35,3),new T.MeshLambertMaterial({color:0x6b625a}));plate.position.set(17.5,17.5,-1.5);sc.add(plate);
+  var m=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true}));m.castShadow=true;m.receiveShadow=true;sc.add(m);
+  w.cores.forEach(function(c){var k=new T.Mesh(new T.BoxGeometry(c[1]-c[0]-.4,6,c[2]),new T.MeshLambertMaterial({color:0x3a3f48}));k.position.set((c[0]+c[1])/2,31.2+3,c[2]/2);sc.add(k)});
+  var plate=new T.Mesh(new T.BoxGeometry(35,35,3),new T.MeshLambertMaterial({color:0x6b625a}));plate.position.set(17.5,17.5,-1.5);plate.receiveShadow=true;sc.add(plate);
   if(opt.figure!==false){
     var fm=new T.MeshLambertMaterial({color:0xc9a27a}),fg=new T.Group();
     var base=new T.Mesh(new T.CylinderGeometry(8,8,1.5,24),new T.MeshLambertMaterial({color:0x222222}));base.rotation.x=Math.PI/2;base.position.set(0,0,.75);fg.add(base);
     var body=new T.Mesh(new T.CylinderGeometry(3.6,4.4,19,14),fm);body.rotation.x=Math.PI/2;body.position.set(0,0,11);fg.add(body);
     var head=new T.Mesh(new T.SphereGeometry(3,14,10),fm);head.position.set(0,0,24.9);fg.add(head);
-    fg.position.set(3,7,0);sc.add(fg)}
-  sc.add(new T.HemisphereLight(0xcfd9ee,0x2c2a28,.5));
-  var d=new T.DirectionalLight(0xfff4e6,1.25);d.position.set(-60,-80,110);sc.add(d);
-  var d2=new T.DirectionalLight(0xbfd0ff,.18);d2.position.set(80,-20,30);sc.add(d2);
+    fg.position.set(-7,4,0);sc.add(fg)}
+  sc.add(new T.HemisphereLight(0xcfd9ee,0x3a3a42,.6));
+  var d=new T.DirectionalLight(0xfff4e6,1.6);d.position.set(-40,-90,85);d.target.position.set(18,20,20);sc.add(d.target);d.castShadow=true;d.shadow.mapSize.set(2048,2048);var sh=d.shadow.camera;sh.left=-45;sh.right=45;sh.top=45;sh.bottom=-45;sh.near=10;sh.far=250;d.shadow.bias=-.0008;sc.add(d);
+  var d2=new T.DirectionalLight(0xbfd0ff,.4);d2.position.set(80,-20,30);sc.add(d2);
   return sc}
 function camOf(c,aspect){
   var cam=new T.PerspectiveCamera(c.fov,aspect,1,800);cam.up.set(0,0,1);
   var a=c.az*Math.PI/180,e=c.el*Math.PI/180;
   cam.position.set(c.tx+Math.sin(a)*Math.cos(e)*c.dist,c.ty-Math.cos(a)*Math.cos(e)*c.dist,c.tz+Math.sin(e)*c.dist);cam.lookAt(c.tx,c.ty,c.tz);return cam}
-var live=new T.WebGLRenderer({canvas:document.getElementById('live'),antialias:true,preserveDrawingBuffer:true});
-var off=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+var live=new T.WebGLRenderer({canvas:document.getElementById('live'),antialias:true,preserveDrawingBuffer:true});live.shadowMap.enabled=!/noshadow/.test(location.search);
+var off=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});off.shadowMap.enabled=!/noshadow/.test(location.search);
 function bg(){return new T.Color(cssv('--stage')||'#d9e0eb')}
 function shoot(w,opt,W,H){
   off.setPixelRatio(1);off.setSize(W,H);off.setClearColor(bg());
