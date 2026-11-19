@@ -6,7 +6,7 @@
 </header>
 <nav class="bar" aria-label="Sections">
   <div class="links">
-    <a href="#scale">Scales</a><a href="#primitives">Primitives</a><a href="#formation">Formation</a><a href="#edges">Edges</a><a href="#patterns">Patterns</a><a href="#lessons">Lessons</a><a href="#recipe">Recipe</a><a href="#language">Language</a>
+    <a href="#scale">Scales</a><a href="#primitives">Primitives</a><a href="#formation">Formation</a><a href="#edges">Edges</a><a href="#patterns">Patterns</a><a href="#lessons">Lessons</a><a href="#recipe">Recipe</a><a href="#rebuild">Rebuild</a><a href="#language">Language</a>
   </div>
   <div class="relief" role="group" aria-label="Vertical relief of the surface models">relief
     <button type="button" data-k="1" aria-pressed="false">true</button><button type="button" data-k="2" aria-pressed="true">&times;2</button><button type="button" data-k="3" aria-pressed="false">&times;3</button>
@@ -191,13 +191,14 @@
 <section id="recipe" class="recipe">
   <div class="eyebrow">7 &middot; The recipe</div>
   <h2>Building a wall from nothing, coarse to fine</h2>
-  <p>This is the specification. All lengths are mm at the 35 mm square. Tags show where a number comes from: <span class="src">[sheet]</span> a generated sheet, times 1.4; <span class="src">[photo]</span> the unpainted panel, which wins over the sheets; <span class="src">[rounds]</span> found by building it. Z is up; the wall stands at the back and right, the figure&rsquo;s open space at left and front; judge from azimuth about +24&deg;, elevation about 30&deg;.</p>
+  <p>This is the specification. All lengths are mm at the 35 mm square. Tags show where a number comes from: <span class="src">[sheet]</span> a generated sheet, times 1.4; <span class="src">[photo]</span> the unpainted panel, which wins over the sheets; <span class="src">[rounds]</span> found by building it. <span class="src">[rebuild]</span> found when two builders followed this recipe from scratch (section 8). Z is up; the wall stands at the back and right, the figure&rsquo;s open space at left and front; judge from azimuth about +24&deg;, elevation about 30&deg;.</p>
 
   <h3>The general case</h3>
   <div class="step"><h4>0 &middot; Rules that hold at every step</h4>
     <ol>
       <li><b>Everything stays solid.</b> A piece moves only its own share of the free face (setback, tilt); the rock behind is one body. No plates, no slits, no floating piece. <span class="src">[rounds]</span></li>
-      <li><b>Cut, do not scatter.</b> Detail is planes cut into a cell (half-spaces), never jittered points, never a convex cell inside a convex cell.</li>
+      <li><b>Cut, do not scatter.</b> Structure is planes cut into a cell (half-spaces), never jittered points, never a convex cell inside a convex cell. Surface detail that branches or curls (a crack, a pit) is not a half-space: it is a groove or notch carved into one face, held at zero along the face&rsquo;s outline so the solid stays closed. <span class="src">[rebuild]</span></li>
+      <li><b>Say the frame.</b> x runs along the wall as the camera sees it, left to right; y runs away from the viewer; z is up. A face&rsquo;s direction is given by what the camera sees (&ldquo;the slope faces the camera, turned 30&ndash;40&deg; to its right&rdquo;), never as a bare compass number. <span class="src">[rebuild]</span></li>
       <li><b>Budget.</b> Form 70&ndash;80%, structure 15&ndash;25%, surface 5&ndash;10% of the read. Count: 1&ndash;5 dominant masses; a few dozen pieces on a wall, not hundreds. <span class="src">[sheet]</span></li>
       <li><b>Few angle families</b> (table in section 3), 1&ndash;3 fracture sets 20&ndash;60&deg; apart.</li>
       <li><b>Print floor.</b> Nothing under 0.4 mm; keep ledges and features wide enough to read at the tabletop; overhang target 55&deg;, band to 65&deg;. <span class="src">[sheet]</span></li>
@@ -205,15 +206,16 @@
   <div class="step"><h4>1 &middot; Mass (form, 70&ndash;80%)</h4>
     <ol>
       <li>Block out one to three volumes covering about 0.52&ndash;0.60 of the tile depth L (35 mm), with open space of 0.20&ndash;0.24 L on each side for the figure. Keep clearance of at least 0.35 H on the open side. <span class="src">[sheet]</span></li>
-      <li>Wall height H about 38&ndash;43 (the tile height of the sheets). Tiers or layers of 3&ndash;4: O .26/.26/.28/.20 H, N .38/.28/.22/.12 H, but <b>use three courses on O</b> and the panel&rsquo;s run on N. <span class="src">[sheet] [photo]</span></li>
+      <li>Wall height H: the sheets say 38&ndash;43, but against the 35 mm plate the photo&rsquo;s O wall is about 27&ndash;31 plus caps, and N&rsquo;s crest about 33&ndash;36; at 38&ndash;43 the rebuild&rsquo;s O stood 1.3 times too tall, and its N came down to a cap of 33. Measure H against the plate in the photo. <span class="src">[rebuild]</span> Tiers or layers of 3&ndash;4: O .26/.26/.28/.20 H, N .38/.28/.22/.12 H, but <b>use three courses on O</b> and the panel&rsquo;s run on N. <span class="src">[sheet] [photo]</span></li>
       <li>Silhouette first: stepped skyline (O) or a straight rising crest (N). Judge the dashed outline of section 1 before adding anything. <span class="src">[rounds]</span></li>
     </ol></div>
   <div class="step"><h4>2 &middot; Primary planes and breaks (structure, 15&ndash;25%)</h4>
     <ol>
       <li>Cut the mass with the dominant set: spacing .08&ndash;.25 H (3&ndash;10 mm on a 38 mm wall) for fine sets, .20&ndash;.50 H for blocks. Cells no narrower than 0.4 of the spacing.</li>
       <li>Add the cross set at 60&ndash;120&deg; (about 90&deg;), carry 0.1&ndash;0.35. Lean its planes off square a little: up to about 12&deg; on blocks (square reads as brick, over 25&deg; as shards), but only 3&ndash;4&deg; on a slab face (N v13: a 9&deg; spread read as quartz). <span class="src">[rounds]</span></li>
-      <li>Give each cell its own offset along the free face&rsquo;s normal: O 0&ndash;6 per block (up to 7.5); N 0&ndash;3.8 per slab plus 0&ndash;2.2 per cell. Steps are the lines where cells meet.</li>
-      <li>Ledges: depth .10&ndash;.35 H, setback per tier .05&ndash;.30 of the depth, tread 0&ndash;10&deg;, riser 70&ndash;90&deg;. Make one recess deep (6&ndash;8) with the cell above set forward (2&ndash;3): that is the overhang.</li>
+      <li>Give each cell its own offset along the free face&rsquo;s normal: O 0&ndash;6 per block (up to 7.5); N 2&ndash;2.8 per slab plus 1.2&ndash;1.8 per cell. Steps are the lines where cells meet.</li>
+      <li><b>Where two cut faces meet</b> (slope and end, front and side), split the rock by the plane that bisects their angle, and let each face&rsquo;s pieces keep only the half nearer to it. Without it, pieces running back behind one face fill the other&rsquo;s setbacks. <span class="src">[rebuild]</span></li>
+      <li>Ledges step <em>back from the viewer</em> (along y), course by course, so the wall reads as a stair seen from the front; read as columns along x they make a tower. Depth .10&ndash;.35 H, setback per tier .05&ndash;.30 of the depth, tread 0&ndash;10&deg;, riser 70&ndash;90&deg;. Make one recess deep (6&ndash;8) with the cell above set forward (2&ndash;3): that is the overhang.</li>
     </ol></div>
   <div class="step"><h4>3 &middot; Skin over core, levels (still structure)</h4>
     <ol>
@@ -224,8 +226,8 @@
     </ol></div>
   <div class="step"><h4>4 &middot; Edges</h4>
     <ol>
-      <li>70% of edges soft (0.7&ndash;2.8), 30% crisp (0&ndash;0.5). Top-front edge of most blocks: a plane 1.6&ndash;3.4 in. A second on a side or vertical edge for about half the blocks.</li>
-      <li>N: eased lips on 85% of top edges, 28&ndash;52&deg;, 0.5&ndash;1.1, up to .18 of the edge.</li>
+      <li>70% of edges soft (0.7&ndash;2.8), 30% crisp (0&ndash;0.5). Top-front edge of most blocks: a plane 1.6&ndash;3.4 in, but never more than 0.3 of the block&rsquo;s height (on a 3&ndash;5 mm cap it makes a loaf). A second on a side or vertical edge for about half the blocks.</li>
+      <li>N: eased lips on 85% of top edges, 28&ndash;52&deg;, 0.5&ndash;1.4. A lip is a chamfer along the whole edge, or one that starts at a corner and runs part way; a single plane placed mid-edge cuts a whole triangle off the cell. <span class="src">[rebuild]</span></li>
     </ol></div>
   <div class="step"><h4>5 &middot; Chips (surface)</h4>
     <ol>
@@ -236,13 +238,13 @@
   <div class="step"><h4>6 &middot; Pits, dishes, grooves, cracks (surface, 5&ndash;10%)</h4>
     <ol>
       <li><b>Pit or dish = one plane cut into a face.</b> Dishes 4&ndash;35 wide, 0.7&ndash;1.4 deep (to 7 on the rock scale), irregular, off any grid. Pits 0.4&ndash;2.8, 0.15&ndash;0.85 deep, clustered, in one patch of three or four faces, never uniform.</li>
-      <li>Grooves: 0.7&ndash;2.8 wide, 0.4&ndash;1.7 deep, on 30&ndash;55% of cells wider than 4, along the slab, as a lowered strip (never a gap). <span class="src">[sheet]</span></li>
-      <li>Cracks 0.4&ndash;0.7 wide, 0.4&ndash;1.1 deep, V-shaped. In the photo they are long, branch, and meet the block&rsquo;s edges, dividing a face into a few irregular polygons; short isolated scratches read as gouges (O v14). <span class="src">[photo]</span> <span class="src">[rounds]</span></li>
+      <li>Grooves: never under 0.4 wide or deep (two numbers in the N case below were, and did not read). 0.7&ndash;2.8 wide, 0.4&ndash;1.7 deep, on 30&ndash;55% of cells wider than 4, along the slab, as a lowered strip (never a gap). <span class="src">[sheet]</span></li>
+      <li>Cracks 0.4&ndash;0.7 wide, 0.4&ndash;1.1 deep, V-shaped. In the photo they are long, branch, and meet the block&rsquo;s edges, dividing a face into a few irregular polygons; short isolated scratches read as gouges (O v14). Sample the face at 0.2 mm or finer under a crack, or it aliases into a ladder of steps (O Anew). <span class="src">[photo]</span> <span class="src">[rounds]</span></li>
       <li>Grain last, 0.15&ndash;0.85, stretched along the bedding, under the detail only.</li>
     </ol></div>
   <div class="step"><h4>7 &middot; Foot and rubble</h4>
     <ol>
-      <li>About 11&ndash;14 small blocks of the wall&rsquo;s own rock, 3&ndash;6 mm, chamfered, laid in a strip along the foot, not over the whole plate. <span class="src">[rounds]</span></li>
+      <li>Small blocks of the wall&rsquo;s own rock, 3&ndash;6 mm, chamfered: a stair of 11&ndash;14 along the foot, and in the photo 20&ndash;40 more, smaller, over the open plate and round the figure&rsquo;s base. <span class="src">[photo]</span></li>
       <li>Keep a solid base behind the shingles so no gap shows the ground (N).</li>
     </ol></div>
   <div class="step"><h4>8 &middot; Check</h4>
@@ -254,31 +256,71 @@
   <h3>The N case: the slanted slab</h3>
   <ol>
     <li><b>Volume:</b> one box cut by a top plane rising along x, crest from 13 to 43 mm (through (3, 10, 13), slope about 0.94). Cap near 36. The right end is a cut face with its own steps. A slope plane plus a flat cap reads as a pyramid.</li>
-    <li><b>Beds:</b> one set, dip 50&deg; in section (the panel; sheets say 32&ndash;38&deg;), the free face parallel to it (our N v13: dip 52&deg;, facing 262&deg;, camera azimuth 35&deg;). Slab faces nearly parallel, within 3&ndash;4&deg;. Slabs read thick and long: faces 2.5:1 to 5:1, cells about 12&times;40 mm, then 8&times;18, then 5&times;9 on half of them (thicker slabs were the biggest gain in N v13; 2.6&ndash;5 mm slabs read as blades). The outlines of the slabs are irregular, not beam-like. <span class="src">[photo]</span> <span class="src">[rounds]</span></li>
+    <li><b>Beds:</b> one set, dip 50&deg; in section (the panel; sheets say 32&ndash;38&deg;), the free face parallel to it and seen nearly face on from the panel&rsquo;s camera, turned 30&ndash;40&deg; to its right (dip 47&ndash;52&deg;; at 52&deg; with a crest above 38 the wedge is a fin). Slab faces nearly parallel, within 3&ndash;4&deg;. Slabs read thick and long: faces 2.5:1 to 5:1, cells about 12&times;40 mm, then 8&times;18, then 5&times;9 on half of them (thicker slabs were the biggest gain in N v13; 2.6&ndash;5 mm slabs read as blades). The outlines of the slabs are irregular, not beam-like. <b>The slabs&rsquo; long sides run diagonally on the face</b>, so on screen they climb from lower left to upper right: that diagonal blade is N&rsquo;s character, and a cross set at right angles to the strips turns it into a grid. <span class="src">[photo]</span> <span class="src">[rebuild]</span></li>
     <li><b>Layer ratio</b> across the ledges .38 / .28 / .22 / .12 of the face width (about 8 mm each). <span class="src">[sheet]</span></li>
     <li><b>Slab ends:</b> each slab ends at its own line parallel to the crest, 0&ndash;14 mm back, mostly long, so shingles recede by their thickness. The innermost slab is full width, so no ground shows.</li>
-    <li><b>Cross cuts</b> every 22&ndash;36 (then 9&ndash;14 inside), lean 3&ndash;4&deg; (up to 12&deg; only on the end face), about a quarter of the cracks, carry 0.1&ndash;0.15. At carry 1 it is a tilted brick grid.</li>
-    <li><b>Offsets:</b> setback along the free face normal, per slab 0&ndash;3.8 and per cell 0&ndash;2.2 at the coarsest level, then 0.4 of that per level. The step along the slab set goes <em>one way</em>, so the slabs overlap like shingles; a random sign reads flat. Per cell alone reads as loose blocks; pushing along y makes slabs stick out against the bedding. <span class="src">[rounds]</span></li>
-    <li><b>Detail:</b> eased lips 85% (28&ndash;52&deg;, 0.5&ndash;1.1); corner chips 30%, 1&ndash;2 per cell aimed up, 0.8&ndash;1.9 deep; grooves along the slab on 55% of cells wider than 4, 0.25&ndash;0.5 wide, 0.3&ndash;0.6 deep; no gravel on the ramp; foot 11 flat chamfered blocks.</li>
+    <li><b>Cross cuts</b> every 22&ndash;36 (then 9&ndash;14 inside), skewed 6&ndash;12&deg; in the face plane (square reads as brick), lean 3&ndash;4&deg; (up to 12&deg; only on the end face), about a quarter of the cracks, carry 0.1&ndash;0.15. At carry 1 it is a tilted brick grid.</li>
+    <li><b>Offsets:</b> setback along the free face normal, per slab 2&ndash;2.8 and per cell 1.2&ndash;1.8 at the coarsest level (3.8 and 2.2 cut canyons; under 2 the risers vanish and slabs read as cards), then 0.4 of that per level, never under 0.4 mm. The step along the slab set goes <em>one way</em>, so the slabs overlap like shingles; a random sign reads flat. Per cell alone reads as loose blocks; pushing along y makes slabs stick out against the bedding. <span class="src">[rounds]</span></li>
+    <li><b>Detail:</b> eased lips 85% (28&ndash;52&deg;, 0.5&ndash;1.1); corner chips 30%, 1&ndash;2 per cell aimed up, 0.8&ndash;1.9 deep; grooves along the slab on 55% of cells wider than 4, 0.4&ndash;0.6 wide, 0.4&ndash;0.6 deep; no gravel on the ramp; foot 11 flat chamfered blocks.</li>
     <li><b>Avoid:</b> slope too steep or too segmented; too many vertical cuts; faces turned at many angles (quartz); identical bevels on every slab (stacked beams); over 3 chips per cell (destroys the ramp); a front plane cutting across the beds.</li>
   </ol>
 
   <h3>The O case: stacked blocks</h3>
   <ol>
     <li><b>Mass:</b> three boxes stepping up and back; heights .26 / .52 / .80 H (sheet), footprint .20 / .60 / .20 L; H about 38. A foot stair at the right, and the leftmost column standing proud to give the return face.</li>
-    <li><b>Courses:</b> three, each 11.5&ndash;14.5 high (sheet says four of about 10; the photo wins). Level beds; tops lean at most 8&deg;.</li>
+    <li><b>Courses:</b> three, each 9&ndash;11 high against the plate (11.5&ndash;14.5 stood too tall) (sheet says four of about 10; the photo wins). Level beds; tops lean at most 8&deg;.</li>
     <li><b>Blocks:</b> about 12&ndash;22 wide, three wide blocks to a course, joints about every 14 (width to height about 1.2:1 in the photo; the sheet says 1.6&ndash;2.4:1 and gave four narrow rows that read as rubble).</li>
     <li><b>Joints:</b> about a third of the vertical joints repeat the one below (carry 0.35); the others are staggered by at least 3.2.</li>
     <li><b>Depth push:</b> 0&ndash;6 per block (to 7.5); one recess 6&ndash;8 and the cell above forward 2&ndash;3; setback per tier grows with the course index.</li>
-    <li><b>Faces:</b> vertical 85&ndash;90&deg;, flat. Most faces stay whole (about 60%); the rest are split once into a skin piece set back 0.1&ndash;0.3 and turned 0.2&ndash;1.2&deg;, so the block outline dominates (O v14; a skin of 2&ndash;5 pieces read as rubble, faceted relief as crystal). The face&rsquo;s texture is cracks and a few chips, not facets. <span class="src">[rounds]</span></li>
+    <li><b>Faces:</b> vertical 85&ndash;90&deg;, flat. Most faces stay whole as pieces (about 60%): the panel&rsquo;s many small polygons are drawn by the crack network of step 6, not by more pieces (O Anew split 70% of faces into 4&ndash;7 pieces and read busier than v14). The rest are split once into a skin piece set back 0.1&ndash;0.3 and turned 0.2&ndash;1.2&deg;, so the block outline dominates (O v14; a skin of 2&ndash;5 pieces read as rubble, faceted relief as crystal). The face&rsquo;s texture is cracks and a few chips, not facets. <span class="src">[rounds]</span></li>
     <li><b>Edges and chips:</b> eased edges all round the top: a chamfer 1&ndash;2 (to 3.4 on the top front) on the top-front and both top side edges, and on the vertical front edges of about 80% of blocks, slightly irregular (O v14); 1&ndash;3 corner chips of 0.9&ndash;2.8; cap blocks 3.5&ndash;6.5 high on the top course to break the skyline.</li>
     <li><b>Joints must be real:</b> a printed tile has no shadow map, so joints are 0.4&ndash;0.7 wide and read dark because they are deep (at least 3 times their width) or because the neighbour stands proud.</li>
     <li><b>Avoid:</b> rounding the blocks (large tilts, or more than three big chips); diagonal striations (they read as N); a pit cell inside a cell; faceted relief on faces (reads as crystal); short isolated cracks (read as gouges).</li>
   </ol>
 </section>
 
+<section id="rebuild">
+  <div class="eyebrow">8 &middot; The rebuild</div>
+  <h2>Both walls again, from this page alone</h2>
+  <p>Two builders who had never seen our wall code rebuilt O and N from this page, the sheets and the unpainted photos. Each first built the recipe exactly as written, then made two passes by eye and wrote down every place it had to leave the recipe. The recipe above now carries those corrections, marked <span class="src">[rebuild]</span>. The strips put every committed version beside the panel. The first versions were drawn in flat colour, the later ones in the grey light of section 6. The cameras differ a little from version to version.</p>
+  <figure class="panel"><img src="img/rebuild_o.jpg" width="1212" height="604" alt="Panel O and eight versions of Wall O: v4, v8, v12 twice, v14, and the rebuild's literal and final versions" loading="lazy"><figcaption>Wall O, every committed version, then the rebuild: the recipe as written, and after two passes.</figcaption></figure>
+  <figure class="panel"><img src="img/rebuild_n.jpg" width="1212" height="604" alt="Panel N and eight versions of Wall N: v7, v10 twice, v12, v13, and the rebuild's literal and final versions" loading="lazy"><figcaption>Wall N, every committed version, then the rebuild.</figcaption></figure>
+
+  <h3>What it showed</h3>
+  <ol>
+    <li><b>Neither rebuild beats the last iterated version.</b> O v14 and N v13 are still the best. Both builders said so of their own work. The page holds the principles, but what twenty-five rounds learned lived partly in the code, as constructions, not as rules.</li>
+    <li><b>The recipe as written gets the structure, not the look.</b> O came out as a tower of plain boxes, 1.3 times too tall. N came out as the right shingled slope, but its slabs were paper-thin shards. Every number held; what failed was what the numbers left unsaid.</li>
+    <li><b>The silent conventions were the biggest errors.</b> These were:
+      <ul>
+        <li>which axis O&rsquo;s tiers step along (columns made a tower);</li>
+        <li>which way &ldquo;facing 262&deg;&rdquo; points (N&rsquo;s slope was seen edge-on);</li>
+        <li>the wall&rsquo;s height against the plate, where the sheets are wrong and the photo is right.</li>
+      </ul>
+      None of these is about rock. They are the frame, and a reader can&rsquo;t recover them.</li>
+    <li><b>Some steps can&rsquo;t be built as written.</b>
+      <ul>
+        <li>A half-space can&rsquo;t make a branching crack or a notched pit.</li>
+        <li>A mid-edge lip cut by one plane takes a whole triangle off the cell.</li>
+        <li>Two faces cut into one mass fill each other&rsquo;s setbacks unless a mitre plane divides the rock between them.</li>
+      </ul>
+      Our own rounds had solved each of these in code and never written it down.</li>
+    <li><b>Two numbers were under the recipe&rsquo;s own 0.4 mm floor:</b> N&rsquo;s groove width and its finest step. The rebuild caught what our rounds had carried along unchecked.</li>
+    <li><b>The rebuild confirmed what made each wall work.</b> Chamfers that ease the top edge are what make a block read as rock rather than a box, on both walls. Rubble over the whole plate, not only along the foot, is in the photo and was in none of our versions.</li>
+    <li><b>O: the face detail is lines, not pieces.</b> The rebuild found that faces kept whole read as bare boxes, and split most of them into four to seven pieces. That came out busier than v14, whose whole faces carry long cut cracks. The panel&rsquo;s many small polygons are a crack network drawn on a few big faces. Its cracks were also 1.7 mm wide where the photo&rsquo;s are about 0.5, because narrower ones aliased into ladders: the fix is a finer mesh under the crack, not a wider crack.</li>
+    <li><b>N: the diagonal blade is the character, and no rule says so.</b> The literal build kept the long slabs climbing diagonally across the face. When the second pass thickened the slabs and squared the cross cuts, they turned near vertical and the slope became a grid of blocks. v13 keeps the diagonal. The recipe now says it outright.</li>
+    <li><b>Still unsolved by any version:</b>
+      <ul>
+        <li>the panel&rsquo;s worn, slightly soft many-sided outlines;</li>
+        <li>pits that read as chips rather than dents;</li>
+        <li>the fine cleavage texture on top faces;</li>
+        <li>the figure&rsquo;s scale (the photo&rsquo;s figure stands about 22 mm, so plate, wall and figure can&rsquo;t all be matched at once).</li>
+      </ul></li>
+  </ol>
+  <p class="small">The rebuilds are on their own pages, &ldquo;Wall O, Anew&rdquo; and &ldquo;Wall N, Anew&rdquo;, each with its stages, seeds and a table of every recipe rule it kept or changed.</p>
+</section>
+
 <section id="language">
-  <div class="eyebrow">8 &middot; How it maps to the language</div>
+  <div class="eyebrow">9 &middot; How it maps to the language</div>
   <h2>Which Cliff Cleaving words carry what</h2>
   <p>The proposal&rsquo;s words are <code>cleave</code> (with <code>dip</code>, <code>facing</code>, <code>spacing</code>, <code>bend</code>, <code>carry</code>), <code>inside</code> (with <code>cover</code>), <code>setback</code>, <code>tilt</code>, <code>top</code>, <code>joints</code> and <code>chips</code>. This table lists what each carries and what nothing reaches yet. Open questions only; no word is proposed here.</p>
   <div class="tw"><table class="t">

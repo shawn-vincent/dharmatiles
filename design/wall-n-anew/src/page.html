@@ -1,0 +1,80 @@
+<title>Wall N, Anew</title>
+<style>
+:root{--bg:#eceff2;--surface:#f8f9fb;--ink:#1a2028;--ink2:#46515f;--ink3:#6c7786;--rule:#c8cfd8;--dim:#0d6e86;--good:#2e7d58;--warn:#a55a12;--err:#b3392d;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161b;--surface:#1a2027;--ink:#e7ebf0;--ink2:#a9b4c1;--ink3:#7f8b99;--rule:#303945;--dim:#5fc4dd;--good:#6cc79a;--warn:#e1a35d;--err:#ef7d70;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12161b;--surface:#1a2027;--ink:#e7ebf0;--ink2:#a9b4c1;--ink3:#7f8b99;--rule:#303945;--dim:#5fc4dd;--good:#6cc79a;--warn:#e1a35d;--err:#ef7d70;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 system-ui,"Segoe UI",sans-serif;padding-inline:max(16px,env(safe-area-inset-left,0px))}
+.wrap{max-width:1160px;margin:0 auto;padding-block:32px 80px}
+h1{font:700 clamp(2.2rem,6vw,3.6rem)/1.05 "Arial Narrow",system-ui,sans-serif;margin:0 0 .2em;letter-spacing:0}
+h2{font:600 1.7rem/1.1 "Arial Narrow",system-ui,sans-serif;margin:2em 0 .3em}
+.kick{font:600 .8rem/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:12px}
+p{margin:.5em 0 .8em;max-width:72ch}.small,small{font-size:.86rem;color:var(--ink2)}
+code{font:.86em ui-monospace,Menlo,monospace}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seeds{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:700px){.pair{grid-template-columns:1fr}.seeds{grid-template-columns:1fr 1fr}}
+figure{margin:0;background:var(--surface);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+figure img,figure canvas{display:block;width:100%;height:auto;aspect-ratio:1/1;background:#555}
+figcaption{padding:7px 10px;font-size:.82rem;color:var(--ink2)}
+.v3d canvas{cursor:grab;touch-action:pan-y}
+.stages{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+button{font:600 .82rem ui-monospace,Menlo,monospace;border:1px solid var(--rule);background:var(--surface);color:var(--ink);padding:7px 10px;cursor:pointer;border-radius:3px}
+button[aria-pressed="true"]{background:var(--dim);color:var(--bg);border-color:var(--dim)}
+.stagebox{display:grid;grid-template-columns:minmax(0,520px) 1fr;gap:18px;align-items:start}
+@media(max-width:800px){.stagebox{grid-template-columns:1fr}}
+.tw{overflow-x:auto;border:1px solid var(--rule);border-radius:4px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}th,td{padding:6px 9px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
+th{font:600 .75rem ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.ok{color:var(--good);font-weight:600}.chg{color:var(--warn);font-weight:600}.bad{color:var(--err);font-weight:600}
+ul.dep li{margin:.35em 0;max-width:78ch}
+</style>
+<div class="wrap">
+<div class="kick">Built from the recipe of "Rock at Every Scale", section 7, and nothing else</div>
+<h1>Wall N, Anew</h1>
+<p>The slanted, layered wedge, rebuilt from nothing. Every piece is a convex cell cut from half-spaces; the wall is their union over one core, solid and closed, mm at the 35 mm square. The page code makes the geometry (three.js only draws). Left: the unpainted photo panel; right: the model at the panel's camera, in grey with a hemisphere fill, a soft key and baked cavity shading. Drag a model to turn it; double-click to reset.</p>
+
+<h2>1. The panel and the model</h2>
+<div class="pair">
+<figure><img src="{{CROP}}" width="400" height="400" alt="Unpainted photo of panel N, a layered slanted rock wedge beside a figure"><figcaption>Panel N, unpainted photo (the target).</figcaption></figure>
+<figure class="v3d" data-cam="whole" data-seed="1"><canvas width="640" height="640" aria-label="3D model of Wall N, seed 1"></canvas><figcaption>Final, seed 1: <span class="stat"></span>. Camera azimuth 35, elevation 27.</figcaption></figure>
+</div>
+<div class="pair" style="margin-top:12px">
+<figure class="v3d" data-cam="whole" data-seed="1" data-cfg="RECIPE"><canvas width="640" height="640" aria-label="3D model of Wall N, recipe taken literally"></canvas><figcaption>v1: the recipe taken literally, seed 1: <span class="stat"></span>.</figcaption></figure>
+<div>
+<h3 style="font:600 1.2rem system-ui;margin:0 0 .3em">What this shows</h3>
+{{SUMMARY}}
+</div>
+</div>
+
+<h2>2. Close-up</h2>
+<div class="pair">
+<figure><img id="cropclose" src="{{CROPCLOSE}}" width="400" height="400" alt="Close crop of the photo's slope face"><figcaption>The photo, close on the slope face.</figcaption></figure>
+<figure class="v3d" data-cam="close" data-seed="1"><canvas width="640" height="640" aria-label="Close-up of the model"></canvas><figcaption>The model, the same region.</figcaption></figure>
+</div>
+
+<h2>3. Seeds 1 to 4</h2>
+<div class="seeds">
+<figure class="v3d" data-cam="seed" data-seed="1"><canvas width="420" height="420"></canvas><figcaption>Seed 1</figcaption></figure>
+<figure class="v3d" data-cam="seed" data-seed="2"><canvas width="420" height="420"></canvas><figcaption>Seed 2</figcaption></figure>
+<figure class="v3d" data-cam="seed" data-seed="3"><canvas width="420" height="420"></canvas><figcaption>Seed 3</figcaption></figure>
+<figure class="v3d" data-cam="seed" data-seed="4"><canvas width="420" height="420"></canvas><figcaption>Seed 4</figcaption></figure>
+</div>
+
+<h2>4. The build, one recipe step at a time</h2>
+<p>Each button builds the wall up to that step, coarse to fine. Earlier steps never change when a later one is added (every random draw is keyed by the piece, not by order).</p>
+<div class="stages" role="group" aria-label="Recipe step">
+<button data-stage="1" aria-pressed="false">1 Mass</button><button data-stage="2" aria-pressed="false">2 Planes and breaks</button><button data-stage="3" aria-pressed="false">3 Skin, levels</button><button data-stage="4" aria-pressed="false">4 Edges</button><button data-stage="5" aria-pressed="false">5 Chips</button><button data-stage="6" aria-pressed="false">6 Grooves</button><button data-stage="7" aria-pressed="true">7 Foot</button>
+</div>
+<div class="stages cfgsw" role="group" aria-label="Settings"><button data-cfg="FINAL" aria-pressed="true">final</button><button data-cfg="RECIPE" aria-pressed="false">v1, the recipe as written</button></div>
+<div class="stagebox"><figure class="v3d" id="stagev" data-cam="whole" data-seed="1" data-stage="7"><canvas width="640" height="640" aria-label="Wall N at the chosen step"></canvas><figcaption id="stagecap">Step 7 · foot and rubble</figcaption></figure>
+<div>{{STAGES}}</div></div>
+
+<h2>5. Each recipe rule, the number used, and whether it held</h2>
+<div class="tw"><table><thead><tr><th>Recipe rule</th><th>Number used (final)</th><th>Result</th></tr></thead><tbody>{{TABLE}}</tbody></table></div>
+<h2>6. Where the recipe was wrong or silent</h2>
+<ul class="dep">{{DEPARTURES}}</ul>
+<p class="small">Rebuild: <code>python3 build.py</code> in <code>scratchpad/wall-n2/</code> writes <code>out.html</code>; <code>python3 build.py --local</code> uses the local three.js copy for headless stills.</p>
+</div>
+<script>window.STAGE_NAMES={{STAGENAMES}};</script>
+{{SCRIPTS}}

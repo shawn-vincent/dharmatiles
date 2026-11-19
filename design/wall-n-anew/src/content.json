@@ -1,0 +1,147 @@
+{
+ "summary": "<p>The recipe alone gets the massing and the shingled slab structure: a wedge, long slabs running up the slope with stepped ledges, thin lips at their tops. It does not get the photo's character. Pieces are flat, sharp-edged shards with big contrast between neighbours; the photo's slabs are chunky, worn, with irregular many-sided outlines and a skin of fine breaks. Face direction, setback size and the edge treatment (full chamfers, not local lips) had to change before it read as chunky blocks; section 6 lists each change. Against Wall N v13 it is not better: v13 has the panel's diagonal blades and silhouette; this has thicker blocks and better framing, but slabs run near vertical and the pattern is grid-like.</p><p class=\"small\">v1 (below) is the same builder with the recipe's numbers as written.</p>",
+ "stages": [
+  [
+   "1 Mass.",
+   "Volume: front plane at the bed dip, a top plane rising along x, a cap, a cut end."
+  ],
+  [
+   "2 Planes and breaks.",
+   "Slabs along the strike, cross cuts up the dip, shingled setbacks; crest and end tiled too."
+  ],
+  [
+   "3 Skin over core, levels.",
+   "Two finer levels inside each cell, each piece tilted a little."
+  ],
+  [
+   "4 Edges.",
+   "Lips from a top corner."
+  ],
+  [
+   "5 Chips.",
+   "Corner chips aimed up."
+  ],
+  [
+   "6 Grooves.",
+   "Lowered sub-strips along slabs."
+  ],
+  [
+   "7 Foot.",
+   "Eleven chamfered blocks along the foot."
+  ]
+ ],
+ "table": [
+  [
+   "0 Solid, closed, one body",
+   "convex cells over one core; pieces overlap the core by 1 mm",
+   "held"
+  ],
+  [
+   "0 Cut, do not scatter",
+   "half-spaces only; no jitter",
+   "held",
+   "every lip, chip and groove is a plane or a sub-cell"
+  ],
+  [
+   "1 Volume, crest and cap",
+   "top plane through (3, y, 15), cap 33, foot (17, 5), dip 47, from x = 13",
+   "changed",
+   "dip 52 and cap 38 give a tall fin"
+  ],
+  [
+   "1 Facing 262",
+   "283",
+   "changed",
+   "as written the face is seen edge-on"
+  ],
+  [
+   "2 Slab width 9 to 14, cells 12 x 40",
+   "strips 9 to 14, cross cuts every 22 to 36",
+   "held"
+  ],
+  [
+   "2 Cross cut lean 3 to 4 degrees, carry 0.12",
+   "lean 3.5, in-plane skew 12",
+   "changed",
+   "brick grid at 4"
+  ],
+  [
+   "2 Offsets 0 to 3.8 per slab, 0 to 2.2 per cell",
+   "0 to 2.0 and 0 to 1.2",
+   "changed",
+   "canyons at full size"
+  ],
+  [
+   "2 One-way step so slabs shingle",
+   "step 1.25 per strip, wrapped",
+   "held"
+  ],
+  [
+   "3 Levels 8 x 18 and 5 x 9, 0.4 of the level above, finest on half",
+   "8 x 18 on all, 5 x 9 on half; 0.6 and 0.3",
+   "held"
+  ],
+  [
+   "3 Tilt up to 3 degrees on slab faces",
+   "2 degrees",
+   "changed",
+   "calmer; shards at 3 on the crest"
+  ],
+  [
+   "3 Skin on every free face",
+   "slope, crest and end, mitred",
+   "changed",
+   "mitre added; crest and end two levels"
+  ],
+  [
+   "4 Lips 85%, 28 to 52 degrees, 0.5 to 1.1, .18 of the edge",
+   "every cell: top-edge chamfer 30-48, 0.7-1.4; sides on 55%; 1-2 corner facets",
+   "changed",
+   "the recipe's local lip gives cards"
+  ],
+  [
+   "5 Corner chips 30%, 1 to 2 per cell, 0.8 to 1.9, aimed up",
+   "as written",
+   "held",
+   "not very visible at this camera"
+  ],
+  [
+   "6 Grooves 55% of cells wider than 4",
+   "55%, 0.4 to 0.5 wide, 0.3 to 0.6 deep",
+   "held",
+   "a sub-strip; hard to see"
+  ],
+  [
+   "6 Pits, dishes, cracks, grain",
+   "none",
+   "unmet",
+   "needs a non-convex cut or a sub-cell tiling"
+  ],
+  [
+   "7 Foot: 11 chamfered blocks, 3 to 6",
+   "22 blocks over the plate front",
+   "changed",
+   "a strip is too little"
+  ],
+  [
+   "8 Seeds 1 to 4 all read right",
+   "four seeds, same look",
+   "held",
+   "all read as a faceted slab ramp"
+  ]
+ ],
+ "departures": [
+  "<strong>Round 2, framing.</strong> Figure at (8, 9) so it stands front left on the plate; wedge from x = 13, foot (17, 5), dip 47 instead of 52, cap 33, camera 122 mm out aimed at z = 13 so the whole plate shows. The recipe's dip of 50 to 52 with a 40 mm cap makes a tall narrow fin at this footprint; the panel's wedge is lower and wider.",
+  "<strong>Round 2, cards to chunks.</strong> Every leaf cell now gets a full-length chamfer on its top edge (30 to 48 degrees, 0.7 to 1.4 mm), side chamfers on about half, a small one at the foot, plus one or two extra cut planes at random corners (25 to 50 degrees, 1 to 2.6 mm deep). Setbacks went back up to 2.8 and 1.8 so the riser shows as a face, skew down to 6. The recipe's 'lip, no longer than .18 of the edge' makes a thin card edge; the panel's lips run the whole edge and are wide. This moved the look most.",
+  "<strong>Round 2, crest and end.</strong> Cap lowered to 33 so the apex where top, end and front planes meet is a flat tread, not a spike. Stepped but plain: the cap is not tiled.",
+  "<strong>Round 2, foot.</strong> 22 chamfered blocks of 2.5 to 6 mm over the plate's front and left, avoiding the figure, instead of 11 along the foot. The photo strews rubble over the front of the plate, so 'a strip along the foot' is too little.",
+  "<strong>The recipe is silent on which way the free face looks.</strong> It gives dip 52 and facing 262 with camera azimuth 35, but not the compass convention. Read as written (the face looking along the strike, at the front) the face is seen edge-on and the wall reads as a thin fin. Final: facing 283, foot point (12, 5), wedge from x = 7, cap 40, crest plane through (3, 15). Chosen by eye so the bed face looks at the camera and the end face is a sliver, as in the photo.",
+  "<strong>Setbacks of 3.8 + 2.2 mm cut canyons.</strong> On 12 mm slabs the recipe's offsets leave dark ravines and flat shards, nothing like the photo's shallow ledges. Final: slab 0 to 2.0, cell 0 to 1.2, then 0.6 and 0.3 (about half), core depth 6 instead of 9. Shingling (a monotonic step along the strike) was kept and does work.",
+  "<strong>A lip cannot be local with a half-space.</strong> 'Lips 85%, no longer than .18 of the edge' is impossible as one plane through mid-edge: the cut takes the whole cell beyond a line. A lip had to start at a top corner and run along the edge (a long thin chip). Depth raised to 0.8 to 1.6 and length to .25, because 0.5 to 1.1 does not show at the tabletop camera.",
+  "<strong>Each face needs a mitre, which the recipe never mentions.</strong> The recipe tiles the crest and the end 'like the slope', but pieces that run 10 mm behind their face and stop at the neighbour's nominal plane fill in the neighbour's setbacks. Each tiled face keeps the half of the rock nearer to it (a mitre plane between faces). Without it the end face swallowed the slope.",
+  "<strong>Crest and end: fewer levels.</strong> Three levels with 3 degree tilts on the crest and end made shards. Final: two levels, 2 degrees, no third level.",
+  "<strong>Cross cuts lean in plane, not only out of plane.</strong> Recipe: 3 to 4 degrees lean. A skew of 9 to 12 degrees in the plane of the face reads like the photo's diagonal cracks; at 4 degrees the cuts make a visible brick grid even at carry 0.12.",
+  "<strong>Interior pits cannot be one plane.</strong> A pit or dish as 'one plane cut into a face' is local only at an edge. In a union of convex cells an interior pit needs a sub-cell tiling; not built. Cracks (V grooves, branching) and grain are not built either; grooves are lowered sub-strips (0.4 to 0.5 wide, 0.3 to 0.6 deep) and are barely visible.",
+  "<strong>Min piece and the 0.4 mm floor disagree.</strong> The recipe's L3 setback (0.25 to 0.35 mm) and groove width (0.25 mm) are under its own 0.4 mm floor. Grooves widened to 0.4; the L3 step kept but it only reads through its tilt."
+ ]
+}
