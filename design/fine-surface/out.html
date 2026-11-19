@@ -37,6 +37,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 .stat b{color:var(--fg);font-weight:600}
 .fault{margin:0;padding:6px 10px;border:1px solid var(--err);border-radius:3px;color:var(--err);font-size:13px}
 @media (max-width:640px){.box{aspect-ratio:1/1}}
+.box.held{outline:2px solid var(--accent);outline-offset:2px}
 </style>
 
 <main>
@@ -61,7 +62,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
       </div>
     </div>
     <div class="box" id="view" role="img" aria-label="The block with the fine surface texture, live in 3D"><div class="wait" id="wait">Building the surface…</div></div>
-    <p class="stat" id="stat">Drag to turn, pinch to zoom.</p>
+    <p class="stat" id="stat">Drag to turn, pinch to zoom; click the view, then drag two fingers to pan.</p>
   </section>
 </main>
 
@@ -277,13 +278,28 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
   const box = document.getElementById('view'), fmt = (v, d) => v.toLocaleString('en-US', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 });
   const renderer = new T.WebGLRenderer({ antialias: true, alpha: true }); renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   const canvas = renderer.domElement;
-  /* Scrolling over the view scrolls the page; only a pinch zooms it. A trackpad's pinch comes as a wheel with ctrl held, a touch
-     screen's as two fingers, which the controls read themselves. This listener is the canvas's first, so a plain scroll never
-     reaches the controls. */
-  canvas.addEventListener('wheel', (e) => { if (!e.ctrlKey) e.stopImmediatePropagation(); });
+  /* Scrolling over the view scrolls the page until you click the view. A click takes it (outlined); then a two-finger drag on a
+     trackpad pans it, until the pointer leaves or Escape. A pinch always zooms: a trackpad's comes as a wheel with ctrl held, which
+     the controls read. On a touch screen two fingers pan and pinch together (the controls' own); a mouse pans with the right button.
+     This listener is the canvas's first, so a plain scroll never reaches the controls. */
+  let held = false;
+  const hold = (on) => { held = on; box.classList.toggle('held', on); };
+  canvas.addEventListener('pointerdown', () => hold(true));
+  canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hold(false); });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') hold(false); });
+  canvas.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) return;
+    e.stopImmediatePropagation(); if (!held) return;
+    e.preventDefault();
+    /* move the camera and what it looks at together, in the screen's plane: a pixel of drag is a pixel of view at the target */
+    const dist = camera.position.distanceTo(controls.target), perPx = 2 * dist * Math.tan(camera.fov * Math.PI / 360) / box.clientHeight;
+    const right = new T.Vector3().setFromMatrixColumn(camera.matrix, 0), up = new T.Vector3().setFromMatrixColumn(camera.matrix, 1);
+    const move = right.multiplyScalar(e.deltaX * perPx).add(up.multiplyScalar(-e.deltaY * perPx));
+    camera.position.add(move); controls.target.add(move); controls.update(); draw();
+  }, { passive: false });
   box.appendChild(canvas);
   const scene = new T.Scene(), camera = new T.PerspectiveCamera(CAM.fov, 1.6, 1, 2000); camera.up.set(0, 0, 1);
-  const controls = new T.OrbitControls(camera, canvas); controls.enablePan = false; controls.minDistance = 8; controls.maxDistance = 700;
+  const controls = new T.OrbitControls(camera, canvas); controls.enablePan = true; controls.screenSpacePanning = true; controls.minDistance = 8; controls.maxDistance = 700;
   /* two sets of lights, for viewing only. Whole: the Flakes page's (soft all round, one lamp past the left end raking the top and the
      near face). Close: one low lamp raking across the top face, little else. */
   const whole = new T.Group(), close = new T.Group();
@@ -324,7 +340,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
       const t2 = performance.now();
       document.getElementById('wait').hidden = true;
       document.getElementById('stat').innerHTML = 'Built in <b>' + fmt((t2 - t0) / 1000, 2) + ' s</b> (surface ' + fmt((t1 - t0) / 1000, 2) + ' s, normals ' + fmt((t2 - t1) / 1000, 2) + ' s): ' +
-        fmt(B.points) + ' points on a ' + FINE.grid + ' mm grid and ' + fmt(B.fine.points) + ' on a ' + fmt(B.fine.step, 3) + ' mm patch of the top face for the close-up, ' + fmt(B.triangles) + ' triangles, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.pits) + ' raised specks; deepest cut ' + fmt(B.deepest, 2) + ' mm. Drag to turn, pinch to zoom.';
+        fmt(B.points) + ' points on a ' + FINE.grid + ' mm grid and ' + fmt(B.fine.points) + ' on a ' + fmt(B.fine.step, 3) + ' mm patch of the top face for the close-up, ' + fmt(B.triangles) + ' triangles, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.pits) + ' raised specks; deepest cut ' + fmt(B.deepest, 2) + ' mm. Drag to turn, pinch to zoom; click the view, then drag two fingers to pan.';
       window.fineBuilt = { marks: B.marks.map((m, i) => m[0] + ' ' + Math.round(m[1] - (i ? B.marks[i - 1][1] : t0))).join(', '), normals: Math.round(t2 - t1), flakes: B.flakes, seconds: (t2 - t0) / 1000, deepest: B.deepest, points: B.points };
       draw();
     } catch (e) { report('building the surface', e); }
