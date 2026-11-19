@@ -48,6 +48,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     fine: .12,            /* the surface's grid step, where the crests are drawn */
     hollow: .14,          /* a dish's bottom is this much darker than its crests */
     tip: .08,             /* and its crests this much brighter, fading out within the outer part of the dish */
+    sharp: .15,           /* 0: a dish curves as the sag does; more steepens its walls just below the crest */
     speck: 2, sliver: .6, /* a stray piece of a dish smaller than this many mm², or thinner than this many mm, joins its neighbour */
     coarse: .42,          /* the grid step of a first, rough solve, which the fine grid then finishes */
     sweeps: { coarse: 120, fine: 15 }   /* passes of the relaxation on each grid */
@@ -281,7 +282,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     top.fill(0); for (let k = 0; k < F.N; k++) if (sag[k] > top[piece[k]]) top[piece[k]] = sag[k];
     for (let k = 0; k < F.N; k++) {
       const w = fDish[k], tp = top[piece[k]], wide = 4 * Math.sqrt(tp) * FEEL.fine, full = Math.min(FEEL.deepest, wide * FEEL.depthPerWidth);
-      const d = tp > 0 && sag[k] > 0 ? full * sag[k] / tp : 0;
+      const d = tp > 0 && sag[k] > 0 ? full * Math.pow(sag[k] / tp, 1 - FEEL.sharp) : 0;
       /* a dish darkens toward its bottom, as a hollow gets less of the light around it, and brightens a little at its crests */
       const p = full > 0 ? d / full : 0, q = 1 - p, c = 1 - FEEL.hollow * p * p + FEEL.tip * q * q * q * q;
       for (let t = 0; t < 3; t++) { pos[3 * k + t] = xyz[3 * k + t] - dir[3 * k + t] * d; shade[3 * k + t] = c; }
