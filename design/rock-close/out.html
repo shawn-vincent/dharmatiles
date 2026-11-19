@@ -238,7 +238,6 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
 
   /* ---- the view ---- */
   const renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.VSMShadowMap;
   const scene = new T.Scene(), cam = new T.PerspectiveCamera(CAM.fov, 1, 10, 2000); cam.up.set(0, 0, 1);
   const controls = new T.OrbitControls(cam, canvas); controls.enablePan = false; controls.addEventListener('change', draw);
   function home() {
@@ -246,17 +245,12 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     cam.position.set(t[0] + CAM.dist * Math.cos(e) * Math.sin(a), t[1] - CAM.dist * Math.cos(e) * Math.cos(a), t[2] + CAM.dist * Math.sin(e));
     controls.target.set(t[0], t[1], t[2]); controls.update();
   }
-  const block = new T.Mesh(geo, new T.MeshStandardMaterial({ color: 0xececee, roughness: 1, metalness: 0 })); block.castShadow = true; scene.add(block);
-  const ground = new T.Mesh(new T.PlaneGeometry(600, 600), new T.ShadowMaterial({ opacity: .14 })); ground.receiveShadow = true; scene.add(ground);
-  /* soft light from above: a sky over a dimmer ground, and two lamps high up on either side of the block, one to the left and in
-     front, one to the right and behind, each pointing down at it with a soft-edged shadow, so every face catches some light and
-     the dishes' shadows fall across the faces in two ways */
-  scene.add(new T.HemisphereLight(0xffffff, 0x8c8c90, .5));
-  [[-34, -24, 84, .42], [36, 20, 80, .34]].forEach(([x, y, z, power]) => {
-    const lamp = new T.SpotLight(0xffffff, power, 0, Math.PI / 5, 1); lamp.position.set(x, y, z); lamp.target.position.set(0, 0, 6);
-    lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024); lamp.shadow.radius = 6; lamp.shadow.bias = -.0005;
-    lamp.shadow.camera.near = 20; lamp.shadow.camera.far = 200; scene.add(lamp, lamp.target);
-  });
+  const block = new T.Mesh(geo, new T.MeshStandardMaterial({ color: 0xececee, roughness: 1, metalness: 0 })); scene.add(block);
+  /* the block floats, with no ground and no shadows: an even light all round, and one lamp out past its left end, low and a little in
+     front, pointing at the near left top corner, so its light rakes along the top and the near face and the dishes show by their shading */
+  scene.add(new T.AmbientLight(0xffffff, .45), new T.HemisphereLight(0xffffff, 0x8c8c90, .2));
+  const lamp = new T.SpotLight(0xffffff, .34, 0, Math.PI / 4, 1); lamp.position.set(-72, -16, 34); lamp.target.position.set(-16.3, -7.4, 12.25);
+  scene.add(lamp, lamp.target);
   function draw() { renderer.render(scene, cam); }
   function size() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); draw(); }
   canvas.addEventListener('dblclick', () => { home(); draw(); });
