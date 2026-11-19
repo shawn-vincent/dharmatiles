@@ -44,6 +44,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     round: 2.4,           /* the block's edges and corners are rounded this much */
     depthPerWidth: 1 / 7.5, deepest: 1.9,    /* a dish is as deep as its width times this, never deeper than that */
     fine: .12,            /* the surface's grid step, where the crests are drawn */
+    hollow: .14,          /* a dish's bottom is this much darker than its crests */
     coarse: .42,          /* the grid step of a first, rough solve, which the fine grid then finishes */
     sweeps: { coarse: 120, fine: 15 }   /* passes of the relaxation on each grid */
   };
@@ -198,8 +199,9 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
         goes down along the taut skin's way out (read from the coarse grid, where it is smooth). */
   const C = coarse, F = fine, cDish = new Uint16Array(C.N), cPin = new Uint8Array(C.N), cXyz = new Float32Array(C.N * 3), cSag = new Float32Array(C.N);
   const fDish = new Uint16Array(F.N), fPin = new Uint8Array(F.N), xyz = new Float32Array(F.N * 3), sag = new Float32Array(F.N), top = new Float32Array(dishes.length);
-  const pos = new Float32Array(F.N * 3), geo = new T.BufferGeometry(), Q = [0, 0, 0], O = [0, 0, 0];
+  const pos = new Float32Array(F.N * 3), shade = new Float32Array(F.N * 3), geo = new T.BufferGeometry(), Q = [0, 0, 0], O = [0, 0, 0];
   geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setIndex(new T.BufferAttribute(F.tris, 1));
+  geo.setAttribute('color', new T.BufferAttribute(shade, 3));
   const onBlock = (p, k) => { inner(p[3 * k], p[3 * k + 1], p[3 * k + 2], Q, O); for (let t = 0; t < 3; t++) p[3 * k + t] = Q[t] + O[t] * FEEL.round; };
   const cOut = new Float32Array(C.N * 3), dir = new Float32Array(F.N * 3);
   /* a fine point's dish is certain when the four coarse points around it are of one dish and none is on a ridge */
@@ -231,9 +233,11 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     top.fill(0); for (let k = 0; k < F.N; k++) if (sag[k] > top[fDish[k]]) top[fDish[k]] = sag[k];
     for (let k = 0; k < F.N; k++) {
       const tp = top[fDish[k]], full = Math.min(FEEL.deepest, 4 * Math.sqrt(tp) * FEEL.fine * FEEL.depthPerWidth), d = tp > 0 && sag[k] > 0 ? full * sag[k] / tp : 0;
-      for (let t = 0; t < 3; t++) pos[3 * k + t] = xyz[3 * k + t] - dir[3 * k + t] * d;
+      /* a dish darkens toward its bottom, as a hollow gets less of the light around it; its crests keep their full brightness */
+      const p = tp > 0 ? sag[k] / tp : 0, c = 1 - FEEL.hollow * p * p;
+      for (let t = 0; t < 3; t++) { pos[3 * k + t] = xyz[3 * k + t] - dir[3 * k + t] * d; shade[3 * k + t] = c; }
     }
-    geo.attributes.position.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere();
+    geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere();
   }
 
   /* ---- the view ---- */
@@ -245,13 +249,13 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     cam.position.set(t[0] + CAM.dist * Math.cos(e) * Math.sin(a), t[1] - CAM.dist * Math.cos(e) * Math.cos(a), t[2] + CAM.dist * Math.sin(e));
     controls.target.set(t[0], t[1], t[2]); controls.update();
   }
-  const block = new T.Mesh(geo, new T.MeshStandardMaterial({ color: 0xececee, roughness: 1, metalness: 0 })); scene.add(block);
+  const block = new T.Mesh(geo, new T.MeshStandardMaterial({ color: 0xececee, roughness: 1, metalness: 0, vertexColors: true })); scene.add(block);
   /* the block floats, with no ground and no shadows. A soft light all round, part of it even and part coming from above, behind and
      to the right, so the far side has some shape too; and one lamp out past its left end, low and a little in front, pointing at the
      near left top corner, so its light rakes along the top and the near face and the dishes show by their shading */
-  const fill = new T.DirectionalLight(0xffffff, .24); fill.position.set(50, 60, 45);
-  scene.add(new T.AmbientLight(0xffffff, .24), new T.HemisphereLight(0xffffff, 0x8c8c90, .2), fill);
-  const lamp = new T.SpotLight(0xffffff, .42, 0, Math.PI / 4, 1); lamp.position.set(-72, -16, 34); lamp.target.position.set(-16.3, -7.4, 12.25);
+  const fill = new T.DirectionalLight(0xffffff, .2); fill.position.set(50, 60, 45);
+  scene.add(new T.AmbientLight(0xffffff, .38), new T.HemisphereLight(0xffffff, 0x8c8c90, .2), fill);
+  const lamp = new T.SpotLight(0xffffff, .34, 0, Math.PI / 4, 1); lamp.position.set(-72, -16, 34); lamp.target.position.set(-16.3, -7.4, 12.25);
   scene.add(lamp, lamp.target);
   function draw() { renderer.render(scene, cam); }
   function size() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); draw(); }
