@@ -1,12 +1,14 @@
 <title>Rock Up Close</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* Layout: the reference and our view as two equal squares, side by side on a desk, stacked on a phone. Nothing else on the page. */
-:root{--bg:#eceff2;--rule:#c8cfd8;--stage:#8c8c91;color-scheme:light}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161b;--rule:#303945;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#12161b;--rule:#303945;color-scheme:dark}
+/* Layout: the reference and our view as two equal squares, side by side on a desk, stacked on a phone; below them, how the
+   block is made, as one readable column. */
+:root{--bg:#eceff2;--rule:#c8cfd8;--stage:#8c8c91;--fg:#1d232b;--muted:#566170;
+  --text:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--head:"Space Grotesk","Inter",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161b;--rule:#303945;--fg:#e3e8ee;--muted:#9aa5b3;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12161b;--rule:#303945;--fg:#e3e8ee;--muted:#9aa5b3;color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 var(--text);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media (max-width:760px){.duo{grid-template-columns:1fr}}
@@ -14,7 +16,16 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
 .box>*{position:absolute;inset:0;width:100%;height:100%;max-width:none;display:block}
 .box>img{object-fit:contain}
 .box>canvas{touch-action:none;cursor:grab}
+.how{max-width:68ch;margin:40px auto 0;display:grid;gap:14px}
+.how h2{font:600 22px/1.25 var(--head);margin:0;text-wrap:balance}
+.how p{margin:0}
+.how ol{margin:0;padding-left:1.4em;display:grid;gap:12px}
+.how li::marker{font:600 14px var(--head);color:var(--muted)}
+.how b{font-weight:600}
+.how code{font:13px var(--mono)}
+.how .note{color:var(--muted);font-size:14px}
 </style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Space+Grotesk:wght@600&display=swap">
 <main>
   <div class="duo">
     <div class="box"><img src="img/block-ref.jpg" alt="The reference block: a smooth pale stone block, about twice as long as it is wide, its faces broken into broad scalloped facets with crisp ridges between them"></div>
@@ -22,6 +33,22 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     <div class="box"><img src="img/block-lines.jpg" alt="The block's plain shape with the ridges traced off the reference drawn on its top, long face and left end as a net of dark lines"></div>
     <div class="box"><img src="img/block-scallop.jpg" alt="The model made from those traced ridges: the block's top, long face and left end scalloped into shallow dishes between the ridges, the block's own edges between those faces gone"></div>
   </div>
+  <section class="how" aria-labelledby="how">
+    <h2 id="how">How the block is made</h2>
+    <p>Every load builds the block from scratch in the page, from seed 7. Sizes are millimetres at true size; the settings are <code>FEEL</code> at the top of the page's script.</p>
+    <ol>
+      <li><b>The block.</b> A tapered box 32.6 long, its left end 14.8 wide and 12.25 tall, its right end 16.9 by 15.3, with its edges and corners rounded 0.5.</li>
+      <li><b>The dishes.</b> Centres are thrown at random over the top, sides and ends, then in a separate throw over the bottom, each kept only where it clears those before it. Each has a half-width of 2 to 4; the largest size allowed shrinks as the throws go on, so the big dishes go down first and small ones fill the gaps. Height counts 1.4 times, so dishes on the sides come out long and low. Each dish is stretched along a grain (the block's length, or across it on the ends, turned up to 20°) by 1.8 to 3 times, and reaching round onto another face counts half again as far, so most edges stay whole while some corners break.</li>
+      <li><b>The ridges.</b> Between two dishes the even line is where a point is equally far into each. The ridge is a walk along that line, out from its middle both ways: straight runs of 0.6 to 1.8, then a turn of up to 40°, which steers back toward the even line six times in ten. So a ridge zigzags without wandering off, and the dishes are not convex.</li>
+      <li><b>Two grids.</b> A coarse grid at 0.42 and a fine grid at 0.12 (164,730 points) cover the six faces, joined into one closed mesh. Each point belongs to the dish that wins against each other in turn among its five nearest: the side of their ridge it lies on. The coarse grid decides first; a fine point whose four coarse neighbours agree takes their dish without a test.</li>
+      <li><b>Stray pieces.</b> A ridge's walk can cut a piece off a dish. A piece under 2 mm² or thinner than 0.6 joins the dish it borders most; any other piece is a hollow of its own.</li>
+      <li><b>Crest points.</b> Where a ridge crosses a fine grid edge, the end nearer the crossing moves exactly onto it and is pinned there on the block's surface. Each grid square is cut along the diagonal that joins two crest points, so every ridge is an unbroken line of triangle edges.</li>
+      <li><b>Relaxation.</b> With the crest points pinned, two things relax over the grid: a taut skin (each free point pulled to its neighbours' mean, which cuts flat facets where a dish runs over an edge) and a membrane that sags evenly, giving each dish one smooth hollow. The coarse grid takes 120 passes; the fine grid starts from that answer and takes 15. A link to a crest point counts by how close the crest really is, so depth grows evenly from the true ridge.</li>
+      <li><b>Depth.</b> Each piece's deepest sag tells its width (a round dish of radius R sags R²/4). Its full depth is a tenth of its width, never more than 1.9, and each point goes down by that full depth times its sag over the deepest, to the power 0.85, which steepens the walls just under the crest. It goes down along the taut skin's normal.</li>
+      <li><b>Hard crests.</b> Each crest point is split into a copy per dish beside it, so the two walls meeting there shade separately and the crest reads as a sharp edge.</li>
+    </ol>
+    <p class="note">For viewing only: each dish is drawn a little darker toward its bottom and a little brighter at its crests, under soft light from all round and one lamp raking across the top from the left.</p>
+  </section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -61,7 +88,8 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   const A = end(-BLOCK.L / 2, BLOCK.left), B = end(BLOCK.L / 2, BLOCK.right);
   /* the six faces: corners at (a, b) = (0,0) (1,0) (1,1) (0,1), counter-clockwise from outside; top, near, far, left end, right end, bottom */
   const FACES = [[A[3], B[3], B[2], A[2]], [A[0], B[0], B[3], A[3]], [B[1], A[1], A[2], B[2]], [A[1], A[0], A[3], A[2]], [B[0], B[1], B[2], B[3]], [A[1], B[1], B[0], A[0]]];
-  const at = (c, a, b) => [0, 1, 2].map(t => (c[0][t] * (1 - a) + c[1][t] * a) * (1 - b) + (c[3][t] * (1 - a) + c[2][t] * a) * b);
+  const lerp = (c, a, b, t) => (c[0][t] * (1 - a) + c[1][t] * a) * (1 - b) + (c[3][t] * (1 - a) + c[2][t] * a) * b;
+  const at = (c, a, b) => [lerp(c, a, b, 0), lerp(c, a, b, 1), lerp(c, a, b, 2)];
   const sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]], cross = (u, v) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
   const len = (v) => Math.hypot(v[0], v[1], v[2]);
   const AREA = FACES.map(c => (len(cross(sub(c[1], c[0]), sub(c[3], c[0]))) + len(cross(sub(c[1], c[2]), sub(c[3], c[2])))) / 2);
@@ -82,7 +110,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
      corners (quads), counter-clockwise from outside. */
   function grid(step) {
     const nL = Math.round(BLOCK.L / step), nW = Math.round((BLOCK.left.W + BLOCK.right.W) / 2 / step), nH = Math.round((BLOCK.left.H + BLOCK.right.H) / 2 / step);
-    const counts = [[nL, nW], [nL, nH], [nL, nH], [nW, nH], [nW, nH], [nL, nW]], index = new Map(), box = [], tris = [], quads = [], links = [], ids = [];
+    const counts = [[nL, nW], [nL, nH], [nL, nH], [nW, nH], [nW, nH], [nL, nW]], index = new Map(), box = [], quads = [], links = [], ids = [];
     const node = (p) => { const k = (Math.round(p[0] * 500) + 32768) * 4294967296 + (Math.round(p[1] * 500) + 32768) * 65536 + (Math.round(p[2] * 500) + 32768);
       let v = index.get(k); if (v === undefined) { v = box.length / 3; index.set(k, v); box.push(p[0], p[1], p[2]); links.push([]); } return v; };
     const link = (a, b) => { if (!links[a].includes(b)) { links[a].push(b); links[b].push(a); } };
@@ -90,14 +118,14 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
       const [nx, ny] = counts[f], W = nx + 1, g = new Int32Array(W * (ny + 1));
       for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) g[j * W + i] = node(at(c, i / nx, j / ny));
       for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) { const k = g[j * W + i]; if (i < nx) link(k, g[j * W + i + 1]); if (j < ny) link(k, g[(j + 1) * W + i]); }
-      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const k = j * W + i; tris.push(g[k], g[k + 1], g[k + W + 1], g[k], g[k + W + 1], g[k + W]); quads.push(g[k], g[k + 1], g[k + W + 1], g[k + W]); }
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const k = j * W + i; quads.push(g[k], g[k + 1], g[k + W + 1], g[k + W]); }
       ids.push({ nx: nx, ny: ny, g: g });
     });
     const N = box.length / 3, base = new Float32Array(N * 3), out = new Float32Array(N * 3), q = [0, 0, 0], n = [0, 0, 0];
     for (let k = 0; k < N; k++) { inner(box[3 * k], box[3 * k + 1], box[3 * k + 2], q, n); for (let t = 0; t < 3; t++) { out[3 * k + t] = n[t]; base[3 * k + t] = q[t] + n[t] * FEEL.round; } }
     const off = new Int32Array(N + 1); for (let k = 0; k < N; k++) off[k + 1] = off[k] + links[k].length;
     const nbr = new Int32Array(off[N]); for (let k = 0; k < N; k++) nbr.set(links[k], off[k]);
-    return { N: N, box: new Float32Array(box), base: base, out: out, tris: new Uint32Array(tris), quads: new Uint32Array(quads), off: off, nbr: nbr, ids: ids };
+    return { N: N, box: new Float32Array(box), base: base, out: out, quads: new Uint32Array(quads), off: off, nbr: nbr, ids: ids };
   }
   const fine = grid(FEEL.fine), coarse = grid(FEEL.coarse);
   /* each fine point read from the coarse grid: the four coarse points around it on its face, and their weights */
@@ -128,19 +156,23 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
       c.a = [0, 1, 2].map(i => u[i] * Math.cos(t) + w[i] * Math.sin(t)); c.n = n.slice(); c.pull = .6 + .4 * c.pull; });
     return C;
   })();
-  /* each point's K nearest dishes, by distance less half-width (the stretch and the edges only reorder these) */
-  const K = 5;
-  function nearest(G) {
-    const out = new Uint16Array(G.N * K), best = new Float64Array(K), id = new Int32Array(K), b = G.box;
-    for (let k = 0; k < G.N; k++) {
-      best.fill(Infinity); const x = b[3 * k], y = b[3 * k + 1], z = b[3 * k + 2];
-      for (let i = 0; i < dishes.length; i++) { const v = md(x, y, z, dishes[i]) - dishes[i].r; if (v >= best[K - 1]) continue;
-        let s = K - 1; while (s > 0 && best[s - 1] > v) { best[s] = best[s - 1]; id[s] = id[s - 1]; s--; } best[s] = v; id[s] = i; }
-      out.set(id, k * K);
-    }
-    return out;
+  /* A point's nearest dishes, by distance less half-width (the stretch and the edges only reorder these): the K its dish is chosen
+     among (partition). A coarse point keeps its KC nearest of them all; a fine point looks only among its four coarse points'
+     (they are within a coarse step of it, so its nearest are among theirs). near(G, k, id) puts point k's K nearest in id. */
+  const K = 5, KC = 8, best = new Float64Array(KC), seen = new Int32Array(dishes.length).fill(-1);
+  let stamp = 0;
+  function rank(x, y, z, n, pick, keep, id) {
+    best.fill(Infinity); stamp++;
+    for (let m = 0; m < n; m++) { const i = pick(m); if (seen[i] === stamp) continue; seen[i] = stamp;
+      const v = md(x, y, z, dishes[i]) - dishes[i].r; if (v >= best[keep - 1]) continue;
+      let s = keep - 1; while (s > 0 && best[s - 1] > v) { best[s] = best[s - 1]; id[s] = id[s - 1]; s--; } best[s] = v; id[s] = i; }
   }
-  fine.near = nearest(fine); coarse.near = nearest(coarse);
+  const coarseNear = new Uint16Array(coarse.N * KC), all = (m) => m;
+  { const id = new Int32Array(KC), b = coarse.box; for (let k = 0; k < coarse.N; k++) { rank(b[3 * k], b[3 * k + 1], b[3 * k + 2], dishes.length, all, KC, id); coarseNear.set(id, k * KC); } }
+  function near(G, k, id) {
+    if (G === coarse) { for (let s = 0; s < K; s++) id[s] = coarseNear[k * KC + s]; return; }
+    rank(G.box[3 * k], G.box[3 * k + 1], G.box[3 * k + 2], 4 * KC, (m) => coarseNear[from[4 * k + (m / KC | 0)] * KC + m % KC], K, id);
+  }
 
   /* The ridge between two dishes is a walk along the even line between them, from its middle outward both ways: straight runs
      between turns (FEEL.turns), each turn mostly steering back toward the even line, so a ridge zigzags without wandering off.
@@ -183,7 +215,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     for (let k = 0; k < G.N; k++) {
       if (known) { const d = known(k); if (d >= 0) { dish[k] = d; continue; } }
       const x = b[3 * k], y = b[3 * k + 1], z = b[3 * k + 2], nx = o[3 * k], ny = o[3 * k + 1], nz = o[3 * k + 2];
-      for (let s = 0; s < K; s++) { c[s] = G.near[k * K + s]; v[s] = reach(x, y, z, c[s], nx, ny, nz); }
+      near(G, k, c); for (let s = 0; s < K; s++) v[s] = reach(x, y, z, c[s], nx, ny, nz);
       let w = 0; for (let s = 1; s < K; s++) if (margin(x, y, z, nx, ny, nz, c[w], c[s], v[w], v[s]) < 0) w = s;
       dish[k] = c[w];
     }
@@ -208,14 +240,15 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
         crest points, so every ridge is an unbroken line of triangle edges. The free points start from the coarse answer read at
         their place (the sag scaled to fine steps), and a few fine passes finish it: what the rough solve got wrong is all
         small-scale, which is what passes undo fast.
-     3. Each dish's (each piece's) deepest sag gives its width (a round dish of radius R sags R² / 4, in grid steps), so its full depth, and its
-        sag over that deepest is its profile: depth = full depth times profile. The dish
-        goes down along the taut skin's way out (read from the coarse grid, where it is smooth). */
+     3. Each piece's deepest sag gives its width (a round dish of radius R sags R² / 4, in grid steps), so its full depth, and its
+        sag over that deepest is its profile: depth = full depth times profile to the power 1 - FEEL.sharp. The dish goes down
+        along the taut skin's way out (read from the coarse grid, where it is smooth).
+     4. Each crest point is split into a copy per dish beside it, so the crest is a hard edge. */
   const C = coarse, F = fine, cDish = new Uint16Array(C.N), cPin = new Uint8Array(C.N), cXyz = new Float32Array(C.N * 3), cSag = new Float32Array(C.N);
   const fDish = new Uint16Array(F.N), fPin = new Uint8Array(F.N), xyz = new Float32Array(F.N * 3), sag = new Float32Array(F.N), piece = new Int32Array(F.N), top = new Float32Array(F.N), stack = new Int32Array(F.N);
   /* room for every point and a copy of each crest point per dish beside it (below) */
   const pos = new Float32Array(F.N * 6), shade = new Float32Array(F.N * 6), geo = new T.BufferGeometry(), Q = [0, 0, 0], O = [0, 0, 0];
-  geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setIndex(new T.BufferAttribute(new Uint32Array(F.tris.length), 1));
+  geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setIndex(new T.BufferAttribute(new Uint32Array(F.quads.length / 4 * 6), 1));
   geo.setAttribute('color', new T.BufferAttribute(shade, 3));
   /* the pieces: each run of neighbouring points of one dish (piece), its point count (area), and its points (members, from start[i]) */
   const area = new Int32Array(F.N), start = new Int32Array(F.N + 1), members = new Int32Array(F.N);
@@ -230,14 +263,15 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   const cOut = new Float32Array(C.N * 3), dir = new Float32Array(F.N * 3), shift = new Float32Array(F.N), toward = new Int32Array(F.N), link = new Float32Array(F.nbr.length);
   /* a fine point's dish is certain when the four coarse points around it are of one dish and none is on a ridge */
   const settled = (k) => { const a = from[4 * k], d = cDish[a]; for (let q = 4 * k; q < 4 * k + 4; q++) { const c = from[q]; if (cPin[c] || cDish[c] !== d) return -1; } return d; };
-  /* the whole surface, steps 1 to 3, and the direction each point's dish goes down (the taut skin's way out, read from the coarse
+  /* the whole surface, steps 1 to 4, and the direction each point's dish goes down (the taut skin's way out, read from the coarse
      grid) */
   function shape() {
     partition(C, cDish, null);
     for (let k = 0; k < C.N; k++) { cPin[k] = 0; for (let e = C.off[k]; e < C.off[k + 1]; e++) if (cDish[C.nbr[e]] !== cDish[k]) { cPin[k] = 1; break; } }
     cXyz.set(C.base); cSag.fill(0); relax(C, cPin, cXyz, cSag, FEEL.sweeps.coarse);
-    cOut.fill(0); const t = C.tris;
-    for (let i = 0; i < t.length; i += 3) { const a = 3 * t[i], b = 3 * t[i + 1], c = 3 * t[i + 2];
+    /* the coarse skin's way out at each point: the normals of the triangles around it (each square cut along its diagonal a-c) */
+    cOut.fill(0); const qc = C.quads;
+    for (let i = 0; i < qc.length; i += 4) for (const [a, b, c] of [[3 * qc[i], 3 * qc[i + 1], 3 * qc[i + 2]], [3 * qc[i], 3 * qc[i + 2], 3 * qc[i + 3]]]) {
       const ux = cXyz[b] - cXyz[a], uy = cXyz[b + 1] - cXyz[a + 1], uz = cXyz[b + 2] - cXyz[a + 2], vx = cXyz[c] - cXyz[a], vy = cXyz[c + 1] - cXyz[a + 1], vz = cXyz[c + 2] - cXyz[a + 2];
       const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; cOut[a] += nx; cOut[a + 1] += ny; cOut[a + 2] += nz; cOut[b] += nx; cOut[b + 1] += ny; cOut[b + 2] += nz; cOut[c] += nx; cOut[c + 1] += ny; cOut[c + 2] += nz; }
     partition(F, fDish, settled);
