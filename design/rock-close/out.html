@@ -246,9 +246,11 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     controls.target.set(t[0], t[1], t[2]); controls.update();
   }
   const block = new T.Mesh(geo, new T.MeshStandardMaterial({ color: 0xececee, roughness: 1, metalness: 0 })); scene.add(block);
-  /* the block floats, with no ground and no shadows: an even light all round, and one lamp out past its left end, low and a little in
-     front, pointing at the near left top corner, so its light rakes along the top and the near face and the dishes show by their shading */
-  scene.add(new T.AmbientLight(0xffffff, .45), new T.HemisphereLight(0xffffff, 0x8c8c90, .2));
+  /* the block floats, with no ground and no shadows. A soft light all round, part of it even and part coming from above, behind and
+     to the right, so the far side has some shape too; and one lamp out past its left end, low and a little in front, pointing at the
+     near left top corner, so its light rakes along the top and the near face and the dishes show by their shading */
+  const fill = new T.DirectionalLight(0xffffff, .2); fill.position.set(50, 60, 45);
+  scene.add(new T.AmbientLight(0xffffff, .38), new T.HemisphereLight(0xffffff, 0x8c8c90, .2), fill);
   const lamp = new T.SpotLight(0xffffff, .34, 0, Math.PI / 4, 1); lamp.position.set(-72, -16, 34); lamp.target.position.set(-16.3, -7.4, 12.25);
   scene.add(lamp, lamp.target);
   function draw() { renderer.render(scene, cam); }
