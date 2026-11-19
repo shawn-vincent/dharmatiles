@@ -138,7 +138,7 @@ html{scroll-behavior:smooth}
     <div class="words">
       <div class="n">Step 3</div><h2 id="h3s">Ridges</h2>
       <p>Between two flakes, the <b>even line</b> is where a point is equally far into each (counting the stretch). A straight even line would give convex cells, which stone doesn't have.</p>
-      <p>So the ridge is a <b>walk</b> along the even line, out from its middle both ways: a straight run of 0.6 to 1.8 mm, then a turn of up to 40°, steering back toward the even line six times in ten. It zigzags without wandering off.</p>
+      <p>So the ridge is a <b>walk</b> along the even line, out from its middle both ways: a straight run of 0.6 to 1.8 mm, then a turn of up to 34°, steering back toward the even line six times in ten. It zigzags without wandering off.</p>
       <p>The diagram is one real ridge of this block, at true scale: everything above the walk belongs to one flake, everything below to the other.</p>
     </div>
     <div class="views">
@@ -240,7 +240,7 @@ html{scroll-behavior:smooth}
     edge: .5,             /* a flake is this much more reluctant to reach round onto another face (0: not at all; more keeps the edges whole) */
     stretch: 3,           /* each flake is drawn out along the grain by up to this much (at least 60% of it), so the cells are long and thin */
     grain: 20,            /* a flake's long way is along the block's length (on the ends, across them), turned by up to this many degrees */
-    turns: { every: [.6, 1.8], most: 40 },   /* a ridge turns every so many mm, by up to so many degrees */
+    turns: { every: [.6, 1.8], most: 34 },   /* a ridge turns every so many mm, by up to so many degrees */
     depthPerWidth: 1 / 10,  deepest: 1.9,    /* a flake is as deep as its width times this, never deeper than that */
     fine: .12,            /* the surface's grid step, where the crests are drawn */
     hollow: .14,          /* a flake's bottom is this much darker than its crests */
