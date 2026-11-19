@@ -1,0 +1,1216 @@
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Rock at Every Scale</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<style>
+/* Layout concept: a geologist's field plate. A quiet stone-grey page, drawings and models in rows (model, section, sheet panel), dimension lines in teal, one measured number per claim.
+   Colour: slate ink on cool paper; teal is for dimensions only; red is for mistakes only; the models sit on a mid grey like the references. */
+:root{
+  --bg:#eceff2; --surface:#f8f9fb; --surface2:#e3e7ec; --ink:#1a2028; --ink2:#46515f; --ink3:#6c7786; --rule:#c8cfd8;
+  --dim:#0d6e86; --stone:#c5cad2; --stone2:#9aa3af; --err:#b3392d; --good:#2e7d58; --band:#a55a12;
+  --f1:#34557a; --f2:#0d6e86; --f3:#8a5a1a;
+  --disp:"Barlow Condensed","Arial Narrow",system-ui,sans-serif; --body:"Source Sans 3","Segoe UI",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12161b; --surface:#1a2027; --surface2:#232a33; --ink:#e7ebf0; --ink2:#a9b4c1; --ink3:#7f8b99; --rule:#303945;
+  --dim:#5fc4dd; --stone:#58616d; --stone2:#8792a0; --err:#ef7d70; --good:#6cc79a; --band:#e1a35d;
+  --f1:#8db4e0; --f2:#5fc4dd; --f3:#e1b36c; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#12161b; --surface:#1a2027; --surface2:#232a33; --ink:#e7ebf0; --ink2:#a9b4c1; --ink3:#7f8b99; --rule:#303945;
+  --dim:#5fc4dd; --stone:#58616d; --stone2:#8792a0; --err:#ef7d70; --good:#6cc79a; --band:#e1a35d;
+  --f1:#8db4e0; --f2:#5fc4dd; --f3:#e1b36c; color-scheme:dark;}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:64px}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16.5px/1.55 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:0 80px}
+h1,h2,h3,h4{font-family:var(--disp);font-weight:600;letter-spacing:.01em;line-height:1.1;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.6rem,7vw,4.6rem);font-weight:700;letter-spacing:0}
+h2{font-size:clamp(1.8rem,4vw,2.5rem);margin:0 0 .35em;padding-top:.2em}
+h3{font-size:1.45rem;margin:0 0 .3em}
+h4{font-size:1.05rem;text-transform:uppercase;letter-spacing:.09em;color:var(--ink2);margin:0 0 .4em;font-weight:600}
+p{margin:.5em 0 .8em;max-width:70ch}
+a{color:var(--dim)}
+code,.mono{font-family:var(--mono);font-size:.86em}
+small,.small{font-size:.86rem;color:var(--ink2)}
+.num{font-variant-numeric:tabular-nums}
+header.top{padding-block:44px 22px;border-bottom:1px solid var(--rule)}
+header.top .kick{font:600 .85rem/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:14px}
+header.top p.lede{font-size:1.2rem;max-width:62ch;color:var(--ink2)}
+nav.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--rule);display:flex;gap:6px 14px;align-items:center;padding-block:8px;margin-inline:-16px;padding-inline:16px;flex-wrap:wrap}
+nav.bar .links{display:flex;gap:4px 12px;overflow-x:auto;flex:1 1 360px;white-space:nowrap;scrollbar-width:thin}
+nav.bar a{font:600 .88rem/1 var(--disp);letter-spacing:.07em;text-transform:uppercase;text-decoration:none;color:var(--ink2);padding:6px 2px}
+nav.bar a:hover{color:var(--dim)}
+.relief{display:flex;align-items:center;gap:8px;font:500 .78rem var(--mono);color:var(--ink2)}
+.relief button{font:600 .8rem var(--mono);border:1px solid var(--rule);background:var(--surface);color:var(--ink);padding:5px 9px;cursor:pointer;border-radius:3px}
+.relief button[aria-pressed="true"]{background:var(--dim);color:var(--bg);border-color:var(--dim)}
+section{padding-block:44px 8px;border-top:1px solid var(--rule);margin-top:36px}
+section:first-of-type{border-top:0;margin-top:8px}
+.eyebrow{font:600 .78rem/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.cols4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media (max-width:900px){.cols3,.cols4{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){.cols2,.cols3,.cols4{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--rule);padding:14px 16px 16px;min-width:0}
+.note{border-left:3px solid var(--dim);background:var(--surface);padding:10px 14px;margin:14px 0;max-width:78ch}
+.note.warn{border-left-color:var(--band)}
+.note b.t{font:600 .78rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);display:block;margin-bottom:2px}
+/* the three scales */
+.scalebar{display:flex;height:44px;border:1px solid var(--rule);margin:14px 0 6px;font:600 .9rem var(--disp);letter-spacing:.06em;text-transform:uppercase}
+.scalebar div{display:flex;align-items:center;justify-content:center;color:#fff;white-space:nowrap;overflow:hidden}
+.scalebar .a{flex:75;background:var(--f1)} .scalebar .b{flex:20;background:var(--f2)} .scalebar .c{flex:7.5;background:var(--f3)}
+:root:not([data-theme="light"]) .scalebar div{color:#0b0f14}
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:20px}
+@media (max-width:700px){.hero{grid-template-columns:1fr}}
+.hero figure{margin:0}
+.photo{position:relative;line-height:0;background:#777}
+.photo img{width:100%;height:auto;display:block}
+.photo svg{position:absolute;inset:0;width:100%;height:100%}
+.mk circle{fill:#fff;stroke-width:3}
+.mk text{font:700 12px var(--mono);text-anchor:middle;dominant-baseline:central;fill:#111}
+.k1{stroke:var(--f1)} .k2{stroke:var(--f2)} .k3{stroke:var(--f3)}
+.sil{fill:none;stroke:#fff;stroke-width:2;stroke-dasharray:7 5}
+.legend{display:grid;gap:6px;margin:10px 0 0;padding:0;list-style:none;font-size:.95rem}
+.legend li{display:grid;grid-template-columns:26px 1fr;gap:8px;align-items:start}
+.legend i{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;border:3px solid;font:700 11px var(--mono);font-style:normal;background:var(--surface);color:var(--ink)}
+/* primitives */
+.prim{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) minmax(0,.95fr);gap:18px;padding:22px 0;border-top:1px solid var(--rule);align-items:start}
+.prim:first-of-type{border-top:0}
+.prim>header{grid-column:1/-1;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.prim>header .tag{font:600 .76rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
+.prim .intro{grid-column:1/-1;margin:0}
+@media (max-width:1020px){.prim{grid-template-columns:1fr 1fr}.prim .panel{grid-column:1/-1}}
+@media (max-width:640px){.prim{grid-template-columns:1fr}}
+.v3d{position:relative;margin:0;background:#7d818a;border:1px solid var(--rule);line-height:0;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.v3d canvas{width:100%;aspect-ratio:4/3;display:block;cursor:grab}
+.v3d.live canvas{cursor:grabbing}
+.v3d figcaption{position:absolute;left:8px;bottom:6px;font:500 .7rem var(--mono);color:#e8ecf2;text-shadow:0 1px 2px #0008;line-height:1.2;pointer-events:none}
+.v3d.wide canvas{aspect-ratio:16/10}
+.panel{margin:0}
+.panel img{width:100%;height:auto;display:block;border:1px solid var(--rule);background:#fff}
+.panel figcaption{font-size:.82rem;color:var(--ink2);margin-top:5px;line-height:1.35}
+.panel.stack{display:grid;gap:10px}
+svg.prof{width:100%;height:auto;display:block;background:var(--surface);border:1px solid var(--rule)}
+svg text{font:500 10.5px var(--mono);fill:var(--ink2)}
+svg .land{fill:var(--stone);stroke:var(--ink);stroke-width:1.3;stroke-linejoin:round}
+svg .base{fill:var(--surface2);stroke:none}
+svg .dimline{stroke:var(--dim);stroke-width:1;fill:none}
+svg .dimtxt{fill:var(--dim);font-weight:600}
+svg .grid{stroke:var(--rule);stroke-width:1;stroke-dasharray:2 3}
+svg .thin{stroke:var(--ink3);stroke-width:1;fill:none}
+svg .fill1{fill:var(--stone)} svg .fill2{fill:var(--surface2)} svg .stroke{stroke:var(--ink);fill:none;stroke-width:1.3}
+svg .e{stroke:var(--err);fill:none;stroke-width:1.5}
+dl.nums{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:10px 0 0;font-size:.92rem}
+dl.nums dt{color:var(--ink3);font:500 .74rem var(--mono);letter-spacing:.04em;padding-top:3px;text-transform:uppercase}
+dl.nums dd{margin:0;font-variant-numeric:tabular-nums}
+dl.nums dd.me{color:var(--dim);font-weight:600}
+table.t{border-collapse:collapse;width:100%;font-size:.92rem;font-variant-numeric:tabular-nums}
+table.t th,table.t td{border-bottom:1px solid var(--rule);padding:6px 10px 6px 0;text-align:left;vertical-align:top}
+table.t th{font:600 .74rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.tw{overflow-x:auto;max-width:100%}
+.mistake{background:var(--surface);border:1px solid var(--rule);display:grid;grid-template-rows:auto 1fr}
+.mistake img{width:100%;display:block;aspect-ratio:1/1;object-fit:cover;background:#777}
+.mistake .b{padding:10px 12px 12px}
+.mistake .b h4{color:var(--err)}
+.mistake .b p{margin:.2em 0;font-size:.92rem}
+.recipe ol{padding-left:1.4em;max-width:78ch}
+.recipe li{margin:.45em 0}
+.recipe li b{font-weight:600}
+.recipe .step{border-left:3px solid var(--rule);padding-left:14px;margin:18px 0}
+.recipe .step h4{color:var(--ink)}
+.src{font:500 .72rem var(--mono);color:var(--ink3);white-space:nowrap}
+.tagrow{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}
+.pill{font:600 .7rem var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--rule);color:var(--ink2);background:var(--surface)}
+.pill.s{color:var(--f1);border-color:var(--f1)} .pill.p{color:var(--f3);border-color:var(--f3)} .pill.o{color:var(--f2);border-color:var(--f2)}
+footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);font-size:.88rem;color:var(--ink2)}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+:focus-visible{outline:2px solid var(--dim);outline-offset:2px}
+
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="kick">Reference and specification &middot; 35 mm square</div>
+  <h1>Rock at Every Scale</h1>
+  <p class="lede">What makes a block of resin read as rock, from the silhouette down to the grain, with the numbers to build it. Nine primitives, the logic that assembles them, the mistakes of about twenty-five rounds on Walls N and O, and a recipe for building a wall from nothing.</p>
+  <p class="small">Every model on this page is built by code on the page (a heightfield or a set of half-spaces; three.js only draws it). Drag a model to turn it. Numbers are in mm at the 35 mm square; the generated sheets are drawn at 25 mm, so their millimetres are multiplied by 1.4 and their ratios kept. Sheet numbers are guidance, not measurements. Where a sheet and the unpainted photos disagree, the photos win, and the page says so.</p>
+</header>
+<nav class="bar" aria-label="Sections">
+  <div class="links">
+    <a href="#scale">Scales</a><a href="#primitives">Primitives</a><a href="#formation">Formation</a><a href="#edges">Edges</a><a href="#patterns">Patterns</a><a href="#lessons">Lessons</a><a href="#recipe">Recipe</a><a href="#language">Language</a>
+  </div>
+  <div class="relief" role="group" aria-label="Vertical relief of the surface models">relief
+    <button type="button" data-k="1" aria-pressed="false">true</button><button type="button" data-k="2" aria-pressed="true">&times;2</button><button type="button" data-k="3" aria-pressed="false">&times;3</button>
+  </div>
+</nav>
+
+<section id="scale">
+  <div class="eyebrow">1 &middot; What makes rock read as rock</div>
+  <h2>Three scales, one budget</h2>
+  <p>A rock reads at three distances. The silhouette and the main masses are read first, the breaks and ledges second, the surface last. The family guide gives the share of the read each carries, and our rounds on N and O agreed with it the hard way: when the surface got most of the work, the wall read as noise.</p>
+  <div class="scalebar" role="img" aria-label="Form 70 to 80 percent, structure 15 to 25 percent, surface 5 to 10 percent"><div class="a">Form 70&ndash;80%</div><div class="b">Structure 15&ndash;25%</div><div class="c">Surface 5&ndash;10%</div></div>
+  <div class="tw"><table class="t">
+    <tr><th>Scale</th><th>Feature size at 35 mm</th><th>Does</th><th>Examples</th><th>Sheet (25 mm)</th></tr>
+    <tr><td><b>Form</b> (macro)</td><td>35&ndash;280, 1&ndash;5 dominant masses</td><td>silhouette and primary volumes</td><td>wall, terrace, spire; tiers; the ramp</td><td>25&ndash;200+, 70&ndash;80%</td></tr>
+    <tr><td><b>Structure</b> (meso)</td><td>7&ndash;70</td><td>layers, breaks, block boundaries, the form&rsquo;s internal rhythm</td><td>courses, ledges, big fractures, slab ends</td><td>5&ndash;50, 15&ndash;25%</td></tr>
+    <tr><td><b>Surface</b> (small)</td><td>1.4&ndash;7</td><td>wear and material character; keep it restrained</td><td>chips, small steps, pits, grooves, eased edges</td><td>1&ndash;5, 5&ndash;10%</td></tr>
+    <tr><td><b>Grain</b> (micro)</td><td>0.4&ndash;2.1</td><td>roughness; only under strong detail</td><td>pitting, striations, tool texture</td><td>0.3&ndash;1.5</td></tr>
+  </table></div>
+  <p class="small">The 0.4 mm floor is the printer&rsquo;s and is not scaled. Feature size under 0.4 mm is removed; under 0.6 to 1.0 mm is fragile (rock sheet, 9).</p>
+
+  <h3 style="margin-top:28px">Where each scale shows, on the unpainted panels</h3>
+  <div class="hero"><figure><div class="photo"><img src="img/ref_o.jpg" width="310" height="310" alt="Reference panel O, unpainted"><svg viewBox="0 0 400 400" aria-hidden="true"><polygon class="sil" points="128,95 192,28 265,20 345,32 386,88 388,300 330,334 270,300 236,300 190,268 180,215 132,170"/><g class="mk"><circle class="k1" cx="258" cy="22" r="11"/><text x="258" y="22">1</text></g><g class="mk"><circle class="k2" cx="170" cy="140" r="11"/><text x="170" y="140">2</text></g><g class="mk"><circle class="k2" cx="262" cy="77" r="11"/><text x="262" y="77">3</text></g><g class="mk"><circle class="k2" cx="350" cy="205" r="11"/><text x="350" y="205">4</text></g><g class="mk"><circle class="k2" cx="300" cy="262" r="11"/><text x="300" y="262">5</text></g><g class="mk"><circle class="k3" cx="302" cy="58" r="11"/><text x="302" y="58">6</text></g><g class="mk"><circle class="k3" cx="250" cy="200" r="11"/><text x="250" y="200">7</text></g><g class="mk"><circle class="k3" cx="338" cy="82" r="11"/><text x="338" y="82">8</text></g></svg></div><figcaption class="small">Panel O, unpainted. Dashed outline: form. Numbers: where structure and surface show.</figcaption></figure><figure><div class="photo"><img src="img/ref_n.jpg" width="308" height="308" alt="Reference panel N, unpainted"><svg viewBox="0 0 400 400" aria-hidden="true"><polygon class="sil" points="155,190 205,125 245,95 300,65 345,52 372,38 378,98 385,150 386,300 330,262 270,262 215,272 170,250"/><g class="mk"><circle class="k1" cx="300" cy="66" r="11"/><text x="300" y="66">1</text></g><g class="mk"><circle class="k2" cx="250" cy="152" r="11"/><text x="250" y="152">2</text></g><g class="mk"><circle class="k2" cx="300" cy="190" r="11"/><text x="300" y="190">3</text></g><g class="mk"><circle class="k2" cx="228" cy="215" r="11"/><text x="228" y="215">4</text></g><g class="mk"><circle class="k3" cx="345" cy="82" r="11"/><text x="345" y="82">5</text></g><g class="mk"><circle class="k3" cx="330" cy="232" r="11"/><text x="330" y="232">6</text></g><g class="mk"><circle class="k3" cx="288" cy="126" r="11"/><text x="288" y="126">7</text></g></svg></div><figcaption class="small">Panel N, unpainted.</figcaption></figure></div>
+  <div class="cols2" style="margin-top:14px">
+    <ul class="legend">
+      <li><i class="k1">1</i><span><b>Form.</b> O: stacked blocks stepping up to the right, in three tiers, a cap on top. The dashed outline is the whole read at arm&rsquo;s length.</span></li>
+      <li><i class="k2">2</i><span><b>Course joint.</b> A level bed between two courses, 11.5 to 14.5 mm apart.</span></li>
+      <li><i class="k2">3</i><span><b>Cap and shelf planes,</b> near level (0&ndash;10&deg;), lit from above.</span></li>
+      <li><i class="k2">4</i><span><b>Vertical block face,</b> 85&ndash;90&deg;, with a few fracture lines.</span></li>
+      <li><i class="k2">5</i><span><b>Offset.</b> One block stands forward of its neighbour: the tier&rsquo;s setback.</span></li>
+      <li><i class="k3">6</i><span><b>Corner chip.</b> A plane taken off a top corner.</span></li>
+      <li><i class="k3">7</i><span><b>Broken face.</b> A few planes bent a little, cut by fine lines.</span></li>
+      <li><i class="k3">8</i><span><b>Pits</b> and small chips, in patches, on the tops.</span></li>
+    </ul>
+    <ul class="legend">
+      <li><i class="k1">1</i><span><b>Form (N).</b> One ramp rising to the back right. In section the panel reads about 50&deg;; the sheets say 32&ndash;38&deg; and 30&ndash;35&deg;. The panel wins.</span></li>
+      <li><i class="k2">2</i><span><b>Bedding steps.</b> Long ledges running up the slope, parallel to the dip.</span></li>
+      <li><i class="k2">3</i><span><b>Cross crack,</b> leaning off square, ending inside a slab.</span></li>
+      <li><i class="k2">4</i><span><b>Slab face.</b> The free face is the bed plane; slabs are thin and long (about 2.5:1 to 5:1).</span></li>
+      <li><i class="k3">5</i><span><b>Chipped lips</b> on the slab edges, bright and turned up.</span></li>
+      <li><i class="k3">6</i><span><b>Facets</b> on the slab faces: a few planes, never a mosaic.</span></li>
+      <li><i class="k3">7</i><span><b>Shallow groove</b> along a slab.</span></li>
+    </ul>
+  </div>
+  <div class="note"><b class="t">Reading the photos</b>Both panels spend nearly all their geometry at form and structure. The surface scale is small, sparse and clustered. Painted sheets fake much of it with paint, which is why the unpainted panels are the target.</div>
+</section>
+
+<section id="primitives">
+  <div class="eyebrow">2 &middot; The primitives, one by one</div>
+  <h2>Nine building blocks</h2>
+  <p>Each row is a model built for this page (left), a section cut through the same height function with its measurements (middle), the numbers at 35 mm, and the sheet panel it matches (right). The section is stretched vertically so the shape shows; its horizontal scale is true. All models are solid and closed.</p>
+  <article class="prim" id="planes"><header><h3>Planes and facet changes</h3><span class="tag">primitive 1 of 9</span></header><p class="intro">A plane is a broad, nearly flat face. A facet change is where one plane meets the next at a small angle. This is the structure of rock: the planes carry the form, and a crease between them is a line, not a gap. The model is one skin, so the planes can never separate.</p><figure class="v3d " data-model="facet"><canvas aria-label="3D model: Three planes, 2.2° to 3.4°. Relief ×2 (see the switch above)."></canvas><figcaption>Three planes, 2.2° to 3.4°. Relief ×2 (see the switch above).</figcaption></figure><div><div data-prof="facet"></div><dl class="nums"><dt>flat sheet ×1.4</dt><dd>change 1–5° (to 8°), span 7–70, height 0.3–1.4</dd><dt>rock sheet ×1.4</dt><dd>plane 5–45°, size 7–70+, irregularity ±1.4–7</dd><dt>this model</dt><dd class="me"></dd><dt>rule</dt><dd>creases wander ±1.6 mm; no two neighbouring planes parallel</dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/t_facet.jpg" width="360" height="85" alt="Rock sheet, 2. Surface detail: Facet (plane)" loading="lazy"><figcaption>Rock sheet, 2. Surface detail: Facet (plane)</figcaption></figure><figure class="panel "><img src="img/f_facet.jpg" width="317" height="68" alt="Flat-rock sheet, C: Facet Change" loading="lazy"><figcaption>Flat-rock sheet, C: Facet Change</figcaption></figure></div></article>
+<article class="prim" id="breaks"><header><h3>Breaks and edges</h3><span class="tag">primitive 2 of 9</span></header><p class="intro">A break is where two planes meet. Its sharpness is a choice made edge by edge: seven in ten are eased, three in ten stay crisp. Sharp everywhere reads as a box, soft everywhere reads as a pebble. Left to right: sharp, crisp (0.45 mm), eased (2.4 mm in three tangent planes), eased with three corner chips.</p><figure class="v3d wide" data-model="edges" data-relief="no" data-dist="1.2"><canvas aria-label="3D model: Four blocks, 11 × 11 × 9 mm. Relief switch does not apply."></canvas><figcaption>Four blocks, 11 × 11 × 9 mm. Relief switch does not apply.</figcaption></figure><div><dl class="nums"><dt>angle between planes</dt><dd>60–110° (rock sheet)</dd><dt>chamfer, rock sheet</dt><dd>0–2 mm, ×1.4 = 0–2.8 mm</dd><dt>edge bevel, N and O sheet</dt><dd>0.5–2.0 mm, ×1.4 = 0.7–2.8 mm</dd><dt>top-front bevel (meso)</dt><dd>2–6 mm, ×1.4 = 2.8–8.4; our O used 1.6–3.4</dd><dt>mix</dt><dd>70% soft or worn, 30% crisp</dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/t_edge.jpg" width="360" height="73" alt="Rock sheet, 2: Edge (break), 60–110°, chamfer 0–2" loading="lazy"><figcaption>Rock sheet, 2: Edge (break), 60–110°, chamfer 0–2</figcaption></figure><figure class="panel "><img src="img/t_b.jpg" width="257" height="84" alt="Rock sheet, 1B: Breaks (edges)" loading="lazy"><figcaption>Rock sheet, 1B: Breaks (edges)</figcaption></figure></div></article>
+<article class="prim" id="steps"><header><h3>Steps and ledges</h3><span class="tag">primitive 3 of 9</span></header><p class="intro">Offsets and ledges come from fracture layers. A ledge is a tread (nearly level, tilted back a few degrees) and a riser (steep). The lip is never a straight line. Ledges give the silhouette its rhythm and give a base wide enough to stand on.</p><figure class="v3d " data-model="steps"><canvas aria-label="3D model: Three risers of 3 mm, treads of 8.2 mm tilted back 3°."></canvas><figcaption>Three risers of 3 mm, treads of 8.2 mm tilted back 3°.</figcaption></figure><div><div data-prof="steps"></div><dl class="nums"><dt>rock sheet ×1.4</dt><dd>height 2.8–21, depth 7–56, H:D 1:2 to 1:6</dd><dt>N and O sheets</dt><dd>step height .10–.30 H; ledge depth .10–.35 H (O)</dd><dt>risers / treads</dt><dd>70–90° / 0–10° (family guide)</dd><dt>this model</dt><dd class="me"></dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/t_step.jpg" width="360" height="77" alt="Rock sheet, 2: Step (ledge)" loading="lazy"><figcaption>Rock sheet, 2: Step (ledge)</figcaption></figure><figure class="panel "><img src="img/t_c.jpg" width="257" height="78" alt="Rock sheet, 1C: Steps (terraces)" loading="lazy"><figcaption>Rock sheet, 1C: Steps (terraces)</figcaption></figure></div></article>
+<article class="prim" id="chips"><header><h3>Chips and notches</h3><span class="tag">primitive 4 of 9</span></header><p class="intro">A chip is a removal: a flat floor, a steep wall, an outline made of straight runs. It is one plane cut into the surface, so it stays one piece. Chips sit on exposed edges and corners far more than on faces.</p><figure class="v3d " data-model="chip"><canvas aria-label="3D model: A chip 11 × 8 mm with a floor tilted 3° and a wall of 55°, and a second small one."></canvas><figcaption>A chip 11 × 8 mm with a floor tilted 3° and a wall of 55°, and a second small one.</figcaption></figure><div><div data-prof="chip"></div><dl class="nums"><dt>flat sheet ×1.4</dt><dd>depth 0.3–2.1, size 1.4–11, edge angle 15–45°</dd><dt>rock sheet ×1.4</dt><dd>depth 1.4–7, width 2.8–21, wall 45–80°</dd><dt>our corner chip</dt><dd>0.12–0.3 of the piece’s narrow side, on 30% of top corners, 0–2 per block</dd><dt>this model</dt><dd class="me"></dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/f_chip.jpg" width="317" height="68" alt="Flat-rock sheet, C: Chip / Flake" loading="lazy"><figcaption>Flat-rock sheet, C: Chip / Flake</figcaption></figure><figure class="panel "><img src="img/t_chip.jpg" width="360" height="75" alt="Rock sheet, 2: Chip (notch)" loading="lazy"><figcaption>Rock sheet, 2: Chip (notch)</figcaption></figure></div></article>
+<article class="prim" id="dishes"><header><h3>Dishes</h3><span class="tag">primitive 5a of 9</span></header><p class="intro">A dish is a shallow, broad, irregular scoop. It must not be round or evenly spaced; Shawn found the explorer’s round pockets “not quite organic and irregular enough”. This one is elliptical, turned off the grid, deeper on one side, with a rim that wanders.</p><figure class="v3d " data-model="dish"><canvas aria-label="3D model: One elliptical dish, 25 × 16 mm."></canvas><figcaption>One elliptical dish, 25 × 16 mm.</figcaption></figure><div><div data-prof="dish"></div><dl class="nums"><dt>flat sheet ×1.4</dt><dd>depth 0.3–1.4, width 7–42, concave and gentle</dd><dt>rock sheet ×1.4</dt><dd>depth 0.7–7, width 4–35, depth to width 1:6 to 1:10</dd><dt>this model</dt><dd class="me"></dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/f_dish.jpg" width="317" height="64" alt="Flat-rock sheet, C: Shallow Dish / Scoop" loading="lazy"><figcaption>Flat-rock sheet, C: Shallow Dish / Scoop</figcaption></figure><figure class="panel "><img src="img/t_dish.jpg" width="360" height="75" alt="Rock sheet, 2: Dish (depression)" loading="lazy"><figcaption>Rock sheet, 2: Dish (depression)</figcaption></figure></div></article>
+<article class="prim" id="pits"><header><h3>Pits</h3><span class="tag">primitive 5b of 9</span></header><p class="intro">Pits are small, clustered, uneven in size. A lattice of identical pits is the mistake the sheets warn about (“avoid uniform pitting”). Nothing under 0.4 mm is printed, whatever the scale.</p><figure class="v3d " data-model="pits"><canvas aria-label="3D model: 65 pits in three clusters, diameter 0.8 to 2.8 mm."></canvas><figcaption>65 pits in three clusters, diameter 0.8 to 2.8 mm.</figcaption></figure><div><div data-prof="pits"></div><dl class="nums"><dt>flat sheet ×1.4</dt><dd>diameter 0.4 (print floor)–2.8, depth 0.15–0.85</dd><dt>rock sheet ×1.4</dt><dd>pits and dishes 1.4–14 across</dd><dt>share of a face</dt><dd>one patch in three or four, never the whole face</dd><dt>this model</dt><dd class="me"></dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/f_pit.jpg" width="317" height="67" alt="Flat-rock sheet, C: Pitting" loading="lazy"><figcaption>Flat-rock sheet, C: Pitting</figcaption></figure><figure class="panel "><img src="img/t_e.jpg" width="257" height="67" alt="Rock sheet, 1E: Pits (dishes)" loading="lazy"><figcaption>Rock sheet, 1E: Pits (dishes)</figcaption></figure></div></article>
+<article class="prim" id="ridges"><header><h3>Ridges and swells</h3><span class="tag">primitive 6 of 9</span></header><p class="intro">A ridge is a raised band (a vein, a weathering line, a fracture pillar). Its crest is rounded or angular, and it fades out instead of ending in a cap. A swell is the same idea broad and round.</p><figure class="v3d " data-model="ridge"><canvas aria-label="3D model: An angular ridge that fades, and a round swell."></canvas><figcaption>An angular ridge that fades, and a round swell.</figcaption></figure><div><div data-prof="ridge"></div><dl class="nums"><dt>flat sheet ×1.4</dt><dd>height 0.3–1.4, width 4–28, crest slope 5–20°</dd><dt>rock sheet ×1.4</dt><dd>height 1.4–8.4, width 4.2–28</dd><dt>this model</dt><dd class="me"></dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/f_ridge.jpg" width="317" height="70" alt="Flat-rock sheet, C: Low Ridge / Swell" loading="lazy"><figcaption>Flat-rock sheet, C: Low Ridge / Swell</figcaption></figure><figure class="panel "><img src="img/t_ridge.jpg" width="360" height="78" alt="Rock sheet, 2: Ridge" loading="lazy"><figcaption>Rock sheet, 2: Ridge</figcaption></figure></div></article>
+<article class="prim" id="cracks"><header><h3>Cracks and fissures</h3><span class="tag">primitive 7 of 9</span></header><p class="intro">A crack is a narrow groove that wanders and stops. It stops because it lives inside one block (persistence). A hairline of 0.1 mm cannot be printed, so a crack is at least 0.4 mm wide and reads by its dark shadow, with a small step across it where one side sits a little proud.</p><figure class="v3d " data-model="crack"><canvas aria-label="3D model: A crack 0.7 mm wide, 1 mm deep, with a branch and a small step."></canvas><figcaption>A crack 0.7 mm wide, 1 mm deep, with a branch and a small step.</figcaption></figure><div><div data-prof="crack"></div><dl class="nums"><dt>flat sheet ×1.4</dt><dd>width 0.15–0.7 (print floor 0.4), depth 0.15–1.1, length 7–70+</dd><dt>persistence</dt><dd>a crack ends inside a block; it never crosses a joint of the level above</dd><dt>this model</dt><dd class="me"></dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/f_crack.jpg" width="317" height="70" alt="Flat-rock sheet, C: Crack / Fissure" loading="lazy"><figcaption>Flat-rock sheet, C: Crack / Fissure</figcaption></figure><figure class="panel "><img src="img/f_close.jpg" width="798" height="410" alt="Flat-rock sheet, B: the close-up, hairline crack at right" loading="lazy"><figcaption>Flat-rock sheet, B: the close-up, hairline crack at right</figcaption></figure></div></article>
+<article class="prim" id="undulation"><header><h3>Undulation</h3><span class="tag">primitive 8 of 9</span></header><p class="intro">Undulation is the lowest, broadest relief: no feature in it stands out, and it is what stops a flat from looking machined. It is the macro layer of the flat-rock sheet.</p><figure class="v3d " data-model="undul"><canvas aria-label="3D model: Value noise, wavelength 20 mm, relief about 2 mm."></canvas><figcaption>Value noise, wavelength 20 mm, relief about 2 mm.</figcaption></figure><div><div data-prof="undul"></div><dl class="nums"><dt>flat sheet ×1.4</dt><dd>amplitude 0.7–2.8, width 14–56, slope 1–4°</dd><dt>total relief of a flat</dt><dd>1.4–2.8 mm peak to low (to 4.2)</dd><dt>this model</dt><dd class="me"></dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/f_profile.jpg" width="453" height="195" alt="Flat-rock sheet, D: surface profile" loading="lazy"><figcaption>Flat-rock sheet, D: surface profile</figcaption></figure><figure class="panel "><img src="img/f_multi.jpg" width="354" height="205" alt="Flat-rock sheet, F: macro, meso, micro" loading="lazy"><figcaption>Flat-rock sheet, F: macro, meso, micro</figcaption></figure></div></article>
+<article class="prim" id="grain"><header><h3>Grain and striation</h3><span class="tag">primitive 9 of 9</span></header><p class="intro">Grain is the finest layer. It is stretched along the bedding (striations follow the slab), and it is the last thing added, because it is only worth anything under strong detail. Below 0.4 mm the printer will not follow.</p><figure class="v3d " data-model="grain"><canvas aria-label="3D model: Striations at 14° and a fine grain, 20 × 20 mm."></canvas><figcaption>Striations at 14° and a fine grain, 20 × 20 mm.</figcaption></figure><div><div data-prof="grain"></div><dl class="nums"><dt>flat sheet ×1.4</dt><dd>micro 0.15–0.85 deep; tool floor 0.4 mm (not scaled)</dd><dt>rock sheet ×1.4</dt><dd>micro texture 0.4–2.1</dd><dt>share of the read</dt><dd>5–10% (family guide)</dd><dt>this model</dt><dd class="me"></dd></dl></div><div class="panel stack"><figure class="panel "><img src="img/t_f.jpg" width="257" height="80" alt="Rock sheet, 1F and the micro layer" loading="lazy"><figcaption>Rock sheet, 1F and the micro layer</figcaption></figure><figure class="panel "><img src="img/ap_tex.jpg" width="435" height="190" alt="Family guide, 7: texture language (striated slabs)" loading="lazy"><figcaption>Family guide, 7: texture language (striated slabs)</figcaption></figure></div></article>
+  <div class="note warn"><b class="t">How well the models match their panels</b>
+  <b>Close:</b> dish, pits, ridge, chip, crack, steps and the eight forms read the same as their sheet panels in kind, size and proportion (pits are a little small and shallow against the sheet&rsquo;s, whose rims are raised).
+  <b>Partial:</b> the facet change (the true angles are 1&ndash;5&deg;, so the crease shows only at relief &times;2 or more) and the blocks (eased edges, chips, courses), which are planar and clean where the photos are hewn: they carry planes, chamfers, bends and chips but not the photos&rsquo; fine broken facets. The shingled slabs read as shingles but are shorter and fatter than the photo&rsquo;s long blades. Skin and levels illustrate the idea; they do not try to look like the photos.
+  <b>Not matched:</b> the photographic roughness of the sheets&rsquo; close-ups, which a printed surface cannot carry (nothing under 0.4 mm).</div>
+</section>
+
+<section id="formation">
+  <div class="eyebrow">3 &middot; Formation logic</div>
+  <h2>How the primitives assemble</h2>
+
+  <h3>Plane families and their angles</h3>
+  <p>A rock formation has few angles, repeated. The family guide lists them; the N and O sheets narrow them for each wall. Everything on a wall belongs to one of these families; a face at some other angle is a mistake of the shard kind.</p>
+  <div class="cols2">
+    <div data-diagram="angles"></div>
+    <div class="tw"><table class="t">
+      <tr><th>Family</th><th>Angle</th><th>Wall N</th><th>Wall O</th></tr>
+      <tr><td>Vertical faces</td><td>85&ndash;90&deg;</td><td>breaks 80&ndash;90&deg;</td><td>dominant, 80&ndash;90&deg;</td></tr>
+      <tr><td>Sloped faces</td><td>15&ndash;70&deg;, typical 25&ndash;60&deg;</td><td>main slope; sheet 30&ndash;35&deg;, <b>panel about 50&deg;</b></td><td>stepped faces 20&ndash;45&deg;, transitional</td></tr>
+      <tr><td>Shelves, ledges, caps</td><td>0&ndash;10&deg;</td><td>narrow, 0&ndash;15&deg;</td><td>cap and shelf planes 0&ndash;10&deg;</td></tr>
+      <tr><td>Diagonal cleavage</td><td>30&ndash;60&deg;, about 45&deg;</td><td>major fractures 30&ndash;40&deg; (set A)</td><td>secondary joints 60&ndash;75&deg;</td></tr>
+      <tr><td>Terrace risers</td><td>70&ndash;90&deg;</td><td>step risers</td><td>block faces secondary 70&ndash;85&deg;</td></tr>
+      <tr><td>Fracture intersections</td><td>60&ndash;120&deg;, about 90&deg;</td><td>cross joints 60&ndash;75&deg;</td><td>vertical joints 80&ndash;90&deg;</td></tr>
+      <tr><td>Undercuts</td><td>over 100&deg;</td><td>small</td><td>local</td></tr>
+    </table></div>
+  </div>
+  <div class="cols3" style="margin-top:14px">
+    <figure class="panel "><img src="img/ap_angles.jpg" width="513" height="225" alt="Family guide, 5: angle families" loading="lazy"><figcaption>Family guide, 5: angle families</figcaption></figure><figure class="panel "><img src="img/ns_planeN.jpg" width="362" height="165" alt="Study: plane-family analysis, N" loading="lazy"><figcaption>Study: plane-family analysis, N</figcaption></figure><figure class="panel "><img src="img/ns_planeO.jpg" width="345" height="165" alt="Study: plane-family analysis, O" loading="lazy"><figcaption>Study: plane-family analysis, O</figcaption></figure>
+  </div>
+  <p class="small">Overhang: 55&deg; is every element&rsquo;s target; 55&ndash;65&deg; is a band allowed on 0.1% of the downward-facing area, and over 65&deg; on another 0.1%. A face that leans out is the one thing a print cannot do.</p>
+
+  <h3 style="margin-top:34px">Fracture sets and persistence</h3>
+  <p>Rock breaks along one to three dominant sets, 20&ndash;60&deg; apart. A set is a family of near-parallel cracks. A crack of one set runs through the whole mass (carry 1) or only to the next crack of another set (carry near 0.1&ndash;0.35). N wants low carry: at carry 1 the sets make a tilted brick grid; at 0 to 0.15 they read as broken slabs. O joints repeat the joint below about a third of the time.</p>
+  <div class="cols2">
+    <div data-diagram="sets"></div>
+    <div>
+      <p><b>Persistence.</b> A crack that stops is a crack of a finer level: it lives inside its parent cell and never crosses the parent&rsquo;s edge. Nothing else has to be said about where it ends. Seen in the reference: cracks end inside blocks.</p>
+      <p><b>Minimum piece.</b> No cell is narrower than 0.4 of the level&rsquo;s spacing; a crack that would leave a sliver is skipped. Both walls needed this to stop slivers.</p>
+      <p><b>A tapering crack.</b> One side of the crack tilts along it so the step between the two sides shrinks to nothing toward one end (a gradient of at most 0.1).</p>
+    </div>
+  </div>
+  <div class="cols2" style="margin-top:12px"><figure class="panel "><img src="img/ns_fracN.jpg" width="345" height="165" alt="Study: fracture system, N (slope 30–35°, majors 30–40°, cross joints 60–75°)" loading="lazy"><figcaption>Study: fracture system, N (slope 30–35°, majors 30–40°, cross joints 60–75°)</figcaption></figure><figure class="panel "><img src="img/ns_fracO.jpg" width="355" height="165" alt="Study: fracture system, O (verticals 80–90°, secondary 60–75°, bedding 0–10°)" loading="lazy"><figcaption>Study: fracture system, O (verticals 80–90°, secondary 60–75°, bedding 0–10°)</figcaption></figure></div>
+
+  <h3 style="margin-top:34px">One mass: levels, and a skin over a core</h3>
+  <p>The references are one body of rock that has broken along a few directions at several sizes, not pieces set side by side. A level is the same cutting again inside each cell of the level above. Only the face moves, so the mass stays one body: a piece moves its own share of the free face (set back and turned) and the rock behind stays whole. O calls it a skin over a core, N a riser against the rock behind.</p>
+  <div class="cols2">
+    <div>
+      <figure class="v3d" data-model="levels" data-az="-18" data-el="48"><canvas aria-label="3D model: three levels of cells"></canvas><figcaption>Three levels on one slab, 34 &times; 34 mm. No gaps; the base is shared.</figcaption></figure>
+      <div data-diagram="levels" style="margin-top:10px"></div>
+    </div>
+    <div>
+      <figure class="v3d" data-model="skin"><canvas aria-label="3D model: a block with a broken skin, cut away"></canvas><figcaption>A block 26 &times; 17 mm, cut away at the middle: the front skin in pieces over a darker core.</figcaption></figure>
+      <div data-diagram="skin" style="margin-top:10px"></div>
+    </div>
+  </div>
+  <dl class="nums" style="max-width:760px">
+    <dt>Offset per level</dt><dd>a tenth to 0.4 of the level above: N 0.4 (1.5, 0.6, 0.25 mm); O skin about a tenth of the block&rsquo;s own push, and half looked like rubble</dd>
+    <dt>Levels</dt><dd>3 on N (12&times;40, 8&times;18, 5&times;9 mm cells), the finest on 50&ndash;80% of cells; 2 on O (blocks, then a skin 3&ndash;4 mm deep)</dd>
+    <dt>Skin piece</dt><dd>5&ndash;9 mm wide, setback 0.2&ndash;0.8 (a fifth up to 1.9), lean 1&ndash;9&deg; (O used 1&ndash;4&deg;), seam 0.1, two or three pieces per face</dd>
+    <dt>Every free face</dt><dd>N&rsquo;s crest and end read as a box until they were cut like the slope</dd>
+  </dl>
+
+  <h3 style="margin-top:34px">Layering and shingling (N)</h3>
+  <p>N is a ramp of long thin slabs bedded about 40&deg;, rising to the back right. The free face is the bed plane. Slabs are thin (2&ndash;5 mm) and recede inward by their own thickness, and each slab ends at its own line a drawn distance back, so the steps are the slab edges. The cross cut leans, but not far.</p>
+  <div class="cols2">
+    <figure class="v3d" data-model="shingle"><canvas aria-label="3D model: shingled slabs"></canvas><figcaption>Five slabs on a 50&deg; bed plane, ten prisms, over one darker core.</figcaption></figure>
+    <div data-diagram="secN"></div>
+  </div>
+  <div class="cols3" style="margin-top:12px"><figure class="panel "><img src="img/n_dims.jpg" width="300" height="195" alt="N and O sheet: key dimensions, N" loading="lazy"><figcaption>N and O sheet: key dimensions, N</figcaption></figure><figure class="panel "><img src="img/n_mass.jpg" width="300" height="145" alt="N and O sheet: massing and ratios, N" loading="lazy"><figcaption>N and O sheet: massing and ratios, N</figcaption></figure><figure class="panel "><img src="img/ns_carveN.jpg" width="717" height="140" alt="Study: carving sequence, N" loading="lazy"><figcaption>Study: carving sequence, N</figcaption></figure></div>
+
+  <h3 style="margin-top:34px">Stacked blocks, caps, shelves and tiers (O)</h3>
+  <p>O is a stack of mostly vertical blocks on level beds. Three courses (the photo; the sheet says four of about .26 H). Each block is pushed back by its own amount, so the face steps in and out; one cell is recessed deep and the one above it is set forward, which makes the overhang. Small cap blocks on the top course break the skyline.</p>
+  <div class="cols2">
+    <figure class="v3d" data-model="courses"><canvas aria-label="3D model: two courses with an overhang"></canvas><figcaption>Two courses, six blocks, one recess (7 mm) and the course above set forward (2&ndash;3 mm).</figcaption></figure>
+    <div data-diagram="secO"></div>
+  </div>
+  <div class="cols3" style="margin-top:12px"><figure class="panel "><img src="img/o_dims.jpg" width="302" height="195" alt="N and O sheet: key dimensions, O" loading="lazy"><figcaption>N and O sheet: key dimensions, O</figcaption></figure><figure class="panel "><img src="img/o_mass.jpg" width="302" height="145" alt="N and O sheet: massing and ratios, O" loading="lazy"><figcaption>N and O sheet: massing and ratios, O</figcaption></figure><figure class="panel "><img src="img/ns_carveO.jpg" width="710" height="140" alt="Study: carving sequence, O" loading="lazy"><figcaption>Study: carving sequence, O</figcaption></figure></div>
+
+  <h3 style="margin-top:34px">The eight characteristic surface forms</h3>
+  <p>The rock sheet names eight forms and the angle or ratio of each. Each patch below is built from the primitives above with that form&rsquo;s numbers; the sheet crop is under it.</p>
+  <div class="cols4"><div class="card"><h4>Flat faceted</h4><figure class="v3d " data-model="form_flat"><canvas aria-label="3D model: 22 × 22 mm patch"></canvas><figcaption>22 × 22 mm patch</figcaption></figure><p class="small mono" style="margin:6px 0 4px">10–30°</p><figure class="panel "><img src="img/form0.jpg" width="201" height="276" alt="Rock sheet, 5" loading="lazy"><figcaption>Rock sheet, 5</figcaption></figure></div><div class="card"><h4>Layered / bedded</h4><figure class="v3d " data-model="form_layered"><canvas aria-label="3D model: 22 × 22 mm patch"></canvas><figcaption>22 × 22 mm patch</figcaption></figure><p class="small mono" style="margin:6px 0 4px">0–15°</p><figure class="panel "><img src="img/form1.jpg" width="201" height="276" alt="Rock sheet, 5" loading="lazy"><figcaption>Rock sheet, 5</figcaption></figure></div><div class="card"><h4>Fractured blocky</h4><figure class="v3d " data-model="form_blocky"><canvas aria-label="3D model: 22 × 22 mm patch"></canvas><figcaption>22 × 22 mm patch</figcaption></figure><p class="small mono" style="margin:6px 0 4px">70–110°</p><figure class="panel "><img src="img/form2.jpg" width="201" height="276" alt="Rock sheet, 5" loading="lazy"><figcaption>Rock sheet, 5</figcaption></figure></div><div class="card"><h4>Sheared / inclined</h4><figure class="v3d " data-model="form_sheared"><canvas aria-label="3D model: 22 × 22 mm patch"></canvas><figcaption>22 × 22 mm patch</figcaption></figure><p class="small mono" style="margin:6px 0 4px">25–45°</p><figure class="panel "><img src="img/form3.jpg" width="201" height="276" alt="Rock sheet, 5" loading="lazy"><figcaption>Rock sheet, 5</figcaption></figure></div><div class="card"><h4>Weathered / rounded</h4><figure class="v3d " data-model="form_weathered"><canvas aria-label="3D model: 22 × 22 mm patch"></canvas><figcaption>22 × 22 mm patch</figcaption></figure><p class="small mono" style="margin:6px 0 4px">R 7–35 mm</p><figure class="panel "><img src="img/form4.jpg" width="201" height="276" alt="Rock sheet, 5" loading="lazy"><figcaption>Rock sheet, 5</figcaption></figure></div><div class="card"><h4>Pitted / eroded</h4><figure class="v3d " data-model="form_pitted"><canvas aria-label="3D model: 22 × 22 mm patch"></canvas><figcaption>22 × 22 mm patch</figcaption></figure><p class="small mono" style="margin:6px 0 4px">D:W 1:6–1:10</p><figure class="panel "><img src="img/form5.jpg" width="201" height="276" alt="Rock sheet, 5" loading="lazy"><figcaption>Rock sheet, 5</figcaption></figure></div><div class="card"><h4>Cracked network</h4><figure class="v3d " data-model="form_cracked"><canvas aria-label="3D model: 22 × 22 mm patch"></canvas><figcaption>22 × 22 mm patch</figcaption></figure><p class="small mono" style="margin:6px 0 4px">30–120°</p><figure class="panel "><img src="img/form6.jpg" width="201" height="276" alt="Rock sheet, 5" loading="lazy"><figcaption>Rock sheet, 5</figcaption></figure></div><div class="card"><h4>Columnar / vertical</h4><figure class="v3d " data-model="form_columnar"><canvas aria-label="3D model: 22 × 22 mm patch"></canvas><figcaption>22 × 22 mm patch</figcaption></figure><p class="small mono" style="margin:6px 0 4px">80–95°</p><figure class="panel "><img src="img/form7.jpg" width="201" height="276" alt="Rock sheet, 5" loading="lazy"><figcaption>Rock sheet, 5</figcaption></figure></div></div>
+</section>
+
+<section id="edges">
+  <div class="eyebrow">4 &middot; Edges</div>
+  <h2>Seven soft, three crisp</h2>
+  <p>Vary edge sharpness: 70% soft or worn, 30% crisp (flat sheet, I). Eased edges and chips at corners and edges matter most; Shawn on our rounds: &ldquo;our corner chipping has good value here&rdquo;. A chamfer of 1 to 2 mm at the scale of a wall is the usual size, with a larger bevel of 1.6 to 3.4 mm along the top-front edge of most blocks.</p>
+  <div class="cols2">
+    <div data-diagram="edges"></div>
+    <figure class="v3d" data-model="chipped" data-relief="no"><canvas aria-label="3D model: a block with eased edges and chips"></canvas><figcaption>One block, 18 &times; 14 &times; 13 mm: faces leaning 1.5&ndash;4&deg;, top edges eased, a top-front bevel of 3 mm, a side bevel, three corner chips.</figcaption></figure>
+  </div>
+  <dl class="nums" style="max-width:820px">
+    <dt>Soft edge</dt><dd>0.7&ndash;2.8 mm eased (3 tangent planes make a round with no new vertex count to speak of); the top-front edge 1.6&ndash;3.4</dd>
+    <dt>Crisp edge</dt><dd>0&ndash;0.5 mm chamfer, kept crisp so the plane still reads</dd>
+    <dt>Lip on a slab (N)</dt><dd>85% of top edges, 28&ndash;52&deg;, 0.5&ndash;1.1 mm, no longer than 0.18 of the edge</dd>
+    <dt>Corner chip</dt><dd>on 30% of the top corners of a leaf cell; one plane along the averaged normal of the faces that meet there, tilted up to 25&deg;, taking 0.12&ndash;0.3 of the cell&rsquo;s narrow side</dd>
+    <dt>Count</dt><dd>0&ndash;2 per block on O (0.9&ndash;2.8 mm deep), 0&ndash;2 per cell on N (up to 3.2). Three or more big ones per block bring the pillows back</dd>
+    <dt>Where</dt><dd>edges and corners of every leaf cell, never the floor and never a joint (a chip on a joint opens a hole)</dd>
+  </dl>
+</section>
+
+<section id="patterns">
+  <div class="eyebrow">5 &middot; Patterns</div>
+  <h2>Five surface patterns as patches</h2>
+  <p>A surface is one pattern, chosen for the rock and applied as patches, not everywhere. Each is a blend of two or three scales: macro (0.7&ndash;2.8 mm of broad relief), meso (cracks, chips, small dishes, 0.3&ndash;2.1 mm) and micro (grain and pits, 0.15&ndash;0.85 mm). Blending two or three scales gives the most natural look.</p>
+  <div class="cols3"><div class="card"><h4>Subtle and worn</h4><figure class="v3d " data-model="pat_subtle"><canvas aria-label="3D model: 30 × 30 mm patch"></canvas><figcaption>30 × 30 mm patch</figcaption></figure><p class="small" style="margin:6px 0 0">undulation, a few small pits and one soft chip, almost no cracks</p></div><div class="card"><h4>Fractured plates</h4><figure class="v3d " data-model="pat_plates"><canvas aria-label="3D model: 30 × 30 mm patch"></canvas><figcaption>30 × 30 mm patch</figcaption></figure><p class="small" style="margin:6px 0 0">large plates, shallow steps and 3° tilts between them, chips at the plate edges</p></div><div class="card"><h4>Pitted and weathered</h4><figure class="v3d " data-model="pat_pitted"><canvas aria-label="3D model: 30 × 30 mm patch"></canvas><figcaption>30 × 30 mm patch</figcaption></figure><p class="small" style="margin:6px 0 0">clustered pits of every size, a few shallow dishes, soft rounded edges</p></div><div class="card"><h4>Layered and veined</h4><figure class="v3d " data-model="pat_layered"><canvas aria-label="3D model: 30 × 30 mm patch"></canvas><figcaption>30 × 30 mm patch</figcaption></figure><p class="small" style="margin:6px 0 0">low flowing ridges and layer lines, one raised vein crossing them</p></div><div class="card"><h4>Cracked network</h4><figure class="v3d " data-model="pat_network"><canvas aria-label="3D model: 30 × 30 mm patch"></canvas><figcaption>30 × 30 mm patch</figcaption></figure><p class="small" style="margin:6px 0 0">domed plates of 6–10 mm cut all round by crack lines, 30–120° corners</p></div><div class="card"><figure class="panel "><img src="img/f_gallery.jpg" width="760" height="220" alt="Flat-rock sheet, H: the five variations at the same scale; and G, the patterns top down" loading="lazy"><figcaption>Flat-rock sheet, H: the five variations at the same scale; and G, the patterns top down</figcaption></figure></div></div>
+</section>
+
+<section id="lessons">
+  <div class="eyebrow">6 &middot; What our rounds taught</div>
+  <h2>Nine ways to get it wrong</h2>
+  <p>About twenty-five rounds on N and O, each pair of pictures judged by eye against the panel. The images are our own renders from those rounds (cropped); the page models stand in where we did not keep a picture.</p>
+  <div class="cols3"><div class="mistake"><img src="img/m_o_slits.jpg" alt="Plates open slits" loading="lazy"><div class="b"><h4>Plates open slits</h4><p>Splitting a surface into tilted polygons makes plates. Plates overlap, and where they do not, a slit opens to the inside. O rounds 3 to 5. The method was wrong, not the settings. Fix: everything stays solid; a piece moves only its share of the face.</p></div></div>
+<div class="mistake"><img src="img/m_n_shards.jpg" alt="Crystal shards" loading="lazy"><div class="b"><h4>Crystal shards</h4><p>Faces turned at many angles read as quartz. N rounds 1 to 3. Slab faces within a few degrees of one another read as rock; the variety comes from where the lips start and stop. Cross cuts: off square by up to 12° is chipped, over 25° is a shard.</p></div></div>
+<div class="mistake"><img src="img/m_o_rubble.jpg" alt="Rubble" loading="lazy"><div class="b"><h4>Rubble</h4><p>Too many pieces, or offsets too large, read as a dry-stone wall. O pass 3 (every block skinned into stones). Offsets per level are a tenth to 0.4 of the level above, and fewer, bigger faces carry the look.</p></div></div>
+<div class="mistake"><img src="img/m_o_foil.jpg" alt="Triangulated relief" loading="lazy"><div class="b"><h4>Triangulated relief</h4><p>Jittered points under a Delaunay triangulation made crumpled foil, not hewn stone. A face is bent by two or three planes and cut by a few straight cracks; points are not scattered.</p></div></div>
+<div class="mistake"><div data-diagram="pitwrong"></div><div class="b"><h4>A pit as a cell inside a cell</h4><p>Subtracting a convex pit cell from a convex cell leaves up to six thin pieces and the face reads shattered (O pass 5). A pit is one plane cut into a face: one piece, no slivers.</p></div></div>
+<div class="mistake"><figure class="v3d " data-model="dish_round"><canvas aria-label="3D model: Round, even dishes"></canvas><figcaption>Round, even dishes</figcaption></figure><div class="b"><h4>Round, even dishes</h4><p>A lattice of identical round pockets is the first thing the eye finds. Compare the irregular dish and pits above: different sizes, off the grid, clustered, wandering rims.</p></div></div>
+<div class="mistake"><img src="img/m_n_black.jpg" alt="Black recesses" loading="lazy"><div class="b"><h4>Black recesses</h4><p>One flat colour hides fine relief and turns every recess black (N comp 9). Grey with a hemisphere fill, a soft key and cavity shading is fair. A printed tile has no shadow map, so the model needs real depth in its joints.</p></div></div>
+<div class="mistake"><figure class="v3d " data-model="uniform"><canvas aria-label="3D model: Uniform noise"></canvas><figcaption>Uniform noise</figcaption></figure><div class="b"><h4>Uniform noise</h4><p>The same amplitude everywhere is texture with no structure. The sheets say it twice: avoid dense noisy texture, keep surface to 5–10% of the read.</p></div></div>
+<div class="mistake"><img src="img/m_o_boxes.jpg" alt="Boxes only" loading="lazy"><div class="b"><h4>Boxes only</h4><p>Courses, joints and depth push give O’s massing and the strongest single lever, but bare boxes read as toys. The face needs broken planes, eased edges and chips on top of the massing.</p></div></div></div>
+  <h3 style="margin-top:30px">Where the rounds ended</h3>
+  <p>The last renders beside the unpainted panels. Massing, planes and the proportion of levels are close; fine relief, the ragged polygon facets of the photos, and the darkness of the deep joints are not.</p>
+  <div class="cols2"><figure class="panel "><img src="img/m_o_last.jpg" width="900" height="450" alt="Wall O, our latest model beside panel O (left). Light grey, hemisphere fill, one soft key, cavity shading baked per vertex." loading="lazy"><figcaption>Wall O, our latest model beside panel O (left). Light grey, hemisphere fill, one soft key, cavity shading baked per vertex.</figcaption></figure><figure class="panel "><img src="img/m_n_last.jpg" width="900" height="450" alt="Wall N, our latest model beside panel N (left). Same light." loading="lazy"><figcaption>Wall N, our latest model beside panel N (left). Same light.</figcaption></figure></div>
+  <div class="cols2" style="margin-top:18px">
+    <div><h4>What moved the look, biggest first</h4>
+      <ol>
+        <li><b>O:</b> broken faces on every free face; then a per-block depth push on level courses; then the light.</li>
+        <li><b>N:</b> a free face parallel to the bedding, with each slab ending at its own line; then one mass in three levels.</li>
+        <li><b>Both:</b> corner chips; few, large faces; offsets falling by 0.4 a level; eased lips.</li>
+        <li><b>Little help:</b> hew (jittered facets), tilt planes beyond 0.3, many chips, a second finer skin, round pockets.</li>
+      </ol>
+    </div>
+    <div><h4>Lighting</h4>
+      <p>Judge in grey: a hemisphere fill (about 0.6), one soft key from above front left, and cavity darkening baked per vertex (rays over about 7 mm). Multi-light shadow-map occlusion went dark; baked per-vertex worked. A coloured, flat light hides fine relief and hides faults.</p>
+    </div>
+  </div>
+</section>
+
+<section id="recipe" class="recipe">
+  <div class="eyebrow">7 &middot; The recipe</div>
+  <h2>Building a wall from nothing, coarse to fine</h2>
+  <p>This is the specification. All lengths are mm at the 35 mm square. Tags show where a number comes from: <span class="src">[sheet]</span> a generated sheet, times 1.4; <span class="src">[photo]</span> the unpainted panel, which wins over the sheets; <span class="src">[rounds]</span> found by building it. Z is up; the wall stands at the back and right, the figure&rsquo;s open space at left and front; judge from azimuth about +24&deg;, elevation about 30&deg;.</p>
+
+  <h3>The general case</h3>
+  <div class="step"><h4>0 &middot; Rules that hold at every step</h4>
+    <ol>
+      <li><b>Everything stays solid.</b> A piece moves only its own share of the free face (setback, tilt); the rock behind is one body. No plates, no slits, no floating piece. <span class="src">[rounds]</span></li>
+      <li><b>Cut, do not scatter.</b> Detail is planes cut into a cell (half-spaces), never jittered points, never a convex cell inside a convex cell.</li>
+      <li><b>Budget.</b> Form 70&ndash;80%, structure 15&ndash;25%, surface 5&ndash;10% of the read. Count: 1&ndash;5 dominant masses; a few dozen pieces on a wall, not hundreds. <span class="src">[sheet]</span></li>
+      <li><b>Few angle families</b> (table in section 3), 1&ndash;3 fracture sets 20&ndash;60&deg; apart.</li>
+      <li><b>Print floor.</b> Nothing under 0.4 mm; keep ledges and features wide enough to read at the tabletop; overhang target 55&deg;, band to 65&deg;. <span class="src">[sheet]</span></li>
+    </ol></div>
+  <div class="step"><h4>1 &middot; Mass (form, 70&ndash;80%)</h4>
+    <ol>
+      <li>Block out one to three volumes covering about 0.52&ndash;0.60 of the tile depth L (35 mm), with open space of 0.20&ndash;0.24 L on each side for the figure. Keep clearance of at least 0.35 H on the open side. <span class="src">[sheet]</span></li>
+      <li>Wall height H about 38&ndash;43 (the tile height of the sheets). Tiers or layers of 3&ndash;4: O .26/.26/.28/.20 H, N .38/.28/.22/.12 H, but <b>use three courses on O</b> and the panel&rsquo;s run on N. <span class="src">[sheet] [photo]</span></li>
+      <li>Silhouette first: stepped skyline (O) or a straight rising crest (N). Judge the dashed outline of section 1 before adding anything. <span class="src">[rounds]</span></li>
+    </ol></div>
+  <div class="step"><h4>2 &middot; Primary planes and breaks (structure, 15&ndash;25%)</h4>
+    <ol>
+      <li>Cut the mass with the dominant set: spacing .08&ndash;.25 H (3&ndash;10 mm on a 38 mm wall) for fine sets, .20&ndash;.50 H for blocks. Cells no narrower than 0.4 of the spacing.</li>
+      <li>Add the cross set at 60&ndash;120&deg; (about 90&deg;), carry 0.1&ndash;0.35. Lean its planes off square a little: up to about 12&deg; on blocks (square reads as brick, over 25&deg; as shards), but only 3&ndash;4&deg; on a slab face (N v13: a 9&deg; spread read as quartz). <span class="src">[rounds]</span></li>
+      <li>Give each cell its own offset along the free face&rsquo;s normal: O 0&ndash;6 per block (up to 7.5); N 0&ndash;3.8 per slab plus 0&ndash;2.2 per cell. Steps are the lines where cells meet.</li>
+      <li>Ledges: depth .10&ndash;.35 H, setback per tier .05&ndash;.30 of the depth, tread 0&ndash;10&deg;, riser 70&ndash;90&deg;. Make one recess deep (6&ndash;8) with the cell above set forward (2&ndash;3): that is the overhang.</li>
+    </ol></div>
+  <div class="step"><h4>3 &middot; Skin over core, levels (still structure)</h4>
+    <ol>
+      <li>Cut each cell again, in the same families, at 0.6 and 0.4 of the spacing above; a crack lives inside its parent. Offsets 0.4 of the level above (O: a tenth).</li>
+      <li>On every free face, not only the front: tops, ends, crests.</li>
+      <li>Apply the finest level to 50&ndash;80% of cells, in a fixed seeded order. Leave the rest whole.</li>
+      <li>Give each piece its own tilt, small: 0.2&ndash;1.2&deg; on a block face (O v14), up to about 3&deg; on a slab face (N v13); tops lean at most about 8&deg;. Variety comes from where pieces start and stop, not from their angles. <span class="src">[rounds]</span></li>
+    </ol></div>
+  <div class="step"><h4>4 &middot; Edges</h4>
+    <ol>
+      <li>70% of edges soft (0.7&ndash;2.8), 30% crisp (0&ndash;0.5). Top-front edge of most blocks: a plane 1.6&ndash;3.4 in. A second on a side or vertical edge for about half the blocks.</li>
+      <li>N: eased lips on 85% of top edges, 28&ndash;52&deg;, 0.5&ndash;1.1, up to .18 of the edge.</li>
+    </ol></div>
+  <div class="step"><h4>5 &middot; Chips (surface)</h4>
+    <ol>
+      <li>Corner chips on 30% of top corners of leaf cells: plane along the averaged normal of the meeting faces, tilted up to 25&deg;, 0.12&ndash;0.3 of the narrow side deep (0.9&ndash;2.8 mm).</li>
+      <li>0&ndash;2 per block; never more than 3 big ones. Aim a little upward (bright, upturned) on N.</li>
+      <li>Never chip a floor face or a joint.</li>
+    </ol></div>
+  <div class="step"><h4>6 &middot; Pits, dishes, grooves, cracks (surface, 5&ndash;10%)</h4>
+    <ol>
+      <li><b>Pit or dish = one plane cut into a face.</b> Dishes 4&ndash;35 wide, 0.7&ndash;1.4 deep (to 7 on the rock scale), irregular, off any grid. Pits 0.4&ndash;2.8, 0.15&ndash;0.85 deep, clustered, in one patch of three or four faces, never uniform.</li>
+      <li>Grooves: 0.7&ndash;2.8 wide, 0.4&ndash;1.7 deep, on 30&ndash;55% of cells wider than 4, along the slab, as a lowered strip (never a gap). <span class="src">[sheet]</span></li>
+      <li>Cracks 0.4&ndash;0.7 wide, 0.4&ndash;1.1 deep, V-shaped. In the photo they are long, branch, and meet the block&rsquo;s edges, dividing a face into a few irregular polygons; short isolated scratches read as gouges (O v14). <span class="src">[photo]</span> <span class="src">[rounds]</span></li>
+      <li>Grain last, 0.15&ndash;0.85, stretched along the bedding, under the detail only.</li>
+    </ol></div>
+  <div class="step"><h4>7 &middot; Foot and rubble</h4>
+    <ol>
+      <li>About 11&ndash;14 small blocks of the wall&rsquo;s own rock, 3&ndash;6 mm, chamfered, laid in a strip along the foot, not over the whole plate. <span class="src">[rounds]</span></li>
+      <li>Keep a solid base behind the shingles so no gap shows the ground (N).</li>
+    </ol></div>
+  <div class="step"><h4>8 &middot; Check</h4>
+    <ol>
+      <li>Judge in grey with a soft key and cavity shading, beside the unpainted panel at the same view; random seeds must all read right.</li>
+      <li>One body, closed, no sliver under 0.4 of its parent, nothing under 0.4 mm, overhang within the band.</li>
+    </ol></div>
+
+  <h3>The N case: the slanted slab</h3>
+  <ol>
+    <li><b>Volume:</b> one box cut by a top plane rising along x, crest from 13 to 43 mm (through (3, 10, 13), slope about 0.94). Cap near 36. The right end is a cut face with its own steps. A slope plane plus a flat cap reads as a pyramid.</li>
+    <li><b>Beds:</b> one set, dip 50&deg; in section (the panel; sheets say 32&ndash;38&deg;), the free face parallel to it (our N v13: dip 52&deg;, facing 262&deg;, camera azimuth 35&deg;). Slab faces nearly parallel, within 3&ndash;4&deg;. Slabs read thick and long: faces 2.5:1 to 5:1, cells about 12&times;40 mm, then 8&times;18, then 5&times;9 on half of them (thicker slabs were the biggest gain in N v13; 2.6&ndash;5 mm slabs read as blades). The outlines of the slabs are irregular, not beam-like. <span class="src">[photo]</span> <span class="src">[rounds]</span></li>
+    <li><b>Layer ratio</b> across the ledges .38 / .28 / .22 / .12 of the face width (about 8 mm each). <span class="src">[sheet]</span></li>
+    <li><b>Slab ends:</b> each slab ends at its own line parallel to the crest, 0&ndash;14 mm back, mostly long, so shingles recede by their thickness. The innermost slab is full width, so no ground shows.</li>
+    <li><b>Cross cuts</b> every 22&ndash;36 (then 9&ndash;14 inside), lean 3&ndash;4&deg; (up to 12&deg; only on the end face), about a quarter of the cracks, carry 0.1&ndash;0.15. At carry 1 it is a tilted brick grid.</li>
+    <li><b>Offsets:</b> setback along the free face normal, per slab 0&ndash;3.8 and per cell 0&ndash;2.2 at the coarsest level, then 0.4 of that per level. The step along the slab set goes <em>one way</em>, so the slabs overlap like shingles; a random sign reads flat. Per cell alone reads as loose blocks; pushing along y makes slabs stick out against the bedding. <span class="src">[rounds]</span></li>
+    <li><b>Detail:</b> eased lips 85% (28&ndash;52&deg;, 0.5&ndash;1.1); corner chips 30%, 1&ndash;2 per cell aimed up, 0.8&ndash;1.9 deep; grooves along the slab on 55% of cells wider than 4, 0.25&ndash;0.5 wide, 0.3&ndash;0.6 deep; no gravel on the ramp; foot 11 flat chamfered blocks.</li>
+    <li><b>Avoid:</b> slope too steep or too segmented; too many vertical cuts; faces turned at many angles (quartz); identical bevels on every slab (stacked beams); over 3 chips per cell (destroys the ramp); a front plane cutting across the beds.</li>
+  </ol>
+
+  <h3>The O case: stacked blocks</h3>
+  <ol>
+    <li><b>Mass:</b> three boxes stepping up and back; heights .26 / .52 / .80 H (sheet), footprint .20 / .60 / .20 L; H about 38. A foot stair at the right, and the leftmost column standing proud to give the return face.</li>
+    <li><b>Courses:</b> three, each 11.5&ndash;14.5 high (sheet says four of about 10; the photo wins). Level beds; tops lean at most 8&deg;.</li>
+    <li><b>Blocks:</b> about 12&ndash;22 wide, three wide blocks to a course, joints about every 14 (width to height about 1.2:1 in the photo; the sheet says 1.6&ndash;2.4:1 and gave four narrow rows that read as rubble).</li>
+    <li><b>Joints:</b> about a third of the vertical joints repeat the one below (carry 0.35); the others are staggered by at least 3.2.</li>
+    <li><b>Depth push:</b> 0&ndash;6 per block (to 7.5); one recess 6&ndash;8 and the cell above forward 2&ndash;3; setback per tier grows with the course index.</li>
+    <li><b>Faces:</b> vertical 85&ndash;90&deg;, flat. Most faces stay whole (about 60%); the rest are split once into a skin piece set back 0.1&ndash;0.3 and turned 0.2&ndash;1.2&deg;, so the block outline dominates (O v14; a skin of 2&ndash;5 pieces read as rubble, faceted relief as crystal). The face&rsquo;s texture is cracks and a few chips, not facets. <span class="src">[rounds]</span></li>
+    <li><b>Edges and chips:</b> eased edges all round the top: a chamfer 1&ndash;2 (to 3.4 on the top front) on the top-front and both top side edges, and on the vertical front edges of about 80% of blocks, slightly irregular (O v14); 1&ndash;3 corner chips of 0.9&ndash;2.8; cap blocks 3.5&ndash;6.5 high on the top course to break the skyline.</li>
+    <li><b>Joints must be real:</b> a printed tile has no shadow map, so joints are 0.4&ndash;0.7 wide and read dark because they are deep (at least 3 times their width) or because the neighbour stands proud.</li>
+    <li><b>Avoid:</b> rounding the blocks (large tilts, or more than three big chips); diagonal striations (they read as N); a pit cell inside a cell; faceted relief on faces (reads as crystal); short isolated cracks (read as gouges).</li>
+  </ol>
+</section>
+
+<section id="language">
+  <div class="eyebrow">8 &middot; How it maps to the language</div>
+  <h2>Which Cliff Cleaving words carry what</h2>
+  <p>The proposal&rsquo;s words are <code>cleave</code> (with <code>dip</code>, <code>facing</code>, <code>spacing</code>, <code>bend</code>, <code>carry</code>), <code>inside</code> (with <code>cover</code>), <code>setback</code>, <code>tilt</code>, <code>top</code>, <code>joints</code> and <code>chips</code>. This table lists what each carries and what nothing reaches yet. Open questions only; no word is proposed here.</p>
+  <div class="tw"><table class="t">
+    <tr><th>Primitive or idea</th><th>Carried by</th><th>Not reached</th></tr>
+    <tr><td>Planes and facet changes</td><td><code>cleave</code> dip, facing, spacing; <code>tilt</code> per cell</td><td>creases that wander (a bend that is not a lean per plane)</td></tr>
+    <tr><td>Breaks and edges</td><td><code>chips</code> on edges of every leaf cell</td><td>the 70/30 soft and crisp split; a chamfer size per edge</td></tr>
+    <tr><td>Steps and ledges</td><td><code>setback</code> per cell; <code>cleave</code> dip 0 with <code>spacing</code></td><td>a setback range that crosses zero (the overhang); setback growing with the course index</td></tr>
+    <tr><td>Chips and notches</td><td><code>chips</code> at corners</td><td>an aim for a chip; a chip taken from a face, not a corner</td></tr>
+    <tr><td>Dishes</td><td>(<code>pockets</code> on the rock; on N cells lowered with <code>setback</code> and <code>bumpSize</code>)</td><td>an irregular dish with a wandering rim; a pit as a plane cut into a face</td></tr>
+    <tr><td>Pits</td><td>nothing yet on the cliff</td><td>clusters of small pits of mixed size</td></tr>
+    <tr><td>Ridges and swells</td><td>nothing</td><td>a raised band that fades; <code>top</code> as a plane per cell is held open</td></tr>
+    <tr><td>Cracks and fissures</td><td><code>joints</code> (width), <code>carry</code>, <code>inside</code> (persistence)</td><td>a crack that tapers; a step across a crack that dies out</td></tr>
+    <tr><td>Undulation</td><td>nothing smooth: cells are flat</td><td>a low broad swell across a face</td></tr>
+    <tr><td>Grain and striation</td><td>nothing (a finish, not massing; the rock explorer has <code>grain</code>)</td><td>depth of grain; direction along the bedding</td></tr>
+    <tr><td>Layering and shingling (N)</td><td><code>cleave</code> dip, spacing; <code>top</code> per cell for each slab&rsquo;s end</td><td>a floor cell so the ground never shows between slabs</td></tr>
+    <tr><td>Tiers, caps, shelves (O)</td><td><code>cleave</code> dip 0, <code>carry</code>, <code>setback</code></td><td>caps that shrink near the top (a spacing that falls with height)</td></tr>
+    <tr><td>Skin over core, levels</td><td><code>inside</code>, <code>cover</code>, <code>setback</code>, <code>tilt</code></td><td>a skin depth as a property of the nested set; a minimum piece as a rule beyond spacing&rsquo;s lower end</td></tr>
+    <tr><td>Cavity darkness, joints dark</td><td>not a language matter (paint and light)</td><td>whether a joint&rsquo;s depth belongs to <code>joints</code></td></tr>
+  </table></div>
+  <h4 style="margin-top:22px">Open questions</h4>
+  <ol>
+    <li>May <code>setback</code> be negative, so one range covers both the recess and the overhang above it?</li>
+    <li>How does a dish (irregular, one plane cut into a face) differ from <code>pockets</code> on a rock, and does it need a face aim like a chip?</li>
+    <li>Does a bedding set need a floor on each cell&rsquo;s top, so shingles never show the ground?</li>
+    <li>Is <code>top</code>&rsquo;s slope per cell the same thing as a ridge, a swell and a tapering crack, or three things?</li>
+    <li>Where does a skin depth live, and is a minimum piece width part of <code>spacing</code> or a separate rule?</li>
+    <li>Is a share of soft against crisp edges a property of <code>chips</code>, or of the cliff?</li>
+    <li>Does grain on a cliff belong to the language at all, or only to finishing?</li>
+  </ol>
+  <footer>
+    <p>Sources: the generated reference sheets in the repository&rsquo;s <code>reference/cliffs/</code> (the flat rock surface, the rock surface texture, the A&ndash;P family guide, the N and O sculpting study and sheet, and the unpainted sheets of 16 panels), our Wall N and Wall O generators (notes of 18 November 2026), and the Cliff Cleaving proposal. The sheets are generated images, not measurements. The model code is on this page; rebuild it with <code>build.py</code> in the page&rsquo;s folder.</p>
+  </footer>
+</section>
+
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* engine.js: our own procedural geometry for the page. No geometry libraries; three.js only draws.
+   Units are mm at the 35 mm square. z is up.
+   Two builders, both closed solids by construction:
+     hf*      a heightfield patch: a rough top over a flat base, four walls and a floor.
+     poly*    convex solids from lists of half-spaces (the way the wall generators build blocks).
+   Lighting is baked per vertex as cavity shading (horizon occlusion on a heightfield, hemisphere rays on solids). */
+(function (G) {
+  'use strict';
+  const T = THREE, PI = Math.PI, sin = Math.sin, cos = Math.cos, abs = Math.abs, min = Math.min, max = Math.max, sqrt = Math.sqrt, floor = Math.floor;
+
+  /* ---------- small tools ---------- */
+  function rng(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function hash2(i, j, s) { let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(s, 1274126177)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+  const sstep = (a, b, x) => { const t = min(1, max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const lerp = (a, b, t) => a + (b - a) * t, clamp = (x, a, b) => min(b, max(a, x));
+  function vnoise(x, y, s) { const i = floor(x), j = floor(y), fx = x - i, fy = y - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy); const a = hash2(i, j, s), b = hash2(i + 1, j, s), c = hash2(i, j + 1, s), d = hash2(i + 1, j + 1, s); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+  function fbm(x, y, s, oct) { let a = 0, n = 0, f = 1, m = 1; for (let o = 0; o < (oct || 3); o++) { a += m * (vnoise(x * f, y * f, s + o * 17) - .5); n += m; m *= .5; f *= 2; } return a / n * 2; }   /* about -1..1 */
+  const rad = (d) => d * PI / 180;
+
+  /* Voronoi in the plane: nearest and second nearest of one jittered seed per grid cell */
+  function voronoi(cs, seed, jit) {
+    jit = jit == null ? .85 : jit;
+    return function (x, y) {
+      const gi = floor(x / cs), gj = floor(y / cs); let d1 = 1e9, d2 = 1e9, s1 = null;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        const i = gi + a, j = gj + b, px = (i + .5 + (hash2(i, j, seed) - .5) * jit) * cs, py = (j + .5 + (hash2(i, j, seed + 7) - .5) * jit) * cs;
+        const d = Math.hypot(x - px, y - py);
+        if (d < d1) { d2 = d1; d1 = d; s1 = { i: i, j: j, x: px, y: py }; } else if (d < d2) d2 = d;
+      }
+      return { d1: d1, d2: d2, e: (d2 - d1) * .5, id: hash2(s1.i, s1.j, seed + 31), id2: hash2(s1.i, s1.j, seed + 53), id3: hash2(s1.i, s1.j, seed + 97), cx: s1.x, cy: s1.y };
+    };
+  }
+  /* signed distance to a polygon (negative inside), pts = [[x,y],...] */
+  function polySD(pts, x, y) {
+    let d = 1e9, inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const ax = pts[j][0], ay = pts[j][1], bx = pts[i][0], by = pts[i][1], ex = bx - ax, ey = by - ay, t = clamp(((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey), 0, 1), px = ax + ex * t - x, py = ay + ey * t - y;
+      d = min(d, Math.hypot(px, py));
+      if (((ay > y) !== (by > y)) && (x < (bx - ax) * (y - ay) / (by - ay) + ax)) inside = !inside;
+    }
+    return inside ? -d : d;
+  }
+  function distSeg(px, py, ax, ay, bx, by) { const ex = bx - ax, ey = by - ay, t = clamp(((px - ax) * ex + (py - ay) * ey) / (ex * ex + ey * ey || 1), 0, 1); return { d: Math.hypot(ax + ex * t - px, ay + ey * t - py), t: t, s: (ex * (py - ay) - ey * (px - ax)) >= 0 ? 1 : -1 }; }
+  function distPath(pts, x, y) { let best = { d: 1e9, t: 0, s: 1 }, tot = 0, lens = []; for (let i = 0; i < pts.length - 1; i++) { const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); lens.push(l); tot += l; } let acc = 0; for (let i = 0; i < pts.length - 1; i++) { const r = distSeg(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]); if (r.d < best.d) best = { d: r.d, t: (acc + r.t * lens[i]) / tot, s: r.s }; acc += lens[i]; } return best; }
+  /* a meandering path from a to b */
+  function wander(a, b, n, amp, seed) { const pts = [], dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L; for (let i = 0; i <= n; i++) { const t = i / n, w = (vnoise(t * 3.2, seed, seed) - .5) * 2 * amp * sin(PI * t) ** .5; pts.push([a[0] + dx * t + nx * w, a[1] + dy * t + ny * w]); } return pts; }
+  /* an irregular convex-ish polygon about a centre */
+  function jag(cx, cy, rx, ry, n, rot, seed, irr) { const r = rng(seed), pts = []; for (let i = 0; i < n; i++) { const a = rot + 2 * PI * (i + (r() - .5) * .5) / n, k = 1 - irr + irr * 2 * r(); pts.push([cx + cos(a) * rx * k, cy + sin(a) * ry * k]); } return pts; }
+
+  /* ---------- heightfield patch ----------
+     spec: { size, N, base, h(x,y) -> z, tone(x,y) -> 0.8..1.15 (optional), ao: strength }
+     returns { meshes, center, radius } */
+  const MAT = () => new T.MeshLambertMaterial({ vertexColors: true });
+  function hfPatch(spec) {
+    const size = spec.size || 30, N = spec.N || 150, cell = size / N, n1 = N + 1;
+    const H = new Float32Array(n1 * n1), Tn = new Float32Array(n1 * n1);
+    for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) { const x = i * cell, y = j * cell; H[j * n1 + i] = spec.h(x, y); Tn[j * n1 + i] = spec.tone ? spec.tone(x, y) : 1; }
+    let hmin = 1e9, hmax = -1e9; for (let k = 0; k < H.length; k++) { hmin = min(hmin, H[k]); hmax = max(hmax, H[k]); }
+    const base = (spec.base == null ? 3 : spec.base) - hmin;   /* the floor sits 3 mm below the lowest point */
+    /* horizon occlusion: for 8 directions, the steepest rise seen within R mm */
+    const R = spec.aoR || 3.2, dist = [.25, .5, .9, 1.5, 2.3, 3.2].filter(d => d <= R + .01), A = spec.ao == null ? 1 : spec.ao, ao = new Float32Array(n1 * n1);
+    const dirs = []; for (let k = 0; k < 8; k++) dirs.push([cos(k * PI / 4), sin(k * PI / 4)]);
+    for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+      const h0 = H[j * n1 + i]; let occ = 0;
+      for (const d of dirs) { let ms = 0; for (const r of dist) { const ii = Math.round(i + d[0] * r / cell), jj = Math.round(j + d[1] * r / cell); if (ii < 0 || jj < 0 || ii > N || jj > N) break; const s = (H[jj * n1 + ii] - h0) / r; if (s > ms) ms = s; } occ += Math.atan(ms) / (PI / 2); }
+      ao[j * n1 + i] = 1 - A * 1.25 * occ / 8;
+    }
+    const pos = new Float32Array(n1 * n1 * 3), col = new Float32Array(n1 * n1 * 3), g = spec.grey || .74;
+    for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) { const k = j * n1 + i; pos[k * 3] = i * cell; pos[k * 3 + 1] = j * cell; pos[k * 3 + 2] = H[k]; const c = g * Tn[k] * clamp(ao[k], .25, 1.05); col[k * 3] = c; col[k * 3 + 1] = c; col[k * 3 + 2] = c * 1.025; }
+    const idx = []; for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const a = j * n1 + i, b = a + 1, c = a + n1, d = c + 1; idx.push(a, b, d, a, d, c); }
+    const top = new T.BufferGeometry(); top.setAttribute('position', new T.BufferAttribute(pos, 3)); top.setAttribute('color', new T.BufferAttribute(col, 3)); top.setIndex(idx); top.computeVertexNormals();
+    /* walls and floor, flat colours */
+    const wp = [], wc = [], wcol = g * .62;
+    function quad(a, b, c, d) { [a, b, c, a, c, d].forEach(p => { wp.push(p[0], p[1], p[2]); wc.push(wcol, wcol, wcol * 1.02); }); }
+    for (let i = 0; i < N; i++) {
+      const x0 = i * cell, x1 = (i + 1) * cell, h0 = H[i], h1 = H[i + 1], k0 = N * n1 + i, k1 = k0 + 1;
+      quad([x0, 0, -base], [x1, 0, -base], [x1, 0, h1], [x0, 0, h0]);
+      quad([x1, size, -base], [x0, size, -base], [x0, size, H[k0]], [x1, size, H[k1]]);
+      const y0 = i * cell, y1 = (i + 1) * cell, l0 = H[i * n1], l1 = H[(i + 1) * n1], r0 = H[i * n1 + N], r1 = H[(i + 1) * n1 + N];
+      quad([0, y1, -base], [0, y0, -base], [0, y0, l0], [0, y1, l1]);
+      quad([size, y0, -base], [size, y1, -base], [size, y1, r1], [size, y0, r0]);
+    }
+    quad([0, size, -base], [size, size, -base], [size, 0, -base], [0, 0, -base]);
+    const wg = new T.BufferGeometry(); wg.setAttribute('position', new T.Float32BufferAttribute(wp, 3)); wg.setAttribute('color', new T.Float32BufferAttribute(wc, 3)); wg.computeVertexNormals();
+    const m1 = new T.Mesh(top, MAT()), m2 = new T.Mesh(wg, MAT());
+    return { meshes: [m1, m2], center: [size / 2, size / 2, (hmin + hmax) / 2], radius: size * .93, hmin: hmin, hmax: hmax, H: H, N: N, size: size };
+  }
+
+  /* ---------- convex solids from half-spaces ---------- */
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  function clipPoly(poly, n, d) {
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length], da = dot(n, a) - d, db = dot(n, b) - d;
+      if (da <= 1e-9) out.push(a);
+      if ((da < -1e-9 && db > 1e-9) || (da > 1e-9 && db < -1e-9)) { const t = da / (da - db); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]); }
+    }
+    return out;
+  }
+  /* planes: [{n:[x,y,z] unit, d, tag}] keep n.p <= d. Returns faces [{n, pts, tag}] */
+  function solidFromPlanes(planes) {
+    const faces = [];
+    planes.forEach((pl, i) => {
+      const n = pl.n, helper = abs(n[2]) < .9 ? [0, 0, 1] : [1, 0, 0], u = norm(cross(n, helper)), v = cross(n, u), c = mul(n, pl.d), L = 400;
+      let poly = [add(c, add(mul(u, L), mul(v, L))), add(c, add(mul(u, -L), mul(v, L))), add(c, add(mul(u, -L), mul(v, -L))), add(c, add(mul(u, L), mul(v, -L)))];
+      /* orient so that the polygon normal is n */
+      const cn = cross(sub(poly[1], poly[0]), sub(poly[2], poly[0])); if (dot(cn, n) < 0) poly.reverse();
+      for (let j = 0; j < planes.length && poly.length >= 3; j++) if (j !== i) poly = clipPoly(poly, planes[j].n, planes[j].d);
+      if (poly.length >= 3) { let ar = 0; for (let k = 1; k < poly.length - 1; k++) ar += Math.hypot.apply(null, cross(sub(poly[k], poly[0]), sub(poly[k + 1], poly[0]))) / 2; if (ar > 1e-3) faces.push({ n: n, pts: poly, tag: pl.tag || '', area: ar }); }
+    });
+    return faces;
+  }
+  const P = (n, d, tag) => { n = norm(n); return { n: n, d: d, tag: tag }; };
+  /* a tilted face plane: nominal normal n0 through point p, leaned by angle (deg) about a random axis */
+  function leaned(n0, p, ang, r, tag) {
+    const ax = norm(cross(n0, [r() - .5, r() - .5, r() - .5])), a = rad(ang), n = norm(add(mul(n0, cos(a)), mul(cross(ax, n0), sin(a))));
+    return P(n, dot(n, p), tag);
+  }
+  /* an axis aligned box as six planes, optionally leaned, plus chamfer planes on chosen edges, plus extra planes (chips) */
+  function blockPlanes(b, r) {
+    const x0 = b.x0, x1 = b.x1, y0 = b.y0, y1 = b.y1, z0 = b.z0, z1 = b.z1, lean = b.lean || {}, pl = [];
+    const c = [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2];
+    const faces = [['-x', [-1, 0, 0], [x0, c[1], c[2]]], ['+x', [1, 0, 0], [x1, c[1], c[2]]], ['-y', [0, -1, 0], [c[0], y0, c[2]]], ['+y', [0, 1, 0], [c[0], y1, c[2]]], ['-z', [0, 0, -1], [c[0], c[1], z0]], ['+z', [0, 0, 1], [c[0], c[1], z1]]];
+    faces.forEach(f => { const a = lean[f[0]] || 0; pl.push(a ? leaned(f[1], f[2], a * (r() < .5 ? -1 : 1) * (.4 + .6 * r()), r, f[0]) : P(f[1], dot(f[1], f[2]), f[0])); });
+    return pl;
+  }
+  /* exact: plane through the points E - c*b (on face a) and E - c*a (on face b) */
+  function chamferExact(a, b, E, c, tag) { const n = norm(add(a, b)); const p = sub(E, mul(b, c)); return P(n, dot(n, p), tag || 'chamfer'); }
+  /* a cut aimed at a point: plane with normal n through (point - depth*n) */
+  function cutAt(point, n, depth, tag) { n = norm(n); return P(n, dot(n, point) - depth, tag || 'chip'); }
+
+  /* ---------- solids to a mesh with cavity shading ---------- */
+  const AODIR = (function () { const a = [], n = 16; for (let i = 0; i < n; i++) { const u = (i + .5) / n, v = (i * .618034) % 1, r = sqrt(u), ph = 2 * PI * v; a.push([r * cos(ph), r * sin(ph), sqrt(1 - u)]); } return a; })();
+  function Soup() { this.tri = []; }  /* triangles to cast against */
+  function bakeAO(tris, verts, opts) {
+    const CS = 3, mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
+    tris.forEach(q => { for (let v = 0; v < 3; v++) for (let k = 0; k < 3; k++) { mn[k] = min(mn[k], q[v * 3 + k]); mx[k] = max(mx[k], q[v * 3 + k]); } });
+    const D = [0, 1, 2].map(k => Math.ceil((mx[k] - mn[k]) / CS) + 1), grid = new Map(), key = (x, y, z) => (x * D[1] + y) * D[2] + z;
+    tris.forEach((q, ti) => { const lo = [0, 1, 2].map(k => floor((min(q[k], q[3 + k], q[6 + k]) - mn[k]) / CS)), hi = [0, 1, 2].map(k => floor((max(q[k], q[3 + k], q[6 + k]) - mn[k]) / CS)); for (let x = lo[0]; x <= hi[0]; x++) for (let y = lo[1]; y <= hi[1]; y++) for (let z = lo[2]; z <= hi[2]; z++) { const kk = key(x, y, z); let l = grid.get(kk); if (!l) { l = []; grid.set(kk, l); } l.push(ti); } });
+    const stamp = new Int32Array(tris.length); let sid = 0;
+    function hit(o, d, tmax) {
+      sid++; let best = 1e9;
+      for (let s = 0; s < tmax + CS; s += CS * .5) {
+        const ix = floor((o[0] + d[0] * s - mn[0]) / CS), iy = floor((o[1] + d[1] * s - mn[1]) / CS), iz = floor((o[2] + d[2] * s - mn[2]) / CS);
+        if (ix < 0 || iy < 0 || iz < 0 || ix >= D[0] || iy >= D[1] || iz >= D[2]) continue;
+        const l = grid.get(key(ix, iy, iz)); if (!l) continue;
+        for (let a = 0; a < l.length; a++) {
+          const ti = l[a]; if (stamp[ti] === sid) continue; stamp[ti] = sid; const q = tris[ti];
+          const e1x = q[3] - q[0], e1y = q[4] - q[1], e1z = q[5] - q[2], e2x = q[6] - q[0], e2y = q[7] - q[1], e2z = q[8] - q[2], px = d[1] * e2z - d[2] * e2y, py = d[2] * e2x - d[0] * e2z, pz = d[0] * e2y - d[1] * e2x, det = e1x * px + e1y * py + e1z * pz;
+          if (abs(det) < 1e-9) continue; const id = 1 / det, tx = o[0] - q[0], ty = o[1] - q[1], tz = o[2] - q[2], u = (tx * px + ty * py + tz * pz) * id; if (u < 0 || u > 1) continue;
+          const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x, v = (d[0] * qx + d[1] * qy + d[2] * qz) * id; if (v < 0 || u + v > 1) continue;
+          const tt = (e2x * qx + e2y * qy + e2z * qz) * id; if (tt > .02 && tt < best) best = tt;
+        }
+        if (best < s + CS) break;
+      }
+      return best;
+    }
+    const maxd = opts.maxd || 7, out = new Float32Array(verts.length), cache = new Map();
+    verts.forEach((vt, vi) => {
+      const p = vt.p, n = vt.n, kk = p.map(x => Math.round(x * 20)).join(',') + '|' + n.map(x => Math.round(x * 8)).join(',');
+      let c = cache.get(kk);
+      if (c === undefined) {
+        const tt = abs(n[2]) < .9 ? [0, 0, 1] : [1, 0, 0], u = norm(cross(n, tt)), v = cross(n, u), o = add(p, mul(n, .06)); let occ = 0;
+        for (const a of AODIR) { const d = norm(add(add(mul(u, a[0]), mul(v, a[1])), mul(n, a[2]))), t = hit(o, d, maxd); if (t < maxd) occ += 1 - t / maxd * .55; }
+        c = 1 - 1.25 * occ / AODIR.length; cache.set(kk, c);
+      }
+      out[vi] = c;
+    });
+    return out;
+  }
+  /* parts: [{faces, tone, dark}] ; ground: optional z=0 plate [x0,y0,x1,y1] drawn and cast against.
+     Faces are tessellated to about 'pitch' mm so the cavity shading has somewhere to vary. */
+  function solidsMesh(parts, opts) {
+    opts = opts || {}; const pitch = opts.pitch || 3.4, r = rng(opts.seed || 5), tris = [], verts = [], pos = [], nor = [], tone = [];
+    function sub3(a, b, c, n, tb) {
+      const L = max(Math.hypot.apply(null, sub(b, a)), Math.hypot.apply(null, sub(c, b)), Math.hypot.apply(null, sub(a, c))), m = clamp(Math.ceil(L / pitch), 1, 7);
+      const Pt = (i, j) => [a[0] + (b[0] - a[0]) * i / m + (c[0] - a[0]) * j / m, a[1] + (b[1] - a[1]) * i / m + (c[1] - a[1]) * j / m, a[2] + (b[2] - a[2]) * i / m + (c[2] - a[2]) * j / m];
+      const emit = (p, q, s) => { [p, q, s].forEach(v => { pos.push(v[0], v[1], v[2]); nor.push(n[0], n[1], n[2]); verts.push({ p: v, n: n }); tone.push(tb); }); tris.push([p[0], p[1], p[2], q[0], q[1], q[2], s[0], s[1], s[2]]); };
+      for (let i = 0; i < m; i++) for (let j = 0; j < m - i; j++) { emit(Pt(i, j), Pt(i + 1, j), Pt(i, j + 1)); if (j < m - i - 1) emit(Pt(i + 1, j), Pt(i + 1, j + 1), Pt(i, j + 1)); }
+    }
+    parts.forEach(pt => pt.faces.forEach(f => {
+      const tb = (pt.tone || 1) * (opts.facetTone == null ? .2 : opts.facetTone) * (r() - .5) * 2 + (pt.tone || 1) + (pt.dark ? 0 : 0);
+      for (let k = 1; k < f.pts.length - 1; k++) {
+        let a = f.pts[0], b = f.pts[k], c = f.pts[k + 1];
+        if (dot(cross(sub(b, a), sub(c, a)), f.n) < 0) { const t = b; b = c; c = t; }
+        sub3(a, b, c, f.n, tb);
+      }
+    }));
+    let ground = null;
+    if (opts.ground) { const g = opts.ground, gv = [[g[0], g[1], 0], [g[2], g[1], 0], [g[2], g[3], 0], [g[0], g[3], 0]]; ground = gv; tris.push([].concat(gv[0], gv[1], gv[2])); tris.push([].concat(gv[0], gv[2], gv[3])); }
+    const ao = bakeAO(tris, verts, opts), col = new Float32Array(pos.length), base = opts.grey || .66;
+    for (let i = 0; i < verts.length; i++) { const c = base * tone[i] * (.3 + .7 * clamp(ao[i], 0, 1) ** 1.35); col[i * 3] = c; col[i * 3 + 1] = c; col[i * 3 + 2] = c * 1.025; }
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new T.BufferAttribute(col, 3));
+    const meshes = [new T.Mesh(g, MAT())];
+    if (ground) {
+      /* the plate under it, a closed slab 2 mm thick */
+      const g0 = opts.ground, pl = solidFromPlanes([P([0, 0, 1], 0, 'top'), P([0, 0, -1], 2, 'bot'), P([-1, 0, 0], -g0[0], 'a'), P([1, 0, 0], g0[2], 'b'), P([0, -1, 0], -g0[1], 'c'), P([0, 1, 0], g0[3], 'd')]);
+      const pp = [], pn = [], pc = [];
+      pl.forEach(f => { for (let k = 1; k < f.pts.length - 1; k++) { let a = f.pts[0], b = f.pts[k], c = f.pts[k + 1]; if (dot(cross(sub(b, a), sub(c, a)), f.n) < 0) { const t = b; b = c; c = t; } [a, b, c].forEach(v => { pp.push(v[0], v[1], v[2]); pn.push(f.n[0], f.n[1], f.n[2]); const cc = (f.tag === 'top' ? .62 : .5); pc.push(cc, cc, cc * 1.02); }); } });
+      const gg = new T.BufferGeometry(); gg.setAttribute('position', new T.Float32BufferAttribute(pp, 3)); gg.setAttribute('normal', new T.Float32BufferAttribute(pn, 3)); gg.setAttribute('color', new T.Float32BufferAttribute(pc, 3));
+      meshes.push(new T.Mesh(gg, MAT()));
+    }
+    let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9]; parts.forEach(pt => pt.faces.forEach(f => f.pts.forEach(p => { for (let k = 0; k < 3; k++) { mn[k] = min(mn[k], p[k]); mx[k] = max(mx[k], p[k]); } })));
+    const ctr = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2], rr = Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) / 2;
+    return { meshes: meshes, center: ctr, radius: rr, tris: tris.length };
+  }
+
+  /* ---------- viewer: one shared renderer, a still image per view, orbit on demand ---------- */
+  let renderer = null;
+  function getRenderer() {
+    if (renderer) return renderer;
+    renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setClearColor(0x000000, 0); return renderer;
+  }
+  const RELIEF = { k: 1 };
+  function makeView(el, model, opt) {
+    opt = opt || {};
+    const canvas = el.querySelector('canvas'), ctx = canvas.getContext('2d'), scene = new T.Scene(), cam = new T.PerspectiveCamera(opt.fov || 28, 1, .5, 2000);
+    cam.up.set(0, 0, 1);
+    const grp = new T.Group(); model.meshes.forEach(m => grp.add(m)); scene.add(grp);
+    scene.add(new T.HemisphereLight(0xf3f5fa, 0x7d7f88, opt.hemi == null ? .74 : opt.hemi));
+    const key = new T.DirectionalLight(0xffffff, opt.key == null ? .5 : opt.key); scene.add(key); scene.add(key.target);
+    const st = { az: opt.az == null ? -28 : opt.az, el: opt.el == null ? 38 : opt.el, d: (opt.dist || 1) * model.radius * 3.35, z: 0, flat: !!opt.flat };
+    const c0 = model.center, relK = opt.relief !== false;
+    function draw() {
+      const r = getRenderer(), w = canvas.clientWidth || 400, h = canvas.clientHeight || 300, dpr = min(window.devicePixelRatio || 1, 2);
+      if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+      r.setPixelRatio(1); r.setSize(canvas.width, canvas.height, false); cam.aspect = w / h; cam.updateProjectionMatrix();
+      const a = rad(st.az), e = rad(st.el), d = st.d / (st.z || 1);
+      grp.scale.set(1, 1, relK ? RELIEF.k : 1); grp.position.set(0, 0, 0);
+      cam.position.set(c0[0] + d * cos(e) * sin(a), c0[1] - d * cos(e) * cos(a), c0[2] * 1 + d * sin(e)); cam.lookAt(c0[0], c0[1], c0[2]);
+      /* key light: soft, from the upper left front of the camera, so relief shows */
+      const ka = a - rad(55), ke = rad(opt.keyEl || 42); key.position.set(c0[0] + 100 * cos(ke) * sin(ka), c0[1] - 100 * cos(ke) * cos(ka), c0[2] + 100 * sin(ke)); key.target.position.set(c0[0], c0[1], c0[2]);
+      r.render(scene, cam);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const gr = ctx.createRadialGradient(canvas.width * .5, canvas.height * .42, 10, canvas.width * .5, canvas.height * .5, canvas.width * .75); gr.addColorStop(0, '#9a9ea7'); gr.addColorStop(1, '#6a6e77');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(r.domElement, 0, 0);
+    }
+    let drag = null, raf = 0; const ask = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
+    canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, az: st.az, el: st.el, t: e.pointerType }; try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* capture is best effort */ } el.classList.add('live'); });
+    canvas.addEventListener('pointermove', e => { if (!drag) return; st.az = drag.az - (e.clientX - drag.x) * .45; if (drag.t !== 'touch') st.el = clamp(drag.el + (e.clientY - drag.y) * .35, 4, 86); ask(); });
+    const up = () => { drag = null; el.classList.remove('live'); };
+    canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+    canvas.addEventListener('dblclick', () => { st.az = opt.az == null ? -28 : opt.az; st.el = opt.el == null ? 38 : opt.el; st.z = 0; ask(); });
+    canvas.addEventListener('wheel', e => { if (!e.shiftKey && !e.ctrlKey && !e.altKey) return; e.preventDefault(); st.z = clamp((st.z || 1) * (e.deltaY < 0 ? 1.1 : .9), .5, 4); ask(); }, { passive: false });
+    return { draw: ask, now: draw, st: st };
+  }
+
+  G.Eng = { rng, hash2, sstep, lerp, clamp, vnoise, fbm, voronoi, polySD, distPath, distSeg, wander, jag, hfPatch, solidFromPlanes, blockPlanes, chamferExact, cutAt, leaned, P, norm, cross, dot, add, sub, mul, solidsMesh, makeView, RELIEF, rad };
+})(window);
+
+/* models.js: the models of the page. Each returns { meshes, center, radius } through Eng.hfPatch or Eng.solidsMesh,
+   and some also give a profile function (one section line through the same height function) for the SVG beside it.
+   All lengths are mm at the 35 mm square. */
+(function (G) {
+  'use strict';
+  const E = G.Eng, sstep = E.sstep, vn = E.vnoise, fbm = E.fbm, rad = E.rad, hash2 = E.hash2;
+  const sin = Math.sin, cos = Math.cos, tan = Math.tan, abs = Math.abs, min = Math.min, max = Math.max, PI = Math.PI, hyp = Math.hypot, fl = Math.floor;
+  const MODELS = {}, PROFILES = {};
+  const grain = (x, y, a, s) => a * (fbm(x * 1.7, y * 1.7, s, 2) * .6 + fbm(x * 4.1, y * 4.1, s + 9, 1) * .4);
+  const wob = (v, a, wl, s) => (vn(v / wl, s, s) - .5) * 2 * a;
+
+  /* ============ the primitives, as heightfield patches ============ */
+  /* facet change: three planes meeting at 3 to 5 degrees, creases not straight */
+  const facetH = (x, y) => {
+    const u1 = (x - 15) * cos(.38) + (y - 15) * sin(.38) + wob(y, 1.6, 7, 3), u2 = (x - 15) * cos(2.2) + (y - 15) * sin(2.2) + wob(x, 1.4, 6, 8);
+    const a = tan(rad(2.2)) * u1 + .55, b = -tan(rad(2.6)) * u1 + .55, c = tan(rad(3.4)) * u2 + .25 * 0;
+    return min(a, b, 0.25 + c * 1.0) + grain(x, y, .03, 2);
+  };
+  const facetPlate = (x, y) => { const u1 = (x - 15) * cos(.38) + (y - 15) * sin(.38) + wob(y, 1.6, 7, 3), u2 = (x - 15) * cos(2.2) + (y - 15) * sin(2.2) + wob(x, 1.4, 6, 8); const a = tan(rad(2.2)) * u1 + .55, b = -tan(rad(2.6)) * u1 + .55, c = tan(rad(3.4)) * u2 + .25; return (a <= b && a <= c) ? .95 : (b <= c ? 1.03 : 1.0); };
+  MODELS.facet = () => E.hfPatch({ size: 30, N: 150, h: facetH, tone: facetPlate });
+  PROFILES.facet = { w: 30, y: 15, fn: (x) => facetH(x, 15), vex: 10 };
+
+  /* steps and ledges: a flight of treads tilted back 3 degrees, risers near 75 degrees, the lips not straight */
+  const STEP = { rise: 3, tread: 8.2, n: 3, x0: 5 };
+  const stepsH = (x, y) => {
+    let h = 0; const xs = [], w = .55;
+    for (let k = 0; k < STEP.n; k++) { const xb = STEP.x0 + k * STEP.tread + wob(y + k * 13, 1.1, 5, 11 + k); h += STEP.rise * sstep(xb - w, xb + w, x); xs.push(xb); }
+    let k = -1; for (let i = 0; i < xs.length; i++) if (x >= xs[i]) k = i;
+    const loc = k < 0 ? x - (xs[0] - STEP.tread) : x - xs[k];
+    return h - tan(rad(3)) * loc * .7 + grain(x, y, .05, 5) - (k >= 0 ? .55 * sstep(.35, .0, abs(x - xs[k] - .3)) * sstep(.55, .75, vn(y * .5, k, 4)) : 0);
+  };
+  MODELS.steps = () => E.hfPatch({ size: 30, N: 150, h: stepsH, tone: (x, y) => 1 + .05 * (fl((x - STEP.x0) / STEP.tread)) * 0 });
+  PROFILES.steps = { w: 30, y: 15, fn: (x) => stepsH(x, 15), vex: 3.2 };
+
+  /* chip / flake: an irregular polygon cut down to a floor tilted 3 degrees, walls near 55 degrees; a smaller second chip */
+  const chipPoly = E.jag(15, 15, 5.6, 4.0, 6, .5, 4, .18), chipPoly2 = E.jag(22.4, 9.4, 1.8, 1.4, 5, 1.2, 9, .2);
+  const chipH = (x, y) => {
+    const base = grain(x, y, .08, 6) + .25 * fbm(x / 13, y / 13, 4, 2);
+    const D = 1.25 + .06 * (x - 15), sd = E.polySD(chipPoly, x, y), w = 1.25 / tan(rad(55)), sd2 = E.polySD(chipPoly2, x, y);
+    let cut = sd < 0 ? D : D * (1 - sstep(0, w, sd)); cut += .15 * fbm(x * 2, y * 2, 7, 2) * (sd < 0 ? 1 : 0);
+    const cut2 = sd2 < 0 ? .55 : .55 * (1 - sstep(0, .5, sd2));
+    return base - max(cut, cut2);
+  };
+  MODELS.chip = () => E.hfPatch({ size: 30, N: 170, h: chipH, aoR: 2.3 });
+  PROFILES.chip = { w: 30, y: 15, fn: (x) => chipH(x, 15), vex: 6 };
+
+  /* dish: one irregular dish, deeper on one side, the rim not round (not the explorer's round pocket) */
+  const dishH = (x, y) => {
+    const dx = x - 15, dy = y - 14.5, c = cos(.5), s = sin(.5), u = (dx * c + dy * s) / 12.5, v = (-dx * s + dy * c) / 8.2, r = hyp(u, v), a = Math.atan2(v, u);
+    const rim = 1 + .2 * (vn(a * 1.15 + 6, 1.3, 5) - .5) * 2 + .1 * (vn(a * 3.1 + 2, 2.3, 7) - .5) * 2;
+    const rr = r / rim, f = rr < 1 ? Math.pow(1 - rr * rr, .85) : 0, depth = .95 * (1 + .32 * u) * (1 + .12 * sin(a * 2) * min(1, r * 1.5));
+    return -depth * f + .22 * fbm(x / 14, y / 14, 3, 2) + grain(x, y, .035, 4) - .1 * sstep(.8, 1, rr) * (rr < 1.1 ? 1 : 0) * 0;
+  };
+  MODELS.dish = () => E.hfPatch({ size: 30, N: 150, h: dishH });
+  PROFILES.dish = { w: 30, y: 14.5, fn: (x) => dishH(x, 14.5), vex: 10 };
+
+  /* pits: small irregular pits, clustered, never a lattice; diameter 0.8 to 2.8, none below 0.4 */
+  const PITS = (function () {
+    const r = E.rng(21), pts = [], cl = [[7, 8], [17, 15], [10, 18]];
+    for (let i = 0; i < 80; i++) {
+      const c = cl[i % 3], a = r() * 2 * PI, d = Math.pow(r(), .7) * (7 + 3 * (i % 3)), x = c[0] + cos(a) * d * .9, y = c[1] + sin(a) * d * .8;
+      if (x < 1 || x > 23 || y < 1 || y > 23) continue;
+      const dia = .8 + 2.0 * Math.pow(r(), 2.2), dep = clamp01(.12 + .3 * dia / 2.8 + .12 * r()) * 1;
+      pts.push({ x: x, y: y, r: dia / 2, d: dep, ph: r() * 6, el: .8 + .4 * r() });
+    }
+    return pts;
+  })();
+  function clamp01(x) { return min(1, max(0, x)); }
+  const pitsH = (x, y) => {
+    let h = grain(x, y, .05, 9) + .18 * fbm(x / 9, y / 9, 3, 2), cut = 0;
+    for (const p of PITS) { const dx = x - p.x, dy = y - p.y; if (abs(dx) > p.r * 1.6 || abs(dy) > p.r * 1.6) continue; const a = Math.atan2(dy, dx), rr = hyp(dx, dy * p.el) / (p.r * (1 + .13 * sin(a * 2 + p.ph) + .07 * sin(a * 5 + p.ph * 2))); if (rr < 1) cut = max(cut, p.d * (1 - rr * rr) ** .7); }
+    return h - cut;
+  };
+  MODELS.pits = () => E.hfPatch({ size: 24, N: 190, h: pitsH, aoR: 1.6 });
+  PROFILES.pits = { w: 24, y: 8, fn: (x) => pitsH(x, 8), vex: 8 };
+
+  /* ridge and swell: an angular ridge that fades out, beside a broad round swell */
+  const RIDGE = E.wander([0, 8], [30, 20], 10, 2.2, 5);
+  const ridgeH = (x, y) => {
+    const q = E.distPath(RIDGE, x, y), fade = 1 - .85 * sstep(.62, .95, q.t), hw = 3.2 + 1.2 * sin(q.t * 6), prof = Math.pow(max(0, 1 - q.d / hw), 1.35) * (.18 * 0 + 1);
+    const swell = Math.exp(-(((x - 9) / 7.5) ** 2 + ((y - 24) / 5.5) ** 2) * 1.0) * .7;
+    return 1.0 * fade * prof + swell + .18 * fbm(x / 12, y / 12, 6, 2) + grain(x, y, .035, 3);
+  };
+  MODELS.ridge = () => E.hfPatch({ size: 30, N: 150, h: ridgeH });
+  PROFILES.ridge = { w: 30, y: 14, fn: (x) => ridgeH(x, 14), vex: 8 };
+
+  /* crack: a meandering groove 0.7 wide, 1.0 deep, that stops inside the plate, with a short branch and a small step across it */
+  const CR = E.wander([2, 5], [28, 22], 14, 2.6, 7), BR = (function () { const p = CR[6]; return E.wander(p, [p[0] + 9, p[1] - 8], 6, 1.1, 3); })();
+  const crackH = (x, y) => {
+    const q = E.distPath(CR, x, y), taper = sstep(0, .1, q.t) * (1 - sstep(.78, .96, q.t)), b = E.distPath(BR, x, y), bt = sstep(0, .12, b.t) * (1 - sstep(.5, .95, b.t));
+    const g1 = q.d < .75 ? 1.0 * taper * (1 - q.d / .75) : 0, g2 = b.d < .55 ? .6 * bt * (1 - b.d / .55) : 0, step = .22 * q.s * sstep(0, 1.4, q.d) * taper;
+    return .18 * fbm(x / 11, y / 11, 2, 2) + grain(x, y, .04, 8) - max(g1, g2) + step;
+  };
+  MODELS.crack = () => E.hfPatch({ size: 30, N: 200, h: crackH, aoR: 2 });
+  PROFILES.crack = { w: 30, y: 13.4, fn: (x) => crackH(x, 13.4), vex: 8 };
+
+  /* undulation: broad, low, no feature stands out */
+  const undH = (x, y) => 1.5 * fbm(x / 20, y / 20, 5, 2) + .12 * fbm(x / 4, y / 4, 8, 2);
+  MODELS.undul = () => E.hfPatch({ size: 36, N: 150, h: undH });
+  PROFILES.undul = { w: 36, y: 18, fn: (x) => undH(x, 18), vex: 8 };
+
+  /* grain and striation: fine, stretched along the bedding, never below 0.4 mm */
+  const grH = (x, y) => {
+    const a = rad(14), u = x * cos(a) + y * sin(a), v = -x * sin(a) + y * cos(a);
+    return .26 * (vn(v * 1.5, u * .12, 3) - .5) * 2 + .1 * (vn(v * 3.4, u * .3, 5) - .5) * 2 + .05 * (vn(x * 2.8, y * 2.8, 11) - .5) * 2;
+  };
+  MODELS.grain = () => E.hfPatch({ size: 20, N: 200, h: grH, aoR: 1.4 });
+  PROFILES.grain = { w: 20, y: 10, fn: (x) => grH(x, 10), vex: 10 };
+
+  /* ============ the eight characteristic surface forms (patches 22 mm) ============ */
+  const vor = (cs, s, j) => E.voronoi(cs, s, j);
+  const formFn = {
+    flat: () => { const V = vor(11, 3, .8); return { h: (x, y) => { const q = V(x, y), tx = (q.id - .5) * 2 * tan(rad(4)), ty = (q.id2 - .5) * 2 * tan(rad(4)); return -tan(rad(20)) * x * .55 + tx * (x - q.cx) + ty * (y - q.cy) + (q.e < .3 ? -.3 * (1 - q.e / .3) : 0) + grain(x, y, .04, 2); }, tone: (x, y) => .93 + .14 * V(x, y).id }; },
+    layered: () => { const bs = [-1]; let u = 1, r = E.rng(4); while (u < 60) { bs.push(u); u += 3 + 2.6 * r(); } return { h: (x, y) => { const xx = x + wob(y, 1.1, 6, 3); let h = 0, k = -1; for (let i = 0; i < bs.length; i++) { h += (.5 + .9 * hash2(i, 3, 4)) * sstep(bs[i] - .35, bs[i] + .35, xx); if (xx >= bs[i]) k = i; } const loc = xx - (bs[max(k, 0)] || 0); return h - tan(rad(5)) * loc * .8 + tan(rad(7)) * -x * 0 + grain(x, y, .04, 7) - .25 * sstep(.5, 0, abs(loc)) * 0; }, tone: (x, y) => .95 + .1 * hash2(fl(x / 4), 0, 3) }; },
+    blocky: () => { const a = rad(8), r = E.rng(5); return { h: (x, y) => { const u = x * cos(a) + y * sin(a), v = -x * sin(a) + y * cos(a), row = fl(v / 7), off = hash2(row, 1, 4) * 8, uu = u + off, col = fl(uu / 8), lu = uu - col * 8 - 0, lv = v - row * 7, ed = min(lu, 8 - lu, lv, 7 - lv), id = hash2(col, row, 6), top = 2.4 * hash2(col, row, 8) + (id - .5) * .3 * (lu - 4) * .3; return top - 1.4 * (1 - sstep(0, .55, ed)) - .6 * (1 - sstep(.5, 1.6, ed)) * (hash2(col, row, 12) > .3 ? 1 : 0) + grain(x, y, .05, 9); }, tone: (x, y) => { const a2 = rad(8), u = x * cos(a2) + y * sin(a2), v = -x * sin(a2) + y * cos(a2), row = fl(v / 7), uu = u + hash2(row, 1, 4) * 8; return .93 + .14 * hash2(fl(uu / 8), row, 6); } }; },
+    sheared: () => ({ h: (x, y) => { const a = rad(28), u = x * sin(a) + y * cos(a), s = 4.2, k = fl(u / s), f = u / s - k; return -tan(rad(30)) * y * .8 + .75 * (f ** 1.15) * (1 + .5 * (hash2(k, 2, 9) - .5)) + wob(x + k * 9, .35, 4, 5) * 0 + grain(x, y, .05, 5); }, tone: (x, y) => { const a = rad(28), u = x * sin(a) + y * cos(a); return .94 + .12 * hash2(fl(u / 4.2), 1, 3); } }),
+    weathered: () => ({ h: (x, y) => 2.9 * fbm(x / 11, y / 11, 4, 2) + .12 * fbm(x / 3, y / 3, 6, 2) - .5 * sstep(.55, .1, hyp(x - 14, y - 7) / 3.5) , tone: () => 1 }),
+    pitted: () => { const S = []; const r = E.rng(13); for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { const x = (i + .5 + (r() - .5) * .7) * 3.1 + (j % 2) * 1.5, y = (j + .5 + (r() - .5) * .7) * 2.9; if (r() < .88) S.push({ x: x, y: y, r: 1.15 + .75 * r(), d: .4 + .45 * r(), ph: r() * 6, el: .85 + .3 * r() }); } return { h: (x, y) => grain(x, y, .05, 12) - cutSpots(S, x, y), tone: () => 1 }; },
+    cracked: () => { const V = vor(6.4, 6, .85); return { h: (x, y) => { const q = V(x, y), dome = .5 * (1 - clamp01(q.d1 / 3.6) ** 2) + (q.id - .5) * .45, crack = q.e < .55 ? 1.0 * (1 - q.e / .55) ** 1.1 : 0; return dome - crack + (q.id2 - .5) * tan(rad(3)) * (x - q.cx) + grain(x, y, .035, 4); }, tone: (x, y) => .93 + .14 * V(x, y).id }; },
+    columnar: () => { const V = vor(4.6, 7, .55); return { h: (x, y) => { const q = V(x, y), top = q.id * 5.2 + (q.id2 - .5) * tan(rad(3)) * (x - q.cx) * 1 , gap = sstep(.42, .12, q.e); return top - gap * 2.6 + grain(x, y, .04, 6); }, tone: (x, y) => .92 + .16 * V(x, y).id }; }
+  };
+  function clampF(x, a, b) { return min(b, max(a, x)); }
+  ['flat', 'layered', 'blocky', 'sheared', 'weathered', 'pitted', 'cracked', 'columnar'].forEach(k => { MODELS['form_' + k] = () => { const f = formFn[k](); return E.hfPatch({ size: 22, N: 130, h: f.h, tone: f.tone, aoR: 2.3 }); }; });
+
+  /* ============ the five patterns (patches 30 mm) ============ */
+  const spots = (seed, n, rmin, rmax, dmax, box, el) => { const r = E.rng(seed), a = []; for (let i = 0; i < n; i++) { const rr = rmin + (rmax - rmin) * Math.pow(r(), 2.2); a.push({ x: box[0] + r() * (box[2] - box[0]), y: box[1] + r() * (box[3] - box[1]), r: rr, d: min(dmax, .15 + .32 * rr / rmax * dmax * 1.5) * (.7 + .5 * r()), ph: r() * 6, el: .8 + .4 * r() }); } return a; };
+  function cutSpots(S, x, y) { let cut = 0; for (const p of S) { const dx = x - p.x, dy = y - p.y; if (abs(dx) > p.r * 1.5 || abs(dy) > p.r * 1.5) continue; const a = Math.atan2(dy, dx), rr = hyp(dx, dy * p.el) / (p.r * (1 + .13 * sin(a * 2 + p.ph) + .07 * sin(a * 5 + p.ph * 2))); if (rr < 1) cut = max(cut, p.d * (1 - rr * rr) ** .75); } return cut; }
+  const P1 = spots(3, 14, .5, 1.1, .35, [2, 2, 28, 28]);
+  MODELS.pat_subtle = () => E.hfPatch({ size: 30, N: 160, h: (x, y) => 1.1 * fbm(x / 18, y / 18, 3, 2) + .02 * x * 0 - cutSpots(P1, x, y) - .55 * sstep(.9, .0, E.polySD(E.jag(21, 21, 3.4, 2.6, 6, .3, 8, .2), x, y)) * .6 + grain(x, y, .045, 5), aoR: 2 });
+  const VP = E.voronoi(11.5, 12, .85), CHP = [E.jag(8, 22, 3.3, 2.4, 6, .3, 5, .2), E.jag(23, 8, 2.8, 2.2, 6, 1.1, 6, .2), E.jag(19, 24, 2.2, 1.6, 5, .8, 7, .2)];
+  MODELS.pat_plates = () => E.hfPatch({ size: 30, N: 160, h: (x, y) => { const q = VP(x * .86 + y * .22, y * 1.1 - x * .12), base = (q.id - .5) * 1.7 + ((q.id2 - .5) * tan(rad(3)) * (x - q.cx) * .86) + ((q.id3 - .5) * tan(rad(3)) * (y - q.cy)); let c = 0; for (const pp of CHP) { const sd = E.polySD(pp, x, y); c = max(c, sd < 0 ? .95 : .95 * (1 - sstep(0, .8, sd))); } return base - (q.e < .32 ? .55 * (1 - q.e / .32) : 0) - c + grain(x, y, .05, 5); }, tone: (x, y) => .93 + .14 * VP(x * .86 + y * .22, y * 1.1 - x * .12).id, aoR: 2.2 });
+  const P3 = spots(11, 70, .5, 1.5, .6, [1, 1, 29, 29]), P3b = spots(15, 7, 3, 5, .9, [3, 3, 27, 27]);
+  MODELS.pat_pitted = () => E.hfPatch({ size: 30, N: 190, h: (x, y) => .9 * fbm(x / 15, y / 15, 8, 2) - cutSpots(P3b, x, y) - cutSpots(P3, x, y) + grain(x, y, .06, 7), aoR: 1.8 });
+  MODELS.pat_layered = () => { const bs = [], r = E.rng(8); let u = -4; while (u < 70) { bs.push(u); u += 2.2 + 3.6 * r(); } return E.hfPatch({ size: 30, N: 170, h: (x, y) => { const a = rad(10), uu = (x * sin(a) + y * cos(a)) + wob(x, .9, 9, 4) * 1, vv = (x * cos(a) - y * sin(a)); let h = 0, k = -1; for (let i = 0; i < bs.length; i++) { h += (.18 + .45 * hash2(i, 5, 5)) * sstep(bs[i] - .3, bs[i] + .3, uu); if (uu >= bs[i]) k = i; } const loc = uu - (bs[max(k, 0)] || 0); const vein = max(0, 1 - abs(vv - 12 + wob(uu, 1.5, 8, 9)) / .55) * .28; return h - tan(rad(4)) * loc * .5 + vein + grain(x, y, .04, 5) + .35 * fbm(x / 10, y / 10, 3, 2); }, tone: (x, y) => .94 + .12 * hash2(fl((x * sin(rad(10)) + y * cos(rad(10)) + 4) / 3), 4, 4), aoR: 2 }); };
+  const VN = E.voronoi(8.2, 14, .9);
+  MODELS.pat_network = () => E.hfPatch({ size: 30, N: 170, h: (x, y) => { const xx = x + 1.6 * fbm(x / 7, y / 7, 3, 2), yy = y + 1.6 * fbm(x / 7 + 9, y / 7, 5, 2), q = VN(xx, yy), crack = q.e < .65 ? 1.1 * (1 - q.e / .65) ** 1.2 : 0; return .55 * (1 - clamp01(q.d1 / 4.6) ** 2) + (q.id - .5) * .4 - crack + (q.id2 - .5) * tan(rad(2.5)) * (x - q.cx) + grain(x, y, .04, 4); }, tone: (x, y) => .93 + .14 * VN(x, y).id, aoR: 2.4 });
+
+  /* the one mass, broken at three sizes: cracks live inside their parent cell; offsets fall by 0.4 a level */
+  MODELS.levels = () => {
+    const V1 = E.voronoi(15, 3, .85), cache = {}, sub = (seed, cs) => cache[seed + ':' + cs] || (cache[seed + ':' + cs] = E.voronoi(cs, seed, .85)), O = [1.7, .68, .27];
+    function cellAt(x, y) {
+      const a = V1(x, y), s2 = 100 + fl(a.id * 9000), b = sub(s2, 6.4)(x, y), on3 = b.id < .62, c = on3 ? sub(s2 + fl(b.id2 * 7000) + 1, 3.3)(x, y) : null;
+      return { h: (a.id - .5) * 2 * O[0] + (b.id2 - .5) * 2 * O[1] + (c ? (c.id3 - .5) * 2 * O[2] : 0), e1: a.e, e2: b.e, e3: c ? c.e : 9, id1: a.id, id2: b.id2, id3: c ? c.id3 : .5 };
+    }
+    return E.hfPatch({ size: 34, N: 180, h: (x, y) => { const c = cellAt(x, y); return c.h - (c.e1 < .35 ? .5 * (1 - c.e1 / .35) : 0) - (c.e2 < .22 ? .22 * (1 - c.e2 / .22) : 0) + grain(x, y, .025, 6); }, tone: (x, y) => { const c = cellAt(x, y); return .93 + .1 * c.id1 + .05 * c.id2; }, aoR: 2.6 });
+  };
+
+  /* ============ solids ============ */
+  const V3 = (a, b, c) => [a, b, c];
+  const AX = { '+x': [1, 0, 0], '-x': [-1, 0, 0], '+y': [0, 1, 0], '-y': [0, -1, 0], '+z': [0, 0, 1], '-z': [0, 0, -1] };
+  MODELS.chipped_cam = 0;
+  /* a block with its edges: soft = rounded in 3 tangent planes of radius rho; crisp = a 0.35 chamfer; none = a sharp edge */
+  function edgePlanes(b, spec) {
+    /* spec: function(edgeName) -> {kind:'crisp'|'soft'|'none', c} ; edges named by two face tags */
+    const pl = [], X = [b.x0, b.x1], Y = [b.y0, b.y1], Z = [b.z0, b.z1], faces = ['-x', '+x', '-y', '+y', '-z', '+z'];
+    const pt = { '-x': b.x0, '+x': b.x1, '-y': b.y0, '+y': b.y1, '-z': b.z0, '+z': b.z1 };
+    for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) {
+      const f = faces[i], g = faces[j]; if (f[1] === g[1]) continue;
+      const a = AX[f], c = AX[g], nm = f + g, s = spec(nm); if (!s || s.kind === 'none') continue;
+      const E3 = [0, 0, 0]; ['x', 'y', 'z'].forEach((ax, k) => { E3[k] = (f[1] === ax) ? pt[f] : (g[1] === ax) ? pt[g] : (b[ax + '0'] + b[ax + '1']) / 2; });
+      if (s.kind === 'crisp') pl.push(E.chamferExact(a, c, E3, s.c, nm));
+      else { const rho = s.c; const C = E.sub(E3, E.mul(E.add(a, c), rho)); [22.5, 45, 67.5].forEach(t => { const n = E.norm(E.add(E.mul(a, cos(rad(t))), E.mul(c, sin(rad(t))))); pl.push(E.P(n, E.dot(n, C) + rho, nm)); }); }
+    }
+    return pl;
+  }
+  /* a face bent by two planes that meet in a crest: the face keeps its outline, gains a crease (the intersection of half-spaces keeps the lower of the two) */
+  function bendFace(b, face, r, amp) {
+    const n0 = AX[face], c = [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2], pt = { '-x': b.x0, '+x': b.x1, '-y': b.y0, '+y': b.y1, '-z': b.z0, '+z': b.z1 }, out = [];
+    const base = [c[0], c[1], c[2]]; base[{ x: 0, y: 1, z: 2 }[face[1]]] = pt[face];
+    const tang = ['x', 'y', 'z'].filter(a => a !== face[1]), ta = tang[r() < .5 ? 0 : 1], k = { x: 0, y: 1, z: 2 }[ta], other = { x: 0, y: 1, z: 2 }[tang[ta === tang[0] ? 1 : 0]];
+    const ext = [b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0][k], crest = base.slice(); crest[k] += (r() - .5) * ext * .5;
+    const tdir = [0, 0, 0]; tdir[k] = 1;
+    [-1, 1].forEach(sg => { const a = rad(amp * (.7 + .6 * r())) * sg, n = E.norm(E.add(E.mul(n0, Math.cos(a)), E.mul(tdir, Math.sin(a)))); out.push(E.P(n, E.dot(n, crest), 'bend')); });
+    return out;
+  }
+  const corner = (b, sx, sy, sz) => [sx > 0 ? b.x1 : b.x0, sy > 0 ? b.y1 : b.y0, sz > 0 ? b.z1 : b.z0];
+  function cornerChip(b, sx, sy, sz, frac, r) {
+    const V = corner(b, sx, sy, sz), n0 = E.norm([sx, sy, sz]), ax = E.norm(E.cross(n0, [r() - .5, r() - .5, r() - .5])), a = rad(8 + 17 * r()), n = E.norm(E.add(E.mul(n0, cos(a)), E.mul(E.cross(ax, n0), sin(a))));
+    return E.cutAt(V, n, frac * min(b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0), 'chip');
+  }
+  const solid = (planes, tone) => ({ faces: E.solidFromPlanes(planes), tone: tone || 1 });
+
+  /* three blocks: sharp, eased, eased and chipped */
+  MODELS.edges = () => {
+    const parts = [], r = E.rng(5);
+    [[0, 'sharp'], [1, 'crisp'], [2, 'soft'], [3, 'chip']].forEach(([i, kind]) => {
+      const b = { x0: i * 15, x1: i * 15 + 11, y0: 4, y1: 15, z0: 0, z1: 9 }, pl = E.blockPlanes(b, r);
+      if (kind === 'crisp') edgePlanes(b, nm => ({ kind: 'crisp', c: .45 })).forEach(p => pl.push(p));
+      if (kind === 'soft' || kind === 'chip') edgePlanes(b, nm => nm.indexOf('-z') >= 0 ? null : ({ kind: nm.indexOf('+z') >= 0 ? 'soft' : 'crisp', c: nm.indexOf('+z') >= 0 ? 2.4 : .5 })).forEach(p => pl.push(p));
+      if (kind === 'chip') { pl.push(cornerChip(b, 1, -1, 1, .2, r), cornerChip(b, -1, -1, 1, .14, r), cornerChip(b, 1, 1, 1, .1, r)); }
+      parts.push(solid(pl, .98));
+    });
+    return E.solidsMesh(parts, { ground: [-4, -2, 62, 22], seed: 3 });
+  };
+  MODELS.edges.cam = { az: -14, el: 27, dist: 1.2 };
+
+  /* the three kinds of edge as one row, 70% soft, 30% crisp, is a ratio: ten edges of one block coloured by kind are drawn in the SVG; here a block carries the full vocabulary */
+  MODELS.chipped = () => {
+    const r = E.rng(11), b = { x0: 0, x1: 18, y0: 0, y1: 14, z0: 0, z1: 13, lean: { '+x': 2.5, '-x': 2, '+y': 3, '-y': 1.5, '+z': 4 } };
+    const pl = E.blockPlanes(b, r);
+    edgePlanes(b, nm => { if (nm.indexOf('-z') >= 0) return null; if (nm === '+y+z' || nm === '-y+z') return null; if (nm.indexOf('+z') >= 0) return { kind: 'soft', c: 1.8 }; return r() < .3 ? { kind: 'crisp', c: .4 } : { kind: 'soft', c: 1.1 }; }).forEach(p => pl.push(p));
+    pl.push(E.chamferExact(AX['-y'], AX['+z'], [9, 0, 13], 3.0, 'top-front'), E.chamferExact(AX['+x'], AX['-y'], [18, 0, 6], 2.0, 'side'));
+    pl.push(cornerChip(b, 1, 1, 1, .22, r), cornerChip(b, -1, 1, 1, .15, r), cornerChip(b, 1, -1, 1, .12, r));
+    bendFace(b, '-y', r, 4).forEach(p => { p.d += .5; pl.push(p); }); bendFace(b, '+z', r, 3).forEach(p => { p.d += .35; pl.push(p); });
+    return E.solidsMesh([solid(pl)], { ground: [-5, -5, 23, 19], seed: 3 });
+  };
+  MODELS.chipped.cam = { az: -32, el: 26, dist: 1.45 };
+
+  /* shingled slabs on a dip slope (N): thin slabs, each ends at its own line, each leaning cross cut a little off square */
+  MODELS.shingle = () => {
+    const al = rad(50), S = [cos(al), 0, sin(al)], Tn = [-sin(al), 0, cos(al)], W = [0, 1, 0], r = E.rng(9), parts = [], th = 2.6, nS = 6;
+    const org = [0, 0, 0], at = (s, w, t) => [S[0] * s + W[0] * w + Tn[0] * t, S[1] * s + W[1] * w + Tn[1] * t, S[2] * s + W[2] * w + Tn[2] * t];
+    const sEnd = [9, 14.5, 20, 25.5, 31, 36.5], cuts = [0, 14, 29];
+    const mk = (k, w0, w1) => {
+      const t0 = -k * th * .85, t1 = t0 - th * 1.05, sHi = sEnd[k] + (r() - .5) * 2.5, pl = [];
+      const faceOut = E.P(Tn, E.dot(Tn, at(0, 0, t0)), 'bed-out'), faceIn = E.P(E.mul(Tn, -1), -E.dot(Tn, at(0, 0, t1)), 'bed-in');
+      pl.push(faceOut, faceIn);
+      pl.push(E.P(E.mul(S, -1), -2, 'foot'));
+      const lean = rad((r() - .5) * 2 * 12), nEnd = E.norm(E.add(E.mul(S, cos(lean * .4)), E.mul(W, sin(lean)))); pl.push(E.P(nEnd, E.dot(nEnd, at(sHi, 0, 0)), 'end'));
+      const l0 = rad((r() - .5) * 2 * 10), l1 = rad((r() - .5) * 2 * 10); pl.push(E.P(E.norm(E.add(E.mul(W, -cos(l0)), E.mul(S, sin(l0)))), E.dot(E.norm(E.add(E.mul(W, -cos(l0)), E.mul(S, sin(l0)))), at(0, w0, 0)), 'cut'));
+      pl.push(E.P(E.norm(E.add(E.mul(W, cos(l1)), E.mul(S, sin(l1)))), E.dot(E.norm(E.add(E.mul(W, cos(l1)), E.mul(S, sin(l1)))), at(0, w1, 0)), 'cut'));
+      /* eased lip on the end edge, 28 to 52 degrees, 0.5 to 1.1 mm */
+      const th2 = rad(28 + 24 * r()), nl = E.norm(E.add(E.mul(Tn, cos(th2)), E.mul(S, sin(th2)))); pl.push(E.cutAt(at(sHi, 0, t0), nl, .5 + .6 * r(), 'lip'));
+      /* a corner chip on one top corner of about one slab in three */
+      if (r() < .45) { const wc = r() < .5 ? w0 : w1, nn = E.norm(E.add(E.add(Tn, S), E.mul(W, wc === w0 ? -1 : 1))); pl.push(E.cutAt(at(sHi, wc, t0), E.add(nn, [r() * .3, r() * .3, r() * .3]), 1.0 + 1.2 * r(), 'chip')); }
+      pl.push(E.P([0, 0, -1], 0, 'ground'));
+      return solid(pl, .96 + .06 * r());
+    };
+    for (let k = 0; k < nS; k++) for (let c = 0; c < 2; c++) parts.push(mk(k, cuts[c] + (r() - .5) * 1, cuts[c + 1] + (r() - .5) * 1 + (c === 1 ? 4 : 0) + 0.4));
+    /* the core behind the slabs: one body, darker */
+    const core = [E.P(Tn, E.dot(Tn, at(0, 0, -nS * th * .85 - th * 1.05)), 'top'), E.P(E.mul(Tn, -1), 30, 'bot'), E.P(E.mul(S, -1), -2, 'foot'), E.P(S, E.dot(S, at(41, 0, 0)), 'back'), E.P(E.mul(W, -1), -0, 'l'), E.P(W, 31, 'r'), E.P([0, 0, -1], 0, 'ground')];
+    parts.push(solid(core, .8));
+    return E.solidsMesh(parts, { ground: [-10, -6, 46, 40], seed: 4 });
+  };
+  MODELS.shingle.cam = { az: -58, el: 24, dist: 1.0 };
+
+  /* two courses of blocks with an overhang: the upper course set forward, one lower block recessed */
+  MODELS.courses = () => {
+    const r = E.rng(14), parts = [], back = 20;
+    const rows = [
+      { z0: 0, z1: 12.5, blocks: [[0, 15, 0], [15.4, 31, 7], [31.4, 49, 0]] },
+      { z0: 12.9, z1: 26.4, blocks: [[0, 14, -2.5], [14.4, 33, -3], [33.4, 49, -2]] }
+    ];
+    rows.forEach((row, ri) => row.blocks.forEach((bl, bi) => {
+      const b = { x0: bl[0], x1: bl[1], y0: bl[2], y1: back, z0: row.z0, z1: row.z1 + (ri ? 0 : 0) + ((bi * 7 + ri * 3) % 3) * .4, lean: { '-y': 2.5, '+x': 2, '-x': 2, '+z': 4, '-z': 0 } };
+      const pl = E.blockPlanes(b, r);
+      edgePlanes(b, nm => { if (nm.indexOf('-z') >= 0 || nm.indexOf('+y') >= 0) return null; if (nm === '-y+z') return { kind: 'crisp', c: 2.4 + r() * 1 }; return r() < .3 ? { kind: 'crisp', c: .45 } : { kind: 'soft', c: 1.0 + r() * .8 }; }).forEach(p => pl.push(p));
+      if (r() < .6) pl.push(E.chamferExact(AX['+x'], AX['-y'], [b.x1, b.y0, (b.z0 + b.z1) / 2], 1.6 + r() * 1.3, 'side'));
+      bendFace(b, '-y', r, 3.5).forEach(p => { p.d += .45; pl.push(p); }); if (r() < .6) bendFace(b, '+z', r, 2.5).forEach(p => { p.d += .3; pl.push(p); });
+      const nChip = 1 + fl(r() * 2); for (let i = 0; i < nChip; i++) pl.push(cornerChip(b, r() < .5 ? 1 : -1, -1, 1, .1 + .1 * r(), r));
+      parts.push(solid(pl, .95 + .08 * r()));
+    }));
+    parts.push(solid([E.P([0, 0, 1], 26, 'top'), E.P([0, 0, -1], 0, 'bot'), E.P([-1, 0, 0], 0, 'l'), E.P([1, 0, 0], 49, 'r'), E.P([0, -1, 0], -(back - 2), 'f'), E.P([0, 1, 0], back + 6, 'b')], .62));
+    return E.solidsMesh(parts, { ground: [-5, -6, 56, 28], seed: 6, pitch: 4 });
+  };
+  MODELS.courses.cam = { az: -24, el: 20, dist: 1.2 };
+
+  /* a skin over a core: the face moves, the mass stays one body. Cut away at the middle. */
+  MODELS.skin = () => {
+    const r = E.rng(21), parts = [], W = 26, D = 14, Hh = 17, skinT = 3.6;
+    const cut = E.P([1, 0, 0], W / 2 + 1, 'cutaway');
+    const coreP = [E.P([-1, 0, 0], 0, 'l'), E.P([1, 0, 0], W, 'r'), E.P([0, -1, 0], -skinT, 'f'), E.P([0, 1, 0], D, 'b'), E.P([0, 0, -1], 0, 'bot'), E.P([0, 0, 1], Hh, 'top'), cut];
+    parts.push(solid(coreP, .55));
+    /* pieces of the front skin: a few straight cracks across the face */
+    const cx = [0, 5.4, 13.8, 19.2, W], cz = [0, 6.2, 11.8, Hh];
+    for (let i = 0; i < cx.length - 1; i++) for (let j = 0; j < cz.length - 1; j++) {
+      const sb = .4 + 1.5 * r(), lean = (3 + 6 * r()), pl = [E.P([-1, 0, 0], -cx[i], 'a'), E.P([1, 0, 0], cx[i + 1] - .05, 'b'), E.P([0, 0, -1], -cz[j], 'c'), E.P([0, 0, 1], cz[j + 1] - .05, 'd'), E.P([0, 1, 0], skinT + .05, 'back'), cut];
+      const ax = E.norm(E.cross([0, -1, 0], [r() - .5, 0, r() - .5])), a = rad(lean), n = E.norm(E.add(E.mul([0, -1, 0], cos(a)), E.mul(E.cross(ax, [0, -1, 0]), sin(a))));
+      pl.push(E.P(n, E.dot(n, [(cx[i] + cx[i + 1]) / 2, sb, (cz[j] + cz[j + 1]) / 2]), 'face'));
+      if (i === 3 && j === 2) pl.push(E.cutAt([cx[i + 1], sb, cz[j + 1]], [1, -1, 1], 1.4, 'chip'));
+      if (i === 0 && j === 2) pl.push(E.cutAt([cx[i], sb, cz[j + 1]], [-1, -1, 1], 1.1, 'chip'));
+      parts.push(solid(pl, .96 + .08 * r()));
+    }
+    return E.solidsMesh(parts, { ground: [-8, -8, 34, 22], seed: 9, pitch: 3 });
+  };
+  MODELS.skin.cam = { az: 30, el: 26, dist: 1.25 };
+
+
+  /* the mistakes, as models: even round pockets, and uniform noise */
+  MODELS.dish_round = () => { const S = []; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) S.push({ x: 5.5 + i * 9.5, y: 5.5 + j * 9.5, r: 3.6, d: .8, ph: 0, el: 1 }); return E.hfPatch({ size: 30, N: 150, h: (x, y) => { let cut = 0; for (const p of S) { const rr = hyp(x - p.x, y - p.y) / p.r; if (rr < 1) cut = max(cut, p.d * (1 - rr * rr)); } return -cut + grain(x, y, .03, 3); } }); };
+  MODELS.uniform = () => E.hfPatch({ size: 30, N: 170, h: (x, y) => .55 * fbm(x * .9, y * .9, 5, 3) + grain(x, y, .12, 9), aoR: 1.6 });
+  ['edges', 'chipped', 'shingle', 'courses', 'skin'].forEach(k => { MODELS[k].noRelief = true; });
+  G.MODELS = MODELS; G.PROFILES = PROFILES;
+})(window);
+
+/* page.js: mounts the 3D views lazily (a still image each, orbit on drag), draws the section profiles from the same height functions
+   as the models, and draws the static diagrams. */
+(function () {
+  'use strict';
+  const NS = 'http://www.w3.org/2000/svg';
+  const f1 = (x) => (Math.round(x * 10) / 10).toString();
+  const f2 = (x) => (Math.round(x * 100) / 100).toString();
+
+  /* ---------- 3D views, on demand ---------- */
+  const views = [];
+  function mount(el) {
+    if (el._v) return;
+    const name = el.dataset.model, mk = window.MODELS[name];
+    if (!mk) { el.querySelector('figcaption').textContent = 'no model ' + name; return; }
+    let m;
+    try { m = mk(); } catch (e) { el.querySelector('figcaption').textContent = 'model failed: ' + e.message; console.error(name, e); return; }
+    const c = mk.cam || {};
+    const v = Eng.makeView(el, m, { az: el.dataset.az != null ? +el.dataset.az : (c.az != null ? c.az : -28), el: el.dataset.el != null ? +el.dataset.el : (c.el != null ? c.el : 36), dist: el.dataset.dist != null ? +el.dataset.dist : (c.dist != null ? c.dist : 1), relief: el.dataset.relief !== 'no' && !mk.noRelief });
+    el._v = v; views.push(v); v.now();
+  }
+  function setupViews() {
+    const els = [].slice.call(document.querySelectorAll('.v3d'));
+    if (!window.THREE || !window.MODELS) { els.forEach(e => { e.querySelector('figcaption').textContent = '3D needs three.js (blocked or offline)'; }); return; }
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((es) => { es.forEach(en => { if (en.isIntersecting) { io.unobserve(en.target); setTimeout(() => mount(en.target), 0); } }); }, { rootMargin: '400px 0px' });
+      els.forEach(e => io.observe(e));
+    } else els.forEach(mount);
+    window.addEventListener('resize', () => { views.forEach(v => v.draw()); });
+    const bs = [].slice.call(document.querySelectorAll('.relief button'));
+    bs.forEach(b => b.addEventListener('click', () => { Eng.RELIEF.k = +b.dataset.k; bs.forEach(x => x.setAttribute('aria-pressed', String(x === b))); views.forEach(v => v.now()); }));
+    Eng.RELIEF.k = 2;
+  }
+
+  /* ---------- section profiles ---------- */
+  const KIND = { facet: 'crease', steps: 'steps', chip: 'dip', dish: 'dip', pits: 'dips', ridge: 'bump', crack: 'dip', undul: 'wave', grain: 'noise' };
+  function median(a) { const b = a.slice().sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; }
+  function pct(a, q) { const b = a.slice().sort((x, y) => x - y); return b[Math.floor((b.length - 1) * q)]; }
+  function el(tag, attrs, txt) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; return e; }
+  function profile(host) {
+    const id = host.dataset.prof, P = window.PROFILES[id]; if (!P) return;
+    const n = 420, xs = [], ys = []; for (let i = 0; i <= n; i++) { const x = P.w * i / n; xs.push(x); ys.push(P.fn(x)); }
+    const W = 380, L = 34, R = 14, T = 34, sx = (W - L - R) / P.w;
+    const ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
+    let vex = P.vex; const maxpx = 96; if ((ymax - ymin) * sx * vex > maxpx) vex = maxpx / ((ymax - ymin) * sx);
+    const sy = sx * vex, hpx = (ymax - ymin) * sy, base = 16, H = T + hpx + base + 36;
+    const X = (x) => L + x * sx, Y = (y) => T + (ymax - y) * sy;
+    const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + Math.round(H), class: 'prof', role: 'img', 'aria-label': 'Section profile of the ' + id + ' model' });
+    /* scale bar and ground */
+    let d = 'M' + X(0) + ',' + (T + hpx + base); xs.forEach((x, i) => { d += ' L' + f2(X(x)) + ',' + f2(Y(ys[i])); }); d += ' L' + X(P.w) + ',' + (T + hpx + base) + ' Z';
+    svg.appendChild(el('path', { d: d, class: 'base' }));
+    let line = ''; xs.forEach((x, i) => { line += (i ? ' L' : 'M') + f2(X(x)) + ',' + f2(Y(ys[i])); });
+    svg.appendChild(el('path', { d: line, class: 'land', fill: 'none' }));
+    const kind = KIND[id], med = (kind === 'dip' ? pct(ys, .88) : kind === 'bump' ? pct(ys, .12) : median(ys)), dims = [];
+    const dimV = (x, ya, yb, txt, side) => { const xp = X(x), a = Y(ya), b = Y(yb); svg.appendChild(el('path', { d: 'M' + xp + ',' + a + ' V' + b + ' M' + (xp - 3) + ',' + a + ' h6 M' + (xp - 3) + ',' + b + ' h6', class: 'dimline' })); svg.appendChild(el('text', { x: xp + (side === 'l' ? -6 : 7), y: (a + b) / 2 + 3, class: 'dimtxt', 'text-anchor': side === 'l' ? 'end' : 'start' }, txt)); };
+    const dimH = (x0, x1, y, txt) => { const a = X(x0), b = X(x1); svg.appendChild(el('path', { d: 'M' + a + ',' + y + ' H' + b + ' M' + a + ',' + (y - 3) + ' v6 M' + b + ',' + (y - 3) + ' v6', class: 'dimline' })); svg.appendChild(el('text', { x: (a + b) / 2, y: y - 6, class: 'dimtxt', 'text-anchor': 'middle' }, txt)); };
+    let facts = '';
+    if (kind === 'dip' || kind === 'bump') {
+      const sg = kind === 'dip' ? -1 : 1, rel = ys.map(y => sg * (y - med)), pk = Math.max.apply(null, rel), im = rel.indexOf(pk), thr = Math.max(.06, pk * .12);
+      let a = im, b = im; while (a > 0 && rel[a] > thr) a--; while (b < n && rel[b] > thr) b++;
+      const wmm = xs[b] - xs[a];
+      dimH(xs[a], xs[b], Y(med) - (kind === 'bump' ? 6 : 8) - (kind === 'bump' ? hpx * 0 : 0) + (kind === 'dip' ? -4 : 0) - 8 * 0, f1(wmm) + ' mm wide');
+      dimV(xs[im], med, ys[im], f2(pk) + ' mm ' + (kind === 'dip' ? 'deep' : 'high'), 'r');
+      facts = (kind === 'dip' ? 'depth ' : 'height ') + f2(pk) + ' mm, width ' + f1(wmm) + ' mm';
+    } else if (kind === 'dips') {
+      facts = 'diameter 0.8 to 2.8 mm, depth 0.15 to 0.8 mm';
+      const rel = ys.map(y => med - y); let k = 0; for (let i = 1; i < n && k < 2; i++) if (rel[i] > .12 && rel[i - 1] <= .12) { let j = i; while (j < n && rel[j] > .12) j++; const pk = Math.max.apply(null, rel.slice(i, j)); dimH(xs[i], xs[j], Y(med) - 6 - k * 0, f1(xs[j] - xs[i]) + ' mm'); k++; i = j; }
+    } else if (kind === 'steps') {
+      const dy = ys.map((y, i) => i ? (y - ys[i - 1]) : 0); let ris = [], i = 0; while (i < n) { if (dy[i] > .03) { let j = i; let tot = 0; while (j < n && dy[j] > .03) { tot += dy[j]; j++; } ris.push({ x: xs[i], x1: xs[j], h: tot, y0: ys[i - 1], y1: ys[j] }); i = j; } else i++; }
+      ris.forEach((r, k) => { dimV(r.x1 + .8, r.y0, r.y0 + r.h, f1(r.h) + ' mm', 'r'); if (k < ris.length - 1) dimH(r.x1, ris[k + 1].x, Y(ymax) - 10 - (ris.length - 1 - k) * 0 + 0, f1(ris[k + 1].x - r.x1) + ' mm tread'); });
+      facts = 'risers ' + f1(ris.reduce((a, r) => a + r.h, 0) / Math.max(1, ris.length)) + ' mm, treads about ' + f1(ris.length > 1 ? ris[1].x - ris[0].x1 : 0) + ' mm';
+    } else if (kind === 'crease') {
+      const im = ys.indexOf(ymax), sl = (ys[im - 40] - ys[im - 60]) / (xs[im - 40] - xs[im - 60]), sr = (ys[im + 60] - ys[im + 40]) / (xs[im + 60] - xs[im + 40]);
+      const ang = Math.atan(sl) * 180 / Math.PI + Math.atan(-sr) * 180 / Math.PI;
+      svg.appendChild(el('text', { x: X(xs[im]) + 8, y: Y(ymax) - 6, class: 'dimtxt' }, 'crease, planes differ by ' + f1(Math.abs(ang)) + '°'));
+      svg.appendChild(el('circle', { cx: X(xs[im]), cy: Y(ymax), r: 3, fill: 'none', stroke: 'var(--dim)' }));
+      facts = 'plane change ' + f1(Math.abs(ang)) + ' degrees across a span of ' + f1(P.w * .8) + ' mm';
+    } else if (kind === 'wave') {
+      dimV(xs[ys.indexOf(ymax)], ymax, ymin, f2(ymax - ymin) + ' mm peak to low', 'r'); facts = 'peak to low ' + f2(ymax - ymin) + ' mm over 36 mm';
+    } else {
+      dimV(P.w * .9, ymax, ymin, f2(ymax - ymin) + ' mm', 'l'); facts = 'texture amplitude ' + f2(ymax - ymin) + ' mm';
+    }
+    /* scale: 5 mm bar, and the vertical exaggeration */
+    const by = T + hpx + base + 18; svg.appendChild(el('path', { d: 'M' + L + ',' + by + ' h' + 5 * sx + ' m0,-3 v6 m' + (-5 * sx) + ',-3 v6', class: 'dimline' })); svg.appendChild(el('text', { x: L + 5 * sx + 6, y: by + 3 }, '5 mm'));
+    svg.appendChild(el('text', { x: W - R, y: by + 3, 'text-anchor': 'end' }, 'vertical ×' + f1(vex) + ' (horizontal true)'));
+    svg.appendChild(el('text', { x: L, y: 14, class: 'dimtxt' }, 'Section through the model'));
+    host.appendChild(svg);
+    const cap = host.parentNode.querySelector('.me'); if (cap && facts) cap.textContent = facts;
+  }
+
+  /* ---------- static diagrams ---------- */
+  const D = {};
+  const svgOpen = (w, h, label) => '<svg viewBox="0 0 ' + w + ' ' + h + '" class="prof" role="img" aria-label="' + label + '">';
+  /* the angle families on one cliff section */
+  D.angles = () => {
+    let s = svgOpen(640, 330, 'The angle families of a cliff section');
+    s += '<path class="base" d="M20,300 H620 V312 H20Z"/>';
+    s += '<path class="land fill1" d="M30,300 L30,258 L96,258 L96,214 L150,214 L150,168 L214,162 L330,64 L396,64 L396,28 L470,28 L470,300Z"/>';
+    s += '<path class="thin" d="M120,300 L196,198 M290,300 L384,214 M214,162 L262,300"/>';
+    const t = (x, y, a) => '<text x="' + x + '" y="' + y + '" class="dimtxt">' + a + '</text>';
+    const ld = (x0, y0, x1, y1) => '<path class="dimline" d="M' + x0 + ',' + y0 + ' L' + x1 + ',' + y1 + '"/><circle cx="' + x1 + '" cy="' + y1 + '" r="2" fill="var(--dim)"/>';
+    s += t(486, 140, 'vertical faces 85\u201390\u00b0') + ld(484, 137, 470, 137);
+    s += t(24, 112, 'shelf / ledge 0\u201310\u00b0') + ld(96, 116, 123, 214);
+    s += t(24, 150, 'riser 70\u201390\u00b0') + ld(60, 154, 96, 236);
+    s += t(150, 62, 'sloped face 25\u201360\u00b0') + ld(262, 66, 272, 113);
+    s += t(236, 290, 'diagonal cleavage 30\u201360\u00b0') + ld(330, 280, 330, 262).replace('330,280 L330,262', '330,280 L340,262');
+    s += t(300, 196, 'cross joints 60\u2013120\u00b0');
+    s += '<path class="dimline" d="M322,72 A40,40 0 0 1 337,100"/><text x="620" y="326" text-anchor="end">section, not to scale</text></svg>';
+    return s;
+  };
+  /* fracture sets in plan: 1 to 3 sets, 20 to 60 degrees apart, carry, cracks that stop */
+  D.sets = () => {
+    const r = Eng.rng(12); let s = svgOpen(560, 300, 'Fracture sets in plan');
+    s += '<rect class="fill2" x="20" y="14" width="520" height="250" stroke="var(--rule)"/>';
+    const sets = [[0, 1, 'set A, carry 1'], [38, .4, 'set B, carry about .35'], [100, .3, 'set C (cross), carry about .3']];
+    sets.forEach((st, k) => {
+      const a = st[0] * Math.PI / 180, dx = Math.cos(a), dy = Math.sin(a), n = k === 0 ? 4 : 9;
+      for (let i = 0; i < n; i++) {
+        const cx = 40 + r() * 480, cy = 30 + (k === 0 ? (i + .5) * 250 / n * .9 : r() * 220), len = k === 0 ? 480 : 70 + r() * 150, x0 = cx - dx * len / 2, y0 = cy - dy * len / 2, x1 = cx + dx * len / 2, y1 = cy + dy * len / 2;
+        const cl = (x, y) => [Math.max(22, Math.min(538, x)), Math.max(16, Math.min(262, y))];
+        const p = cl(x0, y0), q = cl(x1, y1);
+        s += '<path d="M' + f1(p[0]) + ',' + f1(p[1]) + ' L' + f1(q[0]) + ',' + f1(q[1]) + '" stroke="' + ['var(--f1)', 'var(--f2)', 'var(--f3)'][k] + '" stroke-width="' + (k === 0 ? 2.2 : 1.6) + '" fill="none"/>';
+        if (k) s += '<circle cx="' + f1(q[0]) + '" cy="' + f1(q[1]) + '" r="2.6" fill="var(--surface)" stroke="' + ['var(--f1)', 'var(--f2)', 'var(--f3)'][k] + '"/>';
+      }
+    });
+    s += '<text x="26" y="284">' + sets.map(x => x[2]).join('   ·   ') + '</text>';
+    s += '<text x="534" y="30" text-anchor="end" class="dimtxt">sets 20–60° apart; a crack that stops ends in a ring</text></svg>';
+    return s;
+  };
+  /* one mass broken at three sizes: plan of nested cells with the section of offsets under it */
+  D.levels = () => {
+    let s = svgOpen(560, 270, 'One mass broken at three levels');
+    const A = [[24, 20, 190, 90], [214, 20, 170, 90], [384, 20, 152, 90], [24, 110, 130, 90], [154, 110, 230, 90], [384, 110, 152, 90]];
+    A.forEach(a => { s += '<rect x="' + a[0] + '" y="' + a[1] + '" width="' + a[2] + '" height="' + a[3] + '" fill="var(--surface2)" stroke="var(--ink)" stroke-width="2.2"/>'; });
+    const B = [[24, 20, 190, 90, .5], [214, 20, 170, 90, .35], [154, 110, 230, 90, .6], [384, 110, 152, 90, .45], [24, 110, 130, 90, .4], [384, 20, 152, 90, .55]], r = Eng.rng(6);
+    B.forEach(b => { const cx = b[0] + b[2] * (.3 + .4 * r()), cy = b[1] + b[3] * (.3 + .4 * r()); s += '<path d="M' + f1(cx) + ',' + b[1] + ' V' + f1(b[1] + b[3] * b[4]) + ' H' + (b[0] + b[2]) + ' M' + b[0] + ',' + f1(cy) + ' H' + f1(cx + 20) + ' V' + (b[1] + b[3]) + '" stroke="var(--f2)" stroke-width="1.5" fill="none"/>'; s += '<circle cx="' + f1(cx) + '" cy="' + f1(b[1] + b[3] * b[4]) + '" r="2.4" fill="var(--surface)" stroke="var(--f2)"/>'; });
+    s += '<path d="M60,40 h50 v24 M300,60 h30 M440,150 h30 v20 M80,160 h24 M230,140 h40 v22" stroke="var(--f3)" stroke-width="1" fill="none"/>';
+    s += '<text x="24" y="232" class="dimtxt">level 1 (black): 12–40 mm cells, offset up to 1.7</text><text x="24" y="246" class="dimtxt">level 2 (teal): cracks stop inside their parent; offset 0.4 of level 1</text><text x="24" y="260" class="dimtxt">level 3 (amber): on 50–80% of cells; offset 0.4 of level 2</text></svg>';
+    return s;
+  };
+  /* edges: profile of a sharp edge, a crisp 0.45 chamfer, a 3-facet round, and the 70/30 split */
+  D.edges = () => {
+    let s = svgOpen(560, 230, 'Edge profiles');
+    const e = (x, kind, label, size) => {
+      const x0 = x, y0 = 40, w = 100, h = 100; let p;
+      if (kind === 'sharp') p = 'M' + x0 + ',' + (y0 + h) + ' V' + y0 + ' H' + (x0 + w) + ' V' + (y0 + h);
+      if (kind === 'crisp') p = 'M' + x0 + ',' + (y0 + h) + ' V' + (y0 + 5) + ' L' + (x0 + 5) + ',' + y0 + ' H' + (x0 + w - 5) + ' L' + (x0 + w) + ',' + (y0 + 5) + ' V' + (y0 + h);
+      if (kind === 'soft') { const c = 24; p = 'M' + x0 + ',' + (y0 + h) + ' V' + (y0 + c); [[.0, 0], [22.5, 0], [45, 0], [67.5, 0], [90, 0]].forEach(() => { }); const pts = []; for (let i = 0; i <= 12; i++) { const a = Math.PI / 2 * i / 12; pts.push([x0 + c - Math.cos(a) * c, y0 + c - Math.sin(a) * c]); } p += pts.map(q => ' L' + f1(q[0]) + ',' + f1(q[1])).join(''); p += ' H' + (x0 + w - c); const pts2 = []; for (let i = 0; i <= 12; i++) { const a = Math.PI / 2 * i / 12; pts2.push([x0 + w - c + Math.sin(a) * c, y0 + c - Math.cos(a) * c]); } p += pts2.map(q => ' L' + f1(q[0]) + ',' + f1(q[1])).join('') + ' V' + (y0 + h); }
+      if (kind === 'chip') { p = 'M' + x0 + ',' + (y0 + h) + ' V' + (y0 + 8) + ' L' + (x0 + 6) + ',' + y0 + ' H' + (x0 + 50) + ' L' + (x0 + 80) + ',' + (y0 + 26) + ' L' + (x0 + 74) + ',' + (y0 + 38) + ' L' + (x0 + w) + ',' + (y0 + 44) + ' V' + (y0 + h); }
+      return '<path class="land fill1" d="' + p + ' Z"/><text x="' + (x0 + w / 2) + '" y="168" text-anchor="middle" class="dimtxt">' + label + '</text><text x="' + (x0 + w / 2) + '" y="182" text-anchor="middle">' + size + '</text>';
+    };
+    s += e(20, 'sharp', 'sharp', '90°, 0 mm') + e(150, 'crisp', 'crisp (30%)', 'chamfer 0 to 0.5 mm') + e(280, 'soft', 'soft (70%)', 'eased 0.7 to 2.8 mm') + e(410, 'chip', 'broken', 'chip 1.4 to 7 mm');
+    s += '<text x="20" y="216">Section through a block corner. 100 px = 14 mm.</text></svg>';
+    return s;
+  };
+  /* skin over core: section. 12 px = 1 mm */
+  D.skin = () => {
+    let s = svgOpen(560, 240, 'A skin over a core, in section');
+    s += '<path class="base" d="M20,214 H540 V226 H20Z"/><rect x="150" y="20" width="390" height="194" class="fill2" stroke="var(--ink)" stroke-width="1.3"/>';
+    s += '<path d="M107,20 V214" stroke="var(--ink3)" stroke-dasharray="3 3"/>';
+    const sb = [5, 14, 2, 23, 10], lean = [2, -3, 4, -2, 3], ys = [22, 62, 100, 140, 176, 214];
+    for (let i = 0; i < 5; i++) { const xf = 107 + sb[i], y0 = ys[i] + 1, y1 = ys[i + 1] - 1; s += '<path class="land fill1" d="M150,' + y0 + ' H' + (xf + lean[i]) + ' L' + (xf - lean[i]) + ',' + y1 + ' H150Z"/>'; }
+    s += '<text x="160" y="16" class="dimtxt">core: one body, never cut through</text>';
+    s += '<path class="dimline" d="M107,226 H150 M107,222 v8 M150,222 v8"/><text x="128" y="240" text-anchor="middle" class="dimtxt">skin 3.6</text>';
+    s += '<text x="170" y="236">pieces 5&#8211;9 wide; setback 0.2&#8211;1.9; lean 1&#8211;9&#176;; 12 px = 1 mm</text>';
+    s += '<text x="20" y="40" class="dimtxt">unbroken face</text><path class="dimline" d="M70,44 L105,60"/></svg>';
+    return s;
+  };
+  D.pitwrong = () => {
+    let s = svgOpen(420, 210, 'A pit as a cell inside a cell, against a pit as a plane cut');
+    s += '<rect x="10" y="30" width="190" height="150" class="fill2" stroke="var(--ink)" stroke-width="1.3"/>';
+    s += '<path class="e" d="M10,30 L80,80 M200,30 L140,80 M10,180 L80,130 M200,180 L140,130 M80,80 H140 V130 H80 Z M80,80 V130 M140,80 V130"/>';
+    s += '<rect x="80" y="80" width="60" height="50" fill="var(--surface)" stroke="var(--err)" stroke-width="1.5"/>';
+    s += '<text x="105" y="20" text-anchor="middle" class="dimtxt" style="fill:var(--err)">cell in a cell: slivers</text>';
+    s += '<rect x="220" y="30" width="190" height="150" class="fill2" stroke="var(--ink)" stroke-width="1.3"/>';
+    s += '<path d="M290,70 L350,64 L366,110 L330,140 L284,120 Z" fill="var(--surface)" stroke="var(--good)" stroke-width="1.6"/><path d="M290,70 L330,140 M350,64 L330,140" stroke="var(--good)" stroke-width="1" fill="none"/>';
+    s += '<text x="315" y="20" text-anchor="middle" class="dimtxt" style="fill:var(--good)">a plane cut: one piece</text></svg>';
+    return s;
+  };
+  /* N and O sections with the sheet's ratios */
+  D.secN = () => {
+    let s = svgOpen(560, 312, 'Section of N, the slanted slab');
+    s += '<path class="base" d="M20,260 H540 V274 H20Z"/>';
+    s += '<path class="land fill1" d="M110,260 L400,86 L430,66 V260Z"/>';
+    s += '<path class="thin" d="M110,260 L400,86 M146,260 L416,90 M190,260 L424,86 M236,260 L428,80"/>';
+    s += '<path class="dimline" d="M110,236 A24,24 0 0 1 128,252"/><text x="140" y="246" class="dimtxt">dip 50° in section (the panel); sheets say 32–38°</text>';
+    s += '<path class="dimline" d="M444,260 V66 M440,66 h8 M440,260 h8"/><text x="452" y="168" class="dimtxt">H 38–43</text>';
+    s += '<text x="120" y="40">sheet: layers .38 / .28 / .22 / .12 of the face width,</text><text x="120" y="54">crest 13 to 43 mm up the slope, slabs 2.6 to 5 mm thick</text>';
+    s += '<path class="dimline" d="M20,282 H430 M20,278 v8 M430,278 v8"/><text x="225" y="296" text-anchor="middle" class="dimtxt">wall run about 0.52 L = 18 mm (sheet); the panel reads wider</text></svg>';
+    return s;
+  };
+  D.secO = () => {
+    let s = svgOpen(560, 312, 'Section of O, the stacked blocks');
+    s += '<path class="base" d="M20,262 H540 V276 H20Z"/>';
+    s += '<path class="land fill1" d="M110,262 V196 H170 V148 H260 V92 H360 V262Z"/>';
+    s += '<path class="thin" d="M170,196 V262 M260,148 V262 M110,229 H170"/>';
+    s += '<path class="dimline" d="M380,262 V92 M376,92 h8 M376,262 h8 M376,196 h8 M376,148 h8"/>';
+    s += '<text x="388" y="96" class="dimtxt">.80 H</text><text x="388" y="152" class="dimtxt">.52 H</text><text x="388" y="200" class="dimtxt">.26 H</text>';
+    s += '<text x="118" y="188" class="dimtxt">foot</text><text x="178" y="140" class="dimtxt">tier 2</text><text x="268" y="84" class="dimtxt">cap</text>';
+    s += '<path class="dimline" d="M110,284 H360 M110,280 v8 M360,280 v8"/><text x="235" y="298" text-anchor="middle" class="dimtxt">footprint .20 / .60 / .20 of L; H about 38 mm; courses 11.5 to 14.5</text></svg>';
+    return s;
+  };
+  function diagrams() { [].slice.call(document.querySelectorAll('[data-diagram]')).forEach(h => { const f = D[h.dataset.diagram]; if (f) h.innerHTML = f(); }); }
+
+  function init() {
+    [].slice.call(document.querySelectorAll('[data-prof]')).forEach(profile);
+    diagrams(); setupViews();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+
+
+</script>
