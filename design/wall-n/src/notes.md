@@ -38,3 +38,15 @@ Round 11, the sculpting sheet (n-o-sculpting-sheet.jpg, N half; 25 mm tile, x1.4
 | groove | width .7-2.8 dmm, depth .4-1.7 | none (joints 0) | 35% of leaf cells get a groove strip .7-2.2 wide, .4-1.7 deep, along the ledge 60%, a lowered cell (never a gap) |
 | erosion pits | .5-2 mm clustered | pockets .6 | pockets .8 (clustered noise, cells lowered) |
 Biggest gaps: layer ratio (random vs .38/.28/.22/.12), grooves (absent), edge bevels (too small).
+
+Round 12 (18 Nov, unpainted panel + sheet 2 + family guide). Panel crop: ref-N-unpainted.jpg = on-squares-a-p-unpainted.jpg at (316,942) size 308, resized to 400 (matched against the painted sheet, mean error 6.7). Lighting: neutral grey, hemisphere .8 + one directional from above-front + cavity AO baked per triangle (BVH, 24 rays, 5 mm); ?noao=1 turns it off. v10 looked fair in it (dark slits gone, but far too many shards).
+| sheet 2 / guide | value | v10 | v12 |
+| main slope plane | 30-35 (sheet), 25-60 typical (guide) | dip 60 (41 in section) | dip 52, panel followed |
+| diagonal cleavage | 30-60, about 45 | ledge line 20 deg off dip | kept (th=20) |
+| faces | elongated 2.5:1 to 5:1 | 5.5x24 = 4.4:1 but tiny | 9x36 = 4:1, large |
+| vertical cuts | few | many cross cracks | l1 36 -> fewer |
+| ledges/shelves | 0-15, narrow | none | level-1 offsets 3dmm, sloped tops only |
+| detail budget | form 70-80, structure 15-25, detail 5-10 | detail-dominated | L3 on 50% of cells; edge bevels 30% |
+Guide numbers used: angle families (slope 25-60, diagonal 45), detail budget, "chips on exposed edges", "avoid dense noisy texture / uniform pitting". Not used: ledge depth .10-.40 D and setback .05-.30 D (setback left at the old values; to check).
+
+Round 13 (v13, 18 Nov). v12 read as quartz. Changes: lean .4x, dying-crack tilt .04, diag 0/0/.08, cross cracks 25% of cracks, along-slab cracks step one way (sg=-1), min piece 3.2/2/1.5, spacing 12x40 / 8x18 / 5x9 (spar .5), eased lips on 85% of top edges (28-52 deg, .5-1.1 mm, <= .18 of edge length), corner chips 30%, grooves (strip cells .25-.5 wide, .3-.6 deep, parallel to the slab, 55% of cells wider than 4), foot = 11 flat blocks with chamfers (no hew). Hatch: end blocks (fam 2) overlapped crest blocks (fam 1); end blocks now stop at dcr-10 and reach 4.5 into x. Pitfall: shot.sh does not rebuild; cat head+tail into gen.js and run build.py, or comp.sh. Debug: ?famdbg=1, ?nofam=N, ?noao=1.

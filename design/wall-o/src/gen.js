@@ -17,7 +17,7 @@ function faces(planes){
         if((da<-1e-7&&db>1e-7)||(da>1e-7&&db<-1e-7)){var s=da/(da-db);r.push([a[0]+(b[0]-a[0])*s,a[1]+(b[1]-a[1])*s,a[2]+(b[2]-a[2])*s])}}
       poly=r}
     if(poly.length>=3){var area=0;for(var m=1;m<poly.length-1;m++){var w=cross([poly[m][0]-poly[0][0],poly[m][1]-poly[0][1],poly[m][2]-poly[0][2]],[poly[m+1][0]-poly[0][0],poly[m+1][1]-poly[0][1],poly[m+1][2]-poly[0][2]]);area+=Math.hypot(w[0],w[1],w[2])/2}
-      if(area>0.05)out.push({poly:poly,n:n,i:i,cut:!!P.cut,area:area})}
+      if(area>0.05)out.push({poly:poly,n:n,i:i,cut:P.cut||0,area:area})}
   });
   return out}
 function boxPlanes(b){return[{n:[1,0,0],d:b.x1},{n:[-1,0,0],d:-b.x0},{n:[0,1,0],d:b.y1},{n:[0,-1,0],d:-b.y0},{n:[0,0,1],d:b.z1},{n:[0,0,-1],d:-b.z0}]}
@@ -31,6 +31,72 @@ function clipPoly(poly,n,d){var r=[];for(var k=0;k<poly.length;k++){var a=poly[k
   if((da<-1e-9&&db>1e-9)||(da>1e-9&&db<-1e-9)){var s=da/(da-db);r.push([a[0]+(b[0]-a[0])*s,a[1]+(b[1]-a[1])*s])}}return r}
 function polyArea(p){var s=0;for(var i=0;i<p.length;i++){var a=p[i],b=p[(i+1)%p.length];s+=a[0]*b[1]-b[0]*a[1]}return Math.abs(s)/2}
 function minW(P){var m=1e9;for(var i=0;i<P.length;i++){var a=P[i],b=P[(i+1)%P.length],ex=b[0]-a[0],ey=b[1]-a[1],l=Math.hypot(ex,ey)||1,mx=0;for(var j=0;j<P.length;j++){var d=Math.abs(ex*(P[j][1]-a[1])-ey*(P[j][0]-a[0]))/l;if(d>mx)mx=d}if(mx<m)m=mx}return m}
+/* HEW: relief facets. A face polygon is filled with jittered points (boundary kept flat so the block's edges stay square), the interior points are pushed along the normal, and the points are joined by a Delaunay triangulation. Every triangle is a flat facet. */
+function delaunay(P){var n=P.length,S=[],i,j,k;
+  var mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;P.forEach(function(p){mnx=Math.min(mnx,p[0]);mxx=Math.max(mxx,p[0]);mny=Math.min(mny,p[1]);mxy=Math.max(mxy,p[1])});
+  var d=Math.max(mxx-mnx,mxy-mny)*20+10,mx=(mnx+mxx)/2,my=(mny+mxy)/2;
+  var Q=P.concat([[mx-d,my-d],[mx+d,my-d],[mx,my+d]]);
+  var T=[[n,n+1,n+2]];
+  function cc(t){var a=Q[t[0]],b=Q[t[1]],c=Q[t[2]],D=2*(a[0]*(b[1]-c[1])+b[0]*(c[1]-a[1])+c[0]*(a[1]-b[1]));if(Math.abs(D)<1e-12)return null;
+    var ux=((a[0]*a[0]+a[1]*a[1])*(b[1]-c[1])+(b[0]*b[0]+b[1]*b[1])*(c[1]-a[1])+(c[0]*c[0]+c[1]*c[1])*(a[1]-b[1]))/D,uy=((a[0]*a[0]+a[1]*a[1])*(c[0]-b[0])+(b[0]*b[0]+b[1]*b[1])*(a[0]-c[0])+(c[0]*c[0]+c[1]*c[1])*(b[0]-a[0]))/D;return[ux,uy,(a[0]-ux)*(a[0]-ux)+(a[1]-uy)*(a[1]-uy)]}
+  for(i=0;i<n;i++){var p=Q[i],bad=[],keep=[];
+    T.forEach(function(t){var c=cc(t);if(c&&(p[0]-c[0])*(p[0]-c[0])+(p[1]-c[1])*(p[1]-c[1])<c[2]-1e-9)bad.push(t);else keep.push(t)});
+    var E={};bad.forEach(function(t){for(k=0;k<3;k++){var a=t[k],b=t[(k+1)%3],key=a<b?a+'_'+b:b+'_'+a;E[key]=(E[key]||[]).concat([[a,b]])}});
+    Object.keys(E).forEach(function(key){if(E[key].length===1)keep.push([E[key][0][0],E[key][0][1],i])});T=keep}
+  return T.filter(function(t){return t[0]<n&&t[1]<n&&t[2]<n})}
+function hew(f,R,amp){
+  var p=f.poly,n=f.n,t=Math.abs(n[2])<.9?[0,0,1]:[1,0,0],u=norm(cross(n,t)),v=cross(n,u),o=p[0];
+  var to2=function(q){var d=[q[0]-o[0],q[1]-o[1],q[2]-o[2]];return[dot(d,u),dot(d,v)]};
+  var P2=[],P3=[],disp=[],i;
+  /* boundary, subdivided every ~4 mm, flat */
+  for(i=0;i<p.length;i++){var a=p[i],b=p[(i+1)%p.length],L=Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]),k=Math.max(1,Math.round(L/4));
+    for(var j=0;j<k;j++){var q=[a[0]+(b[0]-a[0])*j/k,a[1]+(b[1]-a[1])*j/k,a[2]+(b[2]-a[2])*j/k];P3.push(q);P2.push(to2(q));disp.push(0)}}
+  var poly2=p.map(to2),mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;poly2.forEach(function(q){mnx=Math.min(mnx,q[0]);mxx=Math.max(mxx,q[0]);mny=Math.min(mny,q[1]);mxy=Math.max(mxy,q[1])});
+  /* orientation of the polygon in 2D, to test "inside with margin" */
+  var area=0;for(i=0;i<poly2.length;i++){var A=poly2[i],B=poly2[(i+1)%poly2.length];area+=A[0]*B[1]-B[0]*A[1]}var sg=area>0?1:-1;
+  function inside(q,m){for(var i=0;i<poly2.length;i++){var A=poly2[i],B=poly2[(i+1)%poly2.length],ex=B[0]-A[0],ey=B[1]-A[1],l=Math.hypot(ex,ey)||1,dd=sg*(ex*(q[1]-A[1])-ey*(q[0]-A[0]))/l;if(dd<m)return false}return true}
+  /* FRACTURE: 3 planes across the face, each leaning by 0.12-0.3, combined by min (a crest) or max (a trough): the big planar facets and sharp cracks. */
+  var fr=[],mode=R()<.5?1:-1,np=2+Math.floor(R()*2);
+  for(i=0;i<np;i++){var an=R()*6.283,sl=.12+.18*R();fr.push({cx:mnx+(mxx-mnx)*R(),cy:mny+(mxy-mny)*R(),dx:Math.cos(an)*sl,dy:Math.sin(an)*sl,off:(R()-.5)*2.2})}
+  function edgeDist(q){var m=1e9;for(var i=0;i<poly2.length;i++){var A=poly2[i],B=poly2[(i+1)%poly2.length],ex=B[0]-A[0],ey=B[1]-A[1],l=Math.hypot(ex,ey)||1,dd=Math.abs(ex*(q[1]-A[1])-ey*(q[0]-A[0]))/l;if(dd<m)m=dd}return m}
+  function fracture(q){var best=null;fr.forEach(function(F){var v=F.dx*(q[0]-F.cx)+F.dy*(q[1]-F.cy)+F.off;if(best===null||(mode>0?v<best:v>best))best=v});return Math.max(-2.2,Math.min(2.2,best))}
+  var sp=3.5;
+  for(var x=mnx+sp/2;x<mxx;x+=sp)for(var y=mny+sp/2;y<mxy;y+=sp){var q=[x+(R()-.5)*sp*.8,y+(R()-.5)*sp*.8];if(!inside(q,1.2))continue;
+    var h=(fracture(q)*(f.cut?.12:.2)+(R()-.5)*amp*.7)*Math.min(1,edgeDist(q)/3);P2.push(q);P3.push([o[0]+u[0]*q[0]+v[0]*q[1]+n[0]*h,o[1]+u[1]*q[0]+v[1]*q[1]+n[1]*h,o[2]+u[2]*q[0]+v[2]*q[1]+n[2]*h]);disp.push(h)}
+  if(P2.length<4)return null;
+  return delaunay(P2).map(function(tr){return[P3[tr[0]],P3[tr[1]],P3[tr[2]]]})}
+
+
+/* GROOVES (v14): a flat face is scored with thin V cracks. Cracks are polylines (near-vertical with wobble, one branch maybe); the face is a coarse grid, and only cells near a crack are subdivided finely, so the rest stays flat. Depth is a V of the distance to the nearest crack. */
+function segDist(px,py,s){var dx=s[2]-s[0],dy=s[3]-s[1],l2=dx*dx+dy*dy||1,t=Math.max(0,Math.min(1,((px-s[0])*dx+(py-s[1])*dy)/l2));return Math.hypot(px-s[0]-dx*t,py-s[1]-dy*t)}
+function grooves(f,R,opt){
+  var p=f.poly,n=f.n,t=Math.abs(n[2])<.9?[0,0,1]:[1,0,0],u=norm(cross(n,t)),v=cross(n,u),o=p[0],i;
+  var to2=function(q){var d=[q[0]-o[0],q[1]-o[1],q[2]-o[2]];return[dot(d,u),dot(d,v)]};
+  var P=p.map(to2),mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;P.forEach(function(q){mnx=Math.min(mnx,q[0]);mxx=Math.max(mxx,q[0]);mny=Math.min(mny,q[1]);mxy=Math.max(mxy,q[1])});
+  var area=polyArea(P),W=mxx-mnx,Hh=mxy-mny,top=n[2]>.9,nc=Math.min(5,Math.round(area/(top?45:30))+1);
+  if(nc<1)return null;
+  var segs=[],hw=opt.hw*(.8+.4*R()),D=opt.depth;
+  for(i=0;i<nc;i++){
+    var sx=mnx+W*(.12+.76*R()),sy=mny+Hh*(top?R():R()*.25),a=top?R()*3.14:ur_(R,-.22,.22),len=Hh*ur_(R,.6,1)*(top?.5:1),x=sx,y=sy,k=0,steps=Math.max(2,Math.round(len/1.6)),pts=[[x,y]];
+    for(k=0;k<steps;k++){a+=ur_(R,-.14,.14);x+=Math.sin(a)*len/steps;y+=Math.cos(a)*len/steps;pts.push([x,y])}
+    for(k=0;k<pts.length-1;k++)segs.push([pts[k][0],pts[k][1],pts[k+1][0],pts[k+1][1],1-.35*k/(pts.length-1)]);
+    if(R()<.5&&pts.length>3){var bi=1+Math.floor(R()*(pts.length-2)),bx=pts[bi][0],by=pts[bi][1],ba=a+(R()<.5?-1:1)*ur_(R,.5,.9),bl=ur_(R,3,6);segs.push([bx,by,bx+Math.sin(ba)*bl,by+Math.cos(ba)*bl,.6])}
+  }
+  function edgeD(q){var m=1e9;for(var j=0;j<P.length;j++){var A=P[j],B=P[(j+1)%P.length];m=Math.min(m,segDist(q[0],q[1],[A[0],A[1],B[0],B[1]]))}return m}
+  function depth(q){var best=0;for(var j=0;j<segs.length;j++){var s2=segs[j],h=hw*s2[4],d=segDist(q[0],q[1],s2);if(d<h){var dd=D*s2[4]*(1-d/h);if(dd>best)best=dd}}return best*Math.min(1,edgeD(q)/1.0)}
+  var area2=0;for(i=0;i<P.length;i++){var A=P[i],B=P[(i+1)%P.length];area2+=A[0]*B[1]-B[0]*A[1]}
+  var sg=area2>0?1:-1,tris=[];
+  function clipCell(x0,y0,x1,y1){var c=P.slice();if(sg<0)c=c.slice().reverse();c=clipPoly2(c,[1,0],x1);c=clipPoly2(c,[-1,0],-x0);c=clipPoly2(c,[0,1],y1);c=clipPoly2(c,[0,-1],-y0);return c}
+  function emit(c){if(c.length<3||polyArea(c)<1e-4)return;var ds=[],pts=c.map(function(q){var d=depth(q);ds.push(d);return[o[0]+u[0]*q[0]+v[0]*q[1]-n[0]*d,o[1]+u[1]*q[0]+v[1]*q[1]-n[1]*d,o[2]+u[2]*q[0]+v[2]*q[1]-n[2]*d]});for(var j=1;j<pts.length-1;j++){var T=[pts[0],pts[j],pts[j+1]],dm=(ds[0]+ds[j]+ds[j+1])/3;T.k=1-.75*Math.min(1,dm/D);tris.push(T)}}
+  var CS=1,FS=.2,reach=hw+.6;
+  for(var x=mnx;x<mxx;x+=CS)for(var y=mny;y<mxy;y+=CS){
+    var c=clipCell(x,y,x+CS,y+CS);if(c.length<3)continue;
+    var near=false,cx=x+CS/2,cy=y+CS/2;for(i=0;i<segs.length;i++)if(segDist(cx,cy,segs[i])<reach){near=true;break}
+    if(!near){emit(c);continue}
+    for(var x2=x;x2<x+CS-1e-6;x2+=FS)for(var y2=y;y2<y+CS-1e-6;y2+=FS)emit(clipCell(x2,y2,x2+FS,y2+FS))}
+  return tris.length?tris:null}
+function ur_(R,a,b){return a+(b-a)*R()}
+function clipPoly2(poly,n,d){return clipPoly(poly,n,d)}
 var STAGES=['mass','courses','joints','depth','cleave','chips','hew'];
 G.STAGES=STAGES;
 /* build the wall up to stage `upto` (1..6). Every stage works on the blocks of the one before. */
@@ -71,7 +137,9 @@ G.build=function(seed,upto){
   blocks.forEach(function(b){
     var step=pick([0,0,1,2,3.5]);
     if(b.m===0&&b.row===1)step=ur(6,8);          /* the deep recess in the middle course ... */
-    if(b.m===0&&b.row>=2)step=ur(-3,-1.5);        /* ... under the block that overhangs it */
+    if(b.m===0&&b.row>=2)step=ur(-3,-1.5);
+    if(b.m>=1&&b.row>=1)step+=ur(-1.2,1.2);   /* each course sits a little proud of or behind the one below */
+    if(b.m>=1&&b.row>=2)step-=1;        /* ... under the block that overhangs it */
     if(b.m===1&&b.row===0)step=ur(2,3.5);
     b.y0=Math.min(b.y0+step,b.y1-7);
     if(b.row>0)b.z0-=0; var top=b.z1;
@@ -99,9 +167,12 @@ G.build=function(seed,upto){
   /* 6b BEVELS: the big breaks along edges. A chamfer plane through the top-front edge (depth 1.6-3.4), often one through a top side edge and a vertical edge; the foot blocks get them too. */
   blocks.forEach(function(b){
     var d=b.z1-b.z0,pw=b.x1-b.x0;
-    if(R()<.95)b.planes.push(cut([ur(-.15,.15),-1,ur(.9,1.5)],[(b.x0+b.x1)/2,b.y0+ur(0,.4),b.z1-ur(2,3.6)],3));
-    if(R()<.5){var sx=R()<.5?-1:1;b.planes.push(cut([sx*ur(.8,1.2),ur(-.2,.2),ur(.7,1.3)],[sx<0?b.x0+ur(1.2,3):b.x1-ur(1.2,3),(b.y0+b.y1)/2,b.z1],3))}
-    if(R()<.45){var sx2=R()<.5?-1:1;b.planes.push(cut([sx2*ur(.9,1.3),-1,ur(-.1,.25)],[sx2<0?b.x0:b.x1,b.y0+ur(1.2,3),(b.z0+b.z1)/2],3))}
+    /* eased edges: a chamfer of 1-2 dmm on the top-front edge, both top side edges and (mostly) both vertical front edges */
+    b.planes.push(cut([ur(-.08,.08),-1,ur(.92,1.1)],[(b.x0+b.x1)/2,b.y0,b.z1-ur(1,2)],3));
+    [-1,1].forEach(function(sx){
+      b.planes.push(cut([sx*ur(.9,1.1),ur(-.1,.1),1],[sx<0?b.x0+ur(1,1.9):b.x1-ur(1,1.9),(b.y0+b.y1)/2,b.z1],3));
+      if(R()<.8)b.planes.push(cut([sx*1,-ur(.9,1.1),ur(-.05,.05)],[sx<0?b.x0:b.x1,b.y0+ur(1,1.9),(b.z0+b.z1)/2],3));
+    });
     if(R()<.3)b.planes.push(cut([ur(-.4,.4),-1,-ur(.6,1.2)],[(b.x0+b.x1)/2,b.y0+ur(0,.5),b.z0+ur(1.2,3)],3));
   });
   if(upto<7)return fin(blocks,upto);
@@ -131,7 +202,7 @@ G.build=function(seed,upto){
       function cells(x0,x1,y0,y1,nmax){
         var cs=[[[x0,y0],[x1,y0],[x1,y1],[x0,y1]]],ns=nmax>0?1+Math.floor(Rs()*nmax):0,tries=0;
         while(ns>0&&tries<30){tries++;cs.sort(function(a,b2){return polyArea(b2)-polyArea(a)});var P=cs[0],cx=0,cy=0;P.forEach(function(q){cx+=q[0];cy+=q[1]});cx/=P.length;cy/=P.length;
-          var th=Rs()<.5?Math.PI/2+ur2(-.3,.3):(Rs()<.7?ur2(-.25,.25):ur2(.4,1.1)),n2=[-Math.sin(th),Math.cos(th)],rad=Math.sqrt(polyArea(P))*.25,px=cx+ur2(-rad,rad),py=cy+ur2(-rad,rad),d=n2[0]*px+n2[1]*py;
+          var th=Rs()<.6?Math.PI/2+ur2(-.12,.12):ur2(-.1,.1),n2=[-Math.sin(th),Math.cos(th)],rad=Math.sqrt(polyArea(P))*.25,px=cx+ur2(-rad,rad),py=cy+ur2(-rad,rad),d=n2[0]*px+n2[1]*py;
           var pa=clipPoly(P,n2,d),pb=clipPoly(P,[-n2[0],-n2[1]],-d);if(pa.length<3||pb.length<3)continue;var w0=minW(P);if(minW(pa)<.4*w0||minW(pb)<.4*w0)continue;
           cs.shift();cs.push(pa,pb);ns--}
         return cs}
@@ -144,20 +215,22 @@ G.build=function(seed,upto){
           for(var k=0;k<P.length;k++){var A=P[k],B=P[(k+1)%P.length],ex=B[0]-A[0],ey=B[1]-A[1],l=Math.hypot(ex,ey)||1,nx=ey/l,ny=-ex/l,onB=(Math.abs(A[0]-x0)<1e-6&&Math.abs(B[0]-x0)<1e-6)||(Math.abs(A[0]-x1)<1e-6&&Math.abs(B[0]-x1)<1e-6)||(Math.abs(A[1]-y0)<1e-6&&Math.abs(B[1]-y0)<1e-6)||(Math.abs(A[1]-y1)<1e-6&&Math.abs(B[1]-y1)<1e-6);
             if(onB)continue;var d=nx*A[0]+ny*A[1]-.1;
             pp.push(axis==='y'?{n:[nx,0,ny],d:d}:{n:[nx,ny,0],d:d})}
-          var sb=Rs()<.25?0:ur2(.2,.8)*(Rs()<.2?1.5:1),tl=Math.tan(ur2(1,4)*Math.PI/180),ph=ur2(0,6.283);
+          var sb=Rs()<.4?0:ur2(.1,.3),tl=Math.tan(ur2(.2,1.2)*Math.PI/180),ph=ur2(0,6.283);
           if(axis==='y'){var nf=norm([tl*Math.cos(ph),-1,tl*Math.sin(ph)]);pp.push({n:nf,d:dot(nf,[cx,bb.y0+sb,cy])});pp.push({n:[0,1,0],d:bb.y0+T});}
           else{var nf2=norm([tl*Math.cos(ph),tl*Math.sin(ph),1]);pp.push({n:nf2,d:dot(nf2,[cx,cy,bb.z1-sb])});pp.push({n:[0,0,-1],d:-(bb.z1-T2)});pp.push({n:[0,-1,0],d:-(bb.y0+T)});pp.push({n:[0,1,0],d:bb.y1})}
           pp=pp.concat(extra);
           var f2=faces(pp);if(!f2.length)return;
-          var ad=chipsOf(f2,Rs,3,.75,.5,1.7);if(ad.length){pp=pp.concat(ad);f2=faces(pp)}
+          var ad=chipsOf(f2,Rs,1,.45,.5,1.1);if(ad.length){pp=pp.concat(ad);f2=faces(pp)}
           res.push({id:i,m:b.m,row:b.row,box:bb,faces:f2,k:.92+.22*Rs()})})
         return res}
-      var fcells=cells(bb.x0,bb.x1,bb.z0,bb.z1,Math.max(1,Math.min(3,Math.round((bb.x1-bb.x0)*(bb.z1-bb.z0)/80)))),
-          tcells=cells(bb.x0,bb.x1,bb.y0+T,bb.y1,Math.max(0,Math.min(2,Math.round((bb.x1-bb.x0)*(bb.y1-bb.y0-T)/110))));
+      var fcells=cells(bb.x0,bb.x1,bb.z0,bb.z1,(Rs()<.6?0:1)),
+          tcells=cells(bb.x0,bb.x1,bb.y0+T,bb.y1,(Rs()<.7?0:1));
       pieceSolids(fcells,'y',0,0,0,bb.x0,bb.x1,bb.z0,bb.z1).forEach(function(o){out.push(o)});
       if(bb.y1-bb.y0-T>2)pieceSolids(tcells,'z',0,0,0,bb.x0,bb.x1,bb.y0+T,bb.y1).forEach(function(o){out.push(o)});
       var core=[{n:[1,0,0],d:bb.x1-.05},{n:[-1,0,0],d:-(bb.x0+.05)},{n:[0,1,0],d:bb.y1},{n:[0,-1,0],d:-(bb.y0+T-.1)},{n:[0,0,1],d:bb.z1-T2+.1},{n:[0,0,-1],d:-bb.z0}];
       out.push({id:i,m:b.m,row:b.row,box:bb,faces:faces(core),k:.72})});
+    /* FINE: thin incised cracks on flat front and top faces */
+    if(up>=7){var Rh=rng(seed*101+3);out.forEach(function(o){o.faces.forEach(function(f){if(f.area>8&&f.cut<=1&&(f.n[1]<-.9||f.n[2]>.9))f.tris=grooves(f,Rh,{hw:.5,depth:.42})})})}
     return{blocks:out,seed:seed,upto:up,H:H,cores:[[X[0],X[1],H[0]-3],[X[1],X[2],H[1]-3],[X[2],W,H[2]-3]]}}
 };
 G.rng=rng;

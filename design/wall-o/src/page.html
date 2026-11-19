@@ -37,7 +37,7 @@ table{border-collapse:collapse;font-size:13px;width:100%}td,th{border-top:1px so
 <header><h1>Wall O</h1><p class="mute">One generator, one target: the stepped grey block wall in reference O. Blocks are massed, coursed, pushed to different depths, then split along planes.</p></header>
 <section>
 <div class="pair">
-<div><div class="frame"><img id="ref" alt="Reference picture O: a painted stone wall of stacked blocks with a 28 mm figure beside it" src="__REF__"></div><div class="cap">Reference O</div></div>
+<div><div class="frame"><img id="ref" alt="Reference picture O, unpainted: a stone wall of stacked blocks with a 28 mm figure beside it" src="__REF__"></div><div class="cap">Reference O, unpainted</div></div>
 <div><div class="frame"><canvas id="live" aria-label="Generated wall, drag to orbit"></canvas></div><div class="cap">Generated, 35 mm tile, drag to orbit, wheel to zoom</div></div>
 </div>
 <div class="bar"><button id="match" class="pri">Match camera</button><button id="prv" aria-label="previous seed">&lt;</button><label for="seedv">seed</label><input id="seedv" type="number" min="1" value="1"><button id="nxt" aria-label="next seed">&gt;</button><span id="ms" class="mute"></span></div>
@@ -46,7 +46,7 @@ table{border-collapse:collapse;font-size:13px;width:100%}td,th{border-top:1px so
 <section id="steps"><h2>How it is made</h2>
 __STEPS__
 </section>
-<section><h2>What is still off</h2><p>Round 4 (v9): faces are fractured at three scales with cracks that die inside the face, corners are chipped, pockets are faceted. Still off: too many thin sliver pieces and slits where two levels cross (the reference has fewer, fatter facets); the dark gaps show the inside of the block; the edges of a block are not worn bright as in the photo; the tone is flat.</p></section>
+<section><h2>What is still off</h2><p>Round 6 (v14): about a dozen fat blocks, the outer skin almost invisible (none on most faces, at most one split, set back 0.1 to 0.3 dmm), every exposed edge chamfered 1 to 2 dmm, each right-hand course a little proud of or behind the one below, no back slabs, and the surface is flat faces scored with thin V cracks (0.5 dmm half-width, 0.4 deep, near-vertical, one branch now and then). No relief facets. Still off: the cracks are short and scratchy where the panel has long branching ones that cross a face and meet the edge; their sides are stair-stepped (they come from a 0.2 dmm grid, not a strip along the crack); no small pebbles on the tops; the wall is lower than the panel's; no deep recess shadow line between courses.</p></section>
 <section><h2>What carries to the other references</h2>__CARRY__</section>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

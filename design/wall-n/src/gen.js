@@ -77,9 +77,9 @@ function vnoise(R0,x,y){var xi=Math.floor(x),yi=Math.floor(y),fx=x-xi,fy=y-yi,h=
   var a=h(xi,yi),b=h(xi+1,yi),c=h(xi,yi+1),d=h(xi+1,yi+1);return a+(b-a)*sm(fx)+(c-a)*sm(fy)+(a-b-c+d)*sm(fx)*sm(fy)}
 G.build=function(seed,upto,opt){
   opt=opt||{};
-  if(typeof location!=='undefined'){(location.search.match(/[?&](lo|hi|p0x|p0y|dip|face|px|py|amp|pock|chip|send|tilt|th|l1|spar|s1|s2|s3|weld)=(-?[\w.]+)/g)||[]).forEach(function(m){var k=m.slice(1).split('=');opt[k[0]]=isNaN(+k[1])?k[1]:+k[1]})}
+  if(typeof location!=='undefined'){(location.search.match(/[?&](lo|hi|p0x|p0y|dip|face|px|py|amp|pock|chip|send|tilt|th|l1|spar|eb|ln|sg|gv|gw|gd|bw|s1|s2|s3|l2|l3|d2|d3|weld)=(-?[\w.]+)/g)||[]).forEach(function(m){var k=m.slice(1).split('=');opt[k[0]]=isNaN(+k[1])?k[1]:+k[1]})}
   var R=rng(seed*7919+13),ur=function(a,b){return a+(b-a)*R()};
-  var dip=(opt.dip||60)*D2R,fac=(opt.face||240)*D2R,TH=(opt.th==null?20:opt.th)*D2R;
+  var dip=(opt.dip||52)*D2R,fac=(opt.face||262)*D2R,TH=(opt.th==null?20:opt.th)*D2R;
   var nb=[Math.sin(dip)*Math.cos(fac),Math.sin(dip)*Math.sin(fac),Math.cos(dip)];
   var st=[-Math.sin(fac),Math.cos(fac),0];
   var up=norm(cross(st,nb)); if(up[2]<0)up=[-up[0],-up[1],-up[2]];
@@ -94,9 +94,9 @@ G.build=function(seed,upto,opt){
   var ff=faces(vol).filter(function(f){return f.i===6})[0],root=ff.poly.map(function(q){return[dot(st,q),dot(up,q)]});
   var SE=Math.max.apply(0,root.map(function(q){return q[0]}))+(opt.send||0),endA=[4,1.6,.6];
   var T0=dOut-2.5,BASE=dOut-40;
-  var AMP=opt.amp==null?1.5:opt.amp;
+  var AMP=opt.amp==null?2.0:opt.amp;
   /* the three levels: spacing along strike, along the dip, offset of a piece from its parent, joint width, lean of the walls */
-  var LV=[{ws:opt.s1||5.5,wl:opt.l1||24,A:1.9*AMP,jw:0,lean:.16,diag:0,p:1},{ws:3.6,wl:9,A:.8*AMP,jw:0,lean:.2,diag:.1,p:1},{ws:2.8,wl:5,A:.34*AMP,jw:0,lean:.25,diag:.25,p:opt.spar==null?.8:opt.spar}];
+  var LV=[{ws:opt.s1||12,wl:opt.l1||40,A:1.9*AMP,jw:0,lean:.16*(opt.ln==null?.4:opt.ln),diag:0,p:1},{ws:opt.s2||8,wl:opt.l2||18,A:.8*AMP,jw:0,lean:.2*(opt.ln==null?.4:opt.ln),diag:opt.d2==null?0:opt.d2,p:1},{ws:opt.s3||5,wl:opt.l3||9,A:.34*AMP,jw:0,lean:.25*(opt.ln==null?.4:opt.ln),diag:opt.d3==null?.08:opt.d3,p:opt.spar==null?.5:opt.spar}];
   var leaves=[];
   function mk(poly,lines,H,A,B,lvl,row){return{poly:poly,lines:lines,H:H,A:A,B:B,row:row}}
   function split(cell,L,depth,out,upLvl,FR){var st=FR.e1,up=FR.e2,nb=FR.n,T0=FR.T0,TH=FR.TH,SE=0;
@@ -108,17 +108,18 @@ G.build=function(seed,upto,opt){
     if(stop){out.push(cell);return}
     var phi,r=R();
     if(lv.diag&&r<lv.diag&&rs>1&&ra>1){phi=Math.atan2(F[1],F[0])+(R()<.5?1:-1)*ur(28,55)*D2R}
-    else if(rs/(rs+ra)>R()*1.0&&rs>=1.3||ra<1.3){phi=Math.atan2(F[1],F[0])+ur(-9,9)*D2R}      /* a crack along the dip: normal along strike */
+    else if(rs>=1.3&&(ra<1.3||R()<(opt.cx==null?.75:1-opt.cx))){phi=Math.atan2(F[1],F[0])+ur(-9,9)*D2R}      /* a crack along the dip: normal along strike */
     else phi=Math.atan2(E[1],E[0])+ur(-14,14)*D2R;                                   /* a cross crack: normal along the dip */
     var n2=[Math.cos(phi),Math.sin(phi)],lo=1e9,hi=-1e9;P.forEach(function(q){var t=n2[0]*q[0]+n2[1]*q[1];lo=Math.min(lo,t);hi=Math.max(hi,t)});
-    var c=lo+(hi-lo)*ur(.3,.7),P1=clip2(P,n2,c,true),P2=clip2(P,n2,c,false);
+    var c=lo+(hi-lo)*ur(.3,.7),mp=[3.2,2,1.5][L];if(c-lo<mp||hi-c<mp){out.push(cell);return}
+    var P1=clip2(P,n2,c,true),P2=clip2(P,n2,c,false);
     if(P1.length<3||P2.length<3||area2(P1)<.3||area2(P2)<.3){out.push(cell);return}
     var dr=ur(-lv.lean,lv.lean),w=ur(0,lv.jw),N3=norm([st[0]*n2[0]+up[0]*n2[1]+nb[0]*dr,st[1]*n2[0]+up[1]*n2[1]+nb[1]*dr,st[2]*n2[0]+up[2]*n2[1]+nb[2]*dr]);
     var d3=(c+dr*T0)*1/ (Math.hypot(n2[0],n2[1],dr)),
         kids=[[P1,{n:N3,d:d3-w/2,cut:0,j:1},1],[P2,{n:[-N3[0],-N3[1],-N3[2]],d:-(d3+w/2),cut:0,j:1},-1]];
     /* each side gets its own offset; one side also tilts along the crack so the step between the two dies out toward one end */
-    var hs=[ur(-1,1)*lv.A*.7*FR.k,ur(-1,1)*lv.A*.7*FR.k],dir=[-n2[1],n2[0]],hd=hs[1]-hs[0],Lc=Math.max(2,(function(){var m=1e9,M=-1e9;P.forEach(function(q){var t=dir[0]*q[0]+dir[1]*q[1];m=Math.min(m,t);M=Math.max(M,t)});return M-m})());
-    var gT=R()<.6?Math.max(-.1,Math.min(.1,-hd/Lc*ur(.8,1.6)*(R()<.5?1:-1))):0;
+    var alongDip=Math.abs(n2[0]*F[0]+n2[1]*F[1])>.7,sgn=opt.sg==null?-1:opt.sg,hs=alongDip?(function(){var m=ur(.35,1)*lv.A*.8*FR.k*sgn;return[-m/2+ur(-.15,.15)*lv.A*FR.k,m/2+ur(-.15,.15)*lv.A*FR.k]})():[ur(-1,1)*lv.A*.3*FR.k,ur(-1,1)*lv.A*.3*FR.k],dir=[-n2[1],n2[0]],hd=hs[1]-hs[0],Lc=Math.max(2,(function(){var m=1e9,M=-1e9;P.forEach(function(q){var t=dir[0]*q[0]+dir[1]*q[1];m=Math.min(m,t);M=Math.max(M,t)});return M-m})());
+    var gT=R()<.6?Math.max(-.04,Math.min(.04,-hd/Lc*ur(.8,1.6)*(R()<.5?1:-1))):0;
     kids.forEach(function(k,i){
       var pc=[0,0];k[0].forEach(function(q){pc[0]+=q[0]/k[0].length;pc[1]+=q[1]/k[0].length});
       var gs=(i?gT*dir[0]:0)+ur(-1,1)*[.1,.17,.24][L]*(opt.tilt==null?.3:opt.tilt),ga=(i?gT*dir[1]:0)+ur(-1,1)*[.1,.17,.24][L]*(opt.tilt==null?.3:opt.tilt);
@@ -134,24 +135,42 @@ G.build=function(seed,upto,opt){
       cur.forEach(function(c){var m=[0,0];c.poly.forEach(function(q){m[0]+=q[0]/c.poly.length;m[1]+=q[1]/c.poly.length});
         var v=vnoise(R0,m[0]/4.5,m[1]/10)*.65+vnoise(R0+5,m[0]/2.2,m[1]/4.6)*.35;
         if(v>.6){var dd=(v-.6)/.4*1.3*pk+.2;c.H-=dd;c.A+=(R()-.5)*.1;c.B+=(R()-.5)*.1}})}
+    if(upto>=5&&withPock&&(opt.gv==null?.55:opt.gv)>0){
+      /* grain: narrow grooves along the slab direction, each a strip cell lowered a little, cut by two parallel planes (a cleave with a joints width and no setback) */
+      var TH2=FR.TH,Fd=[Math.cos(TH2),-Math.sin(TH2)],nx2=[];
+      cur.forEach(function(c){var P=c.poly,lo=1e9,hi=-1e9;P.forEach(function(q){var t=Fd[0]*q[0]+Fd[1]*q[1];lo=Math.min(lo,t);hi=Math.max(hi,t)});
+        if(hi-lo<4||R()>(opt.gv==null?.55:opt.gv)){nx2.push(c);return}
+        var gw=ur(.25,.5)*(opt.gw||1),dp=ur(.3,.6),k=R()<.35?2:1,cuts=[],t=lo+(hi-lo)*ur(.25,.75);
+        for(var g=0;g<k;g++){cuts.push(t);t+=ur(1.6,3.2);if(t>hi-1)break}
+        var edges=[-1e9].concat(cuts.reduce(function(a,x){return a.concat([x,x+gw])},[]),[1e9]),
+            nrm=function(ph){var a=Math.atan2(Fd[1],Fd[0])+ph;return[Math.cos(a),Math.sin(a)]};
+        var n2=[Fd[0],Fd[1]];
+        for(var e=0;e<edges.length-1;e++){
+          var pc=c.poly;if(edges[e]>-1e8)pc=clip2(pc,n2,edges[e],false);if(edges[e+1]<1e8)pc=clip2(pc,n2,edges[e+1],true);
+          if(pc.length<3||area2(pc)<.2)continue;
+          var ln=c.lines.slice(),N3=norm([FR.e1[0]*n2[0]+FR.e2[0]*n2[1],FR.e1[1]*n2[0]+FR.e2[1]*n2[1],FR.e1[2]*n2[0]+FR.e2[2]*n2[1]]);
+          if(edges[e]>-1e8)ln.push({n:[-N3[0],-N3[1],-N3[2]],d:-edges[e],cut:0,j:1});
+          if(edges[e+1]<1e8)ln.push({n:N3,d:edges[e+1],cut:0,j:1});
+          nx2.push({poly:pc,lines:ln,H:c.H-(e%2?dp:0)+0,A:c.A,B:c.B,row:c.row})}});
+      cur=nx2}
     return cur.map(function(c){
       var pl=side.slice(),len=Math.hypot(c.A,c.B,1),e1=FR.e1,e2=FR.e2,n=FR.n,Nt=norm([-c.A*e1[0]-c.B*e2[0]+n[0],-c.A*e1[1]-c.B*e2[1]+n[1],-c.A*e1[2]-c.B*e2[2]+n[2]]);
       pl.push({n:Nt,d:c.H/len,cut:0,top:1});
       pl.push({n:[-n[0],-n[1],-n[2]],d:-BASEv,cut:0,j:1});
       c.lines.forEach(function(l){pl.push(l)});
-      return{planes:pl,i:c.row,cell:1,e1:e1}})}
-  var dcr=vol[4].d,sideS=[{n:[1,0,0],d:X1-2.5},vol[1],vol[2],vol[3],{n:cr,d:dcr-2.5},vol[5],{n:[0,0,1],d:(opt.cap||36)-2.5}];
+      return{planes:pl,i:c.row,cell:1,e1:e1,fam:FR.k==1?0:(FR.k==.35?1:2)}})}
+  var dcr=vol[4].d,sideS=[{n:[1,0,0],d:X1-2.5},vol[1],vol[2],vol[3],{n:cr,d:dcr-3.4},vol[5],{n:[0,0,1],d:(opt.cap||36)-2.5}];
   var polyOf=function(i,e1,e2){var f=faces(vol).filter(function(f){return f.i===i})[0];return f.poly.map(function(q){return[dot(e1,q),dot(e2,q)]})};
   var FRs=[{e1:st,e2:up,n:nb,T0:dOut-2.5,TH:TH,k:1}];
   blocks=surface(FRs[0],root,sideS,dOut-40,true);
   var ce1=norm(cross([0,1,0],cr)),ce2=cross(cr,ce1);
-  var FRc={e1:ce1,e2:ce2,n:cr,T0:dcr-1.2,TH:70*D2R,k:.55};
+  var FRc={e1:ce1,e2:ce2,n:cr,T0:dcr-1.2,TH:70*D2R,k:.35};
   blocks=blocks.concat(surface(FRc,polyOf(4,ce1,ce2),[vol[0],vol[1],vol[2],vol[3],{n:nb,d:dOut-1.5},vol[5],vol[7]],dcr-12,false));
   var FRe={e1:[0,1,0],e2:[0,0,1],n:[1,0,0],T0:X1-1.6,TH:25*D2R,k:.45};
-  blocks=blocks.concat(surface(FRe,polyOf(0,[0,1,0],[0,0,1]),[{n:[1,0,0],d:X1+.3},vol[1],vol[2],vol[3],{n:nb,d:dOut-1.5},vol[4],vol[5],vol[7]],X1-12,false));
+  blocks=blocks.concat(surface(FRe,polyOf(0,[0,1,0],[0,0,1]),[{n:[1,0,0],d:X1+.3},vol[1],vol[2],vol[3],{n:nb,d:dOut-1.5},{n:cr,d:dcr-10},vol[5],{n:[0,0,1],d:(opt.cap||36)-3}],X1-4.5,false));
   if(upto<5)return fin(blocks,upto);
     /* corner chips: at a corner of the top face, a plane along the averaged normal of the faces meeting there, tilted up to 25 degrees, taking 0.12 to 0.3 of the cell's narrow side; 45 per cent of corners */
-  var CF=opt.chip==null?.2:opt.chip;
+  var CF=opt.chip==null?.3:opt.chip;
   blocks.forEach(function(b){
     var fcs=faces(b.planes),top=fcs.filter(function(f){return b.planes[f.i].top})[0];if(!top)return;
     var mn=1e9,mx=-1e9;top.poly.forEach(function(q){mn=Math.min(mn,dot(b.e1,q));mx=Math.max(mx,dot(b.e1,q))});
@@ -161,12 +180,22 @@ G.build=function(seed,upto,opt){
       var vn=[0,0,0];fcs.forEach(function(f){if(f.poly.some(function(r){return Math.hypot(r[0]-q[0],r[1]-q[1],r[2]-q[2])<1e-4}))vn=add(vn,f.n)});
       var tt=ur(0,25)*D2R,ang=ur(0,6.283),n=norm(vn),t1=norm(cross(n,Math.abs(n[2])<.9?[0,0,1]:[1,0,0])),t2=cross(n,t1);
       n=norm(add(add(n,t1,Math.tan(tt)*Math.cos(ang)),t2,Math.tan(tt)*Math.sin(ang)));
-      var dep=ur(.12,.3)*ext;b.planes.push(cut(n,[q[0]-n[0]*dep,q[1]-n[1]*dep,q[2]-n[2]*dep],2))})});
+      var dep=ur(.12,.3)*ext;b.planes.push(cut(n,[q[0]-n[0]*dep,q[1]-n[1]*dep,q[2]-n[2]*dep],2))})
+    /* edge bevels (a worn lip): a plane through the middle of a top edge, tilted 35-55 degrees out of the face, taking 0.3-0.8 mm; a plane cut into the face's edge, so a pit stays a plane cut and no cell is placed inside a cell */
+    var EB=opt.eb==null?.85:opt.eb;if(EB>0){var cen=[0,0,0];top.poly.forEach(function(q){cen=add(cen,q,1/top.poly.length)});
+      for(var ei=0;ei<top.poly.length;ei++){var qa=top.poly[ei],qb=top.poly[(ei+1)%top.poly.length],el=Math.hypot(qb[0]-qa[0],qb[1]-qa[1],qb[2]-qa[2]);
+        if(el<3||R()>EB)continue;
+        var ed=norm(sub(qb,qa)),od=norm(cross(top.n,ed)),mid=add(qa,sub(qb,qa),.5);if(dot(od,sub(mid,cen))<0)od=[-od[0],-od[1],-od[2]];
+        var bt=ur(28,52)*D2R,bn=norm(add(top.n,od,0)),nn=norm([top.n[0]*Math.cos(bt)+od[0]*Math.sin(bt),top.n[1]*Math.cos(bt)+od[1]*Math.sin(bt),top.n[2]*Math.cos(bt)+od[2]*Math.sin(bt)]),dd=Math.min(ur(.5,1.1)*(opt.bw||1),.3*ext,.18*el);
+        b.planes.push(cut(nn,[mid[0]-nn[0]*dd,mid[1]-nn[1]*dd,mid[2]-nn[2]*dd],2))}}});
+  /* foot blocks: the same rock in small pieces, flat-faced, with every top edge eased by a chamfer plane */
   var rubble=[];
-  for(var q=0;q<14;q++){var px=ur(9,33),py=ur(.8,3.2),sc=ur(1.4,2.9),th=ur(0,Math.PI),c=Math.cos(th),s2=Math.sin(th);
+  for(var q=0;q<11;q++){var px=ur(9,33),py=ur(.8,3.4),sc=ur(1.7,3),th=ur(0,Math.PI),c=Math.cos(th),s2=Math.sin(th);
     if(px<10&&py<8)continue;
-    var h=sc*ur(.7,1.1),a2=sc*ur(.8,1.3),pl=[plane([c,s2,0],px*c+py*s2+a2),plane([-c,-s2,0],-(px*c+py*s2)+a2),plane([-s2,c,0],-px*s2+py*c+sc),plane([s2,-c,0],px*s2-py*c+sc),plane([0,0,1],h),plane([0,0,-1],0.3),
-      cut(norm([ur(-.5,.5),ur(-.5,.5),1]),[px,py,h-ur(.3,1)],2),cut(norm([ur(-.9,.9),ur(-.9,.9),.5]),[px+ur(-1,1),py+ur(-1,1),h*.5],2)];
+    var h=sc*ur(.8,1.2),a2=sc*ur(.8,1.4),dirs=[[c,s2,a2],[-c,-s2,a2],[-s2,c,sc],[s2,-c,sc]],
+      pl=[plane([c,s2,0],px*c+py*s2+a2),plane([-c,-s2,0],-(px*c+py*s2)+a2),plane([-s2,c,0],-px*s2+py*c+sc),plane([s2,-c,0],px*s2-py*c+sc),plane([0,0,1],h),plane([0,0,-1],0.3)];
+    dirs.forEach(function(d){var nn=norm([d[0]*.8,d[1]*.8,1]),e=[px+d[0]*d[2],py+d[1]*d[2],h],dp=ur(.35,.75);pl.push(cut(nn,[e[0]-nn[0]*dp,e[1]-nn[1]*dp,e[2]-nn[2]*dp],2))});
+    pl.push(cut(norm([ur(-.5,.5),ur(-.5,.5),1]),[px,py,h-ur(.5,1)],2));
     rubble.push({planes:pl,rub:1})}
   blocks=blocks.concat(rubble);
   return fin(blocks,upto);
@@ -174,8 +203,8 @@ G.build=function(seed,upto,opt){
     var out=[];
     bl.forEach(function(b,i){
       var fc=faces(b.planes);if(fc.length<4)return;fc.forEach(function(f){f.top=!!b.planes[f.i].top;f.vs=b.planes[f.i]===undefined?0:(b.planes[f.i].n===vol[0].n?1:0)});
-      if(up>=6&&b.rub){var Rh=rng(seed*101+i*7+3);fc.forEach(function(f){f.tris=hew(f,Rh,f.cut?.5:.75)})}
-      out.push({id:i,m:b.rub?1:0,row:b.i||0,rub:!!b.rub,faces:fc})});
+      if(up>=6&&b.rub&&opt.hewr){var Rh=rng(seed*101+i*7+3);fc.forEach(function(f){f.tris=hew(f,Rh,f.cut?.5:.75)})}
+      out.push({id:i,fam:b.fam,m:b.rub?1:0,row:b.i||0,rub:!!b.rub,faces:fc})});
     return{blocks:out,seed:seed,upto:up,cores:[],core:[]}}
 };
 G.rng=rng;
