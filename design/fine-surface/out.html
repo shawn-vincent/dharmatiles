@@ -42,7 +42,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 <main>
   <header>
     <h1>Fine Surface</h1>
-    <p class="lede">A stone texture 0.1 to 0.5 mm deep: low tilted facets, shallow overlapping flakes, pits and grain. The reference, then the texture cut into the standard block at true scale.</p>
+    <p class="lede">A stone texture 0.1 to 0.5 mm deep: low tilted facets, shallow overlapping flakes, raised specks and grain. The reference, then the texture cut into the standard block at true scale.</p>
   </header>
 
   <p class="fault" id="fault" role="alert" hidden></p>
@@ -106,9 +106,9 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
     step: .8,                /* for this share of D; past it the ground rises gently (apron, mm per mm), so no thin fin is left standing between two scars */
     apron: .25,
     soft: .05,               /* and is rounded over this width */
-    pits: { per: .3, r: [.05, .15], deep: [.25, .45] },   /* pits per mm²; depth as a share of the radius */
-    /* grain: `cells` octaves cut thin valleys along one level of a noise (not zero, which every lattice point has), which leaves small rounded grains between them */
-    grain: [{ amp: .014, wave: .1, cells: true }, { amp: .012, wave: .22, cells: true }, { amp: .012, wave: .45 }]
+    specks: { per: 2.2, r: [.05, .125], high: [.02, .06] },   /* raised grains per mm², their radius and height: the one place the texture adds material */
+    /* grain: a `specks` octave raises the tops of a noise as small low grains; a plain one cuts gently */
+    grain: [{ amp: .006, wave: .06 }, { amp: .016, wave: .1, specks: true }, { amp: .012, wave: .2, specks: true }, { amp: .012, wave: .45 }]
   };
 
   /* ---- the shape: the standard block, as on Flakes Up Close ----
@@ -254,9 +254,9 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
     });
 
     marks.push(['flakes', performance.now()]);
-    /* 3. pits: sparse small round divots */
-    const pits = Math.round(F.pits.per * AREA);
-    for (let k = 0; k < pits; k++) { const ci = Math.floor(rnd() * N), r = F.pits.r[0] + (F.pits.r[1] - F.pits.r[0]) * rnd() * rnd(), d = r * range(F.pits.deep), cx = base[3 * ci], cy = base[3 * ci + 1], cz = base[3 * ci + 2];
+    /* 3. specks: small round grains standing on whatever they sit on, plateau or wall */
+    const pits = Math.round(F.specks.per * AREA);
+    for (let k = 0; k < pits; k++) { const ci = Math.floor(rnd() * N), r = range(F.specks.r), d = -range(F.specks.high) * (r / F.specks.r[1]), cx = base[3 * ci], cy = base[3 * ci + 1], cz = base[3 * ci + 2];
       for (const pts of both) { const pb = pts.base, cut = pts.cut; pts.near(cx, cy, cz, r, (i) => { const dx = pb[3 * i] - cx, dy = pb[3 * i + 1] - cy, dz = pb[3 * i + 2] - cz, m = 1 - (dx * dx + dy * dy + dz * dz) / (r * r); if (m > 0) cut[i] += d * m * m; }); } }
 
     marks.push(['pits', performance.now()]);
@@ -265,7 +265,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
     function place(pts, grid) { const pos = new Float32Array(pts.N * 3), pb = pts.base, pn = pts.nor;
       for (let i = 0; i < pts.N; i++) { const X = pb[3 * i], Y = pb[3 * i + 1], Z = pb[3 * i + 2], x = .36 * X + .48 * Y + .8 * Z, y = -.8 * X + .6 * Y, z = -.48 * X - .64 * Y + .6 * Z; let d = pts.cut[i];
         for (let o = 0; o < F.grain.length; o++) { const gr = F.grain[o], s = 1 / gr.wave; if (gr.wave < 2.2 * grid) continue;   /* a grid too coarse for a wave leaves it out */
-          let v = noise(x * s, y * s, z * s, 101 + o); if (gr.cells) { v = 1 - Math.abs(v - .13) * 7; if (v < 0) v = 0; } else v = v * .9 + .5; d += gr.amp * v; }
+          let v = noise(x * s, y * s, z * s, 101 + o); if (gr.specks) { v = (v - .05) * 2.5; v = v < 0 ? 0 : v > 1 ? -1 : -v * v; } else v = v * .9 + .5; d += gr.amp * v; }
         if (d > deepest) deepest = d;
         pos[3 * i] = X - pn[3 * i] * d; pos[3 * i + 1] = Y - pn[3 * i + 1] * d; pos[3 * i + 2] = Z - pn[3 * i + 2] * d; }
       return pos; }
@@ -324,7 +324,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
       const t2 = performance.now();
       document.getElementById('wait').hidden = true;
       document.getElementById('stat').innerHTML = 'Built in <b>' + fmt((t2 - t0) / 1000, 2) + ' s</b> (surface ' + fmt((t1 - t0) / 1000, 2) + ' s, normals ' + fmt((t2 - t1) / 1000, 2) + ' s): ' +
-        fmt(B.points) + ' points on a ' + FINE.grid + ' mm grid and ' + fmt(B.fine.points) + ' on a ' + fmt(B.fine.step, 3) + ' mm patch of the top face for the close-up, ' + fmt(B.triangles) + ' triangles, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.pits) + ' pits; deepest cut ' + fmt(B.deepest, 2) + ' mm. Drag to turn, pinch to zoom.';
+        fmt(B.points) + ' points on a ' + FINE.grid + ' mm grid and ' + fmt(B.fine.points) + ' on a ' + fmt(B.fine.step, 3) + ' mm patch of the top face for the close-up, ' + fmt(B.triangles) + ' triangles, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.pits) + ' raised specks; deepest cut ' + fmt(B.deepest, 2) + ' mm. Drag to turn, pinch to zoom.';
       window.fineBuilt = { marks: B.marks.map((m, i) => m[0] + ' ' + Math.round(m[1] - (i ? B.marks[i - 1][1] : t0))).join(', '), normals: Math.round(t2 - t1), flakes: B.flakes, seconds: (t2 - t0) / 1000, deepest: B.deepest, points: B.points };
       draw();
     } catch (e) { report('building the surface', e); }
