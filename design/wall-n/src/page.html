@@ -1,0 +1,54 @@
+<title>Wall N</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a workbench. Reference beside the live wall on top, seed strip, then the recipe as a run of steps with a picture each. */
+:root{--bg:#f1f2f4;--ink:#1c2128;--mute:#5a6472;--line:#cfd4dc;--card:#fbfbfc;--stage:#d9e0eb;--acc:#3b5b8c;--acc-ink:#fff;--mono:ui-monospace,"JetBrains Mono",Menlo,monospace;--serif:"Newsreader",Georgia,serif;--sans:"Instrument Sans",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#14171c;--ink:#e6e9ee;--mute:#99a3b1;--line:#2c333d;--card:#1b1f26;--stage:#2a3038;--acc:#8fb0e6;--acc-ink:#10151c}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#14171c;--ink:#e6e9ee;--mute:#99a3b1;--line:#2c333d;--card:#1b1f26;--stage:#2a3038;--acc:#8fb0e6;--acc-ink:#10151c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);padding-block:20px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap>*{min-width:0}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:28px}
+h1{font:600 34px/1.1 var(--serif);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font:600 22px/1.2 var(--serif);margin:0 0 6px;text-wrap:balance}
+p{margin:0 0 .7em;max-width:66ch}.mute{color:var(--mute)}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.pair{grid-template-columns:minmax(0,1fr)}}
+.frame{background:var(--stage);border:1px solid var(--line);position:relative;aspect-ratio:1/1;overflow:hidden}
+.frame img,.frame canvas{width:100%;height:100%;display:block;object-fit:cover}
+.cap{font:12px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--mute);padding:6px 0}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font:13px var(--mono)}
+button,input{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);padding:6px 12px;border-radius:3px}
+button{cursor:pointer}button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+input{width:84px}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media(max-width:760px){.strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+figure{margin:0}figure img{width:100%;display:block;background:var(--stage);border:1px solid var(--line)}
+figcaption{font:12px var(--mono);color:var(--mute);padding-top:4px}
+.step{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:20px;align-items:center;padding-block:14px;border-top:1px solid var(--line)}
+@media(max-width:760px){.step{grid-template-columns:minmax(0,1fr)}}
+.step img{width:100%;display:block;background:var(--stage);border:1px solid var(--line)}
+.tag{font:12px var(--mono);color:var(--acc);text-transform:uppercase;letter-spacing:.06em}
+table{border-collapse:collapse;font-size:13px;width:100%}td,th{border-top:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.scroll{overflow-x:auto}
+</style>
+<div class="wrap">
+<header><h1>Wall N</h1><p class="mute">One generator, one target: the tilted rock wedge in reference N, a ramp of stacked slabs on a dip slope. The free face is a dip slope: one plane, and a bedding set parallel to it. Each slab ends at its own line parallel to the crest, then the broad faces are hewn.</p></header>
+<section>
+<div class="pair">
+<div><div class="frame"><img id="ref" alt="Reference picture N: a wedge of grey rock slabs rising to the back right beside a 28 mm figure" src="__REF__"></div><div class="cap">Reference N</div></div>
+<div><div class="frame"><canvas id="live" aria-label="Generated wall, drag to orbit"></canvas></div><div class="cap">Generated, 35 mm tile, drag to orbit, wheel to zoom</div></div>
+</div>
+<div class="bar"><button id="match" class="pri">Match camera</button><button id="prv" aria-label="previous seed">&lt;</button><label for="seedv">seed</label><input id="seedv" type="number" min="1" value="1"><button id="nxt" aria-label="next seed">&gt;</button><span id="ms" class="mute"></span></div>
+</section>
+<section><h2>Four seeds</h2><p class="mute">Same recipe, four draws, the picture's camera.</p><div class="strip" id="strip"></div></section>
+<section id="steps"><h2>How it is made</h2>
+__STEPS__
+</section>
+<section><h2>What is still off</h2><p>The slabs now stack as shingles and the crest is a straight ramp, but they are thin and sparse next to N, where the same rock reads heavy with broad, chipped, bright faces. The back right tip is too tall and the right end face too narrow. There is no gravel, colour or weathering; the figure is a stand-in.</p></section>
+<section><h2>What carries to the other references</h2>__CARRY__</section>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>__GEN__</script>
+<script>__VIEW__</script>
