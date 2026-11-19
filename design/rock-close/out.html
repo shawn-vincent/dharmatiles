@@ -6,11 +6,11 @@
    picture drawn from the real build at the present settings. Neutrals are cool stone greys; one slate-blue accent marks what a
    step adds. Red and orange are never used on a model (they mean overhang in dharmatiles). */
 :root{
-  --bg:#eef0f2;--panel:#f8f9fa;--fg:#1c2129;--muted:#5a6472;--rule:#d0d6dd;--stage:#8c8c91;--accent:#3557c9;--accent-soft:#c9d3f2;
+  --bg:#eef0f2;--panel:#f8f9fa;--fg:#1c2129;--muted:#5a6472;--rule:#d0d6dd;--stage:#8c8c91;--accent:#3557c9;--accent-soft:#c9d3f2;--err:#b3261e;
   --text:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--head:"Space Grotesk","Inter",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;
   color-scheme:light}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111418;--panel:#181c22;--fg:#e4e8ed;--muted:#98a2af;--rule:#2c333d;--accent:#93a8ff;--accent-soft:#2c3866;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#111418;--panel:#181c22;--fg:#e4e8ed;--muted:#98a2af;--rule:#2c333d;--accent:#93a8ff;--accent-soft:#2c3866;color-scheme:dark}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111418;--panel:#181c22;--fg:#e4e8ed;--muted:#98a2af;--rule:#2c333d;--accent:#93a8ff;--accent-soft:#2c3866;--err:#ff8a80;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111418;--panel:#181c22;--fg:#e4e8ed;--muted:#98a2af;--rule:#2c333d;--accent:#93a8ff;--accent-soft:#2c3866;--err:#ff8a80;color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 var(--text);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
@@ -70,6 +70,9 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 .ramp{background:linear-gradient(90deg,#f2f4f6,#2f6f8f)}
 
 /* the flat diagrams, drawn on canvas from the build, in the page's colours */
+#p-ridge{height:300px}#p-slice{height:120px}#p-zoom{height:230px}
+.fault{grid-column:1/-1;margin:0;padding:6px 10px;border:1px solid var(--err);border-radius:3px;color:var(--err);font-size:13px}
+.box>img.shot{object-fit:fill;cursor:grab;user-select:none;-webkit-user-select:none}
 .plot{width:100%;max-width:100%;border:1px solid var(--rule);background:var(--panel);border-radius:3px;display:block}
 .plot.drag{cursor:ew-resize;touch-action:pan-y}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -99,7 +102,8 @@ html{scroll-behavior:smooth}
     </div>
     <label for="width">Dish width</label><input type="range" id="width" min="2" max="5" step="0.05"><output id="width-mm" for="width"></output>
     <label for="depth">Depth</label><input type="range" id="depth" min="0" max="1" step="0.01"><output id="depth-mm" for="depth"></output>
-    <p class="help">Drag a view to turn it; click it, then scroll, to zoom; double-click to put it back. Built in <span class="num" id="t-build">–</span>.</p>
+    <p class="fault" id="fault" role="alert" hidden></p>
+    <p class="help">Drag a view to turn it (on a phone, tap it first); click it, then scroll, to zoom; double-click to put it back. Built in <span class="num" id="t-build">–</span>.</p>
   </div>
 
   <ol class="steps" aria-label="The steps">
@@ -317,6 +321,16 @@ html{scroll-behavior:smooth}
      Every 3D view has its own scene and camera but they all draw through one WebGL renderer, off the page, copied into each view's
      own canvas: a page of a dozen views stays within the browser's few WebGL contexts. */
   const R = new T.WebGLRenderer({ antialias: true, alpha: true }), DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const LIVE = new T.WebGLRenderer({ antialias: true, alpha: true }); LIVE.setPixelRatio(DPR);
+  /* Something that goes wrong drawing is said on the page, where it can be read and sent, not only in the console */
+  function report(where, e) {
+    const p = document.getElementById('fault'); p.hidden = false;
+    p.textContent = 'Something went wrong drawing ' + where + ': ' + (e && e.message ? e.message : e) + '. Please send this line.';
+    console.error(e);
+  }
+  window.addEventListener('error', (e) => report('the page', e.error || e.message));
+  window.addEventListener('unhandledrejection', (e) => report('the page', e.reason));
+  const guard = (where, fn) => function () { try { return fn.apply(this, arguments); } catch (e) { report(where, e); } };
   /* the shape floats, with no ground and no shadows: a soft light all round, part of it from above, behind and to the right, and one
      lamp past the left end, low and a little in front, raking along the top and the near face */
   function lit(scene) {
@@ -612,27 +626,48 @@ html{scroll-behavior:smooth}
     const HOME = SHAPE.cam ? orbit(CAM.az, CAM.el, CAM.dist, CAM.target, CAM.fov) : orbit(CAM.az, CAM.el, CAM.dist * size, mid, CAM.fov);
     const NEAR = orbit(-20, 15, 130 * size, onFace(.38, .58), 8), LOW = orbit(-64, 9, 300 * size, mid, 8);
     const CLOSE = (() => { const t = onFace(.71, .28); return { pos: [t[0] + face1[0] * 21.4, t[1] + face1[1] * 21.4, t[2] + face1[2] * 21.4 + 4], target: t, fov: 12 }; })();
+    /* Each view is a still picture, drawn through the off-page renderer R. Only the view in use is live: hovering it with a mouse,
+       or tapping it, moves the one live 3D canvas (LIVE) into it, with its own controls; leaving it for another turns it back into
+       a picture of where you left it. So the page holds one live canvas and two WebGL contexts however many views it has. */
     const views = [];
+    let active = null, controls = null;
     function view(id, things, home, bright) {
-      const box = document.getElementById(id), canvas = document.createElement('canvas'); box.querySelectorAll('canvas').forEach(c => c.remove()); box.appendChild(canvas);
+      const box = document.getElementById(id), img = document.createElement('img'); box.querySelectorAll('canvas, img.shot').forEach(c => c.remove());
+      img.className = 'shot'; img.alt = ''; img.draggable = false; box.appendChild(img);
       const scene = lit(new T.Scene()); things.forEach(t => scene.add(t));
       if (bright) scene.add(new T.AmbientLight(0xffffff, bright));   /* coloured views: more even light, so the colours read */
       const cam = new T.PerspectiveCamera(home.fov, 1, 1, 3000); cam.up.set(0, 0, 1);
-      const controls = new T.OrbitControls(cam, canvas); controls.enablePan = false; controls.enableZoom = false;
-      const v = { box: box, canvas: canvas, ctx: canvas.getContext('2d'), scene: scene, cam: cam, controls: controls, dirty: true, seen: false };
-      const back = () => { cam.position.set(home.pos[0], home.pos[1], home.pos[2]); controls.target.set(home.target[0], home.target[1], home.target[2]); controls.update(); };
-      back(); controls.addEventListener('change', () => paint(v));
-      /* scrolling the page over a view scrolls the page; once a view is clicked, scrolling over it zooms it, until the pointer leaves */
-      canvas.addEventListener('pointerdown', () => { controls.enableZoom = true; });
-      canvas.addEventListener('pointerleave', () => { controls.enableZoom = false; });
-      canvas.addEventListener('dblclick', () => { back(); paint(v); });
+      const v = { box: box, img: img, scene: scene, cam: cam, home: home, target: new T.Vector3(), dirty: true, seen: false };
+      back(v, false);
+      box.onpointerenter = (e) => { if (e.pointerType === 'mouse') activate(v); };
+      box.onpointerdown = () => activate(v);
       views.push(v); return v;
     }
+    /* back to where the view started */
+    function back(v, draw) {
+      const h = v.home; v.cam.position.set(h.pos[0], h.pos[1], h.pos[2]); v.target.set(h.target[0], h.target[1], h.target[2]); v.cam.lookAt(v.target);
+      if (v === active) { controls.target.copy(v.target); controls.update(); }
+      if (draw) paint(v);
+    }
+    function activate(v) {
+      if (active === v) return;
+      if (active) { const was = active; active = null; controls.dispose(); controls = null; LIVE.domElement.remove(); paint(was); }
+      active = v; v.box.appendChild(LIVE.domElement);
+      controls = new T.OrbitControls(v.cam, LIVE.domElement); controls.enablePan = false; controls.enableZoom = false; controls.target.copy(v.target); controls.update();
+      controls.addEventListener('change', () => { v.target.copy(controls.target); paint(v); });
+      /* scrolling the page over a view scrolls the page; once a view is clicked, scrolling over it zooms it, until the pointer leaves */
+      LIVE.domElement.onpointerdown = () => { if (controls) controls.enableZoom = true; };
+      LIVE.domElement.onpointerleave = () => { if (controls) controls.enableZoom = false; };
+      LIVE.domElement.ondblclick = () => back(v, true);
+      paint(v);
+    }
+    /* a view drawn: the live one on the live canvas; the others through R, kept as a picture */
     function paint(v) {
-      const w = Math.round(v.box.clientWidth * DPR), h = Math.round(v.box.clientHeight * DPR); if (!w || !h) return;
-      if (v.canvas.width !== w || v.canvas.height !== h) { v.canvas.width = w; v.canvas.height = h; }
-      R.setSize(w, h, false); v.cam.aspect = w / h; v.cam.updateProjectionMatrix(); R.render(v.scene, v.cam);
-      v.ctx.clearRect(0, 0, w, h); v.ctx.drawImage(R.domElement, 0, 0); v.dirty = false;
+      const w = v.box.clientWidth, h = v.box.clientHeight; if (!w || !h) return;
+      v.cam.aspect = w / h; v.cam.updateProjectionMatrix(); v.cam.lookAt(v.target);
+      if (v === active) { LIVE.setSize(w, h, false); LIVE.render(v.scene, v.cam); }
+      else { R.setSize(Math.round(w * DPR), Math.round(h * DPR), false); R.render(v.scene, v.cam); v.img.src = R.domElement.toDataURL('image/jpeg', .9); }
+      v.dirty = false;
     }
     function repaint() { views.forEach(v => { v.dirty = true; if (v.seen) paint(v); }); }
 
@@ -673,7 +708,7 @@ html{scroll-behavior:smooth}
     view('v-depth', [new T.Mesh(geo, stone({ vertexColors: true }))], LOW);
     view('v-soft', [new T.Mesh(gSoft, stone({ vertexColors: true }))], CLOSE);
     view('v-hard', [new T.Mesh(geo, stone({ vertexColors: true }))], CLOSE);
-    const io = new IntersectionObserver(es => es.forEach(e => { const v = views.find(w => w.box === e.target); v.seen = e.isIntersecting; if (v.seen && v.dirty) paint(v); }), { rootMargin: '150px' });
+    const io = new IntersectionObserver(es => es.forEach(e => { const v = views.find(w => w.box === e.target); v.seen = e.isIntersecting; if (v.seen && v.dirty) guard('a 3D view', paint)(v); }), { rootMargin: '300px' });
     views.forEach(v => io.observe(v.box));
 
     /* each dish's colour: pale, spread round the cool half of the hues (no reds or oranges, which mean overhang on a model) */
@@ -723,7 +758,7 @@ html{scroll-behavior:smooth}
       gCrest.setDrawRange(0, c); gCrest.attributes.position.needsUpdate = true; gCrest.computeBoundingSphere();
       put('f-crest', fmt(c)); put('f-tris', fmt(geo.drawRange.count / 3));
       gSoft.computeVertexNormals();
-      drawRidge(); drawSlice();
+      guard('the ridge diagram', drawRidge)(); guard('the slice', drawSlice)();
     }
 
     /* ---- the flat diagrams ---- */
@@ -791,16 +826,17 @@ html{scroll-behavior:smooth}
       const t0 = performance.now();
       if (work & 2) { place(); shape(); }
       dig(); const ms = performance.now() - t0;
-      if (work & 2) showShape(); showDepth(); repaint();
+      if (work & 2) guard('the steps\' pictures', showShape)(); guard('the depth pictures', showDepth)(); guard('the 3D views', repaint)();
       return ms;
     }
     function dispose() {
       io.disconnect();
-      views.forEach(v => { v.controls.dispose(); v.canvas.remove(); v.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
+      if (controls) controls.dispose(); LIVE.domElement.remove(); active = null;
+      views.forEach(v => { v.box.onpointerenter = v.box.onpointerdown = null; v.img.remove(); v.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
       disc.dispose();
     }
-    return { rebuild: rebuild, dispose: dispose, redraw: () => { repaint(); drawRidge(); drawSlice(); }, diagrams: () => { drawRidge(); drawSlice(); },
-      nextRidge: () => { ridgeAt = (ridgeAt + 1) % Math.max(1, ridges.length); drawRidge(); }, slideTo: slideTo };
+    return { rebuild: rebuild, dispose: dispose, redraw: () => { guard('the 3D views', repaint)(); guard('the ridge diagram', drawRidge)(); guard('the slice', drawSlice)(); }, diagrams: () => { guard('the ridge diagram', drawRidge)(); guard('the slice', drawSlice)(); },
+      nextRidge: () => { ridgeAt = (ridgeAt + 1) % Math.max(1, ridges.length); guard('the ridge diagram', drawRidge)(); }, slideTo: guard('the slice', slideTo) };
   }
 
   /* ---- the settings ----
