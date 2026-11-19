@@ -73,7 +73,7 @@ P.append(prim('steps', 'Steps and ledges', 'primitive 3 of 9',
    ('risers / treads', '70–90° / 0–10° (family guide)'),
    ('this model', '', 'me')],
   img('t_step', 'Rock sheet, 2: Step (ledge)') + img('t_c', 'Rock sheet, 1C: Steps (terraces)'),
-  'Three risers of 3 mm, treads of 8.2 mm tilted back 3°.'))
+  'Three risers of about 3 mm; the flat treads, about 8 mm deep, tilt back 3°. Drawn at true height: the relief switch does not apply.', relief='no'))
 P.append(prim('chips', 'Chips and notches', 'primitive 4 of 9',
   'A chip is a removal: a flat floor, a steep wall, an outline made of straight runs. It is one plane cut into the surface, so it stays one piece. Chips sit on exposed edges and corners far more than on faces.',
   'chip', 'chip',

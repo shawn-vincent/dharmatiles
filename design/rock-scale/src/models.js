@@ -21,7 +21,7 @@
   PROFILES.facet = { w: 30, y: 15, fn: (x) => facetH(x, 15), vex: 10 };
 
   /* steps and ledges: a flight of treads tilted back 3 degrees, risers near 75 degrees, the lips not straight */
-  const STEP = { rise: 3, tread: 8.2, n: 3, x0: 5 };
+  const STEP = { rise: 3, tread: 9.8, n: 3, x0: 4 };
   const stepsH = (x, y) => {
     let h = 0; const xs = [], w = .55;
     for (let k = 0; k < STEP.n; k++) { const xb = STEP.x0 + k * STEP.tread + wob(y + k * 13, 1.1, 5, 11 + k); h += STEP.rise * sstep(xb - w, xb + w, x); xs.push(xb); }
@@ -279,6 +279,8 @@
   /* the mistakes, as models: even round pockets, and uniform noise */
   MODELS.dish_round = () => { const S = []; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) S.push({ x: 5.5 + i * 9.5, y: 5.5 + j * 9.5, r: 3.6, d: .8, ph: 0, el: 1 }); return E.hfPatch({ size: 30, N: 150, h: (x, y) => { let cut = 0; for (const p of S) { const rr = hyp(x - p.x, y - p.y) / p.r; if (rr < 1) cut = max(cut, p.d * (1 - rr * rr)); } return -cut + grain(x, y, .03, 3); } }); };
   MODELS.uniform = () => E.hfPatch({ size: 30, N: 170, h: (x, y) => .55 * fbm(x * .9, y * .9, 5, 3) + grain(x, y, .12, 9), aoR: 1.6 });
-  ['edges', 'chipped', 'shingle', 'courses', 'skin'].forEach(k => { MODELS[k].noRelief = true; });
+  /* a ledge's proportion is the point of steps, so it is drawn at true height, like the blocks, seen nearly along the lips */
+  MODELS.steps.cam = { az: -12, el: 24, dist: 1.0 };
+  ['steps', 'edges', 'chipped', 'shingle', 'courses', 'skin'].forEach(k => { MODELS[k].noRelief = true; });
   G.MODELS = MODELS; G.PROFILES = PROFILES;
 })(window);
