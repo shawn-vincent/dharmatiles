@@ -37,10 +37,11 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   /* The surface: every face broken into shallow dishes between crisp ridges, as the reference has them. All in mm at true size. */
   const FEEL = {
     seed: 7,
-    cell: [1.2, 5.5],     /* a dish's half-width, smallest and largest: neighbouring dishes' centres are the sum of theirs apart */
+    cell: [2, 4],         /* a dish's half-width, smallest and largest: neighbouring dishes' centres are the sum of theirs apart */
     squash: 1.4,          /* dishes on the sides are this much wider than tall (the picture's are long and low, like courses) */
-    edge: 2.5,            /* a dish is this much more reluctant to reach round onto another face, so the block's edges stay ridges */
-    stretch: 3,           /* each dish is drawn out along a direction of its own by up to this much, so the cells are uneven */
+    edge: .5,             /* a dish is this much more reluctant to reach round onto another face (0: not at all; more keeps the edges whole) */
+    stretch: 3,           /* each dish is drawn out along the grain by up to this much (at least 60% of it), so the cells are long and thin */
+    grain: 20,            /* a dish's long way is along the block's length (on the ends, across them), turned by up to this many degrees */
     turns: { every: [.6, 1.8], most: 40 },   /* a ridge turns every so many mm, by up to so many degrees */
     round: .5,            /* the block's edges and corners are rounded this much */
     depthPerWidth: 1 / 10,  deepest: 1.9,    /* a dish is as deep as its width times this, never deeper than that */
@@ -108,8 +109,8 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   const md = (x, y, z, c) => Math.hypot(x - c.x, y - c.y, (z - c.z) * FEEL.squash);
   /* Dish centres are thrown at random over every face but the bottom, each with its own half-width (r), kept only where they clear
      the ones before them. The largest a throw may draw shrinks from the biggest to the smallest as the throws go on, so the big
-     dishes are placed first and the small ones fill the gaps between them. Each has a direction of its own across the surface (a)
-     and a share of the stretch (pull). */
+     dishes are placed first and the small ones fill the gaps between them. Each has a long way across the surface (a), the block's
+     grain give or take FEEL.grain, and a share of the stretch (pull). */
   const TRIES = 6000, dishes = (() => {
     const rnd = stream(FEEL.seed), total = AREA[0] + AREA[1] + AREA[2] + AREA[3] + AREA[4], C = [], q = [0, 0, 0], n = [0, 0, 0], [lo, hi] = FEEL.cell;
     for (let tries = 0; tries < TRIES; tries++) {
@@ -117,8 +118,9 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
       const most = hi - (hi - lo) * (tries / TRIES) ** 2, p = at(FACES[f], rnd(), rnd()), r = lo + rnd() * (most - lo), c = { x: p[0], y: p[1], z: p[2], r: r };
       if (C.every(d => md(c.x, c.y, c.z, d) >= r + d.r)) { c.spin = rnd(); c.pull = rnd(); C.push(c); }
     }
-    C.forEach(c => { inner(c.x, c.y, c.z, q, n); const e1 = cross(n, Math.abs(n[2]) < .9 ? [0, 0, 1] : [1, 0, 0]), l1 = len(e1), u = e1.map(v => v / l1), w = cross(n, u), t = c.spin * Math.PI;
-      c.a = [0, 1, 2].map(i => u[i] * Math.cos(t) + w[i] * Math.sin(t)); c.n = n.slice(); });
+    C.forEach(c => { inner(c.x, c.y, c.z, q, n); const g = Math.abs(n[0]) > .7 ? [0, 1, 0] : [1, 0, 0], gn = g[0] * n[0] + g[1] * n[1] + g[2] * n[2];
+      const e1 = [g[0] - gn * n[0], g[1] - gn * n[1], g[2] - gn * n[2]], l1 = len(e1), u = e1.map(v => v / l1), w = cross(n, u), t = (2 * c.spin - 1) * FEEL.grain * Math.PI / 180;
+      c.a = [0, 1, 2].map(i => u[i] * Math.cos(t) + w[i] * Math.sin(t)); c.n = n.slice(); c.pull = .6 + .4 * c.pull; });
     return C;
   })();
   /* each point's K nearest dishes, by distance less half-width (the stretch and the edges only reorder these) */
