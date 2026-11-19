@@ -1,4 +1,4 @@
-<title>Rock Up Close</title>
+<title>Flakes Up Close</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
 /* Layout: a bench for one stone. The reference and the live block open the page as two squares; a control bar for the two
@@ -87,12 +87,12 @@ html{scroll-behavior:smooth}
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Space+Grotesk:wght@600&display=swap">
 <main>
   <div class="intro">
-    <h1>Rock Up Close</h1>
-    <p class="lede">A stone block whose faces are scooped into shallow dishes between crisp ridges, built from nothing in this page in nine steps. Every picture below is the real build at the two settings in the bar: change them and every step redraws.</p>
+    <h1>Flakes Up Close</h1>
+    <p class="lede"><b>Flakes</b>: a stone surface where chunks have flaked off, leaving shallow scars between crisp ridges. Each scar is one flake. Here it is laid on a plain shape, built from nothing in this page in nine steps. Every picture below is the real build at the two settings in the bar: change them and every step redraws.</p>
   </div>
   <div class="hero">
     <figure><div class="box"><img src="img/block-ref.jpg" alt="The reference: a smooth pale stone block, about twice as long as it is wide, its faces broken into broad scalloped facets with crisp ridges between them"></div><figcaption>The reference.</figcaption></figure>
-    <figure><div class="box" id="v-hero" role="img" aria-label="The built block, seen from the reference's camera: every face broken into shallow dishes between crisp ridges"></div><figcaption id="cap-hero">The reference block as built, from the reference's camera.</figcaption></figure>
+    <figure><div class="box" id="v-hero" role="img" aria-label="The built block, seen from the reference's camera: every face broken into shallow flake scars between crisp ridges"></div><figcaption id="cap-hero">The reference block as built, from the reference's camera.</figcaption></figure>
   </div>
 
   <div class="bar" role="group" aria-label="Texture settings">
@@ -100,14 +100,14 @@ html{scroll-behavior:smooth}
     <div class="shapes" role="radiogroup" aria-labelledby="shape-label">
       <label><input type="radio" name="shape" value="reference" checked>Reference</label><label><input type="radio" name="shape" value="cube">Cube</label><label><input type="radio" name="shape" value="sphere">Sphere</label><label><input type="radio" name="shape" value="pyramid">Pyramid</label>
     </div>
-    <label for="width">Dish width</label><input type="range" id="width" min="2" max="5" step="0.05"><output id="width-mm" for="width"></output>
+    <label for="width">Flake width</label><input type="range" id="width" min="2" max="5" step="0.05"><output id="width-mm" for="width"></output>
     <label for="depth">Depth</label><input type="range" id="depth" min="0" max="1" step="0.01"><output id="depth-mm" for="depth"></output>
     <p class="fault" id="fault" role="alert" hidden></p>
     <p class="help">Drag a view to turn it (on a phone, tap it first); click it, then scroll, to zoom; double-click to put it back. Built in <span class="num" id="t-build">–</span>.</p>
   </div>
 
   <ol class="steps" aria-label="The steps">
-    <li><a href="#s1"><span>1</span>Shape</a></li><li><a href="#s2"><span>2</span>Dishes</a></li><li><a href="#s3"><span>3</span>Ridges</a></li>
+    <li><a href="#s1"><span>1</span>Shape</a></li><li><a href="#s2"><span>2</span>Flakes</a></li><li><a href="#s3"><span>3</span>Ridges</a></li>
     <li><a href="#s4"><span>4</span>Two grids</a></li><li><a href="#s5"><span>5</span>Stray pieces</a></li><li><a href="#s6"><span>6</span>Crest points</a></li>
     <li><a href="#s7"><span>7</span>Relaxation</a></li><li><a href="#s8"><span>8</span>Depth</a></li><li><a href="#s9"><span>9</span>Hard crests</a></li>
   </ol>
@@ -123,24 +123,24 @@ html{scroll-behavior:smooth}
 
   <section class="step" id="s2" aria-labelledby="h2s">
     <div class="words">
-      <div class="n">Step 2</div><h2 id="h2s">Dishes</h2>
-      <p>Dish centres are thrown at random over the faces, each kept only where it clears the ones before. The largest size allowed shrinks as the throws go on, so big dishes land first and small ones fill the gaps between them. The bottom gets a throw of its own.</p>
-      <p>Each dish is stretched along a <b>grain</b>: the block's length (across it on the ends), turned by up to 20°. Its long axis is 1.8 to 3 times its short one, and heights count 1.4 times, so dishes on the sides lie long and low, like courses of stone.</p>
-      <dl class="facts"><dt>dishes</dt><dd id="f-dishes">–</dd><dt>half-widths</dt><dd id="f-half">–</dd><dt>average width</dt><dd id="f-width">–</dd></dl>
+      <div class="n">Step 2</div><h2 id="h2s">Flakes</h2>
+      <p>Flake centres are thrown at random over the faces, each kept only where it clears the ones before. The largest size allowed shrinks as the throws go on, so big flakes land first and small ones fill the gaps between them. The bottom gets a throw of its own.</p>
+      <p>Each flake is stretched along a <b>grain</b>: the block's length (across it on the ends), turned by up to 20°. Its long axis is 1.8 to 3 times its short one, and heights count 1.4 times, so flakes on the sides lie long and low, like courses of stone.</p>
+      <dl class="facts"><dt>flakes</dt><dd id="f-flakes">–</dd><dt>half-widths</dt><dd id="f-half">–</dd><dt>average width</dt><dd id="f-width">–</dd></dl>
     </div>
-    <div class="views"><figure><div class="box wide" id="v-dishes" role="img" aria-label="The block with each dish's reach painted in its own colour, long along the grain, and a dot at each centre"></div>
-      <figcaption>Each dish's centre, and how far it would reach on its own: long along the grain, short across. Where two overlap, the nearer wins for now; the ridges settle it. The colours carry through the next steps.</figcaption></figure></div>
+    <div class="views"><figure><div class="box wide" id="v-flakes" role="img" aria-label="The block with each flake's reach painted in its own colour, long along the grain, and a dot at each centre"></div>
+      <figcaption>Each flake's centre, and how far it would reach on its own: long along the grain, short across. Where two overlap, the nearer wins for now; the ridges settle it. The colours carry through the next steps.</figcaption></figure></div>
   </section>
 
   <section class="step" id="s3" aria-labelledby="h3s">
     <div class="words">
       <div class="n">Step 3</div><h2 id="h3s">Ridges</h2>
-      <p>Between two dishes, the <b>even line</b> is where a point is equally far into each (counting the stretch). A straight even line would give convex cells, which stone doesn't have.</p>
+      <p>Between two flakes, the <b>even line</b> is where a point is equally far into each (counting the stretch). A straight even line would give convex cells, which stone doesn't have.</p>
       <p>So the ridge is a <b>walk</b> along the even line, out from its middle both ways: a straight run of 0.6 to 1.8 mm, then a turn of up to 40°, steering back toward the even line six times in ten. It zigzags without wandering off.</p>
-      <p>The diagram is one real ridge of this block, at true scale: everything above the walk belongs to one dish, everything below to the other.</p>
+      <p>The diagram is one real ridge of this block, at true scale: everything above the walk belongs to one flake, everything below to the other.</p>
     </div>
     <div class="views">
-      <canvas class="plot" id="p-ridge" height="300" role="img" aria-label="One ridge drawn flat: a dashed even line, the zigzag walk across it, and the two dishes' colours above and below the walk"></canvas>
+      <canvas class="plot" id="p-ridge" height="300" role="img" aria-label="One ridge drawn flat: a dashed even line, the zigzag walk across it, and the two flakes' colours above and below the walk"></canvas>
       <div class="row"><button type="button" id="next-ridge">Another ridge</button><span class="key" id="ridge-key"></span></div>
     </div>
   </section>
@@ -148,23 +148,23 @@ html{scroll-behavior:smooth}
   <section class="step" id="s4" aria-labelledby="h4s">
     <div class="words">
       <div class="n">Step 4</div><h2 id="h4s">Two grids</h2>
-      <p>Two grids cover the six faces, joined into one closed mesh: a coarse one at 0.42 mm and a fine one at 0.12 mm. Each point belongs to the dish that wins against each other in turn among its five nearest: whichever side of their ridge it lies on.</p>
-      <p>The coarse grid decides first. A fine point whose four coarse neighbours all agree takes their dish without a test, so only the points near ridges are worked out at the fine scale.</p>
+      <p>Two grids cover the six faces, joined into one closed mesh: a coarse one at 0.42 mm and a fine one at 0.12 mm. Each point belongs to the flake that wins against each other in turn among its five nearest: whichever side of their ridge it lies on.</p>
+      <p>The coarse grid decides first. A fine point whose four coarse neighbours all agree takes their flake without a test, so only the points near ridges are worked out at the fine scale.</p>
       <dl class="facts"><dt>coarse points</dt><dd id="f-coarse">–</dd><dt>fine points</dt><dd id="f-fine">–</dd><dt>fine points tested</dt><dd id="f-tested">–</dd></dl>
     </div>
     <div class="views two">
-      <figure><div class="box" id="v-coarse" role="img" aria-label="The block coloured by dish on the coarse grid: blurry cell borders"></div><figcaption>Coarse grid, 0.42 mm.</figcaption></figure>
-      <figure><div class="box" id="v-fine" role="img" aria-label="The block coloured by dish on the fine grid: crisp, zigzag cell borders"></div><figcaption>Fine grid, 0.12 mm.</figcaption></figure>
+      <figure><div class="box" id="v-coarse" role="img" aria-label="The block coloured by flake on the coarse grid: blurry cell borders"></div><figcaption>Coarse grid, 0.42 mm.</figcaption></figure>
+      <figure><div class="box" id="v-fine" role="img" aria-label="The block coloured by flake on the fine grid: crisp, zigzag cell borders"></div><figcaption>Fine grid, 0.12 mm.</figcaption></figure>
     </div>
   </section>
 
   <section class="step" id="s5" aria-labelledby="h5s">
     <div class="words">
       <div class="n">Step 5</div><h2 id="h5s">Stray pieces</h2>
-      <p>A ridge's walk can cut a dish in two. A piece smaller than 2 mm², or thinner than 0.6 mm, would become a pit or a trench, so it joins the dish it borders most. Any other piece becomes a hollow of its own.</p>
+      <p>A ridge's walk can cut a flake in two. A piece smaller than 2 mm², or thinner than 0.6 mm, would become a pit or a trench, so it joins the flake it borders most. Any other piece becomes a hollow of its own.</p>
       <dl class="facts"><dt>pieces joined</dt><dd id="f-joined">–</dd><dt>area joined</dt><dd id="f-joined-area">–</dd></dl>
     </div>
-    <div class="views"><figure><div class="box wide" id="v-stray" role="img" aria-label="The block in pale dish colours with the stray pieces that joined a neighbour in the accent colour"></div>
+    <div class="views"><figure><div class="box wide" id="v-stray" role="img" aria-label="The block in pale flake colours with the stray pieces that joined a neighbour in the accent colour"></div>
       <figcaption><span class="key"><span><i class="sw-accent"></i>pieces that joined a neighbour</span></span></figcaption></figure></div>
   </section>
 
@@ -182,23 +182,23 @@ html{scroll-behavior:smooth}
   <section class="step" id="s7" aria-labelledby="h7s">
     <div class="words">
       <div class="n">Step 7</div><h2 id="h7s">Relaxation</h2>
-      <p>With the crest points pinned, two things relax over the grid, each point pulled toward the mean of its neighbours. A <b>taut skin</b> follows the block, but where a dish runs over an edge it pulls straight across, cutting a flat facet. A <b>membrane</b>, pinned at zero on the crests and sagging evenly, gives each dish one smooth hollow.</p>
+      <p>With the crest points pinned, two things relax over the grid, each point pulled toward the mean of its neighbours. A <b>taut skin</b> follows the block, but where a flake runs over an edge it pulls straight across, cutting a flat facet. A <b>membrane</b>, pinned at zero on the crests and sagging evenly, gives each flake one smooth hollow.</p>
       <p>The coarse grid takes 120 passes; the fine grid starts from its answer and takes 15.</p>
     </div>
-    <div class="views"><figure><div class="box wide" id="v-sag" role="img" aria-label="The taut skin coloured by how far each dish's membrane sags: pale at the crests, deep blue-green at the bottom of each dish"></div>
-      <figcaption><span class="key"><span><i class="ramp" style="width:60px"></i>membrane sag, crest to each dish's deepest</span></span></figcaption></figure></div>
+    <div class="views"><figure><div class="box wide" id="v-sag" role="img" aria-label="The taut skin coloured by how far each flake's membrane sags: pale at the crests, deep blue-green at the bottom of each flake"></div>
+      <figcaption><span class="key"><span><i class="ramp" style="width:60px"></i>membrane sag, crest to each flake's deepest</span></span></figcaption></figure></div>
   </section>
 
   <section class="step" id="s8" aria-labelledby="h8s">
     <div class="words">
       <div class="n">Step 8</div><h2 id="h8s">Depth</h2>
-      <p>Each piece's deepest sag tells its width, so wide dishes go deeper: a tenth of their width, never more than 1.9 mm (at the default depth; the depth setting scales it). Each point goes down by that full depth times its sag over the deepest, raised to 0.85, which steepens the walls just under the crest.</p>
+      <p>Each piece's deepest sag tells its width, so wide flakes go deeper: a tenth of their width, never more than 1.9 mm (at the default depth; the depth setting scales it). Each point goes down by that full depth times its sag over the deepest, raised to 0.85, which steepens the walls just under the crest.</p>
       <p>The slice below runs along the middle of the near face, end to end, at true scale. Drag the window along it to see that stretch up close, still at true scale.</p>
     </div>
     <div class="views">
       <figure><div class="box wide" id="v-depth" role="img" aria-label="The finished block from a low angle, light raking across the top"></div><figcaption>The finished shape, from low past its left end, the light raking along it.</figcaption></figure>
       <canvas class="plot drag" id="p-slice" height="120" role="img" aria-label="The middle of the near face, end to end, at true scale: the plain block's line and the textured surface dipping below it, with a window marking the stretch shown below"></canvas>
-      <canvas class="plot" id="p-zoom" height="230" role="img" aria-label="Six millimetres of the near face's middle, at true scale: the plain line and the dishes under it"></canvas>
+      <canvas class="plot" id="p-zoom" height="230" role="img" aria-label="Six millimetres of the near face's middle, at true scale: the plain line and the flakes under it"></canvas>
       <div class="key"><span><i style="background:var(--muted)"></i>plain block</span><span><i class="sw-accent"></i>textured surface</span><span id="zoom-label"></span></div>
     </div>
   </section>
@@ -207,12 +207,12 @@ html{scroll-behavior:smooth}
     <div class="words">
       <div class="n">Step 9</div><h2 id="h9s">Hard crests</h2>
       <p>A point shared by two triangles gets one normal, the average of theirs. On a crest that averages the two walls, and the crest shades soft and rounded.</p>
-      <p>So each crest point is split into one copy per dish beside it. The walls meet at the same place but shade apart, and the crest reads as a sharp edge.</p>
-      <p>For viewing only, each dish is drawn a little darker toward its bottom and a little brighter at its crests.</p>
+      <p>So each crest point is split into one copy per flake beside it. The walls meet at the same place but shade apart, and the crest reads as a sharp edge.</p>
+      <p>For viewing only, each flake is drawn a little darker toward its bottom and a little brighter at its crests.</p>
     </div>
     <div class="views two">
       <figure><div class="box" id="v-soft" role="img" aria-label="A close view where crest points are shared: the crests look soft"></div><figcaption>Crest points shared.</figcaption></figure>
-      <figure><div class="box" id="v-hard" role="img" aria-label="The same close view with crest points split: the crests are sharp"></div><figcaption>Crest points split per dish.</figcaption></figure>
+      <figure><div class="box" id="v-hard" role="img" aria-label="The same close view with crest points split: the crests are sharp"></div><figcaption>Crest points split per flake.</figcaption></figure>
     </div>
   </section>
 </main>
@@ -225,26 +225,26 @@ html{scroll-behavior:smooth}
   /* The reference camera was fitted to the reference picture, with the reference block (below): the block's outline against the
      rock's, and its top corners against the rock's (the picture letterboxed in a square, as it is shown). */
   const CAM = { az: -33.75, el: 22.87, dist: 304.8, fov: 8, target: [-4.3, -6.66, 10.53] };
-  /* The surface: every face broken into shallow dishes between crisp ridges, as the reference has them. All in mm at true size. */
-  /* The two controls, in mm: the width of an average dish (the short way across) and the depth of a typical one. Every other
+  /* The surface: every face broken into shallow flake scars between crisp ridges, as the reference has them. All in mm at true size. */
+  /* The two controls, in mm: the width of an average flake (the short way across) and the depth of a typical one. Every other
      setting below was made at width W0 and depth D0 and keeps its look at any other: sizes along the surface scale with the
      width, depths with the depth. At depth 0 the block is left exactly as it is. */
   const W0 = 5.4, D0 = .45;
   const FEEL = {
     width: 5, depth: D0,   /* the controls run to 5 and 1 mm */
     seed: 7,
-    cell: [2, 4],         /* a dish's half-width, smallest and largest (at width W0): neighbouring dishes' centres are the sum of theirs apart */
-    squash: 1.4,          /* dishes on the sides are this much wider than tall (the picture's are long and low, like courses) */
-    edge: .5,             /* a dish is this much more reluctant to reach round onto another face (0: not at all; more keeps the edges whole) */
-    stretch: 3,           /* each dish is drawn out along the grain by up to this much (at least 60% of it), so the cells are long and thin */
-    grain: 20,            /* a dish's long way is along the block's length (on the ends, across them), turned by up to this many degrees */
+    cell: [2, 4],         /* a flake's half-width, smallest and largest (at width W0): neighbouring flakes' centres are the sum of theirs apart */
+    squash: 1.4,          /* flakes on the sides are this much wider than tall (the picture's are long and low, like courses) */
+    edge: .5,             /* a flake is this much more reluctant to reach round onto another face (0: not at all; more keeps the edges whole) */
+    stretch: 3,           /* each flake is drawn out along the grain by up to this much (at least 60% of it), so the cells are long and thin */
+    grain: 20,            /* a flake's long way is along the block's length (on the ends, across them), turned by up to this many degrees */
     turns: { every: [.6, 1.8], most: 40 },   /* a ridge turns every so many mm, by up to so many degrees */
-    depthPerWidth: 1 / 10,  deepest: 1.9,    /* a dish is as deep as its width times this, never deeper than that */
+    depthPerWidth: 1 / 10,  deepest: 1.9,    /* a flake is as deep as its width times this, never deeper than that */
     fine: .12,            /* the surface's grid step, where the crests are drawn */
-    hollow: .14,          /* a dish's bottom is this much darker than its crests */
-    tip: .08,             /* and its crests this much brighter, fading out within the outer part of the dish */
-    sharp: .15,           /* 0: a dish curves as the sag does; more steepens its walls just below the crest */
-    speck: 2, sliver: .6, /* a stray piece of a dish smaller than this many mm², or thinner than this many mm, joins its neighbour */
+    hollow: .14,          /* a flake's bottom is this much darker than its crests */
+    tip: .08,             /* and its crests this much brighter, fading out within the outer part of the flake */
+    sharp: .15,           /* 0: a flake curves as the sag does; more steepens its walls just below the crest */
+    speck: 2, sliver: .6, /* a stray piece of a flake smaller than this many mm², or thinner than this many mm, joins its neighbour */
     coarse: .42,          /* the grid step of a first, rough solve, which the fine grid then finishes */
     sweeps: { coarse: 120, fine: 15 }   /* passes of the relaxation on each grid */
   };
@@ -314,7 +314,7 @@ html{scroll-behavior:smooth}
     pyramid: Object.assign(flat([[-14, -14, 0], [-14, 14, 0], [-1.5, 1.5, 20], [-1.5, -1.5, 20]], [[14, -14, 0], [14, 14, 0], [1.5, 1.5, 20], [1.5, -1.5, 20]], .5), { name: 'pyramid',
       words: 'The texture is laid on a plain shape. The pyramid stands on a 28 mm square and rises 20 mm to a 3 mm top (its grid needs a face there), with every edge and corner rounded 0.5 mm.' })
   };
-  /* a seeded stream (mulberry32): one for the dishes, one of its own for each ridge */
+  /* a seeded stream (mulberry32): one for the flakes, one of its own for each ridge */
   const stream = (k) => { let a = k >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 
   /* ---- the pictures' renderer ----
@@ -385,14 +385,14 @@ html{scroll-behavior:smooth}
         from[k] = C.g[j0 * CW + i0]; from[k + 1] = C.g[j0 * CW + i0 + 1]; from[k + 2] = C.g[(j0 + 1) * CW + i0]; from[k + 3] = C.g[(j0 + 1) * CW + i0 + 1];
         weight[k] = (1 - u) * (1 - v); weight[k + 1] = u * (1 - v); weight[k + 2] = (1 - u) * v; weight[k + 3] = u * v;
       } });
-    /* distance as the dishes see it: height counts squash times, so a dish on a side is wider than tall */
+    /* distance as the flakes see it: height counts squash times, so a flake on a side is wider than tall */
     const md = (x, y, z, c) => Math.hypot(x - c.x, y - c.y, (z - c.z) * FEEL.squash);
-    /* Dish centres are thrown at random over the five upper faces, and then, in a throw of their own, over the bottom; each with its own half-width (r), kept only where they clear
+    /* Flake centres are thrown at random over the five upper faces, and then, in a throw of their own, over the bottom; each with its own half-width (r), kept only where they clear
        the ones before them. The largest a throw may draw shrinks from the biggest to the smallest as the throws go on, so the big
-       dishes are placed first and the small ones fill the gaps between them. Each has a long way across the surface (a), the block's
+       flakes are placed first and the small ones fill the gaps between them. Each has a long way across the surface (a), the block's
        grain give or take FEEL.grain, and a share of the stretch (pull). */
     const TRIES = 6000;
-    let dishes = [];
+    let flakes = [];
     function toss() {
       const C = [], q = [0, 0, 0], n = [0, 0, 0], lo = FEEL.cell[0] * along(), hi = FEEL.cell[1] * along();
       const throwOn = (rnd, faces) => { const total = faces.reduce((s, f) => s + AREA[f], 0);
@@ -407,7 +407,7 @@ html{scroll-behavior:smooth}
         c.a = [0, 1, 2].map(i => u[i] * Math.cos(t) + w[i] * Math.sin(t)); c.n = n.slice(); c.pull = .6 + .4 * c.pull; });
       return C;
     }
-    /* A point's nearest dishes, by distance less half-width (the stretch and the edges only reorder these): the K its dish is chosen
+    /* A point's nearest flakes, by distance less half-width (the stretch and the edges only reorder these): the K its flake is chosen
        among (partition). A coarse point keeps its KC nearest of them all; a fine point looks only among its four coarse points'
        (they are within a coarse step of it, so its nearest are among theirs). near(G, k, id) puts point k's K nearest in id. */
     const K = 5, KC = 8, best = new Float64Array(KC), coarseNear = new Uint16Array(coarse.N * KC), all = (m) => m;
@@ -415,22 +415,22 @@ html{scroll-behavior:smooth}
     function rank(x, y, z, n, pick, keep, id) {
       best.fill(Infinity); stamp++;
       for (let m = 0; m < n; m++) { const i = pick(m); if (seen[i] === stamp) continue; seen[i] = stamp;
-        const v = md(x, y, z, dishes[i]) - dishes[i].r; if (v >= best[keep - 1]) continue;
+        const v = md(x, y, z, flakes[i]) - flakes[i].r; if (v >= best[keep - 1]) continue;
         let s = keep - 1; while (s > 0 && best[s - 1] > v) { best[s] = best[s - 1]; id[s] = id[s - 1]; s--; } best[s] = v; id[s] = i; }
     }
-    /* the dishes at the present width, each coarse point's nearest of them, and no ridge walked yet */
+    /* the flakes at the present width, each coarse point's nearest of them, and no ridge walked yet */
     function place() {
-      dishes = toss(); seen = new Int32Array(dishes.length).fill(-1); walks.clear(); dt = DT * along();
-      const id = new Int32Array(KC), b = coarse.box; for (let k = 0; k < coarse.N; k++) { rank(b[3 * k], b[3 * k + 1], b[3 * k + 2], dishes.length, all, KC, id); coarseNear.set(id, k * KC); }
+      flakes = toss(); seen = new Int32Array(flakes.length).fill(-1); walks.clear(); dt = DT * along();
+      const id = new Int32Array(KC), b = coarse.box; for (let k = 0; k < coarse.N; k++) { rank(b[3 * k], b[3 * k + 1], b[3 * k + 2], flakes.length, all, KC, id); coarseNear.set(id, k * KC); }
     }
     function near(G, k, id) {
       if (G === coarse) { for (let s = 0; s < K; s++) id[s] = coarseNear[k * KC + s]; return; }
       rank(G.box[3 * k], G.box[3 * k + 1], G.box[3 * k + 2], 4 * KC, (m) => coarseNear[from[4 * k + (m / KC | 0)] * KC + m % KC], K, id);
     }
 
-    /* The ridge between two dishes is a walk along the even line between them, from its middle outward both ways: straight runs
+    /* The ridge between two flakes is a walk along the even line between them, from its middle outward both ways: straight runs
        between turns (FEEL.turns), each turn mostly steering back toward the even line, so a ridge zigzags without wandering off.
-       Kept as its offset toward the lower-numbered dish, every dt mm along the line (DT at width W0). */
+       Kept as its offset toward the lower-numbered flake, every dt mm along the line (DT at width W0). */
     let dt = 0;
     const SPAN = 24, DT = .05, NS = Math.round(2 * SPAN / DT) + 1, MID = (NS - 1) / 2, DEG = Math.PI / 180, STEEP = 70 * DEG;
     const walks = new Map();
@@ -447,44 +447,44 @@ html{scroll-behavior:smooth}
         } }
       walks.set(key, w); return w;
     }
-    /* how far a point is outside dish i, in mm (negative inside it): its distance less the dish's half-width; along the dish's direction distance counts less, by its stretch; and
-       where the block's way out at the point (nx, ny, nz) turns away from the dish's own, more, by FEEL.edge */
+    /* how far a point is outside flake i, in mm (negative inside it): its distance less the flake's half-width; along the flake's direction distance counts less, by its stretch; and
+       where the block's way out at the point (nx, ny, nz) turns away from the flake's own, more, by FEEL.edge */
     function reach(x, y, z, i, nx, ny, nz) {
-      const c = dishes[i], turn = 1 + FEEL.edge * (1 - nx * c.n[0] - ny * c.n[1] - nz * c.n[2]), dx = x - c.x, dy = y - c.y, dz = (z - c.z) * FEEL.squash, al = dx * c.a[0] + dy * c.a[1] + dz * c.a[2], long = 1 + (FEEL.stretch - 1) * c.pull;
+      const c = flakes[i], turn = 1 + FEEL.edge * (1 - nx * c.n[0] - ny * c.n[1] - nz * c.n[2]), dx = x - c.x, dy = y - c.y, dz = (z - c.z) * FEEL.squash, al = dx * c.a[0] + dy * c.a[1] + dz * c.a[2], long = 1 + (FEEL.stretch - 1) * c.pull;
       return Math.sqrt(Math.max(0, dx * dx + dy * dy + dz * dz - al * al) + (al / long) * (al / long)) * turn - c.r;
     }
-    /* how far, in mm, a point lies on dish i's side of its ridge with dish j (negative: on j's side). vi, vj: the point's reach to
+    /* how far, in mm, a point lies on flake i's side of its ridge with flake j (negative: on j's side). vi, vj: the point's reach to
        each; n: the block's way out at the point, which with the line between the two centres gives the direction along the ridge */
     function margin(x, y, z, nx, ny, nz, i, j, vi, vj) {
-      const lo = i < j, a = lo ? i : j, b = lo ? j : i, P = dishes[a], Q = dishes[b];
+      const lo = i < j, a = lo ? i : j, b = lo ? j : i, P = flakes[a], Q = flakes[b];
       const toA = ((lo ? vj : vi) - (lo ? vi : vj)) / 2, ex = Q.x - P.x, ey = Q.y - P.y, ez = Q.z - P.z;
       const ux = ny * ez - nz * ey, uy = nz * ex - nx * ez, uz = nx * ey - ny * ex, ul = Math.hypot(ux, uy, uz) || 1;
       const t = ((x - (P.x + Q.x) / 2) * ux + (y - (P.y + Q.y) / 2) * uy + (z - (P.z + Q.z) / 2) * uz) / ul;
       const f = Math.max(0, Math.min(NS - 1.001, MID + t / dt)), s = f | 0, w = walk(a, b), m = toA - (w[s] + (w[s + 1] - w[s]) * (f - s));
       return lo ? m : -m;
     }
-    /* how far along the ridge between dishes a < b fine point k lies, from the ridge's middle (as margin reads its walk) */
+    /* how far along the ridge between flakes a < b fine point k lies, from the ridge's middle (as margin reads its walk) */
     function alongRidge(k, a, b) {
-      const P = dishes[a], Q = dishes[b], nx = fine.out[3 * k], ny = fine.out[3 * k + 1], nz = fine.out[3 * k + 2], ex = Q.x - P.x, ey = Q.y - P.y, ez = Q.z - P.z;
+      const P = flakes[a], Q = flakes[b], nx = fine.out[3 * k], ny = fine.out[3 * k + 1], nz = fine.out[3 * k + 2], ex = Q.x - P.x, ey = Q.y - P.y, ez = Q.z - P.z;
       const ux = ny * ez - nz * ey, uy = nz * ex - nx * ez, uz = nx * ey - ny * ex, ul = Math.hypot(ux, uy, uz) || 1;
       return ((fine.box[3 * k] - (P.x + Q.x) / 2) * ux + (fine.box[3 * k + 1] - (P.y + Q.y) / 2) * uy + (fine.box[3 * k + 2] - (P.z + Q.z) / 2) * uz) / ul;
     }
-    /* Each point of a grid: its dish, of its K nearest the one that beats each other in turn, nearest first. known(k), if given,
-       gives a point's dish when it is already certain, or -1. */
-    function partition(G, dish, known) {
+    /* Each point of a grid: its flake, of its K nearest the one that beats each other in turn, nearest first. known(k), if given,
+       gives a point's flake when it is already certain, or -1. */
+    function partition(G, flake, known) {
       const b = G.box, o = G.out, v = new Float64Array(K), c = new Int32Array(K);
       for (let k = 0; k < G.N; k++) {
-        if (known) { const d = known(k); if (d >= 0) { dish[k] = d; continue; } }
+        if (known) { const d = known(k); if (d >= 0) { flake[k] = d; continue; } }
         const x = b[3 * k], y = b[3 * k + 1], z = b[3 * k + 2], nx = o[3 * k], ny = o[3 * k + 1], nz = o[3 * k + 2];
         near(G, k, c); for (let s = 0; s < K; s++) v[s] = reach(x, y, z, c[s], nx, ny, nz);
         let w = 0; for (let s = 1; s < K; s++) if (margin(x, y, z, nx, ny, nz, c[w], c[s], v[w], v[s]) < 0) w = s;
-        dish[k] = c[w];
+        flake[k] = c[w];
       }
     }
     /* The relaxation, on any grid: the free points of a skin (xyz) pulled toward their neighbours' mean, so it goes taut between its
-       pinned points (on a face nothing changes; where a dish runs over the block's edge or corner it is cut straight across, a flat
+       pinned points (on a face nothing changes; where a flake runs over the block's edge or corner it is cut straight across, a flat
        facet); and beside it a membrane (sag), pinned at zero, sagging the same everywhere (by each point's share of the surface), so
-       each dish is one smooth hollow. */
+       each flake is one smooth hollow. */
     function relax(G, pinned, xyz, sag, sweeps, link) {
       const off = G.off, nbr = G.nbr;
       for (let it = 0; it < sweeps; it++) for (let k = 0; k < G.N; k++) {
@@ -495,71 +495,71 @@ html{scroll-behavior:smooth}
       }
     }
     /* The surface:
-       1. A rough solve on the coarse grid: each point's dish, pinned where it meets another dish, relaxed from the rounded block.
-       2. The fine grid: each point's dish. Where a ridge crosses a grid edge (its two ends of different dishes), the end nearer the
+       1. A rough solve on the coarse grid: each point's flake, pinned where it meets another flake, relaxed from the rounded block.
+       2. The fine grid: each point's flake. Where a ridge crosses a grid edge (its two ends of different flakes), the end nearer the
           crossing moves onto it (found from the two ends' margins, so along the walk, between grid points), and is pinned there on
           the rounded block, a point of the crest; each grid square is cut into its two triangles along the diagonal that joins two
           crest points, so every ridge is an unbroken line of triangle edges. The free points start from the coarse answer read at
           their place (the sag scaled to fine steps), and a few fine passes finish it: what the rough solve got wrong is all
           small-scale, which is what passes undo fast.
-       3. Each piece's deepest sag gives its width (a round dish of radius R sags R² / 4, in grid steps), so its full depth, and its
-          sag over that deepest is its profile: depth = full depth times profile to the power 1 - FEEL.sharp. The dish goes down
+       3. Each piece's deepest sag gives its width (a round flake of radius R sags R² / 4, in grid steps), so its full depth, and its
+          sag over that deepest is its profile: depth = full depth times profile to the power 1 - FEEL.sharp. The flake goes down
           along the taut skin's way out (read from the coarse grid, where it is smooth).
-       4. Each crest point is split into a copy per dish beside it, so the crest is a hard edge. */
-    const C = coarse, F = fine, cDish = new Uint16Array(C.N), cPin = new Uint8Array(C.N), cXyz = new Float32Array(C.N * 3), cSag = new Float32Array(C.N);
-    const fDish = new Uint16Array(F.N), fPin = new Uint8Array(F.N), xyz = new Float32Array(F.N * 3), sag = new Float32Array(F.N), piece = new Int32Array(F.N), top = new Float32Array(F.N), stack = new Int32Array(F.N);
-    /* room for every point and a copy of each crest point per dish beside it (copyOf: the point each copy is of) */
+       4. Each crest point is split into a copy per flake beside it, so the crest is a hard edge. */
+    const C = coarse, F = fine, cFlake = new Uint16Array(C.N), cPin = new Uint8Array(C.N), cXyz = new Float32Array(C.N * 3), cSag = new Float32Array(C.N);
+    const fFlake = new Uint16Array(F.N), fPin = new Uint8Array(F.N), xyz = new Float32Array(F.N * 3), sag = new Float32Array(F.N), piece = new Int32Array(F.N), top = new Float32Array(F.N), stack = new Int32Array(F.N);
+    /* room for every point and a copy of each crest point per flake beside it (copyOf: the point each copy is of) */
     const copyOf = new Int32Array(F.N); let copied = 0;
     /* kept for the pictures only: the fine partition before stray pieces join (fRaw), which points joined (joined), the squares cut
-       into triangles before the crest copies (ixTri), and each pair of dishes that meet: how many grid edges their ridge crosses and
+       into triangles before the crest copies (ixTri), and each pair of flakes that meet: how many grid edges their ridge crosses and
        how far along it, from its middle, those crossings run (pairs) */
     const fRaw = new Uint16Array(F.N), joined = new Uint8Array(F.N), ixTri = new Uint32Array(F.quads.length / 4 * 6), pairs = new Map();
     let joinedPieces = 0;
     const pos = new Float32Array(F.N * 6), shade = new Float32Array(F.N * 6), geo = new T.BufferGeometry(), Q = [0, 0, 0], O = [0, 0, 0];
     geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setIndex(new T.BufferAttribute(new Uint32Array(F.quads.length / 4 * 6), 1));
     geo.setAttribute('color', new T.BufferAttribute(shade, 3));
-    /* the pieces: each run of neighbouring points of one dish (piece), its area in grid squares (area), and its points (members, from start[i]) */
+    /* the pieces: each run of neighbouring points of one flake (piece), its area in grid squares (area), and its points (members, from start[i]) */
     const area = new Float64Array(F.N), start = new Int32Array(F.N + 1), members = new Int32Array(F.N);
     function pieces() {
       piece.fill(-1); let count = 0, at = 0;
       for (let k = 0; k < F.N; k++) { if (piece[k] >= 0) continue; const id = count++; start[id] = at; let n = 0; piece[k] = id; stack[n++] = k;
         let a = 0;
-        while (n) { const p = stack[--n]; members[at++] = p; a += F.load[p]; for (let e = F.off[p]; e < F.off[p + 1]; e++) { const o = F.nbr[e]; if (piece[o] < 0 && fDish[o] === fDish[p]) { piece[o] = id; stack[n++] = o; } } }
+        while (n) { const p = stack[--n]; members[at++] = p; a += F.load[p]; for (let e = F.off[p]; e < F.off[p + 1]; e++) { const o = F.nbr[e]; if (piece[o] < 0 && fFlake[o] === fFlake[p]) { piece[o] = id; stack[n++] = o; } } }
         area[id] = a; }
       start[count] = at; return count;
     }
     const onBlock = (p, k) => { inner(p[3 * k], p[3 * k + 1], p[3 * k + 2], Q, O); for (let t = 0; t < 3; t++) p[3 * k + t] = Q[t] + O[t] * SHAPE.r; };
     const cOut = new Float32Array(C.N * 3), dir = new Float32Array(F.N * 3), shift = new Float32Array(F.N), toward = new Int32Array(F.N), link = new Float32Array(F.nbr.length);
-    /* a fine point's dish is certain when the four coarse points around it are of one dish and none is on a ridge */
-    const settled = (k) => { const a = from[4 * k], d = cDish[a]; for (let q = 4 * k; q < 4 * k + 4; q++) { const c = from[q]; if (cPin[c] || cDish[c] !== d) return -1; } return d; };
-    /* the whole surface but its depth (steps 1, 2 and 4; dig is step 3), and the direction each point's dish goes down (the taut skin's way out, read from the coarse
+    /* a fine point's flake is certain when the four coarse points around it are of one flake and none is on a ridge */
+    const settled = (k) => { const a = from[4 * k], d = cFlake[a]; for (let q = 4 * k; q < 4 * k + 4; q++) { const c = from[q]; if (cPin[c] || cFlake[c] !== d) return -1; } return d; };
+    /* the whole surface but its depth (steps 1, 2 and 4; dig is step 3), and the direction each point's flake goes down (the taut skin's way out, read from the coarse
        grid) */
     function shape() {
-      partition(C, cDish, null);
-      for (let k = 0; k < C.N; k++) { cPin[k] = 0; for (let e = C.off[k]; e < C.off[k + 1]; e++) if (cDish[C.nbr[e]] !== cDish[k]) { cPin[k] = 1; break; } }
+      partition(C, cFlake, null);
+      for (let k = 0; k < C.N; k++) { cPin[k] = 0; for (let e = C.off[k]; e < C.off[k + 1]; e++) if (cFlake[C.nbr[e]] !== cFlake[k]) { cPin[k] = 1; break; } }
       cXyz.set(C.base); cSag.fill(0); relax(C, cPin, cXyz, cSag, FEEL.sweeps.coarse);
       /* the coarse skin's way out at each point: the normals of the triangles around it (each square cut along its diagonal a-c) */
       cOut.fill(0); const qc = C.quads;
       for (let i = 0; i < qc.length; i += 4) for (const [a, b, c] of [[3 * qc[i], 3 * qc[i + 1], 3 * qc[i + 2]], [3 * qc[i], 3 * qc[i + 2], 3 * qc[i + 3]]]) {
         const ux = cXyz[b] - cXyz[a], uy = cXyz[b + 1] - cXyz[a + 1], uz = cXyz[b + 2] - cXyz[a + 2], vx = cXyz[c] - cXyz[a], vy = cXyz[c + 1] - cXyz[a + 1], vz = cXyz[c + 2] - cXyz[a + 2];
         const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; cOut[a] += nx; cOut[a + 1] += ny; cOut[a + 2] += nz; cOut[b] += nx; cOut[b + 1] += ny; cOut[b + 2] += nz; cOut[c] += nx; cOut[c + 1] += ny; cOut[c + 2] += nz; }
-      partition(F, fDish, settled); fRaw.set(fDish); joined.fill(0); joinedPieces = 0;
-      /* A dish's ground can come out in more than one piece (the ridges' walks cut a stray piece off). A stray piece smaller than
-         FEEL.speck mm², or thinner than FEEL.sliver mm (its area over its rim), joins the dish it borders most; every other piece is
-         a hollow of its own (step 3). A dish's largest piece always stays. */
-      const small = FEEL.speck * along() ** 2 / (FEEL.fine * FEEL.fine), thin = FEEL.sliver * along() / FEEL.fine, largest = new Int32Array(dishes.length);
-      const n = pieces(); for (let i = 0; i < n; i++) { const d = fDish[members[start[i]]]; if (area[i] > largest[d]) largest[d] = area[i]; }
-      for (let i = 0; i < n; i++) { const d = fDish[members[start[i]]]; if (area[i] === largest[d]) continue;
+      partition(F, fFlake, settled); fRaw.set(fFlake); joined.fill(0); joinedPieces = 0;
+      /* A flake's ground can come out in more than one piece (the ridges' walks cut a stray piece off). A stray piece smaller than
+         FEEL.speck mm², or thinner than FEEL.sliver mm (its area over its rim), joins the flake it borders most; every other piece is
+         a hollow of its own (step 3). A flake's largest piece always stays. */
+      const small = FEEL.speck * along() ** 2 / (FEEL.fine * FEEL.fine), thin = FEEL.sliver * along() / FEEL.fine, largest = new Int32Array(flakes.length);
+      const n = pieces(); for (let i = 0; i < n; i++) { const d = fFlake[members[start[i]]]; if (area[i] > largest[d]) largest[d] = area[i]; }
+      for (let i = 0; i < n; i++) { const d = fFlake[members[start[i]]]; if (area[i] === largest[d]) continue;
         const votes = new Map(); let rim = 0, best = -1, most = 0;
-        for (let q = start[i]; q < start[i + 1]; q++) { const p = members[q]; for (let e = F.off[p]; e < F.off[p + 1]; e++) { const j = fDish[F.nbr[e]]; if (j !== d) { votes.set(j, (votes.get(j) || 0) + 1); rim += Math.sqrt(F.load[p]); } } }
+        for (let q = start[i]; q < start[i + 1]; q++) { const p = members[q]; for (let e = F.off[p]; e < F.off[p + 1]; e++) { const j = fFlake[F.nbr[e]]; if (j !== d) { votes.set(j, (votes.get(j) || 0) + 1); rim += Math.sqrt(F.load[p]); } } }
         if (area[i] >= small && area[i] >= thin * rim) continue;
-        votes.forEach((v, j) => { if (v > most) { most = v; best = j; } }); if (best >= 0) { joinedPieces++; for (let q = start[i]; q < start[i + 1]; q++) { fDish[members[q]] = best; joined[members[q]] = 1; } } }
+        votes.forEach((v, j) => { if (v > most) { most = v; best = j; } }); if (best >= 0) { joinedPieces++; for (let q = start[i]; q < start[i + 1]; q++) { fFlake[members[q]] = best; joined[members[q]] = 1; } } }
       pieces();
       /* the crest points: each grid edge a ridge crosses moves its nearer end onto the crossing (each point to its nearest one) */
       const side = (p, a, b) => { const x = F.box[3 * p], y = F.box[3 * p + 1], z = F.box[3 * p + 2], nx = F.out[3 * p], ny = F.out[3 * p + 1], nz = F.out[3 * p + 2];
         return margin(x, y, z, nx, ny, nz, a, b, reach(x, y, z, a, nx, ny, nz), reach(x, y, z, b, nx, ny, nz)); };
-      pairs.clear(); shift.fill(1); for (let k = 0; k < F.N; k++) for (let e = F.off[k]; e < F.off[k + 1]; e++) { const o = F.nbr[e]; if (o < k || fDish[o] === fDish[k]) continue;
-        const a = fDish[k], b = fDish[o], mk = side(k, a, b), mo = side(o, a, b), t = mk > 0 && mo < 0 ? mk / (mk - mo) : .5;
+      pairs.clear(); shift.fill(1); for (let k = 0; k < F.N; k++) for (let e = F.off[k]; e < F.off[k + 1]; e++) { const o = F.nbr[e]; if (o < k || fFlake[o] === fFlake[k]) continue;
+        const a = fFlake[k], b = fFlake[o], mk = side(k, a, b), mo = side(o, a, b), t = mk > 0 && mo < 0 ? mk / (mk - mo) : .5;
         { const lo = Math.min(a, b), hi = Math.max(a, b), u = alongRidge(k, lo, hi), key = lo * 4096 + hi, p = pairs.get(key);
           if (p) { p.n++; p.lo = Math.min(p.lo, u); p.hi = Math.max(p.hi, u); } else pairs.set(key, { a: lo, b: hi, n: 1, lo: u, hi: u }); }
         if (t <= .5) { if (t < shift[k]) { shift[k] = t; toward[k] = o; } } else if (1 - t < shift[o]) { shift[o] = 1 - t; toward[o] = k; } }
@@ -583,14 +583,14 @@ html{scroll-behavior:smooth}
         if (!fPin[o]) { link[e] = 1; continue; } const l = Math.hypot(F.base[3 * k] - xyz[3 * o], F.base[3 * k + 1] - xyz[3 * o + 1], F.base[3 * k + 2] - xyz[3 * o + 2]);
         link[e] = Math.min(4, FEEL.fine / Math.max(l, FEEL.fine / 4)); }
       relax(F, fPin, xyz, sag, FEEL.sweeps.fine, link);
-      /* each piece's deepest sag (top), not its dish's, gives its width and depth, so a stray piece sinks as far as its size says
+      /* each piece's deepest sag (top), not its flake's, gives its width and depth, so a stray piece sinks as far as its size says
          and never stays a raised plateau */
       top.fill(0); for (let k = 0; k < F.N; k++) if (sag[k] > top[piece[k]]) top[piece[k]] = sag[k];
-      /* A crest is a hard edge: each triangle takes, at a crest point, that point's copy for the triangle's own dish (the dish of its
+      /* A crest is a hard edge: each triangle takes, at a crest point, that point's copy for the triangle's own flake (the flake of its
          first corner off the crest), so the two walls meeting there are shaded each on its own and do not blur into each other. */
       const copies = new Map(); copied = 0;
       for (let i = 0; i < ix.length; i += 3) { let side = -1;
-        for (let j = 0; j < 3; j++) if (!fPin[ix[i + j]]) { side = fDish[ix[i + j]]; break; }
+        for (let j = 0; j < 3; j++) if (!fPin[ix[i + j]]) { side = fFlake[ix[i + j]]; break; }
         if (side < 0) continue;
         for (let j = 0; j < 3; j++) { const k = ix[i + j]; if (!fPin[k]) continue; const key = k * 4096 + side; let c = copies.get(key);
           if (c === undefined) { c = F.N + copied; copyOf[copied++] = k; copies.set(key, c); }
@@ -598,14 +598,14 @@ html{scroll-behavior:smooth}
       geo.setDrawRange(0, ix.length); geo.index.needsUpdate = true;
     }
     /* Step 3, the depth, alone, so the depth control needs nothing else. dk: how much deeper than at D0. Everything the texture does
-       to the block goes as dk: the taut skin's departure from the rounded block (its facets over the edges) and each dish's depth;
+       to the block goes as dk: the taut skin's departure from the rounded block (its facets over the edges) and each flake's depth;
        so at depth 0 every point is on the rounded block. */
     function dig() {
       const dk = FEEL.depth / D0, lit = Math.min(1, dk);
       for (let k = 0; k < F.N; k++) {
         const tp = top[piece[k]], wide = 4 * Math.sqrt(tp) * FEEL.fine / along(), full = dk * Math.min(FEEL.deepest, wide * FEEL.depthPerWidth);
         const d = tp > 0 && sag[k] > 0 ? full * Math.pow(sag[k] / tp, 1 - FEEL.sharp) : 0;
-        /* a dish darkens toward its bottom, as a hollow gets less of the light around it, and brightens a little at its crests (for
+        /* a flake darkens toward its bottom, as a hollow gets less of the light around it, and brightens a little at its crests (for
            viewing only; it fades out as the depth goes to zero) */
         const p = full > 0 ? d / full : 0, q = 1 - p, c = 1 + lit * (FEEL.tip * q * q * q * q - FEEL.hollow * p * p);
         for (let t = 0; t < 3; t++) { const b = fPin[k] ? xyz[3 * k + t] : F.base[3 * k + t]; pos[3 * k + t] = b + dk * (xyz[3 * k + t] - b) - dir[3 * k + t] * d; shade[3 * k + t] = c; }
@@ -651,8 +651,8 @@ html{scroll-behavior:smooth}
     }
     function activate(v) {
       if (active === v) return;
-      if (active) { const was = active; active = null; controls.dispose(); controls = null; LIVE.domElement.remove(); paint(was); }
-      active = v; v.box.appendChild(LIVE.domElement);
+      if (active) { const was = active; active = null; controls.dispose(); controls = null; LIVE.domElement.remove(); paint(was); was.img.hidden = false; }
+      active = v; v.img.hidden = true; v.box.appendChild(LIVE.domElement);
       controls = new T.OrbitControls(v.cam, LIVE.domElement); controls.enablePan = false; controls.enableZoom = false; controls.target.copy(v.target); controls.update();
       controls.addEventListener('change', () => { v.target.copy(controls.target); paint(v); });
       /* scrolling the page over a view scrolls the page; once a view is clicked, scrolling over it zooms it, until the pointer leaves */
@@ -666,7 +666,7 @@ html{scroll-behavior:smooth}
       const w = v.box.clientWidth, h = v.box.clientHeight; if (!w || !h) return;
       v.cam.aspect = w / h; v.cam.updateProjectionMatrix(); v.cam.lookAt(v.target);
       if (v === active) { LIVE.setSize(w, h, false); LIVE.render(v.scene, v.cam); }
-      else { R.setSize(Math.round(w * DPR), Math.round(h * DPR), false); R.render(v.scene, v.cam); v.img.src = R.domElement.toDataURL('image/jpeg', .9); }
+      else { R.setSize(Math.round(w * DPR), Math.round(h * DPR), false); R.render(v.scene, v.cam); v.img.src = R.domElement.toDataURL('image/png'); }
       v.dirty = false;
     }
     function repaint() { views.forEach(v => { v.dirty = true; if (v.seen) paint(v); }); }
@@ -687,7 +687,7 @@ html{scroll-behavior:smooth}
     const sagCol = new Float32Array(F.N * 3), gSkin = new T.BufferGeometry(); gSkin.setAttribute('position', attr(xyz, 3)); gSkin.setIndex(attr(ixTri, 1)); gSkin.setAttribute('color', attr(sagCol, 3));
     /* the finished surface with its crest points shared, not split (step 9's soft side): the same points, the triangles before the copies */
     const gSoft = new T.BufferGeometry(); gSoft.setAttribute('position', geo.attributes.position); gSoft.setAttribute('color', geo.attributes.color); gSoft.setIndex(attr(ixTri, 1));
-    /* the dish markers: a dot at each centre and its two axes; and the crest points as dots */
+    /* the flake markers: a dot at each centre and its two axes; and the crest points as dots */
     /* (three.js sizes a point by its distance alone, not the lens, so each size here is a width in mm over the tangent of half its view's field) */
     const gDots = new T.BufferGeometry(), gCrest = new T.BufferGeometry(), crestAt = new Float32Array(F.N * 3);
     gCrest.setAttribute('position', attr(crestAt, 3));
@@ -699,7 +699,7 @@ html{scroll-behavior:smooth}
 
     view('v-hero', [new T.Mesh(geo, stone({ vertexColors: true }))], HOME);
     view('v-block', [new T.Mesh(plain, stone())], HOME);
-    view('v-dishes', [new T.Mesh(gFoot, tint()), dots], HOME, .3);
+    view('v-flakes', [new T.Mesh(gFoot, tint()), dots], HOME, .3);
     view('v-coarse', [new T.Mesh(gCoarse, tint())], NEAR, .35);
     view('v-fine', [new T.Mesh(gFine, tint())], NEAR, .35);
     view('v-stray', [new T.Mesh(gStray, tint())], NEAR, .3);
@@ -711,37 +711,37 @@ html{scroll-behavior:smooth}
     const io = new IntersectionObserver(es => es.forEach(e => { const v = views.find(w => w.box === e.target); v.seen = e.isIntersecting; if (v.seen && v.dirty) guard('a 3D view', paint)(v); }), { rootMargin: '300px' });
     views.forEach(v => io.observe(v.box));
 
-    /* each dish's colour: pale, spread round the cool half of the hues (no reds or oranges, which mean overhang on a model) */
-    let dishCol = new Float32Array(0);
+    /* each flake's colour: pale, spread round the cool half of the hues (no reds or oranges, which mean overhang on a model) */
+    let flakeCol = new Float32Array(0);
     const hue = new T.Color();
-    function colourDishes() {
-      dishCol = new Float32Array(dishes.length * 3);
-      for (let i = 0; i < dishes.length; i++) { hue.setHSL((150 + 190 * ((i * .618034) % 1)) / 360, .55, .72); dishCol[3 * i] = hue.r; dishCol[3 * i + 1] = hue.g; dishCol[3 * i + 2] = hue.b; }
+    function colourFlakes() {
+      flakeCol = new Float32Array(flakes.length * 3);
+      for (let i = 0; i < flakes.length; i++) { hue.setHSL((150 + 190 * ((i * .618034) % 1)) / 360, .55, .72); flakeCol[3 * i] = hue.r; flakeCol[3 * i + 1] = hue.g; flakeCol[3 * i + 2] = hue.b; }
     }
-    const paintBy = (out, dish, n) => { for (let k = 0; k < n; k++) { const d = 3 * dish[k]; out[3 * k] = dishCol[d]; out[3 * k + 1] = dishCol[d + 1]; out[3 * k + 2] = dishCol[d + 2]; } };
+    const paintBy = (out, flake, n) => { for (let k = 0; k < n; k++) { const d = 3 * flake[k]; out[3 * k] = flakeCol[d]; out[3 * k + 1] = flakeCol[d + 1]; out[3 * k + 2] = flakeCol[d + 2]; } };
 
-    /* after the dishes and the surface's shape (everything but the depth) are made */
+    /* after the flakes and the surface's shape (everything but the depth) are made */
     function showShape() {
-      colourDishes();
-      /* step 2: each dish's own footprint (where it reaches, stretch and all, before any ridge), the nearest one where they overlap,
+      colourFlakes();
+      /* step 2: each flake's own footprint (where it reaches, stretch and all, before any ridge), the nearest one where they overlap,
          and a dot at each centre, a little off the block so it sits on it */
-      const n = dishes.length, dp = new Float32Array(n * 3), q = [0, 0, 0], o = [0, 0, 0], id = new Int32Array(K);
-      dishes.forEach((c, i) => { inner(c.x, c.y, c.z, q, o); for (let t = 0; t < 3; t++) dp[3 * i + t] = q[t] + o[t] * (SHAPE.r + .08); });
+      const n = flakes.length, dp = new Float32Array(n * 3), q = [0, 0, 0], o = [0, 0, 0], id = new Int32Array(K);
+      flakes.forEach((c, i) => { inner(c.x, c.y, c.z, q, o); for (let t = 0; t < 3; t++) dp[3 * i + t] = q[t] + o[t] * (SHAPE.r + .08); });
       gDots.setAttribute('position', attr(dp, 3)); gDots.computeBoundingSphere();
       for (let k = 0; k < C.N; k++) { near(C, k, id); let best = 0, at = -1;
         for (let s = 0; s < K; s++) { const v = reach(C.box[3 * k], C.box[3 * k + 1], C.box[3 * k + 2], id[s], C.out[3 * k], C.out[3 * k + 1], C.out[3 * k + 2]); if (v < best) { best = v; at = id[s]; } }
-        for (let t = 0; t < 3; t++) footCol[3 * k + t] = at < 0 ? .86 : dishCol[3 * at + t]; }
+        for (let t = 0; t < 3; t++) footCol[3 * k + t] = at < 0 ? .86 : flakeCol[3 * at + t]; }
       gFoot.attributes.color.needsUpdate = true;
-      const rs = dishes.map(c => c.r);
-      put('f-dishes', fmt(n)); put('f-half', fmt(Math.min(...rs), 1) + ' to ' + fmt(Math.max(...rs), 1) + ' mm'); put('f-width', fmt(2 * rs.reduce((a, b) => a + b, 0) / n, 2) + ' mm');
-      /* step 4: both grids by dish (the fine one before the stray pieces join) */
-      paintBy(cCol, cDish, C.N); paintBy(fineCol, fRaw, F.N); gCoarse.attributes.color.needsUpdate = true; gFine.attributes.color.needsUpdate = true;
+      const rs = flakes.map(c => c.r);
+      put('f-flakes', fmt(n)); put('f-half', fmt(Math.min(...rs), 1) + ' to ' + fmt(Math.max(...rs), 1) + ' mm'); put('f-width', fmt(2 * rs.reduce((a, b) => a + b, 0) / n, 2) + ' mm');
+      /* step 4: both grids by flake (the fine one before the stray pieces join) */
+      paintBy(cCol, cFlake, C.N); paintBy(fineCol, fRaw, F.N); gCoarse.attributes.color.needsUpdate = true; gFine.attributes.color.needsUpdate = true;
       let tested = 0; for (let k = 0; k < F.N; k++) if (settled(k) < 0) tested++;
       put('f-coarse', fmt(C.N)); put('f-fine', fmt(F.N)); put('f-tested', fmt(tested) + ' (' + fmt(100 * tested / F.N) + '%)');
-      /* step 5: the final dishes faded, and what joined in the accent */
-      let jn = 0; for (let k = 0; k < F.N; k++) { const d = 3 * fDish[k];
+      /* step 5: the final flakes faded, and what joined in the accent */
+      let jn = 0; for (let k = 0; k < F.N; k++) { const d = 3 * fFlake[k];
         if (joined[k]) { jn += F.load[k]; strayCol[3 * k] = accent.r; strayCol[3 * k + 1] = accent.g; strayCol[3 * k + 2] = accent.b; }
-        else for (let t = 0; t < 3; t++) strayCol[3 * k + t] = .78 + .22 * dishCol[d + t]; }
+        else for (let t = 0; t < 3; t++) strayCol[3 * k + t] = .78 + .22 * flakeCol[d + t]; }
       gStray.attributes.color.needsUpdate = true;
       put('f-joined', fmt(joinedPieces)); put('f-joined-area', fmt(jn * FEEL.fine * FEEL.fine, 1) + ' mm²');
       /* step 7: the membrane's sag, pale at the crests to deep at each piece's bottom */
@@ -762,21 +762,21 @@ html{scroll-behavior:smooth}
     }
 
     /* ---- the flat diagrams ---- */
-    const rgb = (i, f) => 'rgb(' + [0, 1, 2].map(t => Math.round(255 * (dishCol[3 * i + t] * (f || 1)))).join(',') + ')';
+    const rgb = (i, f) => 'rgb(' + [0, 1, 2].map(t => Math.round(255 * (flakeCol[3 * i + t] * (f || 1)))).join(',') + ')';
     function sized(cv) { const w = cv.clientWidth, h = +cv.getAttribute('height'); cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR); cv.style.height = h + 'px';
       const g = cv.getContext('2d'); g.setTransform(DPR, 0, 0, DPR, 0, 0); g.clearRect(0, 0, w, h); return { g: g, w: w, h: h }; }
     function bar(g, x, y, px, text) {   /* a scale bar of px pixels */
       g.strokeStyle = css('--fg'); g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + px, y); g.moveTo(x, y - 4); g.lineTo(x, y + 4); g.moveTo(x + px, y - 4); g.lineTo(x + px, y + 4); g.stroke();
       g.fillStyle = css('--fg'); g.font = '12px ' + css('--mono'); g.fillText(text, x + px + 8, y + 4);
     }
-    /* step 3: one ridge, in its own frame: across, along it from its middle; up, toward the lower-numbered dish (both in mm, one scale) */
+    /* step 3: one ridge, in its own frame: across, along it from its middle; up, toward the lower-numbered flake (both in mm, one scale) */
     let ridges = [], ridgeAt = 0;
     function drawRidge() {
       const cv = document.getElementById('p-ridge'), { g, w, h } = sized(cv), r = ridges[ridgeAt]; if (!r) return;
       const wk = walk(r.a, r.b), lo = r.lo - .6, hi = r.hi + .6, s = w / (hi - lo), x0 = 0, cy = h / 2;
       const X = (t) => x0 + (t - lo) * s, Y = (y) => cy - y * s, at = (t) => { const f = Math.max(0, Math.min(NS - 1.001, MID + t / dt)), i = f | 0; return wk[i] + (wk[i + 1] - wk[i]) * (f - i); };
       const steps = Math.ceil((hi - lo) / dt), path = []; for (let i = 0; i <= steps; i++) { const t = lo + i * (hi - lo) / steps; path.push([X(t), Y(at(t))]); }
-      /* the two sides, in the two dishes' colours */
+      /* the two sides, in the two flakes' colours */
       g.fillStyle = rgb(r.a); g.beginPath(); g.moveTo(x0, 0); path.forEach(p => g.lineTo(p[0], p[1])); g.lineTo(path[path.length - 1][0], 0); g.fill();
       g.fillStyle = rgb(r.b); g.beginPath(); g.moveTo(x0, h); path.forEach(p => g.lineTo(p[0], p[1])); g.lineTo(path[path.length - 1][0], h); g.fill();
       /* the even line and the walk */
@@ -784,7 +784,7 @@ html{scroll-behavior:smooth}
       g.strokeStyle = '#14181e'; g.lineWidth = 2.2; g.beginPath(); path.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke();
       /* the turns: where the walk's slope changes */
       g.fillStyle = '#14181e'; for (let i = 1; i < path.length - 1; i++) { const a = path[i][1] - path[i - 1][1], b = path[i + 1][1] - path[i][1]; if (Math.abs(a - b) > .02 * s * dt * 4) { g.beginPath(); g.arc(path[i][0], path[i][1], 3, 0, 7); g.fill(); i += 3; } }
-      g.fillStyle = 'rgba(20,24,30,.8)'; g.font = '600 12px ' + css('--text'); g.fillText('dish ' + (r.a + 1) + ' side', x0 + 6, 16); g.fillText('dish ' + (r.b + 1) + ' side', x0 + 6, h - 8);
+      g.fillStyle = 'rgba(20,24,30,.8)'; g.font = '600 12px ' + css('--text'); g.fillText('flake ' + (r.a + 1) + ' side', x0 + 6, 16); g.fillText('flake ' + (r.b + 1) + ' side', x0 + 6, h - 8);
       g.font = '12px ' + css('--text'); g.fillText('even line', w - 70, cy - 8);
       const unit = s >= 60 ? 1 : 2; g.fillStyle = 'rgba(20,24,30,.8)'; g.strokeStyle = '#14181e'; g.lineWidth = 1.5;
       g.beginPath(); g.moveTo(w - unit * s - 64, h - 14); g.lineTo(w - 64, h - 14); g.stroke(); g.fillText(unit + ' mm', w - 58, h - 10);
@@ -820,7 +820,7 @@ html{scroll-behavior:smooth}
     /* the window follows the pointer's place along the slice */
     function slideTo(clientX) { if (!sliceMap) return; const m = sliceMap, x = (clientX - m.left - 12) / m.s + m.lo - SPAN_MM / 2; windowAt = clamp((x - m.lo - .3) / Math.max(.001, m.L - .6 - SPAN_MM), 0, 1); drawSlice(); }
 
-    /* a build at the present settings: a width change (work & 2) throws the dishes again and remakes everything; a depth change only
+    /* a build at the present settings: a width change (work & 2) throws the flakes again and remakes everything; a depth change only
        digs again */
     function rebuild(work) {
       const t0 = performance.now();
@@ -831,7 +831,7 @@ html{scroll-behavior:smooth}
     }
     function dispose() {
       io.disconnect();
-      if (controls) controls.dispose(); LIVE.domElement.remove(); active = null;
+      if (controls) controls.dispose(); LIVE.domElement.remove(); if (active) active.img.hidden = false; active = null;
       views.forEach(v => { v.box.onpointerenter = v.box.onpointerdown = null; v.img.remove(); v.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
       disc.dispose();
     }
@@ -840,7 +840,7 @@ html{scroll-behavior:smooth}
   }
 
   /* ---- the settings ----
-     The shape makes a new bench; a width change throws the dishes again and remakes everything; a depth change only digs again.
+     The shape makes a new bench; a width change throws the flakes again and remakes everything; a depth change only digs again.
      Changes while a rebuild is waiting are folded into it. */
   let bench = null, want = 0;
   function run(work) { put('t-build', fmt(bench.rebuild(work)) + ' ms'); }
