@@ -18,3 +18,18 @@ Round 3 (composites comp1..comp6.png; fc.png was stale from a winding/core-bug b
 Round 4-5: relief spacing 4.4 mm / amp .95 (cut faces .6) with per-facet tone .84-1.16 gave crisper chips than 3.4 mm; 1-3 corner/edge bites per block now fine because relief carries the texture. Small cap blocks (3.5-6.5 mm tall) on top courses break the skyline. Checked light mode and 400 px layout (fixed grid minmax(0,1fr)).
 Order of what moved the look, biggest first: (1) relief facets; (2) per-block depth push + level beds + camera/composition; (3) dark cool tone with strong key; (4) larger blocks (3-4 courses of 11-15 mm, ~12 mm wide); (5) cap blocks. Chip planes and tilt planes were the least useful.
 Not done: left return face, rough chipped vertical edges, crevice darkening (AO), ground.
+
+## Pass 5: the sculpting sheet (measured against v12; sheet numbers x1.4 for our 35 dmm; H = wall height about 38 dmm, L = depth 35)
+| Sheet (O) | Sheet in dmm | v12 | Gap |
+|---|---|---|---|
+| 4 layers .26/.26/.28/.20 H | 9.9/9.9/10.6/7.6 | 3 courses of 11.5-14.5 (.30-.38 H), top often shortened | courses too tall by a third; photo shows 3 courses, photo followed |
+| footprint steps .20/.60/.20 of L; height steps .26/.52/.80 | tiers back to front | one slab, front depth varies 0-3.5 plus one 6-8 recess | biggest gap: no tiers stepping back with height |
+| block w:h 1.6-2.4 | w 15-22 at h 9-10 | w 10-14 at h 12-14, about 1:1 | too narrow and square; photo is about 1.2:1, photo followed |
+| block width .20-.50 H | 7.6-19 | 10-14 | in range |
+| block height .20-.30 H | 7.6-11.4 | 11.5-14.5 | .30-.38 H, slightly tall |
+| ledge depth .10-.35 H | 3.8-13 | 0-3.5, recess 6-8 | too shallow except the one recess |
+| fracture spacing .08-.25 H | 3-9.5 | skin cracks 4-8 | in range |
+| face angles 85-90 / 70-85 | | skin tilt 1-4 degrees: 86-89 | secondary faces (70-85) missing |
+| edge bevels 2-6 mm at 25 -> 2.8-8.4 dmm | | 2-3.6 dmm | bevels about half the sheet's |
+| groove width .5-2 mm at 25 -> .7-2.8 dmm, depth .3-1.2 -> .4-1.7 | | seam .1 dmm, no pits | no grooves or pits |
+Tried (gen.v13-try.js): (1) layers .26/.26/.28/.20 with block width = 1.5-2.2 x height and tiers 1-3 dmm per course: four narrow rows, a rubble look, worse than v12 against the photo; reverted to the photo's three courses. (2) A micro level: groove seams of .25-.7 dmm on 30% of cracks and 1-2 pits per large cell (a convex pit piece set back a further .4-1.2, the cell cut into convex pieces around it): the subtraction makes many thin pieces and reads as shattered rubble; tamed (pits only in cells over 45 mm2) it was still worse than v12. Not published; v12 stays live.

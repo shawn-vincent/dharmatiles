@@ -26,3 +26,15 @@ Round 8 (18 Nov, fracture round): the model changed from shingled slabs to ONE M
 Camera moved to az 2 (the old az 42 viewed the slope at grazing angle; the wedge's steps need risers facing the camera).
 Seen in the reference: ledges 4-6 mm wide, cracks end inside blocks, offsets ~ 1/4 of ledge width at each level, facets are fewer and blunter than mine at the finest level.
 Pitfall: shot.sh does not rebuild test.html; run build.py (comp.sh does).
+
+Round 11, the sculpting sheet (n-o-sculpting-sheet.jpg, N half; 25 mm tile, x1.4 for dmm). Sheet vs v10:
+| quantity | sheet (x1.4 where mm) | v10 | action |
+| overall slope | 32-38 deg (side section X) | dip 60 facing 240: section along x = atan(tan60*|cos240|)=41 deg, along y 56 | kept: photo silhouette wins; dip 55 (35 in section) made the wedge too low vs the photo |
+| layers | 3-5, thickness base .38, .28, .22, cap .12 of the face's width | random strips 5.5 wide | 4 layers in that ratio across the ledges (ratio followed; the sheet) |
+| face width | .15-.35 H = 5-12 dmm | 5.5 | layers ~8 wide |
+| step height | .10-.30 H | ~2 dmm | layer offsets +-0.9, L1 +-1.1 (smaller than sheet; photo risers read as 1-3 mm: photo followed) |
+| fracture spacing | .08-.20 H = 3-7 dmm | L2 3.6x9 | kept |
+| edge bevel | .5-2 mm = .7-2.8 dmm | chips .12-.3 of narrow side (<=1) | chips 30%, .15-.35 |
+| groove | width .7-2.8 dmm, depth .4-1.7 | none (joints 0) | 35% of leaf cells get a groove strip .7-2.2 wide, .4-1.7 deep, along the ledge 60%, a lowered cell (never a gap) |
+| erosion pits | .5-2 mm clustered | pockets .6 | pockets .8 (clustered noise, cells lowered) |
+Biggest gaps: layer ratio (random vs .38/.28/.22/.12), grooves (absent), edge bevels (too small).
