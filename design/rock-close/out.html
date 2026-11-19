@@ -1,60 +1,206 @@
 <title>Rock Up Close</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* Layout: the reference and our view as two equal squares, side by side on a desk, stacked on a phone; below them, how the
-   block is made, as one readable column. */
-:root{--bg:#eceff2;--rule:#c8cfd8;--stage:#8c8c91;--fg:#1d232b;--muted:#566170;
-  --text:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--head:"Space Grotesk","Inter",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;color-scheme:light}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161b;--rule:#303945;--fg:#e3e8ee;--muted:#9aa5b3;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#12161b;--rule:#303945;--fg:#e3e8ee;--muted:#9aa5b3;color-scheme:dark}
+/* Layout: a bench for one stone. The reference and the live block open the page as two squares; a control bar for the two
+   settings stays pinned at the top while you scroll; then the build's steps in order, each its words beside its pictures, every
+   picture drawn from the real build at the present settings. Neutrals are cool stone greys; one slate-blue accent marks what a
+   step adds. Red and orange are never used on a model (they mean overhang in dharmatiles). */
+:root{
+  --bg:#eef0f2;--panel:#f8f9fa;--fg:#1c2129;--muted:#5a6472;--rule:#d0d6dd;--stage:#8c8c91;--accent:#3557c9;--accent-soft:#c9d3f2;
+  --text:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--head:"Space Grotesk","Inter",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111418;--panel:#181c22;--fg:#e4e8ed;--muted:#98a2af;--rule:#2c333d;--accent:#93a8ff;--accent-soft:#2c3866;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111418;--panel:#181c22;--fg:#e4e8ed;--muted:#98a2af;--rule:#2c333d;--accent:#93a8ff;--accent-soft:#2c3866;color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 var(--text);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
-.duo{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media (max-width:760px){.duo{grid-template-columns:1fr}}
-.box{position:relative;aspect-ratio:1/1;width:100%;max-width:100%;border:1px solid var(--rule);background:var(--stage);overflow:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+main{max-width:1240px;margin:0 auto;padding-block:28px 64px}
+h1,h2{font-family:var(--head);font-weight:600;text-wrap:balance;margin:0}
+h1{font-size:clamp(28px,4vw,40px);line-height:1.1;letter-spacing:-.01em}
+h2{font-size:22px;line-height:1.25}
+p{margin:0}
+b{font-weight:600}
+code,.num{font-family:var(--mono);font-size:.88em;font-variant-numeric:tabular-nums}
+.lede{max-width:64ch;color:var(--muted);font-size:16px;margin-top:8px}
+.intro{display:grid;gap:4px;margin-bottom:20px}
+
+/* the 3D views: squares (or wide boxes) on the stage grey, which stays the same in both themes */
+.box{position:relative;width:100%;max-width:100%;aspect-ratio:1/1;border:1px solid var(--rule);background:var(--stage);overflow:hidden;border-radius:3px}
+.box.wide{aspect-ratio:16/10}
 .box>*{position:absolute;inset:0;width:100%;height:100%;max-width:none;display:block}
 .box>img{object-fit:contain}
-.box>canvas{touch-action:none;cursor:grab}
-.ctl{max-width:680px;margin:20px auto 0;display:grid;grid-template-columns:auto 1fr 5.5em;gap:10px 14px;align-items:center;font-size:14px}
-.ctl input{width:100%;min-width:0;accent-color:var(--muted)}
-.ctl output{font:13px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);text-align:right}
-.how{max-width:68ch;margin:40px auto 0;display:grid;gap:14px}
-.how h2{font:600 22px/1.25 var(--head);margin:0;text-wrap:balance}
-.how p{margin:0}
-.how ol{margin:0;padding-left:1.4em;display:grid;gap:12px}
-.how li::marker{font:600 14px var(--head);color:var(--muted)}
-.how b{font-weight:600}
-.how code{font:13px var(--mono)}
-.how .note{color:var(--muted);font-size:14px}
+.box>canvas{touch-action:pan-y;cursor:grab}
+.box>canvas:active{cursor:grabbing}
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.hero figure,.views figure{margin:0;display:grid;gap:6px;min-width:0}
+figcaption{font-size:13px;color:var(--muted);line-height:1.45}
+
+/* the control bar, pinned under the top edge */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin:20px 0 0;padding:12px 0;background:var(--bg);border-bottom:1px solid var(--rule);display:grid;grid-template-columns:auto minmax(0,1fr) 5.2em auto minmax(0,1fr) 5.2em;gap:8px 14px;align-items:center;font-size:14px}
+.bar label{font-weight:600}
+.bar input{width:100%;min-width:0;accent-color:var(--accent)}
+.bar output{font:13px var(--mono);font-variant-numeric:tabular-nums;color:var(--fg);text-align:right}
+.bar .help{grid-column:1/-1;font-size:12.5px;color:var(--muted)}
+.bar .help .num{color:var(--fg)}
+
+/* the steps, as a numbered list you can jump along */
+.steps{list-style:none;margin:22px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.steps a{display:flex;gap:6px;align-items:baseline;padding:4px 10px;border:1px solid var(--rule);border-radius:99px;color:var(--fg);text-decoration:none;font-size:13px;background:var(--panel)}
+.steps a span{font:600 12px var(--head);color:var(--accent)}
+.steps a:hover,.steps a:focus-visible{border-color:var(--accent);outline:none}
+
+.step{display:grid;grid-template-columns:minmax(0,36ch) minmax(0,1fr);gap:20px 36px;padding:44px 0;border-top:1px solid var(--rule);scroll-margin-top:110px}
+.step:first-of-type{border-top:0}
+.words{display:grid;gap:12px;align-content:start}
+.words .n{font:600 13px var(--head);color:var(--accent);letter-spacing:.06em;text-transform:uppercase}
+.words p{color:var(--fg)}
+.facts{display:grid;grid-template-columns:auto auto;justify-content:start;gap:2px 14px;margin:4px 0 0;padding:10px 12px;background:var(--panel);border:1px solid var(--rule);border-radius:3px;font-size:13px}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.views{display:grid;gap:14px;align-content:start;min-width:0}
+.views.two{grid-template-columns:1fr 1fr}
+.key{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted)}
+.key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.sw-accent{background:var(--accent)}
+.ramp{background:linear-gradient(90deg,#f2f4f6,#2f6f8f)}
+
+/* the flat diagrams, drawn on canvas from the build, in the page's colours */
+.plot{width:100%;max-width:100%;border:1px solid var(--rule);background:var(--panel);border-radius:3px;display:block}
+.plot.drag{cursor:ew-resize;touch-action:pan-y}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button{font:600 13px var(--text);padding:5px 12px;border:1px solid var(--rule);border-radius:3px;background:var(--panel);color:var(--fg);cursor:pointer}
+button:hover,button:focus-visible{border-color:var(--accent);outline:none}
+
+@media (max-width:900px){.step{grid-template-columns:1fr}.bar{grid-template-columns:auto minmax(0,1fr) 5.2em}}
+@media (max-width:640px){.hero,.views.two{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+html{scroll-behavior:smooth}
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Space+Grotesk:wght@600&display=swap">
 <main>
-  <div class="duo">
-    <div class="box"><img src="img/block-ref.jpg" alt="The reference block: a smooth pale stone block, about twice as long as it is wide, its faces broken into broad scalloped facets with crisp ridges between them"></div>
-    <div class="box" id="stage"><canvas id="view" aria-label="Our model, drawn anew: the same block with every face broken into shallow dishes between crisp ridges that run over its edges, seen from the reference's camera. Drag to turn, double-click to return."></canvas></div>
-    <div class="box"><img src="img/block-lines.jpg" alt="The block's plain shape with the ridges traced off the reference drawn on its top, long face and left end as a net of dark lines"></div>
-    <div class="box"><img src="img/block-scallop.jpg" alt="The model made from those traced ridges: the block's top, long face and left end scalloped into shallow dishes between the ridges, the block's own edges between those faces gone"></div>
+  <div class="intro">
+    <h1>Rock Up Close</h1>
+    <p class="lede">A stone block whose faces are scooped into shallow dishes between crisp ridges, built from nothing in this page in nine steps. Every picture below is the real build at the two settings in the bar: change them and every step redraws.</p>
   </div>
-  <div class="ctl">
+  <div class="hero">
+    <figure><div class="box"><img src="img/block-ref.jpg" alt="The reference: a smooth pale stone block, about twice as long as it is wide, its faces broken into broad scalloped facets with crisp ridges between them"></div><figcaption>The reference.</figcaption></figure>
+    <figure><div class="box" id="v-hero" role="img" aria-label="The built block, seen from the reference's camera: every face broken into shallow dishes between crisp ridges"></div><figcaption>The block as built, from the reference's camera.</figcaption></figure>
+  </div>
+
+  <div class="bar" role="group" aria-label="Texture settings">
     <label for="width">Dish width</label><input type="range" id="width" min="2" max="16" step="0.1"><output id="width-mm" for="width"></output>
     <label for="depth">Depth</label><input type="range" id="depth" min="0" max="1.5" step="0.01"><output id="depth-mm" for="depth"></output>
+    <p class="help">Drag a view to turn it; click it, then scroll, to zoom; double-click to put it back. Built in <span class="num" id="t-build">–</span>.</p>
   </div>
-  <section class="how" aria-labelledby="how">
-    <h2 id="how">How the block is made</h2>
-    <p>Every load builds the block from scratch in the page, from seed 7. Sizes are millimetres at true size; the settings are <code>FEEL</code> at the top of the page's script. Two controls set the texture: <b>dish width</b>, the short way across an average dish (5.4 mm as drawn), and <b>depth</b>, how deep a typical dish goes (0.45 mm). The sizes below are at those; every size along the surface scales with the width and every depth with the depth, so the look keeps its proportions. At depth 0 the block is left exactly as it is.</p>
-    <ol>
-      <li><b>The block.</b> A tapered box 32.6 long, its left end 14.8 wide and 12.25 tall, its right end 16.9 by 15.3, with its edges and corners rounded 0.5.</li>
-      <li><b>The dishes.</b> Centres are thrown at random over the top, sides and ends, then in a separate throw over the bottom, each kept only where it clears those before it. Each has a half-width of 2 to 4; the largest size allowed shrinks as the throws go on, so the big dishes go down first and small ones fill the gaps. Height counts 1.4 times, so dishes on the sides come out long and low. Each dish is stretched along a grain (the block's length, or across it on the ends, turned up to 20°) by 1.8 to 3 times, and reaching round onto another face counts half again as far, so most edges stay whole while some corners break.</li>
-      <li><b>The ridges.</b> Between two dishes the even line is where a point is equally far into each. The ridge is a walk along that line, out from its middle both ways: straight runs of 0.6 to 1.8, then a turn of up to 40°, which steers back toward the even line six times in ten. So a ridge zigzags without wandering off, and the dishes are not convex.</li>
-      <li><b>Two grids.</b> A coarse grid at 0.42 and a fine grid at 0.12 (164,730 points) cover the six faces, joined into one closed mesh. Each point belongs to the dish that wins against each other in turn among its five nearest: the side of their ridge it lies on. The coarse grid decides first; a fine point whose four coarse neighbours agree takes their dish without a test.</li>
-      <li><b>Stray pieces.</b> A ridge's walk can cut a piece off a dish. A piece under 2 mm² or thinner than 0.6 joins the dish it borders most; any other piece is a hollow of its own.</li>
-      <li><b>Crest points.</b> Where a ridge crosses a fine grid edge, the end nearer the crossing moves exactly onto it and is pinned there on the block's surface. Each grid square is cut along the diagonal that joins two crest points, so every ridge is an unbroken line of triangle edges.</li>
-      <li><b>Relaxation.</b> With the crest points pinned, two things relax over the grid: a taut skin (each free point pulled to its neighbours' mean, which cuts flat facets where a dish runs over an edge) and a membrane that sags evenly, giving each dish one smooth hollow. The coarse grid takes 120 passes; the fine grid starts from that answer and takes 15. A link to a crest point counts by how close the crest really is, so depth grows evenly from the true ridge.</li>
-      <li><b>Depth.</b> Each piece's deepest sag tells its width (a round dish of radius R sags R²/4). Its full depth is a tenth of its width, never more than 1.9, and each point goes down by that full depth times its sag over the deepest, to the power 0.85, which steepens the walls just under the crest. It goes down along the taut skin's normal. The depth control scales both this and the taut skin's facets over the edges, so at 0 nothing moves.</li>
-      <li><b>Hard crests.</b> Each crest point is split into a copy per dish beside it, so the two walls meeting there shade separately and the crest reads as a sharp edge.</li>
-    </ol>
-    <p class="note">For viewing only: each dish is drawn a little darker toward its bottom and a little brighter at its crests, under soft light from all round and one lamp raking across the top from the left.</p>
+
+  <ol class="steps" aria-label="The steps">
+    <li><a href="#s1"><span>1</span>Block</a></li><li><a href="#s2"><span>2</span>Dishes</a></li><li><a href="#s3"><span>3</span>Ridges</a></li>
+    <li><a href="#s4"><span>4</span>Two grids</a></li><li><a href="#s5"><span>5</span>Stray pieces</a></li><li><a href="#s6"><span>6</span>Crest points</a></li>
+    <li><a href="#s7"><span>7</span>Relaxation</a></li><li><a href="#s8"><span>8</span>Depth</a></li><li><a href="#s9"><span>9</span>Hard crests</a></li>
+  </ol>
+
+  <section class="step" id="s1" aria-labelledby="h1s">
+    <div class="words">
+      <div class="n">Step 1</div><h2 id="h1s">The block</h2>
+      <p>The texture is laid on a plain shape. Here it is a tapered box: 32.6 mm long, its left end 14.8 wide and 12.25 tall, its right end 16.9 by 15.3, with every edge and corner rounded 0.5 mm.</p>
+      <p>At depth 0 this is exactly what comes out: the texture moves nothing.</p>
+    </div>
+    <div class="views"><figure><div class="box wide" id="v-block" role="img" aria-label="The plain rounded tapered block"></div><figcaption>The rounded block, before any texture.</figcaption></figure></div>
+  </section>
+
+  <section class="step" id="s2" aria-labelledby="h2s">
+    <div class="words">
+      <div class="n">Step 2</div><h2 id="h2s">Dishes</h2>
+      <p>Dish centres are thrown at random over the faces, each kept only where it clears the ones before. The largest size allowed shrinks as the throws go on, so big dishes land first and small ones fill the gaps between them. The bottom gets a throw of its own.</p>
+      <p>Each dish is stretched along a <b>grain</b>: the block's length (across it on the ends), turned by up to 20°. Its long axis is 1.8 to 3 times its short one, and heights count 1.4 times, so dishes on the sides lie long and low, like courses of stone.</p>
+      <dl class="facts"><dt>dishes</dt><dd id="f-dishes">–</dd><dt>half-widths</dt><dd id="f-half">–</dd><dt>average width</dt><dd id="f-width">–</dd></dl>
+    </div>
+    <div class="views"><figure><div class="box wide" id="v-dishes" role="img" aria-label="The block with each dish's reach painted in its own colour, long along the grain, and a dot at each centre"></div>
+      <figcaption>Each dish's centre, and how far it would reach on its own: long along the grain, short across. Where two overlap, the nearer wins for now; the ridges settle it. The colours carry through the next steps.</figcaption></figure></div>
+  </section>
+
+  <section class="step" id="s3" aria-labelledby="h3s">
+    <div class="words">
+      <div class="n">Step 3</div><h2 id="h3s">Ridges</h2>
+      <p>Between two dishes, the <b>even line</b> is where a point is equally far into each (counting the stretch). A straight even line would give convex cells, which stone doesn't have.</p>
+      <p>So the ridge is a <b>walk</b> along the even line, out from its middle both ways: a straight run of 0.6 to 1.8 mm, then a turn of up to 40°, steering back toward the even line six times in ten. It zigzags without wandering off.</p>
+      <p>The diagram is one real ridge of this block, at true scale: everything above the walk belongs to one dish, everything below to the other.</p>
+    </div>
+    <div class="views">
+      <canvas class="plot" id="p-ridge" height="300" role="img" aria-label="One ridge drawn flat: a dashed even line, the zigzag walk across it, and the two dishes' colours above and below the walk"></canvas>
+      <div class="row"><button type="button" id="next-ridge">Another ridge</button><span class="key" id="ridge-key"></span></div>
+    </div>
+  </section>
+
+  <section class="step" id="s4" aria-labelledby="h4s">
+    <div class="words">
+      <div class="n">Step 4</div><h2 id="h4s">Two grids</h2>
+      <p>Two grids cover the six faces, joined into one closed mesh: a coarse one at 0.42 mm and a fine one at 0.12 mm. Each point belongs to the dish that wins against each other in turn among its five nearest: whichever side of their ridge it lies on.</p>
+      <p>The coarse grid decides first. A fine point whose four coarse neighbours all agree takes their dish without a test, so only the points near ridges are worked out at the fine scale.</p>
+      <dl class="facts"><dt>coarse points</dt><dd id="f-coarse">–</dd><dt>fine points</dt><dd id="f-fine">–</dd><dt>fine points tested</dt><dd id="f-tested">–</dd></dl>
+    </div>
+    <div class="views two">
+      <figure><div class="box" id="v-coarse" role="img" aria-label="The block coloured by dish on the coarse grid: blurry cell borders"></div><figcaption>Coarse grid, 0.42 mm.</figcaption></figure>
+      <figure><div class="box" id="v-fine" role="img" aria-label="The block coloured by dish on the fine grid: crisp, zigzag cell borders"></div><figcaption>Fine grid, 0.12 mm.</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="step" id="s5" aria-labelledby="h5s">
+    <div class="words">
+      <div class="n">Step 5</div><h2 id="h5s">Stray pieces</h2>
+      <p>A ridge's walk can cut a dish in two. A piece smaller than 2 mm², or thinner than 0.6 mm, would become a pit or a trench, so it joins the dish it borders most. Any other piece becomes a hollow of its own.</p>
+      <dl class="facts"><dt>pieces joined</dt><dd id="f-joined">–</dd><dt>area joined</dt><dd id="f-joined-area">–</dd></dl>
+    </div>
+    <div class="views"><figure><div class="box wide" id="v-stray" role="img" aria-label="The block in pale dish colours with the stray pieces that joined a neighbour in the accent colour"></div>
+      <figcaption><span class="key"><span><i class="sw-accent"></i>pieces that joined a neighbour</span></span></figcaption></figure></div>
+  </section>
+
+  <section class="step" id="s6" aria-labelledby="h6s">
+    <div class="words">
+      <div class="n">Step 6</div><h2 id="h6s">Crest points</h2>
+      <p>Wherever a ridge crosses an edge of the fine grid, the end nearer the crossing moves exactly onto the ridge and is pinned there. Each grid square is then cut into two triangles along the diagonal that joins two crest points.</p>
+      <p>So every ridge is an unbroken line of triangle edges that follows the walk, not the grid's staircase.</p>
+      <dl class="facts"><dt>crest points</dt><dd id="f-crest">–</dd><dt>triangles</dt><dd id="f-tris">–</dd></dl>
+    </div>
+    <div class="views"><figure><div class="box wide" id="v-crest" role="img" aria-label="A close view of the finished surface with its triangles drawn and the crest points as dots along the ridges"></div>
+      <figcaption>Close up, about 5 mm across, with the triangles drawn: <span class="key"><span><i class="sw-accent"></i>crest points</span></span></figcaption></figure></div>
+  </section>
+
+  <section class="step" id="s7" aria-labelledby="h7s">
+    <div class="words">
+      <div class="n">Step 7</div><h2 id="h7s">Relaxation</h2>
+      <p>With the crest points pinned, two things relax over the grid, each point pulled toward the mean of its neighbours. A <b>taut skin</b> follows the block, but where a dish runs over an edge it pulls straight across, cutting a flat facet. A <b>membrane</b>, pinned at zero on the crests and sagging evenly, gives each dish one smooth hollow.</p>
+      <p>The coarse grid takes 120 passes; the fine grid starts from its answer and takes 15.</p>
+    </div>
+    <div class="views"><figure><div class="box wide" id="v-sag" role="img" aria-label="The taut skin coloured by how far each dish's membrane sags: pale at the crests, deep blue-green at the bottom of each dish"></div>
+      <figcaption><span class="key"><span><i class="ramp" style="width:60px"></i>membrane sag, crest to each dish's deepest</span></span></figcaption></figure></div>
+  </section>
+
+  <section class="step" id="s8" aria-labelledby="h8s">
+    <div class="words">
+      <div class="n">Step 8</div><h2 id="h8s">Depth</h2>
+      <p>Each piece's deepest sag tells its width, so wide dishes go deeper: a tenth of their width, never more than 1.9 mm (at the default depth; the depth setting scales it). Each point goes down by that full depth times its sag over the deepest, raised to 0.85, which steepens the walls just under the crest.</p>
+      <p>The slice below is the middle of the top, end to end, at true scale. Drag the window along it to see that stretch up close, still at true scale.</p>
+    </div>
+    <div class="views">
+      <figure><div class="box wide" id="v-depth" role="img" aria-label="The finished block from a low angle, light raking across the top"></div><figcaption>The finished block, from low past its left end, the light raking along the top.</figcaption></figure>
+      <canvas class="plot drag" id="p-slice" height="120" role="img" aria-label="The middle of the top, end to end, at true scale: the plain block's line and the textured surface dipping below it, with a window marking the stretch shown below"></canvas>
+      <canvas class="plot" id="p-zoom" height="230" role="img" aria-label="Six millimetres of the top's middle, at true scale: the plain line and the dishes under it"></canvas>
+      <div class="key"><span><i style="background:var(--muted)"></i>plain block</span><span><i class="sw-accent"></i>textured surface</span><span id="zoom-label"></span></div>
+    </div>
+  </section>
+
+  <section class="step" id="s9" aria-labelledby="h9s">
+    <div class="words">
+      <div class="n">Step 9</div><h2 id="h9s">Hard crests</h2>
+      <p>A point shared by two triangles gets one normal, the average of theirs. On a crest that averages the two walls, and the crest shades soft and rounded.</p>
+      <p>So each crest point is split into one copy per dish beside it. The walls meet at the same place but shade apart, and the crest reads as a sharp edge.</p>
+      <p>For viewing only, each dish is drawn a little darker toward its bottom and a little brighter at its crests.</p>
+    </div>
+    <div class="views two">
+      <figure><div class="box" id="v-soft" role="img" aria-label="A close view where crest points are shared: the crests look soft"></div><figcaption>Crest points shared.</figcaption></figure>
+      <figure><div class="box" id="v-hard" role="img" aria-label="The same close view with crest points split: the crests are sharp"></div><figcaption>Crest points split per dish.</figcaption></figure>
+    </div>
   </section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -62,7 +208,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
 <script>
 (function () {
   'use strict';
-  if (typeof THREE === 'undefined') return;   /* three.js did not load: the view stays empty */
+  if (typeof THREE === 'undefined') return;   /* three.js did not load: the views stay empty */
   /* The block and the camera were fitted to the reference picture: the block's outline against the rock's outline, and its top
      corners against the rock's (the picture letterboxed in a square, as it is shown). The block tapers: its right end is wider
      and taller than its left. Units are mm; z is up, x is the length, the near long face is -y. */
@@ -93,7 +239,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     sweeps: { coarse: 120, fine: 15 }   /* passes of the relaxation on each grid */
   };
   const along = () => FEEL.width / W0;   /* how much bigger than at W0 the texture is along the surface */
-  const T = THREE, stage = document.getElementById('stage'), canvas = document.getElementById('view');
+  const T = THREE;
 
   /* ---- the block ---- */
   const wAt = (a) => BLOCK.left.W + (BLOCK.right.W - BLOCK.left.W) * a, hAt = (a) => BLOCK.left.H + (BLOCK.right.H - BLOCK.left.H) * a;
@@ -227,6 +373,12 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     const f = Math.max(0, Math.min(NS - 1.001, MID + t / dt)), s = f | 0, w = walk(a, b), m = toA - (w[s] + (w[s + 1] - w[s]) * (f - s));
     return lo ? m : -m;
   }
+  /* how far along the ridge between dishes a < b fine point k lies, from the ridge's middle (as margin reads its walk) */
+  function alongRidge(k, a, b) {
+    const P = dishes[a], Q = dishes[b], nx = fine.out[3 * k], ny = fine.out[3 * k + 1], nz = fine.out[3 * k + 2], ex = Q.x - P.x, ey = Q.y - P.y, ez = Q.z - P.z;
+    const ux = ny * ez - nz * ey, uy = nz * ex - nx * ez, uz = nx * ey - ny * ex, ul = Math.hypot(ux, uy, uz) || 1;
+    return ((fine.box[3 * k] - (P.x + Q.x) / 2) * ux + (fine.box[3 * k + 1] - (P.y + Q.y) / 2) * uy + (fine.box[3 * k + 2] - (P.z + Q.z) / 2) * uz) / ul;
+  }
   /* Each point of a grid: its dish, of its K nearest the one that beats each other in turn, nearest first. known(k), if given,
      gives a point's dish when it is already certain, or -1. */
   function partition(G, dish, known) {
@@ -267,6 +419,11 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   const fDish = new Uint16Array(F.N), fPin = new Uint8Array(F.N), xyz = new Float32Array(F.N * 3), sag = new Float32Array(F.N), piece = new Int32Array(F.N), top = new Float32Array(F.N), stack = new Int32Array(F.N);
   /* room for every point and a copy of each crest point per dish beside it (copyOf: the point each copy is of) */
   const copyOf = new Int32Array(F.N); let copied = 0;
+  /* kept for the pictures only: the fine partition before stray pieces join (fRaw), which points joined (joined), the squares cut
+     into triangles before the crest copies (ixTri), and each pair of dishes that meet: how many grid edges their ridge crosses and
+     how far along it, from its middle, those crossings run (pairs) */
+  const fRaw = new Uint16Array(F.N), joined = new Uint8Array(F.N), ixTri = new Uint32Array(F.quads.length / 4 * 6), pairs = new Map();
+  let joinedPieces = 0;
   const pos = new Float32Array(F.N * 6), shade = new Float32Array(F.N * 6), geo = new T.BufferGeometry(), Q = [0, 0, 0], O = [0, 0, 0];
   geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setIndex(new T.BufferAttribute(new Uint32Array(F.quads.length / 4 * 6), 1));
   geo.setAttribute('color', new T.BufferAttribute(shade, 3));
@@ -294,7 +451,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     for (let i = 0; i < qc.length; i += 4) for (const [a, b, c] of [[3 * qc[i], 3 * qc[i + 1], 3 * qc[i + 2]], [3 * qc[i], 3 * qc[i + 2], 3 * qc[i + 3]]]) {
       const ux = cXyz[b] - cXyz[a], uy = cXyz[b + 1] - cXyz[a + 1], uz = cXyz[b + 2] - cXyz[a + 2], vx = cXyz[c] - cXyz[a], vy = cXyz[c + 1] - cXyz[a + 1], vz = cXyz[c + 2] - cXyz[a + 2];
       const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; cOut[a] += nx; cOut[a + 1] += ny; cOut[a + 2] += nz; cOut[b] += nx; cOut[b + 1] += ny; cOut[b + 2] += nz; cOut[c] += nx; cOut[c + 1] += ny; cOut[c + 2] += nz; }
-    partition(F, fDish, settled);
+    partition(F, fDish, settled); fRaw.set(fDish); joined.fill(0); joinedPieces = 0;
     /* A dish's ground can come out in more than one piece (the ridges' walks cut a stray piece off). A stray piece smaller than
        FEEL.speck mm², or thinner than FEEL.sliver mm (its area over its rim), joins the dish it borders most; every other piece is
        a hollow of its own (step 3). A dish's largest piece always stays. */
@@ -304,19 +461,22 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
       const votes = new Map(); let rim = 0, best = -1, most = 0;
       for (let q = start[i]; q < start[i + 1]; q++) { const p = members[q]; for (let e = F.off[p]; e < F.off[p + 1]; e++) { const j = fDish[F.nbr[e]]; if (j !== d) { votes.set(j, (votes.get(j) || 0) + 1); rim++; } } }
       if (area[i] >= small && area[i] >= thin * rim) continue;
-      votes.forEach((v, j) => { if (v > most) { most = v; best = j; } }); if (best >= 0) for (let q = start[i]; q < start[i + 1]; q++) fDish[members[q]] = best; }
+      votes.forEach((v, j) => { if (v > most) { most = v; best = j; } }); if (best >= 0) { joinedPieces++; for (let q = start[i]; q < start[i + 1]; q++) { fDish[members[q]] = best; joined[members[q]] = 1; } } }
     pieces();
     /* the crest points: each grid edge a ridge crosses moves its nearer end onto the crossing (each point to its nearest one) */
     const side = (p, a, b) => { const x = F.box[3 * p], y = F.box[3 * p + 1], z = F.box[3 * p + 2], nx = F.out[3 * p], ny = F.out[3 * p + 1], nz = F.out[3 * p + 2];
       return margin(x, y, z, nx, ny, nz, a, b, reach(x, y, z, a, nx, ny, nz), reach(x, y, z, b, nx, ny, nz)); };
-    shift.fill(1); for (let k = 0; k < F.N; k++) for (let e = F.off[k]; e < F.off[k + 1]; e++) { const o = F.nbr[e]; if (o < k || fDish[o] === fDish[k]) continue;
+    pairs.clear(); shift.fill(1); for (let k = 0; k < F.N; k++) for (let e = F.off[k]; e < F.off[k + 1]; e++) { const o = F.nbr[e]; if (o < k || fDish[o] === fDish[k]) continue;
       const a = fDish[k], b = fDish[o], mk = side(k, a, b), mo = side(o, a, b), t = mk > 0 && mo < 0 ? mk / (mk - mo) : .5;
+      { const lo = Math.min(a, b), hi = Math.max(a, b), u = alongRidge(k, lo, hi), key = lo * 4096 + hi, p = pairs.get(key);
+        if (p) { p.n++; p.lo = Math.min(p.lo, u); p.hi = Math.max(p.hi, u); } else pairs.set(key, { a: lo, b: hi, n: 1, lo: u, hi: u }); }
       if (t <= .5) { if (t < shift[k]) { shift[k] = t; toward[k] = o; } } else if (1 - t < shift[o]) { shift[o] = 1 - t; toward[o] = k; } }
     for (let k = 0; k < F.N; k++) fPin[k] = shift[k] <= .5 ? 1 : 0;
     const ix = geo.index.array, qd = F.quads;
     for (let q = 0, i = 0; q < qd.length; q += 4) { const a = qd[q], b = qd[q + 1], c = qd[q + 2], d = qd[q + 3];
       if (fPin[b] && fPin[d] && !(fPin[a] && fPin[c])) { ix[i++] = a; ix[i++] = b; ix[i++] = d; ix[i++] = b; ix[i++] = c; ix[i++] = d; }
       else { ix[i++] = a; ix[i++] = b; ix[i++] = c; ix[i++] = a; ix[i++] = c; ix[i++] = d; } }
+    ixTri.set(ix);
     const scale = (FEEL.coarse / FEEL.fine) ** 2;
     for (let k = 0; k < F.N; k++) {
       let x = 0, y = 0, z = 0, h = 0, nx = 0, ny = 0, nz = 0;
@@ -362,36 +522,219 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere();
   }
 
-  /* ---- the view ---- */
-  const renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-  const scene = new T.Scene(), cam = new T.PerspectiveCamera(CAM.fov, 1, 10, 2000); cam.up.set(0, 0, 1);
-  const controls = new T.OrbitControls(cam, canvas); controls.enablePan = false; controls.addEventListener('change', draw);
-  function home() {
-    const a = CAM.az * Math.PI / 180, e = CAM.el * Math.PI / 180, t = CAM.target;
-    cam.position.set(t[0] + CAM.dist * Math.cos(e) * Math.sin(a), t[1] - CAM.dist * Math.cos(e) * Math.cos(a), t[2] + CAM.dist * Math.sin(e));
-    controls.target.set(t[0], t[1], t[2]); controls.update();
-  }
-  const block = new T.Mesh(geo, new T.MeshStandardMaterial({ color: 0xececee, roughness: 1, metalness: 0, vertexColors: true })); scene.add(block);
-  /* the block floats, with no ground and no shadows. A soft light all round, part of it even and part coming from above, behind and
-     to the right, so the far side has some shape too; and one lamp out past its left end, low and a little in front, pointing at the
-     near left top corner, so its light rakes along the top and the near face and the dishes show by their shading */
-  const fill = new T.DirectionalLight(0xffffff, .2); fill.position.set(50, 60, 45);
-  scene.add(new T.AmbientLight(0xffffff, .38), new T.HemisphereLight(0xffffff, 0x8c8c90, .2), fill);
-  const lamp = new T.SpotLight(0xffffff, .34, 0, Math.PI / 4, 1); lamp.position.set(-72, -16, 34); lamp.target.position.set(-16.3, -7.4, 12.25);
-  scene.add(lamp, lamp.target);
-  function draw() { renderer.render(scene, cam); }
-  function size() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); draw(); }
-  canvas.addEventListener('dblclick', () => { home(); draw(); });
 
-  /* the controls: a width change throws the dishes again and remakes everything; a depth change only digs again. Changes while
-     a rebuild is waiting are folded into it. */
+  /* ---- the pictures ----
+     Every 3D view has its own scene and camera but they all draw through one WebGL renderer, off the page, copied into each view's
+     own canvas: a page of a dozen views stays within the browser's few WebGL contexts. A view draws when it is on screen and
+     something changed; off screen it waits. */
+  const R = new T.WebGLRenderer({ antialias: true, alpha: true }), DPR = Math.min(window.devicePixelRatio || 1, 2);
+  /* the block floats, with no ground and no shadows: a soft light all round, part of it from above, behind and to the right, and one
+     lamp past the left end, low and a little in front, raking along the top and the near face */
+  function lit(scene) {
+    const fill = new T.DirectionalLight(0xffffff, .2); fill.position.set(50, 60, 45);
+    const lamp = new T.SpotLight(0xffffff, .34, 0, Math.PI / 4, 1); lamp.position.set(-72, -16, 34); lamp.target.position.set(-16.3, -7.4, 12.25);
+    scene.add(new T.AmbientLight(0xffffff, .38), new T.HemisphereLight(0xffffff, 0x8c8c90, .2), fill, lamp, lamp.target); return scene;
+  }
+  const orbit = (az, el, dist, target, fov) => { const a = az * Math.PI / 180, e = el * Math.PI / 180;
+    return { pos: [target[0] + dist * Math.cos(e) * Math.sin(a), target[1] - dist * Math.cos(e) * Math.cos(a), target[2] + dist * Math.sin(e)], target: target, fov: fov }; };
+  const HOME = orbit(CAM.az, CAM.el, CAM.dist, CAM.target, CAM.fov), NEAR = orbit(-20, 15, 130, [-4, -8, 8], 8), CLOSE = { pos: [7, -30, 8], target: [7, -8.6, 4], fov: 12 };
+  const LOW = orbit(-64, 9, 300, [0, 0, 11], 8);
+  const views = [];
+  function view(id, things, home, bright) {
+    const box = document.getElementById(id), canvas = document.createElement('canvas'); box.appendChild(canvas);
+    const scene = lit(new T.Scene()); things.forEach(t => scene.add(t));
+    if (bright) scene.add(new T.AmbientLight(0xffffff, bright));   /* coloured views: more even light, so the colours read */
+    const cam = new T.PerspectiveCamera(home.fov, 1, 1, 3000); cam.up.set(0, 0, 1);
+    const controls = new T.OrbitControls(cam, canvas); controls.enablePan = false; controls.enableZoom = false;
+    const v = { box: box, canvas: canvas, ctx: canvas.getContext('2d'), scene: scene, cam: cam, dirty: true, seen: false };
+    const back = () => { cam.position.set(home.pos[0], home.pos[1], home.pos[2]); controls.target.set(home.target[0], home.target[1], home.target[2]); controls.update(); };
+    back(); controls.addEventListener('change', () => paint(v));
+    /* scrolling the page over a view scrolls the page; once a view is clicked, scrolling over it zooms it, until the pointer leaves */
+    canvas.addEventListener('pointerdown', () => { controls.enableZoom = true; });
+    canvas.addEventListener('pointerleave', () => { controls.enableZoom = false; });
+    canvas.addEventListener('dblclick', () => { back(); paint(v); });
+    views.push(v); return v;
+  }
+  function paint(v) {
+    const w = Math.round(v.box.clientWidth * DPR), h = Math.round(v.box.clientHeight * DPR); if (!w || !h) return;
+    if (v.canvas.width !== w || v.canvas.height !== h) { v.canvas.width = w; v.canvas.height = h; }
+    R.setSize(w, h, false); v.cam.aspect = w / h; v.cam.updateProjectionMatrix(); R.render(v.scene, v.cam);
+    v.ctx.clearRect(0, 0, w, h); v.ctx.drawImage(R.domElement, 0, 0); v.dirty = false;
+  }
+  function repaint() { views.forEach(v => { v.dirty = true; if (v.seen) paint(v); }); }
+
+  /* the geometries the views share */
+  const stone = (opts) => new T.MeshStandardMaterial(Object.assign({ color: 0xececee, roughness: 1, metalness: 0 }, opts || {}));
+  const tint = () => new T.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, vertexColors: true });
+  const attr = (a, n) => new T.BufferAttribute(a, n);
+  const square = (quads, n) => { const ix = new Uint32Array(quads.length / 4 * 6); for (let q = 0, i = 0; q < quads.length; q += 4) { ix[i++] = quads[q]; ix[i++] = quads[q + 1]; ix[i++] = quads[q + 2]; ix[i++] = quads[q]; ix[i++] = quads[q + 2]; ix[i++] = quads[q + 3]; } return ix; };
+  /* the plain block, fine and coarse, each with its colour for the step that paints it */
+  const plain = new T.BufferGeometry(); plain.setAttribute('position', attr(F.base, 3)); plain.setIndex(attr(square(F.quads), 1)); plain.computeVertexNormals();
+  const painted = (colours) => { const g = new T.BufferGeometry(); g.setAttribute('position', plain.attributes.position); g.setAttribute('normal', plain.attributes.normal); g.setIndex(plain.index); g.setAttribute('color', attr(colours, 3)); return g; };
+  const fineCol = new Float32Array(F.N * 3), strayCol = new Float32Array(F.N * 3), cCol = new Float32Array(C.N * 3), footCol = new Float32Array(C.N * 3);
+  const gFine = painted(fineCol), gStray = painted(strayCol);
+  const gCoarse = new T.BufferGeometry(); gCoarse.setAttribute('position', attr(C.base, 3)); gCoarse.setIndex(attr(square(C.quads), 1)); gCoarse.computeVertexNormals(); gCoarse.setAttribute('color', attr(cCol, 3));
+  const gFoot = new T.BufferGeometry(); gFoot.setAttribute('position', gCoarse.attributes.position); gFoot.setAttribute('normal', gCoarse.attributes.normal); gFoot.setIndex(gCoarse.index); gFoot.setAttribute('color', attr(footCol, 3));
+  /* the taut skin, coloured by its membrane's sag */
+  const sagCol = new Float32Array(F.N * 3), gSkin = new T.BufferGeometry(); gSkin.setAttribute('position', attr(xyz, 3)); gSkin.setIndex(attr(ixTri, 1)); gSkin.setAttribute('color', attr(sagCol, 3));
+  /* the finished surface with its crest points shared, not split (step 9's soft side): the same points, the triangles before the copies */
+  const gSoft = new T.BufferGeometry(); gSoft.setAttribute('position', geo.attributes.position); gSoft.setAttribute('color', geo.attributes.color); gSoft.setIndex(attr(ixTri, 1));
+  /* the dish markers: a dot at each centre and its two axes; and the crest points as dots */
+  /* (three.js sizes a point by its distance alone, not the lens, so each size here is a width in mm over the tangent of half its view's field) */
+  const gDots = new T.BufferGeometry(), gCrest = new T.BufferGeometry(), crestAt = new Float32Array(F.N * 3);
+  gCrest.setAttribute('position', attr(crestAt, 3));
+  const accent = new T.Color(0x3557c9);
+  const disc = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.beginPath(); g.arc(32, 32, 30, 0, 7); g.fill(); return new T.CanvasTexture(c); })();
+  const dots = new T.Points(gDots, new T.PointsMaterial({ size: .7 / Math.tan(HOME.fov * Math.PI / 360), color: 0x1d232b, map: disc, alphaTest: .5, sizeAttenuation: true }));
+  const crestDots = new T.Points(gCrest, new T.PointsMaterial({ size: .05 / Math.tan(CLOSE.fov * Math.PI / 360), color: accent, map: disc, alphaTest: .5, sizeAttenuation: true }));
+  const wires = new T.Mesh(geo, new T.MeshBasicMaterial({ color: 0x1d232b, wireframe: true, transparent: true, opacity: .28 }));
+
+  view('v-hero', [new T.Mesh(geo, stone({ vertexColors: true }))], HOME);
+  view('v-block', [new T.Mesh(plain, stone())], HOME);
+  view('v-dishes', [new T.Mesh(gFoot, tint()), dots], HOME, .3);
+  view('v-coarse', [new T.Mesh(gCoarse, tint())], NEAR, .35);
+  view('v-fine', [new T.Mesh(gFine, tint())], NEAR, .35);
+  view('v-stray', [new T.Mesh(gStray, tint())], NEAR, .3);
+  view('v-crest', [new T.Mesh(geo, stone({ vertexColors: true })), wires, crestDots], CLOSE);
+  view('v-sag', [new T.Mesh(gSkin, tint())], HOME, .2);
+  view('v-depth', [new T.Mesh(geo, stone({ vertexColors: true }))], LOW);
+  view('v-soft', [new T.Mesh(gSoft, stone({ vertexColors: true }))], CLOSE);
+  view('v-hard', [new T.Mesh(geo, stone({ vertexColors: true }))], CLOSE);
+  const io = new IntersectionObserver(es => es.forEach(e => { const v = views.find(w => w.box === e.target); v.seen = e.isIntersecting; if (v.seen && v.dirty) paint(v); }), { rootMargin: '150px' });
+  views.forEach(v => io.observe(v.box));
+
+  /* each dish's colour: pale, spread round the cool half of the hues (no reds or oranges, which mean overhang on a model) */
+  let dishCol = new Float32Array(0);
+  const hue = new T.Color();
+  function colourDishes() {
+    dishCol = new Float32Array(dishes.length * 3);
+    for (let i = 0; i < dishes.length; i++) { hue.setHSL((150 + 190 * ((i * .618034) % 1)) / 360, .55, .72); dishCol[3 * i] = hue.r; dishCol[3 * i + 1] = hue.g; dishCol[3 * i + 2] = hue.b; }
+  }
+  const paintBy = (out, dish, n) => { for (let k = 0; k < n; k++) { const d = 3 * dish[k]; out[3 * k] = dishCol[d]; out[3 * k + 1] = dishCol[d + 1]; out[3 * k + 2] = dishCol[d + 2]; } };
+  const fmt = (v, d) => v.toLocaleString('en-US', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 });
+  const put = (id, text) => { document.getElementById(id).textContent = text; };
+
+  /* after the dishes and the surface's shape (everything but the depth) are made */
+  function showShape() {
+    colourDishes();
+    /* step 2: each dish's own footprint (where it reaches, stretch and all, before any ridge), the nearest one where they overlap,
+       and a dot at each centre, a little off the block so it sits on it */
+    const n = dishes.length, dp = new Float32Array(n * 3), q = [0, 0, 0], o = [0, 0, 0], id = new Int32Array(K);
+    dishes.forEach((c, i) => { inner(c.x, c.y, c.z, q, o); for (let t = 0; t < 3; t++) dp[3 * i + t] = q[t] + o[t] * (FEEL.round + .08); });
+    gDots.setAttribute('position', attr(dp, 3)); gDots.computeBoundingSphere();
+    for (let k = 0; k < C.N; k++) { near(C, k, id); let best = 0, at = -1;
+      for (let s = 0; s < K; s++) { const v = reach(C.box[3 * k], C.box[3 * k + 1], C.box[3 * k + 2], id[s], C.out[3 * k], C.out[3 * k + 1], C.out[3 * k + 2]); if (v < best) { best = v; at = id[s]; } }
+      for (let t = 0; t < 3; t++) footCol[3 * k + t] = at < 0 ? .86 : dishCol[3 * at + t]; }
+    gFoot.attributes.color.needsUpdate = true;
+    const rs = dishes.map(c => c.r);
+    put('f-dishes', fmt(n)); put('f-half', fmt(Math.min(...rs), 1) + ' to ' + fmt(Math.max(...rs), 1) + ' mm'); put('f-width', fmt(2 * rs.reduce((a, b) => a + b, 0) / n, 2) + ' mm');
+    /* step 4: both grids by dish (the fine one before the stray pieces join) */
+    paintBy(cCol, cDish, C.N); paintBy(fineCol, fRaw, F.N); gCoarse.attributes.color.needsUpdate = true; gFine.attributes.color.needsUpdate = true;
+    let tested = 0; for (let k = 0; k < F.N; k++) if (settled(k) < 0) tested++;
+    put('f-coarse', fmt(C.N)); put('f-fine', fmt(F.N)); put('f-tested', fmt(tested) + ' (' + fmt(100 * tested / F.N) + '%)');
+    /* step 5: the final dishes faded, and what joined in the accent */
+    let jn = 0; for (let k = 0; k < F.N; k++) { const d = 3 * fDish[k];
+      if (joined[k]) { jn++; strayCol[3 * k] = accent.r; strayCol[3 * k + 1] = accent.g; strayCol[3 * k + 2] = accent.b; }
+      else for (let t = 0; t < 3; t++) strayCol[3 * k + t] = .78 + .22 * dishCol[d + t]; }
+    gStray.attributes.color.needsUpdate = true;
+    put('f-joined', fmt(joinedPieces)); put('f-joined-area', fmt(jn * FEEL.fine * FEEL.fine, 1) + ' mm²');
+    /* step 7: the membrane's sag, pale at the crests to deep at each piece's bottom */
+    for (let k = 0; k < F.N; k++) { const s = top[piece[k]] > 0 ? sag[k] / top[piece[k]] : 0;
+      sagCol[3 * k] = .949 + (.184 - .949) * s; sagCol[3 * k + 1] = .957 + (.435 - .957) * s; sagCol[3 * k + 2] = .965 + (.561 - .965) * s; }
+    gSkin.attributes.position.needsUpdate = true; gSkin.attributes.color.needsUpdate = true; gSkin.index.needsUpdate = true; gSkin.computeVertexNormals();
+    gSoft.index.needsUpdate = true;
+    /* step 3: the ridges to show, those that cross the most grid edges first */
+    ridges = Array.from(pairs.values()).filter(p => p.hi - p.lo > 1).sort((a, b) => b.n - a.n).slice(0, 24); ridgeAt = 0;
+  }
+  /* after the depth */
+  function showDepth() {
+    let c = 0; for (let k = 0; k < F.N; k++) if (fPin[k]) { crestAt[3 * c] = pos[3 * k]; crestAt[3 * c + 1] = pos[3 * k + 1]; crestAt[3 * c + 2] = pos[3 * k + 2]; c++; }
+    gCrest.setDrawRange(0, c); gCrest.attributes.position.needsUpdate = true; gCrest.computeBoundingSphere();
+    put('f-crest', fmt(c)); put('f-tris', fmt(geo.drawRange.count / 3));
+    gSoft.computeVertexNormals();
+    drawRidge(); drawSlice();
+  }
+
+  /* ---- the flat diagrams ---- */
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const rgb = (i, f) => 'rgb(' + [0, 1, 2].map(t => Math.round(255 * (dishCol[3 * i + t] * (f || 1)))).join(',') + ')';
+  function sized(cv) { const w = cv.clientWidth, h = +cv.getAttribute('height'); cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR); cv.style.height = h + 'px';
+    const g = cv.getContext('2d'); g.setTransform(DPR, 0, 0, DPR, 0, 0); g.clearRect(0, 0, w, h); return { g: g, w: w, h: h }; }
+  function bar(g, x, y, px, text) {   /* a scale bar of px pixels */
+    g.strokeStyle = css('--fg'); g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + px, y); g.moveTo(x, y - 4); g.lineTo(x, y + 4); g.moveTo(x + px, y - 4); g.lineTo(x + px, y + 4); g.stroke();
+    g.fillStyle = css('--fg'); g.font = '12px ' + css('--mono'); g.fillText(text, x + px + 8, y + 4);
+  }
+  /* step 3: one ridge, in its own frame: across, along it from its middle; up, toward the lower-numbered dish (both in mm, one scale) */
+  let ridges = [], ridgeAt = 0;
+  function drawRidge() {
+    const cv = document.getElementById('p-ridge'), { g, w, h } = sized(cv), r = ridges[ridgeAt]; if (!r) return;
+    const wk = walk(r.a, r.b), lo = r.lo - .6, hi = r.hi + .6, s = w / (hi - lo), x0 = 0, cy = h / 2;
+    const X = (t) => x0 + (t - lo) * s, Y = (y) => cy - y * s, at = (t) => { const f = Math.max(0, Math.min(NS - 1.001, MID + t / dt)), i = f | 0; return wk[i] + (wk[i + 1] - wk[i]) * (f - i); };
+    const steps = Math.ceil((hi - lo) / dt), path = []; for (let i = 0; i <= steps; i++) { const t = lo + i * (hi - lo) / steps; path.push([X(t), Y(at(t))]); }
+    /* the two sides, in the two dishes' colours */
+    g.fillStyle = rgb(r.a); g.beginPath(); g.moveTo(x0, 0); path.forEach(p => g.lineTo(p[0], p[1])); g.lineTo(path[path.length - 1][0], 0); g.fill();
+    g.fillStyle = rgb(r.b); g.beginPath(); g.moveTo(x0, h); path.forEach(p => g.lineTo(p[0], p[1])); g.lineTo(path[path.length - 1][0], h); g.fill();
+    /* the even line and the walk */
+    g.setLineDash([5, 5]); g.strokeStyle = 'rgba(20,24,30,.55)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x0, cy); g.lineTo(X(hi), cy); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = '#14181e'; g.lineWidth = 2.2; g.beginPath(); path.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke();
+    /* the turns: where the walk's slope changes */
+    g.fillStyle = '#14181e'; for (let i = 1; i < path.length - 1; i++) { const a = path[i][1] - path[i - 1][1], b = path[i + 1][1] - path[i][1]; if (Math.abs(a - b) > .02 * s * dt * 4) { g.beginPath(); g.arc(path[i][0], path[i][1], 3, 0, 7); g.fill(); i += 3; } }
+    g.fillStyle = 'rgba(20,24,30,.8)'; g.font = '600 12px ' + css('--text'); g.fillText('dish ' + (r.a + 1) + ' side', x0 + 6, 16); g.fillText('dish ' + (r.b + 1) + ' side', x0 + 6, h - 8);
+    g.font = '12px ' + css('--text'); g.fillText('even line', w - 70, cy - 8);
+    const unit = s >= 60 ? 1 : 2; g.fillStyle = 'rgba(20,24,30,.8)'; g.strokeStyle = '#14181e'; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(w - unit * s - 64, h - 14); g.lineTo(w - 64, h - 14); g.stroke(); g.fillText(unit + ' mm', w - 58, h - 10);
+    document.getElementById('ridge-key').textContent = 'Ridge ' + (ridgeAt + 1) + ' of ' + ridges.length + ': ' + fmt(hi - lo - 1.2, 1) + ' mm long, crossing ' + fmt(r.n) + ' grid edges. Dots mark its turns.';
+  }
+  document.getElementById('next-ridge').addEventListener('click', () => { ridgeAt = (ridgeAt + 1) % Math.max(1, ridges.length); drawRidge(); });
+
+  /* step 8: the top's middle row of points, end to end, at true scale; and a 6 mm window of it, at true scale too */
+  const top0 = fine.ids[0], row = (() => { const j = top0.ny >> 1, W = top0.nx + 1, out = []; for (let i = 0; i <= top0.nx; i++) out.push(top0.g[j * W + i]); return out; })();
+  let windowAt = .3; const SPAN_MM = 6;
+  function drawSlice() {
+    const A = sized(document.getElementById('p-slice')), Z = sized(document.getElementById('p-zoom'));
+    const L = BLOCK.L, lo = -L / 2 - .3, s = (A.w - 24) / (L + .6), x0 = 12, zTop = Math.max(...row.map(k => F.base[3 * k + 2])) + .4;
+    const XA = (x) => x0 + (x - lo) * s, YA = (z) => 8 + (zTop - z) * s;
+    const line = (g, pts, X, Y, colour, width) => { g.strokeStyle = colour; g.lineWidth = width; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.stroke(); };
+    const plainPts = row.map(k => [F.base[3 * k], F.base[3 * k + 2]]), surf = row.map(k => [pos[3 * k], pos[3 * k + 2]]);
+    const fillUnder = (g, X, Y, h) => { g.fillStyle = css('--accent-soft'); g.beginPath(); surf.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.lineTo(X(surf[surf.length - 1][0]), h); g.lineTo(X(surf[0][0]), h); g.fill(); };
+    fillUnder(A.g, XA, YA, A.h); line(A.g, plainPts, XA, YA, css('--muted'), 1); line(A.g, surf, XA, YA, css('--accent'), 1.5);
+    /* the window */
+    const wx = -L / 2 + windowAt * (L - SPAN_MM); A.g.strokeStyle = css('--fg'); A.g.lineWidth = 1.5; A.g.strokeRect(XA(wx), 2, SPAN_MM * s, A.h - 4);
+    bar(A.g, A.w - 5 * s - 70, A.h - 12, 5 * s, '5 mm');
+    /* the zoom: the same, 6 mm across */
+    const s2 = (Z.w - 24) / SPAN_MM, inWin = row.filter(k => F.base[3 * k] >= wx - .2 && F.base[3 * k] <= wx + SPAN_MM + .2), zc = Math.max(...inWin.map(k => F.base[3 * k + 2])) + .25;
+    const XZ = (x) => 12 + (x - wx) * s2, YZ = (z) => 10 + (zc - z) * s2;
+    fillUnder(Z.g, XZ, YZ, Z.h); line(Z.g, plainPts, XZ, YZ, css('--muted'), 1.2); line(Z.g, surf, XZ, YZ, css('--accent'), 2.2);
+    bar(Z.g, Z.w - .5 * s2 - 80, Z.h - 14, .5 * s2, '0.5 mm');
+    put('zoom-label', 'Window: ' + fmt(wx + L / 2, 1) + ' to ' + fmt(wx + L / 2 + SPAN_MM, 1) + ' mm from the left end.');
+  }
+  { const cv = document.getElementById('p-slice'); let down = false;
+    const move = (e) => { const r = cv.getBoundingClientRect(), s = (r.width - 24) / (BLOCK.L + .6), x = (e.clientX - r.left - 12) / s - .3 - SPAN_MM / 2; windowAt = Math.max(0, Math.min(1, x / (BLOCK.L - SPAN_MM))); drawSlice(); };
+    cv.addEventListener('pointerdown', (e) => { down = true; cv.setPointerCapture(e.pointerId); move(e); });
+    cv.addEventListener('pointermove', (e) => { if (down) move(e); });
+    cv.addEventListener('pointerup', () => { down = false; }); }
+
+  /* ---- the settings ----
+     A width change throws the dishes again and remakes everything; a depth change only digs again. Changes while a rebuild is
+     waiting are folded into it. */
   let want = 0;
-  function redo() { const w = want; want = 0; if (w & 2) { place(); shape(); } dig(); draw(); }
+  function rebuild(work) {
+    const t0 = performance.now();
+    if (work & 2) { place(); shape(); }
+    dig(); const ms = performance.now() - t0;
+    if (work & 2) showShape(); showDepth(); repaint();
+    put('t-build', fmt(ms) + ' ms');
+  }
+  function redo() { const w = want; want = 0; rebuild(w); }
   [['width', 2], ['depth', 1]].forEach(([name, work]) => { const input = document.getElementById(name), shown = document.getElementById(name + '-mm');
     input.value = FEEL[name]; shown.textContent = (+FEEL[name]).toFixed(2) + ' mm';
     input.addEventListener('input', () => { FEEL[name] = +input.value; shown.textContent = (+input.value).toFixed(2) + ' mm'; if (!want) requestAnimationFrame(redo); want |= work; }); });
-
-  place(); shape(); dig(); home(); size();
-  if ('ResizeObserver' in window) new ResizeObserver(size).observe(stage); else window.addEventListener('resize', size);
+  rebuild(3);
+  /* the views and diagrams follow the page's size and theme */
+  let resizing = 0;
+  const onResize = () => { if (resizing) return; resizing = requestAnimationFrame(() => { resizing = 0; repaint(); drawRidge(); drawSlice(); }); };
+  if ('ResizeObserver' in window) new ResizeObserver(onResize).observe(document.querySelector('main')); else window.addEventListener('resize', onResize);
+  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { drawRidge(); drawSlice(); });
+  new MutationObserver(() => { drawRidge(); drawSlice(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 })();
 </script>
