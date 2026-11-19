@@ -31,7 +31,7 @@ code,.num{font-family:var(--mono);font-size:.88em;font-variant-numeric:tabular-n
 .box>img{object-fit:contain}
 .box>canvas{touch-action:pan-y;cursor:grab}
 .box>canvas:active{cursor:grabbing}
-.hero{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
 .hero figure,.views figure{margin:0;display:grid;gap:6px;min-width:0}
 figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 
@@ -39,8 +39,8 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin:20px 0 0;padding:12px 0;background:var(--bg);border-bottom:1px solid var(--rule);display:grid;grid-template-columns:auto minmax(0,1fr) 5.2em auto minmax(0,1fr) 5.2em;gap:8px 14px;align-items:center;font-size:14px}
 .bar label,.bar .lab{font-weight:600}
 .shapes{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:4px}
-.shapes label{font-weight:500;display:inline-flex;align-items:center;padding:3px 12px;border:1px solid var(--rule);border-radius:99px;background:var(--panel);cursor:pointer;font-size:13px}
-.shapes input{position:absolute;opacity:0;width:1px;height:1px}
+.shapes label{position:relative;font-weight:500;display:inline-flex;align-items:center;padding:3px 12px;border:1px solid var(--rule);border-radius:99px;background:var(--panel);cursor:pointer;font-size:13px}
+.shapes input{position:absolute;left:0;top:0;margin:0;opacity:0;width:1px;height:1px;pointer-events:none}
 .shapes label:has(input:checked){border-color:var(--accent);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .shapes label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .bar input{width:100%;min-width:0;accent-color:var(--accent)}
@@ -62,14 +62,16 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 .facts{display:grid;grid-template-columns:auto auto;justify-content:start;gap:2px 14px;margin:4px 0 0;padding:10px 12px;background:var(--panel);border:1px solid var(--rule);border-radius:3px;font-size:13px}
 .facts dt{color:var(--muted)}
 .facts dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums}
-.views{display:grid;gap:14px;align-content:start;min-width:0}
-.views.two{grid-template-columns:1fr 1fr}
+.views{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-content:start;min-width:0}
+.views.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .key{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted)}
 .key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 .sw-accent{background:var(--accent)}
 .ramp{background:linear-gradient(90deg,#f2f4f6,#2f6f8f)}
 
-/* the flat diagrams, drawn on canvas from the build, in the page's colours */
+/* the flat diagrams, drawn on canvas from the build, in the page's colours. Their size is the page's alone (contain:size): what a
+   canvas holds never widens or lengthens the page, and one that fails to draw keeps its place. */
+.plot{contain:size}
 #p-ridge{height:300px}#p-slice{height:120px}#p-zoom{height:230px}
 .fault{grid-column:1/-1;margin:0;padding:6px 10px;border:1px solid var(--err);border-radius:3px;color:var(--err);font-size:13px}
 .box>img.shot{object-fit:fill;cursor:grab;user-select:none;-webkit-user-select:none}
@@ -79,8 +81,8 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 button{font:600 13px var(--text);padding:5px 12px;border:1px solid var(--rule);border-radius:3px;background:var(--panel);color:var(--fg);cursor:pointer}
 button:hover,button:focus-visible{border-color:var(--accent);outline:none}
 
-@media (max-width:900px){.step{grid-template-columns:1fr}.bar{grid-template-columns:auto minmax(0,1fr) 5.2em}}
-@media (max-width:640px){.hero,.views.two{grid-template-columns:1fr}}
+@media (max-width:900px){.step{grid-template-columns:minmax(0,1fr)}.bar{grid-template-columns:auto minmax(0,1fr) 5.2em}}
+@media (max-width:640px){.hero,.views.two{grid-template-columns:minmax(0,1fr)}}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 html{scroll-behavior:smooth}
 </style>
@@ -763,7 +765,9 @@ html{scroll-behavior:smooth}
 
     /* ---- the flat diagrams ---- */
     const rgb = (i, f) => 'rgb(' + [0, 1, 2].map(t => Math.round(255 * (flakeCol[3 * i + t] * (f || 1)))).join(',') + ')';
-    function sized(cv) { const w = cv.clientWidth, h = +cv.getAttribute('height'); cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR); cv.style.height = h + 'px';
+    /* a diagram's height in CSS pixels is its data-h (at first, its height in the HTML); its height attribute is its pixels, DPR times that,
+       so it is never read back */
+    function sized(cv) { const w = cv.clientWidth, h = +(cv.dataset.h || (cv.dataset.h = cv.getAttribute('height'))); cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR); cv.style.height = h + 'px';
       const g = cv.getContext('2d'); g.setTransform(DPR, 0, 0, DPR, 0, 0); g.clearRect(0, 0, w, h); return { g: g, w: w, h: h }; }
     function bar(g, x, y, px, text) {   /* a scale bar of px pixels */
       g.strokeStyle = css('--fg'); g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + px, y); g.moveTo(x, y - 4); g.lineTo(x, y + 4); g.moveTo(x + px, y - 4); g.lineTo(x + px, y + 4); g.stroke();
@@ -800,7 +804,7 @@ html{scroll-behavior:smooth}
       const plainPts = row.map(k => [hOf(F.base, k), vOf(F.base, k)]), surf = row.map(k => [hOf(pos, k), vOf(pos, k)]);
       const lo = Math.min(...plainPts.map(p => p[0])) - .3, L = Math.max(...plainPts.map(p => p[0])) + .3 - lo, cv = document.getElementById('p-slice'), w = cv.clientWidth, s = (w - 24) / L;
       const vTop = Math.max(...plainPts.map(p => p[1])) + .4, vLow = Math.min(...surf.map(p => p[1])) - .3;
-      cv.setAttribute('height', Math.round(Math.min(220, Math.max(90, (vTop - vLow) * s + 16))));
+      cv.dataset.h = (Math.round(Math.min(220, Math.max(90, (vTop - vLow) * s + 16))));
       const A = sized(cv), Z = sized(document.getElementById('p-zoom'));
       const XA = (x) => 12 + (x - lo) * s, YA = (v) => 8 + (vTop - v) * s;
       const line = (g, pts, X, Y, colour, width) => { g.strokeStyle = colour; g.lineWidth = width; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.stroke(); };
