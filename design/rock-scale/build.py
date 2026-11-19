@@ -110,30 +110,32 @@ P.append(prim('ridges', 'Ridges and swells', 'primitive 6 of 9',
   img('f_ridge', 'Flat-rock sheet, C: Low Ridge / Swell') + img('t_ridge', 'Rock sheet, 2: Ridge'),
   'At the flat sheet’s defaults, an angular ridge that fades, and a round swell.'))
 P.append(prim('cracks', 'Cracks and fissures', 'primitive 7 of 9',
-  'A crack is a narrow groove that wanders and stops. It stops because it lives inside one block (persistence). A hairline of 0.1 mm cannot be printed, so a crack is at least 0.4 mm wide and reads by its dark shadow, with a small step across it where one side sits a little proud.',
+  'A crack is a narrow groove that runs from the edge of a plane to the edge of another plane, or stops on the crack it meets. It never dies out in the middle of a face. It runs in straight lengths with angular kinks, not curves; its width changes along its length; its lips are chipped; and one side often sits a little proud of the other. A hairline of 0.1 mm cannot be printed, so a crack is at least 0.4 mm wide at half depth and reads by its dark shadow.',
   'crack', 'crack',
-  [('flat sheet ×1.4', 'width 0.15–0.7 (print floor 0.4), depth 0.15–1.1, length 7–70+'),
-   ('persistence', 'a crack ends inside a block; it never crosses a joint of the level above'),
+  [('flat sheet ×1.4', 'width 0.15–0.7 (print floor 0.4), depth 0.15–1.1, length 7–70+ (the slider sets the plate the crack crosses)'),
+   ('plate tilt', '1–5° (facet change, flat sheet), so a crack is also a step between planes'),
+   ('where it ends', 'at the edge of a plane, or on another crack; never in the middle of a face'),
    ('this model', '', 'me')],
   img('f_crack', 'Flat-rock sheet, C: Crack / Fissure') + img('f_close', 'Flat-rock sheet, B: the close-up, hairline crack at right'),
-  'At the defaults, a crack 0.7 mm wide, 1 mm deep, with a branch and a small step.'))
+  'At the defaults, a main crack crosses a 30 mm plate edge to edge; one crack comes in from the edge and stops on it, another leaves it for the opposite edge. The four planes are tilted and a little apart in height.'))
 P.append(prim('undulation', 'Undulation', 'primitive 8 of 9',
-  'Undulation is the lowest, broadest relief: no feature in it stands out, and it is what stops a flat from looking machined. It is the macro layer of the flat-rock sheet.',
+  'Undulation is the lowest, broadest relief: no feature in it stands out, and it is what stops a flat from looking machined. It is the macro layer of the flat-rock sheet. Each swell has its own height from crest to trough; the end-to-end tilt of the whole piece is a separate slope that adds to the overall range, so the overall top-to-bottom figure is larger than a swell.',
   'undul', 'undul',
-  [('flat sheet ×1.4', 'amplitude 0.7–2.8, width 14–56, slope 1–4°'),
-   ('total relief of a flat', '1.4–2.8 mm peak to low (to 4.2)'),
+  [('flat sheet ×1.4', 'swell 0.7–2.8 peak to trough, width 14–56, end-to-end slope 1–4°'),
+   ('total relief of a flat', '1.4–2.8 mm peak to low (to 4.2), swells and tilt together'),
    ('this model', '', 'me')],
   img('f_profile', 'Flat-rock sheet, D: surface profile') + img('f_multi', 'Flat-rock sheet, F: macro, meso, micro'),
-  'At the defaults, value noise, wavelength 20 mm, relief about 2 mm.'))
+  'At the defaults, swells 1.5 mm from crest to trough and 20 mm crest to crest, on a 2° end-to-end tilt, on a 40 mm patch. The section marks the largest swell and the overall range separately.'))
 P.append(prim('grain', 'Grain and striation', 'primitive 9 of 9',
-  'Grain is the finest layer. It is stretched along the bedding (striations follow the slab), and it is the last thing added, because it is only worth anything under strong detail. Below 0.4 mm the printer will not follow.',
+  'Grain is the finest layer. It lies on a few bedded slab faces with steps between them, and on each slab the striations run along the slab: long, fine, parallel ridges and grooves that follow its direction. Each slab turns a few degrees from its neighbour. It is the last thing added, because it is only worth anything under strong detail. Below 0.4 mm the printer will not follow.',
   'grain', 'grain',
   [('flat sheet ×1.4', 'micro 0.15–0.85 deep; tool floor 0.4 mm (not scaled)'),
-   ('rock sheet ×1.4', 'micro texture 0.4–2.1'),
+   ('rock sheet ×1.4', 'micro texture 0.4–2.1 (the striated slabs of panel 7 sit near 1–2)'),
+   ('striations', 'spacing 0.4–2.5 (flat) or 0.6–5 (rock); direction 0–60° off the slab edge; a step of 0–1.2 or 0–2.1 between slabs'),
    ('share of the read', '5–10% (family guide)'),
    ('this model', '', 'me')],
   img('t_f', 'Rock sheet, 1F and the micro layer') + img('ap_tex', 'Family guide, 7: texture language (striated slabs)'),
-  'At the flat sheet’s defaults, striations at 14° and a fine grain, 20 × 20 mm.'))
+  'At the flat sheet’s defaults, six bedded slabs with steps of up to 0.4 mm between them, striations 1.1 mm apart at 14°, texture 0.4 mm deep, on a 24 × 24 mm patch. The rock-sheet variant at its depth of 2 mm and wide spacing reaches the striated slabs of the family guide.'))
 
 # ---------------------------------------------------------------- forms
 FORMS = [
@@ -146,17 +148,20 @@ FORMS = [
  ('cracked', 'Cracked network', '30–120°', 'form6'),
  ('columnar', 'Columnar / vertical', '80–95°', 'form7'),
 ]
+NOTES = {'columnar': 'The crop is a vertical face seen head on. A patch can only show the column tops and the near-vertical walls between them (80–90°, never undercut), turned a little to the camera.',
+         'weathered': 'A heightfield cannot undercut the crop&rsquo;s rims, so its hollows are shallow dimples.',
+         'blocky': 'The crop is a face seen head on; here the block tops are seen from above, with the same bent planes, mixed edges and chips.'}
 forms_html = '<div class="cols4">'
 for k, name, ang, crop in FORMS:
     used.add(crop)
-    forms_html += '<div class="card"><h4>%s</h4>%s<p class="small mono" style="margin:6px 0 4px">%s</p>%s</div>' % (name, view('form_' + k, '22 × 22 mm patch'), ang, img(crop, 'Rock sheet, 5'))
+    forms_html += '<div class="card"><h4>%s</h4>%s<p class="small mono" style="margin:6px 0 4px">%s</p>%s%s</div>' % (name, view('form_' + k, '22 × 22 mm patch'), ang, img(crop, 'Rock sheet, 5'), ('<p class="small" style="margin:6px 0 0">%s</p>' % NOTES[k]) if k in NOTES else '')
 forms_html += '</div>'
 
 PATTERNS = [('pat_subtle', 'Subtle and worn', 'undulation, a few small pits and one soft chip off the front edge, almost no cracks'),
             ('pat_plates', 'Fractured plates', 'large plates, shallow steps and 3° tilts between them, chips at the plate edges'),
             ('pat_pitted', 'Pitted and weathered', 'clustered pits of every size, a few shallow dishes, soft rounded edges'),
             ('pat_layered', 'Layered and veined', 'low flowing ridges and layer lines, one raised vein crossing them'),
-            ('pat_network', 'Cracked network', 'domed plates of 6–10 mm cut all round by crack lines, 30–120° corners')]
+            ('pat_network', 'Cracked network', 'near-level plates of 6–10 mm with small tilts and steps between them, cut all round by crack lines, 30–120° corners')]
 pat_html = '<div class="cols3">'
 for k, name, d in PATTERNS:
     pat_html += '<div class="card"><h4>%s</h4>%s<p class="small" style="margin:6px 0 0">%s</p></div>' % (name, view(k, '30 × 30 mm patch'), d)

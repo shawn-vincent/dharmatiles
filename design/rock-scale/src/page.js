@@ -11,17 +11,22 @@
   const SPEC = window.SPEC || {};
   const digits = (step) => step >= 1 ? 0 : step >= .1 ? 1 : step >= .01 ? 2 : 3;
   const fmt = (v, s) => s.unit === '1 :' ? '1 : ' + (+v).toFixed(digits(s.step)) : (+v).toFixed(digits(s.step)) + (s.unit ? (s.unit === '°' || s.unit === '×' ? s.unit : ' ' + s.unit) : '');
-  const params = (st) => Object.assign({}, st.spec[st.vi].fix, st.vals[st.vi]);
+  const params = (st) => { const o = Object.assign({}, st.spec[st.vi].fix, st.vals[st.vi]); if (st.spec.opt) o[st.spec.opt.k] = st.opt; return o; };
   function h(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
   /* the controls of one model: a sheet switch above the view (when the page's sheets give two ranges), and one slider per number under it */
   function setupCtl(el) {
     const name = el.dataset.model, spec = SPEC[name]; if (!spec) return;
-    const st = { name: name, spec: spec, vi: 0, vals: spec.map(v => { const o = {}; v.sl.forEach(s => { o[s.k] = s.def; }); return o; }), dirty: false, slow: false, t: 0 };
+    const st = { name: name, spec: spec, vi: 0, vals: spec.map(v => { const o = {}; v.sl.forEach(s => { o[s.k] = s.def; }); return o; }), dirty: false, slow: false, t: 0, opt: spec.opt ? spec.opt.choices[0][0] : null };
     el._st = st;
     const wrap = h('div', 'vw'); el.replaceWith(wrap);
     if (spec.length > 1) {
       const sw = h('div', 'seg'); sw.setAttribute('role', 'group'); sw.setAttribute('aria-label', 'Sheet whose ranges and defaults the model uses'); sw.appendChild(h('span', '', 'sheet'));
       spec.forEach((v, i) => { const b = h('button', '', v.label); b.type = 'button'; b.setAttribute('aria-pressed', String(i === 0)); b.addEventListener('click', () => { st.vi = i; [].forEach.call(sw.querySelectorAll('button'), (x, j) => x.setAttribute('aria-pressed', String(j === i))); draw(); change(el); }); sw.appendChild(b); });
+      wrap.appendChild(sw);
+    }
+    if (spec.opt) {
+      const sw = h('div', 'seg'); sw.setAttribute('role', 'group'); sw.setAttribute('aria-label', spec.opt.label); sw.appendChild(h('span', '', spec.opt.label));
+      spec.opt.choices.forEach((c, i) => { const b = h('button', '', c[1]); b.type = 'button'; b.setAttribute('aria-pressed', String(i === 0)); b.addEventListener('click', () => { st.opt = c[0]; [].forEach.call(sw.querySelectorAll('button'), (x, j) => x.setAttribute('aria-pressed', String(j === i))); change(el); }); sw.appendChild(b); });
       wrap.appendChild(sw);
     }
     wrap.appendChild(el);
@@ -54,7 +59,7 @@
     profiles(el); showMe(el);
   }
   /* the printed caption describes the first sheet at its defaults; say so only while that is what is shown */
-  function atDefaults(st) { return st.spec[st.vi].sl.every(s => +st.vals[st.vi][s.k] === s.def); }
+  function atDefaults(st) { return st.spec[st.vi].sl.every(s => +st.vals[st.vi][s.k] === s.def) && (!st.spec.opt || st.opt === st.spec.opt.choices[0][0]); }
   function captionFor(el) {
     const st = el._st, v = st.spec[st.vi].label;
     if (st.vi === 0 && atDefaults(st)) return el._cap;
@@ -111,7 +116,10 @@
     const dimV = (x, ya, yb, txt, side) => { const xp = X(x), a = Y(ya), b = Y(yb); svg.appendChild(el('path', { d: 'M' + xp + ',' + a + ' V' + b + ' M' + (xp - 3) + ',' + a + ' h6 M' + (xp - 3) + ',' + b + ' h6', class: 'dimline' })); svg.appendChild(el('text', { x: xp + (side === 'l' ? -6 : 7), y: (a + b) / 2 + 3, class: 'dimtxt', 'text-anchor': side === 'l' ? 'end' : 'start' }, txt)); };
     const dimH = (x0, x1, y, txt) => { const a = X(x0), b = X(x1); svg.appendChild(el('path', { d: 'M' + a + ',' + y + ' H' + b + ' M' + a + ',' + (y - 3) + ' v6 M' + b + ',' + (y - 3) + ' v6', class: 'dimline' })); svg.appendChild(el('text', { x: (a + b) / 2, y: y - 6, class: 'dimtxt', 'text-anchor': 'middle' }, txt)); };
     let facts = '';
-    if (kind === 'dip' || kind === 'bump') {
+    if (P.dims) {
+      P.dims.forEach(q => { if (q.t === 'v') dimV(q.x, q.ya, q.yb, q.txt, q.side); else dimH(q.x0, q.x1, Y(q.y) - 8, q.txt); });
+      facts = P.facts;
+    } else if (kind === 'dip' || kind === 'bump') {
       const sg = kind === 'dip' ? -1 : 1, rel = ys.map(y => sg * (y - med)), pk = Math.max.apply(null, rel), im = rel.indexOf(pk), thr = Math.max(.06, pk * .12);
       let a = im, b = im; while (a > 0 && rel[a] > thr) a--; while (b < n && rel[b] > thr) b++;
       const wmm = xs[b] - xs[a];
@@ -210,17 +218,20 @@
     s += '<text x="20" y="216">Section through a block corner. 100 px = 14 mm.</text></svg>';
     return s;
   };
-  /* skin over core: section. 12 px = 1 mm */
+  /* the O block in context, in elevation, drawn from the same layout the model is built from. 7 px = 1 mm */
   D.skin = () => {
-    let s = svgOpen(560, 240, 'A skin over a core, in section');
-    s += '<path class="base" d="M20,214 H540 V226 H20Z"/><rect x="150" y="20" width="390" height="194" class="fill2" stroke="var(--ink)" stroke-width="1.3"/>';
-    s += '<path d="M107,20 V214" stroke="var(--ink3)" stroke-dasharray="3 3"/>';
-    const sb = [5, 14, 2, 23, 10], lean = [2, -3, 4, -2, 3], ys = [22, 62, 100, 140, 176, 214];
-    for (let i = 0; i < 5; i++) { const xf = 107 + sb[i], y0 = ys[i] + 1, y1 = ys[i + 1] - 1; s += '<path class="land fill1" d="M150,' + y0 + ' H' + (xf + lean[i]) + ' L' + (xf - lean[i]) + ',' + y1 + ' H150Z"/>'; }
-    s += '<text x="160" y="16" class="dimtxt">core: one body, never cut through</text>';
-    s += '<path class="dimline" d="M107,226 H150 M107,222 v8 M150,222 v8"/><text x="128" y="240" text-anchor="middle" class="dimtxt">skin 3.6</text>';
-    s += '<text x="170" y="236">pieces 5&#8211;9 wide; setback 0.2&#8211;1.9; lean 1&#8211;9&#176;; 12 px = 1 mm</text>';
-    s += '<text x="20" y="40" class="dimtxt">unbroken face</text><path class="dimline" d="M70,44 L105,60"/></svg>';
+    const L = window.SKINLAYOUT(), k = 7, x0 = 24, H = Math.max.apply(null, L.blocks.map(b => b.b.z1)), y0 = 40 + H * k, W = Math.round(L.W * k + 48), Ht = Math.round(y0 + 60);
+    let s = svgOpen(W, Ht, 'Elevation of the O block in context: three blocks, the crack network drawn on their faces, one skin piece');
+    s += '<path class="base" d="M' + (x0 - 12) + ',' + y0 + ' H' + (x0 + L.W * k + 12) + ' V' + (y0 + 10) + ' H' + (x0 - 12) + 'Z"/>';
+    L.blocks.forEach((B, bi) => {
+      B.regs.forEach((R, ri) => { const pts = R.poly.map(q => f1(x0 + q[0] * k) + ',' + f1(y0 - q[1] * k)).join(' '); s += '<polygon points="' + pts + '" class="' + (bi === 1 && ri === B.skin ? 'fill1' : 'fill2') + '" stroke="var(--ink)" stroke-width="1" stroke-linejoin="round"/>'; });
+      B.cuts.forEach(c => { s += '<path d="M' + f1(x0 + c.seg[0][0] * k) + ',' + f1(y0 - c.seg[0][1] * k) + ' L' + f1(x0 + c.seg[1][0] * k) + ',' + f1(y0 - c.seg[1][1] * k) + '" stroke="var(--ink)" stroke-width="2" fill="none"/>'; });
+    });
+    const sb = L.blocks[1], q = sb.regs[sb.skin], cx = q.poly.reduce((a, v) => a + v[0], 0) / q.poly.length, cz = q.poly.reduce((a, v) => a + v[1], 0) / q.poly.length;
+    s += '<path class="dimline" d="M' + f1(x0 + cx * k) + ',' + f1(y0 - cz * k) + ' L' + f1(x0 + cx * k) + ',' + (y0 + 26) + '"/><circle cx="' + f1(x0 + cx * k) + '" cy="' + f1(y0 - cz * k) + '" r="2" fill="var(--dim)"/>';
+    s += '<text x="' + f1(x0 + cx * k) + '" y="' + (y0 + 38) + '" text-anchor="middle" class="dimtxt">skin piece, set back 0.2 mm</text>';
+    s += '<text x="' + x0 + '" y="12">Front view. Heavy lines are cracks:</text><text x="' + x0 + '" y="24">edge to edge, or stopping on a crack.</text>';
+    s += '<text x="' + x0 + '" y="' + (Ht - 6) + '">The 0.2 mm setback is 1.4 px at this scale; 7 px = 1 mm.</text></svg>';
     return s;
   };
   D.pitwrong = () => {
@@ -246,16 +257,18 @@
     s += '<path class="dimline" d="M20,282 H430 M20,278 v8 M430,278 v8"/><text x="225" y="296" text-anchor="middle" class="dimtxt">wall run about 0.52 L = 18 mm (sheet); the panel reads wider</text></svg>';
     return s;
   };
+  /* O: front elevation and side section of the four layers, drawn from the layout the model is built from (defaults). 4 px = 1 mm */
   D.secO = () => {
-    let s = svgOpen(560, 312, 'Section of O, the stacked blocks');
-    s += '<path class="base" d="M20,262 H540 V276 H20Z"/>';
-    s += '<path class="land fill1" d="M110,262 V196 H170 V148 H260 V92 H360 V262Z"/>';
-    s += '<path class="thin" d="M170,196 V262 M260,148 V262 M110,229 H170"/>';
-    s += '<path class="dimline" d="M380,262 V92 M376,92 h8 M376,262 h8 M376,196 h8 M376,148 h8"/>';
-    s += '<text x="388" y="96" class="dimtxt">.80 H</text><text x="388" y="152" class="dimtxt">.52 H</text><text x="388" y="200" class="dimtxt">.26 H</text>';
-    s += '<text x="118" y="188" class="dimtxt">foot</text><text x="178" y="140" class="dimtxt">tier 2</text><text x="268" y="84" class="dimtxt">cap</text>';
-    s += '<path class="dimline" d="M110,284 H360 M110,280 v8 M360,280 v8"/><text x="235" y="298" text-anchor="middle" class="dimtxt">footprint .20 / .60 / .20 of L; H about 38 mm; courses 11.5 to 14.5</text></svg>';
-    return s;
+    const L = window.COURSESLAYOUT(), k = 4, x0 = 20, base = 30 + L.H * k, xa = Math.min.apply(null, L.layers.map(l => l.x0)), sx = x0 - xa * k, sec = x0 + (Math.max.apply(null, L.layers.map(l => l.x1)) - xa) * k + 40;
+    let s = svgOpen(560, 312, 'Elevation and section of O: four layers that step back, with smaller blocks going up');
+    s += '<path class="base" d="M' + (x0 - 8) + ',' + base + ' H540 V' + (base + 10) + ' H' + (x0 - 8) + 'Z"/>';
+    L.layers.forEach((ly, i) => ly.blocks.forEach(b => { s += '<rect x="' + f1(sx + b.x0 * k) + '" y="' + f1(base - b.z1 * k) + '" width="' + f1((b.x1 - b.x0) * k) + '" height="' + f1((b.z1 - b.z0) * k) + '" class="fill' + (i % 2 ? 2 : 1) + '" stroke="var(--ink)" stroke-width="1.1" stroke-linejoin="round"/>'; }));
+    L.layers.forEach((ly, i) => { s += '<rect x="' + f1(sec + ly.front * k) + '" y="' + f1(base - ly.z1 * k) + '" width="' + f1((L.D - ly.front) * k) + '" height="' + f1((ly.z1 - ly.z0) * k) + '" class="fill' + (i % 2 ? 2 : 1) + '" stroke="var(--ink)" stroke-width="1.1"/>'; });
+    const tx = sec + L.D * k + 8; L.layers.forEach((ly, i) => { s += '<path class="dimline" d="M' + (tx - 3) + ',' + f1(base - ly.z1 * k) + ' h6 M' + (tx - 3) + ',' + f1(base - ly.z0 * k) + ' h6 M' + tx + ',' + f1(base - ly.z1 * k) + ' V' + f1(base - ly.z0 * k) + '"/><text x="' + (tx + 6) + '" y="' + f1(base - (ly.z0 + ly.z1) * k / 2 + 3) + '" class="dimtxt">' + f2((ly.z1 - ly.z0) / L.H) + ' H</text>'; });
+    s += '<text x="' + x0 + '" y="14">Front view</text><text x="' + sec + '" y="14">Side section</text>';
+    const meas = L.layers.map((ly, i) => { const a = ly.blocks.map(b => (b.x1 - b.x0) / (b.z1 - b.z0)); return 'layer ' + (i + 1) + ': ' + ly.blocks.length + ' blocks, mean width ' + f1(ly.blocks.reduce((q, b) => q + b.x1 - b.x0, 0) / ly.blocks.length) + ' mm, height ' + f1(ly.hb) + ' mm, ratio ' + f1(a.reduce((q, v) => q + v, 0) / a.length) + ' : 1'; });
+    meas.forEach((t, i) => { s += '<text x="20" y="' + (base + 28 + i * 13) + '">' + t + '</text>'; });
+    return s + '<text x="540" y="304" text-anchor="end" class="dimtxt">4 px = 1 mm, H = ' + L.H + ' mm</text></svg>';
   };
   function diagrams() { [].slice.call(document.querySelectorAll('[data-diagram]')).forEach(h => { const f = D[h.dataset.diagram]; if (f) h.innerHTML = f(); }); }
 

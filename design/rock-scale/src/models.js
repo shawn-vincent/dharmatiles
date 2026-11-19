@@ -6,6 +6,7 @@
   const E = G.Eng, sstep = E.sstep, vn = E.vnoise, fbm = E.fbm, rad = E.rad, hash2 = E.hash2;
   const sin = Math.sin, cos = Math.cos, tan = Math.tan, abs = Math.abs, min = Math.min, max = Math.max, PI = Math.PI, hyp = Math.hypot, fl = Math.floor;
   const MODELS = {}, PROFILES = {};
+  const f1 = (x) => (Math.round(x * 10) / 10).toString(), f2 = (x) => (Math.round(x * 100) / 100).toString();
   const grain = (x, y, a, s) => a * (fbm(x * 1.7, y * 1.7, s, 2) * .6 + fbm(x * 4.1, y * 4.1, s + 9, 1) * .4);
   const wob = (v, a, wl, s) => (vn(v / wl, s, s) - .5) * 2 * a;
 
@@ -126,59 +127,156 @@
   MODELS.ridge = (p) => E.hfPatch({ size: 30, N: 150, h: ridgeF(par('ridge', p)) });
   PROFILES.ridge = (p) => { const h = ridgeF(par('ridge', p)); return { w: 30, y: 14, fn: (x) => h(x, 14) }; };
 
-  /* crack: a meandering groove that stops inside the plate, with a short branch and a small step across it */
-  SPEC.crack = [V('', '', [S('width', 'width at half depth', 'mm', .15, .7, .01, .7), S('depth', 'depth', 'mm', .15, 1.1, .05, 1), S('len', 'length', 'mm', 7, 70, .5, 31)])];
+  /* piecewise linear noise: straight runs with angular kinks, never a smooth curve */
+  const vnl = (t, s) => { const i = fl(t), f = t - i; return hash2(i, 0, s) * (1 - f) + hash2(i + 1, 0, s) * f; };
+  const pathLen = (pts) => { let L = 0; for (let i = 0; i < pts.length - 1; i++) L += hyp(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); return L; };
+  /* the x of a polyline where it crosses y = v */
+  const xAtY = (pts, v) => { for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; if ((a[1] - v) * (b[1] - v) <= 0 && a[1] !== b[1]) return a[0] + (b[0] - a[0]) * (v - a[1]) / (b[1] - a[1]); } return pts[0][0]; };
+
+  /* cracks: a main crack runs from one edge of the plate to the other in straight runs with kinks; one crack runs from the edge and stops on the main crack, another leaves the main crack for the opposite edge.
+     The cracks cut the plate into four planes, each tilted a little and set a little higher or lower than its neighbour. A crack is a V groove whose width wanders along its length and whose lips are chipped. */
+  SPEC.crack = [V('', '', [S('width', 'width at half depth', 'mm', .15, .7, .01, .5), S('depth', 'depth', 'mm', .15, 1.1, .05, .8), S('len', 'crack length (plate size)', 'mm', 7, 70, .5, 30), S('tilt', 'plate tilt', '°', 1, 5, .1, 2.5)])];
   const crackF = (p) => {
-    const L0 = 31.06, ux = 26 / L0, uy = 17 / L0, nn = max(14, Math.round(p.len / 2.2)), CR = E.wander([2, 5], [2 + ux * p.len, 5 + uy * p.len], nn, 2.6, 7), bi = Math.round(nn * .43), bp = CR[bi], BR = E.wander(bp, [bp[0] + 9, bp[1] - 8], 6, 1.1, 3);
-    const size = max(30, Math.ceil(max(2 + ux * p.len, 5 + uy * p.len) + 3)), w = p.width, w2 = p.width * .55 / .75;
-    return { size: size, h: (x, y) => {
-      const q = E.distPath(CR, x, y), taper = sstep(0, .1, q.t) * (1 - sstep(.78, .96, q.t)), b = E.distPath(BR, x, y), bt = sstep(0, .12, b.t) * (1 - sstep(.5, .95, b.t));
-      const g1 = q.d < w ? p.depth * taper * (1 - q.d / w) : 0, g2 = b.d < w2 ? p.depth * .6 * bt * (1 - b.d / w2) : 0, step = .22 * q.s * sstep(0, 1.4, q.d) * taper;
-      return .18 * fbm(x / 11, y / 11, 2, 2) + grain(x, y, .04, 8) - max(g1, g2) + step;
-    } };
+    const size = p.len, U = (pts) => pts.map(q => [q[0] * size, q[1] * size]), r = E.rng(17);
+    const M = U([[.40, 0], [.46, .22], [.43, .45], [.55, .70], [.52, 1]]), B = U([[1, .80], [.76, .64], [xAtY(M, .60 * size) / size, .60]]), C = U([[xAtY(M, .28 * size) / size, .28], [.24, .20], [0, .30]]);
+    const mk = (pts, seed) => {
+      const L = pathLen(pts), chips = []; for (let i = 0; i < max(2, Math.round(L / 5)); i++) chips.push({ t: r(), len: (1 + 2.2 * r()) / L, side: r() < .5 ? -1 : 1, amp: .5 + .9 * r() });
+      return (x, y) => {
+        const q = E.distPath(pts, x, y), w = max(.4, p.width * (.7 + .6 * vnl(q.t * L / 6, seed))), D = p.depth * (.8 + .2 * vnl(q.t * L / 9, seed + 3));
+        let c = 0; for (const k of chips) if (k.side === q.s) c = max(c, max(0, 1 - abs(q.t - k.t) / k.len) * k.amp);
+        const v = q.d < w ? D * (1 - q.d / w) : 0, ch = c > 0 && q.d < w * (1 + 1.4 * c) ? c * .45 * D * (1 - q.d / (w * (1 + 1.4 * c))) : 0;
+        return max(v, ch);
+      };
+    };
+    const gM = mk(M, 5), gB = mk(B, 11), gC = mk(C, 19), sE = E.distPath(M, .9 * size, .5 * size).s, sB = E.distPath(B, .8 * size, .97 * size).s, sC = E.distPath(C, .2 * size, .03 * size).s;
+    const pl = []; for (let k = 0; k < 4; k++) { const a = r() * 2 * PI, m = tan(rad(p.tilt)) * (.6 + .4 * r()); pl.push({ c: (r() - .5) * .14, ax: cos(a) * m, ay: sin(a) * m }); }
+    const plate = (x, y) => E.distPath(M, x, y).s === sE ? (E.distPath(B, x, y).s === sB ? 0 : 1) : (E.distPath(C, x, y).s === sC ? 2 : 3);
+    return { size: size, M: M, h: (x, y) => { const q = pl[plate(x, y)]; return q.c + q.ax * (x - size / 2) + q.ay * (y - size / 2) + .05 * fbm(x / 9, y / 9, 2, 2) + grain(x, y, .03, 8) - max(gM(x, y), gB(x, y), gC(x, y)); } };
   };
-  MODELS.crack = (p) => { const f = crackF(par('crack', p)); return E.hfPatch({ size: f.size, N: min(260, Math.ceil(f.size * 6.67)), h: f.h, aoR: 2 }); };
-  PROFILES.crack = (p) => { const f = crackF(par('crack', p)); return { w: f.size, y: 13.4, fn: (x) => f.h(x, 13.4) }; };
+  /* what a section across the main crack shows: rim height (mean of both sides 1.5 mm out), depth, width at half depth, and the step across */
+  const crackAt = (f, v) => {
+    const y = v * f.size, xc0 = xAtY(f.M, y); let xb = xc0, hb = 1e9; for (let x = xc0 - 1.2; x <= xc0 + 1.2; x += .02) { const h = f.h(x, y); if (h < hb) { hb = h; xb = x; } }
+    const hl = f.h(xb - 1.5, y), hr = f.h(xb + 1.5, y), rim = min(hl, hr), dep = rim - hb, hlf = hb + (hl - hb) / 2, hrf = hb + (hr - hb) / 2; let xl = xb, xr = xb; while (xl > xb - 3 && f.h(xl, y) < hlf) xl -= .02; while (xr < xb + 3 && f.h(xr, y) < hrf) xr += .02;
+    return { xb: xb, hb: hb, rim: rim, dep: dep, wid: xr - xl, xl: xl, xr: xr, step: hr - hl };
+  };
+  MODELS.crack = (p) => { const f = crackF(par('crack', p)); return E.hfPatch({ size: f.size, N: min(330, Math.ceil(f.size / .2)), h: f.h, aoR: 2 }); };
+  PROFILES.crack = (p) => {
+    const f = crackF(par('crack', p)), y0 = .12, m = crackAt(f, y0), all = [.06, .12, .38, .46, .8, .9].map(v => crackAt(f, v)), rg = (k) => { const a = all.map(q => q[k]); return [min.apply(null, a), max.apply(null, a)]; }, W = rg('wid'), D = rg('dep'), St = all.map(q => abs(q.step));
+    return { w: f.size, y: y0 * f.size, fn: (x) => f.h(x, y0 * f.size),
+      dims: [{ t: 'h', x0: m.xl, x1: m.xr, y: m.rim, txt: f2(m.wid) + ' mm wide' }, { t: 'v', x: m.xb, ya: m.rim, yb: m.hb, txt: f2(m.dep) + ' mm deep', side: 'r' }],
+      facts: 'width at half depth ' + f2(W[0]) + ' to ' + f2(W[1]) + ' mm, depth ' + f2(D[0]) + ' to ' + f2(D[1]) + ' mm, step across up to ' + f2(max.apply(null, St)) + ' mm (six sections of the main crack; the floor is 0.4 mm wide)' };
+  };
 
-  /* undulation: broad, low, no feature stands out */
-  SPEC.undul = [V('', '', [S('amp', 'amplitude', 'mm', .7, 2.8, .05, 1.5), S('wl', 'width', 'mm', 14, 56, .5, 20)])];
-  const undF = (p) => (x, y) => p.amp * fbm(x / p.wl, y / p.wl, 5, 2) + .12 * fbm(x / 4, y / 4, 8, 2);
-  MODELS.undul = (p) => E.hfPatch({ size: 36, N: 150, h: undF(par('undul', p)) });
-  PROFILES.undul = (p) => { const h = undF(par('undul', p)); return { w: 36, y: 18, fn: (x) => h(x, 18) }; };
+  /* undulation: swells of a stated peak-to-trough height and width, on an end-to-end tilt of their own */
+  SPEC.undul = [V('', '', [S('amp', 'swell, peak to trough', 'mm', .7, 2.8, .05, 1.5), S('wl', 'swell width (crest to crest)', 'mm', 14, 56, .5, 20), S('tilt', 'end-to-end tilt', '°', 1, 4, .1, 2)])];
+  const undSize = (p) => Math.round(Math.min(72, Math.max(40, p.wl * 1.8)));
+  const undF = (p) => { const th = rad(8), cs = cos(th), sn = sin(th), lam = p.wl, t = tan(rad(p.tilt)); return (x, y) => { const u = x * cs + y * sn, wp = lam * .2 * fbm(x / (lam * .9), y / (lam * .9), 5, 2), mod = .88 + .12 * fbm(x / lam, y / lam, 8, 1); return p.amp / 2 * mod * sin(2 * PI * (u + wp) / lam + 1.1) - t * x + .1 * fbm(x / 4, y / 4, 8, 2); }; };
+  MODELS.undul = (p) => { p = par('undul', p); return E.hfPatch({ size: undSize(p), N: undSize(p) * 4, h: undF(p) }); };
+  PROFILES.undul = (p) => {
+    p = par('undul', p); const h = undF(p), w = undSize(p), n = 420, xs = [], ys = []; for (let i = 0; i <= n; i++) { xs.push(w * i / n); ys.push(h(w * i / n, w / 2)); }
+    /* alternating extremes, a swing counting only once it passes a third of the stated amplitude */
+    const thr = p.amp * .3, ex = []; let dir = 0, ci = 0; for (let i = 1; i <= n; i++) { if (!dir) { if (ys[i] - ys[ci] > thr) { dir = 1; ex.push(ci); ci = i; } else if (ys[ci] - ys[i] > thr) { dir = -1; ex.push(ci); ci = i; } else if ((ys[i] - ys[0]) * 0 === 0 && ex.length === 0 && false) ci = i; } else if (dir > 0) { if (ys[i] > ys[ci]) ci = i; else if (ys[ci] - ys[i] > thr) { ex.push(ci); ci = i; dir = -1; } } else { if (ys[i] < ys[ci]) ci = i; else if (ys[i] - ys[ci] > thr) { ex.push(ci); ci = i; dir = 1; } } } ex.push(ci);
+    let best = { d: 0 }; for (let i = 0; i < ex.length - 1; i++) { const d = abs(ys[ex[i]] - ys[ex[i + 1]]); if (d > best.d) best = { d: d, a: ex[i], b: ex[i + 1] }; }
+    const ymax = Math.max.apply(null, ys), ymin = Math.min.apply(null, ys), dims = [];
+    if (best.d) dims.push({ t: 'v', x: xs[best.a], ya: ys[best.a], yb: ys[best.b], txt: f2(best.d) + ' mm swell', side: 'r' });
+    dims.push({ t: 'v', x: w * .97, ya: ymax, yb: ymin, txt: f2(ymax - ymin) + ' mm overall', side: 'l' });
+    return { w: w, y: w / 2, fn: (x) => h(x, w / 2), dims: dims, facts: 'largest crest-to-trough drop in the section ' + f2(best.d) + ' mm (swells stated ' + f2(p.amp) + '; the tilt adds a little between neighbours); overall top to bottom ' + f2(ymax - ymin) + ' mm over ' + w + ' mm, of which the ' + f1(p.tilt) + '° tilt is ' + f2(w * tan(rad(p.tilt))) + ' mm' };
+  };
 
-  /* grain and striation: fine, stretched along the bedding, never below 0.4 mm */
+  /* grain and striation: bedded slab faces with steps between them; on each slab, ridges and grooves run along the slab, fine and long, never below 0.4 mm */
   SPEC.grain = [
-    V('flat', 'flat sheet', [S('depth', 'micro depth', 'mm', .15, .85, .01, .41), S('ang', 'striation angle', '°', 0, 40, 1, 14)]),
-    V('rock', 'rock sheet', [S('depth', 'micro depth', 'mm', .4, 2.1, .05, 1), S('ang', 'striation angle', '°', 0, 40, 1, 14)])];
-  const grF = (p) => (x, y) => {
-    const a = rad(p.ang), u = x * cos(a) + y * sin(a), v = -x * sin(a) + y * cos(a), k = p.depth / .41;
-    return k * (.26 * (vn(v * 1.5, u * .12, 3) - .5) * 2 + .1 * (vn(v * 3.4, u * .3, 5) - .5) * 2 + .05 * (vn(x * 2.8, y * 2.8, 11) - .5) * 2);
+    V('flat', 'flat sheet', [S('depth', 'micro depth', 'mm', .15, .85, .01, .41), S('ang', 'striation direction', '°', 0, 60, 1, 14), S('sp', 'striation spacing', 'mm', .4, 2.5, .05, 1.1), S('step', 'step between slabs', 'mm', 0, 1.2, .05, .4)]),
+    V('rock', 'rock sheet', [S('depth', 'micro depth', 'mm', .4, 2.1, .05, 1), S('ang', 'striation direction', '°', 0, 60, 1, 14), S('sp', 'striation spacing', 'mm', .6, 5, .05, 1.8), S('step', 'step between slabs', 'mm', 0, 2.1, .05, .8)])];
+  const grF = (p) => {
+    const a0 = rad(p.ang), r = E.rng(23), bs = [-100], slabs = []; let u = -12; for (let k = 0; k < 7; k++) { u += 3.6 + 3 * r(); bs.push(u); } bs.push(100);
+    for (let k = 0; k < bs.length - 1; k++) slabs.push({ c: (r() - .5) * 2 * p.step, tl: tan(rad(1.5 + 3 * r())) * (r() < .5 ? -1 : 1), da: (r() - .5) * rad(10), ph: r() * 9, tone: .9 + .2 * r() });
+    const R = (t) => 1 - abs(2 * t - 1);
+    const tex = (v, uu, k) => .7 * R(vn(v / p.sp + slabs[k].ph, uu / (p.sp * 9), 3 + k)) + .3 * R(vn(v / (p.sp * .4), uu / (p.sp * 4), 5 + k)) + .1 * (vn(uu * 2.8, v * 2.8, 11) - .5);
+    const geo = (x, y) => { const X = x - 12, Y = y - 12; let v = -X * sin(a0) + Y * cos(a0), uu = X * cos(a0) + Y * sin(a0), k = 0; while (k < bs.length - 2 && v > bs[k + 1] + 1.1 * (vnl(uu / 5, 7 + k) - .5) * 2) k++; const s = slabs[k], ca = cos(s.da), sa = sin(s.da), v2 = v * ca - uu * sa, u2 = uu * ca + v * sa; return { k: k, v: v, v2: v2, u2: u2 }; };
+    let lo = 1e9, hi = -1e9; for (let j = 0; j < 50; j++) for (let i = 0; i < 50; i++) { const g = geo(2 + i * .4, 2 + j * .4), t = tex(g.v2, g.u2, g.k); lo = min(lo, t); hi = max(hi, t); }
+    const sc = p.depth / (hi - lo), h = (x, y) => { const g = geo(x, y), s = slabs[g.k], k0 = bs[g.k] === -100 ? g.v : g.v - (bs[g.k] + bs[g.k + 1]) / 2; return s.c + s.tl * k0 + sc * tex(g.v2, g.u2, g.k); };
+    return { h: h, tone: (x, y) => slabs[geo(x, y).k].tone, slabs: slabs, geo: geo, tex: (x, y) => { const g = geo(x, y); return sc * tex(g.v2, g.u2, g.k); }, a0: a0 };
   };
-  MODELS.grain = (p) => E.hfPatch({ size: 20, N: 200, h: grF(par('grain', p)), aoR: 1.4 });
-  PROFILES.grain = (p) => { const h = grF(par('grain', p)); return { w: 20, y: 10, fn: (x) => h(x, 10) }; };
+  MODELS.grain = (p) => { const f = grF(par('grain', p)); return E.hfPatch({ size: 24, N: 240, h: f.h, tone: f.tone, aoR: 1.4 }); };
+  PROFILES.grain = (p) => {
+    p = par('grain', p); const f = grF(p), a = f.a0, fn = (t) => f.h(12 - (t - 10) * sin(a), 12 + (t - 10) * cos(a));
+    let lo = 1e9, hi = -1e9; for (let j = 0; j < 60; j++) for (let i = 0; i < 60; i++) { const t = f.tex(2 + i * .333, 2 + j * .333); lo = min(lo, t); hi = max(hi, t); }
+    const ks = {}, cs = []; for (let i = 0; i <= 200; i++) { const t = 20 * i / 200, g = f.geo(12 - (t - 10) * sin(a), 12 + (t - 10) * cos(a)); if (!ks[g.k]) { ks[g.k] = 1; cs.push(f.slabs[g.k].c); } }
+    let stp = 0; for (let i = 1; i < cs.length; i++) stp = max(stp, abs(cs[i] - cs[i - 1])); let ymin = 1e9, ymax = -1e9; for (let i = 0; i <= 420; i++) { const y = fn(20 * i / 420); ymin = min(ymin, y); ymax = max(ymax, y); }
+    return { w: 20, y: 10, fn: fn, dims: [{ t: 'v', x: 18.2, ya: ymax, yb: ymin, txt: f2(ymax - ymin) + ' mm', side: 'l' }], facts: 'texture depth ' + f2(hi - lo) + ' mm (stated ' + f2(p.depth) + '), ' + cs.length + ' slabs crossed in the section, offsets between slabs up to ' + f2(stp) + ' mm, section across the striations' };
+  };
 
   /* ============ the eight characteristic surface forms (patches 22 mm) ============ */
   const vor = (cs, s, j) => E.voronoi(cs, s, j);
-  SPEC.form_flat = [V('', '', [S('slope', 'slope', '°', 10, 30, 1, 20)])];
-  SPEC.form_layered = [V('', '', [S('tilt', 'tread tilt', '°', 0, 15, .5, 5)])];
-  SPEC.form_blocky = [V('', '', [S('ang', 'joint angle', '°', 70, 110, 1, 90)])];
-  SPEC.form_sheared = [V('', '', [S('ang', 'layer angle', '°', 25, 45, 1, 28)])];
+  /* lens plates: long, pointed plates with curved, irregular outlines, each a little tilted, overlapping like shingles.
+     o: n plates, a half-length, elong length : width, irr outline irregularity, th grain direction (deg), jt jitter of each plate's direction,
+     tilt plate tilt (deg), stack (plates stack up across the grain, each covering the one below), rise (stack: height gained per mm across), seed */
+  const lensField = (o) => {
+    const r = E.rng(o.seed), th = rad(o.th), cs = cos(th), sn = sin(th), pl = [];
+    for (let k = 0; k < o.n; k++) {
+      const a = o.a * (.75 + .5 * r()), b = a / o.elong * (.8 + .4 * r()), uc = -5 + 32 * r(), sc = o.stack ? -5 + 32 * (k + .5 + (r() - .5) * .8) / o.n : -5 + 32 * r(), tk = th + (r() - .5) * 2 * rad(o.jt);
+      const cx = 11 + (uc - 11) * cs - (sc - 11) * sn, cy = 11 + (uc - 11) * sn + (sc - 11) * cs, z = o.stack ? (sc - 11) * o.rise + (r() - .5) * o.rise * 2.2 : (r() - .5) * 1.1;
+      const ta = o.stack ? th + PI / 2 + (r() - .5) * .5 : r() * 2 * PI, tm = tan(rad(o.tilt)) * (.4 + .6 * r());
+      pl.push({ cx: cx, cy: cy, a: a, b: b, c: cos(tk), s: sin(tk), z: z, tx: cos(ta) * tm, ty: sin(ta) * tm, p1: r() * 6, p2: r() * 6, p3: r() * 6, tone: .88 + .22 * r() });
+    }
+    const at = (x, y) => {
+      let best = -1e9, id = -1;
+      for (let k = 0; k < pl.length; k++) {
+        const q = pl[k], dx = x - q.cx, dy = y - q.cy; if (abs(dx) > q.a * 1.5 + 2 || abs(dy) > q.a * 1.5 + 2) continue;
+        const u = dx * q.c + dy * q.s, v = -dx * q.s + dy * q.c, ph = Math.atan2(v / q.b, u / q.a), m = 1 + o.irr * (.5 * sin(2 * ph + q.p1) + .35 * sin(3 * ph + q.p2) + .25 * sin(5 * ph + q.p3));
+        const g = Math.pow(abs(u) / (q.a * m), 1.45) + Math.pow(abs(v) / (q.b * m), 1.45); if (g >= 1) continue;
+        const z = q.z + q.tx * dx + q.ty * dy - .32 * sstep(.62, 1, g); if (z > best) { best = z; id = k; }
+      }
+      return { z: best, id: id };
+    };
+    return { h: (x, y) => { const q = at(x, y); return q.id < 0 ? -1.2 : q.z; }, tone: (x, y) => { const q = at(x, y); return q.id < 0 ? .7 : pl[q.id].tone; } };
+  };
+  SPEC.form_flat = [V('', '', [S('slope', 'slope', '°', 10, 30, 1, 20), S('elong', 'plate length : width', ': 1', 2, 5, .1, 3), S('irr', 'outline irregularity', '', 0, .6, .01, .35)])];
+  SPEC.form_layered = [V('', '', [S('tilt', 'tread tilt', '°', 0, 15, .5, 5), S('irr', 'outline irregularity', '', 0, .6, .01, .3)])];
+  SPEC.form_blocky = [V('', '', [S('ang', 'joint angle', '°', 70, 110, 1, 90), S('chips', 'chips per block', '', 0, 4, .1, 2.5)])];
+  SPEC.form_sheared = [V('', '', [S('ang', 'layer angle', '°', 25, 45, 1, 28), S('elong', 'blade length : width', ': 1', 4, 10, .1, 6)])];
   SPEC.form_weathered = [V('', '', [S('R', 'rounding radius R', 'mm', 7, 35, .5, 11)])];
   SPEC.form_pitted = [V('', '', [S('ratio', 'width : depth', ': 1', 6, 10, .1, 6)])];
   SPEC.form_cracked = [V('', '', [S('cell', 'plate size', 'mm', 6, 10, .1, 6.4), S('jit', 'irregularity', '', .2, 1, .05, .85)])];
   SPEC.form_columnar = [V('', '', [S('wall', 'wall angle', '°', 80, 90, .1, 83.4)])];
   const formFn = {
-    flat: (p) => { const Vo = vor(11, 3, .8); return { h: (x, y) => { const q = Vo(x, y), tx = (q.id - .5) * 2 * tan(rad(4)), ty = (q.id2 - .5) * 2 * tan(rad(4)); return -tan(rad(p.slope)) * x * .55 + tx * (x - q.cx) + ty * (y - q.cy) + (q.e < .3 ? -.3 * (1 - q.e / .3) : 0) + grain(x, y, .04, 2); }, tone: (x, y) => .93 + .14 * Vo(x, y).id }; },
-    layered: (p) => { const bs = [-1]; let u = 1, r = E.rng(4); while (u < 60) { bs.push(u); u += 3 + 2.6 * r(); } return { h: (x, y) => { const xx = x + wob(y, 1.1, 6, 3); let h = 0, k = -1; for (let i = 0; i < bs.length; i++) { h += (.5 + .9 * hash2(i, 3, 4)) * sstep(bs[i] - .35, bs[i] + .35, xx); if (xx >= bs[i]) k = i; } const loc = xx - (bs[max(k, 0)] || 0); return h - tan(rad(p.tilt)) * loc * .8 + grain(x, y, .04, 7); }, tone: (x, y) => .95 + .1 * hash2(fl(x / 4), 0, 3) }; },
-    blocky: (p) => { const a = rad(8), sh = 1 / tan(rad(p.ang)); const uv = (x, y) => { const v = -x * sin(a) + y * cos(a); return [x * cos(a) + y * sin(a) + v * sh, v]; };
-      return { h: (x, y) => { const q = uv(x, y), u = q[0], v = q[1], row = fl(v / 7), off = hash2(row, 1, 4) * 8, uu = u + off, col = fl(uu / 8), lu = uu - col * 8, lv = v - row * 7, ed = min(lu, 8 - lu, lv, 7 - lv), id = hash2(col, row, 6), top = 2.4 * hash2(col, row, 8) + (id - .5) * .3 * (lu - 4) * .3; return top - 1.4 * (1 - sstep(0, .55, ed)) - .6 * (1 - sstep(.5, 1.6, ed)) * (hash2(col, row, 12) > .3 ? 1 : 0) + grain(x, y, .05, 9); }, tone: (x, y) => { const q = uv(x, y), row = fl(q[1] / 7), uu = q[0] + hash2(row, 1, 4) * 8; return .93 + .14 * hash2(fl(uu / 8), row, 6); } }; },
-    sheared: (p) => ({ h: (x, y) => { const a = rad(p.ang), u = x * sin(a) + y * cos(a), s = 4.2, k = fl(u / s), f = u / s - k; return -tan(rad(30)) * y * .8 + .75 * (f ** 1.15) * (1 + .5 * (hash2(k, 2, 9) - .5)) + grain(x, y, .05, 5); }, tone: (x, y) => { const a = rad(p.ang), u = x * sin(a) + y * cos(a); return .94 + .12 * hash2(fl(u / 4.2), 1, 3); } }),
-    weathered: (p) => ({ h: (x, y) => 2.9 * fbm(x / p.R, y / p.R, 4, 2) + .12 * fbm(x / 3, y / 3, 6, 2) - .5 * sstep(.55, .1, hyp(x - 14, y - 7) / 3.5), tone: () => 1 }),
-    pitted: (p) => { const Sp = []; const r = E.rng(13); for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { const x = (i + .5 + (r() - .5) * .7) * 3.1 + (j % 2) * 1.5, y = (j + .5 + (r() - .5) * .7) * 2.9; if (r() < .88) Sp.push({ x: x, y: y, r: 1.15 + .75 * r(), d: (.4 + .45 * r()) * 5 / p.ratio, ph: r() * 6, el: .85 + .3 * r() }); } return { h: (x, y) => grain(x, y, .05, 12) - cutSpots(Sp, x, y), tone: () => 1 }; },
-    cracked: (p) => { const Vo = vor(p.cell, 6, p.jit); return { h: (x, y) => { const q = Vo(x, y), dome = .5 * (1 - clamp01(q.d1 / (p.cell * .5625)) ** 2) + (q.id - .5) * .45, crack = q.e < .55 ? 1.0 * (1 - q.e / .55) ** 1.1 : 0; return dome - crack + (q.id2 - .5) * tan(rad(3)) * (x - q.cx) + grain(x, y, .035, 4); }, tone: (x, y) => .93 + .14 * Vo(x, y).id }; },
-    columnar: (p) => { const Vo = vor(4.6, 7, .55), w = max(.02, 2.6 / tan(rad(p.wall))); return { h: (x, y) => { const q = Vo(x, y), top = q.id * 5.2 + (q.id2 - .5) * tan(rad(3)) * (x - q.cx), gap = sstep(.12 + w, .12, q.e); return top - gap * 2.6 + grain(x, y, .04, 6); }, tone: (x, y) => .92 + .16 * Vo(x, y).id }; }
+    flat: (p) => { const L = lensField({ n: 46, a: 6.2, elong: p.elong, irr: p.irr, th: 35, jt: 9, tilt: 4, seed: 5 }); return { h: (x, y) => L.h(x, y) - tan(rad(p.slope)) * x * .4 + grain(x, y, .05, 2), tone: L.tone }; },
+    layered: (p) => { const L = lensField({ n: 36, a: 8.5, elong: 4.4, irr: p.irr, th: -14, jt: 4, tilt: p.tilt, stack: true, rise: .24, seed: 8 }); return { h: (x, y) => L.h(x, y) + grain(x, y, .05, 3), tone: L.tone }; },
+    blocky: (p) => {
+      const a = rad(8), sh = 1 / tan(rad(p.ang)), uv = (x, y) => { const v = -x * sin(a) + y * cos(a); return [x * cos(a) + y * sin(a) + v * sh, v]; };
+      const side = (col, row, k) => { const m = hash2(col, row, 30 + k); return m < .3 ? .22 : m < .68 ? 1.05 : .55; };   /* crisp, worn or broken, edge by edge */
+      return { h: (x, y) => {
+        const q = uv(x, y), u = q[0], v = q[1], row = fl(v / 7), off = hash2(row, 1, 4) * 8, uu = u + off, col = fl(uu / 8), lu = uu - col * 8, lv = v - row * 7, cx = lu - 4, cz = lv - 3.5, H = (i) => hash2(col, row, i);
+        const ca = H(23) * PI, ca2 = ca + 1 + H(25), top = 2.4 * H(8) + (H(21) - .5) * .12 * cx + (H(22) - .5) * .12 * cz + (H(24) < .5 ? -1 : 1) * .1 * abs(cx * cos(ca) + cz * sin(ca)) + (H(26) < .5 ? -1 : 1) * .06 * abs(cx * cos(ca2) + cz * sin(ca2));
+        const ds = [lu, 8 - lu, lv, 7 - lv], ed = min(ds[0], ds[1], ds[2], ds[3]); let drop = 0;
+        for (let k = 0; k < 4; k++) { const c = side(col, row, k); drop = max(drop, c * (1 - sstep(0, c * 1.25, ds[k])) * (c > .6 ? 1 : 1.3)); }
+        let chip = 0; const nc = fl(p.chips + H(40));
+        for (let c = 0; c < nc; c++) { const sd = fl(H(41 + c) * 4), t = H(50 + c), px = sd < 2 ? (sd ? 8 : 0) + (sd ? -.3 : .3) : 8 * t, pz = sd < 2 ? 7 * t : (sd === 2 ? .3 : 6.7), dx = lu - px, dz = lv - pz, ph = H(60 + c) * 6, rr = .8 + 1.3 * H(70 + c), d = hyp(dx, dz) * (1 + .3 * sin(3 * Math.atan2(dz, dx) + ph)); chip = max(chip, max(0, (.5 + .9 * H(80 + c)) - d / rr * (.5 + .9 * H(80 + c)))); }
+        const tex = .07 * (vn(x * 2.6, y * 2.6, 3) - .5) * 2 + .04 * (vn(x * 5.3, y * 5.3, 4) - .5) * 2 - .12 * max(0, vn(x * 1.8, y * 1.8, 9) - .7) / .3;
+        return top - drop - chip - 1.7 * (1 - sstep(0, .42, ed)) + tex;
+      }, tone: (x, y) => { const q = uv(x, y), row = fl(q[1] / 7), col = fl((q[0] + hash2(row, 1, 4) * 8) / 8); return .92 + .16 * hash2(col, row, 6); } };
+    },
+    sheared: (p) => { const L = lensField({ n: 34, a: 9, elong: p.elong, irr: .28, th: p.ang, jt: 3, tilt: 7, stack: true, rise: .22, seed: 12 }); return { h: (x, y) => L.h(x, y) + grain(x, y, .04, 5), tone: L.tone }; },
+    weathered: (p) => { const Vo = vor(9.5, 4, .8); return { h: (x, y) => {
+      const q = Vo(x, y), dx = x - q.cx, dy = y - q.cy, d = hyp(dx, dy), R = p.R, cap = Math.sqrt(max(0, R * R - d * d)) - R, fa = q.id2 * 6.28, plane = -tan(rad(26 + 10 * q.id3)) * (dx * cos(fa) + dy * sin(fa) - 1.2),
+        e = q.e, crack = e < .6 ? 1.3 * (1 - e / .6) ** 1.2 : 0, ox = (q.id3 - .5) * 3, oy = (q.id - .5) * 3, dim = q.id2 > .5 ? .55 * max(0, 1 - hyp(dx - ox, dy - oy) / 1.4) ** 1.6 : 0;
+      return min(cap, plane) + (q.id - .5) * .8 - crack - dim + grain(x, y, .05, 4) - .5 * sstep(.2, 1.6, 1.6 - e) * .3;
+    }, tone: (x, y) => .92 + .16 * Vo(x, y).id }; },
+    pitted: (p) => { const Vo = vor(3.7, 13, .8); return { h: (x, y) => { const q = Vo(x, y), dep = 2.8 / p.ratio * (.6 + .8 * q.id2); return (q.id - .5) * .14 - dep * sstep(.12, 1.0, q.e) ** .8 + grain(x, y, .045, 12); }, tone: (x, y) => .93 + .14 * Vo(x, y).id }; },
+    cracked: (p) => { const Vo = vor(p.cell, 6, p.jit); return { h: (x, y) => { const q = Vo(x, y), crack = q.e < .6 ? 1.35 * (1 - q.e / .6) ** 1.1 : 0, lip = .12 * (1 - sstep(.5, 1.3, q.e)); return (q.id - .5) * .4 - lip - crack + (q.id2 - .5) * tan(rad(3.4)) * (x - q.cx) + (q.id3 - .5) * tan(rad(3.4)) * (y - q.cy) + grain(x, y, .035, 4); }, tone: (x, y) => .93 + .14 * Vo(x, y).id }; },
+    columnar: (p) => {
+      const r = E.rng(7), bx = [], hs = [], br = []; let x = -4; while (x < 28) { x += 2.6 + 2.8 * r(); bx.push(x); hs.push(1.2 + 3.6 * r()); br.push((r() - .5) * .16); }
+      const seg = (i, y) => { let yb = -3 - 8 * hash2(i, 1, 3), k = 0; for (;;) { const nx = yb + 5 + 8 * hash2(i, k, 5); if (nx > y) break; yb = nx; k++; } return { k: k, y0: yb }; };
+      const w = max(.02, 2.8 / tan(rad(p.wall)));
+      return { h: (x, y) => {
+        let i = 0; while (i < bx.length - 1 && x > bx[i] + br[i] * (y - 11)) i++;
+        const xl = bx[i - 1 < 0 ? 0 : i - 1] + br[i - 1 < 0 ? 0 : i - 1] * (y - 11), xr = bx[i] + br[i] * (y - 11), e = min(x - xl, xr - x), sg = seg(i, y), top = hs[i] + 2.2 * (hash2(i, sg.k, 9) - .5) - .09 * (y - sg.y0) * (hash2(i, sg.k, 11) - .3);
+        return top - 3.2 * (1 - sstep(.2, .2 + w, e)) + .14 * (vn(x * 3.1, y * .35, 5) - .5) * 2 + .1 * (vn(x * 1.3, y * 1.3, 8) - .5) * 2 + grain(x, y, .03, 6);
+      }, tone: (x, y) => { let i = 0; while (i < bx.length - 1 && x > bx[i] + br[i] * (y - 11)) i++; return .9 + .2 * hash2(i, seg(i, y).k, 4); } };
+    }
   };
-  ['flat', 'layered', 'blocky', 'sheared', 'weathered', 'pitted', 'cracked', 'columnar'].forEach(k => { MODELS['form_' + k] = (p) => { const f = formFn[k](par('form_' + k, p)); return E.hfPatch({ size: 22, N: 130, h: f.h, tone: f.tone, aoR: 2.3 }); }; });
+  ['flat', 'layered', 'blocky', 'sheared', 'weathered', 'pitted', 'cracked', 'columnar'].forEach(k => { MODELS['form_' + k] = (p) => { const f = formFn[k](par('form_' + k, p)); return E.hfPatch({ size: 22, N: 150, h: f.h, tone: f.tone, aoR: 2.3 }); }; });
+  MODELS.form_columnar.cam = { az: -12, el: 32, dist: 1 };
 
   /* ============ the five patterns (patches 30 mm): a macro, a meso and a micro amplitude each ============ */
   const spots = (seed, n, rmin, rmax, dmax, box, el) => { const r = E.rng(seed), a = []; for (let i = 0; i < n; i++) { const rr = rmin + (rmax - rmin) * Math.pow(r(), 2.2); a.push({ x: box[0] + r() * (box[2] - box[0]), y: box[1] + r() * (box[3] - box[1]), r: rr, d: min(dmax, .15 + .32 * rr / rmax * dmax * 1.5) * (.7 + .5 * r()), ph: r() * 6, el: .8 + .4 * r() }); } return a; };
@@ -194,7 +292,7 @@
     plates: (p) => ({ N: 160, h: (x, y) => { const q = VP(x * .86 + y * .22, y * 1.1 - x * .12), base = (q.id - .5) * p.macro + ((q.id2 - .5) * tan(rad(3)) * (x - q.cx) * .86) + ((q.id3 - .5) * tan(rad(3)) * (y - q.cy)); let c = 0; for (const pp of CHP) { const sd = E.polySD(pp, x, y); c = max(c, sd < 0 ? p.meso : p.meso * (1 - sstep(0, .8, sd))); } return base - (q.e < .32 ? .55 * (1 - q.e / .32) : 0) - c + grain(x, y, p.micro, 5); }, tone: (x, y) => .93 + .14 * VP(x * .86 + y * .22, y * 1.1 - x * .12).id, aoR: 2.2 }),
     pitted: (p) => ({ N: 190, h: (x, y) => p.macro * fbm(x / 15, y / 15, 8, 2) - cutSpots(P3b, x, y, p.meso / .9) - cutSpots(P3, x, y, p.micro / .6) + grain(x, y, p.micro * .06 / .6, 7), aoR: 1.8 }),
     layered: (p) => { const bs = [], r = E.rng(8); let u = -4; while (u < 70) { bs.push(u); u += 2.2 + 3.6 * r(); } const kk = p.meso / .63; return { N: 170, h: (x, y) => { const a = rad(10), uu = (x * sin(a) + y * cos(a)) + wob(x, .9, 9, 4), vv = (x * cos(a) - y * sin(a)); let h = 0, k = -1; for (let i = 0; i < bs.length; i++) { h += (.18 + .45 * hash2(i, 5, 5)) * kk * sstep(bs[i] - .3, bs[i] + .3, uu); if (uu >= bs[i]) k = i; } const loc = uu - (bs[max(k, 0)] || 0); const vein = max(0, 1 - abs(vv - 12 + wob(uu, 1.5, 8, 9)) / .55) * .28 * kk; return h - tan(rad(4)) * loc * .5 + vein + grain(x, y, p.micro, 5) + p.macro * fbm(x / 10, y / 10, 3, 2); }, tone: (x, y) => .94 + .12 * hash2(fl((x * sin(rad(10)) + y * cos(rad(10)) + 4) / 3), 4, 4), aoR: 2 }; },
-    network: (p) => ({ N: 170, h: (x, y) => { const xx = x + 1.6 * fbm(x / 7, y / 7, 3, 2), yy = y + 1.6 * fbm(x / 7 + 9, y / 7, 5, 2), q = VN(xx, yy), crack = q.e < .65 ? p.meso * (1 - q.e / .65) ** 1.2 : 0; return p.macro * (1 - clamp01(q.d1 / 4.6) ** 2) + (q.id - .5) * .4 - crack + (q.id2 - .5) * tan(rad(2.5)) * (x - q.cx) + grain(x, y, p.micro, 4); }, tone: (x, y) => .93 + .14 * VN(x, y).id, aoR: 2.4 })
+    network: (p) => ({ N: 170, h: (x, y) => { const xx = x + 1.6 * fbm(x / 7, y / 7, 3, 2), yy = y + 1.6 * fbm(x / 7 + 9, y / 7, 5, 2), q = VN(xx, yy), crack = q.e < .65 ? p.meso * (1 - q.e / .65) ** 1.2 : 0; return p.macro * .8 * fbm(x / 16, y / 16, 6, 2) + (q.id - .5) * .4 - .1 * (1 - sstep(.6, 1.4, q.e)) - crack + (q.id2 - .5) * tan(rad(2.5)) * (x - q.cx) + grain(x, y, p.micro, 4); }, tone: (x, y) => .93 + .14 * VN(x, y).id, aoR: 2.4 })
   };
   ['subtle', 'plates', 'pitted', 'layered', 'network'].forEach(k => { MODELS['pat_' + k] = (p) => { const f = patF[k](par('pat_' + k, p)); return E.hfPatch({ size: 30, N: f.N, h: f.h, tone: f.tone, aoR: f.aoR }); }; });
 
@@ -305,49 +403,96 @@
   };
   MODELS.shingle.cam = { az: -58, el: 24, dist: 1.0 };
 
-  /* two courses of blocks with an overhang: the upper course set forward, one lower block recessed */
-  SPEC.courses = [V('', '', [S('recess', 'recess', 'mm', 6, 8, .1, 7), S('fwd', 'course set forward', 'mm', 2, 3, .05, 2.5), S('h', 'course height', 'mm', 11.5, 14.5, .1, 12.5)])];
+  /* O massing, from the N and O sheet's "Massing and ratios": four layers sharing H as .26 / .26 / .28 / .20 (base to top), a block footprint of width : height 1.6 to 2.4.
+     The layers step back, and the blocks get smaller going up, in width and in height (a layer whose blocks would be too tall for its fall-off is cut into two courses), and no course is a row of equal blocks. */
+  SPEC.courses = [V('', '', [S('H', 'total height H', 'mm', 30, 43, .5, 38), S('s1', 'layer 1 (base), share of H', '', .2, .32, .01, .26), S('s2', 'layer 2, share of H', '', .2, .32, .01, .26), S('s3', 'layer 3, share of H', '', .22, .34, .01, .28), S('s4', 'layer 4 (top), share of H', '', .14, .26, .01, .2), S('wh', 'block width : height (base)', ': 1', 1.6, 2.4, .05, 2), S('fall', 'size fall-off per layer', '', 0, 1, .05, .6), S('irr', 'irregularity', '', 0, 1, .05, .5), S('set', 'setback per layer', 'of depth', .05, .3, .01, .15)])];
+  const coursesLayout = (p) => {
+    const r = E.rng(14), tot = p.s1 + p.s2 + p.s3 + p.s4, sh = [p.s1, p.s2, p.s3, p.s4].map(v => v / tot), f = 1 - .3 * p.fall, D = 24, DEP = 18, layers = [];
+    const h0 = p.H * sh[0], L0 = Math.max(44, 3 * p.wh * h0); let z = 0;
+    for (let i = 0; i < 4; i++) {
+      const hi = p.H * sh[i], tb = h0 * Math.pow(f, i), nc = Math.max(1, Math.round(hi / tb)), hb = hi / nc, wbar = p.wh * tb, Li = L0 * (1 - .12 * i), xs0 = L0 * (.035 * i + (r() - .5) * .05) + (L0 - Li) * .25, front = i * p.set * DEP, blocks = [];
+      for (let c = 0; c < nc; c++) {
+        let x = xs0 - r() * wbar * .5; const zc0 = z + c * hb;
+        while (x < xs0 + Li) {
+          const end = xs0 + Li, w0 = max(4.5, wbar * (1 + p.irr * (r() - .5) * 1.2)), x1 = (x + w0 + .6 * wbar > end) ? end : x + w0, push = p.irr * r() * 1.6, dz = (c === nc - 1 ? p.irr * (r() - .3) * .7 : 0);
+          if (x1 - x > 3) blocks.push({ x0: max(x, xs0 - 1), x1: x1, z0: zc0, z1: zc0 + hb + dz, y0: front + push, course: c });
+          x = x1 + .35 + .4 * r();
+        }
+      }
+      layers.push({ z0: z, z1: z + hi, hb: hb, wbar: wbar, blocks: blocks, nc: nc, front: front, x0: xs0, x1: xs0 + Li }); z += hi;
+    }
+    return { layers: layers, H: p.H, L0: L0, D: D, sh: sh };
+  };
   MODELS.courses = (p) => {
     p = par('courses', p);
-    const r = E.rng(14), parts = [], back = 20, f = p.fwd / 2.5, h = p.h;
-    const rows = [
-      { z0: 0, z1: h, blocks: [[0, 15, 0], [15.4, 31, p.recess], [31.4, 49, 0]] },
-      { z0: h + .4, z1: 2 * h + 1.4, blocks: [[0, 14, -2.5 * f], [14.4, 33, -3 * f], [33.4, 49, -2 * f]] }
-    ];
-    rows.forEach((row, ri) => row.blocks.forEach((bl, bi) => {
-      const b = { x0: bl[0], x1: bl[1], y0: bl[2], y1: back, z0: row.z0, z1: row.z1 + ((bi * 7 + ri * 3) % 3) * .4, lean: { '-y': 2.5, '+x': 2, '-x': 2, '+z': 4, '-z': 0 } };
-      const pl = E.blockPlanes(b, r);
-      edgePlanes(b, nm => { if (nm.indexOf('-z') >= 0 || nm.indexOf('+y') >= 0) return null; if (nm === '-y+z') return { kind: 'crisp', c: 2.4 + r() * 1 }; return r() < .3 ? { kind: 'crisp', c: .45 } : { kind: 'soft', c: 1.0 + r() * .8 }; }).forEach(q => pl.push(q));
-      if (r() < .6) pl.push(E.chamferExact(AX['+x'], AX['-y'], [b.x1, b.y0, (b.z0 + b.z1) / 2], 1.6 + r() * 1.3, 'side'));
-      bendFace(b, '-y', r, 3.5).forEach(q => { q.d += .45; pl.push(q); }); if (r() < .6) bendFace(b, '+z', r, 2.5).forEach(q => { q.d += .3; pl.push(q); });
-      const nChip = 1 + fl(r() * 2); for (let i = 0; i < nChip; i++) pl.push(cornerChip(b, r() < .5 ? 1 : -1, -1, 1, .1 + .1 * r(), r));
+    const r = E.rng(15), parts = [], L = coursesLayout(p);
+    L.layers.forEach((ly, li) => ly.blocks.forEach(bl => {
+      const hb = bl.z1 - bl.z0, b = { x0: bl.x0, x1: bl.x1, y0: bl.y0, y1: L.D, z0: bl.z0, z1: bl.z1, lean: { '-y': 2.2, '+x': 2, '-x': 2, '+z': 3 } };
+      const pl = E.blockPlanes(b, r), ez = min(2.4, .08 * hb + .9) * (.7 + .6 * r()), vs = r() < .5;
+      edgePlanes(b, nm => { if (nm.indexOf('-z') >= 0 || nm.indexOf('+y') >= 0) return null; if (nm === '-y+z') return { kind: 'soft', c: ez * 1.2 }; if (nm.indexOf('+z') >= 0) return { kind: 'soft', c: ez }; return vs ? { kind: 'soft', c: .6 + .5 * r() } : { kind: 'crisp', c: .4 + .3 * r() }; }).forEach(q => pl.push(q));
+      bendFace(b, '-y', r, 3).forEach(q => { q.d += .35; pl.push(q); });
+      if (r() < .4) pl.push(cornerChip(b, r() < .5 ? 1 : -1, -1, 1, .12 + .1 * r(), r));
       parts.push(solid(pl, .95 + .08 * r()));
     }));
-    parts.push(solid([E.P([0, 0, 1], 2 * h + 1, 'top'), E.P([0, 0, -1], 0, 'bot'), E.P([-1, 0, 0], 0, 'l'), E.P([1, 0, 0], 49, 'r'), E.P([0, -1, 0], -(back - 2), 'f'), E.P([0, 1, 0], back + 6, 'b')], .62));
-    return E.solidsMesh(parts, { ground: [-5, -6, 56, 28], seed: 6, pitch: 4 });
+    const xa = Math.min.apply(null, L.layers.map(l => l.x0)), xb = Math.max.apply(null, L.layers.map(l => l.x1));
+    parts.push(solid([E.P([0, 0, 1], L.H * .75, 'top'), E.P([0, 0, -1], 0, 'bot'), E.P([-1, 0, 0], -(xa + 9), 'l'), E.P([1, 0, 0], xb - 9, 'r'), E.P([0, -1, 0], -(L.D - 3), 'f'), E.P([0, 1, 0], L.D + 6, 'b')], .82));
+    return E.solidsMesh(parts, { ground: [xa - 8, -8, xb + 8, L.D + 10], seed: 6, pitch: 5, facetTone: .1, grey: .8 });
   };
-  MODELS.courses.cam = { az: -24, el: 20, dist: 1.2 };
+  MODELS.courses.cam = { az: -26, el: 22, dist: 1.1 };
+  window.COURSESLAYOUT = (p) => coursesLayout(par('courses', p));
 
-  /* a skin over a core: the face moves, the mass stays one body. Cut away at the middle. */
-  SPEC.skin = [V('', '', [S('W', 'width', 'mm', 14, 40, .5, 26), S('H', 'height', 'mm', 10, 30, .5, 17), S('skin', 'skin thickness', 'mm', 1.5, 6, .1, 3.6), S('setback', 'largest setback', 'mm', .4, 1.9, .05, 1.9), S('lean', 'largest lean', '°', 3, 9, .5, 9)])];
+  /* an O block in context: a course of three wide blocks with eased top edges and a corner chip. Whole faces carry long cracks: a crack is a plane cut through the block (it runs edge to edge across a face, or stops on the crack it meets),
+     and each side of it is chamfered, so the groove is closed and the mass stays solid. In the middle block one face is split once and the smaller piece is set back and turned (the skin). */
+  SPEC.skin = [V('', '', [S('H', 'course height', 'mm', 10, 30, .5, 13), S('W', 'block width', 'mm', 14, 40, .5, 20), S('ease', 'top edge radius', 'mm', .7, 2.8, .05, 1.6), S('cracks', 'cracks per face', '', 0, 3, 1, 2), S('cw', 'crack width', 'mm', .4, .8, .05, .5), S('setback', 'skin setback', 'mm', .1, .3, .01, .2), S('turn', 'skin turn', '°', .2, 1.2, .05, .6)])];
+  SPEC.skin.opt = { k: 'view', label: 'view', choices: [['whole', 'whole'], ['cut', 'cutaway']] };
+  const clip2 = (poly, n, d) => { const out = []; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length], da = n[0] * a[0] + n[1] * a[1] - d, db = n[0] * b[0] + n[1] * b[1] - d; if (da <= 1e-9) out.push(a); if ((da < -1e-9 && db > 1e-9) || (da > 1e-9 && db < -1e-9)) { const t = da / (da - db); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } } return out; };
+  const area2 = (q) => { let s = 0; for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; s += a[0] * b[1] - b[0] * a[1]; } return abs(s) / 2; };
+  const cen2 = (q) => { let x = 0, z = 0; q.forEach(v => { x += v[0]; z += v[1]; }); return [x / q.length, z / q.length]; };
+  const skinLayout = (p) => {
+    const r = E.rng(31), D = 14, bl = [], ws = [.85, .6, .8].map(f => f * p.W), hz = [0, .4, -.5]; let x = 0;
+    ws.forEach((w, i) => {
+      const b = { x0: x, x1: x + w, y0: 0, y1: D, z0: 0, z1: p.H + hz[i] }; x += w + .4;
+      let regs = [{ poly: [[b.x0, b.z0], [b.x1, b.z0], [b.x1, b.z1], [b.x0, b.z1]], cons: [] }]; const cuts = [];
+      for (let c = 0; c < (i === 1 ? 1 : p.cracks); c++) {
+        let k = 0; regs.forEach((q, j) => { if (area2(q.poly) > area2(regs[k].poly)) k = j; }); const R = regs[k], ct = cen2(R.poly), ph = rad((r() < .5 ? 20 : 110) + 50 * r()), n = [-sin(ph), cos(ph)];
+        const sh = (r() - .5) * .3 * (b.x1 - b.x0), d = n[0] * (ct[0] + sh) + n[1] * ct[1], A = clip2(R.poly, n, d), B = clip2(R.poly, [-n[0], -n[1]], -d);
+        if (A.length < 3 || B.length < 3 || area2(A) < 6 || area2(B) < 6) continue;
+        const on = A.filter(v => abs(n[0] * v[0] + n[1] * v[1] - d) < 1e-6).sort((u, v) => u[0] - v[0] || u[1] - v[1]), seg = [on[0], on[on.length - 1]];
+        const top = on.some(v => abs(v[1] - b.z1) < 1e-6), cid = { n: n, d: d, seg: seg, top: top };
+        regs.splice(k, 1, { poly: A, cons: R.cons.concat([{ n: n, d: d, out: 1, cut: cid }]) }, { poly: B, cons: R.cons.concat([{ n: [-n[0], -n[1]], d: -d, out: -1, cut: cid }]) }); cuts.push(cid);
+      }
+      let skin = -1; if (i === 1 && regs.length > 1) { skin = 0; regs.forEach((q, j) => { if (area2(q.poly) < area2(regs[skin].poly)) skin = j; }); }
+      bl.push({ b: b, regs: regs, cuts: cuts, skin: skin });
+    });
+    return { blocks: bl, D: D, W: x };
+  };
+  /* a chamfer between a face (normal a, offset da) and a cut face (normal b, offset db): hw wide on the first, dp deep on the second */
+  const chamf2 = (a, da, b, db, hw, dp, tag) => { const m = E.add(E.mul(a, hw), E.mul(b, dp)), l = hyp(m[0], m[1], m[2]), n = E.mul(m, 1 / l); return E.P(n, (hw * da + dp * db) / l - hw * dp / hyp(hw, dp), tag); };
   MODELS.skin = (p) => {
     p = par('skin', p);
-    const r = E.rng(21), parts = [], W = p.W, D = 14, Hh = p.H, skinT = p.skin, kx = W / 26, kz = Hh / 17;
-    const cut = E.P([1, 0, 0], W / 2 + 1, 'cutaway');
-    const coreP = [E.P([-1, 0, 0], 0, 'l'), E.P([1, 0, 0], W, 'r'), E.P([0, -1, 0], -skinT, 'f'), E.P([0, 1, 0], D, 'b'), E.P([0, 0, -1], 0, 'bot'), E.P([0, 0, 1], Hh, 'top'), cut];
-    parts.push(solid(coreP, .55));
-    const cx = [0, 5.4 * kx, 13.8 * kx, 19.2 * kx, W], cz = [0, 6.2 * kz, 11.8 * kz, Hh];
-    for (let i = 0; i < cx.length - 1; i++) for (let j = 0; j < cz.length - 1; j++) {
-      const sb = .4 + (p.setback - .4) * r(), lean = (3 + (p.lean - 3) * r()), pl = [E.P([-1, 0, 0], -cx[i], 'a'), E.P([1, 0, 0], cx[i + 1] - .05, 'b'), E.P([0, 0, -1], -cz[j], 'c'), E.P([0, 0, 1], cz[j + 1] - .05, 'd'), E.P([0, 1, 0], skinT + .05, 'back'), cut];
-      const ax = E.norm(E.cross([0, -1, 0], [r() - .5, 0, r() - .5])), a = rad(lean), n = E.norm(E.add(E.mul([0, -1, 0], cos(a)), E.mul(E.cross(ax, [0, -1, 0]), sin(a))));
-      pl.push(E.P(n, E.dot(n, [(cx[i] + cx[i + 1]) / 2, sb, (cz[j] + cz[j + 1]) / 2]), 'face'));
-      if (i === 3 && j === 2) pl.push(E.cutAt([cx[i + 1], sb, cz[j + 1]], [1, -1, 1], 1.4, 'chip'));
-      if (i === 0 && j === 2) pl.push(E.cutAt([cx[i], sb, cz[j + 1]], [-1, -1, 1], 1.1, 'chip'));
-      parts.push(solid(pl, .96 + .08 * r()));
-    }
-    return E.solidsMesh(parts, { ground: [-8, -8, W + 8, 22], seed: 9, pitch: 3 });
+    const L = skinLayout(p), r = E.rng(33), parts = [], cutX = (() => { const b1 = L.blocks[1], q = b1.regs[b1.skin < 0 ? 0 : b1.skin]; return cen2(q.poly)[0]; })();
+    L.blocks.forEach((B, bi) => {
+      const b = B.b, base = E.blockPlanes(Object.assign({ lean: { '-y': .7, '+z': .8, '+x': .8, '-x': .8 }, burn: true }, b), r);
+      edgePlanes(b, nm => { if (nm.indexOf('-z') >= 0 || nm.indexOf('+y') >= 0) return null; if (nm === '-y+z') return { kind: 'soft', c: p.ease }; if (nm.indexOf('+z') >= 0) return { kind: 'soft', c: p.ease * .75 }; return { kind: 'crisp', c: .4 }; }).forEach(q => base.push(q));
+      if (bi === 0) base.push(cornerChip(b, -1, -1, 1, .2, r)); if (bi === 2) base.push(cornerChip(b, 1, -1, 1, .15, r));
+      B.regs.forEach((R, ri) => {
+        const isSkin = bi === 1 && ri === B.skin, pl = base.filter(q => !(isSkin && q.tag === '-y')), yf = isSkin ? p.setback : 0;
+        if (isSkin) { const ct = cen2(R.poly), ax = E.norm(E.cross([0, -1, 0], [.8, 0, .6])), a = rad(p.turn), n = E.norm(E.add(E.mul([0, -1, 0], cos(a)), E.mul(E.cross(ax, [0, -1, 0]), sin(a)))); pl.push(E.P(n, E.dot(n, [ct[0], yf, ct[1]]), '-y')); }
+        R.cons.forEach(cn => {
+          const nc = [cn.n[0], 0, cn.n[1]]; pl.push(E.P(nc, cn.d, 'crack'));
+          const hw = p.cw / 2 * (.7 + .6 * r()), dp = hw * (1.8 + .8 * r());
+          pl.push(chamf2([0, -1, 0], -yf, nc, cn.d, hw, dp, 'lip'));
+          if (cn.cut.top) pl.push(chamf2([0, 0, 1], b.z1, nc, cn.d, hw, dp, 'lip'));
+          cn.cut.seg.forEach(e => { if (abs(e[1] - b.z1) < 1e-6 && r() < .6) pl.push(E.cutAt([e[0], yf, e[1]], E.norm(E.add(E.add(nc, [0, -1, 0]), [0, 0, 1])), .45 + .5 * r(), 'chip')); });
+        });
+        if (p.view === 'cut') pl.push(E.P([-1, 0, 0], -cutX, 'cutaway'));
+        parts.push(solid(pl, .97 + .06 * r()));
+      });
+    });
+    return E.solidsMesh(parts, { ground: [-8, -6, L.W + 8, L.D + 8], seed: 9, pitch: 3, facetTone: .08, grey: .8 });
   };
-  MODELS.skin.cam = { az: 30, el: 26, dist: 1.25 };
+  MODELS.skin.cam = { az: -22, el: 24, dist: 1.15 };
+  window.SKINLAYOUT = (p) => skinLayout(par('skin', p));
 
   /* the mistakes, as models: even round pockets, and uniform noise (no numbers on the page, so no sliders) */
   MODELS.dish_round = () => { const Sp = []; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) Sp.push({ x: 5.5 + i * 9.5, y: 5.5 + j * 9.5, r: 3.6, d: .8, ph: 0, el: 1 }); return E.hfPatch({ size: 30, N: 150, h: (x, y) => { let cut = 0; for (const q of Sp) { const rr = hyp(x - q.x, y - q.y) / q.r; if (rr < 1) cut = max(cut, q.d * (1 - rr * rr)); } return -cut + grain(x, y, .03, 3); } }); };

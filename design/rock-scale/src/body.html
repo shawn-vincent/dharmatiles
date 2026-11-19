@@ -57,7 +57,7 @@
   {{PRIMS}}
   <div class="note warn"><b class="t">How well the models match their panels</b>
   <b>Close:</b> dish, pits, ridge, chip, crack, steps and the eight forms read the same as their sheet panels in kind, size and proportion (pits are a little small and shallow against the sheet&rsquo;s, whose rims are raised).
-  <b>Partial:</b> the facet change (the true angles are 1&ndash;5&deg;, so at the real angles the crease is faint) and the blocks (eased edges, chips, courses), which are planar and clean where the photos are hewn: they carry planes, chamfers, bends and chips but not the photos&rsquo; fine broken facets. The shingled slabs read as shingles but are shorter and fatter than the photo&rsquo;s long blades. Skin and levels illustrate the idea; they do not try to look like the photos.
+  <b>Partial:</b> the facet change (the true angles are 1&ndash;5&deg;, so at the real angles the crease is faint) and the blocks (eased edges, chips, courses), which are planar and clean where the photos are hewn: they carry planes, chamfers, bends and chips but not the photos&rsquo; fine broken facets. The shingled slabs read as shingles but are shorter and fatter than the photo&rsquo;s long blades. Levels illustrates the idea and does not try to look like the photos. The O block in context reads as O&rsquo;s wide blocks with long cracks across their faces, though its faces are clean where the photo&rsquo;s are hewn.
   <b>Not matched:</b> the photographic roughness of the sheets&rsquo; close-ups, which a printed surface cannot carry (nothing under 0.4 mm).</div>
 </section>
 
@@ -90,29 +90,29 @@
   <div class="cols2">
     <div data-diagram="sets"></div>
     <div>
-      <p><b>Persistence.</b> A crack that stops is a crack of a finer level: it lives inside its parent cell and never crosses the parent&rsquo;s edge. Nothing else has to be said about where it ends. Seen in the reference: cracks end inside blocks.</p>
+      <p><b>Persistence.</b> A crack of a finer level lives inside its parent cell and never crosses the parent&rsquo;s edge. Where it ends is a rule too: on the edge of its plane or on another crack, never in the middle of a face. Seen in the reference: a crack stops where it meets another crack or a facet edge, or runs off the edge of the plane; none dies out in the middle of a face.</p>
       <p><b>Minimum piece.</b> No cell is narrower than 0.4 of the level&rsquo;s spacing; a crack that would leave a sliver is skipped. Both walls needed this to stop slivers.</p>
       <p><b>A tapering crack.</b> One side of the crack tilts along it so the step between the two sides shrinks to nothing toward one end (a gradient of at most 0.1).</p>
     </div>
   </div>
   <div class="cols2" style="margin-top:12px">{{FRAC_CROPS}}</div>
 
-  <h3 style="margin-top:34px">One mass: levels, and a skin over a core</h3>
-  <p>The references are one body of rock that has broken along a few directions at several sizes, not pieces set side by side. A level is the same cutting again inside each cell of the level above. Only the face moves, so the mass stays one body: a piece moves its own share of the free face (set back and turned) and the rock behind stays whole. O calls it a skin over a core, N a riser against the rock behind.</p>
+  <h3 style="margin-top:34px">One mass: levels, and an O block with a skin piece</h3>
+  <p>The references are one body of rock that has broken along a few directions at several sizes, not pieces set side by side. A level is the same cutting again inside each cell of the level above. Only the face moves, so the mass stays one body: a piece moves its own share of the free face (set back and turned) and the rock behind stays whole. O calls it a skin piece, N a riser against the rock behind.</p>
   <div class="cols2">
     <div>
       <figure class="v3d" data-model="levels" data-az="-18" data-el="48"><canvas aria-label="3D model: three levels of cells"></canvas><figcaption>Three levels on one slab, 34 &times; 34 mm, at the defaults. No gaps; the base is shared.</figcaption></figure>
       <div data-diagram="levels" style="margin-top:10px"></div>
     </div>
     <div>
-      <figure class="v3d" data-model="skin"><canvas aria-label="3D model: a block with a broken skin, cut away"></canvas><figcaption>A block 26 &times; 17 mm at the defaults, cut away at the middle: the front skin in pieces over a darker core.</figcaption></figure>
+      <figure class="v3d" data-model="skin"><canvas aria-label="3D model: a course of three blocks with cracks across their faces"></canvas><figcaption>A course of three blocks, 13 mm high, at the defaults: eased top edges, a corner chip, long cracks across whole faces. In the middle block one face is split once; the smaller piece is set back 0.2 mm and turned 0.6&deg;. All solid; the cutaway shows the section.</figcaption></figure>
       <div data-diagram="skin" style="margin-top:10px"></div>
     </div>
   </div>
   <dl class="nums" style="max-width:760px">
     <dt>Offset per level</dt><dd>a tenth to 0.4 of the level above: N 0.4 (1.5, 0.6, 0.25 mm); O skin about a tenth of the block&rsquo;s own push, and half looked like rubble</dd>
     <dt>Levels</dt><dd>3 on N (12&times;40, 8&times;18, 5&times;9 mm cells), the finest on 50&ndash;80% of cells; 2 on O (blocks, then a skin 3&ndash;4 mm deep)</dd>
-    <dt>Skin piece</dt><dd>5&ndash;9 mm wide, setback 0.2&ndash;0.8 (a fifth up to 1.9), lean 1&ndash;9&deg; (O used 1&ndash;4&deg;), seam 0.1, two or three pieces per face</dd>
+    <dt>Skin piece</dt><dd>one face split once, the smaller piece set back 0.1&ndash;0.3 and turned 0.2&ndash;1.2&deg;; most faces stay whole and carry long cracks 0.4&ndash;0.8 wide (the earlier 5&ndash;9 mm pieces, 1.9 setbacks and 9&deg; leans read as rubble)</dd>
     <dt>Every free face</dt><dd>N&rsquo;s crest and end read as a box until they were cut like the slope</dd>
   </dl>
 
@@ -125,9 +125,9 @@
   <div class="cols3" style="margin-top:12px">{{N_CROPS}}</div>
 
   <h3 style="margin-top:34px">Stacked blocks, caps, shelves and tiers (O)</h3>
-  <p>O is a stack of mostly vertical blocks on level beds. Three courses (the photo; the sheet says four of about .26 H). Each block is pushed back by its own amount, so the face steps in and out; one cell is recessed deep and the one above it is set forward, which makes the overhang. Small cap blocks on the top course break the skyline.</p>
+  <p>O is a stack of mostly vertical blocks on level beds. The N and O sheet gives four layers sharing H as .26 / .26 / .28 / .20 from base to top, and a block footprint of 1.6 to 2.4 : 1 (width : height). The model carries both, and one thing more that the crop and the photo show and no number states: the layers step back, and the blocks get smaller going up, in width and in height, so no course is a row of equal blocks. Where a layer&rsquo;s blocks would be too tall for its fall-off it is cut into two courses. With the fall-off at none, the upper blocks are as large as the base blocks and the mass reads as a stack of toy blocks; with it raised it reads as stone. Block outlines are irregular and slightly rounded.</p>
   <div class="cols2">
-    <figure class="v3d" data-model="courses"><canvas aria-label="3D model: two courses with an overhang"></canvas><figcaption>At the defaults: two courses, six blocks, one recess (7 mm) and the course above set forward (2&ndash;3 mm).</figcaption></figure>
+    <figure class="v3d" data-model="courses"><canvas aria-label="3D model: four layers of blocks that step back and get smaller going up"></canvas><figcaption>At the defaults: four layers (.26 / .26 / .28 / .20 H) stepping back; blocks about 2 : 1 at the base and smaller in each layer above. Set the fall-off to 0 to see equal blocks.</figcaption></figure>
     <div data-diagram="secO"></div>
   </div>
   <div class="cols3" style="margin-top:12px">{{O_CROPS}}</div>
@@ -236,7 +236,7 @@
     <ol>
       <li><b>Pit or dish = one plane cut into a face.</b> Dishes 4&ndash;35 wide, 0.7&ndash;1.4 deep (to 7 on the rock scale), irregular, off any grid. Pits 0.4&ndash;2.8, 0.15&ndash;0.85 deep, clustered, in one patch of three or four faces, never uniform.</li>
       <li>Grooves: never under 0.4 wide or deep (two numbers in the N case below were, and did not read). 0.7&ndash;2.8 wide, 0.4&ndash;1.7 deep, on 30&ndash;55% of cells wider than 4, along the slab, as a lowered strip (never a gap). <span class="src">[sheet]</span></li>
-      <li>Cracks 0.4&ndash;0.7 wide, 0.4&ndash;1.1 deep, V-shaped. In the photo they are long, branch, and meet the block&rsquo;s edges, dividing a face into a few irregular polygons; short isolated scratches read as gouges (O v14). Sample the face at 0.2 mm or finer under a crack, or it aliases into a ladder of steps (O Anew). <span class="src">[photo]</span> <span class="src">[rounds]</span></li>
+      <li>Cracks 0.4&ndash;0.7 wide, 0.4&ndash;1.1 deep, V-shaped, in straight lengths with angular kinks. Their width varies along the length, the lips are chipped, one side may sit slightly proud, and each runs from the edge of a plane to the edge of another or stops on the crack it meets. In the photo they are long, branch, and meet the block&rsquo;s edges, dividing a face into a few irregular polygons; short isolated scratches read as gouges (O v14). Sample the face at 0.2 mm or finer under a crack, or it aliases into a ladder of steps (O Anew). <span class="src">[photo]</span> <span class="src">[rounds]</span></li>
       <li>Grain last, 0.15&ndash;0.85, stretched along the bedding, under the detail only.</li>
     </ol></div>
   <div class="step"><h4>7 &middot; Foot and rubble</h4>
@@ -296,7 +296,7 @@
       None of these is about rock. They are the frame, and a reader can&rsquo;t recover them.</li>
     <li><b>Some steps can&rsquo;t be built as written.</b>
       <ul>
-        <li>A half-space can&rsquo;t make a branching crack or a notched pit.</li>
+        <li>A half-space can&rsquo;t make a branching crack or a notched pit. On a solid, a crack is a plane cut through the block with a chamfer on each side, and a branch is a second cut on one side of the first; on a heightfield it is a carved groove.</li>
         <li>A mid-edge lip cut by one plane takes a whole triangle off the cell.</li>
         <li>Two faces cut into one mass fill each other&rsquo;s setbacks unless a mitre plane divides the rock between them.</li>
       </ul>
