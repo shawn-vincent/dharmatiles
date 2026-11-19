@@ -249,9 +249,9 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   /* the block floats, with no ground and no shadows. A soft light all round, part of it even and part coming from above, behind and
      to the right, so the far side has some shape too; and one lamp out past its left end, low and a little in front, pointing at the
      near left top corner, so its light rakes along the top and the near face and the dishes show by their shading */
-  const fill = new T.DirectionalLight(0xffffff, .2); fill.position.set(50, 60, 45);
-  scene.add(new T.AmbientLight(0xffffff, .38), new T.HemisphereLight(0xffffff, 0x8c8c90, .2), fill);
-  const lamp = new T.SpotLight(0xffffff, .34, 0, Math.PI / 4, 1); lamp.position.set(-72, -16, 34); lamp.target.position.set(-16.3, -7.4, 12.25);
+  const fill = new T.DirectionalLight(0xffffff, .24); fill.position.set(50, 60, 45);
+  scene.add(new T.AmbientLight(0xffffff, .24), new T.HemisphereLight(0xffffff, 0x8c8c90, .2), fill);
+  const lamp = new T.SpotLight(0xffffff, .42, 0, Math.PI / 4, 1); lamp.position.set(-72, -16, 34); lamp.target.position.set(-16.3, -7.4, 12.25);
   scene.add(lamp, lamp.target);
   function draw() { renderer.render(scene, cam); }
   function size() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); draw(); }
