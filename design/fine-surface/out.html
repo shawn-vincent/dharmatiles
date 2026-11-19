@@ -43,7 +43,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 <main>
   <header>
     <h1>Fine Surface</h1>
-    <p class="lede">A stone texture 0.1 to 0.5 mm deep: low tilted facets, shallow overlapping flakes, raised specks and grain. The reference, then the texture cut into the standard block at true scale.</p>
+    <p class="lede">A stone texture 0.1 to 0.5 mm deep: low tilted facets, shallow overlapping flakes, short sharp ridges that wander along the grain, raised specks and grain. The reference, then the texture cut into the standard block at true scale.</p>
   </header>
 
   <p class="fault" id="fault" role="alert" hidden></p>
@@ -95,18 +95,23 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
        wide how much wider than long a scar is, spread how far (degrees) its direction strays */
     scales: [
       { r: [1.6, 3.0], D: [.04, .11], cover: 1.6, wide: [1.0, 1.5], spread: 45 },
-      { r: [.35, .95], D: [.06, .14], cover: 2.6, wide: [1.3, 2.2], spread: 30 },
-      { r: [.2, .45], D: [.015, .04], cover: 1.2, wide: [1.0, 1.6], spread: 70 }
+      { r: [.35, .95], D: [.04, .1], cover: 2.2, wide: [1.3, 2.2], spread: 30 },
+      { r: [.2, .45], D: [.015, .04], cover: 1.0, wide: [1.0, 1.6], spread: 70 }
     ],
     lobes: [.2, .16, .11, .08, .05],   /* how far the 2nd to 6th harmonics pull a scar's boundary about */
     ragged: 1,               /* a scar's boundary is pushed in and out by a noise of the place (0.2 mm at a 0.7 mm wave, 0.06 at 0.25), times this */
     floor: .05,              /* the share of D taken even at the feathered side */
     hollow: .15,             /* a flake's middle swells by up to this share of D */
     arris: { r: [.4, 1.2], D: [.08, .22], every: .3 },   /* extra flakes centred on the edges: one every so many mm of edge */
-    wall: 1.3,               /* a scar's wall rises this steeply (mm per mm) outside its boundary */
+    wall: .8,               /* a scar's wall rises this steeply (mm per mm) outside its boundary */
     step: .8,                /* for this share of D; past it the ground rises gently (apron, mm per mm), so no thin fin is left standing between two scars */
     apron: .25,
     soft: .05,               /* and is rounded over this width */
+    /* ridges: sharp raised crests that wander along the grain, each starting, running a few mm and stopping. The grain is the
+       block's length on the top, bottom and long faces, and across it on the ends (as on Flakes Up Close); each ridge is turned
+       from it by up to `turn` degrees. A ridge runs `run` mm between turns of up to `most` degrees, six in ten of them back
+       towards its line (the Flakes ridge walk, far smaller). Its crest is `high` mm, its two sides fall at `steep` (mm per mm). */
+    ridges: { grain: { along: [1, 0, 0], ends: [0, 1, 0], turn: 20 }, per: .55, long: [1.2, 4], high: [.05, .14], steep: [1.7, .8], run: [.1, .4], most: 34 },
     specks: { per: 2.2, r: [.05, .125], high: [.02, .06] },   /* raised grains per mm², their radius and height: the one place the texture adds material */
     /* grain: a `specks` octave raises the tops of a noise as small low grains; a plain one cuts gently */
     grain: [{ amp: .006, wave: .06 }, { amp: .016, wave: .1, specks: true }, { amp: .012, wave: .2, specks: true }, { amp: .012, wave: .45 }]
@@ -255,6 +260,40 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
     });
 
     marks.push(['flakes', performance.now()]);
+    /* 2b. ridges: each a walk in the plane that touches the block at its start, raised to a sharp crest that fades out at both ends;
+       where ridges cross the taller shows */
+    const RG = F.ridges, DEG = Math.PI / 180, STEEP = 60 * DEG, ridges = Math.round(RG.per * AREA), wx = [], wy = [];
+    for (let k = 0; k < ridges; k++) {
+      const ci = Math.floor(rnd() * N), cx = base[3 * ci], cy = base[3 * ci + 1], cz = base[3 * ci + 2], nx = nor[3 * ci], ny = nor[3 * ci + 1], nz = nor[3 * ci + 2];
+      const g = Math.abs(nx * RG.grain.along[0] + ny * RG.grain.along[1] + nz * RG.grain.along[2]) > .7 ? RG.grain.ends : RG.grain.along, gd = g[0] * nx + g[1] * ny + g[2] * nz;
+      let ex = g[0] - gd * nx, ey = g[1] - gd * ny, ez = g[2] - gd * nz; const el = Math.hypot(ex, ey, ez) || 1; ex /= el; ey /= el; ez /= el;
+      const fx = ny * ez - nz * ey, fy = nz * ex - nx * ez, fz = nx * ey - ny * ex, turn = (2 * rnd() - 1) * RG.grain.turn * DEG, ct = Math.cos(turn), st = Math.sin(turn);
+      const ax = ex * ct + fx * st, ay = ey * ct + fy * st, az = ez * ct + fz * st, bx = ny * az - nz * ay, by = nz * ax - nx * az, bz = nx * ay - ny * ax;
+      const L = range(RG.long), H = range(RG.high) * (.5 + .5 * L / RG.long[1]), s1 = RG.steep[0], s2 = RG.steep[1], flip = rnd() < .5 ? 1 : -1, soft = .008;
+      /* the walk: along (x) and off (y) its line */
+      wx.length = 0; wy.length = 0; let x = 0, y = 0, phi = (2 * rnd() - 1) * RG.most * DEG; wx.push(0); wy.push(0);
+      while (x < L) { const run = range(RG.run); x += run * Math.cos(phi); y += run * Math.sin(phi); wx.push(x); wy.push(y);
+        const t = RG.most * DEG * (.5 + .5 * rnd()), back = -Math.atan(y / .5), sign = rnd() < .6 ? (Math.sign(back - phi) || 1) : rnd() < .5 ? -1 : 1;
+        phi += sign * t; if (Math.abs(phi) > STEEP) phi -= 2 * sign * t; phi = Math.max(-STEEP, Math.min(STEEP, phi)); }
+      const end = wx[wx.length - 1], fade = (v) => { const t = Math.min(v, end - v) / (.22 * end); return t >= 1 ? 1 : t <= 0 ? 0 : t * (2 - t); };
+      for (let j = 0; j + 1 < wx.length; j++) {
+        const u0 = wx[j] - end / 2, u1 = wx[j + 1] - end / 2, Ax = cx + ax * u0 + bx * wy[j], Ay = cy + ay * u0 + by * wy[j], Az = cz + az * u0 + bz * wy[j];
+        const dx = ax * (u1 - u0) + bx * (wy[j + 1] - wy[j]), dy = ay * (u1 - u0) + by * (wy[j + 1] - wy[j]), dz = az * (u1 - u0) + bz * (wy[j + 1] - wy[j]), d2 = dx * dx + dy * dy + dz * dz;
+        const h0 = H * fade(wx[j]), h1 = H * fade(wx[j + 1]), hm = Math.max(h0, h1); if (hm <= 0) continue;
+        /* the way across the ridge, for its two sides */
+        const sx = (ny * dz - nz * dy) * flip, sy = (nz * dx - nx * dz) * flip, sz = (nx * dy - ny * dx) * flip, reach = Math.sqrt(d2) / 2 + hm / s2 + soft;
+        for (const pts of both) { const pb = pts.base, pn = pts.nor, stage = pts.stage;
+          pts.near(Ax + dx / 2, Ay + dy / 2, Az + dz / 2, reach, (i) => {
+            const vx = pb[3 * i] - Ax, vy = pb[3 * i + 1] - Ay, vz = pb[3 * i + 2] - Az; let t = (vx * dx + vy * dy + vz * dz) / d2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+            const qx = vx - dx * t, qy = vy - dy * t, qz = vz - dz * t, dd = qx * qx + qy * qy + qz * qz, hl = h0 + (h1 - h0) * t;
+            if (pn[3 * i] * nx + pn[3 * i + 1] * ny + pn[3 * i + 2] * nz < .5) return;
+            const p = hl - (qx * sx + qy * sy + qz * sz > 0 ? s1 : s2) * (Math.sqrt(dd + soft * soft) - soft);
+            if (p > stage[i]) stage[i] = p;
+          }); }
+      }
+    }
+    for (const pts of both) { const c = pts.cut, st = pts.stage; for (let i = 0; i < pts.N; i++) c[i] -= st[i]; st.fill(0); }
+    marks.push(['ridges', performance.now()]);
     /* 3. specks: small round grains standing on whatever they sit on, plateau or wall */
     const pits = Math.round(F.specks.per * AREA);
     for (let k = 0; k < pits; k++) { const ci = Math.floor(rnd() * N), r = range(F.specks.r), d = -range(F.specks.high) * (r / F.specks.r[1]), cx = base[3 * ci], cy = base[3 * ci + 1], cz = base[3 * ci + 2];
@@ -271,7 +310,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
         pos[3 * i] = X - pn[3 * i] * d; pos[3 * i + 1] = Y - pn[3 * i + 1] * d; pos[3 * i + 2] = Z - pn[3 * i + 2] * d; }
       return pos; }
     const cpos = place(coarse, step), fpos = place(fine, step / P.sub); marks.push(['grain', performance.now()]);
-    return { marks: marks, pos: cpos, index: index, fine: { pos: fpos, index: pindex, points: PN, step: step / P.sub }, points: N, triangles: (index.length + pindex.length) / 3, flakes: flakes, pits: pits, deepest: deepest };
+    return { marks: marks, pos: cpos, index: index, fine: { pos: fpos, index: pindex, points: PN, step: step / P.sub }, points: N, triangles: (index.length + pindex.length) / 3, flakes: flakes, ridges: ridges, pits: pits, deepest: deepest };
   }
 
   /* ---- the view ---- */
@@ -340,7 +379,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
       const t2 = performance.now();
       document.getElementById('wait').hidden = true;
       document.getElementById('stat').innerHTML = 'Built in <b>' + fmt((t2 - t0) / 1000, 2) + ' s</b> (surface ' + fmt((t1 - t0) / 1000, 2) + ' s, normals ' + fmt((t2 - t1) / 1000, 2) + ' s): ' +
-        fmt(B.points) + ' points on a ' + FINE.grid + ' mm grid and ' + fmt(B.fine.points) + ' on a ' + fmt(B.fine.step, 3) + ' mm patch of the top face for the close-up, ' + fmt(B.triangles) + ' triangles, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.pits) + ' raised specks; deepest cut ' + fmt(B.deepest, 2) + ' mm. Drag to turn, pinch to zoom; click the view, then drag two fingers to pan.';
+        fmt(B.points) + ' points on a ' + FINE.grid + ' mm grid and ' + fmt(B.fine.points) + ' on a ' + fmt(B.fine.step, 3) + ' mm patch of the top face for the close-up, ' + fmt(B.triangles) + ' triangles, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.ridges) + ' ridges, ' + fmt(B.pits) + ' raised specks; deepest cut ' + fmt(B.deepest, 2) + ' mm. Drag to turn, pinch to zoom; click the view, then drag two fingers to pan.';
       window.fineBuilt = { marks: B.marks.map((m, i) => m[0] + ' ' + Math.round(m[1] - (i ? B.marks[i - 1][1] : t0))).join(', '), normals: Math.round(t2 - t1), flakes: B.flakes, seconds: (t2 - t0) / 1000, deepest: B.deepest, points: B.points };
       draw();
     } catch (e) { report('building the surface', e); }
