@@ -77,10 +77,11 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   /* ---- the surface ---- */
   /* A grid over the six faces at about `step` mm, joined into one closed mesh where faces share an edge (faces that share an edge
      share its count of steps). For each point: where it is on the box (box), on the rounded block (base), the way out there (out),
-     its neighbours (packed: nbr from off[k] to off[k + 1]) and, per face, the point at each grid place (ids). */
+     its neighbours (packed: nbr from off[k] to off[k + 1]), per face the point at each grid place (ids), and each grid square's
+     corners (quads), counter-clockwise from outside. */
   function grid(step) {
     const nL = Math.round(BLOCK.L / step), nW = Math.round((BLOCK.left.W + BLOCK.right.W) / 2 / step), nH = Math.round((BLOCK.left.H + BLOCK.right.H) / 2 / step);
-    const counts = [[nL, nW], [nL, nH], [nL, nH], [nW, nH], [nW, nH], [nL, nW]], index = new Map(), box = [], tris = [], links = [], ids = [];
+    const counts = [[nL, nW], [nL, nH], [nL, nH], [nW, nH], [nW, nH], [nL, nW]], index = new Map(), box = [], tris = [], quads = [], links = [], ids = [];
     const node = (p) => { const k = (Math.round(p[0] * 500) + 32768) * 4294967296 + (Math.round(p[1] * 500) + 32768) * 65536 + (Math.round(p[2] * 500) + 32768);
       let v = index.get(k); if (v === undefined) { v = box.length / 3; index.set(k, v); box.push(p[0], p[1], p[2]); links.push([]); } return v; };
     const link = (a, b) => { if (!links[a].includes(b)) { links[a].push(b); links[b].push(a); } };
@@ -88,14 +89,14 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
       const [nx, ny] = counts[f], W = nx + 1, g = new Int32Array(W * (ny + 1));
       for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) g[j * W + i] = node(at(c, i / nx, j / ny));
       for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) { const k = g[j * W + i]; if (i < nx) link(k, g[j * W + i + 1]); if (j < ny) link(k, g[(j + 1) * W + i]); }
-      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const k = j * W + i; tris.push(g[k], g[k + 1], g[k + W + 1], g[k], g[k + W + 1], g[k + W]); }
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const k = j * W + i; tris.push(g[k], g[k + 1], g[k + W + 1], g[k], g[k + W + 1], g[k + W]); quads.push(g[k], g[k + 1], g[k + W + 1], g[k + W]); }
       ids.push({ nx: nx, ny: ny, g: g });
     });
     const N = box.length / 3, base = new Float32Array(N * 3), out = new Float32Array(N * 3), q = [0, 0, 0], n = [0, 0, 0];
     for (let k = 0; k < N; k++) { inner(box[3 * k], box[3 * k + 1], box[3 * k + 2], q, n); for (let t = 0; t < 3; t++) { out[3 * k + t] = n[t]; base[3 * k + t] = q[t] + n[t] * FEEL.round; } }
     const off = new Int32Array(N + 1); for (let k = 0; k < N; k++) off[k + 1] = off[k] + links[k].length;
     const nbr = new Int32Array(off[N]); for (let k = 0; k < N; k++) nbr.set(links[k], off[k]);
-    return { N: N, box: new Float32Array(box), base: base, out: out, tris: new Uint32Array(tris), off: off, nbr: nbr, ids: ids };
+    return { N: N, box: new Float32Array(box), base: base, out: out, tris: new Uint32Array(tris), quads: new Uint32Array(quads), off: off, nbr: nbr, ids: ids };
   }
   const fine = grid(FEEL.fine), coarse = grid(FEEL.coarse);
   /* each fine point read from the coarse grid: the four coarse points around it on its face, and their weights */
@@ -189,27 +190,31 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
   /* The relaxation, on any grid: the free points of a skin (xyz) pulled toward their neighbours' mean, so it goes taut between its
      pinned points (on a face nothing changes; where a dish runs over the block's edge or corner it is cut straight across, a flat
      facet); and beside it a membrane (sag), pinned at zero, sagging the same everywhere, so each dish is one smooth hollow. */
-  function relax(G, pinned, xyz, sag, sweeps) {
+  function relax(G, pinned, xyz, sag, sweeps, link) {
     const off = G.off, nbr = G.nbr;
     for (let it = 0; it < sweeps; it++) for (let k = 0; k < G.N; k++) {
-      if (pinned[k]) continue; const a = off[k], b = off[k + 1], m = b - a; let x = 0, y = 0, z = 0, h = 0;
-      for (let e = a; e < b; e++) { const o = nbr[e]; x += xyz[3 * o]; y += xyz[3 * o + 1]; z += xyz[3 * o + 2]; h += sag[o]; }
-      xyz[3 * k] += 1.8 * (x / m - xyz[3 * k]); xyz[3 * k + 1] += 1.8 * (y / m - xyz[3 * k + 1]); xyz[3 * k + 2] += 1.8 * (z / m - xyz[3 * k + 2]); sag[k] += 1.8 * ((h + 1) / m - sag[k]);
+      if (pinned[k]) continue; const a = off[k], b = off[k + 1]; let x = 0, y = 0, z = 0, h = 0, m = 0;
+      for (let e = a; e < b; e++) { const o = nbr[e], w = link ? link[e] : 1; x += w * xyz[3 * o]; y += w * xyz[3 * o + 1]; z += w * xyz[3 * o + 2]; h += w * sag[o]; m += w; }
+      const g = (b - a) / m;   /* the membrane's even sag, kept as on a plain grid however its links are weighted */
+      xyz[3 * k] += 1.8 * (x / m - xyz[3 * k]); xyz[3 * k + 1] += 1.8 * (y / m - xyz[3 * k + 1]); xyz[3 * k + 2] += 1.8 * (z / m - xyz[3 * k + 2]); sag[k] += 1.8 * (h / m + g / (b - a) - sag[k]);
     }
   }
   /* The surface:
      1. A rough solve on the coarse grid: each point's dish, pinned where it meets another dish, relaxed from the rounded block.
-     2. The fine grid: each point's dish; pinned on one side of every ridge (the lower-numbered dish's points that touch another
-        dish), so a ridge is a single line; the pinned points on the rounded block, each slid onto its ridge so the grid's
-        depth next to a ridge set by the point's own distance to it (below). The free points start from the coarse answer read at their place (the sag scaled to fine
-        steps), and a few fine passes finish it: what the rough solve got wrong is all small-scale, which is what passes undo fast.
+     2. The fine grid: each point's dish. Where a ridge crosses a grid edge (its two ends of different dishes), the end nearer the
+        crossing moves onto it (found from the two ends' margins, so along the walk, between grid points), and is pinned there on
+        the rounded block, a point of the crest; each grid square is cut into its two triangles along the diagonal that joins two
+        crest points, so every ridge is an unbroken line of triangle edges. The free points start from the coarse answer read at
+        their place (the sag scaled to fine steps), and a few fine passes finish it: what the rough solve got wrong is all
+        small-scale, which is what passes undo fast.
      3. Each dish's (each piece's) deepest sag gives its width (a round dish of radius R sags R² / 4, in grid steps), so its full depth, and its
         sag over that deepest is its profile: depth = full depth times profile. The dish
         goes down along the taut skin's way out (read from the coarse grid, where it is smooth). */
   const C = coarse, F = fine, cDish = new Uint16Array(C.N), cPin = new Uint8Array(C.N), cXyz = new Float32Array(C.N * 3), cSag = new Float32Array(C.N);
   const fDish = new Uint16Array(F.N), fPin = new Uint8Array(F.N), xyz = new Float32Array(F.N * 3), sag = new Float32Array(F.N), piece = new Int32Array(F.N), top = new Float32Array(F.N), stack = new Int32Array(F.N);
-  const pos = new Float32Array(F.N * 3), shade = new Float32Array(F.N * 3), geo = new T.BufferGeometry(), Q = [0, 0, 0], O = [0, 0, 0];
-  geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setIndex(new T.BufferAttribute(F.tris, 1));
+  /* room for every point and a copy of each crest point per dish beside it (below) */
+  const pos = new Float32Array(F.N * 6), shade = new Float32Array(F.N * 6), geo = new T.BufferGeometry(), Q = [0, 0, 0], O = [0, 0, 0];
+  geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setIndex(new T.BufferAttribute(new Uint32Array(F.tris.length), 1));
   geo.setAttribute('color', new T.BufferAttribute(shade, 3));
   /* the pieces: each run of neighbouring points of one dish (piece), its point count (area), and its points (members, from start[i]) */
   const area = new Int32Array(F.N), start = new Int32Array(F.N + 1), members = new Int32Array(F.N);
@@ -221,7 +226,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     start[count] = at; return count;
   }
   const onBlock = (p, k) => { inner(p[3 * k], p[3 * k + 1], p[3 * k + 2], Q, O); for (let t = 0; t < 3; t++) p[3 * k + t] = Q[t] + O[t] * FEEL.round; };
-  const cOut = new Float32Array(C.N * 3), dir = new Float32Array(F.N * 3);
+  const cOut = new Float32Array(C.N * 3), dir = new Float32Array(F.N * 3), shift = new Float32Array(F.N), toward = new Int32Array(F.N), link = new Float32Array(F.nbr.length);
   /* a fine point's dish is certain when the four coarse points around it are of one dish and none is on a ridge */
   const settled = (k) => { const a = from[4 * k], d = cDish[a]; for (let q = 4 * k; q < 4 * k + 4; q++) { const c = from[q]; if (cPin[c] || cDish[c] !== d) return -1; } return d; };
   /* the whole surface, steps 1 to 3, and the direction each point's dish goes down (the taut skin's way out, read from the coarse
@@ -246,37 +251,51 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
       if (area[i] >= small && area[i] >= thin * rim) continue;
       votes.forEach((v, j) => { if (v > most) { most = v; best = j; } }); if (best >= 0) for (let q = start[i]; q < start[i + 1]; q++) fDish[members[q]] = best; }
     pieces();
-    for (let k = 0; k < F.N; k++) { fPin[k] = 0; for (let e = F.off[k]; e < F.off[k + 1]; e++) if (fDish[F.nbr[e]] > fDish[k]) { fPin[k] = 1; break; } }
+    /* the crest points: each grid edge a ridge crosses moves its nearer end onto the crossing (each point to its nearest one) */
+    const side = (p, a, b) => { const x = F.box[3 * p], y = F.box[3 * p + 1], z = F.box[3 * p + 2], nx = F.out[3 * p], ny = F.out[3 * p + 1], nz = F.out[3 * p + 2];
+      return margin(x, y, z, nx, ny, nz, a, b, reach(x, y, z, a, nx, ny, nz), reach(x, y, z, b, nx, ny, nz)); };
+    shift.fill(1); for (let k = 0; k < F.N; k++) for (let e = F.off[k]; e < F.off[k + 1]; e++) { const o = F.nbr[e]; if (o < k || fDish[o] === fDish[k]) continue;
+      const a = fDish[k], b = fDish[o], mk = side(k, a, b), mo = side(o, a, b), t = mk > 0 && mo < 0 ? mk / (mk - mo) : .5;
+      if (t <= .5) { if (t < shift[k]) { shift[k] = t; toward[k] = o; } } else if (1 - t < shift[o]) { shift[o] = 1 - t; toward[o] = k; } }
+    for (let k = 0; k < F.N; k++) fPin[k] = shift[k] <= .5 ? 1 : 0;
+    const ix = geo.index.array, qd = F.quads;
+    for (let q = 0, i = 0; q < qd.length; q += 4) { const a = qd[q], b = qd[q + 1], c = qd[q + 2], d = qd[q + 3];
+      if (fPin[b] && fPin[d] && !(fPin[a] && fPin[c])) { ix[i++] = a; ix[i++] = b; ix[i++] = d; ix[i++] = b; ix[i++] = c; ix[i++] = d; }
+      else { ix[i++] = a; ix[i++] = b; ix[i++] = c; ix[i++] = a; ix[i++] = c; ix[i++] = d; } }
     const scale = (FEEL.coarse / FEEL.fine) ** 2;
     for (let k = 0; k < F.N; k++) {
       let x = 0, y = 0, z = 0, h = 0, nx = 0, ny = 0, nz = 0;
       for (let q = 4 * k; q < 4 * k + 4; q++) { const c = from[q], w = weight[q]; x += w * cXyz[3 * c]; y += w * cXyz[3 * c + 1]; z += w * cXyz[3 * c + 2]; h += w * cSag[c]; nx += w * cOut[3 * c]; ny += w * cOut[3 * c + 1]; nz += w * cOut[3 * c + 2]; }
       const l = Math.hypot(nx, ny, nz) || 1; dir[3 * k] = nx / l; dir[3 * k + 1] = ny / l; dir[3 * k + 2] = nz / l;
-      if (fPin[k]) { xyz[3 * k] = F.base[3 * k]; xyz[3 * k + 1] = F.base[3 * k + 1]; xyz[3 * k + 2] = F.base[3 * k + 2]; sag[k] = 0; }
+      if (fPin[k]) { const o = toward[k], f = shift[k]; for (let t = 0; t < 3; t++) xyz[3 * k + t] = F.base[3 * k + t] + (F.base[3 * o + t] - F.base[3 * k + t]) * f; onBlock(xyz, k); sag[k] = 0; }
       else { xyz[3 * k] = x; xyz[3 * k + 1] = y; xyz[3 * k + 2] = z; sag[k] = h * scale; }
     }
-    relax(F, fPin, xyz, sag, FEEL.sweeps.fine);
+    /* a link to a crest point counts by how near the crest really is (a grid step over its length), so a point just beside a
+       crest that moved close stays shallow, and one it moved away from sinks: the depth grows evenly away from the true ridge */
+    for (let k = 0; k < F.N; k++) for (let e = F.off[k]; e < F.off[k + 1]; e++) { const o = F.nbr[e];
+      if (!fPin[o]) { link[e] = 1; continue; } const l = Math.hypot(F.base[3 * k] - xyz[3 * o], F.base[3 * k + 1] - xyz[3 * o + 1], F.base[3 * k + 2] - xyz[3 * o + 2]);
+      link[e] = Math.min(4, FEEL.fine / Math.max(l, FEEL.fine / 4)); }
+    relax(F, fPin, xyz, sag, FEEL.sweeps.fine, link);
     /* each piece's deepest sag (top), not its dish's, gives its width and depth, so a stray piece sinks as far as its size says
        and never stays a raised plateau */
     top.fill(0); for (let k = 0; k < F.N; k++) if (sag[k] > top[piece[k]]) top[piece[k]] = sag[k];
-    /* Beside a ridge the grid only knows which side a point is on, so its crest would follow the grid's staircase. There a point's
-       depth is its distance to the ridge (its smallest margin, which follows the walk between grid points) times the dish wall's
-       slope at its rim (a dish of full depth D and width W, curved as the sag curves, leaves its rim at 4D / W), and the crest
-       runs where the ridge does; never deeper than the sag gives, in case the nearest margin is to the wrong ridge. */
-    const v = new Float64Array(K), c = new Int32Array(K);
     for (let k = 0; k < F.N; k++) {
       const w = fDish[k], tp = top[piece[k]], wide = 4 * Math.sqrt(tp) * FEEL.fine, full = Math.min(FEEL.deepest, wide * FEEL.depthPerWidth);
-      let d = tp > 0 && sag[k] > 0 ? full * sag[k] / tp : 0, edge = false;
-      for (let e = F.off[k]; e < F.off[k + 1]; e++) if (fDish[F.nbr[e]] !== w) { edge = true; break; }
-      if (edge && wide > 0) {
-        const x = F.box[3 * k], y = F.box[3 * k + 1], z = F.box[3 * k + 2], nx = F.out[3 * k], ny = F.out[3 * k + 1], nz = F.out[3 * k + 2], vw = reach(x, y, z, w, nx, ny, nz);
-        let m = Infinity; for (let s2 = 0; s2 < K; s2++) { const j = F.near[k * K + s2]; if (j === w) continue; const mj = margin(x, y, z, nx, ny, nz, w, j, vw, reach(x, y, z, j, nx, ny, nz)); if (mj < m) m = mj; }
-        d = Math.min(d, Math.max(0, m) * 4 * full / wide);
-      }
+      const d = tp > 0 && sag[k] > 0 ? full * sag[k] / tp : 0;
       /* a dish darkens toward its bottom, as a hollow gets less of the light around it, and brightens a little at its crests */
       const p = full > 0 ? d / full : 0, q = 1 - p, c = 1 - FEEL.hollow * p * p + FEEL.tip * q * q * q * q;
       for (let t = 0; t < 3; t++) { pos[3 * k + t] = xyz[3 * k + t] - dir[3 * k + t] * d; shade[3 * k + t] = c; }
     }
+    /* A crest is a hard edge: each triangle takes, at a crest point, that point's copy for the triangle's own dish (the dish of its
+       first corner off the crest), so the two walls meeting there are shaded each on its own and do not blur into each other. */
+    const copies = new Map(); let next = F.N;
+    for (let i = 0; i < ix.length; i += 3) { let side = -1;
+      for (let j = 0; j < 3; j++) if (!fPin[ix[i + j]]) { side = fDish[ix[i + j]]; break; }
+      if (side < 0) continue;
+      for (let j = 0; j < 3; j++) { const k = ix[i + j]; if (!fPin[k]) continue; const key = k * 4096 + side; let c = copies.get(key);
+        if (c === undefined) { c = next++; copies.set(key, c); for (let t = 0; t < 3; t++) { pos[3 * c + t] = pos[3 * k + t]; shade[3 * c + t] = shade[3 * k + t]; } }
+        ix[i + j] = c; } }
+    geo.setDrawRange(0, ix.length); geo.index.needsUpdate = true;
     geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere();
   }
 
