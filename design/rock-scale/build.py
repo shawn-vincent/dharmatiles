@@ -76,14 +76,14 @@ P.append(prim('steps', 'Steps and ledges', 'primitive 3 of 9',
   img('t_step', 'Rock sheet, 2: Step (ledge)') + img('t_c', 'Rock sheet, 1C: Steps (terraces)'),
   'At the rock sheet’s defaults, three risers of about 3 mm; the flat treads, about 8 mm deep, tilt back 3°.'))
 P.append(prim('chips', 'Chips and notches', 'primitive 4 of 9',
-  'A chip is a removal: a flat floor, a steep wall, an outline made of straight runs. It is one plane cut into the surface, so it stays one piece. Chips sit on exposed edges and corners far more than on faces.',
+  'A chip is a removal: a flat floor, a steep wall, an outline made of straight runs. It is one plane cut into the surface, so it stays one piece. Chips sit on edges and corners: every chip in the references takes a piece out of an edge or a corner, none sits in the middle of a plane (a removal there is a dish or a pit). The section runs along the front edge, through the notch.',
   'chip', 'chip',
   [('flat sheet ×1.4', 'depth 0.3–2.1, size 1.4–11, edge angle 15–45°'),
    ('rock sheet ×1.4', 'depth 1.4–7, width 2.8–21, wall 45–80°'),
    ('our corner chip', '0.12–0.3 of the piece’s narrow side, on 30% of top corners, 0–2 per block'),
    ('this model', '', 'me')],
   img('f_chip', 'Flat-rock sheet, C: Chip / Flake') + img('t_chip', 'Rock sheet, 2: Chip (notch)'),
-  'At the flat sheet’s defaults, a chip 11 × 8 mm with a floor tilted 3.4° and a wall of 45°, and a second small one.'))
+  'At the flat sheet’s defaults, a chip 11 mm along the front edge and 5.5 mm into the top, its floor falling 3.4° toward the edge and its wall at 45°, and a small chip off the corner.'))
 P.append(prim('dishes', 'Dishes', 'primitive 5a of 9',
   'A dish is a shallow, broad, irregular scoop. It must not be round or evenly spaced; Shawn found the explorer’s round pockets “not quite organic and irregular enough”. This one is elliptical, turned off the grid, deeper on one side, with a rim that wanders.',
   'dish', 'dish',
@@ -152,7 +152,7 @@ for k, name, ang, crop in FORMS:
     forms_html += '<div class="card"><h4>%s</h4>%s<p class="small mono" style="margin:6px 0 4px">%s</p>%s</div>' % (name, view('form_' + k, '22 × 22 mm patch'), ang, img(crop, 'Rock sheet, 5'))
 forms_html += '</div>'
 
-PATTERNS = [('pat_subtle', 'Subtle and worn', 'undulation, a few small pits and one soft chip, almost no cracks'),
+PATTERNS = [('pat_subtle', 'Subtle and worn', 'undulation, a few small pits and one soft chip off the front edge, almost no cracks'),
             ('pat_plates', 'Fractured plates', 'large plates, shallow steps and 3° tilts between them, chips at the plate edges'),
             ('pat_pitted', 'Pitted and weathered', 'clustered pits of every size, a few shallow dishes, soft rounded edges'),
             ('pat_layered', 'Layered and veined', 'low flowing ridges and layer lines, one raised vein crossing them'),

@@ -10,7 +10,7 @@
   const views = [];
   const SPEC = window.SPEC || {};
   const digits = (step) => step >= 1 ? 0 : step >= .1 ? 1 : step >= .01 ? 2 : 3;
-  const fmt = (v, s) => (+v).toFixed(digits(s.step)) + (s.unit && s.unit !== '1 :' ? (s.unit === '°' || s.unit === '×' ? s.unit : ' ' + s.unit) : '');
+  const fmt = (v, s) => s.unit === '1 :' ? '1 : ' + (+v).toFixed(digits(s.step)) : (+v).toFixed(digits(s.step)) + (s.unit ? (s.unit === '°' || s.unit === '×' ? s.unit : ' ' + s.unit) : '');
   const params = (st) => Object.assign({}, st.spec[st.vi].fix, st.vals[st.vi]);
   function h(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
   /* the controls of one model: a sheet switch above the view (when the page's sheets give two ranges), and one slider per number under it */
@@ -124,7 +124,8 @@
     } else if (kind === 'steps') {
       const dy = ys.map((y, i) => i ? (y - ys[i - 1]) : 0); let ris = [], i = 0; while (i < n) { if (dy[i] > .03) { let j = i; let tot = 0; while (j < n && dy[j] > .03) { tot += dy[j]; j++; } ris.push({ x: xs[i], x1: xs[j], h: tot, y0: ys[i - 1], y1: ys[j] }); i = j; } else i++; }
       ris.forEach((r, k) => { dimV(r.x1 + .8, r.y0, r.y0 + r.h, f1(r.h) + ' mm', 'r'); if (k < ris.length - 1) dimH(r.x1, ris[k + 1].x, Y(ymax) - 10 - (ris.length - 1 - k) * 0 + 0, f1(ris[k + 1].x - r.x1) + ' mm tread'); });
-      facts = 'risers ' + f1(ris.reduce((a, r) => a + r.h, 0) / Math.max(1, ris.length)) + ' mm, treads about ' + f1(ris.length > 1 ? ris[1].x - ris[0].x1 : 0) + ' mm';
+      const rh = ris.reduce((a, r) => a + r.h, 0) / Math.max(1, ris.length), td = ris.length > 1 ? ris[1].x - ris[0].x1 : 0;
+      facts = (td ? 'riser : tread 1 : ' + f1(td / rh) + ' (risers ' : '(one riser ') + f1(rh) + ' mm' + (td ? ', treads about ' + f1(td) + ' mm)' : ')');
     } else if (kind === 'crease') {
       const im = ys.indexOf(ymax), ci = (i) => Math.min(n, Math.max(0, i)), sl = (ys[ci(im - 40)] - ys[ci(im - 60)]) / ((xs[ci(im - 40)] - xs[ci(im - 60)]) || 1), sr = (ys[ci(im + 60)] - ys[ci(im + 40)]) / ((xs[ci(im + 60)] - xs[ci(im + 40)]) || 1);
       const ang = Math.atan(sl) * 180 / Math.PI + Math.atan(-sr) * 180 / Math.PI;

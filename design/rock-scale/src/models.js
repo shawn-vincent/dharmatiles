@@ -37,10 +37,15 @@
 
   /* steps and ledges: treads tilted back, the lips not straight */
   SPEC.steps = [
-    V('rock', 'rock sheet', [S('rise', 'riser height', 'mm', 2.8, 21, .1, 3), S('tread', 'tread pitch', 'mm', 7, 56, .1, 9.8), S('ang', 'riser angle', '°', 70, 90, 1, 70), S('tilt', 'tread tilt back', '°', 0, 10, .1, 3), S('n', 'risers', '', 1, 5, 1, 3)]),
-    V('no', 'N and O sheets', [S('rise', 'step height', 'mm', 3.8, 11.4, .1, 6), S('tread', 'ledge depth', 'mm', 3.8, 13.3, .1, 9.8), S('ang', 'riser angle', '°', 70, 90, 1, 70), S('tilt', 'tread tilt back', '°', 0, 10, .1, 3), S('n', 'risers', '', 1, 5, 1, 3)])];
+    V('rock', 'rock sheet', [S('rise', 'riser height', 'mm', 2.8, 21, .1, 3), S('hd', 'riser : tread', '1 :', 2, 6, .1, 2.7), S('ang', 'riser angle', '°', 70, 90, 1, 70), S('tilt', 'tread tilt back', '°', 0, 10, .1, 3), S('n', 'risers', '', 1, 5, 1, 3)]),
+    V('no', 'N and O sheets', [S('H', 'wall height H', 'mm', 20, 50, .5, 38), S('sh', 'step height', '× H', .1, .3, .01, .16), S('ld', 'ledge depth', '× H', .1, .35, .01, .26), S('ang', 'riser angle', '°', 70, 90, 1, 70), S('tilt', 'tread tilt back', '°', 0, 10, .1, 3), S('n', 'risers', '', 1, 5, 1, 3)])];
+  /* the sheets give steps as ratios: riser to tread (rock sheet), or step height and ledge depth as fractions of the wall's height H (N and O sheets).
+     The flat tread is what the ratio names; the pitch from lip to lip adds the riser's run and the lip's wear (about 0.7 mm). */
   const stepsF = (p) => {
-    const x0 = 4, w = max(.05, p.rise / tan(rad(p.ang)) / 2), size = min(120, max(30, x0 + (p.n - .5) * p.tread));
+    const rise = p.H != null ? p.sh * p.H : p.rise, D = p.H != null ? p.ld * p.H : p.rise * p.hd;
+    const x0 = 4, w = max(.05, rise / tan(rad(p.ang)) / 2), tread = D + 2 * w + .7, size = min(120, max(30, x0 + (p.n - .5) * tread));
+    /* the tread tilting back lowers its back edge, which makes the riser above it taller by that drop: build the step that much lower so the riser seen is the riser asked for */
+    p = Object.assign({}, p, { rise: max(.3, rise - tan(rad(p.tilt)) * .7 * tread), tread: tread });
     return { size: size, h: (x, y) => {
       let h = 0; const xs = [];
       for (let k = 0; k < p.n; k++) { const xb = x0 + k * p.tread + wob(y + k * 13, 1.1, 5, 11 + k); h += p.rise * sstep(xb - w, xb + w, x); xs.push(xb); }
@@ -52,23 +57,24 @@
   MODELS.steps = (p) => { const f = stepsF(par('steps', p)); return E.hfPatch({ size: f.size, N: min(260, Math.ceil(f.size * 5)), h: f.h }); };
   PROFILES.steps = (p) => { const f = stepsF(par('steps', p)); return { w: f.size, y: 15, fn: (x) => f.h(x, 15) }; };
 
-  /* chip / flake: an irregular polygon cut down to a floor tilted back, walls steep; a smaller second chip */
+  /* chip / flake: a removal from an edge, as every reference shows it (none sits in the middle of a plane): an irregular polygon centred on the
+     patch's front edge, cut down to a floor that falls toward the edge, walls steep, so the front face carries the notch; a small second chip takes the corner */
   SPEC.chip = [
     V('flat', 'flat sheet', [S('depth', 'depth', 'mm', .3, 2.1, .05, 1.25), S('size', 'size across', 'mm', 1.4, 11, .1, 11), S('wall', 'edge angle', '°', 15, 45, 1, 45), S('tilt', 'floor tilt', '°', 0, 10, .1, 3.4)]),
     V('rock', 'rock sheet', [S('depth', 'depth', 'mm', 1.4, 7, .1, 3), S('size', 'width', 'mm', 2.8, 21, .1, 14), S('wall', 'wall angle', '°', 45, 80, 1, 60), S('tilt', 'floor tilt', '°', 0, 10, .1, 3.4)])];
-  const chipPoly2 = E.jag(22.4, 9.4, 1.8, 1.4, 5, 1.2, 9, .2);
+  const chipPoly2 = E.jag(30, 0, 2.2, 1.8, 5, 1.2, 9, .2);
   const chipF = (p) => {
-    const poly = E.jag(15, 15, p.size / 2, p.size * .357, 6, .5, 4, .18), w = p.depth / tan(rad(p.wall)), kt = tan(rad(p.tilt));
+    const poly = E.jag(15, 0, p.size / 2, p.size * .5, 6, .5, 4, .18), w = p.depth / tan(rad(p.wall)), kt = tan(rad(p.tilt));
     return (x, y) => {
       const base = grain(x, y, .08, 6) + .25 * fbm(x / 13, y / 13, 4, 2);
-      const D = max(.02, p.depth + kt * (x - 15)), sd = E.polySD(poly, x, y), sd2 = E.polySD(chipPoly2, x, y);
+      const D = max(.02, p.depth - kt * y), sd = E.polySD(poly, x, y), sd2 = E.polySD(chipPoly2, x, y);
       let cut = sd < 0 ? D : D * (1 - sstep(0, w, sd)); cut += .15 * fbm(x * 2, y * 2, 7, 2) * (sd < 0 ? 1 : 0);
       const cut2 = sd2 < 0 ? .55 : .55 * (1 - sstep(0, .5, sd2));
       return base - max(cut, cut2);
     };
   };
   MODELS.chip = (p) => E.hfPatch({ size: 30, N: 170, h: chipF(par('chip', p)), aoR: 2.3 });
-  PROFILES.chip = (p) => { const h = chipF(par('chip', p)); return { w: 30, y: 15, fn: (x) => h(x, 15) }; };
+  PROFILES.chip = (p) => { const h = chipF(par('chip', p)); return { w: 30, y: .6, fn: (x) => h(x, .6) }; };
 
   /* dish: one irregular dish, deeper on one side, the rim not round */
   SPEC.dish = [
@@ -158,7 +164,7 @@
   SPEC.form_blocky = [V('', '', [S('ang', 'joint angle', '°', 70, 110, 1, 90)])];
   SPEC.form_sheared = [V('', '', [S('ang', 'layer angle', '°', 25, 45, 1, 28)])];
   SPEC.form_weathered = [V('', '', [S('R', 'rounding radius R', 'mm', 7, 35, .5, 11)])];
-  SPEC.form_pitted = [V('', '', [S('ratio', 'width : depth', '1 :', 6, 10, .1, 6)])];
+  SPEC.form_pitted = [V('', '', [S('ratio', 'width : depth', ': 1', 6, 10, .1, 6)])];
   SPEC.form_cracked = [V('', '', [S('cell', 'plate size', 'mm', 6, 10, .1, 6.4), S('jit', 'irregularity', '', .2, 1, .05, .85)])];
   SPEC.form_columnar = [V('', '', [S('wall', 'wall angle', '°', 80, 90, .1, 83.4)])];
   const formFn = {
@@ -179,7 +185,7 @@
   function cutSpots(Sp, x, y, k) { let cut = 0; for (const p of Sp) { const dx = x - p.x, dy = y - p.y; if (abs(dx) > p.r * 1.5 || abs(dy) > p.r * 1.5) continue; const a = Math.atan2(dy, dx), rr = hyp(dx, dy * p.el) / (p.r * (1 + .13 * sin(a * 2 + p.ph) + .07 * sin(a * 5 + p.ph * 2))); if (rr < 1) cut = max(cut, p.d * (1 - rr * rr) ** .75); } return cut * (k == null ? 1 : k); }
   const PS = (macro, meso, micro) => [V('', '', [S('macro', 'macro relief', 'mm', 0, 2.8, .05, macro), S('meso', 'meso depth', 'mm', 0, 2.1, .05, meso), S('micro', 'micro grain', 'mm', 0, .85, .005, micro)])];
   SPEC.pat_subtle = PS(1.1, .35, .045); SPEC.pat_plates = PS(1.7, .95, .05); SPEC.pat_pitted = PS(.9, .9, .6); SPEC.pat_layered = PS(.35, .63, .04); SPEC.pat_network = PS(.55, 1.1, .04);
-  const P1 = spots(3, 14, .5, 1.1, .35, [2, 2, 28, 28]), P1c = E.jag(21, 21, 3.4, 2.6, 6, .3, 8, .2);
+  const P1 = spots(3, 14, .5, 1.1, .35, [2, 2, 28, 28]), P1c = E.jag(21, 0, 3.4, 2.6, 6, .3, 8, .2)   /* the one soft chip takes a piece off the front edge: every chip in the references sits on an edge or a corner */;
   const VP = E.voronoi(11.5, 12, .85), CHP = [E.jag(8, 22, 3.3, 2.4, 6, .3, 5, .2), E.jag(23, 8, 2.8, 2.2, 6, 1.1, 6, .2), E.jag(19, 24, 2.2, 1.6, 5, .8, 7, .2)];
   const P3 = spots(11, 70, .5, 1.5, .6, [1, 1, 29, 29]), P3b = spots(15, 7, 3, 5, .9, [3, 3, 27, 27]);
   const VN = E.voronoi(8.2, 14, .9);
