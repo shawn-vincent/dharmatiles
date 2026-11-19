@@ -45,6 +45,7 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     depthPerWidth: 1 / 7.5, deepest: 1.9,    /* a dish is as deep as its width times this, never deeper than that */
     fine: .12,            /* the surface's grid step, where the crests are drawn */
     hollow: .14,          /* a dish's bottom is this much darker than its crests */
+    tip: .08,             /* and its crests this much brighter, fading out within the outer part of the dish */
     coarse: .42,          /* the grid step of a first, rough solve, which the fine grid then finishes */
     sweeps: { coarse: 120, fine: 15 }   /* passes of the relaxation on each grid */
   };
@@ -233,8 +234,8 @@ main{max-width:1500px;margin:0 auto;padding-block:16px 24px}
     top.fill(0); for (let k = 0; k < F.N; k++) if (sag[k] > top[fDish[k]]) top[fDish[k]] = sag[k];
     for (let k = 0; k < F.N; k++) {
       const tp = top[fDish[k]], full = Math.min(FEEL.deepest, 4 * Math.sqrt(tp) * FEEL.fine * FEEL.depthPerWidth), d = tp > 0 && sag[k] > 0 ? full * sag[k] / tp : 0;
-      /* a dish darkens toward its bottom, as a hollow gets less of the light around it; its crests keep their full brightness */
-      const p = tp > 0 ? sag[k] / tp : 0, c = 1 - FEEL.hollow * p * p;
+      /* a dish darkens toward its bottom, as a hollow gets less of the light around it, and brightens a little at its crests */
+      const p = tp > 0 ? sag[k] / tp : 0, q = 1 - p, c = 1 - FEEL.hollow * p * p + FEEL.tip * q * q * q * q;
       for (let t = 0; t < 3; t++) { pos[3 * k + t] = xyz[3 * k + t] - dir[3 * k + t] * d; shade[3 * k + t] = c; }
     }
     geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere();
