@@ -198,7 +198,7 @@ function partsOf(rc, r) {
   const jx = {}, jy = {}, jk = (tab, key) => (tab[key] == null ? (tab[key] = g(-.09, .09)) : tab[key]), kk = (v) => Math.round(v * 1e4);
   return rc.lobes.map((q) => {
     const sx = (q.sx || 0) + tx, sy = (q.sy || 0) + ty, ht = q.h - sx * q.x1 - sy * q.y1, ox0 = q.x0 < 1e-9, ox1 = q.x1 > rc.W - 1e-9, oy0 = q.y0 < 1e-9, oy1 = q.y1 > rc.D - 1e-9;
-    return { x0: q.x0, x1: q.x1, y0: q.y0, y1: q.y1, lean, bat: [ox0 ? bat[0] : 0, ox1 ? bat[1] : 0, oy0 ? bat[2] : 0, oy1 ? bat[3] : 0], sx, sy, h0: ht, clips: q.clips || [], post: [],
+    return { x0: q.x0, x1: q.x1, y0: q.y0, y1: q.y1, lean, bat: q.bat || [ox0 ? bat[0] : 0, ox1 ? bat[1] : 0, oy0 ? bat[2] : 0, oy1 ? bat[3] : 0], sx, sy, h0: ht, clips: q.clips || [], post: [],
       sk: [ox0 ? skO[0] : jk(jx, kk(q.x0)), ox1 ? skO[1] : jk(jx, kk(q.x1)), oy0 ? skO[2] : jk(jy, kk(q.y0)), oy1 ? skO[3] : jk(jy, kk(q.y1))],
       outer: [ox0, ox1, oy0, oy1],
       joints: [!ox0 ? 0 : -1, !ox1 ? 1 : -1, !oy0 ? 2 : -1, !oy1 ? 3 : -1].filter((k) => k >= 0) };
@@ -213,7 +213,7 @@ function kinkPlane(rc, B, face, at, ang, dir, dep) {
   const ext = Math.max(...f.p.map((p) => Math.abs(dot(sub(p, c), w)))) || .1, q = add(add(c, mul(w, at * ext)), mul(f.n, -dep));
   return { n, d: dot(n, q) };
 }
-const sound = (F, shift) => { const m = meshOf(F.map((f) => ({ p: shift ? f.p.map((q) => add(q, shift)) : f.p, n: f.n })), true), c = check(m); return c.open === 0 && c.many === 0 && c.overhangDeg <= 55.05; };
+const sound = (F, shift, tj) => { const m = meshOf(F.map((f) => ({ p: shift ? f.p.map((q) => add(q, shift)) : f.p, n: f.n })), !tj), c = check(m); return c.open === 0 && c.many === 0 && c.overhangDeg <= 55.05; };
 function randomKinks(r, rc, parts, ctx, n) {
   for (let i = 0; i < n; i++) {
     const pi = Math.floor(r() * parts.length), B = buildPart(parts[pi], ctx), face = pick(r, { L: .45, R: .35, T: .2 });
@@ -221,39 +221,62 @@ function randomKinks(r, rc, parts, ctx, n) {
     if (pl && -pl.n[2] < .8192) { parts[pi].clips.push(pl); if (!sound(buildPart(parts[pi], ctx).faces)) parts[pi].clips.pop(); }   /* a plane that leaves a sliver is not used */
   }
 }
-/* battered corners: a chunk of one to three planes knocked off an outer corner or edge of a lobe, sized to read at sheet scale; downward chips stay within 55 degrees */
+/* battered corners and edges: bold chunks of two to four planes knocked off exposed corners, low edges and top edges, some a third of an edge long; downward faces stay within 55 degrees */
 function chips(r, parts, ctx, n) {
   for (let i = 0; i < n; i++) {
     const q = parts[Math.floor(r() * parts.length)], w = [q.x1 - q.x0, q.y1 - q.y0], H = q.h0 + q.sx * q.x1 + q.sy * q.y1;
-    const kind = pick(r, { corner: .55, top: .25, vert: .2 }), ax = [];
     const sx = q.outer[0] && q.outer[1] ? (r() < .5 ? -1 : 1) : q.outer[0] ? -1 : q.outer[1] ? 1 : 0, sy = q.outer[2] && q.outer[3] ? (r() < .5 ? -1 : 1) : q.outer[2] ? -1 : q.outer[3] ? 1 : 0;
     if (!sx && !sy) continue;
-    let sz = kind === 'vert' ? 0 : (kind === 'corner' && r() < .3 ? -1 : 1), sxx = sx, syy = sy;
-    if (kind === 'top') { if (r() < .5) sxx = 0; else syy = 0; if (!sxx && !syy) { sxx = sx; } }
-    if (kind === 'vert' && !(sxx && syy)) continue;
-    if (kind === 'corner' && !(sxx && syy)) { if (r() < .5) sxx = 0; }
-    const cx = sxx > 0 ? q.x1 : sxx < 0 ? q.x0 : q.x0 + w[0] * U(r, .25, .75), cy = syy > 0 ? q.y1 : syy < 0 ? q.y0 : q.y0 + w[1] * U(r, .25, .75);
-    const cz = sz > 0 ? q.h0 + q.sx * cx + q.sy * cy : sz < 0 ? 0 : H * U(r, .25, .7);
-    const depth = Math.min(U(r, .05, .11) * ctx.m / .5, .22 * Math.min(...w, H * 1.4), .09 + .1 * H);
-    for (let k = 0; k < (r() < .5 ? 2 : 3 - (r() < .5 ? 1 : 0)); k++) {
-      let nn = norm([sxx * U(r, .6, 1.2), syy * U(r, .6, 1.2), sz * U(r, .6, 1.2)]); if (-nn[2] > .8192) nn = norm([nn[0], nn[1], -.6 * len(nn)]);
-      if (k) nn = norm(add(nn, [U(r, -.3, .3), U(r, -.3, .3), U(r, -.15, .3)]));
-      const c = [cx + (k ? U(r, -.05, .05) : 0), cy + (k ? U(r, -.05, .05) : 0), cz], dd = depth * (k ? U(r, .45, .85) : 1);
-      if (-nn[2] > .8192) continue; q.post.push({ n: nn, d: dot(nn, c) - dd }); if (!sound(buildPart(q, ctx).faces)) q.post.pop();
+    const kind = pick(r, { topcorner: .3, lowcorner: .2, lowvert: .2, bottomedge: .15, topedge: .15 });
+    let sxx = sx, syy = sy, sz = 1, cz;
+    const cx0 = sxx > 0 ? q.x1 : q.x0, cy0 = syy > 0 ? q.y1 : q.y0;
+    let cx = cx0, cy = cy0;
+    if (kind === 'topcorner') cz = q.h0 + q.sx * cx + q.sy * cy;
+    else if (kind === 'lowcorner') { cz = H * U(r, .06, .3); sz = -1; }
+    else if (kind === 'lowvert') { cz = H * U(r, .08, .4); sz = -1; if (r() < .5) { sxx = 0; cx = q.x0 + w[0] * U(r, .2, .8); } else { syy = 0; cy = q.y0 + w[1] * U(r, .2, .8); } if (!sxx && !syy) continue; }
+    else if (kind === 'bottomedge') { cz = 0; sz = -1; if (r() < .5) { sxx = 0; cx = q.x0 + w[0] * U(r, .2, .8); } else { syy = 0; cy = q.y0 + w[1] * U(r, .2, .8); } }
+    else { sz = 1; if (r() < .5) { sxx = 0; cx = q.x0 + w[0] * U(r, .2, .8); } else { syy = 0; cy = q.y0 + w[1] * U(r, .2, .8); } cz = q.h0 + q.sx * cx + q.sy * cy; }
+    const top = kind === 'topcorner' || kind === 'topedge', depth = Math.min(U(r, .04, .16) * ctx.m, (top ? .1 : .17) * Math.min(...w, H * 1.4));
+    for (let k = 0, nk = 2 + Math.floor(r() * 3); k < nk; k++) {
+      const zs = sz; let nn = norm([sxx * U(r, .5, 1.3), syy * U(r, .5, 1.3), zs * U(r, .5, 1.1)]);   /* a low chunk has its planes tilted down, so each takes a cap off the bottom of the edge */ if (k) nn = norm(add(nn, [U(r, -.45, .45), U(r, -.45, .45), U(r, -.3, .4)]));
+      const act = [sxx, syy, zs]; nn = nn.map((v, i) => (act[i] ? Math.sign(act[i]) * Math.max(Math.abs(v), .38 * len(nn)) : v)); nn = norm(nn);   /* every active axis counts, so no leg of the chunk runs far along one axis */
+      if (-nn[2] > .8192) continue;
+      const c = [cx + (k ? U(r, -.06, .06) : 0), cy + (k ? U(r, -.06, .06) : 0), cz + (k ? U(r, -.03, .03) : 0)], dd = depth * (k ? U(r, .4, .9) : 1);
+      q.post.push({ n: nn, d: dot(nn, c) - dd }); if (!sound(buildPart(q, ctx).faces)) q.post.pop();
     }
   }
 }
-/* a crack: the rock cut through along a surface of one or two planes (a zigzag), the far side moved a little apart and a little along: no chamfer, no V */
-function crackPieces(pieces, cr, rc) {
-  const ax = cr.ax === 'y' ? 1 : 0, mk = (a, b) => norm(ax ? [b[0], 1, b[1]] : [1, b[0], b[1]]);
-  const n1 = mk(0, [cr.a, cr.b]), p0 = ax ? [rc.W / 2, cr.at, cr.zb] : [cr.at, rc.D / 2, cr.zb], H1 = { n: n1, d: dot(n1, p0) };
-  let n2 = null, H2 = null; if (cr.b2 != null) { n2 = mk(0, [cr.a2, cr.b2]); H2 = { n: n2, d: dot(n2, p0) }; }
-  const flip = (h) => ({ n: mul(h.n, -1), d: -h.d }), horiz = norm([n1[0], n1[1], 0]), tan = [-horiz[1], horiz[0], 0];
-  const sh = add(mul(horiz, cr.gap), mul(tan, cr.slip)), out = [];
-  const keep = (F, planes, shift, tag) => { let G = F; for (const p of planes) G = clip(G, p); if (G.length >= 4 && aabbSize(G) > 5e-3) out.push({ F: G, shift: add(shift, [0, 0, 0]), tag }); };
+/* ---------- a crack: a wandering surface of facets (irregular both ways) separating a convex piece M from the rest S. M moves a little away. ---------- */
+const polyKeep = (P, pl) => { const s = P.map((q) => dot(pl.n, q) - pl.d); if (s.every((v) => v <= EPS)) return P; if (s.every((v) => v >= -EPS)) return null; const lo = [], n = P.length;
+  for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n], sa = s[i], sb = s[(i + 1) % n]; if (sa <= EPS) lo.push(a); if ((sa < -EPS && sb > EPS) || (sa > EPS && sb < -EPS)) { const t = sa / (sa - sb); lo.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]); } }
+  return lo.length >= 3 ? lo : null; };
+function crackSurface(r, rc) {
+  const W = rc.W, D = rc.D, H = rc.H, size = Math.max(W, D, H), type = pick(r, { through: .35, corner: .3, top: .2, diag: .15 }), sg = () => (r() < .5 ? -1 : 1);
+  let m0, pc;
+  if (type === 'through') { const ax = r() < .7 ? 0 : 1; m0 = ax ? [U(r, -.2, .2), sg(), U(r, -.15, .15)] : [sg(), U(r, -.2, .2), U(r, -.15, .15)]; pc = [W * U(r, .3, .7), D * U(r, .35, .65), H * U(r, .35, .6)]; }
+  else if (type === 'corner') { const sx = sg(), sy = sg(); m0 = [sx * U(r, .6, 1), sy * U(r, .6, 1), U(r, -.1, .2)]; pc = [sx > 0 ? W * U(r, .5, .75) : W * U(r, .25, .5), sy > 0 ? D * U(r, .5, .75) : D * U(r, .25, .5), H * U(r, .3, .6)]; }
+  else if (type === 'top') { const sx = sg(), sy = r() < .5 ? 0 : sg() * .35; m0 = [sx * U(r, .6, .9), sy, U(r, .4, .7)]; pc = [sx > 0 ? W * U(r, .5, .8) : W * U(r, .2, .5), D * U(r, .35, .65), H * U(r, .45, .7)]; }
+  else { m0 = [sg() * U(r, .5, 1), sg() * U(r, .5, 1), U(r, -.15, .15)]; pc = [W * U(r, .35, .65), D * U(r, .35, .65), H * U(r, .35, .6)]; }
+  m0 = norm(m0);
+  const u = norm(cross(m0, Math.abs(m0[2]) < .9 ? [0, 0, 1] : [1, 0, 0])), v = cross(m0, u), planes = [], L = .5 * size, J = .34;
+  for (let i = 0; i < 8; i++) {
+    const q = add(add(pc, mul(u, U(r, -L, L))), add(mul(v, U(r, -L, L)), mul(m0, U(r, -.03, .03) * size))), m = norm(add(m0, add(mul(u, U(r, -J, J)), mul(v, U(r, -J, J)))));
+    if (m[2] > .8192 || m[2] < -.8192) continue; planes.push({ n: mul(m, -1), d: -dot(m, q) });   /* M = { m.p >= m.q }, held as the keep-side n.p <= d with n = -m */
+  }
+  return { type, m0, planes, gap: U(r, .01, .022), slip: U(r, -.5, .5) };
+}
+function crackPieces(pieces, cr) {
+  const out = [], flatMove = cr.m0, sh = (minZ) => { const g = cr.gap, h = norm([cr.m0[0], cr.m0[1], 0]), t = [-h[1], h[0], 0]; return add(add(mul(h, g * len([cr.m0[0], cr.m0[1], 0])), mul(t, g * cr.slip)), [0, 0, minZ > .03 ? g * Math.max(0, cr.m0[2]) : 0]); };
   for (const pc of pieces) {
-    if (!H2) { keep(pc.F, [H1], pc.shift, pc.tag); keep(pc.F, [flip(H1)], add(pc.shift, sh), pc.tag); }
-    else { keep(pc.F, [H1, H2], pc.shift, pc.tag); keep(pc.F, [flip(H1)], add(pc.shift, sh), pc.tag); keep(pc.F, [H1, flip(H2)], add(pc.shift, sh), pc.tag); }
+    let Mf = pc.F; for (const p of cr.planes) Mf = clip(Mf, p);
+    const Mok = Mf.length >= 4 && aabbSize(Mf) > 4e-3;
+    if (!Mok) { out.push(pc); continue; }
+    const Sp = [];
+    for (const f of pc.F) { let cur = f.p; for (const p of cr.planes) { const outside = polyKeep(cur, { n: mul(p.n, -1), d: -p.d }); if (outside && area(outside, f.n) > 1e-9) Sp.push({ p: outside, n: f.n }); cur = polyKeep(cur, p); if (!cur) break; } }
+    for (const p of cr.planes) { const c = Mf.find((f) => f.pl === p); if (c) Sp.push({ p: c.p.slice().reverse(), n: mul(c.n, -1) }); }
+    const mb = aabb(Mf.flatMap((f) => f.p));
+    out.push({ F: Mf, shift: sh(mb.lo[2]), tag: 'moved' });
+    out.push({ F: Sp, shift: [0, 0, 0], tag: 'rest', open: true });
   }
   return out;
 }
@@ -266,10 +289,10 @@ function makeRock(seed, opts) {
   if (stage >= 2) randomKinks(r, rc, parts, ctx, rc.kinks == null ? 2 : rc.kinks);
   if (stage >= 2) chips(r, parts, ctx, rc.chips == null ? 0 : rc.chips);
   let pieces = parts.map((p) => ({ F: buildPart(p, ctx).faces, shift: [0, 0, 0], tag: 'lobe' }));
-  if (stage >= 3) for (const cr of rc.cracks || []) { const np = crackPieces(pieces, cr, rc); if (np.every((pc) => sound(pc.F, pc.shift))) pieces = np; }   /* a crack that leaves a sliver is dropped */
+  if (stage >= 3 && rc.crack) { const cr = crackSurface(mulberry(hash('c' + (rc.seed || seed))), rc), np = crackPieces(pieces, cr); if (np.every((pc) => sound(pc.F, pc.shift, pc.open))) pieces = np; else rc.crack = null; }   /* a crack that leaves a sliver is dropped */
   const V = [], T = []; let chk = { open: 0, many: 0, edges: 0, overhangDeg: 0, flatBottom: 0 };
   for (const pc of pieces) {
-    const m = meshOf(pc.F.map((f) => ({ p: f.p.map((q) => add(q, pc.shift)), n: f.n })), true), c = check(m), o = V.length;
+    const m = meshOf(pc.F.map((f) => ({ p: f.p.map((q) => add(q, pc.shift)), n: f.n })), !pc.open), c = check(m), o = V.length;
     for (const p of m.V) V.push(p); for (const t of m.T) T.push(t + o);
     chk = { open: chk.open + c.open, many: chk.many + c.many, edges: chk.edges + c.edges, overhangDeg: Math.max(chk.overhangDeg, c.overhangDeg), flatBottom: chk.flatBottom + c.flatBottom };
   }

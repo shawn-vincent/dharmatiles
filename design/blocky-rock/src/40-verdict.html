@@ -3,18 +3,18 @@
 <p>Four reference rocks were drawn by hand first (R1C8, R2C4, R1C7, R1C5), then a generator was written from them; round 4 added irregularity, battered corners and cracks. Judged by rendering the same view beside the cell.</p></header>
 <div class="sec">
 <div class="words"><h3>Looks right</h3><ul>
-<li><b>R1C8 (block of lobes)</b> passes: one boxy mass, flat tops, shallow creases at uneven places.</li>
-<li><b>R2C4 (pillar with a lower lobe)</b> passes weakly: the right proportions and step, flatter top and narrower chamfers than before; the lower lobe is still a plain box.</li>
-<li><b>R1C7 (ramp with a seat)</b> passes weakly: one sloped piece with a level seat low at the front-left. The seat reads shallower than the clay's and the riser is vertical where the sheet's slants.</li>
-<li><b>R1C5 (slab)</b> marginal: three lobes give two creases, but the chip at the front-left is too big for so low a rock.</li>
-<li><b>Irregularity.</b> No two seeds are alike and no side is parallel to another; it stays blocky.</li>
-<li><b>Fast, no redraw.</b> Under 20 ms at the worst seed; a cutting plane that would leave a sliver is not used, so no seed is drawn twice.</li></ul></div>
+<li><b>R1C8 (block of lobes)</b> passes: one boxy mass, flat tops, shallow creases, bolder damage.</li>
+<li><b>R2C4 (pillar with a lower lobe)</b> weak pass: right proportions, a step and a battered foot; the top still chamfered flat.</li>
+<li><b>R1C5 (slab)</b> weak pass: two creases and a battered corner.</li>
+<li><b>Cracks</b> are now rare (1 in 5) and wander on the top and the sides, take different paths (through, corner, from the top, diagonal), and the gap varies along them.</li>
+<li><b>Damage</b> is on most rocks, on corners and low edges, in sizes that read at sheet scale.</li>
+<li>Fast, and no redraw: under 40 ms at the worst seed.</li></ul></div>
 <div class="words"><h3>Does not look right yet</h3><ul>
-<li><b>Cracks</b> read as thin slits with a small step; the sheet's wide grooves are not cracks and are not generated. A crack never changes a rock's outline from above much.</li>
-<li><b>Battered corners</b> are a few flat planes; on small rocks they look like cut corners more than beaten ones.</li>
-<li><b>Softness.</b> Still planes and not clay; faces do not wander in soft waves.</li>
-<li><b>Not generated:</b> V-notch pockets, a groove that stops partway, a slanted riser on a seat.</li>
-<li><b>Cliff constraints:</b> only <code>bottomBevel</code> exists; none yet for a loaded top or a face against a neighbour.</li></ul></div></div>
+<li><b>R1C7 fails:</b> the ramp is one sloped piece with a level seat, but the seat's slanted back that flows into the slope is not made. Tilting the lobes' joint faces separated the pieces, so the riser is vertical and reads as a step.</li>
+<li><b>Chunks on narrow rocks</b> can still take too much: a pillar or a ramp corner is sometimes pointed, the sheet's never are.</li>
+<li><b>Cracks</b> are made of a handful of straight segments, so a close look shows short straight runs; and they read as thin slits more than as breaks.</li>
+<li><b>Softness</b> is out of scope: flats stay flat.</li>
+<li><b>Cliff constraints:</b> only <code>bottomBevel</code> exists.</li></ul></div></div>
 <div class="sec full"><div class="words"><h3>What I did not look at</h3>
 <ul><li>The back of any reference rock; there are none.</li>
 <li>A real phone: headless Chrome at 1280 and 390 px only.</li>
