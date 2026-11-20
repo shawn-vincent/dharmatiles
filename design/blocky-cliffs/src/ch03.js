@@ -1,0 +1,31 @@
+/* ---------- chapter 3 ---------- */
+const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0 }, o))], Object.assign({ w: 300, h: 280, plateSize: [1.2, 1.2], centre: [.6, .6, (o.h || 1) * .46], fov: 10.5 }, opt));
+{
+  const dots = (list) => (svg) => list.forEach(([n, x, y]) => svg.append(s('circle', { cx: x, cy: y, r: 3.2, fill: 'var(--ink)', stroke: '#fff', 'stroke-width': .5 }), s('text', { x, y: y + 1.6, 'font-size': 4.2, 'text-anchor': 'middle', 'font-weight': 700, style: 'fill:#fff', text: n })));
+  const zoom = (src, ratio, list) => { const svg = s('svg', { viewBox: `0 0 100 ${100 / ratio}`, style: 'position:absolute;inset:0;width:100%;height:100%' }); dots(list)(svg); return h('div', { class: 'cell stage' }, h('img', { src, alt: 'Close view of reference stones' }), svg); };
+  $('#an-zoom').append(zoom('img/z-h.jpg', 588 / 399, [[1, 26, 12], [2, 26, 19.5], [3, 22, 44], [4, 45.5, 36], [5, 48.5, 18], [6, 71, 20.5], [1, 62, 55], [2, 64, 61]]), zoom('img/z-k.jpg', 705 / 372, [[1, 68, 8.5], [2, 30, 19], [3, 30, 32], [3, 72, 28], [5, 48.5, 30], [6, 78, 16.5], [2, 33, 44.5], [6, 60, 45.5]]));
+  const base = { w: .55, dp: .5, h: 1.05, bevel: 0, bevelV: 0, taperA: 1, taperD: 1, jit: 0 };
+  const steps = [['A box', 'length, depth, height', {}], ['Chamfer the four upright edges', 'upright chamfer 0.14', { bevelV: .14 }], ['Bevel the top', 'top bevel 0.13', { bevel: .13 }], ['Batter the sides', 'the top is 0.92 of the foot', { taperA: .92, taperD: .94 }], ['Tilt the top', 'rise 0.1 across, 0.07 along', { dipD: .1, dipA: -.07 }], ['Knock one corner off', 'corner cut 0.42', { cut: .42, cutAt: 0 }], ['Unsettle it and stand it in the ground', 'every corner moved 2 percent; turned 5 degrees', { jit: .022, yaw: .09, seed: 4 }]];
+  let acc = Object.assign({}, base); const box = $('#an-steps');
+  steps.forEach(([name, nums, d], i) => { acc = Object.assign({}, acc, d); box.append(one(acc, { w: 220, h: 250, sub: `<b>${i + 1} ${name}.</b> <span class="num">${nums}</span>` })); });
+  const fin = acc, V = $('#an-views');
+  const dim = (b, p, q, text, dx = 0, dy = 0) => { const A = b.proj(...p), B = b.proj(...q); b.svg.append(s('line', { x1: A[0], y1: A[1], x2: B[0], y2: B[1], stroke: 'var(--a-dim)', 'stroke-width': 2 }), s('text', { x: (A[0] + B[0]) / 2 + dx, y: (A[1] + B[1]) / 2 + dy, 'font-size': 12, 'text-anchor': 'middle', style: 'fill:#fff', text })); };
+  const oo = { w: 250, h: 270, span: 1.5, centre: [.6, .6, .5] };
+  const f = one(fin, Object.assign({ view: 'front', tag: 'front' }, oo)); dim(f, [.6 - .275, 0, 1.12], [.6 + .275, 0, 1.12], 'length', 0, -5); dim(f, [.6 + .36, 0, 0], [.6 + .36, 0, 1.05], 'height', -24, 0);
+  const sd = one(fin, Object.assign({ view: 'side', tag: 'from the cut end' }, oo)); dim(sd, [0, .35, 1.14], [0, .85, 1.14], 'depth', 0, -5);
+  const tp = one(fin, Object.assign({ view: 'top', tag: 'above', plate: true }, oo, { centre: [.6, .6, 0], span: 1.1 })); dim(tp, [.6 - .275, .6 - .25, 1.2], [.6 - .275 + .08, .6 - .25, 1.2], 'bevel', 6, -8);
+  V.append(one(fin, { w: 250, h: 270, tag: 'as the references see it' }), f, sd, tp);
+
+  /* the bench */
+  const P = { h: 1.05, w: .5, dp: .45, bevelV: .14, bevel: .13, taper: .93, dip: .08, cut: 0, lean: 0 };
+  const defs = [['h', 'Height', .15, 1.9, .01], ['w', 'Length', .25, 1.4, .01], ['dp', 'Depth', .2, 1, .01], ['bevelV', 'Upright chamfer', 0, .45, .01], ['bevel', 'Top bevel', 0, .45, .01], ['taper', 'Top ÷ foot', .65, 1.05, .01], ['dip', 'Top slope', 0, .6, .01], ['cut', 'Corner cut', 0, .5, .01], ['lean', 'Lean, degrees', 0, 32, 1]];
+  const roles = { pillar: { h: 1.3, w: .42, dp: .4, bevelV: .16, bevel: .13, taper: .95, dip: .08, cut: 0, lean: 0 }, block: { h: .7, w: .52, dp: .48, bevelV: .12, bevel: .14, taper: .94, dip: .05, cut: .35, lean: 0 }, slab: { h: .3, w: 1.15, dp: .42, bevelV: .12, bevel: .2, taper: .97, dip: .02, cut: 0, lean: 0 }, leaner: { h: 1.3, w: .42, dp: .45, bevelV: .14, bevel: .14, taper: .93, dip: .3, cut: 0, lean: 22 }, cap: { h: .48, w: .75, dp: .6, bevelV: .15, bevel: .16, taper: 1, dip: .06, cut: .3, lean: 0 }, toe: { h: .38, w: .46, dp: .34, bevelV: .14, bevel: .18, taper: .78, dip: .12, cut: 0, lean: 0 } };
+  const ctl = $('#an-ctl'), live = $('#an-live'), live2 = $('#an-live2'), read = $('#an-read'), inputs = {};
+  const draw = () => { const o = { h: P.h, w: P.w, dp: P.dp, bevel: P.bevel, bevelV: P.bevelV, taperA: P.taper, taperD: Math.min(1, P.taper + .02), dipD: P.dip * .6, dipA: -P.dip * .8, cut: P.cut, leanA: -Math.tan(P.lean * Math.PI / 180), jit: .015, seed: 9, a: .7 + Math.tan(P.lean * Math.PI / 180) * P.h * .5, d: .7 };
+    live.replaceChildren(still([stoneMesh(o)], { w: 360, h: 330, plateSize: [1.4, 1.4], centre: [.7, .7, .62], fov: 14 })); live2.replaceChildren(still([stoneMesh(o)], { w: 360, h: 330, view: 'top', plateSize: [1.4, 1.4], centre: [.7, .7, 0], span: 1.6 }));
+    const side = (P.w + P.dp) / 2, seen = (P.h * .95) / (.707 * (P.w + P.dp)); const role = P.lean >= 10 ? 'a leaner' : seen > 1.5 ? 'a pillar' : seen < .7 ? 'a slab' : 'a block';
+    read.innerHTML = `<span class="ev p">Proposed</span> Height ÷ mean side <b>${fmt(P.h / side)}</b>. As seen: ${fmt(.707 * (P.w + P.dp))} fh wide, ${fmt(P.h * .95)} fh high, height ÷ width <b>${fmt(seen)}</b>: in the references that is ${role}.`; };
+  for (const [k, name, a, b, st] of defs) { const out = h('output', { for: 'an-' + k, text: fmt(P[k], st < 1 ? 2 : 0) }); const inp = h('input', { type: 'range', id: 'an-' + k, min: a, max: b, step: st, value: P[k], oninput: () => { P[k] = +inp.value; out.textContent = fmt(P[k], st < 1 ? 2 : 0); draw(); } }); inputs[k] = [inp, out, st]; ctl.append(h('label', { for: 'an-' + k, text: name }), inp, out); }
+  const pills = $('#an-roles'); for (const k in roles) pills.append(h('button', { type: 'button', 'aria-pressed': k === 'pillar', text: k, onclick: (e) => { Object.assign(P, roles[k]); for (const q in inputs) { inputs[q][0].value = P[q]; inputs[q][1].textContent = fmt(P[q], inputs[q][2] < 1 ? 2 : 0); } for (const b of pills.children) b.setAttribute('aria-pressed', b === e.target); draw(); } }));
+  Object.assign(P, roles.pillar); for (const q in inputs) { inputs[q][0].value = P[q]; inputs[q][1].textContent = fmt(P[q], inputs[q][2] < 1 ? 2 : 0); } draw();
+}

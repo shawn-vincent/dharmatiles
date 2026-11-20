@@ -1,0 +1,41 @@
+<section class="ch" id="c10"><header><span class="n">Chapter 10</span><h2>Randomness</h2>
+<p>The variation is real but narrow, and most of it is not free. A few numbers are drawn once for the whole formation and every stone inherits them; a few are drawn per stone inside tight bounds; and the relations between neighbours are not drawn at all. They are rules that the draws must then satisfy.</p></header>
+
+<div class="sec"><div class="words"><h3>Where the variation lives</h3>
+<p><span class="ev m">Measured</span> For each property, how much of the spread across all 350 stones is spread <i>between</i> formations (their averages differ) and how much is <i>inside</i> a formation.</p>
+<p>Width is the most a formation's own: a third of its spread is between formations, so a formation has a stone size. Height and height ÷ width are a quarter. Closing is almost wholly inside: it follows the stone's role, not the formation.</p>
+<p>Tilt needs care. Its spread inside a formation is 4 degrees, which is the tracing error, so within a formation stones share one upright as far as can be measured; between formations the average tilt runs from 3 left to 11 right.</p></div>
+<div class="plates"><figure><div class="plate pad"><div id="r-var"></div></div><figcaption><span class="ev m">Measured</span> Share of each property's variance that lies between formations (dark) and inside them (light). Tilt is taken over stones taller than wide.</figcaption></figure></div></div>
+
+<div class="sec"><div class="words"><h3>What shape the spread has</h3>
+<p><span class="ev m">Measured</span> <b>Width</b> has one hump with a longer tail to the right (skew 0.8): most stones near 0.55 fh, a few long slabs. <b>Face height</b> is broad and flat-topped (flatter than a bell: excess kurtosis −0.7): from 0.3 to 1.4 every height is nearly as common as any other. <b>Step between neighbours</b> piles up near zero and thins out steadily to 1.5.</p>
+<p><span class="ev p">Proposed</span> Three different draws fit these.</p>
+<ul><li>Width: a middle-heavy draw about the row's mean (the average of two uniform draws, ±30 percent). Slabs are not a tail of this draw; they are rows of one stone.</li>
+<li>Height: not drawn. It is read off the envelope, which sweeps evenly from low front to high back, and that sweep is what makes the flat top. Each stone then moves ±9 percent.</li>
+<li>Step: not drawn either. It is whatever the envelope gives, with a floor of 0.12.</li></ul></div>
+<div class="plates"><div class="three">
+  <figure><div class="plate pad"><div id="r-w"></div></div><figcaption><span class="ev m">Measured</span> Width, fh.</figcaption></figure>
+  <figure><div class="plate pad"><div id="r-h"></div></div><figcaption><span class="ev m">Measured</span> Face height, fh.</figcaption></figure>
+  <figure><div class="plate pad"><div id="r-d"></div></div><figcaption><span class="ev m">Measured</span> Step between neighbours, fh.</figcaption></figure>
+</div></div></div>
+
+<div class="sec"><div class="words"><h3>What goes with what</h3>
+<p><span class="ev m">Measured</span> Across all stones almost nothing is tied to anything else. A stone's width does not predict its height, its size does not predict where it stands, and upper stones are neither smaller nor slimmer than lower ones. Each of these would be a visible habit if it were there (small stones on top is the habit of a rubble heap), and none is.</p>
+<p>The ties that exist are structural, not statistical: height with depth into the plate (the lower stone is in front, 81 percent), and the peak with the cut end (52 of 52).</p></div>
+<div class="plates"><div class="scroll"><table id="r-corr"></table></div></div></div>
+
+<div class="sec full"><div class="words"><h3>Five scales of chance</h3>
+<p><span class="ev p">Proposed</span> What is decided at each scale, how, and what it depends on. The draws get narrower going down; the bottom scale is nearly deterministic.</p></div>
+<div class="plates"><div class="scroll"><table>
+<tr><th>Scale</th><th>Decided here</th><th>Kind of draw</th><th>Depends on</th></tr>
+<tr><td><b>1 Formation</b></td><td>Class (pillars, blocks, leaners, courses, gates)<br>Height, length, depth<br>Fall and where the peak is<br>Common lean; bevel</td><td>Weighted choice, 22 : 10 : 10 : 7 : 3 as counted<br>Narrow, middle-heavy (height 1.6–1.9 fh)<br>Even draw (fall 0.1–0.55; peak 0–0.35 of the length from the cut end)<br>Choice then even draw (0, or 10–30°); even draw 0.10–0.22</td><td>Nothing. These are the only free choices that change the whole.</td></tr>
+<tr><td><b>2 Rows</b></td><td>How many rows; each row's depth and length<br>Front row's height share<br>How far joints are shifted against the row behind</td><td>Small choice by class (1–4)<br>Even draw 0.2–0.45<br>Even draw 0.3–0.7 of a stone</td><td>Class. Front rows are always thinner, shorter and lower: an order, not a draw.</td></tr>
+<tr><td><b>3 Stones</b></td><td>Widths along a row<br>Top level<br>Level cuts in a tall column<br>Batter, corner cut, top tilt</td><td>Middle-heavy, ±30% of the row's mean<br>Envelope ± 9%<br>Even spacing ± 20%, only where the class has cuts<br>Narrow even draws; corner cut on 1 stone in 3</td><td>Row (size), envelope (height), role (batter: toes most).</td></tr>
+<tr><td><b>4 Relations</b></td><td>Neighbours unlevel; lower in front<br>Cap, jut, bridge, cleft</td><td>None: rules. Tops are moved after drawing until they hold.<br>Choice: a cap in 1 formation in 3, a cleft or recess in 1 in 6; jut 0.05–0.2 fh</td><td>The stones already placed. Nothing here adds freedom; it removes it.</td></tr>
+<tr><td><b>5 Faces and edges</b></td><td>Each corner's place; each stone's bevel</td><td>Even draw: corners ±2% of the short side; bevel ±20% of the formation's</td><td>Formation (bevel). Creases follow from the corners; they are not drawn.</td></tr>
+</table></div></div></div>
+
+<div class="sec full"><div class="words"><h3>Chance that convinces, chance that destroys</h3>
+<p><span class="ev p">Proposed</span> The same formation, the same seed. On the left of each pair a number is drawn once and shared; on the right it is drawn afresh for every stone, with the same spread.</p></div>
+<div class="plates"><div class="row c4" id="r-pairs"></div></div></div>
+</section>

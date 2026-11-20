@@ -28,7 +28,8 @@ function hull(P) {
 
 /* A stone's defaults: every stone on the page is this object with some numbers changed. */
 const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
-  bevel: .16,       /* width of the bevel on every edge, as a share of the stone's shortest side */
+  bevel: .16,       /* width of the bevel round the top, as a share of the stone's shortest side */
+  bevelV: null,     /* width of the chamfer on the four upright edges (the same as bevel when not given) */
   bevelB: 0,        /* the same for the bottom edges (0 for a stone that stands on the ground) */
   taperA: 1, taperD: 1,   /* the top's size as a share of the bottom's, along and across */
   dipA: 0, dipD: 0,       /* the top's slope along and across (rise per run) */
@@ -38,15 +39,17 @@ const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   jit: 0, seed: 1, yaw: 0 };
 function stonePoints(o) {
   const q = Object.assign({}, STONE, o), r = rng(q.seed * 7919 + 13), m = Math.min(q.w, q.dp, q.h);
-  const bv = q.bevel * m, bb = q.bevelB * m, P = []; let ci = 0;
+  const bt = q.bevel * m, bv = (q.bevelV == null ? q.bevel : q.bevelV) * m, bb = q.bevelB * m, P = []; let ci = 0;
   for (const sz of [-1, 1]) for (const sa of [-1, 1]) for (const sd of [-1, 1]) {
-    const top = sz > 0, be = top ? bv : bb;
+    const top = sz > 0, be = top ? bt : bb;
     let ca = bv, cd = bv, cz = be;
     if (top && q.cut > 0 && ((sa > 0 ? 1 : 0) + (sd > 0 ? 2 : 0)) === q.cutAt) { ca = Math.min(q.w * .45, q.cut * m); cd = Math.min(q.dp * .45, q.cut * m); cz = Math.min(q.h * .45, q.cut * m * .8); }
     const ja = (r() - .5) * 2 * q.jit * m, jd = (r() - .5) * 2 * q.jit * m, jz = (r() - .5) * 2 * q.jit * m * (top ? 1 : 0);
     const A = sa * q.w / 2 + ja, D = sd * q.dp / 2 + jd, Z = sz * q.h / 2 + jz;
-    const three = [[A, D - sd * cd, Z - sz * cz], [A - sa * ca, D, Z - sz * cz], [A - sa * ca, D - sd * cd, Z]];
-    if (!top && be === 0) three.length = 0, three.push([A, D - sd * cd, Z], [A - sa * ca, D, Z]);
+    /* each corner: two points where the upright chamfer meets the side faces, and (on a bevelled end) two more on the end face, set in by the bevel */
+    const three = [[A, D - sd * cd, Z - sz * cz], [A - sa * ca, D, Z - sz * cz]];
+    if (cz > 0) three.push([A - sa * cz, D - sd * (cd + cz * .41), Z], [A - sa * (ca + cz * .41), D - sd * cz, Z]);
+    else { three[0][2] = Z; three[1][2] = Z; }
     for (const p of three) P.push(p); ci++;
   }
   const c = Math.cos(q.yaw), s2 = Math.sin(q.yaw);
@@ -90,8 +93,8 @@ function buildScene(stones, o = {}) {
 }
 /* cameras: 'ref' is the references' view (from the near corner, about 20 degrees up); the others are flat, true-shape views */
 function cameraFor(view, w, hgt, o = {}) {
-  const c = o.centre || [PLATE / 2, PLATE / 2, .78], span = o.span || 2.5, asp = w / hgt;
-  if (view === 'ref' || view === 'ref2') { const cam = new THREE.PerspectiveCamera(o.fov || 14.5, asp, .1, 100), R = o.dist || 9.6, el = (o.el || 20) * Math.PI / 180, az = (o.az == null ? 45 : o.az) * Math.PI / 180;
+  const c = o.centre || [PLATE / 2, PLATE / 2, .86], span = o.span || 2.5, asp = w / hgt;
+  if (view === 'ref' || view === 'ref2') { const cam = new THREE.PerspectiveCamera(o.fov || 13.6, asp, .1, 100), R = o.dist || 9.6, el = (o.el || 20) * Math.PI / 180, az = (o.az == null ? 45 : o.az) * Math.PI / 180;
     cam.position.set(c[0] - R * Math.cos(el) * Math.sin(az), c[2] + R * Math.sin(el), c[1] - R * Math.cos(el) * Math.cos(az)); cam.lookAt(c[0], c[2], c[1]); cam.updateMatrixWorld(); cam.updateProjectionMatrix(); return cam; }
   const cam = new THREE.OrthographicCamera(-span * asp / 2, span * asp / 2, span / 2, -span / 2, -50, 50);
   if (view === 'front') { cam.position.set(c[0], c[2], c[1] - 10); cam.up.set(0, 1, 0); }

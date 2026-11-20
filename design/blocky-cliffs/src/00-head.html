@@ -133,3 +133,13 @@ svg .mut{fill:var(--muted)}
 .taxrow p{font-size:13.5px;color:var(--muted)}.taxrow .ids{font-family:var(--mono);font-size:12px}
 @media (max-width:700px){.taxrow{grid-template-columns:minmax(0,1fr)}}
 </style>
+<style>
+.catrow{display:grid;grid-template-columns:minmax(0,34ch) minmax(0,1fr);gap:10px 28px;padding:16px 0;border-top:1px solid var(--rule);align-items:start}
+.catrow:first-child{border-top:0}
+@media (max-width:860px){.catrow{grid-template-columns:minmax(0,1fr)}}
+</style>
+<style>.row,.two,.three{align-items:start}.cell{align-self:start}
+td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
+.bracket{font-size:12.5px;color:var(--muted);display:flex;gap:8px;align-items:center}.bracket i{display:inline-block;width:26px;height:8px;border:2px solid var(--a-top);border-top:0}
+.out .cell{opacity:.62}.out .sub::after{content:" Leaves the style.";font-style:italic}
+</style>
