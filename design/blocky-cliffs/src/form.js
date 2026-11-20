@@ -137,8 +137,8 @@ function formation(over = {}) {
     /* chisel: a chamfer on an exposed top edge, widest on the front and the cut-end side (0.02-0.15 fh deep, 0.01-0.04 fh down the side), seldom on the far side; the same, mirrored, under an exposed bottom edge (a lintel, an overhang); none on a covered edge;
        sometimes one broad one; a narrow chamfer on a front upright edge now and then; one to three top corners knocked off; a hair everywhere else (in stone.js) */
     const kw = q.bevel / .16, wide = sp.w >= .45, side = !cov[1] ? 1 : !cov[0] && sp.a0 > .05 ? 0 : -1, pl = Math.min(sp.w, sp.dp);
-    /* widths measured on K, S9, D, O, T15, S3, B (1 fh = the figure): top bevels 0.03-0.15 deep and 0.015-0.04 down; undersides 0.05-0.16 deep and rising 0.04-0.1; upright corners 0.04-0.14 wide. None under 0.03 on the dimension that shows. */
-    const deep = (e) => (e === 0 || e === 2 ? .03 + .12 * r() ** 2 : within(r, .03, .07)) * kw / m, bT = ex.t.map((x, e) => x ? deep(e) : 0), bB = ex.b.map((x) => x ? within(r, .05, .16) * kw / m : 0), vc = ex.v.map((x) => x ? (.04 + .1 * r() ** 1.3) * kw / pl : 0);
+    /* chamfers are big: they shape the silhouette. Depths, in fh, none under 0.06: top 0.06-0.15 (far side 0.06-0.1), dropping 0.02-0.04; underside 0.06-0.15, rising depth / 1.4 (55 degrees from vertical, so it prints); upright 0.06-0.14. An edge on the ground is sharp; any other covered edge keeps the 0.01 hair. */
+    const big = (x) => Math.max(.06, x * kw) / m, deep = (e) => big(e === 0 || e === 2 ? .06 + .09 * r() ** 2 : within(r, .06, .1)), bT = ex.t.map((x, e) => x ? deep(e) : 0), ground = sp.z < .03, bB = ex.b.map((x) => ground ? -1 : x ? big(within(r, .06, .15)) : 0), vc = ex.v.map((x) => x ? Math.max(.06, (.06 + .08 * r() ** 1.3) * kw) / pl : 0);
     if (wide && !carried.length && side >= 0 && sp.h > .5 && r() < (rest ? .3 : .5)) bT[side] = within(r, .08, .15) * kw / m;
     if (carried.length) for (let i = 0; i < 4; i++) bT[i] = Math.min(bT[i], Math.max(.03, .8 * [sp.a0, a1, sp.d0, d1].map((e, k) => k < 2 ? Math.min(...carried.map((o) => k ? a1 - o.a0 - o.w : o.a0 - sp.a0)) : Math.min(...carried.map((o) => k === 2 ? o.d0 - sp.d0 : d1 - o.d0 - o.dp)))[i]) / m);
     if (wide && sp.h > 1.3 * sp.w && !front) { const u = r(); if (u < .3) vc[0] = vc[1] = within(r, .05, .09) * kw / pl; else if (u < .44) vc[r() < .5 ? 0 : 1] = within(r, .05, .1) * kw / pl; }
@@ -150,9 +150,9 @@ function formation(over = {}) {
       if (!cov[2]) bat[2] = Math.min(sp.dp * .25, sp.h * within(r, .08, .16) * k); dipD = carried.length ? 0 : within(r, -.03, .11);
       dipA = td ? -td : carried.length ? 0 : (clF && !clN ? -1 : clN && !clF ? 1 : r() < .5 ? -1 : 1) * (clF || clN ? within(r, .04, .16) : within(r, 0, .05)) * (rest ? .6 : 1);
       if (sp.end) { bat[1] = tl * sp.h; dipA = within(r, .05, .2); } }
-    const clips = [], u = r(); if (!carried.length && wide) for (let n = u < .5 ? 0 : u < .8 ? 1 : u < .93 ? 2 : 3, cs = [0, 1, 2, 3].sort(() => r() - .5); n > 0; n--) clips.push([cs[n - 1], within(r, .04, .12) * kw / m]);
+    const clips = [], u = r(); if (!carried.length && wide) for (let n = u < .5 ? 0 : u < .8 ? 1 : u < .93 ? 2 : 3, cs = [0, 1, 2, 3].sort(() => r() - .5); n > 0; n--) clips.push([cs[n - 1], Math.max(.06, within(r, .06, .12) * kw) / m]);
     const g = rest ? .004 : .006, kind = front && sp.rank === 0 ? 'toe' : sp.on >= 2 ? 'cap' : sp.lean || sp.end ? 'lean' : sp.h > 1.35 * Math.max(sp.w, sp.dp) ? 'pillar' : sp.h < .7 * Math.max(sp.w, sp.dp) ? 'slab' : 'block';
-    return { w: Math.max(.08, sp.w - g), dp: Math.max(.08, sp.dp - g), h: sp.h, a: sp.a0 + sp.w / 2, d: sp.d0 + sp.dp / 2, z: sp.z, drop: within(r, .015, .04), dropB: within(r, .04, .1), bevelT: bT, bevelB: bB, bevelVC: vc, ex, batter: bat, dipA, dipD, botA: rest && td ? -td : 0, leanA: sp.lean ? -sp.lean : 0,
+    return { w: Math.max(.08, sp.w - g), dp: Math.max(.08, sp.dp - g), h: sp.h, a: sp.a0 + sp.w / 2, d: sp.d0 + sp.dp / 2, z: sp.z, drop: within(r, .02, .04), bevelT: bT, bevelB: bB, bevelVC: vc, ex, batter: bat, dipA, dipD, botA: rest && td ? -td : 0, leanA: sp.lean ? -sp.lean : 0,
       clips, kind, level: sp.level, on: sp.on, rank: sp.rank }; });
   lap('shape', out.length);
   bear(out);

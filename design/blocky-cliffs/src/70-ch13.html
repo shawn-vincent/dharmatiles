@@ -72,14 +72,14 @@ formation(numbers, seed):                         every stone is first a plain b
 stone(box, numbers):
   the eight corners of the box, each moved by batter, top tilt, lean and shear
   cut by planes (each keeps the part of the stone on one side):
-    each top edge:    a shallow bevel: e deep into the top (0.03-0.15 fh, mostly small, on the
-                      front and cut-end edge, 0.03-0.07 on the far side; 0 only if covered),
-                      dropping min(drop, 0.58 e) down the side, drop 0.015-0.04 fh per stone
-    each bottom edge: if exposed, a bigger one (measured on K and S9): 0.05-0.16 deep into the
-                      underside, rising 0.04-0.1 up the face (up to 45 degrees)
-    each upright edge: if exposed, broad (measured on S9): 0.04-0.14 wide
-    top corners:      0 to 3 angled planes across them, 0.04-0.12 fh in, dropping as a top chamfer does
-    every covered edge: a hair, 0.01 fh (a bottom edge on the ground or a stone: crisp)
+    each top edge:    a bevel e deep into the top: 0.06-0.15 fh on the front and cut-end edge,
+                      0.06-0.1 on the far side (none under 0.06: chamfers shape the silhouette),
+                      dropping min(drop, 0.58 e) down the side, drop 0.02-0.04 fh per stone
+    each bottom edge: exposed: e deep into the underside, 0.06-0.15, rising e / 1.4 up the face
+                      (55 degrees from vertical, so it prints); on the ground: no cut, sharp
+    each upright edge: if exposed, 0.06-0.14 wide
+    top corners:      0 to 3 angled planes across them, 0.06-0.12 fh in, dropping as a top chamfer does
+    every other covered edge: a hair, 0.01 fh
   cut each of the six faces by each plane and add the face a plane leaves; turn
 fuse(stones):
   for each contact (a bed, or an upright joint between neighbours) draw chapter 8's rule,

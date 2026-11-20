@@ -9,9 +9,8 @@ const mid = (r, a, b) => a + (b - a) * (r() + r()) / 2;
 /* A stone's defaults: every stone on the page is this object with some numbers changed. */
 const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   bevel: 0, bevelV: 0,    /* the same chamfer on every top edge, or every upright edge, as a share of the shortest side (what the single numbers of the chapters set) */
-  bevelB: null,     /* the same along each bottom edge, as the same shares: only where the edge is exposed (a lintel, an overhang), mirrored from the top kind, rising a short way up the face */
+  bevelB: null,     /* the depth into the underside along each bottom edge, the same shares; it rises 1/1.4 of its depth up the face (55 degrees from vertical); negative: on the ground, no cut at all */
   bevelT: null,     /* the depth into the top of a chamfer along each top edge, as a share of the shortest side: [cut-end side, far side, front, back]; none under the stone */
-  dropB: .06,       /* how far an underside chamfer rises up the face, fh (measured 0.05-0.1 on K and S9) */
   drop: .02,        /* how far a top chamfer or a clipped corner cuts down the side, fh: small, so it lies nearly in the top plane (its depth into the top is the free number) */
   bevelVC: null,    /* a chamfer on each upright edge, as a share of the shorter plan side: [front cut-end, front far, back cut-end, back far] */
   clips: null,      /* top corners knocked off by an angled plane: [[corner 0-3, size as a share of the shortest side]], corner bit 0 the far side, bit 1 the back */
@@ -37,7 +36,9 @@ function stoneParams(o) {
   const planes = [], cut = (p0, p1, p2) => { let n = unit(cross(sub(p1, p0), sub(p2, p0))); if (dot(n, sub(p0, c)) < 0) n = [-n[0], -n[1], -n[2]]; planes.push({ n, d: dot(n, p0) }); };
   /* a horizontal edge E1-E2, top (k 1) or bottom (k 0): its chamfer runs e in across the face and ez toward the stone's middle, up or down */
   [1, 0].forEach((k) => [[v(0, 0, k), v(0, 1, k), v(1, 0, k), v(0, 0, 1 - k)], [v(1, 0, k), v(1, 1, k), v(0, 0, k), v(1, 0, 1 - k)], [v(0, 0, k), v(1, 0, k), v(0, 1, k), v(0, 0, 1 - k)], [v(0, 1, k), v(1, 1, k), v(0, 0, k), v(0, 1, 1 - k)]].forEach(([E1, E2, F1, G1], n) => {
-    const across = Math.hypot(...sub(F1, E1)), e = Math.min(Math.max((k ? bT : bB)[n] * m, HAIR), .45 * across), ez = Math.min(k ? q.drop : q.dropB, (k ? .58 : 1) * e, .5 * q.h);   /* a top bevel lies within 30 degrees of the top; an underside one rises up to 45 */
+    const sh = (k ? bT : bB)[n]; if (sh < 0) return;   /* a negative share: the edge rests on the ground, and stays sharp */
+    const across = Math.hypot(...sub(F1, E1)); let e = Math.min(Math.max(sh * m, HAIR), .45 * across), ez = Math.min(k ? q.drop : e / 1.4, (k ? .58 * e : e), .5 * q.h);
+    if (!k) e = Math.min(e, 1.4 * ez);   /* an underside chamfer is no flatter than 35 degrees above horizontal (55 from vertical), so it prints */
     const de = unit(sub(E2, E1)), perp = (p) => unit(sub(p, [de[0] * dot(p, de), de[1] * dot(p, de), de[2] * dot(p, de)])), A = add(E1, perp(sub(F1, E1)), e), B = add(E1, perp(sub(G1, E1)), ez);   /* the cut runs parallel to the edge */
     cut(A, B, add(A, de, 1)); }));
   /* an upright edge, cut c in along both faces */
