@@ -10,7 +10,7 @@
     ['Body', 'Sheaf', 'Leaners side by side, fanning, with an upright stone at the cut end and upright stones in front.', '10', ['P', 'L', 'T9', 'S14'], F({ preset: 'leaners', seed: 39 })],
     ['Body', 'Tower with skirts', 'One stone far taller than the rest, lower stones gathered round its foot on three sides.', '5', ['C', 'T5', 'T17', 'S13'], F({ preset: 'pillars', seed: 13, nA: 3, rows: 3, peak: .35, fall: .75, length: 1.25 })],
     ['Body', 'Twin with a cleft', 'Two tall stones with an open joint between them, as tall as they are.', '4', ['H', 'S6', 'T13', 'T19'], F({ preset: 'pillars', seed: 3, nA: 2, rows: 2, length: 1.05, fall: .2, cleft: 1 })],
-    ['Head', 'Resting stone', 'A smaller block or a thin slab set back on the tops, usually across a joint.', 'about 12', ['A', 'E', 'D', 'T12'], F({ preset: 'wall', seed: 5, nA: 2, rows: 2, rest: 1 })],
+    ['Head', 'Resting stone', 'A smaller block or a thin slab set back on the tops, usually across a joint.', 'about 12', ['A', 'E', 'D', 'T12'], F({ preset: 'wall', seed: 5, nA: 2, rows: 2, caps: 1 })],
     ['Head', 'Oversail', 'An upper block standing forward of a set-back wall, as often at the far end as by the peak.', '7', ['D', 'O', 'S3', 'S10'], F({ preset: 'pillars', seed: 9, nA: 3, rows: 2, oversail: 1, fall: .3 })],
     ['Head', 'Gate', 'Caps from two unequal piers meet over a set-back wall.', '2 (T15, S9); K and J are a shelter and a niche', ['T15', 'S9', 'K', 'J'], F({ preset: 'gates', seed: 26 })]];
   const box = $('#motifs');

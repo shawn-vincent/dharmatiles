@@ -1,5 +1,5 @@
 <section class="ch" id="c13"><header><span class="n">Chapter 13</span><h2>A generator</h2>
-<p>The grammar of chapter 11, running. It is about 200 lines: one function for a stone, one for a formation. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
+<p>The grammar of chapter 11, running. It is about 250 lines: one function for a stone, one for a formation. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
 
 <div class="sec"><div class="words"><h3>Make one</h3>
 <p><span class="ev p">Proposed</span> Choose a class, then change any number. Drag to turn the view; scrolling scrolls the page; pinch to zoom. The post is one figure high.</p>
@@ -9,15 +9,15 @@
 <p class="note" id="g-read"></p></div>
 <div class="plates"><div class="live stage" id="g-live"></div>
 <div class="row" id="g-steps" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
-<figcaption>How this formation was built: the footprint and envelope; rows; columns under the envelope; the productions (plateau, tiers, a resting stone, an oversail, the leaning set); then every stone shaped.</figcaption></div></div>
+<figcaption>How this formation was built: the footprint and envelope; rows; the stones that stand on the ground; everything piled on, still as plain stones; then every stone shaped by its place.</figcaption></div></div>
 
 <div class="sec"><div class="words"><h3>Does it measure like the sheets?</h3>
 <p><span class="ev m">Measured</span> 200 formations were drawn with every number taken from the proposed ranges and classes in the counted proportion. Each was then measured the way the traces were, from the references' camera: stone sizes, and the relations between touching stones.</p>
-<p>Sizes land close. The relations are the harder test, and the table gives each one for both. Where the generator misses, the miss is left showing:</p>
-<ul><li>its lower stone is in front less often than the sheets', because stones in one row share a depth and the test then turns on noise;</li>
-<li>its widths are more alike than the sheets';</li>
-<li>its far end reads higher against the peak than the sheets' does;</li>
-<li>it puts a cap or an oversailing block in half as many formations.</li></ul>
+<p>The relations are the harder test, and the table gives each one for both, stacking included. Where the generator misses, the miss is left showing:</p>
+<ul><li>its stones are wider and lower as seen than the sheets', because a front cluster and a pile add squat stones faster than the pillars add tall ones;</li>
+<li>its lower stone is in front less often than the sheets';</li>
+<li>fewer of its stones bear on two;</li>
+<li>it puts a cap on about twice as many formations as were traced with one.</li></ul>
 <p>The numbers do not say whether a draw looks right. The pictures show the limits: flat chamfers where the sheets are softly rounded, no kinks on edges, stiff dipping beds, and no niche or shelter.</p></div>
 <div class="plates"><div class="scroll"><table id="g-rel"></table></div>
 <p class="note">References: <span class="ev m">Measured</span> from the traces. Generator: <span class="ev p">Proposed</span> rules, measured on the true solids as the camera would see them. "Foot nearer" compares the lowest point of each outline in the picture; on the traces a hidden foot ends where the stone in front hides it.</p>
@@ -34,27 +34,32 @@
 <div class="plates"><div class="row c4" id="g-beside"></div></div></div>
 
 <div class="sec full"><div class="words"><h3>The whole of it</h3></div><div class="plates"><pre>
-formation(numbers, seed):
-  1 rows      split the depth into rows; front rows thinner, shorter, lower    (depth, rows, frontLen, topLen)
-  2 columns   cut each row into stones of unequal width, none under 0.3 fh,
-              joints kept off the joints of the row behind                    (nA, sizeVar, stagger)
-  3 heights   h = height × lerp(front, 1, row) × (1 − fall × distance from peak) × (1 ± 8%)
-  4 plateau   optional: a run of 2–3 back-row neighbours shares one top plane (plateau)
-    cleft     optional: the two tallest neighbours stand level, joint open    (cleft)
-  5 rules     neighbours not on a plateau at least stepMin apart
-              a stone lower than whatever stands behind it
-  6 lean      optional: back-row joints lean, most at the far end, least by the
-              cut end, where an upright stone closes; feet and cut face stay   (lean, closer)
-  7 gate      optional: an inner back column becomes a set-back wall; a cap from each unequal pier
-  8 stones    a column is one stone, or
-              tiers: a level first tier, shorter tiers on it with their own joints   (tiers)
-              beds:  one thick dipping bed and one or two thinner on it        (dip)
-              oversail: the far-end column split; its upper block over a set-back wall (oversail)
-  9 rest      optional: a smaller stone set back on a top, over one joint if the two tops agree (rest)
- 10 count     if more than eleven stones came out, draw again with fewer along
+formation(numbers, seed):                         every stone is first a plain box with a place
+  1 back mass   by class, along the back edge:
+       pillars   columns of unequal width under the envelope; a plateau run on one
+                 sloping plane; a cleft; steps of stepMin elsewhere; some stand proud
+       blocks    a first tier nearly level, shorter tiers on it, each set back, joints staggered
+       courses   tiers of the whole footprint, each lying on the one below, set back on two sides
+       slabs     parallel leaning slabs of even thickness over a block at the cut end
+       beds      one thick dipping bed, thinner and shorter beds tight on it
+       gate      two heavy piers, a set-back wall, a thick cap from each pier
+  2 front       a chunky buttress hard against the wall at the cut end; a toe in front of
+                or beside it; sometimes a second block along the wall, a stone tucked in
+                the corner, a pillar applied over a joint
+  3 pile        0 to 3 stones laid on the tops, adding height: a summit cap on the highest
+                top, a block spanning a joint (the two tops are first made level), a second
+                storey on a cap
+  4 shape       each stone finds which of its top edges are exposed, then
+       exposed edge: a wide bevel, and on one front edge in three a chamfer of a third to
+                     half the depth; edge against a neighbour: nearly sharp
+       front stones: a wedge top rising into the wall, a battered front and far side
+       tall stones:  narrowing upward; one in ten a spire; some many-sided or with a prow
+       piled stones: tight on what carries them, a little thicker at one end
+       one block or front stone in six carries a shoulder: a second small box on its top
+  5 count       if more than eleven stones came out, drop a piled stone or a column and draw again
 
 stone(box, numbers):
-  24 to 32 points: each corner of the box replaced by the points its chamfers leave
-  scale the top (batter, or a leaning joint on each side), tilt the top, shear, turn
+  each corner of the box replaced by the points its two top bevels and its upright chamfer leave
+  move each face in at the top (batter), scale, tilt the top, shear, turn
   return the convex hull</pre></div></div>
 </section>

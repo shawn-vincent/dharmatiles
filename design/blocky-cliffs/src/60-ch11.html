@@ -1,29 +1,29 @@
 <section class="ch" id="c11"><header><span class="n">Chapter 11</span><h2>The grammar</h2>
-<p>Everything above, folded into one small set: one stone, three levels, two fields that every stone reads, two rules between neighbours, and six productions that the sheets show on top of them.</p></header>
+<p>Everything above, folded into one small set: one stone shaped by where it stands, a back mass, a front cluster, a pile on top, and two things every stone reads.</p></header>
 
 <div class="sec"><div class="words"><h3>Vocabulary and productions</h3>
 <p><span class="ev p">Proposed</span> Read each line as "is made of". Square brackets give how many; a slash is a level joint.</p>
 
-<p>A formation is fully described by about eighteen numbers and a seed: nine in the envelope and the counts, four that switch productions on, five for the stone's own shape, shared by all stones.</p></div>
+<p>A formation is fully described by about twenty numbers and a seed: eight in the envelope and the counts, seven that switch parts on or count them, five for the stone's shape, shared by all stones. A stone's own shape is not drawn freely: it follows from which of its edges are exposed and whether it stands in front, in the wall, or on top.</p></div>
 <div class="plates"><pre>
-Formation → Envelope · Grain · Bevel · Row [1–5]
-Row       → Column [1–4]            front rows thinner, shorter, usually lower
-Column    → Stone
-          | Tier / Tier [1–3]       level tiers, each shorter, joints staggered (blocks)
-          | Bed / Bed [1–2]         one thick dipping bed, thinner ones on it
-          | Wall / Block            the upper block oversails a set-back wall
-Plateau   → Column [2–4] sharing one top plane
-Cleft     → Column | Column         the two tallest, level, joint open
-Rest      → a smaller Stone set back on one top, or across one joint
+Formation → Back mass · Front cluster? · Pile [0–3] · Envelope · Grain · Bevel
+Back mass → Pillars | Blocks | Courses | Slabs | Beds | Gate
+Pillars   → Column [2–4]           unequal widths; a run may share a sloping top (Plateau);
+                                    the two tallest may open a Cleft; some stand proud
+Blocks    → Tier / Tier [1–3]      each tier shorter and set back; joints staggered
+Courses   → Tier / Tier [2–3]      each tier the whole footprint less a setback on two sides
+Slabs     → Block · Slab [2–4]     parallel, leaning 15–25°, tops square to their lean
+Beds      → Bed / Bed [1–2]        dipping 20–32°, tight, each shorter and narrower
 Gate      → Pier · set-back Wall · Pier, a Cap from each pier
-Stone     → Box · Bevel · Batter · Top · Corner cut · Unsettle
+Front     → Buttress · Toe? · Block? · Tucked stone? · Applied pillar?
+Pile      → Summit cap | Spanning block | Second storey      each adds height
+Stone     → Box · Bevel per edge · Chamfer per corner · Batter per face · Top · Shoulder?
 
-Envelope  : height(along, depth) = H × rise(depth) × fall(along from the peak)
-Grain     : every stone upright, or one leaning set whose joints lean most at the far
-            end and least by the cut end, beside upright stones
+Envelope  : height(along) = H × fall(along from the peak), for the back mass
+Grain     : upright, or one set of leaning slabs or dipping beds beside upright stones
 
 Not written: Niche (J), Shelter (K). One example each.
-</pre></pre><div class="row c3" id="gr-levels"></div>
+</pre></pre></pre><div class="row c3" id="gr-levels"></div>
 <figcaption>The three levels on one formation: the envelope over the footprint; rows; stones.</figcaption></div></div>
 
 <div class="sec full"><div class="words"><h3>Eight rules, each from what was seen to what it does</h3></div>
@@ -33,26 +33,24 @@ Not written: Niche (J), Shelter (K). One example each.
 <p><span class="ev p">Proposed</span> Each class of chapter 1 is this grammar with a few counts changed. Nothing else differs: the same stone, the same envelope, the same rules.</p>
 <p>Two readings of the classes fit the sheets, and they differ in what else they allow.</p>
 <p><b>Five types.</b> Pick a type, then draw inside it. Safe: every result looks like a reference. But it cannot make T18 (a pillar wall with a stair in front) or D (a wall with slabs on top and an oversailing block) except as new types.</p>
-<p><b>One family, a few dials and switches</b> (rows, stones along, tiers, a leaning set, and the productions). Mixed cases come free. The risk is the corners of the dial space no reference occupies: a stair of leaning treads, four rows of five pillars. The grain chart in chapter 1 shows the references do fill the space between the classes thinly, which favours dials; the counts (22 pillars to 7 courses) say the dials are not drawn evenly.</p>
+<p><b>One family, a few dials and switches</b> (stones along, tiers, a lean, a front cluster, a pile). Mixed cases come free. The risk is the corners of the dial space no reference occupies: a stair of leaning treads, four rows of five pillars. The grain chart in chapter 1 shows the references do fill the space between the classes thinly, which favours dials; the counts (22 pillars to 7 courses) say the dials are not drawn evenly.</p>
 <p>The generator here takes the middle: dials, set by a weighted choice of class.</p></div>
 <div class="plates"><div class="scroll"><table>
-<tr><th>Class</th><th class="num">Rows</th><th class="num">Stones along</th><th class="num">Stacked</th><th class="num">Leaning set</th><th class="num">Dip</th><th>Also</th></tr>
-<tr><td>Pillars</td><td class="num">2–3</td><td class="num">2–4</td><td class="num">none</td><td class="num">none</td><td class="num">0</td><td>fall 0.35–0.75; a resting stone, an oversail or a cleft now and then</td></tr>
-<tr><td>Pillars, plateau wall</td><td class="num">2–3</td><td class="num">2–4</td><td class="num">none</td><td class="num">none</td><td class="num">0</td><td>fall 0.15–0.35; a run sharing one top</td></tr>
-<tr><td>Blocks</td><td class="num">2–3</td><td class="num">2–3</td><td class="num">2–3 tiers of 0.45–0.7 fh</td><td class="num">none</td><td class="num">0</td><td>each tier shorter; widths more alike (±35%)</td></tr>
-<tr><td>Leaners, fins</td><td class="num">2</td><td class="num">3–4</td><td class="num">none</td><td class="num">14–26°, fanning</td><td class="num">0</td><td>upright closer at the cut end; upright foot</td></tr>
-<tr><td>Leaners, dipping beds</td><td class="num">2</td><td class="num">1</td><td class="num">2–3 beds</td><td class="num">none</td><td class="num">20–32°</td><td>upright blocks in front</td></tr>
-<tr><td>Courses</td><td class="num">4–5</td><td class="num">1–2</td><td class="num">none</td><td class="num">none</td><td class="num">0</td><td>no toe; the last row a short block by the cut end</td></tr>
-<tr><td>Gates</td><td class="num">2</td><td class="num">3</td><td class="num">none</td><td class="num">none</td><td class="num">0</td><td>middle column a set-back wall; unequal piers and caps</td></tr>
+<tr><th>Class</th><th class="num">Front cluster</th><th class="num">Stones along</th><th class="num">Stacked</th><th class="num">Lean</th><th class="num">Dip</th><th>Also</th></tr>
+<tr><td>Pillars</td><td class="num">buttress, toe, often a second block</td><td class="num">3–4</td><td class="num">0–3 piled on</td><td class="num">none</td><td class="num">0</td><td>fall 0.35–0.75; some stand proud; a cleft, an oversail or an applied pillar now and then</td></tr>
+<tr><td>Pillars, plateau wall</td><td class="num">the same</td><td class="num">3–4</td><td class="num">0–3 piled on</td><td class="num">none</td><td class="num">0</td><td>fall 0.15–0.35; a run on one sloping top plane; two in five pillar formations</td></tr>
+<tr><td>Blocks</td><td class="num">buttress, toe</td><td class="num">2–3</td><td class="num">2–4 tiers, then 0–2 piled on</td><td class="num">none</td><td class="num">0</td><td>each tier shorter and 0.1–0.22 set back; widths more alike</td></tr>
+<tr><td>Leaners, slabs</td><td class="num">buttress, toe</td><td class="num">2–4 slabs</td><td class="num">rarely one</td><td class="num">15–25°, parallel</td><td class="num">0</td><td>a block at the cut end under the slabs, sometimes the tallest stone</td></tr>
+<tr><td>Leaners, dipping beds</td><td class="num">buttress, toe</td><td class="num">1</td><td class="num">2–3 beds, 0–2 piled on</td><td class="num">none</td><td class="num">20–32°</td><td>beds tight; upper beds shorter and narrower</td></tr>
+<tr><td>Courses</td><td class="num">none</td><td class="num">1–3 per tier</td><td class="num">3–4 tiers, sometimes one more stone</td><td class="num">none</td><td class="num">0</td><td>each tier set back on two sides; the top tier one block</td></tr>
+<tr><td>Gates</td><td class="num">buttress, toe</td><td class="num">3</td><td class="num">two caps, sometimes one more stone</td><td class="num">none</td><td class="num">0</td><td>caps 0.5–0.7 thick, 0.22–0.4 forward of the piers</td></tr>
 </table></div>
 <div class="row" id="gr-cls" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div></div></div>
 
 <div class="sec"><div class="words"><h3>What stays undecided</h3>
 <p><span class="ev r">Reconstructed</span> One camera angle leaves these open. The grammar takes the simpler reading of each and says so.</p>
-<ul><li><b>Does a tread run under the next step?</b> A stair slab may be a thin stone lying on the one below, or a tall column whose top shows. Both look the same from the front. Columns are used: they need no stacking order.</li>
-<li><b>What is behind?</b> No sheet shows the back or the far end. They are taken as flat and flush with the plate, like the cut end, because a cliff tile would meet a neighbour or the table edge there.</li>
-<li><b>Is it rows at all?</b> Rows are a reading of depth. The same pictures fit two rows and a resting stone where this page reads three rows. The hierarchy of chapter 9 is the simplest account, and the pictures cannot refute it.</li>
+<ul><li><b>Is it rows at all?</b> Rows are a reading of depth. The same pictures fit two rows and a resting stone where this page reads three rows. The hierarchy of chapter 9 is the simplest account, and the pictures cannot refute it.</li>
 <li><b>The niche and the shelter.</b> J and K are single examples of forms the grammar does not make. Each could be written as a production (a slot with a chockstone; a long roof on a set-back wall), but one example fixes no range.</li>
 <li><b>How deep is a stone?</b> Depth shows only at tops. Where tops show it is 0.7 to 1.1 of the length for pillars and blocks (M, H, O). For slabs it is the tread, a third of the length or less.</li></ul></div>
-<div class="plates"><div class="row c3" id="gr-open"></div><figcaption><span class="ev r">Reconstructed</span> The same stair built two ways: columns from the ground (left, cut open in the middle picture by pulling rows apart) and slabs lying on slabs (right). From the references' camera they cannot be told apart.</figcaption></div></div>
+<div class="plates"><p class="note"><span class="ev e">Estimated</span> One reading has been settled against the simpler one. A stair's treads are stones lying on stones, not tall columns whose tops show: the cut ends of E and I show the bed joints, and upper treads are shorter along the cliff as well as set back.</p></div></div>
 </section>

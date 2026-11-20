@@ -2,7 +2,7 @@
 {
   const live = $('#g-live'), FIG = [1.25, .45];
   const CLS = [['pillars', 'Pillars'], ['wall', 'Plateau wall'], ['blocks', 'Blocks in tiers'], ['leaners', 'Leaning set'], ['ramp', 'Dipping beds'], ['courses', 'Courses'], ['gates', 'Gates']];
-  const defs = [['height', 'Height', 1, 2.1, .01], ['length', 'Length', .8, 1.7, .01], ['depth', 'Depth', .5, 1.2, .01], ['nA', 'Stones along', 1, 4, 1], ['rows', 'Rows', 1, 5, 1], ['fall', 'Fall to the far end', 0, .8, .01], ['peak', 'Peak along the cliff', 0, .5, .01], ['front', 'Front row height', .15, 1, .01], ['sizeVar', 'Widths unequal', 0, .7, .01], ['plateau', 'Plateau', 0, 1, 1], ['cleft', 'Cleft', 0, 1, 1], ['rest', 'Resting stones', 0, 2, 1], ['oversail', 'Oversail at the far end', 0, 1, 1], ['tiers', 'Tiers', 0, 3, 1], ['lean', 'Lean of the leaning set, degrees', 0, 32, 1], ['dip', 'Beds dip, degrees', 0, 35, 1], ['bevel', 'Bevel', 0, .4, .01]];
+  const defs = [['height', 'Height', 1, 2.1, .01], ['length', 'Length', .8, 1.7, .01], ['depth', 'Depth', .5, 1.2, .01], ['nA', 'Stones along', 1, 4, 1], ['rows', 'Rows', 1, 5, 1], ['fall', 'Fall to the far end', 0, .8, .01], ['peak', 'Peak along the cliff', 0, .5, .01], ['front', 'Buttress height, share of the wall', .15, 1, .01], ['sizeVar', 'Widths unequal', 0, .7, .01], ['plateau', 'Plateau', 0, 1, 1], ['cleft', 'Cleft', 0, 1, 1], ['caps', 'Stones piled on', 0, 3, 1], ['applied', 'Applied pillar', 0, 1, 1], ['tuck', 'Tucked stone', 0, 1, 1], ['oversail', 'Oversail at the far end', 0, 1, 1], ['tiers', 'Tiers', 0, 4, 1], ['lean', 'Lean of the slabs, degrees', 0, 32, 1], ['dip', 'Beds dip, degrees', 0, 35, 1], ['bevel', 'Bevel', 0, .4, .01]];
   let P = { preset: 'pillars', cls: 'pillars', seed: 7 }, cam = { az: 45, el: 20, dist: 9.6 }, F = null, R3 = null, scene = null, W = 0, H = 0;
   const ctl = $('#g-ctl'), inputs = {};
   const render = () => { if (!R3 || !scene || !W) return; R3.render(scene, cameraFor('ref', W, H, { az: cam.az, el: cam.el, dist: cam.dist, fov: 19, centre: [PLATE / 2, PLATE / 2, .78] })); };
@@ -13,10 +13,10 @@
     const rowBoxes = F.rows.map((r) => stoneMesh(Object.assign({ w: r.len, dp: r.dp - .01, h: Math.max(...r.cols.map((c) => c.h)), a: r.len / 2, d: r.d0 + r.dp / 2, z: 0 }, flat)));
     const colBoxes = F.rows.flatMap((r) => r.cols.map((c) => stoneMesh(Object.assign({ w: c.w - .01, dp: r.dp * (1 - (c.recess || 0)) - .01, h: c.h, a: c.a0 + c.w / 2, d: r.d0 + r.dp * (c.recess || 0) + r.dp * (1 - (c.recess || 0)) / 2, z: 0 }, flat))));
     const cutBoxes = F.stones.map((s0) => stoneMesh(Object.assign({}, s0, flat2)));
-    const a = still([], o); { const d0 = PLATE - q.depth, e = (aa, t) => q.height * lerp(q.front, 1, t) * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); const fp = [[0, d0, 0], [0, PLATE, 0], [q.length, PLATE, 0], [q.length, d0, 0]].map((p) => a.proj(...p)), en = [[0, d0, e(0, 0)], [0, PLATE, e(0, 1)], [q.length, PLATE, e(q.length, 1)], [q.length, d0, e(q.length, 0)]].map((p) => a.proj(...p));
+    const a = still([], o); { const d0 = PLATE - q.depth, e = (aa, t) => q.height * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); const fp = [[0, d0, 0], [0, PLATE, 0], [q.length, PLATE, 0], [q.length, d0, 0]].map((p) => a.proj(...p)), en = [[0, d0, e(0, 0)], [0, PLATE, e(0, 1)], [q.length, PLATE, e(q.length, 1)], [q.length, d0, e(q.length, 0)]].map((p) => a.proj(...p));
       a.svg.append(s('polygon', { points: pts(fp), fill: 'var(--a-out)', 'fill-opacity': .25, stroke: 'var(--a-out)', 'stroke-width': 2 }), s('polygon', { points: pts(en), fill: 'var(--a-top)', 'fill-opacity': .2, stroke: 'var(--a-top)', 'stroke-width': 2, 'stroke-dasharray': '5 4' }), ...fp.map((p, i) => s('line', { x1: p[0], y1: p[1], x2: en[i][0], y2: en[i][1], stroke: 'var(--a-top)', 'stroke-width': 1 }))); }
     st.replaceChildren(a, still(rowBoxes, o), still(colBoxes, o), still(cutBoxes, o), still(ms, o));
-    [...st.children].forEach((c, i) => c.append(h('span', { class: 'tag', text: ['1 footprint, envelope', '2 rows', '3 columns', '4 productions, lean', '5 shaped'][i] })));
+    [...st.children].forEach((c, i) => c.append(h('span', { class: 'tag', text: ['1 footprint, envelope', '2 rows', '3 ground stones', '4 the pile, plain', '5 shaped'][i] })));
     const m = HAVE3 ? seen(F) : null; if (m) $('#g-read').innerHTML = `<span class="ev p">Proposed</span> Seed ${P.seed} · ${m.n} stones · as seen ${fmt(m.W)} fh wide, ${fmt(m.H)} fh high (references: 1.3–2.1 and 1.8–2.3).`;
     const bs = $('#g-beside'), refs = P.preset === 'wall' ? ['H', 'T10', 'T12', 'T20'] : P.preset === 'ramp' ? ['N', 'G', 'S14', 'S7'] : P.preset === 'leaners' ? ['P', 'L', 'T9', 'T19'] : ALL.filter((id) => CL[id].class === F.q.cls).slice(0, 4);
     bs.replaceChildren(...[1, 2, 3, 4].map((k) => still(formMeshes(formation(Object.assign({}, P, { seed: P.seed * 13 + k }))), { w: 300, h: 260, figure: FIG })), ...refs.map((id) => cellView(id, { stones: false })));
@@ -59,6 +59,9 @@
       ['Far end ÷ highest point, as seen (median)', md(RC.map((c) => c.farend)), md(C.map((c) => c.farend))],
       ['Widest ÷ narrowest stone in a formation (median)', md(RC.map((c) => c.wratio)), md(C.map((c) => c.wratio))],
       ['Formations with a cap or oversailing block', pc(RC.filter((c) => c.kinds.cap).length, 52), pc(C.filter((c) => c.jut).length, 200)],
-      ['Most stones in a formation', Math.max(...RC.map((c) => c.n)), Math.max(...C.map((c) => c.n))]];
+      ['Most stones in a formation', Math.max(...RC.map((c) => c.n)), Math.max(...C.map((c) => c.n))],
+      ['Stones resting on another stone', pc(RC.reduce((a, c) => a + c.resting, 0), STONES.length), pc(C.reduce((a, c) => a + c.rest, 0), C.reduce((a, c) => a + c.real, 0))],
+      ['Stones bearing on two or more', pc(RC.reduce((a, c) => a + c.ontwo, 0), STONES.length), pc(C.reduce((a, c) => a + c.two, 0), C.reduce((a, c) => a + c.real, 0))],
+      ...[0, 1, 2, 3, 4].map((k) => ['Formations stacked ' + (k ? k + ' deep at most' : 'not at all'), pc(RC.filter((c) => c.deep === k).length, 52), pc(C.filter((c) => c.deep === k).length, 200)])];
     $('#g-rel').append(h('tr', {}, ['Relation, measured the same way on both', 'References', 'Generator'].map((t, i) => h('th', { class: i ? 'num' : null, text: t }))), ...rows.map((r) => h('tr', {}, r.map((t, i) => h('td', { class: i ? 'num' : null, text: t }))))); }
 }

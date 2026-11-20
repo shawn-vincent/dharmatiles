@@ -191,14 +191,14 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <div class="sec"><div class="words">
 <p>The smallest set that explains the four sheets and makes more of them:</p>
 <ol>
-<li><b>One stone.</b> A box with its four upright edges chamfered and its top bevelled, a little narrower above than below, with one flat top. Slab, block, pillar, leaner, cap and toe are this stone at different proportions and places.</li>
-<li><b>Three levels.</b> A formation is 1 to 5 rows from front to back; a row is 1 to 4 stones side by side; a stone stands from the ground up, or is one of two to four in a stack. Four to eleven stones as traced, none under a fiftieth of the whole and nine in ten over a twentieth.</li>
-<li><b>Two things every stone reads.</b> An envelope that gives its height: highest near the back corner by the cut end (about 1.75 figure heights), lower toward the front and, by anything from a little to three quarters, toward the far end. And a grain: every stone upright, or one leaning set (10 to 30 degrees, fanning) standing beside upright stones, with an upright one closing the cut end.</li>
-<li><b>Relations between neighbours.</b> Joints are closed, but for a rare cleft. Tops step by 0.12 figure heights or more, except on a plateau, where a run of two to four neighbours shares one top plane (about one pair in five). The lower stone usually stands in front (83 percent). A smaller stone may rest set back across a joint; an upper block may stand forward of a set-back wall by up to 0.38.</li>
+<li><b>One stone, shaped by its place.</b> A box with its upright edges chamfered and its top bevelled, one flat top. Where an edge is exposed the bevel is broad; where it meets another stone it is nearly sharp. Front stones are wedges; tall ones narrow upward. Slab, block, pillar, leaner, cap and toe are this stone at different proportions and places.</li>
+<li><b>A pile in three parts.</b> A back mass along the back edge (pillars, tiers of blocks, a stair of courses, leaning slabs, dipping beds, or a gate). A front cluster against it at the cut end: a chunky buttress and a toe. And stones laid on top, each smaller than what carries it: a summit cap, a block across a joint, a second storey. A third of all stones rest on others. Four to eleven stones as traced, nine in ten over a twentieth of the whole.</li>
+<li><b>Two things every stone reads.</b> An envelope that gives its height: highest near the back corner by the cut end (about 1.75 figure heights), lower toward the front and, by anything from a little to three quarters, toward the far end. And a grain: every stone upright, or one set of parallel leaning slabs (15 to 25 degrees) or dipping beds (20 to 32) standing beside upright stones.</li>
+<li><b>Relations between neighbours.</b> Joints are closed, but for a rare cleft. Tops step by 0.12 figure heights or more, except on a plateau, where a run of two to four neighbours shares one top plane (about one pair in five). The lower stone usually stands in front (83 percent). Piled stones sit set back from the exposed sides of what carries them, and half of them bear on two; an upper block may stand forward of a set-back wall by up to 0.38.</li>
 <li><b>Chance in a fixed order.</b> Class, envelope, lean and bevel are drawn once for the formation; widths are drawn per stone and are unequal, the widest typically 2.5 times the narrowest; heights and steps are not drawn but follow from the envelope and the rules; corners move 2 percent.</li>
 </ol>
 <p>This set makes the common forms. It does not make two that each appear once: J's niche and K's shelter. And everything about depth rests on one camera angle.</p>
-<p>About eighteen numbers and a seed. Chapter 11 states the grammar, chapter 13 runs it and measures its output against the traces on sizes and on relations, chapter 14 lists every range with how sure it is.</p></div>
+<p>About twenty numbers and a seed. Chapter 11 states the grammar, chapter 13 runs it and measures its output against the traces on sizes and on relations, chapter 14 lists every range with how sure it is.</p></div>
 <div class="plates"><div class="row c3" id="hero"></div><figcaption>Above: references B, E and P. Below: three formations drawn by the rules, as plain forms.</figcaption></div></div>
 </section>
 
@@ -572,31 +572,31 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 </section>
 
 <section class="ch" id="c11"><header><span class="n">Chapter 11</span><h2>The grammar</h2>
-<p>Everything above, folded into one small set: one stone, three levels, two fields that every stone reads, two rules between neighbours, and six productions that the sheets show on top of them.</p></header>
+<p>Everything above, folded into one small set: one stone shaped by where it stands, a back mass, a front cluster, a pile on top, and two things every stone reads.</p></header>
 
 <div class="sec"><div class="words"><h3>Vocabulary and productions</h3>
 <p><span class="ev p">Proposed</span> Read each line as "is made of". Square brackets give how many; a slash is a level joint.</p>
 
-<p>A formation is fully described by about eighteen numbers and a seed: nine in the envelope and the counts, four that switch productions on, five for the stone's own shape, shared by all stones.</p></div>
+<p>A formation is fully described by about twenty numbers and a seed: eight in the envelope and the counts, seven that switch parts on or count them, five for the stone's shape, shared by all stones. A stone's own shape is not drawn freely: it follows from which of its edges are exposed and whether it stands in front, in the wall, or on top.</p></div>
 <div class="plates"><pre>
-Formation → Envelope · Grain · Bevel · Row [1–5]
-Row       → Column [1–4]            front rows thinner, shorter, usually lower
-Column    → Stone
-          | Tier / Tier [1–3]       level tiers, each shorter, joints staggered (blocks)
-          | Bed / Bed [1–2]         one thick dipping bed, thinner ones on it
-          | Wall / Block            the upper block oversails a set-back wall
-Plateau   → Column [2–4] sharing one top plane
-Cleft     → Column | Column         the two tallest, level, joint open
-Rest      → a smaller Stone set back on one top, or across one joint
+Formation → Back mass · Front cluster? · Pile [0–3] · Envelope · Grain · Bevel
+Back mass → Pillars | Blocks | Courses | Slabs | Beds | Gate
+Pillars   → Column [2–4]           unequal widths; a run may share a sloping top (Plateau);
+                                    the two tallest may open a Cleft; some stand proud
+Blocks    → Tier / Tier [1–3]      each tier shorter and set back; joints staggered
+Courses   → Tier / Tier [2–3]      each tier the whole footprint less a setback on two sides
+Slabs     → Block · Slab [2–4]     parallel, leaning 15–25°, tops square to their lean
+Beds      → Bed / Bed [1–2]        dipping 20–32°, tight, each shorter and narrower
 Gate      → Pier · set-back Wall · Pier, a Cap from each pier
-Stone     → Box · Bevel · Batter · Top · Corner cut · Unsettle
+Front     → Buttress · Toe? · Block? · Tucked stone? · Applied pillar?
+Pile      → Summit cap | Spanning block | Second storey      each adds height
+Stone     → Box · Bevel per edge · Chamfer per corner · Batter per face · Top · Shoulder?
 
-Envelope  : height(along, depth) = H × rise(depth) × fall(along from the peak)
-Grain     : every stone upright, or one leaning set whose joints lean most at the far
-            end and least by the cut end, beside upright stones
+Envelope  : height(along) = H × fall(along from the peak), for the back mass
+Grain     : upright, or one set of leaning slabs or dipping beds beside upright stones
 
 Not written: Niche (J), Shelter (K). One example each.
-</pre></pre><div class="row c3" id="gr-levels"></div>
+</pre></pre></pre><div class="row c3" id="gr-levels"></div>
 <figcaption>The three levels on one formation: the envelope over the footprint; rows; stones.</figcaption></div></div>
 
 <div class="sec full"><div class="words"><h3>Eight rules, each from what was seen to what it does</h3></div>
@@ -606,28 +606,26 @@ Not written: Niche (J), Shelter (K). One example each.
 <p><span class="ev p">Proposed</span> Each class of chapter 1 is this grammar with a few counts changed. Nothing else differs: the same stone, the same envelope, the same rules.</p>
 <p>Two readings of the classes fit the sheets, and they differ in what else they allow.</p>
 <p><b>Five types.</b> Pick a type, then draw inside it. Safe: every result looks like a reference. But it cannot make T18 (a pillar wall with a stair in front) or D (a wall with slabs on top and an oversailing block) except as new types.</p>
-<p><b>One family, a few dials and switches</b> (rows, stones along, tiers, a leaning set, and the productions). Mixed cases come free. The risk is the corners of the dial space no reference occupies: a stair of leaning treads, four rows of five pillars. The grain chart in chapter 1 shows the references do fill the space between the classes thinly, which favours dials; the counts (22 pillars to 7 courses) say the dials are not drawn evenly.</p>
+<p><b>One family, a few dials and switches</b> (stones along, tiers, a lean, a front cluster, a pile). Mixed cases come free. The risk is the corners of the dial space no reference occupies: a stair of leaning treads, four rows of five pillars. The grain chart in chapter 1 shows the references do fill the space between the classes thinly, which favours dials; the counts (22 pillars to 7 courses) say the dials are not drawn evenly.</p>
 <p>The generator here takes the middle: dials, set by a weighted choice of class.</p></div>
 <div class="plates"><div class="scroll"><table>
-<tr><th>Class</th><th class="num">Rows</th><th class="num">Stones along</th><th class="num">Stacked</th><th class="num">Leaning set</th><th class="num">Dip</th><th>Also</th></tr>
-<tr><td>Pillars</td><td class="num">2–3</td><td class="num">2–4</td><td class="num">none</td><td class="num">none</td><td class="num">0</td><td>fall 0.35–0.75; a resting stone, an oversail or a cleft now and then</td></tr>
-<tr><td>Pillars, plateau wall</td><td class="num">2–3</td><td class="num">2–4</td><td class="num">none</td><td class="num">none</td><td class="num">0</td><td>fall 0.15–0.35; a run sharing one top</td></tr>
-<tr><td>Blocks</td><td class="num">2–3</td><td class="num">2–3</td><td class="num">2–3 tiers of 0.45–0.7 fh</td><td class="num">none</td><td class="num">0</td><td>each tier shorter; widths more alike (±35%)</td></tr>
-<tr><td>Leaners, fins</td><td class="num">2</td><td class="num">3–4</td><td class="num">none</td><td class="num">14–26°, fanning</td><td class="num">0</td><td>upright closer at the cut end; upright foot</td></tr>
-<tr><td>Leaners, dipping beds</td><td class="num">2</td><td class="num">1</td><td class="num">2–3 beds</td><td class="num">none</td><td class="num">20–32°</td><td>upright blocks in front</td></tr>
-<tr><td>Courses</td><td class="num">4–5</td><td class="num">1–2</td><td class="num">none</td><td class="num">none</td><td class="num">0</td><td>no toe; the last row a short block by the cut end</td></tr>
-<tr><td>Gates</td><td class="num">2</td><td class="num">3</td><td class="num">none</td><td class="num">none</td><td class="num">0</td><td>middle column a set-back wall; unequal piers and caps</td></tr>
+<tr><th>Class</th><th class="num">Front cluster</th><th class="num">Stones along</th><th class="num">Stacked</th><th class="num">Lean</th><th class="num">Dip</th><th>Also</th></tr>
+<tr><td>Pillars</td><td class="num">buttress, toe, often a second block</td><td class="num">3–4</td><td class="num">0–3 piled on</td><td class="num">none</td><td class="num">0</td><td>fall 0.35–0.75; some stand proud; a cleft, an oversail or an applied pillar now and then</td></tr>
+<tr><td>Pillars, plateau wall</td><td class="num">the same</td><td class="num">3–4</td><td class="num">0–3 piled on</td><td class="num">none</td><td class="num">0</td><td>fall 0.15–0.35; a run on one sloping top plane; two in five pillar formations</td></tr>
+<tr><td>Blocks</td><td class="num">buttress, toe</td><td class="num">2–3</td><td class="num">2–4 tiers, then 0–2 piled on</td><td class="num">none</td><td class="num">0</td><td>each tier shorter and 0.1–0.22 set back; widths more alike</td></tr>
+<tr><td>Leaners, slabs</td><td class="num">buttress, toe</td><td class="num">2–4 slabs</td><td class="num">rarely one</td><td class="num">15–25°, parallel</td><td class="num">0</td><td>a block at the cut end under the slabs, sometimes the tallest stone</td></tr>
+<tr><td>Leaners, dipping beds</td><td class="num">buttress, toe</td><td class="num">1</td><td class="num">2–3 beds, 0–2 piled on</td><td class="num">none</td><td class="num">20–32°</td><td>beds tight; upper beds shorter and narrower</td></tr>
+<tr><td>Courses</td><td class="num">none</td><td class="num">1–3 per tier</td><td class="num">3–4 tiers, sometimes one more stone</td><td class="num">none</td><td class="num">0</td><td>each tier set back on two sides; the top tier one block</td></tr>
+<tr><td>Gates</td><td class="num">buttress, toe</td><td class="num">3</td><td class="num">two caps, sometimes one more stone</td><td class="num">none</td><td class="num">0</td><td>caps 0.5–0.7 thick, 0.22–0.4 forward of the piers</td></tr>
 </table></div>
 <div class="row" id="gr-cls" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div></div></div>
 
 <div class="sec"><div class="words"><h3>What stays undecided</h3>
 <p><span class="ev r">Reconstructed</span> One camera angle leaves these open. The grammar takes the simpler reading of each and says so.</p>
-<ul><li><b>Does a tread run under the next step?</b> A stair slab may be a thin stone lying on the one below, or a tall column whose top shows. Both look the same from the front. Columns are used: they need no stacking order.</li>
-<li><b>What is behind?</b> No sheet shows the back or the far end. They are taken as flat and flush with the plate, like the cut end, because a cliff tile would meet a neighbour or the table edge there.</li>
-<li><b>Is it rows at all?</b> Rows are a reading of depth. The same pictures fit two rows and a resting stone where this page reads three rows. The hierarchy of chapter 9 is the simplest account, and the pictures cannot refute it.</li>
+<ul><li><b>Is it rows at all?</b> Rows are a reading of depth. The same pictures fit two rows and a resting stone where this page reads three rows. The hierarchy of chapter 9 is the simplest account, and the pictures cannot refute it.</li>
 <li><b>The niche and the shelter.</b> J and K are single examples of forms the grammar does not make. Each could be written as a production (a slot with a chockstone; a long roof on a set-back wall), but one example fixes no range.</li>
 <li><b>How deep is a stone?</b> Depth shows only at tops. Where tops show it is 0.7 to 1.1 of the length for pillars and blocks (M, H, O). For slabs it is the tread, a third of the length or less.</li></ul></div>
-<div class="plates"><div class="row c3" id="gr-open"></div><figcaption><span class="ev r">Reconstructed</span> The same stair built two ways: columns from the ground (left, cut open in the middle picture by pulling rows apart) and slabs lying on slabs (right). From the references' camera they cannot be told apart.</figcaption></div></div>
+<div class="plates"><p class="note"><span class="ev e">Estimated</span> One reading has been settled against the simpler one. A stair's treads are stones lying on stones, not tall columns whose tops show: the cut ends of E and I show the bed joints, and upper treads are shorter along the cliff as well as set back.</p></div></div>
 </section>
 
 <section class="ch" id="c12"><header><span class="n">Chapter 12</span><h2>Sensitivity and the style's edges</h2>
@@ -646,7 +644,7 @@ Not written: Niche (J), Shelter (K). One example each.
 </section>
 
 <section class="ch" id="c13"><header><span class="n">Chapter 13</span><h2>A generator</h2>
-<p>The grammar of chapter 11, running. It is about 200 lines: one function for a stone, one for a formation. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
+<p>The grammar of chapter 11, running. It is about 250 lines: one function for a stone, one for a formation. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
 
 <div class="sec"><div class="words"><h3>Make one</h3>
 <p><span class="ev p">Proposed</span> Choose a class, then change any number. Drag to turn the view; scrolling scrolls the page; pinch to zoom. The post is one figure high.</p>
@@ -656,15 +654,15 @@ Not written: Niche (J), Shelter (K). One example each.
 <p class="note" id="g-read"></p></div>
 <div class="plates"><div class="live stage" id="g-live"></div>
 <div class="row" id="g-steps" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
-<figcaption>How this formation was built: the footprint and envelope; rows; columns under the envelope; the productions (plateau, tiers, a resting stone, an oversail, the leaning set); then every stone shaped.</figcaption></div></div>
+<figcaption>How this formation was built: the footprint and envelope; rows; the stones that stand on the ground; everything piled on, still as plain stones; then every stone shaped by its place.</figcaption></div></div>
 
 <div class="sec"><div class="words"><h3>Does it measure like the sheets?</h3>
 <p><span class="ev m">Measured</span> 200 formations were drawn with every number taken from the proposed ranges and classes in the counted proportion. Each was then measured the way the traces were, from the references' camera: stone sizes, and the relations between touching stones.</p>
-<p>Sizes land close. The relations are the harder test, and the table gives each one for both. Where the generator misses, the miss is left showing:</p>
-<ul><li>its lower stone is in front less often than the sheets', because stones in one row share a depth and the test then turns on noise;</li>
-<li>its widths are more alike than the sheets';</li>
-<li>its far end reads higher against the peak than the sheets' does;</li>
-<li>it puts a cap or an oversailing block in half as many formations.</li></ul>
+<p>The relations are the harder test, and the table gives each one for both, stacking included. Where the generator misses, the miss is left showing:</p>
+<ul><li>its stones are wider and lower as seen than the sheets', because a front cluster and a pile add squat stones faster than the pillars add tall ones;</li>
+<li>its lower stone is in front less often than the sheets';</li>
+<li>fewer of its stones bear on two;</li>
+<li>it puts a cap on about twice as many formations as were traced with one.</li></ul>
 <p>The numbers do not say whether a draw looks right. The pictures show the limits: flat chamfers where the sheets are softly rounded, no kinks on edges, stiff dipping beds, and no niche or shelter.</p></div>
 <div class="plates"><div class="scroll"><table id="g-rel"></table></div>
 <p class="note">References: <span class="ev m">Measured</span> from the traces. Generator: <span class="ev p">Proposed</span> rules, measured on the true solids as the camera would see them. "Foot nearer" compares the lowest point of each outline in the picture; on the traces a hidden foot ends where the stone in front hides it.</p>
@@ -681,28 +679,33 @@ Not written: Niche (J), Shelter (K). One example each.
 <div class="plates"><div class="row c4" id="g-beside"></div></div></div>
 
 <div class="sec full"><div class="words"><h3>The whole of it</h3></div><div class="plates"><pre>
-formation(numbers, seed):
-  1 rows      split the depth into rows; front rows thinner, shorter, lower    (depth, rows, frontLen, topLen)
-  2 columns   cut each row into stones of unequal width, none under 0.3 fh,
-              joints kept off the joints of the row behind                    (nA, sizeVar, stagger)
-  3 heights   h = height × lerp(front, 1, row) × (1 − fall × distance from peak) × (1 ± 8%)
-  4 plateau   optional: a run of 2–3 back-row neighbours shares one top plane (plateau)
-    cleft     optional: the two tallest neighbours stand level, joint open    (cleft)
-  5 rules     neighbours not on a plateau at least stepMin apart
-              a stone lower than whatever stands behind it
-  6 lean      optional: back-row joints lean, most at the far end, least by the
-              cut end, where an upright stone closes; feet and cut face stay   (lean, closer)
-  7 gate      optional: an inner back column becomes a set-back wall; a cap from each unequal pier
-  8 stones    a column is one stone, or
-              tiers: a level first tier, shorter tiers on it with their own joints   (tiers)
-              beds:  one thick dipping bed and one or two thinner on it        (dip)
-              oversail: the far-end column split; its upper block over a set-back wall (oversail)
-  9 rest      optional: a smaller stone set back on a top, over one joint if the two tops agree (rest)
- 10 count     if more than eleven stones came out, draw again with fewer along
+formation(numbers, seed):                         every stone is first a plain box with a place
+  1 back mass   by class, along the back edge:
+       pillars   columns of unequal width under the envelope; a plateau run on one
+                 sloping plane; a cleft; steps of stepMin elsewhere; some stand proud
+       blocks    a first tier nearly level, shorter tiers on it, each set back, joints staggered
+       courses   tiers of the whole footprint, each lying on the one below, set back on two sides
+       slabs     parallel leaning slabs of even thickness over a block at the cut end
+       beds      one thick dipping bed, thinner and shorter beds tight on it
+       gate      two heavy piers, a set-back wall, a thick cap from each pier
+  2 front       a chunky buttress hard against the wall at the cut end; a toe in front of
+                or beside it; sometimes a second block along the wall, a stone tucked in
+                the corner, a pillar applied over a joint
+  3 pile        0 to 3 stones laid on the tops, adding height: a summit cap on the highest
+                top, a block spanning a joint (the two tops are first made level), a second
+                storey on a cap
+  4 shape       each stone finds which of its top edges are exposed, then
+       exposed edge: a wide bevel, and on one front edge in three a chamfer of a third to
+                     half the depth; edge against a neighbour: nearly sharp
+       front stones: a wedge top rising into the wall, a battered front and far side
+       tall stones:  narrowing upward; one in ten a spire; some many-sided or with a prow
+       piled stones: tight on what carries them, a little thicker at one end
+       one block or front stone in six carries a shoulder: a second small box on its top
+  5 count       if more than eleven stones came out, drop a piled stone or a column and draw again
 
 stone(box, numbers):
-  24 to 32 points: each corner of the box replaced by the points its chamfers leave
-  scale the top (batter, or a leaning joint on each side), tilt the top, shear, turn
+  each corner of the box replaced by the points its two top bevels and its upright chamfer leave
+  move each face in at the top (batter), scale, tilt the top, shear, turn
   return the convex hull</pre></div></div>
 </section>
 
@@ -727,12 +730,12 @@ stone(box, numbers):
 <div class="sec full"><div class="words"><h3>Ranges for a generator</h3>
 <p>Lengths in figure heights (fh), true size. With a 30 mm figure, multiply by 30 for millimetres.</p></div><div class="plates"><div class="scroll"><table>
 <tr><th>Number</th><th>Range</th><th>Typical</th><th>How it is known</th></tr>
-<tr><td>Height of the highest top</td><td class="num">1.6–2.0 (A: 1.0)</td><td class="num">1.8</td><td><span class="ev r">Reconstructed</span> from 1.82–2.29 as seen, less the rise of the plate behind</td></tr>
+<tr><td>Height of the highest top, piled stones included</td><td class="num">1.6–2.0 (A: 1.0)</td><td class="num">1.8</td><td><span class="ev r">Reconstructed</span> from 1.82–2.29 as seen, less the rise of the plate behind</td></tr>
 <tr><td>Length along the cliff</td><td class="num">1.2–1.7</td><td class="num">1.45</td><td><span class="ev r">Reconstructed</span> from width as seen 1.3–2.1 = 0.71 × (length + depth)</td></tr>
 <tr><td>Depth, front to back</td><td class="num">0.7–1.2</td><td class="num">0.85</td><td><span class="ev r">Reconstructed</span> E's stair starts 0.6 of the way into the plate</td></tr>
-<tr><td>Rows</td><td class="num">1–5</td><td class="num">2–3</td><td><span class="ev e">Estimated</span> by class; stacks to four deep in 7 formations</td></tr>
+<tr><td>Front cluster</td><td class="num">none (1 in 8), buttress and toe, or those and a second block</td><td class="num">buttress, toe</td><td><span class="ev m">Measured</span> nearest stone under half height in 46 of 52</td></tr>
 <tr><td>Stones along the back row</td><td class="num">1–4</td><td class="num">3</td><td><span class="ev e">Estimated</span>; total <span class="ev m">Measured</span> 4–11 traced masses</td></tr>
-<tr><td>Front row height ÷ back row height</td><td class="num">0.2–0.45; 1 in 8: 0.55–0.85</td><td class="num">0.34</td><td><span class="ev m">Measured</span> nearest stone's top 0.21–0.54 of the height in four out of five; 0.6–0.85 in A, D, F, L</td></tr>
+<tr><td>Buttress height ÷ the wall behind it</td><td class="num">0.42–0.6; 1 in 7: 0.62–0.82</td><td class="num">0.5</td><td><span class="ev m">Measured</span> nearest stone's top 0.21–0.54 of the height in four out of five; 0.6–0.85 in A, D, F, L</td></tr>
 <tr><td>Fall from the peak to the far end, true</td><td class="num">0.15–0.35 (walls); 0.35–0.75</td><td class="num">0.5</td><td><span class="ev r">Reconstructed</span> far end 0.5–0.84 of the peak as seen, and the camera lifts the far end by 0.2–0.35 fh; set by matching the generator to those</td></tr>
 <tr><td>Peak, share of the length from the cut end</td><td class="num">0–0.2; 1 in 10: to 0.45</td><td class="num">0.1</td><td><span class="ev m">Measured</span> highest point 0.60–0.89 across in four out of five; mid length in J, O, T5, T17, T18</td></tr>
 <tr><td>Least step between tops not on a plateau</td><td class="num">0.12</td><td class="num">—</td><td><span class="ev p">Proposed</span> from <span class="ev m">Measured</span> steps, median 0.37</td></tr>
@@ -741,14 +744,17 @@ stone(box, numbers):
 <tr><td>Stone height</td><td class="num">0.25–1.8</td><td class="num">0.8</td><td><span class="ev r">Reconstructed</span> from face height 0.36–1.36 as seen ÷ 0.95</td></tr>
 <tr><td>Width spread within a row</td><td class="num">±60%; none under 0.3</td><td class="num">—</td><td><span class="ev m">Measured</span> widest ÷ narrowest in a formation 1.8–3.6, median 2.5, as seen; <span class="ev p">Proposed</span> draw</td></tr>
 <tr><td>Tier height (blocks)</td><td class="num">0.45–0.7</td><td class="num">0.6</td><td><span class="ev m">Measured</span> blocks' face height, median 0.63</td></tr>
-<tr><td>Leaning set</td><td class="num">none, or 14–26° at the far end, half that by the cut end</td><td class="num">none</td><td><span class="ev e">Estimated</span> P 20, 15, 12, 7°; L about 12°; T9 about 25°. <span class="ev m">Measured</span> tilt reads low (leaners' median 7°)</td></tr>
+<tr><td>Leaning slabs</td><td class="num">none, or 15–25°, parallel within 3°, 0.3–0.45 thick</td><td class="num">none</td><td><span class="ev e">Estimated</span> P 20, 15, 12, 7°; L about 12°; T9 about 25°. <span class="ev m">Measured</span> tilt reads low (leaners' median 7°)</td></tr>
 <tr><td>Dip of beds</td><td class="num">none, or 20–32°</td><td class="num">none</td><td><span class="ev e">Estimated</span> N, S14, G, S7</td></tr>
-<tr><td>Bevel, share of the short side</td><td class="num">0.10–0.22</td><td class="num">0.16</td><td><span class="ev e">Estimated</span> smooth sheet at 3×: H, A, M, K, E, O</td></tr>
+<tr><td>Bevel, share of the short side</td><td class="num">0.10–0.20 on an exposed edge, a quarter to a half of that where stones touch; one front edge in three chamfered a third to half the depth</td><td class="num">0.16</td><td><span class="ev e">Estimated</span> smooth sheet at 3×: H, A, M, K, E, O, B</td></tr>
+<tr><td>Wedge top on a front stone</td><td class="num">three in five; 20–35°</td><td class="num">—</td><td><span class="ev e">Estimated</span> buttresses in B, D, F, H, K, L, N, P</td></tr>
 <tr><td>Top ÷ foot</td><td class="num">0.90–1.0; toes 0.75–0.85</td><td class="num">0.95</td><td><span class="ev m">Measured</span> closing: pillars 0°, blocks 4°, toes 23°</td></tr>
 <tr><td>Top tilt</td><td class="num">0–12°; shed 20–35°</td><td class="num">4°</td><td><span class="ev m">Measured</span> top edge −3 to +12° as seen; shed tops <span class="ev e">Estimated</span></td></tr>
 <tr><td>Corner cut</td><td class="num">1 stone in 4; 0.3–0.4 of the short side</td><td class="num">—</td><td><span class="ev e">Estimated</span></td></tr>
 <tr><td>Corners moved</td><td class="num">±2% of the short side</td><td class="num">—</td><td><span class="ev p">Proposed</span> to give the single faint crease seen on about one face in three</td></tr>
-<tr><td>Resting stone</td><td class="num">1 formation in 3; 0.5–0.8 of what it lies on; 0.15–0.5 thick</td><td class="num">—</td><td><span class="ev m">Measured</span> 121 stones rest, 64 on two or more; <span class="ev e">Estimated</span> sizes</td></tr>
+<tr><td>Stones piled on</td><td class="num">0–3 a formation; a summit cap 0.5–0.8 of its support and 0.22–0.45 thick; a spanning block over 35–70% of each of two</td><td class="num">1</td><td><span class="ev m">Measured</span> 121 of 352 stones rest, 64 on two or more; stacks 0, 1, 2, 3 deep in 7, 18, 20, 7 formations. <span class="ev e">Estimated</span> sizes</td></tr>
+<tr><td>Wall depth; buttress depth</td><td class="num">0.42–0.8; 0.62–0.98 of its width</td><td class="num">0.55</td><td><span class="ev e">Estimated</span> from tops and cut ends (M, H, O, E, I)</td></tr>
+<tr><td>Standing proud</td><td class="num">two wall stones in five, by 0.08–0.24</td><td class="num">—</td><td><span class="ev e">Estimated</span> F, H, L, T1, T3, T6, S3, S4</td></tr>
 <tr><td>Oversail</td><td class="num">1 in 4; 0.2–0.38 forward; block 0.35–0.9 thick</td><td class="num">0.3</td><td><span class="ev e">Estimated</span> D, O, K, S3, S5, S10, T4; <span class="ev m">Measured</span> caps' face height 0.36–0.89</td></tr>
 <tr><td>Cleft</td><td class="num">1 in 7; 0.05–0.15 wide</td><td class="num">—</td><td><span class="ev e">Estimated</span> H, T13, T19, S6</td></tr>
 <tr><td>Class</td><td class="num">22 : 10 : 10 : 7 : 3</td><td class="num">pillars</td><td><span class="ev e">Estimated</span> counted over 52 by eye</td></tr>
@@ -929,32 +935,37 @@ function hull(P) {
 /* A stone's defaults: every stone on the page is this object with some numbers changed. */
 const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   bevel: .16,       /* width of the bevel round the top, as a share of the stone's shortest side */
+  bevelT: null,     /* the same, edge by edge: [cut-end side, far side, front, back]; an exposed edge is wide, an edge against a neighbour nearly sharp */
   bevelV: null,     /* width of the chamfer on the four upright edges (the same as bevel when not given) */
-  bevelB: 0,        /* the same for the bottom edges (0 for a stone that stands on the ground) */
+  bevelVC: null,    /* the same, corner by corner: [front cut-end, front far, back cut-end, back far]; two wide front ones make a many-sided pillar, one a prow */
+  bevelB: 0,        /* the bevel on the bottom edges (0 for a stone that stands on the ground or lies tight on another) */
   taperA: 1, taperD: 1,   /* the top's size as a share of the bottom's, along and across */
-  dipA: 0, dipD: 0,       /* the top's slope along and across (rise per run) */
+  batter: null,           /* one-sided batter: how far each face has moved in at the top, fh: [cut-end side, far side, front, back] */
+  dipA: 0, dipD: 0,       /* the top's slope along and across (rise per run); a big one makes a wedge top */
   botA: 0,                /* the bottom's slope along (for beds that dip) */
   leanA: 0, leanD: 0,     /* shear: how far the top is carried along and back, per unit height */
   cut: 0, cutAt: 0,       /* one top corner knocked off: its size as a share of the shortest side, and which corner (0-3) */
   jit: 0, seed: 1, yaw: 0 };
 function stonePoints(o) {
   const q = Object.assign({}, STONE, o), r = rng(q.seed * 7919 + 13), m = Math.min(q.w, q.dp, q.h);
-  const bt = q.bevel * m, bv = (q.bevelV == null ? q.bevel : q.bevelV) * m, bb = q.bevelB * m, P = []; let ci = 0;
+  const bT = q.bevelT || [q.bevel, q.bevel, q.bevel, q.bevel], bvAll = (q.bevelV == null ? q.bevel : q.bevelV), bb = q.bevelB * m, P = [];
   for (const sz of [-1, 1]) for (const sa of [-1, 1]) for (const sd of [-1, 1]) {
-    const top = sz > 0, be = top ? bt : bb;
-    let ca = bv, cd = bv, cz = be;
-    if (top && q.cut > 0 && ((sa > 0 ? 1 : 0) + (sd > 0 ? 2 : 0)) === q.cutAt) { ca = Math.min(q.w * .45, q.cut * m); cd = Math.min(q.dp * .45, q.cut * m); cz = Math.min(q.h * .45, q.cut * m * .8); }
+    const top = sz > 0, ci = (sa > 0 ? 1 : 0) + (sd > 0 ? 2 : 0), cv = (q.bevelVC ? q.bevelVC[ci] : bvAll) * Math.min(q.w, q.dp);
+    /* the two top edges that meet at this corner: one on the side face (a), one on the front or back face (d) */
+    let ea = top ? Math.min(bT[sa < 0 ? 0 : 1] * m, q.w * .46) : bb, ed = top ? Math.min(bT[sd < 0 ? 2 : 3] * m, q.dp * .62) : bb, ca = cv, cd = cv;
+    if (top && q.cut > 0 && ci === q.cutAt) { ca = Math.min(q.w * .45, q.cut * m); cd = Math.min(q.dp * .45, q.cut * m); ea = Math.max(ea, Math.min(q.h * .4, q.cut * m * .8)); ed = Math.max(ed, ea); }
+    const za = Math.min(ea * (ea > .22 * m ? .8 : 1), q.h * .55), zd = Math.min(ed * (ed > .22 * m ? .8 : 1), q.h * .55);
     const ja = (r() - .5) * 2 * q.jit * m, jd = (r() - .5) * 2 * q.jit * m, jz = (r() - .5) * 2 * q.jit * m * (top ? 1 : 0);
     const A = sa * q.w / 2 + ja, D = sd * q.dp / 2 + jd, Z = sz * q.h / 2 + jz;
-    /* each corner: two points where the upright chamfer meets the side faces, and (on a bevelled end) two more on the end face, set in by the bevel */
-    const three = [[A, D - sd * cd, Z - sz * cz], [A - sa * ca, D, Z - sz * cz]];
-    if (cz > 0) three.push([A - sa * cz, D - sd * (cd + cz * .41), Z], [A - sa * (ca + cz * .41), D - sd * cz, Z]);
-    else { three[0][2] = Z; three[1][2] = Z; }
-    for (const p of three) P.push(p); ci++;
+    /* each corner: a point on each of the two faces under its bevel, and (on a bevelled end) two on the end face, set in by the bevels */
+    const pts3 = [[A, D - sd * cd, Z - sz * za], [A - sa * ca, D, Z - sz * zd]];
+    if (ea > 0 || ed > 0) pts3.push([A - sa * ea, D - sd * (ed + cd * .6), Z], [A - sa * (ea + ca * .6), D - sd * ed, Z]);
+    for (const p of pts3) P.push(p);
   }
-  const c = Math.cos(q.yaw), s2 = Math.sin(q.yaw);
+  const c = Math.cos(q.yaw), s2 = Math.sin(q.yaw), bt = q.batter || [0, 0, 0, 0];
+  const ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2;
   return P.map(([a, d, z]) => { const t = z / q.h + .5;
-    a *= lerp(1, q.taperA, t); d *= lerp(1, q.taperD, t);
+    a = a * lerp(1, ta, t) + sa0 * t; d = d * lerp(1, tdp, t) + sd0 * t;
     z += t * (q.dipA * a + q.dipD * d) + (1 - t) * q.botA * a;
     const zz = z + q.h / 2; a += q.leanA * zz; d += q.leanD * zz;
     return [q.a + a * c - d * s2, q.d + a * s2 + d * c, q.z + zz]; });
@@ -1020,129 +1031,165 @@ function still(stones, o = {}) {
 }
 
 /* ---------- the formation (proposed; chapter 11 states it) ----------
-   Rows of columns under an envelope, then a few productions that the sheets show on top of that: a plateau (neighbours sharing a top),
-   a cleft, a stone resting set back on others, an upper block oversailing a set-back wall, tiers with staggered joints, a leaning set
-   beside an upright one, a gate. */
+   A pile. A back mass stands along the back edge: pillars, tiers of blocks, a stair of courses, a set of leaning slabs, dipping beds,
+   or a gate. A front cluster stands against it at the cut end: a buttress and a toe. Stones may stand proud of the wall, be applied to
+   it, or be tucked into a corner. Then stones are piled on: a summit cap, a block spanning a joint, a second storey.
+   Every stone is first a plain box with a place (a "spec"); shapes are given last, when each stone knows which of its edges are exposed. */
 const FORM = { seed: 1, cls: 'pillars',
-  length: 1.45, depth: .85, height: 1.75,   /* fh: along the cliff, front to back, the highest top */
-  nA: 3, rows: 2,          /* stones along the back row; rows front to back */
-  frontLen: .55,           /* the front row's length as a share of the back row's */
-  front: .34,              /* the front row's height as a share of the back row's */
-  fall: .35,               /* how far the tops fall from the peak to the far end, as a share of the height (0 = a wall) */
-  peak: .12,               /* where the peak is along the cliff (0 = at the cut end, .5 = mid length) */
-  sizeVar: .55,            /* how unequal the widths are: each within this share of the mean */
-  stagger: .5,             /* joints of one row or tier against the next: 0 in line, .5 half a stone off */
+  length: 1.45, depth: .62, height: 1.7,    /* fh: along the cliff; the back mass front to back; the highest top of the back mass (caps add to it) */
+  nA: 3, rows: 2,          /* stones along the back mass; rows: 1 = no front cluster, 2 = buttress and toe, 3 = and a second block along the wall */
+  front: .4,               /* the buttress's height as a share of the wall behind it */
+  fall: .45,               /* how far the tops fall from the peak to the far end, as a share of the height */
+  peak: .1,                /* where the peak is along the cliff (0 = at the cut end, .5 = mid length) */
+  sizeVar: .55,            /* how unequal the widths are */
+  stagger: .5,             /* joints of one tier against the next: 0 in line */
   stepMin: .13,            /* least step between neighbouring tops that are not on a plateau, fh */
-  plateau: 0,              /* 1: a run of two or three neighbours in the back row shares one top plane, which falls toward the far end by 7 to 14 degrees (level as the references' camera sees it) */
+  plateau: 0,              /* 1: a run of two or three neighbours shares one sloping top plane */
   cleft: 0,                /* 1: an open joint between the two tallest neighbours */
-  rest: 0,                 /* stones resting set back on the back row's tops: how many (0-2) */
-  oversail: 0, over: null, /* 1: an upper block at the far end oversails a set-back lower wall; over: by how much, fh (drawn 0.22-0.36 when not given) */
-  tiers: 0,                /* 2-3: the back rows are built in level tiers with staggered joints (blocks) */
-  topLen: 1,               /* the last row's length as a share of the full length (a stair's small top block) */
-  lean: 0, closer: 1,      /* degrees: the far joints lean this far, fanning down toward the cut end; closer: an upright stone closes the cut end */
-  dip: 0,                  /* degrees: the back row is beds that dip this far */
-  taper: .95, bevel: .16, jit: .02, offset: .03, cutCorner: .25,
-  gate: false, toe: true, rough: 1, minW: 1,   /* minW 0 lets stones be thinner than 0.4 fh on average, for the experiments */
-  leanEach: 0, yawEach: 0, bevelEach: 0, gap: 0, stepAlong: null };   /* disorder, for the experiments */
+  caps: 0,                 /* stones piled on: the first is a summit cap, the rest span a joint or make a second storey */
+  proud: 1, applied: 0, tuck: 0,   /* stones standing forward of the wall; a pillar applied over a joint; a small stone tucked in a corner */
+  oversail: 0, over: null, /* 1: an upper block at the far end oversails a set-back lower wall; over: by how much, fh */
+  tiers: 0,                /* 2-4: the back mass is tiers of blocks, each shorter and set back, joints staggered */
+  lean: 0,                 /* degrees: the back mass is parallel slabs leaning this far toward the cut end */
+  dip: 0,                  /* degrees: the back mass is beds dipping this far */
+  taper: .95, bevel: .16, jit: .02, offset: .03, cutCorner: .2,
+  gate: false, toe: true, rough: 1, minW: 1, shapes: 1,   /* shapes 0: every stone a plain bevelled box (for the experiments) */
+  leanEach: 0, yawEach: 0, bevelEach: 0, gap: 0 };
 const PRESET = {
   pillars: { nA: 3, rows: 2 },
-  wall: { cls: 'pillars', nA: 3, rows: 2, fall: .06, plateau: 1, front: .3, peak: .3 },
-  blocks: { nA: 3, rows: 2, tiers: 2, front: .36, frontLen: .5, fall: .35, sizeVar: .35 },
-  courses: { nA: 1, rows: 4, front: .22, fall: .05, depth: 1.05, length: 1.5, frontLen: .95, sizeVar: .2, toe: false, stepMin: .2, stepAlong: .05, peak: 0, cutCorner: .12, topLen: .4 },
-  leaners: { nA: 4, rows: 2, lean: 20, front: .36, fall: .35, depth: .75 },
-  ramp: { cls: 'leaners', nA: 1, rows: 2, dip: 27, front: .4, fall: .05, frontLen: .55, depth: .85, sizeVar: .3 },
-  gates: { nA: 3, rows: 2, gate: true, fall: .08, depth: .8, peak: .35, frontLen: .35, front: .3, height: 1.75 } };
+  wall: { cls: 'pillars', nA: 3, rows: 2, fall: .25, plateau: 1, peak: .25 },
+  blocks: { nA: 3, rows: 2, tiers: 3, depth: .72, fall: .4, sizeVar: .35, caps: 1 },
+  courses: { nA: 2, rows: 4, depth: 1.1, length: 1.5, fall: .2, sizeVar: .3, toe: false, peak: 0, caps: 0 },
+  leaners: { nA: 4, rows: 2, lean: 20, fall: .35, depth: .6 },
+  ramp: { cls: 'leaners', nA: 1, rows: 2, dip: 27, fall: .1, depth: .7, caps: 1 },
+  gates: { nA: 3, rows: 2, gate: true, fall: .3, depth: .72, peak: .15, height: 1.3, caps: 1 } };
 function formationOnce(over = {}) {
-  const q = Object.assign({}, FORM, PRESET[over.preset || over.cls] || {}, over), r = rng(q.seed * 104729 + 7), out = [];
-  const td = Math.tan(q.dip * Math.PI / 180), back = PLATE, L = q.length;
-  /* 1 rows: front rows are thinner, shorter and lower */
-  const wts = Array.from({ length: q.rows }, (_, i) => lerp(.72, 1.15, q.rows > 1 ? i / (q.rows - 1) : 1) * within(r, .9, 1.1)), wsum = wts.reduce((a, b) => a + b, 0);
-  let d0 = back - q.depth; const rows = [];
-  for (let i = 0; i < q.rows; i++) { const t = q.rows > 1 ? i / (q.rows - 1) : 1, dp = q.depth * wts[i] / wsum; let len = L * lerp(q.frontLen, 1, Math.pow(t, .8)); if (i === q.rows - 1 && q.rows > 2) len = L * q.topLen; rows.push({ i, t, d0, dp, len }); d0 += dp; }
-  /* 2 columns: unequal widths, no slivers; joints kept off the joints of the row behind */
-  const cutRow = (len, n, avoid = []) => { let best = null; for (let tries = 0; tries < 12; tries++) { let ws = Array.from({ length: n }, () => within(r, 1 - q.sizeVar, 1 + q.sizeVar)); const s0 = ws.reduce((a, b) => a + b, 0); ws = ws.map((v) => v / s0 * len);
-      const joints = []; let a = 0; for (const w of ws.slice(0, -1)) { a += w; joints.push(a); } const clear = Math.min(1, ...joints.flatMap((j) => avoid.map((k) => Math.abs(j - k)))), thin = Math.min(...ws);
-      const score = Math.min(clear / (.12 + .2 * q.stagger), 1) + Math.min(thin / .3, 1); if (!best || score > best.score) best = { ws, score }; if (score >= 2) break; } return best.ws; };
-  const env = (a, t) => { const p = q.peak * L, far = a > p ? (a - p) / Math.max(L - p, .01) : (p - a) / Math.max(L, .01) * .5; return q.height * lerp(q.front, 1, t) * (1 - q.fall * far); };
-  for (let i = rows.length - 1; i >= 0; i--) { const row = rows[i], n = Math.max(1, Math.min(Math.round(q.nA * row.len / L), q.minW === 0 ? 99 : Math.floor(row.len / .4))), behind = i < rows.length - 1 ? rows[i + 1].cols.slice(0, -1).map((c) => c.a0 + c.w) : [];
-    const ws = q.stagger === 0 ? Array(n).fill(row.len / n) : cutRow(row.len, n, behind); let a0 = 0; row.cols = ws.map((w, k) => { const c = { a0, w, k, row }; a0 += w; return c; }); }
-  /* 3 heights under the envelope */
-  for (const row of rows) for (const c of row.cols) c.h = Math.max(.18, env(c.a0 + c.w / 2, row.t) * within(r, 1 - .08 * q.rough, 1 + .08 * q.rough));
-  const br = rows[rows.length - 1], B = br.cols;
-  /* 4 a plateau: a run of neighbours in the back row shares one top; a cleft: the two tallest neighbours stand level with an open joint */
-  if (q.plateau && B.length >= 2) { const n = Math.min(B.length, 2 + (r() < .4 ? 1 : 0)), k0 = Math.floor(r() * (B.length - n + 1)), run = B.slice(k0, k0 + n), m = run.reduce((a, c) => a + c.h, 0) / n, s = within(r, .2, .3), am = run.reduce((a, c) => a + c.a0 + c.w / 2, 0) / n; run.forEach((c) => { c.h = m - s * (c.a0 + c.w / 2 - am); c.plat = 1; c.platDip = s; }); }
-  if (q.cleft && B.length >= 2) { let k = 0; for (let j = 1; j < B.length - 1; j++) if (B[j].h + B[j + 1].h > B[k].h + B[k + 1].h) k = j; const m = Math.max(B[k].h, B[k + 1].h); B[k].h = m; B[k + 1].h = m - .2 * (B[k].w + B[k + 1].w) / 2 * within(r, .7, 1.2); B[k].plat = B[k + 1].plat = 2; B[k].gapFar = B[k + 1].gapNear = within(r, .035, .06); }
-  /* 5 the two rules: neighbours not on a plateau stand at least stepMin apart; a stone is lower than what stands behind it */
-  for (let i = rows.length - 1; i >= 0; i--) { const row = rows[i];
-    row.cols.forEach((c, k) => {
-      if (i < rows.length - 1) { const lowest = Math.min(...rows[i + 1].cols.filter((b) => b.a0 < c.a0 + c.w - .03 && b.a0 + b.w > c.a0 + .03).map((b) => b.h)); if (isFinite(lowest)) c.h = Math.min(c.h, lowest - Math.max(.1, q.stepMin)); }
-      if (k > 0) { const p = row.cols[k - 1], sm = q.stepAlong == null ? q.stepMin : q.stepAlong; if (!(p.plat && c.plat && p.plat === c.plat) && Math.abs(p.h - c.h) < sm) c.h = p.h + (c.h >= p.h && r() < .5 && i === rows.length - 1 ? 1 : -1) * sm * (1 + r() * .5); }
-      c.h = Math.max(c.h, .18); }); }
-  /* 6 the leaning set: joints of the back row lean, most at the far end, fanning down toward the cut end; the cut face and the feet stay put */
-  if (q.lean) { const n = B.length, j0 = q.closer && n > 2 ? 1 : 0, tmax = Math.tan(q.lean * Math.PI / 180);
-    B.forEach((c, k) => { const f = (j) => j <= j0 ? 0 : tmax * lerp(.4, 1, (j - j0) / Math.max(1, n - j0)); c.tN = k === j0 && j0 > 0 ? f(j0 + 1) * .85 : f(k); c.tF = f(k + 1); if (k < j0) c.tN = c.tF = 0; });
-    if (j0 > 0) { const sh = B[j0].tN * Math.min(B[j0 - 1].h, B[j0].h) * .9; for (let k = j0; k < n; k++) B[k].a0 += sh; } }
-  /* a stone from a column (or from any box in that column's row) */
-  const shape = (c, z, hh, x = {}) => { const row = c.row, isTop = x.top !== false, rec = c.recess || 0, tN = c.tN || 0, tF = c.tF || 0;
-    const gN = c.gapNear || 0, gF = c.gapFar || 0, w0 = (x.w || c.w) - gN - gF, aN = (x.a0 == null ? c.a0 : x.a0) + gN;
-    const wB = w0 - z * (tF - tN), wT = w0 - (z + hh) * (tF - tN), aC = aN + w0 / 2 - z * (tN + tF) / 2;
-    const dp = (x.dp || row.dp * (1 - rec)), dC = x.d == null ? row.d0 + row.dp * rec + dp / 2 : x.d, lv = x.level || 0, m = Math.min(wB, dp, hh);
-    return { w: Math.max(.08, wB - .012 - q.gap), dp: dp - .012 - q.gap, h: hh, a: aC + (r() - .5) * q.offset * .3, d: dC + (r() - .5) * q.offset * .5, z,
-      bevel: q.bevel * within(r, .85, 1.2) * (q.bevelEach ? Math.max(.05, 1 + (r() - .5) * 2 * q.bevelEach) : 1), bevelB: lv ? q.bevel * .45 : 0,
-      taperA: Math.max(.5, wT / wB) * (x.taper || q.taper) * within(r, .98, 1.02), taperD: Math.min(1, (x.taper || q.taper) * within(r, .99, 1.04)),
-      dipA: -(x.dip == null ? td : x.dip) - (tN + tF) * .28 + (isTop ? (c.platDip ? -c.platDip : -within(r, 0, .08) * q.rough) : 0), dipD: isTop ? within(r, -.02, .1) * q.rough : 0, botA: lv ? -(x.dip == null ? td : x.dip) : 0,
-      leanA: -(tN + tF) / 2 + (q.leanEach ? Math.tan((r() - .5) * 2 * q.leanEach * Math.PI / 180) : 0), leanD: q.leanEach ? Math.tan((r() - .5) * 2 * q.leanEach * Math.PI / 180) : 0,
-      cut: (isTop && !lv && m > .3 && r() < q.cutCorner) ? within(r, .28, .42) : 0, cutAt: r() < .6 ? 0 : 1, jit: lv ? q.jit * .6 : q.jit,
-      yaw: (r() - .5) * q.offset * 1.4 + (q.yawEach ? (r() - .5) * 2 * q.yawEach * Math.PI / 180 : 0), seed: Math.floor(r() * 1e6),
-      kind: x.kind || (hh > 1.35 * Math.max(wB, dp) ? 'pillar' : hh < .7 * Math.max(wB, dp) ? 'slab' : 'block'), col: c, level: lv }; };
-  /* 7 a gate: one inner column of the back row is a set-back wall; a cap from each pier meets over it, the piers unequal */
-  let caps = [];
-  if (q.gate && B.length >= 3) { const g = B[1], N = B[0], F = B[2]; g.recess = .55; const thN = within(r, .4, .6), thF = within(r, .34, .5);
-    N.h = Math.max(N.h, q.height * .9) - thN; F.h = N.h * within(r, .8, .93); g.h = Math.min(N.h, F.h) - .03; const split = within(r, .4, .65);
-    caps = [{ a0: N.a0 + N.w * .25, w: N.w * .75 + g.w * split, z: N.h, h: thN, o: within(r, .06, .18) }, { a0: g.a0 + g.w * split, w: g.w * (1 - split) + F.w * within(r, .7, .95), z: F.h, h: N.h + thN - F.h - within(r, .2, .35), o: within(r, .1, .25) }]; }
-  /* 8 stones */
-  for (const row of rows) { const isBack = row === br;
-    if (q.tiers && row.i > 0) {   /* tiers: a level first tier, then shorter tiers on it with their own joints, each set back a little */
-      const top = Math.max(...row.cols.map((c) => c.h)), z1 = Math.min(top * .5, within(r, .5, .7)); let prev = row.cols.slice(0, -1).map((c) => c.a0 + c.w), z = 0, len = row.len, lv = 0, sup = [];
-      for (const c of row.cols) { const hh = Math.min(c.h, z1 * within(r, .97, 1.03)); out.push(shape(c, 0, hh, { top: c.h <= z1 * 1.05 })); c.t1 = hh; sup.push({ a0: c.a0, w: c.w, top: hh }); }
-      z = z1; lv = 1;
-      while (z < top - .3 && lv < q.tiers + 1) { len *= within(r, .6, .85); const n = Math.max(1, Math.round(row.cols.length * len / row.len)), ws = cutRow(len, n, prev), lastTier = (lv === q.tiers) || top - z < .9; let a0 = 0; const made = [];
-        ws.forEach((w, k) => { const under = sup.filter((c) => c.a0 < a0 + w - .02 && c.a0 + c.w > a0 + .02); if (!under.length || Math.min(...under.map((c) => c.top)) < z - .08) { a0 += w; return; }
-          let hh = lastTier ? Math.max(.3, env(a0 + w / 2, row.t) * within(r, .93, 1.05) - z) : within(r, .45, .62); if (made.length && Math.abs(made[made.length - 1].h - hh) < q.stepMin && lastTier) hh -= q.stepMin;
-          hh = Math.max(.28, Math.min(hh, 1)); const sb = .05 * lv * within(r, .6, 1.4); made.push(Object.assign(shape({ row, a0, w, h: z + hh }, z, hh, { level: lv, dp: row.dp - sb, d: row.d0 + sb + (row.dp - sb) / 2, top: lastTier }), { sa0: a0, sw: w })); a0 += w; });
-        out.push(...made); prev = []; { let a = 0; for (const w of ws.slice(0, -1)) { a += w; prev.push(a); } } if (lastTier || !made.length) break; z += Math.min(...made.map((s2) => s2.h)); sup = made.map((s2) => ({ a0: s2.sa0, w: s2.sw, top: z })); for (const s2 of made) s2.h = z - s2.z; lv++; }
-      continue; }
-    for (const c of row.cols) {
-      if (q.toe && row.i === 0 && q.rows > 1) { out.push(shape(c, 0, c.h, { kind: 'toe', taper: q.taper * .82 })); continue; }
-      if (td && isBack) {   /* dipping beds: one thick bed and one or two thinner, shorter ones on it */
-        const n = c.h > 1.3 && r() < .6 ? 3 : 2, zs = [0, c.h * within(r, .5, .62)]; if (n === 3) zs.push(zs[1] + (c.h - zs[1]) * within(r, .45, .6)); zs.push(c.h);
-        for (let i = 0; i < n; i++) { const sh = 1 - .17 * i; out.push(shape(c, zs[i] + (i ? td * c.w * (1 - sh) * .5 : 0), zs[i + 1] - zs[i], { level: i, w: c.w * sh, top: i === n - 1 })); } continue; }
-      if (q.oversail && isBack && c === B[B.length - 1] && c.h > .8 && !c.recess && !(c.tF || c.tN)) {   /* an upper block oversails a set-back wall */
-        const zc = c.h * within(r, .45, .62), sb = q.over == null ? within(r, .22, .36) : q.over; out.push(shape(Object.assign({}, c, { recess: sb / row.dp }), 0, zc, { top: false })); out.push(shape(c, zc, c.h - zc, { level: 1, kind: 'cap', dp: row.dp + .04, d: row.d0 - .04 + (row.dp + .04) / 2 })); continue; }
-      out.push(shape(c, 0, c.h, {})); } }
-  for (const l of caps) out.push(shape({ row: br, a0: l.a0, w: l.w, h: l.z + l.h }, l.z, l.h, { level: 1, kind: 'cap', dp: br.dp + l.o, d: br.d0 - l.o + (br.dp + l.o) / 2, taper: 1 }));
-  /* 9 stones that rest: smaller, set back from the face, over one joint where the two tops are level, else on one top */
-  for (let i = 0; i < q.rest && !q.tiers && !td && !q.gate; i++) { const ok = B.map((c, k) => k).filter((k) => !B[k].used && !(q.oversail && k === B.length - 1) && !(B[k].tF || B[k].tN)); if (!ok.length) break;
-    const pairK = ok.find((k) => B[k + 1] && ok.includes(k + 1) && Math.abs(B[k].h - B[k + 1].h) < .03), k = pairK != null ? pairK : ok[Math.floor(r() * ok.length)], c = B[k], two = pairK != null, n2 = two ? B[k + 1] : null;
-    const span = two ? c.w + n2.w : c.w, w = span * within(r, .5, .8), a0 = c.a0 + (span - w) * within(r, .25, .75), slab = w > .7 || r() < .4, hh = slab ? within(r, .14, .26) : within(r, .3, .48), sb = within(r, .06, .16), base = Math.min(c.h, two ? n2.h : c.h);
-    for (const s2 of out) if ((s2.col === c || s2.col === n2) && Math.abs(s2.z + s2.h - s2.col.h) < 1e-6) { s2.h -= hh; s2.cut = 0; } c.h -= hh; c.used = 1; if (n2) { n2.h -= hh; n2.used = 1; }
-    out.push(shape({ row: br, a0, w, h: base }, base - hh, hh, { level: 1, dp: br.dp - sb, d: br.d0 + sb + (br.dp - sb) / 2, kind: slab ? 'slab' : 'block' })); }
+  const q = Object.assign({}, FORM, PRESET[over.preset || over.cls] || {}, over), r = rng(q.seed * 104729 + 7), S = [];
+  const td = Math.tan(q.dip * Math.PI / 180), tl = Math.tan(q.lean * Math.PI / 180), L = q.length, back = PLATE, D = q.depth, dB = back - D, courses = q.cls === 'courses';
+  const add = (o) => { const sp = Object.assign({ z: 0, level: 0, on: 0, depth: 0, role: 'wall' }, o); S.push(sp); return sp; };
+  /* a row cut into unequal widths, none thin, joints kept off the joints in `avoid` */
+  const cutRow = (len, n, avoid = []) => { n = Math.max(1, q.minW === 0 ? n : Math.min(n, Math.floor(len / .4))); if (q.stagger === 0 && !avoid.length) return Array(n).fill(len / n); let best = null;
+    for (let tries = 0; tries < 14; tries++) { let ws = Array.from({ length: n }, () => within(r, 1 - q.sizeVar, 1 + q.sizeVar)); const s0 = ws.reduce((a, b) => a + b, 0); ws = ws.map((v) => v / s0 * len);
+      const joints = []; let a = 0; for (const w of ws.slice(0, -1)) { a += w; joints.push(a); } const clear = q.stagger === 0 ? 1 : Math.min(1, ...joints.flatMap((j) => avoid.map((k) => Math.abs(j - k)))), thin = Math.min(...ws);
+      const score = Math.min(clear / (.12 + .2 * q.stagger), 1) + Math.min(thin / (q.minW === 0 ? .1 : .34), 1); if (!best || score > best.score) best = { ws, score }; if (score >= 2) break; } return best.ws; };
+  const jointsOf = (ws, a0 = 0) => { const j = []; let a = a0; for (const w of ws.slice(0, -1)) { a += w; j.push(a); } return j; };
+  const env = (a) => { const p = q.peak * L, far = a > p ? (a - p) / Math.max(L - p, .01) : (p - a) / Math.max(L, .01) * .5; return q.height * (1 - q.fall * far); };
+  const rowB = { i: Math.max(0, q.rows - 1), t: 1, d0: dB, dp: D, len: L, cols: [] }; let rows = [rowB];
+  const col = (o, row = rowB) => { const c = Object.assign({ row }, o); row.cols.push(c); return c; };
+
+  /* ---- 1 the back mass ---- */
+  if (courses) {   /* a stair: tiers of the whole footprint, each lying on the one below, set back on two sides, joints staggered */
+    const K = Math.max(2, q.rows); rows = []; let sa = 1, sd = 1, z = 0, prev = [], wing = r() < .25 ? 1 + Math.floor(r() * (K - 2)) : -1;
+    for (let k = 0; k < K; k++) { const last = k === K - 1; if (k) { sd *= within(r, .66, .8); if (k !== wing) sa *= last ? within(r, .4, .6) : within(r, .74, .9); }
+      const len = L * sa, dp = D * sd, hh = q.height / K * within(r, .88, 1.12), row = { i: k, t: K > 1 ? k / (K - 1) : 1, d0: back - dp, dp, len, cols: [] }; rows.push(row);
+      const ws = cutRow(len, last ? 1 : Math.max(1, Math.min(q.nA, 1 + Math.floor(r() * q.nA + (len > 1.1 ? .4 : 0)))), prev); let a0 = 0;
+      ws.forEach((w, j) => { const zz = z + (j && !last ? (r() - .5) * .08 : 0) * (k ? 0 : 1); add({ a0, w, d0: back - dp, dp, z, h: hh + (j ? (r() - .5) * .1 : 0), level: k, depth: k, on: k ? Math.max(1, prev.filter((p) => p > a0 + .06 && p < a0 + w - .06).length + 1) : 0, role: 'course', col: col({ a0, w, h: z + hh }, row) }); a0 += w; });
+      prev = jointsOf(ws); z += hh; }
+  } else if (q.tiers) {   /* blocks: a first tier nearly level, shorter tiers on it, each set back from the face */
+    const z1 = within(r, .5, .7); let ws = cutRow(L, q.nA, []), a0 = 0, sup = [], prev = jointsOf(ws), z = z1, len = L, sb = 0;
+    ws.forEach((w, k) => { const hh = z1 + (k === ws.length - 1 && ws.length > 2 ? -within(r, .05, .14) : (r() - .5) * .03); add({ a0, w, d0: dB, dp: D, h: hh, col: col({ a0, w, h: hh }) }); sup.push({ a0, w, top: hh }); a0 += w; });
+    const nT = Math.max(q.tiers, Math.min(4, 1 + Math.ceil((env(0) - z1) / .62))); for (let lv = 1; lv < nT; lv++) { const lastT = lv === nT - 1; len *= within(r, .62, .84); sb += within(r, .1, .22); const n = Math.max(1, Math.round(q.nA * len / L)), w2 = cutRow(len, n, prev); a0 = 0; const made = [];
+      w2.forEach((w) => { const under = sup.filter((c) => c.a0 < a0 + w - .04 && c.a0 + c.w > a0 + .04); if (!under.length || Math.min(...under.map((c) => c.top)) < z - .16) { a0 += w; return; }
+        let hh = lastT ? env(a0 + w / 2) * within(r, .94, 1.04) - z : within(r, .42, .6); if (lastT && made.length && Math.abs(made[made.length - 1].h - hh) < q.stepMin) hh -= q.stepMin; hh = Math.max(.3, Math.min(hh, .72));
+        made.push(add({ a0, w, d0: dB + sb, dp: D - sb, z, h: hh, level: lv, depth: lv, on: under.length, role: 'tier', col: { row: rowB, a0, w, h: z + hh } })); a0 += w; });
+      if (!made.length) break; if (!lastT) { const zz = z + Math.min(...made.map((m) => m.h)); for (const m of made) m.h = zz - z; z = zz; }
+      sup = made.map((m) => ({ a0: m.a0, w: m.w, top: m.z + m.h })); prev = jointsOf(w2); }
+  } else if (td) {   /* dipping beds: one thick bed from the ground, thinner and shorter beds lying tight on it */
+    const c = col({ a0: 0, w: L, h: q.height }), n = r() < .5 ? 3 : 2, z1 = q.height * within(r, .5, .6); let w = L, dp = D, zc = z1, ac = L / 2;
+    add({ a0: 0, w: L, d0: dB, dp: D, h: z1, dipA: -td, role: 'bed', col: c });
+    for (let i = 1; i < n; i++) { const w2 = w * within(r, .7, .85), dp2 = dp * within(r, .8, .9), hh = i === n - 1 ? Math.min(.6, Math.max(.3, q.height - zc)) : within(r, .3, .45), a2 = w2 / 2, zb = zc + td * (ac - a2);
+      add({ a0: 0, w: w2, d0: back - dp2, dp: dp2, z: zb, h: hh, dipA: -td, botA: -td, level: i, depth: i, on: 1, role: 'bed', col: { row: rowB, a0: 0, w: w2, h: zb + hh } }); w = w2; dp = dp2; zc = zb + hh; ac = a2; }
+  } else if (tl) {   /* leaning slabs: parallel, of near-constant thickness, each shorter than the one nearer the cut end; a block fills the cut end under them */
+    const n = Math.max(2, Math.min(4, q.nA)), h0 = q.height, sh = tl * h0 * .78; let a0 = sh, hh = h0;
+    const bl = col({ a0: 0, w: sh + .12, h: h0 * (r() < .35 ? within(r, 1, 1.08) : within(r, .42, .62)) }); add({ a0: 0, w: bl.w, d0: dB, dp: D, h: bl.h, dipA: within(r, .25, .5), col: bl });
+    for (let k = 0; k < n; k++) { const w = within(r, .3, .45), th = Math.tan((q.lean + (r() - .5) * 6) * Math.PI / 180), pr = r() < .4 ? within(r, .06, .18) : 0;
+      add({ a0, w, d0: dB - pr, dp: D + pr, h: hh, lean: th, role: 'slab', col: col({ a0, w, h: hh }) }); a0 += w; hh = Math.max(.6, hh * (1 - q.fall * within(r, .35, .6) * (2.2 / n)) - .05); }
+  } else {   /* pillars, walls, gates: columns under the envelope */
+    const ws = cutRow(L, q.nA, []); let a0 = 0; const B = ws.map((w, k) => { const c = col({ a0, w, k, h: Math.max(.3, env(a0 + w / 2) * within(r, 1 - .08 * q.rough, 1 + .08 * q.rough)) }); a0 += w; return c; });
+    if (q.plateau && B.length >= 2) { const n = Math.min(B.length, 2 + (r() < .45 ? 1 : 0)), k0 = Math.floor(r() * (B.length - n + 1)), run = B.slice(k0, k0 + n), m = run.reduce((a, c) => a + c.h, 0) / n, s = within(r, .2, .3), am = run.reduce((a, c) => a + c.a0 + c.w / 2, 0) / n; run.forEach((c) => { c.h = m - s * (c.a0 + c.w / 2 - am); c.plat = 1; c.platDip = s; }); }
+    if (q.cleft && B.length >= 2) { let k = 0; for (let j = 1; j < B.length - 1; j++) if (B[j].h + B[j + 1].h > B[k].h + B[k + 1].h) k = j; const m = Math.max(B[k].h, B[k + 1].h); B[k].h = m; B[k + 1].h = m - .2 * (B[k].w + B[k + 1].w) / 2 * within(r, .7, 1.2); B[k].plat = B[k + 1].plat = 2; B[k].gapFar = B[k + 1].gapNear = within(r, .035, .06); }
+    B.forEach((c, k) => { if (k > 0) { const p = B[k - 1]; if (!(p.plat && c.plat && p.plat === c.plat) && Math.abs(p.h - c.h) < q.stepMin) c.h = Math.max(.3, p.h + (c.h >= p.h && r() < .5 ? 1 : -1) * q.stepMin * (1 + r() * .5)); } });
+    let caps = [];
+    if (q.gate && B.length >= 3) { const g = B[1], N = B[0], F = B[2], thN = within(r, .5, .7), thF = within(r, .42, .6); g.recess = within(r, .32, .45); N.h = Math.max(N.h, q.height * .92); F.h = N.h * within(r, .78, .92); g.h = Math.min(N.h, F.h) - .02; const split = within(r, .4, .62);
+      caps = [{ a0: N.a0 + N.w * .12, w: N.w * .88 + g.w * split, z: N.h, h: thN, o: within(r, .22, .36), on: 2 }, { a0: g.a0 + g.w * split, w: g.w * (1 - split) + F.w * within(r, .8, 1), z: F.h, h: Math.max(.35, N.h + thN - F.h - within(r, .18, .32)), o: within(r, .26, .4), on: 2 }]; }
+    B.forEach((c, k) => { const pr = q.proud && !c.recess && !(k && B[k - 1].pr) && r() < .42 ? within(r, .08, .24) : 0, gN = c.gapNear || 0, gF = c.gapFar || 0; c.pr = pr; const rec = c.recess ? D * c.recess : 0;
+      if (q.oversail && k === B.length - 1 && c.h > .8 && !c.recess) { const zc = c.h * within(r, .45, .62), sb = q.over == null ? within(r, .22, .36) : q.over; add({ a0: c.a0, w: c.w, d0: dB + sb, dp: D - sb, h: zc, col: c, covered: 1 }); add({ a0: c.a0, w: c.w, d0: dB - .04, dp: D + .04, z: zc, h: c.h - zc, level: 1, depth: 1, on: 1, role: 'cap', col: c }); return; }
+      add({ a0: c.a0 + gN, w: c.w - gN - gF, d0: dB - pr + rec, dp: D + pr - rec, h: c.h, platDip: c.platDip, col: c, covered: c.recess ? 1 : 0 }); });
+    for (const l of caps) add({ a0: l.a0, w: l.w, d0: dB - l.o, dp: D + l.o, z: l.z, h: l.h, level: 1, depth: 1, on: l.on, role: 'cap', col: { row: rowB, a0: l.a0, w: l.w, h: l.z + l.h } });
+  }
+  /* what stands behind a stretch of the front: the face (smallest d) and the lowest ground-standing top there */
+  const wallAt = (a0, a1) => { const b = S.filter((s) => s.level === 0 && s.role !== 'front' && s.a0 < a1 - .03 && s.a0 + s.w > a0 + .03); return b.length ? { d: Math.min(...b.map((s) => s.d0)), h: Math.min(...b.map((s) => s.h)), hi: Math.max(...b.map((s) => s.h)) } : { d: dB, h: q.height * .5, hi: q.height * .5 }; };
+
+  /* ---- 2 the front cluster at the cut end: a chunky buttress hard against the wall, a toe in front of it or beside it ---- */
+  if (q.rows > 1 && !courses) { const rowF = { i: 0, t: 0, d0: dB - .5, dp: .5, len: L * .5, cols: [] }; rows.unshift(rowF); if (q.rows > 2) rows.splice(1, 0, { i: 1, t: .5, d0: dB - .5, dp: .5, len: L * .7, cols: [] });
+    const w = Math.min(within(r, .42, .62), L * .5), wl = wallAt(0, w), dp = Math.max(.3, Math.min(.58, w * within(r, .62, .98))), hB = Math.max(.3, Math.min(q.front * wl.hi, wl.h - q.stepMin - .04));
+    const bu = add({ a0: 0, w, d0: wl.d - dp + within(r, .05, .14), dp, h: hB, role: 'front', kind: 'buttress', col: col({ a0: 0, w, h: hB }, rowF) }); let aNext = w - .03;
+    if (q.rows > 2) { const w2 = within(r, .36, .55), wl2 = wallAt(aNext, aNext + w2), dp2 = Math.max(.3, Math.min(.55, w2 * within(r, .7, 1.05))), h2 = Math.max(.28, Math.min(hB * within(r, .6, 1.25), wl2.h - q.stepMin - .04)); if (Math.abs(h2 - hB) < q.stepMin) { /* never level with the buttress */ }
+      const hh = Math.abs(h2 - hB) < q.stepMin ? Math.max(.25, hB - q.stepMin * 1.4) : h2; add({ a0: aNext, w: w2, d0: wl2.d - dp2 + within(r, .05, .12), dp: dp2, h: hh, role: 'front', kind: 'buttress', col: col({ a0: aNext, w: w2, h: hh }, rows[1]) }); aNext += w2 - .03; }
+    if (q.toe) { const w3 = within(r, .3, .45), dp3 = within(r, .28, .42), h3 = Math.min(within(r, .2, .4), hB * .65), beside = q.rows < 3 && r() < .4, a3 = beside ? aNext : within(r, 0, .12), d3 = beside ? wallAt(a3, a3 + w3).d - dp3 + .08 : bu.d0 - dp3 + .06;
+      add({ a0: a3, w: w3, d0: d3, dp: dp3, h: h3, role: 'front', kind: 'toe', col: col({ a0: a3, w: w3, h: h3 }, rowF) }); if (beside) aNext += w3; }
+    /* a small stone tucked into the corner between the cluster and the wall */
+    if (q.tuck && aNext < L - .35) { const w4 = within(r, .2, .32), wl4 = wallAt(aNext, aNext + w4), h4 = hB * within(r, .3, .55); add({ a0: aNext, w: w4, d0: wl4.d - w4 + .04, dp: w4, h: h4, role: 'front', kind: 'toe', col: col({ a0: aNext, w: w4, h: h4 }, rowF) }); }
+    /* a pillar applied to the wall, over a joint */
+    if (q.applied && rowB.cols.length >= 2 && !tl && !td && !q.tiers) { const js = rowB.cols.slice(0, -1).map((c) => c.a0 + c.w).filter((j) => j > aNext + .2 && j < L - .2); if (js.length) { const j = js[Math.floor(r() * js.length)], w5 = within(r, .3, .45), dp5 = within(r, .25, .35), wl5 = wallAt(j - w5 / 2, j + w5 / 2), h5 = wl5.h * within(r, .7, .93);
+      add({ a0: j - w5 / 2, w: w5, d0: wl5.d - dp5 + .04, dp: dp5, h: h5, role: 'wall', kind: 'pillar', applied: 1, col: { row: rowB, a0: j - w5 / 2, w: w5, h: h5 } }); } } }
+
+  /* ---- 3 the pile: stones laid on the tops. They add height. ---- */
+  const tops = () => S.filter((s) => !s.covered && s.role !== 'front' && s.role !== 'slab' && !s.applied && s.w > .32 && s.dp > .3);
+  for (let i = 0; i < q.caps; i++) { const T = tops(); if (!T.length) break; const top = (s) => s.z + s.h;
+    const pairs = []; for (const a of T) for (const b of T) if (a !== b && Math.abs(a.a0 + a.w - b.a0) < .07 && (a.platDip && b.platDip ? true : Math.abs(top(a) - top(b)) < (a.level || b.level ? .09 : .22) && !a.platDip && !b.platDip) && !a.dipA && !b.dipA && a.role !== 'cap' && b.role !== 'cap' && Math.min(a.d0 + a.dp, b.d0 + b.dp) - Math.max(a.d0, b.d0) > .3) pairs.push([a, b]);
+    if (pairs.length && (i > 0 ? r() < .85 : r() < .65)) {   /* a block spanning a joint, bearing on both */
+      const [a, b] = pairs[Math.floor(r() * pairs.length)]; if (!a.platDip && !a.level && !b.level) { const mt = (top(a) + top(b)) / 2; a.h = mt - a.z; b.h = mt - b.z; a.col.h = a.h; b.col.h = b.h; } const a0 = a.a0 + a.w * (1 - within(r, .35, .7)), a1 = b.a0 + b.w * within(r, .35, .7), d0 = Math.max(a.d0, b.d0) + within(r, .05, .15), dp = Math.min(.8, Math.min(a.d0 + a.dp, b.d0 + b.dp) - d0), hh = within(r, .25, .48), sl = a.platDip ? -a.platDip : 0, am = (a0 + a1) / 2, z = sl ? top(a) + sl * (am - (a.a0 + a.w / 2)) : Math.max(top(a), top(b));
+      add({ a0, w: a1 - a0, d0, dp, z, h: hh, dipA: sl, botA: sl, level: Math.max(a.level, b.level) + 1, depth: Math.max(a.depth, b.depth) + 1, on: 2, role: 'cap', col: { row: rowB, a0, w: a1 - a0, h: z + hh } }); a.covered = b.covered = 1; continue; }
+    /* a summit cap on the highest top, or a second storey on a cap already placed; smaller than what carries it, set back from its exposed sides */
+    const sup = T.reduce((u, v) => (top(v) > top(u) ? v : u)), slope = sup.dipA || (sup.platDip ? -sup.platDip : 0), wide = sup.w > .5, w = sup.w * (wide ? within(r, .5, .8) : within(r, .82, .94)), a0 = sup.a0 + (sup.w - w) * within(r, .1, .6), sb = within(r, .05, .15), dp = Math.min(.72, sup.dp - sb - (sup.dp > .6 ? within(r, 0, .12) : 0)), hh = sup.role === 'cap' ? within(r, .2, .32) : within(r, .22, .45);
+    const z = top(sup) + slope * (a0 + w / 2 - (sup.a0 + sup.w / 2)); add({ a0, w, d0: sup.d0 + sb, dp, z, h: hh, dipA: slope, botA: slope, level: sup.level + 1, depth: sup.depth + 1, on: 1, role: 'cap', col: { row: rowB, a0, w, h: z + hh } }); sup.covered = 1; }
+
+  /* ---- 4 shapes: each stone learns which of its top edges are exposed, then is shaped by its role ---- */
+  const out = [], near = (u, v) => Math.abs(u - v) < .08;
+  for (const sp of S) { const top = sp.z + sp.h, a1 = sp.a0 + sp.w, d1 = sp.d0 + sp.dp, m = Math.min(sp.w, sp.dp, sp.h), front = sp.role === 'front';
+    const hid = (test) => S.some((o) => o !== sp && o.z + o.h > top - .06 && o.z < top && test(o)), ovD = (o) => Math.min(d1, o.d0 + o.dp) - Math.max(sp.d0, o.d0) > .08, ovA = (o) => Math.min(a1, o.a0 + o.w) - Math.max(sp.a0, o.a0) > .08;
+    const cov = [hid((o) => near(o.a0 + o.w, sp.a0) && ovD(o)), hid((o) => near(o.a0, a1) && ovD(o)), hid((o) => near(o.d0 + o.dp, sp.d0) && ovA(o)), d1 > back - .05 || hid((o) => (near(o.d0, d1) || (o.d0 < d1 && o.d0 + o.dp > d1)) && ovA(o))];
+    const bv = q.bevel * (q.bevelEach ? Math.max(.05, 1 + (r() - .5) * 2 * q.bevelEach) : 1), big = q.shapes && !cov[2] && sp.dp > .34 && r() < (front ? .45 : .3);
+    const bT = cov.map((c, i) => c ? bv * within(r, .25, .45) : (i === 2 && big ? within(r, .3, .55) * sp.dp / m : bv * within(r, .95, 1.5)));
+    const tall = sp.h > 1.3 * sp.w, poly = q.shapes && tall && !front && r() < .3, prow = q.shapes && tall && !poly && r() < .2, vc = [bv * within(r, .7, 1.2), bv * within(r, .7, 1.2), bv * .4, bv * .4];
+    if (poly) { vc[0] = within(r, .25, .38); vc[1] = within(r, .25, .38); } else if (prow) { vc[r() < .5 ? 0 : 1] = within(r, .3, .42); }
+    let bat = [0, 0, 0, 0], tA = 1, tD = 1, dipA = sp.dipA || 0, dipD = 0, leanA = 0, kind = sp.kind;
+    if (!q.shapes) { tA = q.taper; tD = Math.min(1, q.taper + .02); dipD = within(r, -.02, .1) * q.rough; dipA += sp.platDip ? -sp.platDip : -within(r, 0, .08) * q.rough; }
+    else if (front) { bat = [0, Math.min(sp.w * .2, sp.h * within(r, .04, .12)), Math.min(sp.dp * .35, sp.h * within(r, .1, .25)), 0]; const u = r(); if (big) dipD = within(r, 0, .1); else if (u < .6) dipD = within(r, .35, .7); else if (u < .75) dipA = within(r, .25, .45); else dipD = within(r, 0, .12); }
+    else if (sp.role === 'slab') { leanA = -sp.lean; dipA = sp.lean * within(r, .5, 1); tA = within(r, .93, 1); bat[2] = sp.h * within(r, .02, .06); }
+    else if (sp.level > 0) { tA = within(r, .95, 1); tD = within(r, .96, 1); if (sp.role === 'cap' && !sp.dipA) dipA = (r() - .5) * .2; dipD = within(r, -.03, .08); if (!cov[2]) bat[2] = sp.h * within(r, 0, .12); }
+    else { const spire = tall && r() < .1; tA = spire ? within(r, .55, .7) : tall ? within(r, .84, .97) : within(r, .92, 1); tD = spire ? within(r, .7, .85) : 1; bat[2] = Math.min(sp.dp * .25, sp.h * within(r, .03, .09)); dipD = sp.role === 'bed' ? within(r, 0, .06) : within(r, -.02, .12) * q.rough; if (!sp.dipA) dipA = sp.platDip ? -sp.platDip : -within(r, 0, .09) * q.rough; }
+    tA *= q.taper / .95; if (!kind) kind = sp.role === 'cap' ? 'cap' : sp.role === 'slab' ? 'lean' : sp.h > 1.35 * Math.max(sp.w, sp.dp) ? 'pillar' : sp.h < .7 * Math.max(sp.w, sp.dp) ? 'slab' : 'block';
+    const g = sp.level ? .004 : .012, st = { w: Math.max(.08, sp.w - g - q.gap), dp: Math.max(.08, sp.dp - g - q.gap), h: sp.h, a: sp.a0 + sp.w / 2 + (r() - .5) * q.offset * .3, d: sp.d0 + sp.dp / 2 + (r() - .5) * q.offset * .3, z: sp.z,
+      bevel: bv, bevelT: bT, bevelVC: vc, bevelB: 0, taperA: tA, taperD: tD, batter: bat, dipA, dipD, botA: sp.botA || 0,
+      leanA: leanA + (q.leanEach ? Math.tan((r() - .5) * 2 * q.leanEach * Math.PI / 180) : 0), leanD: q.leanEach ? Math.tan((r() - .5) * 2 * q.leanEach * Math.PI / 180) : 0,
+      cut: (q.shapes && !sp.level && !front && m > .32 && !big && r() < q.cutCorner) ? within(r, .26, .4) : 0, cutAt: r() < .6 ? 0 : 1, jit: sp.level || front ? q.jit * .5 : q.jit,
+      yaw: (sp.level || sp.role === 'bed' ? 0 : (r() - .5) * q.offset * 1.4) + (q.yawEach ? (r() - .5) * 2 * q.yawEach * Math.PI / 180 : 0), seed: Math.floor(r() * 1e6), kind, col: sp.col, level: sp.level, on: sp.on, depth: sp.depth };
+    out.push(st);
+    /* a stepped stone: a shoulder on the top, flush with the back and one side, the two read as one stone */
+    if (q.shapes && (front || kind === 'block') && !sp.level && sp.h > .4 && sp.w > .4 && Math.abs(dipD) < .2 && Math.abs(dipA) < .15 && r() < .16) { const w2 = sp.w * within(r, .45, .65), dp2 = sp.dp * within(r, .5, .7), h2 = Math.min(.3, sp.h * within(r, .25, .45)), nearSide = r() < .5;
+      out.push(Object.assign({}, st, { part: true, w: w2, dp: dp2, h: h2 + .02, a: nearSide ? sp.a0 + w2 / 2 + .01 : a1 - w2 / 2 - .01, d: d1 - dp2 / 2 - .01, z: top - .02, bevelT: [bv, bv, bv * 1.3, bv * .4], bevelVC: null, bevelV: bv * .7, batter: null, taperA: .97, taperD: .97, dipA: 0, dipD: within(r, 0, .08), cut: 0, yaw: st.yaw, seed: st.seed + 1 })); st.cut = 0; } }
   return { q, rows, stones: out };
 }
 /* the count is held to what the sheets show: at most eleven stones */
-function formation(over = {}) { let f = formationOnce(over), o = Object.assign({}, over), n = 0; while (f.stones.length > 11 && n++ < 4) { o = Object.assign({}, o, { nA: Math.max(1, f.q.nA - 1), rest: 0, tiers: f.q.tiers ? Math.max(2, f.q.tiers - (n > 1 ? 1 : 0)) : 0, rows: n > 2 ? Math.max(1, f.q.rows - 1) : f.q.rows }); f = formationOnce(o); } return f; }
+function formation(over = {}) { let f = formationOnce(over), o = Object.assign({}, over), n = 0; const count = (g) => g.stones.filter((s) => !s.part).length;
+  while (count(f) > 11 && n++ < 5) { o = Object.assign({}, o, f.q.caps > 1 ? { caps: f.q.caps - 1 } : f.q.tuck || f.q.applied ? { tuck: 0, applied: 0 } : { nA: Math.max(1, f.q.nA - 1), rows: f.q.cls === 'courses' ? Math.max(3, f.q.rows - 1) : f.q.rows }); f = formationOnce(o); } return f; }
 const formMeshes = (f) => f.stones.map(stoneMesh);
 
 /* Scale 1: draw a whole formation's numbers from the proposed ranges. */
 function drawParams(seed, want) {
   const r = rng(seed * 31 + 5), u = r() * 52, cls = want && want !== 'any' ? want : (u < 22 ? 'pillars' : u < 32 ? 'blocks' : u < 42 ? 'leaners' : u < 49 ? 'courses' : 'gates');
-  const o = { cls: cls === 'ramp' || cls === 'wall' ? (cls === 'ramp' ? 'leaners' : 'pillars') : cls, preset: cls, seed, height: mid(r, 1.6, 1.98), length: within(r, 1.25, 1.7), bevel: within(r, .1, .22), fall: within(r, .35, .75), peak: r() < .1 ? within(r, .25, .45) : within(r, 0, .18), sizeVar: .62, front: r() < .15 ? within(r, .55, .85) : within(r, .22, .45) };
-  if (cls === 'pillars' || cls === 'wall') { const wall = cls === 'wall' || r() < .25; Object.assign(o, { nA: 2 + Math.floor(r() * 2.3), rows: 2 + (r() < .6 ? 1 : 0), depth: within(r, .75, 1), plateau: wall || r() < .3 ? 1 : 0, cleft: r() < .15 ? 1 : 0, rest: r() < .3 ? 1 : 0, oversail: r() < .3 ? 1 : 0 }); if (wall) Object.assign(o, { fall: within(r, .15, .35), peak: within(r, .05, .35) }); }
-  if (cls === 'blocks') Object.assign(o, { nA: 2 + (r() < .6 ? 1 : 0), rows: 2 + (r() < .35 ? 1 : 0), tiers: 2 + (r() < .45 ? 1 : 0), depth: within(r, .8, 1.05), fall: within(r, .3, .65), sizeVar: .35 });
-  if (cls === 'leaners') { if (r() < .3) Object.assign(o, { preset: 'ramp', dip: within(r, 20, 32), fall: within(r, .05, .2) }); else Object.assign(o, { lean: within(r, 14, 26), nA: 3 + (r() < .5 ? 1 : 0), closer: r() < .65 ? 1 : 0, length: within(r, 1.2, 1.5), front: within(r, .25, .45) }); }
-  if (cls === 'ramp') Object.assign(o, { dip: within(r, 20, 32), fall: within(r, 0, .12) });
-  if (cls === 'courses') Object.assign(o, { height: o.height * .9, rows: 4 + (r() < .35 ? 1 : 0), nA: r() < .6 ? 1 : 2, fall: within(r, .15, .35), peak: 0, front: within(r, .16, .24), topLen: within(r, .28, .5), sizeVar: .3, depth: within(r, 1, 1.2) });
-  if (cls === 'gates') Object.assign(o, { rows: 2, fall: within(r, .25, .45), peak: within(r, .1, .35), front: within(r, .22, .36) });
+  const o = { cls: cls === 'ramp' ? 'leaners' : cls === 'wall' ? 'pillars' : cls, preset: cls, seed, height: mid(r, 1.42, 1.75), length: within(r, 1.25, 1.7), bevel: within(r, .1, .2), fall: within(r, .35, .75), peak: r() < .1 ? within(r, .25, .45) : within(r, 0, .18), sizeVar: .6,
+    front: r() < .15 ? within(r, .62, .82) : within(r, .42, .6), rows: r() < .12 ? 1 : r() < .45 ? 3 : 2, tuck: r() < .3 ? 1 : 0 };
+  const pile = (p0, p1, p2) => { const v = r(); return v < p0 ? 0 : v < p0 + p1 ? 1 : v < p0 + p1 + p2 ? 2 : 3; };
+  if (cls === 'pillars' || cls === 'wall') { const wall = cls === 'wall' || r() < .4; Object.assign(o, { nA: 3 + (r() < .45 ? 1 : 0) - (r() < .2 ? 1 : 0), depth: within(r, .42, .58), plateau: wall || r() < .25 ? 1 : 0, cleft: r() < .12 ? 1 : 0, oversail: r() < .22 ? 1 : 0, applied: r() < .25 ? 1 : 0, caps: pile(.1, .42, .34) }); if (wall) Object.assign(o, { fall: within(r, .15, .35), peak: within(r, .05, .35) }); }
+  if (cls === 'blocks') Object.assign(o, { nA: 2 + (r() < .55 ? 1 : 0), tiers: 2 + (r() < .55 ? 1 : 0), depth: within(r, .62, .82), fall: within(r, .3, .65), sizeVar: .35, caps: pile(.25, .5, .25), rows: r() < .6 ? 2 : 3 });
+  if (cls === 'leaners') { if (r() < .35) Object.assign(o, { preset: 'ramp', dip: within(r, 20, 32), fall: within(r, .05, .2), depth: within(r, .62, .8), caps: pile(.25, .5, .25) }); else Object.assign(o, { lean: within(r, 15, 25), nA: 3 + (r() < .5 ? 1 : 0), length: within(r, 1.25, 1.5), depth: within(r, .5, .68), caps: pile(.55, .4, .05), front: within(r, .3, .45) }); }
+  if (cls === 'ramp') Object.assign(o, { dip: within(r, 20, 32), fall: within(r, .05, .2), depth: within(r, .62, .8), caps: pile(.25, .5, .25) });
+  if (cls === 'courses') Object.assign(o, { height: mid(r, 1.4, 1.7), rows: 3 + (r() < .7 ? 1 : 0), nA: 1 + Math.floor(r() * 2.5), depth: within(r, 1, 1.25), length: within(r, 1.35, 1.65), caps: pile(.5, .42, .08), sizeVar: .3 });
+  if (cls === 'gates') Object.assign(o, { height: within(r, 1.05, 1.2), rows: 2 + (r() < .4 ? 1 : 0), fall: within(r, .2, .4), peak: within(r, .05, .25), depth: within(r, .65, .8), caps: pile(.5, .45, .05), length: within(r, 1.4, 1.7) });
+  if (cls !== 'courses') o.height *= 1 - .07 * o.caps;
   return o;
 }
 /* What a generated formation would measure if it were traced like a reference: each stone as seen from the references' camera, in fh,
@@ -1150,7 +1197,7 @@ function drawParams(seed, want) {
 function seen(f) {
   const cam = cameraFor('ref', 360, 300), pr = (a, d, z) => { const v = new THREE.Vector3(a, z, d).project(cam); return [(v.x + 1) * 180, (1 - v.y) * 150]; };
   let X0 = 1e9, X1 = -1e9, Y0 = 1e9, Y1 = -1e9; const fig = pr(1.25, .45, 0), figTop = pr(1.25, .45, 1), fh = Math.hypot(fig[0] - figTop[0], fig[1] - figTop[1]);
-  const stones = f.stones.map((o) => { const P = stonePoints(o).map((p) => pr(...p)); const x0 = Math.min(...P.map((p) => p[0])), x1 = Math.max(...P.map((p) => p[0])), y0 = Math.min(...P.map((p) => p[1])), y1 = Math.max(...P.map((p) => p[1]));
+  const stones = f.stones.filter((o) => !o.part).map((o) => { const P = stonePoints(o).map((p) => pr(...p)); const x0 = Math.min(...P.map((p) => p[0])), x1 = Math.max(...P.map((p) => p[0])), y0 = Math.min(...P.map((p) => p[1])), y1 = Math.max(...P.map((p) => p[1]));
     X0 = Math.min(X0, x0); X1 = Math.max(X1, x1); Y0 = Math.min(Y0, y0); Y1 = Math.max(Y1, y1);
     const b = pr(o.a, o.d - o.dp / 2, o.z), t = pr(o.a + o.leanA * o.h, o.d - o.dp / 2, o.z + o.h), hiP = P.reduce((u, v) => (v[1] < u[1] ? v : u)); return { wb: (x1 - x0) / fh, hb: Math.hypot(b[0] - t[0], b[1] - t[1]) / fh, kind: o.kind, x0, x1, y0, y1, xTop: hiP[0], o }; });
   const W = (X1 - X0) / fh, H = (Y1 - Y0) / fh, pairs = [];
@@ -1160,7 +1207,7 @@ function seen(f) {
   const near = stones.reduce((a, b) => (b.y1 > a.y1 ? b : a)), top = stones.reduce((a, b) => (b.y0 < a.y0 ? b : a)), ws = stones.map((s2) => s2.wb);
   const leftTop = Math.min(...stones.filter((s2) => s2.x0 < X0 + (X1 - X0) * .12).map((s2) => s2.y0));
   return { stones, pairs, W, H, n: stones.length, footshare: (Y1 - near.y0) / (Y1 - Y0), peak: (top.xTop - X0) / (X1 - X0), wratio: Math.max(...ws) / Math.min(...ws), farend: (Y1 - leftTop) / (Y1 - Y0),
-    jut: f.stones.some((o) => o.kind === 'cap') };
+    jut: f.stones.some((o) => o.kind === 'cap'), rest: f.stones.filter((o) => !o.part && o.level > 0).length, two: f.stones.filter((o) => !o.part && o.on >= 2).length, real: f.stones.filter((o) => !o.part).length, deep: Math.max(...f.stones.map((o) => o.depth || 0)) };
 }
 
 /* ---------- chapter 1 ---------- */
@@ -1255,7 +1302,7 @@ function seen(f) {
   const f = formation({ preset: 'pillars', seed: 11, nA: 4, rows: 3, fall: .45 }), ms = formMeshes(f), row = $('#env-row'), q = f.q;
   const lv = (box, view) => { for (const st of f.stones) { const c = st.col; if (st.z + st.h < c.h - 1e-6 && st.kind !== 'cap') continue; const top = st.z + st.h; const A = view === 'side' ? box.proj(c.a0 + c.w / 2, c.row.d0, top) : box.proj(c.a0, c.row.d0, top), B = view === 'side' ? box.proj(c.a0 + c.w / 2, c.row.d0 + c.row.dp, top) : box.proj(c.a0 + c.w, c.row.d0, top); box.svg.append(s('line', { x1: A[0], y1: A[1], x2: B[0], y2: B[1], stroke: 'var(--a-top)', 'stroke-width': 2.5 })); } };
   const a = still(ms, { tag: 'as the references see it', w: 360, h: 320 });
-  { const back = PLATE, e = (aa, t) => q.height * lerp(q.front, 1, t) * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); const P = [[0, back - q.depth, e(0, 0)], [0, back, e(0, 1)], [q.length, back, e(q.length, 1)], [q.length, back - q.depth, e(q.length, 0)]].map((p) => a.proj(...p)); a.svg.append(s('polygon', { points: pts(P), fill: 'var(--a-top)', 'fill-opacity': .18, stroke: 'var(--a-top)', 'stroke-width': 2, 'stroke-dasharray': '6 4' })); }
+  { const back = PLATE, e = (aa, t) => q.height * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); const P = [[0, back - q.depth, e(0, 0)], [0, back, e(0, 1)], [q.length, back, e(q.length, 1)], [q.length, back - q.depth, e(q.length, 0)]].map((p) => a.proj(...p)); a.svg.append(s('polygon', { points: pts(P), fill: 'var(--a-top)', 'fill-opacity': .18, stroke: 'var(--a-top)', 'stroke-width': 2, 'stroke-dasharray': '6 4' })); }
   const b = still(ms, { tag: 'front', view: 'front', w: 360, h: 320, span: 2.3, centre: [PLATE / 2, PLATE / 2, .9] }); lv(b, 'front');
   const c = still(ms, { tag: 'from the cut end', view: 'side', w: 360, h: 320, span: 2.3, centre: [PLATE / 2, PLATE / 2, .9] }); lv(c, 'side');
   row.append(a, b, c);
@@ -1410,7 +1457,7 @@ const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0
     ['Body', 'Sheaf', 'Leaners side by side, fanning, with an upright stone at the cut end and upright stones in front.', '10', ['P', 'L', 'T9', 'S14'], F({ preset: 'leaners', seed: 39 })],
     ['Body', 'Tower with skirts', 'One stone far taller than the rest, lower stones gathered round its foot on three sides.', '5', ['C', 'T5', 'T17', 'S13'], F({ preset: 'pillars', seed: 13, nA: 3, rows: 3, peak: .35, fall: .75, length: 1.25 })],
     ['Body', 'Twin with a cleft', 'Two tall stones with an open joint between them, as tall as they are.', '4', ['H', 'S6', 'T13', 'T19'], F({ preset: 'pillars', seed: 3, nA: 2, rows: 2, length: 1.05, fall: .2, cleft: 1 })],
-    ['Head', 'Resting stone', 'A smaller block or a thin slab set back on the tops, usually across a joint.', 'about 12', ['A', 'E', 'D', 'T12'], F({ preset: 'wall', seed: 5, nA: 2, rows: 2, rest: 1 })],
+    ['Head', 'Resting stone', 'A smaller block or a thin slab set back on the tops, usually across a joint.', 'about 12', ['A', 'E', 'D', 'T12'], F({ preset: 'wall', seed: 5, nA: 2, rows: 2, caps: 1 })],
     ['Head', 'Oversail', 'An upper block standing forward of a set-back wall, as often at the far end as by the peak.', '7', ['D', 'O', 'S3', 'S10'], F({ preset: 'pillars', seed: 9, nA: 3, rows: 2, oversail: 1, fall: .3 })],
     ['Head', 'Gate', 'Caps from two unequal piers meet over a set-back wall.', '2 (T15, S9); K and J are a shelter and a niche', ['T15', 'S9', 'K', 'J'], F({ preset: 'gates', seed: 26 })]];
   const box = $('#motifs');
@@ -1453,23 +1500,20 @@ const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0
 {
   const f = formation({ preset: 'pillars', seed: 9, nA: 3, rows: 3 }), ms = formMeshes(f), q = f.q, n = f.rows.length, L = $('#gr-levels'), o = { w: 300, h: 260 };
   const grey = (st) => { const v = Math.round(lerp(0xd2, 0x9a, st.o.col.row.i / (n - 1))); return (v << 16) | (v << 8) | (v + 4); };
-  const a = still(ms, Object.assign({ tag: 'formation' }, o)); { const d0 = PLATE - q.depth, e = (aa, t) => q.height * lerp(q.front, 1, t) * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); a.svg.append(s('polygon', { points: pts([[0, d0, e(0, 0)], [0, PLATE, e(0, 1)], [q.length, PLATE, e(q.length, 1)], [q.length, d0, e(q.length, 0)]].map((p) => a.proj(...p))), fill: 'var(--a-top)', 'fill-opacity': .18, stroke: 'var(--a-top)', 'stroke-width': 2, 'stroke-dasharray': '6 4' })); }
+  const a = still(ms, Object.assign({ tag: 'formation' }, o)); { const d0 = PLATE - q.depth, e = (aa, t) => q.height * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); a.svg.append(s('polygon', { points: pts([[0, d0, e(0, 0)], [0, PLATE, e(0, 1)], [q.length, PLATE, e(q.length, 1)], [q.length, d0, e(q.length, 0)]].map((p) => a.proj(...p))), fill: 'var(--a-top)', 'fill-opacity': .18, stroke: 'var(--a-top)', 'stroke-width': 2, 'stroke-dasharray': '6 4' })); }
   L.append(a, still(ms, Object.assign({ tag: 'rows', color: grey }, o)), (() => { const b = still(ms, Object.assign({ tag: 'stones' }, o)); for (const st of f.stones) { const P = stonePoints(st).map((p) => b.proj(...p)); /* outline: convex hull of the projected points */ const hullPts = ((pp) => { pp = pp.slice().sort((x, y) => x[0] - y[0] || x[1] - y[1]); const cr = (o2, a2, b2) => (a2[0] - o2[0]) * (b2[1] - o2[1]) - (a2[1] - o2[1]) * (b2[0] - o2[0]); const lo = []; for (const p of pp) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); } const up = []; for (const p of pp.reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); } return lo.slice(0, -1).concat(up.slice(0, -1)); })(P); b.svg.append(s('polygon', { points: pts(hullPts), fill: 'none', stroke: 'var(--a-out)', 'stroke-width': 1.6 })); } return b; })());
   const rules = [
     ['1 One stone', 'Every major stone reads as convex and flat-faced, with all edges planed (ch. 3, 6). By eye; unhidden outlines fill 99–100% of their hull.', 'A box with chamfered upright edges and a bevelled top.', 'bevel, batter, top tilt, corner cut', 'bevel 0.10–0.22 · top ÷ foot 0.90–1.0 (toes 0.75–0.85)', 'Bevel width sets how wide a joint reads (rule 5).', 'Chunky, soft, never sharp, never round.'],
     ['2 One envelope', 'Highest point right of the middle in 50 of 52; height 1.8–2.3 fh as seen in 50; far end 0.5–0.84 of the peak as seen (ch. 2).', 'A surface over the footprint, highest near the back corner by the cut end, falling to the front and the far end.', 'height, fall, peak, front', 'height 1.6–2.0 fh · fall 0.15–0.75 · peak 0–0.45 of the length · front 0.2–0.45, rarely to 0.85', 'Gives every stone its height, so height is not random (ch. 10). The camera lifts the far end, so true fall is larger than it looks.', 'One mass with one summit; a readable silhouette.'],
-    ['3 Low in front, usually', 'The lower of two neighbours is the nearer in 83% of 286 pairs, by their feet; the nearest stone is under half height in 46 of 52 (ch. 7).', 'Rows from front to back, each as a rule a higher band.', 'rows, front', '1–5 rows; a stone is lower than what stands behind it', 'A tall right-front stone (A, D, F, L) is a high <code>front</code>, not a broken rule.', 'Most stones show a face.'],
-    ['4 Step, or plateau', '79% of neighbouring tops differ by 0.12 fh or more as seen; 21% do not, in 39 formations, and those come in runs (ch. 7).', 'A floor on the step between touching tops, lifted for one run that shares a top plane.', 'stepMin, plateau', 'step 0.12 fh or more, typical 0.37 · a plateau of 2–4 stones in 1 formation in 3', 'A plateau that looks level falls 7–14° toward the far end in true shape. A cleft is a plateau of two with the joint open.', 'Rock, not a built wall; and now and then a flat-topped mass.'],
-    ['5 Closed joints, two grains at most', 'Outlines fill 74% of their box. Tilts inside a formation span 12° or more in 28 of 52; leaning formations hold upright stones too (ch. 6).', 'Stones tile the footprint. Either all upright, or one leaning set beside upright stones.', 'lean, closer, dip', 'leaning set 14–26° at the far end, fanning down by half toward the cut end · beds dip 20–32°', 'Feet and the cut face are never sheared; an upright stone closes the cut end; a leaner may prop against an upright.', 'A jointed mass. Leaning sets read as strata, not as fallen stones.'],
-    ['6 Few and big', '4–11 traced masses; nine in ten over 5% of the outline; widest ÷ narrowest 2.5 as seen (ch. 5, 7).', 'Divide once into rows, once into columns; stack up to four.', 'nA, rows, tiers, sizeVar', 'widths ±60% of the row’s mean, none under 0.3 fh; at most eleven stones', 'Counts are of traced masses; grooves inside a mass are not counted (ch. 1).', 'Each stone is read against the figure; no rubble.'],
+    ['3 Low in front, usually', 'The lower of two neighbours is the nearer in 83% of 286 pairs, by their feet; the nearest stone is under half height in 46 of 52 (ch. 7).', 'A front cluster against a back mass.', 'rows, front', 'buttress 0.42–0.6 of the wall behind it, rarely to 0.8', 'A tall right-front stone (A, D, F, L) is a high <code>front</code>, not a broken rule.', 'Most stones show a face.'],
+    ['4 Step, or plateau', '79% of neighbouring tops differ by 0.12 fh or more as seen; 21% do not, in 39 formations, and those come in runs (ch. 7).', 'A floor on the step between touching tops, lifted for one run that shares a sloping top plane.', 'stepMin, plateau', 'step 0.12 fh or more, typical 0.37 · a plateau of 2–3 stones in two pillar formations in five', 'A plateau that looks level falls 7–14° toward the far end in true shape. A cleft is a plateau of two with the joint open.', 'Rock, not a built wall; and now and then a flat-topped mass.'],
+    ['5 Closed joints, two grains at most', 'Outlines fill 74% of their box. Tilts inside a formation span 12° or more in 28 of 52; leaning formations hold upright stones too (ch. 6).', 'Stones tile the footprint and overlap a little in depth. Either all upright, or one set of parallel leaning slabs, or dipping beds, beside upright stones.', 'lean, dip, proud', 'slabs 15–25°, parallel within 3° · beds dip 20–32° · two wall stones in five stand 0.08–0.24 fh proud', 'Feet and the cut face are never sheared; the wall has two to four depth planes, not one.', 'A jointed mass with relief. Leaning sets read as strata, not as fallen stones.'],
+    ['6 Few and big', '4–11 traced masses; nine in ten over 5% of the outline; widest ÷ narrowest 2.5 as seen (ch. 5, 7).', 'Few stones along, few on top; chunky in plan.', 'nA, tiers, sizeVar, depth', 'widths ±60% of the mean, none under 0.34 fh; wall 0.42–0.8 fh deep; at most eleven stones', 'Counts are of traced masses; grooves inside a mass are not counted (ch. 1).', 'Each stone is read against the figure; no rubble, no plates.'],
     ['7 A foot', 'The nearest stone tops out under half height in 46 of 52 (ch. 8).', 'The front row is short, starts at the cut end, and its stones are wedges.', 'frontLen, toe', 'front row 0.4–0.6 of the length; toe top ÷ foot 0.75–0.85', 'It is the lowest step of rule 3.', 'The cliff comes down to the ground by steps, at the corner where it is tallest.'],
-    ['8 Heads', 'A third of traced stones rest on others, 64 of 121 across a joint; caps in 17 of 52, half of them at the far end (ch. 7).', 'Three productions: a stone resting set back; an upper block oversailing a set-back wall; caps bridging.', 'rest, oversail, gate', 'resting stone 0.5–0.8 of what it lies on · oversail 0.2–0.38 fh, block 0.35–0.9 thick', 'A resting stone wants level tops under it, so it goes with a plateau.', 'One or two accents per formation.']];
+    ['8 A pile', 'A third of traced stones rest on others, 64 of 121 on two or more; 45 of 52 formations have one; stacks are 0, 1, 2, 3 deep in 7, 18, 20, 7 (ch. 7).', 'Stones laid on the tops, each smaller than what carries it and set back from its exposed sides. They add height: the summit is usually a piled stone.', 'caps, tiers, oversail, gate', 'summit cap 0.5–0.8 of its support, 0.22–0.45 thick · spanning block over 35–70% of each of two stones · oversail 0.2–0.38 fh', 'A spanning block wants level tops, so the two under it are made level first.', 'A pile, not a fence: the mass reads as stacked.'],
+    ['9 Shape follows place', 'Exposed edges are broadly bevelled and touching edges nearly sharp; front stones carry wedge tops; some pillars are many-sided (ch. 3, 6). By eye.', 'Bevel per edge, chamfer per corner, batter per face, set by exposure and role.', 'bevel, shapes', 'exposed edge 1–1.5 × bevel, touching 0.25–0.45 × · wedge top 20–35° on three front stones in five · front batter 0.1–0.25 of the height', 'One stone in six carries a shoulder, made as a second small box on its top.', 'Stones that look worked by their neighbours, not stamped from one die.']];
   const R = $('#gr-rules'); for (const [name, obs, abs, par, ran, inter, cons] of rules) R.append(h('div', { class: 'rule' }, h('h3', { text: name }), h('div', { class: 'chain' }, ...[['Seen', obs], ['Abstraction', abs], ['Numbers', `<code>${par}</code>`], ['Range', ran], ['Meets', inter], ['Gives', cons]].map(([k, v]) => h('div', {}, h('span', { text: k }), h('span', { html: v }))))));
-  const G = $('#gr-cls'); for (const [k, name, sd] of [['pillars', 'Pillars', 13], ['wall', 'Plateau wall', 46], ['blocks', 'Blocks', 40], ['leaners', 'Fins', 39], ['ramp', 'Dipping beds', 6], ['courses', 'Courses', 11], ['gates', 'Gates', 26]]) G.append(still(formMeshes(formation(drawParams(sd, k))), { w: 240, h: 210, tag: name }));
-  /* the stair two ways */
-  const st = formation({ preset: 'courses', seed: 5, rows: 3, topLen: 1 }), sm = formMeshes(st), O = $('#gr-open');
-  const lay = []; { const rws = st.rows; rws.forEach((r, i) => { const c = r.cols[0], below = i ? rws[i - 1].cols[0].h : 0; lay.push(stoneMesh({ w: r.len - .012, dp: (PLATE - r.d0) - .012, h: c.h - below, a: r.len / 2, d: r.d0 + (PLATE - r.d0) / 2, z: below, bevel: .16, bevelB: 0, taperA: 1, taperD: 1, jit: .015, seed: 5 + i })); }); }
-  O.append(still(sm, { w: 300, h: 260, tag: 'columns' }), still(sm, { w: 300, h: 260, tag: 'columns, rows pulled apart', shift: (t) => [0, -(st.rows.length - 1 - t.o.col.row.i) * .22, 0], centre: [PLATE / 2, PLATE / 2 - .2, .7], fov: 16.5 }), still(lay, { w: 300, h: 260, tag: 'slabs on slabs' }));
+  const G = $('#gr-cls'); for (const [k, name, sd] of [['pillars', 'Pillars', 13], ['wall', 'Plateau wall', 46], ['blocks', 'Blocks', 40], ['leaners', 'Leaning slabs', 38], ['ramp', 'Dipping beds', 6], ['courses', 'Courses', 11], ['gates', 'Gates', 26]]) G.append(still(formMeshes(formation(drawParams(sd, k))), { w: 240, h: 210, tag: name }));
 }
 
 /* ---------- chapter 12 ---------- */
@@ -1498,7 +1542,7 @@ const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0
 {
   const live = $('#g-live'), FIG = [1.25, .45];
   const CLS = [['pillars', 'Pillars'], ['wall', 'Plateau wall'], ['blocks', 'Blocks in tiers'], ['leaners', 'Leaning set'], ['ramp', 'Dipping beds'], ['courses', 'Courses'], ['gates', 'Gates']];
-  const defs = [['height', 'Height', 1, 2.1, .01], ['length', 'Length', .8, 1.7, .01], ['depth', 'Depth', .5, 1.2, .01], ['nA', 'Stones along', 1, 4, 1], ['rows', 'Rows', 1, 5, 1], ['fall', 'Fall to the far end', 0, .8, .01], ['peak', 'Peak along the cliff', 0, .5, .01], ['front', 'Front row height', .15, 1, .01], ['sizeVar', 'Widths unequal', 0, .7, .01], ['plateau', 'Plateau', 0, 1, 1], ['cleft', 'Cleft', 0, 1, 1], ['rest', 'Resting stones', 0, 2, 1], ['oversail', 'Oversail at the far end', 0, 1, 1], ['tiers', 'Tiers', 0, 3, 1], ['lean', 'Lean of the leaning set, degrees', 0, 32, 1], ['dip', 'Beds dip, degrees', 0, 35, 1], ['bevel', 'Bevel', 0, .4, .01]];
+  const defs = [['height', 'Height', 1, 2.1, .01], ['length', 'Length', .8, 1.7, .01], ['depth', 'Depth', .5, 1.2, .01], ['nA', 'Stones along', 1, 4, 1], ['rows', 'Rows', 1, 5, 1], ['fall', 'Fall to the far end', 0, .8, .01], ['peak', 'Peak along the cliff', 0, .5, .01], ['front', 'Buttress height, share of the wall', .15, 1, .01], ['sizeVar', 'Widths unequal', 0, .7, .01], ['plateau', 'Plateau', 0, 1, 1], ['cleft', 'Cleft', 0, 1, 1], ['caps', 'Stones piled on', 0, 3, 1], ['applied', 'Applied pillar', 0, 1, 1], ['tuck', 'Tucked stone', 0, 1, 1], ['oversail', 'Oversail at the far end', 0, 1, 1], ['tiers', 'Tiers', 0, 4, 1], ['lean', 'Lean of the slabs, degrees', 0, 32, 1], ['dip', 'Beds dip, degrees', 0, 35, 1], ['bevel', 'Bevel', 0, .4, .01]];
   let P = { preset: 'pillars', cls: 'pillars', seed: 7 }, cam = { az: 45, el: 20, dist: 9.6 }, F = null, R3 = null, scene = null, W = 0, H = 0;
   const ctl = $('#g-ctl'), inputs = {};
   const render = () => { if (!R3 || !scene || !W) return; R3.render(scene, cameraFor('ref', W, H, { az: cam.az, el: cam.el, dist: cam.dist, fov: 19, centre: [PLATE / 2, PLATE / 2, .78] })); };
@@ -1509,10 +1553,10 @@ const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0
     const rowBoxes = F.rows.map((r) => stoneMesh(Object.assign({ w: r.len, dp: r.dp - .01, h: Math.max(...r.cols.map((c) => c.h)), a: r.len / 2, d: r.d0 + r.dp / 2, z: 0 }, flat)));
     const colBoxes = F.rows.flatMap((r) => r.cols.map((c) => stoneMesh(Object.assign({ w: c.w - .01, dp: r.dp * (1 - (c.recess || 0)) - .01, h: c.h, a: c.a0 + c.w / 2, d: r.d0 + r.dp * (c.recess || 0) + r.dp * (1 - (c.recess || 0)) / 2, z: 0 }, flat))));
     const cutBoxes = F.stones.map((s0) => stoneMesh(Object.assign({}, s0, flat2)));
-    const a = still([], o); { const d0 = PLATE - q.depth, e = (aa, t) => q.height * lerp(q.front, 1, t) * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); const fp = [[0, d0, 0], [0, PLATE, 0], [q.length, PLATE, 0], [q.length, d0, 0]].map((p) => a.proj(...p)), en = [[0, d0, e(0, 0)], [0, PLATE, e(0, 1)], [q.length, PLATE, e(q.length, 1)], [q.length, d0, e(q.length, 0)]].map((p) => a.proj(...p));
+    const a = still([], o); { const d0 = PLATE - q.depth, e = (aa, t) => q.height * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); const fp = [[0, d0, 0], [0, PLATE, 0], [q.length, PLATE, 0], [q.length, d0, 0]].map((p) => a.proj(...p)), en = [[0, d0, e(0, 0)], [0, PLATE, e(0, 1)], [q.length, PLATE, e(q.length, 1)], [q.length, d0, e(q.length, 0)]].map((p) => a.proj(...p));
       a.svg.append(s('polygon', { points: pts(fp), fill: 'var(--a-out)', 'fill-opacity': .25, stroke: 'var(--a-out)', 'stroke-width': 2 }), s('polygon', { points: pts(en), fill: 'var(--a-top)', 'fill-opacity': .2, stroke: 'var(--a-top)', 'stroke-width': 2, 'stroke-dasharray': '5 4' }), ...fp.map((p, i) => s('line', { x1: p[0], y1: p[1], x2: en[i][0], y2: en[i][1], stroke: 'var(--a-top)', 'stroke-width': 1 }))); }
     st.replaceChildren(a, still(rowBoxes, o), still(colBoxes, o), still(cutBoxes, o), still(ms, o));
-    [...st.children].forEach((c, i) => c.append(h('span', { class: 'tag', text: ['1 footprint, envelope', '2 rows', '3 columns', '4 productions, lean', '5 shaped'][i] })));
+    [...st.children].forEach((c, i) => c.append(h('span', { class: 'tag', text: ['1 footprint, envelope', '2 rows', '3 ground stones', '4 the pile, plain', '5 shaped'][i] })));
     const m = HAVE3 ? seen(F) : null; if (m) $('#g-read').innerHTML = `<span class="ev p">Proposed</span> Seed ${P.seed} · ${m.n} stones · as seen ${fmt(m.W)} fh wide, ${fmt(m.H)} fh high (references: 1.3–2.1 and 1.8–2.3).`;
     const bs = $('#g-beside'), refs = P.preset === 'wall' ? ['H', 'T10', 'T12', 'T20'] : P.preset === 'ramp' ? ['N', 'G', 'S14', 'S7'] : P.preset === 'leaners' ? ['P', 'L', 'T9', 'T19'] : ALL.filter((id) => CL[id].class === F.q.cls).slice(0, 4);
     bs.replaceChildren(...[1, 2, 3, 4].map((k) => still(formMeshes(formation(Object.assign({}, P, { seed: P.seed * 13 + k }))), { w: 300, h: 260, figure: FIG })), ...refs.map((id) => cellView(id, { stones: false })));
@@ -1555,7 +1599,10 @@ const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0
       ['Far end ÷ highest point, as seen (median)', md(RC.map((c) => c.farend)), md(C.map((c) => c.farend))],
       ['Widest ÷ narrowest stone in a formation (median)', md(RC.map((c) => c.wratio)), md(C.map((c) => c.wratio))],
       ['Formations with a cap or oversailing block', pc(RC.filter((c) => c.kinds.cap).length, 52), pc(C.filter((c) => c.jut).length, 200)],
-      ['Most stones in a formation', Math.max(...RC.map((c) => c.n)), Math.max(...C.map((c) => c.n))]];
+      ['Most stones in a formation', Math.max(...RC.map((c) => c.n)), Math.max(...C.map((c) => c.n))],
+      ['Stones resting on another stone', pc(RC.reduce((a, c) => a + c.resting, 0), STONES.length), pc(C.reduce((a, c) => a + c.rest, 0), C.reduce((a, c) => a + c.real, 0))],
+      ['Stones bearing on two or more', pc(RC.reduce((a, c) => a + c.ontwo, 0), STONES.length), pc(C.reduce((a, c) => a + c.two, 0), C.reduce((a, c) => a + c.real, 0))],
+      ...[0, 1, 2, 3, 4].map((k) => ['Formations stacked ' + (k ? k + ' deep at most' : 'not at all'), pc(RC.filter((c) => c.deep === k).length, 52), pc(C.filter((c) => c.deep === k).length, 200)])];
     $('#g-rel').append(h('tr', {}, ['Relation, measured the same way on both', 'References', 'Generator'].map((t, i) => h('th', { class: i ? 'num' : null, text: t }))), ...rows.map((r) => h('tr', {}, r.map((t, i) => h('td', { class: i ? 'num' : null, text: t }))))); }
 }
 

@@ -135,6 +135,14 @@ for cid, c in T.items():
         x = mx0 + (i + .5) / 48 * (mx1 - mx0)
         cut = mass.intersection(LineString([(x, my0 - 1), (x, my1 + 1)]))
         low.append(0 if cut.is_empty else (my1 - cut.bounds[3]) / fh)
+    # how deep each stone is stacked: 0 on the plate (or on a hidden support), else one more than the deepest stone it rests on
+    dmap = {}
+    def depth_of(sid, seen=()):
+        if sid in dmap: return dmap[sid]
+        rs = [x for x in restmap.get(sid, []) if x != '?' and x not in seen]
+        dmap[sid] = (1 + max(depth_of(x, seen + (sid,)) for x in rs)) if rs else (1 if '?' in restmap.get(sid, []) else 0)
+        return dmap[sid]
+    for r_ in rec: r_['depth'] = depth_of(r_['id'])
     areas = sorted((r['area'] for r in rec), reverse=True)
     nearest = min(rec, key=lambda r: r['boty'])                 # the stone whose foot is lowest in the picture
     leans = [r['lean'] for r in rec if r['lean'] is not None]; ws_ = [r['wb'] for r in rec]
@@ -147,6 +155,7 @@ for cid, c in T.items():
                       fill=mass.area / ((mx1 - mx0) * (my1 - my0)), sky=[round(v, 3) for v in sky], low=[round(v, 3) for v in low],
                       peak=(int(np.argmax(sky)) + .5) / 48, cx=(mass.centroid.x - mx0) / (mx1 - mx0), cy=(my1 - mass.centroid.y) / (my1 - my0),
                       big=areas[0] / sum(areas), big2=(areas[1] / areas[0] if len(areas) > 1 else None),
+                      deep=max(r['depth'] for r in rec), resting=sum(1 for r in rec if r['nrest'] > 0), ontwo=sum(1 for r in rec if r['nrest'] >= 2),
                       footshare=nearest['topy'] / ((my1 - my0) / fh), footid=nearest['id'], tiltrange=(max(leans) - min(leans)) if leans else 0.0, wratio=max(ws_) / min(ws_),
                       farend=float(np.mean(sky[:4]) / max(sky)),
                       tilt=float(np.median([r['lean'] for r in rec if r['lean'] is not None] or [0])),

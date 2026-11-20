@@ -29,32 +29,37 @@ function hull(P) {
 /* A stone's defaults: every stone on the page is this object with some numbers changed. */
 const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   bevel: .16,       /* width of the bevel round the top, as a share of the stone's shortest side */
+  bevelT: null,     /* the same, edge by edge: [cut-end side, far side, front, back]; an exposed edge is wide, an edge against a neighbour nearly sharp */
   bevelV: null,     /* width of the chamfer on the four upright edges (the same as bevel when not given) */
-  bevelB: 0,        /* the same for the bottom edges (0 for a stone that stands on the ground) */
+  bevelVC: null,    /* the same, corner by corner: [front cut-end, front far, back cut-end, back far]; two wide front ones make a many-sided pillar, one a prow */
+  bevelB: 0,        /* the bevel on the bottom edges (0 for a stone that stands on the ground or lies tight on another) */
   taperA: 1, taperD: 1,   /* the top's size as a share of the bottom's, along and across */
-  dipA: 0, dipD: 0,       /* the top's slope along and across (rise per run) */
+  batter: null,           /* one-sided batter: how far each face has moved in at the top, fh: [cut-end side, far side, front, back] */
+  dipA: 0, dipD: 0,       /* the top's slope along and across (rise per run); a big one makes a wedge top */
   botA: 0,                /* the bottom's slope along (for beds that dip) */
   leanA: 0, leanD: 0,     /* shear: how far the top is carried along and back, per unit height */
   cut: 0, cutAt: 0,       /* one top corner knocked off: its size as a share of the shortest side, and which corner (0-3) */
   jit: 0, seed: 1, yaw: 0 };
 function stonePoints(o) {
   const q = Object.assign({}, STONE, o), r = rng(q.seed * 7919 + 13), m = Math.min(q.w, q.dp, q.h);
-  const bt = q.bevel * m, bv = (q.bevelV == null ? q.bevel : q.bevelV) * m, bb = q.bevelB * m, P = []; let ci = 0;
+  const bT = q.bevelT || [q.bevel, q.bevel, q.bevel, q.bevel], bvAll = (q.bevelV == null ? q.bevel : q.bevelV), bb = q.bevelB * m, P = [];
   for (const sz of [-1, 1]) for (const sa of [-1, 1]) for (const sd of [-1, 1]) {
-    const top = sz > 0, be = top ? bt : bb;
-    let ca = bv, cd = bv, cz = be;
-    if (top && q.cut > 0 && ((sa > 0 ? 1 : 0) + (sd > 0 ? 2 : 0)) === q.cutAt) { ca = Math.min(q.w * .45, q.cut * m); cd = Math.min(q.dp * .45, q.cut * m); cz = Math.min(q.h * .45, q.cut * m * .8); }
+    const top = sz > 0, ci = (sa > 0 ? 1 : 0) + (sd > 0 ? 2 : 0), cv = (q.bevelVC ? q.bevelVC[ci] : bvAll) * Math.min(q.w, q.dp);
+    /* the two top edges that meet at this corner: one on the side face (a), one on the front or back face (d) */
+    let ea = top ? Math.min(bT[sa < 0 ? 0 : 1] * m, q.w * .46) : bb, ed = top ? Math.min(bT[sd < 0 ? 2 : 3] * m, q.dp * .62) : bb, ca = cv, cd = cv;
+    if (top && q.cut > 0 && ci === q.cutAt) { ca = Math.min(q.w * .45, q.cut * m); cd = Math.min(q.dp * .45, q.cut * m); ea = Math.max(ea, Math.min(q.h * .4, q.cut * m * .8)); ed = Math.max(ed, ea); }
+    const za = Math.min(ea * (ea > .22 * m ? .8 : 1), q.h * .55), zd = Math.min(ed * (ed > .22 * m ? .8 : 1), q.h * .55);
     const ja = (r() - .5) * 2 * q.jit * m, jd = (r() - .5) * 2 * q.jit * m, jz = (r() - .5) * 2 * q.jit * m * (top ? 1 : 0);
     const A = sa * q.w / 2 + ja, D = sd * q.dp / 2 + jd, Z = sz * q.h / 2 + jz;
-    /* each corner: two points where the upright chamfer meets the side faces, and (on a bevelled end) two more on the end face, set in by the bevel */
-    const three = [[A, D - sd * cd, Z - sz * cz], [A - sa * ca, D, Z - sz * cz]];
-    if (cz > 0) three.push([A - sa * cz, D - sd * (cd + cz * .41), Z], [A - sa * (ca + cz * .41), D - sd * cz, Z]);
-    else { three[0][2] = Z; three[1][2] = Z; }
-    for (const p of three) P.push(p); ci++;
+    /* each corner: a point on each of the two faces under its bevel, and (on a bevelled end) two on the end face, set in by the bevels */
+    const pts3 = [[A, D - sd * cd, Z - sz * za], [A - sa * ca, D, Z - sz * zd]];
+    if (ea > 0 || ed > 0) pts3.push([A - sa * ea, D - sd * (ed + cd * .6), Z], [A - sa * (ea + ca * .6), D - sd * ed, Z]);
+    for (const p of pts3) P.push(p);
   }
-  const c = Math.cos(q.yaw), s2 = Math.sin(q.yaw);
+  const c = Math.cos(q.yaw), s2 = Math.sin(q.yaw), bt = q.batter || [0, 0, 0, 0];
+  const ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2;
   return P.map(([a, d, z]) => { const t = z / q.h + .5;
-    a *= lerp(1, q.taperA, t); d *= lerp(1, q.taperD, t);
+    a = a * lerp(1, ta, t) + sa0 * t; d = d * lerp(1, tdp, t) + sd0 * t;
     z += t * (q.dipA * a + q.dipD * d) + (1 - t) * q.botA * a;
     const zz = z + q.h / 2; a += q.leanA * zz; d += q.leanD * zz;
     return [q.a + a * c - d * s2, q.d + a * s2 + d * c, q.z + zz]; });
