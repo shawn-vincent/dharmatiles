@@ -1,4 +1,4 @@
-<title>Fine Surface</title>
+<title>Scale</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
 <style>
@@ -42,14 +42,14 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 
 <main>
   <header>
-    <h1>Fine Surface</h1>
+    <h1>Scale</h1>
     <p class="lede">A stone texture 0.1 to 0.5 mm deep: low tilted facets, shallow overlapping flakes with crisp stepped edges, raised specks and grain. The reference, then the texture cut into the standard block at true scale.</p>
   </header>
 
   <p class="fault" id="fault" role="alert" hidden></p>
 
   <figure class="ref">
-    <img src="img/fine-ref.png" width="1586" height="992" alt="The reference sheet: a grey stone block whose faces are covered in fine, shallow, overlapping chips; an extreme close-up 5 to 10 mm across showing scalloped step edges with grainy plateaus between them; the same surface under top, raking and soft light; a cross-section 0.1 to 0.5 mm deep; and labels for a small chip, a tilted facet, a fine seam and a pit">
+    <img src="img/scale-ref.png" width="1586" height="992" alt="The reference sheet: a grey stone block whose faces are covered in fine, shallow, overlapping chips; an extreme close-up 5 to 10 mm across showing scalloped step edges with grainy plateaus between them; the same surface under top, raking and soft light; a cross-section 0.1 to 0.5 mm deep; and labels for a small chip, a tilted facet, a fine seam and a pit">
     <figcaption>The reference.</figcaption>
   </figure>
 
@@ -61,7 +61,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
         <button type="button" id="cam-close" aria-pressed="false">Close-up, 8 mm across</button>
       </div>
     </div>
-    <div class="box" id="view" role="img" aria-label="The block with the fine surface texture, live in 3D"><div class="wait" id="wait">Building the surface…</div></div>
+    <div class="box" id="view" role="img" aria-label="The block with the scale texture, live in 3D"><div class="wait" id="wait">Building the surface…</div></div>
     <p class="stat" id="stat">Drag to turn, pinch to zoom; click the view, then drag two fingers to pan.</p>
   </section>
 </main>
@@ -86,7 +86,7 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
   const CAM = { az: -33.75, el: 22.87, dist: 304.8, fov: 8, target: [-4.3, -6.66, 10.53] };
 
   /* ---- the texture's settings, all in mm at true size ---- */
-  const FINE = {
+  const SCALE = {
     seed: 11,
     grid: .08,               /* the block's grid */
     patch: { a: [.39, .73], b: [.2, .8], sub: 4 },   /* the part of the top face (along, across) drawn on a grid `sub` times finer, for the close-up */
@@ -336,14 +336,14 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
   /* build once the page has painted, and say how long it took */
   setTimeout(() => {
     try {
-      const t0 = performance.now(), B = build(FINE), t1 = performance.now();
+      const t0 = performance.now(), B = build(SCALE), t1 = performance.now();
       const stone = new T.MeshStandardMaterial({ color: 0xc4c4c8, roughness: 1, metalness: 0 });
       for (const part of [B, B.fine]) { const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(part.pos, 3)); geo.setIndex(new T.BufferAttribute(part.index, 1)); geo.computeVertexNormals(); scene.add(new T.Mesh(geo, stone)); }
       const t2 = performance.now();
       document.getElementById('wait').hidden = true;
       document.getElementById('stat').innerHTML = 'Built in <b>' + fmt((t2 - t0) / 1000, 2) + ' s</b> (surface ' + fmt((t1 - t0) / 1000, 2) + ' s, normals ' + fmt((t2 - t1) / 1000, 2) + ' s): ' +
-        fmt(B.points) + ' points on a ' + FINE.grid + ' mm grid and ' + fmt(B.fine.points) + ' on a ' + fmt(B.fine.step, 3) + ' mm patch of the top face for the close-up, ' + fmt(B.triangles) + ' triangles, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.pits) + ' raised specks; deepest cut ' + fmt(B.deepest, 2) + ' mm. Drag to turn, pinch to zoom; click the view, then drag two fingers to pan.';
-      window.fineBuilt = { marks: B.marks.map((m, i) => m[0] + ' ' + Math.round(m[1] - (i ? B.marks[i - 1][1] : t0))).join(', '), normals: Math.round(t2 - t1), flakes: B.flakes, seconds: (t2 - t0) / 1000, deepest: B.deepest, points: B.points };
+        fmt(B.points) + ' points on a ' + SCALE.grid + ' mm grid and ' + fmt(B.fine.points) + ' on a ' + fmt(B.fine.step, 3) + ' mm patch of the top face for the close-up, ' + fmt(B.triangles) + ' triangles, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.pits) + ' raised specks; deepest cut ' + fmt(B.deepest, 2) + ' mm. Drag to turn, pinch to zoom; click the view, then drag two fingers to pan.';
+      window.scaleBuilt = { marks: B.marks.map((m, i) => m[0] + ' ' + Math.round(m[1] - (i ? B.marks[i - 1][1] : t0))).join(', '), normals: Math.round(t2 - t1), flakes: B.flakes, seconds: (t2 - t0) / 1000, deepest: B.deepest, points: B.points };
       draw();
     } catch (e) { report('building the surface', e); }
   }, 30);
