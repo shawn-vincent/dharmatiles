@@ -44,6 +44,8 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
 .shapes label:has(input:checked){border-color:var(--accent);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .shapes label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .bar input{width:100%;min-width:0;accent-color:var(--accent)}
+.bar .switch{grid-column:2/-1;display:flex;gap:10px;align-items:baseline;font-weight:400;font-size:13px;color:var(--muted);cursor:pointer}
+.bar .switch input{width:auto;flex:none;transform:translateY(2px)}
 .bar output{font:13px var(--mono);font-variant-numeric:tabular-nums;color:var(--fg);text-align:right}
 .bar .help{grid-column:1/-1;font-size:12.5px;color:var(--muted)}
 .bar .help .num{color:var(--fg)}
@@ -104,8 +106,9 @@ html{scroll-behavior:smooth}
     </div>
     <label for="width">Flake width</label><input type="range" id="width" min="2" max="5" step="0.05"><output id="width-mm" for="width"></output>
     <label for="depth">Depth</label><input type="range" id="depth" min="0" max="1" step="0.01"><output id="depth-mm" for="depth"></output>
+    <label for="scale">Scale</label><label class="switch"><input type="checkbox" id="scale"><span>The Scale texture on the flats inside each flake, along the same grain; it fades out toward the crests.</span></label>
     <p class="fault" id="fault" role="alert" hidden></p>
-    <p class="help">Drag a view to turn it (on a phone, tap it first); pinch to zoom; double-click to put it back. Built in <span class="num" id="t-build">–</span>.</p>
+    <p class="help">Drag a view to turn it (on a phone, tap it first); pinch to zoom; double-click to put it back. Built in <span class="num" id="t-build">–</span>. <span id="t-scale"></span></p>
   </div>
 
   <ol class="steps" aria-label="The steps">
@@ -248,8 +251,10 @@ html{scroll-behavior:smooth}
     sharp: .15,           /* 0: a flake curves as the sag does; more steepens its walls just below the crest */
     speck: 2, sliver: .6, /* a stray piece of a flake smaller than this many mm², or thinner than this many mm, joins its neighbour */
     coarse: .42,          /* the grid step of a first, rough solve, which the fine grid then finishes */
-    sweeps: { coarse: 120, fine: 15 }   /* passes of the relaxation on each grid */
+    sweeps: { coarse: 120, fine: 15 },   /* passes of the relaxation on each grid */
+    flats: [.15, .6]      /* Scale, when it is on, is laid on a flake's floor: none of it where the flake is shallower than the first share of its full depth, all of it past the second */
   };
+  let SCALED = false;   /* the Scale switch */
   const along = () => FEEL.width / W0;   /* how much bigger than at W0 the texture is along the surface */
   const T = THREE;
 
@@ -318,6 +323,121 @@ html{scroll-behavior:smooth}
   };
   /* a seeded stream (mulberry32): one for the flakes, one of its own for each ridge */
   const stream = (k) => { let a = k >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+
+  /* ==== Scale, the texture. One block of code, the same byte for byte in design/scale/out.html (its source) and in
+     design/rock-close/out.html (Flakes Up Close, which lays it on the flats inside its flakes). Change it in the source, then
+     paste it over the other. ====
+     A face is a height map: a grid of depths below the face, in the face's own flat frame (x along, y across, mm). Each feature
+     (a flake, a speck) is stamped onto the grid places its own box covers and nowhere else, so the cost is the number of points
+     times a small constant, with no search. A map is { ni, nj, h (its step), x0, y0, seed, cut, stage, rag }. */
+  const Scale = (() => {
+    /* the settings, all in mm at true size */
+    const settings = {
+      /* flakes, the larger size first: r the radius, D the thickness at the thick edge, cover how many times they cover the surface,
+         wide how much wider than long a flake is, spread how far (degrees) its direction strays */
+      flakes: [
+        { r: [1.6, 3.0], D: [.04, .11], cover: 1.6, wide: [1.0, 1.5], spread: 45 },
+        { r: [.35, .95], D: [.05, .13], cover: 2.2, wide: [1.3, 2.2], spread: 30 }
+      ],
+      ragged: [{ by: .3, wave: 1.1 }, { by: .16, wave: .33 }],   /* a flake's boundary is a circle pushed in and out by two noises of the place, each by up to `by` mm at its wave for a flake of 0.8 mm (a smaller or larger one takes its share, up to twice) */
+      lip: .55,                /* this share of a flake's thickness is gained close to its thick edge, which turns the edge up into a lip */
+      wall: .05,               /* a flake's edge is a wall this wide (mm), however tall: the narrowest a grid carries without hatching is about 2.5 of its steps (0.02 mm steps here), so a coarser grid widens it to walls * its step */
+      walls: 1.5,
+      meet: .6,                /* within this many mm of a map's sides its texture fades out to one level, so two faces meet at their shared edge */
+      specks: { per: 2.2, r: [.05, .125], high: [.02, .06] },   /* raised grains per mm², their radius and height: the one place the texture adds material */
+      grain: .008              /* sand: every point is cut or raised by up to this much, at random */
+    };
+    /* value noise in 2D over a whole grid at once: amp * (-1..1) added to every place of arr. A row's lattice values are blended
+       once for the row, so a point costs one blend more. */
+    function lattice(ix, iy, k) { let h = Math.imul(ix, 0x27d4eb2d) ^ Math.imul(iy, 0x165667b1) ^ k; h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d); return ((h ^ (h >>> 13)) >>> 0) / 2147483648 - 1; }
+    function noise(arr, ni, nj, h, x0, y0, wave, amp, seed) {
+      const s = h / wave, xa = x0 / wave, first = Math.floor(xa), col = new Float32Array(Math.floor(xa + (ni - 1) * s) - first + 2);
+      for (let j = 0, k = 0; j < nj; j++) { const y = (y0 + j * h) / wave, iy = Math.floor(y); let fy = y - iy; fy = fy * fy * (3 - 2 * fy);
+        for (let c = 0; c < col.length; c++) { const a = lattice(first + c, iy, seed); col[c] = amp * (a + (lattice(first + c, iy + 1, seed) - a) * fy); }
+        for (let i = 0; i < ni; i++, k++) { const x = xa + i * s, ix = Math.floor(x), c = ix - first; let fx = x - ix; fx = fx * fx * (3 - 2 * fx); arr[k] += col[c] + (col[c + 1] - col[c]) * fx; } }
+    }
+    /* a map of ni by nj places, in `room` (arrays at least that long, used again) or its own. The ragged noise is held to HELD of
+       its octaves' sum, which it seldom passes: that bounds how far a flake reaches. */
+    const HELD = .6;
+    function map(ni, nj, h, x0, y0, seed, F, room) {
+      const n = ni * nj, M = room || { cut: new Float32Array(n), stage: new Float32Array(n), rag: new Float32Array(n) }, rag = M.rag, most = HELD * F.ragged.reduce((s, o) => s + o.by, 0);
+      if (room) { M.cut.fill(0, 0, n); M.stage.fill(0, 0, n); rag.fill(0, 0, n); }
+      F.ragged.forEach((o, e) => noise(rag, ni, nj, h, x0, y0, o.wave, o.by, seed + 977 * e));
+      for (let k = 0; k < n; k++) { const v = rag[k]; if (v > most) rag[k] = most; else if (v < -most) rag[k] = -most; }
+      return { ni: ni, nj: nj, h: h, x0: x0, y0: y0, seed: seed, cut: M.cut, stage: M.stage, rag: rag, ragMost: most, wide: Math.max(F.wall, F.walls * h) };
+    }
+    /* a face's features, for a face Lx by Ly mm whose flakes' thick edges point `way` (an angle in its frame): the flakes of each
+       size (fl holds FL numbers a flake: x, y, the way its thick edge points (cos, sin), r, D, 1 / wide, and its share of the
+       raggedness; cap is the size's thickest) and the specks (sp holds x, y, r, height each). rnd is the caller's stream. */
+    const FL = 8, DEG = Math.PI / 180;
+    function features(F, Lx, Ly, way, rnd) {
+      const range = (r) => r[0] + (r[1] - r[0]) * rnd();
+      const flakes = F.flakes.map((sc) => { const rm = (sc.r[0] + sc.r[1]) / 2, wm = (sc.wide[0] + sc.wide[1]) / 2, pad = sc.r[1] * wm;
+        const count = Math.round(sc.cover * (Lx + 2 * pad) * (Ly + 2 * pad) / (Math.PI * rm * rm * wm)), fl = new Float32Array(count * FL);
+        for (let k = 0, o = 0; k < count; k++, o += FL) { const r = range(sc.r), turn = way + (rnd() + rnd() + rnd() - 1.5) * 1.3 * sc.spread * DEG;
+          fl[o] = -pad + rnd() * (Lx + 2 * pad); fl[o + 1] = -pad + rnd() * (Ly + 2 * pad); fl[o + 2] = Math.cos(turn); fl[o + 3] = Math.sin(turn); fl[o + 4] = r;
+          fl[o + 5] = (sc.D[0] + (sc.D[1] - sc.D[0]) * rnd()) * (.55 + .45 * r / sc.r[1]); fl[o + 6] = 1 / range(sc.wide); fl[o + 7] = Math.min(2, r / .8); }
+        return { fl: fl, count: count, cap: sc.D[1] }; });
+      const count = Math.round(F.specks.per * Lx * Ly), sp = new Float32Array(count * 4);
+      for (let k = 0, o = 0; k < count; k++, o += 4) { const r = range(F.specks.r); sp[o] = rnd() * Lx; sp[o + 1] = rnd() * Ly; sp[o + 2] = r; sp[o + 3] = range(F.specks.high) * (r / F.specks.r[1]); }
+      return { flakes: flakes, specks: sp, speckCount: count };
+    }
+    /* One size of flakes onto one map. A flake is a gently tilted plate inside a ragged round boundary (wider than long), thin at
+       its feathered side and D thick at its other, where it ends in a wall (of the map's width) down to whatever lies beside it.
+       Where flakes overlap the tallest shows, so their edges are scalloped arcs that meet in cusps; the surface is cut from the
+       size's cap down to them. Each row of a flake's box visits only the places inside the flake's reach. */
+    function stamp(M, fl, count, cap, F) {
+      const ragMost = M.ragMost, ni = M.ni, nj = M.nj, h = M.h, stage = M.stage, rag = M.rag, W = M.wide, lip = F.lip;
+      for (let f = 0, o = 0; f < count; f++, o += FL) {
+        const cx = fl[o] - M.x0, cy = fl[o + 1] - M.y0, ax = fl[o + 2], ay = fl[o + 3], r = fl[o + 4], D = fl[o + 5], iw = fl[o + 6], sc = fl[o + 7], ir = 1 / r;
+        const slope = D / W, far = r + sc * ragMost + W, far2 = far * far, fy = far * Math.sqrt(ay * ay + ax * ax / (iw * iw));
+        const j0 = Math.max(0, Math.ceil((cy - fy) / h)), j1 = Math.min(nj - 1, Math.floor((cy + fy) / h)), du = h * ax, dw = -h * ay * iw, A = du * du + dw * dw;
+        for (let j = j0; j <= j1; j++) {
+          const dy = j * h - cy, u0 = dy * ay - cx * ax, w0 = (dy * ax + cx * ay) * iw, B = u0 * du + w0 * dw, disc = B * B - A * (u0 * u0 + w0 * w0 - far2); if (disc < 0) continue;
+          const sq = Math.sqrt(disc), i0 = Math.max(0, Math.ceil((-B - sq) / A)), i1 = Math.min(ni - 1, Math.floor((-B + sq) / A));
+          let u = u0 + i0 * du, w = w0 + i0 * dw;
+          for (let i = i0, k = j * ni + i0; i <= i1; i++, k++, u += du, w += dw) {
+            let a = (u * ir + 1) * .5; a = a < 0 ? 0 : a > 1 ? 1 : a; a = a * a * (3 - 2 * a); a *= 1 - lip + lip * a * a * a;
+            let d = D * a; const now = stage[k]; if (d <= now) continue;   /* it cannot show here: the plate itself is under what stands */
+            const t = Math.sqrt(u * u + w * w) - r - sc * rag[k];
+            if (t > 0) { d -= slope * t; if (d <= now) continue; }
+            stage[k] = d;
+          }
+        }
+      }
+      const cut = M.cut; for (let k = 0, n = ni * nj; k < n; k++) { const s = stage[k]; if (s < cap) cut[k] += cap - s; stage[k] = 0; }
+    }
+    /* raised specks onto one map */
+    function sprinkle(M, sp, count) {
+      const ni = M.ni, nj = M.nj, h = M.h, cut = M.cut;
+      for (let s = 0, o = 0; s < count; s++, o += 4) { const cx = sp[o] - M.x0, cy = sp[o + 1] - M.y0, r = sp[o + 2], high = sp[o + 3], ir = 1 / (r * r);
+        const i0 = Math.max(0, Math.ceil((cx - r) / h)), i1 = Math.min(ni - 1, Math.floor((cx + r) / h)), j0 = Math.max(0, Math.ceil((cy - r) / h)), j1 = Math.min(nj - 1, Math.floor((cy + r) / h));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const dx = i * h - cx, dy = j * h - cy, m = 1 - (dx * dx + dy * dy) * ir; if (m > 0) cut[j * ni + i] -= high * m * m; } }
+    }
+    /* sand onto one map: each place by its own random share of F.grain */
+    function sand(M, F) {
+      const cut = M.cut, seed = M.seed, grain = F.grain / 2147483648;
+      for (let k = 0, n = M.ni * M.nj; k < n; k++) { let h = Math.imul(k + 1, 0x9e3779b1) ^ seed; h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d); cut[k] += grain * ((h ^ (h >>> 13)) >>> 0) - F.grain; }
+    }
+    /* the whole texture onto a map: after it M.cut is each place's depth. lap, if given, is told each part's name as it ends. */
+    function fill(M, feat, F, lap) {
+      for (const s of feat.flakes) stamp(M, s.fl, s.count, s.cap, F); if (lap) lap('flakes');
+      sprinkle(M, feat.specks, feat.speckCount); if (lap) lap('specks');
+      sand(M, F); if (lap) lap('sand');
+    }
+    /* the one level the texture fades out to at a map's sides: half the flakes' caps */
+    const level = (F) => F.flakes.reduce((s, sc) => s + sc.D[1], 0) / 2;
+    /* a map's sides fade to the level, over F.meet mm */
+    function meet(M, F) {
+      const ni = M.ni, nj = M.nj, cut = M.cut, n = Math.min(Math.ceil(F.meet / M.h), ni >> 1, nj >> 1), lv = level(F);
+      const ease = (k, e) => { const w = e / n; cut[k] = lv + (cut[k] - lv) * w * w * (3 - 2 * w); };
+      for (let j = 0; j < nj; j++) { const dj = Math.min(j, nj - 1 - j);
+        if (dj < n) for (let i = 0; i < ni; i++) ease(j * ni + i, Math.min(dj, i, ni - 1 - i));
+        else for (let e = 0; e < n; e++) { ease(j * ni + e, e); ease(j * ni + ni - 1 - e, e); } }
+    }
+    return { settings: settings, map: map, features: features, fill: fill, meet: meet, level: level };
+  })();
+  /* ==== the end of Scale ==== */
 
   /* ---- the pictures' renderer ----
      Every 3D view has its own scene and camera but they all draw through one WebGL renderer, off the page, copied into each view's
@@ -603,18 +723,35 @@ html{scroll-behavior:smooth}
           ix[i + j] = c; } }
       geo.setDrawRange(0, ix.length); geo.index.needsUpdate = true;
     }
+    /* Scale (the switch): each face's fine grid is one of Scale's maps, a place a point, at the fine grid's own step: no points are
+       added. Its flakes lie along the Flakes grain (the same rule as a flake's: the block's length, across it on the ends), their
+       thick edges pointing across it and down, each turned by up to FEEL.grain. Made once for a shape, when first wanted: it
+       depends on neither the width nor the depth. scaleCut is each point's depth, which dig lays on the flats. */
+    const scaleCut = new Float32Array(F.N); let scaleMs = 0, scaleMade = false;
+    function scale() {
+      const t0 = performance.now(), S = Object.assign({}, Scale.settings, { flakes: Scale.settings.flakes.map(sc => Object.assign({}, sc, { spread: FEEL.grain })) });
+      const rnd = stream(FEEL.seed + 2), h = FEEL.fine, most = Math.max(...F.ids.map(I => (I.nx + 1) * (I.ny + 1))), room = { cut: new Float32Array(most), stage: new Float32Array(most), rag: new Float32Array(most) }, q = [0, 0, 0], n = [0, 0, 0];
+      F.ids.forEach((I, f) => { const c = FACES[f], ni = I.nx + 1, nj = I.ny + 1, mid = at(c, .5, .5); inner(mid[0], mid[1], mid[2], q, n);
+        const g = Math.abs(n[0]) > .7 ? [0, 1, 0] : [1, 0, 0], eu = unit(sub(c[1], c[0])), ev = unit(sub(c[3], c[0])), grain = Math.atan2(dot(g, ev), dot(g, eu));
+        const down = (a) => { const cs = Math.cos(a), sn = Math.sin(a); return (cs * eu[1] + sn * ev[1]) * .3 + cs * eu[2] + sn * ev[2]; }, way = down(grain + Math.PI / 2) < down(grain - Math.PI / 2) ? grain + Math.PI / 2 : grain - Math.PI / 2;
+        const M = Scale.map(ni, nj, h, 0, 0, FEEL.seed * 31 + f, S, room); Scale.fill(M, Scale.features(S, I.nx * h, I.ny * h, way, rnd), S); Scale.meet(M, S);
+        for (let k = 0, m = ni * nj; k < m; k++) scaleCut[I.g[k]] = M.cut[k]; });
+      scaleMs = performance.now() - t0; scaleMade = true;
+    }
     /* Step 3, the depth, alone, so the depth control needs nothing else. dk: how much deeper than at D0. Everything the texture does
        to the block goes as dk: the taut skin's departure from the rounded block (its facets over the edges) and each flake's depth;
        so at depth 0 every point is on the rounded block. */
     function dig() {
-      const dk = FEEL.depth / D0, lit = Math.min(1, dk);
+      const dk = FEEL.depth / D0, lit = Math.min(1, dk), f0 = FEEL.flats[0], f1 = FEEL.flats[1] - f0;
       for (let k = 0; k < F.N; k++) {
         const tp = top[piece[k]], wide = 4 * Math.sqrt(tp) * FEEL.fine / along(), full = dk * Math.min(FEEL.deepest, wide * FEEL.depthPerWidth);
         const d = tp > 0 && sag[k] > 0 ? full * Math.pow(sag[k] / tp, 1 - FEEL.sharp) : 0;
         /* a flake darkens toward its bottom, as a hollow gets less of the light around it, and brightens a little at its crests (for
            viewing only; it fades out as the depth goes to zero) */
         const p = full > 0 ? d / full : 0, q = 1 - p, c = 1 + lit * (FEEL.tip * q * q * q * q - FEEL.hollow * p * p);
-        for (let t = 0; t < 3; t++) { const b = fPin[k] ? xyz[3 * k + t] : F.base[3 * k + t]; pos[3 * k + t] = b + dk * (xyz[3 * k + t] - b) - dir[3 * k + t] * d; shade[3 * k + t] = c; }
+        /* Scale, on the flake's floor only: it fades out toward the walls and is nothing at a crest */
+        let s = 0; if (SCALED) { const w = (p - f0) / f1; if (w > 0) s = lit * scaleCut[k] * (w >= 1 ? 1 : w * w * (3 - 2 * w)); }
+        for (let t = 0; t < 3; t++) { const b = fPin[k] ? xyz[3 * k + t] : F.base[3 * k + t]; pos[3 * k + t] = b + dk * (xyz[3 * k + t] - b) - dir[3 * k + t] * (d + s); shade[3 * k + t] = c; }
       }
       for (let i = 0; i < copied; i++) { const c = F.N + i, k = copyOf[i]; for (let t = 0; t < 3; t++) { pos[3 * c + t] = pos[3 * k + t]; shade[3 * c + t] = shade[3 * k + t]; } }
       geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere();
@@ -830,6 +967,7 @@ html{scroll-behavior:smooth}
     function rebuild(work) {
       const t0 = performance.now();
       if (work & 2) { place(); shape(); }
+      if (SCALED && !scaleMade) scale();
       dig(); const ms = performance.now() - t0;
       if (work & 2) guard('the steps\' pictures', showShape)(); guard('the depth pictures', showDepth)(); guard('the 3D views', repaint)();
       return ms;
@@ -840,7 +978,7 @@ html{scroll-behavior:smooth}
       views.forEach(v => { v.box.onpointerenter = v.box.onpointerdown = null; v.img.remove(); v.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); });
       disc.dispose();
     }
-    return { rebuild: rebuild, dispose: dispose, redraw: () => { guard('the 3D views', repaint)(); guard('the ridge diagram', drawRidge)(); guard('the slice', drawSlice)(); }, diagrams: () => { guard('the ridge diagram', drawRidge)(); guard('the slice', drawSlice)(); },
+    return { scaleMs: () => scaleMs, rebuild: rebuild, dispose: dispose, redraw: () => { guard('the 3D views', repaint)(); guard('the ridge diagram', drawRidge)(); guard('the slice', drawSlice)(); }, diagrams: () => { guard('the ridge diagram', drawRidge)(); guard('the slice', drawSlice)(); },
       nextRidge: () => { ridgeAt = (ridgeAt + 1) % Math.max(1, ridges.length); guard('the ridge diagram', drawRidge)(); }, slideTo: guard('the slice', slideTo) };
   }
 
@@ -848,11 +986,12 @@ html{scroll-behavior:smooth}
      The shape makes a new bench; a width change throws the flakes again and remakes everything; a depth change only digs again.
      Changes while a rebuild is waiting are folded into it. */
   let bench = null, want = 0;
-  function run(work) { put('t-build', fmt(bench.rebuild(work)) + ' ms'); }
+  const said = () => put('t-scale', SCALED ? 'Scale is on: it took ' + fmt(bench.scaleMs(), 0) + ' ms, once for this shape.' : 'Scale is off.');
+  function run(work) { put('t-build', fmt(bench.rebuild(work)) + ' ms'); said(); }
   function choose(name) {
     const S = SHAPES[name], t0 = performance.now();
     if (bench) bench.dispose();
-    bench = Bench(S); bench.rebuild(3); put('t-build', fmt(performance.now() - t0) + ' ms');
+    bench = Bench(S); bench.rebuild(3); put('t-build', fmt(performance.now() - t0) + ' ms'); said();
     put('shape-words', S.words);
     put('cap-hero', 'The ' + S.name + ' as built, from the reference\'s camera.');
   }
@@ -861,6 +1000,7 @@ html{scroll-behavior:smooth}
     input.value = FEEL[name]; shown.textContent = (+FEEL[name]).toFixed(2) + ' mm';
     input.addEventListener('input', () => { FEEL[name] = +input.value; shown.textContent = (+input.value).toFixed(2) + ' mm'; if (!want) requestAnimationFrame(redo); want |= work; }); });
   document.querySelectorAll('input[name="shape"]').forEach(r => r.addEventListener('change', () => { if (r.checked) choose(r.value); }));
+  document.getElementById('scale').addEventListener('change', (e) => { SCALED = e.target.checked; if (!want) requestAnimationFrame(redo); want |= 1; });
   document.getElementById('next-ridge').addEventListener('click', () => bench.nextRidge());
   { const cv = document.getElementById('p-slice'); let down = false;
     cv.addEventListener('pointerdown', (e) => { down = true; cv.setPointerCapture(e.pointerId); bench.slideTo(e.clientX); });
