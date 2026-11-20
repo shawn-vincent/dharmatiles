@@ -91,7 +91,7 @@ svg.env{width:100%;height:auto;display:block;background:var(--stage);border-radi
 <div class="views" id="v3"></div></section>
 <section class="step" id="s4"><div class="words"><div class="n">Step 4</div><h2>The pile</h2>
 <p>One rule makes every stone that is not on the ground: <b>lay it where there is most room under the envelope</b>. It goes on one top, or, with chance <b>bond</b>, across the joint between two neighbouring tops, bearing on both. A stone that is laid on one top stands back from it by <b>setback</b> and is shorter by up to twice that, at the cut-end side or the far side. Across a joint, the lower top is first raised to the higher, so the stone lies on both. It is as high as the room is, or, where the room would hold two, about half of it, so stacks come two and three deep. <b>Stack</b> says where a single stone goes: 0 on the lowest top, which fills a course before starting the next; 1 under the highest envelope, which builds a tower.</p>
-<p>Every stone is then checked: <b>it must stand</b>. Its support is the tops directly under its footprint, no more than 0.03 fh below it (a top lower than that is not support; bear() closes only a small gap). It passes if the middle half of its footprint, a quarter of its length and depth either side of its centre, is all over its support, so it stands out past it by a quarter of its length at most; or if it bears under the outer eighth at both ends of its long side, as a lintel or a bridge does, which any stone over a gap must. If not, a short top under it is raised to meet it (by up to 0.25 fh, if nothing is on it); failing that, it is slid the smallest way that passes, then shortened and narrowed; and if nothing passes it is not laid. This one check is what keeps overhangs reasonable. A gate's lintel is laid first, across both piers; if it cannot be, the opening is shut.</p>
+<p>Every stone is then checked: <b>it must stand</b>. Its support is the tops directly under its footprint, as drawn (a leaning slab's top is carried over, and the end stone's far face leans in, so it is narrower at the top than its box), no more than 0.03 fh below it (a top lower than that is not support; bear() closes only a small gap). It passes if the middle half of its footprint, a quarter of its length and depth either side of its centre, is all over its support, so it stands out past it by a quarter of its length at most; or if it bears under the outer eighth at both ends of its long side, as a lintel or a bridge does, which any stone over a gap must. If not, a short top under it is raised to meet it (by up to 0.25 fh, if nothing is on it); failing that, it is slid the smallest way that passes, then shortened and narrowed; and if nothing passes it is not laid. This one check is what keeps overhangs reasonable. A gate's lintel is laid first, across both piers; if it cannot be, the opening is shut.</p>
 <p>The same rule makes the caps of pillars, the stones of a stair, the bonded blocks of a tier set, the beds on a ramp and the lintels of a gate. Laying stops at <b>pile</b> stones, when no top has room, or at eleven stones in all.</p>
 <dl class="facts"><dt>specs added</dt><dd id="f4-n">–</dd><dt>time</dt><dd id="t4">–</dd></dl></div>
 <div class="views" id="v4"></div></section>
@@ -348,7 +348,7 @@ function underside(S, i) {
   const s = S[i], n = SUPPORT.n, drops = []; let sup = 0;
   for (let u = 0; u < n; u++) for (let v = 0; v < n; v++) { const a = s.a + (-.5 + (u + .5) / n) * (s.w - .1), d = s.d + (-.5 + (v + .5) / n) * (s.dp - .1), zb = botZ(s, a);
     let best = -1e9, hit = false;
-    for (let k = 0; k < S.length; k++) { const t = S[k]; if (k === i || t.z > zb + .005 || Math.abs(a - t.a - t.leanA * (zb - t.z)) > t.w / 2 - .01 || Math.abs(d - t.d) > t.dp / 2 - .01) continue; const top = topZ(t, a, d); if (top >= zb - SUPPORT.ok) { hit = true; break; } if (top > best) best = top; }
+    for (let k = 0; k < S.length; k++) { const t = S[k], fr = Math.max(0, Math.min(1, (zb - t.z) / t.h)), bt = t.batter || [0, 0, 0, 0]; if (k === i || t.z > zb + .005 || a - t.a - t.leanA * (zb - t.z) < -t.w / 2 + bt[0] * fr + .01 || a - t.a - t.leanA * (zb - t.z) > t.w / 2 - bt[1] * fr - .01 || Math.abs(d - t.d) > t.dp / 2 - .01) continue; const top = topZ(t, a, d); if (top >= zb - SUPPORT.ok) { hit = true; break; } if (top > best) best = top; }
     if (hit) sup++; else drops.push(best > -1e8 ? zb - best : Infinity); }
   return { frac: sup / (n * n), drops };
 }
@@ -365,7 +365,7 @@ function bear(S, stats) {
    it bears under the outer eighth at both ends of its long side, at a quarter of its width either side of the middle line, as a lintel or a bridge does, which a stone over a gap must. If not, the short top
    under it is raised to meet it (by up to SUPPORT.reach, if nothing is on it); failing that the stone is slid the smallest way that passes, then
    shortened and narrowed; and if nothing passes it is not laid. */
-const extA = (s) => { const sh = s.lean ? -s.lean * s.h : 0; return [s.a0 + sh, s.a0 + s.w + sh]; };
+const extA = (s) => { const sh = s.lean ? -s.lean * s.h : 0; return [s.a0 + sh, s.a0 + s.w + sh - (s.end || 0) * s.h]; };   /* a stone's top, along the cliff: leaning stones are carried over, and the end stone's far face leans in */
 const under = (o, sp) => Math.min(extA(o)[1], sp.a0 + sp.w) - Math.max(extA(o)[0], sp.a0) > .02 && Math.min(o.d0 + o.dp, sp.d0 + sp.dp) - Math.max(o.d0, sp.d0) > .02;
 const supportsOf = (S, sp) => S.filter((o) => o !== sp && !o.void && o.z + o.h <= sp.z + .011 && o.z + o.h >= sp.z - SUPPORT.tol && under(o, sp));
 function holds(sup, sp) {
@@ -394,7 +394,7 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
 function formation(over = {}) {
   const marks = [{ name: 'start', n: 0, t: now() }], lap = (name, n) => marks.push({ name, n, t: now() });
   const q = Object.assign({}, FORM, over), r = rng(q.seed * 104729 + 7), S = [], L = q.length, D = q.depth, dB = PLATE - D, tl = Math.tan(q.lean * Math.PI / 180), td = Math.tan(q.dip * Math.PI / 180), gate = q.opening > 0;
-  const add = (o) => { const s = Object.assign({ z: 0, level: 0, on: 0, rank: 2 }, o); S.push(s); return s; };
+  const add = (o) => { const s = Object.assign({ z: 0, level: 0, on: 0, rank: 2, end: 0 }, o); S.push(s); return s; };
   const env = (x) => { const a = Math.min(x, L), p = q.peak * L, far = a > p ? (a - p) / Math.max(L - p, .01) : (p - a) / Math.max(L, .01) * .5; return q.height * (1 - q.fall * far); };
   const top = (s, a = s.a0 + s.w / 2) => s.z + s.h - td * (a - s.a0 - s.w / 2), room = (s) => env(s.a0 + s.w / 2) - top(s);
 
@@ -405,7 +405,7 @@ function formation(over = {}) {
       if (k && !gate && Math.abs(h - hs[k - 1]) < q.step) h = Math.max(.3, hs[k - 1] + (h >= hs[k - 1] && r() < .5 ? 1 : -1) * q.step * within(r, 1, 1.5));
       hs.push(h); a0 += w; });
     a0 = 0; ws.forEach((w, k) => { const hole = gate && k === 1, pr = hole ? 0 : Math.max(0, Math.min(.38, within(r, 0, .12) + .9 * (Math.max(...hs) - hs[k]), 1.3 * w - D)), recess = hole ? D * within(r, .6, .85) : 0;   /* the lower of two stands the more forward */
-      add({ a0, w, d0: dB - pr + recess, dp: D + pr - recess, h: hs[k], void: hole, lean: tl && k ? tl : 0, end: tl && !k }); a0 += w; }); }
+      add({ a0, w, d0: dB - pr + recess, dp: D + pr - recess, h: hs[k], void: hole, lean: tl && k ? tl : 0, end: tl && !k ? tl : 0 }); a0 += w; }); }
   lap('ground', S.length);
 
   /* ---- 2 front: a chunky buttress hard against the wall, a toe in front of it or beside it, a second block along the wall ---- */
@@ -444,7 +444,7 @@ function formation(over = {}) {
   /* ---- 4 shape: each stone learns which of its edges are exposed, then is shaped by that ---- */
   const near = (u, v) => Math.abs(u - v) < .08;
   /* an edge is exposed when any point along it is untouched by another stone or the ground (7 samples, 0.03 fh tolerance; the back of the plate holds the wall) */
-  const touched = (sp, x, y, z) => z < .03 || y > PLATE - .04 || S.some((o) => o !== sp && x >= o.a0 - .03 && x <= o.a0 + o.w + .03 && y >= o.d0 - .03 && y <= o.d0 + o.dp + .03 && z >= o.z - .03 && z <= o.z + o.h + .03);
+  const touched = (sp, x, y, z) => z < .03 || y > PLATE - .04 || S.some((o) => { const sh = (o.lean ? -o.lean : 0) * (z - o.z), cut = (o.end || 0) * (z - o.z); return o !== sp && x >= o.a0 + sh - .03 && x <= o.a0 + o.w + sh - cut + .03 && y >= o.d0 - .03 && y <= o.d0 + o.dp + .03 && z >= o.z - .03 && z <= o.z + o.h + .03; });
   const exposed = (sp, P, Q) => { let n = 0; for (let i = 0; i < 7; i++) { const t = (i + .5) / 7; if (touched(sp, P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t, P[2] + (Q[2] - P[2]) * t)) n++; } return n < 7; };
   const edgesOf = (sp) => { const a1 = sp.a0 + sp.w, d1 = sp.d0 + sp.dp, z0 = sp.z + .005, z1 = sp.z + sp.h - .005, e = (k) => [[[sp.a0, sp.d0, k], [sp.a0, d1, k]], [[a1, sp.d0, k], [a1, d1, k]], [[sp.a0, sp.d0, k], [a1, sp.d0, k]], [[sp.a0, d1, k], [a1, d1, k]]];
     return { t: e(z1).map(([P, Q]) => exposed(sp, P, Q)), b: e(z0).map(([P, Q]) => exposed(sp, P, Q)), v: [[sp.a0, sp.d0], [a1, sp.d0], [sp.a0, d1], [a1, d1]].map(([x, y]) => exposed(sp, [x, y, z0], [x, y, z1])) }; };
