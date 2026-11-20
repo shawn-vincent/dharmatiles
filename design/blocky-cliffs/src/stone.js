@@ -25,16 +25,21 @@ const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
    pushed out to a true rounded box, cut softly by any shoulder or corner planes, then battered, tilted, sheared and turned. */
 const LAT_T = [0, .27, .58, 1];
 function latAxis(hh, rLo, rHi) { const a = LAT_T.map((t) => -hh + rLo * t), b = LAT_T.map((t) => hh - rHi * t).reverse(), m0 = a[3], m1 = b[0]; return a.concat([m0 + (m1 - m0) / 2], b); }
-function stoneMesh(o) {
+/* what a stone's numbers mean, once: the one place its radii, cuts and batter are worked out (the mesh and the field both read it) */
+function stoneParams(o) {
   const q = Object.assign({}, STONE, o), m = Math.min(q.w, q.dp, q.h), hx = q.w / 2, hy = q.dp / 2, hz = q.h / 2, pl = Math.min(q.w, q.dp);
   const R = Math.max(.002, .07 * q.bevel / .16), rh = Math.min(R, .4 * pl), rT = Math.min(R, .4 * q.h, .4 * pl), rB = Math.max(.002, Math.min(q.level > 0 ? R * .6 : R * .28, .3 * q.h));
-  const X = latAxis(hx, rh, rh), Y = latAxis(hy, rh, rh), Z = latAxis(hz, rB, rT), L = X.length - 1, P = [], id = new Map(), idx = [];
   const bT = q.bevelT || [q.bevel, q.bevel, q.bevel, q.bevel], cuts = [];
   [[0, -1, 0], [1, 1, 0], [2, 0, -1], [3, 0, 1]].forEach(([i, sa, sd]) => { const half = sa ? hx : hy, e = Math.min(bT[i] * m, (sa ? q.w : q.dp) * .46), za = Math.min(e * .8, q.h * .55); if (e < 1.7 * rT) return; const l = Math.hypot(za, e), na = za / l, nz = e / l; cuts.push({ n: [sa * na, sd * na, nz], d: na * (half - e) + nz * hz }); });
   if (q.cut > 0) { const sa = q.cutAt & 1 ? 1 : -1, sd = q.cutAt & 2 ? 1 : -1, l = Math.sqrt(3); cuts.push({ n: [sa / l, sd / l, 1 / l], d: (hx + hy + hz - q.cut * m * 1.2) / l }); }
   const vc = q.bevelVC || (q.bevelV ? [q.bevelV, q.bevelV, q.bevelV, q.bevelV] : null);
   if (vc) vc.forEach((v, ci) => { const c = v * pl; if (c < 1.7 * rh) return; const sa = ci & 1 ? 1 : -1, sd = ci & 2 ? 1 : -1; cuts.push({ n: [sa * .7071, sd * .7071, 0], d: (hx + hy - c) * .7071 }); });
-  const bt = q.batter || [0, 0, 0, 0], ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2, c = Math.cos(q.yaw), s2 = Math.sin(q.yaw), cu = q.cushion * m;
+  const bt = q.batter || [0, 0, 0, 0], ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2;
+  return { q, m, hx, hy, hz, pl, rh, rT, rB, cuts, ta, tdp, sa0, sd0, c: Math.cos(q.yaw), s2: Math.sin(q.yaw), cu: q.cushion * m };
+}
+function stoneMesh(o) {
+  const { q, m, hx, hy, hz, rh, rT, rB, cuts, ta, tdp, sa0, sd0, c, s2, cu } = stoneParams(o);
+  const X = latAxis(hx, rh, rh), Y = latAxis(hy, rh, rh), Z = latAxis(hz, rB, rT), L = X.length - 1, P = [], id = new Map(), idx = [];
   const node = (i, j, k) => { const key = i * 10000 + j * 100 + k; let v = id.get(key); if (v != null) return v; let a = X[i], d = Y[j], z = Z[k];
     const rz = z > 0 ? rT : rB, ca = Math.max(-hx + rh, Math.min(hx - rh, a)), cd = Math.max(-hy + rh, Math.min(hy - rh, d)), cz = Math.max(-hz + rB, Math.min(hz - rT, z));
     const da = (a - ca) / rh, dd = (d - cd) / rh, dz = (z - cz) / rz, l = Math.hypot(da, dd, dz); if (l > 1e-9) { a = ca + da / l * rh; d = cd + dd / l * rh; z = cz + dz / l * rz; }

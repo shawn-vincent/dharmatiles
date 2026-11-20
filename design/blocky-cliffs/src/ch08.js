@@ -20,7 +20,7 @@
   for (const k of CLASSES) { const ids = ALL.filter((id) => CL[id].class === k); tb.append(h('tr', {}, h('td', { text: CLASS_NAME[k] }), ...[ids.length, ids.filter((id) => CELLS[id].kinds.toe).length, ids.filter((id) => CELLS[id].kinds.cap).length, ids.filter((id) => CL[id].overhang).length, ids.filter((id) => CL[id].cleft).length].map((n) => h('td', { class: 'num', text: n })))); }
 
   let cls = 'pillars', pull = .22; const A = $('#hier-a'), B = $('#hier-b');
-  const draw = () => { const f = formation({ preset: cls, seed: 12, rows: cls === 'courses' ? 4 : 3, nA: cls === 'courses' ? 1 : 3, tiers: 0 }), ms = formMeshes(f), n = f.rows.length;
+  const draw = () => { const f = formation({ preset: cls, seed: 12, rows: cls === 'courses' ? 4 : 3, nA: cls === 'courses' ? 1 : 3, tiers: 0 }), ms = formMeshes(f, true), n = f.rows.length;
     const grey = (st) => { const t = n > 1 ? st.o.col.row.i / (n - 1) : 1, v = Math.round(lerp(0xd2, 0x9a, t)); return (v << 16) | (v << 8) | (v + 4); };
     A.replaceChildren(still(ms, { w: 400, h: 360, color: grey, shift: (st) => [0, -(n - 1 - st.o.col.row.i) * pull, 0], centre: [PLATE / 2, PLATE / 2 - pull * .8, .7], fov: 16 }));
     B.replaceChildren(still(ms, { w: 400, h: 360, view: 'top', color: grey, centre: [PLATE / 2, PLATE / 2, 0], span: 2 })); };

@@ -210,10 +210,10 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <div class="sec"><div class="words">
 <p>The smallest set that explains the four sheets and makes more of them:</p>
 <ol>
-<li><b>One stone, shaped by its place.</b> A rounded box: every edge and corner rounded by about 0.07 figure heights whatever the stone's size, broad faces slightly swollen, one near-flat top. Under a resting stone the rounding is smaller, so every bed joint reads as a groove. Front stones are wedges; tall ones narrow upward. Slab, block, pillar, leaner, cap and toe are this stone at different proportions and places.</li>
+<li><b>One stone, shaped by its place.</b> A rounded box: every edge and corner rounded by about 0.07 figure heights whatever the stone's size, broad faces slightly swollen, one near-flat top. Each stone is a signed distance field, and a formation's stones are joined by a plain union into one solid: every inside corner is sharp, never filled with a curve, and each joint that shows is a V groove 0.05 figure heights deep or less, cut as a wedge, so a bed is one body with no lip and no slot (chapter 8). Front stones are wedges; tall ones narrow upward. Slab, block, pillar, leaner, cap and toe are this stone at different proportions and places.</li>
 <li><b>A pile in three parts.</b> A back mass along the back edge (pillars, tiers of blocks, a stair of courses, leaning slabs, dipping beds, or a gate). A front cluster against it in ranks, each rank 0.55 to 0.8 as tall as the one behind: a toe, a buttress, sometimes a main pillar. And the top of the wall is stones of its own: an upper block as wide as what carries it, a block across a joint, a pillar split by a level joint. A third of all stones rest on others. Four to eleven stones as traced, nine in ten over a twentieth of the whole.</li>
 <li><b>Two things every stone reads.</b> An envelope that gives its height: highest near the back corner by the cut end (about 1.75 figure heights), lower toward the front and, by anything from a little to three quarters, toward the far end. And a grain: every stone upright, or one set of parallel leaning slabs (15 to 25 degrees) or dipping beds (20 to 32) standing beside upright stones.</li>
-<li><b>Relations between neighbours.</b> Joints are closed, but for a rare cleft, and nine in ten show a line from end to end. One in ten is <b>fused</b> along part of its length: the line fades out, usually toward the foot, over about half the contact, and the two stones share one surface beyond it. Upright joints at the front and the far end fuse most; the bed under a resting stone almost never does (chapter 8). Tops step by 0.12 figure heights or more, except on a plateau, where a run of two to four neighbours shares one top plane (about one pair in five). The lower stone usually stands in front (83 percent). Piled stones sit flush with the face of what carries them, and half of them bear on two; an upper block may stand forward of a set-back wall by up to 0.38.</li>
+<li><b>Relations between neighbours.</b> Joints are closed, but for a rare cleft, and nine in ten show a line from end to end. One contact in twelve is <b>fused</b> along part of its length (about one formation in two has one): the groove fades out, usually toward the foot, over about half the contact, and the two stones share one surface beyond it. Upright joints at the front and the far end fuse most; the bed under a resting stone almost never does (chapter 8). Tops step by 0.12 figure heights or more, except on a plateau, where a run of two to four neighbours shares one top plane (about one pair in five). The lower stone usually stands in front (83 percent). Piled stones sit flush with the face of what carries them, and half of them bear on two; an upper block may stand forward of a set-back wall by up to 0.38.</li>
 <li><b>Chance in a fixed order.</b> Class, envelope, lean and bevel are drawn once for the formation; widths are drawn per stone and are unequal, the widest typically 2.5 times the narrowest; heights and steps are not drawn but follow from the envelope and the rules; corners move 2 percent.</li>
 </ol>
 <p>This set makes the common forms. It does not make two that each appear once: J's niche and K's shelter. And everything about depth rests on one camera angle.</p>
@@ -341,7 +341,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <figcaption>Left: H's pillars. Right: K's caps, whose underside carries the same bevel as their top.</figcaption></div></div>
 
 <div class="sec full"><div class="words"><h3>Built in seven moves</h3>
-<p><span class="ev p">Proposed</span> A box, and six things done to it. Each move is one or two numbers. The stone is a rounded box, not a chamfered one: the reference edges read as soft bevels at a glance and as true rounds up close.</p></div>
+<p><span class="ev p">Proposed</span> A box, and six things done to it. Each move is one or two numbers. The stone is a rounded box, not a chamfered one: the reference edges read as soft bevels at a glance and as true rounds up close. Only the outer (convex) edges are rounded. Each stone is also a signed distance field, the same rounded box taken through its batter, dip, lean and turn and cut by its shoulder planes; a formation is the plain union of its stones' fields, polygonised once by surface nets on a grid of 0.025 to 0.035 fh, evaluated finely only in a narrow band round the surface. Where stones meet, inside corners stay sharp: a joint is a V groove cut as a wedge, or no groove where it has fused (chapter 8).</p></div>
 <div class="plates"><div class="row" id="an-steps" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))"></div></div></div>
 
 <div class="sec"><div class="words"><h3>True shape</h3>
@@ -576,12 +576,28 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <p>Every bed under a resting stone, its whole length. Every contact between a front stone and the stone behind it. Clefts. Back joints by the cut end. An open upright joint that reaches the plate still tapers: full depth over its upper two thirds, falling to <b>0.5 to 0.8</b> of it at the foot, and to a hairline in three of ten.</p></div>
 <div class="rule"><h3>5 · No line at all</h3>
 <p>Seen once in <span data-jn="n"></span>. At most one contact in a formation, in one formation in ten, and only with a waist left in the outline.</p></div>
-<p><span class="ev p">Proposed</span> By these numbers a formation of nine contacts has one that fuses, about one time in two a second, and about a twentieth of all its joint length carries no groove, as in the references.</p></div>
+<p><span class="ev p">Proposed</span> By these numbers, applied to the 510 contacts traced here (9.8 to a formation), a formation of nine contacts has fewer than one that fuses, 0.8 on average: about one formation in two has at least one, one in five has two or more, and about a twentieth (5 percent) of all its joint length carries no groove, as in the references. The generator, with 5.4 contacts a formation and some of them hidden behind a front stone, fuses 0.7 contacts per formation, one formation in two has one, one in seven two or more, and 8 percent of its joint length.</p></div>
 <div class="plates"><figure><div class="plate pad"><div id="jn-print"></div></div><figcaption><span class="ev p">Proposed</span> A section through a bed joint. Left: the lip and the slot of two rounded stones stacked. Right: the same two fused into one body, the joint kept as a shallow V.</figcaption></figure>
 <div class="words"><h3>What this does for printing</h3>
 <p><span class="ev p">Proposed</span> A rounded stone set on another leaves two things at every level joint. The rounded lower edge of the upper stone is a <b>lip</b>: a strip of surface that faces down, the lowest part of it nearly level, with nothing under it. And between that lip and the rounded top edge of the lower stone is a <b>slot</b>: a narrow gap that closes to nothing at the back. A printer has to bridge the lip in mid air, and the slot is thinner than a nozzle can draw, so it prints as a ragged seam or is dropped.</p>
-<p>Fusing removes both. The two stones become one body with no gap inside it, and where the joint was the surface dips in a shallow V whose upper side leans out no more than the 55 degrees an overhang is allowed. An upright joint has no lip, but the same slot: a deep, thin cut between two rounded sides. Fused, it is a V that ends on solid stone.</p>
+<p>Fusing removes both. The two stones become one body with no gap inside it, and where the joint was the surface dips in a shallow V, 0.05 fh deep at most, whose upper flank is no flatter than 45 degrees (an overhang of 45, under the 55 an overhang is allowed). An upright joint has no lip, but the same slot: a deep, thin cut between two rounded sides. Fused, it is a V that ends on solid stone.</p>
 <p><span class="ev e">Estimated</span> The references do not fuse for this reason. Their beds under resting stones are the joints they keep most open (97 percent), several in deep shadow under a block that stands forward (S8, S11, T2). What they merge is mostly upright joints near the foot, which print well either way. So the rule above gives the look; printing needs one thing more than the references show: <b>every bed is a V groove in one body, never a gap between two</b>, however crisp it is drawn.</p></div></div></div>
+<div class="sec full"><div class="words"><h3>Printability: one body against separate stones</h3>
+<p><span class="ev m">Measured</span> The downward-facing area of the same eight formations (two seeds each of pillars, blocks, courses and a gate) built three ways, by the angle of each downward face from vertical (a flat underside is 90 degrees), the part on the plate left out. Shares are of the downward-facing area. <b>Separate</b> is every stone its own rounded box, as the earlier rounds drew them. <b>Joined, not blended</b> is the plain union of those boxes with nothing filling the lips. <b>One body</b> is the solid of this chapter.</p></div>
+<div class="plates pad"><table class="data"><tr><th rowspan="2">Formation</th><th colspan="3">Separate stones</th><th colspan="3">Joined, not blended</th><th colspan="3">One body</th></tr>
+<tr><th class="num">past 55&deg;</th><th class="num">55&ndash;65&deg;</th><th class="num">past 65&deg;</th><th class="num">past 55&deg;</th><th class="num">55&ndash;65&deg;</th><th class="num">past 65&deg;</th><th class="num">past 55&deg;</th><th class="num">55&ndash;65&deg;</th><th class="num">past 65&deg;</th></tr>
+<tr><td>Pillars, seed 1</td><td class="num">10.8</td><td class="num">4.0</td><td class="num">6.8</td><td class="num">12.3</td><td class="num">5.5</td><td class="num">6.8</td><td class="num">7.3</td><td class="num">4.0</td><td class="num">3.3</td></tr>
+<tr><td>Pillars, seed 2</td><td class="num">4.2</td><td class="num">4.1</td><td class="num">0.1</td><td class="num">4.2</td><td class="num">2.4</td><td class="num">1.9</td><td class="num">3.1</td><td class="num">1.8</td><td class="num">1.3</td></tr>
+<tr><td>Blocks, seed 1</td><td class="num">28.9</td><td class="num">5.4</td><td class="num">23.4</td><td class="num">19.2</td><td class="num">5.6</td><td class="num">13.6</td><td class="num">5.5</td><td class="num">2.7</td><td class="num">2.7</td></tr>
+<tr><td>Blocks, seed 2</td><td class="num">33.0</td><td class="num">5.6</td><td class="num">27.4</td><td class="num">22.6</td><td class="num">5.7</td><td class="num">16.9</td><td class="num">8.8</td><td class="num">2.3</td><td class="num">6.5</td></tr>
+<tr><td>Courses, seed 1</td><td class="num">47.0</td><td class="num">4.2</td><td class="num">42.8</td><td class="num">22.1</td><td class="num">5.2</td><td class="num">16.9</td><td class="num">7.3</td><td class="num">3.0</td><td class="num">4.3</td></tr>
+<tr><td>Courses, seed 2</td><td class="num">42.6</td><td class="num">5.8</td><td class="num">36.8</td><td class="num">26.7</td><td class="num">7.8</td><td class="num">18.9</td><td class="num">4.8</td><td class="num">2.6</td><td class="num">2.1</td></tr>
+<tr><td>Gate, seed 1</td><td class="num">34.0</td><td class="num">3.9</td><td class="num">30.1</td><td class="num">27.2</td><td class="num">4.9</td><td class="num">22.3</td><td class="num">23.0</td><td class="num">2.9</td><td class="num">20.2</td></tr>
+<tr><td>Gate, seed 2</td><td class="num">30.1</td><td class="num">4.1</td><td class="num">26.1</td><td class="num">24.7</td><td class="num">4.0</td><td class="num">20.7</td><td class="num">21.4</td><td class="num">2.4</td><td class="num">19.0</td></tr>
+<tr><td><b>All eight, by area</b></td><td class="num"><b>30.2</b></td><td class="num"><b>4.7</b></td><td class="num"><b>25.5</b></td><td class="num"><b>21.1</b></td><td class="num"><b>5.2</b></td><td class="num"><b>15.9</b></td><td class="num"><b>11.8</b></td><td class="num"><b>2.7</b></td><td class="num"><b>9.1</b></td></tr>
+</table><figcaption>Percent of the downward-facing area. &ldquo;Past 55&deg;&rdquo; includes the two columns that follow it (55&ndash;65 and past 65). The downward-facing area is 1.74, 1.16 and 1.04 square figure heights on average for the three builds.</figcaption></div>
+<div class="words"><p><span class="ev m">Measured</span> The beds were the overhang: stacked rounded stones put 4 to 11 in a hundred of the downward-facing area of pillars, about 30 in a hundred of blocks and 43 to 47 of courses past 55 degrees, nearly all of it past 65 (the flat underside of a bed and the rounded lip). The plain union keeps the lips and loses the flat undersides. One body leaves 3 to 9 in a hundred of the downward area past 55 degrees in pillars, blocks and courses, and 21 to 23 in a hundred in the gates, whose lintel is a real underside over an opening. What is left in the others is the underside of a stone that oversails the one below it, a wedge-topped stone, and the grid's own stair-stepping on the flanks of a groove; it is measured on a grid of 0.02 fh and is not paint on the models. The gate's overhang is a design fact, not a joint fault: it is what the gate is.</p>
+<p><span class="ev p">Proposed</span> <b>No inside corner is ever rounded.</b> The stones keep their rounded outer (convex) edges. Where they meet, the solid is the plain union of the stones, so every inside corner is a sharp right angle; where a stone stands on a lower one, the step between them is a crisp right angle or a crisp inside corner. A joint that shows is a V groove with flat flanks and a sharp bottom, cut as a wedge; a fused stretch has no groove, the two surfaces meeting flush or at a sharp inside corner; a dying joint is a V groove whose depth ramps to nothing or ends in a notch, with sharp flanks the whole way. The rounded gap between two rounded edges is closed up and cut again as a V, or filled flush.</p></div></div>
 </section>
 
 <section class="ch" id="c8"><header><span class="n">Chapter 9</span><h2>Repeated arrangements</h2>
@@ -822,11 +838,24 @@ formation(numbers, seed):                         every stone is first a plain b
   5 count       if more than eleven stones came out, drop a piled stone or a column and draw again
 
 stone(box, numbers):
-  the surface of a 9 × 9 × 9 lattice (386 points), three steps round each edge;
-  every point pushed out to a true rounded box: radius 0.07 fh on top and upright edges,
-  0.04 under a resting stone (so a bed joint is a groove), 0.02 at a ground stone's foot;
+  a signed distance field of a true rounded box: radius 0.07 fh on top and upright edges,
+  0.04 under a resting stone, 0.02 at a ground stone's foot (outer edges only);
   broad faces swell 3.5 percent; shoulder and corner cuts are planes applied softly
-  move each face in at the top (batter), scale, tilt the top, shear, turn</pre></div></div>
+  move each face in at the top (batter), scale, tilt the top, shear, turn (the field is
+  evaluated through the inverse of these)
+
+solid(stones):
+  plain union of the stones' fields: no smooth union, no inside fillet
+  each contact (a bed, or an upright joint between neighbours) gets a bridge that fills
+    the slot between the two stones, flush with their faces, then a V wedge cut along
+    its free edge: depth 0.05 (bed) or 0.06 (upright) fh, flanks 45 degrees
+  the wedge's depth along the joint: full, or 0 where the joint is fused (chapter 8's
+    chance, share, place and ending), ramping to 0 over 0.15-0.5 fh or ending in a notch;
+    parts of one stone are fused whole
+  polygonise: surface nets on a grid of 0.035 fh (0.025 for the live view), an octree
+    search so only a narrow band round the surface is evaluated, each vertex stepped
+    onto the surface</pre></div>
+<div class="words"><p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 0.55 to 0.65 s as one solid each (about 0.2 s as separate rounded boxes); one formation takes 20 to 40 ms at 0.035 fh and 35 to 55 ms at 0.025 fh, so a new seed in the generator is instant.</p></div></div>
 </section>
 
 <section class="ch" id="c14"><header><span class="n">Chapter 15</span><h2>Rules, ranges, constraints</h2>
@@ -1051,16 +1080,21 @@ const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
    pushed out to a true rounded box, cut softly by any shoulder or corner planes, then battered, tilted, sheared and turned. */
 const LAT_T = [0, .27, .58, 1];
 function latAxis(hh, rLo, rHi) { const a = LAT_T.map((t) => -hh + rLo * t), b = LAT_T.map((t) => hh - rHi * t).reverse(), m0 = a[3], m1 = b[0]; return a.concat([m0 + (m1 - m0) / 2], b); }
-function stoneMesh(o) {
+/* what a stone's numbers mean, once: the one place its radii, cuts and batter are worked out (the mesh and the field both read it) */
+function stoneParams(o) {
   const q = Object.assign({}, STONE, o), m = Math.min(q.w, q.dp, q.h), hx = q.w / 2, hy = q.dp / 2, hz = q.h / 2, pl = Math.min(q.w, q.dp);
   const R = Math.max(.002, .07 * q.bevel / .16), rh = Math.min(R, .4 * pl), rT = Math.min(R, .4 * q.h, .4 * pl), rB = Math.max(.002, Math.min(q.level > 0 ? R * .6 : R * .28, .3 * q.h));
-  const X = latAxis(hx, rh, rh), Y = latAxis(hy, rh, rh), Z = latAxis(hz, rB, rT), L = X.length - 1, P = [], id = new Map(), idx = [];
   const bT = q.bevelT || [q.bevel, q.bevel, q.bevel, q.bevel], cuts = [];
   [[0, -1, 0], [1, 1, 0], [2, 0, -1], [3, 0, 1]].forEach(([i, sa, sd]) => { const half = sa ? hx : hy, e = Math.min(bT[i] * m, (sa ? q.w : q.dp) * .46), za = Math.min(e * .8, q.h * .55); if (e < 1.7 * rT) return; const l = Math.hypot(za, e), na = za / l, nz = e / l; cuts.push({ n: [sa * na, sd * na, nz], d: na * (half - e) + nz * hz }); });
   if (q.cut > 0) { const sa = q.cutAt & 1 ? 1 : -1, sd = q.cutAt & 2 ? 1 : -1, l = Math.sqrt(3); cuts.push({ n: [sa / l, sd / l, 1 / l], d: (hx + hy + hz - q.cut * m * 1.2) / l }); }
   const vc = q.bevelVC || (q.bevelV ? [q.bevelV, q.bevelV, q.bevelV, q.bevelV] : null);
   if (vc) vc.forEach((v, ci) => { const c = v * pl; if (c < 1.7 * rh) return; const sa = ci & 1 ? 1 : -1, sd = ci & 2 ? 1 : -1; cuts.push({ n: [sa * .7071, sd * .7071, 0], d: (hx + hy - c) * .7071 }); });
-  const bt = q.batter || [0, 0, 0, 0], ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2, c = Math.cos(q.yaw), s2 = Math.sin(q.yaw), cu = q.cushion * m;
+  const bt = q.batter || [0, 0, 0, 0], ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2;
+  return { q, m, hx, hy, hz, pl, rh, rT, rB, cuts, ta, tdp, sa0, sd0, c: Math.cos(q.yaw), s2: Math.sin(q.yaw), cu: q.cushion * m };
+}
+function stoneMesh(o) {
+  const { q, m, hx, hy, hz, rh, rT, rB, cuts, ta, tdp, sa0, sd0, c, s2, cu } = stoneParams(o);
+  const X = latAxis(hx, rh, rh), Y = latAxis(hy, rh, rh), Z = latAxis(hz, rB, rT), L = X.length - 1, P = [], id = new Map(), idx = [];
   const node = (i, j, k) => { const key = i * 10000 + j * 100 + k; let v = id.get(key); if (v != null) return v; let a = X[i], d = Y[j], z = Z[k];
     const rz = z > 0 ? rT : rB, ca = Math.max(-hx + rh, Math.min(hx - rh, a)), cd = Math.max(-hy + rh, Math.min(hy - rh, d)), cz = Math.max(-hz + rB, Math.min(hz - rT, z));
     const da = (a - ca) / rh, dd = (d - cd) / rh, dz = (z - cz) / rz, l = Math.hypot(da, dd, dz); if (l > 1e-9) { a = ca + da / l * rh; d = cd + dd / l * rh; z = cz + dz / l * rz; }
@@ -1127,6 +1161,162 @@ function still(stones, o = {}) {
   sc.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
   box.proj = (a, d, z) => { const v = new THREE.Vector3(a, z, d).project(cam); return [(v.x + 1) / 2 * w, (1 - v.y) / 2 * hgt]; };
   return o.sub ? Object.assign(h('div', { style: 'min-width:0' }, box, h('div', { class: 'sub', html: o.sub })), { svg, proj: box.proj, box }) : box;
+}
+
+/* ---------- one solid per formation ----------
+   Each stone is a signed distance field (the rounded box of stoneParams, taken through the inverse of the stone's batter, dip, lean and yaw,
+   cut softly by its planes). The stones are joined by a plain union (every concave corner stays sharp), and every contact between two stones has its own setting:
+   - a bridge fills the slot between them where they touch, so a bed is one body with no lip under the upper stone;
+   - a V groove (about 0.04 fh deep, flanks at 45 degrees) is cut along the free edge of the bridge to mark the joint;
+   - the groove's depth along the joint is a profile: full, or nothing where the joint has died (fused), ramping to nothing or ending in a notch.
+   The field is polygonised on a grid with surface nets, evaluating finely only in a narrow band round the surface. */
+const SF = { fp: 0 };                    /* where a stone's field leaves its plan footprint's distance */
+const GROOVE = { bed: .05, up: .06 };   /* a groove's full depth, fh */
+const smax = (a, b, k) => (a + b + Math.sqrt((a - b) * (a - b) + k * k)) / 2;
+
+/* a stone's field: ev(x, y, z) is its signed distance (negative inside) and leaves the plan footprint's distance in SF.fp */
+function stoneField(o) {
+  const P = stoneParams(o), { q, hx, hy, hz, rh, rT, rB, cuts, ta, tdp, sa0, sd0, c, s2, cu } = P, vcuts = cuts.filter((t) => t.n[2] === 0);
+  const pts = stoneMesh(o).P, box = [1e9, 1e9, 1e9, -1e9, -1e9, -1e9];
+  for (const p of pts) for (let k = 0; k < 3; k++) { if (p[k] < box[k]) box[k] = p[k]; if (p[k] > box[k + 3]) box[k + 3] = p[k]; }
+  const h = q.h, ks = Math.min(1, ta, tdp) / Math.sqrt(1 + q.leanA * q.leanA + q.leanD * q.leanD + q.dipA * q.dipA + q.dipD * q.dipD + q.botA * q.botA), ev = (X, Y, Z) => {
+    const x = X - q.a, y = Y - q.d, zz = Z - q.z; let a = x * c + y * s2, d = -x * s2 + y * c; a -= q.leanA * zz; d -= q.leanD * zz;
+    let t = zz / h; t = t < 0 ? 0 : t > 1 ? 1 : t; const zb = zz - h / 2; let sa = lerp(1, ta, t), sd = lerp(1, tdp, t), zl = zb - t * (q.dipA * a + q.dipD * d) - (1 - t) * q.botA * a;
+    if (q.dipA || q.dipD || q.botA) { t = zl / h + .5; t = t < 0 ? 0 : t > 1 ? 1 : t; sa = lerp(1, ta, t); sd = lerp(1, tdp, t); zl = zb - t * (q.dipA * a + q.dipD * d) - (1 - t) * q.botA * a; }
+    const al = (a - sa0 * t) / sa, dl = (d - sd0 * t) / sd, zr = zl / hz, zq = 1 - (zr > 1 ? 1 : zr < -1 ? 1 : zr * zr), rr = dl / hy, ra = al / hx;
+    const hxe = hx + cu * (rr * rr < 1 ? 1 - rr * rr : 0) * zq, hye0 = hy + cu * (ra * ra < 1 ? 1 - ra * ra : 0) * zq;
+    let hyF = hye0; if (q.crease && dl < 0) { const u = Math.max(0, zr); hyF += q.crease * Math.max(0, 1 - Math.abs(al) / hx * 1.4) * (1 - u * u * u * u); }
+    const qx = (al < 0 ? -al : al) - (hxe - rh), qy = (dl < 0 ? -dl : dl) - ((dl < 0 ? hyF : hye0) - rh), mx = qx > 0 ? qx : 0, my = qy > 0 ? qy : 0;
+    let fp = Math.sqrt(mx * mx + my * my) + Math.min(Math.max(qx, qy), 0) - rh;
+    for (let i = 0; i < vcuts.length; i++) { const ct = vcuts[i], u = ct.n[0] * al + ct.n[1] * dl - ct.d; if (u > fp - .15) fp = smax(fp, u, .035); }
+    const rz = zl > 0 ? rT : rB, qz = zl > 0 ? zl - (hz - rT) : -zl - (hz - rB), mz = qz > 0 ? qz : 0, ex = mx / rh, ey = my / rh, ez = mz / rz, l = Math.sqrt(ex * ex + ey * ey + ez * ez);
+    let dist = l > 0 ? (l - 1) * ((rh * (ex + ey) + rz * ez) / (ex + ey + ez)) : Math.max(qx - rh, qy - rh, qz - rz);
+    for (let i = 0; i < cuts.length; i++) { const ct = cuts[i], u = ct.n[0] * al + ct.n[1] * dl + ct.n[2] * zl - ct.d; if (u > dist - .15) dist = smax(dist, u, .035); }
+    SF.fp = fp * ks; return dist * ks; };
+  /* where the stone's front and back faces stand at height Z (the plan faces, rounded edges and cushion left out) */
+  ev.face = (Z, back) => { let t = (Z - q.z) / h; t = t < 0 ? 0 : t > 1 ? 1 : t; return q.d + (back ? hy * lerp(1, tdp, t) : -hy * lerp(1, tdp, t)) + sd0 * t + q.leanD * (Z - q.z); };
+  ev.box = box; ev.o = o; return ev;
+}
+
+/* ---- contacts: where two stones touch, and what that joint is ---- */
+const aLo = (s) => s.a - s.w / 2, aHi = (s) => s.a + s.w / 2, dLo = (s) => s.d - s.dp / 2, dHi = (s) => s.d + s.dp / 2;
+function contactsOf(f) {
+  const S = f.stones, C = [];
+  for (let i = 0; i < S.length; i++) for (let j = 0; j < S.length; j++) { if (i === j) continue; const lo = S[i], up = S[j];
+    const oa = Math.min(aHi(lo), aHi(up)) - Math.max(aLo(lo), aLo(up)), od = Math.min(dHi(lo), dHi(up)) - Math.max(dLo(lo), dLo(up));
+    if (oa > .08 && od > .08 && Math.abs(up.z - (lo.z + lo.h)) < .06 && up.z + up.h > lo.z + lo.h + .02) C.push({ type: 'bed', lo: i, up: j, a0: Math.max(aLo(lo), aLo(up)), a1: Math.min(aHi(lo), aHi(up)), d0: Math.max(dLo(lo), dLo(up)), d1: Math.min(dHi(lo), dHi(up)), zb: up.z }); }
+  for (let i = 0; i < S.length; i++) for (let j = 0; j < S.length; j++) { if (i >= j) continue; let l = S[i], u = S[j], li = i, ui = j; if (l.a > u.a) { l = S[j]; u = S[i]; li = j; ui = i; }
+    const gap = aLo(u) - aHi(l), od = Math.min(dHi(l), dHi(u)) - Math.max(dLo(l), dLo(u)), z0 = Math.max(l.z, u.z), z1 = Math.min(l.z + l.h, u.z + u.h);
+    if (Math.abs(gap) < .05 && od > .1 && z1 - z0 > .2 && !C.some((c) => c.type === 'bed' && ((c.lo === i && c.up === j) || (c.lo === j && c.up === i)))) C.push({ type: 'up', lo: li, up: ui, a0: (aHi(l) + aLo(u)) / 2, d0: Math.max(dLo(l), dLo(u)), d1: Math.min(dHi(l), dHi(u)), z0, z1, front: Math.abs(dLo(l) - dLo(u)) < .05 }); }
+  return C;
+}
+
+/* How a contact's joint is drawn, from the numbers the atlas's chapter 8 measures (the chance a contact fuses, how much, where, how it ends). */
+const FUSE = { upFront: .20, upBack: .07, bedCourse: .30, bedBack: .04, rest: .03, far: 2, near: .7, minLen: .4, share: [.3, .7], ramp: .6, rampLen: [.15, .5], pillarFoot: .6, pillarMid: .3, full: .1 };
+function settle(f, S, C, fields, noFuse) {
+  const r = rng(f.q.seed * 7919 + 13), soft = within(r, .5, 1.5), L = f.q.length, fullAt = r() < FUSE.full ? r() : -1, out = [];
+  const eligible = C.map((c, n) => { const lo = S[c.lo], up = S[c.up]; return !lo.part && !up.part && (c.type === 'bed' ? c.a1 - c.a0 : c.z1 - c.z0) >= FUSE.minLen && (c.type === 'up' || up.kind === 'slab'); }), pool = eligible.map((e, n) => e ? n : -1).filter((n) => n >= 0), fullN = fullAt >= 0 && pool.length ? pool[Math.floor(fullAt * pool.length)] : -1;
+  const taken = (x, y, z, skip) => S.some((s, k) => !skip.includes(k) && fields[k](x, y, z) < .02);
+  C.forEach((c, n) => { const lo = S[c.lo], up = S[c.up], part = lo.part || up.part, g = { c, part, D: GROOVE[c.type], fused: false, win: null, ends: [], foot: 1, sides: [] };
+    if (c.type === 'bed') { const ym = (c.a0 + c.a1) / 2, zb = c.zb + .02;
+      g.sides = [['L', taken(c.a0 - .06, (c.d0 + c.d1) / 2, zb, [c.lo, c.up])], ['F', taken(ym, c.d0 - .06, zb, [c.lo, c.up])], ['R', taken(c.a1 + .06, (c.d0 + c.d1) / 2, zb, [c.lo, c.up])]].filter((s) => !s[1]).map((s) => s[0]);
+      g.frontFree = g.sides.includes('F'); const lenL = c.d1 - c.d0, lenF = c.a1 - c.a0; g.off = g.sides.includes('L') ? lenL : 0; g.len = (g.sides.includes('L') ? lenL : 0) + (g.sides.includes('F') ? lenF : 0) + (g.sides.includes('R') ? lenL : 0); g.lenL = lenL; g.lenF = lenF; g.jl = lenF;
+    } else { g.frontFree = !taken((lo.a + up.a) / 2, c.d0 - .06, (c.z0 + c.z1) / 2, [c.lo, c.up]); g.sides = g.frontFree ? ['F'] : []; g.len = c.z1 - c.z0; g.jl = g.len; g.foot = c.z0 < .03 ? 1 : 0; }
+    const centre = c.type === 'bed' ? (c.a0 + c.a1) / 2 : c.a0, restOn = c.type === 'bed' && up.kind !== 'slab';   /* a stone resting on another (a cap, a block); a course or a half of a pillar is a slab */
+    if (part) { g.fused = true; g.win = [0, g.len]; g.D = 0; }
+    else if (!noFuse && g.sides.length && g.jl >= FUSE.minLen) {
+      let p = c.type === 'up' ? (g.frontFree ? FUSE.upFront : FUSE.upBack) : restOn ? FUSE.rest : (g.frontFree ? FUSE.bedCourse : FUSE.bedBack);
+      if (centre < .25 * L && !g.frontFree) p = 0;     /* back joints by the cut end stay open */
+      p = Math.min(.9, p * (centre > 2 * L / 3 ? FUSE.far : FUSE.near) * soft);
+      const full = n === fullN, roll = r();
+      if (full) { g.fused = true; g.win = [0, g.len]; g.D = 0; }
+      else if (roll < p) { const share = within(r, ...FUSE.share), w = share * g.len; let u0;
+        if (c.type === 'up') { const k = r(); u0 = k < FUSE.pillarFoot ? 0 : k < FUSE.pillarFoot + FUSE.pillarMid ? within(r, .1 * g.len, Math.max(.1 * g.len, .5 * g.len - w)) : g.len - w; }
+        else u0 = r() < .25 ? 0 : g.len - w;
+        g.win = [u0, u0 + w]; g.fused = true;
+        for (const e of [0, 1]) { const inner = e ? g.win[1] < g.len - 1e-6 : g.win[0] > 1e-6; if (inner) g.ends[e] = r() < FUSE.ramp ? { ramp: within(r, ...FUSE.rampLen) } : { notch: 1 }; } }
+      if (c.type === 'up' && g.foot && !g.fused) g.footD = r() < .3 ? .1 : within(r, .5, .8);
+      else if (c.type === 'up' && g.foot && g.win && g.win[0] > 1e-6) g.footD = r() < .3 ? .1 : within(r, .5, .8);
+    }
+    if (!g.fused && !g.win && c.type === 'up' && g.foot) g.footD = r() < .3 ? .1 : within(r, .5, .8);
+    out.push(g); });
+  return out;
+}
+/* the groove's depth at distance s along the joint */
+function grooveDepth(g, s) {
+  if (g.part) return 0; let D = g.D;
+  if (g.win) { const [u0, u1] = g.win; if (s >= u0 && s <= u1) return 0; const e = s < u0 ? g.ends[0] : g.ends[1], dist = s < u0 ? u0 - s : s - u1;
+    if (e && e.ramp) D *= Math.min(1, dist / e.ramp); else if (e && e.notch && dist < .5 * D) D *= 1.6; else if (!e) { /* the window runs to the joint's end */ } }
+  if (g.footD != null && g.c.type === 'up') { const t = Math.min(1, s / .25); D *= g.footD + (1 - g.footD) * t; }
+  return D;
+}
+
+/* ---- the solid ---- */
+function formSolid(f, opt = {}) {
+  const S = f.stones, fields = S.map(stoneField), N = S.length, C = contactsOf(f), G = opt.plain ? [] : settle(f, S, C, fields, opt.nofuse), E = .09;
+  const H = opt.h || .035, M = .1, MS = .04;
+  let x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1e9, y1 = -1e9, z1 = -1e9; for (const ev of fields) { const b = ev.box; x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); z0 = Math.min(z0, b[2]); x1 = Math.max(x1, b[3]); y1 = Math.max(y1, b[4]); z1 = Math.max(z1, b[5]); }
+  x0 -= .06; y0 -= .06; z0 -= .06; x1 += .06; y1 += .06; z1 += .06;
+  const dd = new Float64Array(N), fq = new Float64Array(N), near = new Uint8Array(N);
+  const cb = G.map((g) => { const a = fields[g.c.lo].box, b = fields[g.c.up].box; return [Math.max(a[0], b[0]) - M, Math.max(a[1], b[1]) - M, Math.max(a[2], b[2]) - M, Math.min(a[3], b[3]) + M, Math.min(a[4], b[4]) + M, Math.min(a[5], b[5]) + M]; });
+    const field = (x, y, z, wide) => {
+    const MG = wide ? M : MS; let F = MG, any = false;
+    for (let i = 0; i < N; i++) { const b = fields[i].box; if (x < b[0] - MG || x > b[3] + MG || y < b[1] - MG || y > b[4] + MG || z < b[2] - MG || z > b[5] + MG) { near[i] = 0; continue; } near[i] = 1; dd[i] = fields[i](x, y, z); fq[i] = SF.fp; F = any ? Math.min(F, dd[i]) : dd[i]; any = true; }
+    if (!any) return MG; if (F > MG) F = MG;
+    let Bm = MG, Gm = -MG;
+    for (let n = 0; n < G.length; n++) { const g = G[n], c = g.c, b = cb[n]; if (x < b[0] || x > b[3] || y < b[1] || y > b[4] || z < b[2] || z > b[5]) continue;
+      const li = c.lo, ui = c.up, lo = S[li], up = S[ui]; let mask, xin, s, dl; if (!near[li]) { near[li] = 1; dd[li] = fields[li](x, y, z); fq[li] = SF.fp; } if (!near[ui]) { near[ui] = 1; dd[ui] = fields[ui](x, y, z); fq[ui] = SF.fp; }
+      if (c.type === 'bed') { mask = Math.max(fq[li], fq[ui]); xin = -mask; const a = x - up.leanA * (z - up.z), side = g.sides;
+        dl = z - ((lo.z + lo.h + lo.dipA * (x - lo.a) + lo.dipD * (y - lo.d)) + (up.z + up.botA * (x - up.a))) / 2;   /* height above the bed plane */
+        if (side.length) { const xl = a - c.a0, xr = c.a1 - a, xf = y - c.d0; let best = 1e9, sv = 0;
+          if (side.includes('L') && xl < best) { best = xl; sv = c.d1 - y; } if (side.includes('F') && xf < best) { best = xf; sv = g.off + Math.max(0, Math.min(g.lenF, a - c.a0)); } if (side.includes('R') && xr < best) { best = xr; sv = g.off + (side.includes('F') ? g.lenF : 0) + (y - c.d0); }
+          s = Math.max(0, sv); } else s = 0; }
+      else { const fr = Math.max(fields[li].face(z, 0), fields[ui].face(z, 0)), bk = Math.min(fields[li].face(z, 1), fields[ui].face(z, 1)); mask = Math.max(fr - y, y - bk); xin = y - fr; s = z - c.z0; dl = x - (aHi(lo) + lo.leanA * (z - lo.z) + aLo(up) + up.leanA * (z - up.z)) / 2; }
+      const zc = c.type === 'bed' ? Math.max(lo.z - z, z - up.z - up.h) : Math.max(c.z0 - z, z - c.z1), bridge = Math.max(dd[li] - E, dd[ui] - E, mask, zc); if (bridge < Bm) Bm = bridge;
+      if (g.sides.length && (c.type === 'bed' || c.front)) { const D = grooveDepth(g, s); if (D > 0) { const gv = Math.min((D - Math.abs(dl) - xin) / 1.414, xin + .01); if (gv > Gm) Gm = gv; } } }
+    if (Bm < F) F = Bm; if (Gm > F) F = Gm; return F; };
+  /* the grid is searched as an octree: a block is dropped when its centre is further from the surface than the block is wide, so the
+     field is evaluated finely only in a narrow band round the surface */
+  const R = 16, gx = Math.ceil((x1 - x0) / H / R) * R, gy = Math.ceil((y1 - y0) / H / R) * R, gz = Math.ceil((z1 - z0) / H / R) * R, sx = gx + 1, sy = gy + 1;
+  const val = new Float32Array(sx * sy * (gz + 1)).fill(NaN), at = (i, j, k) => (k * sy + j) * sx + i, cells = [];
+  const node = (i, j, k) => { const q = at(i, j, k); let v = val[q]; if (v !== v) { v = field(x0 + i * H, y0 + j * H, z0 + k * H); val[q] = v; } return v; };
+  const split = (i, j, k, b) => {
+    if (b === 1) { let neg = 0; for (let c = 0; c < 8; c++) if (node(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2)) < 0) neg++; if (neg && neg < 8) cells.push(i, j, k); return; }
+    { const bx0 = x0 + i * H - .02, by0 = y0 + j * H - .02, bz0 = z0 + k * H - .02, bx1 = bx0 + b * H + .04, by1 = by0 + b * H + .04, bz1 = bz0 + b * H + .04; let hit = false; for (let n = 0; n < N && !hit; n++) { const q = fields[n].box; hit = q[0] < bx1 && q[3] > bx0 && q[1] < by1 && q[4] > by0 && q[2] < bz1 && q[5] > bz0; } if (!hit) return; }
+    const hb = b / 2, v = field(x0 + (i + hb) * H, y0 + (j + hb) * H, z0 + (k + hb) * H, true); if (Math.abs(v) > b * H * (opt.prune || .9)) return;
+    for (let c = 0; c < 8; c++) split(i + (c & 1) * hb, j + ((c >> 1) & 1) * hb, k + (c >> 2) * hb, hb); };
+  for (let k = 0; k < gz; k += R) for (let j = 0; j < gy; j += R) for (let i = 0; i < gx; i += R) split(i, j, k, R);
+  return surfaceNets(node, cells, gx, gy, gz, [x0, y0, z0], H, opt.project === false ? null : field);
+}
+
+/* naive surface nets over the listed cells; a cell the search dropped but the surface needs (a neighbour across a crossed edge) is added when asked for */
+function surfaceNets(node, cells, nx, ny, nz, o, H, field) {
+  const P = [], idx = [], cell = new Map(), key = (i, j, k) => (k * ny + j) * nx + i, cv = new Float64Array(8), todo = cells.slice();
+  const E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const make = (i, j, k) => { for (let c = 0; c < 8; c++) cv[c] = node(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2));
+    let px = 0, py = 0, pz = 0, m = 0;
+    for (const [a, b] of E) { const va = cv[a], vb = cv[b]; if ((va < 0) === (vb < 0)) continue; const t = va / (va - vb); px += (a & 1) + ((b & 1) - (a & 1)) * t; py += ((a >> 1) & 1) + (((b >> 1) & 1) - ((a >> 1) & 1)) * t; pz += (a >> 2) + ((b >> 2) - (a >> 2)) * t; m++; }
+    if (!m) return -1; let X = o[0] + (i + px / m) * H, Y = o[1] + (j + py / m) * H, Z = o[2] + (k + pz / m) * H;
+    if (field) { /* one step onto the surface itself, along the gradient the cell's corners give: creases come out sharper than the averaged vertex */
+      const gx = (cv[1] - cv[0] + cv[3] - cv[2] + cv[5] - cv[4] + cv[7] - cv[6]) / (4 * H), gy = (cv[2] - cv[0] + cv[3] - cv[1] + cv[6] - cv[4] + cv[7] - cv[5]) / (4 * H), gz = (cv[4] - cv[0] + cv[5] - cv[1] + cv[6] - cv[2] + cv[7] - cv[3]) / (4 * H), gg = gx * gx + gy * gy + gz * gz;
+      if (gg > 1e-6) { const st = Math.max(-H, Math.min(H, field(X, Y, Z) / gg)); X -= gx * st; Y -= gy * st; Z -= gz * st; } }
+    cell.set(key(i, j, k), P.length); P.push([X, Y, Z]); return P.length - 1; };
+  const ensure = (i, j, k) => { const q = cell.get(key(i, j, k)); if (q !== undefined) return q; const v = make(i, j, k); if (v >= 0) todo.push(i, j, k); return v; };
+  for (let n = 0; n < todo.length; n += 3) if (!cell.has(key(todo[n], todo[n + 1], todo[n + 2]))) make(todo[n], todo[n + 1], todo[n + 2]);
+  for (let n = 0; n < todo.length; n += 3) { const i = todo[n], j = todo[n + 1], k = todo[n + 2];
+    for (let ax = 0; ax < 3; ax++) { const u = (ax + 1) % 3, w = (ax + 2) % 3, v0 = node(i, j, k) < 0, v1 = node(i + (ax === 0), j + (ax === 1), k + (ax === 2)) < 0; if (v0 === v1) continue;
+      const d = [i, j, k]; if (d[u] < 1 || d[w] < 1) continue;
+      const mk = (du, dw) => { const e = [i, j, k]; e[u] += du; e[w] += dw; return ensure(e[0], e[1], e[2]); }, a = mk(-1, -1), b = mk(0, -1), c = mk(0, 0), e = mk(-1, 0);
+      if (a < 0 || b < 0 || c < 0 || e < 0) continue; if (v0) idx.push(a, b, c, a, c, e); else idx.push(a, c, b, a, e, c); } }
+  return { P, idx };
+}
+/* the downward-facing area of a mesh by angle from vertical (a horizontal underside is 90), past the plate: shares past 55, in 55 to 65, past 65 */
+function overhang(meshes) {
+  let tot = 0, a55 = 0, a65 = 0, over = 0;
+  for (const m of meshes) for (let t = 0; t < m.idx.length; t += 3) { const A = m.P[m.idx[t]], Bp = m.P[m.idx[t + 1]], Cp = m.P[m.idx[t + 2]]; if ((A[2] + Bp[2] + Cp[2]) / 3 < .012) continue;
+    const ux = Bp[0] - A[0], uy = Bp[1] - A[1], uz = Bp[2] - A[2], vx = Cp[0] - A[0], vy = Cp[1] - A[1], vz = Cp[2] - A[2], nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz), ar = l / 2; if (l < 1e-12) continue;
+    const z = nz / l; if (z >= 0) continue; const ang = Math.asin(Math.min(1, -z)) * 180 / Math.PI; tot += ar; if (ang > 55) { over += ar; if (ang <= 65) a55 += ar; else a65 += ar; } }
+  return { down: tot, band: a55, steep: a65, past55: tot ? over / tot : 0, in5565: tot ? a55 / tot : 0, past65: tot ? a65 / tot : 0 };
 }
 
 /* ---------- the formation (proposed; chapter 11 states it) ----------
@@ -1334,7 +1524,8 @@ function formationOnce(over = {}) {
 /* the count is held to what the sheets show: at most eleven stones */
 function formation(over = {}) { let f = formationOnce(over), o = Object.assign({}, over), n = 0; const count = (g) => g.stones.filter((s) => !s.part).length;
   while (count(f) > 11 && n++ < 5) { o = Object.assign({}, o, f.q.caps > 1 ? { caps: f.q.caps - 1 } : f.q.tuck || f.q.applied ? { tuck: 0, applied: 0 } : { nA: Math.max(1, f.q.nA - 1), rows: f.q.cls === 'courses' ? Math.max(3, f.q.rows - 1) : f.q.rows }); f = formationOnce(o); } return f; }
-const formMeshes = (f) => f.stones.map(stoneMesh);
+/* a formation's meshes: one solid (the stones blended, chapter 8's rule), or with `apart` each stone as its own rounded box */
+const formMeshes = (f, apart) => apart ? f.stones.map(stoneMesh) : [formSolid(f)];
 
 /* Scale 1: draw a whole formation's numbers from the proposed ranges. */
 function drawParams(seed, want) {
@@ -1756,7 +1947,7 @@ const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0
   for (const k of CLASSES) { const ids = ALL.filter((id) => CL[id].class === k); tb.append(h('tr', {}, h('td', { text: CLASS_NAME[k] }), ...[ids.length, ids.filter((id) => CELLS[id].kinds.toe).length, ids.filter((id) => CELLS[id].kinds.cap).length, ids.filter((id) => CL[id].overhang).length, ids.filter((id) => CL[id].cleft).length].map((n) => h('td', { class: 'num', text: n })))); }
 
   let cls = 'pillars', pull = .22; const A = $('#hier-a'), B = $('#hier-b');
-  const draw = () => { const f = formation({ preset: cls, seed: 12, rows: cls === 'courses' ? 4 : 3, nA: cls === 'courses' ? 1 : 3, tiers: 0 }), ms = formMeshes(f), n = f.rows.length;
+  const draw = () => { const f = formation({ preset: cls, seed: 12, rows: cls === 'courses' ? 4 : 3, nA: cls === 'courses' ? 1 : 3, tiers: 0 }), ms = formMeshes(f, true), n = f.rows.length;
     const grey = (st) => { const t = n > 1 ? st.o.col.row.i / (n - 1) : 1, v = Math.round(lerp(0xd2, 0x9a, t)); return (v << 16) | (v << 8) | (v + 4); };
     A.replaceChildren(still(ms, { w: 400, h: 360, color: grey, shift: (st) => [0, -(n - 1 - st.o.col.row.i) * pull, 0], centre: [PLATE / 2, PLATE / 2 - pull * .8, .7], fov: 16 }));
     B.replaceChildren(still(ms, { w: 400, h: 360, view: 'top', color: grey, centre: [PLATE / 2, PLATE / 2, 0], span: 2 })); };
@@ -1787,7 +1978,7 @@ const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0
 
 /* ---------- chapter 11 ---------- */
 {
-  const f = formation({ preset: 'pillars', seed: 9, nA: 3, rows: 3 }), ms = formMeshes(f), q = f.q, n = f.rows.length, L = $('#gr-levels'), o = { w: 300, h: 260 };
+  const f = formation({ preset: 'pillars', seed: 9, nA: 3, rows: 3 }), ms = formMeshes(f, true), q = f.q, n = f.rows.length, L = $('#gr-levels'), o = { w: 300, h: 260 };
   const grey = (st) => { const v = Math.round(lerp(0xd2, 0x9a, st.o.col.row.i / (n - 1))); return (v << 16) | (v << 8) | (v + 4); };
   const a = still(ms, Object.assign({ tag: 'formation' }, o)); { const d0 = PLATE - q.depth, e = (aa, t) => q.height * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); a.svg.append(s('polygon', { points: pts([[0, d0, e(0, 0)], [0, PLATE, e(0, 1)], [q.length, PLATE, e(q.length, 1)], [q.length, d0, e(q.length, 0)]].map((p) => a.proj(...p))), fill: 'var(--a-top)', 'fill-opacity': .18, stroke: 'var(--a-top)', 'stroke-width': 2, 'stroke-dasharray': '6 4' })); }
   L.append(a, still(ms, Object.assign({ tag: 'rows', color: grey }, o)), (() => { const b = still(ms, Object.assign({ tag: 'stones' }, o)); for (const st of f.stones) { const P = stonePoints(st).map((p) => b.proj(...p)); /* outline: convex hull of the projected points */ const hullPts = ((pp) => { pp = pp.slice().sort((x, y) => x[0] - y[0] || x[1] - y[1]); const cr = (o2, a2, b2) => (a2[0] - o2[0]) * (b2[1] - o2[1]) - (a2[1] - o2[1]) * (b2[0] - o2[0]); const lo = []; for (const p of pp) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); } const up = []; for (const p of pp.reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); } return lo.slice(0, -1).concat(up.slice(0, -1)); })(P); b.svg.append(s('polygon', { points: pts(hullPts), fill: 'none', stroke: 'var(--a-out)', 'stroke-width': 1.6 })); } return b; })());
