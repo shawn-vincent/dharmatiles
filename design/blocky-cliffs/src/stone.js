@@ -38,6 +38,7 @@ const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   dipA: 0, dipD: 0,       /* the top's slope along and across (rise per run); a big one makes a wedge top */
   botA: 0,                /* the bottom's slope along (for beds that dip) */
   leanA: 0, leanD: 0,     /* shear: how far the top is carried along and back, per unit height */
+  crease: 0,              /* how far the middle of the front face stands out, fh: the face becomes two planes meeting at a crease */
   cut: 0, cutAt: 0,       /* one top corner knocked off: its size as a share of the shortest side, and which corner (0-3) */
   jit: 0, seed: 1, yaw: 0 };
 function stonePoints(o) {
@@ -56,6 +57,8 @@ function stonePoints(o) {
     const rings = (ea > 0 || ed > 0) ? [[0, 1], [.29, .29], [1, 0]] : [[0, 0]], arc = [[0, 1, 0], [.29, .29, .5], [1, 0, 1]];
     for (const [ins, drop] of rings) for (const [fa, fd, k] of arc) P.push([A - sa * (ea * ins + ca * fa), D - sd * (ed * ins + cd * fd), Z - sz * drop * lerp(za, zd, k)]);
   }
+  /* a crease: the middle of the front face stands out a little, so the face is two planes */
+  if (q.crease) { const zf = Math.min(bT[2] * m, q.h * .55); P.push([q.creaseAt || 0, -q.dp / 2 - q.crease, -q.h / 2], [q.creaseAt || 0, -q.dp / 2 - q.crease, q.h / 2 - zf]); }
   const c = Math.cos(q.yaw), s2 = Math.sin(q.yaw), bt = q.batter || [0, 0, 0, 0];
   const ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2;
   return P.map(([a, d, z]) => { const t = z / q.h + .5;
