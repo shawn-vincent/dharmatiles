@@ -41,7 +41,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 </style>
 <main>
 <div><h1>Blocky Cliff Generator</h1>
-<p class="lede">One formation from one seed, piled from rounded boxes by the rules of the <a href="https://claude.ai/artifact/MYzPe5rc2ieRxEUzxChEmw">Blocky Cliff Atlas</a>. Where chapter 8's rule says a joint has fused, the two stones are grown toward each other when they are built, so they overlap and their faces run on as one; nothing is added or cut, and inside corners are sharp. It is for judging the coarse character: shapes, sizes, arrangement, proportion. No figure, no base, no surface.</p></div>
+<p class="lede">One formation from one seed, piled from rounded boxes by the rules of the <a href="https://claude.ai/artifact/MYzPe5rc2ieRxEUzxChEmw">Blocky Cliff Atlas</a>. Where chapter 8's rule says a joint has fused, the two stones are grown toward each other when they are built, so they overlap and their faces run on as one; nothing is added or cut, and inside corners are sharp. A stone that would overhang with stone close below is built taller, down onto it (by at most 0.25 fh), when the pile is made; a real overhang, such as a gate's lintel, stays one. It is for judging the coarse character: shapes, sizes, arrangement, proportion. No figure, no base, no surface.</p></div>
 <div class="bench">
   <div class="live" id="live"></div>
   <div class="side">
@@ -71,7 +71,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
   const NAME = { pillars: 'pillars', wall: 'a plateau wall', blocks: 'blocks in tiers', leaners: 'a leaning set', ramp: 'dipping beds', courses: 'courses', gates: 'a gate' };
   let seed = 1 + Math.floor(Math.random() * 9000);
   try { const sv = +localStorage.getItem('bcg-seed'); if (sv > 0) seed = sv; } catch (e) { /* no storage in this frame: start from a random seed */ }
-  /* merged: the stones on a fused joint grown toward each other; separate: the stones as built */
+  /* merged: the stones on a fused joint grown toward each other; separate: the stones as built (they already bear on the stone below) */
   let joined = true;
   try { if (localStorage.getItem('bcg-joined') === '0') joined = false; } catch (e) { /* no storage in this frame: start joined */ }
   const make = (sd) => { const p = drawParams(sd, clsIn.value), f = formation(p); return { p, f, ms: formMeshes(f, !joined) }; };

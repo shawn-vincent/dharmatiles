@@ -32,6 +32,30 @@ const PRESET = {
   leaners: { nA: 4, rows: 2, lean: 20, fall: .35, depth: .6 },
   ramp: { cls: 'leaners', nA: 1, rows: 2, dip: 27, fall: .1, depth: .7, caps: 1 },
   gates: { nA: 3, rows: 2, gate: true, fall: .3, depth: .72, peak: .15, height: 1.3, caps: 1 } };
+/* ---------- bearing on a base ----------
+   A stone that is not on the ground may overhang: part of its underside has no stone top within 0.01 fh below it. Where there is stone mass
+   a little way below that part, the stone is built taller, its top where the design put it and its bottom lower, so that 3 in 4 of the
+   unsupported part rests on or 0.015 fh into the stone below. It is done only when that is at most SUPPORT.reach, so a real overhang (a
+   gate's lintel over its opening, an oversail over a set-back wall) stays one. It is done when the pile is made: the stone's own height is the height it bears at. */
+const SUPPORT = { share: .75, reach: .25, sink: .015, ok: .01, n: 7 };
+const botZ = (s, a) => s.z + s.botA * (a - s.a), topZ = (s, a, d) => s.z + s.h + s.dipA * (a - s.a) + s.dipD * (d - s.d);
+/* under a stone's footprint: the share supported, and for each unsupported sample the drop to the highest stone top below it (Infinity: open air) */
+function underside(S, i) {
+  const s = S[i], n = SUPPORT.n, drops = []; let sup = 0, tot = 0;
+  for (let u = 0; u < n; u++) for (let v = 0; v < n; v++) { const a = s.a + (-.5 + (u + .5) / n) * (s.w - .1), d = s.d + (-.5 + (v + .5) / n) * (s.dp - .1), zb = botZ(s, a); tot++;
+    let best = -1e9, hit = false; for (let k = 0; k < S.length; k++) { if (k === i) continue; const t = S[k]; if (Math.abs(a - t.a) > t.w / 2 - .01 || Math.abs(d - t.d) > t.dp / 2 - .01 || t.z > zb + .005) continue; const top = topZ(t, a, d); if (top >= zb - SUPPORT.ok) { hit = true; break; } if (top > best) best = top; }
+    if (hit) sup++; else drops.push(best > -1e8 ? zb - best : Infinity); }
+  return { frac: sup / tot, drops, tot };
+}
+/* lowest stone first, so a stone that has been made taller bears the ones above it; `stats` collects what was done */
+function bear(S, stats) {
+  const order = S.map((s, i) => i).sort((p, q) => S[p].z - S[q].z);
+  for (const i of order) { const s = S[i]; if (s.part || s.z < .02) continue; const u = underside(S, i); if (u.drops.length === 0) continue;
+    const fin = u.drops.filter((x) => isFinite(x)).sort((p, q) => p - q), need = Math.ceil(SUPPORT.share * u.drops.length);
+    if (stats) stats.push({ i, frac: u.frac, done: false });
+    if (fin.length < need) continue; const d = fin[need - 1] + SUPPORT.sink; if (d > SUPPORT.reach || s.z - d < 0) continue;
+    s.z -= d; s.h += d; if (stats) { stats[stats.length - 1].done = true; stats[stats.length - 1].d = d; } }
+}
 function formationOnce(over = {}) {
   const q = Object.assign({}, FORM, PRESET[over.preset || over.cls] || {}, over), r = rng(q.seed * 104729 + 7), S = [];
   const td = Math.tan(q.dip * Math.PI / 180), tl = Math.tan(q.lean * Math.PI / 180), L = q.length, back = PLATE, D = q.depth, dB = back - D, courses = q.cls === 'courses';
@@ -198,6 +222,7 @@ function formationOnce(over = {}) {
     /* a stepped stone: a shoulder on the top, flush with the back and one side, the two read as one stone */
     if (q.shapes && (front || kind === 'block') && !sp.level && sp.h > .4 && sp.w > .4 && Math.abs(dipD) < .2 && Math.abs(dipA) < .15 && r() < .16) { const w2 = sp.w * within(r, .45, .65), dp2 = sp.dp * within(r, .5, .7), h2 = Math.min(.3, sp.h * within(r, .25, .45)), nearSide = r() < .5;
       out.push(Object.assign({}, st, { part: true, w: w2, dp: dp2, h: h2 + .02, a: nearSide ? sp.a0 + w2 / 2 + .01 : a1 - w2 / 2 - .01, d: d1 - dp2 / 2 - .01, z: top - .02, bevelT: [bv, bv, bv * 1.3, bv * .4], bevelVC: null, bevelV: bv * .7, batter: null, taperA: .97, taperD: .97, dipA: 0, dipD: within(r, 0, .08), cut: 0, yaw: st.yaw, seed: st.seed + 1 })); st.cut = 0; } }
+  if (!q.noBear) bear(out);
   return { q, rows, stones: out };
 }
 /* the count is held to what the sheets show: at most eleven stones */

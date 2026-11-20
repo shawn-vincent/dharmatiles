@@ -84,6 +84,10 @@ fuse(stones):
     upright joint: each stone sideways by its edge radius + 0.01 (about 0.08 fh)
     bed: the upper stone downward by the two edge radii + 0.01 (about 0.12 fh)
   the stones then simply overlap; no material is added, none is cut, no boolean is needed
-  every other joint stays the natural gap between two rounded boxes</pre></div>
+bear(stones):  (when the pile is made, lowest stone first)
+  for a stone off the ground, find the samples of its underside with no stone top within
+    0.01 fh below; for each, the drop to the stone mass below (or open air)
+  d = the drop that 3 in 4 of those samples are within, + 0.015 (rests 0.015 into the stone)
+  if d <= 0.25 fh: build the stone taller by d (top stays, bottom moves down); else leave it</pre></div>
 <div class="words"><p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 0.18 to 0.21 s with the grown stones, the same as the stones alone.</p></div></div>
 </section>
