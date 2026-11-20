@@ -72,7 +72,7 @@ function show() {
   rock = ROCK.makeRock(seed, { kind });
   scene = ROCKVIEW.buildScene(rock); frame(); draw();
   const d = rock.dimsOut, c = rock.check;
-  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Lobes</dt><dd>${rock.parts.length}</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (limit 55°)${rock.attempt > 1 ? '; drawn again ' + (rock.attempt - 1) + '×' : ''}</dd>`;
+  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Lobes</dt><dd>${rock.parts.length}</dd><dt>Pieces</dt><dd>${rock.pieces.length} (${rock.rc.cracks.length} crack${rock.rc.cracks.length === 1 ? '' : 's'}, ${rock.rc.chips} battered corner${rock.rc.chips === 1 ? '' : 's'})</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (limit 55°)${rock.attempt > 1 ? '; drawn again ' + (rock.attempt - 1) + '×' : ''}</dd>`;
   $('#seed').value = seed; try { history.replaceState(null, '', '#s=' + seed + '&k=' + kind); } catch (e) { /* the preview may not allow it: harmless */ }
 }
 function go(s) { seed = Math.max(1, Math.min(999999, Math.round(s))); show(); }
@@ -94,9 +94,9 @@ function startExplorer(img) {
 
 /* ---------- how a rock is built: the stages of one seed, and the timing ---------- */
 function stages() {
-  let s0 = 1; for (; s0 < 800; s0++) { const r = ROCK.makeRock(s0, { kind: 'any' }); if (r.parts.length >= 3 && r.kind !== 'ramp') break; }
-  const host = $('#stages'), f = ROCK.makeRock(s0, { kind: 'any' });
-  const items = [['1 · lobes', ROCK.makeRock(s0, { kind: 'any', stage: 0 }), 'The footprint as ' + f.parts.length + ' boxes that touch, each with its own top height, joined into one mass. Sharp.'], ['2 · chamfers', ROCK.makeRock(s0, { kind: 'any', stage: 1 }), 'Every convex edge of every lobe rounded off by two or three planes, toward the neighbour too: the creases are the V where two lobes meet.'], ['3 · wobble', f, 'A few planes at one to three degrees break the large faces. ' + f.T.length / 3 + ' triangles, one closed mesh (seed ' + s0 + ').']];
+  let s0 = 1; for (; s0 < 800; s0++) { const r = ROCK.makeRock(s0, { kind: 'any' }); if (r.parts.length >= 2 && r.rc.cracks.length && r.rc.chips) break; }
+  const host = $('#stages'), f = ROCK.makeRock(s0, { kind: 'any' }), o = { kind: 'any' };
+  const items = [['1 · lobes', ROCK.makeRock(s0, { ...o, stage: 0 }), f.parts.length + ' boxes touching, each its own height, each leaning a little differently.'], ['2 · chamfers', ROCK.makeRock(s0, { ...o, stage: 1 }), 'Every convex edge rounded off by two or three planes, narrow on the tops.'], ['3 · wobble, battered corners', ROCK.makeRock(s0, { ...o, stage: 2 }), 'A few planes at one to three degrees, and chunks knocked off corners.'], ['4 · cracks', f, 'The rock cut through, the far side moved a little apart and along. ' + f.pieces.length + ' pieces, ' + f.T.length / 3 + ' triangles (seed ' + s0 + ').']];
   for (const [t, r, sub] of items) { const cv = ROCKVIEW.still(r, 330, 300); host.append(el('div', {}, el('div', { class: 'cell' }, cv, el('span', { class: 'tag', text: t })), el('div', { class: 'note', style: 'margin-top:5px;border:0;padding:0', text: sub }))); }
 }
 function timing() {
@@ -104,11 +104,11 @@ function timing() {
   const all = [];
   for (const k of kinds) {
     const ms = [], tri = []; let again = 0, bad = 0, over = 0; const N = 120;
-    for (let i = 0; i < N; i++) { const r = ROCK.makeRock(5000 + i, { kind: k }); ms.push(r.ms); tri.push(r.T.length / 3); if (r.attempt > 1) again++; if (r.check.open || r.check.many) bad++; over = Math.max(over, r.check.overhangDeg); }
+    for (let i = 0; i < N; i++) { const r = ROCK.makeRock(5000 + i, { kind: k }); ms.push(r.ms); tri.push(r.T.length / 3); if (r.rc.cracks.length) again++; if (r.check.open || r.check.many) bad++; over = Math.max(over, r.check.overhangDeg); }
     all.push(...ms); rows.push([k, f1(ms.reduce((a, b) => a + b) / N), f1(q(ms, .95)), f1(Math.max(...ms)), Math.round(tri.reduce((a, b) => a + b) / N), Math.round(again / N * 100) + '%', bad, f1(over)]);
   }
-  $('#t-time').innerHTML = table(['Base shape', 'mean ms', 'p95 ms', 'max ms', 'triangles', 'redrawn', 'open', 'worst underside °'], rows);
-  $('#timenote').textContent = 'Measured just now in this browser: 120 seeds a row, a rock built, joined, welded and checked each time; the picture is not in it. "Redrawn" is the share of seeds that needed a second draw because the first had a face over 55 degrees or an open edge; the seed still gives the same rock every time.';
+  $('#t-time').innerHTML = table(['Base shape', 'mean ms', 'p95 ms', 'max ms', 'triangles', 'cracked', 'open', 'worst underside °'], rows);
+  $('#timenote').textContent = 'Measured just now in this browser: 120 seeds a row, a rock built, joined, welded and checked each time; the picture is not in it. "Cracked" is the share of rocks with a crack. A cutting plane that would leave a sliver or a face over 55 degrees is left out while building, so nothing is redrawn.';
 }
 
 window.addEventListener('DOMContentLoaded', () => {

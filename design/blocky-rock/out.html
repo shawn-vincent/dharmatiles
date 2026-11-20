@@ -174,22 +174,24 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 <p>Class shares of the sheet: slab .22, block .30, pillar .22, ramp .26. Plan W, D and height H:</p>
 <ul><li>slab: W 0.75–1.1 fh, D 0.6–0.76 W, H 0.28–0.36 W</li><li>block: W 0.5–0.75 fh, D 0.75–0.95 W, H 0.68–0.95 W</li><li>pillar: W 0.42–0.56 fh, D 0.7–0.9 W, H 1.7–2.1 W (never above 1.3 fh)</li><li>ramp: W 0.5–0.7 fh, D 0.65–0.85, H 0.62–0.82; the top rises toward the back (y), from 0.22–0.32 of H at the front</li></ul>
 <p>Sides are near upright: a pillar leans with chance .4 by at most 0.03.</p></div>
-<div class="rule k"><h3><span class="rn">L1</span> A rock is lobes</h3>
-<p>The footprint is cut across its full depth into 1 to 4 lobes, each a box (or ramp) from the ground to its own top. Lobes touch and share the outline: no waist, no gap, the same face planes across a joint. Their tops are level, or within 0.02 of each other, except for a step. A block's second lobe may be split again in depth (the sheet's R1C8: three lobes round a corner).</p></div>
-<div class="rule k"><h3><span class="rn">L2</span> A split is the crease between two lobes</h3>
-<p>Cut positions are at 0.3–0.7 of the length. Slab: 1 (.5) or 2 (.5) cuts; block: 0 (.2), 1 (.45), 2 (.35); pillar: one in four; ramp: one in five. The crease is the V made by the two lobes' chamfers, a quarter of the radius of an outer edge (0.018 fh at least): narrow, sharp at the bottom, running down the faces and across the top, ending at the ground in a small notch like the sheet's feet.</p></div>
-<div class="rule k"><h3><span class="rn">L3</span> A step is a lower lobe</h3>
-<p>Chance .12 on a slab (its end lobe at 0.6–0.75 of the height), .22 on a block (first lobe at 0.45–0.65), .5 on a pillar (one end lobe 0.38–0.52 of the width, at 0.35–0.5 of the height), .6 on a ramp: a seat, 0.35–0.5 of the width by 0.3–0.4 of the depth at the front-left, at about half the ramp's height there. A lower lobe is chamfered like any other, tread and riser included.</p></div>
+<div class="rule k"><h3><span class="rn">L1</span> A rock is lobes, nothing straight</h3>
+<p>1 to 4 lobes, each a box (or ramp) from the ground to its own top, touching along joints. Slab: 1 (.3), 2 (.35) or 3 (.35); block: 1 (.45), 2 (.3), 3 (.25). Joints are at uneven places (0.28–0.48 and 0.62–0.78 of the length) and each is angled up to 0.09 in plan. Every outer side leans by its own −0.01 to 0.045 (opposite sides differ), is twisted in plan by up to 0.07, and the top slopes by up to 0.025 each way. Tops are level within 0.012–0.03 except for a step.</p></div>
+<div class="rule k"><h3><span class="rn">L2</span> A step is a lower lobe</h3>
+<p>Chance .12 on a slab, .22 on a block (first lobe at 0.45–0.65 of the height), .5 on a pillar (an end lobe 0.38–0.52 of the width, at 0.35–0.5 of the height), .6 on a ramp: a seat 0.35–0.5 of the width by 0.3–0.4 of the depth at the front-left, a level shelf at 0.45–0.6 of the ramp's height there. A lower lobe is chamfered like any other.</p></div>
 <div class="rule"><h3><span class="rn">C1</span> Chamfers: a rounded-off edge as a chain of planes</h3>
-<p>Each convex edge gets 2 (.4) or 3 (.6) planes, each tangent to a circle of radius <i>r</i> tucked into the edge (normals at 0.33 and 0.67, or 0.2, 0.5 and 0.8 of the way round), so the outermost planes meet the faces at small angles and the edge reads round at a distance. <i>r</i> is 0.14–0.22 m on a top edge, 0.12–0.2 m on an upright, 0.1–0.16 m at the bottom, never under 0.05 fh and never over 0.42 of the face it sits on; each plane's radius varies ±15 per cent and each is tilted so its width changes by up to 0.4 r from the middle of the edge to its ends. Slabs take a smaller <i>r</i>. A bend under 35 degrees (a ramp's top against its front) is left a crease. Concave corners are never cut.</p></div>
+<p>Each convex edge gets 2 (.4) or 3 (.6) tangent planes; radius is 0.08–0.13 m on a top (so tops stay flat), 0.09–0.15 on an upright, 0.07–0.11 at the bottom, never under 0.05 fh; ±15 per cent per plane, and tilted so the width changes by up to 0.4 r along the edge. A joint edge takes a fifth of the radius. A bend under 35 degrees is a crease. Concave corners are never cut. A plane that would leave a sliver is left out.</p></div>
 <div class="rule"><h3><span class="rn">C2</span> Wobble</h3>
-<p>One to three planes a rock (one on a slab), 1.2–3.2 degrees off a side face or 0.5–1.3 off a top, 0.012–0.035 fh deep at the crease, never on a joint face: gentle breaks in a large face, never a facet.</p></div>
+<p>One to three planes a rock (one on a slab), 1.2–3.2 degrees off a side face or 0.5–1.3 off a top, 0.012–0.035 fh deep, never on a joint face.</p></div>
+<div class="rule"><h3><span class="rn">C3</span> Battered corners</h3>
+<p>0 to 3 a rock (0: .15, 1: .35, 2: .3, 3: .2; at most 1 on a slab). Each is one to three planes knocked off an outer corner (.55), top edge (.25) or upright edge (.2) of a random lobe, 0.05–0.11 fh deep (never over 0.22 of the lobe's narrowest side), with normals mixed from the corner's axes so no two are alike. Cut after the chamfers. Chunks facing down are held to 50 degrees from vertical.</p></div>
+<div class="rule k"><h3><span class="rn">K1</span> Crack: cut through, shifted</h3>
+<p>Slab .6, block .7, pillar .35, ramp .3. The rock is cut at 0.28–0.72 of its length (two cracks are at least 0.26 apart), by one plane or two meeting at a horizontal line (a zigzag), tilted up to 0.14 in plan and 0.05–0.14 out of vertical. The far side moves 0.008–0.02 fh apart and up to 0.03 along the crack, never up, so each piece stands on the ground. No chamfer, no V. Cut pieces are separate meshes.</p></div>
 <div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P1</span> Undersides print</h3>
-<p>No face is flatter than 35 degrees above horizontal, except the flat bottom. A bottom chamfer plane whose normal points more than sin 55° (0.819) down is dropped; the finished mesh is checked and a rock with a face over 55 degrees is drawn again with other chamfer widths (the table in chapter 4 gives how often).</p></div>
+<p>No face is flatter than 35 degrees above horizontal, except the flat bottom. A bottom chamfer plane whose normal points more than sin 55° (0.819) down is dropped; the finished mesh is checked and a plane that would leave a face over 55 degrees or a sliver is not used, so nothing is drawn again.</p></div>
 <div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P2</span> Where a face must stay plain</h3>
 <p>For the cliff: <code>bottomBevel: false</code> leaves the bottom edges sharp (an edge on the ground, or on another stone). A top that carries a stone should take no wobble or chamfer, and a face against a neighbour none; the generator has no switch for these yet.</p></div>
 <div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P3</span> One closed mesh</h3>
-<p>The union is welded and its T-junctions repaired; the page checks that every edge has two triangles.</p></div>
+<p>Each piece is welded and checked: every edge has two triangles.</p></div>
 </div>
 </section>
 
@@ -211,34 +213,37 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 </section>
 
 <section class="ch" id="built">
-<header><span class="n">4 · How a rock is built</span><h2>Lobes, rounded off, grown together</h2>
-<p>Three stages of one rock. Then the cost, measured in this browser.</p></header>
+<header><span class="n">4 · How a rock is built</span><h2>Lobes, rounded off, battered, cracked</h2>
+<p>Four stages of one rock. Then the cost, measured in this browser.</p></header>
 <div class="sec full"><div class="row" id="stages" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))"></div></div>
 <div class="sec">
 <div class="words"><ol>
-<li><b>Lobes.</b> A rock is one to four lobes: boxes, or ramps, that stand on the ground and touch along full-depth joints. They share one outline and one top level, except that a lobe may stand lower (a step) or a ramp's lobes share one sloping plane. Each is a convex solid held as planes.</li>
-<li><b>Chamfers.</b> Every convex edge of every lobe is rounded off by two or three planes, each tangent to a circle whose radius is set from the edge's own line in space, tilted a little so the width changes along the edge. Joint edges get a quarter of the radius, so the crease between two lobes is a V, wide at the surface and sharp at the bottom. Inside corners are never rounded.</li>
-<li><b>Wobble.</b> A few planes at 0.5 to 3 degrees, never on a joint face, break the large faces and tops.</li>
-<li><b>Join.</b> Each polygon of each lobe is split at the other lobes' planes; pieces inside another lobe are dropped, and so are two faces that touch back to back. What is left is the surface of the union.</li>
-<li><b>Mesh.</b> Weld the corners, repair T-junctions, fan the polygons into triangles, count the edges (each must have two) and find the steepest face facing down; a rock that fails is drawn again with other chamfer widths. Normals are smoothed across bends under 40 degrees for display only.</li></ol>
-<p>Nothing is a voxel or a field: every face is an exact plane.</p></div>
+<li><b>Lobes.</b> A rock is one to four lobes: boxes, or ramps, standing on the ground and touching along joints. They share an outline and, except for a step, a top level. Nothing is straight: each outer side has its own lean and its own twist in plan, the top its own slight slope, and every joint is angled a few degrees and unevenly spaced. Each lobe is a convex solid held as planes.</li>
+<li><b>Chamfers.</b> Every convex edge of every lobe is rounded off by two or three planes, each tangent to a circle whose radius is set from the edge's own line, tilted so the width changes along the edge. The band is narrow on tops, so tops stay flat; joint edges get a fifth of the radius, so the crease between two lobes is a shallow V. A plane that would leave a sliver is left out. Inside corners are never rounded.</li>
+<li><b>Wobble and battered corners.</b> A few planes at 0.5 to 3 degrees break the large faces. Then 0 to 3 chunks of one to three planes are knocked off outer corners and edges, 0.05 to 0.11 fh deep, after the chamfers so their edges stay broken; a chunk facing down is at most 50 degrees from vertical.</li>
+<li><b>Cracks.</b> Some rocks are cut right through along one or two planes (a zigzag), tilted a few degrees and never parallel to a side, with no chamfer and no V. The far side is moved 0.008 to 0.02 fh apart and up to 0.03 along, so the crack shows. Every piece keeps its flat bottom on the ground. A crack that leaves a sliver is dropped.</li>
+<li><b>Mesh.</b> Each piece is a closed convex mesh (welded, each edge in two triangles, steepest underside checked); the rock is its pieces together. Normals are smoothed across bends under 40 degrees for display only.</li></ol>
+<p>Nothing is a voxel or a field: every face is an exact plane. Where a crack and a lobe joint are both possible, cracks make the thin slits and lobe joints make the shallow creases and steps; the sheet has both (R1C8 is lobes, R3C3 and R4C1 are cracks).</p></div>
 <div class="plates"><div class="plate pad"><div id="t-time" class="scroll"></div></div><p class="note" id="timenote"></p></div></div>
 </section>
 
 <section class="ch" id="verdict">
 <header><span class="n">5 · Against the references</span><h2>What looks right, and what does not</h2>
-<p>Four reference rocks were drawn by hand first (R1C8, R2C4, R1C7, R1C5), then a generator was written from them. Judged by rendering the same view beside the cell.</p></header>
+<p>Four reference rocks were drawn by hand first (R1C8, R2C4, R1C7, R1C5), then a generator was written from them; round 4 added irregularity, battered corners and cracks. Judged by rendering the same view beside the cell.</p></header>
 <div class="sec">
 <div class="words"><h3>Looks right</h3><ul>
-<li><b>One block of lobes.</b> A seed reads as a single boxy rock with creases between its lobes, not as pieces side by side. R1C8 (a block of three lobes) is the closest match; R2C4 (a pillar with a lower lobe) and the slab R1C5 read as the same kind of rock.</li>
-<li><b>Edges.</b> Every convex edge is a chain of planes whose width changes along it, soft at a distance, with the normals smoothed for display.</li>
-<li><b>It prints and it is fast.</b> One closed mesh per rock, no face over 55 degrees except the flat bottom, a few milliseconds a rock (chapter 4).</li></ul></div>
+<li><b>R1C8 (block of lobes)</b> passes: one boxy mass, flat tops, shallow creases at uneven places.</li>
+<li><b>R2C4 (pillar with a lower lobe)</b> passes weakly: the right proportions and step, flatter top and narrower chamfers than before; the lower lobe is still a plain box.</li>
+<li><b>R1C7 (ramp with a seat)</b> passes weakly: one sloped piece with a level seat low at the front-left. The seat reads shallower than the clay's and the riser is vertical where the sheet's slants.</li>
+<li><b>R1C5 (slab)</b> marginal: three lobes give two creases, but the chip at the front-left is too big for so low a rock.</li>
+<li><b>Irregularity.</b> No two seeds are alike and no side is parallel to another; it stays blocky.</li>
+<li><b>Fast, no redraw.</b> Under 20 ms at the worst seed; a cutting plane that would leave a sliver is not used, so no seed is drawn twice.</li></ul></div>
 <div class="words"><h3>Does not look right yet</h3><ul>
-<li><b>R1C7, the ramp with a seat, does not match.</b> Its seat and slope come out as separate lobes with a valley between them; the sheet's slope runs unbroken down into the seat. Lobes with planar tops cannot make that without a crease.</li>
-<li><b>Puffy.</b> The chamfers are generous, and a rock reads rounder and a little taller than the clay it copies. The sheet's tops are flatter inside a narrow band.</li>
-<li><b>Faces.</b> The sheet's faces wander in a few soft waves; mine have a few gentle planes.</li>
-<li><b>Not generated:</b> V-notch pockets and chips (R2C6, R3C1, R4C2), a groove that ends partway down a face, a split that does not cross the whole rock.</li>
-<li><b>Cliff constraints</b> are only partly in: <code>bottomBevel</code> exists, but no switch for a loaded top or a face against a neighbour.</li></ul></div></div>
+<li><b>Cracks</b> read as thin slits with a small step; the sheet's wide grooves are not cracks and are not generated. A crack never changes a rock's outline from above much.</li>
+<li><b>Battered corners</b> are a few flat planes; on small rocks they look like cut corners more than beaten ones.</li>
+<li><b>Softness.</b> Still planes and not clay; faces do not wander in soft waves.</li>
+<li><b>Not generated:</b> V-notch pockets, a groove that stops partway, a slanted riser on a seat.</li>
+<li><b>Cliff constraints:</b> only <code>bottomBevel</code> exists; none yet for a loaded top or a face against a neighbour.</li></ul></div></div>
 <div class="sec full"><div class="words"><h3>What I did not look at</h3>
 <ul><li>The back of any reference rock; there are none.</li>
 <li>A real phone: headless Chrome at 1280 and 390 px only.</li>
@@ -344,14 +349,16 @@ function chamferPlanes(F, ctx) {
 
 /* ---------- a part: a column with its own top, cut by chamfers, facets and chips ---------- */
 function buildPart(sp, ctx) {
-  const L = sp.lean, B = sp.bat, pl = [];
-  pl.push(planeOf([-1, 0, L[0] + B[0]], -sp.x0)); pl.push(planeOf([1, 0, -(L[0] - B[1])], sp.x1));
-  pl.push(planeOf([0, -1, L[1] + B[2]], -sp.y0)); pl.push(planeOf([0, 1, -(L[1] - B[3])], sp.y1));
+  const L = sp.lean, B = sp.bat, K = sp.sk || [0, 0, 0, 0], pl = [];
+  pl.push(planeOf([-1, -K[0], L[0] + B[0]], -sp.x0)); pl.push(planeOf([1, K[1], -(L[0] - B[1])], sp.x1));
+  pl.push(planeOf([-K[2], -1, L[1] + B[2]], -sp.y0)); pl.push(planeOf([K[3], 1, -(L[1] - B[3])], sp.y1));
   pl.push(planeOf([-sp.sx, -sp.sy, 1], sp.h0)); pl.push(planeOf([0, 0, -1], -(sp.z0 || 0)));
   for (const k of sp.joints || []) pl[k].joint = 1;
   let F = cube(40); for (const p of pl) F = clip(F, p);
   for (const p of sp.clips || []) F = clip(F, p);
-  for (const p of chamferPlanes(F, ctx)) F = clip(F, p);
+  const F0 = F, cp = chamferPlanes(F, ctx); for (const p of cp) F = clip(F, p);
+  if (!sound(F)) { F = F0; for (const p of cp) { const G = clip(F, p); if (sound(G)) F = G; } }   /* a chamfer plane that leaves a sliver is left out */
+  for (const p of sp.post || []) F = clip(F, p);   /* battered corners: cut after the chamfers, so their edges stay broken, not rounded */
   const box = aabb(F.flatMap((f) => f.p));
   return { faces: F, planes: F.map((f) => f.pl), box, sp };
 }
@@ -394,13 +401,13 @@ function unite(parts) {
 }
 
 /* ---------- a mesh: weld, repair T-junctions, triangulate, check ---------- */
-function meshOf(polys) {
+function meshOf(polys, noT) {
   const V = [], map = new Map(), Q = 1e4, cell = (p) => [Math.floor(p[0] * Q), Math.floor(p[1] * Q), Math.floor(p[2] * Q)];
   const id = (p) => { const c = cell(p); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) { const l = map.get((c[0] + i) + ',' + (c[1] + j) + ',' + (c[2] + k)); if (l) for (const v of l) if (Math.abs(V[v][0] - p[0]) + Math.abs(V[v][1] - p[1]) + Math.abs(V[v][2] - p[2]) < 4e-5) return v; } const n = V.length; V.push(p); const kk = c.join(','); (map.get(kk) || map.set(kk, []).get(kk)).push(n); return n; };
   let loops = polys.map((f) => { const ids = []; for (const p of f.p) { const i = id(p); if (ids[ids.length - 1] !== i) ids.push(i); } if (ids.length > 1 && ids[0] === ids[ids.length - 1]) ids.pop(); return { ids, n: f.n }; }).filter((l) => l.ids.length >= 3);
   /* T-junctions: a vertex lying on another polygon's edge joins it */
   const idxBox = V.map((p) => p);
-  for (const l of loops) {
+  for (const l of noT ? [] : loops) {
     const out = [];
     for (let i = 0; i < l.ids.length; i++) {
       const a = l.ids[i], b = l.ids[(i + 1) % l.ids.length], pa = V[a], pb = V[b]; out.push(a);
@@ -442,11 +449,17 @@ function check(m) {
    recipe: { W, D, H, lean:[x,y], r: radius scale, seed, lobes:[{x0,x1,y0,y1,h, sx, sy, flat}], kinks:n }
    x runs along the left face (y = 0), y into the picture; a lobe's top is h (at its far corner) with slope sx along x. Lobes that touch share a joint plane,
    and the V between them is the two lobes' chamfers. */
-function partsOf(rc) {
+function partsOf(rc, r) {
+  const irr = rc.irr == null ? 1 : rc.irr, g = (a, b) => U(r, a, b) * irr;
+  /* nothing is straight: every outer side has its own lean and its own twist in plan, the top its own small slope */
+  const bat = [g(-.01, .045), g(-.01, .045), g(-.01, .045), g(-.01, .045)], skO = [g(-.07, .07), g(-.07, .07), g(-.07, .07), g(-.07, .07)], lean = [(rc.lean || [0, 0])[0] + g(-.02, .02), (rc.lean || [0, 0])[1] + g(-.02, .02)], tx = g(-.025, .025), ty = g(-.025, .025);
+  const jx = {}, jy = {}, jk = (tab, key) => (tab[key] == null ? (tab[key] = g(-.09, .09)) : tab[key]), kk = (v) => Math.round(v * 1e4);
   return rc.lobes.map((q) => {
-    const sx = q.sx || 0, sy = q.sy || 0, ht = q.h - sx * q.x1 - sy * q.y1;   /* h is the height at the lobe's far corner (x1, y1) */
-    return { x0: q.x0, x1: q.x1, y0: q.y0, y1: q.y1, lean: rc.lean || [0, 0], bat: [0, 0, 0, 0], sx, sy, h0: ht, clips: q.clips || [],
-      joints: [q.x0 > 1e-9 ? 0 : -1, q.x1 < rc.W - 1e-9 ? 1 : -1, q.y0 > 1e-9 ? 2 : -1, q.y1 < rc.D - 1e-9 ? 3 : -1].filter((k) => k >= 0) };
+    const sx = (q.sx || 0) + tx, sy = (q.sy || 0) + ty, ht = q.h - sx * q.x1 - sy * q.y1, ox0 = q.x0 < 1e-9, ox1 = q.x1 > rc.W - 1e-9, oy0 = q.y0 < 1e-9, oy1 = q.y1 > rc.D - 1e-9;
+    return { x0: q.x0, x1: q.x1, y0: q.y0, y1: q.y1, lean, bat: [ox0 ? bat[0] : 0, ox1 ? bat[1] : 0, oy0 ? bat[2] : 0, oy1 ? bat[3] : 0], sx, sy, h0: ht, clips: q.clips || [], post: [],
+      sk: [ox0 ? skO[0] : jk(jx, kk(q.x0)), ox1 ? skO[1] : jk(jx, kk(q.x1)), oy0 ? skO[2] : jk(jy, kk(q.y0)), oy1 ? skO[3] : jk(jy, kk(q.y1))],
+      outer: [ox0, ox1, oy0, oy1],
+      joints: [!ox0 ? 0 : -1, !ox1 ? 1 : -1, !oy0 ? 2 : -1, !oy1 ? 3 : -1].filter((k) => k >= 0) };
   });
 }
 /* a plane a few degrees off a face: wobble. face: 'L' (y=0), 'R' (x=W), 'T' top; at: where along it; ang in degrees; dep: how far below the face at the crease */
@@ -458,27 +471,69 @@ function kinkPlane(rc, B, face, at, ang, dir, dep) {
   const ext = Math.max(...f.p.map((p) => Math.abs(dot(sub(p, c), w)))) || .1, q = add(add(c, mul(w, at * ext)), mul(f.n, -dep));
   return { n, d: dot(n, q) };
 }
+const sound = (F, shift) => { const m = meshOf(F.map((f) => ({ p: shift ? f.p.map((q) => add(q, shift)) : f.p, n: f.n })), true), c = check(m); return c.open === 0 && c.many === 0 && c.overhangDeg <= 55.05; };
 function randomKinks(r, rc, parts, ctx, n) {
   for (let i = 0; i < n; i++) {
     const pi = Math.floor(r() * parts.length), B = buildPart(parts[pi], ctx), face = pick(r, { L: .45, R: .35, T: .2 });
     const pl = kinkPlane(rc, B, face, U(r, -.4, .4), face === 'T' ? U(r, .5, 1.3) : U(r, 1.2, 3.2), face === 'T' ? U(r, 0, 90) : pick(r, { 0: .5, 45: .25, 135: .25 }) | 0, U(r, .012, .035) * ctx.m / .5);
-    if (pl && -pl.n[2] < .8192) parts[pi].clips.push(pl);
+    if (pl && -pl.n[2] < .8192) { parts[pi].clips.push(pl); if (!sound(buildPart(parts[pi], ctx).faces)) parts[pi].clips.pop(); }   /* a plane that leaves a sliver is not used */
   }
 }
+/* battered corners: a chunk of one to three planes knocked off an outer corner or edge of a lobe, sized to read at sheet scale; downward chips stay within 55 degrees */
+function chips(r, parts, ctx, n) {
+  for (let i = 0; i < n; i++) {
+    const q = parts[Math.floor(r() * parts.length)], w = [q.x1 - q.x0, q.y1 - q.y0], H = q.h0 + q.sx * q.x1 + q.sy * q.y1;
+    const kind = pick(r, { corner: .55, top: .25, vert: .2 }), ax = [];
+    const sx = q.outer[0] && q.outer[1] ? (r() < .5 ? -1 : 1) : q.outer[0] ? -1 : q.outer[1] ? 1 : 0, sy = q.outer[2] && q.outer[3] ? (r() < .5 ? -1 : 1) : q.outer[2] ? -1 : q.outer[3] ? 1 : 0;
+    if (!sx && !sy) continue;
+    let sz = kind === 'vert' ? 0 : (kind === 'corner' && r() < .3 ? -1 : 1), sxx = sx, syy = sy;
+    if (kind === 'top') { if (r() < .5) sxx = 0; else syy = 0; if (!sxx && !syy) { sxx = sx; } }
+    if (kind === 'vert' && !(sxx && syy)) continue;
+    if (kind === 'corner' && !(sxx && syy)) { if (r() < .5) sxx = 0; }
+    const cx = sxx > 0 ? q.x1 : sxx < 0 ? q.x0 : q.x0 + w[0] * U(r, .25, .75), cy = syy > 0 ? q.y1 : syy < 0 ? q.y0 : q.y0 + w[1] * U(r, .25, .75);
+    const cz = sz > 0 ? q.h0 + q.sx * cx + q.sy * cy : sz < 0 ? 0 : H * U(r, .25, .7);
+    const depth = Math.min(U(r, .05, .11) * ctx.m / .5, .22 * Math.min(...w, H * 1.4), .09 + .1 * H);
+    for (let k = 0; k < (r() < .5 ? 2 : 3 - (r() < .5 ? 1 : 0)); k++) {
+      let nn = norm([sxx * U(r, .6, 1.2), syy * U(r, .6, 1.2), sz * U(r, .6, 1.2)]); if (-nn[2] > .8192) nn = norm([nn[0], nn[1], -.6 * len(nn)]);
+      if (k) nn = norm(add(nn, [U(r, -.3, .3), U(r, -.3, .3), U(r, -.15, .3)]));
+      const c = [cx + (k ? U(r, -.05, .05) : 0), cy + (k ? U(r, -.05, .05) : 0), cz], dd = depth * (k ? U(r, .45, .85) : 1);
+      if (-nn[2] > .8192) continue; q.post.push({ n: nn, d: dot(nn, c) - dd }); if (!sound(buildPart(q, ctx).faces)) q.post.pop();
+    }
+  }
+}
+/* a crack: the rock cut through along a surface of one or two planes (a zigzag), the far side moved a little apart and a little along: no chamfer, no V */
+function crackPieces(pieces, cr, rc) {
+  const ax = cr.ax === 'y' ? 1 : 0, mk = (a, b) => norm(ax ? [b[0], 1, b[1]] : [1, b[0], b[1]]);
+  const n1 = mk(0, [cr.a, cr.b]), p0 = ax ? [rc.W / 2, cr.at, cr.zb] : [cr.at, rc.D / 2, cr.zb], H1 = { n: n1, d: dot(n1, p0) };
+  let n2 = null, H2 = null; if (cr.b2 != null) { n2 = mk(0, [cr.a2, cr.b2]); H2 = { n: n2, d: dot(n2, p0) }; }
+  const flip = (h) => ({ n: mul(h.n, -1), d: -h.d }), horiz = norm([n1[0], n1[1], 0]), tan = [-horiz[1], horiz[0], 0];
+  const sh = add(mul(horiz, cr.gap), mul(tan, cr.slip)), out = [];
+  const keep = (F, planes, shift, tag) => { let G = F; for (const p of planes) G = clip(G, p); if (G.length >= 4 && aabbSize(G) > 5e-3) out.push({ F: G, shift: add(shift, [0, 0, 0]), tag }); };
+  for (const pc of pieces) {
+    if (!H2) { keep(pc.F, [H1], pc.shift, pc.tag); keep(pc.F, [flip(H1)], add(pc.shift, sh), pc.tag); }
+    else { keep(pc.F, [H1, H2], pc.shift, pc.tag); keep(pc.F, [flip(H1)], add(pc.shift, sh), pc.tag); keep(pc.F, [H1, flip(H2)], add(pc.shift, sh), pc.tag); }
+  }
+  return out;
+}
+const aabbSize = (F) => { const b = aabb(F.flatMap((f) => f.p)); return Math.min(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]); };
 function makeRock(seed, opts) {
   opts = opts || {}; const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
   const rc = opts.recipe || ROCK.random(seed, opts), stage = opts.stage == null ? 3 : opts.stage;
-  let res = null;
-  for (let attempt = 0; attempt < (opts.tries || 12); attempt++) {
-    const ctx = { seed: (rc.seed || seed) + ':' + attempt, m: Math.min(rc.W, rc.D), center: [rc.W / 2, rc.D / 2, rc.H / 2], rmin: .05, rjoint: .018, jf: rc.jf || .25, bottomBevel: opts.bottomBevel !== false, noChamfer: stage === 0, chamfer: rc.chamfer || { top: [.14, .22], vert: [.12, .2], bottom: [.1, .16] } };
-    const parts = partsOf(rc); const r = mulberry(hash('k' + (rc.seed || seed)));
-    if (stage >= 2) randomKinks(r, rc, parts, ctx, rc.kinks == null ? 3 : rc.kinks);
-    const built = parts.map((p) => buildPart(p, ctx)), polys = built.length > 1 ? unite(built) : built[0].faces.map((f) => ({ p: f.p, n: f.n })), mesh = meshOf(polys), chk = check(mesh);
-    res = { rc, parts, built, polys, mesh, check: chk, attempt: attempt + 1, kind: rc.kind || '' };
-    if (chk.open === 0 && chk.many === 0 && chk.overhangDeg <= 55.05) break;
+  const ctx = { seed: String(rc.seed || seed), m: Math.min(rc.W, rc.D), center: [rc.W / 2, rc.D / 2, rc.H / 2], rmin: .05, rjoint: .02, jf: rc.jf || .2, bottomBevel: opts.bottomBevel !== false, noChamfer: stage === 0, chamfer: rc.chamfer || { top: [.08, .13], vert: [.09, .15], bottom: [.07, .11] } };
+  const r = mulberry(hash('k' + (rc.seed || seed))), parts = partsOf(rc, r);
+  if (stage >= 2) randomKinks(r, rc, parts, ctx, rc.kinks == null ? 2 : rc.kinks);
+  if (stage >= 2) chips(r, parts, ctx, rc.chips == null ? 0 : rc.chips);
+  let pieces = parts.map((p) => ({ F: buildPart(p, ctx).faces, shift: [0, 0, 0], tag: 'lobe' }));
+  if (stage >= 3) for (const cr of rc.cracks || []) { const np = crackPieces(pieces, cr, rc); if (np.every((pc) => sound(pc.F, pc.shift))) pieces = np; }   /* a crack that leaves a sliver is dropped */
+  const V = [], T = []; let chk = { open: 0, many: 0, edges: 0, overhangDeg: 0, flatBottom: 0 };
+  for (const pc of pieces) {
+    const m = meshOf(pc.F.map((f) => ({ p: f.p.map((q) => add(q, pc.shift)), n: f.n })), true), c = check(m), o = V.length;
+    for (const p of m.V) V.push(p); for (const t of m.T) T.push(t + o);
+    chk = { open: chk.open + c.open, many: chk.many + c.many, edges: chk.edges + c.edges, overhangDeg: Math.max(chk.overhangDeg, c.overhangDeg), flatBottom: chk.flatBottom + c.flatBottom };
   }
-  const bb = aabb(res.mesh.V), cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
-  res.V = res.mesh.V.map((p) => [p[0] - cx, p[1] - cy, p[2]]); res.T = res.mesh.T;
+  const res = { rc, parts, pieces, check: chk, attempt: 1, kind: rc.kind || '', mesh: { V, T } };
+  const bb = aabb(V), cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
+  res.V = V.map((p) => [p[0] - cx, p[1] - cy, p[2]]); res.T = T;
   res.dimsOut = [bb.hi[0] - bb.lo[0], bb.hi[1] - bb.lo[1], bb.hi[2]];
   res.ms = (typeof performance !== 'undefined' ? performance : Date).now() - t0;
   return res;
@@ -488,14 +543,15 @@ root.ROCK = { makeRock, check, mulberry, RECIPES: {}, random: null };
 
 /* ---------- hand recipes: the four reference rocks drawn by hand (lengths in fh) ---------- */
 ROCK.RECIPES = {
-  R1C8: { kind: 'block', seed: 11, W: .62, D: .52, H: .52, kinks: 3, lobes: [
-    { x0: 0, x1: .28, y0: 0, y1: .52, h: .52 }, { x0: .28, x1: .62, y0: 0, y1: .3, h: .52 }, { x0: .28, x1: .62, y0: .3, y1: .52, h: .5 }] },
-  R2C4: { kind: 'pillar', seed: 12, W: .52, D: .4, H: .95, kinks: 3, lean: [.03, 0], jf: .3, lobes: [
+  R1C8: { kind: 'block', seed: 21, W: .62, D: .52, H: .52, kinks: 3, chips: 2, lobes: [
+    { x0: 0, x1: .26, y0: 0, y1: .52, h: .52 }, { x0: .26, x1: .62, y0: 0, y1: .3, h: .52 }, { x0: .26, x1: .62, y0: .3, y1: .52, h: .5 }] },
+  R2C4: { kind: 'pillar', seed: 22, W: .52, D: .4, H: .95, kinks: 3, chips: 2, lean: [.02, 0], jf: .25, lobes: [
     { x0: .26, x1: .52, y0: 0, y1: .4, h: .95 }, { x0: 0, x1: .26, y0: 0, y1: .4, h: .42 }] },
-  R1C7: { kind: 'ramp', seed: 13, W: .6, D: .75, H: .75, kinks: 3, lobes: [
-    { x0: 0, x1: .6, y0: .3, y1: .75, h: .75, sy: .7 }, { x0: .4, x1: .6, y0: 0, y1: .3, h: .435, sy: .7 }, { x0: 0, x1: .4, y0: 0, y1: .3, h: .24 }] },
-  R1C5: { kind: 'slab', seed: 15, W: .9, D: .62, H: .3, kinks: 1, jf: .2, chamfer: { top: [.09, .14], vert: [.1, .16], bottom: [.08, .12] }, lobes: [
-    { x0: 0, x1: .56, y0: 0, y1: .62, h: .28 }, { x0: .56, x1: .9, y0: 0, y1: .62, h: .28 }] },
+  /* one ramp, rising to the back, with the seat cut down into its front-left corner: the back piece is the whole ramp, the seat is a level shelf */
+  R1C7: { kind: 'ramp', seed: 23, W: .66, D: .8, H: .72, kinks: 3, chips: 2, jf: .12, lobes: [
+    { x0: 0, x1: .66, y0: .32, y1: .8, h: .72, sy: .62 }, { x0: .4, x1: .66, y0: 0, y1: .32, h: .52, sy: .62 }, { x0: 0, x1: .4, y0: 0, y1: .32, h: .2 }] },
+  R1C5: { kind: 'slab', seed: 25, W: .9, D: .62, H: .3, kinks: 1, chips: 2, jf: .15, chamfer: { top: [.07, .11], vert: [.09, .14], bottom: [.06, .1] }, lobes: [
+    { x0: 0, x1: .3, y0: 0, y1: .62, h: .3 }, { x0: .3, x1: .64, y0: 0, y1: .62, h: .3 }, { x0: .64, x1: .9, y0: 0, y1: .62, h: .29 }] },
 };
 
 /* ---------- the generator: a recipe drawn from a seed, in the family the hand recipes span ---------- */
@@ -504,32 +560,38 @@ ROCK.random = function (seed, opts) {
   const r = ROCK.mulberry(seed * 2654435761 + 17), U = (a, b) => a + (b - a) * r(), pickK = (t) => { let s = 0; for (const k in t) s += t[k]; let x = r() * s; for (const k in t) { x -= t[k]; if (x < 0) return k; } return Object.keys(t)[0]; };
   let kind = opts && opts.kind && opts.kind !== 'any' ? opts.kind : pickK(ROCK.MIX), stepped = false;
   if (kind === 'stepped') { kind = pickK({ block: .5, pillar: .5 }); stepped = true; }
-  const rc = { kind, seed, lobes: [], kinks: 1 + Math.floor(r() * 3), jf: U(.2, .32), lean: [0, 0] };
+  const rc = { kind, seed, lobes: [], cracks: [], kinks: 1 + Math.floor(r() * 3), jf: U(.15, .25), lean: [0, 0], chips: +pickK({ 0: .15, 1: .35, 2: .3, 3: .2 }) };
   let W, D, H;
-  const splitsAt = (n, lo, hi) => { const cuts = []; for (let i = 0; i < n; i++) cuts.push(U(lo, hi)); cuts.sort((a, b) => a - b); return cuts.filter((c, i) => i === 0 || c - cuts[i - 1] > .3); };
+  /* a crack: a wandering cut right through, its far side moved a little apart and along; positions uneven and never parallel to the sides */
+  const crack = (ax, len, taken) => { let at; for (let t = 0; t < 8; t++) { at = len * U(.28, .72); if (taken.every((q) => Math.abs(q - at) > .26 * len)) break; } taken.push(at); const sg = r() < .5 ? 1 : -1, b = U(.05, .14) * sg;
+    return { ax, at, a: U(-.14, .14), b, zb: H * U(.3, .7), b2: r() < .55 ? -b * U(.7, 1.6) : null, a2: U(-.14, .14), gap: U(.008, .02), slip: U(-.03, .03) }; };
+  const lobesX = (xs, ys, hs) => { for (let i = 0; i < xs.length - 1; i++) rc.lobes.push({ x0: xs[i], x1: xs[i + 1], y0: 0, y1: D, h: hs[i] }); };
   if (kind === 'slab') {
-    W = U(.75, 1.1); D = W * U(.6, .76); H = W * U(.28, .36); rc.chamfer = { top: [.09, .14], vert: [.1, .16], bottom: [.08, .12] }; rc.kinks = Math.min(rc.kinks, 1);
-    const cuts = splitsAt(r() < .5 ? 1 : 2, .3, .7), xs = [0, ...cuts.map((c) => c * W), W];
-    for (let i = 0; i < xs.length - 1; i++) rc.lobes.push({ x0: xs[i], x1: xs[i + 1], y0: 0, y1: D, h: H - (i && r() < .25 ? U(.025, .04) : 0) });
+    W = U(.75, 1.1); D = W * U(.6, .76); H = W * U(.28, .36); rc.chamfer = { top: [.07, .11], vert: [.09, .14], bottom: [.06, .1] }; rc.kinks = Math.min(rc.kinks, 1); rc.chips = Math.min(rc.chips, 1);
+    const nlob = pickK({ 1: .3, 2: .35, 3: .35 }) | 0, c1 = W * U(.28, .45), c2 = W * U(.62, .76), xs = nlob === 1 ? [0, W] : nlob === 2 ? [0, c1, W] : [0, c1, c2, W];
+    lobesX(xs, 0, xs.slice(0, -1).map((_, i) => H - (i && r() < .3 ? U(.012, .03) : 0)));
+    if (nlob < 3 && r() < .6) rc.cracks.push(crack('x', W, []));
     if (stepped || r() < .12) rc.lobes[rc.lobes.length - 1].h = H * U(.6, .75);
   } else if (kind === 'block') {
     W = U(.5, .75); D = W * U(.75, .95); H = W * U(.68, .95);
-    const cuts = splitsAt(pickK({ 0: .2, 1: .45, 2: .35 }) | 0, .3, .7), xs = [0, ...cuts.map((c) => c * W), W];
-    for (let i = 0; i < xs.length - 1; i++) rc.lobes.push({ x0: xs[i], x1: xs[i + 1], y0: 0, y1: D, h: H - (i && r() < .3 ? U(.025, .045) : 0) });
-    const last = rc.lobes[rc.lobes.length - 1];
-    if (rc.lobes.length > 1 && r() < .55) { const yc = D * U(.45, .65), q = rc.lobes.pop(); rc.lobes.push({ ...q, y1: yc }, { ...q, y0: yc, h: q.h - (r() < .5 ? 0 : U(.025, .045)) }); }
-    if (stepped || r() < .22) { const q = rc.lobes[0]; if (rc.lobes.length < 2) { const u = W * U(.35, .5); rc.lobes = [{ x0: 0, x1: u, y0: 0, y1: D, h: H }, { x0: u, x1: W, y0: 0, y1: D, h: H }]; } rc.lobes[0].h = H * U(.45, .65); }
+    const nlob = pickK({ 1: .45, 2: .3, 3: .25 }) | 0, c1 = W * U(.3, .48), c2 = W * U(.62, .78), xs = nlob === 1 ? [0, W] : nlob === 2 ? [0, c1, W] : [0, c1, c2, W];
+    lobesX(xs, 0, xs.slice(0, -1).map((_, i) => H - (i && r() < .3 ? U(.012, .03) : 0)));
+    if (nlob === 3 && r() < .5) { const yc = D * U(.45, .65), q = rc.lobes.pop(); rc.lobes.push({ ...q, y1: yc }, { ...q, y0: yc, h: q.h - U(.012, .03) }); }
+    const taken = []; for (let i = 0, n = +pickK({ 0: .3, 1: .5, 2: .2 }); i < n; i++) rc.cracks.push(crack(r() < .75 ? 'x' : 'y', 0, taken));
+    rc.cracks.forEach((c) => { const L = c.ax === 'x' ? W : D; c.at = L * (c.at / (c.ax === 'x' ? 1 : 1) < 1.5 ? U(.3, .7) : .5); });
+    if (stepped || r() < .22) { if (rc.lobes.length < 2) { const u = W * U(.35, .5); rc.lobes = [{ x0: 0, x1: u, y0: 0, y1: D, h: H }, { x0: u, x1: W, y0: 0, y1: D, h: H }]; } rc.lobes[0].h = H * U(.45, .65); }
   } else if (kind === 'pillar') {
     W = U(.42, .56); D = W * U(.7, .9); H = Math.min(1.3, W * U(1.7, 2.1)); rc.lean[0] = r() < .4 ? U(-.03, .03) : 0;
     if (stepped || r() < .5) { const u = W * U(.38, .52), side = r() < .7; rc.lobes = side ? [{ x0: 0, x1: u, y0: 0, y1: D, h: H * U(.35, .5) }, { x0: u, x1: W, y0: 0, y1: D, h: H }] : [{ x0: 0, x1: W - u, y0: 0, y1: D, h: H }, { x0: W - u, x1: W, y0: 0, y1: D, h: H * U(.35, .5) }]; }
-    else if (r() < .5) { const u = W * U(.35, .65); rc.lobes = [{ x0: 0, x1: u, y0: 0, y1: D, h: H }, { x0: u, x1: W, y0: 0, y1: D, h: H - (r() < .5 ? 0 : U(.025, .04)) }]; }
     else rc.lobes = [{ x0: 0, x1: W, y0: 0, y1: D, h: H }];
+    if (r() < .35) { const c = crack('x', W, []); c.at = W * U(.35, .65); rc.cracks.push(c); }
   } else {
     W = U(.5, .7); D = U(.65, .85); H = U(.62, .82); const hL = H * U(.22, .32), sy = (H - hL) / D, hAt = (y) => H - sy * (D - y);
-    if (stepped || r() < .6) { const wx = W * U(.35, .5), wy = D * U(.3, .4); rc.lobes = [{ x0: 0, x1: W, y0: wy, y1: D, h: H, sy }, { x0: wx, x1: W, y0: 0, y1: wy, h: hAt(wy), sy }, { x0: 0, x1: wx, y0: 0, y1: wy, h: hAt(wy) * U(.45, .6) }]; }
-    else if (r() < .4) { const u = W * U(.35, .65); rc.lobes = [{ x0: 0, x1: u, y0: 0, y1: D, h: H, sy }, { x0: u, x1: W, y0: 0, y1: D, h: H, sy }]; }
+    if (stepped || r() < .6) { const wx = W * U(.35, .5), wy = D * U(.3, .4); rc.lobes = [{ x0: 0, x1: W, y0: wy, y1: D, h: H, sy }, { x0: wx, x1: W, y0: 0, y1: wy, h: hAt(wy), sy }, { x0: 0, x1: wx, y0: 0, y1: wy, h: hAt(wy) * U(.45, .6) }]; rc.jf = .12; }
     else rc.lobes = [{ x0: 0, x1: W, y0: 0, y1: D, h: H, sy }];
+    if (r() < .3) { const c = crack('x', W, []); c.at = W * U(.35, .65); rc.cracks.push(c); }
   }
+  for (const c of rc.cracks) if (c.at < .05) c.at = (c.ax === 'x' ? W : D) * U(.3, .7);
   Object.assign(rc, { W, D, H });
   return rc;
 };
@@ -665,7 +727,7 @@ function show() {
   rock = ROCK.makeRock(seed, { kind });
   scene = ROCKVIEW.buildScene(rock); frame(); draw();
   const d = rock.dimsOut, c = rock.check;
-  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Lobes</dt><dd>${rock.parts.length}</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (limit 55°)${rock.attempt > 1 ? '; drawn again ' + (rock.attempt - 1) + '×' : ''}</dd>`;
+  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Lobes</dt><dd>${rock.parts.length}</dd><dt>Pieces</dt><dd>${rock.pieces.length} (${rock.rc.cracks.length} crack${rock.rc.cracks.length === 1 ? '' : 's'}, ${rock.rc.chips} battered corner${rock.rc.chips === 1 ? '' : 's'})</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (limit 55°)${rock.attempt > 1 ? '; drawn again ' + (rock.attempt - 1) + '×' : ''}</dd>`;
   $('#seed').value = seed; try { history.replaceState(null, '', '#s=' + seed + '&k=' + kind); } catch (e) { /* the preview may not allow it: harmless */ }
 }
 function go(s) { seed = Math.max(1, Math.min(999999, Math.round(s))); show(); }
@@ -687,9 +749,9 @@ function startExplorer(img) {
 
 /* ---------- how a rock is built: the stages of one seed, and the timing ---------- */
 function stages() {
-  let s0 = 1; for (; s0 < 800; s0++) { const r = ROCK.makeRock(s0, { kind: 'any' }); if (r.parts.length >= 3 && r.kind !== 'ramp') break; }
-  const host = $('#stages'), f = ROCK.makeRock(s0, { kind: 'any' });
-  const items = [['1 · lobes', ROCK.makeRock(s0, { kind: 'any', stage: 0 }), 'The footprint as ' + f.parts.length + ' boxes that touch, each with its own top height, joined into one mass. Sharp.'], ['2 · chamfers', ROCK.makeRock(s0, { kind: 'any', stage: 1 }), 'Every convex edge of every lobe rounded off by two or three planes, toward the neighbour too: the creases are the V where two lobes meet.'], ['3 · wobble', f, 'A few planes at one to three degrees break the large faces. ' + f.T.length / 3 + ' triangles, one closed mesh (seed ' + s0 + ').']];
+  let s0 = 1; for (; s0 < 800; s0++) { const r = ROCK.makeRock(s0, { kind: 'any' }); if (r.parts.length >= 2 && r.rc.cracks.length && r.rc.chips) break; }
+  const host = $('#stages'), f = ROCK.makeRock(s0, { kind: 'any' }), o = { kind: 'any' };
+  const items = [['1 · lobes', ROCK.makeRock(s0, { ...o, stage: 0 }), f.parts.length + ' boxes touching, each its own height, each leaning a little differently.'], ['2 · chamfers', ROCK.makeRock(s0, { ...o, stage: 1 }), 'Every convex edge rounded off by two or three planes, narrow on the tops.'], ['3 · wobble, battered corners', ROCK.makeRock(s0, { ...o, stage: 2 }), 'A few planes at one to three degrees, and chunks knocked off corners.'], ['4 · cracks', f, 'The rock cut through, the far side moved a little apart and along. ' + f.pieces.length + ' pieces, ' + f.T.length / 3 + ' triangles (seed ' + s0 + ').']];
   for (const [t, r, sub] of items) { const cv = ROCKVIEW.still(r, 330, 300); host.append(el('div', {}, el('div', { class: 'cell' }, cv, el('span', { class: 'tag', text: t })), el('div', { class: 'note', style: 'margin-top:5px;border:0;padding:0', text: sub }))); }
 }
 function timing() {
@@ -697,11 +759,11 @@ function timing() {
   const all = [];
   for (const k of kinds) {
     const ms = [], tri = []; let again = 0, bad = 0, over = 0; const N = 120;
-    for (let i = 0; i < N; i++) { const r = ROCK.makeRock(5000 + i, { kind: k }); ms.push(r.ms); tri.push(r.T.length / 3); if (r.attempt > 1) again++; if (r.check.open || r.check.many) bad++; over = Math.max(over, r.check.overhangDeg); }
+    for (let i = 0; i < N; i++) { const r = ROCK.makeRock(5000 + i, { kind: k }); ms.push(r.ms); tri.push(r.T.length / 3); if (r.rc.cracks.length) again++; if (r.check.open || r.check.many) bad++; over = Math.max(over, r.check.overhangDeg); }
     all.push(...ms); rows.push([k, f1(ms.reduce((a, b) => a + b) / N), f1(q(ms, .95)), f1(Math.max(...ms)), Math.round(tri.reduce((a, b) => a + b) / N), Math.round(again / N * 100) + '%', bad, f1(over)]);
   }
-  $('#t-time').innerHTML = table(['Base shape', 'mean ms', 'p95 ms', 'max ms', 'triangles', 'redrawn', 'open', 'worst underside °'], rows);
-  $('#timenote').textContent = 'Measured just now in this browser: 120 seeds a row, a rock built, joined, welded and checked each time; the picture is not in it. "Redrawn" is the share of seeds that needed a second draw because the first had a face over 55 degrees or an open edge; the seed still gives the same rock every time.';
+  $('#t-time').innerHTML = table(['Base shape', 'mean ms', 'p95 ms', 'max ms', 'triangles', 'cracked', 'open', 'worst underside °'], rows);
+  $('#timenote').textContent = 'Measured just now in this browser: 120 seeds a row, a rock built, joined, welded and checked each time; the picture is not in it. "Cracked" is the share of rocks with a crack. A cutting plane that would leave a sliver or a face over 55 degrees is left out while building, so nothing is redrawn.';
 }
 
 window.addEventListener('DOMContentLoaded', () => {

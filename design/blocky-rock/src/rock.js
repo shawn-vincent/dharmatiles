@@ -91,14 +91,16 @@ function chamferPlanes(F, ctx) {
 
 /* ---------- a part: a column with its own top, cut by chamfers, facets and chips ---------- */
 function buildPart(sp, ctx) {
-  const L = sp.lean, B = sp.bat, pl = [];
-  pl.push(planeOf([-1, 0, L[0] + B[0]], -sp.x0)); pl.push(planeOf([1, 0, -(L[0] - B[1])], sp.x1));
-  pl.push(planeOf([0, -1, L[1] + B[2]], -sp.y0)); pl.push(planeOf([0, 1, -(L[1] - B[3])], sp.y1));
+  const L = sp.lean, B = sp.bat, K = sp.sk || [0, 0, 0, 0], pl = [];
+  pl.push(planeOf([-1, -K[0], L[0] + B[0]], -sp.x0)); pl.push(planeOf([1, K[1], -(L[0] - B[1])], sp.x1));
+  pl.push(planeOf([-K[2], -1, L[1] + B[2]], -sp.y0)); pl.push(planeOf([K[3], 1, -(L[1] - B[3])], sp.y1));
   pl.push(planeOf([-sp.sx, -sp.sy, 1], sp.h0)); pl.push(planeOf([0, 0, -1], -(sp.z0 || 0)));
   for (const k of sp.joints || []) pl[k].joint = 1;
   let F = cube(40); for (const p of pl) F = clip(F, p);
   for (const p of sp.clips || []) F = clip(F, p);
-  for (const p of chamferPlanes(F, ctx)) F = clip(F, p);
+  const F0 = F, cp = chamferPlanes(F, ctx); for (const p of cp) F = clip(F, p);
+  if (!sound(F)) { F = F0; for (const p of cp) { const G = clip(F, p); if (sound(G)) F = G; } }   /* a chamfer plane that leaves a sliver is left out */
+  for (const p of sp.post || []) F = clip(F, p);   /* battered corners: cut after the chamfers, so their edges stay broken, not rounded */
   const box = aabb(F.flatMap((f) => f.p));
   return { faces: F, planes: F.map((f) => f.pl), box, sp };
 }
@@ -141,13 +143,13 @@ function unite(parts) {
 }
 
 /* ---------- a mesh: weld, repair T-junctions, triangulate, check ---------- */
-function meshOf(polys) {
+function meshOf(polys, noT) {
   const V = [], map = new Map(), Q = 1e4, cell = (p) => [Math.floor(p[0] * Q), Math.floor(p[1] * Q), Math.floor(p[2] * Q)];
   const id = (p) => { const c = cell(p); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) { const l = map.get((c[0] + i) + ',' + (c[1] + j) + ',' + (c[2] + k)); if (l) for (const v of l) if (Math.abs(V[v][0] - p[0]) + Math.abs(V[v][1] - p[1]) + Math.abs(V[v][2] - p[2]) < 4e-5) return v; } const n = V.length; V.push(p); const kk = c.join(','); (map.get(kk) || map.set(kk, []).get(kk)).push(n); return n; };
   let loops = polys.map((f) => { const ids = []; for (const p of f.p) { const i = id(p); if (ids[ids.length - 1] !== i) ids.push(i); } if (ids.length > 1 && ids[0] === ids[ids.length - 1]) ids.pop(); return { ids, n: f.n }; }).filter((l) => l.ids.length >= 3);
   /* T-junctions: a vertex lying on another polygon's edge joins it */
   const idxBox = V.map((p) => p);
-  for (const l of loops) {
+  for (const l of noT ? [] : loops) {
     const out = [];
     for (let i = 0; i < l.ids.length; i++) {
       const a = l.ids[i], b = l.ids[(i + 1) % l.ids.length], pa = V[a], pb = V[b]; out.push(a);
@@ -189,11 +191,17 @@ function check(m) {
    recipe: { W, D, H, lean:[x,y], r: radius scale, seed, lobes:[{x0,x1,y0,y1,h, sx, sy, flat}], kinks:n }
    x runs along the left face (y = 0), y into the picture; a lobe's top is h (at its far corner) with slope sx along x. Lobes that touch share a joint plane,
    and the V between them is the two lobes' chamfers. */
-function partsOf(rc) {
+function partsOf(rc, r) {
+  const irr = rc.irr == null ? 1 : rc.irr, g = (a, b) => U(r, a, b) * irr;
+  /* nothing is straight: every outer side has its own lean and its own twist in plan, the top its own small slope */
+  const bat = [g(-.01, .045), g(-.01, .045), g(-.01, .045), g(-.01, .045)], skO = [g(-.07, .07), g(-.07, .07), g(-.07, .07), g(-.07, .07)], lean = [(rc.lean || [0, 0])[0] + g(-.02, .02), (rc.lean || [0, 0])[1] + g(-.02, .02)], tx = g(-.025, .025), ty = g(-.025, .025);
+  const jx = {}, jy = {}, jk = (tab, key) => (tab[key] == null ? (tab[key] = g(-.09, .09)) : tab[key]), kk = (v) => Math.round(v * 1e4);
   return rc.lobes.map((q) => {
-    const sx = q.sx || 0, sy = q.sy || 0, ht = q.h - sx * q.x1 - sy * q.y1;   /* h is the height at the lobe's far corner (x1, y1) */
-    return { x0: q.x0, x1: q.x1, y0: q.y0, y1: q.y1, lean: rc.lean || [0, 0], bat: [0, 0, 0, 0], sx, sy, h0: ht, clips: q.clips || [],
-      joints: [q.x0 > 1e-9 ? 0 : -1, q.x1 < rc.W - 1e-9 ? 1 : -1, q.y0 > 1e-9 ? 2 : -1, q.y1 < rc.D - 1e-9 ? 3 : -1].filter((k) => k >= 0) };
+    const sx = (q.sx || 0) + tx, sy = (q.sy || 0) + ty, ht = q.h - sx * q.x1 - sy * q.y1, ox0 = q.x0 < 1e-9, ox1 = q.x1 > rc.W - 1e-9, oy0 = q.y0 < 1e-9, oy1 = q.y1 > rc.D - 1e-9;
+    return { x0: q.x0, x1: q.x1, y0: q.y0, y1: q.y1, lean, bat: [ox0 ? bat[0] : 0, ox1 ? bat[1] : 0, oy0 ? bat[2] : 0, oy1 ? bat[3] : 0], sx, sy, h0: ht, clips: q.clips || [], post: [],
+      sk: [ox0 ? skO[0] : jk(jx, kk(q.x0)), ox1 ? skO[1] : jk(jx, kk(q.x1)), oy0 ? skO[2] : jk(jy, kk(q.y0)), oy1 ? skO[3] : jk(jy, kk(q.y1))],
+      outer: [ox0, ox1, oy0, oy1],
+      joints: [!ox0 ? 0 : -1, !ox1 ? 1 : -1, !oy0 ? 2 : -1, !oy1 ? 3 : -1].filter((k) => k >= 0) };
   });
 }
 /* a plane a few degrees off a face: wobble. face: 'L' (y=0), 'R' (x=W), 'T' top; at: where along it; ang in degrees; dep: how far below the face at the crease */
@@ -205,27 +213,69 @@ function kinkPlane(rc, B, face, at, ang, dir, dep) {
   const ext = Math.max(...f.p.map((p) => Math.abs(dot(sub(p, c), w)))) || .1, q = add(add(c, mul(w, at * ext)), mul(f.n, -dep));
   return { n, d: dot(n, q) };
 }
+const sound = (F, shift) => { const m = meshOf(F.map((f) => ({ p: shift ? f.p.map((q) => add(q, shift)) : f.p, n: f.n })), true), c = check(m); return c.open === 0 && c.many === 0 && c.overhangDeg <= 55.05; };
 function randomKinks(r, rc, parts, ctx, n) {
   for (let i = 0; i < n; i++) {
     const pi = Math.floor(r() * parts.length), B = buildPart(parts[pi], ctx), face = pick(r, { L: .45, R: .35, T: .2 });
     const pl = kinkPlane(rc, B, face, U(r, -.4, .4), face === 'T' ? U(r, .5, 1.3) : U(r, 1.2, 3.2), face === 'T' ? U(r, 0, 90) : pick(r, { 0: .5, 45: .25, 135: .25 }) | 0, U(r, .012, .035) * ctx.m / .5);
-    if (pl && -pl.n[2] < .8192) parts[pi].clips.push(pl);
+    if (pl && -pl.n[2] < .8192) { parts[pi].clips.push(pl); if (!sound(buildPart(parts[pi], ctx).faces)) parts[pi].clips.pop(); }   /* a plane that leaves a sliver is not used */
   }
 }
+/* battered corners: a chunk of one to three planes knocked off an outer corner or edge of a lobe, sized to read at sheet scale; downward chips stay within 55 degrees */
+function chips(r, parts, ctx, n) {
+  for (let i = 0; i < n; i++) {
+    const q = parts[Math.floor(r() * parts.length)], w = [q.x1 - q.x0, q.y1 - q.y0], H = q.h0 + q.sx * q.x1 + q.sy * q.y1;
+    const kind = pick(r, { corner: .55, top: .25, vert: .2 }), ax = [];
+    const sx = q.outer[0] && q.outer[1] ? (r() < .5 ? -1 : 1) : q.outer[0] ? -1 : q.outer[1] ? 1 : 0, sy = q.outer[2] && q.outer[3] ? (r() < .5 ? -1 : 1) : q.outer[2] ? -1 : q.outer[3] ? 1 : 0;
+    if (!sx && !sy) continue;
+    let sz = kind === 'vert' ? 0 : (kind === 'corner' && r() < .3 ? -1 : 1), sxx = sx, syy = sy;
+    if (kind === 'top') { if (r() < .5) sxx = 0; else syy = 0; if (!sxx && !syy) { sxx = sx; } }
+    if (kind === 'vert' && !(sxx && syy)) continue;
+    if (kind === 'corner' && !(sxx && syy)) { if (r() < .5) sxx = 0; }
+    const cx = sxx > 0 ? q.x1 : sxx < 0 ? q.x0 : q.x0 + w[0] * U(r, .25, .75), cy = syy > 0 ? q.y1 : syy < 0 ? q.y0 : q.y0 + w[1] * U(r, .25, .75);
+    const cz = sz > 0 ? q.h0 + q.sx * cx + q.sy * cy : sz < 0 ? 0 : H * U(r, .25, .7);
+    const depth = Math.min(U(r, .05, .11) * ctx.m / .5, .22 * Math.min(...w, H * 1.4), .09 + .1 * H);
+    for (let k = 0; k < (r() < .5 ? 2 : 3 - (r() < .5 ? 1 : 0)); k++) {
+      let nn = norm([sxx * U(r, .6, 1.2), syy * U(r, .6, 1.2), sz * U(r, .6, 1.2)]); if (-nn[2] > .8192) nn = norm([nn[0], nn[1], -.6 * len(nn)]);
+      if (k) nn = norm(add(nn, [U(r, -.3, .3), U(r, -.3, .3), U(r, -.15, .3)]));
+      const c = [cx + (k ? U(r, -.05, .05) : 0), cy + (k ? U(r, -.05, .05) : 0), cz], dd = depth * (k ? U(r, .45, .85) : 1);
+      if (-nn[2] > .8192) continue; q.post.push({ n: nn, d: dot(nn, c) - dd }); if (!sound(buildPart(q, ctx).faces)) q.post.pop();
+    }
+  }
+}
+/* a crack: the rock cut through along a surface of one or two planes (a zigzag), the far side moved a little apart and a little along: no chamfer, no V */
+function crackPieces(pieces, cr, rc) {
+  const ax = cr.ax === 'y' ? 1 : 0, mk = (a, b) => norm(ax ? [b[0], 1, b[1]] : [1, b[0], b[1]]);
+  const n1 = mk(0, [cr.a, cr.b]), p0 = ax ? [rc.W / 2, cr.at, cr.zb] : [cr.at, rc.D / 2, cr.zb], H1 = { n: n1, d: dot(n1, p0) };
+  let n2 = null, H2 = null; if (cr.b2 != null) { n2 = mk(0, [cr.a2, cr.b2]); H2 = { n: n2, d: dot(n2, p0) }; }
+  const flip = (h) => ({ n: mul(h.n, -1), d: -h.d }), horiz = norm([n1[0], n1[1], 0]), tan = [-horiz[1], horiz[0], 0];
+  const sh = add(mul(horiz, cr.gap), mul(tan, cr.slip)), out = [];
+  const keep = (F, planes, shift, tag) => { let G = F; for (const p of planes) G = clip(G, p); if (G.length >= 4 && aabbSize(G) > 5e-3) out.push({ F: G, shift: add(shift, [0, 0, 0]), tag }); };
+  for (const pc of pieces) {
+    if (!H2) { keep(pc.F, [H1], pc.shift, pc.tag); keep(pc.F, [flip(H1)], add(pc.shift, sh), pc.tag); }
+    else { keep(pc.F, [H1, H2], pc.shift, pc.tag); keep(pc.F, [flip(H1)], add(pc.shift, sh), pc.tag); keep(pc.F, [H1, flip(H2)], add(pc.shift, sh), pc.tag); }
+  }
+  return out;
+}
+const aabbSize = (F) => { const b = aabb(F.flatMap((f) => f.p)); return Math.min(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]); };
 function makeRock(seed, opts) {
   opts = opts || {}; const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
   const rc = opts.recipe || ROCK.random(seed, opts), stage = opts.stage == null ? 3 : opts.stage;
-  let res = null;
-  for (let attempt = 0; attempt < (opts.tries || 12); attempt++) {
-    const ctx = { seed: (rc.seed || seed) + ':' + attempt, m: Math.min(rc.W, rc.D), center: [rc.W / 2, rc.D / 2, rc.H / 2], rmin: .05, rjoint: .018, jf: rc.jf || .25, bottomBevel: opts.bottomBevel !== false, noChamfer: stage === 0, chamfer: rc.chamfer || { top: [.14, .22], vert: [.12, .2], bottom: [.1, .16] } };
-    const parts = partsOf(rc); const r = mulberry(hash('k' + (rc.seed || seed)));
-    if (stage >= 2) randomKinks(r, rc, parts, ctx, rc.kinks == null ? 3 : rc.kinks);
-    const built = parts.map((p) => buildPart(p, ctx)), polys = built.length > 1 ? unite(built) : built[0].faces.map((f) => ({ p: f.p, n: f.n })), mesh = meshOf(polys), chk = check(mesh);
-    res = { rc, parts, built, polys, mesh, check: chk, attempt: attempt + 1, kind: rc.kind || '' };
-    if (chk.open === 0 && chk.many === 0 && chk.overhangDeg <= 55.05) break;
+  const ctx = { seed: String(rc.seed || seed), m: Math.min(rc.W, rc.D), center: [rc.W / 2, rc.D / 2, rc.H / 2], rmin: .05, rjoint: .02, jf: rc.jf || .2, bottomBevel: opts.bottomBevel !== false, noChamfer: stage === 0, chamfer: rc.chamfer || { top: [.08, .13], vert: [.09, .15], bottom: [.07, .11] } };
+  const r = mulberry(hash('k' + (rc.seed || seed))), parts = partsOf(rc, r);
+  if (stage >= 2) randomKinks(r, rc, parts, ctx, rc.kinks == null ? 2 : rc.kinks);
+  if (stage >= 2) chips(r, parts, ctx, rc.chips == null ? 0 : rc.chips);
+  let pieces = parts.map((p) => ({ F: buildPart(p, ctx).faces, shift: [0, 0, 0], tag: 'lobe' }));
+  if (stage >= 3) for (const cr of rc.cracks || []) { const np = crackPieces(pieces, cr, rc); if (np.every((pc) => sound(pc.F, pc.shift))) pieces = np; }   /* a crack that leaves a sliver is dropped */
+  const V = [], T = []; let chk = { open: 0, many: 0, edges: 0, overhangDeg: 0, flatBottom: 0 };
+  for (const pc of pieces) {
+    const m = meshOf(pc.F.map((f) => ({ p: f.p.map((q) => add(q, pc.shift)), n: f.n })), true), c = check(m), o = V.length;
+    for (const p of m.V) V.push(p); for (const t of m.T) T.push(t + o);
+    chk = { open: chk.open + c.open, many: chk.many + c.many, edges: chk.edges + c.edges, overhangDeg: Math.max(chk.overhangDeg, c.overhangDeg), flatBottom: chk.flatBottom + c.flatBottom };
   }
-  const bb = aabb(res.mesh.V), cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
-  res.V = res.mesh.V.map((p) => [p[0] - cx, p[1] - cy, p[2]]); res.T = res.mesh.T;
+  const res = { rc, parts, pieces, check: chk, attempt: 1, kind: rc.kind || '', mesh: { V, T } };
+  const bb = aabb(V), cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
+  res.V = V.map((p) => [p[0] - cx, p[1] - cy, p[2]]); res.T = T;
   res.dimsOut = [bb.hi[0] - bb.lo[0], bb.hi[1] - bb.lo[1], bb.hi[2]];
   res.ms = (typeof performance !== 'undefined' ? performance : Date).now() - t0;
   return res;
