@@ -52,7 +52,7 @@ const pictures = (c) => {
   const grown = grownStones(f), moved = new Set(); grown.forEach((s, i) => { if (s.w !== built[i].w || s.h !== built[i].h) moved.add(i); }); say('f7-c', String(contactsOf(f).length)); say('f7-n', `${fusedContacts(f).length}, ${moved.size} stones grown`);
   step('v7', grown.map(stoneMesh), moved, { cap: 'The stones after the fused joints are grown. The marked stones grew.' });
   const one = built[0], mo = stoneMesh(one); say('f8-vt', `${f.stones.reduce((a, s) => a + stoneMesh(s).P.length, 0)} and ${f.stones.reduce((a, s) => a + stoneMesh(s).idx.length / 3, 0)} in all; ${mo.P.length} and ${mo.idx.length / 3} in one stone`);
-  step('v8', [mo], null, { plate: false, w: 300, h: 250, centre: [one.a, one.d, one.z + one.h / 2], dist: 9, fov: 11, figure: null, cap: 'One stone: a lattice pushed out to a rounded box, then shaped.' });
+  step('v8', [mo], null, { plate: false, w: 300, h: 250, centre: [one.a, one.d, one.z + one.h / 2], dist: 9, fov: 11, figure: null, cap: 'One stone: a box cut by planes.' });
 };
 let cur = null;
 const show = (sd, keepView) => { seed = Math.max(1, Math.min(999999, Math.round(sd) || 1)); seedIn.value = seed; try { localStorage.setItem('bcg-seed', seed); } catch (e) { /* not kept: nothing depends on it */ }

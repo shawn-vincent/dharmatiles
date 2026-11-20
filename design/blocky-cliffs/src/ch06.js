@@ -8,6 +8,5 @@
   const base = { w: .46, dp: .44, h: 1.0, bevel: .14, bevelV: .14, taperA: .95, taperD: .96, jit: .012, seed: 6 };
   $('#e-tops').append(one(Object.assign({}, base, { dipD: .03 }), { sub: '<b>Level.</b>' }), one(Object.assign({}, base, { dipD: .16, dipA: -.08 }), { sub: '<b>Tipped.</b> Rises to the back.' }), one(Object.assign({}, base, { dipD: .62 }), { sub: '<b>Shed.</b> Down toward the front.' }), one(Object.assign({}, base, { leanA: -.36, dipA: -.2, a: .78 }), { sub: '<b>Carried.</b> Up the way it leans.' }));
   const fx = { w: .62, dp: .56, h: .8 };
-  $('#e-faces').append(one(Object.assign({}, base, fx, { cushion: 0 }), { sub: 'No swell: every face dead flat.', w: 280, h: 250, centre: [.6, .6, .4] }), one(Object.assign({}, base, fx, { cushion: .035 }), { sub: 'Faces swell 3.5 percent of the short side.', w: 280, h: 250, centre: [.6, .6, .4] }), one(Object.assign({}, base, fx, { cushion: .14 }), { sub: 'Swell of 14 percent: reads as a pillow.', w: 280, h: 250, centre: [.6, .6, .4] }));
-  $('#e-faces').lastChild.classList.add('out');
+  $('#e-faces').append(...[[.58, '30 degrees to the top: a flat bevel'], [1, '45 degrees: the usual'], [1.73, '60 degrees: steep, nearly upright']].map(([k, t]) => one(Object.assign({}, base, fx, { bevelT: [.08, .02, .1, .02], bevelK: k }), { sub: 'Chamfer at ' + t + '.', w: 280, h: 250, centre: [.6, .6, .4] })));
 }

@@ -17,7 +17,7 @@ const FORM = { seed: 1, height: 1.7, length: 1.45, depth: .62,   /* the highest 
   lean: 0, dip: 0,         /* degrees: the ground stones are slabs leaning toward the cut end; every top and bed dips toward the far end */
   opening: 0,              /* share of the length left open between two piers, under lintels */
   front: 2,                /* stones against the wall at the cut end: 1 buttress, 2 and a toe, 3 and a second block */
-  bevel: .16 };            /* how round the edges are */
+  bevel: .16 };            /* how wide the chamfers are (0.16: the usual widths) */
 /* ---------- bearing on a base ----------
    A stone that is not on the ground may overhang: part of its underside has no stone top within 0.01 fh below it. Where there is stone mass
    a little way below that part, the stone is built taller, its top where the design put it and its bottom lower, so that 3 in 4 of the
@@ -129,22 +129,25 @@ function formation(over = {}) {
     const cov = [hid((o) => near(o.a0 + o.w, sp.a0) && ovD(o)), hid((o) => near(o.a0, a1) && ovD(o)), hid((o) => near(o.d0 + o.dp, sp.d0) && ovA(o)), d1 > PLATE - .05 || hid((o) => (near(o.d0, d1) || (o.d0 < d1 && o.d0 + o.dp > d1)) && ovA(o))];
     const carried = S.filter((o) => o !== sp && Math.abs(o.z - topz) < .07 && ovA(o) && ovD(o));
     const clear = (test) => !S.some((o) => o !== sp && o.z + o.h > topz - .2 && o.z < topz && test(o)), clN = sp.a0 > .05 && clear((o) => near(o.a0 + o.w, sp.a0) && ovD(o)), clF = clear((o) => near(o.a0, a1) && ovD(o));
-    /* edges: wide where exposed, nearly sharp against a neighbour or under a stone, so the joint stays a crease; a shoulder cut on one side edge; some tall stones many-sided */
-    const bT = cov.map((c) => bv * (c ? within(r, .25, .45) : within(r, .95, 1.5))), wide = sp.w >= .45, side = !cov[1] ? 1 : !cov[0] && sp.a0 > .05 ? 0 : -1, vc = [bv * within(r, .7, 1.2), bv * within(r, .7, 1.2), bv * .4, bv * .4];
-    if (wide && !carried.length && side >= 0 && sp.h > .5 && r() < (rest ? .35 : .6)) bT[side] = Math.min(Math.min(.3, .5 * sp.h) / m, within(r, .25, .4) * sp.w / m);
+    /* chisel: a chamfer on an exposed top edge, widest on the front and the cut-end side (0.025-0.07 fh), seldom on the far side; none on a covered one;
+       sometimes one broad one; a narrow chamfer on a front upright edge now and then; one to three top corners knocked off; a hair everywhere else (in stone.js) */
+    const kw = q.bevel / .16, wide = sp.w >= .45, side = !cov[1] ? 1 : !cov[0] && sp.a0 > .05 ? 0 : -1, pl = Math.min(sp.w, sp.dp);
+    const bT = cov.map((c, e) => (c ? 0 : e === 0 || e === 2 ? (r() < .85 ? within(r, .025, .07) : 0) : r() < .35 ? within(r, .015, .04) : 0) * kw / m), vc = [r() < .3 ? within(r, .015, .04) * kw / pl : 0, r() < .3 ? within(r, .015, .04) * kw / pl : 0, 0, 0];
+    if (wide && !carried.length && side >= 0 && sp.h > .5 && r() < (rest ? .3 : .5)) bT[side] = within(r, .06, .12) * kw / m;
     if (carried.length) for (let i = 0; i < 4; i++) bT[i] = Math.min(bT[i], Math.max(.03, .8 * [sp.a0, a1, sp.d0, d1].map((e, k) => k < 2 ? Math.min(...carried.map((o) => k ? a1 - o.a0 - o.w : o.a0 - sp.a0)) : Math.min(...carried.map((o) => k === 2 ? o.d0 - sp.d0 : d1 - o.d0 - o.dp)))[i]) / m);
-    if (wide && sp.h > 1.3 * sp.w && !front) { const u = r(); if (u < .3) vc[0] = vc[1] = within(r, .25, .38); else if (u < .44) vc[r() < .5 ? 0 : 1] = within(r, .3, .42); }
+    if (wide && sp.h > 1.3 * sp.w && !front) { const u = r(); if (u < .3) vc[0] = vc[1] = within(r, .05, .09) * kw / pl; else if (u < .44) vc[r() < .5 ? 0 : 1] = within(r, .05, .1) * kw / pl; }
+    const clips = [], u = r(); if (!carried.length && wide) for (let n = u < .5 ? 0 : u < .8 ? 1 : u < .93 ? 2 : 3, cs = [0, 1, 2, 3].sort(() => r() - .5); n > 0; n--) clips.push([cs[n - 1], within(r, .04, .09) * kw / m]);
     /* batter: a side stands in only above the top of the stone beside it; the top slopes unless it carries a stone */
     const sh = (test) => Math.max(0, Math.min(1, (topz - Math.max(0, ...S.filter((o) => o !== sp && o.z < topz && test(o)).map((o) => o.z + o.h))) / sp.h)), k = rest ? .8 : 1, bat = [0, 0, 0, 0]; let dipA = 0, dipD = 0;
     if (front) { bat[1] = clF ? Math.min(sp.w * .25, sp.h * within(r, .1, .2)) : 0; bat[2] = Math.min(sp.dp * .3, sp.h * within(r, .1, .2)); const u = r();   /* a wedge top rising into the wall, on the larger stones */
       if (sp.h < .5) { dipD = within(r, 0, .12); if (clF && r() < .5) dipA = -within(r, .04, .12); } else if (u < .7) dipA = (clF ? -1 : 1) * within(r, .3, .6); else dipD = u < .85 ? within(r, .3, .6) : within(r, 0, .1); }
     else { if (clN) bat[0] = Math.min(sp.w * .22, sp.h * within(r, .06, .14) * k) * sh((o) => near(o.a0 + o.w, sp.a0) && ovD(o)); if (clF) bat[1] = Math.min(sp.w * .22, sp.h * within(r, .06, .14) * k) * sh((o) => near(o.a0, a1) && ovD(o));
       if (!cov[2]) bat[2] = Math.min(sp.dp * .25, sp.h * within(r, .08, .16) * k); dipD = carried.length ? 0 : within(r, -.03, .11);
-      dipA = td ? -td : carried.length ? 0 : (clF && !clN ? -1 : clN && !clF ? 1 : r() < .5 ? -1 : 1) * (clF || clN ? within(r, .1, .32) : within(r, 0, .12)) * (rest ? .6 : 1);
+      dipA = td ? -td : carried.length ? 0 : (clF && !clN ? -1 : clN && !clF ? 1 : r() < .5 ? -1 : 1) * (clF || clN ? within(r, .04, .16) : within(r, 0, .05)) * (rest ? .6 : 1);
       if (sp.end) { bat[1] = tl * sp.h; dipA = within(r, .05, .2); } }
     const g = rest ? .004 : .006, kind = front && sp.rank === 0 ? 'toe' : sp.on >= 2 ? 'cap' : sp.lean || sp.end ? 'lean' : sp.h > 1.35 * Math.max(sp.w, sp.dp) ? 'pillar' : sp.h < .7 * Math.max(sp.w, sp.dp) ? 'slab' : 'block';
-    return { w: Math.max(.08, sp.w - g), dp: Math.max(.08, sp.dp - g), h: sp.h, a: sp.a0 + sp.w / 2, d: sp.d0 + sp.dp / 2, z: sp.z, bevel: bv, bevelT: bT, bevelVC: vc, batter: bat, dipA, dipD, botA: rest && td ? -td : 0, leanA: sp.lean ? -sp.lean : 0,
-      cut: wide && !rest && !front && !carried.length && m > .32 && r() < .2 ? within(r, .26, .4) : 0, cutAt: r() < .6 ? 0 : 1, kind, level: sp.level, on: sp.on, rank: sp.rank }; });
+    return { w: Math.max(.08, sp.w - g), dp: Math.max(.08, sp.dp - g), h: sp.h, a: sp.a0 + sp.w / 2, d: sp.d0 + sp.dp / 2, z: sp.z, bevelK: within(r, .58, 1.5), bevelT: bT, bevelVC: vc, batter: bat, dipA, dipD, botA: rest && td ? -td : 0, leanA: sp.lean ? -sp.lean : 0,
+      clips, kind, level: sp.level, on: sp.on, rank: sp.rank }; });
   lap('shape', out.length);
   bear(out);
   lap('bear', out.length);
@@ -164,14 +167,14 @@ const FAMILIES = ['columns', 'tiers', 'slabs'];
 const lookOf = (q) => (q.opening ? 'a gate' : q.lean ? 'a leaning set' : q.dip > 12 ? 'dipping beds' : q.dip ? 'a plateau wall' : q.setback > .06 ? (q.base < .45 ? 'courses' : 'blocks in tiers') : 'pillars');
 function drawParams(seed, want) {
   const r = rng(seed * 31 + 5), u = r() * 52, family = FAMILIES.includes(want) ? want : u < 25 ? 'columns' : u < 42 ? 'tiers' : 'slabs', pick = (...p) => { let v = r(); return p.findIndex((x) => (v -= x) < 0); };
-  const o = { family, seed, height: mid(r, 1.6, 1.82), length: within(r, 1.25, 1.7), bevel: within(r, .14, .24), fall: within(r, .35, .75), peak: r() < .1 ? within(r, .25, .45) : within(r, 0, .18), front: [0, 1, 2, 3][pick(.2, .1, .5, .2)] };
+  const o = { family, seed, height: mid(r, 1.55, 1.77), length: within(r, 1.2, 1.65), bevel: within(r, .14, .24), fall: within(r, .35, .75), peak: r() < .1 ? within(r, .25, .45) : within(r, 0, .18), front: [0, 1, 2, 3][pick(.2, .1, .5, .2)] };
   if (family === 'columns') { const wall = r() < .3, gate = !wall && r() < .15;
     Object.assign(o, { cols: (o.length < 1.45 ? 2 : 3) + (r() < .5 ? 1 : 0), spread: .5, base: within(r, .4, .95), step: wall ? .06 : .17, depth: within(r, .42, .55), fall: wall ? within(r, .1, .3) : within(r, .45, .75), peak: wall ? within(r, .05, .35) : o.peak, dip: wall ? within(r, 4, 10) : 0, pile: 4, bond: .85, stack: .7, setback: within(r, 0, .06) });
     if (gate) Object.assign(o, { opening: within(r, .3, .38), height: within(r, 1.36, 1.52), base: within(r, .62, .72), depth: within(r, .65, .8), fall: within(r, .2, .4), peak: within(r, .05, .25), pile: 2, bond: 1, front: 2, setback: 0 }); }
   else if (family === 'tiers') { const b = within(r, .3, .7), k = (b - .3) / .4;   /* b low: courses, b high: blocks */
-    Object.assign(o, { base: b, cols: b < .45 ? 1 + (r() < .6 ? 1 : 0) : 2 + (r() < .65 ? 1 : 0), spread: .35, height: mid(r, 1.52, 1.78 - .1 * k), length: within(r, 1.35, 1.65), depth: lerp(within(r, 1, 1.25), within(r, .6, .75), k), fall: lerp(within(r, .25, .45), within(r, .4, .65), k), peak: b < .45 ? 0 : o.peak, step: lerp(.1, .15, k), pile: b < .45 ? 5 : 4 + (r() < .4 ? 1 : 0), bond: lerp(.7, .5, k), stack: lerp(.3, .6, k), setback: lerp(within(r, .15, .25), within(r, .05, .1), k), front: b < .45 ? 0 : o.front }); }
-  else if (r() < .35) Object.assign(o, { dip: within(r, 14, 24), height: mid(r, 1.55, 1.76), cols: 1 + (r() < .5 ? 1 : 0), spread: .3, base: within(r, .6, .7), fall: within(r, .05, .2), depth: within(r, .62, .8), pile: 2 + (r() < .5 ? 1 : 0), bond: .3, setback: within(r, .05, .1), step: .1 });
-  else Object.assign(o, { lean: within(r, 15, 24), height: mid(r, 1.55, 1.76), cols: 3 + (r() < .3 ? 1 : 0), spread: .12, base: within(r, .65, .8), length: within(r, 1.3, 1.6), fall: within(r, .45, .7), peak: 0, depth: within(r, .5, .68), pile: 1 + (r() < .6 ? 1 : 0), bond: .7, setback: 0, step: .1 });
+    Object.assign(o, { base: b, cols: b < .45 ? 1 + (r() < .6 ? 1 : 0) : 2 + (r() < .65 ? 1 : 0), spread: .35, height: mid(r, 1.47, 1.73 - .1 * k), length: within(r, 1.35, 1.65), depth: lerp(within(r, 1, 1.25), within(r, .6, .75), k), fall: lerp(within(r, .25, .45), within(r, .4, .65), k), peak: b < .45 ? 0 : o.peak, step: lerp(.1, .15, k), pile: b < .45 ? 5 : 4 + (r() < .4 ? 1 : 0), bond: lerp(.7, .5, k), stack: lerp(.3, .6, k), setback: lerp(within(r, .15, .25), within(r, .05, .1), k), front: b < .45 ? 0 : o.front }); }
+  else if (r() < .35) Object.assign(o, { dip: within(r, 14, 24), height: mid(r, 1.5, 1.71), cols: 1 + (r() < .5 ? 1 : 0), spread: .3, base: within(r, .6, .7), fall: within(r, .05, .2), depth: within(r, .62, .8), pile: 2 + (r() < .5 ? 1 : 0), bond: .3, setback: within(r, .05, .1), step: .1 });
+  else Object.assign(o, { lean: within(r, 15, 24), height: mid(r, 1.5, 1.71), cols: 3 + (r() < .3 ? 1 : 0), spread: .12, base: within(r, .65, .8), length: within(r, 1.3, 1.6), fall: within(r, .45, .7), peak: 0, depth: within(r, .5, .68), pile: 1 + (r() < .6 ? 1 : 0), bond: .7, setback: 0, step: .1 });
   return o;
 }
 /* What a generated formation would measure if it were traced like a reference: each stone as seen from the references' camera, in fh,

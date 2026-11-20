@@ -1,10 +1,10 @@
 /* ---------- fused faces ----------
-   Most joints between two stones stay what the stones make them: the natural gap between two rounded edges. A joint that has fused
-   (chapter 8's chance: which contacts) is made by growing the two stones toward each other when
-   they are built, so that they overlap: the stones are then simply a union, no material is added and nothing is cut. An upright joint
-   grows each stone sideways by its edge radius and a little more, so each stone's flat face runs on across the other's rounded edge and the
-   two faces are one; a bed grows the upper stone downward by the two edge radii and a little more, so its front face runs down over the
-   lower stone's rounded top edge. Where the faces are not on one plane the overlap leaves a sharp inside corner. */
+   Most joints between two stones stay what the stones make them: the V of two chamfered edges. A joint that has fused (chapter 8's chance:
+   which contacts) is made by growing the two stones toward each other when they are built, so that they overlap: the stones are then simply a
+   union, no material is added and nothing is cut. An upright joint grows each stone sideways by its widest upright chamfer and a little more,
+   so each stone's flat face runs on across the other's chamfered edge and the two faces are one; a bed grows the upper stone downward by the
+   lower stone's front top chamfer and a little more, so its front face runs down over it. Where the faces are not on one plane the overlap
+   leaves a sharp inside corner. */
 
 /* ---- contacts: where two stones touch ---- */
 const aLo = (s) => s.a - s.w / 2, aHi = (s) => s.a + s.w / 2, dLo = (s) => s.d - s.dp / 2, dHi = (s) => s.d + s.dp / 2;

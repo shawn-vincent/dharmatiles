@@ -1,4 +1,4 @@
-/* ---------- the stone: one bevelled box, shaped by a handful of numbers ----------
+/* ---------- the stone: a chiselled block ----------
    Frame: a = along the cliff (0 at its cut end), d = depth (grows toward the back), z = up. Lengths in figure heights (fh). */
 const rng = (seed) => { let t = (seed >>> 0) + 0x6D2B79F5; return () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r; return ((r ^ (r >>> 14)) >>> 0) / 4294967296; }; };
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -8,50 +8,57 @@ const mid = (r, a, b) => a + (b - a) * (r() + r()) / 2;
 
 /* A stone's defaults: every stone on the page is this object with some numbers changed. */
 const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
-  bevel: .16,       /* how round the edges are: 0.16 gives a radius of 0.07 fh on the top and upright edges, whatever the stone's size */
-  bevelT: null,     /* a top edge cut back further than its rounding, edge by edge: [cut-end side, far side, front, back], as shares of the shortest side (a shoulder cut) */
-  bevelV: null, bevelVC: null,   /* an upright corner cut back, as a share of the shorter plan side: all four, or [front cut-end, front far, back cut-end, back far] */
-  level: 0,         /* 0: stands on the ground (a small radius at the foot); above 0: rests on a stone (a larger radius below, so the bed joint is a groove) */
+  bevel: 0, bevelV: 0,    /* the same chamfer on every top edge, or every upright edge, as a share of the shortest side (what the single numbers of the chapters set) */
+  bevelT: null,     /* a chamfer along each top edge, as a share of the shortest side: [cut-end side, far side, front, back]; none under the stone */
+  bevelK: 1,        /* how steep a chamfer is: its drop over its width (0.58 to 1.7 is 30 to 60 degrees to the top) */
+  bevelVC: null,    /* a chamfer on each upright edge, as a share of the shorter plan side: [front cut-end, front far, back cut-end, back far] */
+  clips: null,      /* top corners knocked off by an angled plane: [[corner 0-3, size as a share of the shortest side]], corner bit 0 the far side, bit 1 the back */
   taperA: 1, taperD: 1,   /* the top's size as a share of the bottom's, along and across */
   batter: null,           /* one-sided batter: how far each face has moved in at the top, fh: [cut-end side, far side, front, back] */
   dipA: 0, dipD: 0,       /* the top's slope along and across (rise per run); a big one makes a wedge top */
   botA: 0,                /* the bottom's slope along (for beds that dip) */
   leanA: 0, leanD: 0,     /* shear: how far the top is carried along and back, per unit height */
-  cut: 0, cutAt: 0,       /* one top corner knocked off: its size as a share of the shortest side, and which corner (0-3) */
-  cushion: .035,          /* broad faces swell by this share of the shortest side */
   yaw: 0 };
-/* A stone is a rounded box: the surface of a small lattice (nine places along each side, three of them round each edge), every node
-   pushed out to a true rounded box, cut softly by any shoulder or corner planes, then battered, tilted, sheared and turned. */
-const LAT_T = [0, .27, .58, 1];
-function latAxis(hh, rLo, rHi) { const a = LAT_T.map((t) => -hh + rLo * t), b = LAT_T.map((t) => hh - rHi * t).reverse(), m0 = a[3], m1 = b[0]; return a.concat([m0 + (m1 - m0) / 2], b); }
-/* what a stone's numbers mean, once: the one place its radii, cuts and batter are worked out (the mesh and the field both read it) */
+/* A stone is a box (its taper, batter, tilt and shear map applied to the eight corners) cut by planes, every cut convex: a chamfer along each exposed
+   edge, a plane across each clipped corner, and everywhere else a hair of a chamfer, so a crease catches the light. The bottom is never cut. */
+const HAIR = .01;
+const sub = (p, r) => [p[0] - r[0], p[1] - r[1], p[2] - r[2]], add = (p, r, k) => [p[0] + r[0] * k, p[1] + r[1] * k, p[2] + r[2] * k], cross = (p, r) => [p[1] * r[2] - p[2] * r[1], p[2] * r[0] - p[0] * r[2], p[0] * r[1] - p[1] * r[0]], dot = (p, r) => p[0] * r[0] + p[1] * r[1] + p[2] * r[2], unit = (p) => { const l = Math.hypot(...p) || 1; return [p[0] / l, p[1] / l, p[2] / l]; };
+/* what a stone's numbers mean, once: its corners and its cut planes (the mesh and the fusing both read it) */
 function stoneParams(o) {
-  const q = Object.assign({}, STONE, o), m = Math.min(q.w, q.dp, q.h), hx = q.w / 2, hy = q.dp / 2, hz = q.h / 2, pl = Math.min(q.w, q.dp);
-  const R = Math.max(.002, .07 * q.bevel / .16), rh = Math.min(R, .4 * pl), rT = Math.min(R, .4 * q.h, .4 * pl), rB = Math.max(.002, Math.min(q.level > 0 ? R * .6 : R * .28, .3 * q.h));
-  const bT = q.bevelT || [q.bevel, q.bevel, q.bevel, q.bevel], cuts = [];
-  [[0, -1, 0], [1, 1, 0], [2, 0, -1], [3, 0, 1]].forEach(([i, sa, sd]) => { const half = sa ? hx : hy, e = Math.min(bT[i] * m, (sa ? q.w : q.dp) * .46), za = Math.min(e * .8, q.h * .55); if (e < 1.7 * rT) return; const l = Math.hypot(za, e), na = za / l, nz = e / l; cuts.push({ n: [sa * na, sd * na, nz], d: na * (half - e) + nz * hz }); });
-  if (q.cut > 0) { const sa = q.cutAt & 1 ? 1 : -1, sd = q.cutAt & 2 ? 1 : -1, l = Math.sqrt(3); cuts.push({ n: [sa / l, sd / l, 1 / l], d: (hx + hy + hz - q.cut * m * 1.2) / l }); }
-  const vc = q.bevelVC || (q.bevelV ? [q.bevelV, q.bevelV, q.bevelV, q.bevelV] : null);
-  if (vc) vc.forEach((v, ci) => { const c = v * pl; if (c < 1.7 * rh) return; const sa = ci & 1 ? 1 : -1, sd = ci & 2 ? 1 : -1; cuts.push({ n: [sa * .7071, sd * .7071, 0], d: (hx + hy - c) * .7071 }); });
+  const q = Object.assign({}, STONE, o), m = Math.min(q.w, q.dp, q.h), pl = Math.min(q.w, q.dp), hx = q.w / 2, hy = q.dp / 2, hz = q.h / 2;
   const bt = q.batter || [0, 0, 0, 0], ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2;
-  return { q, m, hx, hy, hz, pl, rh, rT, rB, cuts, ta, tdp, sa0, sd0, c: Math.cos(q.yaw), s2: Math.sin(q.yaw), cu: q.cushion * m };
+  const V = []; for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) for (let k = 0; k < 2; k++) { let a = i ? hx : -hx, d = j ? hy : -hy, z = k ? hz : -hz;
+    const t = z / q.h + .5; a = a * lerp(1, ta, t) + sa0 * t; d = d * lerp(1, tdp, t) + sd0 * t; z += t * (q.dipA * a + q.dipD * d) + (1 - t) * q.botA * a; const zz = z + q.h / 2; V[i * 4 + j * 2 + k] = [a + q.leanA * zz, d + q.leanD * zz, zz]; }
+  const v = (i, j, k) => V[i * 4 + j * 2 + k], bT = q.bevelT || Array(4).fill(q.bevel || 0), vc = q.bevelVC || Array(4).fill(q.bevelV || 0), clips = q.clips || (q.cut > 0 ? [[q.cutAt, q.cut * 1.2]] : []);
+  const c = [0, 0, 0]; for (const p of V) for (let x = 0; x < 3; x++) c[x] += p[x] / 8;
+  const planes = [], cut = (p0, p1, p2) => { let n = unit(cross(sub(p1, p0), sub(p2, p0))); if (dot(n, sub(p0, c)) < 0) n = [-n[0], -n[1], -n[2]]; planes.push({ n, d: dot(n, p0) }); };
+  /* a top edge E1-E2: its chamfer runs e in across the top and e*k down the side */
+  [[v(0, 0, 1), v(0, 1, 1), v(1, 0, 1), v(1, 1, 1), v(0, 0, 0), v(0, 1, 0), 0], [v(1, 0, 1), v(1, 1, 1), v(0, 0, 1), v(0, 1, 1), v(1, 0, 0), v(1, 1, 0), 1],
+   [v(0, 0, 1), v(1, 0, 1), v(0, 1, 1), v(1, 1, 1), v(0, 0, 0), v(1, 0, 0), 2], [v(0, 1, 1), v(1, 1, 1), v(0, 0, 1), v(1, 0, 1), v(0, 1, 0), v(1, 1, 0), 3]].forEach(([E1, E2, F1, , G1, , n]) => {
+    const across = Math.hypot(...sub(F1, E1)), e = Math.min(Math.max(bT[n] * m, HAIR), .45 * across), ez = Math.min(e * q.bevelK, .5 * q.h);
+    cut(add(E1, unit(sub(F1, E1)), e), add(E1, unit(sub(G1, E1)), -0 + ez), add(E2, unit(sub(F1, E1)), e)); });
+  /* an upright edge, cut c in along both faces */
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { const w = Math.min(Math.max(vc[i + 2 * j] * pl, HAIR), .45 * pl), B = v(i, j, 0), T = v(i, j, 1);
+    cut(add(B, unit(sub(v(1 - i, j, 0), B)), w), add(B, unit(sub(v(i, 1 - j, 0), B)), w), add(T, unit(sub(v(1 - i, j, 1), T)), w)); }
+  for (const [k, sz] of clips) { const i = k & 1, j = k >> 1 & 1, T = v(i, j, 1), s = Math.min(sz * m, .45 * pl);
+    cut(add(T, unit(sub(v(1 - i, j, 1), T)), s), add(T, unit(sub(v(i, 1 - j, 1), T)), s), add(T, unit(sub(v(i, j, 0), T)), s)); }
+  return { q, m, V, c, planes, rh: Math.max(HAIR, ...vc.map((x) => x * pl)), rT: Math.max(HAIR, bT[2] * m * q.bevelK), rB: HAIR,   /* what a fused joint must grow over: the widest upright chamfer, the front top chamfer */
+     cs: Math.cos(q.yaw), sn: Math.sin(q.yaw) };
 }
+/* the polyhedron: the box's six faces, each cut by every plane, and a new face where a plane cuts */
 function stoneMesh(o) {
-  const { q, m, hx, hy, hz, rh, rT, rB, cuts, ta, tdp, sa0, sd0, c, s2, cu } = stoneParams(o);
-  const X = latAxis(hx, rh, rh), Y = latAxis(hy, rh, rh), Z = latAxis(hz, rB, rT), L = X.length - 1, P = [], idx = [], id = new Int32Array((X.length) ** 3).fill(-1);
-  const node = (i, j, k) => { const key = (i * X.length + j) * X.length + k; let v = id[key]; if (v >= 0) return v; let a = X[i], d = Y[j], z = Z[k];
-    const rz = z > 0 ? rT : rB, ca = Math.max(-hx + rh, Math.min(hx - rh, a)), cd = Math.max(-hy + rh, Math.min(hy - rh, d)), cz = Math.max(-hz + rB, Math.min(hz - rT, z));
-    const da = (a - ca) / rh, dd = (d - cd) / rh, dz = (z - cz) / rz, l = Math.hypot(da, dd, dz); if (l > 1e-9) { a = ca + da / l * rh; d = cd + dd / l * rh; z = cz + dz / l * rz; }
-    const fa = i === 0 || i === L, fd = j === 0 || j === L;
-    if (fa) a += Math.sign(a) * cu * (1 - (d / hy) ** 2) * (1 - (z / hz) ** 2); if (fd) d += Math.sign(d) * cu * (1 - (a / hx) ** 2) * (1 - (z / hz) ** 2);
-    for (const ct of cuts) { const t = ct.n[0] * a + ct.n[1] * d + ct.n[2] * z - ct.d, mv = (t + Math.sqrt(t * t + .035 * .035)) / 2; a -= ct.n[0] * mv; d -= ct.n[1] * mv; z -= ct.n[2] * mv; }
-    const t = z / q.h + .5; a = a * lerp(1, ta, t) + sa0 * t; d = d * lerp(1, tdp, t) + sd0 * t; z += t * (q.dipA * a + q.dipD * d) + (1 - t) * q.botA * a; const zz = z + q.h / 2; a += q.leanA * zz; d += q.leanD * zz;
-    v = P.length; P.push([q.a + a * c - d * s2, q.d + a * s2 + d * c, q.z + zz]); id[key] = v; return v; };
-  const quad = (p0, p1, p2, p3) => { idx.push(p0, p1, p2, p0, p2, p3); };
-  for (let u = 0; u < L; u++) for (let v = 0; v < L; v++) {
-    quad(node(u, v, L), node(u + 1, v, L), node(u + 1, v + 1, L), node(u, v + 1, L)); quad(node(u, v, 0), node(u, v + 1, 0), node(u + 1, v + 1, 0), node(u + 1, v, 0));
-    quad(node(u, 0, v), node(u + 1, 0, v), node(u + 1, 0, v + 1), node(u, 0, v + 1)); quad(node(u, L, v), node(u, L, v + 1), node(u + 1, L, v + 1), node(u + 1, L, v));
-    quad(node(0, u, v), node(0, u, v + 1), node(0, u + 1, v + 1), node(0, u + 1, v)); quad(node(L, u, v), node(L, u + 1, v), node(L, u + 1, v + 1), node(L, u, v + 1)); }
+  const { q, V, c, planes, cs, sn } = stoneParams(o), v = (i, j, k) => V[i * 4 + j * 2 + k];
+  let F = [[v(0, 0, 0), v(0, 1, 0), v(1, 1, 0), v(1, 0, 0)], [v(0, 0, 1), v(1, 0, 1), v(1, 1, 1), v(0, 1, 1)], [v(0, 0, 0), v(1, 0, 0), v(1, 0, 1), v(0, 0, 1)], [v(0, 1, 0), v(0, 1, 1), v(1, 1, 1), v(1, 1, 0)], [v(0, 0, 0), v(0, 0, 1), v(0, 1, 1), v(0, 1, 0)], [v(1, 0, 0), v(1, 1, 0), v(1, 1, 1), v(1, 0, 1)]];
+  for (const pl of planes) { const side = (p) => pl.n[0] * p[0] + pl.n[1] * p[1] + pl.n[2] * p[2] - pl.d, next = [], edge = [];
+    for (const f of F) { const g = []; for (let i = 0; i < f.length; i++) { const p = f[i], r = f[(i + 1) % f.length], sp = side(p), sr = side(r);
+        if (sp <= 0) g.push(p); if ((sp < 0 && sr > 0) || (sp > 0 && sr < 0)) { const t = sp / (sp - sr), x = [p[0] + (r[0] - p[0]) * t, p[1] + (r[1] - p[1]) * t, p[2] + (r[2] - p[2]) * t]; g.push(x); edge.push(x); } }
+      if (g.length >= 3) next.push(g); }
+    if (edge.length >= 3) { const m0 = [0, 1, 2].map((x) => edge.reduce((a, p) => a + p[x], 0) / edge.length), u = Math.abs(pl.n[0]) < .9 ? [1, 0, 0] : [0, 1, 0], e1 = unit(cross(pl.n, u)), e2 = cross(pl.n, e1);
+      const ang = (p) => Math.atan2(dot(sub(p, m0), e2), dot(sub(p, m0), e1)); edge.sort((p, r) => ang(p) - ang(r)); const cap = edge.filter((p, i) => i === 0 || Math.hypot(...sub(p, edge[i - 1])) > 1e-6); if (cap.length >= 3) next.push(cap); }
+    F = next; }
+  const P = [], idx = [];
+  for (const f of F) { const n0 = P.length; let n = cross(sub(f[1], f[0]), sub(f[2], f[0])); const mf = [0, 1, 2].map((x) => f.reduce((a, p) => a + p[x], 0) / f.length); if (dot(n, sub(mf, c)) < 0) f.reverse();
+    for (const p of f) P.push([q.a + p[0] * cs - p[1] * sn, q.d + p[0] * sn + p[1] * cs, q.z + p[2]]); for (let i = 1; i < f.length - 1; i++) idx.push(n0, n0 + i, n0 + i + 1); }
   return { P, idx, o };
 }
 const stonePoints = (o) => stoneMesh(o).P;
@@ -76,7 +83,7 @@ function buildScene(stones, o = {}) {
   sc.add(new THREE.HemisphereLight(0xffffff, 0x5f6167, .56));
   const key = new THREE.DirectionalLight(0xffffff, .6); key.position.set(.5, 1.7, -1.3); sc.add(key);
   const fill = new THREE.DirectionalLight(0xffffff, .12); fill.position.set(-1.2, .5, -.2); sc.add(fill);
-  if (o.plate !== false) { const pl = o.plateSize || [PLATE, PLATE], k = pl.join(); let m = KEEP.plate.get(k); if (!m) KEEP.plate.set(k, m = new THREE.Mesh(geometryOf([stoneMesh({ w: pl[0], dp: pl[1], h: .09, a: pl[0] / 2, d: pl[1] / 2, z: -.09, bevel: .25 })]), material(0xb4b7bd))); sc.add(m); }
+  if (o.plate !== false) { const pl = o.plateSize || [PLATE, PLATE], k = pl.join(); let m = KEEP.plate.get(k); if (!m) KEEP.plate.set(k, m = new THREE.Mesh(geometryOf([stoneMesh({ w: pl[0], dp: pl[1], h: .09, a: pl[0] / 2, d: pl[1] / 2, z: -.09, bevelT: [.8, .8, .8, .8] })]), material(0xb4b7bd))); sc.add(m); }
   if (o.color || o.shift) stones.forEach((st, i) => { const m = meshOf(st, o.color ? o.color(st, i) : GREY); if (o.shift) { const v = o.shift(st, i); m.position.set(v[0], v[2], v[1]); } m.userData.own = true; sc.add(m); });
   else if (stones.length) { const m = new THREE.Mesh(geometryOf(stones), material(GREY)); m.userData.own = true; sc.add(m); }
   if (o.figure) { const f = o.figure, mat = material(0xa9adb4); if (!KEEP.figure) KEEP.figure = [new THREE.CylinderGeometry(.33, .33, .05, 40), new THREE.CylinderGeometry(.11, .15, .95, 18)];

@@ -15,11 +15,11 @@
 <p><span class="ev m">Measured</span> 200 formations were drawn with every number taken from the proposed ranges, the three families in the counted proportion (25 : 17 : 10). Each was then measured the way the traces were, from the references' camera: stone sizes, and the relations between touching stones.</p>
 <p>The table gives every measure for both, and the generator's from two angles: 45 degrees off the face, where the references' A–P plates stand, and 25, which is nearer how the sheet of sixteen is seen and how several A–P cliffs sit turned on their plates. Where the generator misses, the miss is left showing:</p>
 <ul><li>its ground-standing stones are lower and broader than the sheets' (median face height 0.74 against 0.95; the like-for-like row, of what shows, is 1.16 against 1.67): the widths are held at 0.42 or more, so a tall stone is a tall wide one;</li>
-<li>its resting stones are thinner (0.34 against 0.52) and fewer bear on two (8% against 18%), though as many rest (34%) and the stacks are nearer: 8 / 48 / 40 / 5 per cent against 13 / 35 / 38 / 13;</li>
+<li>its resting stones are thinner (0.34 against 0.52) and fewer bear on two (8% against 18%), though as many rest (34%) and the stacks are nearer: 9 / 49 / 39 / 4 per cent against 13 / 35 / 38 / 13;</li>
 <li>its widths are more alike (1.6 against 2.5 for widest to narrowest);</li>
-<li>the lower of two neighbours is in front in 66% of pairs against 83%, and the far end is 0.79 of the highest point as seen against 0.62;</li>
-<li>on the support check, of 857 laid stones in 400 draws none fails and none stands out past its support by more than 0.24 of its length; without the check 67 of 851 failed it and 28 overhung by more than half. All 23 gates in 400 draws keep their opening under a lintel that lies on both piers.</li></ul>
-<p>The numbers do not say whether a draw looks right. The pictures show the limits: flat chamfers where the sheets are softly rounded, no kinks on edges, stiff dipping beds, and no niche or shelter.</p></div>
+<li>the lower of two neighbours is in front in 65% of pairs against 83%, and the far end is 0.80 of the highest point as seen against 0.62;</li>
+<li>on the support check, of 820 laid stones in 400 draws none fails and none stands out past its support by more than 0.25 of its length; without the check 67 of 851 failed it and 28 overhung by more than half. All 23 gates in 400 draws keep their opening under a lintel that lies on both piers.</li></ul>
+<p>The numbers do not say whether a draw looks right. The pictures show the limits: chamfers that are all flat where the sheets' edges wander, no kinks on edges, stiff dipping beds, and no niche or shelter.</p></div>
 <div class="plates"><div class="scroll"><table id="g-rel"></table></div>
 <p class="note">References: <span class="ev m">Measured</span> from the traces. Generator: <span class="ev p">Proposed</span> rules, measured on the true solids as the camera would see them. "Foot nearer" compares the lowest point of each outline in the picture; on the traces a hidden foot ends where the stone in front hides it.</p>
 <div class="two">
@@ -69,17 +69,21 @@ formation(numbers, seed):                         every stone is first a plain b
   5 count       laying stops at eleven stones
 
 stone(box, numbers):
-  the surface of a 9 x 9 x 9 lattice (386 points), three steps round each edge;
-  every point pushed out to a true rounded box: radius 0.07 fh on top and upright edges,
-  0.04 under a resting stone (so a bed joint is a groove), 0.02 at a ground stone's foot;
-  broad faces swell 3.5 percent; shoulder and corner cuts are planes applied softly
-  move each face in at the top (batter), scale, tilt the top, shear, turn
+  the eight corners of the box, each moved by batter, top tilt, lean and shear
+  cut by planes (each keeps the part of the stone on one side):
+    each top edge:    through a point e in across the top and one e x k down the side (k from
+                      0.58 to 1.7); e is 0.025-0.07 fh on the front and cut-end edge, seldom the far
+                      side, 0 under or against another stone, sometimes one broad edge
+    each upright edge: narrow on a front corner now and then, 0.05-0.1 on a many-sided tall stone
+    top corners:      0 to 3 angled planes across them, 0.04-0.09 fh from the corner
+    everything else except the bottom edges: a hair, 0.01 fh
+  cut each of the six faces by each plane and add the face a plane leaves; turn
 fuse(stones):
   for each contact (a bed, or an upright joint between neighbours) draw chapter 8's rule:
     whether it fuses (the chance only; its place and ends are not drawn)
   grow, when the stones are built, those on a fused joint toward each other:
-    upright joint: each stone sideways by its edge radius + 0.01 (about 0.08 fh)
-    bed: the upper stone downward by the two edge radii + 0.01 (about 0.12 fh)
+    upright joint: each stone sideways by its widest upright chamfer + 0.01
+    bed: the upper stone downward by the lower's front top chamfer + 0.01
   the stones then simply overlap; no material is added, none is cut, no boolean is needed
 bear(stones):  (lowest stone first)
   for a stone off the ground, find the samples of its underside with no stone top within
