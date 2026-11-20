@@ -27,6 +27,7 @@ p{margin:0}a{color:var(--accent)}
 input[type=number]{font:15px var(--mono);width:7.5em;padding:6px 8px;border:1px solid var(--rule);border-radius:3px;background:var(--panel);color:var(--fg)}
 button,select{font:500 14px var(--text);padding:6px 12px;border:1px solid var(--rule);border-radius:99px;background:var(--panel);color:var(--fg);cursor:pointer}
 select{border-radius:3px;max-width:100%}
+button[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft, var(--panel))}
 button.main{border-color:var(--accent);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .read{font-size:13.5px;color:var(--muted)}.read b{color:var(--fg);font-weight:600}
@@ -48,6 +49,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
       <div class="seedrow"><button type="button" class="main" id="new">New seed</button><button type="button" id="view">Reset view</button></div></div>
     <div class="grp"><label for="cls"><span style="font:600 12px var(--head);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Kind</span></label>
       <select id="cls"><option value="any">Any, in the references' proportion</option><option value="pillars">Pillars</option><option value="wall">Plateau wall</option><option value="blocks">Blocks in tiers</option><option value="leaners">Leaning set or dipping beds</option><option value="courses">Courses (a stair)</option><option value="gates">Gate</option></select></div>
+    <div class="grp"><span id="l-join">Stones</span><div class="seedrow" role="group" aria-labelledby="l-join"><button type="button" id="j-on" aria-pressed="true">Joined into one solid</button><button type="button" id="j-off" aria-pressed="false">Separate</button></div></div>
     <p class="read" id="read"></p>
     <p class="note">Drag to turn. Pinch to zoom. Scrolling over the view scrolls the page. Lengths are in figure heights: a formation is about two high.</p>
   </div>
@@ -69,7 +71,10 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
   const NAME = { pillars: 'pillars', wall: 'a plateau wall', blocks: 'blocks in tiers', leaners: 'a leaning set', ramp: 'dipping beds', courses: 'courses', gates: 'a gate' };
   let seed = 1 + Math.floor(Math.random() * 9000);
   try { const sv = +localStorage.getItem('bcg-seed'); if (sv > 0) seed = sv; } catch (e) { /* no storage in this frame: start from a random seed */ }
-  const make = (sd, fine) => { const p = drawParams(sd, clsIn.value), f = formation(p); return { p, f, ms: fine ? [formSolid(f, { h: .025 })] : formMeshes(f) }; };
+  /* joined: one solid, plain union with V grooves; separate: each stone its own rounded mesh, as piled, before any joining */
+  let joined = true;
+  try { if (localStorage.getItem('bcg-joined') === '0') joined = false; } catch (e) { /* no storage in this frame: start joined */ }
+  const make = (sd, fine) => { const p = drawParams(sd, clsIn.value), f = formation(p); return { p, f, ms: !joined ? formMeshes(f, true) : fine ? [formSolid(f, { h: .025 })] : formMeshes(f) }; };
   /* the middle of a formation, so every view turns about the stones and not about an absent plate */
   const middle = (ms) => { let lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; for (const m of ms) for (const q of m.P) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2]; };
   const R3 = new THREE.WebGLRenderer({ antialias: true }); R3.setClearColor(STAGE, 1); R3.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); const cv = R3.domElement; live.append(cv);
@@ -97,6 +102,10 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
   $('#next').addEventListener('click', () => go(seed + 1));
   $('#view').addEventListener('click', () => { refView(middle(cur.ms)); render(); });
   seedIn.addEventListener('change', () => go(+seedIn.value, true));
+  const jOn = $('#j-on'), jOff = $('#j-off');
+  const setJoin = (on) => { joined = on; jOn.setAttribute('aria-pressed', on); jOff.setAttribute('aria-pressed', !on); try { localStorage.setItem('bcg-joined', on ? '1' : '0'); } catch (e) { /* not kept: nothing depends on it */ } fill(from); show(seed, true); };
+  jOn.setAttribute('aria-pressed', joined); jOff.setAttribute('aria-pressed', !joined);
+  jOn.addEventListener('click', () => setJoin(true)); jOff.addEventListener('click', () => setJoin(false));
   clsIn.addEventListener('change', () => { fill(from); show(seed); });
   fill(from); show(seed);
 })();
