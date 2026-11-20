@@ -98,3 +98,38 @@ svg .mut{fill:var(--muted)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
+<style>
+.tr .o{fill:transparent;stroke:var(--a-out);stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.tr .t{fill:var(--a-top);fill-opacity:.22;stroke:var(--a-top);stroke-width:1.4;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.tr.dim{opacity:.18}
+.tr.on .o{fill:var(--a-out);fill-opacity:.28;stroke-width:3}
+.cell.stage{overflow:hidden;border-radius:2px}
+.chart{min-width:0;width:100%}
+.chart svg{display:block}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+.plate.pad{padding:12px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:860px){.two,.three{grid-template-columns:minmax(0,1fr)}}
+.stat{display:grid;gap:2px}
+.stat b{font:600 22px/1.1 var(--head);font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px 18px}
+.rule{display:grid;gap:6px;padding:12px 14px;border:1px solid var(--rule);border-left:3px solid var(--accent);background:var(--panel);border-radius:3px;font-size:14px}
+.rule h3{font-size:15px}
+.chain{display:grid;gap:4px;font-size:13.5px}
+.chain div{display:grid;grid-template-columns:8.2em minmax(0,1fr);gap:8px}
+.chain div>span:first-child{font:600 11.5px/1.7 var(--head);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+@media (max-width:520px){.chain div{grid-template-columns:minmax(0,1fr);gap:0}}
+</style>
+<style>
+.insp{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.insp{grid-template-columns:minmax(0,1fr)}}
+#insp-table tr.on td{background:var(--accent-soft)}
+#insp-grid .cell.sel{outline:3px solid var(--accent);outline-offset:-3px}
+#insp-grid .cell:focus-visible{outline:3px solid var(--fg);outline-offset:-3px}
+.taxrow{display:grid;grid-template-columns:minmax(0,26ch) minmax(0,1fr);gap:8px 18px;padding:12px 0;border-top:1px solid var(--rule);align-items:start}
+.taxrow p{font-size:13.5px;color:var(--muted)}.taxrow .ids{font-family:var(--mono);font-size:12px}
+@media (max-width:700px){.taxrow{grid-template-columns:minmax(0,1fr)}}
+</style>

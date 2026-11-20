@@ -98,6 +98,41 @@ svg .mut{fill:var(--muted)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
+<style>
+.tr .o{fill:transparent;stroke:var(--a-out);stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.tr .t{fill:var(--a-top);fill-opacity:.22;stroke:var(--a-top);stroke-width:1.4;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.tr.dim{opacity:.18}
+.tr.on .o{fill:var(--a-out);fill-opacity:.28;stroke-width:3}
+.cell.stage{overflow:hidden;border-radius:2px}
+.chart{min-width:0;width:100%}
+.chart svg{display:block}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+.plate.pad{padding:12px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:860px){.two,.three{grid-template-columns:minmax(0,1fr)}}
+.stat{display:grid;gap:2px}
+.stat b{font:600 22px/1.1 var(--head);font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px 18px}
+.rule{display:grid;gap:6px;padding:12px 14px;border:1px solid var(--rule);border-left:3px solid var(--accent);background:var(--panel);border-radius:3px;font-size:14px}
+.rule h3{font-size:15px}
+.chain{display:grid;gap:4px;font-size:13.5px}
+.chain div{display:grid;grid-template-columns:8.2em minmax(0,1fr);gap:8px}
+.chain div>span:first-child{font:600 11.5px/1.7 var(--head);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+@media (max-width:520px){.chain div{grid-template-columns:minmax(0,1fr);gap:0}}
+</style>
+<style>
+.insp{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.insp{grid-template-columns:minmax(0,1fr)}}
+#insp-table tr.on td{background:var(--accent-soft)}
+#insp-grid .cell.sel{outline:3px solid var(--accent);outline-offset:-3px}
+#insp-grid .cell:focus-visible{outline:3px solid var(--fg);outline-offset:-3px}
+.taxrow{display:grid;grid-template-columns:minmax(0,26ch) minmax(0,1fr);gap:8px 18px;padding:12px 0;border-top:1px solid var(--rule);align-items:start}
+.taxrow p{font-size:13.5px;color:var(--muted)}.taxrow .ids{font-family:var(--mono);font-size:12px}
+@media (max-width:700px){.taxrow{grid-template-columns:minmax(0,1fr)}}
+</style>
 
 <main>
 <div class="intro">
@@ -130,29 +165,228 @@ svg .mut{fill:var(--muted)}
 <ol class="chapters" id="chapters"></ol>
 
 <section class="ch" id="c1"><header><span class="n">Chapter 1</span><h2>The four sheets</h2>
-<p>Every cell of the four references, cropped and named. These 52 formations are the whole of the evidence.</p></header>
-<div class="sec full"><div class="plates">
-  <figure><div class="row c4" id="g-smooth"></div><figcaption>A–P, smooth on a bare plate (<code>blocky-a-p-smooth.jpg</code>). The clearest geometry, and the sheet most measurements are taken from.</figcaption></figure>
-  <figure><div class="row c4" id="g-squares"></div><figcaption>The same sixteen with a surface texture and rubble (<code>on-squares-a-p-unpainted.jpg</code>). Read only for where it agrees or disagrees with the smooth sheet about the big faces.</figcaption></figure>
-  <figure><div class="row c5" id="g-twenty"></div><figcaption>T1–T20 (<code>blocky-twenty.jpg</code>).</figcaption></figure>
-  <figure><div class="row c4" id="g-sixteen"></div><figcaption>S1–S16 (<code>blocky-sixteen.jpg</code>).</figcaption></figure>
+<p>Fifty-two formations are the whole of the evidence. Every one was cropped, named, and its major stones outlined by hand: 350 stones in all. Every measured number on this page comes from those outlines.</p></header>
+
+<div class="sec full"><div class="words"><h3>Look at any formation</h3>
+<p>Pick a sheet, then a cell. Blue lines are the stones as traced; green patches are the top faces that show. Point at a stone to read what was measured from its outline. Lengths are in <b>figure heights as seen</b> (fh): the stone's size in the picture divided by the figure's foot-to-head height in the same cell.</p></div>
+<div class="plates">
+  <div class="pills" id="insp-sheet" role="group" aria-label="Sheet"></div>
+  <div class="insp">
+    <figure><div id="insp-big"></div><figcaption id="insp-note"></figcaption></figure>
+    <div class="scroll"><table id="insp-table"></table></div>
+  </div>
+  <div class="row" id="insp-grid" style="grid-template-columns:repeat(auto-fill,minmax(104px,1fr))"></div>
+  <p class="note"><span class="ev m">Measured</span> Outlines are good to about 2 percent of a cell's width (roughly 0.05 fh). Block bottoms run 1 to 2 percent low. Where a stone runs behind the figure or another stone its outline is closed by a guess, and where a groove is faint a wide stone may really be two: the tracing notes list 25 such places. Counts lean toward fewer, wider stones.</p>
 </div></div>
+
+<div class="sec"><div class="words"><h3>What the scale really is</h3>
+<p>The figure's round base gives a ruler that lies flat on the plate. Its top rim is a circle, so the ellipse it makes in the picture tells how far above the horizon the camera sits (15 to 21 degrees), and with that the plate's two visible edges can be laid flat and measured in base diameters.</p>
+<p><span class="ev m">Measured</span> The plate is <b>2.4 to 2.8 base diameters</b> on a side in the A–P sheets, about 2.3 by 3.0 in the sheet of twenty (a rectangle), and 1.8 to 2.1 in the sheet of sixteen.</p>
+<p><span class="ev e">Estimated</span> A 28 to 32 mm figure stands on a 25 mm base. On that reading the plates are 45 to 70 mm across, <b>not one 35 mm square</b>: a 25 mm base would cover seven tenths of a 35 mm square's side, and here it covers four tenths. This much is sure. Which size the plates are is not: the three sheets disagree with each other by a third, so the plate was never drawn to a fixed scale against the figure.</p>
+<p>So the page measures in figure heights. The figure is drawn the same in every cell, it stands upright like the cliff faces, and it is the scale a player reads the cliff against.</p></div>
+<div class="plates"><div class="two">
+  <figure><div id="scale-cell"></div><figcaption>The ruler in cell H: the base's rim, the figure's height, and the plate's two near edges.</figcaption></figure>
+  <figure><div class="plate pad"><div id="scale-plan"></div></div><figcaption>The same laid flat, seen from above, in base diameters. Dashed: a 35 mm square if the base is 25 mm.</figcaption></figure>
+</div>
+<div class="scroll"><table id="scale-table"></table></div></div></div>
+
+<div class="sec full"><div class="words"><h3>Five kinds of formation</h3>
+<p><span class="ev e">Estimated</span> Sorted by eye into five classes by what the big joints do. The classes are names for regions of one family, not separate designs: chapter 9 shows what they share, and the scatter below shows they run into each other.</p></div>
+<div class="plates"><div id="tax"></div>
+<div class="two">
+  <figure><div class="plate pad"><div id="tax-grain"></div><div id="tax-legend" style="padding-top:6px"></div></div><figcaption><span class="ev m">Measured</span> Each formation's grain: the direction its stones' long axes share (0° upright, 90° level), against how strongly they share it (1 = all the same). Pillars sit upright and agree; courses lie level and agree; blocks have no grain to speak of. Shape of mark: the class given by eye.</figcaption></figure>
+  <figure><div class="plate pad"><div id="tax-count"></div></div><figcaption><span class="ev m">Measured</span> Major stones per formation. The A–P sheets use 4 to 8; the two later sheets 5 to 11. Median 7.</figcaption></figure>
+</div></div></div>
+
+<div class="sec"><div class="words"><h3>Where the sources disagree</h3>
+<p>The smooth A–P sheet and the textured one show the same sixteen compositions, but the textured sheet breaks faces the smooth one leaves whole. The smooth sheet is taken as the form; the textured one only confirms the masses.</p>
+<p>The older sculpting guides in the same folder describe a different rock. Where they differ from the four sheets, the sheets win:</p></div>
+<div class="plates"><div class="scroll"><table>
+<tr><th>The guides say</th><th>The four sheets show</th></tr>
+<tr><td>Fractured, angular style; chipped edges; avoid a rounded look.</td><td>Every edge is a broad soft bevel. No sharp arris anywhere on the smooth sheets (chapter 6).</td></tr>
+<tr><td>B is a low outcrop; D a spire; O a slanted mass; P a stacked-block mass.</td><td>B is a tall pillar wall; D a broad wall with slabs on top; O squarish blocks in tiers; P four leaning fins.</td></tr>
+<tr><td>Sloped faces 15 to 70 degrees, diagonal cleavage typically 45.</td><td>Stones lean 0 to 35 degrees off upright, and mostly under 12 (chapter 6). Nothing lies at 45.</td></tr>
+<tr><td>A tile is 25 mm; height is 0.25 to 1.25 footprints.</td><td>The plate is 1.8 to 3 figure bases across; all but one formation stand 1.8 to 2.4 fh in the picture.</td></tr>
+<tr><td>Rubble, chips and secondary breaks are part of the form.</td><td>Left out here by instruction: only the major stones.</td></tr>
+</table></div>
+<div class="row c4" id="diff-row"></div>
+<p class="note">Left pair: cell L smooth and textured. The textured sheet cuts L's four leaning slabs with level joints into about a dozen blocks. Right pair: cell P. The fins gain small blocks at the foot, but lean, count and order are kept.</p></div></div>
 </section>
 
 <div id="stubs"></div>
 </main>
 
 <script>
-(() => {
-  const AP = 'ABCDEFGHIJKLMNOP'.split('');
-  const T = Array.from({ length: 20 }, (_, i) => 'T' + (i + 1)), S = Array.from({ length: 16 }, (_, i) => 'S' + (i + 1));
-  const el = (tag, attrs = {}, kids = []) => { const e = document.createElement(tag); for (const k in attrs) { if (k === 'text') e.textContent = attrs[k]; else e.setAttribute(k, attrs[k]); } for (const c of kids) e.append(c); return e; };
-  const gallery = (id, names, pre) => { const g = document.getElementById(id); if (!g) return; for (const n of names) g.append(el('div', { class: 'cell stage' }, [el('img', { src: 'img/' + pre + n.toLowerCase() + '.jpg', alt: 'Reference formation ' + n, loading: 'lazy' }), el('span', { class: 'tag', text: n })])); };
-  gallery('g-smooth', AP, 'ap-'); gallery('g-squares', AP, 'sq-'); gallery('g-twenty', T, ''); gallery('g-sixteen', S, '');
+(async () => {
+  const fail = (e) => { const b = document.createElement('p'); b.style.cssText = 'padding:12px;border:2px solid var(--err);color:var(--err);margin:16px 0'; b.textContent = 'The page could not finish drawing: ' + (e && e.message || e); document.querySelector('main').prepend(b); console.error(e); };
+  try {
+/* ---------- small tools ---------- */
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (s, r = document) => r.querySelector(s);
+const put = (e, attrs, kids) => { for (const k in attrs) { const v = attrs[k]; if (v == null || v === false) continue; if (k === 'text') e.textContent = v; else if (k === 'html') e.innerHTML = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c); return e; };
+const h = (tag, attrs = {}, ...kids) => put(document.createElement(tag), attrs, kids);
+const s = (tag, attrs = {}, ...kids) => put(document.createElementNS(NS, tag), attrs, kids);
+const fmt = (v, d = 2) => (v == null || !isFinite(v)) ? '–' : (+v).toFixed(d);
+const pts = (p) => p.map((q) => q[0] + ',' + q[1]).join(' ');
+const quant = (arr, q) => { const a = arr.filter((v) => v != null && isFinite(v)).sort((x, y) => x - y); if (!a.length) return NaN; const i = (a.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i); return a[lo] + (a[hi] - a[lo]) * (i - lo); };
+const stats = (arr) => ({ n: arr.filter((v) => v != null && isFinite(v)).length, min: quant(arr, 0), p10: quant(arr, .1), q1: quant(arr, .25), med: quant(arr, .5), q3: quant(arr, .75), p90: quant(arr, .9), max: quant(arr, 1) });
+const range = (st, d = 2) => fmt(st.p10, d) + '–' + fmt(st.p90, d);
+const AP = 'ABCDEFGHIJKLMNOP'.split(''), TT = Array.from({ length: 20 }, (_, i) => 'T' + (i + 1)), SS = Array.from({ length: 16 }, (_, i) => 'S' + (i + 1));
+const ALL = [...AP, ...TT, ...SS];
+const imgOf = (id) => 'img/' + (id.length === 1 ? 'ap-' : '') + id.toLowerCase() + '.jpg';
+const KINDS = ['slab', 'block', 'pillar', 'lean', 'cap', 'toe'];
+const CLASSES = ['pillars', 'blocks', 'leaners', 'courses', 'gates'];
+const CLASS_NAME = { pillars: 'Pillars', blocks: 'Blocks', leaners: 'Leaners', courses: 'Courses', gates: 'Gates' };
+
+/* ---------- data: the traces and what was measured from them ---------- */
+const [TR, ME, CL] = await Promise.all(['data/traces.json', 'data/measures.json', 'data/classes.json'].map((u) => fetch(u).then((r) => { if (!r.ok) throw new Error(u + ': ' + r.status); return r.json(); })));
+const STONES = ME.stones, PAIRS = ME.pairs, CELLS = ME.cells;
+const stoneById = Object.fromEntries(STONES.map((x) => [x.id, x]));
+for (const st of STONES) st.cls = CL[st.cell].class;
+
+/* ---------- a reference cell with its traced stones over it ---------- */
+function cellView(id, o = {}) {
+  const c = TR[id];
+  const svg = s('svg', { viewBox: '0 0 100 100', preserveAspectRatio: 'none', style: 'position:absolute;inset:0;width:100%;height:100%' });
+  if (o.mass) svg.append(s('polygon', { points: pts(CELLS[id].mass), fill: 'none', stroke: 'var(--a-dim)', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' }));
+  if (o.stones !== false) for (const st of c.stones) {
+    const want = !o.only || o.only(st, stoneById[st.id]);
+    const g = s('g', { 'data-stone': st.id, class: 'tr' + (want ? '' : ' dim') });
+    g.append(s('polygon', { points: pts(st.out), class: 'o' }));
+    if (st.top && o.tops !== false) g.append(s('polygon', { points: pts(st.top), class: 't' }));
+    if (o.onstone) { g.addEventListener('pointerenter', () => o.onstone(st.id)); g.addEventListener('click', () => o.onstone(st.id)); }
+    svg.append(g);
+  }
+  if (o.frame && c.plate) { svg.append(s('polyline', { points: pts(c.plate), fill: 'none', stroke: 'var(--a-dim)', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' })); const b = c.fig.base; svg.append(s('ellipse', { cx: b[0], cy: b[1], rx: b[2], ry: b[3], fill: 'none', stroke: 'var(--a-dim)', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' }), s('line', { x1: c.fig.foot[0], y1: c.fig.foot[1], x2: c.fig.head[0], y2: c.fig.head[1], stroke: 'var(--a-dim)', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' })); }
+  if (o.extra) o.extra(svg, c);
+  const kids = [h('img', { src: o.img || imgOf(id), alt: 'Reference formation ' + id, style: o.fade ? 'opacity:' + o.fade : null }), svg, o.tag === false ? null : h('span', { class: 'tag', text: o.label || id })];
+  const d = h('div', { class: 'cell stage', 'data-cell': id }, kids);
+  if (o.onpick) { d.style.cursor = 'pointer'; d.tabIndex = 0; d.setAttribute('role', 'button'); d.addEventListener('click', () => o.onpick(id)); d.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); o.onpick(id); } }); }
+  return o.sub ? h('div', { style: 'min-width:0' }, d, h('div', { class: 'sub', html: o.sub })) : d;
+}
+
+/* ---------- charts: drawn as SVG at the width of the box they sit in, drawn again when that width changes ---------- */
+const DRAWS = [];
+function chart(target, height, draw) {
+  const box = typeof target === 'string' ? document.getElementById(target) : target; if (!box) return;
+  box.classList.add('chart'); let last = 0;
+  const run = () => { const w = Math.floor(box.clientWidth); if (!w || w === last) return; last = w; const svg = s('svg', { width: w, height, viewBox: `0 0 ${w} ${height}`, role: 'img' }); draw(svg, w, height); box.replaceChildren(svg); };
+  new ResizeObserver(run).observe(box); DRAWS.push(() => { last = 0; run(); }); run();
+}
+const scale = (d0, d1, r0, r1) => (v) => r0 + (v - d0) / (d1 - d0) * (r1 - r0);
+const ticks = (d0, d1, n = 5) => { const span = d1 - d0, step0 = Math.pow(10, Math.floor(Math.log10(span / n))), err = span / n / step0; const step = step0 * (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1); const out = []; for (let v = Math.ceil(d0 / step - 1e-9) * step; v <= d1 + 1e-9; v += step) out.push(+v.toFixed(6)); return out; };
+function axes(svg, w, hgt, o) {
+  const m = Object.assign({ l: 40, r: 10, t: 10, b: 34 }, o.m || {});
+  const x = scale(o.x[0], o.x[1], m.l, w - m.r), y = scale(o.y[0], o.y[1], hgt - m.b, m.t);
+  const g = s('g', { 'font-size': 11 });
+  for (const v of (o.xt || ticks(o.x[0], o.x[1], w < 420 ? 4 : 7))) g.append(s('line', { x1: x(v), x2: x(v), y1: m.t, y2: hgt - m.b, stroke: 'var(--rule)' }), s('text', { x: x(v), y: hgt - m.b + 14, 'text-anchor': 'middle', class: 'mut', text: o.xf ? o.xf(v) : v }));
+  for (const v of (o.yt || ticks(o.y[0], o.y[1], 4))) g.append(s('line', { x1: m.l, x2: w - m.r, y1: y(v), y2: y(v), stroke: 'var(--rule)' }), s('text', { x: m.l - 5, y: y(v) + 4, 'text-anchor': 'end', class: 'mut', text: o.yf ? o.yf(v) : v }));
+  if (o.xl) g.append(s('text', { x: (m.l + w - m.r) / 2, y: hgt - 4, 'text-anchor': 'middle', text: o.xl }));
+  if (o.yl) g.append(s('text', { x: 4, y: m.t + 2, 'dominant-baseline': 'hanging', text: o.yl }));
+  svg.append(g); return { x, y, m };
+}
+/* a histogram of measured values, with an optional band for a proposed range */
+function hist(target, vals, o) {
+  chart(target, o.h || 210, (svg, w, hgt) => {
+    const v = vals.filter((q) => q != null && isFinite(q)), n = o.bins || 14, [a, b] = o.x;
+    const bins = Array(n).fill(0); for (const q of v) { const i = Math.floor((Math.min(Math.max(q, a), b - 1e-9) - a) / (b - a) * n); bins[i]++; }
+    const top = Math.max(...bins) * 1.12;
+    const ax = axes(svg, w, hgt, { x: o.x, y: [0, top], xl: o.xl, yl: o.yl || 'stones', xf: o.xf, m: { t: 18 } });
+    if (o.prop) svg.append(s('rect', { x: ax.x(o.prop[0]), y: ax.m.t, width: ax.x(o.prop[1]) - ax.x(o.prop[0]), height: hgt - ax.m.b - ax.m.t, fill: 'var(--accent-soft)', opacity: .55 }), s('line', { x1: ax.x(o.prop[0]), x2: ax.x(o.prop[1]), y1: ax.m.t, y2: ax.m.t, stroke: 'var(--accent)', 'stroke-width': 2, 'stroke-dasharray': '5 3' }));
+    bins.forEach((c, i) => { if (!c) return; const x0 = ax.x(a + i / n * (b - a)), x1 = ax.x(a + (i + 1) / n * (b - a)); svg.append(s('rect', { x: x0 + 1, y: ax.y(c), width: Math.max(1, x1 - x0 - 2), height: ax.y(0) - ax.y(c), fill: o.fill || 'var(--a-out)', rx: 1 })); });
+    const st = stats(v); const my = ax.m.t + 2;
+    svg.append(s('line', { x1: ax.x(Math.max(a, st.p10)), x2: ax.x(Math.min(b, st.p90)), y1: my + 6, y2: my + 6, stroke: 'var(--fg)', 'stroke-width': 1.5 }), s('line', { x1: ax.x(Math.max(a, st.q1)), x2: ax.x(Math.min(b, st.q3)), y1: my + 6, y2: my + 6, stroke: 'var(--fg)', 'stroke-width': 5 }), s('circle', { cx: ax.x(st.med), cy: my + 6, r: 4, fill: 'var(--panel)', stroke: 'var(--fg)', 'stroke-width': 2 }));
+  });
+}
+/* a scatter of measured values: groups get the page's annotation colours and their own mark */
+const MARK = { pillars: ['var(--a-out)', 'c'], blocks: ['var(--a-dim)', 'q'], leaners: ['var(--a-ax)', 'd'], courses: ['var(--a-top)', 't'], gates: ['var(--a-gap)', 'x'],
+  pillar: ['var(--a-out)', 'c'], block: ['var(--a-dim)', 'q'], lean: ['var(--a-ax)', 'd'], slab: ['var(--a-top)', 't'], cap: ['var(--a-gap)', 'x'], toe: ['var(--muted)', 'p'] };
+function mark(kind, x, y, r = 4, extra = {}) {
+  const [col, sh] = MARK[kind] || ['var(--fg)', 'c']; const a = Object.assign({ fill: col, 'fill-opacity': .72, stroke: col, 'stroke-width': 1 }, extra);
+  if (sh === 'c') return s('circle', Object.assign({ cx: x, cy: y, r }, a));
+  if (sh === 'q') return s('rect', Object.assign({ x: x - r * .85, y: y - r * .85, width: r * 1.7, height: r * 1.7 }, a));
+  if (sh === 'd') return s('polygon', Object.assign({ points: `${x},${y - r * 1.2} ${x + r * 1.1},${y} ${x},${y + r * 1.2} ${x - r * 1.1},${y}` }, a));
+  if (sh === 't') return s('polygon', Object.assign({ points: `${x},${y - r * 1.15} ${x + r * 1.15},${y + r * .9} ${x - r * 1.15},${y + r * .9}` }, a));
+  if (sh === 'p') return s('polygon', Object.assign({ points: `${x},${y + r * 1.15} ${x + r * 1.15},${y - r * .9} ${x - r * 1.15},${y - r * .9}` }, a));
+  return s('path', Object.assign({ d: `M${x - r},${y - r}L${x + r},${y + r}M${x - r},${y + r}L${x + r},${y - r}` }, a, { 'stroke-width': 2.2, fill: 'none' }));
+}
+function legend(kinds, names) { return h('div', { class: 'legend' }, kinds.map((k) => { const sv = s('svg', { width: 14, height: 14, viewBox: '0 0 14 14' }, mark(k, 7, 7, 4.2)); return h('span', {}, sv, (names && names[k]) || k); })); }
+function scatter(target, rows, o) {
+  chart(target, o.h || 260, (svg, w, hgt) => {
+    const ax = axes(svg, w, hgt, o);
+    if (o.under) o.under(svg, ax, w, hgt);
+    for (const r of rows) { const X = o.fx(r), Y = o.fy(r); if (X == null || Y == null || !isFinite(X) || !isFinite(Y)) continue; const m = mark(o.fk ? o.fk(r) : 'pillar', ax.x(Math.min(Math.max(X, o.x[0]), o.x[1])), ax.y(Math.min(Math.max(Y, o.y[0]), o.y[1])), o.r || 3.6); if (o.title) m.append(s('title', { text: o.title(r) })); svg.append(m); }
+    if (o.over) o.over(svg, ax, w, hgt);
+  });
+}
+
+const CROPS = await fetch('data/crops.json').then((r) => r.json());
+/* ---------- chapter 1 ---------- */
+{
+  const sheets = [['A–P smooth', AP, null], ['A–P textured', AP, 'sq-'], ['T1–T20', TT, null], ['S1–S16', SS, null]];
+  let sheet = 0, cur = 'H';
+  const big = $('#insp-big'), table = $('#insp-table'), grid = $('#insp-grid'), note = $('#insp-note');
+  const hi = (sid) => { for (const g of big.querySelectorAll('.tr')) g.classList.toggle('on', g.dataset.stone === sid); for (const r of table.querySelectorAll('tr[data-stone]')) r.classList.toggle('on', r.dataset.stone === sid); };
+  const show = (id) => {
+    cur = id; const pre = sheets[sheet][2];
+    big.replaceChildren(cellView(id, { img: pre ? 'img/' + pre + id.toLowerCase() + '.jpg' : null, mass: true, onstone: hi }));
+    const c = CELLS[id];
+    note.innerHTML = `<b>${id}</b> · ${CLASS_NAME[CL[id].class]} · ${c.n} stones · ${fmt(c.W)} fh wide, ${fmt(c.H)} fh high as seen. ${CL[id].note}`;
+    table.replaceChildren(h('tr', {}, ['Stone', 'Kind', 'Width', 'Face height', 'Height ÷ width', 'Lean', 'Share'].map((t, i) => h('th', { class: i > 1 ? 'num' : null, text: t }))),
+      ...STONES.filter((x) => x.cell === id).map((x) => h('tr', { 'data-stone': x.id, onpointerenter: () => hi(x.id) }, h('td', { text: x.id }), h('td', { text: x.kind + (x.ground ? '' : ' ↑') }), h('td', { class: 'num', text: fmt(x.wb) }), h('td', { class: 'num', text: fmt(x.hb) }), h('td', { class: 'num', text: fmt(x.slender) }), h('td', { class: 'num', text: fmt(x.lean, 0) + '°' }), h('td', { class: 'num', text: fmt(x.share * 100, 0) + '%' }))));
+    for (const d of grid.children) d.classList.toggle('sel', d.dataset.cell === id);
+  };
+  const fill = () => {
+    const [, names, pre] = sheets[sheet];
+    grid.replaceChildren(...names.map((id) => cellView(id, { img: pre ? 'img/' + pre + id.toLowerCase() + '.jpg' : null, onpick: show, tops: false })));
+    if (!names.includes(cur)) cur = names[0]; show(cur);
+  };
+  const pills = $('#insp-sheet');
+  sheets.forEach(([name], i) => pills.append(h('button', { type: 'button', 'aria-pressed': i === 0, text: name, onclick: (e) => { sheet = i; for (const b of pills.children) b.setAttribute('aria-pressed', b === e.target); fill(); } })));
+  fill();
+
+  /* the scale: the base's rim as a ruler on the plate */
+  $('#scale-cell').append(cellView('H', { stones: false, frame: true }));
+  const flat = (id, sphi) => { const c = TR[id], [W, H] = CROPS[c.img].size, b = c.fig.base, rx = b[2] * W / 100; const P = c.plate.map((p) => [p[0] * W / 100, p[1] * H / 100]); const f = (p) => [(p[0] - P[1][0]) / (2 * rx), -(p[1] - P[1][1]) / sphi / (2 * rx)]; return { L: f(P[0]), R: f(P[2]), fig: f([b[0] * W / 100, b[1] * H / 100]), s: (b[3] * H) / (b[2] * W) }; };
+  chart('scale-plan', 250, (svg, w, hgt) => {
+    const f = flat('H', .31), fr = [f.L[0] + f.R[0], f.L[1] + f.R[1]];
+    const k = Math.min((w - 30) / (f.R[0] - f.L[0]), (hgt - 60) / fr[1]), ox = w / 2 - (f.L[0] + f.R[0]) * k / 2, oy = hgt - 40;
+    const X = (p) => [ox + p[0] * k, oy - p[1] * k], far = [f.L[0] + f.R[0], f.L[1] + f.R[1]];
+    svg.append(s('polygon', { points: pts([[0, 0], f.L, far, f.R].map(X)), fill: 'var(--stone)', stroke: 'var(--stone3)' }));
+    const u = [f.R[0] / Math.hypot(...f.R), f.R[1] / Math.hypot(...f.R)], v = [f.L[0] / Math.hypot(...f.L), f.L[1] / Math.hypot(...f.L)];
+    svg.append(s('polygon', { points: pts([[0, 0], [v[0] * 1.4, v[1] * 1.4], [v[0] * 1.4 + u[0] * 1.4, v[1] * 1.4 + u[1] * 1.4], [u[0] * 1.4, u[1] * 1.4]].map(X)), fill: 'none', stroke: 'var(--a-dim)', 'stroke-dasharray': '5 4', 'stroke-width': 1.5 }));
+    const c = X(f.fig); svg.append(s('circle', { cx: c[0], cy: c[1], r: k / 2, fill: 'var(--stone2)', stroke: 'var(--a-dim)', 'stroke-width': 2 }), s('text', { x: c[0], y: c[1] + 4, 'text-anchor': 'middle', 'font-size': 11, text: '1' }));
+    const lab = (p, q, t, dy) => { const a = X(p), b = X(q); svg.append(s('text', { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2 + dy, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600, fill: 'var(--a-dim)', style: 'fill:var(--a-dim)', text: t })); };
+    lab([-.35, 0], f.L.map((q, i) => q - (i ? 0 : .35)), fmt(Math.hypot(...f.L), 1), 12); lab([.35, 0], f.R.map((q, i) => q + (i ? 0 : .35)), fmt(Math.hypot(...f.R), 1), 12); lab([0, .7], [0, .7], '1.4', 4);
+    svg.append(s('text', { x: X([0, 0])[0], y: hgt - 4, 'text-anchor': 'middle', 'font-size': 11, class: 'mut', text: 'near corner (camera this side)' }));
+  });
+  const rows = [['A–P (16 cells)', AP], ['T1–T20', TT], ['S1–S16', SS]].map(([name, ids]) => { const lo = ids.map((id) => flat(id, .36)), hi2 = ids.map((id) => flat(id, .26)); const m = (a, k) => quant(a.map((q) => Math.hypot(...q[k])), .5); return [name, fmt(quant(ids.map((id) => flat(id, .3).s), .5), 2), fmt(m(lo, 'L'), 1) + '–' + fmt(m(hi2, 'L'), 1), fmt(m(lo, 'R'), 1) + '–' + fmt(m(hi2, 'R'), 1), fmt(quant(ids.map((id) => CELLS[id].figratio), .5), 2)]; });
+  $('#scale-table').append(h('tr', {}, ['Sheet', 'Rim: height ÷ width', 'Left edge, diameters', 'Right edge, diameters', 'Figure height ÷ diameter, as seen'].map((t, i) => h('th', { class: i ? 'num' : null, text: t }))), ...rows.map((r) => h('tr', {}, r.map((t, i) => h('td', { class: i ? 'num' : null, text: t })))),
+    h('tr', {}, h('td', { colspan: 5, html: '<span class="ev m">Measured</span> Medians over each sheet. The two ends of each range lay the plate flat with the camera 21° and 15° above the horizon, the spread the rim allows. A 35 mm square under a 25 mm base would read 1.4.' })));
+
+  /* taxonomy */
+  const tax = $('#tax');
+  for (const k of CLASSES) { const ids = ALL.filter((id) => CL[id].class === k);
+    const what = { pillars: 'Upright stones side by side; the joints that show are upright; tops step.', blocks: 'Squarish stones in tiers; upright and level joints both show.', leaners: 'Slabs or pillars tilted one common way, 10 to 35 degrees.', courses: 'Level slabs or rows of blocks, each set back from the one below: a stair.', gates: 'Cap stones meet over a recess.' }[k];
+    tax.append(h('div', { class: 'taxrow' }, h('div', {}, h('h3', { text: CLASS_NAME[k] }), h('p', { html: `<b>${ids.length}</b> of 52 · ${what}` }), h('p', { class: 'ids', text: ids.join(' ') })), h('div', { class: 'row', style: 'grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:4px' }, ids.map((id) => cellView(id, { stones: false }))))); }
+  scatter('tax-grain', ALL.map((id) => CELLS[id]), { x: [0, 90], y: [0, 1], xl: 'grain, degrees from upright', yl: 'agreement', fx: (c) => Math.abs(c.grain), fy: (c) => c.graincoh, fk: (c) => CL[c.id].class, title: (c) => c.id, r: 4.5, xt: [0, 15, 30, 45, 60, 75, 90] });
+  $('#tax-legend').append(legend(CLASSES, CLASS_NAME));
+  chart('tax-count', 240, (svg, w, hgt) => {
+    const ax = axes(svg, w, hgt, { x: [3.5, 11.5], y: [0, 16], xl: 'major stones in the formation', yl: 'formations', xt: [4, 5, 6, 7, 8, 9, 10, 11] });
+    const cols = { smooth: 'var(--a-out)', twenty: 'var(--a-top)', sixteen: 'var(--a-gap)' }; const bw = (ax.x(5) - ax.x(4)) * .8;
+    for (let n = 4; n <= 11; n++) { let y0 = 0; for (const sh of ['smooth', 'twenty', 'sixteen']) { const c = ALL.filter((id) => CELLS[id].n === n && CELLS[id].sheet === sh).length; if (!c) continue; svg.append(s('rect', { x: ax.x(n) - bw / 2, y: ax.y(y0 + c), width: bw, height: ax.y(y0) - ax.y(y0 + c) - 1, fill: cols[sh] })); y0 += c; } }
+    [['A–P', 'smooth'], ['T', 'twenty'], ['S', 'sixteen']].forEach(([t, k], i) => svg.append(s('rect', { x: w - 120 + i * 40, y: 6, width: 10, height: 10, fill: cols[k] }), s('text', { x: w - 106 + i * 40, y: 15, 'font-size': 11, text: t })));
+  });
+  const dr = $('#diff-row'); dr.append(cellView('L', { stones: false }), cellView('L', { stones: false, img: 'img/sq-l.jpg', label: 'L textured' }), cellView('P', { stones: false }), cellView('P', { stones: false, img: 'img/sq-p.jpg', label: 'P textured' }));
+}
+
+{
   const CH = [['c1', 'The four sheets'], ['c2', 'Silhouettes and mass'], ['c3', 'Anatomy of one stone'], ['c4', 'Catalogue of stones'], ['c5', 'Proportions'], ['c6', 'Faces, edges, corners'], ['c7', 'Neighbours'], ['c8', 'Repeated arrangements'], ['c9', 'Hierarchy'], ['c10', 'Randomness'], ['c11', 'The grammar'], ['c12', 'Sensitivity and the style’s edges'], ['c13', 'A generator'], ['c14', 'Rules, ranges, constraints']];
-  const nav = document.getElementById('chapters');
-  CH.forEach(([id, name], i) => nav.append(el('li', {}, [el('a', { href: '#' + id }, [el('span', { text: String(i + 1) }), name])])));
-  const stubs = document.getElementById('stubs');
-  CH.forEach(([id, name], i) => { if (document.getElementById(id) || !stubs) return; stubs.append(el('section', { class: 'ch', id }, [el('header', {}, [el('span', { class: 'n', text: 'Chapter ' + (i + 1) }), el('h2', { text: name }), el('p', { text: 'Being measured and drawn.' })])])); });
+  const nav = $('#chapters'), stubs = $('#stubs');
+  CH.forEach(([id, name], i) => { nav.append(h('li', {}, h('a', { href: '#' + id }, h('span', { text: String(i + 1) }), name))); if (!document.getElementById(id)) stubs.append(h('section', { class: 'ch', id }, h('header', {}, h('span', { class: 'n', text: 'Chapter ' + (i + 1) }), h('h2', { text: name }), h('p', { text: 'Being measured and drawn.' })))); });
+}
+
+    if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => DRAWS.forEach((f) => f()));
+  } catch (e) { fail(e); }
 })();
 </script>

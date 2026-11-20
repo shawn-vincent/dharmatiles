@@ -1,0 +1,314 @@
+{
+"E": {
+"class": "courses",
+"overhang": false,
+"cleft": false,
+"note": "A stair of three long slabs, each set back by about half its height, with one block on top at the back right. The right end is cut off flat at the plate edge."
+},
+"I": {
+"class": "courses",
+"overhang": false,
+"cleft": false,
+"note": "A stair like E with a second wing: a long slab runs off to the left at mid height. Five slabs, top one small."
+},
+"T2": {
+"class": "courses",
+"overhang": true,
+"cleft": false,
+"note": "Four tiers of squat blocks stepping up to the back right, each tier set back by about half a block; a low slab and a toe sit in front. The top block is the roundest and overhangs slightly to the front."
+},
+"T7": {
+"class": "courses",
+"overhang": false,
+"cleft": false,
+"note": "Coursed like a rough wall: three tiers of squarish blocks, two or three across each tier, each tier set back from the one below so the tops make broad steps; two blocks on top at the back right. Joints run nearly vertical and nearly level."
+},
+"T14": {
+"class": "courses",
+"overhang": false,
+"cleft": false,
+"note": "Coursed squarish blocks in four tiers, each tier set back and to the right, tops making broad level steps; the front bottom block is the largest. Sibling of T7 with fatter, rounder blocks."
+},
+"S5": {
+"class": "courses",
+"overhang": false,
+"cleft": false,
+"note": "Coursed like rough masonry: three tiers of squarish blocks stepping up and back to the right, the upper course of smaller blocks set back on the lower. A wide two-step toe closes the right front; the left flank steps down in two stones."
+},
+"S11": {
+"class": "courses",
+"overhang": true,
+"cleft": false,
+"note": "Three courses of wide blocks, two stones per course, each course set back and up to the right; the top course is two thick slabs whose tops dip toward the front left. The upper left slab overhangs the course below slightly. Lowest course is a broad two-block step."
+},
+"B": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "Two short pillars at the right front carry a big block; a taller pillar stands free at the left. Tops step up to the back right."
+},
+"F": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "A sheer wall of five pillars, tops rising to the right. The joints lean together slightly toward the top."
+},
+"H": {
+"class": "pillars",
+"overhang": false,
+"cleft": true,
+"note": "Two tall pillars with a narrow cleft between them, a shorter pillar in front of the right one, and a toe in front of that."
+},
+"J": {
+"class": "pillars",
+"overhang": true,
+"cleft": true,
+"note": "A corner: a pillar on the left and a mass on the right with an upright recess between them, and a chock wedged across the top of the recess."
+},
+"M": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "Six separate columns of different heights packed together, like organ pipes; every top is its own level."
+},
+"T1": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "A staircase of upright stones climbing to the back right: low block at the left, taller pillars behind, the tallest pillar at the back right corner; two squat blocks stand in front at the right foot. Everything near vertical, a slight common lean to the left."
+},
+"T3": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "A wall of tall slabs standing side by side, all leaning left by roughly ten degrees, tops rising to the back right; a low wedge-topped toe lies at the right foot and a small block at the left foot."
+},
+"T6": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "Tall near-vertical pillars side by side, tops stepping up to the right; the left pillar is the broadest and widens slightly downward. One squat block with a flat top stands in front at the right."
+},
+"T8": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "Tall pillars leaning a little to the right at the top, packed side by side and stepping up to the back right, with smaller blocks capping the highest; one squat block with a sloped top in front at the right."
+},
+"T10": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "A broad wall face: two wide upright pillars side by side at the left and centre, a narrower pair at the right carrying a block on top, a squat block in front. Tops nearly level, rising gently to the right; the widest and plainest faces of the sheet."
+},
+"T11": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "A cluster of separate upright pillars of different heights, like organ pipes, tallest at the back right and shorter toward the front and left; each has its own small sloped top. Slight lean to the right."
+},
+"T12": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "The broadest wall: four wide upright pillars shoulder to shoulder with an almost level top (thin slabs lie on it at the back), all leaning very slightly left; two squat blocks step down in front at the right."
+},
+"T13": {
+"class": "pillars",
+"overhang": false,
+"cleft": true,
+"note": "The most broken-up cell: separate tapering pillars with gaps between them, leaning slightly left, a spire at the back right; a tilted wedge of two fused stones lies in front and a small toe at the right. Stones narrow toward the top more than elsewhere."
+},
+"T17": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "One tall pillar at the back centre with lower blocks gathered round its foot on three sides, stepping down to the front right in three levels. The clearest \"tower with skirts\" in the sheet."
+},
+"T18": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "A broad upright wall at the left and back (wide pillars, a big block on top) with a staircase of squat blocks descending in front at the right, four levels down to the plate. Wall and stair read as two groups."
+},
+"S1": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "A fan of upright pillars stepping up from left to right and back: low left pillar, two tall centre pillars, the tallest at the back right. A leaning block props the right flank and a two-step toe stone sits in front of it."
+},
+"S2": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "Same scheme as S1 with squarer stones: three pillars rising left to right, the tallest at the back right, then two stepped blocks descending at the right front (a mid block and a toe in front of it)."
+},
+"S3": {
+"class": "pillars",
+"overhang": true,
+"cleft": false,
+"note": "Three tiers stepping down to the front right: a tall back pillar, a mid pillar in front of it, a leaning block and a low toe. On the left a wide head block sits on two narrow pillars and overhangs them slightly."
+},
+"S4": {
+"class": "pillars",
+"overhang": false,
+"cleft": false,
+"note": "A broad tapering centre pillar with a small cap block on the summit, flanked by lower stones on the left that step down, and two stepped stones (block, then toe) at the right front."
+},
+"S6": {
+"class": "pillars",
+"overhang": false,
+"cleft": true,
+"note": "Few, large stones: a broad tall centre pillar, a tall right pillar leaning in against it with a dark cleft between, and a big head block at the back right sitting over the cleft. Low block on the left, square toe at the front."
+},
+"S8": {
+"class": "pillars",
+"overhang": true,
+"cleft": false,
+"note": "Two tall pillars side by side; the left one carries a squat head block that bulges out past it to the left, and a small block tops the pair. Three low blocks step down across the right front."
+},
+"S10": {
+"class": "pillars",
+"overhang": true,
+"cleft": false,
+"note": "A tall slightly leaning centre pillar with a squat head block to its left that overhangs the lower left pillar, and a stacked right column (pillar, block, top block) rising highest at the back right. Square toe at the front."
+},
+"G": {
+"class": "leaners",
+"overhang": false,
+"cleft": false,
+"note": "One big slab leaning back to the right with two small blocks on its top edge, propped by a block at the right front."
+},
+"L": {
+"class": "leaners",
+"overhang": false,
+"cleft": false,
+"note": "One wall cut by three joints that all lean the same way (top to the left as seen), into four slabs. Sloped tops rise to the right."
+},
+"N": {
+"class": "leaners",
+"overhang": false,
+"cleft": false,
+"note": "Three slabs dipping about thirty degrees, each lying on the one below, with two upright blocks at the right front."
+},
+"P": {
+"class": "leaners",
+"overhang": false,
+"cleft": false,
+"note": "Four parallel fins leaning about twenty-five degrees, tops in a rising row, with two upright blocks at the right front."
+},
+"T9": {
+"class": "leaners",
+"overhang": false,
+"cleft": false,
+"note": "Big slabs leaning back to the right like tilted books, each one behind and above the last, their top faces sloping down to the left; two squat upright blocks and a toe stand in front at the right. The lean is the strongest in this sheet (about 25 degrees off vertical)."
+},
+"T16": {
+"class": "leaners",
+"overhang": false,
+"cleft": false,
+"note": "Slabs leaning back to the right, stacked behind one another and rising to the back right, with squat upright blocks stepping down in front at the right (three levels) and a broad block at the left. Sibling of T9."
+},
+"T19": {
+"class": "leaners",
+"overhang": false,
+"cleft": true,
+"note": "Leaning pillars (about 10-15 degrees to the right) standing in two rows, the back row taller, a gap between the left pair and the rest; a low wedge pile of two toes in front at the right."
+},
+"S7": {
+"class": "leaners",
+"overhang": false,
+"cleft": false,
+"note": "Courses that dip: horizontal joints all tilt up to the right, and the top is one long slab lying on the slope so the skyline is a single ramp rising to the back right. A curved back slab fills the left of the ramp. Blocks step down to a large right-front block."
+},
+"S14": {
+"class": "leaners",
+"overhang": false,
+"cleft": false,
+"note": "Two thick slabs lying one on the other, both dipping steeply down to the front left (about 30 degrees), so the skyline is a single ramp and the joint between them is a parallel sloping line. Upright blocks step down in front at the right: block, block, toe."
+},
+"S15": {
+"class": "leaners",
+"overhang": false,
+"cleft": false,
+"note": "A leaning centre mass with a tilted top face, a squat block and a top block stacked at the back right, an upright right pillar, and an unusually large upright toe block in front (nearly a third of the height). Faces here are softer and the joints the least distinct of the sheet."
+},
+"A": {
+"class": "blocks",
+"overhang": false,
+"cleft": false,
+"note": "The only low one: two squat blocks side by side and a thin slab lying across their tops. A small chock fills the foot of the joint."
+},
+"C": {
+"class": "blocks",
+"overhang": false,
+"cleft": false,
+"note": "A stepped tower: six blocks, each higher one set back and to the right, so the left profile is a stair and the right one is sheer."
+},
+"D": {
+"class": "blocks",
+"overhang": true,
+"cleft": false,
+"note": "A wall of big blocks with thin slabs lying on top; the upper left block juts out over the figure. Two leaning piers prop the right front."
+},
+"O": {
+"class": "blocks",
+"overhang": true,
+"cleft": false,
+"note": "Squarish blocks in three tiers with the joints staggered; the upper left block juts out over a recess; a thin slab on top."
+},
+"T4": {
+"class": "blocks",
+"overhang": true,
+"cleft": false,
+"note": "Big squarish blocks in three tiers: two blocks side by side over narrower footing stones (they bulge out over them), a cap block on top at the back right, a square block and a toe stepping down in front at the right."
+},
+"T5": {
+"class": "blocks",
+"overhang": false,
+"cleft": false,
+"note": "A stepped pyramid: one block on top, one broader block under it, then pillars and blocks at the foot on both sides, a wedge toe in front. Each level is wider than the one above, symmetric left and right more than most."
+},
+"T20": {
+"class": "blocks",
+"overhang": true,
+"cleft": false,
+"note": "Three very large rounded blocks side by side making one bulging wall (the left one swells out above a narrower foot), a flat cap on top at the back right, and two blocks stepping down in front at the right."
+},
+"S12": {
+"class": "blocks",
+"overhang": false,
+"cleft": false,
+"note": "The simplest of the sheet: five big stones in a staircase. A front block, a wide mid block with a slanted left face behind it, then a tall square pillar at the back right, with two blocks stepping down the left. Every stone has a clear flat top."
+},
+"S13": {
+"class": "blocks",
+"overhang": false,
+"cleft": false,
+"note": "A stepped pedestal of wide blocks in two courses carrying one tall, slightly tapering pillar at the back right: the pillar is about twice the height of any course. A smaller block sits behind on the left shoulder."
+},
+"S16": {
+"class": "blocks",
+"overhang": false,
+"cleft": false,
+"note": "Squarish stacked blocks: a tall right pillar and a shorter centre pillar, upper blocks on the centre and left, and a flat slab crowning the back. The left flank steps down to a broad low block; a two-step toe closes the right front."
+},
+"K": {
+"class": "gates",
+"overhang": true,
+"cleft": true,
+"note": "A gateway: two cap blocks meet over a recess; a pier of two blocks carries the right end, a pillar in shadow the left."
+},
+"T15": {
+"class": "gates",
+"overhang": true,
+"cleft": true,
+"note": "A gateway: a left pillar and a right pier carry two big cap blocks that meet over a recessed back wall, so the middle reads as a shallow alcove; the caps bulge out past what carries them. A small toe sits in the alcove mouth."
+},
+"S9": {
+"class": "gates",
+"overhang": true,
+"cleft": true,
+"note": "An overhang: a massive two-lobed head stone bulges forward and left over a recessed, in-leaning pillar and a low left pillar, so the widest part of the formation is at two-thirds height. A block tops it at the back right; a right pillar and a toe prop the front."
+}
+}
