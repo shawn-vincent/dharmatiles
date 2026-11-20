@@ -28,7 +28,7 @@ function hull(P) {
 
 /* A stone's defaults: every stone on the page is this object with some numbers changed. */
 const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
-  bevel: .16,       /* width of the bevel round the top, as a share of the stone's shortest side */
+  bevel: .16,       /* width of the rounding round the top, as a share of the stone's shortest side (each arris is rounded in two facets) */
   bevelT: null,     /* the same, edge by edge: [cut-end side, far side, front, back]; an exposed edge is wide, an edge against a neighbour nearly sharp */
   bevelV: null,     /* width of the chamfer on the four upright edges (the same as bevel when not given) */
   bevelVC: null,    /* the same, corner by corner: [front cut-end, front far, back cut-end, back far]; two wide front ones make a many-sided pillar, one a prow */
@@ -51,10 +51,10 @@ function stonePoints(o) {
     const za = Math.min(ea * (ea > .22 * m ? .8 : 1), q.h * .55), zd = Math.min(ed * (ed > .22 * m ? .8 : 1), q.h * .55);
     const ja = (r() - .5) * 2 * q.jit * m, jd = (r() - .5) * 2 * q.jit * m, jz = (r() - .5) * 2 * q.jit * m * (top ? 1 : 0);
     const A = sa * q.w / 2 + ja, D = sd * q.dp / 2 + jd, Z = sz * q.h / 2 + jz;
-    /* each corner: a point on each of the two faces under its bevel, and (on a bevelled end) two on the end face, set in by the bevels */
-    const pts3 = [[A, D - sd * cd, Z - sz * za], [A - sa * ca, D, Z - sz * zd]];
-    if (ea > 0 || ed > 0) pts3.push([A - sa * ea, D - sd * (ed + cd * .6), Z], [A - sa * (ea + ca * .6), D - sd * ed, Z]);
-    for (const p of pts3) P.push(p);
+    /* each corner is rounded: three rings (on the faces, a third of the way round the bevel, on the end face), each with three points
+       round the upright chamfer. Two facets to a quarter turn, which reads as a soft arris. */
+    const rings = (ea > 0 || ed > 0) ? [[0, 1], [.29, .29], [1, 0]] : [[0, 0]], arc = [[0, 1, 0], [.29, .29, .5], [1, 0, 1]];
+    for (const [ins, drop] of rings) for (const [fa, fd, k] of arc) P.push([A - sa * (ea * ins + ca * fa), D - sd * (ed * ins + cd * fd), Z - sz * drop * lerp(za, zd, k)]);
   }
   const c = Math.cos(q.yaw), s2 = Math.sin(q.yaw), bt = q.batter || [0, 0, 0, 0];
   const ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2;
@@ -80,9 +80,9 @@ function meshOf(st, color = GREY) {
   const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color }));
   /* primary edges only: where two faces meet at more than 14 degrees */
   const byEdge = new Map(); st.F.forEach((f, fi) => { const r = f.ring; for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length], k = a < b ? a + '_' + b : b + '_' + a; (byEdge.get(k) || byEdge.set(k, []).get(k)).push(fi); } });
-  for (const [k, fs] of byEdge) { if (fs.length === 2) { const n0 = st.F[fs[0]].n, n1 = st.F[fs[1]].n; if (n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2] > .97) continue; } const [a, b] = k.split('_').map(Number); edge.push(st.P[a][0], st.P[a][2], st.P[a][1], st.P[b][0], st.P[b][2], st.P[b][1]); }
+  for (const [k, fs] of byEdge) { if (fs.length === 2) { const n0 = st.F[fs[0]].n, n1 = st.F[fs[1]].n; if (n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2] > .55) continue; } const [a, b] = k.split('_').map(Number); edge.push(st.P[a][0], st.P[a][2], st.P[a][1], st.P[b][0], st.P[b][2], st.P[b][1]); }
   const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.Float32BufferAttribute(edge, 3));
-  const lines = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x4b4f57, transparent: true, opacity: .55 }));
+  const lines = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x4b4f57, transparent: true, opacity: .4 }));
   const grp = new THREE.Group(); grp.add(mesh, lines); return grp;
 }
 const PLATE = 1.7;   /* the plate's side in fh (chapter 1: 2.4 to 2.8 base diameters, a figure 1.5 diameters tall) */

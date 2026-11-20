@@ -36,10 +36,10 @@ function formationOnce(over = {}) {
   const td = Math.tan(q.dip * Math.PI / 180), tl = Math.tan(q.lean * Math.PI / 180), L = q.length, back = PLATE, D = q.depth, dB = back - D, courses = q.cls === 'courses';
   const add = (o) => { const sp = Object.assign({ z: 0, level: 0, on: 0, depth: 0, role: 'wall' }, o); S.push(sp); return sp; };
   /* a row cut into unequal widths, none thin, joints kept off the joints in `avoid` */
-  const cutRow = (len, n, avoid = []) => { n = Math.max(1, q.minW === 0 ? n : Math.min(n, Math.floor(len / .4))); if (q.stagger === 0 && !avoid.length) return Array(n).fill(len / n); let best = null;
+  const cutRow = (len, n, avoid = []) => { n = Math.max(1, q.minW === 0 ? n : Math.min(n, Math.floor(len / (q.tiers || courses ? .45 : .33)))); if (q.stagger === 0 && !avoid.length) return Array(n).fill(len / n); let best = null;
     for (let tries = 0; tries < 14; tries++) { let ws = Array.from({ length: n }, () => within(r, 1 - q.sizeVar, 1 + q.sizeVar)); const s0 = ws.reduce((a, b) => a + b, 0); ws = ws.map((v) => v / s0 * len);
       const joints = []; let a = 0; for (const w of ws.slice(0, -1)) { a += w; joints.push(a); } const clear = q.stagger === 0 ? 1 : Math.min(1, ...joints.flatMap((j) => avoid.map((k) => Math.abs(j - k)))), thin = Math.min(...ws);
-      const score = Math.min(clear / (.12 + .2 * q.stagger), 1) + Math.min(thin / (q.minW === 0 ? .1 : .34), 1); if (!best || score > best.score) best = { ws, score }; if (score >= 2) break; } return best.ws; };
+      const score = Math.min(clear / (.12 + .2 * q.stagger), 1) + Math.min(thin / (q.minW === 0 ? .1 : q.tiers || courses ? .4 : .27), 1); if (!best || score > best.score) best = { ws, score }; if (score >= 2) break; } return best.ws; };
   const jointsOf = (ws, a0 = 0) => { const j = []; let a = a0; for (const w of ws.slice(0, -1)) { a += w; j.push(a); } return j; };
   const env = (a) => { const p = q.peak * L, far = a > p ? (a - p) / Math.max(L - p, .01) : (p - a) / Math.max(L, .01) * .5; return q.height * (1 - q.fall * far); };
   const rowB = { i: Math.max(0, q.rows - 1), t: 1, d0: dB, dp: D, len: L, cols: [] }; let rows = [rowB];
@@ -54,11 +54,11 @@ function formationOnce(over = {}) {
       ws.forEach((w, j) => { const zz = z + (j && !last ? (r() - .5) * .08 : 0) * (k ? 0 : 1); if (!j) for (const o of S) if (o.role === 'course' && o.level === k - 1) o.covered = 1; add({ a0, w, d0: back - dp, dp, z, h: hh + (j && last ? (r() - .5) * .1 : 0), level: k, depth: k, on: k ? Math.max(1, prev.filter((p) => p > a0 + .06 && p < a0 + w - .06).length + 1) : 0, role: 'course', col: col({ a0, w, h: z + hh }, row) }); a0 += w; });
       prev = jointsOf(ws); z += hh; }
   } else if (q.tiers) {   /* blocks: a first tier, shorter tiers on it set back from the face, joints staggered; one stone may run two tiers high */
-    const z1 = within(r, .5, .68), ws = cutRow(L, q.nA, []); let a0 = 0, sup = [], lo = 0, hi = L, z = z1, sb = 0, tallSp = null; const tallK = ws.length > 1 && r() < .5 ? (r() < .75 ? 0 : ws.length - 1) : -1;
+    const z1 = within(r, .6, .8), ws = cutRow(L, q.nA, []); let a0 = 0, sup = [], lo = 0, hi = L, z = z1, sb = 0, tallSp = null; const tallK = ws.length > 1 && q.tiers >= 3 && r() < .4 ? 0 : -1;
     ws.forEach((w, k) => { const hh = k === tallK ? z1 * within(r, 1.6, 2) : z1 + (r() - .5) * .03, sp = add({ a0, w, d0: dB, dp: D, h: hh, col: col({ a0, w, h: hh }) }); if (k === tallK) { tallSp = sp; if (k === 0) lo = w; else hi = L - w; } else sup.push({ a0, w, top: hh, sp }); a0 += w; });
-    let prev = jointsOf(ws); const nT = Math.max(q.tiers, Math.min(4, 1 + Math.ceil((env(0) - z1) / .6))); let below = z1;
+    let prev = jointsOf(ws); const nT = Math.max(2, Math.min(q.tiers, 1 + Math.ceil((env(0) - z1) / .72))); let below = z1;
     for (let lv = 1; lv < nT; lv++) { const lastT = lv === nT - 1, span = hi - lo, len = span * (r() < .5 ? within(r, .85, 1) : within(r, .62, .84)), start = lo + (r() < .1 ? within(r, 0, span - len) : 0); sb += within(r, .1, .2);
-      const n = Math.max(1, Math.round(q.nA * len / L)), w2 = cutRow(len, n, prev.map((p) => p - start)); a0 = start; const made = [], th = lastT ? Math.min(below, Math.max(.32, env(start + len / 2) - z)) : within(r, .42, .6);
+      const n = Math.max(1, Math.round(q.nA * len / L)), w2 = cutRow(len, n, prev.map((p) => p - start)); a0 = start; const made = [], th = lastT ? Math.min(below * 1.05, Math.max(.4, env(start + len / 2) - z)) : within(r, .5, .72);
       w2.forEach((w) => { const under = sup.filter((c) => c.a0 < a0 + w - .04 && c.a0 + c.w > a0 + .04); if (!under.length || Math.min(...under.map((c) => c.top)) < z - .16) { a0 += w; return; }
         for (const u of under) u.sp.covered = 1; made.push(add({ a0, w, d0: dB + sb, dp: D - sb, z, h: th, level: lv, depth: lv, on: under.length, role: 'tier', col: { row: rowB, a0, w, h: z + th } })); a0 += w; });
       if (!made.length) break; z += th; below = th; lo = made[0].a0; hi = made[made.length - 1].a0 + made[made.length - 1].w; sup = made.map((m) => ({ a0: m.a0, w: m.w, top: z, sp: m })); prev = jointsOf(w2, start);
@@ -72,9 +72,9 @@ function formationOnce(over = {}) {
     let last = b0; for (let i = 1; i < n; i++) { const w2 = w * within(r, .7, .85), dp2 = dp * within(r, .82, .92), hh = i === n - 1 ? Math.min(.55, Math.max(.35, q.height - zc)) : within(r, .35, .5), a2 = w2 / 2, zb = zc + td * (ac - a2);
       last.covered = 1; last = add({ a0: 0, w: w2, d0: back - dp2, dp: dp2, z: zb, h: hh, dipA: -td, botA: -td, level: i, depth: i, on: 1, role: 'bed', col: { row: rowB, a0: 0, w: w2, h: zb + hh } }); w = w2; dp = dp2; zc = zb + hh; ac = a2; }
   } else if (tl) {   /* leaning slabs: fat, parallel, each shorter than the one nearer the cut end; an end stone fills the space under the first */
-    const h0 = q.height, sh = tl * h0 * .78, n = Math.max(2, Math.min(4, q.nA, Math.round((L - sh) / .5))), wS = (L - sh) / n, odd = Math.floor(r() * n), prK = r() < .4 ? Math.floor(r() * n) : -1; let a0 = sh, hh = h0;
+    const h0 = q.height, sh = tl * h0 * .78, n = Math.max(2, Math.min(3, q.nA, Math.round((L - sh) / .62))), wS = (L - sh) / n, odd = Math.floor(r() * n), prK = r() < .4 ? Math.floor(r() * n) : -1; let a0 = sh, hh = h0;
     const hE = Math.min(.9 * h0, (sh - .1) / tl), bl = col({ a0: 0, w: sh, h: hE }); add({ a0: 0, w: sh + .02, d0: dB, dp: D, h: hE, batFar: tl * hE, role: 'end', col: bl });
-    for (let k = 0; k < n; k++) { const w = Math.max(.36, Math.min(.62, wS * within(r, .88, 1.12))), th = Math.tan((q.lean + (k === odd ? (r() - .5) * 6 : 0)) * Math.PI / 180), pr = k === prK ? within(r, .06, .16) : 0;
+    for (let k = 0; k < n; k++) { const w = Math.max(.45, Math.min(.78, wS * within(r, .88, 1.12))), th = Math.tan((q.lean + (k === odd ? (r() - .5) * 6 : 0)) * Math.PI / 180), pr = k === prK ? within(r, .06, .16) : 0;
       add({ a0, w, d0: dB - pr, dp: D + pr, h: hh, lean: th, role: 'slab', col: col({ a0, w, h: hh }) }); a0 += w; hh = Math.max(.6, hh * (1 - q.fall * within(r, .35, .6) * (2.2 / n)) - .05); }
   } else {   /* pillars, walls, gates: columns under the envelope */
     const ws = cutRow(L, q.nA, []); let a0 = 0; const B = ws.map((w, k) => { const c = col({ a0, w, k, h: Math.max(.3, env(a0 + w / 2) * within(r, 1 - .08 * q.rough, 1 + .08 * q.rough)) }); a0 += w; return c; });
@@ -83,14 +83,16 @@ function formationOnce(over = {}) {
     B.forEach((c, k) => { if (k > 0) { const p = B[k - 1]; if (!(p.plat && c.plat && p.plat === c.plat) && Math.abs(p.h - c.h) < q.stepMin) c.h = Math.max(.3, p.h + (c.h >= p.h && r() < .5 ? 1 : -1) * q.stepMin * (1 + r() * .5)); } });
     for (const c of B) c.spire = q.shapes && !c.plat && c.h > 1.3 * c.w && r() < .1; const farPr = q.proud && r() < .33 ? within(r, .2, .38) : 0;
     let caps = [];
-    if (q.gate && B.length >= 3) { const g = B[1], N = B[0], F = B[2], thN = within(r, .4, .55), thF = within(r, .36, .5), tw = L * within(r, .3, .36), gw = L * within(r, .26, .32); N.w = tw; g.a0 = tw; g.w = gw; F.a0 = tw + gw; F.w = L - tw - gw; g.recess = within(r, .3, .42); N.h = Math.max(N.h, q.height * .92); F.h = N.h * within(r, .78, .92); g.h = Math.min(N.h, F.h) - .02; const split = within(r, .4, .62);
-      caps = [{ a0: N.a0 + N.w * .06, w: N.w * .94 + g.w * split, z: N.h, h: thN, o: within(r, .05, .12), on: 2 }, { a0: g.a0 + g.w * split, w: g.w * (1 - split) + F.w * within(r, .85, 1), z: F.h, h: Math.max(.32, Math.min(thF + .15, N.h + thN - F.h - within(r, .18, .32))), o: within(r, .06, .14), on: 2 }]; }
+    if (q.gate && B.length >= 3) { const g = B[1], N = B[0], F = B[2], th = within(r, .45, .62), tw = L * within(r, .3, .38), gw = L * within(r, .24, .3); N.w = tw; g.a0 = tw; g.w = gw; F.a0 = tw + gw; F.w = L - tw - gw; g.recess = within(r, .3, .42);
+      N.h = q.height * within(r, .96, 1.04); F.h = N.h - th - within(r, .06, .22); g.h = F.h - .02; N.spire = F.spire = false; N.plat = F.plat = 0;
+      /* the lintel: one big stone, its end against the tall pier's side, lying on the wall and the lower pier */
+      caps = [{ a0: g.a0 - .01, w: g.w + F.w * within(r, .7, 1), z: F.h, h: th, o: within(r, .04, .12), on: 2 }]; }
     B.forEach((c, k) => { const pr = k === B.length - 1 && farPr && !c.recess ? farPr : q.proud && !c.recess && !(k && B[k - 1].pr) && r() < .42 ? within(r, .08, .24) : 0, gN = c.gapNear || 0, gF = c.gapFar || 0; c.pr = pr; const rec = c.recess ? D * c.recess : 0;
-      if (q.oversail && k === B.length - 1 && c.h > .8 && !c.recess) { const zc = c.h * within(r, .45, .62), sb = q.over == null ? Math.min(.3 * D, within(r, .14, .24)) : q.over, wU = c.w * within(r, .68, .78); add({ a0: c.a0, w: c.w, d0: dB + sb, dp: D - sb, h: zc, col: c, covered: 1 }); add({ a0: c.a0, w: wU, d0: dB - .03, dp: D + .03, z: zc, h: c.h - zc, level: 1, depth: 1, on: 1, role: 'cap', col: c }); return; }
+      if (q.oversail && k === B.length - 1 && c.h > .8 && !c.recess) { const zc = c.h * within(r, .45, .62), sb = q.over == null ? Math.min(.3 * D, within(r, .14, .24)) : q.over, wU = c.w * within(r, .68, .78); add({ a0: c.a0, w: c.w, d0: dB + sb, dp: D - sb, h: zc, col: c, covered: 1 }); add({ a0: c.a0, w: wU, d0: dB - .03, dp: D + .03, z: zc, h: c.h - zc, level: 1, depth: 1, on: 1, role: 'cap', jut: 1, col: c }); return; }
       /* a pillar split by a level joint: the upper block is the top of the column */
       if (q.split !== 0 && !c.recess && !c.spire && !c.plat && c.h > 1.2 && r() < (q.split == null ? .35 : q.split)) { const zc = c.h * within(r, .55, .75), sh2 = (r() - .5) * .08; add({ a0: c.a0 + gN, w: c.w - gN - gF, d0: dB - pr, dp: D + pr, h: zc, col: c, covered: 1 }); add({ a0: c.a0 + gN, w: c.w - gN - gF, d0: dB - pr + sh2, dp: D + pr - Math.max(0, sh2), z: zc, h: c.h - zc, level: 1, depth: 1, on: 1, role: 'upper', col: c }); return; }
       add({ a0: c.a0 + gN, w: c.w - gN - gF, d0: dB - pr + rec, dp: D + pr - rec, h: c.h, platDip: c.platDip, spire: c.spire, col: c, covered: c.recess || (q.gate && k !== 1) ? 1 : 0 }); });
-    for (const l of caps) add({ a0: l.a0, w: l.w, d0: dB - l.o, dp: D + l.o, z: l.z, h: l.h, level: 1, depth: 1, on: l.on, role: 'cap', col: { row: rowB, a0: l.a0, w: l.w, h: l.z + l.h } });
+    for (const l of caps) add({ a0: l.a0, w: l.w, d0: dB - l.o, dp: D + l.o, z: l.z, h: l.h, level: 1, depth: 1, on: l.on, role: 'cap', jut: 1, col: { row: rowB, a0: l.a0, w: l.w, h: l.z + l.h } });
   }
   /* what stands behind a stretch of the front: the face (smallest d) and the lowest ground-standing top there */
   const wallAt = (a0, a1) => { const b = S.filter((s) => s.level === 0 && s.role !== 'front' && s.a0 < a1 - .03 && s.a0 + s.w > a0 + .03); return b.length ? { d: Math.min(...b.map((s) => s.d0)), h: Math.min(...b.map((s) => s.h)), hi: Math.max(...b.map((s) => s.h)) } : { d: dB, h: q.height * .5, hi: q.height * .5 }; };
@@ -101,7 +103,7 @@ function formationOnce(over = {}) {
     /* a main pillar applied to the wall over a joint near mid length: the third rank */
     if (q.applied && rowB.cols.length >= 2 && !tl && !td && !q.tiers && !q.gate) { const js = rowB.cols.slice(0, -1).map((c) => c.a0 + c.w).filter((j) => j > .5 && j < L - .3); if (js.length) { const j = js.reduce((u, v) => (Math.abs(v - L * .5) < Math.abs(u - L * .5) ? v : u)), w5 = within(r, .42, .6), dp5 = within(r, .35, .5), wl5 = wallAt(j - w5 / 2, j + w5 / 2), h5 = wl5.h * within(r, .7, .93);
       add({ a0: j - w5 / 2, w: w5, d0: wl5.d - dp5 + .05, dp: dp5, h: h5, role: 'wall', kind: 'pillar', applied: 1, col: { row: rows[q.rows > 2 ? 1 : 0], a0: j - w5 / 2, w: w5, h: h5 } }); } }
-    const aB = r() < .33 ? within(r, 0, .3 * L) : 0, w = Math.min(within(r, .4, .58), L * .5), wl = wallAt(aB, aB + w), dp = within(r, .36, .52), hB = Math.max(.35, Math.min(q.front * within(r, .92, 1.08) * wl.hi, wallOver(aB + w / 2) - .2));
+    const aB = r() < .33 ? within(r, 0, .3 * L) : 0, w = Math.min(within(r, .4, .58), L * .5), wl = wallAt(aB, aB + w), dp = within(r, .32, .46), hB = Math.max(.35, Math.min(q.front * within(r, .92, 1.08) * wl.hi, wallOver(aB + w / 2) - .2));
     const bu = add({ a0: aB, w, d0: wl.d - dp + within(r, .05, .14), dp, h: hB, role: 'front', kind: 'buttress', col: col({ a0: aB, w, h: hB }, rowF) }); let aNext = aB + w - .03;
     if (q.rows > 2) { const w2 = within(r, .38, .55), wl2 = wallAt(aNext, aNext + w2), dp2 = within(r, .34, .52), h2 = Math.max(.3, Math.min(hB * within(r, .6, 1.2), wallOver(aNext + w2 / 2) - .2)), hh = Math.abs(h2 - hB) < q.stepMin ? Math.max(.28, hB - q.stepMin * 1.4) : h2;
       add({ a0: aNext, w: w2, d0: wl2.d - dp2 + within(r, .05, .12), dp: dp2, h: hh, role: 'front', kind: 'buttress', col: col({ a0: aNext, w: w2, h: hh }, rows[1]) }); aNext += w2 - .03; }
@@ -111,22 +113,22 @@ function formationOnce(over = {}) {
     if (q.tuck && aNext < L - .35) { const w4 = within(r, .22, .32), wl4 = wallAt(aNext, aNext + w4), h4 = hB * within(r, .3, .5); add({ a0: aNext, w: w4, d0: wl4.d - w4 + .04, dp: w4, h: h4, role: 'front', kind: 'toe', col: col({ a0: aNext, w: w4, h: h4 }, rowF) }); } }
 
   /* ---- 3 the pile: stones laid on the tops. They add height. ---- */
-  const tops = () => S.filter((s) => !s.covered && !s.spire && s.role !== 'front' && s.role !== 'slab' && s.role !== 'end' && !s.applied && s.w > .4 && s.dp > .3);
+  const tops = () => S.filter((s) => !s.covered && !s.spire && s.role !== 'front' && s.role !== 'slab' && s.role !== 'end' && !s.applied && s.w > .3 && s.dp > .3);
   const lower = (s, by) => { const d = Math.min(by, Math.max(0, s.h - .4)); s.h -= d; if (s.col && Math.abs(s.col.h - (s.z + s.h + d)) < 1e-6) s.col.h -= d; return d; };
   for (let i = 0; i < q.caps; i++) { const T = tops(); if (!T.length) break; const top = (s) => s.z + s.h;
-    const pairs = []; for (const a of T) for (const b of T) if (a !== b && Math.abs(a.a0 + a.w - b.a0) < .07 && (a.platDip && b.platDip ? true : Math.abs(top(a) - top(b)) < (a.level || b.level ? .09 : .22) && !a.platDip && !b.platDip) && !a.dipA && !b.dipA && a.role !== 'cap' && b.role !== 'cap' && Math.min(a.d0 + a.dp, b.d0 + b.dp) - Math.max(a.d0, b.d0) > .3) pairs.push([a, b]);
-    if (pairs.length && (i > 0 ? r() < .85 : r() < .75)) {   /* a block spanning a joint, bearing on both, flush with their face; its height comes off the two under it */
+    const pairs = []; for (const a of T) for (const b of T) if (a !== b && Math.abs(a.a0 + a.w - b.a0) < .07 && (a.platDip && b.platDip ? true : Math.abs(top(a) - top(b)) < (a.level || b.level ? .09 : .3) && !a.platDip && !b.platDip) && !a.dipA && !b.dipA && a.role !== 'cap' && b.role !== 'cap' && Math.min(a.d0 + a.dp, b.d0 + b.dp) - Math.max(a.d0, b.d0) > .3) pairs.push([a, b]);
+    if (pairs.length && r() < .9) {   /* a block spanning a joint, bearing on both, flush with their face; its height comes off the two under it */
       const [a, b] = pairs[Math.floor(r() * pairs.length)], hh = within(r, .35, .6); if (!a.level && !b.level) { if (!a.platDip) { const mt = (top(a) + top(b)) / 2; a.h = mt - a.z; b.h = mt - b.z; a.col.h = a.h; b.col.h = b.h; } const k = within(r, .35, .7) * hh; lower(a, k); lower(b, k); }
       const a0 = a.a0 + a.w * (1 - within(r, .45, .8)), a1 = b.a0 + b.w * within(r, .45, .8), d0 = Math.max(a.d0, b.d0) + within(r, 0, .05), dp = Math.min(.85, Math.min(a.d0 + a.dp, b.d0 + b.dp) - d0), sl = a.platDip ? -a.platDip : 0, am = (a0 + a1) / 2, z = sl ? top(a) + sl * (am - (a.a0 + a.w / 2)) : Math.max(top(a), top(b));
       add({ a0, w: a1 - a0, d0, dp, z, h: hh, dipA: sl, botA: sl, level: Math.max(a.level, b.level) + 1, depth: Math.max(a.depth, b.depth) + 1, on: 2, role: 'cap', col: { row: rowB, a0, w: a1 - a0, h: z + hh } }); a.covered = b.covered = 1; continue; }
     /* an upper block on the highest top: nearly as wide as what carries it, flush at the front, set back on one side; a second storey only on a broad block */
-    const ok = T.filter((s) => s.role !== 'cap' || s.w >= .5); if (!ok.length) break; const sup = ok.reduce((u, v) => (top(v) > top(u) ? v : u)), slope = sup.dipA || (sup.platDip ? -sup.platDip : 0), second = sup.role === 'cap' || sup.role === 'upper';
+    const ok = T.filter((s) => (s.role !== 'cap' || s.w >= .5) && s.w > .36); if (!ok.length) break; const sup = ok.reduce((u, v) => (top(v) > top(u) ? v : u)), slope = sup.dipA || (sup.platDip ? -sup.platDip : 0), second = sup.role === 'cap' || sup.role === 'upper';
     const hh = second || sup.level ? within(r, .3, .45) : within(r, .4, .8), w = sup.w * (second ? within(r, .7, .9) : within(r, .85, 1)), a0 = sup.a0 + (sup.w - w) * (r() < .5 ? 0 : 1), fr = within(r, 0, .06), dp = Math.min(.85, sup.dp + fr - (second ? within(r, .05, .15) : 0));
     if (!sup.level || sup.role === 'bed') { if (sup.role !== 'bed') lower(sup, within(r, .35, .7) * hh); }
     const z = top(sup) + slope * (a0 + w / 2 - (sup.a0 + sup.w / 2)); add({ a0, w, d0: sup.d0 - fr + (second ? .06 : 0), dp, z, h: hh, dipA: slope, botA: slope, level: sup.level + 1, depth: sup.depth + 1, on: 1, role: 'cap', col: { row: rowB, a0, w, h: z + hh } }); sup.covered = 1; }
 
   /* the whole is held to its height: if the pile has carried it past the envelope by more than a tenth, everything is pressed down in proportion */
-  { const zm = Math.max(...S.map((s) => s.z + s.h)), k = Math.min(1, q.height * 1.1 / zm); if (k < 1) { for (const s of S) { s.z *= k; s.h *= k; } for (const rw of rows) for (const c of rw.cols) c.h *= k; } }
+  { const zm = Math.max(...S.map((s) => s.z + s.h)), k = Math.min(1, q.height * 1.04 / zm); if (k < 1) { for (const s of S) { s.z *= k; s.h *= k; } for (const rw of rows) for (const c of rw.cols) c.h *= k; } }
 
   /* ---- 4 shapes: each stone learns which of its top edges are exposed, then is shaped by its role ---- */
   const out = [], near = (u, v) => Math.abs(u - v) < .08;
@@ -155,7 +157,7 @@ function formationOnce(over = {}) {
     else if (sp.level > 0) { dipD = within(r, -.03, .08); if (sp.role === 'cap' && !sp.dipA) dipA = (r() - .5) * .16; if (!cov[2]) bat[2] = sp.h * within(r, 0, .1); if (clN) bat[0] = sp.h * within(r, .02, .08); if (clF) bat[1] = sp.h * within(r, .02, .08); }
     else { if (sp.spire && clN && clF) { tA = within(r, .55, .7); tD = within(r, .7, .85); } else { if (clN) bat[0] = sp.h * within(r, .03, .08); if (clF) bat[1] = sp.h * within(r, .03, .08); }
       bat[2] = Math.min(sp.dp * .25, sp.h * within(r, .03, .09)); dipD = sp.role === 'bed' ? within(r, 0, .06) : within(r, -.02, .12) * q.rough; if (!sp.dipA) dipA = sp.platDip ? -sp.platDip : (clF && !clN ? -1 : clN && !clF ? 1 : (r() < .5 ? -1 : 1)) * within(r, 0, .16) * q.rough; }
-    tA *= q.taper / .95; if (!kind) kind = sp.role === 'cap' ? 'cap' : sp.role === 'slab' ? 'lean' : sp.h > 1.35 * Math.max(sp.w, sp.dp) ? 'pillar' : sp.h < .7 * Math.max(sp.w, sp.dp) ? 'slab' : 'block';
+    tA *= q.taper / .95; if (!kind) kind = sp.role === 'cap' && (sp.on >= 2 || sp.jut) ? 'cap' : sp.role === 'slab' ? 'lean' : sp.h > 1.35 * Math.max(sp.w, sp.dp) ? 'pillar' : sp.h < .7 * Math.max(sp.w, sp.dp) ? 'slab' : 'block';
     const g = sp.level ? .004 : .006, st = { w: Math.max(.08, sp.w - g - q.gap), dp: Math.max(.08, sp.dp - g - q.gap), h: sp.h, a: sp.a0 + sp.w / 2 + (r() - .5) * q.offset * .3, d: sp.d0 + sp.dp / 2 + (r() - .5) * q.offset * .3, z: sp.z,
       bevel: bv, bevelT: bT, bevelVC: vc, bevelB: 0, taperA: tA, taperD: tD, batter: bat, dipA, dipD, botA: sp.botA || 0,
       leanA: leanA + (q.leanEach ? Math.tan((r() - .5) * 2 * q.leanEach * Math.PI / 180) : 0), leanD: q.leanEach ? Math.tan((r() - .5) * 2 * q.leanEach * Math.PI / 180) : 0,
@@ -175,15 +177,15 @@ const formMeshes = (f) => f.stones.map(stoneMesh);
 /* Scale 1: draw a whole formation's numbers from the proposed ranges. */
 function drawParams(seed, want) {
   const r = rng(seed * 31 + 5), u = r() * 52, cls = want && want !== 'any' ? want : (u < 22 ? 'pillars' : u < 32 ? 'blocks' : u < 42 ? 'leaners' : u < 49 ? 'courses' : 'gates');
-  const o = { cls: cls === 'ramp' ? 'leaners' : cls === 'wall' ? 'pillars' : cls, preset: cls, seed, height: mid(r, 1.4, 1.7), length: within(r, 1.25, 1.7), bevel: within(r, .1, .2), fall: within(r, .35, .75), peak: r() < .1 ? within(r, .25, .45) : within(r, 0, .18), sizeVar: .6,
-    front: within(r, .55, .8), rows: r() < .1 ? 1 : r() < .3 ? 3 : 2, tuck: r() < .1 ? 1 : 0 };
+  const o = { cls: cls === 'ramp' ? 'leaners' : cls === 'wall' ? 'pillars' : cls, preset: cls, seed, height: mid(r, 1.4, 1.66), length: within(r, 1.25, 1.7), bevel: within(r, .14, .24), fall: within(r, .35, .75), peak: r() < .1 ? within(r, .25, .45) : within(r, 0, .18), sizeVar: .6,
+    front: within(r, .6, .85), rows: r() < .1 ? 1 : r() < .2 ? 3 : 2, tuck: r() < .05 ? 1 : 0 };
   const pile = (p0, p1, p2) => { const v = r(); return v < p0 ? 0 : v < p0 + p1 ? 1 : v < p0 + p1 + p2 ? 2 : 3; };
-  if (cls === 'pillars' || cls === 'wall') { const wall = cls === 'wall' || r() < .4; Object.assign(o, { nA: 3 + (r() < .45 ? 1 : 0) - (r() < .2 ? 1 : 0), depth: within(r, .38, .52), plateau: wall || r() < .25 ? 1 : 0, cleft: r() < .12 ? 1 : 0, oversail: r() < .22 ? 1 : 0, applied: r() < .5 ? 1 : 0, caps: pile(.22, .5, .25), split: .28, toe: r() < .75 }); if (wall) Object.assign(o, { fall: within(r, .15, .35), peak: within(r, .05, .35) }); }
-  if (cls === 'blocks') Object.assign(o, { nA: 2 + (r() < .55 ? 1 : 0), tiers: 2 + (r() < .55 ? 1 : 0), depth: within(r, .62, .82), fall: within(r, .3, .65), sizeVar: .35, caps: pile(.6, .4, 0), rows: r() < .6 ? 2 : 3 });
-  if (cls === 'leaners') { if (r() < .35) Object.assign(o, { preset: 'ramp', dip: within(r, 20, 32), fall: within(r, .05, .2), depth: within(r, .62, .8), caps: pile(.5, .5, 0) }); else Object.assign(o, { lean: within(r, 15, 25), height: mid(r, 1.35, 1.6), nA: r() < .2 ? 2 : r() < .8 ? 3 : 4, length: within(r, 1.25, 1.5), depth: within(r, .5, .68), caps: 0, front: within(r, .45, .65), fall: within(r, .3, .55) }); }
+  if (cls === 'pillars' || cls === 'wall') { const wall = cls === 'wall' || r() < .4; Object.assign(o, { nA: 3 + Math.floor(r() * 2.4), sizeVar: .7, fall: within(r, .25, .6), depth: within(r, .36, .48), plateau: wall || r() < .25 ? 1 : 0, cleft: r() < .12 ? 1 : 0, oversail: r() < .22 ? 1 : 0, applied: r() < .4 ? 1 : 0, caps: pile(.18, .55, .27), split: .12, toe: r() < .7 }); if (wall) Object.assign(o, { fall: within(r, .1, .3), peak: within(r, .05, .35) }); }
+  if (cls === 'blocks') Object.assign(o, { nA: 2 + (r() < .3 ? 1 : 0), tiers: 2 + (r() < .75 ? 1 : 0), depth: within(r, .62, .82), fall: within(r, .3, .65), sizeVar: .4, caps: pile(.4, .6, 0), rows: r() < .6 ? 2 : 3 });
+  if (cls === 'leaners') { if (r() < .35) Object.assign(o, { preset: 'ramp', dip: within(r, 20, 32), fall: within(r, .05, .2), depth: within(r, .62, .8), caps: pile(.5, .5, 0) }); else Object.assign(o, { lean: within(r, 15, 25), height: mid(r, 1.35, 1.6), nA: r() < .45 ? 2 : 3, length: within(r, 1.25, 1.5), depth: within(r, .5, .68), caps: 0, front: within(r, .45, .65), fall: within(r, .3, .55) }); }
   if (cls === 'ramp') Object.assign(o, { dip: within(r, 20, 32), fall: within(r, .05, .2), depth: within(r, .62, .8), caps: pile(.5, .5, 0) });
   if (cls === 'courses') Object.assign(o, { height: mid(r, 1.45, 1.75), rows: 3 + (r() < .7 ? 1 : 0), nA: 1 + Math.floor(r() * 2.5), depth: within(r, 1, 1.25), length: within(r, 1.35, 1.65), caps: pile(.75, .25, 0), sizeVar: .3 });
-  if (cls === 'gates') Object.assign(o, { height: within(r, 1.25, 1.45), rows: 2 + (r() < .4 ? 1 : 0), fall: within(r, .2, .4), peak: within(r, .05, .25), depth: within(r, .65, .8), caps: 0, length: within(r, 1.4, 1.7) });
+  if (cls === 'gates') Object.assign(o, { height: within(r, 1.5, 1.72), rows: 2 + (r() < .3 ? 1 : 0), fall: within(r, .2, .4), peak: within(r, .05, .25), depth: within(r, .65, .8), caps: 0, length: within(r, 1.4, 1.7) });
   /* a budget for extras: a second front block, a tucked stone and piled stones beyond the first come to two at most */
   while ((o.rows > 2 ? 1 : 0) + (o.tuck ? 1 : 0) + Math.max(0, (o.caps || 0) - 1) > 2) { if (o.tuck) o.tuck = 0; else if (o.rows > 2) o.rows = 2; else o.caps--; }
   return o;

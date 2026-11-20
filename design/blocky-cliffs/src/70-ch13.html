@@ -14,10 +14,10 @@
 <div class="sec"><div class="words"><h3>Does it measure like the sheets?</h3>
 <p><span class="ev m">Measured</span> 200 formations were drawn with every number taken from the proposed ranges and classes in the counted proportion. Each was then measured the way the traces were, from the references' camera: stone sizes, and the relations between touching stones.</p>
 <p>The table gives every measure for both, and the generator's from two angles: 45 degrees off the face, where the references' A–P plates stand, and 25, which is nearer how the sheet of sixteen is seen and how several A–P cliffs sit turned on their plates. Where the generator misses, the miss is left showing:</p>
-<ul><li>its ground-standing stones are lower and broader than the sheets': face height about 0.7 fh against 0.95, and height ÷ width about 1.0 against 1.67. A reference formation has a stone or two standing nearly its full height; half of the generator's have none;</li>
-<li>more of its formations pass 2.29 fh;</li>
-<li>fewer of its stones bear on two, and more formations have no stacked stone;</li>
-<li>its lower stone is in front less often.</li></ul>
+<ul><li>its ground-standing stones are still lower and broader than the sheets';</li>
+<li>fewer of its stones rest on others or bear on two, and more formations have nothing stacked;</li>
+<li>its widths are more alike;</li>
+<li>block formations put their highest point left of the middle more often than the sheets do.</li></ul>
 <p>The numbers do not say whether a draw looks right. The pictures show the limits: flat chamfers where the sheets are softly rounded, no kinks on edges, stiff dipping beds, and no niche or shelter.</p></div>
 <div class="plates"><div class="scroll"><table id="g-rel"></table></div>
 <p class="note">References: <span class="ev m">Measured</span> from the traces. Generator: <span class="ev p">Proposed</span> rules, measured on the true solids as the camera would see them. "Foot nearer" compares the lowest point of each outline in the picture; on the traces a hidden foot ends where the stone in front hides it.</p>
@@ -40,9 +40,11 @@ formation(numbers, seed):                         every stone is first a plain b
                  sloping plane; a cleft; steps of stepMin elsewhere; some stand proud
        blocks    a first tier nearly level, shorter tiers on it, each set back, joints staggered
        courses   tiers of the whole footprint, each lying on the one below, set back on two sides
-       slabs     parallel leaning slabs of even thickness over a block at the cut end
+       slabs     two or three fat leaning masses, parallel and tight, over an end stone
+                 battered to fill under the first
        beds      one thick dipping bed, thinner and shorter beds tight on it
-       gate      two heavy piers, a set-back wall, a thick cap from each pier
+       gate      a tall pier, a set-back wall, a lower pier; one big lintel with its end
+                 against the tall pier, lying on the wall and the lower pier
   2 front       three ranks: sometimes a main pillar applied over a joint near mid length;
                 a buttress 0.55 to 0.8 of the wall behind it, hard against it; a toe a third
                 to a half of the buttress; sometimes a second block, or a stone tucked in
@@ -64,7 +66,8 @@ formation(numbers, seed):                         every stone is first a plain b
   5 count       if more than eleven stones came out, drop a piled stone or a column and draw again
 
 stone(box, numbers):
-  each corner of the box replaced by the points its two top bevels and its upright chamfer leave
+  each corner of the box replaced by nine points: three rings round the top arris, three round
+  the upright corner, so every arris is rounded in two facets
   move each face in at the top (batter), scale, tilt the top, shear, turn
   return the convex hull</pre></div></div>
 </section>
