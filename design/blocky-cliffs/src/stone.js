@@ -77,7 +77,10 @@ let RENDER = null;
 function renderer() { if (!RENDER) { RENDER = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); RENDER.setPixelRatio(1); RENDER.setClearColor(STAGE, 1); } return RENDER; }
 function meshOf(st, color = GREY) {
   const pos = [], nor = [], edge = [];
-  for (const f of st.F) { const r = f.ring; for (let i = 1; i + 1 < r.length; i++) for (const m of [r[0], r[i + 1], r[i]]) { const p = st.P[m]; pos.push(p[0], p[2], p[1]); nor.push(f.n[0], f.n[2], f.n[1]); } }
+  const vn = st.P.map(() => [0, 0, 0]); for (const f of st.F) for (const m of f.ring) { vn[m][0] += f.n[0]; vn[m][1] += f.n[1]; vn[m][2] += f.n[2]; }
+  for (const v of vn) { const l = Math.hypot(v[0], v[1], v[2]) || 1; v[0] /= l; v[1] /= l; v[2] /= l; }
+  /* shading only: a vertex's normal is its face's blended with the mean of the faces round it; the silhouette keeps its facets */
+  for (const f of st.F) { const r = f.ring; for (let i = 1; i + 1 < r.length; i++) for (const m of [r[0], r[i + 1], r[i]]) { const p = st.P[m], v = vn[m], x = f.n[0] * .45 + v[0], y = f.n[1] * .45 + v[1], z = f.n[2] * .45 + v[2], l = Math.hypot(x, y, z) || 1; pos.push(p[0], p[2], p[1]); nor.push(x / l, z / l, y / l); } }
   /* three's frame (a, z, d) is mirrored against (a, d, z), so each triangle is wound the other way round */
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color }));
@@ -85,7 +88,7 @@ function meshOf(st, color = GREY) {
   const byEdge = new Map(); st.F.forEach((f, fi) => { const r = f.ring; for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length], k = a < b ? a + '_' + b : b + '_' + a; (byEdge.get(k) || byEdge.set(k, []).get(k)).push(fi); } });
   for (const [k, fs] of byEdge) { if (fs.length === 2) { const n0 = st.F[fs[0]].n, n1 = st.F[fs[1]].n; if (n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2] > .55) continue; } const [a, b] = k.split('_').map(Number); edge.push(st.P[a][0], st.P[a][2], st.P[a][1], st.P[b][0], st.P[b][2], st.P[b][1]); }
   const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.Float32BufferAttribute(edge, 3));
-  const lines = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x4b4f57, transparent: true, opacity: .4 }));
+  const lines = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x4b4f57, transparent: true, opacity: .3 }));
   const grp = new THREE.Group(); grp.add(mesh, lines); return grp;
 }
 const PLATE = 1.7;   /* the plate's side in fh (chapter 1: 2.4 to 2.8 base diameters, a figure 1.5 diameters tall) */
