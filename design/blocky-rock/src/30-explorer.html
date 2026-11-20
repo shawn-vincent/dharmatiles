@@ -7,7 +7,7 @@
   <div class="grp"><label for="seed" id="l-seed">Seed</label><div class="seedrow"><input type="number" id="seed" min="1" max="999999" step="1" aria-labelledby="l-seed"><button type="button" id="prev">Previous</button><button type="button" id="next">Next</button></div>
    <div class="seedrow"><button type="button" class="main" id="new">New seed</button><button type="button" id="view">Reset view</button></div></div>
   <div class="grp"><label for="kind">Base shape</label>
-   <select id="kind"><option value="any">Any, in the sheet's shares</option><option value="slab">Slab: low, long</option><option value="block">Block</option><option value="pillar">Pillar: tall</option><option value="ramp">Ramp: top rising to a high back</option><option value="stepped">Stepped: a block or pillar with a bite out of a corner</option></select></div>
+   <select id="kind"><option value="any">Any, in the sheet's shares</option><option value="slab">Slab: low, long</option><option value="block">Block</option><option value="pillar">Pillar: tall</option><option value="ramp">Ramp: top rising to a high back</option><option value="stepped">Stepped: a block or pillar with one lobe lower</option></select></div>
   <div class="grp"><label for="refcell">Reference</label><select id="refcell"></select>
    <div class="plate stage"><canvas id="refcrop" style="width:100%;height:auto;display:block"></canvas></div></div>
   <dl class="read" id="read"></dl>
@@ -16,16 +16,16 @@
 </section>
 
 <section class="ch" id="built">
-<header><span class="n">4 · How a rock is built</span><h2>One mass, cut</h2>
-<p>Four stages of one rock (found by scanning for one with a step, a split and a chip). Then the cost, measured in this browser.</p></header>
+<header><span class="n">4 · How a rock is built</span><h2>Lobes, rounded off, grown together</h2>
+<p>Three stages of one rock. Then the cost, measured in this browser.</p></header>
 <div class="sec full"><div class="row" id="stages" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))"></div></div>
 <div class="sec">
 <div class="words"><ol>
-<li><b>The mass.</b> One convex solid held as planes: four sides that lean a little, a top that slopes only for a ramp, a flat bottom. Slab, block, pillar and ramp are the same solid with different proportions.</li>
-<li><b>Chamfers.</b> Each edge is read off its two faces and cut by three to five planes whose widths are straight lines along the edge, so the widest wins and the width wanders with creases between facets.</li>
-<li><b>Facets, kinks and chips.</b> More planes on the same solid: a few degrees off a side face (a ramp's slope may take one too, a flat top never), and skew corner flakes. Still convex.</li>
-<li><b>Cuts.</b> Concave pieces are taken out of the solid by convex cutters: a V-groove (two planes, with a tapering end) scored into a face and sometimes on across the top, and a bite out of a top corner for a step. Faces are split at the cutters' planes, what lies inside is dropped, and the cutters' own faces close the cut. A groove never divides the rock; a bite is one corner shelf.</li>
-<li><b>Mesh.</b> Weld the corners, repair T-junctions, fan the polygons into triangles, count the edges (each must have two) and find the steepest face facing down; a rock that fails is drawn again from the same seed.</li></ol>
+<li><b>Lobes.</b> A rock is one to four lobes: boxes, or ramps, that stand on the ground and touch along full-depth joints. They share one outline and one top level, except that a lobe may stand lower (a step) or a ramp's lobes share one sloping plane. Each is a convex solid held as planes.</li>
+<li><b>Chamfers.</b> Every convex edge of every lobe is rounded off by two or three planes, each tangent to a circle whose radius is set from the edge's own line in space, tilted a little so the width changes along the edge. Joint edges get a quarter of the radius, so the crease between two lobes is a V, wide at the surface and sharp at the bottom. Inside corners are never rounded.</li>
+<li><b>Wobble.</b> A few planes at 0.5 to 3 degrees, never on a joint face, break the large faces and tops.</li>
+<li><b>Join.</b> Each polygon of each lobe is split at the other lobes' planes; pieces inside another lobe are dropped, and so are two faces that touch back to back. What is left is the surface of the union.</li>
+<li><b>Mesh.</b> Weld the corners, repair T-junctions, fan the polygons into triangles, count the edges (each must have two) and find the steepest face facing down; a rock that fails is drawn again with other chamfer widths. Normals are smoothed across bends under 40 degrees for display only.</li></ol>
 <p>Nothing is a voxel or a field: every face is an exact plane.</p></div>
 <div class="plates"><div class="plate pad"><div id="t-time" class="scroll"></div></div><p class="note" id="timenote"></p></div></div>
 </section>

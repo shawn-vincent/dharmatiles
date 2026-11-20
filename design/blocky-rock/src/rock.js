@@ -1,4 +1,4 @@
-/* ---------- the rock: columns, chamfered, joined ----------
+/* ---------- the rock: lobes, chamfered, joined ----------
    A rock is a few convex columns standing on the ground (a split of the footprint, each part with its own top), every one cut by planes
    (a chamfer along each edge, broken into one to three facets whose width runs along the edge; a few big facets and corner chips), and the
    columns joined: a polygon of one column that lies inside another is dropped, the rest is the surface. Where two columns of the same height
@@ -53,12 +53,11 @@ const centroid = (P) => mul(P.reduce((a, p) => add(a, p), [0, 0, 0]), 1 / P.leng
 const aabb = (P) => { const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; for (const p of P) for (let k = 0; k < 3; k++) { if (p[k] < lo[k]) lo[k] = p[k]; if (p[k] > hi[k]) hi[k] = p[k]; } return { lo, hi }; };
 const overlap = (a, b, m = 1e-6) => a.lo[0] <= b.hi[0] + m && b.lo[0] <= a.hi[0] + m && a.lo[1] <= b.hi[1] + m && b.lo[1] <= a.hi[1] + m && a.lo[2] <= b.hi[2] + m && b.lo[2] <= a.hi[2] + m;
 
-/* ---------- chamfers: one to three planes along each edge, their width a straight line along the edge ---------- */
-const FACE_BIAS = 1 / 1.4;   /* an underside chamfer rises 1/1.4 of its run: 55 degrees from vertical, so it prints */
+
+/* ---------- chamfers: each convex edge rounded off by a chain of two or three planes, tangent to a circle of radius r that wanders along the edge ---------- */
 function edgeKey(a, t, n1, n2, ax) {
   const p0 = add(a, mul(t, -a[ax] / t[ax])), q = (v) => Math.round(v * 1000), nk = (n) => n.map((v) => Math.round(v * 100)).join(',');
-  const ns = [nk(n1), nk(n2)].sort().join('/');
-  return ax + '|' + [0, 1, 2].filter((k) => k !== ax).map((k) => q(p0[k])).join(',') + '|' + ns;
+  return ax + '|' + [0, 1, 2].filter((k) => k !== ax).map((k) => q(p0[k])).join(',') + '|' + [nk(n1), nk(n2)].sort().join('/');
 }
 function chamferPlanes(F, ctx) {
   if (ctx.noChamfer) return [];
@@ -67,35 +66,24 @@ function chamferPlanes(F, ctx) {
   const out = [];
   for (const e of E.values()) {
     if (e.f.length !== 2) continue;
-    const f1 = F[e.f[0]], f2 = F[e.f[1]], n1 = f1.n, n2 = f2.n;
-    if (dot(n1, n2) > 0.82) continue;   /* a shallow bend is left as a crease */
-    const a = e.a, b = e.b, L = len(sub(b, a)); if (L < 0.05) continue;
-    const bottom = n1[2] < -.95 || n2[2] < -.95, top = !bottom && (n1[2] > .3 || n2[2] > .3);
+    let f1 = F[e.f[0]], f2 = F[e.f[1]]; if (f2.n[2] > f1.n[2]) [f1, f2] = [f2, f1];   /* nA: the face that is more up */
+    const nA = f1.n, nB = f2.n, cs = dot(nA, nB);
+    if (cs > 0.82) continue;   /* a shallow bend stays a crease */
+    const a = e.a, b = e.b; if (len(sub(b, a)) < 0.04) continue;
+    const bottom = nB[2] < -.95, top = !bottom && nA[2] > .5;
     if (bottom && !ctx.bottomBevel) continue;
-    if (bottom && (f1.pl.joint || f2.pl.joint)) continue;   /* a groove stops at the ground: no notch there */
     const t = norm(sub(b, a)), ax = Math.abs(t[0]) > Math.abs(t[1]) ? (Math.abs(t[0]) > Math.abs(t[2]) ? 0 : 2) : (Math.abs(t[1]) > Math.abs(t[2]) ? 1 : 2);
-    const inFace = (f) => { let g = norm(cross(f.n, t)); if (dot(g, sub(centroid(f.p), a)) < 0) g = mul(g, -1); return g; };
-    const g1 = inFace(f1), g2 = inFace(f2), ext = (f, g) => Math.max(...f.p.map((p) => dot(sub(p, a), g)));
-    const cap = .4 * Math.min(ext(f1, g1), ext(f2, g2));
-    const type = bottom ? 'bottom' : top ? 'top' : 'vert', k = edgeKey(a, t, n1, n2, ax), r = mulberry(hash(ctx.seed + ':' + k));
-    const nf = pick(r, { 3: .35, 4: .4, 5: .25 }) | 0, rng = ctx.chamfer[type], base = U(r, rng[0], rng[1]) * ctx.m * ((f1.pl.joint || f2.pl.joint) ? .2 : 1);
-    /* which face is which: the bottom or top face takes the long leg */
-    let bigIsF1 = bottom ? n1[2] < -.95 : top ? n1[2] > .3 && n1[2] >= n2[2] : true;
-    const ratio = bottom ? FACE_BIAS : top ? U(r, .45, .95) : 1;
-    for (let i = 0; i < nf; i++) {
-      const e0 = base * U(r, .7, 1.3), slope = U(r, -.3, .3) * ctx.m;
-      const jt = f1.pl.joint || f2.pl.joint, floor = Math.min(jt ? .018 : bottom ? .05 : .06, .11 * ctx.m), wid = (c) => Math.min(Math.max(floor, e0 + slope * c), Math.max(floor, .2 * ctx.m));   /* big silhouette features: none under 0.06 fh (a groove's two halves 0.045) */
-      const leg = (c) => { const w = Math.min(wid(c), cap / Math.max(1, ratio < 1 ? 1 : ratio)); return bigIsF1 ? [w, w * ratio] : [w * ratio, w]; };
-      const la = leg(a[ax]), lb = leg(b[ax]);
-      const P1 = add(a, mul(g1, la[0])), P2 = add(a, mul(g2, la[1])), Q1 = add(b, mul(g1, lb[0]));
-      let n = cross(sub(P2, P1), sub(Q1, P1)); if (len(n) < 1e-9) continue; n = norm(n); if (dot(n, add(n1, n2)) < 0) n = mul(n, -1);
-      if (-n[2] > .8192) {   /* a chamfer facing down no flatter than 35 degrees above horizontal: lengthen the leg on the standing face, or leave the edge */
-        let ok = false, k = 1;
-        for (let t = 0; t < 3 && !ok; t++) { k *= 1.2; const ga = bigIsF1 ? [la[0], la[1] * k] : [la[0] * k, la[1]], gb = bigIsF1 ? [lb[0], lb[1] * k] : [lb[0] * k, lb[1]];
-          const A1 = add(a, mul(g1, ga[0])), A2 = add(a, mul(g2, ga[1])), B1 = add(b, mul(g1, gb[0])); let m = cross(sub(A2, A1), sub(B1, A1)); if (len(m) < 1e-9) continue; m = norm(m); if (dot(m, add(n1, n2)) < 0) m = mul(m, -1); if (-m[2] <= .8192) { n = m; P1.splice(0, 3, ...A1); ok = true; } }
-        if (!ok) continue;
-      }
-      out.push({ n, d: dot(n, P1) });
+    const type = bottom ? 'bottom' : top ? 'top' : 'vert', k = edgeKey(a, t, nA, nB, ax), r = mulberry(hash(ctx.seed + ':' + k));
+    const ext = (f, n) => { const g = norm(cross(n, t)); const sg = dot(g, sub(centroid(f.p), a)) < 0 ? -1 : 1; return Math.max(...f.p.map((p) => dot(sub(p, a), mul(g, sg)))); };
+    const R = ctx.chamfer[type], jt = f1.pl.joint || f2.pl.joint, rad = Math.min(Math.max(jt ? ctx.rjoint : ctx.rmin, U(r, R[0], R[1]) * ctx.m * (jt ? ctx.jf : 1)), .3 * Math.min(ctx.center[0], ctx.center[1], ctx.center[2]) * 2);   /* capped by the whole rock, not by one lobe, so lobes that share an edge cut it alike */
+    const E0 = add(a, mul(t, (ctx.center[ax] - a[ax]) / t[ax])), kv = mul(add(nA, nB), 1 / (1 + cs)), C = sub(E0, mul(kv, rad));
+    const nf = bottom ? 2 : +pick(r, { 2: .4, 3: .6 }), S = bottom ? [.32, .56] : nf === 2 ? [.33, .67] : [.2, .5, .8];
+    for (const s0 of S) {
+      const s = Math.min(.95, Math.max(.05, s0 + U(r, -.07, .07)));
+      let nn = norm(add(mul(nA, 1 - s), mul(nB, s))); if (-nn[2] > .8192) continue;   /* a face looking down no flatter than 35 degrees above horizontal */
+      const rr = rad * U(r, .88, 1.15), P0 = add(C, mul(nn, rr)), tilt = norm(add(nn, mul(t, U(r, -.4, .4) * rad / Math.max(.2, ctx.center[ax]))));   /* the plane's width changes by up to 0.4 r from the middle of the edge to either end */
+      if (-tilt[2] > .8192) continue;
+      out.push({ n: tilt, d: dot(tilt, P0) });
     }
   }
   return out;
@@ -154,7 +142,8 @@ function unite(parts) {
 
 /* ---------- a mesh: weld, repair T-junctions, triangulate, check ---------- */
 function meshOf(polys) {
-  const V = [], map = new Map(), Q = 1e5, id = (p) => { const k = Math.round(p[0] * Q) + ',' + Math.round(p[1] * Q) + ',' + Math.round(p[2] * Q); let i = map.get(k); if (i === undefined) { i = V.length; V.push(p); map.set(k, i); } return i; };
+  const V = [], map = new Map(), Q = 1e4, cell = (p) => [Math.floor(p[0] * Q), Math.floor(p[1] * Q), Math.floor(p[2] * Q)];
+  const id = (p) => { const c = cell(p); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) { const l = map.get((c[0] + i) + ',' + (c[1] + j) + ',' + (c[2] + k)); if (l) for (const v of l) if (Math.abs(V[v][0] - p[0]) + Math.abs(V[v][1] - p[1]) + Math.abs(V[v][2] - p[2]) < 4e-5) return v; } const n = V.length; V.push(p); const kk = c.join(','); (map.get(kk) || map.set(kk, []).get(kk)).push(n); return n; };
   let loops = polys.map((f) => { const ids = []; for (const p of f.p) { const i = id(p); if (ids[ids.length - 1] !== i) ids.push(i); } if (ids.length > 1 && ids[0] === ids[ids.length - 1]) ids.pop(); return { ids, n: f.n }; }).filter((l) => l.ids.length >= 3);
   /* T-junctions: a vertex lying on another polygon's edge joins it */
   const idxBox = V.map((p) => p);
@@ -195,146 +184,51 @@ function check(m) {
   return { open, many, edges: E.size, overhangDeg: Math.asin(Math.max(0, Math.min(1, worst))) * 180 / Math.PI, flatBottom: flat };
 }
 
-/* ---------- composing a rock from a seed ---------- */
-const KINDS = ['slab', 'block', 'pillar', 'ramp', 'stepped'];
-const MIX = { slab: .22, block: .30, pillar: .22, ramp: .26 };   /* the sheet: 9 slabs, 12 blocks, 9 pillars, 10 ramps of 40; "stepped" is a control, not a share */
-/* what the sheet gives, as numbers (see the study): sizes are against the longer plan side W; cuts is how many splits; step the chance of a lowered corner */
-const KIND_SPEC = {
-  slab: { W: [.75, 1.15], D: [.55, .85], H: [.28, .42], cuts: { 1: .6, 2: .4 }, lean: 0, step: .15 },
-  block: { W: [.5, .85], D: [.72, 1], H: [.5, .85], cuts: { 0: .25, 1: .55, 2: .2 }, lean: .1, step: .25 },
-  pillar: { W: [.4, .6], D: [.6, .9], H: [1.6, 2.4], cuts: { 0: .78, 1: .22 }, lean: .3, step: .45 },
-  ramp: { W: [.6, 1], D: [.6, .9], H: [.62, .95], cuts: { 0: .6, 1: .4 }, lean: .2, step: .5 },
-};
-/* ---------- cutters: a convex region (planes, inside is n.p <= d) taken out of the one mass ---------- */
-function cutterOf(planes) { let F = cube(40); for (const p of planes) F = clip(F, p); return { planes, faces: F }; }
-const orient = (n, d, inside) => (dot(n, inside) - d > 0 ? { n: mul(n, -1), d: -d } : { n, d });   /* make `inside` satisfy n.p <= d */
-/* a V-groove scored into a face: opening w at the face c (normal n, tangent u, axis a along the groove), apex d below; the end at distance t_e along a tapers away, interior toward `sign` */
-function groove(c, n, u, a, w, d, end) {
-  const q0 = add(c, mul(n, -d)), pl = [];
-  for (const sg of [1, -1]) { const v = add(mul(n, d), mul(u, sg * w / 2)); let m = norm(cross(a, v)), dd = dot(m, q0); const o = orient(m, dd, c); pl.push({ n: o.n, d: o.d * 1 }); }
-  /* orient() tests the point c, which lies inside the wedge; recompute d from the apex so the plane passes through the apex line */
-  pl.forEach((p, i) => { p.d = dot(p.n, q0); if (dot(p.n, c) - p.d > 0) { p.n = mul(p.n, -1); p.d = -p.d; } });
-  if (end) { const Pf = add(c, mul(a, end.t)), Pk = add(q0, mul(a, end.t + end.sign * d)); let m = norm(cross(u, sub(Pk, Pf))); const o = orient(m, dot(m, Pf), add(Pf, mul(a, end.sign * .1))); pl.push(o); }
-  return cutterOf(pl);
-}
-function compose(seed, attempt, opts) {
-  const r = mulberry(hash('rock' + seed + ':' + attempt));
-  let kind = opts.kind && opts.kind !== 'any' ? opts.kind : pick(r, MIX), forceStep = false;
-  if (kind === 'stepped') { kind = pick(r, { block: .45, pillar: .4, ramp: .15 }); forceStep = true; }
-  const S = KIND_SPEC[kind];
-  let W = U(r, ...S.W), D = W * U(r, ...S.D), H = W * U(r, ...S.H);
-  if (kind === 'pillar') H = Math.min(H, 1.3);
-  if (r() < .5) { const t = W; W = D; D = t; }
-  const size = Math.max(W, D, H), m = Math.min(W, D);
-  const ctx = { seed, size, m, bottomBevel: opts.bottomBevel !== false, noChamfer: opts.stage === 0, ramp: kind === 'ramp', chamfer: { top: [.08, .14], vert: [.08, .14], bottom: [.07, .12] } };
-  const lean = [0, 0]; if (r() < S.lean) lean[r() < .7 ? 0 : 1] = U(r, .012, .035) * (r() < .5 ? -1 : 1);
-  const bat = [W, W, D, D].map((w) => (kind !== 'pillar' && r() < .3 ? U(r, .008, .02) * w / Math.max(H, w * 1.2) : 0));
-  let sx = 0, h0 = H; if (kind === 'ramp') { const hL = H * U(r, .25, .45); sx = (H - hL) / W; h0 = hL; }
-  const part = { x0: 0, x1: W, y0: 0, y1: D, lean, bat, sx, sy: 0, h0, clips: [] }, feats = [], cutters = [], dims = { W, D, H, size };
-  const full = opts.stage == null || opts.stage >= 3, topAt = (x) => h0 + sx * x;
-  /* a step: one bite out of a top corner of the mass (concave, right-angled): the shelf is the tread, the cut face the riser */
-  if (forceStep || r() < S.step) {
-    const nearEnd = r() < .35, wx = Math.max(U(r, .28, .5) * W, .3 * m), wy = r() < .6 ? Math.max(U(r, .4, .75) * D, .3 * m) : null, pl = [];
-    let zs = kind === 'ramp' ? Math.min(topAt(nearEnd ? W - wx : 0) * U(r, .55, .9), topAt(nearEnd ? W : wx) * U(r, .35, .6)) : H * (1 - U(r, kind === 'pillar' ? .3 : .25, kind === 'pillar' ? .55 : .5));
-    zs = Math.max(zs, .12 * size);
-    pl.push(nearEnd ? { n: [-1, 0, 0], d: -(W - wx) } : { n: [1, 0, 0], d: wx }); if (wy) pl.push({ n: [0, 1, 0], d: wy }); pl.push({ n: [0, 0, -1], d: -zs });
-    cutters.push(cutterOf(pl)); feats.push({ k: 'step', z: +zs.toFixed(3), corner: nearEnd ? 'near' : 'left', deep: !!wy });
-  }
-  /* splits: V-grooves scored into a face, thin and crisp, running up from the ground (tapering out there) through the top edge; some go on across the top */
-  const ng = kind === 'ramp' && !S.cuts ? 0 : +pick(r, S.cuts);
-  for (let i = 0; i < ng; i++) {
-    const onL = r() < .65, u = U(r, .25, .75), w = U(r, .045, .075), d = w * U(r, .55, .85), reach = r() < .4 ? null : U(r, .3, .8);
-    const ze = reach == null ? 0 : H * (1 - reach) * (kind === 'ramp' ? .6 : 1), tilt = U(r, -.08, .08);
-    let c, n, t, a;
-    if (onL) { c = [u * W, 0, 0]; n = [0, -1, 0]; t = [1, 0, 0]; a = norm([tilt, 0, 1]); } else { c = [W, u * D, 0]; n = [1, 0, 0]; t = [0, 1, 0]; a = norm([0, tilt, 1]); }
-    cutters.push(groove(c, n, t, a, w, d, { t: ze, sign: 1 })); feats.push({ k: 'split', face: onL ? 'L' : 'R', at: +u.toFixed(2), reach: reach == null ? 'full' : +reach.toFixed(2) });
-    if (kind !== 'ramp' && r() < .3) {   /* the line goes on across the top, and stops short of the back */
-      const ye = (onL ? D : W) * U(r, .4, .9), ct = onL ? [u * W, 0, H] : [W, u * D, H], aa = onL ? [0, 1, 0] : [-1, 0, 0], tt = onL ? [1, 0, 0] : [0, 1, 0];
-      cutters.push(groove(ct, [0, 0, 1], tt, aa, w, d, { t: ye, sign: -1 })); feats.push({ k: 'split', face: 'T', at: +u.toFixed(2), reach: +(ye / (onL ? D : W)).toFixed(2) });
-    }
-  }
-  const parts = [part], dd = dims, nfac = +pick(r, { 0: .15, 1: .4, 2: .35, 3: .1 }), nchip = +pick(r, { 0: .45, 1: .35, 2: .2 });
-  const built0 = [buildPart(part, ctx)], stage = opts.stage == null ? 3 : opts.stage;
-  if (stage >= 2) { for (let i = 0; i < nfac; i++) addFacet(r, parts, built0, ctx, dd, feats); for (let i = 0, nk = 1 + Math.floor(r() * 3); i < nk; i++) addFacet(r, parts, built0, ctx, dd, feats, true); for (let i = 0; i < nchip; i++) addChip(r, parts, built0, ctx, dd, feats); }
-  return { parts, cutters: stage >= 3 ? cutters : [], feats, kind, dims, ctx, lean, bat, forceStep };
-}
-const CHIPS_MAX_TRY = 8, bvol = (b) => (b.box.hi[0] - b.box.lo[0]) * (b.box.hi[1] - b.box.lo[1]) * (b.box.hi[2] - b.box.lo[2]);
-function pickPart(r, parts, built) { let tot = 0; const w = built.map((b) => { const q = Math.max(.02, (b.box.hi[0] - b.box.lo[0]) * (b.box.hi[1] - b.box.lo[1])); tot += q; return q; }); let x = r() * tot; for (let i = 0; i < w.length; i++) { x -= w[i]; if (x < 0) return i; } return 0; }
-/* a facet: a plane a few degrees off a face, cutting a shallow wedge from it */
-function addFacet(r, parts, built, ctx, dims, feats, kink) {
-  const i = pickPart(r, parts, built), B = built[i], faces = B.faces.filter((f) => !f.pl.joint && (Math.abs(f.n[2]) < .2 || (ctx.ramp && f.n[2] > .5 && f.n[2] < .95)));   /* a flat top stays flat: only a ramp's slope takes a facet */
-  for (let tr = 0; tr < CHIPS_MAX_TRY; tr++) {
-    const f = faces[Math.floor(r() * faces.length)]; if (!f || area(f.p, f.n) < .03 * dims.size * dims.size) continue;
-    const side = Math.abs(f.n[2]) < .2, c = centroid(f.p);
-    /* in-face direction the plane tilts toward: mostly vertical on a side, diagonal sometimes */
-    const up = side ? [0, 0, 1] : [1, 0, 0], u1 = norm(cross(f.n, up)), u2 = norm(cross(f.n, u1));
-    const ang = side ? pick(r, { v: .45, d: .4, h: .15 }) : 'h', a = ang === 'v' ? 0 : ang === 'h' ? Math.PI / 2 : (r() < .5 ? 1 : -1) * U(r, .35, .65) * Math.PI / 2;
-    const w = norm(add(mul(u2, Math.cos(a)), mul(u1, Math.sin(a)))), al = (kink ? U(r, 1.5, 4) : U(r, 3, side ? 9 : 6)) * Math.PI / 180;
-    let sgn = r() < .5 ? 1 : -1; if (Math.abs(w[2]) > .3) sgn = Math.sign(w[2]) * (r() < .85 ? 1 : -1);   /* a plane that is tilted up the face narrows the rock toward the top, as the sheet's pillars do; down, rarely */
-    const n = norm(add(mul(f.n, Math.cos(al)), mul(w, sgn * Math.sin(al))));
-    const ext = Math.max(...f.p.map((p) => Math.abs(dot(sub(p, c), w)))) || .1, off = U(r, -.5, .35) * ext, dep = (kink ? U(r, .012, .035) : U(r, .03, .1)) * Math.min(ctx.m, 1.2 * Math.min(B.box.hi[0] - B.box.lo[0], B.box.hi[1] - B.box.lo[1]));
-    const q = add(add(c, mul(w, sgn * off)), mul(f.n, -dep)), pl = { n, d: dot(n, q) };
-    if (-pl.n[2] > .8192) continue;   /* a downward plane no flatter than 35 degrees above horizontal */
-    parts[i].clips.push(pl); const nb = buildPart(parts[i], ctx); if (bvol(nb) < .72 * bvol(B)) { parts[i].clips.pop(); continue; } built[i] = nb; if (!kink) feats.push({ k: 'facet', part: i, deg: +(al * 180 / Math.PI).toFixed(1) }); return;
-  }
-}
-/* a chip: the plane through a point on each of the three edges at a corner, the legs unequal */
-function addChip(r, parts, built, ctx, dims, feats) {
-  const i = pickPart(r, parts, built), B = built[i];
-  for (let tr = 0; tr < CHIPS_MAX_TRY; tr++) {
-    const verts = []; for (const f of B.faces) for (const p of f.p) if (!verts.some((q) => len(sub(p, q)) < 1e-5)) verts.push(p);
-    const lowBias = r() < .45, cand = verts.filter((v) => (lowBias ? v[2] < .12 * dims.H + 1e-3 : v[2] > .4 * dims.H));
-    if (!cand.length) continue;
-    const v = cand[Math.floor(r() * cand.length)], at = B.faces.filter((f) => f.p.some((p) => len(sub(p, v)) < 1e-5));
-    if (at.length < 3 || at.some((f) => f.pl.joint)) continue;   /* never into a face that is a joint: that would open the groove into a gap */
-    /* edges at the corner: directions to the neighbouring vertices along faces */
-    const dirs = [];
-    for (const f of at) { const k = f.p.findIndex((p) => len(sub(p, v)) < 1e-5), n = f.p.length; for (const nb of [f.p[(k + 1) % n], f.p[(k + n - 1) % n]]) { const d = norm(sub(nb, v)); if (!dirs.some((e) => dot(e, d) > .999)) dirs.push(d); } }
-    if (dirs.length !== 3) continue;
-    const m = Math.min(dims.W, dims.D, dims.H, 1), legs = [U(r, .16, .4), U(r, .16, .4), U(r, .16, .4)].map((x) => x * Math.max(.35, m) * 1);
-    const pts = dirs.map((d, k) => add(v, mul(d, Math.min(legs[k], .45 * len(sub(B.box.hi, B.box.lo)) / 2))));
-    let n = cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])); if (len(n) < 1e-9) continue; n = norm(n);
-    const out = mul(norm(at.reduce((a, f) => add(a, f.n), [0, 0, 0])), 1); if (dot(n, out) < 0) n = mul(n, -1);
-    if (-n[2] > .8192) continue;
-    parts[i].clips.push({ n, d: dot(n, pts[0]) }); const nb = buildPart(parts[i], ctx); if (bvol(nb) < .8 * bvol(B)) { parts[i].clips.pop(); continue; } built[i] = nb; feats.push({ k: 'chip', part: i, low: v[2] < .3 * dims.H }); return;
-  }
-}
 
-/* the mass minus its cutters: faces split at the cutters' planes and the inside dropped; each cutter's faces, cut to the mass and to the other cutters, close the cut */
-function keepInside(P, pl) {
-  const s = P.map((q) => dot(pl.n, q) - pl.d); if (s.every((v) => v <= EPS)) return P; if (s.every((v) => v >= -EPS)) return null;
-  const lo = [], n = P.length;
-  for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n], sa = s[i], sb = s[(i + 1) % n]; if (sa <= EPS) lo.push(a); if ((sa < -EPS && sb > EPS) || (sa > EPS && sb < -EPS)) { const t = sa / (sa - sb); lo.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]); } }
-  return lo.length >= 3 ? lo : null;
-}
-const insideAll = (c, planes) => planes.every((pl) => dot(pl.n, c) - pl.d < -1e-6);
-function carve(Pm, cutters) {
-  const out = [];
-  const pieces = (poly, others) => { let fr = [poly]; for (const C of others) for (const pl of C.planes) { const nx = []; for (const g of fr) nx.push(...splitFrag(g, pl)); fr = nx; } return fr; };
-  for (const f of Pm.faces) for (const g of pieces(f.p, cutters)) { if (area(g, f.n) < 1e-10) continue; if (cutters.some((C) => insideAll(centroid(g), C.planes))) continue; out.push({ p: g, n: f.n }); }
-  cutters.forEach((C, k) => {
-    const others = cutters.filter((_, j) => j !== k);
-    for (const f of C.faces) {
-      let poly = f.p; for (const pl of Pm.planes) { poly = poly && keepInside(poly, pl); if (!poly) break; }
-      if (!poly || area(poly, f.n) < 1e-9) continue;
-      for (const g of pieces(poly, others)) { if (area(g, f.n) < 1e-10) continue; if (others.some((C2) => insideAll(centroid(g), C2.planes))) continue; out.push({ p: g.slice().reverse(), n: mul(f.n, -1) }); }
-    }
+/* ---------- a rock: lobes (rounded-off prisms) grown together, from a recipe ----------
+   recipe: { W, D, H, lean:[x,y], r: radius scale, seed, lobes:[{x0,x1,y0,y1,h, sx, sy, flat}], kinks:n }
+   x runs along the left face (y = 0), y into the picture; a lobe's top is h (at its far corner) with slope sx along x. Lobes that touch share a joint plane,
+   and the V between them is the two lobes' chamfers. */
+function partsOf(rc) {
+  return rc.lobes.map((q) => {
+    const sx = q.sx || 0, sy = q.sy || 0, ht = q.h - sx * q.x1 - sy * q.y1;   /* h is the height at the lobe's far corner (x1, y1) */
+    return { x0: q.x0, x1: q.x1, y0: q.y0, y1: q.y1, lean: rc.lean || [0, 0], bat: [0, 0, 0, 0], sx, sy, h0: ht, clips: q.clips || [],
+      joints: [q.x0 > 1e-9 ? 0 : -1, q.x1 < rc.W - 1e-9 ? 1 : -1, q.y0 > 1e-9 ? 2 : -1, q.y1 < rc.D - 1e-9 ? 3 : -1].filter((k) => k >= 0) };
   });
-  return out;
+}
+/* a plane a few degrees off a face: wobble. face: 'L' (y=0), 'R' (x=W), 'T' top; at: where along it; ang in degrees; dep: how far below the face at the crease */
+function kinkPlane(rc, B, face, at, ang, dir, dep) {
+  const f = B.faces.filter((q) => !q.pl.joint && (face === 'L' ? q.n[1] < -.9 : face === 'R' ? q.n[0] > .9 : face === 'B' ? q.n[1] > .9 : q.n[2] > .9)).sort((a, b) => area(b.p, b.n) - area(a.p, a.n))[0];
+  if (!f) return null;
+  const c = centroid(f.p), up = face === 'T' ? [1, 0, 0] : [0, 0, 1], u1 = norm(cross(f.n, up)), u2 = norm(cross(f.n, u1));
+  const w = norm(add(mul(u2, Math.cos(dir * Math.PI / 180)), mul(u1, Math.sin(dir * Math.PI / 180)))), al = ang * Math.PI / 180, n = norm(add(mul(f.n, Math.cos(al)), mul(w, Math.sin(al))));
+  const ext = Math.max(...f.p.map((p) => Math.abs(dot(sub(p, c), w)))) || .1, q = add(add(c, mul(w, at * ext)), mul(f.n, -dep));
+  return { n, d: dot(n, q) };
+}
+function randomKinks(r, rc, parts, ctx, n) {
+  for (let i = 0; i < n; i++) {
+    const pi = Math.floor(r() * parts.length), B = buildPart(parts[pi], ctx), face = pick(r, { L: .45, R: .35, T: .2 });
+    const pl = kinkPlane(rc, B, face, U(r, -.4, .4), face === 'T' ? U(r, .5, 1.3) : U(r, 1.2, 3.2), face === 'T' ? U(r, 0, 90) : pick(r, { 0: .5, 45: .25, 135: .25 }) | 0, U(r, .012, .035) * ctx.m / .5);
+    if (pl && -pl.n[2] < .8192) parts[pi].clips.push(pl);
+  }
 }
 function makeRock(seed, opts) {
   opts = opts || {}; const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
+  const rc = opts.recipe || ROCK.random(seed, opts), stage = opts.stage == null ? 3 : opts.stage;
   let res = null;
-  for (let attempt = opts.attempt ? opts.attempt - 1 : 0; attempt < (opts.attempt ? opts.attempt : 10); attempt++) {
-    const c = compose(seed, attempt, opts), built = c.parts.map((p) => buildPart(p, c.ctx)), polys = c.cutters.length ? carve(built[0], c.cutters) : built[0].faces.map((f) => ({ p: f.p, n: f.n })), m = meshOf(polys), chk = check(m);
-    res = { ...c, built, polys, mesh: m, check: chk, attempt: attempt + 1 };
+  for (let attempt = 0; attempt < (opts.tries || 12); attempt++) {
+    const ctx = { seed: (rc.seed || seed) + ':' + attempt, m: Math.min(rc.W, rc.D), center: [rc.W / 2, rc.D / 2, rc.H / 2], rmin: .05, rjoint: .018, jf: rc.jf || .25, bottomBevel: opts.bottomBevel !== false, noChamfer: stage === 0, chamfer: rc.chamfer || { top: [.14, .22], vert: [.12, .2], bottom: [.1, .16] } };
+    const parts = partsOf(rc); const r = mulberry(hash('k' + (rc.seed || seed)));
+    if (stage >= 2) randomKinks(r, rc, parts, ctx, rc.kinks == null ? 3 : rc.kinks);
+    const built = parts.map((p) => buildPart(p, ctx)), polys = built.length > 1 ? unite(built) : built[0].faces.map((f) => ({ p: f.p, n: f.n })), mesh = meshOf(polys), chk = check(mesh);
+    res = { rc, parts, built, polys, mesh, check: chk, attempt: attempt + 1, kind: rc.kind || '' };
     if (chk.open === 0 && chk.many === 0 && chk.overhangDeg <= 55.05) break;
   }
-  const bb = aabb(res.mesh.V), want = opts.size, k = want ? want / Math.max(bb.hi[0] - bb.lo[0], bb.hi[1] - bb.lo[1], bb.hi[2]) : 1, cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
-  res.V = res.mesh.V.map((p) => [(p[0] - cx) * k, (p[1] - cy) * k, p[2] * k]); res.T = res.mesh.T; res.scale = k; res.off = [cx, cy];
-  res.dimsOut = [(bb.hi[0] - bb.lo[0]) * k, (bb.hi[1] - bb.lo[1]) * k, bb.hi[2] * k];
+  const bb = aabb(res.mesh.V), cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
+  res.V = res.mesh.V.map((p) => [p[0] - cx, p[1] - cy, p[2]]); res.T = res.mesh.T;
+  res.dimsOut = [bb.hi[0] - bb.lo[0], bb.hi[1] - bb.lo[1], bb.hi[2]];
   res.ms = (typeof performance !== 'undefined' ? performance : Date).now() - t0;
   return res;
 }
-root.ROCK = { makeRock, KINDS, MIX, check, mulberry };
+root.ROCK = { makeRock, check, mulberry, RECIPES: {}, random: null };
 })(typeof window !== 'undefined' ? window : globalThis);

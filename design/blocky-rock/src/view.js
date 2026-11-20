@@ -3,7 +3,7 @@
 'use strict';
 const STAGE = 0x4a4a4e, GREY = 0xb2b4b8;
 /* flat planes, with the faces that bend by under 18 degrees shaded as one (the clay look of the sheet); the geometry is the same either way */
-const CREASE = Math.cos(18 * Math.PI / 180);
+const CREASE = Math.cos(40 * Math.PI / 180);
 function geometryOf(rock) {
   const nT = rock.T.length / 3, pos = new Float32Array(nT * 9), nor = new Float32Array(nT * 9), fn = [], key = new Map();
   for (let t = 0; t < nT; t++) {

@@ -1,22 +1,21 @@
 <section class="ch" id="verdict">
 <header><span class="n">5 · Against the references</span><h2>What looks right, and what does not</h2>
-<p>Judged by rendering the same view as the sheet and putting the two side by side, over many seeds, not by the numbers.</p></header>
+<p>Four reference rocks were drawn by hand first (R1C8, R2C4, R1C7, R1C5), then a generator was written from them. Judged by rendering the same view beside the cell.</p></header>
 <div class="sec">
 <div class="words"><h3>Looks right</h3><ul>
-<li><b>The vocabulary.</b> A chunky mass on a flat bottom, every convex edge cut by a few planes of changing width, a V-groove that splits it, a corner step or a seat on a ramp, an oblique facet across a face, a skew corner flake. A seed reads as one of the sheet's families at a glance.</li>
-<li><b>Proportions and mix.</b> Slabs low and long, blocks near cubes, pillars two to three times as tall as wide, ramps rising to a high back, in the sheet's shares; steps on four in ten and splits on eight in ten.</li>
-<li><b>Sharp inside corners.</b> Where a step meets its riser and at the bottom of every groove the corner is sharp, as the rule says, because it comes from joining boxes.</li>
-<li><b>It prints and it is fast.</b> Every shown rock is one closed mesh, no face over 55 degrees from vertical except the flat bottom, and a rock builds in 2 to 6 ms on average and under 50 ms at the worst seed (chapter 4).</li></ul></div>
+<li><b>One block of lobes.</b> A seed reads as a single boxy rock with creases between its lobes, not as pieces side by side. R1C8 (a block of three lobes) is the closest match; R2C4 (a pillar with a lower lobe) and the slab R1C5 read as the same kind of rock.</li>
+<li><b>Edges.</b> Every convex edge is a chain of planes whose width changes along it, soft at a distance, with the normals smoothed for display.</li>
+<li><b>It prints and it is fast.</b> One closed mesh per rock, no face over 55 degrees except the flat bottom, a few milliseconds a rock (chapter 4).</li></ul></div>
 <div class="words"><h3>Does not look right yet</h3><ul>
-<li><b>Softness.</b> The sheet is a clay sculpt: faces are slightly wavy, creases soft. These are exact planes, shaded as one across bends under 18 degrees; a cut stone next to the clay, though far less crystalline than before.</li>
-<li><b>One mass.</b> Every rock is one solid with grooves and a bite cut into it; it no longer reads as two rocks. A groove ends in a flat-floored taper that looks more like a slot than the sheet's soft line.</li><li><b>The bite's rim.</b> A step's tread and riser edges are sharp; the sheet chamfers them.</li>
-<li><b>Chamfer wander.</b> Widths change along an edge with creases, but only as a convex envelope, so they widen toward the ends or the middle and do not wander freely as on the sheet.</li>
-<li><b>Not generated at all:</b> the pocket or V notch cut into a face (R2C6, R3C1, R4C2; three rocks), and the wavy surface of the clay. A horizontal bed line is generated but is rare in the sheet (R5C3 only).</li>
-<li><b>Cliff constraints are only partly in.</b> The generator has the bottom switch (<code>bottomBevel: false</code>) but no switch yet for a top that carries a stone, or a face against a neighbour. I would add them as a list of faces to leave plain.</li></ul></div></div>
+<li><b>R1C7, the ramp with a seat, does not match.</b> Its seat and slope come out as separate lobes with a valley between them; the sheet's slope runs unbroken down into the seat. Lobes with planar tops cannot make that without a crease.</li>
+<li><b>Puffy.</b> The chamfers are generous, and a rock reads rounder and a little taller than the clay it copies. The sheet's tops are flatter inside a narrow band.</li>
+<li><b>Faces.</b> The sheet's faces wander in a few soft waves; mine have a few gentle planes.</li>
+<li><b>Not generated:</b> V-notch pockets and chips (R2C6, R3C1, R4C2), a groove that ends partway down a face, a split that does not cross the whole rock.</li>
+<li><b>Cliff constraints</b> are only partly in: <code>bottomBevel</code> exists, but no switch for a loaded top or a face against a neighbour.</li></ul></div></div>
 <div class="sec full"><div class="words"><h3>What I did not look at</h3>
-<ul><li>The back and right-back of any reference rock; there are none. The faces of a generated rock that the camera never sees are not compared with anything.</li>
-<li>A real phone: the page was checked in headless Chrome at 1280 and 390 px wide; touch orbit and pinch are OrbitControls' and were not tried by hand.</li>
-<li>The feature positions against the sheet by statistics: the rules take shares and ranges from the study; I did not test that a thousand generated rocks match the table, only looked at several hundred.</li>
-<li>How the rock sits on a cliff's plate, with neighbours and a figure; this level is one rock.</li></ul></div></div>
+<ul><li>The back of any reference rock; there are none.</li>
+<li>A real phone: headless Chrome at 1280 and 390 px only.</li>
+<li>Statistics of generated rocks against the study tables.</li>
+<li>The rock in a cliff, with neighbours.</li></ul></div></div>
 </section>
 </main>
