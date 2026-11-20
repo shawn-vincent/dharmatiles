@@ -1,0 +1,33 @@
+<section class="ch" id="explorer">
+<header><span class="n">3 · The explorer</span><h2>Draw a rock</h2>
+<p>One rock from one seed, built with the rules above. Drag to turn it, scroll or pinch to zoom. The sixteen below are the neighbouring seeds; touch one to open it. Beside them is a crop of the reference to judge against.</p></header>
+<div class="bench">
+ <div class="live" id="live"></div>
+ <div class="side">
+  <div class="grp"><label for="seed" id="l-seed">Seed</label><div class="seedrow"><input type="number" id="seed" min="1" max="999999" step="1" aria-labelledby="l-seed"><button type="button" id="prev">Previous</button><button type="button" id="next">Next</button></div>
+   <div class="seedrow"><button type="button" class="main" id="new">New seed</button><button type="button" id="view">Reset view</button></div></div>
+  <div class="grp"><label for="kind">Base shape</label>
+   <select id="kind"><option value="any">Any, in the sheet's shares</option><option value="slab">Slab: low, long</option><option value="block">Block</option><option value="pillar">Pillar: tall</option><option value="ramp">Ramp: top rising to a high back</option><option value="stepped">Stepped: a block or pillar with a lowered corner</option></select></div>
+  <dl class="read" id="read"></dl>
+ </div>
+</div>
+<div class="beside">
+ <div><div class="sheet" id="sheet"></div><p class="note" style="margin-top:8px">Each is drawn at the references' view. Same seed, same rock; a new base shape gives a different rock for the same number.</p></div>
+ <figure><div class="plate stage"><canvas id="refcrop"></canvas></div><figcaption>The reference rocks R2C1 to R3C4: the same view, the same light, for comparison.</figcaption></figure>
+</div>
+</section>
+
+<section class="ch" id="built">
+<header><span class="n">4 · How a rock is built</span><h2>Columns, cuts, joined</h2>
+<p>Four stages of one seed (found by scanning for a rock with a step, a facet and a chip). Then the cost, measured in this browser.</p></header>
+<div class="sec full"><div class="row" id="stages" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))"></div></div>
+<div class="sec">
+<div class="words"><ol>
+<li><b>Columns.</b> The base box (or ramp) is cut into columns, each a convex solid held as six planes: four sides that may lean or move in, a top that may slope, a flat bottom.</li>
+<li><b>Chamfers.</b> Each edge of each column is read off its faces, and one to three planes are cut along it, their widths set from the edge's own line in space, so two columns that share an edge cut it the same way.</li>
+<li><b>Facets and chips.</b> A few more planes on one column each. Convex clips only, so a column stays convex.</li>
+<li><b>Join.</b> Each polygon of each column is split at the other columns' planes; the pieces inside another column are dropped, and so is a pair of pieces that touch back to back (a joint). What is left is the surface of the union, with the V of a split and the riser of a step in it.</li>
+<li><b>Mesh.</b> Weld the corners, repair the T-junctions where a split crosses a neighbour's edge, fan the polygons into triangles, count the edges (each must have two), and find the steepest face facing down.</li></ol>
+<p>Nothing is a voxel or a field: every face is an exact plane, so an edge is as crisp as the planes make it.</p></div>
+<div class="plates"><div class="plate pad"><div id="t-time" class="scroll"></div></div><p class="note" id="timenote"></p></div></div>
+</section>

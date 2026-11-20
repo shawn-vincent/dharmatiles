@@ -1,0 +1,69 @@
+<main>
+<header class="intro">
+<h1>Blocky Rock Study</h1>
+<p class="lede">Rocks come in levels of detail. The cliff generator places blocks and gives each a box with chamfers; this is the next level, which turns that box into a rough rock with a few big structural features, in the style of a reference sheet of forty single rocks. Fine surface and weathering come after, and are not here. The page has the study of the sheet, the rules it gives, and an explorer that draws one rock from a seed.</p>
+<div class="key">
+ <div><span class="ev m">measured</span><br>read off the picture by a program: silhouette sizes of the forty rocks.</div>
+ <div><span class="ev e">estimated</span><br>read by eye from crops at 2.4 times: which features a rock has, where, how big. One 3/4 view each.</div>
+ <div><span class="ev p">proposed</span><br>a number in the generator, chosen from the above and judged by comparing renders.</div>
+</div>
+<ul class="chapters"><li><a href="#study"><span>1</span> The study</a></li><li><a href="#rules"><span>2</span> The rules</a></li><li><a href="#explorer"><span>3</span> The explorer</a></li><li><a href="#built"><span>4</span> How a rock is built</a></li><li><a href="#verdict"><span>5</span> Against the references</a></li></ul>
+</header>
+
+<section class="ch" id="study">
+<header><span class="n">1 · The study</span><h2>Forty rocks, taken apart</h2>
+<p>Cells are named R1C1 to R5C8 (row, then column). Each rock is read as a base shape plus its big features, each with a rough place and size in the rock's own proportions. The reading is in <code>data/rocks.json</code>, written by <code>study.py</code>, which also measures each silhouette.</p></header>
+
+<div class="sec full"><figure class="plate stage" id="sheetfig"><img alt="The reference sheet: forty single blocky rocks in five rows of eight" src="@@IMG:sheet@@"></figure></div>
+
+<div class="sec full">
+<div class="words"><h3>What the sheet shows</h3>
+<p>Every rock is one mass: a column stood on a flat bottom, seen from the same corner at about 20 degrees up, lit softly from the upper left. The left face is the one that is broad; the right face is seen at a slant. All of them are made of <b>flat planes</b>. The edges are not sharp: every convex edge, top, upright and bottom, is cut by one to three narrow planes whose width changes along the edge. The concave corners (where a step meets its riser, where a groove goes in) are sharp. Nothing is rounded in.</p>
+<p>The surface is a smooth clay sculpt, so planes are slightly wavy and the creases are soft. I take that as shading and not as geometry; the rules below are for planes.</p></div></div>
+
+<div class="sec">
+<div class="words"><h3>Base shapes <span class="ev m">measured</span> <span class="ev e">estimated</span></h3>
+<p>The class of each rock comes from its silhouette's height over width in the 3/4 view (a cube reads about 1.0 there) and from whether the top slopes. <b>Slab, block and pillar are one family</b> that differs in proportion only: the aspects run 0.54 to 2.05 with no gap, so they are one box with a height drawn from a wide range, named for the generator's control. A <b>ramp</b> is the only different base: a sloped top rising to a high back, seen on 10 rocks.</p>
+<p><b>Correction to the first read:</b> the stepped L-profile is not a base shape. A step is found on every class (slab, block, pillar and ramp), so it is a feature, and a ramp with a seat is a ramp with a step.</p></div>
+<div class="plates"><div id="t-base" class="scroll"></div></div></div>
+
+<div class="sec">
+<div class="words"><h3>Size ranges <span class="ev e">estimated</span></h3>
+<p>The size of each feature in the rock's own units, so it scales with the rock. A <b>chip</b> is small: 0.15 to 0.3 of the face it is on. A <b>step</b> takes 0.2 to 0.55 of the face's width and is cut 0.35 to 0.5 down from the top. A <b>facet</b> covers half the face or more. A <b>split</b> that does not run the full height comes 0.3 to 0.8 down from the top, median 0.6. Widths of the grooves and chamfers are in the chamfer table below.</p></div>
+<div class="plates"><div id="t-size" class="scroll"></div></div></div>
+
+<div class="sec">
+<div class="words"><h3>Features, and how often <span class="ev e">estimated</span></h3>
+<p>Six kinds explain the sheet. A rock has two features on average (2.25; one to four, never none): <b>split</b> (a V-groove down a face), <b>step</b> (a corner or end cut down to a shelf), <b>chip</b> (a flake off a corner or a V notch), <b>facet</b> (a plane a few degrees off a face), <b>bed</b> (a line across the top, or one horizontal line on a face) and <b>offset</b> (one side of a split a hair lower).</p>
+<p><b>Splits</b> are the most common, and every slab has one. They read as two columns grown together: the V is the sum of the chamfers of both halves, and the halves are level to within a few per cent. <b>Bed lines are weaker than the first read:</b> 5 of the 6 are a line across the <i>top</i>, not a horizontal groove on a side; only R5C3 has a horizontal one.</p></div>
+<div class="plates"><div id="t-feat" class="scroll"></div></div></div>
+
+<div class="sec">
+<div class="words"><h3>Where features sit <span class="ev e">estimated</span></h3>
+<p>Faces: the left face carries most features because it is the one seen square; the right face is foreshortened, so its counts are low and I do not read a preference from them. Height: chips are low (12 of 17 in the lower third: feet and lower corners), steps are cut at 0.35 to 0.5 of the height (a shelf at the lower left, or a seat in the top), facets sit mid-face, beds are at the top. Splits reach from the top: 11 of 32 run the full height and the rest come down 0.3 to 0.8 of it (median 0.6); none starts from the ground and stops short, which is what lets every groove print.</p>
+<p>Not seen on any rock: a chip in a top face, or a groove that is closed at the top and open below. The first is the cliff rule (a top that carries something stays flat); the second is the print rule.</p></div>
+<div class="plates"><div id="t-where" class="scroll"></div></div></div>
+
+<div class="sec">
+<div class="words"><h3>Which go together <span class="ev e">estimated</span></h3>
+<p>The cell is the number of rocks with both. The diagonal is the number of rocks with that feature. A split goes with the rest because it is the commonest. What is rare is the stack of everything: <b>step with chip is on only 2 rocks</b> and bed with anything on 1 to 4. A step and a split are together on 7 of the 16 stepped rocks, which fits reading a step as a split with one side lower (the generator does).</p></div>
+<div class="plates"><div id="t-co" class="scroll"></div></div></div>
+
+<div class="sec">
+<div class="words"><h3>How irregular a chamfer is <span class="ev e">estimated</span></h3>
+<p>On the main top edge of each rock I counted the planes (1, 2 or 3) and guessed the ratio of the widest to the narrowest width along the edge. Almost all have two or three planes; the width runs between about 1.3 and 2.3 times. Widths against the rock: a top chamfer is about <b>8 to 12 per cent of the shorter plan side</b>, wider on the top than it is deep; an upright one about 8 to 12 (my first read was 5 to 8; the renders looked too sharp, so I took it up); a groove's two halves are about 4 to 6 each. The bottom edges are <b>beveled too</b> (not sharp) at 60 to 100 per cent of the top width, which is what I see; where a rock sits in a cliff the bottom is left sharp, as the cliff rules say.</p></div>
+<div class="plates"><div id="t-chamfer" class="scroll"></div></div></div>
+
+<div class="sec full">
+<div class="words"><h3>Plates: features marked on the references</h3><p>Eight rocks, enlarged, with their main features marked. Colours: <span class="legend"><span><i style="background:#7a3fc4"></i>split</span><span><i style="background:#0f8f7e"></i>step</span><span><i style="background:#b0188f"></i>chip</span><span><i style="background:#3557c9"></i>facet</span><span><i style="background:#6b7a12"></i>bed</span></span></p></div>
+<div class="row" id="plates" style="align-items:start;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))"></div>
+</div>
+
+<div class="sec full"><div class="words"><h3>What one 3/4 view cannot tell</h3><ul>
+<li><b>Hidden faces.</b> The back and right-back are never seen. A split drawn on the left face may run through the rock or stop; I count what shows. Every position in the table is on the visible faces only.</li>
+<li><b>Proportions are projected.</b> The silhouette aspect includes the top face and the depth, so it is not H over W. Slab below 0.75, pillar from 1.25 are cuts in a continuous range, not natural classes.</li>
+<li><b>Sizes are by eye, to about a tenth of the rock.</b> The 190-pixel cells give a groove a few pixels wide; I can say narrow, not 4 per cent against 5.</li>
+<li><b>Depth of grooves and steps</b> is foreshortened; I take a groove to be as deep as it is wide.</li>
+<li><b>Scale.</b> There is no figure in the pictures. Rocks are generated at 0.3 to 1.3 fh, the cliff work's range, with the longest side the size.</li>
+<li><b>Bottoms.</b> The ground hides the bottom edge in the lower third of every cell; the bottom bevel is read from its visible edge only.</li></ul></div></div>
+</section>
