@@ -23,7 +23,7 @@ const FORM = { seed: 1, height: 1.7, length: 1.45, depth: .62,   /* the highest 
    a little way below that part, the stone is built taller, its top where the design put it and its bottom lower, so that 3 in 4 of the
    unsupported part rests on or 0.015 fh into the stone below. It is done only when that is at most SUPPORT.reach, so a real overhang (a
    lintel over its opening) stays one. Lowest stone first, so a stone made taller bears the ones above it. */
-const SUPPORT = { share: .75, reach: .25, sink: .015, ok: .01, n: 7, tol: .06 };   /* tol: how far under a stone a top may be and still hold it up */
+const SUPPORT = { share: .75, reach: .25, sink: .015, ok: .01, n: 7, tol: .03 };   /* tol: how far under a stone a top may be and still hold it up */
 const botZ = (s, a) => s.z + s.botA * (a - s.a), topZ = (s, a, d) => s.z + s.h + s.dipA * (a - s.a) + s.dipD * (d - s.d);
 function underside(S, i) {
   const s = S[i], n = SUPPORT.n, drops = []; let sup = 0;
@@ -40,23 +40,28 @@ function bear(S, stats) {
     if (fin.length >= need && d <= SUPPORT.reach && s.z - d >= 0) { s.z -= d; s.h += d; } }
 }
 /* ---------- the support rule ----------
-   One check, made when a stone is laid, keeps overhangs reasonable. The stone rests on the tops directly under its footprint (within SUPPORT.reach
-   below it, which bear() then closes). It stays up if its centre of mass is over them, with a margin of a tenth of its length and depth, or if
-   it bears near both ends of its long side (a lintel or a bridge). If not, it is slid the smallest way that passes, then shortened and
-   narrowed, and if nothing passes it is not laid. A stone is then never more than about half past its support when centred, or spans two. */
+   One check, made when a stone is laid, keeps overhangs reasonable. The stone rests on the tops directly under its footprint and no more than
+   SUPPORT.tol below it (a top any lower is not support: bear() closes only a small gap). It stands if (a) the middle half of its footprint, a quarter
+   of its length and depth either side of its centre, is all over its support, so it is out past it by a quarter of its length at most; or if (b)
+   it bears under the outer eighth at both ends of its long side, at a quarter of its width either side of the middle line, as a lintel or a bridge does, which a stone over a gap must. If not, the short top
+   under it is raised to meet it (by up to SUPPORT.reach, if nothing is on it); failing that the stone is slid the smallest way that passes, then
+   shortened and narrowed; and if nothing passes it is not laid. */
 const extA = (s) => { const sh = s.lean ? -s.lean * s.h : 0; return [s.a0 + sh, s.a0 + s.w + sh]; };
-const supportsOf = (S, sp) => S.filter((o) => o !== sp && !o.void && o.z + o.h <= sp.z + .011 && o.z + o.h >= sp.z - SUPPORT.tol && Math.min(extA(o)[1], sp.a0 + sp.w) - Math.max(extA(o)[0], sp.a0) > .02 && Math.min(o.d0 + o.dp, sp.d0 + sp.dp) - Math.max(o.d0, sp.d0) > .02);
+const under = (o, sp) => Math.min(extA(o)[1], sp.a0 + sp.w) - Math.max(extA(o)[0], sp.a0) > .02 && Math.min(o.d0 + o.dp, sp.d0 + sp.dp) - Math.max(o.d0, sp.d0) > .02;
+const supportsOf = (S, sp) => S.filter((o) => o !== sp && !o.void && o.z + o.h <= sp.z + .011 && o.z + o.h >= sp.z - SUPPORT.tol && under(o, sp));
 function holds(sup, sp) {
-  const on = (a, d) => sup.some((o) => a >= extA(o)[0] && a <= extA(o)[1] && d >= o.d0 && d <= o.d0 + o.dp), ca = sp.a0 + sp.w / 2, cd = sp.d0 + sp.dp / 2, ma = .1 * sp.w, md = .1 * sp.dp;
-  return (on(ca, cd) && on(ca - ma, cd - md) && on(ca + ma, cd - md) && on(ca - ma, cd + md) && on(ca + ma, cd + md)) || (sp.w >= sp.dp ? on(sp.a0 + sp.w / 8, cd) && on(sp.a0 + sp.w * 7 / 8, cd) : on(ca, sp.d0 + sp.dp / 8) && on(ca, sp.d0 + sp.dp * 7 / 8));
+  const on = (a, d) => sup.some((o) => a >= extA(o)[0] && a <= extA(o)[1] && d >= o.d0 && d <= o.d0 + o.dp), ca = sp.a0 + sp.w / 2, cd = sp.d0 + sp.dp / 2, ma = .25 * sp.w, md = .25 * sp.dp;
+  return [-1, 0, 1].every((i) => [-1, 0, 1].every((j) => on(ca + i * ma, cd + j * md))) || [-1, 1].every((i) => [-1, 1].every((j) => (sp.w >= sp.dp ? on(ca + i * sp.w * .375, cd + j * md) : on(ca + j * ma, cd + i * sp.dp * .375))));
 }
 const SLIDES = (() => { const v = []; for (let i = -12; i <= 12; i++) for (let j = -12; j <= 12; j++) v.push([i * .05, j * .05]); return v.sort((p, q) => p[0] ** 2 + p[1] ** 2 - q[0] ** 2 - q[1] ** 2); })();
-/* lay `sp` among S if it can be made to stand: slid, then shortened and narrowed; returns whether it was laid */
+/* lay `sp` among S if it can be made to stand; returns whether it was laid */
 function lay(S, sp) {
-  const w = sp.w, dp = sp.dp, a0 = sp.a0, d0 = sp.d0; S.push(sp);
+  const w = sp.w, dp = sp.dp, a0 = sp.a0, d0 = sp.d0, stand = () => { const sup = supportsOf(S, sp); if (!sup.length || !holds(sup, sp)) return false; Object.assign(sp, { sup, on: sup.length, level: Math.max(...sup.map((o) => o.level)) + 1, rank: sup[0].rank }); return true; };
+  S.push(sp); if (stand()) return true;
+  const low = S.filter((o) => o !== sp && !o.void && !o.front && o.z + o.h < sp.z - SUPPORT.tol && o.z + o.h >= sp.z - SUPPORT.reach && under(o, sp) && !S.some((c) => c.sup && c.sup.includes(o))), was = low.map((o) => o.h);
+  if (low.length) { low.forEach((o) => { o.h = sp.z - o.z; }); if (stand()) return true; low.forEach((o, i) => { o.h = was[i]; }); }
   for (const k of [1, .85, .7, .55]) { if (w * k < .35 || dp * k < .3) break; sp.w = w * k; sp.dp = dp * k;
-    for (const [da, dd] of SLIDES) { sp.a0 = a0 + (w - sp.w) / 2 + da; sp.d0 = d0 + (dp - sp.dp) / 2 + dd; if (sp.a0 < -.02 || sp.d0 + sp.dp > PLATE + .01) continue;
-      const sup = supportsOf(S, sp); if (sup.length && holds(sup, sp)) { Object.assign(sp, { sup, on: sup.length, level: Math.max(...sup.map((o) => o.level)) + 1, rank: sup[0].rank }); return true; } } }
+    for (const [da, dd] of SLIDES) { sp.a0 = a0 + (w - sp.w) / 2 + da; sp.d0 = d0 + (dp - sp.dp) / 2 + dd; if (sp.a0 >= -.02 && sp.d0 + sp.dp <= PLATE + .01 && stand()) return true; } }
   S.pop(); return false;
 }
 /* a row cut into n unequal widths, none thin */
@@ -100,6 +105,8 @@ function formation(over = {}) {
   const free = (s) => { const [lo, hi] = extA(s); let best = [lo, lo], x = lo; for (const [u, v] of S.filter((o) => o.sup && o.sup.includes(s)).map((o) => [o.a0, o.a0 + o.w]).sort((p, c) => p[0] - c[0]).concat([[hi, hi]])) { if (u - x > best[1] - best[0]) best = [x, u]; x = Math.max(x, v); } return best; };
   const tall = (rm) => { const t = rm <= .5 ? rm : rm * within(r, .33, .55); return rm - t < .22 ? rm : t; };
   for (let n = 0; n < q.pile && S.length < 11; n++) {
+    if (gate && !n) { const [P, G, Q] = S, a0 = P.a0 + P.w * .4, a1 = Q.a0 + Q.w * .6, z = Math.max(top(P), top(Q)), d0 = Math.min(P.d0, Q.d0) - within(r, .1, .2);   /* a gate's lintel lies on both piers, or the opening is shut */
+      if (lay(S, { a0, w: a1 - a0, d0, dp: .85, z, h: tall(env((a0 + a1) / 2) - z) })) continue; G.void = false; G.h = z - G.z; }
     const T = S.filter((s) => !s.front && !s.void && room(s) >= .22 && free(s)[1] - free(s)[0] >= .4), joints = [];
     for (const A of S) for (const B of S) { if (A === B || A.front || B.front || (A.void && B.void)) continue; const fa = free(A), fb = free(B), pa = extA(A), pb = extA(B);
       if (Math.abs(pa[1] - pb[0]) < .07 && fa[1] > pa[1] - .01 && fb[0] < pb[0] + .01 && (A.void || fa[1] - fa[0] >= .2) && (B.void || fb[1] - fb[0] >= .2) && (A.void || B.void || Math.min(A.d0 + A.dp, B.d0 + B.dp) - Math.max(A.d0, B.d0) > .3) && (A.void || B.void || Math.abs(top(A) - top(B)) < .3)) joints.push([A, B]); }

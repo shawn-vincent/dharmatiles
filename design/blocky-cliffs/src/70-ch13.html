@@ -15,10 +15,10 @@
 <p><span class="ev m">Measured</span> 200 formations were drawn with every number taken from the proposed ranges, the three families in the counted proportion (25 : 17 : 10). Each was then measured the way the traces were, from the references' camera: stone sizes, and the relations between touching stones.</p>
 <p>The table gives every measure for both, and the generator's from two angles: 45 degrees off the face, where the references' A–P plates stand, and 25, which is nearer how the sheet of sixteen is seen and how several A–P cliffs sit turned on their plates. Where the generator misses, the miss is left showing:</p>
 <ul><li>its ground-standing stones are lower and broader than the sheets' (median face height 0.74 against 0.95; the like-for-like row, of what shows, is 1.16 against 1.67): the widths are held at 0.42 or more, so a tall stone is a tall wide one;</li>
-<li>its resting stones are thinner (0.35 against 0.52) and fewer bear on two (7% against 18%), though as many rest (34%) and the stacks are nearer: 10 / 46 / 40 / 5 per cent against 13 / 35 / 38 / 13;</li>
+<li>its resting stones are thinner (0.34 against 0.52) and fewer bear on two (8% against 18%), though as many rest (34%) and the stacks are nearer: 8 / 48 / 40 / 5 per cent against 13 / 35 / 38 / 13;</li>
 <li>its widths are more alike (1.6 against 2.5 for widest to narrowest);</li>
 <li>the lower of two neighbours is in front in 66% of pairs against 83%, and the far end is 0.79 of the highest point as seen against 0.62;</li>
-<li>on the support check, of 851 laid stones in 400 draws none fails and none overhangs by more than 0.46 of its length; without the check 199 of 869 failed it and 160 overhung by more than half.</li></ul>
+<li>on the support check, of 857 laid stones in 400 draws none fails and none stands out past its support by more than 0.24 of its length; without the check 67 of 851 failed it and 28 overhung by more than half. All 23 gates in 400 draws keep their opening under a lintel that lies on both piers.</li></ul>
 <p>The numbers do not say whether a draw looks right. The pictures show the limits: flat chamfers where the sheets are softly rounded, no kinks on edges, stiff dipping beds, and no niche or shelter.</p></div>
 <div class="plates"><div class="scroll"><table id="g-rel"></table></div>
 <p class="note">References: <span class="ev m">Measured</span> from the traces. Generator: <span class="ev p">Proposed</span> rules, measured on the true solids as the camera would see them. "Foot nearer" compares the lowest point of each outline in the picture; on the traces a hidden foot ends where the stone in front hides it.</p>
@@ -52,11 +52,13 @@ formation(numbers, seed):                         every stone is first a plain b
                 by setback x (0.3-1.7) and shorter by up to 2 x setback
        height   the room if it is under 0.5 fh, else a third to a half of it, and all of it if
                 less than 0.22 would be left
-       stands   the support is the tops under its footprint within 0.06 fh below it; it passes if
-                its centre, with a margin of a tenth of its length and depth, is over the support,
-                or it has support within the outer eighth of both ends of its long side;
-                else slide it the smallest way that passes, then shorten and narrow it (to 0.55),
-                else do not lay it
+       stands   the support is the tops under its footprint within 0.03 fh below it; it passes if
+                the middle half of its footprint (a quarter of its length and depth either side
+                of its centre) is over the support, or it has support under the outer eighth of
+                both ends of its long side (a bridge: required over any gap); else raise a short
+                top under it to meet it (up to 0.25 fh, if nothing is on it), else slide it the
+                smallest way that passes, then shorten and narrow it (to 0.55), else do not lay it
+       gate     first lay the lintel across both piers; if it cannot be laid, shut the opening
   4 shape       each stone finds which of its top edges are exposed, then
        exposed edge: a wide bevel; one stone in three a chamfer of up to 0.3 fh on a side edge
                      (a shoulder cut); under a carried stone and against a neighbour: nearly
