@@ -17,12 +17,14 @@ const FORM = { seed: 1, cls: 'pillars',
   stacks: 0, blockCourse: 0, tallOne: 0,   /* stacks: blocks built as columns of stacked blocks; blockCourse: a stair's tiers cut into blocks; tallOne: one column stands above the envelope */
   caps: 0, split: null,    /* stones piled on: an upper block or a block spanning a joint; their height comes off what carries them. split: the chance a tall pillar is split by a level joint (0.35 when not given) */
   proud: 1, applied: 0, tuck: 0,   /* stones standing forward of the wall; a pillar applied over a joint; a small stone tucked in a corner */
+  tilt: 0,                 /* degrees: every column of the back mass leans this far toward the cut end (columns become slabs) */
+  gate: 0,                 /* share of the length left open between two piers, under a lintel; 0 none */
   oversail: 0, over: null, /* 1: an upper block at the far end oversails a set-back lower wall; over: by how much, fh */
   tiers: 0,                /* 2-4: the back mass is tiers of blocks, each shorter and set back, joints staggered */
   lean: 0,                 /* degrees: the back mass is parallel slabs leaning this far toward the cut end */
   dip: 0,                  /* degrees: the back mass is beds dipping this far */
-  taper: .95, bevel: .16, jit: .02, offset: .03, cutCorner: .2,
-  gate: false, toe: true, rough: 1, minW: 1, shapes: 1,   /* shapes 0: every stone a plain bevelled box (for the experiments) */
+  taper: .95, bevel: .16, offset: .03, cutCorner: .2,
+  toe: true, rough: 1, minW: 1,
   leanEach: 0, yawEach: 0, bevelEach: 0, gap: 0 };
 const PRESET = {
   pillars: { nA: 3, rows: 2 },
@@ -31,7 +33,7 @@ const PRESET = {
   courses: { nA: 2, rows: 4, depth: 1.1, length: 1.5, fall: .2, sizeVar: .3, toe: false, peak: 0, caps: 0 },
   leaners: { nA: 4, rows: 2, lean: 20, fall: .35, depth: .6 },
   ramp: { cls: 'leaners', nA: 1, rows: 2, dip: 27, fall: .1, depth: .7, caps: 1 },
-  gates: { nA: 3, rows: 2, gate: true, fall: .3, depth: .72, peak: .15, height: 1.3, caps: 1 } };
+  gates: { nA: 3, rows: 2, gate: .34, fall: .3, depth: .72, peak: .15, height: 1.3, caps: 1 } };
 /* ---------- bearing on a base ----------
    A stone that is not on the ground may overhang: part of its underside has no stone top within 0.01 fh below it. Where there is stone mass
    a little way below that part, the stone is built taller, its top where the design put it and its bottom lower, so that 3 in 4 of the
@@ -56,7 +58,10 @@ function bear(S, stats) {
     if (fin.length < need) continue; const d = fin[need - 1] + SUPPORT.sink; if (d > SUPPORT.reach || s.z - d < 0) continue;
     s.z -= d; s.h += d; if (stats) { stats[stats.length - 1].done = true; stats[stats.length - 1].d = d; } }
 }
+/* `marks` times the steps and says how many specs each had made: the pictures of the algorithm page are made from them */
+const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
 function formationOnce(over = {}) {
+  const marks = [{ name: 'start', n: 0, t: now() }], lap = (name, n) => marks.push({ name, n, t: now() });
   const q = Object.assign({}, FORM, PRESET[over.preset || over.cls] || {}, over), r = rng(q.seed * 104729 + 7), S = [];
   const td = Math.tan(q.dip * Math.PI / 180), tl = Math.tan(q.lean * Math.PI / 180), L = q.length, back = PLATE, D = q.depth, dB = back - D, courses = q.cls === 'courses';
   const add = (o) => { const sp = Object.assign({ z: 0, level: 0, on: 0, depth: 0, role: 'wall' }, o); S.push(sp); return sp; };
@@ -127,9 +132,9 @@ function formationOnce(over = {}) {
     if (q.plateau && B.length >= 2) { const n = Math.min(B.length, 2 + (r() < .45 ? 1 : 0)), k0 = Math.floor(r() * (B.length - n + 1)), run = B.slice(k0, k0 + n), m = run.reduce((a, c) => a + c.h, 0) / n, s = within(r, .2, .3), am = run.reduce((a, c) => a + c.a0 + c.w / 2, 0) / n; run.forEach((c) => { c.h = m - s * (c.a0 + c.w / 2 - am); c.plat = 1; c.platDip = s; }); }
     if (q.cleft && B.length >= 2) { let k = 0; for (let j = 1; j < B.length - 1; j++) if (B[j].h + B[j + 1].h > B[k].h + B[k + 1].h) k = j; const m = Math.max(B[k].h, B[k + 1].h); B[k].h = m; B[k + 1].h = m - .2 * (B[k].w + B[k + 1].w) / 2 * within(r, .7, 1.2); B[k].plat = B[k + 1].plat = 2; B[k].gapFar = B[k + 1].gapNear = within(r, .035, .06); }
     B.forEach((c, k) => { if (k > 0) { const p = B[k - 1]; if (!(p.plat && c.plat && p.plat === c.plat) && Math.abs(p.h - c.h) < q.stepMin) c.h = Math.max(.3, p.h + (c.h >= p.h && r() < .5 ? 1 : -1) * q.stepMin * (1 + r() * .5)); } });
-    for (const c of B) c.spire = q.shapes && !c.plat && c.h > 1.3 * c.w && r() < .1; const farPr = q.proud && r() < .33 ? within(r, .2, .38) : 0;
+    for (const c of B) c.spire = !c.plat && c.h > 1.3 * c.w && r() < .1; const farPr = q.proud && r() < .33 ? within(r, .2, .38) : 0;
     let caps = [], gateW = 0;
-    if (q.gate && B.length >= 3) { const g = B[1], N = B[0], F = B[2], gw = L * within(r, .3, .38), tw = (L - gw) * within(r, .45, .55); N.w = tw; g.a0 = tw; g.w = gw; F.a0 = tw + gw; F.w = L - tw - gw; g.recess = within(r, .6, .85);
+    if (q.gate && B.length >= 3) { const g = B[1], N = B[0], F = B[2], gw = L * q.gate, tw = (L - gw) * within(r, .45, .55); N.w = tw; g.a0 = tw; g.w = gw; F.a0 = tw + gw; F.w = L - tw - gw; g.recess = within(r, .6, .85);
       N.h = within(r, .9, 1.05); const th = Math.max(.38, Math.min(.58, q.height - N.h)); F.h = N.h; g.h = Math.min(N.h, F.h) - .02; N.spire = F.spire = false; N.plat = F.plat = 0; N.gateTop = F.gateTop = N.h; F.h = N.h; gateW = tw;
       /* the lintel course: two blocks over the opening and both piers, forward of them */
       const split = g.a0 + g.w * within(r, .35, .65), e0 = N.a0 + N.w * within(r, .05, .3), e1 = F.a0 + F.w * within(r, .7, 1);
@@ -140,13 +145,14 @@ function formationOnce(over = {}) {
       if (q.oversail && k === B.length - 1 && c.h > .8 && !c.recess) { const zc = c.h * within(r, .45, .62), sb = q.over == null ? Math.min(.3 * D, within(r, .14, .24)) : q.over, wU = c.w * within(r, .68, .78); add({ a0: c.a0, w: c.w, d0: dB + sb, dp: D - sb, h: zc, col: c, covered: 1 }); add({ a0: c.a0, w: wU, d0: dB - .03, dp: D + .03, z: zc, h: c.h - zc, level: 1, depth: 1, on: 1, role: 'cap', jut: 1, col: c }); return; }
       /* a pillar split by a level joint: the upper block is the top of the column */
       if (q.split !== 0 && !c.recess && !c.spire && !c.plat && c.h > 1.2 && r() < (q.split == null ? .35 : q.split)) { const zc = c.h * within(r, .55, .75), sh2 = (r() - .5) * .08; add({ a0: c.a0 + gN, w: c.w - gN - gF, d0: dB - pr, dp: D + pr, h: zc, col: c, covered: 1 }); add({ a0: c.a0 + gN, w: c.w - gN - gF, d0: dB - pr + sh2, dp: D + pr - Math.max(0, sh2), z: zc, h: c.h - zc, level: 1, depth: 1, on: 1, role: 'upper', col: c }); return; }
-      add({ a0: c.a0 + gN, w: c.w - gN - gF, d0: dB - pr + rec, dp: D + pr - rec, h: c.h, platDip: c.platDip, spire: c.spire, tallOne: c.tallOne, col: c, covered: c.recess || (q.gate && k !== 1) ? 1 : 0 }); });
+      add({ a0: c.a0 + gN, w: c.w - gN - gF, d0: dB - pr + rec, dp: D + pr - rec, h: c.h, lean: Math.tan(q.tilt * Math.PI / 180), platDip: c.platDip, spire: c.spire, tallOne: c.tallOne, col: c, covered: c.recess || (q.gate && k !== 1) ? 1 : 0 }); });
     for (const l of caps) add({ a0: l.a0, w: l.w, d0: dB - l.o, dp: D + l.o, z: l.z, h: l.h, level: 1, depth: 1, on: l.on, role: 'cap', jut: 1, col: { row: rowB, a0: l.a0, w: l.w, h: l.z + l.h } });
     if (gateW) q.gateW = gateW;
   }
   /* what stands behind a stretch of the front: the face (smallest d) and the lowest ground-standing top there */
   const wallAt = (a0, a1) => { const b = S.filter((s) => s.level === 0 && s.role !== 'front' && s.a0 < a1 - .03 && s.a0 + s.w > a0 + .03); return b.length ? { d: Math.min(...b.map((s) => s.d0)), h: Math.min(...b.map((s) => s.h)), hi: Math.max(...b.map((s) => s.h)) } : { d: dB, h: q.height * .5, hi: q.height * .5 }; };
 
+  lap('back', S.length);
   /* ---- 2 the front cluster at the cut end: a chunky buttress hard against the wall, a toe in front of it or beside it ---- */
   if (q.rows > 1 && !courses) { const rowF = { i: 0, t: 0, d0: dB - .5, dp: .5, len: L * .5, cols: [] }; rows.unshift(rowF); if (q.rows > 2) rows.splice(1, 0, { i: 1, t: .5, d0: dB - .5, dp: .5, len: L * .7, cols: [] });
     const wallOver = (a) => { const b = S.filter((s) => s.level === 0 && s.role !== 'front' && s.a0 <= a && s.a0 + s.w >= a); return b.length ? Math.max(...b.map((s) => s.col && s.col.h > s.h ? s.col.h : s.h)) : q.height * .6; };
@@ -163,6 +169,7 @@ function formationOnce(over = {}) {
     /* a small stone tucked into the corner between the cluster and the wall */
     if (q.tuck && aNext < L - .35) { const w4 = within(r, .22, .32), wl4 = wallAt(aNext, aNext + w4), h4 = hB * within(r, .3, .5); add({ a0: aNext, w: w4, d0: wl4.d - w4 + .04, dp: w4, h: h4, role: 'front', kind: 'toe', col: col({ a0: aNext, w: w4, h: h4 }, rowF) }); } }
 
+  lap('front', S.length);
   /* ---- 3 the pile: stones laid on the tops. They add height. ---- */
   const tops = () => S.filter((s) => !s.covered && !s.spire && s.role !== 'front' && s.role !== 'slab' && !s.applied && s.w > .3 && s.dp > .3);
   const lower = (s, by) => { const d = Math.min(by, Math.max(0, s.h - .4)); s.h -= d; if (s.col && Math.abs(s.col.h - (s.z + s.h + d)) < 1e-6) s.col.h -= d; return d; };
@@ -180,6 +187,7 @@ function formationOnce(over = {}) {
     /* on a wide support, a second block beside the first */
     if (sup.w - w > .42 && !second) { const w2 = Math.min(sup.w - w - .01, within(r, .45, .7)), aa = a0 > sup.a0 + .01 ? a0 - w2 : a0 + w, h2 = Math.max(.3, hh + (r() < .5 ? -1 : 1) * within(r, .12, .25)); add({ a0: aa, w: w2, d0: sup.d0 - fr + within(r, .02, .1), dp: dp * within(r, .8, .95), z: top(sup), h: h2, level: sup.level + 1, depth: sup.depth + 1, on: 1, role: 'cap', col: { row: rowB, a0: aa, w: w2, h: top(sup) + h2 } }); } }
 
+  lap('pile', S.length);
   /* the whole is held to its height: if the pile has carried it past the envelope by more than a tenth, everything is pressed down in proportion */
   { const zm = Math.max(...S.map((s) => s.z + s.h)), k = Math.min(1, q.height * (q.gate ? 1.12 : 1) / zm); if (k < 1) { for (const s of S) { s.z *= k; s.h *= k; } for (const rw of rows) for (const c of rw.cols) c.h *= k; } }
 
@@ -191,18 +199,17 @@ function formationOnce(over = {}) {
     const bv = q.bevel * (q.bevelEach ? Math.max(.05, 1 + (r() - .5) * 2 * q.bevelEach) : 1), toe = sp.kind === 'toe';
     /* stones this one carries: no wide bevel under them, so the joint stays a crease */
     const carried = S.filter((o) => o !== sp && Math.abs(o.z - top) < .07 && ovA(o) && ovD(o)), bigCap = Math.min(.25, .5 * sp.h) / m;
-    const big = q.shapes && !carried.length && !cov[2] && sp.dp > .34 && sp.role !== 'course' && !sp.level && !toe && r() < (front ? .3 : .25);
+    const big = !carried.length && !cov[2] && sp.dp > .34 && sp.role !== 'course' && !sp.level && !toe && r() < (front ? .3 : .25);
     const bT = cov.map((c, i) => c ? bv * within(r, .25, .45) : (i === 2 && big ? Math.min(bigCap, within(r, .3, .55) * sp.dp / m) : bv * within(r, .95, 1.5)));
     /* a shoulder cut: one exposed side edge chamfered a third to a half of the width, which makes the face a pentagon */
-    const wideEnough = sp.w >= .45, side = !cov[1] ? 1 : !cov[0] && sp.a0 > .05 ? 0 : -1; if (q.shapes && wideEnough && !carried.length && !big && side >= 0 && sp.h > .5 && sp.role !== 'slab' && sp.role !== 'bed' && sp.role !== 'course' && r() < (sp.level ? .35 : .6)) bT[side] = Math.min(Math.min(.3, .5 * sp.h) / m, (front ? within(r, .22, .35) : within(r, .28, .45)) * sp.w / m);
+    const wideEnough = sp.w >= .45, side = !cov[1] ? 1 : !cov[0] && sp.a0 > .05 ? 0 : -1; if (wideEnough && !carried.length && !big && side >= 0 && sp.h > .5 && sp.role !== 'slab' && sp.role !== 'bed' && sp.role !== 'course' && r() < (sp.level ? .35 : .6)) bT[side] = Math.min(Math.min(.3, .5 * sp.h) / m, (front ? within(r, .22, .35) : within(r, .28, .45)) * sp.w / m);
     if (carried.length) { const sbk = [Math.min(...carried.map((o) => o.a0 - sp.a0)), Math.min(...carried.map((o) => a1 - (o.a0 + o.w))), Math.min(...carried.map((o) => o.d0 - sp.d0)), Math.min(...carried.map((o) => d1 - (o.d0 + o.dp)))]; for (let i = 0; i < 4; i++) bT[i] = Math.min(bT[i], Math.max(.03, .8 * sbk[i]) / m); }
-    const tall = sp.h > 1.3 * sp.w, poly = q.shapes && wideEnough && tall && !front && r() < .3, prow = q.shapes && wideEnough && tall && !poly && r() < .2, vc = [bv * within(r, .7, 1.2), bv * within(r, .7, 1.2), bv * .4, bv * .4];
+    const tall = sp.h > 1.3 * sp.w, poly = wideEnough && tall && !front && r() < .3, prow = wideEnough && tall && !poly && r() < .2, vc = [bv * within(r, .7, 1.2), bv * within(r, .7, 1.2), bv * .4, bv * .4];
     if (poly) { vc[0] = within(r, .25, .38); vc[1] = within(r, .25, .38); } else if (prow) { vc[r() < .5 ? 0 : 1] = within(r, .3, .42); }
     /* which sides stand clear above the neighbour: only those are battered, so joints between neighbours stay closed */
     const clear = (test) => !S.some((o) => o !== sp && o.z + o.h > top - .2 && o.z < top && test(o)), clN = sp.a0 > .05 && clear((o) => near(o.a0 + o.w, sp.a0) && ovD(o)), clF = clear((o) => near(o.a0, a1) && ovD(o));
     let bat = [0, 0, 0, 0], tA = 1, tD = 1, dipA = sp.dipA || 0, dipD = 0, leanA = 0, kind = sp.kind;
-    if (!q.shapes) { tA = q.taper; tD = Math.min(1, q.taper + .02); dipD = within(r, -.02, .1) * q.rough; dipA += sp.platDip ? -sp.platDip : -within(r, 0, .08) * q.rough; }
-    else if (toe) { const bq = sp.rubble ? .12 : within(r, .15, .25); bat = [0, clF ? Math.min(sp.w * .25, sp.h * bq) : 0, Math.min(sp.dp * .3, sp.h * bq), 0]; dipD = within(r, 0, .12); if (!sp.rubble && clF && r() < .5) dipA = -within(r, .04, .12); }
+    if (toe) { const bq = sp.rubble ? .12 : within(r, .15, .25); bat = [0, clF ? Math.min(sp.w * .25, sp.h * bq) : 0, Math.min(sp.dp * .3, sp.h * bq), 0]; dipD = within(r, 0, .12); if (!sp.rubble && clF && r() < .5) dipA = -within(r, .04, .12); }
     else if (front) { bat = [0, clF ? Math.min(sp.w * .25, sp.h * within(r, .1, .2)) : 0, Math.min(sp.dp * .3, sp.h * within(r, .1, .2)), 0]; const u = r(), wedge = sp.h >= .5 && !big;
       if (wedge && u < .7) dipA = (clF ? -1 : 1) * within(r, .3, .6); else if (wedge && u < .85) dipD = within(r, .3, .6); else dipD = within(r, 0, .1); }
     else if (sp.role === 'end') { bat = [0, sp.batFar, sp.h * within(r, .03, .08), 0]; dipA = within(r, .05, .2); dipD = within(r, 0, .1); }
@@ -210,20 +217,25 @@ function formationOnce(over = {}) {
     else if (sp.level > 0) { dipD = within(r, -.03, .1); if (!sp.dipA && sp.role !== 'bed') dipA = (clF && !clN ? -1 : clN && !clF ? 1 : (r() < .5 ? -1 : 1)) * within(r, .05, .2) * (carried.length ? .3 : 1); if (!cov[2]) bat[2] = Math.min(sp.dp * .25, sp.h * within(r, .08, .18)); if (clN) bat[0] = Math.min(sp.w * .2, sp.h * within(r, .06, .16)); if (clF) bat[1] = Math.min(sp.w * .2, sp.h * within(r, .06, .16)); }
     else { if (sp.spire && clN && clF) { tA = within(r, .55, .7); tD = within(r, .7, .85); } else { if (clN) bat[0] = Math.min(sp.w * .22, sp.h * within(r, .06, .14)); if (clF) bat[1] = Math.min(sp.w * .22, sp.h * within(r, .06, .14)); }
       bat[2] = Math.min(sp.dp * .25, sp.h * within(r, .08, .16)); dipD = sp.role === 'bed' ? 0 : within(r, -.02, .12) * q.rough; if (!sp.dipA) dipA = sp.platDip ? -sp.platDip : (clF && !clN ? -1 : clN && !clF ? 1 : (r() < .5 ? -1 : 1)) * (clF || clN ? within(r, .1, .32) : within(r, 0, .12)) * q.rough * (carried.length ? .3 : 1); }
+    if (sp.lean && sp.role !== 'slab') leanA = -sp.lean;   /* a column of a tilted back mass leans toward the cut end */
+    /* a stone that carries another has a flat top under it (or the slope its plateau shares), so what it carries bears on it all over */
+    if (carried.length) { dipD = 0; if (!sp.dipA && !sp.platDip) dipA = 0; }
     /* a side is battered only above the top of the stone beside it, so the joint between two neighbours stays closed up to the lower one's top */
     if (sp.role !== 'end' && sp.role !== 'slab' && !front) { const nbTop = (test) => Math.max(0, ...S.filter((o) => o !== sp && !o.part && o.z < top && test(o)).map((o) => o.z + o.h)), fr2 = (t2) => Math.max(0, Math.min(1, (top - t2) / sp.h)); bat[0] *= fr2(nbTop((o) => near(o.a0 + o.w, sp.a0) && ovD(o))); bat[1] *= fr2(nbTop((o) => near(o.a0, a1) && ovD(o))); }
     tA *= q.taper / .95; if (!kind) kind = sp.role === 'cap' && (sp.on >= 2 || sp.jut) ? 'cap' : sp.role === 'slab' ? 'lean' : sp.h > 1.35 * Math.max(sp.w, sp.dp) ? 'pillar' : sp.h < .7 * Math.max(sp.w, sp.dp) ? 'slab' : 'block';
     const g = sp.part ? 0 : sp.level ? .004 : .006, st = { w: Math.max(.08, sp.w - g - q.gap), dp: Math.max(.08, sp.dp - g - q.gap), h: sp.h, a: sp.a0 + sp.w / 2 + (r() - .5) * q.offset * .3, d: sp.d0 + sp.dp / 2 + (r() - .5) * q.offset * .3, z: sp.z,
-      bevel: bv, bevelT: bT, bevelVC: vc, bevelB: 0, crease: q.shapes && sp.w > .5 && !cov[2] && sp.role !== 'course' && r() < .4 ? within(r, .03, .06) : 0, taperA: tA, taperD: tD, batter: bat, dipA, dipD, botA: sp.botA || 0,
+      bevel: bv, bevelT: bT, bevelVC: vc, crease: sp.w > .5 && !cov[2] && sp.role !== 'course' && r() < .4 ? within(r, .03, .06) : 0, taperA: tA, taperD: tD, batter: bat, dipA, dipD, botA: sp.botA || 0,
       leanA: leanA + (q.leanEach ? Math.tan((r() - .5) * 2 * q.leanEach * Math.PI / 180) : 0), leanD: q.leanEach ? Math.tan((r() - .5) * 2 * q.leanEach * Math.PI / 180) : 0,
-      cut: (q.shapes && wideEnough && !sp.level && !front && !carried.length && m > .32 && !big && r() < q.cutCorner) ? within(r, .26, .4) : 0, cutAt: r() < .6 ? 0 : 1, jit: sp.role === 'bed' ? 0 : sp.level || front ? q.jit * .5 : q.jit,
+      cut: (wideEnough && !sp.level && !front && !carried.length && m > .32 && !big && r() < q.cutCorner) ? within(r, .26, .4) : 0, cutAt: r() < .6 ? 0 : 1, 
       yaw: (sp.level || front || sp.role === 'bed' || sp.role === 'end' || sp.role === 'slab' ? 0 : (r() - .5) * q.offset * 1.4) + (q.yawEach ? (r() - .5) * 2 * q.yawEach * Math.PI / 180 : 0), seed: Math.floor(r() * 1e6), kind, col: sp.col, level: sp.level, on: sp.on, depth: sp.depth, part: sp.part ? true : undefined };
     out.push(st);
     /* a stepped stone: a shoulder on the top, flush with the back and one side, the two read as one stone */
-    if (q.shapes && (front || kind === 'block') && !sp.level && sp.h > .4 && sp.w > .4 && Math.abs(dipD) < .2 && Math.abs(dipA) < .15 && r() < .16) { const w2 = sp.w * within(r, .45, .65), dp2 = sp.dp * within(r, .5, .7), h2 = Math.min(.3, sp.h * within(r, .25, .45)), nearSide = r() < .5;
+    if ((front || kind === 'block') && !sp.level && sp.h > .4 && sp.w > .4 && Math.abs(dipD) < .2 && Math.abs(dipA) < .15 && r() < .16) { const w2 = sp.w * within(r, .45, .65), dp2 = sp.dp * within(r, .5, .7), h2 = Math.min(.3, sp.h * within(r, .25, .45)), nearSide = r() < .5;
       out.push(Object.assign({}, st, { part: true, w: w2, dp: dp2, h: h2 + .02, a: nearSide ? sp.a0 + w2 / 2 + .01 : a1 - w2 / 2 - .01, d: d1 - dp2 / 2 - .01, z: top - .02, bevelT: [bv, bv, bv * 1.3, bv * .4], bevelVC: null, bevelV: bv * .7, batter: null, taperA: .97, taperD: .97, dipA: 0, dipD: within(r, 0, .08), cut: 0, yaw: st.yaw, seed: st.seed + 1 })); st.cut = 0; } }
+  lap('shape', out.length);
   if (!q.noBear) bear(out);
-  return { q, rows, stones: out };
+  lap('bear', out.length);
+  return { q, rows, stones: out, specs: S, marks };
 }
 /* the count is held to what the sheets show: at most eleven stones */
 function formation(over = {}) { let f = formationOnce(over), o = Object.assign({}, over), n = 0; const count = (g) => g.stones.filter((s) => !s.part).length;
@@ -242,7 +254,7 @@ function drawParams(seed, want) {
   if (cls === 'leaners') { if (r() < .35) Object.assign(o, { preset: 'ramp', dip: within(r, 14, 24), fall: within(r, .05, .2), depth: within(r, .62, .8), caps: pile(.3, .5, .2) }); else Object.assign(o, { lean: within(r, 15, 25), height: mid(r, 1.4, 1.65), nA: r() < .5 ? 3 : 4, length: within(r, 1.3, 1.6), caps: r() < .6 ? 1 : 0, lean: within(r, 15, 24), depth: within(r, .5, .68), front: within(r, .45, .65), fall: within(r, .3, .55) }); }
   if (cls === 'ramp') Object.assign(o, { dip: within(r, 14, 24), fall: within(r, .05, .2), depth: within(r, .62, .8), caps: pile(.3, .5, .2) });
   if (cls === 'courses') Object.assign(o, { height: mid(r, 1.45, 1.75), rows: 3 + (r() < .7 ? 1 : 0), nA: 1 + Math.floor(r() * 2.5), depth: within(r, 1, 1.25), length: within(r, 1.35, 1.65), caps: 0, sizeVar: .3, blockCourse: r() < .67 ? 1 : 0 });
-  if (cls === 'gates') Object.assign(o, { height: within(r, 1.36, 1.52), caps: r() < .33 ? 1 : 0, rows: 2, fall: within(r, .2, .4), peak: within(r, .05, .25), depth: within(r, .65, .8), length: within(r, 1.4, 1.7) });
+  if (cls === 'gates') Object.assign(o, { gate: within(r, .3, .38), height: within(r, 1.36, 1.52), caps: r() < .33 ? 1 : 0, rows: 2, fall: within(r, .2, .4), peak: within(r, .05, .25), depth: within(r, .65, .8), length: within(r, 1.4, 1.7) });
   /* a budget for extras: a second front block, a tucked stone and piled stones beyond the first come to two at most */
   while ((o.rows > 2 ? 1 : 0) + (o.tuck ? 1 : 0) + Math.max(0, (o.caps || 0) - 1) > 2) { if (o.tuck) o.tuck = 0; else if (o.rows > 2) o.rows = 2; else o.caps--; }
   return o;

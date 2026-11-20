@@ -19,7 +19,7 @@ open(os.path.join(here, 'work', 'local.html'), 'w').write('<!doctype html><html>
 # the generator page: its own small page around the same stone and formation code
 gen = open(os.path.join(here, 'src-gen', 'page.html')).read()
 gen = gen.replace('/*lib-head*/', open(os.path.join(here, 'src', 'lib.js')).read().split('/* ---------- data')[0])
-gen = re.sub(r'/\*js:([a-z0-9.-]+)\*/', js, gen)
+gen = re.sub(r'/\*js:([a-z0-9.-]+)\*/', js, gen).replace('@@REF@@', open(os.path.join(here, 'src-gen', 'ref.b64')).read().strip())
 open(os.path.join(here, 'generator.html'), 'w').write(gen)
 open(os.path.join(here, 'work', 'local-gen.html'), 'w').write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="file://%s/"><style>:root{color-scheme:light}body{margin:0;font:14px system-ui}img{max-width:100%%}[hidden]{display:none!important}</style></head><body>%s</body></html>' % (here, gen.replace('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', 'work/three.min.js').replace('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js', 'work/OrbitControls.js')))
 print('out.html', len(page), 'generator.html', len(gen))

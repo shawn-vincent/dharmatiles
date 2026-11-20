@@ -8,7 +8,7 @@
   const render = () => { if (!R3 || !scene || !W) return; R3.render(scene, cameraFor('ref', W, H, { az: cam.az, el: cam.el, dist: cam.dist, fov: 19, centre: [PLATE / 2, PLATE / 2, .78] })); };
   const rebuild = () => {
     F = formation(P); const ms = formMeshes(F);
-    if (HAVE3) { if (scene) scene.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); }); scene = buildScene(ms, { figure: FIG }); render(); }
+    if (HAVE3) { if (scene) scene.traverse((m) => { if (m.userData.own) m.geometry.dispose(); }); scene = buildScene(ms, { figure: FIG }); render(); }
     const q = F.q, st = $('#g-steps'), o = { w: 220, h: 200 }, flat = { cushion: 0, bevel: 0, bevelV: 0, bevelB: 0, taperA: 1, taperD: 1, dipA: 0, dipD: 0, botA: 0, cut: 0, jit: 0, yaw: 0, leanA: 0, leanD: 0 }, flat2 = { cushion: 0, bevel: 0, bevelV: 0, bevelB: 0, dipD: 0, cut: 0, jit: 0, yaw: 0 };
     const rowBoxes = F.rows.map((r) => stoneMesh(Object.assign({ w: r.len, dp: r.dp - .01, h: Math.max(...r.cols.map((c) => c.h)), a: r.len / 2, d: r.d0 + r.dp / 2, z: 0 }, flat)));
     const colBoxes = F.rows.flatMap((r) => r.cols.map((c) => stoneMesh(Object.assign({ w: c.w - .01, dp: r.dp * (1 - (c.recess || 0)) - .01, h: c.h, a: c.a0 + c.w / 2, d: r.d0 + r.dp * (c.recess || 0) + r.dp * (1 - (c.recess || 0)) / 2, z: 0 }, flat))));

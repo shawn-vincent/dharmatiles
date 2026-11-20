@@ -79,15 +79,17 @@ stone(box, numbers):
   move each face in at the top (batter), scale, tilt the top, shear, turn
 fuse(stones):
   for each contact (a bed, or an upright joint between neighbours) draw chapter 8's rule:
-    whether it fuses (the places and ends are not drawn)
+    whether it fuses (the chance only; its place and ends are not drawn)
   grow, when the stones are built, those on a fused joint toward each other:
     upright joint: each stone sideways by its edge radius + 0.01 (about 0.08 fh)
     bed: the upper stone downward by the two edge radii + 0.01 (about 0.12 fh)
   the stones then simply overlap; no material is added, none is cut, no boolean is needed
-bear(stones):  (when the pile is made, lowest stone first)
+carried stones: a stone that carries another keeps a flat top (the slope its plateau shares)
+bear(stones):  (a guard when the pile is made, lowest stone first)
   for a stone off the ground, find the samples of its underside with no stone top within
     0.01 fh below; for each, the drop to the stone mass below (or open air)
   d = the drop that 3 in 4 of those samples are within, + 0.015 (rests 0.015 into the stone)
   if d <= 0.25 fh: build the stone taller by d (top stays, bottom moves down); else leave it</pre></div>
-<div class="words"><p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 0.18 to 0.21 s with the grown stones, the same as the stones alone.</p></div></div>
+<div class="words"><p><span class="ev p">Proposed</span> The back mass has three families, and the generator's kinds are presets over their parameters (drawn in the reference mix of 22 : 10 : 10 : 7 : 3 for pillars, blocks, leaners, courses, gates). <b>Columns</b> (pillars, plateau walls, gates): columns under the envelope with a plateau, a cleft, an <b>opening</b> (a gate is columns with a share of the length left open under a lintel; 0 is none) and a <b>tilt</b> (every column leaning toward the cut end, degrees). <b>Tiers</b> (blocks, courses): tiers each shorter and set back, joints staggered. <b>Beds</b> (dipping beds): thick beds on a dip. Leaning slabs keep their own rule (graded slabs with an end stone); the tilt carries a pillar pile toward them.</p>
+<p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 20 to 25 ms (it was about 0.2 s before the picture code reused the renderer size, the plate, the figure and the materials), with the grown stones or without.</p></div></div>
 </section>

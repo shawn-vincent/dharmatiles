@@ -39,8 +39,8 @@ function stoneParams(o) {
 }
 function stoneMesh(o) {
   const { q, m, hx, hy, hz, rh, rT, rB, cuts, ta, tdp, sa0, sd0, c, s2, cu } = stoneParams(o);
-  const X = latAxis(hx, rh, rh), Y = latAxis(hy, rh, rh), Z = latAxis(hz, rB, rT), L = X.length - 1, P = [], id = new Map(), idx = [];
-  const node = (i, j, k) => { const key = i * 10000 + j * 100 + k; let v = id.get(key); if (v != null) return v; let a = X[i], d = Y[j], z = Z[k];
+  const X = latAxis(hx, rh, rh), Y = latAxis(hy, rh, rh), Z = latAxis(hz, rB, rT), L = X.length - 1, P = [], idx = [], id = new Int32Array((X.length) ** 3).fill(-1);
+  const node = (i, j, k) => { const key = (i * X.length + j) * X.length + k; let v = id[key]; if (v >= 0) return v; let a = X[i], d = Y[j], z = Z[k];
     const rz = z > 0 ? rT : rB, ca = Math.max(-hx + rh, Math.min(hx - rh, a)), cd = Math.max(-hy + rh, Math.min(hy - rh, d)), cz = Math.max(-hz + rB, Math.min(hz - rT, z));
     const da = (a - ca) / rh, dd = (d - cd) / rh, dz = (z - cz) / rz, l = Math.hypot(da, dd, dz); if (l > 1e-9) { a = ca + da / l * rh; d = cd + dd / l * rh; z = cz + dz / l * rz; }
     const fa = i === 0 || i === L, fd = j === 0 || j === L;
@@ -48,7 +48,7 @@ function stoneMesh(o) {
     if (q.crease && j === 0) d -= q.crease * Math.max(0, 1 - Math.abs(a) / hx * 1.4) * (1 - Math.max(0, z / hz) ** 4);
     for (const ct of cuts) { const t = ct.n[0] * a + ct.n[1] * d + ct.n[2] * z - ct.d, mv = (t + Math.sqrt(t * t + .035 * .035)) / 2; a -= ct.n[0] * mv; d -= ct.n[1] * mv; z -= ct.n[2] * mv; }
     const t = z / q.h + .5; a = a * lerp(1, ta, t) + sa0 * t; d = d * lerp(1, tdp, t) + sd0 * t; z += t * (q.dipA * a + q.dipD * d) + (1 - t) * q.botA * a; const zz = z + q.h / 2; a += q.leanA * zz; d += q.leanD * zz;
-    v = P.length; P.push([q.a + a * c - d * s2, q.d + a * s2 + d * c, q.z + zz]); id.set(key, v); return v; };
+    v = P.length; P.push([q.a + a * c - d * s2, q.d + a * s2 + d * c, q.z + zz]); id[key] = v; return v; };
   const quad = (p0, p1, p2, p3) => { idx.push(p0, p1, p2, p0, p2, p3); };
   for (let u = 0; u < L; u++) for (let v = 0; v < L; v++) {
     quad(node(u, v, L), node(u + 1, v, L), node(u + 1, v + 1, L), node(u, v + 1, L)); quad(node(u, v, 0), node(u, v + 1, 0), node(u + 1, v + 1, 0), node(u + 1, v, 0));
@@ -62,22 +62,27 @@ const stonePoints = (o) => stoneMesh(o).P;
 const HAVE3 = typeof THREE !== 'undefined';
 const V3 = (p) => new THREE.Vector3(p[0], p[2], p[1]);
 const STAGE = 0x8c8c91, GREY = 0xbcbfc5;
-let RENDER = null;
+let RENDER = null, RSIZE = '';
 function renderer() { if (!RENDER) { RENDER = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); RENDER.setPixelRatio(1); RENDER.setClearColor(STAGE, 1); } return RENDER; }
-function meshOf(st, color = GREY) {
-  const pos = []; for (const p of st.P) pos.push(p[0], p[2], p[1]);
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(st.idx); g.computeVertexNormals();
-  const grp = new THREE.Group(); grp.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }))); return grp;
+/* what every picture shares is made once: a material for each colour, the plate and the figure */
+const KEEP = { mat: new Map(), plate: new Map(), figure: null };
+const material = (color) => { let m = KEEP.mat.get(color); if (!m) KEEP.mat.set(color, m = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide })); return m; };
+function geometryOf(list) {   /* one geometry for any number of meshes: positions joined, indices shifted */
+  const pos = [], idx = []; let n = 0; for (const st of list) { for (const p of st.P) pos.push(p[0], p[2], p[1]); for (const i of st.idx) idx.push(i + n); n += st.P.length; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
 }
+const meshOf = (st, color = GREY) => new THREE.Mesh(geometryOf([st]), material(color));
 const PLATE = 1.7;   /* the plate's side in fh (chapter 1: 2.4 to 2.8 base diameters, a figure 1.5 diameters tall) */
 function buildScene(stones, o = {}) {
   const sc = new THREE.Scene();
   sc.add(new THREE.HemisphereLight(0xffffff, 0x5f6167, .56));
   const key = new THREE.DirectionalLight(0xffffff, .6); key.position.set(.5, 1.7, -1.3); sc.add(key);
   const fill = new THREE.DirectionalLight(0xffffff, .12); fill.position.set(-1.2, .5, -.2); sc.add(fill);
-  if (o.plate !== false) { const pl = o.plateSize || [PLATE, PLATE]; sc.add(meshOf(stoneMesh({ w: pl[0], dp: pl[1], h: .09, a: pl[0] / 2, d: pl[1] / 2, z: -.09, bevel: .25, bevelB: .1 }), 0xb4b7bd)); }
-  stones.forEach((st, i) => { const g = meshOf(st, o.color ? o.color(st, i) : GREY); if (o.shift) { const v = o.shift(st, i); g.position.set(v[0], v[2], v[1]); } sc.add(g); });
-  if (o.figure) { const f = o.figure; const m = new THREE.Mesh(new THREE.CylinderGeometry(.33, .33, .05, 40), new THREE.MeshLambertMaterial({ color: 0xa9adb4 })); m.position.set(f[0], .025, f[1]); sc.add(m); const b = new THREE.Mesh(new THREE.CylinderGeometry(.11, .15, .95, 18), new THREE.MeshLambertMaterial({ color: 0xa9adb4 })); b.position.set(f[0], .525, f[1]); sc.add(b); }
+  if (o.plate !== false) { const pl = o.plateSize || [PLATE, PLATE], k = pl.join(); let m = KEEP.plate.get(k); if (!m) KEEP.plate.set(k, m = new THREE.Mesh(geometryOf([stoneMesh({ w: pl[0], dp: pl[1], h: .09, a: pl[0] / 2, d: pl[1] / 2, z: -.09, bevel: .25 })]), material(0xb4b7bd))); sc.add(m); }
+  if (o.color || o.shift) stones.forEach((st, i) => { const m = meshOf(st, o.color ? o.color(st, i) : GREY); if (o.shift) { const v = o.shift(st, i); m.position.set(v[0], v[2], v[1]); } m.userData.own = true; sc.add(m); });
+  else if (stones.length) { const m = new THREE.Mesh(geometryOf(stones), material(GREY)); m.userData.own = true; sc.add(m); }
+  if (o.figure) { const f = o.figure, mat = material(0xa9adb4); if (!KEEP.figure) KEEP.figure = [new THREE.CylinderGeometry(.33, .33, .05, 40), new THREE.CylinderGeometry(.11, .15, .95, 18)];
+    const m = new THREE.Mesh(KEEP.figure[0], mat); m.position.set(f[0], .025, f[1]); sc.add(m); const b = new THREE.Mesh(KEEP.figure[1], mat); b.position.set(f[0], .525, f[1]); sc.add(b); }
   return sc;
 }
 /* cameras: 'ref' is the references' view (from the near corner, about 20 degrees up); the others are flat, true-shape views */
@@ -101,9 +106,9 @@ function still(stones, o = {}) {
   const box = h('div', { class: 'cell stage' }, cv, svg, o.tag ? h('span', { class: 'tag', text: o.tag }) : null);
   box.svg = svg;
   if (!HAVE3) { box.proj = () => [0, 0]; return box; }
-  const cam = cameraFor(o.view || 'ref', w, hgt, o), R = renderer(); R.setSize(w * px, hgt * px, false);
+  const cam = cameraFor(o.view || 'ref', w, hgt, o), R = renderer(), size = (w * px) + 'x' + (hgt * px); if (size !== RSIZE) { R.setSize(w * px, hgt * px, false); RSIZE = size; }
   const sc = buildScene(stones, o); R.render(sc, cam); cv.getContext('2d').drawImage(R.domElement, 0, 0);
-  sc.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
+  sc.traverse((m) => { if (m.userData.own) m.geometry.dispose(); });
   box.proj = (a, d, z) => { const v = new THREE.Vector3(a, z, d).project(cam); return [(v.x + 1) / 2 * w, (1 - v.y) / 2 * hgt]; };
   return o.sub ? Object.assign(h('div', { style: 'min-width:0' }, box, h('div', { class: 'sub', html: o.sub })), { svg, proj: box.proj, box }) : box;
 }
