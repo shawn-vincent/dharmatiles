@@ -6,68 +6,52 @@ const within = (r, a, b) => a + (b - a) * r();
 /* a draw that favours the middle of its range: the mean of two uniform draws */
 const mid = (r, a, b) => a + (b - a) * (r() + r()) / 2;
 
-/* The convex hull of a small set of points, as flat faces (each a ring of point indices, counter-clockwise seen from outside). */
-function hull(P) {
-  const n = P.length, faces = [], seen = new Set();
-  let size = 0; for (const p of P) size = Math.max(size, Math.abs(p[0]), Math.abs(p[1]), Math.abs(p[2])); const eps = 1e-7 * (size || 1);
-  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let k = j + 1; k < n; k++) {
-    const ax = P[j][0] - P[i][0], ay = P[j][1] - P[i][1], az = P[j][2] - P[i][2], bx = P[k][0] - P[i][0], by = P[k][1] - P[i][1], bz = P[k][2] - P[i][2];
-    let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx; const L = Math.hypot(nx, ny, nz); if (L < 1e-12) continue; nx /= L; ny /= L; nz /= L;
-    let pos = 0, neg = 0; const on = [];
-    for (let m = 0; m < n && !(pos && neg); m++) { const q = nx * (P[m][0] - P[i][0]) + ny * (P[m][1] - P[i][1]) + nz * (P[m][2] - P[i][2]); if (q > eps) pos++; else if (q < -eps) neg++; else on.push(m); }
-    if (pos && neg) continue; if (pos) { nx = -nx; ny = -ny; nz = -nz; }
-    const key = on.join(','); if (seen.has(key)) continue; seen.add(key);
-    let cx = 0, cy = 0, cz = 0; for (const m of on) { cx += P[m][0]; cy += P[m][1]; cz += P[m][2]; } cx /= on.length; cy /= on.length; cz /= on.length;
-    let ux = P[on[0]][0] - cx, uy = P[on[0]][1] - cy, uz = P[on[0]][2] - cz; const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
-    const vx = ny * uz - nz * uy, vy = nz * ux - nx * uz, vz = nx * uy - ny * ux;
-    const ring = on.map((m) => [Math.atan2((P[m][0] - cx) * vx + (P[m][1] - cy) * vy + (P[m][2] - cz) * vz, (P[m][0] - cx) * ux + (P[m][1] - cy) * uy + (P[m][2] - cz) * uz), m]).sort((p, q) => p[0] - q[0]).map((p) => p[1]);
-    faces.push({ ring, n: [nx, ny, nz] });
-  }
-  return faces;
-}
-
 /* A stone's defaults: every stone on the page is this object with some numbers changed. */
 const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
-  bevel: .16,       /* width of the rounding round the top, as a share of the stone's shortest side (each arris is rounded in two facets) */
-  bevelT: null,     /* the same, edge by edge: [cut-end side, far side, front, back]; an exposed edge is wide, an edge against a neighbour nearly sharp */
-  bevelV: null,     /* width of the chamfer on the four upright edges (the same as bevel when not given) */
-  bevelVC: null,    /* the same, corner by corner: [front cut-end, front far, back cut-end, back far]; two wide front ones make a many-sided pillar, one a prow */
-  bevelB: 0,        /* the bevel on the bottom edges (0 for a stone that stands on the ground or lies tight on another) */
+  bevel: .16,       /* how round the edges are: 0.16 gives a radius of 0.07 fh on the top and upright edges, whatever the stone's size */
+  bevelT: null,     /* a top edge cut back further than its rounding, edge by edge: [cut-end side, far side, front, back], as shares of the shortest side (a shoulder cut) */
+  bevelV: null, bevelVC: null,   /* an upright corner cut back, as a share of the shorter plan side: all four, or [front cut-end, front far, back cut-end, back far] */
+  level: 0,         /* 0: stands on the ground (a small radius at the foot); above 0: rests on a stone (a larger radius below, so the bed joint is a groove) */
   taperA: 1, taperD: 1,   /* the top's size as a share of the bottom's, along and across */
   batter: null,           /* one-sided batter: how far each face has moved in at the top, fh: [cut-end side, far side, front, back] */
   dipA: 0, dipD: 0,       /* the top's slope along and across (rise per run); a big one makes a wedge top */
   botA: 0,                /* the bottom's slope along (for beds that dip) */
   leanA: 0, leanD: 0,     /* shear: how far the top is carried along and back, per unit height */
-  crease: 0,              /* how far the middle of the front face stands out, fh: the face becomes two planes meeting at a crease */
+  crease: 0,              /* how far the middle of the front face stands out, fh */
   cut: 0, cutAt: 0,       /* one top corner knocked off: its size as a share of the shortest side, and which corner (0-3) */
-  jit: 0, seed: 1, yaw: 0 };
-function stonePoints(o) {
-  const q = Object.assign({}, STONE, o), r = rng(q.seed * 7919 + 13), m = Math.min(q.w, q.dp, q.h);
-  const bT = q.bevelT || [q.bevel, q.bevel, q.bevel, q.bevel], bvAll = (q.bevelV == null ? q.bevel : q.bevelV), bb = q.bevelB * m, P = [];
-  for (const sz of [-1, 1]) for (const sa of [-1, 1]) for (const sd of [-1, 1]) {
-    const top = sz > 0, ci = (sa > 0 ? 1 : 0) + (sd > 0 ? 2 : 0), cv = (q.bevelVC ? q.bevelVC[ci] : bvAll) * Math.min(q.w, q.dp);
-    /* the two top edges that meet at this corner: one on the side face (a), one on the front or back face (d) */
-    let ea = top ? Math.min(bT[sa < 0 ? 0 : 1] * m, q.w * .46) : bb, ed = top ? Math.min(bT[sd < 0 ? 2 : 3] * m, q.dp * .62) : bb, ca = cv, cd = cv;
-    if (top && q.cut > 0 && ci === q.cutAt) { ca = Math.min(q.w * .45, q.cut * m); cd = Math.min(q.dp * .45, q.cut * m); ea = Math.max(ea, Math.min(q.h * .4, q.cut * m * .8)); ed = Math.max(ed, ea); }
-    const za = Math.min(ea * (ea > .22 * m ? .8 : 1), q.h * .55), zd = Math.min(ed * (ed > .22 * m ? .8 : 1), q.h * .55);
-    const ja = (r() - .5) * 2 * q.jit * m, jd = (r() - .5) * 2 * q.jit * m, jz = (r() - .5) * 2 * q.jit * m * (top ? 1 : 0);
-    const A = sa * q.w / 2 + ja, D = sd * q.dp / 2 + jd, Z = sz * q.h / 2 + jz;
-    /* each corner is rounded: three rings (on the faces, a third of the way round the bevel, on the end face), each with three points
-       round the upright chamfer. Two facets to a quarter turn, which reads as a soft arris. */
-    const rings = (ea > 0 || ed > 0) ? [[0, 1], [.29, .29], [1, 0]] : [[0, 0]], arc = [[0, 1, 0], [.29, .29, .5], [1, 0, 1]];
-    for (const [ins, drop] of rings) for (const [fa, fd, k] of arc) P.push([A - sa * (ea * ins + ca * fa), D - sd * (ed * ins + cd * fd), Z - sz * drop * lerp(za, zd, k)]);
-  }
-  /* a crease: the middle of the front face stands out a little, so the face is two planes */
-  if (q.crease) { const zf = Math.min(bT[2] * m, q.h * .55); P.push([q.creaseAt || 0, -q.dp / 2 - q.crease, -q.h / 2], [q.creaseAt || 0, -q.dp / 2 - q.crease, q.h / 2 - zf]); }
-  const c = Math.cos(q.yaw), s2 = Math.sin(q.yaw), bt = q.batter || [0, 0, 0, 0];
-  const ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2;
-  return P.map(([a, d, z]) => { const t = z / q.h + .5;
-    a = a * lerp(1, ta, t) + sa0 * t; d = d * lerp(1, tdp, t) + sd0 * t;
-    z += t * (q.dipA * a + q.dipD * d) + (1 - t) * q.botA * a;
-    const zz = z + q.h / 2; a += q.leanA * zz; d += q.leanD * zz;
-    return [q.a + a * c - d * s2, q.d + a * s2 + d * c, q.z + zz]; });
+  cushion: .035,          /* broad faces swell by this share of the shortest side */
+  seed: 1, yaw: 0 };
+/* A stone is a rounded box: the surface of a small lattice (nine places along each side, three of them round each edge), every node
+   pushed out to a true rounded box, cut softly by any shoulder or corner planes, then battered, tilted, sheared and turned. */
+const LAT_T = [0, .27, .58, 1];
+function latAxis(hh, rLo, rHi) { const a = LAT_T.map((t) => -hh + rLo * t), b = LAT_T.map((t) => hh - rHi * t).reverse(), m0 = a[3], m1 = b[0]; return a.concat([m0 + (m1 - m0) / 2], b); }
+function stoneMesh(o) {
+  const q = Object.assign({}, STONE, o), m = Math.min(q.w, q.dp, q.h), hx = q.w / 2, hy = q.dp / 2, hz = q.h / 2, pl = Math.min(q.w, q.dp);
+  const R = Math.max(.002, .07 * q.bevel / .16), rh = Math.min(R, .4 * pl), rT = Math.min(R, .4 * q.h, .4 * pl), rB = Math.max(.002, Math.min(q.level > 0 ? R * .6 : R * .28, .3 * q.h));
+  const X = latAxis(hx, rh, rh), Y = latAxis(hy, rh, rh), Z = latAxis(hz, rB, rT), L = X.length - 1, P = [], id = new Map(), idx = [];
+  const bT = q.bevelT || [q.bevel, q.bevel, q.bevel, q.bevel], cuts = [];
+  [[0, -1, 0], [1, 1, 0], [2, 0, -1], [3, 0, 1]].forEach(([i, sa, sd]) => { const half = sa ? hx : hy, e = Math.min(bT[i] * m, (sa ? q.w : q.dp) * .46), za = Math.min(e * .8, q.h * .55); if (e < 1.7 * rT) return; const l = Math.hypot(za, e), na = za / l, nz = e / l; cuts.push({ n: [sa * na, sd * na, nz], d: na * (half - e) + nz * hz }); });
+  if (q.cut > 0) { const sa = q.cutAt & 1 ? 1 : -1, sd = q.cutAt & 2 ? 1 : -1, l = Math.sqrt(3); cuts.push({ n: [sa / l, sd / l, 1 / l], d: (hx + hy + hz - q.cut * m * 1.2) / l }); }
+  const vc = q.bevelVC || (q.bevelV ? [q.bevelV, q.bevelV, q.bevelV, q.bevelV] : null);
+  if (vc) vc.forEach((v, ci) => { const c = v * pl; if (c < 1.7 * rh) return; const sa = ci & 1 ? 1 : -1, sd = ci & 2 ? 1 : -1; cuts.push({ n: [sa * .7071, sd * .7071, 0], d: (hx + hy - c) * .7071 }); });
+  const bt = q.batter || [0, 0, 0, 0], ta = q.taperA * Math.max(.2, (q.w - bt[0] - bt[1]) / q.w), tdp = q.taperD * Math.max(.2, (q.dp - bt[2] - bt[3]) / q.dp), sa0 = (bt[0] - bt[1]) / 2, sd0 = (bt[2] - bt[3]) / 2, c = Math.cos(q.yaw), s2 = Math.sin(q.yaw), cu = q.cushion * m;
+  const node = (i, j, k) => { const key = i * 10000 + j * 100 + k; let v = id.get(key); if (v != null) return v; let a = X[i], d = Y[j], z = Z[k];
+    const rz = z > 0 ? rT : rB, ca = Math.max(-hx + rh, Math.min(hx - rh, a)), cd = Math.max(-hy + rh, Math.min(hy - rh, d)), cz = Math.max(-hz + rB, Math.min(hz - rT, z));
+    const da = (a - ca) / rh, dd = (d - cd) / rh, dz = (z - cz) / rz, l = Math.hypot(da, dd, dz); if (l > 1e-9) { a = ca + da / l * rh; d = cd + dd / l * rh; z = cz + dz / l * rz; }
+    const fa = i === 0 || i === L, fd = j === 0 || j === L;
+    if (fa) a += Math.sign(a) * cu * (1 - (d / hy) ** 2) * (1 - (z / hz) ** 2); if (fd) d += Math.sign(d) * cu * (1 - (a / hx) ** 2) * (1 - (z / hz) ** 2);
+    if (q.crease && j === 0) d -= q.crease * Math.max(0, 1 - Math.abs(a) / hx * 1.4) * (1 - Math.max(0, z / hz) ** 4);
+    for (const ct of cuts) { const t = ct.n[0] * a + ct.n[1] * d + ct.n[2] * z - ct.d, mv = (t + Math.sqrt(t * t + .035 * .035)) / 2; a -= ct.n[0] * mv; d -= ct.n[1] * mv; z -= ct.n[2] * mv; }
+    const t = z / q.h + .5; a = a * lerp(1, ta, t) + sa0 * t; d = d * lerp(1, tdp, t) + sd0 * t; z += t * (q.dipA * a + q.dipD * d) + (1 - t) * q.botA * a; const zz = z + q.h / 2; a += q.leanA * zz; d += q.leanD * zz;
+    v = P.length; P.push([q.a + a * c - d * s2, q.d + a * s2 + d * c, q.z + zz]); id.set(key, v); return v; };
+  const quad = (p0, p1, p2, p3) => { idx.push(p0, p1, p2, p0, p2, p3); };
+  for (let u = 0; u < L; u++) for (let v = 0; v < L; v++) {
+    quad(node(u, v, L), node(u + 1, v, L), node(u + 1, v + 1, L), node(u, v + 1, L)); quad(node(u, v, 0), node(u, v + 1, 0), node(u + 1, v + 1, 0), node(u + 1, v, 0));
+    quad(node(u, 0, v), node(u + 1, 0, v), node(u + 1, 0, v + 1), node(u, 0, v + 1)); quad(node(u, L, v), node(u, L, v + 1), node(u + 1, L, v + 1), node(u + 1, L, v));
+    quad(node(0, u, v), node(0, u, v + 1), node(0, u + 1, v + 1), node(0, u + 1, v)); quad(node(L, u, v), node(L, u + 1, v), node(L, u + 1, v + 1), node(L, u, v + 1)); }
+  return { P, idx, o };
 }
-function stoneMesh(o) { const P = stonePoints(o); return { P, F: hull(P), o }; }
+const stonePoints = (o) => stoneMesh(o).P;
 
 /* ---------- drawing: one hidden WebGL renderer makes still pictures; three = (a, z, d) ---------- */
 const HAVE3 = typeof THREE !== 'undefined';
@@ -76,20 +60,9 @@ const STAGE = 0x8c8c91, GREY = 0xbcbfc5;
 let RENDER = null;
 function renderer() { if (!RENDER) { RENDER = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); RENDER.setPixelRatio(1); RENDER.setClearColor(STAGE, 1); } return RENDER; }
 function meshOf(st, color = GREY) {
-  const pos = [], nor = [], edge = [];
-  const vn = st.P.map(() => [0, 0, 0]); for (const f of st.F) for (const m of f.ring) { vn[m][0] += f.n[0]; vn[m][1] += f.n[1]; vn[m][2] += f.n[2]; }
-  for (const v of vn) { const l = Math.hypot(v[0], v[1], v[2]) || 1; v[0] /= l; v[1] /= l; v[2] /= l; }
-  /* shading only: a vertex's normal is its face's blended with the mean of the faces round it; the silhouette keeps its facets */
-  for (const f of st.F) { const r = f.ring; for (let i = 1; i + 1 < r.length; i++) for (const m of [r[0], r[i + 1], r[i]]) { const p = st.P[m], v = vn[m], x = f.n[0] * .45 + v[0], y = f.n[1] * .45 + v[1], z = f.n[2] * .45 + v[2], l = Math.hypot(x, y, z) || 1; pos.push(p[0], p[2], p[1]); nor.push(x / l, z / l, y / l); } }
-  /* three's frame (a, z, d) is mirrored against (a, d, z), so each triangle is wound the other way round */
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color }));
-  /* primary edges only: where two faces meet at more than 14 degrees */
-  const byEdge = new Map(); st.F.forEach((f, fi) => { const r = f.ring; for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length], k = a < b ? a + '_' + b : b + '_' + a; (byEdge.get(k) || byEdge.set(k, []).get(k)).push(fi); } });
-  for (const [k, fs] of byEdge) { if (fs.length === 2) { const n0 = st.F[fs[0]].n, n1 = st.F[fs[1]].n; if (n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2] > .55) continue; } const [a, b] = k.split('_').map(Number); edge.push(st.P[a][0], st.P[a][2], st.P[a][1], st.P[b][0], st.P[b][2], st.P[b][1]); }
-  const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.Float32BufferAttribute(edge, 3));
-  const lines = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x4b4f57, transparent: true, opacity: .3 }));
-  const grp = new THREE.Group(); grp.add(mesh, lines); return grp;
+  const pos = []; for (const p of st.P) pos.push(p[0], p[2], p[1]);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(st.idx); g.computeVertexNormals();
+  const grp = new THREE.Group(); grp.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }))); return grp;
 }
 const PLATE = 1.7;   /* the plate's side in fh (chapter 1: 2.4 to 2.8 base diameters, a figure 1.5 diameters tall) */
 function buildScene(stones, o = {}) {

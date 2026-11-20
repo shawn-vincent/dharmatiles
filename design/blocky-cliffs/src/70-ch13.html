@@ -1,5 +1,5 @@
 <section class="ch" id="c13"><header><span class="n">Chapter 13</span><h2>A generator</h2>
-<p>The grammar of chapter 11, running. It is about 250 lines: one function for a stone, one for a formation. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
+<p>The grammar of chapter 11, running. It is about 250 lines: one function for a stone, one for a formation. Fifty formations build and draw in about a third of a second. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
 
 <div class="sec"><div class="words"><h3>Make one</h3>
 <p><span class="ev p">Proposed</span> Choose a class, then change any number. Drag to turn the view; scrolling scrolls the page; pinch to zoom. The post is one figure high.</p>
@@ -36,12 +36,16 @@
 <div class="sec full"><div class="words"><h3>The whole of it</h3></div><div class="plates"><pre>
 formation(numbers, seed):                         every stone is first a plain box with a place
   1 back mass   by class, along the back edge:
-       pillars   columns of unequal width under the envelope; a plateau run on one
+       pillars   two to four columns, none under 0.42 wide or deeper than 1.3 times its
+                 width, under the envelope; a plateau run on one
                  sloping plane; a cleft; steps of stepMin elsewhere; some stand proud
-       blocks    two or three columns, each its own stack of one to three big blocks under
-                 the envelope (one draw in five: level tiers, each shorter and set back)
-       courses   tiers of the whole footprint, each lying on the one below, set back on two
-                 sides; in seven draws in ten every tier is cut into blocks about 0.55 wide
+       blocks    two or three columns of big blocks; where two neighbours' first blocks top
+                 out level the next block lies across the joint, a third of upper blocks
+                 standing forward (one draw in five: level tiers)
+       courses   tiers of the whole footprint, each lying on the one below, nearly as long,
+                 set back toward the back corner. A tier is two or three stones of unequal
+                 length; their treads stand 0.05 to 0.15 apart, the taller usually nearer
+                 the cut end and a little forward; the tier above may lie across the joint
        slabs     three or four leaning slabs, tight, graded up to the cut end; the first is
                  cut by the cut plane, its near side upright; it may carry a block
        beds      one thick dipping bed, one or two beds tight on it, each broken across in two
@@ -62,16 +66,15 @@ formation(numbers, seed):                         every stone is first a plain b
                      against a neighbour: nearly sharp, so joints stay creases
        front stones: a top sloping along the cliff or into the wall, a battered front
        toes:         flat, with one broad chamfer
-       shading:      each corner's light is blended with its neighbours', so arrises read
-                     round and broad faces a little cushioned; the outline keeps two facets
        tall stones:  battered only on a side that stands clear of its neighbour;
                      one in ten a spire; some many-sided or with a prow
        piled stones: tight on what carries them
   5 count       if more than eleven stones came out, drop a piled stone or a column and draw again
 
 stone(box, numbers):
-  each corner of the box replaced by nine points: three rings round the top arris, three round
-  the upright corner, so every arris is rounded in two facets
-  move each face in at the top (batter), scale, tilt the top, shear, turn
-  return the convex hull</pre></div></div>
+  the surface of a 9 × 9 × 9 lattice (386 points), three steps round each edge;
+  every point pushed out to a true rounded box: radius 0.07 fh on top and upright edges,
+  0.04 under a resting stone (so a bed joint is a groove), 0.02 at a ground stone's foot;
+  broad faces swell 3.5 percent; shoulder and corner cuts are planes applied softly
+  move each face in at the top (batter), scale, tilt the top, shear, turn</pre></div></div>
 </section>
