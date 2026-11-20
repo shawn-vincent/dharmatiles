@@ -154,6 +154,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <style>.answer{margin-top:28px;padding:20px;border:1px solid var(--rule);background:var(--panel);border-radius:4px;display:grid;gap:8px}
 .answer ol{padding-left:1.2em}.answer li{font-size:14.5px}
 @media (max-width:520px){.answer{padding:14px}}</style>
+<style>.redrawn img{opacity:0}.redrawn .tr .o{fill:#b9bcc2;stroke:#3c4048;stroke-width:1.4}.redrawn .tr .t{fill:#d6d9de;fill-opacity:1;stroke:#3c4048;stroke-width:1}.redrawn .tr.on .o{fill:var(--a-out);fill-opacity:1}</style>
 
 <main>
 <div class="intro">
@@ -204,7 +205,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <p>Fifty-two formations are the whole of the evidence. Every one was cropped, named, and its major stones outlined by hand: 350 stones in all. Every measured number on this page comes from those outlines.</p></header>
 
 <div class="sec full"><div class="words"><h3>Look at any formation</h3>
-<p>Pick a sheet, then a cell. Blue lines are the stones as traced; green patches are the top faces that show. Point at a stone to read what was measured from its outline. Lengths are in <b>figure heights as seen</b> (fh): the stone's size in the picture divided by the figure's foot-to-head height in the same cell.</p></div>
+<p>Pick a sheet, then a cell. Blue lines are the stones as traced; green patches are the top faces that show. Point at a stone to read what was measured from its outline. <b>Redrawn</b> takes the photograph away and leaves the traced stones as flat shapes: the formation as the measurements see it. Lengths are in <b>figure heights as seen</b> (fh): the stone's size in the picture divided by the figure's foot-to-head height in the same cell.</p></div>
 <div class="plates">
   <div class="pills" id="insp-sheet" role="group" aria-label="Sheet"></div>
   <div class="insp">
@@ -766,7 +767,7 @@ function cellView(id, o = {}) {
   const c = TR[id];
   const svg = s('svg', { viewBox: '0 0 100 100', preserveAspectRatio: 'none', style: 'position:absolute;inset:0;width:100%;height:100%' });
   if (o.mass) svg.append(s('polygon', { points: pts(CELLS[id].mass), fill: 'none', stroke: 'var(--a-dim)', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' }));
-  if (o.stones !== false) for (const st of c.stones) {
+  if (o.stones !== false) for (const st of c.stones.slice().reverse()) {   /* traced front first, so drawn back first */
     const want = !o.only || o.only(st, stoneById[st.id]);
     const g = s('g', { 'data-stone': st.id, class: 'tr' + (want ? '' : ' dim') });
     g.append(s('polygon', { points: pts(st.out), class: 'o' }));
@@ -1103,7 +1104,8 @@ function seen(f) {
     if (!names.includes(cur)) cur = names[0]; show(cur);
   };
   const pills = $('#insp-sheet');
-  sheets.forEach(([name], i) => pills.append(h('button', { type: 'button', 'aria-pressed': i === 0, text: name, onclick: (e) => { sheet = i; for (const b of pills.children) b.setAttribute('aria-pressed', b === e.target); fill(); } })));
+  sheets.forEach(([name], i) => pills.append(h('button', { type: 'button', 'aria-pressed': i === 0, text: name, onclick: (e) => { sheet = i; for (const b of [...pills.children].slice(0, sheets.length)) b.setAttribute('aria-pressed', b === e.target); fill(); } })));
+  const rd = h('button', { type: 'button', 'aria-pressed': false, text: 'Redrawn, no photo', style: 'margin-left:10px', onclick: () => { const on = rd.getAttribute('aria-pressed') !== 'true'; rd.setAttribute('aria-pressed', on); big.classList.toggle('redrawn', on); grid.classList.toggle('redrawn', on); } }); pills.append(rd);
   fill();
 
   /* the scale: the base's rim as a ruler on the plate */

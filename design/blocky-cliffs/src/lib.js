@@ -27,7 +27,7 @@ function cellView(id, o = {}) {
   const c = TR[id];
   const svg = s('svg', { viewBox: '0 0 100 100', preserveAspectRatio: 'none', style: 'position:absolute;inset:0;width:100%;height:100%' });
   if (o.mass) svg.append(s('polygon', { points: pts(CELLS[id].mass), fill: 'none', stroke: 'var(--a-dim)', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' }));
-  if (o.stones !== false) for (const st of c.stones) {
+  if (o.stones !== false) for (const st of c.stones.slice().reverse()) {   /* traced front first, so drawn back first */
     const want = !o.only || o.only(st, stoneById[st.id]);
     const g = s('g', { 'data-stone': st.id, class: 'tr' + (want ? '' : ' dim') });
     g.append(s('polygon', { points: pts(st.out), class: 'o' }));

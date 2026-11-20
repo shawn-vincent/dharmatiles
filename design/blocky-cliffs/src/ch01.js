@@ -19,7 +19,8 @@
     if (!names.includes(cur)) cur = names[0]; show(cur);
   };
   const pills = $('#insp-sheet');
-  sheets.forEach(([name], i) => pills.append(h('button', { type: 'button', 'aria-pressed': i === 0, text: name, onclick: (e) => { sheet = i; for (const b of pills.children) b.setAttribute('aria-pressed', b === e.target); fill(); } })));
+  sheets.forEach(([name], i) => pills.append(h('button', { type: 'button', 'aria-pressed': i === 0, text: name, onclick: (e) => { sheet = i; for (const b of [...pills.children].slice(0, sheets.length)) b.setAttribute('aria-pressed', b === e.target); fill(); } })));
+  const rd = h('button', { type: 'button', 'aria-pressed': false, text: 'Redrawn, no photo', style: 'margin-left:10px', onclick: () => { const on = rd.getAttribute('aria-pressed') !== 'true'; rd.setAttribute('aria-pressed', on); big.classList.toggle('redrawn', on); grid.classList.toggle('redrawn', on); } }); pills.append(rd);
   fill();
 
   /* the scale: the base's rim as a ruler on the plate */
