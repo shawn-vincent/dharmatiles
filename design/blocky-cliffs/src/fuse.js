@@ -20,7 +20,7 @@ function contactsOf(f) {
 }
 
 /* ---- which contacts fuse: chapter 8's chance ---- */
-const FUSE = { up: [.20, .07], course: [.30, .04], rest: [.03, .03], far: 2, near: .7, minLen: .4 };   /* chance in front / behind; times 2 in the far third of the length, 0.7 elsewhere, times a softness drawn once */
+const FUSE = { up: [.20, .07], course: [.30, .04], rest: [.03, .03], far: 2.4, near: .9, minLen: .4 };   /* chance in front / behind; times 2 in the far third of the length, 0.7 elsewhere, times a softness drawn once */
 function fusedContacts(f) {
   const S = f.stones, r = rng(f.q.seed * 7919 + 13), soft = within(r, .5, 1.5), L = f.q.length, hidden = (x, y, z, skip) => S.some((s, k) => !skip.includes(k) && Math.abs(x - s.a) < s.w / 2 + .02 && Math.abs(y - s.d) < s.dp / 2 + .02 && z > s.z - .02 && z < s.z + s.h + .02);
   return contactsOf(f).filter((c) => { const lo = S[c.lo], up = S[c.up];

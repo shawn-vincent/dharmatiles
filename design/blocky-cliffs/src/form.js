@@ -124,9 +124,9 @@ function formation(over = {}) {
 
   /* ---- 4 shape: each stone learns which of its edges are exposed, then is shaped by that ---- */
   const near = (u, v) => Math.abs(u - v) < .08;
-  /* an edge is exposed when no other stone and not the ground touches most of its length (7 samples, 0.03 fh tolerance; the back of the plate holds the wall) */
+  /* an edge is exposed when any point along it is untouched by another stone or the ground (7 samples, 0.03 fh tolerance; the back of the plate holds the wall) */
   const touched = (sp, x, y, z) => z < .03 || y > PLATE - .04 || S.some((o) => o !== sp && x >= o.a0 - .03 && x <= o.a0 + o.w + .03 && y >= o.d0 - .03 && y <= o.d0 + o.dp + .03 && z >= o.z - .03 && z <= o.z + o.h + .03);
-  const exposed = (sp, P, Q) => { let n = 0; for (let i = 0; i < 7; i++) { const t = (i + .5) / 7; if (touched(sp, P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t, P[2] + (Q[2] - P[2]) * t)) n++; } return n <= 4; };
+  const exposed = (sp, P, Q) => { let n = 0; for (let i = 0; i < 7; i++) { const t = (i + .5) / 7; if (touched(sp, P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t, P[2] + (Q[2] - P[2]) * t)) n++; } return n < 7; };
   const edgesOf = (sp) => { const a1 = sp.a0 + sp.w, d1 = sp.d0 + sp.dp, z0 = sp.z + .005, z1 = sp.z + sp.h - .005, e = (k) => [[[sp.a0, sp.d0, k], [sp.a0, d1, k]], [[a1, sp.d0, k], [a1, d1, k]], [[sp.a0, sp.d0, k], [a1, sp.d0, k]], [[sp.a0, d1, k], [a1, d1, k]]];
     return { t: e(z1).map(([P, Q]) => exposed(sp, P, Q)), b: e(z0).map(([P, Q]) => exposed(sp, P, Q)), v: [[sp.a0, sp.d0], [a1, sp.d0], [sp.a0, d1], [a1, d1]].map(([x, y]) => exposed(sp, [x, y, z0], [x, y, z1])) }; };
   const out = S.map((sp) => { const topz = sp.z + sp.h, a1 = sp.a0 + sp.w, d1 = sp.d0 + sp.dp, m = Math.min(sp.w, sp.dp, sp.h), front = !!sp.front, rest = sp.level > 0, bv = q.bevel;
@@ -137,7 +137,8 @@ function formation(over = {}) {
     /* chisel: a chamfer on an exposed top edge, widest on the front and the cut-end side (0.02-0.15 fh deep, 0.01-0.04 fh down the side), seldom on the far side; the same, mirrored, under an exposed bottom edge (a lintel, an overhang); none on a covered edge;
        sometimes one broad one; a narrow chamfer on a front upright edge now and then; one to three top corners knocked off; a hair everywhere else (in stone.js) */
     const kw = q.bevel / .16, wide = sp.w >= .45, side = !cov[1] ? 1 : !cov[0] && sp.a0 > .05 ? 0 : -1, pl = Math.min(sp.w, sp.dp);
-    const deep = (e) => (e === 0 || e === 2 ? .02 + .13 * r() ** 2 : within(r, .015, .06)) * kw / m, bT = ex.t.map((x, e) => x ? deep(e) : 0), bB = ex.b.map((x, e) => x ? deep(e) : 0), vc = ex.v.map((x) => x ? within(r, .015, .04) * kw / pl : 0);
+    /* widths measured on K, S9, D, O, T15, S3, B (1 fh = the figure): top bevels 0.03-0.15 deep and 0.015-0.04 down; undersides 0.05-0.16 deep and rising 0.04-0.1; upright corners 0.04-0.14 wide. None under 0.03 on the dimension that shows. */
+    const deep = (e) => (e === 0 || e === 2 ? .03 + .12 * r() ** 2 : within(r, .03, .07)) * kw / m, bT = ex.t.map((x, e) => x ? deep(e) : 0), bB = ex.b.map((x) => x ? within(r, .05, .16) * kw / m : 0), vc = ex.v.map((x) => x ? (.04 + .1 * r() ** 1.3) * kw / pl : 0);
     if (wide && !carried.length && side >= 0 && sp.h > .5 && r() < (rest ? .3 : .5)) bT[side] = within(r, .08, .15) * kw / m;
     if (carried.length) for (let i = 0; i < 4; i++) bT[i] = Math.min(bT[i], Math.max(.03, .8 * [sp.a0, a1, sp.d0, d1].map((e, k) => k < 2 ? Math.min(...carried.map((o) => k ? a1 - o.a0 - o.w : o.a0 - sp.a0)) : Math.min(...carried.map((o) => k === 2 ? o.d0 - sp.d0 : d1 - o.d0 - o.dp)))[i]) / m);
     if (wide && sp.h > 1.3 * sp.w && !front) { const u = r(); if (u < .3) vc[0] = vc[1] = within(r, .05, .09) * kw / pl; else if (u < .44) vc[r() < .5 ? 0 : 1] = within(r, .05, .1) * kw / pl; }
@@ -151,7 +152,7 @@ function formation(over = {}) {
       if (sp.end) { bat[1] = tl * sp.h; dipA = within(r, .05, .2); } }
     const clips = [], u = r(); if (!carried.length && wide) for (let n = u < .5 ? 0 : u < .8 ? 1 : u < .93 ? 2 : 3, cs = [0, 1, 2, 3].sort(() => r() - .5); n > 0; n--) clips.push([cs[n - 1], within(r, .04, .12) * kw / m]);
     const g = rest ? .004 : .006, kind = front && sp.rank === 0 ? 'toe' : sp.on >= 2 ? 'cap' : sp.lean || sp.end ? 'lean' : sp.h > 1.35 * Math.max(sp.w, sp.dp) ? 'pillar' : sp.h < .7 * Math.max(sp.w, sp.dp) ? 'slab' : 'block';
-    return { w: Math.max(.08, sp.w - g), dp: Math.max(.08, sp.dp - g), h: sp.h, a: sp.a0 + sp.w / 2, d: sp.d0 + sp.dp / 2, z: sp.z, drop: within(r, .01, .04), bevelT: bT, bevelB: bB, bevelVC: vc, ex, batter: bat, dipA, dipD, botA: rest && td ? -td : 0, leanA: sp.lean ? -sp.lean : 0,
+    return { w: Math.max(.08, sp.w - g), dp: Math.max(.08, sp.dp - g), h: sp.h, a: sp.a0 + sp.w / 2, d: sp.d0 + sp.dp / 2, z: sp.z, drop: within(r, .015, .04), dropB: within(r, .04, .1), bevelT: bT, bevelB: bB, bevelVC: vc, ex, batter: bat, dipA, dipD, botA: rest && td ? -td : 0, leanA: sp.lean ? -sp.lean : 0,
       clips, kind, level: sp.level, on: sp.on, rank: sp.rank }; });
   lap('shape', out.length);
   bear(out);

@@ -11,6 +11,7 @@ const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   bevel: 0, bevelV: 0,    /* the same chamfer on every top edge, or every upright edge, as a share of the shortest side (what the single numbers of the chapters set) */
   bevelB: null,     /* the same along each bottom edge, as the same shares: only where the edge is exposed (a lintel, an overhang), mirrored from the top kind, rising a short way up the face */
   bevelT: null,     /* the depth into the top of a chamfer along each top edge, as a share of the shortest side: [cut-end side, far side, front, back]; none under the stone */
+  dropB: .06,       /* how far an underside chamfer rises up the face, fh (measured 0.05-0.1 on K and S9) */
   drop: .02,        /* how far a top chamfer or a clipped corner cuts down the side, fh: small, so it lies nearly in the top plane (its depth into the top is the free number) */
   bevelVC: null,    /* a chamfer on each upright edge, as a share of the shorter plan side: [front cut-end, front far, back cut-end, back far] */
   clips: null,      /* top corners knocked off by an angled plane: [[corner 0-3, size as a share of the shortest side]], corner bit 0 the far side, bit 1 the back */
@@ -21,7 +22,7 @@ const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   leanA: 0, leanD: 0,     /* shear: how far the top is carried along and back, per unit height */
   yaw: 0 };
 /* A stone is a box (its taper, batter, tilt and shear map applied to the eight corners) cut by planes, every cut convex: a chamfer along each exposed
-   edge, top or bottom or upright (an edge is exposed when no other stone and not the ground touches most of its length), a plane across each clipped
+   edge, top or bottom or upright (an edge is exposed when any point along it is untouched by another stone or the ground), a plane across each clipped
    corner, and everywhere else a hair of a chamfer, so a crease catches the light. A stone flush on the ground or on a stone keeps a crisp bottom joint. */
 const HAIR = .01;
 const sub = (p, r) => [p[0] - r[0], p[1] - r[1], p[2] - r[2]], add = (p, r, k) => [p[0] + r[0] * k, p[1] + r[1] * k, p[2] + r[2] * k], cross = (p, r) => [p[1] * r[2] - p[2] * r[1], p[2] * r[0] - p[0] * r[2], p[0] * r[1] - p[1] * r[0]], dot = (p, r) => p[0] * r[0] + p[1] * r[1] + p[2] * r[2], unit = (p) => { const l = Math.hypot(...p) || 1; return [p[0] / l, p[1] / l, p[2] / l]; };
@@ -36,7 +37,7 @@ function stoneParams(o) {
   const planes = [], cut = (p0, p1, p2) => { let n = unit(cross(sub(p1, p0), sub(p2, p0))); if (dot(n, sub(p0, c)) < 0) n = [-n[0], -n[1], -n[2]]; planes.push({ n, d: dot(n, p0) }); };
   /* a horizontal edge E1-E2, top (k 1) or bottom (k 0): its chamfer runs e in across the face and ez toward the stone's middle, up or down */
   [1, 0].forEach((k) => [[v(0, 0, k), v(0, 1, k), v(1, 0, k), v(0, 0, 1 - k)], [v(1, 0, k), v(1, 1, k), v(0, 0, k), v(1, 0, 1 - k)], [v(0, 0, k), v(1, 0, k), v(0, 1, k), v(0, 0, 1 - k)], [v(0, 1, k), v(1, 1, k), v(0, 0, k), v(0, 1, 1 - k)]].forEach(([E1, E2, F1, G1], n) => {
-    const across = Math.hypot(...sub(F1, E1)), e = Math.min(Math.max((k ? bT : bB)[n] * m, HAIR), .45 * across), ez = Math.min(q.drop, .58 * e, .5 * q.h);   /* 30 degrees at the steepest */
+    const across = Math.hypot(...sub(F1, E1)), e = Math.min(Math.max((k ? bT : bB)[n] * m, HAIR), .45 * across), ez = Math.min(k ? q.drop : q.dropB, (k ? .58 : 1) * e, .5 * q.h);   /* a top bevel lies within 30 degrees of the top; an underside one rises up to 45 */
     const de = unit(sub(E2, E1)), perp = (p) => unit(sub(p, [de[0] * dot(p, de), de[1] * dot(p, de), de[2] * dot(p, de)])), A = add(E1, perp(sub(F1, E1)), e), B = add(E1, perp(sub(G1, E1)), ez);   /* the cut runs parallel to the edge */
     cut(A, B, add(A, de, 1)); }));
   /* an upright edge, cut c in along both faces */
