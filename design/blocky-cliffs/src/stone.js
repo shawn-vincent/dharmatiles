@@ -9,8 +9,8 @@ const mid = (r, a, b) => a + (b - a) * (r() + r()) / 2;
 /* A stone's defaults: every stone on the page is this object with some numbers changed. */
 const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   bevel: 0, bevelV: 0,    /* the same chamfer on every top edge, or every upright edge, as a share of the shortest side (what the single numbers of the chapters set) */
-  bevelT: null,     /* a chamfer along each top edge, as a share of the shortest side: [cut-end side, far side, front, back]; none under the stone */
-  bevelK: 1,        /* how steep a chamfer is: its drop over its width (0.58 to 1.7 is 30 to 60 degrees to the top) */
+  bevelT: null,     /* the depth into the top of a chamfer along each top edge, as a share of the shortest side: [cut-end side, far side, front, back]; none under the stone */
+  drop: .02,        /* how far a top chamfer or a clipped corner cuts down the side, fh: small, so it lies nearly in the top plane (its depth into the top is the free number) */
   bevelVC: null,    /* a chamfer on each upright edge, as a share of the shorter plan side: [front cut-end, front far, back cut-end, back far] */
   clips: null,      /* top corners knocked off by an angled plane: [[corner 0-3, size as a share of the shortest side]], corner bit 0 the far side, bit 1 the back */
   taperA: 1, taperD: 1,   /* the top's size as a share of the bottom's, along and across */
@@ -35,14 +35,15 @@ function stoneParams(o) {
   /* a top edge E1-E2: its chamfer runs e in across the top and e*k down the side */
   [[v(0, 0, 1), v(0, 1, 1), v(1, 0, 1), v(1, 1, 1), v(0, 0, 0), v(0, 1, 0), 0], [v(1, 0, 1), v(1, 1, 1), v(0, 0, 1), v(0, 1, 1), v(1, 0, 0), v(1, 1, 0), 1],
    [v(0, 0, 1), v(1, 0, 1), v(0, 1, 1), v(1, 1, 1), v(0, 0, 0), v(1, 0, 0), 2], [v(0, 1, 1), v(1, 1, 1), v(0, 0, 1), v(1, 0, 1), v(0, 1, 0), v(1, 1, 0), 3]].forEach(([E1, E2, F1, , G1, , n]) => {
-    const across = Math.hypot(...sub(F1, E1)), e = Math.min(Math.max(bT[n] * m, HAIR), .45 * across), ez = Math.min(e * q.bevelK, .5 * q.h);
+    const across = Math.hypot(...sub(F1, E1)), e = Math.min(Math.max(bT[n] * m, HAIR), .45 * across), ez = Math.min(q.drop, .58 * e, .5 * q.h);   /* 30 degrees below the top at the steepest */
     cut(add(E1, unit(sub(F1, E1)), e), add(E1, unit(sub(G1, E1)), -0 + ez), add(E2, unit(sub(F1, E1)), e)); });
   /* an upright edge, cut c in along both faces */
   for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { const w = Math.min(Math.max(vc[i + 2 * j] * pl, HAIR), .45 * pl), B = v(i, j, 0), T = v(i, j, 1);
     cut(add(B, unit(sub(v(1 - i, j, 0), B)), w), add(B, unit(sub(v(i, 1 - j, 0), B)), w), add(T, unit(sub(v(1 - i, j, 1), T)), w)); }
   for (const [k, sz] of clips) { const i = k & 1, j = k >> 1 & 1, T = v(i, j, 1), s = Math.min(sz * m, .45 * pl);
-    cut(add(T, unit(sub(v(1 - i, j, 1), T)), s), add(T, unit(sub(v(i, 1 - j, 1), T)), s), add(T, unit(sub(v(i, j, 0), T)), s)); }
-  return { q, m, V, c, planes, rh: Math.max(HAIR, ...vc.map((x) => x * pl)), rT: Math.max(HAIR, bT[2] * m * q.bevelK), rB: HAIR,   /* what a fused joint must grow over: the widest upright chamfer, the front top chamfer */
+    cut(add(T, unit(sub(v(1 - i, j, 1), T)), s), add(T, unit(sub(v(i, 1 - j, 1), T)), s), add(T, unit(sub(v(i, j, 0), T)), Math.min(q.drop, .58 * s))); }
+  if (q.plain) planes.length = 0;   /* a plain slab: the plate */
+  return { q, m, V, c, planes, rh: Math.max(HAIR, ...vc.map((x) => x * pl)), rT: Math.max(HAIR, Math.min(q.drop, .58 * bT[2] * m)), rB: HAIR,   /* what a fused joint must grow over: the widest upright chamfer, the front top chamfer */
      cs: Math.cos(q.yaw), sn: Math.sin(q.yaw) };
 }
 /* the polyhedron: the box's six faces, each cut by every plane, and a new face where a plane cuts */
@@ -83,7 +84,7 @@ function buildScene(stones, o = {}) {
   sc.add(new THREE.HemisphereLight(0xffffff, 0x5f6167, .56));
   const key = new THREE.DirectionalLight(0xffffff, .6); key.position.set(.5, 1.7, -1.3); sc.add(key);
   const fill = new THREE.DirectionalLight(0xffffff, .12); fill.position.set(-1.2, .5, -.2); sc.add(fill);
-  if (o.plate !== false) { const pl = o.plateSize || [PLATE, PLATE], k = pl.join(); let m = KEEP.plate.get(k); if (!m) KEEP.plate.set(k, m = new THREE.Mesh(geometryOf([stoneMesh({ w: pl[0], dp: pl[1], h: .09, a: pl[0] / 2, d: pl[1] / 2, z: -.09, bevelT: [.8, .8, .8, .8] })]), material(0xb4b7bd))); sc.add(m); }
+  if (o.plate !== false) { const pl = o.plateSize || [PLATE, PLATE], k = pl.join(); let m = KEEP.plate.get(k); if (!m) KEEP.plate.set(k, m = new THREE.Mesh(geometryOf([stoneMesh({ w: pl[0], dp: pl[1], h: .09, a: pl[0] / 2, d: pl[1] / 2, z: -.09, plain: 1 })]), material(0xb4b7bd))); sc.add(m); }
   if (o.color || o.shift) stones.forEach((st, i) => { const m = meshOf(st, o.color ? o.color(st, i) : GREY); if (o.shift) { const v = o.shift(st, i); m.position.set(v[0], v[2], v[1]); } m.userData.own = true; sc.add(m); });
   else if (stones.length) { const m = new THREE.Mesh(geometryOf(stones), material(GREY)); m.userData.own = true; sc.add(m); }
   if (o.figure) { const f = o.figure, mat = material(0xa9adb4); if (!KEEP.figure) KEEP.figure = [new THREE.CylinderGeometry(.33, .33, .05, 40), new THREE.CylinderGeometry(.11, .15, .95, 18)];

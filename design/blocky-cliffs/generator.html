@@ -96,7 +96,7 @@ svg.env{width:100%;height:auto;display:block;background:var(--stage);border-radi
 <dl class="facts"><dt>specs added</dt><dd id="f4-n">–</dd><dt>time</dt><dd id="t4">–</dd></dl></div>
 <div class="views" id="v4"></div></section>
 <section class="step" id="s5"><div class="words"><div class="n">Step 5</div><h2>Shapes</h2>
-<p>Each spec becomes a stone. It finds which of its top edges are <b>exposed</b> and which are against or under another stone: an exposed edge is <b>chamfered</b>, widest on the front and the cut-end side (0.025 to 0.07 fh, small and subtle, at 30 to 60 degrees to the faces), seldom on the far side, sometimes one broad one; an edge against or under another stone is not, so joints stay crisp creases. A front upright edge is sometimes chamfered narrowly, tall stones sometimes many-sided, and one to three top corners may be knocked off by an angled plane. Stones are shaped by place: front stones are wedges, a side is battered only above the top of its neighbour, a stone that carries another keeps a flat top, and one that is clear tilts its top a few degrees. With a <b>dip</b> every top slopes the same way and the beds of laid stones follow it. The stone itself is a <b>chiselled block</b> (step 8) carrying a handful of numbers: batter, tilt, lean, chamfers and clips.</p>
+<p>Each spec becomes a stone. It finds which of its top edges are <b>exposed</b> and which are against or under another stone: an exposed edge is <b>chamfered</b> by a shallow bevel that lies nearly in the top plane: its depth into the top is the free number (0.02 to 0.15 fh, mostly small, on the front and cut-end side, seldom the far side, sometimes one broad one), and it drops only 0.01 to 0.04 fh down the side, 10 to 30 degrees below the top, never a tall cut; an edge against or under another stone is not, so joints stay crisp creases. A front upright edge is sometimes chamfered narrowly, tall stones sometimes many-sided, and one to three top corners may be shallowly knocked off by an angled plane. Stones are shaped by place: front stones are wedges, a side is battered only above the top of its neighbour, a stone that carries another keeps a flat top, and one that is clear tilts its top a few degrees. With a <b>dip</b> every top slopes the same way and the beds of laid stones follow it. The stone itself is a <b>chiselled block</b> (step 8) carrying a handful of numbers: batter, tilt, lean, chamfers and clips.</p>
 <dl class="facts"><dt>stones</dt><dd id="f5-n">–</dd><dt>time</dt><dd id="t5">–</dd></dl></div>
 <div class="views" id="v5"></div></section>
 <section class="step" id="s6"><div class="words"><div class="n">Step 6</div><h2>Bearing</h2>
@@ -111,7 +111,7 @@ svg.env{width:100%;height:auto;display:block;background:var(--stage);border-radi
 <div class="views" id="v7"></div></section>
 
 <section class="step" id="s8"><div class="words"><div class="n">Step 8</div><h2>Meshes</h2>
-<p>A stone is a <b>convex polyhedron</b>: the eight corners of its box after the batter, tilt, lean and turn, cut by planes. Each cut keeps the part of the stone on one side of a plane: a chamfer along each top edge (a plane through a point in from the edge across the top and a point down the side), a chamfer along an upright edge, a plane across a top corner, and on every other edge but the bottom ones a hair of a chamfer, 0.01 fh, so a crease catches the light. The bottom is never cut, so a stone sits flush and a joint is a crisp line. Cutting each of the six faces by each plane in turn and adding a face where a plane cuts leaves 20 to 40 flat faces. Nothing concave is ever made: every cut removes a convex piece.</p>
+<p>A stone is a <b>convex polyhedron</b>: the eight corners of its box after the batter, tilt, lean and turn, cut by planes. Each cut keeps the part of the stone on one side of a plane: a chamfer along each top edge (a plane through a point in from the edge across the top and a point a little way down the side), a chamfer along an upright edge, a plane across a top corner (both shallow: a depth drawn freely, a drop of 0.01 to 0.04 fh), and on every other edge but the bottom ones a hair of a chamfer, 0.01 fh, so a crease catches the light. The bottom is never cut, so a stone sits flush and a joint is a crisp line. Cutting each of the six faces by each plane in turn and adding a face where a plane cuts leaves 20 to 40 flat faces. Nothing concave is ever made: every cut removes a convex piece.</p>
 <dl class="facts"><dt>vertices, triangles</dt><dd id="f8-vt">–</dd><dt>time</dt><dd id="t8">–</dd></dl></div>
 <div class="views" id="v8"></div></section>
 
@@ -161,8 +161,8 @@ const mid = (r, a, b) => a + (b - a) * (r() + r()) / 2;
 /* A stone's defaults: every stone on the page is this object with some numbers changed. */
 const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   bevel: 0, bevelV: 0,    /* the same chamfer on every top edge, or every upright edge, as a share of the shortest side (what the single numbers of the chapters set) */
-  bevelT: null,     /* a chamfer along each top edge, as a share of the shortest side: [cut-end side, far side, front, back]; none under the stone */
-  bevelK: 1,        /* how steep a chamfer is: its drop over its width (0.58 to 1.7 is 30 to 60 degrees to the top) */
+  bevelT: null,     /* the depth into the top of a chamfer along each top edge, as a share of the shortest side: [cut-end side, far side, front, back]; none under the stone */
+  drop: .02,        /* how far a top chamfer or a clipped corner cuts down the side, fh: small, so it lies nearly in the top plane (its depth into the top is the free number) */
   bevelVC: null,    /* a chamfer on each upright edge, as a share of the shorter plan side: [front cut-end, front far, back cut-end, back far] */
   clips: null,      /* top corners knocked off by an angled plane: [[corner 0-3, size as a share of the shortest side]], corner bit 0 the far side, bit 1 the back */
   taperA: 1, taperD: 1,   /* the top's size as a share of the bottom's, along and across */
@@ -187,14 +187,15 @@ function stoneParams(o) {
   /* a top edge E1-E2: its chamfer runs e in across the top and e*k down the side */
   [[v(0, 0, 1), v(0, 1, 1), v(1, 0, 1), v(1, 1, 1), v(0, 0, 0), v(0, 1, 0), 0], [v(1, 0, 1), v(1, 1, 1), v(0, 0, 1), v(0, 1, 1), v(1, 0, 0), v(1, 1, 0), 1],
    [v(0, 0, 1), v(1, 0, 1), v(0, 1, 1), v(1, 1, 1), v(0, 0, 0), v(1, 0, 0), 2], [v(0, 1, 1), v(1, 1, 1), v(0, 0, 1), v(1, 0, 1), v(0, 1, 0), v(1, 1, 0), 3]].forEach(([E1, E2, F1, , G1, , n]) => {
-    const across = Math.hypot(...sub(F1, E1)), e = Math.min(Math.max(bT[n] * m, HAIR), .45 * across), ez = Math.min(e * q.bevelK, .5 * q.h);
+    const across = Math.hypot(...sub(F1, E1)), e = Math.min(Math.max(bT[n] * m, HAIR), .45 * across), ez = Math.min(q.drop, .58 * e, .5 * q.h);   /* 30 degrees below the top at the steepest */
     cut(add(E1, unit(sub(F1, E1)), e), add(E1, unit(sub(G1, E1)), -0 + ez), add(E2, unit(sub(F1, E1)), e)); });
   /* an upright edge, cut c in along both faces */
   for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { const w = Math.min(Math.max(vc[i + 2 * j] * pl, HAIR), .45 * pl), B = v(i, j, 0), T = v(i, j, 1);
     cut(add(B, unit(sub(v(1 - i, j, 0), B)), w), add(B, unit(sub(v(i, 1 - j, 0), B)), w), add(T, unit(sub(v(1 - i, j, 1), T)), w)); }
   for (const [k, sz] of clips) { const i = k & 1, j = k >> 1 & 1, T = v(i, j, 1), s = Math.min(sz * m, .45 * pl);
-    cut(add(T, unit(sub(v(1 - i, j, 1), T)), s), add(T, unit(sub(v(i, 1 - j, 1), T)), s), add(T, unit(sub(v(i, j, 0), T)), s)); }
-  return { q, m, V, c, planes, rh: Math.max(HAIR, ...vc.map((x) => x * pl)), rT: Math.max(HAIR, bT[2] * m * q.bevelK), rB: HAIR,   /* what a fused joint must grow over: the widest upright chamfer, the front top chamfer */
+    cut(add(T, unit(sub(v(1 - i, j, 1), T)), s), add(T, unit(sub(v(i, 1 - j, 1), T)), s), add(T, unit(sub(v(i, j, 0), T)), Math.min(q.drop, .58 * s))); }
+  if (q.plain) planes.length = 0;   /* a plain slab: the plate */
+  return { q, m, V, c, planes, rh: Math.max(HAIR, ...vc.map((x) => x * pl)), rT: Math.max(HAIR, Math.min(q.drop, .58 * bT[2] * m)), rB: HAIR,   /* what a fused joint must grow over: the widest upright chamfer, the front top chamfer */
      cs: Math.cos(q.yaw), sn: Math.sin(q.yaw) };
 }
 /* the polyhedron: the box's six faces, each cut by every plane, and a new face where a plane cuts */
@@ -235,7 +236,7 @@ function buildScene(stones, o = {}) {
   sc.add(new THREE.HemisphereLight(0xffffff, 0x5f6167, .56));
   const key = new THREE.DirectionalLight(0xffffff, .6); key.position.set(.5, 1.7, -1.3); sc.add(key);
   const fill = new THREE.DirectionalLight(0xffffff, .12); fill.position.set(-1.2, .5, -.2); sc.add(fill);
-  if (o.plate !== false) { const pl = o.plateSize || [PLATE, PLATE], k = pl.join(); let m = KEEP.plate.get(k); if (!m) KEEP.plate.set(k, m = new THREE.Mesh(geometryOf([stoneMesh({ w: pl[0], dp: pl[1], h: .09, a: pl[0] / 2, d: pl[1] / 2, z: -.09, bevelT: [.8, .8, .8, .8] })]), material(0xb4b7bd))); sc.add(m); }
+  if (o.plate !== false) { const pl = o.plateSize || [PLATE, PLATE], k = pl.join(); let m = KEEP.plate.get(k); if (!m) KEEP.plate.set(k, m = new THREE.Mesh(geometryOf([stoneMesh({ w: pl[0], dp: pl[1], h: .09, a: pl[0] / 2, d: pl[1] / 2, z: -.09, plain: 1 })]), material(0xb4b7bd))); sc.add(m); }
   if (o.color || o.shift) stones.forEach((st, i) => { const m = meshOf(st, o.color ? o.color(st, i) : GREY); if (o.shift) { const v = o.shift(st, i); m.position.set(v[0], v[2], v[1]); } m.userData.own = true; sc.add(m); });
   else if (stones.length) { const m = new THREE.Mesh(geometryOf(stones), material(GREY)); m.userData.own = true; sc.add(m); }
   if (o.figure) { const f = o.figure, mat = material(0xa9adb4); if (!KEEP.figure) KEEP.figure = [new THREE.CylinderGeometry(.33, .33, .05, 40), new THREE.CylinderGeometry(.11, .15, .95, 18)];
@@ -441,14 +442,14 @@ function formation(over = {}) {
     const cov = [hid((o) => near(o.a0 + o.w, sp.a0) && ovD(o)), hid((o) => near(o.a0, a1) && ovD(o)), hid((o) => near(o.d0 + o.dp, sp.d0) && ovA(o)), d1 > PLATE - .05 || hid((o) => (near(o.d0, d1) || (o.d0 < d1 && o.d0 + o.dp > d1)) && ovA(o))];
     const carried = S.filter((o) => o !== sp && Math.abs(o.z - topz) < .07 && ovA(o) && ovD(o));
     const clear = (test) => !S.some((o) => o !== sp && o.z + o.h > topz - .2 && o.z < topz && test(o)), clN = sp.a0 > .05 && clear((o) => near(o.a0 + o.w, sp.a0) && ovD(o)), clF = clear((o) => near(o.a0, a1) && ovD(o));
-    /* chisel: a chamfer on an exposed top edge, widest on the front and the cut-end side (0.025-0.07 fh), seldom on the far side; none on a covered one;
+    /* chisel: a chamfer on an exposed top edge, widest on the front and the cut-end side (0.02-0.15 fh deep, 0.01-0.04 fh down the side), seldom on the far side; none on a covered one;
        sometimes one broad one; a narrow chamfer on a front upright edge now and then; one to three top corners knocked off; a hair everywhere else (in stone.js) */
     const kw = q.bevel / .16, wide = sp.w >= .45, side = !cov[1] ? 1 : !cov[0] && sp.a0 > .05 ? 0 : -1, pl = Math.min(sp.w, sp.dp);
-    const bT = cov.map((c, e) => (c ? 0 : e === 0 || e === 2 ? (r() < .85 ? within(r, .025, .07) : 0) : r() < .35 ? within(r, .015, .04) : 0) * kw / m), vc = [r() < .3 ? within(r, .015, .04) * kw / pl : 0, r() < .3 ? within(r, .015, .04) * kw / pl : 0, 0, 0];
-    if (wide && !carried.length && side >= 0 && sp.h > .5 && r() < (rest ? .3 : .5)) bT[side] = within(r, .06, .12) * kw / m;
+    const bT = cov.map((c, e) => (c ? 0 : e === 0 || e === 2 ? (r() < .85 ? .02 + .13 * r() ** 2 : 0) : r() < .35 ? within(r, .015, .06) : 0) * kw / m), vc = [r() < .3 ? within(r, .015, .04) * kw / pl : 0, r() < .3 ? within(r, .015, .04) * kw / pl : 0, 0, 0];
+    if (wide && !carried.length && side >= 0 && sp.h > .5 && r() < (rest ? .3 : .5)) bT[side] = within(r, .08, .15) * kw / m;
     if (carried.length) for (let i = 0; i < 4; i++) bT[i] = Math.min(bT[i], Math.max(.03, .8 * [sp.a0, a1, sp.d0, d1].map((e, k) => k < 2 ? Math.min(...carried.map((o) => k ? a1 - o.a0 - o.w : o.a0 - sp.a0)) : Math.min(...carried.map((o) => k === 2 ? o.d0 - sp.d0 : d1 - o.d0 - o.dp)))[i]) / m);
     if (wide && sp.h > 1.3 * sp.w && !front) { const u = r(); if (u < .3) vc[0] = vc[1] = within(r, .05, .09) * kw / pl; else if (u < .44) vc[r() < .5 ? 0 : 1] = within(r, .05, .1) * kw / pl; }
-    const clips = [], u = r(); if (!carried.length && wide) for (let n = u < .5 ? 0 : u < .8 ? 1 : u < .93 ? 2 : 3, cs = [0, 1, 2, 3].sort(() => r() - .5); n > 0; n--) clips.push([cs[n - 1], within(r, .04, .09) * kw / m]);
+    const clips = [], u = r(); if (!carried.length && wide) for (let n = u < .5 ? 0 : u < .8 ? 1 : u < .93 ? 2 : 3, cs = [0, 1, 2, 3].sort(() => r() - .5); n > 0; n--) clips.push([cs[n - 1], within(r, .04, .12) * kw / m]);
     /* batter: a side stands in only above the top of the stone beside it; the top slopes unless it carries a stone */
     const sh = (test) => Math.max(0, Math.min(1, (topz - Math.max(0, ...S.filter((o) => o !== sp && o.z < topz && test(o)).map((o) => o.z + o.h))) / sp.h)), k = rest ? .8 : 1, bat = [0, 0, 0, 0]; let dipA = 0, dipD = 0;
     if (front) { bat[1] = clF ? Math.min(sp.w * .25, sp.h * within(r, .1, .2)) : 0; bat[2] = Math.min(sp.dp * .3, sp.h * within(r, .1, .2)); const u = r();   /* a wedge top rising into the wall, on the larger stones */
@@ -458,7 +459,7 @@ function formation(over = {}) {
       dipA = td ? -td : carried.length ? 0 : (clF && !clN ? -1 : clN && !clF ? 1 : r() < .5 ? -1 : 1) * (clF || clN ? within(r, .04, .16) : within(r, 0, .05)) * (rest ? .6 : 1);
       if (sp.end) { bat[1] = tl * sp.h; dipA = within(r, .05, .2); } }
     const g = rest ? .004 : .006, kind = front && sp.rank === 0 ? 'toe' : sp.on >= 2 ? 'cap' : sp.lean || sp.end ? 'lean' : sp.h > 1.35 * Math.max(sp.w, sp.dp) ? 'pillar' : sp.h < .7 * Math.max(sp.w, sp.dp) ? 'slab' : 'block';
-    return { w: Math.max(.08, sp.w - g), dp: Math.max(.08, sp.dp - g), h: sp.h, a: sp.a0 + sp.w / 2, d: sp.d0 + sp.dp / 2, z: sp.z, bevelK: within(r, .58, 1.5), bevelT: bT, bevelVC: vc, batter: bat, dipA, dipD, botA: rest && td ? -td : 0, leanA: sp.lean ? -sp.lean : 0,
+    return { w: Math.max(.08, sp.w - g), dp: Math.max(.08, sp.dp - g), h: sp.h, a: sp.a0 + sp.w / 2, d: sp.d0 + sp.dp / 2, z: sp.z, drop: within(r, .01, .04), bevelT: bT, bevelVC: vc, batter: bat, dipA, dipD, botA: rest && td ? -td : 0, leanA: sp.lean ? -sp.lean : 0,
       clips, kind, level: sp.level, on: sp.on, rank: sp.rank }; });
   lap('shape', out.length);
   bear(out);
