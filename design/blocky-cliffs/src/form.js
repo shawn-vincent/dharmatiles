@@ -23,7 +23,7 @@ const FORM = { seed: 1, height: 1.7, length: 1.45, depth: .62,   /* the highest 
    a little way below that part, the stone is built taller, its top where the design put it and its bottom lower, so that 3 in 4 of the
    unsupported part rests on or 0.015 fh into the stone below. It is done only when that is at most SUPPORT.reach, so a real overhang (a
    lintel over its opening) stays one. Lowest stone first, so a stone made taller bears the ones above it. */
-const SUPPORT = { share: .75, reach: .25, sink: .015, ok: .01, n: 7 };
+const SUPPORT = { share: .75, reach: .25, sink: .015, ok: .01, n: 7, tol: .06 };   /* tol: how far under a stone a top may be and still hold it up */
 const botZ = (s, a) => s.z + s.botA * (a - s.a), topZ = (s, a, d) => s.z + s.h + s.dipA * (a - s.a) + s.dipD * (d - s.d);
 function underside(S, i) {
   const s = S[i], n = SUPPORT.n, drops = []; let sup = 0;
@@ -38,6 +38,26 @@ function bear(S, stats) {
     const fin = u.drops.filter(isFinite).sort((p, q) => p - q), need = Math.ceil(SUPPORT.share * u.drops.length), d = fin[need - 1] + SUPPORT.sink;
     if (stats) stats.push({ i, frac: u.frac, d: fin.length >= need && d <= SUPPORT.reach && s.z - d >= 0 ? d : 0 });
     if (fin.length >= need && d <= SUPPORT.reach && s.z - d >= 0) { s.z -= d; s.h += d; } }
+}
+/* ---------- the support rule ----------
+   One check, made when a stone is laid, keeps overhangs reasonable. The stone rests on the tops directly under its footprint (within SUPPORT.reach
+   below it, which bear() then closes). It stays up if its centre of mass is over them, with a margin of a tenth of its length and depth, or if
+   it bears near both ends of its long side (a lintel or a bridge). If not, it is slid the smallest way that passes, then shortened and
+   narrowed, and if nothing passes it is not laid. A stone is then never more than about half past its support when centred, or spans two. */
+const extA = (s) => { const sh = s.lean ? -s.lean * s.h : 0; return [s.a0 + sh, s.a0 + s.w + sh]; };
+const supportsOf = (S, sp) => S.filter((o) => o !== sp && !o.void && o.z + o.h <= sp.z + .011 && o.z + o.h >= sp.z - SUPPORT.tol && Math.min(extA(o)[1], sp.a0 + sp.w) - Math.max(extA(o)[0], sp.a0) > .02 && Math.min(o.d0 + o.dp, sp.d0 + sp.dp) - Math.max(o.d0, sp.d0) > .02);
+function holds(sup, sp) {
+  const on = (a, d) => sup.some((o) => a >= extA(o)[0] && a <= extA(o)[1] && d >= o.d0 && d <= o.d0 + o.dp), ca = sp.a0 + sp.w / 2, cd = sp.d0 + sp.dp / 2, ma = .1 * sp.w, md = .1 * sp.dp;
+  return (on(ca, cd) && on(ca - ma, cd - md) && on(ca + ma, cd - md) && on(ca - ma, cd + md) && on(ca + ma, cd + md)) || (sp.w >= sp.dp ? on(sp.a0 + sp.w / 8, cd) && on(sp.a0 + sp.w * 7 / 8, cd) : on(ca, sp.d0 + sp.dp / 8) && on(ca, sp.d0 + sp.dp * 7 / 8));
+}
+const SLIDES = (() => { const v = []; for (let i = -12; i <= 12; i++) for (let j = -12; j <= 12; j++) v.push([i * .05, j * .05]); return v.sort((p, q) => p[0] ** 2 + p[1] ** 2 - q[0] ** 2 - q[1] ** 2); })();
+/* lay `sp` among S if it can be made to stand: slid, then shortened and narrowed; returns whether it was laid */
+function lay(S, sp) {
+  const w = sp.w, dp = sp.dp, a0 = sp.a0, d0 = sp.d0; S.push(sp);
+  for (const k of [1, .85, .7, .55]) { if (w * k < .35 || dp * k < .3) break; sp.w = w * k; sp.dp = dp * k;
+    for (const [da, dd] of SLIDES) { sp.a0 = a0 + (w - sp.w) / 2 + da; sp.d0 = d0 + (dp - sp.dp) / 2 + dd; if (sp.a0 < -.02 || sp.d0 + sp.dp > PLATE + .01) continue;
+      const sup = supportsOf(S, sp); if (sup.length && holds(sup, sp)) { Object.assign(sp, { sup, on: sup.length, level: Math.max(...sup.map((o) => o.level)) + 1, rank: sup[0].rank }); return true; } } }
+  S.pop(); return false;
 }
 /* a row cut into n unequal widths, none thin */
 function widths(r, len, n, spread) {
@@ -75,23 +95,24 @@ function formation(over = {}) {
       add({ a0: a3, w: w3, d0: beside ? wallAt(a3, a3 + w3).d - dp3 + .07 : bu.d0 - dp3 + .06, dp: dp3, h: Math.max(.3, Math.min(.55, hB * within(r, .4, .6))), rank: 0, front: 1 }); } }
   lap('front', S.length);
 
-  /* ---- 3 pile: lay a stone where there is most room under the envelope. It stands on one top, or lies across the joint between two
+  /* ---- 3 pile: lay a stone (and check it stands, above) where there is most room under the envelope. It stands on one top, or lies across the joint between two
      (bearing on both); it is set back from what carries it, and is as high as the room is, or one stone of a stack. ---- */
-  const ext = (s) => { const sh = s.lean ? -s.lean * s.h : 0; return [s.a0 + sh, s.a0 + s.w + sh]; };   /* a stone's top as a range along the cliff (a leaning slab's is carried over) */
-  const free = (s) => { const [lo, hi] = ext(s); let best = [lo, lo], x = lo; for (const [u, v] of S.filter((o) => o.sup && o.sup.includes(s)).map((o) => [o.a0, o.a0 + o.w]).sort((p, c) => p[0] - c[0]).concat([[hi, hi]])) { if (u - x > best[1] - best[0]) best = [x, u]; x = Math.max(x, v); } return best; };
+  const free = (s) => { const [lo, hi] = extA(s); let best = [lo, lo], x = lo; for (const [u, v] of S.filter((o) => o.sup && o.sup.includes(s)).map((o) => [o.a0, o.a0 + o.w]).sort((p, c) => p[0] - c[0]).concat([[hi, hi]])) { if (u - x > best[1] - best[0]) best = [x, u]; x = Math.max(x, v); } return best; };
   const tall = (rm) => { const t = rm <= .5 ? rm : rm * within(r, .33, .55); return rm - t < .22 ? rm : t; };
-  while (S.length < 11 && S.filter((s) => s.level).length < q.pile) {
+  for (let n = 0; n < q.pile && S.length < 11; n++) {
     const T = S.filter((s) => !s.front && !s.void && room(s) >= .22 && free(s)[1] - free(s)[0] >= .4), joints = [];
-    for (const A of S) for (const B of S) { if (A === B || A.front || B.front || (A.void && B.void)) continue; const fa = free(A), fb = free(B), pa = ext(A), pb = ext(B);
+    for (const A of S) for (const B of S) { if (A === B || A.front || B.front || (A.void && B.void)) continue; const fa = free(A), fb = free(B), pa = extA(A), pb = extA(B);
       if (Math.abs(pa[1] - pb[0]) < .07 && fa[1] > pa[1] - .01 && fb[0] < pb[0] + .01 && (A.void || fa[1] - fa[0] >= .2) && (B.void || fb[1] - fb[0] >= .2) && (A.void || B.void || Math.min(A.d0 + A.dp, B.d0 + B.dp) - Math.max(A.d0, B.d0) > .3) && (A.void || B.void || Math.abs(top(A) - top(B)) < .3)) joints.push([A, B]); }
     const rate = (A, B) => Math.min(...[A, B].filter((s) => !s.void).map(room)), J = joints.filter(([A, B]) => rate(A, B) >= .22);
     if (J.length && r() < q.bond) {
-      const [A, B] = J.reduce((u, v) => (rate(...v) + .1 * r() > rate(...u) ? v : u)), fa = free(A), fb = free(B), reach = (c) => c.void ? c.w * .5 : c.w * within(r, .45, .7), a0 = Math.max(fa[0], ext(A)[1] - reach(A)), a1 = Math.min(fb[1], ext(B)[0] + reach(B));
-      if (a1 - a0 >= .42 && a1 - a0 <= .9) { const z = Math.max(...[A, B].filter((c) => !c.void).map((c) => top(c, (a0 + a1) / 2))), d0 = Math.min(A.d0, B.d0) + (A.void || B.void ? -within(r, .1, .2) : within(r, .03, .1));
-        add({ a0, w: a1 - a0, d0, dp: Math.min(.85, Math.min(A.d0 + A.dp, B.d0 + B.dp) - d0), z, h: tall(env((a0 + a1) / 2) - z), level: Math.max(A.level, B.level) + 1, on: 2, rank: A.rank, sup: [A, B] }); continue; } }
+      const [A, B] = J.reduce((u, v) => (rate(...v) + .1 * r() > rate(...u) ? v : u)), fa = free(A), fb = free(B), reach = (c) => c.void ? c.w * .5 : c.w * within(r, .45, .7), a0 = Math.max(fa[0], extA(A)[1] - reach(A)), a1 = Math.min(fb[1], extA(B)[0] + reach(B));
+      if (a1 - a0 >= .42 && a1 - a0 <= .9) { const lo = [A, B].filter((c) => !c.void).sort((u, v) => top(u) - top(v))[0], hi = [A, B].filter((c) => !c.void).reduce((u, v) => (top(v) > top(u) ? v : u)), was = lo.h;
+        if (!S.some((o) => o.sup && o.sup.includes(lo))) lo.h += top(hi) - top(lo);   /* the lower top is raised to the higher, so the stone lies on both */
+        const z = Math.max(...[A, B].filter((c) => !c.void).map((c) => top(c, (a0 + a1) / 2))), d0 = Math.min(A.d0, B.d0) + (A.void || B.void ? -within(r, .1, .2) : within(r, .03, .1));
+        if (lay(S, { a0, w: a1 - a0, d0, dp: Math.min(.85, Math.min(A.d0 + A.dp, B.d0 + B.dp) - d0), z, h: tall(env((a0 + a1) / 2) - z) })) continue; lo.h = was; } }
     if (!T.length) break;
     const sc = (v) => env(v.a0 + v.w / 2) - (1 - q.stack) * top(v) + .1 * r(), s = T.reduce((u, v) => (sc(v) > sc(u) ? v : u)), [fa, fb] = free(s), w = Math.max(.42, Math.min(fb - fa, .75) - within(r, 0, 2 * q.setback)), a0 = r() < .6 ? fa : fb - w, d0 = s.d0 + q.setback * within(r, .3, 1.7), z = top(s, a0 + w / 2);
-    add({ a0, w, d0, dp: Math.min(.85, 1.2 * w, s.d0 + s.dp - d0), z, h: tall(env(a0 + w / 2) - z), level: s.level + 1, on: 1, rank: s.rank, sup: [s] }); }
+    lay(S, { a0, w, d0, dp: Math.min(.85, 1.2 * w, s.d0 + s.dp - d0), z, h: tall(env(a0 + w / 2) - z) }); }
   lap('pile', S.length);
 
   /* ---- 4 shape: each stone learns which of its edges are exposed, then is shaped by that ---- */
