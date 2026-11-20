@@ -1,0 +1,102 @@
+<title>Blocky Cliff Generator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: a bench. One live view of one formation, the seed and class beside it, and under it a sheet of the next twelve seeds to judge
+   the variety at a glance. Cool stone greys; forms plain grey on the stage grey; nothing on a form is red or orange. */
+:root{--bg:#eef0f2;--panel:#f8f9fa;--fg:#1c2129;--muted:#5a6472;--rule:#d0d6dd;--stage:#8c8c91;--ink:#2a2f38;--accent:#3557c9;--accent-soft:#c9d3f2;
+  --text:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--head:"Space Grotesk","Inter",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111418;--panel:#181c22;--fg:#e4e8ed;--muted:#98a2af;--rule:#2c333d;--ink:#0c0e11;--accent:#93a8ff;--accent-soft:#2c3866;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111418;--panel:#181c22;--fg:#e4e8ed;--muted:#98a2af;--rule:#2c333d;--ink:#0c0e11;--accent:#93a8ff;--accent-soft:#2c3866;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 var(--text);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:1100px;margin:0 auto;padding-block:26px 64px;display:grid;gap:18px}
+h1,h2{font-family:var(--head);font-weight:600;margin:0;text-wrap:balance}
+h1{font-size:clamp(26px,4vw,38px);line-height:1.1}h2{font-size:19px}
+p{margin:0}a{color:var(--accent)}
+.lede{color:var(--muted);max-width:68ch}
+.bench{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,300px);gap:16px;align-items:start}
+@media (max-width:820px){.bench{grid-template-columns:minmax(0,1fr)}}
+.live{position:relative;width:100%;aspect-ratio:4/3;background:var(--stage);border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.live>canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
+.live>canvas:active{cursor:grabbing}
+.side{display:grid;gap:14px;min-width:0}
+.grp{display:grid;gap:6px;min-width:0}
+.grp>span{font:600 12px var(--head);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.seedrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+input[type=number]{font:15px var(--mono);width:7.5em;padding:6px 8px;border:1px solid var(--rule);border-radius:3px;background:var(--panel);color:var(--fg)}
+button,select{font:500 14px var(--text);padding:6px 12px;border:1px solid var(--rule);border-radius:99px;background:var(--panel);color:var(--fg);cursor:pointer}
+select{border-radius:3px;max-width:100%}
+button.main{border-color:var(--accent);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.read{font-size:13.5px;color:var(--muted)}.read b{color:var(--fg);font-weight:600}
+.sheet{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:820px){.sheet{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}}
+.cell{position:relative;min-width:0;cursor:pointer;border-radius:2px;overflow:hidden;background:var(--stage)}
+.cell canvas{display:block;width:100%;height:auto}
+.cell .tag{position:absolute;left:4px;top:4px;font:600 11px/1 var(--mono);padding:3px 5px;background:var(--ink);color:#fff;border-radius:2px}
+.cell.sel{outline:3px solid var(--accent);outline-offset:-3px}
+.note{font-size:13px;color:var(--muted);max-width:76ch}
+</style>
+<main>
+<div><h1>Blocky Cliff Generator</h1>
+<p class="lede">One formation from one seed, piled from plain chamfered boxes by the rules of the <a href="https://claude.ai/artifact/MYzPe5rc2ieRxEUzxChEmw">Blocky Cliff Atlas</a>. It is for judging the coarse character: shapes, sizes, arrangement, proportion. No figure, no base, no surface.</p></div>
+<div class="bench">
+  <div class="live" id="live"></div>
+  <div class="side">
+    <div class="grp"><span id="l-seed">Seed</span><div class="seedrow"><input type="number" id="seed" min="1" max="999999" step="1" aria-labelledby="l-seed"><button type="button" id="prev">Previous</button><button type="button" id="next">Next</button></div>
+      <div class="seedrow"><button type="button" class="main" id="new">New seed</button><button type="button" id="view">Reset view</button></div></div>
+    <div class="grp"><label for="cls"><span style="font:600 12px var(--head);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Kind</span></label>
+      <select id="cls"><option value="any">Any, in the references' proportion</option><option value="pillars">Pillars</option><option value="wall">Plateau wall</option><option value="blocks">Blocks in tiers</option><option value="leaners">Leaning set or dipping beds</option><option value="courses">Courses (a stair)</option><option value="gates">Gate</option></select></div>
+    <p class="read" id="read"></p>
+    <p class="note">Drag to turn. Pinch to zoom. Scrolling over the view scrolls the page. Lengths are in figure heights: a formation is about two high.</p>
+  </div>
+</div>
+<div class="grp"><h2 id="sheet-h">Twelve in a row</h2><p class="note">Seeds from the one above onward, each drawn once as a still picture from the references' three-quarter view. Choose one to load it.</p>
+<div class="sheet" id="sheet" aria-labelledby="sheet-h"></div></div>
+<p class="note">What this does not do: the stones are flat-faced boxes where the references are softly rounded; edges are ruled where the references' wander; dipping beds are stiff; and two forms that each appear once in the sheets, a niche with a chockstone (J) and a rock shelter (K), are not made at all.</p>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+/*lib-head*/
+/*js:stone.js*/
+/*js:form.js*/
+  const live = $('#live'), seedIn = $('#seed'), clsIn = $('#cls'), sheet = $('#sheet'), read = $('#read');
+  if (!HAVE3) { live.append(h('p', { style: 'padding:16px;color:#fff', text: 'The 3D view needs three.js, which did not load.' })); return; }
+  const NAME = { pillars: 'pillars', wall: 'a plateau wall', blocks: 'blocks in tiers', leaners: 'a leaning set', ramp: 'dipping beds', courses: 'courses', gates: 'a gate' };
+  let seed = 1 + Math.floor(Math.random() * 9000);
+  try { const sv = +localStorage.getItem('bcg-seed'); if (sv > 0) seed = sv; } catch (e) { /* no storage in this frame: start from a random seed */ }
+  const make = (sd) => { const p = drawParams(sd, clsIn.value), f = formation(p); return { p, f, ms: formMeshes(f) }; };
+  /* the middle of a formation, so every view turns about the stones and not about an absent plate */
+  const middle = (ms) => { let lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; for (const m of ms) for (const q of m.P) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2]; };
+  const R3 = new THREE.WebGLRenderer({ antialias: true }); R3.setClearColor(STAGE, 1); R3.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); const cv = R3.domElement; live.append(cv);
+  const cam = new THREE.PerspectiveCamera(17, 4 / 3, .1, 100);
+  /* scrolling over the view scrolls the page: this listener is added before the controls', and stops theirs unless it is a pinch (ctrl + wheel) */
+  cv.addEventListener('wheel', (e) => { if (!e.ctrlKey) e.stopImmediatePropagation(); });
+  const ctl = new THREE.OrbitControls(cam, cv); ctl.enablePan = false; ctl.minDistance = 4; ctl.maxDistance = 22; ctl.maxPolarAngle = Math.PI * .56;
+  let scene = null, W = 0;
+  const render = () => { if (scene && W) R3.render(scene, cam); }; ctl.addEventListener('change', render);
+  /* the view's size is its box's width; its height is three quarters of that, as the CSS says; nothing is read back from the canvas */
+  new ResizeObserver(() => { const w = Math.floor(live.clientWidth); if (!w || w === W) return; W = w; R3.setSize(W, Math.round(W * .75), false); render(); }).observe(live);
+  const refView = (c) => { const R = 8.6, el = 20 * Math.PI / 180, az = 45 * Math.PI / 180; ctl.target.set(c[0], c[2], c[1]); cam.position.set(c[0] - R * Math.cos(el) * Math.sin(az), c[2] + R * Math.sin(el), c[1] - R * Math.cos(el) * Math.cos(az)); ctl.update(); };
+  let cur = null;
+  const show = (sd, keepView) => { seed = Math.max(1, Math.min(999999, Math.round(sd) || 1)); seedIn.value = seed; try { localStorage.setItem('bcg-seed', seed); } catch (e) { /* not kept: nothing depends on it */ }
+    cur = make(seed); if (scene) scene.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
+    scene = buildScene(cur.ms, { plate: false }); const c = middle(cur.ms); if (!keepView) refView(c); else { ctl.target.set(c[0], c[2], c[1]); ctl.update(); } render();
+    const q = cur.f.q, extra = [q.plateau ? 'a plateau' : '', q.cleft ? 'a cleft' : '', q.rest ? 'a resting stone' : '', q.oversail ? 'an oversail' : '', q.lean ? `leaning ${Math.round(q.lean)}°` : '', q.dip ? `dipping ${Math.round(q.dip)}°` : ''].filter(Boolean);
+    read.innerHTML = `Seed <b>${seed}</b>: ${NAME[cur.p.preset] || cur.p.preset}, <b>${cur.f.stones.length}</b> stones, ${fmt(q.height, 2)} high, ${fmt(q.length, 2)} long, ${q.rows} rows${extra.length ? '; ' + extra.join(', ') : ''}.`;
+    for (const d of sheet.children) d.classList.toggle('sel', +d.dataset.seed === seed); };
+  const fill = (from) => { sheet.replaceChildren(); for (let i = 0; i < 12; i++) { const sd = from + i, m = make(sd), c = middle(m.ms); const e = still(m.ms, { w: 260, h: 230, px: 1.5, plate: false, centre: c, dist: 8.6, fov: 17, tag: String(sd) }); e.dataset.seed = sd; e.tabIndex = 0; e.setAttribute('role', 'button'); e.setAttribute('aria-label', 'Load seed ' + sd);
+      const go = () => show(sd); e.addEventListener('click', go); e.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } }); sheet.append(e); } };
+  let from = seed; const go = (sd, refill) => { if (refill || sd < from || sd > from + 11) { from = sd; fill(from); } show(sd); };
+  $('#new').addEventListener('click', () => go(1 + Math.floor(Math.random() * 99000), true));
+  $('#prev').addEventListener('click', () => go(Math.max(1, seed - 1)));
+  $('#next').addEventListener('click', () => go(seed + 1));
+  $('#view').addEventListener('click', () => { refView(middle(cur.ms)); render(); });
+  seedIn.addEventListener('change', () => go(+seedIn.value, true));
+  clsIn.addEventListener('change', () => { fill(from); show(seed); });
+  fill(from); show(seed);
+})();
+</script>
