@@ -27,8 +27,9 @@
   strip('sky-fill', classGroups((c) => c.fill), { x: [.5, 1], xl: 'stone ÷ bounding box', left: 78, xt: [.5, .6, .7, .8, .9, 1] });
 
   /* the envelope, on a generated formation */
-  const f = formation({ preset: 'pillars', seed: 11, nA: 4, rows: 3, fall: .45 }), ms = formMeshes(f), row = $('#env-row'), q = f.q;
-  const lv = (box, view) => { for (const st of f.stones) { const c = st.col; if (st.z + st.h < c.h - 1e-6 && st.kind !== 'cap') continue; const top = st.z + st.h; const A = view === 'side' ? box.proj(c.a0 + c.w / 2, c.row.d0, top) : box.proj(c.a0, c.row.d0, top), B = view === 'side' ? box.proj(c.a0 + c.w / 2, c.row.d0 + c.row.dp, top) : box.proj(c.a0 + c.w, c.row.d0, top); box.svg.append(s('line', { x1: A[0], y1: A[1], x2: B[0], y2: B[1], stroke: 'var(--a-top)', 'stroke-width': 2.5 })); } };
+  const f = formation({ seed: 11, cols: 4, front: 3, fall: .45 }), ms = formMeshes(f), row = $('#env-row'), q = f.q;
+  const lv = (box, view) => { for (const st of f.stones) { const top = st.z + st.h; if (f.stones.some((o) => o.level > st.level && Math.abs(o.z - top) < .06 && Math.abs(o.a - st.a) < (o.w + st.w) / 2)) continue;   /* a top with nothing on it */
+    const A = view === 'side' ? box.proj(st.a, st.d - st.dp / 2, top) : box.proj(st.a - st.w / 2, st.d - st.dp / 2, top), B = view === 'side' ? box.proj(st.a, st.d + st.dp / 2, top) : box.proj(st.a + st.w / 2, st.d - st.dp / 2, top); box.svg.append(s('line', { x1: A[0], y1: A[1], x2: B[0], y2: B[1], stroke: 'var(--a-top)', 'stroke-width': 2.5 })); } };
   const a = still(ms, { tag: 'as the references see it', w: 360, h: 320 });
   { const back = PLATE, e = (aa, t) => q.height * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); const P = [[0, back - q.depth, e(0, 0)], [0, back, e(0, 1)], [q.length, back, e(q.length, 1)], [q.length, back - q.depth, e(q.length, 0)]].map((p) => a.proj(...p)); a.svg.append(s('polygon', { points: pts(P), fill: 'var(--a-top)', 'fill-opacity': .18, stroke: 'var(--a-top)', 'stroke-width': 2, 'stroke-dasharray': '6 4' })); }
   const b = still(ms, { tag: 'front', view: 'front', w: 360, h: 320, span: 2.3, centre: [PLATE / 2, PLATE / 2, .9] }); lv(b, 'front');
@@ -40,8 +41,8 @@
   fr.append(cellView('E', { stones: false, extra: cut('79.5,52 94.5,49 95,79 90,82 79.5,83.5') }), cellView('I', { stones: false, extra: cut('93,22 94,45 93,78 90,82 88,61 88,42') }), cellView('H', { only: (st) => st.id === 'H1', tops: false }), cellView('S2', { only: (st, m) => m.kind === 'toe', tops: false }));
 
   /* one set of stones, three ways */
-  const base = formation({ preset: 'pillars', seed: 5, nA: 4, rows: 3 });
-  const noEnv = formation({ preset: 'pillars', seed: 5, nA: 4, rows: 3, fall: 0, front: 1, rough: 5, stepMin: 0 });
-  const pile = formation({ preset: 'pillars', seed: 5, nA: 4, rows: 3 }); { const r = rng(77); for (const st of pile.stones) { st.a += (r() - .5) * .5 + .15; st.d += (r() - .5) * .45 - .15; st.yaw = (r() - .5) * 1.6; st.leanA = (r() - .5) * .5; st.leanD = (r() - .5) * .4; } }
+  const base = formation({ seed: 5, cols: 4, front: 3 });
+  const noEnv = formation({ seed: 5, cols: 4, front: 3, fall: 0, base: 1, pile: 0, step: 0 }); { const r = rng(9); for (const st of noEnv.stones) st.h *= within(r, .45, 1.55); }
+  const pile = formation({ seed: 5, cols: 4, front: 3 }); { const r = rng(77); for (const st of pile.stones) { st.a += (r() - .5) * .5 + .15; st.d += (r() - .5) * .45 - .15; st.yaw = (r() - .5) * 1.6; st.leanA = (r() - .5) * .5; st.leanD = (r() - .5) * .4; } }
   $('#pile-row').append(still(formMeshes(base), { sub: '<b>A cliff.</b> Envelope, tight joints, a shared upright, low stones in front.' }), still(formMeshes(noEnv), { sub: '<b>A wall of posts.</b> Heights drawn with no envelope: the front hides the back and the skyline is noise. <i>Leaves the style.</i>' }), still(formMeshes(pile), { sub: '<b>A pile.</b> Same stones turned, tilted and spread each on its own. <i>Leaves the style.</i>' }));
 }

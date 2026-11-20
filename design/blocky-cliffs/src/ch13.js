@@ -1,32 +1,30 @@
 /* ---------- chapter 13 ---------- */
 {
   const live = $('#g-live'), FIG = [1.25, .45];
-  const CLS = [['pillars', 'Pillars'], ['wall', 'Plateau wall'], ['blocks', 'Blocks in tiers'], ['leaners', 'Leaning set'], ['ramp', 'Dipping beds'], ['courses', 'Courses'], ['gates', 'Gates']];
-  const defs = [['height', 'Height', 1, 2.1, .01], ['length', 'Length', .8, 1.7, .01], ['depth', 'Depth', .5, 1.2, .01], ['nA', 'Stones along', 1, 4, 1], ['rows', 'Rows', 1, 5, 1], ['fall', 'Fall to the far end', 0, .8, .01], ['peak', 'Peak along the cliff', 0, .5, .01], ['front', 'Buttress height, share of the wall', .15, 1, .01], ['sizeVar', 'Widths unequal', 0, .7, .01], ['plateau', 'Plateau', 0, 1, 1], ['cleft', 'Cleft', 0, 1, 1], ['caps', 'Stones piled on', 0, 2, 1], ['applied', 'Applied pillar', 0, 1, 1], ['tuck', 'Tucked stone', 0, 1, 1], ['oversail', 'Oversail at the far end', 0, 1, 1], ['tiers', 'Tiers', 0, 4, 1], ['lean', 'Lean of the slabs, degrees', 0, 32, 1], ['dip', 'Beds dip, degrees', 0, 35, 1], ['bevel', 'Bevel', 0, .4, .01]];
-  let P = { preset: 'pillars', cls: 'pillars', seed: 7 }, cam = { az: 45, el: 20, dist: 9.6 }, F = null, R3 = null, scene = null, W = 0, H = 0;
+  const CLS = FAMILIES.map((k) => [k, k[0].toUpperCase() + k.slice(1)]), OF = { pillars: 'columns', gates: 'columns', blocks: 'tiers', courses: 'tiers', leaners: 'slabs' };
+  const defs = [['height', 'Height', 1, 2.1, .01], ['length', 'Length', .8, 1.7, .01], ['depth', 'Depth', .5, 1.2, .01], ['fall', 'Fall to the far end', 0, .8, .01], ['peak', 'Peak along the cliff', 0, .5, .01], ['cols', 'Stones on the ground', 1, 4, 1], ['spread', 'Widths unequal', 0, .7, .01], ['base', 'Ground height, share of the envelope', .25, 1, .01], ['step', 'Least step between tops', 0, .25, .01], ['pile', 'Stones laid on', 0, 5, 1], ['bond', 'Chance across a joint', 0, 1, .01], ['stack', 'Stack: lowest top to highest', 0, 1, .01], ['setback', 'Setback of a laid stone', 0, .3, .01], ['lean', 'Lean of the slabs, degrees', 0, 32, 1], ['dip', 'Beds dip, degrees', 0, 35, 1], ['opening', 'Opening between piers', 0, .45, .01], ['front', 'Stones in front', 0, 3, 1], ['bevel', 'Bevel', 0, .4, .01]];
+  let P = drawParams(7, 'columns'), cam = { az: 45, el: 20, dist: 9.6 }, F = null, R3 = null, scene = null, W = 0, H = 0;
   const ctl = $('#g-ctl'), inputs = {};
   const render = () => { if (!R3 || !scene || !W) return; R3.render(scene, cameraFor('ref', W, H, { az: cam.az, el: cam.el, dist: cam.dist, fov: 19, centre: [PLATE / 2, PLATE / 2, .78] })); };
   const rebuild = () => {
     F = formation(P); const ms = formMeshes(F);
     if (HAVE3) { if (scene) scene.traverse((m) => { if (m.userData.own) m.geometry.dispose(); }); scene = buildScene(ms, { figure: FIG }); render(); }
-    const q = F.q, st = $('#g-steps'), o = { w: 220, h: 200 }, flat = { cushion: 0, bevel: 0, bevelV: 0, bevelB: 0, taperA: 1, taperD: 1, dipA: 0, dipD: 0, botA: 0, cut: 0, jit: 0, yaw: 0, leanA: 0, leanD: 0 }, flat2 = { cushion: 0, bevel: 0, bevelV: 0, bevelB: 0, dipD: 0, cut: 0, jit: 0, yaw: 0 };
-    const rowBoxes = F.rows.map((r) => stoneMesh(Object.assign({ w: r.len, dp: r.dp - .01, h: Math.max(...r.cols.map((c) => c.h)), a: r.len / 2, d: r.d0 + r.dp / 2, z: 0 }, flat)));
-    const colBoxes = F.rows.flatMap((r) => r.cols.map((c) => stoneMesh(Object.assign({ w: c.w - .01, dp: r.dp * (1 - (c.recess || 0)) - .01, h: c.h, a: c.a0 + c.w / 2, d: r.d0 + r.dp * (c.recess || 0) + r.dp * (1 - (c.recess || 0)) / 2, z: 0 }, flat))));
-    const cutBoxes = F.stones.map((s0) => stoneMesh(Object.assign({}, s0, flat2)));
+    const q = F.q, st = $('#g-steps'), o = { w: 220, h: 200 }, flat = { cushion: 0, bevel: 0 };
+    const M = Object.fromEntries(F.marks.map((m) => [m.name, m.n])), plain = (n) => F.specs.slice(0, n).map((sp) => stoneMesh(Object.assign({ w: sp.w - .01, dp: sp.dp - .01, h: sp.h, a: sp.a0 + sp.w / 2, d: sp.d0 + sp.dp / 2, z: sp.z, level: sp.level }, flat)));
     const a = still([], o); { const d0 = PLATE - q.depth, e = (aa, t) => q.height * (1 - q.fall * Math.max(0, aa - q.peak * q.length) / (q.length * (1 - q.peak))); const fp = [[0, d0, 0], [0, PLATE, 0], [q.length, PLATE, 0], [q.length, d0, 0]].map((p) => a.proj(...p)), en = [[0, d0, e(0, 0)], [0, PLATE, e(0, 1)], [q.length, PLATE, e(q.length, 1)], [q.length, d0, e(q.length, 0)]].map((p) => a.proj(...p));
       a.svg.append(s('polygon', { points: pts(fp), fill: 'var(--a-out)', 'fill-opacity': .25, stroke: 'var(--a-out)', 'stroke-width': 2 }), s('polygon', { points: pts(en), fill: 'var(--a-top)', 'fill-opacity': .2, stroke: 'var(--a-top)', 'stroke-width': 2, 'stroke-dasharray': '5 4' }), ...fp.map((p, i) => s('line', { x1: p[0], y1: p[1], x2: en[i][0], y2: en[i][1], stroke: 'var(--a-top)', 'stroke-width': 1 }))); }
-    st.replaceChildren(a, still(rowBoxes, o), still(colBoxes, o), still(cutBoxes, o), still(ms, o));
-    [...st.children].forEach((c, i) => c.append(h('span', { class: 'tag', text: ['1 footprint, envelope', '2 rows', '3 ground stones', '4 the pile, plain', '5 shaped'][i] })));
+    st.replaceChildren(a, still(plain(M.ground), o), still(plain(M.front), o), still(plain(M.pile), o), still(ms, o));
+    [...st.children].forEach((c, i) => c.append(h('span', { class: 'tag', text: ['1 footprint, envelope', '2 ground', '3 front', '4 the pile, plain', '5 shaped'][i] })));
     const m = HAVE3 ? seen(F) : null; if (m) $('#g-read').innerHTML = `<span class="ev p">Proposed</span> Seed ${P.seed} · ${m.n} stones · as seen ${fmt(m.W)} fh wide, ${fmt(m.H)} fh high (references: 1.3–2.1 and 1.8–2.3).`;
-    const bs = $('#g-beside'), refs = P.preset === 'wall' ? ['H', 'T10', 'T12', 'T20'] : P.preset === 'ramp' ? ['N', 'G', 'S14', 'S7'] : P.preset === 'leaners' ? ['P', 'L', 'T9', 'T19'] : ALL.filter((id) => CL[id].class === F.q.cls).slice(0, 4);
+    const bs = $('#g-beside'), refs = ALL.filter((id) => OF[CL[id].class] === P.family).filter((id, i) => i % 3 === 0).slice(0, 4);
     bs.replaceChildren(...[1, 2, 3, 4].map((k) => still(formMeshes(formation(Object.assign({}, P, { seed: P.seed * 13 + k }))), { w: 300, h: 260, figure: FIG })), ...refs.map((id) => cellView(id, { stones: false })));
   };
   const sync = () => { const q = formation(P).q; for (const [k, , , , stp] of defs) { inputs[k][0].value = q[k]; inputs[k][1].textContent = fmt(q[k], stp < 1 ? 2 : 0); } };
   for (const [k, name, a, b, stp] of defs) { const out = h('output', { for: 'g-' + k }), inp = h('input', { type: 'range', id: 'g-' + k, min: a, max: b, step: stp, oninput: () => { P[k] = +inp.value; out.textContent = fmt(P[k], stp < 1 ? 2 : 0); rebuild(); } }); inputs[k] = [inp, out]; ctl.append(h('label', { for: 'g-' + k, text: name }), inp, out); }
   const pills = $('#g-cls'), press = (k) => { for (const b of pills.children) b.setAttribute('aria-pressed', b.dataset.k === k); };
-  for (const [k, name] of CLS) pills.append(h('button', { type: 'button', 'data-k': k, text: name, onclick: () => { P = { preset: k, cls: k === 'ramp' ? 'leaners' : k === 'wall' ? 'pillars' : k, seed: P.seed }; press(k); sync(); rebuild(); } }));
+  for (const [k, name] of CLS) pills.append(h('button', { type: 'button', 'data-k': k, text: name, onclick: () => { P = drawParams(P.seed, k); press(k); sync(); rebuild(); } }));
   $('#g-seed').addEventListener('click', () => { P.seed = 1 + Math.floor(Math.random() * 9999); rebuild(); });
-  $('#g-all').addEventListener('click', () => { P = drawParams(1 + Math.floor(Math.random() * 99999)); press(P.preset); sync(); rebuild(); });
+  $('#g-all').addEventListener('click', () => { P = drawParams(1 + Math.floor(Math.random() * 99999)); press(P.family); sync(); rebuild(); });
   $('#g-cam').addEventListener('click', () => { cam = { az: 45, el: 20, dist: 9.6 }; render(); });
   if (HAVE3) {
     R3 = new THREE.WebGLRenderer({ antialias: true }); R3.setClearColor(STAGE, 1); R3.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); const cv = R3.domElement; live.append(cv);
@@ -41,7 +39,7 @@
     /* scrolling over the view scrolls the page; a trackpad's pinch arrives as a wheel with ctrl held, and only that zooms */
     cv.addEventListener('wheel', (e) => { if (!e.ctrlKey) return; e.preventDefault(); cam.dist = Math.min(22, Math.max(4, cam.dist * Math.exp(e.deltaY * .01))); render(); }, { passive: false });
   } else live.append(h('p', { style: 'padding:16px;color:#fff', text: 'The 3D view needs three.js, which did not load.' }));
-  press('pillars'); sync(); rebuild();
+  press('columns'); sync(); rebuild();
 
   /* measured like the sheets: sizes, then the relations between touching stones */
   if (HAVE3) { const S = [], C = [], GP = [], S2 = [], C2 = [], GP2 = []; for (let i = 1; i <= 200; i++) { const f0 = formation(drawParams(i)), m = seen(f0), m2 = seen(f0, 25); S.push(...m.stones); C.push(m); GP.push(...m.pairs); S2.push(...m2.stones); C2.push(m2); GP2.push(...m2.pairs); }

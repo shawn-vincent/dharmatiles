@@ -22,10 +22,11 @@
   const caps = $('#n-caps'); for (const id of ['D', 'K', 'O', 'S9']) caps.append(cellView(id, { only: (t, m) => m.kind === 'cap', tops: false }));
   const gap = (poly) => (svg) => svg.append(s('polygon', { points: poly, fill: 'var(--a-gap)', 'fill-opacity': .35, stroke: 'var(--a-gap)', 'stroke-width': 2.5, 'vector-effect': 'non-scaling-stroke' }));
   $('#n-gaps').append(cellView('H', { stones: false, extra: gap('64,12 66.5,11 65,30 62,34 58,56 55,74 56,55 60,36 63,30') }), cellView('J', { stones: false, extra: gap('44,26 53,26 52,67 46,66') }), cellView('K', { stones: false, extra: gap('32,39 52,39.5 62,36 72,40 77,47 66,56 60,74 46,69 36,68') }), cellView('T15', { stones: false, extra: gap('50,36 62,34 68,40 67,62 62,86 52,84 49,60') }));
-  const V = $('#n-valid'), F = (o) => formMeshes(formation(Object.assign({ preset: 'pillars', seed: 21, nA: 3, rows: 2 }, o)));
+  const V = $('#n-valid'), F = (o, fn) => { const f = formation(Object.assign({ seed: 21, cols: 3, front: 2 }, o)); if (fn) f.stones.forEach(fn); return formMeshes(f); };
   const pair = (good, bad, gs, bs) => { V.append(still(good, { w: 300, h: 260, sub: '<b>Fits.</b> ' + gs }), still(bad, { w: 300, h: 260, sub: '<b>Does not.</b> ' + bs })); };
-  pair(F({}), F({ stepMin: 0, fall: 0, rough: 0, front: .34 }), 'Tops step, or share a plane in one run.', 'Every top level, every row: reads as a built wall.');
-  pair(F({}), F({ gap: .09 }), 'Joints closed; bevels make the groove.', 'Stones stand apart: reads as posts.');
-  pair(F({ preset: 'blocks', seed: 4 }), F({ preset: 'blocks', seed: 4, stagger: 0, sizeVar: 0, rough: 0, stepMin: 0, fall: 0, offset: 0, front: .34, cap: 0 }), 'Joints staggered, sizes unequal.', 'Joints in line both ways, equal stones: reads as crates.');
-  pair(F({}), (() => { const f = formation({ preset: 'pillars', seed: 21, nA: 3, rows: 2 }); for (const t of f.stones) if (t.col.row.i === 0) { t.h *= 3.6; } return formMeshes(f); })(), 'Low stones in front, tall behind.', 'Every front stone tall: the rest is hidden and the stair in depth is gone.');
+  pair(F({}), F({ step: 0, fall: 0, base: 1, pile: 0 }, (t) => { t.h = 1.3 - t.z; }), 'Tops step, or share a plane in one run.', 'Every top level, every row: reads as a built wall.');
+  pair(F({}), F({}, (t) => { t.w -= .09; t.dp -= .09; }), 'Joints closed; bevels make the groove.', 'Stones stand apart: reads as posts.');
+  const BL = { seed: 4, base: .55, cols: 3, pile: 4, depth: .7, setback: .08, step: .13, stack: .4, bond: .5 };
+  pair(F(BL), F(Object.assign({}, BL, { spread: 0, step: 0, fall: 0, setback: 0 })), 'Joints staggered, sizes unequal.', 'Joints in line both ways, equal stones: reads as crates.');
+  pair(F({}), F({}, (t) => { if (t.rank === 0) t.h *= 3.6; }), 'Low stones in front, tall behind.', 'Every front stone tall: the rest is hidden and the stair in depth is gone.');
 }

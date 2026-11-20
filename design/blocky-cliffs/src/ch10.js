@@ -10,10 +10,10 @@
   const C = ALL.map((id) => CELLS[id]);
   const list = [['Stone: width and face height', corr(STONES, (r) => r.wb, (r) => r.hb), 'Size is not shape.'], ['Stone: share and height ÷ width', corr(STONES, (r) => r.share, (r) => r.slender), 'Big stones are no slimmer or squatter.'], ['Stone: how high it sits and its share', corr(STONES, (r) => r.cy, (r) => r.share), 'Upper stones are not smaller.'], ['Stone: how high it sits and height ÷ width', corr(STONES, (r) => r.cy, (r) => r.slender), 'Upper stones are not slimmer.'], ['Stone: how high it sits and width', corr(STONES, (r) => r.cy, (r) => r.wb), ''], ['Stone: how far right and its top level', corr(STONES, (r) => r.cx, (r) => r.topy), 'The climb is carried by which stone is behind, not by the stone’s own place across the picture.'], ['Formation: stones and largest share', corr(C, (c) => c.n, (c) => c.big), 'More stones, smaller biggest stone: the only strong tie, and it is arithmetic.'], ['Formation: width and height', corr(C, (c) => c.W, (c) => c.H), 'Driven by the sheet (chapter 2).']];
   $('#r-corr').append(h('tr', {}, ['Pair', 'r', 'Counted', ''].map((t, i) => h('th', { class: i === 1 || i === 2 ? 'num' : null, text: t }))), ...list.map(([name, [r, n], note]) => h('tr', {}, h('td', { text: name }), h('td', { class: 'num', text: (r >= 0 ? '+' : '') + fmt(r) }), h('td', { class: 'num', text: n }), h('td', { text: note }))));
-  const F = (o) => formMeshes(formation(Object.assign({ preset: 'pillars', seed: 17, nA: 4, rows: 2 }, o))), P = $('#r-pairs');
+  const F = (o, fn) => { const f = formation(Object.assign({ seed: 17, cols: 4, front: 2 }, o)); if (fn) f.stones.forEach(fn); return formMeshes(f); }, P = $('#r-pairs'), jit = (k) => { const r = rng(5); return (t) => k(t, (a) => (r() - .5) * 2 * a); };
   const pr = (a, b, sa, sb) => { P.append(still(a, { w: 300, h: 260, sub: sa })); const e = still(b, { w: 300, h: 260, sub: sb }); e.classList.add('out'); P.append(e); };
-  pr(F({ lean: 16 }), F({ leanEach: 16 }), '<b>Lean, shared:</b> every stone 16°.', '<b>Lean, each its own:</b> up to 16° any way.');
-  pr(F({}), F({ rough: 6, stepMin: 0 }), '<b>Height:</b> envelope ±9%.', '<b>Height:</b> envelope ±55%.');
-  pr(F({ offset: .03 }), F({ yawEach: 28 }), '<b>Turn:</b> within 2°.', '<b>Turn:</b> up to 28° each.');
-  pr(F({ bevel: .16 }), F({ bevelEach: .95 }), '<b>Bevel, shared:</b> 0.16 ±20%.', '<b>Bevel, each its own:</b> 0.01 to 0.31.');
+  pr(F({ lean: 16 }), F({}, jit((t, e) => { t.leanA = Math.tan(e(16) * Math.PI / 180); t.leanD = Math.tan(e(16) * Math.PI / 180); })), '<b>Lean, shared:</b> every stone 16°.', '<b>Lean, each its own:</b> up to 16° any way.');
+  pr(F({}), F({}, jit((t, e) => { if (!t.level) t.h *= 1 + e(.55); })), '<b>Height:</b> envelope ±9%.', '<b>Height:</b> envelope ±55%.');
+  pr(F({}), F({}, jit((t, e) => { t.yaw = e(28) * Math.PI / 180; })), '<b>Turn:</b> none: every stone faces the same way.', '<b>Turn:</b> up to 28° each.');
+  pr(F({ bevel: .16 }), F({}, jit((t, e) => { t.bevel *= Math.max(.05, 1 + e(.95)); })), '<b>Bevel, shared:</b> 0.16 ±20%.', '<b>Bevel, each its own:</b> 0.01 to 0.31.');
 }

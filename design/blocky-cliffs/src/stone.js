@@ -17,10 +17,9 @@ const STONE = { w: .6, dp: .5, h: 1, a: 0, d: 0, z: 0,
   dipA: 0, dipD: 0,       /* the top's slope along and across (rise per run); a big one makes a wedge top */
   botA: 0,                /* the bottom's slope along (for beds that dip) */
   leanA: 0, leanD: 0,     /* shear: how far the top is carried along and back, per unit height */
-  crease: 0,              /* how far the middle of the front face stands out, fh */
   cut: 0, cutAt: 0,       /* one top corner knocked off: its size as a share of the shortest side, and which corner (0-3) */
   cushion: .035,          /* broad faces swell by this share of the shortest side */
-  seed: 1, yaw: 0 };
+  yaw: 0 };
 /* A stone is a rounded box: the surface of a small lattice (nine places along each side, three of them round each edge), every node
    pushed out to a true rounded box, cut softly by any shoulder or corner planes, then battered, tilted, sheared and turned. */
 const LAT_T = [0, .27, .58, 1];
@@ -45,7 +44,6 @@ function stoneMesh(o) {
     const da = (a - ca) / rh, dd = (d - cd) / rh, dz = (z - cz) / rz, l = Math.hypot(da, dd, dz); if (l > 1e-9) { a = ca + da / l * rh; d = cd + dd / l * rh; z = cz + dz / l * rz; }
     const fa = i === 0 || i === L, fd = j === 0 || j === L;
     if (fa) a += Math.sign(a) * cu * (1 - (d / hy) ** 2) * (1 - (z / hz) ** 2); if (fd) d += Math.sign(d) * cu * (1 - (a / hx) ** 2) * (1 - (z / hz) ** 2);
-    if (q.crease && j === 0) d -= q.crease * Math.max(0, 1 - Math.abs(a) / hx * 1.4) * (1 - Math.max(0, z / hz) ** 4);
     for (const ct of cuts) { const t = ct.n[0] * a + ct.n[1] * d + ct.n[2] * z - ct.d, mv = (t + Math.sqrt(t * t + .035 * .035)) / 2; a -= ct.n[0] * mv; d -= ct.n[1] * mv; z -= ct.n[2] * mv; }
     const t = z / q.h + .5; a = a * lerp(1, ta, t) + sa0 * t; d = d * lerp(1, tdp, t) + sd0 * t; z += t * (q.dipA * a + q.dipD * d) + (1 - t) * q.botA * a; const zz = z + q.h / 2; a += q.leanA * zz; d += q.leanD * zz;
     v = P.length; P.push([q.a + a * c - d * s2, q.d + a * s2 + d * c, q.z + zz]); id[key] = v; return v; };

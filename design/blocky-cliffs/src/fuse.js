@@ -23,7 +23,7 @@ function contactsOf(f) {
 const FUSE = { up: [.20, .07], course: [.30, .04], rest: [.03, .03], far: 2, near: .7, minLen: .4 };   /* chance in front / behind; times 2 in the far third of the length, 0.7 elsewhere, times a softness drawn once */
 function fusedContacts(f) {
   const S = f.stones, r = rng(f.q.seed * 7919 + 13), soft = within(r, .5, 1.5), L = f.q.length, hidden = (x, y, z, skip) => S.some((s, k) => !skip.includes(k) && Math.abs(x - s.a) < s.w / 2 + .02 && Math.abs(y - s.d) < s.dp / 2 + .02 && z > s.z - .02 && z < s.z + s.h + .02);
-  return contactsOf(f).filter((c) => { const lo = S[c.lo], up = S[c.up]; if (lo.part || up.part) return false;
+  return contactsOf(f).filter((c) => { const lo = S[c.lo], up = S[c.up];
     const bed = c.type === 'bed', len = bed ? c.a1 - c.a0 : c.z1 - c.z0, at = bed ? (c.a0 + c.a1) / 2 : c.a0; if (len < FUSE.minLen) return false;
     const front = !hidden(bed ? at : (lo.a + up.a) / 2, c.d0 - .06, bed ? c.zb + .02 : (c.z0 + c.z1) / 2, [c.lo, c.up]), kind = !bed ? FUSE.up : up.kind === 'slab' ? FUSE.course : FUSE.rest;
     if (at < .25 * L && !front) return false;   /* back joints by the cut end stay open */

@@ -1,23 +1,23 @@
 <section class="ch" id="c13"><header><span class="n">Chapter 14</span><h2>A generator</h2>
-<p>The grammar of chapter 12, running. It is about 250 lines: one function for a stone, one for a formation. Fifty formations build and draw in about a third of a second. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
+<p>The grammar of chapter 12, running. It is about 125 lines for the formation and 110 for the stone: one rule for laying stones on, three families of numbers. Fifty formations build and draw in about a third of a second. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
 
 <div class="sec"><div class="words"><h3>Make one</h3>
-<p><span class="ev p">Proposed</span> Choose a class, then change any number. Drag to turn the view; scrolling scrolls the page; pinch to zoom. The post is one figure high.</p>
-<div class="pills" id="g-cls" role="group" aria-label="Class"></div>
+<p><span class="ev p">Proposed</span> Choose a family, then change any number. Drag to turn the view; scrolling scrolls the page; pinch to zoom. The post is one figure high.</p>
+<div class="pills" id="g-cls" role="group" aria-label="Family"></div>
 <div class="pills"><button type="button" id="g-seed">New seed</button><button type="button" id="g-all">Draw everything</button><button type="button" id="g-cam">References' view</button></div>
 <div class="ctl" id="g-ctl" style="display:grid;grid-template-columns:auto minmax(0,1fr) 3.4em;gap:6px 10px"></div>
 <p class="note" id="g-read"></p></div>
 <div class="plates"><div class="live stage" id="g-live"></div>
 <div class="row" id="g-steps" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
-<figcaption>How this formation was built: the footprint and envelope; rows; the stones that stand on the ground; everything piled on, still as plain stones; then every stone shaped by its place.</figcaption></div></div>
+<figcaption>How this formation was built: the footprint and envelope; the stones that stand on the ground; the front; everything laid on, still as plain stones; then every stone shaped by its place.</figcaption></div></div>
 
 <div class="sec"><div class="words"><h3>Does it measure like the sheets?</h3>
-<p><span class="ev m">Measured</span> 200 formations were drawn with every number taken from the proposed ranges and classes in the counted proportion. Each was then measured the way the traces were, from the references' camera: stone sizes, and the relations between touching stones.</p>
+<p><span class="ev m">Measured</span> 200 formations were drawn with every number taken from the proposed ranges, the three families in the counted proportion (25 : 17 : 10). Each was then measured the way the traces were, from the references' camera: stone sizes, and the relations between touching stones.</p>
 <p>The table gives every measure for both, and the generator's from two angles: 45 degrees off the face, where the references' A–P plates stand, and 25, which is nearer how the sheet of sixteen is seen and how several A–P cliffs sit turned on their plates. Where the generator misses, the miss is left showing:</p>
-<ul><li>its ground-standing stones are still lower and broader than the sheets', though less so once hidden parts are left out, as a traced outline leaves them out: the two rows marked "of what shows" are the like-for-like ones;</li>
-<li>fewer of its stones rest on others or bear on two, and more formations have nothing stacked;</li>
-<li>its widths are more alike;</li>
-<li>block formations put their highest point left of the middle more often than the sheets do.</li></ul>
+<ul><li>its ground-standing stones are lower and broader than the sheets' (median face height 0.72 against 0.95; the like-for-like row, of what shows, is 1.16 against 1.67): the widths are held at 0.42 or more, so a tall stone is a tall wide one;</li>
+<li>its resting stones are thinner (0.38 against 0.52) and fewer bear on two (9% against 18%), though as many rest (34%) and the stacks are nearer: 8 / 47 / 40 / 5 per cent against 13 / 35 / 38 / 13;</li>
+<li>its widths are more alike (1.6 against 2.5 for widest to narrowest);</li>
+<li>the lower of two neighbours is in front in 61% of pairs against 83%, and the far end is 0.76 of the highest point as seen against 0.62.</li></ul>
 <p>The numbers do not say whether a draw looks right. The pictures show the limits: flat chamfers where the sheets are softly rounded, no kinks on edges, stiff dipping beds, and no niche or shelter.</p></div>
 <div class="plates"><div class="scroll"><table id="g-rel"></table></div>
 <p class="note">References: <span class="ev m">Measured</span> from the traces. Generator: <span class="ev p">Proposed</span> rules, measured on the true solids as the camera would see them. "Foot nearer" compares the lowest point of each outline in the picture; on the traces a hidden foot ends where the stone in front hides it.</p>
@@ -35,44 +35,33 @@
 
 <div class="sec full"><div class="words"><h3>The whole of it</h3></div><div class="plates"><pre>
 formation(numbers, seed):                         every stone is first a plain box with a place
-  1 back mass   by class, along the back edge:
-       pillars   two to four columns, none under 0.42 wide or deeper than 1.3 times its
-                 width, under the envelope; a plateau run on one
-                 sloping plane; a cleft; steps of stepMin elsewhere; some stand proud
-       blocks    two or three columns of big blocks; where two neighbours' first blocks top
-                 out level the next block lies across the joint, a third of upper blocks
-                 standing forward (one draw in five: level tiers)
-       courses   tiers of the whole footprint, each lying on the one below, nearly as long,
-                 set back toward the back corner. A tier is two or three stones of unequal
-                 length; their treads stand 0.05 to 0.15 apart, the taller usually nearer
-                 the cut end and a little forward; the tier above may lie across the joint
-       slabs     three or four leaning slabs, tight, graded up to the cut end; the first is
-                 cut by the cut plane, its near side upright; it may carry a block
-       beds      one thick dipping bed, one or two beds tight on it, each broken across in two
-       gate      two piers 0.64 to 0.75 of the height, a deep recess between them, a lintel
-                 course of two blocks over the opening and both piers, sometimes a stone on it
-  2 front       three ranks: sometimes a main pillar applied over a joint near mid length;
-                a buttress 0.55 to 0.8 of the wall behind it, hard against it; a toe a third
-                to a half of the buttress; sometimes a second block, or a stone tucked in
-  3 pile        0 to 2 stones on the tops, as the top of the wall: first a block straddling a
-                joint (the two tops under it are brought level), else an upper block 0.5 to
-                0.75 wide, two side by side where the support is wide; part of its height is taken off what carries it. A tall pillar may
-                instead be split by a level joint. None on a spire or a narrow stone.
-     height     if the pile has carried the whole more than a tenth past the envelope,
-                everything is pressed down in proportion
+  1 ground      cols stones side by side along the back, widths unequal (spread), none under 0.42
+       height   base x envelope x 0.92-1.03, where base runs to 1 by a cubed draw per stone, so a
+                few stand alone; a neighbour within step is moved by step
+       stand    forward of the wall by up to 0.38, the lower of two the more
+       lean     the first stone is an end stone (upright near side); the rest lean 15-24 deg
+       opening  two piers, and a middle stone far back and 0.32-0.42 lower
+  2 front       front stones (0 to 3): a buttress 0.55-0.8 of the wall behind it, hard against
+                it; a toe 0.3-0.55 high in front of it or beside it; a second block beside it
+  3 pile        until pile stones are laid, no top has room (0.22 fh) or eleven stones stand:
+       joint    with chance bond, two neighbouring tops that differ by under 0.3 and have free
+                length: lay one stone across them (0.42-0.9 long), on the higher
+       top      else on the top that scores most: envelope there - (1 - stack) x its height;
+                in the largest free length of it, at the cut end side 6 times in 10, set back
+                by setback x (0.3-1.7) and shorter by up to 2 x setback
+       height   the room if it is under 0.5 fh, else a third to a half of it, and all of it if
+                less than 0.22 would be left
   4 shape       each stone finds which of its top edges are exposed, then
-       exposed edge: a wide bevel; one edge in four a chamfer of up to 0.25 fh, on the
-                     front or (a shoulder cut) on a side; under a carried stone and
-                     against a neighbour: nearly sharp, so joints stay creases
+       exposed edge: a wide bevel; one stone in three a chamfer of up to 0.3 fh on a side edge
+                     (a shoulder cut); under a carried stone and against a neighbour: nearly
+                     sharp, so joints stay creases
        front stones: a top sloping along the cliff or into the wall, a battered front
-       toes:         flat, with one broad chamfer
-       tall stones:  battered only on a side that stands clear of its neighbour;
-                     one in ten a spire; some many-sided or with a prow
-       piled stones: tight on what carries them
-  5 count       if more than eleven stones came out, drop a piled stone or a column and draw again
+       others:       battered only on a side that stands clear of its neighbour; a top sloped
+                     (the dip, if any) unless it carries a stone; some many-sided
+  5 count       laying stops at eleven stones
 
 stone(box, numbers):
-  the surface of a 9 × 9 × 9 lattice (386 points), three steps round each edge;
+  the surface of a 9 x 9 x 9 lattice (386 points), three steps round each edge;
   every point pushed out to a true rounded box: radius 0.07 fh on top and upright edges,
   0.04 under a resting stone (so a bed joint is a groove), 0.02 at a ground stone's foot;
   broad faces swell 3.5 percent; shoulder and corner cuts are planes applied softly
@@ -84,12 +73,11 @@ fuse(stones):
     upright joint: each stone sideways by its edge radius + 0.01 (about 0.08 fh)
     bed: the upper stone downward by the two edge radii + 0.01 (about 0.12 fh)
   the stones then simply overlap; no material is added, none is cut, no boolean is needed
-carried stones: a stone that carries another keeps a flat top (the slope its plateau shares)
-bear(stones):  (a guard when the pile is made, lowest stone first)
+bear(stones):  (lowest stone first)
   for a stone off the ground, find the samples of its underside with no stone top within
     0.01 fh below; for each, the drop to the stone mass below (or open air)
   d = the drop that 3 in 4 of those samples are within, + 0.015 (rests 0.015 into the stone)
   if d <= 0.25 fh: build the stone taller by d (top stays, bottom moves down); else leave it</pre></div>
-<div class="words"><p><span class="ev p">Proposed</span> The back mass has three families, and the generator's kinds are presets over their parameters (drawn in the reference mix of 22 : 10 : 10 : 7 : 3 for pillars, blocks, leaners, courses, gates). <b>Columns</b> (pillars, plateau walls, gates): columns under the envelope with a plateau, a cleft, an <b>opening</b> (a gate is columns with a share of the length left open under a lintel; 0 is none) and a <b>tilt</b> (every column leaning toward the cut end, degrees). <b>Tiers</b> (blocks, courses): tiers each shorter and set back, joints staggered. <b>Beds</b> (dipping beds): thick beds on a dip. Leaning slabs keep their own rule (graded slabs with an end stone); the tilt carries a pillar pile toward them.</p>
+<div class="words"><p><span class="ev p">Proposed</span> There are three families, which are regions of the numbers and not different code. <b>Columns</b> (25 in 52): base 0.4 to 0.95; with a small step and a shared dip a plateau wall, with an opening a gate. <b>Tiers</b> (17): base 0.3 to 0.7, the lower the base the deeper and the more set back: courses at one end, blocks at the other. <b>Slabs</b> (10): a lean (fins) or a dip (beds). The generator page's picker offers these three. The seven kinds of the sheets are what a draw reads as, and <code>lookOf</code> names them.</p>
 <p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 20 to 25 ms (it was about 0.2 s before the picture code reused the renderer size, the plate, the figure and the materials), with the grown stones or without.</p></div></div>
 </section>
