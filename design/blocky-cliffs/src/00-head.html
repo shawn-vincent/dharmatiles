@@ -155,3 +155,22 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 .answer ol{padding-left:1.2em}.answer li{font-size:14.5px}
 @media (max-width:520px){.answer{padding:14px}}</style>
 <style>.redrawn img{opacity:0}.redrawn .tr .o{fill:#b9bcc2;stroke:#3c4048;stroke-width:1.4}.redrawn .tr .t{fill:#d6d9de;fill-opacity:1;stroke:#3c4048;stroke-width:1}.redrawn .tr.on .o{fill:var(--a-out);fill-opacity:1}</style>
+<style>
+.jn polyline{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.jn.op polyline{stroke:var(--a-gap);stroke-width:2.4}
+.jn.op polyline.w{stroke-dasharray:5 4;stroke-width:1.8}
+.jn.dy polyline{stroke:var(--a-ax);stroke-width:3.2}
+.jn.dy polyline.w{stroke-dasharray:5 4;stroke-width:2.4}
+.jn.dy polyline.f{stroke:var(--a-top);stroke-width:3.2;stroke-dasharray:1 5}
+.jn .end{fill:var(--panel);stroke:var(--a-top);stroke-width:2;vector-effect:non-scaling-stroke}
+.jn.on polyline{stroke-width:5.5}
+#jn-table tr.on td{background:var(--accent-soft)}
+#jn-grid .cell.sel{outline:3px solid var(--accent);outline-offset:-3px}
+#jn-grid .cell:focus-visible{outline:3px solid var(--fg);outline-offset:-3px}
+#jn-grid .jn polyline{stroke-width:1.8}
+.jcloses{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;align-items:start}
+.jclose .pair{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-items:start}
+.jclose .jstrip{display:block;width:100%;height:34px}
+.jclose .mut{color:var(--muted)}
+.rule table{font-size:13px}
+</style>

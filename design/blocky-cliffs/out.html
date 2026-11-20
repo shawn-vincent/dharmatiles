@@ -155,6 +155,25 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 .answer ol{padding-left:1.2em}.answer li{font-size:14.5px}
 @media (max-width:520px){.answer{padding:14px}}</style>
 <style>.redrawn img{opacity:0}.redrawn .tr .o{fill:#b9bcc2;stroke:#3c4048;stroke-width:1.4}.redrawn .tr .t{fill:#d6d9de;fill-opacity:1;stroke:#3c4048;stroke-width:1}.redrawn .tr.on .o{fill:var(--a-out);fill-opacity:1}</style>
+<style>
+.jn polyline{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.jn.op polyline{stroke:var(--a-gap);stroke-width:2.4}
+.jn.op polyline.w{stroke-dasharray:5 4;stroke-width:1.8}
+.jn.dy polyline{stroke:var(--a-ax);stroke-width:3.2}
+.jn.dy polyline.w{stroke-dasharray:5 4;stroke-width:2.4}
+.jn.dy polyline.f{stroke:var(--a-top);stroke-width:3.2;stroke-dasharray:1 5}
+.jn .end{fill:var(--panel);stroke:var(--a-top);stroke-width:2;vector-effect:non-scaling-stroke}
+.jn.on polyline{stroke-width:5.5}
+#jn-table tr.on td{background:var(--accent-soft)}
+#jn-grid .cell.sel{outline:3px solid var(--accent);outline-offset:-3px}
+#jn-grid .cell:focus-visible{outline:3px solid var(--fg);outline-offset:-3px}
+#jn-grid .jn polyline{stroke-width:1.8}
+.jcloses{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;align-items:start}
+.jclose .pair{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-items:start}
+.jclose .jstrip{display:block;width:100%;height:34px}
+.jclose .mut{color:var(--muted)}
+.rule table{font-size:13px}
+</style>
 
 <main>
 <div class="intro">
@@ -194,11 +213,11 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <li><b>One stone, shaped by its place.</b> A rounded box: every edge and corner rounded by about 0.07 figure heights whatever the stone's size, broad faces slightly swollen, one near-flat top. Under a resting stone the rounding is smaller, so every bed joint reads as a groove. Front stones are wedges; tall ones narrow upward. Slab, block, pillar, leaner, cap and toe are this stone at different proportions and places.</li>
 <li><b>A pile in three parts.</b> A back mass along the back edge (pillars, tiers of blocks, a stair of courses, leaning slabs, dipping beds, or a gate). A front cluster against it in ranks, each rank 0.55 to 0.8 as tall as the one behind: a toe, a buttress, sometimes a main pillar. And the top of the wall is stones of its own: an upper block as wide as what carries it, a block across a joint, a pillar split by a level joint. A third of all stones rest on others. Four to eleven stones as traced, nine in ten over a twentieth of the whole.</li>
 <li><b>Two things every stone reads.</b> An envelope that gives its height: highest near the back corner by the cut end (about 1.75 figure heights), lower toward the front and, by anything from a little to three quarters, toward the far end. And a grain: every stone upright, or one set of parallel leaning slabs (15 to 25 degrees) or dipping beds (20 to 32) standing beside upright stones.</li>
-<li><b>Relations between neighbours.</b> Joints are closed, but for a rare cleft. Tops step by 0.12 figure heights or more, except on a plateau, where a run of two to four neighbours shares one top plane (about one pair in five). The lower stone usually stands in front (83 percent). Piled stones sit flush with the face of what carries them, and half of them bear on two; an upper block may stand forward of a set-back wall by up to 0.38.</li>
+<li><b>Relations between neighbours.</b> Joints are closed, but for a rare cleft, and nine in ten show a line from end to end. One in ten is <b>fused</b> along part of its length: the line fades out, usually toward the foot, over about half the contact, and the two stones share one surface beyond it. Upright joints at the front and the far end fuse most; the bed under a resting stone almost never does (chapter 8). Tops step by 0.12 figure heights or more, except on a plateau, where a run of two to four neighbours shares one top plane (about one pair in five). The lower stone usually stands in front (83 percent). Piled stones sit flush with the face of what carries them, and half of them bear on two; an upper block may stand forward of a set-back wall by up to 0.38.</li>
 <li><b>Chance in a fixed order.</b> Class, envelope, lean and bevel are drawn once for the formation; widths are drawn per stone and are unequal, the widest typically 2.5 times the narrowest; heights and steps are not drawn but follow from the envelope and the rules; corners move 2 percent.</li>
 </ol>
 <p>This set makes the common forms. It does not make two that each appear once: J's niche and K's shelter. And everything about depth rests on one camera angle.</p>
-<p>About twenty numbers and a seed. Chapter 11 states the grammar, chapter 13 runs it and measures its output against the traces on sizes and on relations, chapter 14 lists every range with how sure it is.</p></div>
+<p>About twenty numbers and a seed. Chapter 12 states the grammar, chapter 14 runs it and measures its output against the traces on sizes and on relations, chapter 15 lists every range with how sure it is.</p></div>
 <div class="plates"><div class="row c3" id="hero"></div><figcaption>Above: references B, E and P. Below: three formations drawn by the rules, as plain forms.</figcaption></div></div>
 </section>
 
@@ -229,7 +248,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <div class="scroll"><table id="scale-table"></table></div></div></div>
 
 <div class="sec full"><div class="words"><h3>Five kinds of formation</h3>
-<p><span class="ev e">Estimated</span> Sorted by eye into five classes by what the big joints do. The classes are names for regions of one family, not separate designs: chapter 9 shows what they share, and the scatter below shows they run into each other.</p></div>
+<p><span class="ev e">Estimated</span> Sorted by eye into five classes by what the big joints do. The classes are names for regions of one family, not separate designs: chapter 10 shows what they share, and the scatter below shows they run into each other.</p></div>
 <div class="plates"><div id="tax"></div>
 <div class="two">
   <figure><div class="plate pad"><div id="tax-grain"></div><div id="tax-legend" style="padding-top:6px"></div></div><figcaption><span class="ev m">Measured</span> Each formation's grain: the direction its stones' long axes share (0° upright, 90° level), against how strongly they share it (1 = all the same). Pillars sit upright and agree; courses lie level and agree; blocks have no grain to speak of. Shape of mark: the class given by eye.</figcaption></figure>
@@ -340,7 +359,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <section class="ch" id="c4"><header><span class="n">Chapter 4</span><h2>Catalogue of stones</h2>
 <p>One primitive, six roles. A role is where a stone stands and what proportions it takes there, not a shape of its own: the scatter in chapter 5 shows the roles running into one another.</p></header>
 <div class="sec full"><div class="plates"><div id="cat"></div>
-<p class="note"><span class="ev m">Measured</span> "As seen" is face height ÷ width from the traces, 10th to 90th percentile, with the number of stones. <span class="ev p">Proposed</span> Sizes in fh are true sizes for a generator, set so that stones drawn from them measure like the references when seen from the references' camera (chapter 13 checks this, and checks the relations between stones too). <span class="ev e">Estimated</span> Roles were given by eye while tracing; the traced examples are outlined in blue.</p></div></div>
+<p class="note"><span class="ev m">Measured</span> "As seen" is face height ÷ width from the traces, 10th to 90th percentile, with the number of stones. <span class="ev p">Proposed</span> Sizes in fh are true sizes for a generator, set so that stones drawn from them measure like the references when seen from the references' camera (chapter 14 checks this, and checks the relations between stones too). <span class="ev e">Estimated</span> Roles were given by eye while tracing; the traced examples are outlined in blue.</p></div></div>
 </section>
 
 <section class="ch" id="c5"><header><span class="n">Chapter 5</span><h2>Proportions</h2>
@@ -444,7 +463,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <li><b>Oversail.</b> An upper block standing forward of a set-back wall under it.</li>
 <li><b>Prop.</b> A leaning stone against an upright one, a wedge of space between them at the foot or the head.</li>
 </ol>
-<p>The joint itself is always the same: two bevels meeting in a shallow V. Stones touch; they never overlap into each other and stand apart only at a cleft.</p></div>
+<p>The joint itself is always the same: two bevels meeting in a shallow V. Stones touch and stand apart only at a cleft. In one contact in ten the V fades out along the joint and the two stones run together (chapter 8).</p></div>
 <div class="plates"><div class="row c3" id="n-vocab"></div></div></div>
 
 <div class="sec"><div class="words"><h3>Most neighbours step; one pair in five shares a top</h3>
@@ -484,7 +503,88 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <div class="plates"><div class="row c4" id="n-valid"></div></div></div>
 </section>
 
-<section class="ch" id="c8"><header><span class="n">Chapter 8</span><h2>Repeated arrangements</h2>
+<section class="ch" id="cj"><header><span class="n">Chapter 8</span><h2>Joints and fusion</h2>
+<p>Every contact between two stones was traced from one edge to the other, and each stretch of it called by eye: a line shows, a faint line shows, or no line shows and the surface runs on from one stone into the next. <span data-jn="n"></span> contacts in the 52 formations.</p></header>
+
+<div class="sec"><div class="words"><h3>Nine contacts in ten show a line from end to end</h3>
+<p><span class="ev m">Measured</span> Of <span data-jn="n"></span> contacts, <b><span data-jn="open"></span> (<span data-jn="openp"></span>) are open</b>: a line the whole way. <b><span data-jn="dy"></span> (<span data-jn="dyp"></span>) die</b>: <span data-jn="one"></span> at one end, <span data-jn="both"></span> at both, the line starting and stopping inside a face. <b><span data-jn="fused"></span> has no line at all</b> and only a waist in the outline to say there are two stones. By length, <span data-jn="mergedlen"></span> of all contact shows no line.</p>
+<p>Fusion is real, and it is the minority. <span data-jn="cells"></span> of the 52 formations hold at least one contact that is not open, most of them exactly one; eighteen hold none.</p>
+<p><span class="ev e">Estimated</span> How sure. Leaving out the calls marked low, <span data-jn="suredy"></span> of <span data-jn="sure"></span> are not open (<span data-jn="surep"></span>): the true share lies between that and <span data-jn="dyp"></span>. A line here is what the light shows: a groove, or a crease where two planes meet. How deep it is cannot be read, and <span data-jn="faintopen"></span> of the open joints are faint along part of their length.</p>
+<p><span class="ev m">Measured</span> A second opinion from the picture itself: the darkness of the line was measured along every traced contact. It agrees with the eye on <span data-jn="agree"></span> of contacts. It finds a line on <span data-jn="eyedy-myes"></span> the eye called dying (it follows any edge within 3 percent of the cell, a notch or a shadow among them) and loses the line on <span data-jn="eyeopen-mno"></span> the eye called open.</p></div>
+<div class="plates"><figure><div class="plate pad"><div id="jn-bar"></div></div><figcaption><span class="ev m">Measured</span> All <span data-jn="n"></span> contacts by state.</figcaption></figure>
+<div id="jn-legend"></div>
+<p class="note"><span class="ev m">Measured</span> What cannot be counted: two stones merged so fully that neither a line nor the outline shows them. The tracing has <span data-jn="inner"></span> cracks that lie inside one traced mass, so a mass is often two stones; where a mass shows no crack it was counted as one stone. The count of fused contacts is a floor.</p></div></div>
+
+<div class="sec full"><div class="words"><h3>Look at any formation's joints</h3>
+<p>Pick a sheet, then a cell. Point at a joint or a row.</p></div>
+<div class="plates">
+  <div class="pills" id="jn-sheet" role="group" aria-label="Sheet"></div>
+  <div class="insp">
+    <figure><div id="jn-big"></div><figcaption id="jn-note"></figcaption></figure>
+    <div class="scroll"><table id="jn-table"></table></div>
+  </div>
+  <div class="row" id="jn-grid" style="grid-template-columns:repeat(auto-fill,minmax(104px,1fr))"></div>
+</div></div>
+
+<div class="sec"><div class="words"><h3>Where joints die</h3>
+<p><span class="ev e">Estimated</span> Four habits account for nearly all of them.</p>
+<ol>
+<li><b>Two pillars, one foot.</b> A groove runs down from a step in the skyline, softens at a third to a half of the height, often at a dimple or a notch, and below that the two pillars are one face to the plate. S1, S2, S4, S6, and more faintly T3, T12, F, L, P.</li>
+<li><b>A crack that stops in a face.</b> A line from the head of a stone that runs a third of the way down and ends: T8, T12, C. Or a short groove with a notch in the middle of a broad face, joined to nothing: T6, T10, T13, T17.</li>
+<li><b>A bed that shows at the free edge only.</b> A level joint is a notch at the outer edge of a pillar or block and fades inward: S5, S6, S10, S12, T15.</li>
+<li><b>Round the corner.</b> E's stair is crisp along the front; on the cut end its two lower courses are one face.</li>
+</ol>
+<p><span class="ev e">Estimated</span> Cell by cell, where a reading is easy to get wrong. B, H and M: the joints between the front pillars reach the plate; in B they thin to a hairline over the last third, in H and M they are plain to the foot. F and L: the cracks from the skyline run down to the top of a lower stone standing in front, which hides the rest; they are not seen to die. I: every bed is open. D: the far-end block and the slab on it share a top surface, with a faint line down the front only (low confidence). O, S9 and S11: the beds under the upper blocks are open and in shadow. P, N and S14: the leaning slabs are open as far as they show; in P it is the joint between the two front blocks that fades toward the foot.</p></div>
+<div class="plates"><div class="row c4" id="jn-plates"></div><figcaption><span class="ev e">Estimated</span> Twelve formations with a joint that dies. A dot marks where the line ends.</figcaption>
+<div class="row c4" id="jn-open"></div><figcaption><span class="ev e">Estimated</span> Eight where every joint is open, or all but one: pillars (B, M), upper blocks and gates (O, S9, K), courses (T7, T14), dipping beds (S14).</figcaption></div></div>
+
+<div class="sec full"><div class="words"><h3>Close up</h3>
+<p><span class="ev m">Measured</span> Each pair is one crop, plain and with its joint drawn. The bars under it are the measured strength of the line along the contact, first end to last; under the dashed rule no line is taken to show.</p></div>
+<div class="plates"><div id="jn-close" class="jcloses"></div></div></div>
+
+<div class="sec full"><div class="words"><h3>By kind, by class, by place</h3>
+<p><span class="ev m">Measured</span> Upright joints and beds between courses die five times as often as the bed under a resting stone or the contact of a front stone with what stands behind it. Place matters as much as kind: in the far third of a formation one contact in four is not open, against one in fifteen elsewhere, and among front upright joints at the far end it is about one in two. Front joints die three times as often as back ones. The class of formation matters little. The sheets differ: S1–S16 and A–P are softer than T1–T20.</p></div>
+<div class="plates"><div class="scroll"><table id="jn-kind"></table></div><div class="scroll"><table id="jn-pos"></table></div><div class="scroll"><table id="jn-class"></table></div><div class="scroll"><table id="jn-sheetb"></table></div>
+<p class="note"><span class="ev m">Measured</span> Front and back for A–P were called by eye; for the other two sheets a contact is front when it reaches the plate or lies in the lowest two fifths of the formation's height. Thirds of length and height are of the formation's outline as seen. "Other" is mostly a toe or a front block against the stone behind it.</p></div></div>
+
+<div class="sec"><div class="words"><h3>How far a dying line runs, and how it ends</h3>
+<p><span class="ev m">Measured</span> A joint that dies shows a line on about <b>half</b> its contact (usually 0.3 to 0.75) and none on 0.13 to 0.73 fh, typically 0.37. These are long contacts: 0.87 fh against 0.52 for an open joint. Short joints do not die.</p>
+<p><span class="ev m">Measured</span> The line is lost toward the foot in half of them and part way across a face in two fifths; the top, the back and the cut end share the rest. Six in ten fade gradually, the line faint for about a quarter of a figure height before it is gone; four in ten stop short, often in a notch. Where the line is gone, the outline still shows two stones in half: a step in the skyline, a waist, or a change of plane. In the other half it reads as a crack in one stone.</p>
+<p><span class="ev m">Measured</span> Open joints weaken downward too. Of <span data-jn="g-n"></span> upright joints that reach the plate, <span data-jn="g-open"></span> are open, and <span data-jn="g-faint"></span> of those are faint in their last stretch. The measured line in the lowest fifth is <b><span data-jn="g-ratio"></span></b> as strong as in the top fifth.</p></div>
+<div class="plates"><div class="two">
+<figure><div class="plate pad"><div id="jn-shown"></div></div><figcaption><span class="ev m">Measured</span> Joints that die: the share of the contact on which a line shows. The band is the proposed range.</figcaption></figure>
+<figure><div class="plate pad"><div id="jn-down"></div></div><figcaption><span class="ev m">Measured</span> Mean strength of the line down upright joints that reach the plate. In the tinted band no line shows.</figcaption></figure></div>
+<div class="two"><figure><div class="plate pad"><div id="jn-dies"></div></div><figcaption><span class="ev e">Estimated</span> Toward which end the line is lost.</figcaption></figure>
+<figure><div class="plate pad"><div id="jn-fade"></div></div><figcaption><span class="ev e">Estimated</span> How the line ends, and what the outline shows beyond it.</figcaption></figure></div>
+<div class="scroll"><table id="jn-lens"></table></div></div></div>
+
+<div class="sec"><div class="words"><h3>The rule for a generator</h3>
+<p><span class="ev p">Proposed</span> Each contact gets a <b>fusion amount</b>: the share of its length with no groove, 0 for an open joint.</p>
+<div class="rule"><h3>1 · Which contacts fuse</h3>
+<p>The chance that a contact fuses at all, before the two factors below:</p>
+<table><tr><th>Contact</th><th class="num">Front</th><th class="num">Back</th></tr>
+<tr><td>Upright joint between neighbours (pillars, blocks, leaners)</td><td class="num">0.20</td><td class="num">0.07</td></tr>
+<tr><td>Bed between courses, or across a pillar</td><td class="num">0.30</td><td class="num">0.04</td></tr>
+<tr><td>Bed under a resting stone</td><td class="num">0.03</td><td class="num">0.03</td></tr>
+<tr><td>Front stone or toe against what stands behind</td><td class="num">0.02</td><td class="num">–</td></tr></table>
+<p>Times <b>2</b> in the far third of the formation's length, times <b>0.7</b> elsewhere. Times a softness drawn once for the formation, <b>0.5 to 1.5</b>. A contact shorter than 0.4 fh does not fuse.</p></div>
+<div class="rule"><h3>2 · How much, and where</h3>
+<p>A fusing contact has no groove on <b>0.3 to 0.7</b> of its length, evenly drawn. On an upright joint that stretch is at the foot in six of ten, in the middle or lower part of the face (the groove stopping short of a junction) in three, at the top in one. On a bed the groove stays at the free outer edge and the stretch with none is inward, or round the corner on the cut end.</p></div>
+<div class="rule"><h3>3 · How the groove ends</h3>
+<p>Six in ten: the groove's depth falls evenly to nothing over <b>0.15 to 0.5 fh</b> (typically 0.25). Four in ten: it holds its depth and ends within 0.05 fh in a notch about twice the groove's width. Beyond the end, one draw in two keeps the two stones' tops apart, so the outline still steps; the other sets them on one plane.</p></div>
+<div class="rule"><h3>4 · What stays open</h3>
+<p>Every bed under a resting stone, its whole length. Every contact between a front stone and the stone behind it. Clefts. Back joints by the cut end. An open upright joint that reaches the plate still tapers: full depth over its upper two thirds, falling to <b>0.5 to 0.8</b> of it at the foot, and to a hairline in three of ten.</p></div>
+<div class="rule"><h3>5 · No line at all</h3>
+<p>Seen once in <span data-jn="n"></span>. At most one contact in a formation, in one formation in ten, and only with a waist left in the outline.</p></div>
+<p><span class="ev p">Proposed</span> By these numbers a formation of nine contacts has one that fuses, about one time in two a second, and about a twentieth of all its joint length carries no groove, as in the references.</p></div>
+<div class="plates"><figure><div class="plate pad"><div id="jn-print"></div></div><figcaption><span class="ev p">Proposed</span> A section through a bed joint. Left: the lip and the slot of two rounded stones stacked. Right: the same two fused into one body, the joint kept as a shallow V.</figcaption></figure>
+<div class="words"><h3>What this does for printing</h3>
+<p><span class="ev p">Proposed</span> A rounded stone set on another leaves two things at every level joint. The rounded lower edge of the upper stone is a <b>lip</b>: a strip of surface that faces down, the lowest part of it nearly level, with nothing under it. And between that lip and the rounded top edge of the lower stone is a <b>slot</b>: a narrow gap that closes to nothing at the back. A printer has to bridge the lip in mid air, and the slot is thinner than a nozzle can draw, so it prints as a ragged seam or is dropped.</p>
+<p>Fusing removes both. The two stones become one body with no gap inside it, and where the joint was the surface dips in a shallow V whose upper side leans out no more than the 55 degrees an overhang is allowed. An upright joint has no lip, but the same slot: a deep, thin cut between two rounded sides. Fused, it is a V that ends on solid stone.</p>
+<p><span class="ev e">Estimated</span> The references do not fuse for this reason. Their beds under resting stones are the joints they keep most open (97 percent), several in deep shadow under a block that stands forward (S8, S11, T2). What they merge is mostly upright joints near the foot, which print well either way. So the rule above gives the look; printing needs one thing more than the references show: <b>every bed is a V groove in one body, never a gap between two</b>, however crisp it is drawn.</p></div></div></div>
+</section>
+
+<section class="ch" id="c8"><header><span class="n">Chapter 9</span><h2>Repeated arrangements</h2>
 <p>Between one stone and the whole cliff there are a handful of small groupings that come back again and again. A formation is one foot, one body, and sometimes a head.</p></header>
 <div class="sec full"><div class="plates"><div id="motifs"></div>
 <p class="note"><span class="ev e">Estimated</span> Cells listed by eye. <span class="ev p">Proposed</span> The grey pictures are generated, one per arrangement.</p></div></div>
@@ -496,14 +596,14 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <div class="plates"><div class="scroll"><table id="combo"></table></div></div></div>
 </section>
 
-<section class="ch" id="c9"><header><span class="n">Chapter 9</span><h2>Hierarchy</h2>
+<section class="ch" id="c9"><header><span class="n">Chapter 10</span><h2>Hierarchy</h2>
 <p>Is a formation one mass cut into stones, or stones piled into a mass? Neither. The evidence fits a shallow hierarchy of three levels better than either, though one camera angle cannot prove it.</p></header>
 
 <div class="sec"><div class="words"><h3>Three explanations, tested</h3>
 <p>Each model predicts something the traces can check.</p>
 <p><b>Cut from one block.</b> Joints would run through, and the two sides of a joint would share a top. <span class="ev m">Measured</span> 21 percent of neighbours are within 0.12 fh; the rest step.</p>
 <p><b>Piled up.</b> Stones would overlap, leave holes, and any stone could be anywhere. <span class="ev m">Measured</span> The outline is 74 percent full with joints closed, and the lower stone is in front 83 percent of the time.</p>
-<p><b>Rows of columns under one surface.</b> The plate's back half is divided once into rows, each row once into stones; each stone rises from the ground to its own height near a shared envelope; a tall one may be cut across by level joints, and a few stones rest across two. This predicts tight packing, mostly stepped tops, low stones in front, and a skyline that climbs. All four are measured. It does not by itself predict plateaus or resting stones: those are added productions (chapter 11).</p></div>
+<p><b>Rows of columns under one surface.</b> The plate's back half is divided once into rows, each row once into stones; each stone rises from the ground to its own height near a shared envelope; a tall one may be cut across by level joints, and a few stones rest across two. This predicts tight packing, mostly stepped tops, low stones in front, and a skyline that climbs. All four are measured. It does not by itself predict plateaus or resting stones: those are added productions (chapter 12).</p></div>
 <div class="plates"><div class="scroll"><table>
 <tr><th>What the sheets show</th><th>Cut from one block</th><th>Piled up</th><th>Rows of columns</th></tr>
 <tr><td>Joints closed, no holes</td><td class="yes">yes</td><td class="no">no</td><td class="yes">yes</td></tr>
@@ -529,7 +629,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <div class="plates"><div class="two"><figure><div id="hier-a"></div><figcaption>Rows pulled apart toward the viewer.</figcaption></figure><figure><div id="hier-b"></div><figcaption>The same from above, not pulled apart.</figcaption></figure></div></div></div>
 </section>
 
-<section class="ch" id="c10"><header><span class="n">Chapter 10</span><h2>Randomness</h2>
+<section class="ch" id="c10"><header><span class="n">Chapter 11</span><h2>Randomness</h2>
 <p>The variation is real but narrow, and most of it is not free. A few numbers are drawn once for the whole formation and every stone inherits them; a few are drawn per stone inside tight bounds; and the relations between neighbours are not drawn at all. They are rules that the draws must then satisfy.</p></header>
 
 <div class="sec"><div class="words"><h3>Where the variation lives</h3>
@@ -571,7 +671,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <div class="plates"><div class="row c4" id="r-pairs"></div></div></div>
 </section>
 
-<section class="ch" id="c11"><header><span class="n">Chapter 11</span><h2>The grammar</h2>
+<section class="ch" id="c11"><header><span class="n">Chapter 12</span><h2>The grammar</h2>
 <p>Everything above, folded into one small set: one stone shaped by where it stands, a back mass, a front cluster, a pile on top, and two things every stone reads.</p></header>
 
 <div class="sec"><div class="words"><h3>Vocabulary and productions</h3>
@@ -627,29 +727,29 @@ Not written: Niche (J), Shelter (K). One example each.
 
 <div class="sec"><div class="words"><h3>What stays undecided</h3>
 <p><span class="ev r">Reconstructed</span> One camera angle leaves these open. The grammar takes the simpler reading of each and says so.</p>
-<ul><li><b>Is it rows at all?</b> Rows are a reading of depth. The same pictures fit two rows and a resting stone where this page reads three rows. The hierarchy of chapter 9 is the simplest account, and the pictures cannot refute it.</li>
+<ul><li><b>Is it rows at all?</b> Rows are a reading of depth. The same pictures fit two rows and a resting stone where this page reads three rows. The hierarchy of chapter 10 is the simplest account, and the pictures cannot refute it.</li>
 <li><b>The niche and the shelter.</b> J and K are single examples of forms the grammar does not make. Each could be written as a production (a slot with a chockstone; a long roof on a set-back wall), but one example fixes no range.</li>
 <li><b>How deep is a stone?</b> Depth shows only at tops. Where tops show it is 0.7 to 1.1 of the length for pillars and blocks (M, H, O). For slabs it is the tread, a third of the length or less.</li></ul></div>
 <div class="plates"><p class="note"><span class="ev e">Estimated</span> One reading has been settled against the simpler one. A stair's treads are stones lying on stones, not tall columns whose tops show: the cut ends of E and I show the bed joints, and upper treads are shorter along the cliff as well as set back.</p></div></div>
 </section>
 
-<section class="ch" id="c12"><header><span class="n">Chapter 12</span><h2>Sensitivity and the style's edges</h2>
+<section class="ch" id="c12"><header><span class="n">Chapter 13</span><h2>Sensitivity and the style's edges</h2>
 <p>One formation, one number changed at a time. Pictures left at full strength are inside the style as the four sheets show it; dimmed ones have left it, and the caption says for where.</p></header>
 <div class="sec full"><div class="words"><p><span class="ev p">Proposed</span> The base is a pillar formation of three stones along and two rows (seed 13), or a block formation in tiers where the number only matters there. Everything not named is held. The in-style ranges are judgements against the 52 references, not measurements.</p></div>
 <div class="plates"><div id="sens"></div></div></div>
 <div class="sec full"><div class="words"><h3>Which numbers the style is sensitive to</h3>
 <p><span class="ev p">Proposed</span> Ranked by how little change it takes to leave the style.</p>
-<ol><li><b>Each stone's own lean or turn.</b> A few degrees drawn per stone is enough (chapter 10). The tightest bound of all.</li>
+<ol><li><b>Each stone's own lean or turn.</b> A few degrees drawn per stone is enough (chapter 11). The tightest bound of all.</li>
 <li><b>Bevel.</b> In the style over a factor of two (0.10 to 0.22); outside it within a step either way.</li>
 <li><b>Open joints and offsets.</b> 0.06 fh of slack and the mass falls apart into posts.</li>
 <li><b>Level tops.</b> One run sharing a top is in the style; every top level reads as masonry.</li>
 <li><b>Stone count.</b> Wide: 4 to 11. Two is a monolith and twenty is a wall.</li>
 <li><b>Height, fall, front, peak.</b> Widest: the sheets themselves span most of the range. A shows that half height stays in the family, H and T12 that a wall with almost no fall does, F and L that a tall stone at the right front does.</li></ol>
-<p>The order is the grammar's order turned over: the numbers decided last and lowest (chapter 10's scales 4 and 5) are the ones with no room, and the numbers decided first have the most.</p></div></div>
+<p>The order is the grammar's order turned over: the numbers decided last and lowest (chapter 11's scales 4 and 5) are the ones with no room, and the numbers decided first have the most.</p></div></div>
 </section>
 
-<section class="ch" id="c13"><header><span class="n">Chapter 13</span><h2>A generator</h2>
-<p>The grammar of chapter 11, running. It is about 250 lines: one function for a stone, one for a formation. Fifty formations build and draw in about a third of a second. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
+<section class="ch" id="c13"><header><span class="n">Chapter 14</span><h2>A generator</h2>
+<p>The grammar of chapter 12, running. It is about 250 lines: one function for a stone, one for a formation. Fifty formations build and draw in about a third of a second. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
 
 <div class="sec"><div class="words"><h3>Make one</h3>
 <p><span class="ev p">Proposed</span> Choose a class, then change any number. Drag to turn the view; scrolling scrolls the page; pinch to zoom. The post is one figure high.</p>
@@ -729,7 +829,7 @@ stone(box, numbers):
   move each face in at the top (batter), scale, tilt the top, shear, turn</pre></div></div>
 </section>
 
-<section class="ch" id="c14"><header><span class="n">Chapter 14</span><h2>Rules, ranges, constraints</h2>
+<section class="ch" id="c14"><header><span class="n">Chapter 15</span><h2>Rules, ranges, constraints</h2>
 <p>Everything a generator needs, on one page, with how each number is known.</p></header>
 
 <div class="sec full"><div class="words"><h3>What holds, and how often</h3>
@@ -1514,6 +1614,126 @@ const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0
   pair(F({}), (() => { const f = formation({ preset: 'pillars', seed: 21, nA: 3, rows: 2 }); for (const t of f.stones) if (t.col.row.i === 0) { t.h *= 3.6; } return formMeshes(f); })(), 'Low stones in front, tall behind.', 'Every front stone tall: the rest is hidden and the stair in depth is gone.');
 }
 
+/* ---------- joints and fusion ---------- */
+{
+  const JN = await fetch('data/joints.json').then((r) => { if (!r.ok) throw new Error('data/joints.json: ' + r.status); return r.json(); });
+  const J = JN.joints, byCell = {}; for (const j of J) (byCell[j.cell] = byCell[j.cell] || []).push(j);
+  const dying = (j) => j.state === 'one' || j.state === 'both', notOpen = (j) => j.state !== 'open';
+  const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
+  const STATE = { open: 'open end to end', one: 'dies at one end', both: 'dies at both ends', fused: 'no line at all' };
+
+  /* the joints of a cell drawn over it: an open joint in the joint colour, a dying joint's line in the axis colour, the stretch with no line in the level colour, dashed */
+  const layer = (id, o = {}) => (svg) => {
+    for (const j of byCell[id] || []) {
+      if (o.only && !o.only(j)) continue;
+      const g = s('g', { 'data-joint': j.id, class: 'jn ' + (j.state === 'open' ? 'op' : 'dy') });
+      for (const p of j.parts) g.append(s('polyline', { points: pts(p.p), class: p.s }));
+      if (j.state !== 'open') for (let i = 0; i < j.parts.length - 1; i++) if ((j.parts[i].s === 'f') !== (j.parts[i + 1].s === 'f')) { const q = j.parts[i].p[j.parts[i].p.length - 1]; g.append(s('circle', { cx: q[0], cy: q[1], r: o.dot || 1.3, class: 'end' })); }
+      g.append(s('title', { text: `${j.id}: ${j.kind}, ${STATE[j.state]}` })); svg.append(g);
+    }
+  };
+  const plate = (id, o = {}) => cellView(id, Object.assign({ stones: false, extra: layer(id, o) }, o));
+  $('#jn-legend').append(h('div', { class: 'legend' },
+    [['op', 'v', 'a line from end to end'], ['op', 'w', 'the same, faint'], ['dy', 'v', 'the line of a joint that dies'], ['dy', 'f', 'no line: one surface']].map(([a, b, t]) => h('span', {}, s('svg', { width: 34, height: 12, viewBox: '0 0 34 12' }, s('g', { class: 'jn ' + a }, s('polyline', { points: '2,6 32,6', class: b }))), t))));
+
+  /* headline numbers */
+  const n = J.length, cnt = (f) => J.filter(f).length, set = (k, v) => { for (const e of document.querySelectorAll(`[data-jn="${k}"]`)) e.textContent = v; };
+  const len = (f) => J.filter(f).reduce((a, j) => a + j.len, 0), merged = J.reduce((a, j) => a + j.len * (1 - j.shown), 0);
+  set('n', n); set('open', cnt((j) => j.state === 'open')); set('one', cnt((j) => j.state === 'one')); set('both', cnt((j) => j.state === 'both')); set('fused', cnt((j) => j.state === 'fused'));
+  set('openp', pct(cnt((j) => j.state === 'open'), n)); set('dyp', pct(cnt(dying), n)); set('dy', cnt(dying));
+  set('cells', new Set(J.filter(notOpen).map((j) => j.cell)).size); set('mergedlen', pct(merged, len(() => true)));
+  set('sure', cnt((j) => j.conf !== 'low')); set('suredy', cnt((j) => j.conf !== 'low' && notOpen(j))); set('surep', pct(cnt((j) => j.conf !== 'low' && notOpen(j)), cnt((j) => j.conf !== 'low')));
+  set('inner', cnt((j) => /[a-z]$/.test(j.a))); set('faintopen', pct(cnt((j) => j.state === 'open' && j.faint > 0), cnt((j) => j.state === 'open')));
+  const agree = cnt((j) => (j.state === 'open') === (j.mshown >= .85)); set('agree', pct(agree, n)); set('eyeopen-mno', cnt((j) => j.state === 'open' && j.mshown < .85)); set('eyedy-myes', cnt((j) => j.state !== 'open' && j.mshown >= .85));
+  chart('jn-bar', 96, (svg, w) => { const x0 = 10, x1 = w - 10; let x = x0;
+    for (const [k, col, lab] of [['open', 'var(--a-gap)', 'open'], ['one', 'var(--a-ax)', 'one end'], ['both', 'var(--a-ax)', 'both'], ['fused', 'var(--a-top)', 'fused']]) { const c = cnt((j) => j.state === k), wd = (x1 - x0) * c / n; svg.append(s('rect', { x, y: 30, width: Math.max(1, wd - 1), height: 30, fill: col, 'fill-opacity': k === 'both' ? .55 : 1 })); if (wd > 46) svg.append(s('text', { x: x + 4, y: 22, 'font-size': 12, text: `${lab} ${c}` })); x += wd; }
+    svg.append(s('text', { x: x1, y: 78, 'text-anchor': 'end', 'font-size': 12, class: 'mut', text: `dies at both ends ${cnt((j) => j.state === 'both')} · no line at all ${cnt((j) => j.state === 'fused')}` })); });
+
+  /* look at any cell */
+  const sheets = [['A–P', AP], ['T1–T20', TT], ['S1–S16', SS]]; let sheet = 2, cur = 'S1';
+  const big = $('#jn-big'), table = $('#jn-table'), grid = $('#jn-grid'), note = $('#jn-note');
+  const hi = (jid) => { for (const g of big.querySelectorAll('.jn')) g.classList.toggle('on', g.dataset.joint === jid); for (const r of table.querySelectorAll('tr[data-joint]')) r.classList.toggle('on', r.dataset.joint === jid); };
+  const show = (id) => { cur = id; const js = byCell[id] || [];
+    big.replaceChildren(plate(id, { dot: 1.1 })); for (const g of big.querySelectorAll('.jn')) g.addEventListener('pointerenter', () => hi(g.dataset.joint));
+    note.innerHTML = `<b>${id}</b> · ${CLASS_NAME[CL[id].class]} · ${js.length} contacts, ${js.filter(notOpen).length} not open end to end.`;
+    table.replaceChildren(h('tr', {}, ['Between', 'Kind', 'State', 'Line shows', 'Dies at', 'Fades', 'Two-stone outline', 'Sure', 'Note'].map((t, i) => h('th', { class: i === 3 ? 'num' : null, text: t }))),
+      ...js.map((j) => h('tr', { 'data-joint': j.id, onpointerenter: () => hi(j.id) }, h('td', { text: j.a.slice(id.length) + ' | ' + j.b.slice(id.length) }), h('td', { text: j.kind }), h('td', { class: j.state === 'open' ? 'no' : 'yes', text: STATE[j.state] }), h('td', { class: 'num', text: Math.round(j.shown * 100) + '%' }), h('td', { text: j.dies || '' }), h('td', { text: j.fade || '' }), h('td', { text: j.two == null ? '' : j.two ? 'yes' : 'no' }), h('td', { text: j.conf }), h('td', { text: j.note }))));
+    for (const d of grid.children) d.classList.toggle('sel', d.dataset.cell === id); };
+  const fill = () => { const names = sheets[sheet][1]; grid.replaceChildren(...names.map((id) => plate(id, { onpick: show, dot: 1.6 }))); if (!names.includes(cur)) cur = names[0]; show(cur); };
+  const pills = $('#jn-sheet'); sheets.forEach(([name], i) => pills.append(h('button', { type: 'button', 'aria-pressed': i === sheet, text: name, onclick: (e) => { sheet = i; for (const b of pills.children) b.setAttribute('aria-pressed', b === e.target); fill(); } }))); fill();
+
+  /* plates: the cells where joints die */
+  for (const id of ['S1', 'S2', 'S4', 'S6', 'T8', 'T3', 'T12', 'E', 'C', 'S5', 'S12', 'S15']) $('#jn-plates').append(plate(id, { dot: 1.5 }));
+  for (const id of ['B', 'M', 'O', 'S9', 'T7', 'T14', 'S14', 'K']) $('#jn-open').append(plate(id, { dot: 1.5 }));
+
+  /* close-ups: the crop plain, the same crop with the joint drawn, and the measured strength of the line along the contact */
+  const zoom = (id, box, draw) => { const [W, H] = CROPS[TR[id].img].size, [x0, y0, x1, y1] = box;
+    const svg = s('svg', { viewBox: `${x0} ${y0} ${x1 - x0} ${y1 - y0}`, preserveAspectRatio: 'none', style: `display:block;width:100%;aspect-ratio:${(x1 - x0) * W}/${(y1 - y0) * H}` }, s('image', { href: imgOf(id), x: 0, y: 0, width: 100, height: 100, preserveAspectRatio: 'none' }));
+    if (draw) draw(svg); return h('div', { class: 'cell stage' }, svg); };
+  const strip = (j) => { const w = 16 * 9, svg = s('svg', { viewBox: `0 0 ${w} 34`, class: 'jstrip', role: 'img', 'aria-label': 'Measured line strength along the contact' }); const k = (v) => Math.min(v, 6) / 6 * 28;
+    j.prof.forEach((v, i) => svg.append(s('rect', { x: i * 9 + 1, y: 32 - k(v), width: 7, height: Math.max(.6, k(v)), fill: v >= 1.2 ? 'var(--a-ax)' : 'var(--a-top)' })));
+    svg.append(s('line', { x1: 0, x2: w, y1: 32 - k(1.2), y2: 32 - k(1.2), stroke: 'var(--fg)', 'stroke-width': .6, 'stroke-dasharray': '3 2' })); return svg; };
+  const close = [['S1', 'S1-j2', [38, 10, 58, 82], 'Two pillars, one foot. The groove runs from the skyline to a dimple at half height; below it there is one face to the plate.'],
+    ['S4', 'S4-j2', [40, 10, 60, 82], 'A crooked crack from the skyline to a notch under shoulder height, then nothing.'],
+    ['T8', 'T8-j3', [50, 30, 70, 84], 'A crack from the head of a slab that runs a third of the way down its face.'],
+    ['T3', 'T3-j7', [60, 12, 80, 86], 'A crack from the skyline, fainter down the slab, gone before the foot.'],
+    ['T12', 'T12-j3', [62, 8, 80, 52], 'A skyline crack that fades out a third of the way down a block.'],
+    ['S11', 'S11-j9', [54, 54, 78, 90], 'Between two front blocks: a crease that widens, softens and is gone before the plate.'],
+    ['E', 'E-j1', [56, 42, 98, 76], 'Crisp along the front of the stair. Round the corner, on the cut end, the two courses are one face.'],
+    ['S12', 'S12-j4', [40, 30, 70, 50], 'A bed that is crisp by the pillar and gone toward the far end.'],
+    ['S15', 'S15-j1', [60, 2, 92, 28], 'The one contact with no line at all: the top block runs into the slab behind it through a rounded neck.']];
+  for (const [id, jid, box, text] of close) { const j = J.find((q) => q.id === jid);
+    $('#jn-close').append(h('figure', { class: 'jclose' }, h('div', { class: 'pair' }, zoom(id, box), zoom(id, box, (svg) => layer(id, { only: (q) => q.id === jid, dot: .7 })(svg))), strip(j),
+      h('figcaption', { html: `<b>${id}</b> ${text} <span class="mut">Line shows on ${Math.round(j.shown * 100)}% of the contact.</span>` }))); }
+
+  /* tables of measures */
+  const tab = (target, head, groups) => { const t = $(target);
+    t.append(h('tr', {}, [head, 'Contacts', 'Open end to end', 'Dies at one end', 'Dies at both', 'No line', 'Not open'].map((x, i) => h('th', { class: i ? 'num' : null, text: x }))),
+      ...groups.map(([name, f]) => { const g = J.filter(f), c = (k) => g.filter((j) => j.state === k).length; return h('tr', {}, h('td', { html: name }), h('td', { class: 'num', text: g.length }), h('td', { class: 'num', text: pct(c('open'), g.length) }), h('td', { class: 'num', text: c('one') }), h('td', { class: 'num', text: c('both') }), h('td', { class: 'num', text: c('fused') }), h('td', { class: 'num', html: `<b>${pct(g.filter(notOpen).length, g.length)}</b>` })); })); };
+  const KN = ['column–column', 'course–course', 'leaner–leaner', 'cap–support', 'other'], KL = { 'column–column': 'Column–column: an upright joint between neighbours', 'course–course': 'Course–course: a bed between courses, or across a pillar', 'leaner–leaner': 'Leaner–leaner', 'cap–support': 'Cap–support: the bed under a resting stone', other: 'Other: a front stone or toe against what stands behind' };
+  tab('#jn-kind', 'By kind', KN.map((k) => [KL[k], (j) => j.kind === k]));
+  tab('#jn-class', 'By class of formation', CLASSES.map((k) => [CLASS_NAME[k], (j) => CL[j.cell].class === k]));
+  const sh = (j) => TR[j.cell].sheet;
+  tab('#jn-pos', 'By place on the formation', [['Front: reaches the plate, or in the lowest two fifths', (j) => j.rank !== 'back'], ['Back: higher up', (j) => j.rank === 'back'],
+    ['Far third of the length', (j) => j.along <= 1 / 3], ['Middle third', (j) => j.along > 1 / 3 && j.along <= 2 / 3], ['Third by the cut end', (j) => j.along > 2 / 3],
+    ['Lowest third of the height', (j) => j.up <= 1 / 3], ['Middle third', (j) => j.up > 1 / 3 && j.up <= 2 / 3], ['Top third', (j) => j.up > 2 / 3],
+    ['Column–column, front, far third', (j) => j.kind === 'column–column' && j.rank !== 'back' && j.along <= 1 / 3], ['Column–column, back, by the cut end', (j) => j.kind === 'column–column' && j.rank === 'back' && j.along > 2 / 3]]);
+  tab('#jn-sheetb', 'By sheet and by how it was found', [['A–P', (j) => sh(j) === 'smooth'], ['T1–T20', (j) => sh(j) === 'twenty'], ['S1–S16', (j) => sh(j) === 'sixteen'],
+    ['Between two traced stones', (j) => !/[a-z]$/.test(j.a)], ['A crack inside one traced mass', (j) => /[a-z]$/.test(j.a)], ['Called with high or medium confidence', (j) => j.conf !== 'low'], ['Called with low confidence', (j) => j.conf === 'low']]);
+
+  /* how far a dying line runs, where it dies, how it fades */
+  const D = J.filter(dying);
+  hist('jn-shown', D.map((j) => j.shown), { x: [0, 1], bins: 10, xl: 'share of the contact on which a line shows', yl: 'joints', h: 210, fill: 'var(--a-ax)', prop: [.3, .75] });
+  const count = (target, rows, total) => chart(target, rows.length * 26 + 16, (svg, w) => { const l = 150, mx = Math.max(...rows.map((r) => r[1]));
+    rows.forEach(([name, c, col], i) => { const y = 8 + i * 26; svg.append(s('text', { x: 0, y: y + 14, 'font-size': 12.5, text: name }), s('rect', { x: l, y: y + 2, width: Math.max(1, (w - l - 70) * c / mx), height: 16, fill: col || 'var(--a-ax)' }), s('text', { x: l + (w - l - 70) * c / mx + 6, y: y + 14, 'font-size': 12, class: 'mut', text: `${c} · ${pct(c, total)}` })); }); });
+  const by = (f, order) => order.map((k) => [k[1], D.filter((j) => f(j) === k[0]).length, k[2]]);
+  count('jn-dies', by((j) => j.dies, [['foot', 'toward the foot'], ['mid-face', 'part way across a face'], ['top', 'toward the top'], ['back', 'toward the back'], ['cut end', 'at the cut end']]), D.length);
+  count('jn-fade', [...by((j) => j.fade, [['gradual', 'fades gradually'], ['stops', 'stops, often in a notch']]), ...by((j) => j.two, [[true, 'outline still shows two', 'var(--a-top)'], [false, 'outline shows one', 'var(--a-top)']])], D.length);
+  statTable('jn-lens', [['Line shows, share of the contact', D.map((j) => j.shown)], ['Stretch with no line, fh', D.map((j) => j.len * (1 - j.shown))], ['Faint stretch before it, where the line fades gradually, fh', D.filter((j) => j.fade === 'gradual').map((j) => j.len * j.faint)], ['Whole contact of a joint that dies, fh', D.map((j) => j.len)], ['Whole contact of an open joint, fh', J.filter((j) => j.state === 'open').map((j) => j.len)]]);
+  /* the line's measured strength down upright joints that reach the plate */
+  const G = J.filter((j) => j.ends[1] === 'ground' && (j.kind === 'column–column' || j.kind === 'leaner–leaner')), GO = G.filter((j) => j.state === 'open');
+  set('g-n', G.length); set('g-open', GO.length); set('g-faint', GO.filter((j) => j.parts[j.parts.length - 1].s === 'w').length);
+  const mean = (g, i) => g.reduce((a, j) => a + Math.min(j.prof[i], 6), 0) / g.length; set('g-ratio', fmt((mean(GO, 13) + mean(GO, 14) + mean(GO, 15)) / (mean(GO, 0) + mean(GO, 1) + mean(GO, 2)), 2));
+  chart('jn-down', 220, (svg, w, hgt) => { const ax = axes(svg, w, hgt, { x: [0, 1], y: [0, 6], xl: 'along the joint: head at 0, the plate at 1', yl: 'line strength', xt: [0, .25, .5, .75, 1] });
+    svg.append(s('rect', { x: ax.x(0), y: ax.y(1.2), width: ax.x(1) - ax.x(0), height: ax.y(0) - ax.y(1.2), fill: 'var(--a-top)', opacity: .18 }));
+    for (const [g, col, dash] of [[GO, 'var(--a-gap)', null], [G.filter(dying), 'var(--a-ax)', null]]) svg.append(s('polyline', { points: pts(g[0].prof.map((_, i) => [ax.x((i + .5) / 16), ax.y(mean(g, i))])), fill: 'none', stroke: col, 'stroke-width': 2.5, 'stroke-dasharray': dash }));
+    svg.append(s('text', { x: ax.x(.03), y: ax.y(5.55), 'font-size': 11.5, style: 'fill:var(--a-gap)', text: `open joints (${GO.length})` }), s('text', { x: ax.x(.03), y: ax.y(.25), 'font-size': 11.5, style: 'fill:var(--a-ax)', text: `joints that die (${G.filter(dying).length})` })); });
+
+  /* printability: a section through a bed joint, stacked and fused */
+  chart('jn-print', 230, (svg, w, hgt) => { const k = Math.min(1, (w - 20) / 520), g = s('g', { transform: `translate(${(w - 520 * k) / 2} 0) scale(${k})` }); svg.append(g);
+    const rr = (x, y, wd, ht, r, a = {}) => s('rect', Object.assign({ x, y, width: wd, height: ht, rx: r, fill: 'var(--stone)', stroke: 'var(--stone3)', 'stroke-width': 1.5 }, a));
+    g.append(s('line', { x1: 0, x2: 520, y1: 196, y2: 196, stroke: 'var(--muted)' }));
+    /* stacked */
+    g.append(rr(20, 110, 200, 86, 20), rr(44, 30, 150, 80, 20));
+    g.append(s('path', { d: 'M44,90 A20,20 0 0 0 64,110', fill: 'none', stroke: 'var(--a-ax)', 'stroke-width': 4 }), s('path', { d: 'M194,90 A20,20 0 0 1 174,110', fill: 'none', stroke: 'var(--a-ax)', 'stroke-width': 4 }));
+    g.append(s('path', { d: 'M24,118 A20,20 0 0 1 40,110 L64,110 A20,20 0 0 1 44,90 L30,100 Z', fill: 'var(--a-gap)', 'fill-opacity': .35, stroke: 'var(--a-gap)', 'stroke-width': 1.2 }));
+    g.append(s('text', { x: 4, y: 84, 'font-size': 12, style: 'fill:var(--a-ax)', text: 'lip' }), s('text', { x: 0, y: 106, 'font-size': 12, style: 'fill:var(--a-gap)', text: 'slot' }), s('text', { x: 120, y: 218, 'text-anchor': 'middle', 'font-size': 12.5, text: 'Stacked: two rounded stones' }));
+    /* fused */
+    g.append(s('path', { d: 'M320,196 L300,196 L300,130 A20,20 0 0 1 320,110 L326,110 L332,102 L324,94 L324,50 A20,20 0 0 1 344,30 L454,30 A20,20 0 0 1 474,50 L474,94 L466,102 L474,110 L480,110 A20,20 0 0 1 500,130 L500,196 Z', fill: 'var(--stone)', stroke: 'var(--stone3)', 'stroke-width': 1.5 }));
+    g.append(s('path', { d: 'M326,110 L332,102 L324,94', fill: 'none', stroke: 'var(--a-top)', 'stroke-width': 3.5 }), s('path', { d: 'M474,94 L466,102 L474,110', fill: 'none', stroke: 'var(--a-top)', 'stroke-width': 3.5 }));
+    g.append(s('text', { x: 400, y: 218, 'text-anchor': 'middle', 'font-size': 12.5, text: 'Fused: one body, a shallow V where the joint was' }), s('text', { x: 286, y: 100, 'text-anchor': 'end', 'font-size': 12, style: 'fill:var(--a-top)', text: 'V groove' })); });
+}
+
 /* ---------- chapters 8 and 9 ---------- */
 {
   const F = (o) => formMeshes(formation(o)), pic = (m, o = {}) => still(m, Object.assign({ w: 260, h: 230 }, o));
@@ -1677,7 +1897,7 @@ const one = (o, opt = {}) => still([stoneMesh(Object.assign({ a: .6, d: .6, z: 0
 { const hero = $('#hero'); if (hero) { for (const id of ['B', 'E', 'P']) hero.append(cellView(id, { stones: false })); for (const [k, sd] of [['pillars', 13], ['courses', 11], ['leaners', 39]]) hero.append(still(formMeshes(formation(drawParams(sd, k))), { w: 300, h: 290, figure: [1.25, .45] })); } }
 
 {
-  const CH = [['c1', 'The four sheets'], ['c2', 'Silhouettes and mass'], ['c3', 'Anatomy of one stone'], ['c4', 'Catalogue of stones'], ['c5', 'Proportions'], ['c6', 'Faces, edges, corners'], ['c7', 'Neighbours'], ['c8', 'Repeated arrangements'], ['c9', 'Hierarchy'], ['c10', 'Randomness'], ['c11', 'The grammar'], ['c12', 'Sensitivity and the style’s edges'], ['c13', 'A generator'], ['c14', 'Rules, ranges, constraints']];
+  const CH = [['c1', 'The four sheets'], ['c2', 'Silhouettes and mass'], ['c3', 'Anatomy of one stone'], ['c4', 'Catalogue of stones'], ['c5', 'Proportions'], ['c6', 'Faces, edges, corners'], ['c7', 'Neighbours'], ['cj', 'Joints and fusion'], ['c8', 'Repeated arrangements'], ['c9', 'Hierarchy'], ['c10', 'Randomness'], ['c11', 'The grammar'], ['c12', 'Sensitivity and the style’s edges'], ['c13', 'A generator'], ['c14', 'Rules, ranges, constraints']];
   const nav = $('#chapters'), stubs = $('#stubs');
   CH.forEach(([id, name], i) => { nav.append(h('li', {}, h('a', { href: '#' + id }, h('span', { text: String(i + 1) }), name))); if (!document.getElementById(id)) stubs.append(h('section', { class: 'ch', id }, h('header', {}, h('span', { class: 'n', text: 'Chapter ' + (i + 1) }), h('h2', { text: name }), h('p', { text: 'Being measured and drawn.' })))); });
 }
