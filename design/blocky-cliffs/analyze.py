@@ -36,6 +36,17 @@ def widths(p, n=9):
         out.append(c.length)
     return out
 
+def sides(p):
+    """the stone's two sides: the outline's edges within 40 degrees of upright, left and right of its middle.
+    Returns each side's angle from upright (positive = the top is to the right), weighted by edge length, or None."""
+    c = list(p.exterior.coords); cx = p.centroid.x; acc = {'L': [0, 0], 'R': [0, 0]}
+    for (x0, y0), (x1, y1) in zip(c[:-1], c[1:]):
+        if y1 > y0: x0, y0, x1, y1 = x1, y1, x0, y0      # make the edge point up (y smaller)
+        L = math.hypot(x1 - x0, y1 - y0); a = math.degrees(math.atan2(x1 - x0, y0 - y1))
+        if L < 1e-6 or abs(a) > 40: continue
+        k = 'L' if (x0 + x1) / 2 < cx else 'R'; acc[k][0] += a * L; acc[k][1] += L
+    return [acc[k][0] / acc[k][1] if acc[k][1] > 0 else None for k in 'LR'] + [acc['L'][1], acc['R'][1]]
+
 cells = {}; stones = []; pairs = []
 for cid, c in T.items():
     W, H = CROPS[c['img']]['size']; sx, sy = W / 100, H / 100
@@ -67,7 +78,7 @@ for cid, c in T.items():
         # body height measured down the middle: the face under the top
         r = dict(id=s['id'], cell=cid, sheet=c['sheet'], kind=s['kind'], ground=(len(s['rests']) == 0), nrest=len(s['rests']),
                  w=(x1 - x0) / fh, h=(y1 - y0) / fh, hb=hb / fh, wb=(bx1 - bx0) / fh, area=p.area / fh ** 2, share=p.area / mass.area,
-                 lean=ang, elong=elong, taper=(np.mean(ws[1:3]) / max(np.mean(ws[6:8]), 1e-6)), convex=p.area / p.convex_hull.area,
+                 lean=ang, elong=elong, convex=p.area / p.convex_hull.area,
                  nv=len(s['out']), topw=None, toph=None, topshare=None,
                  cx=(p.centroid.x - mx0) / (mx1 - mx0), cy=(my1 - p.centroid.y) / (my1 - my0),
                  topy=(my1 - y0) / fh, boty=(my1 - y1) / fh, left=(x0 - mx0) / fh, right=(x1 - mx0) / fh)
@@ -77,6 +88,12 @@ for cid, c in T.items():
             # the top's dip across the picture: slope of the line through its leftmost and rightmost points
             pts = sorted(t.exterior.coords[:-1]); r['topdip'] = math.degrees(math.atan2(-(pts[-1][1] - pts[0][1]), pts[-1][0] - pts[0][0]))
         r['slender'] = r['hb'] / r['wb']
+        aL, aR, lL, lR = sides(p)
+        r['axis'] = r['lean']; r['sideL'] = aL; r['sideR'] = aR
+        # tilt: the mean of the two sides; closing: how much they close toward the top (positive = narrower above)
+        ok = aL is not None and aR is not None and min(lL, lR) > 0.25 * hb
+        r['lean'] = (aL + aR) / 2 if ok else None
+        r['close'] = (aL - aR) if ok else None
         rec.append(r); stones.append(r)
     # neighbours: stones whose visible parts share a boundary
     ids = [s['id'] for s in c['stones']]; R = {r['id']: r for r in rec}
@@ -109,7 +126,7 @@ for cid, c in T.items():
         low.append(0 if cut.is_empty else (my1 - cut.bounds[3]) / fh)
     areas = sorted((r['area'] for r in rec), reverse=True)
     # grain: the stones' long axes, weighted by area and by how long each stone is
-    wts = np.array([r['area'] * max(r['elong'] - 1, 0.05) for r in rec]); angs = np.radians([r['lean'] for r in rec])
+    wts = np.array([r['area'] * max(r['elong'] - 1, 0.05) for r in rec]); angs = np.radians([r['axis'] for r in rec])
     # axes are undirected: average on the doubled angle; 0 = upright, +-90 = level
     C = (wts * np.cos(2 * angs)).sum() / wts.sum(); S = (wts * np.sin(2 * angs)).sum() / wts.sum()
     simp = mass.simplify(0.8)
@@ -117,6 +134,7 @@ for cid, c in T.items():
                       fill=mass.area / ((mx1 - mx0) * (my1 - my0)), sky=[round(v, 3) for v in sky], low=[round(v, 3) for v in low],
                       peak=(int(np.argmax(sky)) + .5) / 48, cx=(mass.centroid.x - mx0) / (mx1 - mx0), cy=(my1 - mass.centroid.y) / (my1 - my0),
                       big=areas[0] / sum(areas), big2=(areas[1] / areas[0] if len(areas) > 1 else None),
+                      tilt=float(np.median([r['lean'] for r in rec if r['lean'] is not None] or [0])),
                       grain=math.degrees(math.atan2(S, C)) / 2, graincoh=math.hypot(C, S),
                       fh=fh / sy, bd=bd / sx, figratio=fh / bd,
                       mass=[[round(x / sx, 1), round(y / sy, 1)] for x, y in simp.exterior.coords[:-1]],

@@ -1,10 +1,17 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (async () => {
   const fail = (e) => { const b = document.createElement('p'); b.style.cssText = 'padding:12px;border:2px solid var(--err);color:var(--err);margin:16px 0'; b.textContent = 'The page could not finish drawing: ' + (e && e.message || e); document.querySelector('main').prepend(b); console.error(e); };
   try {
 /*js:lib.js*/
 const CROPS = await fetch('data/crops.json').then((r) => r.json());
+/*js:stone.js*/
+/*js:form.js*/
 /*js:ch01.js*/
+/*js:ch02.js*/
+/*js:ch05.js*/
+/*js:ch07.js*/
+/*js:ch13.js*/
 /*js:nav.js*/
     if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => DRAWS.forEach((f) => f()));
   } catch (e) { fail(e); }

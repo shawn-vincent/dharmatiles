@@ -97,3 +97,25 @@ function scatter(target, rows, o) {
     if (o.over) o.over(svg, ax, w, hgt);
   });
 }
+/* rows of dots: one row per group, every measured stone a dot, a tick at each row's median and a bar from its 10th to 90th percentile */
+function strip(target, groups, o) {
+  chart(target, (o.rowH || 30) * groups.length + 44, (svg, w, hgt) => {
+    const ax = axes(svg, w, hgt, { x: o.x, y: [0, 1], yt: [], xl: o.xl, xt: o.xt, m: { l: o.left || 80, t: 6 } }), rh = (hgt - ax.m.b - ax.m.t) / groups.length;
+    if (o.prop) svg.append(s('rect', { x: ax.x(o.prop[0]), y: ax.m.t, width: ax.x(o.prop[1]) - ax.x(o.prop[0]), height: hgt - ax.m.b - ax.m.t, fill: 'var(--accent-soft)', opacity: .5 }));
+    if (o.ref != null) svg.append(s('line', { x1: ax.x(o.ref), x2: ax.x(o.ref), y1: ax.m.t, y2: hgt - ax.m.b, stroke: 'var(--fg)', 'stroke-dasharray': '3 3' }));
+    groups.forEach((g, i) => { const y = ax.m.t + rh * (i + .5), r = rng(i + 3), v = g.vals.filter((q) => q != null && isFinite(q)), st = stats(v);
+      svg.append(s('text', { x: 4, y: y + 4, 'font-size': 12, text: g.name }), s('text', { x: ax.m.l - 6, y: y + 4, 'font-size': 10.5, 'text-anchor': 'end', class: 'mut', text: 'n ' + v.length }));
+      for (const q of v) svg.append(mark(g.kind || 'pillar', ax.x(Math.min(Math.max(q, o.x[0]), o.x[1])), y + (r() - .5) * rh * .62, 2.4, { 'fill-opacity': .5, 'stroke-width': 0 }));
+      if (v.length) svg.append(s('line', { x1: ax.x(Math.max(o.x[0], st.p10)), x2: ax.x(Math.min(o.x[1], st.p90)), y1: y, y2: y, stroke: 'var(--fg)', 'stroke-width': 1.5 }), s('line', { x1: ax.x(st.med), x2: ax.x(st.med), y1: y - rh * .36, y2: y + rh * .36, stroke: 'var(--fg)', 'stroke-width': 3 })); });
+  });
+}
+const kindGroups = (f, kinds = KINDS) => kinds.map((k) => ({ name: k, kind: k, vals: STONES.filter((x) => x.kind === k).map(f) }));
+const classGroups = (f) => CLASSES.map((k) => ({ name: CLASS_NAME[k], kind: k, vals: ALL.filter((id) => CL[id].class === k).map((id) => f(CELLS[id])) }));
+const pointIn = (p, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
+/* a formation's outline in fh, with its lowest right corner at (0, 0), x to the left negative, y up */
+const massFh = (id) => { const c = CELLS[id], [W, H] = CROPS[TR[id].img].size, f = c.fh * H / 100, P = c.mass.map((p) => [p[0] * W / 100, p[1] * H / 100]); const x1 = Math.max(...P.map((p) => p[0])), y1 = Math.max(...P.map((p) => p[1])); return P.map((p) => [(p[0] - x1) / f, (y1 - p[1]) / f]); };
+/* a small table of what was measured: each row a name, the values, and how many decimals */
+function statTable(target, rows) {
+  const t = typeof target === 'string' ? document.getElementById(target) : target;
+  t.append(h('tr', {}, ['', 'Typical', 'Usual range', 'Extremes', 'Counted'].map((x, i) => h('th', { class: i ? 'num' : null, text: x }))), ...rows.map(([name, vals, d = 2, unit = '']) => { const st = stats(vals); return h('tr', {}, h('td', { html: name }), h('td', { class: 'num', text: fmt(st.med, d) + unit }), h('td', { class: 'num', text: fmt(st.p10, d) + '–' + fmt(st.p90, d) }), h('td', { class: 'num', text: fmt(st.min, d) + '–' + fmt(st.max, d) }), h('td', { class: 'num', text: st.n })); }));
+}
