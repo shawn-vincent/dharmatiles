@@ -7,22 +7,25 @@
     mini([st(.25, .5, 0, .5, 1.15), st(.75, .48, 0, .5, .8, { seed: 5 })], '<b>1 Abut.</b> Upright joint, tops apart.'),
     mini([st(.3, .6, 0, .45, 1.2), st(.25, .5, .45, .32, .42, { seed: 8, taperA: .8, taperD: .85 })], '<b>2 Stand in front.</b> The lower one nearer.'),
     mini([st(.3, .7, 0, .55, .62), st(.3, .58, 0, .45, .5, { z: .62, bevelB: .15, seed: 9 })], '<b>3 Rest on.</b> Level joint, upper set back.'),
-    mini([st(.15, .34, 0, .45, .78), st(.95, .36, 0, .45, .78, { seed: 4 }), st(.5, .44, 0, .2, .74, { seed: 6 }), st(.08, .68, 0, .55, .42, { z: .78, bevelB: .16, seed: 10, d: dB - .3 }), st(.76, .62, 0, .5, .38, { z: .78, bevelB: .16, seed: 12, d: dB - .27 })], '<b>4 Bridge.</b> Two caps meet over a recess with a back wall.'),
-    mini([st(.4, .5, 0, .45, .85), st(.38, .68, 0, .58, .45, { z: .85, bevelB: .16, seed: 14, d: dB - .33 })], '<b>5 Jut.</b> The cap overhangs a little, to the front and the far side.'),
+    mini([st(.15, .34, 0, .45, .78), st(.95, .36, 0, .45, .78, { seed: 4 }), st(.5, .44, 0, .2, .74, { seed: 6 }), st(.08, .68, 0, .55, .42, { z: .78, bevelB: .08, seed: 10, d: dB - .3 }), st(.76, .62, 0, .5, .34, { z: .78, bevelB: .08, seed: 12, d: dB - .27 })], '<b>4 Bridge.</b> Two caps meet over a recess with a back wall.'),
+    mini([st(.4, .6, 0, .3, .7), st(.4, .6, 0, .56, .6, { z: .7, bevelB: .08, seed: 14 })], '<b>5 Oversail.</b> An upper block stands forward of a set-back wall.'),
     mini([st(.25, .45, 0, .45, 1.2), st(.78, .42, 0, .42, 1.0, { seed: 15, leanA: -.22 })], '<b>6 Prop.</b> A leaner against an upright.'));
   const side = PAIRS.filter((p) => !p.stacked);
-  hist('n-dtop', side.map((p) => p.dtop), { x: [0, 1.5], bins: 30, xl: 'difference in top level, fh', yl: 'pairs', prop: [.12, 1.5], h: 230 });
-  chart('n-front', 120, (svg, w) => { const f = side.filter((p) => p.lowfront).length / side.length, x0 = 10, x1 = w - 10;
+  hist('n-dtop', side.map((p) => p.dtop), { x: [0, 1.5], bins: 25, xl: 'difference in top level, fh', yl: 'pairs', prop: [.12, 1.5], h: 230 });
+  const dec = side.filter((p) => p.lowfront_foot != null), big = dec.filter((p) => p.dtop > .3); $('#n-front-big').textContent = Math.round(100 * big.filter((p) => p.lowfront_foot).length / big.length) + ' percent of ' + big.length;
+  chart('n-front', 120, (svg, w) => { const k = dec.filter((p) => p.lowfront_foot).length, f = k / dec.length, x0 = 10, x1 = w - 10;
     svg.append(s('rect', { x: x0, y: 34, width: (x1 - x0) * f, height: 34, fill: 'var(--a-out)' }), s('rect', { x: x0 + (x1 - x0) * f, y: 34, width: (x1 - x0) * (1 - f), height: 34, fill: 'var(--stone2)' }),
-      s('text', { x: x0, y: 24, 'font-size': 12.5, text: `lower stone in front: ${Math.round(f * 100)}% (${side.filter((p) => p.lowfront).length} of ${side.length})` }), s('text', { x: x1, y: 88, 'font-size': 12.5, 'text-anchor': 'end', class: 'mut', text: `taller in front: ${Math.round((1 - f) * 100)}%` })); });
+      s('text', { x: x0, y: 24, 'font-size': 12.5, text: `lower stone nearer: ${Math.round(f * 100)}% (${k} of ${dec.length})` }), s('text', { x: x1, y: 88, 'font-size': 12.5, 'text-anchor': 'end', class: 'mut', text: `taller stone nearer: ${Math.round((1 - f) * 100)}%` })); });
+  for (const [id, a, b] of [['H', 'H3', 'H4'], ['T12', null, null], ['T4', null, null], ['L', 'L3', 'L4']]) $('#n-plat').append(cellView(id, a ? { only: (t) => t.id === a || t.id === b, tops: false } : { tops: false }));
+  for (const id of ['A', 'D', 'F', 'L']) $('#n-tallfront').append(cellView(id, { only: (t) => t.id === CELLS[id].footid, tops: false }));
   hist('n-ratio', PAIRS.map((p) => p.ratio), { x: [0, 1], bins: 20, xl: 'smaller ÷ larger', yl: 'pairs', h: 200 });
   const caps = $('#n-caps'); for (const id of ['D', 'K', 'O', 'S9']) caps.append(cellView(id, { only: (t, m) => m.kind === 'cap', tops: false }));
   const gap = (poly) => (svg) => svg.append(s('polygon', { points: poly, fill: 'var(--a-gap)', 'fill-opacity': .35, stroke: 'var(--a-gap)', 'stroke-width': 2.5, 'vector-effect': 'non-scaling-stroke' }));
   $('#n-gaps').append(cellView('H', { stones: false, extra: gap('64,12 66.5,11 65,30 62,34 58,56 55,74 56,55 60,36 63,30') }), cellView('J', { stones: false, extra: gap('44,26 53,26 52,67 46,66') }), cellView('K', { stones: false, extra: gap('32,39 52,39.5 62,36 72,40 77,47 66,56 60,74 46,69 36,68') }), cellView('T15', { stones: false, extra: gap('50,36 62,34 68,40 67,62 62,86 52,84 49,60') }));
   const V = $('#n-valid'), F = (o) => formMeshes(formation(Object.assign({ preset: 'pillars', seed: 21, nA: 3, rows: 2 }, o)));
   const pair = (good, bad, gs, bs) => { V.append(still(good, { w: 300, h: 260, sub: '<b>Fits.</b> ' + gs }), still(bad, { w: 300, h: 260, sub: '<b>Does not.</b> ' + bs })); };
-  pair(F({}), F({ stepMin: 0, fall: 0, rough: 0, front: .34 }), 'Every top its own level.', 'Tops level along each row: reads as a built wall.');
+  pair(F({}), F({ stepMin: 0, fall: 0, rough: 0, front: .34 }), 'Tops step, or share a plane in one run.', 'Every top level, every row: reads as a built wall.');
   pair(F({}), F({ gap: .09 }), 'Joints closed; bevels make the groove.', 'Stones stand apart: reads as posts.');
   pair(F({ preset: 'blocks', seed: 4 }), F({ preset: 'blocks', seed: 4, stagger: 0, sizeVar: 0, rough: 0, stepMin: 0, fall: 0, offset: 0, front: .34, cap: 0 }), 'Joints staggered, sizes unequal.', 'Joints in line both ways, equal stones: reads as crates.');
-  pair(F({}), (() => { const f = formation({ preset: 'pillars', seed: 21, nA: 3, rows: 2 }); for (const t of f.stones) if (t.col.row.i === 0) { t.h *= 3.6; } return formMeshes(f); })(), 'Low stones in front, tall behind.', 'Tall stones in front hide the rest: the stair in depth is gone.');
+  pair(F({}), (() => { const f = formation({ preset: 'pillars', seed: 21, nA: 3, rows: 2 }); for (const t of f.stones) if (t.col.row.i === 0) { t.h *= 3.6; } return formMeshes(f); })(), 'Low stones in front, tall behind.', 'Every front stone tall: the rest is hidden and the stair in depth is gone.');
 }

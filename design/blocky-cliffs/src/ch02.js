@@ -43,5 +43,5 @@
   const base = formation({ preset: 'pillars', seed: 5, nA: 4, rows: 3 });
   const noEnv = formation({ preset: 'pillars', seed: 5, nA: 4, rows: 3, fall: 0, front: 1, rough: 5, stepMin: 0 });
   const pile = formation({ preset: 'pillars', seed: 5, nA: 4, rows: 3 }); { const r = rng(77); for (const st of pile.stones) { st.a += (r() - .5) * .5 + .15; st.d += (r() - .5) * .45 - .15; st.yaw = (r() - .5) * 1.6; st.leanA = (r() - .5) * .5; st.leanD = (r() - .5) * .4; } }
-  $('#pile-row').append(still(formMeshes(base), { sub: '<b>A cliff.</b> Envelope, tight joints, one upright, low stones in front.' }), still(formMeshes(noEnv), { sub: '<b>A wall of posts.</b> Heights drawn with no envelope: the front hides the back and the skyline is noise. <i>Leaves the style.</i>' }), still(formMeshes(pile), { sub: '<b>A pile.</b> Same stones turned, tilted and spread each on its own. <i>Leaves the style.</i>' }));
+  $('#pile-row').append(still(formMeshes(base), { sub: '<b>A cliff.</b> Envelope, tight joints, a shared upright, low stones in front.' }), still(formMeshes(noEnv), { sub: '<b>A wall of posts.</b> Heights drawn with no envelope: the front hides the back and the skyline is noise. <i>Leaves the style.</i>' }), still(formMeshes(pile), { sub: '<b>A pile.</b> Same stones turned, tilted and spread each on its own. <i>Leaves the style.</i>' }));
 }

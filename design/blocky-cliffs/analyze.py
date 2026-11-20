@@ -76,7 +76,12 @@ for cid, c in T.items():
         ws = widths(body)
         hb = by1 - by0
         # body height measured down the middle: the face under the top
-        r = dict(id=s['id'], cell=cid, sheet=c['sheet'], kind=s['kind'], ground=(len(s['rests']) == 0), nrest=len(s['rests']),
+        # is the stone's foot in view? a ground stone whose lower edge has no other traced stone just under it
+        from shapely.affinity import translate
+        under = translate(p, 0, 4).difference(p)
+        others = unary_union([P[o['id']] for o in c['stones'] if o['id'] != s['id']])
+        footvis = (len(s['rests']) == 0) and (under.is_empty or under.intersection(others).area < 0.25 * under.area)
+        r = dict(id=s['id'], cell=cid, sheet=c['sheet'], kind=s['kind'], ground=(len(s['rests']) == 0), nrest=len(s['rests']), footvis=bool(footvis), hidden=('?' in s['rests']),
                  w=(x1 - x0) / fh, h=(y1 - y0) / fh, hb=hb / fh, wb=(bx1 - bx0) / fh, area=p.area / fh ** 2, share=p.area / mass.area,
                  lean=ang, elong=elong, convex=p.area / p.convex_hull.area,
                  nv=len(s['out']), topw=None, toph=None, topshare=None,
@@ -88,6 +93,7 @@ for cid, c in T.items():
             # the top's dip across the picture: slope of the line through its leftmost and rightmost points
             pts = sorted(t.exterior.coords[:-1]); r['topdip'] = math.degrees(math.atan2(-(pts[-1][1] - pts[0][1]), pts[-1][0] - pts[0][0]))
         r['slender'] = r['hb'] / r['wb']
+        r['zt'] = (r['hb'] / 0.95) if footvis else None      # true height, where the foot shows: face height over the camera's foreshortening
         aL, aR, lL, lR = sides(p)
         r['axis'] = r['lean']; r['sideL'] = aL; r['sideR'] = aR
         # tilt: the mean of the two sides; closing: how much they close toward the top (positive = narrower above)
@@ -109,7 +115,12 @@ for cid, c in T.items():
             stacked = (b in restmap[a]) or (a in restmap[b])
             A, B = R[a], R[b]
             lo, hi = (A, B) if A['topy'] < B['topy'] else (B, A)
-            pairs.append(dict(cell=cid, a=a, b=b, stacked=stacked, joint=jl, jang=jang, dtop=abs(A['topy'] - B['topy']),
+            # which is in front: on the ground the nearer stone's foot is lower in the picture (no use of the order of tracing)
+            fr = None
+            if abs(A['boty'] - B['boty']) > 0.04: fr = a if A['boty'] < B['boty'] else b
+            lowfront_foot = None if fr is None else (fr == lo['id'])
+            dz = abs(A['zt'] - B['zt']) if (A['zt'] is not None and B['zt'] is not None) else None
+            pairs.append(dict(cell=cid, a=a, b=b, stacked=stacked, joint=jl, jang=jang, dtop=abs(A['topy'] - B['topy']), dz=dz, lowfront_foot=lowfront_foot,
                               ratio=min(A['area'], B['area']) / max(A['area'], B['area']),
                               lowfront=(ids.index(lo['id']) < ids.index(hi['id'])), dx=(hi['cx'] - lo['cx'])))
     # the skyline: height of the mass's top edge above its lowest point, at 48 places across its width
@@ -125,6 +136,8 @@ for cid, c in T.items():
         cut = mass.intersection(LineString([(x, my0 - 1), (x, my1 + 1)]))
         low.append(0 if cut.is_empty else (my1 - cut.bounds[3]) / fh)
     areas = sorted((r['area'] for r in rec), reverse=True)
+    nearest = min(rec, key=lambda r: r['boty'])                 # the stone whose foot is lowest in the picture
+    leans = [r['lean'] for r in rec if r['lean'] is not None]; ws_ = [r['wb'] for r in rec]
     # grain: the stones' long axes, weighted by area and by how long each stone is
     wts = np.array([r['area'] * max(r['elong'] - 1, 0.05) for r in rec]); angs = np.radians([r['axis'] for r in rec])
     # axes are undirected: average on the doubled angle; 0 = upright, +-90 = level
@@ -134,6 +147,8 @@ for cid, c in T.items():
                       fill=mass.area / ((mx1 - mx0) * (my1 - my0)), sky=[round(v, 3) for v in sky], low=[round(v, 3) for v in low],
                       peak=(int(np.argmax(sky)) + .5) / 48, cx=(mass.centroid.x - mx0) / (mx1 - mx0), cy=(my1 - mass.centroid.y) / (my1 - my0),
                       big=areas[0] / sum(areas), big2=(areas[1] / areas[0] if len(areas) > 1 else None),
+                      footshare=nearest['topy'] / ((my1 - my0) / fh), footid=nearest['id'], tiltrange=(max(leans) - min(leans)) if leans else 0.0, wratio=max(ws_) / min(ws_),
+                      farend=float(np.mean(sky[:4]) / max(sky)),
                       tilt=float(np.median([r['lean'] for r in rec if r['lean'] is not None] or [0])),
                       grain=math.degrees(math.atan2(S, C)) / 2, graincoh=math.hypot(C, S),
                       fh=fh / sy, bd=bd / sx, figratio=fh / bd,
