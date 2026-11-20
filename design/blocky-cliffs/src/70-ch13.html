@@ -13,11 +13,11 @@
 
 <div class="sec"><div class="words"><h3>Does it measure like the sheets?</h3>
 <p><span class="ev m">Measured</span> 200 formations were drawn with every number taken from the proposed ranges and classes in the counted proportion. Each was then measured the way the traces were, from the references' camera: stone sizes, and the relations between touching stones.</p>
-<p>The relations are the harder test, and the table gives each one for both, stacking included. Where the generator misses, the miss is left showing:</p>
-<ul><li>its stones are wider and lower as seen than the sheets', because a front cluster and a pile add squat stones faster than the pillars add tall ones;</li>
-<li>its lower stone is in front less often than the sheets';</li>
-<li>fewer of its stones bear on two;</li>
-<li>it puts a cap on about twice as many formations as were traced with one.</li></ul>
+<p>The table gives every measure for both, and the generator's from two angles: 45 degrees off the face, where the references' A–P plates stand, and 25, which is nearer how the sheet of sixteen is seen and how several A–P cliffs sit turned on their plates. Where the generator misses, the miss is left showing:</p>
+<ul><li>its ground-standing stones are lower and broader than the sheets': face height about 0.7 fh against 0.95, and height ÷ width about 1.0 against 1.67. A reference formation has a stone or two standing nearly its full height; half of the generator's have none;</li>
+<li>more of its formations pass 2.29 fh;</li>
+<li>fewer of its stones bear on two, and more formations have no stacked stone;</li>
+<li>its lower stone is in front less often.</li></ul>
 <p>The numbers do not say whether a draw looks right. The pictures show the limits: flat chamfers where the sheets are softly rounded, no kinks on edges, stiff dipping beds, and no niche or shelter.</p></div>
 <div class="plates"><div class="scroll"><table id="g-rel"></table></div>
 <p class="note">References: <span class="ev m">Measured</span> from the traces. Generator: <span class="ev p">Proposed</span> rules, measured on the true solids as the camera would see them. "Foot nearer" compares the lowest point of each outline in the picture; on the traces a hidden foot ends where the stone in front hides it.</p>
@@ -43,19 +43,24 @@ formation(numbers, seed):                         every stone is first a plain b
        slabs     parallel leaning slabs of even thickness over a block at the cut end
        beds      one thick dipping bed, thinner and shorter beds tight on it
        gate      two heavy piers, a set-back wall, a thick cap from each pier
-  2 front       a chunky buttress hard against the wall at the cut end; a toe in front of
-                or beside it; sometimes a second block along the wall, a stone tucked in
-                the corner, a pillar applied over a joint
-  3 pile        0 to 3 stones laid on the tops, adding height: a summit cap on the highest
-                top, a block spanning a joint (the two tops are first made level), a second
-                storey on a cap
+  2 front       three ranks: sometimes a main pillar applied over a joint near mid length;
+                a buttress 0.55 to 0.8 of the wall behind it, hard against it; a toe a third
+                to a half of the buttress; sometimes a second block, or a stone tucked in
+  3 pile        0 to 2 stones on the tops, as the top of the wall: an upper block nearly as
+                wide as what carries it and flush with its face, or a block spanning a
+                joint; part of its height is taken off what carries it. A tall pillar may
+                instead be split by a level joint. None on a spire or a narrow stone.
+     height     if the pile has carried the whole more than a tenth past the envelope,
+                everything is pressed down in proportion
   4 shape       each stone finds which of its top edges are exposed, then
-       exposed edge: a wide bevel, and on one front edge in three a chamfer of a third to
-                     half the depth; edge against a neighbour: nearly sharp
-       front stones: a wedge top rising into the wall, a battered front and far side
-       tall stones:  narrowing upward; one in ten a spire; some many-sided or with a prow
-       piled stones: tight on what carries them, a little thicker at one end
-       one block or front stone in six carries a shoulder: a second small box on its top
+       exposed edge: a wide bevel; one edge in four a chamfer of up to 0.25 fh, on the
+                     front or (a shoulder cut) on a side; under a carried stone and
+                     against a neighbour: nearly sharp, so joints stay creases
+       front stones: a top sloping along the cliff or into the wall, a battered front
+       toes:         flat, with one broad chamfer
+       tall stones:  battered only on a side that stands clear of its neighbour;
+                     one in ten a spire; some many-sided or with a prow
+       piled stones: tight on what carries them
   5 count       if more than eleven stones came out, drop a piled stone or a column and draw again
 
 stone(box, numbers):
