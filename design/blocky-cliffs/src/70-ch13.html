@@ -1,1 +1,49 @@
-<section class="ch" id="c13"><header><span class="n">Chapter 13</span><h2>A generator</h2><p>Being built.</p></header><div class="row c4" id="gen-test"></div></section>
+<section class="ch" id="c13"><header><span class="n">Chapter 13</span><h2>A generator</h2>
+<p>The grammar of chapter 11, running. It is about 150 lines: one function for a stone, one for a formation. It is a sketch to test the rules against the sheets, not production geometry.</p></header>
+
+<div class="sec"><div class="words"><h3>Make one</h3>
+<p><span class="ev p">Proposed</span> Choose a class, then change any number. Drag to turn the view; scrolling scrolls the page; pinch to zoom. The post is one figure high.</p>
+<div class="pills" id="g-cls" role="group" aria-label="Class"></div>
+<div class="pills"><button type="button" id="g-seed">New seed</button><button type="button" id="g-all">Draw everything</button><button type="button" id="g-cam">References' view</button></div>
+<div class="ctl" id="g-ctl" style="display:grid;grid-template-columns:auto minmax(0,1fr) 3.4em;gap:6px 10px"></div>
+<p class="note" id="g-read"></p></div>
+<div class="plates"><div class="live stage" id="g-live"></div>
+<div class="row" id="g-steps" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
+<figcaption>How this formation was built: the footprint and envelope; rows; columns under the envelope, pushed apart in level; level cuts and caps; then every stone shaped, and the common lean.</figcaption></div></div>
+
+<div class="sec"><div class="words"><h3>Does it measure like the sheets?</h3>
+<p><span class="ev m">Measured</span> 200 formations were drawn with every number taken from the proposed ranges and classes in the counted proportion, then each stone was measured the way the traces were: its width and face height as seen from the references' camera, in figure heights.</p>
+<p>Medians and usual ranges land on the references for width, face height, their ratio, and the formation's height. Two things do not match and are left showing: generated formations are narrower as seen than the sheet of twenty (whose plates are wider), and the generator's stone count has a longer upper tail.</p>
+<p>This checks sizes only. It does not check that the result looks right; the pictures do that, and they show the limits: no kinks on edges, flat chamfers where the sheets are softly rounded, and beds that dip are stiffer than N's.</p></div>
+<div class="plates"><div class="two">
+<figure><div class="plate pad"><div id="g-v1"></div></div><figcaption>Stone width as seen, fh.</figcaption></figure>
+<figure><div class="plate pad"><div id="g-v2"></div></div><figcaption>Stone face height as seen, fh.</figcaption></figure>
+<figure><div class="plate pad"><div id="g-v3"></div></div><figcaption>Face height ÷ width.</figcaption></figure>
+<figure><div class="plate pad"><div id="g-v4"></div></div><figcaption>Formation height as seen, fh.</figcaption></figure>
+<figure><div class="plate pad"><div id="g-v5"></div></div><figcaption>Formation width as seen, fh.</figcaption></figure>
+<figure><div class="plate pad"><div id="g-v6"></div></div><figcaption>Stones per formation.</figcaption></figure>
+</div><p class="note">Upper row of each chart: the references (<span class="ev m">Measured</span>). Lower row: the generator (<span class="ev p">Proposed</span>, measured the same way).</p></div></div>
+
+<div class="sec full"><div class="words"><h3>Beside the references</h3><p>Four draws of the chosen class above, four reference formations of that class below.</p></div>
+<div class="plates"><div class="row c4" id="g-beside"></div></div></div>
+
+<div class="sec full"><div class="words"><h3>The whole of it</h3></div><div class="plates"><pre>
+formation(numbers, seed):
+  1 rows     split the depth into rows, front rows thinner and shorter       (depth, rows, frontLen)
+  2 columns  cut each row along its length into stones                       (nA, sizeVar)
+             shift the joints against the row behind                         (stagger)
+  3 heights  h = height × lerp(front, 1, row) × (1 − fall × distance from peak) × (1 ± 9%)
+             lower any stone that stands in front of a lower one             (rule: low in front)
+             lower any stone within stepMin of its neighbour                 (rule: never level)
+  4 gate     optional: set one inner back column back and down; two caps over it
+  5 cuts     where the class has them, cut a column level every cutEvery     (cutEvery)
+  6 caps     optional: the top of the tallest column becomes a wider stone   (cap, over)
+  7 shape    each stone = stone(box, bevel, batter, top tilt, corner cut, 2% unsettle)
+  8 lean     shear everything about the plate by the common lean             (lean)
+
+stone(box, numbers):
+  24 to 32 points: each corner of the box replaced by the points its chamfers leave
+  scale the top (batter), tilt the top, shear (lean), turn (yaw)
+  return the convex hull
+</pre></div></div>
+</section>

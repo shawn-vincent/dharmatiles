@@ -1,0 +1,1 @@
+{ const hero = $('#hero'); if (hero) { for (const id of ['B', 'E', 'P']) hero.append(cellView(id, { stones: false })); for (const [k, sd] of [['pillars', 7], ['courses', 5], ['leaners', 6]]) hero.append(still(formMeshes(formation({ preset: k, cls: k, seed: sd, cap: k === 'pillars' ? 1 : 0 })), { w: 300, h: 290, figure: [1.25, .45] })); } }

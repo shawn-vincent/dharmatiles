@@ -143,3 +143,14 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 .bracket{font-size:12.5px;color:var(--muted);display:flex;gap:8px;align-items:center}.bracket i{display:inline-block;width:26px;height:8px;border:2px solid var(--a-top);border-top:0}
 .out .cell{opacity:.62}.out .sub::after{content:" Leaves the style.";font-style:italic}
 </style>
+<style>
+.live{position:relative;width:100%;aspect-ratio:100/78;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.live>canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
+.live>canvas:active{cursor:grabbing}
+</style>
+<style>.dimmed .cell{opacity:.5}.dimmed .sub::after{content:" out";font-style:italic}
+@media (max-width:860px){#sens .row{grid-template-columns:repeat(3,minmax(0,1fr))!important}#motifs .row{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+</style>
+<style>.answer{margin-top:28px;padding:20px;border:1px solid var(--rule);background:var(--panel);border-radius:4px;display:grid;gap:8px}
+.answer ol{padding-left:1.2em}.answer li{font-size:14.5px}
+@media (max-width:520px){.answer{padding:14px}}</style>
