@@ -1,20 +1,16 @@
 <section class="ch" id="verdict">
 <header><span class="n">5 · Against the references</span><h2>What looks right, and what does not</h2>
-<p>Four reference rocks were drawn by hand first (R1C8, R2C4, R1C7, R1C5), then a generator was written from them; round 4 added irregularity, battered corners and cracks. Judged by rendering the same view beside the cell.</p></header>
+<p>Round 6: one idea only. Compared beside R1C8, R2C4 and R1C5. Judged by rendering the same view beside the cell.</p></header>
 <div class="sec">
 <div class="words"><h3>Looks right</h3><ul>
-<li><b>R1C8 (block of lobes)</b> passes: one boxy mass, flat tops, shallow creases, bolder damage.</li>
-<li><b>R2C4 (pillar with a lower lobe)</b> weak pass: right proportions, a step and a battered foot; the top still chamfered flat.</li>
-<li><b>R1C5 (slab)</b> weak pass: two creases and a battered corner.</li>
-<li><b>Cracks</b> are now rare (1 in 5) and wander on the top and the sides, take different paths (through, corner, from the top, diagonal), and the gap varies along them.</li>
-<li><b>Damage</b> is on most rocks, on corners and low edges, in sizes that read at sheet scale.</li>
-<li>Fast, and no redraw: under 40 ms at the worst seed.</li></ul></div>
+<li>One idea, and it reads as one: a boxy rock with soft, wandering chamfers on every edge, nothing parallel, nothing straight.</li>
+<li>It stays the base shape: slab, block, pillar and ramp are all plainly themselves.</li>
+<li>A closed mesh by construction, 1 to 3 ms a rock.</li></ul></div>
 <div class="words"><h3>Does not look right yet</h3><ul>
-<li><b>R1C7 fails:</b> the ramp is one sloped piece with a level seat, but the seat's slanted back that flows into the slope is not made. Tilting the lobes' joint faces separated the pieces, so the riser is vertical and reads as a step.</li>
-<li><b>Chunks on narrow rocks</b> can still take too much: a pillar or a ramp corner is sometimes pointed, the sheet's never are.</li>
-<li><b>Cracks</b> are made of a handful of straight segments, so a close look shows short straight runs; and they read as thin slits more than as breaks.</li>
-<li><b>Softness</b> is out of scope: flats stay flat.</li>
-<li><b>Cliff constraints:</b> only <code>bottomBevel</code> exists.</li></ul></div></div>
+<li><b>It reads more like crumpled paper than the references.</b> The sheet's chamfers are crisp planes with distinct edges; mine, at these widths, blend into the faces under the display smoothing, and the faces carry faint X-shaped creases from the way they are triangulated.</li>
+<li><b>The steps, creases between lobes and damage that made the sheet's rocks read as rocks are off</b>, so every seed is a single plain block; the sheet's variety is not there.</li>
+<li><b>Some side chamfers swing wide</b> and leave a notch-like dark band down an edge.</li>
+<li>The steepest underside is up to about 90 degrees on a seed, because printing is not enforced.</li></ul></div></div>
 <div class="sec full"><div class="words"><h3>What I did not look at</h3>
 <ul><li>The back of any reference rock; there are none.</li>
 <li>A real phone: headless Chrome at 1280 and 390 px only.</li>

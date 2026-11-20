@@ -194,7 +194,7 @@ function check(m) {
 function partsOf(rc, r) {
   const irr = rc.irr == null ? 1 : rc.irr, g = (a, b) => U(r, a, b) * irr;
   /* nothing is straight: every outer side has its own lean and its own twist in plan, the top its own small slope */
-  const bat = [g(-.01, .045), g(-.01, .045), g(-.01, .045), g(-.01, .045)], skO = [g(-.07, .07), g(-.07, .07), g(-.07, .07), g(-.07, .07)], lean = [(rc.lean || [0, 0])[0] + g(-.02, .02), (rc.lean || [0, 0])[1] + g(-.02, .02)], tx = g(-.025, .025), ty = g(-.025, .025);
+  const bat = [g(-.03, .07), g(-.03, .07), g(-.03, .07), g(-.03, .07)], skO = [g(-.07, .07), g(-.07, .07), g(-.07, .07), g(-.07, .07)], lean = [(rc.lean || [0, 0])[0] + g(-.02, .02), (rc.lean || [0, 0])[1] + g(-.02, .02)], tx = g(-.045, .045), ty = g(-.045, .045);
   const jx = {}, jy = {}, jk = (tab, key) => (tab[key] == null ? (tab[key] = g(-.09, .09)) : tab[key]), kk = (v) => Math.round(v * 1e4);
   return rc.lobes.map((q) => {
     const sx = (q.sx || 0) + tx, sy = (q.sy || 0) + ty, ht = q.h - sx * q.x1 - sy * q.y1, ox0 = q.x0 < 1e-9, ox1 = q.x1 > rc.W - 1e-9, oy0 = q.y0 < 1e-9, oy1 = q.y1 > rc.D - 1e-9;
@@ -281,9 +281,85 @@ function crackPieces(pieces, cr) {
   return out;
 }
 const aabbSize = (F) => { const b = aabb(F.flatMap((f) => f.p)); return Math.min(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]); };
+
+/* ---------- the simple rock: one block, every edge chamfered by a strip built directly as a mesh ----------
+   Each edge gets a strip of N short segments between a line on one face and a line on the other. The width follows a smooth random curve along the
+   edge and so does the tilt, so the strip swells, narrows and twists; each face is left with an inset polygon, and each corner is closed by a small
+   patch joining the three strips' ends. Top edges lie 10-25 degrees below horizontal, bottom edges rise 62-68 degrees, upright edges about 45. */
+function curve(r) { const f1 = U(r, .5, 1.4), f2 = U(r, 1.0, 2.2), p1 = r() * 6.283, p2 = r() * 6.283, a = U(r, .6, .75), g = (t) => a * Math.sin(6.283 * f1 * t + p1) + (1 - a) * Math.sin(6.283 * f2 * t + p2); g.slope = 6.283 * (a * f1 + (1 - a) * f2); return g; }
+function simpleRock(rc, seed, stage, N, bottomBevel) {
+  const r0 = mulberry(hash('b' + seed)), one = { W: rc.W, D: rc.D, H: rc.H, lean: rc.lean, irr: rc.irr, lobes: [{ x0: 0, x1: rc.W, y0: 0, y1: rc.D, h: rc.H, sy: rc.kind === 'ramp' ? (rc.lobes[0].sy || 0) : 0 }] };
+  const part = partsOf(one, r0)[0], F = buildPart(part, { noChamfer: true, m: 1, center: [0, 0, 0], seed: 'x', chamfer: { top: [0, 0], vert: [0, 0], bottom: [0, 0] } }).faces;
+  if (stage === 0) { const m = meshOf(F.map((f) => ({ p: f.p, n: f.n }))); return { V: m.V, T: m.T }; }
+  const V = [], key = (p) => Math.round(p[0] * 1e5) + ',' + Math.round(p[1] * 1e5) + ',' + Math.round(p[2] * 1e5), vmap = new Map(), vid = (p) => { const k = key(p); let i = vmap.get(k); if (i === undefined) { i = V.length; V.push(p); vmap.set(k, i); } return i; };
+  const loops = F.map((f) => { const l = []; for (const p of f.p) { const i = vid(p); if (l[l.length - 1] !== i) l.push(i); } if (l.length > 1 && l[0] === l[l.length - 1]) l.pop(); return l; });
+  const corners = V.slice(), nv = corners.length, edges = new Map(), faceN = F.map((f) => f.n), faceC = loops.map((l) => mul(l.reduce((a, i) => add(a, corners[i]), [0, 0, 0]), 1 / l.length));
+  loops.forEach((l, fi) => { for (let k = 0; k < l.length; k++) { const a = l[k], b = l[(k + 1) % l.length], ka = Math.min(a, b) + '_' + Math.max(a, b); let e = edges.get(ka); if (!e) edges.set(ka, e = { a: Math.min(a, b), b: Math.max(a, b), f: [] }); e.f.push(fi); } });
+  const center = mul(corners.reduce((a, p) => add(a, p), [0, 0, 0]), 1 / nv), m = Math.min(rc.W, rc.D), H = rc.H, P = [], tri = [];
+  const pid = (p) => { P.push(p); return P.length - 1; }, bottomOf = (fi) => faceN[fi][2];
+  const ids = new Map(), N1 = N + 1;
+  /* every face is curved a little both ways: a shallow dome or saddle, mostly bulging out, never on the bottom */
+  const fld = F.map((f, fi) => { const n = f.n, r = mulberry(hash(seed + ':f' + fi)), up = Math.abs(n[2]) > .9 ? [1, 0, 0] : [0, 0, 1], u = norm(cross(n, up)), v = cross(n, u), ext = [Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), u)))) || 1, Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), v)))) || 1];
+    const A = f.n[2] < -.95 ? 0 : U(r, .004, .014) * Math.min(ext[0], ext[1]) * 2, dome = U(r, -1, 1), sad = U(r, -.5, .5), tl = U(r, -.2, .2), tl2 = U(r, -.2, .2); return { n, u, v, ext, c: faceC[fi], A, dome, sad, tl, tl2 }; });
+  const bulge = (fi, p) => { const q = fld[fi]; if (!q.A) return p; const x = dot(sub(p, q.c), q.u) / q.ext[0], y = dot(sub(p, q.c), q.v) / q.ext[1], h = q.A * (q.dome * (1 - (x * x + y * y) / 2) + q.sad * (x * x - y * y) + q.tl * x + q.tl2 * y); return add(p, mul(q.n, h)); };
+  /* pass 0: each edge's kind, size and leg, so a strip can stop short of the corner by the neighbours' legs and the corner patch lies on the faces, not on a sharp edge */
+  const info = new Map(); let ej = 0;
+  for (const e of edges.values()) {
+    const rw = mulberry(hash(seed + ':w' + (ej++))), A = corners[e.a], B = corners[e.b], t = norm(sub(B, A)), mid = mul(add(A, B), .5);
+    let [f1, f2] = e.f; const n1 = faceN[f1], n2 = faceN[f2];
+    const bottom = Math.min(n1[2], n2[2]) < -.95, top = !bottom && Math.max(n1[2], n2[2]) > .5, kind = bottom ? 'bottom' : top ? 'top' : 'vert';
+    if (bottom ? n2[2] < n1[2] : top ? n2[2] > n1[2] : false) [f1, f2] = [f2, f1];   /* f1 carries the first leg: the top face, the bottom face */
+    const dir = (fi) => { const c = sub(faceC[fi], mid), d = sub(c, mul(t, dot(c, t))); return norm(d); }, d1 = dir(f1), d2 = dir(f2);
+    const ext = (fi, d) => Math.max(...loops[fi].map((i) => dot(sub(corners[i], mid), d)));
+    const e1 = ext(f1, d1), e2 = ext(f2, d2);
+    let w0, th0, tw;
+    if (kind === 'top') { w0 = U(rw, .07, .13) * m; th0 = U(rw, 8, 27); tw = 5; } else if (kind === 'bottom') { w0 = U(rw, .04, .07) * m; th0 = U(rw, 60, 69); tw = 4; } else { w0 = U(rw, .05, .1) * m; th0 = U(rw, 18, 72); tw = 10; }
+    if (kind === 'bottom' && !bottomBevel) w0 = 1e-4;
+    info.set(e, { kind, f1, f2, d1, d2, e1, e2, w0, th0, tw, A, B, t, mid, n1, n2, leg: Math.min(w0 * 1.4, .16 * e1) });
+  }
+  const trimAt = (e, v) => { let g = 0; for (const o of edges.values()) if (o !== e && (o.a === v || o.b === v)) g = Math.max(g, info.get(o).leg, info.get(o).kind === 'vert' ? 0 : Math.min(info.get(o).w0 * 1.4 * Math.tan(info.get(o).th0 * Math.PI / 180), .16 * info.get(o).e2)); return .9 * g; };
+  let ei = 0;
+  for (const e of edges.values()) {
+    const r = mulberry(hash(seed + ':e' + (ei++))), { kind, f1, f2, d1, d2, e1, e2, w0, th0, tw, A, B, n1, n2 } = info.get(e), gw = curve(r), ga = curve(r);
+    const Lfull = len(sub(B, A)), tA = Math.min(.3, trimAt(e, e.a) / Lfull), tB = Math.min(.3, trimAt(e, e.b) / Lfull);
+    const bow = U(r, -.3, .3), ob = norm(add(n1, n2)), Le = Lfull * (1 - tA - tB), ampW = .5 * Math.min(1, .5 * Le / (w0 * .5 * gw.slope)), L1 = [], L2 = [];   /* the width changes slowly enough along a short edge that the strip never leans past the print rule */
+    for (let i = 0; i < N1; i++) {
+      const tt = i / N, w = Math.max(.35, 1 + .38 * gw(tt)) * w0, th = (th0 + tw * ga(tt)) * Math.PI / 180;
+      let a = Math.min(w, .16 * e1), b = Math.min(w * Math.tan(th), .16 * e2);   /* on one face the chamfers together never take more than a third of its width */
+      if (kind === 'bottom' || kind === 'top') { /* the limit on the leg keeps the angle: shorten the other */ if (b < w * Math.tan(th) - 1e-9) a = Math.min(a, b / Math.tan(th)); }
+      const E = add(A, mul(sub(B, A), tA + (1 - tA - tB) * tt));
+      const bw = bow * Math.sin(Math.PI * tt) * w0, bo = mul(kind === 'bottom' ? [ob[0], ob[1], 0] : ob, bw);   /* the chamfer as a whole bows along its length, in or out */
+      L1.push(pid(add(bulge(f1, add(E, mul(d1, a))), bo))); L2.push(pid(add(bulge(f2, add(E, mul(d2, b))), bo)));
+    }
+    ids.set(e, [f1, f2, L1, L2]);
+    for (let i = 0; i < N; i++) tri.push(Object.assign([L1[i], L1[i + 1], L2[i + 1], L2[i]], { ref: ob }));
+  }
+  const edgeOf = (a, b) => edges.get(Math.min(a, b) + '_' + Math.max(a, b));
+  loops.forEach((l, fi) => { const poly = []; for (let k = 0; k < l.length; k++) { const a = l[k], b = l[(k + 1) % l.length], e = edgeOf(a, b), [f1, f2, L1, L2] = ids.get(e), arr = f1 === fi ? L1 : L2; if (a === e.a) for (let i = 0; i < N1; i++) poly.push(arr[i]); else for (let i = N; i >= 0; i--) poly.push(arr[i]); }
+    const c = fld[fi].c, rings = [poly]; for (const sc of [.7, .4]) rings.push(poly.map((i) => pid(bulge(fi, add(c, mul(sub(P[i], c), sc)))))); const n = poly.length;
+    for (let g = 0; g < 2; g++) for (let i = 0; i < n; i++) { const a = rings[g][i], b = rings[g][(i + 1) % n], c2 = rings[g + 1][(i + 1) % n], d = rings[g + 1][i]; tri.push(Object.assign([a, b, c2, d], { ref: fld[fi].n })); }
+    tri.push({ fan: rings[2], mid: bulge(fi, c), ref: fld[fi].n }); });
+  for (let v = 0; v < nv; v++) {
+    const inc = [...edges.values()].filter((e) => e.a === v || e.b === v), ptOf = (e, f) => { const [f1, , L1, L2] = ids.get(e), i = e.a === v ? 0 : N; return (f === f1 ? L1 : L2)[i]; };
+    let e = inc[0], f = e.f[0]; const pts = [];
+    for (let k = 0; k < 3; k++) { const e2 = inc.find((x) => x !== e && x.f.includes(f)); pts.push(ptOf(e, f), ptOf(e2, f)); f = e2.f[0] === f ? e2.f[1] : e2.f[0]; e = e2; }
+    let nm = [0, 0, 0]; for (const [fi, l] of loops.entries()) if (l.includes(v)) nm = add(nm, faceN[fi]);
+    { const nn = norm(nm), hc = mul(pts.reduce((a, i) => add(a, P[i]), [0, 0, 0]), 1 / pts.length); tri.push({ fan: pts, ref: nn, mid: add(hc, mul(nn, Math.max(0, dot(sub(corners[v], hc), nn)) * .6)), corner: true }); }   /* the corner patch bulges toward the old corner, like a rounded one */
+  }
+  const T = [], poly = (ts, ref, corner) => { let n = [0, 0, 0]; for (const [a, b, c] of ts) n = add(n, cross(sub(P[b], P[a]), sub(P[c], P[a]))); const flip = dot(n, ref) < 0; for (const [a, b, c] of ts) { let f = flip; if (!corner) f = dot(cross(sub(P[b], P[a]), sub(P[c], P[a])), ref) < 0; if (f) T.push(a, c, b); else T.push(a, b, c); } };   /* one winding for a whole patch or strip, so a folded piece can never flip alone */
+  for (const q of tri) {
+    if (q.fan) { const pl = q.fan; let c = q.mid || mul(pl.reduce((a, i) => add(a, P[i]), [0, 0, 0]), 1 / pl.length); const ci = pid(c), ts = []; for (let i = 0; i < pl.length; i++) ts.push([ci, pl[i], pl[(i + 1) % pl.length]]); poly(ts, q.ref, q.corner); }
+    else poly([[q[0], q[1], q[2]], [q[0], q[2], q[3]]], q.ref);
+  }
+  return { V: P, T };
+}
 function makeRock(seed, opts) {
   opts = opts || {}; const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
   const rc = opts.recipe || ROCK.random(seed, opts), stage = opts.stage == null ? 3 : opts.stage;
+  if (!opts.full) {
+    const m = simpleRock(rc, rc.seed || seed, stage, 24, opts.bottomBevel !== false), chk = check(m), bb = aabb(m.V), cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
+    return { rc, parts: [1], pieces: [1], check: chk, attempt: 1, kind: rc.kind || '', mesh: m, V: m.V.map((p) => [p[0] - cx, p[1] - cy, p[2]]), T: m.T, dimsOut: [bb.hi[0] - bb.lo[0], bb.hi[1] - bb.lo[1], bb.hi[2]], ms: (typeof performance !== 'undefined' ? performance : Date).now() - t0 };
+  }
   const ctx = { seed: String(rc.seed || seed), m: Math.min(rc.W, rc.D), center: [rc.W / 2, rc.D / 2, rc.H / 2], rmin: .05, rjoint: .02, jf: rc.jf || .2, bottomBevel: opts.bottomBevel !== false, noChamfer: stage === 0, chamfer: rc.chamfer || { top: [.08, .13], vert: [.09, .15], bottom: [.07, .11] } };
   const r = mulberry(hash('k' + (rc.seed || seed))), parts = partsOf(rc, r);
   if (stage >= 2) randomKinks(r, rc, parts, ctx, rc.kinks == null ? 2 : rc.kinks);
@@ -303,5 +379,5 @@ function makeRock(seed, opts) {
   res.ms = (typeof performance !== 'undefined' ? performance : Date).now() - t0;
   return res;
 }
-root.ROCK = { makeRock, check, mulberry, RECIPES: {}, random: null };
+root.ROCK = { makeRock, check, mulberry, RECIPES: {}, random: null, printable: false };
 })(typeof window !== 'undefined' ? window : globalThis);

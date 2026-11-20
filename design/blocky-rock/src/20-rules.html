@@ -1,30 +1,23 @@
 <section class="ch" id="rules">
-<header><span class="n">2 · The rules</span><h2>The smallest set that explains the sheet</h2>
-<p>A rock is lobes grown together, every edge rounded off by a chain of planes. Every number is <span class="ev p">proposed</span>: taken from the study and from drawing four reference rocks by hand. Lengths are in figure heights (fh); <code>m</code> is the shorter plan side. A rock is about 0.3 to 1.3 fh at its longest.</p></header>
+<header><span class="n">2 · The rules</span><h2>One idea: chamfer every edge</h2>
+<p>Round 6 strips the rock to one idea. Every number is <span class="ev p">proposed</span>. Lengths are in figure heights (fh); <code>m</code> is the shorter plan side.</p></header>
 <div class="rules">
 <div class="rule"><h3><span class="rn">B1</span> Base: a box, or a ramp</h3>
-<p>Class shares of the sheet: slab .22, block .30, pillar .22, ramp .26. Plan W, D and height H:</p>
-<ul><li>slab: W 0.75–1.1 fh, D 0.6–0.76 W, H 0.28–0.36 W</li><li>block: W 0.5–0.75 fh, D 0.75–0.95 W, H 0.68–0.95 W</li><li>pillar: W 0.42–0.56 fh, D 0.7–0.9 W, H 1.7–2.1 W (never above 1.3 fh)</li><li>ramp: W 0.5–0.7 fh, D 0.65–0.85, H 0.62–0.82; the top rises toward the back (y), from 0.22–0.32 of H at the front</li></ul>
-<p>Sides are near upright: a pillar leans with chance .4 by at most 0.03.</p></div>
-<div class="rule k"><h3><span class="rn">L1</span> A rock is lobes, nothing straight</h3>
-<p>1 to 4 lobes, each a box (or ramp) from the ground to its own top, touching along joints. Slab: 1 (.3), 2 (.35) or 3 (.35); block: 1 (.45), 2 (.3), 3 (.25). Joints are at uneven places (0.28–0.48 and 0.62–0.78 of the length) and each is angled up to 0.09 in plan. Every outer side leans by its own −0.01 to 0.045 (opposite sides differ), is twisted in plan by up to 0.07, and the top slopes by up to 0.025 each way. Tops are level within 0.012–0.03 except for a step.</p></div>
-<div class="rule k"><h3><span class="rn">L2</span> A step is a lower lobe</h3>
-<p>Chance .12 on a slab, .22 on a block (first lobe at 0.45–0.65 of the height), .5 on a pillar (an end lobe 0.38–0.52 of the width, at 0.35–0.5 of the height), .6 on a ramp: a seat 0.35–0.5 of the width by 0.3–0.4 of the depth at the front-left, a level shelf at 0.45–0.6 of the ramp's height there. A lower lobe is chamfered like any other.</p></div>
-<div class="rule"><h3><span class="rn">C1</span> Chamfers: a rounded-off edge as a chain of planes</h3>
-<p>Each convex edge gets 2 (.4) or 3 (.6) tangent planes; radius is 0.08–0.13 m on a top (so tops stay flat), 0.09–0.15 on an upright, 0.07–0.11 at the bottom, never under 0.05 fh; ±15 per cent per plane, and tilted so the width changes by up to 0.4 r along the edge. A joint edge takes a fifth of the radius. A bend under 35 degrees is a crease. Concave corners are never cut. A plane that would leave a sliver is left out.</p></div>
-<div class="rule"><h3><span class="rn">C2</span> Wobble</h3>
-<p>One to three planes a rock (one on a slab), 1.2–3.2 degrees off a side face or 0.5–1.3 off a top, 0.012–0.035 fh deep, never on a joint face.</p></div>
-<div class="rule"><h3><span class="rn">C3</span> Battered corners and edges</h3>
-<p>2 to 5 a rock (at most 4 on a slab), visible on most rocks. Each is two to four planes knocked off an outer feature of a random lobe: a top corner (.3), a low corner (.2), a low upright edge (.2), a bottom edge (.15) or a top edge (.15). Low and bottom chunks use planes tilted downward, so each takes a cap off the foot of the edge. Depth 0.04–0.16 of the shorter side (0.1 of a lobe's narrowest side on a top, 0.17 elsewhere), so a bite reaches up to a third of an edge; each plane's normal mixes the corner's axes with none under 0.38, so no leg runs long. Cut after the chamfers. Downward faces stay within 55 degrees from vertical.</p></div>
-<div class="rule k"><h3><span class="rn">K1</span> Crack: sometimes, and wandering</h3>
-<p>About 1 rock in 5, never more than one crack. The crack is a surface of up to 8 facets whose normals scatter around a base direction and whose positions scatter across the rock, so its line is irregular on the top, the sides and the corners, never straight in any direction. It separates a convex piece from the rest, and the path varies: right through from one side to the other (.35), cutting a corner off (.3), running down from the top and out through a side (.2), or diagonal (.15). The convex piece is moved 0.01–0.022 fh away, and a little along; the gap varies along the crack with the facets. A piece that touches the ground moves only sideways; a piece above the ground may lift. No chamfer, no V. A crack that leaves a sliver or an underside past 55 degrees is dropped.</p></div>
-<div class="rule k"><h3><span class="rn">R1</span> A ramp seat</h3>
-<p>The ramp is one sloped back piece, with the seat a lower level lobe at its front-left corner, its top tilting up 0.22 toward the riser. The slanted riser that flows into the seat is not built: tilting the lobes' joint faces made the pieces separate, so the riser is vertical.</p></div>
-<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P1</span> Undersides print</h3>
-<p>No face is flatter than 35 degrees above horizontal, except the flat bottom. A bottom chamfer plane whose normal points more than sin 55° (0.819) down is dropped; the finished mesh is checked and a plane that would leave a face over 55 degrees or a sliver is not used, so nothing is drawn again.</p></div>
-<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P2</span> Where a face must stay plain</h3>
-<p>For the cliff: <code>bottomBevel: false</code> leaves the bottom edges sharp (an edge on the ground, or on another stone). A top that carries a stone should take no wobble or chamfer, and a face against a neighbour none; the generator has no switch for these yet.</p></div>
-<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P3</span> One closed mesh</h3>
-<p>Each piece is welded and checked: every edge has two triangles.</p></div>
+<p>Class shares of the sheet: slab .22, block .30, pillar .22, ramp .26. Plan W, D and height H: slab W 0.75–1.1, D 0.6–0.76 W, H 0.28–0.36 W; block W 0.5–0.75, D 0.75–0.95 W, H 0.68–0.95 W; pillar W 0.42–0.56, D 0.7–0.9 W, H 1.7–2.1 W (not above 1.3 fh); ramp W 0.5–0.7, D 0.65–0.85, H 0.62–0.82, rising toward the back.</p></div>
+<div class="rule"><h3><span class="rn">B2</span> Nothing is square</h3>
+<p>Each outer side leans by its own −0.03 to 0.07 and is twisted in plan by up to 0.07; the top slopes up to 0.045 each way. The bottom is flat.</p></div>
+<div class="rule k"><h3><span class="rn">C1</span> Every edge is a wandering strip</h3>
+<p>24 segments an edge. The width is a smooth random curve (two sine waves) around a base width, varying ±38 per cent, and the tilt is another, so the strip swells, narrows and twists. A slow bow of up to 0.3 of the width, in or out, runs along it.</p></div>
+<div class="rule k"><h3><span class="rn">C2</span> Angles by kind of edge</h3>
+<ul><li>top edge: base width 0.07–0.13 m, 8–27 degrees below horizontal (twist ±5), a short drop down the side;</li><li>bottom edge: width 0.04–0.07 m, 60–69 degrees above horizontal (twist ±4);</li><li>side edge: width 0.05–0.10 m, 18–72 degrees (twist ±10): into either face.</li></ul>
+<p>On one face the chamfers together never take more than a third of its width (each leg at most 0.16 of the face's width).</p></div>
+<div class="rule"><h3><span class="rn">F1</span> Faces curve a little</h3>
+<p>Each face (not the bottom) carries a dome or saddle with an amplitude of 0.4–1.4 per cent of its size and a small tilt term, each from slightly concave to slightly convex. The chamfer lines sit on the curved faces.</p></div>
+<div class="rule"><h3><span class="rn">M1</span> Corners and closure</h3>
+<p>A strip ends short of the corner by about 0.9 of its neighbours' legs; a patch joins the six end points, its centre bulged 0.6 of the way toward the old corner. Faces are rings of quads and a fan; every vertex is shared, so the mesh is closed.</p></div>
+<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P1</span> Printing: off</h3>
+<p>The 55 degree rule is not enforced this round; the steepest underside is reported. <code>bottomBevel: false</code> still leaves the foot sharp, for the cliff.</p></div>
+<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">X1</span> Off, kept in the code</h3>
+<p>Lobes and steps, cracks (a wandering faceted cut with the far piece moved aside), battered corners and edges, and kink planes: <code>makeRock(seed, { full: true })</code>.</p></div>
 </div>
 </section>

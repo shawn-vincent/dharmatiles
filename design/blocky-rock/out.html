@@ -167,33 +167,26 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 </section>
 
 <section class="ch" id="rules">
-<header><span class="n">2 · The rules</span><h2>The smallest set that explains the sheet</h2>
-<p>A rock is lobes grown together, every edge rounded off by a chain of planes. Every number is <span class="ev p">proposed</span>: taken from the study and from drawing four reference rocks by hand. Lengths are in figure heights (fh); <code>m</code> is the shorter plan side. A rock is about 0.3 to 1.3 fh at its longest.</p></header>
+<header><span class="n">2 · The rules</span><h2>One idea: chamfer every edge</h2>
+<p>Round 6 strips the rock to one idea. Every number is <span class="ev p">proposed</span>. Lengths are in figure heights (fh); <code>m</code> is the shorter plan side.</p></header>
 <div class="rules">
 <div class="rule"><h3><span class="rn">B1</span> Base: a box, or a ramp</h3>
-<p>Class shares of the sheet: slab .22, block .30, pillar .22, ramp .26. Plan W, D and height H:</p>
-<ul><li>slab: W 0.75–1.1 fh, D 0.6–0.76 W, H 0.28–0.36 W</li><li>block: W 0.5–0.75 fh, D 0.75–0.95 W, H 0.68–0.95 W</li><li>pillar: W 0.42–0.56 fh, D 0.7–0.9 W, H 1.7–2.1 W (never above 1.3 fh)</li><li>ramp: W 0.5–0.7 fh, D 0.65–0.85, H 0.62–0.82; the top rises toward the back (y), from 0.22–0.32 of H at the front</li></ul>
-<p>Sides are near upright: a pillar leans with chance .4 by at most 0.03.</p></div>
-<div class="rule k"><h3><span class="rn">L1</span> A rock is lobes, nothing straight</h3>
-<p>1 to 4 lobes, each a box (or ramp) from the ground to its own top, touching along joints. Slab: 1 (.3), 2 (.35) or 3 (.35); block: 1 (.45), 2 (.3), 3 (.25). Joints are at uneven places (0.28–0.48 and 0.62–0.78 of the length) and each is angled up to 0.09 in plan. Every outer side leans by its own −0.01 to 0.045 (opposite sides differ), is twisted in plan by up to 0.07, and the top slopes by up to 0.025 each way. Tops are level within 0.012–0.03 except for a step.</p></div>
-<div class="rule k"><h3><span class="rn">L2</span> A step is a lower lobe</h3>
-<p>Chance .12 on a slab, .22 on a block (first lobe at 0.45–0.65 of the height), .5 on a pillar (an end lobe 0.38–0.52 of the width, at 0.35–0.5 of the height), .6 on a ramp: a seat 0.35–0.5 of the width by 0.3–0.4 of the depth at the front-left, a level shelf at 0.45–0.6 of the ramp's height there. A lower lobe is chamfered like any other.</p></div>
-<div class="rule"><h3><span class="rn">C1</span> Chamfers: a rounded-off edge as a chain of planes</h3>
-<p>Each convex edge gets 2 (.4) or 3 (.6) tangent planes; radius is 0.08–0.13 m on a top (so tops stay flat), 0.09–0.15 on an upright, 0.07–0.11 at the bottom, never under 0.05 fh; ±15 per cent per plane, and tilted so the width changes by up to 0.4 r along the edge. A joint edge takes a fifth of the radius. A bend under 35 degrees is a crease. Concave corners are never cut. A plane that would leave a sliver is left out.</p></div>
-<div class="rule"><h3><span class="rn">C2</span> Wobble</h3>
-<p>One to three planes a rock (one on a slab), 1.2–3.2 degrees off a side face or 0.5–1.3 off a top, 0.012–0.035 fh deep, never on a joint face.</p></div>
-<div class="rule"><h3><span class="rn">C3</span> Battered corners and edges</h3>
-<p>2 to 5 a rock (at most 4 on a slab), visible on most rocks. Each is two to four planes knocked off an outer feature of a random lobe: a top corner (.3), a low corner (.2), a low upright edge (.2), a bottom edge (.15) or a top edge (.15). Low and bottom chunks use planes tilted downward, so each takes a cap off the foot of the edge. Depth 0.04–0.16 of the shorter side (0.1 of a lobe's narrowest side on a top, 0.17 elsewhere), so a bite reaches up to a third of an edge; each plane's normal mixes the corner's axes with none under 0.38, so no leg runs long. Cut after the chamfers. Downward faces stay within 55 degrees from vertical.</p></div>
-<div class="rule k"><h3><span class="rn">K1</span> Crack: sometimes, and wandering</h3>
-<p>About 1 rock in 5, never more than one crack. The crack is a surface of up to 8 facets whose normals scatter around a base direction and whose positions scatter across the rock, so its line is irregular on the top, the sides and the corners, never straight in any direction. It separates a convex piece from the rest, and the path varies: right through from one side to the other (.35), cutting a corner off (.3), running down from the top and out through a side (.2), or diagonal (.15). The convex piece is moved 0.01–0.022 fh away, and a little along; the gap varies along the crack with the facets. A piece that touches the ground moves only sideways; a piece above the ground may lift. No chamfer, no V. A crack that leaves a sliver or an underside past 55 degrees is dropped.</p></div>
-<div class="rule k"><h3><span class="rn">R1</span> A ramp seat</h3>
-<p>The ramp is one sloped back piece, with the seat a lower level lobe at its front-left corner, its top tilting up 0.22 toward the riser. The slanted riser that flows into the seat is not built: tilting the lobes' joint faces made the pieces separate, so the riser is vertical.</p></div>
-<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P1</span> Undersides print</h3>
-<p>No face is flatter than 35 degrees above horizontal, except the flat bottom. A bottom chamfer plane whose normal points more than sin 55° (0.819) down is dropped; the finished mesh is checked and a plane that would leave a face over 55 degrees or a sliver is not used, so nothing is drawn again.</p></div>
-<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P2</span> Where a face must stay plain</h3>
-<p>For the cliff: <code>bottomBevel: false</code> leaves the bottom edges sharp (an edge on the ground, or on another stone). A top that carries a stone should take no wobble or chamfer, and a face against a neighbour none; the generator has no switch for these yet.</p></div>
-<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P3</span> One closed mesh</h3>
-<p>Each piece is welded and checked: every edge has two triangles.</p></div>
+<p>Class shares of the sheet: slab .22, block .30, pillar .22, ramp .26. Plan W, D and height H: slab W 0.75–1.1, D 0.6–0.76 W, H 0.28–0.36 W; block W 0.5–0.75, D 0.75–0.95 W, H 0.68–0.95 W; pillar W 0.42–0.56, D 0.7–0.9 W, H 1.7–2.1 W (not above 1.3 fh); ramp W 0.5–0.7, D 0.65–0.85, H 0.62–0.82, rising toward the back.</p></div>
+<div class="rule"><h3><span class="rn">B2</span> Nothing is square</h3>
+<p>Each outer side leans by its own −0.03 to 0.07 and is twisted in plan by up to 0.07; the top slopes up to 0.045 each way. The bottom is flat.</p></div>
+<div class="rule k"><h3><span class="rn">C1</span> Every edge is a wandering strip</h3>
+<p>24 segments an edge. The width is a smooth random curve (two sine waves) around a base width, varying ±38 per cent, and the tilt is another, so the strip swells, narrows and twists. A slow bow of up to 0.3 of the width, in or out, runs along it.</p></div>
+<div class="rule k"><h3><span class="rn">C2</span> Angles by kind of edge</h3>
+<ul><li>top edge: base width 0.07–0.13 m, 8–27 degrees below horizontal (twist ±5), a short drop down the side;</li><li>bottom edge: width 0.04–0.07 m, 60–69 degrees above horizontal (twist ±4);</li><li>side edge: width 0.05–0.10 m, 18–72 degrees (twist ±10): into either face.</li></ul>
+<p>On one face the chamfers together never take more than a third of its width (each leg at most 0.16 of the face's width).</p></div>
+<div class="rule"><h3><span class="rn">F1</span> Faces curve a little</h3>
+<p>Each face (not the bottom) carries a dome or saddle with an amplitude of 0.4–1.4 per cent of its size and a small tilt term, each from slightly concave to slightly convex. The chamfer lines sit on the curved faces.</p></div>
+<div class="rule"><h3><span class="rn">M1</span> Corners and closure</h3>
+<p>A strip ends short of the corner by about 0.9 of its neighbours' legs; a patch joins the six end points, its centre bulged 0.6 of the way toward the old corner. Faces are rings of quads and a fan; every vertex is shared, so the mesh is closed.</p></div>
+<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P1</span> Printing: off</h3>
+<p>The 55 degree rule is not enforced this round; the steepest underside is reported. <code>bottomBevel: false</code> still leaves the foot sharp, for the cliff.</p></div>
+<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">X1</span> Off, kept in the code</h3>
+<p>Lobes and steps, cracks (a wandering faceted cut with the far piece moved aside), battered corners and edges, and kink planes: <code>makeRock(seed, { full: true })</code>.</p></div>
 </div>
 </section>
 
@@ -215,37 +208,32 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 </section>
 
 <section class="ch" id="built">
-<header><span class="n">4 · How a rock is built</span><h2>Lobes, rounded off, battered, cracked</h2>
-<p>Four stages of one rock. Then the cost, measured in this browser.</p></header>
+<header><span class="n">4 · How a rock is built</span><h2>One block, every edge chamfered</h2>
+<p>Two stages of one rock. Then the cost, measured in this browser.</p></header>
 <div class="sec full"><div class="row" id="stages" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))"></div></div>
 <div class="sec">
 <div class="words"><ol>
-<li><b>Lobes.</b> A rock is one to four lobes: boxes, or ramps, standing on the ground and touching along joints. They share an outline and, except for a step, a top level. Nothing is straight: each outer side has its own lean and its own twist in plan, the top its own slight slope, and every joint is angled a few degrees and unevenly spaced. Each lobe is a convex solid held as planes.</li>
-<li><b>Chamfers.</b> Every convex edge of every lobe is rounded off by two or three planes, each tangent to a circle whose radius is set from the edge's own line, tilted so the width changes along the edge. The band is narrow on tops, so tops stay flat; joint edges get a fifth of the radius, so the crease between two lobes is a shallow V. A plane that would leave a sliver is left out. Inside corners are never rounded.</li>
-<li><b>Wobble and battered corners.</b> A few planes at 0.5 to 3 degrees break the large faces. Then 2 to 5 chunks of two to four planes are knocked off exposed corners and low and top edges, up to a third of an edge long, after the chamfers so their edges stay broken; downward faces stay within 55 degrees.</li>
-<li><b>Cracks.</b> About one rock in five is cracked, never more than once. A surface of facets scattered in both directions separates a convex piece from the rest: through, cutting a corner, down from the top, or diagonal. The convex piece moves a little away, and the rest is rebuilt around the cut. No chamfer, no V. A crack that would leave a sliver is dropped.</li>
-<li><b>Mesh.</b> Each piece is a closed mesh (welded, each edge in two triangles, steepest underside checked); the rock is its pieces together. Normals are smoothed across bends under 40 degrees for display only.</li></ol>
-<p>Nothing is a voxel or a field: every face is an exact plane. Where a crack and a lobe joint are both possible, cracks make the thin slits and lobe joints make the shallow creases and steps; the sheet has both (R1C8 is lobes, R3C3 and R4C1 are cracks).</p></div>
+<li><b>The block.</b> The base shape (slab, block, pillar or ramp) as six planes, each side tilted a little off square by its own amount, so no two sides are parallel, and the top with its own slight slope. The bottom is flat.</li>
+<li><b>A strip along every edge.</b> Each edge becomes a ruled strip of 24 short segments between a line on one face and a line on the other. The width follows a smooth random curve along the edge, so it swells and narrows, and so does the tilt, so the strip twists; the strip also bows a little along its length, in or out. Top edges lie 8 to 27 degrees below horizontal with a short drop down the side, bottom edges rise 60 to 69 degrees, and side edges take any angle from 18 to 72 degrees, leaning into one face or the other. The chamfers on one face together never take more than a third of its width, so the rock stays the same block.</li>
+<li><b>Faces and corners.</b> Every face is also curved a little both ways, a shallow dome or saddle, from slightly concave to slightly convex, and the chamfer lines lie on the curved faces. Each strip stops short of the corner by the neighbours' legs, and a small patch, bulged toward the old corner, joins the three strips' ends and the three faces' insets.</li>
+<li><b>Mesh.</b> Faces, strips and corner patches share their vertices, so the mesh is closed by construction (every edge in two triangles). Normals are smoothed across bends under 40 degrees for display only. About 3,600 triangles, 1 to 3 ms.</li></ol>
+<p><b>Off for this round, kept in the code (<code>makeRock(seed, { full: true })</code>):</b> lobes and steps, cracks, battered corners, kink planes, and the print rule (reported as "steepest underside", not enforced).</p></div>
 <div class="plates"><div class="plate pad"><div id="t-time" class="scroll"></div></div><p class="note" id="timenote"></p></div></div>
 </section>
 
 <section class="ch" id="verdict">
 <header><span class="n">5 · Against the references</span><h2>What looks right, and what does not</h2>
-<p>Four reference rocks were drawn by hand first (R1C8, R2C4, R1C7, R1C5), then a generator was written from them; round 4 added irregularity, battered corners and cracks. Judged by rendering the same view beside the cell.</p></header>
+<p>Round 6: one idea only. Compared beside R1C8, R2C4 and R1C5. Judged by rendering the same view beside the cell.</p></header>
 <div class="sec">
 <div class="words"><h3>Looks right</h3><ul>
-<li><b>R1C8 (block of lobes)</b> passes: one boxy mass, flat tops, shallow creases, bolder damage.</li>
-<li><b>R2C4 (pillar with a lower lobe)</b> weak pass: right proportions, a step and a battered foot; the top still chamfered flat.</li>
-<li><b>R1C5 (slab)</b> weak pass: two creases and a battered corner.</li>
-<li><b>Cracks</b> are now rare (1 in 5) and wander on the top and the sides, take different paths (through, corner, from the top, diagonal), and the gap varies along them.</li>
-<li><b>Damage</b> is on most rocks, on corners and low edges, in sizes that read at sheet scale.</li>
-<li>Fast, and no redraw: under 40 ms at the worst seed.</li></ul></div>
+<li>One idea, and it reads as one: a boxy rock with soft, wandering chamfers on every edge, nothing parallel, nothing straight.</li>
+<li>It stays the base shape: slab, block, pillar and ramp are all plainly themselves.</li>
+<li>A closed mesh by construction, 1 to 3 ms a rock.</li></ul></div>
 <div class="words"><h3>Does not look right yet</h3><ul>
-<li><b>R1C7 fails:</b> the ramp is one sloped piece with a level seat, but the seat's slanted back that flows into the slope is not made. Tilting the lobes' joint faces separated the pieces, so the riser is vertical and reads as a step.</li>
-<li><b>Chunks on narrow rocks</b> can still take too much: a pillar or a ramp corner is sometimes pointed, the sheet's never are.</li>
-<li><b>Cracks</b> are made of a handful of straight segments, so a close look shows short straight runs; and they read as thin slits more than as breaks.</li>
-<li><b>Softness</b> is out of scope: flats stay flat.</li>
-<li><b>Cliff constraints:</b> only <code>bottomBevel</code> exists.</li></ul></div></div>
+<li><b>It reads more like crumpled paper than the references.</b> The sheet's chamfers are crisp planes with distinct edges; mine, at these widths, blend into the faces under the display smoothing, and the faces carry faint X-shaped creases from the way they are triangulated.</li>
+<li><b>The steps, creases between lobes and damage that made the sheet's rocks read as rocks are off</b>, so every seed is a single plain block; the sheet's variety is not there.</li>
+<li><b>Some side chamfers swing wide</b> and leave a notch-like dark band down an edge.</li>
+<li>The steepest underside is up to about 90 degrees on a seed, because printing is not enforced.</li></ul></div></div>
 <div class="sec full"><div class="words"><h3>What I did not look at</h3>
 <ul><li>The back of any reference rock; there are none.</li>
 <li>A real phone: headless Chrome at 1280 and 390 px only.</li>
@@ -454,7 +442,7 @@ function check(m) {
 function partsOf(rc, r) {
   const irr = rc.irr == null ? 1 : rc.irr, g = (a, b) => U(r, a, b) * irr;
   /* nothing is straight: every outer side has its own lean and its own twist in plan, the top its own small slope */
-  const bat = [g(-.01, .045), g(-.01, .045), g(-.01, .045), g(-.01, .045)], skO = [g(-.07, .07), g(-.07, .07), g(-.07, .07), g(-.07, .07)], lean = [(rc.lean || [0, 0])[0] + g(-.02, .02), (rc.lean || [0, 0])[1] + g(-.02, .02)], tx = g(-.025, .025), ty = g(-.025, .025);
+  const bat = [g(-.03, .07), g(-.03, .07), g(-.03, .07), g(-.03, .07)], skO = [g(-.07, .07), g(-.07, .07), g(-.07, .07), g(-.07, .07)], lean = [(rc.lean || [0, 0])[0] + g(-.02, .02), (rc.lean || [0, 0])[1] + g(-.02, .02)], tx = g(-.045, .045), ty = g(-.045, .045);
   const jx = {}, jy = {}, jk = (tab, key) => (tab[key] == null ? (tab[key] = g(-.09, .09)) : tab[key]), kk = (v) => Math.round(v * 1e4);
   return rc.lobes.map((q) => {
     const sx = (q.sx || 0) + tx, sy = (q.sy || 0) + ty, ht = q.h - sx * q.x1 - sy * q.y1, ox0 = q.x0 < 1e-9, ox1 = q.x1 > rc.W - 1e-9, oy0 = q.y0 < 1e-9, oy1 = q.y1 > rc.D - 1e-9;
@@ -541,9 +529,85 @@ function crackPieces(pieces, cr) {
   return out;
 }
 const aabbSize = (F) => { const b = aabb(F.flatMap((f) => f.p)); return Math.min(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]); };
+
+/* ---------- the simple rock: one block, every edge chamfered by a strip built directly as a mesh ----------
+   Each edge gets a strip of N short segments between a line on one face and a line on the other. The width follows a smooth random curve along the
+   edge and so does the tilt, so the strip swells, narrows and twists; each face is left with an inset polygon, and each corner is closed by a small
+   patch joining the three strips' ends. Top edges lie 10-25 degrees below horizontal, bottom edges rise 62-68 degrees, upright edges about 45. */
+function curve(r) { const f1 = U(r, .5, 1.4), f2 = U(r, 1.0, 2.2), p1 = r() * 6.283, p2 = r() * 6.283, a = U(r, .6, .75), g = (t) => a * Math.sin(6.283 * f1 * t + p1) + (1 - a) * Math.sin(6.283 * f2 * t + p2); g.slope = 6.283 * (a * f1 + (1 - a) * f2); return g; }
+function simpleRock(rc, seed, stage, N, bottomBevel) {
+  const r0 = mulberry(hash('b' + seed)), one = { W: rc.W, D: rc.D, H: rc.H, lean: rc.lean, irr: rc.irr, lobes: [{ x0: 0, x1: rc.W, y0: 0, y1: rc.D, h: rc.H, sy: rc.kind === 'ramp' ? (rc.lobes[0].sy || 0) : 0 }] };
+  const part = partsOf(one, r0)[0], F = buildPart(part, { noChamfer: true, m: 1, center: [0, 0, 0], seed: 'x', chamfer: { top: [0, 0], vert: [0, 0], bottom: [0, 0] } }).faces;
+  if (stage === 0) { const m = meshOf(F.map((f) => ({ p: f.p, n: f.n }))); return { V: m.V, T: m.T }; }
+  const V = [], key = (p) => Math.round(p[0] * 1e5) + ',' + Math.round(p[1] * 1e5) + ',' + Math.round(p[2] * 1e5), vmap = new Map(), vid = (p) => { const k = key(p); let i = vmap.get(k); if (i === undefined) { i = V.length; V.push(p); vmap.set(k, i); } return i; };
+  const loops = F.map((f) => { const l = []; for (const p of f.p) { const i = vid(p); if (l[l.length - 1] !== i) l.push(i); } if (l.length > 1 && l[0] === l[l.length - 1]) l.pop(); return l; });
+  const corners = V.slice(), nv = corners.length, edges = new Map(), faceN = F.map((f) => f.n), faceC = loops.map((l) => mul(l.reduce((a, i) => add(a, corners[i]), [0, 0, 0]), 1 / l.length));
+  loops.forEach((l, fi) => { for (let k = 0; k < l.length; k++) { const a = l[k], b = l[(k + 1) % l.length], ka = Math.min(a, b) + '_' + Math.max(a, b); let e = edges.get(ka); if (!e) edges.set(ka, e = { a: Math.min(a, b), b: Math.max(a, b), f: [] }); e.f.push(fi); } });
+  const center = mul(corners.reduce((a, p) => add(a, p), [0, 0, 0]), 1 / nv), m = Math.min(rc.W, rc.D), H = rc.H, P = [], tri = [];
+  const pid = (p) => { P.push(p); return P.length - 1; }, bottomOf = (fi) => faceN[fi][2];
+  const ids = new Map(), N1 = N + 1;
+  /* every face is curved a little both ways: a shallow dome or saddle, mostly bulging out, never on the bottom */
+  const fld = F.map((f, fi) => { const n = f.n, r = mulberry(hash(seed + ':f' + fi)), up = Math.abs(n[2]) > .9 ? [1, 0, 0] : [0, 0, 1], u = norm(cross(n, up)), v = cross(n, u), ext = [Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), u)))) || 1, Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), v)))) || 1];
+    const A = f.n[2] < -.95 ? 0 : U(r, .004, .014) * Math.min(ext[0], ext[1]) * 2, dome = U(r, -1, 1), sad = U(r, -.5, .5), tl = U(r, -.2, .2), tl2 = U(r, -.2, .2); return { n, u, v, ext, c: faceC[fi], A, dome, sad, tl, tl2 }; });
+  const bulge = (fi, p) => { const q = fld[fi]; if (!q.A) return p; const x = dot(sub(p, q.c), q.u) / q.ext[0], y = dot(sub(p, q.c), q.v) / q.ext[1], h = q.A * (q.dome * (1 - (x * x + y * y) / 2) + q.sad * (x * x - y * y) + q.tl * x + q.tl2 * y); return add(p, mul(q.n, h)); };
+  /* pass 0: each edge's kind, size and leg, so a strip can stop short of the corner by the neighbours' legs and the corner patch lies on the faces, not on a sharp edge */
+  const info = new Map(); let ej = 0;
+  for (const e of edges.values()) {
+    const rw = mulberry(hash(seed + ':w' + (ej++))), A = corners[e.a], B = corners[e.b], t = norm(sub(B, A)), mid = mul(add(A, B), .5);
+    let [f1, f2] = e.f; const n1 = faceN[f1], n2 = faceN[f2];
+    const bottom = Math.min(n1[2], n2[2]) < -.95, top = !bottom && Math.max(n1[2], n2[2]) > .5, kind = bottom ? 'bottom' : top ? 'top' : 'vert';
+    if (bottom ? n2[2] < n1[2] : top ? n2[2] > n1[2] : false) [f1, f2] = [f2, f1];   /* f1 carries the first leg: the top face, the bottom face */
+    const dir = (fi) => { const c = sub(faceC[fi], mid), d = sub(c, mul(t, dot(c, t))); return norm(d); }, d1 = dir(f1), d2 = dir(f2);
+    const ext = (fi, d) => Math.max(...loops[fi].map((i) => dot(sub(corners[i], mid), d)));
+    const e1 = ext(f1, d1), e2 = ext(f2, d2);
+    let w0, th0, tw;
+    if (kind === 'top') { w0 = U(rw, .07, .13) * m; th0 = U(rw, 8, 27); tw = 5; } else if (kind === 'bottom') { w0 = U(rw, .04, .07) * m; th0 = U(rw, 60, 69); tw = 4; } else { w0 = U(rw, .05, .1) * m; th0 = U(rw, 18, 72); tw = 10; }
+    if (kind === 'bottom' && !bottomBevel) w0 = 1e-4;
+    info.set(e, { kind, f1, f2, d1, d2, e1, e2, w0, th0, tw, A, B, t, mid, n1, n2, leg: Math.min(w0 * 1.4, .16 * e1) });
+  }
+  const trimAt = (e, v) => { let g = 0; for (const o of edges.values()) if (o !== e && (o.a === v || o.b === v)) g = Math.max(g, info.get(o).leg, info.get(o).kind === 'vert' ? 0 : Math.min(info.get(o).w0 * 1.4 * Math.tan(info.get(o).th0 * Math.PI / 180), .16 * info.get(o).e2)); return .9 * g; };
+  let ei = 0;
+  for (const e of edges.values()) {
+    const r = mulberry(hash(seed + ':e' + (ei++))), { kind, f1, f2, d1, d2, e1, e2, w0, th0, tw, A, B, n1, n2 } = info.get(e), gw = curve(r), ga = curve(r);
+    const Lfull = len(sub(B, A)), tA = Math.min(.3, trimAt(e, e.a) / Lfull), tB = Math.min(.3, trimAt(e, e.b) / Lfull);
+    const bow = U(r, -.3, .3), ob = norm(add(n1, n2)), Le = Lfull * (1 - tA - tB), ampW = .5 * Math.min(1, .5 * Le / (w0 * .5 * gw.slope)), L1 = [], L2 = [];   /* the width changes slowly enough along a short edge that the strip never leans past the print rule */
+    for (let i = 0; i < N1; i++) {
+      const tt = i / N, w = Math.max(.35, 1 + .38 * gw(tt)) * w0, th = (th0 + tw * ga(tt)) * Math.PI / 180;
+      let a = Math.min(w, .16 * e1), b = Math.min(w * Math.tan(th), .16 * e2);   /* on one face the chamfers together never take more than a third of its width */
+      if (kind === 'bottom' || kind === 'top') { /* the limit on the leg keeps the angle: shorten the other */ if (b < w * Math.tan(th) - 1e-9) a = Math.min(a, b / Math.tan(th)); }
+      const E = add(A, mul(sub(B, A), tA + (1 - tA - tB) * tt));
+      const bw = bow * Math.sin(Math.PI * tt) * w0, bo = mul(kind === 'bottom' ? [ob[0], ob[1], 0] : ob, bw);   /* the chamfer as a whole bows along its length, in or out */
+      L1.push(pid(add(bulge(f1, add(E, mul(d1, a))), bo))); L2.push(pid(add(bulge(f2, add(E, mul(d2, b))), bo)));
+    }
+    ids.set(e, [f1, f2, L1, L2]);
+    for (let i = 0; i < N; i++) tri.push(Object.assign([L1[i], L1[i + 1], L2[i + 1], L2[i]], { ref: ob }));
+  }
+  const edgeOf = (a, b) => edges.get(Math.min(a, b) + '_' + Math.max(a, b));
+  loops.forEach((l, fi) => { const poly = []; for (let k = 0; k < l.length; k++) { const a = l[k], b = l[(k + 1) % l.length], e = edgeOf(a, b), [f1, f2, L1, L2] = ids.get(e), arr = f1 === fi ? L1 : L2; if (a === e.a) for (let i = 0; i < N1; i++) poly.push(arr[i]); else for (let i = N; i >= 0; i--) poly.push(arr[i]); }
+    const c = fld[fi].c, rings = [poly]; for (const sc of [.7, .4]) rings.push(poly.map((i) => pid(bulge(fi, add(c, mul(sub(P[i], c), sc)))))); const n = poly.length;
+    for (let g = 0; g < 2; g++) for (let i = 0; i < n; i++) { const a = rings[g][i], b = rings[g][(i + 1) % n], c2 = rings[g + 1][(i + 1) % n], d = rings[g + 1][i]; tri.push(Object.assign([a, b, c2, d], { ref: fld[fi].n })); }
+    tri.push({ fan: rings[2], mid: bulge(fi, c), ref: fld[fi].n }); });
+  for (let v = 0; v < nv; v++) {
+    const inc = [...edges.values()].filter((e) => e.a === v || e.b === v), ptOf = (e, f) => { const [f1, , L1, L2] = ids.get(e), i = e.a === v ? 0 : N; return (f === f1 ? L1 : L2)[i]; };
+    let e = inc[0], f = e.f[0]; const pts = [];
+    for (let k = 0; k < 3; k++) { const e2 = inc.find((x) => x !== e && x.f.includes(f)); pts.push(ptOf(e, f), ptOf(e2, f)); f = e2.f[0] === f ? e2.f[1] : e2.f[0]; e = e2; }
+    let nm = [0, 0, 0]; for (const [fi, l] of loops.entries()) if (l.includes(v)) nm = add(nm, faceN[fi]);
+    { const nn = norm(nm), hc = mul(pts.reduce((a, i) => add(a, P[i]), [0, 0, 0]), 1 / pts.length); tri.push({ fan: pts, ref: nn, mid: add(hc, mul(nn, Math.max(0, dot(sub(corners[v], hc), nn)) * .6)), corner: true }); }   /* the corner patch bulges toward the old corner, like a rounded one */
+  }
+  const T = [], poly = (ts, ref, corner) => { let n = [0, 0, 0]; for (const [a, b, c] of ts) n = add(n, cross(sub(P[b], P[a]), sub(P[c], P[a]))); const flip = dot(n, ref) < 0; for (const [a, b, c] of ts) { let f = flip; if (!corner) f = dot(cross(sub(P[b], P[a]), sub(P[c], P[a])), ref) < 0; if (f) T.push(a, c, b); else T.push(a, b, c); } };   /* one winding for a whole patch or strip, so a folded piece can never flip alone */
+  for (const q of tri) {
+    if (q.fan) { const pl = q.fan; let c = q.mid || mul(pl.reduce((a, i) => add(a, P[i]), [0, 0, 0]), 1 / pl.length); const ci = pid(c), ts = []; for (let i = 0; i < pl.length; i++) ts.push([ci, pl[i], pl[(i + 1) % pl.length]]); poly(ts, q.ref, q.corner); }
+    else poly([[q[0], q[1], q[2]], [q[0], q[2], q[3]]], q.ref);
+  }
+  return { V: P, T };
+}
 function makeRock(seed, opts) {
   opts = opts || {}; const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
   const rc = opts.recipe || ROCK.random(seed, opts), stage = opts.stage == null ? 3 : opts.stage;
+  if (!opts.full) {
+    const m = simpleRock(rc, rc.seed || seed, stage, 24, opts.bottomBevel !== false), chk = check(m), bb = aabb(m.V), cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
+    return { rc, parts: [1], pieces: [1], check: chk, attempt: 1, kind: rc.kind || '', mesh: m, V: m.V.map((p) => [p[0] - cx, p[1] - cy, p[2]]), T: m.T, dimsOut: [bb.hi[0] - bb.lo[0], bb.hi[1] - bb.lo[1], bb.hi[2]], ms: (typeof performance !== 'undefined' ? performance : Date).now() - t0 };
+  }
   const ctx = { seed: String(rc.seed || seed), m: Math.min(rc.W, rc.D), center: [rc.W / 2, rc.D / 2, rc.H / 2], rmin: .05, rjoint: .02, jf: rc.jf || .2, bottomBevel: opts.bottomBevel !== false, noChamfer: stage === 0, chamfer: rc.chamfer || { top: [.08, .13], vert: [.09, .15], bottom: [.07, .11] } };
   const r = mulberry(hash('k' + (rc.seed || seed))), parts = partsOf(rc, r);
   if (stage >= 2) randomKinks(r, rc, parts, ctx, rc.kinks == null ? 2 : rc.kinks);
@@ -563,7 +627,7 @@ function makeRock(seed, opts) {
   res.ms = (typeof performance !== 'undefined' ? performance : Date).now() - t0;
   return res;
 }
-root.ROCK = { makeRock, check, mulberry, RECIPES: {}, random: null };
+root.ROCK = { makeRock, check, mulberry, RECIPES: {}, random: null, printable: false };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /* ---------- hand recipes: the four reference rocks drawn by hand (lengths in fh) ---------- */
@@ -743,7 +807,7 @@ function show() {
   rock = ROCK.makeRock(seed, { kind });
   scene = ROCKVIEW.buildScene(rock); frame(); draw();
   const d = rock.dimsOut, c = rock.check;
-  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Lobes</dt><dd>${rock.parts.length}</dd><dt>Pieces</dt><dd>${rock.pieces.length} (${rock.rc.crack ? 'a crack' : 'no crack'}, ${rock.rc.chips} battered corner${rock.rc.chips === 1 ? '' : 's'})</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (limit 55°)${rock.attempt > 1 ? '; drawn again ' + (rock.attempt - 1) + '×' : ''}</dd>`;
+  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (not enforced this round; the printing limit is 55°)</dd>`;
   $('#seed').value = seed; try { history.replaceState(null, '', '#s=' + seed + '&k=' + kind); } catch (e) { /* the preview may not allow it: harmless */ }
 }
 function go(s) { seed = Math.max(1, Math.min(999999, Math.round(s))); show(); }
@@ -765,9 +829,8 @@ function startExplorer(img) {
 
 /* ---------- how a rock is built: the stages of one seed, and the timing ---------- */
 function stages() {
-  let s0 = 1; for (; s0 < 800; s0++) { const r = ROCK.makeRock(s0, { kind: 'any' }); if (r.parts.length >= 2 && r.rc.crack && r.rc.chips) break; }
-  const host = $('#stages'), f = ROCK.makeRock(s0, { kind: 'any' }), o = { kind: 'any' };
-  const items = [['1 · lobes', ROCK.makeRock(s0, { ...o, stage: 0 }), f.parts.length + ' boxes touching, each its own height, each leaning a little differently.'], ['2 · chamfers', ROCK.makeRock(s0, { ...o, stage: 1 }), 'Every convex edge rounded off by two or three planes, narrow on the tops.'], ['3 · wobble, battered', ROCK.makeRock(s0, { ...o, stage: 2 }), 'A few planes at one to three degrees, and chunks knocked off corners.'], ['4 · cracks', f, 'A wandering crack, the cut-off piece moved a little apart. ' + f.pieces.length + ' pieces, ' + f.T.length / 3 + ' triangles (seed ' + s0 + ').']];
+  const host = $('#stages'), s0 = 7, o = { kind: 'block' };
+  const items = [['1 · the block', ROCK.makeRock(s0, { ...o, stage: 0 }), 'Six faces, each tilted a little off square, the top with its own slope.'], ['2 · every edge chamfered', ROCK.makeRock(s0, o), 'A strip along each edge whose width, tilt and bow wander along it; faces curved a little; corner patches close it.']];
   for (const [t, r, sub] of items) { const cv = ROCKVIEW.still(r, 330, 300); host.append(el('div', {}, el('div', { class: 'cell' }, cv, el('span', { class: 'tag', text: t })), el('div', { class: 'note', style: 'margin-top:5px;border:0;padding:0', text: sub }))); }
 }
 function timing() {
@@ -776,10 +839,10 @@ function timing() {
   for (const k of kinds) {
     const ms = [], tri = []; let again = 0, bad = 0, over = 0; const N = 120;
     for (let i = 0; i < N; i++) { const r = ROCK.makeRock(5000 + i, { kind: k }); ms.push(r.ms); tri.push(r.T.length / 3); if (r.rc.crack) again++; if (r.check.open || r.check.many) bad++; over = Math.max(over, r.check.overhangDeg); }
-    all.push(...ms); rows.push([k, f1(ms.reduce((a, b) => a + b) / N), f1(q(ms, .95)), f1(Math.max(...ms)), Math.round(tri.reduce((a, b) => a + b) / N), Math.round(again / N * 100) + '%', bad, f1(over)]);
+    all.push(...ms); rows.push([k, f1(ms.reduce((a, b) => a + b) / N), f1(q(ms, .95)), f1(Math.max(...ms)), Math.round(tri.reduce((a, b) => a + b) / N), f1(over), bad]);
   }
-  $('#t-time').innerHTML = table(['Base shape', 'mean ms', 'p95 ms', 'max ms', 'triangles', 'cracked', 'open', 'worst underside °'], rows);
-  $('#timenote').textContent = 'Measured just now in this browser: 120 seeds a row, a rock built, joined, welded and checked each time; the picture is not in it. "Cracked" is the share of rocks with a crack. A cutting plane that would leave a sliver or a face over 55 degrees is left out while building, so nothing is redrawn.';
+  $('#t-time').innerHTML = table(['Base shape', 'mean ms', 'p95 ms', 'max ms', 'triangles', 'underside °', 'open'], rows);
+  $('#timenote').textContent = 'Measured just now in this browser: 120 seeds a row, a rock built and checked each time; the picture is not in it. "underside" is the steepest face facing down, in degrees from vertical; it is reported and not enforced this round (the printing limit is 55°).';
 }
 
 window.addEventListener('DOMContentLoaded', () => {
