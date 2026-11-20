@@ -1,20 +1,20 @@
 <section class="ch" id="rules">
 <header><span class="n">2 · The rules</span><h2>One idea: chamfer every edge</h2>
-<p>Round 6 strips the rock to one idea. Every number is <span class="ev p">proposed</span>. Lengths are in figure heights (fh); <code>m</code> is the shorter plan side.</p></header>
+<p>Round 7 keeps the one idea of round 6, with single-arc chamfers. It strips the rock to one idea. Every number is <span class="ev p">proposed</span>. Lengths are in figure heights (fh); <code>m</code> is the shorter plan side.</p></header>
 <div class="rules">
 <div class="rule"><h3><span class="rn">B1</span> Base: a box, or a ramp</h3>
 <p>Class shares of the sheet: slab .22, block .30, pillar .22, ramp .26. Plan W, D and height H: slab W 0.75–1.1, D 0.6–0.76 W, H 0.28–0.36 W; block W 0.5–0.75, D 0.75–0.95 W, H 0.68–0.95 W; pillar W 0.42–0.56, D 0.7–0.9 W, H 1.7–2.1 W (not above 1.3 fh); ramp W 0.5–0.7, D 0.65–0.85, H 0.62–0.82, rising toward the back.</p></div>
 <div class="rule"><h3><span class="rn">B2</span> Nothing is square</h3>
 <p>Each outer side leans by its own −0.03 to 0.07 and is twisted in plan by up to 0.07; the top slopes up to 0.045 each way. The bottom is flat.</p></div>
-<div class="rule k"><h3><span class="rn">C1</span> Every edge is a wandering strip</h3>
-<p>24 segments an edge. The width is a smooth random curve (two sine waves) around a base width, varying ±38 per cent, and the tilt is another, so the strip swells, narrows and twists. A slow bow of up to 0.3 of the width, in or out, runs along it.</p></div>
-<div class="rule k"><h3><span class="rn">C2</span> Angles by kind of edge</h3>
-<ul><li>top edge: base width 0.07–0.13 m, 8–27 degrees below horizontal (twist ±5), a short drop down the side;</li><li>bottom edge: width 0.04–0.07 m, 60–69 degrees above horizontal (twist ±4);</li><li>side edge: width 0.05–0.10 m, 18–72 degrees (twist ±10): into either face.</li></ul>
-<p>On one face the chamfers together never take more than a third of its width (each leg at most 0.16 of the face's width).</p></div>
+<div class="rule k"><h3><span class="rn">C1</span> Every edge is one arc</h3>
+<p>24 segments an edge. The width is wider or narrower in the middle, by up to 40 per cent either way; the tilt is constant or changes once, by up to ±4 degrees on a top edge, ±3 on a bottom edge, ±8 on a side edge; the strip bows by up to 0.3 of its width, in or out. Each edge has its own random numbers.</p></div>
+<div class="rule k"><h3><span class="rn">C2</span> Angles and widths</h3>
+<ul><li>top edge: width 0.13–0.24 m (at least 0.06 fh), 8–27 degrees below horizontal, a short drop down the side;</li><li>bottom edge: width 0.06–0.10 m (at least 0.05), 60–69 degrees above horizontal;</li><li>side edge: width 0.12–0.22 m (at least 0.06), 32–58 degrees, so no dark gash.</li></ul>
+<p>On one face the chamfers together never take more than a third of its width (each leg at most 0.16 of the face). Each chamfer is shown as its own band: normals are not smoothed across bends over 6 degrees.</p></div>
 <div class="rule"><h3><span class="rn">F1</span> Faces curve a little</h3>
-<p>Each face (not the bottom) carries a dome or saddle with an amplitude of 0.4–1.4 per cent of its size and a small tilt term, each from slightly concave to slightly convex. The chamfer lines sit on the curved faces.</p></div>
+<p>Each face (not the bottom) carries a dome or saddle with an amplitude of 0.13–0.47 per cent of its size and a small tilt term, each from slightly concave to slightly convex. The chamfer lines sit on the curved faces.</p></div>
 <div class="rule"><h3><span class="rn">M1</span> Corners and closure</h3>
-<p>A strip ends short of the corner by about 0.9 of its neighbours' legs; a patch joins the six end points, its centre bulged 0.6 of the way toward the old corner. Faces are rings of quads and a fan; every vertex is shared, so the mesh is closed.</p></div>
+<p>A strip ends short of the corner by about 0.9 of its neighbours' legs; a patch joins the six end points, its centre bulged 0.2 of the way toward the old corner. Each face is an even 12 by 24 grid of quads, its two other sides zipped to it; every vertex is shared, so the mesh is closed.</p></div>
 <div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P1</span> Printing: off</h3>
 <p>The 55 degree rule is not enforced this round; the steepest underside is reported. <code>bottomBevel: false</code> still leaves the foot sharp, for the cliff.</p></div>
 <div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">X1</span> Off, kept in the code</h3>
