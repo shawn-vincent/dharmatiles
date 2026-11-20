@@ -41,7 +41,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 </style>
 <main>
 <div><h1>Blocky Cliff Generator</h1>
-<p class="lede">One formation from one seed, piled from rounded boxes and built as one solid: the stones are joined by a plain union, so every inside corner is sharp, and each joint that shows is a V groove of 0.05 figure heights or less with flat flanks, closing up (fusing) along part of its length by the measured rule of chapter 8. The rules are those of the <a href="https://claude.ai/artifact/MYzPe5rc2ieRxEUzxChEmw">Blocky Cliff Atlas</a>. It is for judging the coarse character: shapes, sizes, arrangement, proportion. No figure, no base, no surface.</p></div>
+<p class="lede">One formation from one seed, piled from rounded boxes by the rules of the <a href="https://claude.ai/artifact/MYzPe5rc2ieRxEUzxChEmw">Blocky Cliff Atlas</a>. Where chapter 8's rule says a joint has fused, a flat filler piece is added between the two stones, flush with their faces and never cut into them; inside corners are sharp. It is for judging the coarse character: shapes, sizes, arrangement, proportion. No figure, no base, no surface.</p></div>
 <div class="bench">
   <div class="live" id="live"></div>
   <div class="side">
@@ -49,14 +49,14 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
       <div class="seedrow"><button type="button" class="main" id="new">New seed</button><button type="button" id="view">Reset view</button></div></div>
     <div class="grp"><label for="cls"><span style="font:600 12px var(--head);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Kind</span></label>
       <select id="cls"><option value="any">Any, in the references' proportion</option><option value="pillars">Pillars</option><option value="wall">Plateau wall</option><option value="blocks">Blocks in tiers</option><option value="leaners">Leaning set or dipping beds</option><option value="courses">Courses (a stair)</option><option value="gates">Gate</option></select></div>
-    <div class="grp"><span id="l-join">Stones</span><div class="seedrow" role="group" aria-labelledby="l-join"><button type="button" id="j-on" aria-pressed="true">Joined into one solid</button><button type="button" id="j-off" aria-pressed="false">Separate</button></div></div>
+    <div class="grp"><span id="l-join">Joints</span><div class="seedrow" role="group" aria-labelledby="l-join"><button type="button" id="j-on" aria-pressed="true">Faces merged</button><button type="button" id="j-off" aria-pressed="false">Separate</button></div></div>
     <p class="read" id="read"></p>
     <p class="note">Drag to turn. Pinch to zoom. Scrolling over the view scrolls the page. Lengths are in figure heights: a formation is about two high.</p>
   </div>
 </div>
 <div class="grp"><h2 id="sheet-h">Twelve in a row</h2><p class="note">Seeds from the one above onward, each drawn once as a still picture from the references' three-quarter view. Choose one to load it.</p>
 <div class="sheet" id="sheet" aria-labelledby="sheet-h"></div></div>
-<p class="note">What this does not do: the stones are rounded boxes, plainer than the references' stones, which bulge and dent; the solid is polygonised on a grid of 0.025 fh (the sheet below 0.035), so a groove's line wavers a little where it ramps away; edges are ruled where the references' wander; dipping beds are stiff; and two forms that each appear once in the sheets, a niche with a chockstone (J) and a rock shelter (K), are not made at all.</p>
+<p class="note">What this does not do: the stones are rounded boxes, plainer than the references' stones, which bulge and dent; edges are ruled where the references' wander; dipping beds are stiff; a fused stretch is drawn only where a flat filler lies flush (not across a chamfer, a battered side or a bed that opens), and only along the front of a bed; nothing is done yet to make beds printable; and two forms that each appear once in the sheets, a niche with a chockstone (J) and a rock shelter (K), are not made at all.</p>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -191,41 +191,13 @@ function still(stones, o = {}) {
   return o.sub ? Object.assign(h('div', { style: 'min-width:0' }, box, h('div', { class: 'sub', html: o.sub })), { svg, proj: box.proj, box }) : box;
 }
 
-/* ---------- one solid per formation ----------
-   Each stone is a signed distance field (the rounded box of stoneParams, taken through the inverse of the stone's batter, dip, lean and yaw,
-   cut softly by its planes). The stones are joined by a plain union (every concave corner stays sharp), and every contact between two stones has its own setting:
-   - a bridge fills the slot between them where they touch, so a bed is one body with no lip under the upper stone;
-   - a V groove (about 0.04 fh deep, flanks at 45 degrees) is cut along the free edge of the bridge to mark the joint;
-   - the groove's depth along the joint is a profile: full, or nothing where the joint has died (fused), ramping to nothing or ending in a notch.
-   The field is polygonised on a grid with surface nets, evaluating finely only in a narrow band round the surface. */
-const SF = { fp: 0 };                    /* where a stone's field leaves its plan footprint's distance */
-const GROOVE = { bed: .05, up: .06 };   /* a groove's full depth, fh */
-const smax = (a, b, k) => (a + b + Math.sqrt((a - b) * (a - b) + k * k)) / 2;
-
-/* a stone's field: ev(x, y, z) is its signed distance (negative inside) and leaves the plan footprint's distance in SF.fp */
-function stoneField(o) {
-  const P = stoneParams(o), { q, hx, hy, hz, rh, rT, rB, cuts, ta, tdp, sa0, sd0, c, s2, cu } = P, vcuts = cuts.filter((t) => t.n[2] === 0);
-  const pts = stoneMesh(o).P, box = [1e9, 1e9, 1e9, -1e9, -1e9, -1e9];
-  for (const p of pts) for (let k = 0; k < 3; k++) { if (p[k] < box[k]) box[k] = p[k]; if (p[k] > box[k + 3]) box[k + 3] = p[k]; }
-  const h = q.h, ks = Math.min(1, ta, tdp) / Math.sqrt(1 + q.leanA * q.leanA + q.leanD * q.leanD + q.dipA * q.dipA + q.dipD * q.dipD + q.botA * q.botA), ev = (X, Y, Z) => {
-    const x = X - q.a, y = Y - q.d, zz = Z - q.z; let a = x * c + y * s2, d = -x * s2 + y * c; a -= q.leanA * zz; d -= q.leanD * zz;
-    let t = zz / h; t = t < 0 ? 0 : t > 1 ? 1 : t; const zb = zz - h / 2; let sa = lerp(1, ta, t), sd = lerp(1, tdp, t), zl = zb - t * (q.dipA * a + q.dipD * d) - (1 - t) * q.botA * a;
-    if (q.dipA || q.dipD || q.botA) { t = zl / h + .5; t = t < 0 ? 0 : t > 1 ? 1 : t; sa = lerp(1, ta, t); sd = lerp(1, tdp, t); zl = zb - t * (q.dipA * a + q.dipD * d) - (1 - t) * q.botA * a; }
-    const al = (a - sa0 * t) / sa, dl = (d - sd0 * t) / sd, zr = zl / hz, zq = 1 - (zr > 1 ? 1 : zr < -1 ? 1 : zr * zr), rr = dl / hy, ra = al / hx;
-    const hxe = hx + cu * (rr * rr < 1 ? 1 - rr * rr : 0) * zq, hye0 = hy + cu * (ra * ra < 1 ? 1 - ra * ra : 0) * zq;
-    let hyF = hye0; if (q.crease && dl < 0) { const u = Math.max(0, zr); hyF += q.crease * Math.max(0, 1 - Math.abs(al) / hx * 1.4) * (1 - u * u * u * u); }
-    const qx = (al < 0 ? -al : al) - (hxe - rh), qy = (dl < 0 ? -dl : dl) - ((dl < 0 ? hyF : hye0) - rh), mx = qx > 0 ? qx : 0, my = qy > 0 ? qy : 0;
-    let fp = Math.sqrt(mx * mx + my * my) + Math.min(Math.max(qx, qy), 0) - rh;
-    for (let i = 0; i < vcuts.length; i++) { const ct = vcuts[i], u = ct.n[0] * al + ct.n[1] * dl - ct.d; if (u > fp - .15) fp = smax(fp, u, .035); }
-    const rz = zl > 0 ? rT : rB, qz = zl > 0 ? zl - (hz - rT) : -zl - (hz - rB), mz = qz > 0 ? qz : 0, ex = mx / rh, ey = my / rh, ez = mz / rz, l = Math.sqrt(ex * ex + ey * ey + ez * ez);
-    let dist = l > 0 ? (l - 1) * ((rh * (ex + ey) + rz * ez) / (ex + ey + ez)) : Math.max(qx - rh, qy - rh, qz - rz);
-    for (let i = 0; i < cuts.length; i++) { const ct = cuts[i], u = ct.n[0] * al + ct.n[1] * dl + ct.n[2] * zl - ct.d; if (u > dist - .15) dist = smax(dist, u, .035); }
-    SF.fp = fp * ks; return dist * ks; };
-  /* where the stone's front and back faces stand at height Z (the plan faces, rounded edges and cushion left out) */
-  ev.face = (Z, back) => { let t = (Z - q.z) / h; t = t < 0 ? 0 : t > 1 ? 1 : t; return q.d + (back ? hy * lerp(1, tdp, t) : -hy * lerp(1, tdp, t)) + sd0 * t + q.leanD * (Z - q.z); };
-  ev.box = box; ev.o = o; return ev;
-}
-
+/* ---------- fused faces ----------
+   Most joints between two stones stay what the stones make them: the natural gap between two rounded edges. A joint that has fused
+   (chapter 8's rule: which contacts, how much of the length, where, how it ends) gets a filler, a plain mesh added to the two stones, never
+   a cut. The filler's front face lies on the plane of the two stones' faces and spans the gap between their rounded edges, so the faces read
+   as one there. Where the two faces are not on one plane the filler is on the recessed one and meets the forward stone's side at a sharp
+   inside corner. Only the filler's convex top edge is rounded, like the stones'. A ramp end tapers the filler back into the stones until the
+   gap is open again; a notch end stops it square. */
 /* ---- contacts: where two stones touch, and what that joint is ---- */
 const aLo = (s) => s.a - s.w / 2, aHi = (s) => s.a + s.w / 2, dLo = (s) => s.d - s.dp / 2, dHi = (s) => s.d + s.dp / 2;
 function contactsOf(f) {
@@ -241,110 +213,80 @@ function contactsOf(f) {
 
 /* How a contact's joint is drawn, from the numbers the atlas's chapter 8 measures (the chance a contact fuses, how much, where, how it ends). */
 const FUSE = { upFront: .20, upBack: .07, bedCourse: .30, bedBack: .04, rest: .03, far: 2, near: .7, minLen: .4, share: [.3, .7], ramp: .6, rampLen: [.15, .5], pillarFoot: .6, pillarMid: .3, full: .1 };
-function settle(f, S, C, fields, noFuse) {
+function settle(f, S, C, noFuse) {
   const r = rng(f.q.seed * 7919 + 13), soft = within(r, .5, 1.5), L = f.q.length, fullAt = r() < FUSE.full ? r() : -1, out = [];
   const eligible = C.map((c, n) => { const lo = S[c.lo], up = S[c.up]; return !lo.part && !up.part && (c.type === 'bed' ? c.a1 - c.a0 : c.z1 - c.z0) >= FUSE.minLen && (c.type === 'up' || up.kind === 'slab'); }), pool = eligible.map((e, n) => e ? n : -1).filter((n) => n >= 0), fullN = fullAt >= 0 && pool.length ? pool[Math.floor(fullAt * pool.length)] : -1;
-  const taken = (x, y, z, skip) => S.some((s, k) => !skip.includes(k) && fields[k](x, y, z) < .02);
-  C.forEach((c, n) => { const lo = S[c.lo], up = S[c.up], part = lo.part || up.part, g = { c, part, D: GROOVE[c.type], fused: false, win: null, ends: [], foot: 1, sides: [] };
+  const taken = (x, y, z, skip) => S.some((s, k) => !skip.includes(k) && Math.abs(x - s.a) < s.w / 2 + .02 && Math.abs(y - s.d) < s.dp / 2 + .02 && z > s.z - .02 && z < s.z + s.h + .02);
+  C.forEach((c, n) => { const lo = S[c.lo], up = S[c.up], part = lo.part || up.part, g = { c, part, fused: false, win: null, ends: [], foot: 1, sides: [] };
     if (c.type === 'bed') { const ym = (c.a0 + c.a1) / 2, zb = c.zb + .02;
       g.sides = [['L', taken(c.a0 - .06, (c.d0 + c.d1) / 2, zb, [c.lo, c.up])], ['F', taken(ym, c.d0 - .06, zb, [c.lo, c.up])], ['R', taken(c.a1 + .06, (c.d0 + c.d1) / 2, zb, [c.lo, c.up])]].filter((s) => !s[1]).map((s) => s[0]);
       g.frontFree = g.sides.includes('F'); const lenL = c.d1 - c.d0, lenF = c.a1 - c.a0; g.off = g.sides.includes('L') ? lenL : 0; g.len = (g.sides.includes('L') ? lenL : 0) + (g.sides.includes('F') ? lenF : 0) + (g.sides.includes('R') ? lenL : 0); g.lenL = lenL; g.lenF = lenF; g.jl = lenF;
     } else { g.frontFree = !taken((lo.a + up.a) / 2, c.d0 - .06, (c.z0 + c.z1) / 2, [c.lo, c.up]); g.sides = g.frontFree ? ['F'] : []; g.len = c.z1 - c.z0; g.jl = g.len; g.foot = c.z0 < .03 ? 1 : 0; }
     const centre = c.type === 'bed' ? (c.a0 + c.a1) / 2 : c.a0, restOn = c.type === 'bed' && up.kind !== 'slab';   /* a stone resting on another (a cap, a block); a course or a half of a pillar is a slab */
-    if (part) { g.fused = true; g.win = [0, g.len]; g.D = 0; }
+    if (part) { g.fused = true; g.win = [0, g.len]; }
     else if (!noFuse && g.sides.length && g.jl >= FUSE.minLen) {
       let p = c.type === 'up' ? (g.frontFree ? FUSE.upFront : FUSE.upBack) : restOn ? FUSE.rest : (g.frontFree ? FUSE.bedCourse : FUSE.bedBack);
       if (centre < .25 * L && !g.frontFree) p = 0;     /* back joints by the cut end stay open */
       p = Math.min(.9, p * (centre > 2 * L / 3 ? FUSE.far : FUSE.near) * soft);
       const full = n === fullN, roll = r();
-      if (full) { g.fused = true; g.win = [0, g.len]; g.D = 0; }
+      if (full) { g.fused = true; g.win = [0, g.len]; }
       else if (roll < p) { const share = within(r, ...FUSE.share), w = share * g.len; let u0;
         if (c.type === 'up') { const k = r(); u0 = k < FUSE.pillarFoot ? 0 : k < FUSE.pillarFoot + FUSE.pillarMid ? within(r, .1 * g.len, Math.max(.1 * g.len, .5 * g.len - w)) : g.len - w; }
         else u0 = r() < .25 ? 0 : g.len - w;
         g.win = [u0, u0 + w]; g.fused = true;
         for (const e of [0, 1]) { const inner = e ? g.win[1] < g.len - 1e-6 : g.win[0] > 1e-6; if (inner) g.ends[e] = r() < FUSE.ramp ? { ramp: within(r, ...FUSE.rampLen) } : { notch: 1 }; } }
-      if (c.type === 'up' && g.foot && !g.fused) g.footD = r() < .3 ? .1 : within(r, .5, .8);
-      else if (c.type === 'up' && g.foot && g.win && g.win[0] > 1e-6) g.footD = r() < .3 ? .1 : within(r, .5, .8);
     }
-    if (!g.fused && !g.win && c.type === 'up' && g.foot) g.footD = r() < .3 ? .1 : within(r, .5, .8);
     out.push(g); });
   return out;
 }
-/* the groove's depth at distance s along the joint */
-function grooveDepth(g, s) {
-  if (g.part) return 0; let D = g.D;
-  if (g.win) { const [u0, u1] = g.win; if (s >= u0 && s <= u1) return 0; const e = s < u0 ? g.ends[0] : g.ends[1], dist = s < u0 ? u0 - s : s - u1;
-    if (e && e.ramp) D *= Math.min(1, dist / e.ramp); else if (e && e.notch && dist < .5 * D) D *= 1.6; else if (!e) { /* the window runs to the joint's end */ } }
-  if (g.footD != null && g.c.type === 'up') { const t = Math.min(1, s / .25); D *= g.footD + (1 - g.footD) * t; }
-  return D;
-}
 
-/* ---- the solid ---- */
-function formSolid(f, opt = {}) {
-  const S = f.stones, fields = S.map(stoneField), N = S.length, C = contactsOf(f), G = opt.plain ? [] : settle(f, S, C, fields, opt.nofuse), E = .09;
-  const H = opt.h || .035, M = .1, MS = .04;
-  let x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1e9, y1 = -1e9, z1 = -1e9; for (const ev of fields) { const b = ev.box; x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); z0 = Math.min(z0, b[2]); x1 = Math.max(x1, b[3]); y1 = Math.max(y1, b[4]); z1 = Math.max(z1, b[5]); }
-  x0 -= .06; y0 -= .06; z0 -= .06; x1 += .06; y1 += .06; z1 += .06;
-  const dd = new Float64Array(N), fq = new Float64Array(N), near = new Uint8Array(N);
-  const cb = G.map((g) => { const a = fields[g.c.lo].box, b = fields[g.c.up].box; return [Math.max(a[0], b[0]) - M, Math.max(a[1], b[1]) - M, Math.max(a[2], b[2]) - M, Math.min(a[3], b[3]) + M, Math.min(a[4], b[4]) + M, Math.min(a[5], b[5]) + M]; });
-    const field = (x, y, z, wide) => {
-    const MG = wide ? M : MS; let F = MG, any = false;
-    for (let i = 0; i < N; i++) { const b = fields[i].box; if (x < b[0] - MG || x > b[3] + MG || y < b[1] - MG || y > b[4] + MG || z < b[2] - MG || z > b[5] + MG) { near[i] = 0; continue; } near[i] = 1; dd[i] = fields[i](x, y, z); fq[i] = SF.fp; F = any ? Math.min(F, dd[i]) : dd[i]; any = true; }
-    if (!any) return MG; if (F > MG) F = MG;
-    let Bm = MG, Gm = -MG;
-    for (let n = 0; n < G.length; n++) { const g = G[n], c = g.c, b = cb[n]; if (x < b[0] || x > b[3] || y < b[1] || y > b[4] || z < b[2] || z > b[5]) continue;
-      const li = c.lo, ui = c.up, lo = S[li], up = S[ui]; let mask, xin, s, dl; if (!near[li]) { near[li] = 1; dd[li] = fields[li](x, y, z); fq[li] = SF.fp; } if (!near[ui]) { near[ui] = 1; dd[ui] = fields[ui](x, y, z); fq[ui] = SF.fp; }
-      if (c.type === 'bed') { mask = Math.max(fq[li], fq[ui]); xin = -mask; const a = x - up.leanA * (z - up.z), side = g.sides;
-        dl = z - ((lo.z + lo.h + lo.dipA * (x - lo.a) + lo.dipD * (y - lo.d)) + (up.z + up.botA * (x - up.a))) / 2;   /* height above the bed plane */
-        if (side.length) { const xl = a - c.a0, xr = c.a1 - a, xf = y - c.d0; let best = 1e9, sv = 0;
-          if (side.includes('L') && xl < best) { best = xl; sv = c.d1 - y; } if (side.includes('F') && xf < best) { best = xf; sv = g.off + Math.max(0, Math.min(g.lenF, a - c.a0)); } if (side.includes('R') && xr < best) { best = xr; sv = g.off + (side.includes('F') ? g.lenF : 0) + (y - c.d0); }
-          s = Math.max(0, sv); } else s = 0; }
-      else { const fr = Math.max(fields[li].face(z, 0), fields[ui].face(z, 0)), bk = Math.min(fields[li].face(z, 1), fields[ui].face(z, 1)); mask = Math.max(fr - y, y - bk); xin = y - fr; s = z - c.z0; dl = x - (aHi(lo) + lo.leanA * (z - lo.z) + aLo(up) + up.leanA * (z - up.z)) / 2; }
-      const zc = c.type === 'bed' ? Math.max(lo.z - z, z - up.z - up.h) : Math.max(c.z0 - z, z - c.z1), bridge = Math.max(dd[li] - E, dd[ui] - E, mask, zc); if (bridge < Bm) Bm = bridge;
-      if (g.sides.length && (c.type === 'bed' || c.front)) { const D = grooveDepth(g, s); if (D > 0) { const gv = Math.min((D - Math.abs(dl) - xin) / 1.414, xin + .01); if (gv > Gm) Gm = gv; } } }
-    if (Bm < F) F = Bm; if (Gm > F) F = Gm; return F; };
-  /* the grid is searched as an octree: a block is dropped when its centre is further from the surface than the block is wide, so the
-     field is evaluated finely only in a narrow band round the surface */
-  const R = 16, gx = Math.ceil((x1 - x0) / H / R) * R, gy = Math.ceil((y1 - y0) / H / R) * R, gz = Math.ceil((z1 - z0) / H / R) * R, sx = gx + 1, sy = gy + 1;
-  const val = new Float32Array(sx * sy * (gz + 1)).fill(NaN), at = (i, j, k) => (k * sy + j) * sx + i, cells = [];
-  const node = (i, j, k) => { const q = at(i, j, k); let v = val[q]; if (v !== v) { v = field(x0 + i * H, y0 + j * H, z0 + k * H); val[q] = v; } return v; };
-  const split = (i, j, k, b) => {
-    if (b === 1) { let neg = 0; for (let c = 0; c < 8; c++) if (node(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2)) < 0) neg++; if (neg && neg < 8) cells.push(i, j, k); return; }
-    { const bx0 = x0 + i * H - .02, by0 = y0 + j * H - .02, bz0 = z0 + k * H - .02, bx1 = bx0 + b * H + .04, by1 = by0 + b * H + .04, bz1 = bz0 + b * H + .04; let hit = false; for (let n = 0; n < N && !hit; n++) { const q = fields[n].box; hit = q[0] < bx1 && q[3] > bx0 && q[1] < by1 && q[4] > by0 && q[2] < bz1 && q[5] > bz0; } if (!hit) return; }
-    const hb = b / 2, v = field(x0 + (i + hb) * H, y0 + (j + hb) * H, z0 + (k + hb) * H, true); if (Math.abs(v) > b * H * (opt.prune || .9)) return;
-    for (let c = 0; c < 8; c++) split(i + (c & 1) * hb, j + ((c >> 1) & 1) * hb, k + (c >> 2) * hb, hb); };
-  for (let k = 0; k < gz; k += R) for (let j = 0; j < gy; j += R) for (let i = 0; i < gx; i += R) split(i, j, k, R);
-  return surfaceNets(node, cells, gx, gy, gz, [x0, y0, z0], H, opt.project === false ? null : field);
+/* ---- the filler pieces ---- */
+const sample = (a, b, step) => { const n = Math.max(1, Math.ceil((b - a) / step)), o = []; for (let i = 0; i <= n; i++) o.push(a + (b - a) * i / n); return o; };
+const FACTS = new WeakMap(), stoneFacts = (s) => { let p = FACTS.get(s); if (!p) FACTS.set(s, p = stoneParams(s)); return p; };
+/* where a stone's plan faces stand at height z: its battered, tapered and leaning sides */
+const faceA = (s, z, hi) => { const P = stoneFacts(s); let t = (z - s.z) / s.h; t = t < 0 ? 0 : t > 1 ? 1 : t; return s.a + (hi ? P.hx : -P.hx) * lerp(1, P.ta, t) + P.sa0 * t + s.leanA * (z - s.z); };
+const faceD = (s, z, back) => { const P = stoneFacts(s); let t = (z - s.z) / s.h; t = t < 0 ? 0 : t > 1 ? 1 : t; return s.d + (back ? P.hy : -P.hy) * lerp(1, P.tdp, t) + P.sd0 * t + s.leanD * (z - s.z); };
+/* a chamfer or a corner cut on the stone's front, or on the side facing the joint, means the edge there is not a rounded gap a filler could fill */
+const chamfered = (s, towards) => stoneFacts(s).cuts.some((t) => (t.n[1] < -.01 && (t.n[2] > .01 || Math.abs(t.n[0]) > .01)) || (t.n[2] > .01 && t.n[0] * towards > .01) || (t.n[2] < .01 && t.n[0] * towards > .01 && t.n[1] < 0));
+const topAt = (s, a, d) => s.z + s.h + s.dipA * (a - s.a) + s.dipD * (d - s.d);
+/* a closed prism through rings of four points; each of its four sides has vertices of its own, so its faces shade flat */
+function loft(rings) {
+  const P = [], idx = [], quad = (a, b, c, d) => { const n = P.length; P.push(a, b, c, d); idx.push(n, n + 1, n + 2, n, n + 2, n + 3); };
+  for (let i = 0; i + 1 < rings.length; i++) for (let k = 0; k < 4; k++) quad(rings[i][k], rings[i][(k + 1) % 4], rings[i + 1][(k + 1) % 4], rings[i + 1][k]);
+  const r0 = rings[0], r1 = rings[rings.length - 1]; quad(r0[0], r0[1], r0[2], r0[3]); quad(r1[0], r1[1], r1[2], r1[3]);
+  return { P, idx, filler: true };
 }
-
-/* naive surface nets over the listed cells; a cell the search dropped but the surface needs (a neighbour across a crossed edge) is added when asked for */
-function surfaceNets(node, cells, nx, ny, nz, o, H, field) {
-  const P = [], idx = [], cell = new Map(), key = (i, j, k) => (k * ny + j) * nx + i, cv = new Float64Array(8), todo = cells.slice();
-  const E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
-  const make = (i, j, k) => { for (let c = 0; c < 8; c++) cv[c] = node(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2));
-    let px = 0, py = 0, pz = 0, m = 0;
-    for (const [a, b] of E) { const va = cv[a], vb = cv[b]; if ((va < 0) === (vb < 0)) continue; const t = va / (va - vb); px += (a & 1) + ((b & 1) - (a & 1)) * t; py += ((a >> 1) & 1) + (((b >> 1) & 1) - ((a >> 1) & 1)) * t; pz += (a >> 2) + ((b >> 2) - (a >> 2)) * t; m++; }
-    if (!m) return -1; let X = o[0] + (i + px / m) * H, Y = o[1] + (j + py / m) * H, Z = o[2] + (k + pz / m) * H;
-    if (field) { /* one step onto the surface itself, along the gradient the cell's corners give: creases come out sharper than the averaged vertex */
-      const gx = (cv[1] - cv[0] + cv[3] - cv[2] + cv[5] - cv[4] + cv[7] - cv[6]) / (4 * H), gy = (cv[2] - cv[0] + cv[3] - cv[1] + cv[6] - cv[4] + cv[7] - cv[5]) / (4 * H), gz = (cv[4] - cv[0] + cv[5] - cv[1] + cv[6] - cv[2] + cv[7] - cv[3]) / (4 * H), gg = gx * gx + gy * gy + gz * gz;
-      if (gg > 1e-6) { const st = Math.max(-H, Math.min(H, field(X, Y, Z) / gg)); X -= gx * st; Y -= gy * st; Z -= gz * st; } }
-    cell.set(key(i, j, k), P.length); P.push([X, Y, Z]); return P.length - 1; };
-  const ensure = (i, j, k) => { const q = cell.get(key(i, j, k)); if (q !== undefined) return q; const v = make(i, j, k); if (v >= 0) todo.push(i, j, k); return v; };
-  for (let n = 0; n < todo.length; n += 3) if (!cell.has(key(todo[n], todo[n + 1], todo[n + 2]))) make(todo[n], todo[n + 1], todo[n + 2]);
-  for (let n = 0; n < todo.length; n += 3) { const i = todo[n], j = todo[n + 1], k = todo[n + 2];
-    for (let ax = 0; ax < 3; ax++) { const u = (ax + 1) % 3, w = (ax + 2) % 3, v0 = node(i, j, k) < 0, v1 = node(i + (ax === 0), j + (ax === 1), k + (ax === 2)) < 0; if (v0 === v1) continue;
-      const d = [i, j, k]; if (d[u] < 1 || d[w] < 1) continue;
-      const mk = (du, dw) => { const e = [i, j, k]; e[u] += du; e[w] += dw; return ensure(e[0], e[1], e[2]); }, a = mk(-1, -1), b = mk(0, -1), c = mk(0, 0), e = mk(-1, 0);
-      if (a < 0 || b < 0 || c < 0 || e < 0) continue; if (v0) idx.push(a, b, c, a, c, e); else idx.push(a, c, b, a, e, c); } }
-  return { P, idx };
-}
-/* the downward-facing area of a mesh by angle from vertical (a horizontal underside is 90), past the plate: shares past 55, in 55 to 65, past 65 */
-function overhang(meshes) {
-  let tot = 0, a55 = 0, a65 = 0, over = 0;
-  for (const m of meshes) for (let t = 0; t < m.idx.length; t += 3) { const A = m.P[m.idx[t]], Bp = m.P[m.idx[t + 1]], Cp = m.P[m.idx[t + 2]]; if ((A[2] + Bp[2] + Cp[2]) / 3 < .012) continue;
-    const ux = Bp[0] - A[0], uy = Bp[1] - A[1], uz = Bp[2] - A[2], vx = Cp[0] - A[0], vy = Cp[1] - A[1], vz = Cp[2] - A[2], nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz), ar = l / 2; if (l < 1e-12) continue;
-    const z = nz / l; if (z >= 0) continue; const ang = Math.asin(Math.min(1, -z)) * 180 / Math.PI; tot += ar; if (ang > 55) { over += ar; if (ang <= 65) a55 += ar; else a65 += ar; } }
-  return { down: tot, band: a55, steep: a65, past55: tot ? over / tot : 0, in5565: tot ? a55 / tot : 0, past65: tot ? a65 / tot : 0 };
+/* how far the filler's front has drawn back from the face at distance e before an end of the fused stretch (0 on the face, `depth` buried) */
+const drawn = (end, e, depth) => (end && end.ramp ? depth * Math.max(0, 1 - e / end.ramp) : 0);
+function fillers(f) {
+  const S = f.stones, C = contactsOf(f), G = settle(f, S, C, false), out = [];
+  G.forEach((g) => { if (!g.win || g.part) return; const c = g.c, lo = S[c.lo], up = S[c.up], [u0, u1] = g.win;
+    if (c.type === 'up') {
+      if (chamfered(lo, 1) || chamfered(up, -1)) return;
+      const dm = (Math.max(dLo(lo), dLo(up)) + Math.min(dHi(lo), dHi(up))) / 2, top = Math.min(topAt(lo, c.a0, dm), topAt(up, c.a0, dm)), zlo = c.z0 + u0, topEnd = u1 >= g.len - 1e-6, zhi = c.z0 + u1;
+      const rT = Math.min(stoneFacts(lo).rT, stoneFacts(up).rT), rings = [], depth0 = Math.min(.12, .8 * Math.min(lo.dp, up.dp));
+      const zhiEff = topEnd ? Math.min(zhi, top - rT - .01) : zhi, zs = sample(zlo, Math.max(zhiEff, zlo + .001), .05); if (zhiEff - zlo < .08) return;   /* a stretch that runs to the top stops just under the rounded top edges, square */
+      for (const z of zs) { const gapA = faceA(up, z, 0) - faceA(lo, z, 1); if (gapA < -.03 || gapA > .06 || Math.abs(faceD(lo, z, 0) - faceD(up, z, 0)) > .2) { if (rings.length) break; continue; }   /* where the faces draw apart (a battered side) the stones are not touching: no filler */
+        const fa = faceD(lo, z, 0), fb = faceD(up, z, 0), fr = Math.max(fa, fb), back = Math.min(faceD(lo, z, 1), faceD(up, z, 1)), depth = Math.min(depth0, back - fr - .005); if (depth < .05) continue;
+        const rh = Math.min(stoneFacts(lo).rh, stoneFacts(up).rh), loFwd = fa < fb - .01, upFwd = fb < fa - .01;
+        const aL = faceA(lo, z, 1) - (loFwd ? .01 : rh + .005), aR = faceA(up, z, 0) + (upFwd ? .01 : rh + .005);
+        let o = 0;
+        if (u0 > 1e-6) o = Math.max(o, drawn(g.ends[0], z - zlo, depth)); if (!topEnd) o = Math.max(o, drawn(g.ends[1], zhi - z, depth));
+        o = Math.min(o, depth - .01); rings.push([[aL, fr + o, z], [aR, fr + o, z], [aR, fr + depth, z], [aL, fr + depth, z]]); }
+      if (rings.length > 1) out.push(loft(rings));
+    } else {
+      if ([lo, up].some((s) => stoneFacts(s).cuts.some((t) => t.n[1] < -.01 && (t.n[2] > .01 || Math.abs(t.n[2]) < .01)))) return;   /* a chamfered front edge or a cut front corner */
+      const rh = .07, a0 = c.a0 + rh, a1 = c.a1 - rh, off = g.off, lenF = g.lenF; if (!g.sides.includes('F') || a1 - a0 < .1) return;
+      const t0 = Math.max(u0 - off, 0), t1 = Math.min(u1 - off, lenF); if (t1 - t0 < .12) return;
+      const aS = Math.max(a0, c.a0 + t0), aE = Math.min(a1, c.a0 + t1), e0 = u0 > off + 1e-6 && u0 - off > rh ? g.ends[0] : null, e1 = u1 < off + lenF - 1e-6 && off + lenF - u1 > rh ? g.ends[1] : null, rings = [];
+      const rTl = stoneFacts(lo).rT, rBu = stoneFacts(up).rB;
+      for (const a of sample(aS, aE, .05)) { const dd = Math.max(faceD(lo, lo.z + lo.h, 0), faceD(up, up.z, 0)), zbL = topAt(lo, a, dd), zbU = up.z + up.botA * (a - up.a), zb = (zbL + zbU) / 2;
+        const zf = zbL - .005; const fa = faceD(lo, zf, 0), fb = faceD(up, zbU + .005, 0), fr = Math.max(fa, fb), back = Math.min(faceD(lo, zbL, 1), faceD(up, zbU, 1)), depth = Math.min(.12, back - fr - .005); if (depth < .05) continue; if (fb < fa - .03 || Math.abs(zbU - zbL) > .05) { if (rings.length) break; continue; }   /* a stone standing forward of the one under it, or a bed that opens, is left as it is */
+        const recessed = fb > fa + .03, zlo = recessed ? zbL - .012 : zbL - rTl - .005, zhi = zbU + rBu + .005;
+        let o = 0; if (e0) o = Math.max(o, drawn(e0, a - aS, depth)); if (e1) o = Math.max(o, drawn(e1, aE - a, depth)); o = Math.min(o, depth - .01);
+        rings.push([[a, fr + o, zlo], [a, fr + o, zhi], [a, fr + depth, zhi], [a, fr + depth, zlo]]); }
+      if (rings.length > 1) out.push(loft(rings)); } });
+  return out;
 }
 
 /* ---------- the formation (proposed; chapter 11 states it) ----------
@@ -552,8 +494,8 @@ function formationOnce(over = {}) {
 /* the count is held to what the sheets show: at most eleven stones */
 function formation(over = {}) { let f = formationOnce(over), o = Object.assign({}, over), n = 0; const count = (g) => g.stones.filter((s) => !s.part).length;
   while (count(f) > 11 && n++ < 5) { o = Object.assign({}, o, f.q.caps > 1 ? { caps: f.q.caps - 1 } : f.q.tuck || f.q.applied ? { tuck: 0, applied: 0 } : { nA: Math.max(1, f.q.nA - 1), rows: f.q.cls === 'courses' ? Math.max(3, f.q.rows - 1) : f.q.rows }); f = formationOnce(o); } return f; }
-/* a formation's meshes: one solid (the stones blended, chapter 8's rule), or with `apart` each stone as its own rounded box */
-const formMeshes = (f, apart) => apart ? f.stones.map(stoneMesh) : [formSolid(f)];
+/* a formation's meshes: the stones and the fillers of its fused joints (chapter 8's rule), or with `apart` the stones alone */
+const formMeshes = (f, apart) => apart ? f.stones.map(stoneMesh) : f.stones.map(stoneMesh).concat(fillers(f));
 
 /* Scale 1: draw a whole formation's numbers from the proposed ranges. */
 function drawParams(seed, want) {
@@ -602,10 +544,10 @@ function seen(f, az = 45) {
   const NAME = { pillars: 'pillars', wall: 'a plateau wall', blocks: 'blocks in tiers', leaners: 'a leaning set', ramp: 'dipping beds', courses: 'courses', gates: 'a gate' };
   let seed = 1 + Math.floor(Math.random() * 9000);
   try { const sv = +localStorage.getItem('bcg-seed'); if (sv > 0) seed = sv; } catch (e) { /* no storage in this frame: start from a random seed */ }
-  /* joined: one solid, plain union with V grooves; separate: each stone its own rounded mesh, as piled, before any joining */
+  /* joined: the stones and the fillers of the joints that have fused (faces merged); separate: the stones alone, as piled */
   let joined = true;
   try { if (localStorage.getItem('bcg-joined') === '0') joined = false; } catch (e) { /* no storage in this frame: start joined */ }
-  const make = (sd, fine) => { const p = drawParams(sd, clsIn.value), f = formation(p); return { p, f, ms: !joined ? formMeshes(f, true) : fine ? [formSolid(f, { h: .025 })] : formMeshes(f) }; };
+  const make = (sd) => { const p = drawParams(sd, clsIn.value), f = formation(p); return { p, f, ms: formMeshes(f, !joined) }; };
   /* the middle of a formation, so every view turns about the stones and not about an absent plate */
   const middle = (ms) => { let lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; for (const m of ms) for (const q of m.P) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2]; };
   const R3 = new THREE.WebGLRenderer({ antialias: true }); R3.setClearColor(STAGE, 1); R3.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); const cv = R3.domElement; live.append(cv);
@@ -620,7 +562,7 @@ function seen(f, az = 45) {
   const refView = (c) => { const R = 8.6, el = 20 * Math.PI / 180, az = 45 * Math.PI / 180; ctl.target.set(c[0], c[2], c[1]); cam.position.set(c[0] - R * Math.cos(el) * Math.sin(az), c[2] + R * Math.sin(el), c[1] - R * Math.cos(el) * Math.cos(az)); ctl.update(); };
   let cur = null;
   const show = (sd, keepView) => { seed = Math.max(1, Math.min(999999, Math.round(sd) || 1)); seedIn.value = seed; try { localStorage.setItem('bcg-seed', seed); } catch (e) { /* not kept: nothing depends on it */ }
-    cur = make(seed, true); if (scene) scene.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
+    cur = make(seed); if (scene) scene.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
     scene = buildScene(cur.ms, { plate: false }); const c = middle(cur.ms); if (!keepView) refView(c); else { ctl.target.set(c[0], c[2], c[1]); ctl.update(); } render();
     const q = cur.f.q, extra = [q.plateau ? 'a plateau' : '', q.cleft ? 'a cleft' : '', q.rest ? 'a resting stone' : '', q.oversail ? 'an oversail' : '', q.lean ? `leaning ${Math.round(q.lean)}°` : '', q.dip ? `dipping ${Math.round(q.dip)}°` : ''].filter(Boolean);
     read.innerHTML = `Seed <b>${seed}</b>: ${NAME[cur.p.preset] || cur.p.preset}, <b>${cur.f.stones.length}</b> stones, ${fmt(q.height, 2)} high, ${fmt(q.length, 2)} long, ${q.rows} rows${extra.length ? '; ' + extra.join(', ') : ''}.`;

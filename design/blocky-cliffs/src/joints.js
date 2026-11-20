@@ -103,17 +103,4 @@
     for (const [g, col, dash] of [[GO, 'var(--a-gap)', null], [G.filter(dying), 'var(--a-ax)', null]]) svg.append(s('polyline', { points: pts(g[0].prof.map((_, i) => [ax.x((i + .5) / 16), ax.y(mean(g, i))])), fill: 'none', stroke: col, 'stroke-width': 2.5, 'stroke-dasharray': dash }));
     svg.append(s('text', { x: ax.x(.03), y: ax.y(5.55), 'font-size': 11.5, style: 'fill:var(--a-gap)', text: `open joints (${GO.length})` }), s('text', { x: ax.x(.03), y: ax.y(.25), 'font-size': 11.5, style: 'fill:var(--a-ax)', text: `joints that die (${G.filter(dying).length})` })); });
 
-  /* printability: a section through a bed joint, stacked and fused */
-  chart('jn-print', 230, (svg, w, hgt) => { const k = Math.min(1, (w - 20) / 520), g = s('g', { transform: `translate(${(w - 520 * k) / 2} 0) scale(${k})` }); svg.append(g);
-    const rr = (x, y, wd, ht, r, a = {}) => s('rect', Object.assign({ x, y, width: wd, height: ht, rx: r, fill: 'var(--stone)', stroke: 'var(--stone3)', 'stroke-width': 1.5 }, a));
-    g.append(s('line', { x1: 0, x2: 520, y1: 196, y2: 196, stroke: 'var(--muted)' }));
-    /* stacked */
-    g.append(rr(20, 110, 200, 86, 20), rr(44, 30, 150, 80, 20));
-    g.append(s('path', { d: 'M44,90 A20,20 0 0 0 64,110', fill: 'none', stroke: 'var(--a-ax)', 'stroke-width': 4 }), s('path', { d: 'M194,90 A20,20 0 0 1 174,110', fill: 'none', stroke: 'var(--a-ax)', 'stroke-width': 4 }));
-    g.append(s('path', { d: 'M24,118 A20,20 0 0 1 40,110 L64,110 A20,20 0 0 1 44,90 L30,100 Z', fill: 'var(--a-gap)', 'fill-opacity': .35, stroke: 'var(--a-gap)', 'stroke-width': 1.2 }));
-    g.append(s('text', { x: 4, y: 84, 'font-size': 12, style: 'fill:var(--a-ax)', text: 'lip' }), s('text', { x: 0, y: 106, 'font-size': 12, style: 'fill:var(--a-gap)', text: 'slot' }), s('text', { x: 120, y: 218, 'text-anchor': 'middle', 'font-size': 12.5, text: 'Stacked: two rounded stones' }));
-    /* fused */
-    g.append(s('path', { d: 'M320,196 L300,196 L300,130 A20,20 0 0 1 320,110 L326,110 L332,102 L324,94 L324,50 A20,20 0 0 1 344,30 L454,30 A20,20 0 0 1 474,50 L474,94 L466,102 L474,110 L480,110 A20,20 0 0 1 500,130 L500,196 Z', fill: 'var(--stone)', stroke: 'var(--stone3)', 'stroke-width': 1.5 }));
-    g.append(s('path', { d: 'M326,110 L332,102 L324,94', fill: 'none', stroke: 'var(--a-top)', 'stroke-width': 3.5 }), s('path', { d: 'M474,94 L466,102 L474,110', fill: 'none', stroke: 'var(--a-top)', 'stroke-width': 3.5 }));
-    g.append(s('text', { x: 400, y: 218, 'text-anchor': 'middle', 'font-size': 12.5, text: 'Fused: one body, a shallow V where the joint was' }), s('text', { x: 286, y: 100, 'text-anchor': 'end', 'font-size': 12, style: 'fill:var(--a-top)', text: 'V groove' })); });
 }

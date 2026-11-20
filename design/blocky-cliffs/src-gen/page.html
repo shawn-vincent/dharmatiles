@@ -41,7 +41,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 </style>
 <main>
 <div><h1>Blocky Cliff Generator</h1>
-<p class="lede">One formation from one seed, piled from rounded boxes and built as one solid: the stones are joined by a plain union, so every inside corner is sharp, and each joint that shows is a V groove of 0.05 figure heights or less with flat flanks, closing up (fusing) along part of its length by the measured rule of chapter 8. The rules are those of the <a href="https://claude.ai/artifact/MYzPe5rc2ieRxEUzxChEmw">Blocky Cliff Atlas</a>. It is for judging the coarse character: shapes, sizes, arrangement, proportion. No figure, no base, no surface.</p></div>
+<p class="lede">One formation from one seed, piled from rounded boxes by the rules of the <a href="https://claude.ai/artifact/MYzPe5rc2ieRxEUzxChEmw">Blocky Cliff Atlas</a>. Where chapter 8's rule says a joint has fused, a flat filler piece is added between the two stones, flush with their faces and never cut into them; inside corners are sharp. It is for judging the coarse character: shapes, sizes, arrangement, proportion. No figure, no base, no surface.</p></div>
 <div class="bench">
   <div class="live" id="live"></div>
   <div class="side">
@@ -49,14 +49,14 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
       <div class="seedrow"><button type="button" class="main" id="new">New seed</button><button type="button" id="view">Reset view</button></div></div>
     <div class="grp"><label for="cls"><span style="font:600 12px var(--head);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Kind</span></label>
       <select id="cls"><option value="any">Any, in the references' proportion</option><option value="pillars">Pillars</option><option value="wall">Plateau wall</option><option value="blocks">Blocks in tiers</option><option value="leaners">Leaning set or dipping beds</option><option value="courses">Courses (a stair)</option><option value="gates">Gate</option></select></div>
-    <div class="grp"><span id="l-join">Stones</span><div class="seedrow" role="group" aria-labelledby="l-join"><button type="button" id="j-on" aria-pressed="true">Joined into one solid</button><button type="button" id="j-off" aria-pressed="false">Separate</button></div></div>
+    <div class="grp"><span id="l-join">Joints</span><div class="seedrow" role="group" aria-labelledby="l-join"><button type="button" id="j-on" aria-pressed="true">Faces merged</button><button type="button" id="j-off" aria-pressed="false">Separate</button></div></div>
     <p class="read" id="read"></p>
     <p class="note">Drag to turn. Pinch to zoom. Scrolling over the view scrolls the page. Lengths are in figure heights: a formation is about two high.</p>
   </div>
 </div>
 <div class="grp"><h2 id="sheet-h">Twelve in a row</h2><p class="note">Seeds from the one above onward, each drawn once as a still picture from the references' three-quarter view. Choose one to load it.</p>
 <div class="sheet" id="sheet" aria-labelledby="sheet-h"></div></div>
-<p class="note">What this does not do: the stones are rounded boxes, plainer than the references' stones, which bulge and dent; the solid is polygonised on a grid of 0.025 fh (the sheet below 0.035), so a groove's line wavers a little where it ramps away; edges are ruled where the references' wander; dipping beds are stiff; and two forms that each appear once in the sheets, a niche with a chockstone (J) and a rock shelter (K), are not made at all.</p>
+<p class="note">What this does not do: the stones are rounded boxes, plainer than the references' stones, which bulge and dent; edges are ruled where the references' wander; dipping beds are stiff; a fused stretch is drawn only where a flat filler lies flush (not across a chamfer, a battered side or a bed that opens), and only along the front of a bed; nothing is done yet to make beds printable; and two forms that each appear once in the sheets, a niche with a chockstone (J) and a rock shelter (K), are not made at all.</p>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -64,17 +64,17 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 (() => {
 /*lib-head*/
 /*js:stone.js*/
-/*js:sdf.js*/
+/*js:fuse.js*/
 /*js:form.js*/
   const live = $('#live'), seedIn = $('#seed'), clsIn = $('#cls'), sheet = $('#sheet'), read = $('#read');
   if (!HAVE3) { live.append(h('p', { style: 'padding:16px;color:#fff', text: 'The 3D view needs three.js, which did not load.' })); return; }
   const NAME = { pillars: 'pillars', wall: 'a plateau wall', blocks: 'blocks in tiers', leaners: 'a leaning set', ramp: 'dipping beds', courses: 'courses', gates: 'a gate' };
   let seed = 1 + Math.floor(Math.random() * 9000);
   try { const sv = +localStorage.getItem('bcg-seed'); if (sv > 0) seed = sv; } catch (e) { /* no storage in this frame: start from a random seed */ }
-  /* joined: one solid, plain union with V grooves; separate: each stone its own rounded mesh, as piled, before any joining */
+  /* joined: the stones and the fillers of the joints that have fused (faces merged); separate: the stones alone, as piled */
   let joined = true;
   try { if (localStorage.getItem('bcg-joined') === '0') joined = false; } catch (e) { /* no storage in this frame: start joined */ }
-  const make = (sd, fine) => { const p = drawParams(sd, clsIn.value), f = formation(p); return { p, f, ms: !joined ? formMeshes(f, true) : fine ? [formSolid(f, { h: .025 })] : formMeshes(f) }; };
+  const make = (sd) => { const p = drawParams(sd, clsIn.value), f = formation(p); return { p, f, ms: formMeshes(f, !joined) }; };
   /* the middle of a formation, so every view turns about the stones and not about an absent plate */
   const middle = (ms) => { let lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; for (const m of ms) for (const q of m.P) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2]; };
   const R3 = new THREE.WebGLRenderer({ antialias: true }); R3.setClearColor(STAGE, 1); R3.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); const cv = R3.domElement; live.append(cv);
@@ -89,7 +89,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
   const refView = (c) => { const R = 8.6, el = 20 * Math.PI / 180, az = 45 * Math.PI / 180; ctl.target.set(c[0], c[2], c[1]); cam.position.set(c[0] - R * Math.cos(el) * Math.sin(az), c[2] + R * Math.sin(el), c[1] - R * Math.cos(el) * Math.cos(az)); ctl.update(); };
   let cur = null;
   const show = (sd, keepView) => { seed = Math.max(1, Math.min(999999, Math.round(sd) || 1)); seedIn.value = seed; try { localStorage.setItem('bcg-seed', seed); } catch (e) { /* not kept: nothing depends on it */ }
-    cur = make(seed, true); if (scene) scene.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
+    cur = make(seed); if (scene) scene.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
     scene = buildScene(cur.ms, { plate: false }); const c = middle(cur.ms); if (!keepView) refView(c); else { ctl.target.set(c[0], c[2], c[1]); ctl.update(); } render();
     const q = cur.f.q, extra = [q.plateau ? 'a plateau' : '', q.cleft ? 'a cleft' : '', q.rest ? 'a resting stone' : '', q.oversail ? 'an oversail' : '', q.lean ? `leaning ${Math.round(q.lean)}°` : '', q.dip ? `dipping ${Math.round(q.dip)}°` : ''].filter(Boolean);
     read.innerHTML = `Seed <b>${seed}</b>: ${NAME[cur.p.preset] || cur.p.preset}, <b>${cur.f.stones.length}</b> stones, ${fmt(q.height, 2)} high, ${fmt(q.length, 2)} long, ${q.rows} rows${extra.length ? '; ' + extra.join(', ') : ''}.`;

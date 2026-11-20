@@ -72,22 +72,21 @@ formation(numbers, seed):                         every stone is first a plain b
   5 count       if more than eleven stones came out, drop a piled stone or a column and draw again
 
 stone(box, numbers):
-  a signed distance field of a true rounded box: radius 0.07 fh on top and upright edges,
-  0.04 under a resting stone, 0.02 at a ground stone's foot (outer edges only);
+  the surface of a 9 × 9 × 9 lattice (386 points), three steps round each edge;
+  every point pushed out to a true rounded box: radius 0.07 fh on top and upright edges,
+  0.04 under a resting stone (so a bed joint is a groove), 0.02 at a ground stone's foot;
   broad faces swell 3.5 percent; shoulder and corner cuts are planes applied softly
-  move each face in at the top (batter), scale, tilt the top, shear, turn (the field is
-  evaluated through the inverse of these)
-
-solid(stones):
-  plain union of the stones' fields: no smooth union, no inside fillet
-  each contact (a bed, or an upright joint between neighbours) gets a bridge that fills
-    the slot between the two stones, flush with their faces, then a V wedge cut along
-    its free edge: depth 0.05 (bed) or 0.06 (upright) fh, flanks 45 degrees
-  the wedge's depth along the joint: full, or 0 where the joint is fused (chapter 8's
-    chance, share, place and ending), ramping to 0 over 0.15-0.5 fh or ending in a notch;
-    parts of one stone are fused whole
-  polygonise: surface nets on a grid of 0.035 fh (0.025 for the live view), an octree
-    search so only a narrow band round the surface is evaluated, each vertex stepped
-    onto the surface</pre></div>
-<div class="words"><p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 0.55 to 0.65 s as one solid each (about 0.2 s as separate rounded boxes); one formation takes 20 to 40 ms at 0.035 fh and 35 to 55 ms at 0.025 fh, so a new seed in the generator is instant.</p></div></div>
+  move each face in at the top (batter), scale, tilt the top, shear, turn
+fuse(stones):
+  for each contact (a bed, or an upright joint between neighbours) draw chapter 8's rule:
+    whether it fuses, over how much of its length (0.3 to 0.7), where (foot, middle, top),
+    and how each end finishes (a ramp over 0.15 to 0.5 fh, or a notch)
+  along a fused stretch ADD a filler piece, never cut: a flat face on the plane of the two
+    stones' faces, spanning the gap between their rounded edges; where the faces are not on
+    one plane the filler is on the recessed one and meets the forward stone at a sharp
+    inside corner; a ramp end draws the filler back into the stones, a notch end stops it
+    square; a stretch that runs to the top stops just under the rounded top edges
+  a joint with a chamfer or cut corner on its front, or whose faces draw apart, is not filled
+  every other joint stays the natural gap between two rounded boxes</pre></div>
+<div class="words"><p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 0.18 to 0.21 s with the fillers, the same as the stones alone.</p></div></div>
 </section>
