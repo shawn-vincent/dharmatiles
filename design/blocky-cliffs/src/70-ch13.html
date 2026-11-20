@@ -59,10 +59,11 @@ formation(numbers, seed):                         every stone is first a plain b
                 top under it to meet it (up to 0.25 fh, if nothing is on it), else slide it the
                 smallest way that passes, then shorten and narrow it (to 0.55), else do not lay it
        gate     first lay the lintel across both piers; if it cannot be laid, shut the opening
-  4 shape       each stone finds which of its top edges are exposed, then
-       exposed edge: a wide bevel; one stone in three a chamfer of up to 0.3 fh on a side edge
-                     (a shoulder cut); under a carried stone and against a neighbour: nearly
-                     sharp, so joints stay creases
+  4 shape       each stone finds which of its 12 box edges are exposed (no other stone and
+                not the ground touches most of its length, 7 samples), then
+       exposed edge: a shallow chamfer (below); one edge in two a broad one; a covered edge
+                     (against a neighbour, under a carried stone, on the ground): a hair, so
+                     joints stay crisp creases
        front stones: a top sloping along the cliff or into the wall, a battered front
        others:       battered only on a side that stands clear of its neighbour; a top sloped
                      (the dip, if any) unless it carries a stone; some many-sided
@@ -75,12 +76,16 @@ stone(box, numbers):
                       front and cut-end edge, seldom the far side, 0 under or against another
                       stone, sometimes one broad edge), dropping min(drop, 0.58 e) down the
                       side, drop 0.01-0.04 fh drawn per stone (10 to 30 degrees below the top)
-    each upright edge: narrow on a front corner now and then, 0.05-0.1 on a many-sided tall stone
+    each bottom edge: if exposed, the same bevel mirrored (shallow into the underside, a short
+                      rise up the face): a lintel, a cap's overhang, a bridge
+    each upright edge: if exposed, narrow (0.015-0.04), 0.05-0.1 on a many-sided tall stone
     top corners:      0 to 3 angled planes across them, 0.04-0.12 fh in, dropping as a top chamfer does
-    everything else except the bottom edges: a hair, 0.01 fh
+    every covered edge: a hair, 0.01 fh (a bottom edge on the ground or a stone: crisp)
   cut each of the six faces by each plane and add the face a plane leaves; turn
 fuse(stones):
-  for each contact (a bed, or an upright joint between neighbours) draw chapter 8's rule:
+  for each contact (a bed, or an upright joint between neighbours) draw chapter 8's rule,
+    but never across an exposed edge (a bed: the upper's bottom front edge and the lower's
+    top front edge covered; upright: the shorter stone's edge along the joint covered):
     whether it fuses (the chance only; its place and ends are not drawn)
   grow, when the stones are built, those on a fused joint toward each other:
     upright joint: each stone sideways by its widest upright chamfer + 0.01

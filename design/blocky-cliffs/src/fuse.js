@@ -26,6 +26,8 @@ function fusedContacts(f) {
   return contactsOf(f).filter((c) => { const lo = S[c.lo], up = S[c.up];
     const bed = c.type === 'bed', len = bed ? c.a1 - c.a0 : c.z1 - c.z0, at = bed ? (c.a0 + c.a1) / 2 : c.a0; if (len < FUSE.minLen) return false;
     const front = !hidden(bed ? at : (lo.a + up.a) / 2, c.d0 - .06, bed ? c.zb + .02 : (c.z0 + c.z1) / 2, [c.lo, c.up]), kind = !bed ? FUSE.up : up.kind === 'slab' ? FUSE.course : FUSE.rest;
+    /* exposed edges are never merged: a bed fuses only where the upper stone's bottom front edge and the lower's top front edge are covered, an upright joint only where the shorter stone's edge along it is */
+    if (bed ? up.ex.b[2] || lo.ex.t[2] : (lo.h <= up.h ? lo : up).ex.v[(lo.h <= up.h ? 1 : 0) + (c.front ? 0 : 2)]) return false;
     if (at < .25 * L && !front) return false;   /* back joints by the cut end stay open */
     return r() < Math.min(.9, kind[front ? 0 : 1] * (at > 2 * L / 3 ? FUSE.far : FUSE.near) * soft); });
 }
