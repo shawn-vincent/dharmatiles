@@ -133,7 +133,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 <div class="sec">
 <div class="words"><h3>Features, and how often <span class="ev e">estimated</span></h3>
 <p>Six kinds explain the sheet. A rock has two features on average (2.25; one to four, never none): <b>split</b> (a V-groove down a face), <b>step</b> (a corner or end cut down to a shelf), <b>chip</b> (a flake off a corner or a V notch), <b>facet</b> (a plane a few degrees off a face), <b>bed</b> (a line across the top, or one horizontal line on a face) and <b>offset</b> (one side of a split a hair lower).</p>
-<p><b>Splits</b> are the most common, and every slab has one. They read as two columns grown together: the V is the sum of the chamfers of both halves, and the halves are level to within a few per cent. <b>Bed lines are weaker than the first read:</b> 5 of the 6 are a line across the <i>top</i>, not a horizontal groove on a side; only R5C3 has a horizontal one.</p></div>
+<p><b>Splits</b> are the most common, and every slab has one. They read as a V-line in one mass, level on both sides, never a gap. <b>Bed lines are weaker than the first read:</b> 5 of the 6 are a line across the <i>top</i>, not a horizontal groove on a side; only R5C3 has a horizontal one.</p></div>
 <div class="plates"><div id="t-feat" class="scroll"></div></div></div>
 
 <div class="sec">
@@ -144,7 +144,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 
 <div class="sec">
 <div class="words"><h3>Which go together <span class="ev e">estimated</span></h3>
-<p>The cell is the number of rocks with both. The diagonal is the number of rocks with that feature. A split goes with the rest because it is the commonest. What is rare is the stack of everything: <b>step with chip is on only 2 rocks</b> and bed with anything on 1 to 4. A step and a split are together on 7 of the 16 stepped rocks, which fits reading a step as a split with one side lower (the generator does).</p></div>
+<p>The cell is the number of rocks with both. The diagonal is the number of rocks with that feature. A split goes with the rest because it is the commonest. What is rare is the stack of everything: <b>step with chip is on only 2 rocks</b> and bed with anything on 1 to 4. A step and a split are together on 7 of the 16 stepped rocks, so the generator has them independent: a scored line, and a bite from a corner.</p></div>
 <div class="plates"><div id="t-co" class="scroll"></div></div></div>
 
 <div class="sec">
@@ -168,66 +168,63 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 
 <section class="ch" id="rules">
 <header><span class="n">2 · The rules</span><h2>The smallest set that explains the sheet</h2>
-<p>Two base shapes, one cut that is a split or a step, and three ways of breaking a surface. Every number is <span class="ev p">proposed</span>: taken from the study, then judged against the references by rendering. Lengths are in figure heights (fh); <code>m</code> is the shorter plan side of the rock. A rock is about 0.3 to 1.3 fh at its longest.</p></header>
+<p>Two base shapes, two ways of cutting a concave piece out of it, and three ways of breaking a surface. Every number is <span class="ev p">proposed</span>: taken from the study, then judged against the references by rendering. Lengths are in figure heights (fh); <code>m</code> is the shorter plan side of the rock. A rock is about 0.3 to 1.3 fh at its longest.</p></header>
 <div class="rules">
 <div class="rule"><h3><span class="rn">B1</span> Base: a box, or a ramp</h3>
 <p>Draw the class with the sheet's shares: slab .22, block .30, pillar .22, ramp .26. Plan side W (the long one) then D, height H, all against W:</p>
 <ul><li>slab: W 0.75–1.15 fh, D 0.55–0.85, H 0.28–0.42</li><li>block: W 0.5–0.85 fh, D 0.72–1, H 0.62–1</li><li>pillar: W 0.32–0.5 fh, D 0.6–0.9, H 1.7–2.5 (never above 1.3 fh)</li><li>ramp: W 0.6–1 fh, D 0.6–0.9, back H 0.62–0.95, front 0.25–0.45 of the back; the top rises along W</li></ul>
-<p>Lean: a pillar leans with chance .6, a ramp .2, a block .1: the whole rock sheared 0.05–0.14 along a plan side (3 to 8 degrees). Each outer face of a block, slab or ramp moves in as it rises with chance .45, by 3–8 per cent of its width over the height (not on a pillar, which tapers only through its facets).</p></div>
-<div class="rule k"><h3><span class="rn">B2</span> Columns: the footprint is cut</h3>
-<p>The footprint is cut across its full depth into columns, and each column is its own box with its own top. A cut falls at 0.3–0.7 of the column it cuts; no column is narrower than 0.3 m, or than a fifth of its height. Number of cuts: slab 1 (.55) or 2 (.45); block 0 (.17), 1 (.5), 2 (.33); pillar 0 (.78) or 1 (.22); ramp 0 (.6) or 1 (.4).</p></div>
-<div class="rule k"><h3><span class="rn">F1</span> Split = a cut with level sides</h3>
-<p>Both sides keep the top (one side is 2–5 per cent lower, with chance .3 when there is a cut). The groove is nothing but the chamfers of the two columns where they meet, so it is a V in every face the cut crosses, <b>sharp at the bottom of the V</b>, and as wide as its two chamfers: 0.022 to 0.03 fh a side, so 0.045 to 0.06 across. It need not go through: a split that stops partway is made by a column behind it that joins the two (the bed, F3).</p></div>
-<div class="rule k"><h3><span class="rn">F2</span> Step = a cut with one side lower</h3>
-<p>Chance .15 on a slab, .25 on a block, .45 on a pillar, .5 on a ramp. The column at a corner is lowered by 0.25–0.5 of the height (0.3–0.55 on a pillar): at the left end of the left face with chance .65, at the near corner with .35, and with chance .6 it is also cut short in depth, so it is a corner and not a whole end. On a ramp the corner column is a level shelf at 0.55–0.9 of the ramp's height there, with the ramp rising behind it (the seat). The tread and riser meet at a sharp inside corner; their outer edges are chamfered like any other.</p></div>
+<p>Lean: a pillar leans with chance .3, a ramp .2, a block .1: the whole rock sheared 0.012–0.035 along a plan side (under 2 degrees); the sides stay near upright. A face of a block, slab or ramp moves in as it rises with chance .3, by 1–2 per cent of its width over the height.</p></div>
+<div class="rule k"><h3><span class="rn">B2</span> One mass</h3>
+<p>A rock is one convex solid with chamfers, facets and chips cut in; the concave features below are taken out of it. It never has a second top or a second outline, so it reads as one block from every side.</p></div>
+<div class="rule k"><h3><span class="rn">F1</span> Split = a scored V-line</h3>
+<p>A V-groove 0.045–0.075 fh wide at the face and about two thirds as deep, scored into the left face (.65) or right face (.35) at 0.25–0.75 of its width, running up through the top edge. It starts at the ground with a taper (no notch in the base) or, with chance .6, at 0.2–0.7 of the height with a tapering end. With chance .3 (not on a ramp) the line goes on across the top and stops 0.4–0.9 of the way back. The groove is tilted up to 5 degrees. Number of grooves: slab 1 (.6) or 2 (.4); block 0 (.25), 1 (.55), 2 (.2); pillar 0 (.78) or 1 (.22); ramp 0 (.6) or 1 (.4). A groove is sharp at its bottom and does not change the outline.</p></div>
+<div class="rule k"><h3><span class="rn">F2</span> Step = a bite from a top corner</h3>
+<p>Chance .15 on a slab, .25 on a block, .45 on a pillar, .5 on a ramp. A box is cut out of a top corner: 0.28–0.5 of the length at the left end (.65) or the near end (.35), 0.4–0.75 of the depth (chance .6; otherwise all the way through), down to 0.5–0.75 of the height on a block or slab and 0.45–0.7 on a pillar. On a ramp the bite is a level shelf at 0.55–0.9 of the ramp's height there (the seat). Tread and riser meet at a sharp inside corner. The bite's own rim edges are not chamfered yet.</p></div>
 <div class="rule"><h3><span class="rn">C1</span> Chamfers: every convex edge, 1 to 3 planes</h3>
-<p>Each edge of each column (top, upright, bottom) is cut by 1, 2 or 3 planes (.25, .45, .3). The width of a plane is a straight line along the edge, drawn at random and changing by up to ±0.45 m per fh; with two or three, the widest wins, so they cross and show creases. Base widths: top 0.08–0.14 m, upright 0.08–0.14 m, bottom 0.07–0.12 m, and a quarter of that on the two sides of a cut. <b>No free chamfer under 0.06 fh</b> (0.05 at the bottom, 0.022 for a groove side; on a rock narrower than 0.55 fh the floor gives way to 0.11 m so a pillar is not a prism) and none over 0.2 m. A top chamfer drops 0.45–0.95 of its width; an upright one is 45 degrees. A bend under 35 degrees (a ramp's top against its front) is left as a crease. Concave corners are never cut.</p></div>
+<p>Each edge (top, upright, bottom) is cut by 3, 4 or 5 planes (.35, .4, .25). The width of a plane is a straight line along the edge, drawn at random and changing by up to ±0.3 m per fh; the widest wins, so the planes cross and the width wanders along the edge with a crease at each change. Base widths: top 0.08–0.14 m, upright 0.08–0.14 m, bottom 0.07–0.12 m, <b>No chamfer under 0.06 fh</b> (0.05 at the bottom; on a rock narrower than 0.55 fh the floor gives way to 0.11 m so a pillar is not a prism) and none over 0.2 m. A top chamfer drops 0.45–0.95 of its width; an upright one is 45 degrees. A bend under 35 degrees (a ramp's top against its front) is left as a crease. Concave corners are never cut.</p></div>
 <div class="rule"><h3><span class="rn">C2</span> Facets: a plane a few degrees off a face</h3>
-<p>0 to 3 a rock (.15, .35, .35, .15). A plane tilted 6–24 degrees from a side face (6–10 from a top), toward a direction that is mostly up (.45), diagonal (.4) or along (.15); a plane tilted up the face (so the rock narrows toward the top) is chosen with chance .85, one tilted down .15; set 0.05–0.2 m below the face at the middle of its place, so it meets the face along a crease and cuts a wedge off one side. It is refused if it takes more than 28 per cent of the column's box, and never goes in a face that is a joint (that would open the groove into a gap). One to four <b>kinks</b> as well: the same plane at 2.5–6 degrees and 0.015–0.05 m deep, which break a large face into planes that shade a little differently, as on the sheet. These are the oblique planes of R1C6, R2C1 and R4C3.</p></div>
+<p>0 to 3 a rock (.15, .4, .35, .1). A plane tilted 3–9 degrees from a side face (3–6 from a ramp's slope; a flat top takes none), toward a direction that is mostly up (.45), diagonal (.4) or along (.15); tilted up the face (the rock narrows toward the top) with chance .85, down .15; set 0.03–0.1 m below the face, so it meets the face along a crease and cuts a wedge off one side. It is refused if it takes more than 28 per cent of the box. One to three <b>kinks</b> as well: the same plane at 1.5–4 degrees and 0.012–0.035 m deep, which break a large face into planes that shade a little differently, as on the sheet. These are the oblique planes of R1C6, R2C1 and R4C3.</p></div>
 <div class="rule"><h3><span class="rn">C3</span> Chips: a corner flake</h3>
 <p>0 to 2 a rock (.45, .35, .2). The plane through a point on each of the three edges at a corner, 0.16–0.4 of the shorter side out along each, so the three legs are unequal and the flake is a skew triangle. 45 per cent are at a lower corner. Refused if it takes more than 20 per cent of the box, or if one of its three faces is a joint. The V notch of R3C1 is read as a chip; a pocket in a face is not generated.</p></div>
-<div class="rule"><h3><span class="rn">F3</span> Bed: a line across</h3>
-<p>Chance .12, on blocks and pillars. Every column that is tall enough is cut at 0.5–0.8 of the height into a lower and an upper box, joined by one that stands behind them at 0.28–0.5 m from the front, so the groove shows on the near faces and the top and ends at the sides. Five of the six beds in the sheet are a line across the top, which the split's V already gives; this is for the sixth.</p></div>
 <div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P1</span> Undersides print</h3>
 <p>No face is flatter than 35 degrees above horizontal, except the flat bottom. Bottom chamfers rise run over 1.4 (55 degrees from vertical). A plane facing down with its normal pointing more than sin 55° (0.819) downward is lengthened on its standing leg or dropped; the finished mesh is checked and a seed with a face over 55 degrees is drawn again from the same seed (the table in chapter 4 gives how often; every rock shown passes).</p></div>
 <div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P2</span> Where a face must stay plain</h3>
-<p>For the cliff: <code>bottomBevel: false</code> leaves the bottom edges sharp (an edge on the ground, or on another stone). A top that carries a stone should take no step, facet, chip or chamfer; a face against a neighbour no split, facet or chip; the generator has no switch for these yet, and says so in the verdict.</p></div>
+<p>For the cliff: <code>bottomBevel: false</code> leaves the bottom edges sharp (an edge on the ground, or on another stone). A top that carries a stone should take no step, facet, chip or chamfer; a face against a neighbour no split, facet or chip; the generator has no switch for these yet.</p></div>
 <div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P3</span> One closed mesh</h3>
-<p>The columns are convex; the rock is their union, found by splitting each face at the others' planes and dropping what lies inside another column, and by dropping both of two faces that touch back to back. Faces are welded and the T-junctions of the splits repaired; the page checks that every edge has two triangles.</p></div>
+<p>The cut solid is welded and its T-junctions repaired; the page checks that every edge has two triangles.</p></div>
+
 </div>
 </section>
 
 <section class="ch" id="explorer">
 <header><span class="n">3 · The explorer</span><h2>Draw a rock</h2>
-<p>One rock from one seed, built with the rules above. Drag to turn it, scroll or pinch to zoom. The sixteen below are the neighbouring seeds; touch one to open it. Beside them is a crop of the reference to judge against.</p></header>
+<p>One rock from one seed, built with the rules above. Drag to turn it, scroll or pinch to zoom. Beside it is one reference rock to judge it against; pick which.</p></header>
 <div class="bench">
  <div class="live" id="live"></div>
  <div class="side">
   <div class="grp"><label for="seed" id="l-seed">Seed</label><div class="seedrow"><input type="number" id="seed" min="1" max="999999" step="1" aria-labelledby="l-seed"><button type="button" id="prev">Previous</button><button type="button" id="next">Next</button></div>
    <div class="seedrow"><button type="button" class="main" id="new">New seed</button><button type="button" id="view">Reset view</button></div></div>
   <div class="grp"><label for="kind">Base shape</label>
-   <select id="kind"><option value="any">Any, in the sheet's shares</option><option value="slab">Slab: low, long</option><option value="block">Block</option><option value="pillar">Pillar: tall</option><option value="ramp">Ramp: top rising to a high back</option><option value="stepped">Stepped: a block or pillar with a lowered corner</option></select></div>
+   <select id="kind"><option value="any">Any, in the sheet's shares</option><option value="slab">Slab: low, long</option><option value="block">Block</option><option value="pillar">Pillar: tall</option><option value="ramp">Ramp: top rising to a high back</option><option value="stepped">Stepped: a block or pillar with a bite out of a corner</option></select></div>
+  <div class="grp"><label for="refcell">Reference</label><select id="refcell"></select>
+   <div class="plate stage"><canvas id="refcrop" style="width:100%;height:auto;display:block"></canvas></div></div>
   <dl class="read" id="read"></dl>
  </div>
-</div>
-<div class="beside">
- <div><div class="sheet" id="sheet"></div><p class="note" style="margin-top:8px">Each is drawn at the references' view. Same seed, same rock; a new base shape gives a different rock for the same number.</p></div>
- <figure><div class="plate stage"><canvas id="refcrop"></canvas></div><figcaption>The reference rocks R2C1 to R3C4: the same view, the same light, for comparison.</figcaption></figure>
 </div>
 </section>
 
 <section class="ch" id="built">
-<header><span class="n">4 · How a rock is built</span><h2>Columns, cuts, joined</h2>
-<p>Four stages of one seed (found by scanning for a rock with a step, a facet and a chip). Then the cost, measured in this browser.</p></header>
+<header><span class="n">4 · How a rock is built</span><h2>One mass, cut</h2>
+<p>Four stages of one rock (found by scanning for one with a step, a split and a chip). Then the cost, measured in this browser.</p></header>
 <div class="sec full"><div class="row" id="stages" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))"></div></div>
 <div class="sec">
 <div class="words"><ol>
-<li><b>Columns.</b> The base box (or ramp) is cut into columns, each a convex solid held as six planes: four sides that may lean or move in, a top that may slope, a flat bottom.</li>
-<li><b>Chamfers.</b> Each edge of each column is read off its faces, and one to three planes are cut along it, their widths set from the edge's own line in space, so two columns that share an edge cut it the same way.</li>
-<li><b>Facets and chips.</b> A few more planes on one column each. Convex clips only, so a column stays convex.</li>
-<li><b>Join.</b> Each polygon of each column is split at the other columns' planes; the pieces inside another column are dropped, and so is a pair of pieces that touch back to back (a joint). What is left is the surface of the union, with the V of a split and the riser of a step in it.</li>
-<li><b>Mesh.</b> Weld the corners, repair the T-junctions where a split crosses a neighbour's edge, fan the polygons into triangles, count the edges (each must have two), and find the steepest face facing down.</li></ol>
-<p>Nothing is a voxel or a field: every face is an exact plane, so an edge is as crisp as the planes make it.</p></div>
+<li><b>The mass.</b> One convex solid held as planes: four sides that lean a little, a top that slopes only for a ramp, a flat bottom. Slab, block, pillar and ramp are the same solid with different proportions.</li>
+<li><b>Chamfers.</b> Each edge is read off its two faces and cut by three to five planes whose widths are straight lines along the edge, so the widest wins and the width wanders with creases between facets.</li>
+<li><b>Facets, kinks and chips.</b> More planes on the same solid: a few degrees off a side face (a ramp's slope may take one too, a flat top never), and skew corner flakes. Still convex.</li>
+<li><b>Cuts.</b> Concave pieces are taken out of the solid by convex cutters: a V-groove (two planes, with a tapering end) scored into a face and sometimes on across the top, and a bite out of a top corner for a step. Faces are split at the cutters' planes, what lies inside is dropped, and the cutters' own faces close the cut. A groove never divides the rock; a bite is one corner shelf.</li>
+<li><b>Mesh.</b> Weld the corners, repair T-junctions, fan the polygons into triangles, count the edges (each must have two) and find the steepest face facing down; a rock that fails is drawn again from the same seed.</li></ol>
+<p>Nothing is a voxel or a field: every face is an exact plane.</p></div>
 <div class="plates"><div class="plate pad"><div id="t-time" class="scroll"></div></div><p class="note" id="timenote"></p></div></div>
 </section>
 
@@ -241,9 +238,9 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 <li><b>Sharp inside corners.</b> Where a step meets its riser and at the bottom of every groove the corner is sharp, as the rule says, because it comes from joining boxes.</li>
 <li><b>It prints and it is fast.</b> Every shown rock is one closed mesh, no face over 55 degrees from vertical except the flat bottom, and a rock builds in 2 to 6 ms on average and under 50 ms at the worst seed (chapter 4).</li></ul></div>
 <div class="words"><h3>Does not look right yet</h3><ul>
-<li><b>Softness.</b> The sheet is a clay sculpt: faces are slightly wavy, creases soft. These are exact planes, shaded as one across bends under 18 degrees. The result is a cut stone, a little crystalline next to the clay.</li>
-<li><b>One mass.</b> On the sheet a split is a narrow line in a monolith. Mine are right when there are one or two cuts and read as fused boxes with three or more, or when the step is deep; the V at the foot of a groove sometimes opens a notch at the ground.</li>
-<li><b>Flat tops.</b> The sheet's tops are broad and flat inside a band of chamfers. Mine are mostly so, but a facet on a ramp or a lean can put a crease across a top that the sheet does not have.</li>
+<li><b>Softness.</b> The sheet is a clay sculpt: faces are slightly wavy, creases soft. These are exact planes, shaded as one across bends under 18 degrees; a cut stone next to the clay, though far less crystalline than before.</li>
+<li><b>One mass.</b> Every rock is one solid with grooves and a bite cut into it; it no longer reads as two rocks. A groove ends in a flat-floored taper that looks more like a slot than the sheet's soft line.</li><li><b>The bite's rim.</b> A step's tread and riser edges are sharp; the sheet chamfers them.</li>
+<li><b>Chamfer wander.</b> Widths change along an edge with creases, but only as a convex envelope, so they widen toward the ends or the middle and do not wander freely as on the sheet.</li>
 <li><b>Not generated at all:</b> the pocket or V notch cut into a face (R2C6, R3C1, R4C2; three rocks), and the wavy surface of the clay. A horizontal bed line is generated but is rare in the sheet (R5C3 only).</li>
 <li><b>Cliff constraints are only partly in.</b> The generator has the bottom switch (<code>bottomBevel: false</code>) but no switch yet for a top that carries a stone, or a face against a neighbour. I would add them as a list of faces to leave plain.</li></ul></div></div>
 <div class="sec full"><div class="words"><h3>What I did not look at</h3>
@@ -332,18 +329,19 @@ function chamferPlanes(F, ctx) {
     const a = e.a, b = e.b, L = len(sub(b, a)); if (L < 0.05) continue;
     const bottom = n1[2] < -.95 || n2[2] < -.95, top = !bottom && (n1[2] > .3 || n2[2] > .3);
     if (bottom && !ctx.bottomBevel) continue;
+    if (bottom && (f1.pl.joint || f2.pl.joint)) continue;   /* a groove stops at the ground: no notch there */
     const t = norm(sub(b, a)), ax = Math.abs(t[0]) > Math.abs(t[1]) ? (Math.abs(t[0]) > Math.abs(t[2]) ? 0 : 2) : (Math.abs(t[1]) > Math.abs(t[2]) ? 1 : 2);
     const inFace = (f) => { let g = norm(cross(f.n, t)); if (dot(g, sub(centroid(f.p), a)) < 0) g = mul(g, -1); return g; };
     const g1 = inFace(f1), g2 = inFace(f2), ext = (f, g) => Math.max(...f.p.map((p) => dot(sub(p, a), g)));
     const cap = .4 * Math.min(ext(f1, g1), ext(f2, g2));
     const type = bottom ? 'bottom' : top ? 'top' : 'vert', k = edgeKey(a, t, n1, n2, ax), r = mulberry(hash(ctx.seed + ':' + k));
-    const nf = pick(r, { 1: .25, 2: .45, 3: .3 }) | 0, rng = ctx.chamfer[type], base = U(r, rng[0], rng[1]) * ctx.m * ((f1.pl.joint || f2.pl.joint) ? .26 : 1);
+    const nf = pick(r, { 3: .35, 4: .4, 5: .25 }) | 0, rng = ctx.chamfer[type], base = U(r, rng[0], rng[1]) * ctx.m * ((f1.pl.joint || f2.pl.joint) ? .2 : 1);
     /* which face is which: the bottom or top face takes the long leg */
     let bigIsF1 = bottom ? n1[2] < -.95 : top ? n1[2] > .3 && n1[2] >= n2[2] : true;
     const ratio = bottom ? FACE_BIAS : top ? U(r, .45, .95) : 1;
     for (let i = 0; i < nf; i++) {
-      const e0 = base * U(r, .62, 1.38), slope = U(r, -.45, .45) * ctx.m;
-      const jt = f1.pl.joint || f2.pl.joint, floor = Math.min(jt ? .022 : bottom ? .05 : .06, .11 * ctx.m), wid = (c) => Math.min(Math.max(floor, e0 + slope * c), Math.max(floor, .2 * ctx.m));   /* big silhouette features: none under 0.06 fh (a groove's two halves 0.045) */
+      const e0 = base * U(r, .7, 1.3), slope = U(r, -.3, .3) * ctx.m;
+      const jt = f1.pl.joint || f2.pl.joint, floor = Math.min(jt ? .018 : bottom ? .05 : .06, .11 * ctx.m), wid = (c) => Math.min(Math.max(floor, e0 + slope * c), Math.max(floor, .2 * ctx.m));   /* big silhouette features: none under 0.06 fh (a groove's two halves 0.045) */
       const leg = (c) => { const w = Math.min(wid(c), cap / Math.max(1, ratio < 1 ? 1 : ratio)); return bigIsF1 ? [w, w * ratio] : [w * ratio, w]; };
       const la = leg(a[ax]), lb = leg(b[ax]);
       const P1 = add(a, mul(g1, la[0])), P2 = add(a, mul(g2, la[1])), Q1 = add(b, mul(g1, lb[0]));
@@ -459,89 +457,79 @@ const KINDS = ['slab', 'block', 'pillar', 'ramp', 'stepped'];
 const MIX = { slab: .22, block: .30, pillar: .22, ramp: .26 };   /* the sheet: 9 slabs, 12 blocks, 9 pillars, 10 ramps of 40; "stepped" is a control, not a share */
 /* what the sheet gives, as numbers (see the study): sizes are against the longer plan side W; cuts is how many splits; step the chance of a lowered corner */
 const KIND_SPEC = {
-  slab: { W: [.75, 1.15], D: [.55, .85], H: [.28, .42], cuts: { 1: .55, 2: .45 }, lean: 0, step: .15 },
-  block: { W: [.5, .85], D: [.72, 1], H: [.5, .85], cuts: { 0: .17, 1: .5, 2: .33 }, lean: .1, step: .25 },
-  pillar: { W: [.4, .6], D: [.6, .9], H: [1.6, 2.4], cuts: { 0: .78, 1: .22 }, lean: .6, step: .45 },
+  slab: { W: [.75, 1.15], D: [.55, .85], H: [.28, .42], cuts: { 1: .6, 2: .4 }, lean: 0, step: .15 },
+  block: { W: [.5, .85], D: [.72, 1], H: [.5, .85], cuts: { 0: .25, 1: .55, 2: .2 }, lean: .1, step: .25 },
+  pillar: { W: [.4, .6], D: [.6, .9], H: [1.6, 2.4], cuts: { 0: .78, 1: .22 }, lean: .3, step: .45 },
   ramp: { W: [.6, 1], D: [.6, .9], H: [.62, .95], cuts: { 0: .6, 1: .4 }, lean: .2, step: .5 },
 };
+/* ---------- cutters: a convex region (planes, inside is n.p <= d) taken out of the one mass ---------- */
+function cutterOf(planes) { let F = cube(40); for (const p of planes) F = clip(F, p); return { planes, faces: F }; }
+const orient = (n, d, inside) => (dot(n, inside) - d > 0 ? { n: mul(n, -1), d: -d } : { n, d });   /* make `inside` satisfy n.p <= d */
+/* a V-groove scored into a face: opening w at the face c (normal n, tangent u, axis a along the groove), apex d below; the end at distance t_e along a tapers away, interior toward `sign` */
+function groove(c, n, u, a, w, d, end) {
+  const q0 = add(c, mul(n, -d)), pl = [];
+  for (const sg of [1, -1]) { const v = add(mul(n, d), mul(u, sg * w / 2)); let m = norm(cross(a, v)), dd = dot(m, q0); const o = orient(m, dd, c); pl.push({ n: o.n, d: o.d * 1 }); }
+  /* orient() tests the point c, which lies inside the wedge; recompute d from the apex so the plane passes through the apex line */
+  pl.forEach((p, i) => { p.d = dot(p.n, q0); if (dot(p.n, c) - p.d > 0) { p.n = mul(p.n, -1); p.d = -p.d; } });
+  if (end) { const Pf = add(c, mul(a, end.t)), Pk = add(q0, mul(a, end.t + end.sign * d)); let m = norm(cross(u, sub(Pk, Pf))); const o = orient(m, dot(m, Pf), add(Pf, mul(a, end.sign * .1))); pl.push(o); }
+  return cutterOf(pl);
+}
 function compose(seed, attempt, opts) {
   const r = mulberry(hash('rock' + seed + ':' + attempt));
   let kind = opts.kind && opts.kind !== 'any' ? opts.kind : pick(r, MIX), forceStep = false;
   if (kind === 'stepped') { kind = pick(r, { block: .45, pillar: .4, ramp: .15 }); forceStep = true; }
   const S = KIND_SPEC[kind];
   let W = U(r, ...S.W), D = W * U(r, ...S.D), H = W * U(r, ...S.H);
-  if (kind === 'pillar') { H = Math.min(H, 1.3); } else if (kind === 'ramp') { H = W * U(r, ...S.H); }
-  if (r() < .5) { const t = W; W = D; D = t; }   /* which plan side faces left */
-  const size = Math.max(W, D, H);
-  const ctx = { seed, size, m: Math.min(W, D), bottomBevel: opts.bottomBevel !== false, noChamfer: opts.stage === 0, chamfer: { top: [.08, .14], vert: [.08, .14], bottom: [.07, .12] } };
-  /* lean: the whole column sheared; batter: a face moves in a little as it rises */
-  const lean = [0, 0]; if (r() < S.lean) { const ax = r() < .7 ? 0 : 1; lean[ax] = U(r, .05, .14) * (r() < .5 ? -1 : 1); }
-  const bat = [W, W, D, D].map((w) => (kind !== 'pillar' && r() < .45 ? U(r, .03, .08) * w / Math.max(H, w * 1.2) : 0));
-  let sx = 0, sy = 0, h0 = H, flatLow = 0;
-  if (kind === 'ramp') { const hL = H * U(r, .25, .45); sx = (H - hL) / W; h0 = hL; }
-  /* the footprint, split into columns by cuts that run the full depth (a split, or a step when one side is lower) */
-  let cols = [{ x0: 0, x1: W, y0: 0, y1: D, drop: 0 }];
-  const ncut = forceStep ? Math.max(1, +pick(r, S.cuts)) : +pick(r, S.cuts), feats = [];
-  const minw = Math.max(.3 * Math.min(W, D), H / 5, .1);
-  for (let c = 0; c < ncut; c++) {
-    const cand = cols.filter((q) => Math.max(q.x1 - q.x0, q.y1 - q.y0) > 2.2 * minw).sort((a, b) => (b.x1 - b.x0) * (b.y1 - b.y0) - (a.x1 - a.x0) * (a.y1 - a.y0));
-    if (!cand.length) break;
-    const q = cand[Math.min(cand.length - 1, r() < .7 ? 0 : 1)], wx = q.x1 - q.x0, wy = q.y1 - q.y0, alongX = (wx > wy) === (r() < .75) ? wx >= 2.2 * minw : wy < 2.2 * minw;
-    const ax = (alongX && wx >= 2.2 * minw) || wy < 2.2 * minw;
-    const lo = ax ? q.x0 : q.y0, hi = ax ? q.x1 : q.y1, u = lo + (hi - lo) * U(r, .3, .7);
-    const a = ax ? { ...q, x1: u } : { ...q, y1: u }, b = ax ? { ...q, x0: u } : { ...q, y0: u };
-    cols.splice(cols.indexOf(q), 1, a, b);
-    feats.push({ k: 'split', axis: ax ? 'x' : 'y', at: u });
+  if (kind === 'pillar') H = Math.min(H, 1.3);
+  if (r() < .5) { const t = W; W = D; D = t; }
+  const size = Math.max(W, D, H), m = Math.min(W, D);
+  const ctx = { seed, size, m, bottomBevel: opts.bottomBevel !== false, noChamfer: opts.stage === 0, ramp: kind === 'ramp', chamfer: { top: [.08, .14], vert: [.08, .14], bottom: [.07, .12] } };
+  const lean = [0, 0]; if (r() < S.lean) lean[r() < .7 ? 0 : 1] = U(r, .012, .035) * (r() < .5 ? -1 : 1);
+  const bat = [W, W, D, D].map((w) => (kind !== 'pillar' && r() < .3 ? U(r, .008, .02) * w / Math.max(H, w * 1.2) : 0));
+  let sx = 0, h0 = H; if (kind === 'ramp') { const hL = H * U(r, .25, .45); sx = (H - hL) / W; h0 = hL; }
+  const part = { x0: 0, x1: W, y0: 0, y1: D, lean, bat, sx, sy: 0, h0, clips: [] }, feats = [], cutters = [], dims = { W, D, H, size };
+  const full = opts.stage == null || opts.stage >= 3, topAt = (x) => h0 + sx * x;
+  /* a step: one bite out of a top corner of the mass (concave, right-angled): the shelf is the tread, the cut face the riser */
+  if (forceStep || r() < S.step) {
+    const nearEnd = r() < .35, wx = Math.max(U(r, .28, .5) * W, .3 * m), wy = r() < .6 ? Math.max(U(r, .4, .75) * D, .3 * m) : null, pl = [];
+    let zs = kind === 'ramp' ? Math.min(topAt(nearEnd ? W - wx : 0) * U(r, .55, .9), topAt(nearEnd ? W : wx) * U(r, .35, .6)) : H * (1 - U(r, kind === 'pillar' ? .3 : .25, kind === 'pillar' ? .55 : .5));
+    zs = Math.max(zs, .12 * size);
+    pl.push(nearEnd ? { n: [-1, 0, 0], d: -(W - wx) } : { n: [1, 0, 0], d: wx }); if (wy) pl.push({ n: [0, 1, 0], d: wy }); pl.push({ n: [0, 0, -1], d: -zs });
+    cutters.push(cutterOf(pl)); feats.push({ k: 'step', z: +zs.toFixed(3), corner: nearEnd ? 'near' : 'left', deep: !!wy });
   }
-  /* steps: a corner column lowered (the near corner of the left face, mostly): a split with one side lower */
-  const stepNow = forceStep || r() < S.step, cutLeaf = (q, ax, u) => { const a = ax === 'x' ? { ...q, x1: u } : { ...q, y1: u }, b = ax === 'x' ? { ...q, x0: u } : { ...q, y0: u }; cols.splice(cols.indexOf(q), 1, a, b); feats.push({ k: 'split', axis: ax, at: u }); return [a, b]; };
-  if (stepNow) {
-    const atFar = r() < .35, cx = atFar ? W : 0;   /* the corner at x = 0 (the left end of the left face) or at x = W (the near corner) */
-    let q = cols.find((c) => (c.x0 <= cx + 1e-9 && c.x1 >= cx - 1e-9) && c.y0 === 0);
-    const wmin = Math.max(.34 * Math.min(W, D), H / 3.4, .1);
-    if ((q.x1 - q.x0) > wmin * 2.1 && (q.x1 - q.x0) > .55 * W) { const lo = Math.max(wmin, kind === 'ramp' ? .28 * W : .2 * W), hi = Math.max(lo * 1.01, .5 * W), u = atFar ? q.x1 - U(r, lo, hi) : q.x0 + U(r, lo, hi), pr = cutLeaf(q, 'x', u); q = atFar ? pr[1] : pr[0]; }
-    if ((q.y1 - q.y0) > wmin * 2.1 && r() < .6) { const v = U(r, Math.max(wmin, .35 * D), Math.max(wmin * 1.01, .7 * D)); q = cutLeaf(q, 'y', v)[0]; }
-    if (kind === 'ramp') {
-      /* a seat: a flat shelf lower than the ramp where the column stands, with the ramp rising behind it */
-      const top = (x) => h0 + sx * x, hs = Math.min(top(q.x0) * U(r, .55, .9), top(q.x1) * U(r, .35, .6)); q.flat = Math.max(hs, .12 * size);
-    } else q.drop = H * U(r, kind === 'pillar' ? .3 : .25, kind === 'pillar' ? .55 : .5);
-    feats.push({ k: 'step', drop: q.drop || null, flat: q.flat || null, corner: atFar ? 'near' : 'left' });
-  } else if (cols.length > 1 && r() < .3) { const q = cols[Math.floor(r() * cols.length)]; q.drop = H * U(r, .02, .05); feats.push({ k: 'offset', drop: q.drop }); }
-  /* a bed line: every column cut at one height, joined behind so the groove stays on the near faces */
-  let bed = null;
-  if (kind !== 'ramp' && kind !== 'slab' && r() < .12) bed = { z: H * U(r, .5, .8), depth: Math.min(W, D) * U(r, .28, .5) };
-  const parts = [];
-  const topPlane = (q) => q.flat ? { sx: 0, sy: 0, h0: q.flat } : { sx, sy, h0: h0 - q.drop };
-  for (const q of cols) {
-    const tp = topPlane(q), ht = tp.h0 + tp.sx * q.x1 + tp.sy * q.y1;
-    const base = { x0: q.x0, x1: q.x1, y0: q.y0, y1: q.y1, lean, bat: [q.x0 === 0 ? bat[0] : 0, q.x1 === W ? bat[1] : 0, q.y0 === 0 ? bat[2] : 0, q.y1 === D ? bat[3] : 0], ...tp, clips: [], joints: [q.x0 !== 0 ? 0 : -1, q.x1 !== W ? 1 : -1, q.y0 !== 0 ? 2 : -1, q.y1 !== D ? 3 : -1].filter((k) => k >= 0) };
-    if (bed && ht - .22 * size > bed.z && !q.flat && q.y0 < bed.depth + 1e-9) { parts.push({ ...base, sx: 0, sy: 0, h0: bed.z, bedLow: 1, joints: [...base.joints, 4] }, { ...base, z0: bed.z, joints: [...base.joints, 5] }); } else parts.push(base);
+  /* splits: V-grooves scored into a face, thin and crisp, running up from the ground (tapering out there) through the top edge; some go on across the top */
+  const ng = kind === 'ramp' && !S.cuts ? 0 : +pick(r, S.cuts);
+  for (let i = 0; i < ng; i++) {
+    const onL = r() < .65, u = U(r, .25, .75), w = U(r, .045, .075), d = w * U(r, .55, .85), reach = r() < .4 ? null : U(r, .3, .8);
+    const ze = reach == null ? 0 : H * (1 - reach) * (kind === 'ramp' ? .6 : 1), tilt = U(r, -.08, .08);
+    let c, n, t, a;
+    if (onL) { c = [u * W, 0, 0]; n = [0, -1, 0]; t = [1, 0, 0]; a = norm([tilt, 0, 1]); } else { c = [W, u * D, 0]; n = [1, 0, 0]; t = [0, 1, 0]; a = norm([0, tilt, 1]); }
+    cutters.push(groove(c, n, t, a, w, d, { t: ze, sign: 1 })); feats.push({ k: 'split', face: onL ? 'L' : 'R', at: +u.toFixed(2), reach: reach == null ? 'full' : +reach.toFixed(2) });
+    if (kind !== 'ramp' && r() < .3) {   /* the line goes on across the top, and stops short of the back */
+      const ye = (onL ? D : W) * U(r, .4, .9), ct = onL ? [u * W, 0, H] : [W, u * D, H], aa = onL ? [0, 1, 0] : [-1, 0, 0], tt = onL ? [1, 0, 0] : [0, 1, 0];
+      cutters.push(groove(ct, [0, 0, 1], tt, aa, w, d, { t: ye, sign: -1 })); feats.push({ k: 'split', face: 'T', at: +u.toFixed(2), reach: +(ye / (onL ? D : W)).toFixed(2) });
+    }
   }
-  if (bed) { const hmin = Math.min(...parts.filter((p) => !p.bedLow).map((p) => p.h0 + p.sx * p.x1 + p.sy * p.y1)); parts.push({ x0: 0, x1: W, y0: bed.depth, y1: D, lean, bat: [bat[0], bat[1], 0, bat[3]], sx, sy, h0: hmin - 0 - sx * W, clips: [] }); feats.push({ k: 'bed', z: bed.z }); }
-  /* facets and chips on the parts: planes at slight angles; planes of corners cut off */
-  const nfac = +pick(r, { 0: .1, 1: .3, 2: .35, 3: .25 }), nchip = +pick(r, { 0: .45, 1: .35, 2: .2 });
-  const dims = { W, D, H, size };
-  const built0 = parts.map((p) => buildPart(p, ctx));
-  if (opts.stage == null || opts.stage >= 2) for (let i = 0; i < nfac; i++) addFacet(r, parts, built0, ctx, dims, feats);
-  if (opts.stage == null || opts.stage >= 2) for (let i = 0, nk = 1 + Math.floor(r() * 4); i < nk; i++) addFacet(r, parts, built0, ctx, dims, feats, true);
-  if (opts.stage == null || opts.stage >= 2) for (let i = 0; i < nchip; i++) addChip(r, parts, built0, ctx, dims, feats);
-  return { parts, feats, kind, dims, ctx, lean, bat, forceStep };
+  const parts = [part], dd = dims, nfac = +pick(r, { 0: .15, 1: .4, 2: .35, 3: .1 }), nchip = +pick(r, { 0: .45, 1: .35, 2: .2 });
+  const built0 = [buildPart(part, ctx)], stage = opts.stage == null ? 3 : opts.stage;
+  if (stage >= 2) { for (let i = 0; i < nfac; i++) addFacet(r, parts, built0, ctx, dd, feats); for (let i = 0, nk = 1 + Math.floor(r() * 3); i < nk; i++) addFacet(r, parts, built0, ctx, dd, feats, true); for (let i = 0; i < nchip; i++) addChip(r, parts, built0, ctx, dd, feats); }
+  return { parts, cutters: stage >= 3 ? cutters : [], feats, kind, dims, ctx, lean, bat, forceStep };
 }
 const CHIPS_MAX_TRY = 8, bvol = (b) => (b.box.hi[0] - b.box.lo[0]) * (b.box.hi[1] - b.box.lo[1]) * (b.box.hi[2] - b.box.lo[2]);
 function pickPart(r, parts, built) { let tot = 0; const w = built.map((b) => { const q = Math.max(.02, (b.box.hi[0] - b.box.lo[0]) * (b.box.hi[1] - b.box.lo[1])); tot += q; return q; }); let x = r() * tot; for (let i = 0; i < w.length; i++) { x -= w[i]; if (x < 0) return i; } return 0; }
 /* a facet: a plane a few degrees off a face, cutting a shallow wedge from it */
 function addFacet(r, parts, built, ctx, dims, feats, kink) {
-  const i = pickPart(r, parts, built), B = built[i], faces = B.faces.filter((f) => !f.pl.joint && (Math.abs(f.n[2]) < .6 || (f.n[2] > .6 && f.n[2] < .95)));
+  const i = pickPart(r, parts, built), B = built[i], faces = B.faces.filter((f) => !f.pl.joint && (Math.abs(f.n[2]) < .2 || (ctx.ramp && f.n[2] > .5 && f.n[2] < .95)));   /* a flat top stays flat: only a ramp's slope takes a facet */
   for (let tr = 0; tr < CHIPS_MAX_TRY; tr++) {
     const f = faces[Math.floor(r() * faces.length)]; if (!f || area(f.p, f.n) < .03 * dims.size * dims.size) continue;
-    const side = Math.abs(f.n[2]) < .6, c = centroid(f.p);
+    const side = Math.abs(f.n[2]) < .2, c = centroid(f.p);
     /* in-face direction the plane tilts toward: mostly vertical on a side, diagonal sometimes */
     const up = side ? [0, 0, 1] : [1, 0, 0], u1 = norm(cross(f.n, up)), u2 = norm(cross(f.n, u1));
     const ang = side ? pick(r, { v: .45, d: .4, h: .15 }) : 'h', a = ang === 'v' ? 0 : ang === 'h' ? Math.PI / 2 : (r() < .5 ? 1 : -1) * U(r, .35, .65) * Math.PI / 2;
-    const w = norm(add(mul(u2, Math.cos(a)), mul(u1, Math.sin(a)))), al = (kink ? U(r, 2.5, 6) : U(r, 6, side ? 24 : 9)) * Math.PI / 180;
+    const w = norm(add(mul(u2, Math.cos(a)), mul(u1, Math.sin(a)))), al = (kink ? U(r, 1.5, 4) : U(r, 3, side ? 9 : 6)) * Math.PI / 180;
     let sgn = r() < .5 ? 1 : -1; if (Math.abs(w[2]) > .3) sgn = Math.sign(w[2]) * (r() < .85 ? 1 : -1);   /* a plane that is tilted up the face narrows the rock toward the top, as the sheet's pillars do; down, rarely */
     const n = norm(add(mul(f.n, Math.cos(al)), mul(w, sgn * Math.sin(al))));
-    const ext = Math.max(...f.p.map((p) => Math.abs(dot(sub(p, c), w)))) || .1, off = U(r, -.5, .35) * ext, dep = (kink ? U(r, .015, .05) : U(r, .05, .2)) * Math.min(ctx.m, 1.2 * Math.min(B.box.hi[0] - B.box.lo[0], B.box.hi[1] - B.box.lo[1]));
+    const ext = Math.max(...f.p.map((p) => Math.abs(dot(sub(p, c), w)))) || .1, off = U(r, -.5, .35) * ext, dep = (kink ? U(r, .012, .035) : U(r, .03, .1)) * Math.min(ctx.m, 1.2 * Math.min(B.box.hi[0] - B.box.lo[0], B.box.hi[1] - B.box.lo[1]));
     const q = add(add(c, mul(w, sgn * off)), mul(f.n, -dep)), pl = { n, d: dot(n, q) };
     if (-pl.n[2] > .8192) continue;   /* a downward plane no flatter than 35 degrees above horizontal */
     parts[i].clips.push(pl); const nb = buildPart(parts[i], ctx); if (bvol(nb) < .72 * bvol(B)) { parts[i].clips.pop(); continue; } built[i] = nb; if (!kink) feats.push({ k: 'facet', part: i, deg: +(al * 180 / Math.PI).toFixed(1) }); return;
@@ -569,28 +557,43 @@ function addChip(r, parts, built, ctx, dims, feats) {
   }
 }
 
+/* the mass minus its cutters: faces split at the cutters' planes and the inside dropped; each cutter's faces, cut to the mass and to the other cutters, close the cut */
+function keepInside(P, pl) {
+  const s = P.map((q) => dot(pl.n, q) - pl.d); if (s.every((v) => v <= EPS)) return P; if (s.every((v) => v >= -EPS)) return null;
+  const lo = [], n = P.length;
+  for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n], sa = s[i], sb = s[(i + 1) % n]; if (sa <= EPS) lo.push(a); if ((sa < -EPS && sb > EPS) || (sa > EPS && sb < -EPS)) { const t = sa / (sa - sb); lo.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]); } }
+  return lo.length >= 3 ? lo : null;
+}
+const insideAll = (c, planes) => planes.every((pl) => dot(pl.n, c) - pl.d < -1e-6);
+function carve(Pm, cutters) {
+  const out = [];
+  const pieces = (poly, others) => { let fr = [poly]; for (const C of others) for (const pl of C.planes) { const nx = []; for (const g of fr) nx.push(...splitFrag(g, pl)); fr = nx; } return fr; };
+  for (const f of Pm.faces) for (const g of pieces(f.p, cutters)) { if (area(g, f.n) < 1e-10) continue; if (cutters.some((C) => insideAll(centroid(g), C.planes))) continue; out.push({ p: g, n: f.n }); }
+  cutters.forEach((C, k) => {
+    const others = cutters.filter((_, j) => j !== k);
+    for (const f of C.faces) {
+      let poly = f.p; for (const pl of Pm.planes) { poly = poly && keepInside(poly, pl); if (!poly) break; }
+      if (!poly || area(poly, f.n) < 1e-9) continue;
+      for (const g of pieces(poly, others)) { if (area(g, f.n) < 1e-10) continue; if (others.some((C2) => insideAll(centroid(g), C2.planes))) continue; out.push({ p: g.slice().reverse(), n: mul(f.n, -1) }); }
+    }
+  });
+  return out;
+}
 function makeRock(seed, opts) {
   opts = opts || {}; const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
   let res = null;
   for (let attempt = opts.attempt ? opts.attempt - 1 : 0; attempt < (opts.attempt ? opts.attempt : 10); attempt++) {
-    const c = compose(seed, attempt, opts), built = c.parts.map((p) => buildPart(p, c.ctx)), polys = unite(built), m = meshOf(polys), chk = check(m);
+    const c = compose(seed, attempt, opts), built = c.parts.map((p) => buildPart(p, c.ctx)), polys = c.cutters.length ? carve(built[0], c.cutters) : built[0].faces.map((f) => ({ p: f.p, n: f.n })), m = meshOf(polys), chk = check(m);
     res = { ...c, built, polys, mesh: m, check: chk, attempt: attempt + 1 };
-    if (chk.open === 0 && chk.many === 0 && chk.overhangDeg <= 55.5) break;
+    if (chk.open === 0 && chk.many === 0 && chk.overhangDeg <= 55.05) break;
   }
-  /* put the rock on the ground at the origin, scaled to its size in fh */
   const bb = aabb(res.mesh.V), want = opts.size, k = want ? want / Math.max(bb.hi[0] - bb.lo[0], bb.hi[1] - bb.lo[1], bb.hi[2]) : 1, cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
-  res.V = res.mesh.V.map((p) => [(p[0] - cx) * k, (p[1] - cy) * k, p[2] * k]); res.T = res.mesh.T; res.scale = k;
+  res.V = res.mesh.V.map((p) => [(p[0] - cx) * k, (p[1] - cy) * k, p[2] * k]); res.T = res.mesh.T; res.scale = k; res.off = [cx, cy];
   res.dimsOut = [(bb.hi[0] - bb.lo[0]) * k, (bb.hi[1] - bb.lo[1]) * k, bb.hi[2] * k];
   res.ms = (typeof performance !== 'undefined' ? performance : Date).now() - t0;
   return res;
 }
-/* each column on its own, in the rock's final frame (for showing the stages) */
-function columns(res) {
-  const bb = aabb(res.mesh.V), k = res.scale, cx = (bb.lo[0] + bb.hi[0]) / 2, cy = (bb.lo[1] + bb.hi[1]) / 2;
-  return res.built.map((b) => { const m = meshOf(b.faces.map((f) => ({ p: f.p, n: f.n }))); return { V: m.V.map((p) => [(p[0] - cx) * k, (p[1] - cy) * k, p[2] * k]), T: m.T }; });
-}
-function columnMesh(b) { return meshOf(b.faces.map((f) => ({ p: f.p, n: f.n }))); }
-root.ROCK = { makeRock, columns, columnMesh, KINDS, MIX, check, mulberry };
+root.ROCK = { makeRock, KINDS, MIX, check, mulberry };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /* ---------- drawing a rock: flat-shaded grey on the references' dark stage; three is (x, z, -y) ---------- */
@@ -724,13 +727,8 @@ function show() {
   rock = ROCK.makeRock(seed, { kind });
   scene = ROCKVIEW.buildScene(rock); frame(); draw();
   const d = rock.dimsOut, c = rock.check, fe = rock.feats.map((f) => f.k).reduce((a, k) => (a[k] = (a[k] || 0) + 1, a), {});
-  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}${rock.forceStep ? ' (stepped)' : ''}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Columns</dt><dd>${rock.parts.length}</dd><dt>Features</dt><dd>${Object.entries(fe).map(([k, n]) => k + (n > 1 ? ' ×' + n : '')).join(', ') || 'none'}</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (limit 55°)${rock.attempt > 1 ? '; seed redrawn ' + (rock.attempt - 1) + '×' : ''}</dd>`;
+  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}${rock.forceStep ? ' (stepped)' : ''}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Cutters</dt><dd>${rock.cutters.length}</dd><dt>Features</dt><dd>${Object.entries(fe).map(([k, n]) => k + (n > 1 ? ' ×' + n : '')).join(', ') || 'none'}</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (limit 55°)${rock.attempt > 1 ? '; seed redrawn ' + (rock.attempt - 1) + '×' : ''}</dd>`;
   $('#seed').value = seed; try { history.replaceState(null, '', '#s=' + seed + '&k=' + kind); } catch (e) { /* the preview may not allow it: harmless */ }
-  sheet();
-}
-function sheet() {
-  const base = Math.floor((seed - 1) / 16) * 16 + 1, host = $('#sheet'); host.replaceChildren();
-  for (let i = 0; i < 16; i++) { const s = base + i, r = ROCK.makeRock(s, { kind }), cv = ROCKVIEW.still(r, 240, 256); const c = el('div', { class: 'cell' + (s === seed ? ' sel' : ''), tabindex: 0, role: 'button', 'aria-label': 'Seed ' + s, onclick: () => go(s), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(s); } } }, cv, el('span', { class: 'tag', text: s })); host.append(c); }
 }
 function go(s) { seed = Math.max(1, Math.min(999999, Math.round(s))); show(); }
 function startExplorer(img) {
@@ -744,28 +742,19 @@ function startExplorer(img) {
   $('#view').onclick = () => { ctl.target.set(0, 0, 0); cam.position.set(.65, .35, .67); frame(); };
   $('#seed').onchange = (e) => go(+e.target.value || 1); $('#kind').onchange = (e) => { kind = e.target.value; show(); };
   fit(); show();
-  const cv = $('#refcrop'); cv.width = 784 * 2; cv.height = 403 * 2; const c = cv.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(img, 0, 230, 784, 403, 0, 0, cv.width, cv.height);
+  const sel = $('#refcell'); for (const r of ROCKS.slice().sort((x, y) => x.id.localeCompare(y.id))) sel.append(el('option', { value: r.id, text: r.id + ' · ' + r.cls }));
+  const showRef = () => { const r = ROCKS.find((x) => x.id === sel.value), [x0, y0, x1, y1] = r.cell, w = x1 - x0, h = y1 - y0, cv = $('#refcrop'); cv.width = w * 3; cv.height = h * 3; const c = cv.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(img, x0, y0, w, h, 0, 0, cv.width, cv.height); };
+  sel.value = 'R2C2'; sel.onchange = showRef; showRef();
 }
 
 /* ---------- how a rock is built: the stages of one seed, and the timing ---------- */
 function stages() {
   let s0 = 1, best = null;
-  for (; s0 < 600; s0++) { const r = ROCK.makeRock(s0, { kind: 'any' }), k = new Set(r.feats.map((f) => f.k)); if (k.has('step') && k.has('facet') && k.has('chip') && r.parts.length >= 3 && r.parts.length <= 4 && r.kind !== 'pillar') { best = r; break; } }
-  if (!best) best = ROCK.makeRock(7, { kind: 'any' });
-  const sd = best.seed || s0, a = best.attempt, host = $('#stages');
-  const final = best, o = { kind: 'any', attempt: a };
-  const st0 = ROCK.makeRock(s0, { ...o, stage: 0 }), st1 = ROCK.makeRock(s0, { ...o, stage: 1 });
-  /* all stages drawn in the final rock's frame: shift by the final rock's own offset */
-  const frameOf = (r) => { const m = r.mesh.V, lo = [1e9, 1e9], hi = [-1e9, -1e9]; for (const p of m) for (let k = 0; k < 2; k++) { lo[k] = Math.min(lo[k], p[k]); hi[k] = Math.max(hi[k], p[k]); } return [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]; };
-  const fo = frameOf(final), tr = (m) => ({ V: m.V.map((p) => [(p[0] - fo[0]) * final.scale, (p[1] - fo[1]) * final.scale, p[2] * final.scale]), T: m.T });
-  const cols = (r) => r.built.map((b) => tr(ROCK.columnMesh(b)));
-  const items = [
-    ['1 · columns', { multi: cols(st0), dimsOut: final.dimsOut }, 'The footprint cut into ' + final.parts.length + ' boxes; each has its own top. They overlap where a bridge joins them.'],
-    ['2 · chamfers', { multi: cols(st1), dimsOut: final.dimsOut }, 'Every edge of every column cut by one to three planes.'],
-    ['3 · facets and chips', { multi: cols(final), dimsOut: final.dimsOut }, 'A few planes on single columns.'],
-    ['4 · joined', final, 'Inside faces dropped; one closed mesh, ' + final.T.length / 3 + ' triangles.'],
-  ];
-  for (const [t, r, sub] of items) { const cv = ROCKVIEW.still(r, 330, 300); host.append(el('div', {}, el('div', { class: 'cell' }, cv, el('span', { class: 'tag', text: t })), el('div', { class: 'note', style: 'margin-top:5px;border:0;padding:0', text: sub + (t[0] === '4' ? ' (seed ' + s0 + ')' : '') }))); }
+  for (; s0 < 800; s0++) { const r = ROCK.makeRock(s0, { kind: 'any' }), k = new Set(r.feats.map((f) => f.k)), nsp = r.feats.filter((f) => f.k === 'split').length; if (k.has('step') && nsp && k.has('chip') && k.has('facet') && r.kind !== 'pillar') { best = r; break; } }
+  if (!best) { s0 = 20; best = ROCK.makeRock(20, { kind: 'any' }); }
+  const host = $('#stages'), o = { kind: 'any', attempt: best.attempt };
+  const items = [['1 · the mass', ROCK.makeRock(s0, { ...o, stage: 0 }), 'One solid: sides, top, flat bottom.'], ['2 · chamfers', ROCK.makeRock(s0, { ...o, stage: 1 }), 'Every edge cut by several planes of changing width.'], ['3 · facets, chips', ROCK.makeRock(s0, { ...o, stage: 2 }), 'A few more planes on the same solid.'], ['4 · cuts', best, 'Grooves and a bite taken out: ' + best.T.length / 3 + ' triangles, one closed mesh (seed ' + s0 + ').']];
+  for (const [t, r, sub] of items) { const cv = ROCKVIEW.still(r, 330, 300); host.append(el('div', {}, el('div', { class: 'cell' }, cv, el('span', { class: 'tag', text: t })), el('div', { class: 'note', style: 'margin-top:5px;border:0;padding:0', text: sub }))); }
 }
 function timing() {
   const rows = [], kinds = ['slab', 'block', 'pillar', 'ramp', 'stepped'];

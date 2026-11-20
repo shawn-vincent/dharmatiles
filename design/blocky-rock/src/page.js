@@ -72,13 +72,8 @@ function show() {
   rock = ROCK.makeRock(seed, { kind });
   scene = ROCKVIEW.buildScene(rock); frame(); draw();
   const d = rock.dimsOut, c = rock.check, fe = rock.feats.map((f) => f.k).reduce((a, k) => (a[k] = (a[k] || 0) + 1, a), {});
-  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}${rock.forceStep ? ' (stepped)' : ''}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Columns</dt><dd>${rock.parts.length}</dd><dt>Features</dt><dd>${Object.entries(fe).map(([k, n]) => k + (n > 1 ? ' ×' + n : '')).join(', ') || 'none'}</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (limit 55°)${rock.attempt > 1 ? '; seed redrawn ' + (rock.attempt - 1) + '×' : ''}</dd>`;
+  $('#read').innerHTML = `<dt>Base</dt><dd>${rock.kind}${rock.forceStep ? ' (stepped)' : ''}</dd><dt>Size</dt><dd>${f2(d[0])} × ${f2(d[1])} × ${f2(d[2])} fh (x, y, up)</dd><dt>Cutters</dt><dd>${rock.cutters.length}</dd><dt>Features</dt><dd>${Object.entries(fe).map(([k, n]) => k + (n > 1 ? ' ×' + n : '')).join(', ') || 'none'}</dd><dt>Triangles</dt><dd>${rock.T.length / 3}</dd><dt>Built in</dt><dd>${f1(rock.ms)} ms</dd><dt>Closed</dt><dd>${c.open === 0 && c.many === 0 ? 'yes: ' + c.edges + ' edges, each in two triangles' : 'NO: ' + c.open + ' open, ' + c.many + ' shared by more'}</dd><dt>Steepest underside</dt><dd>${f1(c.overhangDeg)}° from vertical (limit 55°)${rock.attempt > 1 ? '; seed redrawn ' + (rock.attempt - 1) + '×' : ''}</dd>`;
   $('#seed').value = seed; try { history.replaceState(null, '', '#s=' + seed + '&k=' + kind); } catch (e) { /* the preview may not allow it: harmless */ }
-  sheet();
-}
-function sheet() {
-  const base = Math.floor((seed - 1) / 16) * 16 + 1, host = $('#sheet'); host.replaceChildren();
-  for (let i = 0; i < 16; i++) { const s = base + i, r = ROCK.makeRock(s, { kind }), cv = ROCKVIEW.still(r, 240, 256); const c = el('div', { class: 'cell' + (s === seed ? ' sel' : ''), tabindex: 0, role: 'button', 'aria-label': 'Seed ' + s, onclick: () => go(s), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(s); } } }, cv, el('span', { class: 'tag', text: s })); host.append(c); }
 }
 function go(s) { seed = Math.max(1, Math.min(999999, Math.round(s))); show(); }
 function startExplorer(img) {
@@ -92,28 +87,19 @@ function startExplorer(img) {
   $('#view').onclick = () => { ctl.target.set(0, 0, 0); cam.position.set(.65, .35, .67); frame(); };
   $('#seed').onchange = (e) => go(+e.target.value || 1); $('#kind').onchange = (e) => { kind = e.target.value; show(); };
   fit(); show();
-  const cv = $('#refcrop'); cv.width = 784 * 2; cv.height = 403 * 2; const c = cv.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(img, 0, 230, 784, 403, 0, 0, cv.width, cv.height);
+  const sel = $('#refcell'); for (const r of ROCKS.slice().sort((x, y) => x.id.localeCompare(y.id))) sel.append(el('option', { value: r.id, text: r.id + ' · ' + r.cls }));
+  const showRef = () => { const r = ROCKS.find((x) => x.id === sel.value), [x0, y0, x1, y1] = r.cell, w = x1 - x0, h = y1 - y0, cv = $('#refcrop'); cv.width = w * 3; cv.height = h * 3; const c = cv.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(img, x0, y0, w, h, 0, 0, cv.width, cv.height); };
+  sel.value = 'R2C2'; sel.onchange = showRef; showRef();
 }
 
 /* ---------- how a rock is built: the stages of one seed, and the timing ---------- */
 function stages() {
   let s0 = 1, best = null;
-  for (; s0 < 600; s0++) { const r = ROCK.makeRock(s0, { kind: 'any' }), k = new Set(r.feats.map((f) => f.k)); if (k.has('step') && k.has('facet') && k.has('chip') && r.parts.length >= 3 && r.parts.length <= 4 && r.kind !== 'pillar') { best = r; break; } }
-  if (!best) best = ROCK.makeRock(7, { kind: 'any' });
-  const sd = best.seed || s0, a = best.attempt, host = $('#stages');
-  const final = best, o = { kind: 'any', attempt: a };
-  const st0 = ROCK.makeRock(s0, { ...o, stage: 0 }), st1 = ROCK.makeRock(s0, { ...o, stage: 1 });
-  /* all stages drawn in the final rock's frame: shift by the final rock's own offset */
-  const frameOf = (r) => { const m = r.mesh.V, lo = [1e9, 1e9], hi = [-1e9, -1e9]; for (const p of m) for (let k = 0; k < 2; k++) { lo[k] = Math.min(lo[k], p[k]); hi[k] = Math.max(hi[k], p[k]); } return [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]; };
-  const fo = frameOf(final), tr = (m) => ({ V: m.V.map((p) => [(p[0] - fo[0]) * final.scale, (p[1] - fo[1]) * final.scale, p[2] * final.scale]), T: m.T });
-  const cols = (r) => r.built.map((b) => tr(ROCK.columnMesh(b)));
-  const items = [
-    ['1 · columns', { multi: cols(st0), dimsOut: final.dimsOut }, 'The footprint cut into ' + final.parts.length + ' boxes; each has its own top. They overlap where a bridge joins them.'],
-    ['2 · chamfers', { multi: cols(st1), dimsOut: final.dimsOut }, 'Every edge of every column cut by one to three planes.'],
-    ['3 · facets and chips', { multi: cols(final), dimsOut: final.dimsOut }, 'A few planes on single columns.'],
-    ['4 · joined', final, 'Inside faces dropped; one closed mesh, ' + final.T.length / 3 + ' triangles.'],
-  ];
-  for (const [t, r, sub] of items) { const cv = ROCKVIEW.still(r, 330, 300); host.append(el('div', {}, el('div', { class: 'cell' }, cv, el('span', { class: 'tag', text: t })), el('div', { class: 'note', style: 'margin-top:5px;border:0;padding:0', text: sub + (t[0] === '4' ? ' (seed ' + s0 + ')' : '') }))); }
+  for (; s0 < 800; s0++) { const r = ROCK.makeRock(s0, { kind: 'any' }), k = new Set(r.feats.map((f) => f.k)), nsp = r.feats.filter((f) => f.k === 'split').length; if (k.has('step') && nsp && k.has('chip') && k.has('facet') && r.kind !== 'pillar') { best = r; break; } }
+  if (!best) { s0 = 20; best = ROCK.makeRock(20, { kind: 'any' }); }
+  const host = $('#stages'), o = { kind: 'any', attempt: best.attempt };
+  const items = [['1 · the mass', ROCK.makeRock(s0, { ...o, stage: 0 }), 'One solid: sides, top, flat bottom.'], ['2 · chamfers', ROCK.makeRock(s0, { ...o, stage: 1 }), 'Every edge cut by several planes of changing width.'], ['3 · facets, chips', ROCK.makeRock(s0, { ...o, stage: 2 }), 'A few more planes on the same solid.'], ['4 · cuts', best, 'Grooves and a bite taken out: ' + best.T.length / 3 + ' triangles, one closed mesh (seed ' + s0 + ').']];
+  for (const [t, r, sub] of items) { const cv = ROCKVIEW.still(r, 330, 300); host.append(el('div', {}, el('div', { class: 'cell' }, cv, el('span', { class: 'tag', text: t })), el('div', { class: 'note', style: 'margin-top:5px;border:0;padding:0', text: sub }))); }
 }
 function timing() {
   const rows = [], kinds = ['slab', 'block', 'pillar', 'ramp', 'stepped'];
