@@ -210,7 +210,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <div class="sec"><div class="words">
 <p>The smallest set that explains the four sheets and makes more of them:</p>
 <ol>
-<li><b>One stone, shaped by its place.</b> A rounded box: every edge and corner rounded by about 0.07 figure heights whatever the stone's size, broad faces slightly swollen, one near-flat top. Under a resting stone the rounding is smaller, so every bed joint reads as a groove. Where a joint has fused, a flat filler piece is added, never cut: its face lies on the planes of the two stones' faces and spans the gap between their rounded edges, and any inside corner is sharp (chapter 8). Front stones are wedges; tall ones narrow upward. Slab, block, pillar, leaner, cap and toe are this stone at different proportions and places.</li>
+<li><b>One stone, shaped by its place.</b> A rounded box: every edge and corner rounded by about 0.07 figure heights whatever the stone's size, broad faces slightly swollen, one near-flat top. Under a resting stone the rounding is smaller, so every bed joint reads as a groove. Where a joint has fused, the two stones are grown toward each other at construction so that they overlap and their faces run on as one; nothing is added or cut, and inside corners are sharp (chapter 8). Front stones are wedges; tall ones narrow upward. Slab, block, pillar, leaner, cap and toe are this stone at different proportions and places.</li>
 <li><b>A pile in three parts.</b> A back mass along the back edge (pillars, tiers of blocks, a stair of courses, leaning slabs, dipping beds, or a gate). A front cluster against it in ranks, each rank 0.55 to 0.8 as tall as the one behind: a toe, a buttress, sometimes a main pillar. And the top of the wall is stones of its own: an upper block as wide as what carries it, a block across a joint, a pillar split by a level joint. A third of all stones rest on others. Four to eleven stones as traced, nine in ten over a twentieth of the whole.</li>
 <li><b>Two things every stone reads.</b> An envelope that gives its height: highest near the back corner by the cut end (about 1.75 figure heights), lower toward the front and, by anything from a little to three quarters, toward the far end. And a grain: every stone upright, or one set of parallel leaning slabs (15 to 25 degrees) or dipping beds (20 to 32) standing beside upright stones.</li>
 <li><b>Relations between neighbours.</b> Joints are closed, but for a rare cleft, and nine in ten show a line from end to end. One contact in twelve is <b>fused</b> along part of its length (about one formation in two has one): the groove fades out, usually toward the foot, over about half the contact, and the two stones share one surface beyond it. Upright joints at the front and the far end fuse most; the bed under a resting stone almost never does (chapter 8). Tops step by 0.12 figure heights or more, except on a plateau, where a run of two to four neighbours shares one top plane (about one pair in five). The lower stone usually stands in front (83 percent). Piled stones sit flush with the face of what carries them, and half of them bear on two; an upper block may stand forward of a set-back wall by up to 0.38.</li>
@@ -341,7 +341,7 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <figcaption>Left: H's pillars. Right: K's caps, whose underside carries the same bevel as their top.</figcaption></div></div>
 
 <div class="sec full"><div class="words"><h3>Built in seven moves</h3>
-<p><span class="ev p">Proposed</span> A box, and six things done to it. Each move is one or two numbers. The stone is a rounded box, not a chamfered one: the reference edges read as soft bevels at a glance and as true rounds up close. Where two stones have fused along a stretch of their joint, a flat filler piece is added between them (chapter 8); it is a plain mesh laid over the stones, and the stones themselves stay exactly the rounded boxes described here. Inside corners are never rounded: they are right angles or crisp creases.</p></div>
+<p><span class="ev p">Proposed</span> A box, and six things done to it. Each move is one or two numbers. The stone is a rounded box, not a chamfered one: the reference edges read as soft bevels at a glance and as true rounds up close. Where two stones have fused, each is grown a little toward the other when it is built, so that they overlap and their flat faces run on as one (chapter 8); the stones stay the rounded boxes described here. Inside corners are never rounded: they are right angles or crisp creases.</p></div>
 <div class="plates"><div class="row" id="an-steps" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))"></div></div></div>
 
 <div class="sec"><div class="words"><h3>True shape</h3>
@@ -576,11 +576,11 @@ td.yes{color:var(--a-top);font-weight:600}td.no{color:var(--muted)}
 <p>Every bed under a resting stone, its whole length. Every contact between a front stone and the stone behind it. Clefts. Back joints by the cut end. An open upright joint that reaches the plate still tapers: full depth over its upper two thirds, falling to <b>0.5 to 0.8</b> of it at the foot, and to a hairline in three of ten.</p></div>
 <div class="rule"><h3>5 · No line at all</h3>
 <p>Seen once in <span data-jn="n"></span>. At most one contact in a formation, in one formation in ten, and only with a waist left in the outline.</p></div>
-<p><span class="ev p">Proposed</span> By these numbers, applied to the 510 contacts traced here (9.8 to a formation), a formation of nine contacts has fewer than one that fuses, 0.8 on average: about one formation in two has at least one, one in five has two or more, and about a twentieth (5 percent) of all its joint length carries no groove, as in the references. The generator has 5.4 contacts a formation, some hidden behind a front stone. It decides 0.7 fusions per formation and draws 0.3 of them, the rest failing the tests below: about one formation in four shows a fused stretch, one in twenty two.</p></div>
-<div class="words"><h3>How the generator draws a fused stretch</h3>
-<p><span class="ev p">Proposed</span> A joint that fuses gets a filler: a plain piece of mesh <b>added</b> between the two stones, never a cut. Its front face lies on the plane of the two stones' faces and spans the gap between their rounded edges, so the faces read as one there; its flat faces are flat and flush. Where the two faces are not on one plane (one stands forward, or a top is higher) the filler is on the recessed face and meets the forward stone at a sharp inside corner. <b>No inside corner is ever rounded:</b> inside corners are right angles or crisp creases. At a ramp end the filler draws back into the stones, so the gap between the rounded edges opens again gradually; at a notch end it stops square; a stretch that runs to the top stops just under the rounded top edges. A joint that has not fused stays exactly as two rounded stones leave it, the natural gap between them.</p>
-<p><span class="ev p">Proposed</span> A joint is left alone when the filler would not be flush: a chamfer or a cut corner on its front, faces that draw apart (a battered side), a front more than 0.2 fh out of line, or a bed whose two planes part by more than 0.05 fh. A bed is filled along its front edge only, not round the corner on the cut end. About two in five of the fusions the rule draws survive these tests.</p>
-<p><span class="ev p">Proposed</span> Printing is not decided here. A rounded stone set on another leaves a lip and a thin slot at every bed; the references do not fuse for this reason (their beds under resting stones are open 97 percent of the time), and a printing rule for beds, how every bed should be closed up without removing material or rounding an inside corner, is not yet decided.</p></div></div>
+<p><span class="ev p">Proposed</span> By these numbers, applied to the 510 contacts traced here (9.8 to a formation), a formation of nine contacts has fewer than one that fuses, 0.8 on average: about one formation in two has at least one, one in five has two or more, and about a twentieth (5 percent) of all its joint length carries no groove, as in the references. The generator has 5.4 contacts a formation, some hidden behind a front stone. It fuses 0.7 joints per formation: about one formation in two has a fused joint and one in six two or more.</p></div>
+<div class="words"><h3>How the generator draws a fused joint</h3>
+<p><span class="ev p">Proposed</span> A joint that fuses is made when the stones are built: the two stones are <b>grown toward each other</b> until they overlap, and the stones are simply a union. Nothing is added and nothing is cut. On an upright joint each stone grows sideways by its edge radius and a little more (about 0.08 fh), so each stone's flat face runs on across the other's rounded edge and the two faces are one, with no seam. On a bed the upper stone grows downward by the two edge radii and a little more (about 0.12 fh), so its front face runs down over the lower stone's rounded top edge. Where the faces are not on one plane the overlap leaves a sharp inside corner. <b>No inside corner is ever rounded.</b></p>
+<p><span class="ev p">Proposed</span> A joint that has not fused is left as the two rounded stones make it: where they touch, the rounded edges leave a seam or a shallow vertical depression, and that is as it should be. A fused joint is fused along its whole length: the places and ends of the rule (foot, middle, top; ramp or notch) are not drawn, because a stone cannot grow along part of a joint. The chance that a joint fuses is the rule's, and about 0.7 joints in a formation do.</p>
+<p><span class="ev p">Proposed</span> Printing is not decided here. A rounded stone set on another leaves a lip and a thin slot at every bed that has not fused; the references do not fuse for this reason (their beds under resting stones are open 97 percent of the time), and a printing rule for beds is not yet decided.</p></div></div>
 </section>
 
 <section class="ch" id="c8"><header><span class="n">Chapter 9</span><h2>Repeated arrangements</h2>
@@ -828,16 +828,13 @@ stone(box, numbers):
   move each face in at the top (batter), scale, tilt the top, shear, turn
 fuse(stones):
   for each contact (a bed, or an upright joint between neighbours) draw chapter 8's rule:
-    whether it fuses, over how much of its length (0.3 to 0.7), where (foot, middle, top),
-    and how each end finishes (a ramp over 0.15 to 0.5 fh, or a notch)
-  along a fused stretch ADD a filler piece, never cut: a flat face on the plane of the two
-    stones' faces, spanning the gap between their rounded edges; where the faces are not on
-    one plane the filler is on the recessed one and meets the forward stone at a sharp
-    inside corner; a ramp end draws the filler back into the stones, a notch end stops it
-    square; a stretch that runs to the top stops just under the rounded top edges
-  a joint with a chamfer or cut corner on its front, or whose faces draw apart, is not filled
+    whether it fuses (the places and ends are not drawn)
+  grow, when the stones are built, those on a fused joint toward each other:
+    upright joint: each stone sideways by its edge radius + 0.01 (about 0.08 fh)
+    bed: the upper stone downward by the two edge radii + 0.01 (about 0.12 fh)
+  the stones then simply overlap; no material is added, none is cut, no boolean is needed
   every other joint stays the natural gap between two rounded boxes</pre></div>
-<div class="words"><p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 0.18 to 0.21 s with the fillers, the same as the stones alone.</p></div></div>
+<div class="words"><p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 0.18 to 0.21 s with the grown stones, the same as the stones alone.</p></div></div>
 </section>
 
 <section class="ch" id="c14"><header><span class="n">Chapter 15</span><h2>Rules, ranges, constraints</h2>
@@ -1147,11 +1144,12 @@ function still(stones, o = {}) {
 
 /* ---------- fused faces ----------
    Most joints between two stones stay what the stones make them: the natural gap between two rounded edges. A joint that has fused
-   (chapter 8's rule: which contacts, how much of the length, where, how it ends) gets a filler, a plain mesh added to the two stones, never
-   a cut. The filler's front face lies on the plane of the two stones' faces and spans the gap between their rounded edges, so the faces read
-   as one there. Where the two faces are not on one plane the filler is on the recessed one and meets the forward stone's side at a sharp
-   inside corner. Only the filler's convex top edge is rounded, like the stones'. A ramp end tapers the filler back into the stones until the
-   gap is open again; a notch end stops it square. */
+   (chapter 8's rule: which contacts, how much of the length, where, how it ends) is made by growing the two stones toward each other when
+   they are built, so that they overlap: the stones are then simply a union, no material is added and nothing is cut. An upright joint
+   grows each stone sideways by its edge radius and a little more, so each stone's flat face runs on across the other's rounded edge and the
+   two faces are one; a bed grows the upper stone downward by the two edge radii and a little more, so its front face runs down over the
+   lower stone's rounded top edge. Where the faces are not on one plane the overlap leaves a sharp inside corner. */
+
 /* ---- contacts: where two stones touch, and what that joint is ---- */
 const aLo = (s) => s.a - s.w / 2, aHi = (s) => s.a + s.w / 2, dLo = (s) => s.d - s.dp / 2, dHi = (s) => s.d + s.dp / 2;
 function contactsOf(f) {
@@ -1194,53 +1192,14 @@ function settle(f, S, C, noFuse) {
   return out;
 }
 
-/* ---- the filler pieces ---- */
-const sample = (a, b, step) => { const n = Math.max(1, Math.ceil((b - a) / step)), o = []; for (let i = 0; i <= n; i++) o.push(a + (b - a) * i / n); return o; };
-const FACTS = new WeakMap(), stoneFacts = (s) => { let p = FACTS.get(s); if (!p) FACTS.set(s, p = stoneParams(s)); return p; };
-/* where a stone's plan faces stand at height z: its battered, tapered and leaning sides */
-const faceA = (s, z, hi) => { const P = stoneFacts(s); let t = (z - s.z) / s.h; t = t < 0 ? 0 : t > 1 ? 1 : t; return s.a + (hi ? P.hx : -P.hx) * lerp(1, P.ta, t) + P.sa0 * t + s.leanA * (z - s.z); };
-const faceD = (s, z, back) => { const P = stoneFacts(s); let t = (z - s.z) / s.h; t = t < 0 ? 0 : t > 1 ? 1 : t; return s.d + (back ? P.hy : -P.hy) * lerp(1, P.tdp, t) + P.sd0 * t + s.leanD * (z - s.z); };
-/* a chamfer or a corner cut on the stone's front, or on the side facing the joint, means the edge there is not a rounded gap a filler could fill */
-const chamfered = (s, towards) => stoneFacts(s).cuts.some((t) => (t.n[1] < -.01 && (t.n[2] > .01 || Math.abs(t.n[0]) > .01)) || (t.n[2] > .01 && t.n[0] * towards > .01) || (t.n[2] < .01 && t.n[0] * towards > .01 && t.n[1] < 0));
-const topAt = (s, a, d) => s.z + s.h + s.dipA * (a - s.a) + s.dipD * (d - s.d);
-/* a closed prism through rings of four points; each of its four sides has vertices of its own, so its faces shade flat */
-function loft(rings) {
-  const P = [], idx = [], quad = (a, b, c, d) => { const n = P.length; P.push(a, b, c, d); idx.push(n, n + 1, n + 2, n, n + 2, n + 3); };
-  for (let i = 0; i + 1 < rings.length; i++) for (let k = 0; k < 4; k++) quad(rings[i][k], rings[i][(k + 1) % 4], rings[i + 1][(k + 1) % 4], rings[i + 1][k]);
-  const r0 = rings[0], r1 = rings[rings.length - 1]; quad(r0[0], r0[1], r0[2], r0[3]); quad(r1[0], r1[1], r1[2], r1[3]);
-  return { P, idx, filler: true };
-}
-/* how far the filler's front has drawn back from the face at distance e before an end of the fused stretch (0 on the face, `depth` buried) */
-const drawn = (end, e, depth) => (end && end.ramp ? depth * Math.max(0, 1 - e / end.ramp) : 0);
-function fillers(f) {
-  const S = f.stones, C = contactsOf(f), G = settle(f, S, C, false), out = [];
-  G.forEach((g) => { if (!g.win || g.part) return; const c = g.c, lo = S[c.lo], up = S[c.up], [u0, u1] = g.win;
-    if (c.type === 'up') {
-      if (chamfered(lo, 1) || chamfered(up, -1)) return;
-      const dm = (Math.max(dLo(lo), dLo(up)) + Math.min(dHi(lo), dHi(up))) / 2, top = Math.min(topAt(lo, c.a0, dm), topAt(up, c.a0, dm)), zlo = c.z0 + u0, topEnd = u1 >= g.len - 1e-6, zhi = c.z0 + u1;
-      const rT = Math.min(stoneFacts(lo).rT, stoneFacts(up).rT), rings = [], depth0 = Math.min(.12, .8 * Math.min(lo.dp, up.dp));
-      const zhiEff = topEnd ? Math.min(zhi, top - rT - .01) : zhi, zs = sample(zlo, Math.max(zhiEff, zlo + .001), .05); if (zhiEff - zlo < .08) return;   /* a stretch that runs to the top stops just under the rounded top edges, square */
-      for (const z of zs) { const gapA = faceA(up, z, 0) - faceA(lo, z, 1); if (gapA < -.03 || gapA > .06 || Math.abs(faceD(lo, z, 0) - faceD(up, z, 0)) > .2) { if (rings.length) break; continue; }   /* where the faces draw apart (a battered side) the stones are not touching: no filler */
-        const fa = faceD(lo, z, 0), fb = faceD(up, z, 0), fr = Math.max(fa, fb), back = Math.min(faceD(lo, z, 1), faceD(up, z, 1)), depth = Math.min(depth0, back - fr - .005); if (depth < .05) continue;
-        const rh = Math.min(stoneFacts(lo).rh, stoneFacts(up).rh), loFwd = fa < fb - .01, upFwd = fb < fa - .01;
-        const aL = faceA(lo, z, 1) - (loFwd ? .01 : rh + .005), aR = faceA(up, z, 0) + (upFwd ? .01 : rh + .005);
-        let o = 0;
-        if (u0 > 1e-6) o = Math.max(o, drawn(g.ends[0], z - zlo, depth)); if (!topEnd) o = Math.max(o, drawn(g.ends[1], zhi - z, depth));
-        o = Math.min(o, depth - .01); rings.push([[aL, fr + o, z], [aR, fr + o, z], [aR, fr + depth, z], [aL, fr + depth, z]]); }
-      if (rings.length > 1) out.push(loft(rings));
-    } else {
-      if ([lo, up].some((s) => stoneFacts(s).cuts.some((t) => t.n[1] < -.01 && (t.n[2] > .01 || Math.abs(t.n[2]) < .01)))) return;   /* a chamfered front edge or a cut front corner */
-      const rh = .07, a0 = c.a0 + rh, a1 = c.a1 - rh, off = g.off, lenF = g.lenF; if (!g.sides.includes('F') || a1 - a0 < .1) return;
-      const t0 = Math.max(u0 - off, 0), t1 = Math.min(u1 - off, lenF); if (t1 - t0 < .12) return;
-      const aS = Math.max(a0, c.a0 + t0), aE = Math.min(a1, c.a0 + t1), e0 = u0 > off + 1e-6 && u0 - off > rh ? g.ends[0] : null, e1 = u1 < off + lenF - 1e-6 && off + lenF - u1 > rh ? g.ends[1] : null, rings = [];
-      const rTl = stoneFacts(lo).rT, rBu = stoneFacts(up).rB;
-      for (const a of sample(aS, aE, .05)) { const dd = Math.max(faceD(lo, lo.z + lo.h, 0), faceD(up, up.z, 0)), zbL = topAt(lo, a, dd), zbU = up.z + up.botA * (a - up.a), zb = (zbL + zbU) / 2;
-        const zf = zbL - .005; const fa = faceD(lo, zf, 0), fb = faceD(up, zbU + .005, 0), fr = Math.max(fa, fb), back = Math.min(faceD(lo, zbL, 1), faceD(up, zbU, 1)), depth = Math.min(.12, back - fr - .005); if (depth < .05) continue; if (fb < fa - .03 || Math.abs(zbU - zbL) > .05) { if (rings.length) break; continue; }   /* a stone standing forward of the one under it, or a bed that opens, is left as it is */
-        const recessed = fb > fa + .03, zlo = recessed ? zbL - .012 : zbL - rTl - .005, zhi = zbU + rBu + .005;
-        let o = 0; if (e0) o = Math.max(o, drawn(e0, a - aS, depth)); if (e1) o = Math.max(o, drawn(e1, aE - a, depth)); o = Math.min(o, depth - .01);
-        rings.push([[a, fr + o, zlo], [a, fr + o, zhi], [a, fr + depth, zhi], [a, fr + depth, zlo]]); }
-      if (rings.length > 1) out.push(loft(rings)); } });
-  return out;
+
+/* the stones as they are drawn: those on a fused joint grown toward each other (the whole stretch; chapter 8's ends and places are not drawn) */
+function grownStones(f) {
+  const S = f.stones.map((s) => Object.assign({}, s)), C = contactsOf(f), G = settle(f, f.stones, C, false), P = f.stones.map(stoneParams);
+  G.forEach((g) => { if (!g.win || g.part) return; const c = g.c, lo = S[c.lo], up = S[c.up];
+    if (c.type === 'up') { const e = Math.max(P[c.lo].rh, P[c.up].rh) + .01; lo.w += e; lo.a += e / 2; up.w += e; up.a -= e / 2; }
+    else { const e = P[c.up].rB + P[c.lo].rT + .01; up.z -= e; up.h += e; } });
+  return S;
 }
 
 /* ---------- the formation (proposed; chapter 11 states it) ----------
@@ -1448,8 +1407,8 @@ function formationOnce(over = {}) {
 /* the count is held to what the sheets show: at most eleven stones */
 function formation(over = {}) { let f = formationOnce(over), o = Object.assign({}, over), n = 0; const count = (g) => g.stones.filter((s) => !s.part).length;
   while (count(f) > 11 && n++ < 5) { o = Object.assign({}, o, f.q.caps > 1 ? { caps: f.q.caps - 1 } : f.q.tuck || f.q.applied ? { tuck: 0, applied: 0 } : { nA: Math.max(1, f.q.nA - 1), rows: f.q.cls === 'courses' ? Math.max(3, f.q.rows - 1) : f.q.rows }); f = formationOnce(o); } return f; }
-/* a formation's meshes: the stones and the fillers of its fused joints (chapter 8's rule), or with `apart` the stones alone */
-const formMeshes = (f, apart) => apart ? f.stones.map(stoneMesh) : f.stones.map(stoneMesh).concat(fillers(f));
+/* a formation's meshes: the stones with those on a fused joint (chapter 8's rule) grown toward each other, or with `apart` the stones as built */
+const formMeshes = (f, apart) => apart ? f.stones.map(stoneMesh) : grownStones(f).map(stoneMesh);
 
 /* Scale 1: draw a whole formation's numbers from the proposed ranges. */
 function drawParams(seed, want) {

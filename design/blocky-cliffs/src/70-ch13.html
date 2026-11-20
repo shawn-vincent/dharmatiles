@@ -79,14 +79,11 @@ stone(box, numbers):
   move each face in at the top (batter), scale, tilt the top, shear, turn
 fuse(stones):
   for each contact (a bed, or an upright joint between neighbours) draw chapter 8's rule:
-    whether it fuses, over how much of its length (0.3 to 0.7), where (foot, middle, top),
-    and how each end finishes (a ramp over 0.15 to 0.5 fh, or a notch)
-  along a fused stretch ADD a filler piece, never cut: a flat face on the plane of the two
-    stones' faces, spanning the gap between their rounded edges; where the faces are not on
-    one plane the filler is on the recessed one and meets the forward stone at a sharp
-    inside corner; a ramp end draws the filler back into the stones, a notch end stops it
-    square; a stretch that runs to the top stops just under the rounded top edges
-  a joint with a chamfer or cut corner on its front, or whose faces draw apart, is not filled
+    whether it fuses (the places and ends are not drawn)
+  grow, when the stones are built, those on a fused joint toward each other:
+    upright joint: each stone sideways by its edge radius + 0.01 (about 0.08 fh)
+    bed: the upper stone downward by the two edge radii + 0.01 (about 0.12 fh)
+  the stones then simply overlap; no material is added, none is cut, no boolean is needed
   every other joint stays the natural gap between two rounded boxes</pre></div>
-<div class="words"><p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 0.18 to 0.21 s with the fillers, the same as the stones alone.</p></div></div>
+<div class="words"><p><span class="ev m">Measured</span> What it costs, in a browser: a sheet of 24 formations built and drawn takes about 0.18 to 0.21 s with the grown stones, the same as the stones alone.</p></div></div>
 </section>

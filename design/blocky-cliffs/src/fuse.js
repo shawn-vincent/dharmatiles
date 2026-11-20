@@ -1,10 +1,11 @@
 /* ---------- fused faces ----------
    Most joints between two stones stay what the stones make them: the natural gap between two rounded edges. A joint that has fused
-   (chapter 8's rule: which contacts, how much of the length, where, how it ends) gets a filler, a plain mesh added to the two stones, never
-   a cut. The filler's front face lies on the plane of the two stones' faces and spans the gap between their rounded edges, so the faces read
-   as one there. Where the two faces are not on one plane the filler is on the recessed one and meets the forward stone's side at a sharp
-   inside corner. Only the filler's convex top edge is rounded, like the stones'. A ramp end tapers the filler back into the stones until the
-   gap is open again; a notch end stops it square. */
+   (chapter 8's rule: which contacts, how much of the length, where, how it ends) is made by growing the two stones toward each other when
+   they are built, so that they overlap: the stones are then simply a union, no material is added and nothing is cut. An upright joint
+   grows each stone sideways by its edge radius and a little more, so each stone's flat face runs on across the other's rounded edge and the
+   two faces are one; a bed grows the upper stone downward by the two edge radii and a little more, so its front face runs down over the
+   lower stone's rounded top edge. Where the faces are not on one plane the overlap leaves a sharp inside corner. */
+
 /* ---- contacts: where two stones touch, and what that joint is ---- */
 const aLo = (s) => s.a - s.w / 2, aHi = (s) => s.a + s.w / 2, dLo = (s) => s.d - s.dp / 2, dHi = (s) => s.d + s.dp / 2;
 function contactsOf(f) {
@@ -47,51 +48,12 @@ function settle(f, S, C, noFuse) {
   return out;
 }
 
-/* ---- the filler pieces ---- */
-const sample = (a, b, step) => { const n = Math.max(1, Math.ceil((b - a) / step)), o = []; for (let i = 0; i <= n; i++) o.push(a + (b - a) * i / n); return o; };
-const FACTS = new WeakMap(), stoneFacts = (s) => { let p = FACTS.get(s); if (!p) FACTS.set(s, p = stoneParams(s)); return p; };
-/* where a stone's plan faces stand at height z: its battered, tapered and leaning sides */
-const faceA = (s, z, hi) => { const P = stoneFacts(s); let t = (z - s.z) / s.h; t = t < 0 ? 0 : t > 1 ? 1 : t; return s.a + (hi ? P.hx : -P.hx) * lerp(1, P.ta, t) + P.sa0 * t + s.leanA * (z - s.z); };
-const faceD = (s, z, back) => { const P = stoneFacts(s); let t = (z - s.z) / s.h; t = t < 0 ? 0 : t > 1 ? 1 : t; return s.d + (back ? P.hy : -P.hy) * lerp(1, P.tdp, t) + P.sd0 * t + s.leanD * (z - s.z); };
-/* a chamfer or a corner cut on the stone's front, or on the side facing the joint, means the edge there is not a rounded gap a filler could fill */
-const chamfered = (s, towards) => stoneFacts(s).cuts.some((t) => (t.n[1] < -.01 && (t.n[2] > .01 || Math.abs(t.n[0]) > .01)) || (t.n[2] > .01 && t.n[0] * towards > .01) || (t.n[2] < .01 && t.n[0] * towards > .01 && t.n[1] < 0));
-const topAt = (s, a, d) => s.z + s.h + s.dipA * (a - s.a) + s.dipD * (d - s.d);
-/* a closed prism through rings of four points; each of its four sides has vertices of its own, so its faces shade flat */
-function loft(rings) {
-  const P = [], idx = [], quad = (a, b, c, d) => { const n = P.length; P.push(a, b, c, d); idx.push(n, n + 1, n + 2, n, n + 2, n + 3); };
-  for (let i = 0; i + 1 < rings.length; i++) for (let k = 0; k < 4; k++) quad(rings[i][k], rings[i][(k + 1) % 4], rings[i + 1][(k + 1) % 4], rings[i + 1][k]);
-  const r0 = rings[0], r1 = rings[rings.length - 1]; quad(r0[0], r0[1], r0[2], r0[3]); quad(r1[0], r1[1], r1[2], r1[3]);
-  return { P, idx, filler: true };
-}
-/* how far the filler's front has drawn back from the face at distance e before an end of the fused stretch (0 on the face, `depth` buried) */
-const drawn = (end, e, depth) => (end && end.ramp ? depth * Math.max(0, 1 - e / end.ramp) : 0);
-function fillers(f) {
-  const S = f.stones, C = contactsOf(f), G = settle(f, S, C, false), out = [];
-  G.forEach((g) => { if (!g.win || g.part) return; const c = g.c, lo = S[c.lo], up = S[c.up], [u0, u1] = g.win;
-    if (c.type === 'up') {
-      if (chamfered(lo, 1) || chamfered(up, -1)) return;
-      const dm = (Math.max(dLo(lo), dLo(up)) + Math.min(dHi(lo), dHi(up))) / 2, top = Math.min(topAt(lo, c.a0, dm), topAt(up, c.a0, dm)), zlo = c.z0 + u0, topEnd = u1 >= g.len - 1e-6, zhi = c.z0 + u1;
-      const rT = Math.min(stoneFacts(lo).rT, stoneFacts(up).rT), rings = [], depth0 = Math.min(.12, .8 * Math.min(lo.dp, up.dp));
-      const zhiEff = topEnd ? Math.min(zhi, top - rT - .01) : zhi, zs = sample(zlo, Math.max(zhiEff, zlo + .001), .05); if (zhiEff - zlo < .08) return;   /* a stretch that runs to the top stops just under the rounded top edges, square */
-      for (const z of zs) { const gapA = faceA(up, z, 0) - faceA(lo, z, 1); if (gapA < -.03 || gapA > .06 || Math.abs(faceD(lo, z, 0) - faceD(up, z, 0)) > .2) { if (rings.length) break; continue; }   /* where the faces draw apart (a battered side) the stones are not touching: no filler */
-        const fa = faceD(lo, z, 0), fb = faceD(up, z, 0), fr = Math.max(fa, fb), back = Math.min(faceD(lo, z, 1), faceD(up, z, 1)), depth = Math.min(depth0, back - fr - .005); if (depth < .05) continue;
-        const rh = Math.min(stoneFacts(lo).rh, stoneFacts(up).rh), loFwd = fa < fb - .01, upFwd = fb < fa - .01;
-        const aL = faceA(lo, z, 1) - (loFwd ? .01 : rh + .005), aR = faceA(up, z, 0) + (upFwd ? .01 : rh + .005);
-        let o = 0;
-        if (u0 > 1e-6) o = Math.max(o, drawn(g.ends[0], z - zlo, depth)); if (!topEnd) o = Math.max(o, drawn(g.ends[1], zhi - z, depth));
-        o = Math.min(o, depth - .01); rings.push([[aL, fr + o, z], [aR, fr + o, z], [aR, fr + depth, z], [aL, fr + depth, z]]); }
-      if (rings.length > 1) out.push(loft(rings));
-    } else {
-      if ([lo, up].some((s) => stoneFacts(s).cuts.some((t) => t.n[1] < -.01 && (t.n[2] > .01 || Math.abs(t.n[2]) < .01)))) return;   /* a chamfered front edge or a cut front corner */
-      const rh = .07, a0 = c.a0 + rh, a1 = c.a1 - rh, off = g.off, lenF = g.lenF; if (!g.sides.includes('F') || a1 - a0 < .1) return;
-      const t0 = Math.max(u0 - off, 0), t1 = Math.min(u1 - off, lenF); if (t1 - t0 < .12) return;
-      const aS = Math.max(a0, c.a0 + t0), aE = Math.min(a1, c.a0 + t1), e0 = u0 > off + 1e-6 && u0 - off > rh ? g.ends[0] : null, e1 = u1 < off + lenF - 1e-6 && off + lenF - u1 > rh ? g.ends[1] : null, rings = [];
-      const rTl = stoneFacts(lo).rT, rBu = stoneFacts(up).rB;
-      for (const a of sample(aS, aE, .05)) { const dd = Math.max(faceD(lo, lo.z + lo.h, 0), faceD(up, up.z, 0)), zbL = topAt(lo, a, dd), zbU = up.z + up.botA * (a - up.a), zb = (zbL + zbU) / 2;
-        const zf = zbL - .005; const fa = faceD(lo, zf, 0), fb = faceD(up, zbU + .005, 0), fr = Math.max(fa, fb), back = Math.min(faceD(lo, zbL, 1), faceD(up, zbU, 1)), depth = Math.min(.12, back - fr - .005); if (depth < .05) continue; if (fb < fa - .03 || Math.abs(zbU - zbL) > .05) { if (rings.length) break; continue; }   /* a stone standing forward of the one under it, or a bed that opens, is left as it is */
-        const recessed = fb > fa + .03, zlo = recessed ? zbL - .012 : zbL - rTl - .005, zhi = zbU + rBu + .005;
-        let o = 0; if (e0) o = Math.max(o, drawn(e0, a - aS, depth)); if (e1) o = Math.max(o, drawn(e1, aE - a, depth)); o = Math.min(o, depth - .01);
-        rings.push([[a, fr + o, zlo], [a, fr + o, zhi], [a, fr + depth, zhi], [a, fr + depth, zlo]]); }
-      if (rings.length > 1) out.push(loft(rings)); } });
-  return out;
+
+/* the stones as they are drawn: those on a fused joint grown toward each other (the whole stretch; chapter 8's ends and places are not drawn) */
+function grownStones(f) {
+  const S = f.stones.map((s) => Object.assign({}, s)), C = contactsOf(f), G = settle(f, f.stones, C, false), P = f.stones.map(stoneParams);
+  G.forEach((g) => { if (!g.win || g.part) return; const c = g.c, lo = S[c.lo], up = S[c.up];
+    if (c.type === 'up') { const e = Math.max(P[c.lo].rh, P[c.up].rh) + .01; lo.w += e; lo.a += e / 2; up.w += e; up.a -= e / 2; }
+    else { const e = P[c.up].rB + P[c.lo].rT + .01; up.z -= e; up.h += e; } });
+  return S;
 }

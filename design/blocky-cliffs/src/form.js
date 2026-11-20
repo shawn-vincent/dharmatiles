@@ -203,8 +203,8 @@ function formationOnce(over = {}) {
 /* the count is held to what the sheets show: at most eleven stones */
 function formation(over = {}) { let f = formationOnce(over), o = Object.assign({}, over), n = 0; const count = (g) => g.stones.filter((s) => !s.part).length;
   while (count(f) > 11 && n++ < 5) { o = Object.assign({}, o, f.q.caps > 1 ? { caps: f.q.caps - 1 } : f.q.tuck || f.q.applied ? { tuck: 0, applied: 0 } : { nA: Math.max(1, f.q.nA - 1), rows: f.q.cls === 'courses' ? Math.max(3, f.q.rows - 1) : f.q.rows }); f = formationOnce(o); } return f; }
-/* a formation's meshes: the stones and the fillers of its fused joints (chapter 8's rule), or with `apart` the stones alone */
-const formMeshes = (f, apart) => apart ? f.stones.map(stoneMesh) : f.stones.map(stoneMesh).concat(fillers(f));
+/* a formation's meshes: the stones with those on a fused joint (chapter 8's rule) grown toward each other, or with `apart` the stones as built */
+const formMeshes = (f, apart) => apart ? f.stones.map(stoneMesh) : grownStones(f).map(stoneMesh);
 
 /* Scale 1: draw a whole formation's numbers from the proposed ranges. */
 function drawParams(seed, want) {
