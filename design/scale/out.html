@@ -91,27 +91,21 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
     grid: .08,               /* the block's grid */
     patch: { a: [.39, .73], b: [.2, .8], sub: 4 },   /* the part of the top face (along, across) drawn on a grid `sub` times finer, for the close-up */
     grainWay: [.5, -.6, -.6],   /* a flake's thick edge points this way, laid onto each face: like shingles, down the sides and towards the near right of the top */
-    /* flakes, taken off largest first: r the radius, D the depth at the step side, cover how many times they cover the surface,
-       wide how much wider than long a scar is, spread how far (degrees) its direction strays */
-    scales: [
+    /* flakes, the larger size first: r the radius, D the thickness at the thick edge, cover how many times they cover the surface,
+       wide how much wider than long a flake is, spread how far (degrees) its direction strays */
+    flakes: [
       { r: [1.6, 3.0], D: [.04, .11], cover: 1.6, wide: [1.0, 1.5], spread: 45 },
-      { r: [.35, .95], D: [.05, .13], cover: 2.2, wide: [1.3, 2.2], spread: 30 },
-      { r: [.2, .45], D: [.015, .04], cover: 1.1, wide: [1.0, 1.6], spread: 70 }
+      { r: [.35, .95], D: [.05, .13], cover: 2.2, wide: [1.3, 2.2], spread: 30 }
     ],
-    lobes: [.2, .16, .11, .08, .05],   /* how far the 2nd to 6th harmonics pull a scar's boundary about */
-    ragged: 1,               /* a scar's boundary is pushed in and out by a noise of the place (0.2 mm at a 0.7 mm wave, 0.06 at 0.25), times this */
-    floor: .05,              /* the share of D taken even at the feathered side */
-    hollow: .15,             /* a flake's middle swells by up to this share of D */
-    arris: { r: [.4, 1.2], D: [.08, .22], every: .3 },   /* extra flakes centred on the edges: one every so many mm of edge */
+    ragged: [{ by: .3, wave: 1.1 }, { by: .16, wave: .33 }],   /* a flake's boundary is a circle pushed in and out by two noises of the place, each by up to `by` mm at its wave for a flake of 0.8 mm (a smaller or larger one takes its share, up to twice) */
+    lip: .55,                /* this share of a flake's thickness is gained close to its thick edge, which turns the edge up into a lip */
     wall: .05,               /* a flake's edge is a wall this wide (mm), however tall: the narrowest a grid carries without hatching is about 2.5 of its steps (the close-up patch's 0.02 mm), so a coarser grid widens it to walls * its step */
     walls: 1.5,
-    lip: .55,                /* this share of a flake's thickness is gained close to its thick edge, which turns the edge up into a lip that catches the light */
-    step: .9,                /* for this share of D; past it the ground rises gently (apron, mm per mm), so no thin fin is left standing between two scars */
-    apron: .12,
-    soft: .05,               /* and is rounded over this width */
+    /* arrises: along every edge a row of chips, one every `every` mm, each r long and up to D deep at its middle: a flat cut across
+       the rounded edge. Within `fade` mm of an edge the faces' own texture fades out to one level, so two faces meet. */
+    arris: { r: [.4, 1.2], D: .22, every: .3, fade: .6 },
     specks: { per: 2.2, r: [.05, .125], high: [.02, .06] },   /* raised grains per mm², their radius and height: the one place the texture adds material */
-    /* grain: a `specks` octave raises the tops of a noise as small low grains; a plain one cuts gently */
-    grain: [{ amp: .006, wave: .06 }, { amp: .016, wave: .1, specks: true }, { amp: .012, wave: .2, specks: true }, { amp: .012, wave: .45 }]
+    grain: .008              /* sand: every point is cut by up to this much, at random */
   };
 
   /* ---- the shape: the standard block, as on Flakes Up Close ----
@@ -132,148 +126,180 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
     const s = hexa(end(-B.L / 2, B.left), end(B.L / 2, B.right)); s.r = r;
     s.inner = (x, y, z, q, n) => { const a = (x + B.L / 2) / B.L, hw = (B.left.W + (B.right.W - B.left.W) * a) / 2, H = B.left.H + (B.right.H - B.left.H) * a;
       q[0] = clamp(x, -B.L / 2 + r, B.L / 2 - r); q[1] = clamp(y, -hw + r, hw - r); q[2] = clamp(z, r, H - r);
-      const dx = x - q[0], dy = y - q[1], dz = z - q[2], l = Math.hypot(dx, dy, dz) || 1; n[0] = dx / l; n[1] = dy / l; n[2] = dz / l; };
+      const dx = x - q[0], dy = y - q[1], dz = z - q[2], l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1; n[0] = dx / l; n[1] = dy / l; n[2] = dz / l; };
     return s;
   }
   const BLOCK = taper({ L: 32.6, left: { W: 14.8, H: 12.25 }, right: { W: 16.9, H: 15.3 } }, .5);
   const stream = (k) => { let a = k >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 
-  /* gradient noise in 3D (Perlin's), about -1..1, zero at lattice points: no grid shows in it as it does in value noise */
-  function corner(ix, iy, iz, k, x, y, z) { let h = Math.imul(ix, 0x27d4eb2d) ^ Math.imul(iy, 0x165667b1) ^ Math.imul(iz, 0x9e3779b1) ^ k; h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d); h = (h ^ (h >>> 13)) & 15;
-    const u = h < 8 ? x : y, v = h < 4 ? y : (h === 12 || h === 14 ? x : z); return ((h & 1) ? -u : u) + ((h & 2) ? -v : v); }
-  function noise(x, y, z, k) {
-    const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z), fx = x - ix, fy = y - iy, fz = z - iz;
-    const sx = fx * fx * fx * (fx * (fx * 6 - 15) + 10), sy = fy * fy * fy * (fy * (fy * 6 - 15) + 10), sz = fz * fz * fz * (fz * (fz * 6 - 15) + 10);
-    const a = corner(ix, iy, iz, k, fx, fy, fz), b = corner(ix + 1, iy, iz, k, fx - 1, fy, fz), c = corner(ix, iy + 1, iz, k, fx, fy - 1, fz), d = corner(ix + 1, iy + 1, iz, k, fx - 1, fy - 1, fz);
-    const e = corner(ix, iy, iz + 1, k, fx, fy, fz - 1), f = corner(ix + 1, iy, iz + 1, k, fx - 1, fy, fz - 1), g = corner(ix, iy + 1, iz + 1, k, fx, fy - 1, fz - 1), h = corner(ix + 1, iy + 1, iz + 1, k, fx - 1, fy - 1, fz - 1);
-    const p = a + (b - a) * sx, q = c + (d - c) * sx, r = e + (f - e) * sx, t = g + (h - g) * sx, u = p + (q - p) * sy, v = r + (t - r) * sy; return u + (v - u) * sz;
+  /* value noise in 2D over a whole grid at once: amp * (-1..1) added to every place of arr. A row's lattice values are blended
+     once for the row, so a point costs one blend more. */
+  function lattice(ix, iy, k) { let h = Math.imul(ix, 0x27d4eb2d) ^ Math.imul(iy, 0x165667b1) ^ k; h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d); return ((h ^ (h >>> 13)) >>> 0) / 2147483648 - 1; }
+  function noise(arr, ni, nj, h, x0, y0, wave, amp, seed) {
+    const s = h / wave, xa = x0 / wave, first = Math.floor(xa), col = new Float32Array(Math.floor(xa + (ni - 1) * s) - first + 2);
+    for (let j = 0, k = 0; j < nj; j++) { const y = (y0 + j * h) / wave, iy = Math.floor(y); let fy = y - iy; fy = fy * fy * (3 - 2 * fy);
+      for (let c = 0; c < col.length; c++) { const a = lattice(first + c, iy, seed); col[c] = amp * (a + (lattice(first + c, iy + 1, seed) - a) * fy); }
+      for (let i = 0; i < ni; i++, k++) { const x = xa + i * s, ix = Math.floor(x), c = ix - first; let fx = x - ix; fx = fx * fx * (3 - 2 * fx); arr[k] += col[c] + (col[c + 1] - col[c]) * fx; } }
   }
 
   /* ---- the build ----
-     The texture is a depth below the block's surface for any point of it, so the same flakes can be read at any fineness: the whole
-     block on the coarse grid, and one patch of the top face (where the close-up looks) on a grid several times finer. */
-  /* a set of surface points (where each is on the rounded block, and its way out), in buckets so a flake finds the points it reaches */
-  function points(base, nor, N) {
-    const CS = .5, lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
-    for (let i = 0; i < N; i++) for (let t = 0; t < 3; t++) { const v = base[3 * i + t]; if (v < lo[t]) lo[t] = v; if (v > hi[t]) hi[t] = v; }
-    const gx = Math.floor((hi[0] - lo[0]) / CS) + 1, gy = Math.floor((hi[1] - lo[1]) / CS) + 1, gz = Math.floor((hi[2] - lo[2]) / CS) + 1;
-    const cellOf = new Uint32Array(N), start = new Uint32Array(gx * gy * gz + 1), order = new Uint32Array(N);
-    for (let i = 0; i < N; i++) { const c = (Math.floor((base[3 * i + 2] - lo[2]) / CS) * gy + Math.floor((base[3 * i + 1] - lo[1]) / CS)) * gx + Math.floor((base[3 * i] - lo[0]) / CS); cellOf[i] = c; start[c + 1]++; }
-    for (let c = 0; c < gx * gy * gz; c++) start[c + 1] += start[c];
-    { const fill = start.slice(0, gx * gy * gz); for (let i = 0; i < N; i++) order[fill[cellOf[i]]++] = i; }
-    /* (the noises are read in a frame turned off the block's axes, so their lattice lines up with no face and no grid) */
-    /* every point within `reach` of (cx, cy, cz) is handed to fn */
-    function near(cx, cy, cz, reach, fn) {
-      const x0 = Math.max(0, Math.floor((cx - reach - lo[0]) / CS)), x1 = Math.min(gx - 1, Math.floor((cx + reach - lo[0]) / CS));
-      const y0 = Math.max(0, Math.floor((cy - reach - lo[1]) / CS)), y1 = Math.min(gy - 1, Math.floor((cy + reach - lo[1]) / CS));
-      const z0 = Math.max(0, Math.floor((cz - reach - lo[2]) / CS)), z1 = Math.min(gz - 1, Math.floor((cz + reach - lo[2]) / CS));
-      if (x0 > x1) return;
-      for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) { const row = (z * gy + y) * gx; for (let k = start[row + x0], e = start[row + x1 + 1]; k < e; k++) fn(order[k]); }
+     Every face is a height map: a grid of depths below the face, in the face's own flat frame (x along, y across, mm). Each
+     feature (a flake, a speck, an arris chip) is stamped onto the grid cells its own box covers and nowhere else, so the cost is
+     the number of points times a small constant, with no search. The close-up patch is the same features of the top face stamped
+     onto a finer grid. A map is { ni, nj, h (its step), x0, y0, cut, stage, rag }. */
+  const timer = () => { const m = [], o = { t: performance.now(), mark: (name) => { const n = performance.now(); m.push([name, n - o.t]); o.t = n; }, marks: m }; return o; };
+  /* a map of ni by nj places, in `room` (arrays at least that long, used again) or its own. The ragged noise is held to HELD of
+     its octaves' sum, which it seldom passes: that bounds how far a flake reaches. */
+  const HELD = .6;
+  function map(ni, nj, h, x0, y0, seed, F, room) {
+    const n = ni * nj, M = room || { cut: new Float32Array(n), stage: new Float32Array(n), rag: new Float32Array(n) }, rag = M.rag, most = HELD * F.ragged.reduce((s, o) => s + o.by, 0);
+    if (room) { M.cut.fill(0, 0, n); M.stage.fill(0, 0, n); rag.fill(0, 0, n); }
+    F.ragged.forEach((o, e) => noise(rag, ni, nj, h, x0, y0, o.wave, o.by, seed + 977 * e));
+    for (let k = 0; k < n; k++) { const v = rag[k]; if (v > most) rag[k] = most; else if (v < -most) rag[k] = -most; }
+    return { ni: ni, nj: nj, h: h, x0: x0, y0: y0, seed: seed, cut: M.cut, stage: M.stage, rag: rag, ragMost: most, wide: Math.max(F.wall, F.walls * h) };
+  }
+  /* One size of flakes onto one map. A flake is a gently tilted plate inside a ragged round boundary (wider than long), thin at
+     its feathered side and D thick at its other, where it ends in a wall (of the map's width) down to whatever lies beside it.
+     Where flakes overlap the tallest shows, so their edges are scalloped arcs that meet in cusps; the surface is cut from the
+     size's cap down to them. fl holds 8 numbers a flake: x, y, the way its thick edge points (cos, sin), r, D, 1 / wide, and its
+     share of the raggedness. Each row of a flake's box visits only the places inside the flake's reach. */
+  const FL = 8;
+  function stamp(M, fl, count, cap, F) {
+    const ragMost = M.ragMost, ni = M.ni, nj = M.nj, h = M.h, stage = M.stage, rag = M.rag, W = M.wide, lip = F.lip;
+    for (let f = 0, o = 0; f < count; f++, o += FL) {
+      const cx = fl[o] - M.x0, cy = fl[o + 1] - M.y0, ax = fl[o + 2], ay = fl[o + 3], r = fl[o + 4], D = fl[o + 5], iw = fl[o + 6], sc = fl[o + 7], ir = 1 / r;
+      const slope = D / W, far = r + sc * ragMost + W, far2 = far * far, fy = far * Math.sqrt(ay * ay + ax * ax / (iw * iw));
+      const j0 = Math.max(0, Math.ceil((cy - fy) / h)), j1 = Math.min(nj - 1, Math.floor((cy + fy) / h)), du = h * ax, dw = -h * ay * iw, A = du * du + dw * dw;
+      for (let j = j0; j <= j1; j++) {
+        const dy = j * h - cy, u0 = dy * ay - cx * ax, w0 = (dy * ax + cx * ay) * iw, B = u0 * du + w0 * dw, disc = B * B - A * (u0 * u0 + w0 * w0 - far2); if (disc < 0) continue;
+        const sq = Math.sqrt(disc), i0 = Math.max(0, Math.ceil((-B - sq) / A)), i1 = Math.min(ni - 1, Math.floor((-B + sq) / A));
+        let u = u0 + i0 * du, w = w0 + i0 * dw;
+        for (let i = i0, k = j * ni + i0; i <= i1; i++, k++, u += du, w += dw) {
+          let a = (u * ir + 1) * .5; a = a < 0 ? 0 : a > 1 ? 1 : a; a = a * a * (3 - 2 * a); a *= 1 - lip + lip * a * a * a;
+          let d = D * a; const now = stage[k]; if (d <= now) continue;   /* it cannot show here: the plate itself is under what stands */
+          const t = Math.sqrt(u * u + w * w) - r - sc * rag[k];
+          if (t > 0) { d -= slope * t; if (d <= now) continue; }
+          stage[k] = d;
+        }
+      }
     }
-    const rag = new Float32Array(N); for (let i = 0; i < N; i++) { const X = base[3 * i], Y = base[3 * i + 1], Z = base[3 * i + 2], x = .36 * X + .48 * Y + .8 * Z, y = -.8 * X + .6 * Y, z = -.48 * X - .64 * Y + .6 * Z; rag[i] = noise(x * 1.37, y * 1.37, z * 1.37, 53) * .2 + noise(x * 4.1 + .37, y * 4.1 + .11, z * 4.1 + .73, 51) * .06; }
-    return { base: base, nor: nor, N: N, near: near, rag: rag, cut: new Float32Array(N), stage: new Float32Array(N) };
+    const cut = M.cut; for (let k = 0, n = ni * nj; k < n; k++) { const s = stage[k]; if (s < cap) cut[k] += cap - s; stage[k] = 0; }
+  }
+  const unit = (nor, N) => { for (let i = 0; i < 3 * N; i += 3) { const x = nor[i], y = nor[i + 1], z = nor[i + 2], l = 1 / (Math.sqrt(x * x + y * y + z * z) || 1); nor[i] = x * l; nor[i + 1] = y * l; nor[i + 2] = z * l; } };
+  /* raised specks onto one map: sp holds x, y, r, height each */
+  function sprinkle(M, sp, count) {
+    const ni = M.ni, nj = M.nj, h = M.h, cut = M.cut;
+    for (let s = 0, o = 0; s < count; s++, o += 4) { const cx = sp[o] - M.x0, cy = sp[o + 1] - M.y0, r = sp[o + 2], high = sp[o + 3], ir = 1 / (r * r);
+      const i0 = Math.max(0, Math.ceil((cx - r) / h)), i1 = Math.min(ni - 1, Math.floor((cx + r) / h)), j0 = Math.max(0, Math.ceil((cy - r) / h)), j1 = Math.min(nj - 1, Math.floor((cy + r) / h));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const dx = i * h - cx, dy = j * h - cy, m = 1 - (dx * dx + dy * dy) * ir; if (m > 0) cut[j * ni + i] -= high * m * m; } }
+  }
+  /* sand, as a number -1..1 for a point of a map */
+  const sand = (k, seed) => { let h = Math.imul(k + 1, 0x9e3779b1) ^ seed; h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d); return ((h ^ (h >>> 13)) >>> 0) / 2147483648 - 1; };
+  /* a map's normals from its points (ids says which point each grid place is), added into nor */
+  function normals(ni, nj, ids, pos, nor) {
+    for (let j = 0, k = 0; j < nj; j++) { const ju = j > 0 ? -ni : 0, jd = j < nj - 1 ? ni : 0;
+      for (let i = 0; i < ni; i++, k++) { const a = 3 * (ids ? ids[k + (i < ni - 1 ? 1 : 0)] : k + (i < ni - 1 ? 1 : 0)), b = 3 * (ids ? ids[k - (i > 0 ? 1 : 0)] : k - (i > 0 ? 1 : 0)), c = 3 * (ids ? ids[k + jd] : k + jd), d = 3 * (ids ? ids[k + ju] : k + ju), id = 3 * (ids ? ids[k] : k);
+        const ux = pos[a] - pos[b], uy = pos[a + 1] - pos[b + 1], uz = pos[a + 2] - pos[b + 2], vx = pos[c] - pos[d], vy = pos[c + 1] - pos[d + 1], vz = pos[c + 2] - pos[d + 2];
+        const x = uy * vz - uz * vy, y = uz * vx - ux * vz, z = ux * vy - uy * vx, l = 1 / (Math.sqrt(x * x + y * y + z * z) || 1);
+        nor[id] += x * l; nor[id + 1] += y * l; nor[id + 2] += z * l; } }
   }
   function build(F) {
-    const S = BLOCK, step = F.grid, counts = S.counts(step), rnd = stream(F.seed), range = (r) => r[0] + (r[1] - r[0]) * rnd();
-    /* 1. the mesh: the six grids, welded along the faces' shared edges into one closed surface. A window of the top face is left
-       open for the fine patch, whose border points are the coarse grid's own. */
+    const S = BLOCK, R = S.r, step = F.grid, counts = S.counts(step), rnd = stream(F.seed), range = (r) => r[0] + (r[1] - r[0]) * rnd(), T0 = timer();
+    /* 1. the grid: which point each place of the six faces' grids is, the faces welded along their shared edges into one closed
+       surface, and the triangles. A window of the top face is left open for the fine patch, whose border points are the block
+       grid's own. */
     const P = F.patch, na0 = counts[0][0], nb0 = counts[0][1];
     const wi0 = Math.round(P.a[0] * na0), wi1 = Math.round(P.a[1] * na0), wj0 = Math.round(P.b[0] * nb0), wj1 = Math.round(P.b[1] * nb0);
-    let cap = 0, nq = 0; for (const [na, nb] of counts) { cap += (na + 1) * (nb + 1); nq += na * nb; }
-    const base = new Float32Array(cap * 3), nor = new Float32Array(cap * 3), index = new Uint32Array((nq - (wi1 - wi0) * (wj1 - wj0)) * 6), weld = new Map();
-    const q = [0, 0, 0], n = [0, 0, 0]; let N = 0, ti = 0;
-    for (let f = 0; f < 6; f++) {
-      const c = S.faces[f], na = counts[f][0], nb = counts[f][1], ids = new Uint32Array((na + 1) * (nb + 1));
-      for (let j = 0; j <= nb; j++) for (let i = 0; i <= na; i++) {
-        const a = i / na, b = j / nb, x = lerp(c, a, b, 0), y = lerp(c, a, b, 1), z = lerp(c, a, b, 2); let id = -1, key = 0;
-        const rim = i === 0 || j === 0 || i === na || j === nb;
-        if (rim) { key = (Math.round((x + 20.0037) * 50) * 8192 + Math.round((y + 20.0037) * 50)) * 8192 + Math.round((z + 20.0037) * 50); const got = weld.get(key); if (got !== undefined) id = got; }
-        if (id < 0) { id = N++; if (rim) weld.set(key, id); S.inner(x, y, z, q, n);
-          base[3 * id] = q[0] + n[0] * S.r; base[3 * id + 1] = q[1] + n[1] * S.r; base[3 * id + 2] = q[2] + n[2] * S.r; nor[3 * id] = n[0]; nor[3 * id + 1] = n[1]; nor[3 * id + 2] = n[2]; }
-        ids[j * (na + 1) + i] = id;
-      }
+    let nq = 0, most = 0; for (const [na, nb] of counts) { nq += na * nb; most = Math.max(most, (na + 1) * (nb + 1)); }
+    const index = new Uint32Array((nq - (wi1 - wi0) * (wj1 - wj0)) * 6), weld = new Map(), q = [0, 0, 0], n = [0, 0, 0], q2 = [0, 0, 0], m = [0, 0, 0]; let N = 0, ti = 0;
+    const faces = S.faces.map((c, f) => {
+      const na = counts[f][0], nb = counts[f][1], ni = na + 1, ids = new Uint32Array(ni * (nb + 1));
+      /* a place's point on the box */
+      const at = (i, j, p) => { const a = i / na, b = j / nb; p[0] = lerp(c, a, b, 0); p[1] = lerp(c, a, b, 1); p[2] = lerp(c, a, b, 2); };
+      for (let j = 0, k = 0; j <= nb; j++) for (let i = 0; i <= na; i++, k++) {
+        if (i > 0 && j > 0 && i < na && j < nb) { ids[k] = N++; continue; }
+        at(i, j, q); const key = (Math.round((q[0] + 20.0037) * 50) * 8192 + Math.round((q[1] + 20.0037) * 50)) * 8192 + Math.round((q[2] + 20.0037) * 50), got = weld.get(key);
+        if (got !== undefined) ids[k] = got; else { weld.set(key, N); ids[k] = N++; } }
       for (let j = 0; j < nb; j++) for (let i = 0; i < na; i++) { if (f === 0 && i >= wi0 && i < wi1 && j >= wj0 && j < wj1) continue;
-        const p0 = ids[j * (na + 1) + i], p1 = ids[j * (na + 1) + i + 1], p2 = ids[(j + 1) * (na + 1) + i + 1], p3 = ids[(j + 1) * (na + 1) + i];
+        const p0 = ids[j * ni + i], p1 = ids[j * ni + i + 1], p2 = ids[(j + 1) * ni + i + 1], p3 = ids[(j + 1) * ni + i];
         index[ti++] = p0; index[ti++] = p1; index[ti++] = p2; index[ti++] = p0; index[ti++] = p2; index[ti++] = p3; }
-    }
-    const marks = [['mesh', performance.now()]];
-    const AREA = nq * step * step, coarse = points(base, nor, N);
-    /* the fine patch: the window's own grid, each step cut into P.sub */
-    const pa = (wi1 - wi0) * P.sub, pb = (wj1 - wj0) * P.sub, PN = (pa + 1) * (pb + 1), pbase = new Float32Array(PN * 3), pnor = new Float32Array(PN * 3), pindex = new Uint32Array(pa * pb * 6);
-    { const c = S.faces[0]; let k = 0, t = 0;
-      for (let j = 0; j <= pb; j++) for (let i = 0; i <= pa; i++, k++) { const a = (wi0 + i / P.sub) / na0, b = (wj0 + j / P.sub) / nb0; S.inner(lerp(c, a, b, 0), lerp(c, a, b, 1), lerp(c, a, b, 2), q, n);
-        pbase[3 * k] = q[0] + n[0] * S.r; pbase[3 * k + 1] = q[1] + n[1] * S.r; pbase[3 * k + 2] = q[2] + n[2] * S.r; pnor[3 * k] = n[0]; pnor[3 * k + 1] = n[1]; pnor[3 * k + 2] = n[2]; }
-      for (let j = 0; j < pb; j++) for (let i = 0; i < pa; i++) { const p0 = j * (pa + 1) + i, p1 = p0 + 1, p3 = p0 + pa + 1, p2 = p3 + 1; pindex[t++] = p0; pindex[t++] = p1; pindex[t++] = p2; pindex[t++] = p0; pindex[t++] = p2; pindex[t++] = p3; } }
-    const fine = points(pbase, pnor, PN), both = [coarse, fine]; coarse.wide = Math.max(F.wall, F.walls * step); fine.wide = Math.max(F.wall, F.walls * step / P.sub); marks.push(['points', performance.now()]);
-
-    /* 2. flakes. The surface is left as overlapping flakes, like shingles: each a gently tilted plate inside an irregular boundary,
-       thin at its feathered side and D thick at its other, where it ends in a short steep wall down to whatever lies beside it.
-       Where flakes of one size overlap the tallest shows, so their edges are scalloped arcs that meet in cusps; each smaller size
-       is cut into what the larger left. A flake on an arris is a flat cut in space instead (over the plane that touches the block
-       at its centre), so it bites the rounded edge to a facet. */
-    const G = F.grainWay; let flakes = 0;
-    function flake(ci, r, D, wide, spread, plane) {
-      const cx = base[3 * ci], cy = base[3 * ci + 1], cz = base[3 * ci + 2], nx = nor[3 * ci], ny = nor[3 * ci + 1], nz = nor[3 * ci + 2];
-      let gd = G[0] * nx + G[1] * ny + G[2] * nz, ex = G[0] - gd * nx, ey = G[1] - gd * ny, ez = G[2] - gd * nz, el = Math.hypot(ex, ey, ez);
-      if (el < .25) { gd = nx * .9 + ny * .3 + nz * .3; ex = .9 - gd * nx; ey = .3 - gd * ny; ez = .3 - gd * nz; el = Math.hypot(ex, ey, ez); }
-      ex /= el; ey /= el; ez /= el; const fx = ny * ez - nz * ey, fy = nz * ex - nx * ez, fz = nx * ey - ny * ex;
-      const turn = (rnd() + rnd() + rnd() - 1.5) * 1.3 * spread * Math.PI / 180, ct = Math.cos(turn), st = Math.sin(turn);
-      const ax = ex * ct + fx * st, ay = ey * ct + fy * st, az = ez * ct + fz * st, bx = ny * az - nz * ay, by = nz * ax - nx * az, bz = nx * ay - ny * ax;
-      /* the boundary: a circle of radius r pulled about by a few harmonics */
-      const A = new Float64Array(10); let room = 1;
-      for (let k = 0; k < 5; k++) { const amp = F.lobes[k] * (.4 + rnd()), ph = rnd() * 6.2832; A[2 * k] = amp * Math.cos(ph); A[2 * k + 1] = amp * Math.sin(ph); room += amp; }
-      const hollow = F.hollow * rnd(), ragged = F.ragged, top = D * F.step, apron = F.apron, lip = F.lip, reach = (r * room + .3 * ragged) * wide + coarse.wide * 1.3 + D * (1.1 - F.step) / apron, npMin = plane ? .5 : .3;
-      const reach2 = reach * reach; flakes++;
-      for (const pts of both) { const pb = pts.base, pn = pts.nor, stage = pts.stage, rag = pts.rag, soft = Math.min(F.soft, pts.wide / 2), wall = top / pts.wide, far = pts.wide + soft / 2;
-        pts.near(cx, cy, cz, reach, (i) => {
-          const vx = pb[3 * i] - cx, vy = pb[3 * i + 1] - cy, vz = pb[3 * i + 2] - cz; if (vx * vx + vy * vy + vz * vz > reach2) return;
-          const vn = vx * nx + vy * ny + vz * nz; if (vn > r || vn < -r) return;
-          const np = pn[3 * i] * nx + pn[3 * i + 1] * ny + pn[3 * i + 2] * nz; if (np < npMin) return;
-          const u = vx * ax + vy * ay + vz * az, w = (vx * bx + vy * by + vz * bz) / wide, rho = Math.hypot(u, w);
-          let R = r + ragged * rag[i];
-          if (rho > 1e-6) { const c1 = u / rho, s1 = w / rho; let c = c1, s = s1, sum = 0;
-            for (let k = 0; k < 5; k++) { const c2 = c * c1 - s * s1, s2 = s * c1 + c * s1; c = c2; s = s2; sum += A[2 * k] * c - A[2 * k + 1] * s; }
-            R += r * sum; }
-          const t = rho - R + soft / 2; let lift = 0;
-          if (t > 0) { lift = t < soft ? wall * t * t / (2 * soft) : wall * (t - soft / 2); if (lift > top) { lift = top + (t - far) * apron; if (lift > D * 1.1) return; } }
-          let a = (u / R + 1) / 2; a = a < 0 ? 0 : a > 1 ? 1 : a; a = a * a * (3 - 2 * a); a *= 1 - lip + lip * a * a * a;
-          const b = rho / R, bowl = b < 1 ? 1 - b * b : 0;
-          let d = D * (F.floor + (1 - F.floor) * a) + D * hollow * bowl - lift;
-          if (plane) d = (d + vn) / np;
-          if (d > stage[i]) stage[i] = d;
-        }); }
-    }
-    /* a size's flakes are what is left standing: each point is cut down from the size's cap to the tallest flake over it. The arris cuts are cuts as they are. */
-    const settle = (cap) => { for (const pts of both) { const c = pts.cut, s = pts.stage; if (cap) for (let i = 0; i < pts.N; i++) c[i] += s[i] < cap ? cap - s[i] : 0; else for (let i = 0; i < pts.N; i++) c[i] += s[i]; s.fill(0); } };
-    /* the points on the rounded edges, where the arris flakes are centred */
-    const edgePts = []; for (let i = 0; i < N; i++) if (Math.max(Math.abs(nor[3 * i]), Math.abs(nor[3 * i + 1]), Math.abs(nor[3 * i + 2])) < .93) edgePts.push(i);
-    F.scales.forEach((sc, si) => {
-      const rm = (sc.r[0] + sc.r[1]) / 2, wm = (sc.wide[0] + sc.wide[1]) / 2, count = Math.round(sc.cover * AREA / (Math.PI * rm * rm * wm));
-      for (let k = 0; k < count; k++) { const r = range(sc.r); flake(Math.floor(rnd() * N), r, (sc.D[0] + (sc.D[1] - sc.D[0]) * rnd()) * (.55 + .45 * r / sc.r[1]), range(sc.wide), sc.spread, false); }
-      settle(sc.D[1]);
-      if (si === 0) { const edges = 4 * (32.6 + 15.85 + 13.8), many = Math.round(edges / F.arris.every);
-        for (let k = 0; k < many; k++) flake(edgePts[Math.floor(rnd() * edgePts.length)], range(F.arris.r), F.arris.D[0] + (F.arris.D[1] - F.arris.D[0]) * rnd() * rnd(), 1 + .8 * rnd(), 180, true);
-        settle(0); }
+      /* the way the face's flakes point, in its own flat frame */
+      const eu = sub(c[1], c[0]), ev = sub(c[3], c[0]), G = F.grainWay, gu = (G[0] * eu[0] + G[1] * eu[1] + G[2] * eu[2]) / len(eu), gv = (G[0] * ev[0] + G[1] * ev[1] + G[2] * ev[2]) / len(ev);
+      return { c: c, na: na, nb: nb, ids: ids, at: at, way: Math.hypot(gu, gv) < .25 ? .3 : Math.atan2(gv, gu) };
     });
+    T0.mark('grid and triangles');
 
-    marks.push(['flakes', performance.now()]);
-    /* 3. specks: small round grains standing on whatever they sit on, plateau or wall */
-    const pits = Math.round(F.specks.per * AREA);
-    for (let k = 0; k < pits; k++) { const ci = Math.floor(rnd() * N), r = range(F.specks.r), d = -range(F.specks.high) * (r / F.specks.r[1]), cx = base[3 * ci], cy = base[3 * ci + 1], cz = base[3 * ci + 2];
-      for (const pts of both) { const pb = pts.base, cut = pts.cut; pts.near(cx, cy, cz, r, (i) => { const dx = pb[3 * i] - cx, dy = pb[3 * i + 1] - cy, dz = pb[3 * i + 2] - cz, m = 1 - (dx * dx + dy * dy + dz * dz) / (r * r); if (m > 0) cut[i] += d * m * m; }); } }
+    /* 2. the features, per face: the flakes of each size, and the specks; and the chips along each edge, as a depth for every
+       point of the rim */
+    const DEG = Math.PI / 180;
+    for (const fc of faces) { const Lx = fc.na * step, Ly = fc.nb * step;
+      fc.flakes = F.flakes.map((sc) => { const rm = (sc.r[0] + sc.r[1]) / 2, wm = (sc.wide[0] + sc.wide[1]) / 2, pad = sc.r[1] * wm;
+        const count = Math.round(sc.cover * (Lx + 2 * pad) * (Ly + 2 * pad) / (Math.PI * rm * rm * wm)), fl = new Float32Array(count * FL);
+        for (let k = 0, o = 0; k < count; k++, o += FL) { const r = range(sc.r), turn = fc.way + (rnd() + rnd() + rnd() - 1.5) * 1.3 * sc.spread * DEG;
+          fl[o] = -pad + rnd() * (Lx + 2 * pad); fl[o + 1] = -pad + rnd() * (Ly + 2 * pad); fl[o + 2] = Math.cos(turn); fl[o + 3] = Math.sin(turn); fl[o + 4] = r;
+          fl[o + 5] = (sc.D[0] + (sc.D[1] - sc.D[0]) * rnd()) * (.55 + .45 * r / sc.r[1]); fl[o + 6] = 1 / range(sc.wide); fl[o + 7] = Math.min(2, r / .8); }
+        return { fl: fl, count: count, cap: sc.D[1] }; });
 
-    marks.push(['pits', performance.now()]);
-    /* 4. grain, then the points */
-    let deepest = 0;
-    function place(pts, grid) { const pos = new Float32Array(pts.N * 3), pb = pts.base, pn = pts.nor;
-      for (let i = 0; i < pts.N; i++) { const X = pb[3 * i], Y = pb[3 * i + 1], Z = pb[3 * i + 2], x = .36 * X + .48 * Y + .8 * Z, y = -.8 * X + .6 * Y, z = -.48 * X - .64 * Y + .6 * Z; let d = pts.cut[i];
-        for (let o = 0; o < F.grain.length; o++) { const gr = F.grain[o], s = 1 / gr.wave; if (gr.wave < 2.2 * grid) continue;   /* a grid too coarse for a wave leaves it out */
-          let v = noise(x * s, y * s, z * s, 101 + o); if (gr.specks) { v = (v - .05) * 2.5; v = v < 0 ? 0 : v > 1 ? -1 : -v * v; } else v = v * .9 + .5; d += gr.amp * v; }
-        if (d > deepest) deepest = d;
-        pos[3 * i] = X - pn[3 * i] * d; pos[3 * i + 1] = Y - pn[3 * i + 1] * d; pos[3 * i + 2] = Z - pn[3 * i + 2] * d; }
-      return pos; }
-    const cpos = place(coarse, step), fpos = place(fine, step / P.sub); marks.push(['grain', performance.now()]);
-    return { marks: marks, pos: cpos, index: index, fine: { pos: fpos, index: pindex, points: PN, step: step / P.sub }, points: N, triangles: (index.length + pindex.length) / 3, flakes: flakes, pits: pits, deepest: deepest };
+      const count = Math.round(F.specks.per * Lx * Ly), sp = new Float32Array(count * 4);
+      for (let k = 0, o = 0; k < count; k++, o += 4) { const r = range(F.specks.r); sp[o] = rnd() * Lx; sp[o + 1] = rnd() * Ly; sp[o + 2] = r; sp[o + 3] = range(F.specks.high) * (r / F.specks.r[1]); }
+      fc.specks = sp; fc.speckCount = count; }
+    const chip = new Float32Array(N), chipped = new Uint8Array(N), A = F.arris;
+    for (const fc of faces) { const ni = fc.na + 1, ids = fc.ids;
+      for (const [from, by, len] of [[0, 1, fc.na], [fc.nb * ni, 1, fc.na], [0, ni, fc.nb], [fc.na, ni, fc.nb]]) {
+        if (chipped[ids[from + by * (len >> 1)]]) continue;   /* the face across this edge made its chips already */
+        for (let s = rnd() * A.every; s < len * step; s += A.every * (.5 + rnd())) { const r = range(A.r), D = A.D * rnd() * rnd(), a = Math.max(0, Math.ceil((s - r) / step)), b = Math.min(len, Math.floor((s + r) / step));
+          for (let e = a; e <= b; e++) { const t = (e * step - s) / r, d = D * (1 - t * t), id = ids[from + by * e]; if (d > chip[id]) chip[id] = d; } }
+        for (let e = 0; e <= len; e++) chipped[ids[from + by * e]] = 1; } }
+    T0.mark('placing');
+
+    /* 3. each face's map in turn (one map's room serves them all): the ragged noise, flakes, specks, then the edge (the chips'
+       flat cuts across the rounding, and the fade to one level), sand, and the points. Away from its sides a face is flat: its
+       points are the box's own and the way out is one. */
+    const pos = new Float32Array(N * 3), room = { cut: new Float32Array(most), stage: new Float32Array(most), rag: new Float32Array(most) };
+    const level = F.flakes.reduce((s, sc) => s + sc.D[1], 0) / 2, fadeN = A.fade / step, band = Math.ceil((R + .3) / step), edge = Math.ceil(R / step) + 1, grain = F.grain;
+    let tMap = 0, tFlakes = 0, tSpecks = 0, tEdge = 0, tPoints = 0, deepest = 0, flakes = 0, specks = 0, t = performance.now(); const lap = () => { const now = performance.now(), d = now - t; t = now; return d; };
+    faces.forEach((fc, f) => { const c = fc.c, na = fc.na, nb = fc.nb, ni = na + 1, nj = nb + 1, ids = fc.ids, M = map(ni, nj, step, 0, 0, F.seed * 31 + f, F, room), stage = M.stage, cut = M.cut; fc.seed = M.seed;
+      tMap += lap();
+      for (const s of fc.flakes) { stamp(M, s.fl, s.count, s.cap, F); flakes += s.count; }
+      tFlakes += lap();
+      sprinkle(M, fc.specks, fc.speckCount); specks += fc.speckCount; tSpecks += lap();
+      /* the chips: for a point near a side, the flat cut through the rim's point pushed in by its chip, square to the rim's way out */
+      const bite = (ri, rj, di, dj) => { const chipD = chip[ids[rj * ni + ri]]; if (chipD <= 0) return;
+        fc.at(ri, rj, q2); S.inner(q2[0], q2[1], q2[2], q2, m);
+        for (let e = 0; e < band; e++) { const i = ri + di * e, j = rj + dj * e, k = j * ni + i; fc.at(i, j, q); S.inner(q[0], q[1], q[2], q, n);
+          const nm = n[0] * m[0] + n[1] * m[1] + n[2] * m[2]; if (nm < .3) break;
+          const d = ((q[0] - q2[0]) * m[0] + (q[1] - q2[1]) * m[1] + (q[2] - q2[2]) * m[2] + R * (nm - 1) + chipD) / nm; if (d <= 0) break; if (d > stage[k]) stage[k] = d; } };
+      for (let j = 0; j < nj; j++) { bite(0, j, 1, 0); bite(na, j, -1, 0); }
+      for (let i = 0; i < ni; i++) { bite(i, 0, 0, 1); bite(i, nb, 0, -1); }
+      tEdge += lap();
+      fc.at(na >> 1, nb >> 1, q); S.inner(q[0], q[1], q[2], q, n); const fx = n[0], fy = n[1], fz = n[2], seed = M.seed;
+      for (let j = 0, k = 0; j < nj; j++) { const b = j / nb, dj = Math.min(j, nb - j), lx = c[0][0] + (c[3][0] - c[0][0]) * b, ly = c[0][1] + (c[3][1] - c[0][1]) * b, lz = c[0][2] + (c[3][2] - c[0][2]) * b;
+        const sx = (c[1][0] + (c[2][0] - c[1][0]) * b - lx) / na, sy = (c[1][1] + (c[2][1] - c[1][1]) * b - ly) / na, sz = (c[1][2] + (c[2][2] - c[1][2]) * b - lz) / na;
+        for (let i = 0; i < ni; i++, k++) { const e = Math.min(dj, i, na - i), id = 3 * ids[k], x = lx + sx * i, y = ly + sy * i, z = lz + sz * i; let d = cut[k] + grain * sand(k, seed);
+          if (e >= edge && e >= fadeN) { pos[id] = x - fx * d; pos[id + 1] = y - fy * d; pos[id + 2] = z - fz * d; }
+          else { if (e < fadeN) { const w = e / fadeN; d = level + (d - level) * w * w * (3 - 2 * w) + stage[k]; }
+            S.inner(x, y, z, q, n); pos[id] = q[0] + n[0] * (R - d); pos[id + 1] = q[1] + n[1] * (R - d); pos[id + 2] = q[2] + n[2] * (R - d); }
+          if (d > deepest) deepest = d; } }
+      tPoints += lap(); });
+    T0.marks.push(['ragged noise', tMap], ['flakes', tFlakes], ['specks', tSpecks], ['edges', tEdge], ['sand and points', tPoints]); T0.t = performance.now();
+    const nor = new Float32Array(N * 3); for (const fc of faces) normals(fc.na + 1, fc.nb + 1, fc.ids, pos, nor);
+    unit(nor, N); T0.mark('normals');
+
+    /* the close-up patch: the top face's own features on a grid P.sub times finer, over the window */
+    const T1 = timer(), top = faces[0], h = step / P.sub, pi = (wi1 - wi0) * P.sub + 1, pj = (wj1 - wj0) * P.sub + 1, PN = pi * pj, ppos = new Float32Array(PN * 3), pnor = new Float32Array(PN * 3), pindex = new Uint32Array((pi - 1) * (pj - 1) * 6);
+    { let ix = 0; for (let j = 0; j < pj - 1; j++) for (let i = 0; i < pi - 1; i++) { const p0 = j * pi + i, p1 = p0 + 1, p3 = p0 + pi, p2 = p3 + 1; pindex[ix++] = p0; pindex[ix++] = p1; pindex[ix++] = p2; pindex[ix++] = p0; pindex[ix++] = p2; pindex[ix++] = p3; } }
+    T1.mark('grid and triangles');
+    const M = map(pi, pj, h, wi0 * step, wj0 * step, top.seed, F, null); T1.mark('ragged noise');
+    for (const s of top.flakes) stamp(M, s.fl, s.count, s.cap, F); T1.mark('flakes');
+    sprinkle(M, top.specks, top.speckCount); T1.mark('specks');
+    { const c = top.c, cut = M.cut; top.at(na0 >> 1, nb0 >> 1, q); S.inner(q[0], q[1], q[2], q, n); const fx = n[0], fy = n[1], fz = n[2];
+      for (let j = 0, k = 0; j < pj; j++) { const b = (wj0 + j / P.sub) / nb0, a0 = wi0 / na0, a1 = wi1 / na0, x0 = lerp(c, a0, b, 0), y0 = lerp(c, a0, b, 1), z0 = lerp(c, a0, b, 2), sx = (lerp(c, a1, b, 0) - x0) / (pi - 1), sy = (lerp(c, a1, b, 1) - y0) / (pi - 1), sz = (lerp(c, a1, b, 2) - z0) / (pi - 1);
+        for (let i = 0; i < pi; i++, k++) { const d = cut[k] + grain * sand(k, M.seed); ppos[3 * k] = x0 + sx * i - fx * d; ppos[3 * k + 1] = y0 + sy * i - fy * d; ppos[3 * k + 2] = z0 + sz * i - fz * d; } } }
+    T1.mark('sand and points');
+    normals(pi, pj, null, ppos, pnor); unit(pnor, PN); T1.mark('normals');
+    const sum = (ms) => ms.reduce((s, x) => s + x[1], 0);
+    return { pos: pos, nor: nor, index: index, points: N, ms: sum(T0.marks), marks: T0.marks, flakes: flakes, specks: specks, deepest: deepest,
+      fine: { pos: ppos, nor: pnor, index: pindex, points: PN, step: h, ms: sum(T1.marks), marks: T1.marks } };
   }
 
   /* ---- the view ---- */
@@ -333,17 +359,19 @@ figcaption{font-size:13px;color:var(--muted);line-height:1.45}
   (function loop() { requestAnimationFrame(loop); if (dirty) { dirty = false; try { renderer.render(scene, camera); } catch (e) { report('drawing the block', e); } } })();
   size(); setCam('whole');
 
-  /* build once the page has painted, and say how long it took */
+  /* build once the page has painted, and say how long each part took */
   setTimeout(() => {
     try {
-      const t0 = performance.now(), B = build(SCALE), t1 = performance.now();
+      const B = build(SCALE), t0 = performance.now();
       const stone = new T.MeshStandardMaterial({ color: 0xc4c4c8, roughness: 1, metalness: 0 });
-      for (const part of [B, B.fine]) { const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(part.pos, 3)); geo.setIndex(new T.BufferAttribute(part.index, 1)); geo.computeVertexNormals(); scene.add(new T.Mesh(geo, stone)); }
-      const t2 = performance.now();
+      for (const part of [B, B.fine]) { const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(part.pos, 3)); geo.setAttribute('normal', new T.BufferAttribute(part.nor, 3)); geo.setIndex(new T.BufferAttribute(part.index, 1));
+        const mesh = new T.Mesh(geo, stone); mesh.frustumCulled = false; scene.add(mesh); }
+      renderer.render(scene, camera); renderer.getContext().finish(); const upload = performance.now() - t0;
+      const parts = (m) => m.map((x) => x[0] + ' ' + fmt(x[1], 1)).join(', ');
       document.getElementById('wait').hidden = true;
-      document.getElementById('stat').innerHTML = 'Built in <b>' + fmt((t2 - t0) / 1000, 2) + ' s</b> (surface ' + fmt((t1 - t0) / 1000, 2) + ' s, normals ' + fmt((t2 - t1) / 1000, 2) + ' s): ' +
-        fmt(B.points) + ' points on a ' + SCALE.grid + ' mm grid and ' + fmt(B.fine.points) + ' on a ' + fmt(B.fine.step, 3) + ' mm patch of the top face for the close-up, ' + fmt(B.triangles) + ' triangles, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.pits) + ' raised specks; deepest cut ' + fmt(B.deepest, 2) + ' mm. Drag to turn, pinch to zoom; click the view, then drag two fingers to pan.';
-      window.scaleBuilt = { marks: B.marks.map((m, i) => m[0] + ' ' + Math.round(m[1] - (i ? B.marks[i - 1][1] : t0))).join(', '), normals: Math.round(t2 - t1), flakes: B.flakes, seconds: (t2 - t0) / 1000, deepest: B.deepest, points: B.points };
+      document.getElementById('stat').innerHTML = 'The block built in <b>' + fmt(B.ms, 0) + ' ms</b> (' + parts(B.marks) + '): ' + fmt(B.points) + ' points on a ' + SCALE.grid + ' mm grid, ' + fmt(B.flakes) + ' flakes, ' + fmt(B.specks) + ' raised specks, deepest cut ' + fmt(B.deepest, 2) + ' mm. ' +
+        'The close-up patch built in <b>' + fmt(B.fine.ms, 0) + ' ms</b> (' + parts(B.fine.marks) + '): ' + fmt(B.fine.points) + ' points on a ' + fmt(B.fine.step, 3) + ' mm grid. First picture (sending both to the graphics card and drawing) ' + fmt(upload, 0) + ' ms.';
+      window.scaleBuilt = { ms: B.ms, marks: parts(B.marks), patchMs: B.fine.ms, patchMarks: parts(B.fine.marks), upload: upload, flakes: B.flakes, deepest: B.deepest, points: B.points, patchPoints: B.fine.points };
       draw();
     } catch (e) { report('building the surface', e); }
   }, 30);
