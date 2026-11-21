@@ -192,9 +192,9 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <ol>
       <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, <b>Height</b> tall and <b>Depth</b> deep, standing at the back of the square. Its bottom, its back and its two ends (the tile's edges) are <b>crisp</b>: no mass crosses them. Its top and its front are <b>fuzzy</b>: each mass draws how far short of them it stops, up to <b>Fuzz</b>, from a smooth field along the wall (two thirds) and its own draw (one third), so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
       <li><b>Control planes</b>, <b>Count</b> of them, sweep the envelope from one side to the other: <b>Plane tilt</b> 0° makes them level (sweeping up), 90° upright; <b>Plane turn</b> faces an upright plane across the wall (0°, sweeping along it) or along it (90°, sweeping from back to front). Each inner plane is moved and turned at random by up to <b>Wobble</b>. The planes organise the spines; they never cut a rock.</li>
-      <li><b>Spines.</b> In each interval between two planes in turn, spines are started by dart throwing: a dart is a point of the envelope between the two planes, its direction the sweep's turned at random by about <b>Spread</b>, and its spine runs back to the first plane and on to the next, and on through each further plane with chance <b>Span</b>; a spine begins and ends inside the envelope, so one that would leave it first ends where it leaves. A dart is kept only if it is clear of every spine already in the interval (at least <b>Packing</b> times their two radii apart, measured across their sections); a spine that only ends at the interval's plane does not count, so masses can stack end to end. Until 80 darts in a row miss, the interval is not full. <b>Bedding</b> holds spines to shared strata: the wall's height is cut into bands about a mass thick, a start is pulled toward its band's middle, the spine runs flatter, and its thickness becomes the band's. One spine is one mass.</li>
-      <li><b>Each spine's support</b> is the space it may claim: the convex hull of its two end sections (a polygon of about <b>Faces</b> sides, <b>Size</b> times <b>Reach</b> across, flattened by <b>Aspect</b>, each end drawn on its own within <b>Vary</b>), so a mass can taper, flatten and change its sides from end to end. At the top of Reach there is no limit: the support is the whole envelope, and a mass grows until it meets its neighbours (its ends too: the ends below shape only limited masses). Each end lies on its control plane, turned by up to <b>End tilt</b>, rounded by a ring of chamfers <b>Round</b> deep, and roughened (every plane of the end turned and moved) by <b>Rough</b>. Weight, drawn at each end within <b>Weight</b>, is how hard a spine competes.</li>
-      <li><b>Space is split by weight.</b> Each spine scores a point by its power distance: the square of the distance across its section (and along it, past an end) less the square of its local size times weight; the lower score claims it. Two such scores are equal on a plane (exactly, for points), so where two supports meet, their overlap is split by the plane fitted (least squares) to where the scores are equal, and the planes of three masses meet in one line, leaving no hole. <b>Spacing</b> then sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones, heaped), and under zero each reaches past the split into its neighbour (they read as one mass). It changes each mass's size; nothing moves. Each split adds its own random part, up to Spacing's <b>Vary</b> either way. A mass is its support and envelope (its hull) less its neighbours' claims, each claim the neighbour's support on its own side of the split (a convex cut, so the mass is a hull with hollows, as Rocks from Hulls reads it). A point both supports reach goes to exactly one side, so with Spacing at zero or more no two masses overlap, by construction, and only the shared overlap is split, so nothing either could not reach is lost. A mass must be one piece: it is read on a 1 mm grid, and while it is not, the claim cutting the most becomes a half-space instead (the side holding the spine is kept). Space no support reaches stays empty: gaps are allowed. A mass too small to print (under 2 mm through) is left out and counted.</li>
+      <li><b>Spines.</b> In each interval between two planes in turn, spines are started by dart throwing: a dart is a point of the envelope between the two planes, its direction the sweep's turned at random by about <b>Spread</b>, and its spine runs back to the first plane and on to the next, and on through each further plane with chance <b>Span</b>; its ends lie on its planes, inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own mass stops. A dart is kept only if it is clear of every spine already in the interval (at least <b>Packing</b> times their two radii apart, measured across their sections); a spine that only ends at the interval's plane does not count, so masses can stack end to end. Until 80 darts in a row miss, the interval is not full. <b>Bedding</b> holds spines to shared strata: the wall's height is cut into bands about a mass thick, a start is pulled toward its band's middle, the spine runs flatter, and its thickness becomes the band's. One spine is one mass.</li>
+      <li><b>Each spine's support</b> is the space it may claim: the convex hull of its two end sections (a polygon of about <b>Faces</b> sides, <b>Size</b> times <b>Reach</b> across, flattened by <b>Aspect</b>, each end drawn on its own within <b>Vary</b>), so a mass can taper, flatten and change its sides from end to end. At the top of Reach there is no limit: the support is the whole envelope, and a mass grows until it meets its neighbours (its ends too: the ends below shape only limited masses). Each end lies on its control plane (or at its mass's fuzzy edge), turned by up to <b>End tilt</b>, rounded by a ring of chamfers <b>Round</b> deep, and roughened (every plane of the end turned and moved) by <b>Rough</b>. Weight, drawn at each end within <b>Weight</b>, is how hard a spine competes.</li>
+      <li><b>Space is split by weight.</b> Each spine scores a point by its power distance: the square of the distance across its section (and along it, past an end) less the square of its local size times weight; the lower score claims it. Two such scores are equal on a plane (exactly, for points), so where two supports meet, their overlap is split by the plane fitted (least squares) to where the scores are equal, and the planes of three masses meet in one line, leaving no hole. <b>Spacing</b> then sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones, heaped), and under zero each reaches past the split into its neighbour (they read as one mass). It changes each mass's size; nothing moves. Each split adds its own random part, up to Spacing's <b>Vary</b> either way. A mass is its support and envelope (its hull) less its neighbours' claims, each claim the neighbour's support on its own side of the split (a convex cut, so the mass is a hull with hollows, as Rocks from Hulls reads it). A point both supports reach goes to exactly one side, so with Spacing at zero or more no two masses overlap, by construction, and only the shared overlap is split, so nothing either could not reach is lost. A mass must be one piece: it is read on a 1 mm grid, and while it is not, the claim cutting the most becomes a half-space instead (the side holding the spine is kept). Space no support reaches stays empty: gaps are allowed. Every spine keeps a mass: a split leaves each spine at least 1.5 mm of its own (and half of a gap); where the fitted plane cannot, the split is across the line between the spines' nearest points. So every spine is a mass, and every mass a stone.</li>
       <li><b>Rocks.</b> Each mass is a hull for Rocks from Hulls, with its neighbours' claims as hollows: <b>Rocks</b> sets its faces, chamfers, tilt, sink and weathering. A rock stays inside its mass, so with Spacing at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the control planes and the spines.</li>
     </ol>
     <p class="hint"><b>Granite wall</b>, the first style: two planes, the back and the front of the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; no limit on reach and Spacing under zero, so they fill the wall and merge into one irregular mass. <b>Columns</b>: two planes, the ground and the top, so every spine is one upright column from a point on the ground, no limit on reach, a hair apart.</p>
@@ -920,6 +920,9 @@ function cliff(seed, P) {
   const inBox = (p, m = 0) => p[0] >= lo[0] - m && p[0] <= hi[0] + m && p[1] >= lo[1] - m && p[1] <= hi[1] + m && p[2] >= lo[2] - m && p[2] <= hi[2] + m;
   const crisp = [{ n: [1, 0, 0], b: W / 2 }, { n: [-1, 0, 0], b: W / 2 }, { n: [0, 0, -1], b: 0 }, { n: [0, 1, 0], b: y1 }];
   const fuzzTop = waves(keyed(seed, 'fuzz', 'top')), fuzzFront = waves(keyed(seed, 'fuzz', 'front'));
+  // how far short of a fuzzy edge a mass stops: the smooth field (two thirds) and its own draw (one third); most stop near the
+  // nominal edge, a few well short
+  const short = (f, rf) => P.fuzz * clamp(0.5 + 0.5 * (0.67 * f + 0.33 * (2 * rf() - 1)), 0, 1) ** 2;
 
   // control planes: Count of them across the envelope along the sweep, the inner ones moved and turned by up to Wobble
   const ta = P.ptilt * DEG, tb = P.pturn * DEG, axis = [Math.sin(ta) * Math.cos(tb), Math.sin(ta) * Math.sin(tb), Math.cos(ta)];   // tilted from level, then turned from along the wall toward across it
@@ -968,14 +971,17 @@ function cliff(seed, P) {
       let d = turn(axis, P.spread, r); if (P.bedding > 0) d = unit([d[0], d[1], d[2] * (1 - P.bedding / 100)]);
       let p0 = onPlane(flip(A), x, mul(d, -1)), p1 = onPlane(planes[j], x, d);
       if (!p0 || !p1) { fails++; continue; }
-      // a spine begins and ends in the envelope: where it would leave first, it ends there (too short then, the dart misses)
+      // its ends lie on its planes, inside the envelope's crisp sides (the bottom, the back, the ends), or the dart misses. Past the
+      // fuzzy top or front, where its own mass stops (its draw of how far short, made here), the spine ends there instead
+      if (![p0, p1].every(q => q[0] >= lo[0] - 1e-6 && q[0] <= hi[0] + 1e-6 && q[2] >= -1e-6 && q[1] <= y1 + 1e-6)) { fails++; continue; }
+      const rf = keyed(seed, 'fuzz', id), sTop = short(fuzzTop(x[0], x[1]), rf), sFront = short(fuzzFront(x[0], x[2]), rf);
       { let t0 = 0, t1 = 1; const dd = sub(p1, p0);
-        for (let a = 0; a < 3; a++) {
-          if (Math.abs(dd[a]) < 1e-12) { if (p0[a] < lo[a] || p0[a] > hi[a]) t1 = -1; continue; }
-          let ta = (lo[a] - p0[a]) / dd[a], tb = (hi[a] - p0[a]) / dd[a]; if (ta > tb) [ta, tb] = [tb, ta];
-          t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+        for (const [n, b] of [[[0, 0, 1], H - sTop], [[0, -1, 0], -(y0 + sFront)]]) {
+          const a0 = dot(n, p0) - b, da = dot(n, dd);   // inside where a0 + t da <= 0
+          if (Math.abs(da) < 1e-12) { if (a0 > 0) t1 = -1; continue; }
+          const t = -a0 / da; if (da > 0) t1 = Math.min(t1, t); else t0 = Math.max(t0, t);
         }
-        if (t1 - t0 < 1e-9 || (t1 - t0) * len(dd) < 1) { fails++; continue; }
+        if ((t1 - t0) * len(dd) < 1) { fails++; continue; }
         [p0, p1] = [add(p0, mul(dd, t0)), add(p0, mul(dd, t1))]; }
       const e = unit(sub(p1, p0)), [u, v] = frame(e);
       const end = () => ({ r: vary(r, P.size / 2, P.vary / 100), a: clamp(vary(r, P.aspect, P.vary / 200), 0.2, 1), m: clamp(P.faces + Math.round((r() - 0.5) * 2.4 * Math.min(1, P.vary / 40)), 3, 10), rot: 2 * Math.PI * r(), w: Math.exp(P.weight / 100 * 1.2 * (2 * r() - 1)) });
@@ -988,7 +994,7 @@ function cliff(seed, P) {
         return Math.sqrt(du * du + dv * dv) >= P.packing * (lerp(o.r0, o.r1, t) + rx);
       });
       if (!clear) { fails++; continue; }
-      const sp = { id, i, j, p0, p1, e, u, v, len: len(sub(p1, p0)), E: [E0, E1], r0: E0.r, r1: E1.r, a: (E0.a + E1.a) / 2 };
+      const sp = { id, i, j, p0, p1, e, u, v, len: len(sub(p1, p0)), E: [E0, E1], r0: E0.r, r1: E1.r, a: (E0.a + E1.a) / 2, sTop, sFront };
       here.push(sp); spines.push(sp); k++; fails = 0;
     }
   }
@@ -1021,9 +1027,7 @@ function cliff(seed, P) {
     });
     sp.support = unlimited ? [] : planesOf;   // with no limit, a mass may claim all of the envelope: only its splits shape it
     // the fuzzy edges: how far short of the top and the front this mass stops (a smooth field and its own draw)
-    const rf = keyed(seed, 'fuzz', sp.id), c = mul(add(sp.p0, sp.p1), 0.5);
-    const short = f => P.fuzz * clamp(0.5 + 0.5 * (0.67 * f + 0.33 * (2 * rf() - 1)), 0, 1) ** 2;   // most stop near the nominal edge, a few well short
-    sp.env = [...crisp, { n: [0, 0, 1], b: H - short(fuzzTop(c[0], c[1])) }, { n: [0, -1, 0], b: -(y0 + short(fuzzFront(c[0], c[2]))) }];
+    sp.env = [...crisp, { n: [0, 0, 1], b: H - sp.sTop }, { n: [0, -1, 0], b: -(y0 + sp.sFront) }];
     sp.poly = polyFaces(bigSolid([...sp.support, ...sp.env]));   // what it may claim: its support inside its envelope
     const vs = sp.poly.flatMap(f => f.verts);
     sp.lo = [0, 1, 2].map(a => Math.min(Infinity, ...vs.map(p => p[a]))); sp.hi = [0, 1, 2].map(a => Math.max(-Infinity, ...vs.map(p => p[a])));
@@ -1069,6 +1073,7 @@ function cliff(seed, P) {
     for (let r1 = 0; r1 < 4; r1++) M[r1][r1] += 1e-9;
     const sol = solve4(M), g = [sol[0], sol[1], sol[2]], gl = len(g);
     let d, b;
+    const [s, t, pa, pb] = nearest(A.p0, A.p1, B.p0, B.p1);
     if (gl > 1e-9) { d = mul(g, 1 / gl); b = -sol[3] / gl; }   // A keeps where g.p + c <= 0: its score is the lower
     else { const c = centroidOf(vs); d = unit(sub(mul(add(B.p0, B.p1), 0.5), mul(add(A.p0, A.p1), 0.5))); b = dot(d, c); }
     // Spacing, for this split: the global value and a random part. Each side stops half of it short of the split (a gap), or past
@@ -1076,6 +1081,15 @@ function cliff(seed, P) {
     // support and envelope beyond A's own limit), and B loses A's. Where B claims all of A beyond that limit, A's cut is just the
     // half-space (and so for B), which keeps a mass convex when its neighbours reach past it
     const gap = P.spacing + P.spacingVary * (2 * keyed(seed, 'spacing', A.id, B.id)() - 1);
+    // every spine keeps a mass: the split leaves each spine at least KEEP of its own (and half of a gap). Where the fitted plane
+    // cannot, the split is across the line between the spines' nearest points (between spines that meet: their middles)
+    const keep = KEEP + Math.max(0, gap) / 2, reachA = dd => Math.max(dot(dd, A.p0), dot(dd, A.p1)), fromB = dd => Math.min(dot(dd, B.p0), dot(dd, B.p1));
+    if (fromB(d) - reachA(d) >= 2 * keep) b = clamp(b, reachA(d) + keep, fromB(d) - keep);
+    else {
+      const ab = sub(pb, pa); d = len(ab) > 1e-3 ? unit(ab) : unit(sub(mul(add(B.p0, B.p1), 0.5), mul(add(A.p0, A.p1), 0.5)));
+      const lo_ = reachA(d), hi_ = fromB(d), wa = lerp(A.E[0].w, A.E[1].w, s), wb = lerp(B.E[0].w, B.E[1].w, t);
+      b = hi_ - lo_ >= 2 * keep ? clamp(lo_ + (hi_ - lo_) * wa / (wa + wb), lo_ + keep, hi_ - keep) : (lo_ + hi_) / 2;
+    }
     const halfA = { n: d, b: b - gap / 2 }, halfB = { n: mul(d, -1), b: -(b + gap / 2) };
     const beyond = (poly, pl) => polyFaces(clip(poly, { n: mul(pl.n, -1), b: -pl.b, role: 'hull' })).flatMap(f => f.verts);
     const covers = (pls, pts) => pts.every(q => pls.every(r => dot(r.n, q) <= r.b + 1e-6));
@@ -1098,12 +1112,12 @@ function cliff(seed, P) {
       hull = [...hull, worst.half]; poly = polyFaces(bigSolid(hull)); cuts = cuts.filter(c => c !== worst);
       cuts = cuts.filter(c => { const q = polyFaces(bigSolid([...hull, ...c.claim])); return q.length && volume(q) > 1e-3; });
     }
-    if (!poly.length) { lost.push(sp); return; }
+    if (!poly.length) throw new Error(`spine ${sp.id} kept no space`);   // cannot happen: every split leaves a spine its own
     const vs = poly.flatMap(f => f.verts);
     let thin = Infinity; for (const f of poly) { let m = -Infinity; for (const p of vs) m = Math.max(m, -dot(f.n, p)); thin = Math.min(thin, f.b + m); }
     const solid = { planes: hull, faces: poly }, cutSolids = cuts.map(c => { const planes = [...c.claim, ...hull]; return { planes, faces: polyFaces(bigSolid(planes)) }; });
     const surf = surfaceOf([{ solid, cuts: cutSolids }]), vol = volumeOf(surf.faces);
-    if (vol < 4 || thin < 2) { lost.push(sp); return; }
+    if (vol < 1e-3) throw new Error(`spine ${sp.id} kept no space`);
     masses.push({ sp, hull, cuts: cutSolids, surf, vol });
   });
   const envVol = W * D * H, massVol = masses.reduce((t, m) => t + m.vol, 0);
@@ -1158,12 +1172,13 @@ function rockSurface(C, seed, P) {
 }
 
 // ---------- page state ----------
-const REACH_NONE = 4;   // Reach at its top: no limit
+const REACH_NONE = 4;
+const KEEP = 1.5;   // mm of its own every spine keeps at a split   // Reach at its top: no limit
 const PRESETS = {
   granite: { count: 2, ptilt: 90, pturn: 90, wobble: 0, span: 0, spread: 10, bedding: 0, size: 11, reach: REACH_NONE, vary: 45, aspect: 0.7, faces: 5, weight: 50, etilt: 25, round: 1.5, rough: 50, spacing: -0.8, spacingVary: 0.8, fuzz: 5, packing: 0.8 },
   columnar: { count: 2, ptilt: 0, pturn: 0, wobble: 0, span: 0, spread: 4, bedding: 0, size: 8, reach: REACH_NONE, vary: 25, aspect: 0.9, faces: 6, weight: 30, etilt: 15, round: 1, rough: 30, spacing: 0.3, spacingVary: 0.2, fuzz: 10, packing: 0.9 },
   layered: { count: 6, ptilt: 90, pturn: 0, wobble: 6, span: 45, spread: 4, bedding: 85, size: 12, reach: 1, vary: 40, aspect: 0.45, faces: 4, weight: 40, etilt: 25, round: 1, rough: 50, spacing: 0.4, spacingVary: 0.2, fuzz: 4, packing: 0.5 },
-  massive: { count: 4, ptilt: 70, pturn: 0, wobble: 20, span: 35, spread: 35, bedding: 0, size: 15, reach: 1, vary: 45, aspect: 0.75, faces: 5, weight: 60, etilt: 30, round: 2.5, rough: 60, spacing: 0.5, spacingVary: 0.3, fuzz: 5, packing: 0.55 },
+  massive: { count: 4, ptilt: 90, pturn: 0, wobble: 15, span: 35, spread: 20, bedding: 0, size: 15, reach: 1.5, vary: 45, aspect: 0.75, faces: 5, weight: 60, etilt: 30, round: 2.5, rough: 60, spacing: 0.5, spacingVary: 0.3, fuzz: 5, packing: 0.55 },
 };
 const STYLES = [['granite', 'Granite wall', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and merging into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Strata: flat slabs along the wall, staggered breaks'], ['massive', 'Massive', 'Large irregular masses, broad faces, uneven joints']];
 const DEFAULTS = { style: 'granite', ...PRESETS.granite, squares: 1, height: 36, depth: 16, facets: 24, chamfered: 100, rtilt: 6, sink: 3, weather: 0, draw: 'rocks', ghost: true, planesOn: false, spinesOn: false, lines: true };
