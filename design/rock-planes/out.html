@@ -96,7 +96,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 <div class="wrap">
   <header>
     <h1>Rock Planes</h1>
-    <p class="lede">A rock as a few planes around a shape: the shape says what space the rock fills, the planes make its faces, edges, corners and outline in one step, and chamfers come after.</p>
+    <p class="lede">A rock as planes all around a shape. Each plane is put on the shape (on a face, along an edge or at a corner), turned a little at random, sunk a little and cut. That is the whole algorithm.</p>
   </header>
 
   <div class="bar">
@@ -123,38 +123,30 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 
     <aside>
       <h2>Planes</h2>
-      <div class="ctl"><div class="top"><label for="faces">Faces</label><output id="o-faces"></output></div>
-        <input type="range" id="faces" min="6" max="40" step="1" value="16"><small>Major and fill faces together, before chamfers.</small></div>
-      <div class="checks"><label><input type="checkbox" id="majors" checked> Major faces (joint sets, or the shape's own faces)</label></div>
+      <div class="ctl"><div class="top"><label for="planes">Planes</label><output id="o-planes"></output></div>
+        <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many planes are put around the shape.</small></div>
+      <div class="ctl"><div class="top"><label for="edges">On edges</label><output id="o-edges"></output></div>
+        <input type="range" id="edges" min="0" max="80" step="5" value="30"><small>The share of planes put along the shape's edges rather than on its faces. Corners always get one each.</small></div>
       <div class="ctl"><div class="top"><label for="spread">Spread</label><output id="o-spread"></output></div>
-        <input type="range" id="spread" min="0" max="30" step="1" value="8"><small>How far each major face tilts from its set's direction.</small></div>
-      <div class="ctl"><div class="top"><label for="majorCut">Major cut</label><output id="o-majorCut"></output></div>
-        <input type="range" id="majorCut" min="0" max="15" step="0.5" value="5"><small>How far a major plane is pushed into the shape, at most (of the shape's size).</small></div>
-      <div class="ctl"><div class="top"><label for="fillCut">Fill cut</label><output id="o-fillCut"></output></div>
-        <input type="range" id="fillCut" min="0" max="15" step="0.5" value="3"></div>
-      <hr>
-      <h2>Break up</h2>
-      <div class="ctl"><div class="top"><label for="largest">Largest face</label><output id="o-largest"></output></div>
-        <input type="range" id="largest" min="3" max="30" step="0.5" value="8"><small>A face bigger than this share of the surface is broken into facets.</small></div>
-      <div class="ctl"><div class="top"><label for="drop">Facet drop</label><output id="o-drop"></output></div>
-        <input type="range" id="drop" min="0.5" max="10" step="0.5" value="4"><small>How far below the face a break-up facet reaches at the face's edge, at most (of the shape's size).</small></div>
-      <div class="ctl"><div class="top"><label for="passes">Passes</label><output id="o-passes"></output></div>
-        <input type="range" id="passes" min="0" max="4" step="1" value="2"><small>Each pass breaks whatever faces are still too big.</small></div>
-      <hr>
-      <h2>After</h2>
-      <div class="ctl"><div class="top"><label for="chamfer">Chamfer width</label><output id="o-chamfer"></output></div>
-        <input type="range" id="chamfer" min="0" max="12" step="0.5" value="4"><small>One plane across each sharp edge that is not on the ground.</small></div>
-      <div class="ctl"><div class="top"><label for="sharp">Sharp edge</label><output id="o-sharp"></output></div>
-        <input type="range" id="sharp" min="15" max="80" step="1" value="40"><small>An edge is sharp when its two faces turn by more than this.</small></div>
-      <div class="ctl"><div class="top"><label for="chips">Corner chips</label><output id="o-chips"></output></div>
-        <input type="range" id="chips" min="0" max="100" step="5" value="30"></div>
+        <input type="range" id="spread" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there.</small></div>
+      <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
+        <input type="range" id="sink" min="0" max="10" step="0.25" value="2.5"><small>How far a plane on a face is sunk into the shape, at most (of the shape's size).</small></div>
+      <div class="ctl"><div class="top"><label for="esink">Edge sink</label><output id="o-esink"></output></div>
+        <input type="range" id="esink" min="0" max="15" step="0.5" value="6"></div>
+      <div class="ctl"><div class="top"><label for="csink">Corner sink</label><output id="o-csink"></output></div>
+        <input type="range" id="csink" min="0" max="20" step="0.5" value="10"><small>Edges and corners sink deeper than faces, or the face planes beside them would cut past them and they would not show.</small></div>
+      <div class="ctl"><div class="top"><label for="dome">Dome</label><output id="o-dome"></output></div>
+        <input type="range" id="dome" min="0" max="20" step="0.5" value="6"><small>A flat face is treated as a little domed: its planes lean away from its middle, up to this at the rim. Without it the deepest plane covers a flat face's middle.</small></div>
+      <div class="ctl"><div class="top"><label for="deepest">Lean limit</label><output id="o-deepest"></output></div>
+        <input type="range" id="deepest" min="0" max="10" step="0.25" value="1.5"><small>A turned plane may cut into the shape no deeper than its own sink plus this, anywhere (of the shape's size).</small></div>
       <div class="ctl"><div class="top"><label for="foot">Foot</label><output id="o-foot"></output></div>
         <input type="range" id="foot" min="0" max="30" step="1" value="10"><small>How much of the shape's height is sunk below the plate.</small></div>
       <hr>
       <div class="checks">
         <label><input type="checkbox" id="ghost" checked> Show the shape</label>
-        <label><input type="checkbox" id="edges" checked> Show edges</label>
-        <label><input type="checkbox" id="roles"> Colour faces by kind</label>
+        <label><input type="checkbox" id="lines" checked> Show edges</label>
+        <label><input type="checkbox" id="roles"> Colour faces by where their plane was put</label>
+        <label><input type="checkbox" id="anchors"> Show where planes were put</label>
       </div>
       <button class="btn" id="reset">Reset settings</button>
       <hr>
@@ -165,14 +157,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
   <section class="how">
     <h2>How a rock is built</h2>
     <ol>
-      <li><b>The shape</b> is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). Its bottom is cut at the <b>Foot</b> height and the rock is set down so that cut sits on the plate.</li>
-      <li><b>Major faces.</b> A cube, slab, pyramid or wedge uses its own faces, each tilted about its own centre. A sphere, oval or cylinder uses three joint sets: one near level (the top) and two upright ones roughly square to each other, each giving a face on both sides. Each direction is tilted at random (about <b>Spread</b>), its plane is put where the shape reaches furthest in that direction (the shape's support), then pushed in by up to <b>Major cut</b>.</li>
-      <li><b>Fill faces.</b> More directions, thrown at random and kept apart from each other and from the majors, until there are <b>Faces</b> in all. Each plane is put at the shape's support and pushed in by up to <b>Fill cut</b>. No direction points more than 50° below level, so no face overhangs past the 55° print limit.</li>
-      <li><b>Break up.</b> Any face bigger than <b>Largest face</b> (a share of the whole surface) gets one to three planes toward different sides, each through a point between the face's centre and its edge and reaching <b>Facet drop</b> below the face at the edge. A big face therefore tilts its facets gently and a small one more steeply. The big face becomes a shallow cluster of facets with low ridges between them and stays mostly flat. Each of the <b>Passes</b> does this again to whatever is still too big, so faces end up a few large, more medium, few small.</li>
-      <li><b>The rock</b> is everything inside all the planes and above the foot: one closed convex solid. Because every plane starts at the shape's surface, the rock pokes out a little where planes meet and cuts in where they were pushed in. The numbers on the right say by how much.</li>
-      <li><b>Chamfers and chips.</b> Every edge of that solid whose faces turn by more than <b>Sharp edge</b>, except edges on the ground, gets one more plane across it, leaning toward one of its two faces and skewed a little so its width tapers along the edge. Some sharp corners get a chip plane (one that turns at least 18° from every face at the corner). Both obey the same 50° limit. Then the whole rock is cut by all of them at once. Break-up ridges turn by less than <b>Sharp edge</b>, so they stay crisp.</li>
+      <li><b>The shape</b> is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). Its bottom is cut at the <b>Foot</b> height and the rock is set down so that cut sits on the plate. Nothing is anchored below the foot.</li>
+      <li><b>Where the planes go.</b> Every corner of the shape gets one. Then points are thrown along the edges and over the faces (about <b>On edges</b> of them on edges), each kept a spacing away from those already taken, until there are <b>Planes</b> in all. A sphere or an oval has no edges or corners, only surface; a cylinder has its top rim as an edge.</li>
+      <li><b>Each plane</b> starts as the shape's own tangent there: on a face, the face's direction; on an edge, halfway between its two faces; at a corner, the average of the faces that meet there. On a flat face it is the tangent of the face domed a little instead: it leans away from the face's middle, by up to <b>Dome</b> at the rim, and drops by the dome's sag. (Tangents of a curved surface all show; tangents of a flat one are all the same plane, and the deepest would cover the middle.) It is turned at random by about <b>Spread</b>, about the point where it was put, then sunk by a drawn amount between half and all of <b>Sink</b>, <b>Edge sink</b> or <b>Corner sink</b>. Edges and corners sink deeper, or the face planes beside them would cut past them. A plane turned about its point can dip into the shape far from it, so a turn that would cut deeper than its own sink plus <b>Lean limit</b> anywhere (below the dome, on a face) is drawn again, up to twelve times, and the shallowest is kept. No plane may point more than 50° below level, so no face overhangs past the 55° print limit.</li>
+      <li><b>The rock</b> is everything inside all the planes and above the foot: one closed convex solid, cut in one pass. A face with several planes on it breaks into facets; an edge with planes along it becomes a chamfer that changes width and angle as it goes; a corner plane makes a corner facet.</li>
     </ol>
-    <p class="hint">Each step draws from its own seeded stream, so changing Faces keeps the major faces, and changing the chamfers keeps the planes. Overhang paints orange past 55° and red past 65°, as in the program.</p>
+    <p class="hint">Corners, edge points and face points draw from separate seeded streams, so moving On edges or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program. A magenta face means the planes left a gap (a fault).</p>
   </section>
 </div>
 
@@ -193,8 +183,12 @@ const perp = n => unit(Math.abs(n[2]) < 0.9 ? cross(n, [0, 0, 1]) : cross(n, [1,
 // ---------- seeded streams ----------
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function stream(seed, k) { let h = Math.imul(seed | 0, 0x9E3779B1) ^ Math.imul(k + 1, 0x85EBCA77); h ^= h >>> 16; h = Math.imul(h, 0x7FEB352D); h ^= h >>> 15; h = Math.imul(h, 0x846CA68B); h ^= h >>> 16; return mulberry32(h >>> 0); }
+function sphereDir(r) { const z = 2 * r() - 1, ph = 2 * Math.PI * r(), h = Math.sqrt(1 - z * z); return [h * Math.cos(ph), h * Math.sin(ph), z]; }
 
 // ---------- shapes (mm, z up, bottom at z = 0) ----------
+// Every shape answers: its reach in a direction (support), whether a point is inside, a ghost mesh,
+// and candidate anchors: { p, n, kind } with kind 'corner', 'edge' or 'face' and n the shape's own
+// direction there (a corner's is the average of its faces, an edge's halfway between its two faces).
 function orderAround(pts, n) {
   const c = mul(pts.reduce((s, p) => add(s, p), [0, 0, 0]), 1 / pts.length);
   const u = perp(n), v = cross(n, u);
@@ -205,17 +199,41 @@ function polytope(verts, faces) {
   const planes = faces.map(f => {
     const a = verts[f[0]], b = verts[f[1]], d = verts[f[2]];
     let n = unit(cross(sub(b, a), sub(d, a))); if (dot(n, sub(a, c)) < 0) n = mul(n, -1);
-    const fc = mul(f.reduce((s2, i) => add(s2, verts[i]), [0, 0, 0]), 1 / f.length);
-    return { n, b: dot(n, a), f, fc };
+    const idx = orderAround(f.map(i => verts[i]), n).map(p => verts.indexOf(p));
+    return { n, b: dot(n, a), idx };
   });
   return {
     support: n => { let m = -Infinity; for (const v of verts) m = Math.max(m, dot(n, v)); return m; },
     inside: p => planes.every(q => dot(q.n, p) <= q.b + 1e-9),
-    faceAxes: planes.map(q => ({ mu: q.n, p0: q.fc })),
     ghost() {
       const pos = [];
-      for (const q of planes) { const pts = orderAround(q.f.map(i => verts[i]), q.n); for (let i = 1; i + 1 < pts.length; i++) pos.push(...pts[0], ...pts[i], ...pts[i + 1]); }
+      for (const q of planes) { const pts = q.idx.map(i => verts[i]); for (let i = 1; i + 1 < pts.length; i++) pos.push(...pts[0], ...pts[i], ...pts[i + 1]); }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
+    },
+    candidates(r) {
+      const out = [];
+      // corners: every vertex, the average of the faces that meet there
+      verts.forEach((v, i) => { const ns = planes.filter(q => q.idx.includes(i)).map(q => q.n); out.push({ p: v, n: unit(ns.reduce(add, [0, 0, 0])), kind: 'corner' }); });
+      // edges: points along each, halfway between the two faces
+      const seen = new Map();
+      for (const q of planes) for (let k = 0; k < q.idx.length; k++) {
+        const a = q.idx[k], b = q.idx[(k + 1) % q.idx.length], key = Math.min(a, b) + '-' + Math.max(a, b);
+        (seen.get(key) || seen.set(key, { a, b, ns: [] }).get(key)).ns.push(q.n);
+      }
+      for (const e of seen.values()) {
+        const n = unit(add(e.ns[0], e.ns[1])), A = verts[e.a], B = verts[e.b], m = Math.ceil(len(sub(B, A)) * 4);
+        for (let k = 0; k < m; k++) out.push({ p: add(A, mul(sub(B, A), 0.04 + 0.92 * r())), n, kind: 'edge' });
+      }
+      // faces: points spread by area
+      for (const q of planes) {
+        const pts = q.idx.map(i => verts[i]);
+        const fc = mul(pts.reduce(add, [0, 0, 0]), 1 / pts.length), fr = Math.max(...pts.map(v => len(sub(v, fc))));
+        for (let i = 1; i + 1 < pts.length; i++) {
+          const A = pts[0], B = pts[i], C = pts[i + 1], area = len(cross(sub(B, A), sub(C, A))) / 2, m = Math.ceil(area * 2);
+          for (let k = 0; k < m; k++) { let u = r(), w = r(); if (u + w > 1) { u = 1 - u; w = 1 - w; } out.push({ p: add(A, add(mul(sub(B, A), u), mul(sub(C, A), w))), n: q.n, kind: 'face', fc, fr }); }
+        }
+      }
+      return out;
     },
     lo: [0, 1, 2].map(i => Math.min(...verts.map(v => v[i]))), hi: [0, 1, 2].map(i => Math.max(...verts.map(v => v[i]))),
   };
@@ -224,32 +242,36 @@ function boxShape(dx, dy, dz) {
   const v = []; for (const z of [0, dz]) for (const y of [-dy / 2, dy / 2]) for (const x of [-dx / 2, dx / 2]) v.push([x, y, z]);
   return polytope(v, [[0, 1, 3, 2], [4, 5, 7, 6], [0, 1, 5, 4], [2, 3, 7, 6], [0, 2, 6, 4], [1, 3, 7, 5]]);
 }
-function ownAxes() { return this.faceAxes.filter(a => a.mu[2] > -0.9); }
-function jointAxes(phiRange) {
-  return function (r) {
-    const phi = phiRange ? (r() - 0.5) * 2 * phiRange * DEG : r() * Math.PI;
-    const phi2 = phi + (90 + (r() - 0.5) * 40) * DEG;
-    const a = [Math.cos(phi), Math.sin(phi), 0], b = [Math.cos(phi2), Math.sin(phi2), 0];
-    return [[0, 0, 1], a, mul(a, -1), b, mul(b, -1)].map(mu => ({ mu }));
-  };
-}
 const SHAPES = [
   (() => { const R = 10, c = [0, 0, 10]; return { key: 'sphere', label: 'Sphere', support: n => dot(n, c) + R, inside: p => len(sub(p, c)) <= R,
-    ghost: () => new THREE.SphereGeometry(R, 48, 32).translate(0, 0, 10), lo: [-R, -R, 0], hi: [R, R, 2 * R], axes: jointAxes(0) }; })(),
-  (() => { const s = boxShape(18, 18, 18); return Object.assign(s, { key: 'cube', label: 'Cube', axes: ownAxes }); })(),
-  (() => { const v = [[-11, -11, 0], [11, -11, 0], [11, 11, 0], [-11, 11, 0], [0, 0, 18]];
-    const s = polytope(v, [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]); return Object.assign(s, { key: 'pyramid', label: 'Pyramid', axes: ownAxes }); })(),
-  (() => { const s = boxShape(28, 20, 8); return Object.assign(s, { key: 'slab', label: 'Slab', axes: ownAxes }); })(),
+    ghost: () => new THREE.SphereGeometry(R, 48, 32).translate(0, 0, 10), lo: [-R, -R, 0], hi: [R, R, 2 * R],
+    candidates: r => { const out = []; for (let i = 0; i < 4000; i++) { const u = sphereDir(r); out.push({ p: add(c, mul(u, R)), n: u, kind: 'face' }); } return out; } }; })(),
+  Object.assign(boxShape(18, 18, 18), { key: 'cube', label: 'Cube' }),
+  Object.assign(polytope([[-11, -11, 0], [11, -11, 0], [11, 11, 0], [-11, 11, 0], [0, 0, 18]], [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]), { key: 'pyramid', label: 'Pyramid' }),
+  Object.assign(boxShape(28, 20, 8), { key: 'slab', label: 'Slab' }),
   (() => { const a = 14, b = 9, cz = 8, c = [0, 0, cz]; return { key: 'oval', label: 'Oval',
     support: n => dot(n, c) + Math.hypot(a * n[0], b * n[1], cz * n[2]),
     inside: p => (p[0] / a) ** 2 + (p[1] / b) ** 2 + ((p[2] - cz) / cz) ** 2 <= 1,
-    ghost: () => new THREE.SphereGeometry(1, 48, 32).scale(a, b, cz).translate(0, 0, cz), lo: [-a, -b, 0], hi: [a, b, 2 * cz], axes: jointAxes(15) }; })(),
+    ghost: () => new THREE.SphereGeometry(1, 48, 32).scale(a, b, cz).translate(0, 0, cz), lo: [-a, -b, 0], hi: [a, b, 2 * cz],
+    candidates: r => { const out = [];
+      // points spread by area: a direction is kept with odds by how much surface it stands for
+      while (out.length < 4000) { const u = sphereDir(r), n = unit([u[0] / a, u[1] / b, u[2] / cz]);
+        const w = Math.hypot(b * cz * u[0], a * cz * u[1], a * b * u[2]) / (a * b);
+        if (r() < w) out.push({ p: add(c, [a * u[0], b * u[1], cz * u[2]]), n, kind: 'face' }); }
+      return out; } }; })(),
   (() => { const v = []; for (const x of [-12, 12]) for (const [y, z] of [[-8, 0], [8, 0], [-8, 14]]) v.push([x, y, z]);
-    const s = polytope(v, [[0, 1, 2], [3, 4, 5], [0, 1, 4, 3], [0, 2, 5, 3], [1, 2, 5, 4]]); return Object.assign(s, { key: 'wedge', label: 'Wedge', axes: ownAxes }); })(),
+    return Object.assign(polytope(v, [[0, 1, 2], [3, 4, 5], [0, 1, 4, 3], [0, 2, 5, 3], [1, 2, 5, 4]]), { key: 'wedge', label: 'Wedge' }); })(),
   (() => { const r0 = 9, h = 16; return { key: 'cylinder', label: 'Cylinder',
     support: n => r0 * Math.hypot(n[0], n[1]) + h / 2 * Math.abs(n[2]) + h / 2 * n[2],
     inside: p => Math.hypot(p[0], p[1]) <= r0 && p[2] >= 0 && p[2] <= h,
-    ghost: () => new THREE.CylinderGeometry(r0, r0, h, 48).rotateX(Math.PI / 2).translate(0, 0, h / 2), lo: [-r0, -r0, 0], hi: [r0, r0, h], axes: jointAxes(0) }; })(),
+    ghost: () => new THREE.CylinderGeometry(r0, r0, h, 48).rotateX(Math.PI / 2).translate(0, 0, h / 2), lo: [-r0, -r0, 0], hi: [r0, r0, h],
+    candidates: r => { const out = [], side = 2 * Math.PI * r0 * h, top = Math.PI * r0 * r0;
+      for (let i = 0; i < 4000; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0];
+        if (r() < side / (side + top)) out.push({ p: [r0 * d[0], r0 * d[1], h * r()], n: d, kind: 'face' });
+        else { const rr = r0 * Math.sqrt(r()); out.push({ p: [rr * d[0], rr * d[1], h], n: [0, 0, 1], kind: 'face' }); } }
+      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], h], n: unit([d[0], d[1], 1]), kind: 'edge' }); }
+      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), kind: 'edge' }); }
+      return out; } }; })(),
 ];
 for (const s of SHAPES) { s.height = s.hi[2] - s.lo[2]; s.size = (s.hi[0] - s.lo[0] + s.hi[1] - s.lo[1] + s.height) / 3; }
 
@@ -285,187 +307,123 @@ function clip(poly, pl) {
   if (cp.length >= 3) out.push({ n: pl.n, b: pl.b, role: pl.role, verts: orderAround(cp, pl.n) });
   return out;
 }
-const vkey = p => p.map(x => Math.round(x * 1000)).join(',');
-function edgesOf(poly) {
-  const m = new Map();
-  poly.forEach((f, fi) => { const n = f.verts.length; for (let i = 0; i < n; i++) {
-    const a = f.verts[i], b = f.verts[(i + 1) % n], ka = vkey(a), kb = vkey(b); if (ka === kb) continue;
-    const k = ka < kb ? ka + '|' + kb : kb + '|' + ka; let e = m.get(k); if (!e) { e = { a, b, faces: [] }; m.set(k, e); } e.faces.push(fi);
-  } });
-  return [...m.values()].filter(e => e.faces.length === 2);
-}
-function cornersOf(poly) {
-  const m = new Map();
-  poly.forEach((f, fi) => f.verts.forEach(v => { const k = vkey(v); let c = m.get(k); if (!c) { c = { p: v, faces: new Set() }; m.set(k, c); } c.faces.add(fi); }));
-  return [...m.values()];
-}
 function faceArea(f) { let a = [0, 0, 0]; const v = f.verts; for (let i = 1; i + 1 < v.length; i++) a = add(a, cross(sub(v[i], v[0]), sub(v[i + 1], v[0]))); return len(a) / 2; }
-function centroid(f) { return mul(f.verts.reduce((s, p) => add(s, p), [0, 0, 0]), 1 / f.verts.length); }
 function volume(poly) { let v = 0; for (const f of poly) { const p0 = f.verts[0]; for (let i = 1; i + 1 < f.verts.length; i++) v += dot(p0, cross(f.verts[i], f.verts[i + 1])); } return v / 6; }
 
-// ---------- the algorithm ----------
+// ---------- the algorithm: one pass ----------
 const DOWN_LIMIT = 50;                       // no plane's normal points further below level than this
 const CAP_Z = -Math.sin(DOWN_LIMIT * DEG);
 function capped(n) { if (n[2] >= CAP_Z) return n; const h = Math.sqrt(1 - CAP_Z * CAP_Z), xy = Math.hypot(n[0], n[1]) || 1; return [n[0] / xy * h, n[1] / xy * h, CAP_Z]; }
-function tilt(mu, sigmaDeg, r) {
+// turn a direction at random: a random axis across it, an angle of about sigma
+function turn(n, sigmaDeg, r) {
   const th = sigmaDeg * DEG * Math.sqrt(-2 * Math.log(1 - r() * 0.999)), ph = 2 * Math.PI * r();
-  const u = perp(mu), v = cross(mu, u);
-  return unit(add(mul(mu, Math.cos(th)), add(mul(u, Math.sin(th) * Math.cos(ph)), mul(v, Math.sin(th) * Math.sin(ph)))));
+  const u = perp(n), v = cross(n, u);
+  return unit(add(mul(n, Math.cos(th)), add(mul(u, Math.sin(th) * Math.cos(ph)), mul(v, Math.sin(th) * Math.sin(ph)))));
 }
-const angle = (a, b) => Math.acos(Math.max(-1, Math.min(1, dot(a, b))));
 
 function build(shape, seed, P, withStats) {
   const t0 = performance.now();
-  const S = shape, size = S.size, foot = P.foot / 100 * S.height;
-  const planes = [{ n: [0, 0, -1], b: -foot, role: 'base' }];
+  const S = shape, size = S.size, foot = P.foot / 100 * S.height, above = foot + 0.3;
+  const wantEdges = P.edges / 100;
 
-  // major faces
-  const majors = [];
-  if (P.majors) {
-    const r = stream(seed, 1);
-    for (const ax of S.axes.call(S, r)) {
-      // a shape's own face tilts about its centre; a joint face on a curved shape sits at the shape's reach
-      const n = capped(tilt(ax.mu, P.spread, r));
-      const depth = P.majorCut / 100 * size * (0.3 + 0.7 * r());
-      majors.push(n); planes.push({ n, b: (ax.p0 ? dot(n, ax.p0) : S.support(n)) - depth, role: 'major' });
-    }
+  // candidate anchors, each class shuffled by its own stream; nothing at or below the foot
+  const cands = S.candidates(stream(seed, 1)).filter(c => c.p[2] > above && !(c.kind === 'face' && c.n[2] < -0.9));
+  const byKind = k => cands.filter(c => c.kind === k);
+  const order = (list, k) => { const r = stream(seed, k); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
+  const corners = order(byKind('corner'), 2), edgeC = order(byKind('edge'), 3), faceC = order(byKind('face'), 4);
+
+  // pick anchors: every corner, then edges and faces in the asked share, each kept apart
+  const N = P.planes;
+  const totalArea = surfaceArea(S, foot);
+  let gap = 0.85 * Math.sqrt(totalArea / N);
+  const taken = [];
+  const far = c => taken.every(t => len(sub(t.p, c.p)) >= gap);
+  for (const c of corners) if (taken.length < N) taken.push(c);
+  const nEdges = edgeC.length ? Math.round((N - taken.length) * wantEdges) : 0;
+  for (let pass = 0; pass < 6; pass++, gap *= 0.85) {
+    let e = taken.filter(t => t.kind === 'edge').length;
+    for (const c of edgeC) { if (e >= nEdges) break; if (!c.used && far(c)) { c.used = true; taken.push(c); e++; } }
+    for (const c of faceC) { if (taken.length >= N) break; if (!c.used && far(c)) { c.used = true; taken.push(c); } }
+    if (taken.length >= N) break;
   }
-  // fill faces: random directions in the printable cap, kept apart
-  const want = Math.max(0, P.faces - majors.length);
-  if (want > 0) {
-    const r = stream(seed, 2);
-    const cands = [];
-    for (let i = 0; i < 900; i++) { const z = CAP_Z + (1 - CAP_Z) * r(), ph = 2 * Math.PI * r(), h = Math.sqrt(1 - z * z); cands.push([h * Math.cos(ph), h * Math.sin(ph), z]); }
-    const depths = cands.map(() => r());
-    const omega = 2 * Math.PI * (1 - CAP_Z);
-    let alpha = Math.sqrt(omega / (want + majors.length)) * 0.95;
-    const taken = majors.slice(), used = new Set(); let got = 0;
-    for (let pass = 0; pass < 8 && got < want; pass++, alpha *= 0.86) {
-      for (let i = 0; i < cands.length && got < want; i++) {
-        if (used.has(i)) continue;
-        const n = cands[i];
-        if (taken.every(t => angle(t, n) >= alpha)) {
-          used.add(i); taken.push(n); got++;
-          planes.push({ n, b: S.support(n) - P.fillCut / 100 * size * depths[i], role: 'fill' });
-        }
-      }
+
+  // one plane per anchor: the shape's direction there, turned, sunk, cut
+  const r = stream(seed, 5);
+  const planes = [{ n: [0, 0, -1], b: -foot, role: 'base' }];
+  // a turned plane may cut the shape far from its anchor (a face plane turned about a point dips
+  // across the rest of the face); a turn that would cut deeper than Deepest cut is drawn again
+  const cap = P.deepest / 100 * size;
+  for (const a of taken) {
+    const sink = a.kind === 'edge' ? P.esink : a.kind === 'corner' ? P.csink : P.sink;
+    const depth = sink / 100 * size * (0.5 + 0.5 * r());
+    // on a flat face the plane is the tangent of the face domed a little: it leans away from the face's
+    // centre by up to Dome at the rim, and its point drops by the dome's sag there
+    let n0 = a.n, p0 = a.p, allow = cap;
+    if (a.fc && P.dome > 0) {
+      allow += Math.tan(P.dome * DEG) * a.fr / 2;   // measured from the dome, not the flat face
+      const d = sub(a.p, a.fc), rr = len(d), t = Math.tan(P.dome * DEG);
+      if (rr > 1e-6) { n0 = unit(add(a.n, mul(d, t / a.fr))); p0 = sub(a.p, mul(a.n, t * rr * rr / (2 * a.fr))); }
     }
+    let best = null;
+    for (let k = 0; k < 12; k++) {
+      const n = capped(turn(n0, P.spread, r)), b = dot(n, p0) - depth, extra = S.support(n) - b - depth;
+      if (!best || extra < best.extra) best = { n, b, extra };
+      if (extra <= allow) break;
+    }
+    planes.push({ n: best.n, b: best.b, role: a.kind });
   }
-  // the solid inside every plane
   const pad = 2 + 0.3 * size;
   let poly = boxPoly(sub(S.lo, [pad, pad, pad]), add(S.hi, [pad, pad, pad]));
   for (const pl of planes) poly = clip(poly, pl);
-  const primaryFaces = poly.length;
 
-  // break up big faces: each face larger than the limit gets planes tilted a few degrees off it,
-  // each through a point on the face, so it becomes a shallow cluster of facets; then again on what is left
-  if (P.passes > 0) {
-    const r4 = stream(seed, 4);
-    for (let pass = 0; pass < P.passes; pass++) {
-      const areas = poly.map(f => (f.role === 'base' || f.role === 'box') ? 0 : faceArea(f));
-      const total = areas.reduce((a, b) => a + b, 0), limit = P.largest / 100 * total;
-      const cuts = [];
-      poly.forEach((f, i) => {
-        if (areas[i] <= limit) return;
-        const k = areas[i] > 2.5 * limit ? 3 : areas[i] > 1.5 * limit ? 2 : 1;
-        const c = centroid(f), u0 = perp(f.n), v0 = cross(f.n, u0), az0 = r4() * 2 * Math.PI;
-        for (let j = 0; j < k; j++) {
-          const az = az0 + j * 2 * Math.PI / k + (r4() - 0.5) * 1.2;
-          const u = add(mul(u0, Math.cos(az)), mul(v0, Math.sin(az)));
-          // the plane passes through a point between the centre and the edge, and at the far edge sits
-          // a drawn drop below the face: its tilt follows from the drop, so big faces tilt gently
-          const t = 0.05 + 0.35 * r4(), drop = P.drop / 100 * size * (0.5 + 0.5 * r4());
-          let reach = 0; for (const v of f.verts) reach = Math.max(reach, dot(sub(v, c), u));
-          const th = Math.min(25 * DEG, Math.atan(drop / Math.max(0.5, reach * (1 - t))));
-          const n = unit(add(mul(f.n, Math.cos(th)), mul(u, Math.sin(th))));
-          if (n[2] < CAP_Z) continue;
-          cuts.push({ n, b: dot(n, add(c, mul(u, t * reach))), role: 'break', most: 0.7 * areas[i] });
-        }
-      });
-      // a break-up plane stays local: it is refused if it swallows a whole face
-      // bigger than a small corner (it would merge facets into one bigger one) or makes a facet bigger than it was meant to
-      for (const pl of cuts) {
-        const next = clip(poly, pl);
-        if (next === poly) continue;
-        const made = next[next.length - 1];
-        if (made.role !== 'break' || faceArea(made) > pl.most) continue;
-        const kept = new Set(next.map(f => f.n.join() + '|' + f.b));
-        if (poly.some(f => !kept.has(f.n.join() + '|' + f.b) && faceArea(f) > 0.2 * pl.most)) continue;
-        poly = next;
-      }
-    }
-  }
-
-  // chamfers and chips, read from that solid, then cut all at once
-  const after = [];
-  const r3 = stream(seed, 3);
-  if (P.chamfer > 0) {
-    for (const e of edgesOf(poly)) {
-      const fa = poly[e.faces[0]], fb = poly[e.faces[1]];
-      const draws = [r3(), r3(), r3(), r3()];
-      if (fa.role === 'base' || fb.role === 'base' || fa.role === 'box' || fb.role === 'box') continue;
-      const d = angle(fa.n, fb.n); if (d < P.sharp * DEG) continue;
-      if (len(sub(e.b, e.a)) < 1.0) continue;
-      const t = 0.3 + 0.4 * draws[0];
-      let n = unit(add(mul(fa.n, 1 - t), mul(fb.n, t)));
-      n = unit(add(n, mul(unit(sub(e.b, e.a)), (draws[1] - 0.5) * 0.3)));
-      if (n[2] < CAP_Z) continue;
-      const w = P.chamfer / 100 * size * (0.6 + 0.8 * draws[2]);
-      const mid = mul(add(e.a, e.b), 0.5);
-      after.push({ n, b: dot(n, mid) - w / (2 * Math.tan(d / 2)), role: 'chamfer' });
-    }
-  }
-  if (P.chips > 0) {
-    const depthBase = (P.chamfer > 0 ? P.chamfer : 4) / 100 * size;
-    for (const c of cornersOf(poly)) {
-      const roll = r3(), jx = r3() - 0.5, jy = r3() - 0.5, jz = r3() - 0.5, dd = r3();
-      const fs = [...c.faces].map(i => poly[i]);
-      if (fs.length < 3 || fs.some(f => f.role === 'base' || f.role === 'box')) continue;
-      if (roll >= P.chips / 100) continue;
-      let n = unit(fs.reduce((s, f) => add(s, f.n), [0, 0, 0]));
-      n = unit(add(n, mul([jx, jy, jz], 0.5)));
-      if (n[2] < CAP_Z) continue;
-      // only a truly sharp corner: the chip turns well away from every face it cuts, else it would plane a face flat
-      if (fs.some(f => angle(f.n, n) < 18 * DEG) || fs.filter(f => angle(f.n, n) > 25 * DEG).length < 3) continue;
-      after.push({ n, b: dot(n, c.p) - depthBase * (0.8 + 0.8 * dd), role: 'chip' });
-    }
-  }
-  for (const pl of after) poly = clip(poly, pl);
-
-  const res = { poly, foot, ms: 0, primaryFaces };
+  const res = { poly, foot, anchors: taken.map(a => ({ p: [a.p[0], a.p[1], a.p[2] - foot], kind: a.kind })), ms: 0 };
   if (withStats) {
-    // how far the rock leaves the shape: compare reaches (supports) over every printable direction
     let out = 0, inn = 0;
-    const N = 1500;
-    for (let i = 0; i < N; i++) {
-      const z = 1 - 2 * (i + 0.5) / N; if (z < CAP_Z + 0.02) continue;
+    const M = 1500;
+    for (let i = 0; i < M; i++) {
+      const z = 1 - 2 * (i + 0.5) / M; if (z < CAP_Z + 0.02) continue;
       const ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z), n = [h * Math.cos(ph), h * Math.sin(ph), z];
       let hp = -Infinity; for (const f of poly) for (const v of f.verts) hp = Math.max(hp, dot(n, v));
       const ht = S.support(n); out = Math.max(out, hp - ht); inn = Math.max(inn, ht - hp);
     }
-    // overlap with the shape above the foot, on a grid
-    const lo = S.lo.slice(), hi = S.hi.slice(), g = 30; let both = 0, either = 0, inT = 0;
+    const lo = S.lo.slice(), hi = S.hi.slice(), g = 30; let both = 0, either = 0;
     for (const f of poly) for (const v of f.verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
     const fp = poly.map(f => [f.n, f.b]);
     for (let a = 0; a < g; a++) for (let b = 0; b < g; b++) for (let c = 0; c < g; c++) {
       const p = [lo[0] + (hi[0] - lo[0]) * (a + 0.5) / g, lo[1] + (hi[1] - lo[1]) * (b + 0.5) / g, foot + (hi[2] - foot) * (c + 0.5) / g];
-      const t = S.inside(p); let r = true; for (const [n, bb] of fp) if (dot(n, p) > bb + 1e-9) { r = false; break; }
-      if (t) inT++; if (t && r) both++; if (t || r) either++;
+      const t = S.inside(p); let rr = true; for (const [n, bb] of fp) if (dot(n, p) > bb + 1e-9) { rr = false; break; }
+      if (t && rr) both++; if (t || rr) either++;
     }
-    let steep = 0, over = 0;
-    for (const f of poly) if (f.role !== 'base' && f.n[2] < 0) { const ang = Math.asin(-f.n[2]) / DEG; steep = Math.max(steep, ang); if (ang > 55) over++; }
+    let steep = 0, areaSum = 0, areaMax = 0;
+    for (const f of poly) if (f.role !== 'base') {
+      if (f.n[2] < 0) steep = Math.max(steep, Math.asin(-f.n[2]) / DEG);
+      const a = faceArea(f); areaSum += a; areaMax = Math.max(areaMax, a);
+    }
     const counts = {}; for (const f of poly) counts[f.role] = (counts[f.role] || 0) + 1;
-    let areaSum = 0, areaMax = 0; for (const f of poly) if (f.role !== 'base') { const a = faceArea(f); areaSum += a; areaMax = Math.max(areaMax, a); }
-    res.largest = areaMax / areaSum;
-    Object.assign(res, { out, inn, iou: either ? both / either : 0, steep, over, counts, vol: volume(poly) });
+    const placed = {}; for (const a of taken) placed[a.kind] = (placed[a.kind] || 0) + 1;
+    Object.assign(res, { out, inn, iou: either ? both / either : 0, steep, counts, placed, vol: volume(poly), largest: areaMax / areaSum });
   }
   for (const f of poly) f.verts = f.verts.map(v => [v[0], v[1], v[2] - foot]);
   res.ms = performance.now() - t0;
   return res;
 }
+// the shape's surface above the foot (for the anchors' spacing): the area of a fine polytope
+// made of 240 of the shape's tangent planes and the foot
+function surfaceArea(S, foot) {
+  if (S._area && S._area[0] === foot) return S._area[1];
+  let poly = boxPoly(sub(S.lo, [5, 5, 5]), add(S.hi, [5, 5, 5]));
+  poly = clip(poly, { n: [0, 0, -1], b: -foot, role: 'base' });
+  const M = 240;
+  for (let i = 0; i < M; i++) {
+    const z = 1 - 2 * (i + 0.5) / M, ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z), n = [h * Math.cos(ph), h * Math.sin(ph), z];
+    poly = clip(poly, { n, b: S.support(n), role: 'face' });
+  }
+  const a = poly.filter(f => f.role !== 'base').reduce((t, f) => t + faceArea(f), 0);
+  S._area = [foot, a]; return a;
+}
 
 // ---------- drawing ----------
-const ROLE = { base: ['#6B7079', 'Ground'], major: ['#7F948A', 'Major'], fill: ['#C2BCAE', 'Fill'], break: ['#9DB0C9', 'Break-up'], chamfer: ['#D3A86E', 'Chamfer'], chip: ['#B67A5C', 'Chip'], box: ['#D33CC4', 'Unbounded (a fault)'] };
+const ROLE = { base: ['#6B7079', 'Ground'], face: ['#B9B4A8', 'On a face'], edge: ['#D3A86E', 'On an edge'], corner: ['#B67A5C', 'At a corner'], box: ['#D33CC4', 'Gap (a fault)'] };
 const STONE = '#A9A69D';
 function faceColor(f, byRole) {
   if (f.role !== 'base' && f.n[2] < 0) { const a = Math.asin(-f.n[2]) / DEG; if (a > 65) return '#E5483B'; if (a > 55) return '#FF8C1A'; }
@@ -479,7 +437,7 @@ function rockGroup(res, opt) {
   for (const f of res.poly) {
     c.set(faceColor(f, opt.roles)); const v = f.verts;
     for (let i = 1; i + 1 < v.length; i++) for (const p of [v[0], v[i], v[i + 1]]) { pos.push(...p); nor.push(...f.n); col.push(c.r, c.g, c.b); }
-    if (opt.edges && f.role !== 'base') for (let i = 0; i < v.length; i++) { const a = v[i], b = v[(i + 1) % v.length]; lines.push(...add(a, mul(f.n, 0.02)), ...add(b, mul(f.n, 0.02))); }
+    if (opt.lines && f.role !== 'base') for (let i = 0; i < v.length; i++) { const a = v[i], b = v[(i + 1) % v.length]; lines.push(...add(a, mul(f.n, 0.02)), ...add(b, mul(f.n, 0.02))); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -487,6 +445,12 @@ function rockGroup(res, opt) {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   const grp = new THREE.Group(); grp.add(new THREE.Mesh(g, stoneMat));
   if (lines.length) { const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); grp.add(new THREE.LineSegments(lg, edgeMat)); }
+  if (opt.anchors && res.anchors) {
+    const ap = [], ac = [];
+    for (const a of res.anchors) { c.set(ROLE[a.kind][0]).multiplyScalar(0.7); ap.push(...a.p); ac.push(c.r, c.g, c.b); }
+    const ag = new THREE.BufferGeometry(); ag.setAttribute('position', new THREE.Float32BufferAttribute(ap, 3)); ag.setAttribute('color', new THREE.Float32BufferAttribute(ac, 3));
+    grp.add(new THREE.Points(ag, new THREE.PointsMaterial({ size: 0.9, vertexColors: true, depthTest: false })));
+  }
   return grp;
 }
 function disposeGroup(grp) { grp.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
@@ -505,11 +469,11 @@ function makeScene() {
 }
 
 // ---------- page state ----------
-const DEFAULTS = { largest: 8, drop: 4, passes: 2, sharp: 40, faces: 16, majors: true, spread: 8, majorCut: 5, fillCut: 3, chamfer: 4, chips: 30, foot: 10, ghost: true, edges: true, roles: false };
+const DEFAULTS = { planes: 60, edges: 30, spread: 6, sink: 2, esink: 6, csink: 10, dome: 6, deepest: 1.5, foot: 10, ghost: true, lines: true, roles: false, anchors: false };
 const state = { shape: 'sphere', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
-const SLIDERS = { largest: v => v + '%', drop: v => v + '%', passes: v => v, faces: v => v, spread: v => v + '°', majorCut: v => v + '%', fillCut: v => v + '%', chamfer: v => v + '%', sharp: v => v + '°', chips: v => v + '%', foot: v => v + '%' };
-const CHECKS = ['majors', 'ghost', 'edges', 'roles'];
+const SLIDERS = { planes: v => v, edges: v => v + '%', spread: v => v + '°', sink: v => v + '%', esink: v => v + '%', csink: v => v + '%', dome: v => v + '°', deepest: v => v + '%', foot: v => v + '%' };
+const CHECKS = ['ghost', 'lines', 'roles', 'anchors'];
 const shapeOf = k => SHAPES.find(s => s.key === k) || SHAPES[0];
 
 const viewerEl = $('viewer');
@@ -525,7 +489,6 @@ function initGL() {
   controls.target.set(0, 0, 7); controls.enablePan = false; controls.minDistance = 20; controls.maxDistance = 180;
   controls.addEventListener('change', draw); controls.update();
   new ResizeObserver(resize).observe(viewerEl); resize();
-
   thumbR = new THREE.WebGLRenderer({ antialias: true });
   thumbR.setPixelRatio(Math.min(devicePixelRatio, 2)); thumbR.setSize(140, 140);
   thumbScene = makeScene();
@@ -533,8 +496,7 @@ function initGL() {
 }
 function resize() { const w = viewerEl.clientWidth, h = viewerEl.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); draw(); }
 function draw() { if (renderer) renderer.render(scene, camera); }
-
-function params() { return { faces: state.faces, majors: state.majors, spread: state.spread, majorCut: state.majorCut, fillCut: state.fillCut, chamfer: state.chamfer, sharp: state.sharp, largest: state.largest, drop: state.drop, passes: state.passes, chips: state.chips, foot: state.foot }; }
+function params() { return { planes: state.planes, edges: state.edges, spread: state.spread, sink: state.sink, esink: state.esink, csink: state.csink, dome: state.dome, deepest: state.deepest, foot: state.foot }; }
 
 function rebuild() {
   try {
@@ -554,17 +516,16 @@ function rebuild() {
     draw();
     $('chip').textContent = sh.label.toLowerCase() + ' · seed ' + state.seed;
     showStats(res);
-    const lg = $('legend'); lg.hidden = !state.roles;
-    if (state.roles) lg.innerHTML = ['major', 'fill', 'break', 'chamfer', 'chip', 'base'].map(k => `<span><i style="background:${ROLE[k][0]}"></i>${ROLE[k][1]}</span>`).join('');
+    const lg = $('legend'); lg.hidden = !(state.roles || state.anchors);
+    if (!lg.hidden) lg.innerHTML = ['face', 'edge', 'corner', 'base'].map(k => `<span><i style="background:${ROLE[k][0]}"></i>${ROLE[k][1]}</span>`).join('');
   } catch (e) { $('err').hidden = false; $('err').textContent = 'The rock could not be built: ' + e.message; console.error(e); }
 }
 function showStats(r) {
-  const c = r.counts, n = k => c[k] || 0;
+  const c = r.counts, p = r.placed, n = (o, k) => o[k] || 0;
   const rows = [
-    ['Faces', (r.poly.length - n('base'))],
-    ['  major · fill · break', n('major') + ' · ' + n('fill') + ' · ' + n('break')],
+    ['Planes on face · edge · corner', `${n(p, 'face')} · ${n(p, 'edge')} · ${n(p, 'corner')}`],
+    ['Faces that show', r.poly.length - n(c, 'base')],
     ['Largest face', (r.largest * 100).toFixed(1) + '% of the surface'],
-    ['  chamfer · chip', n('chamfer') + ' · ' + n('chip')],
     ['Pokes out, at most', r.out.toFixed(2) + ' mm'],
     ['Cuts in, at most', r.inn.toFixed(2) + ' mm'],
     ['Overlap with the shape', (r.iou * 100).toFixed(1) + '%'],
@@ -572,8 +533,8 @@ function showStats(r) {
     ['Steepest underside', `<span class="${r.steep > 55 ? 'bad' : 'good'}">${r.steep.toFixed(1)}°</span>`],
     ['Built in', r.ms.toFixed(1) + ' ms'],
   ];
-  if (n('box')) rows.push(['Unbounded faces', `<span class="bad">${n('box')}</span>`]);
-  $('stats').innerHTML = rows.map(([k, v]) => `<dt>${k.replace(/^ {2}/, '&emsp;')}</dt><dd>${v}</dd>`).join('');
+  if (n(c, 'box')) rows.push(['Gaps (faults)', `<span class="bad">${n(c, 'box')}</span>`]);
+  $('stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
 }
 
 // neighbouring seeds
@@ -595,7 +556,7 @@ function drawThumbs() {
     const seed = start + i; t.b.dataset.seed = seed; t.s.textContent = seed;
     t.b.setAttribute('aria-current', seed === state.seed ? 'true' : 'false'); t.b.setAttribute('aria-label', 'Seed ' + seed);
     try {
-      const g = rockGroup(build(sh, seed, params(), false), { edges: state.edges, roles: state.roles });
+      const g = rockGroup(build(sh, seed, params(), false), { lines: state.lines, roles: state.roles });
       thumbScene.add(g); thumbR.render(thumbScene, thumbCam); thumbScene.remove(g); disposeGroup(g);
       t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
     } catch (e) { console.error(e); }
