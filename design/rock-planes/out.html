@@ -158,11 +158,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Where the planes go.</b> <b>Chamfered</b> of the edges and of the corners, drawn, are chamfered; the others stay sharp and get no plane. Each chamfered corner gets one plane, each chamfered edge planes spaced along it, and the rest of the <b>Planes</b> are thrown over the faces, each kept a spacing away from those already taken.</li>
       <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Tilt</b> about the point, with a patch around the point (15 to 35% of the way to the face's nearest edge, drawn) that no other face plane may cut (a chamfer may eat into it). Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
       <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Tilt</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Tilt 0 the face stays flat), are turned at random by about <b>Tilt</b> and sunk by half to all of <b>Sink</b>. A turn that would dip much deeper into the shape anywhere than at its own point, or would cut a touch point, is drawn again, up to twelve times; if none clears the touch points the best is pushed back past them.</li>
-      <li><b>Chamfer planes</b> start halfway between the edge's two faces, or as the average of a corner's faces, and are turned the same way. Each is set against what the face planes leave and cuts one to two times <b>Sink</b> into it. If a touch point keeps one from cutting that deep, the next sharp edge or corner in the drawn order is chamfered instead, so the share always holds.</li>
+      <li><b>Chamfer planes</b> start halfway between the edge's two faces, or as the average of a corner's faces. Each makes one draw from its own stream: a turn of up to half of <b>Tilt</b>, never more than a third of the angle between the faces it cuts, so it stays on its edge or corner. It is set against what the face planes leave and cuts one to two times <b>Sink</b> into it, stopping at any touch point. If that bites less than a Sink, the chamfer takes, in order, the turn mirrored, no turn, or the turn's limit away from each face it cuts: the first that bites a whole Sink, with no second draw. If a touch point keeps one from cutting that deep, the next sharp edge or corner in the drawn order is chamfered instead, so the share always holds.</li>
       <li><b>Kept inside.</b> Where face planes meet outside the shape, each of them is sunk by how far the corner pokes out, as far as the touch points let it, and the planes are cut again (up to six rounds). Without it a sphere's planes, sunk only a little, meet past its surface between them.</li>
       <li><b>The rock</b> is everything inside all the planes and inside the shape itself (the shape's own faces; a curved shape's are 200 of its tangent planes). It is one closed convex solid. Where the shape's own face shows, the rock touches it.</li>
     </ol>
-    <p class="hint">Touch points, which edges and corners are chamfered, corners, edge points and face points draw from separate seeded streams, so moving On edges or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
+    <p class="hint">Touch points, which edges and corners are chamfered, corners, edge points and face points draw from separate seeded streams, so moving Chamfered or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
   </section>
 </div>
 
@@ -185,7 +185,7 @@ function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; le
 function stream(seed, k) { let h = Math.imul(seed | 0, 0x9E3779B1) ^ Math.imul(k + 1, 0x85EBCA77); h ^= h >>> 16; h = Math.imul(h, 0x7FEB352D); h ^= h >>> 15; h = Math.imul(h, 0x846CA68B); h ^= h >>> 16; return mulberry32(h >>> 0); }
 // M directions tilt evenly over the sphere, turned as a whole at random
 function fib(M) { const out = []; for (let i = 0; i < M; i++) { const z = 1 - 2 * (i + 0.5) / M, ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z); out.push([h * Math.cos(ph), h * Math.sin(ph), z]); } return out; }
-function tilt(M, r) { const u = sphereDir(r), v = perp(u), w = cross(u, v); return fib(M).map(d => add(mul(u, d[0]), add(mul(v, d[1]), mul(w, d[2])))); }
+function evenDirs(M, r) { const u = sphereDir(r), v = perp(u), w = cross(u, v); return fib(M).map(d => add(mul(u, d[0]), add(mul(v, d[1]), mul(w, d[2])))); }
 function sphereDir(r) { const z = 2 * r() - 1, ph = 2 * Math.PI * r(), h = Math.sqrt(1 - z * z); return [h * Math.cos(ph), h * Math.sin(ph), z]; }
 
 // ---------- shapes (mm, z up, bottom at z = 0) ----------
@@ -231,7 +231,7 @@ function polytope(verts, faces) {
     candidates(r) {
       const out = [];
       // corners: every vertex, the average of the faces that meet there
-      verts.forEach((v, i) => { const ns = planes.filter(q => q.idx.includes(i)).map(q => q.n); out.push({ p: v, n: unit(ns.reduce(add, [0, 0, 0])), kind: 'corner', key: 'c' + i }); });
+      verts.forEach((v, i) => { const ns = planes.filter(q => q.idx.includes(i)).map(q => q.n); out.push({ p: v, n: unit(ns.reduce(add, [0, 0, 0])), fn: ns, kind: 'corner', key: 'c' + i }); });
       // edges: points along each, halfway between the two faces
       const seen = new Map();
       for (const q of planes) for (let k = 0; k < q.idx.length; k++) {
@@ -240,9 +240,9 @@ function polytope(verts, faces) {
       }
       for (const [key, e] of seen) {
         const n = unit(add(e.ns[0], e.ns[1])), A = verts[e.a], B = verts[e.b], m = Math.ceil(len(sub(B, A)) * 4);
-        for (let k = 0; k < m; k++) out.push({ p: add(A, mul(sub(B, A), 0.04 + 0.92 * r())), n, kind: 'edge', key: 'e' + key });
+        for (let k = 0; k < m; k++) out.push({ p: add(A, mul(sub(B, A), 0.04 + 0.92 * r())), n, fn: e.ns, kind: 'edge', key: 'e' + key });
       }
-      // faces: points tilt by area
+      // faces: points spaced by area
       for (const [fi, q] of planes.entries()) {
         const pts = q.idx.map(i => verts[i]);
         const fc = mul(pts.reduce(add, [0, 0, 0]), 1 / pts.length), fr = Math.max(...pts.map(v => len(sub(v, fc))));
@@ -263,7 +263,7 @@ function boxShape(dx, dy, dz) {
 const SHAPES = [
   (() => { const R = 10, c = [0, 0, 10]; return { key: 'sphere', label: 'Sphere', support: n => dot(n, c) + R, inside: p => len(sub(p, c)) <= R,
     ghost: () => new THREE.SphereGeometry(R, 48, 32).translate(0, 0, 10), lo: [-R, -R, 0], hi: [R, R, 2 * R],
-    contacts: r => tilt(8, r).map(u => ({ p: add(c, mul(u, R)) })),
+    contacts: r => evenDirs(8, r).map(u => ({ p: add(c, mul(u, R)) })),
     candidates: r => { const out = []; for (let i = 0; i < 4000; i++) { const u = sphereDir(r); out.push({ p: add(c, mul(u, R)), n: u, kind: 'face' }); } return out; } }; })(),
   Object.assign(boxShape(18, 18, 18), { key: 'cube', label: 'Cube' }),
   Object.assign(polytope([[-11, -11, 0], [11, -11, 0], [11, 11, 0], [-11, 11, 0], [0, 0, 18]], [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]), { key: 'pyramid', label: 'Pyramid' }),
@@ -272,9 +272,9 @@ const SHAPES = [
     support: n => dot(n, c) + Math.hypot(a * n[0], b * n[1], cz * n[2]),
     inside: p => (p[0] / a) ** 2 + (p[1] / b) ** 2 + ((p[2] - cz) / cz) ** 2 <= 1,
     ghost: () => new THREE.SphereGeometry(1, 48, 32).scale(a, b, cz).translate(0, 0, cz), lo: [-a, -b, 0], hi: [a, b, 2 * cz],
-    contacts: r => tilt(8, r).map(u => ({ p: add(c, [a * u[0], b * u[1], cz * u[2]]) })),
+    contacts: r => evenDirs(8, r).map(u => ({ p: add(c, [a * u[0], b * u[1], cz * u[2]]) })),
     candidates: r => { const out = [];
-      // points tilt by area: a direction is kept with odds by how much surface it stands for
+      // points spaced by area: a direction is kept with odds by how much surface it stands for
       while (out.length < 4000) { const u = sphereDir(r), n = unit([u[0] / a, u[1] / b, u[2] / cz]);
         const w = Math.hypot(b * cz * u[0], a * cz * u[1], a * b * u[2]) / (a * b);
         if (r() < w) out.push({ p: add(c, [a * u[0], b * u[1], cz * u[2]]), n, kind: 'face' }); }
@@ -293,8 +293,8 @@ const SHAPES = [
       for (let i = 0; i < 4000; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0];
         if (r() < side / (side + top)) out.push({ p: [r0 * d[0], r0 * d[1], h * r()], n: d, kind: 'face' });
         else { const rr = r0 * Math.sqrt(r()), up = r() < 0.5; out.push({ p: [rr * d[0], rr * d[1], up ? h : 0], n: [0, 0, up ? 1 : -1], kind: 'face', fi: up ? 'top' : 'bot', fr: r0 }); } }
-      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], h], n: unit([d[0], d[1], 1]), kind: 'edge', key: 'etop' }); }
-      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), kind: 'edge', key: 'ebot' }); }
+      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], h], n: unit([d[0], d[1], 1]), fn: [[0, 0, 1], d], kind: 'edge', key: 'etop' }); }
+      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), fn: [[0, 0, -1], d], kind: 'edge', key: 'ebot' }); }
       return out; } }; })(),
 ];
 for (const s of SHAPES) { s.height = s.hi[2] - s.lo[2]; s.size = (s.hi[0] - s.lo[0] + s.hi[1] - s.lo[1] + s.height) / 3; }
@@ -342,6 +342,19 @@ function turn(n, sigmaDeg, r) {
   return unit(add(mul(n, Math.cos(th)), add(mul(u, Math.sin(th) * Math.cos(ph)), mul(v, Math.sin(th) * Math.sin(ph)))));
 }
 
+// a stream keyed by any words, for jobs that must not move one another
+function keyed(...keys) { let h = 2166136261; for (const ch of keys.join('/')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return mulberry32(h >>> 0); }
+// a chamfer's turn: one draw, up to half of Tilt, and never more than two thirds of the way from its own direction to the nearest
+// face it cuts (a third of the angle between two faces), so it always stays on its edge or corner. It comes with its mirror and
+// with no turn, then turned as far as that limit away from each face it cuts: the chamfer takes the first that bites a whole Sink
+// (no second draw: a touch point near the edge is cleared by turning away from its face)
+function chamferTurns(n, faces, tiltDeg, r) {
+  const near = Math.min(...faces.map(f => Math.acos(Math.max(-1, Math.min(1, dot(n, unit(f))))))), cap = near * 2 / 3;
+  const th = Math.min(tiltDeg / 2 * DEG, cap) * Math.sqrt(r()), ph = 2 * Math.PI * r();
+  const u = perp(n), v = cross(n, u), w = add(mul(u, Math.cos(ph)), mul(v, Math.sin(ph)));
+  const away = faces.map(f => { const a = sub(mul(n, dot(n, unit(f))), unit(f)), l = len(a); return l < 1e-9 ? n : unit(add(mul(n, Math.cos(cap)), mul(a, Math.sin(cap) / l))); });
+  return [unit(add(mul(n, Math.cos(th)), mul(w, Math.sin(th)))), unit(add(mul(n, Math.cos(th)), mul(w, -Math.sin(th)))), n, ...away];
+}
 const LEAN = 1.5;  // a turned face plane may dip no deeper into the shape than at its own point plus this (% of size)
 // the shape's own bounding planes: a polytope's faces, a curved shape's tangent planes
 function boundsOf(S) { return S._bounds || (S._bounds = S.ownFaces || [...fib(200), [0, 0, 1], [0, 0, -1]].map(n => ({ n, b: S.support(n) }))); }
@@ -440,8 +453,11 @@ function build(shape, seed, P, withStats) {
   const bites = new Map(), made = new Map();
   const make = key => {
     if (!byKey.has(key)) byKey.set(key, [first(key)]);
-    let most = 0; const pls = (byKey.get(key) || []).map(a => {
-      const { n, b } = turned(a.n, a.p, lean, n => reach(poly, n) - sink * (1 + r()), true);
+    let most = 0; const pls = (byKey.get(key) || []).map((a, i) => {
+      // one draw from the chamfer's own stream; it stops at a touch point rather than being drawn again
+      const rr = keyed(seed, 'chamfer', key, i), turns = chamferTurns(a.n, a.fn, P.tilt, rr), depth = sink * (1 + rr());
+      const tries = turns.map(n => { const b = through(n, reach(poly, n) - depth, points); return { n, b, bite: reach(poly, n) - b }; });
+      const { n, b } = tries.find(t => t.bite >= sink - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x);
       most = Math.max(most, reach(poly, n) - b); return { n, b, role: a.kind };
     });
     bites.set(key, most); made.set(key, pls);
