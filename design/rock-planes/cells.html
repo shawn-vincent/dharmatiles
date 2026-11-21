@@ -107,7 +107,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
       <ol>
         <li><b>Hulls.</b> Take the shape's convex hull. Each stretch of the outline that falls inside it is a hollow, closed by a mouth along the hull; each hole is a hollow with no mouth. Do the same to each hollow: what of its hull is not hollow is a bump of rock inside it. Stop after three levels.</li>
         <li><b>Planes on a rock hull</b>, as in Rock Planes, along each face that is real surface (a mouth gets none): each the face's direction, domed away from that face's touch point by up to Spread, turned by about Spread and sunk by up to Sink. A crown sits on each touch point. A curved stretch gets a touch point every 10 mm or so instead.</li>
-        <li><b>Planes on a hollow.</b> Each flat face becomes a chain of one, two or three segments bowing into the rock, a half to a whole Sink deep, drawn by seed from that face's own stream: a V, a three-faceted bow, or one face leaning from an end. One end touches the shape, or both. The chain always bows into the rock, never toward the hollow, so the pocket stays convex. On a curved stretch each plane pivots on the nearest touch point it faces.</li>
+        <li><b>Planes on a hollow.</b> Each flat face becomes a chain of one, two or three segments bowing into the rock, drawn by seed from that face's own stream. Sink moves it in by a half to a whole Sink, and Spread bends it as it domes a rock face: each bend goes in by about Spread's slope over its distance to the nearer end, and a single segment leans by about Spread. The chain can be a V, a three-faceted bow, or one face leaning from an end. One end touches the shape, or both. The chain always bows into the rock, never toward the hollow, so the pocket stays convex. On a curved stretch each plane pivots on the nearest touch point it faces.</li>
         <li><b>Touching.</b> A rock plane is pushed back out to every touch point of its hull; a hollow plane passes the one it pivots on. A rock piece is also kept inside its hull, and a pocket always takes its whole hollow (a plane that would cut into the hollow is pushed out to the hollow's corner) and reaches no more than Sink into the rock. So the rock never passes the shape.</li>
         <li><b>Bevels.</b> Bevelled of a rock hull's outward corners, drawn, get a bevel cutting one to two Sinks into what its faces leave. So do Bevelled of the outward corners where a rock face meets a hollow's face (an L's arm tips), which neither hull owns: each is cut on its own, the corner alone, one to two Sinks into the rock that is there. Hollows' own corners get none, so inside corners stay sharp.</li>
         <li><b>The rock</b> is the first hull's piece, minus each hollow's pocket, plus each bump's piece, in order.</li>
@@ -220,9 +220,12 @@ function planesOn(node, key, P) {
       const rh = stream(key, 'hollow', fi), o = [t[1], -t[0]], dmax = P.sink * (0.5 + 0.5 * rh());
       const k = rh() < 0.2 ? 1 : rh() < 0.55 ? 2 : 3, end = rh(), pts = [[0, end < 0.35 ? dmax * 0.6 * rh() : 0]];
       const ts = Array.from({ length: k - 1 }, () => 0.2 + 0.6 * rh()).sort((x, y) => x - y);
-      for (const u of ts) pts.push([u, dmax * (0.5 + 0.5 * rh())]);
+      // Spread bends the chain as it domes a rock's face: each bend goes in by about Spread's slope over its distance to the nearer end
+      const tsp = Math.tan(spread);
+      for (const u of ts) pts.push([u, dmax * (0.5 + 0.5 * rh()) + len * tsp * Math.min(u, 1 - u) * (0.6 + 0.8 * rh())]);
       pts.push([1, end > 0.65 ? dmax * 0.6 * rh() : 0]);
-      if (k === 1) { const lift = rh() < 0.5 ? 0 : 1; pts[lift][1] = dmax; pts[1 - lift][1] = 0; }   // one segment: leans from one touching end
+      const lift = rh() < 0.5 ? 0 : 1, lean = dmax + 0.5 * len * tsp * (0.6 + 0.8 * rh());
+      if (k === 1) { pts[lift][1] = lean; pts[1 - lift][1] = 0; }   // one segment: leans from one touching end
       // keep the profile concave (the pocket is convex): its upper hull
       const up = [];
       for (const q of pts) { while (up.length > 1 && cross3(up[up.length - 2], up[up.length - 1], q) >= 0) up.pop(); up.push(q); }
@@ -263,7 +266,7 @@ function planesOn(node, key, P) {
         if (g) {
           const dist = Math.hypot(...sub(p, g.p)), L = Math.max(dist, 4);
           if (dist > 1e-6) { const u = mul(sub(p, g.p), 1 / dist), d = add(mul(u, L), mul(o, depth)); n = nrm([d[1], -d[0]]); if (dot(n, o) < 0) n = mul(n, -1); }
-          n = rot(n, turn * 0.3);
+          n = rot(n, turn);
           planes.push({ n, b: dot(n, g.p), kind });
         } else planes.push({ n, b: dot(n, p) + depth, kind });
         nextP += 2.6 + 1.8 * rPlanes(); continue;
@@ -283,7 +286,7 @@ function planesOn(node, key, P) {
   const hull = node.faces.map(e => e.a);
   if (s < 0) for (const pl of planes) { let h = -Infinity; for (const v of hull) h = Math.max(h, dot(pl.n, v)); pl.b = Math.max(pl.b, h); }
   // bounds: a rock piece stays inside its hull; a pocket reaches no more than Sink into the rock, and a little out of its mouth
-  const bounds = node.faces.map(e => { const n = outOf(e); return { n, b: dot(n, e.a) + (s > 0 || e.kind === 'span' ? 0 : e.kind === 'surface' ? P.sink : 2), kind: 'bound' }; });
+  const bounds = node.faces.map(e => { const n = outOf(e); return { n, b: dot(n, e.a) + (s > 0 || e.kind === 'span' ? 0 : e.kind === 'surface' ? P.sink + 0.7 * Math.hypot(...sub(e.b, e.a)) * Math.tan(spread) + 0.01 : 2), kind: 'bound' }; });
   let poly = [[-40, -40], [40, -40], [40, 40], [-40, 40]];
   for (const pl of [...planes, ...bounds]) poly = clipHalf(poly, pl.n, pl.b);
   // bevels on a rock hull's outward corners between two surface faces
@@ -304,7 +307,7 @@ function planesOn(node, key, P) {
   }
   return { poly, planes, touches };
 }
-const insideConvex = (P, p) => { const sg = Math.sign(area(P)); return P.every((a, i) => sg * cross3(a, P[(i + 1) % P.length], p) >= -1e-9); };
+const insideConvex = (P, p, eps = 1e-9) => { const sg = Math.sign(area(P)); return P.every((a, i) => sg * cross3(a, P[(i + 1) % P.length], p) >= eps); };
 function clipBy(P, C) { const sg = Math.sign(area(C)); for (let i = 0; i < C.length && P.length; i++) { const a = C[i], d = sub(C[(i + 1) % C.length], a), n = nrm(sg > 0 ? [d[1], -d[0]] : [-d[1], d[0]]); P = clipHalf(P, n, dot(n, a)); } return P; }
 function segX(p, q, r, t) { const d1 = sub(q, p), d2 = sub(t, r), den = d1[0] * d2[1] - d1[1] * d2[0]; if (Math.abs(den) < 1e-12) return null; const w = sub(r, p), u = (w[0] * d2[1] - w[1] * d2[0]) / den, v = (w[0] * d1[1] - w[1] * d1[0]) / den; return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? add(p, mul(d1, u)) : null; }
 // the corners where a rock hull's face meets a hollow's wall at an outward corner (an L's arm tips): neither hull owns them,
@@ -330,7 +333,7 @@ function tipBevels(root, seed, P) {
     const rb = stream(seed, 'tip', t.id), m = rot(nrm(add(outOf(t.ei), outOf(t.eo))), (rb() - 0.5) * P.spread * DEG);
     const wedge = L => [t.tip, add(t.tip, mul(t.dO, L)), add(t.tip, mul(t.di, -L))];
     const A = clipBy(wedge(5), t.node.poly), B = t.pocket.poly, cand = [];
-    A.forEach(v => { if (!insideConvex(B, v)) cand.push(v); });
+    A.forEach(v => { if (!insideConvex(B, v, 1e-6)) cand.push(v); });   // a point on the pocket's edge is still rock
     B.forEach(v => { if (A.length > 2 && insideConvex(A, v)) cand.push(v); });
     A.forEach((p, i) => B.forEach((r, j) => { const x = segX(p, A[(i + 1) % A.length], r, B[(j + 1) % B.length]); if (x) cand.push(x); }));
     if (!cand.length) continue;
