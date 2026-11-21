@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Rock planes: references and research notes</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:72ch;margin:2em auto;padding:0 16px}h2{margin-top:1.6em}</style>
+<h1>Rock planes: references and research notes</h1>
+<p>What the next rounds of <a href="../../../design/rock-planes/out.html">Rock Planes</a> (artifact QYXt8uavGT92b31Wqb55ch) build on. The research came from two ChatGPT deep-research runs Shawn did on 20 Nov 2026. These are notes; they are not a design.</p>
+
+<h2>Pictures</h2>
+<ul>
+<li><code>firewatch-rock-sheet.png</code>: Campo Santo's production sheet for Firewatch. Large smooth planes, all slanted rocks share one angle, big boulders are simple shapes with detail kept inside the faces (cracks, moss), layered flat rocks are stacked slabs.</li>
+<li><code>ghibli-rock-studies.png</code>: an artist's Ghibli rock studies. Small simple shapes inside one large simple shape; texture kept to one area; one rock sticking out breaks the outline.</li>
+<li><code>low-poly-boulder-set.png</code>: a plain low-poly set. Mostly rings of faces around a vertical axis, a flat foot, a chamfer ring at the top. It is close to what an even spread of directions gives, and it reads as a gem or a cut stone more than a rock.</li>
+<li><code>guide-*.png</code>: generated drawing guides (shapes, solids, any solid, model to boulder with and without its mesh, flats/edges/corners/curves, three rock forms). They are generated and not consistent with each other, so use their rules and not their pictures. Their sphere step looks like a regular truncated icosahedron, which is the regularity to avoid.</li>
+</ul>
+
+<h2>From the first research run (already in Rock Planes)</h2>
+<ul>
+<li>Faces, edges, corners and outline all come from one set of planes. Chamfers are a second pass.</li>
+<li>Place each plane at the shape's support (its furthest reach in that direction), give or take a band. No optimizer is needed for a convex shape.</li>
+<li>Fracture normals cluster into 2 or 3 joint sets (Fisher-like spread around a mean). Joshua Tree granite has one near-level set and two upright ones.</li>
+<li>Concave shapes: a union of convex pieces (the seams read as joints), or select cells of a plane arrangement (Kinetic Surface Reconstruction). The best long-term idea is one "mother rock" fracture field per tile, so neighbouring rocks share matching faces.</li>
+</ul>
+
+<h2>New in the second run (for a future round)</h2>
+<ol>
+<li><b>Outlines count more than volume.</b> Silhouette changes matter perceptually far more than the same change elsewhere. Measure the outline from a set of views (12 to 32, or the tile's usual camera), as overlap and contour distance, and judge by the worst view, not the average. A plane whose edge lies inside the outline changes only shading; one at the outline changes the outline. Rock Planes measures only reach in 3D and volume overlap today.</li>
+<li><b>Three levels of facet.</b> A mass facet changes the volume and often the outline (a real plane). A form facet only clarifies light (geometry, or a normal or paint region). A surface accent is a crack, divot or small light wedge. Painters invent many facets at the colour stage that the line drawing never had. For a printed tile only the first two can be geometry, so form facets must be shallow planes.</li>
+<li><b>Face sizes are heavy-tailed.</b> A few large faces, several medium, few small. Measure it as a distribution of normalised face areas, and keep "rest areas" with no detail. Rock Planes spreads fill faces evenly, which works against this.</li>
+<li><b>Each shape family has its own constraint.</b> Round: keep the radial extent. Squat: keep the low height-to-width ratio. Blocky: keep some orthogonality, do not round it all away. Tall: keep the vertical axis. Wedge: keep the one big sloping plane and its apex. Slab: keep the thickness subordinate. Elongated: no faceting the same in all directions; face boundaries follow the long axis. Asymmetric: one dominant mass plus one or two secondary ones. Overhang and arch: need a non-convex representation.</li>
+<li><b>Three sources of candidate planes.</b> Envelope planes (to fit the shape), structural planes (the joint sets), and a few <i>art planes</i> chosen because they improve a view: a good top facet, a silhouette break, a triangular shadow plane.</li>
+<li><b>Fracture first, weathering second.</b> Water attacks a block's corners from three sides, its edges from two and its faces from one (USGS on spheroidal weathering, Joshua Tree corestones). So corners lose most, then edges. Curvature plus exposure is one field; artists may still keep one sharp corner because it helps the outline.</li>
+<li><b>Cracks grow from the edge network.</b> They start at a major edge or corner (or a chosen detailed face), cross the plane, turn at plane boundaries (that change of direction is what shows the plane's tilt), then branch or stop. They stop more often near existing cracks and major fractures (stress shadows, T-junctions). Cracks come last and stay secondary.</li>
+<li><b>Value grouping.</b> Under the key light, faces fall into three or four value groups (light, middle, shadow). Similar planes may merge into one value. For dharmatiles this is a check on the model, read in the renders, not a paint step.</li>
+<li><b>One shared slant.</b> Firewatch's slanted rocks all lean at the same angle, and repeated shape motifs unify a set. For a scatter, the joint-set directions could be shared across the tile, not drawn per rock.</li>
+<li><b>Test shapes to add:</b> flattened ellipsoid, rounded cube, tapered column, cone, warped plate, capsule, two-lobed blob, L-block, mushroom (overhang), arch, two stacked masses.</li>
+<li><b>Baselines to compare at the same face count:</b> noise displacement, clipping an expanded copy, plane proxies (Variational Shape Approximation), and the constrained planes.</li>
+<li><b>Judge with three separate questions:</b> does it look like a rock, does it keep the intended shape, does it look like a designed cartoon or game rock.</li>
+</ol>
+
+<h2>Sources named</h2>
+<p>Jane Ng (Campo Santo) on Firewatch's rock art; John Muir Laws on drawing rocks; Draw Paint Academy; Gen Amos's stylized-rock breakdown; BaM Animation on background design; Maurice Noble (the Road Runner deserts); USGS and NPS on spheroidal weathering at Joshua Tree; Beardall et al., <i>Directable Weathering of Concave Rock Using Curvature Estimation</i>; Cohen-Steiner, Alliez and Desbrun, <i>Variational Shape Approximation</i>; CGAL Polygonal and Kinetic Surface Reconstruction; Paris et al., <i>Modeling Rocky Scenery using Implicit Blocks</i>; SideFX Rockify, Labs Edge Damage; Procedural Studio Rock Weathering; rockgen; SeedRock.</p>
