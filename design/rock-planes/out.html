@@ -130,7 +130,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <aside>
       <h2>Planes</h2>
       <div class="ctl"><div class="top"><label for="planes">Planes</label><output id="o-planes"></output></div>
-        <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many planes are put around the shape.</small></div>
+        <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many face planes are put around the shape. Chamfers come on top of these.</small></div>
       <div class="ctl"><div class="top"><label for="edges">Chamfered</label><output id="o-edges"></output></div>
         <input type="range" id="edges" min="0" max="100" step="5" value="100"><small>The share of the shape's edges and corners that are chamfered, drawn; the rest stay sharp.</small></div>
       <div class="ctl"><div class="top"><label for="tilt">Tilt</label><output id="o-tilt"></output></div>
@@ -155,14 +155,14 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <ol>
       <li><b>The shape</b> is picked in the menu, or by the seed itself when it says Random (the seed's first draw chooses one of the seven). It is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
       <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight tilt around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point (and every crown's patch, below), so the rock reaches each of them: it touches every face of the shape.</li>
-      <li><b>Where the planes go.</b> <b>Chamfered</b> of the edges and of the corners, drawn, are chamfered; the others stay sharp and get no plane. Each chamfered corner gets one plane, each chamfered edge planes spaced along it, and the rest of the <b>Planes</b> are thrown over the faces, each kept a spacing away from those already taken.</li>
+      <li><b>Where the planes go.</b> <b>Chamfered</b> of the edges and of the corners, drawn, are chamfered; the others stay sharp and get no plane. <b>Planes</b> face planes are thrown over the faces, each kept a spacing away from the others; then each chamfered corner gets one plane and each chamfered edge planes spaced along it. Face planes and chamfers never look at each other, so Chamfered never moves a face plane.</li>
       <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Tilt</b> about the point, with a patch around the point (15 to 35% of the way to the face's nearest edge, drawn) that no other face plane may cut (a chamfer may eat into it). Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
-      <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Tilt</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Tilt 0 the face stays flat), are turned at random by about <b>Tilt</b> and sunk by half to all of <b>Sink</b>. A turn that would dip much deeper into the shape anywhere than at its own point, or would cut a touch point, is drawn again, up to twelve times; if none clears the touch points the best is pushed back past them.</li>
+      <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Tilt</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Tilt 0 the face stays flat), are turned at random by about <b>Tilt</b> and sunk by half to all of <b>Sink</b>. Each makes one draw from its own stream, keyed to its spot: a direction and a size, which Tilt scales, so raising Tilt turns the same plane further. A turn that would dip much deeper into the shape anywhere than at its own point is shortened just enough, never drawn again; then the plane is pushed back past the touch points.</li>
       <li><b>Chamfer planes</b> start halfway between the edge's two faces, or as the average of a corner's faces. Each makes one draw from its own stream: a turn of up to half of <b>Tilt</b>, never more than a third of the angle between the faces it cuts, so it stays on its edge or corner. It is set against what the face planes leave and cuts one to two times <b>Sink</b> into it, stopping at any touch point. If that bites less than a Sink, the chamfer takes, in order, the turn mirrored, no turn, or the turn's limit away from each face it cuts: the first that bites a whole Sink, with no second draw. If a touch point keeps one from cutting that deep, the next sharp edge or corner in the drawn order is chamfered instead, so the share always holds.</li>
       <li><b>Kept inside.</b> Where face planes meet outside the shape, each of them is sunk by how far the corner pokes out, as far as the touch points let it, and the planes are cut again (up to six rounds). Without it a sphere's planes, sunk only a little, meet past its surface between them.</li>
       <li><b>The rock</b> is everything inside all the planes and inside the shape itself (the shape's own faces; a curved shape's are 200 of its tangent planes). It is one closed convex solid. Where the shape's own face shows, the rock touches it.</li>
     </ol>
-    <p class="hint">Touch points, which edges and corners are chamfered, corners, edge points and face points draw from separate seeded streams, so moving Chamfered or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
+    <p class="hint">Every job draws from its own seeded stream: touch points, crowns, which edges and corners are chamfered, the spots, each face plane (keyed to its spot) and each chamfer (keyed to its edge or corner). So Tilt and Sink move no spot and only turn or sink the same planes, and Chamfered moves no face plane. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
   </section>
 </div>
 
@@ -365,6 +365,7 @@ function build(shape, seed, P, withStats) {
   const S = shape, size = S.size, sink = P.sink / 100 * size, lean = LEAN / 100 * size;
   const contacts = S.contacts(stream(seed, 8));
   const cands = S.candidates(stream(seed, 1));
+  cands.forEach((c, i) => { c.id = i; });   // a spot's own name, which keys its plane's stream
   const byKind = k => cands.filter(c => c.kind === k);
   const order = (list, k) => { const r = stream(seed, k); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
   const corners = order(byKind('corner'), 2), edgeC = order(byKind('edge'), 3), faceC = order(byKind('face'), 4);
@@ -374,19 +375,19 @@ function build(shape, seed, P, withStats) {
   const edgeKeys = [...new Set(edgeC.map(c => c.key))], cornerKeys = corners.map(c => c.key);
   const bitten = new Set([...share(edgeKeys, 6), ...share(cornerKeys, 7)]);
 
-  // pick anchors: each chamfered corner, planes spaced along each chamfered edge, then faces, all kept apart
-  const N = P.planes;
-  let gap = 0.85 * Math.sqrt(surfaceArea(S) / N);
-  const taken = [];
-  const far = (c, g = gap) => taken.every(t => len(sub(t.p, c.p)) >= g);
-  const take = c => { c.used = true; taken.push(c); };
-  for (const c of corners) if (bitten.has(c.key) && taken.length < N) take(c);
-  for (const key of edgeKeys) if (bitten.has(key) && taken.length < N) { const on = edgeC.filter(c => c.key === key); take(on.find(c => far(c)) || on[0]); }
-  for (const c of edgeC) { if (taken.length >= N) break; if (bitten.has(c.key) && !c.used && far(c, 1.5 * gap)) take(c); }
-  for (let pass = 0; pass < 6; pass++, gap *= 0.85) {
-    for (const c of faceC) { if (taken.length >= N) break; if (!c.used && far(c)) take(c); }
-    if (taken.length >= N) break;
-  }
+  // pick anchors. Planes face planes are thrown over the faces, kept apart from one another; then each chamfered corner gets one
+  // plane and each chamfered edge planes spaced along it, kept apart from one another. The two never look at each other, so
+  // Chamfered never moves a face plane and Planes never moves a chamfer
+  const N = P.planes, gap0 = 0.85 * Math.sqrt(surfaceArea(S) / N);
+  const faceA = [], edgeA = [];
+  const farFrom = (list, c, g) => list.every(t => len(sub(t.p, c.p)) >= g);
+  let gap = gap0;
+  for (let pass = 0; pass < 6 && faceA.length < N; pass++, gap *= 0.85)
+    for (const c of faceC) { if (faceA.length >= N) break; if (!c.used && farFrom(faceA, c, gap)) { c.used = true; faceA.push(c); } }
+  for (const c of corners) if (bitten.has(c.key)) edgeA.push(c);
+  for (const key of edgeKeys) if (bitten.has(key)) { const on = edgeC.filter(c => c.key === key); edgeA.push(on.find(c => farFrom(edgeA, c, gap0)) || on[0]); }
+  for (const c of edgeC) if (bitten.has(c.key) && !edgeA.includes(c) && farFrom(edgeA, c, 1.5 * gap0)) edgeA.push(c);
+  const taken = [...edgeA, ...faceA];
 
   // every plane passes through or beyond every touch point
   // a flat face's crown: its plane turned by Tilt about the touch point, with a patch of drawn size around the
@@ -401,19 +402,17 @@ function build(shape, seed, P, withStats) {
   // face planes keep clear of the crowns' patches; chamfers only of the touch points themselves, so a chamfer may eat into a crown
   const points = contacts.map(c => c.p);
   const through = (n, b, keep = guards) => { for (const g of keep) b = Math.max(b, dot(n, g)); return b; };
-  const r = stream(seed, 5);
-  // a turn is drawn again (up to twelve times) if it would dip much deeper into the shape anywhere than
-  // at its own point, or would cut a touch point; the best is kept, and pushed back past the touch points
-  const turned = (n0, p0, allow, bOf, avoid) => {
-    let best = null;
-    for (let k = 0; k < 12; k++) {
-      const n = turn(n0, P.tilt, r), b = bOf(n), extra = Math.max(0, S.support(n) - dot(n, p0) - allow);
-      let miss = 0; if (avoid) for (const g of points) miss = Math.max(miss, dot(n, g) - b);
-      const score = extra + 4 * miss;
-      if (!best || score < best.score) best = { n, b, score };
-      if (score <= 0) break;
-    }
-    return { n: best.n, b: through(best.n, best.b, avoid ? points : guards) };
+  // a face plane's turn: one draw from its own stream (a direction and a size), scaled by Tilt, so a higher Tilt turns the same
+  // plane further. If the turn would dip deeper into the shape anywhere than at its own point (plus its allowance), it is shortened
+  // just enough, never drawn again
+  const turnedFace = (n0, p0, allow, rr) => {
+    const th = P.tilt * DEG * Math.sqrt(-2 * Math.log(1 - rr() * 0.999)), ph = 2 * Math.PI * rr();
+    const u = perp(n0), v = cross(n0, u), w = add(mul(u, Math.cos(ph)), mul(v, Math.sin(ph)));
+    const at = sc => unit(add(mul(n0, Math.cos(sc * th)), mul(w, Math.sin(sc * th))));
+    const extra = sc => S.support(at(sc)) - dot(at(sc), p0) - allow;
+    let sc = 1;
+    if (extra(1) > 0) { if (extra(0) > 0) sc = 0; else { let lo = 0, hi = 1; for (let k = 0; k < 16; k++) { const m = (lo + hi) / 2; if (extra(m) > 0) hi = m; else lo = m; } sc = lo; } }
+    return at(sc);
   };
   const touchOf = fi => fi === undefined ? null : contacts.find(c => c.fi === fi);
 
@@ -429,8 +428,8 @@ function build(shape, seed, P, withStats) {
       allow += k * a.fr / 2;
       if (rr > 1e-6) { n0 = unit(add(a.n, mul(d, k / a.fr))); p0 = sub(a.p, mul(a.n, k * rr * rr / (2 * a.fr))); }
     }
-    const depth = sink * (0.5 + 0.5 * r());
-    planes.push({ ...turned(n0, p0, allow, n => dot(n, p0) - depth, false), role: 'face' });
+    const rr = keyed(seed, 'face', a.id), depth = sink * (0.5 + 0.5 * rr()), n = turnedFace(n0, p0, allow, rr);
+    planes.push({ n, b: through(n, dot(n, p0) - depth), role: 'face' });
   }
   // a plane meeting others outside the shape is sunk until they meet inside it (as far as the touch points let it)
   const centre = mul(add(S.lo, S.hi), 0.5);
