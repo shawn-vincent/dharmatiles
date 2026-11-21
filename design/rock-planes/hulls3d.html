@@ -1,0 +1,850 @@
+<title>Rocks from Hulls 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one working bench. The viewer on the plate fills the left, the controls stand in a narrow column on the right, a strip of neighbouring seeds runs under the viewer, and how it is built reads below. Tokens are the dharmatiles visual system's (Lichen & Linen by day, Moonpool at night). */
+:root {
+  --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --plate: #D9E0EB; --plate-ink: #2B3340;
+  --over: #E5483B; --band: #FF8C1A;
+  --bg: #F3F2EC; --panel: #E6EAE1; --raised: #FCFCF8; --line: #C9D1C8; --line-2: #AEBBB0;
+  --ink: #1D2922; --muted: #657168;
+  --accent: #287B62; --accent-hi: #1F654F; --on-accent: #F5FFF9;
+  --ok: #397A55; --err: #B83B2E;
+  --r: 5px; --r-lg: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
+  --ok: #5CC28A; --err: #F07A6A; --r: 4px; --r-lg: 8px;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
+  --ok: #5CC28A; --err: #F07A6A; --r: 4px; --r-lg: 8px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 14px/20px var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 28px; }
+h1 { font: 800 34px/1 var(--f-display); letter-spacing: .01em; margin: 0; text-transform: uppercase; }
+.lede { color: var(--muted); margin: 0; max-width: 62ch; }
+.bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.lbl { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.seg { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); }
+.seg button { height: 26px; padding: 0 10px; border: 0; border-radius: calc(var(--r) - 2px); background: transparent; color: var(--ink); font: 500 13px var(--f-body); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.seg button:hover:not([aria-pressed="true"]) { background: var(--panel); }
+.sel { height: 30px; padding: 0 28px 0 10px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 500 14px var(--f-body); cursor: pointer; }
+.sel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seed { display: flex; align-items: center; gap: 6px; }
+.btn { height: 30px; min-width: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 600 14px var(--f-body); cursor: pointer; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.seed input { width: 76px; height: 30px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 600 15px var(--f-code); text-align: center; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hint { color: var(--muted); font-size: 12px; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.stage { display: grid; gap: 10px; min-width: 0; }
+.viewer { position: relative; height: min(68vh, 620px); min-height: 320px; background: var(--plate); border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line); }
+.viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.chip { position: absolute; left: 10px; top: 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font: 600 12px var(--f-code); box-shadow: 0 8px 24px -12px rgb(26 23 20 / .45); }
+.legend { position: absolute; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font-size: 12px; max-width: calc(100% - 20px); }
+.legend[hidden] { display: none; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.strip { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+.thumb { position: relative; border: 1px solid var(--line); border-radius: var(--r); background: var(--plate); padding: 0; cursor: pointer; aspect-ratio: 1; max-width: 100%; overflow: hidden; }
+.thumb canvas { width: 100%; height: 100%; display: block; }
+.thumb span { position: absolute; left: 4px; bottom: 3px; font: 600 11px var(--f-code); color: var(--plate-ink); }
+.thumb[aria-current="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+aside { display: grid; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; min-width: 0; }
+aside h2 { font: 800 18px/1 var(--f-display); text-transform: uppercase; letter-spacing: .03em; margin: 0; }
+.ctl { display: grid; gap: 4px; }
+.ctl .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ctl label { font-weight: 500; }
+.ctl output { font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); }
+output .ip, output .fp { display: inline-block; } output .ip { text-align: right; } output .fp { text-align: left; } output { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.ctl small { color: var(--muted); font-size: 12px; line-height: 16px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.checks { display: grid; gap: 6px; }
+.checks label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
+.stats { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13px; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; text-align: right; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; }
+.good { color: var(--ok); } .bad { color: var(--err); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
+.how { display: grid; gap: 10px; max-width: 74ch; }
+.how h2 { font: 800 22px/1 var(--f-display); text-transform: uppercase; margin: 8px 0 0; }
+.how ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+.how b { font-weight: 600; }
+.how code { font: 13px var(--f-code); background: var(--panel); padding: 0 4px; border-radius: 3px; }
+.err { color: var(--err); font-weight: 600; }
+@media (max-width: 860px) {
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .viewer { height: 380px; }
+  .strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Rocks from Hulls 3D</h1>
+    <p class="lede">The 2D page's rule in three dimensions. A shape is written as alternating convex hulls: a hull, minus hollows, plus bumps inside the hollows. Each rock hull gets Rock Planes; each hollow gets planes that bow into the rock; the rims where a hollow opens get their own chamfers.</p>
+  </header>
+
+  <div class="bar">
+    <label class="lbl" for="shape">Shape</label>
+    <select class="sel" id="shape"></select>
+    <span class="lbl">Seed</span>
+    <div class="seed">
+      <button class="btn" id="prev" aria-label="Previous seed">&#8592;</button>
+      <input id="seed" type="number" inputmode="numeric" min="0" step="1" value="1" aria-label="Seed">
+      <button class="btn" id="next" aria-label="Next seed">&#8594;</button>
+    </div>
+    <span class="lbl">View</span>
+    <div class="seg" id="view" role="group" aria-label="View">
+      <button data-view="persp">Perspective</button><button data-view="ortho">Orthographic</button>
+    </div>
+    <span class="hint">&#8592; &#8594; keys browse seeds</span>
+  </div>
+
+  <div class="main">
+    <div class="stage">
+      <div class="viewer" id="viewer">
+        <div class="chip" id="chip"></div>
+      </div>
+      <div class="strip" id="strip" aria-label="Neighbouring seeds"></div>
+      <p class="err" id="err" hidden></p>
+    </div>
+
+    <aside>
+      <h2>Planes</h2>
+      <div class="ctl"><div class="top"><label for="planes">Planes</label><output id="o-planes"></output></div>
+        <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many face planes go around the whole shape. It sets one spacing (from the shape's surface area) for a rock hull's planes and for how many planes bow each hollow face.</small></div>
+      <div class="ctl"><div class="top"><label for="edges">Chamfered</label><output id="o-edges"></output></div>
+        <input type="range" id="edges" min="0" max="100" step="1" value="100"><small>The share of edge length chamfered: each rock hull's own edges and corners, and the rims where a hollow opens.</small></div>
+      <div class="ctl"><div class="top"><label for="tilt">Tilt</label><output id="o-tilt"></output></div>
+        <input type="range" id="tilt" min="0" max="25" step="0.5" value="6"><small>How far planes turn at random, outside and inside alike; a hollow face's planes lean more with it.</small></div>
+      <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
+        <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep planes bite (of the shape's size): face planes up to this, hollow walls half to all of it more, chamfers half to all of it.</small></div>
+      <hr>
+      <div class="checks">
+        <label><input type="checkbox" id="ghost" checked> Show the shape</label>
+        <label><input type="checkbox" id="lines" checked> Show edges</label>
+      </div>
+      <button class="btn" id="reset">Reset settings</button>
+      <hr>
+      <dl class="stats" id="stats"></dl>
+    </aside>
+  </div>
+
+  <section class="how">
+    <h2>How a rock is built</h2>
+    <ol>
+      <li><b>The shape</b> is written as a tree of convex hulls: the first is rock, its children are hollows cut from it, their children are bumps of rock inside a hollow, and so on. The L is its hull less a wedge; the ring an octagon less a heptagon; the notch with a peak a block less a notch plus a peak standing in it. A face that lies on its parent's face is a <b>mouth</b> (a hollow's opening, or where a bump stands on a wall): it is not the shape's surface and gets no planes.</li>
+      <li><b>Rock hulls</b> are built by Rock Planes as they are, bounded by the hull's own faces: touch points, crowns, face planes, edge and corner chamfers. Only where the hull's face is real surface does it get a touch point, a spot or a chamfer, so nothing is put across a hollow's mouth. Each hull takes its share of Planes by its real surface area, at the whole rock's spacing, and its own seed keyed to its place in the tree.</li>
+      <li><b>Hollows</b> are cut with a pocket. Each real face of the hollow gets about one plane for each plane spacing squared of its area (one to six), each leaning into the rock a different way by half to all of <b>Sink</b> plus <b>Tilt</b> across the face, then pushed out until it holds the whole hollow. So the pocket always holds the hollow and touches it at an edge or a corner, and its walls bow into the rock as facets. A mouth lets the pocket out a little past it; a real face no further than its planes reach.</li>
+      <li><b>Rims.</b> Where a hollow's wall meets a rock face at an outward edge (the L's two tips, the top of the ring's hole, the arch's edges), neither hull owns the edge. Each such edge is chamfered by <b>Chamfered</b> of their length, drawn: the one chamfer rule (a turn of up to half of Tilt, capped by the angle between the faces), cutting half to all of Sink into what is there.</li>
+      <li><b>The rock</b> is the first hull's rock, less each hollow's pocket, plus each bump's rock, in order, kept as convex pieces; the rims are cut from the pieces last. What shows is each piece's faces less where another piece covers them.</li>
+    </ol>
+    <p class="hint">Every job draws from its own seeded stream keyed by the hull's place in the tree, the face or the rim, so one control never reshuffles another. Overhang paints orange past 55° and red past 65°; with no ground case the underside, and the arch's roof, are overhang for now.</p>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+"use strict";
+const DEG = Math.PI / 180;
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const len = a => Math.hypot(a[0], a[1], a[2]);
+const unit = a => { const l = len(a); return l > 1e-12 ? mul(a, 1 / l) : [0, 0, 1]; };
+const perp = n => unit(Math.abs(n[2]) < 0.9 ? cross(n, [0, 0, 1]) : cross(n, [1, 0, 0]));
+
+// ---------- seeded streams ----------
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function stream(seed, k) { let h = Math.imul(seed | 0, 0x9E3779B1) ^ Math.imul(k + 1, 0x85EBCA77); h ^= h >>> 16; h = Math.imul(h, 0x7FEB352D); h ^= h >>> 15; h = Math.imul(h, 0x846CA68B); h ^= h >>> 16; return mulberry32(h >>> 0); }
+// M directions tilt evenly over the sphere, turned as a whole at random
+function fib(M) { const out = []; for (let i = 0; i < M; i++) { const z = 1 - 2 * (i + 0.5) / M, ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z); out.push([h * Math.cos(ph), h * Math.sin(ph), z]); } return out; }
+function evenDirs(M, r) { const u = sphereDir(r), v = perp(u), w = cross(u, v); return fib(M).map(d => add(mul(u, d[0]), add(mul(v, d[1]), mul(w, d[2])))); }
+function sphereDir(r) { const z = 2 * r() - 1, ph = 2 * Math.PI * r(), h = Math.sqrt(1 - z * z); return [h * Math.cos(ph), h * Math.sin(ph), z]; }
+function orderAround(pts, n) {
+  const c = mul(pts.reduce((s, p) => add(s, p), [0, 0, 0]), 1 / pts.length);
+  const u = perp(n), v = cross(n, u);
+  return pts.map(p => { const d = sub(p, c); return [Math.atan2(dot(d, v), dot(d, u)), p]; }).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+}
+// ---------- convex solid as faces, cut by planes ----------
+function dedupe(pts, eps) { const out = []; for (const p of pts) if (!out.some(q => len(sub(p, q)) < eps)) out.push(p); return out; }
+function boxPoly(lo, hi) {
+  const faces = [];
+  for (let i = 0; i < 3; i++) for (const s of [-1, 1]) {
+    const n = [0, 0, 0]; n[i] = s; const val = s > 0 ? hi[i] : lo[i];
+    const j = (i + 1) % 3, k = (i + 2) % 3, pts = [];
+    for (const a of [lo[j], hi[j]]) for (const b of [lo[k], hi[k]]) { const p = [0, 0, 0]; p[i] = val; p[j] = a; p[k] = b; pts.push(p); }
+    faces.push({ n, b: dot(n, pts[0]), role: 'box', verts: orderAround(pts, n) });
+  }
+  return faces;
+}
+function clip(poly, pl) {
+  const eps = 1e-7; let cut = false; const out = [], cap = [];
+  for (const f of poly) {
+    const ds = f.verts.map(v => dot(pl.n, v) - pl.b);
+    if (ds.every(d => d <= eps)) { out.push(f); ds.forEach((d, i) => { if (d > -eps) cap.push(f.verts[i]); }); continue; }
+    cut = true;
+    if (ds.every(d => d >= -eps)) continue;
+    const vs = [], m = f.verts.length;
+    for (let i = 0; i < m; i++) {
+      const a = f.verts[i], b = f.verts[(i + 1) % m], da = ds[i], db = ds[(i + 1) % m];
+      if (da <= eps) { vs.push(a); if (da > -eps) cap.push(a); }
+      if ((da < -eps && db > eps) || (da > eps && db < -eps)) { const p = add(a, mul(sub(b, a), da / (da - db))); vs.push(p); cap.push(p); }
+    }
+    const vd = dedupe(vs, 1e-7); if (vd.length >= 3) out.push({ ...f, verts: vd });
+  }
+  if (!cut) return poly;
+  const cp = dedupe(cap, 1e-6);
+  if (cp.length >= 3) out.push({ n: pl.n, b: pl.b, role: pl.role, verts: orderAround(cp, pl.n) });
+  return out;
+}
+function faceArea(f) { let a = [0, 0, 0]; const v = f.verts; for (let i = 1; i + 1 < v.length; i++) a = add(a, cross(sub(v[i], v[0]), sub(v[i + 1], v[0]))); return len(a) / 2; }
+function volume(poly) { let v = 0; for (const f of poly) { const p0 = f.verts[0]; for (let i = 1; i + 1 < f.verts.length; i++) v += dot(p0, cross(f.verts[i], f.verts[i + 1])); } return v / 6; }
+// ---------- the algorithm: one pass ----------
+// turn a direction at random: a random axis across it, an angle of about sigma
+function turn(n, sigmaDeg, r) {
+  const th = sigmaDeg * DEG * Math.sqrt(-2 * Math.log(1 - r() * 0.999)), ph = 2 * Math.PI * r();
+  const u = perp(n), v = cross(n, u);
+  return unit(add(mul(n, Math.cos(th)), add(mul(u, Math.sin(th) * Math.cos(ph)), mul(v, Math.sin(th) * Math.sin(ph)))));
+}
+
+// a stream keyed by any words, for jobs that must not move one another
+function keyed(...keys) { let h = 2166136261; for (const ch of keys.join('/')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return mulberry32(h >>> 0); }
+// a chamfer's turn: one draw, up to half of Tilt, and never more than two thirds of the way from its own direction to the nearest
+// face it cuts (a third of the angle between two faces), so it always stays on its edge or corner. It comes with its mirror and
+// with no turn, then turned as far as that limit away from each face it cuts: the chamfer takes the first that bites a whole Sink
+// (no second draw: a touch point near the edge is cleared by turning away from its face)
+function chamferTurns(n, faces, tiltDeg, r) {
+  const near = Math.min(...faces.map(f => Math.acos(Math.max(-1, Math.min(1, dot(n, unit(f))))))), cap = near * 2 / 3;
+  const th = Math.min(tiltDeg / 2 * DEG, cap) * Math.sqrt(r()), ph = 2 * Math.PI * r();
+  const u = perp(n), v = cross(n, u), w = add(mul(u, Math.cos(ph)), mul(v, Math.sin(ph)));
+  const away = faces.map(f => { const a = sub(mul(n, dot(n, unit(f))), unit(f)), l = len(a); return l < 1e-9 ? n : unit(add(mul(n, Math.cos(cap)), mul(a, Math.sin(cap) / l))); });
+  return [unit(add(mul(n, Math.cos(th)), mul(w, Math.sin(th)))), unit(add(mul(n, Math.cos(th)), mul(w, -Math.sin(th)))), n, ...away];
+}
+const LEAN = 1.5;  // a turned face plane may dip no deeper into the shape than at its own point plus this (% of size)
+// the shape's own bounding planes: a polytope's faces, a curved shape's tangent planes
+function boundsOf(S) { return S._bounds || (S._bounds = S.ownFaces || [...fib(200), [0, 0, 1], [0, 0, -1]].map(n => ({ n, b: S.support(n) }))); }
+const reach = (poly, n) => { let m = -Infinity; for (const f of poly) for (const v of f.verts) m = Math.max(m, dot(n, v)); return m; };
+
+function build(shape, seed, P, withStats) {
+  const t0 = performance.now();
+  const S = shape, size = S.size, sink = P.sink / 100 * size, cham = sink / 2, lean = LEAN / 100 * size;
+  const contacts = S.contacts(stream(seed, 8));
+  const cands = S.candidates(stream(seed, 1));
+  cands.forEach((c, i) => { c.id = i; });   // a spot's own name, which keys its plane's stream
+  const byKind = k => cands.filter(c => c.kind === k);
+  const order = (list, k) => { const r = stream(seed, k); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
+  const corners = order(byKind('corner'), 2), edgeC = order(byKind('edge'), 3), faceC = order(byKind('face'), 4);
+
+  // Chamfered of the edges' total length, and of the corners, drawn, are chamfered; the rest get no plane. An edge is taken whole,
+  // in the drawn order, while that brings the length nearer the share (a round rim is many short edges, so it is taken in pieces)
+  const edgeKeys = [...new Set(edgeC.map(c => c.key))], cornerKeys = corners.map(c => c.key);
+  const edgeLen = new Map(edgeC.map(c => [c.key, c.len || 1]));
+  const lenOf = keys => keys.reduce((t, k) => t + edgeLen.get(k), 0), wantLen = lenOf(edgeKeys) * P.edges / 100;
+  const shareLen = keys => { const out = []; let got = 0; for (const k of keys) if (got + edgeLen.get(k) / 2 <= wantLen + 1e-9) { out.push(k); got += edgeLen.get(k); } return out; };
+  const bitten = new Set([...shareLen(order(edgeKeys, 6)), ...order(cornerKeys, 7).slice(0, Math.round(cornerKeys.length * P.edges / 100))]);
+
+  // pick anchors. Planes face planes are thrown over the faces, kept apart from one another; then each chamfered corner gets one
+  // plane and each chamfered edge planes spaced along it, kept apart from one another. The two never look at each other, so
+  // Chamfered never moves a face plane and Planes never moves a chamfer
+  const N = P.faceN, gap0 = P.gap0;   // the hull's share of Planes, at the whole rock's spacing
+  const faceA = [], edgeA = [];
+  const farFrom = (list, c, g) => list.every(t => len(sub(t.p, c.p)) >= g);
+  let gap = gap0;
+  for (let pass = 0; pass < 6 && faceA.length < N; pass++, gap *= 0.85)
+    for (const c of faceC) { if (faceA.length >= N) break; if (!c.used && farFrom(faceA, c, gap)) { c.used = true; faceA.push(c); } }
+  for (const c of corners) if (bitten.has(c.key)) edgeA.push(c);
+  for (const key of edgeKeys) if (bitten.has(key)) { const on = edgeC.filter(c => c.key === key); edgeA.push(on.find(c => farFrom(edgeA, c, gap0)) || on[0]); }
+  for (const c of edgeC) if (bitten.has(c.key) && !edgeA.includes(c) && farFrom(edgeA, c, 1.5 * gap0)) edgeA.push(c);
+  const taken = [...edgeA, ...faceA];
+
+  // every plane passes through or beyond every touch point
+  // a flat face's crown: its plane turned by Tilt about the touch point, with a patch of drawn size around the
+  // point that no other plane may cut, so the face's planes meet around a facet, not at a point
+  const rc = stream(seed, 9), guards = [], crowns = [];
+  for (const c of contacts) {
+    if (!c.n) { guards.push(c.p); continue; }
+    const n = turn(c.n, P.tilt, rc), u = perp(n), v = cross(n, u), rho = c.room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
+    for (let k = 0; k < 6; k++) { const ph = ph0 + k * Math.PI / 3; guards.push(add(c.p, add(mul(u, rho * Math.cos(ph)), mul(v, rho * Math.sin(ph))))); }
+    crowns.push({ n, b: dot(n, c.p), role: 'face' });
+  }
+  // face planes keep clear of the crowns' patches; chamfers only of the touch points themselves, so a chamfer may eat into a crown
+  const points = contacts.map(c => c.p);
+  const through = (n, b, keep = guards) => { for (const g of keep) b = Math.max(b, dot(n, g)); return b; };
+  // a face plane's turn: one draw from its own stream (a direction and a size), scaled by Tilt, so a higher Tilt turns the same
+  // plane further. If the turn would dip deeper into the shape anywhere than at its own point (plus its allowance), it is shortened
+  // just enough, never drawn again
+  const turnedFace = (n0, p0, allow, rr) => {
+    const th = P.tilt * DEG * Math.sqrt(-2 * Math.log(1 - rr() * 0.999)), ph = 2 * Math.PI * rr();
+    const u = perp(n0), v = cross(n0, u), w = add(mul(u, Math.cos(ph)), mul(v, Math.sin(ph)));
+    const at = sc => unit(add(mul(n0, Math.cos(sc * th)), mul(w, Math.sin(sc * th))));
+    const extra = sc => S.support(at(sc)) - dot(at(sc), p0) - allow;
+    let sc = 1;
+    if (extra(1) > 0) { if (extra(0) > 0) sc = 0; else { let lo = 0, hi = 1; for (let k = 0; k < 16; k++) { const m = (lo + hi) / 2; if (extra(m) > 0) hi = m; else lo = m; } sc = lo; } }
+    return at(sc);
+  };
+  const touchOf = fi => fi === undefined ? null : contacts.find(c => c.fi === fi);
+
+  // face planes: the face's tangent domed around its touch point, turned, sunk
+  const pad = 2 + 0.3 * size;
+  let poly = boxPoly(sub(S.lo, [pad, pad, pad]), add(S.hi, [pad, pad, pad]));
+  const planes = [...crowns];
+  for (const a of taken) if (a.kind === 'face') {
+    let n0 = a.n, p0 = a.p, allow = lean;
+    const t = touchOf(a.fi);
+    if (t) {
+      const d = sub(a.p, t.p), rr = len(d), k = Math.tan(P.tilt * DEG);   // the dome: lean away from the touch point, up to Tilt at the rim
+      allow += k * a.fr / 2;
+      if (rr > 1e-6) { n0 = unit(add(a.n, mul(d, k / a.fr))); p0 = sub(a.p, mul(a.n, k * rr * rr / (2 * a.fr))); }
+    }
+    const rr = keyed(seed, 'face', a.id), depth = sink * (0.5 + 0.5 * rr()), n = turnedFace(n0, p0, allow, rr);
+    planes.push({ n, b: through(n, dot(n, p0) - depth), role: 'face' });
+  }
+  // a plane meeting others outside the shape is sunk until they meet inside it (as far as the touch points let it)
+  const centre = mul(add(S.lo, S.hi), 0.5);
+  const poke = v => { if (S.inside(v)) return 0; let lo = 0, hi = 1; for (let k = 0; k < 20; k++) { const m = (lo + hi) / 2; if (S.inside(add(centre, mul(sub(v, centre), m)))) lo = m; else hi = m; } return (1 - lo) * len(sub(v, centre)); };
+  for (let round = 0; round < 6; round++) {
+    let q = poly; for (const pl of planes) q = clip(q, pl);
+    const push = new Map();
+    for (const f of q) if (f.role === 'face') for (const v of f.verts) { const d = poke(v); if (d > 1e-4) push.set(f, Math.max(push.get(f) || 0, d)); }
+    if (!push.size) break;
+    for (const pl of planes) { const f = q.find(f => f.n === pl.n && f.b === pl.b); if (f && push.has(f)) pl.b = through(pl.n, pl.b - push.get(f) * 1.1); }
+  }
+  for (const pl of planes) poly = clip(poly, pl);
+  for (const pl of boundsOf(S)) poly = clip(poly, { ...pl, role: 'touch' });
+
+  // chamfer planes: set against what the faces leave, cutting half to all of Sink into it
+  // if a touch point keeps one from cutting that deep, the next sharp one in the drawn order is chamfered instead
+  const ec = taken.filter(a => a.kind !== 'face'), byKey = new Map();
+  for (const a of ec) (byKey.get(a.key) || byKey.set(a.key, []).get(a.key)).push(a);
+  const first = key => corners.find(c => c.key === key) || edgeC.find(c => c.key === key);
+  const bites = new Map(), made = new Map();
+  const make = key => {
+    if (!byKey.has(key)) byKey.set(key, [first(key)]);
+    let most = 0; const pls = (byKey.get(key) || []).map((a, i) => {
+      // one draw from the chamfer's own stream; it stops at a touch point rather than being drawn again
+      const rr = keyed(seed, 'chamfer', key, i), turns = chamferTurns(a.n, a.fn, P.tilt, rr), depth = cham * (1 + rr());   // half to all of Sink
+      const tries = turns.map(n => { const b = through(n, reach(poly, n) - depth, points); return { n, b, bite: reach(poly, n) - b }; });
+      const { n, b } = tries.find(t => t.bite >= cham - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x);
+      most = Math.max(most, reach(poly, n) - b); return { n, b, role: a.kind };
+    });
+    bites.set(key, most); made.set(key, pls);
+  };
+  for (const key of [...byKey.keys()]) make(key);
+  const biting = key => bites.get(key) >= cham - 1e-6;
+  { const want = lenOf(shareLen(order(edgeKeys, 6))), ok = () => lenOf(edgeKeys.filter(biting));
+    for (const key of order(edgeKeys, 6)) { if (ok() >= want - 1e-9) break; if (!biting(key)) make(key); } }
+  { const want = Math.round(cornerKeys.length * P.edges / 100), ok = () => cornerKeys.filter(biting).length;
+    for (const key of order(cornerKeys, 7)) { if (ok() >= want) break; if (!biting(key)) make(key); } }
+  for (const pls of made.values()) for (const pl of pls) poly = clip(poly, pl);
+
+  const foot = 0;   // a hull's rock stays where the hull is; the whole rock is set down at the end
+  const res = { poly, foot, anchors: taken.map(a => ({ p: [a.p[0], a.p[1], a.p[2] - foot], kind: a.kind })), ms: 0 };
+  if (withStats) {
+    let out = 0, inn = 0;
+    for (const n of fib(1500)) { const hp = reach(poly, n), ht = S.support(n); out = Math.max(out, hp - ht); inn = Math.max(inn, ht - hp); }
+    const lo = S.lo.slice(), hi = S.hi.slice(), g = 30; let both = 0, either = 0;
+    for (const f of poly) for (const v of f.verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
+    const fp = poly.map(f => [f.n, f.b]);
+    for (let a = 0; a < g; a++) for (let b = 0; b < g; b++) for (let c = 0; c < g; c++) {
+      const p = [lo[0] + (hi[0] - lo[0]) * (a + 0.5) / g, lo[1] + (hi[1] - lo[1]) * (b + 0.5) / g, lo[2] + (hi[2] - lo[2]) * (c + 0.5) / g];
+      const t = S.inside(p); let rr = true; for (const [n, bb] of fp) if (dot(n, p) > bb + 1e-9) { rr = false; break; }
+      if (t && rr) both++; if (t || rr) either++;
+    }
+    let areaSum = 0, areaMax = 0;
+    for (const f of poly) { const a = faceArea(f); areaSum += a; areaMax = Math.max(areaMax, a); }
+    const counts = {}; for (const f of poly) counts[f.role] = (counts[f.role] || 0) + 1;
+    const placed = {}; for (const a of taken) placed[a.kind] = (placed[a.kind] || 0) + 1;
+    const inside = p => poly.every(f => dot(f.n, p) <= f.b + 1e-6);
+    const touched = S.ownFaces ? S.ownFaces.filter(f => reach(poly, f.n) >= f.b - 1e-6).length : contacts.filter(c => inside(c.p)).length;
+    const bit = keys => keys.filter(k => (bites.get(k) || 0) >= cham - 1e-6).length;
+    Object.assign(res, { out, inn, iou: either ? both / either : 0, counts, placed, vol: volume(poly), largest: areaMax / areaSum,
+      touched, sides: S.ownFaces ? S.ownFaces.length : contacts.length, sidesWord: S.ownFaces ? 'faces' : 'touch points',
+      edgesBit: lenOf(edgeKeys.filter(k => (bites.get(k) || 0) >= cham - 1e-6)), edgesAll: lenOf(edgeKeys), edgesWant: lenOf(shareLen(order(edgeKeys, 6))), cornersBit: bit(cornerKeys), cornersAll: cornerKeys.length });
+  }
+  res.ms = performance.now() - t0;
+  return res;
+}
+
+// ---------- targets: each written as alternating convex hulls (a hull, minus hollows, plus bumps inside them) ----------
+// a convex solid is a list of half-spaces { n, b } (n·x <= b); its faces come from cutting a big box by them
+function solidOf(planes) { let p = boxPoly([-80, -80, -80], [80, 80, 80]); for (const pl of planes) p = clip(p, { ...pl, role: 'hull' }); return p; }
+function prism(P2, z0, z1) {   // a counter-clockwise outline, stood up from z0 to z1
+  const out = [{ n: [0, 0, 1], b: z1 }, { n: [0, 0, -1], b: -z0 }];
+  P2.forEach((a, i) => { const c = P2[(i + 1) % P2.length], d = [c[0] - a[0], c[1] - a[1]], l = Math.hypot(d[0], d[1]), n = [d[1] / l, -d[0] / l, 0]; out.push({ n, b: n[0] * a[0] + n[1] * a[1] }); });
+  return out;
+}
+function pyramidDown(P2, zTop, apex) {   // a pit: an outline at zTop, narrowing down to an apex
+  const out = [{ n: [0, 0, 1], b: zTop }], c = P2.reduce((s, p) => [s[0] + p[0] / P2.length, s[1] + p[1] / P2.length], [0, 0]);
+  P2.forEach((a2, i) => {
+    const b2 = P2[(i + 1) % P2.length], a = [a2[0], a2[1], zTop], b = [b2[0], b2[1], zTop];
+    let n = unit(cross(sub(b, a), sub(apex, a))); if (dot(n, sub([c[0], c[1], zTop - 1], a)) > 0) n = mul(n, -1);
+    out.push({ n, b: dot(n, a) });
+  });
+  return out;
+}
+const ring2 = (k, r, ph, cw) => Array.from({ length: k }, (_, i) => { const t = ph + (cw ? -1 : 1) * 2 * Math.PI * i / k; return [r * Math.cos(t), r * Math.sin(t)]; });
+const node = (planes, kids = []) => ({ planes, kids });
+const TARGETS = [
+  { key: 'l', label: 'L-block', tree: node(prism([[-9, -9], [9, -9], [9, -1], [-1, 9], [-9, 9]], 0, 10), [node(prism([[9, -1], [-1, 9], [-1, -1]], 0, 10))]) },
+  { key: 'u', label: 'U-block', tree: node(prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 10), [node(prism([[-4, -3], [4, -3], [4, 9], [-4, 9]], 0, 10))]) },
+  { key: 'ring', label: 'Ring', tree: node(prism(ring2(8, 10, Math.PI / 8), 0, 9), [node(prism(ring2(7, 4.4, 0.3), 0, 9))]) },
+  { key: 'pit', label: 'Block with a pit', tree: node(prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 12), [node(pyramidDown([[-5, -5], [5, -5], [5, 5], [-5, 5]], 12, [0.5, -0.5, 5]))]) },
+  { key: 'arch', label: 'Arch', tree: node(prism([[-9, -7], [9, -7], [9, 7], [-9, 7]], 0, 13), [node(prism([[-9, -3.5], [9, -3.5], [9, 3.5], [-9, 3.5]], 0, 6.5))]) },
+  { key: 'peak', label: 'Notch with a peak', tree: node(prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 10), [node(prism([[-4.5, 9], [-2, 1], [2, 1], [4.5, 9]], 0, 10), [node(prism([[-2, 1], [2, 1], [0, 6]], 0, 10))])]) },
+];
+
+// ---------- the hull tree, made ready ----------
+const samePlane = (f, g) => dot(f.n, g.n) > 1 - 1e-9 && Math.abs(f.b - g.b) < 1e-6;
+const centroidOf = pts => mul(pts.reduce(add, [0, 0, 0]), 1 / pts.length);
+function inFace(f, p, eps = 1e-9) { const v = f.verts; for (let i = 0; i < v.length; i++) { const a = v[i], b = v[(i + 1) % v.length]; if (dot(cross(sub(b, a), sub(p, a)), f.n) < -eps) return false; } return true; }
+function prepare(T) {
+  if (T._ready) return T;
+  const all = [];
+  const walk = (nd, parent, sign, path) => {
+    nd.parent = parent; nd.sign = sign; nd.path = path; nd.poly = solidOf(nd.planes); all.push(nd);
+    nd.kids.forEach((k, i) => walk(k, nd, -sign, path + '.' + i));
+  };
+  walk(T.tree, null, 1, 'h');
+  for (const nd of all) {
+    nd.mouth = nd.poly.map(f => !!nd.parent && nd.parent.poly.some((g, gi) => samePlane(f, g) && !nd.parent.mouth[gi]));
+    // a point on face fi is real surface (the target's own) unless the face is a mouth or a child's mouth covers it
+    nd.real = (fi, p) => !nd.mouth[fi] && !nd.kids.some(k => k.poly.some(g => samePlane(g, nd.poly[fi]) && inFace(g, p, 1e-7)));
+    const r = mulberry32(12345);
+    nd.realArea = nd.poly.map((f, fi) => { if (nd.mouth[fi]) return 0; const pts = sampleFace(f, 300, r); return faceArea(f) * pts.filter(p => nd.real(fi, p)).length / pts.length; });
+  }
+  const lo = [0, 1, 2].map(i => Math.min(...T.tree.poly.flatMap(f => f.verts.map(v => v[i])))), hi = [0, 1, 2].map(i => Math.max(...T.tree.poly.flatMap(f => f.verts.map(v => v[i]))));
+  Object.assign(T, { _ready: true, all, lo, hi, size: (hi[0] - lo[0] + hi[1] - lo[1] + hi[2] - lo[2]) / 3, area: all.reduce((t, nd) => t + nd.realArea.reduce((u, a) => u + a, 0), 0) });
+  T.pieces = assemble(T.tree, nd => nd.planes, nd => nd.poly);
+  T.volume = T.pieces.reduce((t, p) => t + volume(p), 0);
+  return T;
+}
+function sampleFace(f, m, r) {
+  const v = f.verts, tris = []; for (let i = 1; i + 1 < v.length; i++) tris.push([v[0], v[i], v[i + 1], len(cross(sub(v[i], v[0]), sub(v[i + 1], v[0])))]);
+  const tot = tris.reduce((t, a) => t + a[3], 0), out = [];
+  for (let k = 0; k < m; k++) { let x = r() * tot, T = tris[0]; for (const t of tris) { T = t; if ((x -= t[3]) <= 0) break; } let u = r(), w = r(); if (u + w > 1) { u = 1 - u; w = 1 - w; } out.push(add(T[0], add(mul(sub(T[1], T[0]), u), mul(sub(T[2], T[0]), w)))); }
+  return out;
+}
+
+// a rock hull as a shape Rock Planes can build on: its own faces bound the rock; touch points, corners, edges and face spots
+// are only where the hull's face is the target's real surface (never across a hollow's mouth)
+function hullShape(nd, T) {
+  const poly = nd.poly, verts = dedupe(poly.flatMap(f => f.verts), 1e-6);
+  const S = {
+    support: n => { let m = -Infinity; for (const v of verts) m = Math.max(m, dot(n, v)); return m; },
+    inside: p => poly.every(f => dot(f.n, p) <= f.b + 1e-9),
+    ownFaces: poly.map(f => ({ n: f.n, b: f.b })),
+    lo: T.lo, hi: T.hi, size: T.size, height: T.hi[2] - T.lo[2],
+    contacts(r) {
+      const out = [];
+      poly.forEach((f, fi) => {
+        if (nd.realArea[fi] < 1) return;
+        const pts = sampleFace(f, 60, r).filter(p => nd.real(fi, p)); if (!pts.length) return;
+        const fc = centroidOf(pts), p = pts[Math.floor(r() * pts.length)];
+        let c = add(fc, mul(sub(p, fc), 0.35)); if (!nd.real(fi, c)) c = p;
+        // room: how far the touch point is from the nearest edge of the face's real part
+        const edges = [f, ...nd.kids.flatMap(k => k.poly.filter(g => samePlane(g, f)))];
+        let room = Infinity; for (const g of edges) for (let i = 0; i < g.verts.length; i++) { const A = g.verts[i], B = g.verts[(i + 1) % g.verts.length], e = sub(B, A), t = Math.max(0, Math.min(1, dot(sub(c, A), e) / dot(e, e))); room = Math.min(room, len(sub(c, add(A, mul(e, t))))); }
+        out.push({ p: c, fi, n: f.n, fr: Math.max(...pts.map(q => len(sub(q, fc)))), room });
+      });
+      return out;
+    },
+    candidates(r) {
+      const out = [], into = (f, a, b) => { let d = unit(cross(f.n, sub(b, a))); if (dot(d, sub(centroidOf(f.verts), a)) < 0) d = mul(d, -1); return d; };
+      // corners: a hull vertex whose every face is real right beside it
+      verts.forEach((v, i) => {
+        const fs = poly.map((f, fi) => [f, fi]).filter(([f]) => f.verts.some(w => len(sub(w, v)) < 1e-6));
+        if (fs.length >= 3 && fs.every(([f, fi]) => nd.real(fi, add(v, mul(unit(sub(centroidOf(f.verts), v)), 0.3)))))
+          out.push({ p: v, n: unit(fs.reduce((s, [f]) => add(s, f.n), [0, 0, 0])), fn: fs.map(([f]) => f.n), kind: 'corner', key: 'c' + i });
+      });
+      // edges: a hull edge whose two faces are real along it
+      const seen = new Map();
+      poly.forEach((f, fi) => f.verts.forEach((a, k) => {
+        const b = f.verts[(k + 1) % f.verts.length], ia = verts.findIndex(w => len(sub(w, a)) < 1e-6), ib = verts.findIndex(w => len(sub(w, b)) < 1e-6), key = Math.min(ia, ib) + '-' + Math.max(ia, ib);
+        (seen.get(key) || seen.set(key, { a, b, fs: [] }).get(key)).fs.push(fi);
+      }));
+      for (const [key, e] of seen) {
+        if (e.fs.length !== 2) continue;
+        const ok = [0.2, 0.5, 0.8].every(t => e.fs.every(fi => nd.real(fi, add(add(e.a, mul(sub(e.b, e.a), t)), mul(into(poly[fi], e.a, e.b), 0.3)))));
+        if (!ok) continue;
+        const ns = e.fs.map(fi => poly[fi].n), n = unit(add(ns[0], ns[1])), m = Math.ceil(len(sub(e.b, e.a)) * 4);
+        for (let k = 0; k < m; k++) out.push({ p: add(e.a, mul(sub(e.b, e.a), 0.04 + 0.92 * r())), n, fn: ns, kind: 'edge', key: 'e' + key, len: len(sub(e.b, e.a)) });
+      }
+      // face spots: spread by area over the real part of each face
+      poly.forEach((f, fi) => {
+        if (nd.realArea[fi] <= 0) return;
+        const fc = centroidOf(f.verts), fr = Math.max(...f.verts.map(v => len(sub(v, fc))));
+        for (const p of sampleFace(f, Math.ceil(faceArea(f) * 2), r)) if (nd.real(fi, p)) out.push({ p, n: f.n, kind: 'face', fi, fr });
+      });
+      return out;
+    },
+  };
+  return S;
+}
+
+// a hollow's pocket: each real face of its hull gets planes turned into the rock and pushed out to the hollow's hull, so the
+// pocket always holds the whole hollow and each face touches the target along an edge or at a corner. A face gets about one
+// plane for each plane spacing squared of its area (one to six), leaning different ways, so it bows into the rock
+function pocketOf(nd, T, seed, P) {
+  const sinkMM = P.sink / 100 * T.size, tt = Math.tan(P.tilt * DEG), planes = [];
+  const verts = dedupe(nd.poly.flatMap(f => f.verts), 1e-6), hs = n => Math.max(...verts.map(v => dot(n, v)));
+  nd.poly.forEach((f, fi) => {
+    if (nd.realArea[fi] < 0.5) return;
+    const rh = keyed(seed, 'hollow', nd.path, fi);
+    const k = Math.max(1, Math.min(6, Math.round(nd.realArea[fi] / (P.gap0 * P.gap0) * (0.6 + 0.8 * rh()))));
+    const u0 = perp(f.n), v0 = cross(f.n, u0), ph0 = 2 * Math.PI * rh();
+    for (let j = 0; j < k; j++) {
+      const ph = ph0 + 2 * Math.PI * j / k + (rh() - 0.5) * Math.PI / k, u = add(mul(u0, Math.cos(ph)), mul(v0, Math.sin(ph)));
+      const ext = Math.max(...f.verts.map(v => dot(u, v))) - Math.min(...f.verts.map(v => dot(u, v)));
+      const depth = sinkMM * 0.5 * (1 + rh()) + 0.5 * ext * tt * (0.6 + 0.8 * rh()), a = Math.atan2(depth, Math.max(ext, 1e-6));
+      const n = unit(add(mul(f.n, Math.cos(a)), mul(u, Math.sin(a))));
+      planes.push({ n, b: hs(n), role: 'hollow' });
+    }
+  });
+  // bounds: a mouth opens a little past itself; a real face lets the pocket into the rock no further than its planes can reach
+  for (const [fi, f] of nd.poly.entries()) {
+    const diam = Math.max(...f.verts.flatMap(a => f.verts.map(b => len(sub(a, b)))));
+    planes.push({ n: f.n, b: f.b + (nd.mouth[fi] ? 2 : nd.realArea[fi] > 0 ? sinkMM + 0.7 * diam * tt + 0.01 : 0), role: 'bound' });
+  }
+  return planes;
+}
+
+// ---------- convex pieces: subtract a convex region (half-spaces), add a piece ----------
+function subtractRegion(pieces, region) {
+  const out = [];
+  for (const piece of pieces) {
+    let rest = piece;
+    for (const pl of region) {
+      const outside = clip(rest, { n: mul(pl.n, -1), b: -pl.b, role: pl.role });
+      if (outside.length >= 4 && volume(outside) > 1e-6) out.push(outside);
+      rest = clip(rest, pl); if (rest.length < 4 || volume(rest) <= 1e-6) break;
+    }
+  }
+  return out;
+}
+// the rock (or the target): the first hull's piece, minus each hollow's region, plus each bump's piece, in order
+function assemble(root, regionOf, pieceOf) {
+  let pieces = [pieceOf(root)];
+  const visit = nd => { for (const k of nd.kids) { if (k.sign < 0) pieces = subtractRegion(pieces, regionOf(k)); else pieces.push(pieceOf(k)); visit(k); } };
+  visit(root);
+  return pieces;
+}
+
+// ---------- the rims of hollows: where a rock face meets a hollow's wall at an outward edge ----------
+// neither hull owns these edges, so each gets its own chamfer, a cut of that edge alone, set against the rock that is there
+function rimsOf(T) {
+  const out = [];
+  for (const nd of T.all) if (nd.sign < 0 && nd.parent && nd.parent.sign > 0) {
+    const P = nd.parent;
+    nd.poly.forEach((W, wi) => {
+      if (nd.realArea[wi] <= 0) return;
+      W.verts.forEach((a, k) => {
+        const b = W.verts[(k + 1) % W.verts.length], mid = mul(add(a, b), 0.5);
+        const mi = nd.poly.findIndex((M, j) => j !== wi && Math.abs(dot(M.n, a) - M.b) < 1e-6 && Math.abs(dot(M.n, b) - M.b) < 1e-6);
+        if (mi < 0 || !nd.mouth[mi]) return;
+        const G = P.poly.find(g => samePlane(g, nd.poly[mi]));
+        // the rock face: the parent face the mouth lies in, if the edge is inside it; else the parent face across the edge
+        const off = unit(cross(nd.poly[mi].n, sub(b, a))), side = dot(off, sub(centroidOf(nd.poly[mi].verts), mid)) > 0 ? mul(off, -1) : off;
+        const probe = add(mid, mul(side, 0.05));
+        let F = G && inFace(G, probe, 1e-7) ? G : P.poly.find(g => !samePlane(g, nd.poly[mi]) && Math.abs(dot(g.n, a) - g.b) < 1e-6 && Math.abs(dot(g.n, b) - g.b) < 1e-6);
+        if (!F) return;
+        if (dot(F.n, mul(W.n, -1)) > Math.cos(25 * DEG)) return;   // nearly flat: no edge to chamfer
+        out.push({ a, b, F, W, len: len(sub(b, a)), key: nd.path + ':' + wi + ':' + k });
+      });
+    });
+  }
+  return out;
+}
+function rimCuts(T, pieces, seed, P) {
+  const sinkMM = P.sink / 100 * T.size, cham = sinkMM / 2, rims = rimsOf(T), cuts = [];
+  const rp = keyed(seed, 'rim-pick'), order = rims.map(m => [rp(), m]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
+  const want = rims.reduce((t, m) => t + m.len, 0) * P.edges / 100; let got = 0;
+  for (const m of order) {
+    if (got + m.len / 2 > want + 1e-9) continue; got += m.len;
+    const rr = keyed(seed, 'rim', m.key), nW = mul(m.W.n, -1), t = unit(sub(m.b, m.a));
+    const n = chamferTurns(unit(add(m.F.n, nW)), [m.F.n, nW], P.tilt, rr)[0];
+    const near = [{ n: m.F.n, b: m.F.b + 0.01 }, { n: nW, b: -m.W.b + 0.01 }, { n: mul(t, -1), b: -dot(t, m.a) }, { n: t, b: dot(t, m.b) }];
+    let h = -Infinity;
+    for (const piece of pieces) { let q = piece; for (const pl of near) q = clip(q, pl); for (const f of q) for (const v of f.verts) h = Math.max(h, dot(n, v)); }
+    if (h === -Infinity) continue;
+    const b = h - cham * (1 + rr());
+    cuts.push({ region: [...near, { n: mul(n, -1), b: -b, role: 'chamfer' }], plane: { n, b }, len: m.len });
+  }
+  return { cuts, rimLen: rims.reduce((t, m) => t + m.len, 0), cutLen: got };
+}
+
+// ---------- the whole rock ----------
+function buildRock(T, seed, P0, withStats) {
+  const t0 = performance.now();
+  prepare(T);
+  const gap0 = 0.85 * Math.sqrt(T.area / P0.planes), P = { ...P0, gap0 };
+  const nodeSeed = path => Math.floor(keyed(seed, 'node', path)() * 2147483647);
+  const rockOf = new Map(), pocket = new Map();
+  for (const nd of T.all) {
+    if (nd.sign > 0) {
+      const share = nd.realArea.reduce((t, a) => t + a, 0) / T.area;
+      const res = build(hullShape(nd, T), nodeSeed(nd.path), { ...P, faceN: Math.max(1, Math.round(P.planes * share)) }, false);
+      rockOf.set(nd, res.poly.filter(f => f.verts.length >= 3));
+    } else pocket.set(nd, pocketOf(nd, T, seed, P));
+  }
+  let pieces = assemble(T.tree, nd => pocket.get(nd), nd => rockOf.get(nd));
+  const rim = rimCuts(T, pieces, seed, P);
+  for (const c of rim.cuts) pieces = subtractRegion(pieces, c.region);
+  const res = { pieces, rim, ms: performance.now() - t0, hulls: T.all.length };
+  if (withStats) {
+    res.volume = pieces.reduce((t, p) => t + volume(p), 0);
+    res.fill = res.volume / T.volume;
+    const sv = surfaceOf(pieces); res.faces = sv.faces.length;
+  }
+  return res;
+}
+
+// ---------- the surface of a set of convex pieces: each face less what other pieces cover, and the creases ----------
+function clipPoly(vs, n, b) {   // keep n·x <= b
+  const out = [];
+  for (let i = 0; i < vs.length; i++) {
+    const a = vs[i], c = vs[(i + 1) % vs.length], da = dot(n, a) - b, dc = dot(n, c) - b;
+    if (da <= 1e-9) out.push(a);
+    if ((da < -1e-9 && dc > 1e-9) || (da > 1e-9 && dc < -1e-9)) out.push(add(a, mul(sub(c, a), da / (da - dc))));
+  }
+  return dedupe(out, 1e-7);
+}
+const polyArea = (vs, n) => { let a = [0, 0, 0]; for (let i = 1; i + 1 < vs.length; i++) a = add(a, cross(sub(vs[i], vs[0]), sub(vs[i + 1], vs[0]))); return Math.abs(dot(a, n)) / 2; };
+function minusPoly(vs, g, n) {   // the parts of convex vs outside convex g, both on one plane
+  const out = []; let rest = vs;
+  for (let i = 0; i < g.verts.length; i++) {
+    const A = g.verts[i], B = g.verts[(i + 1) % g.verts.length], m = unit(cross(sub(B, A), g.n));
+    const o = clipPoly(rest, mul(m, -1), -dot(m, A)); if (o.length >= 3 && polyArea(o, n) > 1e-6) out.push(o);
+    rest = clipPoly(rest, m, dot(m, A)); if (rest.length < 3 || polyArea(rest, n) <= 1e-6) return out;
+  }
+  return out;
+}
+function surfaceOf(pieces) {
+  const faces = []; pieces.forEach((pc, i) => pc.forEach(f => faces.push({ ...f, piece: i })));
+  const outer = [];
+  for (const f of faces) {
+    let frags = [f.verts];
+    for (const g of faces) if (g.piece !== f.piece && dot(g.n, f.n) < -1 + 1e-9 && Math.abs(g.b + f.b) < 1e-6) frags = frags.flatMap(v => minusPoly(v, g, f.n));
+    for (const v of frags) outer.push({ n: f.n, b: f.b, role: f.role, verts: v });
+  }
+  const lines = [];
+  for (const f of outer) { const c = centroidOf(f.verts); f.verts.forEach((a, k) => {
+    const b = f.verts[(k + 1) % f.verts.length], mid = mul(add(a, b), 0.5);
+    let across = unit(cross(f.n, sub(b, a))); if (dot(across, sub(c, mid)) > 0) across = mul(across, -1);
+    const q = add(mid, mul(across, 1e-3));
+    if (outer.some(g => g !== f && samePlane(g, f) && inFace(g, q, 1e-9))) return;   // a seam between two pieces on one plane
+    lines.push(a, b);
+  }); }
+  return { faces: outer, lines };
+}
+
+// ---------- drawing ----------
+const STONE = '#B9B4A8';
+function faceColor(n) { if (n[2] < 0) { const a = Math.asin(-n[2]) / DEG; if (a > 65) return '#E5483B'; if (a > 55) return '#FF8C1A'; } return STONE; }
+const stoneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x2B3340, transparent: true, opacity: 0.45 });
+function meshOf(surf, foot, opt) {
+  const pos = [], nor = [], col = [], c = new THREE.Color(), dz = v => [v[0], v[1], v[2] - foot];
+  for (const f of surf.faces) {
+    c.set(opt.ghost ? '#287B62' : faceColor(f.n)); const v = f.verts.map(dz);
+    for (let i = 1; i + 1 < v.length; i++) for (const p of [v[0], v[i], v[i + 1]]) { pos.push(...p); nor.push(...f.n); col.push(c.r, c.g, c.b); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const grp = new THREE.Group();
+  grp.add(new THREE.Mesh(g, opt.ghost ? new THREE.MeshBasicMaterial({ color: 0x287B62, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }) : stoneMat));
+  if (opt.lines) {
+    const lp = []; for (const p of surf.lines) lp.push(...dz(p));
+    const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+    grp.add(new THREE.LineSegments(lg, opt.ghost ? new THREE.LineBasicMaterial({ color: 0x287B62, transparent: true, opacity: 0.55 }) : edgeMat));
+  }
+  return grp;
+}
+function disposeGroup(grp) { grp.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+function makeScene() {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#D9E0EB');
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x7c8494, 0.62));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.85); sun.position.set(-30, -45, 60); scene.add(sun);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.22); fill.position.set(40, 30, 20); scene.add(fill);
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: 0xD9E0EB }));
+  plate.position.z = -0.01; scene.add(plate);
+  const rule = []; for (let k = -3; k <= 3; k++) { const x = 17.5 + 35 * k; rule.push(x, -122.5, 0, x, 122.5, 0, -122.5, x, 0, 122.5, x, 0); }
+  const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(rule, 3));
+  scene.add(new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xA9B4C4 })));
+  return scene;
+}
+function rockSurface(T, seed, withStats) {
+  const res = buildRock(T, seed, params(), withStats), surf = surfaceOf(res.pieces);
+  let foot = Infinity; for (const f of surf.faces) for (const v of f.verts) foot = Math.min(foot, v[2]);
+  return { res, surf, foot };
+}
+
+// ---------- page state ----------
+const DEFAULTS = { planes: 60, edges: 100, tilt: 6, sink: 3, ghost: true, lines: true };
+const state = { shape: 'l', view: 'persp', seed: 1, ...DEFAULTS };
+const $ = id => document.getElementById(id);
+// a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
+function showValue(out, input, unit) {
+  const places = (String(input.step).split('.')[1] || '').length, digits = String(Math.floor(+input.max)).length;
+  const [ip, fp] = (+input.value).toFixed(places).replace(/\.?0+$/, m => places ? '' : m).split('.');
+  out.innerHTML = `<span class="ip" style="min-width:${digits}ch">${ip}</span><span class="fp" style="width:${places ? places + 1 : 0}ch">${fp ? '.' + fp : ''}</span>${unit ? `<span class="un">${unit}</span>` : ''}`;
+}
+const SLIDERS = { planes: '', edges: '%', tilt: '°', sink: '%' };
+const CHECKS = ['ghost', 'lines'];
+const targetOf = k => TARGETS.find(t => t.key === k) || TARGETS[0];
+function params() { return { planes: state.planes, edges: state.edges, tilt: state.tilt, sink: state.sink }; }
+
+const viewerEl = $('viewer');
+let renderer, scene, camera, persp, ortho, controls, rockObj = null, ghostObj = null, thumbR, thumbScene, thumbPersp, thumbOrtho;
+function initGL() {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  viewerEl.prepend(renderer.domElement);
+  scene = makeScene();
+  persp = new THREE.PerspectiveCamera(35, 1, 0.5, 1000);
+  ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
+  for (const c of [persp, ortho]) { c.up.set(0, 0, 1); c.position.set(34, -50, 36); }
+  camera = state.view === 'ortho' ? ortho : persp;
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 5); controls.enablePan = false; controls.minDistance = 20; controls.maxDistance = 180;
+  controls.addEventListener('change', draw); controls.update();
+  new ResizeObserver(resize).observe(viewerEl); resize();
+  thumbR = new THREE.WebGLRenderer({ antialias: true });
+  thumbR.setPixelRatio(Math.min(devicePixelRatio, 2)); thumbR.setSize(140, 140);
+  thumbScene = makeScene();
+  thumbPersp = new THREE.PerspectiveCamera(32, 1, 0.5, 1000);
+  const th = 62 * Math.tan(16 * DEG); thumbOrtho = new THREE.OrthographicCamera(-th, th, th, -th, -500, 1000);
+  for (const c of [thumbPersp, thumbOrtho]) c.up.set(0, 0, 1);
+}
+function frameOrtho() {
+  const w = viewerEl.clientWidth, h = viewerEl.clientHeight, half = camera.position.distanceTo(controls.target) * Math.tan(17.5 * DEG);
+  Object.assign(ortho, { left: -half * w / h, right: half * w / h, top: half, bottom: -half }); ortho.updateProjectionMatrix();
+}
+function resize() { const w = viewerEl.clientWidth, h = viewerEl.clientHeight; renderer.setSize(w, h, false); persp.aspect = w / h; persp.updateProjectionMatrix(); frameOrtho(); draw(); }
+function setView(v) {
+  state.view = v; const next = v === 'ortho' ? ortho : persp;
+  if (next !== camera) {
+    next.position.copy(camera.position);
+    if (next === ortho) { ortho.zoom = 1; camera = ortho; frameOrtho(); }
+    else { persp.position.sub(controls.target).multiplyScalar(1 / ortho.zoom).add(controls.target); camera = persp; }
+    controls.object = camera; camera.lookAt(controls.target); controls.update();
+  }
+  syncUI(); draw(); rebuildThumbs();
+}
+function draw() { if (renderer) renderer.render(scene, camera); }
+
+function rebuild() {
+  try {
+    $('err').hidden = true;
+    const T = targetOf(state.shape), { res, surf, foot } = rockSurface(T, state.seed, true);
+    if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
+    rockObj = meshOf(surf, foot, { lines: state.lines }); scene.add(rockObj);
+    if (ghostObj) { scene.remove(ghostObj); disposeGroup(ghostObj); ghostObj = null; }
+    if (state.ghost) { ghostObj = meshOf(T._surf || (T._surf = surfaceOf(T.pieces)), foot, { ghost: true, lines: true }); scene.add(ghostObj); }
+    draw();
+    $('chip').textContent = T.label.toLowerCase() + ' · seed ' + state.seed;
+    showStats(T, res, surf);
+  } catch (e) { $('err').hidden = false; $('err').textContent = 'The rock could not be built: ' + e.message; console.error(e); }
+}
+function showStats(T, r, surf) {
+  const rim = r.rim, rows = [
+    ['Hulls (rock · hollow)', `${T.all.filter(n => n.sign > 0).length} · ${T.all.filter(n => n.sign < 0).length}`],
+    ['Faces', surf.faces.length],
+    ...(rim.rimLen ? [['Rim length chamfered', `${Math.round(100 * rim.cutLen / rim.rimLen)}% of ${rim.rimLen.toFixed(0)} mm`]] : []),
+    ['Fills the shape', (r.fill * 100).toFixed(1) + '%'],
+    ['Volume', (r.volume / 1000).toFixed(2) + ' cm³'],
+    ['Built in', r.ms.toFixed(0) + ' ms'],
+  ];
+  $('stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+}
+
+// neighbouring seeds
+const strip = $('strip'), thumbs = [];
+for (let i = 0; i < 8; i++) {
+  const b = document.createElement('button'); b.className = 'thumb';
+  const cv = document.createElement('canvas'); cv.width = 280; cv.height = 280;
+  const s = document.createElement('span'); b.append(cv, s); strip.append(b);
+  b.addEventListener('click', () => setSeed(+b.dataset.seed));
+  thumbs.push({ b, cv, s, ctx: cv.getContext('2d') });
+}
+let thumbTimer = 0;
+function rebuildThumbs() { clearTimeout(thumbTimer); thumbTimer = setTimeout(drawThumbs, 120); }
+function drawThumbs() {
+  const start = Math.max(0, state.seed - 3), T = targetOf(state.shape);
+  const cam = state.view === 'ortho' ? thumbOrtho : thumbPersp;
+  const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+  cam.position.copy(dir.multiplyScalar(62)).add(new THREE.Vector3(0, 0, 5)); cam.lookAt(0, 0, 5);
+  thumbs.forEach((t, i) => {
+    const seed = start + i; t.b.dataset.seed = seed; t.s.textContent = seed;
+    t.b.setAttribute('aria-current', seed === state.seed ? 'true' : 'false'); t.b.setAttribute('aria-label', 'Seed ' + seed);
+    try {
+      const { surf, foot } = rockSurface(T, seed, false), g = meshOf(surf, foot, { lines: state.lines });
+      thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
+      t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
+    } catch (e) { console.error(e); }
+  });
+}
+
+// controls
+const shapeEl = $('shape');
+for (const t of TARGETS) { const o = document.createElement('option'); o.value = t.key; o.textContent = t.label; shapeEl.append(o); }
+shapeEl.addEventListener('change', () => { state.shape = shapeEl.value; update(); });
+for (const b of $('view').children) b.addEventListener('click', () => setView(b.dataset.view));
+for (const k of Object.keys(SLIDERS)) $(k).addEventListener('input', e => { state[k] = +e.target.value; showValue($('o-' + k), $(k), SLIDERS[k]); update(); });
+for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.target.checked; update(); });
+$('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS); syncUI(); update(); });
+$('prev').addEventListener('click', () => setSeed(state.seed - 1));
+$('next').addEventListener('click', () => setSeed(state.seed + 1));
+$('seed').addEventListener('change', e => setSeed(parseInt(e.target.value, 10) || 0));
+document.addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input, textarea, select')) return;
+  if (e.key === 'ArrowLeft') { setSeed(state.seed - 1); e.preventDefault(); }
+  if (e.key === 'ArrowRight') { setSeed(state.seed + 1); e.preventDefault(); }
+});
+function setSeed(s) { state.seed = Math.max(0, s | 0); syncUI(); update(); }
+function syncUI() {
+  shapeEl.value = state.shape;
+  for (const b of $('view').children) b.setAttribute('aria-pressed', b.dataset.view === state.view ? 'true' : 'false');
+  $('seed').value = state.seed;
+  for (const k of Object.keys(SLIDERS)) { $(k).value = state[k]; showValue($('o-' + k), $(k), SLIDERS[k]); }
+  for (const k of CHECKS) $(k).checked = state[k];
+}
+let ownHash = '';
+function update() {
+  rebuild(); rebuildThumbs();
+  ownHash = '#' + state.shape + '-' + state.seed;
+  try { if (location.hash !== ownHash) history.replaceState(null, '', ownHash); } catch (e) { /* the frame may refuse; the page works without it */ }
+}
+function readHash() {
+  const m = /^#([a-z]+)-(\d+)$/.exec(location.hash || '');
+  if (m && TARGETS.some(t => t.key === m[1])) { state.shape = m[1]; state.seed = +m[2]; }
+}
+window.addEventListener('hashchange', () => { if (location.hash !== ownHash) { readHash(); syncUI(); update(); } });
+
+readHash(); syncUI();
+try { initGL(); update(); }
+catch (e) { $('err').hidden = false; $('err').textContent = 'The 3D view could not start: ' + e.message; }
+</script>
