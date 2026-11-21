@@ -46,10 +46,8 @@ h1 { font: 800 34px/1 var(--f-display); letter-spacing: .01em; margin: 0; text-t
 .seg button:hover:not([aria-pressed="true"]) { background: var(--panel); }
 .sel { height: 30px; padding: 0 28px 0 10px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 500 14px var(--f-body); cursor: pointer; }
 .sel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.seed { display: flex; align-items: center; gap: 6px; }
 .btn { height: 30px; min-width: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 600 14px var(--f-body); cursor: pointer; }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
-.seed input { width: 76px; height: 30px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 600 15px var(--f-code); text-align: center; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hint { color: var(--muted); font-size: 12px; }
 .main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
@@ -64,11 +62,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .legend { position: absolute; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font-size: 12px; max-width: calc(100% - 20px); }
 .legend[hidden] { display: none; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.carousel { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; align-items: start; }
+.carousel .arrow { align-self: stretch; height: auto; aspect-ratio: auto; padding: 0 6px; margin-bottom: 26px; font-size: 16px; }
 .strip { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
-.thumb { position: relative; border: 1px solid var(--line); border-radius: var(--r); background: var(--plate); padding: 0; cursor: pointer; aspect-ratio: 1; max-width: 100%; overflow: hidden; }
+.item { display: grid; gap: 4px; justify-items: center; min-width: 0; }
+.num { height: 22px; min-width: 44px; padding: 0 6px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--muted); font: 600 12px var(--f-code); font-variant-numeric: tabular-nums; cursor: pointer; }
+.num:hover { color: var(--ink); }
+.item[aria-current="true"] .num { color: var(--accent); border-color: var(--line-2); background: var(--raised); cursor: text; }
+.item[aria-current="true"] .num:hover { border-color: var(--accent); }
+.numedit { width: 64px; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 600 12px var(--f-code); text-align: center; }
+.thumb { position: relative; width: 100%; border: 1px solid var(--line); border-radius: var(--r); background: var(--plate); padding: 0; cursor: pointer; aspect-ratio: 1; max-width: 100%; overflow: hidden; }
 .thumb canvas { width: 100%; height: 100%; display: block; }
-.thumb span { position: absolute; left: 4px; bottom: 3px; font: 600 11px var(--f-code); color: var(--plate-ink); }
-.thumb[aria-current="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.item[aria-current="true"] .thumb { outline: 2px solid var(--accent); outline-offset: 1px; }
 aside { display: grid; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; min-width: 0; }
 aside h2 { font: 800 18px/1 var(--f-display); text-transform: uppercase; letter-spacing: .03em; margin: 0; }
 .ctl { display: grid; gap: 4px; }
@@ -96,7 +101,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 @media (max-width: 860px) {
   .main { grid-template-columns: minmax(0, 1fr); }
   .viewer { height: 380px; }
-  .strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .strip .item:nth-child(1), .strip .item:nth-child(7), .strip .item:nth-child(8) { display: none; }   /* five on a phone: two each side */
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -110,13 +116,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
   <div class="bar">
     <label class="lbl" for="shape">Shape</label>
     <select class="sel" id="shape"></select>
-    <span class="lbl">Seed</span>
-    <div class="seed">
-      <button class="btn" id="prev" aria-label="Previous seed">&#8592;</button>
-      <input id="seed" type="number" inputmode="numeric" min="0" step="1" value="1" aria-label="Seed">
-      <button class="btn" id="next" aria-label="Next seed">&#8594;</button>
-    </div>
-    <span class="hint">&#8592; &#8594; keys browse seeds</span>
+    <span class="hint">&#8592; &#8594; keys browse seeds; click the chosen seed's number to type one</span>
   </div>
 
   <div class="main">
@@ -133,7 +133,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
           </div>
         </div>
       </div>
-      <div class="strip" id="strip" aria-label="Neighbouring seeds"></div>
+      <div class="carousel" role="group" aria-label="Seeds">
+        <button class="btn arrow" id="prev" aria-label="Previous seed">&#8592;</button>
+        <div class="strip" id="strip"></div>
+        <button class="btn arrow" id="next" aria-label="Next seed">&#8594;</button>
+      </div>
       <p class="err" id="err" hidden></p>
     </div>
 
@@ -897,12 +901,27 @@ function showStats(T, r, surf) {
 
 // neighbouring seeds
 const strip = $('strip'), thumbs = [];
+// a carousel of seeds around the chosen one: a click on a picture or its number chooses it; a click on the chosen one's number
+// turns it into a box to type any seed in (Enter or leaving it chooses, Escape puts it back)
 for (let i = 0; i < 8; i++) {
+  const item = document.createElement('div'); item.className = 'item';
   const b = document.createElement('button'); b.className = 'thumb';
-  const cv = document.createElement('canvas'); cv.width = 280; cv.height = 280;
-  const s = document.createElement('span'); b.append(cv, s); strip.append(b);
-  b.addEventListener('click', () => setSeed(+b.dataset.seed));
-  thumbs.push({ b, cv, s, ctx: cv.getContext('2d') });
+  const cv = document.createElement('canvas'); cv.width = 280; cv.height = 280; b.append(cv);
+  const s = document.createElement('button'); s.className = 'num';
+  item.append(b, s); strip.append(item);
+  const t = { item, b, cv, s, ctx: cv.getContext('2d') };
+  b.addEventListener('click', () => setSeed(+item.dataset.seed));
+  s.addEventListener('click', () => { if (+item.dataset.seed === state.seed) editSeed(t); else setSeed(+item.dataset.seed); });
+  thumbs.push(t);
+}
+function editSeed(t) {
+  const box = document.createElement('input');
+  Object.assign(box, { type: 'number', inputmode: 'numeric', min: 0, step: 1, value: state.seed, className: 'numedit' }); box.setAttribute('aria-label', 'Seed');
+  t.s.replaceWith(box); box.focus(); box.select();
+  let done = false;
+  const finish = keep => { if (done) return; done = true; box.replaceWith(t.s); const v = parseInt(box.value, 10); if (keep && Number.isFinite(v) && v !== state.seed) setSeed(v); else t.s.focus(); };
+  box.addEventListener('keydown', e => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); e.stopPropagation(); });
+  box.addEventListener('blur', () => finish(true));
 }
 let thumbJob = 0;
 function rebuildThumbs() {
@@ -911,7 +930,11 @@ function rebuildThumbs() {
   const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
   cam.position.copy(dir.multiplyScalar(62)).add(new THREE.Vector3(0, 0, 5)); cam.lookAt(0, 0, 5);
   const order = thumbs.map((t, i) => i).sort((a, b) => Math.abs(start + a - state.seed) - Math.abs(start + b - state.seed));
-  thumbs.forEach((t, i) => { const seed = start + i; t.b.dataset.seed = seed; t.s.textContent = seed; t.b.setAttribute('aria-current', seed === state.seed ? 'true' : 'false'); t.b.setAttribute('aria-label', 'Seed ' + seed); });
+  thumbs.forEach((t, i) => {
+    const seed = start + i, on = seed === state.seed;
+    t.item.dataset.seed = seed; t.s.textContent = seed; t.item.setAttribute('aria-current', on ? 'true' : 'false');
+    t.b.setAttribute('aria-label', 'Seed ' + seed); t.s.setAttribute('aria-label', on ? 'Seed ' + seed + ', click to type a seed' : 'Seed ' + seed);
+  });
   const next = () => {
     if (job !== thumbJob || !order.length) return;
     const i = order.shift(), t = thumbs[i];
@@ -942,7 +965,6 @@ for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.targ
 $('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS); syncUI(); update(); });
 $('prev').addEventListener('click', () => setSeed(state.seed - 1));
 $('next').addEventListener('click', () => setSeed(state.seed + 1));
-$('seed').addEventListener('change', e => setSeed(parseInt(e.target.value, 10) || 0));
 document.addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input, textarea, select')) return;
   if (e.key === 'ArrowLeft') { setSeed(state.seed - 1); e.preventDefault(); }
@@ -952,7 +974,6 @@ function setSeed(s) { state.seed = Math.max(0, s | 0); syncUI(); update(); }
 function syncUI() {
   shapeEl.value = state.shape;
   for (const b of $('view').children) b.setAttribute('aria-pressed', b.dataset.view === state.view ? 'true' : 'false');
-  $('seed').value = state.seed;
   for (const k of Object.keys(SLIDERS)) { $(k).value = state[k]; showValue($('o-' + k), $(k), SLIDERS[k]); }
   for (const k of CHECKS) $(k).checked = state[k];
 }
