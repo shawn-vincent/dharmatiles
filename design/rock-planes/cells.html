@@ -37,8 +37,10 @@ h1 { font: 800 38px/1 var(--f-display); text-transform: uppercase; letter-spacin
 .sbtn { min-width: 32px; font: 600 15px var(--f-body); cursor: pointer; }
 .sbtn:hover { border-color: var(--accent); color: var(--accent); }
 #seedin { width: 70px; font: 500 15px var(--f-code); text-align: center; }
-.sld { display: grid; grid-template-columns: auto 110px 48px; gap: 8px; align-items: center; }
+.sld { display: grid; grid-template-columns: auto 110px auto; gap: 8px; align-items: center; }
 .sld output { font: 500 13px var(--f-code); color: var(--accent); }
+output .ip, output .fp { display: inline-block; } output .ip { text-align: right; } output .fp { text-align: left; } output { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
 input[type=range] { accent-color: var(--accent); width: 100%; }
 .sel:focus-visible, .sbtn:focus-visible, #seedin:focus-visible, input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 18px; }
@@ -79,7 +81,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
       <button class="sbtn" id="next" aria-label="Next seed">&#8594;</button></div>
     <div class="sld"><label class="lbl" for="tilt">Tilt</label><input type="range" id="tilt" min="0" max="20" step="1" value="8"><output id="o-tilt"></output></div>
     <div class="sld"><label class="lbl" for="sink">Sink</label><input type="range" id="sink" min="0" max="2" step="0.1" value="0.7"><output id="o-sink"></output></div>
-    <div class="sld"><label class="lbl" for="bev">Chamfered</label><input type="range" id="bev" min="0" max="100" step="10" value="100"><output id="o-bev"></output></div>
+    <div class="sld"><label class="lbl" for="bev">Chamfered</label><input type="range" id="bev" min="0" max="100" step="1" value="100"><output id="o-bev"></output></div>
   </div>
 
   <div class="grid">
@@ -395,6 +397,13 @@ function drawRock(cv, R, built, opts = {}) {
 }
 
 let target = 'L', seed = 7;
+// a slider's value, aligned on its decimal point: the whole part right-aligned in room for the largest, then the fraction
+// as written (no trailing .0) with room kept for the step's decimals, so the number never shifts while dragging
+function showValue(out, input, unit) {
+  const places = (String(input.step).split('.')[1] || '').length, digits = String(Math.floor(+input.max)).length;
+  const [ip, fp] = (+input.value).toFixed(places).replace(/\.?0+$/, m => places ? '' : m).split('.');
+  out.innerHTML = `<span class="ip" style="min-width:${digits}ch">${ip}</span><span class="fp" style="width:${places ? places + 1 : 0}ch">${fp ? '.' + fp : ''}</span>${unit ? `<span class="un">${unit}</span>` : ''}`;
+}
 const state = { tilt: 8, sink: 0.7, bev: 100 };
 const $ = id => document.getElementById(id);
 function render() {
@@ -419,7 +428,7 @@ function render() {
     drawRock(t.cv, R, build(R, sd, state), { target: false });
   });
   $('seedin').value = seed; $('target').value = target;
-  for (const k of ['tilt', 'sink', 'bev']) { $(k).value = state[k]; $('o-' + k).textContent = state[k] + (k === 'tilt' ? '°' : k === 'sink' ? ' mm' : '%'); }
+  for (const k of ['tilt', 'sink', 'bev']) { $(k).value = state[k]; showValue($('o-' + k), $(k), k === 'tilt' ? '°' : k === 'sink' ? '&nbsp;mm' : '%'); }
 }
 const thumbs = [];
 for (let i = 0; i < 8; i++) {

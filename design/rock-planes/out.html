@@ -71,6 +71,8 @@ aside h2 { font: 800 18px/1 var(--f-display); text-transform: uppercase; letter-
 .ctl .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .ctl label { font-weight: 500; }
 .ctl output { font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); }
+output .ip, output .fp { display: inline-block; } output .ip { text-align: right; } output .fp { text-align: left; } output { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
 .ctl small { color: var(--muted); font-size: 12px; line-height: 16px; }
 input[type=range] { width: 100%; accent-color: var(--accent); }
 .checks { display: grid; gap: 6px; }
@@ -132,7 +134,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <div class="ctl"><div class="top"><label for="planes">Planes</label><output id="o-planes"></output></div>
         <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many face planes are put around the shape. Chamfers come on top of these.</small></div>
       <div class="ctl"><div class="top"><label for="edges">Chamfered</label><output id="o-edges"></output></div>
-        <input type="range" id="edges" min="0" max="100" step="5" value="100"><small>The share of the shape's edges and corners that are chamfered, drawn; the rest stay sharp.</small></div>
+        <input type="range" id="edges" min="0" max="100" step="1" value="100"><small>The share of the shape's edges and corners that are chamfered, drawn; the rest stay sharp.</small></div>
       <div class="ctl"><div class="top"><label for="tilt">Tilt</label><output id="o-tilt"></output></div>
         <input type="range" id="tilt" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there, and how far a flat face's planes lean away from its touch point at the rim. At 0 flat faces stay flat.</small></div>
       <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
@@ -559,7 +561,14 @@ function makeScene() {
 const DEFAULTS = { planes: 60, edges: 100, tilt: 6, sink: 3, ghost: true, lines: true, roles: false, anchors: false };
 const state = { shape: 'random', view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
-const SLIDERS = { planes: v => v, edges: v => v + '%', tilt: v => v + '°', sink: v => v + '%' };
+// a slider's value, aligned on its decimal point: the whole part right-aligned in room for the largest, then the fraction
+// as written (no trailing .0) with room kept for the step's decimals, so the number never shifts while dragging
+function showValue(out, input, unit) {
+  const places = (String(input.step).split('.')[1] || '').length, digits = String(Math.floor(+input.max)).length;
+  const [ip, fp] = (+input.value).toFixed(places).replace(/\.?0+$/, m => places ? '' : m).split('.');
+  out.innerHTML = `<span class="ip" style="min-width:${digits}ch">${ip}</span><span class="fp" style="width:${places ? places + 1 : 0}ch">${fp ? '.' + fp : ''}</span>${unit ? `<span class="un">${unit}</span>` : ''}`;
+}
+const SLIDERS = { planes: '', edges: '%', tilt: '°', sink: '%' };   // each slider's unit
 const CHECKS = ['ghost', 'lines', 'roles', 'anchors'];
 const shapeOf = k => SHAPES.find(s => s.key === k) || SHAPES[0];
 // Random: the seed's first draw (its own stream) picks the shape
@@ -679,7 +688,7 @@ const shapeEl = $('shape');
 for (const [key, label] of [['random', 'Random'], ...SHAPES.map(s => [s.key, s.label])]) { const o = document.createElement('option'); o.value = key; o.textContent = label; shapeEl.append(o); }
 shapeEl.addEventListener('change', () => { state.shape = shapeEl.value; update(); });
 for (const b of $('view').children) b.addEventListener('click', () => setView(b.dataset.view));
-for (const k of Object.keys(SLIDERS)) $(k).addEventListener('input', e => { state[k] = +e.target.value; $('o-' + k).textContent = SLIDERS[k](state[k]); update(); });
+for (const k of Object.keys(SLIDERS)) $(k).addEventListener('input', e => { state[k] = +e.target.value; showValue($('o-' + k), $(k), SLIDERS[k]); update(); });
 for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.target.checked; update(); });
 $('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS); syncUI(); update(); });
 $('prev').addEventListener('click', () => setSeed(state.seed - 1));
@@ -695,7 +704,7 @@ function syncUI() {
   shapeEl.value = state.shape;
   for (const b of $('view').children) b.setAttribute('aria-pressed', b.dataset.view === state.view ? 'true' : 'false');
   $('seed').value = state.seed;
-  for (const k of Object.keys(SLIDERS)) { $(k).value = state[k]; $('o-' + k).textContent = SLIDERS[k](state[k]); }
+  for (const k of Object.keys(SLIDERS)) { $(k).value = state[k]; showValue($('o-' + k), $(k), SLIDERS[k]); }
   for (const k of CHECKS) $(k).checked = state[k];
 }
 let ownHash = '';
