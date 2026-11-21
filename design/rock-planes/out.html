@@ -134,7 +134,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <div class="ctl"><div class="top"><label for="planes">Planes</label><output id="o-planes"></output></div>
         <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many face planes are put around the shape. Chamfers come on top of these.</small></div>
       <div class="ctl"><div class="top"><label for="edges">Chamfered</label><output id="o-edges"></output></div>
-        <input type="range" id="edges" min="0" max="100" step="1" value="100"><small>The share of the shape's edges and corners that are chamfered, drawn; the rest stay sharp.</small></div>
+        <input type="range" id="edges" min="0" max="100" step="1" value="100"><small>The share of the shape's edge length, and of its corners, that is chamfered, drawn; the rest stay sharp. A straight edge is chamfered whole; a round rim in pieces.</small></div>
       <div class="ctl"><div class="top"><label for="tilt">Tilt</label><output id="o-tilt"></output></div>
         <input type="range" id="tilt" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there, and how far a flat face's planes lean away from its touch point at the rim. At 0 flat faces stay flat.</small></div>
       <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
@@ -157,7 +157,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <ol>
       <li><b>The shape</b> is picked in the menu, or by the seed itself when it says Random (the seed's first draw chooses one of the seven). It is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
       <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight tilt around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point (and every crown's patch, below), so the rock reaches each of them: it touches every face of the shape.</li>
-      <li><b>Where the planes go.</b> <b>Chamfered</b> of the edges and of the corners, drawn, are chamfered; the others stay sharp and get no plane. <b>Planes</b> face planes are thrown over the faces, each kept a spacing away from the others; then each chamfered corner gets one plane and each chamfered edge planes spaced along it. Face planes and chamfers never look at each other, so Chamfered never moves a face plane.</li>
+      <li><b>Where the planes go.</b> <b>Chamfered</b> of the edges' total length, and of the corners, drawn, are chamfered; the others stay sharp and get no plane. A straight edge is taken whole, in the drawn order, while that brings the length nearer the share; a round rim is cut into short pieces, each an edge of its own, so it is chamfered piece by piece. <b>Planes</b> face planes are thrown over the faces, each kept a spacing away from the others; then each chamfered corner gets one plane and each chamfered edge planes spaced along it. Face planes and chamfers never look at each other, so Chamfered never moves a face plane.</li>
       <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Tilt</b> about the point, with a patch around the point (15 to 35% of the way to the face's nearest edge, drawn) that no other face plane may cut (a chamfer may eat into it). Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
       <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Tilt</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Tilt 0 the face stays flat), are turned at random by about <b>Tilt</b> and sunk by half to all of <b>Sink</b>. Each makes one draw from its own stream, keyed to its spot: a direction and a size, which Tilt scales, so raising Tilt turns the same plane further. A turn that would dip much deeper into the shape anywhere than at its own point is shortened just enough, never drawn again; then the plane is pushed back past the touch points.</li>
       <li><b>Chamfer planes</b> start halfway between the edge's two faces, or as the average of a corner's faces. Each makes one draw from its own stream: a turn of up to half of <b>Tilt</b>, never more than a third of the angle between the faces it cuts, so it stays on its edge or corner. It is set against what the face planes leave and cuts one to two times <b>Sink</b> into it, stopping at any touch point. If that bites less than a Sink, the chamfer takes, in order, the turn mirrored, no turn, or the turn's limit away from each face it cuts: the first that bites a whole Sink, with no second draw. If a touch point keeps one from cutting that deep, the next sharp edge or corner in the drawn order is chamfered instead, so the share always holds.</li>
@@ -242,7 +242,7 @@ function polytope(verts, faces) {
       }
       for (const [key, e] of seen) {
         const n = unit(add(e.ns[0], e.ns[1])), A = verts[e.a], B = verts[e.b], m = Math.ceil(len(sub(B, A)) * 4);
-        for (let k = 0; k < m; k++) out.push({ p: add(A, mul(sub(B, A), 0.04 + 0.92 * r())), n, fn: e.ns, kind: 'edge', key: 'e' + key });
+        for (let k = 0; k < m; k++) out.push({ p: add(A, mul(sub(B, A), 0.04 + 0.92 * r())), n, fn: e.ns, kind: 'edge', key: 'e' + key, len: len(sub(B, A)) });
       }
       // faces: points spaced by area
       for (const [fi, q] of planes.entries()) {
@@ -295,8 +295,10 @@ const SHAPES = [
       for (let i = 0; i < 4000; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0];
         if (r() < side / (side + top)) out.push({ p: [r0 * d[0], r0 * d[1], h * r()], n: d, kind: 'face' });
         else { const rr = r0 * Math.sqrt(r()), up = r() < 0.5; out.push({ p: [rr * d[0], rr * d[1], up ? h : 0], n: [0, 0, up ? 1 : -1], kind: 'face', fi: up ? 'top' : 'bot', fr: r0 }); } }
-      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], h], n: unit([d[0], d[1], 1]), fn: [[0, 0, 1], d], kind: 'edge', key: 'etop' }); }
-      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), fn: [[0, 0, -1], d], kind: 'edge', key: 'ebot' }); }
+      // a rim is round, so it is cut into RIM pieces, each an edge of its own: Chamfered takes a share of its length, piece by piece
+      const RIM = 24, piece = ph => Math.min(RIM - 1, Math.floor(ph / (2 * Math.PI) * RIM)), plen = 2 * Math.PI * r0 / RIM;
+      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], h], n: unit([d[0], d[1], 1]), fn: [[0, 0, 1], d], kind: 'edge', key: 'etop' + piece(ph), len: plen }); }
+      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), fn: [[0, 0, -1], d], kind: 'edge', key: 'ebot' + piece(ph), len: plen }); }
       return out; } }; })(),
 ];
 for (const s of SHAPES) { s.height = s.hi[2] - s.lo[2]; s.size = (s.hi[0] - s.lo[0] + s.hi[1] - s.lo[1] + s.height) / 3; }
@@ -372,10 +374,13 @@ function build(shape, seed, P, withStats) {
   const order = (list, k) => { const r = stream(seed, k); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
   const corners = order(byKind('corner'), 2), edgeC = order(byKind('edge'), 3), faceC = order(byKind('face'), 4);
 
-  // Chamfered of the edges and of the corners, drawn, are chamfered; the rest get no plane
-  const share = (keys, k) => order(keys, k).slice(0, Math.round(keys.length * P.edges / 100));
+  // Chamfered of the edges' total length, and of the corners, drawn, are chamfered; the rest get no plane. An edge is taken whole,
+  // in the drawn order, while that brings the length nearer the share (a round rim is many short edges, so it is taken in pieces)
   const edgeKeys = [...new Set(edgeC.map(c => c.key))], cornerKeys = corners.map(c => c.key);
-  const bitten = new Set([...share(edgeKeys, 6), ...share(cornerKeys, 7)]);
+  const edgeLen = new Map(edgeC.map(c => [c.key, c.len || 1]));
+  const lenOf = keys => keys.reduce((t, k) => t + edgeLen.get(k), 0), wantLen = lenOf(edgeKeys) * P.edges / 100;
+  const shareLen = keys => { const out = []; let got = 0; for (const k of keys) if (got + edgeLen.get(k) / 2 <= wantLen + 1e-9) { out.push(k); got += edgeLen.get(k); } return out; };
+  const bitten = new Set([...shareLen(order(edgeKeys, 6)), ...order(cornerKeys, 7).slice(0, Math.round(cornerKeys.length * P.edges / 100))]);
 
   // pick anchors. Planes face planes are thrown over the faces, kept apart from one another; then each chamfered corner gets one
   // plane and each chamfered edge planes spaced along it, kept apart from one another. The two never look at each other, so
@@ -464,10 +469,11 @@ function build(shape, seed, P, withStats) {
     bites.set(key, most); made.set(key, pls);
   };
   for (const key of [...byKey.keys()]) make(key);
-  for (const [keys, k] of [[edgeKeys, 6], [cornerKeys, 7]]) {
-    const want = Math.round(keys.length * P.edges / 100), ok = () => keys.filter(key => bites.get(key) >= sink - 1e-6).length;
-    for (const key of order(keys, k)) { if (ok() >= want) break; if (!(bites.get(key) >= sink - 1e-6)) make(key); }
-  }
+  const biting = key => bites.get(key) >= sink - 1e-6;
+  { const want = lenOf(shareLen(order(edgeKeys, 6))), ok = () => lenOf(edgeKeys.filter(biting));
+    for (const key of order(edgeKeys, 6)) { if (ok() >= want - 1e-9) break; if (!biting(key)) make(key); } }
+  { const want = Math.round(cornerKeys.length * P.edges / 100), ok = () => cornerKeys.filter(biting).length;
+    for (const key of order(cornerKeys, 7)) { if (ok() >= want) break; if (!biting(key)) make(key); } }
   for (const pls of made.values()) for (const pl of pls) poly = clip(poly, pl);
 
   let foot = Infinity; for (const f of poly) for (const v of f.verts) foot = Math.min(foot, v[2]);
@@ -492,7 +498,7 @@ function build(shape, seed, P, withStats) {
     const bit = keys => keys.filter(k => (bites.get(k) || 0) >= sink - 1e-6).length;
     Object.assign(res, { out, inn, iou: either ? both / either : 0, counts, placed, vol: volume(poly), largest: areaMax / areaSum,
       touched, sides: S.ownFaces ? S.ownFaces.length : contacts.length, sidesWord: S.ownFaces ? 'faces' : 'touch points',
-      edgesBit: bit(edgeKeys), edgesAll: edgeKeys.length, cornersBit: bit(cornerKeys), cornersAll: cornerKeys.length });
+      edgesBit: lenOf(edgeKeys.filter(k => (bites.get(k) || 0) >= sink - 1e-6)), edgesAll: lenOf(edgeKeys), edgesWant: lenOf(shareLen(order(edgeKeys, 6))), cornersBit: bit(cornerKeys), cornersAll: cornerKeys.length });
   }
   for (const f of poly) f.verts = f.verts.map(v => [v[0], v[1], v[2] - foot]);
   res.ms = performance.now() - t0;
@@ -643,7 +649,7 @@ function showStats(r) {
     ['Planes on face · edge · corner', `${n(p, 'face')} · ${n(p, 'edge')} · ${n(p, 'corner')}`],
     ['Faces', r.poly.length],
     ['Touches the shape at', `<span class="${r.touched === r.sides ? 'good' : 'bad'}">${r.touched} of ${r.sides} ${r.sidesWord}</span>`],
-    ...(r.edgesAll ? [['Edges chamfered', `<span class="${r.edgesBit >= Math.round(r.edgesAll * state.edges / 100) ? 'good' : 'bad'}">${r.edgesBit} of ${r.edgesAll}</span>`]] : []),
+    ...(r.edgesAll ? [['Edge length chamfered', `<span class="${r.edgesBit >= r.edgesWant - 1e-6 ? 'good' : 'bad'}">${Math.round(100 * r.edgesBit / r.edgesAll)}% of ${r.edgesAll.toFixed(0)} mm</span>`]] : []),
     ...(r.cornersAll ? [['Corners chamfered', `<span class="${r.cornersBit >= Math.round(r.cornersAll * state.edges / 100) ? 'good' : 'bad'}">${r.cornersBit} of ${r.cornersAll}</span>`]] : []),
     ['Largest face', (r.largest * 100).toFixed(1) + '% of the surface'],
     ['Pokes out, at most', r.out.toFixed(2) + ' mm'],
