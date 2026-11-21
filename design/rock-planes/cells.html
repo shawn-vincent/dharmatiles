@@ -1,0 +1,291 @@
+<title>Rocks from Cells</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a short lede, then the idea as five numbered panels in order (shape, planes, cells, pick, shared), each a square drawing over two or three sentences; a closing note on 3D and costs. Tokens are the dharmatiles visual system's. */
+:root {
+  --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --bg: #F3F2EC; --panel: #E6EAE1; --line: #C9D1C8; --ink: #1D2922; --muted: #657168;
+  --accent: #287B62; --on-accent: #F5FFF9;
+  --plate: #D9E0EB; --plate-ink: #2B3340;
+  --stone: #A9A69D; --stone-2: #8E8A80; --edge-line: #287B62; --bevel-line: #B4782E; --crack-line: #7B5AA6; --notch: #E5483B;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #081319; --panel: #0E2028; --line: #29454D; --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --on-accent: #051513; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #081319; --panel: #0E2028; --line: #29454D; --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --on-accent: #051513; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/23px var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 22px; }
+h1 { font: 800 38px/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 66ch; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.btn { height: 32px; padding: 0 14px; border: 1px solid var(--accent); border-radius: 5px; background: var(--accent); color: var(--on-accent); font: 600 14px var(--f-body); cursor: pointer; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seed { font: 500 13px var(--f-code); color: var(--muted); }
+.key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.key i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; margin-right: 6px; vertical-align: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 18px; }
+figure { margin: 0; display: grid; gap: 10px; align-content: start; min-width: 0; }
+canvas { width: 100%; aspect-ratio: 1; max-width: 100%; display: block; background: var(--plate); border-radius: 10px; border: 1px solid var(--line); }
+figcaption { display: grid; gap: 4px; }
+figcaption b { font: 800 19px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .03em; }
+figcaption b span { color: var(--accent); margin-right: 6px; }
+figcaption p { margin: 0; color: var(--muted); font-size: 14px; line-height: 21px; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+.notes h2 { font: 800 20px/1 var(--f-display); text-transform: uppercase; margin: 0 0 8px; }
+.notes p, .notes li { margin: 0; font-size: 14px; line-height: 21px; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.notes > div { min-width: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:10px">
+    <h1>Rocks from cells</h1>
+    <p class="lede">Option 3 for a concave shape, drawn as a slice through it. The planes don't make the rock by all cutting one block. They divide all of space into cells, and the rock is the group of cells that lie mostly inside the shape. A group of convex cells can have notches, so the rock can be concave. In 3D every line here is a plane and every cell is a convex block; the steps are the same.</p>
+  </header>
+
+  <div class="bar">
+    <button class="btn" id="again">New planes</button>
+    <span class="seed" id="seed"></span>
+    <div class="key">
+      <span><i style="border-color:var(--edge-line)"></i>plane on a face</span>
+      <span><i style="border-color:var(--bevel-line)"></i>plane at a corner</span>
+      <span><i style="border-color:var(--crack-line)"></i>fracture plane</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <figure>
+      <canvas id="c1" aria-label="An L-shaped target and the best convex rock, which fills the notch"></canvas>
+      <figcaption><b><span>1</span>The problem</b><p>The target is an L. Cutting one block with planes always gives a convex rock, so the best it can do is the hull (dashed), which fills the notch (red).</p></figcaption>
+    </figure>
+    <figure>
+      <canvas id="c2" aria-label="Planes laid along the shape's faces and corners, each extending across all of space"></canvas>
+      <figcaption><b><span>2</span>Planes across everything</b><p>Planes are placed as in Rock Planes: on the faces (the inner ones too), turned a little and sunk a little, plus some at corners and a few fracture planes. Each one runs on forever, across the notch and past the rock.</p></figcaption>
+    </figure>
+    <figure>
+      <canvas id="c3" aria-label="The planes divide space into convex cells, each labelled with how much of it lies inside the shape"></canvas>
+      <figcaption><b><span>3</span>Cells</b><p>Together the planes split space into convex cells. Each cell gets one number: how much of it lies inside the shape. Darker means more inside.</p></figcaption>
+    </figure>
+    <figure>
+      <canvas id="c4" aria-label="The cells mostly inside the shape, joined into one concave rock with faint seams between cells"></canvas>
+      <figcaption><b><span>4</span>Pick and join</b><p>The cells more than half inside are kept and joined. The outline (bold) follows the planes, so every face is still flat, and the notch survives with a sharp inside corner. Lines between kept cells (thin) can be erased or left as cracks.</p></figcaption>
+    </figure>
+    <figure>
+      <canvas id="c5" aria-label="Two neighbouring rocks taken from one set of cells, pulled apart to show their matching faces"></canvas>
+      <figcaption><b><span>5</span>One set of planes, many rocks</b><p>Give two neighbouring shapes the same planes, and each cell goes to the shape it is mostly inside. The rocks come out as pieces of one broken stone: where they meet, their faces match (shown pulled apart).</p></figcaption>
+    </figure>
+    <figure>
+      <canvas id="c6" aria-label="The same cells with the fill share set lower and higher"></canvas>
+      <figcaption><b><span>6</span>How much to keep</b><p>The share a cell needs to be kept is a dial. Left half: cells a quarter inside are kept, so the rock is fuller and pokes past the shape. Right half: three quarters, so it is leaner and more broken.</p></figcaption>
+    </figure>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h2>In 3D</h2>
+      <p>Each line here is a plane and each cell is a convex block, cut from a box around the shape. The program already has the pieces: a block cut by planes is how Rock Planes builds today, and joining solids is a Manifold union. Only cells near the shape matter, so you split only those and leave far-off space alone.</p>
+    </div>
+    <div>
+      <h2>What it costs</h2>
+      <ul>
+        <li>Thin slivers: two nearly parallel planes leave a thin cell that may or may not be kept. They need a rule, such as merging a sliver into its neighbour.</li>
+        <li>The cell count grows fast with the number of planes, so fewer planes go much further than in Rock Planes.</li>
+        <li>Touching the shape and the bevel shares become rules about which cells are kept, not about how deep each plane sits.</li>
+        <li>An inside corner faces downward on one side, so the overhang gate needs looking at there.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ---------- geometry (2D, world units = mm in a 24 mm window) ----------
+const W = 12;
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+const mul = (a, s) => [a[0] * s, a[1] * s];
+const rot = (v, t) => [v[0] * Math.cos(t) - v[1] * Math.sin(t), v[0] * Math.sin(t) + v[1] * Math.cos(t)];
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const area = P => { let s = 0; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; };
+// keep the side of a line n·x <= b (works for a concave subject too)
+function clipHalf(P, n, b) {
+  const out = [];
+  for (let i = 0; i < P.length; i++) {
+    const a = P[i], c = P[(i + 1) % P.length], da = dot(n, a) - b, dc = dot(n, c) - b;
+    if (da <= 0) out.push(a);
+    if ((da < 0 && dc > 0) || (da > 0 && dc < 0)) out.push(add(a, mul(sub(c, a), da / (da - dc))));
+  }
+  return out;
+}
+function clipConvex(P, C) { // P clipped by convex polygon C (counter-clockwise)
+  let out = P;
+  for (let i = 0; i < C.length && out.length; i++) {
+    const a = C[i], c = C[(i + 1) % C.length], e = sub(c, a), n = [e[1], -e[0]];
+    out = clipHalf(out, n, dot(n, a));
+  }
+  return out;
+}
+function inside(p, P) { let s = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], b = P[j]; if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) s = !s; } return s; }
+function hull(pts) {
+  const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const q of p) { while (lo.length > 1 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (const q of p.slice().reverse()) { while (up.length > 1 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+
+// the target: an L (counter-clockwise), its concave corner at (-1, -1)
+const L = [[-9, -9], [9, -9], [9, -1], [-1, -1], [-1, 9], [-9, 9]];
+
+// planes laid as in Rock Planes: on every face (inner ones too), at some corners, and a few fractures
+function planesFor(shape, r, opts) {
+  const lines = [];
+  const n = shape.length, isConvex = i => { const a = shape[(i + n - 1) % n], b = shape[i], c = shape[(i + 1) % n]; return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) > 0; };
+  for (let i = 0; i < n; i++) {
+    const a = shape[i], c = shape[(i + 1) % n], e = sub(c, a), el = Math.hypot(...e), out = mul([e[1], -e[0]], 1 / el);
+    const k = el > 12 ? 2 : 1;
+    for (let j = 0; j < k; j++) {
+      const p = add(a, mul(e, (j + 0.25 + 0.5 * r()) / k)), nn = rot(out, (r() - 0.5) * 0.28);
+      lines.push({ n: nn, b: dot(nn, p) - 0.25 - 0.5 * r(), kind: 'edge' });
+    }
+  }
+  for (let i = 0; i < n; i++) if (isConvex(i) && r() < 0.6) {
+    const a = shape[(i + n - 1) % n], b = shape[i], c = shape[(i + 1) % n];
+    const e1 = sub(b, a), e2 = sub(c, b), n1 = mul([e1[1], -e1[0]], 1 / Math.hypot(...e1)), n2 = mul([e2[1], -e2[0]], 1 / Math.hypot(...e2));
+    let m = add(n1, n2); m = mul(m, 1 / Math.hypot(...m)); m = rot(m, (r() - 0.5) * 0.3);
+    lines.push({ n: m, b: dot(m, b) - 1.2 - 1.2 * r(), kind: 'bevel' });
+  }
+  for (let k = 0; k < (opts.cracks ?? 2); k++) {
+    const t = r() * Math.PI, nn = [Math.cos(t), Math.sin(t)], p = [(r() - 0.5) * 12, (r() - 0.5) * 12];
+    lines.push({ n: nn, b: dot(nn, p), kind: 'crack' });
+  }
+  return lines;
+}
+// every line splits every cell it crosses
+function cellsFor(lines) {
+  let cells = [[[-W, -W], [W, -W], [W, W], [-W, W]]];
+  for (const l of lines) {
+    const next = [];
+    for (const c of cells) {
+      const a = clipHalf(c, l.n, l.b), b = clipHalf(c, mul(l.n, -1), -l.b);
+      if (a.length >= 3 && Math.abs(area(a)) > 1e-6) next.push(a);
+      if (b.length >= 3 && Math.abs(area(b)) > 1e-6) next.push(b);
+    }
+    cells = next;
+  }
+  return cells.map(P => ({ P, a: Math.abs(area(P)) }));
+}
+const share = (cell, shape) => { const q = clipConvex(shape, cell.P); return q.length >= 3 ? Math.abs(area(q)) / cell.a : 0; };
+const centroid = P => { let x = 0, y = 0, A = 0; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], f = a[0] * b[1] - b[0] * a[1]; x += (a[0] + b[0]) * f; y += (a[1] + b[1]) * f; A += f; } return [x / (3 * A), y / (3 * A)]; };
+// which cell holds a point
+const cellAt = (cells, p) => cells.findIndex(c => inside(p, c.P));
+
+// ---------- drawing ----------
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function setup(id) {
+  const cv = document.getElementById(id), d = Math.min(devicePixelRatio || 1, 2), s = cv.clientWidth;
+  cv.width = Math.round(s * d); cv.height = Math.round(s * d);
+  const g = cv.getContext('2d'); g.setTransform(d * s / (2 * W), 0, 0, -d * s / (2 * W), d * s / 2, d * s / 2);
+  g.px = 2 * W / s; g.lineJoin = 'round'; return g;
+}
+function poly(g, P) { g.beginPath(); P.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); }
+function stroke(g, color, w, dash) { g.strokeStyle = color; g.lineWidth = w * g.px; g.setLineDash(dash ? dash.map(v => v * g.px) : []); g.stroke(); g.setLineDash([]); }
+function fullLine(g, l) { const d = [-l.n[1], l.n[0]], p = mul(l.n, l.b); g.beginPath(); g.moveTo(...add(p, mul(d, -40))); g.lineTo(...add(p, mul(d, 40))); }
+function text(g, s, p, color, size) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); const cv = g.canvas, k = cv.width / (2 * W); g.fillStyle = color; g.font = `500 ${size * (devicePixelRatio > 1 ? 2 : 1)}px ${css('--f-code')}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(s, cv.width / 2 + p[0] * k, cv.height / 2 - p[1] * k); g.restore(); }
+const lineColor = k => css(k === 'edge' ? '--edge-line' : k === 'bevel' ? '--bevel-line' : '--crack-line');
+function shade(f) { // plate to stone by the share inside
+  const a = [217, 224, 235], b = [120, 116, 106], t = Math.min(1, f);
+  return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',')})`;
+}
+// the kept cells' outline: an edge is outline when the cell across it is not kept
+function drawRock(g, cells, keep, fill, offset = [0, 0]) {
+  g.save(); g.translate(...offset);
+  for (const i of keep) { poly(g, cells[i].P); g.fillStyle = fill; g.fill(); }
+  const kept = new Set(keep);
+  for (const i of keep) {
+    const P = cells[i].P;
+    for (let k = 0; k < P.length; k++) {
+      const a = P[k], b = P[(k + 1) % P.length], e = sub(b, a), el = Math.hypot(...e); if (el < 1e-6) continue;
+      const out = [e[1] / el, -e[0] / el], m = add(mul(add(a, b), 0.5), mul(out, 0.05)), j = cellAt(cells, m);
+      g.beginPath(); g.moveTo(...a); g.lineTo(...b);
+      if (kept.has(j)) stroke(g, 'rgba(43,51,64,.35)', 1, [3, 3]); else stroke(g, '#2B3340', 2.4);
+    }
+  }
+  g.restore();
+}
+
+let seed = 4;
+function render() {
+  document.getElementById('seed').textContent = 'planes seed ' + seed;
+  const lines = planesFor(L, mulberry32(seed * 7919 + 1), { cracks: 2 });
+  const cells = cellsFor(lines);
+  const f = cells.map(c => share(c, L));
+
+  // 1: the shape and its hull
+  let g = setup('c1');
+  const H = hull(L); poly(g, H); g.fillStyle = 'rgba(229,72,59,.18)'; g.fill();
+  poly(g, L); g.fillStyle = css('--stone'); g.fill(); stroke(g, '#2B3340', 2);
+  poly(g, H); stroke(g, css('--notch'), 2, [6, 4]);
+  text(g, 'notch filled', [4, 4], css('--notch'), 12);
+  text(g, 'target', [-5, -5], '#2B3340', 12);
+
+  // 2: the planes
+  g = setup('c2');
+  poly(g, L); g.fillStyle = 'rgba(169,166,157,.45)'; g.fill(); stroke(g, '#2B3340', 1.2, [4, 3]);
+  for (const l of lines) { fullLine(g, l); stroke(g, lineColor(l.kind), 1.8); }
+
+  // 3: the cells and their shares
+  g = setup('c3');
+  cells.forEach((c, i) => { poly(g, c.P); g.fillStyle = shade(f[i]); g.fill(); stroke(g, 'rgba(43,51,64,.55)', 1); });
+  poly(g, L); stroke(g, css('--accent'), 1.4, [4, 3]);
+  cells.forEach((c, i) => { if (c.a > 3.5 && f[i] > 0.005) { const p = centroid(c.P); text(g, Math.round(f[i] * 100) + '%', p, f[i] > 0.55 ? '#F5F3EE' : '#2B3340', 10); } });
+
+  // 4: keep cells more than half inside
+  g = setup('c4');
+  poly(g, L); stroke(g, css('--accent'), 1.4, [4, 3]);
+  drawRock(g, cells, cells.map((c, i) => i).filter(i => f[i] > 0.5), css('--stone'));
+
+  // 6: the same cells at a quarter (left half) and three quarters (right half)
+  g = setup('c6');
+  g.save(); g.beginPath(); g.rect(-W, -W, W, 2 * W); g.clip();
+  drawRock(g, cells, cells.map((c, i) => i).filter(i => f[i] > 0.25), css('--stone'));
+  g.restore(); g.save(); g.beginPath(); g.rect(0, -W, W, 2 * W); g.clip();
+  drawRock(g, cells, cells.map((c, i) => i).filter(i => f[i] > 0.75), css('--stone'));
+  g.restore();
+  poly(g, L); stroke(g, css('--accent'), 1.4, [4, 3]);
+  g.beginPath(); g.moveTo(0, -W); g.lineTo(0, W); stroke(g, '#2B3340', 1, [2, 4]);
+  text(g, 'keep > 25%', [-6, 10.6], '#2B3340', 11); text(g, 'keep > 75%', [6, 10.6], '#2B3340', 11);
+
+  // 5: two neighbours, one set of planes, each cell to the shape it is mostly in
+  g = setup('c5');
+  const A = [[-10, -6], [0, -6], [0, 6], [-10, 6]], B = [[0, -8], [10, -8], [10, 3], [0, 3]];
+  const r5 = mulberry32(seed * 104729 + 3);
+  const l5 = [...planesFor(A, r5, { cracks: 0 }), ...planesFor(B, r5, { cracks: 0 })].filter(l => !(Math.abs(l.n[0]) > 0.95 && Math.abs(l.b) < 1.2));
+  for (let k = 0; k < 3; k++) { const t = 1.1 + (r5() - 0.5) * 0.9, nn = [Math.cos(t), Math.sin(t)], p = [(r5() - 0.5) * 3, (r5() - 0.5) * 8]; l5.push({ n: nn, b: dot(nn, p), kind: 'crack' }); }
+  const c5 = cellsFor(l5), fa = c5.map(c => share(c, A)), fb = c5.map(c => share(c, B));
+  const ka = [], kb = [];
+  c5.forEach((c, i) => { if (Math.max(fa[i], fb[i]) > 0.5) (fa[i] >= fb[i] ? ka : kb).push(i); });
+  poly(g, A); stroke(g, css('--accent'), 1.2, [4, 3]); poly(g, B); stroke(g, css('--accent'), 1.2, [4, 3]);
+  drawRock(g, c5, ka, css('--stone'), [-1.1, 0]);
+  drawRock(g, c5, kb, css('--stone-2'), [1.1, 0]);
+  text(g, 'faces match', [0, 10.6], '#2B3340', 11);
+}
+
+document.getElementById('again').addEventListener('click', () => { seed++; render(); });
+let t = 0; new ResizeObserver(() => { clearTimeout(t); t = setTimeout(render, 60); }).observe(document.querySelector('.grid'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+render();
+</script>
