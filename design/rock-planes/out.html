@@ -138,7 +138,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <div class="ctl"><div class="top"><label for="tilt">Tilt</label><output id="o-tilt"></output></div>
         <input type="range" id="tilt" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there, and how far a flat face's planes lean away from its touch point at the rim. At 0 flat faces stay flat.</small></div>
       <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
-        <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep the planes bite (of the shape's size): a face plane sinks up to this, and a chamfer cuts one to two times this into what the faces leave.</small></div>
+        <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep the planes bite (of the shape's size): a face plane sinks up to this, and a chamfer cuts half to all of this into what the faces leave.</small></div>
       <hr>
       <div class="checks">
         <label><input type="checkbox" id="ghost" checked> Show the shape</label>
@@ -160,7 +160,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Where the planes go.</b> <b>Chamfered</b> of the edges' total length, and of the corners, drawn, are chamfered; the others stay sharp and get no plane. A straight edge is taken whole, in the drawn order, while that brings the length nearer the share; a round rim is cut into short pieces, each an edge of its own, so it is chamfered piece by piece. <b>Planes</b> face planes are thrown over the faces, each kept a spacing away from the others; then each chamfered corner gets one plane and each chamfered edge planes spaced along it. Face planes and chamfers never look at each other, so Chamfered never moves a face plane.</li>
       <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Tilt</b> about the point, with a patch around the point (15 to 35% of the way to the face's nearest edge, drawn) that no other face plane may cut (a chamfer may eat into it). Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
       <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Tilt</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Tilt 0 the face stays flat), are turned at random by about <b>Tilt</b> and sunk by half to all of <b>Sink</b>. Each makes one draw from its own stream, keyed to its spot: a direction and a size, which Tilt scales, so raising Tilt turns the same plane further. A turn that would dip much deeper into the shape anywhere than at its own point is shortened just enough, never drawn again; then the plane is pushed back past the touch points.</li>
-      <li><b>Chamfer planes</b> start halfway between the edge's two faces, or as the average of a corner's faces. Each makes one draw from its own stream: a turn of up to half of <b>Tilt</b>, never more than a third of the angle between the faces it cuts, so it stays on its edge or corner. It is set against what the face planes leave and cuts one to two times <b>Sink</b> into it, stopping at any touch point. If that bites less than a Sink, the chamfer takes, in order, the turn mirrored, no turn, or the turn's limit away from each face it cuts: the first that bites a whole Sink, with no second draw. If a touch point keeps one from cutting that deep, the next sharp edge or corner in the drawn order is chamfered instead, so the share always holds.</li>
+      <li><b>Chamfer planes</b> start halfway between the edge's two faces, or as the average of a corner's faces. Each makes one draw from its own stream: a turn of up to half of <b>Tilt</b>, never more than a third of the angle between the faces it cuts, so it stays on its edge or corner. It is set against what the face planes leave and cuts half to all of <b>Sink</b> into it, stopping at any touch point. If that bites less than half a Sink, the chamfer takes, in order, the turn mirrored, no turn, or the turn's limit away from each face it cuts: the first that bites half a Sink, with no second draw. If a touch point keeps one from cutting that deep, the next sharp edge or corner in the drawn order is chamfered instead, so the share always holds.</li>
       <li><b>Kept inside.</b> Where face planes meet outside the shape, each of them is sunk by how far the corner pokes out, as far as the touch points let it, and the planes are cut again (up to six rounds). Without it a sphere's planes, sunk only a little, meet past its surface between them.</li>
       <li><b>The rock</b> is everything inside all the planes and inside the shape itself (the shape's own faces; a curved shape's are 200 of its tangent planes). It is one closed convex solid. Where the shape's own face shows, the rock touches it.</li>
     </ol>
@@ -366,7 +366,7 @@ const reach = (poly, n) => { let m = -Infinity; for (const f of poly) for (const
 
 function build(shape, seed, P, withStats) {
   const t0 = performance.now();
-  const S = shape, size = S.size, sink = P.sink / 100 * size, lean = LEAN / 100 * size;
+  const S = shape, size = S.size, sink = P.sink / 100 * size, cham = sink / 2, lean = LEAN / 100 * size;
   const contacts = S.contacts(stream(seed, 8));
   const cands = S.candidates(stream(seed, 1));
   cands.forEach((c, i) => { c.id = i; });   // a spot's own name, which keys its plane's stream
@@ -451,7 +451,7 @@ function build(shape, seed, P, withStats) {
   for (const pl of planes) poly = clip(poly, pl);
   for (const pl of boundsOf(S)) poly = clip(poly, { ...pl, role: 'touch' });
 
-  // chamfer planes: set against what the faces leave, cutting one to two Sinks into it
+  // chamfer planes: set against what the faces leave, cutting half to all of Sink into it
   // if a touch point keeps one from cutting that deep, the next sharp one in the drawn order is chamfered instead
   const ec = taken.filter(a => a.kind !== 'face'), byKey = new Map();
   for (const a of ec) (byKey.get(a.key) || byKey.set(a.key, []).get(a.key)).push(a);
@@ -461,15 +461,15 @@ function build(shape, seed, P, withStats) {
     if (!byKey.has(key)) byKey.set(key, [first(key)]);
     let most = 0; const pls = (byKey.get(key) || []).map((a, i) => {
       // one draw from the chamfer's own stream; it stops at a touch point rather than being drawn again
-      const rr = keyed(seed, 'chamfer', key, i), turns = chamferTurns(a.n, a.fn, P.tilt, rr), depth = sink * (1 + rr());
+      const rr = keyed(seed, 'chamfer', key, i), turns = chamferTurns(a.n, a.fn, P.tilt, rr), depth = cham * (1 + rr());   // half to all of Sink
       const tries = turns.map(n => { const b = through(n, reach(poly, n) - depth, points); return { n, b, bite: reach(poly, n) - b }; });
-      const { n, b } = tries.find(t => t.bite >= sink - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x);
+      const { n, b } = tries.find(t => t.bite >= cham - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x);
       most = Math.max(most, reach(poly, n) - b); return { n, b, role: a.kind };
     });
     bites.set(key, most); made.set(key, pls);
   };
   for (const key of [...byKey.keys()]) make(key);
-  const biting = key => bites.get(key) >= sink - 1e-6;
+  const biting = key => bites.get(key) >= cham - 1e-6;
   { const want = lenOf(shareLen(order(edgeKeys, 6))), ok = () => lenOf(edgeKeys.filter(biting));
     for (const key of order(edgeKeys, 6)) { if (ok() >= want - 1e-9) break; if (!biting(key)) make(key); } }
   { const want = Math.round(cornerKeys.length * P.edges / 100), ok = () => cornerKeys.filter(biting).length;
@@ -495,10 +495,10 @@ function build(shape, seed, P, withStats) {
     const placed = {}; for (const a of taken) placed[a.kind] = (placed[a.kind] || 0) + 1;
     const inside = p => poly.every(f => dot(f.n, p) <= f.b + 1e-6);
     const touched = S.ownFaces ? S.ownFaces.filter(f => reach(poly, f.n) >= f.b - 1e-6).length : contacts.filter(c => inside(c.p)).length;
-    const bit = keys => keys.filter(k => (bites.get(k) || 0) >= sink - 1e-6).length;
+    const bit = keys => keys.filter(k => (bites.get(k) || 0) >= cham - 1e-6).length;
     Object.assign(res, { out, inn, iou: either ? both / either : 0, counts, placed, vol: volume(poly), largest: areaMax / areaSum,
       touched, sides: S.ownFaces ? S.ownFaces.length : contacts.length, sidesWord: S.ownFaces ? 'faces' : 'touch points',
-      edgesBit: lenOf(edgeKeys.filter(k => (bites.get(k) || 0) >= sink - 1e-6)), edgesAll: lenOf(edgeKeys), edgesWant: lenOf(shareLen(order(edgeKeys, 6))), cornersBit: bit(cornerKeys), cornersAll: cornerKeys.length });
+      edgesBit: lenOf(edgeKeys.filter(k => (bites.get(k) || 0) >= cham - 1e-6)), edgesAll: lenOf(edgeKeys), edgesWant: lenOf(shareLen(order(edgeKeys, 6))), cornersBit: bit(cornerKeys), cornersAll: cornerKeys.length });
   }
   for (const f of poly) f.verts = f.verts.map(v => [v[0], v[1], v[2] - foot]);
   res.ms = performance.now() - t0;

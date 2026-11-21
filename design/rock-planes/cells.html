@@ -111,7 +111,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
         <li><b>Planes on a rock hull</b>, as in Rock Planes, along each face that is real surface (a mouth gets none): each the face's direction, domed away from that face's touch point by up to Tilt, turned by about Tilt and sunk by up to Sink. A crown sits on each touch point. A curved stretch gets a touch point every 10 mm or so instead.</li>
         <li><b>Planes on a hollow.</b> Each flat face becomes a chain of one, two or three segments bowing into the rock, drawn by seed from that face's own stream. Sink moves it in by a half to a whole Sink, and Tilt bends it as it domes a rock face: each bend goes in by about Tilt's slope over its distance to the nearer end, and a single segment leans by about Tilt. The chain can be a V, a three-faceted bow, or one face leaning from an end. One end touches the shape, or both. The chain always bows into the rock, never toward the hollow, so the pocket stays convex. On a curved stretch each plane pivots on the nearest touch point it faces.</li>
         <li><b>Touching.</b> A rock plane is pushed back out to every touch point of its hull; a hollow plane passes the one it pivots on. A rock piece is also kept inside its hull, and a pocket always takes its whole hollow (a plane that would cut into the hollow is pushed out to the hollow's corner) and reaches no more than Sink into the rock. So the rock never passes the shape.</li>
-        <li><b>Chamfers.</b> Chamfered of a rock hull's outward corners, drawn, get a chamfer cutting one to two Sinks into what its faces leave. A chamfer makes one draw from its own stream: a turn of up to half of Tilt either way, never more than a third of the angle between its two faces. If a touch point keeps it from biting a whole Sink, it takes the turn mirrored, no turn, or the limit away from either face, the first that bites (no second draw). So do Chamfered of the outward corners where a rock face meets a hollow's face (an L's arm tips), which neither hull owns: each is cut on its own, the corner alone, one to two Sinks into the rock that is there. Hollows' own corners get none, so inside corners stay sharp.</li>
+        <li><b>Chamfers.</b> Chamfered of a rock hull's outward corners, drawn, get a chamfer cutting half to all of Sink into what its faces leave. A chamfer makes one draw from its own stream: a turn of up to half of Tilt either way, never more than a third of the angle between its two faces. If a touch point keeps it from biting half a Sink, it takes the turn mirrored, no turn, or the limit away from either face, the first that bites (no second draw). So do Chamfered of the outward corners where a rock face meets a hollow's face (an L's arm tips), which neither hull owns: each is cut on its own, the corner alone, half to all of Sink into the rock that is there. Hollows' own corners get none, so inside corners stay sharp.</li>
         <li><b>The rock</b> is the first hull's piece, minus each hollow's pocket, plus each bump's piece, in order.</li>
       </ol>
     </div>
@@ -305,10 +305,10 @@ function planesOn(node, key, P) {
     // which corners are chamfered comes from one stream; each corner's own turn and depth from a stream of its own
     const pick = corners.map((m, k) => [rPick(), m, k]).sort((x, y) => x[0] - y[0]).slice(0, Math.round(corners.length * P.bev / 100));
     for (const [, c, k] of pick) {
-      const rb = stream(key, 'chamfer', k), angles = chamferAngles(c.turn, tilt, rb), depth = P.sink * (1 + rb());
+      const rb = stream(key, 'chamfer', k), angles = chamferAngles(c.turn, tilt, rb), depth = P.sink * 0.5 * (1 + rb());   // half to all of Sink
       const tries = angles.map(a => { const m = rot(c.m, a); let h = -Infinity; for (const v of poly) h = Math.max(h, dot(m, v));
         let b = h - depth; for (const g of guards) b = Math.max(b, dot(m, g.p)); return { n: m, b, bite: h - b }; });
-      const pl = { ...(tries.find(t => t.bite >= P.sink - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x)), kind: 'chamfer' };
+      const pl = { ...(tries.find(t => t.bite >= P.sink * 0.5 - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x)), kind: 'chamfer' };
       planes.push(pl); poly = clipHalf(poly, pl.n, pl.b);
     }
   }
@@ -344,7 +344,7 @@ function tipChamfers(root, seed, P) {
     B.forEach(v => { if (A.length > 2 && insideConvex(A, v)) cand.push(v); });
     A.forEach((p, i) => B.forEach((r, j) => { const x = segX(p, A[(i + 1) % A.length], r, B[(j + 1) % B.length]); if (x) cand.push(x); }));
     if (!cand.length) continue;
-    const h = Math.max(...cand.map(v => dot(m, v))), b = h - P.sink * (1 + rb());
+    const h = Math.max(...cand.map(v => dot(m, v))), b = h - P.sink * 0.5 * (1 + rb());
     out.push({ n: m, b, kind: 'chamfer', cut: clipHalf(wedge(8), mul(m, -1), -b) });
   }
   return out;
