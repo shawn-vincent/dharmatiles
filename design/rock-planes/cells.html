@@ -95,7 +95,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
     </figure>
     <figure>
       <canvas id="c3" aria-label="The finished rock"></canvas>
-      <figcaption><b><span>3</span>Rock</b><p>Each rock hull's planes leave a convex piece, and each hollow's planes carve a convex pocket out of it. The rock stays inside the shape (dashed) and touches it at every touch point. Inside corners are sharp, where two hollow planes meet.</p></figcaption>
+      <figcaption><b><span>3</span>Rock</b><p>Each rock hull's planes leave a convex piece, and each hollow's planes carve a convex pocket out of it. The rock stays inside the shape (dashed). Outside it touches the shape at every touch point; along a hollow it touches at the hollow's corners. Inside corners are sharp, where two hollow planes meet.</p></figcaption>
     </figure>
   </div>
 
@@ -107,7 +107,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
       <ol>
         <li><b>Hulls.</b> Take the shape's convex hull. Each stretch of the outline that falls inside it is a hollow, closed by a mouth along the hull; each hole is a hollow with no mouth. Do the same to each hollow: what of its hull is not hollow is a bump of rock inside it. Stop after three levels.</li>
         <li><b>Planes on every hull</b>, as in Rock Planes, along each face that is real surface (a mouth gets none): each the face's direction, domed away from that face's touch point by up to Spread, turned by about Spread and moved by up to Sink, inward on a rock hull and outward on a hollow. A crown sits on each touch point. A curved stretch gets a touch point every 10 mm or so instead.</li>
-        <li><b>Touching.</b> Every plane reaches the touch points of its own hull: a rock plane is pushed back out to them, a hollow plane back in. A rock piece is also kept inside its hull, and a pocket always takes its whole hollow. So the rock reaches each touch point and never passes the shape.</li>
+        <li><b>Touching.</b> Every plane reaches the touch points of its own hull: a rock plane is pushed back out to them, a hollow plane back in. A rock piece is also kept inside its hull, and a pocket always takes its whole hollow, which wins over its touch points: a pocket's plane that would cut into the hollow is pushed out to the hollow's corner instead. So the rock never passes the shape, reaches every touch point on rock hulls, and along a hollow reaches its corners.</li>
         <li><b>Bevels.</b> Bevelled of a rock hull's outward corners, drawn, get a bevel cutting one to two Sinks into what its faces leave. Hollows get none, so inside corners stay sharp.</li>
         <li><b>The rock</b> is the first hull's piece, minus each hollow's pocket, plus each bump's piece, in order.</li>
       </ol>
@@ -118,6 +118,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
         <li>Where a rock face meets a hollow face at an outward corner (an L's arm tip), neither hull owns the corner, so it is never bevelled.</li>
         <li>In 3D a hollow's ceiling is an overhang: hollow planes need the mirror of Rock Planes' rule, none facing up too steeply.</li>
         <li>For a few shapes the hulls keep nesting; three levels covers rock-like shapes.</li>
+        <li>A pocket is convex and must hold its hollow, so a hollow face cannot bulge toward the hollow at a touch point. A hollow face touches the shape at one of its ends and leans into the rock from there; a round hole comes out as a polygon around the circle.</li>
         <li>A pocket reaches up to Sink into the rock; where a hollow comes close to the outline, the wall between them gets thinner.</li>
       </ul>
     </div>
