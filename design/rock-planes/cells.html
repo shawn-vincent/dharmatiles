@@ -79,6 +79,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
       <button class="sbtn" id="prev" aria-label="Previous seed">&#8592;</button>
       <input id="seedin" type="number" inputmode="numeric" min="0" step="1" value="7" aria-label="Seed">
       <button class="sbtn" id="next" aria-label="Next seed">&#8594;</button></div>
+    <div class="sld"><label class="lbl" for="planes">Planes</label><input type="range" id="planes" min="4" max="60" step="1" value="20"><output id="o-planes"></output></div>
     <div class="sld"><label class="lbl" for="tilt">Tilt</label><input type="range" id="tilt" min="0" max="20" step="1" value="8"><output id="o-tilt"></output></div>
     <div class="sld"><label class="lbl" for="sink">Sink</label><input type="range" id="sink" min="0" max="2" step="0.1" value="0.7"><output id="o-sink"></output></div>
     <div class="sld"><label class="lbl" for="bev">Chamfered</label><input type="range" id="bev" min="0" max="100" step="1" value="100"><output id="o-bev"></output></div>
@@ -108,8 +109,8 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
       <h2>How it works</h2>
       <ol>
         <li><b>Hulls.</b> Take the shape's convex hull. Each stretch of the outline that falls inside it is a hollow, closed by a mouth along the hull; each hole is a hollow with no mouth. Do the same to each hollow: what of its hull is not hollow is a bump of rock inside it. Stop after three levels.</li>
-        <li><b>Planes on a rock hull</b>, as in Rock Planes, along each face that is real surface (a mouth gets none): each the face's direction, domed away from that face's touch point by up to Tilt, turned by about Tilt and sunk by up to Sink. A crown sits on each touch point. A curved stretch gets a touch point every 10 mm or so instead.</li>
-        <li><b>Planes on a hollow.</b> Each flat face becomes a chain of one, two or three segments bowing into the rock, drawn by seed from that face's own stream. Sink moves it in by a half to a whole Sink, and Tilt bends it as it domes a rock face: each bend goes in by about Tilt's slope over its distance to the nearer end, and a single segment leans by about Tilt. The chain can be a V, a three-faceted bow, or one face leaning from an end. One end touches the shape, or both. The chain always bows into the rock, never toward the hollow, so the pocket stays convex. On a curved stretch each plane pivots on the nearest touch point it faces.</li>
+        <li><b>Planes on a rock hull</b>, as in Rock Planes, along each face that is real surface (a mouth gets none), spaced by <b>Planes</b> (the outline's length over Planes): each the face's direction, domed away from that face's touch point by up to Tilt, turned by about Tilt and sunk by up to Sink. A crown sits on each touch point. A curved stretch gets a touch point every 10 mm or so instead.</li>
+        <li><b>Planes on a hollow.</b> Each flat face becomes a chain of segments bowing into the rock, about one for each plane spacing along it (one to six), drawn by seed from that face's own stream. Sink moves it in by a half to a whole Sink, and Tilt bends it as it domes a rock face: each bend goes in by about Tilt's slope over its distance to the nearer end, and a single segment leans by about Tilt. The chain can be a V, a three-faceted bow, or one face leaning from an end. One end touches the shape, or both. The chain always bows into the rock, never toward the hollow, so the pocket stays convex. On a curved stretch each plane pivots on the nearest touch point it faces.</li>
         <li><b>Touching.</b> A rock plane is pushed back out to every touch point of its hull; a hollow plane passes the one it pivots on. A rock piece is also kept inside its hull, and a pocket always takes its whole hollow (a plane that would cut into the hollow is pushed out to the hollow's corner) and reaches no more than Sink into the rock. So the rock never passes the shape.</li>
         <li><b>Chamfers.</b> Chamfered of a rock hull's outward corners, drawn, get a chamfer cutting half to all of Sink into what its faces leave. A chamfer makes one draw from its own stream: a turn of up to half of Tilt either way, never more than a third of the angle between its two faces. If a touch point keeps it from biting half a Sink, it takes the turn mirrored, no turn, or the limit away from either face, the first that bites (no second draw). So do Chamfered of the outward corners where a rock face meets a hollow's face (an L's arm tips), which neither hull owns: each is cut on its own, the corner alone, half to all of Sink into the rock that is there. Hollows' own corners get none, so inside corners stay sharp.</li>
         <li><b>The rock</b> is the first hull's piece, minus each hollow's pocket, plus each bump's piece, in order.</li>
@@ -224,7 +225,8 @@ function planesOn(node, key, P) {
     if (len >= 2.5 && s < 0) {
       // a hollow's flat face: a chain of one to three segments bowing into the rock, half to a whole Sink deep; one end or both touch
       const rh = stream(key, 'hollow', fi), o = [t[1], -t[0]], dmax = P.sink * (0.5 + 0.5 * rh());
-      const k = rh() < 0.2 ? 1 : rh() < 0.55 ? 2 : 3, end = rh(), pts = [[0, end < 0.35 ? dmax * 0.6 * rh() : 0]];
+      const k = Math.max(1, Math.min(6, Math.round(len / P.gap * (0.6 + 0.8 * rh())))), end = rh(),   // segments: about one per plane spacing
+      pts = [[0, end < 0.35 ? dmax * 0.6 * rh() : 0]];
       const ts = Array.from({ length: k - 1 }, () => 0.2 + 0.6 * rh()).sort((x, y) => x - y);
       // Tilt bends the chain as it domes a rock's face: each bend goes in by about Tilt's slope over its distance to the nearer end
       const tsp = Math.tan(tilt);
@@ -259,7 +261,7 @@ function planesOn(node, key, P) {
     arc += l;
   }
   // face planes, spaced along the surface every 2.6 to 4.4 mm
-  let walk = 0, nextP = 1 + 2 * rPlanes();
+  let walk = 0, nextP = P.gap * (0.3 + 0.6 * rPlanes());
   for (const f of faces) for (const e of f.edges) {
     const l = Math.hypot(...sub(e.b, e.a));
     if (f.chain) { walk += l; continue; }
@@ -275,12 +277,12 @@ function planesOn(node, key, P) {
           n = rot(n, turn);
           planes.push({ n, b: dot(n, g.p), kind });
         } else planes.push({ n, b: dot(n, p) + depth, kind });
-        nextP += 2.6 + 1.8 * rPlanes(); continue;
+        nextP += P.gap * (0.75 + 0.5 * rPlanes()); continue;
       }
       if (f.touch) { const off = dot(sub(p, f.touch), f.t); n = nrm(add(n, mul(f.t, s * Math.tan(tilt) * off / (f.len / 2)))); }   // leans away from the touch point: off the rock, or into it for a hollow
       n = rot(n, (rPlanes() - 0.5) * tilt);
       planes.push({ n, b: dot(n, p) - s * P.sink * (0.5 + 0.5 * rPlanes()), kind });
-      nextP += 2.6 + 1.8 * rPlanes();
+      nextP += P.gap * (0.75 + 0.5 * rPlanes());
     }
     walk += l;
   }
@@ -351,7 +353,10 @@ function tipChamfers(root, seed, P) {
 }
 // the touch points the rock keeps (a tip's chamfer cuts the hollow face's touch point at that tip away)
 const touchesOf = built => built.all.flatMap(n => n.touches).filter(p => !built.tips.some(t => t.cut.length > 2 && dot(t.n, p) > t.b + 1e-9));
-function build(R, seed, P) {
+function build(R, seed, P0) {
+  // Planes sets one spacing for the whole shape: its outline's length over the number of planes
+  const outline = R.reduce((t, ring) => t + ring.reduce((u, a, i) => u + Math.hypot(...sub(ring[(i + 1) % ring.length], a)), 0), 0);
+  const P = { ...P0, gap: outline / P0.planes };
   const root = treeOf(R), all = [];
   const visit = (node, path) => { Object.assign(node, planesOn(node, seed + '/' + path, P)); all.push(node); node.kids.forEach((kid, i) => visit(kid, path + '.' + i)); };
   visit(root, 'hull');
@@ -404,7 +409,7 @@ function showValue(out, input, unit) {
   const [ip, fp] = (+input.value).toFixed(places).replace(/\.?0+$/, m => places ? '' : m).split('.');
   out.innerHTML = `<span class="ip" style="min-width:${digits}ch">${ip}</span><span class="fp" style="width:${places ? places + 1 : 0}ch">${fp ? '.' + fp : ''}</span>${unit ? `<span class="un">${unit}</span>` : ''}`;
 }
-const state = { tilt: 8, sink: 0.7, bev: 100 };
+const state = { planes: 20, tilt: 8, sink: 0.7, bev: 100 };
 const $ = id => document.getElementById(id);
 function render() {
   const R = TARGETS[target], built = build(R, seed, state);
@@ -428,7 +433,7 @@ function render() {
     drawRock(t.cv, R, build(R, sd, state), { target: false });
   });
   $('seedin').value = seed; $('target').value = target;
-  for (const k of ['tilt', 'sink', 'bev']) { $(k).value = state[k]; showValue($('o-' + k), $(k), k === 'tilt' ? '°' : k === 'sink' ? '&nbsp;mm' : '%'); }
+  for (const k of ['planes', 'tilt', 'sink', 'bev']) { $(k).value = state[k]; showValue($('o-' + k), $(k), { planes: '', tilt: '°', sink: '&nbsp;mm', bev: '%' }[k]); }
 }
 const thumbs = [];
 for (let i = 0; i < 8; i++) {
@@ -440,7 +445,7 @@ $('prev').addEventListener('click', () => setSeed(seed - 1));
 $('next').addEventListener('click', () => setSeed(seed + 1));
 $('seedin').addEventListener('change', e => setSeed(parseInt(e.target.value, 10) || 0));
 $('target').addEventListener('change', e => { target = e.target.value; render(); });
-for (const k of ['tilt', 'sink', 'bev']) $(k).addEventListener('input', e => { state[k] = +e.target.value; render(); });
+for (const k of ['planes', 'tilt', 'sink', 'bev']) $(k).addEventListener('input', e => { state[k] = +e.target.value; render(); });
 document.addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input, select')) return;
   if (e.key === 'ArrowLeft') { setSeed(seed - 1); e.preventDefault(); }
