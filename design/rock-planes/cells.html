@@ -95,7 +95,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
     </figure>
     <figure>
       <canvas id="c3" aria-label="The finished rock"></canvas>
-      <figcaption><b><span>3</span>Rock</b><p>Each rock hull's planes leave a convex piece, and each hollow's planes carve a convex pocket out of it. The rock stays inside the shape (dashed). Outside it touches the shape at every touch point; along a hollow it touches at one end of each face. Inside corners are sharp, where two hollow planes meet.</p></figcaption>
+      <figcaption><b><span>3</span>Rock</b><p>Each rock hull's planes leave a convex piece, and each hollow's planes carve a convex pocket out of it. The rock stays inside the shape (dashed). Outside it touches the shape at every touch point; along a hollow it touches at one or both ends of each face. Inside corners are sharp, where two hollow planes meet.</p></figcaption>
     </figure>
   </div>
 
@@ -107,7 +107,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
       <ol>
         <li><b>Hulls.</b> Take the shape's convex hull. Each stretch of the outline that falls inside it is a hollow, closed by a mouth along the hull; each hole is a hollow with no mouth. Do the same to each hollow: what of its hull is not hollow is a bump of rock inside it. Stop after three levels.</li>
         <li><b>Planes on a rock hull</b>, as in Rock Planes, along each face that is real surface (a mouth gets none): each the face's direction, domed away from that face's touch point by up to Spread, turned by about Spread and sunk by up to Sink. A crown sits on each touch point. A curved stretch gets a touch point every 10 mm or so instead.</li>
-        <li><b>Planes on a hollow.</b> Each flat face touches at one of its ends, drawn by seed; its planes pivot on that end and lean into the rock, a half to a whole Sink deep at the far end, turned a little. On a curved stretch each plane pivots on the nearest touch point it faces.</li>
+        <li><b>Planes on a hollow.</b> Each flat face becomes a chain of one, two or three segments bowing into the rock, a half to a whole Sink deep, drawn by seed from that face's own stream: a V, a three-faceted bow, or one face leaning from an end. One end touches the shape, or both. The chain always bows into the rock, never toward the hollow, so the pocket stays convex. On a curved stretch each plane pivots on the nearest touch point it faces.</li>
         <li><b>Touching.</b> A rock plane is pushed back out to every touch point of its hull; a hollow plane passes the one it pivots on. A rock piece is also kept inside its hull, and a pocket always takes its whole hollow (a plane that would cut into the hollow is pushed out to the hollow's corner) and reaches no more than Sink into the rock. So the rock never passes the shape.</li>
         <li><b>Bevels.</b> Bevelled of a rock hull's outward corners, drawn, get a bevel cutting one to two Sinks into what its faces leave. Hollows get none, so inside corners stay sharp.</li>
         <li><b>The rock</b> is the first hull's piece, minus each hollow's pocket, plus each bump's piece, in order.</li>
@@ -119,7 +119,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
         <li>Where a rock face meets a hollow face at an outward corner (an L's arm tip), neither hull owns the corner, so it is never bevelled.</li>
         <li>In 3D a hollow's ceiling is an overhang: hollow planes need the mirror of Rock Planes' rule, none facing up too steeply.</li>
         <li>For a few shapes the hulls keep nesting; three levels covers rock-like shapes.</li>
-        <li>A pocket is convex and must hold its hollow, so a hollow face cannot bulge toward the hollow at a touch point. So a hollow face touches at an end and leans into the rock from there; a round hole comes out as a polygon around the circle, up to Sink bigger than it.</li>
+        <li>A pocket is convex and must hold its hollow, so a hollow face cannot bulge toward the hollow at a touch point. So a hollow face can bow into the rock (a V, three facets) but never out toward the hollow; a round hole comes out as a polygon around the circle, up to Sink bigger than it.</li>
         <li>A pocket reaches up to Sink into the rock; where a hollow comes close to the outline, the wall between them gets thinner.</li>
       </ul>
     </div>
@@ -211,12 +211,29 @@ function planesOn(node, key, P) {
     if (along) last.push(e); else runs.push([e]);
   }
   const faces = [];
+  let fi = -1;
   for (const run of runs) if (run[0].kind === 'surface') {
+    fi++;
     const a = run[0].a, b = run[run.length - 1].b, len = Math.hypot(...sub(b, a)), t = nrm(sub(b, a));
     const f = { a, t, len, edges: run };
-    if (len >= 2.5 && s < 0) {   // a hollow's flat face touches at one of its ends, drawn
-      const E = rTouch() < 0.5 ? a : b;
-      touches.push(E); guards.push({ p: E, n: [t[1], -t[0]] }); f.end = E;
+    if (len >= 2.5 && s < 0) {
+      // a hollow's flat face: a chain of one to three segments bowing into the rock, half to a whole Sink deep; one end or both touch
+      const rh = stream(key, 'hollow', fi), o = [t[1], -t[0]], dmax = P.sink * (0.5 + 0.5 * rh());
+      const k = rh() < 0.2 ? 1 : rh() < 0.55 ? 2 : 3, end = rh(), pts = [[0, end < 0.35 ? dmax * 0.6 * rh() : 0]];
+      const ts = Array.from({ length: k - 1 }, () => 0.2 + 0.6 * rh()).sort((x, y) => x - y);
+      for (const u of ts) pts.push([u, dmax * (0.5 + 0.5 * rh())]);
+      pts.push([1, end > 0.65 ? dmax * 0.6 * rh() : 0]);
+      if (k === 1) { const lift = rh() < 0.5 ? 0 : 1; pts[lift][1] = dmax; pts[1 - lift][1] = 0; }   // one segment: leans from one touching end
+      // keep the profile concave (the pocket is convex): its upper hull
+      const up = [];
+      for (const q of pts) { while (up.length > 1 && cross3(up[up.length - 2], up[up.length - 1], q) >= 0) up.pop(); up.push(q); }
+      const at = q => add(add(a, mul(t, q[0] * len)), mul(o, q[1]));
+      for (let i = 0; i + 1 < up.length; i++) {
+        const P0 = at(up[i]), P1 = at(up[i + 1]), d = sub(P1, P0); let n = nrm([d[1], -d[0]]); if (dot(n, o) < 0) n = mul(n, -1);
+        planes.push({ n, b: dot(n, P0), kind });
+      }
+      for (const q of [up[0], up[up.length - 1]]) if (q[1] === 0) touches.push(at(q));
+      f.chain = true;
     } else if (len >= 2.5) {   // a rock's flat face: a touch point in its middle third, with a crown on it
       const tt = 1 / 3 + rTouch() / 3, c = add(a, mul(t, tt * len)), room = Math.min(tt, 1 - tt) * len;
       const nc = rot([t[1], -t[0]], (rTouch() - 0.5) * spread), tc = [-nc[1], nc[0]], rho = room * (0.15 + 0.2 * rTouch());
@@ -228,7 +245,7 @@ function planesOn(node, key, P) {
   }
   // a curved stretch (short faces) gets a touch point every 8 to 12 mm of its length
   let arc = 0, nextTouch = 3 + 6 * rCurve();
-  for (const f of faces) if (!f.touch && !f.end) for (const e of f.edges) {
+  for (const f of faces) if (!f.touch && !f.chain) for (const e of f.edges) {
     const l = Math.hypot(...sub(e.b, e.a));
     while (arc + l >= nextTouch) { const c = add(e.a, mul(sub(e.b, e.a), (nextTouch - arc) / l)); touches.push(c); guards.push({ p: c, n: outOf(e) }); nextTouch += 8 + 4 * rCurve(); }
     arc += l;
@@ -237,14 +254,15 @@ function planesOn(node, key, P) {
   let walk = 0, nextP = 1 + 2 * rPlanes();
   for (const f of faces) for (const e of f.edges) {
     const l = Math.hypot(...sub(e.b, e.a));
+    if (f.chain) { walk += l; continue; }
     while (walk + l >= nextP) {
       const p = add(e.a, mul(sub(e.b, e.a), (nextP - walk) / l));
       let n = outOf(e);
       if (s < 0) {   // a hollow plane pivots on the touch point it faces and leans into the rock, Sink deep at the face's far end
-        const o = n, g = f.end ? { p: f.end } : guards.filter(g => dot(g.n, o) > 0.7).sort((x, y) => Math.hypot(...sub(p, x.p)) - Math.hypot(...sub(p, y.p)))[0];
+        const o = n, g = guards.filter(g => dot(g.n, o) > 0.7).sort((x, y) => Math.hypot(...sub(p, x.p)) - Math.hypot(...sub(p, y.p)))[0];
         const depth = P.sink * (0.5 + 0.5 * rPlanes()), turn = (rPlanes() - 0.5) * spread;
         if (g) {
-          const dist = Math.hypot(...sub(p, g.p)), L = f.end ? f.len : Math.max(dist, 4);
+          const dist = Math.hypot(...sub(p, g.p)), L = Math.max(dist, 4);
           if (dist > 1e-6) { const u = mul(sub(p, g.p), 1 / dist), d = add(mul(u, L), mul(o, depth)); n = nrm([d[1], -d[0]]); if (dot(n, o) < 0) n = mul(n, -1); }
           n = rot(n, turn * 0.3);
           planes.push({ n, b: dot(n, g.p), kind });
