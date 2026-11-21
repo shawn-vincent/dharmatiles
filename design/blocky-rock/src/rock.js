@@ -194,7 +194,7 @@ function check(m) {
 function partsOf(rc, r) {
   const irr = rc.irr == null ? 1 : rc.irr, g = (a, b) => U(r, a, b) * irr;
   /* nothing is straight: every outer side has its own lean and its own twist in plan, the top its own small slope */
-  const bat = [g(-.03, .07), g(-.03, .07), g(-.03, .07), g(-.03, .07)], skO = [g(-.07, .07), g(-.07, .07), g(-.07, .07), g(-.07, .07)], lean = [(rc.lean || [0, 0])[0] + g(-.02, .02), (rc.lean || [0, 0])[1] + g(-.02, .02)], tx = g(-.045, .045), ty = g(-.045, .045);
+  const bat = [g(-.008, .025), g(-.008, .025), g(-.008, .025), g(-.008, .025)], skO = [g(-.03, .03), g(-.03, .03), g(-.03, .03), g(-.03, .03)], lean = [(rc.lean || [0, 0])[0] + g(-.02, .02), (rc.lean || [0, 0])[1] + g(-.008, .008)], tx = g(-.018, .018), ty = g(-.018, .018);
   const jx = {}, jy = {}, jk = (tab, key) => (tab[key] == null ? (tab[key] = g(-.09, .09)) : tab[key]), kk = (v) => Math.round(v * 1e4);
   return rc.lobes.map((q) => {
     const sx = (q.sx || 0) + tx, sy = (q.sy || 0) + ty, ht = q.h - sx * q.x1 - sy * q.y1, ox0 = q.x0 < 1e-9, ox1 = q.x1 > rc.W - 1e-9, oy0 = q.y0 < 1e-9, oy1 = q.y1 > rc.D - 1e-9;
@@ -294,14 +294,14 @@ function simpleRock(rc, seed, stage, N, bottomBevel) {
   const loops = F.map((f) => { const l = []; for (const p of f.p) { const i = vid(p); if (l[l.length - 1] !== i) l.push(i); } if (l.length > 1 && l[0] === l[l.length - 1]) l.pop(); return l; });
   const corners = V.slice(), nv = corners.length, edges = new Map(), faceN = F.map((f) => f.n), faceC = loops.map((l) => mul(l.reduce((a, i) => add(a, corners[i]), [0, 0, 0]), 1 / l.length));
   loops.forEach((l, fi) => { for (let k = 0; k < l.length; k++) { const a = l[k], b = l[(k + 1) % l.length], ka = Math.min(a, b) + '_' + Math.max(a, b); let e = edges.get(ka); if (!e) edges.set(ka, e = { a: Math.min(a, b), b: Math.max(a, b), f: [] }); e.f.push(fi); } });
-  const center = mul(corners.reduce((a, p) => add(a, p), [0, 0, 0]), 1 / nv), m = Math.min(rc.W, rc.D), H = rc.H, P = [], tri = [];
-  const pid = (p) => { P.push(p); return P.length - 1; }, bottomOf = (fi) => faceN[fi][2];
-  const ids = new Map(), N1 = N + 1;
-  /* every face is curved a little both ways: a shallow dome or saddle, mostly bulging out, never on the bottom */
+  const m = Math.min(rc.W, rc.D), thin = Math.min(rc.W, rc.D, rc.H), P = [], Pb = [], tri = [];
+  const pid = (p, base) => { P.push(p); Pb.push(base || p); return P.length - 1; };
+  const N1 = N + 1;
+  /* every face is a very slight dome or saddle, one arc each way, from a little concave to a little convex, never on the bottom */
   const fld = F.map((f, fi) => { const n = f.n, r = mulberry(hash(seed + ':f' + fi)), up = Math.abs(n[2]) > .9 ? [1, 0, 0] : [0, 0, 1], u = norm(cross(n, up)), v = cross(n, u), ext = [Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), u)))) || 1, Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), v)))) || 1];
-    const A = f.n[2] < -.95 ? 0 : U(r, .0013, .0047) * Math.min(ext[0], ext[1]) * 2, dome = U(r, -1, 1), sad = U(r, -.5, .5), tl = U(r, -.1, .1), tl2 = U(r, -.1, .1); return { n, u, v, ext, c: faceC[fi], A, dome, sad, tl, tl2 }; });
+    const A = f.n[2] < -.95 ? 0 : U(r, .0004, .0016) * Math.min(ext[0], ext[1]) * 2; return { n, u, v, ext, c: faceC[fi], A, dome: U(r, -1, 1), sad: U(r, -.5, .5), tl: U(r, -.03, .03), tl2: U(r, -.03, .03) }; });
   const bulge = (fi, p) => { const q = fld[fi]; if (!q.A) return p; const x = dot(sub(p, q.c), q.u) / q.ext[0], y = dot(sub(p, q.c), q.v) / q.ext[1], h = q.A * (q.dome * (1 - (x * x + y * y) / 2) + q.sad * (x * x - y * y) + q.tl * x + q.tl2 * y); return add(p, mul(q.n, h)); };
-  /* pass 0: each edge's kind, size and leg, so a strip can stop short of the corner by the neighbours' legs and the corner patch lies on the faces, not on a sharp edge */
+  /* pass 0: each edge's kind, size and angle */
   const info = new Map(); let ej = 0;
   for (const e of edges.values()) {
     const rw = mulberry(hash(seed + ':w' + (ej++))), A = corners[e.a], B = corners[e.b], t = norm(sub(B, A)), mid = mul(add(A, B), .5);
@@ -312,48 +312,54 @@ function simpleRock(rc, seed, stage, N, bottomBevel) {
     const ext = (fi, d) => Math.max(...loops[fi].map((i) => dot(sub(corners[i], mid), d)));
     const e1 = ext(f1, d1), e2 = ext(f2, d2);
     let w0, th0, tw;
-    if (kind === 'top') { w0 = Math.max(.06, U(rw, .13, .24) * m); th0 = U(rw, 8, 27); tw = 4; } else if (kind === 'bottom') { w0 = Math.max(.05, U(rw, .06, .1) * m); th0 = U(rw, 60, 69); tw = 3; } else { w0 = Math.max(.06, U(rw, .12, .22) * m); th0 = U(rw, 32, 58); tw = 8; }
+    if (kind === 'top') { w0 = Math.max(.06, U(rw, .13, .24) * m); th0 = U(rw, 8, 27); tw = 4; } else if (kind === 'bottom') { w0 = U(rw, .012, .022); th0 = U(rw, 70, 76); tw = 2; } else { w0 = Math.max(.06, U(rw, .12, .22) * m); th0 = U(rw, 32, 58); tw = 8; }
     if (kind === 'bottom' && !bottomBevel) w0 = 1e-4;
-    info.set(e, { kind, f1, f2, d1, d2, e1, e2, w0, th0, tw, A, B, t, mid, n1, n2, leg: Math.min(w0 * 1.4, .16 * e1) });
+    info.set(e, { kind, f1, f2, d1, d2, e1, e2, w0, th0, tw, A, B, t, mid, n1, n2 });
   }
-  const trimAt = (e, v) => { let g = 0; for (const o of edges.values()) if (o !== e && (o.a === v || o.b === v)) g = Math.max(g, info.get(o).leg, info.get(o).kind === 'vert' ? 0 : Math.min(info.get(o).w0 * 1.4 * Math.tan(info.get(o).th0 * Math.PI / 180), .16 * info.get(o).e2)); return .9 * g; };
+  /* legs along the edge: one arc each; the same function gives a face's offset from this edge at any point, and at the ends it fixes the corner */
+  const capLeg = (e1_) => Math.min(.16 * e1_, .24 * thin);   /* chamfers on a thin face stay small, so a slab does not pinch */
   let ei = 0;
   for (const e of edges.values()) {
-    const r = mulberry(hash(seed + ':e' + (ei++))), { kind, f1, f2, d1, d2, e1, e2, w0, th0, tw, A, B, n1, n2 } = info.get(e), aw = U(r, -.4, .4), at = U(r, -1, 1);   /* one arc each: the width wider or narrower in the middle, the tilt changing once along the edge */
-    const Lfull = len(sub(B, A)), tA = Math.min(.3, trimAt(e, e.a) / Lfull), tB = Math.min(.3, trimAt(e, e.b) / Lfull);
-    const bow = U(r, -.3, .3), ob = norm(add(n1, n2)), L1 = [], L2 = [];   /* the width changes slowly enough along a short edge that the strip never leans past the print rule */
+    const r = mulberry(hash(seed + ':e' + (ei++))), q = info.get(e), aw = U(r, -.15, .15), at = U(r, -1, 1), bow = U(r, -.15, .15), ob = norm(add(q.n1, q.n2));
+    q.legs = (tt) => { const sb = q.kind === 'vert' ? Math.min(1, .35 + 3 * (q.A[2] < q.B[2] ? tt : 1 - tt)) : 1, w = (1 + aw * Math.sin(Math.PI * tt)) * q.w0 * sb;   /* an upright chamfer narrows toward the foot, so the bottom corner is small */
+      const th = (q.th0 + q.tw * at * (2 * tt - 1)) * Math.PI / 180; let a = Math.min(w, capLeg(q.e1)), b = Math.min(w * Math.tan(th), capLeg(q.e2)); if (q.kind !== 'vert' && b < w * Math.tan(th) - 1e-9) a = Math.min(a, b / Math.tan(th)); return [a, b]; };
+    q.bowAt = (tt) => mul(q.kind === 'bottom' ? [ob[0], ob[1], 0] : ob, bow * Math.sin(Math.PI * tt) * q.w0);
+  }
+  /* corners: on each face, the point where the two chamfers' lines meet; the three such points are the corner facet */
+  const Q = new Map();   /* key face_vertex -> id */
+  const qid = (fi, v) => { const k = fi + '_' + v; let id = Q.get(k); if (id !== undefined) return id;
+    const es = [...edges.values()].filter((e) => (e.a === v || e.b === v) && e.f.includes(fi)), legOf = (e) => { const q = info.get(e), L = q.legs(e.a === v ? 0 : 1); return { d: q.f1 === fi ? q.d1 : q.d2, a: q.f1 === fi ? L[0] : L[1], t: norm(sub(corners[e.a === v ? e.b : e.a], corners[v])) }; };
+    const L1 = legOf(es[0]), L2 = legOf(es[1]);   /* Q - v = x t1 + y t2 with dot(Q-v, d1) = a1, dot(Q-v, d2) = a2 */
+    const m11 = dot(L1.t, L1.d), m12 = dot(L2.t, L1.d), m21 = dot(L1.t, L2.d), m22 = dot(L2.t, L2.d), det = m11 * m22 - m12 * m21 || 1e-9, x = (L1.a * m22 - m12 * L2.a) / det, y = (m11 * L2.a - m21 * L1.a) / det;
+    const base = add(corners[v], add(mul(L1.t, x), mul(L2.t, y))); id = pid(bulge(fi, base), base); Q.set(k, id); return id; };
+  const ids = new Map();
+  for (const e of edges.values()) {
+    const q = info.get(e), { f1, f2, d1, d2, A, B } = q, L1 = [], L2 = [], Ln = len(sub(B, A)), q1a = qid(f1, e.a), q2a = qid(f2, e.a), q1b = qid(f1, e.b), q2b = qid(f2, e.b);
+    const tA = Math.max(0, (dot(sub(Pb[q1a], A), q.t) + dot(sub(Pb[q2a], A), q.t)) / 2) / Ln, tB = Math.max(0, (dot(sub(B, Pb[q1b]), q.t) + dot(sub(B, Pb[q2b]), q.t)) / 2) / Ln;   /* the strip runs between its two corner points, so it never folds back */
     for (let i = 0; i < N1; i++) {
-      const tt = i / N, w = (1 + aw * Math.sin(Math.PI * tt)) * w0, th = (th0 + tw * at * (2 * tt - 1)) * Math.PI / 180;
-      let a = Math.min(w, .16 * e1), b = Math.min(w * Math.tan(th), .16 * e2);   /* on one face the chamfers together never take more than a third of its width */
-      if (kind === 'bottom' || kind === 'top') { /* the limit on the leg keeps the angle: shorten the other */ if (b < w * Math.tan(th) - 1e-9) a = Math.min(a, b / Math.tan(th)); }
-      const E = add(A, mul(sub(B, A), tA + (1 - tA - tB) * tt));
-      const bw = bow * Math.sin(Math.PI * tt) * w0, bo = mul(kind === 'bottom' ? [ob[0], ob[1], 0] : ob, bw);   /* the chamfer as a whole bows along its length, in or out */
-      L1.push(pid(add(bulge(f1, add(E, mul(d1, a))), bo))); L2.push(pid(add(bulge(f2, add(E, mul(d2, b))), bo)));
+      if (i === 0 || i === N) { const v = i ? e.b : e.a; L1.push(qid(f1, v)); L2.push(qid(f2, v)); continue; }
+      const tt = i / N, [a, b] = q.legs(tt), E = add(A, mul(sub(B, A), tA + (1 - tA - tB) * tt)), bo = q.bowAt(tt), b1 = add(E, mul(d1, a)), b2 = add(E, mul(d2, b));
+      { const c1 = add(b1, bo), c2 = add(b2, bo); L1.push(pid(bulge(f1, c1), c1)); L2.push(pid(bulge(f2, c2), c2)); }   /* the bow is part of the base position, so the face grid meets the strip exactly */
     }
     ids.set(e, [f1, f2, L1, L2]);
-    for (let i = 0; i < N; i++) tri.push(Object.assign([L1[i], L1[i + 1], L2[i + 1], L2[i]], { ref: ob }));
+    for (let i = 0; i < N; i++) tri.push(Object.assign([L1[i], L1[i + 1], L2[i + 1], L2[i]], { ref: norm(add(q.n1, q.n2)) }));
   }
-  const edgeOf = (a, b) => edges.get(Math.min(a, b) + '_' + Math.max(a, b));
-  loops.forEach((l, fi) => { const poly = []; for (let k = 0; k < l.length; k++) { const a = l[k], b = l[(k + 1) % l.length], e = edgeOf(a, b), [f1, f2, L1, L2] = ids.get(e), arr = f1 === fi ? L1 : L2; if (a === e.a) for (let i = 0; i < N1; i++) poly.push(arr[i]); else for (let i = N; i >= 0; i--) poly.push(arr[i]); }
-    /* the face as an even grid: rows run between the first and third side's points, the other two sides are zipped to its straight edges */
-    const nref = fld[fi].n, S = (k) => poly.slice(k * N1, (k + 1) * N1), s0 = S(0), s1 = S(1), s2 = S(2), s3 = S(3), top = s2.slice().reverse(), R = 12, G = [s0], s3r = s3.slice().reverse(), chord = (S2, v) => add(mul(P[S2[0]], 1 - v), mul(P[S2[N]], v)), dev = (S2, v) => sub(P[S2[Math.round(v * N)]], chord(S2, v));   /* the sides' own bend is carried into the rows, so the zipped strips stay parallel */
-    for (let j = 1; j < R; j++) { const v = j / R, dL = dev(s3r, v), dR = dev(s1, v); G.push(s0.map((a, i) => { const u = i / N; return pid(bulge(fi, add(add(mul(P[a], 1 - v), mul(P[top[i]], v)), add(mul(dL, 1 - u), mul(dR, u))))); })); }
-    G.push(top);
-    for (let j = 0; j < R; j++) for (let i = 0; i < N; i++) tri.push(Object.assign([G[j][i], G[j][i + 1], G[j + 1][i + 1], G[j + 1][i]], { ref: nref }));
-    const zip = (X, Y) => { let i = 0, j = 0; while (i < X.length - 1 || j < Y.length - 1) { const advX = j >= Y.length - 1 || (i < X.length - 1 && (i + 1) / (X.length - 1) <= (j + 1) / (Y.length - 1)); if (advX) { tri.push(Object.assign([X[i], Y[j], X[i + 1]], { ref: nref })); i++; } else { tri.push(Object.assign([X[i], Y[j], Y[j + 1]], { ref: nref })); j++; } } };
-    zip(G.map((row) => row[N]), s1); zip(G.map((row) => row[0]).reverse(), s3); });
-  for (let v = 0; v < nv; v++) {
-    const inc = [...edges.values()].filter((e) => e.a === v || e.b === v), ptOf = (e, f) => { const [f1, , L1, L2] = ids.get(e), i = e.a === v ? 0 : N; return (f === f1 ? L1 : L2)[i]; };
-    let e = inc[0], f = e.f[0]; const pts = [];
-    for (let k = 0; k < 3; k++) { const e2 = inc.find((x) => x !== e && x.f.includes(f)); pts.push(ptOf(e, f), ptOf(e2, f)); f = e2.f[0] === f ? e2.f[1] : e2.f[0]; e = e2; }
-    let nm = [0, 0, 0]; for (const [fi, l] of loops.entries()) if (l.includes(v)) nm = add(nm, faceN[fi]);
-    { const nn = norm(nm), hc = mul(pts.reduce((a, i) => add(a, P[i]), [0, 0, 0]), 1 / pts.length); tri.push({ fan: pts, ref: nn, mid: add(hc, mul(nn, Math.max(0, dot(sub(corners[v], hc), nn)) * .2)), corner: true }); }   /* the corner patch bulges toward the old corner, like a rounded one */
+  const edgeOf = (a, b) => edges.get(Math.min(a, b) + '_' + Math.max(a, b)), W2 = (a, b) => a === b;
+  loops.forEach((l, fi) => { const poly = []; for (let k = 0; k < l.length; k++) { const a = l[k], b = l[(k + 1) % l.length], e = edgeOf(a, b), [f1, , L1, L2] = ids.get(e), arr = f1 === fi ? L1 : L2; if (a === e.a) for (let i = 0; i < N1; i++) poly.push(arr[i]); else for (let i = N; i >= 0; i--) poly.push(arr[i]); }
+    /* the face as an even grid: rows run between the first and third side's points; the other two sides are zipped to its straight edges */
+    const nref = fld[fi].n, S = (k) => poly.slice(k * N1, (k + 1) * N1), s0 = S(0), s1 = S(1), s2 = S(2), s3 = S(3), top = s2.slice().reverse(), s3r = s3.slice().reverse(), R = N, G = [];
+    /* a Coons patch between the four sides; their corners are shared, so it fits exactly and needs no seam */
+    const c00 = Pb[s0[0]], c10 = Pb[s0[N]], c01 = Pb[top[0]], c11 = Pb[top[N]];
+    for (let j = 0; j <= R; j++) { const v = j / R; if (j === 0) { G.push(s0); continue; } if (j === R) { G.push(top); continue; }
+      G.push(s0.map((a, i) => { if (i === 0) return s3r[j]; if (i === N) return s1[j]; const u = i / N, bl = add(add(mul(c00, (1 - u) * (1 - v)), mul(c10, u * (1 - v))), add(mul(c01, (1 - u) * v), mul(c11, u * v)));
+        const base = sub(add(add(mul(Pb[a], 1 - v), mul(Pb[top[i]], v)), add(mul(Pb[s3r[j]], 1 - u), mul(Pb[s1[j]], u))), bl); return pid(bulge(fi, base), base); })); }
+    for (let j = 0; j < R; j++) for (let i = 0; i < N; i++) tri.push(Object.assign([G[j][i], G[j][i + 1], G[j + 1][i + 1], G[j + 1][i]], { ref: nref })); });
+  for (let v = 0; v < nv; v++) {   /* the corner facet: one triangle (or quad if a face has one point per edge) */
+    const fs = [...loops.keys()].filter((f) => loops[f].includes(v)), pts = fs.map((f) => qid(f, v)); let nm = [0, 0, 0]; for (const f of fs) nm = add(nm, faceN[f]);
+    tri.push(Object.assign(pts, { ref: norm(nm) }));
   }
-  const T = [], poly = (ts, ref, corner) => { let n = [0, 0, 0]; for (const [a, b, c] of ts) n = add(n, cross(sub(P[b], P[a]), sub(P[c], P[a]))); const flip = dot(n, ref) < 0; for (const [a, b, c] of ts) { let f = flip; if (!corner) f = dot(cross(sub(P[b], P[a]), sub(P[c], P[a])), ref) < 0; if (f) T.push(a, c, b); else T.push(a, b, c); } };   /* one winding for a whole patch or strip, so a folded piece can never flip alone */
-  for (const q of tri) {
-    if (q.fan) { const pl = q.fan; let c = q.mid || mul(pl.reduce((a, i) => add(a, P[i]), [0, 0, 0]), 1 / pl.length); const ci = pid(c), ts = []; for (let i = 0; i < pl.length; i++) ts.push([ci, pl[i], pl[(i + 1) % pl.length]]); poly(ts, q.ref, q.corner); }
-    else if (q.length === 3) poly([[q[0], q[1], q[2]]], q.ref); else poly([[q[0], q[1], q[2]], [q[0], q[2], q[3]]], q.ref);
-  }
+  const T = [], poly = (ts, ref) => { for (const [a, b, c] of ts) { if (a === b || b === c || a === c) continue; if (dot(cross(sub(P[b], P[a]), sub(P[c], P[a])), ref) < 0) T.push(a, c, b); else T.push(a, b, c); } };
+  for (const q of tri) { if (q.length === 3) poly([[q[0], q[1], q[2]]], q.ref); else poly([[q[0], q[1], q[2]], [q[0], q[2], q[3]]], q.ref); }
   return { V: P, T };
 }
 function makeRock(seed, opts) {
