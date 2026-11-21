@@ -133,6 +133,14 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <div class="ctl"><div class="top"><label for="fillCut">Fill cut</label><output id="o-fillCut"></output></div>
         <input type="range" id="fillCut" min="0" max="15" step="0.5" value="3"></div>
       <hr>
+      <h2>Break up</h2>
+      <div class="ctl"><div class="top"><label for="largest">Largest face</label><output id="o-largest"></output></div>
+        <input type="range" id="largest" min="3" max="30" step="0.5" value="8"><small>A face bigger than this share of the surface is broken into facets.</small></div>
+      <div class="ctl"><div class="top"><label for="drop">Facet drop</label><output id="o-drop"></output></div>
+        <input type="range" id="drop" min="0.5" max="10" step="0.5" value="4"><small>How far below the face a break-up facet reaches at the face's edge, at most (of the shape's size).</small></div>
+      <div class="ctl"><div class="top"><label for="passes">Passes</label><output id="o-passes"></output></div>
+        <input type="range" id="passes" min="0" max="4" step="1" value="2"><small>Each pass breaks whatever faces are still too big.</small></div>
+      <hr>
       <h2>After</h2>
       <div class="ctl"><div class="top"><label for="chamfer">Chamfer width</label><output id="o-chamfer"></output></div>
         <input type="range" id="chamfer" min="0" max="12" step="0.5" value="4"><small>One plane across each sharp edge that is not on the ground.</small></div>
@@ -160,8 +168,9 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>The shape</b> is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). Its bottom is cut at the <b>Foot</b> height and the rock is set down so that cut sits on the plate.</li>
       <li><b>Major faces.</b> A cube, slab, pyramid or wedge uses its own faces, each tilted about its own centre. A sphere, oval or cylinder uses three joint sets: one near level (the top) and two upright ones roughly square to each other, each giving a face on both sides. Each direction is tilted at random (about <b>Spread</b>), its plane is put where the shape reaches furthest in that direction (the shape's support), then pushed in by up to <b>Major cut</b>.</li>
       <li><b>Fill faces.</b> More directions, thrown at random and kept apart from each other and from the majors, until there are <b>Faces</b> in all. Each plane is put at the shape's support and pushed in by up to <b>Fill cut</b>. No direction points more than 50° below level, so no face overhangs past the 55° print limit.</li>
+      <li><b>Break up.</b> Any face bigger than <b>Largest face</b> (a share of the whole surface) gets one to three planes toward different sides, each through a point between the face's centre and its edge and reaching <b>Facet drop</b> below the face at the edge. A big face therefore tilts its facets gently and a small one more steeply. The big face becomes a shallow cluster of facets with low ridges between them and stays mostly flat. Each of the <b>Passes</b> does this again to whatever is still too big, so faces end up a few large, more medium, few small.</li>
       <li><b>The rock</b> is everything inside all the planes and above the foot: one closed convex solid. Because every plane starts at the shape's surface, the rock pokes out a little where planes meet and cuts in where they were pushed in. The numbers on the right say by how much.</li>
-      <li><b>Chamfers and chips.</b> Every edge of that solid whose faces turn by more than <b>Sharp edge</b>, except edges on the ground, gets one more plane across it, leaning toward one of its two faces and skewed a little so its width tapers along the edge. Some corners get a chip plane. Both obey the same 50° limit. Then the whole rock is cut by all of them at once.</li>
+      <li><b>Chamfers and chips.</b> Every edge of that solid whose faces turn by more than <b>Sharp edge</b>, except edges on the ground, gets one more plane across it, leaning toward one of its two faces and skewed a little so its width tapers along the edge. Some sharp corners get a chip plane (one that turns at least 18° from every face at the corner). Both obey the same 50° limit. Then the whole rock is cut by all of them at once. Break-up ridges turn by less than <b>Sharp edge</b>, so they stay crisp.</li>
     </ol>
     <p class="hint">Each step draws from its own seeded stream, so changing Faces keeps the major faces, and changing the chamfers keeps the planes. Overhang paints orange past 55° and red past 65°, as in the program.</p>
   </section>
@@ -290,6 +299,8 @@ function cornersOf(poly) {
   poly.forEach((f, fi) => f.verts.forEach(v => { const k = vkey(v); let c = m.get(k); if (!c) { c = { p: v, faces: new Set() }; m.set(k, c); } c.faces.add(fi); }));
   return [...m.values()];
 }
+function faceArea(f) { let a = [0, 0, 0]; const v = f.verts; for (let i = 1; i + 1 < v.length; i++) a = add(a, cross(sub(v[i], v[0]), sub(v[i + 1], v[0]))); return len(a) / 2; }
+function centroid(f) { return mul(f.verts.reduce((s, p) => add(s, p), [0, 0, 0]), 1 / f.verts.length); }
 function volume(poly) { let v = 0; for (const f of poly) { const p0 = f.verts[0]; for (let i = 1; i + 1 < f.verts.length; i++) v += dot(p0, cross(f.verts[i], f.verts[i + 1])); } return v / 6; }
 
 // ---------- the algorithm ----------
@@ -346,6 +357,45 @@ function build(shape, seed, P, withStats) {
   for (const pl of planes) poly = clip(poly, pl);
   const primaryFaces = poly.length;
 
+  // break up big faces: each face larger than the limit gets planes tilted a few degrees off it,
+  // each through a point on the face, so it becomes a shallow cluster of facets; then again on what is left
+  if (P.passes > 0) {
+    const r4 = stream(seed, 4);
+    for (let pass = 0; pass < P.passes; pass++) {
+      const areas = poly.map(f => (f.role === 'base' || f.role === 'box') ? 0 : faceArea(f));
+      const total = areas.reduce((a, b) => a + b, 0), limit = P.largest / 100 * total;
+      const cuts = [];
+      poly.forEach((f, i) => {
+        if (areas[i] <= limit) return;
+        const k = areas[i] > 2.5 * limit ? 3 : areas[i] > 1.5 * limit ? 2 : 1;
+        const c = centroid(f), u0 = perp(f.n), v0 = cross(f.n, u0), az0 = r4() * 2 * Math.PI;
+        for (let j = 0; j < k; j++) {
+          const az = az0 + j * 2 * Math.PI / k + (r4() - 0.5) * 1.2;
+          const u = add(mul(u0, Math.cos(az)), mul(v0, Math.sin(az)));
+          // the plane passes through a point between the centre and the edge, and at the far edge sits
+          // a drawn drop below the face: its tilt follows from the drop, so big faces tilt gently
+          const t = 0.05 + 0.35 * r4(), drop = P.drop / 100 * size * (0.5 + 0.5 * r4());
+          let reach = 0; for (const v of f.verts) reach = Math.max(reach, dot(sub(v, c), u));
+          const th = Math.min(25 * DEG, Math.atan(drop / Math.max(0.5, reach * (1 - t))));
+          const n = unit(add(mul(f.n, Math.cos(th)), mul(u, Math.sin(th))));
+          if (n[2] < CAP_Z) continue;
+          cuts.push({ n, b: dot(n, add(c, mul(u, t * reach))), role: 'break', most: 0.7 * areas[i] });
+        }
+      });
+      // a break-up plane stays local: it is refused if it swallows a whole face
+      // bigger than a small corner (it would merge facets into one bigger one) or makes a facet bigger than it was meant to
+      for (const pl of cuts) {
+        const next = clip(poly, pl);
+        if (next === poly) continue;
+        const made = next[next.length - 1];
+        if (made.role !== 'break' || faceArea(made) > pl.most) continue;
+        const kept = new Set(next.map(f => f.n.join() + '|' + f.b));
+        if (poly.some(f => !kept.has(f.n.join() + '|' + f.b) && faceArea(f) > 0.2 * pl.most)) continue;
+        poly = next;
+      }
+    }
+  }
+
   // chamfers and chips, read from that solid, then cut all at once
   const after = [];
   const r3 = stream(seed, 3);
@@ -375,6 +425,8 @@ function build(shape, seed, P, withStats) {
       let n = unit(fs.reduce((s, f) => add(s, f.n), [0, 0, 0]));
       n = unit(add(n, mul([jx, jy, jz], 0.5)));
       if (n[2] < CAP_Z) continue;
+      // only a truly sharp corner: the chip turns well away from every face it cuts, else it would plane a face flat
+      if (fs.some(f => angle(f.n, n) < 18 * DEG) || fs.filter(f => angle(f.n, n) > 25 * DEG).length < 3) continue;
       after.push({ n, b: dot(n, c.p) - depthBase * (0.8 + 0.8 * dd), role: 'chip' });
     }
   }
@@ -403,6 +455,8 @@ function build(shape, seed, P, withStats) {
     let steep = 0, over = 0;
     for (const f of poly) if (f.role !== 'base' && f.n[2] < 0) { const ang = Math.asin(-f.n[2]) / DEG; steep = Math.max(steep, ang); if (ang > 55) over++; }
     const counts = {}; for (const f of poly) counts[f.role] = (counts[f.role] || 0) + 1;
+    let areaSum = 0, areaMax = 0; for (const f of poly) if (f.role !== 'base') { const a = faceArea(f); areaSum += a; areaMax = Math.max(areaMax, a); }
+    res.largest = areaMax / areaSum;
     Object.assign(res, { out, inn, iou: either ? both / either : 0, steep, over, counts, vol: volume(poly) });
   }
   for (const f of poly) f.verts = f.verts.map(v => [v[0], v[1], v[2] - foot]);
@@ -411,7 +465,7 @@ function build(shape, seed, P, withStats) {
 }
 
 // ---------- drawing ----------
-const ROLE = { base: ['#6B7079', 'Ground'], major: ['#7F948A', 'Major'], fill: ['#C2BCAE', 'Fill'], chamfer: ['#D3A86E', 'Chamfer'], chip: ['#B67A5C', 'Chip'], box: ['#D33CC4', 'Unbounded (a fault)'] };
+const ROLE = { base: ['#6B7079', 'Ground'], major: ['#7F948A', 'Major'], fill: ['#C2BCAE', 'Fill'], break: ['#9DB0C9', 'Break-up'], chamfer: ['#D3A86E', 'Chamfer'], chip: ['#B67A5C', 'Chip'], box: ['#D33CC4', 'Unbounded (a fault)'] };
 const STONE = '#A9A69D';
 function faceColor(f, byRole) {
   if (f.role !== 'base' && f.n[2] < 0) { const a = Math.asin(-f.n[2]) / DEG; if (a > 65) return '#E5483B'; if (a > 55) return '#FF8C1A'; }
@@ -451,10 +505,10 @@ function makeScene() {
 }
 
 // ---------- page state ----------
-const DEFAULTS = { sharp: 40, faces: 16, majors: true, spread: 8, majorCut: 5, fillCut: 3, chamfer: 4, chips: 30, foot: 10, ghost: true, edges: true, roles: false };
+const DEFAULTS = { largest: 8, drop: 4, passes: 2, sharp: 40, faces: 16, majors: true, spread: 8, majorCut: 5, fillCut: 3, chamfer: 4, chips: 30, foot: 10, ghost: true, edges: true, roles: false };
 const state = { shape: 'sphere', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
-const SLIDERS = { faces: v => v, spread: v => v + '°', majorCut: v => v + '%', fillCut: v => v + '%', chamfer: v => v + '%', sharp: v => v + '°', chips: v => v + '%', foot: v => v + '%' };
+const SLIDERS = { largest: v => v + '%', drop: v => v + '%', passes: v => v, faces: v => v, spread: v => v + '°', majorCut: v => v + '%', fillCut: v => v + '%', chamfer: v => v + '%', sharp: v => v + '°', chips: v => v + '%', foot: v => v + '%' };
 const CHECKS = ['majors', 'ghost', 'edges', 'roles'];
 const shapeOf = k => SHAPES.find(s => s.key === k) || SHAPES[0];
 
@@ -480,7 +534,7 @@ function initGL() {
 function resize() { const w = viewerEl.clientWidth, h = viewerEl.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); draw(); }
 function draw() { if (renderer) renderer.render(scene, camera); }
 
-function params() { return { faces: state.faces, majors: state.majors, spread: state.spread, majorCut: state.majorCut, fillCut: state.fillCut, chamfer: state.chamfer, sharp: state.sharp, chips: state.chips, foot: state.foot }; }
+function params() { return { faces: state.faces, majors: state.majors, spread: state.spread, majorCut: state.majorCut, fillCut: state.fillCut, chamfer: state.chamfer, sharp: state.sharp, largest: state.largest, drop: state.drop, passes: state.passes, chips: state.chips, foot: state.foot }; }
 
 function rebuild() {
   try {
@@ -501,14 +555,15 @@ function rebuild() {
     $('chip').textContent = sh.label.toLowerCase() + ' · seed ' + state.seed;
     showStats(res);
     const lg = $('legend'); lg.hidden = !state.roles;
-    if (state.roles) lg.innerHTML = ['major', 'fill', 'chamfer', 'chip', 'base'].map(k => `<span><i style="background:${ROLE[k][0]}"></i>${ROLE[k][1]}</span>`).join('');
+    if (state.roles) lg.innerHTML = ['major', 'fill', 'break', 'chamfer', 'chip', 'base'].map(k => `<span><i style="background:${ROLE[k][0]}"></i>${ROLE[k][1]}</span>`).join('');
   } catch (e) { $('err').hidden = false; $('err').textContent = 'The rock could not be built: ' + e.message; console.error(e); }
 }
 function showStats(r) {
   const c = r.counts, n = k => c[k] || 0;
   const rows = [
     ['Faces', (r.poly.length - n('base'))],
-    ['  major · fill', n('major') + ' · ' + n('fill')],
+    ['  major · fill · break', n('major') + ' · ' + n('fill') + ' · ' + n('break')],
+    ['Largest face', (r.largest * 100).toFixed(1) + '% of the surface'],
     ['  chamfer · chip', n('chamfer') + ' · ' + n('chip')],
     ['Pokes out, at most', r.out.toFixed(2) + ' mm'],
     ['Cuts in, at most', r.inn.toFixed(2) + ' mm'],
