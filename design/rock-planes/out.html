@@ -128,7 +128,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <div class="ctl"><div class="top"><label for="edges">On edges</label><output id="o-edges"></output></div>
         <input type="range" id="edges" min="0" max="80" step="5" value="30"><small>The share of planes put along the shape's edges rather than on its faces. Corners always get one each.</small></div>
       <div class="ctl"><div class="top"><label for="spread">Spread</label><output id="o-spread"></output></div>
-        <input type="range" id="spread" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there.</small></div>
+        <input type="range" id="spread" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there, and how far a flat face's planes lean away from its touch point at the rim. At 0 flat faces stay flat.</small></div>
       <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
         <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep the planes bite (of the shape's size): a face plane sinks up to this, and at least half of the edges and corners are bitten at least this much deeper than the faces leave them.</small></div>
       <hr>
@@ -150,7 +150,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>The shape</b> is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
       <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight spread around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point, so the rock reaches each of them: it touches every face of the shape.</li>
       <li><b>Where the planes go.</b> Every corner gets one. At least half of the edges and half of the corners, drawn, are <b>bitten</b>; each bitten edge gets at least one plane. Then points are thrown along the edges and over the faces (about <b>On edges</b> of them on edges), each kept a spacing away from those already taken, until there are <b>Planes</b> in all.</li>
-      <li><b>Face planes</b> start as the face's tangent, domed a little around the face's touch point (6° at the rim, so a flat face's planes lean away from it and do not all fall on one plane), are turned at random by about <b>Spread</b> and sunk by half to all of <b>Sink</b>. A turn that would dip much deeper into the shape anywhere than at its own point, or would cut a touch point, is drawn again, up to twelve times; if none clears the touch points the best is pushed back past them.</li>
+      <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Spread</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Spread 0 the face stays flat), are turned at random by about <b>Spread</b> and sunk by half to all of <b>Sink</b>. A turn that would dip much deeper into the shape anywhere than at its own point, or would cut a touch point, is drawn again, up to twelve times; if none clears the touch points the best is pushed back past them.</li>
       <li><b>Edge and corner planes</b> start halfway between the edge's two faces, or as the average of a corner's faces, and are turned the same way. Each is set against what the face planes leave: a bitten edge or corner's plane cuts one to two times <b>Sink</b> into it, the others up to one <b>Sink</b>. So at least half the edges and corners change the rock by at least Sink, by construction.</li>
       <li><b>Kept inside.</b> Where face planes meet outside the shape, each of them is sunk by how far the corner pokes out, as far as the touch points let it, and the planes are cut again (up to six rounds). Without it a sphere's planes, sunk only a little, meet past its surface between them.</li>
       <li><b>The rock</b> is everything inside all the planes and inside the shape itself (the shape's own faces; a curved shape's are 200 of its tangent planes). It is one closed convex solid. Where the shape's own face shows, the rock touches it.</li>
@@ -332,7 +332,6 @@ function turn(n, sigmaDeg, r) {
   return unit(add(mul(n, Math.cos(th)), add(mul(u, Math.sin(th) * Math.cos(ph)), mul(v, Math.sin(th) * Math.sin(ph)))));
 }
 
-const DOME = 6;    // a flat face's planes lean away from its touch point by up to this at the rim
 const LEAN = 1.5;  // a turned face plane may dip no deeper into the shape than at its own point plus this (% of size)
 // the shape's own bounding planes: a polytope's faces, a curved shape's tangent planes
 function boundsOf(S) { return S._bounds || (S._bounds = S.ownFaces || [...fib(200), [0, 0, 1], [0, 0, -1]].map(n => ({ n, b: S.support(n) }))); }
@@ -394,7 +393,7 @@ function build(shape, seed, P, withStats) {
     let n0 = a.n, p0 = a.p, allow = lean;
     const t = touchOf(a.fi);
     if (t) {
-      const d = sub(a.p, t.p), rr = len(d), k = Math.tan(DOME * DEG);
+      const d = sub(a.p, t.p), rr = len(d), k = Math.tan(P.spread * DEG);   // the dome: lean away from the touch point, up to Spread at the rim
       allow += k * a.fr / 2;
       if (rr > 1e-6) { n0 = unit(add(a.n, mul(d, k / a.fr))); p0 = sub(a.p, mul(a.n, k * rr * rr / (2 * a.fr))); }
     }
