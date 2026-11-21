@@ -196,7 +196,10 @@ function treeOf(R) {
 
 // ---------- Rock Planes on one hull ----------
 const outOf = e => { const d = nrm(sub(e.b, e.a)); return [d[1], -d[0]]; };
-function planesOn(node, r, P) {
+// one stream per job, each keyed from the seed, the hull and the job's name, so a change to one job never moves another
+function stream(...keys) { let h = 2166136261; for (const ch of keys.join('/')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return mulberry32(h); }
+function planesOn(node, key, P) {
+  const rTouch = stream(key, 'touch'), rCurve = stream(key, 'curve'), rPlanes = stream(key, 'planes'), rPick = stream(key, 'bevel-pick');
   const s = node.sign, spread = P.spread * DEG, kind = s > 0 ? 'rock' : 'hollow';
   const planes = [], guards = [], touches = [];
   // faces: runs of surface edges that turn less than 3 degrees
@@ -211,8 +214,8 @@ function planesOn(node, r, P) {
     const a = run[0].a, b = run[run.length - 1].b, len = Math.hypot(...sub(b, a)), t = nrm(sub(b, a));
     const f = { a, t, len, edges: run };
     if (len >= 2.5) {   // a flat face: a touch point in its middle third, with a crown on it
-      const tt = 1 / 3 + r() / 3, c = add(a, mul(t, tt * len)), room = Math.min(tt, 1 - tt) * len;
-      const nc = rot([t[1], -t[0]], (r() - 0.5) * spread), tc = [-nc[1], nc[0]], rho = room * (0.15 + 0.2 * r());
+      const tt = 1 / 3 + rTouch() / 3, c = add(a, mul(t, tt * len)), room = Math.min(tt, 1 - tt) * len;
+      const nc = rot([t[1], -t[0]], (rTouch() - 0.5) * spread), tc = [-nc[1], nc[0]], rho = room * (0.15 + 0.2 * rTouch());
       touches.push(c); const gn = [t[1], -t[0]]; guards.push({ p: c, n: gn }, { p: add(c, mul(tc, rho)), n: gn }, { p: add(c, mul(tc, -rho)), n: gn });
       planes.push({ n: nc, b: dot(nc, c), kind });
       f.touch = c;
@@ -220,23 +223,23 @@ function planesOn(node, r, P) {
     faces.push(f);
   }
   // a curved stretch (short faces) gets a touch point every 8 to 12 mm of its length
-  let arc = 0, nextTouch = 3 + 6 * r();
+  let arc = 0, nextTouch = 3 + 6 * rCurve();
   for (const f of faces) if (!f.touch) for (const e of f.edges) {
     const l = Math.hypot(...sub(e.b, e.a));
-    while (arc + l >= nextTouch) { const c = add(e.a, mul(sub(e.b, e.a), (nextTouch - arc) / l)); touches.push(c); guards.push({ p: c, n: outOf(e) }); nextTouch += 8 + 4 * r(); }
+    while (arc + l >= nextTouch) { const c = add(e.a, mul(sub(e.b, e.a), (nextTouch - arc) / l)); touches.push(c); guards.push({ p: c, n: outOf(e) }); nextTouch += 8 + 4 * rCurve(); }
     arc += l;
   }
   // face planes, spaced along the surface every 2.6 to 4.4 mm
-  let walk = 0, nextP = 1 + 2 * r();
+  let walk = 0, nextP = 1 + 2 * rPlanes();
   for (const f of faces) for (const e of f.edges) {
     const l = Math.hypot(...sub(e.b, e.a));
     while (walk + l >= nextP) {
       const p = add(e.a, mul(sub(e.b, e.a), (nextP - walk) / l));
       let n = outOf(e);
       if (f.touch) { const off = dot(sub(p, f.touch), f.t); n = nrm(add(n, mul(f.t, s * Math.tan(spread) * off / (f.len / 2)))); }   // leans away from the touch point: off the rock, or into it for a hollow
-      n = rot(n, (r() - 0.5) * spread);
-      planes.push({ n, b: dot(n, p) - s * P.sink * (0.5 + 0.5 * r()), kind });
-      nextP += 2.6 + 1.8 * r();
+      n = rot(n, (rPlanes() - 0.5) * spread);
+      planes.push({ n, b: dot(n, p) - s * P.sink * (0.5 + 0.5 * rPlanes()), kind });
+      nextP += 2.6 + 1.8 * rPlanes();
     }
     walk += l;
   }
@@ -258,10 +261,11 @@ function planesOn(node, r, P) {
       const e = F[k], g = F[(k + 1) % F.length];
       if (e.kind === 'surface' && g.kind === 'surface' && dot(outOf(e), outOf(g)) < Math.cos(25 * DEG)) corners.push(nrm(add(outOf(e), outOf(g))));
     }
-    const pick = corners.map(m => [r(), m]).sort((x, y) => x[0] - y[0]).slice(0, Math.round(corners.length * P.bev / 100)).map(x => x[1]);
-    for (const m0 of pick) {
-      const m = rot(m0, (r() - 0.5) * spread); let h = -Infinity; for (const v of poly) h = Math.max(h, dot(m, v));
-      const pl = { n: m, b: h - P.sink * (1 + r()), kind: 'bevel' };
+    // which corners are bevelled comes from one stream; each corner's own turn and depth from a stream of its own
+    const pick = corners.map((m, k) => [rPick(), m, k]).sort((x, y) => x[0] - y[0]).slice(0, Math.round(corners.length * P.bev / 100));
+    for (const [, m0, k] of pick) {
+      const rb = stream(key, 'bevel', k), m = rot(m0, (rb() - 0.5) * spread); let h = -Infinity; for (const v of poly) h = Math.max(h, dot(m, v));
+      const pl = { n: m, b: h - P.sink * (1 + rb()), kind: 'bevel' };
       for (const g of guards) pl.b = Math.max(pl.b, dot(pl.n, g.p));
       planes.push(pl); poly = clipHalf(poly, pl.n, pl.b);
     }
@@ -269,9 +273,9 @@ function planesOn(node, r, P) {
   return { poly, planes, touches };
 }
 function build(R, seed, P) {
-  const root = treeOf(R), r = mulberry32(seed * 7919 + 13), all = [];
-  const visit = node => { Object.assign(node, planesOn(node, r, P)); all.push(node); node.kids.forEach(visit); };
-  visit(root);
+  const root = treeOf(R), all = [];
+  const visit = (node, path) => { Object.assign(node, planesOn(node, seed + '/' + path, P)); all.push(node); node.kids.forEach((kid, i) => visit(kid, path + '.' + i)); };
+  visit(root, 'hull');
   return { root, all };
 }
 
