@@ -131,12 +131,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <h2>Planes</h2>
       <div class="ctl"><div class="top"><label for="planes">Planes</label><output id="o-planes"></output></div>
         <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many planes are put around the shape.</small></div>
-      <div class="ctl"><div class="top"><label for="edges">Bevelled</label><output id="o-edges"></output></div>
-        <input type="range" id="edges" min="0" max="100" step="5" value="50"><small>The share of the shape's edges and corners that are bevelled, drawn; the rest stay sharp.</small></div>
-      <div class="ctl"><div class="top"><label for="spread">Spread</label><output id="o-spread"></output></div>
-        <input type="range" id="spread" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there, and how far a flat face's planes lean away from its touch point at the rim. At 0 flat faces stay flat.</small></div>
+      <div class="ctl"><div class="top"><label for="edges">Chamfered</label><output id="o-edges"></output></div>
+        <input type="range" id="edges" min="0" max="100" step="5" value="50"><small>The share of the shape's edges and corners that are chamfered, drawn; the rest stay sharp.</small></div>
+      <div class="ctl"><div class="top"><label for="tilt">Tilt</label><output id="o-tilt"></output></div>
+        <input type="range" id="tilt" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there, and how far a flat face's planes lean away from its touch point at the rim. At 0 flat faces stay flat.</small></div>
       <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
-        <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep the planes bite (of the shape's size): a face plane sinks up to this, and a bevel cuts one to two times this into what the faces leave.</small></div>
+        <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep the planes bite (of the shape's size): a face plane sinks up to this, and a chamfer cuts one to two times this into what the faces leave.</small></div>
       <hr>
       <div class="checks">
         <label><input type="checkbox" id="ghost" checked> Show the shape</label>
@@ -154,15 +154,15 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <h2>How a rock is built</h2>
     <ol>
       <li><b>The shape</b> is picked in the menu, or by the seed itself when it says Random (the seed's first draw chooses one of the seven). It is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
-      <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight spread around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point (and every crown's patch, below), so the rock reaches each of them: it touches every face of the shape.</li>
-      <li><b>Where the planes go.</b> <b>Bevelled</b> of the edges and of the corners, drawn, are bevelled; the others stay sharp and get no plane. Each bevelled corner gets one plane, each bevelled edge planes spaced along it, and the rest of the <b>Planes</b> are thrown over the faces, each kept a spacing away from those already taken.</li>
-      <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Spread</b> about the point, with a patch around the point (15 to 35% of the way to the face's nearest edge, drawn) that no other face plane may cut (a bevel may eat into it). Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
-      <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Spread</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Spread 0 the face stays flat), are turned at random by about <b>Spread</b> and sunk by half to all of <b>Sink</b>. A turn that would dip much deeper into the shape anywhere than at its own point, or would cut a touch point, is drawn again, up to twelve times; if none clears the touch points the best is pushed back past them.</li>
-      <li><b>Bevel planes</b> start halfway between the edge's two faces, or as the average of a corner's faces, and are turned the same way. Each is set against what the face planes leave and cuts one to two times <b>Sink</b> into it. If a touch point keeps one from cutting that deep, the next sharp edge or corner in the drawn order is bevelled instead, so the share always holds.</li>
+      <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight tilt around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point (and every crown's patch, below), so the rock reaches each of them: it touches every face of the shape.</li>
+      <li><b>Where the planes go.</b> <b>Chamfered</b> of the edges and of the corners, drawn, are chamfered; the others stay sharp and get no plane. Each chamfered corner gets one plane, each chamfered edge planes spaced along it, and the rest of the <b>Planes</b> are thrown over the faces, each kept a spacing away from those already taken.</li>
+      <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Tilt</b> about the point, with a patch around the point (15 to 35% of the way to the face's nearest edge, drawn) that no other face plane may cut (a chamfer may eat into it). Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
+      <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Tilt</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Tilt 0 the face stays flat), are turned at random by about <b>Tilt</b> and sunk by half to all of <b>Sink</b>. A turn that would dip much deeper into the shape anywhere than at its own point, or would cut a touch point, is drawn again, up to twelve times; if none clears the touch points the best is pushed back past them.</li>
+      <li><b>Chamfer planes</b> start halfway between the edge's two faces, or as the average of a corner's faces, and are turned the same way. Each is set against what the face planes leave and cuts one to two times <b>Sink</b> into it. If a touch point keeps one from cutting that deep, the next sharp edge or corner in the drawn order is chamfered instead, so the share always holds.</li>
       <li><b>Kept inside.</b> Where face planes meet outside the shape, each of them is sunk by how far the corner pokes out, as far as the touch points let it, and the planes are cut again (up to six rounds). Without it a sphere's planes, sunk only a little, meet past its surface between them.</li>
       <li><b>The rock</b> is everything inside all the planes and inside the shape itself (the shape's own faces; a curved shape's are 200 of its tangent planes). It is one closed convex solid. Where the shape's own face shows, the rock touches it.</li>
     </ol>
-    <p class="hint">Touch points, which edges and corners are bevelled, corners, edge points and face points draw from separate seeded streams, so moving On edges or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
+    <p class="hint">Touch points, which edges and corners are chamfered, corners, edge points and face points draw from separate seeded streams, so moving On edges or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
   </section>
 </div>
 
@@ -183,9 +183,9 @@ const perp = n => unit(Math.abs(n[2]) < 0.9 ? cross(n, [0, 0, 1]) : cross(n, [1,
 // ---------- seeded streams ----------
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function stream(seed, k) { let h = Math.imul(seed | 0, 0x9E3779B1) ^ Math.imul(k + 1, 0x85EBCA77); h ^= h >>> 16; h = Math.imul(h, 0x7FEB352D); h ^= h >>> 15; h = Math.imul(h, 0x846CA68B); h ^= h >>> 16; return mulberry32(h >>> 0); }
-// M directions spread evenly over the sphere, turned as a whole at random
+// M directions tilt evenly over the sphere, turned as a whole at random
 function fib(M) { const out = []; for (let i = 0; i < M; i++) { const z = 1 - 2 * (i + 0.5) / M, ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z); out.push([h * Math.cos(ph), h * Math.sin(ph), z]); } return out; }
-function spread(M, r) { const u = sphereDir(r), v = perp(u), w = cross(u, v); return fib(M).map(d => add(mul(u, d[0]), add(mul(v, d[1]), mul(w, d[2])))); }
+function tilt(M, r) { const u = sphereDir(r), v = perp(u), w = cross(u, v); return fib(M).map(d => add(mul(u, d[0]), add(mul(v, d[1]), mul(w, d[2])))); }
 function sphereDir(r) { const z = 2 * r() - 1, ph = 2 * Math.PI * r(), h = Math.sqrt(1 - z * z); return [h * Math.cos(ph), h * Math.sin(ph), z]; }
 
 // ---------- shapes (mm, z up, bottom at z = 0) ----------
@@ -242,7 +242,7 @@ function polytope(verts, faces) {
         const n = unit(add(e.ns[0], e.ns[1])), A = verts[e.a], B = verts[e.b], m = Math.ceil(len(sub(B, A)) * 4);
         for (let k = 0; k < m; k++) out.push({ p: add(A, mul(sub(B, A), 0.04 + 0.92 * r())), n, kind: 'edge', key: 'e' + key });
       }
-      // faces: points spread by area
+      // faces: points tilt by area
       for (const [fi, q] of planes.entries()) {
         const pts = q.idx.map(i => verts[i]);
         const fc = mul(pts.reduce(add, [0, 0, 0]), 1 / pts.length), fr = Math.max(...pts.map(v => len(sub(v, fc))));
@@ -263,7 +263,7 @@ function boxShape(dx, dy, dz) {
 const SHAPES = [
   (() => { const R = 10, c = [0, 0, 10]; return { key: 'sphere', label: 'Sphere', support: n => dot(n, c) + R, inside: p => len(sub(p, c)) <= R,
     ghost: () => new THREE.SphereGeometry(R, 48, 32).translate(0, 0, 10), lo: [-R, -R, 0], hi: [R, R, 2 * R],
-    contacts: r => spread(8, r).map(u => ({ p: add(c, mul(u, R)) })),
+    contacts: r => tilt(8, r).map(u => ({ p: add(c, mul(u, R)) })),
     candidates: r => { const out = []; for (let i = 0; i < 4000; i++) { const u = sphereDir(r); out.push({ p: add(c, mul(u, R)), n: u, kind: 'face' }); } return out; } }; })(),
   Object.assign(boxShape(18, 18, 18), { key: 'cube', label: 'Cube' }),
   Object.assign(polytope([[-11, -11, 0], [11, -11, 0], [11, 11, 0], [-11, 11, 0], [0, 0, 18]], [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]), { key: 'pyramid', label: 'Pyramid' }),
@@ -272,9 +272,9 @@ const SHAPES = [
     support: n => dot(n, c) + Math.hypot(a * n[0], b * n[1], cz * n[2]),
     inside: p => (p[0] / a) ** 2 + (p[1] / b) ** 2 + ((p[2] - cz) / cz) ** 2 <= 1,
     ghost: () => new THREE.SphereGeometry(1, 48, 32).scale(a, b, cz).translate(0, 0, cz), lo: [-a, -b, 0], hi: [a, b, 2 * cz],
-    contacts: r => spread(8, r).map(u => ({ p: add(c, [a * u[0], b * u[1], cz * u[2]]) })),
+    contacts: r => tilt(8, r).map(u => ({ p: add(c, [a * u[0], b * u[1], cz * u[2]]) })),
     candidates: r => { const out = [];
-      // points spread by area: a direction is kept with odds by how much surface it stands for
+      // points tilt by area: a direction is kept with odds by how much surface it stands for
       while (out.length < 4000) { const u = sphereDir(r), n = unit([u[0] / a, u[1] / b, u[2] / cz]);
         const w = Math.hypot(b * cz * u[0], a * cz * u[1], a * b * u[2]) / (a * b);
         if (r() < w) out.push({ p: add(c, [a * u[0], b * u[1], cz * u[2]]), n, kind: 'face' }); }
@@ -356,12 +356,12 @@ function build(shape, seed, P, withStats) {
   const order = (list, k) => { const r = stream(seed, k); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
   const corners = order(byKind('corner'), 2), edgeC = order(byKind('edge'), 3), faceC = order(byKind('face'), 4);
 
-  // Bevelled of the edges and of the corners, drawn, are bevelled; the rest get no plane
+  // Chamfered of the edges and of the corners, drawn, are chamfered; the rest get no plane
   const share = (keys, k) => order(keys, k).slice(0, Math.round(keys.length * P.edges / 100));
   const edgeKeys = [...new Set(edgeC.map(c => c.key))], cornerKeys = corners.map(c => c.key);
   const bitten = new Set([...share(edgeKeys, 6), ...share(cornerKeys, 7)]);
 
-  // pick anchors: each bevelled corner, planes spaced along each bevelled edge, then faces, all kept apart
+  // pick anchors: each chamfered corner, planes spaced along each chamfered edge, then faces, all kept apart
   const N = P.planes;
   let gap = 0.85 * Math.sqrt(surfaceArea(S) / N);
   const taken = [];
@@ -376,16 +376,16 @@ function build(shape, seed, P, withStats) {
   }
 
   // every plane passes through or beyond every touch point
-  // a flat face's crown: its plane turned by Spread about the touch point, with a patch of drawn size around the
+  // a flat face's crown: its plane turned by Tilt about the touch point, with a patch of drawn size around the
   // point that no other plane may cut, so the face's planes meet around a facet, not at a point
   const rc = stream(seed, 9), guards = [], crowns = [];
   for (const c of contacts) {
     if (!c.n) { guards.push(c.p); continue; }
-    const n = turn(c.n, P.spread, rc), u = perp(n), v = cross(n, u), rho = c.room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
+    const n = turn(c.n, P.tilt, rc), u = perp(n), v = cross(n, u), rho = c.room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
     for (let k = 0; k < 6; k++) { const ph = ph0 + k * Math.PI / 3; guards.push(add(c.p, add(mul(u, rho * Math.cos(ph)), mul(v, rho * Math.sin(ph))))); }
     crowns.push({ n, b: dot(n, c.p), role: 'face' });
   }
-  // face planes keep clear of the crowns' patches; bevels only of the touch points themselves, so a bevel may eat into a crown
+  // face planes keep clear of the crowns' patches; chamfers only of the touch points themselves, so a chamfer may eat into a crown
   const points = contacts.map(c => c.p);
   const through = (n, b, keep = guards) => { for (const g of keep) b = Math.max(b, dot(n, g)); return b; };
   const r = stream(seed, 5);
@@ -394,7 +394,7 @@ function build(shape, seed, P, withStats) {
   const turned = (n0, p0, allow, bOf, avoid) => {
     let best = null;
     for (let k = 0; k < 12; k++) {
-      const n = turn(n0, P.spread, r), b = bOf(n), extra = Math.max(0, S.support(n) - dot(n, p0) - allow);
+      const n = turn(n0, P.tilt, r), b = bOf(n), extra = Math.max(0, S.support(n) - dot(n, p0) - allow);
       let miss = 0; if (avoid) for (const g of points) miss = Math.max(miss, dot(n, g) - b);
       const score = extra + 4 * miss;
       if (!best || score < best.score) best = { n, b, score };
@@ -412,7 +412,7 @@ function build(shape, seed, P, withStats) {
     let n0 = a.n, p0 = a.p, allow = lean;
     const t = touchOf(a.fi);
     if (t) {
-      const d = sub(a.p, t.p), rr = len(d), k = Math.tan(P.spread * DEG);   // the dome: lean away from the touch point, up to Spread at the rim
+      const d = sub(a.p, t.p), rr = len(d), k = Math.tan(P.tilt * DEG);   // the dome: lean away from the touch point, up to Tilt at the rim
       allow += k * a.fr / 2;
       if (rr > 1e-6) { n0 = unit(add(a.n, mul(d, k / a.fr))); p0 = sub(a.p, mul(a.n, k * rr * rr / (2 * a.fr))); }
     }
@@ -432,8 +432,8 @@ function build(shape, seed, P, withStats) {
   for (const pl of planes) poly = clip(poly, pl);
   for (const pl of boundsOf(S)) poly = clip(poly, { ...pl, role: 'touch' });
 
-  // bevel planes: set against what the faces leave, cutting one to two Sinks into it
-  // if a touch point keeps one from cutting that deep, the next sharp one in the drawn order is bevelled instead
+  // chamfer planes: set against what the faces leave, cutting one to two Sinks into it
+  // if a touch point keeps one from cutting that deep, the next sharp one in the drawn order is chamfered instead
   const ec = taken.filter(a => a.kind !== 'face'), byKey = new Map();
   for (const a of ec) (byKey.get(a.key) || byKey.set(a.key, []).get(a.key)).push(a);
   const first = key => corners.find(c => c.key === key) || edgeC.find(c => c.key === key);
@@ -541,10 +541,10 @@ function makeScene() {
 }
 
 // ---------- page state ----------
-const DEFAULTS = { planes: 60, edges: 50, spread: 6, sink: 3, ghost: true, lines: true, roles: false, anchors: false };
+const DEFAULTS = { planes: 60, edges: 50, tilt: 6, sink: 3, ghost: true, lines: true, roles: false, anchors: false };
 const state = { shape: 'random', view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
-const SLIDERS = { planes: v => v, edges: v => v + '%', spread: v => v + '°', sink: v => v + '%' };
+const SLIDERS = { planes: v => v, edges: v => v + '%', tilt: v => v + '°', sink: v => v + '%' };
 const CHECKS = ['ghost', 'lines', 'roles', 'anchors'];
 const shapeOf = k => SHAPES.find(s => s.key === k) || SHAPES[0];
 // Random: the seed's first draw (its own stream) picks the shape
@@ -589,7 +589,7 @@ function setView(v) {
   syncUI(); draw(); rebuildThumbs();
 }
 function draw() { if (renderer) renderer.render(scene, camera); }
-function params() { return { planes: state.planes, edges: state.edges, spread: state.spread, sink: state.sink }; }
+function params() { return { planes: state.planes, edges: state.edges, tilt: state.tilt, sink: state.sink }; }
 
 function rebuild() {
   try {
@@ -619,8 +619,8 @@ function showStats(r) {
     ['Planes on face · edge · corner', `${n(p, 'face')} · ${n(p, 'edge')} · ${n(p, 'corner')}`],
     ['Faces', r.poly.length],
     ['Touches the shape at', `<span class="${r.touched === r.sides ? 'good' : 'bad'}">${r.touched} of ${r.sides} ${r.sidesWord}</span>`],
-    ...(r.edgesAll ? [['Edges bevelled', `<span class="${r.edgesBit >= Math.round(r.edgesAll * state.edges / 100) ? 'good' : 'bad'}">${r.edgesBit} of ${r.edgesAll}</span>`]] : []),
-    ...(r.cornersAll ? [['Corners bevelled', `<span class="${r.cornersBit >= Math.round(r.cornersAll * state.edges / 100) ? 'good' : 'bad'}">${r.cornersBit} of ${r.cornersAll}</span>`]] : []),
+    ...(r.edgesAll ? [['Edges chamfered', `<span class="${r.edgesBit >= Math.round(r.edgesAll * state.edges / 100) ? 'good' : 'bad'}">${r.edgesBit} of ${r.edgesAll}</span>`]] : []),
+    ...(r.cornersAll ? [['Corners chamfered', `<span class="${r.cornersBit >= Math.round(r.cornersAll * state.edges / 100) ? 'good' : 'bad'}">${r.cornersBit} of ${r.cornersAll}</span>`]] : []),
     ['Largest face', (r.largest * 100).toFixed(1) + '% of the surface'],
     ['Pokes out, at most', r.out.toFixed(2) + ' mm'],
     ['Cuts in, at most', r.inn.toFixed(2) + ' mm'],
