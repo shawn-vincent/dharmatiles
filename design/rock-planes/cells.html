@@ -44,6 +44,7 @@ canvas { width: 100%; aspect-ratio: 1; max-width: 100%; display: block; backgrou
 figcaption { display: grid; gap: 4px; }
 figcaption b { font: 800 19px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .03em; }
 figcaption b span { color: var(--accent); margin-right: 6px; }
+figcaption b.inline { font: 600 14px var(--f-body); text-transform: none; letter-spacing: 0; color: var(--ink); }
 figcaption p { margin: 0; color: var(--muted); font-size: 14px; line-height: 21px; }
 .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
 .notes h2 { font: 800 20px/1 var(--f-display); text-transform: uppercase; margin: 0 0 8px; }
@@ -62,6 +63,9 @@ figcaption p { margin: 0; color: var(--muted); font-size: 14px; line-height: 21p
   <div class="bar">
     <div class="seg" id="target" role="group" aria-label="Target">
       <button data-t="L" aria-pressed="true">L-block</button><button data-t="ring" aria-pressed="false">Ring</button>
+    </div>
+    <div class="seg" id="spikes" role="group" aria-label="Spikes">
+      <button data-c="1" aria-pressed="true">Spikes removed</button><button data-c="0" aria-pressed="false">Spikes left</button>
     </div>
     <button class="btn" id="again">New planes</button>
     <span class="seed" id="seed"></span>
@@ -87,7 +91,8 @@ figcaption p { margin: 0; color: var(--muted); font-size: 14px; line-height: 21p
     </figure>
     <figure>
       <canvas id="c4" aria-label="The cells mostly inside the shape, joined into one concave rock with faint seams between cells"></canvas>
-      <figcaption><b><span>4</span>Pick and join</b><p>The cells more than half inside are kept and joined. The outline (bold) follows the planes, so every face is still flat, and a notch keeps a sharp inside corner. The cells over a hole are mostly empty, so they are never kept and the hole stays open. Lines between kept cells (thin) can be erased or left as cracks.</p></figcaption>
+      <figcaption><b><span>4</span>Pick and join</b><p>The cells more than half inside are kept and joined. The outline (bold) follows the planes, so every face is still flat, and a notch keeps a sharp inside corner. The cells over a hole are mostly empty, so they are never kept and the hole stays open. Lines between kept cells (thin) can be erased or left as cracks.</p>
+        <p><b class="inline">Spikes.</b> A cell more than half inside can still have a long thin tail outside, and a thin empty cell can cut a crack into the rock. Two rules remove them: the rock is trimmed to the shape (as Rock Planes keeps its rock inside), so a tail is cut off flat along the shape's own face; and a cell thinner than 1 mm is kept or dropped with the cell across its longest side. Switch to Spikes left to see them.</p></figcaption>
     </figure>
     <figure>
       <canvas id="c5" aria-label="Two neighbouring rocks taken from one set of cells, pulled apart to show their matching faces"></canvas>
@@ -107,7 +112,8 @@ figcaption p { margin: 0; color: var(--muted); font-size: 14px; line-height: 21p
     <div>
       <h2>What it costs</h2>
       <ul>
-        <li>Thin slivers: two nearly parallel planes leave a thin cell that may or may not be kept. They need a rule, such as merging a sliver into its neighbour.</li>
+        <li>Thin slivers: two nearly parallel planes leave a thin cell. With spikes removed, a sliver follows its neighbour; in 3D the test is a cell's thickness, and a thin cell follows the neighbour across its largest face.</li>
+        <li>Trimming to the target needs the target as a solid, and in 3D it is one more Manifold step (an intersection). Where a cell pokes out, the trimmed face is the target's own surface, as it is in Rock Planes.</li>
         <li>The cell count grows fast with the number of planes, so fewer planes go much further than in Rock Planes.</li>
         <li>Touching the shape and the bevel shares become rules about which cells are kept, not about how deep each plane sits.</li>
         <li>An inside corner faces downward on one side, so the overhang gate needs looking at there.</li>
@@ -230,8 +236,26 @@ function shade(f) { // plate to stone by the share inside
   return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',')})`;
 }
 // the kept cells' outline: an edge is outline when the cell across it is not kept
-function drawRock(g, cells, keep, fill, offset = [0, 0]) {
+// keep cells by a rule; with spikes removed, a sliver (under 1 mm across) follows the cell across its longest side
+let clean = true;
+const SLIVER = 1;
+function choose(cells, rule) {
+  const base = cells.map((c, i) => rule(i));
+  if (!clean) return cells.map((c, i) => i).filter(i => base[i]);
+  return cells.map((c, i) => i).filter(i => {
+    const P = cells[i].P; let best = -1, bl = 0;
+    for (let k = 0; k < P.length; k++) { const el = Math.hypot(...sub(P[(k + 1) % P.length], P[k])); if (el > bl) { bl = el; best = k; } }
+    if (2 * cells[i].a / bl >= SLIVER) return base[i];
+    const a = P[best], b = P[(best + 1) % P.length], e = sub(b, a), out = [e[1] / bl, -e[0] / bl];
+    const j = cellAt(cells, add(mul(add(a, b), 0.5), mul(out, 0.05)));
+    return j >= 0 ? base[j] : false;
+  });
+}
+// with spikes removed the rock is trimmed to its target: what pokes out is cut off along the target's own face
+function drawRock(g, cells, keep, fill, offset = [0, 0], R = null) {
   g.save(); g.translate(...offset);
+  const trim = clean && R;
+  if (trim) { shapePath(g, R); g.clip('evenodd'); }
   for (const i of keep) { poly(g, cells[i].P); g.fillStyle = fill; g.fill(); }
   const kept = new Set(keep);
   for (const i of keep) {
@@ -243,6 +267,7 @@ function drawRock(g, cells, keep, fill, offset = [0, 0]) {
       if (kept.has(j)) stroke(g, 'rgba(43,51,64,.35)', 1, [3, 3]); else stroke(g, '#2B3340', 2.4);
     }
   }
+  if (trim) { g.beginPath(); for (const i of keep) path(g, cells[i].P); g.clip(); shapePath(g, R); stroke(g, '#2B3340', 4.8); }
   g.restore();
 }
 
@@ -277,14 +302,14 @@ function render() {
   // 4: keep cells more than half inside
   g = setup('c4');
   outline(g);
-  drawRock(g, cells, cells.map((c, i) => i).filter(i => f[i] > 0.5), css('--stone'));
+  drawRock(g, cells, choose(cells, i => f[i] > 0.5), css('--stone'), [0, 0], R);
 
   // 6: the same cells at a quarter (left half) and three quarters (right half)
   g = setup('c6');
   g.save(); g.beginPath(); g.rect(-W, -W, W, 2 * W); g.clip();
-  drawRock(g, cells, cells.map((c, i) => i).filter(i => f[i] > 0.25), css('--stone'));
+  drawRock(g, cells, choose(cells, i => f[i] > 0.25), css('--stone'), [0, 0], R);
   g.restore(); g.save(); g.beginPath(); g.rect(0, -W, W, 2 * W); g.clip();
-  drawRock(g, cells, cells.map((c, i) => i).filter(i => f[i] > 0.75), css('--stone'));
+  drawRock(g, cells, choose(cells, i => f[i] > 0.75), css('--stone'), [0, 0], R);
   g.restore();
   outline(g);
   g.beginPath(); g.moveTo(0, -W); g.lineTo(0, W); stroke(g, '#2B3340', 1, [2, 4]);
@@ -297,15 +322,17 @@ function render() {
   const l5 = [...planesFor(A, r5, { cracks: 0 }), ...planesFor(B, r5, { cracks: 0 })].filter(l => !(Math.abs(l.n[0]) > 0.95 && Math.abs(l.b) < 1.2));
   for (let k = 0; k < 3; k++) { const t = 1.1 + (r5() - 0.5) * 0.9, nn = [Math.cos(t), Math.sin(t)], p = [(r5() - 0.5) * 3, (r5() - 0.5) * 8]; l5.push({ n: nn, b: dot(nn, p), kind: 'crack' }); }
   const c5 = cellsFor(l5), fa = c5.map(c => share(c, A)), fb = c5.map(c => share(c, B));
-  const ka = [], kb = [];
-  c5.forEach((c, i) => { if (Math.max(fa[i], fb[i]) > 0.5) (fa[i] >= fb[i] ? ka : kb).push(i); });
+  const ka = choose(c5, i => fa[i] > 0.5 && fa[i] >= fb[i]), kb = choose(c5, i => fb[i] > 0.5 && fb[i] > fa[i]);
   poly(g, A); stroke(g, css('--accent'), 1.2, [4, 3]); poly(g, B); stroke(g, css('--accent'), 1.2, [4, 3]);
-  drawRock(g, c5, ka, css('--stone'), [-1.1, 0]);
-  drawRock(g, c5, kb, css('--stone-2'), [1.1, 0]);
+  drawRock(g, c5, ka, css('--stone'), [-1.1, 0], [A]);
+  drawRock(g, c5, kb, css('--stone-2'), [1.1, 0], [B]);
   text(g, 'faces match', [0, 10.6], '#2B3340', 11);
 }
 
 document.getElementById('again').addEventListener('click', () => { seed++; render(); });
+for (const b of document.querySelectorAll('#spikes button')) b.addEventListener('click', () => {
+  clean = b.dataset.c === '1'; for (const o of document.querySelectorAll('#spikes button')) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); render();
+});
 for (const b of document.querySelectorAll('#target button')) b.addEventListener('click', () => {
   target = b.dataset.t; for (const o of document.querySelectorAll('#target button')) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); render();
 });
