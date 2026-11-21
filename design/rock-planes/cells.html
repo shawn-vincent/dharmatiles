@@ -187,7 +187,8 @@ let target = 'L';
 
 // planes laid as in Rock Planes: on every face (inner ones too), at some corners, and a few fractures
 function planesFor(shape, r, opts) {
-  if (Array.isArray(shape[0][0])) { const out = []; shape.forEach((ring, k) => out.push(...planesFor(ring, r, { cracks: k === shape.length - 1 ? opts.cracks : 0 }))); return out; }
+  if (Array.isArray(shape[0][0])) { const out = []; shape.forEach((ring, k) => out.push(...planesFor(ring, r, { cracks: k === shape.length - 1 ? opts.cracks : 0, tag: opts.tag, ri: k }))); return out; }
+  const key = i => (opts.tag || 'T') + (opts.ri || 0) + ':' + ((i + shape.length) % shape.length);
   const lines = [];
   const n = shape.length, isConvex = i => { const a = shape[(i + n - 1) % n], b = shape[i], c = shape[(i + 1) % n]; return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) > 0; };
   for (let i = 0; i < n; i++) {
@@ -195,14 +196,14 @@ function planesFor(shape, r, opts) {
     const k = el > 12 ? 2 : 1;
     for (let j = 0; j < k; j++) {
       const p = add(a, mul(e, (j + 0.25 + 0.5 * r()) / k)), nn = rot(out, (r() - 0.5) * 0.28);
-      lines.push({ n: nn, b: dot(nn, p) - 0.25 - 0.5 * r(), kind: 'edge' });
+      lines.push({ n: nn, b: dot(nn, p) - 0.25 - 0.5 * r(), kind: 'edge', faces: [key(i)] });
     }
   }
   for (let i = 0; i < n; i++) if (isConvex(i) && r() < 0.6) {
     const a = shape[(i + n - 1) % n], b = shape[i], c = shape[(i + 1) % n];
     const e1 = sub(b, a), e2 = sub(c, b), n1 = mul([e1[1], -e1[0]], 1 / Math.hypot(...e1)), n2 = mul([e2[1], -e2[0]], 1 / Math.hypot(...e2));
     let m = add(n1, n2); m = mul(m, 1 / Math.hypot(...m)); m = rot(m, (r() - 0.5) * 0.3);
-    lines.push({ n: m, b: dot(m, b) - 1.2 - 1.2 * r(), kind: 'bevel' });
+    lines.push({ n: m, b: dot(m, b) - 1.2 - 1.2 * r(), kind: 'bevel', faces: [key(i - 1), key(i)] });
   }
   for (let k = 0; k < (opts.cracks ?? 2); k++) {
     const t = r() * Math.PI, nn = [Math.cos(t), Math.sin(t)], p = [(r() - 0.5) * 12, (r() - 0.5) * 12];
@@ -254,7 +255,37 @@ function shade(f) { // plate to stone by the share inside
 // keep cells by a rule; with spikes removed, a sliver (under 1 mm across) follows the cell across its longest side
 let clean = true;
 const SLIVER = 1;
-function choose(cells, rule) {
+// the target face nearest a point, and how far it is
+function nearestFace(R, tag, p) {
+  let best = null, bd = Infinity;
+  R.forEach((ring, ri) => ring.forEach((a, i) => {
+    const b = ring[(i + 1) % ring.length], e = sub(b, a), t = Math.max(0, Math.min(1, dot(sub(p, a), e) / dot(e, e))), d = Math.hypot(...sub(p, add(a, mul(e, t))));
+    if (d < bd) { bd = d; best = tag + ri + ':' + i; }
+  }));
+  return { key: best, d: bd };
+}
+const RIM = 3;   // how far from a face its planes judge cells (mm)
+// keep cells by a rule; with spikes removed: slivers follow their neighbour, and a cell that sits over a face
+// (within RIM of it) is kept only if it is inside that face's planes; within RIM of an outward corner, inside its bevel too
+function choose(cells, rule, lines, R, tag) {
+  const picked = pickBase(cells, rule);
+  if (!clean || !lines) return picked;
+  // each face: its ends, and whether each end is an outward corner
+  const seg = new Map();
+  R.forEach((ring, ri) => { const n = ring.length, turn = i => { const a = ring[(i + n - 1) % n], b = ring[i], c = ring[(i + 1) % n]; return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) > 0; };
+    ring.forEach((a, i) => seg.set(tag + ri + ':' + i, { a, b: ring[(i + 1) % n], outA: turn(i), outB: turn((i + 1) % n) })); });
+  // a face judges a cell that sits over it within RIM; past an outward corner it judges as far as RIM too (never past an inward one)
+  const judges = (l, c) => {
+    if (!l.faces || !l.faces.every(k => seg.has(k))) return false;
+    if (l.faces.length === 2) return Math.hypot(...sub(c, seg.get(l.faces[1]).a)) <= RIM;
+    const { a, b, outA, outB } = seg.get(l.faces[0]), e = sub(b, a), t = dot(sub(c, a), e) / dot(e, e);
+    if (t < 0 && !outA || t > 1 && !outB) return false;
+    const q = add(a, mul(e, Math.max(0, Math.min(1, t))));
+    return Math.hypot(...sub(c, q)) <= RIM;
+  };
+  return picked.filter(i => { const c = centroid(cells[i].P); return lines.every(l => !judges(l, c) || dot(l.n, c) <= l.b); });
+}
+function pickBase(cells, rule) {
   const base = cells.map((c, i) => rule(i));
   if (!clean) return cells.map((c, i) => i).filter(i => base[i]);
   return cells.map((c, i) => i).filter(i => {
@@ -291,7 +322,7 @@ function render() {
   document.getElementById('seedin').value = seed;
   const T = TARGETS[target], R = T.rings;
   document.getElementById('cap1').textContent = T.cap;
-  const lines = planesFor(R, mulberry32(seed * 7919 + 1), { cracks: 2 });
+  const lines = planesFor(R, mulberry32(seed * 7919 + 1), { cracks: 2, tag: 'T' });
   const cells = cellsFor(lines);
   const f = cells.map(c => share(c, R));
   const outline = g => { shapePath(g, R); stroke(g, css('--accent'), 1.4, [4, 3]); };
@@ -317,14 +348,14 @@ function render() {
   // 4: keep cells more than half inside
   g = setup('c4');
   outline(g);
-  drawRock(g, cells, choose(cells, i => f[i] > 0.5), css('--stone'), [0, 0], R);
+  drawRock(g, cells, choose(cells, i => f[i] > 0.5, lines, R, 'T'), css('--stone'), [0, 0], R);
 
   // 6: the same cells at a quarter (left half) and three quarters (right half)
   g = setup('c6');
   g.save(); g.beginPath(); g.rect(-W, -W, W, 2 * W); g.clip();
-  drawRock(g, cells, choose(cells, i => f[i] > 0.25), css('--stone'), [0, 0], R);
+  drawRock(g, cells, choose(cells, i => f[i] > 0.25, lines, R, 'T'), css('--stone'), [0, 0], R);
   g.restore(); g.save(); g.beginPath(); g.rect(0, -W, W, 2 * W); g.clip();
-  drawRock(g, cells, choose(cells, i => f[i] > 0.75), css('--stone'), [0, 0], R);
+  drawRock(g, cells, choose(cells, i => f[i] > 0.75, lines, R, 'T'), css('--stone'), [0, 0], R);
   g.restore();
   outline(g);
   g.beginPath(); g.moveTo(0, -W); g.lineTo(0, W); stroke(g, '#2B3340', 1, [2, 4]);
@@ -334,10 +365,10 @@ function render() {
   g = setup('c5');
   const A = [[-10, -6], [0, -6], [0, 6], [-10, 6]], B = [[0, -8], [10, -8], [10, 3], [0, 3]];
   const r5 = mulberry32(seed * 104729 + 3);
-  const l5 = [...planesFor(A, r5, { cracks: 0 }), ...planesFor(B, r5, { cracks: 0 })].filter(l => !(Math.abs(l.n[0]) > 0.95 && Math.abs(l.b) < 1.2));
+  const l5 = [...planesFor(A, r5, { cracks: 0, tag: 'A' }), ...planesFor(B, r5, { cracks: 0, tag: 'B' })].filter(l => !(Math.abs(l.n[0]) > 0.95 && Math.abs(l.b) < 1.2));
   for (let k = 0; k < 3; k++) { const t = 1.1 + (r5() - 0.5) * 0.9, nn = [Math.cos(t), Math.sin(t)], p = [(r5() - 0.5) * 3, (r5() - 0.5) * 8]; l5.push({ n: nn, b: dot(nn, p), kind: 'crack' }); }
   const c5 = cellsFor(l5), fa = c5.map(c => share(c, A)), fb = c5.map(c => share(c, B));
-  const ka = choose(c5, i => fa[i] > 0.5 && fa[i] >= fb[i]), kb = choose(c5, i => fb[i] > 0.5 && fb[i] > fa[i]);
+  const ka = choose(c5, i => fa[i] > 0.5 && fa[i] >= fb[i], l5, [A], 'A'), kb = choose(c5, i => fb[i] > 0.5 && fb[i] > fa[i], l5, [B], 'B');
   poly(g, A); stroke(g, css('--accent'), 1.2, [4, 3]); poly(g, B); stroke(g, css('--accent'), 1.2, [4, 3]);
   drawRock(g, c5, ka, css('--stone'), [-1.1, 0], [A]);
   drawRock(g, c5, kb, css('--stone-2'), [1.1, 0], [B]);
