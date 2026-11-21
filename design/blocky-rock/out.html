@@ -177,14 +177,14 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 <div class="rule k"><h3><span class="rn">C1</span> Every edge is one arc</h3>
 <p>24 segments an edge. The width is wider or narrower in the middle, by up to 15 per cent either way; the tilt is constant or changes once, by up to ±4 degrees on a top edge, ±3 on a bottom edge, ±8 on a side edge; the strip bows by up to 0.15 of its width, in or out. Each edge has its own random numbers.</p></div>
 <div class="rule k"><h3><span class="rn">C2</span> Angles and widths</h3>
-<ul><li>top edge: width 0.13–0.24 m (at least 0.06 fh), 8–27 degrees below horizontal, a short drop down the side;</li><li>bottom edge: width 0.012–0.022 m, 70–76 degrees above horizontal, small and steep;</li><li>side edge: width 0.12–0.22 m (at least 0.06), 32–58 degrees, so no dark gash; it narrows toward the foot.</li></ul>
+<ul><li>top edge: width 0.13–0.24 m (at least 0.06 fh), 8–27 degrees below horizontal, a short drop down the side;</li><li>bottom edge: width 0.14–0.22 m (at least 0.06), 37–41 degrees above horizontal (twist ±1.5), so it tucks under: the rise up the face is its width times tan 37–41;</li><li>side edge: width 0.12–0.22 m (at least 0.06), 32–58 degrees, so no dark gash</li></ul>
 <p>On one face the chamfers together never take more than a third of its width (each leg at most 0.16 of the face and 0.24 of the rock's thinnest side, so a slab never pinches). Each chamfer is shown as its own band: normals are not smoothed across bends over 6 degrees.</p></div>
 <div class="rule"><h3><span class="rn">F1</span> Faces curve a little</h3>
 <p>Each face (not the bottom) carries a dome or saddle with an amplitude of 0.04–0.16 per cent of its size and a small tilt term, each from slightly concave to slightly convex. The chamfer lines sit on the curved faces.</p></div>
 <div class="rule"><h3><span class="rn">M1</span> Corners and closure</h3>
 <p>The corner facet is one triangle whose vertices are, on each of the three faces, the point where its two chamfer lines meet. Every strip, face grid and facet shares those vertices, so the mesh is closed.</p></div>
-<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P1</span> Printing: off</h3>
-<p>The 55 degree rule is not enforced this round; the steepest underside is reported. <code>bottomBevel: false</code> still leaves the foot sharp, for the cliff.</p></div>
+<div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">P1</span> Printing: bottom chamfers</h3>
+<p>A bottom chamfer is held at 35 degrees or more above horizontal (at most 55 from vertical), so it prints; the steepest underside is reported from the real mesh. The rest is not enforced. <code>bottomBevel: false</code> still leaves the foot sharp, for the cliff.</p></div>
 <div class="rule" style="border-left-color:var(--err)"><h3><span class="rn">X1</span> Off, kept in the code</h3>
 <p>Lobes and steps, cracks (a wandering faceted cut with the far piece moved aside), battered corners and edges, and kink planes: <code>makeRock(seed, { full: true })</code>.</p></div>
 </div>
@@ -214,27 +214,26 @@ button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visibl
 <div class="sec">
 <div class="words"><ol>
 <li><b>The block.</b> The base shape (slab, block, pillar or ramp) as six planes, each side tilted a little off square by its own amount, so no two sides are parallel, and the top with its own slight slope. The bottom is flat.</li>
-<li><b>A strip along every edge.</b> Each edge becomes a ruled strip of 24 short segments between a line on one face and a line on the other, and everything about it is one simple arc: the width is a little wider or narrower in the middle (up to 15 per cent), the tilt is constant or changes once along the edge, and the strip bows a little along its length (up to 0.15 of its width), in or out. Each edge has its own arcs. Top edges lie 8 to 27 degrees below horizontal with a short drop down the side, bottom edges rise 60 to 69 degrees, side edges take 32 to 58 degrees, leaning into either face, and narrow toward the foot. Widths are at least 0.06 fh where they show, and the chamfers on one face together never take more than a third of its width.</li>
+<li><b>A strip along every edge.</b> Each edge becomes a ruled strip of 24 short segments between a line on one face and a line on the other, and everything about it is one simple arc: the width is a little wider or narrower in the middle (up to 15 per cent), the tilt is constant or changes once along the edge, and the strip bows a little along its length (up to 0.15 of its width), in or out. Each edge has its own arcs. Top edges lie 8 to 27 degrees below horizontal with a short drop down the side, bottom edges tuck under the rock, rising 37 to 41 degrees above horizontal (49 to 53 from vertical, inside the 55 degree print limit), side edges take 32 to 58 degrees, leaning into either face. Widths are at least 0.06 fh where they show, and the chamfers on one face together never take more than a third of its width.</li>
 <li><b>Faces.</b> Each face is nearly flat: tilted by up to about 1.5 degrees, and curved by one faint arc each way (0.04 to 0.16 per cent of its size), from slightly concave to slightly convex. Each face is an even 24 by 24 grid (a Coons patch between its four sides, whose corners are shared), so there is no seam or fan.</li>
 <li><b>Corners.</b> On each face, the point where its two chamfer lines meet is found directly; the three such points, one per face, are the vertices of the corner facet, one triangle. Each strip runs between its two end points, so it never folds.</li>
-<li><b>Mesh.</b> Faces, strips and corner patches share their vertices, so the mesh is closed by construction (every edge in two triangles). Normals are smoothed across bends under 6 degrees, so each chamfer shows as a band for display only. About 7,500 triangles, 3 ms.</li></ol>
+<li><b>Mesh.</b> Faces, strips and corner patches share their vertices, so the mesh is closed by construction (every edge in two triangles). Normals are smoothed across bends under 6 degrees, so each chamfer shows as a band for display only. About 7,500 triangles, 3 ms. Each bottom corner is one clean facet, the same as a top corner, so the rock sits on an undercut foot.</li></ol>
 <p><b>Off for this round, kept in the code (<code>makeRock(seed, { full: true })</code>):</b> lobes and steps, cracks, battered corners, kink planes, and the print rule (reported as "steepest underside", not enforced).</p></div>
 <div class="plates"><div class="plate pad"><div id="t-time" class="scroll"></div></div><p class="note" id="timenote"></p></div></div>
 </section>
 
 <section class="ch" id="verdict">
 <header><span class="n">5 · Against the references</span><h2>What looks right, and what does not</h2>
-<p>Round 8: clean corners, near-flat faces. Compared beside R1C8, R2C4 and R1C5. Judged by rendering the same view beside the cell.</p></header>
+<p>Round 9: undercut feet. Compared beside R1C8, R2C4 and R1C5. Judged by rendering the same view beside the cell.</p></header>
 <div class="sec">
 <div class="words"><h3>Looks right</h3><ul>
-<li>It now reads as a block: near-flat faces, flat tops, clear chamfer bands on the top edges, no barrel sides, no waist on pillars or slabs.</li>
-<li>Corners are one clean triangle each; the debris, slots and the striped face of round 7 are gone (the stripes came from the face grid meeting the strip's bow off the face plane; the grid now starts from the strip's own points).</li>
-<li>A closed mesh by construction, 3 ms a rock.</li></ul></div>
+<li><b>The foot.</b> Bottom chamfers tuck under at 37 to 41 degrees above horizontal, large enough to read; each bottom corner is one clean facet like a top corner. The rock sits on an undercut foot, not a tray; seen from slightly below, the chamfers and corner facets are clean.</li>
+<li>Near-flat faces, flat tops with chamfer bands, no waist, no debris. The dark slit along a top edge in seed 12 is gone (the chamfer's bow was moving strip points off the face plane; it is smaller now and part of the face grid's own base).</li>
+<li>A closed mesh by construction, 3.5 ms a rock; the underside check now reports the real angle.</li></ul></div>
 <div class="words"><h3>Does not look right yet</h3><ul>
-<li><b>The feet.</b> At each bottom corner the upright chamfer comes down onto a small steep bottom chamfer, leaving a little downward-pointing triangle, and the foot reads as a faint plinth.</li>
-<li><b>Too tame.</b> Against R1C8, R2C4 and R1C5 it is a clean chamfered block, without the steps, creases between lobes and chips that make the references read as rocks; those are off this round.</li>
-<li>Some seeds still show a thin dark line along a top edge (seed 12).</li>
-<li>The steepest underside is reported up to about 89 degrees (the pointed feet); printing is not enforced.</li></ul></div></div>
+<li><b>Too tame.</b> Against R1C8, R2C4 and R1C5 it is a clean chamfered block; the steps, lobe creases and chips that make the references read as rocks are off.</li>
+<li>A few seeds still bulge slightly in the top or the sides (seeds 8, 10, 11).</li>
+<li>About 3 in 100 seeds have a facet past 55 degrees (a few tilted corner facets), and a faint hatch shows on one top corner in seed 1.</li></ul></div></div>
 <div class="sec full"><div class="words"><h3>What I did not look at</h3>
 <ul><li>The back of any reference rock; there are none.</li>
 <li>A real phone: headless Chrome at 1280 and 390 px only.</li>
@@ -428,8 +427,8 @@ function check(m) {
   /* overhang: the steepest angle from vertical of a downward face that is not the flat bottom */
   let worst = 0, flat = 0;
   for (let t = 0; t < m.T.length; t += 3) {
-    const a = m.V[m.T[t]], b = m.V[m.T[t + 1]], c = m.V[m.T[t + 2]], n = norm(cross(sub(b, a), sub(c, a)));
-    if (n[2] < -.999 && a[2] < 1e-4 && b[2] < 1e-4 && c[2] < 1e-4) { flat++; continue; }
+    const a = m.V[m.T[t]], b = m.V[m.T[t + 1]], c = m.V[m.T[t + 2]], cr = cross(sub(b, a), sub(c, a)); if (len(cr) < 1.2e-4) continue; const n = norm(cr);   /* a sliver has no real direction */
+    if (n[2] < -.995 && a[2] < 1e-3 && b[2] < 1e-3 && c[2] < 1e-3) { flat++; continue; }
     if (-n[2] > worst) worst = -n[2];
   }
   return { open, many, edges: E.size, overhangDeg: Math.asin(Math.max(0, Math.min(1, worst))) * 180 / Math.PI, flatBottom: flat };
@@ -548,7 +547,7 @@ function simpleRock(rc, seed, stage, N, bottomBevel) {
   const N1 = N + 1;
   /* every face is a very slight dome or saddle, one arc each way, from a little concave to a little convex, never on the bottom */
   const fld = F.map((f, fi) => { const n = f.n, r = mulberry(hash(seed + ':f' + fi)), up = Math.abs(n[2]) > .9 ? [1, 0, 0] : [0, 0, 1], u = norm(cross(n, up)), v = cross(n, u), ext = [Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), u)))) || 1, Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), v)))) || 1];
-    const A = f.n[2] < -.95 ? 0 : U(r, .0004, .0016) * Math.min(ext[0], ext[1]) * 2; return { n, u, v, ext, c: faceC[fi], A, dome: U(r, -1, 1), sad: U(r, -.5, .5), tl: U(r, -.03, .03), tl2: U(r, -.03, .03) }; });
+    const A = f.n[2] < -.95 ? 0 : U(r, .0002, .0008) * Math.min(ext[0], ext[1]) * 2; return { n, u, v, ext, c: faceC[fi], A, dome: U(r, -1, 1), sad: U(r, -.5, .5), tl: U(r, -.03, .03), tl2: U(r, -.03, .03) }; });
   const bulge = (fi, p) => { const q = fld[fi]; if (!q.A) return p; const x = dot(sub(p, q.c), q.u) / q.ext[0], y = dot(sub(p, q.c), q.v) / q.ext[1], h = q.A * (q.dome * (1 - (x * x + y * y) / 2) + q.sad * (x * x - y * y) + q.tl * x + q.tl2 * y); return add(p, mul(q.n, h)); };
   /* pass 0: each edge's kind, size and angle */
   const info = new Map(); let ej = 0;
@@ -561,7 +560,7 @@ function simpleRock(rc, seed, stage, N, bottomBevel) {
     const ext = (fi, d) => Math.max(...loops[fi].map((i) => dot(sub(corners[i], mid), d)));
     const e1 = ext(f1, d1), e2 = ext(f2, d2);
     let w0, th0, tw;
-    if (kind === 'top') { w0 = Math.max(.06, U(rw, .13, .24) * m); th0 = U(rw, 8, 27); tw = 4; } else if (kind === 'bottom') { w0 = U(rw, .012, .022); th0 = U(rw, 70, 76); tw = 2; } else { w0 = Math.max(.06, U(rw, .12, .22) * m); th0 = U(rw, 32, 58); tw = 8; }
+    if (kind === 'top') { w0 = Math.max(.06, U(rw, .13, .24) * m); th0 = U(rw, 8, 27); tw = 4; } else if (kind === 'bottom') { w0 = Math.max(.06, U(rw, .14, .22) * m); th0 = U(rw, 37, 41); tw = 1.5;   /* an undercut: 35-40 degrees above horizontal, 50-55 from vertical */ } else { w0 = Math.max(.06, U(rw, .12, .22) * m); th0 = U(rw, 32, 58); tw = 8; }
     if (kind === 'bottom' && !bottomBevel) w0 = 1e-4;
     info.set(e, { kind, f1, f2, d1, d2, e1, e2, w0, th0, tw, A, B, t, mid, n1, n2 });
   }
@@ -569,8 +568,8 @@ function simpleRock(rc, seed, stage, N, bottomBevel) {
   const capLeg = (e1_) => Math.min(.16 * e1_, .24 * thin);   /* chamfers on a thin face stay small, so a slab does not pinch */
   let ei = 0;
   for (const e of edges.values()) {
-    const r = mulberry(hash(seed + ':e' + (ei++))), q = info.get(e), aw = U(r, -.15, .15), at = U(r, -1, 1), bow = U(r, -.15, .15), ob = norm(add(q.n1, q.n2));
-    q.legs = (tt) => { const sb = q.kind === 'vert' ? Math.min(1, .35 + 3 * (q.A[2] < q.B[2] ? tt : 1 - tt)) : 1, w = (1 + aw * Math.sin(Math.PI * tt)) * q.w0 * sb;   /* an upright chamfer narrows toward the foot, so the bottom corner is small */
+    const r = mulberry(hash(seed + ':e' + (ei++))), q = info.get(e), aw = U(r, -.15, .15), at = U(r, -1, 1), bow = U(r, -.08, .08), ob = norm(add(q.n1, q.n2));
+    q.legs = (tt) => { const sb = 1, w = (1 + aw * Math.sin(Math.PI * tt)) * q.w0 * sb;   /* an upright chamfer narrows toward the foot, so the bottom corner is small */
       const th = (q.th0 + q.tw * at * (2 * tt - 1)) * Math.PI / 180; let a = Math.min(w, capLeg(q.e1)), b = Math.min(w * Math.tan(th), capLeg(q.e2)); if (q.kind !== 'vert' && b < w * Math.tan(th) - 1e-9) a = Math.min(a, b / Math.tan(th)); return [a, b]; };
     q.bowAt = (tt) => mul(q.kind === 'bottom' ? [ob[0], ob[1], 0] : ob, bow * Math.sin(Math.PI * tt) * q.w0);
   }
