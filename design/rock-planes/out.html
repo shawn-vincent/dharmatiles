@@ -155,7 +155,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
   <section class="how">
     <h2>How a rock is built</h2>
     <ol>
-      <li><b>The shape</b> is picked in the menu, or by the seed itself when it says Random (the seed's first draw chooses one of the seven). It is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
+      <li><b>The shape</b> is picked in the menu, or by the seed itself when it says Random (the seed's first draw chooses one of the thirteen). The list is the same as on Rocks from Hulls; the L, U, ring, pit, arch and notch come here as their convex hulls, since this page makes convex rocks and the hulls page is where their hollows are cut back out. It is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
       <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight tilt around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point (and every crown's patch, below), so the rock reaches each of them: it touches every face of the shape.</li>
       <li><b>Where the planes go.</b> <b>Chamfered</b> of the edges' total length, and of the corners, drawn, are chamfered; the others stay sharp and get no plane. A straight edge is taken whole, in the drawn order, while that brings the length nearer the share; a round rim is cut into short pieces, each an edge of its own, so it is chamfered piece by piece. <b>Planes</b> face planes are thrown over the faces, each kept a spacing away from the others; then each chamfered corner gets one plane and each chamfered edge planes spaced along it. Face planes and chamfers never look at each other, so Chamfered never moves a face plane.</li>
       <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Tilt</b> about the point, with a patch around the point (15 to 35% of the way to the face's nearest edge, drawn) that no other face plane may cut (a chamfer may eat into it). Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
@@ -301,6 +301,25 @@ const SHAPES = [
       for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), fn: [[0, 0, -1], d], kind: 'edge', key: 'ebot' + piece(ph), len: plen }); }
       return out; } }; })(),
 ];
+// the shapes of Rocks from Hulls, the same on both pages: here each is its convex hull, so a hollow or a notch fills in (this page
+// makes convex rocks; the hulls page cuts the hollows back out)
+{
+  const prism = (P2, z0, z1) => [{ n: [0, 0, 1], b: z1 }, { n: [0, 0, -1], b: -z0 }, ...P2.map((a, i) => { const c = P2[(i + 1) % P2.length], l = Math.hypot(c[0] - a[0], c[1] - a[1]), n = [(c[1] - a[1]) / l, -(c[0] - a[0]) / l, 0]; return { n, b: n[0] * a[0] + n[1] * a[1] }; })];
+  const ring2 = (k, r, ph) => Array.from({ length: k }, (_, i) => { const t = ph + 2 * Math.PI * i / k; return [r * Math.cos(t), r * Math.sin(t)]; });
+  const hullOf = planes => {
+    let poly = boxPoly([-80, -80, -80], [80, 80, 80]); for (const pl of planes) poly = clip(poly, { ...pl, role: 'hull' });
+    const verts = dedupe(poly.flatMap(f => f.verts), 1e-6), at = v => verts.findIndex(w => len(sub(v, w)) < 1e-6);
+    return polytope(verts, poly.map(f => f.verts.map(at)));
+  };
+  for (const [key, label, planes] of [
+    ['l', 'L-block', prism([[-9, -9], [9, -9], [9, -1], [-1, 9], [-9, 9]], 0, 10)],
+    ['u', 'U-block', prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 10)],
+    ['ring', 'Ring', prism(ring2(8, 10, Math.PI / 8), 0, 9)],
+    ['pit', 'Block with a pit', prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 12)],
+    ['arch', 'Arch', prism([[-9, -7], [9, -7], [9, 7], [-9, 7]], 0, 13)],
+    ['peak', 'Notch with a peak', prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 10)],
+  ]) SHAPES.push(Object.assign(hullOf(planes), { key, label: label + ' (hull)' }));
+}
 for (const s of SHAPES) { s.height = s.hi[2] - s.lo[2]; s.size = (s.hi[0] - s.lo[0] + s.hi[1] - s.lo[1] + s.height) / 3; }
 
 // ---------- convex solid as faces, cut by planes ----------

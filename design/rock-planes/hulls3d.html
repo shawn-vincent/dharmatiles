@@ -390,7 +390,48 @@ function pyramidDown(P2, zTop, apex) {   // a pit: an outline at zTop, narrowing
 }
 const ring2 = (k, r, ph, cw) => Array.from({ length: k }, (_, i) => { const t = ph + (cw ? -1 : 1) * 2 * Math.PI * i / k; return [r * Math.cos(t), r * Math.sin(t)]; });
 const node = (planes, kids = []) => ({ planes, kids });
+// the shapes Rock Planes has, the same on both pages: a flat-faced one is one hull; a curved one is one hull of its tangent planes
+// that keeps the curved shape's own touch points and spots (curved), so its rock is built exactly as on Rock Planes
+function facesOf(verts, faces) {
+  const c = mul(verts.reduce(add, [0, 0, 0]), 1 / verts.length);
+  return faces.map(f => { const [a, b, d] = f.map(i => verts[i]); let n = unit(cross(sub(b, a), sub(d, a))); if (dot(n, sub(c, a)) > 0) n = mul(n, -1); return { n, b: dot(n, a) }; });
+}
+const boxPlanes = (dx, dy, dz) => prism([[-dx / 2, -dy / 2], [dx / 2, -dy / 2], [dx / 2, dy / 2], [-dx / 2, dy / 2]], 0, dz);
+function fib(M) { const out = []; for (let i = 0; i < M; i++) { const z = 1 - 2 * (i + 0.5) / M, ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z); out.push([h * Math.cos(ph), h * Math.sin(ph), z]); } return out; }
+function sphereDir(r) { const z = 2 * r() - 1, ph = 2 * Math.PI * r(), h = Math.sqrt(1 - z * z); return [h * Math.cos(ph), h * Math.sin(ph), z]; }
+function evenDirs(M, r) { const u = sphereDir(r), v = perp(u), w = cross(u, v); return fib(M).map(d => add(mul(u, d[0]), add(mul(v, d[1]), mul(w, d[2])))); }
+const curved = (shape, dirs) => Object.assign(node(dirs.map(n => ({ n, b: shape.support(n) }))), { curved: shape });
+const SPHERE = (() => { const R = 10, c = [0, 0, 10]; return { support: n => dot(n, c) + R,
+  contacts: r => evenDirs(8, r).map(u => ({ p: add(c, mul(u, R)) })),
+  candidates: r => { const out = []; for (let i = 0; i < 4000; i++) { const u = sphereDir(r); out.push({ p: add(c, mul(u, R)), n: u, kind: 'face' }); } return out; } }; })();
+const OVAL = (() => { const a = 14, b = 9, cz = 8, c = [0, 0, cz]; return { support: n => dot(n, c) + Math.sqrt((a * n[0]) ** 2 + (b * n[1]) ** 2 + (cz * n[2]) ** 2),
+  contacts: r => evenDirs(8, r).map(u => ({ p: add(c, [a * u[0], b * u[1], cz * u[2]]) })),
+  candidates: r => { const out = [];
+    while (out.length < 4000) { const u = sphereDir(r), n = unit([u[0] / a, u[1] / b, u[2] / cz]), w = Math.sqrt((b * cz * u[0]) ** 2 + (a * cz * u[1]) ** 2 + (a * b * u[2]) ** 2) / (a * b);
+      if (r() < w) out.push({ p: add(c, [a * u[0], b * u[1], cz * u[2]]), n, kind: 'face' }); }
+    return out; } }; })();
+const CYLINDER = (() => { const r0 = 9, h = 16; return { support: n => r0 * Math.sqrt(n[0] * n[0] + n[1] * n[1]) + h / 2 * Math.abs(n[2]) + h / 2 * n[2],
+  contacts: r => { const out = [], disc = up => { const ph = 2 * Math.PI * r(), rr = r0 * 0.5 * Math.sqrt(r()); return { p: [rr * Math.cos(ph), rr * Math.sin(ph), up ? h : 0], fi: up ? 'top' : 'bot', n: [0, 0, up ? 1 : -1], fr: r0, room: r0 - rr }; };
+    out.push(disc(true), disc(false)); const ph0 = 2 * Math.PI * r();
+    for (let k = 0; k < 4; k++) { const ph = ph0 + k * Math.PI / 2 + (r() - 0.5) * 0.6; out.push({ p: [r0 * Math.cos(ph), r0 * Math.sin(ph), h * (0.25 + 0.5 * r())] }); }
+    return out; },
+  candidates: r => { const out = [], side = 2 * Math.PI * r0 * h, top = 2 * Math.PI * r0 * r0;
+    for (let i = 0; i < 4000; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0];
+      if (r() < side / (side + top)) out.push({ p: [r0 * d[0], r0 * d[1], h * r()], n: d, kind: 'face' });
+      else { const rr = r0 * Math.sqrt(r()), up = r() < 0.5; out.push({ p: [rr * d[0], rr * d[1], up ? h : 0], n: [0, 0, up ? 1 : -1], kind: 'face', fi: up ? 'top' : 'bot', fr: r0 }); } }
+    const RIM = 24, piece = ph => Math.min(RIM - 1, Math.floor(ph / (2 * Math.PI) * RIM)), plen = 2 * Math.PI * r0 / RIM;
+    for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], h], n: unit([d[0], d[1], 1]), fn: [[0, 0, 1], d], kind: 'edge', key: 'etop' + piece(ph), len: plen }); }
+    for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), fn: [[0, 0, -1], d], kind: 'edge', key: 'ebot' + piece(ph), len: plen }); }
+    return out; } }; })();
+const roundDirs = M => [...Array.from({ length: M }, (_, i) => [Math.cos(2 * Math.PI * i / M), Math.sin(2 * Math.PI * i / M), 0]), [0, 0, 1], [0, 0, -1]];
 const TARGETS = [
+  { key: 'sphere', label: 'Sphere', tree: curved(SPHERE, [...fib(160), [0, 0, -1]]) },
+  { key: 'cube', label: 'Cube', tree: node(boxPlanes(18, 18, 18)) },
+  { key: 'pyramid', label: 'Pyramid', tree: node(facesOf([[-11, -11, 0], [11, -11, 0], [11, 11, 0], [-11, 11, 0], [0, 0, 18]], [[0, 1, 2], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]])) },
+  { key: 'slab', label: 'Slab', tree: node(boxPlanes(28, 20, 8)) },
+  { key: 'oval', label: 'Oval', tree: curved(OVAL, [...fib(160), [0, 0, -1]]) },
+  { key: 'wedge', label: 'Wedge', tree: node(facesOf([[-12, -8, 0], [-12, 8, 0], [-12, -8, 14], [12, -8, 0], [12, 8, 0], [12, -8, 14]], [[0, 1, 2], [3, 4, 5], [0, 1, 4], [0, 2, 5], [1, 2, 5]])) },
+  { key: 'cylinder', label: 'Cylinder', tree: curved(CYLINDER, roundDirs(48)) },
   { key: 'l', label: 'L-block', tree: node(prism([[-9, -9], [9, -9], [9, -1], [-1, 9], [-9, 9]], 0, 10), [node(prism([[9, -1], [-1, 9], [-1, -1]], 0, 10))]) },
   { key: 'u', label: 'U-block', tree: node(prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 10), [node(prism([[-4, -3], [4, -3], [4, 9], [-4, 9]], 0, 10))]) },
   { key: 'ring', label: 'Ring', tree: node(prism(ring2(8, 10, Math.PI / 8), 0, 9), [node(prism(ring2(7, 4.4, 0.3), 0, 9))]) },
@@ -437,6 +478,7 @@ function sampleFace(f, m, r) {
 // are only where the hull's face is the target's real surface (never across a hollow's mouth)
 function hullShape(nd, T) {
   const poly = nd.poly, verts = dedupe(poly.flatMap(f => f.verts), 1e-6);
+  if (nd.curved) return { support: nd.curved.support, centre: centroidOf(verts), ownFaces: poly.map(f => ({ n: f.n, b: f.b })), lo: T.lo, hi: T.hi, size: T.size, contacts: nd.curved.contacts, candidates: nd.curved.candidates };
   const S = {
     support: n => { let m = -Infinity; for (const v of verts) m = Math.max(m, dot(n, v)); return m; },
     centre: centroidOf(verts),
@@ -833,6 +875,8 @@ function showValue(out, input, unit) {
 const SLIDERS = { planes: '', edges: '%', tilt: '°', sink: '%', weather: '&nbsp;mm' };
 const CHECKS = ['ghost', 'lines'];
 const targetOf = k => TARGETS.find(t => t.key === k) || TARGETS[0];
+// Random: the seed's first draw (its own stream) picks the shape, as on Rock Planes
+const targetFor = seed => state.shape === 'random' ? TARGETS[Math.floor(stream(seed, 0)() * TARGETS.length)] : targetOf(state.shape);
 function params() { return { planes: state.planes, edges: state.edges, tilt: state.tilt, sink: state.sink, weather: state.weather }; }
 
 const viewerEl = $('viewer');
@@ -877,13 +921,13 @@ function draw() { if (renderer) renderer.render(scene, camera); }
 function rebuild() {
   try {
     $('err').hidden = true;
-    const T = targetOf(state.shape), { res, surf, foot } = rockSurface(T, state.seed);
+    const T = targetFor(state.seed), { res, surf, foot } = rockSurface(T, state.seed);
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
     rockObj = meshOf(surf, foot, { lines: state.lines }); scene.add(rockObj);
     if (ghostObj) { scene.remove(ghostObj); disposeGroup(ghostObj); ghostObj = null; }
     if (state.ghost) { ghostObj = meshOf(prepare(T).surf, foot, { ghost: true, lines: true }); scene.add(ghostObj); }
     draw();
-    $('chip').textContent = T.label.toLowerCase() + ' · seed ' + state.seed;
+    $('chip').textContent = T.label.toLowerCase() + (state.shape === 'random' ? ' (random)' : '') + ' · seed ' + state.seed;
     showStats(T, res, surf);
   } catch (e) { $('err').hidden = false; $('err').textContent = 'The rock could not be built: ' + e.message; console.error(e); }
 }
@@ -925,7 +969,7 @@ function editSeed(t) {
 }
 let thumbJob = 0;
 function rebuildThumbs() {
-  const job = ++thumbJob, start = Math.max(0, state.seed - 3), T = targetOf(state.shape);
+  const job = ++thumbJob, start = Math.max(0, state.seed - 3);
   const cam = state.view === 'ortho' ? thumbOrtho : thumbPersp;
   const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
   cam.position.copy(dir.multiplyScalar(62)).add(new THREE.Vector3(0, 0, 5)); cam.lookAt(0, 0, 5);
@@ -939,7 +983,7 @@ function rebuildThumbs() {
     if (job !== thumbJob || !order.length) return;
     const i = order.shift(), t = thumbs[i];
     try {
-      const { surf, foot } = rockSurface(T, start + i, true), g = meshOf(surf, foot, { lines: state.lines });
+      const { surf, foot } = rockSurface(targetFor(start + i), start + i, true), g = meshOf(surf, foot, { lines: state.lines });
       thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
       t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
     } catch (e) { console.error(e); }
@@ -950,7 +994,7 @@ function rebuildThumbs() {
 
 // controls
 const shapeEl = $('shape');
-for (const t of TARGETS) { const o = document.createElement('option'); o.value = t.key; o.textContent = t.label; shapeEl.append(o); }
+for (const [key, label] of [['random', 'Random'], ...TARGETS.map(t => [t.key, t.label])]) { const o = document.createElement('option'); o.value = key; o.textContent = label; shapeEl.append(o); }
 shapeEl.addEventListener('change', () => { state.shape = shapeEl.value; update(); });
 for (const b of $('view').children) b.addEventListener('click', () => setView(b.dataset.view));
 // the view options: a button on the 3D view opens a small panel; a click elsewhere or Escape closes it
@@ -990,7 +1034,7 @@ function doUpdate() {
 }
 function readHash() {
   const m = /^#([a-z]+)-(\d+)$/.exec(location.hash || '');
-  if (m && TARGETS.some(t => t.key === m[1])) { state.shape = m[1]; state.seed = +m[2]; }
+  if (m && (m[1] === 'random' || TARGETS.some(t => t.key === m[1]))) { state.shape = m[1]; state.seed = +m[2]; }
 }
 window.addEventListener('hashchange', () => { if (location.hash !== ownHash) { readHash(); syncUI(); update(); } });
 
