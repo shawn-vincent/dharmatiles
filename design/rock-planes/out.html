@@ -44,6 +44,8 @@ h1 { font: 800 34px/1 var(--f-display); letter-spacing: .01em; margin: 0; text-t
 .seg button { height: 26px; padding: 0 10px; border: 0; border-radius: calc(var(--r) - 2px); background: transparent; color: var(--ink); font: 500 13px var(--f-body); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .seg button:hover:not([aria-pressed="true"]) { background: var(--panel); }
+.sel { height: 30px; padding: 0 28px 0 10px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 500 14px var(--f-body); cursor: pointer; }
+.sel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .seed { display: flex; align-items: center; gap: 6px; }
 .btn { height: 30px; min-width: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 600 14px var(--f-body); cursor: pointer; }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
@@ -100,13 +102,17 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
   </header>
 
   <div class="bar">
-    <span class="lbl">Shape</span>
-    <div class="seg" id="shapes" role="group" aria-label="Shape"></div>
+    <label class="lbl" for="shape">Shape</label>
+    <select class="sel" id="shape"></select>
     <span class="lbl">Seed</span>
     <div class="seed">
       <button class="btn" id="prev" aria-label="Previous seed">&#8592;</button>
       <input id="seed" type="number" inputmode="numeric" min="0" step="1" value="1" aria-label="Seed">
       <button class="btn" id="next" aria-label="Next seed">&#8594;</button>
+    </div>
+    <span class="lbl">View</span>
+    <div class="seg" id="view" role="group" aria-label="View">
+      <button data-view="persp">Perspective</button><button data-view="ortho">Orthographic</button>
     </div>
     <span class="hint">&#8592; &#8594; keys browse seeds</span>
   </div>
@@ -125,12 +131,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <h2>Planes</h2>
       <div class="ctl"><div class="top"><label for="planes">Planes</label><output id="o-planes"></output></div>
         <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many planes are put around the shape.</small></div>
-      <div class="ctl"><div class="top"><label for="edges">On edges</label><output id="o-edges"></output></div>
-        <input type="range" id="edges" min="0" max="80" step="5" value="30"><small>The share of planes put along the shape's edges rather than on its faces. Corners always get one each.</small></div>
+      <div class="ctl"><div class="top"><label for="edges">Bevelled</label><output id="o-edges"></output></div>
+        <input type="range" id="edges" min="0" max="100" step="5" value="50"><small>The share of the shape's edges and corners that are bevelled, drawn; the rest stay sharp.</small></div>
       <div class="ctl"><div class="top"><label for="spread">Spread</label><output id="o-spread"></output></div>
         <input type="range" id="spread" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there, and how far a flat face's planes lean away from its touch point at the rim. At 0 flat faces stay flat.</small></div>
       <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
-        <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep the planes bite (of the shape's size): a face plane sinks up to this, and at least half of the edges and corners are bitten at least this much deeper than the faces leave them.</small></div>
+        <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep the planes bite (of the shape's size): a face plane sinks up to this, and a bevel cuts one to two times this into what the faces leave.</small></div>
       <hr>
       <div class="checks">
         <label><input type="checkbox" id="ghost" checked> Show the shape</label>
@@ -147,16 +153,16 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
   <section class="how">
     <h2>How a rock is built</h2>
     <ol>
-      <li><b>The shape</b> is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
+      <li><b>The shape</b> is picked in the menu, or by the seed itself when it says Random (the seed's first draw chooses one of the seven). It is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
       <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight spread around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point (and every crown's patch, below), so the rock reaches each of them: it touches every face of the shape.</li>
-      <li><b>Where the planes go.</b> Every corner gets one. At least half of the edges and half of the corners, drawn, are <b>bitten</b>; each bitten edge gets at least one plane. Then points are thrown along the edges and over the faces (about <b>On edges</b> of them on edges), each kept a spacing away from those already taken, until there are <b>Planes</b> in all.</li>
-      <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Spread</b> about the point, with a patch around the point (20 to 50% of the way to the face's nearest edge, drawn) that no other plane may cut. Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
+      <li><b>Where the planes go.</b> <b>Bevelled</b> of the edges and of the corners, drawn, are bevelled; the others stay sharp and get no plane. Each bevelled corner gets one plane, each bevelled edge planes spaced along it, and the rest of the <b>Planes</b> are thrown over the faces, each kept a spacing away from those already taken.</li>
+      <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Spread</b> about the point, with a patch around the point (15 to 35% of the way to the face's nearest edge, drawn) that no other face plane may cut (a bevel may eat into it). Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
       <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Spread</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Spread 0 the face stays flat), are turned at random by about <b>Spread</b> and sunk by half to all of <b>Sink</b>. A turn that would dip much deeper into the shape anywhere than at its own point, or would cut a touch point, is drawn again, up to twelve times; if none clears the touch points the best is pushed back past them.</li>
-      <li><b>Edge and corner planes</b> start halfway between the edge's two faces, or as the average of a corner's faces, and are turned the same way. Each is set against what the face planes leave: a bitten edge or corner's plane cuts one to two times <b>Sink</b> into it, the others up to one <b>Sink</b>. If a touch point keeps a bitten one from biting, the next unbitten one in the drawn order is bitten instead, so at least half the edges and corners change the rock by at least Sink.</li>
+      <li><b>Bevel planes</b> start halfway between the edge's two faces, or as the average of a corner's faces, and are turned the same way. Each is set against what the face planes leave and cuts one to two times <b>Sink</b> into it. If a touch point keeps one from cutting that deep, the next sharp edge or corner in the drawn order is bevelled instead, so the share always holds.</li>
       <li><b>Kept inside.</b> Where face planes meet outside the shape, each of them is sunk by how far the corner pokes out, as far as the touch points let it, and the planes are cut again (up to six rounds). Without it a sphere's planes, sunk only a little, meet past its surface between them.</li>
       <li><b>The rock</b> is everything inside all the planes and inside the shape itself (the shape's own faces; a curved shape's are 200 of its tangent planes). It is one closed convex solid. Where the shape's own face shows, the rock touches it.</li>
     </ol>
-    <p class="hint">Touch points, which edges are bitten, corners, edge points and face points draw from separate seeded streams, so moving On edges or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
+    <p class="hint">Touch points, which edges and corners are bevelled, corners, edge points and face points draw from separate seeded streams, so moving On edges or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
   </section>
 </div>
 
@@ -350,23 +356,21 @@ function build(shape, seed, P, withStats) {
   const order = (list, k) => { const r = stream(seed, k); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
   const corners = order(byKind('corner'), 2), edgeC = order(byKind('edge'), 3), faceC = order(byKind('face'), 4);
 
-  // at least half of the edges and half of the corners are bitten
-  const half = (keys, k) => order(keys, k).slice(0, Math.ceil(keys.length / 2));
+  // Bevelled of the edges and of the corners, drawn, are bevelled; the rest get no plane
+  const share = (keys, k) => order(keys, k).slice(0, Math.round(keys.length * P.edges / 100));
   const edgeKeys = [...new Set(edgeC.map(c => c.key))], cornerKeys = corners.map(c => c.key);
-  const bitten = new Set([...half(edgeKeys, 6), ...half(cornerKeys, 7)]);
+  const bitten = new Set([...share(edgeKeys, 6), ...share(cornerKeys, 7)]);
 
-  // pick anchors: every corner, one on each bitten edge, then edges and faces in the asked share, kept apart
+  // pick anchors: each bevelled corner, planes spaced along each bevelled edge, then faces, all kept apart
   const N = P.planes;
   let gap = 0.85 * Math.sqrt(surfaceArea(S) / N);
   const taken = [];
-  const far = c => taken.every(t => len(sub(t.p, c.p)) >= gap);
+  const far = (c, g = gap) => taken.every(t => len(sub(t.p, c.p)) >= g);
   const take = c => { c.used = true; taken.push(c); };
-  for (const c of corners) if (taken.length < N) take(c);
-  for (const key of edgeKeys) if (bitten.has(key) && taken.length < N) { const on = edgeC.filter(c => c.key === key); take(on.find(far) || on[0]); }
-  const nEdges = edgeC.length ? Math.max(taken.filter(t => t.kind === 'edge').length, Math.round((N - corners.length) * P.edges / 100)) : 0;
+  for (const c of corners) if (bitten.has(c.key) && taken.length < N) take(c);
+  for (const key of edgeKeys) if (bitten.has(key) && taken.length < N) { const on = edgeC.filter(c => c.key === key); take(on.find(c => far(c)) || on[0]); }
+  for (const c of edgeC) { if (taken.length >= N) break; if (bitten.has(c.key) && !c.used && far(c, 1.5 * gap)) take(c); }
   for (let pass = 0; pass < 6; pass++, gap *= 0.85) {
-    let e = taken.filter(t => t.kind === 'edge').length;
-    for (const c of edgeC) { if (e >= nEdges || taken.length >= N) break; if (!c.used && far(c)) { take(c); e++; } }
     for (const c of faceC) { if (taken.length >= N) break; if (!c.used && far(c)) take(c); }
     if (taken.length >= N) break;
   }
@@ -377,11 +381,13 @@ function build(shape, seed, P, withStats) {
   const rc = stream(seed, 9), guards = [], crowns = [];
   for (const c of contacts) {
     if (!c.n) { guards.push(c.p); continue; }
-    const n = turn(c.n, P.spread, rc), u = perp(n), v = cross(n, u), rho = c.room * (0.2 + 0.3 * rc()), ph0 = 2 * Math.PI * rc();
+    const n = turn(c.n, P.spread, rc), u = perp(n), v = cross(n, u), rho = c.room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
     for (let k = 0; k < 6; k++) { const ph = ph0 + k * Math.PI / 3; guards.push(add(c.p, add(mul(u, rho * Math.cos(ph)), mul(v, rho * Math.sin(ph))))); }
     crowns.push({ n, b: dot(n, c.p), role: 'face' });
   }
-  const through = (n, b) => { for (const g of guards) b = Math.max(b, dot(n, g)); return b; };
+  // face planes keep clear of the crowns' patches; bevels only of the touch points themselves, so a bevel may eat into a crown
+  const points = contacts.map(c => c.p);
+  const through = (n, b, keep = guards) => { for (const g of keep) b = Math.max(b, dot(n, g)); return b; };
   const r = stream(seed, 5);
   // a turn is drawn again (up to twelve times) if it would dip much deeper into the shape anywhere than
   // at its own point, or would cut a touch point; the best is kept, and pushed back past the touch points
@@ -389,12 +395,12 @@ function build(shape, seed, P, withStats) {
     let best = null;
     for (let k = 0; k < 12; k++) {
       const n = turn(n0, P.spread, r), b = bOf(n), extra = Math.max(0, S.support(n) - dot(n, p0) - allow);
-      let miss = 0; if (avoid) for (const g of guards) miss = Math.max(miss, dot(n, g) - b);
+      let miss = 0; if (avoid) for (const g of points) miss = Math.max(miss, dot(n, g) - b);
       const score = extra + 4 * miss;
       if (!best || score < best.score) best = { n, b, score };
       if (score <= 0) break;
     }
-    return { n: best.n, b: through(best.n, best.b) };
+    return { n: best.n, b: through(best.n, best.b, avoid ? points : guards) };
   };
   const touchOf = fi => fi === undefined ? null : contacts.find(c => c.fi === fi);
 
@@ -426,22 +432,24 @@ function build(shape, seed, P, withStats) {
   for (const pl of planes) poly = clip(poly, pl);
   for (const pl of boundsOf(S)) poly = clip(poly, { ...pl, role: 'touch' });
 
-  // edge and corner planes: set against what the faces leave, bitten ones by one to two Sinks
-  // if a touch point keeps a bitten one from biting, the next unbitten one in the drawn order is bitten instead
+  // bevel planes: set against what the faces leave, cutting one to two Sinks into it
+  // if a touch point keeps one from cutting that deep, the next sharp one in the drawn order is bevelled instead
   const ec = taken.filter(a => a.kind !== 'face'), byKey = new Map();
   for (const a of ec) (byKey.get(a.key) || byKey.set(a.key, []).get(a.key)).push(a);
+  const first = key => corners.find(c => c.key === key) || edgeC.find(c => c.key === key);
   const bites = new Map(), made = new Map();
-  const make = (key, bite) => {
+  const make = key => {
+    if (!byKey.has(key)) byKey.set(key, [first(key)]);
     let most = 0; const pls = (byKey.get(key) || []).map(a => {
-      const { n, b } = turned(a.n, a.p, lean, n => reach(poly, n) - sink * (bite ? 1 + r() : r()), true);
+      const { n, b } = turned(a.n, a.p, lean, n => reach(poly, n) - sink * (1 + r()), true);
       most = Math.max(most, reach(poly, n) - b); return { n, b, role: a.kind };
     });
     bites.set(key, most); made.set(key, pls);
   };
-  for (const key of byKey.keys()) make(key, bitten.has(key));
+  for (const key of [...byKey.keys()]) make(key);
   for (const [keys, k] of [[edgeKeys, 6], [cornerKeys, 7]]) {
-    const ok = () => keys.filter(key => bites.get(key) >= sink - 1e-6).length;
-    for (const key of order(keys, k)) { if (2 * ok() >= keys.length) break; if (bites.get(key) < sink - 1e-6 && byKey.has(key)) make(key, true); }
+    const want = Math.round(keys.length * P.edges / 100), ok = () => keys.filter(key => bites.get(key) >= sink - 1e-6).length;
+    for (const key of order(keys, k)) { if (ok() >= want) break; if (!(bites.get(key) >= sink - 1e-6)) make(key); }
   }
   for (const pls of made.values()) for (const pl of pls) poly = clip(poly, pl);
 
@@ -533,22 +541,26 @@ function makeScene() {
 }
 
 // ---------- page state ----------
-const DEFAULTS = { planes: 60, edges: 30, spread: 6, sink: 3, ghost: true, lines: true, roles: false, anchors: false };
-const state = { shape: 'sphere', seed: 1, ...DEFAULTS };
+const DEFAULTS = { planes: 60, edges: 50, spread: 6, sink: 3, ghost: true, lines: true, roles: false, anchors: false };
+const state = { shape: 'random', view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 const SLIDERS = { planes: v => v, edges: v => v + '%', spread: v => v + '°', sink: v => v + '%' };
 const CHECKS = ['ghost', 'lines', 'roles', 'anchors'];
 const shapeOf = k => SHAPES.find(s => s.key === k) || SHAPES[0];
+// Random: the seed's first draw (its own stream) picks the shape
+const shapeFor = seed => state.shape === 'random' ? SHAPES[Math.floor(stream(seed, 0)() * SHAPES.length)] : shapeOf(state.shape);
 
 const viewerEl = $('viewer');
-let renderer, scene, camera, controls, rockObj = null, ghostObj = null, thumbR, thumbScene, thumbCam;
+let renderer, scene, camera, persp, ortho, controls, rockObj = null, ghostObj = null, thumbR, thumbScene, thumbCam, thumbPersp, thumbOrtho;
 function initGL() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   viewerEl.prepend(renderer.domElement);
   scene = makeScene();
-  camera = new THREE.PerspectiveCamera(35, 1, 0.5, 1000);
-  camera.up.set(0, 0, 1); camera.position.set(34, -50, 32);
+  persp = new THREE.PerspectiveCamera(35, 1, 0.5, 1000);
+  ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
+  for (const c of [persp, ortho]) { c.up.set(0, 0, 1); c.position.set(34, -50, 32); }
+  camera = state.view === 'ortho' ? ortho : persp;
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 0, 7); controls.enablePan = false; controls.minDistance = 20; controls.maxDistance = 180;
   controls.addEventListener('change', draw); controls.update();
@@ -556,16 +568,33 @@ function initGL() {
   thumbR = new THREE.WebGLRenderer({ antialias: true });
   thumbR.setPixelRatio(Math.min(devicePixelRatio, 2)); thumbR.setSize(140, 140);
   thumbScene = makeScene();
-  thumbCam = new THREE.PerspectiveCamera(32, 1, 0.5, 1000); thumbCam.up.set(0, 0, 1);
+  thumbPersp = new THREE.PerspectiveCamera(32, 1, 0.5, 1000);
+  const th = 62 * Math.tan(16 * DEG); thumbOrtho = new THREE.OrthographicCamera(-th, th, th, -th, -500, 1000);
+  for (const c of [thumbPersp, thumbOrtho]) c.up.set(0, 0, 1);
 }
-function resize() { const w = viewerEl.clientWidth, h = viewerEl.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); draw(); }
+// the orthographic view frames what the perspective view frames at the same distance
+function frameOrtho() {
+  const w = viewerEl.clientWidth, h = viewerEl.clientHeight, half = camera.position.distanceTo(controls.target) * Math.tan(17.5 * DEG);
+  Object.assign(ortho, { left: -half * w / h, right: half * w / h, top: half, bottom: -half }); ortho.updateProjectionMatrix();
+}
+function resize() { const w = viewerEl.clientWidth, h = viewerEl.clientHeight; renderer.setSize(w, h, false); persp.aspect = w / h; persp.updateProjectionMatrix(); frameOrtho(); draw(); }
+function setView(v) {
+  state.view = v; const next = v === 'ortho' ? ortho : persp;
+  if (next !== camera) {
+    next.position.copy(camera.position);
+    if (next === ortho) { ortho.zoom = 1; camera = ortho; frameOrtho(); }
+    else { persp.position.sub(controls.target).multiplyScalar(1 / ortho.zoom).add(controls.target); camera = persp; }
+    controls.object = camera; camera.lookAt(controls.target); controls.update();
+  }
+  syncUI(); draw(); rebuildThumbs();
+}
 function draw() { if (renderer) renderer.render(scene, camera); }
 function params() { return { planes: state.planes, edges: state.edges, spread: state.spread, sink: state.sink }; }
 
 function rebuild() {
   try {
     $('err').hidden = true;
-    const sh = shapeOf(state.shape);
+    const sh = shapeFor(state.seed);
     const res = build(sh, state.seed, params(), true);
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
     rockObj = rockGroup(res, state); scene.add(rockObj);
@@ -578,7 +607,7 @@ function rebuild() {
       scene.add(ghostObj);
     }
     draw();
-    $('chip').textContent = sh.label.toLowerCase() + ' · seed ' + state.seed;
+    $('chip').textContent = sh.label.toLowerCase() + (state.shape === 'random' ? ' (random)' : '') + ' · seed ' + state.seed;
     showStats(res);
     const lg = $('legend'); lg.hidden = !(state.roles || state.anchors);
     if (!lg.hidden) lg.innerHTML = ['face', 'edge', 'corner', 'touch'].map(k => `<span><i style="background:${ROLE[k][0]}"></i>${ROLE[k][1]}</span>`).join('');
@@ -590,8 +619,8 @@ function showStats(r) {
     ['Planes on face · edge · corner', `${n(p, 'face')} · ${n(p, 'edge')} · ${n(p, 'corner')}`],
     ['Faces', r.poly.length],
     ['Touches the shape at', `<span class="${r.touched === r.sides ? 'good' : 'bad'}">${r.touched} of ${r.sides} ${r.sidesWord}</span>`],
-    ...(r.edgesAll ? [['Edges bitten by Sink', `<span class="${2 * r.edgesBit >= r.edgesAll ? 'good' : 'bad'}">${r.edgesBit} of ${r.edgesAll}</span>`]] : []),
-    ...(r.cornersAll ? [['Corners bitten by Sink', `<span class="${2 * r.cornersBit >= r.cornersAll ? 'good' : 'bad'}">${r.cornersBit} of ${r.cornersAll}</span>`]] : []),
+    ...(r.edgesAll ? [['Edges bevelled', `<span class="${r.edgesBit >= Math.round(r.edgesAll * state.edges / 100) ? 'good' : 'bad'}">${r.edgesBit} of ${r.edgesAll}</span>`]] : []),
+    ...(r.cornersAll ? [['Corners bevelled', `<span class="${r.cornersBit >= Math.round(r.cornersAll * state.edges / 100) ? 'good' : 'bad'}">${r.cornersBit} of ${r.cornersAll}</span>`]] : []),
     ['Largest face', (r.largest * 100).toFixed(1) + '% of the surface'],
     ['Pokes out, at most', r.out.toFixed(2) + ' mm'],
     ['Cuts in, at most', r.inn.toFixed(2) + ' mm'],
@@ -615,14 +644,15 @@ for (let i = 0; i < 8; i++) {
 let thumbTimer = 0;
 function rebuildThumbs() { clearTimeout(thumbTimer); thumbTimer = setTimeout(drawThumbs, 120); }
 function drawThumbs() {
-  const sh = shapeOf(state.shape), start = Math.max(0, state.seed - 3);
+  const start = Math.max(0, state.seed - 3);
+  thumbCam = state.view === 'ortho' ? thumbOrtho : thumbPersp;
   const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
   thumbCam.position.copy(dir.multiplyScalar(62)).add(new THREE.Vector3(0, 0, 6)); thumbCam.lookAt(0, 0, 6);
   thumbs.forEach((t, i) => {
     const seed = start + i; t.b.dataset.seed = seed; t.s.textContent = seed;
     t.b.setAttribute('aria-current', seed === state.seed ? 'true' : 'false'); t.b.setAttribute('aria-label', 'Seed ' + seed);
     try {
-      const g = rockGroup(build(sh, seed, params(), false), { lines: state.lines, roles: state.roles });
+      const g = rockGroup(build(shapeFor(seed), seed, params(), false), { lines: state.lines, roles: state.roles });
       thumbScene.add(g); thumbR.render(thumbScene, thumbCam); thumbScene.remove(g); disposeGroup(g);
       t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
     } catch (e) { console.error(e); }
@@ -630,12 +660,10 @@ function drawThumbs() {
 }
 
 // controls
-const shapesEl = $('shapes');
-for (const s of SHAPES) {
-  const b = document.createElement('button'); b.textContent = s.label; b.dataset.key = s.key;
-  b.addEventListener('click', () => { state.shape = s.key; syncUI(); update(); });
-  shapesEl.append(b);
-}
+const shapeEl = $('shape');
+for (const [key, label] of [['random', 'Random'], ...SHAPES.map(s => [s.key, s.label])]) { const o = document.createElement('option'); o.value = key; o.textContent = label; shapeEl.append(o); }
+shapeEl.addEventListener('change', () => { state.shape = shapeEl.value; update(); });
+for (const b of $('view').children) b.addEventListener('click', () => setView(b.dataset.view));
 for (const k of Object.keys(SLIDERS)) $(k).addEventListener('input', e => { state[k] = +e.target.value; $('o-' + k).textContent = SLIDERS[k](state[k]); update(); });
 for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.target.checked; update(); });
 $('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS); syncUI(); update(); });
@@ -649,7 +677,8 @@ document.addEventListener('keydown', e => {
 });
 function setSeed(s) { state.seed = Math.max(0, s | 0); syncUI(); update(); }
 function syncUI() {
-  for (const b of shapesEl.children) b.setAttribute('aria-pressed', b.dataset.key === state.shape ? 'true' : 'false');
+  shapeEl.value = state.shape;
+  for (const b of $('view').children) b.setAttribute('aria-pressed', b.dataset.view === state.view ? 'true' : 'false');
   $('seed').value = state.seed;
   for (const k of Object.keys(SLIDERS)) { $(k).value = state[k]; $('o-' + k).textContent = SLIDERS[k](state[k]); }
   for (const k of CHECKS) $(k).checked = state[k];
@@ -662,7 +691,7 @@ function update() {
 }
 function readHash() {
   const m = /^#([a-z]+)-(\d+)$/.exec(location.hash || '');
-  if (m && SHAPES.some(s => s.key === m[1])) { state.shape = m[1]; state.seed = +m[2]; }
+  if (m && (m[1] === 'random' || SHAPES.some(s => s.key === m[1]))) { state.shape = m[1]; state.seed = +m[2]; }
 }
 window.addEventListener('hashchange', () => { if (location.hash !== ownHash) { readHash(); syncUI(); update(); } });
 
