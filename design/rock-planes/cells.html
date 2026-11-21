@@ -109,14 +109,13 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
         <li><b>Planes on a rock hull</b>, as in Rock Planes, along each face that is real surface (a mouth gets none): each the face's direction, domed away from that face's touch point by up to Spread, turned by about Spread and sunk by up to Sink. A crown sits on each touch point. A curved stretch gets a touch point every 10 mm or so instead.</li>
         <li><b>Planes on a hollow.</b> Each flat face becomes a chain of one, two or three segments bowing into the rock, a half to a whole Sink deep, drawn by seed from that face's own stream: a V, a three-faceted bow, or one face leaning from an end. One end touches the shape, or both. The chain always bows into the rock, never toward the hollow, so the pocket stays convex. On a curved stretch each plane pivots on the nearest touch point it faces.</li>
         <li><b>Touching.</b> A rock plane is pushed back out to every touch point of its hull; a hollow plane passes the one it pivots on. A rock piece is also kept inside its hull, and a pocket always takes its whole hollow (a plane that would cut into the hollow is pushed out to the hollow's corner) and reaches no more than Sink into the rock. So the rock never passes the shape.</li>
-        <li><b>Bevels.</b> Bevelled of a rock hull's outward corners, drawn, get a bevel cutting one to two Sinks into what its faces leave. Hollows get none, so inside corners stay sharp.</li>
+        <li><b>Bevels.</b> Bevelled of a rock hull's outward corners, drawn, get a bevel cutting one to two Sinks into what its faces leave. So do Bevelled of the outward corners where a rock face meets a hollow's face (an L's arm tips), which neither hull owns: each is cut on its own, the corner alone, one to two Sinks into the rock that is there. Hollows' own corners get none, so inside corners stay sharp.</li>
         <li><b>The rock</b> is the first hull's piece, minus each hollow's pocket, plus each bump's piece, in order.</li>
       </ol>
     </div>
     <div>
       <h2>Open questions</h2>
       <ul>
-        <li>Where a rock face meets a hollow face at an outward corner (an L's arm tip), neither hull owns the corner, so it is never bevelled.</li>
         <li>In 3D a hollow's ceiling is an overhang: hollow planes need the mirror of Rock Planes' rule, none facing up too steeply.</li>
         <li>For a few shapes the hulls keep nesting; three levels covers rock-like shapes.</li>
         <li>A pocket is convex and must hold its hollow, so a hollow face cannot bulge toward the hollow at a touch point. So a hollow face can bow into the rock (a V, three facets) but never out toward the hollow; a round hole comes out as a polygon around the circle, up to Sink bigger than it.</li>
@@ -183,7 +182,7 @@ function tree(E, sign, depth) {
     node.faces.push(...lead);
     const a = run[0].a, b = run[run.length - 1].b, pocket = [...run, { a: b, b: a, kind: 'mouth' }];
     if (run.length === 1 || Math.abs(area(pocket.map(e => e.a))) < 0.05 || depth >= 3) node.faces.push(...run);
-    else { node.faces.push({ a, b, kind: 'span' }); node.kids.push(tree(reverse(pocket), -sign, depth + 1)); }
+    else { node.faces.push({ a, b, kind: 'span', first: run[0], last: run[run.length - 1], kid: node.kids.length }); node.kids.push(tree(reverse(pocket), -sign, depth + 1)); }
     node.faces.push(...trail);
   }
   node.hull = H.map(i => V[i]);
@@ -305,11 +304,48 @@ function planesOn(node, key, P) {
   }
   return { poly, planes, touches };
 }
+const insideConvex = (P, p) => { const sg = Math.sign(area(P)); return P.every((a, i) => sg * cross3(a, P[(i + 1) % P.length], p) >= -1e-9); };
+function clipBy(P, C) { const sg = Math.sign(area(C)); for (let i = 0; i < C.length && P.length; i++) { const a = C[i], d = sub(C[(i + 1) % C.length], a), n = nrm(sg > 0 ? [d[1], -d[0]] : [-d[1], d[0]]); P = clipHalf(P, n, dot(n, a)); } return P; }
+function segX(p, q, r, t) { const d1 = sub(q, p), d2 = sub(t, r), den = d1[0] * d2[1] - d1[1] * d2[0]; if (Math.abs(den) < 1e-12) return null; const w = sub(r, p), u = (w[0] * d2[1] - w[1] * d2[0]) / den, v = (w[0] * d1[1] - w[1] * d1[0]) / den; return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? add(p, mul(d1, u)) : null; }
+// the corners where a rock hull's face meets a hollow's wall at an outward corner (an L's arm tips): neither hull owns them,
+// so each gets its own bevel, a cut of the corner alone, set against the rock that is there (the hull's piece less the pocket)
+function tipBevels(root, seed, P) {
+  const tips = [];
+  const walk = (node, path) => {
+    if (node.sign > 0) node.faces.forEach((sp, k, F) => {
+      if (sp.kind !== 'span') return;
+      const prev = F[(k - 1 + F.length) % F.length], next = F[(k + 1) % F.length];
+      for (const [ei, eo, tip, w] of [[prev, sp.first, sp.a, 0], [sp.last, next, sp.b, 1]]) {
+        if (ei.kind !== 'surface' || eo.kind !== 'surface') continue;
+        const di = nrm(sub(ei.b, ei.a)), dO = nrm(sub(eo.b, eo.a));
+        if (cross3([0, 0], di, dO) > 1e-6) tips.push({ node, pocket: node.kids[sp.kid], ei, eo, di, dO, tip, id: path + ':' + k + ':' + w });
+      }
+    });
+    node.kids.forEach((c, i) => walk(c, path + '.' + i));
+  };
+  walk(root, 'hull');
+  const rPick = stream(seed, 'tip-pick'), out = [];
+  const pick = tips.map(t => [rPick(), t]).sort((x, y) => x[0] - y[0]).slice(0, Math.round(tips.length * P.bev / 100));
+  for (const [, t] of pick) {
+    const rb = stream(seed, 'tip', t.id), m = rot(nrm(add(outOf(t.ei), outOf(t.eo))), (rb() - 0.5) * P.spread * DEG);
+    const wedge = L => [t.tip, add(t.tip, mul(t.dO, L)), add(t.tip, mul(t.di, -L))];
+    const A = clipBy(wedge(5), t.node.poly), B = t.pocket.poly, cand = [];
+    A.forEach(v => { if (!insideConvex(B, v)) cand.push(v); });
+    B.forEach(v => { if (A.length > 2 && insideConvex(A, v)) cand.push(v); });
+    A.forEach((p, i) => B.forEach((r, j) => { const x = segX(p, A[(i + 1) % A.length], r, B[(j + 1) % B.length]); if (x) cand.push(x); }));
+    if (!cand.length) continue;
+    const h = Math.max(...cand.map(v => dot(m, v))), b = h - P.sink * (1 + rb());
+    out.push({ n: m, b, kind: 'bevel', cut: clipHalf(wedge(8), mul(m, -1), -b) });
+  }
+  return out;
+}
+// the touch points the rock keeps (a tip's bevel cuts the hollow face's touch point at that tip away)
+const touchesOf = built => built.all.flatMap(n => n.touches).filter(p => !built.tips.some(t => t.cut.length > 2 && dot(t.n, p) > t.b + 1e-9));
 function build(R, seed, P) {
   const root = treeOf(R), all = [];
   const visit = (node, path) => { Object.assign(node, planesOn(node, seed + '/' + path, P)); all.push(node); node.kids.forEach((kid, i) => visit(kid, path + '.' + i)); };
   visit(root, 'hull');
-  return { root, all };
+  return { root, all, tips: tipBevels(root, seed, P) };
 }
 
 // ---------- drawing ----------
@@ -338,6 +374,8 @@ function drawRock(cv, R, built, opts = {}) {
     node.kids.forEach(paint);
   };
   paint(built.root);
+  x.globalCompositeOperation = 'destination-out';
+  for (const t of built.tips) if (t.cut.length > 2) { poly(x, t.cut); x.fill(); }
   const dark = document.createElement('canvas'); dark.width = cv.width; dark.height = cv.height;
   const y = dark.getContext('2d'); y.drawImage(m, 0, 0); y.globalCompositeOperation = 'source-in'; y.fillStyle = '#2B3340'; y.fillRect(0, 0, cv.width, cv.height);
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
@@ -345,7 +383,7 @@ function drawRock(cv, R, built, opts = {}) {
   for (let k = 0; k < 12; k++) { const t = k * Math.PI / 6; g.drawImage(dark, w * Math.cos(t), w * Math.sin(t)); }
   g.drawImage(m, 0, 0); g.restore();
   if (opts.target !== false) { shapePath(g, R); stroke(g, css('--accent'), 1.2, [4, 3]); }
-  if (opts.touches) dots(g, built.all.flatMap(n => n.touches), css('--accent'));
+  if (opts.touches) dots(g, touchesOf(built), css('--accent'));
 }
 
 let target = 'L', seed = 7;
@@ -361,8 +399,9 @@ function render() {
   // 2: planes
   g = setup($('c2'));
   shapePath(g, R); g.fillStyle = 'rgba(169,166,157,.4)'; g.fill('evenodd'); stroke(g, '#2B3340', 1.1, [4, 3]);
+  for (const pl of built.tips) { fullLine(g, pl); stroke(g, css('--bevel-line'), 1.1); }
   for (const node of built.all) for (const pl of node.planes) { fullLine(g, pl); stroke(g, css(pl.kind === 'rock' ? '--rock-line' : pl.kind === 'hollow' ? '--hollow-line' : '--bevel-line'), 1.1); }
-  dots(g, built.all.flatMap(n => n.touches), css('--accent'));
+  dots(g, touchesOf(built), css('--accent'));
   // 3: rock
   drawRock($('c3'), R, built, { touches: true });
   // the strip of neighbouring seeds
