@@ -130,15 +130,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <div class="ctl"><div class="top"><label for="spread">Spread</label><output id="o-spread"></output></div>
         <input type="range" id="spread" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there.</small></div>
       <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
-        <input type="range" id="sink" min="0" max="10" step="0.25" value="2.5"><small>How far a plane on a face is sunk into the shape, at most (of the shape's size).</small></div>
-      <div class="ctl"><div class="top"><label for="esink">Edge sink</label><output id="o-esink"></output></div>
-        <input type="range" id="esink" min="0" max="15" step="0.5" value="6"></div>
-      <div class="ctl"><div class="top"><label for="csink">Corner sink</label><output id="o-csink"></output></div>
-        <input type="range" id="csink" min="0" max="20" step="0.5" value="10"><small>Edges and corners sink deeper than faces, or the face planes beside them would cut past them and they would not show.</small></div>
-      <div class="ctl"><div class="top"><label for="dome">Dome</label><output id="o-dome"></output></div>
-        <input type="range" id="dome" min="0" max="20" step="0.5" value="6"><small>A flat face is treated as a little domed: its planes lean away from its middle, up to this at the rim. Without it the deepest plane covers a flat face's middle.</small></div>
-      <div class="ctl"><div class="top"><label for="deepest">Lean limit</label><output id="o-deepest"></output></div>
-        <input type="range" id="deepest" min="0" max="10" step="0.25" value="1.5"><small>A turned plane may cut into the shape no deeper than its own sink plus this, anywhere (of the shape's size).</small></div>
+        <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep the planes bite (of the shape's size): a face plane sinks up to this, and at least half of the edges and corners are bitten at least this much deeper than the faces leave them.</small></div>
       <hr>
       <div class="checks">
         <label><input type="checkbox" id="ghost" checked> Show the shape</label>
@@ -155,12 +147,15 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
   <section class="how">
     <h2>How a rock is built</h2>
     <ol>
-      <li><b>The shape</b> is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The bottom is treated like every other side: its faces, edges and corners get planes too, and the finished rock is set down on its lowest point. There is no special case for the ground yet.</li>
-      <li><b>Where the planes go.</b> Every corner of the shape gets one. Then points are thrown along the edges and over the faces (about <b>On edges</b> of them on edges), each kept a spacing away from those already taken, until there are <b>Planes</b> in all. A sphere or an oval has no edges or corners, only surface; a cylinder has its top rim as an edge.</li>
-      <li><b>Each plane</b> starts as the shape's own tangent there: on a face, the face's direction; on an edge, halfway between its two faces; at a corner, the average of the faces that meet there. On a flat face it is the tangent of the face domed a little instead: it leans away from the face's middle, by up to <b>Dome</b> at the rim, and drops by the dome's sag. (Tangents of a curved surface all show; tangents of a flat one are all the same plane, and the deepest would cover the middle.) It is turned at random by about <b>Spread</b>, about the point where it was put, then sunk by a drawn amount between half and all of <b>Sink</b>, <b>Edge sink</b> or <b>Corner sink</b>. Edges and corners sink deeper, or the face planes beside them would cut past them. A plane turned about its point can dip into the shape far from it, so a turn that would cut deeper than its own sink plus <b>Lean limit</b> anywhere (below the dome, on a face) is drawn again, up to twelve times, and the shallowest is kept.</li>
-      <li><b>The rock</b> is everything inside all the planes: one closed convex solid, cut in one pass. A face with several planes on it breaks into facets; an edge with planes along it becomes a chamfer that changes width and angle as it goes; a corner plane makes a corner facet.</li>
+      <li><b>The shape</b> is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
+      <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight spread around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point, so the rock reaches each of them: it touches every face of the shape.</li>
+      <li><b>Where the planes go.</b> Every corner gets one. At least half of the edges and half of the corners, drawn, are <b>bitten</b>; each bitten edge gets at least one plane. Then points are thrown along the edges and over the faces (about <b>On edges</b> of them on edges), each kept a spacing away from those already taken, until there are <b>Planes</b> in all.</li>
+      <li><b>Face planes</b> start as the face's tangent, domed a little around the face's touch point (6° at the rim, so a flat face's planes lean away from it and do not all fall on one plane), are turned at random by about <b>Spread</b> and sunk by half to all of <b>Sink</b>. A turn that would dip much deeper into the shape anywhere than at its own point, or would cut a touch point, is drawn again, up to twelve times; if none clears the touch points the best is pushed back past them.</li>
+      <li><b>Edge and corner planes</b> start halfway between the edge's two faces, or as the average of a corner's faces, and are turned the same way. Each is set against what the face planes leave: a bitten edge or corner's plane cuts one to two times <b>Sink</b> into it, the others up to one <b>Sink</b>. So at least half the edges and corners change the rock by at least Sink, by construction.</li>
+      <li><b>Kept inside.</b> Where face planes meet outside the shape, each of them is sunk by how far the corner pokes out, as far as the touch points let it, and the planes are cut again (up to six rounds). Without it a sphere's planes, sunk only a little, meet past its surface between them.</li>
+      <li><b>The rock</b> is everything inside all the planes and inside the shape itself (the shape's own faces; a curved shape's are 200 of its tangent planes). It is one closed convex solid. Where the shape's own face shows, the rock touches it.</li>
     </ol>
-    <p class="hint">Corners, edge points and face points draw from separate seeded streams, so moving On edges or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
+    <p class="hint">Touch points, which edges are bitten, corners, edge points and face points draw from separate seeded streams, so moving On edges or Planes keeps the shape of what was there where it can. Overhang paints orange past 55° and red past 65°, as in the program; with no ground case the underside is all overhang for now. A magenta face means the planes left a gap (a fault).</p>
   </section>
 </div>
 
@@ -181,6 +176,9 @@ const perp = n => unit(Math.abs(n[2]) < 0.9 ? cross(n, [0, 0, 1]) : cross(n, [1,
 // ---------- seeded streams ----------
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function stream(seed, k) { let h = Math.imul(seed | 0, 0x9E3779B1) ^ Math.imul(k + 1, 0x85EBCA77); h ^= h >>> 16; h = Math.imul(h, 0x7FEB352D); h ^= h >>> 15; h = Math.imul(h, 0x846CA68B); h ^= h >>> 16; return mulberry32(h >>> 0); }
+// M directions spread evenly over the sphere, turned as a whole at random
+function fib(M) { const out = []; for (let i = 0; i < M; i++) { const z = 1 - 2 * (i + 0.5) / M, ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z); out.push([h * Math.cos(ph), h * Math.sin(ph), z]); } return out; }
+function spread(M, r) { const u = sphereDir(r), v = perp(u), w = cross(u, v); return fib(M).map(d => add(mul(u, d[0]), add(mul(v, d[1]), mul(w, d[2])))); }
 function sphereDir(r) { const z = 2 * r() - 1, ph = 2 * Math.PI * r(), h = Math.sqrt(1 - z * z); return [h * Math.cos(ph), h * Math.sin(ph), z]; }
 
 // ---------- shapes (mm, z up, bottom at z = 0) ----------
@@ -208,27 +206,39 @@ function polytope(verts, faces) {
       for (const q of planes) { const pts = q.idx.map(i => verts[i]); for (let i = 1; i + 1 < pts.length; i++) pos.push(...pts[0], ...pts[i], ...pts[i + 1]); }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
     },
+    ownFaces: planes.map(q => ({ n: q.n, b: q.b })),
+    // one touch point per face, in the middle third of the face
+    contacts(r) {
+      return planes.map((q, fi) => {
+        const pts = q.idx.map(i => verts[i]), fc = mul(pts.reduce(add, [0, 0, 0]), 1 / pts.length), tris = [];
+        for (let i = 1; i + 1 < pts.length; i++) tris.push([pts[0], pts[i], pts[i + 1], len(cross(sub(pts[i], pts[0]), sub(pts[i + 1], pts[0])))]);
+        let x = r() * tris.reduce((t, a) => t + a[3], 0), T = tris[0]; for (const t of tris) { T = t; if ((x -= t[3]) <= 0) break; }
+        let u = r(), w = r(); if (u + w > 1) { u = 1 - u; w = 1 - w; }
+        const p = add(T[0], add(mul(sub(T[1], T[0]), u), mul(sub(T[2], T[0]), w)));
+        return { p: add(fc, mul(sub(p, fc), 0.35)), fi };
+      });
+    },
     candidates(r) {
       const out = [];
       // corners: every vertex, the average of the faces that meet there
-      verts.forEach((v, i) => { const ns = planes.filter(q => q.idx.includes(i)).map(q => q.n); out.push({ p: v, n: unit(ns.reduce(add, [0, 0, 0])), kind: 'corner' }); });
+      verts.forEach((v, i) => { const ns = planes.filter(q => q.idx.includes(i)).map(q => q.n); out.push({ p: v, n: unit(ns.reduce(add, [0, 0, 0])), kind: 'corner', key: 'c' + i }); });
       // edges: points along each, halfway between the two faces
       const seen = new Map();
       for (const q of planes) for (let k = 0; k < q.idx.length; k++) {
         const a = q.idx[k], b = q.idx[(k + 1) % q.idx.length], key = Math.min(a, b) + '-' + Math.max(a, b);
         (seen.get(key) || seen.set(key, { a, b, ns: [] }).get(key)).ns.push(q.n);
       }
-      for (const e of seen.values()) {
+      for (const [key, e] of seen) {
         const n = unit(add(e.ns[0], e.ns[1])), A = verts[e.a], B = verts[e.b], m = Math.ceil(len(sub(B, A)) * 4);
-        for (let k = 0; k < m; k++) out.push({ p: add(A, mul(sub(B, A), 0.04 + 0.92 * r())), n, kind: 'edge' });
+        for (let k = 0; k < m; k++) out.push({ p: add(A, mul(sub(B, A), 0.04 + 0.92 * r())), n, kind: 'edge', key: 'e' + key });
       }
       // faces: points spread by area
-      for (const q of planes) {
+      for (const [fi, q] of planes.entries()) {
         const pts = q.idx.map(i => verts[i]);
         const fc = mul(pts.reduce(add, [0, 0, 0]), 1 / pts.length), fr = Math.max(...pts.map(v => len(sub(v, fc))));
         for (let i = 1; i + 1 < pts.length; i++) {
           const A = pts[0], B = pts[i], C = pts[i + 1], area = len(cross(sub(B, A), sub(C, A))) / 2, m = Math.ceil(area * 2);
-          for (let k = 0; k < m; k++) { let u = r(), w = r(); if (u + w > 1) { u = 1 - u; w = 1 - w; } out.push({ p: add(A, add(mul(sub(B, A), u), mul(sub(C, A), w))), n: q.n, kind: 'face', fc, fr }); }
+          for (let k = 0; k < m; k++) { let u = r(), w = r(); if (u + w > 1) { u = 1 - u; w = 1 - w; } out.push({ p: add(A, add(mul(sub(B, A), u), mul(sub(C, A), w))), n: q.n, kind: 'face', fi, fr }); }
         }
       }
       return out;
@@ -243,6 +253,7 @@ function boxShape(dx, dy, dz) {
 const SHAPES = [
   (() => { const R = 10, c = [0, 0, 10]; return { key: 'sphere', label: 'Sphere', support: n => dot(n, c) + R, inside: p => len(sub(p, c)) <= R,
     ghost: () => new THREE.SphereGeometry(R, 48, 32).translate(0, 0, 10), lo: [-R, -R, 0], hi: [R, R, 2 * R],
+    contacts: r => spread(8, r).map(u => ({ p: add(c, mul(u, R)) })),
     candidates: r => { const out = []; for (let i = 0; i < 4000; i++) { const u = sphereDir(r); out.push({ p: add(c, mul(u, R)), n: u, kind: 'face' }); } return out; } }; })(),
   Object.assign(boxShape(18, 18, 18), { key: 'cube', label: 'Cube' }),
   Object.assign(polytope([[-11, -11, 0], [11, -11, 0], [11, 11, 0], [-11, 11, 0], [0, 0, 18]], [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]), { key: 'pyramid', label: 'Pyramid' }),
@@ -251,6 +262,7 @@ const SHAPES = [
     support: n => dot(n, c) + Math.hypot(a * n[0], b * n[1], cz * n[2]),
     inside: p => (p[0] / a) ** 2 + (p[1] / b) ** 2 + ((p[2] - cz) / cz) ** 2 <= 1,
     ghost: () => new THREE.SphereGeometry(1, 48, 32).scale(a, b, cz).translate(0, 0, cz), lo: [-a, -b, 0], hi: [a, b, 2 * cz],
+    contacts: r => spread(8, r).map(u => ({ p: add(c, [a * u[0], b * u[1], cz * u[2]]) })),
     candidates: r => { const out = [];
       // points spread by area: a direction is kept with odds by how much surface it stands for
       while (out.length < 4000) { const u = sphereDir(r), n = unit([u[0] / a, u[1] / b, u[2] / cz]);
@@ -263,12 +275,16 @@ const SHAPES = [
     support: n => r0 * Math.hypot(n[0], n[1]) + h / 2 * Math.abs(n[2]) + h / 2 * n[2],
     inside: p => Math.hypot(p[0], p[1]) <= r0 && p[2] >= 0 && p[2] <= h,
     ghost: () => new THREE.CylinderGeometry(r0, r0, h, 48).rotateX(Math.PI / 2).translate(0, 0, h / 2), lo: [-r0, -r0, 0], hi: [r0, r0, h],
+    contacts: r => { const out = [], disc = up => { const ph = 2 * Math.PI * r(), rr = r0 * 0.5 * Math.sqrt(r()); return { p: [rr * Math.cos(ph), rr * Math.sin(ph), up ? h : 0], fi: up ? 'top' : 'bot' }; };
+      out.push(disc(true), disc(false)); const ph0 = 2 * Math.PI * r();
+      for (let k = 0; k < 4; k++) { const ph = ph0 + k * Math.PI / 2 + (r() - 0.5) * 0.6; out.push({ p: [r0 * Math.cos(ph), r0 * Math.sin(ph), h * (0.25 + 0.5 * r())] }); }
+      return out; },
     candidates: r => { const out = [], side = 2 * Math.PI * r0 * h, top = 2 * Math.PI * r0 * r0;
       for (let i = 0; i < 4000; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0];
         if (r() < side / (side + top)) out.push({ p: [r0 * d[0], r0 * d[1], h * r()], n: d, kind: 'face' });
-        else { const rr = r0 * Math.sqrt(r()), up = r() < 0.5; out.push({ p: [rr * d[0], rr * d[1], up ? h : 0], n: [0, 0, up ? 1 : -1], kind: 'face' }); } }
-      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], h], n: unit([d[0], d[1], 1]), kind: 'edge' }); }
-      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), kind: 'edge' }); }
+        else { const rr = r0 * Math.sqrt(r()), up = r() < 0.5; out.push({ p: [rr * d[0], rr * d[1], up ? h : 0], n: [0, 0, up ? 1 : -1], kind: 'face', fi: up ? 'top' : 'bot', fr: r0 }); } }
+      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], h], n: unit([d[0], d[1], 1]), kind: 'edge', key: 'etop' }); }
+      for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), kind: 'edge', key: 'ebot' }); }
       return out; } }; })(),
 ];
 for (const s of SHAPES) { s.height = s.hi[2] - s.lo[2]; s.size = (s.hi[0] - s.lo[0] + s.hi[1] - s.lo[1] + s.height) / 3; }
@@ -316,73 +332,103 @@ function turn(n, sigmaDeg, r) {
   return unit(add(mul(n, Math.cos(th)), add(mul(u, Math.sin(th) * Math.cos(ph)), mul(v, Math.sin(th) * Math.sin(ph)))));
 }
 
+const DOME = 6;    // a flat face's planes lean away from its touch point by up to this at the rim
+const LEAN = 1.5;  // a turned face plane may dip no deeper into the shape than at its own point plus this (% of size)
+// the shape's own bounding planes: a polytope's faces, a curved shape's tangent planes
+function boundsOf(S) { return S._bounds || (S._bounds = S.ownFaces || [...fib(200), [0, 0, 1], [0, 0, -1]].map(n => ({ n, b: S.support(n) }))); }
+const reach = (poly, n) => { let m = -Infinity; for (const f of poly) for (const v of f.verts) m = Math.max(m, dot(n, v)); return m; };
+
 function build(shape, seed, P, withStats) {
   const t0 = performance.now();
-  const S = shape, size = S.size;
-  const wantEdges = P.edges / 100;
-
-  // candidate anchors over the whole surface, bottom included, each class shuffled by its own stream
+  const S = shape, size = S.size, sink = P.sink / 100 * size, lean = LEAN / 100 * size;
+  const contacts = S.contacts(stream(seed, 8));
   const cands = S.candidates(stream(seed, 1));
   const byKind = k => cands.filter(c => c.kind === k);
   const order = (list, k) => { const r = stream(seed, k); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
   const corners = order(byKind('corner'), 2), edgeC = order(byKind('edge'), 3), faceC = order(byKind('face'), 4);
 
-  // pick anchors: every corner, then edges and faces in the asked share, each kept apart
+  // at least half of the edges and half of the corners are bitten
+  const half = (keys, k) => order(keys, k).slice(0, Math.ceil(keys.length / 2));
+  const edgeKeys = [...new Set(edgeC.map(c => c.key))], cornerKeys = corners.map(c => c.key);
+  const bitten = new Set([...half(edgeKeys, 6), ...half(cornerKeys, 7)]);
+
+  // pick anchors: every corner, one on each bitten edge, then edges and faces in the asked share, kept apart
   const N = P.planes;
-  const totalArea = surfaceArea(S);
-  let gap = 0.85 * Math.sqrt(totalArea / N);
+  let gap = 0.85 * Math.sqrt(surfaceArea(S) / N);
   const taken = [];
   const far = c => taken.every(t => len(sub(t.p, c.p)) >= gap);
-  for (const c of corners) if (taken.length < N) taken.push(c);
-  const nEdges = edgeC.length ? Math.round((N - taken.length) * wantEdges) : 0;
+  const take = c => { c.used = true; taken.push(c); };
+  for (const c of corners) if (taken.length < N) take(c);
+  for (const key of edgeKeys) if (bitten.has(key) && taken.length < N) { const on = edgeC.filter(c => c.key === key); take(on.find(far) || on[0]); }
+  const nEdges = edgeC.length ? Math.max(taken.filter(t => t.kind === 'edge').length, Math.round((N - corners.length) * P.edges / 100)) : 0;
   for (let pass = 0; pass < 6; pass++, gap *= 0.85) {
     let e = taken.filter(t => t.kind === 'edge').length;
-    for (const c of edgeC) { if (e >= nEdges) break; if (!c.used && far(c)) { c.used = true; taken.push(c); e++; } }
-    for (const c of faceC) { if (taken.length >= N) break; if (!c.used && far(c)) { c.used = true; taken.push(c); } }
+    for (const c of edgeC) { if (e >= nEdges || taken.length >= N) break; if (!c.used && far(c)) { take(c); e++; } }
+    for (const c of faceC) { if (taken.length >= N) break; if (!c.used && far(c)) take(c); }
     if (taken.length >= N) break;
   }
 
-  // one plane per anchor: the shape's direction there, turned, sunk, cut
+  // every plane passes through or beyond every touch point
+  const through = (n, b) => { for (const c of contacts) b = Math.max(b, dot(n, c.p)); return b; };
   const r = stream(seed, 5);
-  const planes = [];
-  // a turned plane may cut the shape far from its anchor (a face plane turned about a point dips
-  // across the rest of the face); a turn that would cut deeper than Deepest cut is drawn again
-  const cap = P.deepest / 100 * size;
-  for (const a of taken) {
-    const sink = a.kind === 'edge' ? P.esink : a.kind === 'corner' ? P.csink : P.sink;
-    const depth = sink / 100 * size * (0.5 + 0.5 * r());
-    // on a flat face the plane is the tangent of the face domed a little: it leans away from the face's
-    // centre by up to Dome at the rim, and its point drops by the dome's sag there
-    let n0 = a.n, p0 = a.p, allow = cap;
-    if (a.fc && P.dome > 0) {
-      allow += Math.tan(P.dome * DEG) * a.fr / 2;   // measured from the dome, not the flat face
-      const d = sub(a.p, a.fc), rr = len(d), t = Math.tan(P.dome * DEG);
-      if (rr > 1e-6) { n0 = unit(add(a.n, mul(d, t / a.fr))); p0 = sub(a.p, mul(a.n, t * rr * rr / (2 * a.fr))); }
-    }
+  // a turn is drawn again (up to twelve times) if it would dip much deeper into the shape anywhere than
+  // at its own point, or would cut a touch point; the best is kept, and pushed back past the touch points
+  const turned = (n0, p0, allow, bOf, avoid) => {
     let best = null;
     for (let k = 0; k < 12; k++) {
-      const n = turn(n0, P.spread, r), b = dot(n, p0) - depth, extra = S.support(n) - b - depth;
-      if (!best || extra < best.extra) best = { n, b, extra };
-      if (extra <= allow) break;
+      const n = turn(n0, P.spread, r), b = bOf(n), extra = Math.max(0, S.support(n) - dot(n, p0) - allow);
+      let miss = 0; if (avoid) for (const c of contacts) miss = Math.max(miss, dot(n, c.p) - b);
+      const score = extra + 4 * miss;
+      if (!best || score < best.score) best = { n, b, score };
+      if (score <= 0) break;
     }
-    planes.push({ n: best.n, b: best.b, role: a.kind });
-  }
+    return { n: best.n, b: through(best.n, best.b) };
+  };
+  const touchOf = fi => fi === undefined ? null : contacts.find(c => c.fi === fi);
+
+  // face planes: the face's tangent domed around its touch point, turned, sunk
   const pad = 2 + 0.3 * size;
   let poly = boxPoly(sub(S.lo, [pad, pad, pad]), add(S.hi, [pad, pad, pad]));
+  const planes = [];
+  for (const a of taken) if (a.kind === 'face') {
+    let n0 = a.n, p0 = a.p, allow = lean;
+    const t = touchOf(a.fi);
+    if (t) {
+      const d = sub(a.p, t.p), rr = len(d), k = Math.tan(DOME * DEG);
+      allow += k * a.fr / 2;
+      if (rr > 1e-6) { n0 = unit(add(a.n, mul(d, k / a.fr))); p0 = sub(a.p, mul(a.n, k * rr * rr / (2 * a.fr))); }
+    }
+    const depth = sink * (0.5 + 0.5 * r());
+    planes.push({ ...turned(n0, p0, allow, n => dot(n, p0) - depth, false), role: 'face' });
+  }
+  // a plane meeting others outside the shape is sunk until they meet inside it (as far as the touch points let it)
+  const centre = mul(add(S.lo, S.hi), 0.5);
+  const poke = v => { if (S.inside(v)) return 0; let lo = 0, hi = 1; for (let k = 0; k < 20; k++) { const m = (lo + hi) / 2; if (S.inside(add(centre, mul(sub(v, centre), m)))) lo = m; else hi = m; } return (1 - lo) * len(sub(v, centre)); };
+  for (let round = 0; round < 6; round++) {
+    let q = poly; for (const pl of planes) q = clip(q, pl);
+    const push = new Map();
+    for (const f of q) if (f.role === 'face') for (const v of f.verts) { const d = poke(v); if (d > 1e-4) push.set(f, Math.max(push.get(f) || 0, d)); }
+    if (!push.size) break;
+    for (const pl of planes) { const f = q.find(f => f.n === pl.n && f.b === pl.b); if (f && push.has(f)) pl.b = through(pl.n, pl.b - push.get(f) * 1.1); }
+  }
   for (const pl of planes) poly = clip(poly, pl);
+  for (const pl of boundsOf(S)) poly = clip(poly, { ...pl, role: 'touch' });
 
-  // set down on its lowest point
+  // edge and corner planes: set against what the faces leave, bitten ones by one to two Sinks
+  const bites = new Map();
+  const ecPlanes = taken.filter(a => a.kind !== 'face').map(a => {
+    const want = sink * (bitten.has(a.key) ? 1 + r() : r());
+    const { n, b } = turned(a.n, a.p, lean, n => reach(poly, n) - want, true);
+    bites.set(a.key, Math.max(bites.get(a.key) || 0, reach(poly, n) - b));
+    return { n, b, role: a.kind };
+  });
+  for (const pl of ecPlanes) poly = clip(poly, pl);
+
   let foot = Infinity; for (const f of poly) for (const v of f.verts) foot = Math.min(foot, v[2]);
   const res = { poly, foot, anchors: taken.map(a => ({ p: [a.p[0], a.p[1], a.p[2] - foot], kind: a.kind })), ms: 0 };
   if (withStats) {
     let out = 0, inn = 0;
-    const M = 1500;
-    for (let i = 0; i < M; i++) {
-      const z = 1 - 2 * (i + 0.5) / M;
-      const ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z), n = [h * Math.cos(ph), h * Math.sin(ph), z];
-      let hp = -Infinity; for (const f of poly) for (const v of f.verts) hp = Math.max(hp, dot(n, v));
-      const ht = S.support(n); out = Math.max(out, hp - ht); inn = Math.max(inn, ht - hp);
-    }
+    for (const n of fib(1500)) { const hp = reach(poly, n), ht = S.support(n); out = Math.max(out, hp - ht); inn = Math.max(inn, ht - hp); }
     const lo = S.lo.slice(), hi = S.hi.slice(), g = 30; let both = 0, either = 0;
     for (const f of poly) for (const v of f.verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
     const fp = poly.map(f => [f.n, f.b]);
@@ -391,14 +437,16 @@ function build(shape, seed, P, withStats) {
       const t = S.inside(p); let rr = true; for (const [n, bb] of fp) if (dot(n, p) > bb + 1e-9) { rr = false; break; }
       if (t && rr) both++; if (t || rr) either++;
     }
-    let steep = 0, areaSum = 0, areaMax = 0;
-    for (const f of poly) {
-      if (f.n[2] < 0) steep = Math.max(steep, Math.asin(-f.n[2]) / DEG);
-      const a = faceArea(f); areaSum += a; areaMax = Math.max(areaMax, a);
-    }
+    let areaSum = 0, areaMax = 0;
+    for (const f of poly) { const a = faceArea(f); areaSum += a; areaMax = Math.max(areaMax, a); }
     const counts = {}; for (const f of poly) counts[f.role] = (counts[f.role] || 0) + 1;
     const placed = {}; for (const a of taken) placed[a.kind] = (placed[a.kind] || 0) + 1;
-    Object.assign(res, { out, inn, iou: either ? both / either : 0, steep, counts, placed, vol: volume(poly), largest: areaMax / areaSum });
+    const inside = p => poly.every(f => dot(f.n, p) <= f.b + 1e-6);
+    const touched = S.ownFaces ? S.ownFaces.filter(f => reach(poly, f.n) >= f.b - 1e-6).length : contacts.filter(c => inside(c.p)).length;
+    const bit = keys => keys.filter(k => (bites.get(k) || 0) >= sink - 1e-6).length;
+    Object.assign(res, { out, inn, iou: either ? both / either : 0, counts, placed, vol: volume(poly), largest: areaMax / areaSum,
+      touched, sides: S.ownFaces ? S.ownFaces.length : contacts.length, sidesWord: S.ownFaces ? 'faces' : 'touch points',
+      edgesBit: bit(edgeKeys), edgesAll: edgeKeys.length, cornersBit: bit(cornerKeys), cornersAll: cornerKeys.length });
   }
   for (const f of poly) f.verts = f.verts.map(v => [v[0], v[1], v[2] - foot]);
   res.ms = performance.now() - t0;
@@ -418,7 +466,7 @@ function surfaceArea(S) {
 }
 
 // ---------- drawing ----------
-const ROLE = { face: ['#B9B4A8', 'On a face'], edge: ['#D3A86E', 'On an edge'], corner: ['#B67A5C', 'At a corner'], box: ['#D33CC4', 'Gap (a fault)'] };
+const ROLE = { touch: ['#9FC2B0', 'The shape itself'], face: ['#B9B4A8', 'On a face'], edge: ['#D3A86E', 'On an edge'], corner: ['#B67A5C', 'At a corner'], box: ['#D33CC4', 'Gap (a fault)'] };
 const STONE = '#A9A69D';
 function faceColor(f, byRole) {
   if (f.n[2] < 0) { const a = Math.asin(-f.n[2]) / DEG; if (a > 65) return '#E5483B'; if (a > 55) return '#FF8C1A'; }
@@ -464,10 +512,10 @@ function makeScene() {
 }
 
 // ---------- page state ----------
-const DEFAULTS = { planes: 60, edges: 30, spread: 6, sink: 2, esink: 6, csink: 10, dome: 6, deepest: 1.5, ghost: true, lines: true, roles: false, anchors: false };
+const DEFAULTS = { planes: 60, edges: 30, spread: 6, sink: 3, ghost: true, lines: true, roles: false, anchors: false };
 const state = { shape: 'sphere', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
-const SLIDERS = { planes: v => v, edges: v => v + '%', spread: v => v + '°', sink: v => v + '%', esink: v => v + '%', csink: v => v + '%', dome: v => v + '°', deepest: v => v + '%' };
+const SLIDERS = { planes: v => v, edges: v => v + '%', spread: v => v + '°', sink: v => v + '%' };
 const CHECKS = ['ghost', 'lines', 'roles', 'anchors'];
 const shapeOf = k => SHAPES.find(s => s.key === k) || SHAPES[0];
 
@@ -491,7 +539,7 @@ function initGL() {
 }
 function resize() { const w = viewerEl.clientWidth, h = viewerEl.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); draw(); }
 function draw() { if (renderer) renderer.render(scene, camera); }
-function params() { return { planes: state.planes, edges: state.edges, spread: state.spread, sink: state.sink, esink: state.esink, csink: state.csink, dome: state.dome, deepest: state.deepest }; }
+function params() { return { planes: state.planes, edges: state.edges, spread: state.spread, sink: state.sink }; }
 
 function rebuild() {
   try {
@@ -512,7 +560,7 @@ function rebuild() {
     $('chip').textContent = sh.label.toLowerCase() + ' · seed ' + state.seed;
     showStats(res);
     const lg = $('legend'); lg.hidden = !(state.roles || state.anchors);
-    if (!lg.hidden) lg.innerHTML = ['face', 'edge', 'corner'].map(k => `<span><i style="background:${ROLE[k][0]}"></i>${ROLE[k][1]}</span>`).join('');
+    if (!lg.hidden) lg.innerHTML = ['face', 'edge', 'corner', 'touch'].map(k => `<span><i style="background:${ROLE[k][0]}"></i>${ROLE[k][1]}</span>`).join('');
   } catch (e) { $('err').hidden = false; $('err').textContent = 'The rock could not be built: ' + e.message; console.error(e); }
 }
 function showStats(r) {
@@ -520,6 +568,9 @@ function showStats(r) {
   const rows = [
     ['Planes on face · edge · corner', `${n(p, 'face')} · ${n(p, 'edge')} · ${n(p, 'corner')}`],
     ['Faces', r.poly.length],
+    ['Touches the shape at', `<span class="${r.touched === r.sides ? 'good' : 'bad'}">${r.touched} of ${r.sides} ${r.sidesWord}</span>`],
+    ...(r.edgesAll ? [['Edges bitten by Sink', `<span class="${2 * r.edgesBit >= r.edgesAll ? 'good' : 'bad'}">${r.edgesBit} of ${r.edgesAll}</span>`]] : []),
+    ...(r.cornersAll ? [['Corners bitten by Sink', `<span class="${2 * r.cornersBit >= r.cornersAll ? 'good' : 'bad'}">${r.cornersBit} of ${r.cornersAll}</span>`]] : []),
     ['Largest face', (r.largest * 100).toFixed(1) + '% of the surface'],
     ['Pokes out, at most', r.out.toFixed(2) + ' mm'],
     ['Cuts in, at most', r.inn.toFixed(2) + ' mm'],
