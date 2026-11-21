@@ -35,6 +35,17 @@ h1 { font: 800 38px/1 var(--f-display); text-transform: uppercase; letter-spacin
 .seg button { height: 28px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; color: var(--ink); font: 500 14px var(--f-body); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seedbox { display: flex; align-items: center; gap: 6px; }
+.lbl { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.sbtn { height: 32px; min-width: 32px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--ink); font: 600 15px var(--f-body); cursor: pointer; }
+.sbtn:hover { border-color: var(--accent); color: var(--accent); }
+#seedin { width: 72px; height: 32px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--ink); font: 500 15px var(--f-code); text-align: center; }
+.sbtn:focus-visible, #seedin:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.own { display: grid; gap: 14px; }
+.own h2 { font: 800 26px/1 var(--f-display); text-transform: uppercase; margin: 6px 0 0; text-wrap: balance; }
+.own > p { margin: 0; max-width: 72ch; }
+.own ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 72ch; }
+.pair { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 18px; }
 .seed { font: 500 13px var(--f-code); color: var(--muted); }
 .key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
 .key i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; margin-right: 6px; vertical-align: 4px; }
@@ -67,8 +78,12 @@ figcaption p { margin: 0; color: var(--muted); font-size: 14px; line-height: 21p
     <div class="seg" id="spikes" role="group" aria-label="Spikes">
       <button data-c="1" aria-pressed="true">Spikes removed</button><button data-c="0" aria-pressed="false">Spikes left</button>
     </div>
-    <button class="btn" id="again">New planes</button>
-    <span class="seed" id="seed"></span>
+    <div class="seedbox">
+      <span class="lbl">Seed</span>
+      <button class="sbtn" id="prev" aria-label="Previous seed">&#8592;</button>
+      <input id="seedin" type="number" inputmode="numeric" min="0" step="1" value="7" aria-label="Seed">
+      <button class="sbtn" id="next" aria-label="Next seed">&#8594;</button>
+    </div>
     <div class="key">
       <span><i style="border-color:var(--edge-line)"></i>plane on a face</span>
       <span><i style="border-color:var(--bevel-line)"></i>plane at a corner</span>
@@ -103,6 +118,21 @@ figcaption p { margin: 0; color: var(--muted); font-size: 14px; line-height: 21p
       <figcaption><b><span>6</span>How much to keep</b><p>The share a cell needs to be kept is a dial. Left half: cells a quarter inside are kept, so the rock is fuller and pokes past the shape. Right half: three quarters, so it is leaner and more broken.</p></figcaption>
     </figure>
   </div>
+
+  <section class="own">
+    <h2>Closer to Rock Planes: each plane keeps to its own face</h2>
+    <p>The cells make bumps because a cell's outline is whichever planes happen to cross it, so a fracture plane or a plane from the far side can bound a cell at the rim. Rock Planes never makes bumps: every plane cuts everywhere, and the rock is what all of them leave. That only fails on a concave shape because a plane on one arm would cut through the other. So limit how far a plane reaches, and keep everything else.</p>
+    <ol>
+      <li><b>Each face has its own strip</b>: the band over it, bounded at each corner by the line that splits the corner's angle, a few mm deep.</li>
+      <li><b>A face's planes cut over its own strip and its neighbours' strips across outward corners</b>, but never across an inward corner. Across outward corners this is the same as Rock Planes, so faces meet at clean edges. At an inward corner, the two faces' planes each stop at the corner's split line, so the notch stays sharp.</li>
+      <li><b>The rest is Rock Planes</b>: a touch point in the middle third of each face, a crown there, planes domed away from it, turned by Spread and sunk by Sink, every plane passing its own strips' touch points, and half the outward corners bevelled. Every point near the surface is cut by its own face's planes, so nothing pokes out, and the rock touches every face.</li>
+    </ol>
+    <div class="pair">
+      <figure><canvas id="o1" aria-label="The L-block made with planes that keep to their own face"></canvas><figcaption><p>L-block. Dots are the touch points.</p></figcaption></figure>
+      <figure><canvas id="o2" aria-label="The ring made with planes that keep to their own face"></canvas><figcaption><p>Ring. The hole's faces get the same treatment, facing into the hole.</p></figcaption></figure>
+    </div>
+    <p>What it gives up: the rocks are no longer cut from one shared set of cells, so neighbours don't get matching faces (panel 5). In 3D a face's strip is the prism over it, cut at each edge by the plane that splits the edge's angle. Each plane removes a convex chip (its strip beyond the plane), and the rock is the target minus the chips: one Manifold difference.</p>
+  </section>
 
   <div class="notes">
     <div>
@@ -271,9 +301,96 @@ function drawRock(g, cells, keep, fill, offset = [0, 0], R = null) {
   g.restore();
 }
 
-let seed = 4;
+// ---------- each plane keeps to its own face ----------
+const DEPTH = 4;   // how deep a face's strip reaches into the solid (mm)
+function ownFace(R, r) {
+  // every face: its ends, outward normal, and the strip over it, bounded by the corners' split lines
+  const faces = [];
+  R.forEach((ring, ri) => {
+    const n = ring.length;
+    for (let i = 0; i < n; i++) {
+      const a = ring[i], b = ring[(i + 1) % n], e = sub(b, a), el = Math.hypot(...e), t = mul(e, 1 / el);
+      faces.push({ ri, i, a, b, t, el, out: [t[1], -t[0]] });
+    }
+  });
+  const byRing = (ri, i) => faces.find(f => f.ri === ri && f.i === (i + R[ri].length) % R[ri].length);
+  const turnOf = (f, g) => f.t[0] * g.t[1] - f.t[1] * g.t[0];                 // > 0: the corner from f to g turns left (outward corner)
+  for (const f of faces) {
+    const prev = byRing(f.ri, f.i - 1), next = byRing(f.ri, f.i + 1);
+    f.prev = prev; f.next = next;
+    f.convexA = turnOf(prev, f) > 0; f.convexB = turnOf(f, next) > 0;
+  }
+  // the split line at a corner between f (ending there) and g (starting there): inward direction
+  const split = (f, g) => { let d = sub(g.t, f.t); const l = Math.hypot(...d); if (l < 1e-9) d = mul(f.out, -1); else d = mul(d, 1 / l); const inward = dot(d, f.out) < 0 ? d : mul(d, -1); return inward; };
+  for (const f of faces) {
+    const dA = split(f.prev, f), dB = split(f, f.next);
+    const sA = Math.max(0.2, -dot(dA, f.out)), sB = Math.max(0.2, -dot(dB, f.out));
+    const tA = DEPTH / sA, tB = DEPTH / sB;
+    f.strip = [add(f.a, mul(dA, tA)), add(f.b, mul(dB, tB)), add(f.b, mul(dB, -tB)), add(f.a, mul(dA, -tA))];
+  }
+  for (const f of faces) f.reach = [f.strip, ...(f.convexA ? [f.prev.strip] : []), ...(f.convexB ? [f.next.strip] : [])];
+  const inReach = (pl, p) => pl.reach.some(W => inside(p, W));
+  // touch point and crown per face
+  const sink = () => 0.25 + 0.5 * r(), SPREAD = 8 * Math.PI / 180;
+  const planes = [], guards = [];
+  for (const f of faces) {
+    const tt = 1 / 3 + r() / 3, c = add(f.a, mul(f.t, tt * f.el)), room = Math.min(tt, 1 - tt) * f.el;
+    const nc = rot(f.out, (r() - 0.5) * SPREAD), tc = [-nc[1], nc[0]], rho = room * (0.15 + 0.2 * r());
+    f.touch = c;
+    guards.push(c, add(c, mul(tc, rho)), add(c, mul(tc, -rho)));
+    planes.push({ n: nc, b: dot(nc, c), reach: f.reach, kind: 'crown' });
+  }
+  // face planes: domed away from the touch point, turned, sunk
+  for (const f of faces) {
+    const k = Math.max(1, Math.round(f.el / 4));
+    for (let j = 0; j < k; j++) {
+      const p = add(f.a, mul(f.t, (j + 0.15 + 0.7 * r()) / k * f.el)), off = dot(sub(p, f.touch), f.t);
+      const lean = SPREAD * off / (f.el / 2), n = rot(f.out, -lean + (r() - 0.5) * SPREAD);
+      planes.push({ n, b: dot(n, p) - sink(), reach: f.reach, kind: 'face' });
+    }
+  }
+  // every plane passes the touch points (and crown patches) within its reach
+  for (const pl of planes) for (const g of guards) if (inReach(pl, g)) pl.b = Math.max(pl.b, dot(pl.n, g));
+  // half the outward corners bevelled, cutting one to two Sinks into what the faces leave
+  const isIn = p => inside(p, R[0]) && !R.slice(1).some(H => inside(p, H));
+  const corners = faces.filter(f => f.convexB).map(f => ({ f, g: f.next, c: f.b }));
+  const pick = corners.map(c => [r(), c]).sort((x, y) => x[0] - y[0]).slice(0, Math.ceil(corners.length / 2)).map(x => x[1]);
+  for (const { f, g, c } of pick) {
+    let m = add(f.out, g.out); m = mul(m, 1 / Math.hypot(...m)); m = rot(m, (r() - 0.5) * SPREAD);
+    const reach = [f.strip, g.strip], kept = q => planes.every(pl => !inReach(pl, q) || dot(pl.n, q) <= pl.b);
+    let h = -Infinity;
+    for (let x = -4; x <= 4; x += 0.1) for (let y = -4; y <= 4; y += 0.1) { const q = add(c, [x, y]); if (isIn(q) && kept(q)) h = Math.max(h, dot(m, q)); }
+    planes.push({ n: m, b: h - 0.5 * (1 + r()), reach, kind: 'bevel' });
+  }
+  return { faces, planes };
+}
+function drawOwn(id, R, sd) {
+  const g = setup(id), cv = g.canvas;
+  const { faces, planes } = ownFace(R, mulberry32(sd * 15485863 + 11));
+  const mk = () => { const o = document.createElement('canvas'); o.width = cv.width; o.height = cv.height; const x = o.getContext('2d'); x.setTransform(g.getTransform()); x.px = g.px; return x; };
+  const m = mk();
+  shapePath(m, R); m.fillStyle = css('--stone'); m.fill('evenodd');
+  m.globalCompositeOperation = 'destination-out';
+  for (const pl of planes) for (const W of pl.reach) {
+    m.save(); poly(m, W); m.clip();
+    const d = [-pl.n[1], pl.n[0]], p0 = mul(pl.n, pl.b);
+    poly(m, [add(p0, mul(d, -60)), add(p0, mul(d, 60)), add(add(p0, mul(d, 60)), mul(pl.n, 60)), add(add(p0, mul(d, -60)), mul(pl.n, 60))]);
+    m.fillStyle = '#000'; m.fill(); m.restore();
+  }
+  // outline: the rock drawn dark a little larger, then the rock on top
+  const dark = mk(); dark.setTransform(1, 0, 0, 1, 0, 0); dark.drawImage(m.canvas, 0, 0); dark.globalCompositeOperation = 'source-in'; dark.fillStyle = '#2B3340'; dark.fillRect(0, 0, cv.width, cv.height);
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+  const w = Math.max(1.5, cv.width / 260);
+  for (let k = 0; k < 12; k++) { const t = k * Math.PI / 6; g.drawImage(dark.canvas, w * Math.cos(t), w * Math.sin(t)); }
+  g.drawImage(m.canvas, 0, 0); g.restore();
+  shapePath(g, R); stroke(g, css('--accent'), 1.4, [4, 3]);
+  for (const f of faces) { g.beginPath(); g.arc(f.touch[0], f.touch[1], 3.2 * g.px, 0, 2 * Math.PI); g.fillStyle = css('--accent'); g.fill(); }
+}
+
+let seed = 7;
 function render() {
-  document.getElementById('seed').textContent = 'planes seed ' + seed;
+  document.getElementById('seedin').value = seed;
+  drawOwn('o1', TARGETS.L.rings, seed); drawOwn('o2', TARGETS.ring.rings, seed);
   const T = TARGETS[target], R = T.rings;
   document.getElementById('cap1').textContent = T.cap;
   const lines = planesFor(R, mulberry32(seed * 7919 + 1), { cracks: 2 });
@@ -329,7 +446,15 @@ function render() {
   text(g, 'faces match', [0, 10.6], '#2B3340', 11);
 }
 
-document.getElementById('again').addEventListener('click', () => { seed++; render(); });
+const setSeed = v => { seed = Math.max(0, v | 0); render(); };
+document.getElementById('prev').addEventListener('click', () => setSeed(seed - 1));
+document.getElementById('next').addEventListener('click', () => setSeed(seed + 1));
+document.getElementById('seedin').addEventListener('change', e => setSeed(parseInt(e.target.value, 10) || 0));
+document.addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input')) return;
+  if (e.key === 'ArrowLeft') { setSeed(seed - 1); e.preventDefault(); }
+  if (e.key === 'ArrowRight') { setSeed(seed + 1); e.preventDefault(); }
+});
 for (const b of document.querySelectorAll('#spikes button')) b.addEventListener('click', () => {
   clean = b.dataset.c === '1'; for (const o of document.querySelectorAll('#spikes button')) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); render();
 });
