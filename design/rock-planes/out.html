@@ -148,10 +148,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <h2>How a rock is built</h2>
     <ol>
       <li><b>The shape</b> is the space the rock should fill (sizes in mm, at the 35 mm square drawn on the plate). The rock stays inside it and touches it on every side. The bottom is treated like every other side; there is no special case for the ground yet, and the rock is set down on its lowest point.</li>
-      <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight spread around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point, so the rock reaches each of them: it touches every face of the shape.</li>
+      <li><b>Touch points.</b> Each flat face of the shape gets one point, drawn in the middle third of the face; a sphere or an oval gets eight spread around it, a cylinder one on the top, one on the bottom and four around the side. Every plane passes through or beyond every touch point (and every crown's patch, below), so the rock reaches each of them: it touches every face of the shape.</li>
       <li><b>Where the planes go.</b> Every corner gets one. At least half of the edges and half of the corners, drawn, are <b>bitten</b>; each bitten edge gets at least one plane. Then points are thrown along the edges and over the faces (about <b>On edges</b> of them on edges), each kept a spacing away from those already taken, until there are <b>Planes</b> in all.</li>
+      <li><b>Crowns.</b> Each flat face gets one plane at its touch point: the face's plane turned by about <b>Spread</b> about the point, with a patch around the point (20 to 50% of the way to the face's nearest edge, drawn) that no other plane may cut. Without it every plane that passes the touch point meets there and the face comes to a point like a low pyramid; with it the face's planes meet around a facet near its middle.</li>
       <li><b>Face planes</b> start as the face's tangent, domed around the face's touch point by up to <b>Spread</b> at the rim (so a flat face's planes lean away from it and do not all fall on one plane; at Spread 0 the face stays flat), are turned at random by about <b>Spread</b> and sunk by half to all of <b>Sink</b>. A turn that would dip much deeper into the shape anywhere than at its own point, or would cut a touch point, is drawn again, up to twelve times; if none clears the touch points the best is pushed back past them.</li>
-      <li><b>Edge and corner planes</b> start halfway between the edge's two faces, or as the average of a corner's faces, and are turned the same way. Each is set against what the face planes leave: a bitten edge or corner's plane cuts one to two times <b>Sink</b> into it, the others up to one <b>Sink</b>. So at least half the edges and corners change the rock by at least Sink, by construction.</li>
+      <li><b>Edge and corner planes</b> start halfway between the edge's two faces, or as the average of a corner's faces, and are turned the same way. Each is set against what the face planes leave: a bitten edge or corner's plane cuts one to two times <b>Sink</b> into it, the others up to one <b>Sink</b>. If a touch point keeps a bitten one from biting, the next unbitten one in the drawn order is bitten instead, so at least half the edges and corners change the rock by at least Sink.</li>
       <li><b>Kept inside.</b> Where face planes meet outside the shape, each of them is sunk by how far the corner pokes out, as far as the touch points let it, and the planes are cut again (up to six rounds). Without it a sphere's planes, sunk only a little, meet past its surface between them.</li>
       <li><b>The rock</b> is everything inside all the planes and inside the shape itself (the shape's own faces; a curved shape's are 200 of its tangent planes). It is one closed convex solid. Where the shape's own face shows, the rock touches it.</li>
     </ol>
@@ -215,7 +216,10 @@ function polytope(verts, faces) {
         let x = r() * tris.reduce((t, a) => t + a[3], 0), T = tris[0]; for (const t of tris) { T = t; if ((x -= t[3]) <= 0) break; }
         let u = r(), w = r(); if (u + w > 1) { u = 1 - u; w = 1 - w; }
         const p = add(T[0], add(mul(sub(T[1], T[0]), u), mul(sub(T[2], T[0]), w)));
-        return { p: add(fc, mul(sub(p, fc), 0.35)), fi };
+        const c = add(fc, mul(sub(p, fc), 0.35));
+        // room: how far the touch point is from the face's nearest edge
+        let room = Infinity; for (let i = 0; i < pts.length; i++) { const A = pts[i], B = pts[(i + 1) % pts.length], e = sub(B, A), t = Math.max(0, Math.min(1, dot(sub(c, A), e) / dot(e, e))); room = Math.min(room, len(sub(c, add(A, mul(e, t))))); }
+        return { p: c, fi, n: q.n, fr: Math.max(...pts.map(v => len(sub(v, fc)))), room };
       });
     },
     candidates(r) {
@@ -275,7 +279,7 @@ const SHAPES = [
     support: n => r0 * Math.hypot(n[0], n[1]) + h / 2 * Math.abs(n[2]) + h / 2 * n[2],
     inside: p => Math.hypot(p[0], p[1]) <= r0 && p[2] >= 0 && p[2] <= h,
     ghost: () => new THREE.CylinderGeometry(r0, r0, h, 48).rotateX(Math.PI / 2).translate(0, 0, h / 2), lo: [-r0, -r0, 0], hi: [r0, r0, h],
-    contacts: r => { const out = [], disc = up => { const ph = 2 * Math.PI * r(), rr = r0 * 0.5 * Math.sqrt(r()); return { p: [rr * Math.cos(ph), rr * Math.sin(ph), up ? h : 0], fi: up ? 'top' : 'bot' }; };
+    contacts: r => { const out = [], disc = up => { const ph = 2 * Math.PI * r(), rr = r0 * 0.5 * Math.sqrt(r()); return { p: [rr * Math.cos(ph), rr * Math.sin(ph), up ? h : 0], fi: up ? 'top' : 'bot', n: [0, 0, up ? 1 : -1], fr: r0, room: r0 - rr }; };
       out.push(disc(true), disc(false)); const ph0 = 2 * Math.PI * r();
       for (let k = 0; k < 4; k++) { const ph = ph0 + k * Math.PI / 2 + (r() - 0.5) * 0.6; out.push({ p: [r0 * Math.cos(ph), r0 * Math.sin(ph), h * (0.25 + 0.5 * r())] }); }
       return out; },
@@ -368,7 +372,16 @@ function build(shape, seed, P, withStats) {
   }
 
   // every plane passes through or beyond every touch point
-  const through = (n, b) => { for (const c of contacts) b = Math.max(b, dot(n, c.p)); return b; };
+  // a flat face's crown: its plane turned by Spread about the touch point, with a patch of drawn size around the
+  // point that no other plane may cut, so the face's planes meet around a facet, not at a point
+  const rc = stream(seed, 9), guards = [], crowns = [];
+  for (const c of contacts) {
+    if (!c.n) { guards.push(c.p); continue; }
+    const n = turn(c.n, P.spread, rc), u = perp(n), v = cross(n, u), rho = c.room * (0.2 + 0.3 * rc()), ph0 = 2 * Math.PI * rc();
+    for (let k = 0; k < 6; k++) { const ph = ph0 + k * Math.PI / 3; guards.push(add(c.p, add(mul(u, rho * Math.cos(ph)), mul(v, rho * Math.sin(ph))))); }
+    crowns.push({ n, b: dot(n, c.p), role: 'face' });
+  }
+  const through = (n, b) => { for (const g of guards) b = Math.max(b, dot(n, g)); return b; };
   const r = stream(seed, 5);
   // a turn is drawn again (up to twelve times) if it would dip much deeper into the shape anywhere than
   // at its own point, or would cut a touch point; the best is kept, and pushed back past the touch points
@@ -376,7 +389,7 @@ function build(shape, seed, P, withStats) {
     let best = null;
     for (let k = 0; k < 12; k++) {
       const n = turn(n0, P.spread, r), b = bOf(n), extra = Math.max(0, S.support(n) - dot(n, p0) - allow);
-      let miss = 0; if (avoid) for (const c of contacts) miss = Math.max(miss, dot(n, c.p) - b);
+      let miss = 0; if (avoid) for (const g of guards) miss = Math.max(miss, dot(n, g) - b);
       const score = extra + 4 * miss;
       if (!best || score < best.score) best = { n, b, score };
       if (score <= 0) break;
@@ -388,7 +401,7 @@ function build(shape, seed, P, withStats) {
   // face planes: the face's tangent domed around its touch point, turned, sunk
   const pad = 2 + 0.3 * size;
   let poly = boxPoly(sub(S.lo, [pad, pad, pad]), add(S.hi, [pad, pad, pad]));
-  const planes = [];
+  const planes = [...crowns];
   for (const a of taken) if (a.kind === 'face') {
     let n0 = a.n, p0 = a.p, allow = lean;
     const t = touchOf(a.fi);
@@ -414,14 +427,23 @@ function build(shape, seed, P, withStats) {
   for (const pl of boundsOf(S)) poly = clip(poly, { ...pl, role: 'touch' });
 
   // edge and corner planes: set against what the faces leave, bitten ones by one to two Sinks
-  const bites = new Map();
-  const ecPlanes = taken.filter(a => a.kind !== 'face').map(a => {
-    const want = sink * (bitten.has(a.key) ? 1 + r() : r());
-    const { n, b } = turned(a.n, a.p, lean, n => reach(poly, n) - want, true);
-    bites.set(a.key, Math.max(bites.get(a.key) || 0, reach(poly, n) - b));
-    return { n, b, role: a.kind };
-  });
-  for (const pl of ecPlanes) poly = clip(poly, pl);
+  // if a touch point keeps a bitten one from biting, the next unbitten one in the drawn order is bitten instead
+  const ec = taken.filter(a => a.kind !== 'face'), byKey = new Map();
+  for (const a of ec) (byKey.get(a.key) || byKey.set(a.key, []).get(a.key)).push(a);
+  const bites = new Map(), made = new Map();
+  const make = (key, bite) => {
+    let most = 0; const pls = (byKey.get(key) || []).map(a => {
+      const { n, b } = turned(a.n, a.p, lean, n => reach(poly, n) - sink * (bite ? 1 + r() : r()), true);
+      most = Math.max(most, reach(poly, n) - b); return { n, b, role: a.kind };
+    });
+    bites.set(key, most); made.set(key, pls);
+  };
+  for (const key of byKey.keys()) make(key, bitten.has(key));
+  for (const [keys, k] of [[edgeKeys, 6], [cornerKeys, 7]]) {
+    const ok = () => keys.filter(key => bites.get(key) >= sink - 1e-6).length;
+    for (const key of order(keys, k)) { if (2 * ok() >= keys.length) break; if (bites.get(key) < sink - 1e-6 && byKey.has(key)) make(key, true); }
+  }
+  for (const pls of made.values()) for (const pl of pls) poly = clip(poly, pl);
 
   let foot = Infinity; for (const f of poly) for (const v of f.verts) foot = Math.min(foot, v[2]);
   const res = { poly, foot, anchors: taken.map(a => ({ p: [a.p[0], a.p[1], a.p[2] - foot], kind: a.kind })), ms: 0 };
