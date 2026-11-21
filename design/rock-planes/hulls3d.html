@@ -1011,6 +1011,7 @@ function rebuildThumbs() {
 let openPop = null;
 function closePop(keep = true) { if (openPop) { const c = openPop; openPop = null; c(keep); } }
 document.addEventListener('pointerdown', e => { if (openPop && !e.target.closest('.pc.open')) closePop(true); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && openPop) closePop(false); });   // Escape puts the values back, wherever focus is
 const bar = $('params'), resetBtn = $('reset');
 const fmt = (p, v) => { const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
 function paramChip(p) {
@@ -1027,7 +1028,7 @@ function paramChip(p) {
     const range = document.createElement('input'); Object.assign(range, { type: 'range', min: p.min, max: p.max, step: p.step, value: state[p.key] }); range.setAttribute('aria-label', p.label);
     pop.innerHTML = `<div class="ends"><span>${fmt(p, p.min)}</span><span>${fmt(p, p.max)}</span></div>`; pop.prepend(range);
     pop.insertAdjacentHTML('beforeend', `<small>${p.help}</small>`);
-    v.replaceWith(box); pc.append(pop); pc.classList.add('open'); box.focus(); box.select();
+    v.replaceWith(box); pc.append(pop); pc.classList.add('open');   // no focus: on a phone it would raise the keyboard; tap the box to type
     const snap = x => Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min));
     const set = x => { x = +snap(x).toFixed(4); if (x !== state[p.key]) { state[p.key] = x; update(); } };
     box.addEventListener('input', () => { const x = parseFloat(box.value); if (Number.isFinite(x)) { set(x); range.value = state[p.key]; } });

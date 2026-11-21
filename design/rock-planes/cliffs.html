@@ -1374,6 +1374,7 @@ function rebuildThumbs() {
 let openPop = null;
 function closePop(keep = true) { if (openPop) { const c = openPop; openPop = null; c(keep); } }
 document.addEventListener('pointerdown', e => { if (openPop && !e.target.closest('.pc.open')) closePop(true); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && openPop) closePop(false); });   // Escape puts the values back, wherever focus is
 const bar = $('params'), resetBtn = $('reset');
 const fmt = (p, v) => { if (p.none && v >= p.max) return 'no&nbsp;limit'; const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
 const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
@@ -1406,7 +1407,7 @@ function groupChip(g) {
     let first;
     if (lone) { first = document.createElement('input'); Object.assign(first, { type: 'text', inputMode: 'decimal', value: state[g.items[0].key], className: 'pbox' }); first.setAttribute('aria-label', g.label); v.replaceWith(first); pop.append(row(g.items[0], first)); }
     else { for (const p of g.items) pop.append(row(p)); first = pop.querySelector('.pbox'); }
-    pc.append(pop); pc.classList.add('open'); first.focus(); first.select();
+    pc.append(pop); pc.classList.add('open');   // no focus: on a phone it would raise the keyboard; tap the box to type
     pc.addEventListener('focusout', e => { if (openPop && !pc.contains(e.relatedTarget)) closePop(true); });
     openPop = keep => { if (!keep && Object.keys(was).some(k => state[k] !== was[k])) { Object.assign(state, was); update(); } pop.remove(); if (lone) first.replaceWith(v); pc.classList.remove('open'); show(); };
   });
