@@ -50,7 +50,30 @@ h1 { font: 800 34px/1 var(--f-display); letter-spacing: .01em; margin: 0; text-t
 .btn:hover { border-color: var(--accent); color: var(--accent); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hint { color: var(--muted); font-size: 12px; }
-.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.main { display: grid; gap: 16px; }
+/* the settings: one line of values, each opened in place (a box to type in and a slider in a popover under it) */
+.params { gap: 6px 4px; padding: 6px 8px; }
+.pc { position: relative; display: inline-flex; align-items: center; }
+.pv { display: inline-flex; align-items: baseline; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--ink); font: 500 14px var(--f-body); cursor: pointer; align-items: center; }
+.pv .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.pv .v { font: 600 14px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); border-bottom: 1px dashed var(--line-2); padding-bottom: 1px; }
+.pv:hover { border-color: var(--line-2); background: var(--raised); }
+.pv:hover .v { border-bottom-color: var(--accent); }
+.pv.reset { margin-left: auto; color: var(--muted); font-size: 13px; }
+.pv.reset:hover { color: var(--accent); }
+.pc.open .pv { border-color: var(--accent); background: var(--raised); }
+.pbox { width: 6ch; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--ink); font: 600 14px var(--f-code); text-align: right; }
+.pop { position: absolute; left: 0; top: calc(100% + 6px); z-index: 5; width: 280px; display: grid; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 12px 32px -12px rgb(26 23 20 / .55); }
+.pop small { color: var(--muted); font-size: 12px; line-height: 16px; }
+.pop .ends { display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--f-code); }
+.shapeicon { width: 34px; height: 34px; border-radius: var(--r); background: var(--plate); display: block; }
+.pv.shape { height: 42px; padding: 0 6px 0 10px; }
+.shapes { width: min(560px, calc(100vw - 48px)); grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+.shapes button { display: grid; justify-items: center; gap: 3px; padding: 5px 2px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--ink); font: 500 11px/13px var(--f-body); cursor: pointer; text-align: center; }
+.shapes button img, .shapes button .dice { width: 60px; height: 60px; border-radius: var(--r); background: var(--plate); }
+.shapes button:hover { border-color: var(--line-2); background: var(--raised); }
+.shapes button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.dice { display: grid; place-items: center; color: var(--plate-ink); }
 .stage { display: grid; gap: 10px; min-width: 0; }
 .viewer { position: relative; height: min(68vh, 620px); min-height: 320px; background: var(--plate); border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line); }
 .viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
@@ -87,9 +110,10 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .checks { display: grid; gap: 6px; }
 .checks label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
-.stats { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; font-size: 13px; }
+.stats div { display: flex; gap: 6px; align-items: baseline; }
 .stats dt { color: var(--muted); }
-.stats dd { margin: 0; text-align: right; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; }
+.stats dd { margin: 0; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; }
 .good { color: var(--ok); } .bad { color: var(--err); }
 hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 .how { display: grid; gap: 10px; max-width: 74ch; }
@@ -113,10 +137,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <p class="lede">The 2D page's rule in three dimensions. A shape is written as alternating convex hulls: a hull, minus hollows, plus bumps inside the hollows. Each rock hull gets Rock Planes; each hollow gets planes that bow into the rock; the rims where a hollow opens get their own chamfers.</p>
   </header>
 
-  <div class="bar">
-    <label class="lbl" for="shape">Shape</label>
-    <select class="sel" id="shape"></select>
-    <span class="hint">&#8592; &#8594; keys browse seeds; click the chosen seed's number to type one</span>
+  <div class="bar params" id="params" role="toolbar" aria-label="Settings">
+    <button class="pv reset" id="reset" title="Put every setting back">Reset</button>
   </div>
 
   <div class="main">
@@ -131,6 +153,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
           <div class="seg" id="view" role="group" aria-label="Projection">
             <button data-view="persp">Perspective</button><button data-view="ortho">Orthographic</button>
           </div>
+          <span class="lbl">Show</span>
+          <div class="checks">
+            <label><input type="checkbox" id="ghost" checked> The shape</label>
+            <label><input type="checkbox" id="lines" checked> Edges</label>
+          </div>
         </div>
       </div>
       <div class="carousel" role="group" aria-label="Seeds">
@@ -139,29 +166,9 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
         <button class="btn arrow" id="next" aria-label="Next seed">&#8594;</button>
       </div>
       <p class="err" id="err" hidden></p>
+      <dl class="stats" id="stats"></dl>
     </div>
 
-    <aside>
-      <h2>Planes</h2>
-      <div class="ctl"><div class="top"><label for="planes">Planes</label><output id="o-planes"></output></div>
-        <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many face planes go around the whole shape. It sets one spacing (from the shape's surface area) for a rock hull's planes and for how many planes bow each hollow face.</small></div>
-      <div class="ctl"><div class="top"><label for="edges">Chamfered</label><output id="o-edges"></output></div>
-        <input type="range" id="edges" min="0" max="100" step="1" value="100"><small>The share of edge length chamfered: each rock hull's own edges and corners, and the rims where a hollow opens.</small></div>
-      <div class="ctl"><div class="top"><label for="tilt">Tilt</label><output id="o-tilt"></output></div>
-        <input type="range" id="tilt" min="0" max="25" step="0.5" value="6"><small>How far planes turn at random, outside and inside alike; a hollow face's planes lean more with it.</small></div>
-      <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
-        <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep planes bite (of the shape's size): face planes up to this, hollow walls half to all of it more, chamfers half to all of it.</small></div>
-      <div class="ctl"><div class="top"><label for="weather">Weathering</label><output id="o-weather"></output></div>
-        <input type="range" id="weather" min="0" max="2" step="0.05" value="0"><small>Rounds every outward joint (faces, chamfers, the rims of hollows) to this radius; inward corners stay sharp. At 0 the rock is its planes exactly.</small></div>
-      <hr>
-      <div class="checks">
-        <label><input type="checkbox" id="ghost" checked> Show the shape</label>
-        <label><input type="checkbox" id="lines" checked> Show edges</label>
-      </div>
-      <button class="btn" id="reset">Reset settings</button>
-      <hr>
-      <dl class="stats" id="stats"></dl>
-    </aside>
   </div>
 
   <section class="how">
@@ -872,7 +879,14 @@ function showValue(out, input, unit) {
   const [ip, fp] = (+input.value).toFixed(places).replace(/\.?0+$/, m => places ? '' : m).split('.');
   out.innerHTML = `<span class="ip" style="min-width:${digits}ch">${ip}</span><span class="fp" style="width:${places ? places + 1 : 0}ch">${fp ? '.' + fp : ''}</span>${unit ? `<span class="un">${unit}</span>` : ''}`;
 }
-const SLIDERS = { planes: '', edges: '%', tilt: '°', sink: '%', weather: '&nbsp;mm' };
+// the settings, in the order they stand on the line: each a value, opened in place to type in, with its slider in a popover
+const PARAMS = [
+  { key: 'planes', label: 'Planes', min: 6, max: 150, step: 1, unit: '', help: "How many face planes go around the whole shape. It sets one spacing (from the shape's surface area) for a rock hull's planes and for how many planes bow each hollow face." },
+  { key: 'edges', label: 'Chamfered', min: 0, max: 100, step: 1, unit: '%', help: "The share of edge length chamfered: each rock hull's own edges and corners, and the rims where a hollow opens." },
+  { key: 'tilt', label: 'Tilt', min: 0, max: 25, step: 0.5, unit: '°', help: "How far planes turn at random, outside and inside alike; a hollow face's planes lean more with it." },
+  { key: 'sink', label: 'Sink', min: 0, max: 10, step: 0.25, unit: '%', help: "How deep planes bite (of the shape's size): face planes up to this, hollow walls half to all of it more, chamfers half to all of it." },
+  { key: 'weather', label: 'Weathering', min: 0, max: 2, step: 0.05, unit: '&nbsp;mm', help: "Rounds every outward joint (faces, chamfers, the rims of hollows) to this radius; inward corners stay sharp. At 0 the rock is its planes exactly." },
+];
 const CHECKS = ['ghost', 'lines'];
 const targetOf = k => TARGETS.find(t => t.key === k) || TARGETS[0];
 // Random: the seed's first draw (its own stream) picks the shape, as on Rock Planes
@@ -940,7 +954,7 @@ function showStats(T, r, surf) {
     ['Volume', (r.volume / 1000).toFixed(2) + ' cm³'],
     ['Built in', r.ms.toFixed(0) + ' ms'],
   ];
-  $('stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  $('stats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
 }
 
 // neighbouring seeds
@@ -993,9 +1007,73 @@ function rebuildThumbs() {
 }
 
 // controls
-const shapeEl = $('shape');
-for (const [key, label] of [['random', 'Random'], ...TARGETS.map(t => [t.key, t.label])]) { const o = document.createElement('option'); o.value = key; o.textContent = label; shapeEl.append(o); }
-shapeEl.addEventListener('change', () => { state.shape = shapeEl.value; update(); });
+// one popover open at a time; a click elsewhere or Escape closes it (Escape puts the value back)
+let openPop = null;
+function closePop(keep = true) { if (openPop) { const c = openPop; openPop = null; c(keep); } }
+document.addEventListener('pointerdown', e => { if (openPop && !e.target.closest('.pc.open')) closePop(true); });
+const bar = $('params'), resetBtn = $('reset');
+const fmt = (p, v) => { const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
+function paramChip(p) {
+  const pc = document.createElement('span'); pc.className = 'pc';
+  const btn = document.createElement('button'); btn.className = 'pv'; btn.setAttribute('aria-haspopup', 'dialog');
+  btn.innerHTML = `<span class="k">${p.label}</span><span class="v"></span>`;
+  pc.append(btn); bar.insertBefore(pc, resetBtn);
+  const show = () => { btn.querySelector('.v').innerHTML = fmt(p, state[p.key]); btn.setAttribute('aria-label', `${p.label} ${state[p.key]}, click to change`); };
+  btn.addEventListener('click', () => {
+    closePop(true);
+    const was = state[p.key], v = btn.querySelector('.v');
+    const box = document.createElement('input'); Object.assign(box, { type: 'text', inputMode: 'decimal', value: state[p.key], className: 'pbox' }); box.setAttribute('aria-label', p.label);
+    const pop = document.createElement('div'); pop.className = 'pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', p.label);
+    const range = document.createElement('input'); Object.assign(range, { type: 'range', min: p.min, max: p.max, step: p.step, value: state[p.key] }); range.setAttribute('aria-label', p.label);
+    pop.innerHTML = `<div class="ends"><span>${fmt(p, p.min)}</span><span>${fmt(p, p.max)}</span></div>`; pop.prepend(range);
+    pop.insertAdjacentHTML('beforeend', `<small>${p.help}</small>`);
+    v.replaceWith(box); pc.append(pop); pc.classList.add('open'); box.focus(); box.select();
+    const snap = x => Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min));
+    const set = x => { x = +snap(x).toFixed(4); if (x !== state[p.key]) { state[p.key] = x; update(); } };
+    box.addEventListener('input', () => { const x = parseFloat(box.value); if (Number.isFinite(x)) { set(x); range.value = state[p.key]; } });
+    range.addEventListener('input', () => { set(+range.value); box.value = state[p.key]; });
+    box.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') closePop(true); if (e.key === 'Escape') closePop(false); });
+    range.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') closePop(false); if (e.key === 'Enter') closePop(true); });
+    pc.addEventListener('focusout', e => { if (openPop && !pc.contains(e.relatedTarget)) closePop(true); });
+    openPop = keep => { if (!keep && state[p.key] !== was) { state[p.key] = was; update(); } pop.remove(); box.replaceWith(v); pc.classList.remove('open'); show(); };
+  });
+  return show;
+}
+// the shape: shown as a small picture of itself; a click opens a grid of every shape's picture to choose from
+const DICE = '<svg viewBox="0 0 24 24" width="60%" height="60%" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/><circle cx="16" cy="16" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="16" cy="8" r="1.6" fill="currentColor"/><circle cx="8" cy="16" r="1.6" fill="currentColor"/></svg>';
+function shapeIcon(T) {   // the shape itself, drawn once, as a small picture
+  if (T._icon) return T._icon;
+  prepare(T);
+  const c = new THREE.Vector3(0, 0, (T.hi[2] - T.lo[2]) / 2), reach = Math.max(T.hi[0] - T.lo[0], T.hi[1] - T.lo[1], T.hi[2] - T.lo[2]);
+  const cam = thumbPersp; cam.position.set(34, -50, 36).normalize().multiplyScalar(reach * 2.9).add(c); cam.lookAt(c);
+  const g = meshOf(T.surf, T.lo[2], { lines: !T.tree.curved });   // a curved shape's tangent planes are not edges
+  thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
+  return (T._icon = thumbR.domElement.toDataURL());
+}
+const iconHTML = key => key === 'random' ? `<span class="shapeicon dice">${DICE}</span>` : `<img class="shapeicon" alt="" src="${shapeIcon(targetOf(key))}">`;
+const nameOf = key => key === 'random' ? 'Random' : targetOf(key).label;
+function shapeChip() {
+  const pc = document.createElement('span'); pc.className = 'pc';
+  const btn = document.createElement('button'); btn.className = 'pv shape'; btn.setAttribute('aria-haspopup', 'dialog');
+  pc.append(btn); bar.insertBefore(pc, bar.firstChild);
+  const show = () => { btn.innerHTML = `<span class="k">Shape</span>${iconHTML(state.shape)}`; btn.title = nameOf(state.shape); btn.setAttribute('aria-label', 'Shape: ' + nameOf(state.shape) + ', click to choose'); };
+  btn.addEventListener('click', () => {
+    if (pc.classList.contains('open')) { closePop(true); return; }
+    closePop(true);
+    const pop = document.createElement('div'); pop.className = 'pop shapes'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Shapes');
+    for (const key of ['random', ...TARGETS.map(t => t.key)]) {
+      const b = document.createElement('button'); b.setAttribute('aria-pressed', key === state.shape ? 'true' : 'false');
+      b.innerHTML = (key === 'random' ? `<span class="dice">${DICE}</span>` : `<img alt="" src="${shapeIcon(targetOf(key))}">`) + nameOf(key);
+      b.addEventListener('click', () => { state.shape = key; closePop(true); update(); btn.focus(); });
+      pop.append(b);
+    }
+    pc.append(pop); pc.classList.add('open'); (pop.querySelector('[aria-pressed="true"]') || pop.firstChild).focus();
+    pop.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { closePop(false); btn.focus(); } });
+    openPop = () => { pop.remove(); pc.classList.remove('open'); };
+  });
+  return show;
+}
+const shows = [];
 for (const b of $('view').children) b.addEventListener('click', () => setView(b.dataset.view));
 // the view options: a button on the 3D view opens a small panel; a click elsewhere or Escape closes it
 const vopts = $('vopts'), vpanel = $('vpanel');
@@ -1004,7 +1082,6 @@ vopts.addEventListener('click', e => { e.stopPropagation(); showPanel(vpanel.hid
 vpanel.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', () => showPanel(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !vpanel.hidden) { showPanel(false); vopts.focus(); } });
-for (const k of Object.keys(SLIDERS)) $(k).addEventListener('input', e => { state[k] = +e.target.value; showValue($('o-' + k), $(k), SLIDERS[k]); update(); });
 for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.target.checked; update(); });
 $('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS); syncUI(); update(); });
 $('prev').addEventListener('click', () => setSeed(state.seed - 1));
@@ -1016,9 +1093,9 @@ document.addEventListener('keydown', e => {
 });
 function setSeed(s) { state.seed = Math.max(0, s | 0); syncUI(); update(); }
 function syncUI() {
-  shapeEl.value = state.shape;
+  if (!shows.length && thumbR) shows.push(shapeChip(), ...PARAMS.map(paramChip));   // the line is made once the pictures can be drawn
+  for (const show of shows) show();
   for (const b of $('view').children) b.setAttribute('aria-pressed', b.dataset.view === state.view ? 'true' : 'false');
-  for (const k of Object.keys(SLIDERS)) { $(k).value = state[k]; showValue($('o-' + k), $(k), SLIDERS[k]); }
   for (const k of CHECKS) $(k).checked = state[k];
 }
 let ownHash = '';
@@ -1038,7 +1115,7 @@ function readHash() {
 }
 window.addEventListener('hashchange', () => { if (location.hash !== ownHash) { readHash(); syncUI(); update(); } });
 
-readHash(); syncUI();
-try { initGL(); update(); }
+readHash();
+try { initGL(); syncUI(); update(); }
 catch (e) { $('err').hidden = false; $('err').textContent = 'The 3D view could not start: ' + e.message; }
 </script>
