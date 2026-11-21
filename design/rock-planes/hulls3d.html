@@ -138,6 +138,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
         <input type="range" id="tilt" min="0" max="25" step="0.5" value="6"><small>How far planes turn at random, outside and inside alike; a hollow face's planes lean more with it.</small></div>
       <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
         <input type="range" id="sink" min="0" max="10" step="0.25" value="3"><small>How deep planes bite (of the shape's size): face planes up to this, hollow walls half to all of it more, chamfers half to all of it.</small></div>
+      <div class="ctl"><div class="top"><label for="weather">Weathering</label><output id="o-weather"></output></div>
+        <input type="range" id="weather" min="0" max="2" step="0.05" value="0"><small>Rounds every outward joint (faces, chamfers, the rims of hollows) to this radius; inward corners stay sharp. At 0 the rock is its planes exactly.</small></div>
       <hr>
       <div class="checks">
         <label><input type="checkbox" id="ghost" checked> Show the shape</label>
@@ -156,6 +158,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Rock hulls</b> are built by Rock Planes as they are, bounded by the hull's own faces: touch points, crowns, face planes, edge and corner chamfers. Only where the hull's face is real surface does it get a touch point, a spot or a chamfer, so nothing is put across a hollow's mouth. Each hull takes its share of Planes by its real surface area, at the whole rock's spacing, and its own seed keyed to its place in the tree.</li>
       <li><b>Hollows</b> are cut with a pocket. Each real face of the hollow gets about one plane for each plane spacing squared of its area (one to six), each leaning into the rock a different way by half to all of <b>Sink</b> plus <b>Tilt</b> across the face, then pushed out until it holds the whole hollow. So the pocket always holds the hollow and touches it at an edge or a corner, and its walls bow into the rock as facets. A mouth lets the pocket out a little past it; a real face no further than its planes reach.</li>
       <li><b>Rims.</b> Where a hollow's wall meets a rock face at an outward edge (the L's two tips, the top of the ring's hole, the arch's edges), neither hull owns the edge. <b>Chamfered</b> of their length, drawn, are chamfered, each by the one chamfer rule (a turn of up to half of Tilt, capped by the angle between the faces), cutting half to all of Sink below where the rock's rim stands lowest. The chamfers at one mouth make one cut: the hollow with those walls leaned outward into their chamfer planes. So where two chamfers meet, the crease is simply where their planes cross.</li>
+      <li><b>Weathering</b> rounds the rock as if every ball of its radius that fits inside were kept and the rest worn away: each outward joint becomes an arc of that radius, and inward corners stay sharp. The rock is read as a distance field: every plane that bounds it set in by the radius, the distance to what is left, less the radius (a hollow bounds it by its nearest wall only, so its corners stay sharp); it is meshed on a grid of two thirds the radius (0.4 to 0.6 mm), shaded by the surface's own normals (a facet's plane, or away from a joint's line). At 0 nothing is blended and the rock is drawn from its planes exactly.</li>
       <li><b>The rock</b> is each rock hull's solid less its hollows' cuts (the pockets and the mouths' chamfer cuts), every one a convex region. Nothing is split into pieces: a rock face shows where it is outside every cut, a cut's face where it is inside the rock and outside the other cuts. Each rock is built once for its shape, seed and settings and kept, and the neighbouring seeds are drawn one per frame after the main view.</li>
     </ol>
     <p class="hint">Every job draws from its own seeded stream keyed by the hull's place in the tree, the face or the rim, so one control never reshuffles another. Overhang paints orange past 55° and red past 65°; with no ground case the underside, and the arch's roof, are overhang for now.</p>
@@ -571,7 +574,8 @@ function buildRock(T, seed, P0) {
     });
     cuts.get(nd).push({ planes, faces: solidOf(planes) });
   });
-  const surf = surfaceOf(T.all.filter(nd => nd.sign > 0).map(nd => ({ solid: rock.get(nd), cuts: nd.kids.flatMap(k => cuts.get(k)) })));
+  const rocks = T.all.filter(nd => nd.sign > 0).map(nd => ({ solid: rock.get(nd), cuts: nd.kids.flatMap(k => cuts.get(k)) }));
+  const surf = P.weather > 0 ? weathered(rocks, T, P.weather, P.coarse) : surfaceOf(rocks);
   const res = { surf, rim: { rimLen: T.rims.reduce((t, m) => t + m.len, 0), cutLen: got }, ms: performance.now() - t0 };
   res.volume = volumeOf(surf.faces); res.fill = res.volume / T.volume;
   return res;
@@ -645,6 +649,112 @@ function surfaceOf(rocks) {
   }
   return { faces: out, lines };
 }
+// ---------- weathering: every outward joint rounded to a radius, every inward one left sharp ----------
+// An opening: keep every ball of radius r that fits inside the rock. As a distance field: set every plane that bounds the rock in by
+// r, take the distance to what is left, and subtract r. A rock hull's planes bound it; a hollow's cut bounds it by its nearest wall
+// alone (the wall the point is outside of least), so the cut's own corners, which are inward, stay sharp. Where two bounding planes
+// are both passed, the distance is to the line where they meet (through the angle between them), so a square joint becomes a
+// quarter circle and a shallow crease barely changes. Rocks join with a plain min. The surface is meshed from the field
+// (surface nets) on a grid two thirds the radius across (0.4 to 0.6 mm; a thumbnail's coarser), shaded by the field's own normals
+function weathered(rocks, T, r, coarse) {
+  const fields = rocks.map(({ solid, cuts }) => ({ R: solid.planes, C: cuts.map(c => c.planes) }));
+  const h = Math.min(0.6, Math.max(0.4, r / 1.5)) * (coarse ? 1.6 : 1), far = r + 2 * h;
+  const vals = [], nrm = [];
+  let wantN = false, bestN = null;   // when asked, the surface's normal at the point: a facet's own plane, or away from a joint's line
+  const sdf = (fs, x, y, z) => {
+    let best = Infinity;
+    for (const { R, C } of fs) {
+      let sharp = -Infinity, m = 0;
+      for (const pl of R) { const d = pl.n[0] * x + pl.n[1] * y + pl.n[2] * z - pl.b; if (d > sharp) sharp = d; if (d + r > 0) { vals[m] = d + r; nrm[m++] = pl.n; } }
+      if (sharp > far && !wantN) { if (sharp < best) best = sharp; continue; }   // well outside this rock
+      let plain = sharp;
+      for (const planes of C) {
+        let w = Infinity, wn = null;   // the wall this point is outside of least: b - n·x, smallest
+        for (const pl of planes) { const d = pl.b - (pl.n[0] * x + pl.n[1] * y + pl.n[2] * z); if (d < w) { w = d; wn = pl.wn; } }
+        if (w > plain) plain = w;
+        if (w + r > 0) { vals[m] = w + r; nrm[m++] = wn; }
+      }
+      let v = plain, vn = null;
+      if (m && (Math.abs(plain) <= far || wantN)) {
+        let d = 0;
+        for (let i = 0; i < m; i++) {
+          if (vals[i] > d) { d = vals[i]; vn = nrm[i]; }
+          for (let j = i + 1; j < m; j++) {
+            const a = vals[i], b = vals[j], c = dot(nrm[i], nrm[j]);
+            if (c < 0.9999 && a > b * c && b > a * c) {
+              const e = Math.sqrt((a * a + b * b - 2 * a * b * c) / (1 - c * c));
+              if (e > d) { d = e; if (wantN) { const q = 1 - c * c; vn = unit(add(mul(nrm[i], (a - b * c) / q), mul(nrm[j], (b - a * c) / q))); } }
+            }
+          }
+        }
+        v = d - r;
+      }
+      if (v < best) { best = v; bestN = vn; }
+    }
+    return best;
+  };
+  for (const fl of fields) for (const planes of fl.C) for (const pl of planes) pl.wn = pl.wn || mul(pl.n, -1);
+  const lo = sub(T.lo, [1, 1, 1]), nx = Math.ceil((T.hi[0] - T.lo[0] + 2) / h) + 1, ny = Math.ceil((T.hi[1] - T.lo[1] + 2) / h) + 1, nz = Math.ceil((T.hi[2] - T.lo[2] + 2) / h) + 1;
+  const f = new Float32Array(nx * ny * nz), at = (i, j, k) => i + nx * (j + ny * k);
+  // in blocks of B points a side: each block keeps only the planes that can matter in it, and a block wholly far from the surface
+  // is filled with its sign (the field changes by at most the distance moved)
+  const B = 4, rho = (B + 1) * h * Math.sqrt(3) / 2, blocks = new Map(), val = (pl, c) => pl.n[0] * c[0] + pl.n[1] * c[1] + pl.n[2] * c[2] - pl.b;
+  for (let bk = 0; bk < nz; bk += B) for (let bj = 0; bj < ny; bj += B) for (let bi = 0; bi < nx; bi += B) {
+    const ek = Math.min(bk + B, nz), ej = Math.min(bj + B, ny), ei = Math.min(bi + B, nx);
+    const c = [lo[0] + (bi + ei - 1) / 2 * h, lo[1] + (bj + ej - 1) / 2 * h, lo[2] + (bk + ek - 1) / 2 * h];
+    const near = []; let fill = far + rho;
+    for (const { R, C } of fields) {
+      const dR = R.map(pl => val(pl, c)), sharp = Math.max(...dR);
+      if (sharp - rho > far) continue;   // this rock is far outside the whole block
+      let plain = sharp;
+      const Cr = [];
+      for (const planes of C) {
+        const w = planes.map(pl => -val(pl, c)), wmin = Math.min(...w);
+        plain = Math.max(plain, wmin);
+        if (wmin + rho < -r && wmin + rho < sharp - rho) continue;   // this cut is too far off to touch the block
+        Cr.push(planes.filter((pl, k) => w[k] - rho <= wmin + rho));
+      }
+      if (plain + rho < -far) { fill = -far - rho; near.length = 0; break; }   // deep inside this rock: the block is inside
+      near.push({ R: R.filter((pl, k) => dR[k] >= sharp - 2 * rho || dR[k] > -r - rho), C: Cr });
+    }
+    blocks.set(bi / B + 1000 * (bj / B) + 1e6 * (bk / B), near);
+    for (let k = bk; k < ek; k++) for (let j = bj; j < ej; j++) for (let i = bi; i < ei; i++)
+      f[at(i, j, k)] = near.length ? sdf(near, lo[0] + i * h, lo[1] + j * h, lo[2] + k * h) : fill;
+  }
+  // surface nets: a vertex in each cell the surface crosses (the mean of its edges' crossings), a quad across each crossed grid edge
+  const vid = new Int32Array(nx * ny * nz).fill(-1), V = [], VN = [], VB = [];
+  const E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const cv = new Float64Array(8);
+  for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    let neg = 0; for (let c = 0; c < 8; c++) { cv[c] = f[at(i + (c & 1), j + (c >> 1 & 1), k + (c >> 2))]; if (cv[c] < 0) neg++; }
+    if (neg === 0 || neg === 8) continue;
+    let sx = 0, sy = 0, sz = 0, m = 0;
+    for (const [a, b] of E) {
+      if ((cv[a] < 0) === (cv[b] < 0)) continue;
+      const t = cv[a] / (cv[a] - cv[b]);
+      sx += (a & 1) + ((b & 1) - (a & 1)) * t; sy += (a >> 1 & 1) + ((b >> 1 & 1) - (a >> 1 & 1)) * t; sz += (a >> 2) + ((b >> 2) - (a >> 2)) * t; m++;
+    }
+    const u = sx / m, v = sy / m, w = sz / m;   // the field's slope here, from the cell's corners: the shading normal
+    const gx = (1 - v) * (1 - w) * (cv[1] - cv[0]) + v * (1 - w) * (cv[3] - cv[2]) + (1 - v) * w * (cv[5] - cv[4]) + v * w * (cv[7] - cv[6]);
+    const gy = (1 - u) * (1 - w) * (cv[2] - cv[0]) + u * (1 - w) * (cv[3] - cv[1]) + (1 - u) * w * (cv[6] - cv[4]) + u * w * (cv[7] - cv[5]);
+    const gz = (1 - u) * (1 - v) * (cv[4] - cv[0]) + u * (1 - v) * (cv[5] - cv[1]) + (1 - u) * v * (cv[6] - cv[2]) + u * v * (cv[7] - cv[3]);
+    VB.push(blocks.get(Math.floor(i / B) + 1000 * Math.floor(j / B) + 1e6 * Math.floor(k / B)));
+    vid[at(i, j, k)] = V.length; V.push([lo[0] + (i + u) * h, lo[1] + (j + v) * h, lo[2] + (k + w) * h]); VN.push(unit([gx, gy, gz]));   // the grid's, if the field gives none
+  }
+  const faces = [], tri = (a, b, c) => { const n = unit(cross(sub(V[b], V[a]), sub(V[c], V[a]))); faces.push({ n, verts: [V[a], V[b], V[c]], vi: [a, b, c] }); };
+  const quad = (inside, a, b, c, d) => { if ([a, b, c, d].some(q => q < 0)) return; if (inside) { tri(a, b, c); tri(a, c, d); } else { tri(a, c, b); tri(a, d, c); } };
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const v0 = f[at(i, j, k)] < 0;
+    if (i < nx - 1 && j > 0 && k > 0 && v0 !== (f[at(i + 1, j, k)] < 0)) quad(v0, vid[at(i, j - 1, k - 1)], vid[at(i, j, k - 1)], vid[at(i, j, k)], vid[at(i, j - 1, k)]);
+    if (j < ny - 1 && i > 0 && k > 0 && v0 !== (f[at(i, j + 1, k)] < 0)) quad(v0, vid[at(i - 1, j, k - 1)], vid[at(i - 1, j, k)], vid[at(i, j, k)], vid[at(i, j, k - 1)]);
+    if (k < nz - 1 && i > 0 && j > 0 && v0 !== (f[at(i, j, k + 1)] < 0)) quad(v0, vid[at(i - 1, j - 1, k)], vid[at(i, j - 1, k)], vid[at(i, j, k)], vid[at(i - 1, j, k)]);
+  }
+  wantN = true;
+  for (let q = 0; q < V.length; q++) { bestN = null; if (VB[q] && VB[q].length) sdf(VB[q], V[q][0], V[q][1], V[q][2]); if (bestN) VN[q] = bestN; }
+  wantN = false;
+  for (const t of faces) { t.vn = t.vi.map(q => VN[q]); t.n = unit(t.vn.reduce(add, [0, 0, 0])); }   // shading and overhang paint by the surface's own normals
+  return { faces, lines: [] };
+}
 const volumeOf = faces => { let v = 0; for (const f of faces) { const p = f.verts; for (let i = 1; i + 1 < p.length; i++) v += dot(p[0], cross(p[i], p[i + 1])); } return v / 6; };
 
 // ---------- drawing ----------
@@ -656,7 +766,8 @@ function meshOf(surf, foot, opt) {
   const pos = [], nor = [], col = [], c = new THREE.Color(), dz = v => [v[0], v[1], v[2] - foot];
   for (const f of surf.faces) {
     c.set(opt.ghost ? '#287B62' : faceColor(f.n)); const v = f.verts.map(dz);
-    for (let i = 1; i + 1 < v.length; i++) for (const p of [v[0], v[i], v[i + 1]]) { pos.push(...p); nor.push(...f.n); col.push(c.r, c.g, c.b); }
+    if (f.vn) for (let i = 0; i < 3; i++) { pos.push(...v[i]); nor.push(...f.vn[i]); col.push(c.r, c.g, c.b); }
+    else for (let i = 1; i + 1 < v.length; i++) for (const p of [v[0], v[i], v[i + 1]]) { pos.push(...p); nor.push(...f.n); col.push(c.r, c.g, c.b); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -685,11 +796,11 @@ function makeScene() {
 }
 // a rock is built once for its shape, seed and settings, and kept (the last 200)
 const kept = new Map();
-function rockSurface(T, seed) {
-  const key = [T.key, seed, state.planes, state.edges, state.tilt, state.sink].join('/');
+function rockSurface(T, seed, coarse) {   // coarse: a thumbnail's (weathering meshed on a coarser grid)
+  const key = [T.key, seed, state.planes, state.edges, state.tilt, state.sink, state.weather, coarse && state.weather > 0 ? 'c' : ''].join('/');
   let r = kept.get(key);
   if (!r) {
-    const res = buildRock(T, seed, params()), surf = res.surf;
+    const res = buildRock(T, seed, { ...params(), coarse }), surf = res.surf;
     let foot = Infinity; for (const f of surf.faces) for (const v of f.verts) foot = Math.min(foot, v[2]);
     r = { res, surf, foot }; kept.set(key, r); if (kept.size > 200) kept.delete(kept.keys().next().value);
   }
@@ -697,7 +808,7 @@ function rockSurface(T, seed) {
 }
 
 // ---------- page state ----------
-const DEFAULTS = { planes: 60, edges: 100, tilt: 6, sink: 3, ghost: true, lines: true };
+const DEFAULTS = { planes: 60, edges: 100, tilt: 6, sink: 3, weather: 0, ghost: true, lines: true };
 const state = { shape: 'l', view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -706,10 +817,10 @@ function showValue(out, input, unit) {
   const [ip, fp] = (+input.value).toFixed(places).replace(/\.?0+$/, m => places ? '' : m).split('.');
   out.innerHTML = `<span class="ip" style="min-width:${digits}ch">${ip}</span><span class="fp" style="width:${places ? places + 1 : 0}ch">${fp ? '.' + fp : ''}</span>${unit ? `<span class="un">${unit}</span>` : ''}`;
 }
-const SLIDERS = { planes: '', edges: '%', tilt: '°', sink: '%' };
+const SLIDERS = { planes: '', edges: '%', tilt: '°', sink: '%', weather: '&nbsp;mm' };
 const CHECKS = ['ghost', 'lines'];
 const targetOf = k => TARGETS.find(t => t.key === k) || TARGETS[0];
-function params() { return { planes: state.planes, edges: state.edges, tilt: state.tilt, sink: state.sink }; }
+function params() { return { planes: state.planes, edges: state.edges, tilt: state.tilt, sink: state.sink, weather: state.weather }; }
 
 const viewerEl = $('viewer');
 let renderer, scene, camera, persp, ortho, controls, rockObj = null, ghostObj = null, thumbR, thumbScene, thumbPersp, thumbOrtho;
@@ -796,7 +907,7 @@ function rebuildThumbs() {
     if (job !== thumbJob || !order.length) return;
     const i = order.shift(), t = thumbs[i];
     try {
-      const { surf, foot } = rockSurface(T, start + i), g = meshOf(surf, foot, { lines: state.lines });
+      const { surf, foot } = rockSurface(T, start + i, true), g = meshOf(surf, foot, { lines: state.lines });
       thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
       t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
     } catch (e) { console.error(e); }
