@@ -132,7 +132,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <div class="ctl"><div class="top"><label for="planes">Planes</label><output id="o-planes"></output></div>
         <input type="range" id="planes" min="6" max="150" step="1" value="60"><small>How many planes are put around the shape.</small></div>
       <div class="ctl"><div class="top"><label for="edges">Chamfered</label><output id="o-edges"></output></div>
-        <input type="range" id="edges" min="0" max="100" step="5" value="50"><small>The share of the shape's edges and corners that are chamfered, drawn; the rest stay sharp.</small></div>
+        <input type="range" id="edges" min="0" max="100" step="5" value="100"><small>The share of the shape's edges and corners that are chamfered, drawn; the rest stay sharp.</small></div>
       <div class="ctl"><div class="top"><label for="tilt">Tilt</label><output id="o-tilt"></output></div>
         <input type="range" id="tilt" min="0" max="25" step="0.5" value="6"><small>How far each plane is turned at random from the shape's own direction there, and how far a flat face's planes lean away from its touch point at the rim. At 0 flat faces stay flat.</small></div>
       <div class="ctl"><div class="top"><label for="sink">Sink</label><output id="o-sink"></output></div>
@@ -541,7 +541,7 @@ function makeScene() {
 }
 
 // ---------- page state ----------
-const DEFAULTS = { planes: 60, edges: 50, tilt: 6, sink: 3, ghost: true, lines: true, roles: false, anchors: false };
+const DEFAULTS = { planes: 60, edges: 100, tilt: 6, sink: 3, ghost: true, lines: true, roles: false, anchors: false };
 const state = { shape: 'random', view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 const SLIDERS = { planes: v => v, edges: v => v + '%', tilt: v => v + '°', sink: v => v + '%' };

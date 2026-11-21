@@ -79,7 +79,7 @@ figcaption p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-heigh
       <button class="sbtn" id="next" aria-label="Next seed">&#8594;</button></div>
     <div class="sld"><label class="lbl" for="tilt">Tilt</label><input type="range" id="tilt" min="0" max="20" step="1" value="8"><output id="o-tilt"></output></div>
     <div class="sld"><label class="lbl" for="sink">Sink</label><input type="range" id="sink" min="0" max="2" step="0.1" value="0.7"><output id="o-sink"></output></div>
-    <div class="sld"><label class="lbl" for="bev">Chamfered</label><input type="range" id="bev" min="0" max="100" step="10" value="50"><output id="o-bev"></output></div>
+    <div class="sld"><label class="lbl" for="bev">Chamfered</label><input type="range" id="bev" min="0" max="100" step="10" value="100"><output id="o-bev"></output></div>
   </div>
 
   <div class="grid">
@@ -390,7 +390,7 @@ function drawRock(cv, R, built, opts = {}) {
 }
 
 let target = 'L', seed = 7;
-const state = { tilt: 8, sink: 0.7, bev: 50 };
+const state = { tilt: 8, sink: 0.7, bev: 100 };
 const $ = id => document.getElementById(id);
 function render() {
   const R = TARGETS[target], built = build(R, seed, state);
