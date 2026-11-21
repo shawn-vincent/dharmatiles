@@ -179,7 +179,7 @@ function check(m) {
   /* overhang: the steepest angle from vertical of a downward face that is not the flat bottom */
   let worst = 0, flat = 0;
   for (let t = 0; t < m.T.length; t += 3) {
-    const a = m.V[m.T[t]], b = m.V[m.T[t + 1]], c = m.V[m.T[t + 2]], cr = cross(sub(b, a), sub(c, a)); if (len(cr) < 1.2e-4) continue; const n = norm(cr);   /* a sliver has no real direction */
+    const a = m.V[m.T[t]], b = m.V[m.T[t + 1]], c = m.V[m.T[t + 2]], cr = cross(sub(b, a), sub(c, a)); if (len(cr) < 3e-4) continue; const n = norm(cr);   /* a sliver has no real direction */
     if (n[2] < -.995 && a[2] < 1e-3 && b[2] < 1e-3 && c[2] < 1e-3) { flat++; continue; }
     if (-n[2] > worst) worst = -n[2];
   }
@@ -299,7 +299,7 @@ function simpleRock(rc, seed, stage, N, bottomBevel) {
   const N1 = N + 1;
   /* every face is a very slight dome or saddle, one arc each way, from a little concave to a little convex, never on the bottom */
   const fld = F.map((f, fi) => { const n = f.n, r = mulberry(hash(seed + ':f' + fi)), up = Math.abs(n[2]) > .9 ? [1, 0, 0] : [0, 0, 1], u = norm(cross(n, up)), v = cross(n, u), ext = [Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), u)))) || 1, Math.max(...loops[fi].map((i) => Math.abs(dot(sub(corners[i], faceC[fi]), v)))) || 1];
-    const A = f.n[2] < -.95 ? 0 : U(r, .0002, .0008) * Math.min(ext[0], ext[1]) * 2; return { n, u, v, ext, c: faceC[fi], A, dome: U(r, -1, 1), sad: U(r, -.5, .5), tl: U(r, -.03, .03), tl2: U(r, -.03, .03) }; });
+    const A = f.n[2] < -.95 ? 0 : U(r, .0001, .0004) * Math.min(ext[0], ext[1]) * 2; return { n, u, v, ext, c: faceC[fi], A, dome: U(r, -1, 1), sad: U(r, -.5, .5), tl: U(r, -.03, .03), tl2: U(r, -.03, .03) }; });
   const bulge = (fi, p) => { const q = fld[fi]; if (!q.A) return p; const x = dot(sub(p, q.c), q.u) / q.ext[0], y = dot(sub(p, q.c), q.v) / q.ext[1], h = q.A * (q.dome * (1 - (x * x + y * y) / 2) + q.sad * (x * x - y * y) + q.tl * x + q.tl2 * y); return add(p, mul(q.n, h)); };
   /* pass 0: each edge's kind, size and angle */
   const info = new Map(); let ej = 0;
@@ -312,7 +312,7 @@ function simpleRock(rc, seed, stage, N, bottomBevel) {
     const ext = (fi, d) => Math.max(...loops[fi].map((i) => dot(sub(corners[i], mid), d)));
     const e1 = ext(f1, d1), e2 = ext(f2, d2);
     let w0, th0, tw;
-    if (kind === 'top') { w0 = Math.max(.06, U(rw, .13, .24) * m); th0 = U(rw, 8, 27); tw = 4; } else if (kind === 'bottom') { w0 = Math.max(.06, U(rw, .14, .22) * m); th0 = U(rw, 37, 41); tw = 1.5;   /* an undercut: 35-40 degrees above horizontal, 50-55 from vertical */ } else { w0 = Math.max(.06, U(rw, .12, .22) * m); th0 = U(rw, 32, 58); tw = 8; }
+    if (kind === 'top') { w0 = U(rw, .065, .12) * m; th0 = U(rw, 8, 27); tw = 4; } else if (kind === 'bottom') { w0 = U(rw, .07, .11) * m; th0 = U(rw, 40, 43); tw = 1;   /* an undercut: 35-40 degrees above horizontal, 50-55 from vertical */ } else { w0 = U(rw, .06, .11) * m; th0 = U(rw, 32, 58); tw = 8; }
     if (kind === 'bottom' && !bottomBevel) w0 = 1e-4;
     info.set(e, { kind, f1, f2, d1, d2, e1, e2, w0, th0, tw, A, B, t, mid, n1, n2 });
   }
@@ -320,7 +320,7 @@ function simpleRock(rc, seed, stage, N, bottomBevel) {
   const capLeg = (e1_) => Math.min(.16 * e1_, .24 * thin);   /* chamfers on a thin face stay small, so a slab does not pinch */
   let ei = 0;
   for (const e of edges.values()) {
-    const r = mulberry(hash(seed + ':e' + (ei++))), q = info.get(e), aw = U(r, -.15, .15), at = U(r, -1, 1), bow = U(r, -.08, .08), ob = norm(add(q.n1, q.n2));
+    const r = mulberry(hash(seed + ':e' + (ei++))), q = info.get(e), aw = U(r, -.1, .1), at = U(r, -1, 1), bow = U(r, -.08, .08), ob = norm(add(q.n1, q.n2));
     q.legs = (tt) => { const sb = 1, w = (1 + aw * Math.sin(Math.PI * tt)) * q.w0 * sb;   /* an upright chamfer narrows toward the foot, so the bottom corner is small */
       const th = (q.th0 + q.tw * at * (2 * tt - 1)) * Math.PI / 180; let a = Math.min(w, capLeg(q.e1)), b = Math.min(w * Math.tan(th), capLeg(q.e2)); if (q.kind !== 'vert' && b < w * Math.tan(th) - 1e-9) a = Math.min(a, b / Math.tan(th)); return [a, b]; };
     q.bowAt = (tt) => mul(q.kind === 'bottom' ? [ob[0], ob[1], 0] : ob, bow * Math.sin(Math.PI * tt) * q.w0);
