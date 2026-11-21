@@ -155,8 +155,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>The shape</b> is written as a tree of convex hulls: the first is rock, its children are hollows cut from it, their children are bumps of rock inside a hollow, and so on. The L is its hull less a wedge; the ring an octagon less a heptagon; the notch with a peak a block less a notch plus a peak standing in it. A face that lies on its parent's face is a <b>mouth</b> (a hollow's opening, or where a bump stands on a wall): it is not the shape's surface and gets no planes.</li>
       <li><b>Rock hulls</b> are built by Rock Planes as they are, bounded by the hull's own faces: touch points, crowns, face planes, edge and corner chamfers. Only where the hull's face is real surface does it get a touch point, a spot or a chamfer, so nothing is put across a hollow's mouth. Each hull takes its share of Planes by its real surface area, at the whole rock's spacing, and its own seed keyed to its place in the tree.</li>
       <li><b>Hollows</b> are cut with a pocket. Each real face of the hollow gets about one plane for each plane spacing squared of its area (one to six), each leaning into the rock a different way by half to all of <b>Sink</b> plus <b>Tilt</b> across the face, then pushed out until it holds the whole hollow. So the pocket always holds the hollow and touches it at an edge or a corner, and its walls bow into the rock as facets. A mouth lets the pocket out a little past it; a real face no further than its planes reach.</li>
-      <li><b>Rims.</b> Where a hollow's wall meets a rock face at an outward edge (the L's two tips, the top of the ring's hole, the arch's edges), neither hull owns the edge. Each such edge is chamfered by <b>Chamfered</b> of their length, drawn: the one chamfer rule (a turn of up to half of Tilt, capped by the angle between the faces), cutting half to all of Sink into what is there, measured where the rock stands lowest along the rim so the whole rim is cut. A rim's cut takes only the rock behind its own wall. Where two chamfered rims meet, the cuts join along the line their planes cross: at an inside corner (a corner of the ring's hole) what is beyond both planes is cut, at an outside corner what is beyond either, so the chamfers meet in one crease.</li>
-      <li><b>The rock</b> is the first hull's rock, less each hollow's pocket, plus each bump's rock, in order, kept as convex pieces; the rims are cut from the pieces last. What shows is each piece's faces less where another piece covers them.</li>
+      <li><b>Rims.</b> Where a hollow's wall meets a rock face at an outward edge (the L's two tips, the top of the ring's hole, the arch's edges), neither hull owns the edge. <b>Chamfered</b> of their length, drawn, are chamfered, each by the one chamfer rule (a turn of up to half of Tilt, capped by the angle between the faces), cutting half to all of Sink below where the rock's rim stands lowest. The chamfers at one mouth make one cut: the hollow with those walls leaned outward into their chamfer planes. So where two chamfers meet, the crease is simply where their planes cross.</li>
+      <li><b>The rock</b> is each rock hull's solid less its hollows' cuts (the pockets and the mouths' chamfer cuts), every one a convex region. Nothing is split into pieces: a rock face shows where it is outside every cut, a cut's face where it is inside the rock and outside the other cuts. Each rock is built once for its shape, seed and settings and kept, and the neighbouring seeds are drawn one per frame after the main view.</li>
     </ol>
     <p class="hint">Every job draws from its own seeded stream keyed by the hull's place in the tree, the face or the rim, so one control never reshuffles another. Overhang paints orange past 55° and red past 65°; with no ground case the underside, and the arch's roof, are overhang for now.</p>
   </section>
@@ -172,24 +172,20 @@ const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const len = a => Math.hypot(a[0], a[1], a[2]);
+const len = a => Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
 const unit = a => { const l = len(a); return l > 1e-12 ? mul(a, 1 / l) : [0, 0, 1]; };
 const perp = n => unit(Math.abs(n[2]) < 0.9 ? cross(n, [0, 0, 1]) : cross(n, [1, 0, 0]));
 
 // ---------- seeded streams ----------
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function stream(seed, k) { let h = Math.imul(seed | 0, 0x9E3779B1) ^ Math.imul(k + 1, 0x85EBCA77); h ^= h >>> 16; h = Math.imul(h, 0x7FEB352D); h ^= h >>> 15; h = Math.imul(h, 0x846CA68B); h ^= h >>> 16; return mulberry32(h >>> 0); }
-// M directions tilt evenly over the sphere, turned as a whole at random
-function fib(M) { const out = []; for (let i = 0; i < M; i++) { const z = 1 - 2 * (i + 0.5) / M, ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z); out.push([h * Math.cos(ph), h * Math.sin(ph), z]); } return out; }
-function evenDirs(M, r) { const u = sphereDir(r), v = perp(u), w = cross(u, v); return fib(M).map(d => add(mul(u, d[0]), add(mul(v, d[1]), mul(w, d[2])))); }
-function sphereDir(r) { const z = 2 * r() - 1, ph = 2 * Math.PI * r(), h = Math.sqrt(1 - z * z); return [h * Math.cos(ph), h * Math.sin(ph), z]; }
 function orderAround(pts, n) {
   const c = mul(pts.reduce((s, p) => add(s, p), [0, 0, 0]), 1 / pts.length);
   const u = perp(n), v = cross(n, u);
   return pts.map(p => { const d = sub(p, c); return [Math.atan2(dot(d, v), dot(d, u)), p]; }).sort((a, b) => a[0] - b[0]).map(x => x[1]);
 }
 // ---------- convex solid as faces, cut by planes ----------
-function dedupe(pts, eps) { const out = []; for (const p of pts) if (!out.some(q => len(sub(p, q)) < eps)) out.push(p); return out; }
+function dedupe(pts, eps) { const e2 = eps * eps, out = []; for (const p of pts) if (!out.some(q => { const x = p[0] - q[0], y = p[1] - q[1], z = p[2] - q[2]; return x * x + y * y + z * z < e2; })) out.push(p); return out; }
 function boxPoly(lo, hi) {
   const faces = [];
   for (let i = 0; i < 3; i++) for (const s of [-1, 1]) {
@@ -244,12 +240,11 @@ function chamferTurns(n, faces, tiltDeg, r) {
   return [unit(add(mul(n, Math.cos(th)), mul(w, Math.sin(th)))), unit(add(mul(n, Math.cos(th)), mul(w, -Math.sin(th)))), n, ...away];
 }
 const LEAN = 1.5;  // a turned face plane may dip no deeper into the shape than at its own point plus this (% of size)
-// the shape's own bounding planes: a polytope's faces, a curved shape's tangent planes
-function boundsOf(S) { return S._bounds || (S._bounds = S.ownFaces || [...fib(200), [0, 0, 1], [0, 0, -1]].map(n => ({ n, b: S.support(n) }))); }
+// the shape's own bounding planes: a hull's faces
+function boundsOf(S) { return S.ownFaces; }
 const reach = (poly, n) => { let m = -Infinity; for (const f of poly) for (const v of f.verts) m = Math.max(m, dot(n, v)); return m; };
 
-function build(shape, seed, P, withStats) {
-  const t0 = performance.now();
+function build(shape, seed, P) {
   const S = shape, size = S.size, sink = P.sink / 100 * size, cham = sink / 2, lean = LEAN / 100 * size;
   const contacts = S.contacts(stream(seed, 8));
   const cands = S.candidates(stream(seed, 1));
@@ -271,7 +266,7 @@ function build(shape, seed, P, withStats) {
   // Chamfered never moves a face plane and Planes never moves a chamfer
   const N = P.faceN, gap0 = P.gap0;   // the hull's share of Planes, at the whole rock's spacing
   const faceA = [], edgeA = [];
-  const farFrom = (list, c, g) => list.every(t => len(sub(t.p, c.p)) >= g);
+  const farFrom = (list, c, g) => { const g2 = g * g, p = c.p; return list.every(t => { const x = t.p[0] - p[0], y = t.p[1] - p[1], z = t.p[2] - p[2]; return x * x + y * y + z * z >= g2; }); };
   let gap = gap0;
   for (let pass = 0; pass < 6 && faceA.length < N; pass++, gap *= 0.85)
     for (const c of faceC) { if (faceA.length >= N) break; if (!c.used && farFrom(faceA, c, gap)) { c.used = true; faceA.push(c); } }
@@ -322,16 +317,13 @@ function build(shape, seed, P, withStats) {
     const rr = keyed(seed, 'face', a.id), depth = sink * (0.5 + 0.5 * rr()), n = turnedFace(n0, p0, allow, rr);
     planes.push({ n, b: through(n, dot(n, p0) - depth), role: 'face' });
   }
-  // a plane meeting others outside the shape is sunk until they meet inside it (as far as the touch points let it)
-  const centre = mul(add(S.lo, S.hi), 0.5);
-  const poke = v => { if (S.inside(v)) return 0; let lo = 0, hi = 1; for (let k = 0; k < 20; k++) { const m = (lo + hi) / 2; if (S.inside(add(centre, mul(sub(v, centre), m)))) lo = m; else hi = m; } return (1 - lo) * len(sub(v, centre)); };
-  for (let round = 0; round < 6; round++) {
-    let q = poly; for (const pl of planes) q = clip(q, pl);
+  // a plane meeting others outside the hull is sunk by how far their corner pokes out (along the line from the hull's centre),
+  // as far as the touch points let it: one pass
+  const poke = v => { const d = sub(v, S.centre); let t = 1; for (const f of S.ownFaces) { const c = dot(f.n, d); if (c > 1e-12) t = Math.min(t, (f.b - dot(f.n, S.centre)) / c); } return (1 - t) * len(d); };
+  { let q = poly; for (const pl of planes) q = clip(q, pl);
     const push = new Map();
     for (const f of q) if (f.role === 'face') for (const v of f.verts) { const d = poke(v); if (d > 1e-4) push.set(f, Math.max(push.get(f) || 0, d)); }
-    if (!push.size) break;
-    for (const pl of planes) { const f = q.find(f => f.n === pl.n && f.b === pl.b); if (f && push.has(f)) pl.b = through(pl.n, pl.b - push.get(f) * 1.1); }
-  }
+    for (const pl of planes) { const f = q.find(f => f.n === pl.n && f.b === pl.b); if (f && push.has(f)) pl.b = through(pl.n, pl.b - push.get(f) * 1.1); } }
   for (const pl of planes) poly = clip(poly, pl);
   for (const pl of boundsOf(S)) poly = clip(poly, { ...pl, role: 'touch' });
 
@@ -360,32 +352,7 @@ function build(shape, seed, P, withStats) {
     for (const key of order(cornerKeys, 7)) { if (ok() >= want) break; if (!biting(key)) make(key); } }
   for (const pls of made.values()) for (const pl of pls) poly = clip(poly, pl);
 
-  const foot = 0;   // a hull's rock stays where the hull is; the whole rock is set down at the end
-  const res = { poly, foot, anchors: taken.map(a => ({ p: [a.p[0], a.p[1], a.p[2] - foot], kind: a.kind })), ms: 0 };
-  if (withStats) {
-    let out = 0, inn = 0;
-    for (const n of fib(1500)) { const hp = reach(poly, n), ht = S.support(n); out = Math.max(out, hp - ht); inn = Math.max(inn, ht - hp); }
-    const lo = S.lo.slice(), hi = S.hi.slice(), g = 30; let both = 0, either = 0;
-    for (const f of poly) for (const v of f.verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
-    const fp = poly.map(f => [f.n, f.b]);
-    for (let a = 0; a < g; a++) for (let b = 0; b < g; b++) for (let c = 0; c < g; c++) {
-      const p = [lo[0] + (hi[0] - lo[0]) * (a + 0.5) / g, lo[1] + (hi[1] - lo[1]) * (b + 0.5) / g, lo[2] + (hi[2] - lo[2]) * (c + 0.5) / g];
-      const t = S.inside(p); let rr = true; for (const [n, bb] of fp) if (dot(n, p) > bb + 1e-9) { rr = false; break; }
-      if (t && rr) both++; if (t || rr) either++;
-    }
-    let areaSum = 0, areaMax = 0;
-    for (const f of poly) { const a = faceArea(f); areaSum += a; areaMax = Math.max(areaMax, a); }
-    const counts = {}; for (const f of poly) counts[f.role] = (counts[f.role] || 0) + 1;
-    const placed = {}; for (const a of taken) placed[a.kind] = (placed[a.kind] || 0) + 1;
-    const inside = p => poly.every(f => dot(f.n, p) <= f.b + 1e-6);
-    const touched = S.ownFaces ? S.ownFaces.filter(f => reach(poly, f.n) >= f.b - 1e-6).length : contacts.filter(c => inside(c.p)).length;
-    const bit = keys => keys.filter(k => (bites.get(k) || 0) >= cham - 1e-6).length;
-    Object.assign(res, { out, inn, iou: either ? both / either : 0, counts, placed, vol: volume(poly), largest: areaMax / areaSum,
-      touched, sides: S.ownFaces ? S.ownFaces.length : contacts.length, sidesWord: S.ownFaces ? 'faces' : 'touch points',
-      edgesBit: lenOf(edgeKeys.filter(k => (bites.get(k) || 0) >= cham - 1e-6)), edgesAll: lenOf(edgeKeys), edgesWant: lenOf(shareLen(order(edgeKeys, 6))), cornersBit: bit(cornerKeys), cornersAll: cornerKeys.length });
-  }
-  res.ms = performance.now() - t0;
-  return res;
+  return { poly };   // a hull's rock stays where the hull is; the whole rock is set down at the end
 }
 
 // ---------- targets: each written as alternating convex hulls (a hull, minus hollows, plus bumps inside them) ----------
@@ -437,8 +404,10 @@ function prepare(T) {
   }
   const lo = [0, 1, 2].map(i => Math.min(...T.tree.poly.flatMap(f => f.verts.map(v => v[i])))), hi = [0, 1, 2].map(i => Math.max(...T.tree.poly.flatMap(f => f.verts.map(v => v[i]))));
   Object.assign(T, { _ready: true, all, lo, hi, size: (hi[0] - lo[0] + hi[1] - lo[1] + hi[2] - lo[2]) / 3, area: all.reduce((t, nd) => t + nd.realArea.reduce((u, a) => u + a, 0), 0) });
-  T.pieces = assemble(T.tree, nd => nd.planes, nd => nd.poly);
-  T.volume = T.pieces.reduce((t, p) => t + volume(p), 0);
+  const open = nd => { const planes = nd.poly.map((f, fi) => ({ n: f.n, b: f.b + (nd.mouth[fi] ? 1 : 0) })); return { planes, faces: solidOf(planes) }; };
+  T.surf = surfaceOf(all.filter(nd => nd.sign > 0).map(nd => ({ solid: { planes: nd.planes, faces: nd.poly }, cuts: nd.kids.map(open) })));
+  T.volume = volumeOf(T.surf.faces);
+  T.rims = rimsOf(T);
   return T;
 }
 function sampleFace(f, m, r) {
@@ -454,7 +423,7 @@ function hullShape(nd, T) {
   const poly = nd.poly, verts = dedupe(poly.flatMap(f => f.verts), 1e-6);
   const S = {
     support: n => { let m = -Infinity; for (const v of verts) m = Math.max(m, dot(n, v)); return m; },
-    inside: p => poly.every(f => dot(f.n, p) <= f.b + 1e-9),
+    centre: centroidOf(verts),
     ownFaces: poly.map(f => ({ n: f.n, b: f.b })),
     lo: T.lo, hi: T.hi, size: T.size, height: T.hi[2] - T.lo[2],
     contacts(r) {
@@ -489,14 +458,14 @@ function hullShape(nd, T) {
         if (e.fs.length !== 2) continue;
         const ok = [0.2, 0.5, 0.8].every(t => e.fs.every(fi => nd.real(fi, add(add(e.a, mul(sub(e.b, e.a), t)), mul(into(poly[fi], e.a, e.b), 0.3)))));
         if (!ok) continue;
-        const ns = e.fs.map(fi => poly[fi].n), n = unit(add(ns[0], ns[1])), m = Math.ceil(len(sub(e.b, e.a)) * 4);
+        const ns = e.fs.map(fi => poly[fi].n), n = unit(add(ns[0], ns[1])), m = Math.ceil(len(sub(e.b, e.a)) * 1.5);
         for (let k = 0; k < m; k++) out.push({ p: add(e.a, mul(sub(e.b, e.a), 0.04 + 0.92 * r())), n, fn: ns, kind: 'edge', key: 'e' + key, len: len(sub(e.b, e.a)) });
       }
       // face spots: spread by area over the real part of each face
       poly.forEach((f, fi) => {
         if (nd.realArea[fi] <= 0) return;
         const fc = centroidOf(f.verts), fr = Math.max(...f.verts.map(v => len(sub(v, fc))));
-        for (const p of sampleFace(f, Math.ceil(faceArea(f) * 2), r)) if (nd.real(fi, p)) out.push({ p, n: f.n, kind: 'face', fi, fr });
+        for (const p of sampleFace(f, Math.ceil(faceArea(f) * 0.5), r)) if (nd.real(fi, p)) out.push({ p, n: f.n, kind: 'face', fi, fr });
       });
       return out;
     },
@@ -531,27 +500,6 @@ function pocketOf(nd, T, seed, P) {
   return planes;
 }
 
-// ---------- convex pieces: subtract a convex region (half-spaces), add a piece ----------
-function subtractRegion(pieces, region) {
-  const out = [];
-  for (const piece of pieces) {
-    let rest = piece;
-    for (const pl of region) {
-      const outside = clip(rest, { n: mul(pl.n, -1), b: -pl.b, role: pl.role });
-      if (outside.length >= 4 && volume(outside) > 1e-6) out.push(outside);
-      rest = clip(rest, pl); if (rest.length < 4 || volume(rest) <= 1e-6) break;
-    }
-  }
-  return out;
-}
-// the rock (or the target): the first hull's piece, minus each hollow's region, plus each bump's piece, in order
-function assemble(root, regionOf, pieceOf) {
-  let pieces = [pieceOf(root)];
-  const visit = nd => { for (const k of nd.kids) { if (k.sign < 0) pieces = subtractRegion(pieces, regionOf(k)); else pieces.push(pieceOf(k)); visit(k); } };
-  visit(root);
-  return pieces;
-}
-
 // ---------- the rims of hollows: where a rock face meets a hollow's wall at an outward edge ----------
 // neither hull owns these edges, so each gets its own chamfer, a cut of that edge alone, set against the rock that is there
 function rimsOf(T) {
@@ -571,79 +519,65 @@ function rimsOf(T) {
         let F = G && inFace(G, probe, 1e-7) ? G : P.poly.find(g => !samePlane(g, nd.poly[mi]) && Math.abs(dot(g.n, a) - g.b) < 1e-6 && Math.abs(dot(g.n, b) - g.b) < 1e-6);
         if (!F) return;
         if (dot(F.n, mul(W.n, -1)) > Math.cos(25 * DEG)) return;   // nearly flat: no edge to chamfer
-        out.push({ a, b, F, W, len: len(sub(b, a)), key: nd.path + ':' + wi + ':' + k });
+        out.push({ nd, wi, mi, a, b, F, W, len: len(sub(b, a)), key: nd.path + ':' + wi + ':' + k });
       });
     });
   }
   return out;
 }
-// Each chamfered rim gets one plane. Its depth is measured in five slices along the rim and set from the lowest, so it bites half
-// to all of Sink along the whole rim, not only where the rock stands highest. Where two chamfered rims meet, the cuts are joined
-// along the line their planes cross: at an inside corner of the rock (a corner of the ring's hole) the cut is what lies beyond both
-// planes, at an outside corner what lies beyond either, each plane taking its own side. A rim end no chamfered rim meets is cut square
-function rimCuts(T, pieces, seed, P) {
-  const sinkMM = P.sink / 100 * T.size, cham = sinkMM / 2, rims = rimsOf(T), cut = [];
-  const rp = keyed(seed, 'rim-pick'), order = rims.map(m => [rp(), m]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
-  const want = rims.reduce((t, m) => t + m.len, 0) * P.edges / 100; let got = 0;
-  for (const m of order) {
-    if (got + m.len / 2 > want + 1e-9) continue;
-    const rr = keyed(seed, 'rim', m.key), nW = mul(m.W.n, -1), t = unit(sub(m.b, m.a));
-    const n = chamferTurns(unit(add(m.F.n, nW)), [m.F.n, nW], P.tilt, rr)[0], depth = cham * (1 + rr());
-    let low = Infinity;
-    for (const u of [0.2, 0.35, 0.5, 0.65, 0.8]) {
-      const near = [{ n: m.F.n, b: m.F.b + 0.01 }, { n: nW, b: -m.W.b + 0.01 }, { n: mul(t, -1), b: -dot(t, m.a) - (u - 0.05) * m.len }, { n: t, b: dot(t, m.a) + (u + 0.05) * m.len }];
-      let h = -Infinity;
-      for (const piece of pieces) { let q = piece; for (const pl of near) q = clip(q, pl); for (const f of q) for (const v of f.verts) h = Math.max(h, dot(n, v)); }
-      if (h > -Infinity) low = Math.min(low, h);
-    }
-    if (low === Infinity) continue;
-    got += m.len; cut.push({ ...m, n, bb: low - depth, t });
-  }
-  const at = (p, q) => len(sub(p, q)) < 1e-6;
-  const cuts = cut.map(c => {
-    const region = [
-      { n: mul(c.n, -1), b: -c.bb, role: 'chamfer' },
-      { n: mul(c.W.n, -1), b: -(c.W.b - 1e-3), role: 'bound' },   // only the rock behind its own wall: never across the hollow (a corner's other side is its neighbour's)
-    ];
-    for (const [end, out] of [[c.a, mul(c.t, -1)], [c.b, c.t]]) {
-      const j = cut.find(o => o !== c && (at(o.a, end) || at(o.b, end)));
-      if (!j) { region.push({ n: out, b: dot(out, end), role: 'bound' }); continue; }
-      const far = at(j.a, end) ? j.b : j.a;
-      if (dot(c.n, sub(far, end)) > 0) region.push({ n: mul(j.n, -1), b: -j.bb, role: 'chamfer' });   // inside corner: beyond both
-      else region.push({ n: sub(j.n, c.n), b: j.bb - c.bb, role: 'bound' });                            // outside corner: beyond this one most
-    }
-    return { region, plane: { n: c.n, b: c.bb }, len: c.len };
-  });
-  return { cuts, rimLen: rims.reduce((t, m) => t + m.len, 0), cutLen: got };
-}
-
 // ---------- the whole rock ----------
-function buildRock(T, seed, P0, withStats) {
+// The rock is each rock hull's convex solid less its hollows' cuts, and every cut is a convex region: a hollow's pocket, and for each
+// mouth with chamfered rims a flare. A flare is the hollow with those rims leaned outward: each wall at the mouth is either its
+// rim's chamfer plane (the region beyond it) or, unchamfered, the wall itself (a hair inside the hollow, so the pocket covers it).
+// Where two chamfers meet, the crease is simply where their planes cross.
+function buildRock(T, seed, P0) {
   const t0 = performance.now();
   prepare(T);
-  const gap0 = 0.85 * Math.sqrt(T.area / P0.planes), P = { ...P0, gap0 };
+  const gap0 = 0.85 * Math.sqrt(T.area / P0.planes), P = { ...P0, gap0 }, sinkMM = P.sink / 100 * T.size, cham = sinkMM / 2;
   const nodeSeed = path => Math.floor(keyed(seed, 'node', path)() * 2147483647);
-  const rockOf = new Map(), pocket = new Map();
+  const rock = new Map(), cuts = new Map();
   for (const nd of T.all) {
     if (nd.sign > 0) {
       const share = nd.realArea.reduce((t, a) => t + a, 0) / T.area;
-      const res = build(hullShape(nd, T), nodeSeed(nd.path), { ...P, faceN: Math.max(1, Math.round(P.planes * share)) }, false);
-      rockOf.set(nd, res.poly.filter(f => f.verts.length >= 3));
-    } else pocket.set(nd, pocketOf(nd, T, seed, P));
+      const faces = build(hullShape(nd, T), nodeSeed(nd.path), { ...P, faceN: Math.max(1, Math.round(P.planes * share)) }).poly.filter(f => f.verts.length >= 3);
+      rock.set(nd, { planes: faces.map(f => ({ n: f.n, b: f.b })), faces });
+    } else { const planes = pocketOf(nd, T, seed, P); cuts.set(nd, [{ planes, faces: solidOf(planes) }]); }
   }
-  let pieces = assemble(T.tree, nd => pocket.get(nd), nd => rockOf.get(nd));
-  const rim = rimCuts(T, pieces, seed, P);
-  for (const c of rim.cuts) pieces = subtractRegion(pieces, c.region);
-  const res = { pieces, rim, ms: performance.now() - t0, hulls: T.all.length };
-  if (withStats) {
-    res.volume = pieces.reduce((t, p) => t + volume(p), 0);
-    res.fill = res.volume / T.volume;
-    const sv = surfaceOf(pieces); res.faces = sv.faces.length;
+  // rims: Chamfered of their length, drawn; each one plane, one draw from its own stream, cutting half to all of Sink below where
+  // the rock's rim stands lowest (found at five points of the rim: out from the hollow's edge to the pocket's walls, then down to the rock's faces that face the same way as the rim's)
+  const rp = keyed(seed, 'rim-pick'), want = T.rims.reduce((t, m) => t + m.len, 0) * P.edges / 100, chosen = new Map();
+  let got = 0;
+  for (const m of T.rims.map(m => [rp(), m]).sort((x, y) => x[0] - y[0]).map(x => x[1])) {
+    if (got + m.len / 2 > want + 1e-9) continue; got += m.len;
+    const rr = keyed(seed, 'rim', m.key), nW = mul(m.W.n, -1), n = chamferTurns(unit(add(m.F.n, nW)), [m.F.n, nW], P.tilt, rr)[0], depth = cham * (1 + rr());
+    const R = rock.get(m.nd.parent).planes, K = cuts.get(m.nd)[0].planes;
+    let low = Infinity;
+    for (const u of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+      const p = add(m.a, mul(sub(m.b, m.a), u));
+      let t = Infinity; for (const pl of K) { const c = dot(pl.n, m.W.n); if (c > 0.5) t = Math.min(t, (pl.b - dot(pl.n, p)) / c); }
+      const q = add(p, mul(m.W.n, t === Infinity ? 0 : t));
+      let d = 0; for (const pl of R) { const c = dot(pl.n, m.F.n); if (c > 0.5) d = Math.max(d, (dot(pl.n, q) - pl.b) / c); }
+      low = Math.min(low, dot(n, sub(q, mul(m.F.n, d))));
+    }
+    chosen.set(m.nd.path + ':' + m.wi + ':' + m.mi, { n, b: low - depth });
   }
+  for (const nd of T.all) if (nd.sign < 0) nd.poly.forEach((M, mi) => {
+    if (!nd.mouth[mi] || !nd.poly.some((W, wi) => chosen.has(nd.path + ':' + wi + ':' + mi))) return;
+    const planes = [];
+    nd.poly.forEach((W, wi) => {
+      if (nd.mouth[wi]) return;
+      const c = chosen.get(nd.path + ':' + wi + ':' + mi);
+      planes.push(c ? { n: mul(c.n, -1), b: -c.b, role: 'chamfer' } : { n: W.n, b: W.b - 1e-3, role: 'bound' });
+    });
+    cuts.get(nd).push({ planes, faces: solidOf(planes) });
+  });
+  const surf = surfaceOf(T.all.filter(nd => nd.sign > 0).map(nd => ({ solid: rock.get(nd), cuts: nd.kids.flatMap(k => cuts.get(k)) })));
+  const res = { surf, rim: { rimLen: T.rims.reduce((t, m) => t + m.len, 0), cutLen: got }, ms: performance.now() - t0 };
+  res.volume = volumeOf(surf.faces); res.fill = res.volume / T.volume;
   return res;
 }
 
-// ---------- the surface of a set of convex pieces: each face less what other pieces cover, and the creases ----------
+// ---------- the surface: a rock face shows outside every cut; a cut's face shows inside the rock and outside the other cuts ----------
 function clipPoly(vs, n, b) {   // keep n·x <= b
   const out = [];
   for (let i = 0; i < vs.length; i++) {
@@ -651,36 +585,67 @@ function clipPoly(vs, n, b) {   // keep n·x <= b
     if (da <= 1e-9) out.push(a);
     if ((da < -1e-9 && dc > 1e-9) || (da > 1e-9 && dc < -1e-9)) out.push(add(a, mul(sub(c, a), da / (da - dc))));
   }
-  return dedupe(out, 1e-7);
+  return out.length >= 3 ? dedupe(out, 1e-7) : out;
 }
 const polyArea = (vs, n) => { let a = [0, 0, 0]; for (let i = 1; i + 1 < vs.length; i++) a = add(a, cross(sub(vs[i], vs[0]), sub(vs[i + 1], vs[0]))); return Math.abs(dot(a, n)) / 2; };
+const solidPart = (vs, n) => vs.length >= 3 && polyArea(vs, n) > 1e-7;
+function outsideOf(vs, planes, n) {   // the parts of convex polygon vs outside a convex region, as convex polygons
+  for (const pl of planes) { let all = true; for (const v of vs) if (dot(pl.n, v) < pl.b - 1e-9) { all = false; break; } if (all) return [vs]; }
+  const out = []; let rest = vs;
+  for (const pl of planes) {
+    const o = clipPoly(rest, mul(pl.n, -1), -pl.b); if (solidPart(o, n)) out.push(o);
+    rest = clipPoly(rest, pl.n, pl.b); if (!solidPart(rest, n)) break;
+  }
+  return out;
+}
 function minusPoly(vs, g, n) {   // the parts of convex vs outside convex g, both on one plane
   const out = []; let rest = vs;
   for (let i = 0; i < g.verts.length; i++) {
     const A = g.verts[i], B = g.verts[(i + 1) % g.verts.length], m = unit(cross(sub(B, A), g.n));
-    const o = clipPoly(rest, mul(m, -1), -dot(m, A)); if (o.length >= 3 && polyArea(o, n) > 1e-6) out.push(o);
-    rest = clipPoly(rest, m, dot(m, A)); if (rest.length < 3 || polyArea(rest, n) <= 1e-6) return out;
+    const o = clipPoly(rest, mul(m, -1), -dot(m, A)); if (solidPart(o, n)) out.push(o);
+    rest = clipPoly(rest, m, dot(m, A)); if (!solidPart(rest, n)) return out;
   }
   return out;
 }
-function surfaceOf(pieces) {
-  const faces = []; pieces.forEach((pc, i) => pc.forEach(f => faces.push({ ...f, piece: i })));
-  const outer = [];
-  for (const f of faces) {
-    let frags = [f.verts];
-    for (const g of faces) if (g.piece !== f.piece && dot(g.n, f.n) < -1 + 1e-9 && Math.abs(g.b + f.b) < 1e-6) frags = frags.flatMap(v => minusPoly(v, g, f.n));
-    for (const v of frags) outer.push({ n: f.n, b: f.b, role: f.role, verts: v });
+const planeKey = (n, b) => `${Math.round(n[0] * 1e6)},${Math.round(n[1] * 1e6)},${Math.round(n[2] * 1e6)},${Math.round(b * 1e5)}`;
+function surfaceOf(rocks) {
+  const faces = [];
+  for (const { solid, cuts } of rocks) {
+    for (const f of solid.faces) {
+      let fr = [f.verts]; for (const c of cuts) { fr = fr.flatMap(v => outsideOf(v, c.planes, f.n)); if (!fr.length) break; }
+      for (const v of fr) faces.push({ n: f.n, b: f.b, verts: v });
+    }
+    cuts.forEach((c, ci) => { for (const g of c.faces) {
+      let v = g.verts; for (const pl of solid.planes) { v = clipPoly(v, pl.n, pl.b); if (v.length < 3) break; }
+      if (!solidPart(v, g.n)) continue;
+      let fr = [v]; for (let cj = 0; cj < cuts.length && fr.length; cj++) if (cj !== ci) fr = fr.flatMap(w => outsideOf(w, cuts[cj].planes, g.n));
+      const n = mul(g.n, -1); for (const w of fr) faces.push({ n, b: -g.b, verts: w.slice().reverse() });
+    } });
   }
-  const lines = [];
-  for (const f of outer) { const c = centroidOf(f.verts); f.verts.forEach((a, k) => {
-    const b = f.verts[(k + 1) % f.verts.length], mid = mul(add(a, b), 0.5);
-    let across = unit(cross(f.n, sub(b, a))); if (dot(across, sub(c, mid)) > 0) across = mul(across, -1);
-    const q = add(mid, mul(across, 1e-3));
-    if (outer.some(g => g !== f && samePlane(g, f) && inFace(g, q, 1e-9))) return;   // a seam between two pieces on one plane
-    lines.push(a, b);
-  }); }
-  return { faces: outer, lines };
+  // where two faces meet back to back on one plane (a bump standing on a hollow's wall), neither shows
+  const byPlane = new Map(), keyOf = f => f._k || (f._k = planeKey(f.n, f.b));
+  for (const f of faces) { const k = keyOf(f); (byPlane.get(k) || byPlane.set(k, []).get(k)).push(f); }
+  const shown = new Map();
+  for (const f of faces) {
+    let fr = [f.verts]; const back = byPlane.get(planeKey(mul(f.n, -1), -f.b));
+    if (back) for (const g of back) { fr = fr.flatMap(v => minusPoly(v, g, f.n)); if (!fr.length) break; }
+    const k = keyOf(f); for (const v of fr) (shown.get(k) || shown.set(k, []).get(k)).push({ n: f.n, b: f.b, verts: v });
+  }
+  const out = [], lines = [];
+  for (const list of shown.values()) for (const f of list) {
+    out.push(f);
+    const c = centroidOf(f.verts);
+    f.verts.forEach((a, j) => {
+      const b = f.verts[(j + 1) % f.verts.length], mid = mul(add(a, b), 0.5);
+      let across = unit(cross(f.n, sub(b, a))); if (dot(across, sub(c, mid)) > 0) across = mul(across, -1);
+      const q = add(mid, mul(across, 1e-3));
+      if (list.length > 1 && list.some(g => g !== f && inFace(g, q, 1e-9))) return;   // a seam on one plane, not an edge
+      lines.push(a, b);
+    });
+  }
+  return { faces: out, lines };
 }
+const volumeOf = faces => { let v = 0; for (const f of faces) { const p = f.verts; for (let i = 1; i + 1 < p.length; i++) v += dot(p[0], cross(p[i], p[i + 1])); } return v / 6; };
 
 // ---------- drawing ----------
 const STONE = '#B9B4A8';
@@ -718,10 +683,17 @@ function makeScene() {
   scene.add(new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xA9B4C4 })));
   return scene;
 }
-function rockSurface(T, seed, withStats) {
-  const res = buildRock(T, seed, params(), withStats), surf = surfaceOf(res.pieces);
-  let foot = Infinity; for (const f of surf.faces) for (const v of f.verts) foot = Math.min(foot, v[2]);
-  return { res, surf, foot };
+// a rock is built once for its shape, seed and settings, and kept (the last 200)
+const kept = new Map();
+function rockSurface(T, seed) {
+  const key = [T.key, seed, state.planes, state.edges, state.tilt, state.sink].join('/');
+  let r = kept.get(key);
+  if (!r) {
+    const res = buildRock(T, seed, params()), surf = res.surf;
+    let foot = Infinity; for (const f of surf.faces) for (const v of f.verts) foot = Math.min(foot, v[2]);
+    r = { res, surf, foot }; kept.set(key, r); if (kept.size > 200) kept.delete(kept.keys().next().value);
+  }
+  return r;
 }
 
 // ---------- page state ----------
@@ -781,11 +753,11 @@ function draw() { if (renderer) renderer.render(scene, camera); }
 function rebuild() {
   try {
     $('err').hidden = true;
-    const T = targetOf(state.shape), { res, surf, foot } = rockSurface(T, state.seed, true);
+    const T = targetOf(state.shape), { res, surf, foot } = rockSurface(T, state.seed);
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
     rockObj = meshOf(surf, foot, { lines: state.lines }); scene.add(rockObj);
     if (ghostObj) { scene.remove(ghostObj); disposeGroup(ghostObj); ghostObj = null; }
-    if (state.ghost) { ghostObj = meshOf(T._surf || (T._surf = surfaceOf(T.pieces)), foot, { ghost: true, lines: true }); scene.add(ghostObj); }
+    if (state.ghost) { ghostObj = meshOf(prepare(T).surf, foot, { ghost: true, lines: true }); scene.add(ghostObj); }
     draw();
     $('chip').textContent = T.label.toLowerCase() + ' · seed ' + state.seed;
     showStats(T, res, surf);
@@ -812,22 +784,25 @@ for (let i = 0; i < 8; i++) {
   b.addEventListener('click', () => setSeed(+b.dataset.seed));
   thumbs.push({ b, cv, s, ctx: cv.getContext('2d') });
 }
-let thumbTimer = 0;
-function rebuildThumbs() { clearTimeout(thumbTimer); thumbTimer = setTimeout(drawThumbs, 120); }
-function drawThumbs() {
-  const start = Math.max(0, state.seed - 3), T = targetOf(state.shape);
+let thumbJob = 0;
+function rebuildThumbs() {
+  const job = ++thumbJob, start = Math.max(0, state.seed - 3), T = targetOf(state.shape);
   const cam = state.view === 'ortho' ? thumbOrtho : thumbPersp;
   const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
   cam.position.copy(dir.multiplyScalar(62)).add(new THREE.Vector3(0, 0, 5)); cam.lookAt(0, 0, 5);
-  thumbs.forEach((t, i) => {
-    const seed = start + i; t.b.dataset.seed = seed; t.s.textContent = seed;
-    t.b.setAttribute('aria-current', seed === state.seed ? 'true' : 'false'); t.b.setAttribute('aria-label', 'Seed ' + seed);
+  const order = thumbs.map((t, i) => i).sort((a, b) => Math.abs(start + a - state.seed) - Math.abs(start + b - state.seed));
+  thumbs.forEach((t, i) => { const seed = start + i; t.b.dataset.seed = seed; t.s.textContent = seed; t.b.setAttribute('aria-current', seed === state.seed ? 'true' : 'false'); t.b.setAttribute('aria-label', 'Seed ' + seed); });
+  const next = () => {
+    if (job !== thumbJob || !order.length) return;
+    const i = order.shift(), t = thumbs[i];
     try {
-      const { surf, foot } = rockSurface(T, seed, false), g = meshOf(surf, foot, { lines: state.lines });
+      const { surf, foot } = rockSurface(T, start + i), g = meshOf(surf, foot, { lines: state.lines });
       thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
       t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
     } catch (e) { console.error(e); }
-  });
+    requestAnimationFrame(next);
+  };
+  requestAnimationFrame(next);
 }
 
 // controls
@@ -855,7 +830,12 @@ function syncUI() {
   for (const k of CHECKS) $(k).checked = state[k];
 }
 let ownHash = '';
+let pending = false;
 function update() {
+  if (pending) return; pending = true;
+  requestAnimationFrame(() => { pending = false; doUpdate(); });
+}
+function doUpdate() {
   rebuild(); rebuildThumbs();
   ownHash = '#' + state.shape + '-' + state.seed;
   try { if (location.hash !== ownHash) history.replaceState(null, '', ownHash); } catch (e) { /* the frame may refuse; the page works without it */ }
