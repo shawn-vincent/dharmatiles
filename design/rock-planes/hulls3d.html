@@ -155,7 +155,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>The shape</b> is written as a tree of convex hulls: the first is rock, its children are hollows cut from it, their children are bumps of rock inside a hollow, and so on. The L is its hull less a wedge; the ring an octagon less a heptagon; the notch with a peak a block less a notch plus a peak standing in it. A face that lies on its parent's face is a <b>mouth</b> (a hollow's opening, or where a bump stands on a wall): it is not the shape's surface and gets no planes.</li>
       <li><b>Rock hulls</b> are built by Rock Planes as they are, bounded by the hull's own faces: touch points, crowns, face planes, edge and corner chamfers. Only where the hull's face is real surface does it get a touch point, a spot or a chamfer, so nothing is put across a hollow's mouth. Each hull takes its share of Planes by its real surface area, at the whole rock's spacing, and its own seed keyed to its place in the tree.</li>
       <li><b>Hollows</b> are cut with a pocket. Each real face of the hollow gets about one plane for each plane spacing squared of its area (one to six), each leaning into the rock a different way by half to all of <b>Sink</b> plus <b>Tilt</b> across the face, then pushed out until it holds the whole hollow. So the pocket always holds the hollow and touches it at an edge or a corner, and its walls bow into the rock as facets. A mouth lets the pocket out a little past it; a real face no further than its planes reach.</li>
-      <li><b>Rims.</b> Where a hollow's wall meets a rock face at an outward edge (the L's two tips, the top of the ring's hole, the arch's edges), neither hull owns the edge. Each such edge is chamfered by <b>Chamfered</b> of their length, drawn: the one chamfer rule (a turn of up to half of Tilt, capped by the angle between the faces), cutting half to all of Sink into what is there.</li>
+      <li><b>Rims.</b> Where a hollow's wall meets a rock face at an outward edge (the L's two tips, the top of the ring's hole, the arch's edges), neither hull owns the edge. Each such edge is chamfered by <b>Chamfered</b> of their length, drawn: the one chamfer rule (a turn of up to half of Tilt, capped by the angle between the faces), cutting half to all of Sink into what is there, measured where the rock stands lowest along the rim so the whole rim is cut. A rim's cut takes only the rock behind its own wall. Where two chamfered rims meet, the cuts join along the line their planes cross: at an inside corner (a corner of the ring's hole) what is beyond both planes is cut, at an outside corner what is beyond either, so the chamfers meet in one crease.</li>
       <li><b>The rock</b> is the first hull's rock, less each hollow's pocket, plus each bump's rock, in order, kept as convex pieces; the rims are cut from the pieces last. What shows is each piece's faces less where another piece covers them.</li>
     </ol>
     <p class="hint">Every job draws from its own seeded stream keyed by the hull's place in the tree, the face or the rim, so one control never reshuffles another. Overhang paints orange past 55° and red past 65°; with no ground case the underside, and the arch's roof, are overhang for now.</p>
@@ -577,21 +577,43 @@ function rimsOf(T) {
   }
   return out;
 }
+// Each chamfered rim gets one plane. Its depth is measured in five slices along the rim and set from the lowest, so it bites half
+// to all of Sink along the whole rim, not only where the rock stands highest. Where two chamfered rims meet, the cuts are joined
+// along the line their planes cross: at an inside corner of the rock (a corner of the ring's hole) the cut is what lies beyond both
+// planes, at an outside corner what lies beyond either, each plane taking its own side. A rim end no chamfered rim meets is cut square
 function rimCuts(T, pieces, seed, P) {
-  const sinkMM = P.sink / 100 * T.size, cham = sinkMM / 2, rims = rimsOf(T), cuts = [];
+  const sinkMM = P.sink / 100 * T.size, cham = sinkMM / 2, rims = rimsOf(T), cut = [];
   const rp = keyed(seed, 'rim-pick'), order = rims.map(m => [rp(), m]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
   const want = rims.reduce((t, m) => t + m.len, 0) * P.edges / 100; let got = 0;
   for (const m of order) {
-    if (got + m.len / 2 > want + 1e-9) continue; got += m.len;
+    if (got + m.len / 2 > want + 1e-9) continue;
     const rr = keyed(seed, 'rim', m.key), nW = mul(m.W.n, -1), t = unit(sub(m.b, m.a));
-    const n = chamferTurns(unit(add(m.F.n, nW)), [m.F.n, nW], P.tilt, rr)[0];
-    const near = [{ n: m.F.n, b: m.F.b + 0.01 }, { n: nW, b: -m.W.b + 0.01 }, { n: mul(t, -1), b: -dot(t, m.a) }, { n: t, b: dot(t, m.b) }];
-    let h = -Infinity;
-    for (const piece of pieces) { let q = piece; for (const pl of near) q = clip(q, pl); for (const f of q) for (const v of f.verts) h = Math.max(h, dot(n, v)); }
-    if (h === -Infinity) continue;
-    const b = h - cham * (1 + rr());
-    cuts.push({ region: [...near, { n: mul(n, -1), b: -b, role: 'chamfer' }], plane: { n, b }, len: m.len });
+    const n = chamferTurns(unit(add(m.F.n, nW)), [m.F.n, nW], P.tilt, rr)[0], depth = cham * (1 + rr());
+    let low = Infinity;
+    for (const u of [0.2, 0.35, 0.5, 0.65, 0.8]) {
+      const near = [{ n: m.F.n, b: m.F.b + 0.01 }, { n: nW, b: -m.W.b + 0.01 }, { n: mul(t, -1), b: -dot(t, m.a) - (u - 0.05) * m.len }, { n: t, b: dot(t, m.a) + (u + 0.05) * m.len }];
+      let h = -Infinity;
+      for (const piece of pieces) { let q = piece; for (const pl of near) q = clip(q, pl); for (const f of q) for (const v of f.verts) h = Math.max(h, dot(n, v)); }
+      if (h > -Infinity) low = Math.min(low, h);
+    }
+    if (low === Infinity) continue;
+    got += m.len; cut.push({ ...m, n, bb: low - depth, t });
   }
+  const at = (p, q) => len(sub(p, q)) < 1e-6;
+  const cuts = cut.map(c => {
+    const region = [
+      { n: mul(c.n, -1), b: -c.bb, role: 'chamfer' },
+      { n: mul(c.W.n, -1), b: -(c.W.b - 1e-3), role: 'bound' },   // only the rock behind its own wall: never across the hollow (a corner's other side is its neighbour's)
+    ];
+    for (const [end, out] of [[c.a, mul(c.t, -1)], [c.b, c.t]]) {
+      const j = cut.find(o => o !== c && (at(o.a, end) || at(o.b, end)));
+      if (!j) { region.push({ n: out, b: dot(out, end), role: 'bound' }); continue; }
+      const far = at(j.a, end) ? j.b : j.a;
+      if (dot(c.n, sub(far, end)) > 0) region.push({ n: mul(j.n, -1), b: -j.bb, role: 'chamfer' });   // inside corner: beyond both
+      else region.push({ n: sub(j.n, c.n), b: j.bb - c.bb, role: 'bound' });                            // outside corner: beyond this one most
+    }
+    return { region, plane: { n: c.n, b: c.bb }, len: c.len };
+  });
   return { cuts, rimLen: rims.reduce((t, m) => t + m.len, 0), cutLen: got };
 }
 
@@ -674,7 +696,7 @@ function meshOf(surf, foot, opt) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   const grp = new THREE.Group();
-  grp.add(new THREE.Mesh(g, opt.ghost ? new THREE.MeshBasicMaterial({ color: 0x287B62, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }) : stoneMat));
+  grp.add(new THREE.Mesh(g, opt.ghost ? new THREE.MeshBasicMaterial({ color: 0x287B62, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }) : stoneMat));
   if (opt.lines) {
     const lp = []; for (const p of surf.lines) lp.push(...dz(p));
     const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
