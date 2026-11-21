@@ -56,6 +56,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .stage { display: grid; gap: 10px; min-width: 0; }
 .viewer { position: relative; height: min(68vh, 620px); min-height: 320px; background: var(--plate); border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line); }
 .viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.vbtn { position: absolute; right: 10px; top: 10px; width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; box-shadow: 0 8px 24px -12px rgb(26 23 20 / .45); }
+.vbtn:hover, .vbtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.vpanel { position: absolute; right: 10px; top: 48px; display: grid; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 12px 32px -12px rgb(26 23 20 / .5); z-index: 2; }
+.vpanel[hidden] { display: none; }
 .chip { position: absolute; left: 10px; top: 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font: 600 12px var(--f-code); box-shadow: 0 8px 24px -12px rgb(26 23 20 / .45); }
 .legend { position: absolute; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font-size: 12px; max-width: calc(100% - 20px); }
 .legend[hidden] { display: none; }
@@ -112,10 +116,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <input id="seed" type="number" inputmode="numeric" min="0" step="1" value="1" aria-label="Seed">
       <button class="btn" id="next" aria-label="Next seed">&#8594;</button>
     </div>
-    <span class="lbl">View</span>
-    <div class="seg" id="view" role="group" aria-label="View">
-      <button data-view="persp">Perspective</button><button data-view="ortho">Orthographic</button>
-    </div>
     <span class="hint">&#8592; &#8594; keys browse seeds</span>
   </div>
 
@@ -123,6 +123,15 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <div class="stage">
       <div class="viewer" id="viewer">
         <div class="chip" id="chip"></div>
+        <button class="vbtn" id="vopts" aria-label="View options" aria-expanded="false" aria-controls="vpanel" title="View options">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M1.5 10s3.2-5.5 8.5-5.5S18.5 10 18.5 10s-3.2 5.5-8.5 5.5S1.5 10 1.5 10Z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="10" r="2.6" fill="currentColor"/></svg>
+        </button>
+        <div class="vpanel" id="vpanel" hidden>
+          <span class="lbl">Projection</span>
+          <div class="seg" id="view" role="group" aria-label="Projection">
+            <button data-view="persp">Perspective</button><button data-view="ortho">Orthographic</button>
+          </div>
+        </div>
       </div>
       <div class="strip" id="strip" aria-label="Neighbouring seeds"></div>
       <p class="err" id="err" hidden></p>
@@ -921,6 +930,13 @@ const shapeEl = $('shape');
 for (const t of TARGETS) { const o = document.createElement('option'); o.value = t.key; o.textContent = t.label; shapeEl.append(o); }
 shapeEl.addEventListener('change', () => { state.shape = shapeEl.value; update(); });
 for (const b of $('view').children) b.addEventListener('click', () => setView(b.dataset.view));
+// the view options: a button on the 3D view opens a small panel; a click elsewhere or Escape closes it
+const vopts = $('vopts'), vpanel = $('vpanel');
+const showPanel = open => { vpanel.hidden = !open; vopts.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+vopts.addEventListener('click', e => { e.stopPropagation(); showPanel(vpanel.hidden); });
+vpanel.addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', () => showPanel(false));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !vpanel.hidden) { showPanel(false); vopts.focus(); } });
 for (const k of Object.keys(SLIDERS)) $(k).addEventListener('input', e => { state[k] = +e.target.value; showValue($('o-' + k), $(k), SLIDERS[k]); update(); });
 for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.target.checked; update(); });
 $('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS); syncUI(); update(); });
