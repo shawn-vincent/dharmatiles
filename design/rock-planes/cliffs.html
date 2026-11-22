@@ -212,7 +212,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share a layer (they meet end to end) split where two layers between them meet, so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b> sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge); each split adds a random part that grows with Vary. It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
       <li><b>Bedding</b> (on by default, under Rocks): a stone whose underside overhangs past 65° (red; orange is fine) is made to stand on something, at construction, and never leaves its envelope. Stones are bedded from the lowest up, each on what is already there. A stone near the ground (within 2 mm) gets a <b>foot</b>: its lowest 1.5 mm (or up to the top of any overhanging face that starts there, such as a chamfer along its ground edge, at most 6 mm) extended straight down to the ground, so its ground edges are sharp (no chamfer under it) and its bottom is flat on the ground. A small gap (up to 2 mm) is closed by stretching the stone down by the median of its red points' gaps to what is that near below them, so it sits on what is near without sinking into it, its top held; stretching also turns every face toward upright, so some faces need no drop at all (it holds the stone's footprint, so it stays in the envelope). Points further off get <b>corbels</b> (as the cliff element's support cone): a corbel is the hull of some loose points and their ends, each point swept along one direction within 55° of straight down until it meets a bedded stone or the ground, so each wall is parallel to the sweep (leaning no more than 55°) or rests on what the points reach. A corbel lands on one thing, the ground or one stone, so its bottom rests on it and never hangs between two. A stone gets up to six, each taking the direction and the landing that hold up the most of the points still loose: straight down under a slab (bridging a joint below), slanted back under a lip. A corbel is short: a point runs no further than its stone is tall (at least 4 mm, at most 10 mm), and never out of its stone's envelope, which also cuts every corbel; a point nothing holds within that is left as it is, since a long strut across the face reads as a sliver, not a stone. So a cantilever is held up by the stone beside or below it instead of a column to the ground, and the corbel holds up the stones above in turn.</li>
       <li><b>Held faces are not painted.</b> Orange and red mark overhang past 55° and 65°, except where a face is held up: a face on the ground, or a face buried inside a foot, a corbel or another stone, or a bridge: a downward face is split into triangles, and a triangle with at least two corners resting on something (a stone, a corbel or the ground, within 0.15 mm below or inside it) spans between them.</li>
-      <li><b>Rocks.</b> Each mass is a hull for Rocks from Hulls: <b>Rocks</b> sets its faces, chamfers, tilt, sink and weathering. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
+      <li><b>Rocks.</b> Each mass becomes a stone: every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
     </ol>
     <p class="hint"><b>Granite wall</b>, the first style: one layer through the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; Joint under zero, so they merge into one irregular mass. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart. <b>Layered</b>: nine level layers, a handful of slabs in each. <b>Massive</b>: two layers parallel to the front, big stones. <b>Stone wall</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone.</p>
     <p class="hint">Not here yet, from the design: envelopes with concavities and holes (each mass is clipped by a box envelope), curved or irregular ends, twisting sections, and joint faces kept flush (a rock's sink opens every joint). Every job draws from its own stream (the planes, each plane's starts, each spine, each end, the fuzz, each joint, each rock), so one control never reshuffles another. Overhang paints orange past 55° and red past 65°.</p>
@@ -254,573 +254,188 @@ function boxPoly(lo, hi) {
   return faces;
 }
 function clip(poly, pl) {
-  const eps = 1e-7; let cut = false; const out = [], cap = [];
+  const eps = 1e-7, nx = pl.n[0], ny = pl.n[1], nz = pl.n[2], b0 = pl.b;
+  let any = false;   // a plane that misses the solid leaves it as it is
+  for (const f of poly) { for (const v of f.verts) if (nx * v[0] + ny * v[1] + nz * v[2] - b0 > eps) { any = true; break; } if (any) break; }
+  if (!any) return poly;
+  const out = [], cap = [];
   for (const f of poly) {
-    const ds = f.verts.map(v => dot(pl.n, v) - pl.b);
-    if (ds.every(d => d <= eps)) { out.push(f); ds.forEach((d, i) => { if (d > -eps) cap.push(f.verts[i]); }); continue; }
-    cut = true;
-    if (ds.every(d => d >= -eps)) continue;
-    const vs = [], m = f.verts.length;
+    const vs0 = f.verts, m = vs0.length, ds = new Array(m);
+    let hi = -Infinity, lo = Infinity;
+    for (let i = 0; i < m; i++) { const v = vs0[i], d = nx * v[0] + ny * v[1] + nz * v[2] - b0; ds[i] = d; if (d > hi) hi = d; if (d < lo) lo = d; }
+    if (hi <= eps) { out.push(f); for (let i = 0; i < m; i++) if (ds[i] > -eps) cap.push(vs0[i]); continue; }
+    if (lo >= -eps) continue;
+    const vs = [];
     for (let i = 0; i < m; i++) {
-      const a = f.verts[i], b = f.verts[(i + 1) % m], da = ds[i], db = ds[(i + 1) % m];
+      const a = vs0[i], c = vs0[(i + 1) % m], da = ds[i], dc = ds[(i + 1) % m];
       if (da <= eps) { vs.push(a); if (da > -eps) cap.push(a); }
-      if ((da < -eps && db > eps) || (da > eps && db < -eps)) { const p = add(a, mul(sub(b, a), da / (da - db))); vs.push(p); cap.push(p); }
+      if ((da < -eps && dc > eps) || (da > eps && dc < -eps)) { const p = add(a, mul(sub(c, a), da / (da - dc))); vs.push(p); cap.push(p); }
     }
     const vd = dedupe(vs, 1e-7); if (vd.length >= 3) out.push({ ...f, verts: vd });
   }
-  if (!cut) return poly;
   const cp = dedupe(cap, 1e-6);
   if (cp.length >= 3) out.push({ n: pl.n, b: pl.b, role: pl.role, verts: orderAround(cp, pl.n) });
   return out;
 }
 function faceArea(f) { let a = [0, 0, 0]; const v = f.verts; for (let i = 1; i + 1 < v.length; i++) a = add(a, cross(sub(v[i], v[0]), sub(v[i + 1], v[0]))); return len(a) / 2; }
-function volume(poly) { let v = 0; for (const f of poly) { const p0 = f.verts[0]; for (let i = 1; i + 1 < f.verts.length; i++) v += dot(p0, cross(f.verts[i], f.verts[i + 1])); } return v / 6; }
-// ---------- the algorithm: one pass ----------
+// ---------- a stone: its mass's convex cell, each face turned and sunk into facets, its edges and corners chamfered ----------
 // turn a direction at random: a random axis across it, an angle of about sigma
 function turn(n, sigmaDeg, r) {
   const th = sigmaDeg * DEG * Math.sqrt(-2 * Math.log(1 - r() * 0.999)), ph = 2 * Math.PI * r();
   const u = perp(n), v = cross(n, u);
   return unit(add(mul(n, Math.cos(th)), add(mul(u, Math.sin(th) * Math.cos(ph)), mul(v, Math.sin(th) * Math.sin(ph)))));
 }
-
 // a stream keyed by any words, for jobs that must not move one another
 function keyed(...keys) { let h = 2166136261; for (const ch of keys.join('/')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return mulberry32(h >>> 0); }
-// a chamfer's turn: one draw, up to half of Tilt, and never more than two thirds of the way from its own direction to the nearest
-// face it cuts (a third of the angle between two faces), so it always stays on its edge or corner. It comes with its mirror and
-// with no turn, then turned as far as that limit away from each face it cuts: the chamfer takes the first that bites a whole Sink
-// (no second draw: a touch point near the edge is cleared by turning away from its face)
-function chamferTurns(n, faces, tiltDeg, r) {
-  const near = Math.min(...faces.map(f => Math.acos(Math.max(-1, Math.min(1, dot(n, unit(f))))))), cap = near * 2 / 3;
-  const th = Math.min(tiltDeg / 2 * DEG, cap) * Math.sqrt(r()), ph = 2 * Math.PI * r();
-  const u = perp(n), v = cross(n, u), w = add(mul(u, Math.cos(ph)), mul(v, Math.sin(ph)));
-  const away = faces.map(f => { const a = sub(mul(n, dot(n, unit(f))), unit(f)), l = len(a); return l < 1e-9 ? n : unit(add(mul(n, Math.cos(cap)), mul(a, Math.sin(cap) / l))); });
-  return [unit(add(mul(n, Math.cos(th)), mul(w, Math.sin(th)))), unit(add(mul(n, Math.cos(th)), mul(w, -Math.sin(th)))), n, ...away];
-}
-const LEAN = 1.5;  // a turned face plane may dip no deeper into the shape than at its own point plus this (% of size)
-// the shape's own bounding planes: a hull's faces
-function boundsOf(S) { return S.ownFaces; }
 const reach = (poly, n) => { let m = -Infinity; for (const f of poly) for (const v of f.verts) m = Math.max(m, dot(n, v)); return m; };
-
-function build(shape, seed, P) {
-  const S = shape, size = S.size, sink = P.sink / 100 * size, cham = sink / 2, lean = LEAN / 100 * size;
-  const contacts = S.contacts(stream(seed, 8));
-  const cands = S.candidates(stream(seed, 1));
-  cands.forEach((c, i) => { c.id = i; });   // a spot's own name, which keys its plane's stream
-  const byKind = k => cands.filter(c => c.kind === k);
-  const order = (list, k) => { const r = stream(seed, k); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
-  const corners = order(byKind('corner'), 2), edgeC = order(byKind('edge'), 3), faceC = order(byKind('face'), 4);
-
-  // Chamfered of the edges' total length, and of the corners, drawn, are chamfered; the rest get no plane. An edge is taken whole,
-  // in the drawn order, while that brings the length nearer the share (a round rim is many short edges, so it is taken in pieces)
-  const edgeKeys = [...new Set(edgeC.map(c => c.key))], cornerKeys = corners.map(c => c.key);
-  const edgeLen = new Map(edgeC.map(c => [c.key, c.len || 1]));
-  const lenOf = keys => keys.reduce((t, k) => t + edgeLen.get(k), 0), wantLen = lenOf(edgeKeys) * P.edges / 100;
-  const shareLen = keys => { const out = []; let got = 0; for (const k of keys) if (got + edgeLen.get(k) / 2 <= wantLen + 1e-9) { out.push(k); got += edgeLen.get(k); } return out; };
-  const bitten = new Set([...shareLen(order(edgeKeys, 6)), ...order(cornerKeys, 7).slice(0, Math.round(cornerKeys.length * P.edges / 100))]);
-
-  // pick anchors. Planes face planes are thrown over the faces, kept apart from one another; then each chamfered corner gets one
-  // plane and each chamfered edge planes spaced along it, kept apart from one another. The two never look at each other, so
-  // Chamfered never moves a face plane and Planes never moves a chamfer
-  const N = P.faceN, gap0 = P.gap0;   // the hull's share of Planes, at the whole rock's spacing
-  const faceA = [], edgeA = [];
-  const farFrom = (list, c, g) => { const g2 = g * g, p = c.p; return list.every(t => { const x = t.p[0] - p[0], y = t.p[1] - p[1], z = t.p[2] - p[2]; return x * x + y * y + z * z >= g2; }); };
-  let gap = gap0;
-  for (let pass = 0; pass < 6 && faceA.length < N; pass++, gap *= 0.85)
-    for (const c of faceC) { if (faceA.length >= N) break; if (!c.used && farFrom(faceA, c, gap)) { c.used = true; faceA.push(c); } }
-  for (const c of corners) if (bitten.has(c.key)) edgeA.push(c);
-  for (const key of edgeKeys) if (bitten.has(key)) { const on = edgeC.filter(c => c.key === key); edgeA.push(on.find(c => farFrom(edgeA, c, gap0)) || on[0]); }
-  for (const c of edgeC) if (bitten.has(c.key) && !edgeA.includes(c) && farFrom(edgeA, c, 1.5 * gap0)) edgeA.push(c);
-  const taken = [...edgeA, ...faceA];
-
-  // every plane passes through or beyond every touch point
-  // a flat face's crown: its plane turned by Tilt about the touch point, with a patch of drawn size around the
-  // point that no other plane may cut, so the face's planes meet around a facet, not at a point
-  const rc = stream(seed, 9), guards = [], crowns = [];
-  for (const c of contacts) {
-    if (!c.n) { guards.push(c.p); continue; }
-    const n = turn(c.n, P.tilt, rc), u = perp(n), v = cross(n, u), rho = c.room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
-    for (let k = 0; k < 6; k++) { const ph = ph0 + k * Math.PI / 3; guards.push(add(c.p, add(mul(u, rho * Math.cos(ph)), mul(v, rho * Math.sin(ph))))); }
-    crowns.push({ n, b: dot(n, c.p), role: 'face' });
-  }
-  // face planes keep clear of the crowns' patches; chamfers only of the touch points themselves, so a chamfer may eat into a crown
-  const points = contacts.map(c => c.p);
-  const through = (n, b, keep = guards) => { for (const g of keep) b = Math.max(b, dot(n, g)); return b; };
-  // a face plane's turn: one draw from its own stream (a direction and a size), scaled by Tilt, so a higher Tilt turns the same
-  // plane further. If the turn would dip deeper into the shape anywhere than at its own point (plus its allowance), it is shortened
-  // just enough, never drawn again
-  const turnedFace = (n0, p0, allow, rr) => {
-    const th = P.tilt * DEG * Math.sqrt(-2 * Math.log(1 - rr() * 0.999)), ph = 2 * Math.PI * rr();
-    const u = perp(n0), v = cross(n0, u), w = add(mul(u, Math.cos(ph)), mul(v, Math.sin(ph)));
-    const at = sc => unit(add(mul(n0, Math.cos(sc * th)), mul(w, Math.sin(sc * th))));
-    const extra = sc => S.support(at(sc)) - dot(at(sc), p0) - allow;
-    let sc = 1;
-    if (extra(1) > 0) { if (extra(0) > 0) sc = 0; else { let lo = 0, hi = 1; for (let k = 0; k < 16; k++) { const m = (lo + hi) / 2; if (extra(m) > 0) hi = m; else lo = m; } sc = lo; } }
-    return at(sc);
-  };
-  const touchOf = fi => fi === undefined ? null : contacts.find(c => c.fi === fi);
-
-  // face planes: the face's tangent domed around its touch point, turned, sunk
-  const pad = 2 + 0.3 * size;
-  let poly = boxPoly(sub(S.lo, [pad, pad, pad]), add(S.hi, [pad, pad, pad]));
-  const planes = [...crowns];
-  for (const a of taken) if (a.kind === 'face') {
-    let n0 = a.n, p0 = a.p, allow = lean;
-    const t = touchOf(a.fi);
-    if (t) {
-      const d = sub(a.p, t.p), rr = len(d), k = Math.tan(P.tilt * DEG);   // the dome: lean away from the touch point, up to Tilt at the rim
-      allow += k * a.fr / 2;
-      if (rr > 1e-6) { n0 = unit(add(a.n, mul(d, k / a.fr))); p0 = sub(a.p, mul(a.n, k * rr * rr / (2 * a.fr))); }
-    }
-    const rr = keyed(seed, 'face', a.id), depth = sink * (0.5 + 0.5 * rr()), n = turnedFace(n0, p0, allow, rr);
-    planes.push({ n, b: through(n, dot(n, p0) - depth), role: 'face' });
-  }
-  // a plane meeting others outside the hull is sunk by how far their corner pokes out (along the line from the hull's centre),
-  // as far as the touch points let it: one pass
-  const poke = v => { const d = sub(v, S.centre); let t = 1; for (const f of S.ownFaces) { const c = dot(f.n, d); if (c > 1e-12) t = Math.min(t, (f.b - dot(f.n, S.centre)) / c); } return (1 - t) * len(d); };
-  { let q = poly; for (const pl of planes) q = clip(q, pl);
-    const push = new Map();
-    for (const f of q) if (f.role === 'face') for (const v of f.verts) { const d = poke(v); if (d > 1e-4) push.set(f, Math.max(push.get(f) || 0, d)); }
-    for (const pl of planes) { const f = q.find(f => f.n === pl.n && f.b === pl.b); if (f && push.has(f)) pl.b = through(pl.n, pl.b - push.get(f) * 1.1); } }
-  for (const pl of planes) poly = clip(poly, pl);
-  for (const pl of boundsOf(S)) poly = clip(poly, { ...pl, role: 'touch' });
-
-  // chamfer planes: set against what the faces leave, cutting half to all of Sink into it
-  // if a touch point keeps one from cutting that deep, the next sharp one in the drawn order is chamfered instead
-  const ec = taken.filter(a => a.kind !== 'face'), byKey = new Map();
-  for (const a of ec) (byKey.get(a.key) || byKey.set(a.key, []).get(a.key)).push(a);
-  const first = key => corners.find(c => c.key === key) || edgeC.find(c => c.key === key);
-  const bites = new Map(), made = new Map();
-  const make = key => {
-    if (!byKey.has(key)) byKey.set(key, [first(key)]);
-    let most = 0; const pls = (byKey.get(key) || []).map((a, i) => {
-      // one draw from the chamfer's own stream; it stops at a touch point rather than being drawn again
-      const rr = keyed(seed, 'chamfer', key, i), turns = chamferTurns(a.n, a.fn, P.tilt, rr), depth = cham * (1 + rr());   // half to all of Sink
-      const tries = turns.map(n => { const b = through(n, reach(poly, n) - depth, points); return { n, b, bite: reach(poly, n) - b }; });
-      const { n, b } = tries.find(t => t.bite >= cham - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x);
-      most = Math.max(most, reach(poly, n) - b); return { n, b, role: a.kind };
-    });
-    bites.set(key, most); made.set(key, pls);
-  };
-  for (const key of [...byKey.keys()]) make(key);
-  const biting = key => bites.get(key) >= cham - 1e-6;
-  { const want = lenOf(shareLen(order(edgeKeys, 6))), ok = () => lenOf(edgeKeys.filter(biting));
-    for (const key of order(edgeKeys, 6)) { if (ok() >= want - 1e-9) break; if (!biting(key)) make(key); } }
-  { const want = Math.round(cornerKeys.length * P.edges / 100), ok = () => cornerKeys.filter(biting).length;
-    for (const key of order(cornerKeys, 7)) { if (ok() >= want) break; if (!biting(key)) make(key); } }
-  for (const pls of made.values()) for (const pl of pls) poly = clip(poly, pl);
-
-  return { poly };   // a hull's rock stays where the hull is; the whole rock is set down at the end
-}
-
-// ---------- targets: each written as alternating convex hulls (a hull, minus hollows, plus bumps inside them) ----------
-// a convex solid is a list of half-spaces { n, b } (n·x <= b); its faces come from cutting a big box by them
-function solidOf(planes) { let p = boxPoly([-80, -80, -80], [80, 80, 80]); for (const pl of planes) p = clip(p, { ...pl, role: 'hull' }); return p; }
-function prism(P2, z0, z1) {   // a counter-clockwise outline, stood up from z0 to z1
-  const out = [{ n: [0, 0, 1], b: z1 }, { n: [0, 0, -1], b: -z0 }];
-  P2.forEach((a, i) => { const c = P2[(i + 1) % P2.length], d = [c[0] - a[0], c[1] - a[1]], l = Math.hypot(d[0], d[1]), n = [d[1] / l, -d[0] / l, 0]; out.push({ n, b: n[0] * a[0] + n[1] * a[1] }); });
-  return out;
-}
-function pyramidDown(P2, zTop, apex) {   // a pit: an outline at zTop, narrowing down to an apex
-  const out = [{ n: [0, 0, 1], b: zTop }], c = P2.reduce((s, p) => [s[0] + p[0] / P2.length, s[1] + p[1] / P2.length], [0, 0]);
-  P2.forEach((a2, i) => {
-    const b2 = P2[(i + 1) % P2.length], a = [a2[0], a2[1], zTop], b = [b2[0], b2[1], zTop];
-    let n = unit(cross(sub(b, a), sub(apex, a))); if (dot(n, sub([c[0], c[1], zTop - 1], a)) > 0) n = mul(n, -1);
-    out.push({ n, b: dot(n, a) });
-  });
-  return out;
-}
-const ring2 = (k, r, ph, cw) => Array.from({ length: k }, (_, i) => { const t = ph + (cw ? -1 : 1) * 2 * Math.PI * i / k; return [r * Math.cos(t), r * Math.sin(t)]; });
-const node = (planes, kids = []) => ({ planes, kids });
-// the shapes Rock Planes has, the same on both pages: a flat-faced one is one hull; a curved one is one hull of its tangent planes
-// that keeps the curved shape's own touch points and spots (curved), so its rock is built exactly as on Rock Planes
-function facesOf(verts, faces) {
-  const c = mul(verts.reduce(add, [0, 0, 0]), 1 / verts.length);
-  return faces.map(f => { const [a, b, d] = f.map(i => verts[i]); let n = unit(cross(sub(b, a), sub(d, a))); if (dot(n, sub(c, a)) > 0) n = mul(n, -1); return { n, b: dot(n, a) }; });
-}
-const boxPlanes = (dx, dy, dz) => prism([[-dx / 2, -dy / 2], [dx / 2, -dy / 2], [dx / 2, dy / 2], [-dx / 2, dy / 2]], 0, dz);
-function fib(M) { const out = []; for (let i = 0; i < M; i++) { const z = 1 - 2 * (i + 0.5) / M, ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z); out.push([h * Math.cos(ph), h * Math.sin(ph), z]); } return out; }
-function sphereDir(r) { const z = 2 * r() - 1, ph = 2 * Math.PI * r(), h = Math.sqrt(1 - z * z); return [h * Math.cos(ph), h * Math.sin(ph), z]; }
-function evenDirs(M, r) { const u = sphereDir(r), v = perp(u), w = cross(u, v); return fib(M).map(d => add(mul(u, d[0]), add(mul(v, d[1]), mul(w, d[2])))); }
-const curved = (shape, dirs) => Object.assign(node(dirs.map(n => ({ n, b: shape.support(n) }))), { curved: shape });
-const SPHERE = (() => { const R = 10, c = [0, 0, 10]; return { support: n => dot(n, c) + R,
-  contacts: r => evenDirs(8, r).map(u => ({ p: add(c, mul(u, R)) })),
-  candidates: r => { const out = []; for (let i = 0; i < 4000; i++) { const u = sphereDir(r); out.push({ p: add(c, mul(u, R)), n: u, kind: 'face' }); } return out; } }; })();
-const OVAL = (() => { const a = 14, b = 9, cz = 8, c = [0, 0, cz]; return { support: n => dot(n, c) + Math.sqrt((a * n[0]) ** 2 + (b * n[1]) ** 2 + (cz * n[2]) ** 2),
-  contacts: r => evenDirs(8, r).map(u => ({ p: add(c, [a * u[0], b * u[1], cz * u[2]]) })),
-  candidates: r => { const out = [];
-    while (out.length < 4000) { const u = sphereDir(r), n = unit([u[0] / a, u[1] / b, u[2] / cz]), w = Math.sqrt((b * cz * u[0]) ** 2 + (a * cz * u[1]) ** 2 + (a * b * u[2]) ** 2) / (a * b);
-      if (r() < w) out.push({ p: add(c, [a * u[0], b * u[1], cz * u[2]]), n, kind: 'face' }); }
-    return out; } }; })();
-const CYLINDER = (() => { const r0 = 9, h = 16; return { support: n => r0 * Math.sqrt(n[0] * n[0] + n[1] * n[1]) + h / 2 * Math.abs(n[2]) + h / 2 * n[2],
-  contacts: r => { const out = [], disc = up => { const ph = 2 * Math.PI * r(), rr = r0 * 0.5 * Math.sqrt(r()); return { p: [rr * Math.cos(ph), rr * Math.sin(ph), up ? h : 0], fi: up ? 'top' : 'bot', n: [0, 0, up ? 1 : -1], fr: r0, room: r0 - rr }; };
-    out.push(disc(true), disc(false)); const ph0 = 2 * Math.PI * r();
-    for (let k = 0; k < 4; k++) { const ph = ph0 + k * Math.PI / 2 + (r() - 0.5) * 0.6; out.push({ p: [r0 * Math.cos(ph), r0 * Math.sin(ph), h * (0.25 + 0.5 * r())] }); }
-    return out; },
-  candidates: r => { const out = [], side = 2 * Math.PI * r0 * h, top = 2 * Math.PI * r0 * r0;
-    for (let i = 0; i < 4000; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0];
-      if (r() < side / (side + top)) out.push({ p: [r0 * d[0], r0 * d[1], h * r()], n: d, kind: 'face' });
-      else { const rr = r0 * Math.sqrt(r()), up = r() < 0.5; out.push({ p: [rr * d[0], rr * d[1], up ? h : 0], n: [0, 0, up ? 1 : -1], kind: 'face', fi: up ? 'top' : 'bot', fr: r0 }); } }
-    const RIM = 24, piece = ph => Math.min(RIM - 1, Math.floor(ph / (2 * Math.PI) * RIM)), plen = 2 * Math.PI * r0 / RIM;
-    for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], h], n: unit([d[0], d[1], 1]), fn: [[0, 0, 1], d], kind: 'edge', key: 'etop' + piece(ph), len: plen }); }
-    for (let i = 0; i < 600; i++) { const ph = 2 * Math.PI * r(), d = [Math.cos(ph), Math.sin(ph), 0]; out.push({ p: [r0 * d[0], r0 * d[1], 0], n: unit([d[0], d[1], -1]), fn: [[0, 0, -1], d], kind: 'edge', key: 'ebot' + piece(ph), len: plen }); }
-    return out; } }; })();
-const roundDirs = M => [...Array.from({ length: M }, (_, i) => [Math.cos(2 * Math.PI * i / M), Math.sin(2 * Math.PI * i / M), 0]), [0, 0, 1], [0, 0, -1]];
-const TARGETS = [
-  { key: 'sphere', label: 'Sphere', tree: curved(SPHERE, [...fib(160), [0, 0, -1]]) },
-  { key: 'cube', label: 'Cube', tree: node(boxPlanes(18, 18, 18)) },
-  { key: 'pyramid', label: 'Pyramid', tree: node(facesOf([[-11, -11, 0], [11, -11, 0], [11, 11, 0], [-11, 11, 0], [0, 0, 18]], [[0, 1, 2], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]])) },
-  { key: 'slab', label: 'Slab', tree: node(boxPlanes(28, 20, 8)) },
-  { key: 'oval', label: 'Oval', tree: curved(OVAL, [...fib(160), [0, 0, -1]]) },
-  { key: 'wedge', label: 'Wedge', tree: node(facesOf([[-12, -8, 0], [-12, 8, 0], [-12, -8, 14], [12, -8, 0], [12, 8, 0], [12, -8, 14]], [[0, 1, 2], [3, 4, 5], [0, 1, 4], [0, 2, 5], [1, 2, 5]])) },
-  { key: 'cylinder', label: 'Cylinder', tree: curved(CYLINDER, roundDirs(48)) },
-  { key: 'l', label: 'L-block', tree: node(prism([[-9, -9], [9, -9], [9, -1], [-1, 9], [-9, 9]], 0, 10), [node(prism([[9, -1], [-1, 9], [-1, -1]], 0, 10))]) },
-  { key: 'u', label: 'U-block', tree: node(prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 10), [node(prism([[-4, -3], [4, -3], [4, 9], [-4, 9]], 0, 10))]) },
-  { key: 'ring', label: 'Ring', tree: node(prism(ring2(8, 10, Math.PI / 8), 0, 9), [node(prism(ring2(7, 4.4, 0.3), 0, 9))]) },
-  { key: 'pit', label: 'Block with a pit', tree: node(prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 12), [node(pyramidDown([[-5, -5], [5, -5], [5, 5], [-5, 5]], 12, [0.5, -0.5, 5]))]) },
-  { key: 'arch', label: 'Arch', tree: node(prism([[-9, -7], [9, -7], [9, 7], [-9, 7]], 0, 13), [node(prism([[-9, -3.5], [9, -3.5], [9, 3.5], [-9, 3.5]], 0, 6.5))]) },
-  { key: 'peak', label: 'Notch with a peak', tree: node(prism([[-9, -9], [9, -9], [9, 9], [-9, 9]], 0, 10), [node(prism([[-4.5, 9], [-2, 1], [2, 1], [4.5, 9]], 0, 10), [node(prism([[-2, 1], [2, 1], [0, 6]], 0, 10))])]) },
-];
-
-// ---------- the hull tree, made ready ----------
-const samePlane = (f, g) => dot(f.n, g.n) > 1 - 1e-9 && Math.abs(f.b - g.b) < 1e-6;
 const centroidOf = pts => mul(pts.reduce(add, [0, 0, 0]), 1 / pts.length);
-function inFace(f, p, eps = 1e-9) { const v = f.verts; for (let i = 0; i < v.length; i++) { const a = v[i], b = v[(i + 1) % v.length]; if (dot(cross(sub(b, a), sub(p, a)), f.n) < -eps) return false; } return true; }
-function prepare(T) {
-  if (T._ready) return T;
-  const all = [];
-  const walk = (nd, parent, sign, path) => {
-    nd.parent = parent; nd.sign = sign; nd.path = path; nd.poly = solidOf(nd.planes); all.push(nd);
-    nd.kids.forEach((k, i) => walk(k, nd, -sign, path + '.' + i));
-  };
-  walk(T.tree, null, 1, 'h');
-  for (const nd of all) {
-    nd.mouth = nd.poly.map(f => !!nd.parent && nd.parent.poly.some((g, gi) => samePlane(f, g) && !nd.parent.mouth[gi]));
-    // a point on face fi is real surface (the target's own) unless the face is a mouth or a child's mouth covers it
-    nd.real = (fi, p) => !nd.mouth[fi] && !nd.kids.some(k => k.poly.some(g => samePlane(g, nd.poly[fi]) && inFace(g, p, 1e-7)));
-    const r = mulberry32(12345);
-    nd.realArea = nd.poly.map((f, fi) => { if (nd.mouth[fi]) return 0; const pts = sampleFace(f, 300, r); return faceArea(f) * pts.filter(p => nd.real(fi, p)).length / pts.length; });
-  }
-  const lo = [0, 1, 2].map(i => Math.min(...T.tree.poly.flatMap(f => f.verts.map(v => v[i])))), hi = [0, 1, 2].map(i => Math.max(...T.tree.poly.flatMap(f => f.verts.map(v => v[i]))));
-  Object.assign(T, { _ready: true, all, lo, hi, size: (hi[0] - lo[0] + hi[1] - lo[1] + hi[2] - lo[2]) / 3, area: all.reduce((t, nd) => t + nd.realArea.reduce((u, a) => u + a, 0), 0) });
-  const open = nd => { const planes = nd.poly.map((f, fi) => ({ n: f.n, b: f.b + (nd.mouth[fi] ? 1 : 0) })); return { planes, faces: solidOf(planes) }; };
-  T.surf = surfaceOf(all.filter(nd => nd.sign > 0).map(nd => ({ solid: { planes: nd.planes, faces: nd.poly }, cuts: nd.kids.map(open) })));
-  T.volume = volumeOf(T.surf.faces);
-  T.rims = rimsOf(T);
-  return T;
-}
+const samePlane = (f, g) => dot(f.n, g.n) > 1 - 1e-9 && Math.abs(f.b - g.b) < 1e-6;
+function fib(M) { const out = []; for (let i = 0; i < M; i++) { const z = 1 - 2 * (i + 0.5) / M, ph = i * Math.PI * (3 - Math.sqrt(5)), h = Math.sqrt(1 - z * z); out.push([h * Math.cos(ph), h * Math.sin(ph), z]); } return out; }
 function sampleFace(f, m, r) {
   const v = f.verts, tris = []; for (let i = 1; i + 1 < v.length; i++) tris.push([v[0], v[i], v[i + 1], len(cross(sub(v[i], v[0]), sub(v[i + 1], v[0])))]);
   const tot = tris.reduce((t, a) => t + a[3], 0), out = [];
   for (let k = 0; k < m; k++) { let x = r() * tot, T = tris[0]; for (const t of tris) { T = t; if ((x -= t[3]) <= 0) break; } let u = r(), w = r(); if (u + w > 1) { u = 1 - u; w = 1 - w; } out.push(add(T[0], add(mul(sub(T[1], T[0]), u), mul(sub(T[2], T[0]), w)))); }
   return out;
 }
-
-// a rock hull as a shape Rock Planes can build on: its own faces bound the rock; touch points, corners, edges and face spots
-// are only where the hull's face is the target's real surface (never across a hollow's mouth)
-function hullShape(nd, T) {
-  const poly = nd.poly, verts = dedupe(poly.flatMap(f => f.verts), 1e-6);
-  if (nd.curved) return { support: nd.curved.support, centre: centroidOf(verts), ownFaces: poly.map(f => ({ n: f.n, b: f.b })), lo: T.lo, hi: T.hi, size: T.size, contacts: nd.curved.contacts, candidates: nd.curved.candidates };
-  const S = {
-    support: n => { let m = -Infinity; for (const v of verts) m = Math.max(m, dot(n, v)); return m; },
-    centre: centroidOf(verts),
-    ownFaces: poly.map(f => ({ n: f.n, b: f.b })),
-    lo: T.lo, hi: T.hi, size: T.size, height: T.hi[2] - T.lo[2],
-    contacts(r) {
-      const out = [];
-      poly.forEach((f, fi) => {
-        if (nd.realArea[fi] < 1) return;
-        const pts = sampleFace(f, 60, r).filter(p => nd.real(fi, p)); if (!pts.length) return;
-        const fc = centroidOf(pts), p = pts[Math.floor(r() * pts.length)];
-        let c = add(fc, mul(sub(p, fc), 0.35)); if (!nd.real(fi, c)) c = p;
-        // room: how far the touch point is from the nearest edge of the face's real part
-        const edges = [f, ...nd.kids.flatMap(k => k.poly.filter(g => samePlane(g, f)))];
-        let room = Infinity; for (const g of edges) for (let i = 0; i < g.verts.length; i++) { const A = g.verts[i], B = g.verts[(i + 1) % g.verts.length], e = sub(B, A), t = Math.max(0, Math.min(1, dot(sub(c, A), e) / dot(e, e))); room = Math.min(room, len(sub(c, add(A, mul(e, t))))); }
-        out.push({ p: c, fi, n: f.n, fr: Math.max(...pts.map(q => len(sub(q, fc)))), room });
-      });
-      return out;
-    },
-    candidates(r) {
-      const out = [], into = (f, a, b) => { let d = unit(cross(f.n, sub(b, a))); if (dot(d, sub(centroidOf(f.verts), a)) < 0) d = mul(d, -1); return d; };
-      // corners: a hull vertex whose every face is real right beside it
-      verts.forEach((v, i) => {
-        const fs = poly.map((f, fi) => [f, fi]).filter(([f]) => f.verts.some(w => len(sub(w, v)) < 1e-6));
-        if (fs.length >= 3 && fs.every(([f, fi]) => nd.real(fi, add(v, mul(unit(sub(centroidOf(f.verts), v)), 0.3)))))
-          out.push({ p: v, n: unit(fs.reduce((s, [f]) => add(s, f.n), [0, 0, 0])), fn: fs.map(([f]) => f.n), kind: 'corner', key: 'c' + i });
-      });
-      // edges: a hull edge whose two faces are real along it
-      const seen = new Map();
-      poly.forEach((f, fi) => f.verts.forEach((a, k) => {
-        const b = f.verts[(k + 1) % f.verts.length], ia = verts.findIndex(w => len(sub(w, a)) < 1e-6), ib = verts.findIndex(w => len(sub(w, b)) < 1e-6), key = Math.min(ia, ib) + '-' + Math.max(ia, ib);
-        (seen.get(key) || seen.set(key, { a, b, fs: [] }).get(key)).fs.push(fi);
-      }));
-      for (const [key, e] of seen) {
-        if (e.fs.length !== 2) continue;
-        const ok = [0.2, 0.5, 0.8].every(t => e.fs.every(fi => nd.real(fi, add(add(e.a, mul(sub(e.b, e.a), t)), mul(into(poly[fi], e.a, e.b), 0.3)))));
-        if (!ok) continue;
-        const ns = e.fs.map(fi => poly[fi].n), n = unit(add(ns[0], ns[1])), m = Math.ceil(len(sub(e.b, e.a)) * 1.5);
-        for (let k = 0; k < m; k++) out.push({ p: add(e.a, mul(sub(e.b, e.a), 0.04 + 0.92 * r())), n, fn: ns, kind: 'edge', key: 'e' + key, len: len(sub(e.b, e.a)) });
-      }
-      // face spots: spread by area over the real part of each face
-      poly.forEach((f, fi) => {
-        if (nd.realArea[fi] <= 0) return;
-        const fc = centroidOf(f.verts), fr = Math.max(...f.verts.map(v => len(sub(v, fc))));
-        for (const p of sampleFace(f, Math.ceil(faceArea(f) * 0.5), r)) if (nd.real(fi, p)) out.push({ p, n: f.n, kind: 'face', fi, fr });
-      });
-      return out;
-    },
+// a cut along an edge or a corner: its plane turned by one draw, up to half of Tilt and never more than two thirds of the way to
+// the nearest face it cuts (so it stays on its edge), with its mirror, no turn, and turned that far away from each face it cuts;
+// the chamfer takes the first that bites a whole half Sink past every touch point
+function chamferTurns(n, faces, tiltDeg, r) {
+  const near = Math.min(...faces.map(f => Math.acos(clamp(dot(n, f), -1, 1)))), cap = near * 2 / 3;
+  const th = Math.min(tiltDeg / 2 * DEG, cap) * Math.sqrt(r()), ph = 2 * Math.PI * r();
+  const u = perp(n), v = cross(n, u), w = add(mul(u, Math.cos(ph)), mul(v, Math.sin(ph)));
+  const away = faces.map(f => { const a = sub(mul(n, dot(n, f)), f), l = len(a); return l < 1e-9 ? n : unit(add(mul(n, Math.cos(cap)), mul(a, Math.sin(cap) / l))); });
+  return [unit(add(mul(n, Math.cos(th)), mul(w, Math.sin(th)))), unit(add(mul(n, Math.cos(th)), mul(w, -Math.sin(th)))), n, ...away];
+}
+const LEAN = 1.5;   // a turned facet may dip no deeper into the stone than at its own point plus this (% of size)
+// The stone: every face of the cell keeps a touch point, a small patch of it around which its own plane is turned by Tilt (a crown),
+// so the stone fills its cell; Facets planes are spread over the faces (spaced by area), each its face's plane domed away from the
+// face's touch point, turned by Tilt, sunk half to all of Sink, and moved out past every crown's patch; then Chamfered of the edges'
+// length and of the corners are cut, each half to all of Sink, never past a touch point
+function stoneOf(cell, seed, P) {
+  const verts = dedupe(cell.flatMap(f => f.verts), 1e-6), support = n => { let m = -Infinity; for (const v of verts) m = Math.max(m, dot(n, v)); return m; };
+  const lo = [0, 1, 2].map(i => Math.min(...verts.map(v => v[i]))), hi = [0, 1, 2].map(i => Math.max(...verts.map(v => v[i])));
+  const size = (hi[0] - lo[0] + hi[1] - lo[1] + hi[2] - lo[2]) / 3, sink = P.sink / 100 * size, cham = sink / 2, lean = LEAN / 100 * size;
+  const gap = 0.85 * Math.sqrt(cell.reduce((t, f) => t + faceArea(f), 0) / P.facets), k = Math.tan(P.rtilt * DEG);
+  const order = (list, s) => { const r = stream(seed, s); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
+  // touch points and crowns
+  const rc = stream(seed, 9), touch = [], guards = [], planes = [];
+  cell.forEach((f, fi) => {
+    if (faceArea(f) < 1) return;
+    const fc = centroidOf(f.verts), p = add(fc, mul(sub(sampleFace(f, 1, rc)[0], fc), 0.35)), fr = Math.max(...f.verts.map(v => len(sub(v, fc))));
+    let room = Infinity; f.verts.forEach((A, i) => { const e = sub(f.verts[(i + 1) % f.verts.length], A), t = clamp(dot(sub(p, A), e) / dot(e, e), 0, 1); room = Math.min(room, len(sub(p, add(A, mul(e, t))))); });
+    touch[fi] = { p, fr };
+    const n = turn(f.n, P.rtilt, rc), u = perp(n), v = cross(n, u), rho = room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
+    for (let j = 0; j < 6; j++) { const ph = ph0 + j * Math.PI / 3; guards.push(add(p, add(mul(u, rho * Math.cos(ph)), mul(v, rho * Math.sin(ph))))); }
+    planes.push({ n, b: dot(n, p) });
+  });
+  const points = touch.filter(Boolean).map(t => t.p);
+  const through = (n, b, keep = guards) => { for (const g of keep) b = Math.max(b, dot(n, g)); return b; };
+  // facets: spots spread by area, kept apart (the spacing loosened a little until Facets are placed)
+  const spots = order(cell.flatMap((f, fi) => touch[fi] ? sampleFace(f, Math.ceil(faceArea(f) * 0.5), stream(seed, 100 + fi)).map(p => ({ p, fi })) : []), 4), taken = [];
+  for (let pass = 0, g = gap; pass < 6 && taken.length < P.facets; pass++, g *= 0.85)
+    for (const s of spots) { if (taken.length >= P.facets) break; if (!s.used && taken.every(t => len(sub(t.p, s.p)) >= g)) { s.used = true; taken.push(s); } }
+  taken.forEach((s, i) => {
+    const f = cell[s.fi], t = touch[s.fi], d = sub(s.p, t.p), dd = len(d);
+    let n0 = f.n, p0 = s.p; const allow = lean + k * t.fr / 2;
+    if (dd > 1e-6) { n0 = unit(add(f.n, mul(d, k / t.fr))); p0 = sub(s.p, mul(f.n, k * dd * dd / (2 * t.fr))); }
+    // turned by one draw; if that dips deeper into the stone than its own point (plus its allowance), shortened just enough
+    const rr = keyed(seed, 'face', i), depth = sink * (0.5 + 0.5 * rr()), th = P.rtilt * DEG * Math.sqrt(-2 * Math.log(1 - rr() * 0.999)), ph = 2 * Math.PI * rr();
+    const u = perp(n0), w = add(mul(u, Math.cos(ph)), mul(cross(n0, u), Math.sin(ph))), at = sc => unit(add(mul(n0, Math.cos(sc * th)), mul(w, Math.sin(sc * th))));
+    const extra = sc => support(at(sc)) - dot(at(sc), p0) - allow;
+    let sc = 1; if (extra(1) > 0) { if (extra(0) > 0) sc = 0; else { let a = 0, b = 1; for (let j = 0; j < 12; j++) { const m = (a + b) / 2; if (extra(m) > 0) b = m; else a = m; } sc = a; } }
+    const n = at(sc); planes.push({ n, b: through(n, dot(n, p0) - depth) });
+  });
+  // a facet whose corners poke out of the cell is sunk by how far they poke, as far as the patches let it
+  { let q = boxPoly(sub(lo, [5, 5, 5]), add(hi, [5, 5, 5])); planes.forEach((pl, i) => { q = clip(q, { ...pl, role: i }); });
+    const out = v => Math.max(0, ...cell.map(f => dot(f.n, v) - f.b)), push = new Map();
+    for (const f of q) if (typeof f.role === 'number') for (const v of f.verts) push.set(f.role, Math.max(push.get(f.role) || 0, out(v)));
+    for (const [i, d] of push) if (d > 1e-4) planes[i].b = through(planes[i].n, planes[i].b - d * 1.1); }
+  let poly = cell; for (const pl of planes) poly = clip(poly, { ...pl, role: 'face' });
+  poly = polyFaces(poly);
+  // chamfers on what the facets leave: edges by length, corners by count, in a drawn order, each taken while it bites
+  const vid = v => verts.findIndex(w => len(sub(w, v)) < 1e-6), edges = new Map(), at = new Map();
+  cell.forEach(f => f.verts.forEach((a, i) => {
+    const b = f.verts[(i + 1) % f.verts.length], ia = vid(a), ib = vid(b), key = Math.min(ia, ib) + '-' + Math.max(ia, ib);
+    (edges.get(key) || edges.set(key, { a, b, fn: [] }).get(key)).fn.push(f.n);
+    for (const j of [ia]) (at.get(j) || at.set(j, []).get(j)).push(f.n);
+  }));
+  const cuts = [], cut = (anchors, fn, key) => {
+    let most = 0; const pls = anchors.map(([p, n], i) => {
+      const rr = keyed(seed, 'chamfer', key, i), depth = cham * (1 + rr());
+      const tries = chamferTurns(n, fn, P.rtilt, rr).map(m => { const top = reach(poly, m), b = through(m, top - depth, points); return { n: m, b, bite: top - b }; });
+      const t = tries.find(t => t.bite >= cham - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x); most = Math.max(most, t.bite); return t;
+    });
+    if (most < cham - 1e-6) return false; cuts.push(...pls); return true;
   };
-  return S;
-}
-
-// a hollow's pocket: each real face of its hull gets planes turned into the rock and pushed out to the hollow's hull, so the
-// pocket always holds the whole hollow and each face touches the target along an edge or at a corner. A face gets about one
-// plane for each plane spacing squared of its area (one to six), leaning different ways, so it bows into the rock
-function pocketOf(nd, T, seed, P) {
-  const sinkMM = P.sink / 100 * T.size, tt = Math.tan(P.tilt * DEG), planes = [];
-  const verts = dedupe(nd.poly.flatMap(f => f.verts), 1e-6), hs = n => Math.max(...verts.map(v => dot(n, v)));
-  nd.poly.forEach((f, fi) => {
-    if (nd.realArea[fi] < 0.5) return;
-    const rh = keyed(seed, 'hollow', nd.path, fi);
-    const k = Math.max(1, Math.min(6, Math.round(nd.realArea[fi] / (P.gap0 * P.gap0) * (0.6 + 0.8 * rh()))));
-    const u0 = perp(f.n), v0 = cross(f.n, u0), ph0 = 2 * Math.PI * rh();
-    for (let j = 0; j < k; j++) {
-      const ph = ph0 + 2 * Math.PI * j / k + (rh() - 0.5) * Math.PI / k, u = add(mul(u0, Math.cos(ph)), mul(v0, Math.sin(ph)));
-      const ext = Math.max(...f.verts.map(v => dot(u, v))) - Math.min(...f.verts.map(v => dot(u, v)));
-      const depth = sinkMM * 0.5 * (1 + rh()) + 0.5 * ext * tt * (0.6 + 0.8 * rh()), a = Math.atan2(depth, Math.max(ext, 1e-6));
-      const n = unit(add(mul(f.n, Math.cos(a)), mul(u, Math.sin(a))));
-      planes.push({ n, b: hs(n), role: 'hollow' });
-    }
-  });
-  // bounds: a mouth opens a little past itself; a real face lets the pocket into the rock no further than its planes can reach
-  for (const [fi, f] of nd.poly.entries()) {
-    const diam = Math.max(...f.verts.flatMap(a => f.verts.map(b => len(sub(a, b)))));
-    planes.push({ n: f.n, b: f.b + (nd.mouth[fi] ? 2 : nd.realArea[fi] > 0 ? sinkMM + 0.7 * diam * tt + 0.01 : 0), role: 'bound' });
-  }
-  return planes;
-}
-
-// ---------- the rims of hollows: where a rock face meets a hollow's wall at an outward edge ----------
-// neither hull owns these edges, so each gets its own chamfer, a cut of that edge alone, set against the rock that is there
-function rimsOf(T) {
-  const out = [];
-  for (const nd of T.all) if (nd.sign < 0 && nd.parent && nd.parent.sign > 0) {
-    const P = nd.parent;
-    nd.poly.forEach((W, wi) => {
-      if (nd.realArea[wi] <= 0) return;
-      W.verts.forEach((a, k) => {
-        const b = W.verts[(k + 1) % W.verts.length], mid = mul(add(a, b), 0.5);
-        const mi = nd.poly.findIndex((M, j) => j !== wi && Math.abs(dot(M.n, a) - M.b) < 1e-6 && Math.abs(dot(M.n, b) - M.b) < 1e-6);
-        if (mi < 0 || !nd.mouth[mi]) return;
-        const G = P.poly.find(g => samePlane(g, nd.poly[mi]));
-        // the rock face: the parent face the mouth lies in, if the edge is inside it; else the parent face across the edge
-        const off = unit(cross(nd.poly[mi].n, sub(b, a))), side = dot(off, sub(centroidOf(nd.poly[mi].verts), mid)) > 0 ? mul(off, -1) : off;
-        const probe = add(mid, mul(side, 0.05));
-        let F = G && inFace(G, probe, 1e-7) ? G : P.poly.find(g => !samePlane(g, nd.poly[mi]) && Math.abs(dot(g.n, a) - g.b) < 1e-6 && Math.abs(dot(g.n, b) - g.b) < 1e-6);
-        if (!F) return;
-        if (dot(F.n, mul(W.n, -1)) > Math.cos(25 * DEG)) return;   // nearly flat: no edge to chamfer
-        out.push({ nd, wi, mi, a, b, F, W, len: len(sub(b, a)), key: nd.path + ':' + wi + ':' + k });
-      });
-    });
-  }
-  return out;
-}
-// ---------- the whole rock ----------
-// The rock is each rock hull's convex solid less its hollows' cuts, and every cut is a convex region: a hollow's pocket, and for each
-// mouth with chamfered rims a flare. A flare is the hollow with those rims leaned outward: each wall at the mouth is either its
-// rim's chamfer plane (the region beyond it) or, unchamfered, the wall itself (a hair inside the hollow, so the pocket covers it).
-// Where two chamfers meet, the crease is simply where their planes cross.
-function buildRock(T, seed, P0) {
-  const t0 = performance.now();
-  prepare(T);
-  const gap0 = 0.85 * Math.sqrt(T.area / P0.planes), P = { ...P0, gap0 }, sinkMM = P.sink / 100 * T.size, cham = sinkMM / 2;
-  const nodeSeed = path => Math.floor(keyed(seed, 'node', path)() * 2147483647);
-  const rock = new Map(), cuts = new Map();
-  for (const nd of T.all) {
-    if (nd.sign > 0) {
-      const share = nd.realArea.reduce((t, a) => t + a, 0) / T.area;
-      const faces = build(hullShape(nd, T), nodeSeed(nd.path), { ...P, faceN: Math.max(1, Math.round(P.planes * share)) }).poly.filter(f => f.verts.length >= 3);
-      rock.set(nd, { planes: faces.map(f => ({ n: f.n, b: f.b })), faces });
-    } else { const planes = pocketOf(nd, T, seed, P); cuts.set(nd, [{ planes, faces: solidOf(planes) }]); }
-  }
-  // rims: Chamfered of their length, drawn; each one plane, one draw from its own stream, cutting half to all of Sink below where
-  // the rock's rim stands lowest (found at five points of the rim: out from the hollow's edge to the pocket's walls, then down to the rock's faces that face the same way as the rim's)
-  const rp = keyed(seed, 'rim-pick'), want = T.rims.reduce((t, m) => t + m.len, 0) * P.edges / 100, chosen = new Map();
+  const elist = [...edges].filter(([, e]) => e.fn.length === 2), total = elist.reduce((t, [, e]) => t + len(sub(e.b, e.a)), 0);
   let got = 0;
-  for (const m of T.rims.map(m => [rp(), m]).sort((x, y) => x[0] - y[0]).map(x => x[1])) {
-    if (got + m.len / 2 > want + 1e-9) continue; got += m.len;
-    const rr = keyed(seed, 'rim', m.key), nW = mul(m.W.n, -1), n = chamferTurns(unit(add(m.F.n, nW)), [m.F.n, nW], P.tilt, rr)[0], depth = cham * (1 + rr());
-    const R = rock.get(m.nd.parent).planes, K = cuts.get(m.nd)[0].planes;
-    let low = Infinity;
-    for (const u of [0.1, 0.3, 0.5, 0.7, 0.9]) {
-      const p = add(m.a, mul(sub(m.b, m.a), u));
-      let t = Infinity; for (const pl of K) { const c = dot(pl.n, m.W.n); if (c > 0.5) t = Math.min(t, (pl.b - dot(pl.n, p)) / c); }
-      const q = add(p, mul(m.W.n, t === Infinity ? 0 : t));
-      let d = 0; for (const pl of R) { const c = dot(pl.n, m.F.n); if (c > 0.5) d = Math.max(d, (dot(pl.n, q) - pl.b) / c); }
-      low = Math.min(low, dot(n, sub(q, mul(m.F.n, d))));
-    }
-    chosen.set(m.nd.path + ':' + m.wi + ':' + m.mi, { n, b: low - depth });
+  for (const [key, e] of order(elist, 6)) {
+    const L = len(sub(e.b, e.a)); if (got + L / 2 > total * P.chamfered / 100 + 1e-9) continue;
+    const m = Math.max(1, Math.round(L / (1.5 * gap))), n = unit(add(e.fn[0], e.fn[1]));
+    if (cut(Array.from({ length: m }, (_, j) => [add(e.a, mul(sub(e.b, e.a), (j + 0.5) / m)), n]), e.fn, 'e' + key)) got += L;
   }
-  for (const nd of T.all) if (nd.sign < 0) nd.poly.forEach((M, mi) => {
-    if (!nd.mouth[mi] || !nd.poly.some((W, wi) => chosen.has(nd.path + ':' + wi + ':' + mi))) return;
-    const planes = [];
-    nd.poly.forEach((W, wi) => {
-      if (nd.mouth[wi]) return;
-      const c = chosen.get(nd.path + ':' + wi + ':' + mi);
-      planes.push(c ? { n: mul(c.n, -1), b: -c.b, role: 'chamfer' } : { n: W.n, b: W.b - 1e-3, role: 'bound' });
-    });
-    cuts.get(nd).push({ planes, faces: solidOf(planes) });
-  });
-  const rocks = T.all.filter(nd => nd.sign > 0).map(nd => ({ solid: rock.get(nd), cuts: nd.kids.flatMap(k => cuts.get(k)) }));
-  const surf = P.weather > 0 ? weathered(rocks, T, P.weather, P.coarse) : surfaceOf(rocks);
-  const res = { surf, rim: { rimLen: T.rims.reduce((t, m) => t + m.len, 0), cutLen: got }, ms: performance.now() - t0 };
-  res.volume = volumeOf(surf.faces); res.fill = res.volume / T.volume;
-  return res;
+  const clist = [...at].filter(([, fn]) => fn.length >= 3); let want = Math.round(clist.length * P.chamfered / 100);
+  for (const [j, fn] of order(clist, 7)) { if (want <= 0) break; if (cut([[verts[j], unit(fn.reduce(add, [0, 0, 0]))]], fn, 'c' + j)) want--; }
+  for (const pl of cuts) poly = clip(poly, { ...pl, role: 'chamfer' });
+  return { poly: polyFaces(poly), lo, hi };
 }
-
-// ---------- the surface: a rock face shows outside every cut; a cut's face shows inside the rock and outside the other cuts ----------
-function clipPoly(vs, n, b) {   // keep n·x <= b
+function clipPoly(vs, n, b) {   // a convex polygon, kept where n·x <= b
   const out = [];
   for (let i = 0; i < vs.length; i++) {
     const a = vs[i], c = vs[(i + 1) % vs.length], da = dot(n, a) - b, dc = dot(n, c) - b;
     if (da <= 1e-9) out.push(a);
     if ((da < -1e-9 && dc > 1e-9) || (da > 1e-9 && dc < -1e-9)) out.push(add(a, mul(sub(c, a), da / (da - dc))));
   }
-  return out.length >= 3 ? dedupe(out, 1e-7) : out;
-}
-const polyArea = (vs, n) => { let a = [0, 0, 0]; for (let i = 1; i + 1 < vs.length; i++) a = add(a, cross(sub(vs[i], vs[0]), sub(vs[i + 1], vs[0]))); return Math.abs(dot(a, n)) / 2; };
-const solidPart = (vs, n) => vs.length >= 3 && polyArea(vs, n) > 1e-7;
-function outsideOf(vs, planes, n) {   // the parts of convex polygon vs outside a convex region, as convex polygons
-  for (const pl of planes) { let all = true; for (const v of vs) if (dot(pl.n, v) < pl.b - 1e-9) { all = false; break; } if (all) return [vs]; }
-  const out = []; let rest = vs;
-  for (const pl of planes) {
-    const o = clipPoly(rest, mul(pl.n, -1), -pl.b); if (solidPart(o, n)) out.push(o);
-    rest = clipPoly(rest, pl.n, pl.b); if (!solidPart(rest, n)) break;
-  }
   return out;
 }
-function minusPoly(vs, g, n) {   // the parts of convex vs outside convex g, both on one plane
-  const out = []; let rest = vs;
-  for (let i = 0; i < g.verts.length; i++) {
-    const A = g.verts[i], B = g.verts[(i + 1) % g.verts.length], m = unit(cross(sub(B, A), g.n));
-    const o = clipPoly(rest, mul(m, -1), -dot(m, A)); if (solidPart(o, n)) out.push(o);
-    rest = clipPoly(rest, m, dot(m, A)); if (!solidPart(rest, n)) return out;
-  }
-  return out;
+// a convex solid's surface: its faces, and each edge once
+function surfOf(poly) {
+  const lines = [], before = (a, b) => { for (let i = 0; i < 3; i++) if (Math.abs(a[i] - b[i]) > 1e-6) return a[i] < b[i]; return false; };
+  for (const f of poly) f.verts.forEach((a, i) => { const b = f.verts[(i + 1) % f.verts.length]; if (before(a, b)) lines.push(a, b); });
+  return { faces: poly, lines };
 }
-const planeKey = (n, b) => `${Math.round(n[0] * 1e6)},${Math.round(n[1] * 1e6)},${Math.round(n[2] * 1e6)},${Math.round(b * 1e5)}`;
-function surfaceOf(rocks) {
-  const faces = [];
-  for (const { solid, cuts } of rocks) {
-    for (const f of solid.faces) {
-      let fr = [f.verts]; for (const c of cuts) { fr = fr.flatMap(v => outsideOf(v, c.planes, f.n)); if (!fr.length) break; }
-      for (const v of fr) faces.push({ n: f.n, b: f.b, verts: v });
-    }
-    cuts.forEach((c, ci) => { for (const g of c.faces) {
-      let v = g.verts; for (const pl of solid.planes) { v = clipPoly(v, pl.n, pl.b); if (v.length < 3) break; }
-      if (!solidPart(v, g.n)) continue;
-      let fr = [v]; for (let cj = 0; cj < cuts.length && fr.length; cj++) if (cj !== ci) fr = fr.flatMap(w => outsideOf(w, cuts[cj].planes, g.n));
-      const n = mul(g.n, -1); for (const w of fr) faces.push({ n, b: -g.b, verts: w.slice().reverse() });
-    } });
-  }
-  // where two faces meet back to back on one plane (a bump standing on a hollow's wall), neither shows
-  const byPlane = new Map(), keyOf = f => f._k || (f._k = planeKey(f.n, f.b));
-  for (const f of faces) { const k = keyOf(f); (byPlane.get(k) || byPlane.set(k, []).get(k)).push(f); }
-  const shown = new Map();
-  for (const f of faces) {
-    let fr = [f.verts]; const back = byPlane.get(planeKey(mul(f.n, -1), -f.b));
-    if (back) for (const g of back) { fr = fr.flatMap(v => minusPoly(v, g, f.n)); if (!fr.length) break; }
-    const k = keyOf(f); for (const v of fr) (shown.get(k) || shown.set(k, []).get(k)).push({ n: f.n, b: f.b, verts: v });
-  }
-  const out = [], lines = [];
-  for (const list of shown.values()) for (const f of list) {
-    out.push(f);
-    const c = centroidOf(f.verts);
-    f.verts.forEach((a, j) => {
-      const b = f.verts[(j + 1) % f.verts.length], mid = mul(add(a, b), 0.5);
-      let across = unit(cross(f.n, sub(b, a))); if (dot(across, sub(c, mid)) > 0) across = mul(across, -1);
-      const q = add(mid, mul(across, 1e-3));
-      if (list.length > 1 && list.some(g => g !== f && inFace(g, q, 1e-9))) return;   // a seam on one plane, not an edge
-      lines.push(a, b);
-    });
-  }
-  return { faces: out, lines };
-}
-// ---------- weathering: every outward joint rounded to a radius, every inward one left sharp ----------
-// An opening: keep every ball of radius r that fits inside the rock. As a distance field: set every plane that bounds the rock in by
-// r, take the distance to what is left, and subtract r. A rock hull's planes bound it; a hollow's cut bounds it by its nearest wall
-// alone (the wall the point is outside of least), so the cut's own corners, which are inward, stay sharp. Where two bounding planes
-// are both passed, the distance is to the line where they meet (through the angle between them), so a square joint becomes a
-// quarter circle and a shallow crease barely changes. Rocks join with a plain min. The surface is meshed from the field
-// (surface nets) on a grid two thirds the radius across (0.4 to 0.6 mm; a thumbnail's coarser), shaded by the field's own normals
-function weathered(rocks, T, r, coarse) {
-  const fields = rocks.map(({ solid, cuts }) => ({ R: solid.planes, C: cuts.map(c => c.planes) }));
-  const h = Math.min(0.6, Math.max(0.4, r / 1.5)) * (coarse ? 1.6 : 1), far = r + 2 * h;
-  const vals = [], nrm = [];
-  let wantN = false, bestN = null;   // when asked, the surface's normal at the point: a facet's own plane, or away from a joint's line
-  const sdf = (fs, x, y, z) => {
-    let best = Infinity;
-    for (const { R, C } of fs) {
-      let sharp = -Infinity, m = 0;
-      for (const pl of R) { const d = pl.n[0] * x + pl.n[1] * y + pl.n[2] * z - pl.b; if (d > sharp) sharp = d; if (d + r > 0) { vals[m] = d + r; nrm[m++] = pl.n; } }
-      if (sharp > far && !wantN) { if (sharp < best) best = sharp; continue; }   // well outside this rock
-      let plain = sharp;
-      for (const planes of C) {
-        let w = Infinity, wn = null;   // the wall this point is outside of least: b - n·x, smallest
-        for (const pl of planes) { const d = pl.b - (pl.n[0] * x + pl.n[1] * y + pl.n[2] * z); if (d < w) { w = d; wn = pl.wn; } }
-        if (w > plain) plain = w;
-        if (w + r > 0) { vals[m] = w + r; nrm[m++] = wn; }
-      }
-      let v = plain, vn = null;
-      if (m && (Math.abs(plain) <= far || wantN)) {
-        let d = 0;
-        for (let i = 0; i < m; i++) {
-          if (vals[i] > d) { d = vals[i]; vn = nrm[i]; }
-          for (let j = i + 1; j < m; j++) {
-            const a = vals[i], b = vals[j], c = dot(nrm[i], nrm[j]);
-            if (c < 0.9999 && a > b * c && b > a * c) {
-              const e = Math.sqrt((a * a + b * b - 2 * a * b * c) / (1 - c * c));
-              if (e > d) { d = e; if (wantN) { const q = 1 - c * c; vn = unit(add(mul(nrm[i], (a - b * c) / q), mul(nrm[j], (b - a * c) / q))); } }
-            }
-          }
+// ---------- weathering: every outward edge rounded to a radius ----------
+// An opening: keep every ball of radius r that fits inside the stone. As a distance field: set every plane in by r, take the distance
+// to what is left, and subtract r. Where two planes are both passed, the distance is to the line where they meet (through the angle
+// between them), so a square edge becomes a quarter circle and a shallow crease barely changes. The surface is meshed from the field
+// (surface nets) on a grid two thirds the radius across (0.4 to 0.6 mm), shaded by the field's own normals
+function weathered(planes, lo0, hi0, r) {
+  const h = Math.min(0.6, Math.max(0.4, r / 1.5)), far = r + 2 * h, vals = [], nrm = [];
+  // the field; well away from the surface (outside, or deep inside where no plane is near) only its sign matters, and the plain
+  // distance to the nearest plane gives it
+  const sdf = (x, y, z, wantN) => {
+    let m = 0, sharp = -Infinity;
+    for (const pl of planes) { const d = pl.n[0] * x + pl.n[1] * y + pl.n[2] * z - pl.b; if (d > sharp) sharp = d; if (d + r > 0) { vals[m] = d + r; nrm[m++] = pl.n; } }
+    if (!m || (sharp > far && !wantN)) return { v: sharp, n: null };
+    let d = 0, vn = null;
+    for (let i = 0; i < m; i++) {
+      if (vals[i] > d) { d = vals[i]; vn = nrm[i]; }
+      for (let j = i + 1; j < m; j++) {
+        const a = vals[i], b = vals[j], c = dot(nrm[i], nrm[j]);
+        if (c < 0.9999 && a > b * c && b > a * c) {
+          const e = Math.sqrt((a * a + b * b - 2 * a * b * c) / (1 - c * c));
+          if (e > d) { d = e; if (wantN) { const q = 1 - c * c; vn = unit(add(mul(nrm[i], (a - b * c) / q), mul(nrm[j], (b - a * c) / q))); } }
         }
-        v = d - r;
       }
-      if (v < best) { best = v; bestN = vn; }
     }
-    return best;
+    return { v: d - r, n: vn };
   };
-  for (const fl of fields) for (const planes of fl.C) for (const pl of planes) pl.wn = pl.wn || mul(pl.n, -1);
-  const lo = sub(T.lo, [1, 1, 1]), nx = Math.ceil((T.hi[0] - T.lo[0] + 2) / h) + 1, ny = Math.ceil((T.hi[1] - T.lo[1] + 2) / h) + 1, nz = Math.ceil((T.hi[2] - T.lo[2] + 2) / h) + 1;
+  const lo = sub(lo0, [1, 1, 1]), nx = Math.ceil((hi0[0] - lo0[0] + 2) / h) + 1, ny = Math.ceil((hi0[1] - lo0[1] + 2) / h) + 1, nz = Math.ceil((hi0[2] - lo0[2] + 2) / h) + 1;
   const f = new Float32Array(nx * ny * nz), at = (i, j, k) => i + nx * (j + ny * k);
-  // in blocks of B points a side: each block keeps only the planes that can matter in it, and a block wholly far from the surface
-  // is filled with its sign (the field changes by at most the distance moved)
-  const B = 4, rho = (B + 1) * h * Math.sqrt(3) / 2, blocks = new Map(), val = (pl, c) => pl.n[0] * c[0] + pl.n[1] * c[1] + pl.n[2] * c[2] - pl.b;
+  // in blocks of B points a side: a block wholly far from the surface takes its middle's plain distance (the field changes by at
+  // most the distance moved, so its sign is right everywhere in it); only blocks near the surface are worked out point by point
+  const B = 4, rho = B * h * Math.sqrt(3) / 2;
   for (let bk = 0; bk < nz; bk += B) for (let bj = 0; bj < ny; bj += B) for (let bi = 0; bi < nx; bi += B) {
     const ek = Math.min(bk + B, nz), ej = Math.min(bj + B, ny), ei = Math.min(bi + B, nx);
-    const c = [lo[0] + (bi + ei - 1) / 2 * h, lo[1] + (bj + ej - 1) / 2 * h, lo[2] + (bk + ek - 1) / 2 * h];
-    const near = []; let fill = far + rho;
-    for (const { R, C } of fields) {
-      const dR = R.map(pl => val(pl, c)), sharp = Math.max(...dR);
-      if (sharp - rho > far) continue;   // this rock is far outside the whole block
-      let plain = sharp;
-      const Cr = [];
-      for (const planes of C) {
-        const w = planes.map(pl => -val(pl, c)), wmin = Math.min(...w);
-        plain = Math.max(plain, wmin);
-        if (wmin + rho < -r && wmin + rho < sharp - rho) continue;   // this cut is too far off to touch the block
-        Cr.push(planes.filter((pl, k) => w[k] - rho <= wmin + rho));
-      }
-      if (plain + rho < -far) { fill = -far - rho; near.length = 0; break; }   // deep inside this rock: the block is inside
-      near.push({ R: R.filter((pl, k) => dR[k] >= sharp - 2 * rho || dR[k] > -r - rho), C: Cr });
-    }
-    blocks.set(bi / B + 1000 * (bj / B) + 1e6 * (bk / B), near);
-    for (let k = bk; k < ek; k++) for (let j = bj; j < ej; j++) for (let i = bi; i < ei; i++)
-      f[at(i, j, k)] = near.length ? sdf(near, lo[0] + i * h, lo[1] + j * h, lo[2] + k * h) : fill;
+    const cx = lo[0] + (bi + ei - 1) / 2 * h, cy = lo[1] + (bj + ej - 1) / 2 * h, cz = lo[2] + (bk + ek - 1) / 2 * h;
+    let sc = -Infinity; for (const pl of planes) sc = Math.max(sc, pl.n[0] * cx + pl.n[1] * cy + pl.n[2] * cz - pl.b);
+    const whole = Math.abs(sc) > far + rho;
+    for (let k = bk; k < ek; k++) for (let j = bj; j < ej; j++) for (let i = bi; i < ei; i++) f[at(i, j, k)] = whole ? sc : sdf(lo[0] + i * h, lo[1] + j * h, lo[2] + k * h).v;
   }
   // surface nets: a vertex in each cell the surface crosses (the mean of its edges' crossings), a quad across each crossed grid edge
-  const vid = new Int32Array(nx * ny * nz).fill(-1), V = [], VN = [], VB = [];
-  const E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
-  const cv = new Float64Array(8);
+  const vid = new Int32Array(nx * ny * nz).fill(-1), V = [];
+  const E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]], cv = new Float64Array(8);
   for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
     let neg = 0; for (let c = 0; c < 8; c++) { cv[c] = f[at(i + (c & 1), j + (c >> 1 & 1), k + (c >> 2))]; if (cv[c] < 0) neg++; }
     if (neg === 0 || neg === 8) continue;
@@ -830,25 +445,17 @@ function weathered(rocks, T, r, coarse) {
       const t = cv[a] / (cv[a] - cv[b]);
       sx += (a & 1) + ((b & 1) - (a & 1)) * t; sy += (a >> 1 & 1) + ((b >> 1 & 1) - (a >> 1 & 1)) * t; sz += (a >> 2) + ((b >> 2) - (a >> 2)) * t; m++;
     }
-    const u = sx / m, v = sy / m, w = sz / m;   // the field's slope here, from the cell's corners: the shading normal
-    const gx = (1 - v) * (1 - w) * (cv[1] - cv[0]) + v * (1 - w) * (cv[3] - cv[2]) + (1 - v) * w * (cv[5] - cv[4]) + v * w * (cv[7] - cv[6]);
-    const gy = (1 - u) * (1 - w) * (cv[2] - cv[0]) + u * (1 - w) * (cv[3] - cv[1]) + (1 - u) * w * (cv[6] - cv[4]) + u * w * (cv[7] - cv[5]);
-    const gz = (1 - u) * (1 - v) * (cv[4] - cv[0]) + u * (1 - v) * (cv[5] - cv[1]) + (1 - u) * v * (cv[6] - cv[2]) + u * v * (cv[7] - cv[3]);
-    VB.push(blocks.get(Math.floor(i / B) + 1000 * Math.floor(j / B) + 1e6 * Math.floor(k / B)));
-    vid[at(i, j, k)] = V.length; V.push([lo[0] + (i + u) * h, lo[1] + (j + v) * h, lo[2] + (k + w) * h]); VN.push(unit([gx, gy, gz]));   // the grid's, if the field gives none
+    vid[at(i, j, k)] = V.length; V.push([lo[0] + (i + sx / m) * h, lo[1] + (j + sy / m) * h, lo[2] + (k + sz / m) * h]);
   }
-  const faces = [], tri = (a, b, c) => { const n = unit(cross(sub(V[b], V[a]), sub(V[c], V[a]))); faces.push({ n, verts: [V[a], V[b], V[c]], vi: [a, b, c] }); };
-  const quad = (inside, a, b, c, d) => { if ([a, b, c, d].some(q => q < 0)) return; if (inside) { tri(a, b, c); tri(a, c, d); } else { tri(a, c, b); tri(a, d, c); } };
+  const VN = V.map(p => sdf(p[0], p[1], p[2], true).n || [0, 0, 1]);
+  const faces = [], tri = (a, b, c) => faces.push({ verts: [V[a], V[b], V[c]], vn: [VN[a], VN[b], VN[c]], n: unit(add(VN[a], add(VN[b], VN[c]))) });
+  const quad = (inside, a, b, c, d) => { if (a < 0 || b < 0 || c < 0 || d < 0) return; if (inside) { tri(a, b, c); tri(a, c, d); } else { tri(a, c, b); tri(a, d, c); } };
   for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const v0 = f[at(i, j, k)] < 0;
     if (i < nx - 1 && j > 0 && k > 0 && v0 !== (f[at(i + 1, j, k)] < 0)) quad(v0, vid[at(i, j - 1, k - 1)], vid[at(i, j, k - 1)], vid[at(i, j, k)], vid[at(i, j - 1, k)]);
     if (j < ny - 1 && i > 0 && k > 0 && v0 !== (f[at(i, j + 1, k)] < 0)) quad(v0, vid[at(i - 1, j, k - 1)], vid[at(i - 1, j, k)], vid[at(i, j, k)], vid[at(i, j, k - 1)]);
     if (k < nz - 1 && i > 0 && j > 0 && v0 !== (f[at(i, j, k + 1)] < 0)) quad(v0, vid[at(i - 1, j - 1, k)], vid[at(i, j - 1, k)], vid[at(i, j, k)], vid[at(i - 1, j, k)]);
   }
-  wantN = true;
-  for (let q = 0; q < V.length; q++) { bestN = null; if (VB[q] && VB[q].length) sdf(VB[q], V[q][0], V[q][1], V[q][2]); if (bestN) VN[q] = bestN; }
-  wantN = false;
-  for (const t of faces) { t.vn = t.vi.map(q => VN[q]); t.n = unit(t.vn.reduce(add, [0, 0, 0])); }   // shading and overhang paint by the surface's own normals
   return { faces, lines: [] };
 }
 const volumeOf = faces => { let v = 0; for (const f of faces) { const p = f.verts; for (let i = 1; i + 1 < p.length; i++) v += dot(p[0], cross(p[i], p[i + 1])); } return v / 6; };
@@ -928,9 +535,10 @@ function hullPlanes(pts) {
   return out;
 }
 const polyFaces = poly => poly.filter(f => f.verts.length >= 3);
-function bigSolid(planes) { let p = boxPoly([-200, -200, -200], [200, 200, 200]); for (const pl of planes) { p = clip(p, { ...pl, role: 'hull' }); if (!p.length) break; } return p; }
+function bigSolid(planes) { let p = boxPoly([-200, -200, -200], [200, 200, 200]); for (const pl of planes) { p = clip(p, { ...pl, role: 'hull' }); if (!p.length) break; } return polyFaces(p); }
 
 const AXES = { up: [0, 0, 1], along: [1, 0, 0], through: [0, 1, 0] };
+const KEEP = 1.5;   // mm of its own every spine keeps at a split
 function cliff(seed, P) {
   const t0 = performance.now();
   const W = 35 * P.squares, H = P.height, D = P.depth, y0 = 17.5 - D, y1 = 17.5;   // the wall stands at the back of the square
@@ -1038,30 +646,29 @@ function cliff(seed, P) {
   }
 
   // a mass: its envelope cut by its splits, nearest first (one that misses what is left is skipped): a convex cell
-  let cuts = 0;
   const masses = spines.map((sp, k) => {
-    let poly = polyFaces(bigSolid(sp.env)); const hull = [...sp.env];
+    let poly = (bigSolid(sp.env)); const hull = [...sp.env];
     for (const h of splits[k].sort((x, y) => x.dist - y.dist)) {
       if (poly.every(f => f.verts.every(v => dot(h.n, v) <= h.b + 1e-9))) continue;
-      poly = polyFaces(clip(poly, { ...h, role: 'hull' })); hull.push(h); cuts++;
+      poly = polyFaces(clip(poly, { ...h, role: 'hull' })); hull.push(h);
       if (!poly.length) break;
     }
     if (!poly.length) throw new Error(`spine ${sp.id} kept no space`);   // cannot happen: every split leaves a spine its own
-    const surf = surfaceOf([{ solid: { planes: hull, faces: poly }, cuts: [] }]), vol = volumeOf(surf.faces);
-    return { sp, hull, cuts: [], surf, vol };
+    return { sp, hull, poly, surf: surfOf(poly), vol: volumeOf(poly) };
   });
   const envVol = W * D * H, massVol = masses.reduce((t, m) => t + m.vol, 0);
-  return { W, H, D, lo, hi, faces, spines, masses, cuts, envVol, fill: massVol / envVol, ms: performance.now() - t0 };
+  return { W, H, D, lo, hi, faces, spines, masses, envVol, fill: massVol / envVol, ms: performance.now() - t0 };
 }
 
-// a mass as a hull for Rocks from Hulls; its rock, built once per mass, seed and rock settings
+// a mass's stone, built once per mass, seed and rock settings
 const kept = new Map();
 function rockOf(m, seed, P) {
-  const key = [seed, m.sp.id, m.hull.map(f => planeKey(f.n, f.b)).join(';'), m.cuts.map(c => c.planes.map(f => planeKey(f.n, f.b)).join(';')).join('|'), P.facets, P.chamfered, P.rtilt, P.sink, P.weather].join('/');
+  const key = [seed, m.sp.id, m.hull.map(f => f.n.join() + ',' + f.b).join(';'), P.facets, P.chamfered, P.rtilt, P.sink, P.weather].join('/');
   let r = kept.get(key);
   if (!r) {
-    const T = { tree: node(m.hull.map(f => ({ n: f.n, b: f.b })), m.cuts.map(c => node(c.planes.map(f => ({ n: f.n, b: f.b }))))) };
-    r = buildRock(T, Math.floor(keyed(seed, 'rock', m.sp.id)() * 2147483647), { planes: P.facets, edges: P.chamfered, tilt: P.rtilt, sink: P.sink, weather: P.weather });
+    const t0 = performance.now(), st = stoneOf(m.poly, Math.floor(keyed(seed, 'rock', m.sp.id)() * 2147483647), P);
+    const flat = surfOf(st.poly);
+    r = { flat, surf: P.weather > 0 ? weathered(st.poly.map(f => ({ n: f.n, b: f.b })), st.lo, st.hi, P.weather) : flat, volume: volumeOf(st.poly), ms: performance.now() - t0 };
     kept.set(key, r); if (kept.size > 600) kept.delete(kept.keys().next().value);
   }
   return r;
@@ -1072,170 +679,182 @@ function massSurface(masses) {
   markHeld(masses.map(m => m.surf)).forEach((st, k) => { const shade = SHADES[k % SHADES.length]; for (const f of st.faces) faces.push({ ...f, shade }); for (const p of st.lines) lines.push(p); });
   return { faces, lines };
 }
-// Bedding: a stone whose underside overhangs past the limit is made to stand on something, at construction. Stones are bedded from the
-// lowest up, each on what is already there (the ground and the stones bedded before it). A small gap (the face's drop to what is
-// below, up to SMALL) is closed by stretching the stone down, its top held: stretching also turns every face toward upright, so a
-// face may need no drop at all. A stone with faces further off gets one corbel: those faces' points swept along a direction within the limit of straight down
-// (so the corbel's walls lean no more than the limit), toward whichever bedded stone or the ground it reaches soonest, until all of
-// it runs into that; the corbel is then part of the stone, and holds up the stones above in turn
-const HULL_DIRS = fib(32);   // a corbel's outline from at most this many points: the brute-force hull is cubic in them
-const CORBEL_MAX = 10, CORBEL_MIN = 4, CORBELS = 6, POST = 0.25, FOOT = 1.5, FOOT_MAX = 6;   // mm: the longest a corbel runs, and what it may always reach (a thin slab's own height is too little)
-const OVER = 55, LIMIT = 65, SIN_LIMIT = Math.sin(LIMIT * DEG), SMALL = 2;   // bed only what is past the steepest (red); corbels lean no more than the overhang (55°)
-const SWEEPS = (() => { const out = [[0, 0, -1]]; for (const a of [25, 40, OVER - 1]) for (let k = 0; k < 8; k++) { const ph = 2 * Math.PI * k / 8 + (a === 40 ? Math.PI / 8 : 0); out.push([Math.sin(a * DEG) * Math.cos(ph), Math.sin(a * DEG) * Math.sin(ph), -Math.cos(a * DEG)]); } return out; })();
+// Bedding: a stone whose underside overhangs past the limit (red) is made to stand on something, at construction, and never leaves its
+// envelope. Stones are bedded from the lowest up, each on the ground and the stones bedded before it, in three steps:
+//   a foot: a stone within SMALL of the ground has its lowest FOOT mm (or up to the top of a chamfer that starts there, at most FOOT_MAX)
+//     extended straight down to the ground, so its ground edges are sharp and its bottom is flat;
+//   a stretch: the stone is stretched down, its top held: a steep red face only as far as turns it to the limit (if that is small), a
+//     flat one by the median of its points' gaps to what is within SMALL below (sitting on what is near, not sinking into it); the
+//     bottom drops at most SMALL and never below the ground, and the footprint holds, so it stays in its envelope;
+//   corbels: the points of red faces still on nothing are swept along one of SWEEPS (within 55° of straight down) until each meets
+//     the ground or a stone, at most the stone's height (CORBEL_MIN to CORBEL_MAX) and inside its envelope. A corbel is the hull of a
+//     set of points and their ends that land on one thing (so its bottom rests on it): each wall is parallel to the sweep or rests on
+//     what was met. Up to CORBELS per stone, each the sweep and landing holding the most points still loose; one or two points get a
+//     post (a small square around each, swept the same way). A point nothing holds within reach is left: a long strut is a sliver
+const OVER = 55, LIMIT = 65, SIN_OVER = Math.sin(OVER * DEG), SIN_LIMIT = Math.sin(LIMIT * DEG);   // the overhang target, and the steepest allowed
+const SMALL = 2, FOOT = 1.5, FOOT_MAX = 6, CORBEL_MIN = 4, CORBEL_MAX = 10, CORBELS = 6, POST = 0.25;   // mm, and how many
+const SWEEPS = (() => { const out = [[0, 0, -1]]; for (const a of [30, OVER - 1]) for (let k = 0; k < 6; k++) { const ph = Math.PI * (k + (a === 30 ? 0 : 0.5)) / 3; out.push([Math.sin(a * DEG) * Math.cos(ph), Math.sin(a * DEG) * Math.sin(ph), -Math.cos(a * DEG)]); } return out; })();
+const HULL = 20, HULL_DIRS = fib(HULL);   // a hull of points is made from at most this many (the furthest along HULL_DIRS): it is cubic in them
+// the convex hull of some points, cut by an envelope, as faces (none if the points are too few or flat)
+function hullSolid(pts, env) {
+  if (pts.length > HULL) pts = dedupe(HULL_DIRS.map(n => pts.reduce((m, v) => dot(n, v) > dot(n, m) ? v : m)), 1e-6);
+  const hp = pts.length >= 4 ? hullPlanes(pts) : [];
+  return hp.length >= 4 ? bigSolid([...hp, ...env]) : [];
+}
+const zRange = st => { let lo = Infinity, hi = -Infinity; for (const f of st.faces) for (const v of f.verts) { if (v[2] < lo) lo = v[2]; if (v[2] > hi) hi = v[2]; } return [lo, hi]; };
+function bed(stones, envs) {
+  const { add: add_, hit, land } = rayGrid(), down = [0, 0, -1];
+  const count = { stretched: 0, corbels: 0, feet: 0, left: 0 }, out = new Array(stones.length), red = f => f.n[2] < -SIN_LIMIT - 1e-9;
+  const order = stones.map((st, k) => [zRange(st)[0], k]).sort((a, b) => a[0] - b[0]);
+  for (const [, k] of order) {
+    let st = stones[k]; const env = envs[k], inEnv = v => env.every(q => dot(q.n, v) <= q.b + 1e-6);
+    let [bot, top] = zRange(st);
+    // the stretch
+    let need = 1; const rest = [];
+    for (const f of st.faces) {
+      if (!red(f)) continue;
+      const h = Math.hypot(f.n[0], f.n[1]), turnTo = h < 1e-9 ? Infinity : -f.n[2] * Math.sqrt(1 - SIN_LIMIT * SIN_LIMIT) / (SIN_LIMIT * h);
+      if (turnTo < 1 + SMALL / Math.max(1e-6, top - Math.min(...f.verts.map(v => v[2])))) { need = Math.max(need, turnTo); continue; }
+      for (const v of [...f.verts, centroidOf(f.verts)]) { const up = top - v[2], dz = hit(v, down, SMALL + 1e-6); if (dz <= SMALL && up > 1e-6) rest.push(1 + dz / up); }
+    }
+    if (rest.length) { rest.sort((x, y) => x - y); need = Math.max(need, rest[rest.length >> 1]); }
+    if (top - bot > 1e-6) need = Math.min(need, 1 + Math.min(SMALL, Math.max(0, bot)) / (top - bot));
+    const stretch = need > 1 + 1e-6 ? { top, need } : null;
+    if (stretch) { count.stretched++; st = stretched(st, stretch); bot = top - (top - bot) * need; }
+    const faces = [], lines = [];   // the foot and the corbels
+    const join = (solid, part) => { for (const g of solid) { faces.push({ verts: g.verts, n: g.n, part }); g.verts.forEach((a, i) => lines.push(a, g.verts[(i + 1) % g.verts.length])); } return solid.length > 0; };
+    // the foot
+    let footTop = -Infinity;
+    if (bot < SMALL) {
+      footTop = bot + FOOT;
+      for (const f of st.faces) if (f.n[2] < -SIN_OVER && Math.min(...f.verts.map(v => v[2])) <= bot + FOOT) footTop = Math.max(footTop, ...f.verts.map(v => v[2]));
+      footTop = Math.min(footTop, bot + FOOT_MAX);
+      const ring = dedupe(st.faces.flatMap(f => f.verts).filter(v => v[2] <= footTop + 1e-6), 0.05);
+      if (join(hullSolid([...ring, ...ring.map(v => [v[0], v[1], 0])], env), 'foot')) count.feet++;
+    }
+    // corbels: a red face with any point on nothing gives all its points (so its corbel holds the whole face), but the foot's band
+    const cap = Math.min(CORBEL_MAX, Math.max(CORBEL_MIN, top - bot));
+    let loose = [];
+    for (const f of st.faces) if (red(f) && faceArea(f) >= 0.05) { const pts = [...f.verts, centroidOf(f.verts)]; if (pts.some(v => hit(v, down, 0.1) >= 0.1)) loose.push(...pts); }
+    loose = dedupe(loose.filter(v => v[2] > footTop + 1e-6), 0.05);
+    // where each point lands along each sweep, once (nothing joins the grid while a stone is bedded)
+    const lands = SWEEPS.map(w => loose.map(v => { const h = land(add(v, mul(w, 1e-4)), w, cap + 1e-6), e = add(v, mul(w, h.t + 0.2)); return h.who !== null && h.t <= cap && inEnv(e) ? { who: h.who, e } : null; }));
+    const free = loose.map(() => true);
+    for (let made = 0; made < CORBELS && free.some(Boolean); made++) {
+      let pick = null;
+      lands.forEach((L, s) => {
+        const runs = new Map();
+        L.forEach((h, i) => { if (h && free[i]) { if (!runs.has(h.who)) runs.set(h.who, []); runs.get(h.who).push(i); } });
+        for (const run of runs.values()) if (!pick || run.length > pick.idx.length) pick = { w: SWEEPS[s], s, idx: run };
+      });
+      if (!pick) break;
+      let run = pick.idx.map(i => [loose[i], lands[pick.s][i].e]);
+      if (run.length < 3) { const u = perp(pick.w), u2 = cross(pick.w, u); run = run.flatMap(([a, b]) => [[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([x, y]) => { const o = add(mul(u, POST * x), mul(u2, POST * y)); return [add(a, o), add(b, o)]; })); }
+      if (join(hullSolid(run.flat(), env), 'corbel')) count.corbels++;
+      for (const i of pick.idx) free[i] = false;
+    }
+    if (free.some(Boolean)) count.left++;
+    out[k] = { stretch, parts: { faces, lines } };
+    add_([...st.faces, ...faces], k);
+  }
+  return { stones: out, ...count };
+}
+// a stone stretched down, its top held (each corner moved once, so corners stay shared)
+function stretched(st, { top, need }) {
+  const moved = new Map(), sz = v => { let w = moved.get(v); if (!w) moved.set(v, w = [v[0], v[1], top - (top - v[2]) * need]); return w; }, sn = n => unit([n[0], n[1], n[2] / need]);
+  return { faces: st.faces.map(f => ({ ...f, verts: f.verts.map(sz), n: sn(f.n), ...(f.vn ? { vn: f.vn.map(sn) } : {}) })), lines: st.lines.map(sz) };
+}
 // a grid of solids' triangles in CELL mm cubes: a ray tests only the triangles in the cells it passes through
 function rayGrid() {
-  const CELL = 1.5, grid = new Map(), tris = [], seen = [];
+  const CELL = 1.5, grid = new Map(), tris = [];
   let stamp = 0;
   const cellKey = (ix, iy, iz) => (ix * 1009 + iy) * 1009 + iz;
   const add_ = (faces, who = 0) => {
     for (const f of faces) for (let i = 1; i + 1 < f.verts.length; i++) {
-      const a = f.verts[0], b = f.verts[i], c = f.verts[i + 1], e1 = sub(b, a), e2 = sub(c, a), t = { a, e1, e2, n: cross(e1, e2), zlo: Math.min(a[2], b[2], c[2]), zhi: Math.max(a[2], b[2], c[2]), who }, id = tris.push(t) - 1;
-      seen.push(0);
+      const a = f.verts[0], b = f.verts[i], c = f.verts[i + 1];
+      const e1x = b[0] - a[0], e1y = b[1] - a[1], e1z = b[2] - a[2], e2x = c[0] - a[0], e2y = c[1] - a[1], e2z = c[2] - a[2];
+      const id = tris.push({ ax: a[0], ay: a[1], az: a[2], e1x, e1y, e1z, e2x, e2y, e2z, nx: e1y * e2z - e1z * e2y, ny: e1z * e2x - e1x * e2z, nz: e1x * e2y - e1y * e2x, who, seen: 0 }) - 1;
       const x0 = Math.floor(Math.min(a[0], b[0], c[0]) / CELL), x1 = Math.floor(Math.max(a[0], b[0], c[0]) / CELL);
       const y0 = Math.floor(Math.min(a[1], b[1], c[1]) / CELL), y1 = Math.floor(Math.max(a[1], b[1], c[1]) / CELL);
-      const z0 = Math.floor(t.zlo / CELL), z1 = Math.floor(t.zhi / CELL);
-      for (let ix = x0; ix <= x1; ix++) for (let iy = y0; iy <= y1; iy++) for (let iz = z0; iz <= z1; iz++) { const k = cellKey(ix, iy, iz); let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(id); }
+      const z0 = Math.floor(Math.min(a[2], b[2], c[2]) / CELL), z1 = Math.floor(Math.max(a[2], b[2], c[2]) / CELL);
+      // only the cells its plane passes through (a slanted triangle's box holds many it never touches)
+      const T = tris[id], nl = Math.hypot(T.nx, T.ny, T.nz), r = (Math.abs(T.nx) + Math.abs(T.ny) + Math.abs(T.nz)) * CELL / 2;
+      if (nl < 1e-12) continue;
+      for (let ix = x0; ix <= x1; ix++) for (let iy = y0; iy <= y1; iy++) for (let iz = z0; iz <= z1; iz++) {
+        if (Math.abs(T.nx * ((ix + 0.5) * CELL - a[0]) + T.ny * ((iy + 0.5) * CELL - a[1]) + T.nz * ((iz + 0.5) * CELL - a[2])) > r) continue;
+        const k = cellKey(ix, iy, iz); let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(id);
+      }
     }
   };
-  // how far along w from p the first solid or the ground is (Infinity: neither); only faces turned toward the ray can be hit first,
-  // unless any: then every face counts, and the answer says which way the face it met faces (n z), so a point inside a solid shows
+  // how far along w from p the first solid or the ground is, up to cap: { t, nz, who } (who -1: the ground, null: nothing). Only faces
+  // turned toward the ray can be met first, unless any: then every face counts, and nz says which way the face met faces (a point
+  // inside a solid meets a face turned away). The cells the ray crosses are walked nearest first, until a hit is nearer than the next
   const walk = (p, w, cap, any) => {
-    let best = Math.min(w[2] < -1e-9 ? p[2] / -w[2] : Infinity, cap), nz = 1, who = w[2] < -1e-9 && p[2] / -w[2] <= cap ? -1 : null;
-    // the cells the ray crosses, nearest first (a grid walk), until a hit is nearer than the next cell
-    const reach = Number.isFinite(best) ? best : 200;
-    const ii = [0, 1, 2].map(q => Math.floor(p[q] / CELL)), sg = w.map(Math.sign);
-    const dT = w.map(c => c ? CELL / Math.abs(c) : Infinity);
-    const tN = [0, 1, 2].map(q => sg[q] ? ((sg[q] > 0 ? (ii[q] + 1) * CELL : ii[q] * CELL) - p[q]) / w[q] : Infinity);
+    const px = p[0], py = p[1], pz = p[2], wx = w[0], wy = w[1], wz = w[2];
+    const tg = wz < -1e-9 ? pz / -wz : Infinity;
+    let best = Math.min(tg, cap), nz = 1, who = tg <= cap ? -1 : null;
+    let ix = Math.floor(px / CELL), iy = Math.floor(py / CELL), iz = Math.floor(pz / CELL);
+    const sx = Math.sign(wx), sy = Math.sign(wy), sz = Math.sign(wz);
+    const dx = sx ? CELL / Math.abs(wx) : Infinity, dy = sy ? CELL / Math.abs(wy) : Infinity, dz = sz ? CELL / Math.abs(wz) : Infinity;
+    let tx = sx ? ((sx > 0 ? ix + 1 : ix) * CELL - px) / wx : Infinity, ty = sy ? ((sy > 0 ? iy + 1 : iy) * CELL - py) / wy : Infinity, tz = sz ? ((sz > 0 ? iz + 1 : iz) * CELL - pz) / wz : Infinity;
+    const stop = Math.min(best, 200);
     stamp++;
-    for (let tIn = 0; tIn <= Math.min(best, reach);) {
-      const l = grid.get(cellKey(ii[0], ii[1], ii[2]));
-      if (l) for (const id of l) {
-        if (seen[id] === stamp) continue; seen[id] = stamp;
-        const T = tris[id]; if (!any && T.n[0] * w[0] + T.n[1] * w[1] + T.n[2] * w[2] >= 0) continue;
-        const pv = cross(w, T.e2), det = dot(T.e1, pv); if (Math.abs(det) < 1e-12) continue;
-        const tv = sub(p, T.a), u = dot(tv, pv) / det; if (u < 0 || u > 1) continue;
-        const qv = cross(tv, T.e1), v = dot(w, qv) / det; if (v < 0 || u + v > 1) continue;
-        const t = dot(T.e2, qv) / det; if (t > -1e-6 && t < best) { best = Math.max(0, t); nz = T.n[2]; who = T.who; }
+    for (let tIn = 0; tIn <= Math.min(best, stop) && iz >= -1;) {
+      const l = grid.get(cellKey(ix, iy, iz));
+      if (l) for (let q = 0; q < l.length; q++) {
+        const T = tris[l[q]]; if (T.seen === stamp) continue; T.seen = stamp;
+        if (!any && T.nx * wx + T.ny * wy + T.nz * wz >= 0) continue;
+        const pvx = wy * T.e2z - wz * T.e2y, pvy = wz * T.e2x - wx * T.e2z, pvz = wx * T.e2y - wy * T.e2x;
+        const det = T.e1x * pvx + T.e1y * pvy + T.e1z * pvz; if (det > -1e-12 && det < 1e-12) continue;
+        const inv = 1 / det, ox = px - T.ax, oy = py - T.ay, oz = pz - T.az, u = (ox * pvx + oy * pvy + oz * pvz) * inv; if (u < 0 || u > 1) continue;
+        const qx = oy * T.e1z - oz * T.e1y, qy = oz * T.e1x - ox * T.e1z, qz = ox * T.e1y - oy * T.e1x, v = (wx * qx + wy * qy + wz * qz) * inv; if (v < 0 || u + v > 1) continue;
+        const t = (T.e2x * qx + T.e2y * qy + T.e2z * qz) * inv; if (t > -1e-6 && t < best) { best = Math.max(0, t); nz = T.nz; who = T.who; }
       }
-      const q = tN[0] < tN[1] ? (tN[0] < tN[2] ? 0 : 2) : (tN[1] < tN[2] ? 1 : 2);
-      tIn = tN[q]; tN[q] += dT[q]; ii[q] += sg[q];
-      if (!Number.isFinite(tIn) || ii[2] < -1) break;
+      if (tx < ty && tx < tz) { tIn = tx; tx += dx; ix += sx; } else if (ty < tz) { tIn = ty; ty += dy; iy += sy; } else { tIn = tz; tz += dz; iz += sz; }
+      if (!Number.isFinite(tIn)) break;
     }
     return { t: best, nz, who };
   };
   return { add: add_, hit: (p, w, cap = Infinity) => walk(p, w, cap, false).t, land: (p, w, cap) => walk(p, w, cap, false), first: (p, w, cap) => walk(p, w, cap, true) };
-}
-function bed(stones, envs) {
-  const { add: add_, hit, land } = rayGrid();
-  let stretched = 0, corbels = 0, feet = 0, left = 0;
-  const order = stones.map((st, k) => { let lo = Infinity; for (const f of st.faces) for (const v of f.verts) lo = Math.min(lo, v[2]); return [lo, k]; }).sort((a, b) => a[0] - b[0]);
-  const out = new Array(stones.length), past = f => f.n[2] < -SIN_LIMIT - 1e-9;
-  for (const [, k] of order) {
-    let st = stones[k];
-    let top = -Infinity; for (const f of st.faces) for (const v of f.verts) top = Math.max(top, v[2]);
-    // the stretch: as much as closes each overhanging face by turning it, or by a drop of up to SMALL
-    // the stretch: a steep face is turned to the limit (its own stretch, if small); a flat one rests: the stone drops by the median of
-    // its red points' gaps to what is within SMALL below them, so it sits on what is near and does not sink into it to close the
-    // deepest gap (a point over a joint below is left to the corbel)
-    let need = 1; const rest = [];
-    for (const f of st.faces) {
-      if (!past(f)) continue;
-      const h = Math.hypot(f.n[0], f.n[1]), kAngle = h < 1e-9 ? Infinity : -f.n[2] * Math.sqrt(1 - SIN_LIMIT * SIN_LIMIT) / (SIN_LIMIT * h);
-      if (kAngle < 1 + SMALL / Math.max(1e-6, top - Math.min(...f.verts.map(v => v[2])))) { need = Math.max(need, kAngle); continue; }
-      for (const v of [...f.verts, centroidOf(f.verts)]) { const up = top - v[2], dz = hit(v, [0, 0, -1], SMALL + 1e-6); if (dz <= SMALL && up > 1e-6) rest.push(1 + dz / up); }
-    }
-    if (rest.length) { rest.sort((x, y) => x - y); need = Math.max(need, rest[Math.floor(rest.length / 2)]); }
-    // the stone's bottom drops at most SMALL, and never below the ground (the stretch holds its footprint, so it stays in its envelope)
-    { let bot = Infinity; for (const f of st.faces) for (const v of f.verts) bot = Math.min(bot, v[2]);
-      if (top - bot > 1e-6) need = Math.min(need, 1 + Math.min(SMALL, Math.max(0, bot)) / (top - bot)); }
-    if (need > 1 + 1e-6) {
-      stretched++;
-      const sz = v => [v[0], v[1], top - (top - v[2]) * need], sn = n => unit([n[0], n[1], n[2] / need]);
-      st = { faces: st.faces.map(f => ({ ...f, verts: f.verts.map(sz), n: sn(f.n), ...(f.vn ? { vn: f.vn.map(sn) } : {}) })), lines: st.lines.map(sz) };
-    }
-    // corbels (as the cliff element's support cone): the points of its red faces that stand on nothing, swept along one direction
-    // within the limit of straight down, each until it meets a bedded stone or the ground. A corbel is the hull of its points and
-    // their ends: each wall is parallel to the sweep (so it leans no more than the limit) or rests on what the points reach. A
-    // stone gets up to CORBELS, each taking the direction that holds up the most of the points still loose (straight down under a
-    // slab, slanted back under a lip); one or two points left alone each get a post, a small square around the point swept the same way. A corbel is short: a point runs no further than the stone is tall (CORBEL_MIN to
-    // CORBEL_MAX), and never out of its stone's envelope; a point nothing holds within that is left as it is (a long strut across
-    // the face reads as a sliver, not a stone)
-    const faces = [...st.faces], lines = [...st.lines], env = envs[k], inEnv = v => env.every(q => dot(q.n, v) <= q.b + 1e-6);
-    let bot = Infinity; for (const f of st.faces) for (const v of f.verts) bot = Math.min(bot, v[2]);
-    // a stone near the ground stands on it: its foot, its lowest FOOT mm extended straight down to the ground (so its ground edges
-    // are sharp and its bottom is flat on the ground; its walls are upright)
-    const footed = bot < SMALL; let footTop = -Infinity;
-    if (footed) {
-      // up to FOOT, or the top of any overhanging face that starts within it (a whole base chamfer), at most FOOT_MAX
-      let ft = bot + FOOT;
-      for (const f of st.faces) if (f.n[2] < -Math.sin(OVER * DEG) && Math.min(...f.verts.map(v => v[2])) <= bot + FOOT) ft = Math.max(ft, ...f.verts.map(v => v[2]));
-      footTop = ft = Math.min(ft, bot + FOOT_MAX);
-      const band = st.faces.flatMap(f => f.verts).filter(v => v[2] <= ft + 1e-6), ring = dedupe(band, 0.05);
-      const pts0 = [...ring, ...ring.map(v => [v[0], v[1], 0])], pts = pts0.length > 32 ? dedupe(HULL_DIRS.map(n => pts0.reduce((m, v) => dot(n, v) > dot(n, m) ? v : m)), 1e-6) : pts0;
-      const ff = pts.length >= 4 ? polyFaces(bigSolid([...hullPlanes(pts), ...env])) : [];
-      if (ff.length) { feet++; for (const g of ff) { faces.push({ verts: g.verts, n: g.n, part: 'foot' }); g.verts.forEach((a, i) => lines.push(a, g.verts[(i + 1) % g.verts.length])); } }
-    }
-    const cap = Math.min(CORBEL_MAX, Math.max(CORBEL_MIN, top - bot));
-    let loose = [];
-    // a red face with any corner on nothing gives all its corners, so its corbel encloses the whole face, not just the hanging part
-    for (const f of st.faces) if (past(f) && faceArea(f) >= 0.05) { const pts = [...f.verts, centroidOf(f.verts)]; if (pts.some(v => hit(v, [0, 0, -1], 0.1) >= 0.1)) loose.push(...pts); }
-    loose = dedupe(loose.filter(v => !(footed && v[2] <= footTop + 1e-6)), 0.05);   // the foot holds its own band
-    for (let made = 0; loose.length && made < CORBELS; made++) {
-      // a corbel lands on one thing (the ground or one stone), so its bottom rests on it and never hangs between two
-      let pick = null;
-      for (const w of SWEEPS) {
-        const runs = new Map();
-        for (const v of loose) { const h = land(add(v, mul(w, 1e-4)), w, cap + 1e-6); if (h.who !== null && h.t <= cap && inEnv(add(v, mul(w, h.t + 0.2)))) { if (!runs.has(h.who)) runs.set(h.who, []); runs.get(h.who).push([v, add(v, mul(w, h.t + 0.2))]); } }
-        for (const run of runs.values()) if (!pick || run.length > pick.run.length) pick = { w, run };
-      }
-      if (!pick) break;
-      // the hull's corners: of the points and their ends, those furthest along any of many directions (few points keep it quick)
-      // one or two points are too few for a solid: each is a post, a small square around it across the sweep
-      let run = pick.run;
-      if (run.length < 3) { const u = perp(pick.w), u2 = cross(pick.w, u); run = run.flatMap(([a, b]) => [[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([x, y]) => { const o = add(mul(u, POST * x), mul(u2, POST * y)); return [add(a, o), add(b, o)]; })); }
-      const all = run.flat(), pts = all.length > 32 ? dedupe(HULL_DIRS.map(n => all.reduce((m, v) => dot(n, v) > dot(n, m) ? v : m)), 1e-6) : all;
-      const hp = [...hullPlanes(pts), ...env], cf = hp.length >= 4 ? polyFaces(bigSolid(hp)) : [];
-      if (cf.length) { corbels++; for (const g of cf) { faces.push({ verts: g.verts, n: g.n, part: 'corbel' }); g.verts.forEach((a, i) => lines.push(a, g.verts[(i + 1) % g.verts.length])); } }
-      const held = new Set(pick.run.map(r => r[0])); loose = loose.filter(v => !held.has(v));
-    }
-    if (loose.length) left++;
-    out[k] = { faces, lines };
-    add_(faces, k);
-  }
-  return { stones: out, stretched, corbels, feet, left };
 }
 // what is held up: a face on the ground, or a bridge (a triangle of a downward face with at least two corners resting on
 // something: a stone, a corbel or the ground, within HELD mm below or inside it) is never painted orange or red
 const HELD = 0.15;
 function markHeld(stones) {
   const g = rayGrid(); for (const st of stones) g.add(st.faces);
-  const down = [0, 0, -1], on = v => { if (v[2] < HELD) return true; const r = g.first([v[0], v[1], v[2] - 1e-3], down, 40); return r.nz < 0 || r.t <= HELD; };   // the first face met faces down: inside a solid
+  const memo = new Map(), down = [0, 0, -1], on = v => {
+    let ok = memo.get(v); if (ok !== undefined) return ok;
+    if (v[2] < HELD) ok = true; else { const r = g.first([v[0], v[1], v[2] - 1e-3], down, 40); ok = r.nz < 0 || r.t <= HELD; }
+    memo.set(v, ok); return ok;
+  };   // the first face met faces down: inside a solid
   // a face buried in a solid (a foot, a corbel, a stone below): just outside its middle is inside something
   const buried = f => { const c = add(centroidOf(f.verts), mul(f.n, 0.03)); return g.first(c, down, 40).nz < 0; };
   // a downward face is split into triangles; a triangle with at least two corners held spans between them (a bridge)
   return stones.map(st => ({ ...st, faces: st.faces.flatMap(f => {
-    if (f.n[2] > -Math.sin(OVER * DEG)) return [f];
+    if (f.n[2] > -SIN_OVER) return [f];
     const ok = f.verts.map(on); if (ok.every(Boolean) || buried(f)) return [{ ...f, held: true }];
     const out = []; for (let i = 1; i + 1 < f.verts.length; i++) out.push({ ...f, verts: [f.verts[0], f.verts[i], f.verts[i + 1]], ...(f.vn ? { vn: [f.vn[0], f.vn[i], f.vn[i + 1]] } : {}), held: ok[0] + ok[i] + ok[i + 1] >= 2 });
     return out;
   }) }));
 }
 function rockSurface(C, seed, P) {
-  const faces = [], lines = []; let ms = 0, vol = 0;
-  let stones = C.masses.map(m => { const r = rockOf(m, seed, P); ms += r.ms; vol += r.volume; return r.surf; });
+  let ms = 0, vol = 0;
+  const rocks = C.masses.map(m => { const r = rockOf(m, seed, P); ms += r.ms; vol += r.volume; return r; });
+  // bedding works on the flat-faced stones (weathering only rounds them); its stretch and parts are then laid on what is shown
   let info = null;
   if (P.bedding) {
-    const kept = C.bedded || (C.bedded = new Map()), key = [seed, ...ROCK_KEYS.map(k => P[k])].join('/');   // kept with its cliff
-    info = kept.get(key); if (!info) { info = bed(stones, C.masses.map(m => m.sp.env)); kept.set(key, info); }
-    stones = info.stones;
+    const kept = C.bedded || (C.bedded = new Map()), key = [seed, ...ROCK_KEYS.filter(k => k !== 'weather').map(k => P[k])].join('/');   // kept with its cliff
+    info = kept.get(key); if (!info) { info = bed(rocks.map(r => r.flat), C.masses.map(m => m.sp.env)); kept.set(key, info); }
   }
-  stones = markHeld(stones);
-  for (const st of stones) { for (const f of st.faces) faces.push(f); for (const p of st.lines) lines.push(p); }
-  return { faces, lines, ms, vol, bed: info && { stretched: info.stretched, corbels: info.corbels, feet: info.feet, left: info.left } };
+  const stones = markHeld(rocks.map((r, k) => {
+    const b = info && info.stones[k]; if (!b) return r.surf;
+    const s = b.stretch ? stretched(r.surf, b.stretch) : r.surf;
+    return { faces: [...s.faces, ...b.parts.faces], lines: [...s.lines, ...b.parts.lines] };
+  }));
+  return { faces: stones.flatMap(st => st.faces), lines: stones.flatMap(st => st.lines), ms, vol, bed: info && { stretched: info.stretched, corbels: info.corbels, feet: info.feet, left: info.left } };
 }
 
 // ---------- page state ----------
-const KEEP = 1.5;   // mm of its own every spine keeps at a split
 const PRESETS = {
   granite: { direction: 'through', layers: 1, span: 0, wander: 10, width: 9, thickness: 6.5, vary: 45, joint: -0.8, fuzz: 5, order: 0 },
   columnar: { direction: 'up', layers: 1, span: 0, wander: 4, width: 7.5, thickness: 7, vary: 25, joint: 0.3, fuzz: 10, order: 0 },
@@ -1273,7 +892,7 @@ const GROUPS = [
     P_('order', 'Order', 0, 100, 1, '%', 'How regularly spines are placed: 0% thrown at random, 100% on a grid Width by Thickness, every other layer moved half a Width so the joints alternate (a laid wall); between, the grid is jittered.'),
     P_('joint', 'Joint', -3, 3, 0.1, MM, 'Where two stones meet, each stops half of this short of the split: over zero a gap (separate stones), under zero they reach into each other and merge. It changes each stone’s size; nothing moves.')] },
   { label: 'Rocks', items: [
-    P_('facets', 'Faces', 4, 80, 1, '', 'Face planes around each rock (Planes on Rocks from Hulls).'),
+    P_('facets', 'Faces', 4, 80, 1, '', 'How many face planes each stone gets, spread over its faces by area.'),
     P_('chamfered', 'Chamfered', 0, 100, 1, '%', 'The share of each rock’s edge length chamfered.'),
     P_('rtilt', 'Tilt', 0, 25, 0.5, '°', 'How far each rock’s planes turn at random.'),
     P_('sink', 'Sink', 0, 10, 0.25, '%', 'How deep each rock’s planes bite, of its size; this opens the joints between rocks.'),
@@ -1389,7 +1008,6 @@ function showStats(C, surf, ms) {
   const spans = C.masses.map(m => m.sp.j - m.sp.i), rows = [
     ['Masses', C.masses.length],
     ['Layers spanned', spans.length ? `${Math.min(...spans)} to ${Math.max(...spans)}, mean ${(spans.reduce((a, b) => a + b, 0) / spans.length).toFixed(1)}` : '-'],
-    ['Cuts', C.cuts],
     ['Masses fill the envelope', (C.fill * 100).toFixed(1) + '%'],
     ...(state.draw === 'rocks' ? [['Rocks fill it', (surf.vol / C.envVol * 100).toFixed(1) + '%'], ['Faces', surf.faces.length]] : []),
     ...(state.draw === 'rocks' && surf.bed ? [['Bedded', `${surf.bed.stretched} stretched, ${surf.bed.feet} feet, ${surf.bed.corbels} corbels` + (surf.bed.left ? `, ${surf.bed.left} partly beyond reach` : '')]] : []),
