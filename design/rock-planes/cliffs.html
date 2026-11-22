@@ -87,6 +87,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .phead .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .styles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .styles .note { grid-column: 1 / -1; }
+.spec textarea { width: 100%; min-height: 220px; resize: vertical; padding: 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg); color: var(--ink); font: 12px/16px var(--f-code); }
+.spec .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.spec .acts button { height: 28px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 500 13px var(--f-body); cursor: pointer; }
+.spec .acts button:hover { border-color: var(--accent); color: var(--accent); }
 .styles button { display: grid; gap: 2px; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--ink); cursor: pointer; font: 500 14px var(--f-body); }
 .styles button small { color: var(--muted); }
 .styles button:hover { border-color: var(--line-2); background: var(--raised); }
@@ -157,6 +161,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 
   <div class="bar params" id="params" role="toolbar" aria-label="Settings">
     <button class="pv reset" id="reset" title="Put every setting back">Reset</button>
+    <span class="pc"><button class="pv" id="spec" aria-haspopup="dialog" title="Copy everything on screen as text, or load pasted text">Spec</button></span>
   </div>
 
   <div class="main">
@@ -1295,6 +1300,10 @@ function extras(C) {
   }
   return grp;
 }
+// what went wrong, for the spec: thrown errors and the cliff's own failures
+const problems = [];
+addEventListener('error', e => problems.push('error: ' + e.message));
+addEventListener('unhandledrejection', e => problems.push('rejection: ' + (e.reason && e.reason.message || e.reason)));
 function rebuild() {
   try {
     $('err').hidden = true;
@@ -1308,8 +1317,9 @@ function rebuild() {
     draw();
     $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed;
     showStats(C, surf, ms);
-  } catch (e) { $('err').hidden = false; $('err').textContent = 'The cliff could not be built: ' + e.message; console.error(e); }
+  } catch (e) { $('err').hidden = false; $('err').textContent = 'The cliff could not be built: ' + e.message; problems.push('build: ' + e.message); console.error(e); }
 }
+let lastStats = [];
 function showStats(C, surf, ms) {
   const spans = C.masses.map(m => m.sp.j - m.sp.i), rows = [
     ['Masses', C.masses.length],
@@ -1321,6 +1331,7 @@ function showStats(C, surf, ms) {
     ['Masses in', C.ms.toFixed(0) + ' ms'],
     ...(state.draw === 'rocks' ? [['Rocks in', ms.toFixed(0) + ' ms']] : []),
   ];
+  lastStats = rows;
   $('stats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
 }
 
@@ -1463,6 +1474,60 @@ function styleChip() {
   });
   return show;
 }
+// the spec: everything on screen as text (to paste to Claude to make the same cliff), and pasted text loaded back
+const SPEC_KEYS = () => [...GROUPS.flatMap(g => g.items.map(p => p.key)), 'draw', ...CHECKS];
+const r1 = x => +x.toFixed(2);
+function specText() {
+  const c = camera.position, t = controls.target, strip = h => String(h).replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
+  return ['cliffs-from-spines spec', `style ${state.style}${edited() ? ' (edited)' : ''}`, `seed ${state.seed}`, `view ${state.view}`,
+    `camera ${[c.x, c.y, c.z].map(r1).join(' ')} target ${[t.x, t.y, t.z].map(r1).join(' ')}`, '', '[settings]',
+    ...SPEC_KEYS().map(k => `${k} ${state[k]}`), '', '[result]', ...lastStats.map(([k, v]) => `${k}: ${strip(v)}`), '', '[problems]',
+    ...(problems.length ? problems.slice(-12) : ['none']), ''].join('\n');
+}
+function loadSpec(text) {
+  const lines = text.split('\n').map(l => l.trim());
+  if (!/^cliffs-from-spines spec/.test(lines[0] || '')) throw new Error('this is not a Cliffs from Spines spec');
+  const val = (k, v) => { const d = DEFAULTS[k]; return typeof d === 'boolean' ? v === 'true' : typeof d === 'number' ? +v : v; };
+  let part = 'head', cam = null;
+  for (const l of lines.slice(1)) {
+    if (/^\[.*\]$/.test(l)) { part = l; continue; }
+    if (!l) continue;
+    const [k, ...rest] = l.split(/\s+/), v = rest.join(' ');
+    if (part === 'head') {
+      if (k === 'style' && PRESETS[rest[0]]) state.style = rest[0];
+      if (k === 'seed') state.seed = +rest[0];
+      if (k === 'view') state.view = rest[0];
+      if (k === 'camera') cam = rest.filter(x => x !== 'target').map(Number);
+    } else if (part === '[settings]' && k in DEFAULTS) state[k] = val(k, v);
+  }
+  syncUI(); setView(state.view);
+  if (cam && cam.length === 6 && cam.every(Number.isFinite)) { camera.position.set(cam[0], cam[1], cam[2]); controls.target.set(cam[3], cam[4], cam[5]); controls.update(); }
+  update();
+}
+(function () {
+  const btn = $('spec'), pc = btn.parentNode;
+  btn.addEventListener('click', () => {
+    if (pc.classList.contains('open')) { closePop(true); return; }
+    closePop(true);
+    const pop = document.createElement('div'); pop.className = 'pop spec'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Spec'); pop.append(sheetHead('Spec'));
+    const ta = document.createElement('textarea'); ta.value = specText(); ta.spellcheck = false; ta.setAttribute('aria-label', 'Spec text');
+    const acts = document.createElement('div'); acts.className = 'acts';
+    const msg = document.createElement('small'), say = t => { msg.textContent = t; };
+    const mk = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.addEventListener('click', fn); acts.append(b); };
+    const copy = () => {
+      const done = () => say('Copied. Paste it to Claude to make this same cliff.'), fail = () => { ta.select(); say('The browser did not allow the clipboard here: the text is selected, copy it by hand.'); };
+      try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, fail); else { ta.select(); if (document.execCommand && document.execCommand('copy')) done(); else fail(); } } catch (e) { fail(); }
+    };
+    mk('Copy', () => { if (ta.dataset.edited !== '1') ta.value = specText(); copy(); });
+    mk('Load', () => { try { loadSpec(ta.value); ta.dataset.edited = '0'; say('Loaded: the page now shows this spec.'); } catch (e) { say('Could not load: ' + e.message); } });
+    acts.append(msg);
+    ta.addEventListener('input', () => { ta.dataset.edited = '1'; say(''); });
+    ta.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') closePop(true); });
+    pop.append(ta, acts); pc.append(pop); pc.classList.add('open');
+    copy();   // the clipboard at once (the box is not focused: no keyboard on a phone)
+    openPop = () => { pop.remove(); pc.classList.remove('open'); };
+  });
+})();
 const shows = [];
 for (const b of $('view').children) b.addEventListener('click', () => setView(b.dataset.view));
 for (const b of $('draw').children) b.addEventListener('click', () => { state.draw = b.dataset.draw; syncUI(); update(); });
