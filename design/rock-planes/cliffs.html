@@ -76,6 +76,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .sheethead b { display: inline-flex; align-items: center; gap: 8px; }
 .sheethead b .ic { color: var(--ink); }
 .pc.open .pv { border-color: var(--accent); background: var(--raised); }
+.pbox.rng { width: 11ch; }
 .pbox { width: 6ch; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--ink); font: 600 14px var(--f-code); text-align: right; }
 .pop { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 20; width: min(760px, 100vw); max-height: 55vh; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 8px; align-content: start; padding: 0 16px max(16px, env(safe-area-inset-bottom)); background: var(--panel); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); }
 .sheethead { grid-column: 1 / -1; position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: 12px 0 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
@@ -147,6 +148,16 @@ output .ip, output .fp { display: inline-block; } output .ip { text-align: right
 
 .ctl small { color: var(--muted); font-size: 12px; line-height: 16px; }
 input[type=range] { width: 100%; accent-color: var(--accent); }
+/* a range: two handles on one track, each dragged on its own; the band between them is the range */
+.twin { position: relative; height: 24px; }
+.twin .track, .twin .band { position: absolute; top: 10px; height: 4px; border-radius: 2px; }
+.twin .track { left: 0; right: 0; background: var(--line-2); }
+.twin .band { background: var(--accent); }
+.twin input[type=range] { position: absolute; inset: 0; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; height: 24px; }
+.twin input[type=range]::-webkit-slider-runnable-track { background: none; height: 24px; }
+.twin input[type=range]::-moz-range-track { background: none; }
+.twin input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 18px; height: 18px; margin-top: 3px; border-radius: 50%; background: var(--raised); border: 2px solid var(--accent); cursor: grab; }
+.twin input[type=range]::-moz-range-thumb { pointer-events: auto; width: 14px; height: 14px; border-radius: 50%; background: var(--raised); border: 2px solid var(--accent); cursor: grab; }
 .checks { display: grid; gap: 6px; }
 .checks label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
@@ -192,6 +203,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
         </button>
         <div class="zooms">
           <button class="vbtn" id="zin" aria-label="Zoom in" title="Zoom in"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M10.5 7.5v6M7.5 10.5h6"/></svg></button>
+          <button class="vbtn" id="zfit" aria-label="Zoom to fit" title="Zoom to fit"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg></button>
           <button class="vbtn" id="zout" aria-label="Zoom out" title="Zoom out"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6"/></svg></button>
         </div>
         <div class="vpanel" id="vpanel" hidden>
@@ -226,10 +238,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
   <section class="how">
     <h2>How a cliff is built</h2>
     <ol>
-      <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, <b>Height</b> tall and <b>Depth</b> deep, standing at the back of the square. Its bottom, its back and its two ends (the tile's edges) are <b>crisp</b>: no mass crosses them. Its top and its front are <b>fuzzy</b>: each mass draws how far short of them it stops, up to <b>Fuzz</b>, from a smooth field along the wall (two thirds) and its own draw (one third), so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
-      <li><b>Spines</b> run one <b>Direction</b>: <b>Up</b> (columns, or with many layers, courses), <b>Through</b> the wall from back to front (so the stones show their ends) or <b>Along</b> it (slabs). The envelope is cut across that direction into <b>Layers</b>, the outer faces of the first and last at the envelope's ends; where two layers meet is turned and moved at random by up to half of <b>Wander</b>. Layers organise the spines and never cut a stone. In each layer in turn, spines are started by dart throwing: a dart is a point in the layer, its direction turned at random by up to <b>Wander</b>, and its spine runs back to the layer's near face and on to its far face, and on through each further layer with chance <b>Span</b>, so breaks stagger. Its ends lie on layer faces inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is clear of every spine already in the layer by <b>Width</b> horizontally across the layer and <b>Thickness</b> the other way across it (vertically for Through and Along, front to back for Up), each the two ends' sizes together; until 80 darts in a row miss, the layer is not full. <b>Order</b> draws the darts' places from a grid instead, Width by Thickness across the layer, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is jittered. Each end's size varies within <b>Vary</b>. One spine is one stone.</li>
-      <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share a layer (they meet end to end) split where two layers between them meet, so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b> sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge); each split adds a random part that grows with Vary. It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
-      <li><b>Rocks.</b> Each mass becomes a stone, printable by construction. First its mass gets a flat <b>bottom</b> just above its lowest point (at most 1 mm up, or a fifth of its height), and every underside flatter than 65° from upright is cut away by a flare rising from that bottom at 65°, so the bottom is the only face that overhangs past the limit. Then every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. The bottom is kept as it is, and no plane, crown, facet or chamfer is made that overhangs past 65°, so a little roughness under a stone stays in the printable range (between 55° and 65°: orange). <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
+      <li><b>Ranges.</b> Every setting drawn at random is a <b>range</b>: two handles on one track, the low end and the high end, typed <code>low..high</code> (a number alone, <code>7</code>, is the range 7..7: always that). Each draw is made between the ends, every value as likely, from a stream of its own for the job (a stone, a spine end, a layer face, a plane), so one setting never reshuffles another; Height and Depth are the exception, drawn mostly from a smooth field along the wall (below), so they wander rather than spread evenly.</li>
+      <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, as tall as the high end of <b>Height</b> and as deep as the high end of <b>Depth</b>, standing at the back of the square. Its bottom, its back and its two ends (the tile's edges) are <b>crisp</b>: no mass crosses them. Its top and its front are <b>fuzzy</b>: each stone draws how tall it reaches in Height and how far forward in Depth, two thirds from a smooth field along the wall and one third its own, so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
+      <li><b>Spines</b> run one <b>Direction</b>: <b>Up</b> (columns, or with many layers, courses), <b>Through</b> the wall from back to front (so the stones show their ends) or <b>Along</b> it (slabs). The envelope is cut across that direction into <b>Layers</b>, the outer faces of the first and last at the envelope's ends; each face where two layers meet is drawn on its own: it slopes along Width by an angle drawn in <b>Lean</b> and along Thickness by one drawn in <b>Pitch</b>, and curves along Width by a height drawn in <b>Sag</b> (its middle that far past its edges) and along Thickness by one drawn in <b>Bow</b>. Where neighbouring faces cross, a layer pinches out. Layers organise the spines and never cut a stone. In each layer in turn, spines are started by dart throwing: a dart is a point in the layer, its direction turned by an angle drawn in <b>Wander</b>, and its spine runs back to the layer's near face and on to its far face, through as many layers as it draws in <b>Span</b>, so breaks stagger. Its ends lie on layer faces inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is clear of every spine already in the layer by <b>Width</b> horizontally across the layer and <b>Thickness</b> the other way across it (vertically for Through and Along, front to back for Up), each the two ends' sizes together; until 80 darts in a row miss, the layer is not full. <b>Order</b> draws the darts' places from a grid instead, its pitch the middle of Width by the middle of Thickness, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is jittered. Each end's sizes are drawn in Width and Thickness. One spine is one stone.</li>
+      <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share a layer (they meet end to end) split on the face between them (its tangent plane, where it curves), so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b>, drawn for each split, sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge). It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
+      <li><b>Rocks.</b> Each mass becomes a stone, printable by construction. First its mass gets a flat <b>bottom</b> just above its lowest point (at most 1 mm up, or a fifth of its height), and every underside flatter than 65° from upright is cut away by a flare rising from that bottom at 65°, so the bottom is the only face that overhangs past the limit. Then every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. The bottom is kept as it is, and no plane, crown, facet or chamfer is made that overhangs past 65°, so a little roughness under a stone stays in the printable range (between 55° and 65°: orange). <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Faces, Chamfered and Weathering are drawn for each stone, Tilt and Sink for each plane. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
       <li><b>Bedding</b> (on by default, under Rocks): the bottom is then the only part of a stone that needs holding, so bedding only sets the bottom on something. Stones are finished in the order of their tops (what holds a stone lies below its bottom, so it is finished first), and each is stretched down, its top held, by the widest gap under its bottom within 6 mm, to the finished stones or the ground (a lip out over nothing that near is left as it is); so its whole bottom rests on what is below it, a little into it where that is uneven. Stretching only turns its other faces toward upright, and it holds the footprint, so the stone stays printable and in its envelope; it changes only the stone's size and shape.
       <li><b>Held faces are not painted.</b> Orange and red mark overhang past 55° and 65°, except where a face is held up: a face on the ground, or a face buried inside another stone, or a bridge: a downward face is split into triangles, and a triangle with at least two corners resting on something (a stone or the ground, within 0.15 mm below or inside it) spans between them.</li>
     </ol>
@@ -298,10 +311,20 @@ function clip(poly, pl) {
 }
 function faceArea(f) { let a = [0, 0, 0]; const v = f.verts; for (let i = 1; i + 1 < v.length; i++) a = add(a, cross(sub(v[i], v[0]), sub(v[i + 1], v[0]))); return len(a) / 2; }
 // ---------- a stone: its mass's convex cell, each face turned and sunk into facets, its edges and corners chamfered ----------
-// turn a direction at random: a random axis across it, an angle of about sigma
-function turn(n, sigmaDeg, r) {
-  const th = sigmaDeg * DEG * Math.sqrt(-2 * Math.log(1 - r() * 0.999)), ph = 2 * Math.PI * r();
-  const u = perp(n), v = cross(n, u);
+// ---------- ranges: every setting drawn at random is a range [lo, hi], written lo..hi (a number alone is lo = hi); pickIn is
+// the only way one becomes a number: uniform between its ends, from the stream of the job that draws it
+const pickIn = ([lo, hi], r) => lo + (hi - lo) * r();
+const pickInt = ([lo, hi], r) => Math.min(hi, Math.floor(lo + (hi - lo + 1) * r()));   // a whole number, lo to hi, each as likely
+const middle = ([lo, hi]) => (lo + hi) / 2;
+const rangeText = ([lo, hi]) => lo === hi ? String(lo) : `${lo}..${hi}`;
+// 'a..b' or 'a' (negatives too: '-10..-2'); ends given high first are swapped; null when it is not a range
+function parseRange(t) {
+  const m = /^\s*(-?\d*\.?\d+)\s*(?:\.\.\s*(-?\d*\.?\d+))?\s*$/.exec(t); if (!m) return null;
+  const a = +m[1], b = m[2] === undefined ? a : +m[2]; return a <= b ? [a, b] : [b, a];
+}
+// turn a direction by exactly deg, about a random axis across it
+function turnBy(n, deg, r) {
+  const th = deg * DEG, ph = 2 * Math.PI * r(), u = perp(n), v = cross(n, u);
   return unit(add(mul(n, Math.cos(th)), add(mul(u, Math.sin(th) * Math.cos(ph)), mul(v, Math.sin(th) * Math.sin(ph)))));
 }
 // a stream keyed by any words, for jobs that must not move one another
@@ -334,8 +357,11 @@ const LEAN = 1.5;   // a turned facet may dip no deeper into the stone than at i
 function stoneOf(cell, seed, P, fixed = new Set(), ground = new Set()) {
   const verts = dedupe(cell.flatMap(f => f.verts), 1e-6), support = n => { let m = -Infinity; for (const v of verts) m = Math.max(m, dot(n, v)); return m; };
   const lo = [0, 1, 2].map(i => Math.min(...verts.map(v => v[i]))), hi = [0, 1, 2].map(i => Math.max(...verts.map(v => v[i])));
-  const size = (hi[0] - lo[0] + hi[1] - lo[1] + hi[2] - lo[2]) / 3, sink = P.sink / 100 * size, cham = sink / 2, lean = LEAN / 100 * size;
-  const gap = 0.85 * Math.sqrt(cell.reduce((t, f) => t + faceArea(f), 0) / P.facets), k = Math.tan(P.rtilt * DEG);
+  // the stone's own draws from the ranges: how many faces, what share chamfered, its chamfers' depth and its dome; each plane then
+  // draws its own turn and bite
+  const rs = keyed(seed, 'stone'), facets = Math.max(1, pickInt(P.facets, rs)), chamfered = pickIn(P.chamfered, rs);
+  const size = (hi[0] - lo[0] + hi[1] - lo[1] + hi[2] - lo[2]) / 3, bite = r => pickIn(P.sink, r) / 100 * size, cham = pickIn(P.sink, rs) / 100 * size / 2, lean = LEAN / 100 * size;
+  const gap = 0.85 * Math.sqrt(cell.reduce((t, f) => t + faceArea(f), 0) / facets), k = Math.tan(pickIn(P.rtilt, rs) * DEG);   // the stone's own dome, from its own draw
   const order = (list, s) => { const r = stream(seed, s); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
   // touch points and crowns
   const rc = stream(seed, 9), touch = [], guards = [], planes = [];
@@ -346,7 +372,7 @@ function stoneOf(cell, seed, P, fixed = new Set(), ground = new Set()) {
     touch[fi] = { p, fr };
     // a fixed face (it rests on something, or holds something up) stays as it is, and its middle is kept from facets
     if (fixed.has(fi)) { for (const v of f.verts) guards.push(add(fc, mul(sub(v, fc), 0.85))); return; }
-    let n = turn(f.n, P.rtilt, rc); if (steep(n)) n = f.n;   // never turned past the overhang limit
+    let n = turnBy(f.n, pickIn(P.rtilt, rc), rc); if (steep(n)) n = f.n;   // never turned past the overhang limit
     const u = perp(n), v = cross(n, u), rho = room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
     for (let j = 0; j < 6; j++) { const ph = ph0 + j * Math.PI / 3; guards.push(add(p, add(mul(u, rho * Math.cos(ph)), mul(v, rho * Math.sin(ph))))); }
     planes.push({ n, b: dot(n, p) });
@@ -355,14 +381,14 @@ function stoneOf(cell, seed, P, fixed = new Set(), ground = new Set()) {
   const through = (n, b, keep = guards) => { for (const g of keep) b = Math.max(b, dot(n, g)); return b; };
   // facets: spots spread by area, kept apart (the spacing loosened a little until Facets are placed)
   const spots = order(cell.flatMap((f, fi) => touch[fi] && !fixed.has(fi) ? sampleFace(f, Math.ceil(faceArea(f) * 0.5), stream(seed, 100 + fi)).map(p => ({ p, fi })) : []), 4), taken = [];
-  for (let pass = 0, g = gap; pass < 6 && taken.length < P.facets; pass++, g *= 0.85)
-    for (const s of spots) { if (taken.length >= P.facets) break; if (!s.used && taken.every(t => len(sub(t.p, s.p)) >= g)) { s.used = true; taken.push(s); } }
+  for (let pass = 0, g = gap; pass < 6 && taken.length < facets; pass++, g *= 0.85)
+    for (const s of spots) { if (taken.length >= facets) break; if (!s.used && taken.every(t => len(sub(t.p, s.p)) >= g)) { s.used = true; taken.push(s); } }
   taken.forEach((s, i) => {
     const f = cell[s.fi], t = touch[s.fi], d = sub(s.p, t.p), dd = len(d);
     let n0 = f.n, p0 = s.p; const allow = lean + k * t.fr / 2;
     if (dd > 1e-6) { n0 = unit(add(f.n, mul(d, k / t.fr))); p0 = sub(s.p, mul(f.n, k * dd * dd / (2 * t.fr))); }
     // turned by one draw; if that dips deeper into the stone than its own point (plus its allowance), shortened just enough
-    const rr = keyed(seed, 'face', i), depth = sink * (0.5 + 0.5 * rr()), th = P.rtilt * DEG * Math.sqrt(-2 * Math.log(1 - rr() * 0.999)), ph = 2 * Math.PI * rr();
+    const rr = keyed(seed, 'face', i), depth = bite(rr), th = pickIn(P.rtilt, rr) * DEG, ph = 2 * Math.PI * rr();
     const u = perp(n0), w = add(mul(u, Math.cos(ph)), mul(cross(n0, u), Math.sin(ph))), at = sc => unit(add(mul(n0, Math.cos(sc * th)), mul(w, Math.sin(sc * th))));
     const extra = sc => support(at(sc)) - dot(at(sc), p0) - allow;
     let sc = 1; if (extra(1) > 0) { if (extra(0) > 0) sc = 0; else { let a = 0, b = 1; for (let j = 0; j < 12; j++) { const m = (a + b) / 2; if (extra(m) > 0) b = m; else a = m; } sc = a; } }
@@ -386,7 +412,7 @@ function stoneOf(cell, seed, P, fixed = new Set(), ground = new Set()) {
   const cuts = [], cut = (anchors, fn, key) => {
     let most = 0; const pls = anchors.map(([p, n], i) => {
       const rr = keyed(seed, 'chamfer', key, i), depth = cham * (1 + rr());
-      const tries = chamferTurns(n, fn, P.rtilt, rr).filter(m => !steep(m)).map(m => { const top = reach(poly, m), b = through(m, top - depth, points); return { n: m, b, bite: top - b }; });
+      const tries = chamferTurns(n, fn, pickIn(P.rtilt, rr), rr).filter(m => !steep(m)).map(m => { const top = reach(poly, m), b = through(m, top - depth, points); return { n: m, b, bite: top - b }; });
       if (!tries.length) return null;   // every way this chamfer could turn faces down past the overhang limit: none
       const t = tries.find(t => t.bite >= cham - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x); most = Math.max(most, t.bite); return t;
     }).filter(Boolean);
@@ -395,11 +421,11 @@ function stoneOf(cell, seed, P, fixed = new Set(), ground = new Set()) {
   const elist = [...edges].filter(([, e]) => e.fn.length === 2 && !onGround(e.fs)), total = elist.reduce((t, [, e]) => t + len(sub(e.b, e.a)), 0);
   let got = 0;
   for (const [key, e] of order(elist, 6)) {
-    const L = len(sub(e.b, e.a)); if (got + L / 2 > total * P.chamfered / 100 + 1e-9) continue;
+    const L = len(sub(e.b, e.a)); if (got + L / 2 > total * chamfered / 100 + 1e-9) continue;
     const m = Math.max(1, Math.round(L / (1.5 * gap))), n = unit(add(e.fn[0], e.fn[1]));
     if (cut(Array.from({ length: m }, (_, j) => [add(e.a, mul(sub(e.b, e.a), (j + 0.5) / m)), n]), e.fn, 'e' + key)) got += L;
   }
-  const clist = [...at].filter(([, c]) => c.fn.length >= 3 && !onGround(c.fs)); let want = Math.round(clist.length * P.chamfered / 100);
+  const clist = [...at].filter(([, c]) => c.fn.length >= 3 && !onGround(c.fs)); let want = Math.round(clist.length * chamfered / 100);
   for (const [j, c] of order(clist, 7)) { if (want <= 0) break; if (cut([[verts[j], unit(c.fn.reduce(add, [0, 0, 0]))]], c.fn, 'c' + j)) want--; }
   for (const pl of cuts) poly = clip(poly, { ...pl, role: 'chamfer' });
   return { poly: polyFaces(poly), lo, hi };
@@ -551,68 +577,77 @@ const polyFaces = poly => poly.filter(f => f.verts.length >= 3);
 function bigSolid(planes) { let p = boxPoly([-200, -200, -200], [200, 200, 200]); for (const pl of planes) { p = clip(p, { ...pl, role: 'hull' }); if (!p.length) break; } return polyFaces(p); }
 
 const AXES = { up: [0, 0, 1], along: [1, 0, 0], through: [0, 1, 0] };
+// the two directions across a direction e: Width's (horizontal) and Thickness's
+const frame = e => { const u = Math.abs(e[2]) < 0.95 ? unit(cross(e, [0, 0, 1])) : [1, 0, 0]; return [u, cross(e, u)]; };
+const FIELD = 2 / 3;   // of a fuzzy edge's draw, the share from the smooth field along the wall (the rest is the stone's own)
 const KEEP = 1.5;   // mm of its own every spine keeps at a split
 function cliff(seed, P) {
   const t0 = performance.now();
-  const W = 35 * P.squares, H = P.height, D = P.depth, y0 = 17.5 - D, y1 = 17.5;   // the wall stands at the back of the square
+  const W = 35 * P.squares, H = P.height[1], D = P.depth[1], y0 = 17.5 - D, y1 = 17.5;   // the wall stands at the back of the square
   const lo = [-W / 2, y0, 0], hi = [W / 2, y1, H], mid = [0, (y0 + y1) / 2, H / 2];
   const crisp = [{ n: [1, 0, 0], b: W / 2 }, { n: [-1, 0, 0], b: W / 2 }, { n: [0, 0, -1], b: 0 }, { n: [0, 1, 0], b: y1 }];
   const fuzzTop = waves(keyed(seed, 'fuzz', 'top')), fuzzFront = waves(keyed(seed, 'fuzz', 'front'));
-  // how far short of a fuzzy edge a mass stops: the smooth field (two thirds) and its own draw (one third)
-  const short = (f, rf) => P.fuzz * clamp(0.5 + 0.5 * (0.67 * f + 0.33 * (2 * rf() - 1)), 0, 1) ** 2;
+  // how far short of the envelope's top or front a stone stops: its Height or Depth drawn in the range, the draw made of the smooth
+  // field along the wall (FIELD of it) and the stone's own (the rest), so neighbours stop at similar places
+  const short = (range, f, rf) => range[1] - lerp(range[0], range[1], clamp(0.5 + 0.5 * (FIELD * f + (1 - FIELD) * (2 * rf() - 1)), 0, 1));
 
-  // layers across the envelope along the direction: the faces where they meet, the inner ones turned and moved by up to half of Wander
-  const axis = AXES[P.direction];
+  // layers across the envelope along the direction. Each face where two meet is drawn from its own stream: it leans (slopes along
+  // Width) and pitches (slopes along Thickness) by angles drawn in Lean and Pitch, and sags (along Width) and bows (along Thickness)
+  // by heights drawn in Sag and Bow: a curved face, field = 0. The ends of the stack are the envelope, flat
+  const axis = AXES[P.direction], [fu, fv] = frame(axis);
   const corners = []; for (const x of [lo[0], hi[0]]) for (const y of [lo[1], hi[1]]) for (const z of [lo[2], hi[2]]) corners.push([x, y, z]);
   const s0 = Math.min(...corners.map(c => dot(axis, c))), s1 = Math.max(...corners.map(c => dot(axis, c)));
-  const rp = keyed(seed, 'layers'), N = P.layers + 1, step = (s1 - s0) / (N - 1);
-  const reachAcross = Math.max(...corners.map(c => len(sub(sub(c, mid), mul(axis, dot(axis, sub(c, mid)))))));   // the envelope's half-width across the layers
+  const hu = Math.max(...corners.map(c => Math.abs(dot(fu, sub(c, mid))))), hv = Math.max(...corners.map(c => Math.abs(dot(fv, sub(c, mid)))));
+  const N = P.layers + 1, step = (s1 - s0) / (N - 1);
   const faces = Array.from({ length: N }, (_, i) => {
-    // a face moves at most a fifth of a layer and turns at most as far as moves its edge another fifth, so faces never cross
-    const inner = i > 0 && i < N - 1, sh = s0 + step * i + (inner ? (rp() - 0.5) * step * 0.4 * Math.min(1, P.wander / 30) : 0);
-    const tilt = Math.min(P.wander / 2, Math.atan(0.2 * step / reachAcross) / DEG);
-    const n = inner ? turn(axis, tilt, rp) : axis, at = add(mid, mul(axis, sh - dot(axis, mid)));
-    return { n, b: dot(n, at), i };
+    const inner = i > 0 && i < N - 1, rp = keyed(seed, 'layer', i), at = add(mid, mul(axis, s0 + step * i - dot(axis, mid)));
+    const lean = inner ? pickIn(P.lean, rp) : 0, pitch = inner ? pickIn(P.pitch, rp) : 0, sag = inner ? pickIn(P.sag, rp) : 0, bow = inner ? pickIn(P.bow, rp) : 0;
+    const n = unit(add(axis, add(mul(fu, -Math.tan(lean * DEG)), mul(fv, -Math.tan(pitch * DEG)))));
+    return { n, b: dot(n, at), sag, bow, i };
   });
-  // where a line from p along d meets a layer face; a spine leans at most 60° from its normal
-  const onPlane = (pl, p, d) => { const c = dot(pl.n, d); if (c < 0.5) return null; return add(p, mul(d, (pl.b - dot(pl.n, p)) / c)); };
-  const flip = pl => ({ n: mul(pl.n, -1), b: -pl.b });
+  // a face's field (positive past it, along the stack), its gradient, and where a line meets it (Newton from its mean plane)
+  const field = (F, x) => { const a = dot(fu, sub(x, mid)) / hu, c = dot(fv, sub(x, mid)) / hv; return dot(F.n, x) - F.b - F.sag * (1 - a * a) - F.bow * (1 - c * c); };
+  const grad = (F, x) => { const a = dot(fu, sub(x, mid)) / hu, c = dot(fv, sub(x, mid)) / hv; return add(F.n, add(mul(fu, 2 * F.sag * a / hu), mul(fv, 2 * F.bow * c / hv))); };
+  const meet = (F, p, d) => { let t = 0; for (let k = 0; k < 8; k++) { const x = add(p, mul(d, t)), g = dot(grad(F, x), d); if (Math.abs(g) < 1e-9) return null; t -= field(F, x) / g; } const x = add(p, mul(d, t)); return Math.abs(field(F, x)) < 1e-4 ? x : null; };
+  // the face's tangent plane where the line from x along the stack meets it
+  const tangent = (F, x) => { const q = meet(F, x, axis) || x, n = unit(grad(F, q)); return { n, b: dot(n, q) }; };
+  // where a line from p along d meets a layer face; a spine leans at most 60° from the face where it ends
+  const onFace = (F, p, d) => { const q = meet(F, p, d); return q && Math.abs(dot(unit(grad(F, q)), d)) >= 0.5 ? q : null; };
 
   // spines: in each layer, darts thrown until 80 in a row miss. A dart is a point in the layer;
-  // its spine runs back along its direction to the first plane and on to its last (on through each further plane with chance Span).
+  // its spine runs back along its direction to the first plane and on to its last (through as many layers as it draws in Span).
   // It must be clear of every spine already in the interval by Width horizontally on the plane and Thickness the other way
   const spines = [];
-  const frame = e => { const u = Math.abs(e[2]) < 0.95 ? unit(cross(e, [0, 0, 1])) : [1, 0, 0]; return [u, cross(e, u)]; };
-  const vary = (r, x, v) => x * Math.max(0.25, 1 + v * (2 * r() - 1));
-  const phase = keyed(seed, 'order-phase')() * P.width;
+  const pw = middle(P.width), pt = middle(P.thickness);   // Order's grid pitch: the middle of Width and of Thickness
+  const phase = keyed(seed, 'order-phase')() * pw;
   for (let i = 0; i < N - 1; i++) {
     const rd = keyed(seed, 'starts', i), A = faces[i], B = faces[i + 1], here = spines.filter(sp => sp.i <= i && sp.j > i);
     // Order: the darts' places drawn from a grid across the layer, Width by Thickness, every other layer moved half a Width
     // (alternate joints, as a laid wall), each place jittered by what Order lacks of 100%
     const lattice = [];
     if (P.order > 0) {
-      const [u, v] = frame(axis), sm = (A.b + B.b) / 2, base = add(mid, mul(axis, sm - dot(axis, mid))), jit = 1 - P.order / 100, rj = keyed(seed, 'order', i);
+      const [u, v] = [fu, fv], base = add(mid, mul(axis, s0 + step * (i + 0.5) - dot(axis, mid))), jit = 1 - P.order / 100, rj = keyed(seed, 'order', i);
       const us = corners.map(c => dot(u, sub(c, base))), vs = corners.map(c => dot(v, sub(c, base))), u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs);
-      const nv = Math.max(1, Math.round((v1 - v0) / P.thickness)), off = u0 + (i % 2 ? P.width / 2 : 0) + phase - P.width, th = B.b - A.b;   // the grid starts at a place drawn for the wall (a seed's own)
-      for (let a = off; a <= u1 + 1e-6; a += P.width) for (let b = 0; b < nv; b++) {
+      const nv = Math.max(1, Math.round((v1 - v0) / pt)), off = u0 + (i % 2 ? pw / 2 : 0) + phase - pw, th = step;   // the grid starts at a place drawn for the wall (a seed's own)
+      for (let a = off; a <= u1 + 1e-6; a += pw) for (let b = 0; b < nv; b++) {
         if (a < u0 - 1e-6) continue;
         const pv = v0 + (b + 0.5) * (v1 - v0) / nv;
-        lattice.push(add(base, add(mul(u, a + (rj() - 0.5) * P.width * jit), add(mul(v, pv + (rj() - 0.5) * (v1 - v0) / nv * jit), mul(axis, (rj() - 0.5) * th * 0.8 * jit)))));
+        lattice.push(add(base, add(mul(u, a + (rj() - 0.5) * pw * jit), add(mul(v, pv + (rj() - 0.5) * (v1 - v0) / nv * jit), mul(axis, (rj() - 0.5) * th * 0.8 * jit)))));
       }
     }
     let fails = 0, k = 0, guard = 0, gi = 0;
     while (fails < 80 && k < 300 && guard++ < 40000) {
       if (P.order > 0 && gi >= lattice.length) break;
       const x = P.order > 0 ? lattice[gi++].map((c, q) => clamp(c, lo[q] + 1e-3, hi[q] - 1e-3)) : [lerp(lo[0], hi[0], rd()), lerp(lo[1], hi[1], rd()), lerp(lo[2], hi[2], rd())];
-      if (dot(A.n, x) < A.b || dot(B.n, x) > B.b) continue;   // not in the layer: not a dart
+      if (field(A, x) < 0 || field(B, x) > 0) continue;   // not in the layer (where faces cross, it pinches out): not a dart
       const id = i + '.' + k, r = keyed(seed, 'dart', i, guard);   // each dart its own draws
-      let j = i + 1; while (j < N - 1 && r() < P.span / 100) j++;
-      const d = turn(axis, P.wander, r);
-      let p0 = onPlane(flip(A), x, mul(d, -1)), p1 = onPlane(faces[j], x, d);
+      const j = Math.min(N - 1, i + pickInt(P.span, r));   // Span: how many layers it runs through
+      const d = turnBy(axis, pickIn(P.wander, r), r);
+      let p0 = onFace(A, x, mul(d, -1)), p1 = onFace(faces[j], x, d);
       if (!p0 || !p1) { fails++; continue; }
       // its ends lie on layer faces inside the crisp sides, or the dart misses; past the fuzzy top or front it ends where its mass stops
       if (![p0, p1].every(q => q[0] >= lo[0] - 1e-6 && q[0] <= hi[0] + 1e-6 && q[2] >= -1e-6 && q[1] <= y1 + 1e-6)) { fails++; continue; }
-      const rf = keyed(seed, 'fuzz', id), sTop = short(fuzzTop(x[0], x[1]), rf), sFront = short(fuzzFront(x[0], x[2]), rf);
+      const rf = keyed(seed, 'fuzz', id), sTop = short(P.height, fuzzTop(x[0], x[1]), rf), sFront = short(P.depth, fuzzFront(x[0], x[2]), rf);
       { let ta = 0, tb = 1; const dd = sub(p1, p0);
         for (const [n, b] of [[[0, 0, 1], H - sTop], [[0, -1, 0], -(y0 + sFront)]]) {
           const a0 = dot(n, p0) - b, da = dot(n, dd);
@@ -622,7 +657,7 @@ function cliff(seed, P) {
         if ((tb - ta) * len(dd) < 0.3) { fails++; continue; }
         [p0, p1] = [add(p0, mul(dd, ta)), add(p0, mul(dd, tb))]; }
       const e = unit(sub(p1, p0)), [u, v] = frame(e);
-      const end = () => ({ r: vary(r, P.width / 2, P.vary / 100), a: clamp(vary(r, P.thickness / P.width, P.vary / 200), 0.1, 4) });   // a: Thickness over Width
+      const end = () => { const w = pickIn(P.width, r); return { r: w / 2, a: clamp(pickIn(P.thickness, r) / w, 0.1, 4) }; };   // a: Thickness over Width
       const E0 = end(), E1 = end();
       const rx = (E0.r + E1.r) / 2, a = (E0.a + E1.a) / 2;
       const clear = here.every(o => {
@@ -641,13 +676,19 @@ function cliff(seed, P) {
   // spine at least KEEP of its own
   const splits = spines.map(() => []);
   for (let ia = 0; ia < spines.length; ia++) for (let ib = ia + 1; ib < spines.length; ib++) {
-    const A = spines[ia], B = spines[ib], gap = P.joint + 1.5 * P.vary / 100 * (2 * keyed(seed, 'joint', A.id, B.id)() - 1);
+    const A = spines[ia], B = spines[ib], gap = pickIn(P.joint, keyed(seed, 'joint', A.id, B.id));
     // two spines that share no layer split on a layer face between them (they meet end to end; the layers order the stones)
     if (A.j <= B.i || B.j <= A.i) {
-      const [F, G] = A.j <= B.i ? [A, B] : [B, A], pl = faces[Math.round((F.j + G.i) / 2)], sf = F === A ? 1 : -1, gp = Math.min(gap, 0.4 * step);   // a joint never eats a layer
-      const dist = len(sub(nearest(A.p0, A.p1, B.p0, B.p1)[3], nearest(A.p0, A.p1, B.p0, B.p1)[2]));
-      splits[ia].push({ n: mul(pl.n, sf), b: sf * pl.b - gp / 2, dist }); splits[ib].push({ n: mul(pl.n, -sf), b: -sf * pl.b - gp / 2, dist });
-      continue;
+      const [F, G] = A.j <= B.i ? [A, B] : [B, A], sf = F === A ? 1 : -1, gp = Math.min(gap, 0.4 * step);   // a joint never eats a layer
+      // the face's tangent plane between them, moved as little as keeps each spine on its own side (their ends are on the face; on a
+      // curved face a tangent plane may cut a little off each end: then midway); where it would cut more, they split as two that share a layer do
+      const [, , qa, qb] = nearest(A.p0, A.p1, B.p0, B.p1), dist = len(sub(qb, qa)), pl = tangent(faces[Math.round((F.j + G.i) / 2)], mul(add(qa, qb), 0.5));
+      const top = Math.max(dot(pl.n, F.p0), dot(pl.n, F.p1)), bot = Math.min(dot(pl.n, G.p0), dot(pl.n, G.p1));
+      const b = bot >= top ? clamp(pl.b, top, bot) : (top + bot) / 2, fLow = Math.min(dot(pl.n, F.p0), dot(pl.n, F.p1)), gHigh = Math.max(dot(pl.n, G.p0), dot(pl.n, G.p1));
+      if (bot - top >= -2 && b - Math.max(0, gp) / 2 >= fLow + KEEP && b + Math.max(0, gp) / 2 <= gHigh - KEEP) {
+        splits[ia].push({ n: mul(pl.n, sf), b: sf * b - gp / 2, dist }); splits[ib].push({ n: mul(pl.n, -sf), b: -sf * b - gp / 2, dist });
+        continue;
+      }
     }
     const [s, t, pa, pb] = nearest(A.p0, A.p1, B.p0, B.p1);
     const ab = sub(pb, pa), L = len(ab), ra = lerp(A.r0, A.r1, s), rb = lerp(B.r0, B.r1, t);
@@ -670,7 +711,7 @@ function cliff(seed, P) {
     return { sp, hull, poly, surf: surfOf(poly), vol: volumeOf(poly) };
   });
   const envVol = W * D * H, massVol = masses.reduce((t, m) => t + m.vol, 0);
-  return { W, H, D, lo, hi, faces, spines, masses, envVol, fill: massVol / envVol, ms: performance.now() - t0 };
+  return { W, H, D, lo, hi, faces, field, meet, axis, fu, fv, hu, hv, mid, spines, masses, envVol, fill: massVol / envVol, ms: performance.now() - t0 };
 }
 
 // a mass's stone, built once per mass, seed and rock settings
@@ -785,7 +826,7 @@ function markHeld(stones) {
 // a stone, built once per mass, seed and rock settings, from its printable outline: { poly, ms }
 const kept = new Map();
 function rockOf(cell, id, seed, P) {
-  const key = [seed, id, cell.map(f => f.n.map(x => x.toFixed(6)).join() + ',' + f.b.toFixed(5)).join(';'), P.facets, P.chamfered, P.rtilt, P.sink].join('/');
+  const key = [seed, id, cell.map(f => f.n.map(x => x.toFixed(6)).join() + ',' + f.b.toFixed(5)).join(';'), ...[P.facets, P.chamfered, P.rtilt, P.sink].map(rangeText)].join('/');
   let r = kept.get(key);
   if (!r) {
     const t0 = performance.now(), out = printable(cell), fixed = new Set([out.bottom]), onGround = zRange(out.poly)[0] < 1e-6;
@@ -809,22 +850,23 @@ function rockSurface(C, seed, P) {
     const r = rockOf(C.masses[k].poly, C.masses[k].sp.id, seed, P); let poly = r.poly;
     if (P.bedding) { const g = grownOnto(poly, grid); poly = g.poly; count.grown += g.grown; }
     const t0 = performance.now(), vs = poly.flatMap(f => f.verts), lo = [0, 1, 2].map(i => Math.min(...vs.map(v => v[i]))), hi = [0, 1, 2].map(i => Math.max(...vs.map(v => v[i])));
-    surfs[k] = P.weather > 0 ? weathered(poly.map(f => ({ n: f.n, b: f.b })), lo, hi, P.weather) : surfOf(poly);
+    const wr = pickIn(P.weather, keyed(seed, 'weather', C.masses[k].sp.id));   // each stone its own radius
+    surfs[k] = wr > 0 ? weathered(poly.map(f => ({ n: f.n, b: f.b })), lo, hi, wr) : surfOf(poly);
     ms += r.ms + performance.now() - t0; vol += volumeOf(poly); grid.add(poly);
   }
   const stones = markHeld(surfs);
   return { faces: stones.flatMap(st => st.faces), lines: stones.flatMap(st => st.lines), ms, vol, bed: P.bedding ? count : null };
 }
 // ---------- page state ----------
-const PRESETS = {
-  granite: { direction: 'through', layers: 1, span: 0, wander: 10, width: 9, thickness: 6.5, vary: 45, joint: -0.8, fuzz: 5, order: 0 },
-  columnar: { direction: 'up', layers: 1, span: 0, wander: 4, width: 7.5, thickness: 7, vary: 25, joint: 0.3, fuzz: 10, order: 0 },
-  layered: { direction: 'up', layers: 9, span: 10, wander: 4, width: 12, thickness: 7, vary: 40, joint: 0.4, fuzz: 4, order: 0 },
-  massive: { direction: 'through', layers: 2, span: 30, wander: 15, width: 15, thickness: 11, vary: 45, joint: 0.5, fuzz: 5, order: 0 },
-  wall: { direction: 'up', layers: 8, span: 0, wander: 0, width: 11, thickness: 16, vary: 12, joint: 0.3, fuzz: 0.5, order: 100 },
+const PRESETS = {   // ranges are [lo, hi]
+  granite: { height: [31, 36], depth: [11, 16], direction: 'through', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: [1, 1], wander: [0, 15], width: [5, 13], thickness: [5, 8], order: 0, joint: [-1.5, -0.1] },
+  columnar: { height: [30, 36], depth: [12, 16], direction: 'up', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: [1, 1], wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.1, 0.7] },
+  layered: { height: [33, 36], depth: [13, 16], direction: 'up', layers: 9, lean: [-3, 3], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: [1, 1], wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-0.2, 1] },
+  massive: { height: [32, 36], depth: [12, 16], direction: 'through', layers: 2, lean: [-4, 4], pitch: [-4, 4], sag: [0, 0], bow: [0, 0], span: [1, 2], wander: [0, 22], width: [8, 22], thickness: [8, 14], order: 0, joint: [-0.2, 1.2] },
+  wall: { height: [35.5, 36], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: [1, 1], wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [0.1, 0.5] },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and merging into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['massive', 'Massive', 'Large irregular masses in two layers parallel to the front, broad faces, uneven joints'], ['wall', 'Wall', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
-const DEFAULTS = { style: 'layered', ...PRESETS.layered, squares: 1, height: 36, depth: 16, facets: 24, chamfered: 100, rtilt: 6, sink: 3, weather: 0, bedding: true, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, lines: true };
+const DEFAULTS = { style: 'layered', ...PRESETS.layered, squares: 1, facets: [20, 28], chamfered: [80, 100], rtilt: [0, 9], sink: [1.5, 3], weather: [0, 0], bedding: true, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, lines: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -850,36 +892,40 @@ function dirIcon(d) {
   return svg(`<path class="hid" d="${hid}"/><path class="faint" d="${box}"/><path class="plane" d="${path(plane)}Z"/>`, 'dir', '0 0 24 20');
 }
 const P_ = (key, label, min, max, step, unit, help) => ({ key, label, min, max, step, unit, help });
+const R_ = (...a) => ({ ...P_(...a), range: true });   // a range: drawn at random between its two ends
 // the settings, in groups on one line: a group shows its first value; a click opens its settings under it
 const GROUPS = [
   { label: 'Envelope', icon: () => ICON.envelope, value: 'squares', items: [
     P_('squares', 'Squares', 1, 3, 1, '', 'How many 35 mm squares long the wall is.'),
-    P_('height', 'Height', 12, 60, 1, MM, 'How tall the envelope is.'),
-    P_('depth', 'Depth', 6, 35, 1, MM, 'How deep the envelope is, from the back of the square forward.'),
-    P_('fuzz', 'Fuzz', 0, 12, 0.5, MM, 'How far short of the fuzzy top and front a stone may stop: a smooth field along the wall and each stone’s own draw.')] },
+    R_('height', 'Height', 6, 60, 0.5, MM, 'How tall each stone reaches: drawn in this range, mostly from a smooth field along the wall, so neighbours stop at similar heights and the top wanders. The envelope is as tall as the high end.'),
+    R_('depth', 'Depth', 4, 35, 0.5, MM, 'How far forward each stone reaches from the back of the square, drawn the same way, so the front wanders. The back is crisp.')] },
   { label: 'Structure', icon: () => dirIcon(state.direction), value: 'layers', items: [
-    { key: 'direction', label: 'Direction', choices: [['up', 'Up'], ['through', 'Through'], ['along', 'Along']], icon: dirIcon, help: 'Which way the spines run: through the wall back to front (stones show their ends), along it (slabs), or up (columns; with many layers, courses of slabs). The layers lie across it.' },
+    { key: 'direction', label: 'Direction', choices: [['up', 'Up'], ['through', 'Through'], ['along', 'Along']], icon: dirIcon, help: 'Which way the spines run: up (columns; with many layers, courses), through the wall back to front (stones show their ends), or along it (slabs).' },
     P_('layers', 'Layers', 1, 50, 1, '', 'How many layers the envelope is cut into across the direction; a spine starts and ends where layers meet (or at the envelope).'),
-    P_('span', 'Span', 0, 95, 1, '%', 'The chance a spine goes on through one more plane: mostly short spines, fewer long ones, so breaks stagger.'),
-    P_('wander', 'Wander', 0, 60, 1, '°', 'How far a spine turns at random from the direction (where layers meet turns by half of it).'),
-    P_('width', 'Width', 3, 26, 0.5, MM, 'The spacing of neighbouring spines across the layer, horizontally: along the wall (Through, Up) or front to back (Along). Each stone then grows until it meets its neighbours or the envelope.'),
-    P_('thickness', 'Thickness', 2, 26, 0.5, MM, 'The spacing of neighbouring spines the other way across the layer: vertically (Through, Along) or front to back (Up).'),
-    P_('vary', 'Vary', 0, 80, 1, '%', 'How much each spine end’s size varies (a bigger end takes more of what it shares), and the joints with it.'),
-    P_('order', 'Order', 0, 100, 1, '%', 'How regularly spines are placed: 0% thrown at random, 100% on a grid Width by Thickness, every other layer moved half a Width so the joints alternate (a laid wall); between, the grid is jittered.'),
-    P_('joint', 'Joint', -3, 3, 0.1, MM, 'Where two stones meet, each stops half of this short of the split: over zero a gap (separate stones), under zero they reach into each other and merge. It changes each stone’s size; nothing moves.')] },
+    R_('lean', 'Lean', -30, 30, 0.5, '°', 'How far each face between layers slopes along Width (along the wall for Up and Through, front to back for Along), drawn for each face. Where neighbouring faces cross, a layer pinches out.'),
+    R_('pitch', 'Pitch', -30, 30, 0.5, '°', 'How far each face between layers slopes along Thickness (front to back for Up, vertically for Through and Along), drawn for each face.'),
+    R_('sag', 'Sag', -10, 10, 0.25, MM, 'How far each face between layers curves along Width: its middle this far past its edges (negative: a hump), drawn for each face.'),
+    R_('bow', 'Bow', -10, 10, 0.25, MM, 'How far each face between layers curves along Thickness, drawn for each face.'),
+    R_('span', 'Span', 1, 10, 1, '', 'How many layers each spine runs through, drawn for each spine (each number in the range as likely), so breaks stagger.'),
+    R_('wander', 'Wander', 0, 60, 1, '°', 'How far each spine turns from the direction, drawn for each spine.'),
+    R_('width', 'Width', 3, 30, 0.5, MM, 'The size of each spine end across the layer, horizontally: along the wall (Through, Up) or front to back (Along), drawn for each end; a bigger end takes more of what it shares. Neighbouring spines keep their ends’ sizes apart, and each stone grows until it meets its neighbours or the envelope.'),
+    R_('thickness', 'Thickness', 2, 30, 0.5, MM, 'The size of each spine end the other way across the layer: vertically (Through, Along) or front to back (Up), drawn for each end.'),
+    P_('order', 'Order', 0, 100, 1, '%', 'How regularly spines are placed: 0% thrown at random, 100% on a grid (its pitch the middle of Width by the middle of Thickness), every other layer moved half a pitch so the joints alternate (a laid wall); between, the grid is jittered.'),
+    R_('joint', 'Joint', -3, 3, 0.1, MM, 'Where two stones meet, drawn for each pair: each stops half of it short of the split: over zero a gap (separate stones), under zero they reach into each other and merge. It changes each stone’s size; nothing moves.')] },
   { label: 'Rocks', icon: () => ICON.rocks, value: 'facets', items: [
-    P_('facets', 'Faces', 4, 80, 1, '', 'How many face planes each stone gets, spread over its faces by area.'),
-    P_('chamfered', 'Chamfered', 0, 100, 1, '%', 'The share of each rock’s edge length chamfered.'),
-    P_('rtilt', 'Tilt', 0, 25, 0.5, '°', 'How far each rock’s planes turn at random.'),
-    P_('sink', 'Sink', 0, 10, 0.25, '%', 'How deep each rock’s planes bite, of its size; this opens the joints between rocks.'),
-    P_('weather', 'Weathering', 0, 2, 0.05, MM, 'Rounds every outward joint of each rock to this radius (slow: a distance field per rock).'),
+    R_('facets', 'Faces', 4, 80, 1, '', 'How many face planes each stone gets, drawn for each stone, spread over its faces by area.'),
+    R_('chamfered', 'Chamfered', 0, 100, 1, '%', 'The share of each stone’s edge length chamfered, drawn for each stone.'),
+    R_('rtilt', 'Tilt', 0, 25, 0.5, '°', 'How far each of a stone’s planes turns, drawn for each plane.'),
+    R_('sink', 'Sink', 0, 10, 0.25, '%', 'How deep each of a stone’s planes bites, of its size, drawn for each plane; this opens the joints between stones.'),
+    R_('weather', 'Weathering', 0, 2, 0.05, MM, 'Rounds every outward joint of each stone to a radius drawn for it (slow: a distance field per stone).'),
     { key: 'bedding', label: 'Bedding', bool: true, help: 'Every stone is printable by construction, a flat bottom its only face past 65°; bedding stretches each stone down, its top held, until its whole bottom rests on the stones below or the ground. Stones are finished in the order of their tops.' }] },
 ];
 const CHECKS = ['ghost', 'layersOn', 'spinesOn', 'lines'];
-const CLIFF_KEYS = ['squares', 'height', 'depth', ...Object.keys(PRESETS.massive)];
+const CLIFF_KEYS = ['squares', ...Object.keys(PRESETS.massive)];
 const ROCK_KEYS = ['facets', 'chamfered', 'rtilt', 'sink', 'weather', 'bedding'];
 const pick = keys => Object.fromEntries(keys.map(k => [k, state[k]]));
-const edited = () => Object.keys(PRESETS[state.style]).some(k => state[k] !== PRESETS[state.style][k]);
+const same = (a, b) => String(a) === String(b);   // a range is compared by its ends
+const edited = () => Object.keys(PRESETS[state.style]).some(k => !same(state[k], PRESETS[state.style][k]));
 // a cliff is made once per seed and its settings (the last 40)
 const cliffs = new Map();
 function cliffFor(seed) {
@@ -891,8 +937,8 @@ function cliffFor(seed) {
 const viewerEl = $('viewer');
 let renderer, scene, camera, persp, ortho, controls, rockObj = null, extraObj = null, thumbR, thumbScene, thumbPersp, thumbOrtho;
 const homeDir = () => new THREE.Vector3(34, -50, 30).normalize();
-const focus = () => new THREE.Vector3(0, 17.5 - state.depth / 2, state.height / 2);
-const reachOf = () => Math.max(35 * state.squares, state.height) * 2.3;
+const focus = () => new THREE.Vector3(0, 17.5 - state.depth[1] / 2, state.height[1] / 2);
+const reachOf = () => Math.max(35 * state.squares, state.height[1]) * 2.3;
 function initGL() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -937,6 +983,16 @@ function zoomBy(f) {
   else { const d = camera.position.distanceTo(controls.target), to = clamp(d * f, controls.minDistance, controls.maxDistance); camera.position.sub(controls.target).multiplyScalar(to / d).add(controls.target); }
   controls.update(); draw();
 }
+// zoom to fit: the shape shown, centred, its bounding sphere just inside the view (the view's direction is kept)
+function zoomFit() {
+  if (!rockObj) return;
+  const sph = new THREE.Box3().setFromObject(rockObj).getBoundingSphere(new THREE.Sphere()), R = sph.radius * 1.04, w = viewerEl.clientWidth, h = viewerEl.clientHeight;
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  controls.target.copy(sph.center);
+  if (camera === ortho) { const half = ortho.top; ortho.zoom = Math.min(half, half * w / h) / R; ortho.updateProjectionMatrix(); camera.position.copy(dir.multiplyScalar(reachOf())).add(sph.center); }
+  else { const vf = persp.fov * DEG / 2, hf = Math.atan(Math.tan(vf) * w / h), d = clamp(R / Math.sin(Math.min(vf, hf)), controls.minDistance, controls.maxDistance); camera.position.copy(dir.multiplyScalar(d)).add(sph.center); }
+  controls.update(); draw();
+}
 
 // what else the view shows: the envelope, the layers' faces (each clipped to the envelope) and the spines
 function extras(C) {
@@ -944,13 +1000,22 @@ function extras(C) {
   if (state.ghost) grp.add(meshOf({ faces: bigSolid([{ n: [1, 0, 0], b: C.hi[0] }, { n: [-1, 0, 0], b: -C.lo[0] }, { n: [0, 1, 0], b: C.hi[1] }, { n: [0, -1, 0], b: -C.lo[1] }, { n: [0, 0, 1], b: C.hi[2] }, { n: [0, 0, -1], b: 0 }]), lines: [] }, 0, { ghost: true, lines: false }));
   if (state.layersOn) {
     const pos = [], lp = [], box = [[1, 0, 0, C.hi[0]], [-1, 0, 0, -C.lo[0]], [0, 1, 0, C.hi[1]], [0, -1, 0, -C.lo[1]], [0, 0, 1, C.hi[2]], [0, 0, -1, 0]];
-    for (const pl of C.faces) {
-      const u = perp(pl.n), v = cross(pl.n, u), o = mul(pl.n, pl.b);
-      let vs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => add(o, add(mul(u, 300 * a), mul(v, 300 * b))));
-      for (const [x, y, z, b] of box) { vs = clipPoly(vs, [x, y, z], b); if (vs.length < 3) break; }
-      if (vs.length < 3) continue;
-      for (let i = 1; i + 1 < vs.length; i++) pos.push(...vs[0], ...vs[i], ...vs[i + 1]);
-      vs.forEach((a, i) => lp.push(...a, ...vs[(i + 1) % vs.length]));
+    // each face as a grid over the envelope's cross-section, each point where the line along the stack meets the face, cut to the box
+    const M = 16;
+    for (const F of C.faces) {
+      const at = (i, j) => C.meet(F, add(C.mid, add(mul(C.fu, C.hu * (2 * i / M - 1)), mul(C.fv, C.hv * (2 * j / M - 1)))), C.axis);
+      const g = []; for (let i = 0; i <= M; i++) { g.push([]); for (let j = 0; j <= M; j++) g[i].push(at(i, j)); }
+      for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) {
+        const q = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]]; if (q.some(x => !x)) continue;
+        let vs = q; for (const [x, y, z, b] of box) { vs = clipPoly(vs, [x, y, z], b); if (vs.length < 3) break; }
+        if (vs.length < 3) continue;
+        for (let k = 1; k + 1 < vs.length; k++) pos.push(...vs[0], ...vs[k], ...vs[k + 1]);
+      }
+      // its outline: the grid's border lines, cut to the box
+      for (let i = 0; i <= M; i += M) for (let j = 0; j < M; j++) for (const [p0, p1] of [[g[i][j], g[i][j + 1]], [g[j][i], g[j + 1][i]]]) {
+        if (!p0 || !p1) continue; let vs = [p0, p1, p1]; for (const [x, y, z, b] of box) { vs = clipPoly(vs, [x, y, z], b); if (vs.length < 2) break; }
+        if (vs.length >= 2) lp.push(...vs[0], ...vs[1]);
+      }
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x3E6FB0, transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide })));
@@ -1063,7 +1128,7 @@ document.addEventListener('pointerdown', e => { if (openPop && !e.target.closest
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && openPop) closePop(false); });   // Escape puts the values back, wherever focus is
 const bar = $('params'), resetBtn = $('reset');
 // a direction's picture: the wall, seen from the front and a little above, and the way its spines run
-const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.choices) { const c = p.choices.find(x => x[0] === v); return (p.icon ? p.icon(v) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
+const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return rangeText(v) + (p.unit || ''); if (p.choices) { const c = p.choices.find(x => x[0] === v); return (p.icon ? p.icon(v) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
 const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
 // one setting's row in a popover: a box to type in, its slider and its help
 function row(p, box) {
@@ -1086,6 +1151,7 @@ function row(p, box) {
     wrap.append(cb); wrap.insertAdjacentHTML('beforeend', `<span class="k">${p.label}</span><small>${p.help}</small>`);
     return wrap;
   }
+  if (p.range) return twinRow(p, box);
   const wrap = document.createElement('div'); wrap.className = 'prow';
   const range = document.createElement('input'); Object.assign(range, { type: 'range', min: p.min, max: p.max, step: p.step, value: state[p.key] }); range.setAttribute('aria-label', p.label);
   if (!box) { box = document.createElement('input'); Object.assign(box, { type: 'text', inputMode: 'decimal', value: state[p.key], className: 'pbox' }); box.setAttribute('aria-label', p.label); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box); }
@@ -1097,6 +1163,26 @@ function row(p, box) {
   for (const el of [box, range]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') closePop(true); if (e.key === 'Escape') closePop(false); });
   return wrap;
 }
+// a range's row: a box to type lo..hi in, two handles on one track (each dragged on its own, never past the other), and its help
+function twinRow(p, box) {
+  const wrap = document.createElement('div'); wrap.className = 'prow';
+  if (!box) { box = document.createElement('input'); Object.assign(box, { type: 'text', value: rangeText(state[p.key]), className: 'pbox rng' }); box.setAttribute('aria-label', p.label + ', low..high'); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box); }
+  const twin = document.createElement('div'); twin.className = 'twin'; twin.innerHTML = '<span class="track"></span><span class="band"></span>';
+  const band = twin.querySelector('.band');
+  const ends = ['low', 'high'].map((w, e) => { const h = document.createElement('input'); Object.assign(h, { type: 'range', min: p.min, max: p.max, step: p.step, value: state[p.key][e] }); h.setAttribute('aria-label', `${p.label}, ${w} end`); twin.append(h); return h; });
+  const paint = () => { const [a, b] = state[p.key], at = x => (x - p.min) / (p.max - p.min) * 100; band.style.left = at(a) + '%'; band.style.width = (at(b) - at(a)) + '%'; ends[0].value = a; ends[1].value = b; ends[0].style.zIndex = a > p.max - (p.max - p.min) * 0.05 ? 3 : 2; };
+  const set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } paint(); };
+  ends.forEach((h, e) => h.addEventListener('input', () => {
+    const x = snapTo(p, +h.value), [a, b] = state[p.key];
+    set(e === 0 ? [Math.min(x, b), b] : [a, Math.max(x, a)]); box.value = rangeText(state[p.key]);
+  }));
+  box.addEventListener('input', () => { const v = parseRange(box.value); if (v) set(v.map(x => snapTo(p, x))); });
+  box.addEventListener('change', () => { box.value = rangeText(state[p.key]); });   // the box shows the one spelling: 7 when both ends are 7
+  wrap.append(twin); paint();
+  wrap.insertAdjacentHTML('beforeend', `<div class="ends"><span>${p.min}${p.unit || ''}</span><span>${p.max}${p.unit || ''}</span></div><small>${p.help}</small>`);
+  for (const el of [box, ...ends]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') closePop(true); if (e.key === 'Escape') closePop(false); });
+  return wrap;
+}
 function groupChip(g) {
   const pc = document.createElement('span'); pc.className = 'pc';
   const btn = document.createElement('button'); btn.className = 'pv'; btn.setAttribute('aria-haspopup', 'dialog');
@@ -1104,14 +1190,14 @@ function groupChip(g) {
   pc.append(btn); bar.insertBefore(pc, resetBtn);
   const lone = g.items.length === 1;
   // the chip shows the group's first value; the popover has them all
-  const show = () => { btn.querySelector('.gi').outerHTML = g.icon().replace('class="ic', 'class="gi ic'); btn.querySelector('.v').innerHTML = fmt(g.items.find(p => p.key === g.value), state[g.value]); btn.setAttribute('aria-label', `${g.label}: ${g.items.map(p => p.label + ' ' + state[p.key]).join(', ')}; click to change`); };
+  const show = () => { btn.querySelector('.gi').outerHTML = g.icon().replace('class="ic', 'class="gi ic'); btn.querySelector('.v').innerHTML = fmt(g.items.find(p => p.key === g.value), state[g.value]); btn.setAttribute('aria-label', `${g.label}: ${g.items.map(p => p.label + ' ' + (p.range ? rangeText(state[p.key]) : state[p.key])).join(', ')}; click to change`); };
   btn.addEventListener('click', () => {
     if (pc.classList.contains('open')) return;
     closePop(true);
     const was = pick(g.items.map(p => p.key)), v = btn.querySelector('.v');
     const pop = document.createElement('div'); pop.className = 'pop' + (lone ? '' : ' group'); pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', g.label); pop.append(sheetHead(g.label, g.icon()));
     let first;
-    if (lone) { first = document.createElement('input'); Object.assign(first, { type: 'text', inputMode: 'decimal', value: state[g.items[0].key], className: 'pbox' }); first.setAttribute('aria-label', g.label); v.replaceWith(first); pop.append(row(g.items[0], first)); }
+    if (lone) { const p0 = g.items[0]; first = document.createElement('input'); Object.assign(first, { type: 'text', inputMode: p0.range ? 'text' : 'decimal', value: p0.range ? rangeText(state[p0.key]) : state[p0.key], className: p0.range ? 'pbox rng' : 'pbox' }); first.setAttribute('aria-label', g.label); v.replaceWith(first); pop.append(row(g.items[0], first)); }
     else { for (const p of g.items) pop.append(row(p)); first = pop.querySelector('.pbox'); }
     pc.append(pop); pc.classList.add('open');   // no focus: on a phone it would raise the keyboard; tap the box to type
     pc.addEventListener('focusout', e => { if (openPop && !pc.contains(e.relatedTarget)) closePop(true); });
@@ -1135,7 +1221,7 @@ function styleChip() {
       b.addEventListener('click', () => { const others = Object.keys(PRESETS).filter(k => k !== state.style), to = key === 'random' ? others[Math.floor(Math.random() * others.length)] : key; Object.assign(state, { style: to }, PRESETS[to]); closePop(true); syncUI(); update(); btn.focus(); });
       pop.append(b);
     }
-    pop.insertAdjacentHTML('beforeend', '<small class="note">A style sets Structure and Fuzz; * means one has been changed since.</small>');
+    pop.insertAdjacentHTML('beforeend', '<small class="note">A style sets Height, Depth and Structure; * means one has been changed since.</small>');
     pc.append(pop); pc.classList.add('open');   // no focus moved: the sheet is read where it is
     pop.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { closePop(false); btn.focus(); } });
     openPop = () => { pop.remove(); pc.classList.remove('open'); };
@@ -1149,7 +1235,7 @@ function specText() {
   const c = camera.position, t = controls.target, strip = h => String(h).replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
   return ['cliffs-from-spines spec', `style ${state.style}${edited() ? ' (edited)' : ''}`, `seed ${state.seed}`, `view ${state.view}`,
     `camera ${[c.x, c.y, c.z].map(r1).join(' ')} target ${[t.x, t.y, t.z].map(r1).join(' ')}`, '', '[settings]',
-    ...SPEC_KEYS().map(k => `${k} ${state[k]}`), '', '[result]', ...lastStats.map(([k, v]) => `${k}: ${strip(v)}`), '', '[problems]',
+    ...SPEC_KEYS().map(k => `${k} ${Array.isArray(state[k]) ? rangeText(state[k]) : state[k]}`), '', '[result]', ...lastStats.map(([k, v]) => `${k}: ${strip(v)}`), '', '[problems]',
     ...(problems.length ? problems.slice(-12) : ['none']), ''].join('\n');
 }
 function loadSpec(text) {
@@ -1157,7 +1243,7 @@ function loadSpec(text) {
   const words = ['style', 'seed', 'view', 'camera', ...SPEC_KEYS()];
   const lines = text.replace(/\s+(\[[a-z]+\])\s+/g, '\n$1\n').replace(new RegExp('\\s+(?=(' + words.join('|') + ')\\s)', 'g'), '\n').replace(/\s+(?=[A-Z][a-z ]+:)/g, '\n').split('\n').map(l => l.trim());
   if (!/^cliffs-from-spines spec/.test(lines[0] || '')) throw new Error('this is not a Cliffs from Spines spec');
-  const val = (k, v) => { const d = DEFAULTS[k]; return typeof d === 'boolean' ? v === 'true' : typeof d === 'number' ? +v : v; };
+  const val = (k, v) => { const d = DEFAULTS[k]; if (Array.isArray(d)) { const r = parseRange(v), p = GROUPS.flatMap(g => g.items).find(q => q.key === k); if (!r) throw new Error(`${k} wants low..high, not '${v}'`); return r.map(x => snapTo(p, x)); } return typeof d === 'boolean' ? v === 'true' : typeof d === 'number' ? +v : v; };
   let part = 'head', cam = null;
   for (const l of lines.slice(1)) {
     if (/^\[.*\]$/.test(l)) { part = l; continue; }
@@ -1212,6 +1298,7 @@ for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.targ
 $('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS, PRESETS[state.style]); syncUI(); update(); });
 $('zin').addEventListener('click', () => zoomBy(0.8));
 $('zout').addEventListener('click', () => zoomBy(1.25));
+$('zfit').addEventListener('click', zoomFit);
 $('prev').addEventListener('click', () => setSeed(state.seed - 1));
 $('next').addEventListener('click', () => setSeed(state.seed + 1));
 document.addEventListener('keydown', e => {
