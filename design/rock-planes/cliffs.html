@@ -244,7 +244,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share a layer (they meet end to end) split on the face between them (its tangent plane, where it curves; where a curved or pinched face would cut into one of the two spines, that plane is turned just enough to pass between them whole), so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b>, drawn for each split, sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge). It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
       <li><b>Rocks.</b> Each mass becomes a stone, printable by construction. Its <b>bottom</b> is its mass's own faces that overhang past 65°: on a layer, the face of the layer below, level, tilted or curved as that is (one face for each stone below it); with Bedding, only the part of it that rests or is bridged (below); any other underside flatter than 65° from upright is cut away by a flare rising from the bottom at 65°, so the bottom is the only part that overhangs past the limit. A mass with no such face stands on its lowest point. Then every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. The bottom is kept as it is, and no plane, crown, facet or chamfer is made that overhangs past 65°, so a little roughness under a stone stays in the printable range (between 55° and 65°: orange). <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Faces, Chamfered and Weathering are drawn for each stone, Tilt and Sink for each plane. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
       <li><b>Bedding</b> (on by default, under Rocks) builds each stone knowing what is below it, so it rests by construction and nothing is stretched or repaired afterwards. <b>The order:</b> a stone is finished only after every stone that holds it (whose mass lies under its mass's bottom); a circle, each partly over the next, is broken at the stone with the lowest bottom. <b>The bottom:</b> the points of its mass's bottom that rest (on a finished stone or the ground within <span data-const="LOOK"></span> mm, or inside one) and the points bridged between them, on a line between two resting points at most <b>Bridge</b> apart: the largest convex group of them seen from above with nothing inside that neither rests nor is bridged. The flare rises from it, from its corners and along each edge of its outline, so a stone over a gap is smaller rather than overhanging. <b>The top:</b> where a stone holds a mass above, its top stays on its plane under that mass's footprint but for a rim along the footprint's edges, <span data-const="RIM%"></span> of its width across each edge, where facets, crowns and chamfers may cut; so the stone above finds it within <span data-const="LOOK"></span> mm, and the two cut back into a V between them. A stone that rests nowhere keeps its whole bottom and is painted where nothing holds it. Off: each stone is its mass made printable alone, in no order: a view to compare with.</li>
-      <li><b>What rests or is bridged is not painted.</b> Orange and red mark overhang past 55° and 65°, except where a downward face rests (on the ground, on a stone within <span data-const="LOOK"></span> mm below, or buried inside one) or is bridged (on a line between two of its stone's resting points at most Bridge apart), the rule a bottom is chosen by. A face not wholly resting is judged in triangles <span data-const="PIECE"></span> mm across (a weathered stone's faces, small already, whole).</li>
+      <li><b>What rests or is bridged is not painted.</b> Orange and red mark overhang past 55° and 65°, except where a downward face rests (on the ground, on a stone within <span data-const="LOOK"></span> mm below, or buried inside one) or is bridged (on a line between two of its stone's resting points at most Bridge apart), the rule a bottom is chosen by. A face not wholly resting is judged in triangles, split down to <span data-const="PIECE"></span> mm only where the answer changes (a weathered stone's faces, small already, whole).</li>
     </ol>
     <p class="hint"><b>Layered</b>, the first style: nine level layers, a handful of slabs in each. <b>Granite</b>: one layer through the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; Joint under zero, so they merge into one irregular mass. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart. <b>Massive</b>: two layers parallel to the front, big stones. <b>Wall</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone.</p>
     <p class="hint">Not here yet, from the design: envelopes with concavities and holes (each mass is clipped by a box envelope), curved or irregular ends, twisting sections, and joint faces kept flush (a rock's sink opens every joint). Every job draws from its own stream (the planes, each plane's starts, each spine, each end, the fuzz, each joint, each rock), so one control never reshuffles another. Overhang paints orange past 55° and red past 65°.</p>
@@ -776,22 +776,28 @@ function column(cell, x, y) {
   }
   return hi >= lo ? [lo, hi] : null;
 }
-// what holds what, from the masses alone: below each point of A's bottom, the first mass a vertical line meets (at any distance:
-// it is finished first) holds A; where it meets that mass's top within contact (as far as a joint can open or close: masses touch or
-// reach into each other), the point is in A's footprint on it. { holds: [Set of b] per a, footprints: per b, [{ a, ps }] the footprints of each mass on it }
+// what holds what, from the masses alone: below each point of A's bottom, the highest mass whose column through that point (the
+// vertical line's stretch inside it) has its middle below A's bottom there holds A (at any distance: it is finished first; a
+// neighbour in A's own layer has its middle level with A's, however far masses reach into each other); where its top is within contact
+// of the point (as far as a joint can open: masses touch or reach into each other), the point is in A's footprint on it.
+// { holds: [Set of b] per a, footprints: per b, [{ a, ps }] the footprints of each mass on it }
 function holding(masses, joint) {
-  const n = masses.length, holds = masses.map(() => new Set()), footprints = masses.map(() => []);
-  const under = Math.max(0, joint[1]) + CONTACT, into = Math.max(0, -joint[0]) + CONTACT;
+  const n = masses.length, holds = masses.map(() => new Set()), footprints = masses.map(() => []), under = Math.max(0, joint[1]) + CONTACT;
   const box = masses.map(m => { const vs = m.poly.flatMap(f => f.verts); return [0, 1, 2].map(i => [Math.min(...vs.map(v => v[i])), Math.max(...vs.map(v => v[i]))]); });
+  // the masses over each BIN mm square seen from above, so a point asks only those near it
+  const BIN = 4, bins = new Map(), bin = (x, y) => Math.floor(x / BIN) + ',' + Math.floor(y / BIN);
+  box.forEach((bx, b) => { for (let x = Math.floor(bx[0][0] / BIN); x <= Math.floor(bx[0][1] / BIN); x++) for (let y = Math.floor(bx[1][0] / BIN); y <= Math.floor(bx[1][1] / BIN); y++) { const k = x + ',' + y; (bins.get(k) || bins.set(k, []).get(k)).push(b); } });
   masses.forEach((A, a) => {
     const per = new Map();
-    for (const p of samplesOn(A.poly.filter(f => steep(f.n)), SAMPLE, 'footprint/' + A.sp.id)) {
+    // (at twice the bottom's spacing: what holds what and a footprint's outline need no finer)
+    for (const p of samplesOn(A.poly.filter(f => steep(f.n)), 2 * SAMPLE, 'footprint/' + A.sp.id)) {
+      const ca = column(A.poly, p[0], p[1]); if (!ca) continue;
       let best = -1, top = -Infinity;
-      for (let b = 0; b < n; b++) {
+      for (const b of bins.get(bin(p[0], p[1])) || []) {
         const bx = box[b];
-        if (b === a || p[0] < bx[0][0] - 1e-6 || p[0] > bx[0][1] + 1e-6 || p[1] < bx[1][0] - 1e-6 || p[1] > bx[1][1] + 1e-6 || p[2] < bx[2][0]) continue;
+        if (b === a || p[0] < bx[0][0] - 1e-6 || p[0] > bx[0][1] + 1e-6 || p[1] < bx[1][0] - 1e-6 || p[1] > bx[1][1] + 1e-6 || bx[2][0] >= ca[0] || bx[2][1] <= top) continue;
         const c = column(masses[b].poly, p[0], p[1]);
-        if (c && c[0] < p[2] && c[1] <= p[2] + into && c[1] > top) { best = b; top = c[1]; }
+        if (c && c[0] + c[1] < 2 * ca[0] && c[1] > top) { best = b; top = c[1]; }
       }
       if (best < 0) continue;
       holds[a].add(best);
@@ -864,16 +870,23 @@ function largestGroup(pts, link) {
 // whether a point rests: within LOOK above what the grid holds or the ground, or inside a solid (the first face met faces down).
 // from: how far above the point the ray starts (just off its own face)
 const restsOn = (grid, p, from) => { if (p[2] < LOOK) return true; const r = grid.first([p[0], p[1], p[2] + from], [0, 0, -1], RAY); return r.nz < 0 || r.t <= LOOK + from; };
-// whether a point is bridged: on a line between two resting points at most bridge apart (directions about it in SECTORS sectors; two
-// facing sectors, one either side, whose nearest points are bridge or less apart)
-function bridged(x, R, bridge, u, v) {
-  const S = SECTORS, near = new Array(S).fill(Infinity);
-  for (const p of R) {
-    const d = sub(p, x), l = len(d); if (l > bridge) continue;
-    const s = ((Math.round(Math.atan2(dot(d, v), dot(d, u)) / (2 * Math.PI) * S) % S) + S) % S; if (l < near[s]) near[s] = l;
-  }
-  for (let s = 0; s < S; s++) if (near[s] < Infinity) for (const o of [-1, 0, 1]) if (near[s] + near[(s + S / 2 + o + S) % S] <= bridge) return true;
-  return false;
+// a test of whether a point is bridged: on a line between two resting points at most bridge apart, seen across the plane of u, v
+// (the points are projected once, one kept in each SAMPLE square; about the point, the nearest within bridge in each of SECTORS
+// directions; two facing sectors, one either side, whose nearest are bridge or less apart)
+function bridges(R, bridge, u, v) {
+  const cells = new Map();
+  for (const p of R) { const a = dot(p, u), b = dot(p, v), c = Math.round(a / SAMPLE) + ',' + Math.round(b / SAMPLE); if (!cells.has(c)) cells.set(c, [a, b]); }
+  const m = cells.size, pu = new Float64Array(m), pv = new Float64Array(m), S = SECTORS, near = new Float64Array(S), b2 = bridge * bridge, k = S / (2 * Math.PI);
+  let i = 0; for (const [a, b] of cells.values()) { pu[i] = a; pv[i++] = b; }
+  return x => {
+    const xu = dot(x, u), xv = dot(x, v); near.fill(Infinity);
+    for (let i = 0; i < m; i++) {
+      const du = pu[i] - xu, dv = pv[i] - xv, d2 = du * du + dv * dv; if (d2 > b2) continue;
+      const s = ((Math.round(Math.atan2(dv, du) * k) % S) + S) % S, l = Math.sqrt(d2); if (l < near[s]) near[s] = l;
+    }
+    for (let s = 0; s < S; s++) if (near[s] < Infinity) for (let o = -1; o <= 1; o++) if (near[s] + near[(s + S / 2 + o + S) % S] <= bridge) return true;
+    return false;
+  };
 }
 // a stone's bottom from points sampled on its mass's bottom and whether each rests: the allowed points (resting, or bridged between
 // two resting points at most bridge apart), the largest group of them each within bridge of another, and then its outline seen from
@@ -881,16 +894,17 @@ function bridged(x, R, bridge, u, v) {
 // hold only allowed points. Null when it rests nowhere
 function bottomFrom(pts, rests, bridge) {
   const R = pts.filter((_, i) => rests[i]); if (!R.length) return null;
-  const U = [1, 0, 0], V = [0, 1, 0], allowed = pts.map((p, i) => rests[i] || bridged(p, R, bridge, U, V));
+  const across = bridges(R, bridge, [1, 0, 0], [0, 1, 0]), allowed = pts.map((p, i) => rests[i] || across(p));
   const bad = pts.filter((_, i) => !allowed[i]).map(p => [p[0], p[1]]);
   // (a group links points within bridge, or within two sample spacings, so one resting patch is one group even with Bridge 0)
   let group = largestGroup(pts.filter((_, i) => allowed[i]), Math.max(bridge, 2 * SAMPLE));
   const inside = (H, q) => H.every((v, i) => { const w = H[(i + 1) % H.length]; return (w[0] - v[0]) * (q[1] - v[1]) - (w[1] - v[1]) * (q[0] - v[0]) > 1e-3 * Math.hypot(w[0] - v[0], w[1] - v[1]); });
   const badIn = g => { const H = hull2(g.map(p => [p[0], p[1]])); return H.length < 3 ? 0 : bad.filter(q => inside(H, q)).length; };
   for (let it = 0, now = badIn(group); now > 0 && it < 80 && group.length > 3; it++) {
-    const H = hull2(group.map(p => [p[0], p[1]]));
+    // the corners tried: the four nearest a failing point inside
+    const H = hull2(group.map(p => [p[0], p[1]])), ins = bad.filter(q => inside(H, q)), d = h => Math.min(...ins.map(q => Math.hypot(q[0] - h[0], q[1] - h[1])));
     let pick = null, least = Infinity;
-    for (const h of H) { const g = group.filter(p => p[0] !== h[0] || p[1] !== h[1]), c = badIn(g); if (c < least) { least = c; pick = g; } }
+    for (const h of H.map(h => [d(h), h]).sort((x, y) => x[0] - y[0]).slice(0, 4).map(x => x[1])) { const g = group.filter(p => p[0] !== h[0] || p[1] !== h[1]), c = badIn(g); if (c < least) { least = c; pick = g; } }
     group = pick; now = least;
   }
   return group;
@@ -951,27 +965,37 @@ function rayGrid() {
 }
 // what is not painted: a downward face where it rests (on the ground, on a stone within LOOK below, or buried inside one) or is
 // bridged (on a line between two of its stone's resting points at most bridge apart), the same rule a bottom is chosen by. A face
-// not wholly resting is split into triangles PIECE across and each judged by its middle (a weathered stone's faces are small already and judged whole); allowed marks what is not painted
+// not wholly resting is split into triangles, down to PIECE across where its corners and middle disagree, and each judged by its middle (a weathered stone's faces are small already and judged whole); allowed marks what is not painted
 function markRests(stones, bridge) {
   const g = rayGrid(); for (const st of stones) g.add(st.faces);
-  const memo = new Map(), down = [0, 0, -1];
-  const on = v => { let ok = memo.get(v); if (ok === undefined) memo.set(v, ok = restsOn(g, v, -1e-3)); return ok; };
+  const memo = new Map(), down = [0, 0, -1], key = v => v[0].toFixed(4) + ',' + v[1].toFixed(4) + ',' + v[2].toFixed(4);
+  const on = v => { const k = key(v); let ok = memo.get(k); if (ok === undefined) memo.set(k, ok = restsOn(g, v, -1e-3)); return ok; };
   // a face buried in a solid (a foot, a stone below): just outside its middle is inside something
   const buried = f => g.first(add(centroidOf(f.verts), mul(f.n, 0.03)), down, RAY).nz < 0;
-  const split = t => { const [a, b, c] = t, m = (p, q) => mul(add(p, q), 0.5); if (Math.max(len(sub(a, b)), len(sub(b, c)), len(sub(c, a))) <= PIECE) return [t]; const ab = m(a, b), bc = m(b, c), ca = m(c, a); return [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]].flatMap(split); };
+  const mid = (p, q) => mul(add(p, q), 0.5), longest = ([a, b, c]) => Math.max(len(sub(a, b)), len(sub(b, c)), len(sub(c, a)));
+  const quarters = ([a, b, c]) => { const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a); return [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]; };
   return stones.map((st, si) => {
     const low = st.faces.filter(f => f.n[2] <= -SIN_OVER), lone = new Set(low.filter(f => !buried(f)));
     // the stone's resting points, over all its downward faces (buried ones too: they are bridges' ends); a face all of whose points
     // rest is not split
     const R = [], whole = new Set();
     for (const f of low) { const ps = samplesOn([f], SAMPLE, 'rest/' + si + '/' + f.verts[0].join()), ok = ps.map(on); ps.forEach((p, i) => { if (ok[i]) R.push(p); }); if (ok.every(Boolean)) whole.add(f); }
+    const tests = new Map();   // one bridge test per plane direction
     return { ...st, faces: st.faces.flatMap(f => {
       if (f.n[2] > -SIN_OVER) return [f];
       if (!lone.has(f) || whole.has(f)) return [{ ...f, allowed: true }];
-      const u = perp(f.n), v = cross(f.n, u), fine = !f.vn, out = [];
-      for (let i = 1; i + 1 < f.verts.length; i++) for (const t of fine ? split([f.verts[0], f.verts[i], f.verts[i + 1]]) : [[f.verts[0], f.verts[i], f.verts[i + 1]]]) {
-        const c = centroidOf(t);
-        out.push({ ...f, verts: t, ...(f.vn ? { vn: [f.vn[0], f.vn[i], f.vn[i + 1]] } : {}), allowed: on(c) || bridged(c, R, bridge, u, v) });
+      const fk = key(f.n); let across = tests.get(fk); if (!across) { const u = perp(f.n); tests.set(fk, across = bridges(R, bridge, u, cross(f.n, u))); }
+      const allowed = p => on(p) || across(p), out = [];
+      // a triangle is split into quarters while it is longer than four pieces, then only while its corners and middle disagree,
+      // down to PIECE; each piece is judged by its middle
+      const judge = t => {
+        const L = longest(t), c = centroidOf(t), ac = allowed(c);
+        if (L > PIECE && (L > 4 * PIECE || t.some(p => allowed(p) !== ac))) { for (const q of quarters(t)) judge(q); return; }
+        out.push({ ...f, verts: t, allowed: ac });
+      };
+      for (let i = 1; i + 1 < f.verts.length; i++) {
+        const t = [f.verts[0], f.verts[i], f.verts[i + 1]];
+        if (f.vn) out.push({ ...f, verts: t, vn: [f.vn[0], f.vn[i], f.vn[i + 1]], allowed: allowed(centroidOf(t)) }); else judge(t);
       }
       return out;
     }) };
