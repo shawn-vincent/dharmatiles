@@ -87,6 +87,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .phead .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .styles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .styles .note { grid-column: 1 / -1; }
+.dicon { width: 26px; height: 19px; vertical-align: middle; margin-right: 5px; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.dicon .wall { stroke: currentColor; stroke-width: 1; opacity: .55; }
+.dicon .ar { stroke: currentColor; stroke-width: 1.9; }
+.seg button.withicon { height: 34px; display: inline-flex; align-items: center; }
 .spec textarea { width: 100%; min-height: 220px; resize: vertical; padding: 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg); color: var(--ink); font: 12px/16px var(--f-code); }
 .spec .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .spec .acts button { height: 28px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 500 13px var(--f-body); cursor: pointer; }
@@ -1198,7 +1202,7 @@ const GROUPS = [
     P_('depth', 'Depth', 6, 35, 1, MM, 'How deep the envelope is, from the back of the square forward.'),
     P_('fuzz', 'Fuzz', 0, 12, 0.5, MM, 'How far short of the fuzzy top and front a stone may stop: a smooth field along the wall and each stone’s own draw.')] },
   { label: 'Structure', items: [
-    { key: 'direction', label: 'Direction', choices: [['through', 'Through'], ['along', 'Along'], ['up', 'Up']], help: 'Which way the spines run: through the wall back to front (stones show their ends), along it (slabs), or up (columns; with many planes, courses of slabs). The control planes stand across it.' },
+    { key: 'direction', label: 'Direction', choices: [['through', 'Through', '<path class="ar" d="M19 6.5 9 14.5M9 14.5h4.2M9 14.5l1.4-3.9"/>'], ['along', 'Along', '<path class="ar" d="M4.5 12h14M18.5 12l-3-2.4M18.5 12l-3 2.4"/>'], ['up', 'Up', '<path class="ar" d="M11.5 15.5v-12M11.5 3.5 9 6.5M11.5 3.5l2.5 3"/>']], help: 'Which way the spines run: through the wall back to front (stones show their ends), along it (slabs), or up (columns; with many planes, courses of slabs). The control planes stand across it.' },
     P_('planes', 'Planes', 2, 14, 1, '', 'How many control planes cross the envelope, the first and last at its ends; a spine ends on them.'),
     P_('span', 'Span', 0, 95, 1, '%', 'The chance a spine goes on through one more plane: mostly short spines, fewer long ones, so breaks stagger.'),
     P_('wander', 'Wander', 0, 60, 1, '°', 'How far a spine turns at random from the direction (the inner planes turn by half of it).'),
@@ -1394,7 +1398,9 @@ function closePop(keep = true) { if (openPop) { const c = openPop; openPop = nul
 document.addEventListener('pointerdown', e => { if (openPop && !e.target.closest('.pc.open')) closePop(true); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && openPop) closePop(false); });   // Escape puts the values back, wherever focus is
 const bar = $('params'), resetBtn = $('reset');
-const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.choices) return p.choices.find(c => c[0] === v)[1]; const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
+// a direction's picture: the wall, seen from the front and a little above, and the way its spines run
+const dirIcon = path => `<svg class="dicon" viewBox="0 0 26 19" aria-hidden="true"><path class="wall" d="M2.5 7.5h16v9h-16zM2.5 7.5l4-4h16l-4 4M18.5 16.5l4-4v-9"/>${path}</svg>`;
+const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.choices) { const c = p.choices.find(x => x[0] === v); return (c[2] ? dirIcon(c[2]) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
 const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
 // one setting's row in a popover: a box to type in, its slider and its help
 function row(p, box) {
@@ -1402,8 +1408,8 @@ function row(p, box) {
     const wrap = document.createElement('div'); wrap.className = 'prow';
     wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`);
     const seg = document.createElement('div'); seg.className = 'seg';
-    for (const [v, label] of p.choices) {
-      const b = document.createElement('button'); b.textContent = label; b.setAttribute('aria-pressed', state[p.key] === v ? 'true' : 'false');
+    for (const [v, label, icon] of p.choices) {
+      const b = document.createElement('button'); b.innerHTML = (icon ? dirIcon(icon) : '') + label; b.className = icon ? 'withicon' : ''; b.setAttribute('aria-pressed', state[p.key] === v ? 'true' : 'false');
       b.addEventListener('click', () => { state[p.key] = v; for (const o of seg.children) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); update(); });
       seg.append(b);
     }
