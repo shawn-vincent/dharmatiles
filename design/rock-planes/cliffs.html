@@ -198,7 +198,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Spines.</b> In each interval between two planes in turn, spines are started by dart throwing: a dart is a point of the envelope between the two planes, its direction the sweep's turned at random by about <b>Spread</b>, and its spine runs back to the first plane and on to the next, and on through each further plane with chance <b>Span</b>; its ends lie on its planes, inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own mass stops. A dart is kept only if it is clear of every spine already in the interval (at least <b>Packing</b> times their two radii apart, measured across their sections); a spine that only ends at the interval's plane does not count, so masses can stack end to end. Until 80 darts in a row miss, the interval is not full. <b>Strata</b> holds spines to shared strata: the wall's height is cut into bands about a mass thick, a start is pulled toward its band's middle, the spine runs flatter, and its thickness becomes the band's. One spine is one mass.</li>
       <li><b>Each spine's support</b> is the space it may claim: the convex hull of its two end sections (a polygon of about <b>Faces</b> sides, <b>Size</b> times <b>Reach</b> across, flattened by <b>Aspect</b>, each end drawn on its own within <b>Vary</b>), so a mass can taper, flatten and change its sides from end to end. At the top of Reach there is no limit: the support is the whole envelope, and a mass grows until it meets its neighbours (its ends too: the ends below shape only limited masses). Each end lies on its control plane (or at its mass's fuzzy edge), turned by up to <b>End tilt</b>, rounded by a ring of chamfers <b>Round</b> deep, and roughened (every plane of the end turned and moved) by <b>Rough</b>. Weight, drawn at each end within <b>Weight</b>, is how hard a spine competes.</li>
       <li><b>Space is split by weight.</b> Each spine scores a point by its power distance: the square of the distance across its section (and along it, past an end) less the square of its local size times weight; the lower score claims it. Two such scores are equal on a plane (exactly, for points), so where two supports meet, their overlap is split by the plane fitted (least squares) to where the scores are equal, and the planes of three masses meet in one line, leaving no hole. <b>Spacing</b> then sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones, heaped), and under zero each reaches past the split into its neighbour (they read as one mass). It changes each mass's size; nothing moves. Each split adds its own random part, up to Spacing's <b>Vary</b> either way. A mass is its support and envelope (its hull) less its neighbours' claims, each claim the neighbour's support on its own side of the split (a convex cut, so the mass is a hull with hollows, as Rocks from Hulls reads it). A point both supports reach goes to exactly one side, so with Spacing at zero or more no two masses overlap, by construction, and only the shared overlap is split, so nothing either could not reach is lost. A mass must be one piece: it is read on a 1 mm grid, and while it is not, the claim cutting the most becomes a half-space instead (the side holding the spine is kept). Space no support reaches stays empty: gaps are allowed. Every spine keeps a mass: a split leaves each spine at least 1.5 mm of its own (and half of a gap); where the fitted plane cannot, the split is across the line between the spines' nearest points. So every spine is a mass, and every mass a stone.</li>
-      <li><b>Bedding</b> (on by default, under Rocks): a stone whose underside overhangs past 55° is made to stand on something, at construction. Stones are bedded from the lowest up, each on what is already there. A small gap (a face's drop to what is below, up to 2 mm) is closed by stretching the stone down, its top held; stretching also turns every face toward upright, so some faces need no drop at all. A stone with faces further off gets one <b>corbel</b> (as the cliff element's support cone): the hull of the points of those faces and their sweep along a direction within 55° of straight down, the one that reaches a bedded stone or the ground soonest for all of them, until all have run into it. Each wall of the corbel is parallel to the sweep, so it leans no more than 55°, or a copy of the underside, the lower one inside what it reaches. So a cantilever is held up by the stone beside or below it instead of a column to the ground, and the corbel holds up the stones above in turn.</li>
+      <li><b>Bedding</b> (on by default, under Rocks): a stone whose underside overhangs past 65° (red; orange is fine) is made to stand on something, at construction, and never leaves its envelope. Stones are bedded from the lowest up, each on what is already there. A small gap (a face's drop to what is below, up to 2 mm) is closed by stretching the stone down, its top held; stretching also turns every face toward upright, so some faces need no drop at all (it holds the stone's footprint, so it stays in the envelope). A stone with faces further off gets one <b>corbel</b> (as the cliff element's support cone): the hull of the points of those faces and their sweep along a direction within 55° of straight down, the one that reaches a bedded stone or the ground soonest for all of them, until all have run into it; a direction that would carry any point out of the stone's envelope is not taken (if every one would, the nearest is, cut back to the envelope, holding up what it can), and the corbel is always cut by the envelope. Each wall of the corbel is parallel to the sweep, so it leans no more than 55°, or a copy of the underside, the lower one inside what it reaches. So a cantilever is held up by the stone beside or below it instead of a column to the ground, and the corbel holds up the stones above in turn.</li>
       <li><b>Rocks.</b> Each mass is a hull for Rocks from Hulls, with its neighbours' claims as hollows: <b>Rocks</b> sets its faces, chamfers, tilt, sink and weathering. A rock stays inside its mass, so with Spacing at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the control planes and the spines.</li>
     </ol>
     <p class="hint"><b>Granite wall</b>, the first style: two planes, the back and the front of the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; no limit on reach and Spacing under zero, so they fill the wall and merge into one irregular mass. <b>Columns</b>: two planes, the ground and the top, so every spine is one upright column from a point on the ground, no limit on reach, a hair apart.</p>
@@ -1176,9 +1176,9 @@ function massSurface(masses) {
 // (so the corbel's walls lean no more than the limit), toward whichever bedded stone or the ground it reaches soonest, until all of
 // it runs into that; the corbel is then part of the stone, and holds up the stones above in turn
 const HULL_DIRS = fib(120);
-const OVER = 55, SIN_OVER = Math.sin(OVER * DEG), SMALL = 2;
+const OVER = 55, LIMIT = 65, SIN_LIMIT = Math.sin(LIMIT * DEG), SMALL = 2;   // bed only what is past the steepest (red); corbels lean no more than the overhang (55°)
 const SWEEPS = (() => { const out = [[0, 0, -1]]; for (const a of [25, 40, OVER - 1]) for (let k = 0; k < 8; k++) { const ph = 2 * Math.PI * k / 8 + (a === 40 ? Math.PI / 8 : 0); out.push([Math.sin(a * DEG) * Math.cos(ph), Math.sin(a * DEG) * Math.sin(ph), -Math.cos(a * DEG)]); } return out; })();
-function bed(stones) {
+function bed(stones, envs) {
   const done = [];   // bedded solids' triangles with their boxes
   const add_ = faces => { const tris = [], lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
     for (const f of faces) { for (let i = 1; i + 1 < f.verts.length; i++) tris.push([f.verts[0], f.verts[i], f.verts[i + 1]]); for (const v of f.verts) for (let q = 0; q < 3; q++) { lo[q] = Math.min(lo[q], v[q]); hi[q] = Math.max(hi[q], v[q]); } }
@@ -1202,7 +1202,7 @@ function bed(stones) {
   };
   let stretched = 0, corbels = 0, left = 0;
   const order = stones.map((st, k) => { let lo = Infinity; for (const f of st.faces) for (const v of f.verts) lo = Math.min(lo, v[2]); return [lo, k]; }).sort((a, b) => a[0] - b[0]);
-  const out = new Array(stones.length), past = f => f.n[2] < -SIN_OVER - 1e-9;
+  const out = new Array(stones.length), past = f => f.n[2] < -SIN_LIMIT - 1e-9;
   for (const [, k] of order) {
     let st = stones[k];
     let top = -Infinity; for (const f of st.faces) for (const v of f.verts) top = Math.max(top, v[2]);
@@ -1210,12 +1210,15 @@ function bed(stones) {
     let need = 1;
     for (const f of st.faces) {
       if (!past(f)) continue;
-      const h = Math.hypot(f.n[0], f.n[1]), kAngle = h < 1e-9 ? Infinity : -f.n[2] * Math.sqrt(1 - SIN_OVER * SIN_OVER) / (SIN_OVER * h);
+      const h = Math.hypot(f.n[0], f.n[1]), kAngle = h < 1e-9 ? Infinity : -f.n[2] * Math.sqrt(1 - SIN_LIMIT * SIN_LIMIT) / (SIN_LIMIT * h);
       let kReach = 1, far = false;
       for (const v of [...f.verts, centroidOf(f.verts)]) { const up = top - v[2], dz = hit(v, [0, 0, -1], SMALL + 1e-6); if (dz > SMALL) { far = true; break; } if (up > 1e-6) kReach = Math.max(kReach, 1 + dz / up); }
       const kf = Math.min(kAngle, far ? Infinity : kReach);
       if (kf < Infinity && kf < 1 + SMALL / Math.max(1e-6, top - Math.min(...f.verts.map(v => v[2])))) need = Math.max(need, kf);
     }
+    // the stone's bottom drops at most SMALL, and never below the ground (the stretch holds its footprint, so it stays in its envelope)
+    { let bot = Infinity; for (const f of st.faces) for (const v of f.verts) bot = Math.min(bot, v[2]);
+      if (top - bot > 1e-6) need = Math.min(need, 1 + Math.min(SMALL, Math.max(0, bot)) / (top - bot)); }
     if (need > 1 + 1e-6) {
       stretched++;
       const sz = v => [v[0], v[1], top - (top - v[2]) * need], sn = n => unit([n[0], n[1], n[2] / need]);
@@ -1231,12 +1234,16 @@ function bed(stones) {
     // keep it quick)
     const P = loose.length > 24 ? dedupe(HULL_DIRS.map(n => loose.reduce((m, v) => dot(n, v) > dot(n, m) ? v : m)), 1e-6) : dedupe(loose, 1e-3);
     if (P.length) {
-      let best = null;
+      let best = null, any = null;
+      const env = envs[k], inEnv = v => env.every(q => dot(q.n, v) <= q.b + 1e-6);
       for (const w of SWEEPS) {
         let L = 0; for (const v of P) { L = Math.max(L, hit(add(v, mul(w, 1e-4)), w)); if (best && L >= best.L) break; }
-        if (L < Infinity && (!best || L < best.L)) best = { w, L };
+        // a corbel never leaves its stone's envelope: a sweep that would carry any point out of it is not taken
+        if (L < Infinity && (!any || L < any.L)) any = { w, L };
+        if (L < Infinity && (!best || L < best.L) && P.every(v => inEnv(add(v, mul(w, L + 0.2))))) best = { w, L };
       }
-      const pts = best && P.length >= 3 ? [...P, ...P.map(v => add(v, mul(best.w, best.L + 0.2)))] : null, hp = pts && hullPlanes(pts);
+      if (!best) best = any;   // every sweep leaves the envelope: the nearest, cut by the envelope, holds up what it can
+      const pts = best && P.length >= 3 ? [...P, ...P.map(v => add(v, mul(best.w, best.L + 0.2)))] : null, hp = pts && [...hullPlanes(pts), ...env];   // and is cut by it besides
       const cf = hp && hp.length >= 4 ? polyFaces(bigSolid(hp)) : [];
       if (cf.length) { corbels++; for (const g of cf) { faces.push({ verts: g.verts, n: g.n }); g.verts.forEach((a, i) => lines.push(a, g.verts[(i + 1) % g.verts.length])); } }
       else left++;
@@ -1252,7 +1259,7 @@ function rockSurface(C, seed, P) {
   let info = null;
   if (P.bedding) {
     const kept = C.bedded || (C.bedded = new Map()), key = [seed, ...ROCK_KEYS.map(k => P[k])].join('/');   // kept with its cliff
-    info = kept.get(key); if (!info) { info = bed(stones); kept.set(key, info); }
+    info = kept.get(key); if (!info) { info = bed(stones, C.masses.map(m => m.sp.env)); kept.set(key, info); }
     stones = info.stones;
   }
   for (const st of stones) { for (const f of st.faces) faces.push(f); for (const p of st.lines) lines.push(p); }
@@ -1317,7 +1324,7 @@ const GROUPS = [
     P_('rtilt', 'Tilt', 0, 25, 0.5, '°', 'How far each rock’s planes turn at random.'),
     P_('sink', 'Sink', 0, 10, 0.25, '%', 'How deep each rock’s planes bite, of its size; this opens the joints between rocks.'),
     P_('weather', 'Weathering', 0, 2, 0.05, MM, 'Rounds every outward joint of each rock to this radius (slow: a distance field per rock).'),
-    { key: 'bedding', label: 'Bedding', bool: true, help: 'A stone whose underside overhangs past 55° is made to stand on something: a small gap (up to 2 mm) is closed by stretching it down, its top held; further off, the stone gets a corbel, swept at no more than 55° toward the nearest stone below (or the ground). Stones are bedded from the lowest up.' }] },
+    { key: 'bedding', label: 'Bedding', bool: true, help: 'A stone whose underside overhangs past 65° (red) is made to stand on something, inside its envelope: a small gap (up to 2 mm) is closed by stretching it down, its top held; further off, the stone gets a corbel, swept at no more than 55° toward the nearest stone below (or the ground). Stones are bedded from the lowest up.' }] },
 ];
 const CHECKS = ['ghost', 'planesOn', 'spinesOn', 'lines'];
 const CLIFF_KEYS = ['squares', 'height', 'depth', ...Object.keys(PRESETS.massive)];
