@@ -173,7 +173,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 <div class="wrap">
   <header>
     <h1>Cliffs from Spines</h1>
-    <p class="lede">A cliff as a population of rock masses. The envelope is cut into layers; spines are thrown in each, Width and Thickness apart; each grows until it meets its neighbours or the envelope. Every mass then becomes a faceted stone. Granite wall, Columns, Layered, Massive and Stone wall are settings of one engine, and Random draws a new one.</p>
+    <p class="lede">A cliff as a population of rock masses. The envelope is cut into layers; spines are thrown in each, Width and Thickness apart; each grows until it meets its neighbours or the envelope. Every mass then becomes a faceted stone. Granite wall, Columns, Layered, Massive and Stone wall are settings of one engine; Random picks one of them.</p>
   </header>
 
   <div class="bar params" id="params" role="toolbar" aria-label="Settings">
@@ -875,14 +875,7 @@ const PRESETS = {
   massive: { direction: 'through', layers: 2, span: 30, wander: 15, width: 15, thickness: 11, vary: 45, joint: 0.5, fuzz: 5, order: 0 },
   wall: { direction: 'up', layers: 8, span: 0, wander: 0, width: 11, thickness: 16, vary: 12, joint: 0.3, fuzz: 0.5, order: 100 },
 };
-const STYLES = [['granite', 'Granite wall', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and merging into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['massive', 'Massive', 'Large irregular masses in two layers parallel to the front, broad faces, uneven joints'], ['wall', 'Stone wall', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'A new structure drawn at random each time it is chosen: direction, layers, spacing, wander, joints and fuzz']];
-// Random: a structure drawn from the ranges the styles use (it becomes the Random preset, so Reset and the * work as for any style)
-function randomStructure() {
-  const r = Math.random, of = a => a[Math.floor(r() * a.length)], at = (a, b, step) => +(Math.round((a + r() * (b - a)) / step) * step).toFixed(2);
-  const direction = of(['through', 'along', 'up']), order = r() < 0.25 ? at(60, 100, 1) : 0;
-  return { direction, layers: direction === 'up' ? of([1, 2, 3, 5, 8, 12]) : of([1, 2, 3]), span: at(0, 50, 1), wander: order ? at(0, 6, 1) : at(0, 20, 1), width: at(7, 16, 0.5), thickness: at(5, 14, 0.5), vary: at(10, 55, 1), joint: at(-0.5, 0.8, 0.1), fuzz: at(0, 8, 0.5), order };
-}
-PRESETS.random = randomStructure();
+const STYLES = [['granite', 'Granite wall', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and merging into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['massive', 'Massive', 'Large irregular masses in two layers parallel to the front, broad faces, uneven joints'], ['wall', 'Stone wall', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
 const DEFAULTS = { style: 'granite', ...PRESETS.granite, squares: 1, height: 36, depth: 16, facets: 24, chamfered: 100, rtilt: 6, sink: 3, weather: 0, bedding: true, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, lines: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
@@ -1184,7 +1177,7 @@ function styleChip() {
     for (const [key, label, about] of STYLES) {
       const b = document.createElement('button'); b.setAttribute('aria-pressed', key === state.style && !edited() ? 'true' : 'false');
       b.innerHTML = `<b>${label}</b><small>${about}</small>`;
-      b.addEventListener('click', () => { if (key === 'random') PRESETS.random = randomStructure(); Object.assign(state, { style: key }, PRESETS[key]); closePop(true); syncUI(); update(); btn.focus(); });
+      b.addEventListener('click', () => { const others = Object.keys(PRESETS).filter(k => k !== state.style), to = key === 'random' ? others[Math.floor(Math.random() * others.length)] : key; Object.assign(state, { style: to }, PRESETS[to]); closePop(true); syncUI(); update(); btn.focus(); });
       pop.append(b);
     }
     pop.insertAdjacentHTML('beforeend', '<small class="note">A style sets Structure and Fuzz; * means one has been changed since.</small>');
