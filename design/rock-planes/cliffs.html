@@ -148,16 +148,19 @@ output .ip, output .fp { display: inline-block; } output .ip { text-align: right
 
 .ctl small { color: var(--muted); font-size: 12px; line-height: 16px; }
 input[type=range] { width: 100%; accent-color: var(--accent); }
-/* a range: two handles on one track, each dragged on its own; the band between them is the range */
-.twin { position: relative; height: 24px; }
-.twin .track, .twin .band { position: absolute; top: 10px; height: 4px; border-radius: 2px; }
-.twin .track { left: 0; right: 0; background: var(--line-2); }
-.twin .band { background: var(--accent); }
-.twin input[type=range] { position: absolute; inset: 0; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; height: 24px; }
-.twin input[type=range]::-webkit-slider-runnable-track { background: none; height: 24px; }
-.twin input[type=range]::-moz-range-track { background: none; }
-.twin input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 18px; height: 18px; margin-top: 3px; border-radius: 50%; background: var(--raised); border: 2px solid var(--accent); cursor: grab; }
-.twin input[type=range]::-moz-range-thumb { pointer-events: auto; width: 14px; height: 14px; border-radius: 50%; background: var(--raised); border: 2px solid var(--accent); cursor: grab; }
+/* a slider, one for a number and for a range: a track; the band (a number's from the start to its value, a range's from low to high);
+   below the track a handle for each end, a tab pointing up at it; above a range's band, a grip that moves the whole range */
+.slider { position: relative; height: 42px; touch-action: none; user-select: none; -webkit-user-select: none; --pad: 10px; }
+.slider .track, .slider .band { position: absolute; top: 19px; height: 4px; border-radius: 2px; }
+.slider .track { left: var(--pad); right: var(--pad); background: var(--line-2); cursor: pointer; }
+.slider .band { background: var(--accent); pointer-events: none; }
+.slider .end, .slider .grip { position: absolute; cursor: grab; outline: none; }
+.slider .end { top: 22px; width: 16px; height: 16px; margin-left: -8px; background: var(--accent); clip-path: polygon(50% 0, 100% 40%, 100% 100%, 0 100%, 0 40%); }
+.slider .end::after { content: ""; position: absolute; inset: 2.5px; background: var(--raised); clip-path: polygon(50% 0, 100% 40%, 100% 100%, 0 100%, 0 40%); }
+.slider .grip { top: 3px; width: 28px; height: 12px; margin-left: -14px; border-radius: 6px; background: var(--accent);
+  background-image: linear-gradient(90deg, transparent 9px, var(--on-accent) 9px 10px, transparent 10px 13.5px, var(--on-accent) 13.5px 14.5px, transparent 14.5px 18px, var(--on-accent) 18px 19px, transparent 19px); background-size: 28px 6px; background-position: 0 3px; background-repeat: no-repeat; }
+.slider .end:focus-visible, .slider .grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.slider .end:active, .slider .grip:active { cursor: grabbing; }
 .checks { display: grid; gap: 6px; }
 .checks label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
@@ -238,7 +241,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
   <section class="how">
     <h2>How a cliff is built</h2>
     <ol>
-      <li><b>Ranges.</b> Every setting drawn at random is a <b>range</b>: two handles on one track, the low end and the high end, typed <code>low..high</code> (a number alone, <code>7</code>, is the range 7..7: always that). Each draw is made between the ends, every value as likely, from a stream of its own for the job (a stone, a spine end, a layer face, a plane), so one setting never reshuffles another; Height and Depth are the exception, drawn mostly from a smooth field along the wall (below), so they wander rather than spread evenly.</li>
+      <li><b>Ranges.</b> Every setting drawn at random is a <b>range</b>: on its slider a handle under each end, the low end and the high end, and a grip above the band between them that moves the whole range (a number's slider is the same with one end); typed <code>low..high</code> (a number alone, <code>7</code>, is the range 7..7: always that). Each draw is made between the ends, every value as likely, from a stream of its own for the job (a stone, a spine end, a layer face, a plane), so one setting never reshuffles another; Height and Depth are the exception, drawn mostly from a smooth field along the wall (below), so they wander rather than spread evenly.</li>
       <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, as tall as the high end of <b>Height</b> and as deep as the high end of <b>Depth</b>, standing at the back of the square. Its bottom, its back and its two ends (the tile's edges) are <b>crisp</b>: no mass crosses them. Its top and its front are <b>fuzzy</b>: each stone draws how tall it reaches in Height and how far forward in Depth, two thirds from a smooth field along the wall and one third its own, so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
       <li><b>Spines</b> run one <b>Direction</b>: <b>Up</b> (columns, or with many layers, courses), <b>Through</b> the wall from back to front (so the stones show their ends) or <b>Along</b> it (slabs). The envelope is cut across that direction into <b>Layers</b>, the outer faces of the first and last at the envelope's ends; each face where two layers meet is drawn on its own: it slopes along Width by an angle drawn in <b>Lean</b> and along Thickness by one drawn in <b>Pitch</b>, and curves along Width by a height drawn in <b>Sag</b> (its middle that far past its edges) and along Thickness by one drawn in <b>Bow</b>. Where neighbouring faces cross, a layer pinches out. Layers organise the spines and never cut a stone. In each layer in turn, spines are started by dart throwing: a dart is a point in the layer, its direction turned by an angle drawn in <b>Wander</b>, and its spine runs back to the layer's near face and on to its far face, through as many layers as it draws in <b>Span</b>, so breaks stagger. Its ends lie on layer faces inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is clear of every spine already in the layer by <b>Width</b> horizontally across the layer and <b>Thickness</b> the other way across it (vertically for Through and Along, front to back for Up), each the two ends' sizes together; until 80 darts in a row miss, the layer is not full. <b>Order</b> draws the darts' places from a grid instead, its pitch the middle of Width by the middle of Thickness, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is jittered. Each end's sizes are drawn in Width and Thickness. One spine is one stone.</li>
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share a layer (they meet end to end) split on the face between them (its tangent plane, where it curves; where a curved or pinched face would cut into one of the two spines, that plane is turned just enough to pass between them whole), so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b>, drawn for each split, sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge). It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
@@ -1346,35 +1349,77 @@ function row(p, box) {
   }
   if (p.range) return twinRow(p, box);
   const wrap = document.createElement('div'); wrap.className = 'prow';
-  const range = document.createElement('input'); Object.assign(range, { type: 'range', min: p.min, max: p.max, step: p.step, value: state[p.key] }); range.setAttribute('aria-label', p.label);
   if (!box) { box = document.createElement('input'); Object.assign(box, { type: 'text', inputMode: 'decimal', value: state[p.key], className: 'pbox' }); box.setAttribute('aria-label', p.label); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box); }
   const set = x => { x = snapTo(p, x); if (x !== state[p.key]) { state[p.key] = x; update(); } };
-  box.addEventListener('input', () => { const x = parseFloat(box.value); if (Number.isFinite(x)) { set(x); range.value = state[p.key]; } });
-  range.addEventListener('input', () => { set(+range.value); box.value = state[p.key]; });
-  wrap.append(range);
+  const sl = slider(p, () => [state[p.key]], ([x]) => { set(x); box.value = state[p.key]; });
+  box.addEventListener('input', () => { const x = parseFloat(box.value); if (Number.isFinite(x)) { set(x); sl.paint(); } });
+  wrap.append(sl.el);
   wrap.insertAdjacentHTML('beforeend', `<div class="ends"><span>${fmt(p, p.min)}</span><span>${fmt(p, p.max)}</span></div><small>${p.help}</small>`);
-  for (const el of [box, range]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') closePop(true); if (e.key === 'Escape') closePop(false); });
+  for (const el of [box, ...sl.keys]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') closePop(true); if (e.key === 'Escape') closePop(false); });
   return wrap;
 }
-// a range's row: a box to type lo..hi in, two handles on one track (each dragged on its own, never past the other), and its help
+// a range's row: a box to type lo..hi in, its slider, and its help
 function twinRow(p, box) {
   const wrap = document.createElement('div'); wrap.className = 'prow';
   if (!box) { box = document.createElement('input'); Object.assign(box, { type: 'text', value: rangeText(state[p.key]), className: 'pbox rng' }); box.setAttribute('aria-label', p.label + ', low..high'); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box); }
-  const twin = document.createElement('div'); twin.className = 'twin'; twin.innerHTML = '<span class="track"></span><span class="band"></span>';
-  const band = twin.querySelector('.band');
-  const ends = ['low', 'high'].map((w, e) => { const h = document.createElement('input'); Object.assign(h, { type: 'range', min: p.min, max: p.max, step: p.step, value: state[p.key][e] }); h.setAttribute('aria-label', `${p.label}, ${w} end`); twin.append(h); return h; });
-  const paint = () => { const [a, b] = state[p.key], at = x => (x - p.min) / (p.max - p.min) * 100; band.style.left = at(a) + '%'; band.style.width = (at(b) - at(a)) + '%'; ends[0].value = a; ends[1].value = b; ends[0].style.zIndex = a > p.max - (p.max - p.min) * 0.05 ? 3 : 2; };
-  const set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } paint(); };
-  ends.forEach((h, e) => h.addEventListener('input', () => {
-    const x = snapTo(p, +h.value), [a, b] = state[p.key];
-    set(e === 0 ? [Math.min(x, b), b] : [a, Math.max(x, a)]); box.value = rangeText(state[p.key]);
-  }));
-  box.addEventListener('input', () => { const v = parseRange(box.value); if (v) set(v.map(x => snapTo(p, x))); });
+  const set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } };
+  const sl = slider(p, () => state[p.key], v => { set(v); box.value = rangeText(state[p.key]); });
+  box.addEventListener('input', () => { const v = parseRange(box.value); if (v) { set(v.map(x => snapTo(p, x))); sl.paint(); } });
   box.addEventListener('change', () => { box.value = rangeText(state[p.key]); });   // the box shows the one spelling: 7 when both ends are 7
-  wrap.append(twin); paint();
+  wrap.append(sl.el);
   wrap.insertAdjacentHTML('beforeend', `<div class="ends"><span>${p.min}${p.unit || ''}</span><span>${p.max}${p.unit || ''}</span></div><small>${p.help}</small>`);
-  for (const el of [box, ...ends]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') closePop(true); if (e.key === 'Escape') closePop(false); });
+  for (const el of [box, ...sl.keys]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') closePop(true); if (e.key === 'Escape') closePop(false); });
   return wrap;
+}
+// a setting's slider, for a number (get gives [value]) or a range ([low, high]): { el, paint, keys }. Each end's handle is dragged
+// on its own, never past the other; with two ends there is a grip, which moves the whole range, keeping its width, stopping at the
+// track's ends; a click on the track moves the end that can go there (outside the range, the end on that side; inside, the nearer,
+// the low end on a tie). Each handle and the grip is a keyboard slider: arrows a step, Page keys ten, Home and End to the track's
+// ends (the grip takes the whole range there)
+function slider(p, get, put) {
+  const el = document.createElement('div'); el.className = 'slider';
+  el.innerHTML = '<span class="track"></span><span class="band"></span>';
+  const band = el.querySelector('.band'), twin = get().length === 2, span = p.max - p.min;   // twin: two ends
+  const pos = x => `calc(var(--pad) + (100% - 2 * var(--pad)) * ${Math.min(1, Math.max(0, (x - p.min) / span))})`;
+  const valueAt = cx => { const r = el.getBoundingClientRect(), pad = 10; return p.min + (cx - r.left - pad) / Math.max(1, r.width - 2 * pad) * span; };
+  const handle = (cls, label) => { const h = document.createElement('span'); h.className = cls; h.tabIndex = 0; h.setAttribute('role', 'slider'); h.setAttribute('aria-label', label); h.setAttribute('aria-valuemin', p.min); h.setAttribute('aria-valuemax', p.max); el.append(h); return h; };
+  const ends = twin ? [handle('end', `${p.label}, low end`), handle('end', `${p.label}, high end`)] : [handle('end', p.label)];
+  const grip = twin ? handle('grip', `${p.label}, whole range`) : null;
+  // a new end: a range's kept in order; the whole range moved by d, its width kept, inside the track
+  const withEnd = (e, x) => { x = snapTo(p, x); if (!twin) return [x]; const [a, b] = get(); return e === 0 ? [Math.min(x, b), b] : [a, Math.max(x, a)]; };
+  const moved = ([a, b], d) => { const w = b - a, lo = snapTo(p, Math.min(p.max - w, Math.max(p.min, a + d))); return [lo, +(lo + w).toFixed(4)]; };
+  const paint = () => {
+    const v = get(), a = twin ? v[0] : p.min, b = twin ? v[1] : v[0];
+    band.style.left = pos(a); band.style.width = `calc(${pos(b)} - ${pos(a)})`;
+    ends.forEach((h, e) => { h.style.left = pos(v[e]); h.setAttribute('aria-valuenow', v[e]); });
+    if (grip) { grip.style.left = pos((v[0] + v[1]) / 2); grip.setAttribute('aria-valuetext', rangeText(v)); }
+    // a range at the top of the track: its low end is the one left to grab
+    if (twin) ends[0].style.zIndex = v[0] > p.max - span * 0.05 ? 3 : 2;
+  };
+  const set = v => { put(v); paint(); };
+  // a drag: from a press on h, each move sets what move makes of where the drag started and where the pointer is
+  const drag = (h, start, move) => { const begin = e => {
+    e.preventDefault(); e.stopPropagation(); h.focus(); h.setPointerCapture(e.pointerId);
+    const s = start(e), mv = ev => set(move(s, ev)), up = () => { h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); };
+    h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+  }; h.addEventListener('pointerdown', begin); return begin; };
+  const begins = ends.map((h, e) => drag(h, () => null, (_, ev) => withEnd(e, valueAt(ev.clientX))));
+  if (grip) drag(grip, e => ({ v: get(), x: valueAt(e.clientX) }), (s, ev) => moved(s.v, valueAt(ev.clientX) - s.x));
+  el.addEventListener('pointerdown', e => {
+    if (e.target !== el && !e.target.classList.contains('track')) return;
+    const x = valueAt(e.clientX), v = get(), e0 = !twin || x <= v[0] ? 0 : x >= v[1] ? 1 : x - v[0] <= v[1] - x ? 0 : 1;
+    set(withEnd(e0, x)); begins[e0](e);
+  });
+  const keyed_ = (h, step) => h.addEventListener('keydown', e => {
+    const k = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -10, PageUp: 10 }[e.key];
+    if (k !== undefined) { e.preventDefault(); set(step(k * p.step)); }
+    else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); set(step(e.key === 'Home' ? -Infinity : Infinity)); }
+  });
+  const clampD = d => Number.isFinite(d) ? d : d * span;   // Home and End: as far as it goes
+  ends.forEach((h, e) => keyed_(h, d => withEnd(e, get()[e] + clampD(d))));
+  if (grip) keyed_(grip, d => moved(get(), clampD(d)));
+  paint();
+  return { el, paint, keys: grip ? [...ends, grip] : ends };
 }
 function groupChip(g) {
   const pc = document.createElement('span'); pc.className = 'pc';
