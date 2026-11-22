@@ -1191,8 +1191,15 @@ function crackSeeds(C, P, seed) {
   const cell = a => {
     let c = cells.get(a.id); if (c) return c;
     const d2 = b => b.q.reduce((t, x, i) => t + (x - a.q[i]) ** 2, 0);
-    let p = box; for (const b of seeds.filter(b => b !== a && d2(b) <= r2).sort((x, y) => d2(x) - d2(y))) { p = clip(p, { ...bisector(a, b), role: 'cell:' + b.id }); if (!p.length) break; }
-    const faces = p.filter(isCell), vs = p.flatMap(f => f.verts);
+    // nearest first; a neighbour more than twice as far as the cell's farthest corner cannot cut it, so the rest are passed over
+    const reach2 = poly => { let m = 0; for (const f of poly) for (const v of f.verts) { const qv = q(v); let t = 0; for (let i = 0; i < qv.length; i++) t += (qv[i] - a.q[i]) ** 2; if (t > m) m = t; } return m; };
+    let p = box, far = Infinity, n = 0;
+    for (const b of seeds.filter(b => b !== a && d2(b) <= r2).sort((x, y) => d2(x) - d2(y))) {
+      if (d2(b) > 4 * far) break;
+      p = clip(p, { ...bisector(a, b), role: 'cell:' + b.id }); if (!p.length) break;
+      if (++n % 4 === 0) far = reach2(p);
+    }
+    const faces = p.filter(isCell).map(f => { const ws = f.verts; return { ...f, lo: [0, 1, 2].map(i => Math.min(...ws.map(v => v[i]))), hi: [0, 1, 2].map(i => Math.max(...ws.map(v => v[i]))) }; }), vs = p.flatMap(f => f.verts);
     c = { faces, lo: [0, 1, 2].map(i => Math.min(...vs.map(v => v[i]))), hi: [0, 1, 2].map(i => Math.max(...vs.map(v => v[i]))) };
     cells.set(a.id, c); return c;
   };
@@ -1202,7 +1209,7 @@ function crackSeeds(C, P, seed) {
 function boundariesNear(poly, net) {
   const vs = poly.flatMap(f => f.verts), lo = [0, 1, 2].map(i => Math.min(...vs.map(v => v[i]))), hi = [0, 1, 2].map(i => Math.max(...vs.map(v => v[i])));
   const vq = vs.map(net.q), qlo = vq[0].map((_, i) => Math.min(...vq.map(v => v[i])) - 1.5 * net.sp), qhi = vq[0].map((_, i) => Math.max(...vq.map(v => v[i])) + 1.5 * net.sp);
-  const apart = (P2) => { const ws = P2.verts; return [0, 1, 2].some(i => Math.max(...ws.map(v => v[i])) < lo[i] - 1e-6 || Math.min(...ws.map(v => v[i])) > hi[i] + 1e-6); };
+  const apart = g => [0, 1, 2].some(i => g.hi[i] < lo[i] - 1e-6 || g.lo[i] > hi[i] + 1e-6);
   const out = [];
   for (const a of net.seeds) {
     if (!a.q.every((x, i) => x >= qlo[i] && x <= qhi[i])) continue;
@@ -1213,6 +1220,8 @@ function boundariesNear(poly, net) {
 }
 // where two convex polygons in two planes cross: the segment [p, q] of the planes' line inside both, or null
 function crossing(A, F) {
+  const straddles = (g, h) => { let lo = Infinity, hi = -Infinity; for (const v of g.verts) { const d = dot(h.n, v) - h.b; if (d < lo) lo = d; if (d > hi) hi = d; } return lo < 1e-9 && hi > -1e-9; };
+  if (!straddles(F, A) || !straddles(A, F)) return null;
   const d = cross(A.n, F.n), d2 = dot(d, d); if (d2 < 1e-12) return null;
   const x0 = mul(add(mul(cross(F.n, d), A.b), mul(cross(d, A.n), F.b)), 1 / d2), u = mul(d, 1 / Math.sqrt(d2));
   let lo = -Infinity, hi = Infinity;
@@ -1368,9 +1377,9 @@ function crackStone(poly, k, plan, seed, P, holds = []) {
       vs.forEach((a, i) => { const b = vs[(i + 1) % vs.length]; if (!inner.some(h => onPlane(a, h) && onPlane(b, h))) lines.push(a, b); });
     }
   }
-  return { faces: tJoin(faces), lines, traces, vol: parts.reduce((t, pt) => t + volumeOf(pt.poly), 0) };
+  return { faces, lines, traces, vol: parts.reduce((t, pt) => t + volumeOf(pt.poly), 0) };
 }
-// faces whose corners lie inside one another's edges (where parts are cut differently on the two sides of an edge) given those
+// (for a printable mesh, not the view, which needs none: the closure check joins them) faces whose corners lie inside one another's edges (where parts are cut differently on the two sides of an edge) given those
 // corners, so every edge is met by exactly one other going the other way
 function tJoin(faces) {
   const C = 2, grid = new Map(), cellKey = (x, y, z) => x + ',' + y + ',' + z, seen = new Set();
