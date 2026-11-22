@@ -211,6 +211,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Spines</b> run one <b>Direction</b>: <b>Through</b> the wall from back to front (so the stones show their ends), <b>Along</b> it (slabs) or <b>Up</b> (columns, or with many layers, courses). The envelope is cut across that direction into <b>Layers</b>, the outer faces of the first and last at the envelope's ends; where two layers meet is turned and moved at random by up to half of <b>Wander</b>. Layers organise the spines and never cut a stone. In each layer in turn, spines are started by dart throwing: a dart is a point in the layer, its direction turned at random by up to <b>Wander</b>, and its spine runs back to the layer's near face and on to its far face, and on through each further layer with chance <b>Span</b>, so breaks stagger. Its ends lie on layer faces inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is clear of every spine already in the layer by <b>Width</b> horizontally across the layer and <b>Thickness</b> the other way across it (vertically for Through and Along, front to back for Up), each the two ends' sizes together; until 80 darts in a row miss, the layer is not full. Each end's size varies within <b>Vary</b>. One spine is one stone.</li>
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share a layer (they meet end to end) split where two layers between them meet, so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b> sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge); each split adds a random part that grows with Vary. It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
       <li><b>Bedding</b> (on by default, under Rocks): a stone whose underside overhangs past 65° (red; orange is fine) is made to stand on something, at construction, and never leaves its envelope. Stones are bedded from the lowest up, each on what is already there. A small gap (up to 2 mm) is closed by stretching the stone down by the median of its red points' gaps to what is that near below them, so it sits on what is near without sinking into it, its top held; stretching also turns every face toward upright, so some faces need no drop at all (it holds the stone's footprint, so it stays in the envelope). Points further off get <b>corbels</b> (as the cliff element's support cone): a corbel is the hull of some loose points and their ends, each point swept along one direction within 55° of straight down until it meets a bedded stone or the ground, so each wall is parallel to the sweep (leaning no more than 55°) or rests on what the points reach. A stone gets up to three, each taking the direction that holds up the most of the points still loose: straight down under a slab (bridging a joint below), slanted back under a lip. A corbel is short: a point runs no further than its stone is tall (at least 3 mm, at most 10 mm), and never out of its stone's envelope, which also cuts every corbel; a point nothing holds within that is left as it is, since a long strut across the face reads as a sliver, not a stone. So a cantilever is held up by the stone beside or below it instead of a column to the ground, and the corbel holds up the stones above in turn.</li>
+      <li><b>Held faces are not painted.</b> Orange and red mark overhang past 55° and 65°, except where a face is held up: a face on the ground, or a bridge: a downward face is split into triangles, and a triangle with at least two corners resting on something (a stone, a corbel or the ground, within 0.15 mm below or inside it) spans between them.</li>
       <li><b>Rocks.</b> Each mass is a hull for Rocks from Hulls: <b>Rocks</b> sets its faces, chamfers, tilt, sink and weathering. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
     </ol>
     <p class="hint"><b>Granite wall</b>, the first style: one layer through the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; Joint under zero, so they merge into one irregular mass. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart. <b>Layered</b>: nine level layers, a handful of slabs in each.</p>
@@ -854,13 +855,13 @@ const volumeOf = faces => { let v = 0; for (const f of faces) { const p = f.vert
 
 // ---------- drawing ----------
 const STONE = '#B9B4A8';
-function faceColor(n, base = STONE) { if (n[2] < 0) { const a = Math.asin(-n[2]) / DEG; if (a > 65) return '#E5483B'; if (a > 55) return '#FF8C1A'; } return base; }
+function faceColor(n, base = STONE, held = false) { if (n[2] < 0 && !held) { const a = Math.asin(-n[2]) / DEG; if (a > 65) return '#E5483B'; if (a > 55) return '#FF8C1A'; } return base; }
 const stoneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
 const edgeMat = new THREE.LineBasicMaterial({ color: 0x2B3340, transparent: true, opacity: 0.45 });
 function meshOf(surf, foot, opt) {
   const pos = [], nor = [], col = [], c = new THREE.Color(), dz = v => [v[0], v[1], v[2] - foot];
   for (const f of surf.faces) {
-    c.set(opt.ghost ? '#287B62' : faceColor(f.n, f.shade)); const v = f.verts.map(dz);
+    c.set(opt.ghost ? '#287B62' : faceColor(f.n, f.shade, f.held)); const v = f.verts.map(dz);
     if (f.vn) for (let i = 0; i < 3; i++) { pos.push(...v[i]); nor.push(...f.vn[i]); col.push(c.r, c.g, c.b); }
     else for (let i = 1; i + 1 < v.length; i++) for (const p of [v[0], v[i], v[i + 1]]) { pos.push(...p); nor.push(...f.n); col.push(c.r, c.g, c.b); }
   }
@@ -1053,7 +1054,7 @@ function rockOf(m, seed, P) {
 const SHADES = ['#B9B4A8', '#A39E92', '#CFCABE', '#9A9A94', '#C4BBA9', '#AEB0AA', '#D6D1C6', '#B0A796'];
 function massSurface(masses) {
   const faces = [], lines = [];
-  masses.forEach((m, k) => { const shade = SHADES[k % SHADES.length]; for (const f of m.surf.faces) faces.push({ ...f, shade }); for (const p of m.surf.lines) lines.push(p); });
+  markHeld(masses.map(m => m.surf)).forEach((st, k) => { const shade = SHADES[k % SHADES.length]; for (const f of st.faces) faces.push({ ...f, shade }); for (const p of st.lines) lines.push(p); });
   return { faces, lines };
 }
 // Bedding: a stone whose underside overhangs past the limit is made to stand on something, at construction. Stones are bedded from the
@@ -1066,8 +1067,8 @@ const HULL_DIRS = fib(32);   // a corbel's outline from at most this many points
 const CORBEL_MAX = 10, CORBEL_MIN = 3, CORBELS = 3;   // mm: the longest a corbel runs, and what it may always reach (a thin slab's own height is too little)
 const OVER = 55, LIMIT = 65, SIN_LIMIT = Math.sin(LIMIT * DEG), SMALL = 2;   // bed only what is past the steepest (red); corbels lean no more than the overhang (55°)
 const SWEEPS = (() => { const out = [[0, 0, -1]]; for (const a of [25, 40, OVER - 1]) for (let k = 0; k < 8; k++) { const ph = 2 * Math.PI * k / 8 + (a === 40 ? Math.PI / 8 : 0); out.push([Math.sin(a * DEG) * Math.cos(ph), Math.sin(a * DEG) * Math.sin(ph), -Math.cos(a * DEG)]); } return out; })();
-function bed(stones, envs) {
-  // the bedded solids' triangles, in a grid of CELL mm cubes (a ray tests only the triangles in the cells it passes through)
+// a grid of solids' triangles in CELL mm cubes: a ray tests only the triangles in the cells it passes through
+function rayGrid() {
   const CELL = 1.5, grid = new Map(), tris = [], seen = [];
   let stamp = 0;
   const cellKey = (ix, iy, iz) => (ix * 1009 + iy) * 1009 + iz;
@@ -1081,9 +1082,10 @@ function bed(stones, envs) {
       for (let ix = x0; ix <= x1; ix++) for (let iy = y0; iy <= y1; iy++) for (let iz = z0; iz <= z1; iz++) { const k = cellKey(ix, iy, iz); let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(id); }
     }
   };
-  // how far along w from p the first bedded solid or the ground is (Infinity: neither); only faces turned toward the ray can be hit first
-  const hit = (p, w, cap = Infinity) => {
-    let best = Math.min(w[2] < -1e-9 ? p[2] / -w[2] : Infinity, cap);
+  // how far along w from p the first solid or the ground is (Infinity: neither); only faces turned toward the ray can be hit first,
+  // unless any: then every face counts, and the answer says which way the face it met faces (n z), so a point inside a solid shows
+  const walk = (p, w, cap, any) => {
+    let best = Math.min(w[2] < -1e-9 ? p[2] / -w[2] : Infinity, cap), nz = 1;
     // the cells the ray crosses, nearest first (a grid walk), until a hit is nearer than the next cell
     const reach = Number.isFinite(best) ? best : 200;
     const ii = [0, 1, 2].map(q => Math.floor(p[q] / CELL)), sg = w.map(Math.sign);
@@ -1094,18 +1096,22 @@ function bed(stones, envs) {
       const l = grid.get(cellKey(ii[0], ii[1], ii[2]));
       if (l) for (const id of l) {
         if (seen[id] === stamp) continue; seen[id] = stamp;
-        const T = tris[id]; if (T.n[0] * w[0] + T.n[1] * w[1] + T.n[2] * w[2] >= 0) continue;
+        const T = tris[id]; if (!any && T.n[0] * w[0] + T.n[1] * w[1] + T.n[2] * w[2] >= 0) continue;
         const pv = cross(w, T.e2), det = dot(T.e1, pv); if (Math.abs(det) < 1e-12) continue;
         const tv = sub(p, T.a), u = dot(tv, pv) / det; if (u < 0 || u > 1) continue;
         const qv = cross(tv, T.e1), v = dot(w, qv) / det; if (v < 0 || u + v > 1) continue;
-        const t = dot(T.e2, qv) / det; if (t > -1e-6 && t < best) best = Math.max(0, t);
+        const t = dot(T.e2, qv) / det; if (t > -1e-6 && t < best) { best = Math.max(0, t); nz = T.n[2]; }
       }
       const q = tN[0] < tN[1] ? (tN[0] < tN[2] ? 0 : 2) : (tN[1] < tN[2] ? 1 : 2);
       tIn = tN[q]; tN[q] += dT[q]; ii[q] += sg[q];
       if (!Number.isFinite(tIn) || ii[2] < -1) break;
     }
-    return best;
+    return { t: best, nz };
   };
+  return { add: add_, hit: (p, w, cap = Infinity) => walk(p, w, cap, false).t, first: (p, w, cap) => walk(p, w, cap, true) };
+}
+function bed(stones, envs) {
+  const { add: add_, hit } = rayGrid();
   let stretched = 0, corbels = 0, left = 0;
   const order = stones.map((st, k) => { let lo = Infinity; for (const f of st.faces) for (const v of f.verts) lo = Math.min(lo, v[2]); return [lo, k]; }).sort((a, b) => a[0] - b[0]);
   const out = new Array(stones.length), past = f => f.n[2] < -SIN_LIMIT - 1e-9;
@@ -1165,6 +1171,20 @@ function bed(stones, envs) {
   }
   return { stones: out, stretched, corbels, left };
 }
+// what is held up: a face on the ground, or a bridge (a triangle of a downward face with at least two corners resting on
+// something: a stone, a corbel or the ground, within HELD mm below or inside it) is never painted orange or red
+const HELD = 0.15;
+function markHeld(stones) {
+  const g = rayGrid(); for (const st of stones) g.add(st.faces);
+  const down = [0, 0, -1], on = v => { if (v[2] < HELD) return true; const r = g.first([v[0], v[1], v[2] - 1e-3], down, 40); return r.nz < 0 || r.t <= HELD; };   // the first face met faces down: inside a solid
+  // a downward face is split into triangles; a triangle with at least two corners held spans between them (a bridge)
+  return stones.map(st => ({ ...st, faces: st.faces.flatMap(f => {
+    if (f.n[2] > -Math.sin(OVER * DEG)) return [f];
+    const ok = f.verts.map(on); if (ok.every(Boolean)) return [{ ...f, held: true }];
+    const out = []; for (let i = 1; i + 1 < f.verts.length; i++) out.push({ ...f, verts: [f.verts[0], f.verts[i], f.verts[i + 1]], ...(f.vn ? { vn: [f.vn[0], f.vn[i], f.vn[i + 1]] } : {}), held: ok[0] + ok[i] + ok[i + 1] >= 2 });
+    return out;
+  }) }));
+}
 function rockSurface(C, seed, P) {
   const faces = [], lines = []; let ms = 0, vol = 0;
   let stones = C.masses.map(m => { const r = rockOf(m, seed, P); ms += r.ms; vol += r.volume; return r.surf; });
@@ -1174,6 +1194,7 @@ function rockSurface(C, seed, P) {
     info = kept.get(key); if (!info) { info = bed(stones, C.masses.map(m => m.sp.env)); kept.set(key, info); }
     stones = info.stones;
   }
+  stones = markHeld(stones);
   for (const st of stones) { for (const f of st.faces) faces.push(f); for (const p of st.lines) lines.push(p); }
   return { faces, lines, ms, vol, bed: info && { stretched: info.stretched, corbels: info.corbels, left: info.left } };
 }
