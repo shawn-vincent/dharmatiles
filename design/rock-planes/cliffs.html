@@ -1069,7 +1069,7 @@ function markRests(stones, bridge) {
       if (f.n[2] > -SIN_OVER) return [f];
       if (!lone.has(f) || whole.has(f)) return [{ ...f, allowed: true }];
       const fk = key(f.n); let across = tests.get(fk); if (!across) { const u = perp(f.n); tests.set(fk, across = bridges(R, bridge, u, cross(f.n, u))); }
-      const allowed = p => on(p) || across(p), out = [];
+      const seen = new Map(), allowed = p => { const k = key(p); let a = seen.get(k); if (a === undefined) seen.set(k, a = on(p) || across(p)); return a; }, out = [];   // each corner judged once
       // a triangle is split into quarters while it is longer than four pieces, then only while its corners and middle disagree,
       // down to PIECE; each piece is judged by its middle
       const judge = t => {
@@ -1084,6 +1084,15 @@ function markRests(stones, bridge) {
       return out;
     }) };
   });
+}
+// a stone cracked, kept per stone, network, its cracks picked and their settings (so a change elsewhere cracks nothing again)
+const crackKept = new Map();
+function crackedOf(poly, k, plan, seed, P) {
+  const mine = [...plan.active].filter(x => x.startsWith(k + ':')).sort();
+  const key = [seed, k, sig(poly.flatMap(f => f.verts)), plan.net.key, mine.join(' '), ...[P.cleft, P.opening, P.wiggle].map(rangeText)].join('/');
+  let r = crackKept.get(key);
+  if (!r) { r = crackStone({ pieces: piecesOf(poly, plan.net), outer: poly, key: k }, plan, seed, P); crackKept.set(key, r); if (crackKept.size > 600) crackKept.delete(crackKept.keys().next().value); }
+  return r;
 }
 // a stone, built once per mass, seed, rock settings, bottom and footprints, from its printable outline: { poly, ms }
 const kept = new Map();
@@ -1132,7 +1141,7 @@ function rockSurface(C, seed, P) {
     const wr = pickIn(P.weather, keyed(seed, 'weather', m.sp.id));   // each stone its own radius
     if (wr > 0) { surfs[k] = weathered(poly.map(f => ({ n: f.n, b: f.b })), lo, hi, wr); vol += volumeOf(poly); grid.add(poly); }   // a weathered stone is not cracked
     else if (cplan) {
-      const c = crackStone({ pieces: piecesOf(poly, cplan.net), outer: poly, key: k }, cplan, seed, P);
+      const c = crackedOf(poly, k, cplan, seed, P);
       surfs[k] = { faces: c.faces, lines: c.lines }; vol += c.vol; grid.add(c.faces); crackLines.push(...c.traces);
     } else { surfs[k] = surfOf(poly); vol += volumeOf(poly); grid.add(poly); }
     ms += r.ms + performance.now() - t1;
@@ -1155,6 +1164,13 @@ const NETWORK = { planes: C => [C.axis], columns: C => [C.fu, C.fv], blocks: C =
 const WIGGLE_TURN = 30;   // degrees: the most a step of a crack's walk turns off its line
 const WIGGLE_LEAST = 0.5;   // mm: the shortest step
 const CRACK_STEEPEST = 3;   // the largest slope (opening over cleft, each side) a wall may take to stay within the target; past it, that face is not cracked
+// the network, kept per cliff while its seed, Network and Spacing hold (its cells are made as stones ask for them)
+const nets = new WeakMap();
+function netFor(C, P, seed) {
+  const k = [seed, P.network, rangeText(P.spacing)].join('/'), m = nets.get(C) || nets.set(C, new Map()).get(C);
+  let n = m.get(k); if (!n) { n = { ...crackSeeds(C, P, seed), key: k }; m.set(k, n); if (m.size > 8) m.delete(m.keys().next().value); }
+  return n;
+}
 function crackSeeds(C, P, seed) {
   const axes = NETWORK[P.network](C), sp = (P.spacing[0] + P.spacing[1]) / 2, spread = P.spacing[1] - P.spacing[0];
   const q = x => axes.map(a => dot(sub(x, C.mid), a));
@@ -1171,21 +1187,28 @@ function crackSeeds(C, P, seed) {
     const rhs = (b.q.reduce((s, x) => s + x * x, 0) - a.q.reduce((s, x) => s + x * x, 0)) / 2 + dot(C.mid, N);
     return { n: mul(N, 1 / l), b: rhs / l };
   };
-  return { seeds, sp, q, bisector };
+  // each seed's cell, made once for the whole cliff (a box about the cliff cut by the planes to its neighbours within 2.6 spacings,
+  // nearest first), with its bounds; a stone's pieces are the stone cut by the cells that reach it
+  const pad = 3 * sp, box = boxPoly(C.lo.map(x => x - pad), C.hi.map(x => x + pad)), cells = new Map(), r2 = (2.6 * sp) ** 2;
+  const cell = a => {
+    let c = cells.get(a.id); if (c) return c;
+    const d2 = b => b.q.reduce((t, x, i) => t + (x - a.q[i]) ** 2, 0);
+    let p = box; for (const b of seeds.filter(b => b !== a && d2(b) <= r2).sort((x, y) => d2(x) - d2(y))) { p = clip(p, { ...bisector(a, b), role: 'cell:' + b.id }); if (!p.length) break; }
+    const faces = p.filter(isCell), vs = p.flatMap(f => f.verts);
+    c = { faces, lo: [0, 1, 2].map(i => Math.min(...vs.map(v => v[i]))), hi: [0, 1, 2].map(i => Math.max(...vs.map(v => v[i]))) };
+    cells.set(a.id, c); return c;
+  };
+  return { seeds, sp, q, bisector, cell };
 }
 // a stone cut by the network's cells: [{ s: seed id, poly }], each cell's faces where it meets another tagged 'cell:<id>'
 function piecesOf(poly, net) {
-  const { seeds, sp, q, bisector } = net, vq = poly.flatMap(f => f.verts).map(q);
-  const lo = vq[0].map((_, i) => Math.min(...vq.map(v => v[i])) - 1.5 * sp), hi = vq[0].map((_, i) => Math.max(...vq.map(v => v[i])) + 1.5 * sp);
-  const near = seeds.filter(s => s.q.every((x, i) => x >= lo[i] && x <= hi[i]));
+  const vs = poly.flatMap(f => f.verts), lo = [0, 1, 2].map(i => Math.min(...vs.map(v => v[i]))), hi = [0, 1, 2].map(i => Math.max(...vs.map(v => v[i])));
+  const vq = vs.map(net.q), qlo = vq[0].map((_, i) => Math.min(...vq.map(v => v[i])) - 1.5 * net.sp), qhi = vq[0].map((_, i) => Math.max(...vq.map(v => v[i])) + 1.5 * net.sp);
   const out = [];
-  for (const a of near) {
-    let p = poly;
-    for (const b of near) {
-      if (b === a) continue;
-      const d2 = b.q.reduce((t, x, i) => t + (x - a.q[i]) ** 2, 0); if (d2 > (2.6 * sp) ** 2) continue;
-      p = clip(p, { ...bisector(a, b), role: 'cell:' + b.id }); if (!p.length) break;
-    }
+  for (const a of net.seeds) {
+    if (!a.q.every((x, i) => x >= qlo[i] && x <= qhi[i])) continue;
+    const c = net.cell(a); if ([0, 1, 2].some(i => c.hi[i] < lo[i] - 1e-6 || hi[i] < c.lo[i] - 1e-6)) continue;
+    let p = poly; for (const f of c.faces) { p = clip(p, { n: f.n, b: f.b, role: f.role }); if (!p.length) break; }
     if (p.length) out.push({ s: a.id, poly: polyFaces(p) });
   }
   return out;
@@ -1210,7 +1233,7 @@ function traceOf(face, outer) {
 // end to the neighbour that turns least, and also take the next with the chance Branching; each draw has its own stream, and the
 // picking stops when the picked length reaches Cracks × the total, so a higher Cracks only adds
 function crackPlan(polys, C, P, seed) {
-  const net = crackSeeds(C, P, seed), stones = [], all = [], byEnd = new Map();
+  const net = netFor(C, P, seed), stones = [], all = [], byEnd = new Map();
   polys.forEach((poly, k) => {
     if (!poly) { stones.push(null); return; }
     const outer = poly, pieces = piecesOf(poly, net), bounds = new Map();
@@ -1254,7 +1277,9 @@ function crackPlan(polys, C, P, seed) {
     if (steps.length <= 1) { walks.set(b.key, { T, steps: [{ s0, s1: Math.max(s1, s0 + 1e-6), w0: 0, w1: 0 }], reach: 0 }); continue; }
     const end = steps[steps.length - 1].w1, at = x => end * (x - s0) / (s1 - s0);
     for (const sp of steps) { sp.w0 -= at(sp.s0); sp.w1 -= at(sp.s1); }
-    walks.set(b.key, { T, steps, reach: Math.max(...steps.map(sp => Math.abs(sp.w1))) });
+    // and level past both ends (the walk is 0 there), so the centre is never farther off than the walk's reach
+    const flat = (a, z) => ({ s0: a, s1: z, w0: 0, w1: 0 });
+    walks.set(b.key, { T, steps: [flat(s0 - 1, s0), ...steps, flat(s1, s1 + 1)], reach: Math.max(...steps.map(sp => Math.abs(sp.w1))) });
   }
   return { net, stones, all, active, walks, total, got };
 }
@@ -1294,10 +1319,12 @@ function crackStone(st, plan, seed, P) {
       const near = slopes(1), far = slopes(-1); near.forEach((t, k) => { if (t === null || far[k] === null) near[k] = far[k] = null; });
       // what this side keeps where the crack's centre is w0 + dw·(s − s0) toward the other side: past the centre, outside its near wall;
       // between the boundary and the centre (when the centre has walked onto this side), inside its far wall
-      const constrain = (poly, sp) => {
+      // (only the faces whose depth is under Cleft somewhere in the part can take a wall there: the others are passed over)
+      const reaches = poly => { const vs = poly.flatMap(f => f.verts); return st.outer.map(g => vs.some(v => dot(g.n, v) - g.b > -cleft - 1e-6)); };
+      const constrain = (poly, sp, can = reaches(poly)) => {
         const w0 = sg * sp.w0, dw = slope(sp), mc = add(m, mul(T, dw)), lc = len(mc), at = c - w0 + dw * sp.s0;
         const walls = (q, ts, side) => { st.outer.forEach((g, k) => {
-          const t = ts[k]; if (t === null || !q.length) return;
+          const t = ts[k]; if (t === null || !can[k] || !q.length) return;
           const n = sub(mul(g.n, t), mul(mc, side)), l = len(n);
           q = clip(q, { n: mul(n, 1 / l), b: (t * (g.b - cleft) - side * at) / l, role: 'crack' });
         }); return q; };
@@ -1307,15 +1334,19 @@ function crackStone(st, plan, seed, P) {
         return [out, inside.length ? walls(inside, far, -1) : []].filter(q => q.length);
       };
       if (wk.steps.length === 1) { cur = cur.flatMap(p => constrain(p, wk.steps[0])); continue; }
-      const R = wk.reach + CRACK_STEEPEST * cleft;   // past this from the boundary no wall reaches
+      const R = wk.reach + Math.max(0, ...near, ...far) * cleft + 1e-3;   // past this from the boundary no wall reaches (the walk's reach and the steepest wall's opening)
       cur = cur.flatMap(p => {
         const out = [], core = clip(p, { n: f.n, b: f.b - R, role: 'inner' }), band = clip(p, { n: m, b: R - f.b, role: 'inner' });
         if (core.length) out.push(core);
+        if (!band.length) return out;
+        // the steps the band reaches along the crack (the first and last run on past the walk's ends), and the faces that can take a wall in it
+        const ss = band.flatMap(g => g.verts).map(v => dot(T, v)), lo = Math.min(...ss), hi = Math.max(...ss), can = reaches(band), n = wk.steps.length;
         wk.steps.forEach((sp, i) => {
+          if ((i < n - 1 && sp.s1 <= lo) || (i > 0 && sp.s0 >= hi)) return;
           let q = band;
           if (i > 0) q = clip(q, { n: mul(T, -1), b: -sp.s0, role: 'inner' });
-          if (i < wk.steps.length - 1 && q.length) q = clip(q, { n: T, b: sp.s1, role: 'inner' });
-          if (q.length) out.push(...constrain(q, sp));
+          if (i < n - 1 && q.length) q = clip(q, { n: T, b: sp.s1, role: 'inner' });
+          if (q.length) out.push(...constrain(q, sp, can));
         });
         return out;
       });
@@ -1563,12 +1594,16 @@ function extras(C, surf = null) {
 const problems = [];
 addEventListener('error', e => problems.push('error: ' + e.message));
 addEventListener('unhandledrejection', e => problems.push('rejection: ' + (e.reason && e.reason.message || e.reason)));
+const surfKept = new WeakMap();   // per cliff, its last surface
 function rebuild() {
   try {
     $('err').hidden = true;
     const C = cliffFor(state.seed), t0 = performance.now();
-    const surf = state.draw === 'rocks' ? rockSurface(C, state.seed, pick(ROCK_KEYS)) : massSurface(C, state.bridge);
-    const ms = performance.now() - t0;
+    // a surface is kept while the cliff and what it is made from hold, so a change of view, lines or a check builds nothing
+    const sk = [state.draw, state.seed, ...(state.draw === 'rocks' ? ROCK_KEYS : ['bridge']).map(k => JSON.stringify(state[k]))].join('/');
+    let surf = (surfKept.get(C) || {})[sk];
+    if (!surf) { surf = state.draw === 'rocks' ? rockSurface(C, state.seed, pick(ROCK_KEYS)) : massSurface(C, state.bridge); surf.took = performance.now() - t0; surfKept.set(C, { [sk]: surf }); }
+    const ms = surf.took;   // how long it took to build, kept with it
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
     rockObj = meshOf(surf, 0, { lines: state.lines }); scene.add(rockObj);
     if (extraObj) { scene.remove(extraObj); disposeGroup(extraObj); }
@@ -1620,7 +1655,11 @@ function editSeed(t) {
 }
 // the neighbours are drawn as their masses (quick), one per frame, nearest first
 let thumbJob = 0;
+let thumbKey = '';
 function rebuildThumbs() {
+  // the strip shows masses: redrawn only when what they are made from, the seed or the view changes
+  const tk = [state.seed, state.view, state.lines, ...CLIFF_KEYS.map(k => state[k]), camera.position.toArray().map(x => x.toFixed(2))].join('/');
+  if (tk === thumbKey) return; thumbKey = tk;
   const job = ++thumbJob, start = Math.max(0, state.seed - 3);
   const cam = state.view === 'ortho' ? thumbOrtho : thumbPersp, f = focus(), reach = reachOf() * 0.95;
   const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
