@@ -1,0 +1,402 @@
+<title>Bedding by Construction</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column of the proposal, each idea a section with its own working diagram beside its text (stacked on a phone).
+   Tokens are the dharmatiles visual system's (Lichen & Slate); red and orange mean overhang only, as on every model. */
+:root {
+  --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --plate: #D9E0EB; --plate-ink: #2B3340;
+  --over: #E5483B; --band: #FF8C1A;
+  --bg: #F3F2EC; --panel: #E6EAE1; --raised: #FCFCF8; --line: #C9D1C8; --line-2: #AEBBB0;
+  --ink: #1D2922; --muted: #657168;
+  --accent: #287B62; --accent-hi: #1F654F; --on-accent: #F5FFF9;
+  --stone: #B9B4A8; --stone-2: #A39E92; --stone-3: #CFCABE; --stone-edge: #6E6A61;
+  --held: #3E9A6E; --bridge: #6A9BD1;
+  --r: 5px; --r-lg: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
+  --plate: #C9D1DD; --stone-edge: #4E4A43; --held: #4FC28A; --bridge: #7FB0E6;
+  --r: 4px; --r-lg: 8px; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
+  --plate: #C9D1DD; --stone-edge: #4E4A43; --held: #4FC28A; --bridge: #7FB0E6;
+  --r: 4px; --r-lg: 8px; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/24px var(--f-body); margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 40px; }
+h1 { font: 800 44px/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+h2 { font: 800 26px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; margin: 0; text-wrap: balance; }
+h3 { font: 600 15px/1.3 var(--f-body); margin: 0; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 64ch; font-size: 17px; line-height: 27px; }
+header { display: grid; gap: 14px; }
+.eyebrow { font: 600 12px var(--f-code); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+code, .mono { font-family: var(--f-code); font-size: .9em; }
+section { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px 36px; align-items: start; border-top: 1px solid var(--line); padding-top: 28px; }
+section.full { grid-template-columns: minmax(0, 1fr); }
+.text { display: grid; gap: 12px; min-width: 0; }
+.text p, .text li { max-width: 62ch; }
+.text ul, .text ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.fig { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.fig svg, .fig canvas { width: 100%; height: auto; display: block; border-radius: var(--r); background: var(--plate); touch-action: none; }
+.cap { color: var(--muted); font-size: 13px; line-height: 19px; }
+.ctl { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; }
+.ctl label { display: flex; align-items: center; gap: 8px; }
+.ctl input[type=range] { width: 130px; accent-color: var(--accent); }
+.ctl output { font: 600 12px var(--f-code); min-width: 5.5ch; color: var(--ink); }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
+.seg button, .btn { font: 500 13px var(--f-body); padding: 4px 10px; background: var(--raised); color: var(--ink); border: 0; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line-2); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.btn { border: 1px solid var(--line-2); border-radius: var(--r); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.read { font: 600 13px var(--f-code); display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.read .bad { color: var(--over); } .read .good { color: var(--held); }
+.key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.key span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.rule { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.rule .n { font: 800 28px/1 var(--f-display); color: var(--accent); }
+.rule p { font-size: 14px; line-height: 21px; color: var(--ink); }
+.tag { font: 600 11px var(--f-code); letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid currentColor; }
+.tag.agreed { color: var(--held); } .tag.open { color: var(--band); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; line-height: 20px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font: 600 12px var(--f-code); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); }
+@media (max-width: 820px) { section { grid-template-columns: minmax(0, 1fr); } h1 { font-size: 36px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">Cliffs from Spines · design</span>
+  <h1>Bedding by construction</h1>
+  <p class="lede">Where the bedding conversation has landed. Instead of building a stone and then stretching it down onto whatever is below, each stone is built knowing what is below it: everything under it is already finished, its bottom is chosen to sit on what is there, and a point of the bottom is allowed only where it rests or bridges between two points that rest. Nothing is repaired afterwards.</p>
+</header>
+
+<section class="full">
+  <div class="text">
+    <h2>Where we landed</h2>
+    <p>Five rules. The first four are agreed; the fifth has its proposal and is open.</p>
+  </div>
+  <div class="rules">
+    <div class="rule"><span class="n">1</span><h3>Order by what holds what <span class="tag agreed">agreed</span></h3><p>A stone is built only after every stone under its bottom. Not by the height of tops: a sloping neighbour can have a high top and still be under it. A circle (three stones each partly over the next) is broken at the stone with the lowest bottom.</p></div>
+    <div class="rule"><span class="n">2</span><h3>Everything below is known <span class="tag agreed">agreed</span></h3><p>When a stone is built, what is under it is finished. A ray down from any point of its bottom says what holds it and how far away it is.</p></div>
+    <div class="rule"><span class="n">3</span><h3>The bottom is a choice <span class="tag agreed">agreed</span></h3><p>The mass is the space a stone may use; the stone's bottom can be any flat face inside it, any size. A 65° flare rises from the bottom, so the stone is printable by construction. A smaller bottom means a smaller stone.</p></div>
+    <div class="rule"><span class="n">4</span><h3>Supported, or bridged <span class="tag agreed">agreed</span></h3><p>A point of the bottom must rest on something (within 0.15 mm, or inside a stone), or lie on the line between two resting points no more than <b>Bridge</b> apart. Bridge is a setting (15 mm). The same rule paints red.</p></div>
+    <div class="rule"><span class="n">5</span><h3>Look only as deep as a held top can sink <span class="tag open">proposed</span></h3><p>Under a stone that will rest on it, a top face keeps its facets, but their turn is limited so they drop no more than one Sink bite across the footprint. The stone above looks down exactly that far.</p></div>
+  </div>
+</section>
+
+<section id="order">
+  <div class="text">
+    <h2>1 · The order</h2>
+    <p>Stones are finished one at a time, and each is set on the stones already finished. Today the order is by tops, lowest first. That is right whenever a stone's top is roughly level, because what holds a stone lies under its bottom, so its top is lower.</p>
+    <p>It goes wrong when a neighbour's top slopes. Stone <b>C</b> here is under <b>S</b>'s right end, but C's top rises past S's top further along. By tops, S comes first and is bedded without knowing C is there; C is then built into the space under S. They overlap there, or S hangs over a stone it never saw.</p>
+    <p>Raise C's top to see the order flip. Ordering by what holds what (C is under S's bottom, so C goes first) never flips.</p>
+    <p class="cap">Where it happens: rarely with level layers; more with Lean, Pitch, Sag or Bow, with Through and Along, and with Massive's big stones.</p>
+  </div>
+  <div class="fig">
+    <svg id="ordSvg" viewBox="0 0 720 300" role="img" aria-label="A cross-section: stone B low on the left, slab S above it, and stone C with a sloping top under S's right end"></svg>
+    <div class="ctl">
+      <label for="cTop">C's top <input id="cTop" type="range" min="14" max="40" step="0.5" value="30"><output id="cTopOut"></output></label>
+      <span class="seg" role="group" aria-label="Order rule"><button id="byTops" aria-pressed="true">By tops</button><button id="byHold" aria-pressed="false">By what holds what</button></span>
+    </div>
+    <div class="read" id="ordRead"></div>
+  </div>
+</section>
+
+<section id="bottom">
+  <div class="text">
+    <h2>3 · The bottom, and its flare</h2>
+    <p>A mass is a convex cell: the space its stone may use. Its stone needs one face that rests, the bottom; everything else must be printable, so no other underside may face down past 65° (flatter than 25° from level).</p>
+    <p>So the stone is its mass cut by a flare: two walls rising from the ends of the bottom at the steepest overhang allowed. Inside the flare nothing overhangs past the limit; what lies outside it is cut away.</p>
+    <p>Drag the bottom's ends or raise it. Keeping the mass's own bottom keeps the whole mass. A smaller or higher bottom loses the wedges beside it: the price of sitting only where there is support.</p>
+  </div>
+  <div class="fig">
+    <svg id="botSvg" viewBox="0 0 720 360" role="img" aria-label="A mass in section with a chosen bottom; the stone is the mass inside the 65 degree flare from the bottom"></svg>
+    <div class="ctl">
+      <label for="bz">Height <input id="bz" type="range" min="0" max="8" step="0.1" value="0"><output id="bzOut"></output></label>
+      <label for="bx0">Left end <input id="bx0" type="range" min="0" max="30" step="0.25" value="3"><output id="bx0Out"></output></label>
+      <label for="bx1">Right end <input id="bx1" type="range" min="2" max="32" step="0.25" value="25"><output id="bx1Out"></output></label>
+    </div>
+    <div class="key"><span style="--c: var(--stone)">the stone</span><span style="--c: color-mix(in srgb, var(--over) 35%, transparent)">cut away by the flare</span><span style="--c: var(--accent)">the bottom</span></div>
+    <div class="read" id="botRead"></div>
+  </div>
+</section>
+
+<section id="depth">
+  <div class="text">
+    <h2>5 · How far down to look</h2>
+    <p>The stone below was built by the same stone builder, so how rough its top is follows from its settings. Facets bite by <b>Sink</b> (1.5..3% of the stone's size: a few tenths of a millimetre). What drops a top far below its plane is <b>Tilt</b>: every plane is turned, and a turned plane falls away across the face.</p>
+    <p>A support found below the bottom's plane holds nothing unless the bottom comes down to it, and a flat bottom brought down to the deepest point buries the high ones. So the useful depth is small, and the proposal makes it small by construction: under the footprint of a stone above, a top's planes may turn only as far as keeps their drop across the footprint within one Sink bite. Outside footprints, the full Tilt.</p>
+    <p>Then the stone above looks down one Sink bite plus the 0.15 mm tolerance, a few tenths of a millimetre, and finds most of the top there. Switch the limit off to see what Tilt does to it.</p>
+    <p class="cap">True proportions: an 8 mm stretch of the top under a stone, magnified with both axes alike.</p>
+  </div>
+  <div class="fig">
+    <svg id="depSvg" viewBox="0 0 720 300" role="img" aria-label="The top of the stone below, under the plane of the stone above, with the look band and the points it finds"></svg>
+    <div class="ctl">
+      <span class="seg" role="group" aria-label="Turn under the footprint"><button id="limOn" aria-pressed="true">Turn limited</button><button id="limOff" aria-pressed="false">Full Tilt</button></span>
+      <label for="tilt">Tilt <input id="tilt" type="range" min="0" max="20" step="0.5" value="9"><output id="tiltOut"></output></label>
+      <label for="sink">Sink <input id="sink" type="range" min="0.5" max="8" step="0.25" value="3"><output id="sinkOut"></output></label>
+      <label for="size">Stone size <input id="size" type="range" min="4" max="20" step="0.5" value="9.5"><output id="sizeOut"></output></label>
+      <button class="btn" id="reseed">Another draw</button>
+    </div>
+    <div class="key"><span style="--c: var(--held)">within reach: rests</span><span style="--c: var(--over)">deeper: does not</span><span style="--c: color-mix(in srgb, var(--accent) 25%, transparent)">the look band</span></div>
+    <div class="read" id="depRead"></div>
+  </div>
+</section>
+
+<section id="bridge">
+  <div class="text">
+    <h2>4 · Supported, or bridged</h2>
+    <p>Seen from above: the bottom's footprint, and where it touches down (the green patches, from the rays of rule 5). A point of the bottom is allowed if it rests, or if it is on the line between two resting points no more than <b>Bridge</b> apart: a printer spans that gap in the air.</p>
+    <p>Between two patches, everything between them is allowed (the band round the two). With three small patches, the middle of their triangle is not on a line between two resting points, so it is not allowed: it is on a line between a patch and the empty space opposite.</p>
+    <p>Drag the patches; change Bridge. What is left (red) cannot be the bottom: the bottom shrinks to the allowed part, and the flare does the rest.</p>
+  </div>
+  <div class="fig">
+    <canvas id="brCan" width="720" height="380" aria-label="The footprint of a bottom from above, with contact patches, bridged area and unsupported area"></canvas>
+    <div class="ctl">
+      <label for="br">Bridge <input id="br" type="range" min="2" max="40" step="0.5" value="15"><output id="brOut"></output></label>
+      <button class="btn" id="addP">Add a patch</button>
+      <button class="btn" id="delP">Remove the last</button>
+    </div>
+    <div class="key"><span style="--c: var(--held)">rests</span><span style="--c: var(--bridge)">bridged</span><span style="--c: var(--over)">neither</span></div>
+    <div class="read" id="brRead"></div>
+  </div>
+</section>
+
+<section class="full">
+  <div class="text">
+    <h2>One stone, step by step</h2>
+    <ol>
+      <li><b>Wait</b> until every stone under the mass's bottom is finished (rule 1).</li>
+      <li><b>The plane:</b> the mass's own bottom face, the face it shares with the layer below.</li>
+      <li><b>Look down</b> from points over that face, one Sink bite of the stone below plus 0.15 mm (rule 5). Where a ray finds a stone or the ground within that, the point rests.</li>
+      <li><b>The bottom</b> is the resting points plus every line between two of them no more than Bridge apart (rule 4), cut to the mass.</li>
+      <li><b>The stone</b> is the mass inside the 65° flare from that bottom (rule 3), then faceted and chamfered as now; the bottom is kept, and under the footprints of masses above, planes turn only within one Sink bite (rule 5).</li>
+      <li>It is <b>finished</b>: it rests by construction. No stretch, no repair, nothing below its mass.</li>
+    </ol>
+  </div>
+</section>
+
+<section class="full">
+  <div class="text">
+    <h2>What changes from today</h2>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Today</th><th>Proposed</th></tr></thead>
+      <tbody>
+        <tr><td>Stones finished in order of their tops.</td><td>In order of what holds what; a circle broken at the lowest bottom.</td></tr>
+        <tr><td>A stone is built from its mass alone, then bedded.</td><td>A stone is built against the finished stones under it.</td></tr>
+        <tr><td>The bottom is the mass's whole bottom.</td><td>The bottom is the part of the mass's bottom that rests or bridges.</td></tr>
+        <tr><td>Bedding stretches the stone down by the widest gap (within 6 mm), past its mass.</td><td>No stretch; a stone never leaves its mass.</td></tr>
+        <tr><td>Tops are faceted with the full Tilt everywhere.</td><td>Under a footprint, a top's turn drops no more than one Sink bite.</td></tr>
+        <tr><td>Red is painted per triangle: two held corners hold it.</td><td>Red is rule 4 exactly: rests, or bridged within Bridge.</td></tr>
+        <tr><td>How far to look: up to 6 mm.</td><td>One Sink bite of the stone below plus 0.15 mm.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="full">
+  <div class="text">
+    <h2>Still open</h2>
+    <ul>
+      <li><b>Joint below zero.</b> Overlapping masses make "under" fuzzy where they overlap; the proposal judges it from bottoms over tops and treats a point inside the stone below as resting.</li>
+      <li><b>A stone with no resting point at all</b> (a lip with nothing within reach): the allowed bottom is empty. Options: it keeps a point bottom at its lowest corner and is painted red, or its mass is given to its neighbours.</li>
+      <li><b>Chamfers</b> along a held top's edge are narrow and usually bridged; if Bridge is set below twice their width, the same turn limit would apply to them.</li>
+      <li><b>Bridge</b> belongs to the printer: on this page a setting beside Bedding; in the program, in the printer profile with the 55° and 65° angles. A new word, so Orin reviews it before it is built.</li>
+    </ul>
+  </div>
+</section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; };
+const DEG = Math.PI / 180, T25 = Math.tan(25 * DEG);
+// clip a polygon [[x, z], ...] to a*x + b*z <= c
+function clipHalf(poly, a, b, c) {
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length], dp = a * p[0] + b * p[1] - c, dq = a * q[0] + b * q[1] - c;
+    if (dp <= 0) out.push(p);
+    if ((dp < 0 && dq > 0) || (dp > 0 && dq < 0)) { const t = dp / (dp - dq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); }
+  }
+  return out;
+}
+const area = poly => Math.abs(poly.reduce((s, p, i) => { const q = poly[(i + 1) % poly.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
+
+// ---------- 1: the order ----------
+(function () {
+  const svg = $('ordSvg'), S = 6, X0 = 30, Z0 = 270, P = ([x, z]) => `${X0 + x * S},${Z0 - z * S}`;
+  let rule = 'tops';
+  const draw = () => {
+    const zC = +$('cTop').value; $('cTopOut').textContent = zC + ' mm';
+    svg.innerHTML = '';
+    el('line', { x1: 0, y1: Z0, x2: 720, y2: Z0, stroke: css('--plate-ink'), 'stroke-width': 1.5 }, svg);
+    // C: a sloping top that passes just under S's right end (z 13 at x 78)
+    const s = (zC - 13) / (110 - 78), z66 = Math.max(0.5, 13 - 12 * s);
+    const B = [[10, 0], [55, 0], [55, 12], [10, 12]], Sl = [[10, 14], [78, 14], [78, 20], [10, 20]], C = [[66, 0], [110, 0], [110, zC], [66, z66]];
+    const tops = { B: 12, S: 20, C: zC }, order = rule === 'tops' ? Object.keys(tops).sort((a, b) => tops[a] - tops[b]) : ['B', 'C', 'S'];
+    const bad = order.indexOf('S') < order.indexOf('C');
+    const poly = (pts, fill, name) => { el('polygon', { points: pts.map(P).join(' '), fill, stroke: css('--stone-edge'), 'stroke-width': 1.2 }, svg); };
+    poly(B, css('--stone-2')); poly(C, css('--stone')); poly(Sl, css('--stone-3'));
+    if (bad) {   // S's right end, over where C will be: S was set down without C
+      const over = [[66, 14], [78, 14], [78, 20], [66, 20]];
+      el('polygon', { points: over.map(P).join(' '), fill: css('--over'), 'fill-opacity': .35, stroke: css('--over'), 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, svg);
+      el('text', { x: X0 + 66 * S, y: Z0 - 22.5 * S }, svg).textContent = 'built before C: over a space it thinks is empty';
+    }
+    const label = (name, x, z) => { const n = order.indexOf(name) + 1;
+      const g = el('g', {}, svg); el('circle', { cx: X0 + x * S, cy: Z0 - z * S, r: 11, fill: css('--accent') }, g);
+      const t = el('text', { x: X0 + x * S, y: Z0 - z * S + 4, 'text-anchor': 'middle', style: `fill:${css('--on-accent')};font-weight:600` }, g); t.textContent = n;
+      el('text', { x: X0 + x * S + 16, y: Z0 - z * S + 4 }, svg).textContent = name + '  top ' + tops[name] + ' mm'; };
+    label('B', 20, 6); label('S', 20, 17); label('C', 92, Math.min(zC, 30) / 2.4);
+    $('ordRead').innerHTML = `<span>order: ${order.join(' → ')}</span>` + (bad ? '<span class="bad">S is finished before the stone under its right end</span>' : '<span class="good">every stone under S is finished first</span>');
+  };
+  $('cTop').addEventListener('input', draw);
+  const setRule = r => { rule = r; $('byTops').setAttribute('aria-pressed', r === 'tops'); $('byHold').setAttribute('aria-pressed', r === 'hold'); draw(); };
+  $('byTops').addEventListener('click', () => setRule('tops')); $('byHold').addEventListener('click', () => setRule('hold'));
+  draw();
+})();
+
+// ---------- 3: the bottom and its flare ----------
+(function () {
+  const svg = $('botSvg'), S = 20, X0 = 40, Z0 = 320, P = ([x, z]) => `${X0 + x * S},${Z0 - z * S}`;
+  const MASS = [[0, 5], [2, 0], [26, 0], [31, 3], [29, 13], [4, 14]];
+  const draw = () => {
+    let zb = +$('bz').value, x0 = +$('bx0').value, x1 = +$('bx1').value;
+    if (x1 < x0 + 1) { x1 = x0 + 1; $('bx1').value = x1; }
+    $('bzOut').textContent = zb.toFixed(1) + ' mm'; $('bx0Out').textContent = x0 + ' mm'; $('bx1Out').textContent = x1 + ' mm';
+    // the stone: the mass above the bottom's plane and inside the flare rising from its ends at 25 degrees from level
+    let st = clipHalf(MASS, 0, -1, -zb); st = clipHalf(st, -T25, -1, -zb - T25 * x0); st = clipHalf(st, T25, -1, T25 * x1 - zb);
+    svg.innerHTML = '';
+    el('polygon', { points: MASS.map(P).join(' '), fill: css('--over'), 'fill-opacity': .22, stroke: css('--stone-edge'), 'stroke-dasharray': '5 4', 'stroke-width': 1.2 }, svg);
+    if (st.length > 2) el('polygon', { points: st.map(P).join(' '), fill: css('--stone'), stroke: css('--stone-edge'), 'stroke-width': 1.4 }, svg);
+    // the flare's walls, drawn long and faint
+    for (const [x, dir] of [[x0, -1], [x1, 1]]) el('line', { x1: X0 + x * S, y1: Z0 - zb * S, x2: X0 + (x + dir * 14) * S, y2: Z0 - (zb + 14 * T25) * S, stroke: css('--plate-ink'), 'stroke-opacity': .45, 'stroke-dasharray': '3 4' }, svg);
+    // the bottom, where it lies inside the mass
+    const inMass = st.filter(p => Math.abs(p[1] - zb) < 1e-6).map(p => p[0]);
+    if (inMass.length >= 2) el('line', { x1: X0 + Math.min(...inMass) * S, y1: Z0 - zb * S, x2: X0 + Math.max(...inMass) * S, y2: Z0 - zb * S, stroke: css('--accent'), 'stroke-width': 5, 'stroke-linecap': 'round' }, svg);
+    el('text', { x: X0 + x1 * S + 10, y: Z0 - (zb + 4 * T25) * S - 6 }, svg).textContent = '65° (25° from level)';
+    el('text', { x: X0 + 8 * S, y: Z0 - 15 * S - 8 }, svg).textContent = 'the mass (dashed)';
+    const kept = st.length > 2 ? area(st) / area(MASS) : 0;
+    $('botRead').innerHTML = `<span>stone keeps ${(kept * 100).toFixed(0)}% of its mass</span>` + (kept < 0.999 ? `<span class="bad">${((1 - kept) * 100).toFixed(0)}% cut away</span>` : '<span class="good">nothing cut</span>');
+  };
+  for (const id of ['bz', 'bx0', 'bx1']) $(id).addEventListener('input', draw);
+  draw();
+})();
+
+// ---------- 5: how far down to look ----------
+(function () {
+  const svg = $('depSvg'), W = 8, S = 85, X0 = 20, ZT = 50, P = (x, z) => [X0 + x * S, ZT - z * S];
+  let limited = true, seed = 7;
+  const rng = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const draw = () => {
+    const tilt = +$('tilt').value, sink = +$('sink').value, size = +$('size').value;
+    $('tiltOut').textContent = '0..' + tilt + '°'; $('sinkOut').textContent = '½..' + sink + '%'; $('sizeOut').textContent = size + ' mm';
+    const bite = sink / 100 * size, band = bite + 0.15, r = rng(seed);
+    // the planes over this stretch: the crown through the touch point (x = 2, on the plane) and facets, each through its point at a
+    // drawn depth and turned by a drawn angle; limited, a plane's drop across the footprint stays within one bite
+    const capT = bite / W;
+    const turnT = () => { let t = Math.tan(r() * tilt * DEG) * (r() < 0.5 ? -1 : 1); if (limited) t = Math.max(-capT, Math.min(capT, t)); return t; };
+    const planes = [{ x: 2, d: 0, t: turnT() }];
+    for (let i = 0; i < 5; i++) planes.push({ x: 0.8 + i * 1.7 + r() * 0.6, d: bite * (0.5 + 0.5 * r()), t: turnT() });
+    // the guards: a facet never cuts the touch patch (x 1.6..2.4 stays on the plane)
+    const line = p => x => -p.d + p.t * (x - p.x);
+    const lines = planes.map((p, i) => { const f = line(p); if (i === 0) return f; const lift = Math.max(0, -f(1.6), -f(2.4)); return x => f(x) + lift; });
+    const top = x => Math.min(0, ...lines.map(f => f(x)));
+    svg.innerHTML = '';
+    const N = 320, pts = []; for (let i = 0; i <= N; i++) { const x = W * i / N; pts.push([x, top(x)]); }
+    // the stone below
+    el('polygon', { points: [...pts.map(([x, z]) => P(x, z)), P(W, -3), P(0, -3)].map(p => p.join(',')).join(' '), fill: css('--stone'), stroke: 'none' }, svg);
+    // the look band, under the plane
+    el('rect', { x: X0, y: ZT, width: W * S, height: band * S, fill: css('--accent'), 'fill-opacity': .18 }, svg);
+    // the top, coloured by whether it is within reach
+    let held = 0;
+    for (let i = 0; i < N; i++) { const a = pts[i], b = pts[i + 1], ok = (a[1] + b[1]) / 2 >= -band - 1e-9; if (ok) held++;
+      el('line', { x1: P(...a)[0], y1: P(...a)[1], x2: P(...b)[0], y2: P(...b)[1], stroke: ok ? css('--held') : css('--over'), 'stroke-width': 3 }, svg); }
+    // the plane of the stone above: its bottom
+    el('line', { x1: X0, y1: ZT, x2: X0 + W * S, y2: ZT, stroke: css('--plate-ink'), 'stroke-width': 2 }, svg);
+    el('text', { x: X0 + 4, y: ZT - 8 }, svg).textContent = 'the bottom of the stone above (its plane)';
+    el('text', { x: X0 + 4, y: ZT + band * S + 14 }, svg).textContent = `look ${band.toFixed(2)} mm down`;
+    // a scale bar: 1 mm
+    el('line', { x1: X0 + (W - 1) * S, y1: 285, x2: X0 + W * S, y2: 285, stroke: css('--plate-ink'), 'stroke-width': 2 }, svg);
+    el('text', { x: X0 + (W - 1) * S, y: 278 }, svg).textContent = '1 mm';
+    const deep = -Math.min(...pts.map(p => p[1]));
+    $('depRead').innerHTML = `<span>Sink bite ${bite.toFixed(2)} mm</span><span>deepest ${deep.toFixed(2)} mm</span><span class="${held / N > 0.6 ? 'good' : 'bad'}">${(held / N * 100).toFixed(0)}% of this stretch within reach</span>`;
+  };
+  for (const id of ['tilt', 'sink', 'size']) $(id).addEventListener('input', draw);
+  const setLim = v => { limited = v; $('limOn').setAttribute('aria-pressed', v); $('limOff').setAttribute('aria-pressed', !v); draw(); };
+  $('limOn').addEventListener('click', () => setLim(true)); $('limOff').addEventListener('click', () => setLim(false));
+  $('reseed').addEventListener('click', () => { seed = (seed * 7919 + 13) % 100003; draw(); });
+  draw();
+})();
+
+// ---------- 4: supported, or bridged ----------
+(function () {
+  const can = $('brCan'), ctx = can.getContext('2d'), FW = 36, FH = 18, S = 18, OX = 36, OY = 28, CELL = 0.5;
+  const patches = [{ x: 6, y: 9, r: 2.5 }, { x: 30, y: 5, r: 2 }, { x: 25, y: 14.5, r: 2 }];
+  const toPx = (x, y) => [OX + x * S, OY + y * S];
+  let drag = null;
+  const draw = () => {
+    const B = +$('br').value; $('brOut').textContent = B + ' mm';
+    const nx = FW / CELL, ny = FH / CELL, rest = new Uint8Array(nx * ny), ok = new Uint8Array(nx * ny);
+    const inPatch = (x, y) => patches.some(p => (x - p.x) ** 2 + (y - p.y) ** 2 <= p.r * p.r);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (inPatch((i + .5) * CELL, (j + .5) * CELL)) { rest[j * nx + i] = 1; ok[j * nx + i] = 1; }
+    // resting points about every millimetre; each pair no more than Bridge apart marks the cells along its line
+    const ends = []; for (let j = 0; j < ny; j += 2) for (let i = 0; i < nx; i += 2) if (rest[j * nx + i]) ends.push([(i + .5) * CELL, (j + .5) * CELL]);
+    for (const p of patches) for (let k = 0; k < 16; k++) { const a = 2 * Math.PI * k / 16, x = p.x + Math.cos(a) * (p.r - 0.05), y = p.y + Math.sin(a) * (p.r - 0.05); if (x > 0 && x < FW && y > 0 && y < FH) ends.push([x, y]); }
+    for (let a = 0; a < ends.length; a++) for (let b = a + 1; b < ends.length; b++) {
+      const [x0, y0] = ends[a], [x1, y1] = ends[b], d = Math.hypot(x1 - x0, y1 - y0); if (d > B || d < 1e-6) continue;
+      const n = Math.ceil(d / (CELL * 0.5));
+      for (let k = 0; k <= n; k++) { const x = x0 + (x1 - x0) * k / n, y = y0 + (y1 - y0) * k / n, i = Math.floor(x / CELL), j = Math.floor(y / CELL); if (i >= 0 && i < nx && j >= 0 && j < ny) ok[j * nx + i] = 1; }
+    }
+    ctx.fillStyle = css('--plate'); ctx.fillRect(0, 0, can.width, can.height);
+    let nOk = 0, nRest = 0;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i, [px, py] = toPx(i * CELL, j * CELL);
+      ctx.fillStyle = rest[k] ? css('--held') : ok[k] ? css('--bridge') : css('--over');
+      ctx.globalAlpha = rest[k] ? 0.95 : ok[k] ? 0.55 : 0.4; ctx.fillRect(px, py, CELL * S + 0.5, CELL * S + 0.5); ctx.globalAlpha = 1;
+      nOk += ok[k]; nRest += rest[k];
+    }
+    ctx.strokeStyle = css('--plate-ink'); ctx.lineWidth = 2; ctx.strokeRect(OX, OY, FW * S, FH * S);
+    for (const p of patches) { const [px, py] = toPx(p.x, p.y); ctx.beginPath(); ctx.arc(px, py, p.r * S, 0, 2 * Math.PI); ctx.lineWidth = 1.5; ctx.strokeStyle = css('--plate-ink'); ctx.stroke(); }
+    // a Bridge-long bar for scale
+    const [bx, by] = toPx(0, FH + 1.1); ctx.strokeStyle = css('--plate-ink'); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + Math.min(B, FW) * S, by); ctx.stroke();
+    ctx.fillStyle = css('--plate-ink'); ctx.font = `11px ${css('--f-code')}`; ctx.fillText(`Bridge ${B} mm`, bx + Math.min(B, FW) * S + 8, by + 4);
+    ctx.fillText('the footprint of the bottom, 36 × 18 mm, from above', OX, OY - 10);
+    const tot = nx * ny;
+    $('brRead').innerHTML = `<span class="good">rests ${(nRest / tot * 100).toFixed(0)}%</span><span>bridged ${((nOk - nRest) / tot * 100).toFixed(0)}%</span><span class="${nOk < tot ? 'bad' : 'good'}">neither ${((tot - nOk) / tot * 100).toFixed(0)}%</span>`;
+  };
+  const at = e => { const r = can.getBoundingClientRect(), sx = can.width / r.width, sy = can.height / r.height; return [((e.clientX - r.left) * sx - OX) / S, ((e.clientY - r.top) * sy - OY) / S]; };
+  can.addEventListener('pointerdown', e => { const [x, y] = at(e); drag = patches.find(p => (x - p.x) ** 2 + (y - p.y) ** 2 <= (p.r + 1) ** 2) || null; if (drag) can.setPointerCapture(e.pointerId); });
+  can.addEventListener('pointermove', e => { if (!drag) return; const [x, y] = at(e); drag.x = Math.max(0, Math.min(FW, x)); drag.y = Math.max(0, Math.min(FH, y)); draw(); });
+  can.addEventListener('pointerup', () => { drag = null; });
+  $('br').addEventListener('input', draw);
+  $('addP').addEventListener('click', () => { patches.push({ x: 18, y: 9, r: 1.5 }); draw(); });
+  $('delP').addEventListener('click', () => { if (patches.length > 1) patches.pop(); draw(); });
+  draw();
+})();
+// redraw on a theme change (the colours are read from the tokens)
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => document.querySelectorAll('input[type=range]').forEach(i => i.dispatchEvent(new Event('input')))); } catch (e) { /* older browsers: the page still works in the theme it opened in */ }
+</script>
