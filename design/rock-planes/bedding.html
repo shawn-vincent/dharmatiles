@@ -99,7 +99,7 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
     <div class="rule"><span class="n">2</span><h3>Everything below is known <span class="tag agreed">agreed</span></h3><p>When a stone is built, what is under it is finished. A ray down from any point of its bottom says what holds it and how far away it is.</p></div>
     <div class="rule"><span class="n">3</span><h3>The bottom is a choice <span class="tag agreed">agreed</span></h3><p>The mass is the space a stone may use; the stone's bottom can be any flat face inside it, any size. A 65° flare rises from the bottom, so the stone is printable by construction. A smaller bottom means a smaller stone.</p></div>
     <div class="rule"><span class="n">4</span><h3>Supported, or bridged <span class="tag agreed">agreed</span></h3><p>A point of the bottom must rest on something (within 0.15 mm, or inside a stone), or lie on the line between two resting points no more than <b>Bridge</b> apart. Bridge is a setting (15 mm). The same rule paints red.</p></div>
-    <div class="rule"><span class="n">5</span><h3>A top under a mass stays on its plane, but for its edges <span class="tag open">proposed</span></h3><p>Where a stone's top is a face shared with a mass above, a facet may cut into that mass's footprint only within 1.5 mm of an edge. The middle stays on the plane, so the stone above looks down only the 0.15 mm tolerance; at the edges both stones cut back into a V.</p></div>
+    <div class="rule"><span class="n">5</span><h3>A top under a mass stays on its plane, but for its edges <span class="tag open">proposed</span></h3><p>Where a stone's top is a face shared with a mass above, a facet may cut into that mass's footprint only within 15% of its width from an edge. The middle stays on the plane, so the stone above looks down only the 0.15 mm tolerance; at the edges both stones cut back into a V.</p></div>
   </div>
 </section>
 
@@ -145,8 +145,8 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
     <h2>5 · A flat bed, cut back at the edges</h2>
     <p>The stone below is built by the same stone builder, so its top is faceted: <b>Sink</b> bites a few tenths of a millimetre, and <b>Tilt</b> turns each plane so it falls away across the face, up to a millimetre or two. A support found below the bottom's plane holds nothing unless the bottom comes down to it, so a rough top under a stone is mostly missed.</p>
     <p>Rules 3 and 4 already keep every stone printable whatever the top below looks like: the stone above takes as its bottom only what rests or is bridged, and its flare cuts the rest. So this rule only decides how much the stones lose at their joints.</p>
-    <p>When a stone is built, the masses above it are known. Under each one's footprint, a facet (or the crown's turn) may cut the top only within <b>1.5 mm</b> of an edge: the footprint's edge, or the stone's own edge where the footprint runs past it. The middle stays on the plane. That is the guard that already keeps facets off the touch point, with a bigger patch: the footprint drawn in by 1.5 mm, a check on its corners. The band is at most a third of the footprint, so a small stone keeps a flat middle, and two bands (3 mm) fit well within Bridge.</p>
-    <p>The joints then read as a V, with no setting for their shape: the stone below falls away at up to Tilt, at most 1.5·tan(Tilt) deep at the edge; the stone above stops its bottom where the stone below stops resting and rises from there at 25° from level. Where the stone above crosses a joint below, it bridges it.</p>
+    <p>When a stone is built, the masses above it are known. Under each one's footprint, a facet (or the crown's turn) may cut the top only within a band along an edge: the footprint's edge, or the stone's own edge where the footprint runs past it. The band is <b>15% of the footprint's width</b> across that edge, so it scales with the stone above: about 1.8 mm on a 12 mm Layered slab, 0.6 mm under a 4 mm pebble. Two bands are 30% of the width, so a flat middle always remains, and on any footprint Bridge can span they fit within it. The middle stays on the plane. That is the guard that already keeps facets off the touch point, with a bigger patch: the footprint drawn in by its bands, a check on its corners.</p>
+    <p>The joints then read as a V, with no setting for their shape: the stone below falls away at up to Tilt, at most the band times tan(Tilt) deep at the edge; the stone above stops its bottom where the stone below stops resting and rises from there at 25° from level. Where the stone above crosses a joint below, it bridges it.</p>
     <p>Outside the footprints (the top of the cliff, steps, where the stone above sits back) Tilt and Sink apply in full. Move the footprint; switch to "Faceted everywhere" for today's top.</p>
     <p class="cap">True proportions: a 14 mm stretch, both axes alike; two stones below with a joint at 7 mm. The footprint is the mass's, not the stone's: the stone above is not built yet, and its bottom always lies inside its mass's.</p>
   </div>
@@ -191,9 +191,9 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
     <ol>
       <li><b>Wait</b> until every stone under the mass's bottom is finished (rule 1).</li>
       <li><b>The plane:</b> the mass's own bottom face, the face it shares with the layer below.</li>
-      <li><b>Look down</b> from points over that face, 0.15 mm (rule 5: the tops below are flat under this mass, but for 1.5 mm at their edges). Where a ray finds a stone or the ground within that, the point rests.</li>
+      <li><b>Look down</b> from points over that face, 0.15 mm (rule 5: the tops below are flat under this mass, but for a band of 15% of its width at their edges). Where a ray finds a stone or the ground within that, the point rests.</li>
       <li><b>The bottom</b> is the resting points plus every line between two of them no more than Bridge apart (rule 4), cut to the mass.</li>
-      <li><b>The stone</b> is the mass inside the 65° flare from that bottom (rule 3), then faceted and chamfered as now; the bottom is kept, and so is its top under the footprint of each mass above, but for a 1.5 mm band at the edges (rule 5).</li>
+      <li><b>The stone</b> is the mass inside the 65° flare from that bottom (rule 3), then faceted and chamfered as now; the bottom is kept, and so is its top under the footprint of each mass above, but for a band of 15% of that footprint's width at the edges (rule 5).</li>
       <li>It is <b>finished</b>: it rests by construction. No stretch, no repair, nothing below its mass.</li>
     </ol>
   </div>
@@ -211,7 +211,7 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
         <tr><td>A stone is built from its mass alone, then bedded.</td><td>A stone is built against the finished stones under it.</td></tr>
         <tr><td>The bottom is the mass's whole bottom.</td><td>The bottom is the part of the mass's bottom that rests or bridges.</td></tr>
         <tr><td>Bedding stretches the stone down by the widest gap (within 6 mm), past its mass.</td><td>No stretch; a stone never leaves its mass.</td></tr>
-        <tr><td>Tops are faceted with the full Tilt everywhere.</td><td>Under the footprint of a mass above, a top stays on its plane; facets cut it only within 1.5 mm of an edge, and outside it.</td></tr>
+        <tr><td>Tops are faceted with the full Tilt everywhere.</td><td>Under the footprint of a mass above, a top stays on its plane; facets cut it only within 15% of the footprint's width from an edge, and outside it.</td></tr>
         <tr><td>Red is painted per triangle: two held corners hold it.</td><td>Red is rule 4 exactly: rests, or bridged within Bridge.</td></tr>
         <tr><td>How far to look: up to 6 mm.</td><td>0.15 mm, the tolerance.</td></tr>
       </tbody>
@@ -225,7 +225,7 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
     <ul>
       <li><b>Joint below zero.</b> Overlapping masses make "under" fuzzy where they overlap; the proposal judges it from bottoms over tops and treats a point inside the stone below as resting.</li>
       <li><b>A stone with no resting point at all</b> (a lip with nothing within reach): the allowed bottom is empty. Options: it keeps a point bottom at its lowest corner and is painted red, or its mass is given to its neighbours.</li>
-      <li><b>The band, 1.5 mm, is fixed.</b> Tilt, Sink and the 65° flare give the V's shape; nothing in them gives where the cut may start (the formula that suggests itself, a Sink bite over tan Tilt, grows without bound as Tilt goes to zero). If the cliffs read too regular, it can become a range under Rocks later.</li>
+      <li><b>The band, 15% of the footprint's width, is fixed.</b> Tilt, Sink and the 65° flare give the V's shape; nothing in them gives where the cut may start (the formula that suggests itself, a Sink bite over tan Tilt, grows without bound as Tilt goes to zero). It is a share of the footprint, not of the mass's size, so a long thin mass gets thin bands without a second rule. If the cliffs read too regular, it can become a range under Rocks later.</li>
       <li><b>Bridge</b> belongs to the printer: on this page a setting beside Bedding; in the program, in the printer profile with the 55° and 65° angles. A new word, so Orin reviews it before it is built.</li>
     </ul>
   </div>
@@ -313,7 +313,7 @@ const area = poly => Math.abs(poly.reduce((s, p, i) => { const q = poly[(i + 1) 
 // ---------- 5: a flat bed, cut back at the edges ----------
 (function () {
   const svg = $('depSvg'), W = 14, S = 48, X0 = 24, ZT = 120, HA = 1.8, P = (x, z) => [X0 + x * S, ZT - z * S];
-  const TOL = 0.15, BAND = 1.5, BRIDGE = 15, JX = 7, GAP = 0.2, CHAM = 0.2;
+  const TOL = 0.15, BAND = 0.15, BRIDGE = 15, JX = 7, GAP = 0.2, CHAM = 0.2;
   let flat = true, seed = 7;
   const rng = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const draw = () => {
@@ -334,9 +334,9 @@ const area = poly => Math.abs(poly.reduce((s, p, i) => { const q = poly[(i + 1) 
       fs.push(x => Math.min(x - s.a, s.b - x) - CHAM);
       // the guard: a plane is lifted until it leaves the kept stretch whole. A plane's lowest point over a stretch is at an end
       // (in 3D, at a corner of the footprint drawn in). Flat but the edges: the part under the footprint, drawn in by the band
-      // (at most a third of it). Faceted everywhere: only the touch point
+      // (15% of the footprint's width; where this stone holds less than two bands of it, its middle point). Faceted everywhere: only the touch point
       let ka = tx - 0.4, kb = tx + 0.4;
-      if (flat && under) { const w = Math.min(BAND, (ib - ia) / 3); ka = ia + w; kb = ib - w; }
+      if (flat && under) { const w = BAND * (fb - fa); ka = ia + w; kb = ib - w; if (kb < ka) ka = kb = (ia + ib) / 2; }
       const lines = fs.map(f => { const lift = Math.max(0, -f(ka), -f(kb)); return x => f(x) + lift; });
       return { ...s, top: x => Math.min(0, ...lines.map(f => f(x))) };
     });
