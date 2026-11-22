@@ -63,7 +63,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pv.reset:hover { color: var(--accent); }
 .pc.open .pv { border-color: var(--accent); background: var(--raised); }
 .pbox { width: 6ch; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--ink); font: 600 14px var(--f-code); text-align: right; }
-.pop { position: absolute; left: 0; top: calc(100% + 6px); z-index: 5; width: 280px; display: grid; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 12px 32px -12px rgb(26 23 20 / .55); }
+.pop { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 20; width: min(760px, 100vw); max-height: 55vh; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 8px; align-content: start; padding: 0 16px max(16px, env(safe-area-inset-bottom)); background: var(--panel); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); }
+.sheethead { grid-column: 1 / -1; position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: 12px 0 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.sheethead b { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sheethead button { height: 28px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 500 13px var(--f-body); cursor: pointer; }
+.sheethead button:hover { border-color: var(--accent); color: var(--accent); }
 .pop small { color: var(--muted); font-size: 12px; line-height: 16px; }
 .pop .ends { display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--f-code); }
 .shapeicon { width: 34px; height: 34px; border-radius: var(--r); background: var(--plate); display: block; }
@@ -74,14 +78,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .shapes button:hover { border-color: var(--line-2); background: var(--raised); }
 .shapes button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .pv .sep { color: var(--muted); margin: 0 4px; }
-.pop.group { width: 300px; gap: 14px; }
+.pop.group { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px 28px; }
 .prow { display: grid; gap: 6px; }
 .pbool { grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; cursor: pointer; }
 .pbool small { grid-column: 1 / -1; }
 .pbool .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .phead { display: flex; justify-content: space-between; align-items: center; }
 .phead .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.styles { width: 280px; }
+.styles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.styles .note { grid-column: 1 / -1; }
 .styles button { display: grid; gap: 2px; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--ink); cursor: pointer; font: 500 14px var(--f-body); }
 .styles button small { color: var(--muted); }
 .styles button:hover { border-color: var(--line-2); background: var(--raised); }
@@ -195,7 +200,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <ol>
       <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, <b>Height</b> tall and <b>Depth</b> deep, standing at the back of the square. Its bottom, its back and its two ends (the tile's edges) are <b>crisp</b>: no mass crosses them. Its top and its front are <b>fuzzy</b>: each mass draws how far short of them it stops, up to <b>Fuzz</b>, from a smooth field along the wall (two thirds) and its own draw (one third), so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
       <li><b>Spines</b> run one <b>Direction</b>: <b>Through</b> the wall from back to front (so the stones show their ends), <b>Along</b> it (slabs) or <b>Up</b> (columns). <b>Planes</b> control planes stand across that direction, the first and last at the envelope's ends, the inner ones turned and moved at random by up to half of <b>Wander</b>; they organise the spines and never cut a stone. In each interval between two planes in turn, spines are started by dart throwing: a dart is a point between the two planes, its direction turned at random by up to <b>Wander</b>, and its spine runs back to the first plane and on to the next, and on through each further plane with chance <b>Span</b>, so breaks stagger. Its ends lie on its planes inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is at least <b>Size</b> from every spine already in the interval (the two ends' radii, measured across their sections, flattened by <b>Aspect</b>); until 80 darts in a row miss, the interval is not full. <b>Strata</b> holds spines to shared bands about a stone thick: a start is pulled to its band's middle, the spine runs flatter, and its thickness becomes the band's. Each end's size varies within <b>Vary</b>. One spine is one stone.</li>
-      <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split: the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b> sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge); each split adds a random part that grows with Vary. It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
+      <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share an interval (they meet end to end) split on a control plane between them, so the planes order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b> sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge); each split adds a random part that grows with Vary. It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
       <li><b>Bedding</b> (on by default, under Rocks): a stone whose underside overhangs past 65° (red; orange is fine) is made to stand on something, at construction, and never leaves its envelope. Stones are bedded from the lowest up, each on what is already there. A small gap (a face's drop to what is below, up to 2 mm) is closed by stretching the stone down, its top held; stretching also turns every face toward upright, so some faces need no drop at all (it holds the stone's footprint, so it stays in the envelope). A stone with faces further off gets one <b>corbel</b> (as the cliff element's support cone): the hull of the points of those faces and their sweep along a direction within 55° of straight down, the one that reaches a bedded stone or the ground soonest for all of them, until all have run into it; a direction that would carry any point out of the stone's envelope is not taken (if every one would, the nearest is, cut back to the envelope, holding up what it can), and the corbel is always cut by the envelope. Each wall of the corbel is parallel to the sweep, so it leans no more than 55°, or a copy of the underside, the lower one inside what it reaches. So a cantilever is held up by the stone beside or below it instead of a column to the ground, and the corbel holds up the stones above in turn.</li>
       <li><b>Rocks.</b> Each mass is a hull for Rocks from Hulls: <b>Rocks</b> sets its faces, chamfers, tilt, sink and weathering. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the control planes and the spines.</li>
     </ol>
@@ -989,15 +994,23 @@ function cliff(seed, P) {
     }
   }
 
-  // splits: every two spines, one plane, the power bisector of their nearest points (each weighed by its radius there), which
+  // splits: every two spines, one plane. Two that share an interval: the power bisector of their nearest points (each weighed by its radius there), which
   // separates the two spines whole. Joint sets where each side stops: half of it short (a gap) or past (they merge). It leaves each
   // spine at least KEEP of its own
   const splits = spines.map(() => []);
   for (let ia = 0; ia < spines.length; ia++) for (let ib = ia + 1; ib < spines.length; ib++) {
-    const A = spines[ia], B = spines[ib], [s, t, pa, pb] = nearest(A.p0, A.p1, B.p0, B.p1);
+    const A = spines[ia], B = spines[ib], gap = P.joint + 1.5 * P.vary / 100 * (2 * keyed(seed, 'joint', A.id, B.id)() - 1);
+    // two spines that share no interval split on a control plane between them (they meet end to end; the planes order the stones)
+    if (A.j <= B.i || B.j <= A.i) {
+      const [F, G] = A.j <= B.i ? [A, B] : [B, A], pl = planes[Math.round((F.j + G.i) / 2)], sf = F === A ? 1 : -1;
+      const dist = len(sub(nearest(A.p0, A.p1, B.p0, B.p1)[3], nearest(A.p0, A.p1, B.p0, B.p1)[2]));
+      splits[ia].push({ n: mul(pl.n, sf), b: sf * pl.b - gap / 2, dist }); splits[ib].push({ n: mul(pl.n, -sf), b: -sf * pl.b - gap / 2, dist });
+      continue;
+    }
+    const [s, t, pa, pb] = nearest(A.p0, A.p1, B.p0, B.p1);
     const ab = sub(pb, pa), L = len(ab), ra = lerp(A.r0, A.r1, s), rb = lerp(B.r0, B.r1, t);
     const d = L > 1e-3 ? mul(ab, 1 / L) : unit(sub(add(B.p0, B.p1), add(A.p0, A.p1)));
-    const da = dot(d, pa), db = dot(d, pb), gap = P.joint + 1.5 * P.vary / 100 * (2 * keyed(seed, 'joint', A.id, B.id)() - 1);
+    const da = dot(d, pa), db = dot(d, pb);
     let b = L > 1e-3 ? (dot(pb, pb) - dot(pa, pa) + ra * ra - rb * rb) / (2 * L) : (da + db) / 2;
     const keep = KEEP + Math.max(0, gap) / 2; b = db - da >= 2 * keep ? clamp(b, da + keep, db - keep) : (da + db) / 2;
     splits[ia].push({ n: d, b: b - gap / 2, dist: L }); splits[ib].push({ n: mul(d, -1), b: -(b + gap / 2), dist: L });
@@ -1179,13 +1192,12 @@ const GROUPS = [
     P_('height', 'Height', 12, 60, 1, MM, 'How tall the envelope is.'),
     P_('depth', 'Depth', 6, 35, 1, MM, 'How deep the envelope is, from the back of the square forward.'),
     P_('fuzz', 'Fuzz', 0, 12, 0.5, MM, 'How far short of the fuzzy top and front a stone may stop: a smooth field along the wall and each stone’s own draw.')] },
-  { label: 'Spines', items: [
+  { label: 'Structure', items: [
     { key: 'direction', label: 'Direction', choices: [['through', 'Through'], ['along', 'Along'], ['up', 'Up']], help: 'Which way the spines run: through the wall back to front (stones show their ends), along it (slabs), or up (columns). The control planes stand across it.' },
     P_('planes', 'Planes', 2, 14, 1, '', 'How many control planes cross the envelope, the first and last at its ends; a spine ends on them.'),
     P_('span', 'Span', 0, 95, 1, '%', 'The chance a spine goes on through one more plane: mostly short spines, fewer long ones, so breaks stagger.'),
     P_('wander', 'Wander', 0, 60, 1, '°', 'How far a spine turns at random from the direction (the inner planes turn by half of it).'),
-    P_('strata', 'Strata', 0, 100, 1, '%', 'How strongly spines keep to shared strata: starts pulled to a band’s middle, flatter, as thick as the band.')] },
-  { label: 'Stones', items: [
+    P_('strata', 'Strata', 0, 100, 1, '%', 'How strongly spines keep to shared strata: starts pulled to a band’s middle, flatter, as thick as the band.'),
     P_('size', 'Size', 3, 26, 0.5, MM, 'How wide a stone is: the distance kept between neighbouring spines. Each stone then grows until it meets its neighbours or the envelope.'),
     P_('vary', 'Vary', 0, 80, 1, '%', 'How much each spine end’s size varies (a bigger end takes more of what it shares), and the joints with it.'),
     P_('aspect', 'Aspect', 0.2, 1, 0.05, '', 'How flat a stone is: its depth over its width.'),
@@ -1364,6 +1376,8 @@ function rebuildThumbs() {
 }
 
 // controls
+// a bottom sheet's head: its name and Done
+const sheetHead = label => { const h = document.createElement('div'); h.className = 'sheethead'; h.innerHTML = `<b>${label}</b>`; const b = document.createElement('button'); b.textContent = 'Done'; b.addEventListener('click', () => closePop(true)); h.append(b); return h; };
 // one popover open at a time; a click elsewhere or Escape closes it (Escape puts the values back)
 let openPop = null;
 function closePop(keep = true) { if (openPop) { const c = openPop; openPop = null; c(keep); } }
@@ -1416,7 +1430,7 @@ function groupChip(g) {
     if (pc.classList.contains('open')) return;
     closePop(true);
     const was = pick(g.items.map(p => p.key)), v = btn.querySelector('.v');
-    const pop = document.createElement('div'); pop.className = 'pop' + (lone ? '' : ' group'); pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', g.label);
+    const pop = document.createElement('div'); pop.className = 'pop' + (lone ? '' : ' group'); pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', g.label); pop.append(sheetHead(g.label));
     let first;
     if (lone) { first = document.createElement('input'); Object.assign(first, { type: 'text', inputMode: 'decimal', value: state[g.items[0].key], className: 'pbox' }); first.setAttribute('aria-label', g.label); v.replaceWith(first); pop.append(row(g.items[0], first)); }
     else { for (const p of g.items) pop.append(row(p)); first = pop.querySelector('.pbox'); }
@@ -1435,15 +1449,15 @@ function styleChip() {
   btn.addEventListener('click', () => {
     if (pc.classList.contains('open')) { closePop(true); return; }
     closePop(true);
-    const pop = document.createElement('div'); pop.className = 'pop styles'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Styles');
+    const pop = document.createElement('div'); pop.className = 'pop styles'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Styles'); pop.append(sheetHead('Style'));
     for (const [key, label, about] of STYLES) {
       const b = document.createElement('button'); b.setAttribute('aria-pressed', key === state.style && !edited() ? 'true' : 'false');
       b.innerHTML = `<b>${label}</b><small>${about}</small>`;
       b.addEventListener('click', () => { Object.assign(state, { style: key }, PRESETS[key]); closePop(true); syncUI(); update(); btn.focus(); });
       pop.append(b);
     }
-    pop.insertAdjacentHTML('beforeend', '<small class="note">A style sets Spines, Stones and Fuzz; * means one has been changed since.</small>');
-    pc.append(pop); pc.classList.add('open'); pop.querySelector('button').focus();
+    pop.insertAdjacentHTML('beforeend', '<small class="note">A style sets Structure and Fuzz; * means one has been changed since.</small>');
+    pc.append(pop); pc.classList.add('open');   // no focus moved: the sheet is read where it is
     pop.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { closePop(false); btn.focus(); } });
     openPop = () => { pop.remove(); pc.classList.remove('open'); };
   });
