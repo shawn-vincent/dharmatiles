@@ -255,7 +255,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> A stone's <b>core</b> is its spine, or for a fused group the convex hull of the middle halves of its members' spines (clear of the layer faces, which a whole layer's ends lie along). Between every two cores there is one split. Two that never share a layer (they meet end to end) split on the face between them (its tangent plane, where it curves; where a curved or pinched face would cut into one of the two cores, that plane is turned just enough to pass between them whole), so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared; a fused group's radius is its members' mean), so a bigger end takes more of what it shares. That plane separates the two cores whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b>, drawn for each split, sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they overlap). It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction.</li>
       <li><b>Rocks.</b> Each mass becomes a stone, printable by construction. Its <b>bottom</b> is its mass's own faces that overhang past 65°: on a layer, the face of the layer below, level, tilted or curved as that is (one face for each stone below it); with Bedding, only the part of it that rests or is bridged (below); any other underside flatter than 65° from upright is cut away by a flare rising from the bottom at 65°, so the bottom is the only part that overhangs past the limit. A mass with no such face stands on its lowest point. Then every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. The bottom is kept as it is, and no plane, crown, facet or chamfer is made that overhangs past 65°, so a little roughness under a stone stays in the printable range (between 55° and 65°: orange). <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap. Faces, Chamfered and Weathering are drawn for each stone, Tilt and Sink for each plane. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
       <li><b>Bedding</b> (on by default, under Rocks) builds each stone knowing what is below it, so it rests by construction and nothing is stretched or repaired afterwards. <b>The order:</b> a stone is finished only after every stone that holds it (whose mass lies under its mass's bottom); a circle, each partly over the next, is broken at the stone with the lowest bottom. <b>The bottom:</b> the points of its mass's bottom that rest (on a finished stone or the ground within <span data-const="LOOK"></span> mm, or inside one) and the points bridged between them, on a line between two resting points at most <b>Bridge</b> apart: the largest convex group of them seen from above with nothing inside that neither rests nor is bridged (cut back by a line through each such point inside it). The flare rises from it, from its corners and along each edge of its outline, so a stone over a gap is smaller rather than overhanging. <b>The top:</b> where a stone holds a mass above, its top stays on its plane under that mass's footprint but for a rim along the footprint's edges, <span data-const="RIM%"></span> of its width across each edge, where facets, crowns and chamfers may cut; so the stone above finds it within <span data-const="LOOK"></span> mm, and the two cut back into a V between them. A stone that rests nowhere keeps its whole bottom and is painted where nothing holds it. Off: each stone is its mass made printable alone, in no order: a view to compare with.</li>
-      <li><b>Cracks</b> (off by default) follow one hidden <b>Network</b> over the whole cliff: the cells of seeds on a grid in the cliff's own frame, in one, two or three of its axes: <b>Planes</b> across the Direction (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread. Where two cells meet is a plane, so each stone is cut by the cells near it into convex pieces, and the boundaries' traces on its exposed faces are the lines a crack can follow; a crack never runs from one stone into another. <b>Cracks</b> picks a share of the traces' length: each crack starts at a line drawn by length and carries on, at each end, along the line that turns least, taking a second as well with the chance <b>Branching</b>; every draw has its own stream, so raising Cracks only adds. A picked line is cut as a wedge, as wide as <b>Opening</b> at the surface and closing to a sharp V at <b>Cleft</b> below it: on each side the part kept is where the distance from the boundary is at least a slope times (Cleft less the depth below each exposed face), one plane per face, so every piece stays convex. Each slope is the least of the drawn one and what keeps its face within the overhang target, so a crack across a steep face is a level floor under a 55° roof; a face that would need a slope past <span data-const="CRACK_STEEPEST"></span> (opening over cleft, each side) is not cracked from. A bottom, a face facing down past the target, or a face the boundary meets at less than <span data-const="GRAZE"></span>° (it would take off a skin) is not cracked from. Where two pieces meet, only what one does not cover of the other shows: where a crack ends against an uncracked line, and where a crack's two walls take different slopes. Cracks are cut once every stone is finished, so a stone rests on the one below before it is cracked (the crack under it is bridged); a weathered stone is not cracked. Not here yet, from the proposal: erosion, a crack's wander, pulling junctions to facet edges, seams between stones, and two networks at once.</li>
+      <li><b>Cracks</b> (off by default) follow one hidden <b>Network</b> over the whole cliff: the cells of seeds on a grid in the cliff's own frame, in one, two or three of its axes: <b>Planes</b> across the Direction (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread. Where two cells meet is a plane, so each stone is cut by the cells near it into convex pieces, and the boundaries' traces on its exposed faces are the lines a crack can follow; a crack never runs from one stone into another. <b>Cracks</b> picks a share of the traces' length: each crack starts at a line drawn by length and carries on, at each end, along the line that turns least, taking a second as well with the chance <b>Branching</b>; every draw has its own stream, so raising Cracks only adds. A picked line is cut as a wedge, as wide as <b>Opening</b> at the surface and closing to a sharp V at <b>Cleft</b> below it: on each side the part kept is where the distance from the boundary is at least a slope times (Cleft less the depth below each exposed face), one plane per face, so every piece stays convex. Each slope is the least of the drawn one and what keeps its face within the overhang target, so a crack across a steep face is a level floor under a 55° roof; a face that would need a slope past <span data-const="CRACK_STEEPEST"></span> (opening over cleft, each side) is not cracked from. A bottom, a face facing down past the target, or a face the boundary meets at less than <span data-const="GRAZE"></span>° (it would take off a skin) is not cracked from. Where two pieces meet, only what one does not cover of the other shows: where a crack ends against an uncracked line, and where a crack's two walls take different slopes. Cracks are planned on the masses, and each stone is cracked as soon as it is built, so a stone above beds on it cracked (resting where it can, bridging the rest); a weathered stone is not cracked. <b>Wiggle</b> walks a crack sideways in steps drawn in its range, each turning up to <span data-const="WIGGLE_TURN"></span>° off the line, pulled back so it ends where its line ends; within a step the crack's centre moves linearly, so its walls stay planes and the piece is cut into strips, one per step, near the crack. Not here yet, from the proposal: erosion, pulling junctions to facet edges, seams between stones, and two networks at once.</li>
       <li><b>What rests or is bridged is not painted.</b> Orange and red mark overhang past 55° and 65°, except where a downward face rests (on the ground, on a stone within <span data-const="LOOK"></span> mm below, or buried inside one) or is bridged (on a line between two of its stone's resting points at most Bridge apart), the rule a bottom is chosen by. A face not wholly resting is judged in triangles, split down to <span data-const="PIECE"></span> mm only where the answer changes (a weathered stone's faces, small already, whole).</li>
     </ol>
     <p class="hint"><b>Layered</b>, the first style: nine level layers, a handful of slabs in each. <b>Granite</b>: one layer through the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; Joint under zero, so they overlap into one irregular mass. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart. <b>Massive</b>: two layers parallel to the front, big stones. <b>Wall</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone.</p>
@@ -1112,7 +1112,9 @@ function rockSurface(C, seed, P) {
   const hold = P.bedding ? holding(M, C.joint) : null, plan = hold ? holdOrder(hold.holds, M) : { order: M.map((_, k) => k), cut: 0 };
   const count = { bedded: 0, nowhere: 0, cut: plan.cut };
   let ms = performance.now() - t00, vol = 0;
-  const polys = new Array(M.length).fill(null);   // the stones a crack may cut (not weathered ones)
+  // the cracks are planned on the masses (all known before any stone), and each stone is cracked as soon as it is built, so the
+  // stones above it bed on it cracked
+  const cplan = P.cracks > 0 ? crackPlan(M.map(m => m.poly), C, P, seed) : null, crackLines = [];
   for (const k of plan.order) {
     const m = M[k], t1 = performance.now();
     let base = null, footprints = [];
@@ -1128,18 +1130,14 @@ function rockSurface(C, seed, P) {
     const r = rockOf(m.poly, m.sp.id, seed, P, base, footprints), poly = r.poly;
     const vs = poly.flatMap(f => f.verts), lo = [0, 1, 2].map(i => Math.min(...vs.map(v => v[i]))), hi = [0, 1, 2].map(i => Math.max(...vs.map(v => v[i])));
     const wr = pickIn(P.weather, keyed(seed, 'weather', m.sp.id));   // each stone its own radius
-    surfs[k] = wr > 0 ? weathered(poly.map(f => ({ n: f.n, b: f.b })), lo, hi, wr) : surfOf(poly);
-    if (!(wr > 0)) polys[k] = poly;
-    ms += r.ms + performance.now() - t1; vol += volumeOf(poly); grid.add(poly);
+    if (wr > 0) { surfs[k] = weathered(poly.map(f => ({ n: f.n, b: f.b })), lo, hi, wr); vol += volumeOf(poly); grid.add(poly); }   // a weathered stone is not cracked
+    else if (cplan) {
+      const c = crackStone({ pieces: piecesOf(poly, cplan.net), outer: poly, key: k }, cplan, seed, P);
+      surfs[k] = { faces: c.faces, lines: c.lines }; vol += c.vol; grid.add(c.faces); crackLines.push(...c.traces);
+    } else { surfs[k] = surfOf(poly); vol += volumeOf(poly); grid.add(poly); }
+    ms += r.ms + performance.now() - t1;
   }
-  // cracks, once every stone is finished (a stone above rests on the one below before it is cracked; a crack under it is bridged)
-  let cracks = null;
-  if (P.cracks > 0) {
-    const t2 = performance.now(), plan = crackPlan(polys, C, P, seed);
-    plan.stones.forEach((st, k) => { if (!st) return; const r = crackStone({ ...st, key: k }, plan.active, seed, P); vol += r.vol - volumeOf(polys[k]); surfs[k] = { faces: r.faces, lines: r.lines }; });
-    cracks = { lines: plan.all.map(b => ({ segs: b.segs, on: plan.active.has(b.key) })), got: plan.got, total: plan.total, n: plan.active.size, of: plan.all.length };
-    ms += performance.now() - t2;
-  }
+  const cracks = cplan ? { lines: crackLines, got: cplan.got, total: cplan.total, n: cplan.active.size, of: cplan.all.length } : null;
   const stones = markRests(surfs, P.bridge);
   return { faces: stones.flatMap(st => st.faces), lines: stones.flatMap(st => st.lines), ms, vol, bed: hold ? count : null, cracks };
 }
@@ -1148,12 +1146,14 @@ function rockSurface(C, seed, P) {
 // along Thickness across it), in one, two or all three of those axes (Network: Planes, Columns, Blocks), each seed moved within the
 // Spacing's spread. Where two cells meet is a plane. Each stone is cut by the cells near it into convex pieces, and the boundaries'
 // traces on its exposed faces are the lines a crack can follow (a crack never runs from one stone into another). Cracks, a share of
-// the traces' length, picks connected boundaries, and each one picked is cut as a wedge: on each side the part kept is where the
+// the traces' length (measured on the masses, so the plan is known before any stone), picks connected boundaries, and each one picked is cut as a wedge: on each side the part kept is where the
 // distance from the boundary is at least t·(cleft − depth), depth below each exposed face, one plane per face, so every piece stays
 // convex and the bottom is a sharp V. Every slope of a crack is the least of its drawn one (Opening over Cleft) and what keeps its face
 // within the overhang target. A face facing down past the target, a bottom, or a face its boundary meets at less than GRAZE is not
 // cracked
 const NETWORK = { planes: C => [C.axis], columns: C => [C.fu, C.fv], blocks: C => [C.axis, C.fu, C.fv] };
+const WIGGLE_TURN = 30;   // degrees: the most a step of a crack's walk turns off its line
+const WIGGLE_LEAST = 0.5;   // mm: the shortest step
 const CRACK_STEEPEST = 3;   // the largest slope (opening over cleft, each side) a wall may take to stay within the target; past it, that face is not cracked
 function crackSeeds(C, P, seed) {
   const axes = NETWORK[P.network](C), sp = (P.spacing[0] + P.spacing[1]) / 2, spread = P.spacing[1] - P.spacing[0];
@@ -1218,7 +1218,7 @@ function crackPlan(polys, C, P, seed) {
       if (!isCell(f)) continue;
       const o = +f.role.slice(5); if (o < pc.s) continue;   // each boundary once, from its lower seed's side
       const tr = traceOf(f, outer); if (tr.length < 0.05) continue;
-      const b = { key: `${k}:${pc.s}:${o}`, k, a: pc.s, b: o, ...tr }; bounds.set(b.key, b); all.push(b);
+      const b = { key: `${k}:${pc.s}:${o}`, k, a: pc.s, b: o, face: f, ...tr }; bounds.set(b.key, b); all.push(b);
       for (const e of tr.ends) { const ek = k + '@' + e.k; (byEnd.get(ek) || byEnd.set(ek, []).get(ek)).push(b); }
     }
     stones.push({ pieces, outer, bounds });
@@ -1242,7 +1242,20 @@ function crackPlan(polys, C, P, seed) {
       }
     }
   }
-  return { stones, all, active, total, got };
+  // each crack's walk (Wiggle): steps drawn along the line's longest direction in its plane, each moving sideways by its length times
+  // the tangent of a turn drawn up to WIGGLE_TURN, then pulled back so it ends where it began (sideways 0 at both ends); its own stream
+  const walks = new Map();
+  for (const b of all) if (active.has(b.key)) {
+    const vs = b.face.verts; let T = [1, 0, 0], far = -1;
+    for (let i = 0; i < vs.length; i++) for (let j = i + 1; j < vs.length; j++) { const d = len(sub(vs[j], vs[i])); if (d > far) { far = d; T = unit(sub(vs[j], vs[i])); } }
+    const ss = vs.map(v => dot(T, v)), s0 = Math.min(...ss), s1 = Math.max(...ss), rw = keyed(seed, 'wiggle', b.key), steps = [];
+    if (P.wiggle[1] > 0) { let s = s0, w = 0; while (s < s1 - 1e-9) { const e = Math.min(s1, s + Math.max(WIGGLE_LEAST, pickIn(P.wiggle, rw))), w1 = w + (e - s) * Math.tan((2 * rw() - 1) * WIGGLE_TURN * DEG); steps.push({ s0: s, s1: e, w0: w, w1 }); s = e; w = w1; } }
+    if (steps.length <= 1) { walks.set(b.key, { T, steps: [{ s0, s1: Math.max(s1, s0 + 1e-6), w0: 0, w1: 0 }], reach: 0 }); continue; }
+    const end = steps[steps.length - 1].w1, at = x => end * (x - s0) / (s1 - s0);
+    for (const sp of steps) { sp.w0 -= at(sp.s0); sp.w1 -= at(sp.s1); }
+    walks.set(b.key, { T, steps, reach: Math.max(...steps.map(sp => Math.abs(sp.w1))) });
+  }
+  return { net, stones, all, active, walks, total, got };
 }
 // the least slope t ≥ t0 at which a wall off face nk, kept where (t·nk − m)·x ≤ …, faces within the target; null past CRACK_STEEPEST
 function wallSlope(nk, m, t0) {
@@ -1252,46 +1265,96 @@ function wallSlope(nk, m, t0) {
   let a = t0, b = CRACK_STEEPEST; for (let i = 0; i < 30; i++) { const mid = (a + b) / 2; if (ok(mid)) b = mid; else a = mid; }
   return b;
 }
-// one stone cracked: its faces (where two pieces meet, only what one does not cover of the other),
-// lines (no edge along an uncracked boundary) and volume
-function crackStone(st, active, seed, P) {
-  const parts = st.pieces.map(pc => {
-    let poly = pc.poly; const shut = [];
+// one stone cracked: its faces (where two pieces meet, only what one does not cover of the other; inside a piece, nothing), lines
+// (no edge along an uncracked boundary or inside a piece) and volume. A crack's centre follows its walk: within a step it moves
+// linearly sideways, so every wall stays a plane; near the crack a piece is cut into strips, one per step (the walls' slopes are the
+// same in every step, so neighbouring strips meet)
+function crackStone(st, plan, seed, P) {
+  const parts = [];
+  for (const pc of st.pieces) {
+    let cur = [pc.poly]; const shut = [];
     for (const f of pc.poly) {
       if (!isCell(f)) continue;
       const o = +f.role.slice(5), key = `${st.key}:${Math.min(pc.s, o)}:${Math.max(pc.s, o)}`;
-      if (!active.has(key)) { shut.push(f); continue; }
+      if (!plan.active.has(key)) { shut.push(f); continue; }
       const r = keyed(seed, 'crack-cut', key), cleft = pickIn(P.cleft, r), opening = pickIn(P.opening, r), m = mul(f.n, -1), c = -f.b;
-      for (const g of st.outer) {
-        if (!cuts(g, m)) continue;
-        const t = wallSlope(g.n, m, opening / 2 / cleft); if (t === null) continue;
-        const n = sub(mul(g.n, t), m), l = len(n);
-        poly = clip(poly, { n: mul(n, 1 / l), b: (t * (g.b - cleft) - c) / l, role: 'crack' });
-        if (!poly.length) break;
-      }
+      const wk = plan.walks.get(key), sg = pc.s < o ? 1 : -1, T = wk.T;   // the walk moves along the lower seed's side's normal
+      const slope = sp => sg * (sp.w1 - sp.w0) / (sp.s1 - sp.s0);
+      // each wall's slope off each face, the same in every step: the wall this side keeps (side +1) and the crack's far wall (−1),
+      // which this side keeps where the centre has walked onto it (the other side's own slope, so a centre crossing the boundary
+      // leaves no step)
+      const slopes = side => st.outer.map(g => {
+        if (!cuts(g, mul(m, side))) return null;
+        let t = opening / 2 / cleft;
+        for (const sp of wk.steps) { const tt = wallSlope(g.n, mul(add(m, mul(T, slope(sp))), side), t); if (tt === null) return null; t = tt; }
+        return t;
+      });
+      // a face either wall cannot take is cracked from by neither, so the parts made inside a piece meet exactly (and are hidden)
+      const near = slopes(1), far = slopes(-1); near.forEach((t, k) => { if (t === null || far[k] === null) near[k] = far[k] = null; });
+      // what this side keeps where the crack's centre is w0 + dw·(s − s0) toward the other side: past the centre, outside its near wall;
+      // between the boundary and the centre (when the centre has walked onto this side), inside its far wall
+      const constrain = (poly, sp) => {
+        const w0 = sg * sp.w0, dw = slope(sp), mc = add(m, mul(T, dw)), lc = len(mc), at = c - w0 + dw * sp.s0;
+        const walls = (q, ts, side) => { st.outer.forEach((g, k) => {
+          const t = ts[k]; if (t === null || !q.length) return;
+          const n = sub(mul(g.n, t), mul(mc, side)), l = len(n);
+          q = clip(q, { n: mul(n, 1 / l), b: (t * (g.b - cleft) - side * at) / l, role: 'crack' });
+        }); return q; };
+        if (Math.max(-w0, -(w0 + dw * (sp.s1 - sp.s0))) <= 1e-9) return [walls(poly, near, 1)].filter(q => q.length);   // the centre stays off this side
+        const out = walls(clip(poly, { n: mul(mc, -1 / lc), b: -at / lc, role: 'inner' }), near, 1);
+        const inside = clip(poly, { n: mul(mc, 1 / lc), b: at / lc, role: 'inner' });
+        return [out, inside.length ? walls(inside, far, -1) : []].filter(q => q.length);
+      };
+      if (wk.steps.length === 1) { cur = cur.flatMap(p => constrain(p, wk.steps[0])); continue; }
+      const R = wk.reach + CRACK_STEEPEST * cleft;   // past this from the boundary no wall reaches
+      cur = cur.flatMap(p => {
+        const out = [], core = clip(p, { n: f.n, b: f.b - R, role: 'inner' }), band = clip(p, { n: m, b: R - f.b, role: 'inner' });
+        if (core.length) out.push(core);
+        wk.steps.forEach((sp, i) => {
+          let q = band;
+          if (i > 0) q = clip(q, { n: mul(T, -1), b: -sp.s0, role: 'inner' });
+          if (i < wk.steps.length - 1 && q.length) q = clip(q, { n: T, b: sp.s1, role: 'inner' });
+          if (q.length) out.push(...constrain(q, sp));
+        });
+        return out;
+      });
     }
-    return { s: pc.s, poly: polyFaces(poly), shut };
-  });
-  const bySeed = new Map(parts.map(p => [p.s, p]));
+    for (const poly of cur) parts.push({ s: pc.s, poly: polyFaces(poly), shut });
+  }
+  // inside a piece its parts meet exactly: hidden. Where two pieces meet, what of one the other does not cover shows: where a crack
+  // ends against an uncracked boundary, and where a crack's two walls take different slopes
+  const internal = isCell, planeKey = f => { const lead = f.n.find(x => Math.abs(x) > 1e-6), sgn = Math.sign(lead), q = x => Math.round(x * sgn * 1e4); return [...f.n.map(q), q(f.b)].join(','); };   // a plane, either facing
+  const byPlane = new Map(), box = new Map(); for (const p of parts) for (const f of p.poly) if (internal(f)) { const k = planeKey(f); (byPlane.get(k) || byPlane.set(k, []).get(k)).push(f); box.set(f, [0, 1, 2].map(i => [Math.min(...f.verts.map(v => v[i])), Math.max(...f.verts.map(v => v[i]))])); }
+  const apart = (a, b) => a.some((r, i) => r[1] < b[i][0] - 1e-6 || b[i][1] < r[0] - 1e-6);
   const faces = [], lines = [];
   for (const p of parts) for (const f of p.poly) {
-    if (!isCell(f)) { faces.push(f); continue; }
-    // where two pieces meet, what of one the other does not cover shows: where a crack ends against an uncracked boundary, and
-    // where a crack's two walls take different slopes
-    const o = +f.role.slice(5), q = bySeed.get(o), other = q && q.poly.find(g => g.role === 'cell:' + p.s);
-    for (const piece of uncovered(f, other)) faces.push(piece);
+    if (f.role === 'inner') continue;
+    if (!internal(f)) { faces.push(f); continue; }
+    let rest = [f];
+    for (const g of byPlane.get(planeKey(f))) if (rest.length && dot(g.n, f.n) < 0 && !apart(box.get(f), box.get(g))) rest = rest.flatMap(x => uncovered(x, g));
+    faces.push(...rest);
   }
-  for (const p of parts) for (const f of p.poly) {
-    if (isCell(f)) continue;
-    f.verts.forEach((a, i) => { const b = f.verts[(i + 1) % f.verts.length]; if (!p.shut.some(g => onPlane(a, g) && onPlane(b, g))) lines.push(a, b); });
+  for (const p of parts) {
+    const flat = [...p.shut, ...p.poly.filter(g => g.role === 'inner')];
+    for (const f of p.poly) {
+      if (isCell(f) || f.role === 'inner') continue;
+      f.verts.forEach((a, i) => { const b = f.verts[(i + 1) % f.verts.length]; if (!flat.some(g => onPlane(a, g) && onPlane(b, g))) lines.push(a, b); });
+    }
   }
-  return { faces, lines, vol: parts.reduce((t, p) => t + volumeOf(p.poly), 0) };
+  // each boundary's trace on the stone as built, for the Crack lines view: cut or not
+  const traces = [];
+  for (const pc of st.pieces) for (const f of pc.poly) if (isCell(f) && +f.role.slice(5) > pc.s) traces.push({ segs: traceOf(f, st.outer).segs, on: plan.active.has(`${st.key}:${pc.s}:${f.role.slice(5)}`) });
+  return { faces, lines, traces, vol: parts.reduce((t, p) => t + volumeOf(p.poly), 0) };
 }
 // a face less the coincident face of the other side (both convex): convex pieces, seen from the face's own side
 function uncovered(f, g) {
   if (!g) return [f];
   const u = perp(f.n), v = cross(f.n, u), to2 = p => [dot(p, u), dot(p, v)], h = dot(f.n, f.verts[0]);
   const A = hull2(f.verts.map(to2)), B = hull2(g.verts.map(to2)), out = [];
+  // quick answers: apart (nothing covered), or the same polygon (all of it)
+  const box = P2 => [0, 1].map(i => [Math.min(...P2.map(p => p[i])), Math.max(...P2.map(p => p[i]))]), ba = box(A), bb = box(B);
+  if ([0, 1].some(i => ba[i][1] <= bb[i][0] + 1e-6 || bb[i][1] <= ba[i][0] + 1e-6)) return [f];
+  if (A.length === B.length && A.every(p => B.some(q => Math.abs(p[0] - q[0]) < 1e-5 && Math.abs(p[1] - q[1]) < 1e-5))) return [];
   let rest = A;
   for (let i = 0; i < B.length && rest.length >= 3; i++) {
     const p = B[i], q = B[(i + 1) % B.length], n = [q[1] - p[1], -(q[0] - p[0])], c = n[0] * p[0] + n[1] * p[1];
@@ -1311,7 +1374,7 @@ const PRESETS = {   // ranges are [lo, hi]
   wall: { height: [35.5, 36], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0] },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['massive', 'Massive', 'Large irregular masses in two layers parallel to the front, broad faces, uneven joints'], ['wall', 'Wall', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
-const DEFAULTS = { style: 'layered', ...PRESETS.layered, squares: 1, facets: [20, 28], chamfered: [80, 100], rtilt: [0, 9], sink: [1.5, 3], weather: [0, 0], bedding: true, bridge: 15, cracks: 0, network: 'blocks', spacing: [6, 10], branching: 25, opening: [0.8, 1.2], cleft: [1.5, 3], draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, crackLines: false, lines: true };
+const DEFAULTS = { style: 'layered', ...PRESETS.layered, squares: 1, facets: [20, 28], chamfered: [80, 100], rtilt: [0, 9], sink: [1.5, 3], weather: [0, 0], bedding: true, bridge: 15, cracks: 0, network: 'blocks', spacing: [6, 10], branching: 25, opening: [0.8, 1.2], cleft: [1.5, 3], wiggle: [0, 0], draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, crackLines: false, lines: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -1373,11 +1436,12 @@ const GROUPS = [
     R_('spacing', 'Spacing', 2, 30, 0.5, MM, 'How far apart the network’s lines are: its seeds lie on a grid spaced by the middle of this range, each moved anywhere within its spread. A centre and a spread, not drawn per crack (as Order reads Width).'),
     P_('branching', 'Branching', 0, 100, 1, '%', 'The chance a crack, where it could carry on along two lines, takes both.'),
     R_('opening', 'Opening', 0.2, 3, 0.05, MM, 'How wide each crack opens at the surface, drawn for each: at least this wide, wider where a wall needs it to stay within the overhang target (a crack across a steep face: a level floor under a 55° roof). A gap within one stone (Joint is the gap between two).'),
-    R_('cleft', 'Cleft', 0.3, 5, 0.1, MM, 'How deep each crack goes into the stone from its surface, drawn for each; there it closes to a sharp V.')] },
+    R_('cleft', 'Cleft', 0.3, 5, 0.1, MM, 'How deep each crack goes into the stone from its surface, drawn for each; there it closes to a sharp V.'),
+    R_('wiggle', 'Wiggle', 0, 10, 0.1, MM, `How long each step of a crack’s random walk is, drawn for each step (at least ${WIGGLE_LEAST} mm; 0 keeps cracks straight). Each step turns up to ${WIGGLE_TURN}° off the line, and the walk is pulled back so the crack ends where its line ends.`)] },
 ];
 const CHECKS = ['ghost', 'layersOn', 'spinesOn', 'crackLines', 'lines'];
 const CLIFF_KEYS = ['squares', ...Object.keys(PRESETS.massive)];
-const ROCK_KEYS = ['facets', 'chamfered', 'rtilt', 'sink', 'weather', 'bedding', 'bridge', 'cracks', 'network', 'spacing', 'branching', 'opening', 'cleft'];
+const ROCK_KEYS = ['facets', 'chamfered', 'rtilt', 'sink', 'weather', 'bedding', 'bridge', 'cracks', 'network', 'spacing', 'branching', 'opening', 'cleft', 'wiggle'];
 const pick = keys => Object.fromEntries(keys.map(k => [k, state[k]]));
 const same = (a, b) => String(a) === String(b);   // a range is compared by its ends
 const edited = () => Object.keys(PRESETS[state.style]).some(k => !same(state[k], PRESETS[state.style][k]));
@@ -1809,7 +1873,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') { setSeed(state.seed + 1); e.preventDefault(); }
 });
 // the page's prose shows the constants from the code, never a copy of them
-document.querySelectorAll('[data-const]').forEach(e => { const k = e.dataset.const, pc = k.endsWith('%'), v = { LOOK, RIM, PIECE, GRAZE, CRACK_STEEPEST }[pc ? k.slice(0, -1) : k]; e.textContent = pc ? Math.round(v * 100) + '%' : String(v); });
+document.querySelectorAll('[data-const]').forEach(e => { const k = e.dataset.const, pc = k.endsWith('%'), v = { LOOK, RIM, PIECE, GRAZE, CRACK_STEEPEST, WIGGLE_TURN }[pc ? k.slice(0, -1) : k]; e.textContent = pc ? Math.round(v * 100) + '%' : String(v); });
 function setSeed(s) { state.seed = Math.max(0, s | 0); syncUI(); update(); }
 function syncUI() {
   if (!shows.length) shows.push(styleChip(), ...GROUPS.map(groupChip));
