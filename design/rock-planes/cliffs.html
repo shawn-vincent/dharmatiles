@@ -119,6 +119,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .vbtn:hover, .vbtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
 .vpanel { position: absolute; right: 10px; top: 48px; display: grid; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 12px 32px -12px rgb(26 23 20 / .5); z-index: 2; }
 .vpanel[hidden] { display: none; }
+.zooms { position: absolute; right: 10px; bottom: 10px; display: grid; gap: 6px; }
+.zooms .vbtn { position: static; }
 .chip { position: absolute; left: 10px; top: 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font: 600 12px var(--f-code); box-shadow: 0 8px 24px -12px rgb(26 23 20 / .45); }
 .legend { position: absolute; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font-size: 12px; max-width: calc(100% - 20px); }
 .legend[hidden] { display: none; }
@@ -173,7 +175,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 <div class="wrap">
   <header>
     <h1>Cliffs from Spines</h1>
-    <p class="lede">A cliff as a population of rock masses. The envelope is cut into layers; spines are thrown in each, Width and Thickness apart; each grows until it meets its neighbours or the envelope. Every mass then becomes a faceted stone. Granite wall, Columns, Layered, Massive and Stone wall are settings of one engine; Random picks one of them.</p>
+    <p class="lede">A cliff as a population of rock masses. The envelope is cut into layers; spines are thrown in each, Width and Thickness apart; each grows until it meets its neighbours or the envelope. Every mass then becomes a faceted stone. Granite, Columns, Layered, Massive and Wall are settings of one engine; Random picks one of them.</p>
   </header>
 
   <div class="bar params" id="params" role="toolbar" aria-label="Settings">
@@ -188,6 +190,10 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
         <button class="vbtn" id="vopts" aria-label="View options" aria-expanded="false" aria-controls="vpanel" title="View options">
           <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M1.5 10s3.2-5.5 8.5-5.5S18.5 10 18.5 10s-3.2 5.5-8.5 5.5S1.5 10 1.5 10Z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="10" r="2.6" fill="currentColor"/></svg>
         </button>
+        <div class="zooms">
+          <button class="vbtn" id="zin" aria-label="Zoom in" title="Zoom in"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M10.5 7.5v6M7.5 10.5h6"/></svg></button>
+          <button class="vbtn" id="zout" aria-label="Zoom out" title="Zoom out"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6"/></svg></button>
+        </div>
         <div class="vpanel" id="vpanel" hidden>
           <span class="lbl">Projection</span>
           <div class="seg" id="view" role="group" aria-label="Projection">
@@ -221,13 +227,13 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <h2>How a cliff is built</h2>
     <ol>
       <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, <b>Height</b> tall and <b>Depth</b> deep, standing at the back of the square. Its bottom, its back and its two ends (the tile's edges) are <b>crisp</b>: no mass crosses them. Its top and its front are <b>fuzzy</b>: each mass draws how far short of them it stops, up to <b>Fuzz</b>, from a smooth field along the wall (two thirds) and its own draw (one third), so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
-      <li><b>Spines</b> run one <b>Direction</b>: <b>Through</b> the wall from back to front (so the stones show their ends), <b>Along</b> it (slabs) or <b>Up</b> (columns, or with many layers, courses). The envelope is cut across that direction into <b>Layers</b>, the outer faces of the first and last at the envelope's ends; where two layers meet is turned and moved at random by up to half of <b>Wander</b>. Layers organise the spines and never cut a stone. In each layer in turn, spines are started by dart throwing: a dart is a point in the layer, its direction turned at random by up to <b>Wander</b>, and its spine runs back to the layer's near face and on to its far face, and on through each further layer with chance <b>Span</b>, so breaks stagger. Its ends lie on layer faces inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is clear of every spine already in the layer by <b>Width</b> horizontally across the layer and <b>Thickness</b> the other way across it (vertically for Through and Along, front to back for Up), each the two ends' sizes together; until 80 darts in a row miss, the layer is not full. <b>Order</b> draws the darts' places from a grid instead, Width by Thickness across the layer, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is jittered. Each end's size varies within <b>Vary</b>. One spine is one stone.</li>
+      <li><b>Spines</b> run one <b>Direction</b>: <b>Up</b> (columns, or with many layers, courses), <b>Through</b> the wall from back to front (so the stones show their ends) or <b>Along</b> it (slabs). The envelope is cut across that direction into <b>Layers</b>, the outer faces of the first and last at the envelope's ends; where two layers meet is turned and moved at random by up to half of <b>Wander</b>. Layers organise the spines and never cut a stone. In each layer in turn, spines are started by dart throwing: a dart is a point in the layer, its direction turned at random by up to <b>Wander</b>, and its spine runs back to the layer's near face and on to its far face, and on through each further layer with chance <b>Span</b>, so breaks stagger. Its ends lie on layer faces inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is clear of every spine already in the layer by <b>Width</b> horizontally across the layer and <b>Thickness</b> the other way across it (vertically for Through and Along, front to back for Up), each the two ends' sizes together; until 80 darts in a row miss, the layer is not full. <b>Order</b> draws the darts' places from a grid instead, Width by Thickness across the layer, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is jittered. Each end's size varies within <b>Vary</b>. One spine is one stone.</li>
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share a layer (they meet end to end) split where two layers between them meet, so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b> sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge); each split adds a random part that grows with Vary. It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
-      <li><b>Bedding</b> (on by default, under Rocks): a stone whose underside overhangs past 65° (red; orange is fine) is made to stand on something, at construction, and never leaves its envelope. Stones are bedded from the lowest up, each on what is already there. A stone near the ground (within 2 mm) gets a <b>foot</b>: its lowest 1.5 mm (or up to the top of any overhanging face that starts there, such as a chamfer along its ground edge, at most 6 mm) extended straight down to the ground, so its ground edges are sharp (no chamfer under it) and its bottom is flat on the ground. A small gap (up to 2 mm) is closed by stretching the stone down by the median of its red points' gaps to what is that near below them, so it sits on what is near without sinking into it, its top held; stretching also turns every face toward upright, so some faces need no drop at all (it holds the stone's footprint, so it stays in the envelope). Points further off get <b>corbels</b> (as the cliff element's support cone): a corbel is the hull of some loose points and their ends, each point swept along one direction within 55° of straight down until it meets a bedded stone or the ground, so each wall is parallel to the sweep (leaning no more than 55°) or rests on what the points reach. A corbel lands on one thing, the ground or one stone, so its bottom rests on it and never hangs between two. A stone gets up to six, each taking the direction and the landing that hold up the most of the points still loose: straight down under a slab (bridging a joint below), slanted back under a lip. A corbel is short: a point runs no further than its stone is tall (at least 4 mm, at most 10 mm), and never out of its stone's envelope, which also cuts every corbel; a point nothing holds within that is left as it is, since a long strut across the face reads as a sliver, not a stone. So a cantilever is held up by the stone beside or below it instead of a column to the ground, and the corbel holds up the stones above in turn.</li>
-      <li><b>Held faces are not painted.</b> Orange and red mark overhang past 55° and 65°, except where a face is held up: a face on the ground, or a face buried inside a foot, a corbel or another stone, or a bridge: a downward face is split into triangles, and a triangle with at least two corners resting on something (a stone, a corbel or the ground, within 0.15 mm below or inside it) spans between them.</li>
-      <li><b>Rocks.</b> Each mass becomes a stone: every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
+      <li><b>Rocks.</b> Each mass becomes a stone, printable by construction. First its mass gets a flat <b>bottom</b> just above its lowest point (at most 1 mm up, or a fifth of its height), and every underside flatter than 65° from upright is cut away by a flare rising from that bottom at 65°, so the bottom is the only face that overhangs past the limit. Then every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. The bottom is kept as it is, and no plane, crown, facet or chamfer is made that overhangs past 65°, so a little roughness under a stone stays in the printable range (between 55° and 65°: orange). <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
+      <li><b>Bedding</b> (on by default, under Rocks): the bottom is then the only part of a stone that needs holding, so bedding only sets the bottom on something. Stones are finished in the order of their tops (what holds a stone lies below its bottom, so it is finished first), and each is stretched down, its top held, by the widest gap under its bottom within 6 mm, to the finished stones or the ground (a lip out over nothing that near is left as it is); so its whole bottom rests on what is below it, a little into it where that is uneven. Stretching only turns its other faces toward upright, and it holds the footprint, so the stone stays printable and in its envelope; it changes only the stone's size and shape.
+      <li><b>Held faces are not painted.</b> Orange and red mark overhang past 55° and 65°, except where a face is held up: a face on the ground, or a face buried inside another stone, or a bridge: a downward face is split into triangles, and a triangle with at least two corners resting on something (a stone or the ground, within 0.15 mm below or inside it) spans between them.</li>
     </ol>
-    <p class="hint"><b>Granite wall</b>, the first style: one layer through the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; Joint under zero, so they merge into one irregular mass. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart. <b>Layered</b>: nine level layers, a handful of slabs in each. <b>Massive</b>: two layers parallel to the front, big stones. <b>Stone wall</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone.</p>
+    <p class="hint"><b>Layered</b>, the first style: nine level layers, a handful of slabs in each. <b>Granite</b>: one layer through the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; Joint under zero, so they merge into one irregular mass. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart. <b>Massive</b>: two layers parallel to the front, big stones. <b>Wall</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone.</p>
     <p class="hint">Not here yet, from the design: envelopes with concavities and holes (each mass is clipped by a box envelope), curved or irregular ends, twisting sections, and joint faces kept flush (a rock's sink opens every joint). Every job draws from its own stream (the planes, each plane's starts, each spine, each end, the fuzz, each joint, each rock), so one control never reshuffles another. Overhang paints orange past 55° and red past 65°.</p>
   </section>
 </div>
@@ -325,7 +331,7 @@ const LEAN = 1.5;   // a turned facet may dip no deeper into the stone than at i
 // so the stone fills its cell; Facets planes are spread over the faces (spaced by area), each its face's plane domed away from the
 // face's touch point, turned by Tilt, sunk half to all of Sink, and moved out past every crown's patch; then Chamfered of the edges'
 // length and of the corners are cut, each half to all of Sink, never past a touch point
-function stoneOf(cell, seed, P) {
+function stoneOf(cell, seed, P, fixed = new Set(), ground = new Set()) {
   const verts = dedupe(cell.flatMap(f => f.verts), 1e-6), support = n => { let m = -Infinity; for (const v of verts) m = Math.max(m, dot(n, v)); return m; };
   const lo = [0, 1, 2].map(i => Math.min(...verts.map(v => v[i]))), hi = [0, 1, 2].map(i => Math.max(...verts.map(v => v[i])));
   const size = (hi[0] - lo[0] + hi[1] - lo[1] + hi[2] - lo[2]) / 3, sink = P.sink / 100 * size, cham = sink / 2, lean = LEAN / 100 * size;
@@ -338,14 +344,17 @@ function stoneOf(cell, seed, P) {
     const fc = centroidOf(f.verts), p = add(fc, mul(sub(sampleFace(f, 1, rc)[0], fc), 0.35)), fr = Math.max(...f.verts.map(v => len(sub(v, fc))));
     let room = Infinity; f.verts.forEach((A, i) => { const e = sub(f.verts[(i + 1) % f.verts.length], A), t = clamp(dot(sub(p, A), e) / dot(e, e), 0, 1); room = Math.min(room, len(sub(p, add(A, mul(e, t))))); });
     touch[fi] = { p, fr };
-    const n = turn(f.n, P.rtilt, rc), u = perp(n), v = cross(n, u), rho = room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
+    // a fixed face (it rests on something, or holds something up) stays as it is, and its middle is kept from facets
+    if (fixed.has(fi)) { for (const v of f.verts) guards.push(add(fc, mul(sub(v, fc), 0.85))); return; }
+    let n = turn(f.n, P.rtilt, rc); if (steep(n)) n = f.n;   // never turned past the overhang limit
+    const u = perp(n), v = cross(n, u), rho = room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
     for (let j = 0; j < 6; j++) { const ph = ph0 + j * Math.PI / 3; guards.push(add(p, add(mul(u, rho * Math.cos(ph)), mul(v, rho * Math.sin(ph))))); }
     planes.push({ n, b: dot(n, p) });
   });
   const points = touch.filter(Boolean).map(t => t.p);
   const through = (n, b, keep = guards) => { for (const g of keep) b = Math.max(b, dot(n, g)); return b; };
   // facets: spots spread by area, kept apart (the spacing loosened a little until Facets are placed)
-  const spots = order(cell.flatMap((f, fi) => touch[fi] ? sampleFace(f, Math.ceil(faceArea(f) * 0.5), stream(seed, 100 + fi)).map(p => ({ p, fi })) : []), 4), taken = [];
+  const spots = order(cell.flatMap((f, fi) => touch[fi] && !fixed.has(fi) ? sampleFace(f, Math.ceil(faceArea(f) * 0.5), stream(seed, 100 + fi)).map(p => ({ p, fi })) : []), 4), taken = [];
   for (let pass = 0, g = gap; pass < 6 && taken.length < P.facets; pass++, g *= 0.85)
     for (const s of spots) { if (taken.length >= P.facets) break; if (!s.used && taken.every(t => len(sub(t.p, s.p)) >= g)) { s.used = true; taken.push(s); } }
   taken.forEach((s, i) => {
@@ -357,7 +366,7 @@ function stoneOf(cell, seed, P) {
     const u = perp(n0), w = add(mul(u, Math.cos(ph)), mul(cross(n0, u), Math.sin(ph))), at = sc => unit(add(mul(n0, Math.cos(sc * th)), mul(w, Math.sin(sc * th))));
     const extra = sc => support(at(sc)) - dot(at(sc), p0) - allow;
     let sc = 1; if (extra(1) > 0) { if (extra(0) > 0) sc = 0; else { let a = 0, b = 1; for (let j = 0; j < 12; j++) { const m = (a + b) / 2; if (extra(m) > 0) b = m; else a = m; } sc = a; } }
-    const n = at(sc); planes.push({ n, b: through(n, dot(n, p0) - depth) });
+    const n = at(sc); if (!steep(n)) planes.push({ n, b: through(n, dot(n, p0) - depth) });   // a facet past the overhang limit is not made
   });
   // a facet whose corners poke out of the cell is sunk by how far they poke, as far as the patches let it
   { let q = boxPoly(sub(lo, [5, 5, 5]), add(hi, [5, 5, 5])); planes.forEach((pl, i) => { q = clip(q, { ...pl, role: i }); });
@@ -368,28 +377,30 @@ function stoneOf(cell, seed, P) {
   poly = polyFaces(poly);
   // chamfers on what the facets leave: edges by length, corners by count, in a drawn order, each taken while it bites
   const vid = v => verts.findIndex(w => len(sub(w, v)) < 1e-6), edges = new Map(), at = new Map();
-  cell.forEach(f => f.verts.forEach((a, i) => {
-    const b = f.verts[(i + 1) % f.verts.length], ia = vid(a), ib = vid(b), key = Math.min(ia, ib) + '-' + Math.max(ia, ib);
-    (edges.get(key) || edges.set(key, { a, b, fn: [] }).get(key)).fn.push(f.n);
-    for (const j of [ia]) (at.get(j) || at.set(j, []).get(j)).push(f.n);
+  cell.forEach((f, fi) => f.verts.forEach((a, i) => {
+    const b = f.verts[(i + 1) % f.verts.length], ia = vid(a), ib = vid(b), key = Math.min(ia, ib) + '-' + Math.max(ia, ib), e = edges.get(key) || edges.set(key, { a, b, fn: [], fs: [] }).get(key);
+    e.fn.push(f.n); e.fs.push(fi);
+    const c = at.get(ia) || at.set(ia, { fn: [], fs: [] }).get(ia); c.fn.push(f.n); c.fs.push(fi);
   }));
+  const onGround = fs => fs.some(fi => ground.has(fi));   // an edge or corner on the ground stays sharp
   const cuts = [], cut = (anchors, fn, key) => {
     let most = 0; const pls = anchors.map(([p, n], i) => {
       const rr = keyed(seed, 'chamfer', key, i), depth = cham * (1 + rr());
-      const tries = chamferTurns(n, fn, P.rtilt, rr).map(m => { const top = reach(poly, m), b = through(m, top - depth, points); return { n: m, b, bite: top - b }; });
+      const tries = chamferTurns(n, fn, P.rtilt, rr).filter(m => !steep(m)).map(m => { const top = reach(poly, m), b = through(m, top - depth, points); return { n: m, b, bite: top - b }; });
+      if (!tries.length) return null;   // every way this chamfer could turn faces down past the overhang limit: none
       const t = tries.find(t => t.bite >= cham - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x); most = Math.max(most, t.bite); return t;
-    });
+    }).filter(Boolean);
     if (most < cham - 1e-6) return false; cuts.push(...pls); return true;
   };
-  const elist = [...edges].filter(([, e]) => e.fn.length === 2), total = elist.reduce((t, [, e]) => t + len(sub(e.b, e.a)), 0);
+  const elist = [...edges].filter(([, e]) => e.fn.length === 2 && !onGround(e.fs)), total = elist.reduce((t, [, e]) => t + len(sub(e.b, e.a)), 0);
   let got = 0;
   for (const [key, e] of order(elist, 6)) {
     const L = len(sub(e.b, e.a)); if (got + L / 2 > total * P.chamfered / 100 + 1e-9) continue;
     const m = Math.max(1, Math.round(L / (1.5 * gap))), n = unit(add(e.fn[0], e.fn[1]));
     if (cut(Array.from({ length: m }, (_, j) => [add(e.a, mul(sub(e.b, e.a), (j + 0.5) / m)), n]), e.fn, 'e' + key)) got += L;
   }
-  const clist = [...at].filter(([, fn]) => fn.length >= 3); let want = Math.round(clist.length * P.chamfered / 100);
-  for (const [j, fn] of order(clist, 7)) { if (want <= 0) break; if (cut([[verts[j], unit(fn.reduce(add, [0, 0, 0]))]], fn, 'c' + j)) want--; }
+  const clist = [...at].filter(([, c]) => c.fn.length >= 3 && !onGround(c.fs)); let want = Math.round(clist.length * P.chamfered / 100);
+  for (const [j, c] of order(clist, 7)) { if (want <= 0) break; if (cut([[verts[j], unit(c.fn.reduce(add, [0, 0, 0]))]], c.fn, 'c' + j)) want--; }
   for (const pl of cuts) poly = clip(poly, { ...pl, role: 'chamfer' });
   return { poly: polyFaces(poly), lo, hi };
 }
@@ -536,17 +547,6 @@ function nearest(p0, p1, q0, q1) {
   }
   return [s, t, add(p0, mul(d1, s)), add(q0, mul(d2, t))];
 }
-// the convex hull of a few points, as planes (every triple whose plane has all points on one side; few points, so plain is fast)
-function hullPlanes(pts) {
-  const out = [], c = centroidOf(pts);
-  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) for (let k = j + 1; k < pts.length; k++) {
-    let n = cross(sub(pts[j], pts[i]), sub(pts[k], pts[i])); const l = len(n); if (l < 1e-6) continue; n = mul(n, 1 / l);
-    if (dot(n, sub(pts[i], c)) < 0) n = mul(n, -1);
-    const b = dot(n, pts[i]); if (pts.some(p => dot(n, p) > b + 1e-6)) continue;
-    if (!out.some(q => samePlane(q, { n, b }))) out.push({ n, b });
-  }
-  return out;
-}
 const polyFaces = poly => poly.filter(f => f.verts.length >= 3);
 function bigSolid(planes) { let p = boxPoly([-200, -200, -200], [200, 200, 200]); for (const pl of planes) { p = clip(p, { ...pl, role: 'hull' }); if (!p.length) break; } return polyFaces(p); }
 
@@ -674,108 +674,40 @@ function cliff(seed, P) {
 }
 
 // a mass's stone, built once per mass, seed and rock settings
-const kept = new Map();
-function rockOf(m, seed, P) {
-  const key = [seed, m.sp.id, m.hull.map(f => f.n.join() + ',' + f.b).join(';'), P.facets, P.chamfered, P.rtilt, P.sink, P.weather].join('/');
-  let r = kept.get(key);
-  if (!r) {
-    const t0 = performance.now(), st = stoneOf(m.poly, Math.floor(keyed(seed, 'rock', m.sp.id)() * 2147483647), P);
-    const flat = surfOf(st.poly);
-    r = { flat, surf: P.weather > 0 ? weathered(st.poly.map(f => ({ n: f.n, b: f.b })), st.lo, st.hi, P.weather) : flat, volume: volumeOf(st.poly), ms: performance.now() - t0 };
-    kept.set(key, r); if (kept.size > 600) kept.delete(kept.keys().next().value);
-  }
-  return r;
-}
-const SHADES = ['#B9B4A8', '#A39E92', '#CFCABE', '#9A9A94', '#C4BBA9', '#AEB0AA', '#D6D1C6', '#B0A796'];
-function massSurface(masses) {
-  const faces = [], lines = [];
-  markHeld(masses.map(m => m.surf)).forEach((st, k) => { const shade = SHADES[k % SHADES.length]; for (const f of st.faces) faces.push({ ...f, shade }); for (const p of st.lines) lines.push(p); });
-  return { faces, lines };
-}
-// Bedding: a stone whose underside overhangs past the limit (red) is made to stand on something, at construction, and never leaves its
-// envelope. Stones are bedded from the lowest up, each on the ground and the stones bedded before it, in three steps:
-//   a foot: a stone within SMALL of the ground has its lowest FOOT mm (or up to the top of a chamfer that starts there, at most FOOT_MAX)
-//     extended straight down to the ground, so its ground edges are sharp and its bottom is flat;
-//   a stretch: the stone is stretched down, its top held: a steep red face only as far as turns it to the limit (if that is small), a
-//     flat one by the median of its points' gaps to what is within SMALL below (sitting on what is near, not sinking into it); the
-//     bottom drops at most SMALL and never below the ground, and the footprint holds, so it stays in its envelope;
-//   corbels: the points of red faces still on nothing are swept along one of SWEEPS (within 55° of straight down) until each meets
-//     the ground or a stone, at most the stone's height (CORBEL_MIN to CORBEL_MAX) and inside its envelope. A corbel is the hull of a
-//     set of points and their ends that land on one thing (so its bottom rests on it): each wall is parallel to the sweep or rests on
-//     what was met. Up to CORBELS per stone, each the sweep and landing holding the most points still loose; one or two points get a
-//     post (a small square around each, swept the same way). A point nothing holds within reach is left: a long strut is a sliver
+// ---------- printable by construction, and bedding ----------
+// Every stone is printable by construction: its mass's outline gets a flat bottom just above its lowest point (DROP), and is cut by a
+// cone rising from that bottom at the steepest overhang allowed (LIMIT, CONE sides), so every underside flatter than that becomes a
+// LIMIT face and the bottom is the only face facing down past it. The stone builder keeps the bottom where it is and never makes a
+// face past LIMIT. Bedding then only has to set the bottom on something: stones are finished in the order of their tops, and each is grown
+// (stretched down, its top held) by the widest of its bottom's gaps to the finished stones or the ground below (as far as REACH), so
+// it sits on what is there, a little into it where that is uneven; stretching only turns its other faces toward upright. It holds the footprint, so it stays in its envelope
 const OVER = 55, LIMIT = 65, SIN_OVER = Math.sin(OVER * DEG), SIN_LIMIT = Math.sin(LIMIT * DEG);   // the overhang target, and the steepest allowed
-const SMALL = 2, FOOT = 1.5, FOOT_MAX = 6, CORBEL_MIN = 4, CORBEL_MAX = 10, CORBELS = 6, POST = 0.25;   // mm, and how many
-const SWEEPS = (() => { const out = [[0, 0, -1]]; for (const a of [30, OVER - 1]) for (let k = 0; k < 6; k++) { const ph = Math.PI * (k + (a === 30 ? 0 : 0.5)) / 3; out.push([Math.sin(a * DEG) * Math.cos(ph), Math.sin(a * DEG) * Math.sin(ph), -Math.cos(a * DEG)]); } return out; })();
-const HULL = 20, HULL_DIRS = fib(HULL);   // a hull of points is made from at most this many (the furthest along HULL_DIRS): it is cubic in them
-// the convex hull of some points, cut by an envelope, as faces (none if the points are too few or flat)
-function hullSolid(pts, env) {
-  if (pts.length > HULL) pts = dedupe(HULL_DIRS.map(n => pts.reduce((m, v) => dot(n, v) > dot(n, m) ? v : m)), 1e-6);
-  const hp = pts.length >= 4 ? hullPlanes(pts) : [];
-  return hp.length >= 4 ? bigSolid([...hp, ...env]) : [];
+const steep = n => n[2] < -SIN_LIMIT - 1e-9;   // facing down past the limit: red
+const DROP = 1, CONE = 16, REACH = 6, HELD = 0.15;   // mm (the bottom at most a fifth of the way up), cone sides, mm, mm
+const zRange = faces => { let lo = Infinity, hi = -Infinity; for (const f of faces) for (const v of f.verts) { if (v[2] < lo) lo = v[2]; if (v[2] > hi) hi = v[2]; } return [lo, hi]; };
+const CONE_DIRS = Array.from({ length: CONE }, (_, j) => { const ph = 2 * Math.PI * j / CONE, c = Math.cos(LIMIT * DEG); return [c * Math.cos(ph), c * Math.sin(ph), -SIN_LIMIT]; });
+// a mass's outline made printable: { poly, bottom } (the bottom face's index)
+function printable(cell) {
+  const [lo, hi] = zRange(cell), zb = lo + Math.min(DROP, (hi - lo) / 5);
+  let poly = clip(cell, { n: [0, 0, -1], b: -zb, role: 'bottom' });
+  const base = poly.find(f => f.role === 'bottom').verts;
+  const flare = h => { const l = Math.hypot(h[0], h[1]), c = Math.cos(LIMIT * DEG) / l, n = [h[0] * c, h[1] * c, -SIN_LIMIT]; return { n, b: Math.max(...base.map(v => dot(n, v))), role: 'cone' }; };
+  for (const n of CONE_DIRS) poly = clip(poly, flare(n));
+  // what the cone's sides miss between them: each face still past the limit is cut by the flare turned its way
+  for (let pass = 0; pass < 4; pass++) { const left = poly.filter(f => f.role !== 'bottom' && steep(f.n) && Math.hypot(f.n[0], f.n[1]) > 1e-6); if (!left.length) break; for (const f of left) poly = clip(poly, flare(f.n)); }
+  poly = polyFaces(poly);
+  return { poly, bottom: poly.findIndex(f => f.role === 'bottom') };
 }
-const zRange = st => { let lo = Infinity, hi = -Infinity; for (const f of st.faces) for (const v of f.verts) { if (v[2] < lo) lo = v[2]; if (v[2] > hi) hi = v[2]; } return [lo, hi]; };
-function bed(stones, envs) {
-  const { add: add_, hit, land } = rayGrid(), down = [0, 0, -1];
-  const count = { stretched: 0, corbels: 0, feet: 0, left: 0 }, out = new Array(stones.length), red = f => f.n[2] < -SIN_LIMIT - 1e-9;
-  const order = stones.map((st, k) => [zRange(st)[0], k]).sort((a, b) => a[0] - b[0]);
-  for (const [, k] of order) {
-    let st = stones[k]; const env = envs[k], inEnv = v => env.every(q => dot(q.n, v) <= q.b + 1e-6);
-    let [bot, top] = zRange(st);
-    // the stretch
-    let need = 1; const rest = [];
-    for (const f of st.faces) {
-      if (!red(f)) continue;
-      const h = Math.hypot(f.n[0], f.n[1]), turnTo = h < 1e-9 ? Infinity : -f.n[2] * Math.sqrt(1 - SIN_LIMIT * SIN_LIMIT) / (SIN_LIMIT * h);
-      if (turnTo < 1 + SMALL / Math.max(1e-6, top - Math.min(...f.verts.map(v => v[2])))) { need = Math.max(need, turnTo); continue; }
-      for (const v of [...f.verts, centroidOf(f.verts)]) { const up = top - v[2], dz = hit(v, down, SMALL + 1e-6); if (dz <= SMALL && up > 1e-6) rest.push(1 + dz / up); }
-    }
-    if (rest.length) { rest.sort((x, y) => x - y); need = Math.max(need, rest[rest.length >> 1]); }
-    if (top - bot > 1e-6) need = Math.min(need, 1 + Math.min(SMALL, Math.max(0, bot)) / (top - bot));
-    const stretch = need > 1 + 1e-6 ? { top, need } : null;
-    if (stretch) { count.stretched++; st = stretched(st, stretch); bot = top - (top - bot) * need; }
-    const faces = [], lines = [];   // the foot and the corbels
-    const join = (solid, part) => { for (const g of solid) { faces.push({ verts: g.verts, n: g.n, part }); g.verts.forEach((a, i) => lines.push(a, g.verts[(i + 1) % g.verts.length])); } return solid.length > 0; };
-    // the foot
-    let footTop = -Infinity;
-    if (bot < SMALL) {
-      footTop = bot + FOOT;
-      for (const f of st.faces) if (f.n[2] < -SIN_OVER && Math.min(...f.verts.map(v => v[2])) <= bot + FOOT) footTop = Math.max(footTop, ...f.verts.map(v => v[2]));
-      footTop = Math.min(footTop, bot + FOOT_MAX);
-      const ring = dedupe(st.faces.flatMap(f => f.verts).filter(v => v[2] <= footTop + 1e-6), 0.05);
-      if (join(hullSolid([...ring, ...ring.map(v => [v[0], v[1], 0])], env), 'foot')) count.feet++;
-    }
-    // corbels: a red face with any point on nothing gives all its points (so its corbel holds the whole face), but the foot's band
-    const cap = Math.min(CORBEL_MAX, Math.max(CORBEL_MIN, top - bot));
-    let loose = [];
-    for (const f of st.faces) if (red(f) && faceArea(f) >= 0.05) { const pts = [...f.verts, centroidOf(f.verts)]; if (pts.some(v => hit(v, down, 0.1) >= 0.1)) loose.push(...pts); }
-    loose = dedupe(loose.filter(v => v[2] > footTop + 1e-6), 0.05);
-    // where each point lands along each sweep, once (nothing joins the grid while a stone is bedded)
-    const lands = SWEEPS.map(w => loose.map(v => { const h = land(add(v, mul(w, 1e-4)), w, cap + 1e-6), e = add(v, mul(w, h.t + 0.2)); return h.who !== null && h.t <= cap && inEnv(e) ? { who: h.who, e } : null; }));
-    const free = loose.map(() => true);
-    for (let made = 0; made < CORBELS && free.some(Boolean); made++) {
-      let pick = null;
-      lands.forEach((L, s) => {
-        const runs = new Map();
-        L.forEach((h, i) => { if (h && free[i]) { if (!runs.has(h.who)) runs.set(h.who, []); runs.get(h.who).push(i); } });
-        for (const run of runs.values()) if (!pick || run.length > pick.idx.length) pick = { w: SWEEPS[s], s, idx: run };
-      });
-      if (!pick) break;
-      let run = pick.idx.map(i => [loose[i], lands[pick.s][i].e]);
-      if (run.length < 3) { const u = perp(pick.w), u2 = cross(pick.w, u); run = run.flatMap(([a, b]) => [[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([x, y]) => { const o = add(mul(u, POST * x), mul(u2, POST * y)); return [add(a, o), add(b, o)]; })); }
-      if (join(hullSolid(run.flat(), env), 'corbel')) count.corbels++;
-      for (const i of pick.idx) free[i] = false;
-    }
-    if (free.some(Boolean)) count.left++;
-    out[k] = { stretch, parts: { faces, lines } };
-    add_([...st.faces, ...faces], k);
-  }
-  return { stones: out, ...count };
-}
-// a stone stretched down, its top held (each corner moved once, so corners stay shared)
-function stretched(st, { top, need }) {
-  const moved = new Map(), sz = v => { let w = moved.get(v); if (!w) moved.set(v, w = [v[0], v[1], top - (top - v[2]) * need]); return w; }, sn = n => unit([n[0], n[1], n[2] / need]);
-  return { faces: st.faces.map(f => ({ ...f, verts: f.verts.map(sz), n: sn(f.n), ...(f.vn ? { vn: f.vn.map(sn) } : {}) })), lines: st.lines.map(sz) };
+// a finished stone grown down onto what the grid holds: { poly, grown }. Its bottom is the face facing straight down
+function grownOnto(poly, grid) {
+  const [bot, top] = zRange(poly), f = poly.reduce((a, g) => g.n[2] < a.n[2] ? g : a);
+  const gaps = [...f.verts, centroidOf(f.verts), ...sampleFace(f, Math.ceil(faceArea(f) / 2), keyed('bed', bot, top))].map(v => grid.hit(v, [0, 0, -1], REACH + 1e-6)).filter(t => t <= REACH);
+  // the widest gap within reach: the whole bottom set on what is below it, a little into it where that is uneven; a lip with nothing
+  // within reach (out over a lower course) is left as it is
+  const drop = gaps.length ? Math.min(Math.max(...gaps), bot) : 0;
+  if (drop < 1e-6) return { poly, grown: false };
+  const need = (top - bot + drop) / (top - bot), moved = new Map(), sz = v => { let w = moved.get(v); if (!w) moved.set(v, w = [v[0], v[1], top - (top - v[2]) * need]); return w; };
+  return { poly: poly.map(g => { const verts = g.verts.map(sz), n = unit([g.n[0], g.n[1], g.n[2] / need]); return { ...g, verts, n, b: dot(n, verts[0]) }; }), grown: true };
 }
 // a grid of solids' triangles in CELL mm cubes: a ray tests only the triangles in the cells it passes through
 function rayGrid() {
@@ -802,6 +734,7 @@ function rayGrid() {
   // how far along w from p the first solid or the ground is, up to cap: { t, nz, who } (who -1: the ground, null: nothing). Only faces
   // turned toward the ray can be met first, unless any: then every face counts, and nz says which way the face met faces (a point
   // inside a solid meets a face turned away). The cells the ray crosses are walked nearest first, until a hit is nearer than the next
+  // (a stone's bottom on the ground and the ground meet a ray at one depth: the stone's face wins, so a point inside it is inside)
   const walk = (p, w, cap, any) => {
     const px = p[0], py = p[1], pz = p[2], wx = w[0], wy = w[1], wz = w[2];
     const tg = wz < -1e-9 ? pz / -wz : Infinity;
@@ -821,7 +754,7 @@ function rayGrid() {
         const det = T.e1x * pvx + T.e1y * pvy + T.e1z * pvz; if (det > -1e-12 && det < 1e-12) continue;
         const inv = 1 / det, ox = px - T.ax, oy = py - T.ay, oz = pz - T.az, u = (ox * pvx + oy * pvy + oz * pvz) * inv; if (u < 0 || u > 1) continue;
         const qx = oy * T.e1z - oz * T.e1y, qy = oz * T.e1x - ox * T.e1z, qz = ox * T.e1y - oy * T.e1x, v = (wx * qx + wy * qy + wz * qz) * inv; if (v < 0 || u + v > 1) continue;
-        const t = (T.e2x * qx + T.e2y * qy + T.e2z * qz) * inv; if (t > -1e-6 && t < best) { best = Math.max(0, t); nz = T.nz; who = T.who; }
+        const t = (T.e2x * qx + T.e2y * qy + T.e2z * qz) * inv; if (t > -1e-6 && (t < best || (any && T.nz < 0 && t <= best + 1e-6))) { best = Math.max(0, t); nz = T.nz; who = T.who; }
       }
       if (tx < ty && tx < tz) { tIn = tx; tx += dx; ix += sx; } else if (ty < tz) { tIn = ty; ty += dy; iy += sy; } else { tIn = tz; tz += dz; iz += sz; }
       if (!Number.isFinite(tIn)) break;
@@ -832,7 +765,6 @@ function rayGrid() {
 }
 // what is held up: a face on the ground, or a bridge (a triangle of a downward face with at least two corners resting on
 // something: a stone, a corbel or the ground, within HELD mm below or inside it) is never painted orange or red
-const HELD = 0.15;
 function markHeld(stones) {
   const g = rayGrid(); for (const st of stones) g.add(st.faces);
   const memo = new Map(), down = [0, 0, -1], on = v => {
@@ -850,23 +782,39 @@ function markHeld(stones) {
     return out;
   }) }));
 }
-function rockSurface(C, seed, P) {
-  let ms = 0, vol = 0;
-  const rocks = C.masses.map(m => { const r = rockOf(m, seed, P); ms += r.ms; vol += r.volume; return r; });
-  // bedding works on the flat-faced stones (weathering only rounds them); its stretch and parts are then laid on what is shown
-  let info = null;
-  if (P.bedding) {
-    const kept = C.bedded || (C.bedded = new Map()), key = [seed, ...ROCK_KEYS.filter(k => k !== 'weather').map(k => P[k])].join('/');   // kept with its cliff
-    info = kept.get(key); if (!info) { info = bed(rocks.map(r => r.flat), C.masses.map(m => m.sp.env)); kept.set(key, info); }
+// a stone, built once per mass, seed and rock settings, from its printable outline: { poly, ms }
+const kept = new Map();
+function rockOf(cell, id, seed, P) {
+  const key = [seed, id, cell.map(f => f.n.map(x => x.toFixed(6)).join() + ',' + f.b.toFixed(5)).join(';'), P.facets, P.chamfered, P.rtilt, P.sink].join('/');
+  let r = kept.get(key);
+  if (!r) {
+    const t0 = performance.now(), out = printable(cell), fixed = new Set([out.bottom]), onGround = zRange(out.poly)[0] < 1e-6;
+    r = { poly: stoneOf(out.poly, Math.floor(keyed(seed, 'rock', id)() * 2147483647), P, fixed, onGround ? fixed : new Set()).poly, ms: performance.now() - t0 };
+    kept.set(key, r); if (kept.size > 600) kept.delete(kept.keys().next().value);
   }
-  const stones = markHeld(rocks.map((r, k) => {
-    const b = info && info.stones[k]; if (!b) return r.surf;
-    const s = b.stretch ? stretched(r.surf, b.stretch) : r.surf;
-    return { faces: [...s.faces, ...b.parts.faces], lines: [...s.lines, ...b.parts.lines] };
-  }));
-  return { faces: stones.flatMap(st => st.faces), lines: stones.flatMap(st => st.lines), ms, vol, bed: info && { stretched: info.stretched, corbels: info.corbels, feet: info.feet, left: info.left } };
+  return r;
 }
-
+const SHADES = ['#B9B4A8', '#A39E92', '#CFCABE', '#9A9A94', '#C4BBA9', '#AEB0AA', '#D6D1C6', '#B0A796'];
+function massSurface(C) {
+  const faces = [], lines = [];
+  markHeld(C.masses.map(m => m.surf)).forEach((st, k) => { const shade = SHADES[k % SHADES.length]; for (const f of st.faces) faces.push({ ...f, shade }); for (const p of st.lines) lines.push(p); });
+  return { faces, lines };
+}
+// the stones in the order of their tops: each built, then (with Bedding) grown onto the finished stones below, then weathered. What
+// holds a stone lies below its bottom, so its top is lower and it is finished first, and growing a stone moves nothing above its bottom
+function rockSurface(C, seed, P) {
+  const grid = rayGrid(), surfs = new Array(C.masses.length), count = { grown: 0 };
+  let ms = 0, vol = 0;
+  for (const [, k] of C.masses.map((m, k) => [zRange(m.poly)[1], k]).sort((a, b) => a[0] - b[0])) {
+    const r = rockOf(C.masses[k].poly, C.masses[k].sp.id, seed, P); let poly = r.poly;
+    if (P.bedding) { const g = grownOnto(poly, grid); poly = g.poly; count.grown += g.grown; }
+    const t0 = performance.now(), vs = poly.flatMap(f => f.verts), lo = [0, 1, 2].map(i => Math.min(...vs.map(v => v[i]))), hi = [0, 1, 2].map(i => Math.max(...vs.map(v => v[i])));
+    surfs[k] = P.weather > 0 ? weathered(poly.map(f => ({ n: f.n, b: f.b })), lo, hi, P.weather) : surfOf(poly);
+    ms += r.ms + performance.now() - t0; vol += volumeOf(poly); grid.add(poly);
+  }
+  const stones = markHeld(surfs);
+  return { faces: stones.flatMap(st => st.faces), lines: stones.flatMap(st => st.lines), ms, vol, bed: P.bedding ? count : null };
+}
 // ---------- page state ----------
 const PRESETS = {
   granite: { direction: 'through', layers: 1, span: 0, wander: 10, width: 9, thickness: 6.5, vary: 45, joint: -0.8, fuzz: 5, order: 0 },
@@ -875,8 +823,8 @@ const PRESETS = {
   massive: { direction: 'through', layers: 2, span: 30, wander: 15, width: 15, thickness: 11, vary: 45, joint: 0.5, fuzz: 5, order: 0 },
   wall: { direction: 'up', layers: 8, span: 0, wander: 0, width: 11, thickness: 16, vary: 12, joint: 0.3, fuzz: 0.5, order: 100 },
 };
-const STYLES = [['granite', 'Granite wall', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and merging into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['massive', 'Massive', 'Large irregular masses in two layers parallel to the front, broad faces, uneven joints'], ['wall', 'Stone wall', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
-const DEFAULTS = { style: 'granite', ...PRESETS.granite, squares: 1, height: 36, depth: 16, facets: 24, chamfered: 100, rtilt: 6, sink: 3, weather: 0, bedding: true, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, lines: true };
+const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and merging into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['massive', 'Massive', 'Large irregular masses in two layers parallel to the front, broad faces, uneven joints'], ['wall', 'Wall', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
+const DEFAULTS = { style: 'layered', ...PRESETS.layered, squares: 1, height: 36, depth: 16, facets: 24, chamfered: 100, rtilt: 6, sink: 3, weather: 0, bedding: true, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, lines: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -910,7 +858,7 @@ const GROUPS = [
     P_('depth', 'Depth', 6, 35, 1, MM, 'How deep the envelope is, from the back of the square forward.'),
     P_('fuzz', 'Fuzz', 0, 12, 0.5, MM, 'How far short of the fuzzy top and front a stone may stop: a smooth field along the wall and each stone’s own draw.')] },
   { label: 'Structure', icon: () => dirIcon(state.direction), value: 'layers', items: [
-    { key: 'direction', label: 'Direction', choices: [['through', 'Through'], ['along', 'Along'], ['up', 'Up']], icon: dirIcon, help: 'Which way the spines run: through the wall back to front (stones show their ends), along it (slabs), or up (columns; with many layers, courses of slabs). The layers lie across it.' },
+    { key: 'direction', label: 'Direction', choices: [['up', 'Up'], ['through', 'Through'], ['along', 'Along']], icon: dirIcon, help: 'Which way the spines run: through the wall back to front (stones show their ends), along it (slabs), or up (columns; with many layers, courses of slabs). The layers lie across it.' },
     P_('layers', 'Layers', 1, 50, 1, '', 'How many layers the envelope is cut into across the direction; a spine starts and ends where layers meet (or at the envelope).'),
     P_('span', 'Span', 0, 95, 1, '%', 'The chance a spine goes on through one more plane: mostly short spines, fewer long ones, so breaks stagger.'),
     P_('wander', 'Wander', 0, 60, 1, '°', 'How far a spine turns at random from the direction (where layers meet turns by half of it).'),
@@ -925,7 +873,7 @@ const GROUPS = [
     P_('rtilt', 'Tilt', 0, 25, 0.5, '°', 'How far each rock’s planes turn at random.'),
     P_('sink', 'Sink', 0, 10, 0.25, '%', 'How deep each rock’s planes bite, of its size; this opens the joints between rocks.'),
     P_('weather', 'Weathering', 0, 2, 0.05, MM, 'Rounds every outward joint of each rock to this radius (slow: a distance field per rock).'),
-    { key: 'bedding', label: 'Bedding', bool: true, help: 'A stone whose underside overhangs past 65° (red) is made to stand on something, inside its envelope: a small gap (up to 2 mm) is closed by stretching it down, its top held; further off, up to six short corbels, each landing on one thing, (4 to 10 mm), each swept at no more than 55° from straight down until it meets a stone below or the ground. Stones are bedded from the lowest up.' }] },
+    { key: 'bedding', label: 'Bedding', bool: true, help: 'Every stone is printable by construction, a flat bottom its only face past 65°; bedding stretches each stone down, its top held, until its whole bottom rests on the stones below or the ground. Stones are finished in the order of their tops.' }] },
 ];
 const CHECKS = ['ghost', 'layersOn', 'spinesOn', 'lines'];
 const CLIFF_KEYS = ['squares', 'height', 'depth', ...Object.keys(PRESETS.massive)];
@@ -957,6 +905,8 @@ function initGL() {
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.target.copy(focus()); controls.enablePan = true; controls.minDistance = 20; controls.maxDistance = 600;
   controls.addEventListener('change', draw); controls.update();
+  // a scroll over the view scrolls the page; only a pinch zooms (on a trackpad a pinch comes as a wheel event with Ctrl held)
+  viewerEl.addEventListener('wheel', e => { if (!e.ctrlKey) e.stopPropagation(); }, { capture: true });
   new ResizeObserver(resize).observe(viewerEl); resize();
   thumbR = new THREE.WebGLRenderer({ antialias: true });
   thumbR.setPixelRatio(Math.min(devicePixelRatio, 2)); thumbR.setSize(140, 140);
@@ -981,6 +931,12 @@ function setView(v) {
   syncUI(); draw(); rebuildThumbs();
 }
 function draw() { if (renderer) renderer.render(scene, camera); }
+// the zoom buttons: a step nearer or further (the perspective camera moves along its line of sight; the orthographic one scales)
+function zoomBy(f) {
+  if (camera === ortho) { ortho.zoom = clamp(ortho.zoom / f, 0.2, 8); ortho.updateProjectionMatrix(); }
+  else { const d = camera.position.distanceTo(controls.target), to = clamp(d * f, controls.minDistance, controls.maxDistance); camera.position.sub(controls.target).multiplyScalar(to / d).add(controls.target); }
+  controls.update(); draw();
+}
 
 // what else the view shows: the envelope, the layers' faces (each clipped to the envelope) and the spines
 function extras(C) {
@@ -1020,7 +976,7 @@ function rebuild() {
   try {
     $('err').hidden = true;
     const C = cliffFor(state.seed), t0 = performance.now();
-    const surf = state.draw === 'rocks' ? rockSurface(C, state.seed, pick(ROCK_KEYS)) : massSurface(C.masses);
+    const surf = state.draw === 'rocks' ? rockSurface(C, state.seed, pick(ROCK_KEYS)) : massSurface(C);
     const ms = performance.now() - t0;
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
     rockObj = meshOf(surf, 0, { lines: state.lines }); scene.add(rockObj);
@@ -1038,7 +994,7 @@ function showStats(C, surf, ms) {
     ['Layers spanned', spans.length ? `${Math.min(...spans)} to ${Math.max(...spans)}, mean ${(spans.reduce((a, b) => a + b, 0) / spans.length).toFixed(1)}` : '-'],
     ['Masses fill the envelope', (C.fill * 100).toFixed(1) + '%'],
     ...(state.draw === 'rocks' ? [['Rocks fill it', (surf.vol / C.envVol * 100).toFixed(1) + '%'], ['Faces', surf.faces.length]] : []),
-    ...(state.draw === 'rocks' && surf.bed ? [['Bedded', `${surf.bed.stretched} stretched, ${surf.bed.feet} feet, ${surf.bed.corbels} corbels` + (surf.bed.left ? `, ${surf.bed.left} partly beyond reach` : '')]] : []),
+    ...(state.draw === 'rocks' && surf.bed ? [['Bedded', `${surf.bed.grown} grown`]] : []),
     ['Masses in', C.ms.toFixed(0) + ' ms'],
     ...(state.draw === 'rocks' ? [['Rocks in', ms.toFixed(0) + ' ms']] : []),
   ];
@@ -1088,7 +1044,7 @@ function rebuildThumbs() {
     if (job !== thumbJob || !order.length) return;
     const i = order.shift(), t = thumbs[i];
     try {
-      const g = meshOf(massSurface(cliffFor(start + i).masses), 0, { lines: state.lines });
+      const g = meshOf(massSurface(cliffFor(start + i)), 0, { lines: state.lines });
       thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
       t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
     } catch (e) { console.error(e); }
@@ -1164,12 +1120,11 @@ function groupChip(g) {
   return show;
 }
 // the style: a preset of every setting that shapes the masses (Massive, Layered, Columnar); the engine is the same for all three
-// the bar shows a style's short name (Granite, Stone)
 function styleChip() {
   const pc = document.createElement('span'); pc.className = 'pc';
   const btn = document.createElement('button'); btn.className = 'pv'; btn.setAttribute('aria-haspopup', 'dialog');
   pc.append(btn); bar.insertBefore(pc, bar.firstChild);
-  const show = () => { const s = STYLES.find(x => x[0] === state.style); btn.innerHTML = `${ICON.style}<span class="v">${s[1].replace(/ wall$/, '')}${edited() ? '*' : ''}</span>`; btn.title = 'Style'; btn.setAttribute('aria-label', 'Style: ' + s[1] + (edited() ? ', edited' : '') + '; click to choose'); };
+  const show = () => { const s = STYLES.find(x => x[0] === state.style); btn.innerHTML = `${ICON.style}<span class="v">${s[1]}${edited() ? '*' : ''}</span>`; btn.title = 'Style'; btn.setAttribute('aria-label', 'Style: ' + s[1] + (edited() ? ', edited' : '') + '; click to choose'); };
   btn.addEventListener('click', () => {
     if (pc.classList.contains('open')) { closePop(true); return; }
     closePop(true);
@@ -1255,6 +1210,8 @@ document.addEventListener('click', () => showPanel(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !vpanel.hidden) { showPanel(false); vopts.focus(); } });
 for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.target.checked; update(); });
 $('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS, PRESETS[state.style]); syncUI(); update(); });
+$('zin').addEventListener('click', () => zoomBy(0.8));
+$('zout').addEventListener('click', () => zoomBy(1.25));
 $('prev').addEventListener('click', () => setSeed(state.seed - 1));
 $('next').addEventListener('click', () => setSeed(state.seed + 1));
 document.addEventListener('keydown', e => {
