@@ -242,7 +242,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, as tall as the high end of <b>Height</b> and as deep as the high end of <b>Depth</b>, standing at the back of the square. Its bottom, its back and its two ends (the tile's edges) are <b>crisp</b>: no mass crosses them. Its top and its front are <b>fuzzy</b>: each stone draws how tall it reaches in Height and how far forward in Depth, two thirds from a smooth field along the wall and one third its own, so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
       <li><b>Spines</b> run one <b>Direction</b>: <b>Up</b> (columns, or with many layers, courses), <b>Through</b> the wall from back to front (so the stones show their ends) or <b>Along</b> it (slabs). The envelope is cut across that direction into <b>Layers</b>, the outer faces of the first and last at the envelope's ends; each face where two layers meet is drawn on its own: it slopes along Width by an angle drawn in <b>Lean</b> and along Thickness by one drawn in <b>Pitch</b>, and curves along Width by a height drawn in <b>Sag</b> (its middle that far past its edges) and along Thickness by one drawn in <b>Bow</b>. Where neighbouring faces cross, a layer pinches out. Layers organise the spines and never cut a stone. In each layer in turn, spines are started by dart throwing: a dart is a point in the layer, its direction turned by an angle drawn in <b>Wander</b>, and its spine runs back to the layer's near face and on to its far face, through as many layers as it draws in <b>Span</b>, so breaks stagger. Its ends lie on layer faces inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is clear of every spine already in the layer by <b>Width</b> horizontally across the layer and <b>Thickness</b> the other way across it (vertically for Through and Along, front to back for Up), each the two ends' sizes together; until 80 darts in a row miss, the layer is not full. <b>Order</b> draws the darts' places from a grid instead, its pitch the middle of Width by the middle of Thickness, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is jittered. Each end's sizes are drawn in Width and Thickness. One spine is one stone.</li>
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share a layer (they meet end to end) split on the face between them (its tangent plane, where it curves), so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b>, drawn for each split, sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge). It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
-      <li><b>Rocks.</b> Each mass becomes a stone, printable by construction. First its mass gets a flat <b>bottom</b> just above its lowest point (at most 1 mm up, or a fifth of its height), and every underside flatter than 65° from upright is cut away by a flare rising from that bottom at 65°, so the bottom is the only face that overhangs past the limit. Then every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. The bottom is kept as it is, and no plane, crown, facet or chamfer is made that overhangs past 65°, so a little roughness under a stone stays in the printable range (between 55° and 65°: orange). <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Faces, Chamfered and Weathering are drawn for each stone, Tilt and Sink for each plane. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
+      <li><b>Rocks.</b> Each mass becomes a stone, printable by construction. Its <b>bottom</b> is its mass's own faces that overhang past 65°: on a layer, the face of the layer below, level, tilted or curved as that is (one face for each stone below it). Nothing is cut from the bottom, so the stone fills its mass right down to what is below it; any other underside flatter than 65° from upright is cut away by a flare rising from the bottom at 65°, so the bottom is the only part that overhangs past the limit. A mass with no such face stands on its lowest point. Then every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. The bottom is kept as it is, and no plane, crown, facet or chamfer is made that overhangs past 65°, so a little roughness under a stone stays in the printable range (between 55° and 65°: orange). <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Faces, Chamfered and Weathering are drawn for each stone, Tilt and Sink for each plane. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
       <li><b>Bedding</b> (on by default, under Rocks): the bottom is then the only part of a stone that needs holding, so bedding only sets the bottom on something. Stones are finished in the order of their tops (what holds a stone lies below its bottom, so it is finished first), and each is stretched down, its top held, by the widest gap under its bottom within 6 mm, to the finished stones or the ground (a lip out over nothing that near is left as it is); so its whole bottom rests on what is below it, a little into it where that is uneven. Stretching only turns its other faces toward upright, and it holds the footprint, so the stone stays printable and in its envelope; it changes only the stone's size and shape.
       <li><b>Held faces are not painted.</b> Orange and red mark overhang past 55° and 65°, except where a face is held up: a face on the ground, or a face buried inside another stone, or a bridge: a downward face is split into triangles, and a triangle with at least two corners resting on something (a stone or the ground, within 0.15 mm below or inside it) spans between them.</li>
     </ol>
@@ -716,33 +716,38 @@ function cliff(seed, P) {
 
 // a mass's stone, built once per mass, seed and rock settings
 // ---------- printable by construction, and bedding ----------
-// Every stone is printable by construction: its mass's outline gets a flat bottom just above its lowest point (DROP), and is cut by a
-// cone rising from that bottom at the steepest overhang allowed (LIMIT, CONE sides), so every underside flatter than that becomes a
-// LIMIT face and the bottom is the only face facing down past it. The stone builder keeps the bottom where it is and never makes a
+// Every stone is printable by construction: its bottom is its mass's own faces facing down past the limit (kept whole, so it fills
+// its mass down to what is below), and its outline is cut by a cone rising from the bottom at the steepest overhang allowed (LIMIT,
+// CONE sides), so every other underside flatter than that becomes a LIMIT face and the bottom is the only part facing down past it. The stone builder keeps the bottom where it is and never makes a
 // face past LIMIT. Bedding then only has to set the bottom on something: stones are finished in the order of their tops, and each is grown
 // (stretched down, its top held) by the widest of its bottom's gaps to the finished stones or the ground below (as far as REACH), so
 // it sits on what is there, a little into it where that is uneven; stretching only turns its other faces toward upright. It holds the footprint, so it stays in its envelope
 const OVER = 55, LIMIT = 65, SIN_OVER = Math.sin(OVER * DEG), SIN_LIMIT = Math.sin(LIMIT * DEG);   // the overhang target, and the steepest allowed
 const steep = n => n[2] < -SIN_LIMIT - 1e-9;   // facing down past the limit: red
-const DROP = 1, CONE = 16, REACH = 6, HELD = 0.15;   // mm (the bottom at most a fifth of the way up), cone sides, mm, mm
+const CONE = 16, REACH = 6, HELD = 0.15;   // cone sides, mm, mm
 const zRange = faces => { let lo = Infinity, hi = -Infinity; for (const f of faces) for (const v of f.verts) { if (v[2] < lo) lo = v[2]; if (v[2] > hi) hi = v[2]; } return [lo, hi]; };
 const CONE_DIRS = Array.from({ length: CONE }, (_, j) => { const ph = 2 * Math.PI * j / CONE, c = Math.cos(LIMIT * DEG); return [c * Math.cos(ph), c * Math.sin(ph), -SIN_LIMIT]; });
-// a mass's outline made printable: { poly, bottom } (the bottom face's index)
+// a mass's outline made printable: { poly, bottom } (the bottom faces' indices). Its bottom is its own faces facing down past the
+// limit: on a layer, the face of the layer below (level, tilted or curved as that is; one face for each stone below it, where the
+// layers' split meets each); nothing is cut from them, so the stone still fills its mass down to what is below. A mass with none
+// rests on its lowest point and needs no bottom
 function printable(cell) {
-  const [lo, hi] = zRange(cell), zb = lo + Math.min(DROP, (hi - lo) / 5);
-  let poly = clip(cell, { n: [0, 0, -1], b: -zb, role: 'bottom' });
-  const base = poly.find(f => f.role === 'bottom').verts;
+  const down = new Set(cell.filter(f => steep(f.n)));
+  if (!down.size) return { poly: cell, bottom: [] };
+  const base = [...down].flatMap(f => f.verts);
+  let poly = cell.map(f => down.has(f) ? { ...f, role: 'bottom' } : f);
   const flare = h => { const l = Math.hypot(h[0], h[1]), c = Math.cos(LIMIT * DEG) / l, n = [h[0] * c, h[1] * c, -SIN_LIMIT]; return { n, b: Math.max(...base.map(v => dot(n, v))), role: 'cone' }; };
   for (const n of CONE_DIRS) poly = clip(poly, flare(n));
   // what the cone's sides miss between them: each face still past the limit is cut by the flare turned its way
   for (let pass = 0; pass < 4; pass++) { const left = poly.filter(f => f.role !== 'bottom' && steep(f.n) && Math.hypot(f.n[0], f.n[1]) > 1e-6); if (!left.length) break; for (const f of left) poly = clip(poly, flare(f.n)); }
   poly = polyFaces(poly);
-  return { poly, bottom: poly.findIndex(f => f.role === 'bottom') };
+  return { poly, bottom: poly.flatMap((f, i) => f.role === 'bottom' ? [i] : []) };
 }
-// a finished stone grown down onto what the grid holds: { poly, grown }. Its bottom is the face facing straight down
+// a finished stone grown down onto what the grid holds: { poly, grown }. It rests on its bottom faces, or with none on its lowest point
 function grownOnto(poly, grid) {
-  const [bot, top] = zRange(poly), f = poly.reduce((a, g) => g.n[2] < a.n[2] ? g : a);
-  const gaps = [...f.verts, centroidOf(f.verts), ...sampleFace(f, Math.ceil(faceArea(f) / 2), keyed('bed', bot, top))].map(v => grid.hit(v, [0, 0, -1], REACH + 1e-6)).filter(t => t <= REACH);
+  const [bot, top] = zRange(poly), fs = poly.filter(g => g.role === 'bottom');
+  const low = poly.flatMap(g => g.verts).reduce((a, v) => v[2] < a[2] ? v : a);
+  const gaps = (fs.length ? fs.flatMap((f, i) => [...f.verts, centroidOf(f.verts), ...sampleFace(f, Math.ceil(faceArea(f) / 2), keyed('bed', bot, top, i))]) : [low]).map(v => grid.hit(v, [0, 0, -1], REACH + 1e-6)).filter(t => t <= REACH);
   // the widest gap within reach: the whole bottom set on what is below it, a little into it where that is uneven; a lip with nothing
   // within reach (out over a lower course) is left as it is
   const drop = gaps.length ? Math.min(Math.max(...gaps), bot) : 0;
@@ -829,7 +834,7 @@ function rockOf(cell, id, seed, P) {
   const key = [seed, id, cell.map(f => f.n.map(x => x.toFixed(6)).join() + ',' + f.b.toFixed(5)).join(';'), ...[P.facets, P.chamfered, P.rtilt, P.sink].map(rangeText)].join('/');
   let r = kept.get(key);
   if (!r) {
-    const t0 = performance.now(), out = printable(cell), fixed = new Set([out.bottom]), onGround = zRange(out.poly)[0] < 1e-6;
+    const t0 = performance.now(), out = printable(cell), fixed = new Set(out.bottom), onGround = zRange(out.poly)[0] < 1e-6;
     r = { poly: stoneOf(out.poly, Math.floor(keyed(seed, 'rock', id)() * 2147483647), P, fixed, onGround ? fixed : new Set()).poly, ms: performance.now() - t0 };
     kept.set(key, r); if (kept.size > 600) kept.delete(kept.keys().next().value);
   }
@@ -918,7 +923,7 @@ const GROUPS = [
     R_('rtilt', 'Tilt', 0, 25, 0.5, '°', 'How far each of a stone’s planes turns, drawn for each plane.'),
     R_('sink', 'Sink', 0, 10, 0.25, '%', 'How deep each of a stone’s planes bites, of its size, drawn for each plane; this opens the joints between stones.'),
     R_('weather', 'Weathering', 0, 2, 0.05, MM, 'Rounds every outward joint of each stone to a radius drawn for it (slow: a distance field per stone).'),
-    { key: 'bedding', label: 'Bedding', bool: true, help: 'Every stone is printable by construction, a flat bottom its only face past 65°; bedding stretches each stone down, its top held, until its whole bottom rests on the stones below or the ground. Stones are finished in the order of their tops.' }] },
+    { key: 'bedding', label: 'Bedding', bool: true, help: 'Every stone is printable by construction, its bottom (the face of what is below it) the only part past 65°; bedding stretches each stone down, its top held, until its whole bottom rests on the stones below or the ground. Stones are finished in the order of their tops.' }] },
 ];
 const CHECKS = ['ghost', 'layersOn', 'spinesOn', 'lines'];
 const CLIFF_KEYS = ['squares', ...Object.keys(PRESETS.massive)];
