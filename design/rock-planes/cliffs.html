@@ -156,7 +156,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 <div class="wrap">
   <header>
     <h1>Cliffs from Spines</h1>
-    <p class="lede">A cliff as a population of rock masses. Spines are thrown between control planes, a stone width apart; each grows until it meets its neighbours or the envelope. Every mass is then a hull for Rocks from Hulls to turn into faceted rock. Granite wall, Columns, Layered and Massive are settings of one engine.</p>
+    <p class="lede">A cliff as a population of rock masses. Spines are thrown between control planes, Width and Thickness apart; each grows until it meets its neighbours or the envelope. Every mass is then a hull for Rocks from Hulls to turn into faceted rock. Granite wall, Columns, Layered and Massive are settings of one engine.</p>
   </header>
 
   <div class="bar params" id="params" role="toolbar" aria-label="Settings">
@@ -204,7 +204,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <h2>How a cliff is built</h2>
     <ol>
       <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, <b>Height</b> tall and <b>Depth</b> deep, standing at the back of the square. Its bottom, its back and its two ends (the tile's edges) are <b>crisp</b>: no mass crosses them. Its top and its front are <b>fuzzy</b>: each mass draws how far short of them it stops, up to <b>Fuzz</b>, from a smooth field along the wall (two thirds) and its own draw (one third), so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
-      <li><b>Spines</b> run one <b>Direction</b>: <b>Through</b> the wall from back to front (so the stones show their ends), <b>Along</b> it (slabs) or <b>Up</b> (columns, or with many planes, courses: <b>Layered</b> is ten level planes, so each course is a row of flat slabs between two of them). <b>Planes</b> control planes stand across that direction, the first and last at the envelope's ends, the inner ones turned and moved at random by up to half of <b>Wander</b>; they organise the spines and never cut a stone. In each interval between two planes in turn, spines are started by dart throwing: a dart is a point between the two planes, its direction turned at random by up to <b>Wander</b>, and its spine runs back to the first plane and on to the next, and on through each further plane with chance <b>Span</b>, so breaks stagger. Its ends lie on its planes inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is at least <b>Size</b> from every spine already in the interval (the two ends' radii, measured across their sections, flattened by <b>Aspect</b>); until 80 darts in a row miss, the interval is not full. Each end's size varies within <b>Vary</b>. One spine is one stone.</li>
+      <li><b>Spines</b> run one <b>Direction</b>: <b>Through</b> the wall from back to front (so the stones show their ends), <b>Along</b> it (slabs) or <b>Up</b> (columns, or with many planes, courses: <b>Layered</b> is ten level planes, so each course is a row of flat slabs between two of them). <b>Planes</b> control planes stand across that direction, the first and last at the envelope's ends, the inner ones turned and moved at random by up to half of <b>Wander</b>; they organise the spines and never cut a stone. In each interval between two planes in turn, spines are started by dart throwing: a dart is a point between the two planes, its direction turned at random by up to <b>Wander</b>, and its spine runs back to the first plane and on to the next, and on through each further plane with chance <b>Span</b>, so breaks stagger. Its ends lie on its planes inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is clear of every spine already in the interval by <b>Width</b> horizontally on the control plane and <b>Thickness</b> the other way on it (vertically for Through and Along, front to back for Up), each the two ends' sizes together; until 80 darts in a row miss, the interval is not full. Each end's size varies within <b>Vary</b>. One spine is one stone.</li>
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share an interval (they meet end to end) split on a control plane between them, so the planes order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b> sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge); each split adds a random part that grows with Vary. It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
       <li><b>Bedding</b> (on by default, under Rocks): a stone whose underside overhangs past 65° (red; orange is fine) is made to stand on something, at construction, and never leaves its envelope. Stones are bedded from the lowest up, each on what is already there. A small gap (a face's drop to what is below, up to 2 mm) is closed by stretching the stone down, its top held; stretching also turns every face toward upright, so some faces need no drop at all (it holds the stone's footprint, so it stays in the envelope). A stone with faces further off gets one <b>corbel</b> (as the cliff element's support cone): the hull of the points of those faces and their sweep along a direction within 55° of straight down, the one that reaches a bedded stone or the ground soonest for all of them, until all have run into it. A corbel is no longer than its stone is tall (at most 10 mm): a part of the underside nothing supports within that is left as it is, since a long strut across the face reads as a sliver, not a stone. A direction that would carry any point out of the stone's envelope is not taken (if every one would, the nearest is, cut back to the envelope, holding up what it can), and the corbel is always cut by the envelope. Each wall of the corbel is parallel to the sweep, so it leans no more than 55°, or a copy of the underside, the lower one inside what it reaches. So a cantilever is held up by the stone beside or below it instead of a column to the ground, and the corbel holds up the stones above in turn.</li>
       <li><b>Rocks.</b> Each mass is a hull for Rocks from Hulls: <b>Rocks</b> sets its faces, chamfers, tilt, sink and weathering. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the control planes and the spines.</li>
@@ -951,7 +951,7 @@ function cliff(seed, P) {
 
   // spines: in each interval between two planes, darts thrown until 80 in a row miss. A dart is a point between the two planes;
   // its spine runs back along its direction to the first plane and on to its last (on through each further plane with chance Span).
-  // It must be at least Size from every spine already in the interval (their two radii, across their sections)
+  // It must be clear of every spine already in the interval by Width horizontally on the plane and Thickness the other way
   const spines = [];
   const frame = e => { const u = Math.abs(e[2]) < 0.95 ? unit(cross(e, [0, 0, 1])) : [1, 0, 0]; return [u, cross(e, u)]; };
   const vary = (r, x, v) => x * Math.max(0.25, 1 + v * (2 * r() - 1));
@@ -978,7 +978,7 @@ function cliff(seed, P) {
         if ((tb - ta) * len(dd) < 1) { fails++; continue; }
         [p0, p1] = [add(p0, mul(dd, ta)), add(p0, mul(dd, tb))]; }
       const e = unit(sub(p1, p0)), [u, v] = frame(e);
-      const end = () => ({ r: vary(r, P.size / 2, P.vary / 100), a: clamp(vary(r, P.aspect, P.vary / 200), 0.2, 1) });
+      const end = () => ({ r: vary(r, P.width / 2, P.vary / 100), a: clamp(vary(r, P.thickness / P.width, P.vary / 200), 0.1, 4) });   // a: Thickness over Width
       const E0 = end(), E1 = end();
       const rx = (E0.r + E1.r) / 2, a = (E0.a + E1.a) / 2;
       const clear = here.every(o => {
@@ -1173,10 +1173,10 @@ function rockSurface(C, seed, P) {
 // ---------- page state ----------
 const KEEP = 1.5;   // mm of its own every spine keeps at a split
 const PRESETS = {
-  granite: { direction: 'through', planes: 2, span: 0, wander: 10, size: 9, vary: 45, aspect: 0.7, joint: -0.8, fuzz: 5 },
-  columnar: { direction: 'up', planes: 2, span: 0, wander: 4, size: 7.5, vary: 25, aspect: 0.9, joint: 0.3, fuzz: 10 },
-  layered: { direction: 'up', planes: 10, span: 10, wander: 4, size: 12, vary: 40, aspect: 0.6, joint: 0.4, fuzz: 4 },
-  massive: { direction: 'along', planes: 4, span: 35, wander: 20, size: 9, vary: 45, aspect: 0.75, joint: 0.5, fuzz: 5 },
+  granite: { direction: 'through', planes: 2, span: 0, wander: 10, width: 9, thickness: 6.5, vary: 45, joint: -0.8, fuzz: 5 },
+  columnar: { direction: 'up', planes: 2, span: 0, wander: 4, width: 7.5, thickness: 7, vary: 25, joint: 0.3, fuzz: 10 },
+  layered: { direction: 'up', planes: 10, span: 10, wander: 4, width: 12, thickness: 7, vary: 40, joint: 0.4, fuzz: 4 },
+  massive: { direction: 'along', planes: 4, span: 35, wander: 20, width: 9, thickness: 7, vary: 45, joint: 0.5, fuzz: 5 },
 };
 const STYLES = [['granite', 'Granite wall', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and merging into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level planes: each course a row of flat slabs between two of them, the joints staggered'], ['massive', 'Massive', 'Large irregular masses, broad faces, uneven joints']];
 const DEFAULTS = { style: 'granite', ...PRESETS.granite, squares: 1, height: 36, depth: 16, facets: 24, chamfered: 100, rtilt: 6, sink: 3, weather: 0, bedding: true, draw: 'rocks', ghost: true, planesOn: false, spinesOn: false, lines: true };
@@ -1202,9 +1202,9 @@ const GROUPS = [
     P_('planes', 'Planes', 2, 14, 1, '', 'How many control planes cross the envelope, the first and last at its ends; a spine ends on them.'),
     P_('span', 'Span', 0, 95, 1, '%', 'The chance a spine goes on through one more plane: mostly short spines, fewer long ones, so breaks stagger.'),
     P_('wander', 'Wander', 0, 60, 1, '°', 'How far a spine turns at random from the direction (the inner planes turn by half of it).'),
-    P_('size', 'Size', 3, 26, 0.5, MM, 'How wide a stone is: the distance kept between neighbouring spines. Each stone then grows until it meets its neighbours or the envelope.'),
+    P_('width', 'Width', 3, 26, 0.5, MM, 'The spacing of neighbouring spines across the control plane, horizontally: along the wall (Through, Up) or front to back (Along). Each stone then grows until it meets its neighbours or the envelope.'),
+    P_('thickness', 'Thickness', 2, 26, 0.5, MM, 'The spacing of neighbouring spines the other way on the control plane: vertically (Through, Along) or front to back (Up).'),
     P_('vary', 'Vary', 0, 80, 1, '%', 'How much each spine end’s size varies (a bigger end takes more of what it shares), and the joints with it.'),
-    P_('aspect', 'Aspect', 0.2, 1, 0.05, '', 'How flat a stone is: its depth over its width.'),
     P_('joint', 'Joint', -3, 3, 0.1, MM, 'Where two stones meet, each stops half of this short of the split: over zero a gap (separate stones), under zero they reach into each other and merge. It changes each stone’s size; nothing moves.')] },
   { label: 'Rocks', items: [
     P_('facets', 'Faces', 4, 80, 1, '', 'Face planes around each rock (Planes on Rocks from Hulls).'),
