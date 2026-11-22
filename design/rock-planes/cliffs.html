@@ -267,6 +267,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
 "use strict";
+const SOURCE = typeof document !== 'undefined' && document.currentScript ? document.currentScript.textContent : '';   // the page's own code, which the builder runs
 const DEG = Math.PI / 180;
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -1594,24 +1595,67 @@ function extras(C, surf = null) {
 const problems = [];
 addEventListener('error', e => problems.push('error: ' + e.message));
 addEventListener('unhandledrejection', e => problems.push('rejection: ' + (e.reason && e.reason.message || e.reason)));
+// the builder: the cliff's code (everything above the drawing and the page) in a background worker, so the page keeps answering while a
+// cliff builds; it builds one job at a time, and while it is busy only the latest job waits. If the browser refuses a worker, the
+// page builds itself and says so in the stats
+const BUILDER = `
+const cliffsKept = new Map();
+onmessage = e => {
+  const { id, seed, cp, draw, rp, bridge } = e.data;
+  try {
+    const key = JSON.stringify([seed, cp]); let C = cliffsKept.get(key);
+    if (!C) { C = cliff(seed, cp); cliffsKept.set(key, C); if (cliffsKept.size > 8) cliffsKept.delete(cliffsKept.keys().next().value); }
+    const t0 = performance.now(), surf = draw === 'rocks' ? rockSurface(C, seed, rp) : massSurface(C, bridge);
+    surf.took = performance.now() - t0; postMessage({ id, surf });
+  } catch (err) { postMessage({ id, error: String(err && err.stack || err) }); }
+};`;
+let builder = null, builderNote = '', jobId = 0, busy = null, waiting = null;
+function startBuilder() {
+  try {
+    const cut = (a, b) => SOURCE.slice(SOURCE.indexOf(a), SOURCE.indexOf(b));
+    const code = cut('"use strict";', '// ---------- drawing ----------') + cut('// ---------- the cliff', 'const STYLES') + BUILDER;
+    builder = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+    builder.onmessage = e => builtOne(e.data);
+    builder.onerror = e => { e.preventDefault(); refuse('it stopped: ' + (e.message || 'no reason given')); };
+    builderNote = 'in the background';
+  } catch (e) { refuse('it could not start: ' + e.message); }
+}
+// no worker: the page builds, and the stats say why (a job lost with the worker is built here)
+function refuse(why) { builder = null; builderNote = 'on the page (the background builder ' + why + ')'; const j = busy; busy = waiting = null; if (j) rebuild(); }
 const surfKept = new WeakMap();   // per cliff, its last surface
+const surfKey = () => [state.draw, state.seed, ...(state.draw === 'rocks' ? ROCK_KEYS : ['bridge']).map(k => JSON.stringify(state[k]))].join('/');
 function rebuild() {
   try {
     $('err').hidden = true;
-    const C = cliffFor(state.seed), t0 = performance.now();
+    const C = cliffFor(state.seed), sk = surfKey();
     // a surface is kept while the cliff and what it is made from hold, so a change of view, lines or a check builds nothing
-    const sk = [state.draw, state.seed, ...(state.draw === 'rocks' ? ROCK_KEYS : ['bridge']).map(k => JSON.stringify(state[k]))].join('/');
-    let surf = (surfKept.get(C) || {})[sk];
-    if (!surf) { surf = state.draw === 'rocks' ? rockSurface(C, state.seed, pick(ROCK_KEYS)) : massSurface(C, state.bridge); surf.took = performance.now() - t0; surfKept.set(C, { [sk]: surf }); }
-    const ms = surf.took;   // how long it took to build, kept with it
+    const have = (surfKept.get(C) || {})[sk];
+    if (have) { ++jobId; waiting = null; show(C, have); return; }   // what the builder is making now is no longer wanted
+    if (!builder) { ++jobId; const t0 = performance.now(), surf = state.draw === 'rocks' ? rockSurface(C, state.seed, pick(ROCK_KEYS)) : massSurface(C, state.bridge); surf.took = performance.now() - t0; surfKept.set(C, { [sk]: surf }); show(C, surf); return; }
+    const job = { id: ++jobId, C, sk, msg: { id: jobId, seed: state.seed, cp: pick(CLIFF_KEYS), draw: state.draw, rp: pick(ROCK_KEYS), bridge: state.bridge } };
+    $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed + ' · building…';
+    if (busy) waiting = job; else { busy = job; builder.postMessage(job.msg); }
+  } catch (e) { failed(e.message, e); }
+}
+function builtOne(r) {
+  const job = busy; busy = null;
+  if (waiting) { busy = waiting; waiting = null; builder.postMessage(busy.msg); }
+  if (!job || r.id !== job.id) return;
+  if (r.error) { failed(r.error.split('\n')[0], r.error); return; }
+  surfKept.set(job.C, { [job.sk]: r.surf });
+  if (job.id === jobId) show(job.C, r.surf);   // a newer job is on its way: only the latest is shown
+}
+function failed(msg, detail) { $('err').hidden = false; $('err').textContent = 'The cliff could not be built: ' + msg; problems.push('build: ' + msg); console.error(detail); }
+function show(C, surf) {
+  try {
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
     rockObj = meshOf(surf, 0, { lines: state.lines }); scene.add(rockObj);
     if (extraObj) { scene.remove(extraObj); disposeGroup(extraObj); }
     extraObj = extras(C, surf); scene.add(extraObj);
     draw();
     $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed;
-    showStats(C, surf, ms);
-  } catch (e) { $('err').hidden = false; $('err').textContent = 'The cliff could not be built: ' + e.message; problems.push('build: ' + e.message); console.error(e); }
+    showStats(C, surf, surf.took);
+  } catch (e) { failed(e.message, e); }
 }
 let lastStats = [];
 function showStats(C, surf, ms) {
@@ -1623,7 +1667,7 @@ function showStats(C, surf, ms) {
     ...(state.draw === 'rocks' && surf.bed ? [['Bedding', `${surf.bed.bedded} bedded${surf.bed.nowhere ? `, ${surf.bed.nowhere} resting nowhere` : ''}${surf.bed.cut ? `, ${surf.bed.cut} circles broken` : ''}`]] : []),
     ['Masses in', C.ms.toFixed(0) + ' ms'],
     ...(state.draw === 'rocks' && surf.cracks ? [['Cracks', `${surf.cracks.n} of ${surf.cracks.of} lines, ${surf.cracks.got.toFixed(0)} of ${surf.cracks.total.toFixed(0)} mm`]] : []),
-    ...(state.draw === 'rocks' ? [['Rocks in', ms.toFixed(0) + ' ms']] : []),
+    [state.draw === 'rocks' ? 'Rocks in' : 'Surface in', ms.toFixed(0) + ' ms, ' + builderNote],
   ];
   lastStats = rows;
   $('stats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
@@ -1941,6 +1985,7 @@ function readHash() {
 window.addEventListener('hashchange', () => { if (location.hash !== ownHash) { readHash(); syncUI(); update(); } });
 
 readHash();
+startBuilder();
 try { initGL(); syncUI(); update(); }
 catch (e) { $('err').hidden = false; $('err').textContent = 'The 3D view could not start: ' + e.message; }
 </script>
