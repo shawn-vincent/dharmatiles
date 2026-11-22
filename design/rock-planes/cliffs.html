@@ -59,8 +59,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pv .v { font: 600 14px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); border-bottom: 1px dashed var(--line-2); padding-bottom: 1px; }
 .pv:hover { border-color: var(--line-2); background: var(--raised); }
 .pv:hover .v { border-bottom-color: var(--accent); }
-.pv.reset { margin-left: auto; color: var(--muted); font-size: 13px; }
-.pv.reset:hover { color: var(--accent); }
+.pv.tool { color: var(--muted); padding: 0 7px; }
+.pv.tool:hover { color: var(--accent); }
+#reset { margin-left: auto; }
+/* the bar is one line of icons and values, and stays at the top of the screen */
+.params { position: sticky; top: 0; z-index: 15; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.params::-webkit-scrollbar { display: none; }
+.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.pv .ic { color: var(--muted); }
+.pv:hover .ic, .pc.open .pv .ic { color: var(--ink); }
+.ic.dir { width: 24px; }
+.ic .faint { stroke-width: 1; opacity: .5; }
+.ic .hid { stroke-width: 1; opacity: .3; stroke-dasharray: 1.5 1.5; }
+.ic .plane { fill: currentColor; fill-opacity: .45; stroke-width: 1.8; }
+.pv .v { white-space: nowrap; }
+.sheethead b { display: inline-flex; align-items: center; gap: 8px; }
+.sheethead b .ic { color: var(--ink); }
 .pc.open .pv { border-color: var(--accent); background: var(--raised); }
 .pbox { width: 6ch; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--ink); font: 600 14px var(--f-code); text-align: right; }
 .pop { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 20; width: min(760px, 100vw); max-height: 55vh; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 8px; align-content: start; padding: 0 16px max(16px, env(safe-area-inset-bottom)); background: var(--panel); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); }
@@ -87,9 +101,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .phead .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .styles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .styles .note { grid-column: 1 / -1; }
-.dicon { width: 26px; height: 19px; vertical-align: middle; margin-right: 5px; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.dicon .wall { stroke: currentColor; stroke-width: 1; opacity: .55; }
-.dicon .ar { stroke: currentColor; stroke-width: 1.9; }
+.seg .ic { width: 30px; height: 25px; margin-right: 6px; }
 .seg button.withicon { height: 34px; display: inline-flex; align-items: center; }
 .spec textarea { width: 100%; min-height: 220px; resize: vertical; padding: 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg); color: var(--ink); font: 12px/16px var(--f-code); }
 .spec .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -149,6 +161,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 .how code { font: 13px var(--f-code); background: var(--panel); padding: 0 4px; border-radius: 3px; }
 .err { color: var(--err); font-weight: 600; }
 @media (max-width: 860px) {
+  .pv { padding: 0 4px; gap: 4px; } .pv.tool { padding: 0 4px; } .params { gap: 0; padding: 4px 2px; }
   .main { grid-template-columns: minmax(0, 1fr); }
   .viewer { height: 380px; }
   .strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -160,12 +173,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 <div class="wrap">
   <header>
     <h1>Cliffs from Spines</h1>
-    <p class="lede">A cliff as a population of rock masses. The envelope is cut into layers; spines are thrown in each, Width and Thickness apart; each grows until it meets its neighbours or the envelope. Every mass is then a hull for Rocks from Hulls to turn into faceted rock. Granite wall, Columns, Layered and Massive are settings of one engine.</p>
+    <p class="lede">A cliff as a population of rock masses. The envelope is cut into layers; spines are thrown in each, Width and Thickness apart; each grows until it meets its neighbours or the envelope. Every mass then becomes a faceted stone. Granite wall, Columns, Layered, Massive and Stone wall are settings of one engine, and Random draws a new one.</p>
   </header>
 
   <div class="bar params" id="params" role="toolbar" aria-label="Settings">
-    <button class="pv reset" id="reset" title="Put every setting back">Reset</button>
-    <span class="pc"><button class="pv" id="spec" aria-haspopup="dialog" title="Copy everything on screen as text, or load pasted text">Spec</button></span>
+    <button class="pv tool" id="reset" title="Reset: put every setting back" aria-label="Reset every setting"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></svg></button>
+    <span class="pc"><button class="pv tool" id="spec" aria-haspopup="dialog" title="Spec: copy everything on screen as text, or load pasted text" aria-label="Spec: copy or load the settings as text"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></span>
   </div>
 
   <div class="main">
@@ -862,7 +875,14 @@ const PRESETS = {
   massive: { direction: 'through', layers: 2, span: 30, wander: 15, width: 15, thickness: 11, vary: 45, joint: 0.5, fuzz: 5, order: 0 },
   wall: { direction: 'up', layers: 8, span: 0, wander: 0, width: 11, thickness: 16, vary: 12, joint: 0.3, fuzz: 0.5, order: 100 },
 };
-const STYLES = [['granite', 'Granite wall', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and merging into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['massive', 'Massive', 'Large irregular masses in two layers parallel to the front, broad faces, uneven joints'], ['wall', 'Stone wall', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate']];
+const STYLES = [['granite', 'Granite wall', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and merging into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['massive', 'Massive', 'Large irregular masses in two layers parallel to the front, broad faces, uneven joints'], ['wall', 'Stone wall', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'A new structure drawn at random each time it is chosen: direction, layers, spacing, wander, joints and fuzz']];
+// Random: a structure drawn from the ranges the styles use (it becomes the Random preset, so Reset and the * work as for any style)
+function randomStructure() {
+  const r = Math.random, of = a => a[Math.floor(r() * a.length)], at = (a, b, step) => +(Math.round((a + r() * (b - a)) / step) * step).toFixed(2);
+  const direction = of(['through', 'along', 'up']), order = r() < 0.25 ? at(60, 100, 1) : 0;
+  return { direction, layers: direction === 'up' ? of([1, 2, 3, 5, 8, 12]) : of([1, 2, 3]), span: at(0, 50, 1), wander: order ? at(0, 6, 1) : at(0, 20, 1), width: at(7, 16, 0.5), thickness: at(5, 14, 0.5), vary: at(10, 55, 1), joint: at(-0.5, 0.8, 0.1), fuzz: at(0, 8, 0.5), order };
+}
+PRESETS.random = randomStructure();
 const DEFAULTS = { style: 'granite', ...PRESETS.granite, squares: 1, height: 36, depth: 16, facets: 24, chamfered: 100, rtilt: 6, sink: 3, weather: 0, bedding: true, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, lines: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
@@ -873,16 +893,31 @@ function showValue(out, input, unit) {
   out.innerHTML = `<span class="ip" style="min-width:${digits}ch">${ip}</span><span class="fp" style="width:${places ? places + 1 : 0}ch">${fp ? '.' + fp : ''}</span>${unit ? `<span class="un">${unit}</span>` : ''}`;
 }
 const MM = '&nbsp;mm';
+// the bar's icons (each also heads its sheet)
+const svg = (body, cls = '', vb = '0 0 24 24') => `<svg class="ic ${cls}" viewBox="${vb}" aria-hidden="true">${body}</svg>`;
+const ICON = {
+  style: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>'),
+  envelope: svg('<path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/>'),
+  rocks: svg('<path d="M3.5 16.5 2.5 10l5-5.5 6.5-1.5 5.5 4 2.5 6.5-3 4.5-8.5 1.5z"/><path class="faint" d="M7.5 4.5 9 11l-6.5-1M9 11l6-3.5 6.5 6M9 11l1.5 8.5"/>'),
+};
+// a direction's picture: the envelope as a box (seen from the front, above and to the right) with a layer's plane across it
+function dirIcon(d) {
+  const W = 11, H = 10, D = 8, at = ([x, y, z]) => `${(2.5 + x + y * 0.8).toFixed(1)} ${(17.5 - z - y * 0.8).toFixed(1)}`, path = pts => 'M' + pts.map(at).join('L');
+  const plane = { up: [[0, 0, H / 2], [W, 0, H / 2], [W, D, H / 2], [0, D, H / 2]], along: [[W / 2, 0, 0], [W / 2, D, 0], [W / 2, D, H], [W / 2, 0, H]], through: [[0, D / 2, 0], [W, D / 2, 0], [W, D / 2, H], [0, D / 2, H]] }[d];
+  const box = [path([[0, 0, 0], [W, 0, 0], [W, 0, H], [0, 0, H], [0, 0, 0]]), path([[0, 0, H], [0, D, H], [W, D, H], [W, 0, H]]), path([[W, 0, 0], [W, D, 0], [W, D, H]])].join('');
+  const hid = path([[0, D, H], [0, D, 0], [W, D, 0]]) + path([[0, D, 0], [0, 0, 0]]);
+  return svg(`<path class="hid" d="${hid}"/><path class="faint" d="${box}"/><path class="plane" d="${path(plane)}Z"/>`, 'dir', '0 0 24 20');
+}
 const P_ = (key, label, min, max, step, unit, help) => ({ key, label, min, max, step, unit, help });
 // the settings, in groups on one line: a group shows its first value; a click opens its settings under it
 const GROUPS = [
-  { label: 'Envelope', items: [
+  { label: 'Envelope', icon: () => ICON.envelope, value: 'squares', items: [
     P_('squares', 'Squares', 1, 3, 1, '', 'How many 35 mm squares long the wall is.'),
     P_('height', 'Height', 12, 60, 1, MM, 'How tall the envelope is.'),
     P_('depth', 'Depth', 6, 35, 1, MM, 'How deep the envelope is, from the back of the square forward.'),
     P_('fuzz', 'Fuzz', 0, 12, 0.5, MM, 'How far short of the fuzzy top and front a stone may stop: a smooth field along the wall and each stone’s own draw.')] },
-  { label: 'Structure', items: [
-    { key: 'direction', label: 'Direction', choices: [['through', 'Through', '<path class="ar" d="M19 6.5 9 14.5M9 14.5h4.2M9 14.5l1.4-3.9"/>'], ['along', 'Along', '<path class="ar" d="M4.5 12h14M18.5 12l-3-2.4M18.5 12l-3 2.4"/>'], ['up', 'Up', '<path class="ar" d="M11.5 15.5v-12M11.5 3.5 9 6.5M11.5 3.5l2.5 3"/>']], help: 'Which way the spines run: through the wall back to front (stones show their ends), along it (slabs), or up (columns; with many layers, courses of slabs). The layers lie across it.' },
+  { label: 'Structure', icon: () => dirIcon(state.direction), value: 'layers', items: [
+    { key: 'direction', label: 'Direction', choices: [['through', 'Through'], ['along', 'Along'], ['up', 'Up']], icon: dirIcon, help: 'Which way the spines run: through the wall back to front (stones show their ends), along it (slabs), or up (columns; with many layers, courses of slabs). The layers lie across it.' },
     P_('layers', 'Layers', 1, 50, 1, '', 'How many layers the envelope is cut into across the direction; a spine starts and ends where layers meet (or at the envelope).'),
     P_('span', 'Span', 0, 95, 1, '%', 'The chance a spine goes on through one more plane: mostly short spines, fewer long ones, so breaks stagger.'),
     P_('wander', 'Wander', 0, 60, 1, '°', 'How far a spine turns at random from the direction (where layers meet turns by half of it).'),
@@ -891,7 +926,7 @@ const GROUPS = [
     P_('vary', 'Vary', 0, 80, 1, '%', 'How much each spine end’s size varies (a bigger end takes more of what it shares), and the joints with it.'),
     P_('order', 'Order', 0, 100, 1, '%', 'How regularly spines are placed: 0% thrown at random, 100% on a grid Width by Thickness, every other layer moved half a Width so the joints alternate (a laid wall); between, the grid is jittered.'),
     P_('joint', 'Joint', -3, 3, 0.1, MM, 'Where two stones meet, each stops half of this short of the split: over zero a gap (separate stones), under zero they reach into each other and merge. It changes each stone’s size; nothing moves.')] },
-  { label: 'Rocks', items: [
+  { label: 'Rocks', icon: () => ICON.rocks, value: 'facets', items: [
     P_('facets', 'Faces', 4, 80, 1, '', 'How many face planes each stone gets, spread over its faces by area.'),
     P_('chamfered', 'Chamfered', 0, 100, 1, '%', 'The share of each rock’s edge length chamfered.'),
     P_('rtilt', 'Tilt', 0, 25, 0.5, '°', 'How far each rock’s planes turn at random.'),
@@ -1071,7 +1106,7 @@ function rebuildThumbs() {
 
 // controls
 // a bottom sheet's head: its name and Done
-const sheetHead = label => { const h = document.createElement('div'); h.className = 'sheethead'; h.innerHTML = `<b>${label}</b>`; const b = document.createElement('button'); b.textContent = 'Done'; b.addEventListener('click', () => closePop(true)); h.append(b); return h; };
+const sheetHead = (label, icon = '') => { const h = document.createElement('div'); h.className = 'sheethead'; h.innerHTML = `<b>${icon}${label}</b>`; const b = document.createElement('button'); b.textContent = 'Done'; b.addEventListener('click', () => closePop(true)); h.append(b); return h; };
 // one popover open at a time; a click elsewhere or Escape closes it (Escape puts the values back)
 let openPop = null;
 function closePop(keep = true) { if (openPop) { const c = openPop; openPop = null; c(keep); } }
@@ -1079,8 +1114,7 @@ document.addEventListener('pointerdown', e => { if (openPop && !e.target.closest
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && openPop) closePop(false); });   // Escape puts the values back, wherever focus is
 const bar = $('params'), resetBtn = $('reset');
 // a direction's picture: the wall, seen from the front and a little above, and the way its spines run
-const dirIcon = path => `<svg class="dicon" viewBox="0 0 26 19" aria-hidden="true"><path class="wall" d="M2.5 7.5h16v9h-16zM2.5 7.5l4-4h16l-4 4M18.5 16.5l4-4v-9"/>${path}</svg>`;
-const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.choices) { const c = p.choices.find(x => x[0] === v); return (c[2] ? dirIcon(c[2]) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
+const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.choices) { const c = p.choices.find(x => x[0] === v); return (p.icon ? p.icon(v) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
 const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
 // one setting's row in a popover: a box to type in, its slider and its help
 function row(p, box) {
@@ -1088,8 +1122,8 @@ function row(p, box) {
     const wrap = document.createElement('div'); wrap.className = 'prow';
     wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`);
     const seg = document.createElement('div'); seg.className = 'seg';
-    for (const [v, label, icon] of p.choices) {
-      const b = document.createElement('button'); b.innerHTML = (icon ? dirIcon(icon) : '') + label; b.className = icon ? 'withicon' : ''; b.setAttribute('aria-pressed', state[p.key] === v ? 'true' : 'false');
+    for (const [v, label] of p.choices) {
+      const b = document.createElement('button'); b.innerHTML = (p.icon ? p.icon(v) : '') + label; b.className = p.icon ? 'withicon' : ''; b.setAttribute('aria-pressed', state[p.key] === v ? 'true' : 'false');
       b.addEventListener('click', () => { state[p.key] = v; for (const o of seg.children) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); update(); });
       seg.append(b);
     }
@@ -1117,16 +1151,16 @@ function row(p, box) {
 function groupChip(g) {
   const pc = document.createElement('span'); pc.className = 'pc';
   const btn = document.createElement('button'); btn.className = 'pv'; btn.setAttribute('aria-haspopup', 'dialog');
-  btn.innerHTML = `<span class="k">${g.label}</span><span class="v"></span>`;
+  btn.innerHTML = `<span class="gi"></span><span class="v"></span>`; btn.title = g.label;
   pc.append(btn); bar.insertBefore(pc, resetBtn);
   const lone = g.items.length === 1;
   // the chip shows the group's first value; the popover has them all
-  const show = () => { btn.querySelector('.v').innerHTML = g.items.slice(0, 1).map(p => fmt(p, state[p.key])).join('<span class="sep">·</span>') + (g.items.length > 1 ? '<span class="sep">…</span>' : ''); btn.setAttribute('aria-label', `${g.label}: ${g.items.map(p => p.label + ' ' + state[p.key]).join(', ')}; click to change`); };
+  const show = () => { btn.querySelector('.gi').outerHTML = g.icon().replace('class="ic', 'class="gi ic'); btn.querySelector('.v').innerHTML = fmt(g.items.find(p => p.key === g.value), state[g.value]); btn.setAttribute('aria-label', `${g.label}: ${g.items.map(p => p.label + ' ' + state[p.key]).join(', ')}; click to change`); };
   btn.addEventListener('click', () => {
     if (pc.classList.contains('open')) return;
     closePop(true);
     const was = pick(g.items.map(p => p.key)), v = btn.querySelector('.v');
-    const pop = document.createElement('div'); pop.className = 'pop' + (lone ? '' : ' group'); pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', g.label); pop.append(sheetHead(g.label));
+    const pop = document.createElement('div'); pop.className = 'pop' + (lone ? '' : ' group'); pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', g.label); pop.append(sheetHead(g.label, g.icon()));
     let first;
     if (lone) { first = document.createElement('input'); Object.assign(first, { type: 'text', inputMode: 'decimal', value: state[g.items[0].key], className: 'pbox' }); first.setAttribute('aria-label', g.label); v.replaceWith(first); pop.append(row(g.items[0], first)); }
     else { for (const p of g.items) pop.append(row(p)); first = pop.querySelector('.pbox'); }
@@ -1137,19 +1171,20 @@ function groupChip(g) {
   return show;
 }
 // the style: a preset of every setting that shapes the masses (Massive, Layered, Columnar); the engine is the same for all three
+// the bar shows a style's short name (Granite, Stone)
 function styleChip() {
   const pc = document.createElement('span'); pc.className = 'pc';
   const btn = document.createElement('button'); btn.className = 'pv'; btn.setAttribute('aria-haspopup', 'dialog');
   pc.append(btn); bar.insertBefore(pc, bar.firstChild);
-  const show = () => { const s = STYLES.find(x => x[0] === state.style); btn.innerHTML = `<span class="k">Style</span><span class="v">${s[1]}${edited() ? '*' : ''}</span>`; btn.setAttribute('aria-label', 'Style: ' + s[1] + (edited() ? ', edited' : '') + '; click to choose'); };
+  const show = () => { const s = STYLES.find(x => x[0] === state.style); btn.innerHTML = `${ICON.style}<span class="v">${s[1].replace(/ wall$/, '')}${edited() ? '*' : ''}</span>`; btn.title = 'Style'; btn.setAttribute('aria-label', 'Style: ' + s[1] + (edited() ? ', edited' : '') + '; click to choose'); };
   btn.addEventListener('click', () => {
     if (pc.classList.contains('open')) { closePop(true); return; }
     closePop(true);
-    const pop = document.createElement('div'); pop.className = 'pop styles'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Styles'); pop.append(sheetHead('Style'));
+    const pop = document.createElement('div'); pop.className = 'pop styles'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Styles'); pop.append(sheetHead('Style', ICON.style));
     for (const [key, label, about] of STYLES) {
       const b = document.createElement('button'); b.setAttribute('aria-pressed', key === state.style && !edited() ? 'true' : 'false');
       b.innerHTML = `<b>${label}</b><small>${about}</small>`;
-      b.addEventListener('click', () => { Object.assign(state, { style: key }, PRESETS[key]); closePop(true); syncUI(); update(); btn.focus(); });
+      b.addEventListener('click', () => { if (key === 'random') PRESETS.random = randomStructure(); Object.assign(state, { style: key }, PRESETS[key]); closePop(true); syncUI(); update(); btn.focus(); });
       pop.append(b);
     }
     pop.insertAdjacentHTML('beforeend', '<small class="note">A style sets Structure and Fuzz; * means one has been changed since.</small>');
