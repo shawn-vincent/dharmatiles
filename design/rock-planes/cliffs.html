@@ -206,7 +206,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, <b>Height</b> tall and <b>Depth</b> deep, standing at the back of the square. Its bottom, its back and its two ends (the tile's edges) are <b>crisp</b>: no mass crosses them. Its top and its front are <b>fuzzy</b>: each mass draws how far short of them it stops, up to <b>Fuzz</b>, from a smooth field along the wall (two thirds) and its own draw (one third), so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
       <li><b>Spines</b> run one <b>Direction</b>: <b>Through</b> the wall from back to front (so the stones show their ends), <b>Along</b> it (slabs) or <b>Up</b> (columns). <b>Planes</b> control planes stand across that direction, the first and last at the envelope's ends, the inner ones turned and moved at random by up to half of <b>Wander</b>; they organise the spines and never cut a stone. In each interval between two planes in turn, spines are started by dart throwing: a dart is a point between the two planes, its direction turned at random by up to <b>Wander</b>, and its spine runs back to the first plane and on to the next, and on through each further plane with chance <b>Span</b>, so breaks stagger. Its ends lie on its planes inside the envelope's crisp sides (or the dart misses), except that past the fuzzy top or front a spine ends where its own stone stops. A dart is kept only if it is at least <b>Size</b> from every spine already in the interval (the two ends' radii, measured across their sections, flattened by <b>Aspect</b>); until 80 darts in a row miss, the interval is not full. <b>Strata</b> holds spines to shared bands about a stone thick: a start is pulled to its band's middle, the spine runs flatter, and its thickness becomes the band's. Each end's size varies within <b>Vary</b>. One spine is one stone.</li>
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> Between every two spines there is one split. Two that never share an interval (they meet end to end) split on a control plane between them, so the planes order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared), so a bigger end takes more of what it shares. That plane separates the two spines whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b> sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they merge); each split adds a random part that grows with Vary. It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction, and every spine is a stone.</li>
-      <li><b>Bedding</b> (on by default, under Rocks): a stone whose underside overhangs past 65° (red; orange is fine) is made to stand on something, at construction, and never leaves its envelope. Stones are bedded from the lowest up, each on what is already there. A small gap (a face's drop to what is below, up to 2 mm) is closed by stretching the stone down, its top held; stretching also turns every face toward upright, so some faces need no drop at all (it holds the stone's footprint, so it stays in the envelope). A stone with faces further off gets one <b>corbel</b> (as the cliff element's support cone): the hull of the points of those faces and their sweep along a direction within 55° of straight down, the one that reaches a bedded stone or the ground soonest for all of them, until all have run into it; a direction that would carry any point out of the stone's envelope is not taken (if every one would, the nearest is, cut back to the envelope, holding up what it can), and the corbel is always cut by the envelope. Each wall of the corbel is parallel to the sweep, so it leans no more than 55°, or a copy of the underside, the lower one inside what it reaches. So a cantilever is held up by the stone beside or below it instead of a column to the ground, and the corbel holds up the stones above in turn.</li>
+      <li><b>Bedding</b> (on by default, under Rocks): a stone whose underside overhangs past 65° (red; orange is fine) is made to stand on something, at construction, and never leaves its envelope. Stones are bedded from the lowest up, each on what is already there. A small gap (a face's drop to what is below, up to 2 mm) is closed by stretching the stone down, its top held; stretching also turns every face toward upright, so some faces need no drop at all (it holds the stone's footprint, so it stays in the envelope). A stone with faces further off gets one <b>corbel</b> (as the cliff element's support cone): the hull of the points of those faces and their sweep along a direction within 55° of straight down, the one that reaches a bedded stone or the ground soonest for all of them, until all have run into it. A corbel is no longer than its stone is tall (at most 10 mm): a part of the underside nothing supports within that is left as it is, since a long strut across the face reads as a sliver, not a stone. A direction that would carry any point out of the stone's envelope is not taken (if every one would, the nearest is, cut back to the envelope, holding up what it can), and the corbel is always cut by the envelope. Each wall of the corbel is parallel to the sweep, so it leans no more than 55°, or a copy of the underside, the lower one inside what it reaches. So a cantilever is held up by the stone beside or below it instead of a column to the ground, and the corbel holds up the stones above in turn.</li>
       <li><b>Rocks.</b> Each mass is a hull for Rocks from Hulls: <b>Rocks</b> sets its faces, chamfers, tilt, sink and weathering. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap and merge. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the control planes and the spines.</li>
     </ol>
     <p class="hint"><b>Granite wall</b>, the first style: two planes, the back and the front of the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; Joint under zero, so they merge into one irregular mass. <b>Columns</b>: two planes, the ground and the top, so every spine is one upright column from a point on the ground, a hair apart.</p>
@@ -1063,6 +1063,7 @@ function massSurface(masses) {
 // (so the corbel's walls lean no more than the limit), toward whichever bedded stone or the ground it reaches soonest, until all of
 // it runs into that; the corbel is then part of the stone, and holds up the stones above in turn
 const HULL_DIRS = fib(32);   // a corbel's outline from at most this many points: the brute-force hull is cubic in them
+const CORBEL_MAX = 10;   // mm: the longest a corbel runs
 const OVER = 55, LIMIT = 65, SIN_LIMIT = Math.sin(LIMIT * DEG), SMALL = 2;   // bed only what is past the steepest (red); corbels lean no more than the overhang (55°)
 const SWEEPS = (() => { const out = [[0, 0, -1]]; for (const a of [25, 40, OVER - 1]) for (let k = 0; k < 8; k++) { const ph = 2 * Math.PI * k / 8 + (a === 40 ? Math.PI / 8 : 0); out.push([Math.sin(a * DEG) * Math.cos(ph), Math.sin(a * DEG) * Math.sin(ph), -Math.cos(a * DEG)]); } return out; })();
 function bed(stones, envs) {
@@ -1136,12 +1137,18 @@ function bed(stones, envs) {
     for (const f of st.faces) if (past(f) && faceArea(f) >= 0.05) for (const v of [...f.verts, centroidOf(f.verts)]) if (hit(v, [0, 0, -1], 0.1) >= 0.1) loose.push(v);
     // the hull's corners: of the points, those furthest along any of many directions (the hull is all that matters, and few points
     // keep it quick)
-    const P = loose.length > 24 ? dedupe(HULL_DIRS.map(n => loose.reduce((m, v) => dot(n, v) > dot(n, m) ? v : m)), 1e-6) : dedupe(loose, 1e-3);
+    // a corbel is short: no longer than the stone is tall (at most CORBEL_MAX). A point that no sweep supports within that is left
+    // as it is (a long strut across the face reads as a sliver, not a stone)
+    let bot = Infinity; for (const f of st.faces) for (const v of f.verts) bot = Math.min(bot, v[2]);
+    const cap = Math.min(CORBEL_MAX, top - bot), near = loose.filter(v => SWEEPS.some(w => hit(add(v, mul(w, 1e-4)), w, cap + 1e-6) <= cap));
+    if (near.length < loose.length) left++;
+    const P = near.length > 24 ? dedupe(HULL_DIRS.map(n => near.reduce((m, v) => dot(n, v) > dot(n, m) ? v : m)), 1e-6) : dedupe(near, 1e-3);
     if (P.length) {
       let best = null, any = null;
       const env = envs[k], inEnv = v => env.every(q => dot(q.n, v) <= q.b + 1e-6);
       for (const w of SWEEPS) {
-        let L = 0; for (const v of P) { L = Math.max(L, hit(add(v, mul(w, 1e-4)), w)); if (best && L >= best.L) break; }
+        let L = 0; for (const v of P) { L = Math.max(L, hit(add(v, mul(w, 1e-4)), w, cap + 1e-6)); if (L > cap || (best && L >= best.L)) break; }
+        if (L > cap) continue;
         // a corbel never leaves its stone's envelope: a sweep that would carry any point out of it is not taken
         if (L < Infinity && (!any || L < any.L)) any = { w, L };
         if (L < Infinity && (!best || L < best.L) && P.every(v => inEnv(add(v, mul(w, L + 0.2))))) best = { w, L };
@@ -1213,7 +1220,7 @@ const GROUPS = [
     P_('rtilt', 'Tilt', 0, 25, 0.5, '°', 'How far each rock’s planes turn at random.'),
     P_('sink', 'Sink', 0, 10, 0.25, '%', 'How deep each rock’s planes bite, of its size; this opens the joints between rocks.'),
     P_('weather', 'Weathering', 0, 2, 0.05, MM, 'Rounds every outward joint of each rock to this radius (slow: a distance field per rock).'),
-    { key: 'bedding', label: 'Bedding', bool: true, help: 'A stone whose underside overhangs past 65° (red) is made to stand on something, inside its envelope: a small gap (up to 2 mm) is closed by stretching it down, its top held; further off, the stone gets a corbel, swept at no more than 55° toward the nearest stone below (or the ground). Stones are bedded from the lowest up.' }] },
+    { key: 'bedding', label: 'Bedding', bool: true, help: 'A stone whose underside overhangs past 65° (red) is made to stand on something, inside its envelope: a small gap (up to 2 mm) is closed by stretching it down, its top held; further off, the stone gets a short corbel (no longer than the stone is tall, at most 10 mm), swept at no more than 55° toward the nearest stone below (or the ground). Stones are bedded from the lowest up.' }] },
 ];
 const CHECKS = ['ghost', 'planesOn', 'spinesOn', 'lines'];
 const CLIFF_KEYS = ['squares', 'height', 'depth', ...Object.keys(PRESETS.massive)];
@@ -1327,7 +1334,7 @@ function showStats(C, surf, ms) {
     ['Cuts', C.cuts],
     ['Masses fill the envelope', (C.fill * 100).toFixed(1) + '%'],
     ...(state.draw === 'rocks' ? [['Rocks fill it', (surf.vol / C.envVol * 100).toFixed(1) + '%'], ['Faces', surf.faces.length]] : []),
-    ...(state.draw === 'rocks' && surf.bed ? [['Bedded', `${surf.bed.stretched} stretched, ${surf.bed.corbels} corbels` + (surf.bed.left ? `, ${surf.bed.left} faces left` : '')]] : []),
+    ...(state.draw === 'rocks' && surf.bed ? [['Bedded', `${surf.bed.stretched} stretched, ${surf.bed.corbels} corbels` + (surf.bed.left ? `, ${surf.bed.left} partly beyond reach` : '')]] : []),
     ['Masses in', C.ms.toFixed(0) + ' ms'],
     ...(state.draw === 'rocks' ? [['Rocks in', ms.toFixed(0) + ' ms']] : []),
   ];
@@ -1485,7 +1492,9 @@ function specText() {
     ...(problems.length ? problems.slice(-12) : ['none']), ''].join('\n');
 }
 function loadSpec(text) {
-  const lines = text.split('\n').map(l => l.trim());
+  // one line per entry; text whose line breaks were lost (pasted into a chat) is split before each known word
+  const words = ['style', 'seed', 'view', 'camera', ...SPEC_KEYS()];
+  const lines = text.replace(/\s+(\[[a-z]+\])\s+/g, '\n$1\n').replace(new RegExp('\\s+(?=(' + words.join('|') + ')\\s)', 'g'), '\n').replace(/\s+(?=[A-Z][a-z ]+:)/g, '\n').split('\n').map(l => l.trim());
   if (!/^cliffs-from-spines spec/.test(lines[0] || '')) throw new Error('this is not a Cliffs from Spines spec');
   const val = (k, v) => { const d = DEFAULTS[k]; return typeof d === 'boolean' ? v === 'true' : typeof d === 'number' ? +v : v; };
   let part = 'head', cam = null;
