@@ -99,7 +99,7 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
     <div class="rule"><span class="n">2</span><h3>Everything below is known <span class="tag agreed">agreed</span></h3><p>When a stone is built, what is under it is finished. A ray down from any point of its bottom says what holds it and how far away it is.</p></div>
     <div class="rule"><span class="n">3</span><h3>The bottom is a choice <span class="tag agreed">agreed</span></h3><p>The mass is the space a stone may use; the stone's bottom can be any flat face inside it, any size. A 65° flare rises from the bottom, so the stone is printable by construction. A smaller bottom means a smaller stone.</p></div>
     <div class="rule"><span class="n">4</span><h3>Supported, or bridged <span class="tag agreed">agreed</span></h3><p>A point of the bottom must rest on something (within 0.15 mm, or inside a stone), or lie on the line between two resting points no more than <b>Bridge</b> apart. Bridge is a setting (15 mm). The same rule paints red.</p></div>
-    <div class="rule"><span class="n">5</span><h3>Look only as deep as a held top can sink <span class="tag open">proposed</span></h3><p>Under a stone that will rest on it, a top face keeps its facets, but their turn is limited so they drop no more than one Sink bite across the footprint. The stone above looks down exactly that far.</p></div>
+    <div class="rule"><span class="n">5</span><h3>A top under a mass stays on its plane <span class="tag open">proposed</span></h3><p>Where a stone's top is a face shared with a mass above, the part under that mass's footprint is kept flat on its plane, as a bottom is; facets cut only outside it. Both sides of a joint are flat, so the stone above looks down only the 0.15 mm tolerance.</p></div>
   </div>
 </section>
 
@@ -142,22 +142,25 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
 
 <section id="depth">
   <div class="text">
-    <h2>5 · How far down to look</h2>
-    <p>The stone below was built by the same stone builder, so how rough its top is follows from its settings. Facets bite by <b>Sink</b> (1.5..3% of the stone's size: a few tenths of a millimetre). What drops a top far below its plane is <b>Tilt</b>: every plane is turned, and a turned plane falls away across the face.</p>
-    <p>A support found below the bottom's plane holds nothing unless the bottom comes down to it, and a flat bottom brought down to the deepest point buries the high ones. So the useful depth is small, and the proposal makes it small by construction: under the footprint of a stone above, a top's planes may turn only as far as keeps their drop across the footprint within one Sink bite. Outside footprints, the full Tilt.</p>
-    <p>Then the stone above looks down one Sink bite plus the 0.15 mm tolerance, a few tenths of a millimetre, and finds most of the top there. Switch the limit off to see what Tilt does to it.</p>
-    <p class="cap">True proportions: an 8 mm stretch of the top under a stone, magnified with both axes alike.</p>
+    <h2>5 · A flat bed under the stone above</h2>
+    <p>The stone below is built by the same stone builder, so its top is faceted: <b>Sink</b> bites a few tenths of a millimetre, and <b>Tilt</b> turns each plane so it falls away across the face, up to a millimetre or two. A support found below the bottom's plane holds nothing unless the bottom comes down to it, so a rough top under a stone is mostly missed.</p>
+    <p>So the top is constrained like the bottom. When a stone is built, the masses above it are known. Where its top is a face it shares with a mass above, the part under that mass's footprint is kept on its plane: a facet plane, or the crown's turn, may cut the top only where it leaves the footprint whole. The stone is convex, so that is a check on the footprint's corners, the guard that already keeps facets off the touch point.</p>
+    <p>A top under a stone is hidden, so this costs nothing that shows. Outside the footprint (the top of the cliff, steps, where the stone above sits back) Tilt and Sink apply in full. Both sides of the joint are then flat on one plane: the stone above looks down only the 0.15 mm tolerance, and support is where the two overlap.</p>
+    <p>Move the footprint; switch to "Faceted everywhere" for today's top.</p>
+    <p class="cap">True proportions: a 14 mm stretch of the top, both axes alike. The footprint is the mass's, not the stone's: the stone above is not built yet, and its bottom always lies inside its mass's.</p>
   </div>
   <div class="fig">
-    <svg id="depSvg" viewBox="0 0 720 300" role="img" aria-label="The top of the stone below, under the plane of the stone above, with the look band and the points it finds"></svg>
+    <svg id="depSvg" viewBox="0 0 720 300" role="img" aria-label="The top of the stone below, with the footprint of the mass above kept flat and facets outside it"></svg>
     <div class="ctl">
-      <span class="seg" role="group" aria-label="Turn under the footprint"><button id="limOn" aria-pressed="true">Turn limited</button><button id="limOff" aria-pressed="false">Full Tilt</button></span>
+      <span class="seg" role="group" aria-label="The top under the footprint"><button id="limOn" aria-pressed="true">Flat under the footprint</button><button id="limOff" aria-pressed="false">Faceted everywhere</button></span>
+      <label for="fa">Footprint from <input id="fa" type="range" min="0" max="13" step="0.25" value="3"><output id="faOut"></output></label>
+      <label for="fb">to <input id="fb" type="range" min="1" max="14" step="0.25" value="11"><output id="fbOut"></output></label>
       <label for="tilt">Tilt <input id="tilt" type="range" min="0" max="20" step="0.5" value="9"><output id="tiltOut"></output></label>
       <label for="sink">Sink <input id="sink" type="range" min="0.5" max="8" step="0.25" value="3"><output id="sinkOut"></output></label>
       <label for="size">Stone size <input id="size" type="range" min="4" max="20" step="0.5" value="9.5"><output id="sizeOut"></output></label>
       <button class="btn" id="reseed">Another draw</button>
     </div>
-    <div class="key"><span style="--c: var(--held)">within reach: rests</span><span style="--c: var(--over)">deeper: does not</span><span style="--c: color-mix(in srgb, var(--accent) 25%, transparent)">the look band</span></div>
+    <div class="key"><span style="--c: var(--held)">under the footprint, rests</span><span style="--c: var(--over)">under the footprint, too deep</span><span style="--c: var(--stone-edge)">top in the open</span></div>
     <div class="read" id="depRead"></div>
   </div>
 </section>
@@ -187,9 +190,9 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
     <ol>
       <li><b>Wait</b> until every stone under the mass's bottom is finished (rule 1).</li>
       <li><b>The plane:</b> the mass's own bottom face, the face it shares with the layer below.</li>
-      <li><b>Look down</b> from points over that face, one Sink bite of the stone below plus 0.15 mm (rule 5). Where a ray finds a stone or the ground within that, the point rests.</li>
+      <li><b>Look down</b> from points over that face, 0.15 mm (rule 5: the tops below are flat under this mass). Where a ray finds a stone or the ground within that, the point rests.</li>
       <li><b>The bottom</b> is the resting points plus every line between two of them no more than Bridge apart (rule 4), cut to the mass.</li>
-      <li><b>The stone</b> is the mass inside the 65° flare from that bottom (rule 3), then faceted and chamfered as now; the bottom is kept, and under the footprints of masses above, planes turn only within one Sink bite (rule 5).</li>
+      <li><b>The stone</b> is the mass inside the 65° flare from that bottom (rule 3), then faceted and chamfered as now; the bottom is kept, and so is its top under the footprint of each mass above (rule 5).</li>
       <li>It is <b>finished</b>: it rests by construction. No stretch, no repair, nothing below its mass.</li>
     </ol>
   </div>
@@ -207,9 +210,9 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
         <tr><td>A stone is built from its mass alone, then bedded.</td><td>A stone is built against the finished stones under it.</td></tr>
         <tr><td>The bottom is the mass's whole bottom.</td><td>The bottom is the part of the mass's bottom that rests or bridges.</td></tr>
         <tr><td>Bedding stretches the stone down by the widest gap (within 6 mm), past its mass.</td><td>No stretch; a stone never leaves its mass.</td></tr>
-        <tr><td>Tops are faceted with the full Tilt everywhere.</td><td>Under a footprint, a top's turn drops no more than one Sink bite.</td></tr>
+        <tr><td>Tops are faceted with the full Tilt everywhere.</td><td>Under the footprint of a mass above, a top stays on its plane; facets cut only outside it.</td></tr>
         <tr><td>Red is painted per triangle: two held corners hold it.</td><td>Red is rule 4 exactly: rests, or bridged within Bridge.</td></tr>
-        <tr><td>How far to look: up to 6 mm.</td><td>One Sink bite of the stone below plus 0.15 mm.</td></tr>
+        <tr><td>How far to look: up to 6 mm.</td><td>0.15 mm, the tolerance.</td></tr>
       </tbody>
     </table>
   </div>
@@ -221,7 +224,7 @@ svg text { font-family: var(--f-code); font-size: 11px; fill: var(--plate-ink); 
     <ul>
       <li><b>Joint below zero.</b> Overlapping masses make "under" fuzzy where they overlap; the proposal judges it from bottoms over tops and treats a point inside the stone below as resting.</li>
       <li><b>A stone with no resting point at all</b> (a lip with nothing within reach): the allowed bottom is empty. Options: it keeps a point bottom at its lowest corner and is painted red, or its mass is given to its neighbours.</li>
-      <li><b>Chamfers</b> along a held top's edge are narrow and usually bridged; if Bridge is set below twice their width, the same turn limit would apply to them.</li>
+      <li><b>Chamfers</b> along a held top's edge, and the joints between the stones below, are what Bridge spans now. Chamfers are Sink-sized, so the usual Bridge spans them easily; with Bridge set very small, a chamfer under a footprint would also be kept off it.</li>
       <li><b>Bridge</b> belongs to the printer: on this page a setting beside Bedding; in the program, in the printer profile with the 55° and 65° angles. A new word, so Orin reviews it before it is built.</li>
     </ul>
   </div>
@@ -306,46 +309,47 @@ const area = poly => Math.abs(poly.reduce((s, p, i) => { const q = poly[(i + 1) 
   draw();
 })();
 
-// ---------- 5: how far down to look ----------
+// ---------- 5: a flat bed under the stone above ----------
 (function () {
-  const svg = $('depSvg'), W = 8, S = 85, X0 = 20, ZT = 50, P = (x, z) => [X0 + x * S, ZT - z * S];
-  let limited = true, seed = 7;
+  const svg = $('depSvg'), W = 14, S = 48, X0 = 24, ZT = 120, P = (x, z) => [X0 + x * S, ZT - z * S], TOL = 0.15;
+  let flat = true, seed = 7;
   const rng = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const draw = () => {
     const tilt = +$('tilt').value, sink = +$('sink').value, size = +$('size').value;
+    let fa = +$('fa').value, fb = +$('fb').value; if (fb < fa + 1) { fb = Math.min(W, fa + 1); $('fb').value = fb; }
     $('tiltOut').textContent = '0..' + tilt + '°'; $('sinkOut').textContent = '½..' + sink + '%'; $('sizeOut').textContent = size + ' mm';
-    const bite = sink / 100 * size, band = bite + 0.15, r = rng(seed);
-    // the planes over this stretch: the crown through the touch point (x = 2, on the plane) and facets, each through its point at a
-    // drawn depth and turned by a drawn angle; limited, a plane's drop across the footprint stays within one bite
-    const capT = bite / W;
-    const turnT = () => { let t = Math.tan(r() * tilt * DEG) * (r() < 0.5 ? -1 : 1); if (limited) t = Math.max(-capT, Math.min(capT, t)); return t; };
-    const planes = [{ x: 2, d: 0, t: turnT() }];
-    for (let i = 0; i < 5; i++) planes.push({ x: 0.8 + i * 1.7 + r() * 0.6, d: bite * (0.5 + 0.5 * r()), t: turnT() });
-    // the guards: a facet never cuts the touch patch (x 1.6..2.4 stays on the plane)
-    const line = p => x => -p.d + p.t * (x - p.x);
-    const lines = planes.map((p, i) => { const f = line(p); if (i === 0) return f; const lift = Math.max(0, -f(1.6), -f(2.4)); return x => f(x) + lift; });
+    $('faOut').textContent = fa + ' mm'; $('fbOut').textContent = fb + ' mm';
+    const bite = sink / 100 * size, r = rng(seed);
+    // the planes: the crown through the touch point (on the plane) and facets, each through its point at a drawn depth, turned by a drawn angle
+    const tx = (fa + fb) / 2, turnT = () => Math.tan(r() * tilt * DEG) * (r() < 0.5 ? -1 : 1);
+    const planes = [{ x: tx, d: 0, t: turnT() }];
+    for (let i = 0; i < 9; i++) planes.push({ x: 0.5 + i * 1.5 + r() * 0.8, d: bite * (0.5 + 0.5 * r()), t: turnT() });
+    // the guard: a plane is lifted until it leaves the kept stretch whole; a plane's lowest point over a stretch is at one of its ends,
+    // so the check is on the ends (in 3D, on the footprint's corners). Flat: the kept stretch is the footprint. Faceted: only the touch point
+    const [ka, kb] = flat ? [fa, fb] : [tx - 0.4, tx + 0.4];
+    const lines = planes.map(p => { const f = x => -p.d + p.t * (x - p.x), lift = Math.max(0, -f(ka), -f(kb)); return x => f(x) + lift; });
     const top = x => Math.min(0, ...lines.map(f => f(x)));
     svg.innerHTML = '';
-    const N = 320, pts = []; for (let i = 0; i <= N; i++) { const x = W * i / N; pts.push([x, top(x)]); }
+    const N = 420, pts = []; for (let i = 0; i <= N; i++) { const x = W * i / N; pts.push([x, top(x)]); }
     // the stone below
-    el('polygon', { points: [...pts.map(([x, z]) => P(x, z)), P(W, -3), P(0, -3)].map(p => p.join(',')).join(' '), fill: css('--stone'), stroke: 'none' }, svg);
-    // the look band, under the plane
-    el('rect', { x: X0, y: ZT, width: W * S, height: band * S, fill: css('--accent'), 'fill-opacity': .18 }, svg);
-    // the top, coloured by whether it is within reach
-    let held = 0;
-    for (let i = 0; i < N; i++) { const a = pts[i], b = pts[i + 1], ok = (a[1] + b[1]) / 2 >= -band - 1e-9; if (ok) held++;
-      el('line', { x1: P(...a)[0], y1: P(...a)[1], x2: P(...b)[0], y2: P(...b)[1], stroke: ok ? css('--held') : css('--over'), 'stroke-width': 3 }, svg); }
-    // the plane of the stone above: its bottom
-    el('line', { x1: X0, y1: ZT, x2: X0 + W * S, y2: ZT, stroke: css('--plate-ink'), 'stroke-width': 2 }, svg);
-    el('text', { x: X0 + 4, y: ZT - 8 }, svg).textContent = 'the bottom of the stone above (its plane)';
-    el('text', { x: X0 + 4, y: ZT + band * S + 14 }, svg).textContent = `look ${band.toFixed(2)} mm down`;
+    el('polygon', { points: [...pts.map(([x, z]) => P(x, z)), P(W, -3.4), P(0, -3.4)].map(p => p.join(',')).join(' '), fill: css('--stone'), stroke: 'none' }, svg);
+    // the mass above, over its footprint, standing on the plane
+    el('rect', { x: X0 + fa * S, y: ZT - 1.8 * S, width: (fb - fa) * S, height: 1.8 * S, fill: css('--stone-3'), stroke: css('--stone-edge'), 'stroke-dasharray': '5 4', 'stroke-width': 1.2 }, svg);
+    el('text', { x: X0 + fa * S + 6, y: ZT - 1.8 * S + 16 }, svg).textContent = 'the mass above';
+    // the plane, faint where open and dark under the footprint
+    el('line', { x1: X0, y1: ZT, x2: X0 + W * S, y2: ZT, stroke: css('--plate-ink'), 'stroke-opacity': .35, 'stroke-dasharray': '3 4' }, svg);
+    // the top under the footprint, coloured by whether it rests (within the tolerance); outside it, the top in the open
+    let held = 0, under = 0, deepOpen = 0;
+    for (let i = 0; i < N; i++) { const a = pts[i], b = pts[i + 1], xm = (a[0] + b[0]) / 2, zm = (a[1] + b[1]) / 2, inF = xm >= fa && xm <= fb;
+      if (inF) { under++; if (zm >= -TOL - 1e-9) held++; } else deepOpen = Math.max(deepOpen, -zm);
+      el('line', { x1: P(...a)[0], y1: P(...a)[1], x2: P(...b)[0], y2: P(...b)[1], stroke: !inF ? css('--stone-edge') : zm >= -TOL - 1e-9 ? css('--held') : css('--over'), 'stroke-width': inF ? 3.5 : 2 }, svg); }
+    el('text', { x: X0 + 4, y: ZT + 3.4 * S - 10 }, svg).textContent = 'the stone below';
     // a scale bar: 1 mm
     el('line', { x1: X0 + (W - 1) * S, y1: 285, x2: X0 + W * S, y2: 285, stroke: css('--plate-ink'), 'stroke-width': 2 }, svg);
     el('text', { x: X0 + (W - 1) * S, y: 278 }, svg).textContent = '1 mm';
-    const deep = -Math.min(...pts.map(p => p[1]));
-    $('depRead').innerHTML = `<span>Sink bite ${bite.toFixed(2)} mm</span><span>deepest ${deep.toFixed(2)} mm</span><span class="${held / N > 0.6 ? 'good' : 'bad'}">${(held / N * 100).toFixed(0)}% of this stretch within reach</span>`;
+    $('depRead').innerHTML = `<span class="${held / under > 0.9 ? 'good' : 'bad'}">${(held / under * 100).toFixed(0)}% of the footprint rests</span><span>look 0.15 mm down</span><span>top in the open: down to ${deepOpen.toFixed(2)} mm</span>`;
   };
-  for (const id of ['tilt', 'sink', 'size']) $(id).addEventListener('input', draw);
+  for (const id of ['tilt', 'sink', 'size', 'fa', 'fb']) $(id).addEventListener('input', draw);
   const setLim = v => { limited = v; $('limOn').setAttribute('aria-pressed', v); $('limOff').setAttribute('aria-pressed', !v); draw(); };
   $('limOn').addEventListener('click', () => setLim(true)); $('limOff').addEventListener('click', () => setLim(false));
   $('reseed').addEventListener('click', () => { seed = (seed * 7919 + 13) % 100003; draw(); });
