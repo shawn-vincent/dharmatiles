@@ -1650,7 +1650,7 @@ const sheetHead = (label, icon = '') => { const h = document.createElement('div'
 // one popover open at a time; a click elsewhere or Escape closes it (Escape puts the values back)
 let openPop = null;
 function closePop(keep = true) { if (openPop) { const c = openPop; openPop = null; c(keep); } }
-document.addEventListener('pointerdown', e => { if (openPop && !e.target.closest('.pc.open')) closePop(true); });
+document.addEventListener('pointerdown', e => { if (openPop && !e.target.closest('.pc.open, .pop')) closePop(true); });   // a tap off the chip and its sheet closes it
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && openPop) closePop(false); });   // Escape puts the values back, wherever focus is
 const bar = $('params'), resetBtn = $('reset');
 // a direction's picture: the wall, seen from the front and a little above, and the way its spines run
@@ -1765,8 +1765,9 @@ function groupChip(g) {
     let first;
     if (lone) { const p0 = g.items[0]; first = document.createElement('input'); Object.assign(first, { type: 'text', inputMode: p0.range ? 'text' : 'decimal', value: p0.range ? rangeText(state[p0.key]) : state[p0.key], className: p0.range ? 'pbox rng' : 'pbox' }); first.setAttribute('aria-label', g.label); v.replaceWith(first); pop.append(row(g.items[0], first)); }
     else { for (const p of g.items) pop.append(row(p)); first = pop.querySelector('.pbox'); }
-    pc.append(pop); pc.classList.add('open');   // no focus: on a phone it would raise the keyboard; tap the box to type
-    pc.addEventListener('focusout', e => { if (openPop && !pc.contains(e.relatedTarget)) closePop(true); });
+    document.body.append(pop); pc.classList.add('open');   // on the page, not in the bar: a phone's Safari clips a fixed sheet inside a scrolling bar. No focus: on a phone it would raise the keyboard; tap the box to type
+    const away = e => { if (openPop && e.relatedTarget && !pc.contains(e.relatedTarget) && !pop.contains(e.relatedTarget)) closePop(true); };   // focus gone from the chip and its sheet
+    pc.addEventListener('focusout', away); pop.addEventListener('focusout', away);
     openPop = keep => { if (!keep && Object.keys(was).some(k => state[k] !== was[k])) { Object.assign(state, was); update(); } pop.remove(); if (lone) first.replaceWith(v); pc.classList.remove('open'); show(); };
   });
   return show;
@@ -1788,7 +1789,7 @@ function styleChip() {
       pop.append(b);
     }
     pop.insertAdjacentHTML('beforeend', '<small class="note">A style sets Height, Depth and Structure; * means one has been changed since.</small>');
-    pc.append(pop); pc.classList.add('open');   // no focus moved: the sheet is read where it is
+    document.body.append(pop); pc.classList.add('open');   // no focus moved: the sheet is read where it is
     pop.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { closePop(false); btn.focus(); } });
     openPop = () => { pop.remove(); pc.classList.remove('open'); };
   });
@@ -1845,7 +1846,7 @@ function loadSpec(text) {
     acts.append(msg);
     ta.addEventListener('input', () => { ta.dataset.edited = '1'; say(''); });
     ta.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') closePop(true); });
-    pop.append(ta, acts); pc.append(pop); pc.classList.add('open');
+    pop.append(ta, acts); document.body.append(pop); pc.classList.add('open');
     copy();   // the clipboard at once (the box is not focused: no keyboard on a phone)
     openPop = () => { pop.remove(); pc.classList.remove('open'); };
   });
