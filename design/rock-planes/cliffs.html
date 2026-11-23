@@ -549,6 +549,31 @@ function meshOf(surf, foot, opt) {
   }
   return grp;
 }
+// ---------- the reference miniature ----------
+// A 28 mm scale figure on a 25 mm round base, glassy, standing on the ground in front of the cliff's left end, for judging scale.
+// The figure (miniature-28mm.stl, beside this page) is Auguste Rodin's The Age of Bronze, from Scan The World's scan (CC0, Wikimedia
+// Commons: File:The Age Of Bronze (Auguste Rodin).stl): its plinth cut off, cut to 16,000 triangles, soles at zero, 31 mm to its raised
+// hand (eyes at about 28 mm), facing -y.
+const MINI_BASE = { r: 12.5, top: 11.5, h: 3.5 };   // mm: the base's radius at the ground and at its top, and its height
+const MINI_CLEAR = 2.5;                              // mm between the base and the envelope's front left corner, each way
+function stlGeometry(buf) {
+  const dv = new DataView(buf), n = dv.getUint32(80, true);
+  if (84 + 50 * n !== buf.byteLength) throw new Error(`not a binary STL: ${n} triangles want ${84 + 50 * n} bytes, the file has ${buf.byteLength}`);
+  const pos = new Float32Array(9 * n);
+  for (let i = 0; i < n; i++) for (let k = 0; k < 9; k++) pos[9 * i + k] = dv.getFloat32(84 + 50 * i + 12 + 4 * k, true);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
+}
+function miniOf() {
+  const grp = new THREE.Group(), glass = c => new THREE.MeshLambertMaterial({ color: c, transparent: true, opacity: 0.4, depthWrite: false });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(MINI_BASE.top, MINI_BASE.r, MINI_BASE.h, 64), glass(0x4A5568));
+  base.rotation.x = Math.PI / 2; base.position.z = MINI_BASE.h / 2; base.renderOrder = 5; grp.add(base);
+  fetch('miniature-28mm.stl').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.arrayBuffer(); }).then(buf => {
+    const fig = new THREE.Mesh(stlGeometry(buf), glass(0x5B6B82)); fig.position.z = MINI_BASE.h; fig.renderOrder = 6; grp.add(fig); draw();
+  }).catch(e => { $('err').hidden = false; $('err').textContent = 'The reference miniature could not be loaded: ' + e.message; problems.push('miniature: ' + e.message); console.error(e); });
+  return grp;
+}
+// stands it at the envelope's front left corner, clear of it
+function placeMini(C) { mini.position.set(C.lo[0] - MINI_BASE.r - MINI_CLEAR, C.lo[1] - MINI_BASE.r - MINI_CLEAR, 0); }
 function disposeGroup(grp) { grp.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
 function makeScene() {
   const scene = new THREE.Scene();
@@ -1849,7 +1874,7 @@ function cliffFor(seed) {
 }
 
 const viewerEl = $('viewer');
-let renderer, scene, camera, persp, ortho, controls, rockObj = null, extraObj = null, thumbR, thumbScene, thumbPersp, thumbOrtho;
+let renderer, scene, camera, persp, ortho, controls, rockObj = null, extraObj = null, mini = null, thumbR, thumbScene, thumbPersp, thumbOrtho;
 const homeDir = () => new THREE.Vector3(34, -50, 30).normalize();
 const focus = () => new THREE.Vector3(0, 17.5 - state.depth[1] / 2, state.height[1] / 2);
 const reachOf = () => Math.max(35 * state.squares, state.height[1]) * 2.3;
@@ -1858,6 +1883,7 @@ function initGL() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   viewerEl.prepend(renderer.domElement);
   scene = makeScene();
+  mini = miniOf(); scene.add(mini);
   persp = new THREE.PerspectiveCamera(35, 1, 0.5, 2000);
   ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -1000, 2000);
   for (const c of [persp, ortho]) { c.up.set(0, 0, 1); c.position.copy(homeDir().multiplyScalar(reachOf()).add(focus())); }
@@ -2014,6 +2040,7 @@ function show(C, surf) {
     rockObj = meshOf(surf, 0, { lines: state.lines }); scene.add(rockObj);
     if (extraObj) { scene.remove(extraObj); disposeGroup(extraObj); }
     extraObj = extras(C, surf); scene.add(extraObj);
+    placeMini(C);
     draw();
     $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed;
     showStats(C, surf, surf.took);
