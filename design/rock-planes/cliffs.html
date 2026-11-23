@@ -342,7 +342,15 @@ function turnBy(n, deg, r) {
   return unit(add(mul(n, Math.cos(th)), add(mul(u, Math.sin(th) * Math.cos(ph)), mul(v, Math.sin(th) * Math.sin(ph)))));
 }
 // a stream keyed by any words, for jobs that must not move one another
-function keyed(...keys) { let h = 2166136261; for (const ch of keys.join('/')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return mulberry32(h >>> 0); }
+function keyed(...keys) {   // the FNV hash of keys.join('/'), made without the joined string
+  let h = 2166136261;
+  for (let i = 0; i < keys.length; i++) {
+    if (i) { h ^= 47; h = Math.imul(h, 16777619); }
+    const k = typeof keys[i] === 'string' ? keys[i] : String(keys[i]);
+    for (let j = 0; j < k.length; j++) { h ^= k.charCodeAt(j); h = Math.imul(h, 16777619); }
+  }
+  return mulberry32(h >>> 0);
+}
 const reach = (poly, n) => { let m = -Infinity; for (const f of poly) for (const v of f.verts) m = Math.max(m, dot(n, v)); return m; };
 const centroidOf = pts => mul(pts.reduce(add, [0, 0, 0]), 1 / pts.length);
 const samePlane = (f, g) => dot(f.n, g.n) > 1 - 1e-9 && Math.abs(f.b - g.b) < 1e-6;
@@ -1257,10 +1265,14 @@ function crackSeeds(C, P, seed) {
   const cs = []; for (const x of [C.lo[0], C.hi[0]]) for (const y of [C.lo[1], C.hi[1]]) for (const z of [C.lo[2], C.hi[2]]) cs.push(q([x, y, z]));
   const lo = axes.map((_, i) => Math.floor(Math.min(...cs.map(c => c[i])) / sp) - 2), hi = axes.map((_, i) => Math.ceil(Math.max(...cs.map(c => c[i])) / sp) + 2);
   const seeds = [], walk = (i, idx) => {
-    if (i === axes.length) { const r = keyed(seed, 'crack', ...idx); seeds.push({ id: seeds.length, q: idx.map(k => (k + 0.5) * sp + (r() - 0.5) * spread) }); return; }
+    if (i === axes.length) { const r = keyed(seed, 'crack', ...idx); seeds.push({ id: seeds.length, idx, q: idx.map(k => (k + 0.5) * sp + (r() - 0.5) * spread) }); return; }
     for (let k = lo[i]; k <= hi[i]; k++) walk(i + 1, [...idx, k]);
   };
   walk(0, []);
+  // the seeds by their grid place: a seed lies within spread / 2 of its place's middle along each axis, so every seed within a
+  // distance D of one is within floor((D + spread) / sp) places of it along each
+  const place = idx => idx.reduce((h, k) => h * 4096 + k + 2048, 0), at = new Map(seeds.map(s => [place(s.idx), s]));
+  const around = (idx, D) => { const K = Math.floor((D + spread) / sp), out = [], go = (i, h) => { if (i === idx.length) { const s = at.get(h); if (s) out.push(s); return; } for (let k = -K; k <= K; k++) go(i + 1, h * 4096 + idx[i] + k + 2048); }; go(0, 0); return out; };
   // the plane where seed a's cell meets b's, kept on a's side
   const bisector = (a, b) => {
     const nq = b.q.map((x, i) => x - a.q[i]), N = axes.reduce((s, ax, i) => add(s, mul(ax, nq[i])), [0, 0, 0]), l = len(N);
@@ -1275,8 +1287,12 @@ function crackSeeds(C, P, seed) {
     const d2 = b => b.q.reduce((t, x, i) => t + (x - a.q[i]) ** 2, 0);
     // nearest first; a neighbour more than twice as far as the cell's farthest corner cannot cut it, so the rest are passed over
     const reach2 = poly => { let m = 0; for (const f of poly) for (const v of f.verts) { const qv = q(v); let t = 0; for (let i = 0; i < qv.length; i++) t += (qv[i] - a.q[i]) ** 2; if (t > m) m = t; } return m; };
-    let p = box, far = Infinity, n = 0;
-    for (const b of seeds.filter(b => b !== a && d2(b) <= r2).sort((x, y) => d2(x) - d2(y))) {
+    // it starts from a box about its seed: along the network's axes (the cliff's frame, world axes up to sign) a cell of the jittered
+    // grid lies within √(axes) × (spacing + spread) of its seed; along the others it is the cliff's own padded box
+    const at0 = axes.reduce((s, ax, i) => add(s, mul(ax, a.q[i])), C.mid), R = Math.sqrt(axes.length) * (sp + spread);
+    const blo = [0, 1, 2].map(j => axes.some(ax => Math.abs(ax[j]) > 0.5) ? Math.max(C.lo[j] - pad, at0[j] - R) : C.lo[j] - pad), bhi = [0, 1, 2].map(j => axes.some(ax => Math.abs(ax[j]) > 0.5) ? Math.min(C.hi[j] + pad, at0[j] + R) : C.hi[j] + pad);
+    let p = boxPoly(blo, bhi), far = Infinity, n = 0;
+    for (const b of around(a.idx, Math.sqrt(r2)).filter(b => b !== a && d2(b) <= r2).sort((x, y) => d2(x) - d2(y))) {
       if (d2(b) > 4 * far) break;
       p = clip(p, { ...bisector(a, b), role: 'cell:' + b.id }); if (!p.length) break;
       if (++n % 4 === 0) far = reach2(p);
@@ -1285,7 +1301,9 @@ function crackSeeds(C, P, seed) {
     c = { faces, lo: [0, 1, 2].map(i => Math.min(...vs.map(v => v[i]))), hi: [0, 1, 2].map(i => Math.max(...vs.map(v => v[i]))) };
     cells.set(a.id, c); return c;
   };
-  return { seeds, sp, q, bisector, cell };
+  // the seeds whose places lie in a box of the network's own coordinates
+  const inBox = (qlo, qhi) => { const out = [], lo_ = qlo.map(x => Math.floor(x / sp) - 1), hi_ = qhi.map(x => Math.ceil(x / sp) + 1), go = (i, h) => { if (i === lo_.length) { const s = at.get(h); if (s && s.q.every((x, j) => x >= qlo[j] && x <= qhi[j])) out.push(s); return; } for (let k = Math.max(lo_[i], lo[i]); k <= Math.min(hi_[i], hi[i]); k++) go(i + 1, h * 4096 + k + 2048); }; go(0, 0); return out.sort((x, y) => x.id - y.id); };
+  return { seeds, sp, q, bisector, cell, inBox };
 }
 // the boundaries a convex body meets: [{ a, b, poly }], each the face of a's cell toward b (a < b), from the cells that reach it
 function boundariesNear(poly, net) {
@@ -1293,8 +1311,7 @@ function boundariesNear(poly, net) {
   const vq = vs.map(net.q), qlo = vq[0].map((_, i) => Math.min(...vq.map(v => v[i])) - 1.5 * net.sp), qhi = vq[0].map((_, i) => Math.max(...vq.map(v => v[i])) + 1.5 * net.sp);
   const apart = g => [0, 1, 2].some(i => g.hi[i] < lo[i] - 1e-6 || g.lo[i] > hi[i] + 1e-6);
   const out = [];
-  for (const a of net.seeds) {
-    if (!a.q.every((x, i) => x >= qlo[i] && x <= qhi[i])) continue;
+  for (const a of net.inBox(qlo, qhi)) {
     const c = net.cell(a); if ([0, 1, 2].some(i => c.hi[i] < lo[i] - 1e-6 || hi[i] < c.lo[i] - 1e-6)) continue;
     for (const f of c.faces) { const b = +f.role.slice(5); if (b > a.id && !apart(f)) out.push({ a: a.id, b, poly: f }); }
   }
@@ -1317,6 +1334,18 @@ function crossing(A, F) {
     }
   }
   return hi - lo > 1e-6 ? [add(x0, mul(u, lo)), add(x0, mul(u, hi))] : null;
+}
+// every two of the points within reach of each other, i < j, in order of i then j (the points binned by reach: such a pair lies in
+// neighbouring bins)
+function nearPairs(ps, reach, f) {
+  const cellOf = p => [Math.floor(p[0] / reach), Math.floor(p[1] / reach), Math.floor(p[2] / reach)], keyOf = (x, y, z) => ((x + 2048) * 4096 + y + 2048) * 4096 + z + 2048, bins = new Map();
+  ps.forEach((p, i) => { const c = cellOf(p), k = keyOf(...c); (bins.get(k) || bins.set(k, []).get(k)).push(i); });
+  ps.forEach((p, i) => {
+    const c = cellOf(p), js = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) for (const j of bins.get(keyOf(c[0] + dx, c[1] + dy, c[2] + dz)) || []) if (j > i) js.push(j);
+    js.sort((a, b) => a - b);
+    for (const j of js) { const o = ps[j], x = p[0] - o[0], y = p[1] - o[1], z = p[2] - o[2]; if (x * x + y * y + z * z <= reach * reach) f(i, j); }
+  });
 }
 const isCell = f => String(f.role).startsWith('cell:');   // a cell's face where it meets another cell
 const onPlane = (p, f) => Math.abs(dot(f.n, p) - f.b) < 1e-5;
@@ -1356,7 +1385,7 @@ function crackPlan(polys, C, P, seed) {
     // a junction: the ends within JUNCTION_REACH of each other (two corners of the network a hair apart are one point on the stone);
     // a line with both ends at one junction is too short to see and is no line
     const es = [...bounds.values()].flatMap(b => b.ends), root = es.map((_, i) => i), find = i => root[i] === i ? i : (root[i] = find(root[i]));
-    es.forEach((e, i) => es.forEach((o, j) => { if (j > i && len(sub(e.p, o.p)) <= JUNCTION_REACH) root[find(j)] = find(i); }));
+    nearPairs(es.map(e => e.p), JUNCTION_REACH, (i, j) => { root[find(j)] = find(i); });
     es.forEach((e, i) => { e.node = k + '#' + find(i); });
     for (const b of [...bounds.values()]) if (b.ends.length === 2 && b.ends[0].node === b.ends[1].node) bounds.delete(b.key);
     // junctions joined by a line shorter than JUNCTION_NEAR look like one: they are one cluster (e.cluster), whose own short lines
@@ -1579,7 +1608,7 @@ function crackStone(poly, k, plan, seed, P, holds = [], touches = () => false) {
     const all = links.filter(l => l.alive).flatMap(l => l.ends);
     for (const e of all) if (e.cause) { const g = typeof e.cause === 'object' ? e.cause : null; e.kind = g ? 'joint' : 'free'; e.g = g; e.node = e; }
     const es = all.filter(e => !e.cause), root = es.map((_, i) => i), find = i => root[i] === i ? i : (root[i] = find(root[i]));
-    es.forEach((e, i) => es.forEach((o, j) => { if (j > i && len(sub(e.p, o.p)) <= JUNCTION_REACH) root[find(j)] = find(i); }));
+    nearPairs(es.map(e => e.p), JUNCTION_REACH, (i, j) => { root[find(j)] = find(i); });
     const deg = new Map(); es.forEach((e, i) => { e.node = find(i); deg.set(e.node, (deg.get(e.node) || 0) + 1); });
     const linksAt = new Map(); for (const l of links) if (l.alive) for (const e of l.ends) if (!e.cause) (linksAt.get(e.node) || linksAt.set(e.node, new Set()).get(e.node)).add(l);
     for (const e of es) {
