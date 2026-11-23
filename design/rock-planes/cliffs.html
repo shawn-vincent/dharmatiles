@@ -353,71 +353,63 @@ function sampleFace(f, m, r) {
   for (let k = 0; k < m; k++) { let x = r() * tot, T = tris[0]; for (const t of tris) { T = t; if ((x -= t[3]) <= 0) break; } let u = r(), w = r(); if (u + w > 1) { u = 1 - u; w = 1 - w; } out.push(add(T[0], add(mul(sub(T[1], T[0]), u), mul(sub(T[2], T[0]), w)))); }
   return out;
 }
-// a cut along an edge or a corner: its plane turned by one draw, up to half of Tilt and never more than two thirds of the way to
-// the nearest face it cuts (so it stays on its edge), with its mirror, no turn, and turned that far away from each face it cuts;
-// the chamfer takes the first that bites a whole half Sink past every touch point
-function chamferTurns(n, faces, tiltDeg, r) {
-  const near = Math.min(...faces.map(f => Math.acos(clamp(dot(n, f), -1, 1)))), cap = near * 2 / 3;
-  const th = Math.min(tiltDeg / 2 * DEG, cap) * Math.sqrt(r()), ph = 2 * Math.PI * r();
-  const u = perp(n), v = cross(n, u), w = add(mul(u, Math.cos(ph)), mul(v, Math.sin(ph)));
-  const away = faces.map(f => { const a = sub(mul(n, dot(n, f)), f), l = len(a); return l < 1e-9 ? n : unit(add(mul(n, Math.cos(cap)), mul(a, Math.sin(cap) / l))); });
-  return [unit(add(mul(n, Math.cos(th)), mul(w, Math.sin(th)))), unit(add(mul(n, Math.cos(th)), mul(w, -Math.sin(th)))), n, ...away];
-}
-const LEAN = 1.5;   // a turned facet may dip no deeper into the stone than at its own point plus this (% of size)
-// The stone: every face of the cell keeps a touch point, a small patch of it around which its own plane is turned by Tilt (a crown),
-// so the stone fills its cell; Facets planes are spread over the faces (spaced by area), each its face's plane domed away from the
-// face's touch point, turned by Tilt, sunk half to all of Sink, and moved out past every crown's patch; then Chamfered of the edges'
-// length and of the corners are cut, each half to all of Sink, never past a touch point
-// footprints: points of its top it holds a mass on, which no plane, crown or chamfer may cut past (their rims are left to them)
+// The stone: its cell cut by planes, every one placed by one rule. A plane has a direction and a depth: it sits that deep below the
+// cell's furthest point in its direction (so it bites exactly that deep there and never pokes out of the cell), moved out past every
+// guard (the touch patches and footprints), and is not made if it faces down past the overhang limit or bites nothing.
+// - Crowns: every face of the cell keeps a touch point, a small patch of it around which its own plane is turned by Tilt, so the
+//   stone fills its cell (a fixed face, which rests on something or holds something up, stays as it is, its middle guarded).
+// - Faces: spots spread over the faces by area, each its face's plane domed away from the face's touch point and turned by Tilt,
+//   half to all of Sink deep.
+// - Chamfers: Chamfered of the edges' length (one plane per stretch of an edge) and of the corners, each along the edge's or corner's
+//   mean normal turned up to half Tilt, half to all of half Sink deep; one that bites less than its least is not counted.
+// footprints: points of its top it holds a mass on, which no plane may cut past (their rims are left to them)
+const LEAN = 1.5;   // how far the stone may stand above a turned face's plane, past half its dome's fall (% of size)
 function stoneOf(cell, seed, P, fixed = new Set(), ground = new Set(), footprints = []) {
-  const verts = dedupe(cell.flatMap(f => f.verts), 1e-6), support = n => { let m = -Infinity; for (const v of verts) m = Math.max(m, dot(n, v)); return m; };
+  const verts = dedupe(cell.flatMap(f => f.verts), 1e-6), xs = new Float64Array(verts.flat());
+  const support = n => { let m = -Infinity; for (let i = 0; i < xs.length; i += 3) { const d = n[0] * xs[i] + n[1] * xs[i + 1] + n[2] * xs[i + 2]; if (d > m) m = d; } return m; };
   const lo = [0, 1, 2].map(i => Math.min(...verts.map(v => v[i]))), hi = [0, 1, 2].map(i => Math.max(...verts.map(v => v[i])));
   // the stone's own draws from the ranges: how many faces, what share chamfered, its chamfers' depth and its dome; each plane then
   // draws its own turn and bite
   const rs = keyed(seed, 'stone'), facets = Math.max(1, pickInt(P.facets, rs)), chamfered = pickIn(P.chamfered, rs);
-  const size = (hi[0] - lo[0] + hi[1] - lo[1] + hi[2] - lo[2]) / 3, bite = r => pickIn(P.sink, r) / 100 * size, cham = pickIn(P.sink, rs) / 100 * size / 2, lean = LEAN / 100 * size;
-  const gap = 0.85 * Math.sqrt(cell.reduce((t, f) => t + faceArea(f), 0) / facets), k = Math.tan(pickIn(P.rtilt, rs) * DEG);   // the stone's own dome, from its own draw
+  const size = (hi[0] - lo[0] + hi[1] - lo[1] + hi[2] - lo[2]) / 3, bite = r => pickIn(P.sink, r) / 100 * size, cham = pickIn(P.sink, rs) / 100 * size / 2;
+  const gap = 0.85 * Math.sqrt(cell.reduce((t, f) => t + faceArea(f), 0) / facets), k = Math.tan(pickIn(P.rtilt, rs) * DEG);   // the stone's own dome
   const order = (list, s) => { const r = stream(seed, s); return list.map(c => [r(), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]); };
-  // touch points and crowns
-  const rc = stream(seed, 9), touch = [], guards = [], planes = [];
-  const through = (n, b, keep = guards) => { for (const g of keep) b = Math.max(b, dot(n, g)); return b; };
+  const guards = [...footprints], planes = [];
+  // the one rule: depth below the furthest point, out past the guards; the bite it keeps (0: not made)
+  const place = (n, depth, role, from = null, most = Infinity) => {
+    if (steep(n)) return 0;
+    const top = support(n); let b = Math.max((from === null ? top : from) - depth, top - most); for (const g of guards) b = Math.max(b, dot(n, g));
+    if (b >= top - 1e-6) return 0;
+    planes.push({ n, b, role }); return top - b;
+  };
+  // touch points and their patches first (every later plane keeps clear of them), then the crowns
+  const rc = stream(seed, 9), touch = [], crowns = [];
   cell.forEach((f, fi) => {
     if (faceArea(f) < 1) return;
     const fc = centroidOf(f.verts), p = add(fc, mul(sub(sampleFace(f, 1, rc)[0], fc), 0.35)), fr = Math.max(...f.verts.map(v => len(sub(v, fc))));
     let room = Infinity; f.verts.forEach((A, i) => { const e = sub(f.verts[(i + 1) % f.verts.length], A), t = clamp(dot(sub(p, A), e) / dot(e, e), 0, 1); room = Math.min(room, len(sub(p, add(A, mul(e, t))))); });
     touch[fi] = { p, fr };
-    // a fixed face (it rests on something, or holds something up) stays as it is, and its middle is kept from facets
     if (fixed.has(fi)) { for (const v of f.verts) guards.push(add(fc, mul(sub(v, fc), 0.85))); return; }
     let n = turnBy(f.n, pickIn(P.rtilt, rc), rc); if (steep(n)) n = f.n;   // never turned past the overhang limit
     const u = perp(n), v = cross(n, u), rho = room * (0.15 + 0.2 * rc()), ph0 = 2 * Math.PI * rc();
     for (let j = 0; j < 6; j++) { const ph = ph0 + j * Math.PI / 3; guards.push(add(p, add(mul(u, rho * Math.cos(ph)), mul(v, rho * Math.sin(ph))))); }
-    planes.push({ n, b: through(n, dot(n, p), footprints) });
+    crowns.push({ n, p });
   });
-  guards.push(...footprints);
-  const points = [...touch.filter(Boolean).map(t => t.p), ...footprints];
-  // facets: spots spread by area, kept apart (the spacing loosened a little until Facets are placed)
+  for (const { n, p } of crowns) place(n, 0, 'face', dot(n, p));   // through its touch point, its patch kept whole
+  // faces: spots spread by area, kept apart (the spacing loosened a little until Faces are placed)
   const spots = order(cell.flatMap((f, fi) => touch[fi] && !fixed.has(fi) ? sampleFace(f, Math.ceil(faceArea(f) * 0.5), stream(seed, 100 + fi)).map(p => ({ p, fi })) : []), 4), taken = [];
   for (let pass = 0, g = gap; pass < 6 && taken.length < facets; pass++, g *= 0.85)
     for (const s of spots) { if (taken.length >= facets) break; if (!s.used && taken.every(t => len(sub(t.p, s.p)) >= g)) { s.used = true; taken.push(s); } }
   taken.forEach((s, i) => {
     const f = cell[s.fi], t = touch[s.fi], d = sub(s.p, t.p), dd = len(d);
-    let n0 = f.n, p0 = s.p; const allow = lean + k * t.fr / 2;
-    if (dd > 1e-6) { n0 = unit(add(f.n, mul(d, k / t.fr))); p0 = sub(s.p, mul(f.n, k * dd * dd / (2 * t.fr))); }
-    // turned by one draw; if that dips deeper into the stone than its own point (plus its allowance), shortened just enough
+    // the dome over the face: falling away from its touch point, so its tangent plane at the spot cuts deep toward the face's rim
+    const n0 = dd > 1e-6 ? unit(add(f.n, mul(d, k / t.fr))) : f.n, p0 = sub(s.p, mul(f.n, k * dd * dd / (2 * t.fr)));
     const rr = keyed(seed, 'face', i), depth = bite(rr), th = pickIn(P.rtilt, rr) * DEG, ph = 2 * Math.PI * rr();
-    const u = perp(n0), w = add(mul(u, Math.cos(ph)), mul(cross(n0, u), Math.sin(ph))), at = sc => unit(add(mul(n0, Math.cos(sc * th)), mul(w, Math.sin(sc * th))));
-    const extra = sc => support(at(sc)) - dot(at(sc), p0) - allow;
-    let sc = 1; if (extra(1) > 0) { if (extra(0) > 0) sc = 0; else { let a = 0, b = 1; for (let j = 0; j < 12; j++) { const m = (a + b) / 2; if (extra(m) > 0) b = m; else a = m; } sc = a; } }
-    const n = at(sc); if (!steep(n)) planes.push({ n, b: through(n, dot(n, p0) - depth) });   // a facet past the overhang limit is not made
+    const u = perp(n0), w = add(mul(u, Math.cos(ph)), mul(cross(n0, u), Math.sin(ph))), n = unit(add(mul(n0, Math.cos(th)), mul(w, Math.sin(th))));
+    // turned, the stone stands no higher above it than LEAN and half its dome's fall
+    place(n, depth, 'face', dot(n, p0), depth + LEAN / 100 * size + k * t.fr / 2);
   });
-  // a facet whose corners poke out of the cell is sunk by how far they poke, as far as the patches let it
-  { let q = boxPoly(sub(lo, [5, 5, 5]), add(hi, [5, 5, 5])); planes.forEach((pl, i) => { q = clip(q, { ...pl, role: i }); });
-    const out = v => Math.max(0, ...cell.map(f => dot(f.n, v) - f.b)), push = new Map();
-    for (const f of q) if (typeof f.role === 'number') for (const v of f.verts) push.set(f.role, Math.max(push.get(f.role) || 0, out(v)));
-    for (const [i, d] of push) if (d > 1e-4) planes[i].b = through(planes[i].n, planes[i].b - d * 1.1); }
-  let poly = cell; for (const pl of planes) poly = clip(poly, { ...pl, role: 'face' });
-  poly = polyFaces(poly);
-  // chamfers on what the facets leave: edges by length, corners by count, in a drawn order, each taken while it bites
+  // chamfers: edges by length, corners by count, in a drawn order, each counted when it bites its least
   const vid = v => verts.findIndex(w => len(sub(w, v)) < 1e-6), edges = new Map(), at = new Map();
   cell.forEach((f, fi) => f.verts.forEach((a, i) => {
     const b = f.verts[(i + 1) % f.verts.length], ia = vid(a), ib = vid(b), key = Math.min(ia, ib) + '-' + Math.max(ia, ib), e = edges.get(key) || edges.set(key, { a, b, fn: [], fs: [] }).get(key);
@@ -425,33 +417,24 @@ function stoneOf(cell, seed, P, fixed = new Set(), ground = new Set(), footprint
     const c = at.get(ia) || at.set(ia, { fn: [], fs: [] }).get(ia); c.fn.push(f.n); c.fs.push(fi);
   }));
   const onGround = fs => fs.some(fi => ground.has(fi));   // an edge or corner on the ground stays sharp
-  // the faceted stone's corners, once (the chamfers are all found on it before any is cut)
-  const xs = new Float64Array(poly.flatMap(f => f.verts.flat()));
-  const reachOf = m => { let top = -Infinity; for (let i = 0; i < xs.length; i += 3) { const d = m[0] * xs[i] + m[1] * xs[i + 1] + m[2] * xs[i + 2]; if (d > top) top = d; } return top; };
-  const cuts = [], cut = (anchors, fn, key) => {
-    let most = 0; const pls = anchors.map(([p, n], i) => {
-      const rr = keyed(seed, 'chamfer', key, i), depth = cham * (1 + rr());
-      let t = null;   // the first way that bites a whole half Sink, else the one that bites deepest
-      for (const m of chamferTurns(n, fn, pickIn(P.rtilt, rr), rr)) {
-        if (steep(m)) continue;
-        const top = reachOf(m), b = through(m, top - depth, points), c = { n: m, b, bite: top - b };
-        if (!t || c.bite > t.bite) t = c; if (c.bite >= cham - 1e-6) { t = c; break; }
-      }
-      if (!t) return null;   // every way this chamfer could turn faces down past the overhang limit: none
-      most = Math.max(most, t.bite); return t;
-    }).filter(Boolean);
-    if (most < cham - 1e-6) return false; cuts.push(...pls); return true;
+  const cut = (n, count, key) => {
+    let most = 0;
+    for (let i = 0; i < count; i++) {
+      const rr = keyed(seed, 'chamfer', key, i), turned = turnBy(n, pickIn(P.rtilt, rr) / 2 * rr(), rr);
+      most = Math.max(most, place(steep(turned) ? n : turned, cham * (1 + rr()), 'chamfer'));
+    }
+    return most >= cham / 2 - 1e-6;
   };
   const elist = [...edges].filter(([, e]) => e.fn.length === 2 && !onGround(e.fs)), total = elist.reduce((t, [, e]) => t + len(sub(e.b, e.a)), 0);
   let got = 0;
   for (const [key, e] of order(elist, 6)) {
     const L = len(sub(e.b, e.a)); if (got + L / 2 > total * chamfered / 100 + 1e-9) continue;
-    const m = Math.max(1, Math.round(L / (1.5 * gap))), n = unit(add(e.fn[0], e.fn[1]));
-    if (cut(Array.from({ length: m }, (_, j) => [add(e.a, mul(sub(e.b, e.a), (j + 0.5) / m)), n]), e.fn, 'e' + key)) got += L;
+    if (cut(unit(add(e.fn[0], e.fn[1])), Math.max(1, Math.round(L / (1.5 * gap))), 'e' + key)) got += L;
   }
   const clist = [...at].filter(([, c]) => c.fn.length >= 3 && !onGround(c.fs)); let want = Math.round(clist.length * chamfered / 100);
-  for (const [j, c] of order(clist, 7)) { if (want <= 0) break; if (cut([[verts[j], unit(c.fn.reduce(add, [0, 0, 0]))]], c.fn, 'c' + j)) want--; }
-  for (const pl of cuts) poly = clip(poly, { ...pl, role: 'chamfer' });
+  for (const [j, c] of order(clist, 7)) { if (want <= 0) break; if (cut(unit(c.fn.reduce(add, [0, 0, 0])), 1, 'c' + j)) want--; }
+  // one cut by all of them
+  let poly = cell; for (const pl of planes) { poly = clip(poly, pl); if (!poly.length) break; }
   return { poly: polyFaces(poly), lo, hi };
 }
 // a convex solid's surface: its faces, and each edge once
