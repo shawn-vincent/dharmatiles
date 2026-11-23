@@ -425,12 +425,20 @@ function stoneOf(cell, seed, P, fixed = new Set(), ground = new Set(), footprint
     const c = at.get(ia) || at.set(ia, { fn: [], fs: [] }).get(ia); c.fn.push(f.n); c.fs.push(fi);
   }));
   const onGround = fs => fs.some(fi => ground.has(fi));   // an edge or corner on the ground stays sharp
+  // the faceted stone's corners, once (the chamfers are all found on it before any is cut)
+  const xs = new Float64Array(poly.flatMap(f => f.verts.flat()));
+  const reachOf = m => { let top = -Infinity; for (let i = 0; i < xs.length; i += 3) { const d = m[0] * xs[i] + m[1] * xs[i + 1] + m[2] * xs[i + 2]; if (d > top) top = d; } return top; };
   const cuts = [], cut = (anchors, fn, key) => {
     let most = 0; const pls = anchors.map(([p, n], i) => {
       const rr = keyed(seed, 'chamfer', key, i), depth = cham * (1 + rr());
-      const tries = chamferTurns(n, fn, pickIn(P.rtilt, rr), rr).filter(m => !steep(m)).map(m => { const top = reach(poly, m), b = through(m, top - depth, points); return { n: m, b, bite: top - b }; });
-      if (!tries.length) return null;   // every way this chamfer could turn faces down past the overhang limit: none
-      const t = tries.find(t => t.bite >= cham - 1e-6) || tries.reduce((x, y) => y.bite > x.bite ? y : x); most = Math.max(most, t.bite); return t;
+      let t = null;   // the first way that bites a whole half Sink, else the one that bites deepest
+      for (const m of chamferTurns(n, fn, pickIn(P.rtilt, rr), rr)) {
+        if (steep(m)) continue;
+        const top = reachOf(m), b = through(m, top - depth, points), c = { n: m, b, bite: top - b };
+        if (!t || c.bite > t.bite) t = c; if (c.bite >= cham - 1e-6) { t = c; break; }
+      }
+      if (!t) return null;   // every way this chamfer could turn faces down past the overhang limit: none
+      most = Math.max(most, t.bite); return t;
     }).filter(Boolean);
     if (most < cham - 1e-6) return false; cuts.push(...pls); return true;
   };
@@ -635,6 +643,13 @@ function hullNearest(P, Q) {
   }
   return [a, b];
 }
+// a layer face in a cliff's frame G (fu, fv, hu, hv, mid): its field (positive past it, along the stack), its gradient, and where a
+// line meets it (Newton from its mean plane)
+function faceField(G, F, x) { const a = dot(G.fu, sub(x, G.mid)) / G.hu, c = dot(G.fv, sub(x, G.mid)) / G.hv; return dot(F.n, x) - F.b - F.sag * (1 - a * a) - F.bow * (1 - c * c); }
+function faceGrad(G, F, x) { const a = dot(G.fu, sub(x, G.mid)) / G.hu, c = dot(G.fv, sub(x, G.mid)) / G.hv; return add(F.n, add(mul(G.fu, 2 * F.sag * a / G.hu), mul(G.fv, 2 * F.bow * c / G.hv))); }
+function faceMeet(G, F, p, d) { let t = 0; for (let k = 0; k < 8; k++) { const x = add(p, mul(d, t)), g = dot(faceGrad(G, F, x), d); if (Math.abs(g) < 1e-9) return null; t -= faceField(G, F, x) / g; } const x = add(p, mul(d, t)); return Math.abs(faceField(G, F, x)) < 1e-4 ? x : null; };
+// what the page draws and counts of a cliff, as plain data: the builder sends it with every surface
+const viewOf = C => ({ lo: C.lo, hi: C.hi, axis: C.axis, faces: C.faces, fu: C.fu, fv: C.fv, hu: C.hu, hv: C.hv, mid: C.mid, spines: C.spines.map(sp => ({ p0: sp.p0, p1: sp.p1 })), spans: C.masses.map(m => m.sp.j - m.sp.i), envVol: C.envVol, fill: C.fill, ms: C.ms });
 const AXES = { up: [0, 0, 1], along: [1, 0, 0], through: [0, 1, 0] };
 // the two directions across a direction e: Width's (horizontal) and Thickness's
 const frame = e => { const u = Math.abs(e[2]) < 0.95 ? unit(cross(e, [0, 0, 1])) : [1, 0, 0]; return [u, cross(e, u)]; };
@@ -665,9 +680,7 @@ function cliff(seed, P) {
     return { n, b: dot(n, at), sag, bow, i };
   });
   // a face's field (positive past it, along the stack), its gradient, and where a line meets it (Newton from its mean plane)
-  const field = (F, x) => { const a = dot(fu, sub(x, mid)) / hu, c = dot(fv, sub(x, mid)) / hv; return dot(F.n, x) - F.b - F.sag * (1 - a * a) - F.bow * (1 - c * c); };
-  const grad = (F, x) => { const a = dot(fu, sub(x, mid)) / hu, c = dot(fv, sub(x, mid)) / hv; return add(F.n, add(mul(fu, 2 * F.sag * a / hu), mul(fv, 2 * F.bow * c / hv))); };
-  const meet = (F, p, d) => { let t = 0; for (let k = 0; k < 8; k++) { const x = add(p, mul(d, t)), g = dot(grad(F, x), d); if (Math.abs(g) < 1e-9) return null; t -= field(F, x) / g; } const x = add(p, mul(d, t)); return Math.abs(field(F, x)) < 1e-4 ? x : null; };
+  const G = { fu, fv, hu, hv, mid }, field = (F, x) => faceField(G, F, x), grad = (F, x) => faceGrad(G, F, x), meet = (F, p, d) => faceMeet(G, F, p, d);
   // the face's tangent plane where the line from x along the stack meets it
   const tangent = (F, x) => { const q = meet(F, x, axis) || x, n = unit(grad(F, q)); return { n, b: dot(n, q) }; };
   // where a line from p along d meets a layer face; a spine leans at most 60° from the face where it ends
@@ -1852,7 +1865,7 @@ const PRESETS = {   // ranges are [lo, hi]
   granite: { squares: 2, height: [TALL, TALL], depth: [5, 15], direction: 'through', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 15], width: [22, 30], thickness: [5, 16.5], order: 0, joint: [-10.8, -9.4], facets: [49, 57], rtilt: [4, 13], cracks: 17, network: 'blocks', spacing: [3.5, 6.5], branching: 30, opening: [0.2, 0.5], wiggle: 88 },
   columnar: { squares: 2, height: [TALL, TALL], depth: [12, 16], direction: 'up', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.8, 0], facets: [20, 28], rtilt: [0, 9], cracks: 25, network: 'columns', spacing: [3.5, 5.5], branching: 15, opening: [0.4, 0.6], wiggle: 20 },
   layered: { squares: 2, height: [TALL, TALL], depth: [13, 16], direction: 'up', layers: 38, lean: [0, 6], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-0.8, 0], facets: [20, 28], rtilt: [0, 9], cracks: 90, network: 'planes', spacing: [3, 5], branching: 25, opening: [0.4, 0.6], wiggle: 40 },
-  fieldstone: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 9, lean: [-1.5, 1.5], pitch: [0, 0], sag: [-0.5, 0.5], bow: [0, 0], span: 25, fuse: 12, wander: [0, 2], width: [7, 13], thickness: [15, 17], order: 0, joint: [-0.6, 0], facets: [48, 60], rtilt: [10, 18], cracks: 0, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
+  fieldstone: { squares: 2, height: [63.1, TALL], depth: [15.5, 16], direction: 'up', layers: 50, lean: [-1.5, 1.5], pitch: [0, 0], sag: [-5, 2.5], bow: [-0.5, 2.75], span: 48, fuse: 17, wander: [0, 35], width: [3, 4], thickness: [2, 8], order: 0, joint: [-1.9, 0], facets: [67, 79], rtilt: [21.5, 25], cracks: 0, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
   ashlar: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], facets: [20, 28], rtilt: [0, 9], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['fieldstone', 'Fieldstone', 'A dry wall of irregular, roundish stones placed at random in rough courses, some running up through two courses or joined across, no cracks'], ['ashlar', 'Ashlar', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
@@ -2002,7 +2015,7 @@ function extras(C, surf = null) {
     // each face as a grid over the envelope's cross-section, each point where the line along the stack meets the face, cut to the box
     const M = 16;
     for (const F of C.faces) {
-      const at = (i, j) => C.meet(F, add(C.mid, add(mul(C.fu, C.hu * (2 * i / M - 1)), mul(C.fv, C.hv * (2 * j / M - 1)))), C.axis);
+      const at = (i, j) => faceMeet(C, F, add(C.mid, add(mul(C.fu, C.hu * (2 * i / M - 1)), mul(C.fv, C.hv * (2 * j / M - 1)))), C.axis);
       const g = []; for (let i = 0; i <= M; i++) { g.push([]); for (let j = 0; j <= M; j++) g[i].push(at(i, j)); }
       for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) {
         const q = [g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]]; if (q.some(x => !x)) continue;
@@ -2053,33 +2066,36 @@ onmessage = e => {
     const key = JSON.stringify([seed, cp]); let C = cliffsKept.get(key);
     if (!C) { C = cliff(seed, cp); cliffsKept.set(key, C); if (cliffsKept.size > 8) cliffsKept.delete(cliffsKept.keys().next().value); }
     const t0 = performance.now(), surf = draw === 'rocks' ? rockSurface(C, seed, rp) : massSurface(C, bridge);
-    surf.took = performance.now() - t0; postMessage({ id, surf });
+    surf.took = performance.now() - t0; postMessage({ id, surf, view: viewOf(C) });
   } catch (err) { postMessage({ id, error: String(err && err.stack || err) }); }
 };`;
-let builder = null, builderNote = '', jobId = 0, busy = null, waiting = null;
+let builder = null, thumber = null, thumbDone = null, builderNote = '', jobId = 0, busy = null, waiting = null;
 function startBuilder() {
   try {
     const cut = (a, b) => SOURCE.slice(SOURCE.indexOf(a), SOURCE.indexOf(b));
     const code = cut('"use strict";', '// ---------- drawing ----------') + cut('// ---------- the cliff', 'const STYLES') + BUILDER;
-    builder = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+    const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+    builder = new Worker(url);
     builder.onmessage = e => builtOne(e.data);
+    // a second, for the seed strip's masses, so the strip never holds up the page or the cliff being built
+    try { thumber = new Worker(url); thumber.onmessage = e => thumbDone && thumbDone(e.data); thumber.onerror = e => { e.preventDefault(); thumber = null; thumbKey = ''; rebuildThumbs(); }; } catch (e) { thumber = null; }
     builder.onerror = e => { e.preventDefault(); refuse('it stopped: ' + (e.message || 'no reason given')); };
     builderNote = 'in the background';
   } catch (e) { refuse('it could not start: ' + e.message); }
 }
 // no worker: the page builds, and the stats say why (a job lost with the worker is built here)
 function refuse(why) { builder = null; builderNote = 'on the page (the background builder ' + why + ')'; const j = busy; busy = waiting = null; if (j) rebuild(); }
-const surfKept = new WeakMap();   // per cliff, its last surface
+const shownKept = new Map();   // the cliff's view and its surface, by what they are made from (the last 16)
+const keep = (key, v) => { shownKept.set(key, v); if (shownKept.size > 16) shownKept.delete(shownKept.keys().next().value); };
 const surfKey = () => [state.draw, state.seed, ...(state.draw === 'rocks' ? ROCK_KEYS : ['bridge']).map(k => JSON.stringify(state[k]))].join('/');
 function rebuild() {
   try {
     $('err').hidden = true;
-    const C = cliffFor(state.seed), sk = surfKey();
     // a surface is kept while the cliff and what it is made from hold, so a change of view, lines or a check builds nothing
-    const have = (surfKept.get(C) || {})[sk];
-    if (have) { ++jobId; waiting = null; show(C, have); return; }   // what the builder is making now is no longer wanted
-    if (!builder) { ++jobId; const t0 = performance.now(), surf = state.draw === 'rocks' ? rockSurface(C, state.seed, pick(ROCK_KEYS)) : massSurface(C, state.bridge); surf.took = performance.now() - t0; surfKept.set(C, { [sk]: surf }); show(C, surf); return; }
-    const job = { id: ++jobId, C, sk, msg: { id: jobId, seed: state.seed, cp: pick(CLIFF_KEYS), draw: state.draw, rp: pick(ROCK_KEYS), bridge: state.bridge } };
+    const key = JSON.stringify([state.seed, pick(CLIFF_KEYS)]) + '/' + surfKey(), have = shownKept.get(key);
+    if (have) { ++jobId; waiting = null; show(have.view, have.surf); return; }   // what the builder is making now is no longer wanted
+    if (!builder) { ++jobId; const C = cliffFor(state.seed), t0 = performance.now(), surf = state.draw === 'rocks' ? rockSurface(C, state.seed, pick(ROCK_KEYS)) : massSurface(C, state.bridge); surf.took = performance.now() - t0; keep(key, { view: viewOf(C), surf }); show(viewOf(C), surf); return; }
+    const job = { id: ++jobId, key, msg: { id: jobId, seed: state.seed, cp: pick(CLIFF_KEYS), draw: state.draw, rp: pick(ROCK_KEYS), bridge: state.bridge } };
     $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed + ' · building…';
     if (busy) waiting = job; else { busy = job; builder.postMessage(job.msg); }
   } catch (e) { failed(e.message, e); }
@@ -2089,8 +2105,8 @@ function builtOne(r) {
   if (waiting) { busy = waiting; waiting = null; builder.postMessage(busy.msg); }
   if (!job || r.id !== job.id) return;
   if (r.error) { failed(r.error.split('\n')[0], r.error); return; }
-  surfKept.set(job.C, { [job.sk]: r.surf });
-  if (job.id === jobId) show(job.C, r.surf);   // a newer job is on its way: only the latest is shown
+  keep(job.key, { view: r.view, surf: r.surf });
+  if (job.id === jobId) show(r.view, r.surf);   // a newer job is on its way: only the latest is shown
 }
 function failed(msg, detail) { $('err').hidden = false; $('err').textContent = 'The cliff could not be built: ' + msg; problems.push('build: ' + msg); console.error(detail); }
 function show(C, surf) {
@@ -2107,8 +2123,8 @@ function show(C, surf) {
 }
 let lastStats = [];
 function showStats(C, surf, ms) {
-  const spans = C.masses.map(m => m.sp.j - m.sp.i), rows = [
-    ['Masses', C.masses.length + (C.masses.length < C.spines.length ? ` (${C.spines.length} spines, fused)` : '')],
+  const spans = C.spans, rows = [
+    ['Masses', spans.length + (spans.length < C.spines.length ? ` (${C.spines.length} spines, fused)` : '')],
     ['Layers spanned', spans.length ? `${Math.min(...spans)} to ${Math.max(...spans)}, mean ${(spans.reduce((a, b) => a + b, 0) / spans.length).toFixed(1)}` : '-'],
     ['Masses fill the envelope', (C.fill * 100).toFixed(1) + '%'],
     ...(state.draw === 'rocks' ? [['Rocks fill it', (surf.vol / C.envVol * 100).toFixed(1) + '%'], ['Faces', surf.faces.length]] : []),
@@ -2163,14 +2179,22 @@ function rebuildThumbs() {
     t.item.dataset.seed = seed; t.s.textContent = seed; t.item.setAttribute('aria-current', on ? 'true' : 'false');
     t.b.setAttribute('aria-label', 'Seed ' + seed); t.s.setAttribute('aria-label', on ? 'Seed ' + seed + ', click to type a seed' : 'Seed ' + seed);
   });
+  const draw = (i, surf) => {
+    const t = thumbs[i], g = meshOf(surf, 0, { lines: state.lines });
+    thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
+    t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
+  };
+  // in the second worker, one at a time, each answer asking for the next (so a newer strip waits for at most one stale build, whose
+  // answer is dropped); else on the page, one a frame
+  if (thumber) {
+    const cp = pick(CLIFF_KEYS), ask = () => { if (order.length) { const i = order.shift(); thumber.postMessage({ id: [job, i], seed: start + i, cp, draw: 'masses' }); } };
+    thumbDone = r => { if (r.id[0] !== job) return; if (r.error) console.error(r.error); else draw(r.id[1], r.surf); ask(); };
+    ask(); return;
+  }
   const next = () => {
     if (job !== thumbJob || !order.length) return;
-    const i = order.shift(), t = thumbs[i];
-    try {
-      const g = meshOf(massSurface(cliffFor(start + i)), 0, { lines: state.lines });
-      thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
-      t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
-    } catch (e) { console.error(e); }
+    const i = order.shift();
+    try { draw(i, massSurface(cliffFor(start + i))); } catch (e) { console.error(e); }
     requestAnimationFrame(next);
   };
   requestAnimationFrame(next);
