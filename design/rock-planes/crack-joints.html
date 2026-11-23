@@ -99,6 +99,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
           <div class="num"><span>Steepest groove wall</span><b id="steep"></b></div>
           <div class="num"><span>Joint faces showing</span><b id="showing"></b></div>
           <div class="num"><span>Cross-sections differ by</span><b id="differ"></b></div>
+          <div class="num" id="leanRow" hidden><span>B’s walls off square</span><b id="lean"></b></div>
         </div>
       </div>
       <div class="controls">
@@ -211,9 +212,16 @@ const CASES = [
     build(P) { const g = edgeBlock(P), D = P.D;
       return { stone: g.stone, cuts: [{ id: 'A', planes: [...vee(g.n1, g.d1, O, D), joint(g.H, 0)], away: mul(g.d1, -1) }, { id: 'B', planes: [...vee(g.n2, g.straight, O, D), joint(mul(g.H, -1), 0)], away: g.straight }], pairs: [[0, 1]], look: 'edge' }; } },
   { group: 'Across an edge', key: 'forced', name: 'Slanted, rules forced', chip: ['mid', 'kinks'], uses: ['slant', 'edge'],
-    text: 'To share both top points and put its bottom point on A’s bottom line, B has to leave the edge in the mirror direction: A drifts right as it reaches the edge, so B drifts left down the face. Everything lines up, but the crack kinks at every slanted edge.',
+    text: 'This keeps a fourth rule as well: B is the same V as A, both walls 35° off square and the same width. Rule 3 puts the bottom point where A’s bottom line meets the plane halving the two faces. B’s centre line has to run down the face right above that point, and on a slant that point lies back along the edge, to the left. So B leaves the edge in the mirror direction: A drifts right as it reaches the edge, B drifts left. Everything lines up, but the crack kinks at every slanted edge. Drop the fourth rule and the crack can go straight: see the next case.',
     build(P) { const g = edgeBlock(P), D = P.D;
       return { stone: g.stone, cuts: [{ id: 'A', planes: [...vee(g.n1, g.d1, O, D), joint(g.H, 0)], away: mul(g.d1, -1) }, { id: 'B', planes: [...vee(g.n2, g.mirror, O, D), joint(mul(g.H, -1), 0)], away: g.mirror }], pairs: [[0, 1]], look: 'edge' }; } },
+  { group: 'Across an edge', key: 'straight', name: 'Slanted, rules forced, going straight', chip: ['mid', 'lopsided'], uses: ['slant', 'edge'],
+    text: 'Rules 1 to 3 and nothing else: B starts with exactly A’s end cross-section, both top points and the bottom point, and carries it straight on down the face. The joint is perfect and the crack keeps its line. But that cross-section was cut for the top face, so on the front face it is a lopsided V: its bottom sits off the centre line, one wall leans more than 35° and the other less, all the way along B. The second outline is B’s V a little way down, cut square to its direction. Raise the slant and watch the steeper wall.',
+    build(P) { const g = edgeBlock(P), D = P.D, ends = along(veePoints(g.n1, g.d1, O, D), g.d1, joint(g.H, 0));
+      const B = hullPlanes([...ends, ...ends.map(p => add(p, mul(g.straight, 14)))], n => dot(n, mul(g.H, -1)) > 1 - 1e-6 ? 'joint' : 'wall');
+      const at = mul(g.straight, 2.2);
+      return { stone: g.stone, cuts: [{ id: 'A', planes: [...vee(g.n1, g.d1, O, D), joint(g.H, 0)], away: mul(g.d1, -1) }, { id: 'B', planes: B, away: g.straight }], pairs: [[0, 1]], look: 'edge',
+        probe: { i: 1, plane: { n: g.straight, b: dot(g.straight, at) }, face: g.n2 } }; } },
   { group: 'Across an edge', key: 'twist', name: 'Slanted, option 1: a twisted step', chip: ['mid', 'twisted'], uses: ['slant', 'edge', 'step'],
     text: 'B’s first step starts at exactly A’s end cross-section and ends at B’s own V, a step along. Between them its walls twist, so each wall becomes two triangles. It lines up and the crack keeps its line; the cost is the twist. Watch the steepest wall as you change the slant and the step.',
     build(P) { const g = edgeBlock(P), D = P.D, Q = mul(g.straight, P.step);
@@ -309,6 +317,20 @@ function build() {
     }
   }
   if (P.sections) for (const cu of sc.cuts) { const off = P.mode === 'cut' ? [0, 0, 0] : mul(cu.away, P.apart); for (const s of sectionsOf(sc, cu)) group.add(outline(s.verts, mix(SEG[cu.id], '#ffffff', 0.15), off)); }
+  // a look along a piece: its cross-section square to it, and how far each wall leans off square there
+  let lean = null;
+  if (sc.probe) {
+    const cu = sc.cuts[sc.probe.i], fs = facesOf([...cu.planes, ...sc.stone, { ...sc.probe.plane, tag: 'probe' }]), f = fs.find(x => x.tag === 'probe');
+    if (f) {
+      const off = P.mode === 'cut' ? [0, 0, 0] : mul(cu.away, P.apart), n = sc.probe.face;
+      group.add(outline(f.verts, mix(SEG[cu.id], '#ffffff', 0.15), off));
+      const tip = f.verts.reduce((a, b) => dot(b, n) < dot(a, n) ? b : a), top = Math.max(...f.verts.map(v => dot(v, n)));
+      const tops = f.verts.filter(v => dot(v, n) > top - 1e-6);
+      lean = tops.map(p => Math.acos(Math.min(1, dot(unit(sub(p, tip)), n))) / DEG).sort((a, b) => b - a);
+    }
+  }
+  $('leanRow').hidden = !lean;
+  if (lean) $('lean').textContent = lean.length === 2 ? `${lean[0].toFixed(1)}° and ${lean[1].toFixed(1)}°` : '—';
   // the numbers
   const steep = Math.max(0, ...grooves.map(f => downAngle(f.n)));
   const sw = steep > LIMIT ? OVERC : steep > OVER + 0.05 ? BAND : null;
