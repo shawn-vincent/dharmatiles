@@ -176,7 +176,7 @@ function vee(n, d, p, D) {
   return [1, -1].map(s => { let N = unit(cross(d, add(n, mul(e, s * T)))), b = dot(N, tip); if (dot(N, mid) > b) { N = mul(N, -1); b = -b; } return { n: N, b, tag: 'wall' }; });
 }
 // the V's cross-section points at p (its tip and its two walls carried ABOVE over the face), for a hull
-const veePoints = (n, d, p, D) => { const e = unit(cross(n, d)); return [sub(p, mul(n, D)), ...[1, -1].map(s => add(add(p, mul(e, s * T * (D + ABOVE))), mul(n, ABOVE)))]; };
+const veePoints = (n, d, p, D, above = ABOVE) => { const e = unit(cross(n, d)); return [sub(p, mul(n, D)), ...[1, -1].map(s => add(add(p, mul(e, s * T * (D + above))), mul(n, above)))]; };
 const along = (pts, d, h) => pts.map(p => add(p, mul(d, (h.b - dot(h.n, p)) / dot(h.n, d))));   // moved along d onto plane h
 const joint = (n, b) => ({ n, b, tag: 'joint' });
 const plane = (n, at) => { const u = unit(n); return { n: u, b: dot(u, at) }; };
@@ -223,10 +223,12 @@ const CASES = [
       return { stone: g.stone, cuts: [{ id: 'A', planes: [...vee(g.n1, g.d1, O, D), joint(g.H, 0)], away: mul(g.d1, -1) }, { id: 'B', planes: B, away: g.straight }], pairs: [[0, 1]], look: 'edge',
         probe: { i: 1, plane: { n: g.straight, b: dot(g.straight, at) }, face: g.n2 } }; } },
   { group: 'Across an edge', key: 'twist', name: 'Slanted, option 1: a twisted step', chip: ['mid', 'twisted'], uses: ['slant', 'edge', 'step'],
-    text: 'B’s first step starts at exactly A’s end cross-section and ends at B’s own V, a step along. Between them its walls twist, so each wall becomes two triangles. It lines up and the crack keeps its line; the cost is the twist. Watch the steepest wall as you change the slant and the step.',
+    text: 'B’s first step is six points: A’s end cross-section (its two top points on the edge, its bottom point on A’s bottom line) and B’s own V a step along. Between them each wall twists, so it is two triangles. It lines up and the crack keeps its line; the cost is the twist. Watch the steepest wall as you change the slant and the step.',
     build(P) { const g = edgeBlock(P), D = P.D, Q = mul(g.straight, P.step);
-      const ends = along(veePoints(g.n1, g.d1, O, D), g.d1, joint(g.H, 0)), mine = veePoints(g.n2, g.straight, Q, D);
-      const B1 = hullPlanes([...ends, ...mine], n => dot(n, mul(g.H, -1)) > 1 - 1e-6 || dot(n, g.straight) > 1 - 1e-6 ? 'joint' : 'wall');
+      // the six points exactly: A's end (its tip and its two top points, on the edge) and B's own V a step on (its top points on the
+      // face); the piece's top is the face itself, and each twisted wall is two triangles between them
+      const ends = along(veePoints(g.n1, g.d1, O, D, 0), g.d1, joint(g.H, 0)), mine = veePoints(g.n2, g.straight, Q, D, 0);
+      const B1 = hullPlanes([...ends, ...mine], n => dot(n, mul(g.H, -1)) > 1 - 1e-6 || dot(n, g.straight) > 1 - 1e-6 ? 'joint' : dot(n, g.n2) > 1 - 1e-6 ? 'top' : 'wall');
       return { stone: g.stone, cuts: [{ id: 'A', planes: [...vee(g.n1, g.d1, O, D), joint(g.H, 0)], away: mul(g.d1, -1) }, { id: 'B', planes: B1, away: mul(g.straight, 0.5) }, { id: 'C', planes: [...vee(g.n2, g.straight, Q, D), joint(mul(g.straight, -1), -dot(g.straight, Q))], away: mul(g.straight, 1.6) }], pairs: [[0, 1], [1, 2]], look: 'edge' }; } },
   { group: 'Across an edge', key: 'hook', name: 'Slanted, option 2: a mirrored hook', chip: ['mid', 'hook'], uses: ['slant', 'edge', 'step'],
     text: 'B leaves in the mirror direction for one short step, as the rules force, then turns on the face with a shared miter back to the crack’s own line. Every joint lines up and every wall stays flat; the hook shows at each slanted edge.',
@@ -248,7 +250,7 @@ function cut(sc) {
   for (const f of facesOf(sc.stone)) { let ps = [f.verts]; for (const c of sc.cuts) ps = ps.flatMap(p => subtract(p, c.planes)); for (const p of ps) out.push({ verts: p, n: f.n, kind: 'stone' }); }
   sc.cuts.forEach((c, i) => {
     for (const f of facesOf([...c.planes, ...sc.stone])) {
-      if (f.i >= c.planes.length) continue;
+      if (f.i >= c.planes.length || f.tag === 'top') continue;   // a piece's top lying on the face is the face, not a groove wall
       let ps = [f.verts]; sc.cuts.forEach((o, j) => { if (j !== i) ps = ps.flatMap(p => subtract(p, o.planes)); });
       for (const p of ps) out.push({ verts: [...p].reverse(), n: mul(f.n, -1), kind: 'groove', seg: c.id, tag: f.tag });
     }
