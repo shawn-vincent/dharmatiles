@@ -231,6 +231,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
             <label><input type="checkbox" id="spinesOn"> Spines</label>
             <label><input type="checkbox" id="crackLines"> Crack lines</label>
             <label><input type="checkbox" id="lines" checked> Edges</label>
+            <label><input type="checkbox" id="mini" checked> The miniature</label>
           </div>
         </div>
       </div>
@@ -570,8 +571,9 @@ function miniOf() {
   }).catch(e => { $('err').hidden = false; $('err').textContent = 'The reference miniature could not be loaded: ' + e.message; problems.push('miniature: ' + e.message); console.error(e); });
   return grp;
 }
-// stands it at the envelope's front left corner, clear of it
-function placeMini(C) { mini.position.set(C.lo[0] - MINI_R - MINI_CLEAR, C.lo[1] - MINI_R - MINI_CLEAR, 0); }
+// stands it at the envelope's front left corner, clear of it; The miniature unchecked hides it (it stays loaded)
+function placeMini(C) {
+  mini.visible = state.mini; mini.position.set(C.lo[0] - MINI_R - MINI_CLEAR, C.lo[1] - MINI_R - MINI_CLEAR, 0); }
 function disposeGroup(grp) { grp.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
 function makeScene() {
   const scene = new THREE.Scene();
@@ -1787,15 +1789,17 @@ function tJoin(faces) {
   });
 }
 // ---------- page state ----------
+// a tall wall's height above the ground: DungeonBlocks' tall wall top, 72.3 dmm above the base, less ordinary ground's 3.5 (here 1 dmm is 1 mm)
+const TALL = 68.8;
 const PRESETS = {   // ranges are [lo, hi]
-  granite: { height: [31, 36], depth: [11, 16], direction: 'through', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 15], width: [5, 13], thickness: [5, 8], order: 0, joint: [-1.5, -0.1], cracks: 35, network: 'blocks', spacing: [3.5, 6.5], branching: 30, opening: [0.4, 0.7], wiggle: 35 },
-  columnar: { height: [30, 36], depth: [12, 16], direction: 'up', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.8, 0], cracks: 25, network: 'columns', spacing: [3.5, 5.5], branching: 15, opening: [0.4, 0.6], wiggle: 20 },
-  layered: { height: [33, 36], depth: [13, 16], direction: 'up', layers: 9, lean: [-3, 3], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-1.2, 0], cracks: 30, network: 'blocks', spacing: [3, 5], branching: 25, opening: [0.4, 0.6], wiggle: 40 },
-  massive: { height: [32, 36], depth: [12, 16], direction: 'through', layers: 2, lean: [-4, 4], pitch: [-4, 4], sag: [0, 0], bow: [0, 0], span: 50, fuse: 0, wander: [0, 22], width: [8, 22], thickness: [8, 14], order: 0, joint: [-1.4, 0], cracks: 45, network: 'blocks', spacing: [3.5, 6.5], branching: 35, opening: [0.5, 0.8], wiggle: 50 },
-  wall: { height: [35.5, 36], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
+  granite: { squares: 2, height: [63.8, TALL], depth: [11, 16], direction: 'through', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 15], width: [5, 13], thickness: [5, 8], order: 0, joint: [-1.5, -0.1], cracks: 35, network: 'blocks', spacing: [3.5, 6.5], branching: 30, opening: [0.4, 0.7], wiggle: 35 },
+  columnar: { squares: 2, height: [62.8, TALL], depth: [12, 16], direction: 'up', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.8, 0], cracks: 25, network: 'columns', spacing: [3.5, 5.5], branching: 15, opening: [0.4, 0.6], wiggle: 20 },
+  layered: { squares: 2, height: [65.8, TALL], depth: [13, 16], direction: 'up', layers: 9, lean: [-3, 3], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-1.2, 0], cracks: 30, network: 'blocks', spacing: [3, 5], branching: 25, opening: [0.4, 0.6], wiggle: 40 },
+  massive: { squares: 2, height: [64.8, TALL], depth: [12, 16], direction: 'through', layers: 2, lean: [-4, 4], pitch: [-4, 4], sag: [0, 0], bow: [0, 0], span: 50, fuse: 0, wander: [0, 22], width: [8, 22], thickness: [8, 14], order: 0, joint: [-1.4, 0], cracks: 45, network: 'blocks', spacing: [3.5, 6.5], branching: 35, opening: [0.5, 0.8], wiggle: 50 },
+  wall: { squares: 2, height: [68.3, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['massive', 'Massive', 'Large irregular masses in two layers parallel to the front, broad faces, uneven joints'], ['wall', 'Wall', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
-const DEFAULTS = { style: 'layered', ...PRESETS.layered, squares: 1, facets: [20, 28], chamfered: [80, 100], rtilt: [0, 9], sink: [1.5, 3], weather: [0, 0], bedding: true, bridge: 15, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, crackLines: false, lines: true };
+const DEFAULTS = { style: 'layered', ...PRESETS.layered, facets: [20, 28], chamfered: [80, 100], rtilt: [0, 9], sink: [1.5, 3], weather: [0, 0], bedding: true, bridge: 15, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, crackLines: false, lines: true, mini: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -1826,7 +1830,7 @@ const R_ = (...a) => ({ ...P_(...a), range: true });   // a range: drawn at rand
 const GROUPS = [
   { label: 'Envelope', icon: () => ICON.envelope, value: 'squares', items: [
     P_('squares', 'Squares', 1, 3, 1, '', 'How many 35 mm squares long the wall is.'),
-    R_('height', 'Height', 6, 60, 0.5, MM, 'How tall each stone reaches: drawn in this range, mostly from a smooth field along the wall, so neighbours stop at similar heights and the top wanders. The envelope is as tall as the high end.'),
+    R_('height', 'Height', 6, 80, 0.5, MM, 'How tall each stone reaches: drawn in this range, mostly from a smooth field along the wall, so neighbours stop at similar heights and the top wanders. The envelope is as tall as the high end.'),
     R_('depth', 'Depth', 4, 35, 0.5, MM, 'How far forward each stone reaches from the back of the square, drawn the same way, so the front wanders. The back is crisp.')] },
   { label: 'Structure', icon: () => dirIcon(state.direction), value: 'layers', items: [
     { key: 'direction', label: 'Direction', choices: [['up', 'Up'], ['through', 'Through'], ['along', 'Along']], icon: dirIcon, help: 'Which way the spines run: up (columns; with many layers, courses), through the wall back to front (stones show their ends), or along it (slabs).' },
@@ -1857,8 +1861,8 @@ const GROUPS = [
     { ...R_('opening', 'Opening', 0.1, OPENING_MOST, 0.05, MM, `How wide each crack opens at the surface, drawn for each crack; every crack is the same V (each wall ${GROOVE.toFixed(1)}° off the face), so it is about ${(1 / (2 * Math.tan(GROOVE * DEG))).toFixed(1)} times as deep, and printable whichever way it runs. Its free ends taper to nothing. Below the nozzle’s width (0.4 mm) it prints as a mark, not a gap. A gap within one stone (Joint is the gap between two).`), shownWhile: 'cracks' },
     { ...P_('wiggle', 'Wiggle', 0, 100, 1, '%', `How far a crack meanders off its line: 0% straight, 100% the most (its heading up to ${WIGGLE_TURN}° off the line). It walks in steps ${WIGGLE_STEP[0]} to ${WIGGLE_STEP[1]} mm long, each turning its heading by up to this share of ${WIGGLE_TURN}°, kept within the share, before the walk is pulled back so the crack ends where its line ends.`), shownWhile: 'cracks' }] },
 ];
-const CHECKS = ['ghost', 'layersOn', 'spinesOn', 'crackLines', 'lines'];
-const CLIFF_KEYS = ['squares', ...Object.keys(PRESETS.massive)];
+const CHECKS = ['ghost', 'layersOn', 'spinesOn', 'crackLines', 'lines', 'mini'];
+const CLIFF_KEYS = Object.keys(PRESETS.massive);
 const ROCK_KEYS = ['facets', 'chamfered', 'rtilt', 'sink', 'weather', 'bedding', 'bridge', 'cracks', 'network', 'spacing', 'branching', 'opening', 'wiggle'];
 const pick = keys => Object.fromEntries(keys.map(k => [k, state[k]]));
 const same = (a, b) => String(a) === String(b);   // a range is compared by its ends
