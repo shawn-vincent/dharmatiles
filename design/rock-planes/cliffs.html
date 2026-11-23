@@ -255,7 +255,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Every stone grows until it meets its neighbours or the envelope.</b> A stone's <b>core</b> is its spine, or for a fused group the convex hull of the middle halves of its members' spines (clear of the layer faces, which a whole layer's ends lie along). Between every two cores there is one split. Two that never share a layer (they meet end to end) split on the face between them (its tangent plane, where it curves; where a curved or pinched face would cut into one of the two cores, that plane is turned just enough to pass between them whole), so the layers order the stones. Two that share one split on the plane across the line between their nearest points, where their power distances are equal (the distance from each point less its radius there, squared; a fused group's radius is its members' mean), so a bigger end takes more of what it shares. That plane separates the two cores whole, and it leaves each at least 1.5 mm of its own. <b>Joint</b>, drawn for each split, sets where each side stops: half of it short of the split, so over zero a gap opens (separate stones), and under zero each reaches past it into its neighbour (they overlap). It changes each stone's size; nothing moves. A stone's mass is its envelope cut by its splits, nearest first: a convex cell. So with Joint at zero or more no two stones overlap, by construction.</li>
       <li><b>Rocks.</b> Each mass becomes a stone, printable by construction. Its <b>bottom</b> is its mass's own faces that overhang past 65°: on a layer, the face of the layer below, level, tilted or curved as that is (one face for each stone below it); with Bedding, only the part of it that rests or is bridged (below); any other underside flatter than 65° from upright is cut away by a flare rising from the bottom at 65°, so the bottom is the only part that overhangs past the limit. A mass with no such face stands on its lowest point. Then every face of the mass keeps a small patch around a touch point (its plane turned by Tilt), so the stone fills its mass; <b>Faces</b> planes are spread over the faces by area, each its face's plane domed away from the touch point, turned by Tilt and sunk by up to Sink; then <b>Chamfered</b> of the edges' length and of the corners are cut, never past a touch point. The bottom is kept as it is, and no plane, crown, facet or chamfer is made that overhangs past 65°, so a little roughness under a stone stays in the printable range (between 55° and 65°: orange). <b>Weathering</b> rounds every outward edge. A rock stays inside its mass, so with Joint at zero or more rocks never overlap (the sink opens the joints between them), and under zero they overlap. Faces, Chamfered and Weathering are drawn for each stone, Tilt and Sink for each plane. Draw shows the rocks or the masses themselves (each in its own shade); the view options also show the layers and the spines.</li>
       <li><b>Bedding</b> (on by default, under Rocks) builds each stone knowing what is below it, so it rests by construction and nothing is stretched or repaired afterwards. <b>The order:</b> a stone is finished only after every stone that holds it (whose mass lies under its mass's bottom); a circle, each partly over the next, is broken at the stone with the lowest bottom. <b>The bottom:</b> the points of its mass's bottom that rest (on a finished stone or the ground within <span data-const="LOOK"></span> mm, or inside one) and the points bridged between them, on a line between two resting points at most <b>Bridge</b> apart: the largest convex group of them seen from above with nothing inside that neither rests nor is bridged (cut back by a line through each such point inside it). The flare rises from it, from its corners and along each edge of its outline, so a stone over a gap is smaller rather than overhanging. <b>The top:</b> where a stone holds a mass above, its top stays on its plane under that mass's footprint but for a rim along the footprint's edges, <span data-const="RIM%"></span> of its width across each edge, where facets, crowns and chamfers may cut; so the stone above finds it within <span data-const="LOOK"></span> mm, and the two cut back into a V between them. A stone that rests nowhere keeps its whole bottom and is painted where nothing holds it. Off: each stone is its mass made printable alone, in no order: a view to compare with.</li>
-      <li><b>Cracks</b> (each style sets its own: Granite 35%, Columns 25% on a Columns network, Layered 30%, Massive 45% with wider openings, Wall 15%; under Rocks, whose sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: the cells of seeds on a grid in the cliff's own frame, in one, two or three of its axes: <b>Planes</b> across the Direction (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread. Where two cells meet is a flat boundary; where it crosses a stone's exposed faces is its trace, a line a crack can follow (a crack never runs from one stone into another). <b>Cracks</b> picks a share of the traces' length, and each stone the same share of its own: lines are taken in one fixed order, each time by the stone with the least share taken, which starts a crack at a line drawn by length while it has fewer than its share of the cracks it would have with every line taken (one per <span data-const="CRACK_LINES"></span> lines), and otherwise grows its shortest crack by the line at an end that turns least (taking a second as well with the chance <b>Branching</b>), or, its ends blocked, by a branch where an untaken line touches it; every draw has its own stream, so raising Cracks only adds: there are more cracks, and each grows longer. Only faces upright or facing up take cracks (not a bottom, nor any face facing down), and a face the boundary meets at less than <span data-const="GRAZE"></span>° (it would take off a skin) takes none. A picked line is cut into the stone as one groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>° off the face's inward normal, <b>Opening</b> apart at the face, so on an upright face its roof faces down at the overhang target whichever way the crack runs: printable by construction. Where it turns on a face (Wiggle), the two Vs meet on the turn's bisector, sharing one cross-section. Where it crosses an edge onto the next face, the next piece starts with exactly the last one's end cross-section (its two top points on the edge, its bottom point on the last bottom line) and twists back to the regular V over the shortest of a few steps (0.2 to 2 mm) whose walls all stay within the target; a face too narrow for a step is twisted whole, edge to edge. Where no twist fits (a sliver of a face, or a junction just past the edge), the two Vs meet flush on the plane halving the faces' angle. Its ends meet another crack (one within half its opening: a crack stays full through its junctions and branches), or the stone's visible outline (where it touches another stone or the ground, its bottom's edge included: it runs off it, flush), at full size (flush with the face beyond where that end wall is within the target, else rising to the face as the V does); at most three lines leave a junction (two corners of the network nearer than 0.75 mm are one, the hair of a line between them none; junctions joined by a line shorter than 3 mm count as one, since two T's that near read as an X), so cracks meet in a Y or a T, never a star or an X; a free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span> (a branch with a free end too short for its taper, which would never open to its full width, is not cut) (the walls a hair past 35° so even a taper's roof stays within the target), and a crack is full width only where it meets another crack that is cut (an end that would meet a line left uncut is free, and tapers) or where it reaches a joint: the stone's outline where it touches another stone or the ground, flush with the face beyond; a face that holds another stone is one (the crack stops at its edge, flush, so it never cuts under the stone above), and a stretch that would cut into its bottom is left whole, the grooves either side ending at it with the V's own end. The faces inside a crack are drawn dark grey (orange or red where they overhang, as everywhere). Each face the grooves touch is cut in its own plane into the convex pieces outside them (a face no groove touches stays whole). Cracks are planned on the masses, and each stone is cracked once every stone is built, its grooves kept clear of every point a stone above rests on, so cracking changes no stone's bottom; a weathered stone is not cracked. Each step of the build (a stone's bottom, the stone, its cracks, its paint) is kept by exactly what it reads, so a change remakes only what it reaches. <b>Wiggle</b> walks each line in steps <span data-const="WIGGLE_STEP"></span> mm long whose heading carries on from step to step, each turning it by up to half of its share of <span data-const="WIGGLE_TURN"></span>° and keeping it within that share of the line (100%, the most), so a crack meanders; the walk is then pulled back so it ends where its line ends. Not here yet, from the proposal: erosion, pulling junctions to facet edges, seams between stones, and two networks at once.</li>
+      <li><b>Cracks</b> (each style sets its own: Granite 35%, Columns 25% on a Columns network, Layered 30%, Massive 45% with wider openings, Wall 15%; under Rocks, whose sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: the cells of seeds on a grid in the cliff's own frame, in one, two or three of its axes: <b>Planes</b> across the Direction (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread. Where two cells meet is a flat boundary; where it crosses a stone's exposed faces is its trace, a line a crack can follow (a crack never runs from one stone into another). <b>Cracks</b> picks a share of the traces' length, and each stone the same share of its own: lines are taken in one fixed order, each time by the stone with the least share taken, which starts a crack at a line drawn by length while it has fewer than its share of the cracks it would have with every line taken (one per <span data-const="CRACK_LINES"></span> lines), and otherwise grows its shortest crack by the line at an end that turns least (taking a second as well with the chance <b>Branching</b>), or, its ends blocked, by a branch where an untaken line touches it; every draw has its own stream, so raising Cracks only adds: there are more cracks, and each grows longer. Only faces upright or facing up take cracks (not a bottom, nor any face facing down), and a face the boundary meets at less than <span data-const="GRAZE"></span>° (it would take off a skin) takes none. A picked line is cut into the stone as one groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>° off the face's inward normal, <b>Opening</b> apart at the face, so on an upright face its roof faces down at the overhang target whichever way the crack runs: printable by construction. Where it turns on a face (Wiggle), the two Vs meet on the turn's bisector, sharing one cross-section. Where it crosses an edge onto the next face, the next piece starts with exactly the last one's end cross-section (its two top points on the edge, its bottom point on the last bottom line) and twists back to the regular V over the shortest of a few steps (0.2 to 2 mm) whose walls all stay within the target; a face too narrow for a step is twisted whole, edge to edge. Where no twist fits (a sliver of a face, or a junction just past the edge), the two Vs meet flush on the plane halving the faces' angle. Its ends meet another crack (one within half its opening: a crack stays full through its junctions and branches), or the stone's visible outline (where it touches another stone or the ground, its bottom's edge included: it runs off it, flush), at full size (flush with the face beyond where that end wall is within the target, else rising to the face as the V does); at most three lines leave a junction (two corners of the network nearer than 0.75 mm are one, the hair of a line between them none; junctions joined by a line shorter than 3 mm count as one, since two T's that near read as an X), so cracks meet in a Y or a T, never a star or an X; a free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span> (a branch with a free end too short for its taper, which would never open to its full width, is not cut) (the walls a hair past 35° so even a taper's roof stays within the target), and each stone's cracks are first settled as a graph, once, before any groove is cut, so the grooves keep these rules by construction: a crack has one width along its whole length, and cracks that join share it (the width drawn for the first of them picked); every end is one of three kinds: a <b>junction</b>, where it opens at full width into another crack that is cut (a Y or a T: at most three arms, junctions joined by a line shorter than 3 mm counting as one, the arm picked last giving way); a <b>joint</b>, where it runs off at full width, flush, into the stone's outline where it touches another stone or the ground, or the edge of a face that holds another stone (so it never cuts under the stone above); or <b>free</b>, tapered to a point, the crack long enough to open to its full width first (a shorter one is not cut). A crack ends free either side of an edge it would cross nearly along (within 15°) and of a stretch whose groove would reach past the stone's bottom; nowhere else does it stop. A crack that comes out other than its graph says is listed under Cracks. The faces inside a crack are drawn dark grey (orange or red where they overhang, as everywhere). Each face the grooves touch is cut in its own plane into the convex pieces outside them (a face no groove touches stays whole). Cracks are planned on the masses, and each stone is cracked once every stone is built, its grooves kept clear of every point a stone above rests on, so cracking changes no stone's bottom; a weathered stone is not cracked. Each step of the build (a stone's bottom, the stone, its cracks, its paint) is kept by exactly what it reads, so a change remakes only what it reaches. <b>Wiggle</b> walks each line in steps <span data-const="WIGGLE_STEP"></span> mm long whose heading carries on from step to step, each turning it by up to half of its share of <span data-const="WIGGLE_TURN"></span>° and keeping it within that share of the line (100%, the most), so a crack meanders; the walk is then pulled back so it ends where its line ends. Not here yet, from the proposal: erosion, pulling junctions to facet edges, seams between stones, and two networks at once.</li>
       <li><b>What rests or is bridged is not painted.</b> Orange and red mark overhang past 55° and 65°, except where a downward face rests (on the ground, on a stone within <span data-const="LOOK"></span> mm below, or buried inside one) or is bridged (on a line between two of its stone's resting points at most Bridge apart), the rule a bottom is chosen by. A face not wholly resting is judged in triangles, split down to <span data-const="PIECE"></span> mm only where the answer changes (a weathered stone's faces, small already, whole).</li>
     </ol>
     <p class="hint"><b>Layered</b>, the first style: nine level layers, a handful of slabs in each. <b>Granite</b>: one layer through the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; Joint under zero, so they overlap into one irregular mass. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart. <b>Massive</b>: two layers parallel to the front, big stones. <b>Wall</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone.</p>
@@ -1133,7 +1133,7 @@ function rockSurface(C, seed, P) {
   // the cracks are planned on the masses (all known before any stone); each stone's grooves keep clear of its footprints' guards and
   // of the points of the bottoms of the stones it holds that lie on it
   const pk = ['plan', seed, P.network, rangeText(P.spacing), P.branching].join('/');
-  const cplan = P.cracks > 0 ? keptOn(C, pk + '/' + P.cracks, () => cracksTaken(keptOn(C, pk, () => crackPlan(M.map(m => m.poly), C, P, seed)), P.cracks)) : null, crackLines = []; let grooves = 0;
+  const cplan = P.cracks > 0 ? keptOn(C, pk + '/' + P.cracks, () => cracksTaken(keptOn(C, pk, () => crackPlan(M.map(m => m.poly), C, P, seed)), P.cracks)) : null, crackLines = [], faults = []; let grooves = 0;
   const shown = restGrid(), surfs = new Array(M.length), ids = new Array(M.length), t2 = performance.now();
   M.forEach((m, k) => {
     const poly = polys[k], wr = wrs[k];
@@ -1144,11 +1144,12 @@ function rockSurface(C, seed, P) {
       const held = hold ? hold.footprints[k].flatMap(({ a }) => (bases[a] || []).filter(p => { const c = column(poly, p[0], p[1]); return c && c[0] - 1e-6 <= p[2] && p[2] <= c[1] + LOOK + 1e-6; })) : [];
       const box = boxOfFaces(poly);   // its crack ends are full only where they touch another stone or the ground: kept by those near it
       const c = crackedOf(poly, k, cplan, seed, P, [...guards[k], ...held], p => grid.touches(p, k, LOOK), grid.near(box[0], box[1], k));
-      surfs[k] = c; ids[k] = oid(c); vol += c.vol; shown.add(poly, k, c.cuts, 'c' + ids[k]); crackLines.push(...c.traces); grooves += c.grooves;
+      surfs[k] = c; ids[k] = oid(c); vol += c.vol; shown.add(poly, k, c.cuts, 'c' + ids[k]); crackLines.push(...c.traces); grooves += c.grooves; faults.push(...(c.faults || []));
     } else { surfs[k] = keptOn(poly, 'surf', () => surfOf(poly)); ids[k] = oid(surfs[k]); vol += volumeOf(poly); shown.add(poly, k, [], 's' + ids[k]); }
   });
   ms += performance.now() - t2;
-  const cracks = cplan ? { lines: crackLines, grooves, count: cplan.count, got: cplan.got, total: cplan.total, n: cplan.active.size, of: cplan.all.length } : null;
+  for (const f of faults) console.error('cracks: ' + f);   // a crack the graph planned that came out other than planned: loud
+  const cracks = cplan ? { lines: crackLines, grooves, faults, count: cplan.count, got: cplan.got, total: cplan.total, n: cplan.active.size, of: cplan.all.length } : null;
   const stones = surfs.map((st, k) => paintStone(st, k, shown, P.bridge, ids[k]));
   return { faces: stones.flatMap(st => st.faces), lines: stones.flatMap(st => st.lines), ms, vol, bed: hold ? count : null, cracks };
 }
@@ -1251,6 +1252,7 @@ function crossing(A, F) {
 }
 const isCell = f => String(f.role).startsWith('cell:');   // a cell's face where it meets another cell
 const onPlane = (p, f) => Math.abs(dot(f.n, p) - f.b) < 1e-5;
+const EDGE_GRAZE = 15;   // degrees: a crack crossing an edge nearer along it than this ends either side of it (its V and the next face's could not meet)
 const GRAZE = 30;   // degrees: a boundary meeting a face at less than this is not cracked from it (it would take off a skin, not open a crack)
 // whether a face of a body takes a crack from a boundary with normal n: upright or facing up (not a bottom, none facing down at all,
 // so one V is printable on every face that takes one) and met at GRAZE or more. Lines on other faces are no part of any share
@@ -1405,209 +1407,246 @@ function crackStone(poly, k, plan, seed, P, holds = [], touches = () => false) {
   const onEdgeOf = (p, f) => f.verts.some((a, i) => { const b = f.verts[(i + 1) % f.verts.length], ab = sub(b, a), u = Math.max(0, Math.min(1, dot(sub(p, a), ab) / dot(ab, ab))); return len(sub(p, add(a, mul(ab, u)))) < 1e-4; });
   // the face beyond an end at the stone's visible outline: on an edge of its face f where it touches another stone or the ground
   const seamAt = (p, f) => onEdgeOf(p, f) && touches(p) ? poly.find(h => h !== f && onPlane(p, h) && len(sub(h.n, f.n)) > 1e-6) || null : null;
-  const allCut = [];   // every step's cutter, of every crack of this stone
-  // a stub is not cut: a picked line with one end free (meeting no other line kept, nor the stone's visible outline) too short for
-  // its taper (TAPER x its depth) never opens to its full width, even where it meets the rest (a sliver off a junction); dropping
-  // one can leave another a stub, so until none is
-  const widthOf = key => pickIn(P.opening, keyed(seed, 'crack-cut', (plan.crackOf && plan.crackOf.get(key)) ?? key));
-  const picked = [...((plan.stones[k] && plan.stones[k].bounds.values()) || [])].filter(c => plan.active.has(c.key)), stubs = new Set();
-  const near = boundariesNear(poly, plan.net), traced = new Map(near.map(B => { const key = `${k}:${B.a}:${B.b}`; return [key, traceOn(B.poly, poly)]; }));   // its length on this stone, not on its mass
-  // an end meets another kept line where that line ends on this stone within JUNCTION_REACH (where the lines end on the stone, not
-  // on its mass: the faces moved them)
-  const metAt = (key, p) => picked.some(o => o.key !== key && !stubs.has(o.key) && traced.get(o.key) && traced.get(o.key).ends.some(q => len(sub(q.p, p)) <= JUNCTION_REACH));
-  for (let more = true; more;) {
-    more = false;
-    for (const c of picked) {
-      const tr = traced.get(c.key);
-      if (stubs.has(c.key) || !tr || tr.ends.length !== 2) continue;
-      const w = widthOf(c.key);   // its ends on this stone, met as endOf meets them (another kept line's end, or the visible outline)
-      const full = tr.ends.map(e => seamAt(e.p, tr.segs.find(sg => pkey(sg[0]) === e.k || pkey(sg[1]) === e.k)[2]) || metAt(c.key, e.p));
-      if (full[0] !== full[1] && tr.length < TAPER * w / 2 / t) { stubs.add(c.key); more = true; }
-    }
-  }
-  const lone = new Set();   // ends that meet no groove: free
-  for (let round = 0; ; round++) {
-  allCut.length = 0; traces.length = 0;
+  // ---- the crack graph: every decision about where a crack runs and how each of its ends ends is made here, once, on the lines
+  // as they lie on this stone; the grooves are then made from it alone. The rules it keeps: a crack has one width along its length,
+  // and cracks that join share it; it carries on across every edge between faces it can cut; each end is a junction (opening at full
+  // width into another crack that is cut; a Y or a T, never more), a joint (full width, flush, into the stone's outline where it
+  // touches another stone or the ground, or the edge of a face that holds another stone), or free (tapered to a point, the crack long
+  // enough to open fully first); nothing else ----
+  const Dmost = P.opening[1] / 2 / t;   // the deepest a crack here can be
+  const rank = new Map(plan.order.map((b, i) => [b.key, i]));   // the order the lines were picked in: a later one gives way first
+  const near = boundariesNear(poly, plan.net), traced = new Map(near.map(B => [`${k}:${B.a}:${B.b}`, traceOn(B.poly, poly)]));
+  // a run on a face that holds another stone near it (a held point on that face within reach of its line): never cut
+  const heldOn = (f, A, Z, reach) => { const L = len(sub(Z, A)), d0 = unit(sub(Z, A)); return holds.some(p => Math.abs(dot(f.n, p) - f.b) < 0.05 && len(sub(p, add(A, mul(d0, Math.max(0, Math.min(L, dot(sub(p, A), d0))))))) <= reach); };
+  // a step whose groove, at its deepest and widest, would reach past a bottom's plane (a notch in what the stone stands on); an end
+  // on the bottom's own edge is not one (it ends flush there, on the plane halving the two)
+  // the face beyond p on an edge of f (null: p is inside f)
+  const beyond = (p, f) => onEdgeOf(p, f) ? poly.find(h => h !== f && onPlane(p, h) && len(sub(h.n, f.n)) > 1e-6) || null : null;
+  // a step's groove at its deepest and widest, to its ends' planes (the miter of a turn on its face, the plane halving its face and
+  // the next across an edge, or at the line's end the plane halving its face and the one beyond, else as far as an end wall leans);
+  // a notch when any of it below the face reaches past a bottom's plane
+  const notches = (st, prev, next) => {
+    const f = st.f, n = f.n, d = unit(sub(st.Z, st.A)), e = unit(cross(n, d)), w2 = P.opening[1] / 2;
+    const endPlane = (p, o, dir) => {
+      if (o && o.f === f) { const m = unit(add(unit(sub(o.Z, o.A)), d)); return { n: m, b: dot(m, p) }; }
+      const g = o ? o.f : beyond(p, f); return g ? halving(f, g) : null; };
+    const reachOf = (p, o, dir) => {
+      const V = [sub(p, mul(n, Dmost)), ...[1, -1].map(sd => add(sub(p, mul(n, 0.05)), mul(e, sd * w2 * (1 - 0.05 / Dmost))))];   // its V below 0.05 deep: the tip and the walls there
+      const h = endPlane(p, o, dir);
+      if (!h) return V.map(v => add(v, mul(dir, Dmost * t)));
+      return V.flatMap(v => { const k = dot(h.n, dir); if (Math.abs(k) < 1e-6) return [v]; const s = (h.b - dot(h.n, v)) / k; return [v, add(v, mul(dir, Math.max(0, Math.min(s, 5))))]; }); };
+    const vs = [...reachOf(st.A, prev, mul(d, -1)), ...reachOf(st.Z, next, d)];
+    return bottoms.some(g => vs.some(v => dot(g.n, v) > g.b - 0.05));
+  };
+  // a step crossing an edge nearly along it (within EDGE_GRAZE of the plane halving the two faces) has no V that meets the next face's:
+  // the crack ends either side of it, free
+  const grazes = (x, y) => { const h = halving(x.f, y.f); return h && [x, y].some(q => Math.abs(dot(unit(sub(q.Z, q.A)), h.n)) < Math.sin(EDGE_GRAZE * DEG)); };
+  const links = [];
   for (const B of near) {
-    const key = `${k}:${B.a}:${B.b}`, tr = traced.get(key), on = plan.active.has(key) && !stubs.has(key);
-    if (tr.segs.length) traces.push({ segs: tr.segs.map(s => [s[0], s[1]]), on });
-    if (!on) continue;
-    const w = widthOf(key), D = w / 2 / t;   // one width along a whole crack
+    const key = `${k}:${B.a}:${B.b}`, tr = traced.get(key);
+    if (!plan.active.has(key) || !tr.segs.length) continue;
     // the chains: runs joined where they share an end; a chain from an end (met once) to an end, or a loop
     const segs = tr.segs.map(([p, q, f]) => ({ p, q, f })), at = new Map(), used = new Set(), chains = [];
     segs.forEach((g, i) => { for (const x of [g.p, g.q]) { const kx = pkey(x); (at.get(kx) || at.set(kx, []).get(kx)).push(i); } });
     const walkFrom = (i, from) => { const runs = []; let x = from; for (;;) { used.add(i); const g = segs[i], fw = pkey(g.p) === pkey(x); runs.push(fw ? { A: g.p, Z: g.q, f: g.f } : { A: g.q, Z: g.p, f: g.f }); x = fw ? g.q : g.p; const nx = (at.get(pkey(x)) || []).find(j => !used.has(j)); if (nx === undefined) return runs; i = nx; } };
     for (const e of tr.ends) { const i = (at.get(e.k) || []).find(j => !used.has(j)); if (i !== undefined) chains.push({ runs: walkFrom(i, e.p), loop: false }); }
     segs.forEach((g, i) => { if (!used.has(i)) chains.push({ runs: walkFrom(i, g.p), loop: true }); });
-    // how a chain end ends: meeting another picked line of this stone, its end within half the opening (full, the V's end), at the stone's visible outline (an edge of the
-    // face that touches another stone or the ground: full, flush with
-    // the face beyond: the plane halving the two, where that end wall is within the target; else the V's own end), or free (tapered); by a bottom it tapers
-    const endOf = (p, f) => {
-      if (metAt(key, p) && !lone.has(key + '@' + pkey(p))) return { kind: 'meet' };
-      const g = seamAt(p, f); if (g) return { kind: 'seam', g };
-      return { kind: 'taper' };
-    };
     chains.forEach((ch, ci) => {
-      // the steps along the chain, each with its arc position s (along each run's own line) and its run
-      const steps = []; let s0 = 0;
+      // its steps (Wiggle's walk along each run), each marked when it is left out: on a face that holds (that face) or a notch
+      const steps = [];
       ch.runs.forEach((r, ri) => {
         const L = len(sub(r.Z, r.A)), d0 = unit(sub(r.Z, r.A)), e0 = unit(cross(r.f.n, d0));
         const walk = L < STEP_LEAST ? [[0, 0], [L, 0]] : walkOf(L, P, keyed(seed, 'wiggle', key, ci, ri));
-        const pos = ([u, v]) => add(add(r.A, mul(d0, u)), mul(e0, v));
-        for (let i = 0; i + 1 < walk.length; i++) steps.push({ A: pos(walk[i]), Z: pos(walk[i + 1]), sA: s0 + walk[i][0], sZ: s0 + walk[i + 1][0], f: r.f, ri });
-        r.sway = Math.max(...walk.map(x => Math.abs(x[1])));
-        s0 += L;
+        const pos = ([u, v]) => add(add(r.A, mul(d0, u)), mul(e0, v)), sway = Math.max(...walk.map(x => Math.abs(x[1])));
+        const held = heldOn(r.f, r.A, r.Z, P.opening[1] / 2 + HOLD_MARGIN + sway);
+        const prev = steps[steps.length - 1], firstA = pos(walk[0]), firstZ = pos(walk[1]);
+        if (prev && !prev.out && !held && grazes(prev, { A: firstA, Z: firstZ, f: r.f })) steps.push({ len: 0, out: 'graze' });
+        for (let i = 0; i + 1 < walk.length; i++) { const A = pos(walk[i]), Z = pos(walk[i + 1]); steps.push({ A, Z, len: walk[i + 1][0] - walk[i][0], f: r.f, out: held ? r.f : null }); }
       });
-      const S = s0; if (S < STEP_LEAST) return;
-      const first = ch.runs[0], last = ch.runs[ch.runs.length - 1];
-      const ends = ch.loop ? [{ kind: 'loop' }, { kind: 'loop' }] : [endOf(first.A, first.f), endOf(last.Z, last.f)];
-      // the stretches it must leave whole: a run on a face that holds another stone near it (a held point on that face within reach
-      // of its line), whole, so the crack ends at that face's edge, at the joint, flush with the face beyond (closing on the plane
-      // halving the two faces, it never cuts the face that holds)
-      const blocked = []; let sr = 0;
-      for (const r of ch.runs) {
-        const L = len(sub(r.Z, r.A)), d0 = unit(sub(r.Z, r.A)), reach = w / 2 + HOLD_MARGIN + r.sway;
-        if (holds.some(p => Math.abs(dot(r.f.n, p) - r.f.b) < 0.05 && len(sub(p, add(r.A, mul(d0, Math.max(0, Math.min(L, dot(sub(p, r.A), d0))))))) <= reach)) blocked.push([sr, sr + L, r.f]);
-        sr += L;
-      }
-      // a step that would notch the bottom is a stretch to leave whole too, so the grooves either side end at it: cut again
-      // with it left out until none would
-      for (let pass = 0; pass < 6; pass++) {
-      blocked.sort((a, b) => a[0] - b[0]);
-      const pieces = [], made_ = []; let from = 0, fromEnd = ends[0];
-      for (const [a, b, g] of blocked) { if (b <= from) continue; if (a > from) pieces.push([from, Math.min(a, S), fromEnd, { kind: 'held', g }]); from = Math.max(from, b); fromEnd = { kind: 'held', g }; if (from >= S) break; }
-      if (from < S) pieces.push([from, S, fromEnd, ends[1]]);
-      const whole = pieces.length === 1 && pieces[0][0] === 0 && pieces[0][1] === S;
-      for (const [a, b, ea, eb] of pieces) {
-        if (b - a < STEP_LEAST) continue;
-        const ta = ea.kind === 'taper', tb = eb.kind === 'taper', T = D * TAPER;
-        const depth = x => Math.min(D, ta ? (x - a) / TAPER : D, tb ? (b - x) / TAPER : D);
-        // the steps of this piece, split where its depth stops changing (or, too short for both tapers, at its middle)
-        const cuts_ = [...(ta ? [a + T] : []), ...(tb ? [b - T] : []), ...(ta && tb ? [(a + b) / 2] : [])];
-        // the piece's corners: its ends and the walk's corners between, but not one nearer than STEP_LEAST to an end of the piece
-        // unless it is a face's edge, so no step is cut to a sliver (a sliver's two joint planes cross inside it)
-        const stepAt = x => steps.find(q => x >= q.sA - 1e-9 && x <= q.sZ + 1e-9) || steps[steps.length - 1];
-        const at = x => { const st = stepAt(x); return add(st.A, mul(sub(st.Z, st.A), (x - st.sA) / (st.sZ - st.sA))); };
-        const corners = [a];
-        for (let i = 0; i + 1 < steps.length; i++) {
-          const x = steps[i].sZ; if (x <= a + 1e-6 || x >= b - 1e-6) continue;
-          if (steps[i].f === steps[i + 1].f && (x - a < STEP_LEAST || b - x < STEP_LEAST)) continue;
-          corners.push(x);
-        }
-        corners.push(b);
-        const subs = [];
-        for (let k = 0; k + 1 < corners.length; k++) {
-          const lo = corners[k], hi = corners[k + 1]; if (hi - lo < 1e-6) continue;
-          const st = stepAt((lo + hi) / 2), P0 = at(lo), P1 = at(hi);
-          const xs = [lo, ...cuts_.filter(x => x > lo + 1e-6 && x < hi - 1e-6).sort((x, y) => x - y), hi];
-          const pt = x => add(P0, mul(sub(P1, P0), (x - lo) / (hi - lo)));
-          for (let i = 0; i + 1 < xs.length; i++) subs.push({ A: pt(xs[i]), Z: pt(xs[i + 1]), xa: xs[i], xb: xs[i + 1], dA: depth(xs[i]), dZ: depth(xs[i + 1]), f: st.f, ri: st.ri });
-        }
-        const made = subs.map(u => {
-          const n = u.f.n, d = unit(sub(u.Z, u.A)), e = unit(cross(n, d)), tA = sub(u.A, mul(n, u.dA)), tZ = sub(u.Z, mul(n, u.dZ)), line = sub(tZ, tA);
-          const mid = add(mul(add(tA, tZ), 0.5), mul(n, 0.5 * Math.max(u.dA, u.dZ)));
-          const wall = side => { const N = unit(cross(line, add(n, mul(e, side * t)))), pl = { n: N, b: dot(N, tA) }; return dot(N, mid) > pl.b ? { n: mul(N, -1), b: -pl.b } : pl; };
-          return { u, d, planes: [wall(1), wall(-1)] };
-        });
-        // the planes where steps meet, and the piece's ends
-        const join = (x, y, z, endY) => {   // x then y (then z; or, y the last, how it ends)
-          if (x.u.f === y.u.f) { const m = unit(add(x.d, y.d)), J = x.u.Z; if (x.endFace) x.endFace.next = y; else x.planes.push({ n: m, b: dot(m, J), next: y }); y.planes.push({ n: mul(m, -1), b: -dot(m, J), next: x }); return; }
-          const hx = halving(x.u.f, y.u.f), hy = halving(y.u.f, x.u.f);
-          if (!hx) return;
-          const tw = twisted(x, y, hy, z, endY), xEnd = h => { if (x.endFace) x.endFace.next = h; else x.planes.push({ ...hx, next: h }); };
-          if (!tw) { xEnd(y); y.planes.push({ ...hy, next: x }); return; }
-          xEnd(tw.c); tw.start.next = x;
-          if (tw.whole) { y.planes = tw.planes; y.endFace = tw.end; if (endY && endY.kind === 'seam') y.endsFlush = true; return; }   // y is its own twisted step, edge to edge
-          tw.end.next = y; y.planes.push({ n: mul(y.d, -1), b: -dot(y.d, tw.Q), next: tw.c }); twists.push(tw.c);
-        };
-        // across an edge, y's first step is twisted: its six points are x's end (its tip and its two top points, where its walls and
-        // its bottom line meet the plane halving the two faces) and y's own V a step on, so the two Vs meet in one cross-section; the
-        // step is the shortest of TWIST_STEPS whose walls are all within the target (none: each V ends flush on the halving plane)
-        // a y too short for a step (a narrow face crossed, edge to edge), or with no step within the target, is twisted whole, to its
-        // own V where it ends (the plane halving its face and the next, its turn's miter, its flush end, or its tapered point), where
-        // the next crossing starts from that V as from any other
-        const twisted = (x, y, hy, z, endY) => {
-          const n1 = x.u.f.n, n2 = y.u.f.n, J = x.u.Z, dJ = x.u.dZ, L = len(sub(y.u.Z, y.u.A));
-          if (dJ < 1e-4 || y.u.dA < 1e-4) return null;
-          const onH = (p, dir) => { const k = dot(hy.n, dir); return Math.abs(k) < 1e-6 ? null : add(p, mul(dir, (hy.b - dot(hy.n, p)) / k)); };
-          const e1 = unit(cross(n1, x.d)), line = unit(sub(sub(x.u.Z, mul(n1, x.u.dZ)), sub(x.u.A, mul(n1, x.u.dA))));
-          const ends = [onH(sub(J, mul(n1, dJ)), line), onH(add(J, mul(e1, t * dJ)), x.d), onH(sub(J, mul(e1, t * dJ)), x.d)];
-          if (ends.some(p => !p)) return null;
-          const e2 = unit(cross(n2, y.d));
-          const wallsWithin = (planes, start, end) => !planes.some(g => g !== start && g !== end && g.n[2] > SIN_OVER + 1e-6);   // no wall facing down past the target
-          const whole = () => {
-            // where y ends: the plane halving its face and the next across an edge, the miter of a turn on its face, the plane its
-            // flush end lies on at the stone's outline, or, tapered out, a point
-            let h2 = null, far;
-            if (z) h2 = z.u.f !== y.u.f ? halving(y.u.f, z.u.f) : (m => ({ n: m, b: dot(m, y.u.Z) }))(unit(add(y.d, z.d)));
-            else if (endY && endY.kind === 'seam') { h2 = halving(y.u.f, endY.g); if (!h2 || -h2.n[2] < -SIN_OVER) return null; }
-            else if (!(endY && endY.kind === 'taper' && y.u.dZ < 1e-4)) return null;
-            if (h2) {
-              const onH2 = (p, dir) => { const k = dot(h2.n, dir); return Math.abs(k) < 1e-6 ? null : add(p, mul(dir, (h2.b - dot(h2.n, p)) / k)); };
-              const line2 = unit(sub(sub(y.u.Z, mul(n2, y.u.dZ)), sub(y.u.A, mul(n2, y.u.dA))));
-              far = [onH2(sub(y.u.Z, mul(n2, y.u.dZ)), line2), onH2(add(y.u.Z, mul(e2, t * y.u.dZ)), y.d), onH2(sub(y.u.Z, mul(e2, t * y.u.dZ)), y.d)];
-              if (far.some(p => !p) || y.u.dZ < 1e-4) return null;
-            } else far = [y.u.Z];
-            const planes = hullPlanes([...ends, ...far]).filter(g => dot(g.n, n2) < 1 - 1e-6);
-            const start = planes.find(g => dot(g.n, hy.n) > 1 - 1e-6), end = h2 ? planes.find(g => dot(g.n, h2.n) > 1 - 1e-6) : null;
-            return start && (end || !h2) && wallsWithin(planes, start, end) ? { c: y, whole: true, planes, start, end } : null;
-          };
-          if (L < TWIST_STEPS[0] + STEP_LEAST / 2) return whole();
-          for (const st of TWIST_STEPS) {
-            if (st > L - STEP_LEAST / 2) break;
-            const Q = add(J, mul(y.d, st)), dQ = y.u.dA + (y.u.dZ - y.u.dA) * st / L; if (dQ < 1e-4) break;
-            const planes = hullPlanes([...ends, sub(Q, mul(n2, dQ)), add(Q, mul(e2, t * dQ)), sub(Q, mul(e2, t * dQ))]).filter(g => dot(g.n, n2) < 1 - 1e-6);
-            const start = planes.find(g => dot(g.n, hy.n) > 1 - 1e-6), end = planes.find(g => dot(g.n, y.d) > 1 - 1e-6);
-            if (!start || !end) continue;
-            if (!wallsWithin(planes, start, end)) continue;
-            return { c: { u: { ...y.u, Z: Q, dZ: dQ, xb: y.u.xa + st }, d: y.d, planes, twist: true }, start, end, Q };
-          }
-          return whole();   // no step within the target: the gentlest twist, y's whole length
-        };
-        const twists = [];
-        const looped = ch.loop && whole && made.length > 1;
-        for (let i = 0; i + 1 < made.length; i++) join(made[i], made[i + 1], made[i + 2] || (looped ? made[0] : null), !looped && i + 2 >= made.length ? eb : null);
-        if (looped) join(made[made.length - 1], made[0], made[1]);
-        const head = made[0], tail = made[made.length - 1];   // the piece's own first and last steps (a twisted step is never one)
-        made.push(...twists);
-        const close = (c, end, atZ) => {
-          const tip = atZ ? sub(c.u.Z, mul(c.u.f.n, c.u.dZ)) : sub(c.u.A, mul(c.u.f.n, c.u.dA));
-          if (end.kind === 'meet') { c.planes.push({ ...plane(sub(mul(c.d, atZ ? 1 : -1), mul(c.u.f.n, t)), tip), cap: atZ ? 'Z' : 'A' }); (c.meets = c.meets || []).push({ p: atZ ? c.u.Z : c.u.A, u: atZ ? mul(c.d, -1) : c.d, atZ }); }
-          else if (end.kind === 'loop' && !whole) c.planes.push(plane(sub(mul(c.d, atZ ? 1 : -1), mul(c.u.f.n, t)), tip));
-          else if (end.kind === 'seam' && c.endsFlush) { /* its twisted whole ends on that plane already */ }
-          else if (end.kind === 'seam' || end.kind === 'held') { const h = end.g && halving(c.u.f, end.g); if (h && -h.n[2] >= -SIN_OVER) c.planes.push(h); else c.planes.push(plane(sub(mul(c.d, atZ ? 1 : -1), mul(c.u.f.n, t)), tip)); }   // flush where that end wall (facing −h.n) is within the target, else the V's own end
-        };
-        if (made.length && !(ch.loop && whole)) { close(head, ea, false); close(tail, eb, true); }
-        for (const c of made) {
-          c.cutAway = Math.max(c.u.dA, c.u.dZ) < 1e-4 ? [] : inside(poly, c.planes);
-          // it would notch the bottom: a point of its cut on a bottom's plane that is not on its own face's edge (ending flush at the
-          // bottom's edge, on the plane halving the two, touches the bottom only along that edge)
-          c.notch = c.cutAway.length > 0 && bottoms.some(g => c.cutAway.some(h => h.verts.some(v => dot(g.n, v) > g.b - 0.05 && c.u.f.b - dot(c.u.f.n, v) > 0.05)));
-          c.dead = !c.cutAway.length || c.notch;
-        }
-        made_.push(...made);
-      }
-      const notched = made_.filter(c => c.notch);
-      if (notched.length && pass < 5) { for (const c of notched) blocked.push([c.u.xa - 1e-6, c.u.xb + 1e-6]); continue; }
-      for (const c of made_) c.line = key;
-      allCut.push(...made_);
-      break;
-      }
+      steps.forEach((x, i) => { if (!x.out) { const p = steps[i - 1], q = steps[i + 1]; if (notches(x, p && !p.out ? p : null, q && !q.out ? q : null)) x.out = 'notch'; } });
+      // its links: the stretches of steps between those left out (a loop with none left out is one loop)
+      let st = steps;
+      if (ch.loop) { const i = st.findIndex(x => x.out); if (i < 0) { links.push(linkOf(key, st, null, null, true)); return; } st = [...st.slice(i), ...st.slice(0, i)]; }
+      let cur = [], before = null;
+      for (const x of st) { if (x.out) { if (cur.length) links.push(linkOf(key, cur, before, x.out, false)); cur = []; before = x.out; } else cur.push(x); }
+      if (cur.length) links.push(linkOf(key, cur, before, ch.loop ? st[0].out : null, false));
     });
   }
-    // an end taken as meeting another line where that line's groove is not cut (it came out too short, or under a held stone)
-    // would be full width against nothing: cut the stone's cracks again with that end free, until every such end meets a groove
-    let added = 0;
-    for (const c of allCut) for (const e of (c.dead ? [] : c.meets || [])) if (!allCut.some(o => o.line !== c.line && !o.dead && o.cutAway.some(h => h.verts.some(v => len(sub(v, e.p)) <= JUNCTION_REACH + OPENING_MOST)))) { lone.add(c.line + '@' + pkey(e.p)); added++; }
-    if (!added || round >= 3) break;
+  // a link: its steps (arc positions along it), its length, and its two ends, each with why it stops there (null: the line's own
+  // end; a face: that face holds another stone; 'notch'); a loop has no ends
+  function linkOf(key, steps, causeA, causeZ, loop) {
+    let s = 0; const sts = steps.map(x => { const y = { A: x.A, Z: x.Z, sA: s, sZ: s + x.len, f: x.f }; s += x.len; return y; });
+    const first = sts[0], last = sts[sts.length - 1];
+    return { key, steps: sts, S: s, loop, rank: rank.has(key) ? rank.get(key) : Infinity, alive: true,
+      ends: loop ? [] : [{ p: first.A, f: first.f, cause: causeA }, { p: last.Z, f: last.f, cause: causeZ }] };
   }
+  // the ends meet at junctions: ends within JUNCTION_REACH are one; each end's kind follows from how many meet there and why it stops
+  const settle = () => {
+    // an end where the line stops for a reason of its own (a face that holds, a notch, a grazing edge) meets nothing: only the
+    // lines' own ends meet
+    const all = links.filter(l => l.alive).flatMap(l => l.ends);
+    for (const e of all) if (e.cause) { const g = typeof e.cause === 'object' ? e.cause : null; e.kind = g ? 'joint' : 'free'; e.g = g; e.node = e; }
+    const es = all.filter(e => !e.cause), root = es.map((_, i) => i), find = i => root[i] === i ? i : (root[i] = find(root[i]));
+    es.forEach((e, i) => es.forEach((o, j) => { if (j > i && len(sub(e.p, o.p)) <= JUNCTION_REACH) root[find(j)] = find(i); }));
+    const deg = new Map(); es.forEach((e, i) => { e.node = find(i); deg.set(e.node, (deg.get(e.node) || 0) + 1); });
+    const linksAt = new Map(); for (const l of links) if (l.alive) for (const e of l.ends) if (!e.cause) (linksAt.get(e.node) || linksAt.set(e.node, new Set()).get(e.node)).add(l);
+    for (const e of es) {
+      if (deg.get(e.node) === 2 && linksAt.get(e.node).size === 1) { e.kind = 'closed'; continue; }   // a line back to where it left, alone there: a loop
+      if (deg.get(e.node) >= 2) { e.kind = 'junction'; continue; }
+      const g = seamAt(e.p, e.f); e.kind = g ? 'joint' : 'free'; e.g = g;
+    }
+    return deg;
+  };
+  // the rules the graph is held to, a link at a time until it keeps them all: a Y or a T, junctions joined by a link shorter than
+  // JUNCTION_NEAR counting as one (two T's that near read as an X), at most JUNCTION_MOST arms leaving it (more: the arm picked
+  // last gives way); no hair of a line from a junction back to itself; and long enough to open fully before each free end tapers
+  // one width for cracks that join: each group of links joined at junctions takes the width drawn for the first crack picked in it
+  const widthOf = key => pickIn(P.opening, keyed(seed, 'crack-cut', (plan.crackOf && plan.crackOf.get(key)) ?? key));
+  const widths = live => {
+    const grp = live.map((_, i) => i), top = i => grp[i] === i ? i : (grp[i] = top(grp[i]));
+    live.forEach((l, i) => live.forEach((o, j) => { if (j > i && l.ends.some(e => o.ends.some(q => q.node === e.node))) grp[top(j)] = top(i); }));
+    const first = new Map(); live.forEach((l, i) => { const r = top(i); if (!first.has(r) || l.rank < first.get(r).rank) first.set(r, l); });
+    return new Map(live.map((l, i) => [l, widthOf(first.get(top(i)).key)]));
+  };
+  let width;
+  for (;;) {
+    const deg = settle(), live = links.filter(l => l.alive); let drop = null;
+    width = widths(live);
+    const near_ = l => !l.loop && l.S < JUNCTION_NEAR && l.ends.every(e => deg.get(e.node) >= 2) && l.ends[0].node !== l.ends[1].node;
+    const cl = new Map(), clu = x => cl.has(x) && cl.get(x) !== x ? clu(cl.get(x)) : x;
+    for (const l of live) if (near_(l)) cl.set(clu(l.ends[1].node), clu(l.ends[0].node));
+    const arms = new Map(); for (const l of live) if (!near_(l)) for (const e of l.ends) if (deg.get(e.node) >= 2) { const c = clu(e.node); (arms.get(c) || arms.set(c, []).get(c)).push(l); }
+    drop = live.find(l => l.S < STEP_LEAST || (!l.loop && l.S < JUNCTION_NEAR && l.ends[0].node === l.ends[1].node));   // a hair first: it is no arm
+    if (!drop) for (const a of arms.values()) if (a.length > JUNCTION_MOST) { drop = a.sort((x, y) => y.rank - x.rank)[0]; break; }
+    if (!drop) drop = live.find(l => l.S < l.ends.filter(e => e.kind === 'free').length * TAPER * width.get(l) / 2 / t);
+    if (!drop) break;
+    drop.alive = false;
+  }
+  const live = links.filter(l => l.alive);
+  for (const B of near) { const key = `${k}:${B.a}:${B.b}`, tr = traced.get(key); if (tr.segs.length) traces.push({ segs: tr.segs.map(s => [s[0], s[1]]), on: live.some(l => l.key === key) }); }
+  // ---- the grooves, made from the graph: each link is one groove; its ends as the graph says ----
+  const allCut = [], faults = [];
+  live.forEach((link, li) => {
+    const w = width.get(link), D = w / 2 / t;
+    const endOf = e => e.kind === 'junction' ? { kind: 'meet', node: e.node } : e.kind === 'joint' ? { kind: 'seam', g: e.g } : { kind: 'taper' };
+    const loop = link.loop || link.ends.every(e => e.kind === 'closed');
+    const [ea, eb] = loop ? [{ kind: 'loop' }, { kind: 'loop' }] : link.ends.map(endOf);
+    const steps = link.steps, a = 0, b = link.S, whole = true, ch = { loop };
+    const ta = ea.kind === 'taper', tb = eb.kind === 'taper', T = D * TAPER;
+    const depth = x => Math.min(D, ta ? (x - a) / TAPER : D, tb ? (b - x) / TAPER : D);
+    // the steps of this piece, split where its depth stops changing (or, too short for both tapers, at its middle)
+    const cuts_ = [...(ta ? [a + T] : []), ...(tb ? [b - T] : []), ...(ta && tb ? [(a + b) / 2] : [])];
+    // the piece's corners: its ends and the walk's corners between, but not one nearer than STEP_LEAST to an end of the piece
+    // unless it is a face's edge, so no step is cut to a sliver (a sliver's two joint planes cross inside it)
+    const stepAt = x => steps.find(q => x >= q.sA - 1e-9 && x <= q.sZ + 1e-9) || steps[steps.length - 1];
+    const at = x => { const st = stepAt(x); return add(st.A, mul(sub(st.Z, st.A), (x - st.sA) / (st.sZ - st.sA))); };
+    const corners = [a];
+    for (let i = 0; i + 1 < steps.length; i++) {
+      const x = steps[i].sZ; if (x <= a + 1e-6 || x >= b - 1e-6) continue;
+      if (steps[i].f === steps[i + 1].f && (x - a < STEP_LEAST || b - x < STEP_LEAST)) continue;
+      corners.push(x);
+    }
+    corners.push(b);
+    const subs = [];
+    for (let k = 0; k + 1 < corners.length; k++) {
+      const lo = corners[k], hi = corners[k + 1]; if (hi - lo < 1e-6) continue;
+      const st = stepAt((lo + hi) / 2), P0 = at(lo), P1 = at(hi);
+      const xs = [lo, ...cuts_.filter(x => x > lo + 1e-6 && x < hi - 1e-6).sort((x, y) => x - y), hi];
+      const pt = x => add(P0, mul(sub(P1, P0), (x - lo) / (hi - lo)));
+      for (let i = 0; i + 1 < xs.length; i++) subs.push({ A: pt(xs[i]), Z: pt(xs[i + 1]), xa: xs[i], xb: xs[i + 1], dA: depth(xs[i]), dZ: depth(xs[i + 1]), f: st.f, ri: st.ri });
+    }
+    const made = subs.map(u => {
+      const n = u.f.n, d = unit(sub(u.Z, u.A)), e = unit(cross(n, d)), tA = sub(u.A, mul(n, u.dA)), tZ = sub(u.Z, mul(n, u.dZ)), line = sub(tZ, tA);
+      const mid = add(mul(add(tA, tZ), 0.5), mul(n, 0.5 * Math.max(u.dA, u.dZ)));
+      const wall = side => { const N = unit(cross(line, add(n, mul(e, side * t)))), pl = { n: N, b: dot(N, tA) }; return dot(N, mid) > pl.b ? { n: mul(N, -1), b: -pl.b } : pl; };
+      return { u, d, planes: [wall(1), wall(-1)] };
+    });
+    // the planes where steps meet, and the piece's ends
+    const join = (x, y, z, endY) => {   // x then y (then z; or, y the last, how it ends)
+      if (x.u.f === y.u.f) { const m = unit(add(x.d, y.d)), J = x.u.Z; if (x.endFace) x.endFace.next = y; else x.planes.push({ n: m, b: dot(m, J), next: y }); y.planes.push({ n: mul(m, -1), b: -dot(m, J), next: x }); return; }
+      const hx = halving(x.u.f, y.u.f), hy = halving(y.u.f, x.u.f);
+      if (!hx) return;
+      const tw = twisted(x, y, hy, z, endY), xEnd = h => { if (x.endFace) x.endFace.next = h; else x.planes.push({ ...hx, next: h }); };
+      if (!tw) { xEnd(y); y.planes.push({ ...hy, next: x }); return; }
+      xEnd(tw.c); tw.start.next = x;
+      if (tw.whole) { y.planes = tw.planes; y.endFace = tw.end; if (endY && endY.kind === 'seam') y.endsFlush = true; return; }   // y is its own twisted step, edge to edge
+      tw.end.next = y; y.planes.push({ n: mul(y.d, -1), b: -dot(y.d, tw.Q), next: tw.c }); twists.push(tw.c);
+    };
+    // across an edge, y's first step is twisted: its six points are x's end (its tip and its two top points, where its walls and
+    // its bottom line meet the plane halving the two faces) and y's own V a step on, so the two Vs meet in one cross-section; the
+    // step is the shortest of TWIST_STEPS whose walls are all within the target (none: each V ends flush on the halving plane)
+    // a y too short for a step (a narrow face crossed, edge to edge), or with no step within the target, is twisted whole, to its
+    // own V where it ends (the plane halving its face and the next, its turn's miter, its flush end, or its tapered point), where
+    // the next crossing starts from that V as from any other
+    const twisted = (x, y, hy, z, endY) => {
+      const n1 = x.u.f.n, n2 = y.u.f.n, J = x.u.Z, dJ = x.u.dZ, L = len(sub(y.u.Z, y.u.A));
+      if (dJ < 1e-4 || y.u.dA < 1e-4) return null;
+      const onH = (p, dir) => { const k = dot(hy.n, dir); return Math.abs(k) < 1e-6 ? null : add(p, mul(dir, (hy.b - dot(hy.n, p)) / k)); };
+      const e1 = unit(cross(n1, x.d)), line = unit(sub(sub(x.u.Z, mul(n1, x.u.dZ)), sub(x.u.A, mul(n1, x.u.dA))));
+      const ends = [onH(sub(J, mul(n1, dJ)), line), onH(add(J, mul(e1, t * dJ)), x.d), onH(sub(J, mul(e1, t * dJ)), x.d)];
+      if (ends.some(p => !p)) return null;
+      const e2 = unit(cross(n2, y.d));
+      const wallsWithin = (planes, start, end) => !planes.some(g => g !== start && g !== end && g.n[2] > SIN_OVER + 1e-6);   // no wall facing down past the target
+      const whole = () => {
+        // where y ends: the plane halving its face and the next across an edge, the miter of a turn on its face, the plane its
+        // flush end lies on at the stone's outline, or, tapered out, a point
+        let h2 = null, far;
+        if (z) h2 = z.u.f !== y.u.f ? halving(y.u.f, z.u.f) : (m => ({ n: m, b: dot(m, y.u.Z) }))(unit(add(y.d, z.d)));
+        else if (endY && endY.kind === 'seam') { h2 = halving(y.u.f, endY.g); if (!h2 || -h2.n[2] < -SIN_OVER) return null; }
+        else if (!(endY && endY.kind === 'taper' && y.u.dZ < 1e-4)) return null;
+        if (h2) {
+          const onH2 = (p, dir) => { const k = dot(h2.n, dir); return Math.abs(k) < 1e-6 ? null : add(p, mul(dir, (h2.b - dot(h2.n, p)) / k)); };
+          const line2 = unit(sub(sub(y.u.Z, mul(n2, y.u.dZ)), sub(y.u.A, mul(n2, y.u.dA))));
+          far = [onH2(sub(y.u.Z, mul(n2, y.u.dZ)), line2), onH2(add(y.u.Z, mul(e2, t * y.u.dZ)), y.d), onH2(sub(y.u.Z, mul(e2, t * y.u.dZ)), y.d)];
+          if (far.some(p => !p) || y.u.dZ < 1e-4) return null;
+        } else far = [y.u.Z];
+        const planes = hullPlanes([...ends, ...far]).filter(g => dot(g.n, n2) < 1 - 1e-6);
+        const start = planes.find(g => dot(g.n, hy.n) > 1 - 1e-6), end = h2 ? planes.find(g => dot(g.n, h2.n) > 1 - 1e-6) : null;
+        return start && (end || !h2) && wallsWithin(planes, start, end) ? { c: y, whole: true, planes, start, end } : null;
+      };
+      if (L < TWIST_STEPS[0] + STEP_LEAST / 2) return whole();
+      for (const st of TWIST_STEPS) {
+        if (st > L - STEP_LEAST / 2) break;
+        const Q = add(J, mul(y.d, st)), dQ = y.u.dA + (y.u.dZ - y.u.dA) * st / L; if (dQ < 1e-4) break;
+        const planes = hullPlanes([...ends, sub(Q, mul(n2, dQ)), add(Q, mul(e2, t * dQ)), sub(Q, mul(e2, t * dQ))]).filter(g => dot(g.n, n2) < 1 - 1e-6);
+        const start = planes.find(g => dot(g.n, hy.n) > 1 - 1e-6), end = planes.find(g => dot(g.n, y.d) > 1 - 1e-6);
+        if (!start || !end) continue;
+        if (!wallsWithin(planes, start, end)) continue;
+        return { c: { u: { ...y.u, Z: Q, dZ: dQ, xb: y.u.xa + st }, d: y.d, planes, twist: true }, start, end, Q };
+      }
+      return whole();   // no step within the target: the gentlest twist, y's whole length
+    };
+    const twists = [];
+    const looped = ch.loop && whole && made.length > 1;
+    for (let i = 0; i + 1 < made.length; i++) join(made[i], made[i + 1], made[i + 2] || (looped ? made[0] : null), !looped && i + 2 >= made.length ? eb : null);
+    if (looped) join(made[made.length - 1], made[0], made[1]);
+    const head = made[0], tail = made[made.length - 1];   // the piece's own first and last steps (a twisted step is never one)
+    made.push(...twists);
+    const close = (c, end, atZ) => {
+      const tip = atZ ? sub(c.u.Z, mul(c.u.f.n, c.u.dZ)) : sub(c.u.A, mul(c.u.f.n, c.u.dA));
+      if (end.kind === 'meet') { c.planes.push({ ...plane(sub(mul(c.d, atZ ? 1 : -1), mul(c.u.f.n, t)), tip), cap: atZ ? 'Z' : 'A' }); (c.meets = c.meets || []).push({ p: atZ ? c.u.Z : c.u.A, u: atZ ? mul(c.d, -1) : c.d, atZ, node: end.node }); }
+      else if (end.kind === 'loop' && !whole) c.planes.push(plane(sub(mul(c.d, atZ ? 1 : -1), mul(c.u.f.n, t)), tip));
+      else if (end.kind === 'seam' && c.endsFlush) { /* its twisted whole ends on that plane already */ }
+      else if (end.kind === 'seam' || end.kind === 'held') { const h = end.g && halving(c.u.f, end.g); if (h && -h.n[2] >= -SIN_OVER) c.planes.push(h); else c.planes.push(plane(sub(mul(c.d, atZ ? 1 : -1), mul(c.u.f.n, t)), tip)); }   // flush where that end wall (facing −h.n) is within the target, else the V's own end
+    };
+    if (made.length && !(ch.loop && whole)) { close(head, ea, false); close(tail, eb, true); }
+    for (const c of made) {
+      c.cutAway = Math.max(c.u.dA, c.u.dZ) < 1e-4 ? [] : inside(poly, c.planes);
+      // it would notch the bottom: a point of its cut on a bottom's plane that is not on its own face's edge (ending flush at the
+      // bottom's edge, on the plane halving the two, touches the bottom only along that edge)
+      c.notch = c.cutAway.length > 0 && bottoms.some(g => c.cutAway.some(h => h.verts.some(v => dot(g.n, v) > g.b - 0.05 && c.u.f.b - dot(c.u.f.n, v) > 0.05)));
+      c.dead = !c.cutAway.length || c.notch;
+    }
+    for (const c of made) { c.line = link; if (c.notch) faults.push('a groove would notch the bottom of stone ' + k); }
+    allCut.push(...made);
+  });
   // where picked lines meet on one face, each end is cut on the planes halving the angles to its neighbours around the point (one
   // plane shared by each two, as the steps of one crack share theirs), so the walls of lines meeting there meet in straight lines;
-  // the V's own end stays where the meeting is on another face, or two neighbours are nearer than JUNCTION_LEAST apart
-  // (each end of a step on its own: a step meeting lines at both of its ends keeps the other end's cap)
+  // the V's own end stays where the meeting is on another face, or two neighbours are nearer than JUNCTION_LEAST apart. The
+  // neighbours are the other ends at its junction (the graph's node), each end of a step on its own
   const ends = allCut.filter(c => !c.dead).flatMap(c => (c.meets || []).map(e => ({ c, ...e })));
   for (const E of ends) {
-    const c = E.c, nb = ends.filter(o => o.c !== c && o.c.u.f === c.u.f && len(sub(o.p, E.p)) <= JUNCTION_REACH);
+    const c = E.c, nb = ends.filter(o => o.c !== c && o.node === E.node && o.c.u.f === c.u.f);
     if (!nb.length) continue;
     const n = c.u.f.n, ax = unit(E.u), ay = cross(n, ax), ang = v => Math.atan2(dot(v, ay), dot(v, ax));
     const around = nb.map(o => ({ o, a: (ang(o.u) + 2 * Math.PI) % (2 * Math.PI) })).sort((x, y) => x.a - y.a);
@@ -1621,6 +1660,11 @@ function crackStone(poly, k, plan, seed, P, holds = [], touches = () => false) {
     }
     c.cutAway = inside(poly, c.planes); c.dead = !c.cutAway.length;
   }
+  // the check: a link whose grooves all came out empty leaves its ends' kinds untrue (a junction meeting nothing): said, not hidden
+  for (const l of live) if (!allCut.some(c => c.line === l && !c.dead)) faults.push('a crack on stone ' + k + ' came out empty (' + l.key + ')');
+  // and each junction end meets a groove of another link cut there (else it is full width against nothing)
+  for (const c of allCut) for (const e of (c.dead ? [] : c.meets || []))
+    if (!allCut.some(o => o.line !== c.line && !o.dead && (o.meets || []).some(q => q.node === e.node))) faults.push('a crack on stone ' + k + ' meets nothing at a junction (' + c.line.key + ')');
   for (const c of allCut) {
     if (c.dead) continue;
     const own = c.planes.filter(g => !(g.next && !g.next.dead));   // a plane shared with a cutter that is cut is inside the groove
@@ -1657,7 +1701,7 @@ function crackStone(poly, k, plan, seed, P, holds = [], touches = () => false) {
     faces.push(f);
     f.verts.forEach((a, i) => { const b = f.verts[(i + 1) % f.verts.length]; if (!seams.some(h => onPlane(a, h) && onPlane(b, h))) lines.push(a, b); });
   }
-  return { faces, lines, traces, cuts: cutters.map(c => c.planes), grooves: cutters.length, vol: volumeOf(faces) };
+  return { faces, lines, traces, cuts: cutters.map(c => c.planes), grooves: cutters.length, faults, vol: volumeOf(faces) };
 }
 // a planar polygon's area (signed by its turn about the axis it is most across)
 const polyArea = vs => { let a = [0, 0, 0]; for (let i = 1; i + 1 < vs.length; i++) a = add(a, cross(sub(vs[i], vs[0]), sub(vs[i + 1], vs[0]))); return len(a) / 2; };
@@ -1945,7 +1989,7 @@ function showStats(C, surf, ms) {
     ...(state.draw === 'rocks' ? [['Rocks fill it', (surf.vol / C.envVol * 100).toFixed(1) + '%'], ['Faces', surf.faces.length]] : []),
     ...(state.draw === 'rocks' && surf.bed ? [['Bedding', `${surf.bed.bedded} bedded${surf.bed.nowhere ? `, ${surf.bed.nowhere} resting nowhere` : ''}${surf.bed.cut ? `, ${surf.bed.cut} circles broken` : ''}`]] : []),
     ['Masses in', C.ms.toFixed(0) + ' ms'],
-    ...(state.draw === 'rocks' && surf.cracks ? [['Cracks', `${surf.cracks.count}, ${(surf.cracks.got / Math.max(1, surf.cracks.count)).toFixed(1)} mm long on average; ${surf.cracks.n} of ${surf.cracks.of} lines, ${surf.cracks.got.toFixed(0)} of ${surf.cracks.total.toFixed(0)} mm`]] : []),
+    ...(state.draw === 'rocks' && surf.cracks ? [['Cracks', `${surf.cracks.count}, ${(surf.cracks.got / Math.max(1, surf.cracks.count)).toFixed(1)} mm long on average; ${surf.cracks.n} of ${surf.cracks.of} lines, ${surf.cracks.got.toFixed(0)} of ${surf.cracks.total.toFixed(0)} mm${surf.cracks.faults.length ? `; ${surf.cracks.faults.length} not as planned: ${surf.cracks.faults[0]}` : ''}`]] : []),
     [state.draw === 'rocks' ? 'Rocks in' : 'Surface in', ms.toFixed(0) + ' ms, ' + builderNote],
   ];
   lastStats = rows;
