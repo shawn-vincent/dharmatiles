@@ -704,13 +704,24 @@ function cliff(seed, P) {
       // a stream of the span's own)
       let j = i + 1; if (r() < P.span / 100 && j < N - 1) { const rs = keyed(seed, 'span', id); j++; while (j < N - 1 && rs() < P.span / 100) j++; }
       const d = turnBy(axis, pickIn(P.wander, r), r);
-      let p0 = onFace(A, x, mul(d, -1)), p1 = onFace(faces[j], x, d);
-      if (!p0 || !p1) { fails++; continue; }
-      // its ends lie on layer faces inside the crisp sides, or the dart misses; past the fuzzy top or front it ends where its mass stops
-      if (![p0, p1].every(q => q[0] >= lo[0] - 1e-6 && q[0] <= hi[0] + 1e-6 && q[2] >= -1e-6 && q[1] <= y1 + 1e-6)) { fails++; continue; }
+      // its ends lie on layer faces inside the crisp sides, or the dart misses
+      const ends = c => { const q0 = onFace(A, c, mul(d, -1)), q1 = onFace(faces[j], c, d);
+        return q0 && q1 && [q0, q1].every(q => q[0] >= lo[0] - 1e-6 && q[0] <= hi[0] + 1e-6 && q[2] >= -1e-6 && q[1] <= y1 + 1e-6) ? [q0, q1] : null; };
+      let at = x, pe = ends(x);   // at: the dart, moved with the spine
+      if (!pe) { fails++; continue; }
+      // the fuzzy top and front: where its mass stops. A limit it runs along (more than 60° from it) moves it back behind it whole (a
+      // column turned by Wander would otherwise cross its front partway up and lose its foot); one it runs toward ends it there
       const rf = keyed(seed, 'fuzz', id), sTop = short(P.height, fuzzTop(x[0], x[1]), rf), sFront = short(P.depth, fuzzFront(x[0], x[2]), rf);
+      const limits = [[[0, 0, 1], H - sTop], [[0, -1, 0], -(y0 + sFront)]];
+      for (const [n, b] of limits) {
+        if (Math.abs(dot(n, unit(sub(pe[1], pe[0])))) >= 0.5) continue;
+        const over = Math.max(...pe.map(q => dot(n, q) - b)); if (over <= 0) continue;
+        at = sub(at, mul(n, over + 1e-6)); pe = field(A, at) >= 0 && field(faces[j], at) <= 0 ? ends(at) : null; if (!pe) break;
+      }
+      if (!pe) { fails++; continue; }
+      let [p0, p1] = pe;
       { let ta = 0, tb = 1; const dd = sub(p1, p0);
-        for (const [n, b] of [[[0, 0, 1], H - sTop], [[0, -1, 0], -(y0 + sFront)]]) {
+        for (const [n, b] of limits) {
           const a0 = dot(n, p0) - b, da = dot(n, dd);
           if (Math.abs(da) < 1e-12) { if (a0 > 0) tb = -1; continue; }
           const t = -a0 / da; if (da > 0) tb = Math.min(tb, t); else ta = Math.max(ta, t);
@@ -722,7 +733,7 @@ function cliff(seed, P) {
       const E0 = end(), E1 = end();
       const rx = (E0.r + E1.r) / 2, a = (E0.a + E1.a) / 2;
       const clear = here.every(o => {
-        const t = clamp(dot(sub(x, o.p0), o.e) / o.len, 0, 1), z = sub(x, add(o.p0, mul(o.e, t * o.len))), du = dot(z, o.u), dv = dot(z, o.v) / o.a;
+        const t = clamp(dot(sub(at, o.p0), o.e) / o.len, 0, 1), z = sub(at, add(o.p0, mul(o.e, t * o.len))), du = dot(z, o.u), dv = dot(z, o.v) / o.a;
         return Math.sqrt(du * du + dv * dv) >= (P.order > 0 ? 0.5 : 1) * (lerp(o.r0, o.r1, t) + rx);   // a grid's places are spaced already: only a spine through from an earlier layer is in the way
       });
       if (!clear) { fails++; continue; }
