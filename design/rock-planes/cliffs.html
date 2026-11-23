@@ -1412,13 +1412,16 @@ function crackStone(poly, k, plan, seed, P, holds = [], touches = () => false) {
   const widthOf = key => pickIn(P.opening, keyed(seed, 'crack-cut', (plan.crackOf && plan.crackOf.get(key)) ?? key));
   const picked = [...((plan.stones[k] && plan.stones[k].bounds.values()) || [])].filter(c => plan.active.has(c.key)), stubs = new Set();
   const near = boundariesNear(poly, plan.net), traced = new Map(near.map(B => { const key = `${k}:${B.a}:${B.b}`; return [key, traceOn(B.poly, poly)]; }));   // its length on this stone, not on its mass
+  // an end meets another kept line where that line ends on this stone within JUNCTION_REACH (where the lines end on the stone, not
+  // on its mass: the faces moved them)
+  const metAt = (key, p) => picked.some(o => o.key !== key && !stubs.has(o.key) && traced.get(o.key) && traced.get(o.key).ends.some(q => len(sub(q.p, p)) <= JUNCTION_REACH));
   for (let more = true; more;) {
     more = false;
     for (const c of picked) {
       const tr = traced.get(c.key);
       if (stubs.has(c.key) || !tr || tr.ends.length !== 2) continue;
       const w = widthOf(c.key);   // its ends on this stone, met as endOf meets them (another kept line's end, or the visible outline)
-      const full = tr.ends.map(e => seamAt(e.p, tr.segs.find(sg => pkey(sg[0]) === e.k || pkey(sg[1]) === e.k)[2]) || picked.some(o => o !== c && !stubs.has(o.key) && o.ends.some(q => len(sub(q.p, e.p)) <= Math.max(1e-3, w / 2))));
+      const full = tr.ends.map(e => seamAt(e.p, tr.segs.find(sg => pkey(sg[0]) === e.k || pkey(sg[1]) === e.k)[2]) || metAt(c.key, e.p));
       if (full[0] !== full[1] && tr.length < TAPER * w / 2 / t) { stubs.add(c.key); more = true; }
     }
   }
@@ -1427,8 +1430,6 @@ function crackStone(poly, k, plan, seed, P, holds = [], touches = () => false) {
     if (tr.segs.length) traces.push({ segs: tr.segs.map(s => [s[0], s[1]]), on });
     if (!on) continue;
     const w = widthOf(key), D = w / 2 / t;   // one width along a whole crack
-    // the ends of the other picked lines of this stone: an end within half the opening of one meets it (one crack, full through)
-    const others = [...((plan.stones[k] && plan.stones[k].bounds.values()) || [])].filter(c => c.key !== key && plan.active.has(c.key) && !stubs.has(c.key)).flatMap(c => c.ends.map(e => e.p));
     // the chains: runs joined where they share an end; a chain from an end (met once) to an end, or a loop
     const segs = tr.segs.map(([p, q, f]) => ({ p, q, f })), at = new Map(), used = new Set(), chains = [];
     segs.forEach((g, i) => { for (const x of [g.p, g.q]) { const kx = pkey(x); (at.get(kx) || at.set(kx, []).get(kx)).push(i); } });
@@ -1439,7 +1440,7 @@ function crackStone(poly, k, plan, seed, P, holds = [], touches = () => false) {
     // face that touches another stone or the ground: full, flush with
     // the face beyond: the plane halving the two, where that end wall is within the target; else the V's own end), or free (tapered); by a bottom it tapers
     const endOf = (p, f) => {
-      if (others.some(q => len(sub(q, p)) <= Math.max(1e-3, w / 2))) return { kind: 'meet' };
+      if (metAt(key, p)) return { kind: 'meet' };
       const g = seamAt(p, f); if (g) return { kind: 'seam', g };
       return { kind: 'taper' };
     };
