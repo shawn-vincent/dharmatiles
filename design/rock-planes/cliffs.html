@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: one working bench. The viewer on the plate fills the left, the controls stand in a narrow column on the right, a strip of neighbouring seeds runs under the viewer, and how it is built reads below. Tokens are the dharmatiles visual system's (Lichen & Linen by day, Moonpool at night). */
+/* Layout: one working bench. The viewer on the plate, under it the bar of controls, then a strip of neighbouring seeds, and how it is built reads below. Tokens are the dharmatiles visual system's (Lichen & Linen by day, Moonpool at night). */
 :root {
   --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
   --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
@@ -62,8 +62,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pv.tool { color: var(--muted); padding: 0 7px; }
 .pv.tool:hover { color: var(--accent); }
 #reset { margin-left: auto; }
-/* the bar is one line of icons and values, and stays at the top of the screen */
-.params { position: sticky; top: 0; z-index: 15; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+/* the bar is one line of icons and values, between the viewer and the seeds */
+.params { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .params::-webkit-scrollbar { display: none; }
 .ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .pv .ic { color: var(--muted); }
@@ -198,11 +198,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <p class="lede">A cliff as a population of rock masses. The envelope is cut into layers; spines are thrown in each, Width and Thickness apart; each grows until it meets its neighbours or the envelope. Every mass then becomes a faceted stone. Granite, Columns, Layered, Massive and Wall are settings of one engine; Random picks one of them.</p>
   </header>
 
-  <div class="bar params" id="params" role="toolbar" aria-label="Settings">
-    <button class="pv tool" id="reset" title="Reset: put every setting back" aria-label="Reset every setting"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></svg></button>
-    <span class="pc"><button class="pv tool" id="spec" aria-haspopup="dialog" title="Spec: copy everything on screen as text, or load pasted text" aria-label="Spec: copy or load the settings as text"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></span>
-  </div>
-
   <div class="main">
     <div class="stage">
       <div class="viewer" id="viewer">
@@ -234,6 +229,10 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
             <label><input type="checkbox" id="mini" checked> The miniature</label>
           </div>
         </div>
+      </div>
+      <div class="bar params" id="params" role="toolbar" aria-label="Settings">
+        <button class="pv tool" id="reset" title="Reset: put every setting back" aria-label="Reset every setting"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></svg></button>
+        <span class="pc"><button class="pv tool" id="spec" aria-haspopup="dialog" title="Spec: copy everything on screen as text, or load pasted text" aria-label="Spec: copy or load the settings as text"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></span>
       </div>
       <div class="carousel" role="group" aria-label="Seeds">
         <button class="btn arrow" id="prev" aria-label="Previous seed">&#8592;</button>
