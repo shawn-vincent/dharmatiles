@@ -260,6 +260,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     </ol>
     <p class="hint"><b>Layered</b>, the first style: nine level layers, a handful of slabs in each. <b>Granite</b>: one layer through the wall, so every spine starts at a point on the back and runs straight through to the front (turned about 10°), and the stones show their ends; Joint under zero, so they overlap into one irregular mass. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart. <b>Massive</b>: two layers parallel to the front, big stones. <b>Wall</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone.</p>
     <p class="hint">Not here yet, from the design: envelopes with concavities and holes (each mass is clipped by a box envelope), curved or irregular ends, twisting sections, and joint faces kept flush (a rock's sink opens every joint). Every job draws from its own stream (the planes, each plane's starts, each spine, each end, the fuzz, each joint, each rock), so one control never reshuffles another. Overhang paints orange past 55° and red past 65°.</p>
+    <p class="hint">The glassy figure at the front left, for scale, is <a href="https://www.printables.com/model/77914-fighter-female-no-supports-needed">Fighter - Female</a> by Teirale, a 28 mm miniature on a 25 mm base (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), with fewer triangles.</p>
   </section>
 </div>
 
@@ -550,11 +551,11 @@ function meshOf(surf, foot, opt) {
   return grp;
 }
 // ---------- the reference miniature ----------
-// A 28 mm scale figure on a 25 mm round base, glassy, standing on the ground in front of the cliff's left end, for judging scale.
-// The figure (miniature-28mm.stl, beside this page) is Auguste Rodin's The Age of Bronze, from Scan The World's scan (CC0, Wikimedia
-// Commons: File:The Age Of Bronze (Auguste Rodin).stl): its plinth cut off, cut to 16,000 triangles (ASCII, to 0.001 mm), soles at zero, 31 mm to its raised
-// hand (eyes at about 28 mm), facing -y.
-const MINI_BASE = { r: 12.5, top: 11.5, h: 3.5 };   // mm: the base's radius at the ground and at its top, and its height
+// A 28 mm scale figure on its 25 mm round base, glassy, standing on the ground in front of the cliff's left end, for judging scale.
+// The figure (miniature-28mm.stl, beside this page) is "Fighter - Female - No supports needed" by Teirale (Printables model 77914,
+// "2 All in one.stl", CC BY 4.0, credited on the page): its base's middle at the origin, its bottom at zero, at its own size, cut from
+// 419,000 to 20,000 triangles (ASCII, to 0.001 mm).
+const MINI_R = 12.5;     // mm: the base's radius
 const MINI_CLEAR = 2.5;                              // mm between the base and the envelope's front left corner, each way
 // an ASCII STL (text, so it is served beside the page as it is kept in the repo): its vertices, three to a triangle
 function stlGeometry(text) {
@@ -564,15 +565,13 @@ function stlGeometry(text) {
 }
 function miniOf() {
   const grp = new THREE.Group(), glass = c => new THREE.MeshLambertMaterial({ color: c, transparent: true, opacity: 0.4, depthWrite: false });
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(MINI_BASE.top, MINI_BASE.r, MINI_BASE.h, 64), glass(0x4A5568));
-  base.rotation.x = Math.PI / 2; base.position.z = MINI_BASE.h / 2; base.renderOrder = 5; grp.add(base);
   fetch('miniature-28mm.stl').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); }).then(buf => {
-    const fig = new THREE.Mesh(stlGeometry(buf), glass(0x5B6B82)); fig.position.z = MINI_BASE.h; fig.renderOrder = 6; grp.add(fig); draw();
+    const fig = new THREE.Mesh(stlGeometry(buf), glass(0x5B6B82)); fig.renderOrder = 6; grp.add(fig); draw();
   }).catch(e => { $('err').hidden = false; $('err').textContent = 'The reference miniature could not be loaded: ' + e.message; problems.push('miniature: ' + e.message); console.error(e); });
   return grp;
 }
 // stands it at the envelope's front left corner, clear of it
-function placeMini(C) { mini.position.set(C.lo[0] - MINI_BASE.r - MINI_CLEAR, C.lo[1] - MINI_BASE.r - MINI_CLEAR, 0); }
+function placeMini(C) { mini.position.set(C.lo[0] - MINI_R - MINI_CLEAR, C.lo[1] - MINI_R - MINI_CLEAR, 0); }
 function disposeGroup(grp) { grp.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
 function makeScene() {
   const scene = new THREE.Scene();
