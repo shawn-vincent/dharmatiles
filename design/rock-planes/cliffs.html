@@ -1562,6 +1562,7 @@ function crackStone(poly, k, plan, seed, P, holds = [], touches = () => false) {
         const looped = ch.loop && whole && made.length > 1;
         for (let i = 0; i + 1 < made.length; i++) join(made[i], made[i + 1], made[i + 2] || (looped ? made[0] : null), !looped && i + 2 >= made.length ? eb : null);
         if (looped) join(made[made.length - 1], made[0], made[1]);
+        const head = made[0], tail = made[made.length - 1];   // the piece's own first and last steps (a twisted step is never one)
         made.push(...twists);
         const close = (c, end, atZ) => {
           const tip = atZ ? sub(c.u.Z, mul(c.u.f.n, c.u.dZ)) : sub(c.u.A, mul(c.u.f.n, c.u.dA));
@@ -1570,7 +1571,7 @@ function crackStone(poly, k, plan, seed, P, holds = [], touches = () => false) {
           else if (end.kind === 'seam' && c.endsFlush) { /* its twisted whole ends on that plane already */ }
           else if (end.kind === 'seam') { const h = halving(c.u.f, end.g); if (h && -h.n[2] >= -SIN_OVER) c.planes.push(h); else c.planes.push(plane(sub(mul(c.d, atZ ? 1 : -1), mul(c.u.f.n, t)), tip)); }   // flush where that end wall (facing −h.n) is within the target, else the V's own end
         };
-        if (made.length && !(ch.loop && whole)) { close(made[0], ea, false); close(made[made.length - 1], eb, true); }
+        if (made.length && !(ch.loop && whole)) { close(head, ea, false); close(tail, eb, true); }
         for (const c of made) {
           c.cutAway = Math.max(c.u.dA, c.u.dZ) < 1e-4 ? [] : inside(poly, c.planes);
           // it would notch the bottom: a point of its cut on a bottom's plane that is not on its own face's edge (ending flush at the
