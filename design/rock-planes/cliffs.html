@@ -462,6 +462,7 @@ function hull2(pts) {
 // ---------- today's stone carving (eng stoneOf) on the pooled kernel: typed, no allocation per stone ----------
 // The same rules as stoneOf (crowns through touch points, facet planes spread over the faces and domed, chamfers on edges and
 // corners, every plane past its guards), read from the kernel's cell in place and clipped back into it.
+const MINBITE = 0.12;   // mm: a plane that cuts the stone less than this is not made (a sliver of a facet, a hair of a chamfer: under a third of the nozzle)
 const OVER = 55, SIN55 = Math.sin(OVER * DEG), SIN65 = Math.sin(65 * DEG), LIM = SIN55, TWO_PI = 2 * Math.PI, LEANF = 1.5;   // no plane faces down past the overhang target
 let CF = null, VT = false;   // the wall's carving: its own Faces, Chamfered, Tilt and Sink; VT: this stone is a column (its side facets turn about the vertical only)
 // one stream at a time: the state is `ms`; `rnd` is it (or, exact, a keyed closure)
@@ -521,7 +522,7 @@ function place(nx, ny, nz, depth, from, most) {
     const e = gGe[j]; if (nx * gCx[j] + ny * gCy[j] + nz * gCz[j] + gR[j] > b) for (let i = 3 * s0, n = 3 * e; i < n; i += 3) { const d = nx * gd[i] + ny * gd[i + 1] + nz * gd[i + 2]; if (d > b) b = d; }
     s0 = e;
   }
-  if (b >= top - 1e-6) return 0;
+  if (b >= top - MINBITE) return 0;
   pN[3 * nP] = nx; pN[3 * nP + 1] = ny; pN[3 * nP + 2] = nz; pB[nP++] = b; return top - b;
 }
 function guardsEnd() {   // close a batch of guards: their centre and the radius that holds them (a plane whose reach past the batch is under its bite skips them)
@@ -752,7 +753,7 @@ function domeRing(s, ring, vis) {   // the planes of slot s's face: ring r at 1/
       const ux_ = ox * cp + tx_ * sp, uy_ = oy * cp + ty_ * sp, uz_ = oz * cp + tz_ * sp, ca = Math.cos(al), sa = Math.sin(al);
       let qx = nx * ca + ux_ * sa, qy = ny * ca + uy_ * sa, qz = nz * ca + uz_ * sa; const ql = Math.sqrt(qx * qx + qy * qy + qz * qz); qx /= ql; qy /= ql; qz /= ql;
       const ins = DOME.inset * inr * ring * (nz > 0.5 || oz > 0.4 ? 1 + DOME.upInset * ROUND : 1) * (0.7 + 0.6 * rnd()), bx = qx * (px - ux_ * ins) + qy * (py - uy_ * ins) + qz * (pz - uz_ * ins);
-      if (qz < -DOME.down) continue; const top = support(qx, qy, qz); if (top - bx > 0.02) place(qx, qy, qz, top - bx, null, Infinity);
+      if (qz < -DOME.down) continue; place(qx, qy, qz, 0, bx, Infinity);
     }
   }
 }
@@ -771,7 +772,7 @@ function domeCrown(cr) {
     const wx = nx * 0, ux = ox3 * cp + (ny * oz3 - nz * oy3) * sp, uy = oy3 * cp + (nz * ox3 - nx * oz3) * sp, uz = oz3 * cp + (nx * oy3 - ny * ox3) * sp;
     const al = hiT * (CROWN.lo + CROWN.hi * rnd()) * DEG, ca = Math.cos(al), sa = Math.sin(al);
     let qx = nx * ca + ux * sa, qy = ny * ca + uy * sa, qz = nz * ca + uz * sa; const ql = Math.sqrt(qx * qx + qy * qy + qz * qz); qx /= ql; qy /= ql; qz /= ql;
-    if (qz < -DOME.down) return; const bx = qx * px + qy * py + qz * pz, top = support(qx, qy, qz); if (top - bx > 0.02) place(qx, qy, qz, top - bx, null, Infinity);
+    if (qz < -DOME.down) return; place(qx, qy, qz, 0, qx * px + qy * py + qz * pz, Infinity);
   };
   if (n < 3) { const p = K[0], sv = [CROWN.lo, CROWN.hi]; if (cr.virt) { CROWN.lo = CROWN.vlo; CROWN.hi = CROWN.vhi; } for (let j = 0; j < 8; j++) { const t = TWO_PI * (j + rnd()) / 8; at(p[0], p[1], p[2], Math.cos(t), Math.sin(t)); } CROWN.lo = sv[0]; CROWN.hi = sv[1]; return; }
   for (let i = 0; i < n; i++) {
@@ -1383,14 +1384,14 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     }
     return { top, side, crowns };
   }
-  for (const G of groups.values()) for (const pc of G.pieces) {
+  const emitPiece = (G, pc) => {   // its own function: `wall` is past the size V8 will optimize
     restore(pc.snap);
     if (!pc.ground) { const L = pc.bgL, bg = pc.botPl; clip(bg[0] / L, bg[1] / L, -1 / L, (-bg[2] + pc.sink) / L, KIND.BOT); }
     if (!opt.cells) for (const fl_ of pc.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
     if (pc.cuts) for (const c_ of pc.cuts) clip(c_[0], c_[1], c_[2], c_[3], KIND.TOP);
     if (!opt.cells && pc.flare2) { const kp_ = [], bb_ = pc.bb; for (let i = 0; i < G.kp.length; i += 3) if (G.kp[i] >= bb_[0] - 0.3 && G.kp[i] <= bb_[1] + 0.3 && G.kp[i + 1] >= bb_[2] - 0.3 && G.kp[i + 1] <= bb_[3] + 0.3 && G.kp[i + 2] >= bb_[4] - 0.3 && G.kp[i + 2] <= bb_[5] + 0.3) kp_.push(G.kp[i], G.kp[i + 1], G.kp[i + 2]); for (const fl_ of pc.flare2) { let d_ = fl_[3]; for (let i = 0; i < kp_.length; i += 3) { const g_ = fl_[0] * kp_[i] + fl_[1] * kp_[i + 1] + fl_[2] * kp_[i + 2]; if (g_ > d_) d_ = g_; } clip(fl_[0], fl_[1], fl_[2], d_, KIND.FLARE); } }   // a step never cuts a guard (a crown, a glued face)
-    if (empty) continue;
-    if (opt.cells) { if (empty) continue; } else { const tc = now(); DX = domeData(pc, find, G); carveFast(hash2(seed, G.id) >>> 1, G.kp, !!(pc.ground || pc.onGround)); DX = null; TC += now() - tc; if (empty) continue; }
+    if (empty) return;
+    if (opt.cells) { if (empty) return; } else { const tc = now(); DX = domeData(pc, find, G); carveFast(hash2(seed, G.id) >>> 1, G.kp, !!(pc.ground || pc.onGround)); DX = null; TC += now() - tc; if (empty) return; }
     // faces go straight into the wall's flat buffers (positions, a loop's start and length, kind, normal, area); a stone's `faces` objects are made when something asks
     const f0 = nFace;
     for (let f = 0; f < nF; f++) {
@@ -1402,7 +1403,8 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       XS[nFace] = ps; FM[nFace] = m; FK[nFace] = ft[f] < 0 ? -1 : ft[f] & 15; FN[3 * nFace] = nx / L; FN[3 * nFace + 1] = ny / L; FN[3 * nFace + 2] = nz / L; FA[nFace] = L / 2; nFace++; nTri += m - 2;
     }
         stones.push({ holds: G.holds, piece: pc.id, grp: G.id, get faces() { return this._f || (this._f = mk(this._a, this._b)); }, _a: f0, _b: nFace, _f: null, layer: pc.layer, held: pc.held, onGround: !!pc.onGround });
-  }
+    };
+  for (const G of groups.values()) for (const pc of G.pieces) emitPiece(G, pc);
   lap('emit'); T.carve = TC;
   T.total = now() - t0;
   // ---- the contact graph: a body is connected when some piece rests on the ground or on a connected body
