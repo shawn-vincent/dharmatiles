@@ -182,6 +182,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 .how b { font-weight: 600; }
 .how code { font: 13px var(--f-code); background: var(--panel); padding: 0 4px; border-radius: 3px; }
 .err { color: var(--err); font-weight: 600; }
+/* a setting the engine does not read (now): red, with a note, so what is missing shows */
+.prow.idle .k, .prow.idle small, .pv.idle .v, .pv.idle .ic, .seg button.idle { color: var(--err); }
+.prow.idle .k::after { content: " · does nothing now"; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.pv.idle .v { border-bottom-color: var(--err); }
+.seg button.idle[aria-pressed="true"] { background: var(--err); color: var(--on-accent); }
 @media (max-width: 860px) {
   .pv { padding: 0 4px; gap: 4px; } .pv.tool { padding: 0 4px; } .params { gap: 0; padding: 4px 2px; }
   .main { grid-template-columns: minmax(0, 1fr); }
@@ -899,7 +904,23 @@ function wall(seed, P, opt = {}) {
       if (!empty && nF >= 4 && bf_ >= 0) { q.botPl = [0, 0, 0]; q.bgL = 1; q.sink = 0; q.bot = ccw(faceXYZ(bf_).map(p => [p[0], p[1]])); q.snap = snap(); q.ground = true; nGroundIt++; return true; }
       return false;
   }
-function holdPat(q, k, GAPMAX, lowK, ms = 1) {
+  // a stone whose own bottom plane is tilted against every holder's top (a layer face at the wall's back or front, leaning with Bow or Sag) is laid parallel to
+  // the nearest layer's largest holder top, 0.35 above it, and its cell made again: the stone then sits flush where its own plane could not reach any holder
+  function relayBottom(q, rl) {
+    let r = null; for (const c of rl) { if (!r) { r = c; continue; } const lc = c.holder.layer, lr = r.holder.layer, ac = Math.abs(area2(c.full)), ar = Math.abs(area2(r.full)); if (lc > lr || (lc === lr && ac > ar)) r = c; }
+    if (!r) return false;
+    const tp = r.t.pl, bx = tp[0], by = tp[1], b0 = tp[2] + 0.35, L = Math.hypot(bx, by, 1);
+    const old = { botPl: q.botPl, bgL: q.bgL, bb: q.bb, bot: q.bot, snap: q.snap, ent: q.planes.map(e => e.slice()) };
+    initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
+    for (let i = 0; i < q.planes.length; i++) { const e = q.planes[i]; if (e[4] === KIND.BOT) { e[0] = bx / L; e[1] = by / L; e[2] = -1 / L; e[3] = (-b0 + 1.3) / L; } clip(e[0], e[1], e[2], e[3], e[4] | i << 4); }
+    let botF = -1; if (!empty && nF >= 4) for (let f = 0; f < nF; f++) if ((ft[f] & 15) === KIND.BOT) botF = f;
+    if (botF < 0) { q.planes.forEach((e, i) => { for (let j = 0; j < 4; j++) e[j] = old.ent[i][j]; }); return false; }
+    let x0 = 1e9, x1 = -1e9, ya = 1e9, yb = -1e9, za = 1e9, zb = -1e9;
+    for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
+    q.botPl = [bx, by, b0]; q.bgL = L; q.bb = [x0, x1, ya, yb, za, zb]; q.bot = ccw(faceXYZ(botF).map(p => [p[0], p[1]])); q.snap = snap(); q.relaid = 1;
+    return true;
+  }
+function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       const pat = []; let qg = -1e9;
       for (let kk = k - 1; kk >= lowK; kk--) for (const p of layerPieces[kk]) {
         const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
@@ -939,7 +960,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1) {
           let gmin = 1e9, gmax = -1e9; for (const v of patch) { const g = botN(q, v[0], v[1]) - tz_(r.t.pl, v[0], v[1]); if (g < gmin) gmin = g; if (g > gmax) gmax = g; }
           r.poly = patch; r.gmax = gmax;
         }
-        pat.splice(0, pat.length, ...pat.filter(r => Math.abs(area2(r.poly)) >= 0.03 && minW2(r.poly) >= MINSW));
+        pat.splice(0, pat.length, ...pat.filter(r => Math.abs(area2(r.poly)) >= 0.03 && minW2(r.poly) >= mw));
       }
     return pat;
   }
@@ -952,8 +973,13 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1) {
     if (q.ground) { q.B = q.bot; q.held = true; q.onGround = true; q.Bpolys = [q.bot]; gsup.add(q.grp); continue; }
     let pat = holdPat(q, k, GAPMAX, Math.max(0, k - LB));
     if (!pat.length && LB < 3) pat = holdPat(q, k, GAPMAX, Math.max(0, k - 3));   // thin layers look one layer down first; a lower holder only when no nearer one exists
-    if (!pat.length) { const rl = holdPat(q, k, 12, Math.max(0, k - 6)); if (rl.length) { if (lowerBottom(q, rl)) pat = holdPat(q, k, 2.2, Math.max(0, k - 6)); else pat = holdPat(q, k, GAPMAX, Math.max(0, k - 6)); if (!pat.length) pat = holdPat(q, k, 2.2, Math.max(0, k - 6), 0.25); } }
+    let rl = [];
+    if (!pat.length) { rl = holdPat(q, k, 12, Math.max(0, k - 6)); if (rl.length) { if (lowerBottom(q, rl)) pat = holdPat(q, k, 2.2, Math.max(0, k - 6)); else pat = holdPat(q, k, GAPMAX, Math.max(0, k - 6)); if (!pat.length) pat = holdPat(q, k, 2.2, Math.max(0, k - 6), 0.25); } }
     if (!pat.length && q.bb[4] < GROUNDZ && groundIt(q)) { q.B = q.bot; q.held = true; q.onGround = true; q.Bpolys = [q.bot]; gsup.add(q.grp); continue; }
+    // a stone whose own bottom plane lies tilted against every holder is laid parallel to a holder's top and its cell made again (relayBottom)
+    if (!pat.length && rl.length && relayBottom(q, rl)) { pat = holdPat(q, k, 2.2, Math.max(0, k - 6)); if (!pat.length) pat = holdPat(q, k, 2.2, Math.max(0, k - 6), 0.25); }
+    // a sliver narrower than a patch may be (a cell cut thin by the front or the fuzzy top) rests on its holder all the same: its bottom is lowered to the holder's top and any width of patch counts
+    if (!pat.length) { const rn = holdPat(q, k, 12, Math.max(0, k - 6), 1, 0); if (rn.length) { if (lowerBottom(q, rn)) pat = holdPat(q, k, 2.2, Math.max(0, k - 6), 1, 0); else pat = holdPat(q, k, GAPMAX, Math.max(0, k - 6), 1, 0); q.sliver = 1; } }
     // the bottom: the supports' hull, every point of it resting or on a line between two resting points at most BRIDGE apart. Three or more
     // supports whose hull is not covered by the patches and the hulls of pairs within BRIDGE keep the best pair (or the largest patch) instead
     if (!gsup.has(q.grp) && pat.some(r => r.glue) && pat.some(r => !r.glue)) pat = pat.filter(r => !r.glue);   // gl: a body that rests on nothing yet takes no glue patch (its own lower piece) when a real holder is there
@@ -2134,7 +2160,7 @@ const GROUPS = [
     R_('height', 'Height', 6, 80, 0.1, MM, 'How tall each stone reaches: drawn in this range, mostly from a smooth field along the wall, so neighbours stop at similar heights and the top wanders. The envelope is as tall as the high end.'),
     R_('depth', 'Depth', 4, 35, 0.5, MM, 'How far forward each stone reaches from the back of the square, drawn the same way, so the front wanders. The back is crisp.')] },
   { label: 'Structure', icon: () => dirIcon(state.direction), value: 'layers', items: [
-    { key: 'direction', label: 'Direction', choices: [['up', 'Up'], ['through', 'Through'], ['along', 'Along']], icon: dirIcon, help: 'Which way the spines run: up (columns; with many layers, courses), through the wall back to front (stones show their ends), or along it (slabs: not built by the cells engine, which says so). Through is one layer, so Layers, Lean, Pitch, Sag, Bow, Span, Fuse and Order do not apply to it.' },
+    { key: 'direction', label: 'Direction', choices: [['up', 'Up'], ['through', 'Through'], ['along', 'Along']], idleChoices: ['along'], icon: dirIcon, help: 'Which way the spines run: up (columns; with many layers, courses), through the wall back to front (stones show their ends), or along it (slabs: not built by the cells engine, which says so). Through is one layer, so Layers, Lean, Pitch, Sag, Bow, Span, Fuse and Order do not apply to it.' },
     P_('layers', 'Layers', 1, 50, 1, '', 'How many layers the envelope is cut into across the direction; a spine starts and ends where layers meet (or at the envelope).'),
     R_('lean', 'Lean', -30, 30, 0.5, '°', 'How far each face between layers slopes along Width (along the wall for Up and Through, front to back for Along), drawn for each face. Where neighbouring faces cross, a layer pinches out.'),
     R_('pitch', 'Pitch', -30, 30, 0.5, '°', 'How far each face between layers slopes along Thickness (front to back for Up, vertically for Through and Along), drawn for each face.'),
@@ -2447,6 +2473,10 @@ const bar = $('params'), resetBtn = $('reset');
 // a direction's picture: the wall, seen from the front and a little above, and the way its spines run
 const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return rangeText(v) + (p.unit || ''); if (p.choices) { const c = p.choices.find(x => x[0] === v); return (p.icon ? p.icon(v) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
 const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
+// a setting the cells engine does not read, always or with the settings as they are: shown red (the interface's error colour, not
+// overhang paint) so what is missing can be seen; it keeps its value
+const IDLE_ALWAYS = new Set(['weather', 'bedding']), IDLE_THROUGH = new Set(['layers', 'lean', 'pitch', 'sag', 'bow', 'span', 'fuse', 'order']);
+const idle = p => !!p && (IDLE_ALWAYS.has(p.key) || (state.direction === 'through' && IDLE_THROUGH.has(p.key)) || (p.idleChoices || []).includes(state[p.key]));
 // one setting's row in a popover: a box to type in, its slider and its help
 function row(p, box) {
   if (p.choices) {   // a choice: a button for each, and its help
@@ -2454,7 +2484,7 @@ function row(p, box) {
     wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`);
     const seg = document.createElement('div'); seg.className = 'seg';
     for (const [v, label] of p.choices) {
-      const b = document.createElement('button'); b.innerHTML = (p.icon ? p.icon(v) : '') + label; b.className = p.icon ? 'withicon' : ''; b.setAttribute('aria-pressed', state[p.key] === v ? 'true' : 'false');
+      const b = document.createElement('button'); b.innerHTML = (p.icon ? p.icon(v) : '') + label; b.className = (p.icon ? 'withicon' : '') + ((p.idleChoices || []).includes(v) ? ' idle' : ''); b.setAttribute('aria-pressed', state[p.key] === v ? 'true' : 'false');
       b.addEventListener('click', () => { state[p.key] = v; for (const o of seg.children) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); update(); });
       seg.append(b);
     }
@@ -2547,7 +2577,7 @@ function groupChip(g) {
   pc.append(btn); bar.insertBefore(pc, resetBtn);
   const lone = g.items.length === 1;
   // the chip shows the group's first value; the popover has them all
-  const show = () => { btn.querySelector('.gi').outerHTML = g.icon().replace('class="ic', 'class="gi ic'); btn.querySelector('.v').innerHTML = fmt(g.items.find(p => p.key === g.value), state[g.value]); btn.setAttribute('aria-label', `${g.label}: ${g.items.map(p => p.label + ' ' + (p.range ? rangeText(state[p.key]) : state[p.key])).join(', ')}; click to change`); };
+  const show = () => { btn.classList.toggle('idle', idle(g.items.find(p => p.key === g.value))); btn.querySelector('.gi').outerHTML = g.icon().replace('class="ic', 'class="gi ic'); btn.querySelector('.v').innerHTML = fmt(g.items.find(p => p.key === g.value), state[g.value]); btn.setAttribute('aria-label', `${g.label}: ${g.items.map(p => p.label + ' ' + (p.range ? rangeText(state[p.key]) : state[p.key])).join(', ')}; click to change`); };
   btn.addEventListener('click', () => {
     if (pc.classList.contains('open')) return;
     closePop(true);
@@ -2555,7 +2585,7 @@ function groupChip(g) {
     const pop = document.createElement('div'); pop.className = 'pop' + (lone ? '' : ' group'); pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', g.label); pop.append(sheetHead(g.label, g.icon()));
     let first;
     if (lone) { const p0 = g.items[0]; first = document.createElement('input'); Object.assign(first, { type: 'text', inputMode: p0.range ? 'text' : 'decimal', value: p0.range ? rangeText(state[p0.key]) : state[p0.key], className: p0.range ? 'pbox rng' : 'pbox' }); first.setAttribute('aria-label', g.label); v.replaceWith(first); pop.append(row(g.items[0], first)); }
-    else { const rows = g.items.map(p => [p, row(p)]); for (const [, r] of rows) pop.append(r); first = pop.querySelector('.pbox'); sheetShown = () => { for (const [p, r] of rows) if (p.shownWhile) r.style.display = state[p.shownWhile] > 0 ? '' : 'none'; }; sheetShown(); }   // a row with shownWhile shows only while that setting is above 0 (it keeps its value)
+    else { const rows = g.items.map(p => [p, row(p)]); for (const [, r] of rows) pop.append(r); first = pop.querySelector('.pbox'); sheetShown = () => { for (const [p, r] of rows) { if (p.shownWhile) r.style.display = state[p.shownWhile] > 0 ? '' : 'none'; r.classList.toggle('idle', idle(p)); } }; sheetShown(); }   // a row with shownWhile shows only while that setting is above 0 (it keeps its value)
     document.body.append(pop); pc.classList.add('open');   // on the page, not in the bar: a phone's Safari clips a fixed sheet inside a scrolling bar. No focus: on a phone it would raise the keyboard; tap the box to type
     const away = e => { if (openPop && e.relatedTarget && !pc.contains(e.relatedTarget) && !pop.contains(e.relatedTarget)) closePop(true); };   // focus gone from the chip and its sheet
     const life = new AbortController();   // the sheet's listeners on the chip go with the sheet: one left on the chip would close the next sheet opened from it
