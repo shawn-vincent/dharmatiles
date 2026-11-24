@@ -350,7 +350,7 @@ const SINK = 0.17, FLARE_DEG = 54.9, FLC = Math.cos(FLARE_DEG * DEG), FLS = Math
 const THIN = 3;   // mm: a layer thinner than this is thin: its stones keep every contact they can, whole
 const COLUMN = 6;   // a stone, or a layer's spines, at least this many times as tall as wide is a column
 const BLUNT = 0.3;   // a thick layer's support is 0.4 of its patch, and 0.4 + this when the style is fully round (Fieldstone): a blunter bottom, the flare cut from further out
-const CROWN = Object.assign({ on: 1, size: 2.5, free: 1, dome: 1, spread: 50, lo: 0.4, hi: 0.4, gap: 1.5, corner: 2, virt: 1, vmin: 3, vlo: 0.25, vhi: 0.3, step: [[42, 0.7], [28, 1.6]] }, (typeof TUNE !== 'undefined' && TUNE.crown) || {});   // a stone on two holders rests on a small flat crown on each, as far apart as Bridge allows; a round style only
+const CROWN = Object.assign({ on: 1, size: 2.5, free: 1, dome: 1, spread: 50, lo: 0.4, hi: 0.4, gap: 1.5, corner: 2, virt: 1, vmin: 3, vlo: 0.25, vhi: 0.3, step: [[42, 0.7], [28, 1.6]], chain: 1, chainSpread: 1.0, tilt: 1, tiltK: 0.5, tiltMax: 0.42, tiltDrop: 1.5, tiltPen: 0.6, cutThick: 1.0, tiltThick: 0.5 }, (typeof TUNE !== 'undefined' && TUNE.crown) || {});   // a stone on two holders rests on a small flat crown on each, as far apart as Bridge allows; a round style only
 const BRIDGE_MARGIN = 1;   // mm: the bottoms are planned this far inside Bridge, so a pair of patches the plan bridges is bridged for the measure too
 // ---------- the clip kernel: a convex polytope as vertices + face loops in pooled typed arrays ----------
 const LAZYMAX = 60;
@@ -1095,7 +1095,49 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
         if (ok_ && cur.length) { const aa = []; for (const c of cur) for (const v of c.p) aa.push(v); cutRes = { cur, area: Math.abs(area2(hull2(aa))) }; }
       return cutRes;
     };
-    if (pat.length >= 3) {
+    // chain: a stone on three or more holders whose overlaps a line crosses rests on a crown on each, set along that line: the bar of crowns is longer than one bridge,
+    // and the hull of the crowns is covered by the crowns and the strips of the neighbouring pairs, which is what the measure holds. The bottom plane is fitted to the crowns
+    // (along the line by least squares, across it the mean of the tops' slopes); the holders that are not on the line are left free
+    let chain = false;
+    if (CROWN.on && CROWN.chain && ROUND > 0 && !thin && pat.length >= 3 && !pat.some(r => r.glue) && new Set(pat.map(r => r.holder)).size === pat.length) {
+      const hh = CROWN.size / 2, cenOf = P_ => { let x = 0, y = 0; for (const v of P_) { x += v[0]; y += v[1]; } return [x / P_.length, y / P_.length]; };
+      const inner = pat.map(r => { const F = ccw(r.full), n = F.length; let I = F; for (let i = 0; i < n && I.length >= 3; i++) { const A = F[i], B_ = F[(i + 1) % n], ex = B_[0] - A[0], ey = B_[1] - A[1], l = Math.hypot(ex, ey); if (l < 1e-9) continue; const nx_ = ey / l, ny_ = -ex / l; I = half(I, nx_, ny_, nx_ * A[0] + ny_ * A[1] - hh); } return { F, I: I.length >= 3 ? I : null }; });
+      const sq = (c, ux, uy) => { const vx_ = -uy, vy_ = ux; return ccw([[c[0] - hh * ux - hh * vx_, c[1] - hh * uy - hh * vy_], [c[0] + hh * ux - hh * vx_, c[1] + hh * uy - hh * vy_], [c[0] + hh * ux + hh * vx_, c[1] + hh * uy + hh * vy_], [c[0] - hh * ux + hh * vx_, c[1] - hh * uy + hh * vy_]]); };
+      const segIn = (I, a, ux, uy, dl) => { let t0 = 0, t1 = dl; const n = I.length; for (let i = 0; i < n; i++) { const A = I[i], B_ = I[(i + 1) % n], ex = B_[0] - A[0], ey = B_[1] - A[1], l = Math.hypot(ex, ey); if (l < 1e-9) continue; const nx_ = ey / l, ny_ = -ex / l, d0 = nx_ * (a[0] - A[0]) + ny_ * (a[1] - A[1]), dd = nx_ * ux + ny_ * uy; if (Math.abs(dd) < 1e-9) { if (d0 > 0) return null; } else { const tt = -d0 / dd; if (dd > 0) t1 = Math.min(t1, tt); else t0 = Math.max(t0, tt); } } return t1 > t0 ? [t0, t1] : null; };
+      const Dc = Math.sqrt(Math.max(0, (BRIDGE - 0.4) * (BRIDGE - 0.4) - CROWN.size * CROWN.size)) - CROWN.size;   // the farthest two crown centres may lie apart
+      const cand = [];
+      for (let i = 0; i < pat.length; i++) for (let j = i + 1; j < pat.length; j++) for (const a of ends(inner[i])) for (const b of ends(inner[j])) {
+        const dx = b[0] - a[0], dy = b[1] - a[1], dl = Math.hypot(dx, dy); if (dl > Dc || dl < 2 * CROWN.size + 1.2) continue; const ux = dx / dl, uy = dy / dl;
+        const mids = []; for (let m = 0; m < pat.length; m++) if (m !== i && m !== j && inner[m].I) { const iv = segIn(inner[m].I, a, ux, uy, dl); if (iv && iv[1] > 0.3 && iv[0] < dl - 0.3) mids.push({ m, s0: Math.max(iv[0], 0.3), s1: Math.min(iv[1], dl - 0.3) }); }
+        if (!mids.length) continue;
+        mids.sort((p, r) => (p.s0 + p.s1) - (r.s0 + r.s1)); const ch = [{ m: i, s: 0 }]; let cur = 0;
+        for (const o of mids) { const s = Math.min(o.s1, Math.max(o.s0, (o.s0 + o.s1) / 2)); if (s >= cur + CROWN.size + 0.6 && s <= dl - CROWN.size - 0.6) { ch.push({ m: o.m, s }); cur = s; } }
+        if (ch.length < 2) continue; ch.push({ m: j, s: dl });
+        cand.push({ dl, a, ux, uy, ch });
+      }
+      function ends(I_) { const c = []; if (I_.I) { for (const v of I_.I) c.push(v); } c.push(cenOf(I_.F)); return c; }
+      cand.sort((p, r) => (r.dl + 2 * r.ch.length) - (p.dl + 2 * p.ch.length));
+      for (let ci = 0; ci < Math.min(6, cand.length) && !chain; ci++) {
+        const { a, ux, uy, ch } = cand[ci], vx_ = -uy, vy_ = ux, polys = [];
+        let bad_ = false; for (const e of ch) { const c = [a[0] + ux * e.s, a[1] + uy * e.s], p = inter2(sq(c, ux, uy), inner[e.m].F); if (!p || p.length < 3 || Math.abs(area2(p)) < 0.9 * CROWN.size * CROWN.size) { bad_ = true; break; } polys.push(p); }
+        if (bad_) continue;
+        let pr = true; for (let k = 0; k + 1 < polys.length; k++) if (dmax(polys[k], polys[k + 1]) > BRIDGE - 0.2) pr = false; if (!pr) continue;
+        // the plane: along the line by least squares through the crown centres on their holders' tops, across it the mean of the tops' slopes
+        const cs = ch.map(e => [a[0] + ux * e.s, a[1] + uy * e.s]), zs = ch.map((e, k) => tz_(pat[e.m].t.pl, cs[k][0], cs[k][1])), n_ = ch.length;
+        let ss = 0, sz = 0; for (let k = 0; k < n_; k++) { ss += ch[k].s; sz += zs[k]; } ss /= n_; sz /= n_; let sxx = 0, sxz = 0; for (let k = 0; k < n_; k++) { sxx += (ch[k].s - ss) * (ch[k].s - ss); sxz += (ch[k].s - ss) * (zs[k] - sz); }
+        const sl = sxz / sxx; let sv = 0; for (const e of ch) { const t_ = pat[e.m].t.pl; sv += t_[0] * vx_ + t_[1] * vy_; } sv /= n_;
+        const bx_ = sl * ux + sv * vx_, by_ = sl * uy + sv * vy_; if (Math.hypot(bx_, by_) > MAXTILT) continue;
+        let gl = 1e9, gh = -1e9; for (let k = 0; k < n_; k++) { const g = (sz + sl * (ch[k].s - ss)) - zs[k]; if (g < gl) gl = g; if (g > gh) gh = g; } if (gh - gl > CROWN.chainSpread || gl < -0.8) continue;
+        // the hull of the crowns is held: covered by the crowns and the hulls of the pairs within BRIDGE
+        const hs = ccw(hull2([].concat(...polys))), prs = []; for (let k = 0; k < polys.length; k++) for (let l = k + 1; l < polys.length; l++) if (dmax(polys[k], polys[l]) <= BRIDGE - 0.2) prs.push(ccw(hull2(polys[k].concat(polys[l]))));
+        let ax_ = 1e9, bx2 = -1e9, ay_ = 1e9, by2 = -1e9; for (const v of hs) { ax_ = Math.min(ax_, v[0]); bx2 = Math.max(bx2, v[0]); ay_ = Math.min(ay_, v[1]); by2 = Math.max(by2, v[1]); }
+        let cov = true; outer2: for (let y = ay_ + 0.15; y < by2; y += 0.3) for (let x = ax_ + 0.15; x < bx2; x += 0.3) { if (!inP(hs, x, y)) continue; let ok = false; for (const P_ of polys) if (inP(P_, x, y)) { ok = true; break; } if (!ok) for (const P_ of prs) if (inP(P_, x, y)) { ok = true; break; } if (!ok) { cov = false; break outer2; } }
+        if (!cov) continue;
+        const keep = ch.map((e, k) => { const r = pat[e.m]; r.poly = polys[k]; return r; }); pat.splice(0, pat.length, ...keep); q.crown = 1; q.crown3 = 1; q.chainU = [ux, uy, sl, sv, ss, a[0], a[1], sz]; chain = true;
+      }
+    }
+    if (chain) { /* the chain of crowns is the bottom */
+    } else if (pat.length >= 3) {
       const pl = pat.map(r => ccw(r.poly)), pairs = [];
       for (let i = 0; i < pl.length; i++) for (let j = i + 1; j < pl.length; j++) if (dmax(pl[i], pl[j]) <= BRIDGE) pairs.push({ i, j, h: ccw(hull2(pl[i].concat(pl[j]))) });
       let bad = true;
@@ -1170,7 +1212,10 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       const cen = r => { let x = 0, y = 0; for (const v of r.poly) { x += v[0]; y += v[1]; } return [x / r.poly.length, y / r.poly.length]; };
       const c1 = cen(pat[0]), t1_ = pat[0].t.pl; let t1 = t1_;
       let bx = t1[0], by = t1[1];
-      if (pat.length >= 3) {   // least squares plane through the patch centres on their holders' tops
+      if (q.crown3) {   // a chain of crowns: the plane fitted along the line
+        const [ux, uy, sl, sv, ss, ax0, ay0, sz] = q.chainU, vx_ = -uy, vy_ = ux; bx = sl * ux + sv * vx_; by = sl * uy + sv * vy_;
+        c1[0] = ax0 + ux * ss; c1[1] = ay0 + uy * ss; t1 = [0, 0, sz];
+      } else if (pat.length >= 3) {   // least squares plane through the patch centres on their holders' tops
         const cs = pat.map(cen), zs = pat.map((r, i) => tz_(r.t.pl, cs[i][0], cs[i][1])), n_ = cs.length; let sx = 0, sy = 0, sz = 0; for (let i = 0; i < n_; i++) { sx += cs[i][0]; sy += cs[i][1]; sz += zs[i]; } sx /= n_; sy /= n_; sz /= n_;
         let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0; for (let i = 0; i < n_; i++) { const dx = cs[i][0] - sx, dy = cs[i][1] - sy, dz = zs[i] - sz; a11 += dx * dx; a12 += dx * dy; a22 += dy * dy; b1 += dx * dz; b2 += dy * dz; }
         const det = a11 * a22 - a12 * a12; if (Math.abs(det) > 1e-6) { bx = (b1 * a22 - b2 * a12) / det; by = (a11 * b2 - a12 * b1) / det; } else { bx = t1[0]; by = t1[1]; }
@@ -1185,6 +1230,21 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       }
       if (Math.hypot(bx, by) > MAXTILT && pat.length >= 2) {   // too steep a bridge between two tops: the stone rests on the larger patch alone
         let k0 = 0; for (let i = 1; i < pat.length; i++) if (Math.abs(area2(pat[i].poly)) > Math.abs(area2(pat[k0].poly))) k0 = i; pat.splice(0, pat.length, pat[k0]); c1[0] = cen(pat[0])[0]; c1[1] = cen(pat[0])[1]; t1 = pat[0].t.pl; bx = t1[0]; by = t1[1]; nSteep++; q.steep = 1; }
+      // tilt: a stone resting on one holder (its large contact patch) is tilted off the holder's top by an angle drawn from its own keyed stream, within a limit tied to the style's Tilt. The plane
+      // keeps its highest point on the holder's top and sinks into it elsewhere, so the whole patch is held whatever the slope; the holder is cut to the plane after planning (tiltCuts)
+      if (CROWN.on && CROWN.tilt && ROUND > 0 && !thin && pat.length === 1 && !pat[0].glue && !pat[0].holder.ground && !q.crown && !q.sliver) {
+        const amp = Math.tan(CF.rtilt[1] * CROWN.tiltK * ROUND * DEG), m = amp * (0.3 + 0.7 * uh(SEEDX, 0x7417, q.id)), th = TWO_PI * uh(SEEDX, 0x7418, q.id);
+        let dx_ = m * Math.cos(th), dy_ = m * Math.sin(th); const nb = Math.hypot(bx + dx_, by + dy_);
+        if (nb > CROWN.tiltMax) { const f_ = Math.max(0, (CROWN.tiltMax - Math.hypot(bx, by)) / m); dx_ *= Math.min(1, f_); dy_ *= Math.min(1, f_); }
+        const hld = pat[0].holder, Tp = pat[0].t.pl;
+        for (let it = 0; it < 3 && Math.hypot(dx_, dy_) > 0.02; it++, dx_ *= 0.5, dy_ *= 0.5) {
+          let bv = null, bd = -1e9; for (const v of pat[0].poly) { const d_ = dx_ * v[0] + dy_ * v[1]; if (d_ > bd) { bd = d_; bv = v; } }
+          const zv = tz_(Tp, bv[0], bv[1]); let ok_ = true;   // the stone sinks into the holder by no more than the holder's thickness there allows
+          for (const v of pat[0].poly) { const zs = zv + (bx + dx_) * (v[0] - bv[0]) + (by + dy_) * (v[1] - bv[1]); if (tz_(Tp, v[0], v[1]) - zs > CROWN.tiltPen || zs - SINK - botZ(hld, v[0], v[1]) < CROWN.tiltThick) { ok_ = false; break; } }
+          if (!ok_) continue;
+          c1[0] = bv[0]; c1[1] = bv[1]; bx += dx_; by += dy_; t1 = [0, 0, zv]; q.tilt = [dx_, dy_]; break;
+        }
+      }
       q.botPl[0] = bx; q.botPl[1] = by; q.botPl[2] = tz_(t1, c1[0], c1[1]) - bx * c1[0] - by * c1[1]; q.bgL = Math.hypot(bx, by, 1);
       for (const r of pat) { let gx_ = -1e9; for (const v of r.poly) { const g = botN(q, v[0], v[1]) - tz_(r.t.pl, v[0], v[1]); if (g > gx_) gx_ = g; } r.gmax = gx_; }
     }
@@ -1263,7 +1323,19 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   }
   // each holder keeps flat the convex hull of the supports assigned to it
   let keptFlat = 0;
-  for (const pc of pieces) for (const t of pc.tops) if (t.sup && t.sup.length >= 3) { const h = ccw(hull2(t.sup)); if (h.length >= 3) { t.keeps.push(h.map(v => [v[0], v[1], tz_(t.pl, v[0], v[1])])); keptFlat += Math.abs(area2(h)); } }
+  // tiltCuts: the holder of a tilted stone is cut to the stone's bottom plane (a facet that matches the contact) when nothing else rests where that cuts it,
+  // and the plane drops the holder's top by no more than CROWN.tiltDrop
+  if (CROWN.on && CROWN.tilt && ROUND > 0) {
+    const onH = new Map(); for (const p of pieces) if (p.rests) for (const r of p.rests) { let a = onH.get(r.holder); if (!a) onH.set(r.holder, a = []); a.push({ p, r }); }
+    for (const q of pieces) if (q.tilt && q.rests.length === 1) {
+      const h = q.rests[0].holder, [bx, by] = q.botPl, c = q.botPl[2] - q.sink + 0.08, S = (x, y) => bx * x + by * y + c;
+      let ok = true;
+      for (const { p, r } of onH.get(h) || []) { if (p === q) continue; for (const v of r.poly) { const zb = r.glue || !p.botPl ? tz_(r.t.pl, v[0], v[1]) : p.botPl[0] * v[0] + p.botPl[1] * v[1] + p.botPl[2] - p.sink; if (S(v[0], v[1]) < zb - 0.1) { ok = false; break; } } if (!ok) break; }
+      if (ok) for (const tp of h.tops) for (const v of tp.poly) { const s_ = S(v[0], v[1]); if (tz_(tp.pl, v[0], v[1]) - s_ > CROWN.tiltDrop || (s_ < tz_(tp.pl, v[0], v[1]) && s_ - (h.botPl[0] * v[0] + h.botPl[1] * v[1] + h.botPl[2] - h.sink) < CROWN.cutThick)) { ok = false; break; } }
+      if (ok) { const L = Math.hypot(bx, by, 1); (h.cuts || (h.cuts = [])).push([-bx / L, -by / L, 1 / L, c / L]); q.tiltCut = 1; }
+    }
+  }
+  for (const pc of pieces) for (const t of pc.tops) if (t.sup && t.sup.length >= 3) { const h = ccw(hull2(t.sup)); if (h.length >= 3) { t.keeps.push(h.map(v => { let z = tz_(t.pl, v[0], v[1]); if (pc.cuts) for (const c_ of pc.cuts) z = Math.min(z, (c_[3] - c_[0] * v[0] - c_[1] * v[1]) / c_[2]); return [v[0], v[1], z]; })); keptFlat += Math.abs(area2(h)); } }
   // ---- carving: every piece independent. Pebble planes fitted to the body's box, those cutting a keep patch dropped
   for (const G of groups.values()) {
     // keep patches of the body: every piece's bottom, each rest patch it gives a stone above, glue faces of its sides
@@ -1315,6 +1387,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     restore(pc.snap);
     if (!pc.ground) { const L = pc.bgL, bg = pc.botPl; clip(bg[0] / L, bg[1] / L, -1 / L, (-bg[2] + pc.sink) / L, KIND.BOT); }
     if (!opt.cells) for (const fl_ of pc.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
+    if (pc.cuts) for (const c_ of pc.cuts) clip(c_[0], c_[1], c_[2], c_[3], KIND.TOP);
     if (!opt.cells && pc.flare2) { const kp_ = [], bb_ = pc.bb; for (let i = 0; i < G.kp.length; i += 3) if (G.kp[i] >= bb_[0] - 0.3 && G.kp[i] <= bb_[1] + 0.3 && G.kp[i + 1] >= bb_[2] - 0.3 && G.kp[i + 1] <= bb_[3] + 0.3 && G.kp[i + 2] >= bb_[4] - 0.3 && G.kp[i + 2] <= bb_[5] + 0.3) kp_.push(G.kp[i], G.kp[i + 1], G.kp[i + 2]); for (const fl_ of pc.flare2) { let d_ = fl_[3]; for (let i = 0; i < kp_.length; i += 3) { const g_ = fl_[0] * kp_[i] + fl_[1] * kp_[i + 1] + fl_[2] * kp_[i + 2]; if (g_ > d_) d_ = g_; } clip(fl_[0], fl_[1], fl_[2], d_, KIND.FLARE); } }   // a step never cuts a guard (a crown, a glued face)
     if (empty) continue;
     if (opt.cells) { if (empty) continue; } else { const tc = now(); DX = domeData(pc, find, G); carveFast(hash2(seed, G.id) >>> 1, G.kp, !!(pc.ground || pc.onGround)); DX = null; TC += now() - tc; if (empty) continue; }
