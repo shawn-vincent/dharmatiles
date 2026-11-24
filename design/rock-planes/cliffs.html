@@ -726,9 +726,53 @@ function clipS(nx, ny, nz, d, kind) {
   let alive = 0; for (let s = 0; s < nSL; s++) if (sLen[s]) alive++; if (alive < 4) { empty = true; }
 }
 const CS = { tp: 0, ts: 0, tc: 0, tf: 0 };
+// Dome: a big flat face that will be seen (the open front: the front cut, and any carved face turned toward it) gets a ring of planes round its
+// rim, each tilted from the face's normal toward the rim by an angle drawn in Tilt (so a style with little Tilt is hardly touched), through a
+// point inset from the rim; a style whose Tilt tops out under DOME.tilt degrees (Ashlar, Columns, Layered) has no dome; the one rule (`place`) keeps them out of the guards and refuses one that faces down past the overhang. Convex: planes only.
+const DOME = { on: 1, area: 5, inset: 0.35, spacing: 2, rings: 3, ring2area: 12, tilt: 12 };
+function domeRing(s, ring) {   // the planes of slot s's face: ring r at 1/r of its tilt and r times as deep in
+  const o = s * CAPS, m = sLen[s]; let nx = 0, ny = 0, nz = 0, cx = 0, cy = 0, cz = 0;
+  for (let k = 0; k < m; k++) { const a = sV[o + k], b = sV[o + (k + 1 === m ? 0 : k + 1)]; nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]); cx += vx[a]; cy += vy[a]; cz += vz[a]; }
+  const L2 = Math.sqrt(nx * nx + ny * ny + nz * nz), A = L2 / 2; cx /= m; cy /= m; cz /= m; nx /= L2; ny /= L2; nz /= L2;
+  let per = 0; for (let k = 0; k < m; k++) { const a = sV[o + k], b = sV[o + (k + 1 === m ? 0 : k + 1)]; per += Math.hypot(vx[b] - vx[a], vy[b] - vy[a], vz[b] - vz[a]); }
+  const inr = 2 * A / per, hiT = CF.rtilt[1];
+  for (let k = 0; k < m; k++) {
+    const a = sV[o + k], b = sV[o + (k + 1 === m ? 0 : k + 1)], ex = vx[b] - vx[a], ey = vy[b] - vy[a], ez = vz[b] - vz[a], el = Math.sqrt(ex * ex + ey * ey + ez * ez); if (el < 0.4) continue;
+    let ox = ey * nz - ez * ny, oy = ez * nx - ex * nz, oz = ex * ny - ey * nx; const ol = Math.sqrt(ox * ox + oy * oy + oz * oz); ox /= ol; oy /= ol; oz /= ol;
+    const mx = (vx[a] + vx[b]) / 2 - cx, my = (vy[a] + vy[b]) / 2 - cy, mz = (vz[a] + vz[b]) / 2 - cz; if (ox * mx + oy * my + oz * mz < 0) { ox = -ox; oy = -oy; oz = -oz; }
+    const tx_ = ex / el, ty_ = ey / el, tz_ = ez / el, cnt = Math.max(1, Math.round(el / DOME.spacing));
+    for (let j = 0; j < cnt; j++) {
+      const f = (j + 0.5 + (rnd() - 0.5) * 0.5) / cnt, px = vx[a] + ex * f, py = vy[a] + ey * f, pz = vz[a] + ez * f;
+      const phi = (rnd() - 0.5) * 70 * DEG, al = (hiT * (0.45 + 0.4 * rnd())) * DEG / ring, cp = Math.cos(phi), sp = Math.sin(phi);
+      const ux_ = ox * cp + tx_ * sp, uy_ = oy * cp + ty_ * sp, uz_ = oz * cp + tz_ * sp, ca = Math.cos(al), sa = Math.sin(al);
+      let qx = nx * ca + ux_ * sa, qy = ny * ca + uy_ * sa, qz = nz * ca + uz_ * sa; const ql = Math.sqrt(qx * qx + qy * qy + qz * qz); qx /= ql; qy /= ql; qz /= ql;
+      const ins = DOME.inset * inr * ring * (0.7 + 0.6 * rnd()), bx = qx * (px - ux_ * ins) + qy * (py - uy_ * ins) + qz * (pz - uz_ * ins);
+      const top = support(qx, qy, qz); if (top - bx > 0.02) place(qx, qy, qz, top - bx, null, Infinity);
+    }
+  }
+}
+const hN = new Float64Array(3 * MAXSL), hD = new Float64Array(MAXSL);
+function domeAll(seed) {
+  // a guard that lies outside the stone as it is now (a crown's touch patch lies on the cell, past its own turned plane; a group's footprint
+  // may lie past this cell) holds nothing a plane could still cut: it is moved to the stone's centre
+  { let mx = 0, my = 0, mz = 0, c = 0, nf = 0; for (let v = 0; v < nVS; v++) if (vx[v] === vx[v]) { mx += vx[v]; my += vy[v]; mz += vz[v]; c++; } mx /= c; my /= c; mz /= c;
+    for (let s = 0; s < nSL; s++) { const m = sLen[s]; if (!m) continue; const o = s * CAPS; let nx = 0, ny = 0, nz = 0;
+      for (let i = 0; i < m; i++) { const a = sV[o + i], b = sV[o + (i + 1 === m ? 0 : i + 1)]; nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]); }
+      const L = Math.sqrt(nx * nx + ny * ny + nz * nz); nx /= L; ny /= L; nz /= L; hN[3 * nf] = nx; hN[3 * nf + 1] = ny; hN[3 * nf + 2] = nz; hD[nf++] = nx * vx[sV[o]] + ny * vy[sV[o]] + nz * vz[sV[o]]; }
+    for (let g = 0; g < nG; g++) { const x = gd[3 * g], y = gd[3 * g + 1], z = gd[3 * g + 2]; let gone = false; for (let i = 0; i < nf; i++) if (hN[3 * i] * x + hN[3 * i + 1] * y + hN[3 * i + 2] * z > hD[i] + 1e-3) { gone = true; break; } if (gone) { gd[3 * g] = mx; gd[3 * g + 1] = my; gd[3 * g + 2] = mz; } } }
+  nP = 0; seedStream(seed, 11); const n0 = nSL;
+  for (let s = 0; s < n0; s++) {
+    const m = sLen[s]; if (!m) continue; const k = sKind[s] & 15, o = s * CAPS; let nx = 0, ny = 0, nz = 0;
+    for (let i = 0; i < m; i++) { const a = sV[o + i], b = sV[o + (i + 1 === m ? 0 : i + 1)]; nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]); }
+    const L = Math.sqrt(nx * nx + ny * ny + nz * nz), A = L / 2; if (A < DOME.area) continue; ny /= L;
+    const seen = k === KIND.ENV || (k === KIND.CRISP && ny < 0.9) || (k === KIND.PEBBLE && ny < -0.3); if (!seen) continue;
+    domeRing(s, 1); for (let r = 2; r <= DOME.rings && A >= DOME.ring2area * (r - 1); r++) domeRing(s, r);
+  }
+}
 function carveFast(seed, kp, grd) {
   carvePlanes(seed, kp, grd); toSlots();
   for (let i = 0; i < nP; i++) { clipS(pN[3 * i], pN[3 * i + 1], pN[3 * i + 2], pB[i], KIND.PEBBLE); if (empty) break; }
+  if (!empty && DOME.on && CF.rtilt[1] >= DOME.tilt) { domeAll(seed); for (let i = 0; i < nP; i++) { clipS(pN[3 * i], pN[3 * i + 1], pN[3 * i + 2], pB[i], KIND.PEBBLE + 0); if (empty) break; } }
   if (!empty) fromSlots();
 }
 function wall(seed, P, opt = {}) {
