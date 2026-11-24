@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cliffs: speed ideas</title>
+<style>
+:root { --bg: #f7f5f0; --ink: #1a1714; --dim: #6b645b; --line: #d9d3c7; --done: #2f7d4f; --drop: #9a8f80; --open: #8a5a00; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1a1714; --ink: #ece7de; --dim: #a39a8d; --line: #3a342d; --done: #6fc28f; --drop: #7d7466; --open: #e0b050; } }
+:root[data-theme="dark"] { --bg: #1a1714; --ink: #ece7de; --dim: #a39a8d; --line: #3a342d; --done: #6fc28f; --drop: #7d7466; --open: #e0b050; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; margin: 0 auto; max-width: 900px; padding: 24px 16px; }
+h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 17px; margin: 28px 0 8px; } p { color: var(--dim); margin: 0 0 12px; }
+table { border-collapse: collapse; width: 100%; } td, th { border-top: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+th { font-size: 13px; color: var(--dim); font-weight: 600; } .s { white-space: nowrap; font-weight: 600; font-size: 13px; }
+.done { color: var(--done); } .drop { color: var(--drop); } .open { color: var(--open); }
+</style></head><body>
+<h1>Cliffs: speed ideas</h1>
+<p>Every idea for making a Cliffs from Spines wall build faster, so none is lost: what it is, why it works, what it saves and where it stands. The aim is under 1 s for a wall, under 0.5 s if possible. Times are Node, seed 1; m is measured, e is estimated. As of 23 Nov 2026: Fieldstone builds in 1.87 s (masses 0.62 + rocks 1.26), Layered 1.70, Ashlar 0.67, Granite 0.53, Columns 0.09.</p>
+
+<h2>Where the time goes</h2>
+<p>A stone's bottom rests on the finished stones under it, so stones are built in a chain: 49 levels in Fieldstone (about 18 stones per level), 56 in Layered (about 7). The cost is spread over every stage; no single kernel dominates (clip is about 20%). Fieldstone, per seed: carving the stones (stoneOf) 555 ms, the mass split 420, paint 195, holding 127, masses 95, bottoms 81, rest grid 67.</p>
+
+<h2>Redesigns</h2>
+<table><tr><th>Idea</th><th>Why it works</th><th>Saves</th><th>Status</th></tr>
+<tr><td>Footprint band: a stone keeps its mass's top under a footprint but for a band along the edge (width from chamfer or Sink); the stone above rests on the inner patch</td><td>What is kept is known from the masses and the cheap flares alone, so only bottoms and flares stay in the chain; carving, cracks and paint become independent</td><td>carving in parallel, and a facet or crack slider skips the chain (e)</td><td class="s open">prototyping</td></tr>
+<tr><td>Shared facets: the contact between two stones is a few facet planes (Tilt, Sink) drawn for the pair before either is carved; the lower top and upper bottom share them</td><td>Same as the band, with exact contact, so small stones lose nothing; faceted joints</td><td>same as the band (e)</td><td class="s open">next, if the band falls short</td></tr>
+<tr><td>Worker pool: per chain level, the stones built across about 6 workers; cracks and paint across all at once; the crack plan beside the chain</td><td>Stones in a level are independent</td><td>4 to 5 times on the chain (e); Fieldstone near 0.45 to 0.5 s with the rest</td><td class="s open">open</td></tr>
+<tr><td>Fuse without the cascade: a pair fuses only by its own draw; a spine the fused hull reaches round is kept out by turning the split plane</td><td>The cascade never settles (50 of 50 passes join on every seed), so Fieldstone falls back to the unfused masses after 50 full splits</td><td>370 ms (m) Fieldstone</td><td class="s open">Shawn's call: redesign or remove</td></tr>
+<tr><td>Allocation-free polytope kernel: vertices with three plane ids in pooled typed arrays, walking only the cap</td><td>A stone tries 145 planes (47% cut); each cut today walks all the faces and allocates</td><td>stoneOf clip 339 → about 100 ms Fieldstone (e); helps cracks too</td><td class="s open">open (large, risky)</td></tr>
+<tr><td>Masses made once: the split's per-body cut (balls) is the mass; a hash on ball centres instead of the n² sweep</td><td>The same cell is cut twice</td><td>90 to 120 ms Fieldstone, 40 Layered (e)</td><td class="s open">open</td></tr>
+<tr><td>Cache by what a slider changes: facets, cracks or paint reuse masses, holding and bottoms</td><td>The keyed caches already exist; the footprint band makes the bottoms independent of carving</td><td>a facet slider at carving cost only (e)</td><td class="s open">follows the band</td></tr>
+<tr><td>Paint reuses the bottom's rest judgement</td><td>Bottoms already know where they rest</td><td>30 to 40% of paint (e); changes the red area slightly</td><td class="s open">open</td></tr>
+<tr><td>Crack network as a local lookup per stone instead of cells clipped over the whole cliff</td><td>A stone needs only the boundaries near it</td><td>most of Granite's 220 ms crack plan (e)</td><td class="s open">open</td></tr>
+</table>
+
+<h2>Exact small wins (output unchanged)</h2>
+<table><tr><th>Idea</th><th>Saves</th><th>Status</th></tr>
+<tr><td>Remember each pair's split across fuse passes</td><td>370 → 148 ms Fieldstone (m)</td><td class="s open">measured, not applied</td></tr>
+<tr><td>Bottom grouping by component search instead of every point against every other</td><td>108 → 2 ms Layered (m)</td><td class="s open">measured, not applied</td></tr>
+<tr><td>One rest grid when there are no cracks or weathering</td><td>about 40 ms Fieldstone (m)</td><td class="s open">measured, not applied</td></tr>
+<tr><td>Numeric keys in the bridge test; a table-free sector</td><td>about 70 ms Layered (e)</td><td class="s open">open</td></tr>
+<tr><td>Holding: numeric bins, early out in column</td><td>about 50 ms Fieldstone (e)</td><td class="s open">open</td></tr>
+<tr><td>Spine clearance on a hash grid instead of every pair</td><td>about 60 ms Fieldstone (e)</td><td class="s open">open</td></tr>
+<tr><td>Crack network neighbours by grid place; junction ends binned; keyed hash without joining</td><td>Granite 620 → 530 ms (m)</td><td class="s done">done (87b07fcd)</td></tr>
+</table>
+
+<h2>Tried and dropped</h2>
+<table><tr><th>Idea</th><th>Why it failed</th></tr>
+<tr><td>Rest each stone on its holders' rim-inset patches from the masses alone</td><td>A holder's own flare can cut its top under the patch; unheld overhang rose 3 to 7 times (Layered 947 → 3224 mm², Ashlar 246 → 1862). The band idea counts the flare.</td></tr>
+<tr><td>Exact footprints from facing mass faces</td><td>Pairwise split planes leave masses overlapping masses they were never split from; most real contacts are not shared faces (761 of 866 stones resting nowhere)</td></tr>
+<tr><td>Guess each bottom from the masses, then check and repair</td><td>Carved tops sit 0.1 to 0.3 mm off mass tops (about LOOK), so 85% of guesses miss</td></tr>
+<tr><td>Clip kernel with shared vertex ids</td><td>Slower (1.85 vs 1.27 s Fieldstone rocks): allocation per cut</td></tr>
+<tr><td>Planes ordered deepest first</td><td>No change (1167 vs 1154 ms)</td></tr>
+<tr><td>Masses as a power diagram</td><td>Not exact (split planes depend on segment nearest points and per-pair gaps); the cost is finding neighbours, not the clips</td></tr>
+</table>
+</body></html>

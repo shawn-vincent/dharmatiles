@@ -2122,6 +2122,9 @@ function rebuild() {
     // a surface is kept while the cliff and what it is made from hold, so a change of view, lines or a check builds nothing
     const key = JSON.stringify([state.seed, pick(CLIFF_KEYS)]) + '/' + surfKey(), have = shownKept.get(key);
     if (have) { ++jobId; waiting = null; show(have.view, have.surf); return; }   // what the builder is making now is no longer wanted
+    // what the builder is making now is this: it is shown when it comes (with the view as it is then), not made again
+    if (builder && busy && busy.key === key) { jobId = busy.id; waiting = null; return; }
+    if (builder && waiting && waiting.key === key) return;
     if (!builder) { ++jobId; const C = cliffFor(state.seed), t0 = performance.now(), surf = state.draw === 'rocks' ? rockSurface(C, state.seed, pick(ROCK_KEYS)) : massSurface(C, state.bridge); surf.took = performance.now() - t0; keep(key, { view: viewOf(C), surf }); show(viewOf(C), surf); return; }
     const job = { id: ++jobId, key, msg: { id: jobId, seed: state.seed, cp: pick(CLIFF_KEYS), draw: state.draw, rp: pick(ROCK_KEYS), bridge: state.bridge } };
     $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed + ' · building…';
