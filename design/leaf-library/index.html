@@ -1,0 +1,533 @@
+<title>The Leaf Library</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* layout: a sticky contents rail on the left (top on phones), one reading column of numbered parts, tables in their own scrollers */
+:root {
+  --bg: #f3f5f1; --panel: #ffffff; --ink: #1b221d; --dim: #59655c; --line: #d5ddd5; --moss: #3d6b47; --soil: #8a6236; --flag: #9c3d2e;
+  --display: "Bricolage Grotesque", "Avenir Next Condensed", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #141916; --panel: #1c231f; --ink: #e3eae4; --dim: #9aa89e; --line: #2f3a33; --moss: #8cc49a; --soil: #d4a46c; --flag: #e88a78; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #141916; --panel: #1c231f; --ink: #e3eae4; --dim: #9aa89e; --line: #2f3a33; --moss: #8cc49a; --soil: #d4a46c; --flag: #e88a78; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--body); }
+.shell { max-width: 1240px; margin: 0 auto; padding-block: 32px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 48px; }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); align-self: start; max-height: calc(100vh - 32px); overflow: auto; font-size: 14px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+nav.toc a { color: var(--dim); text-decoration: none; display: block; padding: 3px 8px; border-radius: 5px; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--ink); background: var(--panel); outline: none; }
+nav.toc .n { font: 500 12px var(--mono); color: var(--moss); margin-right: 6px; }
+main { min-width: 0; max-width: 820px; }
+header.top h1 { font: 700 clamp(38px, 6vw, 60px)/1 var(--display); margin: 0 0 12px; letter-spacing: -.01em; text-wrap: balance; }
+header.top .lede { font-size: 19px; color: var(--dim); margin: 0 0 20px; max-width: 64ch; }
+.meta { font: 13px var(--mono); color: var(--dim); }
+section { padding-top: 40px; border-top: 1px solid var(--line); margin-top: 40px; }
+h2 { font: 700 30px/1.15 var(--display); margin: 0 0 14px; text-wrap: balance; }
+h2 .n { font: 500 15px var(--mono); color: var(--moss); display: block; margin-bottom: 6px; letter-spacing: .04em; }
+h3 { font: 600 19px/1.3 var(--body); margin: 28px 0 8px; text-wrap: balance; }
+h4 { font: 600 15px var(--body); margin: 18px 0 4px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+p, li { max-width: 68ch; } ul, ol { padding-left: 22px; } li + li { margin-top: 4px; }
+code { font: 14px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.scroll { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-top: 1px solid var(--line); }
+thead th { border-top: 0; font: 600 12px var(--body); text-transform: uppercase; letter-spacing: .06em; color: var(--dim); background: var(--bg); }
+td.num { font-family: var(--mono); white-space: nowrap; }
+.key { border-left: 3px solid var(--moss); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key.warn { border-left-color: var(--soil); }
+.key p { margin: 0; } .key p + p { margin-top: 8px; }
+.src { font-size: 13px; color: var(--dim); }
+.tag { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
+.t-m { color: var(--moss); } .t-e { color: var(--soil); } .t-x { color: var(--flag); }
+dl.gloss { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 18px; }
+dl.gloss dt { font-weight: 600; } dl.gloss dd { margin: 0; color: var(--dim); }
+@media (max-width: 860px) { .shell { grid-template-columns: minmax(0, 1fr); gap: 24px; } nav.toc { position: static; max-height: none; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--panel); } }
+</style>
+
+<div class="shell">
+<nav class="toc" aria-label="Contents">
+<ol>
+<li><a href="#summary"><span class="n">00</span>Summary</a></li>
+<li><a href="#sources"><span class="n">01</span>Sources</a></li>
+<li><a href="#floor"><span class="n">02</span>The printer's floor</a></li>
+<li><a href="#reading"><span class="n">03</span>How grass and leaves read</a></li>
+<li><a href="#leaf"><span class="n">04</span>The leaf</a></li>
+<li><a href="#arrangement"><span class="n">05</span>Arrangement</a></li>
+<li><a href="#language"><span class="n">06</span>The words</a></li>
+<li><a href="#cost"><span class="n">07</span>Where the time goes</a></li>
+<li><a href="#walls"><span class="n">08</span>What the walls taught</a></li>
+<li><a href="#library"><span class="n">09</span>The library</a></li>
+<li><a href="#compiled"><span class="n">10</span>Compiled entries</a></li>
+<li><a href="#solid"><span class="n">11</span>Making the solid</a></li>
+<li><a href="#beyond"><span class="n">12</span>Further out</a></li>
+<li><a href="#families"><span class="n">13</span>Algorithm families</a></li>
+<li><a href="#tests"><span class="n">14</span>Tests and failure modes</a></li>
+<li><a href="#failed"><span class="n">15</span>Tried and failed</a></li>
+<li><a href="#questions"><span class="n">16</span>Open questions</a></li>
+<li><a href="#glossary"><span class="n">17</span>Glossary</a></li>
+</ol>
+</nav>
+
+<main>
+<header class="top">
+<h1>The Leaf Library</h1>
+<p class="lede">Grass, leaves and small plants for printed terrain, built from a library of precomputed pieces: one place for everything the project knows about them, and everything the stone-wall experiments taught about making them fast.</p>
+<p class="meta">24 Nov 2026 · a design reference, not a plan · extends <a href="../leaf-and-scatter/index.html">Leaf and Scatter</a> (17 Nov) · nothing here has been built in the engine</p>
+</header>
+
+<section id="summary" style="border-top:0;margin-top:8px;padding-top:8px">
+<h2><span class="n">00</span>Summary</h2>
+<p>Grass is a scatter of leaves. A leaf is one bent strip with an outline and a section. Clusters of leaves make tufts, ribbons, rosettes, ferns and flowers. Leaf and Scatter settled that model, measured it against the reference sheet, and found the real cost: not making leaves, but merging thousands of overlapping leaves into one printable solid (12.8 s for a 2×2 meadow in the browser, against 0.57 s for a 1×1 built as stacked 2D layers).</p>
+<p>On 23 and 24 Nov the stone walls went from 1.6 s to 9 ms (true 3D placement) and 0.3 ms (a window on a precomputed wall) by moving work out of the build and into a library made once. Every stone in the library knows its own changes and what each one guarantees; a wall only chooses, copies and checks a flat base. The same move fits vegetation better than stone, because leaves that cross each other look fine and print fine.</p>
+<p>The library this page describes has entries at five levels (leaf, cluster, ribbon, patch, square). An entry is not only a mesh: it carries metadata, certified ranges of its own controls, its slices at every printed layer, small distance and occupancy grids, contact tables and, where it pays, generated code. A tile's build becomes a short program of lookups, copies and per-layer merges, with the 3D boolean gone from the build.</p>
+<div class="key"><p><strong>The three load-bearing ideas.</strong> (1) Precompute everything that does not depend on the tile, at every level of grouping. (2) Build the solid the way it prints, as 2D layers, so overlap costs nothing. (3) Keep every guarantee a property of the library entry or of the step rule, so the build never checks what it could not have broken.</p></div>
+</section>
+
+<section id="sources">
+<h2><span class="n">01</span>Sources</h2>
+<p>This page carries five sources and adds the wall experiments and the discussion that followed them. Where they disagree, Leaf and Scatter's rulings stand unless marked.</p>
+<div class="scroll"><table>
+<thead><tr><th>Source</th><th>Date</th><th>What it gave</th></tr></thead>
+<tbody>
+<tr><td>Leaf and Scatter (<code>design/leaf-and-scatter/</code>)</td><td>17 Nov 2026</td><td>The model (leaf, cluster, scatter, flow, near), eleven words, the measured blade and tuft, seven algorithm steps with cost blocks, the layered build, the per-layer gate, nineteen questions, the eight-stage plan</td></tr>
+<tr><td>Reading the Grass</td><td>15 Nov</td><td>Measurements of the sixty-square reference sheet: blade length, width, side profile, tuft fan, fringe heights, flow fields, soil share</td></tr>
+<tr><td>Procedural Grass &amp; Small Plants, a field guide (<code>reference/grass/procedural-grass-field-guide.docx</code>)</td><td>stored 23 Nov</td><td>The sculptable strip; five directions on the problem; algorithm families; physical level of detail; printability profiles; an exploration program; metrics; failure modes; open-source landscape</td></tr>
+<tr><td>The grass lab (tag <code>before-rust-only</code>)</td><td>October</td><td>26 named failure modes, five acceptance scenes, the blade in whole lines and layers, flow wrap and rim steering, ribbons</td></tr>
+<tr><td>The July leaf history (same tag)</td><td>June to July</td><td>"By construction": coverage by maximality, height order by accumulation, undersides by shape, seams by union; never cull after</td></tr>
+<tr><td>The wall speed experiments (<code>design/rock-planes/cliffs-speed.html</code>)</td><td>23 to 24 Nov</td><td>Fourteen variants from 1.9 s to 0.3 ms, the stone library, generators, piano versions, held-by-base, precomputed strips</td></tr>
+<tr><td>This conversation</td><td>24 Nov</td><td>Compiled entries, distance fields per layer, growth by layers, wave-function collapse, shader preview, distillation, toolpaths</td></tr>
+</tbody></table></div>
+<p class="src">Marks used below: <span class="tag t-m">m</span> measured, <span class="tag t-e">e</span> estimated, <span class="tag t-x">x</span> not built or not checked.</p>
+</section>
+
+<section id="floor">
+<h2><span class="n">02</span>The printer's floor</h2>
+<p>Every rule here comes from <code>library/printers/default.dtile</code> and the project's standing rules. They do not scale with the tile: a leaf that passes on DungeonBlocks (35 mm squares) can fail on OpenLOCK, where the same leaf prints at 0.73 of its size and the line does not shrink.</p>
+<div class="scroll"><table>
+<thead><tr><th>Rule</th><th>Value</th><th>What it means for a leaf</th></tr></thead>
+<tbody>
+<tr><td>Line</td><td class="num">0.45 mm</td><td>Anything narrower vanishes. A tip of angle φ is under one line for 0.45 / (2 tan(φ/2)) mm: 0.71 mm at 35°, 1.7 mm at 15°</td></tr>
+<tr><td>Layer</td><td class="num">0.2 mm</td><td>A cup or keel shows only if it rises at least one layer</td></tr>
+<tr><td>Gap</td><td class="num">0.2 mm</td><td>Two leaves closer than this fuse into a web; 0.2 to 0.6 mm is not made; past 0.6 mm they are separate islands</td></tr>
+<tr><td>Overhang target</td><td class="num">55°</td><td>A layer may step out 0.2 × tan 55° = 0.286 mm past the one below</td></tr>
+<tr><td>Band</td><td class="num">55° to 65°</td><td>Orange; allowed up to 0.1% of the downward-facing area</td></tr>
+<tr><td>Steepest</td><td class="num">65°</td><td>A step of 0.429 mm, just under a line; red past it, allowed up to another 0.1%</td></tr>
+<tr><td>Root</td><td class="num">sunk 0.3 mm</td><td>Every leaf fuses to the ground; no floating tips</td></tr>
+<tr><td>Wedge</td><td class="num">45°</td><td>Under any leaf leaning past 55°, solid from its underside to the ground, its free end raked at 45°</td></tr>
+<tr><td>Sward cap</td><td class="num">3.5 mm</td><td>No sward blade stands higher; tufts and reeds have their own cap, 12 to 15 mm, 22 at water with a thicker base</td></tr>
+</tbody></table></div>
+<p>The gate is a gate: no threshold is loosened and no geometry is culled to pass it. Fixes are made where the geometry is made.</p>
+<h3>Physical level of detail</h3>
+<p>The field guide's sharpest idea: the representation depends on the printed size of a feature, not on the camera. Tiny grass becomes relief, larger grass becomes wedges, hero grass becomes swept strips, detailed leaves become fused clusters. The same semantic plant compiles differently for 0.25, 0.4 and 0.6 mm nozzles. Paint matters as well: folds, ridges and dark gaps have to survive primer, wash and drybrush.</p>
+<h3>Printing as islands</h3>
+<p>Every separate leaf is a separate island in every layer it crosses: a lift, a travel and a possible string. Ten separate 8 mm leaves are 400 island-layers; the same ten fused at the root are 40. Fusion is a printing decision as well as a look.</p>
+</section>
+
+<section id="reading">
+<h2><span class="n">03</span>How grass and leaves read</h2>
+<h3>Grass is rhythm and clumps, not a census of blades</h3>
+<ul>
+<li>Clumps matter more than independent blades; neighbours share a direction.</li>
+<li>A few tall or strongly bent hero blades sell a patch; interiors can be simpler.</li>
+<li>Negative space between clumps is part of the design; even coverage reads as static.</li>
+<li>Terrain steers it: blades lean with a slope, gather at water, shelter behind rocks.</li>
+<li>Miniature sculptors use far fewer, far broader blades than real grass: the target is closer to cartoon grass made solid than to a meadow.</li>
+</ul>
+<h3>Leaves are outline, fold and pose</h3>
+<p>In order of what the eye takes first: the outline, the 3D pose, the central fold, the large lobes, then the major veins. Fine veins and texture vanish at this scale.</p>
+<h3>The five dials of the reference sheet</h3>
+<div class="scroll"><table>
+<thead><tr><th>Dial</th><th>Spans</th><th>In the model</th></tr></thead>
+<tbody>
+<tr><td>Order</td><td>coherence 0.38 (Curly) to 0.83 (Winding)</td><td>the width of a range added to the flow</td></tr>
+<tr><td>Scale</td><td>blades 3 to 14 mm; upright to the cap</td><td><code>size</code></td></tr>
+<tr><td>Clumping</td><td>tufts against even cover</td><td><code>pattern</code>, clumps, spread</td></tr>
+<tr><td>Cover</td><td>soil 0% to 50%, most squares under 10%</td><td><code>cover</code>, <code>clearings</code>, regions for paths</td></tr>
+<tr><td>Relief</td><td>rolling ground</td><td>the ground's, not grass's</td></tr>
+</tbody></table></div>
+<h3>The fringe</h3>
+<p>At every object on the sheet the open mat is low and a row of upright tufts stands at its foot: 9 to 13 mm at rocks, walls and trunks, 14 to 22 at water, 5 to 8 at logs, the row 6 to 12 mm out, leaning toward the object and tallest beside it. This reverses today's grass, which presses blades low beside a rock.</p>
+</section>
+
+<section id="leaf">
+<h2><span class="n">04</span>The leaf</h2>
+<p>One thing, built directly: a strip with a centre line, a width profile and a cross-section, bent. The field guide calls it the sculptable strip; Leaf and Scatter splits its controls along the line the printer draws between two spaces.</p>
+<div class="scroll"><table>
+<thead><tr><th></th><th>Outline (seen from above)</th><th>Section (across and along)</th></tr></thead>
+<tbody>
+<tr><td>Words</td><td><code>width</code>, <code>widest</code>, <code>tip</code>, <code>heel</code></td><td><code>lean</code>, <code>arch</code>, <code>curl</code>, <code>cup</code></td></tr>
+<tr><td>Held by</td><td>the line (0.45) and the gap (0.2)</td><td>the layer (0.2) and the overhang (55°)</td></tr>
+<tr><td>Priced in</td><td>points round the outline, 4 triangles each</td><td>segments across, a step for each bend</td></tr>
+</tbody></table></div>
+<p>Nothing in one space fixes a failure in the other: a bend cannot widen a tip. Lean and arch are one budget: the underside leans by lean at the root and by lean + arch at the tip, free to 55°, wedged past it, an error if any of it goes below the ground. A lobed leaf is a cluster of leaves that fuse (a maple fans from the heel; an oak sits along a midrib).</p>
+<h3>The measured blade</h3>
+<div class="scroll"><table>
+<thead><tr><th>Measured</th><th>Value</th><th>Word</th></tr></thead>
+<tbody>
+<tr><td>Length</td><td>9 to 14 mm (two blades at 11 and 12)</td><td><code>size="9dmm .. 14dmm"</code></td></tr>
+<tr><td>Width</td><td>1.4 to 2.1 mm, a sixth of the length</td><td><code>width="$size / 6"</code></td></tr>
+<tr><td>Widest point</td><td>about 40% from the root</td><td><code>widest=40%</code></td></tr>
+<tr><td>Tip</td><td>under one line for its last 1.4 mm</td><td><code>tip=18deg</code></td></tr>
+<tr><td>Side profile</td><td>rises 3.6 mm, peaks 4.4 mm along</td><td>lean 31°, arch 106° (fit to 0.19 mm)</td></tr>
+<tr><td>Bend in plan</td><td>drifts about 1 mm sideways</td><td><code>curl="0deg .. 30deg"</code></td></tr>
+<tr><td>Section</td><td>a roof with a midrib, edge never under 0.4 mm</td><td><code>cup="30% .. 60%"</code></td></tr>
+<tr><td>Root</td><td>sunk 0.3 mm</td><td><code>buried=0.3mm</code></td></tr>
+</tbody></table></div>
+<h3>Five leaf types</h3>
+<div class="scroll"><table>
+<thead><tr><th>Type</th><th>Length</th><th>Width</th><th>Rise</th><th>As words</th></tr></thead>
+<tbody>
+<tr><td>Combed</td><td class="num">9–14</td><td class="num">1.4–2.1</td><td class="num">3–4</td><td>lean 20–40°, arch 90–110°</td></tr>
+<tr><td>Tuft blade</td><td class="num">5–9</td><td class="num">1.2–1.8</td><td class="num">4–5</td><td>lean and size follow <code>$turn</code></td></tr>
+<tr><td>Upright</td><td class="num">12–15 at the cap</td><td class="num">2–3.5</td><td>—</td><td>base at least 1.5 mm; 14–22 at water</td></tr>
+<tr><td>Broad leaf</td><td class="num">4–11</td><td class="num">3–6</td><td class="num">1.5–2 dome</td><td>lean 75–80°, arch 0–10°, cup −30–10%</td></tr>
+<tr><td>Short cover</td><td class="num">3–5</td><td class="num">1.0–1.5</td><td class="num">1–2</td><td>blunt, tip 120–180°</td></tr>
+</tbody></table></div>
+<h3>Blade archetypes</h3>
+<p>The field guide proposes a small vocabulary of normalised centre lines (upright, soft bend, strong bend, hook, droop, S-curve), with variation around a shared local gesture rather than independent noise. In a library these are the families: each archetype is a set of entries whose controls vary within a certified range.</p>
+<h3>Triangles per leaf</h3>
+<div class="scroll"><table>
+<thead><tr><th>Leaf</th><th>Triangles</th><th>Mark</th></tr></thead>
+<tbody>
+<tr><td>Flat blade, 12 × 1.6</td><td class="num">12–32</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Round leaf, 8 dmm</td><td class="num">68</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Cupped leaf arched 60°</td><td class="num">140</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Keeled blade with its wedge</td><td class="num">220</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Five-leaf maple</td><td class="num">200</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Today's blade before the union</td><td class="num">828</td><td>read from <code>blade.rs</code></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="arrangement">
+<h2><span class="n">05</span>Arrangement</h2>
+<h3>Flow</h3>
+<p>Direction is the largest signal on the sheet. It is one smooth angle field over the tile, written by the author as a number, a range or a formula. The engine then wraps it once round each clearing (grass parts upstream and rejoins downstream) and steers it at the rim over a 9 to 15 mm ramp, choosing the turn side once per stretch. Bending each blade instead made starbursts. Meanders are in phase, about 15 mm long and 10 to 30° wide, over a regional drift, so a 2×2 shows at least three directions.</p>
+<h3>Ribbons</h3>
+<p>The grass lab's defining unit: blades along one streamline, 15 to 30 mm long and 2 to 3 mm apart, each rooted half a blade past the last, each tip over the next base, dark seams between ribbons. A ribbon is a cluster placed along the flow's curve, <code>at=along(flow)</code>. Blue-noise blades have no ribbons.</p>
+<h3>Tufts</h3>
+<p>8 to 14 leaves from one root; spread 40° (tight) to 140° (open fan), or all round for a rosette; about six a square, 10 to 13 mm across, centres 14 to 17 mm apart. The tuft is a fountain: inner leaves stand at about 30°, outer ones lean to 72° and are 38% shorter. That correlation needs the leaf to know its turn from the fan's axis (<code>$turn</code>). The root is one fused body to about 5 mm up.</p>
+<h3>Arrangement families from the field guide</h3>
+<p>Rosette (inner leaves short and upright, outer longer and flatter), fan (a shared base, one preferred plane), paired or opposite, whorl, repeated leaflets (fern), reed or cattail (long straps plus a seed head). Arrange tuft centres, not blades; layer the cover as soil relief, short fused grass, sparse tufts and occasional hero weeds.</p>
+<h3>Clearings and the rim</h3>
+<p>Clearings are eye-shaped lenses along the local flow, 1.3 to 1.8 a square, 13 mm apart, 7 mm from the rim, about 10% of the tile. Leaves meeting a clearing, the rim or an object are shortened, never sliced; at a clearing the last blades stand separately on the dirt, lapping 0.8 to 3.2 mm onto it.</p>
+<h3>Height order</h3>
+<p>Each leaf's root rises one layer over the highest leaf it overlaps upstream, never at random. Random heights read as jitter (F13).</p>
+<h3>Overlap, by height</h3>
+<p>A slicer prints overlapping slices once, so overlap adds no plastic. It matters for looks: roots should fuse, middles should read as separate blades. Leaf and Scatter's proposed cap: anything at the root layers (under 0.6 mm), at most 40% of the printed area covered twice or more from 0.6 to 2 mm, at most 25% above. The default meadow measured 51% to 73% in the middle layers.</p>
+</section>
+
+<section id="language">
+<h2><span class="n">06</span>The words</h2>
+<p>Leaf and Scatter brought the first reading's 57 new words down to eleven, plus one <code>$</code> name. A library changes none of them. Authors write <code>leaf</code>, <code>tuft</code>, <code>scatter</code>; the library is the engine's shelf, filled ahead of time.</p>
+<div class="scroll"><table>
+<thead><tr><th>Word</th><th>Kind</th><th>One meaning</th></tr></thead>
+<tbody>
+<tr><td><code>leaf</code></td><td>thing</td><td>one bent strip, standing or lying</td></tr>
+<tr><td><code>width</code>, <code>widest</code>, <code>tip</code>, <code>heel</code></td><td>length, percent, angle, angle</td><td>the outline</td></tr>
+<tr><td><code>lean</code>, <code>arch</code>, <code>curl</code>, <code>cup</code></td><td>angles and a percent</td><td>the section and the bend</td></tr>
+<tr><td><code>cluster</code></td><td>a thing made of things</td><td>tufts, ribbons, rosettes, lobed leaves, flowers</td></tr>
+<tr><td><code>along(f)</code></td><td>a place</td><td>the curve of the flow from the cluster's root</td></tr>
+<tr><td><code>flow</code></td><td>angle value, on scatter</td><td>the direction each placed thing faces</td></tr>
+<tr><td><code>$turn</code></td><td>angle</td><td>how far this thing's heading lies from its parent's</td></tr>
+</tbody></table></div>
+<div class="key warn"><p><strong>Two things the language must not say.</strong> The build route: a word whose value sends a leaf to a different mesher has two jobs, so the engine picks the route from the values and nobody writes it. And the silent clamp: a written value the builder quietly changes is a checker and a runtime that disagree. A clamp is reported, never silent.</p><p>A library keeps both promises if an entry is found by the canonical form of what it was made from, exactly as the shelf finds a body today, and if a request outside every entry's certified range builds fresh or is reported, never snapped.</p></div>
+</section>
+
+<section id="cost">
+<h2><span class="n">07</span>Where the time goes</h2>
+<p>Leaf and Scatter measured every step in the browser (wasm Manifold, one thread) on a 1×1 meadow of 225 leaves and a 2×2 of 1,120.</p>
+<div class="scroll"><table>
+<thead><tr><th>Step</th><th>1×1</th><th>2×2</th><th></th></tr></thead>
+<tbody>
+<tr><td>Fields: distances, clearings, ground</td><td class="num">1–2 ms</td><td class="num">4–9 ms</td><td><span class="tag t-e">e</span></td></tr>
+<tr><td>Flow, with wrap and rim</td><td class="num">2.1 ms</td><td class="num">8.8 ms</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Sites and clusters</td><td class="num">14.3 ms</td><td class="num">52 ms</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Leaf bodies, 8 variants</td><td class="num">4 ms</td><td class="num">4 ms</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>One batch union of every leaf</td><td class="num">1,675 ms</td><td class="num">12,780 ms</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Layered: slice, 2D union, stack prisms</td><td class="num">569 ms</td><td class="num">2,267 ms</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Layered, meshed straight from the layers</td><td class="num">~150 ms</td><td class="num">~500 ms</td><td><span class="tag t-e">e</span></td></tr>
+<tr><td>24 prebuilt tufts, copies unioned</td><td class="num">360 ms</td><td class="num">1.5 s</td><td><span class="tag t-m">m</span></td></tr>
+<tr><td>Stamp field on a 0.2 mm lattice</td><td class="num">13 ms</td><td class="num">72 ms</td><td><span class="tag t-m">m</span> no undercut</td></tr>
+<tr><td>Today's grass (performance page)</td><td class="num">~3 s</td><td class="num">14 s with a tree</td><td>1.8 GB resident</td></tr>
+</tbody></table></div>
+<p>Everything before the solid is data and takes about 20 ms. The cost is crossings: where two leaves' surfaces cut each other, a 3D boolean has to find the cut and make new triangles. Grouping leaves, building them one at a time or by ribbon does not change the number of crossings. In the layered build, the only boolean left is the merge of layer prisms (471 ms of the 569); meshing straight from the layer polygons removes it.</p>
+<p>Triangles: about 0.4 million a square today; 75,000 for the layered 1×1; 137,000 for the batch union. Nearly half of a union's triangles are thin side walls nobody sees.</p>
+</section>
+
+<section id="walls">
+<h2><span class="n">08</span>What the walls taught</h2>
+<p>On 23 and 24 Nov, Cliffs from Spines' Fieldstone wall was rebuilt fourteen ways. Times are one wall on one thread in Node.</p>
+<div class="scroll"><table>
+<thead><tr><th>Variant</th><th>Time</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>Today, before the speed work</td><td class="num">1.9 s</td><td>approved look, slow</td></tr>
+<tr><td>Exact small wins</td><td class="num">1.6 s</td><td>same output, faster</td></tr>
+<tr><td>Footprint band</td><td class="num">1.5 s</td><td>blockier stones, less overhang</td></tr>
+<tr><td>Shared facets</td><td class="num">1.9 s</td><td>overhang 2–3.5× worse; dropped</td></tr>
+<tr><td>Skin wall v1, v6, v7</td><td class="num">11–20 ms</td><td>a carved face; fast, never the look</td></tr>
+<tr><td>Library: placement</td><td class="num">0.77 s</td><td>stacked boulders, closest to today</td></tr>
+<tr><td>Library + skin wall</td><td class="num">60 ms</td><td>a calmer cobble wall</td></tr>
+<tr><td>Placement on precomputed height maps</td><td class="num">9 ms</td><td>chunkier, more overlap</td></tr>
+<tr><td>Window on precomputed walls</td><td class="num">0.3 ms</td><td>instant; straight walls only</td></tr>
+</tbody></table></div>
+<h3>Lessons that carry to vegetation</h3>
+<ol>
+<li><strong>Move the work out of the build.</strong> Every large gain came from computing something once, offline, that the build had been computing every time. Library build time and download size were allowed to grow without limit, and that freedom was the whole win.</li>
+<li><strong>A piece knows its own changes.</strong> Each library stone carries the operations it allows (turn about z, mirror, uniform scale, stretch up, squash across, a stretch across up to a stored limit) and what each keeps true. The build never asks whether a copy is printable.</li>
+<li><strong>Piano samples.</strong> Each version stretches a little; past about ±15% the next version takes over. Sizes need versions, not unbounded stretching.</li>
+<li><strong>Held by the base.</strong> A library stone faces down past 55° only at its flat base, so "held" is decided on that base alone, exactly. The full overhang measure stays as a slow verifier outside the timed path.</li>
+<li><strong>Overlap is cheap to place and costly to merge.</strong> Placement's stones overlapped 40 to 58% of their volume: free in the browser, expensive in Manifold. Vegetation overlaps more, so the merge is the first problem, not the last.</li>
+<li><strong>A precomputed whole beats a precomputed part.</strong> The fastest wall (0.3 ms) was a window cut from long walls made offline, already one closed mesh. Its limits were variety and straightness.</li>
+<li><strong>The look comes from the pieces.</strong> Fast placement read worse than slow placement because it picked worse stones, not because it was fast. Choice tables tuned offline, and pieces taken from approved builds, are where the look lives.</li>
+</ol>
+</section>
+
+<section id="library">
+<h2><span class="n">09</span>The library</h2>
+<p>A library of vegetation pieces, made offline by an <code>xtask</code>, versioned with the engine, keyed like the shelf, and shipped as data beside the program and the browser engine.</p>
+<h3>Five levels</h3>
+<div class="scroll"><table>
+<thead><tr><th>Level</th><th>What it is</th><th>What being prebuilt saves</th></tr></thead>
+<tbody>
+<tr><td>Leaf</td><td>one strip: a blade, a petal, a clover leaf, a leaflet</td><td>the builder: outline, bend, wedge, tip floor</td></tr>
+<tr><td>Cluster</td><td>a tuft, rosette, fan, fern, flower, lobed leaf</td><td>the crossings inside it, merged once; the fountain's correlations</td></tr>
+<tr><td>Ribbon</td><td>3 to 6 leaves shingled along a curve, in a few curvatures</td><td>the shingle order and the overlap inside a ribbon</td></tr>
+<tr><td>Patch</td><td>a few square centimetres of finished sward, with matched edges</td><td>everything; open meadow becomes copying</td></tr>
+<tr><td>Square</td><td>a whole 35 mm square of cover, with edge variants (Wang tiles)</td><td>everything but objects, clearings and the rim</td></tr>
+</tbody></table></div>
+<p>The levels nest: a patch is made from ribbons and tufts, a tuft from leaves. Each level is also a fallback for the one above it: where a patch cannot go (beside a rock, at a clearing, at the rim), ribbons and tufts are placed one by one.</p>
+<h3>What an entry holds</h3>
+<div class="scroll"><table>
+<thead><tr><th>Part</th><th>What it is</th><th>What it lets the build skip</th></tr></thead>
+<tbody>
+<tr><td>Metadata</td><td>family, level, size, extent, how it meets the ground, its canonical id</td><td>searching and keying</td></tr>
+<tr><td>Body</td><td>a closed mesh in its own frame, vertices rounded to float32 once</td><td>building the shape</td></tr>
+<tr><td>Morph basis</td><td>a rest shape plus a few directions: <code>V = V0 + size·B1 + lean·B2 + arch·B3</code></td><td>rebuilding for each control value; gives continuous variation within a version</td></tr>
+<tr><td>Certified range</td><td>the box of control values over which the entry is proven printable</td><td>every per-copy printability check: a box test instead</td></tr>
+<tr><td>Layer slices</td><td>its outline at every 0.2 mm layer, at a few sub-layer offsets, or as per-vertex formulas <code>a + b·z</code></td><td>slicing</td></tr>
+<tr><td>Distance grids</td><td>per layer, a small int8 signed-distance grid at about 0.1 mm</td><td>the 2D union (a per-cell minimum)</td></tr>
+<tr><td>Occupancy bits</td><td>per layer, a bitset at the line or half-line</td><td>overlap caps, support and island tests (word-wide AND)</td></tr>
+<tr><td>Footprint and front maps</td><td>height under and over it on the tile grid; for stones, the depth of its front face</td><td>drop tests, shard tests, fill scoring</td></tr>
+<tr><td>Contact table</td><td>how it meets each other entry at quantised offsets: clear, touching, overlap amount</td><td>pairwise geometry during placement</td></tr>
+<tr><td>Choice table</td><td>for a quantised description of a gap, pit or site, the best few entries</td><td>scoring candidates</td></tr>
+<tr><td>Paint</td><td>a material and a colour for each face</td><td>the painter's per-face pass</td></tr>
+<tr><td>Code</td><td>where it pays: an unrolled emitter, a decision tree, a specialised clipper</td><td>interpretation (see next part)</td></tr>
+</tbody></table></div>
+<h3>Operations and their guarantees</h3>
+<div class="scroll"><table>
+<thead><tr><th>Operation</th><th>Keeps printable?</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Turn about the vertical, mirror</td><td>always</td><td>no normal changes its angle to the vertical</td></tr>
+<tr><td>Uniform scale</td><td>for overhang, always; not for the line floor</td><td>angles keep, widths shrink: the certified range carries a smallest scale</td></tr>
+<tr><td>Stretch up</td><td>always for overhang</td><td>down faces get steeper</td></tr>
+<tr><td>Stretch across</td><td>up to a stored limit</td><td>down faces get flatter: the limit is precomputed per entry</td></tr>
+<tr><td>Morph within the certified range</td><td>yes, if the range was proven</td><td>interval arithmetic over the basis, done offline</td></tr>
+<tr><td>Bend to follow the flow</td><td>within a certified curvature</td><td>a ribbon's curvature is one more morph direction</td></tr>
+<tr><td>Shorten (rim, clearing, object)</td><td>yes, if done by choosing a shorter version</td><td>never sliced; the tip floor stays</td></tr>
+</tbody></table></div>
+<h3>Versions like piano samples</h3>
+<p>A family is a set of versions across size; each version covers a band with a little stretch or morph; the next version takes over at the band's edge. With a morph basis shared across a family (same mesh layout), versions can crossfade instead of jumping.</p>
+<h3>Sizes, as far as the walls tell</h3>
+<p>The stone library was 180 stones in 0.21 MB compressed; its height-map form 9 MB compressed; the precomputed walls 38 MB. A vegetation library at five levels, with per-layer grids, is likely in the tens of megabytes before compression <span class="tag t-e">e</span>. The browser keeps builds in IndexedDB already; the library would be fetched once and kept the same way.</p>
+</section>
+
+<section id="compiled">
+<h2><span class="n">10</span>Compiled entries</h2>
+<p>An entry can be something the build runs, not only something it reads. This is partial evaluation: fix most of a generator's inputs offline and keep a small residual program.</p>
+<h3>Where code beats data</h3>
+<ul>
+<li><strong>Usually it does not.</strong> A tight generic kernel over well-laid-out arrays runs as fast as specialised code, and data compresses better for the browser.</li>
+<li><strong>Decision trees.</strong> A choice table tuned offline over millions of trials becomes nested branches with constants inlined.</li>
+<li><strong>Emitters.</strong> One piece's triangles written with every index constant; the transform applied as it writes.</li>
+<li><strong>Specialised clippers.</strong> Clipping against a known set of planes, unrolled.</li>
+<li><strong>Straight-line morphs.</strong> One family's basis as a fixed sequence of multiply-adds.</li>
+</ul>
+<h3>How it would ship</h3>
+<p>An <code>xtask</code> writes Rust: const tables, a few generated functions, and <code>include_bytes!</code> for bulk data. The compiler checks it, it is versioned with the engine, and its key is the engine's key, so a cache entry made with an old library is never read by a new one. The browser engine compiles the same source to wasm.</p>
+<h3>Certified, not sampled</h3>
+<p>"By construction" holds only if a certified range is proven: by interval arithmetic over the morph basis, by convexity of the constraint in the controls, or by exhaustive checking on a grid fine enough that nothing between grid points can fail (with the bound stated). A range checked at samples is "usually", and must say so.</p>
+</section>
+
+<section id="solid">
+<h2><span class="n">11</span>Making the solid</h2>
+<p>The library makes placing cheap. The solid is still the cost. Routes, from the measured to the speculative:</p>
+<div class="scroll"><table>
+<thead><tr><th>Route</th><th>How</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Batch 3D union</td><td>Manifold over every leaf</td><td><span class="tag t-m">m</span> 12.8 s for a 2×2</td></tr>
+<tr><td>Layers, prisms merged</td><td>slice, 2D union per layer, stack, one merge</td><td><span class="tag t-m">m</span> 2.3 s</td></tr>
+<tr><td>Layers, meshed directly</td><td>walls from each layer's edges, treads from layer differences, shared crossings, float32 once</td><td><span class="tag t-e">e</span> ~0.5 s</td></tr>
+<tr><td>Layers from precomputed slices</td><td>copy each entry's slices, 2D union per layer, mesh directly</td><td><span class="tag t-x">x</span> removes slicing</td></tr>
+<tr><td>Distance grids per layer</td><td>per-cell minimum of each entry's int8 grid; trace the zero contour; mesh directly</td><td><span class="tag t-x">x</span> branch-free, SIMD, GPU</td></tr>
+<tr><td>Occupancy bits</td><td>OR of bitsets per layer; contour; mesh</td><td><span class="tag t-x">x</span> jagged at the cell size</td></tr>
+<tr><td>Prebuilt clusters, then a union</td><td>24 tuft bodies, copies unioned</td><td><span class="tag t-m">m</span> 1.5 s a 2×2</td></tr>
+<tr><td>Precomputed squares, welded</td><td>a finished square of sward, copied, welded at matched edges</td><td><span class="tag t-e">e</span> under 0.1 s; cannot make objects, clearings or the rim alone</td></tr>
+<tr><td>Window on a precomputed meadow</td><td>a large meadow made offline; a tile cuts a window and edits locally</td><td><span class="tag t-x">x</span> the walls' 0.3 ms route, in 2D</td></tr>
+<tr><td>No solid: the slicer merges</td><td>export overlapping shells; the gate checks the layers</td><td><span class="tag t-m">m</span> the check alone 0.07 s a 1×1; changes the gate's contract</td></tr>
+</tbody></table></div>
+<p>Why layers: the printer works in layers, the gate judges in layers, and in 2D a merge of overlapping regions is a cheap, robust operation. The terrain stays the stack mesher's; grass layers sit on it. A layer mesher needs the stack mesher's discipline: one closed mesh by construction, each crossing cached per edge and shared, vertices rounded to float32 once.</p>
+<h3>The layers are also the gate</h3>
+<p>Each check reads the same layer polygons: the line floor (erode by half a line and grow back), the gap floor (the same on the complement), overhang (each layer inside the one below grown by 0.286 mm, and by 0.429 for the band), lost parts (every component overlaps the layer below), one body by volume. On the measured meadow the overhang was 0 and the lost-part check found 12 floating tip layers, which the tip floor removes.</p>
+</section>
+
+<section id="beyond">
+<h2><span class="n">12</span>Further out</h2>
+<p>Ideas raised in discussion, each a bigger departure. Several touch a settled rule; those are marked.</p>
+<h3>Growth in layers</h3>
+<p>Write every generator as a rule from layer k−1 to layer k. A blade is a region that drifts along its lean and shrinks to its tip; a tuft is regions splitting from one root; a stone widens and narrows. If a layer may reach at most 0.286 mm past the one below, the overhang holds by construction, there is no wedge to add, and overlap is simply one region. The work is area × layers, suited to a GPU. It is what the grass lab's blade in whole lines and layers was reaching for.</p>
+<h3>Bits at printer resolution</h3>
+<p>A square at 0.1 × 0.1 × 0.2 mm is about 6 million bits, 750 KB. Placing, merging, the overhang step, islands and overlap caps become word-wide AND, OR and shift, in a few milliseconds, with no floating-point edge cases. The mesh is the last step.</p>
+<h3>Wave-function collapse with printable rules</h3>
+<p>Learn tiles and adjacency rules from approved builds; check offline that every allowed pair is printable where it meets. Overhang is local, so every solution the solver finds is printable. A tile is a constraint puzzle over a grammar; printability is a type rule on joins.</p>
+<h3>One world, many windows</h3>
+<p>Make one huge meadow offline; a tile is a window on it; rocks, water and paths are local edits. The seed chooses where to cut.</p>
+<h3>A shader preview</h3>
+<p>Draw the tile on the GPU from distance fields, each pixel stepping along its ray. With domain repetition a pixel tests only the blades in its own cell, so a million blades cost what a thousand do. The editor shows changes at once; the exact mesh is made only at Export.</p>
+<h3>Distillation</h3>
+<p>Train a small model on thousands of slow, approved builds; it produces layered occupancy or height and depth maps in milliseconds with the look built in. A model gives no guarantee, so it is followed by a step that adds support under anything past the limit. Adding is the allowed direction; removing would be culling.</p>
+<h3>Toolpaths</h3>
+<p>Precompute each piece as the lines a nozzle lays; a tile is paths composed. The most radical and least portable route; it is where the printing truth lives.</p>
+<div class="key warn"><p><strong>Settled rules these touch.</strong> "No solid" changes the gate's contract (Leaf and Scatter's Q18). A support-adding pass must add, never cut. A shader preview splits what is seen from what is printed, which the editor's rule that the stage shows the print would have to allow. Each is Shawn's call.</p></div>
+</section>
+
+<section id="families">
+<h2><span class="n">13</span>Algorithm families</h2>
+<p>From the field guide, with where a library takes each.</p>
+<div class="scroll"><table>
+<thead><tr><th>Method</th><th>Strengths</th><th>Weaknesses</th><th>Best printed use</th><th>In a library</th></tr></thead>
+<tbody>
+<tr><td>Straight wedges, tapered prisms</td><td>fast, solid, robust when tiny</td><td>stiff</td><td>tiny grass, dense tufts</td><td>short cover entries</td></tr>
+<tr><td>Swept strip on a Bézier</td><td>natural bend, one primitive for blades and leaves</td><td>frames, tips</td><td>hero grass, strap leaves</td><td>the leaf builder offline</td></tr>
+<tr><td>Extruded 2D outline</td><td>shape control, easy width floors</td><td>starts flat</td><td>broad and lobed leaves</td><td>outline families</td></tr>
+<tr><td>Template and deformation</td><td>printability solved once, much variation</td><td>finite vocabulary</td><td>production assets</td><td>this page's core</td></tr>
+<tr><td>CSG primitives</td><td>simple, deterministic</td><td>toy-like</td><td>cattails, succulents</td><td>seed heads, stems</td></tr>
+<tr><td>Distance fields, voxels</td><td>watertight, fuses roots</td><td>melts gaps, costs resolution</td><td>dense tufts, moss</td><td>per-layer grids</td></tr>
+<tr><td>Relief</td><td>indestructible, cheap</td><td>no silhouette</td><td>micro-grass, moss</td><td>the lowest physical level</td></tr>
+<tr><td>Phyllotaxis</td><td>cheap, good rosettes</td><td>arrangement only</td><td>rosettes, aloes</td><td>cluster generators</td></tr>
+<tr><td>L-systems</td><td>structured growth</td><td>overcomplicated, fragile</td><td>ferns, reeds</td><td>offline only</td></tr>
+<tr><td>Space colonisation</td><td>organic branching, veins</td><td>more than needed</td><td>major veins</td><td>offline only</td></tr>
+<tr><td>Agents, particles</td><td>environment-aware</td><td>unpredictable</td><td>creeping cover</td><td>offline, or as patch makers</td></tr>
+<tr><td>GPU cards</td><td>huge density</td><td>not printable</td><td>reference only</td><td>the shader preview</td></tr>
+</tbody></table></div>
+<h3>The field guide's exploration program</h3>
+<ol>
+<li>One printable strip, with straight, V-fold and lens sections; a printed matrix.</li>
+<li>Five or six blade archetypes.</li>
+<li>A tuft grammar: 5 to 12 blades, a shared root, deliberate negative space; raw against boolean against distance-field union.</li>
+<li>Physical level of detail: one patch as relief, fused mass, wedges and strips, printed at several scales.</li>
+<li>A leaf outline system with smooth, serrated and lobed outlines.</li>
+<li>Rosettes and fans.</li>
+<li>Terrain-aware distribution.</li>
+<li>A printability compiler: one profile applied to every primitive.</li>
+<li>Style profiles (comic, miniature resin, botanical, rugged).</li>
+<li>A full tile benchmark: mesh size, time, slicing, print success, painted readability.</li>
+</ol>
+<h3>Open-source pieces</h3>
+<p>OpenAlea ADEL and CNW-Grass (grass morphology), PlantGL and L-Py (plant geometry, L-systems), Helios (plant simulation), GPUOpen's Bézier blades (a compact blade), yomotsu/vegetation and genart-dev/plugin-plants (seeded generators and presets), Runions et al. (venation), lyon (2D outlines and tessellation in Rust), Manifold (booleans, distance-field meshing, cross-sections), Blender Geometry Nodes (Poisson-disk distribution). None of them makes printable miniature vegetation; the new layer is the compilation from a semantic plant into a fused, support-aware printed solid.</p>
+</section>
+
+<section id="tests">
+<h2><span class="n">14</span>Tests and failure modes</h2>
+<h3>Acceptance scenes (grass lab)</h3>
+<div class="scroll"><table>
+<thead><tr><th>Scene</th><th>Content</th><th>Passes when</th></tr></thead>
+<tbody>
+<tr><td>S0</td><td>hills only, grass off</td><td>reads as ground (the ground's job)</td></tr>
+<tr><td>S1</td><td>a flat 1×1</td><td>ribbons, blades, undercut tips and gaps read clearly; judged first</td></tr>
+<tr><td>S2</td><td>a 2×2 with hills, seed 1</td><td>every requirement holds, no failure mode visible</td></tr>
+<tr><td>S3</td><td>S2 at seeds 1 to 6</td><td>at least 5 of 6 pass; none looks stamped</td></tr>
+<tr><td>S4</td><td>S2 printed, primed, drybrushed</td><td>tip and bank shadows survive, grooves stay dark, nothing breaks</td></tr>
+</tbody></table></div>
+<h3>The lab's 26 failure modes</h3>
+<p>F1 hair · F2 moss · F3 radial crowns in a field · F4 shag carpet · F5 wood grain · F6 worms and rope · F7 stamped repetition and fish scales · F8 fingerprints · F9 crumpled foil · F10 flat or melted · F11 fragile literal grass · F12 tent peaks · F13 Z-jitter · F14 terracing · F15 ragged rim · F16 puddles · F17 bubbles · F18 cracks · F19 clay cut · F20 soil debris · F21 wall sprouts · F22 rigid sticks · F23 ruled rim · F24 commas · F25 smooth bank wall · F26 rim seam.</p>
+<p>A library raises one of them above the rest: <strong>F7, stamped repetition</strong>. Every level of reuse (versions, clusters, patches, squares, windows) is a chance to see the same thing twice. Variety must be measured, not assumed: for example, the largest matching patch between two tiles, or the most common repeated cluster within one.</p>
+<h3>The field guide's failure modes</h3>
+<p>Needle forest · green cone (fusion that kills negative space) · cookie-cutter leaf · biological overkill · unprintable elegance · clone field · noise soup · slicer surprise.</p>
+<h3>Metrics</h3>
+<p>Recognition at tabletop distance; silhouette per triangle and per cubic millimetre; support-free print success; durability after handling; paint readability; mesh health; generation time and memory; variation quality across seeds. To these the library adds: library size, library build time, load time, and the share of a tile built from prebuilt pieces.</p>
+</section>
+
+<section id="failed">
+<h2><span class="n">15</span>Tried and failed</h2>
+<div class="scroll"><table>
+<thead><tr><th>Tried</th><th>Why it failed</th><th>Lesson</th></tr></thead>
+<tbody>
+<tr><td>Tuning parameters after fixes started moving problems (July)</td><td>the algorithm's shape was wrong</td><td>write requirements as guarantees first</td></tr>
+<tr><td>1,800 random lens blades in a voxel volume (lab v0)</td><td>crumpled foil, Z-jitter, terracing</td><td>specify top-down by scale: flow, ribbon, leaf</td></tr>
+<tr><td>A height field with carved lips (lab rev 1 to 4)</td><td>never a visible undercut</td><td>the undercut belongs to each leaf</td></tr>
+<tr><td>A turf mass under the blades</td><td>stair-stepped pads, buried undercuts, clay</td><td>blades on dirt; a mat is the ground's</td></tr>
+<tr><td>Shapes as an ideal: domes, knife edges, needles</td><td>dropped or mangled by the slicer</td><td>the model is what prints</td></tr>
+<tr><td>Steering each blade at the rim</td><td>starbursts, feathered seams</td><td>steer the field once</td></tr>
+<tr><td>Soft ends on every blade</td><td>fish scales</td><td>only where a clearing stopped it</td></tr>
+<tr><td>Embossed leaves as displacement</td><td>scales</td><td>a stamp field must pass a printed coupon first</td></tr>
+<tr><td>Stems with a leaf at the tip</td><td>downward stems are undercuts</td><td>a stem is a standing leaf</td></tr>
+<tr><td>Rows and rings of leaves</td><td>read as rows</td><td>no grid anywhere</td></tr>
+<tr><td>Culling leaves that landed badly</td><td>holes; 66% wasted builds</td><td>make the defect impossible; never cull after</td></tr>
+<tr><td>Per-leaf shading and growth simulation</td><td>bought no look</td><td>not proposed</td></tr>
+<tr><td>57 new words (first reading)</td><td>a second language</td><td>eleven words</td></tr>
+<tr><td>Walls: shared contact facets</td><td>one plane per stone rests on too little</td><td>contact must follow the real neighbour</td></tr>
+<tr><td>Walls: a carved skin</td><td>fast, never the look</td><td>the look lives in the pieces</td></tr>
+<tr><td>Walls: placement with random candidates</td><td>slow, and chooses worse stones when fast</td><td>choose from tables tuned offline</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="questions">
+<h2><span class="n">16</span>Open questions</h2>
+<h3>Leaf and Scatter's, still open</h3>
+<ol>
+<li>Q1: flow on scatter as an angle value, using the coordinate <code>a</code>.</li>
+<li>Q2: may a control name a sibling (<code>$size</code>) and the leaf's turn (<code>$turn</code>)?</li>
+<li>Q3: must a near body write the thing's own controls? (Recommended no.)</li>
+<li>Q4: the mat: dirt about 1 dmm over the edge level, or none?</li>
+<li>Q5: grass stops painting the ground; it becomes a part over scatters.</li>
+<li>Q6: reeds retire into a part.</li>
+<li>Q7: the tallest standing leaf: 12, 15 or 22 dmm at water.</li>
+<li>Q8: the two spaces, lobes as fused clusters, a cluster along a point, line or curve.</li>
+<li>Q9: the triangle budget and the density of the look.</li>
+<li>Q10: may an angle divide an angle to a plain number?</li>
+<li>Q11: the engine wraps the field round clearings and steers it at the rim.</li>
+<li>Q12: may <code>foot(…)</code> take a wall, a tree or water?</li>
+<li>Q13: the default blade scale: the sheet's 9 to 14 mm or the lab's 3 to 7.</li>
+<li>Q14: twist stays dropped.</li>
+<li>Q15: a ribbon as a cluster <code>at=along(flow)</code>.</li>
+<li>Q16: a noise function, or a phase-drifted sine first.</li>
+<li>Q17: Orin reviews the words before anything is built.</li>
+<li>Q18: the gate's contract: one watertight body, or sound layers.</li>
+<li>Q19: the overlap cap by height.</li>
+</ol>
+<h3>New with the library</h3>
+<ol>
+<li>How large may the library be, for the program and for the browser download?</li>
+<li>Does the library ship as data, as generated code, or both?</li>
+<li>Which levels does the first library have: leaves and tufts only, or patches and squares too?</li>
+<li>How is variety measured, so that reuse never shows as stamping?</li>
+<li>Do library pieces come from today's builders, from a new builder, or from hand-approved examples?</li>
+<li>Is the layered solid the build route for every vegetation tile, and later for stones?</li>
+<li>May the editor show a preview made differently from the export?</li>
+<li>Does a certified range have to be proven, or may it be verified densely with a stated bound?</li>
+</ol>
+</section>
+
+<section id="glossary">
+<h2><span class="n">17</span>Glossary</h2>
+<dl class="gloss">
+<dt>Tile</dt><dd>the whole printed piece</dd>
+<dt>Square</dt><dd>one 35 mm unit (25.4 on OpenLOCK)</dd>
+<dt>Leaf</dt><dd>one bent strip; a blade is a narrow leaf</dd>
+<dt>Cluster</dt><dd>a thing made of things: a tuft, a rosette, a ribbon, a flower</dd>
+<dt>Ribbon</dt><dd>leaves shingled along one streamline of the flow</dd>
+<dt>Sward</dt><dd>the open cover of combed grass</dd>
+<dt>Fringe</dt><dd>the row of upright tufts at an object's foot</dd>
+<dt>Flow</dt><dd>the angle field that heads every placed thing</dd>
+<dt>Wedge</dt><dd>solid under a leaf leaning past 55°, raked at 45°</dd>
+<dt>Entry</dt><dd>one item in the library, at any level</dd>
+<dt>Version</dt><dd>one entry of a family, covering a band of sizes</dd>
+<dt>Certified range</dt><dd>the box of controls over which an entry is proven printable</dd>
+<dt>Morph basis</dt><dd>a rest shape and a few directions a family varies along</dd>
+<dt>Layered build</dt><dd>the solid made as 0.2 mm layers merged in 2D</dd>
+<dt>Physical level of detail</dt><dd>a switch of representation by printed feature size</dd>
+<dt>dmm</dt><dd>a design millimetre: 1 mm on DungeonBlocks, 0.73 mm on OpenLOCK</dd>
+</dl>
+</section>
+</main>
+</div>
