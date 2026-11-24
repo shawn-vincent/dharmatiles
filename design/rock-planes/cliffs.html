@@ -350,6 +350,7 @@ const SINK = 0.17, FLARE_DEG = 54.9, FLC = Math.cos(FLARE_DEG * DEG), FLS = Math
 const THIN = 3;   // mm: a layer thinner than this is thin: its stones keep every contact they can, whole
 const COLUMN = 6;   // a stone, or a layer's spines, at least this many times as tall as wide is a column
 const BLUNT = 0.3;   // a thick layer's support is 0.4 of its patch, and 0.4 + this when the style is fully round (Fieldstone): a blunter bottom, the flare cut from further out
+const CROWN = Object.assign({ on: 1, size: 2.5, free: 1, dome: 1, spread: 50, lo: 0.4, hi: 0.4, gap: 1.5, corner: 2, virt: 1, vmin: 3, vlo: 0.25, vhi: 0.3, step: [[42, 0.7], [28, 1.6]] }, (typeof TUNE !== 'undefined' && TUNE.crown) || {});   // a stone on two holders rests on a small flat crown on each, as far apart as Bridge allows; a round style only
 const BRIDGE_MARGIN = 1;   // mm: the bottoms are planned this far inside Bridge, so a pair of patches the plan bridges is bridged for the measure too
 // ---------- the clip kernel: a convex polytope as vertices + face loops in pooled typed arrays ----------
 const LAZYMAX = 60;
@@ -760,6 +761,27 @@ const hN = new Float64Array(3 * MAXSL), hD = new Float64Array(MAXSL);
 // rests on it (outside the hull of the stones' patches and of the bottoms above it), `side(i)` whether a point of the side face toward plane i's neighbour lies
 // outside that neighbour's cell (its depth, its top, its flare), i.e. where the neighbour leaves it in view.
 let DX = null;
+// A holder's top domes round its crowns: from the boundary of each crown (the hull of what rests on this top, flat at the contact plane) planes lean away,
+// down and out, by an angle drawn in Tilt. They are convex and leave every crown point (the one rule keeps them out of the guards).
+function domeCrown(cr) {
+  const K = cr.pts, n = K.length, pl = cr.pl, a = pl[0], b = pl[1], nl = Math.hypot(a, b, 1), nx = -a / nl, ny = -b / nl, nz = 1 / nl, hiT = CF.rtilt[1];
+  const at = (px, py, pz, ox, oy) => {   // a plane through the point, leaning away along (ox, oy) in the top's plane
+    let ox3 = ox, oy3 = oy, oz3 = a * ox + b * oy; const ol = Math.sqrt(ox3 * ox3 + oy3 * oy3 + oz3 * oz3); ox3 /= ol; oy3 /= ol; oz3 /= ol;
+    const phi = (rnd() - 0.5) * CROWN.spread * DEG, cp = Math.cos(phi), sp = Math.sin(phi);
+    const wx = nx * 0, ux = ox3 * cp + (ny * oz3 - nz * oy3) * sp, uy = oy3 * cp + (nz * ox3 - nx * oz3) * sp, uz = oz3 * cp + (nx * oy3 - ny * ox3) * sp;
+    const al = hiT * (CROWN.lo + CROWN.hi * rnd()) * DEG, ca = Math.cos(al), sa = Math.sin(al);
+    let qx = nx * ca + ux * sa, qy = ny * ca + uy * sa, qz = nz * ca + uz * sa; const ql = Math.sqrt(qx * qx + qy * qy + qz * qz); qx /= ql; qy /= ql; qz /= ql;
+    if (qz < -DOME.down) return; const bx = qx * px + qy * py + qz * pz, top = support(qx, qy, qz); if (top - bx > 0.02) place(qx, qy, qz, top - bx, null, Infinity);
+  };
+  if (n < 3) { const p = K[0], sv = [CROWN.lo, CROWN.hi]; if (cr.virt) { CROWN.lo = CROWN.vlo; CROWN.hi = CROWN.vhi; } for (let j = 0; j < 8; j++) { const t = TWO_PI * (j + rnd()) / 8; at(p[0], p[1], p[2], Math.cos(t), Math.sin(t)); } CROWN.lo = sv[0]; CROWN.hi = sv[1]; return; }
+  for (let i = 0; i < n; i++) {
+    const A = K[i], B = K[(i + 1) % n], P = K[(i + n - 1) % n], ex = B[0] - A[0], ey = B[1] - A[1], el = Math.hypot(ex, ey); if (el < 1e-6) continue;
+    const eox = ey / el, eoy = -ex / el, cnt = Math.max(1, Math.round(el / CROWN.gap));
+    for (let j = 0; j < cnt; j++) { const f = (j + 0.5) / cnt; at(A[0] + ex * f, A[1] + ey * f, A[2] + (B[2] - A[2]) * f, eox, eoy); }
+    const fx = A[0] - P[0], fy = A[1] - P[1], fl_ = Math.hypot(fx, fy) || 1, bxo = eox + fy / fl_, byo = eoy - fx / fl_;   // the corner: the bisector of the two edges' outward directions
+    for (let j = 0; j < CROWN.corner; j++) at(A[0], A[1], A[2], bxo, byo);
+  }
+}
 function domeAll(seed) {
   // a guard that lies outside the stone as it is now (a crown's touch patch lies on the cell, past its own turned plane; a group's footprint
   // may lie past this cell) holds nothing a plane could still cut: it is moved to the stone's centre
@@ -779,6 +801,7 @@ function domeAll(seed) {
     if (!seen) continue;
     domeRing(s, 1, vis); for (let r = 2; r <= DOME.rings && A >= DOME.ring2area * (r - 1); r++) domeRing(s, r, vis);
   }
+  if (DX && DX.crowns) for (const cr of DX.crowns) domeCrown(cr);
 }
 function carveFast(seed, kp, grd) {
   carvePlanes(seed, kp, grd); toSlots();
@@ -1120,6 +1143,26 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       pat[sm].poly = tr; q.trim = 1; return true; })()) { /* the smaller patch is trimmed and both stay */
     } else if (pat.length === 2 && dmax(pat[0].poly, pat[1].poly) > BRIDGE) { q.far = 1; nPeel++; pat.splice(0, 2, Math.abs(area2(pat[0].poly)) > Math.abs(area2(pat[1].poly)) ? pat[0] : pat[1]); }
     if (pat.length === 2 && MINBR > 0) { const a0 = Math.abs(area2(pat[0].poly)), a1 = Math.abs(area2(pat[1].poly)); if (Math.min(a0, a1) < MINBR) { q.minbr = 1; pat.splice(0, 2, a0 >= a1 ? pat[0] : pat[1]); } }   // a bridge needs both ends to be a real patch
+    // crowns: a stone on two holders rests on a small flat crown on each (the holder's top is free to dome everywhere else), placed as far apart as Bridge allows
+    // inside each holder's overlap, so the bottom (the hull of the crowns, bridged) still spans the stone
+    if (CROWN.on && ROUND > 0 && !thin && pat.length === 2 && !pat[0].glue && !pat[1].glue && pat[0].holder !== pat[1].holder) {
+      const hh = CROWN.size / 2, cs2 = pat.map(r => {
+        const F = ccw(r.full), n = F.length; let I = F;
+        for (let i = 0; i < n && I.length >= 3; i++) { const A = F[i], B_ = F[(i + 1) % n], ex = B_[0] - A[0], ey = B_[1] - A[1], l = Math.hypot(ex, ey); if (l < 1e-9) continue; const nx_ = ey / l, ny_ = -ex / l; I = half(I, nx_, ny_, nx_ * A[0] + ny_ * A[1] - hh); }
+        const c = []; const cen = P_ => { let x = 0, y = 0; for (const v of P_) { x += v[0]; y += v[1]; } return [x / P_.length, y / P_.length]; };
+        if (I.length >= 3) { for (const v of I) c.push(v); c.push(cen(I)); } else c.push(cen(F));
+        return { F, c };
+      });
+      let best = null, bA = -1;
+      for (const a of cs2[0].c) for (const b of cs2[1].c) {
+        const dx = b[0] - a[0], dy = b[1] - a[1], dl = Math.hypot(dx, dy) || 1, ux = dx / dl, uy = dy / dl, vx_ = -uy, vy_ = ux;
+        const mkc = (c, F) => inter2(ccw([[c[0] - hh * ux - hh * vx_, c[1] - hh * uy - hh * vy_], [c[0] + hh * ux - hh * vx_, c[1] + hh * uy - hh * vy_], [c[0] + hh * ux + hh * vx_, c[1] + hh * uy + hh * vy_], [c[0] - hh * ux + hh * vx_, c[1] - hh * uy + hh * vy_]]), F);
+        const p1 = mkc(a, cs2[0].F), p2 = mkc(b, cs2[1].F); if (!p1 || !p2 || p1.length < 3 || p2.length < 3) continue;
+        if (Math.abs(area2(p1)) < 3 || Math.abs(area2(p2)) < 3 || dmax(p1, p2) > BRIDGE) continue;
+        const A_ = Math.abs(area2(hull2(p1.concat(p2)))); if (A_ > bA) { bA = A_; best = [p1, p2]; }
+      }
+      if (best) { pat[0].poly = best[0]; pat[1].poly = best[1]; q.crown = 1; }
+    }
     // the bottom plane is laid to the holders' own top planes: one patch, parallel to its holder's top; two, through both holders' tops at the
     // patches' centres (across the line between them, the mean of the two tops' slopes). The stone then sits flush on a flat holder top, so no part
     // of the patch is sunk past the holder's flare, and the gap is zero over the patch
@@ -1187,6 +1230,15 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       let mx_ = FLC * ey / l, my_ = -FLC * ex / l, mz_ = -FLS; const mu = mx_ * ux + my_ * uy + mz_ * uz; mx_ -= mu * ux; my_ -= mu * uy; mz_ -= mu * uz;
       const ml = Math.hypot(mx_, my_, mz_), nx = mx_ / ml, ny = my_ / ml, nz = mz_ / ml, d = nx * A[0] + ny * A[1] + nz * za;
       q.flare.push([nx, ny, nz, d]);
+      if (CROWN.on && CROWN.step && ROUND > 0) {   // the flare rounds: past the first plane (the least steep a face may be) planes step toward upright, each through the first plane at a height above the bottom's edge
+        if (!q.flare2) q.flare2 = [];
+        const oxh = ey / l, oyh = -ex / l, mxz = (A[0] + C[0]) / 2, myz = (A[1] + C[1]) / 2, mzz = (za + zc) / 2;
+        for (const [deg, h] of CROWN.step) {
+          const th = deg * DEG; let sx_ = Math.cos(th) * oxh, sy_ = Math.cos(th) * oyh, sz_ = -Math.sin(th); const su = sx_ * ux + sy_ * uy + sz_ * uz; sx_ -= su * ux; sy_ -= su * uy; sz_ -= su * uz;
+          const sl = Math.hypot(sx_, sy_, sz_), kx = sx_ / sl, ky = sy_ / sl, kz = sz_ / sl, s = -h * nz / (nx * oxh + ny * oyh), px = mxz + oxh * s, py = myz + oyh * s, pz = mzz + h;
+          q.flare2.push([kx, ky, kz, kx * px + ky * py + kz * pz]);
+        }
+      }
     }
   }
   lap('holding');
@@ -1235,7 +1287,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     if (CF.rtilt[1] < DOME.tilt) return null;
     let cov = null;
     const top = (x, y) => {
-      if (!cov) { cov = []; for (const t of pc.tops) for (const kk of t.keeps) cov.push(ccw(kk)); for (let l = pc.layer + 1; l <= Math.min(N - 2, pc.layer + 3); l++) for (const q of layerPieces[l]) if (q.B && q.B.length >= 3 && q.bb[1] >= pc.bb[0] && pc.bb[1] >= q.bb[0] && q.bb[3] >= pc.bb[2] && pc.bb[3] >= q.bb[2]) cov.push(ccw(q.B)); }
+      if (!cov) { cov = []; for (const t of pc.tops) for (const kk of t.keeps) cov.push(ccw(kk)); for (let l = pc.layer + 1; l <= Math.min(N - 2, pc.layer + 3); l++) for (const q of layerPieces[l]) if (q.B && q.B.length >= 3 && q.bb[1] >= pc.bb[0] && pc.bb[1] >= q.bb[0] && q.bb[3] >= pc.bb[2] && pc.bb[3] >= q.bb[2]) { if (CROWN.on && CROWN.free) { for (const r of q.rests) if (!r.glue || CROWN.free < 2) cov.push(ccw(r.poly)); } else if (CROWN.on && q.crown) { for (const r of q.rests) if (!r.glue) cov.push(ccw(r.poly)); } else cov.push(ccw(q.B)); } }
       for (const P_ of cov) { if (inPoly(P_, x, y)) return false; for (let i = 0, n = P_.length; i < n; i++) { const A = P_[i], B_ = P_[i + 1 === n ? 0 : i + 1], ex = B_[0] - A[0], ey = B_[1] - A[1], tt = Math.max(0, Math.min(1, ((x - A[0]) * ex + (y - A[1]) * ey) / (ex * ex + ey * ey + 1e-12))), dx = x - A[0] - ex * tt, dy = y - A[1] - ey * tt; if (dx * dx + dy * dy < DOME.under * DOME.under) return false; } }   // under the stones above, or within their flare's reach of them
       return true;
     };
@@ -1253,12 +1305,17 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
         return true;
       };
     };
-    return { top, side };
+    const crowns = []; if (CROWN.on && CROWN.dome) for (const t of pc.tops) {
+      for (const kk of t.keeps) crowns.push({ pts: kk, pl: t.pl });
+      if (!t.keeps.length && CROWN.virt && t.poly.length >= 3 && Math.abs(area2(t.poly)) >= CROWN.vmin) { let cx = 0, cy = 0; for (const v of t.poly) { cx += v[0]; cy += v[1]; } cx /= t.poly.length; cy /= t.poly.length; crowns.push({ pts: [[cx, cy, tz_(t.pl, cx, cy)]], pl: t.pl, virt: 1 }); }   // a top nothing rests on is domed round its middle
+    }
+    return { top, side, crowns };
   }
   for (const G of groups.values()) for (const pc of G.pieces) {
     restore(pc.snap);
     if (!pc.ground) { const L = pc.bgL, bg = pc.botPl; clip(bg[0] / L, bg[1] / L, -1 / L, (-bg[2] + pc.sink) / L, KIND.BOT); }
     if (!opt.cells) for (const fl_ of pc.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
+    if (!opt.cells && pc.flare2) { const kp_ = [], bb_ = pc.bb; for (let i = 0; i < G.kp.length; i += 3) if (G.kp[i] >= bb_[0] - 0.3 && G.kp[i] <= bb_[1] + 0.3 && G.kp[i + 1] >= bb_[2] - 0.3 && G.kp[i + 1] <= bb_[3] + 0.3 && G.kp[i + 2] >= bb_[4] - 0.3 && G.kp[i + 2] <= bb_[5] + 0.3) kp_.push(G.kp[i], G.kp[i + 1], G.kp[i + 2]); for (const fl_ of pc.flare2) { let d_ = fl_[3]; for (let i = 0; i < kp_.length; i += 3) { const g_ = fl_[0] * kp_[i] + fl_[1] * kp_[i + 1] + fl_[2] * kp_[i + 2]; if (g_ > d_) d_ = g_; } clip(fl_[0], fl_[1], fl_[2], d_, KIND.FLARE); } }   // a step never cuts a guard (a crown, a glued face)
     if (empty) continue;
     if (opt.cells) { if (empty) continue; } else { const tc = now(); DX = domeData(pc, find, G); carveFast(hash2(seed, G.id) >>> 1, G.kp, !!(pc.ground || pc.onGround)); DX = null; TC += now() - tc; if (empty) continue; }
     // faces go straight into the wall's flat buffers (positions, a loop's start and length, kind, normal, area); a stone's `faces` objects are made when something asks
