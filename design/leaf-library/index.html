@@ -72,12 +72,12 @@ dl.gloss dt { font-weight: 600; } dl.gloss dd { margin: 0; color: var(--dim); }
 <header class="top">
 <h1>The Leaf Library</h1>
 <p class="lede">Grass, leaves and small plants for printed terrain, built from a library of precomputed pieces: one place for everything the project knows about them, and everything the stone-wall experiments taught about making them fast.</p>
-<p class="meta">24 Nov 2026 · a design reference, not a plan · extends <a href="../leaf-and-scatter/index.html">Leaf and Scatter</a> (17 Nov) · nothing here has been built in the engine</p>
+<p class="meta">24 Nov 2026 · a design reference, not a plan · extends <a href="../leaf-and-scatter/index.html">Leaf and Scatter</a> (17 Nov) · nothing here has been built in the engine · reviewed in <a href="https://claude.ai/artifact/3eK8pNRaVXfQFoNWGwpkSK">Leaf Library Review</a></p>
 </header>
 
 <section id="summary" style="border-top:0;margin-top:8px;padding-top:8px">
 <h2><span class="n">00</span>Summary</h2>
-<p>Grass is a scatter of leaves. A leaf is one bent strip with an outline and a section. Clusters of leaves make tufts, ribbons, rosettes, ferns and flowers. Leaf and Scatter settled that model, measured it against the reference sheet, and found the real cost: not making leaves, but merging thousands of overlapping leaves into one printable solid (12.8 s for a 2×2 meadow in the browser, against 0.57 s for a 1×1 built as stacked 2D layers).</p>
+<p>Grass is a scatter of leaves. A leaf is one bent strip with an outline and a section. Clusters of leaves make tufts, ribbons, rosettes, ferns and flowers. Leaf and Scatter settled that model, measured it against the reference sheet, and found the real cost: not making leaves, but merging thousands of overlapping leaves into one printable solid (in the browser, a 2×2 meadow takes 12.8 s as one 3D union and 2.3 s as stacked 2D layers; a 1×1 takes 1.7 s and 0.57 s).</p>
 <p>On 23 and 24 Nov the stone walls went from 1.6 s to 9 ms (true 3D placement) and 0.3 ms (a window on a precomputed wall) by moving work out of the build and into a library made once. Every stone in the library knows its own changes and what each one guarantees; a wall only chooses, copies and checks a flat base. The same move fits vegetation better than stone, because leaves that cross each other look fine and print fine.</p>
 <p>The library this page describes has entries at five levels (leaf, cluster, ribbon, patch, square). An entry is not only a mesh: it carries metadata, certified ranges of its own controls, its slices at every printed layer, small distance and occupancy grids, contact tables and, where it pays, generated code. A tile's build becomes a short program of lookups, copies and per-layer merges, with the 3D boolean gone from the build.</p>
 <div class="key"><p><strong>The three load-bearing ideas.</strong> (1) Precompute everything that does not depend on the tile, at every level of grouping. (2) Build the solid the way it prints, as 2D layers, so overlap costs nothing. (3) Keep every guarantee a property of the library entry or of the step rule, so the build never checks what it could not have broken.</p></div>
@@ -120,7 +120,7 @@ dl.gloss dt { font-weight: 600; } dl.gloss dd { margin: 0; color: var(--dim); }
 <h3>Physical level of detail</h3>
 <p>The field guide's sharpest idea: the representation depends on the printed size of a feature, not on the camera. Tiny grass becomes relief, larger grass becomes wedges, hero grass becomes swept strips, detailed leaves become fused clusters. The same semantic plant compiles differently for 0.25, 0.4 and 0.6 mm nozzles. Paint matters as well: folds, ridges and dark gaps have to survive primer, wash and drybrush.</p>
 <h3>Printing as islands</h3>
-<p>Every separate leaf is a separate island in every layer it crosses: a lift, a travel and a possible string. Ten separate 8 mm leaves are 400 island-layers; the same ten fused at the root are 40. Fusion is a printing decision as well as a look.</p>
+<p>Every separate leaf is a separate island in every layer it crosses: a lift, a travel and a possible string. Ten separate leaves 8 mm tall (a tuft's) are 400 island-layers, and the same ten fused at the root are 40; for sward blades under the 3.5 mm cap the numbers are 170 and 17. Fusion is a printing decision as well as a look.</p>
 </section>
 
 <section id="reading">
