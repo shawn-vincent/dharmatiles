@@ -729,8 +729,8 @@ const CS = { tp: 0, ts: 0, tc: 0, tf: 0 };
 // Dome: a big flat face that will be seen (the open front: the front cut, and any carved face turned toward it) gets a ring of planes round its
 // rim, each tilted from the face's normal toward the rim by an angle drawn in Tilt (so a style with little Tilt is hardly touched), through a
 // point inset from the rim; a style whose Tilt tops out under DOME.tilt degrees (Ashlar, Columns, Layered) has no dome; the one rule (`place`) keeps them out of the guards and refuses one that faces down past the overhang. Convex: planes only.
-const DOME = { on: 1, area: 5, inset: 0.35, spacing: 2, rings: 3, ring2area: 12, tilt: 12 };
-function domeRing(s, ring) {   // the planes of slot s's face: ring r at 1/r of its tilt and r times as deep in
+const DOME = { on: 1, down: 1, under: 0.6, tops: 1, sides: 1, area: 5, inset: 0.35, spacing: 2, rings: 3, ring2area: 12, tilt: 12 };
+function domeRing(s, ring, vis) {   // the planes of slot s's face: ring r at 1/r of its tilt and r times as deep in
   const o = s * CAPS, m = sLen[s]; let nx = 0, ny = 0, nz = 0, cx = 0, cy = 0, cz = 0;
   for (let k = 0; k < m; k++) { const a = sV[o + k], b = sV[o + (k + 1 === m ? 0 : k + 1)]; nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]); cx += vx[a]; cy += vy[a]; cz += vz[a]; }
   const L2 = Math.sqrt(nx * nx + ny * ny + nz * nz), A = L2 / 2; cx /= m; cy /= m; cz /= m; nx /= L2; ny /= L2; nz /= L2;
@@ -743,15 +743,20 @@ function domeRing(s, ring) {   // the planes of slot s's face: ring r at 1/r of 
     const tx_ = ex / el, ty_ = ey / el, tz_ = ez / el, cnt = Math.max(1, Math.round(el / DOME.spacing));
     for (let j = 0; j < cnt; j++) {
       const f = (j + 0.5 + (rnd() - 0.5) * 0.5) / cnt, px = vx[a] + ex * f, py = vy[a] + ey * f, pz = vz[a] + ez * f;
+      if (vis && !vis(px - ox * 0.4, py - oy * 0.4, pz - oz * 0.4)) continue;   // a top or a side: only where it is seen
       const phi = (rnd() - 0.5) * 70 * DEG, al = (hiT * (0.45 + 0.4 * rnd())) * DEG / ring, cp = Math.cos(phi), sp = Math.sin(phi);
       const ux_ = ox * cp + tx_ * sp, uy_ = oy * cp + ty_ * sp, uz_ = oz * cp + tz_ * sp, ca = Math.cos(al), sa = Math.sin(al);
       let qx = nx * ca + ux_ * sa, qy = ny * ca + uy_ * sa, qz = nz * ca + uz_ * sa; const ql = Math.sqrt(qx * qx + qy * qy + qz * qz); qx /= ql; qy /= ql; qz /= ql;
       const ins = DOME.inset * inr * ring * (0.7 + 0.6 * rnd()), bx = qx * (px - ux_ * ins) + qy * (py - uy_ * ins) + qz * (pz - uz_ * ins);
-      const top = support(qx, qy, qz); if (top - bx > 0.02) place(qx, qy, qz, top - bx, null, Infinity);
+      if (qz < -DOME.down) continue; const top = support(qx, qy, qz); if (top - bx > 0.02) place(qx, qy, qz, top - bx, null, Infinity);
     }
   }
 }
 const hN = new Float64Array(3 * MAXSL), hD = new Float64Array(MAXSL);
+// What the piece being carved tells the dome (set by the wall's emit loop; null for Granite): `top` answers whether a point of a layer top lies where nothing
+// rests on it (outside the hull of the stones' patches and of the bottoms above it), `side(i)` whether a point of the side face toward plane i's neighbour lies
+// outside that neighbour's cell (its depth, its top, its flare), i.e. where the neighbour leaves it in view.
+let DX = null;
 function domeAll(seed) {
   // a guard that lies outside the stone as it is now (a crown's touch patch lies on the cell, past its own turned plane; a group's footprint
   // may lie past this cell) holds nothing a plane could still cut: it is moved to the stone's centre
@@ -764,9 +769,12 @@ function domeAll(seed) {
   for (let s = 0; s < n0; s++) {
     const m = sLen[s]; if (!m) continue; const k = sKind[s] & 15, o = s * CAPS; let nx = 0, ny = 0, nz = 0;
     for (let i = 0; i < m; i++) { const a = sV[o + i], b = sV[o + (i + 1 === m ? 0 : i + 1)]; nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]); }
-    const L = Math.sqrt(nx * nx + ny * ny + nz * nz), A = L / 2; if (A < DOME.area) continue; ny /= L;
-    const seen = k === KIND.ENV || (k === KIND.CRISP && ny < 0.9) || (k === KIND.PEBBLE && ny < -0.3); if (!seen) continue;
-    domeRing(s, 1); for (let r = 2; r <= DOME.rings && A >= DOME.ring2area * (r - 1); r++) domeRing(s, r);
+    const L = Math.sqrt(nx * nx + ny * ny + nz * nz), A = L / 2; if (A < DOME.area) continue; ny /= L; nz /= L;
+    let seen = k === KIND.ENV || (k === KIND.CRISP && ny < 0.9) || (k === KIND.PEBBLE && ny < -0.3), vis = null;
+    if (!seen && DX && DOME.tops && k === KIND.TOP && nz > 0.5) { seen = true; vis = DX.top; }
+    else if (!seen && DX && DOME.sides && k === KIND.SIDE) { seen = true; vis = DX.side(sKind[s] >> 4); }
+    if (!seen) continue;
+    domeRing(s, 1, vis); for (let r = 2; r <= DOME.rings && A >= DOME.ring2area * (r - 1); r++) domeRing(s, r, vis);
   }
 }
 function carveFast(seed, kp, grd) {
@@ -776,7 +784,7 @@ function carveFast(seed, kp, grd) {
   if (!empty) fromSlots();
 }
 function wall(seed, P, opt = {}) {
-  carveFor(P);
+  carveFor(P); DOME.down = P.direction === 'through' ? 0.1 : 1;   // a through stone's dome plane faces down no more than 0.1 (granite seed 38 broke the gate with a steeper one)
   if (P.direction === 'through') return graniteWall(seed, P, opt);
   if (P.direction !== 'up') throw new Error('Direction ' + P.direction + ' is not built by the cells engine (it builds Up and Through)');
   const T = { }, t0 = now(); let tm = t0; const lap = k => { const t = now(); T[k] = t - tm; tm = t; };
@@ -1218,12 +1226,38 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   const growP = () => { pcap *= 2; const B = new Float64Array(pcap); B.set(POS); POS = B; };
   const mk = (i0, i1) => { const out = []; for (let i = i0; i < i1; i++) { const m = FM[i], v = new Array(m); for (let k = 0, p = XS[i]; k < m; k++, p += 3) v[k] = [POS[p], POS[p + 1], POS[p + 2]]; out.push({ v, n: [FN[3 * i], FN[3 * i + 1], FN[3 * i + 2]], kind: FK[i], area: FA[i] }); } return out; };
   const faceList = () => null;
+  const inPoly = (P_, x, y) => { for (let i = 0, n = P_.length; i < n; i++) { const A = P_[i], B_ = P_[i + 1 === n ? 0 : i + 1]; if ((B_[0] - A[0]) * (y - A[1]) - (B_[1] - A[1]) * (x - A[0]) < -1e-9) return false; } return true; };
+  // the dome's two questions of a piece, from the construction (see DX): where its top is bare, and where a side face is not against its neighbour
+  function domeData(pc, find, G) {
+    if (CF.rtilt[1] < DOME.tilt) return null;
+    let cov = null;
+    const top = (x, y) => {
+      if (!cov) { cov = []; for (const t of pc.tops) for (const kk of t.keeps) cov.push(ccw(kk)); for (let l = pc.layer + 1; l <= Math.min(N - 2, pc.layer + 3); l++) for (const q of layerPieces[l]) if (q.B && q.B.length >= 3 && q.bb[1] >= pc.bb[0] && pc.bb[1] >= q.bb[0] && q.bb[3] >= pc.bb[2] && pc.bb[3] >= q.bb[2]) cov.push(ccw(q.B)); }
+      for (const P_ of cov) { if (inPoly(P_, x, y)) return false; for (let i = 0, n = P_.length; i < n; i++) { const A = P_[i], B_ = P_[i + 1 === n ? 0 : i + 1], ex = B_[0] - A[0], ey = B_[1] - A[1], tt = Math.max(0, Math.min(1, ((x - A[0]) * ex + (y - A[1]) * ey) / (ex * ex + ey * ey + 1e-12))), dx = x - A[0] - ex * tt, dy = y - A[1] - ey * tt; if (dx * dx + dy * dy < DOME.under * DOME.under) return false; } }   // under the stones above, or within their flare's reach of them
+      return true;
+    };
+    const side = i => {
+      const pl = pc.planes[i]; if (!pl || pl[4] !== KIND.SIDE || find(pl[5]) === G.id) return () => false;   // a glued face stays flat
+      const nb = sites[pl[5]].pieces, me = pc.s.id, TOL = 0.12;
+      return (x, y, z) => {
+        for (const q of nb) {
+          if (x < q.bb[0] - TOL || x > q.bb[1] + TOL || y < q.bb[2] - TOL || y > q.bb[3] + TOL || z < q.bb[4] - TOL || z > q.bb[5] + TOL) continue;
+          let inn = true;
+          for (const e of q.planes) { if (e[4] === KIND.SIDE) { if (e[5] === me) continue; } else if (e[4] === KIND.BOT) { if (z < botZ(q, x, y) - TOL) { inn = false; break; } continue; } if (e[0] * x + e[1] * y + e[2] * z > e[3] + TOL) { inn = false; break; } }
+          if (inn) for (const f of q.flare) if (f[0] * x + f[1] * y + f[2] * z > f[3] + TOL) { inn = false; break; }
+          if (inn) return false;
+        }
+        return true;
+      };
+    };
+    return { top, side };
+  }
   for (const G of groups.values()) for (const pc of G.pieces) {
     restore(pc.snap);
     if (!pc.ground) { const L = pc.bgL, bg = pc.botPl; clip(bg[0] / L, bg[1] / L, -1 / L, (-bg[2] + pc.sink) / L, KIND.BOT); }
     if (!opt.cells) for (const fl_ of pc.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
     if (empty) continue;
-    if (opt.cells) { if (empty) continue; } else { const tc = now(); carveFast(hash2(seed, G.id) >>> 1, G.kp, !!(pc.ground || pc.onGround)); TC += now() - tc; if (empty) continue; }
+    if (opt.cells) { if (empty) continue; } else { const tc = now(); DX = domeData(pc, find, G); carveFast(hash2(seed, G.id) >>> 1, G.kp, !!(pc.ground || pc.onGround)); DX = null; TC += now() - tc; if (empty) continue; }
     // faces go straight into the wall's flat buffers (positions, a loop's start and length, kind, normal, area); a stone's `faces` objects are made when something asks
     const f0 = nFace;
     for (let f = 0; f < nF; f++) {
