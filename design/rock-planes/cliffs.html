@@ -758,7 +758,7 @@ function cliff(seed, P) {
   // Which could meet: a mass is its envelope cut by all its splits, so cut by only some of them it is a shape holding the mass. Each
   // body's shape cut by the splits with its nearest (by their middles: NEAR of those sharing a layer with it, NEAR / 2 of those in
   // the layer below it and of those above) is held in a ball; two bodies whose balls do not meet can never overlap, and need no split
-  const NEAR = 8;
+  const NEAR = 8, pairMemo = new Map();   // pairMemo: the splits of each two bodies (by their ids), made once for this cliff
   const splitAll = bodies => {
     const n = bodies.length, splits = bodies.map(() => []), done = new Set();
     const mid = Q => mul(Q.pts.reduce(add, [0, 0, 0]), 1 / Q.pts.length), mids = bodies.map(mid);
@@ -769,6 +769,13 @@ function cliff(seed, P) {
     const pair = (ia, ib) => {
       if (ia > ib) [ia, ib] = [ib, ia];
       if (done.has(ia * n + ib)) return null; done.add(ia * n + ib);
+      const mk = bodies[ia].id + '|' + bodies[ib].id, hit = pairMemo.get(mk);
+      if (hit) { if (hit.join) return [ia, ib]; for (const [w, h] of hit.puts) splits[w === 0 ? ia : ib].push(h.with === undefined ? { ...h } : { ...h, with: w === 0 ? ib : ia }); return null; }   // a pair's splits depend on the two bodies alone: each fuse pass makes only the new pairs
+      const before = [splits[ia].length, splits[ib].length], r = pair_(ia, ib);
+      pairMemo.set(mk, r ? { join: true } : { puts: [...splits[ia].slice(before[0]).map(h => [0, { ...h }]), ...splits[ib].slice(before[1]).map(h => [1, { ...h }])] });
+      return r;
+    };
+    const pair_ = (ia, ib) => {
       const A = bodies[ia], B = bodies[ib], gap = pickIn(P.joint, keyed(seed, 'joint', A.id, B.id)), one = A.members.length === 1 && B.members.length === 1;
       // nearest points of the two cores, and each body's radius there (a fused body's: its members' mean)
       const near = one ? nearest(A.p0, A.p1, B.p0, B.p1) : (() => { const [pa, pb] = hullNearest(A.pts, B.pts); return [null, null, pa, pb]; })();
@@ -934,8 +941,8 @@ function holding(masses, joint) {
   const n = masses.length, holds = masses.map(() => new Set()), footprints = masses.map(() => []), under = Math.max(0, joint[1]) + CONTACT;
   const box = masses.map(m => { const vs = m.poly.flatMap(f => f.verts); return [0, 1, 2].map(i => [Math.min(...vs.map(v => v[i])), Math.max(...vs.map(v => v[i]))]); });
   // the masses over each BIN mm square seen from above, so a point asks only those near it
-  const BIN = 4, bins = new Map(), bin = (x, y) => Math.floor(x / BIN) + ',' + Math.floor(y / BIN);
-  box.forEach((bx, b) => { for (let x = Math.floor(bx[0][0] / BIN); x <= Math.floor(bx[0][1] / BIN); x++) for (let y = Math.floor(bx[1][0] / BIN); y <= Math.floor(bx[1][1] / BIN); y++) { const k = x + ',' + y; (bins.get(k) || bins.set(k, []).get(k)).push(b); } });
+  const BIN = 4, bins = new Map(), bin = (x, y) => (Math.floor(x / BIN) + 2048) * 4096 + Math.floor(y / BIN) + 2048;
+  box.forEach((bx, b) => { for (let x = Math.floor(bx[0][0] / BIN); x <= Math.floor(bx[0][1] / BIN); x++) for (let y = Math.floor(bx[1][0] / BIN); y <= Math.floor(bx[1][1] / BIN); y++) { const k = (x + 2048) * 4096 + y + 2048; (bins.get(k) || bins.set(k, []).get(k)).push(b); } });
   masses.forEach((A, a) => {
     const per = new Map();
     // (at twice the bottom's spacing: what holds what and a footprint's outline need no finer)
@@ -1011,10 +1018,15 @@ function rimGuards(cell, footprints) {
 }
 // the largest group of points each within link of another in it
 function largestGroup(pts, link) {
-  const parent = pts.map((_, i) => i), find = i => { while (parent[i] !== i) i = parent[i] = parent[parent[i]]; return i; }, l2 = link * link;
-  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) { const d = sub(pts[i], pts[j]); if (dot(d, d) <= l2) parent[find(i)] = find(j); }
-  const groups = new Map(); pts.forEach((p, i) => { const r = find(i); (groups.get(r) || groups.set(r, []).get(r)).push(p); });
-  return [...groups.values()].reduce((a, b) => b.length > a.length ? b : a);
+  const l2 = link * link; let left = pts.map((_, i) => i), best = null;
+  while (left.length) {
+    const comp = [left[0]]; left = left.slice(1);
+    for (let h = 0; h < comp.length && left.length; h++) { const p = pts[comp[h]]; const keep = [];
+      for (const j of left) { const q = pts[j], x = p[0] - q[0], y = p[1] - q[1], z = p[2] - q[2]; if (x * x + y * y + z * z <= l2) comp.push(j); else keep.push(j); }
+      left = keep; }
+    comp.sort((a, b) => a - b); if (!best || comp.length > best.length) best = comp;
+  }
+  return best.map(i => pts[i]);
 }
 // the solids a point may rest on, binned seen from above: each a convex body (a stone's outline; a weathered one's drawn in by its
 // radius, which lies inside its rounded surface, so a point is never said to rest where it does not) less its grooves (each convex,
@@ -1056,7 +1068,7 @@ function restGrid() {
 // directions; two facing sectors, one either side, whose nearest are bridge or less apart)
 function bridges(R, bridge, u, v) {
   const cells = new Map();
-  for (const p of R) { const a = dot(p, u), b = dot(p, v), c = Math.round(a / SAMPLE) + ',' + Math.round(b / SAMPLE); if (!cells.has(c)) cells.set(c, [a, b]); }
+  for (const p of R) { const a = dot(p, u), b = dot(p, v), c = (Math.round(a / SAMPLE) + 32768) * 65536 + Math.round(b / SAMPLE) + 32768; if (!cells.has(c)) cells.set(c, [a, b]); }
   const m = cells.size, pu = new Float64Array(m), pv = new Float64Array(m), S = SECTORS, near = new Float64Array(S), b2 = bridge * bridge, k = S / (2 * Math.PI);
   let i = 0; for (const [a, b] of cells.values()) { pu[i] = a; pv[i++] = b; }
   return x => {
@@ -1209,7 +1221,7 @@ function rockSurface(C, seed, P) {
   // of the points of the bottoms of the stones it holds that lie on it
   const pk = ['plan', seed, P.network, rangeText(P.spacing), P.branching].join('/');
   const cplan = P.cracks > 0 ? keptOn(C, pk + '/' + P.cracks, () => cracksTaken(keptOn(C, pk, () => crackPlan(M.map(m => m.poly), C, P, seed)), P.cracks)) : null, crackLines = [], faults = []; let grooves = 0, cutN = 0, cutMm = 0;
-  const shown = restGrid(), surfs = new Array(M.length), ids = new Array(M.length), t2 = performance.now();
+  const shown = (!cplan && P.weather[1] <= 0) ? grid : restGrid(), surfs = new Array(M.length), ids = new Array(M.length), t2 = performance.now();
   M.forEach((m, k) => {
     const poly = polys[k], wr = wrs[k];
     if (wr > 0) {   // a weathered stone is not cracked
@@ -1220,7 +1232,7 @@ function rockSurface(C, seed, P) {
       const box = boxOfFaces(poly);   // its crack ends are full only where they touch another stone or the ground: kept by those near it
       const c = crackedOf(poly, k, cplan, seed, P, [...guards[k], ...held], p => grid.touches(p, k, LOOK), grid.near(box[0], box[1], k));
       surfs[k] = c; ids[k] = oid(c); vol += c.vol; shown.add(poly, k, c.cuts, 'c' + ids[k]); crackLines.push(...c.traces); grooves += c.grooves; faults.push(...(c.faults || [])); cutN += c.cut.n; cutMm += c.cut.mm;
-    } else { surfs[k] = keptOn(poly, 'surf', () => surfOf(poly)); ids[k] = oid(surfs[k]); vol += volumeOf(poly); shown.add(poly, k, [], 's' + ids[k]); }
+    } else { surfs[k] = keptOn(poly, 'surf', () => surfOf(poly)); ids[k] = oid(surfs[k]); vol += volumeOf(poly); if (shown !== grid) shown.add(poly, k, [], 's' + ids[k]); }
   });
   ms += performance.now() - t2;
   for (const f of faults) console.error('cracks: ' + f);   // a crack the graph planned that came out other than planned: loud

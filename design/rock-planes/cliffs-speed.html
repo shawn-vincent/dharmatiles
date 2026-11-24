@@ -31,12 +31,13 @@ th { font-size: 13px; color: var(--dim); font-weight: 600; } .s { white-space: n
 </table>
 
 <h2>Exact small wins (output unchanged)</h2>
+<p>Applied 23 Nov: Fieldstone 1.92 → 1.59 s, seed 1 (m); every preset's output identical to before, seeds 1 and 2.</p>
 <table><tr><th>Idea</th><th>Saves</th><th>Status</th></tr>
-<tr><td>Remember each pair's split across fuse passes</td><td>370 → 148 ms Fieldstone (m)</td><td class="s open">measured, not applied</td></tr>
-<tr><td>Bottom grouping by component search instead of every point against every other</td><td>108 → 2 ms Layered (m)</td><td class="s open">measured, not applied</td></tr>
-<tr><td>One rest grid when there are no cracks or weathering</td><td>about 40 ms Fieldstone (m)</td><td class="s open">measured, not applied</td></tr>
-<tr><td>Numeric keys in the bridge test; a table-free sector</td><td>about 70 ms Layered (e)</td><td class="s open">open</td></tr>
-<tr><td>Holding: numeric bins, early out in column</td><td>about 50 ms Fieldstone (e)</td><td class="s open">open</td></tr>
+<tr><td>Remember each pair's split across fuse passes (per cliff; a replayed split names its partner by the pair's indices now)</td><td>370 → 148 ms Fieldstone (m)</td><td class="s done">done</td></tr>
+<tr><td>Bottom grouping by component search instead of every point against every other</td><td>108 → 2 ms Layered (m)</td><td class="s done">done</td></tr>
+<tr><td>One rest grid when there are no cracks or weathering</td><td>about 40 ms Fieldstone (m)</td><td class="s done">done</td></tr>
+<tr><td>Numeric keys in the bridge test (done); a table-free sector (open)</td><td>about 70 ms Layered (e)</td><td class="s open">keys done, sector open</td></tr>
+<tr><td>Holding: numeric bins (done), early out in column (open)</td><td>about 50 ms Fieldstone (e)</td><td class="s open">bins done</td></tr>
 <tr><td>Spine clearance on a hash grid instead of every pair</td><td>about 60 ms Fieldstone (e)</td><td class="s open">open</td></tr>
 <tr><td>Crack network neighbours by grid place; junction ends binned; keyed hash without joining</td><td>Granite 620 → 530 ms (m)</td><td class="s done">done (87b07fcd)</td></tr>
 </table>
