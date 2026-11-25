@@ -914,7 +914,7 @@ function wall(seed, P, opt = {}) {
   lap('groups');
   // ---- exact contacts and the holding-order pass (layers bottom up): each piece's bottom (resting patches plus short bridges), its flare, and
   // each holder's rest patch (holder top face x upper bottom x holder's flare section at that height)
-  const MINSUP = 1.5, MINSW = 0.7, minW2 = poly => { let mw = 1e9; const n = poly.length; for (let i = 0; i < n; i++) { const A = poly[i], B = poly[(i + 1) % n], ex = B[0] - A[0], ey = B[1] - A[1], l = Math.hypot(ex, ey); if (l < 1e-9) continue; let mx = 0; for (const v of poly) { const d = Math.abs((v[0] - A[0]) * ey - (v[1] - A[1]) * ex) / l; if (d > mx) mx = d; } if (mx < mw) mw = mx; } return mw; }, BRIDGE = P.bridge - BRIDGE_MARGIN, RS = thin ? 1 : 0.4, GAPMAX = 1.2;
+  const MINSUP = 1.5, MINSW = 0.7, minW2 = poly => { let mw = 1e9; const n = poly.length; for (let i = 0; i < n; i++) { const A = poly[i], B = poly[(i + 1) % n], ex = B[0] - A[0], ey = B[1] - A[1], l = Math.hypot(ex, ey); if (l < 1e-9) continue; let mx = 0; for (const v of poly) { const d = Math.abs((v[0] - A[0]) * ey - (v[1] - A[1]) * ex) / l; if (d > mx) mx = d; } if (mx < mw) mw = mx; } return mw; }, BRIDGE = P.bridge - BRIDGE_MARGIN, GAPMAX = 1.2;
   /* a stone's bottom is the highest of its bottom planes (botPl and botX), so it stays convex */
   const botN = (p, x, y) => { let z = p.botPl[0] * x + p.botPl[1] * y + p.botPl[2]; if (p.botX) for (const b of p.botX) { const v = b[0] * x + b[1] * y + b[2]; if (v > z) z = v; } return z; }, botZ = (p, x, y) => botN(p, x, y) - p.sink;
   const clipBot = p => { const L = p.bgL, bg = p.botPl; clip(bg[0] / L, bg[1] / L, -1 / L, (-bg[2] + p.sink) / L, KIND.BOT); if (p.botX) for (const b of p.botX) { const l = Math.hypot(b[0], b[1], 1); clip(b[0] / l, b[1] / l, -1 / l, (-b[2] + p.sink) / l, KIND.BOT); } };
@@ -986,16 +986,17 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
           continue;
         }
       }
-      // supports: small patches near the extremes of the bottom's outline. Each holder's overlap is shrunk by RS toward its vertex farthest from the
-      // centre of all the overlaps (one holder: about its centroid); glue contacts (same body) keep their whole overlap
+      // supports: each holder's overlap is inset by the bevel's width (what a bevel of either stone can take off its edges); an overlap too small
+      // to keep MINSUP that way is shrunk about its centroid to MINSUP. Glue contacts (same body) keep their whole overlap
       if (pat.length) {
-        let ax = 0, ay = 0, an = 0; for (const r of pat) for (const v of r.full) { ax += v[0]; ay += v[1]; an++; } ax /= an; ay /= an;
         for (const r of pat) {
           const ov = r.full; let patch = ov;
-          if (!r.glue && RS < 1) {
-            let cx0 = 0, cy0 = 0; for (const v of ov) { cx0 += v[0]; cy0 += v[1]; } cx0 /= ov.length; cy0 /= ov.length;
-            let px = cx0, py = cy0;
-            const Af = Math.abs(area2(ov)), sE = Math.max(RS, Math.sqrt(Math.min(1, MINSUP / Math.max(Af, 1e-9)))); patch = ov.map(v => [px + (v[0] - px) * sE, py + (v[1] - py) * sE]);
+          if (!r.glue) {
+            let ins = ccw(ov); const n_ = ins.length, src = ins.slice();
+            for (let i = 0; i < n_ && ins.length >= 3; i++) { const A = src[i], B_ = src[(i + 1) % n_], ex = B_[0] - A[0], ey = B_[1] - A[1], l = Math.hypot(ex, ey); if (l < 1e-9) continue; const nx = ey / l, ny = -ex / l; ins = half(ins, nx, ny, nx * A[0] + ny * A[1] - BEV.hi); }
+            if (ins.length >= 3 && Math.abs(area2(ins)) >= MINSUP) patch = ins;
+            else { let px = 0, py = 0; for (const v of ov) { px += v[0]; py += v[1]; } px /= ov.length; py /= ov.length;
+              const sE = Math.sqrt(Math.min(1, MINSUP / Math.max(Math.abs(area2(ov)), 1e-9))); patch = ov.map(v => [px + (v[0] - px) * sE, py + (v[1] - py) * sE]); }
           }
           let gmin = 1e9, gmax = -1e9; for (const v of patch) { const g = botN(q, v[0], v[1]) - tz_(r.t.pl, v[0], v[1]); if (g < gmin) gmin = g; if (g > gmax) gmax = g; }
           r.poly = patch; r.gmax = gmax;
@@ -2272,7 +2273,7 @@ function selectStone(i) {   // the stone lit yellow, seen through whatever is in
   if (i == null || !shown) { draw(); return; }
   const st = shown.surf.stoneTri, pos = shown.surf.pos.subarray(9 * st[i], 9 * st[i + 1]);
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos.slice(), 3));
-  selObj = new THREE.Group(); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xFFE600, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthTest: false }));
+  selObj = new THREE.Group(); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xFFE600, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthTest: false }));
   m.renderOrder = 9; selObj.add(m); const e = new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: 0x806000, depthTest: false })); e.renderOrder = 9; selObj.add(e); scene.add(selObj); draw();
   $('chip').textContent = state.style + ' · seed ' + state.seed + ' · stone ' + i + ' (body ' + shown.surf.stoneOf[i][0] + (shown.surf.stoneOf[i][1] >= 0 ? ', layer ' + shown.surf.stoneOf[i][1] : '') + ')';
 }
