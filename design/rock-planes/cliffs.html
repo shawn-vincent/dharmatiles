@@ -774,7 +774,7 @@ function bevelAll(grd) {
 // egg is cut as its tangent planes at WEGG directions spread evenly over it (turned for each stone). A piece fused to others is cut by the egg of
 // itself and the pieces of its body that touch it (fitted to their cells, drawn and turned once for the body), so two fused parts share one egg and
 // weather as one rock; a lone stone's egg is its own. Every plane goes through `place`: none faces
-// down past the limit, a guard pushes it out, and a cut under MINBITE is not made. The crisp ends and back of the wall are never cut.
+// down past the limit, a guard pushes it out, and a cut under MINBITE is not made. Every surface weathers, the wall's ends and back as the front.
 const WEGG = 56, eggP = (() => { const o = []; for (let i = 0; i < WEGG; i++) { const z = 1 - 2 * (i + 0.5) / WEGG, r = Math.sqrt(1 - z * z), a = i * Math.PI * (3 - Math.sqrt(5)); o.push([r * Math.cos(a), r * Math.sin(a), z]); } return o; })();
 function eig3(m) {   // Jacobi: the eigenvalues and eigenvectors (columns of V) of a symmetric 3x3
   const a = [[m[0], m[1], m[2]], [m[1], m[3], m[4]], [m[2], m[4], m[5]]], V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
@@ -788,8 +788,8 @@ function eig3(m) {   // Jacobi: the eigenvalues and eigenvectors (columns of V) 
 }
 let EGGX = null, EGGF = null, WKEY = 0;   // EGGX: the corners the egg is fitted to (this piece and the pieces fused to it; null: the stone as it is); WKEY: the body's key for its draws
 function weatherEgg(isGlued) {
-  const used = new Uint8Array(nVS), crisp = [];
-  for (let s_ = 0; s_ < nSL; s_++) { const m = sLen[s_]; if (!m) continue; const isC = (sKind[s_] & 15) === KIND.CRISP; for (let k = 0; k < m; k++) { const v = sV[s_ * CAPS + k]; if (isC) crisp.push(v); used[v] = 1; } }
+  const used = new Uint8Array(nVS);
+  for (let s_ = 0; s_ < nSL; s_++) { const m = sLen[s_]; if (!m) continue; for (let k = 0; k < m; k++) used[sV[s_ * CAPS + k]] = 1; }
   let P = EGGX; if (!P) { P = []; for (let v = 0; v < nVS; v++) if (used[v]) P.push(vx[v], vy[v], vz[v]); }
   const n = P.length / 3; if (n < 4) return; let cx = 0, cy = 0, cz = 0; for (let i = 0; i < P.length; i += 3) { cx += P[i]; cy += P[i + 1]; cz += P[i + 2]; } cx /= n; cy /= n; cz /= n;
   const dw = k => EGGX ? (hash2(WKEY, k) >>> 0) / 4294967296 : drawAt(cx, cy, cz, k);
@@ -817,7 +817,6 @@ function weatherEgg(isGlued) {
     let ux = 0, uy = 0, uz = 0; for (let i = 0; i < 3; i++) { const t = p[i] / sd[i]; ux += V[0][i] * t; uy += V[1][i] * t; uz += V[2][i] * t; }
     const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
     let want = ux * cx + uy * cy + uz * cz + S * sup(ux, uy, uz);
-    for (const v of crisp) { const d = ux * vx[v] + uy * vy[v] + uz * vz[v]; if (d > want) want = d; }
     supN = nVS; if (!place(ux, uy, uz, 0, want, Infinity)) continue;
     clipS(pN[0], pN[1], pN[2], pB[0], KIND.BEVEL); nP = 0; if (empty) return;
   }
@@ -2496,7 +2495,7 @@ const GROUPS = [
     R_('joint', 'Joint', -20, 3, 0.1, MM, 'Where two stones meet, drawn for each pair: each stops half of it short of the split: over zero a gap (separate stones), under zero they reach into each other. It changes each stone’s size; nothing moves. (A gap between two stones; a crack is a gap within one.)')] },
   { label: 'Rocks', icon: () => ICON.rocks, value: 'bevel', items: [
     R_('bevel', 'Bevel', 0, 5, 0.1, MM, 'The first cut on every exposed edge and corner: how much it takes off each face, the same on both, drawn for each end of each edge. Printability and what a stone rests on or carries cap it.'),
-    R_('weather', 'Weathering', 0, 100, 5, '%', 'How worn the stones are: each is cut by an egg of its own shape, at 0% just holding the stone (only the Bevel), at 100% just inside it. Corners go first, then edges, then the faces dome. Drawn once a stone; printability, the crisp ends and what a stone rests on or carries hold it back.'),
+    R_('weather', 'Weathering', 0, 100, 5, '%', 'How worn the stones are: each is cut by an egg of its own shape, at 0% just holding the stone (only the Bevel), at 100% just inside it. Corners go first, then edges, then the faces dome. Drawn once a stone; every surface weathers; printability and what a stone rests on or carries hold it back.'),
     P_('bridge', 'Bridge', 0, 40, 0.5, MM, `The longest span a bottom may bridge between two points that rest; past it, a point must rest itself (0: every point rests). A printer’s limit. The bottoms are planned ${BRIDGE_MARGIN} mm inside it.`),
     P_('cracks', 'Cracks', 0, 100, 1, '%', 'The share of the network’s lines cut as cracks, by length, on every stone alike: 0% none (the other crack settings are then hidden and do nothing; they keep their values), 100% every line on every stone. A crack runs on from line to line, turning least, and never from one stone into another; a weathered stone is not cracked. Raising it only adds cracks: they start on every stone and grow longer.'),
     { key: 'network', label: 'Network', shownWhile: 'cracks', choices: [['planes', 'Planes'], ['columns', 'Columns'], ['blocks', 'Blocks']], help: 'How the hidden network that cracks follow divides the rock: Planes across the Direction (bedding), Columns along it (prisms), or Blocks (cells every way). One network for the whole cliff, so its lines carry on from stone to stone.' },
