@@ -587,13 +587,13 @@ const hN = new Float64Array(3 * MAXSL), hD = new Float64Array(MAXSL);
 // toward plane i's neighbour is one with it (a glued face stays flat). Granite's cells carry the same two.
 let DX = null;
 function relocate() {
-  // a guard that lies outside the stone as it is now (a group's footprint
-  // may lie past this cell) holds nothing a plane could still cut: it is moved to the stone's centre
+  // a guard that lies outside the stone as it is now by more than 0.25 mm (a group's footprint may lie past this cell) holds nothing a plane
+  // could still cut: it is moved to the stone's centre. One just outside (a contact's outline a hair past the stone's side) stays and holds
   { let mx = 0, my = 0, mz = 0, c = 0, nf = 0; for (let v = 0; v < nVS; v++) if (vx[v] === vx[v]) { mx += vx[v]; my += vy[v]; mz += vz[v]; c++; } mx /= c; my /= c; mz /= c;
     for (let s = 0; s < nSL; s++) { const m = sLen[s]; if (!m) continue; const o = s * CAPS; let nx = 0, ny = 0, nz = 0;
       for (let i = 0; i < m; i++) { const a = sV[o + i], b = sV[o + (i + 1 === m ? 0 : i + 1)]; nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]); }
       const L = Math.sqrt(nx * nx + ny * ny + nz * nz); nx /= L; ny /= L; nz /= L; hN[3 * nf] = nx; hN[3 * nf + 1] = ny; hN[3 * nf + 2] = nz; hD[nf++] = nx * vx[sV[o]] + ny * vy[sV[o]] + nz * vz[sV[o]]; }
-    for (let g = 0; g < nG; g++) { const x = gd[3 * g], y = gd[3 * g + 1], z = gd[3 * g + 2]; let gone = false; for (let i = 0; i < nf; i++) if (hN[3 * i] * x + hN[3 * i + 1] * y + hN[3 * i + 2] * z > hD[i] + 1e-3) { gone = true; break; } if (gone) { gd[3 * g] = mx; gd[3 * g + 1] = my; gd[3 * g + 2] = mz; } } }
+    for (let g = 0; g < nG; g++) { const x = gd[3 * g], y = gd[3 * g + 1], z = gd[3 * g + 2]; let gone = false; for (let i = 0; i < nf; i++) if (hN[3 * i] * x + hN[3 * i + 1] * y + hN[3 * i + 2] * z > hD[i] + 0.25) { gone = true; break; } if (gone) { gd[3 * g] = mx; gd[3 * g + 1] = my; gd[3 * g + 2] = mz; } } }
 }
 // ---------- Bevel and Weathering: rounds of flat cuts on the exposed edges and corners ----------
 // Round 1 (Bevel): every exposed edge gets one flat cut taking the same amount, drawn from the Bevel range at each end, off both its faces; every exposed
@@ -1027,7 +1027,13 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
           if (!top) continue;
           let ov = inter2(ccw(top), q.bot); if (!ov) { continue; }
           let gmin = 1e9, gmax = -1e9; for (const v of ov) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; if (g > gmax) gmax = g; }
-          if (gmax > GAPMAX || gmin < -0.8) { continue; }
+          if (gmax > GAPMAX || gmin < -0.8) {
+            // a top tilted against the bottom touches it only in part: the contact is the strip of the overlap where the gap is in reach
+            const bp = q.botPl, ga = bp[0] - t.pl[0], gb = bp[1] - t.pl[1], gc = bp[2] - t.pl[2];
+            let st = half(ov, ga, gb, GAPMAX - gc); if (st.length >= 3) st = half(st, -ga, -gb, 0.8 + gc); if (st.length < 3) continue;
+            gmin = 1e9; gmax = -1e9; for (const v of st) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; if (g > gmax) gmax = g; }
+            if (gmax > GAPMAX + 1e-6 || gmin < -0.8 - 1e-6) continue; ov = st;
+          }
           if (Math.abs(area2(ov)) < 0.03) continue;
           pat.push({ holder: p, t, full: ov, glue, gmax });
           continue;
@@ -1053,15 +1059,25 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     return pat;
   }
   const LB = thin ? 1 : 3, FLM = 0.6, CAPT = 0.8, THICK = 0, SIDED = 0.4, MINBR = 5, GROUNDZ = 3.2, MAXTILT = 0.3;
-  const gsup = new Set(); let nMerge = 0, nFit = 0, nClear = 0;
+  const gsup = new Set(); let nMerge = 0, nFit = 0, nClear = 0, nJoinIn = 0;
+  // a bottom is raised over a stone below only where it would pass into it more than CLEARZ over CLEARA or more (less is the overlap a sink makes)
+  const CLEARZ = 0.3, CLEARA = 0.5, KEEPH = 1;
+  function pens(q, k) {   // the live stones below the bottom passes into (past CLEARZ, over CLEARA)
+    const out = [];
+    for (let kk = k - 1; kk >= Math.max(0, k - 6); kk--) for (const p of layerPieces[kk]) {
+      if (p.dead || !p.tops || p.grp === q.grp) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
+      for (const t of p.tops) { const ov = inter2(ccw(t.poly), q.bot); if (!ov || Math.abs(area2(ov)) < CLEARA) continue; let gmin = 1e9; for (const v of ov) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; } if (gmin < -CLEARZ) { out.push(p); break; } }
+    }
+    return out;
+  }
   function clearBelow(q, k) {
     let added = false;
     for (let kk = k - 1; kk >= Math.max(0, k - 6); kk--) for (const p of layerPieces[kk]) {
       if (p.dead || !p.tops || p.grp === q.grp) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
       for (const t of p.tops) {
-        const ov = inter2(ccw(t.poly), q.bot); if (!ov || Math.abs(area2(ov)) < 0.03) continue;
+        const ov = inter2(ccw(t.poly), q.bot); if (!ov || Math.abs(area2(ov)) < CLEARA) continue;
         let gmin = 1e9; for (const v of ov) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; }
-        if (gmin < -0.05) { q.botX.push(t.pl.slice()); added = true; nClear++; }
+        if (gmin < -CLEARZ) { q.botX.push(t.pl.slice()); added = true; nClear++; }
       }
     }
     return added;
@@ -1084,7 +1100,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     // supports whose hull is not covered by the patches and the hulls of pairs within BRIDGE keep the best pair (or the largest patch) instead
     if (!gsup.has(q.grp) && pat.some(r => r.glue) && pat.some(r => !r.glue)) pat = pat.filter(r => !r.glue);   // gl: a body that rests on nothing yet takes no glue patch (its own lower piece) when a real holder is there
     if (pat.some(r => !r.glue)) gsup.add(q.grp);
-    q.pat0 = pat.length; q.cand = pat.reduce((a, r) => a + Math.abs(area2(r.poly)), 0); q.candFull = pat.reduce((a, r) => a + Math.abs(area2(r.full)), 0);
+    const cands = pat.slice(); q.pat0 = pat.length; q.cand = pat.reduce((a, r) => a + Math.abs(area2(r.poly)), 0); q.candFull = pat.reduce((a, r) => a + Math.abs(area2(r.full)), 0);
     const dmax = (A, B_) => { let dm = 0; for (const u of A) for (const v of B_) { const d = Math.hypot(u[0] - v[0], u[1] - v[1]); if (d > dm) dm = d; } return dm; };
     const inP = (P_, x, y) => { for (let i = 0, n = P_.length; i < n; i++) { const A = P_[i], B_ = P_[(i + 1) % n]; if ((B_[0] - A[0]) * (y - A[1]) - (B_[1] - A[1]) * (x - A[0]) < -1e-9) return false; } return true; };
     // gk: a patch whose far corners lie past BRIDGE from another patch is trimmed to the disk of radius BRIDGE round each corner of the others, so the pair bridges
@@ -1149,7 +1165,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
         else if (set.length >= 2) { q.grown = 1; const keep = set.map(i => pat[i]); pat.splice(0, pat.length, ...keep); bad = false; }
       }
       if (bad) {
-        q.peel = 1; nPeel++; let best = null, bA = -1; for (const pr of pairs) { const a_ = Math.abs(area2(pr.h)); if (a_ > bA) { bA = a_; best = pr; } }
+        q.peel = 1; nPeel++; let best = null, bA = -1; for (const pr of pairs) { if (Math.min(Math.abs(area2(pl[pr.i])), Math.abs(area2(pl[pr.j]))) < MINBR) continue; const a_ = Math.abs(area2(pr.h)); if (a_ > bA) { bA = a_; best = pr; } }   // a pair whose ends can both carry a bridge
         if (best) pat.splice(0, pat.length, pat[best.i], pat[best.j]);
         else { let bi = 0, ba = -1; pat.forEach((r, i) => { const a_ = Math.abs(area2(r.poly)); if (a_ > ba) { ba = a_; bi = i; } }); pat.splice(0, pat.length, pat[bi]); }
       }
@@ -1168,6 +1184,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     // the bottom plane is laid to the holders' own top planes: one patch, parallel to its holder's top; two, through both holders' tops at the
     // patches' centres (across the line between them, the mean of the two tops' slopes). The stone then sits flush on a flat holder top, so no part
     // of the patch is sunk past the holder's flare, and the gap is zero over the patch
+    const layFit = () => {
     if (pat.length >= 1) {
       const cen = r => { let x = 0, y = 0; for (const v of r.poly) { x += v[0]; y += v[1]; } return [x / r.poly.length, y / r.poly.length]; };
       const c1 = cen(pat[0]), t1_ = pat[0].t.pl; let t1 = t1_;
@@ -1198,13 +1215,22 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       let ok = pls.length >= 2; for (const r of pat) { if (!ok) break; for (const v of r.poly) { let m = -1e9; for (const pl of pls) m = Math.max(m, tz_(pl, v[0], v[1])); if (m - tz_(r.t.pl, v[0], v[1]) > 0.05) { ok = false; break; } } }
       if (ok) { q.botPl = pls[0].slice(); q.bgL = Math.hypot(pls[0][0], pls[0][1], 1); q.botX = pls.slice(1).map(pl => pl.slice()); q.fit = 1; nFit++; }
     }
-    /* a bottom never goes down through a stone under it: the top plane of every live stone below whose top the bottom would pass through joins
-       the bottom's planes. A rest the raised bottom no longer touches is dropped; with none left, the nearest top it now meets holds it */
+    };
+    layFit();
+    /* a stone the laid bottom would pass into that was a contact it could rest on is taken as a holder too, and the bottom laid again across all
+       of them; kept when it leaves fewer stones passed into and every rest within reach */
+    { const pn = pens(q, k), add = cands.filter(r => !pat.includes(r) && pn.some(x => x === r.holder));
+      if (add.length) { const save = { pat: pat.slice(), botPl: q.botPl.slice(), botX: q.botX, bgL: q.bgL };
+        pat.push(...add); layFit();
+        if (pat.some(r => !(r.gmax <= GAPMAX)) || pens(q, k).length >= pn.length) { pat = save.pat; q.botPl = save.botPl; q.botX = save.botX; q.bgL = save.bgL; for (const r of pat) { let gx_ = -1e9; for (const v of r.poly) { const g = botN(q, v[0], v[1]) - tz_(r.t.pl, v[0], v[1]); if (g > gx_) gx_ = g; } r.gmax = gx_; } }
+        else { q.joinedIn = 1; nJoinIn++; } } }
+    /* a bottom never goes down through a stone under it: the top plane of every live stone below whose top the bottom would pass into (past
+       CLEARZ, over CLEARA) joins the bottom's planes. A rest the raised bottom no longer touches is dropped; with none left, the nearest top it now meets holds it */
     if (clearBelow(q, k)) {
       const n0 = pat.length;
       for (const r of pat) { let gx_ = -1e9; for (const v of r.poly) { const g = botN(q, v[0], v[1]) - tz_(r.t.pl, v[0], v[1]); if (g > gx_) gx_ = g; } r.gmax = gx_; }
       pat = pat.filter(r => r.gmax <= GAPMAX);
-      if (!pat.length && n0) { const rp = holdPat(q, k, GAPMAX, Math.max(0, k - 6)); if (rp.length) { let bi = 0; rp.forEach((r, i) => { if (Math.abs(area2(r.poly)) > Math.abs(area2(rp[bi].poly))) bi = i; }); pat = [rp[bi]]; } }
+      if (!pat.length && n0) { let rp = holdPat(q, k, GAPMAX, Math.max(0, k - 6)); if (!rp.length) rp = holdPat(q, k, GAPMAX, Math.max(0, k - 6), 1, 0); if (rp.length) { let bi = 0; rp.forEach((r, i) => { if (Math.abs(area2(r.poly)) > Math.abs(area2(rp[bi].poly))) bi = i; }); pat = [rp[bi]]; } }
     }
     let polys = pat.map(r => r.poly);
     q.Bpolys = polys; q.Bfull = pat.filter(r => polys.includes(r.poly)).map(r => r.full);
@@ -1303,7 +1329,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   const pieceAt = new Map(pieces.map(p => [p.k * 100000 + p.s.id, p.id]));   // a layer's piece by its seed
   for (const G of groups.values()) {
     // keep patches of the body: every piece's bottom, each rest patch it gives a stone above, glue faces of its sides
-    const kp = [], kt = [], kw = []; for (const pc of G.pieces) { { const BK = pc.ground ? footOf(pc) : pc.Bkeep, on = pc.ground ? null : pc.rests.filter(r => !r.glue).map(r => r.holder.id); if (BK) for (const v of BK) { kp.push(v[0], v[1], botZ(pc, v[0], v[1])); kt.push(pc.ground ? 8 : 1); kw.push(on); } } for (const t of pc.tops) for (const kk of t.keeps) for (const v of kk) { kp.push(v[0], v[1], v[2]); kt.push(2); kw.push(t.supBy || null); } }
+    const kp = [], kt = [], kw = []; for (const pc of G.pieces) { { const BK = pc.ground ? footOf(pc) : pc.Bkeep, on = pc.ground ? null : pc.rests.filter(r => !r.glue).map(r => r.holder.id); if (BK) for (const v of BK) { const z = botZ(pc, v[0], v[1]); kp.push(v[0], v[1], z); kt.push(pc.ground ? 8 : 1); kw.push(on); if (!pc.ground) { kp.push(v[0], v[1], z + KEEPH); kt.push(1); kw.push(on); } } } for (const t of pc.tops) for (const kk of t.keeps) for (const v of kk) { kp.push(v[0], v[1], v[2]); kt.push(2); kw.push(t.supBy || null); kp.push(v[0], v[1], v[2] - KEEPH); kt.push(2); kw.push(t.supBy || null); } }   /* a contact is kept as a solid KEEPH deep into each stone, so no cut leans in just past it */
     for (const pc of G.pieces) for (const sd of pc.sides) if (find(sd.nb) === G.id) { const pp = sd.poly; let cx = 0, cy = 0, cz = 0; for (const v of pp) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= pp.length; cy /= pp.length; cz /= pp.length; let sh = 0; { let r = 1e9; for (const v of pp) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); sh = Math.min(BEV.hi, 0.4 * r) / Math.max(r, 1e-6) * (r > 0 ? 1 : 0); } for (const v of pp) { kp.push(cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)); kt.push(3); kw.push(pieceAt.has(pc.k * 100000 + sd.nb) ? [pieceAt.get(pc.k * 100000 + sd.nb)] : null); } }   // a glued face keeps its middle: its rim is drawn in by the bevel's width, so an inside corner gets a bevel on each side (a V-groove)
 
     for (const pc of G.pieces) for (const r of pc.rests) if (r.glue && r.t) {   // drawn in from its rim by the bevel's width (at most 0.4 of the way to its middle), as a glued face is, so the edges that end at the join still bevel
@@ -1410,7 +1436,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   const tri = nTri, nfaces = nFace;
   const spines = new Float32Array(6 * sites.length);   // each site's spine, from its first layer face to its last (or the fuzzy top)
   sites.forEach((s, q) => { const za = effG(s.i, s.x, s.y), zb = Math.min(H - s.sTop, effG(s.j, s.x, s.y)), o = 6 * q; spines.set([s.x + s.sx * (za - s.zd), s.y + s.sy * (za - s.zd), za, s.x + s.sx * (zb - s.zd), s.y + s.sy * (zb - s.zd), zb], o); });
-  return { W, H, D, y0, y1, stones, T, sites: sites.length, pieces: pieces.length, groups: groups.size, lost, dead: deadPieces.length, orphaned: nOrphan, fitted: nFit, cleared: nClear, noHold, tri, spines, layers: { gnx, gny, GRX, GR, x0: -hu, y0, EG } };
+  return { W, H, D, y0, y1, stones, T, sites: sites.length, pieces: pieces.length, groups: groups.size, lost, dead: deadPieces.length, orphaned: nOrphan, fitted: nFit, cleared: nClear, joinedIn: nJoinIn, noHold, tri, spines, layers: { gnx, gny, GRX, GR, x0: -hu, y0, EG } };
 }
 
 // ---------- Granite (direction 'through', one layer): one 2D power diagram on the back plane (x, z); each cell is a stone run through along y from the back to its own front.
