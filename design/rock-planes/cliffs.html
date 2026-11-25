@@ -1452,7 +1452,12 @@ function graniteWall(seed, P, opt = {}) {
   for (const q of ST) if (q && !q.dead) for (const fc of q.faces3) {
     if (fc.nz >= STEEPDOWN) continue; const B = ST[fc.nb]; if (!B || B.dead) continue;
     let poly = fc.poly; for (const e of B.pl) { poly = clip3(poly, e[0], e[1], e[2], e[3] + 1e-6); if (poly.length < 3) break; }
-    if (poly.length >= 3) { B.holds.push(poly); for (const v of poly) { B.kp.push(v[0], v[1], v[2]); B.kw.push([q.s.id]); } if (!q.on.includes(B.s.id)) { q.on.push(B.s.id); B.up.push(q.s.id); } }
+    if (poly.length >= 3) {   // the patch set back from its rim by the bevel's width (at most 0.4 of the way to its middle), so the joint's edges can still be bevelled
+      let cx = 0, cy = 0, cz = 0; for (const v of poly) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= poly.length; cy /= poly.length; cz /= poly.length;
+      let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (const f_ of B.faces3) for (const v of f_.poly) for (let k = 0; k < 3; k++) { if (v[k] < lo[k]) lo[k] = v[k]; if (v[k] > hi[k]) hi[k] = v[k]; }
+      let r = Infinity; for (const v of poly) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); const W = BEV.k * Math.min(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]), sh = r > 1e-6 && W > 0 ? Math.min(W, 0.4 * r) / r : 0;
+      poly = poly.map(v => [cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)]);
+      B.holds.push(poly); for (const v of poly) { B.kp.push(v[0], v[1], v[2]); B.kw.push([q.s.id]); } if (!q.on.includes(B.s.id)) { q.on.push(B.s.id); B.up.push(q.s.id); } }
   }
   lap('keeps');
   // ---- carving and emit
