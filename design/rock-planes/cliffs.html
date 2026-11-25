@@ -1173,6 +1173,27 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     }
   }
   lap('holding');
+  /* a piece whose bottom and flare clips leave nothing is not drawn: found here, before keeps and links are made, so no holder keeps room for it,
+     none names it as held up, and no piece counts it as a holder. It is counted as lost. */
+  const deadPieces = [];
+  for (const pc of pieces) {
+    if (pc.ground) continue;
+    restore(pc.snap);
+    { const L = pc.bgL, bg = pc.botPl; clip(bg[0] / L, bg[1] / L, -1 / L, (-bg[2] + pc.sink) / L, KIND.BOT); }
+    if (!opt.cells) for (const fl_ of pc.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
+    if (empty) { pc.dead = true; deadPieces.push(pc); }
+  }
+  let nOrphan = 0;
+  if (deadPieces.length) {
+    for (const pc of deadPieces) for (const r of pc.rests) if (!r.glue && r.t && r.t.supBy) {
+      const t = r.t, keep = t.supBy.map(id => id !== pc.id);
+      t.supFull = t.supFull.filter((_, i) => keep[i]); t.supBy = t.supBy.filter((_, i) => keep[i]); t.sup = (t.sup || []).filter(v => !r.poly.includes(v));
+    }
+    /* a piece that rested only on dead pieces rests on nothing now: the Fuse step below takes it as it takes any body with no way down */
+    for (const pc of pieces) if (!pc.dead && !pc.ground && pc.rests.length) { const n0 = pc.rests.length; pc.rests = pc.rests.filter(r => !r.holder.dead); if (!pc.rests.length && n0) nOrphan++; }
+    for (const pc of deadPieces) { pc.rests = []; pc.onGround = false; }
+    for (const [g, G] of groups) { G.pieces = G.pieces.filter(pc => !pc.dead); if (!G.pieces.length) groups.delete(g); }
+  }
   // mg: a body that rests on nothing the ground holds (a wedge cut to a point, a speck of fuzzy top) is fused to the touching body that is held: Fuse where a stone cannot be held
   {
     const conn = () => { const adj = new Map(), seen = new Set(), qu = []; for (const pc of pieces) for (const r of pc.rests) { const a_ = pc.grp, b_ = r.holder.grp; if (a_ === b_) continue; (adj.get(a_) || adj.set(a_, new Set()).get(a_)).add(b_); (adj.get(b_) || adj.set(b_, new Set()).get(b_)).add(a_); }
@@ -1180,16 +1201,16 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       while (qu.length) { const a_ = qu.pop(); for (const b_ of adj.get(a_) || []) if (!seen.has(b_)) { seen.add(b_); qu.push(b_); } } return seen; };
     for (let rounds = 0; rounds < 8; rounds++) {
       const seen = conn(); let moved = false;
-      const lostG = new Map(); for (const pc of pieces) if (!seen.has(pc.grp)) (lostG.get(pc.grp) || lostG.set(pc.grp, []).get(pc.grp)).push(pc);
+      const lostG = new Map(); for (const pc of pieces) if (!pc.dead && !seen.has(pc.grp)) (lostG.get(pc.grp) || lostG.set(pc.grp, []).get(pc.grp)).push(pc);
       for (const [g, ps] of lostG) {
         let best = null, bv = 0;
-        for (const q of ps) for (const p of pieces) { if (p.grp === g || !seen.has(p.grp) || Math.abs(p.layer - q.layer) > 1) continue; const a = p.bb, b = q.bb;
+        for (const q of ps) for (const p of pieces) { if (p.dead || p.grp === g || !seen.has(p.grp) || Math.abs(p.layer - q.layer) > 1) continue; const a = p.bb, b = q.bb;
           const ox = Math.min(a[1], b[1]) - Math.max(a[0], b[0]), oy = Math.min(a[3], b[3]) - Math.max(a[2], b[2]), oz = Math.min(a[5], b[5]) - Math.max(a[4], b[4]); if (ox < -0.05 || oy < -0.05 || oz < -0.05) continue;
           const v = (Math.max(ox, 0.05)) * (Math.max(oy, 0.05)) * (Math.max(oz, 0.05)); if (v > bv) { bv = v; best = p; } }
         if (best) { parent[find(ps[0].s.id)] = find(best.s.id); moved = true; nMerge++; for (const q of ps) q.merged = 1; }
       }
       if (!moved) break;
-      groups.clear(); for (const pc of pieces) { const g = find(pc.s.id); pc.grp = g; let G = groups.get(g); if (!G) groups.set(g, G = { id: g, pieces: [], keeps: [] }); G.pieces.push(pc); }
+      groups.clear(); for (const pc of pieces) { if (pc.dead) continue; const g = find(pc.s.id); pc.grp = g; let G = groups.get(g); if (!G) groups.set(g, G = { id: g, pieces: [], keeps: [] }); G.pieces.push(pc); }
     }
   }
   // each holder keeps flat the convex hull of the supports assigned to it
@@ -1228,7 +1249,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   const inPoly = (P_, x, y) => { for (let i = 0, n = P_.length; i < n; i++) { const A = P_[i], B_ = P_[i + 1 === n ? 0 : i + 1]; if ((B_[0] - A[0]) * (y - A[1]) - (B_[1] - A[1]) * (x - A[0]) < -1e-9) return false; } return true; };
   // the pieces by the boxes they fill: what lies at a point (a stone's own group is not another stone)
   const PGX = 6, PGY = 4, PGZ = 4, pgrid = new Map();
-  for (const q of pieces) { const b = q.bb; for (let ix = Math.floor(b[0] / PGX); ix <= Math.floor(b[1] / PGX); ix++) for (let iy = Math.floor(b[2] / PGY); iy <= Math.floor(b[3] / PGY); iy++) for (let iz = Math.floor(b[4] / PGZ); iz <= Math.floor(b[5] / PGZ); iz++) { const k = ((ix + 64) * 128 + (iy + 64)) * 128 + iz + 64; let l = pgrid.get(k); if (!l) pgrid.set(k, l = []); l.push(q); } }
+  for (const q of pieces) { if (q.dead) continue; const b = q.bb; for (let ix = Math.floor(b[0] / PGX); ix <= Math.floor(b[1] / PGX); ix++) for (let iy = Math.floor(b[2] / PGY); iy <= Math.floor(b[3] / PGY); iy++) for (let iz = Math.floor(b[4] / PGZ); iz <= Math.floor(b[5] / PGZ); iz++) { const k = ((ix + 64) * 128 + (iy + 64)) * 128 + iz + 64; let l = pgrid.get(k); if (!l) pgrid.set(k, l = []); l.push(q); } }
   const inside = (q, x, y, z) => {
     for (const e of q.planes) { if (e[4] === KIND.BOT) { if (z < botZ(q, x, y)) return false; continue; } if (e[0] * x + e[1] * y + e[2] * z > e[3]) return false; }
     for (const f of q.flare) if (f[0] * x + f[1] * y + f[2] * z > f[3]) return false; return true;
@@ -1309,11 +1330,11 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   for (const pc of pieces) for (const r of pc.rests) { const a = gid(pc), b = gid(r.holder); if (a === b) continue; (adj.get(a) || adj.set(a, new Set()).get(a)).add(b); (adj.get(b) || adj.set(b, new Set()).get(b)).add(a); }
   const seen = new Set(), queue = []; for (const pc of pieces) if (pc.onGround && !seen.has(gid(pc))) { seen.add(gid(pc)); queue.push(gid(pc)); }
   while (queue.length) { const a = queue.pop(); const s = adj.get(a); if (!s) continue; for (const b of s) if (!seen.has(b)) { seen.add(b); queue.push(b); } }
-  let lost = 0; for (const g of groups.keys()) if (!seen.has(g)) lost++;
+  let lost = deadPieces.length; for (const g of groups.keys()) if (!seen.has(g)) lost++;
   const tri = nTri, nfaces = nFace;
   const spines = new Float32Array(6 * sites.length);   // each site's spine, from its first layer face to its last (or the fuzzy top)
   sites.forEach((s, q) => { const za = effG(s.i, s.x, s.y), zb = Math.min(H - s.sTop, effG(s.j, s.x, s.y)), o = 6 * q; spines.set([s.x + s.sx * (za - s.zd), s.y + s.sy * (za - s.zd), za, s.x + s.sx * (zb - s.zd), s.y + s.sy * (zb - s.zd), zb], o); });
-  return { W, H, D, y0, y1, stones, T, sites: sites.length, pieces: pieces.length, groups: groups.size, lost, noHold, tri, spines, layers: { gnx, gny, GRX, GR, x0: -hu, y0, EG } };
+  return { W, H, D, y0, y1, stones, T, sites: sites.length, pieces: pieces.length, groups: groups.size, lost, dead: deadPieces.length, orphaned: nOrphan, noHold, tri, spines, layers: { gnx, gny, GRX, GR, x0: -hu, y0, EG } };
 }
 
 // ---------- Granite (direction 'through', one layer): one 2D power diagram on the back plane (x, z); each cell is a stone run through along y from the back to its own front.
@@ -2155,7 +2176,7 @@ function surfaceOf(w, masses) {
   }
   faceTri[nface] = t;
   return { pos, col, faceTri, bev: Int32Array.from(bev), bevPart: Uint8Array.from(bevPart), bevBase: Uint8Array.from(bevBase), unbev: w.unbev || null, stoneTri: Int32Array.from([...stoneTri, t]), stoneOf: w.stones.map(s => [s.grp, s.layer ?? -1]), joinerAt: Uint8Array.from(w.stones.map(s => s.joiner ? 1 : 0)), report: w.report || null, edgeAt: w.stones.map(s => s.edges || null), stoneRel: w.stones.map(s => [s.piece, s.on || [], s.up || []]), lines: Float32Array.from(lines), vol, nface, ntri, cracks: w.cracks ? { lines: w.cracks.lines, cutters: w.cracks.cutters, cutStones: w.cracks.cutStones, bad: w.cracks.bad, netMs: w.cracks.netMs, netBuilt: w.cracks.netBuilt, polys: w.cracks.polysAll } : null,
-    stones: w.stones.length, sites: w.sites, groups: w.groups, lost: w.lost, noHold: w.noHold, T: w.T };
+    stones: w.stones.length, sites: w.sites, groups: w.groups, lost: w.lost, dead: w.dead || 0, noHold: w.noHold, T: w.T };
 }
 // the paint, from the overhang pass: the faces it found unheld (the page colours each orange or red by its normal), and the shares it reports
 function overhangOf(w, bridge) {
@@ -2597,7 +2618,7 @@ function showStats(V, surf, ms) {
   const rocks = state.draw === 'rocks', cr = surf.cracks, ph = surf.paint, T = surf.T, envVol = (V.hi[0] - V.lo[0]) * (V.hi[1] - V.lo[1]) * (V.hi[2] - V.lo[2]), pct = x => (100 * x / ph.down).toFixed(3) + '%', ok = x => x / ph.down < 0.001;
   const rows = [
     [rocks ? 'Stones' : 'Masses', `${surf.groups} from ${surf.sites} spines` + (surf.stones > surf.groups ? `, in ${surf.stones} shells` : '')],
-    ['Held', `${surf.lost ? `<span class="bad">${surf.lost} with no way down to the ground</span>` : 'every one grounded'}${surf.noHold ? `, ${surf.noHold} resting nowhere` : ''}`],
+    ['Held', `${surf.lost - (surf.dead || 0) ? `<span class="bad">${surf.lost - (surf.dead || 0)} with no way down to the ground</span>` : 'every one grounded'}${surf.dead ? `, <span class="bad">${surf.dead} cut away by their own flare (not drawn)</span>` : ''}${surf.noHold ? `, ${surf.noHold} resting nowhere` : ''}`],
     ...(rocks ? [['Rocks fill it', (surf.vol / envVol * 100).toFixed(1) + '%'], ['Triangles', surf.ntri]] : []),
     ...(rocks ? [['Overhang', ph ? `<span class="${ok(ph.bandArea) ? 'good' : 'bad'}">orange ${pct(ph.bandArea)}</span>, <span class="${ok(ph.redArea) ? 'good' : 'bad'}">red ${pct(ph.redArea)}</span> of the downward area (each may be 0.1%); ${ph.unsupported.toFixed(2)} mm² unsupported, measured in ${ph.ms.toFixed(0)} ms` : 'painting…']] : []),
     ...(rocks && cr ? [['Cracks', `${cr.cutters} grooves cut in ${cr.cutStones} stones${cr.bad ? `; ${cr.bad} runs not cut` : ''}${cr.netBuilt ? `; network table made in ${cr.netMs.toFixed(0)} ms` : ''}`]] : []),
