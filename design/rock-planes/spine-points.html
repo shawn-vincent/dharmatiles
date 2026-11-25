@@ -97,6 +97,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         </div>
       </div>
       <div class="ctl" id="extCtl"><label for="ext">Reach past the ends (+ L/2 rule) <output id="ext_o"></output></label><input id="ext" type="range" min="0" max="8" step="0.5"></div>
+      <div class="ctl"><span class="lbl">A dot that lands in the zone</span>
+        <div class="seg" id="push"><button data-v="slide">Slides along its layer</button><button data-v="out">Moves out to the edge</button></div>
+      </div>
       <div class="ctl"><span class="lbl">Joining</span>
         <div class="seg" id="mode"><button data-v="span">Span up through layers</button><button data-v="fuse">Fuse in a layer</button></div>
       </div>
@@ -125,6 +128,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       <button class="btn" data-p="column">A column, with the wall stretched up</button>
       <button class="btn" data-p="weight">Weight instead of keep-away</button>
       <button class="btn" data-p="reach">Reach to the layer faces</button>
+      <button class="btn" data-p="reachOut">… with the cleared dots moved out, not aside</button>
     </div>
   </section>
 
@@ -154,6 +158,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         <li><b>It fills only part of its dots' cells.</b> Those cells are boxes reaching the layer faces. One convex cell around a midpoint tapers toward its ends, so it misses their corners, and the neighbours take them ("fills" in the cards: about 70% for a two-layer span, under half for four). Keeping the ends is necessary, not enough.</li>
         <li><b>L/2 pushes neighbours back only near the ends.</b> The stone reaches its ends and stays about as wide as before; the corners are still lost.</li>
         <li><b>Reaching further makes a spike, not a flat top.</b> The disc for a far point passes through the midpoint, so near the middle it is narrow and the side neighbours stay put; near the far point it is wide, so the next layer's dots there move aside. The stone grows a point toward the layer face. A flat cap at the face would need the dot above twice as far from the midpoint as the face is: half the next layer would be empty.</li>
+        <li><b>The stones round its ends grow.</b> No dot may sit in the cleared discs, and the stone only takes the part of them nearer its midpoint (the spike). The rest goes to the dots on the discs' edges, so they grow: with nothing joined the largest stone is about 1.3 times the usual, a four-layer span 1.8, reaching to the layer faces about 2.6. Moving a cleared dot out to the disc's edge, off its layer line, instead of sliding it along the layer packs more dots round the edge and brings that to about 2.2. It cannot go away: the space has to belong to someone.</li>
         <li><b>Weight fills more, and spills.</b> A boundary moves out by w / 2d, where d is the distance to that neighbour: most toward the nearest dots (the sides), least toward the far ones (above and below), the opposite of what a tall stone wants. Try "Weight instead of keep-away": the stone fills more of its dots' cells and spreads into what would have been its neighbours' space ("spills").</li>
         <li><b>Its top and bottom are pointed.</b> A dot in the next layer up or down caps a point off flat.</li>
         <li><b>Only one shape for the whole wall.</b> Stretching all of space up before building the diagram (and back after) keeps every cell convex, and makes tall thin cells cheap. It works for a style whose spines all run one way, like Columns. A stretch for one stone alone would curve its boundaries.</li>
@@ -166,7 +171,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 <script>
 'use strict';
 const W = 80, ROWS = 7, A0 = 1;   /* the slice is 80 mm wide and 7 layers tall; a joined segment starts in layer 2 */
-const S = { rule: 'seg', mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, ext: 0, seed: 3, x0: 38, probe: null, showZone: true, showGhost: true, showEnds: true };
+const S = { rule: 'seg', mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, ext: 0, push: 'slide', seed: 3, x0: 38, probe: null, showZone: true, showGhost: true, showEnds: true };
 const RULES = { mid: ['Midpoint', 'Other dots kept a spacing r from the midpoint only, as if the stone were one dot from the start.'],
   seg: ['Segment', 'Other dots kept a spacing r from the segment (your proposal).'],
   ends: ['+ L/2 ends', 'As Segment, and also at least L/2 from each end of the segment (more with Reach past the ends).'] };
@@ -205,7 +210,15 @@ function scene(rule) {
     let x = R() * r * 0.9, prev = -Infinity;
     while (x < W) {
       const z_ = zone.find(v => x > v[0] && x < v[1]);
-      if (z_) { x = Math.max(z_[1] + 0.01, prev + 0.7 * r); continue; }
+      if (z_ && S.push === 'slide') { x = Math.max(z_[1] + 0.01, prev + 0.7 * r); continue; }
+      if (z_) {   /* moved straight out of the zone, to its edge, off its layer line if need be; kept if it is clear of every dot so far */
+        let p = [x, z];
+        for (let it = 0; it < 8; it++) { let moved = false; for (const [cx, cz, rad] of discs) { const dx = p[0] - cx, dz = (p[1] - cz) / s, d = Math.hypot(dx, dz); if (d < rad - 1e-6) { const f = (rad + 0.01) / Math.max(d, 1e-6); p = [cx + dx * f, cz + dz * f * s]; moved = true; } } if (!moved) break; }
+        const clear = p[1] > 0 && p[1] < ROWS * t && p[0] > 0 && p[0] < W && dots.every(q => Math.hypot(q[0] - p[0], (q[1] - p[1]) / s) >= 0.7 * r);
+        if (clear) dots.push(p);
+        x += r * (1 + 0.35 * R()); continue;
+      }
+      if (dots.some(q => q[1] !== z && Math.hypot(q[0] - x, (q[1] - z) / s) < 0.7 * r)) { x += 0.25 * r; continue; }
       dots.push([x, z]); prev = x; x += r * (1 + 0.35 * R());
     }
   }
@@ -234,7 +247,8 @@ function solve(rule, G) {
   for (let i = 0; i <= N; i++) { const f = i / N, p = [sc.a[0] + (sc.b[0] - sc.a[0]) * f, sc.a[1] + (sc.b[1] - sc.a[1]) * f]; if (owner(p) === 0) kept++; else lost.push(f); }
   const gA = G.reduce((x, g) => x + Math.abs(area(g)), 0), cA = Math.abs(area(C[0])), ov = G.reduce((x, g) => x + Math.abs(area(inter(C[0], g))), 0);
   const xs = C[0].map(p => p[0]), zs = C[0].map(p => p[1] * s), wid = Math.max(...xs) - Math.min(...xs), hei = Math.max(...zs) - Math.min(...zs);
-  return { sc, sites, wts, C, G, owner, kept: kept / (N + 1), lost, fill: gA ? ov / gA : 1, spill: gA ? (cA - ov) / gA : 0, wid, hei, cA, gA };
+  const others = C.slice(1).map(P => Math.abs(area(P)) * s).sort((x, y) => x - y), med = others[others.length >> 1] || 1, big = others[others.length - 1] || 0;
+  return { sc, sites, wts, C, G, owner, bigN: big / med, kept: kept / (N + 1), lost, fill: gA ? ov / gA : 1, spill: gA ? (cA - ov) / gA : 0, wid, hei, cA, gA };
 }
 
 /* ---------- drawing ---------- */
@@ -284,7 +298,7 @@ function verdict(R) {
 }
 function statsHTML(R) {
   const pct = x => Math.round(x * 100) + '%';
-  return `<dl class="stats"><dt>Segment kept</dt><dd>${pct(R.kept)}</dd><dt>Fills its dots' cells</dt><dd>${pct(R.fill)}</dd><dt>Spills past them</dt><dd>${pct(R.spill)}</dd><dt>Height × width</dt><dd>${R.hei.toFixed(1)} × ${R.wid.toFixed(1)} mm</dd></dl>`;
+  return `<dl class="stats"><dt>Segment kept</dt><dd>${pct(R.kept)}</dd><dt>Fills its dots' cells</dt><dd>${pct(R.fill)}</dd><dt>Spills past them</dt><dd>${pct(R.spill)}</dd><dt>Largest other stone</dt><dd>×${R.bigN.toFixed(1)} the usual</dd><dt>Height × width</dt><dd>${R.hei.toFixed(1)} × ${R.wid.toFixed(1)} mm</dd></dl>`;
 }
 
 /* ---------- the page ---------- */
@@ -295,6 +309,7 @@ function render() {
   $('leanCtl').hidden = S.mode !== 'span';
   for (const b of $('rule').children) b.setAttribute('aria-pressed', b.dataset.v === S.rule);
   for (const b of $('mode').children) b.setAttribute('aria-pressed', b.dataset.v === S.mode);
+  for (const b of $('push').children) b.setAttribute('aria-pressed', b.dataset.v === S.push);
   const G = target(), all = {}; for (const k of Object.keys(RULES)) all[k] = solve(k, G);
   const R = all[S.rule]; last = R;
   if (!S.probe) S.probe = R.sc.b.slice();
@@ -306,6 +321,7 @@ function render() {
 
 for (const id of ['n', 'lean', 't', 'r', 'w', 's', 'ext']) $(id).addEventListener('input', e => { S[id] = +e.target.value; if (id !== 'w' && id !== 's' && id !== 'ext') S.probe = null; render(); });
 $('rule').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.rule = b.dataset.v; render(); } });
+$('push').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.push = b.dataset.v; render(); } });
 $('mode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.mode = b.dataset.v; S.probe = null; render(); } });
 for (const id of ['showZone', 'showGhost', 'showEnds']) $(id).addEventListener('change', e => { S[id] = e.target.checked; render(); });
 $('reseed').addEventListener('click', () => { S.seed = (S.seed * 31 + 7) % 100003; render(); });
@@ -316,7 +332,8 @@ const PRESETS = {
   lean: { mode: 'span', n: 3, lean: 28, t: 6, r: 7, w: 0, s: 1, rule: 'seg', ext: 0 },
   column: { mode: 'span', n: 5, lean: 0, t: 5, r: 6, w: 0, s: 2.6, rule: 'ends', ext: 0 },
   weight: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 70, s: 1, rule: 'seg', ext: 0 },
-  reach: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'ends', ext: 3 },
+  reach: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'ends', ext: 3, push: 'slide' },
+  reachOut: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'ends', ext: 3, push: 'out' },
 };
 $('presets').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; Object.assign(S, PRESETS[b.dataset.p]); S.x0 = 38; S.probe = null; render(); });
 
