@@ -1160,7 +1160,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     }
     let polys = pat.map(r => r.poly);
     q.Bpolys = polys; q.Bfull = pat.filter(r => polys.includes(r.poly)).map(r => r.full);
-    for (const r of pat) if (!r.glue) { r.t.sup = (r.t.sup || []).concat(r.poly); (r.t.supFull || (r.t.supFull = [])).push(r.full); (r.t.supBy || (r.t.supBy = [])).push(q.id); }
+    for (const r of pat) if (!r.glue) { r.t.sup = (r.t.sup || []).concat(r.poly); (r.t.supPat || (r.t.supPat = [])).push(r.poly); (r.t.supBy || (r.t.supBy = [])).push(q.id); }
     q.rests = pat.map(r => ({ holder: r.holder, poly: r.poly, glue: r.glue, t: r.t }));
     nPatch += pat.length;
     if (polys.length) {
@@ -1215,7 +1215,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   if (deadPieces.length) {
     for (const pc of deadPieces) for (const r of pc.rests) if (!r.glue && r.t && r.t.supBy) {
       const t = r.t, keep = t.supBy.map(id => id !== pc.id);
-      t.supFull = t.supFull.filter((_, i) => keep[i]); t.supBy = t.supBy.filter((_, i) => keep[i]); t.sup = (t.sup || []).filter(v => !r.poly.includes(v));
+      t.supPat = t.supPat.filter((_, i) => keep[i]); t.supBy = t.supBy.filter((_, i) => keep[i]); t.sup = (t.sup || []).filter(v => !r.poly.includes(v));
     }
     /* a piece that rested only on dead pieces rests on nothing now: the Fuse step below takes it as it takes any body with no way down */
     for (const pc of pieces) if (!pc.dead && !pc.ground && pc.rests.length) { const n0 = pc.rests.length; pc.rests = pc.rests.filter(r => !r.holder.dead); if (!pc.rests.length && n0) nOrphan++; }
@@ -1243,9 +1243,9 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   }
   // each holder keeps flat the convex hull of the supports assigned to it
   let keptFlat = 0;
-  // a top keeps the whole of where each stone above sits on it (its full overlap, not only the patch it was planned to rest on), so no cut goes under
-  // anything that rests on it: a cut that reaches one tapers at it
-  for (const pc of pieces) for (const t of pc.tops) if (t.supFull) for (const P_ of t.supFull) if (P_.length >= 3) { t.keeps.push(P_.map(v => [v[0], v[1], tz_(t.pl, v[0], v[1])])); keptFlat += Math.abs(area2(P_)); }
+  // a top keeps each patch a stone above stands on (the stone's bottom is cut back to its patches, so nothing of it lies past them): a cut that
+  // reaches one tapers at it
+  for (const pc of pieces) for (const t of pc.tops) if (t.supPat) for (const P_ of t.supPat) if (P_.length >= 3) { t.keeps.push(P_.map(v => [v[0], v[1], tz_(t.pl, v[0], v[1])])); keptFlat += Math.abs(area2(P_)); }
   // ---- carving: every piece independent. Pebble planes fitted to the body's box, those cutting a keep patch dropped
   // a footing on the ground keeps its middle: every corner drawn in by the bevel's width (to no less than 0.4 of the way from the middle, no more than 0.85),
   // so the bevels of the edges that come down to the ground run to the floor in full and the stone still stands on its whole bottom less a rim
