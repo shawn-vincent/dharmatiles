@@ -698,8 +698,11 @@ function bevelAll(grd) {
     }
     return nE;
   };
-  const seenAt = (A, B, L, bx, by, bz) => {   // a point just outside the edge's middle, its fifths, or just past either end, lies in no other piece
+  const seenAt = (A, B, L, bx, by, bz, s1, s2) => {   // seen: just outside either face next to the edge (at its middle or fifths), or just past either end, lies in no other piece
     if (!open) return true; const mx = (vx[A] + vx[B]) / 2, my = (vy[A] + vy[B]) / 2, mz = (vz[A] + vz[B]) / 2;
+    // off each face: out along its normal, and back from the other face's plane, so a neighbour pressed against the other face does not hide it
+    for (const [p, q] of [[s1, s2], [s2, s1]]) { const ox = (fN[3 * p] - 0.5 * fN[3 * q]) * BEV.eps, oy = (fN[3 * p + 1] - 0.5 * fN[3 * q + 1]) * BEV.eps, oz = (fN[3 * p + 2] - 0.5 * fN[3 * q + 2]) * BEV.eps;
+      for (const t of L > 3 ? [0.5, 0.2, 0.8] : [0.5]) if (open(vx[A] + (vx[B] - vx[A]) * t + ox, vy[A] + (vy[B] - vy[A]) * t + oy, vz[A] + (vz[B] - vz[A]) * t + oz)) return true; }
     let seen = open(mx + bx * BEV.eps, my + by * BEV.eps, mz + bz * BEV.eps); if (!seen && L > 3) seen = open(vx[A] * 0.8 + vx[B] * 0.2 + bx * BEV.eps, vy[A] * 0.8 + vy[B] * 0.2 + by * BEV.eps, vz[A] * 0.8 + vz[B] * 0.2 + bz * BEV.eps) || open(vx[A] * 0.2 + vx[B] * 0.8 + bx * BEV.eps, vy[A] * 0.2 + vy[B] * 0.8 + by * BEV.eps, vz[A] * 0.2 + vz[B] * 0.8 + bz * BEV.eps);
           // an edge seen only end-on (a joint's top or bottom edge, met by the front): a probe just past each end, along the edge
           if (!seen) { const ux = (vx[B] - vx[A]) / L, uy = (vy[B] - vy[A]) / L, uz = (vz[B] - vz[A]) / L, q = BEV.eps; seen = open(vx[B] + (ux + bx) * q, vy[B] + (uy + by) * q, vz[B] + (uz + bz) * q) || open(vx[A] + (bx - ux) * q, vy[A] + (by - uy) * q, vz[A] + (bz - uz) * q); }
@@ -727,7 +730,7 @@ function bevelAll(grd) {
       const n1x = fN[3 * s1], n1y = fN[3 * s1 + 1], n1z = fN[3 * s1 + 2], n2x = fN[3 * s2], n2y = fN[3 * s2 + 1], n2z = fN[3 * s2 + 2], c = n1x * n2x + n1y * n2y + n1z * n2z;
       let bx = n1x + n2x, by = n1y + n2y, bz = n1z + n2z; const bl = Math.sqrt(bx * bx + by * by + bz * bz); bStamp[dk] = bGen; if (bl < 1e-6) continue; bx /= bl; by /= bl; bz /= bl;
       const mx = (vx[A] + vx[B]) / 2, my = (vy[A] + vy[B]) / 2, mz = (vz[A] + vz[B]) / 2, L = bLen[e];
-      if (!seenAt(A, B, L, bx, by, bz)) continue;
+      if (!seenAt(A, B, L, bx, by, bz, s1, s2)) continue;
       const th = Math.acos(Math.max(-1, Math.min(1, c))), w = Math.min(W, BEV.inr * Math.min(fIn[s1], fIn[s2])), dep = w * Math.sin(th / 2);   // w: the strip's width along each face; dep: the plane's depth from the edge, along the bisector
       const want = bx * mx + by * my + bz * mz - Math.max(dep, 1.2 * MINBITE), got = place(bx, by, bz, 0, want, Infinity);
       if (!got) continue;
@@ -745,7 +748,7 @@ function bevelAll(grd) {
       if (grd && (k1 === KIND.BOT || k2 === KIND.BOT)) continue;
       const A = gA[e], B = gB[e], L = Math.hypot(vx[B] - vx[A], vy[B] - vy[A], vz[B] - vz[A]); if (L < BEV.minLen) continue;
       let bx = fN[3 * s1] + fN[3 * s2], by = fN[3 * s1 + 1] + fN[3 * s2 + 1], bz = fN[3 * s1 + 2] + fN[3 * s2 + 2]; const bl = Math.hypot(bx, by, bz); if (bl < 1e-6) continue; bx /= bl; by /= bl; bz /= bl;
-      if (seenAt(A, B, L, bx, by, bz)) UNB.push(vx[A], vy[A], vz[A], vx[B], vy[B], vz[B]);
+      if (seenAt(A, B, L, bx, by, bz, s1, s2)) UNB.push(vx[A], vy[A], vz[A], vx[B], vy[B], vz[B]);
     }
   }
 }function clipAll(kind = KIND.PEBBLE) { for (let i = 0; i < nP; i++) { clipS(pN[3 * i], pN[3 * i + 1], pN[3 * i + 2], pB[i], kind); if (empty) break; } }
