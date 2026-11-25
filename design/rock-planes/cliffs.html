@@ -2151,8 +2151,9 @@ function surfaceOf(w, masses) {
   let ntri = 0, nface = 0, vol = 0;
   for (const s of w.stones) for (const f of s.faces) { ntri += f.v.length - 2; nface++; }
   const pos = new Float32Array(9 * ntri), col = new Uint8Array(9 * ntri), faceTri = new Int32Array(nface + 1), lines = [], bev = [], bevPart = [], bevBase = [];
-  let t = 0, fi = 0;
+  let t = 0, fi = 0; const stoneTri = [];
   for (const s of w.stones) {
+    stoneTri.push(t);
     const faces = s.faces, rgb = shadeOf(s.grp);   // each body in its own shade, rocks and masses alike
     // an outline is a face's edge; where a crack cuts a face into pieces, an edge between two pieces of one flat face (the same normal) is no line
     let seen = null; if (s.cracked) { seen = new Map(); for (const f of faces) for (let i = 0; i < f.v.length; i++) { const a = EK(f.v[i]), b = EK(f.v[(i + 1) % f.v.length]), k = a < b ? a + '|' + b : b + '|' + a; (seen.get(k) || seen.set(k, []).get(k)).push(f.n); } }
@@ -2170,7 +2171,7 @@ function surfaceOf(w, masses) {
     }
   }
   faceTri[nface] = t;
-  return { pos, col, faceTri, bev: Int32Array.from(bev), bevPart: Uint8Array.from(bevPart), bevBase: Uint8Array.from(bevBase), unbev: w.unbev || null, lines: Float32Array.from(lines), vol, nface, ntri, cracks: w.cracks ? { lines: w.cracks.lines, cutters: w.cracks.cutters, cutStones: w.cracks.cutStones, bad: w.cracks.bad, netMs: w.cracks.netMs, netBuilt: w.cracks.netBuilt, polys: w.cracks.polysAll } : null,
+  return { pos, col, faceTri, bev: Int32Array.from(bev), bevPart: Uint8Array.from(bevPart), bevBase: Uint8Array.from(bevBase), unbev: w.unbev || null, stoneTri: Int32Array.from([...stoneTri, t]), stoneOf: w.stones.map(s => [s.grp, s.layer ?? -1]), lines: Float32Array.from(lines), vol, nface, ntri, cracks: w.cracks ? { lines: w.cracks.lines, cutters: w.cracks.cutters, cutStones: w.cracks.cutStones, bad: w.cracks.bad, netMs: w.cracks.netMs, netBuilt: w.cracks.netBuilt, polys: w.cracks.polysAll } : null,
     stones: w.stones.length, sites: w.sites, groups: w.groups, lost: w.lost, noHold: w.noHold, T: w.T };
 }
 // the paint, from the overhang pass: the faces it found unheld (the page colours each orange or red by its normal), and the shares it reports
@@ -2349,6 +2350,16 @@ function initGL() {
   for (const c of [persp, ortho]) { c.up.set(0, 0, 1); c.position.copy(homeDir().multiplyScalar(reachOf()).add(focus())); }
   camera = state.view === 'ortho' ? ortho : persp;
   controls = new THREE.OrbitControls(camera, renderer.domElement);
+  { let down = null; const ray = new THREE.Raycaster();   // a tap (not a drag) on a stone names it in the chip: its number, body and layer
+    renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+    renderer.domElement.addEventListener('pointerup', e => {
+      if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6 || !rockObj || !shown) return; const r = renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
+      const hit = ray.intersectObject(rockObj.children[0])[0], st = shown.surf.stoneTri; if (!hit || !st) return;
+      let lo = 0, hi = st.length - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (st[m] <= hit.faceIndex) lo = m; else hi = m - 1; }
+      const [g, l] = shown.surf.stoneOf[lo]; $('chip').textContent = state.style + ' · seed ' + state.seed + ' · stone ' + lo + ' (body ' + g + (l >= 0 ? ', layer ' + l : '') + ')';
+    });
+  }
   controls.target.copy(focus()); controls.enablePan = true; controls.minDistance = 20; controls.maxDistance = 600;
   controls.addEventListener('change', draw); controls.update();
   // a scroll over the view scrolls the page; only a pinch zooms (on a trackpad a pinch comes as a wheel event with Ctrl held)
@@ -2398,8 +2409,14 @@ function zoomFit() {
 function extras(V, surf = null) {
   const grp = new THREE.Group();
   if (state.bevelsOn && surf && surf.unbev && surf.unbev.length) {   // debugging: the seen edges left sharp
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(surf.unbev, 3));
-    grp.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xFF00FF, depthTest: true })));
+    const u = surf.unbev, r = 0.18, pos = new Float32Array(u.length / 6 * 54);   // each a three-sided tube, r mm across
+    for (let i = 0, o = 0; i < u.length; i += 6) {
+      const a = [u[i], u[i + 1], u[i + 2]], b = [u[i + 3], u[i + 4], u[i + 5]], d = unit(sub(b, a)), p0 = unit(cross(d, Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), p1 = cross(d, p0), R = [];
+      for (let k = 0; k < 3; k++) { const th = TWO_PI * k / 3, c = Math.cos(th) * r, s_ = Math.sin(th) * r; R.push([p0[0] * c + p1[0] * s_, p0[1] * c + p1[1] * s_, p0[2] * c + p1[2] * s_]); }
+      for (let k = 0; k < 3; k++) { const q = R[k], w_ = R[(k + 1) % 3]; for (const P of [[a, q], [b, q], [b, w_], [a, q], [b, w_], [a, w_]]) { pos[o++] = P[0][0] + P[1][0]; pos[o++] = P[0][1] + P[1][1]; pos[o++] = P[0][2] + P[1][2]; } }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xFF00FF, side: THREE.DoubleSide })));
   }
   if (state.ghost) grp.add(ghostOf(bigSolid([{ n: [1, 0, 0], b: V.hi[0] }, { n: [-1, 0, 0], b: -V.lo[0] }, { n: [0, 1, 0], b: V.hi[1] }, { n: [0, -1, 0], b: -V.lo[1] }, { n: [0, 0, 1], b: V.hi[2] }, { n: [0, 0, -1], b: 0 }])));
   // each layer face as a grid over the envelope, coarser than the one the engine reads (a face between layers; where it meets the face below, the layer pinches out)
