@@ -562,11 +562,14 @@ function carvePlanes(seed, kp, grd) {
   VT = hiz - loz >= COLUMN * Math.min(hix - lox, hiy - loy);
   for (let i = 0; i < kp.length; i += 3) { guardAdd(kp[i], kp[i + 1], kp[i + 2]); if ((i / 3) % 6 === 5) guardsEnd(); } guardsEnd();
   // touch points and their patches first, then the crowns
-  seedStream(seed, 9); nc = 0;
+  nc = 0; const seed9 = hash2(seed, 9);
   const crN = pN2, crP = pP2;
   for (let q = 0; q < fcN; q++) {
     cOk[q] = 0; if (cA[q] < 1) continue;
-    const f = cKf[q], fcx = cCx[q], fcy = cCy[q], fcz = cCz[q]; fanOf(f); sampleN(f);
+    const f = cKf[q], fcx = cCx[q], fcy = cCy[q], fcz = cCz[q];
+    // each face draws from its own stream, keyed by its kind and its outward direction (to about 1°), so a face added or lost elsewhere on the stone leaves its draws alone
+    seedStream(seed9, (((ft[f] & 15) * 131 + Math.round(cNx[q] * 60) + 60) * 131 + Math.round(cNy[q] * 60) + 60) * 131 + Math.round(cNz[q] * 60) + 60);
+    fanOf(f); sampleN(f);
     const px = fcx + (sx - fcx) * 0.35, py = fcy + (sy - fcy) * 0.35, pz = fcz + (sz - fcz) * 0.35;
     let room = Infinity; { const o = fo[f], m = fl[f]; for (let i = 0; i < m; i++) { const A = fv[o + i], B = fv[o + (i + 1 === m ? 0 : i + 1)], ex = vx[B] - vx[A], ey = vy[B] - vy[A], ez = vz[B] - vz[A], t = Math.max(0, Math.min(1, ((px - vx[A]) * ex + (py - vy[A]) * ey + (pz - vz[A]) * ez) / (ex * ex + ey * ey + ez * ez))); const qx = px - (vx[A] + ex * t), qy = py - (vy[A] + ey * t), qz = pz - (vz[A] + ez * t), d = qx * qx + qy * qy + qz * qz; if (d < room) room = d; } }
     cOk[q] = 1; cPx[q] = px; cPy[q] = py; cPz[q] = pz;
