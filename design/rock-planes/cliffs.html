@@ -744,7 +744,7 @@ function bevelAll(grd) {
     }
     if (!made) break;
   }
-  if (weathered && !empty) weatherEgg();
+  if (weathered && !empty) weatherEgg(isGlued);
   if (empty) return;
   // the edge report: every edge of the stone as carved, and what became of it; the seen edges left sharp also go to UNB (drawn magenta)
   const nF_ = edgesNow(), minEdge = Math.cos(10 * DEG), bv = k => k === KIND.BEVEL || k === KIND.PART;
@@ -771,7 +771,9 @@ function bevelAll(grd) {
 // Weathering: the stone is cut by an egg. The egg is the ellipsoid of the stone's own spread (its corners' covariance about their centre), scaled
 // so that at 0% it just holds the stone and at 100% it just fits inside it (touching the nearest face); the Weathering draw (once a stone) sets
 // where between. The stone keeps what lies in the egg: corners go first, then edges, then the faces dome, as a block weathers to a boulder. The
-// egg is cut as its tangent planes at WEGG directions spread evenly over it (turned for each stone). Every plane goes through `place`: none faces
+// egg is cut as its tangent planes at WEGG directions spread evenly over it (turned for each stone). A piece fused to others is cut by the egg of
+// itself and the pieces of its body that touch it (fitted to their cells, drawn and turned once for the body), so two fused parts share one egg and
+// weather as one rock; a lone stone's egg is its own. Every plane goes through `place`: none faces
 // down past the limit, a guard pushes it out, and a cut under MINBITE is not made. The crisp ends and back of the wall are never cut.
 const WEGG = 56, eggP = (() => { const o = []; for (let i = 0; i < WEGG; i++) { const z = 1 - 2 * (i + 0.5) / WEGG, r = Math.sqrt(1 - z * z), a = i * Math.PI * (3 - Math.sqrt(5)); o.push([r * Math.cos(a), r * Math.sin(a), z]); } return o; })();
 function eig3(m) {   // Jacobi: the eigenvalues and eigenvectors (columns of V) of a symmetric 3x3
@@ -784,24 +786,30 @@ function eig3(m) {   // Jacobi: the eigenvalues and eigenvectors (columns of V) 
   }
   return { L: [a[0][0], a[1][1], a[2][2]], V };
 }
-function weatherEgg() {
-  const used = new Uint8Array(nVS), crisp = []; let n = 0, cx = 0, cy = 0, cz = 0;
-  for (let s_ = 0; s_ < nSL; s_++) { const m = sLen[s_]; if (!m) continue; const isC = (sKind[s_] & 15) === KIND.CRISP; for (let k = 0; k < m; k++) { const v = sV[s_ * CAPS + k]; if (isC) crisp.push(v); if (!used[v]) { used[v] = 1; n++; cx += vx[v]; cy += vy[v]; cz += vz[v]; } } }
-  if (n < 4) return; cx /= n; cy /= n; cz /= n;
-  const w = BEV.wlo + (BEV.whi - BEV.wlo) * drawAt(cx, cy, cz, 50); if (!(w > 0)) return;
+let EGGX = null, EGGF = null, WKEY = 0;   // EGGX: the corners the egg is fitted to (this piece and the pieces fused to it; null: the stone as it is); WKEY: the body's key for its draws
+function weatherEgg(isGlued) {
+  const used = new Uint8Array(nVS), crisp = [];
+  for (let s_ = 0; s_ < nSL; s_++) { const m = sLen[s_]; if (!m) continue; const isC = (sKind[s_] & 15) === KIND.CRISP; for (let k = 0; k < m; k++) { const v = sV[s_ * CAPS + k]; if (isC) crisp.push(v); used[v] = 1; } }
+  let P = EGGX; if (!P) { P = []; for (let v = 0; v < nVS; v++) if (used[v]) P.push(vx[v], vy[v], vz[v]); }
+  const n = P.length / 3; if (n < 4) return; let cx = 0, cy = 0, cz = 0; for (let i = 0; i < P.length; i += 3) { cx += P[i]; cy += P[i + 1]; cz += P[i + 2]; } cx /= n; cy /= n; cz /= n;
+  const dw = k => EGGX ? (hash2(WKEY, k) >>> 0) / 4294967296 : drawAt(cx, cy, cz, k);
+  const w = BEV.wlo + (BEV.whi - BEV.wlo) * dw(50); if (!(w > 0)) return;
   const C = [0, 0, 0, 0, 0, 0];
-  for (let v = 0; v < nVS; v++) if (used[v]) { const x = vx[v] - cx, y = vy[v] - cy, z = vz[v] - cz; C[0] += x * x; C[1] += x * y; C[2] += x * z; C[3] += y * y; C[4] += y * z; C[5] += z * z; }
+  for (let i = 0; i < P.length; i += 3) { const x = P[i] - cx, y = P[i + 1] - cy, z = P[i + 2] - cz; C[0] += x * x; C[1] += x * y; C[2] += x * z; C[3] += y * y; C[4] += y * z; C[5] += z * z; }
   const { L, V } = eig3(C.map(c => c / n)), sd = L.map(l => Math.sqrt(Math.max(l, 1e-6)));
   // in the egg's frame (axes V, scaled by sd) the egg is a ball: a point's egg radius, and a direction's support
   const rad = (x, y, z) => { let r = 0; for (let i = 0; i < 3; i++) { const t = (V[0][i] * x + V[1][i] * y + V[2][i] * z) / sd[i]; r += t * t; } return Math.sqrt(r); };
   const sup = (ux, uy, uz) => { let r = 0; for (let i = 0; i < 3; i++) { const t = (V[0][i] * ux + V[1][i] * uy + V[2][i] * uz) * sd[i]; r += t * t; } return Math.sqrt(r); };
-  let sOut = 0; for (let v = 0; v < nVS; v++) if (used[v]) sOut = Math.max(sOut, rad(vx[v] - cx, vy[v] - cy, vz[v] - cz));
+  let sOut = 0; for (let i = 0; i < P.length; i += 3) sOut = Math.max(sOut, rad(P[i] - cx, P[i + 1] - cy, P[i + 2] - cz)); for (let v = 0; v < nVS; v++) if (used[v]) sOut = Math.max(sOut, rad(vx[v] - cx, vy[v] - cy, vz[v] - cz));
   edgesNow(); let sIn = Infinity;
-  for (let s_ = 0; s_ < nSL; s_++) if (sLen[s_] && fOk[s_]) { const nx = fN[3 * s_], ny = fN[3 * s_ + 1], nz = fN[3 * s_ + 2], d = nx * (fC[3 * s_] - cx) + ny * (fC[3 * s_ + 1] - cy) + nz * (fC[3 * s_ + 2] - cz); sIn = Math.min(sIn, d / sup(nx, ny, nz)); }
+  if (EGGF) for (let i = 0; i < EGGF.length; i += 4) { const nx = EGGF[i], ny = EGGF[i + 1], nz = EGGF[i + 2]; sIn = Math.min(sIn, (EGGF[i + 3] - nx * cx - ny * cy - nz * cz) / sup(nx, ny, nz)); }
+  else
+  for (let s_ = 0; s_ < nSL; s_++) if (sLen[s_] && fOk[s_] && !isGlued(s_)) { const nx = fN[3 * s_], ny = fN[3 * s_ + 1], nz = fN[3 * s_ + 2], d = nx * (fC[3 * s_] - cx) + ny * (fC[3 * s_ + 1] - cy) + nz * (fC[3 * s_ + 2] - cz); sIn = Math.min(sIn, d / sup(nx, ny, nz)); }
+  if (EGGF) sIn = Math.max(sIn, 0.4 * sOut);   /* a fused rock's planes run past its other parts: the egg never shrinks under 40% of the one that holds it */
   if (!(sIn > 0) || !(sOut > sIn)) return;
   const S = sOut + (sIn - sOut) * w;
   // the directions, turned for this stone (a random rotation from three draws), as points on the egg; each point's tangent plane
-  const q0 = drawAt(cx, cy, cz, 51), q1 = drawAt(cx, cy, cz, 52) * TWO_PI, q2 = drawAt(cx, cy, cz, 53) * TWO_PI, r1 = Math.sqrt(1 - q0), r2 = Math.sqrt(q0);
+  const q0 = dw(51), q1 = dw(52) * TWO_PI, q2 = dw(53) * TWO_PI, r1 = Math.sqrt(1 - q0), r2 = Math.sqrt(q0);
   const qa = r1 * Math.sin(q1), qb = r1 * Math.cos(q1), qc = r2 * Math.sin(q2), qd = r2 * Math.cos(q2);   // a unit quaternion (qd the real part)
   const rot = (x, y, z) => { const tx = 2 * (qb * z - qc * y), ty = 2 * (qc * x - qa * z), tz = 2 * (qa * y - qb * x); return [x + qd * tx + (qb * tz - qc * ty), y + qd * ty + (qc * tx - qa * tz), z + qd * tz + (qa * ty - qb * tx)]; };
   for (const p0 of eggP) {
@@ -1363,7 +1371,18 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     const glued = i => { const pl = pc.planes[i]; return !pl || pl[4] !== KIND.SIDE || find(pl[5]) === G.id; };
     return { open, glued };
   }
+  // a piece's cell as it stands before carving (its bottom and flare cut): its corners, for the egg of the parts fused to it
+  // and its outer faces' planes (a side glued to its own body is inside the rock, not outer)
+  const cellPts = p => { if (p.cellPts) return p.cellPts; restore(p.snap); if (!p.ground) clipBot(p); if (!opt.cells) for (const fl_ of p.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
+    const out = [], fc = []; if (!empty) { const seen = new Set(), body = find(p.s.id); for (let f = 0; f < nF; f++) { const o = fo[f], m = fl[f];
+      for (let k = 0; k < m; k++) { const v = fv[o + k]; if (!seen.has(v)) { seen.add(v); out.push(vx[v], vy[v], vz[v]); } }
+      if ((ft[f] & 15) === KIND.SIDE) { const e = p.planes[ft[f] >> 4]; if (e && find(e[5]) === body) continue; }
+      let nx = 0, ny = 0, nz = 0; for (let k = 0; k < m; k++) { const a = fv[o + k], b = fv[o + (k + 1) % m]; nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]); }
+      const L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue; nx /= L; ny /= L; nz /= L; const a0 = fv[o]; fc.push(nx, ny, nz, nx * vx[a0] + ny * vy[a0] + nz * vz[a0]); } }
+    p.cellFaces = fc; return p.cellPts = out; };
   const emitPiece = (G, pc) => {   // its own function: `wall` is past the size V8 will optimize
+    /* Weathering's egg is fitted to this piece and the pieces of its body that touch it (a lone stone: itself alone); its draws are the body's */
+    if (BEV.whi > 0 && !opt.cells) { const b = pc.bb, pts = cellPts(pc).slice(), fcs = pc.cellFaces.slice(); for (const o of G.pieces) { if (o === pc) continue; const a = o.bb; if (a[1] < b[0] - 0.3 || b[1] < a[0] - 0.3 || a[3] < b[2] - 0.3 || b[3] < a[2] - 0.3 || a[5] < b[4] - 0.3 || b[5] < a[4] - 0.3) continue; for (const v of cellPts(o)) pts.push(v); for (const v of o.cellFaces) fcs.push(v); } EGGX = pts; EGGF = fcs; WKEY = hash2(seed, 7900 + G.id); }
     restore(pc.snap); let pEdges = null;
     if (!pc.ground) clipBot(pc);
     if (!opt.cells) for (const fl_ of pc.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
@@ -1381,7 +1400,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     if (opt.cells) { if (empty) return; emitFaces(); }
     else {
       const tc = now(); DX = seenData(pc, find, G); CKEY = hash2(seed, 7700 + pc.id); KPTAG = G.kpTag; KPWHO = G.kpWho; BEVW = BEV.hi;
-      carveFast(G.kp, !!(pc.ground || pc.onGround)); KPTAG = null; KPWHO = null; pc.W = BEVW; BEVW = null; pEdges = EROWS; EROWS = null; DX = null; TC += now() - tc; if (empty) return;
+      carveFast(G.kp, !!(pc.ground || pc.onGround)); EGGX = null; EGGF = null; KPTAG = null; KPWHO = null; pc.W = BEVW; BEVW = null; pEdges = EROWS; EROWS = null; DX = null; TC += now() - tc; if (empty) return;
       emitFaces();
     }
     pc.fr = [f0, nFace];   // its faces in the wall's buffers, for the joins' overlap
