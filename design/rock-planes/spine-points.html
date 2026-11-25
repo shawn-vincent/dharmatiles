@@ -96,6 +96,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           <button data-v="mid">Midpoint</button><button data-v="seg">Segment</button><button data-v="ends">+ L/2 ends</button>
         </div>
       </div>
+      <div class="ctl" id="extCtl"><label for="ext">Reach past the ends (+ L/2 rule) <output id="ext_o"></output></label><input id="ext" type="range" min="0" max="8" step="0.5"></div>
       <div class="ctl"><span class="lbl">Joining</span>
         <div class="seg" id="mode"><button data-v="span">Span up through layers</button><button data-v="fuse">Fuse in a layer</button></div>
       </div>
@@ -123,6 +124,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       <button class="btn" data-p="lean">A leaning span</button>
       <button class="btn" data-p="column">A column, with the wall stretched up</button>
       <button class="btn" data-p="weight">Weight instead of keep-away</button>
+      <button class="btn" data-p="reach">Reach to the layer faces</button>
     </div>
   </section>
 
@@ -143,6 +145,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         <li>So the rule, applied when the other dots are placed: <b>keep every other dot at least L/2 from each end.</b> The diagram itself never changes.</li>
       </ol>
       <div class="math">stone keeps end e  ⇔  for every other dot q:  |q − e|² − w_q  ≥  (L/2)² − w_stone</div>
+      <p><b>Any point, not just the ends.</b> The stone keeps a point P exactly when the disc centred on P that passes through the midpoint holds no other dot. L/2 is that disc for the ends. Reach past the ends moves P further out along the segment, and its disc grows with it.</p>
       <p>Keeping dots a normal spacing r from the segment (the "Segment" rule) is the same thing when r ≥ L/2. It falls short once L/2 is larger than r: a span over more layers than about 2r/t + 1, or a fuse of more dots than fit in r.</p>
     </section>
     <section>
@@ -150,7 +153,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       <ul>
         <li><b>It fills only part of its dots' cells.</b> Those cells are boxes reaching the layer faces. One convex cell around a midpoint tapers toward its ends, so it misses their corners, and the neighbours take them ("fills" in the cards: about 70% for a two-layer span, under half for four). Keeping the ends is necessary, not enough.</li>
         <li><b>L/2 pushes neighbours back only near the ends.</b> The stone reaches its ends and stays about as wide as before; the corners are still lost.</li>
-        <li><b>Weight fills more, and spills.</b> It pushes every boundary out evenly. Try "Weight instead of keep-away": the stone fills more of its dots' cells and spreads into what would have been its neighbours' space ("spills").</li>
+        <li><b>Reaching further makes a spike, not a flat top.</b> The disc for a far point passes through the midpoint, so near the middle it is narrow and the side neighbours stay put; near the far point it is wide, so the next layer's dots there move aside. The stone grows a point toward the layer face. A flat cap at the face would need the dot above twice as far from the midpoint as the face is: half the next layer would be empty.</li>
+        <li><b>Weight fills more, and spills.</b> A boundary moves out by w / 2d, where d is the distance to that neighbour: most toward the nearest dots (the sides), least toward the far ones (above and below), the opposite of what a tall stone wants. Try "Weight instead of keep-away": the stone fills more of its dots' cells and spreads into what would have been its neighbours' space ("spills").</li>
         <li><b>Its top and bottom are pointed.</b> A dot in the next layer up or down caps a point off flat.</li>
         <li><b>Only one shape for the whole wall.</b> Stretching all of space up before building the diagram (and back after) keeps every cell convex, and makes tall thin cells cheap. It works for a style whose spines all run one way, like Columns. A stretch for one stone alone would curve its boundaries.</li>
         <li><b>The Midpoint rule</b> treats the joined stone as a single dot from the start. It is shown for contrast: its neighbours sit right on the segment.</li>
@@ -162,10 +166,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 <script>
 'use strict';
 const W = 80, ROWS = 7, A0 = 1;   /* the slice is 80 mm wide and 7 layers tall; a joined segment starts in layer 2 */
-const S = { rule: 'seg', mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, seed: 3, x0: 38, probe: null, showZone: true, showGhost: true, showEnds: true };
+const S = { rule: 'seg', mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, ext: 0, seed: 3, x0: 38, probe: null, showZone: true, showGhost: true, showEnds: true };
 const RULES = { mid: ['Midpoint', 'Other dots kept a spacing r from the midpoint only, as if the stone were one dot from the start.'],
   seg: ['Segment', 'Other dots kept a spacing r from the segment (your proposal).'],
-  ends: ['+ L/2 ends', 'As Segment, and also at least L/2 from each end of the segment.'] };
+  ends: ['+ L/2 ends', 'As Segment, and also at least L/2 from each end of the segment (more with Reach past the ends).'] };
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
@@ -189,7 +193,9 @@ function scene(rule) {
   const discs = [];   /* the keep-away zone as discs in the stretched metric: [cx, cz, radius] */
   if (rule === 'mid') discs.push([m[0], m[1], r]);
   else { for (let i = 0; i <= 40; i++) { const f = i / 40; discs.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, r]); }
-    if (rule === 'ends') { discs.push([a[0], a[1], L / 2], [b[0], b[1], L / 2]); } }
+    if (rule === 'ends' && L > 0) {   /* the points to keep: each end, moved Reach further out along the segment; each keeps a disc through the midpoint empty */
+      const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / s / L, e = S.ext, R_ = L / 2 + e;
+      discs.push([a[0] - ux * e, a[1] - uz * e * s, R_], [b[0] + ux * e, b[1] + uz * e * s, R_]); } }
   /* each layer's dots, left to right from its own stream; a dart that lands in the zone moves to where the zone ends */
   const dots = [];
   for (let k = 0; k < ROWS; k++) {
@@ -246,7 +252,7 @@ function draw(cv, R, full) {
   if (full && S.showZone) { g.save(); g.beginPath(); for (const [cx, cz, rad] of R.sc.discs) { g.moveTo(X(cx + rad), Z(cz)); g.ellipse(X(cx), Z(cz), rad * k, rad * s * k, 0, 0, Math.PI * 2); } g.fillStyle = css('--lost-soft'); g.fill('nonzero'); g.restore(); }
   if (S.showGhost) { g.save(); g.setLineDash([5, 4]); g.strokeStyle = css('--lost'); g.lineWidth = full ? 1.6 : 1.2; R.G.forEach(P => { if (P.length) { path(unst(P)); g.stroke(); } }); g.restore(); }
   path(unst(R.C[0])); g.strokeStyle = css('--accent'); g.lineWidth = full ? 2.2 : 1.8; g.stroke();
-  if (full && S.showEnds && R.sc.L > 0) { g.save(); g.setLineDash([1, 3]); g.strokeStyle = css('--ink'); g.globalAlpha = .6; for (const e of [R.sc.a, R.sc.b]) { g.beginPath(); g.ellipse(X(e[0]), Z(e[1]), R.sc.L / 2 * k, R.sc.L / 2 * s * k, 0, 0, Math.PI * 2); g.stroke(); } g.restore(); }
+  if (full && S.showEnds && R.sc.L > 0) { g.save(); g.setLineDash([1, 3]); g.strokeStyle = css('--ink'); g.globalAlpha = .6; const ex = S.rule === 'ends' ? S.ext : 0, ux = (R.sc.b[0] - R.sc.a[0]) / R.sc.L, uz = (R.sc.b[1] - R.sc.a[1]) / R.sc.L, rr = R.sc.L / 2 + ex; for (const [e, sg] of [[R.sc.a, -1], [R.sc.b, 1]]) { const c = [e[0] + sg * ux * ex, e[1] + sg * uz * ex]; g.beginPath(); g.ellipse(X(c[0]), Z(c[1]), rr * k, rr * s * k, 0, 0, Math.PI * 2); g.stroke(); if (ex > 0) { g.beginPath(); g.arc(X(c[0]), Z(c[1]), 2.5, 0, Math.PI * 2); g.stroke(); } } g.restore(); }
   /* the segment, and the parts a neighbour takes */
   const { a, b } = R.sc, P = f => [X(a[0] + (b[0] - a[0]) * f), Z(a[1] + (b[1] - a[1]) * f)];
   g.lineCap = 'round'; g.strokeStyle = css('--accent'); g.lineWidth = full ? 3 : 2.4; g.beginPath(); g.moveTo(...P(0)); g.lineTo(...P(1)); g.stroke();
@@ -284,7 +290,7 @@ function statsHTML(R) {
 /* ---------- the page ---------- */
 let last = null;
 function render() {
-  for (const id of ['n', 'lean', 't', 'r', 'w', 's']) $(id).value = S[id];
+  for (const id of ['n', 'lean', 't', 'r', 'w', 's', 'ext']) $(id).value = S[id]; $('ext_o').textContent = S.ext + ' mm';
   $('n_o').textContent = S.n; $('lean_o').textContent = S.lean + '°'; $('t_o').textContent = S.t + ' mm'; $('r_o').textContent = S.r + ' mm'; $('w_o').textContent = S.w + ' mm²'; $('s_o').textContent = '×' + S.s.toFixed(1);
   $('leanCtl').hidden = S.mode !== 'span';
   for (const b of $('rule').children) b.setAttribute('aria-pressed', b.dataset.v === S.rule);
@@ -298,18 +304,19 @@ function render() {
   for (const c of cmp.children) { const k = c.dataset.v, Rk = all[k]; c.setAttribute('aria-pressed', k === S.rule); draw(c.querySelector('canvas'), Rk, false); c.querySelector('.verdict').textContent = verdict(Rk); c.querySelector('.st').innerHTML = statsHTML(Rk); }
 }
 
-for (const id of ['n', 'lean', 't', 'r', 'w', 's']) $(id).addEventListener('input', e => { S[id] = +e.target.value; if (id !== 'w' && id !== 's') S.probe = null; render(); });
+for (const id of ['n', 'lean', 't', 'r', 'w', 's', 'ext']) $(id).addEventListener('input', e => { S[id] = +e.target.value; if (id !== 'w' && id !== 's' && id !== 'ext') S.probe = null; render(); });
 $('rule').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.rule = b.dataset.v; render(); } });
 $('mode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.mode = b.dataset.v; S.probe = null; render(); } });
 for (const id of ['showZone', 'showGhost', 'showEnds']) $(id).addEventListener('change', e => { S[id] = e.target.checked; render(); });
 $('reseed').addEventListener('click', () => { S.seed = (S.seed * 31 + 7) % 100003; render(); });
 const PRESETS = {
-  two: { mode: 'span', n: 2, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'seg' },
-  four: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'seg' },
-  fuse3: { mode: 'fuse', n: 3, lean: 0, t: 4, r: 9, w: 0, s: 1, rule: 'seg' },
-  lean: { mode: 'span', n: 3, lean: 28, t: 6, r: 7, w: 0, s: 1, rule: 'seg' },
-  column: { mode: 'span', n: 5, lean: 0, t: 5, r: 6, w: 0, s: 2.6, rule: 'ends' },
-  weight: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 70, s: 1, rule: 'seg' },
+  two: { mode: 'span', n: 2, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'seg', ext: 0 },
+  four: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'seg', ext: 0 },
+  fuse3: { mode: 'fuse', n: 3, lean: 0, t: 4, r: 9, w: 0, s: 1, rule: 'seg', ext: 0 },
+  lean: { mode: 'span', n: 3, lean: 28, t: 6, r: 7, w: 0, s: 1, rule: 'seg', ext: 0 },
+  column: { mode: 'span', n: 5, lean: 0, t: 5, r: 6, w: 0, s: 2.6, rule: 'ends', ext: 0 },
+  weight: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 70, s: 1, rule: 'seg', ext: 0 },
+  reach: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'ends', ext: 3 },
 };
 $('presets').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; Object.assign(S, PRESETS[b.dataset.p]); S.x0 = 38; S.probe = null; render(); });
 
