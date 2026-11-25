@@ -569,7 +569,7 @@ function carvePlanes(seed, kp, grd) {
   }
   for (let v = 0; v < nV; v++) { if (vx[v] < lox) lox = vx[v]; if (vx[v] > hix) hix = vx[v]; if (vy[v] < loy) loy = vy[v]; if (vy[v] > hiy) hiy = vy[v]; if (vz[v] < loz) loz = vz[v]; if (vz[v] > hiz) hiz = vz[v]; }
   VT = hiz - loz >= COLUMN * Math.min(hix - lox, hiy - loy);
-  for (let i = 0; i < kp.length; i += 3) { curTag = KPTAG ? KPTAG[i / 3] : 7; guardAdd(kp[i], kp[i + 1], kp[i + 2]); if ((i / 3) % 6 === 5) guardsEnd(); } guardsEnd();
+  for (let i = 0; i < kp.length; i += 3) { curTag = KPTAG ? KPTAG[i / 3] : 2;   // (Granite's carve has one keep: where a stone above leans on this one) guardAdd(kp[i], kp[i + 1], kp[i + 2]); if ((i / 3) % 6 === 5) guardsEnd(); } guardsEnd();
   // touch points and their patches first, then the crowns
   nc = 0; const seed9 = hash2(seed, 9);
   const crN = pN2, crP = pP2;
