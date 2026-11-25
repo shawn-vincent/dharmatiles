@@ -510,12 +510,12 @@ let fcN = 0;
 let supN = 0;
 function support(nx, ny, nz) { let m = -Infinity; for (let v = 0; v < supN; v++) { const d = nx * vx[v] + ny * vy[v] + nz * vz[v]; if (d > m) m = d; } return m; }
 // the one rule: depth below the furthest point, out past the guards; the bite it keeps (0: not made)
-let placeWhy = 0;   // why the last place made nothing: 1 faces down past the limit, 2 a guard held it, 3 it bites under MINBITE on its own
+let placeWhy = 0, placeAt = -1;   // placeAt: the guard point that held the last plane back (-1: none)   // why the last place made nothing: 1 faces down past the limit, 2 a guard held it, 3 it bites under MINBITE on its own
 function place(nx, ny, nz, depth, from, most) {
   if (nz < -LIM - 1e-9) { placeWhy = 1; return 0; }
-  const top = support(nx, ny, nz); let b = Math.max((from === null ? top : from) - depth, top - most); const b0 = b;
+  placeAt = -1; const top = support(nx, ny, nz); let b = Math.max((from === null ? top : from) - depth, top - most); const b0 = b;
   for (let j = 0, s0 = 0; j < nGg; j++) {
-    const e = gGe[j]; if (nx * gCx[j] + ny * gCy[j] + nz * gCz[j] + gR[j] > b) for (let i = 3 * s0, n = 3 * e; i < n; i += 3) { const d = nx * gd[i] + ny * gd[i + 1] + nz * gd[i + 2]; if (d > b) b = d; }
+    const e = gGe[j]; if (nx * gCx[j] + ny * gCy[j] + nz * gCz[j] + gR[j] > b) for (let i = 3 * s0, n = 3 * e; i < n; i += 3) { const d = nx * gd[i] + ny * gd[i + 1] + nz * gd[i + 2]; if (d > b) { b = d; placeAt = i / 3; } }
     s0 = e;
   }
   if (b >= top - MINBITE) { placeWhy = b0 >= top - MINBITE ? 3 : 2; return 0; }
@@ -668,7 +668,7 @@ function relocate() {
 // face, W = K times the stone's smallest dimension (capped at a share of the smaller face's inradius). No tilt, no second pass, no corners, domes, rings or steps.
 // The edges are taken longest first and each cut is made before the next edge is looked at, so an edge whose end was taken off by a neighbour's bevel is read
 // again as it now is. A plane goes through `place`, so the guards (rest patches, crowns, held tops, glued faces) and the downward limit hold.
-let UNB = null;   // the seen edges left sharp, as segments (set by carveFor; debugging)
+let UNB = null, BEVLOG = null;   // BEVLOG: debugging, { piece, on, rows }: each edge tried on that piece and what became of it   // the seen edges left sharp, as segments (set by carveFor; debugging)
 const BEV = { k: 0.15, inr: 0.8, minTurn: 30, eps: 0.25, minLen: 0.4 };   // k: leg width as a share of the stone's smallest side; inr: at most this share of the smaller face's inradius; minTurn: degrees; eps, minLen: mm
 const MAXEG = 1500, etStamp = new Int32Array(MAXVS * MAXVS), etRef = new Int32Array(MAXVS * MAXVS); let etSt = 0;
 const gA = new Int32Array(MAXEG), gB = new Int32Array(MAXEG), gF1 = new Int32Array(MAXEG), gF2 = new Int32Array(MAXEG), gN = new Uint8Array(MAXEG);
@@ -732,9 +732,17 @@ function bevelAll(grd) {
       const mx = (vx[A] + vx[B]) / 2, my = (vy[A] + vy[B]) / 2, mz = (vz[A] + vz[B]) / 2, L = bLen[e];
       if (!seenAt(A, B, L, bx, by, bz, s1, s2)) continue;
       const th = Math.acos(Math.max(-1, Math.min(1, c))), w = Math.min(W, BEV.inr * Math.min(fIn[s1], fIn[s2])), dep = w * Math.sin(th / 2);   // w: the strip's width along each face; dep: the plane's depth from the edge, along the bisector
-      const want = bx * mx + by * my + bz * mz - Math.max(dep, 1.2 * MINBITE), got = place(bx, by, bz, 0, want, Infinity);
+      const want = bx * mx + by * my + bz * mz - Math.max(dep, 1.2 * MINBITE); let got = place(bx, by, bz, 0, want, Infinity), taper = false;
+      if (!got && placeWhy === 2 && placeAt >= 0) {   // held back by a guard: the cut pivots on the guard point and tapers, full depth at the edge's far end, none at the guard
+        const gx = gd[3 * placeAt], gy = gd[3 * placeAt + 1], gz = gd[3 * placeAt + 2], dA = Math.hypot(vx[A] - gx, vy[A] - gy, vz[A] - gz), dB = Math.hypot(vx[B] - gx, vy[B] - gy, vz[B] - gz), F = dA > dB ? A : B, D = Math.max(dep, 1.2 * MINBITE);
+        const fx = vx[F] - bx * D - gx, fy = vy[F] - by * D - gy, fz = vz[F] - bz * D - gz, ex = vx[B] - vx[A], ey = vy[B] - vy[A], ez = vz[B] - vz[A];
+        const cx = ey * bz - ez * by, cy = ez * bx - ex * bz, cz = ex * by - ey * bx;   // across the strip: the cut keeps this direction
+        let nx = fy * cz - fz * cy, ny = fz * cx - fx * cz, nz = fx * cy - fy * cx; const nl = Math.hypot(nx, ny, nz);
+        if (nl > 1e-9) { nx /= nl; ny /= nl; nz /= nl; if (nx * bx + ny * by + nz * bz < 0) { nx = -nx; ny = -ny; nz = -nz; } got = place(nx, ny, nz, 0, nx * gx + ny * gy + nz * gz, Infinity); taper = got > 0; }
+      }
+      if (BEVLOG && BEVLOG.on) BEVLOG.rows.push({ A: [vx[A], vy[A], vz[A]], B: [vx[B], vy[B], vz[B]], kinds: [sKind[s1] & 15, sKind[s2] & 15], dep, got, taper, why: got ? 0 : placeWhy, held: placeAt >= 0 ? [gd[3 * placeAt], gd[3 * placeAt + 1], gd[3 * placeAt + 2]] : null });
       if (!got) continue;
-      clipAll(pB[nP - 1] - want > 0.1 * Math.max(dep, 1.2 * MINBITE) ? KIND.PART : KIND.BEVEL);   // held back by a guard: a part bevel nP = 0; if (lastCap >= 0) { bBorn[lastCap] = 1; for (let o = 0; o < MAXSL; o++) { bStamp[lastCap * MAXSL + o] = 0; bStamp[o * MAXSL + lastCap] = 0; } } did = true; break;
+      clipAll(taper || pB[nP - 1] - want > 0.1 * Math.max(dep, 1.2 * MINBITE) ? KIND.PART : KIND.BEVEL);   // held back by a guard: a part bevel nP = 0; if (lastCap >= 0) { bBorn[lastCap] = 1; for (let o = 0; o < MAXSL; o++) { bStamp[lastCap * MAXSL + o] = 0; bStamp[o * MAXSL + lastCap] = 0; } } did = true; break;
     }
     if (!did) break;
   }
@@ -1313,7 +1321,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     if (!opt.cells) for (const fl_ of pc.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
     if (pc.cuts) for (const c_ of pc.cuts) clip(c_[0], c_[1], c_[2], c_[3], KIND.TOP);
     if (empty) return;
-    if (opt.cells) { if (empty) return; } else { const tc = now(); DX = seenData(pc, find, G); carveFast(hash2(seed, G.id) >>> 1, G.kp, !!(pc.ground || pc.onGround)); DX = null; TC += now() - tc; if (empty) return; }
+    if (opt.cells) { if (empty) return; } else { const tc = now(); DX = seenData(pc, find, G); if (BEVLOG) BEVLOG.on = BEVLOG.piece === pc.id; carveFast(hash2(seed, G.id) >>> 1, G.kp, !!(pc.ground || pc.onGround)); DX = null; TC += now() - tc; if (empty) return; }
     // faces go straight into the wall's flat buffers (positions, a loop's start and length, kind, normal, area); a stone's `faces` objects are made when something asks
     const f0 = nFace;
     for (let f = 0; f < nF; f++) {
