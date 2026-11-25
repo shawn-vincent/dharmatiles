@@ -526,7 +526,7 @@ function place(nx, ny, nz, depth, from, most) {
     const e = gGe[j]; if (nx * gCx[j] + ny * gCy[j] + nz * gCz[j] + gR[j] > b) for (let i = 3 * s0, n = 3 * e; i < n; i += 3) { const d = nx * gd[i] + ny * gd[i + 1] + nz * gd[i + 2]; if (d > b) { b = d; placeAt = i / 3; } }
     s0 = e;
   }
-  if (b >= top - MINBITE) { placeWhy = b0 >= top - MINBITE ? 3 : 2; return 0; }
+  if (!(b < top - MINBITE)) { placeWhy = b0 >= top - MINBITE || b0 !== b0 ? 3 : 2; return 0; }   // (a plane that is not a number is never made)
   pN[3 * nP] = nx; pN[3 * nP + 1] = ny; pN[3 * nP + 2] = nz; pB[nP++] = b; return top - b;
 }
 function guardsEnd() {   // close a batch of guards: their centre and the radius that holds them (a plane whose reach past the batch is under its bite skips them)
@@ -756,7 +756,8 @@ function bevelAll(grd) {
       tried.set(dk, row);
       if (!got) { row.st = ['', 'down', 'guard', 'bite'][why0]; continue; }
       const pushed = !taper && pB[nP - 1] - want > 0.1 * row.d; row.st = taper ? 'taper' : pushed ? 'pushed' : 'bevel'; if (pushed) row.d = Math.max(0, row.d - (pB[nP - 1] - want));
-      clipAll(taper || pushed ? KIND.PART : KIND.BEVEL); if (lastCap >= 0) cutFor.set(lastCap, row);   // held back by a guard: a part bevel nP = 0; if (lastCap >= 0) { bBorn[lastCap] = 1; for (let o = 0; o < MAXSL; o++) { bStamp[lastCap * MAXSL + o] = 0; bStamp[o * MAXSL + lastCap] = 0; } } did = true; break;
+      clipAll(taper || pushed ? KIND.PART : KIND.BEVEL); nP = 0;   // held back by a guard: a part bevel
+      if (lastCap >= 0) { cutFor.set(lastCap, row); bBorn[lastCap] = 1; for (let o = 0; o < MAXSL; o++) { bStamp[lastCap * MAXSL + o] = 0; bStamp[o * MAXSL + lastCap] = 0; } } did = true; break;
     }
     if (!did) break;
   }
