@@ -34,11 +34,16 @@ use repair::{canonical, contains, keep_largest, quantise, separate_pinches};
 /// band is for small patches (55–65°), and 65° is the hard cap: a 0.2 mm
 /// layer steps 0.2·tan 65° = 0.43 mm, under a 0.45 mm line. Past the cap,
 /// small patches are allowed too, up to `over_share` of the same downward
-/// area; more than that fails.
+/// area; more than that fails. Faces of a `free` material in the band are
+/// not counted at all: a rock's underside may be rough, so rock may lean to
+/// the cap anywhere (painted orange all the same).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HangBand {
     /// The materials the band covers; empty: every material.
     pub materials: &'static [Material],
+    /// The materials whose faces in the band are free: not counted against
+    /// `share`.
+    pub free: &'static [Material],
     /// The hard cap, degrees from vertical.
     pub max_deg: f64,
     /// Band area allowed, as a share of those materials' downward-facing
@@ -49,10 +54,11 @@ pub struct HangBand {
 }
 
 impl HangBand {
-    /// The band every element gets: 55–65° up to 0.1% of the downward area,
-    /// and over 65° up to another 0.1%.
+    /// The band every element gets: 55–65° up to 0.1% of the downward area
+    /// (rock's band faces free), and over 65° up to another 0.1%.
     pub const DEFAULT: Self = Self {
         materials: &[],
+        free: &[Material::Rock],
         max_deg: 65.0,
         share: 0.001,
         over_share: 0.001,
@@ -461,12 +467,19 @@ pub fn audit_rounded(
         band_budget_mm2 = b.share * down;
         overhang_budget_mm2 = overhang_budget_mm2.max(b.over_share * down);
     }
+    // the band's counted area: a free material's band faces are left out
+    let free = band.map_or(&[][..], |b| b.free);
     let band_mm2 = 0.0
         + in_band
             .iter()
             .zip(&areas)
-            .filter(|(o, _)| **o)
-            .map(|(_, a)| a)
+            .zip(&source)
+            .filter(|((o, _), t)| {
+                **o && !materials
+                    .get(**t as usize)
+                    .is_some_and(|mat| free.contains(mat))
+            })
+            .map(|((_, a), _)| a)
             .sum::<f64>();
     // (an empty f64 sum is -0.0)
     let overhang_mm2 = 0.0
@@ -784,6 +797,7 @@ mod tests {
         use crate::scene::Material;
         let band = HangBand {
             materials: &[Material::Leaf],
+            free: &[],
             max_deg: 65.0,
             share: 1.0,
             over_share: 0.0,
@@ -818,6 +832,24 @@ mod tests {
             "{d:?}"
         );
         assert!(d.failures(&fdm()).is_empty(), "{:?}", d.failures(&fdm()));
+    }
+
+    /// Rock's underside may lean anywhere in the band: painted, not counted. Past the cap it is red like anything.
+    #[test]
+    fn rock_leans_free_in_the_band() {
+        use crate::scene::Material;
+        let at = |deg: f64, mat: Material| {
+            let m = leaning(deg);
+            let mats = vec![mat; m.triangles.len()];
+            audit_banded(&m, [10.0, 10.0], &fdm(), &mats, Some(&HangBand::DEFAULT)).1
+        };
+        let r = at(60.0, Material::Rock);
+        assert!(r.band.iter().any(|b| *b) && r.band_mm2 == 0.0, "{r:?}");
+        assert!(r.failures(&fdm()).is_empty(), "{:?}", r.failures(&fdm()));
+        let e = at(60.0, Material::Earth);
+        assert!(e.band_mm2 > 1.0 && !e.failures(&fdm()).is_empty(), "{e:?}");
+        let red = at(70.0, Material::Rock);
+        assert!(!red.failures(&fdm()).is_empty(), "{red:?}");
     }
 
     /// A profile in x–z, extruded 2 mm in y; `fan` triangulates it.

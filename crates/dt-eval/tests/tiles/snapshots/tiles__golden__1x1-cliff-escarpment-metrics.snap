@@ -19,7 +19,7 @@ expression: metrics(b)
     },
     "overhang_mm2": 0.041,
     "overhang_budget_mm2": 3.618,
-    "band_mm2": 0.038,
+    "band_mm2": 0.0,
     "band_budget_mm2": 3.618,
     "holes": 0,
     "failures": []
