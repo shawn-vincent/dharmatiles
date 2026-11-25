@@ -2356,18 +2356,29 @@ function edgeWords(r) {
   }[r.st] || r.st;
   return head + '<div class="why">' + why + '</div>';
 }
+// the other stones fused with stone i into one body (joiners left out: they are filler, not stones)
+const matesOf = i => { const S = shown.surf, g = S.stoneOf[i][0], m = []; for (let j = 0; j < S.stoneOf.length; j++) if (j !== i && S.stoneOf[j][0] === g && !(S.joinerAt && S.joinerAt[j])) m.push(j); return m; };
+const fusedWords = i => { const m = matesOf(i); return m.length ? ` · fused with ${m.map(j => `<a href="#" class="slink" data-stone="${j}">stone ${j}</a>`).join(', ')}` : ''; };
+const stoneHead = i => { const [g, l] = shown.surf.stoneOf[i]; return `<div class="dim">stone ${i} · body ${g}${l >= 0 ? ' · layer ' + l : ''}${fusedWords(i)}</div>`; };
 function stoneWords(i) {
-  const [g, l] = shown.surf.stoneOf[i], [, on, up] = shown.surf.stoneRel[i];
-  return `<div class="dim">stone ${i} · body ${g}${l >= 0 ? ' · layer ' + l : ''}</div><b>Stone ${i}</b>` + (on.length ? ` rests on ${stoneLinks(on)}` : ' rests on the ground or nothing below') + (up.length ? `; it holds up ${stoneLinks(up)}` : '; nothing rests on it') + '.';
+  const [, on, up] = shown.surf.stoneRel[i];
+  return stoneHead(i) + `<b>Stone ${i}</b>` + (on.length ? ` rests on ${stoneLinks(on)}` : ' rests on the ground or nothing below') + (up.length ? `; it holds up ${stoneLinks(up)}` : '; nothing rests on it') + '.';
 }
 let selObj = null;
-function selectStone(i) {   // the stone lit yellow, seen through whatever is in front of it
+// three levels of light, one per step out: what is selected, the thing holding it, the thing holding that
+// (an edge selected: the edge, its stone, the stones fused with it; a stone selected: the stone, the stones fused with it)
+const LIT = [0.22, 0.11, 0.05], LIT_LINE = [1, 0.45, 0.2];
+function selectStone(i, edge) {   // the stone lit yellow, seen through whatever is in front of it; edge: an edge of it is what is selected
   if (selObj) { scene.remove(selObj); disposeGroup(selObj); selObj = null; }
   if (i == null || !shown) { draw(); return; }
-  const st = shown.surf.stoneTri, pos = shown.surf.pos.subarray(9 * st[i], 9 * st[i + 1]);
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos.slice(), 3));
-  selObj = new THREE.Group(); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xFFE600, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthTest: false }));
-  m.renderOrder = 9; selObj.add(m); const e = new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: 0x806000, depthTest: false })); e.renderOrder = 9; selObj.add(e); scene.add(selObj); draw();
+  const st = shown.surf.stoneTri, lv = edge ? 1 : 0; selObj = new THREE.Group();
+  const lite = (j, k) => {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(shown.surf.pos.slice(9 * st[j], 9 * st[j + 1]), 3));
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xFFE600, transparent: true, opacity: LIT[k], side: THREE.DoubleSide, depthTest: false, depthWrite: false })); m.renderOrder = 9 - k; selObj.add(m);
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: 0x806000, transparent: LIT_LINE[k] < 1, opacity: LIT_LINE[k], depthTest: false })); e.renderOrder = 9 - k; selObj.add(e);
+  };
+  lite(i, lv); for (const j of matesOf(i)) lite(j, lv + 1);
+  scene.add(selObj); draw();
   $('chip').textContent = state.style + ' · seed ' + state.seed + ' · stone ' + i + ' (body ' + shown.surf.stoneOf[i][0] + (shown.surf.stoneOf[i][1] >= 0 ? ', layer ' + shown.surf.stoneOf[i][1] : '') + ')';
 }
 let hlObj = null;
@@ -2545,15 +2556,16 @@ function initGL() {
       if (R && rg) for (let i = rg[0]; i < rg[1]; i++) { const o = 8 * i, a = [R.D[o], R.D[o + 1], R.D[o + 2]], ab = [R.D[o + 3] - a[0], R.D[o + 4] - a[1], R.D[o + 5] - a[2]], t_ = clamp(dot(sub(P, a), ab) / Math.max(dot(ab, ab), 1e-12), 0, 1), d = len(sub(P, add(a, mul(ab, t_)))); if (d < bd) { bd = d; best = i; } }
       if (best !== null) best = edgeRow(R, best);
       const reach = Math.max(0.4, 0.012 * hit.distance), box = $('einfo');
-      selectStone(lo);   /* the tapped stone lights up */
+      const onEdge = !!(best && bd <= reach);
+      selectStone(lo, onEdge);   /* the tapped stone lights up: a step fainter when one of its edges is the selection */
       ME = lo;
-      if (best && bd <= reach) { box.innerHTML = `<div class="dim">stone ${lo} · body ${g}${l >= 0 ? ' · layer ' + l : ''}</div>` + edgeWords(best); box.hidden = false; highlightEdge(best); }
+      if (onEdge) { box.innerHTML = stoneHead(lo) + edgeWords(best); box.hidden = false; highlightEdge(best); }
       else { box.innerHTML = stoneWords(lo) + '<div class="dim" style="margin-top:4px">Tap nearer an edge for its report.</div>'; box.hidden = false; highlightEdge(null); }
     });
   }
   $('einfo').addEventListener('click', e => {   // a stone's link: that stone selected, and what it rests on and holds up
     const a = e.target.closest('a.slink'); if (!a) return; e.preventDefault(); const i = +a.dataset.stone;
-    selectStone(i); highlightEdge(null); $('einfo').innerHTML = stoneWords(i);
+    ME = i; selectStone(i); highlightEdge(null); $('einfo').innerHTML = stoneWords(i);
   });
   controls.target.copy(focus()); controls.enablePan = true; controls.minDistance = 20; controls.maxDistance = 600;
   controls.addEventListener('change', draw); controls.update();
