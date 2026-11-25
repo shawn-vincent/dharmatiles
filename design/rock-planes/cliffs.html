@@ -114,6 +114,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .styles button[aria-pressed="true"] { border-color: var(--accent); }
 .styles .note { color: var(--muted); }
 .stage { display: grid; gap: 10px; min-width: 0; }
+.viewer.max { position: fixed; inset: 0; height: 100dvh; min-height: 0; border-radius: 0; border: 0; z-index: 1000; }
+body.vmax { overflow: hidden; }
+#vmax .i-restore, .viewer.max #vmax .i-max { display: none; }
+.viewer.max #vmax .i-restore { display: inline; }
 .viewer { position: relative; height: min(68vh, 620px); min-height: 320px; background: var(--plate); border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line); }
 .viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .vbtn { position: absolute; right: 10px; top: 10px; width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; box-shadow: 0 8px 24px -12px rgb(26 23 20 / .45); }
@@ -211,6 +215,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
           <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M1.5 10s3.2-5.5 8.5-5.5S18.5 10 18.5 10s-3.2 5.5-8.5 5.5S1.5 10 1.5 10Z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="10" r="2.6" fill="currentColor"/></svg>
         </button>
         <div class="zooms">
+          <button class="vbtn" id="vmax" aria-label="Maximize" title="Maximize" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path class="i-max" d="M14 4h6v6M10 20H4v-6M20 4l-6 6M4 20l6-6"/><path class="i-restore" d="M20 10h-6V4M4 14h6v6M14 10l6-6M10 14l-6 6"/></svg></button>
           <button class="vbtn" id="zin" aria-label="Zoom in" title="Zoom in"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M10.5 7.5v6M7.5 10.5h6"/></svg></button>
           <button class="vbtn" id="zfit" aria-label="Zoom to fit" title="Zoom to fit"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg></button>
           <button class="vbtn" id="zout" aria-label="Zoom out" title="Zoom out"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6"/></svg></button>
@@ -2859,6 +2864,10 @@ $('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS, PRES
 $('zin').addEventListener('click', () => zoomBy(0.8));
 $('zout').addEventListener('click', () => zoomBy(1.25));
 $('zfit').addEventListener('click', zoomFit);
+// maximize: the viewer fills the window; the same button (now restore) or Escape puts it back
+const setMax = on => { viewerEl.classList.toggle('max', on); document.body.classList.toggle('vmax', on); const b = $('vmax'); b.setAttribute('aria-pressed', String(on)); b.title = on ? 'Restore' : 'Maximize'; b.setAttribute('aria-label', b.title); };
+$('vmax').addEventListener('click', () => setMax(!viewerEl.classList.contains('max')));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && viewerEl.classList.contains('max')) setMax(false); });
 $('prev').addEventListener('click', () => setSeed(state.seed - 1));
 $('next').addEventListener('click', () => setSeed(state.seed + 1));
 document.addEventListener('keydown', e => {
