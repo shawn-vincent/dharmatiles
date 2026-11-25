@@ -536,6 +536,8 @@ function guardsEnd() {   // close a batch of guards: their centre and the radius
   gGe[nGg] = nG; gCx[nGg] = cx; gCy[nGg] = cy; gCz[nGg] = cz; gR[nGg++] = Math.sqrt(r) + 1e-9; gStart = nG;
 }
 let curTag = 0, KPTAG = null, curWho = null, KPWHO = null; const gTag = new Uint8Array(MAXG), gWho = [];   // gWho: the pieces (stones) a guard point keeps something for   // what each guard point keeps (GUARD_WORDS), for the edge report
+function guardsSave() { return { nG, nGg, gStart, gd: gd.slice(0, 3 * nG), gTag: gTag.slice(0, nG), gWho: gWho.slice(0, nG), gGe: gGe.slice(0, nGg), gCx: gCx.slice(0, nGg), gCy: gCy.slice(0, nGg), gCz: gCz.slice(0, nGg), gR: gR.slice(0, nGg) }; }
+function guardsLoad(g) { nG = g.nG; nGg = g.nGg; gStart = g.gStart; gd.set(g.gd); gTag.set(g.gTag); for (let i = 0; i < g.nG; i++) gWho[i] = g.gWho[i]; gGe.set(g.gGe); gCx.set(g.gCx); gCy.set(g.gCy); gCz.set(g.gCz); gR.set(g.gR); }
 function guardAdd(x, y, z) { if (nG >= MAXG) throw new Error('carve: too many guards'); gTag[nG] = curTag; gWho[nG] = curWho; gd[3 * nG] = x; gd[3 * nG + 1] = y; gd[3 * nG + 2] = z; nG++; }
 // n samples of face f from the current stream, each the next three draws; calls back through sx, sy, sz
 let sx = 0, sy = 0, sz = 0;
@@ -582,7 +584,7 @@ function carvePlanes(seed, kp, grd) {
     const px = fcx + (sx - fcx) * 0.35, py = fcy + (sy - fcy) * 0.35, pz = fcz + (sz - fcz) * 0.35;
     let room = Infinity; { const o = fo[f], m = fl[f]; for (let i = 0; i < m; i++) { const A = fv[o + i], B = fv[o + (i + 1 === m ? 0 : i + 1)], ex = vx[B] - vx[A], ey = vy[B] - vy[A], ez = vz[B] - vz[A], t = Math.max(0, Math.min(1, ((px - vx[A]) * ex + (py - vy[A]) * ey + (pz - vz[A]) * ez) / (ex * ex + ey * ey + ez * ez))); const qx = px - (vx[A] + ex * t), qy = py - (vy[A] + ey * t), qz = pz - (vz[A] + ez * t), d = qx * qx + qy * qy + qz * qz; if (d < room) room = d; } }
     cOk[q] = 1; cPx[q] = px; cPy[q] = py; cPz[q] = pz;
-    curWho = null; curTag = 6; if (cFix[q]) { { const o = fo[f], m = fl[f]; for (let i = 0; i < m; i++) { const w = fv[o + i]; guardAdd(fcx + (vx[w] - fcx) * 0.85, fcy + (vy[w] - fcy) * 0.85, fcz + (vz[w] - fcz) * 0.85); } } guardsEnd(); continue; }
+    curWho = null; curTag = 6; if (cFix[q]) { { const o = fo[f], m = fl[f]; for (let i = 0; i < m; i++) { const w = fv[o + i]; const dv = Math.hypot(vx[w] - fcx, vy[w] - fcy, vz[w] - fcz), k = Math.max(0.4, Math.min(0.85, 1 - (BEVW ?? 0) / Math.max(dv, 1e-9))); guardAdd(fcx + (vx[w] - fcx) * k, fcy + (vy[w] - fcy) * k, fcz + (vz[w] - fcz) * k); /* kept to 85%, and back from each corner by the bevel's width */ } } guardsEnd(); continue; }
     { const kb = (rnd() * NK) | 0; turnTab(cNx[q], cNy[q], cNz[q], TC_[kb], TS_[kb]); }   // (the tilt's draw first, then the axis's)
     let nx = tx, ny = ty, nz = tz; if (nz < -LIM - 1e-9) { nx = cNx[q]; ny = cNy[q]; nz = cNz[q]; } if (VT && Math.abs(cNz[q]) < 0.5) { const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l; nz = 0; }
     perpOf(nx, ny, nz); const u1 = ux, u2 = uy, u3 = uz, v1 = ny * u3 - nz * u2, v2 = nz * u1 - nx * u3, v3 = nx * u2 - ny * u1;
@@ -680,7 +682,7 @@ function relocate() {
 // face, W = K times the stone's smallest dimension (capped at a share of the smaller face's inradius). No tilt, no second pass, no corners, domes, rings or steps.
 // The edges are taken longest first and each cut is made before the next edge is looked at, so an edge whose end was taken off by a neighbour's bevel is read
 // again as it now is. A plane goes through `place`, so the guards (rest patches, crowns, held tops, glued faces) and the downward limit hold.
-let UNB = null, EROWS = null, BEVW = null;   // BEVW: the bevel's width for every part of a split piece (the whole piece's), so their bevels meet
+let UNB = null, EROWS = null, BEVW = null, BEVREC = null, CUTS = null;   // CUTS: this piece's cuts and their rows, so a part finds the cut a bevel face came from by its plane   // BEVREC: the bevel planes a piece was cut with, which a joined piece's part past its miter takes too   // BEVW: the bevel's width for every part of a split piece (the whole piece's), so their bevels meet
 // (UNB, EROWS)   // debugging: UNB the seen edges left sharp, as segments; EROWS the carved stone's edges, each with what became of it (the edge report)   // the seen edges left sharp, as segments (set by carveFor; debugging)
 const BEV = { k: 0.15, inr: 0.8, minTurn: 30, eps: 0.25, minLen: 0.4 };   // k: leg width as a share of the stone's smallest side; inr: at most this share of the smaller face's inradius; minTurn: degrees; eps, minLen: mm
 const MAXEG = 1500, etStamp = new Int32Array(MAXVS * MAXVS), etRef = new Int32Array(MAXVS * MAXVS); let etSt = 0;
@@ -693,7 +695,7 @@ function bevelAll(grd) {
   let lox = Infinity, loy = Infinity, loz = Infinity, hix = -Infinity, hiy = -Infinity, hiz = -Infinity;
   for (let v = 0; v < nVS; v++) { const x = vx[v]; if (x !== x) continue; if (x < lox) lox = x; if (x > hix) hix = x; if (vy[v] < loy) loy = vy[v]; if (vy[v] > hiy) hiy = vy[v]; if (vz[v] < loz) loz = vz[v]; if (vz[v] > hiz) hiz = vz[v]; }
   const W = BEVW ?? BEV.k * Math.min(hix - lox, hiy - loy, hiz - loz), open = DX && DX.open, own = DX && DX.own, glued = DX && DX.glued, minTurn = Math.cos(BEV.minTurn * DEG);
-  bGen++; bBorn.fill(0, 0, MAXSL); EROWS = []; const tried = new Map(), cutFor = new Map();   // tried: each face pair's attempt; cutFor: the attempt each bevel face was cut for
+  bGen++; bBorn.fill(0, 0, MAXSL); for (let s_ = 0; s_ < nSL; s_++) { const k_ = sKind[s_] & 15; if (sLen[s_] && (k_ === KIND.BEVEL || k_ === KIND.PART)) bBorn[s_] = 1; } EROWS = []; const tried = new Map(), cutFor = new Map();   // tried: each face pair's attempt; cutFor: the attempt each bevel face was cut for
   const edges = () => {   // the stone's edges now: each with its two faces; and each face's normal and inradius
     supN = nVS; etSt++; let nE = 0;
     for (let s = 0; s < nSL; s++) {
@@ -713,9 +715,16 @@ function bevelAll(grd) {
   };
   const jSt = new Int32Array(MAXSL).fill(-1), jVal = new Uint8Array(MAXSL);
   const joined = s => {   // a face that lies against another piece of this same stone (or the cut where a piece is split): a seam inside the stone, its edges no edges of the stone
-    if ((sKind[s] & 15) === KIND.JOIN) return true; if (!own) return false; if (jSt[s] === etSt) return jVal[s] === 1;
-    const m = sLen[s], o = s * CAPS; let cx = 0, cy = 0, cz = 0; for (let k = 0; k < m; k++) { const v = sV[o + k]; cx += vx[v]; cy += vy[v]; cz += vz[v]; }
-    const r = own(cx / m + fN[3 * s] * BEV.eps, cy / m + fN[3 * s + 1] * BEV.eps, cz / m + fN[3 * s + 2] * BEV.eps); jSt[s] = etSt; jVal[s] = r ? 1 : 0; return r;
+    if ((sKind[s] & 15) === KIND.JOIN) return true; if (!own) return false; if (jSt[s] === bGen) return jVal[s] === 1;   // once a face, for the whole pass
+    const m = sLen[s], o = s * CAPS; let cx = 0, cy = 0, cz = 0; for (let k = 0; k < m; k++) { const v = sV[o + k]; cx += vx[v]; cy += vy[v]; cz += vz[v]; } cx /= m; cy /= m; cz /= m;
+    // mostly covered: by area, over the triangles from its middle to each side (four samples in each), at least half against the piece
+    const ox = fN[3 * s] * BEV.eps, oy = fN[3 * s + 1] * BEV.eps, oz = fN[3 * s + 2] * BEV.eps; let tot = 0, hit = 0;
+    for (let k = 0; k < m; k++) {
+      const a = sV[o + k], b = sV[o + (k + 1 === m ? 0 : k + 1)], ax = vx[a] - cx, ay = vy[a] - cy, az = vz[a] - cz, bx = vx[b] - cx, by = vy[b] - cy, bz = vz[b] - cz;
+      const ar = Math.hypot(ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx); if (ar < 1e-9) continue; tot += ar;
+      for (const [wa, wb] of [[1 / 3, 1 / 3], [2 / 3, 1 / 6], [1 / 6, 2 / 3], [1 / 6, 1 / 6]]) if (own(cx + ax * wa + bx * wb + ox, cy + ay * wa + by * wb + oy, cz + az * wa + bz * wb + oz)) hit += ar / 4;
+    }
+    const r = tot > 0 && hit >= 0.5 * tot; jSt[s] = bGen; jVal[s] = r ? 1 : 0; return r;
   };
   const seenAt = (A, B, L, bx, by, bz, s1, s2) => {   // seen: just outside either face next to the edge (at its middle or fifths), or just past either end, lies in no other piece
     if (!open) return true; const mx = (vx[A] + vx[B]) / 2, my = (vy[A] + vy[B]) / 2, mz = (vz[A] + vz[B]) / 2;
@@ -763,7 +772,9 @@ function bevelAll(grd) {
       }
       tried.set(dk, row);
       if (!got) { row.st = ['', 'down', 'guard', 'bite'][why0]; continue; }
+      if (BEVREC) BEVREC.push({ p: [pN[3 * (nP - 1)], pN[3 * (nP - 1) + 1], pN[3 * (nP - 1) + 2], pB[nP - 1]], a: [vx[A], vy[A], vz[A]], b: [vx[B], vy[B], vz[B]] });   // the plane and the edge it was cut for
       const pushed = !taper && pB[nP - 1] - want > 0.1 * row.d; row.st = taper ? 'taper' : pushed ? 'pushed' : 'bevel'; if (pushed) row.d = Math.max(0, row.d - (pB[nP - 1] - want));
+      if (CUTS) CUTS.push({ p: [pN[3 * (nP - 1)], pN[3 * (nP - 1) + 1], pN[3 * (nP - 1) + 2], pB[nP - 1]], row });
       clipAll(taper || pushed ? KIND.PART : KIND.BEVEL); nP = 0;   // held back by a guard: a part bevel
       if (lastCap >= 0) { cutFor.set(lastCap, row); bBorn[lastCap] = 1; for (let o = 0; o < MAXSL; o++) { bStamp[lastCap * MAXSL + o] = 0; bStamp[o * MAXSL + lastCap] = 0; } } did = true; break;
     }
@@ -777,7 +788,8 @@ function bevelAll(grd) {
       const k1 = sKind[s1] & 15, k2 = sKind[s2] & 15, A = gA[e], B = gB[e], L = Math.hypot(vx[B] - vx[A], vy[B] - vy[A], vz[B] - vz[A]);
       const r = { a: [vx[A], vy[A], vz[A]], b: [vx[B], vy[B], vz[B]], k: [k1, k2], t: Math.acos(Math.max(-1, Math.min(1, c))) / DEG, L, st: '' };
       const bv = k => k === KIND.BEVEL || k === KIND.PART;
-      if (bv(k1) || bv(k2)) { r.st = 'side'; r.of = cutFor.get(bv(k1) ? s1 : s2) || null; }
+      if (bv(k1) || bv(k2)) { const sb = bv(k1) ? s1 : s2; r.st = 'side'; r.of = cutFor.get(sb) || null;
+        if (!r.of && CUTS) { const m = sLen[sb], v = sV[sb * CAPS]; for (const c of CUTS) if (c.p[0] * fN[3 * sb] + c.p[1] * fN[3 * sb + 1] + c.p[2] * fN[3 * sb + 2] > 0.9999 && Math.abs(c.p[0] * vx[v] + c.p[1] * vy[v] + c.p[2] * vz[v] - c.p[3]) < 1e-4) { r.of = c.row; break; } } }
       else if (glued && k1 === KIND.SIDE && glued(sKind[s1] >> 4) && k2 === KIND.SIDE && glued(sKind[s2] >> 4)) r.st = 'glued';
       else if (joined(s1) || joined(s2)) r.st = 'join';
       else if (grd && (k1 === KIND.BOT || k2 === KIND.BOT)) r.st = 'ground';
@@ -799,17 +811,24 @@ function carveFast(seed, kp, grd) {
 }
 // a piece of a merged stone whose top or bottom runs past the piece joined to it: carved whole (its planes, so its faces run on across the split), then split
 // at that piece's sides into parts, each bevelled on its own at the whole piece's width; the split faces are JOIN (inside the stone, never bevelled)
-function carveParts(seed, kp, grd, parts, emit) {
-  carvePlanes(seed, kp, grd); toSlots(); clipAll(); if (empty) return false; fromSlots(); if (empty) return false;
-  let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (let v = 0; v < nV; v++) { if (vx[v] !== vx[v]) continue; const p = [vx[v], vy[v], vz[v]]; for (let k = 0; k < 3; k++) { if (p[k] < lo[k]) lo[k] = p[k]; if (p[k] > hi[k]) hi[k] = p[k]; } }
-  const cs = snap(), gs = gd.slice(0, 3 * nG), rows = []; let any = false; BEVW = BEV.k * Math.min(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
-  for (const part of parts) {
+// the whole piece bevelled first: one plane for each edge, whatever parts it later runs through (a seam, mostly covered, is left); kept for the parts
+function carveWhole(seed, kp, grd) {
+  carvePlanes(seed, kp, grd); toSlots(); clipAll(); if (empty) return null;
+  const unb = UNB; UNB = null; supN = nVS; relocate(); nP = 0; bevelAll(grd); UNB = unb; if (empty) return null; fromSlots(); if (empty) return null;
+  return { cs: snap(), gs: guardsSave() };
+}
+function carveParts(whole, grd, parts, emit) {
+  if (!whole) return false; const { cs } = whole; const gs = whole.gs.gd;
+  guardsLoad(whole.gs); const rows = []; let any = false;
+
+  for (const part of parts) {   // then each part: the joined piece's bevels it takes, and the bevels of what is still sharp (the stretch of an edge past the join)
     restore(cs); gd.set(gs); nP = 0;
-    for (const h of part) clip(h[0], h[1], h[2], h[3], KIND.JOIN);
+    for (const h of part.hs) clip(h[0], h[1], h[2], h[3], KIND.JOIN);
+    for (const h of part.take) clip(h[0], h[1], h[2], h[3], KIND.BEVEL);   // the joined piece's own bevels, run on past the join to the miter: an inside corner's two bevels meet there
     if (empty || nF < 4) continue; toSlots(); supN = nVS; relocate(); nP = 0; bevelAll(grd); if (EROWS) rows.push(...EROWS);
     if (!empty) { fromSlots(); if (!empty) { emit(); any = true; } }
   }
-  BEVW = null; EROWS = rows; return any;
+  EROWS = rows; return any;
 }
 function wall(seed, P, opt = {}) {
   carveFor(P);
@@ -1332,13 +1351,14 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   // ---- carving: every piece independent. Pebble planes fitted to the body's box, those cutting a keep patch dropped
   const pieceAt = new Map(pieces.map(p => [p.k * 100000 + p.s.id, p.id]));   // a layer's piece by its seed
   for (const G of groups.values()) {
+    if (G.pieces.length > 1) { let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (const pc of G.pieces) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], pc.bb[2 * k]); hi[k] = Math.max(hi[k], pc.bb[2 * k + 1]); } G.W = BEV.k * Math.min(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]); }   // a merged stone's one bevel width
     // keep patches of the body: every piece's bottom, each rest patch it gives a stone above, glue faces of its sides
     const kp = [], kt = [], kw = []; for (const pc of G.pieces) { { const BK = pc.ground ? pc.B : pc.Bkeep, on = pc.ground ? null : pc.rests.filter(r => !r.glue).map(r => r.holder.id); if (BK) for (const v of BK) { kp.push(v[0], v[1], botZ(pc, v[0], v[1])); kt.push(pc.ground ? 8 : 1); kw.push(on); } } for (const t of pc.tops) for (const kk of t.keeps) for (const v of kk) { kp.push(v[0], v[1], v[2]); kt.push(2); kw.push(t.supBy || null); } }
-    for (const pc of G.pieces) for (const sd of pc.sides) if (find(sd.nb) === G.id) { const pp = sd.poly; let cx = 0, cy = 0, cz = 0; for (const v of pp) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= pp.length; cy /= pp.length; cz /= pp.length; let sh = 0; { let r = 1e9; for (const v of pp) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); sh = Math.min(BEV.k * Math.min(pc.bb[1] - pc.bb[0], pc.bb[3] - pc.bb[2], pc.bb[5] - pc.bb[4]), 0.4 * r) / Math.max(r, 1e-6) * (r > 0 ? 1 : 0); } for (const v of pp) { kp.push(cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)); kt.push(3); kw.push(pieceAt.has(pc.k * 100000 + sd.nb) ? [pieceAt.get(pc.k * 100000 + sd.nb)] : null); } }   // a glued face keeps its middle: its rim is drawn in by the bevel's width, so an inside corner gets a bevel on each side (a V-groove)
+    for (const pc of G.pieces) for (const sd of pc.sides) if (find(sd.nb) === G.id) { const pp = sd.poly; let cx = 0, cy = 0, cz = 0; for (const v of pp) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= pp.length; cy /= pp.length; cz /= pp.length; let sh = 0; { let r = 1e9; for (const v of pp) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); sh = Math.min(G.W ?? BEV.k * Math.min(pc.bb[1] - pc.bb[0], pc.bb[3] - pc.bb[2], pc.bb[5] - pc.bb[4]), 0.4 * r) / Math.max(r, 1e-6) * (r > 0 ? 1 : 0); } for (const v of pp) { kp.push(cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)); kt.push(3); kw.push(pieceAt.has(pc.k * 100000 + sd.nb) ? [pieceAt.get(pc.k * 100000 + sd.nb)] : null); } }   // a glued face keeps its middle: its rim is drawn in by the bevel's width, so an inside corner gets a bevel on each side (a V-groove)
 
     for (const pc of G.pieces) for (const r of pc.rests) if (r.glue && r.t) {   // drawn in from its rim by the bevel's width (at most 0.4 of the way to its middle), as a glued face is, so the edges that end at the join still bevel
       const P_ = r.poly; let cx = 0, cy = 0; for (const v of P_) { cx += v[0]; cy += v[1]; } cx /= P_.length; cy /= P_.length; let rr = Infinity; for (const v of P_) rr = Math.min(rr, Math.hypot(v[0] - cx, v[1] - cy));
-      const W = BEV.k * Math.min(pc.bb[1] - pc.bb[0], pc.bb[3] - pc.bb[2], pc.bb[5] - pc.bb[4]), sh = rr > 1e-6 && W > 0 ? Math.min(W, 0.4 * rr) / rr : 0;
+      const W = G.W ?? BEV.k * Math.min(pc.bb[1] - pc.bb[0], pc.bb[3] - pc.bb[2], pc.bb[5] - pc.bb[4]), sh = rr > 1e-6 && W > 0 ? Math.min(W, 0.4 * rr) / rr : 0;
       for (const v of P_) { const x = cx + (v[0] - cx) * (1 - sh), y = cy + (v[1] - cy) * (1 - sh); kp.push(x, y, tz_(r.t.pl, x, y)); kt.push(4); kw.push([pc.id, r.holder.id]); }
     }   // the glued interface stays flat on the holder's side too
     G.kp = kp; G.kpTag = kt; G.kpWho = kw; const hp = []; for (const pc of G.pieces) { for (const t of pc.tops) for (const kk of t.keeps) hp.push(kk); for (const sd of pc.sides) if (find(sd.nb) === G.id) hp.push(sd.poly); } G.holds = hp;
@@ -1356,26 +1376,54 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   // the pieces by the boxes they fill: what lies at a point (a stone's own group is not another stone)
   const PGX = 6, PGY = 4, PGZ = 4, pgrid = new Map();
   for (const q of pieces) { const b = q.bb; for (let ix = Math.floor(b[0] / PGX); ix <= Math.floor(b[1] / PGX); ix++) for (let iy = Math.floor(b[2] / PGY); iy <= Math.floor(b[3] / PGY); iy++) for (let iz = Math.floor(b[4] / PGZ); iz <= Math.floor(b[5] / PGZ); iz++) { const k = ((ix + 64) * 128 + (iy + 64)) * 128 + iz + 64; let l = pgrid.get(k); if (!l) pgrid.set(k, l = []); l.push(q); } }
-  const inside = (q, x, y, z) => {
+  const inside = (q, x, y, z, noFlare = false) => {
     for (const e of q.planes) { if (e[4] === KIND.BOT) { if (z < botZ(q, x, y)) return false; continue; } if (e[0] * x + e[1] * y + e[2] * z > e[3]) return false; }
-    for (const f of q.flare) if (f[0] * x + f[1] * y + f[2] * z > f[3]) return false; return true;
+    if (!noFlare) for (const f of q.flare) if (f[0] * x + f[1] * y + f[2] * z > f[3]) return false; return true;
   };
   // the carve's two questions of a piece: where a point lies in no other stone (open), and which side faces are glued to a neighbour
   function seenData(pc, find, G) {
     const open = (x, y, z) => { const lst = pgrid.get(((Math.floor(x / PGX) + 64) * 128 + (Math.floor(y / PGY) + 64)) * 128 + Math.floor(z / PGZ) + 64); if (!lst) return true; for (const q of lst) if (q.grp !== G.id && inside(q, x, y, z)) return false; return true; };
     const glued = i => { const pl = pc.planes[i]; return !pl || pl[4] !== KIND.SIDE || find(pl[5]) === G.id; };
-    const own = (x, y, z) => { const lst = pgrid.get(((Math.floor(x / PGX) + 64) * 128 + (Math.floor(y / PGY) + 64)) * 128 + Math.floor(z / PGZ) + 64); if (lst) for (const q of lst) if (q.grp === G.id && q !== pc && inside(q, x, y, z)) return true; return false; };
-    return { open, glued, own };
+    const own = (x, y, z) => { const lst = pgrid.get(((Math.floor(x / PGX) + 64) * 128 + (Math.floor(y / PGY) + 64)) * 128 + Math.floor(z / PGZ) + 64); if (lst) for (const q of lst) if (q.grp === G.id && q !== pc && inside(q, x, y, z, true)) return true; return false; };   // (a flare under a piece is no gap inside its own stone)
+    return { open, glued, own: G.pieces.length > 1 ? own : null };
   }
   // where a piece's top or bottom runs past a piece of the same stone joined to it (a narrower piece above or below): that piece's open sides split it,
   // so the part under the join keeps its seam flat and the part past it is bevelled like any edge; at most 4 splits, null when none
+  // where a piece's top or bottom runs past a piece of the same stone joined to it (a narrower piece above or below), each open side of that piece makes an
+  // inside corner with the join. The piece is split there along the corner's miter (the plane halfway between that side and the join), and the part on the
+  // joined piece's side of every one of its miters also takes the joined piece's own bevel planes, so the two bevels of the corner meet on the miter.
+  // Parts: { hs: the half-spaces it keeps, take: the bevel planes it takes }; null when there is no inside corner; at most 4 miters
   const partsOf = (G, pc) => {
-    if (G.pieces.length < 2) return null; const nb = G.pieces.filter(o => o !== pc && (pc.rests.some(r => r.glue && r.holder === o) || o.rests.some(r => r.glue && r.holder === pc))); if (!nb.length) return null;
-    const pl = []; for (const o of nb) for (const e of o.planes) {
-      if (e[4] !== KIND.SIDE || find(e[5]) === G.id) continue; let a = 0, b = 0; for (let v = 0; v < nV; v++) { const d = e[0] * vx[v] + e[1] * vy[v] + e[2] * vz[v] - e[3]; if (d > 0.3) a++; else if (d < -0.3) b++; }
-      if (!a || !b || pl.some(q => q[0] * e[0] + q[1] * e[1] + q[2] * e[2] > 0.999 && Math.abs(q[3] - e[3]) < 0.1)) continue; pl.push(e); if (pl.length >= 4) break;
+    if (G.pieces.length < 2) return null; const mit = [];
+    for (const o of G.pieces) {
+      if (o === pc || mit.length >= 4) continue; let jp = null;   // the join's plane, its normal out of pc (toward o): [nx, ny, nz, d], pc inside
+      { const r = pc.rests.find(r => r.glue && r.holder === o && r.t); if (r) { const L = Math.hypot(r.t.pl[0], r.t.pl[1], 1); jp = [r.t.pl[0] / L, r.t.pl[1] / L, -1 / L, -r.t.pl[2] / L]; } }
+      if (!jp) { const r = o.rests.find(r => r.glue && r.holder === pc && r.t); if (r) { const L = Math.hypot(r.t.pl[0], r.t.pl[1], 1); jp = [-r.t.pl[0] / L, -r.t.pl[1] / L, 1 / L, r.t.pl[2] / L]; } }
+      if (!jp) continue; const mine = [];
+      for (const e of o.planes) {
+        if (e[4] !== KIND.SIDE || find(e[5]) === G.id) continue; let a = 0, b = 0;   // the side must cross this piece at the join (its corners there on both sides of it)
+        for (let v = 0; v < nV; v++) { if (vx[v] !== vx[v] || Math.abs(jp[0] * vx[v] + jp[1] * vy[v] + jp[2] * vz[v] - jp[3]) > 0.6) continue; const d = e[0] * vx[v] + e[1] * vy[v] + e[2] * vz[v] - e[3]; if (d > 0.3) a++; else if (d < -0.3) b++; }
+        if (!a || !b) continue;   // no inside corner
+        let mx = e[0] - jp[0], my = e[1] - jp[1], mz = e[2] - jp[2]; const L = Math.hypot(mx, my, mz); if (L < 1e-6) continue;   // the miter: o's side of it is where (side) - (join) <= 0
+        mine.push([mx / L, my / L, mz / L, (e[3] - jp[3]) / L]); if (mit.length + mine.length >= 4) break;
+      }
+      if (mine.length) mit.push({ o, ms: mine, jp });
     }
-    if (!pl.length) return null; const parts = [], rest = []; for (const e of pl) { parts.push([...rest, [-e[0], -e[1], -e[2], -e[3]]]); rest.push(e); } parts.push(rest); return parts;
+    if (!mit.length) return null;
+    const flat = []; for (const m of mit) for (const h of m.ms) flat.push([h, m.o]);
+    // every side of every miter: a part is one choice of side for each (empty ones fall away when carved); it takes the bevels of each joined piece
+    // whose miters it is inside, all of them
+    const parts = [];
+    for (let mask = 0; mask < 1 << flat.length; mask++) {
+      const hs = flat.map(([h], i) => mask >> i & 1 ? [-h[0], -h[1], -h[2], -h[3]] : h), take = [];
+      for (const m of mit) if (m.o.bev && flat.every(([, o], i) => o !== m.o || !(mask >> i & 1))) for (const r of m.o.bev) {   // only the bevels of its edges that come down to the join (not along it)
+        const j = m.jp, da = Math.abs(j[0] * r.a[0] + j[1] * r.a[1] + j[2] * r.a[2] - j[3]), db = Math.abs(j[0] * r.b[0] + j[1] * r.b[1] + j[2] * r.b[2] - j[3]);
+        const ex = r.b[0] - r.a[0], ey = r.b[1] - r.a[1], ez = r.b[2] - r.a[2], el = Math.hypot(ex, ey, ez) || 1;
+        if (Math.min(da, db) < 0.8 && Math.abs(ex * j[0] + ey * j[1] + ez * j[2]) / el > 0.5) take.push(r.p);
+      }
+      parts.push({ hs, take });
+    }
+    return parts;
   };
   const emitPiece = (G, pc) => {   // its own function: `wall` is past the size V8 will optimize
     restore(pc.snap); let pEdges = null;
@@ -1395,13 +1443,26 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     } };
     if (opt.cells) { if (empty) return; emitFaces(); }
     else {
-      const tc = now(), grd = !!(pc.ground || pc.onGround), parts = opt.split === false ? null : partsOf(G, pc); DX = seenData(pc, find, G); KPTAG = G.kpTag; KPWHO = G.kpWho;
-      let ok = true; if (parts) ok = carveParts(hash2(seed, G.id) >>> 1, G.kp, grd, parts, emitFaces); else { carveFast(hash2(seed, G.id) >>> 1, G.kp, grd); ok = !empty; if (ok) emitFaces(); }
-      KPTAG = null; KPWHO = null; pEdges = EROWS; EROWS = null; DX = null; TC += now() - tc; if (!ok || nFace === f0) return;
+      const tc = now(), grd = !!(pc.ground || pc.onGround), parts = opt.split === false ? null : partsOf(G, pc); DX = seenData(pc, find, G); KPTAG = G.kpTag; KPWHO = G.kpWho; BEVW = G.W ?? null; BEVREC = pc.bev = []; CUTS = [];
+      let ok = true; if (parts) { if (pc.bev0) BEVREC = pc.bev = pc.bev0.slice(); if (pc.cuts_) CUTS = pc.cuts_; ok = carveParts(pc.whole, grd, parts, emitFaces); pc.whole = null; } else { carveFast(hash2(seed, G.id) >>> 1, G.kp, grd); ok = !empty; if (ok) emitFaces(); }
+      KPTAG = null; KPWHO = null; BEVW = null; BEVREC = null; CUTS = null; pEdges = EROWS; EROWS = null; DX = null; TC += now() - tc; if (!ok || nFace === f0) return;
     }
-        stones.push({ on: pc.ground ? [] : pc.rests.filter(r => !r.glue).map(r => r.holder.id), up: [...new Set(pc.tops.flatMap(t => t.supBy || []))], edges: pEdges, holds: G.holds, piece: pc.id, grp: G.id, get faces() { return this._f || (this._f = mk(this._a, this._b)); }, _a: f0, _b: nFace, _f: null, layer: pc.layer, held: pc.held, onGround: !!pc.onGround });
+        return ({ on: pc.ground ? [] : pc.rests.filter(r => !r.glue).map(r => r.holder.id), up: [...new Set(pc.tops.flatMap(t => t.supBy || []))], edges: pEdges, holds: G.holds, piece: pc.id, grp: G.id, get faces() { return this._f || (this._f = mk(this._a, this._b)); }, _a: f0, _b: nFace, _f: null, layer: pc.layer, held: pc.held, onGround: !!pc.onGround });
     };
-  for (const G of groups.values()) for (const pc of G.pieces) emitPiece(G, pc);
+  // a merged stone: one bevel width for all its pieces (so an inside corner's bevels meet on its miter), and the pieces with no inside corner carved
+  // first, so their bevel planes are there for the parts that take them; the stones keep the pieces' order
+  const prep = pc => { restore(pc.snap); if (!pc.ground) { const L = pc.bgL, bg = pc.botPl; clip(bg[0] / L, bg[1] / L, -1 / L, (-bg[2] + pc.sink) / L, KIND.BOT); } if (!opt.cells) for (const fl_ of pc.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE); if (pc.cuts) for (const c_ of pc.cuts) clip(c_[0], c_[1], c_[2], c_[3], KIND.TOP); return !empty; };
+  for (const G of groups.values()) {
+    if (G.pieces.length < 2) { const r = emitPiece(G, G.pieces[0]); if (r) stones.push(r); continue; }
+    const late = new Set(); if (!opt.cells && opt.split !== false) for (const pc of G.pieces) if (prep(pc) && partsOf(G, pc)) late.add(pc);
+    for (const pc of late) {   // a split piece's whole-piece bevels first, so a piece split beside it can take them whichever is carved first
+      prep(pc); DX = seenData(pc, find, G); KPTAG = G.kpTag; KPWHO = G.kpWho; BEVW = G.W; BEVREC = pc.bev = []; const unb = UNB; UNB = null;
+      CUTS = pc.cuts_ = []; pc.whole = carveWhole(hash2(seed, G.id) >>> 1, G.kp, !!(pc.ground || pc.onGround)); CUTS = null;
+      UNB = unb; pc.bev0 = pc.bev; BEVREC = null; BEVW = null; KPTAG = null; KPWHO = null; DX = null; EROWS = null;
+    }
+    const rec = new Map(); for (const pc of G.pieces) if (!late.has(pc)) rec.set(pc, emitPiece(G, pc)); for (const pc of late) rec.set(pc, emitPiece(G, pc));
+    for (const pc of G.pieces) { const r = rec.get(pc); if (r) stones.push(r); }
+  }
   lap('emit'); T.carve = TC;
   T.total = now() - t0;
   // ---- the contact graph: a body is connected when some piece rests on the ground or on a connected body
