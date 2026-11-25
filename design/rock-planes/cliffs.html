@@ -479,7 +479,7 @@ const NK = 1024, TC_ = new Float64Array(NK), TS_ = new Float64Array(NK);   // a 
 const ROUND_FROM = 13;   // degrees of Tilt below which a style is not carved round at all (Granite's 13 domes, but its through stones have no margin to spare)
 let ROUND = 0;   // ROUND: 0 to 1, how round the style is carved, from its Tilt (0 at ROUND_FROM degrees or less: Granite, Ashlar, Columns, Layered; 1 at 25: Fieldstone): it blunts the bottoms and rounds the tops
 function carveFor(P) {   // the wall's carving, and the tables of its Tilt
-  CF = { rtilt: P.rtilt }; BEV.k = (P.bevel ?? 15) / 100;
+  CF = { rtilt: P.rtilt }; BEV.k = (P.bevel ?? 15) / 100; UNB = [];
   for (let i = 0; i < NK; i++) { const a = (CF.rtilt[0] + (CF.rtilt[1] - CF.rtilt[0]) * (i + 0.5) / NK) * DEG; TC_[i] = Math.cos(a); TS_[i] = Math.sin(a); }
   ROUND = clamp((CF.rtilt[1] - ROUND_FROM) / (25 - ROUND_FROM), 0, 1);
 }
@@ -668,6 +668,7 @@ function relocate() {
 // face, W = K times the stone's smallest dimension (capped at a share of the smaller face's inradius). No tilt, no second pass, no corners, domes, rings or steps.
 // The edges are taken longest first and each cut is made before the next edge is looked at, so an edge whose end was taken off by a neighbour's bevel is read
 // again as it now is. A plane goes through `place`, so the guards (rest patches, crowns, held tops, glued faces) and the downward limit hold.
+let UNB = null;   // the seen edges left sharp, as segments (set by carveFor; debugging)
 const BEV = { k: 0.15, inr: 0.8, minTurn: 30, eps: 0.25, minLen: 0.4 };   // k: leg width as a share of the stone's smallest side; inr: at most this share of the smaller face's inradius; minTurn: degrees; eps, minLen: mm
 const MAXEG = 1500, etStamp = new Int32Array(MAXVS * MAXVS), etRef = new Int32Array(MAXVS * MAXVS); let etSt = 0;
 const gA = new Int32Array(MAXEG), gB = new Int32Array(MAXEG), gF1 = new Int32Array(MAXEG), gF2 = new Int32Array(MAXEG), gN = new Uint8Array(MAXEG);
@@ -680,7 +681,7 @@ function bevelAll(grd) {
   for (let v = 0; v < nVS; v++) { const x = vx[v]; if (x !== x) continue; if (x < lox) lox = x; if (x > hix) hix = x; if (vy[v] < loy) loy = vy[v]; if (vy[v] > hiy) hiy = vy[v]; if (vz[v] < loz) loz = vz[v]; if (vz[v] > hiz) hiz = vz[v]; }
   const W = BEV.k * Math.min(hix - lox, hiy - loy, hiz - loz), open = DX && DX.open, glued = DX && DX.glued, minTurn = Math.cos(BEV.minTurn * DEG);
   bGen++; bBorn.fill(0, 0, MAXSL);
-  for (let guard = 0; guard < 400 && !empty; guard++) {
+  const edges = () => {   // the stone's edges now: each with its two faces; and each face's normal and inradius
     supN = nVS; etSt++; let nE = 0;
     for (let s = 0; s < nSL; s++) {
       fOk[s] = 0; const m = sLen[s]; if (!m) continue; const o = s * CAPS; let nx = 0, ny = 0, nz = 0, per = 0;
@@ -695,6 +696,17 @@ function bevelAll(grd) {
       const L = Math.sqrt(nx * nx + ny * ny + nz * nz); if (L < 1e-9) continue;
       fN[3 * s] = nx / L; fN[3 * s + 1] = ny / L; fN[3 * s + 2] = nz / L; fIn[s] = L / per; fOk[s] = 1;
     }
+    return nE;
+  };
+  const seenAt = (A, B, L, bx, by, bz) => {   // a point just outside the edge's middle, its fifths, or just past either end, lies in no other piece
+    if (!open) return true; const mx = (vx[A] + vx[B]) / 2, my = (vy[A] + vy[B]) / 2, mz = (vz[A] + vz[B]) / 2;
+    let seen = open(mx + bx * BEV.eps, my + by * BEV.eps, mz + bz * BEV.eps); if (!seen && L > 3) seen = open(vx[A] * 0.8 + vx[B] * 0.2 + bx * BEV.eps, vy[A] * 0.8 + vy[B] * 0.2 + by * BEV.eps, vz[A] * 0.8 + vz[B] * 0.2 + bz * BEV.eps) || open(vx[A] * 0.2 + vx[B] * 0.8 + bx * BEV.eps, vy[A] * 0.2 + vy[B] * 0.8 + by * BEV.eps, vz[A] * 0.2 + vz[B] * 0.8 + bz * BEV.eps);
+          // an edge seen only end-on (a joint's top or bottom edge, met by the front): a probe just past each end, along the edge
+          if (!seen) { const ux = (vx[B] - vx[A]) / L, uy = (vy[B] - vy[A]) / L, uz = (vz[B] - vz[A]) / L, q = BEV.eps; seen = open(vx[B] + (ux + bx) * q, vy[B] + (uy + by) * q, vz[B] + (uz + bz) * q) || open(vx[A] + (bx - ux) * q, vy[A] + (by - uy) * q, vz[A] + (bz - uz) * q); }
+      return seen;
+  };
+  for (let guard = 0; guard < 400 && !empty; guard++) {
+    const nE = edges();
     // the candidates, longest first
     let nc = 0;
     for (let e = 0; e < nE; e++) {
@@ -715,16 +727,26 @@ function bevelAll(grd) {
       const n1x = fN[3 * s1], n1y = fN[3 * s1 + 1], n1z = fN[3 * s1 + 2], n2x = fN[3 * s2], n2y = fN[3 * s2 + 1], n2z = fN[3 * s2 + 2], c = n1x * n2x + n1y * n2y + n1z * n2z;
       let bx = n1x + n2x, by = n1y + n2y, bz = n1z + n2z; const bl = Math.sqrt(bx * bx + by * by + bz * bz); bStamp[dk] = bGen; if (bl < 1e-6) continue; bx /= bl; by /= bl; bz /= bl;
       const mx = (vx[A] + vx[B]) / 2, my = (vy[A] + vy[B]) / 2, mz = (vz[A] + vz[B]) / 2, L = bLen[e];
-      if (open) { let seen = open(mx + bx * BEV.eps, my + by * BEV.eps, mz + bz * BEV.eps); if (!seen && L > 3) seen = open(vx[A] * 0.8 + vx[B] * 0.2 + bx * BEV.eps, vy[A] * 0.8 + vy[B] * 0.2 + by * BEV.eps, vz[A] * 0.8 + vz[B] * 0.2 + bz * BEV.eps) || open(vx[A] * 0.2 + vx[B] * 0.8 + bx * BEV.eps, vy[A] * 0.2 + vy[B] * 0.8 + by * BEV.eps, vz[A] * 0.2 + vz[B] * 0.8 + bz * BEV.eps);
-        // an edge seen only end-on (a joint's top or bottom edge, met by the front): a probe just past each end, along the edge
-        if (!seen) { const ux = (vx[B] - vx[A]) / L, uy = (vy[B] - vy[A]) / L, uz = (vz[B] - vz[A]) / L, q = BEV.eps; seen = open(vx[B] + (ux + bx) * q, vy[B] + (uy + by) * q, vz[B] + (uz + bz) * q) || open(vx[A] + (bx - ux) * q, vy[A] + (by - uy) * q, vz[A] + (bz - uz) * q); }
-        if (!seen) continue; }
+      if (!seenAt(A, B, L, bx, by, bz)) continue;
       const th = Math.acos(Math.max(-1, Math.min(1, c))), w = Math.min(W, BEV.inr * Math.min(fIn[s1], fIn[s2])), dep = w * Math.sin(th / 2);   // w: the strip's width along each face; dep: the plane's depth from the edge, along the bisector
       const want = bx * mx + by * my + bz * mz - Math.max(dep, 1.2 * MINBITE), got = place(bx, by, bz, 0, want, Infinity);
       if (!got) continue;
       clipAll(pB[nP - 1] - want > 0.1 * Math.max(dep, 1.2 * MINBITE) ? KIND.PART : KIND.BEVEL);   // held back by a guard: a part bevel nP = 0; if (lastCap >= 0) { bBorn[lastCap] = 1; for (let o = 0; o < MAXSL; o++) { bStamp[lastCap * MAXSL + o] = 0; bStamp[o * MAXSL + lastCap] = 0; } } did = true; break;
     }
     if (!did) break;
+  }
+  if (!empty && UNB) {   // debugging: the seen edges left sharp (no bevel on either side), drawn as lines
+    const nE = edges();
+    for (let e = 0; e < nE; e++) {
+      if (gN[e] !== 2) continue; const s1 = gF1[e], s2 = gF2[e]; if (!fOk[s1] || !fOk[s2]) continue;
+      const k1 = sKind[s1] & 15, k2 = sKind[s2] & 15; if (k1 === KIND.BEVEL || k1 === KIND.PART || k2 === KIND.BEVEL || k2 === KIND.PART) continue;
+      const c = fN[3 * s1] * fN[3 * s2] + fN[3 * s1 + 1] * fN[3 * s2 + 1] + fN[3 * s1 + 2] * fN[3 * s2 + 2]; if (c > minTurn) continue;
+      if (glued && k1 === KIND.SIDE && glued(sKind[s1] >> 4) && k2 === KIND.SIDE && glued(sKind[s2] >> 4)) continue;
+      if (grd && (k1 === KIND.BOT || k2 === KIND.BOT)) continue;
+      const A = gA[e], B = gB[e], L = Math.hypot(vx[B] - vx[A], vy[B] - vy[A], vz[B] - vz[A]); if (L < BEV.minLen) continue;
+      let bx = fN[3 * s1] + fN[3 * s2], by = fN[3 * s1 + 1] + fN[3 * s2 + 1], bz = fN[3 * s1 + 2] + fN[3 * s2 + 2]; const bl = Math.hypot(bx, by, bz); if (bl < 1e-6) continue; bx /= bl; by /= bl; bz /= bl;
+      if (seenAt(A, B, L, bx, by, bz)) UNB.push(vx[A], vy[A], vz[A], vx[B], vy[B], vz[B]);
+    }
   }
 }function clipAll(kind = KIND.PEBBLE) { for (let i = 0; i < nP; i++) { clipS(pN[3 * i], pN[3 * i + 1], pN[3 * i + 2], pB[i], kind); if (empty) break; } }
 function carveFast(seed, kp, grd) {
@@ -2115,27 +2137,27 @@ function passII(w, opt = {}) {
 }
 // a wall, cracked: the cells and carving, then the grooves (Cracks above 0%)
 function build(seed, P, opt = {}) {
-  const w = wall(seed, P, opt);
+  const w = wall(seed, P, opt); w.unbev = Float32Array.from(UNB || []);
   if (!opt.cells && P.cracks > 0) { const t = now(); w.cracks = crackWall(w, P, seed, P.cracks); w.T.crack = now() - t; w.tri = w.cracks.tri; } else w.T.crack = 0;
   return w;
 }
 // ---------- what the page draws: the wall as flat arrays ----------
 // A stone's faces, as triangles (positions and colours, three vertices each), where each face starts (so the overhang paint can find it), and the outline lines.
 // Colours are bytes; the page lights the faces flat, so no normals are sent.
-const BEVEL_RGB = [64, 128, 224], PART_RGB = [140, 190, 245], STONE_RGB = [185, 180, 168], CRACK_RGB = [71, 74, 76], BAND_RGB = [255, 140, 26], OVER_RGB = [229, 72, 59];   // stone, a crack's inside (dark grey), 55 to 65 degrees (orange), past 65 (red)
+const BEVEL_RGB = [20, 200, 255], PART_RGB = [200, 245, 255], STONE_RGB = [185, 180, 168], CRACK_RGB = [71, 74, 76], BAND_RGB = [255, 140, 26], OVER_RGB = [229, 72, 59];   // stone, a crack's inside (dark grey), 55 to 65 degrees (orange), past 65 (red)
 function shadeOf(g) { const h = hash2(g, 7) / 4294967296, l = 0.5 + 0.22 * (hash2(g, 8) / 4294967296 - 0.5), s = 0.28; const c = (1 - Math.abs(2 * l - 1)) * s, q = h * 6, x = c * (1 - Math.abs(q % 2 - 1)), m = l - c / 2, [r, gg, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(q) % 6]; return [r + m, gg + m, b + m].map(v => Math.round(v * 255)); }   // a mass's own shade
 const EK = p => Math.round(p[0] * 2000) + ',' + Math.round(p[1] * 2000) + ',' + Math.round(p[2] * 2000);
 function surfaceOf(w, masses) {
   let ntri = 0, nface = 0, vol = 0;
   for (const s of w.stones) for (const f of s.faces) { ntri += f.v.length - 2; nface++; }
-  const pos = new Float32Array(9 * ntri), col = new Uint8Array(9 * ntri), faceTri = new Int32Array(nface + 1), lines = [], bev = [], bevPart = [];
+  const pos = new Float32Array(9 * ntri), col = new Uint8Array(9 * ntri), faceTri = new Int32Array(nface + 1), lines = [], bev = [], bevPart = [], bevBase = [];
   let t = 0, fi = 0;
   for (const s of w.stones) {
-    const faces = s.faces, rgb = masses ? shadeOf(s.grp) : null;
+    const faces = s.faces, rgb = shadeOf(s.grp);   // each body in its own shade, rocks and masses alike
     // an outline is a face's edge; where a crack cuts a face into pieces, an edge between two pieces of one flat face (the same normal) is no line
     let seen = null; if (s.cracked) { seen = new Map(); for (const f of faces) for (let i = 0; i < f.v.length; i++) { const a = EK(f.v[i]), b = EK(f.v[(i + 1) % f.v.length]), k = a < b ? a + '|' + b : b + '|' + a; (seen.get(k) || seen.set(k, []).get(k)).push(f.n); } }
     for (const f of faces) {
-      const v = f.v, c = f.crack ? CRACK_RGB : rgb || STONE_RGB; if ((f.kind === KIND.BEVEL || f.kind === KIND.PART) && !f.crack) { bev.push(fi); bevPart.push(f.kind === KIND.PART ? 1 : 0); } faceTri[fi++] = t;
+      const v = f.v, c = f.crack ? CRACK_RGB : rgb || STONE_RGB; if ((f.kind === KIND.BEVEL || f.kind === KIND.PART) && !f.crack) { bev.push(fi); bevPart.push(f.kind === KIND.PART ? 1 : 0); bevBase.push(c[0], c[1], c[2]); } faceTri[fi++] = t;
       vol += f.area * (f.n[0] * v[0][0] + f.n[1] * v[0][1] + f.n[2] * v[0][2]) / 3;
       let gx = 0, gy = 0, gz = 0; for (let i = 1; i + 1 < v.length; i++) { const q = cross(sub(v[i], v[0]), sub(v[i + 1], v[0])); gx += q[0]; gy += q[1]; gz += q[2]; }
       const flip = gx * f.n[0] + gy * f.n[1] + gz * f.n[2] < 0;   // each face is wound counter-clockwise seen from outside
@@ -2148,7 +2170,7 @@ function surfaceOf(w, masses) {
     }
   }
   faceTri[nface] = t;
-  return { pos, col, faceTri, bev: Int32Array.from(bev), bevPart: Uint8Array.from(bevPart), lines: Float32Array.from(lines), vol, nface, ntri, cracks: w.cracks ? { lines: w.cracks.lines, cutters: w.cracks.cutters, cutStones: w.cracks.cutStones, bad: w.cracks.bad, netMs: w.cracks.netMs, netBuilt: w.cracks.netBuilt, polys: w.cracks.polysAll } : null,
+  return { pos, col, faceTri, bev: Int32Array.from(bev), bevPart: Uint8Array.from(bevPart), bevBase: Uint8Array.from(bevBase), unbev: w.unbev || null, lines: Float32Array.from(lines), vol, nface, ntri, cracks: w.cracks ? { lines: w.cracks.lines, cutters: w.cracks.cutters, cutStones: w.cracks.cutStones, bad: w.cracks.bad, netMs: w.cracks.netMs, netBuilt: w.cracks.netBuilt, polys: w.cracks.polysAll } : null,
     stones: w.stones.length, sites: w.sites, groups: w.groups, lost: w.lost, noHold: w.noHold, T: w.T };
 }
 // the paint, from the overhang pass: the faces it found unheld (the page colours each orange or red by its normal), and the shares it reports
@@ -2173,10 +2195,10 @@ function meshOfBuf(surf, lines) {
   return grp;
 }
 // the overhang paint from the pass: each face it found unheld, orange (55 to 65 degrees) or red (past 65), kept on the surface so a shown-again wall is painted at once
-// debugging: the bevels in blue (a part bevel, held back by a guard, paler) when Bevels is checked (overhang paint stays on top)
+// debugging: the bevels bright cyan (a part bevel, held back by a guard, near white) when Bevels is checked (overhang paint stays on top)
 function tintBevels(surf) {
   if (!surf.bev) return; const { col, faceTri } = surf;
-  for (let k = 0; k < surf.bev.length; k++) for (let fi = surf.bev[k], c = !state.bevelsOn ? STONE_RGB : surf.bevPart[k] ? PART_RGB : BEVEL_RGB, o = 9 * faceTri[fi], e = 9 * faceTri[fi + 1]; o < e; o += 3) { col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; }
+  for (let k = 0; k < surf.bev.length; k++) for (let fi = surf.bev[k], c = !state.bevelsOn ? surf.bevBase.subarray(3 * k, 3 * k + 3) : surf.bevPart[k] ? PART_RGB : BEVEL_RGB, o = 9 * faceTri[fi], e = 9 * faceTri[fi + 1]; o < e; o += 3) { col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; }
   if (surf.paint) paintSurf(surf, surf.paint);
 }
 function paintSurf(surf, paint) {
@@ -2375,6 +2397,10 @@ function zoomFit() {
 // what else the view shows: the envelope, the layers' faces and the spines, and the crack network's lines on the stones
 function extras(V, surf = null) {
   const grp = new THREE.Group();
+  if (state.bevelsOn && surf && surf.unbev && surf.unbev.length) {   // debugging: the seen edges left sharp
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(surf.unbev, 3));
+    grp.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xFF00FF, depthTest: true })));
+  }
   if (state.ghost) grp.add(ghostOf(bigSolid([{ n: [1, 0, 0], b: V.hi[0] }, { n: [-1, 0, 0], b: -V.lo[0] }, { n: [0, 1, 0], b: V.hi[1] }, { n: [0, -1, 0], b: -V.lo[1] }, { n: [0, 0, 1], b: V.hi[2] }, { n: [0, 0, -1], b: 0 }])));
   // each layer face as a grid over the envelope, coarser than the one the engine reads (a face between layers; where it meets the face below, the layer pinches out)
   if (state.layersOn && V.layers) {
