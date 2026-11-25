@@ -4,443 +4,315 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: a working bench. The diagram is the page; controls beside it on wide screens, below on narrow; the three rules compared underneath; the reasoning last. */
+/* Layout: a bench. The 3D view is the page; its controls beside it on wide screens, below on narrow; the numbers under the view; what the modes mean last. */
 :root {
   --bg: #F3F4F1; --panel: #FFFFFF; --ink: #1E2421; --mute: #5D6762; --line: #D5DAD5;
-  --stone-a: #CBD0C9; --stone-b: #BCC3BB; --stone-edge: #8D978F;
-  --accent: #1F6F78; --accent-soft: rgba(31,111,120,.28); --lost: #7B3FA6; --lost-soft: rgba(123,63,166,.13);
-  --probe: #1E2421; --dot: #2B312E;
+  --view: #E9ECE8; --stone: #8D978F; --accent: #1F6F78; --ring: #7B3FA6; --dot: #2B312E;
   --display: 'Space Grotesk', 'Inter', system-ui, sans-serif; --body: 'Inter', system-ui, -apple-system, sans-serif; --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #161A18; --panel: #1F2421; --ink: #E7EBE7; --mute: #9BA59F; --line: #343B37;
-  --stone-a: #3A423D; --stone-b: #333A36; --stone-edge: #626D66;
-  --accent: #4FB3BD; --accent-soft: rgba(79,179,189,.30); --lost: #C08AE6; --lost-soft: rgba(192,138,230,.14);
-  --probe: #E7EBE7; --dot: #D7DDD8; color-scheme: dark } }
+  --view: #121513; --stone: #8C978F; --accent: #4FB3BD; --ring: #C08AE6; --dot: #D7DDD8; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #161A18; --panel: #1F2421; --ink: #E7EBE7; --mute: #9BA59F; --line: #343B37;
-  --stone-a: #3A423D; --stone-b: #333A36; --stone-edge: #626D66;
-  --accent: #4FB3BD; --accent-soft: rgba(79,179,189,.30); --lost: #C08AE6; --lost-soft: rgba(192,138,230,.14);
-  --probe: #E7EBE7; --dot: #D7DDD8; color-scheme: dark }
+  --view: #121513; --stone: #8C978F; --accent: #4FB3BD; --ring: #C08AE6; --dot: #D7DDD8; color-scheme: dark }
 html, body { background: var(--bg); color: var(--ink); }
 body { font-family: var(--body); font-size: 15px; line-height: 1.55; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
-.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 24px; }
 h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
-h1 { font-size: 30px; } h2 { font-size: 21px; } h3 { font-size: 16px; }
-p { margin: 0; max-width: 68ch; }
+h1 { font-size: 30px; } h2 { font-size: 20px; } h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
 .lede { color: var(--mute); font-size: 16px; }
 header { display: grid; gap: 8px; }
-.bench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
-@media (max-width: 860px) { .bench { grid-template-columns: minmax(0, 1fr); } }
-.stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
-canvas { display: block; width: 100%; touch-action: none; border-radius: 6px; }
-#main { cursor: crosshair; }
-.readout { font-size: 14px; min-height: 3.1em; }
-.readout b { font-weight: 600; }
+.bench { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 10px; min-width: 0; }
+#view { width: 100%; height: min(68vh, 640px); min-height: 360px; border-radius: 6px; overflow: hidden; background: var(--view); touch-action: none; position: relative; }
+#view canvas { display: block; }
+#busy { position: absolute; top: 10px; left: 12px; font-size: 12.5px; color: var(--mute); pointer-events: none; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--mute); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
-.sw { width: 18px; height: 10px; border-radius: 2px; display: inline-block; }
+.sw { width: 16px; height: 10px; border-radius: 2px; display: inline-block; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat { display: grid; gap: 2px; }
+.stat b { font-family: var(--mono); font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12.5px; color: var(--mute); }
 .controls { display: grid; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
 .ctl { display: grid; gap: 4px; }
 .ctl label, .lbl { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); display: flex; justify-content: space-between; gap: 8px; }
 .ctl label output { font-family: var(--mono); font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--ink); }
 input[type=range] { width: 100%; accent-color: var(--accent); }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
-.seg button { font: inherit; font-size: 13px; padding: 7px 6px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.seg button { font: inherit; font-size: 13px; line-height: 1.25; padding: 7px 5px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed=true] { background: var(--accent); color: var(--panel); }
 .checks { display: grid; gap: 4px; font-size: 13.5px; }
 .checks label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 .btn { font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--ink); cursor: pointer; }
-.btn:hover, .seg button:hover:not([aria-pressed=true]) { background: var(--accent-soft); }
+.btn:hover, .seg button:hover:not([aria-pressed=true]) { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.presets { display: flex; flex-wrap: wrap; gap: 8px; }
-.compare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-@media (max-width: 860px) { .compare { grid-template-columns: minmax(0, 1fr); } }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 8px; cursor: pointer; text-align: left; font: inherit; color: inherit; min-width: 0; }
-.card[aria-pressed=true] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.card .rule { font-size: 13.5px; color: var(--mute); }
-.stats { display: grid; grid-template-columns: auto auto; gap: 2px 12px; font-size: 13px; }
-.stats dt { color: var(--mute); } .stats dd { margin: 0; font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
-.verdict { font-size: 13.5px; font-weight: 500; }
-.planbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 16px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
-.layers { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-.layers figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: grid; gap: 6px; min-width: 0; }
-.layers figcaption { font-size: 12.5px; color: var(--mute); }
-.layers figure.stack { border-color: var(--accent); }
-.explain { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-@media (max-width: 860px) { .explain { grid-template-columns: minmax(0, 1fr); } }
-.explain section { display: grid; gap: 10px; align-content: start; min-width: 0; }
-.explain ol, .explain ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 66ch; }
-.math { font-family: var(--mono); font-size: 13.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; overflow-x: auto; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 900px) { .explain { grid-template-columns: minmax(0, 1fr); } }
+.explain section { display: grid; gap: 8px; align-content: start; min-width: 0; }
 </style>
 
 <div class="wrap">
   <header>
     <h1>Spines as Points</h1>
-    <p class="lede">A spine that spans layers, or a fuse that joins dots in a layer, becomes one dot at its midpoint, and the wall is the power diagram of all the dots. Does that one stone still fill what its spine was meant to fill? That depends on how far its neighbours were kept away when they were placed. This is a slice through the wall: layers run across, the dots of each layer sit on its middle line.</p>
+    <p class="lede">A 3D power diagram of a point cloud, with one column built up through the middle of it: a dot at each level, all on one line. Compare what the cloud does around it with and without the column's neighbours carried up with it. Drag to turn, pinch or scroll to zoom.</p>
   </header>
 
   <div class="bench">
     <div class="stage">
-      <canvas id="main" aria-label="The power diagram of the dots, with the joined stone highlighted"></canvas>
-      <div class="readout" id="readout"></div>
+      <div id="view"><div id="busy"></div></div>
       <div class="legend">
-        <span><i class="sw" style="background:var(--accent-soft);border:1.5px solid var(--accent)"></i>the joined stone's cell</span>
-        <span><i class="sw" style="border:1.5px dashed var(--lost)"></i>what its dots would fill as separate stones</span>
-        <span><i class="sw" style="background:var(--lost)"></i>segment a neighbour takes</span>
-        <span><i class="sw" style="background:var(--lost-soft)"></i>keep-away zone</span>
-        <span>○ the dots it replaced · ● its midpoint</span>
+        <span><i class="sw" style="background:var(--accent)"></i>the column's cells (one per level)</span>
+        <span><i class="sw" style="background:var(--ring)"></i>cells of the dots carried up with it</span>
+        <span><i class="sw" style="background:var(--stone);opacity:.5"></i>the cloud's other cells</span>
+        <span>● dots · ○ keep-away balls</span>
       </div>
+      <div class="stats" id="stats"></div>
     </div>
 
     <div class="controls">
-      <div class="ctl"><span class="lbl">Keep-away rule</span>
-        <div class="seg" id="rule">
-          <button data-v="mid">Midpoint</button><button data-v="seg">Segment</button><button data-v="ends">+ L/2 ends</button>
-        </div>
+      <div class="ctl"><span class="lbl">Around the column</span>
+        <div class="seg" id="mode"><button data-v="col">Column dots only</button><button data-v="clone">Neighbours cloned up</button><button data-v="mirror">Mirrored, straight walls</button></div>
       </div>
-      <div class="ctl" id="extCtl"><label for="ext">Reach past the ends (+ L/2 rule) <output id="ext_o"></output></label><input id="ext" type="range" min="0" max="8" step="0.5"></div>
-      <div class="ctl"><span class="lbl">A dot that lands in the zone</span>
-        <div class="seg" id="push"><button data-v="slide">Slides along its layer</button><button data-v="out">Moves out to the edge</button></div>
+      <div class="ctl"><label for="N">Levels <output id="N_o"></output></label><input id="N" type="range" min="1" max="6" step="1"></div>
+      <div class="ctl"><label for="dz">Level spacing <output id="dz_o"></output></label><input id="dz" type="range" min="4" max="12" step="0.5"></div>
+      <div class="ctl"><label for="r">Spacing of the cloud <output id="r_o"></output></label><input id="r" type="range" min="6" max="12" step="0.5"></div>
+      <div class="ctl"><label for="lean">Lean, each level <output id="lean_o"></output></label><input id="lean" type="range" min="-4" max="4" step="0.5"></div>
+      <div class="ctl"><label for="cut">Cut away above <output id="cut_o"></output></label><input id="cut" type="range" min="0" max="48" step="0.5"></div>
+      <div class="ctl"><span class="lbl">Other cells</span>
+        <div class="seg" id="others"><button data-v="none">None</button><button data-v="touch">Touching</button><button data-v="all">All</button></div>
       </div>
-      <div class="ctl"><span class="lbl">Joining</span>
-        <div class="seg" id="mode"><button data-v="span">Span up through layers</button><button data-v="fuse">Fuse in a layer</button></div>
-      </div>
-      <div class="ctl"><label for="n">Dots joined <output id="n_o"></output></label><input id="n" type="range" min="1" max="5" step="1"></div>
-      <div class="ctl" id="leanCtl"><label for="lean">Lean <output id="lean_o"></output></label><input id="lean" type="range" min="-35" max="35" step="1"></div>
-      <div class="ctl"><label for="t">Layer thickness <output id="t_o"></output></label><input id="t" type="range" min="3" max="10" step="0.5"></div>
-      <div class="ctl"><label for="r">Spacing in a layer <output id="r_o"></output></label><input id="r" type="range" min="4" max="14" step="0.5"></div>
-      <div class="ctl"><label for="w">Joined stone's weight <output id="w_o"></output></label><input id="w" type="range" min="0" max="120" step="1"></div>
-      <div class="ctl"><label for="s">Stretch the whole wall up <output id="s_o"></output></label><input id="s" type="range" min="1" max="3" step="0.1"></div>
+      <div class="ctl"><label for="op">Their opacity <output id="op_o"></output></label><input id="op" type="range" min="0" max="0.5" step="0.01"></div>
       <div class="checks">
-        <label><input type="checkbox" id="showZone" checked> Keep-away zone</label>
-        <label><input type="checkbox" id="showGhost" checked> Its dots' cells as separate stones</label>
-        <label><input type="checkbox" id="showEnds" checked> L/2 circles at the ends</label>
+        <label><input type="checkbox" id="showDots" checked> Dots</label>
+        <label><input type="checkbox" id="showBalls"> Keep-away balls</label>
+        <label><input type="checkbox" id="showRing" checked> Cells of the carried dots</label>
       </div>
-      <button class="btn" id="reseed">New layout of the other dots</button>
+      <button class="btn" id="reseed">New cloud</button>
     </div>
   </div>
 
-  <section style="display:grid;gap:10px">
-    <h2>Try these</h2>
-    <div class="presets" id="presets">
-      <button class="btn" data-p="two">Span 2 layers: the rules agree</button>
-      <button class="btn" data-p="four">Span 4 layers: the segment rule loses the ends</button>
-      <button class="btn" data-p="fuse3">Fuse 3 in a layer, thin layers</button>
-      <button class="btn" data-p="lean">A leaning span</button>
-      <button class="btn" data-p="column">A column, with the wall stretched up</button>
-      <button class="btn" data-p="weight">Weight instead of keep-away</button>
-      <button class="btn" data-p="reach">Reach to the layer faces</button>
-      <button class="btn" data-p="reachOut">… with the cleared dots moved out, not aside</button>
-    </div>
-  </section>
-
-  <section style="display:grid;gap:12px">
-    <h2>The three rules side by side</h2>
-    <p class="lede" style="font-size:15px">The same layers and the same random draws; only the keep-away differs. Tap one to show it above.</p>
-    <div class="compare" id="compare"></div>
-  </section>
-
-  <section class="plan" style="display:grid;gap:12px">
-    <h2>Lining up a span: the plan of each layer</h2>
-    <p class="lede" style="font-size:15px">The per-layer way. Seen from above, each layer is its own power diagram, and a span is one dot in each layer it passes through, at the same spot. With only that, its cell differs from layer to layer, because its neighbours do, and the stacked slices make steps (purple, at the right). With mirrored neighbours, its cell in the lowest layer, P, is kept: in each layer above, every edge of P gets a dot on the line through the span's dot square to that edge, weighted so the boundary falls on the edge, and the other dots keep out of the discs through P's corners.</p>
-    <div class="planbar">
-      <div class="ctl"><span class="lbl">Above the lowest layer</span>
-        <div class="seg" id="pmode"><button data-v="same">Same dot only</button><button data-v="mirror">Mirrored neighbours</button></div></div>
-      <div class="ctl"><label for="pn">Layers spanned <output id="pn_o"></output></label><input id="pn" type="range" min="2" max="5" step="1"></div>
-      <div class="ctl"><label for="pr">Spacing <output id="pr_o"></output></label><input id="pr" type="range" min="6" max="16" step="0.5"></div>
-      <div class="ctl"><label for="pl">Lean, each layer <output id="pl_o"></output></label><input id="pl" type="range" min="-4" max="4" step="0.5"></div>
-      <div class="ctl"><label for="pf">Mirrored dot's distance <output id="pf_o"></output></label><input id="pf" type="range" min="1.2" max="3.5" step="0.1"></div>
-      <button class="btn" id="preseed">New layout</button>
-    </div>
-    <div class="layers" id="layers"></div>
-    <div class="readout" id="preadout"></div>
-  </section>
-
   <div class="explain">
     <section>
-      <h2>Why L/2</h2>
-      <ol>
-        <li>Every point of the wall belongs to the stone whose dot is nearest. With weights, nearest means the smallest <span style="font-family:var(--mono)">d² − w</span>.</li>
-        <li>After joining, the stone has one dot, at the midpoint. Each end of its segment is <b>L/2</b> from that midpoint, where L is the segment's length.</li>
-        <li>So the stone keeps an end only if no other dot is closer than L/2 to that end. A neighbour 7 mm from the top end beats a midpoint 9 mm away, and takes the top.</li>
-        <li>A cell is convex. If it holds both ends, it holds the whole segment between them.</li>
-        <li>So the rule, applied when the other dots are placed: <b>keep every other dot at least L/2 from each end.</b> The diagram itself never changes.</li>
-      </ol>
-      <div class="math">stone keeps end e  ⇔  for every other dot q:  |q − e|² − w_q  ≥  (L/2)² − w_stone</div>
-      <p><b>Any point, not just the ends.</b> The stone keeps a point P exactly when the disc centred on P that passes through the midpoint holds no other dot. L/2 is that disc for the ends. Reach past the ends moves P further out along the segment, and its disc grows with it.</p>
-      <p>Keeping dots a normal spacing r from the segment (the "Segment" rule) is the same thing when r ≥ L/2. It falls short once L/2 is larger than r: a span over more layers than about 2r/t + 1, or a fuse of more dots than fit in r.</p>
+      <h3>Column dots only</h3>
+      <p>The column is a dot at each level, straight up from the base dot (or leaning). The rest of the cloud is ordinary darts kept a spacing from every dot. Each level's cell is shaped by whatever dots happen to sit near it, so the slices differ and the column is ragged: steps where one level's cell sticks out past the next.</p>
     </section>
     <section>
-      <h2>What it costs</h2>
-      <ul>
-        <li><b>It fills only part of its dots' cells.</b> Those cells are boxes reaching the layer faces. One convex cell around a midpoint tapers toward its ends, so it misses their corners, and the neighbours take them ("fills" in the cards: about 70% for a two-layer span, under half for four). Keeping the ends is necessary, not enough.</li>
-        <li><b>L/2 pushes neighbours back only near the ends.</b> The stone reaches its ends and stays about as wide as before; the corners are still lost.</li>
-        <li><b>Reaching further makes a spike, not a flat top.</b> The disc for a far point passes through the midpoint, so near the middle it is narrow and the side neighbours stay put; near the far point it is wide, so the next layer's dots there move aside. The stone grows a point toward the layer face. A flat cap at the face would need the dot above twice as far from the midpoint as the face is: half the next layer would be empty.</li>
-        <li><b>The stones round its ends grow.</b> No dot may sit in the cleared discs, and the stone only takes the part of them nearer its midpoint (the spike). The rest goes to the dots on the discs' edges, so they grow: with nothing joined the largest stone is about 1.3 times the usual, a four-layer span 1.8, reaching to the layer faces about 2.6. Moving a cleared dot out to the disc's edge, off its layer line, instead of sliding it along the layer packs more dots round the edge and brings that to about 2.2. It cannot go away: the space has to belong to someone.</li>
-        <li><b>Weight fills more, and spills.</b> A boundary moves out by w / 2d, where d is the distance to that neighbour: most toward the nearest dots (the sides), least toward the far ones (above and below), the opposite of what a tall stone wants. Try "Weight instead of keep-away": the stone fills more of its dots' cells and spreads into what would have been its neighbours' space ("spills").</li>
-        <li><b>Its top and bottom are pointed.</b> A dot in the next layer up or down caps a point off flat.</li>
-        <li><b>Only one shape for the whole wall.</b> Stretching all of space up before building the diagram (and back after) keeps every cell convex, and makes tall thin cells cheap. It works for a style whose spines all run one way, like Columns. A stretch for one stone alone would curve its boundaries.</li>
-        <li><b>The Midpoint rule</b> treats the joined stone as a single dot from the start. It is shown for contrast: its neighbours sit right on the segment.</li>
-      </ul>
+      <h3>Neighbours cloned up</h3>
+      <p>The base dot's cell is found in the cloud first. The dots that make its sides (those within half a level of its height) are copied up with the column, each moved by the same step as the column's dots. Then the rest of the cloud is placed around them, kept out of the balls through the column cells' corners. A neighbour that sits a little above or below the base makes a sloped wall, and a sloped wall copied up makes a sawtooth.</p>
+    </section>
+    <section>
+      <h3>Mirrored, straight walls</h3>
+      <p>The base dot's cell is cut at its own height, giving the column's outline P. For each edge of P, each column dot is mirrored across that edge's wall (upright, or along the lean), and one dot below and one above the column mirror it across its end faces. The column's cells then stack into one prism exactly, as long as the rest of the cloud keeps out of the balls through their corners.</p>
     </section>
   </div>
 </div>
 
-<script>
-'use strict';
-const W = 80, ROWS = 7, A0 = 1;   /* the slice is 80 mm wide and 7 layers tall; a joined segment starts in layer 2 */
-const S = { rule: 'seg', mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, ext: 0, push: 'slide', seed: 3, x0: 38, probe: null, showZone: true, showGhost: true, showEnds: true };
-const RULES = { mid: ['Midpoint', 'Other dots kept a spacing r from the midpoint only, as if the stone were one dot from the start.'],
-  seg: ['Segment', 'Other dots kept a spacing r from the segment (your proposal).'],
-  ends: ['+ L/2 ends', 'As Segment, and also at least L/2 from each end of the segment (more with Reach past the ends).'] };
-const $ = id => document.getElementById(id);
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
+<script id="engine">
+'use strict';
+/* ---------- the engine: a power diagram of a point cloud in a box, with one column through it. No drawing here. ---------- */
+const BOX = [56, 40, 48];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], len = a => Math.sqrt(dot(a, a)), unit = a => mul(a, 1 / len(a));
 function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
-/* ---------- the scene for one rule: the segment, the dots it replaced, the other dots ---------- */
-function scene(rule) {
-  const { t, r, n, s } = S, H = ROWS * t, mid = k => (k + 0.5) * t;
-  let a, b, repl = [];
-  if (S.mode === 'span') {
-    const z0 = mid(A0), z1 = mid(A0 + n - 1), dx = Math.tan(S.lean * Math.PI / 180) * (z1 - z0);
-    a = [S.x0 - dx / 2, z0]; b = [S.x0 + dx / 2, z1];
-    for (let k = 0; k < n; k++) { const f = n > 1 ? k / (n - 1) : 0; repl.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]); }
-  } else {
-    const z = mid(A0 + 1), L = (n - 1) * r; a = [S.x0 - L / 2, z]; b = [S.x0 + L / 2, z];
-    for (let k = 0; k < n; k++) repl.push([a[0] + k * r, z]);
-  }
-  const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  /* distances in the stretched metric: z counts 1/s */
-  const L = Math.hypot(b[0] - a[0], (b[1] - a[1]) / s);
-  const discs = [];   /* the keep-away zone as discs in the stretched metric: [cx, cz, radius] */
-  if (rule === 'mid') discs.push([m[0], m[1], r]);
-  else { for (let i = 0; i <= 40; i++) { const f = i / 40; discs.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, r]); }
-    if (rule === 'ends' && L > 0) {   /* the points to keep: each end, moved Reach further out along the segment; each keeps a disc through the midpoint empty */
-      const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / s / L, e = S.ext, R_ = L / 2 + e;
-      discs.push([a[0] - ux * e, a[1] - uz * e * s, R_], [b[0] + ux * e, b[1] + uz * e * s, R_]); } }
-  /* each layer's dots, left to right from its own stream; a dart that lands in the zone moves to where the zone ends */
-  const dots = [];
-  for (let k = 0; k < ROWS; k++) {
-    const z = mid(k), R = rng(S.seed * 7919 + k * 104729);
-    const iv = []; for (const [cx, cz, rad] of discs) { const dz = (z - cz) / s, h = rad * rad - dz * dz; if (h > 0) { const q = Math.sqrt(h); iv.push([cx - q, cx + q]); } }
-    iv.sort((p, q) => p[0] - q[0]); const zone = []; for (const v of iv) { if (zone.length && v[0] <= zone[zone.length - 1][1]) zone[zone.length - 1][1] = Math.max(zone[zone.length - 1][1], v[1]); else zone.push(v.slice()); }
-    let x = R() * r * 0.9, prev = -Infinity;
-    while (x < W) {
-      const z_ = zone.find(v => x > v[0] && x < v[1]);
-      if (z_ && S.push === 'slide') { x = Math.max(z_[1] + 0.01, prev + 0.7 * r); continue; }
-      if (z_) {   /* moved straight out of the zone, to its edge, off its layer line if need be; kept if it is clear of every dot so far */
-        let p = [x, z];
-        for (let it = 0; it < 8; it++) { let moved = false; for (const [cx, cz, rad] of discs) { const dx = p[0] - cx, dz = (p[1] - cz) / s, d = Math.hypot(dx, dz); if (d < rad - 1e-6) { const f = (rad + 0.01) / Math.max(d, 1e-6); p = [cx + dx * f, cz + dz * f * s]; moved = true; } } if (!moved) break; }
-        const clear = p[1] > 0 && p[1] < ROWS * t && p[0] > 0 && p[0] < W && dots.every(q => Math.hypot(q[0] - p[0], (q[1] - p[1]) / s) >= 0.7 * r);
-        if (clear) dots.push(p);
-        x += r * (1 + 0.35 * R()); continue;
-      }
-      if (dots.some(q => q[1] !== z && Math.hypot(q[0] - x, (q[1] - z) / s) < 0.7 * r)) { x += 0.25 * r; continue; }
-      dots.push([x, z]); prev = x; x += r * (1 + 0.35 * R());
+/* a convex cell: faces (outward, counter-clockwise seen from outside), each with the dot across it (-1 the box), and its planes n·p <= c */
+function boxCell() {
+  const [X, Y, Z] = BOX, v = [[0, 0, 0], [X, 0, 0], [X, Y, 0], [0, Y, 0], [0, 0, Z], [X, 0, Z], [X, Y, Z], [0, Y, Z]];
+  const F = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [3, 7, 6, 2], [0, 4, 7, 3], [1, 2, 6, 5]];
+  const P = [[[0, 0, -1], 0], [[0, 0, 1], Z], [[0, -1, 0], 0], [[0, 1, 0], Y], [[-1, 0, 0], 0], [[1, 0, 0], X]];
+  return { faces: F.map(f => ({ p: f.map(i => v[i]), src: -1 })), planes: P.map(([n, c]) => ({ n, c, src: -1 })) };
+}
+function clipCell(C, n, c, src) {
+  const e = 1e-9; let cuts = false;
+  for (const f of C.faces) { for (const p of f.p) if (dot(n, p) - c > e) { cuts = true; break; } if (cuts) break; }
+  if (!cuts) return C;
+  const faces = [], cap = [];
+  for (const f of C.faces) {
+    const out = [], m = f.p.length;
+    for (let i = 0; i < m; i++) {
+      const a = f.p[i], b = f.p[(i + 1) % m], da = dot(n, a) - c, db = dot(n, b) - c;
+      if (da <= e) { out.push(a); if (da >= -e) cap.push(a); }
+      if ((da <= e) !== (db <= e) && Math.abs(da - db) > 1e-15) { const q = add(a, mul(sub(b, a), da / (da - db))); out.push(q); cap.push(q); }
     }
+    const clean = []; for (const p of out) if (!clean.length || len(sub(p, clean[clean.length - 1])) > 1e-7) clean.push(p);
+    while (clean.length > 1 && len(sub(clean[0], clean[clean.length - 1])) <= 1e-7) clean.pop();
+    if (clean.length >= 3) faces.push({ p: clean, src: f.src });
   }
-  return { a, b, m, L, repl, dots, discs, H };
-}
-
-/* ---------- power diagram in the stretched space ---------- */
-function clip(poly, nx, nz, c) { const out = []; for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length], dp = nx * p[0] + nz * p[1] - c, dq = nx * q[0] + nz * q[1] - c; if (dp <= 0) out.push(p); if ((dp < 0) !== (dq < 0) && dp !== dq) { const f = dp / (dp - dq); out.push([p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f]); } } return out; }
-function cells(sites, wts, Hs) {   /* sites already in stretched coords */
-  return sites.map((p, i) => { let poly = [[0, 0], [W, 0], [W, Hs], [0, Hs]];
-    for (let j = 0; j < sites.length && poly.length; j++) if (j !== i) { const q = sites[j]; poly = clip(poly, q[0] - p[0], q[1] - p[1], (q[0] * q[0] + q[1] * q[1] - p[0] * p[0] - p[1] * p[1] - wts[j] + wts[i]) / 2); }
-    return poly; });
-}
-const area = P => { let A = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; A += p[0] * q[1] - q[0] * p[1]; } return A / 2; };
-function inter(A, B) { if (area(B) < 0) B = B.slice().reverse(); let P = A; for (let i = 0; i < B.length && P.length; i++) { const b0 = B[i], b1 = B[(i + 1) % B.length], ex = b1[0] - b0[0], ez = b1[1] - b0[1]; P = clip(P, ez, -ex, ez * b0[0] - ex * b0[1]); } return P; }
-
-/* the target, the same for every rule: the cells its dots would have as separate stones, with the other dots a normal spacing from them */
-function target() { const sc = scene('seg'), s = S.s, st = p => [p[0], p[1] / s], gs = [...sc.repl.map(st), ...sc.dots.map(st)]; return cells(gs, gs.map(() => 0), sc.H / s).slice(0, sc.repl.length); }
-function solve(rule, G) {
-  const sc = scene(rule), s = S.s, st = p => [p[0], p[1] / s], Hs = sc.H / s;
-  const sites = [st(sc.m), ...sc.dots.map(st)], wts = [S.w, ...sc.dots.map(() => 0)];
-  const C = cells(sites, wts, Hs);
-  const owner = p => { const q = st(p); let best = 0, bd = Infinity; for (let i = 0; i < sites.length; i++) { const d = (q[0] - sites[i][0]) ** 2 + (q[1] - sites[i][1]) ** 2 - wts[i]; if (d < bd) { bd = d; best = i; } } return best; };
-  /* how much of the segment the stone keeps, sampled */
-  const lost = []; let kept = 0; const N = 120;
-  for (let i = 0; i <= N; i++) { const f = i / N, p = [sc.a[0] + (sc.b[0] - sc.a[0]) * f, sc.a[1] + (sc.b[1] - sc.a[1]) * f]; if (owner(p) === 0) kept++; else lost.push(f); }
-  const gA = G.reduce((x, g) => x + Math.abs(area(g)), 0), cA = Math.abs(area(C[0])), ov = G.reduce((x, g) => x + Math.abs(area(inter(C[0], g))), 0);
-  const xs = C[0].map(p => p[0]), zs = C[0].map(p => p[1] * s), wid = Math.max(...xs) - Math.min(...xs), hei = Math.max(...zs) - Math.min(...zs);
-  const others = C.slice(1).map(P => Math.abs(area(P)) * s).sort((x, y) => x - y), med = others[others.length >> 1] || 1, big = others[others.length - 1] || 0;
-  return { sc, sites, wts, C, G, owner, bigN: big / med, kept: kept / (N + 1), lost, fill: gA ? ov / gA : 1, spill: gA ? (cA - ov) / gA : 0, wid, hei, cA, gA };
-}
-
-/* ---------- drawing ---------- */
-function hashCol(i) { return (i * 2654435761 >>> 0) % 2 ? css('--stone-a') : css('--stone-b'); }
-function draw(cv, R, full) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2), wcss = cv.clientWidth, H = R.sc.H, hcss = wcss * H / W;
-  cv.style.height = hcss + 'px'; cv.width = Math.round(wcss * dpr); cv.height = Math.round(hcss * dpr);
-  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); const k = wcss / W, s = S.s;
-  const X = x => x * k, Z = z => (H - z) * k, unst = P => P.map(p => [p[0], p[1] * s]);
-  const path = P => { g.beginPath(); P.forEach((p, i) => i ? g.lineTo(X(p[0]), Z(p[1])) : g.moveTo(X(p[0]), Z(p[1]))); g.closePath(); };
-  g.clearRect(0, 0, wcss, hcss);
-  R.C.forEach((P, i) => { if (!P.length) return; path(unst(P)); g.fillStyle = i === 0 ? css('--accent-soft') : hashCol(i); g.fill(); g.strokeStyle = css('--stone-edge'); g.lineWidth = 1; g.stroke(); });
-  /* layer lines */
-  g.save(); g.setLineDash([2, 4]); g.strokeStyle = css('--stone-edge'); g.globalAlpha = .55; for (let r_ = 1; r_ < ROWS; r_++) { g.beginPath(); g.moveTo(0, Z(r_ * S.t)); g.lineTo(wcss, Z(r_ * S.t)); g.stroke(); } g.restore();
-  if (full && S.showZone) { g.save(); g.beginPath(); for (const [cx, cz, rad] of R.sc.discs) { g.moveTo(X(cx + rad), Z(cz)); g.ellipse(X(cx), Z(cz), rad * k, rad * s * k, 0, 0, Math.PI * 2); } g.fillStyle = css('--lost-soft'); g.fill('nonzero'); g.restore(); }
-  if (S.showGhost) { g.save(); g.setLineDash([5, 4]); g.strokeStyle = css('--lost'); g.lineWidth = full ? 1.6 : 1.2; R.G.forEach(P => { if (P.length) { path(unst(P)); g.stroke(); } }); g.restore(); }
-  path(unst(R.C[0])); g.strokeStyle = css('--accent'); g.lineWidth = full ? 2.2 : 1.8; g.stroke();
-  if (full && S.showEnds && R.sc.L > 0) { g.save(); g.setLineDash([1, 3]); g.strokeStyle = css('--ink'); g.globalAlpha = .6; const ex = S.rule === 'ends' ? S.ext : 0, ux = (R.sc.b[0] - R.sc.a[0]) / R.sc.L, uz = (R.sc.b[1] - R.sc.a[1]) / R.sc.L, rr = R.sc.L / 2 + ex; for (const [e, sg] of [[R.sc.a, -1], [R.sc.b, 1]]) { const c = [e[0] + sg * ux * ex, e[1] + sg * uz * ex]; g.beginPath(); g.ellipse(X(c[0]), Z(c[1]), rr * k, rr * s * k, 0, 0, Math.PI * 2); g.stroke(); if (ex > 0) { g.beginPath(); g.arc(X(c[0]), Z(c[1]), 2.5, 0, Math.PI * 2); g.stroke(); } } g.restore(); }
-  /* the segment, and the parts a neighbour takes */
-  const { a, b } = R.sc, P = f => [X(a[0] + (b[0] - a[0]) * f), Z(a[1] + (b[1] - a[1]) * f)];
-  g.lineCap = 'round'; g.strokeStyle = css('--accent'); g.lineWidth = full ? 3 : 2.4; g.beginPath(); g.moveTo(...P(0)); g.lineTo(...P(1)); g.stroke();
-  if (R.lost.length) { g.strokeStyle = css('--lost'); g.lineWidth = full ? 5 : 4; for (const f of R.lost) { const f0 = Math.max(0, f - 0.5 / 120), f1 = Math.min(1, f + 0.5 / 120); g.beginPath(); g.moveTo(...P(f0)); g.lineTo(...P(f1)); g.stroke(); } }
-  g.lineCap = 'butt';
-  /* dots */
-  g.fillStyle = css('--dot'); for (const d of R.sc.dots) { g.beginPath(); g.arc(X(d[0]), Z(d[1]), full ? 2.6 : 2, 0, Math.PI * 2); g.fill(); }
-  g.strokeStyle = css('--accent'); g.lineWidth = 1.5; for (const d of R.sc.repl) { g.beginPath(); g.arc(X(d[0]), Z(d[1]), full ? 4 : 3, 0, Math.PI * 2); g.stroke(); }
-  g.fillStyle = css('--accent'); g.beginPath(); g.arc(X(R.sc.m[0]), Z(R.sc.m[1]), full ? 4.5 : 3.5, 0, Math.PI * 2); g.fill();
-  if (S.w > 0) { g.save(); g.setLineDash([3, 3]); g.strokeStyle = css('--accent'); g.beginPath(); const rw = Math.sqrt(S.w); g.ellipse(X(R.sc.m[0]), Z(R.sc.m[1]), rw * k, rw * s * k, 0, 0, Math.PI * 2); g.stroke(); g.restore(); }
-  if (full && S.probe) {   /* the probe: which dot owns this point, and by how much */
-    const p = S.probe, o = R.owner(p), st = q => [q[0], q[1] / s], q = st(p);
-    let near = -1, nd = Infinity; for (let i = 1; i < R.sites.length; i++) { const d = (q[0] - R.sites[i][0]) ** 2 + (q[1] - R.sites[i][1]) ** 2 - R.wts[i]; if (d < nd) { nd = d; near = i; } }
-    const toM = [R.sc.m], toN = near > 0 ? [R.sc.dots[near - 1]] : [];
-    g.save(); g.lineWidth = 1.5;
-    g.strokeStyle = css('--accent'); g.beginPath(); g.moveTo(X(p[0]), Z(p[1])); g.lineTo(X(toM[0][0]), Z(toM[0][1])); g.stroke();
-    if (toN.length) { g.strokeStyle = css('--ink'); g.setLineDash([4, 3]); g.beginPath(); g.moveTo(X(p[0]), Z(p[1])); g.lineTo(X(toN[0][0]), Z(toN[0][1])); g.stroke(); }
-    g.setLineDash([]); g.fillStyle = css('--panel'); g.strokeStyle = css('--probe'); g.lineWidth = 2; g.beginPath(); g.arc(X(p[0]), Z(p[1]), 6, 0, Math.PI * 2); g.fill(); g.stroke();
-    g.restore();
-    const dM = Math.sqrt(Math.max(0, (q[0] - R.sites[0][0]) ** 2 + (q[1] - R.sites[0][1]) ** 2 - R.wts[0])), dN = Math.sqrt(Math.max(0, nd));
-    $('readout').innerHTML = `The probe (drag it) is <b>${dM.toFixed(1)} mm</b> from the stone's midpoint${S.w > 0 ? ' (less its weight)' : ''} and <b>${dN.toFixed(1)} mm</b> from the nearest other dot, so it belongs to <b>${o === 0 ? 'the joined stone' : 'a neighbour'}</b>.` + (R.sc.L > 0 ? ` The segment is ${R.sc.L.toFixed(1)} mm long, so L/2 is ${(R.sc.L / 2).toFixed(1)} mm.` : '');
+  const u = []; for (const p of cap) if (!u.some(q => len(sub(p, q)) <= 1e-7)) u.push(p);
+  if (u.length >= 3) {
+    const g = mul(u.reduce(add, [0, 0, 0]), 1 / u.length), nn = unit(n), ax = Math.abs(nn[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0], bu = unit(cross(nn, ax)), bv = cross(nn, bu);
+    u.sort((p, q) => Math.atan2(dot(sub(p, g), bv), dot(sub(p, g), bu)) - Math.atan2(dot(sub(q, g), bv), dot(sub(q, g), bu)));
+    faces.push({ p: u, src });
   }
+  if (faces.length < 4) return { faces: [], planes: [] };
+  return { faces, planes: C.planes.concat({ n, c, src }) };
 }
-
-function verdict(R) {
-  if (R.sc.L === 0) return 'A single dot: nothing joined.';
-  if (R.kept > 0.999) return R.spill > 0.35 ? 'Keeps its whole segment, but grows well past its dots.' : 'Keeps its whole segment.';
-  return `Loses ${Math.round((1 - R.kept) * 100)}% of its segment to neighbours.`;
-}
-function statsHTML(R) {
-  const pct = x => Math.round(x * 100) + '%';
-  return `<dl class="stats"><dt>Segment kept</dt><dd>${pct(R.kept)}</dd><dt>Fills its dots' cells</dt><dd>${pct(R.fill)}</dd><dt>Spills past them</dt><dd>${pct(R.spill)}</dd><dt>Largest other stone</dt><dd>×${R.bigN.toFixed(1)} the usual</dd><dt>Height × width</dt><dd>${R.hei.toFixed(1)} × ${R.wid.toFixed(1)} mm</dd></dl>`;
-}
-
-/* ---------- the page ---------- */
-let last = null;
-function render() {
-  for (const id of ['n', 'lean', 't', 'r', 'w', 's', 'ext']) $(id).value = S[id]; $('ext_o').textContent = S.ext + ' mm';
-  $('n_o').textContent = S.n; $('lean_o').textContent = S.lean + '°'; $('t_o').textContent = S.t + ' mm'; $('r_o').textContent = S.r + ' mm'; $('w_o').textContent = S.w + ' mm²'; $('s_o').textContent = '×' + S.s.toFixed(1);
-  $('leanCtl').hidden = S.mode !== 'span';
-  for (const b of $('rule').children) b.setAttribute('aria-pressed', b.dataset.v === S.rule);
-  for (const b of $('mode').children) b.setAttribute('aria-pressed', b.dataset.v === S.mode);
-  for (const b of $('push').children) b.setAttribute('aria-pressed', b.dataset.v === S.push);
-  const G = target(), all = {}; for (const k of Object.keys(RULES)) all[k] = solve(k, G);
-  const R = all[S.rule]; last = R;
-  if (!S.probe) S.probe = R.sc.b.slice();
-  draw($('main'), R, true);
-  const cmp = $('compare');
-  if (!cmp.children.length) for (const k of Object.keys(RULES)) { const c = document.createElement('button'); c.className = 'card'; c.dataset.v = k; c.innerHTML = `<h3>${RULES[k][0]}</h3><div class="rule">${RULES[k][1]}</div><canvas></canvas><div class="verdict"></div><div class="st"></div>`; c.addEventListener('click', () => { S.rule = k; render(); }); cmp.appendChild(c); }
-  for (const c of cmp.children) { const k = c.dataset.v, Rk = all[k]; c.setAttribute('aria-pressed', k === S.rule); draw(c.querySelector('canvas'), Rk, false); c.querySelector('.verdict').textContent = verdict(Rk); c.querySelector('.st').innerHTML = statsHTML(Rk); }
-}
-
-for (const id of ['n', 'lean', 't', 'r', 'w', 's', 'ext']) $(id).addEventListener('input', e => { S[id] = +e.target.value; if (id !== 'w' && id !== 's' && id !== 'ext') S.probe = null; render(); });
-$('rule').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.rule = b.dataset.v; render(); } });
-$('push').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.push = b.dataset.v; render(); } });
-$('mode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.mode = b.dataset.v; S.probe = null; render(); } });
-for (const id of ['showZone', 'showGhost', 'showEnds']) $(id).addEventListener('change', e => { S[id] = e.target.checked; render(); });
-$('reseed').addEventListener('click', () => { S.seed = (S.seed * 31 + 7) % 100003; render(); });
-const PRESETS = {
-  two: { mode: 'span', n: 2, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'seg', ext: 0 },
-  four: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'seg', ext: 0 },
-  fuse3: { mode: 'fuse', n: 3, lean: 0, t: 4, r: 9, w: 0, s: 1, rule: 'seg', ext: 0 },
-  lean: { mode: 'span', n: 3, lean: 28, t: 6, r: 7, w: 0, s: 1, rule: 'seg', ext: 0 },
-  column: { mode: 'span', n: 5, lean: 0, t: 5, r: 6, w: 0, s: 2.6, rule: 'ends', ext: 0 },
-  weight: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 70, s: 1, rule: 'seg', ext: 0 },
-  reach: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'ends', ext: 3, push: 'slide' },
-  reachOut: { mode: 'span', n: 4, lean: 0, t: 6, r: 7, w: 0, s: 1, rule: 'ends', ext: 3, push: 'out' },
-};
-$('presets').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; Object.assign(S, PRESETS[b.dataset.p]); S.x0 = 38; S.probe = null; render(); });
-
-/* drag the probe, or the stone (anywhere near its segment) sideways */
-{ const cv = $('main'); let drag = null;
-  const at = e => { const r = cv.getBoundingClientRect(), k = r.width / W; return [(e.clientX - r.left) / k, last.sc.H - (e.clientY - r.top) / k]; };
-  cv.addEventListener('pointerdown', e => { const p = at(e), k = cv.getBoundingClientRect().width / W;
-    const dP = S.probe ? Math.hypot(p[0] - S.probe[0], p[1] - S.probe[1]) * k : Infinity;
-    const { a, b } = last.sc, ab = [b[0] - a[0], b[1] - a[1]], f = Math.max(0, Math.min(1, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1]) / Math.max(1e-9, ab[0] ** 2 + ab[1] ** 2))), dS = Math.hypot(p[0] - a[0] - ab[0] * f, p[1] - a[1] - ab[1] * f) * k;
-    drag = dP < 16 ? { kind: 'probe' } : dS < 12 ? { kind: 'stone', off: p[0] - S.x0 } : { kind: 'probe' };
-    if (drag.kind === 'probe') { S.probe = p; render(); }
-    cv.setPointerCapture(e.pointerId); });
-  cv.addEventListener('pointermove', e => { if (!drag) return; const p = at(e);
-    if (drag.kind === 'probe') S.probe = [Math.max(0, Math.min(W, p[0])), Math.max(0, Math.min(last.sc.H, p[1]))];
-    else { const nx = Math.max(8, Math.min(W - 8, p[0] - drag.off)), dx = nx - S.x0; S.x0 = nx; if (S.probe) S.probe[0] += dx; }
-    render(); });
-  const up = () => { drag = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-}
-
-/* ---------- the plan of each layer: a span as one dot per layer ---------- */
-const PW = 80, PD = 40, PS = { mode: 'mirror', n: 3, r: 9, lean: 0, f: 2, seed: 5 };
-function planScene(mode) {
-  const { n, r, lean, f } = PS, s0 = [PW / 2, PD / 2], out = [];
-  const darts = (k, fixed, ok) => { const R = rng(PS.seed * 7907 + k * 6151), pts = fixed.map(p => p.slice()); for (let i = 0; i < 900; i++) { const c = [R() * PW, R() * PD]; if (pts.every(q => Math.hypot(q[0] - c[0], q[1] - c[1]) >= 0.85 * r) && ok(c)) pts.push(c); } return pts; };
-  /* the lowest layer: ordinary darts round the span's dot */
-  const base = darts(0, [s0], () => true), baseC = cells(base, base.map(() => 0), PD), P = baseC[0];
-  out.push({ sites: base, wts: base.map(() => 0), C: baseC, mir: [], P, s: s0 });
-  for (let k = 1; k < n; k++) {
-    const sk = [s0[0] + lean * k, s0[1]], Pk = P.map(v => [v[0] + lean * k, v[1]]), sites = [sk], wts = [0], mir = [];
-    if (mode === 'mirror') {
-      for (let i = 0; i < Pk.length; i++) { const a = Pk[i], b = Pk[(i + 1) % Pk.length], on = (u, w) => Math.abs(a[u] - w) < 1e-6 && Math.abs(b[u] - w) < 1e-6;
-        if (on(0, 0) || on(0, PW) || on(1, 0) || on(1, PD)) continue;   /* an edge on the slice's own border has no neighbour */
-        const ex = b[0] - a[0], ey = b[1] - a[1], L = Math.hypot(ex, ey), ux = ey / L, uy = -ex / L, h = ux * (a[0] - sk[0]) + uy * (a[1] - sk[1]), d = f * h;
-        sites.push([sk[0] + ux * d, sk[1] + uy * d]); wts.push(d * d - 2 * d * h); mir.push(sites.length - 1); }
-      const disc = Pk.map(v => [v, Math.hypot(v[0] - sk[0], v[1] - sk[1])]);
-      const pts = darts(k, sites, c => disc.every(([v, R_]) => Math.hypot(c[0] - v[0], c[1] - v[1]) >= R_ - 1e-6));
-      for (let i = sites.length; i < pts.length; i++) { sites.push(pts[i]); wts.push(0); }
-    } else { const pts = darts(k, [sk], () => true); for (let i = 1; i < pts.length; i++) { sites.push(pts[i]); wts.push(0); } }
-    out.push({ sites, wts, C: cells(sites, wts, PD), mir, P: Pk, s: sk });
+const verts = C => C.faces.flatMap(f => f.p);
+const volume = C => { let V = 0; for (const f of C.faces) for (let i = 1; i + 1 < f.p.length; i++) V += dot(f.p[0], cross(f.p[i], f.p[i + 1])); return V / 6; };
+const inCell = (C, p) => C.planes.every(({ n, c }) => dot(n, p) <= c + 1e-7);
+/* the cell of dot i among sites (power diagram: nearest by d² − w); neighbours nearest first, stopping when none can reach */
+function cellOf(i, sites, wts) {
+  const s = sites[i], wi = wts[i], wmax = Math.max(...wts), order = [];
+  for (let j = 0; j < sites.length; j++) if (j !== i) order.push([dot(sub(sites[j], s), sub(sites[j], s)), j]);
+  order.sort((a, b) => a[0] - b[0]);
+  let C = boxCell(), R = Infinity, k = 0;
+  for (const [d2, j] of order) {
+    const d = Math.sqrt(d2); if (d < 1e-9) continue;
+    if ((d2 + wi - wmax) / (2 * d) > R) break;
+    const q = sites[j], n = sub(q, s), c = (dot(q, q) - dot(s, s) - wts[j] + wi) / 2;
+    C = clipCell(C, n, c, j); if (!C.faces.length) break;
+    if (++k % 4 === 0 || R === Infinity) R = Math.max(...verts(C).map(v => len(sub(v, s))));
   }
-  /* the steps: where the stacked slices differ (in some layer's cell but not all), measured against the slices' common column */
-  const inside = (P, x, y) => { let sg = 0; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], c = (b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]); if (Math.abs(c) < 1e-12) continue; if (!sg) sg = Math.sign(c); else if (Math.sign(c) !== sg) return false; } return true; };
-  const span = out.map((l, k) => l.C[0].map(v => [v[0] - lean * k, v[1]]));   /* each slice moved back by its lean: a straight prism lines up */
-  let any = 0, all = 0, stepPts = [], g = 0.25;
-  const xs = span.flat().map(v => v[0]), ys = span.flat().map(v => v[1]);
-  for (let x = Math.min(...xs); x <= Math.max(...xs); x += g) for (let y = Math.min(...ys); y <= Math.max(...ys); y += g) { let c = 0; for (const P of span) if (inside(P, x, y)) c++; if (c) any++; if (c === span.length) all++; else if (c) stepPts.push([x, y]); }
-  let big = 0, med = 0; { const A = []; out.forEach(l => l.C.forEach((P, i) => { if (i && P.length) A.push(Math.abs(area(P))); })); A.sort((a, b) => a - b); med = A[A.length >> 1]; big = A[A.length - 1] / med; }
-  return { layers: out, span, steps: any ? (any - all) / any : 0, stepPts, g, big };
+  return C;
 }
-function drawPlan(cv, L, k, stack, PL) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2), wcss = cv.clientWidth, hcss = wcss * PD / PW;
-  cv.style.height = hcss + 'px'; cv.width = Math.round(wcss * dpr); cv.height = Math.round(hcss * dpr);
-  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); const q = wcss / PW, X = x => x * q, Y = y => (PD - y) * q;
-  const path = P => { g.beginPath(); P.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.closePath(); };
-  g.clearRect(0, 0, wcss, hcss);
-  if (stack) {
-    g.fillStyle = css('--stone-b'); g.fillRect(0, 0, wcss, hcss);
-    g.fillStyle = css('--lost'); for (const [x, y] of PL.stepPts) g.fillRect(X(x - PL.g / 2), Y(y + PL.g / 2), PL.g * q + 0.5, PL.g * q + 0.5);
-    PL.span.forEach((P, i) => { path(P); g.strokeStyle = css('--accent'); g.lineWidth = 1.6; g.stroke(); });
-    return;
+/* the cut of a cell by the level plane z = h: a polygon in x, y (counter-clockwise) */
+function section(C, h) {
+  const pts = [];
+  for (const f of C.faces) for (let i = 0; i < f.p.length; i++) { const a = f.p[i], b = f.p[(i + 1) % f.p.length]; if ((a[2] - h) * (b[2] - h) < 0) { const t = (h - a[2]) / (b[2] - a[2]); pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } }
+  const u = []; for (const p of pts) if (!u.some(q => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-7)) u.push(p);
+  const g = [u.reduce((x, p) => x + p[0], 0) / u.length, u.reduce((x, p) => x + p[1], 0) / u.length];
+  return u.sort((p, q) => Math.atan2(p[1] - g[1], p[0] - g[0]) - Math.atan2(q[1] - g[1], q[0] - g[0]));
+}
+
+/* build: the cloud, the column and what is carried with it, then every cell */
+function build(st) {
+  const { mode, N, dz, r, lean, seed } = st, [X, Y, Z] = BOX;
+  const z0 = Math.max(dz, Math.min(Z / 2 - (N - 1) * dz / 2, Z - dz * N)), s0 = [X / 2 - lean * (N - 1) / 2, Y / 2, z0];
+  const darts = (fixed, ok) => { const R = rng(seed * 7919 + 13), pts = fixed.slice(); for (let i = 0; i < 5000; i++) { const c = [R() * X, R() * Y, R() * Z]; if (pts.every(q => len(sub(q, c)) >= 0.85 * r) && ok(c)) pts.push(c); } return pts; };
+  const step = [lean, 0, dz], col = []; for (let k = 0; k < N; k++) col.push(add(s0, mul(step, k)));
+  /* the base dot's cell in the cloud as it would be with no column */
+  const first = darts([s0], () => true), base = cellOf(0, first, first.map(() => 0));
+  const fixed = col.map(p => ({ p, kind: 'col' }));
+  let P = null;
+  if (mode === 'clone') {
+    const side = [...new Set(base.faces.map(f => f.src))].filter(j => j > 0 && Math.abs(first[j][2] - z0) <= dz / 2);
+    for (const j of side) for (let k = 0; k < N; k++) fixed.push({ p: add(first[j], mul(step, k)), kind: 'ring' });
   }
-  L.C.forEach((P, i) => { if (!P.length) return; path(P); g.fillStyle = i === 0 ? css('--accent-soft') : hashCol(i + 17 * k); g.fill(); g.strokeStyle = css('--stone-edge'); g.lineWidth = 1; g.stroke(); });
-  path(L.C[0]); g.strokeStyle = css('--accent'); g.lineWidth = 2; g.stroke();
-  if (k > 0) { g.save(); g.setLineDash([5, 4]); g.strokeStyle = css('--lost'); g.lineWidth = 1.4; path(L.P); g.stroke(); g.restore(); }
-  L.sites.forEach((p, i) => { g.beginPath(); g.arc(X(p[0]), Y(p[1]), i === 0 ? 4 : 2.3, 0, Math.PI * 2); g.fillStyle = i === 0 ? css('--accent') : css('--dot'); g.fill(); });
-  for (const i of L.mir) { const p = L.sites[i]; g.beginPath(); g.arc(X(p[0]), Y(p[1]), 5, 0, Math.PI * 2); g.strokeStyle = css('--accent'); g.lineWidth = 1.5; g.stroke(); }
+  if (mode === 'mirror') {
+    P = section(base, z0); const ax = unit(step);
+    for (let i = 0; i < P.length; i++) {
+      const a = P[i], b = P[(i + 1) % P.length], on = (u, w) => Math.abs(a[u] - w) < 1e-6 && Math.abs(b[u] - w) < 1e-6;
+      if (on(0, 0) || on(0, X) || on(1, 0) || on(1, Y)) continue;   /* an edge on the box has no neighbour */
+      const A = [a[0], a[1], z0]; let nw = unit(cross([b[0] - a[0], b[1] - a[1], 0], ax)); if (dot(nw, sub(A, s0)) < 0) nw = mul(nw, -1);
+      for (const s of col) fixed.push({ p: sub(s, mul(nw, 2 * dot(nw, sub(s, A)))), kind: 'ring' });
+    }
+    fixed.push({ p: sub(col[0], [0, 0, dz]), kind: 'cap' }, { p: add(col[N - 1], [0, 0, dz]), kind: 'cap' });
+  }
+  /* the column's cells among the fixed dots alone; the balls through their corners must stay empty */
+  const balls = [];
+  if (mode !== 'col') {
+    const fs = fixed.map(f => f.p), fw = fs.map(() => 0);
+    for (let k = 0; k < N; k++) { const C = cellOf(k, fs, fw); for (const v of verts(C)) { const R_ = len(sub(v, col[k])); if (!balls.some(b => len(sub(b[0], v)) < 1e-6)) balls.push([v, R_]); } }
+  }
+  const pts = darts(fixed.map(f => f.p), c => balls.every(([v, R_]) => len(sub(c, v)) >= R_ - 1e-6));
+  const sites = pts, wts = pts.map(() => 0), kinds = pts.map((_, i) => i < fixed.length ? fixed[i].kind : 'free');
+  const cells = sites.map((_, i) => cellOf(i, sites, wts));
+  return { sites, kinds, cells, N, col, balls, P, z0, step, freeFirst: first.length - 1, freeNow: pts.length - fixed.length };
 }
-function renderPlan() {
-  for (const [id, key] of [['pn', 'n'], ['pr', 'r'], ['pl', 'lean'], ['pf', 'f']]) $(id).value = PS[key];
-  $('pn_o').textContent = PS.n; $('pr_o').textContent = PS.r + ' mm'; $('pl_o').textContent = PS.lean + ' mm'; $('pf_o').textContent = '×' + PS.f.toFixed(1) + (Math.abs(PS.f - 2) < 0.05 ? ' (mirror)' : '');
-  for (const b of $('pmode').children) b.setAttribute('aria-pressed', b.dataset.v === PS.mode);
-  const PL = planScene(PS.mode), other = planScene(PS.mode === 'mirror' ? 'same' : 'mirror'), box = $('layers');
-  const want = PL.layers.length + 1; while (box.children.length > want) box.lastChild.remove();
-  while (box.children.length < want) { const f = document.createElement('figure'); f.innerHTML = '<canvas></canvas><figcaption></figcaption>'; box.appendChild(f); }
-  PL.layers.forEach((L, k) => { const f = box.children[k]; f.className = ''; drawPlan(f.querySelector('canvas'), L, k, false); f.querySelector('figcaption').textContent = k === 0 ? 'Layer 1, the lowest: the span’s cell here is P' : `Layer ${k + 1}: the span’s cell (blue) against P (dashed)` + (L.mir.length ? `; ${L.mir.length} mirrored dots ringed` : ''); });
-  const f = box.children[PL.layers.length]; f.className = 'stack'; drawPlan(f.querySelector('canvas'), null, 0, true, PL);
-  f.querySelector('figcaption').textContent = 'All slices stacked (lean taken out): purple is where they differ, the steps of a concave stone';
-  const pc = x => Math.round(x * 100) + '%', mine = PS.mode === 'mirror' ? PL : other, same = PS.mode === 'mirror' ? other : PL;
-  $('preadout').innerHTML = `<b>Steps</b> (share of the stone's footprint not in every slice): same dot only <b>${pc(same.steps)}</b>, mirrored neighbours <b>${pc(mine.steps)}</b>. <b>Largest other stone</b>: ×${same.big.toFixed(1)} the usual with the same dot only, ×${mine.big.toFixed(1)} mirrored.`;
+
+/* the numbers: steps (where the column's slices differ, lean taken out), its volume, the largest other cell */
+function measure(B, st) {
+  const out = { steps: 0, vol: 0, big: 0, touching: new Set() };
+  const colCells = B.cells.slice(0, B.N); out.vol = colCells.reduce((x, C) => x + volume(C), 0);
+  if (B.N >= 2) {
+    const zs = [], zlo = B.col[0][2] - st.dz / 2 + 0.2, zhi = B.col[B.N - 1][2] + st.dz / 2 - 0.2;
+    for (let i = 0; i < 18; i++) zs.push(zlo + (zhi - zlo) * i / 17);
+    const vs = colCells.flatMap(verts), x0 = Math.min(...vs.map(v => v[0])) - 1, x1 = Math.max(...vs.map(v => v[0])) + 1, y0 = Math.min(...vs.map(v => v[1])) - 1, y1 = Math.max(...vs.map(v => v[1])) + 1;
+    let any = 0, all = 0; const g = 0.4;
+    for (let x = x0; x <= x1; x += g) for (let y = y0; y <= y1; y += g) {
+      let c = 0; for (const z of zs) { const p = [x + st.lean * (z - B.z0) / st.dz, y, z]; if (colCells.some(C => C.faces.length && inCell(C, p))) c++; }
+      if (c) any++; if (c === zs.length) all++;
+    }
+    out.steps = any ? (any - all) / any : 0;
+  }
+  const A = [], [X, Y, Z] = BOX, r = st.r;
+  B.cells.forEach((C, i) => { const s = B.sites[i]; if (i >= B.N && C.faces.length && s[0] > r && s[0] < X - r && s[1] > r && s[1] < Y - r && s[2] > r && s[2] < Z - r) A.push(volume(C)); });
+  A.sort((a, b) => a - b); const med = A[A.length >> 1] || 1; out.big = (A[A.length - 1] || 0) / med;
+  colCells.forEach(C => C.faces.forEach(f => { if (f.src >= B.N) out.touching.add(f.src); }));
+  return out;
 }
-for (const [id, key] of [['pn', 'n'], ['pr', 'r'], ['pl', 'lean'], ['pf', 'f']]) $(id).addEventListener('input', e => { PS[key] = +e.target.value; renderPlan(); });
-$('pmode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { PS.mode = b.dataset.v; renderPlan(); } });
-$('preseed').addEventListener('click', () => { PS.seed = (PS.seed * 37 + 11) % 100003; renderPlan(); });
-let rt = 0; window.addEventListener('resize', () => { cancelAnimationFrame(rt); rt = requestAnimationFrame(() => { render(); renderPlan(); }); });
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { render(); renderPlan(); });
-new MutationObserver(() => { render(); renderPlan(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-render();
-renderPlan();
+if (typeof module !== 'undefined') module.exports = { build, measure, BOX };
+</script>
+
+<script>
+'use strict';
+const S = { mode: 'mirror', N: 4, dz: 7, r: 8, lean: 0, seed: 7, cut: 48, others: 'touch', op: 0.1, showDots: true, showBalls: false, showRing: true };
+const $ = id => document.getElementById(id), css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const view = $('view'), renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.localClippingEnabled = true; view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(38, 1, 1, 2000); camera.up.set(0, 0, 1);
+const C0 = new THREE.Vector3(BOX[0] / 2, BOX[1] / 2, BOX[2] / 2); camera.position.set(C0.x + 70, C0.y - 95, C0.z + 45);
+const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.target.copy(C0); controls.update(); controls.addEventListener('change', draw);
+scene.add(new THREE.AmbientLight(0xffffff, 0.75)); const sun = new THREE.DirectionalLight(0xffffff, 0.45); sun.position.set(0.4, -0.7, 1); scene.add(sun);
+const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 1e4);
+let group = null, last = null;
+function size() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false); renderer.domElement.style.width = w + 'px'; renderer.domElement.style.height = h + 'px'; camera.aspect = w / h; camera.updateProjectionMatrix(); draw(); }
+function draw() { renderer.render(scene, camera); }
+function dispose(o) { o.traverse(x => { if (x.geometry) x.geometry.dispose(); if (x.material) x.material.dispose(); }); }
+function cellMesh(C, color, opacity, edgeOp) {
+  const pos = []; for (const f of C.faces) for (let i = 1; i + 1 < f.p.length; i++) pos.push(...f.p[0], ...f.p[i], ...f.p[i + 1]);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  const o = new THREE.Group();
+  if (opacity > 0) o.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color, transparent: opacity < 1, opacity, side: THREE.DoubleSide, depthWrite: opacity >= 0.6, clippingPlanes: [cutPlane] })));
+  if (edgeOp > 0) o.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 1), new THREE.LineBasicMaterial({ color, transparent: true, opacity: edgeOp, clippingPlanes: [cutPlane] })));
+  return o;
+}
+let pending = 0;
+function rebuild() {
+  $('busy').textContent = 'Building…'; const my = ++pending;
+  setTimeout(() => { if (my !== pending) return; const t0 = performance.now(); last = build(S); last.m = measure(last, S); last.ms = performance.now() - t0; show(); $('busy').textContent = ''; }, 30);
+}
+function show() {
+  if (!last) return;
+  if (group) { scene.remove(group); dispose(group); }
+  group = new THREE.Group(); const B = last, M = B.m;
+  const cA = new THREE.Color(css('--accent')), cR = new THREE.Color(css('--ring')), cS = new THREE.Color(css('--stone')), cD = new THREE.Color(css('--dot'));
+  B.cells.forEach((C, i) => {
+    if (!C.faces.length) return; const k = B.kinds[i];
+    if (k === 'col') group.add(cellMesh(C, cA, 0.72, 1));
+    else if (k === 'ring' || k === 'cap') { if (S.showRing) group.add(cellMesh(C, cR, 0.22, 0.55)); }
+    else if (S.others === 'all' || (S.others === 'touch' && M.touching.has(i))) group.add(cellMesh(C, cS, S.op, Math.min(1, S.op * 3 + 0.08)));
+  });
+  if (S.showDots) {
+    const sg = new THREE.SphereGeometry(1, 10, 8);
+    B.sites.forEach((p, i) => { const k = B.kinds[i]; if (k === 'free' && !(S.others === 'all' || (S.others === 'touch' && M.touching.has(i)))) return; if ((k === 'ring' || k === 'cap') && !S.showRing) return; const m = new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ color: k === 'col' ? cA : k === 'free' ? cD : cR, clippingPlanes: [cutPlane] })); m.position.set(...p); m.scale.setScalar(k === 'col' ? 0.9 : 0.55); group.add(m); });
+  }
+  if (S.showBalls) for (const [v, R] of B.balls) { const m = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(R, 14, 9)), new THREE.LineBasicMaterial({ color: cR, transparent: true, opacity: 0.13, clippingPlanes: [cutPlane] })); m.position.set(...v); group.add(m); }
+  { const bx = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...BOX)), new THREE.LineBasicMaterial({ color: cS, transparent: true, opacity: 0.5 })); bx.position.copy(C0); group.add(bx); }
+  scene.add(group); draw();
+  const pc = x => Math.round(x * 100) + '%';
+  $('stats').innerHTML = [
+    [B.N >= 2 ? pc(M.steps) : '–', 'steps: share of its outline not in every level'],
+    [Math.round(M.vol) + ' mm³', `the column (${B.N} cell${B.N > 1 ? 's' : ''})`],
+    ['×' + M.big.toFixed(1), 'largest other cell, against the usual'],
+    [String(M.touching.size), 'cells touching the column'],
+    [B.freeNow + ' / ' + B.freeFirst, 'free dots kept, of the cloud without the column'],
+    [Math.round(B.ms) + ' ms', 'to build'],
+  ].map(([v, t]) => `<div class="stat"><b>${v}</b><span>${t}</span></div>`).join('');
+}
+function syncUI() {
+  for (const id of ['N', 'dz', 'r', 'lean', 'cut', 'op']) $(id).value = S[id];
+  $('N_o').textContent = S.N; $('dz_o').textContent = S.dz + ' mm'; $('r_o').textContent = S.r + ' mm'; $('lean_o').textContent = S.lean + ' mm'; $('cut_o').textContent = S.cut >= 48 ? 'nothing' : S.cut + ' mm'; $('op_o').textContent = Math.round(S.op * 100) + '%';
+  for (const [id, key] of [['mode', 'mode'], ['others', 'others']]) for (const b of $(id).children) b.setAttribute('aria-pressed', b.dataset.v === S[key]);
+  for (const id of ['showDots', 'showBalls', 'showRing']) $(id).checked = S[id];
+}
+for (const id of ['N', 'dz', 'r', 'lean']) $(id).addEventListener('input', e => { S[id] = +e.target.value; syncUI(); rebuild(); });
+$('cut').addEventListener('input', e => { S.cut = +e.target.value; cutPlane.constant = S.cut >= 48 ? 1e4 : S.cut; syncUI(); draw(); });
+$('op').addEventListener('input', e => { S.op = +e.target.value; syncUI(); show(); });
+$('mode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.mode = b.dataset.v; syncUI(); rebuild(); } });
+$('others').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.others = b.dataset.v; syncUI(); show(); } });
+for (const id of ['showDots', 'showBalls', 'showRing']) $(id).addEventListener('change', e => { S[id] = e.target.checked; show(); });
+$('reseed').addEventListener('click', () => { S.seed = (S.seed * 31 + 7) % 100003; rebuild(); });
+new ResizeObserver(size).observe(view);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', show);
+new MutationObserver(show).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+syncUI(); size(); rebuild();
 </script>
