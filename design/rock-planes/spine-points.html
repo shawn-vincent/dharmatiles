@@ -63,6 +63,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .stats { display: grid; grid-template-columns: auto auto; gap: 2px 12px; font-size: 13px; }
 .stats dt { color: var(--mute); } .stats dd { margin: 0; font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
 .verdict { font-size: 13.5px; font-weight: 500; }
+.planbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 16px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.layers { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.layers figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: grid; gap: 6px; min-width: 0; }
+.layers figcaption { font-size: 12.5px; color: var(--mute); }
+.layers figure.stack { border-color: var(--accent); }
 .explain { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 @media (max-width: 860px) { .explain { grid-template-columns: minmax(0, 1fr); } }
 .explain section { display: grid; gap: 10px; align-content: start; min-width: 0; }
@@ -136,6 +141,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     <h2>The three rules side by side</h2>
     <p class="lede" style="font-size:15px">The same layers and the same random draws; only the keep-away differs. Tap one to show it above.</p>
     <div class="compare" id="compare"></div>
+  </section>
+
+  <section class="plan" style="display:grid;gap:12px">
+    <h2>Lining up a span: the plan of each layer</h2>
+    <p class="lede" style="font-size:15px">The per-layer way. Seen from above, each layer is its own power diagram, and a span is one dot in each layer it passes through, at the same spot. With only that, its cell differs from layer to layer, because its neighbours do, and the stacked slices make steps (purple, at the right). With mirrored neighbours, its cell in the lowest layer, P, is kept: in each layer above, every edge of P gets a dot on the line through the span's dot square to that edge, weighted so the boundary falls on the edge, and the other dots keep out of the discs through P's corners.</p>
+    <div class="planbar">
+      <div class="ctl"><span class="lbl">Above the lowest layer</span>
+        <div class="seg" id="pmode"><button data-v="same">Same dot only</button><button data-v="mirror">Mirrored neighbours</button></div></div>
+      <div class="ctl"><label for="pn">Layers spanned <output id="pn_o"></output></label><input id="pn" type="range" min="2" max="5" step="1"></div>
+      <div class="ctl"><label for="pr">Spacing <output id="pr_o"></output></label><input id="pr" type="range" min="6" max="16" step="0.5"></div>
+      <div class="ctl"><label for="pl">Lean, each layer <output id="pl_o"></output></label><input id="pl" type="range" min="-4" max="4" step="0.5"></div>
+      <div class="ctl"><label for="pf">Mirrored dot's distance <output id="pf_o"></output></label><input id="pf" type="range" min="1.2" max="3.5" step="0.1"></div>
+      <button class="btn" id="preseed">New layout</button>
+    </div>
+    <div class="layers" id="layers"></div>
+    <div class="readout" id="preadout"></div>
   </section>
 
   <div class="explain">
@@ -352,8 +373,74 @@ $('presets').addEventListener('click', e => { const b = e.target.closest('button
     render(); });
   const up = () => { drag = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 }
-let rt = 0; window.addEventListener('resize', () => { cancelAnimationFrame(rt); rt = requestAnimationFrame(render); });
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
-new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+/* ---------- the plan of each layer: a span as one dot per layer ---------- */
+const PW = 80, PD = 40, PS = { mode: 'mirror', n: 3, r: 9, lean: 0, f: 2, seed: 5 };
+function planScene(mode) {
+  const { n, r, lean, f } = PS, s0 = [PW / 2, PD / 2], out = [];
+  const darts = (k, fixed, ok) => { const R = rng(PS.seed * 7907 + k * 6151), pts = fixed.map(p => p.slice()); for (let i = 0; i < 900; i++) { const c = [R() * PW, R() * PD]; if (pts.every(q => Math.hypot(q[0] - c[0], q[1] - c[1]) >= 0.85 * r) && ok(c)) pts.push(c); } return pts; };
+  /* the lowest layer: ordinary darts round the span's dot */
+  const base = darts(0, [s0], () => true), baseC = cells(base, base.map(() => 0), PD), P = baseC[0];
+  out.push({ sites: base, wts: base.map(() => 0), C: baseC, mir: [], P, s: s0 });
+  for (let k = 1; k < n; k++) {
+    const sk = [s0[0] + lean * k, s0[1]], Pk = P.map(v => [v[0] + lean * k, v[1]]), sites = [sk], wts = [0], mir = [];
+    if (mode === 'mirror') {
+      for (let i = 0; i < Pk.length; i++) { const a = Pk[i], b = Pk[(i + 1) % Pk.length], on = (u, w) => Math.abs(a[u] - w) < 1e-6 && Math.abs(b[u] - w) < 1e-6;
+        if (on(0, 0) || on(0, PW) || on(1, 0) || on(1, PD)) continue;   /* an edge on the slice's own border has no neighbour */
+        const ex = b[0] - a[0], ey = b[1] - a[1], L = Math.hypot(ex, ey), ux = ey / L, uy = -ex / L, h = ux * (a[0] - sk[0]) + uy * (a[1] - sk[1]), d = f * h;
+        sites.push([sk[0] + ux * d, sk[1] + uy * d]); wts.push(d * d - 2 * d * h); mir.push(sites.length - 1); }
+      const disc = Pk.map(v => [v, Math.hypot(v[0] - sk[0], v[1] - sk[1])]);
+      const pts = darts(k, sites, c => disc.every(([v, R_]) => Math.hypot(c[0] - v[0], c[1] - v[1]) >= R_ - 1e-6));
+      for (let i = sites.length; i < pts.length; i++) { sites.push(pts[i]); wts.push(0); }
+    } else { const pts = darts(k, [sk], () => true); for (let i = 1; i < pts.length; i++) { sites.push(pts[i]); wts.push(0); } }
+    out.push({ sites, wts, C: cells(sites, wts, PD), mir, P: Pk, s: sk });
+  }
+  /* the steps: where the stacked slices differ (in some layer's cell but not all), measured against the slices' common column */
+  const inside = (P, x, y) => { let sg = 0; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], c = (b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]); if (Math.abs(c) < 1e-12) continue; if (!sg) sg = Math.sign(c); else if (Math.sign(c) !== sg) return false; } return true; };
+  const span = out.map((l, k) => l.C[0].map(v => [v[0] - lean * k, v[1]]));   /* each slice moved back by its lean: a straight prism lines up */
+  let any = 0, all = 0, stepPts = [], g = 0.25;
+  const xs = span.flat().map(v => v[0]), ys = span.flat().map(v => v[1]);
+  for (let x = Math.min(...xs); x <= Math.max(...xs); x += g) for (let y = Math.min(...ys); y <= Math.max(...ys); y += g) { let c = 0; for (const P of span) if (inside(P, x, y)) c++; if (c) any++; if (c === span.length) all++; else if (c) stepPts.push([x, y]); }
+  let big = 0, med = 0; { const A = []; out.forEach(l => l.C.forEach((P, i) => { if (i && P.length) A.push(Math.abs(area(P))); })); A.sort((a, b) => a - b); med = A[A.length >> 1]; big = A[A.length - 1] / med; }
+  return { layers: out, span, steps: any ? (any - all) / any : 0, stepPts, g, big };
+}
+function drawPlan(cv, L, k, stack, PL) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), wcss = cv.clientWidth, hcss = wcss * PD / PW;
+  cv.style.height = hcss + 'px'; cv.width = Math.round(wcss * dpr); cv.height = Math.round(hcss * dpr);
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); const q = wcss / PW, X = x => x * q, Y = y => (PD - y) * q;
+  const path = P => { g.beginPath(); P.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.closePath(); };
+  g.clearRect(0, 0, wcss, hcss);
+  if (stack) {
+    g.fillStyle = css('--stone-b'); g.fillRect(0, 0, wcss, hcss);
+    g.fillStyle = css('--lost'); for (const [x, y] of PL.stepPts) g.fillRect(X(x - PL.g / 2), Y(y + PL.g / 2), PL.g * q + 0.5, PL.g * q + 0.5);
+    PL.span.forEach((P, i) => { path(P); g.strokeStyle = css('--accent'); g.lineWidth = 1.6; g.stroke(); });
+    return;
+  }
+  L.C.forEach((P, i) => { if (!P.length) return; path(P); g.fillStyle = i === 0 ? css('--accent-soft') : hashCol(i + 17 * k); g.fill(); g.strokeStyle = css('--stone-edge'); g.lineWidth = 1; g.stroke(); });
+  path(L.C[0]); g.strokeStyle = css('--accent'); g.lineWidth = 2; g.stroke();
+  if (k > 0) { g.save(); g.setLineDash([5, 4]); g.strokeStyle = css('--lost'); g.lineWidth = 1.4; path(L.P); g.stroke(); g.restore(); }
+  L.sites.forEach((p, i) => { g.beginPath(); g.arc(X(p[0]), Y(p[1]), i === 0 ? 4 : 2.3, 0, Math.PI * 2); g.fillStyle = i === 0 ? css('--accent') : css('--dot'); g.fill(); });
+  for (const i of L.mir) { const p = L.sites[i]; g.beginPath(); g.arc(X(p[0]), Y(p[1]), 5, 0, Math.PI * 2); g.strokeStyle = css('--accent'); g.lineWidth = 1.5; g.stroke(); }
+}
+function renderPlan() {
+  for (const [id, key] of [['pn', 'n'], ['pr', 'r'], ['pl', 'lean'], ['pf', 'f']]) $(id).value = PS[key];
+  $('pn_o').textContent = PS.n; $('pr_o').textContent = PS.r + ' mm'; $('pl_o').textContent = PS.lean + ' mm'; $('pf_o').textContent = '×' + PS.f.toFixed(1) + (Math.abs(PS.f - 2) < 0.05 ? ' (mirror)' : '');
+  for (const b of $('pmode').children) b.setAttribute('aria-pressed', b.dataset.v === PS.mode);
+  const PL = planScene(PS.mode), other = planScene(PS.mode === 'mirror' ? 'same' : 'mirror'), box = $('layers');
+  const want = PL.layers.length + 1; while (box.children.length > want) box.lastChild.remove();
+  while (box.children.length < want) { const f = document.createElement('figure'); f.innerHTML = '<canvas></canvas><figcaption></figcaption>'; box.appendChild(f); }
+  PL.layers.forEach((L, k) => { const f = box.children[k]; f.className = ''; drawPlan(f.querySelector('canvas'), L, k, false); f.querySelector('figcaption').textContent = k === 0 ? 'Layer 1, the lowest: the span’s cell here is P' : `Layer ${k + 1}: the span’s cell (blue) against P (dashed)` + (L.mir.length ? `; ${L.mir.length} mirrored dots ringed` : ''); });
+  const f = box.children[PL.layers.length]; f.className = 'stack'; drawPlan(f.querySelector('canvas'), null, 0, true, PL);
+  f.querySelector('figcaption').textContent = 'All slices stacked (lean taken out): purple is where they differ, the steps of a concave stone';
+  const pc = x => Math.round(x * 100) + '%', mine = PS.mode === 'mirror' ? PL : other, same = PS.mode === 'mirror' ? other : PL;
+  $('preadout').innerHTML = `<b>Steps</b> (share of the stone's footprint not in every slice): same dot only <b>${pc(same.steps)}</b>, mirrored neighbours <b>${pc(mine.steps)}</b>. <b>Largest other stone</b>: ×${same.big.toFixed(1)} the usual with the same dot only, ×${mine.big.toFixed(1)} mirrored.`;
+}
+for (const [id, key] of [['pn', 'n'], ['pr', 'r'], ['pl', 'lean'], ['pf', 'f']]) $(id).addEventListener('input', e => { PS[key] = +e.target.value; renderPlan(); });
+$('pmode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { PS.mode = b.dataset.v; renderPlan(); } });
+$('preseed').addEventListener('click', () => { PS.seed = (PS.seed * 37 + 11) % 100003; renderPlan(); });
+let rt = 0; window.addEventListener('resize', () => { cancelAnimationFrame(rt); rt = requestAnimationFrame(() => { render(); renderPlan(); }); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { render(); renderPlan(); });
+new MutationObserver(() => { render(); renderPlan(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 render();
+renderPlan();
 </script>
