@@ -2451,7 +2451,7 @@ function initGL() {
       if (R && rg) for (let i = rg[0]; i < rg[1]; i++) { const o = 8 * i, a = [R.D[o], R.D[o + 1], R.D[o + 2]], ab = [R.D[o + 3] - a[0], R.D[o + 4] - a[1], R.D[o + 5] - a[2]], t_ = clamp(dot(sub(P, a), ab) / Math.max(dot(ab, ab), 1e-12), 0, 1), d = len(sub(P, add(a, mul(ab, t_)))); if (d < bd) { bd = d; best = i; } }
       if (best !== null) best = edgeRow(R, best);
       const reach = Math.max(0.4, 0.012 * hit.distance), box = $('einfo');
-      if (selObj) selectStone(null);
+      selectStone(lo);   /* the tapped stone lights up */
       ME = lo;
       if (best && bd <= reach) { box.innerHTML = `<div class="dim">stone ${lo} · body ${g}${l >= 0 ? ' · layer ' + l : ''}</div>` + edgeWords(best); box.hidden = false; highlightEdge(best); }
       else { box.innerHTML = stoneWords(lo) + '<div class="dim" style="margin-top:4px">Tap nearer an edge for its report.</div>'; box.hidden = false; highlightEdge(null); }
