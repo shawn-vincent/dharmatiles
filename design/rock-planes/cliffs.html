@@ -361,7 +361,7 @@ const COLUMN = 6;   // a stone, or a layer's spines, at least this many times as
 const BRIDGE_MARGIN = 1;   // mm: the bottoms are planned this far inside Bridge, so a pair of patches the plan bridges is bridged for the measure too
 // ---------- the clip kernel: a convex polytope as vertices + face loops in pooled typed arrays ----------
 const LAZYMAX = 60;
-const MAXV = 200, MAXF = 160, MAXI = 3000, EPS = 1e-7;
+const MAXV = 500, MAXF = 500, MAXI = 8000, EPS = 1e-7;   // (a weathered stone has many faces)
 const vx = new Float64Array(2 * MAXV), vy = new Float64Array(2 * MAXV), vz = new Float64Array(2 * MAXV), dd = new Float64Array(2 * MAXV);
 let fo = new Int32Array(MAXF), fl = new Int32Array(MAXF), ft = new Int32Array(MAXF), fv = new Int32Array(MAXI);
 let fo2 = new Int32Array(MAXF), fl2 = new Int32Array(MAXF), ft2 = new Int32Array(MAXF), fv2 = new Int32Array(MAXI);
@@ -478,7 +478,7 @@ const pN = new Float64Array(3 * MAXP), pB = new Float64Array(MAXP); let nP = 0;
 // (6 numbers, NaN when none), ATK the guard's tag | EST code << 8, ATW the stones that guard keeps something for. A stone's edges are a range of them
 const EST = ['', 'bevel', 'taper', 'pushed', 'guard', 'down', 'bite', 'hidden', 'gentle', 'short', 'glued', 'ground', 'untried', 'side'], ESC = Object.fromEntries(EST.map((w, i) => [w, i]));
 let ERD = [], ERK = [], ERO = [], ATD = [], ATK = [], ATW = [];
-function carveFor(P) { BEV.k = (P.bevel ?? 15) / 100; UNB = []; ERD = []; ERK = []; ERO = []; ATD = []; ATK = []; ATW = []; }   // the wall's carving: its bevel, and its report begun
+function carveFor(P) { const b = P.bevel ?? [1, 1], w = P.weather ?? [0, 0]; BEV.lo = b[0]; BEV.hi = b[1]; BEV.wlo = w[0] / 100; BEV.whi = w[1] / 100; UNB = []; ERD = []; ERK = []; ERO = []; ATD = []; ATK = []; ATW = []; }   // the wall's carving: its bevel, and its report begun
 // support of the cell's vertex set along n
 let supN = 0;
 function support(nx, ny, nz) { let m = -Infinity; for (let v = 0; v < supN; v++) { const d = nx * vx[v] + ny * vy[v] + nz * vz[v]; if (d > m) m = d; } return m; }
@@ -518,7 +518,7 @@ function guardsOf(kp) {
 // ---------- the slotted clip: faces keep their slot, only the faces a plane touches are rewritten ----------
 // A face is a loop of vertex ids in a slot of CAPS ids; a face a plane misses is not read past a bound test (centre and radius, kept
 // while the face only shrinks); a face wholly cut away frees its slot; a vertex cut away is NaN and its id is reused by the next cut.
-const CAPS = 48, MAXSL = 200, MAXVS = 400;
+const CAPS = 64, MAXSL = 500, MAXVS = 2 * MAXV;
 const sV = new Int32Array(CAPS * MAXSL), sLen = new Int32Array(MAXSL), sKind = new Int32Array(MAXSL), sCx = new Float64Array(MAXSL), sCy = new Float64Array(MAXSL), sCz = new Float64Array(MAXSL), sR = new Float64Array(MAXSL);
 const freeS = new Int32Array(MAXSL), freeV = new Int32Array(MAXVS), deadV = new Int32Array(MAXVS), tmpA = new Int32Array(CAPS + 8);
 let nSL = 0, nFreeS = 0, nFreeV = 0, nVS = 0, nAliveS = 0;
@@ -595,46 +595,48 @@ function relocate() {
       const L = Math.sqrt(nx * nx + ny * ny + nz * nz); nx /= L; ny /= L; nz /= L; hN[3 * nf] = nx; hN[3 * nf + 1] = ny; hN[3 * nf + 2] = nz; hD[nf++] = nx * vx[sV[o]] + ny * vy[sV[o]] + nz * vz[sV[o]]; }
     for (let g = 0; g < nG; g++) { const x = gd[3 * g], y = gd[3 * g + 1], z = gd[3 * g + 2]; let gone = false; for (let i = 0; i < nf; i++) if (hN[3 * i] * x + hN[3 * i + 1] * y + hN[3 * i + 2] * z > hD[i] + 1e-3) { gone = true; break; } if (gone) { gd[3 * g] = mx; gd[3 * g + 1] = my; gd[3 * g + 2] = mz; } } }
 }
-// ---------- Bevel: carving is one cut on each seen edge ----------
-// Every seen edge (two faces turning at least minTurn degrees, long enough, a probe just outside it in no other piece; glued/glued and ground edges left alone)
-// gets ONE plane whose normal is the bisector of its two faces (a 45 degree bevel on a square edge), so the bevel is a flat strip about W mm wide along each
-// face, W = K times the stone's smallest dimension (capped at a share of the smaller face's inradius).
-let UNB = null, EROWS = null, BEVW = null;   // BEVW: the carved piece's bevel width (its keeps and its kept bottom stand back by it)
+// ---------- Bevel and Weathering: rounds of flat cuts on the exposed edges and corners ----------
+// Round 1 (Bevel): every exposed edge gets one flat cut taking the same amount, drawn from the Bevel range at each end, off both its faces; every exposed
+// corner (three or more faces) gets its own cut, as deep as the corner's draw taken back along its edges three times (so a square face is left an octagon).
+// Rounds 2 on (Weathering, drawn for each end of each cut): every edge the round before made is cut again, short on the newer facet (up to almost half its
+// width) and long on the older face (up to almost the way to its middle), and every corner of the newer facets likewise; so the faces dome, facet by facet.
+// Rounds stop when nothing more is cut (a cut under MINBITE, a facet narrower than a nozzle) or after BEV.rounds. Every plane goes through `place`, so the
+// guards (what a stone rests on and carries, glued faces, its footing) and the downward limit hold; a cut a guard holds back pivots on it and tapers.
+let UNB = null, EROWS = null, BEVW = null, CKEY = 0;   // BEVW: how far keeps stand back from their rims (the Bevel's top); CKEY: the carved stone's key for its draws
 // (UNB, EROWS)   debugging: UNB the seen edges left sharp, as segments; EROWS the carved stone's range of the wall's edge report (ERD ...)
-const BEV = { k: 0.15, inr: 0.8, minTurn: 30, eps: 0.25, minLen: 0.4 };   // k: leg width as a share of the stone's smallest side; inr: at most this share of the smaller face's inradius; minTurn: degrees; eps, minLen: mm
-const MAXEG = 1500, etStamp = new Int32Array(MAXVS * MAXVS), etRef = new Int32Array(MAXVS * MAXVS); let etSt = 0;
+const BEV = { lo: 1, hi: 1, wlo: 0, whi: 0, inr: 0.8, flat: 8, eps: 0.25, minLen: 0.4, minFacet: 0.4, rounds: 4, short: 0.45, long: 0.95 };   // lo, hi: Bevel mm; wlo, whi: Weathering 0..1; inr: a cut takes at most this share of a face's inradius; flat: degrees under which an edge is no edge; short, long: a later cut's legs at full Weathering, as shares of the newer facet's width and of the way to the older face's middle
+const MAXEG = 3000, etStamp = new Int32Array(MAXVS * MAXVS), etRef = new Int32Array(MAXVS * MAXVS); let etSt = 0;
 const gA = new Int32Array(MAXEG), gB = new Int32Array(MAXEG), gF1 = new Int32Array(MAXEG), gF2 = new Int32Array(MAXEG), gN = new Uint8Array(MAXEG);
-const fN = new Float64Array(3 * MAXSL), fIn = new Float64Array(MAXSL), fOk = new Uint8Array(MAXSL);
-// a candidate bevel, by its edge of the cell: its faces, ends, length and plane (the bisector b, the plane b.x = want), longest first
-const cS1 = new Int32Array(MAXEG), cS2 = new Int32Array(MAXEG), cE = new Float64Array(6 * MAXEG), cL = new Float64Array(MAXEG), cBn = new Float64Array(3 * MAXEG), cWant = new Float64Array(MAXEG), cD = new Float64Array(MAXEG), cTh = new Float64Array(MAXEG), cOrd = new Int32Array(MAXEG);
-function edgesNow() {   // the stone's edges now: each with its two faces; and each face's normal and inradius
-  supN = nVS; etSt++; let nE = 0;
+const fN = new Float64Array(3 * MAXSL), fC = new Float64Array(3 * MAXSL), fIn = new Float64Array(MAXSL), fOk = new Uint8Array(MAXSL), sRound = new Int8Array(MAXSL);
+const vFace = new Int32Array(8 * MAXVS), vDeg = new Int32Array(MAXVS);   // the faces around each vertex (at most 8 kept)
+// a candidate cut: its plane, its turn (degrees; NaN a corner), its far points (each end's two legs, for a taper), its size (mm on the face), its faces
+const MAXCUT = 2000, kN = new Float64Array(4 * MAXCUT), kP = new Float64Array(12 * MAXCUT), kL = new Float64Array(MAXCUT), kT = new Float64Array(MAXCUT), kS = new Float64Array(MAXCUT), kF = new Int32Array(2 * MAXCUT), kO = new Int32Array(MAXCUT);
+function edgesNow() {   // the stone's edges now: each with its two faces; each face's normal, centre and inradius; the faces around each vertex
+  supN = nVS; etSt++; let nE = 0; vDeg.fill(0, 0, nVS);
   for (let s = 0; s < nSL; s++) {
-    fOk[s] = 0; const m = sLen[s]; if (!m) continue; const o = s * CAPS; let nx = 0, ny = 0, nz = 0, per = 0;
+    fOk[s] = 0; const m = sLen[s]; if (!m) continue; const o = s * CAPS; let nx = 0, ny = 0, nz = 0, per = 0, cx = 0, cy = 0, cz = 0;
     for (let k = 0; k < m; k++) {
       const a = sV[o + k], b = sV[o + (k + 1 === m ? 0 : k + 1)];
       nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]);
-      per += Math.hypot(vx[b] - vx[a], vy[b] - vy[a], vz[b] - vz[a]);
+      per += Math.hypot(vx[b] - vx[a], vy[b] - vy[a], vz[b] - vz[a]); cx += vx[a]; cy += vy[a]; cz += vz[a];
+      if (vDeg[a] < 8) vFace[8 * a + vDeg[a]++] = s;
       const lo = a < b ? a : b, hi = a < b ? b : a, key = lo * MAXVS + hi; let e;
       if (etStamp[key] === etSt) e = etRef[key]; else { if (nE >= MAXEG) throw new Error('carve: too many edges'); e = nE++; etStamp[key] = etSt; etRef[key] = e; gA[e] = a; gB[e] = b; gN[e] = 0; }
       if (gN[e] === 0) gF1[e] = s; else if (gN[e] === 1) gF2[e] = s; gN[e]++;
     }
     const L = Math.sqrt(nx * nx + ny * ny + nz * nz); if (L < 1e-9) continue;
-    fN[3 * s] = nx / L; fN[3 * s + 1] = ny / L; fN[3 * s + 2] = nz / L; fIn[s] = L / per; fOk[s] = 1;
+    fN[3 * s] = nx / L; fN[3 * s + 1] = ny / L; fN[3 * s + 2] = nz / L; fIn[s] = L / per; fOk[s] = 1; fC[3 * s] = cx / m; fC[3 * s + 1] = cy / m; fC[3 * s + 2] = cz / m;
   }
   return nE;
 }
-// The stone is its convex cell, so each edge's bevel is fixed by its two faces alone: the bisector plane, set in from the line where the faces meet
-// (which no other cut moves). The planes are found once from the cell and cut longest edge first; a plane whose edge a neighbour's bevel already took
-// away bites under MINBITE and is not made, which is the outside miter. A plane goes through `place`, so the guards and the downward limit hold.
+// a draw in [0, 1) for a point of this stone (to 0.01 mm) and a purpose k: the same point, the same draw, whatever else is cut
+const drawAt = (x, y, z, k) => (hash2(hash2(hash2(CKEY, Math.round(x * 100)), hash2(Math.round(y * 100), Math.round(z * 100))), k) >>> 0) / 4294967296;
 function bevelAll(grd) {
-  EROWS = [ERK.length, ERK.length]; if (BEV.k <= 0) return;   // Bevel 0: no bevels (EROWS: this stone's range of the report)
-  const open = DX && DX.open, glued = DX && DX.glued, minTurn = Math.cos(BEV.minTurn * DEG), eps = BEV.eps;
-  let lox = Infinity, loy = Infinity, loz = Infinity, hix = -Infinity, hiy = -Infinity, hiz = -Infinity;
-  for (let v = 0; v < nVS; v++) { const x = vx[v]; if (x !== x) continue; if (x < lox) lox = x; if (x > hix) hix = x; if (vy[v] < loy) loy = vy[v]; if (vy[v] > hiy) hiy = vy[v]; if (vz[v] < loz) loz = vz[v]; if (vz[v] > hiz) hiz = vz[v]; }
-  const W = BEVW ?? BEV.k * Math.min(hix - lox, hiy - loy, hiz - loz);
-  const pk = (s1, s2) => s1 < s2 ? s1 * MAXSL + s2 : s2 * MAXSL + s1;
-  const tried = new Map(), seenOf = new Map(), cutFor = new Map();   // by face pair: the attempt (its index in AT*), and whether the edge is seen; by bevel face: its attempt
+  EROWS = [ERK.length, ERK.length]; if (!(BEV.hi > 0)) return;   // Bevel 0: no cuts (EROWS: this stone's range of the report)
+  const open = DX && DX.open, glued = DX && DX.glued, flat = Math.cos(BEV.flat * DEG), eps = BEV.eps, weathered = BEV.whi > 0;
+  const pk = (s1, s2) => s1 < s2 ? s1 * MAXSL + s2 : s2 * MAXSL + s1, isGlued = s => glued && (sKind[s] & 15) === KIND.SIDE && glued(sKind[s] >> 4);
+  const tried = new Map(), seenOf = new Map(), cutFor = new Map();   // by face pair: the attempt (its index in AT*), and whether the edge is seen; by cut face: its attempt
+  for (let s = 0; s < nSL; s++) sRound[s] = 0;
   // seen: a point just outside either face beside the edge (its middle, or fifths), along the bisector, or just past either end, lies in no other piece
   const seenAt = (ax, ay, az, bx_, by_, bz_, L, bx, by, bz, s1, s2) => {
     if (!open) return true; const fifths = L > 3;
@@ -648,41 +650,99 @@ function bevelAll(grd) {
     const ux = (bx_ - ax) / L, uy = (by_ - ay) / L, uz = (bz_ - az) / L;   // an edge seen only end-on (a joint's top or bottom edge, met by the front): just past each end
     return open(bx_ + (ux + bx) * eps, by_ + (uy + by) * eps, bz_ + (uz + bz) * eps) || open(ax + (bx - ux) * eps, ay + (by - uy) * eps, az + (bz - uz) * eps);
   };
-  // the candidates, from the cell as it is
-  const nE = edgesNow(); let nc = 0;
-  for (let e = 0; e < nE; e++) {
-    if (gN[e] !== 2) continue; const s1 = gF1[e], s2 = gF2[e]; if (!fOk[s1] || !fOk[s2]) continue;
-    const c = fN[3 * s1] * fN[3 * s2] + fN[3 * s1 + 1] * fN[3 * s2 + 1] + fN[3 * s1 + 2] * fN[3 * s2 + 2]; if (c > minTurn) continue;
-    const k1 = sKind[s1] & 15, k2 = sKind[s2] & 15;
-    if (glued && k1 === KIND.SIDE && glued(sKind[s1] >> 4) && k2 === KIND.SIDE && glued(sKind[s2] >> 4)) continue;
-    if (grd && (k1 === KIND.BOT || k2 === KIND.BOT)) continue;
-    const A = gA[e], B = gB[e], L = Math.hypot(vx[B] - vx[A], vy[B] - vy[A], vz[B] - vz[A]); if (L < BEV.minLen) continue;
-    let bx = fN[3 * s1] + fN[3 * s2], by = fN[3 * s1 + 1] + fN[3 * s2 + 1], bz = fN[3 * s1 + 2] + fN[3 * s2 + 2]; const bl = Math.sqrt(bx * bx + by * by + bz * bz); if (bl < 1e-6) continue; bx /= bl; by /= bl; bz /= bl;
-    const th = Math.acos(Math.max(-1, Math.min(1, c))), w = Math.min(W, BEV.inr * Math.min(fIn[s1], fIn[s2])), D = Math.max(w * Math.sin(th / 2), 1.2 * MINBITE);   // w: the strip's width along each face; D: the plane's depth from the edge
-    cS1[nc] = s1; cS2[nc] = s2; cL[nc] = L; cTh[nc] = th; cD[nc] = D; cBn[3 * nc] = bx; cBn[3 * nc + 1] = by; cBn[3 * nc + 2] = bz;
-    cE[6 * nc] = vx[A]; cE[6 * nc + 1] = vy[A]; cE[6 * nc + 2] = vz[A]; cE[6 * nc + 3] = vx[B]; cE[6 * nc + 4] = vy[B]; cE[6 * nc + 5] = vz[B];
-    cWant[nc] = bx * (vx[A] + vx[B]) / 2 + by * (vy[A] + vy[B]) / 2 + bz * (vz[A] + vz[B]) / 2 - D; cOrd[nc] = nc; nc++;
-  }
-  const ord = cOrd.subarray(0, nc).sort((a, b) => cL[b] - cL[a] || a - b);
-  for (let i = 0; i < nc && !empty; i++) {
-    const j = ord[i], s1 = cS1[j], s2 = cS2[j], dk = pk(s1, s2), e6 = 6 * j, ax = cE[e6], ay = cE[e6 + 1], az = cE[e6 + 2], ex_ = cE[e6 + 3], ey_ = cE[e6 + 4], ez_ = cE[e6 + 5];
-    const bx = cBn[3 * j], by = cBn[3 * j + 1], bz = cBn[3 * j + 2], D = cD[j], want = cWant[j];
-    const seen = seenAt(ax, ay, az, ex_, ey_, ez_, cL[j], bx, by, bz, s1, s2); seenOf.set(dk, seen); if (!seen) continue;
-    supN = nVS; let got = place(bx, by, bz, 0, want, Infinity), taper = false;
-    const why0 = placeWhy, g0 = placeAt, at = ATK.length;
-    ATD.push(D, cTh[j] / DEG, g0 >= 0 ? gd[3 * g0] : NaN, g0 >= 0 ? gd[3 * g0 + 1] : NaN, g0 >= 0 ? gd[3 * g0 + 2] : NaN, 0); ATK.push(g0 >= 0 ? gTag[g0] : 0); ATW.push(g0 >= 0 ? gWho[g0] : null);
-    if (!got && why0 === 2 && g0 >= 0) {   // held back by a guard: the cut pivots on the guard point and tapers, full depth at the edge's far end, none at the guard
-      const gx = gd[3 * g0], gy = gd[3 * g0 + 1], gz = gd[3 * g0 + 2], far = Math.hypot(ax - gx, ay - gy, az - gz) > Math.hypot(ex_ - gx, ey_ - gy, ez_ - gz);
-      const fx = (far ? ax : ex_) - bx * D - gx, fy = (far ? ay : ey_) - by * D - gy, fz = (far ? az : ez_) - bz * D - gz, ex = ex_ - ax, ey = ey_ - ay, ez = ez_ - az;
-      const cx = ey * bz - ez * by, cy = ez * bx - ex * bz, cz = ex * by - ey * bx;   // across the strip: the cut keeps this direction
-      let nx = fy * cz - fz * cy, ny = fz * cx - fx * cz, nz = fx * cy - fy * cx; const nl = Math.hypot(nx, ny, nz);
-      if (nl > 1e-9) { nx /= nl; ny /= nl; nz /= nl; if (nx * bx + ny * by + nz * bz < 0) { nx = -nx; ny = -ny; nz = -nz; } got = place(nx, ny, nz, 0, nx * gx + ny * gy + nz * gz, Infinity); taper = got > 0; }
+  // the way into face s from the edge A->B (in its plane, across the edge), into ux, uy, uz
+  let ux = 0, uy = 0, uz = 0;
+  const into = (s, ex, ey, ez, ax, ay, az) => { let x = fN[3 * s + 1] * ez - fN[3 * s + 2] * ey, y = fN[3 * s + 2] * ex - fN[3 * s] * ez, z = fN[3 * s] * ey - fN[3 * s + 1] * ex; const l = Math.hypot(x, y, z) || 1; x /= l; y /= l; z /= l; if (x * (fC[3 * s] - ax) + y * (fC[3 * s + 1] - ay) + z * (fC[3 * s + 2] - az) < 0) { x = -x; y = -y; z = -z; } ux = x; uy = y; uz = z; };
+  let nc = 0;
+  // a cut through the four leg points (each end's leg on each face), its normal out of the stone: the plane of the quad's two diagonals, through their middle
+  const addEdge = (s1, s2, A, B, a1, a2, b1, b2, L, turn) => {
+    if (nc >= MAXCUT) throw new Error('carve: too many cuts');
+    const ex = vx[B] - vx[A], ey = vy[B] - vy[A], ez = vz[B] - vz[A], q = 12 * nc;
+    into(s1, ex, ey, ez, vx[A], vy[A], vz[A]); const u1x = ux, u1y = uy, u1z = uz; into(s2, ex, ey, ez, vx[A], vy[A], vz[A]);
+    kP[q] = vx[A] + a1 * u1x; kP[q + 1] = vy[A] + a1 * u1y; kP[q + 2] = vz[A] + a1 * u1z; kP[q + 3] = vx[A] + a2 * ux; kP[q + 4] = vy[A] + a2 * uy; kP[q + 5] = vz[A] + a2 * uz;
+    kP[q + 6] = vx[B] + b1 * u1x; kP[q + 7] = vy[B] + b1 * u1y; kP[q + 8] = vz[B] + b1 * u1z; kP[q + 9] = vx[B] + b2 * ux; kP[q + 10] = vy[B] + b2 * uy; kP[q + 11] = vz[B] + b2 * uz;
+    const d1x = kP[q + 9] - kP[q], d1y = kP[q + 10] - kP[q + 1], d1z = kP[q + 11] - kP[q + 2], d2x = kP[q + 6] - kP[q + 3], d2y = kP[q + 7] - kP[q + 4], d2z = kP[q + 8] - kP[q + 5];
+    let nx = d1y * d2z - d1z * d2y, ny = d1z * d2x - d1x * d2z, nz = d1x * d2y - d1y * d2x; const l = Math.hypot(nx, ny, nz); if (l < 1e-9) return;
+    nx /= l; ny /= l; nz /= l; if (nx * (fN[3 * s1] + fN[3 * s2]) + ny * (fN[3 * s1 + 1] + fN[3 * s2 + 1]) + nz * (fN[3 * s1 + 2] + fN[3 * s2 + 2]) < 0) { nx = -nx; ny = -ny; nz = -nz; }
+    let d = 0; for (let k = 0; k < 4; k++) d += nx * kP[q + 3 * k] + ny * kP[q + 3 * k + 1] + nz * kP[q + 3 * k + 2];
+    kN[4 * nc] = nx; kN[4 * nc + 1] = ny; kN[4 * nc + 2] = nz; kN[4 * nc + 3] = d / 4; kL[nc] = L; kT[nc] = turn; kS[nc] = Math.max(a1, a2, b1, b2); kF[2 * nc] = s1; kF[2 * nc + 1] = s2; nc++;
+  };
+  // a corner's cut: out along the mean of its faces' normals, `depth` in from the vertex
+  const addCorner = (V, depth, size) => {
+    if (nc >= MAXCUT) throw new Error('carve: too many cuts');
+    let nx = 0, ny = 0, nz = 0; for (let i = 0; i < vDeg[V]; i++) { const f = vFace[8 * V + i]; nx += fN[3 * f]; ny += fN[3 * f + 1]; nz += fN[3 * f + 2]; }
+    const l = Math.hypot(nx, ny, nz); if (l < 1e-6) return; nx /= l; ny /= l; nz /= l;
+    if (open && !open(vx[V] + nx * eps, vy[V] + ny * eps, vz[V] + nz * eps)) return;   // a corner inside other stones is not seen
+    kN[4 * nc] = nx; kN[4 * nc + 1] = ny; kN[4 * nc + 2] = nz; kN[4 * nc + 3] = nx * vx[V] + ny * vy[V] + nz * vz[V] - depth; kL[nc] = -1; kT[nc] = NaN; kS[nc] = size; kF[2 * nc] = -1; kF[2 * nc + 1] = -1; nc++;
+  };
+  const draw = (lo, hi, x, y, z, k) => lo + (hi - lo) * drawAt(x, y, z, k);
+  for (let round = 1; round <= (weathered ? BEV.rounds : 1) && !empty; round++) {
+    const nE = edgesNow(); nc = 0;
+    for (let e = 0; e < nE; e++) {
+      if (gN[e] !== 2) continue; const s1 = gF1[e], s2 = gF2[e]; if (!fOk[s1] || !fOk[s2]) continue;
+      const c = fN[3 * s1] * fN[3 * s2] + fN[3 * s1 + 1] * fN[3 * s2 + 1] + fN[3 * s1 + 2] * fN[3 * s2 + 2]; if (c > flat) continue;
+      const k1 = sKind[s1] & 15, k2 = sKind[s2] & 15; if (grd && (k1 === KIND.BOT || k2 === KIND.BOT)) continue;
+      const A = gA[e], B = gB[e], L = Math.hypot(vx[B] - vx[A], vy[B] - vy[A], vz[B] - vz[A]); if (L < BEV.minLen) continue;
+      const r1 = sRound[s1], r2 = sRound[s2], turn = Math.acos(Math.max(-1, Math.min(1, c))) / DEG;
+      if (round === 1) {
+        if (isGlued(s1) && isGlued(s2)) continue;
+        let bx = fN[3 * s1] + fN[3 * s2], by = fN[3 * s1 + 1] + fN[3 * s2 + 1], bz = fN[3 * s1 + 2] + fN[3 * s2 + 2]; const bl = Math.hypot(bx, by, bz); if (bl < 1e-6) continue; bx /= bl; by /= bl; bz /= bl;
+        const dk = pk(s1, s2), seen = seenAt(vx[A], vy[A], vz[A], vx[B], vy[B], vz[B], L, bx, by, bz, s1, s2); seenOf.set(dk, seen); if (!seen) continue;
+        const cap = BEV.inr * Math.min(fIn[s1], fIn[s2]), sa = Math.min(cap, draw(BEV.lo, BEV.hi, vx[A], vy[A], vz[A], 1)), sb = Math.min(cap, draw(BEV.lo, BEV.hi, vx[B], vy[B], vz[B], 1));
+        addEdge(s1, s2, A, B, sa, sa, sb, sb, L, turn); kO[nc - 1] = dk;
+      } else {
+        if (r1 !== round - 1 && r2 !== round - 1) continue;   // only the edges the round before made
+        // each side: the newer facet (the last round's) takes a short leg, an older face a long one, toward its middle; an older face that is glued or hidden is not swept
+        const ex = vx[B] - vx[A], ey = vy[B] - vy[A], ez = vz[B] - vz[A]; let ok = true; const leg = [0, 0, 0, 0];
+        const wa = draw(BEV.wlo, BEV.whi, vx[A], vy[A], vz[A], 2 + round), wb = draw(BEV.wlo, BEV.whi, vx[B], vy[B], vz[B], 2 + round); if (wa <= 0 && wb <= 0) continue;
+        for (let side = 0; side < 2 && ok; side++) {
+          const s = side ? s2 : s1, o = side ? s1 : s2;
+          if (sRound[s] === round - 1) { leg[side] = wa * BEV.short * fIn[s]; leg[2 + side] = wb * BEV.short * fIn[s]; continue; }
+          if (isGlued(s)) { ok = false; break; }
+          if (open) { const mx = (vx[A] + vx[B]) / 2 + (fN[3 * s] - 0.5 * fN[3 * o]) * eps, my = (vy[A] + vy[B]) / 2 + (fN[3 * s + 1] - 0.5 * fN[3 * o + 1]) * eps, mz = (vz[A] + vz[B]) / 2 + (fN[3 * s + 2] - 0.5 * fN[3 * o + 2]) * eps; if (!open(mx, my, mz)) { ok = false; break; } }
+          into(s, ex, ey, ez, vx[A], vy[A], vz[A]);
+          const pa = ux * (fC[3 * s] - vx[A]) + uy * (fC[3 * s + 1] - vy[A]) + uz * (fC[3 * s + 2] - vz[A]), pb = ux * (fC[3 * s] - vx[B]) + uy * (fC[3 * s + 1] - vy[B]) + uz * (fC[3 * s + 2] - vz[B]);
+          leg[side] = wa * BEV.long * Math.max(0, pa); leg[2 + side] = wb * BEV.long * Math.max(0, pb);
+        }
+        if (!ok) continue;
+        const kA = Math.hypot(leg[0], leg[1]), kB = Math.hypot(leg[2], leg[3]); if (kA < BEV.minFacet && kB < BEV.minFacet) continue;   // a facet narrower than a nozzle
+        addEdge(s1, s2, A, B, leg[0], leg[1], leg[2], leg[3], L, turn); kO[nc - 1] = pk(s1, s2);
+      }
     }
-    tried.set(dk, at);
-    if (!got) { ATK[at] |= [0, ESC.down, ESC.guard, ESC.bite][why0] << 8; continue; }
-    const pushed = !taper && pB[0] - want > 0.1 * D; ATK[at] |= (taper ? ESC.taper : pushed ? ESC.pushed : ESC.bevel) << 8; if (pushed) ATD[6 * at] = Math.max(0, D - (pB[0] - want));
-    clipS(pN[0], pN[1], pN[2], pB[0], taper || pushed ? KIND.PART : KIND.BEVEL); nP = 0;   // held back by a guard: a part bevel
-    if (lastCap >= 0) cutFor.set(lastCap, at);
+    const nEdgeCuts = nc;
+    // corners: round 1, every corner of three or more faces; later, every corner of the last round's facets
+    for (let V = 0; V < nVS; V++) {
+      const dg = vDeg[V]; if (dg < 3 || vx[V] !== vx[V]) continue; let newest = Infinity, anyNew = false, bad = false;
+      for (let i = 0; i < dg; i++) { const f = vFace[8 * V + i], k = sKind[f] & 15; if (!fOk[f] || (grd && k === KIND.BOT) || isGlued(f)) { bad = true; break; } if (sRound[f] === round - 1 && round > 1) { anyNew = true; newest = Math.min(newest, fIn[f]); } }
+      if (bad || (round > 1 && !anyNew)) continue;
+      let size;
+      if (round === 1) { let cap = Infinity; for (let i = 0; i < dg; i++) cap = Math.min(cap, BEV.inr * fIn[vFace[8 * V + i]]); size = Math.min(cap, draw(BEV.lo, BEV.hi, vx[V], vy[V], vz[V], 2)); }
+      else { size = draw(BEV.wlo, BEV.whi, vx[V], vy[V], vz[V], 9 + round) * BEV.short * newest; if (size < MINBITE) continue; }
+      addCorner(V, Math.sqrt(3) * size, size);
+    }
+    if (!nc) break;
+    // the cuts: the edges longest first, then the corners
+    const ord = Array.from({ length: nc }, (_, i) => i).sort((a, b) => (a < nEdgeCuts) !== (b < nEdgeCuts) ? (a < nEdgeCuts ? -1 : 1) : kL[b] - kL[a] || a - b);
+    let made = 0;
+    for (const j of ord) {
+      if (empty) break;
+      const nx = kN[4 * j], ny = kN[4 * j + 1], nz = kN[4 * j + 2], want = kN[4 * j + 3], corner = kL[j] < 0;
+      supN = nVS; let got = place(nx, ny, nz, 0, want, Infinity), taper = false;
+      const why0 = placeWhy, g0 = placeAt, at = ATK.length;
+      ATD.push(kS[j], kT[j], g0 >= 0 ? gd[3 * g0] : NaN, g0 >= 0 ? gd[3 * g0 + 1] : NaN, g0 >= 0 ? gd[3 * g0 + 2] : NaN, round); ATK.push((g0 >= 0 ? gTag[g0] : 0) | (corner ? 1 << 12 : 0)); ATW.push(g0 >= 0 ? gWho[g0] : null);
+      if (!got && why0 === 2 && g0 >= 0 && !corner) {   // held back by a guard: the cut pivots on the guard point and tapers, its far end's legs kept, nothing at the guard
+        const q = 12 * j, gx = gd[3 * g0], gy = gd[3 * g0 + 1], gz = gd[3 * g0 + 2], farB = Math.hypot(kP[q] + kP[q + 3] - 2 * gx, kP[q + 1] + kP[q + 4] - 2 * gy, kP[q + 2] + kP[q + 5] - 2 * gz) < Math.hypot(kP[q + 6] + kP[q + 9] - 2 * gx, kP[q + 7] + kP[q + 10] - 2 * gy, kP[q + 8] + kP[q + 11] - 2 * gz), f = farB ? q + 6 : q;
+        const ax = kP[f + 3] - kP[f], ay = kP[f + 4] - kP[f + 1], az = kP[f + 5] - kP[f + 2], bx = gx - kP[f], by = gy - kP[f + 1], bz = gz - kP[f + 2];
+        let tx = ay * bz - az * by, ty = az * bx - ax * bz, tz = ax * by - ay * bx; const tl = Math.hypot(tx, ty, tz);
+        if (tl > 1e-9) { tx /= tl; ty /= tl; tz /= tl; if (tx * nx + ty * ny + tz * nz < 0) { tx = -tx; ty = -ty; tz = -tz; } got = place(tx, ty, tz, 0, tx * gx + ty * gy + tz * gz, Infinity); taper = got > 0; }
+      }
+      if (kO[j] >= 0 && !corner && !tried.has(kO[j])) tried.set(kO[j], at);
+      if (!got) { ATK[at] |= [0, ESC.down, ESC.guard, ESC.bite][why0] << 8; continue; }
+      const pushed = !taper && pB[0] - want > 0.1 * Math.max(kS[j], 0.1); ATK[at] |= (taper ? ESC.taper : pushed ? ESC.pushed : ESC.bevel) << 8; if (pushed) ATD[6 * at] = Math.max(0, kS[j] - (pB[0] - want));
+      clipS(pN[0], pN[1], pN[2], pB[0], taper || pushed ? KIND.PART : KIND.BEVEL); nP = 0;   // held back by a guard: a part cut
+      if (lastCap >= 0) { cutFor.set(lastCap, at); sRound[lastCap] = round; } made++;
+    }
+    if (!made) break;
   }
   if (empty) return;
   // the edge report: every edge of the stone as carved, and what became of it; the seen edges left sharp also go to UNB (drawn magenta)
@@ -692,22 +752,22 @@ function bevelAll(grd) {
     const c = fN[3 * s1] * fN[3 * s2] + fN[3 * s1 + 1] * fN[3 * s2 + 1] + fN[3 * s1 + 2] * fN[3 * s2 + 2]; if (c > minEdge) continue;
     const k1 = sKind[s1] & 15, k2 = sKind[s2] & 15, A = gA[e], B = gB[e], L = Math.hypot(vx[B] - vx[A], vy[B] - vy[A], vz[B] - vz[A]);
     let st = 0, of = -1;
-    if (bv(k1) || bv(k2)) { st = ESC.side; of = cutFor.get(bv(k1) ? s1 : s2) ?? -1; }
-    else if (glued && k1 === KIND.SIDE && glued(sKind[s1] >> 4) && k2 === KIND.SIDE && glued(sKind[s2] >> 4)) st = ESC.glued;
+    if (bv(k1) || bv(k2)) { st = ESC.side; of = cutFor.get(bv(k1) && (!bv(k2) || sRound[s1] >= sRound[s2]) ? s1 : s2) ?? -1; }
+    else if (isGlued(s1) && isGlued(s2)) st = ESC.glued;
     else if (grd && (k1 === KIND.BOT || k2 === KIND.BOT)) st = ESC.ground;
-    else if (c > minTurn) st = ESC.gentle;
+    else if (c > flat) st = ESC.gentle;
     else if (L < BEV.minLen) st = ESC.short;
     else {
       const dk = pk(s1, s2); let seen = seenOf.get(dk);
       if (seen === undefined) { let bx = fN[3 * s1] + fN[3 * s2], by = fN[3 * s1 + 1] + fN[3 * s2 + 1], bz = fN[3 * s1 + 2] + fN[3 * s2 + 2]; const bl = Math.hypot(bx, by, bz) || 1; seen = seenAt(vx[A], vy[A], vz[A], vx[B], vy[B], vz[B], L, bx / bl, by / bl, bz / bl, s1, s2); }
       if (!seen) st = ESC.hidden;
-      else { of = tried.get(dk) ?? -1; st = of >= 0 ? ATK[of] >> 8 : ESC.untried; if (UNB) UNB.push(vx[A], vy[A], vz[A], vx[B], vy[B], vz[B]); }
+      else { of = tried.get(dk) ?? -1; st = of >= 0 ? ATK[of] >> 8 & 15 : ESC.untried; if (UNB) UNB.push(vx[A], vy[A], vz[A], vx[B], vy[B], vz[B]); }
     }
     ERD.push(vx[A], vy[A], vz[A], vx[B], vy[B], vz[B], Math.acos(Math.max(-1, Math.min(1, c))) / DEG, L); ERK.push(k1 | k2 << 4 | st << 8); ERO.push(of);
   }
   EROWS[1] = ERK.length;
 }
-// a stone: its guards, then its bevels, in the slotted faces and back
+// a stone: its guards, then its cuts, in the slotted faces and back
 function carveFast(kp, grd) { guardsOf(kp); toSlots(); supN = nVS; relocate(); bevelAll(grd); if (!empty) fromSlots(); }
 function wall(seed, P, opt = {}) {
   carveFor(P);
@@ -1070,7 +1130,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     }
     let polys = pat.map(r => r.poly);
     q.Bpolys = polys; q.Bfull = pat.filter(r => polys.includes(r.poly)).map(r => r.full);
-    for (const r of pat) if (!r.glue) { r.t.sup = (r.t.sup || []).concat(r.poly); (r.t.supBy || (r.t.supBy = [])).push(q.id); }
+    for (const r of pat) if (!r.glue) { r.t.sup = (r.t.sup || []).concat(r.poly); (r.t.supFull || (r.t.supFull = [])).push(r.full); (r.t.supBy || (r.t.supBy = [])).push(q.id); }
     q.rests = pat.map(r => ({ holder: r.holder, poly: r.poly, glue: r.glue, t: r.t }));
     nPatch += pat.length;
     if (polys.length) {
@@ -1134,22 +1194,24 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   }
   // each holder keeps flat the convex hull of the supports assigned to it
   let keptFlat = 0;
-  for (const pc of pieces) for (const t of pc.tops) if (t.sup && t.sup.length >= 3) { const h = ccw(hull2(t.sup)); if (h.length >= 3) { t.keeps.push(h.map(v => { let z = tz_(t.pl, v[0], v[1]); if (pc.cuts) for (const c_ of pc.cuts) z = Math.min(z, (c_[3] - c_[0] * v[0] - c_[1] * v[1]) / c_[2]); return [v[0], v[1], z]; })); keptFlat += Math.abs(area2(h)); } }
+  // a top keeps the whole of where each stone above sits on it (its full overlap, not only the patch it was planned to rest on), so no cut goes under
+  // anything that rests on it: a cut that reaches one tapers at it
+  for (const pc of pieces) for (const t of pc.tops) if (t.supFull) for (const P_ of t.supFull) if (P_.length >= 3) { t.keeps.push(P_.map(v => [v[0], v[1], tz_(t.pl, v[0], v[1])])); keptFlat += Math.abs(area2(P_)); }
   // ---- carving: every piece independent. Pebble planes fitted to the body's box, those cutting a keep patch dropped
   // a footing on the ground keeps its middle: every corner drawn in by the bevel's width (to no less than 0.4 of the way from the middle, no more than 0.85),
   // so the bevels of the edges that come down to the ground run to the floor in full and the stone still stands on its whole bottom less a rim
   const footOf = pc => { const B = pc.B; if (!B || B.length < 3) return B; let cx = 0, cy = 0; for (const v of B) { cx += v[0]; cy += v[1]; } cx /= B.length; cy /= B.length;
-    const W = BEV.k * Math.min(pc.bb[1] - pc.bb[0], pc.bb[3] - pc.bb[2], pc.bb[5] - pc.bb[4]);
+    const W = BEV.hi;
     return B.map(v => { const dv = Math.hypot(v[0] - cx, v[1] - cy), k = Math.max(0.4, Math.min(0.85, 1 - W / Math.max(dv, 1e-9))); return [cx + (v[0] - cx) * k, cy + (v[1] - cy) * k]; }); };
   const pieceAt = new Map(pieces.map(p => [p.k * 100000 + p.s.id, p.id]));   // a layer's piece by its seed
   for (const G of groups.values()) {
     // keep patches of the body: every piece's bottom, each rest patch it gives a stone above, glue faces of its sides
     const kp = [], kt = [], kw = []; for (const pc of G.pieces) { { const BK = pc.ground ? footOf(pc) : pc.Bkeep, on = pc.ground ? null : pc.rests.filter(r => !r.glue).map(r => r.holder.id); if (BK) for (const v of BK) { kp.push(v[0], v[1], botZ(pc, v[0], v[1])); kt.push(pc.ground ? 8 : 1); kw.push(on); } } for (const t of pc.tops) for (const kk of t.keeps) for (const v of kk) { kp.push(v[0], v[1], v[2]); kt.push(2); kw.push(t.supBy || null); } }
-    for (const pc of G.pieces) for (const sd of pc.sides) if (find(sd.nb) === G.id) { const pp = sd.poly; let cx = 0, cy = 0, cz = 0; for (const v of pp) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= pp.length; cy /= pp.length; cz /= pp.length; let sh = 0; { let r = 1e9; for (const v of pp) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); sh = Math.min(BEV.k * Math.min(pc.bb[1] - pc.bb[0], pc.bb[3] - pc.bb[2], pc.bb[5] - pc.bb[4]), 0.4 * r) / Math.max(r, 1e-6) * (r > 0 ? 1 : 0); } for (const v of pp) { kp.push(cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)); kt.push(3); kw.push(pieceAt.has(pc.k * 100000 + sd.nb) ? [pieceAt.get(pc.k * 100000 + sd.nb)] : null); } }   // a glued face keeps its middle: its rim is drawn in by the bevel's width, so an inside corner gets a bevel on each side (a V-groove)
+    for (const pc of G.pieces) for (const sd of pc.sides) if (find(sd.nb) === G.id) { const pp = sd.poly; let cx = 0, cy = 0, cz = 0; for (const v of pp) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= pp.length; cy /= pp.length; cz /= pp.length; let sh = 0; { let r = 1e9; for (const v of pp) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); sh = Math.min(BEV.hi, 0.4 * r) / Math.max(r, 1e-6) * (r > 0 ? 1 : 0); } for (const v of pp) { kp.push(cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)); kt.push(3); kw.push(pieceAt.has(pc.k * 100000 + sd.nb) ? [pieceAt.get(pc.k * 100000 + sd.nb)] : null); } }   // a glued face keeps its middle: its rim is drawn in by the bevel's width, so an inside corner gets a bevel on each side (a V-groove)
 
     for (const pc of G.pieces) for (const r of pc.rests) if (r.glue && r.t) {   // drawn in from its rim by the bevel's width (at most 0.4 of the way to its middle), as a glued face is, so the edges that end at the join still bevel
       const P_ = r.poly; let cx = 0, cy = 0; for (const v of P_) { cx += v[0]; cy += v[1]; } cx /= P_.length; cy /= P_.length; let rr = Infinity; for (const v of P_) rr = Math.min(rr, Math.hypot(v[0] - cx, v[1] - cy));
-      const W = BEV.k * Math.min(pc.bb[1] - pc.bb[0], pc.bb[3] - pc.bb[2], pc.bb[5] - pc.bb[4]), sh = rr > 1e-6 && W > 0 ? Math.min(W, 0.4 * rr) / rr : 0;
+      const W = BEV.hi, sh = rr > 1e-6 && W > 0 ? Math.min(W, 0.4 * rr) / rr : 0;
       for (const v of P_) { const x = cx + (v[0] - cx) * (1 - sh), y = cy + (v[1] - cy) * (1 - sh); kp.push(x, y, tz_(r.t.pl, x, y)); kt.push(4); kw.push([pc.id, r.holder.id]); }
     }   // the glued interface stays flat on the holder's side too
     G.kp = kp; G.kpTag = kt; G.kpWho = kw; const hp = []; for (const pc of G.pieces) { for (const t of pc.tops) for (const kk of t.keeps) hp.push(kk); for (const sd of pc.sides) if (find(sd.nb) === G.id) hp.push(sd.poly); } G.holds = hp;
@@ -1195,7 +1257,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     } };
     if (opt.cells) { if (empty) return; emitFaces(); }
     else {
-      const tc = now(); DX = seenData(pc, find, G); KPTAG = G.kpTag; KPWHO = G.kpWho; BEVW = BEV.k * Math.min(pc.bb[1] - pc.bb[0], pc.bb[3] - pc.bb[2], pc.bb[5] - pc.bb[4]);
+      const tc = now(); DX = seenData(pc, find, G); CKEY = hash2(seed, 7700 + pc.id); KPTAG = G.kpTag; KPWHO = G.kpWho; BEVW = BEV.hi;
       carveFast(G.kp, !!(pc.ground || pc.onGround)); KPTAG = null; KPWHO = null; pc.W = BEVW; BEVW = null; pEdges = EROWS; EROWS = null; DX = null; TC += now() - tc; if (empty) return;
       emitFaces();
     }
@@ -1336,7 +1398,7 @@ function graniteWall(seed, P, opt = {}) {
     if (poly.length >= 3) {   // the patch set back from its rim by the bevel's width (at most 0.4 of the way to its middle), so the joint's edges can still be bevelled
       let cx = 0, cy = 0, cz = 0; for (const v of poly) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= poly.length; cy /= poly.length; cz /= poly.length;
       let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (const f_ of B.faces3) for (const v of f_.poly) for (let k = 0; k < 3; k++) { if (v[k] < lo[k]) lo[k] = v[k]; if (v[k] > hi[k]) hi[k] = v[k]; }
-      let r = Infinity; for (const v of poly) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); const W = BEV.k * Math.min(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]), sh = r > 1e-6 && W > 0 ? Math.min(W, 0.4 * r) / r : 0;
+      let r = Infinity; for (const v of poly) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); const W = BEV.hi, sh = r > 1e-6 && W > 0 ? Math.min(W, 0.4 * r) / r : 0;
       poly = poly.map(v => [cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)]);
       B.holds.push(poly); for (const v of poly) { B.kp.push(v[0], v[1], v[2]); B.kw.push([q.s.id]); } if (!q.on.includes(B.s.id)) { q.on.push(B.s.id); B.up.push(q.s.id); } }
   }
@@ -1345,7 +1407,7 @@ function graniteWall(seed, P, opt = {}) {
   const stones = []; let nTri = 0, TC = 0;
   for (const q of ST) if (q && !q.dead) {
     restore(q.snap); const grd = q.ground >= 1;
-    const tc = now(); if (!opt.cells) { const nbs = q.sides.map(sd => ST[sd.nb]).filter(o => o && !o.dead); DX = { open: (x, y, z) => { for (const o of nbs) { let inn = true; for (const e of o.pl) if (e[0] * x + e[1] * y + e[2] * z > e[3]) { inn = false; break; } if (inn) return false; } return true; }, glued: () => false }; KPWHO = q.kw; carveFast(hash2(seed, q.s.id) >>> 1, q.kp, grd); KPWHO = null; DX = null; } TC += now() - tc; if (empty) { q.dead = true; continue; }
+    const tc = now(); if (!opt.cells) { const nbs = q.sides.map(sd => ST[sd.nb]).filter(o => o && !o.dead); DX = { open: (x, y, z) => { for (const o of nbs) { let inn = true; for (const e of o.pl) if (e[0] * x + e[1] * y + e[2] * z > e[3]) { inn = false; break; } if (inn) return false; } return true; }, glued: () => false }; KPWHO = q.kw; CKEY = hash2(seed, 7700 + q.s.id); BEVW = BEV.hi; carveFast(q.kp, grd); BEVW = null; KPWHO = null; DX = null; } TC += now() - tc; if (empty) { q.dead = true; continue; }
     const faces = [];
     for (let f = 0; f < nF; f++) {
       const o_ = fo[f], m = fl[f], a0 = fv[o_]; let nx = 0, ny = 0, nz = 0; const v = new Array(m);
@@ -2236,14 +2298,14 @@ function bigSolid(planes) { let p = boxPoly([-200, -200, -200], [200, 200, 200])
 // every style's height, exactly: a tall wall's top above the ground, DungeonBlocks' tall wall top, 72.3 dmm above the base, less ordinary ground's 3.5 (here 1 dmm is 1 mm)
 const TALL = 68.8;
 const PRESETS = {   // ranges are [lo, hi]
-  granite: { squares: 2, height: [TALL, TALL], depth: [5, 15], direction: 'through', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 15], width: [22, 30], thickness: [5, 16.5], order: 0, joint: [-10.8, -9.4], bevel: 15, cracks: 12.5, network: 'blocks', spacing: [3.5, 6.5], branching: 30, opening: [0.2, 0.5], wiggle: 88 },
-  columnar: { squares: 2, height: [TALL, TALL], depth: [12, 16], direction: 'up', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.8, 0], bevel: 15, cracks: 19.5, network: 'columns', spacing: [3.5, 5.5], branching: 15, opening: [0.4, 0.6], wiggle: 20 },
-  layered: { squares: 2, height: [TALL, TALL], depth: [13, 16], direction: 'up', layers: 38, lean: [0, 6], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-0.8, 0], bevel: 15, cracks: 90, network: 'planes', spacing: [3, 5], branching: 25, opening: [0.4, 0.6], wiggle: 40 },
-  fieldstone: { squares: 2, height: [63.1, TALL], depth: [15.5, 16], direction: 'up', layers: 18, lean: [-1.5, 1.5], pitch: [0, 0], sag: [-5, 2.5], bow: [-0.5, 2.75], span: 30, fuse: 0, wander: [0, 15], width: [2.8, 5.8], thickness: [2, 8], order: 0, joint: [-1.9, 0], bevel: 15, cracks: 0, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
-  ashlar: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: 15, cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
+  granite: { squares: 2, height: [TALL, TALL], depth: [5, 15], direction: 'through', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 15], width: [22, 30], thickness: [5, 16.5], order: 0, joint: [-10.8, -9.4], bevel: [1.4, 2], weather: [0, 0], cracks: 12.5, network: 'blocks', spacing: [3.5, 6.5], branching: 30, opening: [0.2, 0.5], wiggle: 88 },
+  columnar: { squares: 2, height: [TALL, TALL], depth: [12, 16], direction: 'up', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.8, 0], bevel: [0.9, 1.5], weather: [0, 0], cracks: 19.5, network: 'columns', spacing: [3.5, 5.5], branching: 15, opening: [0.4, 0.6], wiggle: 20 },
+  layered: { squares: 2, height: [TALL, TALL], depth: [13, 16], direction: 'up', layers: 38, lean: [0, 6], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-0.8, 0], bevel: [0.4, 0.7], weather: [0, 0], cracks: 90, network: 'planes', spacing: [3, 5], branching: 25, opening: [0.4, 0.6], wiggle: 40 },
+  fieldstone: { squares: 2, height: [63.1, TALL], depth: [15.5, 16], direction: 'up', layers: 18, lean: [-1.5, 1.5], pitch: [0, 0], sag: [-5, 2.5], bow: [-0.5, 2.75], span: 30, fuse: 0, wander: [0, 15], width: [2.8, 5.8], thickness: [2, 8], order: 0, joint: [-1.9, 0], bevel: [0.5, 1], weather: [0, 0], cracks: 0, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
+  ashlar: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: [1.2, 1.6], weather: [0, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['fieldstone', 'Fieldstone', 'A dry wall of irregular, roundish stones placed at random in rough courses, some running up through the next course, no cracks'], ['ashlar', 'Ashlar', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
-const DEFAULTS = { style: 'layered', ...PRESETS.layered, weather: [0, 0], bridge: 15, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, crackLines: false, lines: true, bevelsOn: true, mini: true };
+const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, crackLines: false, lines: true, bevelsOn: true, mini: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -2291,8 +2353,8 @@ const GROUPS = [
     P_('order', 'Order', 0, 100, 1, '%', 'How regularly spines are placed: 0% thrown at random, 100% on a grid (spaced by the middle of Width and the middle of Thickness), every other layer moved half a spacing so the joints alternate (a laid wall); between, the grid is jittered.'),
     R_('joint', 'Joint', -20, 3, 0.1, MM, 'Where two stones meet, drawn for each pair: each stops half of it short of the split: over zero a gap (separate stones), under zero they reach into each other. It changes each stone’s size; nothing moves. (A gap between two stones; a crack is a gap within one.)')] },
   { label: 'Rocks', icon: () => ICON.rocks, value: 'bevel', items: [
-    P_('bevel', 'Bevel', 0, 40, 1, '%', 'How wide the 45° cut on each seen edge is, as a share of the stone’s smallest side.'),
-    R_('weather', 'Weathering', 0, 2, 0.05, MM, 'Not read by the cells engine: its stones are not rounded. It stays among the settings so a pasted spec still loads.'),
+    R_('bevel', 'Bevel', 0, 5, 0.1, MM, 'The first cut on every exposed edge and corner: how much it takes off each face, the same on both, drawn for each end of each edge. Printability and what a stone rests on or carries cap it.'),
+    R_('weather', 'Weathering', 0, 100, 5, '%', 'How worn the faces are: 0% only the Bevel; more, and further rounds of cuts dome each face, every edge and corner the last round made cut again, short on the newer facet and running across the older face toward its middle (drawn for each end of each cut).'),
     P_('bridge', 'Bridge', 0, 40, 0.5, MM, `The longest span a bottom may bridge between two points that rest; past it, a point must rest itself (0: every point rests). A printer’s limit. The bottoms are planned ${BRIDGE_MARGIN} mm inside it.`),
     P_('cracks', 'Cracks', 0, 100, 1, '%', 'The share of the network’s lines cut as cracks, by length, on every stone alike: 0% none (the other crack settings are then hidden and do nothing; they keep their values), 100% every line on every stone. A crack runs on from line to line, turning least, and never from one stone into another; a weathered stone is not cracked. Raising it only adds cracks: they start on every stone and grow longer.'),
     { key: 'network', label: 'Network', shownWhile: 'cracks', choices: [['planes', 'Planes'], ['columns', 'Columns'], ['blocks', 'Blocks']], help: 'How the hidden network that cracks follow divides the rock: Planes across the Direction (bedding), Columns along it (prisms), or Blocks (cells every way). One network for the whole cliff, so its lines carry on from stone to stone.' },
@@ -2304,8 +2366,8 @@ const GROUPS = [
 const CHECKS = ['ghost', 'layersOn', 'spinesOn', 'crackLines', 'lines', 'bevelsOn', 'mini'];
 const CLIFF_KEYS = Object.keys(PRESETS.layered);
 const ROCK_KEYS = ['bevel', 'weather', 'bridge', 'cracks', 'network', 'spacing', 'branching', 'opening', 'wiggle'];
-// the settings the engine reads (Weathering is not among them: the cells engine has none)
-const ENGINE_KEYS = [...new Set([...CLIFF_KEYS, ...ROCK_KEYS])].filter(k => k !== 'weather');
+// the settings the engine reads
+const ENGINE_KEYS = [...new Set([...CLIFF_KEYS, ...ROCK_KEYS])];
 const pick = keys => Object.fromEntries(keys.map(k => [k, state[k]]));
 const same = (a, b) => String(a) === String(b);   // a range is compared by its ends
 const edited = () => Object.keys(PRESETS[state.style]).some(k => !same(state[k], PRESETS[state.style][k]));
@@ -2622,7 +2684,7 @@ const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return
 const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
 // a setting the cells engine does not read, always or with the settings as they are: shown red (the interface's error colour, not
 // overhang paint) so what is missing can be seen; it keeps its value
-const IDLE_ALWAYS = new Set(['weather']), IDLE_THROUGH = new Set(['layers', 'lean', 'pitch', 'sag', 'bow', 'span', 'fuse', 'order']);
+const IDLE_ALWAYS = new Set([]), IDLE_THROUGH = new Set(['layers', 'lean', 'pitch', 'sag', 'bow', 'span', 'fuse', 'order']);
 const idle = p => !!p && (IDLE_ALWAYS.has(p.key) || (state.direction === 'through' && IDLE_THROUGH.has(p.key)) || (p.idleChoices || []).includes(state[p.key]));
 // one setting's row in a popover: a box to type in, its slider and its help
 function row(p, box) {
