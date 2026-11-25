@@ -676,7 +676,7 @@ function bevelAll(grd) {
     kN[4 * nc] = nx; kN[4 * nc + 1] = ny; kN[4 * nc + 2] = nz; kN[4 * nc + 3] = nx * vx[V] + ny * vy[V] + nz * vz[V] - depth; kL[nc] = -1; kT[nc] = NaN; kS[nc] = size; kF[2 * nc] = -1; kF[2 * nc + 1] = -1; nc++;
   };
   const draw = (lo, hi, x, y, z, k) => lo + (hi - lo) * drawAt(x, y, z, k);
-  for (let round = 1; round <= (weathered ? BEV.rounds : 1) && !empty; round++) {
+  for (let round = 1; round <= 1 && !empty; round++) {
     const nE = edgesNow(); nc = 0;
     for (let e = 0; e < nE; e++) {
       if (gN[e] !== 2) continue; const s1 = gF1[e], s2 = gF2[e]; if (!fOk[s1] || !fOk[s2]) continue;
@@ -744,6 +744,7 @@ function bevelAll(grd) {
     }
     if (!made) break;
   }
+  if (weathered && !empty) weatherEgg();
   if (empty) return;
   // the edge report: every edge of the stone as carved, and what became of it; the seen edges left sharp also go to UNB (drawn magenta)
   const nF_ = edgesNow(), minEdge = Math.cos(10 * DEG), bv = k => k === KIND.BEVEL || k === KIND.PART;
@@ -766,6 +767,52 @@ function bevelAll(grd) {
     ERD.push(vx[A], vy[A], vz[A], vx[B], vy[B], vz[B], Math.acos(Math.max(-1, Math.min(1, c))) / DEG, L); ERK.push(k1 | k2 << 4 | st << 8); ERO.push(of);
   }
   EROWS[1] = ERK.length;
+}
+// Weathering: the stone is cut by an egg. The egg is the ellipsoid of the stone's own spread (its corners' covariance about their centre), scaled
+// so that at 0% it just holds the stone and at 100% it just fits inside it (touching the nearest face); the Weathering draw (once a stone) sets
+// where between. The stone keeps what lies in the egg: corners go first, then edges, then the faces dome, as a block weathers to a boulder. The
+// egg is cut as its tangent planes at WEGG directions spread evenly over it (turned for each stone). Every plane goes through `place`: none faces
+// down past the limit, a guard pushes it out, and a cut under MINBITE is not made. The crisp ends and back of the wall are never cut.
+const WEGG = 56, eggP = (() => { const o = []; for (let i = 0; i < WEGG; i++) { const z = 1 - 2 * (i + 0.5) / WEGG, r = Math.sqrt(1 - z * z), a = i * Math.PI * (3 - Math.sqrt(5)); o.push([r * Math.cos(a), r * Math.sin(a), z]); } return o; })();
+function eig3(m) {   // Jacobi: the eigenvalues and eigenvectors (columns of V) of a symmetric 3x3
+  const a = [[m[0], m[1], m[2]], [m[1], m[3], m[4]], [m[2], m[4], m[5]]], V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  for (let sw = 0; sw < 12; sw++) for (const [p, q] of [[0, 1], [0, 2], [1, 2]]) {
+    if (Math.abs(a[p][q]) < 1e-12) continue; const th = (a[q][q] - a[p][p]) / (2 * a[p][q]), t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1)), c = 1 / Math.sqrt(t * t + 1), sn = t * c;
+    for (let k = 0; k < 3; k++) { const x = a[k][p], y = a[k][q]; a[k][p] = c * x - sn * y; a[k][q] = sn * x + c * y; }
+    for (let k = 0; k < 3; k++) { const x = a[p][k], y = a[q][k]; a[p][k] = c * x - sn * y; a[q][k] = sn * x + c * y; }
+    for (let k = 0; k < 3; k++) { const x = V[k][p], y = V[k][q]; V[k][p] = c * x - sn * y; V[k][q] = sn * x + c * y; }
+  }
+  return { L: [a[0][0], a[1][1], a[2][2]], V };
+}
+function weatherEgg() {
+  const used = new Uint8Array(nVS), crisp = []; let n = 0, cx = 0, cy = 0, cz = 0;
+  for (let s_ = 0; s_ < nSL; s_++) { const m = sLen[s_]; if (!m) continue; const isC = (sKind[s_] & 15) === KIND.CRISP; for (let k = 0; k < m; k++) { const v = sV[s_ * CAPS + k]; if (isC) crisp.push(v); if (!used[v]) { used[v] = 1; n++; cx += vx[v]; cy += vy[v]; cz += vz[v]; } } }
+  if (n < 4) return; cx /= n; cy /= n; cz /= n;
+  const w = BEV.wlo + (BEV.whi - BEV.wlo) * drawAt(cx, cy, cz, 50); if (!(w > 0)) return;
+  const C = [0, 0, 0, 0, 0, 0];
+  for (let v = 0; v < nVS; v++) if (used[v]) { const x = vx[v] - cx, y = vy[v] - cy, z = vz[v] - cz; C[0] += x * x; C[1] += x * y; C[2] += x * z; C[3] += y * y; C[4] += y * z; C[5] += z * z; }
+  const { L, V } = eig3(C.map(c => c / n)), sd = L.map(l => Math.sqrt(Math.max(l, 1e-6)));
+  // in the egg's frame (axes V, scaled by sd) the egg is a ball: a point's egg radius, and a direction's support
+  const rad = (x, y, z) => { let r = 0; for (let i = 0; i < 3; i++) { const t = (V[0][i] * x + V[1][i] * y + V[2][i] * z) / sd[i]; r += t * t; } return Math.sqrt(r); };
+  const sup = (ux, uy, uz) => { let r = 0; for (let i = 0; i < 3; i++) { const t = (V[0][i] * ux + V[1][i] * uy + V[2][i] * uz) * sd[i]; r += t * t; } return Math.sqrt(r); };
+  let sOut = 0; for (let v = 0; v < nVS; v++) if (used[v]) sOut = Math.max(sOut, rad(vx[v] - cx, vy[v] - cy, vz[v] - cz));
+  edgesNow(); let sIn = Infinity;
+  for (let s_ = 0; s_ < nSL; s_++) if (sLen[s_] && fOk[s_]) { const nx = fN[3 * s_], ny = fN[3 * s_ + 1], nz = fN[3 * s_ + 2], d = nx * (fC[3 * s_] - cx) + ny * (fC[3 * s_ + 1] - cy) + nz * (fC[3 * s_ + 2] - cz); sIn = Math.min(sIn, d / sup(nx, ny, nz)); }
+  if (!(sIn > 0) || !(sOut > sIn)) return;
+  const S = sOut + (sIn - sOut) * w;
+  // the directions, turned for this stone (a random rotation from three draws), as points on the egg; each point's tangent plane
+  const q0 = drawAt(cx, cy, cz, 51), q1 = drawAt(cx, cy, cz, 52) * TWO_PI, q2 = drawAt(cx, cy, cz, 53) * TWO_PI, r1 = Math.sqrt(1 - q0), r2 = Math.sqrt(q0);
+  const qa = r1 * Math.sin(q1), qb = r1 * Math.cos(q1), qc = r2 * Math.sin(q2), qd = r2 * Math.cos(q2);   // a unit quaternion (qd the real part)
+  const rot = (x, y, z) => { const tx = 2 * (qb * z - qc * y), ty = 2 * (qc * x - qa * z), tz = 2 * (qa * y - qb * x); return [x + qd * tx + (qb * tz - qc * ty), y + qd * ty + (qc * tx - qa * tz), z + qd * tz + (qa * ty - qb * tx)]; };
+  for (const p0 of eggP) {
+    const p = rot(p0[0], p0[1], p0[2]);
+    let ux = 0, uy = 0, uz = 0; for (let i = 0; i < 3; i++) { const t = p[i] / sd[i]; ux += V[0][i] * t; uy += V[1][i] * t; uz += V[2][i] * t; }
+    const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
+    let want = ux * cx + uy * cy + uz * cz + S * sup(ux, uy, uz);
+    for (const v of crisp) { const d = ux * vx[v] + uy * vy[v] + uz * vz[v]; if (d > want) want = d; }
+    supN = nVS; if (!place(ux, uy, uz, 0, want, Infinity)) continue;
+    clipS(pN[0], pN[1], pN[2], pB[0], KIND.BEVEL); nP = 0; if (empty) return;
+  }
 }
 // a stone: its guards, then its cuts, in the slotted faces and back
 function carveFast(kp, grd) { guardsOf(kp); toSlots(); supN = nVS; relocate(); bevelAll(grd); if (!empty) fromSlots(); }
@@ -2404,7 +2451,7 @@ const GROUPS = [
     R_('joint', 'Joint', -20, 3, 0.1, MM, 'Where two stones meet, drawn for each pair: each stops half of it short of the split: over zero a gap (separate stones), under zero they reach into each other. It changes each stone’s size; nothing moves. (A gap between two stones; a crack is a gap within one.)')] },
   { label: 'Rocks', icon: () => ICON.rocks, value: 'bevel', items: [
     R_('bevel', 'Bevel', 0, 5, 0.1, MM, 'The first cut on every exposed edge and corner: how much it takes off each face, the same on both, drawn for each end of each edge. Printability and what a stone rests on or carries cap it.'),
-    R_('weather', 'Weathering', 0, 100, 5, '%', 'How worn the faces are: 0% only the Bevel; more, and further rounds of cuts dome each face, every edge and corner the last round made cut again, short on the newer facet and running across the older face toward its middle (drawn for each end of each cut).'),
+    R_('weather', 'Weathering', 0, 100, 5, '%', 'How worn the stones are: each is cut by an egg of its own shape, at 0% just holding the stone (only the Bevel), at 100% just inside it. Corners go first, then edges, then the faces dome. Drawn once a stone; printability, the crisp ends and what a stone rests on or carries hold it back.'),
     P_('bridge', 'Bridge', 0, 40, 0.5, MM, `The longest span a bottom may bridge between two points that rest; past it, a point must rest itself (0: every point rests). A printer’s limit. The bottoms are planned ${BRIDGE_MARGIN} mm inside it.`),
     P_('cracks', 'Cracks', 0, 100, 1, '%', 'The share of the network’s lines cut as cracks, by length, on every stone alike: 0% none (the other crack settings are then hidden and do nothing; they keep their values), 100% every line on every stone. A crack runs on from line to line, turning least, and never from one stone into another; a weathered stone is not cracked. Raising it only adds cracks: they start on every stone and grow longer.'),
     { key: 'network', label: 'Network', shownWhile: 'cracks', choices: [['planes', 'Planes'], ['columns', 'Columns'], ['blocks', 'Blocks']], help: 'How the hidden network that cracks follow divides the rock: Planes across the Direction (bedding), Columns along it (prisms), or Blocks (cells every way). One network for the whole cliff, so its lines carry on from stone to stone.' },
