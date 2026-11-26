@@ -143,6 +143,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .sp .edge .why { margin-top: 4px; }
 .sp .edge h3 { margin: 0 0 4px; font: 600 12px var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .sp small.note { display: block; padding: 8px 12px; color: var(--muted); font-size: 12px; }
+#pgProp.stone .shead { background: var(--part); border-bottom: 1px solid color-mix(in srgb, var(--ink) 30%, transparent); }   /* a stone's page wears its colour */
+#pgProp.stone .shead b, #pgProp.stone .shead b .ic, #pgProp.stone .shead .btn { color: var(--part-ink); }
+#pgProp.stone { box-shadow: inset 8px 0 0 var(--part); background: color-mix(in srgb, var(--part) 22%, transparent); }
 .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent); flex: none; }
 #pgGroup { position: relative; }
 .ptools { position: sticky; top: 41px; z-index: 1; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
@@ -163,6 +166,8 @@ body.vmax { overflow: hidden; }
 .viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .vbtn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; box-shadow: 0 8px 24px -12px rgb(26 23 20 / .45); }
 .vbtn:hover, .vbtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.shead { touch-action: none; cursor: ns-resize; }   /* the header is a handle that resizes the sheet */
+.shead button, .shead input { cursor: pointer; }
 .sgrip { position: absolute; top: 0; left: 0; right: 0; z-index: 2; height: 9px; display: grid; place-items: center; cursor: ns-resize; touch-action: none; }   /* drag it to resize the sheet; it lies over the header's top edge */
 .sgrip::before { content: ""; width: 32px; height: 3px; border-radius: 2px; background: var(--line-2); }
 .sgrip:hover::before, .sgrip.dragging::before { background: var(--accent); }
@@ -2331,8 +2336,6 @@ function finOf(g) {
   const w = hash2(g, 11) / 4294967296, k = 0.84 + 0.24 * (hash2(g, 12) / 4294967296);
   return FIN_COOL.map((c, j) => Math.max(0, Math.min(255, Math.round((c + w * (FIN_WARM[j] - c)) * k))));
 }
-/* the colour a body is drawn in: its stone grey when finished, its own vivid colour otherwise */
-const drawnColour = g => state.draw === 'finished' ? finOf(g) : shadeOf(g);
 /* the finished colours of a wall's faces, made once from its debug colours (a face coloured as a crack's inside stays dark) and painted with the overhang as the debug ones are */
 function ensureFin(surf) {
   if (surf.fin) return surf.fin;
@@ -2697,11 +2700,10 @@ function readBits(bits) {
    counted from the corner they share with the L: the colour-0 cells are the clock (the cell size and count) and the other cells, each colour met several times, are what a reader calibrates by, so a
    reader needs no palette. Inside the border, a sliders icon sits in the middle on a plate: MOSAIC.face holds, for each size, the grid as rows of characters ('#' an icon cell, drawn in ink; 'o' the plate round it, one cell of halo, drawn in the quiet colour; '.' a
    cell of data), written out once, so the page and a reader in node agree on every cell and nothing is rasterised at run time. Plate and icon cells carry no data. The data cells, in reading order from the top left, are three cells
-   holding the byte count of the code (9 bits), then the code's bytes and the parity, the cells that are left filled with a fixed pattern. Each theme has its own eight (a '--name' is that token of the page, a '#hex' a colour added to it; muted, none red or
-   orange, which mean overhang on a model): every two are at least 60 apart in RGB and each at least 35 from the quiet zone. */
+   holding the byte count of the code (9 bits), then the code's bytes and the parity, the cells that are left filled with a fixed pattern. Each theme has its own eight (a '--name' is that token of the page, a '#hex' a colour added to it): soft, so the data reads as the button's background behind the icon (light tints in the light theme, deep tones in the dark one), none red or orange (they mean overhang on a model); every two are at least 50 apart in RGB and each at least 45 from the quiet zone. */
 const MOSAIC = { sizes: [30], palettes: {
-  light: ['--ink', '#935368', '#6CAC97', '#ACAC6C', '#AC6CAC', '#C7C7B8', '#539353', '#535393'],
-  dark: ['--ink', '#83495C', '#A3A35C', '#538349', '#9DC89D', '#C89DC8', '#5CA3A3', '#975CA3'] }, quiet: '--raised', head: 3, parity: 0.25, minParity: 4, face: {
+  light: ['--ink', '#C3DFC3', '#8888DD', '#DD88AA', '#88DD88', '#E6A8E6', '#DDCC88', '#88CCDD'],
+  dark: ['--ink', '#59264F', '#367D7D', '#7D7D36', '#367D36', '#363D7D', '#7D367D', '#47471F'] }, quiet: '--raised', head: 3, parity: 0.25, minParity: 4, face: {
   30: '............................../............................../............................../............................../............................../............................../............................../............................../.........ooooo................/......oooo###oooooooooo......./......o###############o......./......oooo###oooooooooo......./.........ooooo.ooooo........../......oooooooooo###oooo......./......o###############o......./......oooooooooo###oooo......./...........ooooooooo........../......oooooo###oooooooo......./......o###############o......./......oooooo###oooooooo......./...........ooooo............../............................../............................../............................../............................../............................../............................../............................../............................../..............................'
 } };
 /* the grid of a size as a row of characters each, and its data cells (row, column) in reading order inside the border */
@@ -3429,7 +3431,7 @@ function openPage(g) {
 function openProp(g, p) {
   const c = control(p, { dim: true }), body = div('pprop'), e = propEnds(p), t = p.choices || p.bool ? null : typed(p);
   if (t) body.append(t.el); body.append(c.el); if (e) body.append(e); body.append(help(p));
-  pgProp.replaceChildren(backHead(p.label), body); propPaint = () => { c.paint(); if (t) t.paint(); }; propPaint();
+  pgProp.classList.remove('stone'); pgProp.replaceChildren(backHead(p.label), body); propPaint = () => { c.paint(); if (t) t.paint(); }; propPaint();
   stack.push(p); pgProp.scrollTop = 0; showDepth();
 }
 function back() { if (!stack.length) return; const top = stack.pop(); if (stack.length < 2) propPaint = null; if (!stack.length) pageSync = null; showDepth(); stripSync(); if (top === STONE) markStone(null); }
@@ -3476,7 +3478,7 @@ function paintParts() {
   if (a === pFirst && b === pLast) return; pFirst = a; pLast = b;
   let html = '';
   for (let r = a; r < b; r++) {
-    const k = pFilter[r], i = P.idx[k], c = drawnColour(shown.surf.stoneOf[i][0]);
+    const k = pFilter[r], i = P.idx[k], c = shadeOf(shown.surf.stoneOf[i][0]);
     html += `<button class="prow" data-stone="${i}" style="top:${r * ROW}px"><span class="sw" style="background:rgb(${c.join(',')})"></span><span>Stone ${i}</span><span class="l">${P.layer[k]}</span><span class="r">${P.rel[k]}</span></button>`;
   }
   plist.innerHTML = html + (pFilter.length ? '' : '<div class="pnone">No parts match.</div>');
@@ -3493,7 +3495,7 @@ function openParts() { stack.length = 0; stack.push(PARTS); propPaint = null; pa
 const stoneIdx = () => SEL && shown && shown.surf.pieceStone ? shown.surf.pieceStone.get(SEL.piece) : undefined;
 /* a stone's page, made from SEL: a row for each property the model holds (an absent one has no row) and, when an edge of it is selected, the edge's report under them */
 function stonePage() {
-  const i = stoneIdx(), S = shown.surf, [g, l] = S.stoneOf[i], c = drawnColour(g), ln = (k, v) => v ? `<div class="ln"><span class="k">${k}</span><span class="v">${v}</span></div>` : '';
+  const i = stoneIdx(), S = shown.surf, [g, l] = S.stoneOf[i], c = shadeOf(g), ln = (k, v) => v ? `<div class="ln"><span class="k">${k}</span><span class="v">${v}</span></div>` : '';
   const link = j => `<a href="#" class="slink" data-stone="${j}">stone ${j}</a>`, [, on, up] = S.stoneRel[i], mates = matesOf(i).map(link).join(', ');
   const st = S.stoneTri, b = S.pos.subarray(9 * st[i], 9 * st[i + 1]), lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
   for (let q = 0; q < b.length; q++) { const a = q % 3; if (b[q] < lo[a]) lo[a] = b[q]; if (b[q] > hi[a]) hi[a] = b[q]; }
@@ -3501,7 +3503,10 @@ function stonePage() {
   const body = div('sp');
   body.innerHTML = ln('Body', g) + ln('Layer', l >= 0 ? l : '') + ln('Fused with', mates) + ln('Size', b.length ? `${d[0]} long, ${d[1]} deep, ${d[2]} tall (mm)` : '') + ln('Rests on', stoneLinks(on)) + ln('Holds up', stoneLinks(up))
     + (SEL.edge ? `<div class="edge">${edgeWords(SEL.edge)}</div>` : '<small class="note">Tap nearer an edge of the stone for its report.</small>');
-  pgProp.replaceChildren(backHead(`Stone ${i}`, `<span class="sw" style="background:rgb(${c.join(',')})"></span>`), body); pgProp.scrollTop = 0;
+  pgProp.replaceChildren(backHead(`Stone ${i}`), body); pgProp.scrollTop = 0;
+  /* the stone's debug colour (its colour in the Rocks view, whatever the view) is the page's motif: its header is that colour, with ink that reads on it, and a band of it runs down the page */
+  const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+  pgProp.classList.add('stone'); pgProp.style.setProperty('--part', `rgb(${c.join(',')})`); pgProp.style.setProperty('--part-ink', lum > 0.55 ? '#14201A' : '#F5FBF8');
 }
 pgProp.addEventListener('click', e => { const a = e.target.closest('a.slink'); if (!a) return; e.preventDefault(); selectStone(+a.dataset.stone); });
 /* the stack top, Parts, that stone: the list scrolls to the stone's row when it is out of view, so Back lands by it */
@@ -3515,7 +3520,7 @@ function selectStone(i, edge) {
   if (i == null) { if (stack[1] === STONE) { stack.pop(); showDepth(); } return; }
   if (SEL) { enterStone(); if (!sheetOpen()) openSheet(); }
 }
-/* a wall is shown: the list and the count are made again, a stone's page is made again for the same stone (its colour follows the view) or goes back to the list when the stone is gone */
+/* a wall is shown: the list and the count are made again, a stone's page is made again for the same stone or goes back to the list when the stone is gone */
 function partsSync() {
   partsRow.querySelector('.v').textContent = partsCount(); filterParts();
   if (stack[1] === STONE) { if (stoneIdx() !== undefined) stonePage(); else { stack.pop(); showDepth(); } }
@@ -3565,19 +3570,28 @@ $('vclose').addEventListener('click', () => { showPanel(false); vopts.focus(); }
 codeBtn.addEventListener('click', () => showPanel(false));
 document.addEventListener('pointerdown', e => { if (viewOpen() && !e.target.closest('#vpanel, #vopts')) showPanel(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && viewOpen()) { e.preventDefault(); showPanel(false); vopts.focus(); } }, true);
-/* a sheet's top edge is a grip: dragging it sets the height of both sheets (15% to 90% of the view), remembered in this browser */
+/* a sheet's top edge is a grip, and its header is a handle too (not its buttons or fields): dragging either sets the height of both sheets
+   (15% to 90% of the window), remembered in this browser. A touch that drags anywhere else on a sheet scrolls only the page it is on, and
+   never the document or the view behind: where that page cannot scroll the drag is held */
 const SHEET_KEY = 'cliffs-sheet-height', sheets = [sheetEl, vpanel];
 const sheetHeight = h => { for (const el of sheets) { el.style.height = h ? h + 'px' : ''; el.style.maxHeight = h ? 'none' : ''; } };
 for (const el of sheets) {
   const grip = document.createElement('div'); grip.className = 'sgrip'; grip.setAttribute('aria-hidden', 'true'); el.prepend(grip);
-  grip.addEventListener('pointerdown', e => {
-    e.preventDefault(); grip.setPointerCapture(e.pointerId); grip.classList.add('dragging');
+  el.addEventListener('pointerdown', e => {
+    const h = e.target.closest('.sgrip, .shead');
+    if (!h || e.target.closest('button, a, input') || e.button > 0) return;
+    e.preventDefault(); h.setPointerCapture(e.pointerId); grip.classList.add('dragging');
     const y0 = e.clientY, h0 = el.getBoundingClientRect().height, H = window.innerHeight;
     const move = ev => sheetHeight(Math.round(clamp(h0 + y0 - ev.clientY, 0.15 * H, 0.9 * H)));
-    const up = () => { grip.classList.remove('dragging'); grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
+    const up = () => { grip.classList.remove('dragging'); h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
       try { localStorage.setItem(SHEET_KEY, String(el.getBoundingClientRect().height / H)); } catch (err) { /* storage refused: the height holds for this visit */ } };
-    grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
+    h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
   });
+  el.addEventListener('touchmove', e => {
+    if (e.target.closest('.slider, .sgrip, .shead')) { e.preventDefault(); return; }
+    const sc = e.target.closest('.sstrip, .pg, .sbody');
+    if (!sc || sc.scrollHeight <= sc.clientHeight && sc.scrollWidth <= sc.clientWidth) e.preventDefault();
+  }, { passive: false });
 }
 { let f = NaN; try { f = parseFloat(localStorage.getItem(SHEET_KEY)); } catch (e) { /* storage refused: the default height */ } if (f >= 0.15 && f <= 0.9) sheetHeight(Math.round(f * window.innerHeight)); }
 window.addEventListener('resize', () => { let f = NaN; try { f = parseFloat(localStorage.getItem(SHEET_KEY)); } catch (e) { /* storage refused */ } if (f >= 0.15 && f <= 0.9) sheetHeight(Math.round(f * window.innerHeight)); });
