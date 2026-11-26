@@ -58,15 +58,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ic .plane { fill: currentColor; fill-opacity: .45; stroke-width: 1.8; }
 .pbox.rng { width: 11ch; }
 .pbox { width: 6ch; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--ink); font: 600 14px var(--f-code); text-align: right; }
-/* the settings: the mosaic button (bottom right) opens a bottom sheet over the view; its top level lists the settings, a row slides to its page */
+/* the settings: the mosaic button (bottom right) opens a bottom sheet over the view; its top level lists the settings, a row slides to its group's page and a line's label to the setting's page */
 .vbtn.code { position: absolute; right: 10px; bottom: 10px; z-index: 3; display: block; width: auto; height: auto; min-width: 32px; min-height: 32px; padding: 5px; line-height: 0; }
 .vbtn.code canvas { display: block; image-rendering: pixelated; }
 .vbtn.code:focus-visible { border-color: var(--accent); }
 .sheet { position: absolute; left: 0; right: 0; bottom: 0; margin-inline: auto; z-index: 5; width: min(760px, 100%); max-height: 35%; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--panel) 74%, transparent); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); visibility: hidden; transform: translateY(100%); transition: transform .2s ease, visibility 0s .2s; }
 .sheet.open { visibility: visible; transform: none; transition: transform .2s ease; }
-.slides { display: flex; width: 200%; flex: 1 1 auto; min-height: 0; transition: transform .2s ease; }
-.slides.deep { transform: translateX(-50%); }
-.pg { width: 50%; overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.slides { display: flex; width: 300%; flex: 1 1 auto; min-height: 0; transition: transform .2s ease; }
+.pg { width: calc(100% / 3); overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .shead { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 8px 12px 5px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .shead b { flex: 1; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .shead b .ic { color: var(--ink); }
@@ -80,21 +79,39 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .srow .ic { color: var(--muted); }
 .codebox { display: grid; gap: 6px; padding: 8px 12px 0; }
 .codefield { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg); color: var(--ink); font: 13px var(--f-code); }
-.codebox small, .group-rows small, .styles small { color: var(--muted); font-size: 12px; line-height: 16px; }
+.codebox small, .pprop small, .styles small { color: var(--muted); font-size: 12px; line-height: 16px; }
 .codebox .codeerr { color: var(--err); font-weight: 600; }
 .qr { width: min(160px, 100%); background: #fff; padding: 0; line-height: 0; border: 1px solid var(--line); }
 .qr svg { width: 100%; height: auto; display: block; shape-rendering: crispEdges; }
-.group-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 24px; padding: 8px 12px; align-content: start; }
-.group-rows .ends { margin-top: -3px; display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--f-code); }
+.plines { display: grid; }
+.pline { display: grid; grid-template-columns: minmax(104px, 32%) minmax(0, 1fr); align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.plabel { display: flex; align-items: center; justify-content: space-between; gap: 4px; height: 34px; padding: 0 2px 0 4px; border: 0; border-radius: var(--r); background: none; color: var(--ink); font: 500 14px var(--f-body); text-align: left; cursor: pointer; }
+.plabel:hover { background: var(--raised); }
+.plabel .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.plabel .chev { flex: none; color: var(--muted); }
+.pctl { min-width: 0; }
+.ctl { container-type: inline-size; min-width: 0; }
+.ctl.number { display: flex; align-items: center; gap: 8px; }
+.ctl.number .slider { flex: 1 1 0; min-width: 0; }
+.ctl.number .pbox { flex: none; }
+.ctl.pick .seg { justify-self: start; width: fit-content; max-width: 100%; }
+.pline .seg button.withicon { height: 28px; padding: 0 6px; }
+.pline .seg .ic { width: 26px; height: 21px; }
+@container (max-width: 400px) { .seg .withicon .lab { display: none; } .seg .withicon .ic { margin-right: 0; } }
+.pprop .seg .withicon .lab { display: inline; }
+.pline .slider:not(.one) { height: 34px; }
+.pline .slider:not(.one) .track, .pline .slider:not(.one) .band { top: 15px; }
+.pline .slider:not(.one) .end { top: 17px; height: 17px; }
+.pline .slider:not(.one) .grip { height: 19px; background-position: center 4px; }
+.pprop { display: grid; gap: 6px; padding: 10px 12px; align-content: start; }
+.pprop .ctl.number { flex-direction: column-reverse; align-items: stretch; gap: 2px; }
+.pprop .ctl.number .slider { flex: none; }
+.pprop .ctl.number .pbox { align-self: flex-end; }
+.pprop .ends { margin-top: -3px; display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--f-code); }
+.pprop small { color: var(--muted); font-size: 13px; line-height: 18px; }
 .styles, .seedpage { display: grid; gap: 6px; padding: 8px 12px; }
 .styles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .seedpage .seedrow { display: flex; gap: 8px; align-items: center; }
-.prow { display: grid; gap: 2px; align-content: start; }
-.pbool { grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; cursor: pointer; }
-.pbool small { grid-column: 1 / -1; }
-.pbool .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.phead { display: flex; justify-content: space-between; align-items: center; }
-.phead .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .styles .note { grid-column: 1 / -1; }
 .seg .ic { width: 30px; height: 25px; margin-right: 6px; }
 .seg button.withicon { height: 34px; display: inline-flex; align-items: center; }
@@ -230,7 +247,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
                 <div class="qr" id="qr" aria-label="The settings code as a QR code"></div>
               </div>
             </section>
-            <section class="pg" id="pgDetail"></section>
+            <section class="pg" id="pgGroup"></section>
+            <section class="pg" id="pgProp"></section>
           </div>
         </div>
         <div class="sheet" id="vpanel" role="dialog" aria-label="View" inert>
@@ -286,7 +304,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
     </ol>
     <p class="hint"><b>Layered</b>: thirty-eight thin level layers, a handful of slabs in each, the joints staggered, with cracks along Planes. <b>Granite</b>: Direction Through, one layer: every spine runs from the back to the front, and the stones show their ends; Joint under zero, so they overlap into one irregular mass; cracks along Blocks. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart; cracks along Columns. <b>Fieldstone</b>: eighteen rough courses, the stones thrown at random (Order 0%), many-faced and tilted so they read round; Span 30% lets a stone run up through the next course; no cracks. <b>Ashlar</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone; cracks along Blocks.</p>
-    <p class="hint"><b>The settings code</b> is the small colour mosaic on the button at the bottom right of the view (the code with the camera, in eight of the page's colours of the day or night theme and error correction, for a screenshot to carry; the page's decoder reads it back whatever the colours), and opens the settings sheet: a row for the style, the seed and each group, each opening its page, and under them the code as text (with the camera) to copy, paste into or edit, and as a large QR. One code holds every setting that differs from its style, the seed and optionally the view; its last character checks it, and a code made by another version of this page is refused.</p>
+    <p class="hint"><b>The settings code</b> is the small colour mosaic on the button at the bottom right of the view (the code with the camera, in eight of the page's colours of the day or night theme and error correction, for a screenshot to carry; the page's decoder reads it back whatever the colours), and opens the settings sheet: a row for the style, the seed and each group, each opening its page (a line for each setting: its name, which opens the setting&rsquo;s own page with its range and its help, and its control beside it), and under them the code as text (with the camera) to copy, paste into or edit, and as a large QR. One code holds every setting that differs from its style, the seed and optionally the view; its last character checks it, and a code made by another version of this page is refused.</p>
     <p class="hint">Not here yet: envelopes with concavities and holes (each cell is clipped by a box envelope), curved or irregular ends, twisting sections, erosion, seams between stones, and two networks at once. A cell is a convex region, so a stone is convex before its cracks.</p>
     <p class="hint">The glassy figure at the front left, for scale, is <a href="https://www.printables.com/model/77914-fighter-female-no-supports-needed">Fighter - Female</a> by Teirale, a 28 mm miniature on a 25 mm base (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), with fewer triangles.</p>
   </section>
@@ -2971,51 +2989,49 @@ function rebuildThumbs() {
 // controls
 // a setting's value as HTML
 const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return rangeText(v) + (p.unit || ''); if (p.choices) { const c = p.choices.find(x => x[0] === v); return (p.icon ? p.icon(v) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
-// one setting's row in a page of the sheet: a box to type in, its slider and its help
-function row(p) {
-  if (p.choices) {   // a choice: a button for each, and its help
-    const wrap = document.createElement('div'); wrap.className = 'prow';
-    wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`);
-    const seg = document.createElement('div'); seg.className = 'seg';
-    for (const [v, label] of p.choices) {
-      const b = document.createElement('button'); b.innerHTML = (p.icon ? p.icon(v) : '') + label; b.className = p.icon ? 'withicon' : ''; b.setAttribute('aria-pressed', state[p.key] === v ? 'true' : 'false');
-      b.addEventListener('click', () => { state[p.key] = v; for (const o of seg.children) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); update(); });
-      seg.append(b);
-    }
-    wrap.append(seg); wrap.insertAdjacentHTML('beforeend', `<small>${p.help}</small>`);
-    return wrap;
+/* one editor for each kind of setting, sized by the container it is put in: control(p) gives { el, paint } (paint shows the settings as they are). A number is its slider and a box to type in, a range its twin slider and a box
+   (the slider slim on a line of a group page, wide on a property page), a choice a button for each (on a narrow container icons alone where it has them), a switch a checkbox */
+function control(p) {
+  const wrap = div('ctl');
+  if (p.choices) {
+    wrap.classList.add('pick');
+    const seg = div('seg'), bs = p.choices.map(([v, label]) => {
+      const b = document.createElement('button'); b.innerHTML = (p.icon ? p.icon(v) : '') + `<span class="lab">${label}</span>`; b.className = p.icon ? 'withicon' : ''; b.title = label; b.setAttribute('aria-label', label);
+      b.addEventListener('click', () => { state[p.key] = v; update(); }); seg.append(b); return [v, b];
+    });
+    wrap.append(seg);
+    const paint = () => { for (const [v, b] of bs) b.setAttribute('aria-pressed', state[p.key] === v ? 'true' : 'false'); }; paint();
+    return { el: wrap, paint };
   }
-  if (p.bool) {   // a switch: a checkbox and its help
-    const wrap = document.createElement('label'); wrap.className = 'prow pbool';
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!state[p.key];
+  if (p.bool) {
+    wrap.classList.add('flag');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.setAttribute('aria-label', p.label);
     cb.addEventListener('change', () => { state[p.key] = cb.checked; update(); });
-    wrap.append(cb); wrap.insertAdjacentHTML('beforeend', `<span class="k">${p.label}</span><small>${p.help}</small>`);
-    return wrap;
+    wrap.append(cb);
+    const paint = () => { cb.checked = !!state[p.key]; }; paint();
+    return { el: wrap, paint };
   }
-  if (p.range) return twinRow(p);
-  const wrap = document.createElement('div'); wrap.className = 'prow';
-  const box = document.createElement('input'); Object.assign(box, { type: 'text', inputMode: 'decimal', value: state[p.key], className: 'pbox' }); box.setAttribute('aria-label', p.label); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box);
-  const set = x => { x = snapTo(p, x); if (x !== state[p.key]) { state[p.key] = x; update(); } };
-  const sl = slider(p, () => [state[p.key]], ([x]) => { set(x); box.value = state[p.key]; });
-  box.addEventListener('input', () => { const x = parseFloat(box.value); if (Number.isFinite(x)) { set(x); sl.paint(); } });
-  wrap.append(sl.el);
-  wrap.insertAdjacentHTML('beforeend', `<div class="ends"><span>${fmt(p, p.min)}</span><span>${fmt(p, p.max)}</span></div><small>${p.help}</small>`);
-  for (const el of [box, ...sl.keys]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') box.blur(); });
-  return wrap;
-}
-// a range's row: a box to type lo..hi in, its slider, and its help
-function twinRow(p) {
-  const wrap = document.createElement('div'); wrap.className = 'prow';
-  const box = document.createElement('input'); Object.assign(box, { type: 'text', value: rangeText(state[p.key]), className: 'pbox rng' }); box.setAttribute('aria-label', p.label + ', low..high'); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box);
+  wrap.classList.add('number');
+  const twin = !!p.range, box = document.createElement('input'), text = () => twin ? rangeText(state[p.key]) : state[p.key];
+  Object.assign(box, { type: 'text', inputMode: 'decimal', value: text(), className: twin ? 'pbox rng' : 'pbox' }); box.setAttribute('aria-label', twin ? p.label + ', low..high' : p.label);
   const set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } };
-  const sl = slider(p, () => state[p.key], v => { set(v); box.value = rangeText(state[p.key]); });
-  box.addEventListener('input', () => { const v = parseRange(box.value); if (v) { set(v.map(x => snapTo(p, x))); sl.paint(); } });
-  box.addEventListener('change', () => { box.value = rangeText(state[p.key]); });   // the box shows the one spelling: 7 when both ends are 7
-  wrap.append(sl.el);
-  wrap.insertAdjacentHTML('beforeend', `<div class="ends"><span>${p.min}${p.unit || ''}</span><span>${p.max}${p.unit || ''}</span></div><small>${p.help}</small>`);
+  const sl = twin ? slider(p, () => state[p.key], v => set(v)) : slider(p, () => [state[p.key]], ([x]) => set(snapTo(p, x)));
+  const paint = () => { sl.paint(); if (document.activeElement !== box) box.value = text(); };
+  box.addEventListener('input', () => {
+    if (twin) { const v = parseRange(box.value); if (v) { set(v.map(x => snapTo(p, x))); sl.paint(); } }
+    else { const x = parseFloat(box.value); if (Number.isFinite(x)) { set(snapTo(p, x)); sl.paint(); } }
+  });
+  box.addEventListener('change', () => { box.value = text(); });   /* the box shows the one spelling: 7 when both ends of a range are 7 */
+  wrap.append(sl.el, box);
   for (const el of [box, ...sl.keys]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') box.blur(); });
-  return wrap;
+  return { el: wrap, paint };
 }
+/* a number's or a range's ends (propEnds), under its control on a property page; none for a choice or a switch */
+function propEnds(p) {
+  if (p.choices || p.bool) return null;
+  const e = div('ends'); e.innerHTML = `<span>${p.range ? p.min + (p.unit || '') : fmt(p, p.min)}</span><span>${p.range ? p.max + (p.unit || '') : fmt(p, p.max)}</span>`; return e;
+}
+const help = p => { const h = document.createElement('small'); h.textContent = p.help; return h; };
 // a setting's slider, for a number (get gives [value]) or a range ([low, high]): { el, paint, keys }. Each end's handle is dragged
 // on its own, never past the other; with two ends there is a grip, which moves the whole range, keeping its width, stopping at the
 // track's ends; a click on the track moves the end that can go there (outside the range, the end on that side; inside, the nearer,
@@ -3067,8 +3083,9 @@ function slider(p, get, put) {
 }
 // ---------- the settings sheet ----------
 /* The mosaic button is a colour mosaic of the settings code with the camera (see MOSAIC; the page's screenshots are read by it) and opens a bottom sheet over the view (inside it, so it works full screen). The sheet's top level is a row for each
-   group, then the code with the camera as text to copy, paste into or edit, and as a large QR; a row slides to its page; Back, Escape or a tap outside goes back or closes */
-const sheetEl = $('sheet'), slides = $('slides'), pgTop = $('pgTop'), pgDetail = $('pgDetail'), rowsEl = $('srows'), codeBtn = $('code'), field = $('codefield'), codeErr = $('codeerr'), said = $('said');
+   group, then the code with the camera as text to copy, paste into or edit, and as a large QR. The pages are a stack three deep: a row opens its group's page (a line for each setting, its label button and its control), a line's button
+   opens the setting's page; Back and Escape go back one, Close and a tap outside close the sheet */
+const sheetEl = $('sheet'), slides = $('slides'), pgTop = $('pgTop'), pgGroup = $('pgGroup'), pgProp = $('pgProp'), rowsEl = $('srows'), codeBtn = $('code'), field = $('codefield'), codeErr = $('codeerr'), said = $('said');
 const plain = (p, v) => p.range ? rangeText(v) + (p.unit || '') : p.choices ? p.choices.find(c => c[0] === v)[1] : v + (p.unit || '');
 const summary = g => plain(g.items.find(p => p.key === g.value), state[g.value]) + (g.note ? g.note() : '');
 /* a QR of text in alphanumeric mode, the smallest version that fits, at error correction M unless that costs more than one version over L */
@@ -3085,7 +3102,9 @@ function qrSvg(q, quiet, px) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"${px ? ` width="${size * px}" height="${size * px}"` : ''} shape-rendering="crispEdges" aria-hidden="true"><rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
 }
 const sheetOpen = () => sheetEl.classList.contains('open');
-let shownCorner = '', shownField = '', page = null, pageSync = null, saidTimer = 0;
+let shownCorner = '', shownField = '', pageSync = null, propPaint = null, saidTimer = 0;
+const stack = [];   /* the pages open: [] the top level, [group] a group's page, [group, setting] a setting's page */
+const paints = [], lines = [];   /* every group page's controls' paint, and its lines (a line with shownWhile is shown while that setting is above 0) */
 /* the corner: the mosaic of the code with the camera, drawn in cells of whole device pixels (2 at least: 1 CSS px on a 2x screen, 2 on a 1x one) inside a one-cell quiet zone. It is made again when the
    settings change and when the camera stops (the end of a drag, a zoom, a view change), not while it moves */
 const themeNow = () => document.documentElement.dataset.theme === 'light' || document.documentElement.dataset.theme === 'dark' ? document.documentElement.dataset.theme : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -3119,15 +3138,27 @@ const rowBtns = GROUPS.map(g => {
 });
 function sheetSync() {
   GROUPS.forEach((g, i) => { const b = rowBtns[i], s = summary(g); b.firstElementChild.outerHTML = g.icon(); b.querySelector('.v').innerHTML = s; b.setAttribute('aria-label', `${g.label}: ${b.querySelector('.v').textContent}; open`); });
-  if (pageSync) pageSync();
+  repaint();
   codeSync(); fieldSync();
 }
+/* every control shows the settings as they are, the hidden copy of a setting's control too */
+function repaint() {
+  if (!sheetOpen()) return;
+  for (const f of paints) f();
+  if (propPaint) propPaint(); if (pageSync) pageSync();
+  shownRows();
+}
+function shownRows() { for (const [p, el] of lines) if (p.shownWhile) el.style.display = state[p.shownWhile] > 0 ? '' : 'none'; }
 const div = cls => { const d = document.createElement('div'); d.className = cls; return d; };
 const PAGES = {
-  rows: g => {   /* a row with shownWhile shows only while that setting is above 0 (it keeps its value) */
-    const wrap = div('group-rows'), rs = g.items.map(p => [p, row(p)]);
-    for (const [, r] of rs) wrap.append(r);
-    shownRows = () => { for (const [p, r] of rs) if (p.shownWhile) r.style.display = state[p.shownWhile] > 0 ? '' : 'none'; }; shownRows();
+  rows: g => {   /* a line for each setting: a button (its label and a chevron) that opens its page, and its control beside it */
+    const wrap = div('plines');
+    for (const p of g.items) {
+      const line = div('pline'), btn = document.createElement('button'), c = control(p), ctl = div('pctl');
+      btn.className = 'plabel'; btn.innerHTML = `<span class="k">${p.label}</span>${svg('<path d="M9 6l6 6-6 6"/>', 'chev')}`; btn.setAttribute('aria-label', `${p.label}: open`);
+      btn.addEventListener('click', () => openProp(g, p));
+      ctl.append(c.el); line.append(btn, ctl); wrap.append(line); paints.push(c.paint); lines.push([p, line]);
+    }
     return wrap;
   },
   style: () => {   /* a style sets the whole preset; Random picks one of the others */
@@ -3153,18 +3184,34 @@ const PAGES = {
     return wrap;
   },
 };
-function openPage(g) {
-  page = g; shownRows = null; pageSync = null;
+const backHead = (label, icon) => {
   const head = div('shead'), backBtn = document.createElement('button');
   backBtn.className = 'btn'; backBtn.setAttribute('aria-label', 'Back'); backBtn.innerHTML = svg('<path d="M15 6l-6 6 6 6"/>') + 'Back'; backBtn.addEventListener('click', back);
-  head.append(backBtn); head.insertAdjacentHTML('beforeend', `<b>${g.icon()}${g.label}</b>`);
-  pgDetail.replaceChildren(head, PAGES[g.page || 'rows'](g));
-  pgDetail.inert = false; pgTop.inert = true; pgDetail.scrollTop = 0; slides.classList.add('deep');
+  head.append(backBtn); head.insertAdjacentHTML('beforeend', `<b>${icon || ''}${label}</b>`); return head;
+};
+const cached = new Map();   /* a group's page, made once and kept */
+/* the pages slide by depth, one page width each; only the page shown takes taps and focus */
+function showDepth() {
+  const d = stack.length; slides.style.transform = `translateX(${-d * 100 / 3}%)`;
+  pgTop.inert = d !== 0; pgGroup.inert = d !== 1; pgProp.inert = d !== 2;
 }
-function back() { page = null; shownRows = null; pageSync = null; slides.classList.remove('deep'); pgTop.inert = false; pgDetail.inert = true; }
-function openSheet() { sheetEl.inert = false; sheetEl.classList.add('open'); codeBtn.setAttribute('aria-expanded', 'true'); shownField = ''; fieldSync(); }
-function closeSheet(refocus) { back(); sheetEl.classList.remove('open'); sheetEl.inert = true; codeBtn.setAttribute('aria-expanded', 'false'); if (refocus) codeBtn.focus(); }
-pgDetail.inert = true; sheetEl.inert = true;
+function openPage(g) {
+  stack.length = 0; stack.push(g); propPaint = null; pageSync = null;
+  if (!g.page) { if (!cached.has(g)) cached.set(g, [backHead(g.label, g.icon()), PAGES.rows(g)]); pgGroup.replaceChildren(...cached.get(g)); }
+  else pgGroup.replaceChildren(backHead(g.label, g.icon()), PAGES[g.page](g));
+  pgGroup.scrollTop = 0; showDepth(); repaint();
+}
+/* a setting's page: its control (the same builder as on its line), its ends and its help; one page, made again for each setting */
+function openProp(g, p) {
+  const c = control(p), body = div('pprop'), e = propEnds(p);
+  body.append(c.el); if (e) body.append(e); body.append(help(p));
+  pgProp.replaceChildren(backHead(p.label), body); propPaint = c.paint; c.paint();
+  stack.push(p); pgProp.scrollTop = 0; showDepth();
+}
+function back() { if (!stack.length) return; stack.pop(); if (stack.length < 2) propPaint = null; if (!stack.length) pageSync = null; showDepth(); }
+function openSheet() { sheetEl.inert = false; sheetEl.classList.add('open'); codeBtn.setAttribute('aria-expanded', 'true'); shownField = ''; fieldSync(); repaint(); }
+function closeSheet(refocus) { stack.length = 0; propPaint = null; pageSync = null; showDepth(); sheetEl.classList.remove('open'); sheetEl.inert = true; codeBtn.setAttribute('aria-expanded', 'false'); if (refocus) codeBtn.focus(); }
+showDepth(); sheetEl.inert = true;
 codeBtn.addEventListener('click', () => sheetOpen() ? closeSheet() : openSheet());
 /* a change of pixel ratio (page zoom, another screen) draws the mosaic again in whole device pixels */
 window.addEventListener('resize', () => codeSync());
@@ -3173,7 +3220,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 new MutationObserver(() => codeSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 $('sclose').addEventListener('click', () => closeSheet(true));
 document.addEventListener('pointerdown', e => { if (sheetOpen() && !e.target.closest('#sheet, #code')) closeSheet(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen()) { e.preventDefault(); if (page) back(); else closeSheet(true); } }, true);   /* first, so what else Escape does waits for the next press */
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen()) { e.preventDefault(); if (stack.length) back(); else closeSheet(true); } }, true);   /* first, so what else Escape does waits for the next press */
 $('sreset').addEventListener('click', () => { Object.assign(state, PRESETS[state.style], { bridge: DEFAULTS.bridge }); syncUI(); update(); });
 const say = t => { said.textContent = t; clearTimeout(saidTimer); saidTimer = setTimeout(() => { said.textContent = ''; }, 2500); };
 $('scopy').addEventListener('click', () => {
@@ -3261,9 +3308,8 @@ function syncUI() {
 }
 let ownHash = '';
 let pending = false;
-let shownRows = null;   // the open page's rows shown for the settings as they are
 function update() {
-  if (shownRows) shownRows();
+  repaint();
   codeSync(); fieldSync();
   if (pending) return; pending = true;
   requestAnimationFrame(() => { pending = false; doUpdate(); });
