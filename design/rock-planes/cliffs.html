@@ -3061,14 +3061,14 @@ function qrSvg(q, quiet, px) {
 }
 const sheetOpen = () => sheetEl.classList.contains('open');
 let shownCorner = '', shownField = '', page = null, pageSync = null, saidTimer = 0;
-/* the corner: the mosaic of the code with the camera, drawn in cells of whole device pixels (2 CSS px, as near as the screen allows) inside a one-cell quiet zone. It is made again when the
+/* the corner: the mosaic of the code with the camera, drawn in cells of whole device pixels (2 at least: 1 CSS px on a 2x screen, 2 on a 1x one) inside a one-cell quiet zone. It is made again when the
    settings change and when the camera stops (the end of a drag, a zoom, a view change), not while it moves */
 function codeSync() {
   const bits = codeBits(state, { camera: true }), c = base32Of(bits), dpr = window.devicePixelRatio || 1, key = c + '|' + dpr; if (key === shownCorner) return;
   shownCorner = key;
   codeBtn.setAttribute('aria-label', `Settings (code ${c})`); codeBtn.title = `Settings (code ${c})`;
   let m; try { m = mosaicOf(bytesOf(bits)); } catch (e) { codeBtn.textContent = 'Settings'; codeBtn.title = e.message; return; }
-  const cell = Math.max(1, Math.round(2 * dpr)), side = (m.size + 2) * cell, cv = document.createElement('canvas'), g = cv.getContext('2d');
+  const cell = Math.max(2, Math.round(dpr)), side = (m.size + 2) * cell, cv = document.createElement('canvas'), g = cv.getContext('2d');
   cv.width = cv.height = side; cv.style.width = cv.style.height = side / dpr + 'px'; cv.setAttribute('aria-hidden', 'true');
   g.fillStyle = '#fff'; g.fillRect(0, 0, side, side);
   for (let r = 0; r < m.size; r++) for (let q = 0; q < m.size; q++) { g.fillStyle = `rgb(${MOSAIC.colours[m.cells[r * m.size + q]].join(',')})`; g.fillRect((q + 1) * cell, (r + 1) * cell, cell, cell); }
