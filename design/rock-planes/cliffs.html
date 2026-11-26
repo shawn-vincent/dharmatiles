@@ -264,15 +264,15 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <ol>
       <li><b>Ranges.</b> Every setting drawn at random is a <b>range</b>: on its slider a handle under each end, the low end and the high end, and a grip above the band between them that moves the whole range (a number&rsquo;s slider is the same with one end); typed <code>low..high</code> (a number alone, <code>7</code>, is the range 7..7: always that). Each draw is made between the ends, every value as likely, from a stream of its own for the job (a stone, a spine, a layer face, a joint, a plane), so one setting never reshuffles another; Height and Depth are the exception, drawn mostly from a smooth field along the wall (below), so they wander rather than spread evenly.</li>
       <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, as tall as the high end of <b>Height</b> and as deep as the high end of <b>Depth</b>, standing at the back of the square. Its bottom, its back and its two ends (the tile&rsquo;s edges) are <b>crisp</b>: no stone crosses them. Its top and its front are <b>fuzzy</b>: each spine draws how tall it reaches in Height and how far forward in Depth, two thirds from a smooth field along the wall and one third its own, so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
-      <li><b>Layers and spines.</b> <b>Direction Up</b> cuts the envelope across the vertical into <b>Layers</b>. Each face where two layers meet is drawn on its own: it slopes along Width by an angle drawn in <b>Lean</b> and along Thickness by one drawn in <b>Pitch</b>, and curves along Width by a height drawn in <b>Sag</b> (its middle that far past its edges) and along Thickness by one drawn in <b>Bow</b>. A face never lies under the face below it, so where two cross, a layer pinches out. In each layer in turn spines are started by dart throwing: a dart is a point in the layer, its direction turned by an angle drawn in <b>Wander</b>; it is kept only if it is clear of every spine already in the layer by <b>Width</b> across the wall and <b>Thickness</b> front to back (each the two ends&rsquo; sizes together), and the layer is full when 80 darts in a row miss. A spine runs on into the next layer with the chance <b>Span</b>, drawn at each face it reaches, so breaks stagger. <b>Order</b> draws the darts&rsquo; places from a grid instead, its pitch the middle of Width by the middle of Thickness, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is jittered. A layer whose spines are at least <span data-const="COLUMN"></span> Widths long (a column) gives all its spines one lean along the wall, drawn in Wander, so neighbours stay parallel and none narrows against another. <b>Direction Through</b> is one layer through the wall: darts are thrown on the back plane (Width along the wall, Thickness up it) and every spine runs straight through to the front, so the stones show their ends; Layers, Lean, Pitch, Sag, Bow, Span, Fuse and Order do not apply to it. <b>Direction Along</b> is not built by this engine, which says so.</li>
-      <li><b>Cells.</b> <b>Direction Up</b>: each spine is one convex stone, from the layer face it starts on to the one it stops at (each taken as its tangent plane at the spine there, so Sag and Bow become planes). Between it and each spine that shares a layer with it, the stone is cut by the plane halfway between the two spines&rsquo; closest points (measured with Thickness against Width as the proportion, a stretch of the whole wall, so planes stay planes), then by the envelope. The planes are drawn pair by pair and do not have to agree, so some space can be left to no stone. <b>Width</b> and <b>Thickness</b> space the spines; they do not move the planes. <b>Joint</b>, drawn for each pair, moves each side half of it from the halfway plane: over zero a gap opens (separate stones), under zero each reaches past it into its neighbour (they overlap). <b>Direction Through</b> divides the back plane as one power diagram instead (below). The cells are not a chain: every contact is known before any stone is carved, so every stone is carved on its own.</li>
+      <li><b>Layers and spines.</b> Every <b>Direction</b> is built the same way, only turned: the spines run up (Up), from the back to the front (Through) or along the wall (Along), and the envelope is cut across them into <b>Layers</b>. Each face where two layers meet is drawn on its own: it slopes along Width by an angle drawn in <b>Lean</b> and along Thickness by one drawn in <b>Pitch</b>, and curves along Width by a height drawn in <b>Sag</b> (its middle that far past its edges) and along Thickness by one drawn in <b>Bow</b>. A face never lies under the face below it, so where two cross, a layer pinches out. In each layer in turn spines are started by dart throwing: a dart is a point in the layer, its direction turned by an angle drawn in <b>Wander</b>; it is kept only if it is clear of every spine already in the layer by <b>Width</b> across the wall and <b>Thickness</b> front to back (each the two ends&rsquo; sizes together), and the layer is full when 80 darts in a row miss. A spine runs on into the next layer with the chance <b>Span</b>, drawn at each face it reaches, so breaks stagger. <b>Order</b> draws the darts&rsquo; places from a grid instead, its pitch the middle of Width by the middle of Thickness, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is jittered. A layer whose spines are at least <span data-const="COLUMN"></span> Widths long (a column) gives all its spines one lean along the wall, drawn in Wander, so neighbours stay parallel and none narrows against another.</li>
+      <li><b>Cells.</b> Each spine is one convex stone, from the layer face it starts on to the one it stops at (each taken as its tangent plane at the spine there, so Sag and Bow become planes). Between it and each spine that shares a layer with it, the stone is cut by the plane halfway between the two spines&rsquo; closest points (measured with Thickness against Width as the proportion, a stretch of the whole wall, so planes stay planes), then by the envelope. The planes are drawn pair by pair and do not have to agree, so some space can be left to no stone. <b>Width</b> and <b>Thickness</b> space the spines; they do not move the planes. <b>Joint</b>, drawn for each pair, moves each side half of it from the halfway plane: over zero a gap opens (separate stones), under zero each reaches past it into its neighbour (they overlap). The cells are not a chain: every contact is known before any stone is carved, so every stone is carved on its own.</li>
       <li><b>Bodies.</b> A spine that runs through several layers is one stone, carved whole. <b>Fuse</b> joins two neighbouring spines whose cells share a face into one body, one draw for each two from a stream of the pair&rsquo;s own; a cell narrower than 3 mm across joins the neighbour it shares the most side face with. A body is carved cell by cell with the faces where its cells meet kept flat, so the slicer fuses them into one stone; a body that rests on nothing the ground holds is joined to a touching body that is held.</li>
-      <li><b>The bottom.</b> A cell finds what holds it before it is carved: the places where its bottom meets the tops of the cells below (looking down one layer in a thin layer, three in a thick one, and further when none is near), each made a patch. A thick layer&rsquo;s stone rests on a small support inside each patch (40% of it; up to 70% as a style&rsquo;s Tilt rises from 13&deg; to 25&deg;, so Fieldstone&rsquo;s bottoms are blunt), so the stone is carved round; a <b>thin</b> layer (under <span data-const="THIN"></span> mm: Layered) keeps every patch whole. Its <b>bottom</b> is those patches, and every point of it either rests on one or lies on a line between two patches at most <b>Bridge</b> apart (less <span data-const="BRIDGE_MARGIN"></span> mm, so the plan sits inside the measure). A bottom the patches cannot hold whole is made of the largest group of patches whose hull is covered, or in a thin layer cut where it would hang, along the line that keeps the most; else it keeps the best pair, or the largest patch. A stone with no holder is lowered to the nearest top below, or stands on the ground when it is near the plate. A <b>flare</b> rises from the bottom&rsquo;s outline at <span data-const="FLARE_DEG"></span>&deg; from upright, so what lies past a patch is cut away rather than overhanging. Where a stone holds another, its top keeps flat the hull of the patches the stones above rest on, and its fuzzy top is never below its holders&rsquo; tops. Every stone rests on the ground or on a stone that does.</li>
+      <li><b>The bottom.</b> A cell finds what holds it before it is carved: the places where its bottom meets the tops of the cells below (any stone placed before it: the stones are placed holders first, and a stone can hold another only when its spine ends below the middle of the other&rsquo;s and starts lower, so a neighbour beside it never holds it and one it overlaps deeply does), each made a patch. A thick layer&rsquo;s stone rests on a small support inside each patch (40% of it; up to 70% as a style&rsquo;s Tilt rises from 13&deg; to 25&deg;, so Fieldstone&rsquo;s bottoms are blunt), so the stone is carved round; a <b>thin</b> layer (under <span data-const="THIN"></span> mm: Layered) keeps every patch whole. Its <b>bottom</b> is those patches, and every point of it either rests on one or lies on a line between two patches at most <b>Bridge</b> apart (less <span data-const="BRIDGE_MARGIN"></span> mm, so the plan sits inside the measure). A bottom the patches cannot hold whole is made of the largest group of patches whose hull is covered, or in a thin layer cut where it would hang, along the line that keeps the most; else it keeps the best pair, or the largest patch. A stone with no holder is lowered to the nearest top below, or stands on the ground when it is near the plate. A <b>flare</b> rises from the bottom&rsquo;s outline at <span data-const="FLARE_DEG"></span>&deg; from upright, so what lies past a patch is cut away rather than overhanging. Where a stone holds another, its top keeps flat the hull of the patches the stones above rest on, and its fuzzy top is never below its holders&rsquo; tops. Every stone rests on the ground or on a stone that does.</li>
       <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least 30&deg;, a point just outside it in no other stone) gets one flat bevel, cut at the middle angle between its two faces, about 15% of the stone&rsquo;s narrowest side wide, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell, so with Joint at zero or more stones never overlap and under zero they overlap. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the rocks or the masses (the cells as cut, before carving, each body its own shade); the view options also show the layers and the spines. <b>Weathering</b> is not read.</li>
       <li><b>Cracks</b> (each style sets its own: Granite 12.5% on a Blocks network, Columns 19.5% on a Columns network, Layered 90% on a Planes network, Fieldstone none, Ashlar 15%; under Rocks, whose sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: a table of flat boundaries between cells of seeds on a grid, in one, two or three axes: <b>Planes</b> across the vertical (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread, and each boundary carrying the rank at which a crack would reach it (cracks start at even shares and grow from line to line, turning least, branching with the chance <b>Branching</b>, <span data-const="CRACK_LINES"></span> lines to a crack on average). The table is made once for each Network, Spacing and Branching (the first wall that needs one waits for it) and the wall takes it at a seeded offset. Where a boundary crosses a stone&rsquo;s upright or upward faces it is a trace; <b>Cracks</b> picks each stone&rsquo;s own share of its traces&rsquo; length, in rank order, so raising it only adds cracks, and a crack never runs from one stone into another. A boundary a face meets at less than <span data-const="GRAZE"></span>&deg; (it would take off a skin) takes none. A trace is walked in short steps (<b>Wiggle</b>: each step <span data-const="WIGGLE_STEP"></span> mm, its heading turned by up to this share of <span data-const="WIGGLE_TURN"></span>&deg; and kept within the share, so a crack meanders), and cut as a groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>&deg; off the face&rsquo;s inward normal, <b>Opening</b> apart at the face (at most <span data-const="OPENING_MOST"></span> mm), so on an upright face its roof faces down at the overhang target whichever way the crack runs, and a wall that would face down past it is turned up to it. A free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span>; an end that meets another crack, or the stone&rsquo;s outline where it touches another stone or the ground, runs off at full size; and a stretch that holds a stone above or lies on a bottom is left whole. Each face the grooves touch is cut in its own plane into the convex pieces outside them, and merged back to as few as keep it convex. The faces inside a crack are drawn dark grey.</li>
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
     </ol>
-    <p class="hint"><b>Layered</b>: thirty-eight thin level layers, a handful of slabs in each, the joints staggered, with cracks along Planes. <b>Granite</b>: Direction Through, one layer: every spine starts at a point on the back and runs straight through to the front (turned up to 15&deg;), and the stones show their ends; Joint under zero, so they overlap into one irregular mass; cracks along Blocks. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart; cracks along Columns. <b>Fieldstone</b>: eighteen rough courses, the stones thrown at random (Order 0%), many-faced and tilted so they read round; Span 30% lets a stone run up through the next course; no cracks. <b>Ashlar</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone; cracks along Blocks.</p>
+    <p class="hint"><b>Layered</b>: thirty-eight thin level layers, a handful of slabs in each, the joints staggered, with cracks along Planes. <b>Granite</b>: Direction Through, one layer: every spine runs from the back to the front, and the stones show their ends; Joint under zero, so they overlap into one irregular mass; cracks along Blocks. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart; cracks along Columns. <b>Fieldstone</b>: eighteen rough courses, the stones thrown at random (Order 0%), many-faced and tilted so they read round; Span 30% lets a stone run up through the next course; no cracks. <b>Ashlar</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone; cracks along Blocks.</p>
     <p class="hint">Not here yet: Direction Along, Weathering, envelopes with concavities and holes (each cell is clipped by a box envelope), curved or irregular ends, twisting sections, erosion, seams between stones, and two networks at once. A cell is a convex region, so a stone is convex before its cracks.</p>
     <p class="hint">The glassy figure at the front left, for scale, is <a href="https://www.printables.com/model/77914-fighter-female-no-supports-needed">Fighter - Female</a> by Teirale, a 28 mm miniature on a 25 mm base (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), with fewer triangles.</p>
   </section>
@@ -827,50 +827,59 @@ function weatherEgg(isGlued, grd) {
 function carveFast(kp, grd) { guardsOf(kp); toSlots(); supN = nVS; relocate(); bevelAll(grd); if (!empty) fromSlots(); }
 function wall(seed, P, opt = {}) {
   carveFor(P);
-  if (P.direction === 'through') return graniteWall(seed, P, opt);
-  if (P.direction !== 'up') throw new Error('Direction ' + P.direction + ' is not built by the cells engine (it builds Up and Through)');
   const T = { }, t0 = now(); let tm = t0; const lap = k => { const t = now(); T[k] = t - tm; tm = t; };
-  const W = 35 * P.squares, H = P.height[1], D = P.depth[1], y0 = 17.5 - D, y1 = 17.5, N = P.layers + 1, step = H / (N - 1), thin = step < THIN, hu = W / 2, hv = D / 2, ym = (y0 + y1) / 2;
-  // ---- layer faces (axis Up): z_i = s_i + x tan(lean) + sag (1 - a^2) + bow (1 - c^2)
+  const W = 35 * P.squares, H = P.height[1], D = P.depth[1], y0 = 17.5 - D, y1 = 17.5, hu = W / 2;
+  /* The frame: every Direction is built the same way in it, only turned. Spines run along w (Up: up; Through: from the back to the front; Along: along
+     the wall), u runs across them along Width and v along Thickness, and a point of the frame is O + u eU + v eV + w eW in the wall. The envelope, the
+     ground and what holds what are the wall's, whichever way the frame is turned. */
+  const FR = { up: { O: [0, 0, 0], eU: [1, 0, 0], eV: [0, 1, 0], eW: [0, 0, 1], U: [-hu, hu], V: [y0, y1], L: H },
+    through: { O: [0, y1, 0], eU: [1, 0, 0], eV: [0, 0, 1], eW: [0, -1, 0], U: [-hu, hu], V: [0, H], L: D },
+    along: { O: [-hu, 0, 0], eU: [0, 1, 0], eV: [0, 0, 1], eW: [1, 0, 0], U: [y0, y1], V: [0, H], L: W } }[P.direction];
+  if (!FR) throw new Error('No such direction: ' + P.direction);
+  const { O, eU, eV, eW } = FR, [u0, u1] = FR.U, [v0, v1] = FR.V, LW = FR.L, N = P.layers + 1, step = LW / (N - 1);
+  const toW = (u, v, w) => [O[0] + u * eU[0] + v * eV[0] + w * eW[0], O[1] + u * eU[1] + v * eV[1] + w * eW[1], O[2] + u * eU[2] + v * eV[2] + w * eW[2]];
+  const plW = (nu, nv, nw, d) => { const n = [nu * eU[0] + nv * eV[0] + nw * eW[0], nu * eU[1] + nv * eV[1] + nw * eW[1], nu * eU[2] + nv * eV[2] + nw * eW[2]], L = len(n); return [n[0] / L, n[1] / L, n[2] / L, (d + dot(n, O)) / L]; };   /* a plane n.(u,v,w) <= d of the frame, in the wall, made unit */
+  const um = (u0 + u1) / 2, vm = (v0 + v1) / 2, hU = (u1 - u0) / 2, hV = (v1 - v0) / 2;
+  // ---- layer faces across w: w_i = s_i + u tan(lean) + v tan(pitch) + sag (1 - a^2) + bow (1 - c^2), a and c the place across u and v from -1 to 1
   const FPT = new Float64Array(N), FL = new Float64Array(N), FS = new Float64Array(N), FB = new Float64Array(N);
   for (let i = 1; i < N - 1; i++) { const r = stream(seed, 100 + i); FL[i] = Math.tan(lerp(P.lean[0], P.lean[1], r()) * DEG); FS[i] = lerp(P.sag[0], P.sag[1], r()); FB[i] = lerp(P.bow[0], P.bow[1], r()); FPT[i] = Math.tan(lerp(P.pitch[0], P.pitch[1], r()) * DEG); }
-  // effective faces on a 0.5 mm grid: face i is the running maximum of the faces below it (faces never cross: a crossed layer pinches out)
-  const GR = 0.5, GRX = 1.0, gnx = Math.round(W / GRX) + 1, gny = Math.round(D / GR) + 1, EG = new Array(N);
-  EG[0] = new Float32Array(gnx * gny);   // z = 0
+  // effective faces on a grid: face i is the running maximum of the faces below it (faces never cross: a crossed layer pinches out)
+  const GRX = u1 - u0 > 40 ? 1.0 : 0.5, GR = v1 - v0 > 40 ? 1.0 : 0.5, gnx = Math.round((u1 - u0) / GRX) + 1, gny = Math.round((v1 - v0) / GR) + 1, EG = new Array(N);
+  EG[0] = new Float32Array(gnx * gny);
   for (let i = 1; i < N; i++) {
     const g = new Float32Array(gnx * gny), prev = EG[i - 1];
-    if (i === N - 1) g.fill(H);
-    else for (let iy = 0; iy < gny; iy++) { const y = y0 + iy * GR, c = (y - ym) / hv, cc = FB[i] * (1 - c * c) + (y - ym) * FPT[i]; for (let ix = 0; ix < gnx; ix++) { const x = -hu + ix * GRX, a = x / hu, z = i * step + x * FL[i] + FS[i] * (1 - a * a) + cc, p = prev[iy * gnx + ix]; g[iy * gnx + ix] = Math.min(H, z > p ? z : p); } }
+    if (i === N - 1) g.fill(LW);
+    else for (let iy = 0; iy < gny; iy++) { const v = v0 + iy * GR, c = (v - vm) / hV, cc = FB[i] * (1 - c * c) + (v - vm) * FPT[i]; for (let ix = 0; ix < gnx; ix++) { const uc = u0 + ix * GRX - um, a = uc / hU, w = i * step + uc * FL[i] + FS[i] * (1 - a * a) + cc, p = prev[iy * gnx + ix]; g[iy * gnx + ix] = Math.min(LW, w > p ? w : p); } }
     EG[i] = g;
   }
-  const effG = (i, x, y) => {
-    const fx = clamp((x + hu) / GRX, 0, gnx - 1.001), fy = clamp((y - y0) / GR, 0, gny - 1.001), ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy, g = EG[i], q = iy * gnx + ix;
+  const effG = (i, u, v) => {
+    const fx = clamp((u - u0) / GRX, 0, gnx - 1.001), fy = clamp((v - v0) / GR, 0, gny - 1.001), ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy, g = EG[i], q = iy * gnx + ix;
     return (g[q] * (1 - tx) + g[q + 1] * tx) * (1 - ty) + (g[q + gnx] * (1 - tx) + g[q + gnx + 1] * tx) * ty;
   };
-  // a plane through face i over a cell-sized patch about (cx, cy): least squares over 3 x 3 samples; returns [z at centre, dz/dx, dz/dy]
+  // a plane through face i over a cell-sized patch about (cu, cv): least squares over 3 x 3 samples; returns [w at centre, dw/du, dw/dv]
   const FHX = 2.5, FHY = 3.0, fit = [0, 0, 0];
-  function fitFace(i, cx, cy) {
+  function fitFace(i, cu, cv) {
     if (i <= 0) { fit[0] = 0; fit[1] = 0; fit[2] = 0; return; }
-    if (i >= N - 1) { fit[0] = H; fit[1] = 0; fit[2] = 0; return; }
+    if (i >= N - 1) { fit[0] = LW; fit[1] = 0; fit[2] = 0; return; }
     let sz = 0, sx = 0, sy = 0;
-    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const z = effG(i, clamp(cx + a * FHX, -hu, hu), clamp(cy + b * FHY, y0, y1)); sz += z; sx += a * z; sy += b * z; }
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const z = effG(i, clamp(cu + a * FHX, u0, u1), clamp(cv + b * FHY, v0, v1)); sz += z; sx += a * z; sy += b * z; }
     fit[0] = sz / 9; fit[1] = sx / (6 * FHX); fit[2] = sy / (6 * FHY);
   }
-  // ---- sites: darts in each layer, clear of the spines through it (Width/Thickness), Span, Wander, fuzzy top and front
+  // ---- sites: darts in each layer across (u, v), clear of the spines through it (Width along u, Thickness along v), Span, Wander, fuzzy top and front
   const fuzzTop = waves(stream(seed, 1)), fuzzFront = waves(stream(seed, 2)), FIELD = 2 / 3;
   const short = (range, f, rf) => range[1] - lerp(range[0], range[1], clamp(0.5 + 0.5 * (FIELD * f + (1 - FIELD) * (2 * rf() - 1)), 0, 1));
-  const sites = [], pw = 0.5 * (P.width[0] + P.width[1]), AB = 0.5 * (P.thickness[0] + P.thickness[1]) / pw;   // AB: the one aspect the diagram is drawn in
+  const sites = [], pw = 0.5 * (P.width[0] + P.width[1]), AB = 0.5 * (P.thickness[0] + P.thickness[1]) / pw;   // AB: the one aspect the planes are drawn in
   const layerSites = Array.from({ length: N - 1 }, () => []);
   for (let i = 0; i < N - 1; i++) {
     const rd = stream(seed, 1000 + i), here = layerSites[i], zmid = (i + 0.5) * step;
     let fails = 0, k = 0, guard = 0, skips = 0;
     const GRID = P.order >= 100, gp = [];   // Order 100: a grid spaced by the middle Width and Thickness, every other layer moved half a spacing (a running bond)
-    if (GRID) { const spx = pw, rows = Math.max(1, Math.round(D / (0.5 * (P.thickness[0] + P.thickness[1])))), ph = (i % 2) * spx / 2; for (let r_ = 0; r_ < rows; r_++) for (let n_ = 0; n_ * spx < W + spx; n_++) { const xx = -hu + ph + spx / 2 + n_ * spx - (i % 2 ? spx / 2 : 0) * 0 - (i % 2 ? spx : 0) * 0; if (xx > -hu + 0.2 && xx < hu - 0.2) gp.push([xx, y0 + (r_ + 0.5) * D / rows]); } }
+    if (GRID) { const spx = pw, rows = Math.max(1, Math.round((v1 - v0) / (0.5 * (P.thickness[0] + P.thickness[1])))), ph = (i % 2) * spx / 2; for (let r_ = 0; r_ < rows; r_++) for (let n_ = 0; n_ * spx < (u1 - u0) + spx; n_++) { const xx = u0 + ph + spx / 2 + n_ * spx; if (xx > u0 + 0.2 && xx < u1 - 0.2) gp.push([xx, v0 + (r_ + 0.5) * (v1 - v0) / rows]); } }
     let gi = 0;
-    // wc: the layer's columns share one lean along the wall (one draw of Wander, from its own stream; across the wall it would be cut by the front and back), so neighbours stay parallel and none narrows against another
+    // wc: the layer's columns share one lean along u (one draw of Wander, from its own stream), so neighbours stay parallel and none narrows against another
     const wcl = step >= COLUMN * pw ? (() => { const q = stream(seed, 7000 + i), p_ = Math.tan(lerp(P.wander[0], P.wander[1], q()) * DEG), h_ = q() < 0.5 ? 0 : Math.PI; return [p_ * Math.cos(h_), 0]; })() : null;
     while (GRID ? gi < gp.length : (fails < 80 && k < 300 && guard++ < 40000)) {
-      const x = GRID ? gp[gi][0] : lerp(-hu + 1e-3, hu - 1e-3, rd()), y = GRID ? gp[gi++][1] : lerp(y0 + 1e-3, y1 - 1e-3, rd());
+      const x = GRID ? gp[gi][0] : lerp(u0 + 1e-3, u1 - 1e-3, rd()), y = GRID ? gp[gi++][1] : lerp(v0 + 1e-3, v1 - 1e-3, rd());   /* x, y: the dart's u and v */
       if (effG(i + 1, x, y) - effG(i, x, y) < 0.3) { if (++skips > 400) break; continue; }
       const id = sites.length, r = rd;
       let j = i + 1; if (r() < P.span / 100 && j < N - 1) { const rs = rd; j++; while (j < N - 1 && rs() < P.span / 100) j++; }
@@ -880,18 +889,19 @@ function wall(seed, P, opt = {}) {
       let clear = true;
       for (const o of here) { const dx = x - (o.x + o.sx * (zmid - o.zd)), dy = (y - (o.y + o.sy * (zmid - o.zd))) / o.a; if (dx * dx + dy * dy < (o.r + rr) * (o.r + rr)) { clear = false; break; } }
       if (!clear && !GRID) { fails++; continue; }
-      const rf = rd, sTop = short(P.height, fuzzTop(x, y), rf), sFront = short(P.depth, fuzzFront(x, zmid), rf);
+      const rf = rd, pm = toW(x, y, zmid), sTop = short(P.height, fuzzTop(pm[0], pm[1]), rf), sFront = short(P.depth, fuzzFront(pm[0], pm[2]), rf);
       const s = { id, i, j, x, y, zd: zmid, sx: wcl ? wcl[0] : tn * Math.cos(phi), sy: wcl ? wcl[1] : tn * Math.sin(phi), r: rr, a, w: rr * rr, sTop, sFront, uf: id, pieces: [] };
       sites.push(s); for (let l = i; l < j; l++) layerSites[l].push(s); k++; fails = 0;
     }
   }
   lap('sites');
   // ---- cells: each spine is one convex stone. Its ends are the layer faces where it starts and stops (tangent planes at the spine there); between it
-  // and each spine that shares a layer with it, the plane halfway between their closest points (drawn in the diagram's aspect AB, a global stretch,
+  // and each spine that shares a layer with it, the plane halfway between their closest points (drawn in the aspect AB, a stretch of the whole frame,
   // so planes stay planes), moved back half the pair's Joint (negative: the neighbours overlap). Unweighted: Width and Thickness space the spines,
-  // they do not move the planes. The planes are drawn pair by pair, so some space can be left to no stone.
-  const pieces = [], layerPieces = Array.from({ length: N - 1 }, () => []), PLN = [];
-  const siteAt = (s, k) => [clamp(s.x + s.sx * ((k + 0.5) * step - s.zd), -hu + 0.05, hu - 0.05), clamp(s.y + s.sy * ((k + 0.5) * step - s.zd), y0 + 0.05, y1 - 0.05)];
+  // they do not move the planes. The planes are drawn pair by pair, so some space can be left to no stone. Each plane's last entry: the spine across
+  // it, or -1 a layer face, -2 the fuzzy top, -3 the fuzzy front, -4 the ground, -5 the crisp back and ends.
+  const pieces = [], PLN = [];
+  const siteAt = (s, k) => [clamp(s.x + s.sx * ((k + 0.5) * step - s.zd), u0 + 0.05, u1 - 0.05), clamp(s.y + s.sy * ((k + 0.5) * step - s.zd), v0 + 0.05, v1 - 0.05)];
   const NB2 = P.width[1] > 8 ? Math.pow(2.2 * P.width[1] / (1), 2) * Math.max(1, AB * AB) : 100;   // neighbours considered: within this squared reach (the wider the spines, the farther; fieldstone keeps 10 mm)
   const spineEnds = new Map();
   for (const s of sites) {
@@ -899,10 +909,10 @@ function wall(seed, P, opt = {}) {
     const at = z => [s.x + s.sx * (z - s.zd), (s.y + s.sy * (z - s.zd)) / AB, z];
     spineEnds.set(s.id, [at(za), at(zb)]);
   }
-  const closestOf = (A, B, C, D) => {   /* the closest points of two segments: the four end-to-segment cases and the interior one */
-    const u = sub(B, A), v = sub(D, C), w = sub(A, C), a = dot(u, u), b = dot(u, v), c = dot(v, v), d = dot(u, w), e = dot(v, w);
+  const closestOf = (A, B, C, D_) => {   /* the closest points of two segments: the four end-to-segment cases and the interior one */
+    const u = sub(B, A), v = sub(D_, C), w = sub(A, C), a = dot(u, u), b = dot(u, v), c = dot(v, v), d = dot(u, w), e = dot(v, w);
     const onSeg = (x, P_, Q) => { const q = sub(Q, P_), qq = dot(q, q); return qq < 1e-12 ? P_ : add(P_, mul(q, clamp(dot(sub(x, P_), q) / qq, 0, 1))); };
-    const cand = [[A, onSeg(A, C, D)], [B, onSeg(B, C, D)], [onSeg(C, A, B), C], [onSeg(D, A, B), D]];
+    const cand = [[A, onSeg(A, C, D_)], [B, onSeg(B, C, D_)], [onSeg(C, A, B), C], [onSeg(D_, A, B), D_]];
     const den = a * c - b * b; if (den > 1e-12 * a * c) { const s_ = (b * e - c * d) / den, t_ = (a * e - b * d) / den; if (s_ >= 0 && s_ <= 1 && t_ >= 0 && t_ <= 1) cand.push([add(A, mul(u, s_)), add(C, mul(v, t_))]); }
     let best = cand[0], bd = Infinity; for (const pq of cand) { const dd = dot(sub(pq[1], pq[0]), sub(pq[1], pq[0])); if (dd < bd) { bd = dd; best = pq; } } return best;
   };
@@ -910,50 +920,54 @@ function wall(seed, P, opt = {}) {
     const pl = [], [A, B] = spineEnds.get(s.id), seen = new Set([s.id]);
     for (let l = s.i; l < s.j; l++) for (const o of layerSites[l]) {
       if (seen.has(o.id)) continue; seen.add(o.id);
-      const [C, D] = spineEnds.get(o.id), [p, q] = closestOf(A, B, C, D), g = sub(q, p);
+      const [C, D_] = spineEnds.get(o.id), [p, q] = closestOf(A, B, C, D_), g = sub(q, p);
       if (g[0] * g[0] + g[1] * g[1] > NB2) continue;
       const dl = len(g); if (dl < 1e-6) continue;   /* two spines that meet have no plane between them */
       const jt = lerp(P.joint[0], P.joint[1], uh(Math.min(s.id, o.id), Math.max(s.id, o.id), seed));
-      /* n.(X - m) <= 0 in the diagram's space, X = (x, y/AB, z): back to the wall's space and made unit */
-      const n = mul(g, 1 / dl), m = mul(add(p, q), 0.5), wx = n[0], wy = n[1] / AB, wz = n[2], L = Math.hypot(wx, wy, wz);
-      pl.push([wx / L, wy / L, wz / L, dot(n, m) / L - jt / 2, o.id]);
+      /* n.(X - m) <= 0 in the stretched frame, X = (u, v/AB, w): back to the frame, a distance there, then to the wall */
+      const n = mul(g, 1 / dl), m = mul(add(p, q), 0.5), fu = n[0], fv_ = n[1] / AB, fw = n[2], L = Math.hypot(fu, fv_, fw);
+      pl.push([...plW(fu / L, fv_ / L, fw / L, dot(n, m) / L - jt / 2), o.id]);
     }
     return pl;
   }
-  for (let k = 0; k < N - 1; k++) {
-    for (const s of layerSites[k]) {
-      if (k !== s.i) continue;   /* a spine is one piece, from the face it starts on to the face it stops at, made at its first layer */
-      const kt = s.j - 1, [cx, cy] = siteAt(s, k), tc = siteAt(s, kt);
-      fitFace(k, cx, cy); const bz = fit[0], bgx = fit[1], bgy = fit[2]; fitFace(kt + 1, tc[0], tc[1]); const tz = fit[0], tgx = fit[1], tgy = fit[2];
-      if (tz - bz < 0.1) continue;
-      initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
-      const pl = [];   // [nx,ny,nz,d,kind,aux]
-      for (const e of planesOfSpine(s)) { clip(e[0], e[1], e[2], e[3], KIND.SIDE | pl.length << 4); pl.push([e[0], e[1], e[2], e[3], KIND.SIDE, e[4]]); }
-      // the envelope: crisp ends and back, fuzzy front and top
-      const E = [[1, 0, 0, hu, KIND.CRISP], [-1, 0, 0, hu, KIND.CRISP], [0, 1, 0, y1, KIND.CRISP], [0, -1, 0, -(y0 + s.sFront), KIND.ENV], [0, 0, 1, H - s.sTop, KIND.ENV]];
-      for (const e of E) { clip(e[0], e[1], e[2], e[3], e[4] | pl.length << 4); pl.push(e); }
-      // top and bottom: tangent planes of the layer's faces at the centre
-      { const L = Math.hypot(tgx, tgy, 1), nx = -tgx / L, ny = -tgy / L, nz = 1 / L, d = (tz - tgx * tc[0] - tgy * tc[1]) / L; clip(nx, ny, nz, d, KIND.TOP | pl.length << 4); pl.push([nx, ny, nz, d, KIND.TOP, 0]); }
-      const sink = k === 0 ? 0 : 1.3;
-      { const L = Math.hypot(bgx, bgy, 1), nx = bgx / L, ny = bgy / L, nz = -1 / L, d = (-(bz - bgx * cx - bgy * cy) + sink) / L; clip(nx, ny, nz, d, KIND.BOT | pl.length << 4); pl.push([nx, ny, nz, d, KIND.BOT, 0]); }
-      if (empty || nF < 4) continue;
-      { let za_ = 1e9, zb_ = -1e9; for (let v = 0; v < nV; v++) { if (vz[v] < za_) za_ = vz[v]; if (vz[v] > zb_) zb_ = vz[v]; } if (zb_ - za_ < 0.05) continue; }   // a cell of no thickness (the fuzzy top meets its bottom) is no stone
-      // volume (rough, from the bounding box of what is left) and a vertical sliver test
-      let x0 = 1e9, x1 = -1e9, ya = 1e9, yb = -1e9, za = 1e9, zb = -1e9;
-      for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
-      let topF = -1, botF = -1; const nbr = [];
-      for (let f = 0; f < nF; f++) { const kd = ft[f] & 15; if (kd === KIND.TOP) topF = f; else if (kd === KIND.BOT) botF = f; }
-      const pc = { id: pieces.length, s, k, kTop: kt, layer: k, snap: snap(), planes: pl, bb: [x0, x1, ya, yb, za, zb], ground: k === 0,
-        topPl: [tgx, tgy, tz - tgx * tc[0] - tgy * tc[1]], botPl: [bgx, bgy, bz - bgx * cx - bgy * cy], sink: k === 0 ? 0 : SINK, bgL: Math.hypot(bgx, bgy, 1), top: null, bot: null, sides: [], flare: [], B: null, rests: [], keeps: [], held: false, grp: -1 };
-      pc.tops = [];
-      for (let f = 0; f < nF; f++) { const kd = ft[f] & 15; if (kd === KIND.TOP) pc.tops.push({ poly: ccw(faceXYZ(f).map(p => [p[0], p[1]])), pl: pc.topPl, keeps: [] });
-        else if (kd === KIND.ENV) { const o = fo[f], m = fl[f], zt = H - s.sTop; let flat = true; for (let k_ = 0; k_ < m; k_++) if (Math.abs(vz[fv[o + k_]] - zt) > 1e-6) { flat = false; break; } if (flat) pc.tops.push({ poly: ccw(faceXYZ(f).map(p => [p[0], p[1]])), pl: [0, 0, zt], keeps: [] }); } }
-      if (topF >= 0) pc.top = ccw(faceXYZ(topF).map(p => [p[0], p[1]]));
-      if (botF >= 0) pc.bot = ccw(faceXYZ(botF).map(p => [p[0], p[1]]));
-      // side faces toward neighbours (for Fuse): which site, the face
-      pieces.push(pc); for (let l = k; l <= kt; l++) layerPieces[l].push(pc); s.pieces.push(pc);   /* listed in every layer it runs through; a stone above reads it once, at its top layer (one beside it, reaching higher, holds nothing) */
-    }
+  const FLATN = Math.cos(OVER * DEG);   /* a face is a top or a bottom when it faces up or down within the overhang angle of level */
+  const zOf = e => [-e[0] / e[2], -e[1] / e[2], e[3] / e[2]];   /* a plane n.X <= d as height z = a x + b y + c */
+  for (const s of sites) {
+    const k = s.i, kt = s.j - 1, [cx, cy] = siteAt(s, k), tc = siteAt(s, kt);
+    fitFace(k, cx, cy); const bz = fit[0], bgx = fit[1], bgy = fit[2]; fitFace(kt + 1, tc[0], tc[1]); const tz = fit[0], tgx = fit[1], tgy = fit[2];
+    if (tz - bz < 0.1) continue;
+    const pl = [];   // [nx,ny,nz,d,kind,aux]
+    for (const e of planesOfSpine(s)) pl.push([e[0], e[1], e[2], e[3], KIND.SIDE, e[4]]);
+    // the envelope: crisp ends, back and ground, fuzzy front and top
+    pl.push([1, 0, 0, hu, KIND.CRISP, -5], [-1, 0, 0, hu, KIND.CRISP, -5], [0, 1, 0, y1, KIND.CRISP, -5], [0, 0, -1, 0, KIND.CRISP, -4], [0, -1, 0, -(y0 + s.sFront), KIND.ENV, -3], [0, 0, 1, H - s.sTop, KIND.ENV, -2]);
+    // its two ends: the tangent planes of the layer faces it starts and stops on
+    pl.push([...plW(-tgx, -tgy, 1, tz - tgx * tc[0] - tgy * tc[1]), KIND.TOP, -1], [...plW(bgx, bgy, -1, -(bz - bgx * cx - bgy * cy)), KIND.TOP, -1]);
+    const cut = () => { initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4); for (let i = 0; i < pl.length && !empty; i++) { const e = pl[i]; clip(e[0], e[1], e[2], e[3], e[4] | i << 4); } return !empty && nF >= 4; };
+    if (!cut()) continue;
+    { let za_ = 1e9, zb_ = -1e9; for (let v = 0; v < nV; v++) { if (vz[v] < za_) za_ = vz[v]; if (vz[v] > zb_) zb_ = vz[v]; } if (zb_ - za_ < 0.05) continue; }   // a cell of no thickness is no stone
+    /* its bottom, by gravity: on the ground, the ground; else every plane it faces down on within the overhang angle (the highest of them is the bottom) */
+    let ground = false; const downs = [];
+    for (let f = 0; f < nF; f++) { const e = pl[ft[f] >> 4]; if (e[5] === -4) ground = true; else if (e[2] < -FLATN && !downs.includes(ft[f] >> 4)) downs.push(ft[f] >> 4); }
+    if (ground) pl.find(e => e[5] === -4)[4] = KIND.BOT;
+    else if (downs.length) for (const i of downs) pl[i][4] = KIND.BOT;
+    else { let zmin = 1e9; for (let v = 0; v < nV; v++) zmin = Math.min(zmin, vz[v]); pl.push([0, 0, -1, -(zmin + 0.3), KIND.BOT, -1]); }   /* a stone that comes down to an edge or a point gets a small flat bottom */
+    if (!cut()) continue;
+    let x0 = 1e9, x1 = -1e9, ya = 1e9, yb = -1e9, za = 1e9, zb = -1e9;
+    for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
+    const bots = pl.filter(e => e[4] === KIND.BOT).map(zOf), big = (() => { let best = 0, ba = -1; for (let f = 0; f < nF; f++) if ((ft[f] & 15) === KIND.BOT) { const a_ = faceArea({ verts: faceXYZ(f) }); if (a_ > ba) { ba = a_; best = pl.filter(e => e[4] === KIND.BOT).indexOf(pl[ft[f] >> 4]); } } return best; })();
+    const botPl = bots[big], botX = bots.filter((_, i) => i !== big);
+    const pc = { id: pieces.length, s, k, kTop: kt, layer: k, snap: snap(), planes: pl, bb: [x0, x1, ya, yb, za, zb], ground, botPl, botX0: botX, sink: ground ? 0 : SINK, bgL: Math.hypot(botPl[0], botPl[1], 1), top: null, bot: null, sides: [], flare: [], B: null, rests: [], keeps: [], held: false, grp: -1 };
+    pc.botX = botX; topsOf(pc); pc.bot = bottomOf();
+    pieces.push(pc); s.pieces.push(pc);
   }
+  /* what a piece's cell, as clipped now, offers a stone above: each face that faces up within the overhang angle, as its outline in plan and its plane as a height */
+  function topsOf(pc) {
+    pc.tops = []; const all = [];
+    for (let f = 0; f < nF; f++) { const e = pc.planes[ft[f] >> 4]; if (!e || e[2] <= FLATN) continue; const fx = faceXYZ(f); pc.tops.push({ poly: ccw(fx.map(p => [p[0], p[1]])), pl: zOf(e), keeps: [] }); for (const p of fx) all.push([p[0], p[1]]); }
+    pc.top = all.length >= 3 ? ccw(hull2(all)) : null;
+  }
+  /* the plan of a piece's bottom faces, as clipped now */
+  function bottomOf() { const all = []; for (let f = 0; f < nF; f++) if ((ft[f] & 15) === KIND.BOT) for (const p of faceXYZ(f)) all.push([p[0], p[1]]); return all.length >= 3 ? ccw(hull2(all)) : null; }
   lap('cells');
   // ---- Span and Fuse: one union-find over the sites. A site's pieces are one body (Span); neighbours whose cells share a face join with
   // the Fuse chance, one draw for each two (a stream of the pair's own)
@@ -963,8 +977,8 @@ function wall(seed, P, opt = {}) {
     // neighbours whose side face is real: the SIDE faces' planes by their aux
     restore(pc.snap);
     for (let f = 0; f < nF; f++) {
-      if ((ft[f] & 15) !== KIND.SIDE) continue;
-      const m = fl[f], best = ft[f] >> 4;
+      const best = ft[f] >> 4; if (!pc.planes[best] || pc.planes[best][5] < 0) continue;   /* a face on the plane to another spine */
+      const m = fl[f];
       const nb = pc.planes[best][5], fc = faceXYZ(f); let ar = 0; for (let k = 1; k + 1 < m; k++) { const a = fc[0], b = fc[k], c = fc[k + 1]; const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], wx = c[0] - a[0], wy = c[1] - a[1], wz = c[2] - a[2]; ar += Math.hypot(uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx) / 2; }
       if (ar < 0.3) continue;
       pc.sides.push({ nb, poly: fc });
@@ -997,48 +1011,47 @@ function wall(seed, P, opt = {}) {
     let g = 1e9; for (const r of rl) if (r.gmax < g && Math.abs(area2(r.full)) >= 0.4 && minW2(r.full) >= 0.8) g = r.gmax;
     if (g > 1e8) { for (const r of rl) if (r.gmax < g) g = r.gmax; }
     const D = g - 0.35; if (D <= 0.05) return false;
-    q.botPl[2] -= D;
+    q.botPl[2] -= D; if (q.botX) for (const b of q.botX) b[2] -= D;
     initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
     const pl = q.planes;
-    for (let i = 0; i < pl.length; i++) { const e = pl[i]; if (e[4] === KIND.BOT) { e[3] += D / q.bgL; } clip(e[0], e[1], e[2], e[3], e[4] | i << 4); }
+    for (let i = 0; i < pl.length; i++) { const e = pl[i]; if (e[4] === KIND.BOT) { e[3] -= D * e[2]; } clip(e[0], e[1], e[2], e[3], e[4] | i << 4); }
     if (empty || nF < 4) return false;
     let x0 = 1e9, x1 = -1e9, ya = 1e9, yb = -1e9, za = 1e9, zb = -1e9, botF = -1;
     for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
-    for (let f = 0; f < nF; f++) if ((ft[f] & 15) === KIND.BOT) botF = f;
-    if (botF < 0) return false;
-    q.bb = [x0, x1, ya, yb, za, zb]; q.bot = ccw(faceXYZ(botF).map(p => [p[0], p[1]])); q.snap = snap(); q.lowered = D; nLow++;
+    const bt = bottomOf(); if (!bt) return false;
+    q.bb = [x0, x1, ya, yb, za, zb]; q.bot = bt; q.snap = snap(); q.lowered = D; nLow++;
     return true;
   }
   function groundIt(q) {   // a stone near the plate that no holder reaches stands on the ground: its cell is made again with a flat bottom at zero
       initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
       for (let i = 0; i < q.planes.length; i++) { const e = q.planes[i]; if (e[4] === KIND.BOT) clip(0, 0, -1, 0, e[4] | i << 4); else clip(e[0], e[1], e[2], e[3], e[4] | i << 4); }
-      let bf_ = -1; for (let f = 0; f < nF; f++) if ((ft[f] & 15) === KIND.BOT) bf_ = f;
-      if (!empty && nF >= 4 && bf_ >= 0) { q.botPl = [0, 0, 0]; q.bgL = 1; q.sink = 0; q.bot = ccw(faceXYZ(bf_).map(p => [p[0], p[1]])); q.snap = snap(); q.ground = true; nGroundIt++; return true; }
+      const bt = !empty && nF >= 4 ? bottomOf() : null;
+      if (bt) { q.botPl = [0, 0, 0]; q.botX = []; q.bgL = 1; q.sink = 0; q.bot = bt; q.snap = snap(); q.ground = true; nGroundIt++; return true; }
       return false;
   }
   // a stone whose own bottom plane is tilted against every holder's top (a layer face at the wall's back or front, leaning with Bow or Sag) is laid parallel to
   // the nearest layer's largest holder top, 0.35 above it, and its cell made again: the stone then sits flush where its own plane could not reach any holder
   function relayBottom(q, rl) {
-    let r = null; for (const c of rl) { if (!r) { r = c; continue; } const lc = c.holder.kTop, lr = r.holder.kTop, ac = Math.abs(area2(c.full)), ar = Math.abs(area2(r.full)); if (lc > lr || (lc === lr && ac > ar)) r = c; }
+    let r = null; for (const c of rl) { if (!r) { r = c; continue; } const lc = c.holder.bb[5], lr = r.holder.bb[5], ac = Math.abs(area2(c.full)), ar = Math.abs(area2(r.full)); if (lc > lr || (lc === lr && ac > ar)) r = c; }
     if (!r) return false;
     const tp = r.t.pl, bx = tp[0], by = tp[1], b0 = tp[2] + 0.35, L = Math.hypot(bx, by, 1);
     const old = { botPl: q.botPl, bgL: q.bgL, bb: q.bb, bot: q.bot, snap: q.snap, ent: q.planes.map(e => e.slice()) };
     initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
     for (let i = 0; i < q.planes.length; i++) { const e = q.planes[i]; if (e[4] === KIND.BOT) { e[0] = bx / L; e[1] = by / L; e[2] = -1 / L; e[3] = (-b0 + 1.3) / L; } clip(e[0], e[1], e[2], e[3], e[4] | i << 4); }
-    let botF = -1; if (!empty && nF >= 4) for (let f = 0; f < nF; f++) if ((ft[f] & 15) === KIND.BOT) botF = f;
-    if (botF < 0) { q.planes.forEach((e, i) => { for (let j = 0; j < 4; j++) e[j] = old.ent[i][j]; }); return false; }
+    const bt = !empty && nF >= 4 ? bottomOf() : null;
+    if (!bt) { q.planes.forEach((e, i) => { for (let j = 0; j < 4; j++) e[j] = old.ent[i][j]; }); return false; }
     let x0 = 1e9, x1 = -1e9, ya = 1e9, yb = -1e9, za = 1e9, zb = -1e9;
     for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
-    q.botPl = [bx, by, b0]; q.bgL = L; q.bb = [x0, x1, ya, yb, za, zb]; q.bot = ccw(faceXYZ(botF).map(p => [p[0], p[1]])); q.snap = snap(); q.relaid = 1;
+    q.botPl = [bx, by, b0]; q.botX = []; q.bgL = L; q.bb = [x0, x1, ya, yb, za, zb]; q.bot = bt; q.snap = snap(); q.relaid = 1;
     return true;
   }
 function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       const pat = []; let qg = -1e9;
-      for (let kk = k - 1; kk >= lowK; kk--) for (const p of layerPieces[kk]) {
-        if (p.dead || p.kTop !== kk) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
+      for (const p of pieces) {   /* any stone already placed under it: the gap to its top decides */
+        if (p.dead || !p.done || p === q) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
         const glue = p.grp === q.grp;
         for (const t of p.tops) {
-          { const cx_ = (Math.max(a[0], b[0]) + Math.min(a[1], b[1])) / 2, cy_ = (Math.max(a[2], b[2]) + Math.min(a[3], b[3])) / 2, g_ = botN(q, cx_, cy_) - tz_(t.pl, cx_, cy_); if (g_ > GAPMAX + 0.3 || g_ < -1.2) { continue; } }
+          { const cx_ = (Math.max(a[0], b[0]) + Math.min(a[1], b[1])) / 2, cy_ = (Math.max(a[2], b[2]) + Math.min(a[3], b[3])) / 2, g_ = botN(q, cx_, cy_) - tz_(t.pl, cx_, cy_); if (g_ > GAPMAX + 0.3) { continue; } }   /* a stone sunk deep into it rests on it too */
           let top = ms === 1 ? t.shr : undefined;
           if (top === undefined) {
           top = t.poly;
@@ -1050,9 +1063,10 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
           if (ms === 1) t.shr = top;
           }
           if (!top) continue;
-          let ov = inter2(ccw(top), q.bot); if (!ov) { continue; }
+          let ov = inter2(ccw(top), q.bot); if (!ov || !under(t, ov, q, p)) { continue; }
           let gmin = 1e9, gmax = -1e9; for (const v of ov) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; if (g > gmax) gmax = g; }
-          if (gmax > GAPMAX || gmin < -0.8) {
+          if (gmax <= -0.8) { /* sunk into the holder over the whole overlap: it rests there */ }
+          else if (gmax > GAPMAX || gmin < -0.8) {
             // a top tilted against the bottom touches it only in part: the contact is the strip of the overlap where the gap is in reach
             const bp = q.botPl, ga = bp[0] - t.pl[0], gb = bp[1] - t.pl[1], gc = bp[2] - t.pl[2];
             let st = half(ov, ga, gb, GAPMAX - gc); if (st.length >= 3) st = half(st, -ga, -gb, 0.8 + gc); if (st.length < 3) continue;
@@ -1064,6 +1078,11 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
           continue;
         }
       }
+      /* a top with another holder's top over it, where it is, is hidden by that holder: the stone rests on the nearer one */
+      const inside2 = (P_, x, y) => { for (let i = 0, n = P_.length; i < n; i++) { const A = P_[i], B_ = P_[(i + 1) % n]; if ((B_[0] - A[0]) * (y - A[1]) - (B_[1] - A[1]) * (x - A[0]) < -1e-9) return false; } return true; };
+      if (pat.length > 1) { const cen = r => { let x = 0, y = 0; for (const v of r.full) { x += v[0]; y += v[1]; } return [x / r.full.length, y / r.full.length]; };
+        const hidden = pat.filter(r => { const c = cen(r), z = tz_(r.t.pl, c[0], c[1]); return pat.some(o => o !== r && o.holder !== r.holder && inside2(ccw(o.full), c[0], c[1]) && tz_(o.t.pl, c[0], c[1]) > z + 0.3); });
+        if (hidden.length) pat.splice(0, pat.length, ...pat.filter(r => !hidden.includes(r))); }
       // supports: each holder's overlap is inset by the bevel's width (what a bevel of either stone can take off its edges); an overlap too small
       // to keep MINSUP that way is shrunk about its centroid to MINSUP. Glue contacts (same body) keep their whole overlap
       if (pat.length) {
@@ -1083,24 +1102,34 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       }
     return pat;
   }
-  const LB = thin ? 1 : 3, FLM = 0.6, CAPT = 0.8, THICK = 0, SIDED = 0.4, MINBR = 5, GROUNDZ = 3.2, MAXTILT = 0.3;
+  const LB = 3, FLM = 0.6, CAPT = 0.8, THICK = 0, SIDED = 0.4, MINBR = 5, GROUNDZ = 3.2, MAXTILT = 0.3;
   const gsup = new Set(); let nMerge = 0, nFit = 0, nClear = 0, nJoinIn = 0;
   // a bottom is raised over a stone below only where it would pass into it more than CLEARZ over CLEARA or more (less is the overlap a sink makes)
   const CLEARZ = 0.3, CLEARA = 0.5, KEEPH = 1;
+  /* a top is under a stone when it lies below the stone's middle where they overlap (a neighbour beside it, its top as high as the stone's, is not) */
+  const topAt = (q, x, y) => { let z = Infinity; for (const t of q.tops) z = Math.min(z, tz_(t.pl, x, y)); return z === Infinity ? q.bb[5] : z; };   /* a convex stone's top: the lowest of its top planes */
+  /* p's top t is under stone q where they overlap (ov): it lies below q's middle there, and p itself lies below q's bottom there (its own middle under
+     it), so a stone beside q, however its top lies, is not under it */
+  /* a spine's height on the wall, lowest and highest end, whichever way it runs */
+  const spineZ = s => s.zr || (s.zr = (() => { const za = effG(s.i, s.x, s.y), zb = effG(s.j, s.x, s.y), a = toW(s.x + s.sx * (za - s.zd), s.y + s.sy * (za - s.zd), za)[2], b = toW(s.x + s.sx * (zb - s.zd), s.y + s.sy * (zb - s.zd), zb)[2]; return [Math.min(a, b), Math.max(a, b)]; })());
+  const under = (t, ov, q, p) => { let x = 0, y = 0; for (const v of ov) { x += v[0]; y += v[1]; } x /= ov.length; y /= ov.length; const qb = botN(q, x, y); return tz_(t.pl, x, y) < (qb + topAt(q, x, y)) / 2 && spineUnder(p, q); };
+  /* p can hold q only when p's spine ends below the middle of q's and starts below q's (0.6 mm or more): in Up that is a stone of the layers under it,
+     with spines that lie across it is a stone lower down; a holder that overlaps the stone deeply still holds it, a neighbour beside it never does */
+  const spineUnder = (p, q) => { const a = spineZ(p.s), b = spineZ(q.s); return a[1] < (b[0] + b[1]) / 2 && a[0] < b[0] - 0.6; };
   function pens(q, k) {   // the live stones below the bottom passes into (past CLEARZ, over CLEARA)
     const out = [];
-    for (let kk = k - 1; kk >= Math.max(0, k - 6); kk--) for (const p of layerPieces[kk]) {
-      if (p.dead || !p.tops || p.grp === q.grp || p.kTop !== kk) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
-      for (const t of p.tops) { const ov = inter2(ccw(t.poly), q.bot); if (!ov || Math.abs(area2(ov)) < CLEARA) continue; let gmin = 1e9; for (const v of ov) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; } if (gmin < -CLEARZ) { out.push(p); break; } }
+    for (const p of pieces) {
+      if (p.dead || !p.done || p === q || !p.tops || p.grp === q.grp) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
+      for (const t of p.tops) { const ov = inter2(ccw(t.poly), q.bot); if (!ov || Math.abs(area2(ov)) < CLEARA || !under(t, ov, q, p)) continue; let gmin = 1e9; for (const v of ov) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; } if (gmin < -CLEARZ) { out.push(p); break; } }
     }
     return out;
   }
   function clearBelow(q, k) {
     let added = false;
-    for (let kk = k - 1; kk >= Math.max(0, k - 6); kk--) for (const p of layerPieces[kk]) {
-      if (p.dead || !p.tops || p.grp === q.grp || p.kTop !== kk) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
+    for (const p of pieces) {
+      if (p.dead || !p.done || p === q || !p.tops || p.grp === q.grp) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
       for (const t of p.tops) {
-        const ov = inter2(ccw(t.poly), q.bot); if (!ov || Math.abs(area2(ov)) < CLEARA) continue;
+        const ov = inter2(ccw(t.poly), q.bot); if (!ov || Math.abs(area2(ov)) < CLEARA || !under(t, ov, q, p)) continue;
         let gmin = 1e9; for (const v of ov) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; }
         if (gmin < -CLEARZ) { q.botX.push(t.pl.slice()); added = true; nClear++; }
       }
@@ -1108,13 +1137,22 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     return added;
   }
   let nPatch = 0, noHold = 0, nPeel = 0, nLow = 0, nRaise = 0, nRebuild = 0, nSteep = 0, nGroundIt = 0;
-  for (let k = 0; k < N - 1; k++) for (const q of layerPieces[k]) {
-    if (q.k !== k) continue;   /* a piece through several layers is held once, at its bottom layer */
+  /* the stones are placed holders first, whichever way the spines run: a stone comes after every stone whose top lies under it (ties and loops by
+     height); each finds what holds it among those placed before it */
+  const placing = (() => {
+    const below = new Map(pieces.map(p => [p, []]));
+    for (const q of pieces) { if (!q.bot) continue; const b = q.bb; for (const p of pieces) { if (p === q) continue; const a = p.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2] || a[4] > b[5]) continue;
+      if (p.tops.some(t => { const ov = inter2(ccw(t.poly), q.bot); return ov && Math.abs(area2(ov)) > 0.03 && under(t, ov, q, p); })) below.get(q).push(p); } }
+    const out = [], left = new Set(pieces), byZ = pieces.slice().sort((a, b) => a.bb[4] - b.bb[4] || a.id - b.id);
+    while (left.size) { let nx = byZ.find(q => left.has(q) && below.get(q).every(p => !left.has(p))); if (!nx) nx = byZ.find(q => left.has(q)); out.push(nx); left.delete(nx); }
+    return out; })();
+  for (const q of placing) {
+    let thin; { const B_ = q.bot || [[(q.bb[0] + q.bb[1]) / 2, (q.bb[2] + q.bb[3]) / 2]]; let x = 0, y = 0; for (const v of B_) { x += v[0]; y += v[1]; } x /= B_.length; y /= B_.length; thin = topAt(q, x, y) - botN(q, x, y) < THIN; }   /* thin: thinner than THIN where it stands; it keeps every contact it can, whole */
+    const k = q.k; q.done = true;
     if (!q.bot) groundIt(q);
     if (!q.bot) { q.B = null; continue; }
     if (q.ground) { q.B = q.bot; q.held = true; q.onGround = true; q.Bpolys = [q.bot]; gsup.add(q.grp); continue; }
-    let pat = holdPat(q, k, GAPMAX, Math.max(0, k - LB));
-    if (!pat.length && LB < 3) pat = holdPat(q, k, GAPMAX, Math.max(0, k - 3));   // thin layers look one layer down first; a lower holder only when no nearer one exists
+    let pat = holdPat(q, k, GAPMAX, 0);
     let rl = [];
     if (!pat.length) { rl = holdPat(q, k, 12, Math.max(0, k - 6)); if (rl.length) { if (lowerBottom(q, rl)) pat = holdPat(q, k, 2.2, Math.max(0, k - 6)); else pat = holdPat(q, k, GAPMAX, Math.max(0, k - 6)); if (!pat.length) pat = holdPat(q, k, 2.2, Math.max(0, k - 6), 0.25); } }
     if (!pat.length && q.bb[4] < GROUNDZ && groundIt(q)) { q.B = q.bot; q.held = true; q.onGround = true; q.Bpolys = [q.bot]; gsup.add(q.grp); continue; }
@@ -1287,9 +1325,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       } else clipBot(q);
       if (!empty && nF >= 4) {
         q.snap = snap();
-        if (raised) { const zt = q.planes.find(e => e[4] === KIND.ENV && e[2] === 1)[3]; q.tops = [];
-          for (let f = 0; f < nF; f++) { const kd = ft[f] & 15; if (kd === KIND.TOP) q.tops.push({ poly: ccw(faceXYZ(f).map(p => [p[0], p[1]])), pl: q.topPl, keeps: [] });
-            else if (kd === KIND.ENV) { const o = fo[f], m = fl[f]; let flat = true; for (let k_ = 0; k_ < m; k_++) if (Math.abs(vz[fv[o + k_]] - zt) > 1e-6) { flat = false; break; } if (flat) q.tops.push({ poly: ccw(faceXYZ(f).map(p => [p[0], p[1]])), pl: [0, 0, zt], keeps: [] }); } } }
+        if (raised) topsOf(q);
       }
     }
     // the flare rises from the bottom's outline at FLARE_DEG degrees from upright
@@ -1332,7 +1368,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       const lostG = new Map(); for (const pc of pieces) if (!pc.dead && !seen.has(pc.grp)) (lostG.get(pc.grp) || lostG.set(pc.grp, []).get(pc.grp)).push(pc);
       for (const [g, ps] of lostG) {
         let best = null, bv = 0;
-        for (const q of ps) for (const p of pieces) { if (p.dead || p.grp === g || !seen.has(p.grp) || p.k > q.kTop + 1 || q.k > p.kTop + 1) continue; const a = p.bb, b = q.bb;
+        for (const q of ps) for (const p of pieces) { if (p.dead || p.grp === g || !seen.has(p.grp)) continue; const a = p.bb, b = q.bb;
           const ox = Math.min(a[1], b[1]) - Math.max(a[0], b[0]), oy = Math.min(a[3], b[3]) - Math.max(a[2], b[2]), oz = Math.min(a[5], b[5]) - Math.max(a[4], b[4]); if (ox < -0.05 || oy < -0.05 || oz < -0.05) continue;
           const v = (Math.max(ox, 0.05)) * (Math.max(oy, 0.05)) * (Math.max(oz, 0.05)); if (v > bv) { bv = v; best = p; } }
         if (best) { parent[find(ps[0].s.id)] = find(best.s.id); moved = true; nMerge++; for (const q of ps) q.merged = 1; }
@@ -1352,8 +1388,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   const footOf = pc => { const B = pc.B; if (!B || B.length < 3) return B; let cx = 0, cy = 0; for (const v of B) { cx += v[0]; cy += v[1]; } cx /= B.length; cy /= B.length;
     const W = BEV.hi;
     return B.map(v => { const dv = Math.hypot(v[0] - cx, v[1] - cy), k = Math.max(0.4, Math.min(0.85, 1 - W / Math.max(dv, 1e-9))); return [cx + (v[0] - cx) * k, cy + (v[1] - cy) * k]; }); };
-  const pieceAt = new Map(); for (const p of pieces) for (let l = p.k; l <= p.kTop; l++) pieceAt.set(l * 100000 + p.s.id, p.id);   // a layer's piece by its seed (a piece through several layers in each)
-  const pieceBeside = (pc, nb) => { for (let l = pc.k; l <= pc.kTop; l++) if (pieceAt.has(l * 100000 + nb)) return [pieceAt.get(l * 100000 + nb)]; return null; };
+  const pieceOfSite = new Map(pieces.map(p => [p.s.id, p.id])), pieceBeside = (pc, nb) => pieceOfSite.has(nb) ? [pieceOfSite.get(nb)] : null;   // a spine's piece
   for (const G of groups.values()) {
     // keep patches of the body: every piece's bottom, each rest patch it gives a stone above, glue faces of its sides
     const kp = [], kt = [], kw = []; for (const pc of G.pieces) { { const BK = pc.ground ? footOf(pc) : pc.Bkeep, on = pc.ground ? null : pc.rests.filter(r => !r.glue).map(r => r.holder.id); if (BK) for (const v of BK) { const z = botZ(pc, v[0], v[1]); kp.push(v[0], v[1], z); kt.push(pc.ground ? 8 : 1); kw.push(on); if (!pc.ground) { kp.push(v[0], v[1], z + KEEPH); kt.push(1); kw.push(on); } } } for (const t of pc.tops) for (const kk of t.keeps) for (const v of kk) { kp.push(v[0], v[1], v[2]); kt.push(2); kw.push(t.supBy || null); kp.push(v[0], v[1], v[2] - KEEPH); kt.push(2); kw.push(t.supBy || null); } }   /* a contact is kept as a solid KEEPH deep into each stone, so no cut leans in just past it */
@@ -1459,7 +1494,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     if (G.pieces.length < 2 || opt.cells || opt.join === false) continue;
     for (const pc of G.pieces) {
       for (const r of pc.rests) if (r.glue && r.t) { const L = Math.hypot(r.t.pl[0], r.t.pl[1], 1); joinerOf(G, r.holder, pc, [-r.t.pl[0] / L, -r.t.pl[1] / L, 1 / L], r.t.pl[2] / L); }   // on the piece under it
-      for (const e of pc.planes) if (e[4] === KIND.SIDE && find(e[5]) === G.id) { const o = G.pieces.find(q => q !== pc && q.k <= pc.kTop && pc.k <= q.kTop && q.s.id === e[5]); if (o && pc.id < o.id) joinerOf(G, pc, o, [e[0], e[1], e[2]], e[3]); }   // beside it, in its layer
+      for (const e of pc.planes) if (e[4] === KIND.SIDE && e[5] >= 0 && find(e[5]) === G.id) { const o = G.pieces.find(q => q !== pc && q.s.id === e[5]); if (o && pc.id < o.id) joinerOf(G, pc, o, [e[0], e[1], e[2]], e[3]); }   // beside it, in its layer
     }
   }
   for (const j of joiners) stones.push(j);
@@ -1473,124 +1508,11 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   let lost = deadPieces.length; for (const g of groups.keys()) if (!seen.has(g)) lost++;
   const tri = nTri, nfaces = nFace;
   const spines = new Float32Array(6 * sites.length);   // each site's spine, from its first layer face to its last (or the fuzzy top)
-  sites.forEach((s, q) => { const za = effG(s.i, s.x, s.y), zb = Math.min(H - s.sTop, effG(s.j, s.x, s.y)), o = 6 * q; spines.set([s.x + s.sx * (za - s.zd), s.y + s.sy * (za - s.zd), za, s.x + s.sx * (zb - s.zd), s.y + s.sy * (zb - s.zd), zb], o); });
+  sites.forEach((s, q) => { const za = effG(s.i, s.x, s.y), zb = effG(s.j, s.x, s.y); spines.set([...toW(s.x + s.sx * (za - s.zd), s.y + s.sy * (za - s.zd), za), ...toW(s.x + s.sx * (zb - s.zd), s.y + s.sy * (zb - s.zd), zb)], 6 * q); });
   const spineGrp = Int32Array.from(sites, s => { const pc = s.pieces.find(p => !p.dead); return pc ? pc.grp : find(s.id); });   /* each spine's body, for its colour */
-  return { W, H, D, y0, y1, stones, T, sites: sites.length, pieces: pieces.length, groups: groups.size, lost, dead: deadPieces.length, orphaned: nOrphan, fitted: nFit, cleared: nClear, joinedIn: nJoinIn, noHold, tri, spines, spineGrp, layers: { gnx, gny, GRX, GR, x0: -hu, y0, EG } };
+  return { W, H, D, y0, y1, stones, T, sites: sites.length, pieces: pieces.length, groups: groups.size, lost, dead: deadPieces.length, orphaned: nOrphan, fitted: nFit, cleared: nClear, joinedIn: nJoinIn, noHold, tri, spines, spineGrp, layers: { gnx, gny, GRX, GR, x0: u0, y0: v0, EG, O, eU, eV, eW } };
 }
 
-// ---------- Granite (direction 'through', one layer): one 2D power diagram on the back plane (x, z); each cell is a stone run through along y from the back to its own front.
-// A down-facing side of a cell is exactly a neighbour's up-facing side, so the holders are known before carving: a stone's holders are the neighbours across its steep-down sides.
-// A holder is made at least as deep as the stone it holds (its front no further back), so each such face has the holder's material under it over the face's whole depth range;
-// the holder's carving is given the held part of the face as keep points, so carving never removes what the face rests on.
-function clip3(poly, nx, ny, nz, d) {
-  const out = [], n = poly.length;
-  for (let i = 0; i < n; i++) {
-    const p = poly[i], q = poly[(i + 1) % n], dp = nx * p[0] + ny * p[1] + nz * p[2] - d, dq = nx * q[0] + ny * q[1] + nz * q[2] - d;
-    if (dp <= 1e-9) out.push(p);
-    if ((dp < -1e-9 && dq > 1e-9) || (dp > 1e-9 && dq < -1e-9)) { const t = dp / (dp - dq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t]); }
-  }
-  return out;
-}
-function graniteWall(seed, P, opt = {}) {
-  const T = {}, t0 = now(); let tm = t0; const lap = k => { const t = now(); T[k] = t - tm; tm = t; };
-  const W = 35 * P.squares, H = P.height[1], D = P.depth[1], y0 = 17.5 - D, y1 = 17.5, hu = W / 2, ym = (y0 + y1) / 2;
-  const fuzzFront = waves(stream(seed, 2)), FIELD = 2 / 3;
-  const short = (range, f, rf) => range[1] - lerp(range[0], range[1], clamp(0.5 + 0.5 * (FIELD * f + (1 - FIELD) * (2 * rf() - 1)), 0, 1));
-  const pw = 0.5 * (P.width[0] + P.width[1]), AB = 0.5 * (P.thickness[0] + P.thickness[1]) / pw;
-  // ---- sites: darts on the plane (x, z), clear of each other by Width along x and Thickness along z
-  const sites = [], rd = stream(seed, 1000);
-  { let fails = 0, guard = 0;
-    while (fails < 80 && sites.length < 300 && guard++ < 40000) {
-      const x = lerp(-hu + 1e-3, hu - 1e-3, rd()), z = lerp(1e-3, H - 1e-3, rd()), r = rd, id = sites.length;
-      const psi = lerp(P.wander[0], P.wander[1], r()) * DEG, phi = 2 * Math.PI * r(), tn = Math.tan(psi);
-      const w0 = lerp(P.width[0], P.width[1], r()), t0_ = lerp(P.thickness[0], P.thickness[1], r()), w1 = lerp(P.width[0], P.width[1], r()), t1_ = lerp(P.thickness[0], P.thickness[1], r());
-      const rr = (w0 + w1) / 4, a = (clamp(t0_ / w0, 0.1, 4) + clamp(t1_ / w1, 0.1, 4)) / 2;
-      let clear = true; for (const q of sites) { const dx = x - q.x, dz = (z - q.z) / q.a; if (dx * dx + dz * dz < (q.r + rr) * (q.r + rr)) { clear = false; break; } }
-      if (!clear) { fails++; continue; }
-      const rf = rd, sFront = short(P.depth, fuzzFront(x, z), rf);
-      sites.push({ id, x, z, sx: tn * Math.cos(phi), sz: tn * Math.sin(phi), r: rr, a, w: rr * rr, yf: y0 + sFront, yf0: y0 + sFront });
-      fails = 0;
-    } }
-  lap('sites');
-  // ---- cells: one power diagram in (x, z / AB); each cell extruded along y, sheared by Wander, each shared side moved out by half its Joint
-  const AZ = 1, n = sites.length, px = sites.map(s => s.x), pz = sites.map(s => s.z / AZ), ST = new Array(n).fill(null);
-  const NB2 = Math.pow(2.6 * P.width[1], 2) * Math.max(1, AZ * AZ);
-  for (let a = 0; a < n; a++) {
-    const s = sites[a]; initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
-    const pl = [], cand = [];
-    for (let b = 0; b < n; b++) if (b !== a) { const dx = px[b] - px[a], dz = pz[b] - pz[a], d2 = dx * dx + dz * dz; if (d2 <= NB2) cand.push([d2, b]); }
-    cand.sort((u, v) => u[0] - v[0]);
-    for (const [, b] of cand) {
-      const o_ = sites[b], jt = lerp(P.joint[0], P.joint[1], uh(Math.min(s.id, o_.id), Math.max(s.id, o_.id), seed));
-      const dx = px[b] - px[a], dz = pz[b] - pz[a], K = (px[b] * px[b] + pz[b] * pz[b]) - (px[a] * px[a] + pz[a] * pz[a]) + s.w - o_.w;
-      let n2x = dx, n2z = dz / AZ, c = K / 2; const l = Math.sqrt(n2x * n2x + n2z * n2z); n2x /= l; n2z /= l; c /= l; c -= jt / 2;
-      const sh = n2x * s.sx + n2z * s.sz, L = Math.sqrt(1 + sh * sh), nx = n2x / L, ny = -sh / L, nz = n2z / L, dv = (c - sh * ym) / L;
-      clip(nx, ny, nz, dv, KIND.SIDE | pl.length << 4); pl.push([nx, ny, nz, dv, KIND.SIDE, o_.id]);
-    }
-    for (const e of [[1, 0, 0, hu, KIND.CRISP], [-1, 0, 0, hu, KIND.CRISP], [0, 1, 0, y1, KIND.CRISP], [0, 0, 1, H, KIND.ENV], [0, 0, -1, 0, KIND.BOT]]) { clip(e[0], e[1], e[2], e[3], e[4] | pl.length << 4); pl.push(e); }
-    if (empty || nF < 4) continue;
-    const sides = []; let ground = 0;
-    for (let f = 0; f < nF; f++) {
-      const kd = ft[f] & 15, o_ = fo[f], m = fl[f], a0 = fv[o_]; let nx = 0, ny = 0, nz = 0;
-      for (let k = 1; k + 1 < m; k++) { const b = fv[o_ + k], c = fv[o_ + k + 1]; const ux = vx[b] - vx[a0], uy = vy[b] - vy[a0], uz = vz[b] - vz[a0], wx = vx[c] - vx[a0], wy = vy[c] - vy[a0], wz = vz[c] - vz[a0]; nx += uy * wz - uz * wy; ny += uz * wx - ux * wz; nz += ux * wy - uy * wx; }
-      const L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue;
-      if (kd === KIND.SIDE) sides.push({ nb: pl[ft[f] >> 4][5], nz: nz / L, area: L / 2 });
-      else if (kd === KIND.BOT) ground += L / 2;
-    }
-    ST[a] = { s, pl, snap0: snap(), sides, ground, kp: [], kw: [], holds: [], on: [], up: [] };
-  }
-  lap('cells');
-  // ---- holders: the neighbours across steep-down sides; each is made as deep as the stone it holds (fixed point of the minimum)
-  const STEEPDOWN = -0.7;
-  for (const q of ST) if (q) q.hold = [...new Set(q.sides.filter(sd => sd.nz < STEEPDOWN && sd.area >= 0.5 && ST[sd.nb]).map(sd => sd.nb))];
-  for (let it = 0, ch = true; ch && it < 200; it++) { ch = false; for (const q of ST) if (q) for (const b of q.hold) if (ST[b].s.yf > q.s.yf + 1e-9) { ST[b].s.yf = q.s.yf; ch = true; } }
-  lap('holders');
-  // ---- final cells: the front clipped; the planes kept for containment tests
-  for (const q of ST) if (q) {
-    restore(q.snap0); const pl = q.pl.slice(); clip(0, -1, 0, -q.s.yf, KIND.ENV | pl.length << 4); pl.push([0, -1, 0, -q.s.yf, KIND.ENV, 0]);
-    if (empty || nF < 4) { q.dead = true; continue; }
-    q.snap = snap(); q.pl = pl;
-    q.faces3 = []; for (let f = 0; f < nF; f++) { const kd = ft[f] & 15; if (kd !== KIND.SIDE) continue; const pf = faceXYZ(f); const pln = pl[ft[f] >> 4]; q.faces3.push({ poly: pf, nb: pln[5], nz: pln[2] }); }
-  }
-  // the keep points: where a stone's steep-down side lies inside its holder, that part of the side (a convex polygon) is kept by the holder's carving
-  let nHeld = 0, nFree = 0, areaHeld = 0, areaFree = 0;
-  for (const q of ST) if (q && !q.dead) for (const fc of q.faces3) {
-    if (fc.nz >= STEEPDOWN) continue; const B = ST[fc.nb]; if (!B || B.dead) continue;
-    let poly = fc.poly; for (const e of B.pl) { poly = clip3(poly, e[0], e[1], e[2], e[3] + 1e-6); if (poly.length < 3) break; }
-    if (poly.length >= 3) {   // the patch set back from its rim by the bevel's width (at most 0.4 of the way to its middle), so the joint's edges can still be bevelled
-      let cx = 0, cy = 0, cz = 0; for (const v of poly) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= poly.length; cy /= poly.length; cz /= poly.length;
-      let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (const f_ of B.faces3) for (const v of f_.poly) for (let k = 0; k < 3; k++) { if (v[k] < lo[k]) lo[k] = v[k]; if (v[k] > hi[k]) hi[k] = v[k]; }
-      let r = Infinity; for (const v of poly) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); const W = BEV.hi, sh = r > 1e-6 && W > 0 ? Math.min(W, 0.4 * r) / r : 0;
-      poly = poly.map(v => [cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)]);
-      B.holds.push(poly); for (const v of poly) { B.kp.push(v[0], v[1], v[2]); B.kw.push([q.s.id]); } if (!q.on.includes(B.s.id)) { q.on.push(B.s.id); B.up.push(q.s.id); } }
-  }
-  lap('keeps');
-  // ---- carving and emit
-  const stones = []; let nTri = 0, TC = 0;
-  for (const q of ST) if (q && !q.dead) {
-    restore(q.snap); const grd = q.ground >= 1;
-    const tc = now(); if (!opt.cells) { const nbs = q.sides.map(sd => ST[sd.nb]).filter(o => o && !o.dead); DX = { open: (x, y, z) => { for (const o of nbs) { let inn = true; for (const e of o.pl) if (e[0] * x + e[1] * y + e[2] * z > e[3]) { inn = false; break; } if (inn) return false; } return true; }, glued: () => false }; KPWHO = q.kw; CKEY = hash2(seed, 7700 + q.s.id); BEVW = BEV.hi; carveFast(q.kp, grd); BEVW = null; KPWHO = null; DX = null; } TC += now() - tc; if (empty) { q.dead = true; continue; }
-    const faces = [];
-    for (let f = 0; f < nF; f++) {
-      const o_ = fo[f], m = fl[f], a0 = fv[o_]; let nx = 0, ny = 0, nz = 0; const v = new Array(m);
-      for (let k = 0; k < m; k++) { const w = fv[o_ + k]; v[k] = [vx[w], vy[w], vz[w]]; }
-      for (let k = 1; k + 1 < m; k++) { const b = fv[o_ + k], c = fv[o_ + k + 1]; const ux = vx[b] - vx[a0], uy = vy[b] - vy[a0], uz = vz[b] - vz[a0], wx = vx[c] - vx[a0], wy = vy[c] - vy[a0], wz = vz[c] - vz[a0]; nx += uy * wz - uz * wy; ny += uz * wx - ux * wz; nz += ux * wy - uy * wx; }
-      const L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue; nTri += m - 2;
-      faces.push({ v, n: [nx / L, ny / L, nz / L], kind: ft[f] < 0 ? -1 : ft[f] & 15, area: L / 2 });
-    }
-    q.st = { on: q.on, up: q.up, edges: EROWS, holds: q.holds, Bpolys: [], Bfull: [], piece: q.s.id, grp: q.s.id, faces, layer: 0, held: true, onGround: grd, Bn: 0, Barea: 0, rests: [], restsGlue: [] };
-    stones.push(q.st);
-  }
-  lap('emit'); T.carve = TC; T.total = now() - t0;
-  // ---- the contact graph: a stone rests on the neighbour across any side that faces down (n.z < -0.2); a stone is grounded when it stands on the plate or rests on a grounded one
-  const seen = new Set(), queue = []; for (const q of ST) if (q && !q.dead && q.ground >= 1) { seen.add(q.s.id); queue.push(q.s.id); }
-  const up = new Map(); for (const q of ST) if (q && !q.dead) for (const sd of q.sides) if (sd.nz < -0.2 && sd.area >= 0.5 && ST[sd.nb] && !ST[sd.nb].dead) { (up.get(sd.nb) || up.set(sd.nb, []).get(sd.nb)).push(q.s.id); }
-  while (queue.length) { const b = queue.pop(); for (const a of up.get(b) || []) if (!seen.has(a)) { seen.add(a); queue.push(a); } }
-  let lost = 0; for (const q of ST) if (q && !q.dead && !seen.has(q.s.id)) lost++;
-  const spines = new Float32Array(6 * n);   // each site's spine, along y from the back to its stone's front
-  sites.forEach((s, q) => { const f = s.yf, dy1 = y1 - ym, dy2 = f - ym; spines.set([s.x + s.sx * dy1, y1, s.z + s.sz * dy1, s.x + s.sx * dy2, f, s.z + s.sz * dy2], 6 * q); });
-  return { W, H, D, y0, y1, stones, T, sites: n, pieces: stones.length, groups: stones.length, lost, noHold: 0, tri: nTri, spines, spineGrp: Int32Array.from(sites, s => s.id), layers: null };
-}
 // ---------- cracks ----------
 // The network is a table of convex boundary polygons in a fixed frame, made once for each Network, Spacing and Branching (each with its rank in the
 // order a crack would grow through them). A wall takes the table at a seeded offset; each stone traces the boundaries on its faces, takes its own share
@@ -2514,7 +2436,7 @@ const GROUPS = [
     R_('height', 'Height', 6, 80, 0.1, MM, 'How tall each stone reaches: drawn in this range, mostly from a smooth field along the wall, so neighbours stop at similar heights and the top wanders. The envelope is as tall as the high end.'),
     R_('depth', 'Depth', 4, 35, 0.5, MM, 'How far forward each stone reaches from the back of the square, drawn the same way, so the front wanders. The back is crisp.')] },
   { label: 'Structure', icon: () => dirIcon(state.direction), value: 'layers', items: [
-    { key: 'direction', label: 'Direction', choices: [['up', 'Up'], ['through', 'Through'], ['along', 'Along']], idleChoices: ['along'], icon: dirIcon, help: 'Which way the spines run: up (columns; with many layers, courses), through the wall back to front (stones show their ends), or along it (slabs: not built by the cells engine, which says so). Through is one layer, so Layers, Lean, Pitch, Sag, Bow, Span, Fuse and Order do not apply to it.' },
+    { key: 'direction', label: 'Direction', choices: [['up', 'Up'], ['through', 'Through'], ['along', 'Along']], icon: dirIcon, help: 'Which way the spines run: up (columns; with many layers, courses), through the wall from the back to the front (stones show their ends), or along it (slabs). Every direction is built the same way, only turned: the layers are cut across the spines, Width is across them along the wall (Along: front to back) and Thickness the other way across them.' },
     P_('layers', 'Layers', 1, 50, 1, '', 'How many layers the envelope is cut into across the direction; a spine starts and ends where layers meet (or at the envelope).'),
     R_('lean', 'Lean', -30, 30, 0.5, '°', 'How far each face between layers slopes along Width (along the wall for Up and Through, front to back for Along), drawn for each face. Where neighbouring faces cross, a layer pinches out.'),
     R_('pitch', 'Pitch', -30, 30, 0.5, '°', 'How far each face between layers slopes along Thickness (front to back for Up, vertically for Through and Along), drawn for each face.'),
@@ -2523,7 +2445,7 @@ const GROUPS = [
     P_('span', 'Span', 0, 100, 1, '%', 'The chance a spine joins the next layer along the Direction (runs on through it), drawn at each layer face it reaches: 0% every spine one layer, 100% through to the last; so breaks stagger.'),
     P_('fuse', 'Fuse', 0, 100, 1, '%', 'The chance two neighbouring spines in a layer join into one stone, drawn for each two from a stream of their own: 0% every spine its own stone, 100% each layer one stone.'),
     R_('wander', 'Wander', 0, 60, 1, '°', 'How far each spine turns from the direction, drawn for each spine.'),
-    R_('width', 'Width', 3, 30, 0.5, MM, 'The size of each spine end across the layer, horizontally: along the wall (Through, Up) or front to back (Along), drawn for each end. Neighbouring spines keep their ends’ sizes apart, and each stone grows until it meets the plane halfway to each neighbour, or the envelope (Through: a bigger end takes more of what it shares).'),
+    R_('width', 'Width', 3, 30, 0.5, MM, 'The size of each spine end across the layer, horizontally: along the wall (Through, Up) or front to back (Along), drawn for each end. Neighbouring spines keep their ends’ sizes apart, and each stone grows until it meets the plane halfway to each neighbour, or the envelope.'),
     R_('thickness', 'Thickness', 2, 30, 0.5, MM, 'The size of each spine end the other way across the layer: vertically (Through, Along) or front to back (Up), drawn for each end.'),
     P_('order', 'Order', 0, 100, 1, '%', 'How regularly spines are placed: 0% thrown at random, 100% on a grid (spaced by the middle of Width and the middle of Thickness), every other layer moved half a spacing so the joints alternate (a laid wall); between, the grid is jittered.'),
     R_('joint', 'Joint', -20, 3, 0.1, MM, 'Where two stones meet, drawn for each pair: each stops half of it short of the split: over zero a gap (separate stones), under zero they reach into each other. It changes each stone’s size; nothing moves. (A gap between two stones; a crack is a gap within one.)')] },
@@ -2651,7 +2573,7 @@ function extras(V, surf = null) {
   if (state.layersOn && V.layers) {
     const Y = V.layers, SX = 3, SY = 4, pos = [], lp = [];
     for (let i = 1; i < Y.EG.length - 1; i++) {
-      const g = Y.EG[i], at = (ix, iy) => [Y.x0 + ix * Y.GRX, Y.y0 + iy * Y.GR, g[iy * Y.gnx + ix]];
+      const g = Y.EG[i], at = (ix, iy) => { const u = Y.x0 + ix * Y.GRX, v = Y.y0 + iy * Y.GR, w = g[iy * Y.gnx + ix]; return [0, 1, 2].map(c => Y.O[c] + u * Y.eU[c] + v * Y.eV[c] + w * Y.eW[c]); };   /* the frame's (u, v, w) in the wall */
       for (let ix = 0; ix < Y.gnx - 1; ix += SX) for (let iy = 0; iy < Y.gny - 1; iy += SY) {
         const jx = Math.min(ix + SX, Y.gnx - 1), jy = Math.min(iy + SY, Y.gny - 1), q = [at(ix, iy), at(jx, iy), at(jx, jy), at(ix, jy)];
         pos.push(...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]);
@@ -2865,8 +2787,7 @@ const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return
 const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
 // a setting the cells engine does not read, always or with the settings as they are: shown red (the interface's error colour, not
 // overhang paint) so what is missing can be seen; it keeps its value
-const IDLE_ALWAYS = new Set([]), IDLE_THROUGH = new Set(['layers', 'lean', 'pitch', 'sag', 'bow', 'span', 'fuse', 'order']);
-const idle = p => !!p && (IDLE_ALWAYS.has(p.key) || (state.direction === 'through' && IDLE_THROUGH.has(p.key)) || (p.idleChoices || []).includes(state[p.key]));
+const idle = p => !!p && (p.idleChoices || []).includes(state[p.key]);
 // one setting's row in a popover: a box to type in, its slider and its help
 function row(p, box) {
   if (p.choices) {   // a choice: a button for each, and its help
