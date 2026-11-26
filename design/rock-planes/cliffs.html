@@ -1231,7 +1231,7 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
     if (!pat.length) { const rn = holdPat(q, 12, 1, 0); if (rn.length) { if (lowerBottom(q, rn)) pat = holdPat(q, 2.2, 1, 0); else pat = holdPat(q, GAPMAX, 1, 0); } }
     // the bottom: the supports' hull, every point of it resting or on a line between two resting points at most BRIDGE apart. Three or more
     // supports whose hull is not covered by the patches and the hulls of pairs within BRIDGE keep the best pair (or the largest patch) instead
-    const choose = () => {
+    const choose = (lay = true) => {
     if (!gsup.has(q.grp) && pat.some(r => r.glue) && pat.some(r => !r.glue)) pat = pat.filter(r => !r.glue);   // gl: a body that rests on nothing yet takes no glue patch (its own lower piece) when a real holder is there
     if (pat.some(r => !r.glue)) gsup.add(q.grp);
     // gk: a patch whose far corners lie past BRIDGE from another patch is trimmed to the disk of radius BRIDGE round each corner of the others, so the pair bridges
@@ -1290,11 +1290,13 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
       if (ok) { q.botPl = pls[0].slice(); q.bgL = Math.hypot(pls[0][0], pls[0][1], 1); q.botX = pls.slice(1).map(pl => pl.slice()); }
     }
     };
-    layFit();
+    if (lay) layFit();
     };
     choose();
     /* laying moves the bottom, so what touches it is found again against the laid bottom and the bottom laid again, until it stays (at most three times) */
-    for (let k = 0; k < 3; k++) { const b0 = q.botPl.slice(), again = holdPat(q, GAPMAX); if (!again.length) break; pat = again; choose(); if (Math.abs(q.botPl[0] - b0[0]) + Math.abs(q.botPl[1] - b0[1]) + Math.abs(q.botPl[2] - b0[2]) < 1e-4) break; }
+    let stays = false; for (let k = 0; k < 3 && !stays; k++) { const b0 = q.botPl.slice(), again = holdPat(q, GAPMAX); if (!again.length) { stays = true; break; } pat = again; choose(); stays = Math.abs(q.botPl[0] - b0[0]) + Math.abs(q.botPl[1] - b0[1]) + Math.abs(q.botPl[2] - b0[2]) < 1e-4; }
+    /* a bottom that keeps moving between two sets of holders (each plane reaches only the other's) is left where it is and rests on what it reaches there, so every patch it keeps is within reach of the bottom as laid */
+    if (!stays) { const there = holdPat(q, GAPMAX); if (there.length) { pat = there; choose(false); } }
     /* a laid bottom may pass into a stone below it that does not hold it: the stones print as one solid, so where they overlap nothing hangs */
     let polys = pat.map(r => r.poly);
     for (const r of pat) if (!r.glue) { (r.t.supPat || (r.t.supPat = [])).push(r.poly); (r.t.supBy || (r.t.supBy = [])).push(q.id); }
