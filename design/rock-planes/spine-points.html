@@ -7,15 +7,15 @@
 /* Layout: a bench. The 3D view is the page; its controls beside it on wide screens, below on narrow; the numbers under the view; what the modes mean last. */
 :root {
   --bg: #F3F4F1; --panel: #FFFFFF; --ink: #1E2421; --mute: #5D6762; --line: #D5DAD5;
-  --view: #E9ECE8; --stone: #8D978F; --accent: #1F6F78; --ring: #7B3FA6; --dot: #2B312E;
+  --view: #E9ECE8; --stone: #8D978F; --accent: #1F6F78; --ring: #7B3FA6; --dot: #2B312E; --void: #2F64D6;
   --display: 'Space Grotesk', 'Inter', system-ui, sans-serif; --body: 'Inter', system-ui, -apple-system, sans-serif; --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #161A18; --panel: #1F2421; --ink: #E7EBE7; --mute: #9BA59F; --line: #343B37;
-  --view: #121513; --stone: #8C978F; --accent: #4FB3BD; --ring: #C08AE6; --dot: #D7DDD8; color-scheme: dark } }
+  --view: #121513; --stone: #8C978F; --accent: #4FB3BD; --ring: #C08AE6; --dot: #D7DDD8; --void: #7EA8FF; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #161A18; --panel: #1F2421; --ink: #E7EBE7; --mute: #9BA59F; --line: #343B37;
-  --view: #121513; --stone: #8C978F; --accent: #4FB3BD; --ring: #C08AE6; --dot: #D7DDD8; color-scheme: dark }
+  --view: #121513; --stone: #8C978F; --accent: #4FB3BD; --ring: #C08AE6; --dot: #D7DDD8; --void: #7EA8FF; color-scheme: dark }
 html, body { background: var(--bg); color: var(--ink); }
 body { font-family: var(--body); font-size: 15px; line-height: 1.55; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
 .wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 24px; }
@@ -51,7 +51,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .btn { font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--ink); cursor: pointer; }
 .btn:hover, .seg button:hover:not([aria-pressed=true]) { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.only-spines { display: none; } body.spines .only-spines { display: grid; } body.spines .only-dots { display: none; } body.spines .legend .only-spines { display: inline-flex; }
+.explain { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 @media (max-width: 900px) { .explain { grid-template-columns: minmax(0, 1fr); } }
 .explain section { display: grid; gap: 8px; align-content: start; min-width: 0; }
 </style>
@@ -67,20 +68,26 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       <div id="view"><div id="busy"></div></div>
       <div class="legend">
         <span><i class="sw" style="background:var(--accent)"></i>the column's cells (one per level)</span>
-        <span><i class="sw" style="background:var(--ring)"></i>cells of the dots carried up with it</span>
+        <span class="only-dots"><i class="sw" style="background:var(--ring)"></i>cells of the dots carried up with it</span>
         <span><i class="sw" style="background:var(--stone);opacity:.5"></i>the cloud's other cells</span>
-        <span>● dots · ○ keep-away balls</span>
+        <span class="only-dots">● dots · ○ keep-away balls</span>
+        <span class="only-spines"><i class="sw" style="background:var(--void)"></i>space no stone claims · lines are the spines</span>
       </div>
       <div class="stats" id="stats"></div>
     </div>
 
     <div class="controls">
       <div class="ctl"><span class="lbl">Around the column</span>
-        <div class="seg" id="mode"><button data-v="col">Column dots only</button><button data-v="clone">Neighbours cloned up</button><button data-v="mirror">Mirrored, straight walls</button></div>
+        <div class="seg" id="mode"><button data-v="col">Column dots only</button><button data-v="clone">Neighbours cloned up</button><button data-v="mirror">Mirrored, straight walls</button><button data-v="spines">Spines, a plane per pair</button></div>
       </div>
+      <div class="ctl only-spines"><span class="lbl">The other spines</span>
+        <div class="seg" id="layout"><button data-v="masonry">Rows</button><button data-v="full">Full columns</button><button data-v="mixed">Stacked columns</button><button data-v="random">Random</button></div>
+      </div>
+      <div class="ctl only-spines"><label for="gap">End gap <output id="gap_o"></output></label><input id="gap" type="range" min="0.1" max="3" step="0.1"></div>
+      <div class="ctl only-spines"><label for="wobble">Ends off line, up to <output id="wobble_o"></output></label><input id="wobble" type="range" min="0" max="1.5" step="0.1"></div>
       <div class="ctl"><label for="N">Levels <output id="N_o"></output></label><input id="N" type="range" min="1" max="6" step="1"></div>
       <div class="ctl"><label for="dz">Level spacing <output id="dz_o"></output></label><input id="dz" type="range" min="4" max="12" step="0.5"></div>
-      <div class="ctl"><label for="r">Spacing of the cloud <output id="r_o"></output></label><input id="r" type="range" min="6" max="12" step="0.5"></div>
+      <div class="ctl"><label for="r">Spacing of the cloud or spines <output id="r_o"></output></label><input id="r" type="range" min="6" max="12" step="0.5"></div>
       <div class="ctl"><label for="lean">Lean, each level <output id="lean_o"></output></label><input id="lean" type="range" min="-4" max="4" step="0.5"></div>
       <div class="ctl"><label for="cut">Cut away above <output id="cut_o"></output></label><input id="cut" type="range" min="0" max="48" step="0.5"></div>
       <div class="ctl"><span class="lbl">Other cells</span>
@@ -88,9 +95,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       </div>
       <div class="ctl"><label for="op">Their opacity <output id="op_o"></output></label><input id="op" type="range" min="0" max="0.5" step="0.01"></div>
       <div class="checks">
-        <label><input type="checkbox" id="showDots" checked> Dots</label>
-        <label><input type="checkbox" id="showBalls"> Keep-away balls</label>
-        <label><input type="checkbox" id="showRing" checked> Cells of the carried dots</label>
+        <label><input type="checkbox" id="showDots" checked> Dots (or spines)</label>
+        <label class="only-dots"><input type="checkbox" id="showBalls"> Keep-away balls</label>
+        <label class="only-dots"><input type="checkbox" id="showRing" checked> Cells of the carried dots</label>
+        <label class="only-spines"><input type="checkbox" id="showVoids" checked> Empty space</label>
       </div>
       <button class="btn" id="reseed">New cloud</button>
     </div>
@@ -108,6 +116,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     <section>
       <h3>Mirrored, straight walls</h3>
       <p>The base dot's cell is cut at its own height, giving the column's outline P. For each edge of P, each column dot is mirrored across that edge's wall (upright, or along the lean), and one dot below and one above the column mirror it across its end faces. The column's cells then stack into one prism exactly, as long as the rest of the cloud keeps out of the balls through their corners.</p>
+    </section>
+    <section>
+      <h3>Spines, a plane per pair</h3>
+      <p>ChatGPT's rule, with no dots at all. Each stone is a segment, its spine. It is cut off flat at both of its spine's ends, and for every other spine it is cut by the plane halfway between the two spines' closest points. Every stone comes out convex and keeps its whole spine, but the planes are chosen pair by pair and don't agree with each other, and nothing grows past a spine's end, so some space belongs to no stone. That space is drawn in blue. The column is the teal spine, from the bottom of the lowest level to the top of the highest. Rows run along the wall; full columns run floor to top; stacked columns are shorter columns one above another with the end gap between them.</p>
     </section>
   </div>
 </div>
@@ -239,12 +251,75 @@ function measure(B, st) {
   colCells.forEach(C => C.faces.forEach(f => { if (f.src >= B.N) out.touching.add(f.src); }));
   return out;
 }
-if (typeof module !== 'undefined') module.exports = { build, measure, BOX };
+/* ---------- the fourth mode: stones from spines, one halving plane per pair (ChatGPT's spec). No dots, no power diagram. ---------- */
+const clampf = (x, a, b) => Math.max(a, Math.min(b, x));
+/* the closest points of two segments: the four end-to-segment cases and the interior one */
+function closestPts(A, B, C, D) {
+  const u = sub(B, A), v = sub(D, C), w = sub(A, C), a = dot(u, u), b = dot(u, v), c = dot(v, v), d = dot(u, w), e = dot(v, w);
+  const onSeg = (x, P, Q) => { const q = sub(Q, P); return add(P, mul(q, clampf(dot(sub(x, P), q) / dot(q, q), 0, 1))); };
+  const cand = [[A, onSeg(A, C, D)], [B, onSeg(B, C, D)], [onSeg(C, A, B), C], [onSeg(D, A, B), D]];
+  const den = a * c - b * b; if (den > 1e-12 * a * c) { const s = (b * e - c * d) / den, t = (a * e - b * d) / den; if (s >= 0 && s <= 1 && t >= 0 && t <= 1) cand.push([add(A, mul(u, s)), add(C, mul(v, t))]); }
+  let best = null, bd = Infinity; for (const [p, q] of cand) { const dd = dot(sub(q, p), sub(q, p)); if (dd < bd) { bd = dd; best = [p, q]; } } return best;
+}
+const segDist = (s, t) => { const [p, q] = closestPts(s[0], s[1], t[0], t[1]); return len(sub(q, p)); };
+/* the spines: the column (index 0) from the bottom of its lowest level to the top of its highest, then the layout's, each kept clear of the column by 2.5 mm and of the others by 0.1 mm (2.5 for random directions) */
+function spineLayout(st) {
+  const { N, dz, r, lean, seed, layout, gap, wobble } = st, [X, Y, Z] = BOX, R = rng(seed * 104729 + 3);
+  const z0 = Math.max(dz, Math.min(Z / 2 - (N - 1) * dz / 2, Z - dz * N)), s0 = [X / 2 - lean * (N - 1) / 2, Y / 2, z0], a = [lean / dz, 0, 1];
+  const col = [sub(s0, mul(a, dz / 2)), add(s0, mul(a, dz * (N - 0.5)))];
+  const sp = [col], wob = () => (R() - 0.5) * 2 * wobble;
+  const apart = layout === 'random' ? 2.5 : 0.1;   /* a row's or a stack's neighbours are only the end gap apart */
+  const tryAdd = (A, B) => { A = A.map((x, i) => clampf(x, 0.3, BOX[i] - 0.3)); B = B.map((x, i) => clampf(x, 0.3, BOX[i] - 0.3)); if (len(sub(B, A)) > 2 && sp.every((s, k) => segDist(s, [A, B]) > (k === 0 ? 2.5 : apart))) sp.push([A, B]); };
+  if (layout === 'masonry') {
+    for (let z = dz / 2; z < Z - 1; z += dz) for (let y = r / 2; y < Y - 1; y += r) {
+      let x = 0.4 + R() * 8; const zz = z + (R() - 0.5) * 1.5, yy = y + (R() - 0.5) * 2;
+      if (x > gap + 2) tryAdd([0.4, yy + wob(), zz + wob()], [x - gap, yy + wob(), zz + wob()]);
+      while (x < X - 1) { const e = Math.min(x + 10 + R() * 10, X - 0.4); tryAdd([x, yy + wob(), zz + wob()], [e, yy + wob(), zz + wob()]); x = e + gap; }
+    }
+  } else if (layout === 'random') {
+    const want = Math.round(X * Y * Z / (r * r * r * 1.6));
+    for (let k = 0; k < 20000 && sp.length < want + 1; k++) {
+      const l = 8 + R() * 12; let d = [R() * 2 - 1, R() * 2 - 1, R() * 2 - 1]; if (len(d) > 1) continue; d = unit(d); const h = mul(d, l / 2);
+      const c = [Math.abs(h[0]) + R() * (X - 2 * Math.abs(h[0])), Math.abs(h[1]) + R() * (Y - 2 * Math.abs(h[1])), Math.abs(h[2]) + R() * (Z - 2 * Math.abs(h[2]))];
+      tryAdd(sub(c, h), add(c, h));
+    }
+  } else {
+    for (let x = r / 2; x < X; x += r) for (let y = r / 2; y < Y; y += r) {
+      const px = x + (R() - 0.5) * r * 0.6, py = y + (R() - 0.5) * r * 0.6;
+      if (layout === 'full') tryAdd([px + wob(), py + wob(), 0.3], [px + wob(), py + wob(), Z - 0.3]);
+      else { let z = 0.3 + R() * 6; while (z < Z - 4) { const e = Math.min(z + 8 + R() * 22, Z - 0.3); tryAdd([px + wob(), py + wob(), z], [px + wob(), py + wob(), e]); z = e + gap; } }
+    }
+  }
+  return sp;
+}
+function buildSpines(st) {
+  const sp = spineLayout(st), [X, Y, Z] = BOX;
+  const cells = sp.map(([A, B], i) => {
+    const ax = unit(sub(B, A)); let C = boxCell();
+    C = clipCell(C, ax, dot(ax, B), -2); C = clipCell(C, mul(ax, -1), -dot(ax, A), -2);   /* the two end planes */
+    for (let j = 0; j < sp.length && C.faces.length; j++) {
+      if (j === i) continue; const [p, q] = closestPts(A, B, sp[j][0], sp[j][1]), n = unit(sub(q, p));
+      C = clipCell(C, n, dot(n, mul(add(p, q), 0.5)), j);   /* halfway between the closest points */
+    }
+    return C;
+  });
+  /* the empty space: a grid of points no stone claims */
+  const box = cells.map(C => { const v = verts(C); return v.length ? [0, 1, 2].map(k => [Math.min(...v.map(p => p[k])), Math.max(...v.map(p => p[k]))]) : null; });
+  const g = 1.25, voids = []; let n = 0, inner = 0, innerEmpty = 0;
+  for (let x = g / 2; x < X; x += g) for (let y = g / 2; y < Y; y += g) for (let z = g / 2; z < Z; z += g) {
+    const p = [x, y, z]; n++;
+    const own = cells.some((C, i) => box[i] && p.every((c, k) => c >= box[i][k][0] - 1e-6 && c <= box[i][k][1] + 1e-6) && inCell(C, p));
+    const deep = x > 4 && x < X - 4 && y > 4 && y < Y - 4 && z > 4 && z < Z - 4; if (deep) inner++;
+    if (!own) { voids.push(p); if (deep) innerEmpty++; }
+  }
+  return { spines: sp, cells, voids, empty: voids.length / n, emptyInner: innerEmpty / inner };
+}
+if (typeof module !== 'undefined') module.exports = { build, measure, buildSpines, BOX };
 </script>
 
 <script>
 'use strict';
-const S = { mode: 'mirror', N: 4, dz: 7, r: 8, lean: 0, seed: 7, cut: 48, others: 'touch', op: 0.1, showDots: true, showBalls: false, showRing: true };
+const S = { layout: 'masonry', gap: 0.5, wobble: 0, showVoids: true, mode: 'mirror', N: 4, dz: 7, r: 8, lean: 0, seed: 7, cut: 48, others: 'touch', op: 0.1, showDots: true, showBalls: false, showRing: true };
 const $ = id => document.getElementById(id), css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const view = $('view'), renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.localClippingEnabled = true; view.appendChild(renderer.domElement);
@@ -268,11 +343,44 @@ function cellMesh(C, color, opacity, edgeOp) {
 let pending = 0;
 function rebuild() {
   $('busy').textContent = 'Building…'; const my = ++pending;
-  setTimeout(() => { if (my !== pending) return; const t0 = performance.now(); last = build(S); last.m = measure(last, S); last.ms = performance.now() - t0; show(); $('busy').textContent = ''; }, 30);
+  setTimeout(() => { if (my !== pending) return; const t0 = performance.now(); if (S.mode === 'spines') { last = buildSpines(S); last.spinesMode = true; } else { last = build(S); last.m = measure(last, S); } last.ms = performance.now() - t0; show(); $('busy').textContent = ''; }, 30);
+}
+function showSpines() {
+  const B = last, cA = new THREE.Color(css('--accent')), cS = new THREE.Color(css('--stone')), cD = new THREE.Color(css('--dot')), cV = new THREE.Color(css('--void'));
+  const touching = new Set(); if (B.cells[0].faces.length) for (const f of B.cells[0].faces) if (f.src > 0 && B.cells[f.src].faces.some(g => g.src === 0)) touching.add(f.src);
+  B.cells.forEach((C, i) => {
+    if (!C.faces.length) return;
+    if (i === 0) group.add(cellMesh(C, cA, 0.72, 1));
+    else if (S.others === 'all' || (S.others === 'touch' && touching.has(i))) group.add(cellMesh(C, cS, S.op, Math.min(1, S.op * 3 + 0.08)));
+  });
+  if (S.showDots) {
+    const pos = [], posA = [];
+    B.spines.forEach(([a, b], i) => { if (i === 0) posA.push(...a, ...b); else if (S.others === 'all' || (S.others === 'touch' && touching.has(i)) || S.others === 'none') pos.push(...a, ...b); });
+    const line = (p, c, o) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: o, clippingPlanes: [cutPlane] })); };
+    group.add(line(pos, cD, 0.7));
+    const [a, b] = B.spines[0], d = new THREE.Vector3(...sub(b, a)), m = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, d.length(), 10), new THREE.MeshBasicMaterial({ color: cA, clippingPlanes: [cutPlane] }));
+    m.position.set(...mul(add(a, b), 0.5)); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); group.add(m);
+  }
+  if (S.showVoids && B.voids.length) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(B.voids.flat(), 3));
+    group.add(new THREE.Points(g, new THREE.PointsMaterial({ color: cV, size: 0.9, sizeAttenuation: true, transparent: true, opacity: 0.55, depthWrite: false, clippingPlanes: [cutPlane] })));
+  }
+  { const bx = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...BOX)), new THREE.LineBasicMaterial({ color: cS, transparent: true, opacity: 0.5 })); bx.position.copy(C0); group.add(bx); }
+  scene.add(group); draw();
+  const pc = x => (x * 100).toFixed(1) + '%';
+  $('stats').innerHTML = [
+    [pc(B.empty), 'of the box no stone claims'],
+    [pc(B.emptyInner), 'of the inside (4 mm in from the box) no stone claims'],
+    [String(B.spines.length), 'spines, the column included'],
+    [Math.round(volume(B.cells[0])) + ' mm³', 'the column\'s stone'],
+    [String(touching.size), 'stones touching the column'],
+    [Math.round(B.ms) + ' ms', 'to build'],
+  ].map(([v, t]) => `<div class="stat"><b>${v}</b><span>${t}</span></div>`).join('');
 }
 function show() {
   if (!last) return;
   if (group) { scene.remove(group); dispose(group); }
+  if (last.spinesMode) { group = new THREE.Group(); showSpines(); return; }
   group = new THREE.Group(); const B = last, M = B.m;
   const cA = new THREE.Color(css('--accent')), cR = new THREE.Color(css('--ring')), cS = new THREE.Color(css('--stone')), cD = new THREE.Color(css('--dot'));
   B.cells.forEach((C, i) => {
@@ -299,17 +407,19 @@ function show() {
   ].map(([v, t]) => `<div class="stat"><b>${v}</b><span>${t}</span></div>`).join('');
 }
 function syncUI() {
-  for (const id of ['N', 'dz', 'r', 'lean', 'cut', 'op']) $(id).value = S[id];
+  for (const id of ['N', 'dz', 'r', 'lean', 'cut', 'op', 'gap', 'wobble']) $(id).value = S[id];
+  $('gap_o').textContent = S.gap.toFixed(1) + ' mm'; $('wobble_o').textContent = S.wobble.toFixed(1) + ' mm'; document.body.classList.toggle('spines', S.mode === 'spines');
   $('N_o').textContent = S.N; $('dz_o').textContent = S.dz + ' mm'; $('r_o').textContent = S.r + ' mm'; $('lean_o').textContent = S.lean + ' mm'; $('cut_o').textContent = S.cut >= 48 ? 'nothing' : S.cut + ' mm'; $('op_o').textContent = Math.round(S.op * 100) + '%';
-  for (const [id, key] of [['mode', 'mode'], ['others', 'others']]) for (const b of $(id).children) b.setAttribute('aria-pressed', b.dataset.v === S[key]);
-  for (const id of ['showDots', 'showBalls', 'showRing']) $(id).checked = S[id];
+  for (const [id, key] of [['mode', 'mode'], ['others', 'others'], ['layout', 'layout']]) for (const b of $(id).children) b.setAttribute('aria-pressed', b.dataset.v === S[key]);
+  for (const id of ['showDots', 'showBalls', 'showRing', 'showVoids']) $(id).checked = S[id];
 }
-for (const id of ['N', 'dz', 'r', 'lean']) $(id).addEventListener('input', e => { S[id] = +e.target.value; syncUI(); rebuild(); });
+for (const id of ['N', 'dz', 'r', 'lean', 'gap', 'wobble']) $(id).addEventListener('input', e => { S[id] = +e.target.value; syncUI(); rebuild(); });
 $('cut').addEventListener('input', e => { S.cut = +e.target.value; cutPlane.constant = S.cut >= 48 ? 1e4 : S.cut; syncUI(); draw(); });
 $('op').addEventListener('input', e => { S.op = +e.target.value; syncUI(); show(); });
 $('mode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.mode = b.dataset.v; syncUI(); rebuild(); } });
+$('layout').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.layout = b.dataset.v; syncUI(); rebuild(); } });
 $('others').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.others = b.dataset.v; syncUI(); show(); } });
-for (const id of ['showDots', 'showBalls', 'showRing']) $(id).addEventListener('change', e => { S[id] = e.target.checked; show(); });
+for (const id of ['showDots', 'showBalls', 'showRing', 'showVoids']) $(id).addEventListener('change', e => { S[id] = e.target.checked; show(); });
 $('reseed').addEventListener('click', () => { S.seed = (S.seed * 31 + 7) % 100003; rebuild(); });
 new ResizeObserver(size).observe(view);
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', show);
