@@ -455,9 +455,20 @@ function inter2(P, Q) {   // both CCW convex
   return r.length >= 3 ? r : null;
 }
 /* how far a bottom held by two convex patches spans with nothing under it: every point of their hull off them lies on a segment from one to the
-   other no longer than the longer of the hull's two edges that run between them, so that edge is the span (the planner and the measure both ask this) */
+   other no longer than the longer of the hull's two edges that run between them, counting only the part of that edge off both patches (an edge
+   of the hull can run along a patch's own side), so that part is the span (the planner and the measure both ask this) */
 function bridgeSpan(A, B) { const H_ = hull2(A.map(v => [v[0], v[1], 0]).concat(B.map(v => [v[0], v[1], 1]))); let dm = 0;
-  for (let i = 0, n = H_.length; i < n; i++) { const u = H_[i], v = H_[(i + 1) % n]; if (u[2] !== v[2]) dm = Math.max(dm, Math.hypot(u[0] - v[0], u[1] - v[1])); } return dm; }
+  for (let i = 0, n = H_.length; i < n; i++) { const u = H_[i], v = H_[(i + 1) % n]; if (u[2] === v[2]) continue;
+    const L = Math.hypot(v[0] - u[0], v[1] - u[1]); if (L < 1e-9) continue;
+    const on = P_ => segIn(P_, u, v); dm = Math.max(dm, L * Math.max(0, 1 - on(A) - on(B))); }
+  return dm; }
+/* the share of the segment u-v that lies in the convex polygon P (either winding) */
+function segIn(P_, u, v) { const P = ccw(P_); let t0 = 0, t1 = 1; const dx = v[0] - u[0], dy = v[1] - u[1];
+  for (let i = 0, n = P.length; i < n; i++) { const a = P[i], b = P[(i + 1) % n], nx = b[1] - a[1], ny = a[0] - b[0];   /* outward normal of a ccw edge */
+    const num = nx * (a[0] - u[0]) + ny * (a[1] - u[1]), den = nx * dx + ny * dy, tol = 1e-6 * Math.hypot(nx, ny);
+    if (Math.abs(den) < 1e-12) { if (num < -tol) return 0; continue; }
+    const t = (num + tol) / den; if (den > 0) t1 = Math.min(t1, t); else t0 = Math.max(t0, t); if (t0 >= t1) return 0; }
+  return t1 - t0; }
 function minW2(poly) {   // the narrowest width of a convex polygon: the least, over its edges, of the farthest vertex from the edge's line
   let mw = 1e9; const n = poly.length; for (let i = 0; i < n; i++) { const A = poly[i], B = poly[(i + 1) % n], ex = B[0] - A[0], ey = B[1] - A[1], l = Math.hypot(ex, ey); if (l < 1e-9) continue; let mx = 0; for (const v of poly) { const d = Math.abs((v[0] - A[0]) * ey - (v[1] - A[1]) * ex) / l; if (d > mx) mx = d; } if (mx < mw) mw = mx; } return mw;
 }
