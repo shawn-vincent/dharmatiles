@@ -65,7 +65,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .sheet { position: fixed; left: 0; right: 0; bottom: 0; margin-inline: auto; z-index: 5; width: min(760px, 100%); max-height: 35%; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--panel) 74%, transparent); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); visibility: hidden; transform: translateY(100%); transition: transform .2s ease, visibility 0s .2s; }
 .sheet.open { visibility: visible; transform: none; transition: transform .2s ease; }
 .slides { display: flex; width: 300%; flex: 1 1 auto; min-height: 0; transition: transform .2s ease; }
-.pg { width: calc(100% / 3); overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.pg { width: calc(100% / 3); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }   /* a page: its header rows stay put, and only its body scrolls (an overscroll stays inside the body) */
+.pbody { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .shead { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 8px 12px 5px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .shead b { flex: 1; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .shead b .ic { color: var(--ink); }
@@ -270,12 +271,14 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
                 <button class="btn" id="scopy" title="Copy the settings code" aria-label="Copy the settings code"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
                 <button class="btn" id="sclose" title="Close" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg></button>
               </div>
+              <div class="pbody">
               <div id="srows"></div>
               <div class="codebox">
                 <span class="lbl">Code</span>
                 <input class="codefield" id="codefield" type="text" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Settings code: paste one and press Enter to load it">
                 <small class="codeerr" id="codeerr" role="alert"></small>
                 <div class="qr" id="qr" aria-label="The settings code as a QR code"></div>
+              </div>
               </div>
             </section>
             <section class="pg" id="pgGroup"></section>
@@ -3306,7 +3309,7 @@ function slider(p, get, put, opts = {}) {
 /* The mosaic button is a colour mosaic of the settings code with the camera (see MOSAIC; the page's screenshots are read by it) and opens a bottom sheet over the view (inside it, so it works full screen). The sheet's top level is a row for each
    group, then the code with the camera as text to copy, paste into or edit, and as a large QR. The pages are a stack three deep: a row opens its group's page (a line for each setting, its label button and its control), a line's button
    opens the setting's page; Back and Escape go back one, Close and a tap outside close the sheet */
-const sheetEl = $('sheet'), slides = $('slides'), pgTop = $('pgTop'), pgGroup = $('pgGroup'), pgProp = $('pgProp'), rowsEl = $('srows'), codeBtn = $('code'), field = $('codefield'), codeErr = $('codeerr'), said = $('said');
+const sheetEl = $('sheet'), slides = $('slides'), pgTop = $('pgTop'), pgGroup = $('pgGroup'), pgProp = $('pgProp'), groupBody = Object.assign(document.createElement('div'), { className: 'pbody' }), propBody = Object.assign(document.createElement('div'), { className: 'pbody' }), rowsEl = $('srows'), codeBtn = $('code'), field = $('codefield'), codeErr = $('codeerr'), said = $('said');
 const plain = (p, v) => p.range ? isU(p) ? rangeAmount(p, v) : rangeText(v) + (p.unit || '') : p.choices ? p.choices.find(c => c[0] === v)[1] : v + (p.unit || '');
 const summary = g => plain(g.items.find(p => p.key === g.value), state[g.value]) + (g.note ? g.note() : '');
 /* a QR of text in alphanumeric mode, the smallest version that fits, at error correction M unless that costs more than one version over L */
@@ -3423,16 +3426,16 @@ function showDepth() {
 }
 function openPage(g) {
   stack.length = 0; stack.push(g); propPaint = null; pageSync = null;
-  if (!g.page) { if (!cached.has(g)) cached.set(g, [backHead(g.label, g.icon()), PAGES.rows(g)]); pgGroup.replaceChildren(...cached.get(g)); }
-  else pgGroup.replaceChildren(backHead(g.label, g.icon()), PAGES[g.page](g));
-  pgGroup.scrollTop = 0; showDepth(); repaint(); stripSync();
+  if (!g.page) { if (!cached.has(g)) cached.set(g, [backHead(g.label, g.icon()), PAGES.rows(g)]); const [h, b] = cached.get(g); groupBody.replaceChildren(b); pgGroup.replaceChildren(h, groupBody); }
+  else { groupBody.replaceChildren(PAGES[g.page](g)); pgGroup.replaceChildren(backHead(g.label, g.icon()), groupBody); }
+  groupBody.scrollTop = 0; showDepth(); repaint(); stripSync();
 }
 /* a setting's page: its control (the same builder as on its line), its ends and its help; one page, made again for each setting */
 function openProp(g, p) {
   const c = control(p, { dim: true }), body = div('pprop'), e = propEnds(p), t = p.choices || p.bool ? null : typed(p);
   if (t) body.append(t.el); body.append(c.el); if (e) body.append(e); body.append(help(p));
-  pgProp.classList.remove('stone'); pgProp.replaceChildren(backHead(p.label), body); propPaint = () => { c.paint(); if (t) t.paint(); }; propPaint();
-  stack.push(p); pgProp.scrollTop = 0; showDepth();
+  pgProp.classList.remove('stone'); propBody.replaceChildren(body); pgProp.replaceChildren(backHead(p.label), propBody); propPaint = () => { c.paint(); if (t) t.paint(); }; propPaint();
+  stack.push(p); propBody.scrollTop = 0; showDepth();
 }
 function back() { if (!stack.length) return; const top = stack.pop(); if (stack.length < 2) propPaint = null; if (!stack.length) pageSync = null; showDepth(); stripSync(); if (top === STONE) markStone(null); }
 function openSheet() { if (viewOpen()) showPanel(false); if (SEL && !stack.length) enterStone(); sheetEl.inert = false; sheetEl.classList.add('open'); codeBtn.setAttribute('aria-expanded', 'true'); shownField = ''; fieldSync(); repaint(); stripSync(); }
@@ -3473,7 +3476,7 @@ function filterParts() {
 }
 function paintParts() {
   if (!partsLive() || !shown || !shown.surf.stoneRel) return;
-  const P = partsOf(shown.surf), top = pgGroup.scrollTop - plist.offsetTop, h = pgGroup.clientHeight || 300;
+  const P = partsOf(shown.surf), top = groupBody.scrollTop - plist.offsetTop, h = groupBody.clientHeight || 300;
   const a = Math.max(0, Math.floor(top / ROW) - PBUF), b = Math.min(pFilter.length, Math.ceil((top + h) / ROW) + PBUF);
   if (a === pFirst && b === pLast) return; pFirst = a; pLast = b;
   let html = '';
@@ -3483,12 +3486,12 @@ function paintParts() {
   }
   plist.innerHTML = html + (pFilter.length ? '' : '<div class="pnone">No parts match.</div>');
 }
-pbox.addEventListener('input', () => { pQuery = pbox.value; pgGroup.scrollTop = 0; filterParts(); });
+pbox.addEventListener('input', () => { pQuery = pbox.value; groupBody.scrollTop = 0; filterParts(); });
 pbox.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') pbox.blur(); });
-pgGroup.addEventListener('scroll', () => paintParts(), { passive: true });
+groupBody.addEventListener('scroll', () => paintParts(), { passive: true });
 plist.addEventListener('click', e => { const b = e.target.closest('.prow'); if (b) selectStone(+b.dataset.stone); });
 function openPartsPage() {
-  if (pgGroup.firstChild !== partsHead) { pgGroup.replaceChildren(partsHead, partsTools, plist); pFirst = -1; }
+  if (pgGroup.firstChild !== partsHead) { groupBody.replaceChildren(plist); pgGroup.replaceChildren(partsHead, partsTools, groupBody); pFirst = -1; }
   filterParts();
 }
 function openParts() { stack.length = 0; stack.push(PARTS); propPaint = null; pageSync = null; openPartsPage(); showDepth(); repaint(); stripSync(); }
@@ -3503,7 +3506,7 @@ function stonePage() {
   const body = div('sp');
   body.innerHTML = ln('Body', g) + ln('Layer', l >= 0 ? l : '') + ln('Fused with', mates) + ln('Size', b.length ? `${d[0]} long, ${d[1]} deep, ${d[2]} tall (mm)` : '') + ln('Rests on', stoneLinks(on)) + ln('Holds up', stoneLinks(up))
     + (SEL.edge ? `<div class="edge">${edgeWords(SEL.edge)}</div>` : '<small class="note">Tap nearer an edge of the stone for its report.</small>');
-  pgProp.replaceChildren(backHead(`Stone ${i}`), body); pgProp.scrollTop = 0;
+  propBody.replaceChildren(body); pgProp.replaceChildren(backHead(`Stone ${i}`), propBody); propBody.scrollTop = 0;
   /* the stone's debug colour (its colour in the Rocks view, whatever the view) is the page's motif: its header is that colour, with ink that reads on it, and a band of it runs down the page */
   const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
   pgProp.classList.add('stone'); pgProp.style.setProperty('--part', `rgb(${c.join(',')})`); pgProp.style.setProperty('--part-ink', lum > 0.55 ? '#14201A' : '#F5FBF8');
@@ -3513,7 +3516,7 @@ pgProp.addEventListener('click', e => { const a = e.target.closest('a.slink'); i
 function enterStone() {
   stack.length = 0; stack.push(PARTS, STONE); propPaint = null; pageSync = null; openPartsPage(); stonePage(); showDepth();
   const r = pFilter.indexOf(partsOf(shown.surf).pos.get(stoneIdx()));
-  if (r >= 0 && (r * ROW < pgGroup.scrollTop - plist.offsetTop || (r + 1) * ROW > pgGroup.scrollTop - plist.offsetTop + pgGroup.clientHeight)) { pgGroup.scrollTop = Math.max(0, plist.offsetTop + r * ROW - pgGroup.clientHeight / 2); paintParts(); }
+  if (r >= 0 && (r * ROW < groupBody.scrollTop - plist.offsetTop || (r + 1) * ROW > groupBody.scrollTop - plist.offsetTop + groupBody.clientHeight)) { groupBody.scrollTop = Math.max(0, plist.offsetTop + r * ROW - groupBody.clientHeight / 2); paintParts(); }
 }
 function selectStone(i, edge) {
   markStone(i, edge);
@@ -3589,7 +3592,7 @@ for (const el of sheets) {
   });
   el.addEventListener('touchmove', e => {
     if (e.target.closest('.slider, .sgrip, .shead')) { e.preventDefault(); return; }
-    const sc = e.target.closest('.sstrip, .pg, .sbody');
+    const sc = e.target.closest('.sstrip, .pbody, .sbody');
     if (!sc || sc.scrollHeight <= sc.clientHeight && sc.scrollWidth <= sc.clientWidth) e.preventDefault();
   }, { passive: false });
 }
