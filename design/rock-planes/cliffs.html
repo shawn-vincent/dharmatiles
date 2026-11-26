@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: one working bench. The viewer on the plate, under it a strip of neighbouring seeds, and how it is built reads below. Tokens are the dharmatiles visual system's (Lichen & Linen by day, Moonpool at night). */
+/* Layout: one working bench. The viewer on the plate, under it the numbers, and how it is built reads below. Tokens are the dharmatiles visual system's (Lichen & Linen by day, Moonpool at night). */
 :root {
   --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
   --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
@@ -96,6 +96,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pctl { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .pctl > .ctl { flex: 1 1 0; min-width: 0; }
 .pval { flex: none; width: 78px; text-align: right; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }   /* one width on every line, so the sliders line up */
+/* a range's top row ends with its two dots; the low row keeps their room unseen, so the numbers stand in one column */
 .pval .gh { visibility: hidden; font-style: normal; }   /* the decimal place of a whole value: its room kept, so the digits stay where they are, and nothing shown */
 .pval.r2 { display: flex; flex-direction: column; justify-content: center; font-size: 10.5px; line-height: 12px; }   /* a range: low end over high end */
 .slider .tick { position: absolute; top: 24px; width: 1px; height: 5px; margin-left: -0.5px; background: var(--muted); pointer-events: none; }
@@ -154,15 +155,11 @@ body.vmax { overflow: hidden; }
 .legend { position: absolute; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font-size: 12px; max-width: calc(100% - 20px); }
 .legend[hidden] { display: none; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
-.carousel { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; align-items: start; }
-.carousel .arrow { align-self: stretch; height: auto; aspect-ratio: auto; padding: 0 6px; margin-bottom: 26px; font-size: 16px; }
-.strip { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
-.item { display: grid; gap: 4px; justify-items: center; min-width: 0; }
+.sstrip { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 6px; scroll-snap-type: x proximity; }
+.item { display: grid; gap: 4px; justify-items: center; min-width: 0; flex: 0 0 max(64px, calc((100% - 36px) / 7)); scroll-snap-align: center; }
 .num { height: 22px; min-width: 44px; padding: 0 6px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--muted); font: 600 12px var(--f-code); font-variant-numeric: tabular-nums; cursor: pointer; }
 .num:hover { color: var(--ink); }
-.item[aria-current="true"] .num { color: var(--accent); border-color: var(--line-2); background: var(--raised); cursor: text; }
-.item[aria-current="true"] .num:hover { border-color: var(--accent); }
-.numedit { width: 64px; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 600 12px var(--f-code); text-align: center; }
+.item[aria-current="true"] .num { color: var(--accent); border-color: var(--line-2); background: var(--raised); }
 .thumb { position: relative; width: 100%; border: 1px solid var(--line); border-radius: var(--r); background: var(--plate); padding: 0; cursor: pointer; aspect-ratio: 1; max-width: 100%; overflow: hidden; }
 .thumb canvas { width: 100%; height: 100%; display: block; }
 .item[aria-current="true"] .thumb { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -216,8 +213,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 @media (max-width: 860px) {
   .main { grid-template-columns: minmax(0, 1fr); }
   .viewer { height: 380px; }
-  .strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .strip .item:nth-child(1), .strip .item:nth-child(7), .strip .item:nth-child(8) { display: none; }   /* five on a phone: two each side */
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -289,11 +284,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
           </div>
           </div>
         </div>
-      </div>
-      <div class="carousel" role="group" aria-label="Seeds">
-        <button class="btn arrow" id="prev" aria-label="Previous seed">&#8592;</button>
-        <div class="strip" id="strip"></div>
-        <button class="btn arrow" id="next" aria-label="Next seed">&#8594;</button>
       </div>
       <p class="err" id="err" hidden></p>
       <dl class="stats" id="stats"></dl>
@@ -2472,7 +2462,7 @@ function showValue(out, input, unit) {
 }
 const MM = '&nbsp;mm';
 const STICK = 6;   /* px */
-const SQUARE = { word: 'square', mm: 35 };   /* a setting's square (its own property, square; its unit stays the suffix):  a value that is a whole number of them is written in them ("2 squares"), else in mm; its slider has ticks at their multiples that hold the handles */
+const SQUARE = { word: 'sq', mm: 35 };   /* a setting's square (its own property, square; its unit stays the suffix):  a value that is a whole number of them is written in them ("2 sq"), else in mm; its slider has ticks at their multiples that hold the handles */
 // the settings' icons (each also heads its page in the sheet)
 const svg = (body, cls = '', vb = '0 0 24 24') => `<svg class="ic ${cls}" viewBox="${vb}" aria-hidden="true">${body}</svg>`;
 const ICON = {
@@ -2999,37 +2989,37 @@ function showStats(V, surf, ms) {
 }
 
 // neighbouring seeds
-const strip = $('strip'), thumbs = [];
-// a carousel of seeds around the chosen one: a click on a picture or its number chooses it; a click on the chosen one's number
-// turns it into a box to type any seed in (Enter or leaving it chooses, Escape puts it back)
-for (let i = 0; i < 8; i++) {
-  const item = document.createElement('div'); item.className = 'item';
-  const b = document.createElement('button'); b.className = 'thumb';
-  const cv = document.createElement('canvas'); cv.width = 280; cv.height = 280; b.append(cv);
-  const s = document.createElement('button'); s.className = 'num';
-  item.append(b, s); strip.append(item);
-  const t = { item, b, cv, s, ctx: cv.getContext('2d') };
-  b.addEventListener('click', () => setSeed(+item.dataset.seed));
-  s.addEventListener('click', () => { if (+item.dataset.seed === state.seed) editSeed(t); else setSeed(+item.dataset.seed); });
-  thumbs.push(t);
+/* the strip of neighbouring seeds lives in the Seed page: built when the page is made, drawn only while that page is open */
+let thumbs = [], seedStrip = null;
+const THUMBS = 9;
+function makeStrip() {
+  const strip = div('sstrip'); strip.setAttribute('role', 'group'); strip.setAttribute('aria-label', 'Neighbouring seeds'); thumbs = [];
+  for (let i = 0; i < THUMBS; i++) {
+    const item = document.createElement('div'); item.className = 'item';
+    const b = document.createElement('button'); b.className = 'thumb';
+    const cv = document.createElement('canvas'); cv.width = 280; cv.height = 280; b.append(cv);
+    const s = document.createElement('button'); s.className = 'num';
+    item.append(b, s); strip.append(item);
+    const t = { item, b, cv, s, ctx: cv.getContext('2d') };
+    for (const el of [b, s]) el.addEventListener('click', () => setSeed(+item.dataset.seed));
+    thumbs.push(t);
+  }
+  seedStrip = strip; thumbKey = '';
+  return strip;
 }
-function editSeed(t) {
-  const box = document.createElement('input');
-  Object.assign(box, { type: 'number', inputmode: 'numeric', min: 0, step: 1, value: state.seed, className: 'numedit' }); box.setAttribute('aria-label', 'Seed');
-  t.s.replaceWith(box); box.focus(); box.select();
-  let done = false;
-  const finish = keep => { if (done) return; done = true; box.replaceWith(t.s); const v = parseInt(box.value, 10); if (keep && Number.isFinite(v) && v !== state.seed) setSeed(v); else t.s.focus(); };
-  box.addEventListener('keydown', e => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); e.stopPropagation(); });
-  box.addEventListener('blur', () => finish(true));
-}
+/* the strip is live while the Seed page is the page shown on an open sheet */
+const stripLive = () => !!seedStrip && seedStrip.isConnected && stack.length === 1 && stack[0].page === 'seed' && sheetEl.classList.contains('open');
+/* the page opens or closes: the thumbnails are drawn at once, or any still being drawn are dropped */
+function stripSync() { if (stripLive()) { thumbKey = ''; rebuildThumbs(); } else { thumbJob++; thumbKey = ''; } }
 // the neighbours are drawn as their masses (quick), one per frame, nearest first
 let thumbJob = 0;
 let thumbKey = '';
 function rebuildThumbs() {
+  if (!stripLive()) return;
   // the strip shows masses: redrawn only when what they are made from, the seed or the view changes
   const tk = [state.seed, state.view, state.lines, ...ENGINE_KEYS.map(k => state[k]), camera.position.toArray().map(x => x.toFixed(2))].join('/');
   if (tk === thumbKey) return; thumbKey = tk;
-  const job = ++thumbJob, start = Math.max(0, state.seed - 3);
+  const job = ++thumbJob, start = Math.max(0, state.seed - 4);
   const cam = state.view === 'ortho' ? thumbOrtho : thumbPersp, f = focus(), reach = reachOf() * 0.95;
   const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
   cam.position.copy(dir.multiplyScalar(reach)).add(f); cam.lookAt(f);
@@ -3040,7 +3030,9 @@ function rebuildThumbs() {
     t.item.dataset.seed = seed; t.s.textContent = seed; t.item.setAttribute('aria-current', on ? 'true' : 'false');
     t.b.setAttribute('aria-label', 'Seed ' + seed); t.s.setAttribute('aria-label', on ? 'Seed ' + seed + ', click to type a seed' : 'Seed ' + seed);
   });
+  centreStrip();
   const draw = (i, surf) => {
+    if (job !== thumbJob) return;
     const t = thumbs[i], g = meshOfBuf(surf, state.lines);
     thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
     t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
@@ -3060,19 +3052,20 @@ function rebuildThumbs() {
   };
   requestAnimationFrame(next);
 }
+function centreStrip() { const c = thumbs.find(t => +t.item.dataset.seed === state.seed); if (c) seedStrip.scrollTo({ left: c.item.offsetLeft - (seedStrip.clientWidth - c.item.offsetWidth) / 2, behavior: 'auto' }); }
 
 // controls
-/* a setting with a square ({ word, mm }; its unit stays the suffix, mm) writes a value that is a whole number of them in them ("1 square", "2 squares"), any other in mm ("80 mm"), each end of a range on its own; sp is what stands between a number and its word */
+/* a setting with a square ({ word, mm }; its unit stays the suffix, mm) writes a value that is a whole number of them in them ("1 sq", "2 sq"), any other in mm ("80 mm"), each end of a range on its own; sp is what stands between a number and its word */
 const isU = p => !!p.square;
 const sfx = p => p.unit || '';
 const amount = (p, v, sp = '&nbsp;') => {
-  if (isU(p) && v > 0 && Math.abs(v / p.square.mm - Math.round(v / p.square.mm)) < 1e-9) { const n = Math.round(v / p.square.mm); return `${n}${sp}${p.square.word}${n === 1 ? '' : 's'}`; }
+  if (isU(p) && v > 0 && Math.abs(v / p.square.mm - Math.round(v / p.square.mm)) < 1e-9) { const n = Math.round(v / p.square.mm); return `${n}${sp}${p.square.word}`; }
   return isU(p) ? `${v}${sp}mm` : v + sfx(p);
 };
 const rangeAmount = (p, [lo, hi], sp) => lo === hi ? amount(p, lo, sp) : `${amount(p, lo, sp)}..${amount(p, hi, sp)}`;
-/* what is typed for a setting with a unit: "70", "70 mm", "2 squares", or two of them as low..high */
+/* what is typed for a setting with a unit: "70", "70 mm", "2 sq", or two of them as low..high */
 function parseAmounts(p, t) {
-  const one = x => { const m = /^\s*(-?\d*\.?\d+)\s*(squares?|mm)?\s*$/i.exec(x); return m ? +m[1] * (m[2] && m[2].toLowerCase() !== 'mm' ? p.square.mm : 1) : null; };
+  const one = x => { const m = /^\s*(-?\d*\.?\d+)\s*(squares?|sq|mm)?\s*$/i.exec(x); return m ? +m[1] * (m[2] && m[2].toLowerCase() !== 'mm' ? p.square.mm : 1) : null; };
   const parts = t.split('..'); if (parts.length > 2) return null;
   const v = parts.map(one); if (v.some(x => x === null)) return null;
   return v.length === 1 ? [v[0], v[0]] : v[0] <= v[1] ? v : [v[1], v[0]];
@@ -3128,7 +3121,7 @@ function readNum(p, v) {
 function readout(p) {
   const o = document.createElement('output'); o.className = 'pval';
   if (p.range) o.classList.add('r2');
-  const paint = () => { const v = state[p.key]; o.innerHTML = p.range ? `<span>${readNum(p, v[0])}</span><span>${readNum(p, v[1])}</span>` : readNum(p, v); }; paint();
+  const paint = () => { const v = state[p.key]; o.innerHTML = p.range ? `<span>${readNum(p, v[0])}..</span><span>${readNum(p, v[1])}<i class="gh">..</i></span>` : readNum(p, v); }; paint();
   return { el: o, paint };
 }
 /* the value as a box to type in, on a property page: { el, paint } */
@@ -3325,7 +3318,7 @@ const PAGES = {
     box.addEventListener('input', () => { const x = parseInt(box.value, 10); if (Number.isFinite(x) && x !== state.seed) setSeed(x); });
     box.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') box.blur(); });
     line.append(step('←', -1), box, step('→', 1));
-    wrap.append(line); wrap.insertAdjacentHTML('beforeend', '<small>The number every random draw of the wall comes from; the strip under the view shows the neighbouring seeds.</small>');
+    wrap.append(line, makeStrip()); wrap.insertAdjacentHTML('beforeend', '<small>The number every random draw of the wall comes from; tap a picture to take that seed. Left and right arrow keys step it.</small>');
     pageSync = () => { if (document.activeElement !== box) box.value = state.seed; };
     return wrap;
   },
@@ -3346,7 +3339,7 @@ function openPage(g) {
   stack.length = 0; stack.push(g); propPaint = null; pageSync = null;
   if (!g.page) { if (!cached.has(g)) cached.set(g, [backHead(g.label, g.icon()), PAGES.rows(g)]); pgGroup.replaceChildren(...cached.get(g)); }
   else pgGroup.replaceChildren(backHead(g.label, g.icon()), PAGES[g.page](g));
-  pgGroup.scrollTop = 0; showDepth(); repaint();
+  pgGroup.scrollTop = 0; showDepth(); repaint(); stripSync();
 }
 /* a setting's page: its control (the same builder as on its line), its ends and its help; one page, made again for each setting */
 function openProp(g, p) {
@@ -3355,9 +3348,9 @@ function openProp(g, p) {
   pgProp.replaceChildren(backHead(p.label), body); propPaint = () => { c.paint(); if (t) t.paint(); }; propPaint();
   stack.push(p); pgProp.scrollTop = 0; showDepth();
 }
-function back() { if (!stack.length) return; stack.pop(); if (stack.length < 2) propPaint = null; if (!stack.length) pageSync = null; showDepth(); }
-function openSheet() { sheetEl.inert = false; sheetEl.classList.add('open'); codeBtn.setAttribute('aria-expanded', 'true'); shownField = ''; fieldSync(); repaint(); }
-function closeSheet(refocus) { stack.length = 0; propPaint = null; pageSync = null; showDepth(); sheetEl.classList.remove('open'); sheetEl.inert = true; codeBtn.setAttribute('aria-expanded', 'false'); if (refocus) codeBtn.focus(); }
+function back() { if (!stack.length) return; stack.pop(); if (stack.length < 2) propPaint = null; if (!stack.length) pageSync = null; showDepth(); stripSync(); }
+function openSheet() { sheetEl.inert = false; sheetEl.classList.add('open'); codeBtn.setAttribute('aria-expanded', 'true'); shownField = ''; fieldSync(); repaint(); stripSync(); }
+function closeSheet(refocus) { stack.length = 0; propPaint = null; pageSync = null; showDepth(); sheetEl.classList.remove('open'); sheetEl.inert = true; codeBtn.setAttribute('aria-expanded', 'false'); stripSync(); if (refocus) codeBtn.focus(); }
 showDepth(); sheetEl.inert = true;
 codeBtn.addEventListener('click', () => sheetOpen() ? closeSheet() : openSheet());
 /* a change of pixel ratio (page zoom, another screen) draws the mosaic again in whole device pixels */
@@ -3437,8 +3430,6 @@ $('zfit').addEventListener('click', zoomFit);
 const setMax = on => { viewerEl.classList.toggle('max', on); document.body.classList.toggle('vmax', on); const b = $('vmax'); b.setAttribute('aria-pressed', String(on)); b.title = on ? 'Restore' : 'Maximize'; b.setAttribute('aria-label', b.title); };
 $('vmax').addEventListener('click', () => setMax(!viewerEl.classList.contains('max')));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented && viewerEl.classList.contains('max')) setMax(false); });
-$('prev').addEventListener('click', () => setSeed(state.seed - 1));
-$('next').addEventListener('click', () => setSeed(state.seed + 1));
 document.addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input, textarea, select')) return;
   if (e.key === 'ArrowLeft') { setSeed(state.seed - 1); e.preventDefault(); }
