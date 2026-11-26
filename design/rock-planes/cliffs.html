@@ -2515,7 +2515,10 @@ function initGL() {
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6 || !rockObj || !shown) return; const r = renderer.domElement.getBoundingClientRect();
       ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
       const st = shown.surf.stoneTri; if (!st) return; const stoneAt = fi => { let lo = 0, hi = st.length - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (st[m] <= fi) lo = m; else hi = m - 1; } return lo; };
-      const hits = ray.intersectObject(rockObj.children[0]); if (!hits.length) return;   // a joiner's faces lie on its pieces': the piece behind it is the one tapped
+      const hits = ray.intersectObject(rockObj.children[0]);
+      if (!hits.length) {   /* a tap on empty space clears the selection */
+        ME = -1; selectStone(null); highlightEdge(null); $('einfo').hidden = true; $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed; return;
+      }   /* a joiner's faces lie on its pieces': the piece behind it is the one tapped */
       const ja = shown.surf.joinerAt, hit = hits.find(h => !(ja && ja[stoneAt(h.faceIndex)]) && h.distance < hits[0].distance + 0.05) || hits[0]; const lo = stoneAt(hit.faceIndex);
       const [g, l] = shown.surf.stoneOf[lo]; $('chip').textContent = state.style + ' · seed ' + state.seed + ' · stone ' + lo + ' (body ' + g + (l >= 0 ? ', layer ' + l : '') + ')';
       // the nearest edge of that stone to the point tapped, within reach (a share of the view's distance): its report
