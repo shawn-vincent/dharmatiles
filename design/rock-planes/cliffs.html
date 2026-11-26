@@ -83,17 +83,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .codebox .codeerr { color: var(--err); font-weight: 600; }
 .qr { width: min(160px, 100%); background: #fff; padding: 0; line-height: 0; border: 1px solid var(--line); }
 .qr svg { width: 100%; height: auto; display: block; shape-rendering: crispEdges; }
-.plines { display: grid; }
-.pline { display: grid; grid-template-columns: minmax(104px, 32%) minmax(0, 1fr); align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.plines { display: grid; grid-template-columns: max-content minmax(0, 1fr); }   /* the label column as wide as the longest label on the page, shared by every line */
+.pline { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .plabel { display: flex; align-items: center; justify-content: space-between; gap: 4px; height: 34px; padding: 0 2px 0 4px; border: 0; border-radius: var(--r); background: none; color: var(--ink); font: 500 14px var(--f-body); text-align: left; cursor: pointer; }
 .plabel:hover { background: var(--raised); }
 .plabel .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .plabel .chev { flex: none; color: var(--muted); }
-.pctl { min-width: 0; }
 .ctl { container-type: inline-size; min-width: 0; }
 .ctl.number { display: flex; align-items: center; gap: 8px; }
 .ctl.number .slider { flex: 1 1 0; min-width: 0; }
-.ctl.number .pbox { flex: none; }
+.pctl { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.pctl > .ctl { flex: 1 1 0; min-width: 0; }
+.pval { flex: none; width: 9ch; text-align: right; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }   /* one width on every line, so the sliders line up */
 .ctl.pick .seg { justify-self: start; width: fit-content; max-width: 100%; }
 .pline .seg button.withicon { height: 28px; padding: 0 6px; }
 .pline .seg .ic { width: 26px; height: 21px; }
@@ -104,9 +105,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pline .slider:not(.one) .end { top: 17px; height: 17px; }
 .pline .slider:not(.one) .grip { height: 19px; background-position: center 4px; }
 .pprop { display: grid; gap: 6px; padding: 10px 12px; align-content: start; }
-.pprop .ctl.number { flex-direction: column-reverse; align-items: stretch; gap: 2px; }
-.pprop .ctl.number .slider { flex: none; }
-.pprop .ctl.number .pbox { align-self: flex-end; }
+.pprop > .pbox { justify-self: end; }
 .pprop .ends { margin-top: -3px; display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--f-code); }
 .pprop small { color: var(--muted); font-size: 13px; line-height: 18px; }
 .styles, .seedpage { display: grid; gap: 6px; padding: 8px 12px; }
@@ -3012,19 +3011,33 @@ function control(p) {
     return { el: wrap, paint };
   }
   wrap.classList.add('number');
-  const twin = !!p.range, box = document.createElement('input'), text = () => twin ? rangeText(state[p.key]) : state[p.key];
-  Object.assign(box, { type: 'text', inputMode: 'decimal', value: text(), className: twin ? 'pbox rng' : 'pbox' }); box.setAttribute('aria-label', twin ? p.label + ', low..high' : p.label);
-  const set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } };
+  const twin = !!p.range, set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } };
   const sl = twin ? slider(p, () => state[p.key], v => set(v)) : slider(p, () => [state[p.key]], ([x]) => set(snapTo(p, x)));
-  const paint = () => { sl.paint(); if (document.activeElement !== box) box.value = text(); };
-  box.addEventListener('input', () => {
-    if (twin) { const v = parseRange(box.value); if (v) { set(v.map(x => snapTo(p, x))); sl.paint(); } }
-    else { const x = parseFloat(box.value); if (Number.isFinite(x)) { set(snapTo(p, x)); sl.paint(); } }
-  });
-  box.addEventListener('change', () => { box.value = text(); });   /* the box shows the one spelling: 7 when both ends of a range are 7 */
-  wrap.append(sl.el, box);
-  for (const el of [box, ...sl.keys]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') box.blur(); });
+  wrap.append(sl.el);
+  for (const el of sl.keys) el.addEventListener('keydown', e => e.stopPropagation());
+  const paint = () => sl.paint();
   return { el: wrap, paint };
+}
+/* a number's or a range's value as text (one spelling: 7 when both ends of a range are 7) */
+const valueText = p => p.range ? rangeText(state[p.key]) : String(state[p.key]);
+/* the value shown, read-only, beside the slider on a line of a group page: { el, paint } */
+function readout(p) {
+  const o = document.createElement('output'); o.className = 'pval';
+  const paint = () => { o.innerHTML = fmt(p, state[p.key]); }; paint();
+  return { el: o, paint };
+}
+/* the value as a box to type in, on a property page: { el, paint } */
+function typed(p) {
+  const box = document.createElement('input');
+  Object.assign(box, { type: 'text', inputMode: 'decimal', value: valueText(p), className: p.range ? 'pbox rng' : 'pbox' }); box.setAttribute('aria-label', p.range ? p.label + ', low..high' : p.label);
+  const set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } };
+  box.addEventListener('input', () => {
+    if (p.range) { const v = parseRange(box.value); if (v) set(v.map(x => snapTo(p, x))); }
+    else { const x = parseFloat(box.value); if (Number.isFinite(x)) set(snapTo(p, x)); }
+  });
+  box.addEventListener('change', () => { box.value = valueText(p); });
+  box.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') box.blur(); });
+  return { el: box, paint: () => { if (document.activeElement !== box) box.value = valueText(p); } };
 }
 /* a number's or a range's ends (propEnds), under its control on a property page; none for a choice or a switch */
 function propEnds(p) {
@@ -3157,7 +3170,9 @@ const PAGES = {
       const line = div('pline'), btn = document.createElement('button'), c = control(p), ctl = div('pctl');
       btn.className = 'plabel'; btn.innerHTML = `<span class="k">${p.label}</span>${svg('<path d="M9 6l6 6-6 6"/>', 'chev')}`; btn.setAttribute('aria-label', `${p.label}: open`);
       btn.addEventListener('click', () => openProp(g, p));
-      ctl.append(c.el); line.append(btn, ctl); wrap.append(line); paints.push(c.paint); lines.push([p, line]);
+      ctl.append(c.el); paints.push(c.paint);
+      if (!p.choices && !p.bool) { const v = readout(p); ctl.append(v.el); paints.push(v.paint); }
+      line.append(btn, ctl); wrap.append(line); lines.push([p, line]);
     }
     return wrap;
   },
@@ -3203,9 +3218,9 @@ function openPage(g) {
 }
 /* a setting's page: its control (the same builder as on its line), its ends and its help; one page, made again for each setting */
 function openProp(g, p) {
-  const c = control(p), body = div('pprop'), e = propEnds(p);
-  body.append(c.el); if (e) body.append(e); body.append(help(p));
-  pgProp.replaceChildren(backHead(p.label), body); propPaint = c.paint; c.paint();
+  const c = control(p), body = div('pprop'), e = propEnds(p), t = p.choices || p.bool ? null : typed(p);
+  if (t) body.append(t.el); body.append(c.el); if (e) body.append(e); body.append(help(p));
+  pgProp.replaceChildren(backHead(p.label), body); propPaint = () => { c.paint(); if (t) t.paint(); }; propPaint();
   stack.push(p); pgProp.scrollTop = 0; showDepth();
 }
 function back() { if (!stack.length) return; stack.pop(); if (stack.length < 2) propPaint = null; if (!stack.length) pageSync = null; showDepth(); }
