@@ -229,7 +229,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
           </div>
           <span class="lbl">Show</span>
           <div class="checks">
-            <label><input type="checkbox" id="ghost" checked> The envelope</label>
+            <label><input type="checkbox" id="ghost"> The envelope</label>
             <label><input type="checkbox" id="layersOn"> Layers</label>
             <label><input type="checkbox" id="spinesOn"> Spines</label>
             <label><input type="checkbox" id="crackLines"> Crack lines</label>
@@ -2351,7 +2351,7 @@ const PRESETS = {   // ranges are [lo, hi]
   ashlar: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: [1.2, 1.6], weather: [0, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['fieldstone', 'Fieldstone', 'A dry wall of irregular, roundish stones placed at random in rough courses, some running up through the next course, no cracks'], ['ashlar', 'Ashlar', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
-const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, crackLines: false, lines: true, bevelsOn: true, mini: true };
+const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', ghost: false, layersOn: false, spinesOn: false, crackLines: false, lines: true, bevelsOn: true, mini: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -2597,19 +2597,22 @@ function extras(V, surf = null) {
   if (state.ghost) grp.add(ghostOf(bigSolid([{ n: [1, 0, 0], b: V.hi[0] }, { n: [-1, 0, 0], b: -V.lo[0] }, { n: [0, 1, 0], b: V.hi[1] }, { n: [0, -1, 0], b: -V.lo[1] }, { n: [0, 0, 1], b: V.hi[2] }, { n: [0, 0, -1], b: 0 }])));
   // each layer face as a grid over the envelope, coarser than the one the engine reads (a face between layers; where it meets the face below, the layer pinches out)
   if (state.layersOn && V.layers) {
-    const Y = V.layers, SX = 3, SY = 4, pos = [], lp = [];
+    /* each layer face as a sheet reaching LAYER_OVER mm past the envelope on every side (its height held from the nearest sample) */
+    const Y = V.layers, SX = 3, SY = 4, LAYER_OVER = 2.5, pos = [], lp = [];
+    const steps = (n, S, d) => { const o = [-LAYER_OVER / d]; for (let k = 0; k < n - 1; k += S) o.push(k); o.push(n - 1, n - 1 + LAYER_OVER / d); return o; };
+    const xs = steps(Y.gnx, SX, Y.GRX), ys = steps(Y.gny, SY, Y.GR);
     for (let i = 1; i < Y.EG.length - 1; i++) {
-      const g = Y.EG[i], at = (ix, iy) => { const u = Y.u0 + ix * Y.GRX, v = Y.v0 + iy * Y.GR, w = g[iy * Y.gnx + ix]; return [0, 1, 2].map(c => Y.O[c] + u * Y.eU[c] + v * Y.eV[c] + w * Y.eW[c]); };   /* the frame's (u, v, w) in the wall */
-      for (let ix = 0; ix < Y.gnx - 1; ix += SX) for (let iy = 0; iy < Y.gny - 1; iy += SY) {
-        const jx = Math.min(ix + SX, Y.gnx - 1), jy = Math.min(iy + SY, Y.gny - 1), q = [at(ix, iy), at(jx, iy), at(jx, jy), at(ix, jy)];
+      const g = Y.EG[i], at = (fx, fy) => { const u = Y.u0 + fx * Y.GRX, v = Y.v0 + fy * Y.GR, ix = Math.max(0, Math.min(Y.gnx - 1, Math.round(fx))), iy = Math.max(0, Math.min(Y.gny - 1, Math.round(fy))), w = g[iy * Y.gnx + ix]; return [0, 1, 2].map(c => Y.O[c] + u * Y.eU[c] + v * Y.eV[c] + w * Y.eW[c]); };   /* the frame's (u, v, w) in the wall */
+      for (let a = 0; a + 1 < xs.length; a++) for (let b = 0; b + 1 < ys.length; b++) {
+        const q = [at(xs[a], ys[b]), at(xs[a + 1], ys[b]), at(xs[a + 1], ys[b + 1]), at(xs[a], ys[b + 1])];
         pos.push(...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]);
-        if (iy === 0) lp.push(...q[0], ...q[1]); if (jy === Y.gny - 1) lp.push(...q[3], ...q[2]); if (ix === 0) lp.push(...q[0], ...q[3]); if (jx === Y.gnx - 1) lp.push(...q[1], ...q[2]);
+        if (b === 0) lp.push(...q[0], ...q[1]); if (b + 2 === ys.length) lp.push(...q[3], ...q[2]); if (a === 0) lp.push(...q[0], ...q[3]); if (a + 2 === xs.length) lp.push(...q[1], ...q[2]);
       }
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x3E6FB0, transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide })));
+    grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.25, depthWrite: false, side: THREE.DoubleSide })));
     const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
-    grp.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x3E6FB0, transparent: true, opacity: 0.7 })));
+    grp.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x10151C, transparent: true, opacity: 0.9 })));
   }
   if (state.spinesOn || state.draw === 'masses') {   /* each spine a six-sided tube in its body's colour, saturated; seen through the rocks when they are drawn */
     const S = V.spines, C = V.spineRGB, n = S.length / 6, r = 0.32, pos = new Float32Array(n * 6 * 18), col = new Uint8Array(n * 6 * 18), glassy = state.draw === 'masses' && surf && surf.stoneOf, bod = new Float32Array(n * 6 * 6);
