@@ -2212,7 +2212,7 @@ const EK = p => Math.round(p[0] * 2000) + ',' + Math.round(p[1] * 2000) + ',' + 
 function surfaceOf(w) {
   let ntri = 0, nface = 0, vol = 0;
   for (const s of w.stones) for (const f of s.faces) { ntri += f.v.length - 2; nface++; }
-  const pos = new Float32Array(9 * ntri), col = new Uint8Array(9 * ntri), faceTri = new Int32Array(nface + 1), lines = [], bev = [], bevPart = [], bevBase = [];
+  const pos = new Float32Array(9 * ntri), col = new Uint8Array(9 * ntri), faceTri = new Int32Array(nface + 1), lines = [], bev = [], bevPart = [], bevBase = [], faceKind = [];
   let t = 0, fi = 0; const stoneTri = [];
   for (const s of w.stones) {
     stoneTri.push(t);
@@ -2220,7 +2220,7 @@ function surfaceOf(w) {
     // an outline is a face's edge; where a crack cuts a face into pieces, an edge between two pieces of one flat face (the same normal) is no line
     let seen = null; if (s.cracked) { seen = new Map(); for (const f of faces) for (let i = 0; i < f.v.length; i++) { const a = EK(f.v[i]), b = EK(f.v[(i + 1) % f.v.length]), k = a < b ? a + '|' + b : b + '|' + a; (seen.get(k) || seen.set(k, []).get(k)).push(f.n); } }
     for (const f of faces) {
-      const v = f.v, c = f.crack ? CRACK_RGB : rgb || STONE_RGB; if ((f.kind === KIND.BEVEL || f.kind === KIND.PART) && !f.crack) { bev.push(fi); bevPart.push(f.kind === KIND.PART ? 1 : 0); bevBase.push(c[0], c[1], c[2]); } faceTri[fi++] = t;
+      const v = f.v, c = f.crack ? CRACK_RGB : rgb || STONE_RGB; if ((f.kind === KIND.BEVEL || f.kind === KIND.PART) && !f.crack) { bev.push(fi); bevPart.push(f.kind === KIND.PART ? 1 : 0); bevBase.push(c[0], c[1], c[2]); } faceKind.push(f.crack ? 2 : f.kind === KIND.BEVEL || f.kind === KIND.PART ? 1 : 0); faceTri[fi++] = t;
       if (!s.joiner) vol += f.area * (f.n[0] * v[0][0] + f.n[1] * v[0][1] + f.n[2] * v[0][2]) / 3;   // (a joiner lies mostly inside its pieces)
       let gx = 0, gy = 0, gz = 0; for (let i = 1; i + 1 < v.length; i++) { const q = cross(sub(v[i], v[0]), sub(v[i + 1], v[0])); gx += q[0]; gy += q[1]; gz += q[2]; }
       const flip = gx * f.n[0] + gy * f.n[1] + gz * f.n[2] < 0;   // each face is wound counter-clockwise seen from outside
@@ -2233,7 +2233,7 @@ function surfaceOf(w) {
     }
   }
   faceTri[nface] = t;
-  return { pos, col, faceTri, bev: Int32Array.from(bev), bevPart: Uint8Array.from(bevPart), bevBase: Uint8Array.from(bevBase), unbev: w.unbev || null, stoneTri: Int32Array.from([...stoneTri, t]), stoneOf: w.stones.map(s => [s.grp, s.layer ?? -1]), joinerAt: Uint8Array.from(w.stones.map(s => s.joiner ? 1 : 0)), report: w.report || null, edgeAt: w.stones.map(s => s.edges || null), stoneRel: w.stones.map(s => [s.piece, s.on || [], s.up || []]), lines: Float32Array.from(lines), vol, nface, ntri, cracks: w.cracks ? { lines: w.cracks.lines, cutters: w.cracks.cutters, cutStones: w.cracks.cutStones, bad: w.cracks.bad, netMs: w.cracks.netMs, netBuilt: w.cracks.netBuilt, polys: w.cracks.polysAll } : null,
+  return { pos, col, faceTri, faceKind: Uint8Array.from(faceKind), bev: Int32Array.from(bev), bevPart: Uint8Array.from(bevPart), bevBase: Uint8Array.from(bevBase), unbev: w.unbev || null, stoneTri: Int32Array.from([...stoneTri, t]), stoneOf: w.stones.map(s => [s.grp, s.layer ?? -1]), joinerAt: Uint8Array.from(w.stones.map(s => s.joiner ? 1 : 0)), report: w.report || null, edgeAt: w.stones.map(s => s.edges || null), stoneRel: w.stones.map(s => [s.piece, s.on || [], s.up || []]), lines: Float32Array.from(lines), vol, nface, ntri, cracks: w.cracks ? { lines: w.cracks.lines, cutters: w.cracks.cutters, cutStones: w.cracks.cutStones, bad: w.cracks.bad, netMs: w.cracks.netMs, netBuilt: w.cracks.netBuilt, polys: w.cracks.polysAll } : null,
     stones: w.stones.length, sites: w.sites, groups: w.groups, lost: w.lost, dead: w.dead || 0, noHold: w.noHold, T: w.T };
 }
 // the paint, from the overhang pass: the faces it found unheld (the page colours each orange or red by its normal), and the shares it reports
@@ -2278,7 +2278,7 @@ const stoneLinks = ps => ps && ps.length ? ps.filter(p => !shown || shown.surf.p
 // one edge of the report as the words read it: { a, b, k, t, L, st, of: its attempt { d, t, g, gp, who, st } }
 function edgeRow(R, i) {
   const D = R.D, o = 8 * i, K = R.K[i], at = R.O[i], row = { a: [D[o], D[o + 1], D[o + 2]], b: [D[o + 3], D[o + 4], D[o + 5]], t: D[o + 6], L: D[o + 7], k: [K & 15, K >> 4 & 15], st: EST[K >> 8], of: null };
-  if (at >= 0) { const A = R.AD, q = 6 * at; row.of = { d: A[q], t: A[q + 1], gp: A[q + 2] === A[q + 2] ? [A[q + 2], A[q + 3], A[q + 4]] : null, g: R.AK[at] & 255, st: EST[R.AK[at] >> 8], who: R.AW[at] }; }
+  if (at >= 0) { const A = R.AD, q = 6 * at; row.of = { d: A[q], t: A[q + 1], gp: A[q + 2] === A[q + 2] ? [A[q + 2], A[q + 3], A[q + 4]] : null, g: R.AK[at] & 255, st: EST[R.AK[at] >> 8 & 15], corner: !!(R.AK[at] >> 12 & 1), who: R.AW[at] }; }
   return row;
 }
 function edgeWords(r) {
@@ -2298,7 +2298,7 @@ function edgeWords(r) {
     glued: `<b>No bevel</b>: both faces are glued to other pieces of this same stone (a join inside it).`,
     ground: `<b>No bevel</b>: a bottom edge standing on the ground.`,
     untried: `<b>Not bevelled</b>: it is seen, but no cut was tried for it (the faces it lies between were made by other cuts after the pass).`,
-    side: `<b>The edge of a bevel</b>${o ? `: the bevel was cut for an edge turning ${o.t.toFixed(0)}°, ` + ({ bevel: 'full, ' + dep + ' deep', taper: 'tapered (held by ' + g(o) + ')', pushed: 'narrowed by ' + g(o) + ' to ' + dep }[o.st] || o.st) : ''}.`,
+    side: `<b>The edge of a bevel</b>${o ? `: the bevel was cut for ${o.corner ? 'a corner where edges meet' : 'an edge turning ' + o.t.toFixed(0) + '°'}, ` + ({ bevel: 'full, ' + dep + ' deep', taper: 'tapered (held by ' + g(o) + ')', pushed: 'narrowed by ' + g(o) + ' to ' + dep }[o.st] || 'its cut is not described here') : ': which cut made it is not known'}.`,
   }[r.st] || r.st;
   return head + '<div class="why">' + why + '</div>';
 }
@@ -2370,15 +2370,52 @@ function selectSpine(i) {
   }
   scene.add(spineSelObj);
 }
+/* a stone's outline: its hard edges between its big faces, as flat segments. Crack grooves and the bevels' small facets are left out: a place that touches a crack's inside is no line, and a bevel strip (two edges against its two neighbours) is one
+   line, the edge it shares with the larger neighbour. A face is a fan of triangles, so its boundary is the edges one of its triangles has alone; a crack splits a face, so the faces on the far side of a boundary are found by place (a point on
+   one of their boundaries), not by shared ends. */
+function outlineOf(surf, i) {
+  const st = surf.stoneTri, ft = surf.faceTri, P = surf.pos, K = surf.faceKind, faces = [], segs = [], STEP = 1.5, ON = 0.02;
+  let lo = 0, hi = ft.length - 2; while (lo < hi) { const m = (lo + hi) >> 1; if (ft[m] < st[i]) lo = m + 1; else hi = m; }
+  for (let f = lo; f < ft.length - 1 && ft[f] < st[i + 1]; f++) {
+    const own = new Map(); let area = 0, n = [0, 0, 0];
+    for (let t = ft[f]; t < ft[f + 1]; t++) {
+      const o = 9 * t, V = [0, 1, 2].map(k => [P[o + 3 * k], P[o + 3 * k + 1], P[o + 3 * k + 2]]), c = cross(sub(V[1], V[0]), sub(V[2], V[0])); n = add(n, c); area += len(c) / 2;
+      for (let k = 0; k < 3; k++) { const A = V[k], B = V[(k + 1) % 3], a = EK(A), b = EK(B), kk = a < b ? a + '|' + b : b + '|' + a; (own.get(kk) || own.set(kk, { a: A, b: B, c: 0 }).get(kk)).c++; }
+    }
+    const F = { f, kind: K[f], area, n: unit(n) }; faces.push(F);
+    for (const e of own.values()) if (e.c === 1) segs.push({ F, a: e.a, b: e.b });
+  }
+  const onSeg = (m, s_) => { const ab = sub(s_.b, s_.a), t = clamp(dot(sub(m, s_.a), ab) / Math.max(dot(ab, ab), 1e-12), 0, 1); return len(sub(m, add(s_.a, mul(ab, t)))) < ON; };
+  const subs = [];
+  for (const s_ of segs) {
+    const L = len(sub(s_.b, s_.a)), n = Math.max(1, Math.ceil(L / STEP));
+    for (let k = 0; k < n; k++) {
+      const a = add(s_.a, mul(sub(s_.b, s_.a), k / n)), b = add(s_.a, mul(sub(s_.b, s_.a), (k + 1) / n)), m = mul(add(a, b), 0.5), nb = new Set();
+      for (const g of segs) if (g.F !== s_.F && onSeg(m, g)) nb.add(g.F);
+      subs.push({ F: s_.F, a, b, nb });
+    }
+  }
+  const bestOf = new Map();   /* a bevel's largest neighbour among the big faces */
+  for (const u of subs) if (u.F.kind === 1) for (const G of u.nb) if (G.kind === 0 && (bestOf.get(u.F.f) ?? 0) < G.area) bestOf.set(u.F.f, G.area);
+  const out = [];
+  for (const u of subs) {
+    if (!u.nb.size || [...u.nb].some(G => G.kind === 2) || u.F.kind === 2) continue;
+    const ok = [...u.nb].some(G => u.F.kind === 0 ? G.kind === 0 && dot(u.F.n, G.n) < Math.cos(20 * DEG) : u.F.kind === 1 && G.kind === 0 && G.area >= bestOf.get(u.F.f));
+    if (ok) out.push(...u.a, ...u.b);
+  }
+  return out;
+}
+/* the one way a stone, or none, becomes the selection: SEL (what the views keep), the report's stone (ME), and the marks drawn; edge is the tapped edge's row or null */
 function selectStone(i, edge) {   /* the stone outlined in yellow, seen through whatever is in front of it (a step lighter when an edge of it is what is selected) */
   if (selObj) { scene.remove(selObj); disposeGroup(selObj); selObj = null; }
+  SEL = i == null || !shown || !shown.surf.stoneRel ? null : { piece: shown.surf.stoneRel[i][0], wall: wallOf(shown.key), edge: edge || null }; ME = SEL ? i : -1;
   tintInfo(i); selectSpine(i);
   if (i == null || !shown) { draw(); return; }
   const st = shown.surf.stoneTri, lv = edge ? 1 : 0; selObj = new THREE.Group();
   const lite = (j, k) => {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(shown.surf.pos.slice(9 * st[j], 9 * st[j + 1]), 3));
     const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: SEL_YELLOW, transparent: true, opacity: LIT[k], side: THREE.DoubleSide, depthTest: false, depthWrite: false })); m.renderOrder = 9 - k; selObj.add(m);
-    const segs = new THREE.EdgesGeometry(g, 20).attributes.position.array, r = [0.3, 0.2, 0.12][k];
+    const segs = outlineOf(shown.surf, j), r = [0.3, 0.2, 0.12][k];
     selObj.add(rodsOf(segs, r * 1.7, SEL_RIM, 9 - k)); selObj.add(rodsOf(segs, r, SEL_YELLOW, 10 - k));
   };
   lite(i, lv); for (const j of matesOf(i)) lite(j, lv + 1);
@@ -2798,7 +2835,7 @@ function initGL() {
       const st = shown.surf.stoneTri; if (!st) return; const stoneAt = fi => { let lo = 0, hi = st.length - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (st[m] <= fi) lo = m; else hi = m - 1; } return lo; };
       const hits = ray.intersectObject(rockObj.children[0]);
       if (!hits.length) {   /* a tap on empty space clears the selection */
-        SEL = null; ME = -1; selectStone(null); highlightEdge(null); $('einfo').hidden = true; $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed; return;
+        selectStone(null); highlightEdge(null); $('einfo').hidden = true; $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed; return;
       }   /* a joiner's faces lie on its pieces': the piece behind it is the one tapped */
       const ja = shown.surf.joinerAt, hit = hits.find(h => !(ja && ja[stoneAt(h.faceIndex)]) && h.distance < hits[0].distance + 0.05) || hits[0]; const lo = stoneAt(hit.faceIndex);
       const [g, l] = shown.surf.stoneOf[lo]; $('chip').textContent = state.style + ' · seed ' + state.seed + ' · stone ' + lo + ' (body ' + g + (l >= 0 ? ', layer ' + l : '') + ')';
@@ -2808,15 +2845,14 @@ function initGL() {
       if (best !== null) best = edgeRow(R, best);
       const reach = Math.max(0.4, 0.012 * hit.distance), box = $('einfo');
       const onEdge = !!(best && bd <= reach);
-      selectStone(lo, onEdge);   /* the tapped stone lights up: a step fainter when one of its edges is the selection */
-      ME = lo; SEL = { piece: shown.surf.stoneRel[lo][0], wall: wallOf(shown.key), edge: onEdge ? best : null };
+      selectStone(lo, onEdge ? best : null);   /* the tapped stone lights up: a step fainter when one of its edges is the selection */
       if (onEdge) { box.innerHTML = stoneHead(lo) + edgeWords(best); box.hidden = false; highlightEdge(best); }
       else { box.innerHTML = stoneWords(lo) + '<div class="dim" style="margin-top:4px">Tap nearer an edge for its report.</div>'; box.hidden = false; highlightEdge(null); }
     });
   }
   $('einfo').addEventListener('click', e => {   // a stone's link: that stone selected, and what it rests on and holds up
     const a = e.target.closest('a.slink'); if (!a) return; e.preventDefault(); const i = +a.dataset.stone;
-    ME = i; SEL = { piece: shown.surf.stoneRel[i][0], wall: wallOf(shown.key), edge: null }; selectStone(i); highlightEdge(null); $('einfo').innerHTML = stoneWords(i);
+    selectStone(i); highlightEdge(null); $('einfo').innerHTML = stoneWords(i);
   });
   controls.target.copy(focus()); controls.enablePan = true; controls.minDistance = 20; controls.maxDistance = 600;
   controls.addEventListener('change', draw); controls.addEventListener('change', fieldSync); controls.addEventListener('end', () => codeSync()); controls.update();
@@ -2991,7 +3027,7 @@ function failed(msg, detail) { $('err').hidden = false; $('err').textContent = '
 function show(e) {
   try {
     /* the same wall drawn another way keeps the selection (SEL): its stone is found again by its piece, and its edge is drawn as it was */
-    shown = e; const { view, surf } = e; tintBevels(surf); if (hlObj) highlightEdge(null); if (selObj) selectStone(null); $('einfo').hidden = true; if (surf.stoneRel && !surf.pieceStone) surf.pieceStone = new Map(surf.stoneRel.map((r, i) => [r[0], i]));
+    const kept = SEL; shown = e; const { view, surf } = e; tintBevels(surf); if (hlObj) highlightEdge(null); if (selObj) selectStone(null); SEL = kept; $('einfo').hidden = true; if (surf.stoneRel && !surf.pieceStone) surf.pieceStone = new Map(surf.stoneRel.map((r, i) => [r[0], i]));
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
     edgeMat.opacity = state.draw === 'rocks' ? 0.8 : 0.45; rockObj = meshOfBuf(surf, state.draw !== 'finished', state.draw === 'structure', state.draw === 'finished'); scene.add(rockObj);   /* outlines in Rocks and Structure, none when finished */
     if (extraObj) { scene.remove(extraObj); disposeGroup(extraObj); }
@@ -3003,8 +3039,8 @@ function show(e) {
     showStats(view, surf, surf.took);
     if (SEL && SEL.wall !== wallOf(e.key)) SEL = null;
     const i = SEL && surf.pieceStone ? surf.pieceStone.get(SEL.piece) : undefined;
-    if (i !== undefined) { ME = i; selectStone(i, !!SEL.edge); $('einfo').innerHTML = SEL.edge ? stoneHead(i) + edgeWords(SEL.edge) : stoneWords(i); $('einfo').hidden = false; if (SEL.edge) highlightEdge(SEL.edge); }
-    else ME = -1;
+    if (i !== undefined) { const edge = SEL.edge; selectStone(i, edge); $('einfo').innerHTML = edge ? stoneHead(i) + edgeWords(edge) : stoneWords(i); $('einfo').hidden = false; if (edge) highlightEdge(edge); }
+    else { SEL = null; ME = -1; }
   } catch (err) { failed(err.message, err); }
 }
 // the overhang paint arrives after the wall is shown: the unheld faces turn orange or red, and the stats say how much
