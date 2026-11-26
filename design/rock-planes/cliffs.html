@@ -69,7 +69,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .shead { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 8px 12px 5px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .shead b { flex: 1; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .shead b .ic { color: var(--ink); }
-.shead .btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 26px; min-width: 26px; padding: 0 5px; }
+.shead .btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; min-width: 28px; padding: 0; border-color: transparent; background: none; }   /* ghost: icon only; the button's own face shows on hover and keyboard focus */
+.shead .btn:hover, .shead .btn:focus-visible { border-color: var(--accent); background: var(--raised); color: var(--accent); }
 .shead .said { font-size: 12px; color: var(--ok); }
 .srow { display: grid; grid-template-columns: 24px 1fr auto 14px; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 3px 12px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: 500 14px var(--f-body); text-align: left; cursor: pointer; }
 .srow:hover { background: var(--raised); }
@@ -94,7 +95,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ctl.number .slider { flex: 1 1 0; min-width: 0; }
 .pctl { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .pctl > .ctl { flex: 1 1 0; min-width: 0; }
-.pval { flex: none; width: 9ch; text-align: right; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }   /* one width on every line, so the sliders line up */
+.pval { flex: none; width: 78px; text-align: right; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }   /* one width on every line, so the sliders line up */
+.pval .gh { visibility: hidden; font-style: normal; }   /* the room a decimal place takes, kept when the value is whole */
+.pval.r2 { display: flex; flex-direction: column; justify-content: center; font-size: 10.5px; line-height: 12px; }   /* a range: low end over high end */
+.slider .dim { position: absolute; top: 25px; height: 14px; box-sizing: border-box; display: flex; align-items: center; gap: 3px; border-left: 1px solid var(--muted); border-right: 1px solid var(--muted); color: var(--muted); font: 11px var(--f-code); white-space: nowrap; pointer-events: none; }   /* the distance between a range's ends, drawn as a dimension line */
+.slider .dim i { position: relative; flex: 1 1 0; min-width: 0; height: 1px; background: currentColor; }
+.slider .dim i::before { content: ""; position: absolute; top: -3px; width: 6px; height: 7px; background: currentColor; }
+.slider .dim i:first-child::before { left: 0; clip-path: polygon(0 50%, 100% 0, 100% 100%); }
+.slider .dim i:last-child::before { right: 0; clip-path: polygon(100% 50%, 0 0, 0 100%); }
 .ctl.pick .seg { justify-self: start; width: fit-content; max-width: 100%; }
 .pline .seg button.withicon { height: 28px; padding: 0 6px; }
 .pline .seg .ic { width: 26px; height: 21px; }
@@ -3043,7 +3051,7 @@ function rebuildThumbs() {
 const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return rangeText(v) + (p.unit || ''); if (p.choices) { const c = p.choices.find(x => x[0] === v); return (p.icon ? p.icon(v) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
 /* one editor for each kind of setting, sized by the container it is put in: control(p) gives { el, paint } (paint shows the settings as they are). A number is its slider and a box to type in, a range its twin slider and a box
    (the slider slim on a line of a group page, wide on a property page), a choice a button for each (on a narrow container icons alone where it has them), a switch a checkbox */
-function control(p) {
+function control(p, opts) {
   const wrap = div('ctl');
   if (p.choices) {
     wrap.classList.add('pick');
@@ -3065,18 +3073,31 @@ function control(p) {
   }
   wrap.classList.add('number');
   const twin = !!p.range, set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } };
-  const sl = twin ? slider(p, () => state[p.key], v => set(v)) : slider(p, () => [state[p.key]], ([x]) => set(snapTo(p, x)));
+  const sl = twin ? slider(p, () => state[p.key], v => set(v), opts) : slider(p, () => [state[p.key]], ([x]) => set(snapTo(p, x)));
   wrap.append(sl.el);
   for (const el of sl.keys) el.addEventListener('keydown', e => e.stopPropagation());
   const paint = () => sl.paint();
   return { el: wrap, paint };
 }
 /* a number's or a range's value as text (one spelling: 7 when both ends of a range are 7) */
+/* a distance between a range's ends as text, in the setting's unit */
+const distText = (p, d) => {
+  const places = (String(p.step).split('.')[1] || '').length; let t = d.toFixed(places); if (t.includes('.')) t = t.replace(/0+$/, '').replace(/\.$/, '');
+  return t + (p.unit || '').replace('&nbsp;', ' ');
+};
 const valueText = p => p.range ? rangeText(state[p.key]) : String(state[p.key]);
+/* one number of a setting for a readout: its unit, and room for one decimal place at least (a whole value gets an invisible ".0", so the digits stay where they are as the value changes) */
+function readNum(p, v) {
+  const places = (String(p.step).split('.')[1] || '').length, want = Math.max(1, places);
+  let t = (+v).toFixed(places); if (t.includes('.')) t = t.replace(/0+$/, '').replace(/\.$/, '');
+  const [ip, fp = ''] = t.split('.'), ghost = (fp ? '' : '.') + '0'.repeat(want - fp.length);
+  return `${ip}${fp ? '.' + fp : ''}<i class="gh">${ghost}</i>${p.unit || ''}`;
+}
 /* the value shown, read-only, beside the slider on a line of a group page: { el, paint } */
 function readout(p) {
   const o = document.createElement('output'); o.className = 'pval';
-  const paint = () => { o.innerHTML = fmt(p, state[p.key]); }; paint();
+  if (p.range) o.classList.add('r2');
+  const paint = () => { const v = state[p.key]; o.innerHTML = p.range ? `<span>${readNum(p, v[0])}</span><span>${readNum(p, v[1])}</span>` : readNum(p, v); }; paint();
   return { el: o, paint };
 }
 /* the value as a box to type in, on a property page: { el, paint } */
@@ -3097,13 +3118,14 @@ function propEnds(p) {
   if (p.choices || p.bool) return null;
   const e = div('ends'); e.innerHTML = `<span>${p.range ? p.min + (p.unit || '') : fmt(p, p.min)}</span><span>${p.range ? p.max + (p.unit || '') : fmt(p, p.max)}</span>`; return e;
 }
-const help = p => { const h = document.createElement('small'); h.textContent = p.help; return h; };
+const ALT_NOTE = 'Hold Alt (Option) while dragging an end, or pressing an arrow on it, to move both ends together about the centre.';
+const help = p => { const h = document.createElement('small'); h.textContent = p.help + (p.range ? ' ' + ALT_NOTE : ''); return h; };
 // a setting's slider, for a number (get gives [value]) or a range ([low, high]): { el, paint, keys }. Each end's handle is dragged
 // on its own, never past the other; with two ends there is a grip, which moves the whole range, keeping its width, stopping at the
 // track's ends; a click on the track moves the end that can go there (outside the range, the end on that side; inside, the nearer,
 // the low end on a tie). Each handle and the grip is a keyboard slider: arrows a step, Page keys ten, Home and End to the track's
 // ends (the grip takes the whole range there)
-function slider(p, get, put) {
+function slider(p, get, put, opts = {}) {
   const el = document.createElement('div'); el.className = 'slider';
   el.innerHTML = '<span class="track"></span><span class="band"></span>';
   const band = el.querySelector('.band'), twin = get().length === 2, span = p.max - p.min;   // twin: two ends
@@ -3115,9 +3137,26 @@ function slider(p, get, put) {
   const grip = twin ? handle('grip', `${p.label}, whole range`) : null;
   // a new end: a range's kept in order; the whole range moved by d, its width kept, inside the track
   const withEnd = (e, x) => { x = snapTo(p, x); if (!twin) return [x]; const [a, b] = get(); return e === 0 ? [Math.min(x, b), b] : [a, Math.max(x, a)]; };
+  /* an end moved to x with the other going the opposite way about the centre (Alt): the range stays centred, inside the track */
+  const withEndSym = (e, x) => {
+    if (!twin) return [snapTo(p, x)];
+    const [a, b] = get(), c = (a + b) / 2, half = Math.max(0, Math.min(e === 0 ? c - x : x - c, c - p.min, p.max - c)), lo = snapTo(p, c - half);
+    return [lo, Math.min(p.max, +(2 * c - lo).toFixed(4))];
+  };
   const moved = ([a, b], d) => { const w = b - a, lo = snapTo(p, Math.min(p.max - w, Math.max(p.min, a + d))); return [lo, +(lo + w).toFixed(4)]; };
+  const dim = twin && opts.dim ? Object.assign(document.createElement('span'), { className: 'dim', innerHTML: '<i></i><span class="dt"></span><i></i>' }) : null;
+  if (dim) el.append(dim);
+  /* the distance between the ends, shown only where the text and an arrow on each side fit between the handles */
+  const paintDim = v => {
+    if (!dim) return;
+    dim.style.left = pos(v[0]); dim.style.width = `calc(${pos(v[1])} - ${pos(v[0])})`;
+    const t = dim.querySelector('.dt'); t.textContent = distText(p, +(v[1] - v[0]).toFixed(4));
+    const room = (el.clientWidth - 2 * 10) * (v[1] - v[0]) / span; dim.style.visibility = room >= t.offsetWidth + 2 * 18 ? 'visible' : 'hidden';
+  };
+  if (dim && typeof ResizeObserver === 'function') new ResizeObserver(() => paintDim(get())).observe(el);
   const paint = () => {
     const v = get(), a = twin ? v[0] : p.min, b = twin ? v[1] : v[0];
+    paintDim(v);
     band.style.left = pos(a); band.style.width = `calc(${pos(b)} - ${pos(a)})`;
     ends.forEach((h, e) => { h.style.left = pos(v[e]); h.setAttribute('aria-valuenow', v[e]); });
     if (grip) { grip.style.left = pos((v[0] + v[1]) / 2); grip.style.width = `calc(${pos(v[1])} - ${pos(v[0])})`; grip.setAttribute('aria-valuetext', rangeText(v)); }
@@ -3129,7 +3168,8 @@ function slider(p, get, put) {
     const s = start(e), mv = ev => set(move(s, ev)), up = () => { h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); };
     h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
   }; h.addEventListener('pointerdown', begin); return begin; };
-  const begins = ends.map((h, e) => drag(h, () => null, (_, ev) => withEnd(e, valueAt(ev.clientX))));
+  const begins = ends.map((h, e) => drag(h, () => null, (_, ev) => (ev.altKey ? withEndSym : withEnd)(e, valueAt(ev.clientX))));
+  if (twin) for (const h of ends) h.title = ALT_NOTE;
   if (grip) drag(grip, e => ({ v: get(), x: valueAt(e.clientX) }), (s, ev) => moved(s.v, valueAt(ev.clientX) - s.x));
   el.addEventListener('pointerdown', e => {
     if (e.target !== el && !e.target.classList.contains('track')) return;
@@ -3138,11 +3178,11 @@ function slider(p, get, put) {
   });
   const keyed_ = (h, step) => h.addEventListener('keydown', e => {
     const k = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -10, PageUp: 10 }[e.key];
-    if (k !== undefined) { e.preventDefault(); set(step(k * p.step)); }
-    else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); set(step(e.key === 'Home' ? -Infinity : Infinity)); }
+    if (k !== undefined) { e.preventDefault(); set(step(k * p.step, e.altKey)); }
+    else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); set(step(e.key === 'Home' ? -Infinity : Infinity, e.altKey)); }
   });
   const clampD = d => Number.isFinite(d) ? d : d * span;   // Home and End: as far as it goes
-  ends.forEach((h, e) => keyed_(h, d => withEnd(e, get()[e] + clampD(d))));
+  ends.forEach((h, e) => keyed_(h, (d, alt) => (alt ? withEndSym : withEnd)(e, get()[e] + clampD(d))));
   if (grip) keyed_(grip, d => moved(get(), clampD(d)));
   paint();
   return { el, paint, keys: grip ? [...ends, grip] : ends };
@@ -3254,8 +3294,9 @@ const PAGES = {
 };
 const backHead = (label, icon) => {
   const head = div('shead'), backBtn = document.createElement('button');
-  backBtn.className = 'btn'; backBtn.setAttribute('aria-label', 'Back'); backBtn.innerHTML = svg('<path d="M15 6l-6 6 6 6"/>') + 'Back'; backBtn.addEventListener('click', back);
-  head.append(backBtn); head.insertAdjacentHTML('beforeend', `<b>${icon || ''}${label}</b>`); return head;
+  backBtn.className = 'btn'; backBtn.setAttribute('aria-label', 'Back'); backBtn.innerHTML = svg('<path d="M15 6l-6 6 6 6"/>'); backBtn.title = 'Back'; backBtn.addEventListener('click', back);
+  const closeBtn = document.createElement('button'); closeBtn.className = 'btn'; closeBtn.title = 'Close'; closeBtn.setAttribute('aria-label', 'Close'); closeBtn.innerHTML = svg('<path d="M5 5l14 14M19 5 5 19"/>'); closeBtn.addEventListener('click', () => closeSheet(true));
+  head.append(backBtn); head.insertAdjacentHTML('beforeend', `<b>${icon || ''}${label}</b>`); head.append(closeBtn); return head;
 };
 const cached = new Map();   /* a group's page, made once and kept */
 /* the pages slide by depth, one page width each; only the page shown takes taps and focus */
@@ -3271,7 +3312,7 @@ function openPage(g) {
 }
 /* a setting's page: its control (the same builder as on its line), its ends and its help; one page, made again for each setting */
 function openProp(g, p) {
-  const c = control(p), body = div('pprop'), e = propEnds(p), t = p.choices || p.bool ? null : typed(p);
+  const c = control(p, { dim: true }), body = div('pprop'), e = propEnds(p), t = p.choices || p.bool ? null : typed(p);
   if (t) body.append(t.el); body.append(c.el); if (e) body.append(e); body.append(help(p));
   pgProp.replaceChildren(backHead(p.label), body); propPaint = () => { c.paint(); if (t) t.paint(); }; propPaint();
   stack.push(p); pgProp.scrollTop = 0; showDepth();
