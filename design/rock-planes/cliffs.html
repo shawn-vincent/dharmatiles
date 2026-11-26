@@ -59,7 +59,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pbox.rng { width: 24ch; }
 .pbox { width: 6ch; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--ink); font: 600 14px var(--f-code); text-align: right; }
 /* the settings: the mosaic button (bottom right) opens a bottom sheet over the view; its top level lists the settings, a row slides to its group's page and a line's label to the setting's page */
-.vbtn.code { position: absolute; right: 10px; bottom: 10px; z-index: 3; display: block; width: auto; height: auto; min-width: 32px; min-height: 32px; padding: 5px; line-height: 0; }
+.vbtn.code { position: absolute; right: 10px; bottom: 10px; z-index: 3; display: block; width: auto; height: auto; padding: 0; line-height: 0; overflow: hidden; border-radius: 3px; }   /* the mosaic is the whole face; its own quiet cell is the margin */
 .vbtn.code canvas { display: block; image-rendering: pixelated; }
 .vbtn.code:focus-visible { border-color: var(--accent); }
 .sheet { position: absolute; left: 0; right: 0; bottom: 0; margin-inline: auto; z-index: 5; width: min(760px, 100%); max-height: 35%; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--panel) 74%, transparent); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); visibility: hidden; transform: translateY(100%); transition: transform .2s ease, visibility 0s .2s; }
@@ -304,7 +304,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
     </ol>
     <p class="hint"><b>Layered</b>: thirty-eight thin level layers, a handful of slabs in each, the joints staggered, with cracks along Planes. <b>Granite</b>: Direction Through, one layer: every spine runs from the back to the front, and the stones show their ends; Joint under zero, so they overlap into one irregular mass; cracks along Blocks. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart; cracks along Columns. <b>Fieldstone</b>: eighteen rough courses, the stones thrown at random (Order 0%), many-faced and tilted so they read round; Span 30% lets a stone run up through the next course; no cracks. <b>Ashlar</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone; cracks along Blocks.</p>
-    <p class="hint"><b>The settings code</b> is the small colour mosaic on the button at the bottom right of the view (the code with the camera, in eight of the page's colours of the day or night theme and error correction, for a screenshot to carry; the page's decoder reads it back whatever the colours), and opens the settings sheet: a row for the style, the seed and each group, each opening its page (a line for each setting: its name, which opens the setting&rsquo;s own page with its range and its help, and its control beside it), and under them the code as text (with the camera) to copy, paste into or edit, and as a large QR. One code holds every setting that differs from its style, the seed and optionally the view; its last character checks it, and a code made by another version of this page is refused.</p>
+    <p class="hint"><b>The settings code</b> is the colour mosaic that fills the button at the bottom right of the view, a sliders icon on a plate in the middle (the code with the camera, in eight muted colours of the day or night theme and error correction, for a screenshot to carry; the page's decoder reads it back whatever the colours), and opens the settings sheet: a row for the style, the seed and each group, each opening its page (a line for each setting: its name, which opens the setting&rsquo;s own page with its range and its help, and its control beside it), and under them the code as text (with the camera) to copy, paste into or edit, and as a large QR. One code holds every setting that differs from its style, the seed and optionally the view; its last character checks it, and a code made by another version of this page is refused.</p>
     <p class="hint">Not here yet: envelopes with concavities and holes (each cell is clipped by a box envelope), curved or irregular ends, twisting sections, erosion, seams between stones, and two networks at once. A cell is a convex region, so a stone is convex before its cracks.</p>
     <p class="hint">The glassy figure at the front left, for scale, is <a href="https://www.printables.com/model/77914-fighter-female-no-supports-needed">Fighter - Female</a> by Teirale, a 28 mm miniature on a 25 mm base (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), with fewer triangles.</p>
   </section>
@@ -2686,16 +2686,22 @@ function readBits(bits) {
   if (bits.length - at >= 8) throw new Error('the code holds more than this page reads');
   return { values, view };
 }
-/* The corner icon: the code's bytes with Reed-Solomon parity (over GF(256), polynomial 0x11d, roots 1, 2, 4, ...) as a square mosaic of cells in eight colours (3 bits a cell), the page's own: the theme's
-   ink is colour 0 and the quiet zone round the mosaic is the theme's raised colour. The size is 16, 20 or 24 cells, the smallest that fits, and is read from the border, not stored: the left column and
+/* The corner button: the code's bytes with Reed-Solomon parity (over GF(256), polynomial 0x11d, roots 1, 2, 4, ...) as a square mosaic of cells in eight colours (3 bits a cell) that fills the button's whole face, the page's own: the theme's
+   ink is colour 0 and the quiet zone round the mosaic is the theme's raised colour (the button's own background). The size is 30 cells (a button as big as the others at 2 device pixels a cell on a 2x screen), read from the border, not stored: the left column and
    bottom row are colour 0 (an L of one colour on the quiet zone: where the grid is, which way up), and the top row and right column alternate colour 0 with the other seven in order (1 to 7, again),
    counted from the corner they share with the L: the colour-0 cells are the clock (the cell size and count) and the other cells, each colour met several times, are what a reader calibrates by, so a
-   reader needs no palette. Inside the border, from the top left, are three cells holding the byte count of the code (9 bits), then the code's bytes and the parity, the cells that are left filled with a
-   fixed pattern. Each theme has its own eight (a '--name' is that token of the page, a '#hex' a colour added to it; none red or orange, which mean overhang on a model): every two are at least 90
-   apart in RGB and each at least 40 from the quiet zone. */
-const MOSAIC = { sizes: [16, 20, 24], palettes: {
-  light: ['--ink', '--accent', '--line-2', '#4657C0', '#A55DB9', '#C4A23A', '#54C393', '#67A5EB'],
-  dark: ['--ink', '--accent', '--muted', '#576BD8', '#C27FF2', '#D6B64A', '#5EB75E', '#78E2F5'] }, quiet: '--raised', head: 3, parity: 0.25, minParity: 4 };
+   reader needs no palette. Inside the border, a sliders icon sits in the middle on a plate: MOSAIC.face holds, for each size, the grid as rows of characters ('#' an icon cell, drawn in ink; 'o' the plate round it, one cell of halo, drawn in the quiet colour; '.' a
+   cell of data), written out once, so the page and a reader in node agree on every cell and nothing is rasterised at run time. Plate and icon cells carry no data. The data cells, in reading order from the top left, are three cells
+   holding the byte count of the code (9 bits), then the code's bytes and the parity, the cells that are left filled with a fixed pattern. Each theme has its own eight (a '--name' is that token of the page, a '#hex' a colour added to it; muted, none red or
+   orange, which mean overhang on a model): every two are at least 60 apart in RGB and each at least 35 from the quiet zone. */
+const MOSAIC = { sizes: [30], palettes: {
+  light: ['--ink', '#935368', '#6CAC97', '#ACAC6C', '#AC6CAC', '#C7C7B8', '#539353', '#535393'],
+  dark: ['--ink', '#83495C', '#A3A35C', '#538349', '#9DC89D', '#C89DC8', '#5CA3A3', '#975CA3'] }, quiet: '--raised', head: 3, parity: 0.25, minParity: 4, face: {
+  30: '............................../............................../............................../............................../............................../............................../............................../............................../.........ooooo................/......oooo###oooooooooo......./......o###############o......./......oooo###oooooooooo......./.........ooooo.ooooo........../......oooooooooo###oooo......./......o###############o......./......oooooooooo###oooo......./...........ooooooooo........../......oooooo###oooooooo......./......o###############o......./......oooooo###oooooooo......./...........ooooo............../............................../............................../............................../............................../............................../............................../............................../............................../..............................'
+} };
+/* the grid of a size as a row of characters each, and its data cells (row, column) in reading order inside the border */
+const faceOf = size => MOSAIC.face[size].split('/');
+const dataCells = size => { const f = faceOf(size), out = []; for (let r = 1; r < size - 1; r++) for (let c = 1; c < size - 1; c++) if (f[r][c] === '.') out.push([r, c]); return out; };
 /* a theme's eight colours as [r, g, b] and its quiet zone, a token's value from tokenValue(name) (the page: getComputedStyle) */
 const mosaicColours = (theme, tokenValue) => {
   const rgb = t => { const v = t.startsWith('--') ? tokenValue(t).trim() : t; return [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16)); };
@@ -2710,25 +2716,25 @@ function rsParity(data, nsym) {
   for (const d of data) { const f = d ^ rem[0]; rem.copyWithin(0, 1); rem[nsym - 1] = 0; if (f) for (let j = 0; j < nsym; j++) rem[j] ^= gfMul(gen[j + 1], f); }
   return rem;
 }
-/* the palette index of every cell, row by row, of a mosaic holding these bytes; { size, cells } */
+/* the palette index of every cell, row by row, of a mosaic holding these bytes (a cell of the plate or the icon is 0: a reader skips it); { size, cells } */
 function mosaicOf(bytes) {
   const k = bytes.length, word = Uint8Array.from([...bytes, ...rsParity(bytes, rsParityCount(k))]);
-  const need = MOSAIC.head + Math.ceil(word.length * 8 / 3), size = MOSAIC.sizes.find(n => (n - 2) ** 2 >= need);
-  if (!size || k > 511) throw new Error('the code is too long for the corner icon');
-  const cells = new Uint8Array(size * size), inner = [];
+  const need = MOSAIC.head + Math.ceil(word.length * 8 / 3), size = MOSAIC.sizes.find(n => dataCells(n).length >= need);
+  if (!size || k > 511) throw new Error('the code is too long for the corner button');
+  const cells = new Uint8Array(size * size), inner = [], free = dataCells(size);
   for (let i = 0; i < size; i++) { cells[i * size] = 0; cells[(size - 1) * size + i] = 0; cells[i] = i % 2 ? 1 + (((i - 1) >> 1) % 7) : 0; const j = size - 1 - i; cells[i * size + size - 1] = j % 2 ? 1 + (((j - 1) >> 1) % 7) : 0; }
   inner.push(k >> 6, (k >> 3) & 7, k & 7);
   for (let i = 0; i < word.length * 8; i += 3) { let v = 0; for (let j = 0; j < 3; j++) v = v * 2 + (i + j < word.length * 8 ? (word[(i + j) >> 3] >> (7 - ((i + j) & 7))) & 1 : 0); inner.push(v); }
-  for (let i = inner.length; i < (size - 2) ** 2; i++) inner.push((i * 3 + 1) % 8);
-  inner.forEach((v, i) => { cells[(1 + Math.floor(i / (size - 2))) * size + 1 + (i % (size - 2))] = v; });
+  for (let i = inner.length; i < free.length; i++) inner.push((i * 3 + 1) % 8);
+  free.forEach(([r, c], i) => { cells[r * size + c] = inner[i]; });
   return { size, cells };
 }
 /* the other way: the bytes of the code and its parity (k bytes first) from a function giving the palette index of the cell at a row and column; the layout, not the error correction */
 function mosaicWord(size, at) {
-  const inner = []; for (let i = 0; i < (size - 2) ** 2; i++) inner.push(at(1 + Math.floor(i / (size - 2)), 1 + (i % (size - 2))));
+  const inner = dataCells(size).map(([r, c]) => at(r, c));
   const k = inner[0] * 64 + inner[1] * 8 + inner[2], n = k + rsParityCount(k), bits = [];
   for (let i = MOSAIC.head; i < inner.length && bits.length < n * 8; i++) for (const s of [2, 1, 0]) bits.push((inner[i] >> s) & 1);
-  if (bits.length < n * 8) throw new Error('the icon is cut short');
+  if (bits.length < n * 8) throw new Error('the button is cut short');
   return { k, word: bytesOf(bits.slice(0, n * 8)) };
 }
 // ---------- end of settings code ----------
@@ -3319,7 +3325,7 @@ const sheetOpen = () => sheetEl.classList.contains('open');
 let shownCorner = '', shownField = '', pageSync = null, propPaint = null, saidTimer = 0;
 const stack = [];   /* the pages open: [] the top level, [group] a group's page, [group, setting] a setting's page */
 const paints = [], lines = [];   /* every group page's controls' paint, and its lines (a line with shownWhile is shown while that setting is above 0) */
-/* the corner: the mosaic of the code with the camera, drawn in cells of whole device pixels (2 at least: 1 CSS px on a 2x screen, 2 on a 1x one) inside a one-cell quiet zone. It is made again when the
+/* the corner: the mosaic of the code with the camera, drawn in cells of whole device pixels (2 at least: 1 CSS px on a 2x screen, 2 on a 1x one) inside a one-cell quiet zone, the plate and sliders icon of MOSAIC.face over the middle. It is made again when the
    settings change and when the camera stops (the end of a drag, a zoom, a view change), not while it moves */
 const themeNow = () => document.documentElement.dataset.theme === 'light' || document.documentElement.dataset.theme === 'dark' ? document.documentElement.dataset.theme : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 function codeSync() {
@@ -3331,7 +3337,8 @@ function codeSync() {
   cv.width = cv.height = side; cv.style.width = cv.style.height = side / dpr + 'px'; cv.setAttribute('aria-hidden', 'true');
   const { colours, quiet } = mosaicColours(themeNow(), t => getComputedStyle(document.documentElement).getPropertyValue(t));
   g.fillStyle = `rgb(${quiet.join(',')})`; g.fillRect(0, 0, side, side);
-  for (let r = 0; r < m.size; r++) for (let q = 0; q < m.size; q++) { g.fillStyle = `rgb(${colours[m.cells[r * m.size + q]].join(',')})`; g.fillRect((q + 1) * cell, (r + 1) * cell, cell, cell); }
+  const face = faceOf(m.size);
+  for (let r = 0; r < m.size; r++) for (let q = 0; q < m.size; q++) { const f = face[r][q], c = f === 'o' ? quiet : colours[f === '#' ? 0 : m.cells[r * m.size + q]]; g.fillStyle = `rgb(${c.join(',')})`; g.fillRect((q + 1) * cell, (r + 1) * cell, cell, cell); }
   codeBtn.replaceChildren(cv);
 }
 /* the field and the large QR: the code with the camera, left alone while the field is being typed in */

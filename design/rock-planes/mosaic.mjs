@@ -85,12 +85,12 @@ export function read(png) {
     if (same(x - 1, mid, seed)) continue;
     /* the column's ends are rounded by the corner pixels, so the run is taken at this column and the next */
     const [ya, yb_] = vrun(x + 1, mid, seed), [yc, yd] = vrun(x, mid, seed); const top = Math.min(ya, yc), bot = Math.max(yb_, yd);
-    const Lv = bot - top + 1; if (Lv < 14 || Lv > 120) continue;
+    const Lv = bot - top + 1; if (Lv < 14 || Lv > 260) continue;
     y1 = bot; const y0 = top;
     for (const N of SIZES) {
       /* the bottom row of the L is read on the row of its last full pixels, taken at the second cell, where the cell above is not the L's colour */
-      const s = Lv / N, cx2 = Math.min(W - 1, x + Math.ceil(1.5 * s)), yr = dist(px(cx2, y1), seed) <= dist(px(cx2, y1 - 1), seed) ? y1 : y1 - 1; if (!same(cx2, yr, seed)) continue;
-      const [, xa] = hrun(x, yr, seed), [, xb] = hrun(x, Math.max(y0, yr - 1), seed); const x1 = Math.max(xa, xb);
+      const s = Lv / N, cx2 = Math.min(W - 1, x + Math.ceil(1.5 * s)), yr = s < 2 || dist(px(cx2, y1), seed) <= dist(px(cx2, y1 - 1), seed) ? y1 : y1 - 1;   /* (under two pixels a cell has no pure row above the last: the last it is) */ if (!same(cx2, yr, seed)) continue;
+      const [, xa] = hrun(x, yr, seed), [, xb] = s < 2 ? [0, xa] : hrun(x, Math.max(y0, yr - 1), seed); const x1 = Math.max(xa, xb);
       const Lh = x1 - x + 1; if (Math.abs(Lh - Lv) > 0.15 * s + 3) continue;
       /* the edges are measured on the column and the row that are most the L's colour (the bottom row's is the row it was found on), where the other direction's blend is least */
       const cx = dist(px(x, mid), seed) <= dist(px(x + 1, mid), seed) ? x : x + 1;
