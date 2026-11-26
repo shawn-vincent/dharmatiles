@@ -361,7 +361,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Layers and spines.</b> Every <b>Direction</b> is built the same way, only turned: the spines run up (Up), from the back to the front (Through) or along the wall (Along), and the envelope is stacked with layers across them. The first face is flat: the ground (Up), the back (Through) or the left end of the envelope (Along). Each face after it is the face below it moved on along the Direction by a smooth random amount in <b>Reach</b>, everywhere: the amount is a smooth field drawn from a stream of the face&rsquo;s own, its features <span data-const="REACH_FEAT"></span> spine spacings across (the middle of Width and Thickness together), so a layer is as thick as Reach at every place, thickening and thinning smoothly, and faces never cross. Faces are thrown until one lies at the envelope&rsquo;s end, which cuts the last layer; a Reach as long as the envelope is one layer. In each layer in turn spines are started by dart throwing: a dart is a point in the layer, its direction turned by an angle drawn in <b>Wander</b>; it is kept only if it is clear of every spine already in the layer by <b>Width</b> across the wall and <b>Thickness</b> front to back (each the two ends&rsquo; sizes together), and the layer is full when 80 darts in a row miss. A spine runs on into the next layer with the chance <b>Span</b>, drawn at each face it reaches, so breaks stagger. A spine is the plan of its stone: it ends on the layer face or, where that comes first, on the fuzzy reach of the envelope (the top drawn in Height, the front in Depth, the ends in Length), and the stone is built up to the spine&rsquo;s end, its cap the plane the spine stops on. <b>Order</b> draws the darts&rsquo; places from a grid instead, its pitch the middle of Width by the middle of Thickness, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is moved at random by up to half of (100% &minus; Order) of a spacing along each axis, and at 0% there is no grid: the darts are thrown at random. A layer whose spines are at least <span data-const="COLUMN"></span> Widths long (a column) gives all its spines one lean along the wall, drawn in Wander, so neighbours stay parallel and none narrows against another.</li>
       <li><b>Cells.</b> Each spine is one convex stone, from the layer face it starts on to the one it stops at (each taken as its tangent plane at the spine there). Between it and each spine that shares a layer with it, the stone is cut by the plane halfway between the two spines&rsquo; closest points (measured with Thickness against Width as the proportion, a stretch of the whole wall, so planes stay planes), then by the envelope. The planes are drawn pair by pair and do not have to agree, so some space can be left to no stone. <b>Width</b> and <b>Thickness</b> space the spines; they do not move the planes. <b>Joint</b>, drawn for each pair, moves each side half of it from the halfway plane: over zero a gap opens (separate stones), under zero each reaches past it into its neighbour (they overlap). The cells are not a chain: every contact is known before any stone is carved, so every stone is carved on its own.</li>
       <li><b>Bodies.</b> A spine that runs through several layers is one stone, carved whole. <b>Fuse</b> joins two neighbouring spines whose cells share a face into one body, one draw for each two from a stream of the pair&rsquo;s own; a cell narrower than 3 mm across joins the neighbour it shares the most side face with. A body is carved cell by cell with the faces where its cells meet kept flat, so the slicer fuses them into one stone; a body that rests on nothing the ground holds is joined to a touching body that is held.</li>
-      <li><b>The bottom.</b> A cell finds what holds it before it is carved: the places where its bottom meets the tops of the cells below (any stone placed before it: the stones are placed holders first, and a stone can hold another only when its spine ends below the middle of the other&rsquo;s and starts lower, so a neighbour beside it never holds it and one it overlaps deeply does), each made a patch. Each patch is inset by the bevel&rsquo;s width (the high end of <b>Bevel</b>), so a stone rests on what its bevels leave; an overlap too small to keep <span data-const="MINSUP"></span> mm&sup2; that way is shrunk about its centre to <span data-const="MINSUP"></span> mm&sup2; instead, and a stone keeps the whole overlap with a stone of its own body. A holder's patch is where the bottom lies within reach of its top or sunk into it, at any depth. Laying the bottom moves it, so what touches it is found again against the laid bottom and the bottom laid again, until it stays (at most three times). Patches join the bottom from the largest down, each while the hull of those kept is still covered by the patches and the hulls of pairs that span at most Bridge (a patch that cannot join as it is is trimmed toward them and tried again; one under <span data-const="MINBR"></span> mm&sup2; is no end of a bridge). Its <b>bottom</b> is those patches, and every point of it either rests on one or lies on a line between two patches at most <b>Bridge</b> apart (less <span data-const="BRIDGE_MARGIN"></span> mm, so the plan sits inside the measure). The bottom is laid across its holders and may pass into a stone below that does not hold it: the stones print as one solid, so nothing hangs where they overlap. A stone with no holder is lowered to the nearest top below, or stands on the ground when it is near the plate. A <b>flare</b> rises from the bottom&rsquo;s outline at <span data-const="FLARE_DEG"></span>&deg; from upright, so what lies past a patch is cut away rather than overhanging. Where a stone holds another, its top keeps flat the hull of the patches the stones above rest on, and its fuzzy top is never below its holders&rsquo; tops. Every stone rests on the ground or on a stone that does.</li>
+      <li><b>The bottom.</b> A cell finds what holds it before it is carved: the places where its bottom meets the tops of the cells below (any stone placed before it: the stones are placed holders first, and a stone can hold another only when its spine ends below the middle of the other&rsquo;s and starts lower, so a neighbour beside it never holds it and one it overlaps deeply does), each made a patch. Each patch is inset by the bevel&rsquo;s width (the high end of <b>Bevel</b>), so a stone rests on what its bevels leave; an overlap too small to keep <span data-const="MINSUP"></span> mm&sup2; that way is shrunk about its centre to <span data-const="MINSUP"></span> mm&sup2; instead, and a stone keeps the whole overlap with a stone of its own body. A holder's patch is where the bottom lies within reach of its top or sunk into it, at any depth. Laying the bottom moves it, so what touches it is found again against the laid bottom and the bottom laid again, until it stays (at most three times). Patches join the bottom from the largest down, each while the hull of those kept is still covered by the patches and the hulls of pairs that span at most Bridge (a patch that cannot join as it is is trimmed toward them and tried again; one under <span data-const="MINBR"></span> mm&sup2; is no end of a bridge). Its <b>bottom</b> is those patches, and every point of it either rests on one or lies on a line between two patches at most <b>Bridge</b> apart (less <span data-const="BRIDGE_MARGIN"></span> mm, so the plan sits inside the measure). The bottom is laid across its holders and may pass into a stone below that does not hold it: the stones print as one solid, so nothing hangs where they overlap. A stone with no holder is lowered to the nearest top below, or stands on the ground when it is near the plate. Then the stone finds all that holds it: the stones print as one solid, so a stone is held wherever another stone (or the plate) lies just under its surface, not only where it rests on a top. Each face that looks down, a side face too, is clipped by the cell of each stone placed before it; a held place gives up the bevel&rsquo;s width at a rim with open surface past it, and a holder keeps its held places from carving. A holder&rsquo;s held places that touch are one patch. The patches on faces past <span data-const="OVER"></span>&deg; bridge as the bottom&rsquo;s patches do (the bottom first), and any other patch (a side face&rsquo;s) joins while the cone over the patches kept takes in none of the stone&rsquo;s overhang that is neither held nor bridged. A <b>flare</b> keeps that cone: all that lies within <span data-const="FLARE_DEG"></span>&deg; of upright above a held place (for each direction in plan, the plane at that angle through the held place farthest out); the rest would hang and is cut away. Where a stone holds another, its top keeps flat the hull of the patches the stones above rest on, and its fuzzy top is never below its holders&rsquo; tops. Every stone rests on the ground or on a stone that does.</li>
       <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least <span data-const="BEV_FLAT"></span>&deg;, a point just outside it in no other stone) gets one flat bevel, cut the same distance in on both faces, so at the middle angle between them: <b>Bevel</b> wide (drawn between its two ends at each end of the edge), at most <span data-const="BEV_INR%"></span> of the narrower face&rsquo;s inradius, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell, so with Joint at zero or more stones never overlap and under zero they overlap. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the wall three ways. <b>Finished</b> is the stones as they print: a natural grey that runs a little warm, each stone its own, lit like the rest, the cracks dark and the overhang painted orange (55 to 65&deg;) or red (past 65&deg;), with no outlines. <b>Rocks</b> is the same stones for debugging: each in its own vivid colour, every edge outlined, the bevels paler, the crack network drawn (the lines that became cracks solid, the lines a crack could have followed and did not dashed and fainter) and the overhang painted. <b>Structure</b> is the cells as cut, before carving, each body its own shade, as frosted glass, with the spines, the layer faces and the envelope. A tap selects a stone (a mass, in Structure), outlined in yellow, with its spine in Structure, and opens its page in the sheet (Parts, then the stone: its body, layer and size, what it rests on and what it holds up, as links to those stones); in Finished and Rocks a tap near an edge selects that edge too, drawn in cyan with its report on the stone&rsquo;s page, and the selection stays when the view changes. A tap on empty space clears it. <b>Weathering</b> then cuts each stone by an egg of its own shape, just holding the stone at 0% and just inside it at 100%, so corners go first, then edges, then the faces dome; what a stone rests on or carries, and the downward limit, hold it back.</li>
       <li><b>Cracks</b> (each style sets its own: Granite 12.5% on a Blocks network, Columns 19.5% on a Columns network, Layered 90% on a Planes network, Fieldstone none, Ashlar 15%; under Rocks, whose page in the settings sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: a table of flat boundaries between cells of seeds on a grid, in one, two or three axes: <b>Planes</b> across the vertical (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread, and each boundary carrying the rank at which a crack would reach it (cracks start at even shares and grow from line to line, turning least, branching with the chance <b>Branching</b>, <span data-const="CRACK_LINES"></span> lines to a crack on average). The table is made once for each Network, Spacing and Branching (the first wall that needs one waits for it) and the wall takes it at a seeded offset. Where a boundary crosses a stone&rsquo;s upright or upward faces it is a trace; <b>Cracks</b> picks each stone&rsquo;s own share of its traces&rsquo; length, in rank order, so raising it only adds cracks, and a crack never runs from one stone into another. A boundary a face meets at less than <span data-const="GRAZE"></span>&deg; (it would take off a skin) takes none. A trace is walked in short steps (<b>Wiggle</b>: each step <span data-const="WIGGLE_STEP"></span> mm, its heading turned by up to this share of <span data-const="WIGGLE_TURN"></span>&deg; and kept within the share, so a crack meanders), and cut as a groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>&deg; off the face&rsquo;s inward normal, <b>Opening</b> apart at the face (at most <span data-const="OPENING_MOST"></span> mm), so on an upright face its roof faces down at the overhang target whichever way the crack runs, and a wall that would face down past it is turned up to it. A free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span>; an end that meets another crack, or the stone&rsquo;s outline where it touches another stone or the ground, runs off at full size; and a stretch that holds a stone above or lies on a bottom is left whole. Each face the grooves touch is cut in its own plane into the convex pieces outside them, and merged back to as few as keep it convex. The faces inside a crack are drawn dark grey.</li>
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
@@ -487,6 +487,12 @@ function cutV(a, b, da, db) {
   emStamp[key] = stamp; emVal[key] = id; return id;
 }
 let cutN = 0;
+const capL = new Int32Array(4 * MAXF);   // a cut's points on the faces it crossed (each face's entry and exit), for capHull; MAXF covers the carve's slots too
+function capHull(nx, ny, nz, k) {   // a cut's cap as the convex hull of its points in its plane, counterclockwise about the plane's normal, into tmpA; its length
+  const ax = Math.abs(nx) < 0.9 ? [1, 0, 0] : [0, 1, 0], ux = ax[1] * nz - ax[2] * ny, uy = ax[2] * nx - ax[0] * nz, uz = ax[0] * ny - ax[1] * nx, ul = Math.hypot(ux, uy, uz), u = [ux / ul, uy / ul, uz / ul], w = [ny * u[2] - nz * u[1], nz * u[0] - nx * u[2], nx * u[1] - ny * u[0]];
+  const seen = new Set(), pts = []; for (let i = 0; i < k; i++) { const v = capL[i]; if (seen.has(v)) continue; seen.add(v); pts.push([u[0] * vx[v] + u[1] * vy[v] + u[2] * vz[v], w[0] * vx[v] + w[1] * vy[v] + w[2] * vz[v], v]); }
+  if (pts.length < 3) return 0; const h = hull2(pts); if (h.length < 3 || h.length > 64) return 0; for (let i = 0; i < h.length; i++) tmpA[i] = h[i][2]; return h.length;
+}
 // keep n.x <= d; the new face gets kind
 function clip(nx, ny, nz, d, kind) {
   if (empty) return;
@@ -494,7 +500,7 @@ function clip(nx, ny, nz, d, kind) {
   for (let v = 0; v < nv; v++) { const x = nx * vx[v] + ny * vy[v] + nz * vz[v] - d; dd[v] = x; if (x > EPS) anyOut = true; }
   if (!anyOut) return;
   stamp++; cutN = nv;
-  let nI2 = 0, nF2 = 0, chain = -1, capN = 0;
+  let nI2 = 0, nF2 = 0, chain = -1, capN = 0, capK = 0;
   for (let f = 0; f < nF; f++) {
     const o = fo[f], m = fl[f];
     let nout = 0; for (let k = 0; k < m; k++) if (dd[fv[o + k]] > EPS) nout++;
@@ -511,11 +517,12 @@ function clip(nx, ny, nz, d, kind) {
     }
     if (nI2 - start < 3) { nI2 = start; continue; }
     fo2[nF2] = start; fl2[nF2] = nI2 - start; ft2[nF2++] = ft[f];
-    if (exit >= 0 && entry >= 0 && exit !== entry) { nxt[entry] = exit; nxtSt[entry] = stamp; chain = entry; capN++; }
+    if (exit >= 0 && entry >= 0 && exit !== entry) { nxt[entry] = exit; nxtSt[entry] = stamp; chain = entry; capN++; capL[capK++] = entry; capL[capK++] = exit; }
   }
-  if (capN >= 3) {
+  if (capN >= 1) {
     const start = nI2; let v = chain, c = 0;
     do { fv2[nI2++] = v; if (nxtSt[v] !== stamp) { nI2 = start; break; } v = nxt[v]; c++; } while (v !== chain && c <= capN);
+    if (v !== chain || c !== capN) { const h = capHull(nx, ny, nz, capK); nI2 = start; for (let i = 0; i < h; i++) fv2[nI2++] = tmpA[i]; }   /* the walk did not close over every cut face (the plane ran through vertices): the cap is the hull of the cut's points, the cell being convex */
     if (nI2 - start >= 3) { fo2[nF2] = start; fl2[nF2] = nI2 - start; ft2[nF2++] = kind; }
   }
   if (nF2 < 4) { empty = true; nF = 0; return; }
@@ -673,7 +680,7 @@ function clipS(nx, ny, nz, d, kind) {
   const nv = nVS; let anyOut = false;
   for (let v = 0; v < nv; v++) { const x = nx * vx[v] + ny * vy[v] + nz * vz[v] - d; dd[v] = x; if (x > EPS) anyOut = true; }
   if (!anyOut) return;
-  stamp++; let nDead = 0, chain = -1, capN = 0;
+  stamp++; let nDead = 0, chain = -1, capN = 0, capK = 0;
   for (let s = 0; s < nSL; s++) {
     const m = sLen[s]; if (!m) continue;
     if (nx * sCx[s] + ny * sCy[s] + nz * sCz[s] - d + sR[s] <= EPS) continue;   // the face lies wholly inside
@@ -692,12 +699,13 @@ function clipS(nx, ny, nz, d, kind) {
     if (n2 < 3) { sLen[s] = 0; freeS[nFreeS++] = s; continue; }
     if (n2 > CAPS) throw new Error('carve: face too long');
     for (let k = 0; k < n2; k++) sV[o + k] = tmpA[k]; sLen[s] = n2;
-    if (exit >= 0 && entry >= 0 && exit !== entry) { nxt[entry] = exit; nxtSt[entry] = stamp; chain = entry; capN++; }
+    if (exit >= 0 && entry >= 0 && exit !== entry) { nxt[entry] = exit; nxtSt[entry] = stamp; chain = entry; capN++; capL[capK++] = entry; capL[capK++] = exit; }
   }
   for (let v = 0; v < nv; v++) if (dd[v] > EPS) deadV[nDead++] = v;
-  if (capN >= 3) {
+  if (capN >= 1) {
     let v = chain, c = 0, n2 = 0;
     do { if (n2 >= CAPS) { n2 = 0; break; } tmpA[n2++] = v; if (nxtSt[v] !== stamp) { n2 = 0; break; } v = nxt[v]; c++; } while (v !== chain && c <= capN);
+    if (v !== chain || c !== capN) n2 = capHull(nx, ny, nz, capK);   /* the walk did not close over every cut face (the plane ran through vertices): the cap is the hull of the cut's points, the body being convex */
     if (n2 >= 3) { const s = nFreeS > 0 ? freeS[--nFreeS] : nSL++; if (s >= MAXSL) throw new Error('carve: too many faces'); const o = s * CAPS; for (let k = 0; k < n2; k++) sV[o + k] = tmpA[k]; sLen[s] = n2; sKind[s] = kind; sphereOf(s); lastCap = s; }
   }
   for (let i = 0; i < nDead; i++) { const v = deadV[i]; vx[v] = NaN; vy[v] = NaN; vz[v] = NaN; freeV[nFreeV++] = v; }
@@ -1277,6 +1285,44 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
     const out = [], left = new Set(pieces), byZ = pieces.slice().sort((a, b) => a.bb[4] - b.bb[4] || a.id - b.id);
     while (left.size) { let nx = byZ.find(q => left.has(q) && below.get(q).every(p => !left.has(p))); if (!nx) nx = byZ.find(q => left.has(q)); out.push(nx); left.delete(nx); }
     return out; })();
+  /* what holds a stone: the done stones by the columns of plan they cover (HG mm); a face is held where a stone lies HELDEPS under it; the rim of a hold
+     gives up HELDIN to the bevel; the open overhang is sampled every OPENSTEP */
+  const OPENSTEP = 1, HELDEPS = 0.1, HELDIN = Math.max(0.5, BEV.hi), HG = 4, hgrid = new Map();
+  for (const p of pieces) { const b = p.bb; if (!b) continue; for (let ix = Math.floor((b[0] - 2) / HG); ix <= Math.floor((b[1] + 2) / HG); ix++) for (let iy = Math.floor((b[2] - 2) / HG); iy <= Math.floor((b[3] + 2) / HG); iy++) { const k = (ix + 512) * 1024 + iy + 512; let l = hgrid.get(k); if (!l) hgrid.set(k, l = []); l.push(p); } }
+  /* a cone's outline with its near-straight turns (under FLSIMP degrees) and its short edges (under FLSHORT) merged: nearly parallel planes leave the clip slivers */
+  const FLSIMP = 4, FLSHORT = 0.3, simpHull = H => { let P = H.slice(); for (let ch = true; ch && P.length > 3;) { ch = false;
+      for (let i = 0; i < P.length && P.length > 3; i++) { const a = P[(i + P.length - 1) % P.length], b = P[i], c = P[(i + 1) % P.length], u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]], lv = Math.hypot(v[0], v[1]);
+        const turn = Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]) * 180 / Math.PI; if (lv < FLSHORT || turn < FLSIMP) { P.splice(i, 1); ch = true; i--; } } } return P; };
+  /* the cone over held points: the held points with all that lies within FLARE_DEG of upright above them, a convex body; for each direction in plan (each
+     edge of their outline's own, and every 15 degrees), the plane at FLARE_DEG through the held point farthest out that way */
+  const coneOf = H_ => { const B = simpHull(ccw(hull2(H_))), n = B.length, az = [], o = []; if (n < 3) return o;
+    for (let i = 0; i < n; i++) { const A = B[i], C = B[(i + 1) % n]; if (Math.hypot(C[0] - A[0], C[1] - A[1]) > 1e-9) az.push(Math.atan2(-(C[0] - A[0]), C[1] - A[1])); }
+    for (let k = 0; k < 24; k++) { const a = -Math.PI + k * Math.PI / 12; if (az.every(b => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))) > 2 * DEG)) az.push(a); }
+    for (const a of az) { const nx = FLC * Math.cos(a), ny = FLC * Math.sin(a), nz = -FLS; let d = -Infinity; for (const h of H_) d = Math.max(d, nx * h[0] + ny * h[1] + nz * h[2]); o.push([nx, ny, nz, d]); }
+    return o; };
+  /* a convex polygon in 3D cut by a plane (kept where n.x <= d), the outward direction of an edge within its face, a point's distance to a segment, and a done
+     cell's half-spaces moved up by HELDEPS (its bottom where it stands now; kept while the cell is unchanged) */
+  const cut3 = (P, a, b, c, d) => { const o = []; for (let i = 0, m = P.length; i < m; i++) { const u = P[i], v = P[(i + 1) % m], su = a * u[0] + b * u[1] + c * u[2] - d, sv = a * v[0] + b * v[1] + c * v[2] - d; if (su <= 0) o.push(u); if ((su < 0 && sv > 0) || (su > 0 && sv < 0)) { const t = su / (su - sv); o.push([u[0] + t * (v[0] - u[0]), u[1] + t * (v[1] - u[1]), u[2] + t * (v[2] - u[2])]); } } return o; };
+  const outIn = (u, v, n) => { const ex = v[0] - u[0], ey = v[1] - u[1], ez = v[2] - u[2], x = ey * n[2] - ez * n[1], y = ez * n[0] - ex * n[2], z = ex * n[1] - ey * n[0], l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; };
+  const segD = (p, a, b) => { const ex = b[0] - a[0], ey = b[1] - a[1], ez = b[2] - a[2], L2 = ex * ex + ey * ey + ez * ez; let t = L2 > 0 ? ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey + (p[2] - a[2]) * ez) / L2 : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(p[0] - a[0] - t * ex, p[1] - a[1] - t * ey, p[2] - a[2] - t * ez); };
+  const cellHS = p => { const key = p.planes.length * 4096 + p.flare.length * 8 + (p.done ? 1 : 0) + (p.ground ? 2 : 0) + p.sink + (p.botPl ? p.botPl[0] * 7 + p.botPl[1] * 11 + p.botPl[2] : 0) + (p.botX ? p.botX.length * 1e5 : 0); if (p._hsK === key) return p._hs; p._hsK = key; return p._hs = cellHS0(p); }, cellHS0 = p => { const o = [], st = p.done && !p.ground; for (const e of p.planes) { if (st && isBot(e)) continue; o.push([e[0], e[1], e[2], e[3] + HELDEPS * e[2]]); }
+    if (st) for (const b of [p.botPl].concat(p.botX || [])) o.push([b[0], b[1], -1, p.sink - b[2] - HELDEPS]);
+    for (const f of p.flare) o.push([f[0], f[1], f[2], f[3] + HELDEPS * f[2]]); return o; };
+  /* which of a stone's held places it keeps: from the largest, each other (largest first) joins while every point of the hull of the set lies on one or
+     on the hull of two that span at most Bridge; one that cannot join as it is is trimmed toward the set and tried again (each a polygon in plan) */
+  const bridgedSet = (pl, first = -1) => {
+    if (pl.length < 2) return pl.map((p, i) => ({ i, poly: p }));
+    const A_ = pl.map(p => Math.abs(area2(p))), disk = (u, R) => { const o = []; for (let i = 0; i < 16; i++) { const a = 2 * Math.PI * i / 16; o.push([u[0] + R * Math.cos(a) / Math.cos(Math.PI / 16), u[1] + R * Math.sin(a) / Math.cos(Math.PI / 16)]); } return o; };
+    const trimNear = (Pc, others) => { let out = ccw(Pc); for (const O of others) for (const u of O) { out = inter2(out, disk(u, (BRIDGE - 0.15) * Math.cos(Math.PI / 16))); if (!out || out.length < 3) return null; } return out; };
+    const cur = pl.slice(), ok = idx => { const hs = ccw(hull2([].concat(...idx.map(i => cur[i])))), sh = bridgeShapes(idx.map(i => cur[i]), BRIDGE);
+      let ax_ = 1e9, bx_ = -1e9, ay_ = 1e9, by_ = -1e9; for (const v of hs) { ax_ = Math.min(ax_, v[0]); bx_ = Math.max(bx_, v[0]); ay_ = Math.min(ay_, v[1]); by_ = Math.max(by_, v[1]); }
+      for (let y = ay_ + 0.3; y < by_; y += 0.6) for (let x = ax_ + 0.3; x < bx_; x += 0.6) { if (!inPoly(hs, x, y) || sh.some(P_ => inPoly(P_, x, y))) continue; return false; } return true; };
+    const ord = pl.map((_, i) => i).sort((a, b) => (b === first) - (a === first) || A_[b] - A_[a]), set = [ord[0]];
+    for (let t = 1; t < ord.length; t++) { const i = ord[t]; if (A_[i] < MINBR || A_[set[0]] < MINBR) continue;
+      if (ok(set.concat(i))) { set.push(i); continue; }
+      const tp = trimNear(cur[i], set.map(j => cur[j])); if (!tp || Math.abs(area2(tp)) < MINBR || minW2(tp) < MINSW) continue;
+      const sv = cur[i]; cur[i] = tp; if (ok(set.concat(i))) set.push(i); else cur[i] = sv; }
+    return set.map(i => ({ i, poly: cur[i] })); };
   for (const q of placing) {
     let thin; { const B_ = q.bot || [[(q.bb[0] + q.bb[1]) / 2, (q.bb[2] + q.bb[3]) / 2]]; let x = 0, y = 0; for (const v of B_) { x += v[0]; y += v[1]; } x /= B_.length; y /= B_.length; thin = topAt(q, x, y) - botN(q, x, y) < THIN; }   /* thin: thinner than THIN where it stands; it keeps every contact it can, whole */
     q.done = true;
@@ -1383,16 +1429,65 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
       else { clipBot(q); if (!empty && nF >= 4) taken(q); }
       if (raised) topsOf(q);
     }
-    // the flare rises from the bottom's outline at FLARE_DEG degrees from upright
-    const B = ccw(q.B), n = B.length;
-    for (let i = 0; i < n; i++) {
-      const A = B[i], C = B[(i + 1) % n], ex = C[0] - A[0], ey = C[1] - A[1], l = Math.hypot(ex, ey); if (l < 1e-9) continue;
-      // the plane holds the bottom's edge as it is in 3D (the bottom plane is tilted): the ideal normal with its part along the edge removed, which only flattens it
-      const za = botZ(q, A[0], A[1]), zc = botZ(q, C[0], C[1]), e3 = Math.hypot(ex, ey, zc - za), ux = ex / e3, uy = ey / e3, uz = (zc - za) / e3;
-      let mx_ = FLC * ey / l, my_ = -FLC * ex / l, mz_ = -FLS; const mu = mx_ * ux + my_ * uy + mz_ * uz; mx_ -= mu * ux; my_ -= mu * uy; mz_ -= mu * uz;
-      const ml = Math.hypot(mx_, my_, mz_), nx = mx_ / ml, ny = my_ / ml, nz = mz_ / ml, d = nx * A[0] + ny * A[1] + nz * za;
-      q.flare.push([nx, ny, nz, d]);
-    }
+    /* held: every part of a face that looks down (a side face too) with another stone or the plate just outside it. The wall prints as one solid, so a
+       stone is held wherever any stone lies under its surface, not only where it rests on a holder's top. Each such face is a convex polygon, and the part
+       of it a holder's cell holds (the cell moved up by HELDEPS) is that polygon clipped by the cell's planes */
+    { const across = new Map(), down = [];
+      for (let f = 0; f < nF; f++) { const o = fo[f], m = fl[f]; for (let k = 0; k < m; k++) across.set(fv[o + k] * 4096 + fv[o + (k + 1) % m], f); }
+      for (let f = 0; f < nF; f++) { const fx = faceXYZ(f), m = fx.length; let nx = 0, ny = 0, nz = 0;
+        for (let k = 0; k < m; k++) { const a = fx[k], b = fx[(k + 1) % m]; nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1]); }
+        const L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue; nx /= L; ny /= L; nz /= L;
+        const ids = []; for (let k = 0; k < m; k++) ids.push(fv[fo[f] + k]);
+        down[f] = nz > -0.05 ? null : { fx, n: [nx, ny, nz], ids, out: fx.map((a, k) => outIn(a, fx[(k + 1) % m], [nx, ny, nz])) }; }
+      const polys = [], rawK = [], pend = [];
+      for (let f = 0; f < nF; f++) { const D = down[f]; if (!D) continue; const fx = D.fx;
+        let ax_ = 1e9, bx_ = -1e9, ay_ = 1e9, by_ = -1e9, az_ = 1e9, bz_ = -1e9; for (const v of fx) { ax_ = Math.min(ax_, v[0]); bx_ = Math.max(bx_, v[0]); ay_ = Math.min(ay_, v[1]); by_ = Math.max(by_, v[1]); az_ = Math.min(az_, v[2]); bz_ = Math.max(bz_, v[2]); } D.area = polyArea(fx);
+        const cand = new Set(); for (let ix = Math.floor(ax_ / HG); ix <= Math.floor(bx_ / HG); ix++) for (let iy = Math.floor(ay_ / HG); iy <= Math.floor(by_ / HG); iy++) { const l = hgrid.get((ix + 512) * 1024 + iy + 512); if (l) for (const p of l) cand.add(p); }
+        const tries = [[-1, [[0, 0, 1, 0.05 + HELDEPS]]]];
+        if (az_ > 0.05 + HELDEPS) tries.pop();
+        for (const p of cand) { if (p === q || !p.done || p.dead) continue; const b = p.bb; if (b[0] > bx_ || b[1] < ax_ || b[2] > by_ || b[3] < ay_ || b[4] > bz_ + 1 || b[5] < az_ - 1) continue; const hs = cellHS(p); if (hs.some(h => fx.every(v => h[0] * v[0] + h[1] * v[1] + h[2] * v[2] >= h[3]))) continue; tries.push([p.id, hs]); }
+        for (const [by, hs] of tries) { let P = fx; for (const h of hs) { P = cut3(P, h[0], h[1], h[2], h[3]); if (P.length < 3) break; } if (P.length < 3 || polyArea(P) < 1e-4) continue; (D.raw || (D.raw = [])).push(P); if (D.n[2] < -SINO && by >= 0) rawK.push([by, P]); pend.push({ D, by, P }); } }
+      /* the rim of a hold is left to the bevel: an edge with open surface of the stone just past it (in no held polygon of the face it lies on) moves in by HELDIN */
+      for (const D of down) if (D && D.raw) D.rawO = D.raw.map(P => P.map((u, k) => outIn(u, P[(k + 1) % P.length], D.n)));
+      const heldOn = (D, x, y, z) => D.raw ? D.raw.some((P, r) => { const o = D.rawO[r]; for (let k = 0; k < P.length; k++) { const u = P[k], w = o[k]; if ((x - u[0]) * w[0] + (y - u[1]) * w[1] + (z - u[2]) * w[2] > 1e-6) return false; } return true; }) : false;
+      for (const { D, by, P: P0 } of pend) { let P = P0; const fx = D.fx, ins = [];
+          for (let i = 0, m = P.length; i < m; i++) { const u = P[i], v = P[(i + 1) % m], el = Math.hypot(v[0] - u[0], v[1] - u[1], v[2] - u[2]); if (el < 1e-6) continue; const o = outIn(u, v, D.n);
+            /* the edge lies along one of the face's own edges (k), past which is the face across it, or inside the face (k < 0) */
+            let k = -1, kd = 1e-5; { const M = [(u[0] + v[0]) / 2, (u[1] + v[1]) / 2, (u[2] + v[2]) / 2]; for (let j = 0; j < fx.length; j++) { const w = fx[j], dd_ = Math.abs((M[0] - w[0]) * D.out[j][0] + (M[1] - w[1]) * D.out[j][1] + (M[2] - w[2]) * D.out[j][2]); if (dd_ < kd) { kd = dd_; k = j; } } }
+            let dir = null, F = D; if (k < 0) dir = o; else { const g = across.get(D.ids[(k + 1) % fx.length] * 4096 + D.ids[k]), G = g === undefined ? null : down[g]; if (G) { const w = G.out[G.ids.indexOf(D.ids[(k + 1) % fx.length])]; dir = [-w[0], -w[1], -w[2]]; F = G; } }
+            let open = false; if (dir) for (let c = Math.max(1, Math.ceil(el)), t = 0; t < c && !open; t++) { const s = (t + 0.5) / c; open = !heldOn(F, u[0] + s * (v[0] - u[0]) + 0.05 * dir[0], u[1] + s * (v[1] - u[1]) + 0.05 * dir[1], u[2] + s * (v[2] - u[2]) + 0.05 * dir[2]); }
+            if (open) ins.push([o[0], o[1], o[2], o[0] * u[0] + o[1] * u[1] + o[2] * u[2] - HELDIN]); }
+        for (const h of ins) { P = cut3(P, h[0], h[1], h[2], h[3]); if (P.length < 3) break; }
+        if (P.length >= 3 && polyArea(P) > 1e-4) polys.push({ by, P, over: D.n[2] < -SINO }); }
+      restore(q.snap); clipBot(q);
+      /* the held places as connected patches (polygons of one holder within reach of each other), each its own polygon in plan, as the measure sees them */
+      const par = polys.map((_, k) => k), fnd = a => { while (par[a] !== a) a = par[a] = par[par[a]]; return a; }, R_ = 0.75;
+      const near3 = (A, B) => { for (const a of A) for (let i = 0, m = B.length; i < m; i++) if (segD(a, B[i], B[(i + 1) % m]) <= R_) return true; return false; };
+      for (let i = 0; i < polys.length; i++) for (let j = i + 1; j < polys.length; j++) if (polys[i].by === polys[j].by && fnd(i) !== fnd(j) && (near3(polys[i].P, polys[j].P) || near3(polys[j].P, polys[i].P))) par[fnd(j)] = fnd(i);
+      const comp = new Map(); polys.forEach((g, k) => { const r = fnd(k); let l = comp.get(r); if (!l) comp.set(r, l = []); l.push(g); });
+      const gs = [...comp.values()].map(l => { const pts = []; for (const g of l) for (const v of g.P) pts.push([v[0], v[1], v[2], g.by]); return { l, pts, poly: ccw(hull2(pts)) }; }).filter(g => g.poly.length >= 3);
+      if (q.B && q.B.length >= 3) gs.push({ l: null, over: true, pts: q.B.map(v => [v[0], v[1], botZ(q, v[0], v[1]), -2]), poly: ccw(q.B.map(v => [v[0], v[1]])) });
+      for (const g of gs) if (g.l) g.over = g.l.some(h => h.over);
+      q.held = []; const byH = new Map(), keep = v => { q.held.push(v); if (v[3] >= 0) { let l = byH.get(v[3]); if (!l) byH.set(v[3], l = []); l.push(v); } };
+      /* the patches on faces past the overhang angle are bridged as the measure bridges them; the rest of the stone's overhang that is neither held nor
+         bridged is open, and any other patch (a side face's, or one the bridging left out) joins the cone while the cone's outline covers no open point */
+      const oi = gs.map((g, i) => i).filter(i => gs[i].over), sel = bridgedSet(oi.map(i => gs[i].poly), oi.findIndex(i => !gs[i].l)).map(k => ({ i: oi[k.i], poly: k.poly }));
+      { const inSel = new Set(sel.map(k => k.i)), rest = gs.map((g, i) => i).filter(i => !inSel.has(i)).sort((a, b) => Math.abs(area2(gs[b].poly)) - Math.abs(area2(gs[a].poly)));
+        if (rest.length) { const sh = bridgeShapes(sel.map(k => k.poly), BRIDGE).concat(sel.map(k => ccw(k.poly))), openP = [];
+          for (let f = 0; f < nF; f++) { const D = down[f]; if (!D || D.n[2] >= -SINO || (D.raw && D.raw.some(P => polyArea(P) > D.area - 1e-3))) continue; const fx = D.fx;
+            for (let k = 1; k + 1 < fx.length; k++) { const A = fx[0], Bv = fx[k], C = fx[k + 1], e = Math.max(Math.hypot(Bv[0] - A[0], Bv[1] - A[1], Bv[2] - A[2]), Math.hypot(C[0] - A[0], C[1] - A[1], C[2] - A[2])), c = Math.max(1, Math.ceil(e / OPENSTEP));
+              for (let i = 0; i <= c; i++) for (let j = 0; i + j <= c; j++) { const a = i / c, b = j / c, v = [A[0] + a * (Bv[0] - A[0]) + b * (C[0] - A[0]), A[1] + a * (Bv[1] - A[1]) + b * (C[1] - A[1]), A[2] + a * (Bv[2] - A[2]) + b * (C[2] - A[2])];
+                if (heldOn(D, v[0], v[1], v[2]) || sh.some(P_ => inPoly(P_, v[0], v[1]))) continue; openP.push(v); } } }
+          let hp = []; for (const k of sel) { const g = gs[k.i]; for (const v of g.pts) if (k.poly === g.poly || inPoly(k.poly, v[0], v[1])) hp.push(v); }
+          for (const i of rest) { const H2 = hp.concat(gs[i].pts), C = coneOf(H2); if (!C.length || openP.some(v => C.every(e => e[0] * v[0] + e[1] * v[1] + e[2] * v[2] < e[3] - 0.02))) continue; hp = H2; sel.push({ i, poly: gs[i].poly }); } } }
+      for (const k of sel) { const g = gs[k.i]; if (k.poly === g.poly || !g.l) { for (const v of g.pts) if (k.poly === g.poly || inPoly(k.poly, v[0], v[1])) keep(v); continue; }
+        /* a patch trimmed toward the others keeps its polygons cut to the trimmed outline in plan */
+        const T = ccw(k.poly); for (const h of g.l) { let P = h.P; for (let i = 0, m = T.length; i < m && P.length >= 3; i++) { const A = T[i], C = T[(i + 1) % m], ex = C[0] - A[0], ey = C[1] - A[1]; P = cut3(P, ey, -ex, 0, ey * A[0] - ex * A[1]); } if (P.length >= 3) for (const v of P) keep([v[0], v[1], v[2], h.by]); } }
+      /* the holder keeps what holds: the outline of the held places, just under the stone's surface, is a keep of the stone that holds it */
+      { const HQ = q.held.length >= 3 ? ccw(hull2(q.held)) : null; if (HQ) for (const [by, P] of rawK) { if (!P.some(v => inPoly(HQ, v[0], v[1], 0.05))) continue; const hp = pieces[by]; (hp.heldKeeps || (hp.heldKeeps = [])).push({ who: q.id, pts: P.map(v => [v[0], v[1], v[2]]) }); } }
+      for (const [by, l] of byH) if (l.length >= 3) { const hp = pieces[by]; (hp.heldKeeps || (hp.heldKeeps = [])).push({ who: q.id, pts: hull2(l) }); } }
+    /* the flare: the stone keeps the cone over its held points (or, with none, over its bottom's outline); the rest of it would hang */
+    { const H_ = q.held.length >= 3 ? q.held : (q.B || []).map(v => [v[0], v[1], botZ(q, v[0], v[1])]); for (const e of coneOf(H_)) q.flare.push(e); }
     /* a piece its bottom and flare cut to nothing is dead: found now, so no piece above rests on it or is laid through it */
     restore(q.snap); clipBot(q); if (!opt.cells) for (const fl_ of q.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
     if (empty) q.dead = true;
@@ -1445,6 +1540,7 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
   for (const G of groups.values()) {
     // keep patches of the body: every piece's bottom, each rest patch it gives a stone above, glue faces of its sides
     const kp = [], kt = [], kw = []; for (const pc of G.pieces) { { const BK = pc.ground ? footOf(pc) : pc.Bkeep, on = pc.ground ? null : pc.rests.filter(r => !r.glue).map(r => r.holder.id); if (BK) for (const v of BK) { const z = botZ(pc, v[0], v[1]); kp.push(v[0], v[1], z); kt.push(pc.ground ? 8 : 1); kw.push(on); if (!pc.ground) { kp.push(v[0], v[1], z + KEEPH); kt.push(1); kw.push(on); } } } for (const t of pc.tops) for (const kk of t.keeps) for (const v of kk) { kp.push(v[0], v[1], v[2]); kt.push(2); kw.push(t.supBy || null); kp.push(v[0], v[1], v[2] - KEEPH); kt.push(2); kw.push(t.supBy || null); } }   /* a contact is kept as a solid KEEPH deep into each stone, so no cut leans in just past it */
+    for (const pc of G.pieces) if (pc.heldKeeps) for (const hk of pc.heldKeeps) for (const v of hk.pts) { kp.push(v[0], v[1], v[2] - HELDEPS); kt.push(2); kw.push([hk.who]); kp.push(v[0], v[1], v[2] - HELDEPS - KEEPH); kt.push(2); kw.push([hk.who]); }
     for (const pc of G.pieces) for (const sd of pc.sides) if (find(sd.nb) === G.id) { const pp = sd.poly; let cx = 0, cy = 0, cz = 0; for (const v of pp) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= pp.length; cy /= pp.length; cz /= pp.length; let sh = 0; { let r = 1e9; for (const v of pp) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); sh = Math.min(BEV.hi, 0.4 * r) / Math.max(r, 1e-6) * (r > 0 ? 1 : 0); } for (const v of pp) { kp.push(cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)); kt.push(3); kw.push(pieceBeside(sd.nb)); } }   // a glued face keeps its middle: its rim is drawn in by the bevel's width, so an inside corner gets a bevel on each side (a V-groove)
 
     for (const pc of G.pieces) for (const r of pc.rests) if (r.glue && r.t) {   // drawn in from its rim by the bevel's width (at most 0.4 of the way to its middle), as a glued face is, so the edges that end at the join still bevel
