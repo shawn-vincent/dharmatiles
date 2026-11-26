@@ -1033,7 +1033,7 @@ function wall(seed, P, opt = {}) {
   // and each spine that shares a layer with it, the plane halfway between their closest points (drawn in the aspect AB, a stretch of the whole frame,
   // so planes stay planes), moved back half the pair's Joint (negative: the neighbours overlap). Unweighted: Width and Thickness space the spines,
   // they do not move the planes. The planes are drawn pair by pair, so some space can be left to no stone. Each plane's last entry: the spine across
-  // it, or -1 a layer face, -2 the fuzzy top, -3 the fuzzy front, -4 the ground, -5 the crisp back (and ends, when Length is one value), -6 the fuzzy ends.
+  // it, or -1 a layer face, -2 the fuzzy top, -3 the fuzzy front, -4 the ground, -5 the crisp back (and ends, when Length is one value), -6 the fuzzy ends, -7 its own size (the widest split the spacing can leave, and half the most overlap).
   const pieces = [];
   /* a spine, once: its line is (u, v) = (s.u + s.su (w - s.wd), s.v + s.sv (w - s.wd)). It runs between the two layer faces it starts and stops on
      (each face's fitted plane, found by iterating, with the face's slope there: s.face) and stops short where it meets the stone's own fuzzy reach: the
@@ -1085,6 +1085,12 @@ function wall(seed, P, opt = {}) {
     if (st.w - sb.w < 0.1) continue;
     const pl = [];   // [nx,ny,nz,d,kind,aux]
     for (const e of planesOfSpine(s)) pl.push([e[0], e[1], e[2], e[3], KIND.SIDE, e[4]]);
+    /* its own size: however far its neighbours' planes are moved (a negative Joint can carry a plane past the neighbour's spine), the stone reaches from
+       its spine no farther than the widest split the spacing can leave (its own half Width and the largest half Width a neighbour can have, along u;
+       the same with Thickness along v), plus half the most overlap the Joint allows; four sides along the spine's lean */
+    { const ov = Math.max(0, -P.joint[0]) / 2, cu = s.r + P.width[1] / 2 + ov, cv = s.r * s.a + P.thickness[1] / 2 + ov;
+      pl.push([...plW(1, 0, -s.su, s.u - s.su * s.wd + cu), KIND.SIDE, -7], [...plW(-1, 0, s.su, -(s.u - s.su * s.wd) + cu), KIND.SIDE, -7],
+        [...plW(0, 1, -s.sv, s.v - s.sv * s.wd + cv), KIND.SIDE, -7], [...plW(0, -1, s.sv, -(s.v - s.sv * s.wd) + cv), KIND.SIDE, -7]); }
     // the envelope: crisp ends, back and ground, fuzzy front and top
     pl.push(FUZZY_ENDS ? [1, 0, 0, hu - s.sEndR, KIND.ENV, -6] : [1, 0, 0, hu, KIND.CRISP, -5], FUZZY_ENDS ? [-1, 0, 0, hu - s.sEndL, KIND.ENV, -6] : [-1, 0, 0, hu, KIND.CRISP, -5], [0, 1, 0, y1, KIND.CRISP, -5], [0, 0, -1, 0, KIND.CRISP, -4], [0, -1, 0, -(y0 + s.sFront), KIND.ENV, -3], [0, 0, 1, H - s.sTop, KIND.ENV, -2]);
     // its two ends: the tangent planes of the layer faces it starts and stops on
