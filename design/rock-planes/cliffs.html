@@ -929,7 +929,9 @@ function wall(seed, P, opt = {}) {
     for (let a = 0; a < n; a++) { const p = siteAt(S[a], k); px[a] = p[0]; py[a] = p[1] / AB; }
     for (let a = 0; a < n; a++) {
       const s = S[a], cx = px[a], cy = py[a] * AB;
-      fitFace(k, cx, cy); const bz = fit[0], bgx = fit[1], bgy = fit[2]; fitFace(k + 1, cx, cy); const tz = fit[0], tgx = fit[1], tgy = fit[2];
+      if (BY_SPINES && k !== s.i) continue;   /* split by spines: a spine is one piece, from the face it starts on to the face it stops at */
+      const kt = BY_SPINES ? s.j - 1 : k, tc = kt === k ? [cx, cy] : siteAt(s, kt);
+      fitFace(k, cx, cy); const bz = fit[0], bgx = fit[1], bgy = fit[2]; fitFace(kt + 1, tc[0], tc[1]); const tz = fit[0], tgx = fit[1], tgy = fit[2];
       if (tz - bz < 0.1) continue;
       initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
       const pl = [];   // [nx,ny,nz,d,kind,aux]
@@ -950,7 +952,7 @@ function wall(seed, P, opt = {}) {
       const E = [[1, 0, 0, hu, KIND.CRISP], [-1, 0, 0, hu, KIND.CRISP], [0, 1, 0, y1, KIND.CRISP], [0, -1, 0, -(y0 + s.sFront), KIND.ENV], [0, 0, 1, H - s.sTop, KIND.ENV]];
       for (const e of E) { clip(e[0], e[1], e[2], e[3], e[4] | pl.length << 4); pl.push(e); }
       // top and bottom: tangent planes of the layer's faces at the centre
-      { const L = Math.hypot(tgx, tgy, 1), nx = -tgx / L, ny = -tgy / L, nz = 1 / L, d = (tz - tgx * cx - tgy * cy) / L; clip(nx, ny, nz, d, KIND.TOP | pl.length << 4); pl.push([nx, ny, nz, d, KIND.TOP, 0]); }
+      { const L = Math.hypot(tgx, tgy, 1), nx = -tgx / L, ny = -tgy / L, nz = 1 / L, d = (tz - tgx * tc[0] - tgy * tc[1]) / L; clip(nx, ny, nz, d, KIND.TOP | pl.length << 4); pl.push([nx, ny, nz, d, KIND.TOP, 0]); }
       const sink = k === 0 ? 0 : 1.3;
       { const L = Math.hypot(bgx, bgy, 1), nx = bgx / L, ny = bgy / L, nz = -1 / L, d = (-(bz - bgx * cx - bgy * cy) + sink) / L; clip(nx, ny, nz, d, KIND.BOT | pl.length << 4); pl.push([nx, ny, nz, d, KIND.BOT, 0]); }
       if (empty || nF < 4) continue;
@@ -960,15 +962,15 @@ function wall(seed, P, opt = {}) {
       for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
       let topF = -1, botF = -1; const nbr = [];
       for (let f = 0; f < nF; f++) { const kd = ft[f] & 15; if (kd === KIND.TOP) topF = f; else if (kd === KIND.BOT) botF = f; }
-      const pc = { id: pieces.length, s, k, layer: k, snap: snap(), planes: pl, bb: [x0, x1, ya, yb, za, zb], ground: k === 0,
-        topPl: [tgx, tgy, tz - tgx * cx - tgy * cy], botPl: [bgx, bgy, bz - bgx * cx - bgy * cy], sink: k === 0 ? 0 : SINK, bgL: Math.hypot(bgx, bgy, 1), top: null, bot: null, sides: [], flare: [], B: null, rests: [], keeps: [], held: false, grp: -1 };
+      const pc = { id: pieces.length, s, k, kTop: kt, layer: k, snap: snap(), planes: pl, bb: [x0, x1, ya, yb, za, zb], ground: k === 0,
+        topPl: [tgx, tgy, tz - tgx * tc[0] - tgy * tc[1]], botPl: [bgx, bgy, bz - bgx * cx - bgy * cy], sink: k === 0 ? 0 : SINK, bgL: Math.hypot(bgx, bgy, 1), top: null, bot: null, sides: [], flare: [], B: null, rests: [], keeps: [], held: false, grp: -1 };
       pc.tops = [];
       for (let f = 0; f < nF; f++) { const kd = ft[f] & 15; if (kd === KIND.TOP) pc.tops.push({ poly: ccw(faceXYZ(f).map(p => [p[0], p[1]])), pl: pc.topPl, keeps: [] });
         else if (kd === KIND.ENV) { const o = fo[f], m = fl[f], zt = H - s.sTop; let flat = true; for (let k_ = 0; k_ < m; k_++) if (Math.abs(vz[fv[o + k_]] - zt) > 1e-6) { flat = false; break; } if (flat) pc.tops.push({ poly: ccw(faceXYZ(f).map(p => [p[0], p[1]])), pl: [0, 0, zt], keeps: [] }); } }
       if (topF >= 0) pc.top = ccw(faceXYZ(topF).map(p => [p[0], p[1]]));
       if (botF >= 0) pc.bot = ccw(faceXYZ(botF).map(p => [p[0], p[1]]));
       // side faces toward neighbours (for Fuse): which site, the face
-      pieces.push(pc); layerPieces[k].push(pc); s.pieces.push(pc);
+      pieces.push(pc); for (let l = k; l <= kt; l++) layerPieces[l].push(pc); s.pieces.push(pc);   /* listed in every layer it runs through; a stone above reads it once, at its top layer (one beside it, reaching higher, holds nothing) */
     }
   }
   lap('cells');
@@ -1036,7 +1038,7 @@ function wall(seed, P, opt = {}) {
   // a stone whose own bottom plane is tilted against every holder's top (a layer face at the wall's back or front, leaning with Bow or Sag) is laid parallel to
   // the nearest layer's largest holder top, 0.35 above it, and its cell made again: the stone then sits flush where its own plane could not reach any holder
   function relayBottom(q, rl) {
-    let r = null; for (const c of rl) { if (!r) { r = c; continue; } const lc = c.holder.layer, lr = r.holder.layer, ac = Math.abs(area2(c.full)), ar = Math.abs(area2(r.full)); if (lc > lr || (lc === lr && ac > ar)) r = c; }
+    let r = null; for (const c of rl) { if (!r) { r = c; continue; } const lc = c.holder.kTop, lr = r.holder.kTop, ac = Math.abs(area2(c.full)), ar = Math.abs(area2(r.full)); if (lc > lr || (lc === lr && ac > ar)) r = c; }
     if (!r) return false;
     const tp = r.t.pl, bx = tp[0], by = tp[1], b0 = tp[2] + 0.35, L = Math.hypot(bx, by, 1);
     const old = { botPl: q.botPl, bgL: q.bgL, bb: q.bb, bot: q.bot, snap: q.snap, ent: q.planes.map(e => e.slice()) };
@@ -1052,7 +1054,7 @@ function wall(seed, P, opt = {}) {
 function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       const pat = []; let qg = -1e9;
       for (let kk = k - 1; kk >= lowK; kk--) for (const p of layerPieces[kk]) {
-        if (p.dead) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
+        if (p.dead || p.kTop !== kk) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
         const glue = p.grp === q.grp;
         for (const t of p.tops) {
           { const cx_ = (Math.max(a[0], b[0]) + Math.min(a[1], b[1])) / 2, cy_ = (Math.max(a[2], b[2]) + Math.min(a[3], b[3])) / 2, g_ = botN(q, cx_, cy_) - tz_(t.pl, cx_, cy_); if (g_ > GAPMAX + 0.3 || g_ < -1.2) { continue; } }
@@ -1107,7 +1109,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   function pens(q, k) {   // the live stones below the bottom passes into (past CLEARZ, over CLEARA)
     const out = [];
     for (let kk = k - 1; kk >= Math.max(0, k - 6); kk--) for (const p of layerPieces[kk]) {
-      if (p.dead || !p.tops || p.grp === q.grp) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
+      if (p.dead || !p.tops || p.grp === q.grp || p.kTop !== kk) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
       for (const t of p.tops) { const ov = inter2(ccw(t.poly), q.bot); if (!ov || Math.abs(area2(ov)) < CLEARA) continue; let gmin = 1e9; for (const v of ov) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; } if (gmin < -CLEARZ) { out.push(p); break; } }
     }
     return out;
@@ -1115,7 +1117,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   function clearBelow(q, k) {
     let added = false;
     for (let kk = k - 1; kk >= Math.max(0, k - 6); kk--) for (const p of layerPieces[kk]) {
-      if (p.dead || !p.tops || p.grp === q.grp) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
+      if (p.dead || !p.tops || p.grp === q.grp || p.kTop !== kk) continue; const a = p.bb, b = q.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2]) continue;
       for (const t of p.tops) {
         const ov = inter2(ccw(t.poly), q.bot); if (!ov || Math.abs(area2(ov)) < CLEARA) continue;
         let gmin = 1e9; for (const v of ov) { const g = botN(q, v[0], v[1]) - tz_(t.pl, v[0], v[1]); if (g < gmin) gmin = g; }
@@ -1126,6 +1128,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   }
   let nPatch = 0, noHold = 0, nPeel = 0, nLow = 0, nRaise = 0, nRebuild = 0, nSteep = 0, nGroundIt = 0;
   for (let k = 0; k < N - 1; k++) for (const q of layerPieces[k]) {
+    if (q.k !== k) continue;   /* a piece through several layers is held once, at its bottom layer */
     if (!q.bot) groundIt(q);
     if (!q.bot) { q.B = null; continue; }
     if (q.ground) { q.B = q.bot; q.held = true; q.onGround = true; q.Bpolys = [q.bot]; gsup.add(q.grp); continue; }
@@ -1348,7 +1351,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
       const lostG = new Map(); for (const pc of pieces) if (!pc.dead && !seen.has(pc.grp)) (lostG.get(pc.grp) || lostG.set(pc.grp, []).get(pc.grp)).push(pc);
       for (const [g, ps] of lostG) {
         let best = null, bv = 0;
-        for (const q of ps) for (const p of pieces) { if (p.dead || p.grp === g || !seen.has(p.grp) || Math.abs(p.layer - q.layer) > 1) continue; const a = p.bb, b = q.bb;
+        for (const q of ps) for (const p of pieces) { if (p.dead || p.grp === g || !seen.has(p.grp) || p.k > q.kTop + 1 || q.k > p.kTop + 1) continue; const a = p.bb, b = q.bb;
           const ox = Math.min(a[1], b[1]) - Math.max(a[0], b[0]), oy = Math.min(a[3], b[3]) - Math.max(a[2], b[2]), oz = Math.min(a[5], b[5]) - Math.max(a[4], b[4]); if (ox < -0.05 || oy < -0.05 || oz < -0.05) continue;
           const v = (Math.max(ox, 0.05)) * (Math.max(oy, 0.05)) * (Math.max(oz, 0.05)); if (v > bv) { bv = v; best = p; } }
         if (best) { parent[find(ps[0].s.id)] = find(best.s.id); moved = true; nMerge++; for (const q of ps) q.merged = 1; }
@@ -1368,11 +1371,12 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   const footOf = pc => { const B = pc.B; if (!B || B.length < 3) return B; let cx = 0, cy = 0; for (const v of B) { cx += v[0]; cy += v[1]; } cx /= B.length; cy /= B.length;
     const W = BEV.hi;
     return B.map(v => { const dv = Math.hypot(v[0] - cx, v[1] - cy), k = Math.max(0.4, Math.min(0.85, 1 - W / Math.max(dv, 1e-9))); return [cx + (v[0] - cx) * k, cy + (v[1] - cy) * k]; }); };
-  const pieceAt = new Map(pieces.map(p => [p.k * 100000 + p.s.id, p.id]));   // a layer's piece by its seed
+  const pieceAt = new Map(); for (const p of pieces) for (let l = p.k; l <= p.kTop; l++) pieceAt.set(l * 100000 + p.s.id, p.id);   // a layer's piece by its seed (a piece through several layers in each)
+  const pieceBeside = (pc, nb) => { for (let l = pc.k; l <= pc.kTop; l++) if (pieceAt.has(l * 100000 + nb)) return [pieceAt.get(l * 100000 + nb)]; return null; };
   for (const G of groups.values()) {
     // keep patches of the body: every piece's bottom, each rest patch it gives a stone above, glue faces of its sides
     const kp = [], kt = [], kw = []; for (const pc of G.pieces) { { const BK = pc.ground ? footOf(pc) : pc.Bkeep, on = pc.ground ? null : pc.rests.filter(r => !r.glue).map(r => r.holder.id); if (BK) for (const v of BK) { const z = botZ(pc, v[0], v[1]); kp.push(v[0], v[1], z); kt.push(pc.ground ? 8 : 1); kw.push(on); if (!pc.ground) { kp.push(v[0], v[1], z + KEEPH); kt.push(1); kw.push(on); } } } for (const t of pc.tops) for (const kk of t.keeps) for (const v of kk) { kp.push(v[0], v[1], v[2]); kt.push(2); kw.push(t.supBy || null); kp.push(v[0], v[1], v[2] - KEEPH); kt.push(2); kw.push(t.supBy || null); } }   /* a contact is kept as a solid KEEPH deep into each stone, so no cut leans in just past it */
-    for (const pc of G.pieces) for (const sd of pc.sides) if (find(sd.nb) === G.id) { const pp = sd.poly; let cx = 0, cy = 0, cz = 0; for (const v of pp) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= pp.length; cy /= pp.length; cz /= pp.length; let sh = 0; { let r = 1e9; for (const v of pp) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); sh = Math.min(BEV.hi, 0.4 * r) / Math.max(r, 1e-6) * (r > 0 ? 1 : 0); } for (const v of pp) { kp.push(cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)); kt.push(3); kw.push(pieceAt.has(pc.k * 100000 + sd.nb) ? [pieceAt.get(pc.k * 100000 + sd.nb)] : null); } }   // a glued face keeps its middle: its rim is drawn in by the bevel's width, so an inside corner gets a bevel on each side (a V-groove)
+    for (const pc of G.pieces) for (const sd of pc.sides) if (find(sd.nb) === G.id) { const pp = sd.poly; let cx = 0, cy = 0, cz = 0; for (const v of pp) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= pp.length; cy /= pp.length; cz /= pp.length; let sh = 0; { let r = 1e9; for (const v of pp) r = Math.min(r, Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz)); sh = Math.min(BEV.hi, 0.4 * r) / Math.max(r, 1e-6) * (r > 0 ? 1 : 0); } for (const v of pp) { kp.push(cx + (v[0] - cx) * (1 - sh), cy + (v[1] - cy) * (1 - sh), cz + (v[2] - cz) * (1 - sh)); kt.push(3); kw.push(pieceBeside(pc, sd.nb)); } }   // a glued face keeps its middle: its rim is drawn in by the bevel's width, so an inside corner gets a bevel on each side (a V-groove)
 
     for (const pc of G.pieces) for (const r of pc.rests) if (r.glue && r.t) {   // drawn in from its rim by the bevel's width (at most 0.4 of the way to its middle), as a glued face is, so the edges that end at the join still bevel
       const P_ = r.poly; let cx = 0, cy = 0; for (const v of P_) { cx += v[0]; cy += v[1]; } cx /= P_.length; cy /= P_.length; let rr = Infinity; for (const v of P_) rr = Math.min(rr, Math.hypot(v[0] - cx, v[1] - cy));
@@ -1474,7 +1478,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     if (G.pieces.length < 2 || opt.cells || opt.join === false) continue;
     for (const pc of G.pieces) {
       for (const r of pc.rests) if (r.glue && r.t) { const L = Math.hypot(r.t.pl[0], r.t.pl[1], 1); joinerOf(G, r.holder, pc, [-r.t.pl[0] / L, -r.t.pl[1] / L, 1 / L], r.t.pl[2] / L); }   // on the piece under it
-      for (const e of pc.planes) if (e[4] === KIND.SIDE && find(e[5]) === G.id) { const o = G.pieces.find(q => q !== pc && q.k === pc.k && q.s.id === e[5]); if (o && pc.id < o.id) joinerOf(G, pc, o, [e[0], e[1], e[2]], e[3]); }   // beside it, in its layer
+      for (const e of pc.planes) if (e[4] === KIND.SIDE && find(e[5]) === G.id) { const o = G.pieces.find(q => q !== pc && q.k <= pc.kTop && pc.k <= q.kTop && q.s.id === e[5]); if (o && pc.id < o.id) joinerOf(G, pc, o, [e[0], e[1], e[2]], e[3]); }   // beside it, in its layer
     }
   }
   for (const j of joiners) stones.push(j);
