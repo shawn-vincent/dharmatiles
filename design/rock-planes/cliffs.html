@@ -96,12 +96,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pctl { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .pctl > .ctl { flex: 1 1 0; min-width: 0; }
 .pval { flex: none; width: 78px; text-align: right; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }   /* one width on every line, so the sliders line up */
-.pval .gh { visibility: hidden; font-style: normal; }   /* the room a decimal place takes, kept when the value is whole */
+.pval .gh { opacity: .3; font-style: normal; }   /* the decimal place of a whole value, kept (so the digits stay where they are) and faint, so the unit sits against it and not across a gap */
 .pval.r2 { display: flex; flex-direction: column; justify-content: center; font-size: 10.5px; line-height: 12px; }   /* a range: low end over high end */
 .slider .tick { position: absolute; top: 24px; width: 1px; height: 5px; margin-left: -0.5px; background: var(--muted); pointer-events: none; }
 .slider.one .tick { top: 8px; }
 .pline .slider:not(.one) .tick { top: 20px; }
 .slider .dim { position: absolute; top: 29px; height: 13px; box-sizing: border-box; display: flex; align-items: center; gap: 3px; border-left: 1px solid var(--muted); border-right: 1px solid var(--muted); color: var(--muted); font: 11px var(--f-code); white-space: nowrap; pointer-events: none; }   /* the distance between a range's ends, drawn as a dimension line */
+.pline .slider:not(.one) .dim { top: 21px; height: 11px; gap: 2px; font-size: 9px; }   /* on a line of a group page: under the grip, between the end handles */
+.pline .slider:not(.one) .dim i::before { top: -2px; width: 4px; height: 5px; }
 .slider .dim i { position: relative; flex: 1 1 0; min-width: 0; height: 1px; background: currentColor; }
 .slider .dim i::before { content: ""; position: absolute; top: -3px; width: 6px; height: 7px; background: currentColor; }
 .slider .dim i:first-child::before { left: 0; clip-path: polygon(0 50%, 100% 0, 100% 100%); }
@@ -2481,7 +2483,7 @@ function showValue(out, input, unit) {
 }
 const MM = '&nbsp;mm';
 const STICK = 6;   /* px */
-const SQUARE = { word: 'square', mm: 35 };   /* a setting's unit: a value that is a whole number of them is written in them ("2 squares"), else in mm; its slider has ticks at their multiples that hold the handles */
+const SQUARE = { word: 'square', mm: 35 };   /* a setting's square (its own property, square; its unit stays the suffix):  a value that is a whole number of them is written in them ("2 squares"), else in mm; its slider has ticks at their multiples that hold the handles */
 // the settings' icons (each also heads its page in the sheet)
 const svg = (body, cls = '', vb = '0 0 24 24') => `<svg class="ic ${cls}" viewBox="${vb}" aria-hidden="true">${body}</svg>`;
 const ICON = {
@@ -2507,7 +2509,7 @@ const GROUPS = [
   { label: 'Seed', icon: () => ICON.seed, value: 'seed', page: 'seed', items: [
     { key: 'seed', label: 'Seed', own: true, min: 0, max: 1048575, step: 1, unit: '' }] },
   { label: 'Envelope', icon: () => ICON.envelope, value: 'length', items: [
-    R_('length', 'Length', 20, 105, 0.5, SQUARE, 'The wall’s length along itself, in squares or mm (Width, in Structure, is the spacing of spines along the wall): each end of the wall is drawn in this range, mostly from a smooth field along the end, so it wanders. The envelope is as long as the high end.'),
+    { ...R_('length', 'Length', 20, 105, 0.5, MM, 'The wall’s length along itself, in squares or mm (Width, in Structure, is the spacing of spines along the wall): each end of the wall is drawn in this range, mostly from a smooth field along the end, so it wanders. The envelope is as long as the high end.'), square: SQUARE },
     R_('height', 'Height', 6, 80, 0.1, MM, 'How tall each stone reaches: drawn in this range, mostly from a smooth field along the wall, so neighbours stop at similar heights and the top wanders. The envelope is as tall as the high end.'),
     R_('depth', 'Depth', 4, 35, 0.5, MM, 'How far forward each stone reaches from the back of the square, drawn the same way, so the front wanders. The back is crisp.')] },
   { label: 'Structure', icon: () => dirIcon(state.direction), value: 'layers', items: [
@@ -3074,17 +3076,17 @@ function rebuildThumbs() {
 }
 
 // controls
-/* a setting with a unit ({ word, mm }) writes a value that is a whole number of them in them ("1 square", "2 squares"), any other in mm ("80 mm"), each end of a range on its own; sp is what stands between a number and its word */
-const isU = p => !!p.unit && typeof p.unit === 'object';
-const sfx = p => isU(p) ? MM : p.unit || '';
+/* a setting with a square ({ word, mm }; its unit stays the suffix, mm) writes a value that is a whole number of them in them ("1 square", "2 squares"), any other in mm ("80 mm"), each end of a range on its own; sp is what stands between a number and its word */
+const isU = p => !!p.square;
+const sfx = p => p.unit || '';
 const amount = (p, v, sp = '&nbsp;') => {
-  if (isU(p) && v > 0 && Math.abs(v / p.unit.mm - Math.round(v / p.unit.mm)) < 1e-9) { const n = Math.round(v / p.unit.mm); return `${n}${sp}${p.unit.word}${n === 1 ? '' : 's'}`; }
+  if (isU(p) && v > 0 && Math.abs(v / p.square.mm - Math.round(v / p.square.mm)) < 1e-9) { const n = Math.round(v / p.square.mm); return `${n}${sp}${p.square.word}${n === 1 ? '' : 's'}`; }
   return isU(p) ? `${v}${sp}mm` : v + sfx(p);
 };
 const rangeAmount = (p, [lo, hi], sp) => lo === hi ? amount(p, lo, sp) : `${amount(p, lo, sp)}..${amount(p, hi, sp)}`;
 /* what is typed for a setting with a unit: "70", "70 mm", "2 squares", or two of them as low..high */
 function parseAmounts(p, t) {
-  const one = x => { const m = /^\s*(-?\d*\.?\d+)\s*(squares?|mm)?\s*$/i.exec(x); return m ? +m[1] * (m[2] && m[2].toLowerCase() !== 'mm' ? p.unit.mm : 1) : null; };
+  const one = x => { const m = /^\s*(-?\d*\.?\d+)\s*(squares?|mm)?\s*$/i.exec(x); return m ? +m[1] * (m[2] && m[2].toLowerCase() !== 'mm' ? p.square.mm : 1) : null; };
   const parts = t.split('..'); if (parts.length > 2) return null;
   const v = parts.map(one); if (v.some(x => x === null)) return null;
   return v.length === 1 ? [v[0], v[0]] : v[0] <= v[1] ? v : [v[1], v[0]];
@@ -3130,11 +3132,11 @@ const distText = (p, d) => {
 const valueText = p => p.range ? isU(p) ? rangeAmount(p, state[p.key], ' ') : rangeText(state[p.key]) : String(state[p.key]);
 /* one number of a setting for a readout: its unit, and room for one decimal place at least (a whole value gets an invisible ".0", so the digits stay where they are as the value changes) */
 function readNum(p, v) {
-  if (isU(p) && v > 0 && Math.abs(v / p.unit.mm - Math.round(v / p.unit.mm)) < 1e-9) return amount(p, v);
-  const places = (String(p.step).split('.')[1] || '').length, want = Math.max(1, places);
+  if (isU(p) && v > 0 && Math.abs(v / p.square.mm - Math.round(v / p.square.mm)) < 1e-9) return amount(p, v);
+  const places = (String(p.step).split('.')[1] || '').length, want = places;
   let t = (+v).toFixed(places); if (t.includes('.')) t = t.replace(/0+$/, '').replace(/\.$/, '');
   const [ip, fp = ''] = t.split('.'), ghost = (fp ? '' : '.') + '0'.repeat(want - fp.length);
-  return `${ip}${fp ? '.' + fp : ''}<i class="gh">${ghost}</i>${sfx(p)}`;
+  return `${ip}${fp ? '.' + fp : ''}${want ? `<i class="gh">${ghost}</i>` : ''}${sfx(p)}`;
 }
 /* the value shown, read-only, beside the slider on a line of a group page: { el, paint } */
 function readout(p) {
@@ -3177,7 +3179,7 @@ function slider(p, get, put, opts = {}) {
   const valueAt = cx => { const r = el.getBoundingClientRect(), pad = 10; return p.min + (cx - r.left - pad) / Math.max(1, r.width - 2 * pad) * span; };
   const handle = (cls, label) => { const h = document.createElement('span'); h.className = cls; h.tabIndex = 0; h.setAttribute('role', 'slider'); h.setAttribute('aria-label', label); h.setAttribute('aria-valuemin', p.min); h.setAttribute('aria-valuemax', p.max); el.append(h); return h; };
   /* a setting with a unit has a tick at each multiple of it; a handle (or the grip) dragged within STICK px of one holds on it until dragged past */
-  const ticks = isU(p) ? Array.from({ length: Math.floor(p.max / p.unit.mm) + 1 }, (_, k) => k * p.unit.mm).filter(t => t >= p.min && t <= p.max) : [];
+  const ticks = isU(p) ? Array.from({ length: Math.floor(p.max / p.square.mm) + 1 }, (_, k) => k * p.square.mm).filter(t => t >= p.min && t <= p.max) : [];
   for (const t of ticks) { const k = document.createElement('span'); k.className = 'tick'; k.style.left = pos(t); el.append(k); }
   const stick = x => { const r = el.getBoundingClientRect(), per = Math.max(1, r.width - 20) / span; for (const t of ticks) if (Math.abs(x - t) * per <= STICK) return t; return x; };
   const ends = twin ? [handle('end lo', `${p.label}, low end`), handle('end hi', `${p.label}, high end`)] : [handle('end', p.label)];
@@ -3194,14 +3196,14 @@ function slider(p, get, put, opts = {}) {
   const moved = ([a, b], d, sticky) => {
     if (sticky) { let best = null; for (const x of [a + d, b + d]) { const q = stick(x); if (q !== x && (best === null || Math.abs(q - x) < Math.abs(best))) best = q - x; } if (best !== null) d += best; }
     const w = b - a, lo = snapTo(p, Math.min(p.max - w, Math.max(p.min, a + d))); return [lo, +(lo + w).toFixed(4)]; };
-  const dim = twin && opts.dim ? Object.assign(document.createElement('span'), { className: 'dim', innerHTML: '<i></i><span class="dt"></span><i></i>' }) : null;
+  const dim = twin ? Object.assign(document.createElement('span'), { className: 'dim', innerHTML: '<i></i><span class="dt"></span><i></i>' }) : null;
   if (dim) el.append(dim);
   /* the distance between the ends, shown only where the text and an arrow on each side fit between the handles */
   const paintDim = v => {
     if (!dim) return;
     dim.style.left = pos(v[0]); dim.style.width = `calc(${pos(v[1])} - ${pos(v[0])})`;
     const t = dim.querySelector('.dt'); t.textContent = distText(p, +(v[1] - v[0]).toFixed(4));
-    const room = (el.clientWidth - 2 * 10) * (v[1] - v[0]) / span; dim.style.visibility = room >= t.offsetWidth + 2 * 18 ? 'visible' : 'hidden';
+    const room = (el.clientWidth - 2 * 10) * (v[1] - v[0]) / span; dim.style.visibility = room >= t.offsetWidth + 2 * (opts.dim ? 18 : 12) ? 'visible' : 'hidden';
   };
   if (dim && typeof ResizeObserver === 'function') new ResizeObserver(() => paintDim(get())).observe(el);
   const paint = () => {
@@ -3310,7 +3312,7 @@ const PAGES = {
   rows: g => {   /* a line for each setting: a button (its label and a chevron) that opens its page, and its control beside it */
     const wrap = div('plines');
     for (const p of g.items) {
-      const line = div('pline'), btn = document.createElement('button'), c = control(p), ctl = div('pctl');
+      const line = div('pline'), btn = document.createElement('button'), c = control(p, { dim: false }), ctl = div('pctl');
       btn.className = 'plabel'; btn.innerHTML = `<span class="k">${p.label}</span>${svg('<path d="M9 6l6 6-6 6"/>', 'chev')}`; btn.setAttribute('aria-label', `${p.label}: open`);
       btn.addEventListener('click', () => openProp(g, p));
       ctl.append(c.el); paints.push(c.paint);
