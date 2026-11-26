@@ -196,6 +196,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .slider .end:focus-visible, .slider .grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .slider .end:active, .slider .grip:active { cursor: grabbing; }
 .checks { display: grid; gap: 6px; }
+.legend { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .checks label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
 .stats { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; font-size: 13px; }
@@ -273,13 +274,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
           </div>
           <span class="lbl">Draw</span>
           <div class="seg" id="draw" role="group" aria-label="Draw">
-            <button data-draw="rocks">Rocks</button><button data-draw="structure">Structure</button>
+            <button data-draw="finished">Finished</button><button data-draw="rocks">Rocks</button><button data-draw="structure">Structure</button>
           </div>
+          <p class="legend" id="legend" hidden>Solid dark lines: the cracks that were cut. Dashed blue lines: lines a crack could have followed and did not.</p>
           <span class="lbl">Show</span>
           <div class="checks">
-            <label><input type="checkbox" id="crackLines"> Crack lines</label>
-            <label><input type="checkbox" id="lines" checked> Edges</label>
-            <label><input type="checkbox" id="bevelsOn" checked> Bevels</label>
             <label><input type="checkbox" id="mini" checked> The miniature</label>
           </div>
           </div>
@@ -300,7 +299,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Cells.</b> Each spine is one convex stone, from the layer face it starts on to the one it stops at (each taken as its tangent plane at the spine there, so Sag and Bow become planes). Between it and each spine that shares a layer with it, the stone is cut by the plane halfway between the two spines&rsquo; closest points (measured with Thickness against Width as the proportion, a stretch of the whole wall, so planes stay planes), then by the envelope. The planes are drawn pair by pair and do not have to agree, so some space can be left to no stone. <b>Width</b> and <b>Thickness</b> space the spines; they do not move the planes. <b>Joint</b>, drawn for each pair, moves each side half of it from the halfway plane: over zero a gap opens (separate stones), under zero each reaches past it into its neighbour (they overlap). The cells are not a chain: every contact is known before any stone is carved, so every stone is carved on its own.</li>
       <li><b>Bodies.</b> A spine that runs through several layers is one stone, carved whole. <b>Fuse</b> joins two neighbouring spines whose cells share a face into one body, one draw for each two from a stream of the pair&rsquo;s own; a cell narrower than 3 mm across joins the neighbour it shares the most side face with. A body is carved cell by cell with the faces where its cells meet kept flat, so the slicer fuses them into one stone; a body that rests on nothing the ground holds is joined to a touching body that is held.</li>
       <li><b>The bottom.</b> A cell finds what holds it before it is carved: the places where its bottom meets the tops of the cells below (any stone placed before it: the stones are placed holders first, and a stone can hold another only when its spine ends below the middle of the other&rsquo;s and starts lower, so a neighbour beside it never holds it and one it overlaps deeply does), each made a patch. Each patch is inset by the bevel&rsquo;s width (the high end of <b>Bevel</b>), so a stone rests on what its bevels leave; an overlap too small to keep <span data-const="MINSUP"></span> mm&sup2; that way is shrunk about its centre to <span data-const="MINSUP"></span> mm&sup2; instead, and a stone keeps the whole overlap with a stone of its own body. A holder's patch is where the bottom lies within reach of its top or sunk into it, at any depth. Laying the bottom moves it, so what touches it is found again against the laid bottom and the bottom laid again, until it stays (at most three times). Patches join the bottom from the largest down, each while the hull of those kept is still covered by the patches and the hulls of pairs that span at most Bridge (a patch that cannot join as it is is trimmed toward them and tried again; one under <span data-const="MINBR"></span> mm&sup2; is no end of a bridge). Its <b>bottom</b> is those patches, and every point of it either rests on one or lies on a line between two patches at most <b>Bridge</b> apart (less <span data-const="BRIDGE_MARGIN"></span> mm, so the plan sits inside the measure). The bottom is laid across its holders and may pass into a stone below that does not hold it: the stones print as one solid, so nothing hangs where they overlap. A stone with no holder is lowered to the nearest top below, or stands on the ground when it is near the plate. A <b>flare</b> rises from the bottom&rsquo;s outline at <span data-const="FLARE_DEG"></span>&deg; from upright, so what lies past a patch is cut away rather than overhanging. Where a stone holds another, its top keeps flat the hull of the patches the stones above rest on, and its fuzzy top is never below its holders&rsquo; tops. Every stone rests on the ground or on a stone that does.</li>
-      <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least <span data-const="BEV_FLAT"></span>&deg;, a point just outside it in no other stone) gets one flat bevel, cut the same distance in on both faces, so at the middle angle between them: <b>Bevel</b> wide (drawn between its two ends at each end of the edge), at most <span data-const="BEV_INR%"></span> of the narrower face&rsquo;s inradius, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell, so with Joint at zero or more stones never overlap and under zero they overlap. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the rocks, or the <b>structure</b>: the cells as cut, before carving, each body its own shade, as frosted glass, with the spines and the layer faces. <b>Weathering</b> then cuts each stone by an egg of its own shape, just holding the stone at 0% and just inside it at 100%, so corners go first, then edges, then the faces dome; what a stone rests on or carries, and the downward limit, hold it back.</li>
+      <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least <span data-const="BEV_FLAT"></span>&deg;, a point just outside it in no other stone) gets one flat bevel, cut the same distance in on both faces, so at the middle angle between them: <b>Bevel</b> wide (drawn between its two ends at each end of the edge), at most <span data-const="BEV_INR%"></span> of the narrower face&rsquo;s inradius, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell, so with Joint at zero or more stones never overlap and under zero they overlap. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the wall three ways. <b>Finished</b> is the stones as they print: a natural grey that runs a little warm, each stone its own, lit like the rest, the cracks dark and the overhang painted orange (55 to 65&deg;) or red (past 65&deg;), with no outlines. <b>Rocks</b> is the same stones for debugging: each in its own vivid colour, every edge outlined, the bevels paler, the crack network drawn (the lines that became cracks solid, the lines a crack could have followed and did not dashed and fainter) and the overhang painted. <b>Structure</b> is the cells as cut, before carving, each body its own shade, as frosted glass, with the spines, the layer faces and the envelope. A tap selects a stone (a mass, in Structure), outlined in yellow, with its spine in Structure; in Finished and Rocks a tap near an edge selects that edge too, drawn in cyan with its report, and the selection stays when the view changes. <b>Weathering</b> then cuts each stone by an egg of its own shape, just holding the stone at 0% and just inside it at 100%, so corners go first, then edges, then the faces dome; what a stone rests on or carries, and the downward limit, hold it back.</li>
       <li><b>Cracks</b> (each style sets its own: Granite 12.5% on a Blocks network, Columns 19.5% on a Columns network, Layered 90% on a Planes network, Fieldstone none, Ashlar 15%; under Rocks, whose page in the settings sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: a table of flat boundaries between cells of seeds on a grid, in one, two or three axes: <b>Planes</b> across the vertical (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread, and each boundary carrying the rank at which a crack would reach it (cracks start at even shares and grow from line to line, turning least, branching with the chance <b>Branching</b>, <span data-const="CRACK_LINES"></span> lines to a crack on average). The table is made once for each Network, Spacing and Branching (the first wall that needs one waits for it) and the wall takes it at a seeded offset. Where a boundary crosses a stone&rsquo;s upright or upward faces it is a trace; <b>Cracks</b> picks each stone&rsquo;s own share of its traces&rsquo; length, in rank order, so raising it only adds cracks, and a crack never runs from one stone into another. A boundary a face meets at less than <span data-const="GRAZE"></span>&deg; (it would take off a skin) takes none. A trace is walked in short steps (<b>Wiggle</b>: each step <span data-const="WIGGLE_STEP"></span> mm, its heading turned by up to this share of <span data-const="WIGGLE_TURN"></span>&deg; and kept within the share, so a crack meanders), and cut as a groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>&deg; off the face&rsquo;s inward normal, <b>Opening</b> apart at the face (at most <span data-const="OPENING_MOST"></span> mm), so on an upright face its roof faces down at the overhang target whichever way the crack runs, and a wall that would face down past it is turned up to it. A free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span>; an end that meets another crack, or the stone&rsquo;s outline where it touches another stone or the ground, runs off at full size; and a stretch that holds a stone above or lies on a bottom is left whole. Each face the grooves touch is cut in its own plane into the convex pieces outside them, and merged back to as few as keep it convex. The faces inside a crack are drawn dark grey.</li>
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
     </ol>
@@ -2260,9 +2259,9 @@ function bodyIds(surf) {
   return b;
 }
 // the wall from its arrays: its triangles with their colours (lit flat), and the outline lines
-function meshOfBuf(surf, lines, see = false) {
+function meshOfBuf(surf, lines, see = false, finished = false) {
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(surf.pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(surf.col, 3, true));
+  g.setAttribute('position', new THREE.BufferAttribute(surf.pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(finished ? ensureFin(surf) : surf.col, 3, true));
   if (see) g.setAttribute('body', new THREE.BufferAttribute(bodyIds(surf), 1));   /* each vertex its body (+1; 0 is none): the glass compares it with the spines' */
   const grp = new THREE.Group(); grp.add(new THREE.Mesh(g, see ? massMat : stoneMat));
   if (lines) { const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(surf.lines, 3)); grp.add(new THREE.LineSegments(lg, edgeMat)); }
@@ -2312,18 +2311,53 @@ function stoneWords(i) {
   return stoneHead(i) + `<b>Stone ${i}</b>` + (on.length ? ` rests on ${stoneLinks(on)}` : ' rests on the ground or nothing below') + (up.length ? `; it holds up ${stoneLinks(up)}` : '; nothing rests on it') + '.';
 }
 let selObj = null;
-// three levels of light, one per step out: what is selected, the thing holding it, the thing holding that
-// (an edge selected: the edge, its stone, the stones fused with it; a stone selected: the stone, the stones fused with it)
-const LIT = [0.22, 0.11, 0.05], LIT_LINE = [1, 0.45, 0.2];
+// three levels of light, one per step out (an edge selected: its stone, the stones fused with it; a stone selected: the stone, the stones fused with it)
+const LIT = [0.14, 0.07, 0.03];
 /* the info box in the selected stone's own colour (the one it is drawn in): a strip down its left edge, a tint of it as the ground, the ink dark or light by the ground's luminance */
 function tintInfo(i) {
   const box = $('einfo').style, names = ['--stone', '--stone-bg', '--stone-edge', '--stone-ink'];
   if (i == null || !shown) { for (const n of names) box.removeProperty(n); return; }
-  const c = shadeOf(shown.surf.stoneOf[i][0]), mix = t => c.map(v => Math.round(v + t * (255 - v))), css = a => `rgb(${a.join(',')})`, bg = mix(0.82);
+  const c = drawnColour(shown.surf.stoneOf[i][0]), mix = t => c.map(v => Math.round(v + t * (255 - v))), css = a => `rgb(${a.join(',')})`, bg = mix(0.82);
   const lum = (0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]) / 255;
   box.setProperty('--stone', css(c)); box.setProperty('--stone-bg', css(bg)); box.setProperty('--stone-edge', css(mix(0.4))); box.setProperty('--stone-ink', lum > 0.5 ? '#1b1f22' : '#f4f6f8');
 }
-/* the selected mass's spine(s), found by body id as the glass finds them (V.spineGrp[q] + 1 is the body), a fat yellow rod with a dark rim, drawn over everything (structure view only: the rocks view draws no spines) */
+/* the finished stone: a natural grey that runs warm, each body its own (hash of its id) in hue and lightness; a crack's inside is darker still */
+const FIN_COOL = [150, 148, 144], FIN_WARM = [177, 160, 136], FIN_CRACK = [44, 42, 41];
+function finOf(g) {
+  const w = hash2(g, 11) / 4294967296, k = 0.84 + 0.24 * (hash2(g, 12) / 4294967296);
+  return FIN_COOL.map((c, j) => Math.max(0, Math.min(255, Math.round((c + w * (FIN_WARM[j] - c)) * k))));
+}
+/* the colour a body is drawn in: its stone grey when finished, its own vivid colour otherwise */
+const drawnColour = g => state.draw === 'finished' ? finOf(g) : shadeOf(g);
+/* the finished colours of a wall's faces, made once from its debug colours (a face coloured as a crack's inside stays dark) and painted with the overhang as the debug ones are */
+function ensureFin(surf) {
+  if (surf.fin) return surf.fin;
+  const { col, stoneTri, stoneOf } = surf, fin = new Uint8Array(col.length);
+  for (let i = 0; i < stoneOf.length; i++) {
+    const rgb = finOf(stoneOf[i][0]);
+    for (let t = stoneTri[i]; t < stoneTri[i + 1]; t++) { const o = 9 * t, crack = col[o] === CRACK_RGB[0] && col[o + 1] === CRACK_RGB[1] && col[o + 2] === CRACK_RGB[2], c = crack ? FIN_CRACK : rgb; for (let k = 0; k < 9; k += 3) { fin[o + k] = c[0]; fin[o + k + 1] = c[1]; fin[o + k + 2] = c[2]; } }
+  }
+  surf.fin = fin; if (surf.paint) paintSurf(surf, surf.paint);
+  return fin;
+}
+/* The selection: one value, kept across the three views: the piece of a stone (a mass, in Structure) and, when an edge of it was tapped, that edge; wall says which wall (what it is made from) it belongs to. Marks: the stone or mass an outline in yellow
+   (in Structure its spine too, in its own colour inside a yellow outline), an edge its own colour (cyan with a dark rim), neither yellow nor the overhang's red and orange. */
+let SEL = null;
+const wallOf = key => key.slice(key.indexOf('/'));
+const SEL_YELLOW = 0xFFE600, SEL_RIM = 0x4A3A00, EDGE_CYAN = 0x00E5FF, EDGE_RIM = 0x00323A;
+/* line segments (flat x y z x y z) as four-sided rods of one radius, one colour, drawn over everything */
+function rodsOf(segs, r, hex, order) {
+  const pos = new Float32Array(segs.length / 6 * 72); let o = 0;
+  for (let i = 0; i < segs.length; i += 6) {
+    const a = [segs[i], segs[i + 1], segs[i + 2]], b = [segs[i + 3], segs[i + 4], segs[i + 5]], L = len(sub(b, a)); if (L < 1e-9) continue;
+    const d = mul(sub(b, a), 1 / L), p0 = unit(cross(d, Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), p1 = cross(d, p0), R = [];
+    for (let k = 0; k < 4; k++) { const th = Math.PI / 2 * k, c = Math.cos(th) * r, s_ = Math.sin(th) * r; R.push([p0[0] * c + p1[0] * s_, p0[1] * c + p1[1] * s_, p0[2] * c + p1[2] * s_]); }
+    for (let k = 0; k < 4; k++) { const u = R[k], w_ = R[(k + 1) % 4]; for (const [P, Q] of [[a, u], [b, u], [b, w_], [a, u], [b, w_], [a, w_]]) { pos[o++] = P[0] + Q[0]; pos[o++] = P[1] + Q[1]; pos[o++] = P[2] + Q[2]; } }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, o), 3));
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: hex, side: THREE.DoubleSide, depthTest: false, depthWrite: false })); m.renderOrder = order; return m;
+}
+/* the selected mass's spine(s), found by body id as the glass finds them (V.spineGrp[q] + 1 is the body): the spine in its own saturated colour inside a yellow outline, drawn over everything (Structure only: the other views draw no spines) */
 let spineSelObj = null;
 function selectSpine(i) {
   if (spineSelObj) { scene.remove(spineSelObj); disposeGroup(spineSelObj); spineSelObj = null; }
@@ -2331,46 +2365,42 @@ function selectSpine(i) {
   const V = shown.view, bid = shown.surf.stoneOf[i][0] + 1, S = V.spines; spineSelObj = new THREE.Group(); spineSelObj.userData.spineIds = [];
   for (let q = 0; q < V.spineGrp.length; q++) {
     if (V.spineGrp[q] + 1 !== bid) continue; spineSelObj.userData.spineIds.push(q);
-    const A = new THREE.Vector3(S[6 * q], S[6 * q + 1], S[6 * q + 2]), B = new THREE.Vector3(S[6 * q + 3], S[6 * q + 4], S[6 * q + 5]), L = A.distanceTo(B); if (L < 1e-6) continue;
-    for (const [r, col, order] of [[0.95, 0x806000, 12], [0.62, 0xFFE600, 13]]) {
-      const rod = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 8), new THREE.MeshBasicMaterial({ color: col, depthTest: false, depthWrite: false }));
-      rod.position.copy(A).add(B).multiplyScalar(0.5); rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize()); rod.renderOrder = order; spineSelObj.add(rod);
-    }
+    const seg = Array.from(S.subarray(6 * q, 6 * q + 6)), own = (V.spineRGB[3 * q] << 16) | (V.spineRGB[3 * q + 1] << 8) | V.spineRGB[3 * q + 2];
+    for (const [r, col, order] of [[0.85, SEL_RIM, 12], [0.6, SEL_YELLOW, 13], [0.32, own, 14]]) spineSelObj.add(rodsOf(seg, r, col, order));
   }
   scene.add(spineSelObj);
 }
-function selectStone(i, edge) {   // the stone lit yellow, seen through whatever is in front of it; edge: an edge of it is what is selected
+function selectStone(i, edge) {   /* the stone outlined in yellow, seen through whatever is in front of it (a step lighter when an edge of it is what is selected) */
   if (selObj) { scene.remove(selObj); disposeGroup(selObj); selObj = null; }
   tintInfo(i); selectSpine(i);
   if (i == null || !shown) { draw(); return; }
   const st = shown.surf.stoneTri, lv = edge ? 1 : 0; selObj = new THREE.Group();
   const lite = (j, k) => {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(shown.surf.pos.slice(9 * st[j], 9 * st[j + 1]), 3));
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xFFE600, transparent: true, opacity: LIT[k], side: THREE.DoubleSide, depthTest: false, depthWrite: false })); m.renderOrder = 9 - k; selObj.add(m);
-    const e = new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: 0x806000, transparent: LIT_LINE[k] < 1, opacity: LIT_LINE[k], depthTest: false })); e.renderOrder = 9 - k; selObj.add(e);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: SEL_YELLOW, transparent: true, opacity: LIT[k], side: THREE.DoubleSide, depthTest: false, depthWrite: false })); m.renderOrder = 9 - k; selObj.add(m);
+    const segs = new THREE.EdgesGeometry(g, 20).attributes.position.array, r = [0.3, 0.2, 0.12][k];
+    selObj.add(rodsOf(segs, r * 1.7, SEL_RIM, 9 - k)); selObj.add(rodsOf(segs, r, SEL_YELLOW, 10 - k));
   };
   lite(i, lv); for (const j of matesOf(i)) lite(j, lv + 1);
   scene.add(selObj); draw();
   $('chip').textContent = state.style + ' · seed ' + state.seed + ' · stone ' + i + ' (body ' + shown.surf.stoneOf[i][0] + (shown.surf.stoneOf[i][1] >= 0 ? ', layer ' + shown.surf.stoneOf[i][1] : '') + ')';
 }
 let hlObj = null;
-function highlightEdge(r) {
+function highlightEdge(r) {   /* the selected edge: cyan with a dark rim, in every view */
   if (hlObj) { scene.remove(hlObj); disposeGroup(hlObj); hlObj = null; }
   if (!r) { draw(); return; }
-  const a = r.a, b = r.b, d = unit(sub(b, a)), p0 = unit(cross(d, Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), p1 = cross(d, p0), rr = 0.3, pos = [];
-  for (let k = 0; k < 6; k++) { const t0 = TWO_PI * k / 6, t1 = TWO_PI * (k + 1) / 6, q0 = add(mul(p0, Math.cos(t0) * rr), mul(p1, Math.sin(t0) * rr)), q1 = add(mul(p0, Math.cos(t1) * rr), mul(p1, Math.sin(t1) * rr)); for (const P of [add(a, q0), add(b, q0), add(b, q1), add(a, q0), add(b, q1), add(a, q1)]) pos.push(...P); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  hlObj = new THREE.Group(); hlObj.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xFFE600, side: THREE.DoubleSide, depthTest: false }))); hlObj.renderOrder = 10; scene.add(hlObj); draw();
+  const seg = [...r.a, ...r.b];
+  hlObj = new THREE.Group(); hlObj.add(rodsOf(seg, 0.6, EDGE_RIM, 11)); hlObj.add(rodsOf(seg, 0.34, EDGE_CYAN, 12)); scene.add(hlObj); draw();
 }
-// the bevels in their stone's colour, paler (a part bevel paler still), when Bevels is checked (overhang paint stays on top)
+// the bevels of the debug colours, in their stone's colour paler (a part bevel paler still; finished ones are the stone's own colour); the overhang paint stays on top
 function tintBevels(surf) {
   if (!surf.bev) return; const { col, faceTri } = surf;
-  for (let k = 0; k < surf.bev.length; k++) for (let fi = surf.bev[k], b = surf.bevBase.subarray(3 * k, 3 * k + 3), t = !state.bevelsOn ? 0 : surf.bevPart[k] ? PART_PALE : BEVEL_PALE, c = [0, 1, 2].map(j => Math.round(b[j] + t * (255 - b[j]))), o = 9 * faceTri[fi], e = 9 * faceTri[fi + 1]; o < e; o += 3) { col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; }
+  for (let k = 0; k < surf.bev.length; k++) for (let fi = surf.bev[k], b = surf.bevBase.subarray(3 * k, 3 * k + 3), t = surf.bevPart[k] ? PART_PALE : BEVEL_PALE, c = [0, 1, 2].map(j => Math.round(b[j] + t * (255 - b[j]))), o = 9 * faceTri[fi], e = 9 * faceTri[fi + 1]; o < e; o += 3) { col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; }
   if (surf.paint) paintSurf(surf, surf.paint);
 }
 function paintSurf(surf, paint) {
-  const { col, faceTri } = surf;
-  paint.faces.forEach((fi, k) => { const c = paint.red[k] ? OVER_RGB : BAND_RGB; for (let o = 9 * faceTri[fi], e = 9 * faceTri[fi + 1]; o < e; o += 3) { col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; } });
+  const { faceTri } = surf;
+  for (const col of [surf.col, surf.fin]) if (col) paint.faces.forEach((fi, k) => { const c = paint.red[k] ? OVER_RGB : BAND_RGB; for (let o = 9 * faceTri[fi], e = 9 * faceTri[fi + 1]; o < e; o += 3) { col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; } });
   surf.paint = paint;
 }
 /* the envelope as the structure view draws it: an outline of rods (each edge a thin rod, so it keeps its width at any zoom), all one thickness and
@@ -2460,7 +2490,7 @@ const PRESETS = {   // ranges are [lo, hi]
   ashlar: { length: [70, 70], height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: [1.2, 1.6], weather: [0, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['fieldstone', 'Fieldstone', 'A dry wall of irregular, roundish stones placed at random in rough courses, some running up through the next course, no cracks'], ['ashlar', 'Ashlar', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
-const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', crackLines: false, lines: true, bevelsOn: true, mini: true };
+const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'finished', mini: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -2525,7 +2555,7 @@ const GROUPS = [
     { ...R_('opening', 'Opening', 0.1, OPENING_MOST, 0.05, MM, `How wide each crack opens at the surface, drawn for each crack; every crack is the same V (each wall ${GROOVE.toFixed(1)}° off the face), so it is about ${(1 / (2 * Math.tan(GROOVE * DEG))).toFixed(1)} times as deep, and printable whichever way it runs. Its free ends taper to nothing. Below the nozzle’s width (0.4 mm) it prints as a mark, not a gap. A gap within one stone (Joint is the gap between two).`), shownWhile: 'cracks' },
     { ...P_('wiggle', 'Wiggle', 0, 100, 1, '%', `How far a crack meanders off its line: 0% straight, 100% the most (its heading up to ${WIGGLE_TURN}° off the line). It walks in steps ${WIGGLE_STEP[0]} to ${WIGGLE_STEP[1]} mm long, each turning its heading by up to this share of ${WIGGLE_TURN}°, kept within the share, before the walk is pulled back so the crack ends where its line ends.`), shownWhile: 'cracks' }] },
 ];
-const CHECKS = ['crackLines', 'lines', 'bevelsOn', 'mini'];
+const CHECKS = ['mini'];
 const CLIFF_KEYS = Object.keys(PRESETS.layered);
 const ROCK_KEYS = ['bevel', 'weather', 'bridge', 'cracks', 'network', 'spacing', 'branching', 'opening', 'wiggle'];
 // the settings the engine reads
@@ -2535,7 +2565,7 @@ const same = (a, b) => String(a) === String(b);   // a range is compared by its 
 const edited = () => Object.keys(PRESETS[state.style]).some(k => !same(state[k], PRESETS[state.style][k]));
 // ---------- settings code ----------
 /* What is outside GROUPS' presets: the view part of a code (draw, projection) and its camera, each declared here as a small table */
-const VIEW = [{ key: 'draw', choices: ['rocks', 'structure'] }, { key: 'view', choices: ['persp', 'ortho'] }];
+const VIEW = [{ key: 'draw', choices: ['rocks', 'structure', 'finished'] }, { key: 'view', choices: ['persp', 'ortho'] }];
 const CAMERA = { step: 0.1, bits: 16 };
 const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
 /* One code for a configuration. encode and decode read GROUPS (key, min, max, step, choices, in order), PRESETS and VIEW, so a new setting needs no change here.
@@ -2768,7 +2798,7 @@ function initGL() {
       const st = shown.surf.stoneTri; if (!st) return; const stoneAt = fi => { let lo = 0, hi = st.length - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (st[m] <= fi) lo = m; else hi = m - 1; } return lo; };
       const hits = ray.intersectObject(rockObj.children[0]);
       if (!hits.length) {   /* a tap on empty space clears the selection */
-        ME = -1; selectStone(null); highlightEdge(null); $('einfo').hidden = true; $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed; return;
+        SEL = null; ME = -1; selectStone(null); highlightEdge(null); $('einfo').hidden = true; $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed; return;
       }   /* a joiner's faces lie on its pieces': the piece behind it is the one tapped */
       const ja = shown.surf.joinerAt, hit = hits.find(h => !(ja && ja[stoneAt(h.faceIndex)]) && h.distance < hits[0].distance + 0.05) || hits[0]; const lo = stoneAt(hit.faceIndex);
       const [g, l] = shown.surf.stoneOf[lo]; $('chip').textContent = state.style + ' · seed ' + state.seed + ' · stone ' + lo + ' (body ' + g + (l >= 0 ? ', layer ' + l : '') + ')';
@@ -2779,14 +2809,14 @@ function initGL() {
       const reach = Math.max(0.4, 0.012 * hit.distance), box = $('einfo');
       const onEdge = !!(best && bd <= reach);
       selectStone(lo, onEdge);   /* the tapped stone lights up: a step fainter when one of its edges is the selection */
-      ME = lo;
+      ME = lo; SEL = { piece: shown.surf.stoneRel[lo][0], wall: wallOf(shown.key), edge: onEdge ? best : null };
       if (onEdge) { box.innerHTML = stoneHead(lo) + edgeWords(best); box.hidden = false; highlightEdge(best); }
       else { box.innerHTML = stoneWords(lo) + '<div class="dim" style="margin-top:4px">Tap nearer an edge for its report.</div>'; box.hidden = false; highlightEdge(null); }
     });
   }
   $('einfo').addEventListener('click', e => {   // a stone's link: that stone selected, and what it rests on and holds up
     const a = e.target.closest('a.slink'); if (!a) return; e.preventDefault(); const i = +a.dataset.stone;
-    ME = i; selectStone(i); highlightEdge(null); $('einfo').innerHTML = stoneWords(i);
+    ME = i; SEL = { piece: shown.surf.stoneRel[i][0], wall: wallOf(shown.key), edge: null }; selectStone(i); highlightEdge(null); $('einfo').innerHTML = stoneWords(i);
   });
   controls.target.copy(focus()); controls.enablePan = true; controls.minDistance = 20; controls.maxDistance = 600;
   controls.addEventListener('change', draw); controls.addEventListener('change', fieldSync); controls.addEventListener('end', () => codeSync()); controls.update();
@@ -2836,7 +2866,7 @@ function zoomFit() {
 // what else the view shows: the envelope, the layers' faces and the spines, and the crack network's lines on the stones
 function extras(V, surf = null, P = null) {
   const grp = new THREE.Group();
-  if (state.bevelsOn && surf && surf.unbev && surf.unbev.length) {   // debugging: the seen edges left sharp
+  if (state.draw === 'rocks' && surf && surf.unbev && surf.unbev.length) {   // debugging: the seen edges left sharp
     const u = surf.unbev, r = 0.18, pos = new Float32Array(u.length / 6 * 54);   // each a three-sided tube, r mm across
     for (let i = 0, o = 0; i < u.length; i += 6) {
       const a = [u[i], u[i + 1], u[i + 2]], b = [u[i + 3], u[i + 4], u[i + 5]], d = unit(sub(b, a)), p0 = unit(cross(d, Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), p1 = cross(d, p0), R = [];
@@ -2879,10 +2909,11 @@ function extras(V, surf = null, P = null) {
     if (glassy) { g.setAttribute('body', new THREE.BufferAttribute(bod.subarray(0, o / 3), 1)); const m = new THREE.Mesh(g, glassKit().spineBehind); m.renderOrder = 5; m.userData.spines = g; grp.add(m); }   /* the glass draws the crisp ones itself, from this geometry */
     else { const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, depthTest: false, transparent: true })); m.renderOrder = 10; grp.add(m); }   /* drawn after the selection's tint (transparent, so it sorts with it), so a lit stone's spine still shows */
   }
-  // the network's lines on the stones: every line a crack could follow faint, the ones cut strong
-  if (state.crackLines && surf && surf.cracks) for (const on of [false, true]) {
+  /* the network's lines on the stones (Rocks only): the lines that became cracks solid and dark, the candidate lines that did not, fainter and dashed */
+  if (state.draw === 'rocks' && surf && surf.cracks) for (const on of [false, true]) {
     const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(on ? surf.cracks.lines.on : surf.cracks.lines.off, 3));
-    const o = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: on ? 0x10243A : 0x5B8AC4, transparent: true, opacity: on ? 1 : 0.55, depthFunc: THREE.LessEqualDepth })); o.renderOrder = 6; grp.add(o);
+    const o = new THREE.LineSegments(lg, on ? new THREE.LineBasicMaterial({ color: 0x10243A, depthFunc: THREE.LessEqualDepth }) : new THREE.LineDashedMaterial({ color: 0x3F72B8, dashSize: 0.9, gapSize: 0.7, transparent: true, opacity: 0.7, depthFunc: THREE.LessEqualDepth }));
+    if (!on) o.computeLineDistances(); o.renderOrder = 6; grp.add(o);
   }
   return grp;
 }
@@ -2929,7 +2960,7 @@ function rebuild() {
   try {
     $('err').hidden = true;
     // a wall is kept while what it is made from holds, so a change of view, lines or a check builds nothing
-    const key = [state.draw, state.seed, JSON.stringify(pick(ENGINE_KEYS))].join('/'), have = shownKept.get(key);
+    const key = [state.draw === 'structure' ? 'structure' : 'stones', state.seed, JSON.stringify(pick(ENGINE_KEYS))].join('/'), have = shownKept.get(key);
     if (have) { ++jobId; waiting = null; show(have); return; }   // what the builder is making now is no longer wanted
     // what the builder is making now is this: it is shown when it comes (with the view as it is then), not made again
     if (builder && busy && busy.key === key) { jobId = busy.id; waiting = null; return; }
@@ -2959,11 +2990,10 @@ function builtOne(r) {
 function failed(msg, detail) { $('err').hidden = false; $('err').textContent = 'The cliff could not be built: ' + msg; problems.push('build: ' + msg); console.error(detail); }
 function show(e) {
   try {
-    /* the same wall drawn the other way (structure or rocks) keeps the selected stone: it is found again by its piece */
-    const was = shown, keptPiece = was && selObj && ME >= 0 && was.key.slice(was.key.indexOf('/')) === e.key.slice(e.key.indexOf('/')) && was.surf.stoneRel ? was.surf.stoneRel[ME][0] : null;
+    /* the same wall drawn another way keeps the selection (SEL): its stone is found again by its piece, and its edge is drawn as it was */
     shown = e; const { view, surf } = e; tintBevels(surf); if (hlObj) highlightEdge(null); if (selObj) selectStone(null); $('einfo').hidden = true; if (surf.stoneRel && !surf.pieceStone) surf.pieceStone = new Map(surf.stoneRel.map((r, i) => [r[0], i]));
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
-    rockObj = meshOfBuf(surf, state.lines, state.draw === 'structure'); scene.add(rockObj);
+    edgeMat.opacity = state.draw === 'rocks' ? 0.8 : 0.45; rockObj = meshOfBuf(surf, state.draw !== 'finished', state.draw === 'structure', state.draw === 'finished'); scene.add(rockObj);   /* outlines in Rocks and Structure, none when finished */
     if (extraObj) { scene.remove(extraObj); disposeGroup(extraObj); }
     extraObj = extras(view, surf, e.P); scene.add(extraObj);
     glass.rig = null; if (state.draw === 'structure') glassRig();
@@ -2971,7 +3001,9 @@ function show(e) {
     draw();
     $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed;
     showStats(view, surf, surf.took);
-    if (keptPiece !== null && surf.pieceStone && surf.pieceStone.has(keptPiece)) { const i = surf.pieceStone.get(keptPiece); ME = i; selectStone(i); $('einfo').innerHTML = stoneWords(i); $('einfo').hidden = false; }
+    if (SEL && SEL.wall !== wallOf(e.key)) SEL = null;
+    const i = SEL && surf.pieceStone ? surf.pieceStone.get(SEL.piece) : undefined;
+    if (i !== undefined) { ME = i; selectStone(i, !!SEL.edge); $('einfo').innerHTML = SEL.edge ? stoneHead(i) + edgeWords(SEL.edge) : stoneWords(i); $('einfo').hidden = false; if (SEL.edge) highlightEdge(SEL.edge); }
     else ME = -1;
   } catch (err) { failed(err.message, err); }
 }
@@ -2984,7 +3016,7 @@ function painted(e, paint) {
 }
 let lastStats = [];
 function showStats(V, surf, ms) {
-  const rocks = state.draw === 'rocks', cr = surf.cracks, ph = surf.paint, T = surf.T, envVol = (V.hi[0] - V.lo[0]) * (V.hi[1] - V.lo[1]) * (V.hi[2] - V.lo[2]), pct = x => (100 * x / ph.down).toFixed(3) + '%', ok = x => x / ph.down < 0.001;
+  const rocks = state.draw !== 'structure', cr = surf.cracks, ph = surf.paint, T = surf.T, envVol = (V.hi[0] - V.lo[0]) * (V.hi[1] - V.lo[1]) * (V.hi[2] - V.lo[2]), pct = x => (100 * x / ph.down).toFixed(3) + '%', ok = x => x / ph.down < 0.001;
   const rows = [
     [rocks ? 'Stones' : 'Masses', `${surf.groups} from ${surf.sites} spines` + (surf.stones > surf.groups ? `, in ${surf.stones} shells` : '')],
     ['Held', `${surf.lost - (surf.dead || 0) ? `<span class="bad">${surf.lost - (surf.dead || 0)} with no way down to the ground</span>` : 'every one grounded'}${surf.dead ? `, <span class="bad">${surf.dead} cut away by their own flare (not drawn)</span>` : ''}${surf.noHold ? `, ${surf.noHold} resting nowhere` : ''}`],
@@ -3026,7 +3058,7 @@ let thumbKey = '';
 function rebuildThumbs() {
   if (!stripLive()) return;
   // the strip shows masses: redrawn only when what they are made from, the seed or the view changes
-  const tk = [state.seed, state.view, state.lines, ...ENGINE_KEYS.map(k => state[k]), camera.position.toArray().map(x => x.toFixed(2))].join('/');
+  const tk = [state.seed, state.view, ...ENGINE_KEYS.map(k => state[k]), camera.position.toArray().map(x => x.toFixed(2))].join('/');
   if (tk === thumbKey) return; thumbKey = tk;
   const job = ++thumbJob, start = Math.max(0, state.seed - 4);
   const cam = state.view === 'ortho' ? thumbOrtho : thumbPersp, f = focus(), reach = reachOf() * 0.95;
@@ -3042,7 +3074,7 @@ function rebuildThumbs() {
   centreStrip();
   const draw = (i, surf) => {
     if (job !== thumbJob) return;
-    const t = thumbs[i], g = meshOfBuf(surf, state.lines);
+    const t = thumbs[i], g = meshOfBuf(surf, true);
     thumbScene.add(g); thumbR.render(thumbScene, cam); thumbScene.remove(g); disposeGroup(g);
     t.ctx.clearRect(0, 0, 280, 280); t.ctx.drawImage(thumbR.domElement, 0, 0, 280, 280);
   };
@@ -3452,6 +3484,7 @@ function syncUI() {
   for (const b of $('view').children) b.setAttribute('aria-pressed', b.dataset.view === state.view ? 'true' : 'false');
   for (const b of $('draw').children) b.setAttribute('aria-pressed', b.dataset.draw === state.draw ? 'true' : 'false');
   for (const k of CHECKS) $(k).checked = state[k];
+  $('legend').hidden = state.draw !== 'rocks';
 }
 let ownHash = '';
 let pending = false;
