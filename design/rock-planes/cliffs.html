@@ -462,6 +462,11 @@ function bridgeSpan(A, B) { const H_ = hull2(A.map(v => [v[0], v[1], 0]).concat(
     const L = Math.hypot(v[0] - u[0], v[1] - u[1]); if (L < 1e-9) continue;
     const on = P_ => segIn(P_, u, v); dm = Math.max(dm, L * Math.max(0, 1 - on(A) - on(B))); }
   return dm; }
+/* what holds a bottom by bridging: each held patch, and the hull of each pair of them that spans at most bridge (a point in one of these lies on a
+   patch or on a line between two held points at most bridge apart); the planner and the measure both ask this */
+function bridgeShapes(pl, bridge) { const out = pl.map(ccw);
+  for (let i = 0; i < pl.length; i++) for (let j = i + 1; j < pl.length; j++) if (bridgeSpan(pl[i], pl[j]) <= bridge) out.push(ccw(hull2(pl[i].concat(pl[j]))));
+  return out; }
 /* the share of the segment u-v that lies in the convex polygon P (either winding) */
 function segIn(P_, u, v) { const P = ccw(P_); let t0 = 0, t1 = 1; const dx = v[0] - u[0], dy = v[1] - u[1];
   for (let i = 0, n = P.length; i < n; i++) { const a = P[i], b = P[(i + 1) % n], nx = b[1] - a[1], ny = a[0] - b[0];   /* outward normal of a ccw edge */
@@ -1171,10 +1176,9 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
        is trimmed toward the set and tried again. A patch smaller than MINBR is no end of a bridge */
     if (pat.length >= 2) {
       const pl = pat.map(r => ccw(r.poly)), A_ = pl.map(p => Math.abs(area2(p)));
-      const held = idx => { const hs = ccw(hull2([].concat(...idx.map(i => pl[i])))), sh = [];
-        for (let a = 0; a < idx.length; a++) for (let b = a + 1; b < idx.length; b++) if (bridgeSpan(pl[idx[a]], pl[idx[b]]) <= BRIDGE) sh.push(ccw(hull2(pl[idx[a]].concat(pl[idx[b]]))));
+      const held = idx => { const hs = ccw(hull2([].concat(...idx.map(i => pl[i])))), sh = bridgeShapes(idx.map(i => pl[i]), BRIDGE);
         let ax_ = 1e9, bx_ = -1e9, ay_ = 1e9, by_ = -1e9; for (const v of hs) { ax_ = Math.min(ax_, v[0]); bx_ = Math.max(bx_, v[0]); ay_ = Math.min(ay_, v[1]); by_ = Math.max(by_, v[1]); }
-        for (let y = ay_ + 0.2; y < by_; y += 0.4) for (let x = ax_ + 0.2; x < bx_; x += 0.4) { if (!inPoly(hs, x, y) || idx.some(i => inPoly(pl[i], x, y)) || sh.some(P_ => inPoly(P_, x, y))) continue; return false; }
+        for (let y = ay_ + 0.2; y < by_; y += 0.4) for (let x = ax_ + 0.2; x < bx_; x += 0.4) { if (!inPoly(hs, x, y) || sh.some(P_ => inPoly(P_, x, y))) continue; return false; }
         return true; };
       const ord = pl.map((_, i) => i).sort((a, b) => A_[b] - A_[a]), set = [ord[0]];
       for (let t = 1; t < ord.length; t++) {
@@ -2117,8 +2121,7 @@ function passII(w, opt = {}) {
         if (edge) { const x = mx0 + gx * BR, y = my0 + gy * BR; pts.push([x, y], [x + BR, y], [x, y + BR], [x + BR, y + BR]); } }
       const h = hull2(pts); if (h.length >= 3) hulls.push(h);
     }
-    const shapes = hulls.slice();
-    for (let i = 0; i < hulls.length; i++) for (let j = i + 1; j < hulls.length; j++) { if (bridgeSpan(hulls[i], hulls[j]) <= BRIDGE) shapes.push(hull2(hulls[i].concat(hulls[j]))); }
+    const shapes = bridgeShapes(hulls, BRIDGE);
     for (const { f, cols, bad, steep } of fl) {
       total += cols * R * R; faces++;
       let un = 0;
