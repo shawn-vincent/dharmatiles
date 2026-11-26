@@ -2187,12 +2187,21 @@ const viewOf = w => ({ lo: [-w.W / 2, w.y0, 0], hi: [w.W / 2, w.y1, w.H], spines
 const transfers = o => { const out = []; for (const k of ['pos', 'col', 'faceTri', 'lines']) if (o[k]) out.push(o[k].buffer); if (o.cracks) out.push(o.cracks.lines.on.buffer, o.cracks.lines.off.buffer); if (o.report) for (const k of ['D', 'K', 'O', 'AD', 'AK']) out.push(o.report[k].buffer); return out; };
 // ---------- drawing ----------
 const stoneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true });
-const massMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true, transparent: true, opacity: 0.64, depthWrite: false, side: THREE.DoubleSide });   // the masses view: see-through, so the spines show inside
+/* the masses view is frosted glass: the frontmost mass at a pixel is a translucent pane (this material, lit flat) over a blurred picture of everything behind it; massPrepassMat writes the same depths, colour off, so only the nearest surface of the masses passes the pane's depth test */
+const massMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true, transparent: true, opacity: 0.6, depthWrite: false, depthFunc: THREE.LessEqualDepth, side: THREE.DoubleSide });
+const massPrepassMat = massMat.clone(); massPrepassMat.colorWrite = false; massPrepassMat.depthWrite = true;
 const edgeMat = new THREE.LineBasicMaterial({ color: 0x2B3340, transparent: true, opacity: 0.45 });
+// the body of every vertex of the surface, plus one
+function bodyIds(surf) {
+  const st = surf.stoneTri, b = new Float32Array(surf.pos.length / 3);
+  for (let i = 0; i < surf.stoneOf.length; i++) b.fill(surf.stoneOf[i][0] + 1, 3 * st[i], 3 * st[i + 1]);
+  return b;
+}
 // the wall from its arrays: its triangles with their colours (lit flat), and the outline lines
 function meshOfBuf(surf, lines, see = false) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(surf.pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(surf.col, 3, true));
+  if (see) g.setAttribute('body', new THREE.BufferAttribute(bodyIds(surf), 1));   /* each vertex its body (+1; 0 is none): the glass compares it with the spines' */
   const grp = new THREE.Group(); grp.add(new THREE.Mesh(g, see ? massMat : stoneMat));
   if (lines) { const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(surf.lines, 3)); grp.add(new THREE.LineSegments(lg, edgeMat)); }
   return grp;
@@ -2309,12 +2318,15 @@ function miniOf() {
 function placeMini(C) {
   mini.visible = state.mini; mini.position.set(C.lo[0] - MINI_R - MINI_CLEAR, C.lo[1] - MINI_R - MINI_CLEAR, 0); }
 function disposeGroup(grp) { grp.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
-function makeScene() {
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#D9E0EB');
+function addLights(scene) {
   scene.add(new THREE.HemisphereLight(0xffffff, 0x7c8494, 0.62));
   const sun = new THREE.DirectionalLight(0xffffff, 0.85); sun.position.set(-30, -45, 60); scene.add(sun);
   const fill = new THREE.DirectionalLight(0xffffff, 0.22); fill.position.set(40, 30, 20); scene.add(fill);
+}
+function makeScene() {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#D9E0EB');
+  addLights(scene);
   const plate = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: 0xD9E0EB }));
   plate.position.z = -0.01; scene.add(plate);
   const rule = []; for (let k = -3; k <= 3; k++) { const x = 17.5 + 35 * k; rule.push(x, -122.5, 0, x, 122.5, 0, -122.5, x, 0, 122.5, x, 0); }
@@ -2403,6 +2415,83 @@ const same = (a, b) => String(a) === String(b);   // a range is compared by its 
 const edited = () => Object.keys(PRESETS[state.style]).some(k => !same(state[k], PRESETS[state.style][k]));
 
 const viewerEl = $('viewer');
+// ---------- the glass: the masses view ----------
+/* Per pixel, the frontmost mass is a frosted pane: it is drawn translucent over a blurred picture of everything behind it. Spines are crisp
+   where they belong to that mass or lie in front of its surface, and blurred and fainter where they are behind it. Passes: F, the frontmost
+   mass's body and depth; B, the scene without the masses, spines behind a pane faded; the blur of B at half size; then on the screen the
+   blurred (under a mass) or sharp (elsewhere) picture, the pane, the crisp spines, and the selection marks */
+const GLASS_FADE = 0.3, GLASS_EPS = 2e-5;
+const QUAD_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+const glass = { rig: null, kit: null, W: 0, H: 0 };
+function glassKit() {
+  if (glass.kit) return glass.kit;
+  const shared = { tF: { value: null }, tD: { value: null }, res: { value: new THREE.Vector2(1, 1) }, eps: { value: GLASS_EPS }, fade: { value: GLASS_FADE }, bg: { value: new THREE.Color('#D9E0EB') } };
+  const spineMat = mode => new THREE.ShaderMaterial({
+    uniforms: { ...shared, mode: { value: mode } }, vertexColors: true, side: THREE.DoubleSide,
+    vertexShader: 'attribute float body; varying float vB; varying vec3 vC; void main() { vB = body; vC = color; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tF, tD; uniform vec2 res; uniform float eps, fade, mode; uniform vec3 bg; varying float vB; varying vec3 vC;
+      void main() {
+        vec2 uv = gl_FragCoord.xy / res; vec4 f = texture2D(tF, uv);
+        float id = floor(f.r * 255.0 + 0.5) * 256.0 + floor(f.g * 255.0 + 0.5);
+        bool crisp = id < 0.5 || gl_FragCoord.z <= texture2D(tD, uv).r + eps || abs(id - floor(vB + 0.5)) < 0.5;
+        if (crisp == (mode < 0.5)) discard;
+        gl_FragColor = vec4(mode < 0.5 ? mix(vC, bg, fade) : vC, 1.0);
+      }`
+  });
+  const quadMat = (uniforms, frag) => new THREE.ShaderMaterial({ uniforms, vertexShader: QUAD_VS, fragmentShader: frag, depthTest: false, depthWrite: false });
+  const blur = quadMat({ t: { value: null }, dir: { value: new THREE.Vector2() } }, `uniform sampler2D t; uniform vec2 dir; varying vec2 vUv;
+    void main() { vec3 s = vec3(0.0); float w = 0.0; for (int k = -5; k <= 5; k++) { float a = exp(-float(k * k) / 12.0); s += a * texture2D(t, vUv + dir * float(k) * 1.5).rgb; w += a; } gl_FragColor = vec4(s / w, 1.0); }`);
+  const compose = quadMat({ tF: { value: null }, tB: { value: null }, tBlur: { value: null } }, `uniform sampler2D tF, tB, tBlur; varying vec2 vUv;
+    void main() { vec4 f = texture2D(tF, vUv); gl_FragColor = vec4((f.r + f.g > 0.0 ? texture2D(tBlur, vUv) : texture2D(tB, vUv)).rgb, 1.0); }`);
+  const idMat = new THREE.ShaderMaterial({
+    vertexShader: 'attribute float body; varying float vB; void main() { vB = body; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'varying float vB; void main() { float id = floor(vB + 0.5); gl_FragColor = vec4(floor(id / 256.0) / 255.0, mod(id, 256.0) / 255.0, 0.0, 1.0); }', side: THREE.DoubleSide
+  });
+  const quadScene = new THREE.Scene(), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), compose); quad.frustumCulled = false; quadScene.add(quad);
+  return glass.kit = { shared, spineBehind: spineMat(0), spineCrisp: spineMat(1), blur, compose, idMat, quadScene, quad, quadCam: new THREE.Camera() };
+}
+/* the scenes of one shown wall, sharing its geometry: the masses' ids, the pane (a depth prepass then the pane), and the crisp spines */
+function glassRig() {
+  const K = glassKit(), mass = rockObj.children[0], rig = { mass, idScene: new THREE.Scene(), paneScene: new THREE.Scene(), spineScene: new THREE.Scene() };
+  rig.idScene.add(new THREE.Mesh(mass.geometry, K.idMat));
+  addLights(rig.paneScene);
+  const pre = new THREE.Mesh(mass.geometry, massPrepassMat), pane = new THREE.Mesh(mass.geometry, massMat); pre.renderOrder = 0; pane.renderOrder = 1; rig.paneScene.add(pre, pane);
+  extraObj.traverse(o => { if (o.userData.spines) { const m = new THREE.Mesh(o.userData.spines, K.spineCrisp); m.renderOrder = 5; rig.spineScene.add(m); } });
+  glass.rig = rig;
+}
+function glassTargets(W, H) {
+  const K = glassKit(), half = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+  for (const k of ['F', 'B', 'H1', 'H2']) if (glass[k]) glass[k].dispose();
+  if (glass.F) glass.F.depthTexture.dispose();
+  glass.F = new THREE.WebGLRenderTarget(W, H, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+  glass.F.depthTexture = new THREE.DepthTexture(W, H, THREE.UnsignedIntType);
+  glass.B = new THREE.WebGLMultisampleRenderTarget(W, H, half);
+  const hw = Math.max(1, W >> 1), hh = Math.max(1, H >> 1);
+  glass.H1 = new THREE.WebGLRenderTarget(hw, hh, half); glass.H2 = new THREE.WebGLRenderTarget(hw, hh, half);
+  glass.W = W; glass.H = H;
+  K.shared.tF.value = glass.F.texture; K.shared.tD.value = glass.F.depthTexture; K.shared.res.value.set(W, H);
+}
+function drawGlass() {
+  const K = glassKit(), R = glass.rig, size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  if (glass.W !== size.x || glass.H !== size.y || !glass.F) glassTargets(size.x, size.y);
+  const marks = c => c === selObj || c === hlObj, withVisible = (keep, fn) => {   /* the scene's top-level objects (lights always) shown only where keep says */
+    const kids = scene.children.slice(), was = kids.map(c => c.visible); kids.forEach(c => { c.visible = c.isLight || keep(c); }); fn(); kids.forEach((c, i) => { c.visible = was[i]; });
+  };
+  renderer.autoClear = true;
+  renderer.setRenderTarget(glass.F); renderer.render(R.idScene, camera);
+  R.mass.visible = false; renderer.setRenderTarget(glass.B); withVisible(c => !marks(c), () => renderer.render(scene, camera)); R.mass.visible = true;
+  renderer.autoClear = false;
+  const quad = (mat, target) => { K.quad.material = mat; renderer.setRenderTarget(target); renderer.render(K.quadScene, K.quadCam); };
+  K.blur.uniforms.t.value = glass.B.texture; K.blur.uniforms.dir.value.set(1 / glass.H1.width, 0); quad(K.blur, glass.H1);
+  K.blur.uniforms.t.value = glass.H1.texture; K.blur.uniforms.dir.value.set(0, 1 / glass.H2.height); quad(K.blur, glass.H2);
+  K.compose.uniforms.tF.value = glass.F.texture; K.compose.uniforms.tB.value = glass.B.texture; K.compose.uniforms.tBlur.value = glass.H2.texture;
+  renderer.setRenderTarget(null); renderer.clear(); K.quad.material = K.compose; renderer.render(K.quadScene, K.quadCam);
+  renderer.render(R.paneScene, camera);
+  renderer.clearDepth(); renderer.render(R.spineScene, camera);
+  const bg = scene.background; scene.background = null;   /* a colour background would clear what is drawn */
+  withVisible(marks, () => renderer.render(scene, camera)); scene.background = bg;
+  renderer.autoClear = true;
+}
 let renderer, scene, camera, persp, ortho, controls, rockObj = null, extraObj = null, mini = null, thumbR, thumbScene, thumbPersp, thumbOrtho;
 const homeDir = () => new THREE.Vector3(34, -50, 30).normalize();
 const focus = () => new THREE.Vector3(0, 17.5 - state.depth[1] / 2, state.height[1] / 2);
@@ -2470,7 +2559,7 @@ function setView(v) {
   }
   syncUI(); draw(); rebuildThumbs();
 }
-function draw() { if (renderer) renderer.render(scene, camera); }
+function draw() { if (!renderer) return; if (glass.rig && state.draw === 'masses') drawGlass(); else renderer.render(scene, camera); }
 // the zoom buttons: a step nearer or further (the perspective camera moves along its line of sight; the orthographic one scales)
 function zoomBy(f) {
   if (camera === ortho) { ortho.zoom = clamp(ortho.zoom / f, 0.2, 8); ortho.updateProjectionMatrix(); }
@@ -2519,16 +2608,18 @@ function extras(V, surf = null) {
     grp.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x3E6FB0, transparent: true, opacity: 0.7 })));
   }
   if (state.spinesOn || state.draw === 'masses') {   /* each spine a six-sided tube in its body's colour, saturated; seen through the rocks when they are drawn */
-    const S = V.spines, C = V.spineRGB, n = S.length / 6, r = 0.32, pos = new Float32Array(n * 6 * 18), col = new Uint8Array(n * 6 * 18);
+    const S = V.spines, C = V.spineRGB, n = S.length / 6, r = 0.32, pos = new Float32Array(n * 6 * 18), col = new Uint8Array(n * 6 * 18), glassy = state.draw === 'masses' && surf && surf.stoneOf, bod = new Float32Array(n * 6 * 6);
+    const bodyOfRGB = new Map(); if (glassy) for (const [g] of surf.stoneOf) bodyOfRGB.set(vividOf(g).join(','), g);   /* a spine's body, from its colour */
     let o = 0;
     for (let q = 0; q < n; q++) {
       const a = [S[6 * q], S[6 * q + 1], S[6 * q + 2]], b = [S[6 * q + 3], S[6 * q + 4], S[6 * q + 5]], L = len(sub(b, a)); if (L < 1e-6) continue;
-      const d = mul(sub(b, a), 1 / L), p0 = unit(cross(d, Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), p1 = cross(d, p0), R = [];
+      const bid = (bodyOfRGB.get(C[3 * q] + ',' + C[3 * q + 1] + ',' + C[3 * q + 2]) ?? -1) + 1, d = mul(sub(b, a), 1 / L), p0 = unit(cross(d, Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), p1 = cross(d, p0), R = [];
       for (let k = 0; k < 6; k++) { const th = TWO_PI * k / 6, c = Math.cos(th) * r, s_ = Math.sin(th) * r; R.push([p0[0] * c + p1[0] * s_, p0[1] * c + p1[1] * s_, p0[2] * c + p1[2] * s_]); }
-      for (let k = 0; k < 6; k++) { const u = R[k], w_ = R[(k + 1) % 6]; for (const [P, Q] of [[a, u], [b, u], [b, w_], [a, u], [b, w_], [a, w_]]) { pos[o] = P[0] + Q[0]; pos[o + 1] = P[1] + Q[1]; pos[o + 2] = P[2] + Q[2]; col[o] = C[3 * q]; col[o + 1] = C[3 * q + 1]; col[o + 2] = C[3 * q + 2]; o += 3; } }
+      for (let k = 0; k < 6; k++) { const u = R[k], w_ = R[(k + 1) % 6]; for (const [P, Q] of [[a, u], [b, u], [b, w_], [a, u], [b, w_], [a, w_]]) { pos[o] = P[0] + Q[0]; pos[o + 1] = P[1] + Q[1]; pos[o + 2] = P[2] + Q[2]; col[o] = C[3 * q]; col[o + 1] = C[3 * q + 1]; col[o + 2] = C[3 * q + 2]; bod[o / 3] = bid; o += 3; } }
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, o), 3)); g.setAttribute('color', new THREE.BufferAttribute(col.subarray(0, o), 3, true));
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, depthTest: state.draw === 'masses' })); m.renderOrder = 5; grp.add(m);
+    if (glassy) { g.setAttribute('body', new THREE.BufferAttribute(bod.subarray(0, o / 3), 1)); const m = new THREE.Mesh(g, glassKit().spineBehind); m.renderOrder = 5; m.userData.spines = g; grp.add(m); }   /* the glass draws the crisp ones itself, from this geometry */
+    else { const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, depthTest: false })); m.renderOrder = 5; grp.add(m); }
   }
   // the network's lines on the stones: every line a crack could follow faint, the ones cut strong
   if (state.crackLines && surf && surf.cracks) for (const on of [false, true]) {
@@ -2615,6 +2706,7 @@ function show(e) {
     rockObj = meshOfBuf(surf, state.lines, state.draw === 'masses'); scene.add(rockObj);
     if (extraObj) { scene.remove(extraObj); disposeGroup(extraObj); }
     extraObj = extras(view, surf); scene.add(extraObj);
+    glass.rig = null; if (state.draw === 'masses') glassRig();
     placeMini(view);
     draw();
     $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed;
