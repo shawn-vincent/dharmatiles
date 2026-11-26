@@ -458,6 +458,10 @@ function inter2(P, Q) {   // both CCW convex
   }
   return r.length >= 3 ? r : null;
 }
+/* how far a bottom held by two convex patches spans with nothing under it: every point of their hull off them lies on a segment from one to the
+   other no longer than the longer of the hull's two edges that run between them, so that edge is the span (the planner and the measure both ask this) */
+function bridgeSpan(A, B) { const H_ = hull2(A.map(v => [v[0], v[1], 0]).concat(B.map(v => [v[0], v[1], 1]))); let dm = 0;
+  for (let i = 0, n = H_.length; i < n; i++) { const u = H_[i], v = H_[(i + 1) % n]; if (u[2] !== v[2]) dm = Math.max(dm, Math.hypot(u[0] - v[0], u[1] - v[1])); } return dm; }
 function hull2(pts) {
   const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]); if (p.length < 3) return p;
   const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
@@ -1165,7 +1169,6 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     if (!gsup.has(q.grp) && pat.some(r => r.glue) && pat.some(r => !r.glue)) pat = pat.filter(r => !r.glue);   // gl: a body that rests on nothing yet takes no glue patch (its own lower piece) when a real holder is there
     if (pat.some(r => !r.glue)) gsup.add(q.grp);
     const cands = pat.slice(); q.pat0 = pat.length; q.cand = pat.reduce((a, r) => a + Math.abs(area2(r.poly)), 0); q.candFull = pat.reduce((a, r) => a + Math.abs(area2(r.full)), 0);
-    const dmax = (A, B_) => { let dm = 0; for (const u of A) for (const v of B_) { const d = Math.hypot(u[0] - v[0], u[1] - v[1]); if (d > dm) dm = d; } return dm; };
     const inP = (P_, x, y) => { for (let i = 0, n = P_.length; i < n; i++) { const A = P_[i], B_ = P_[(i + 1) % n]; if ((B_[0] - A[0]) * (y - A[1]) - (B_[1] - A[1]) * (x - A[0]) < -1e-9) return false; } return true; };
     // gk: a patch whose far corners lie past BRIDGE from another patch is trimmed to the disk of radius BRIDGE round each corner of the others, so the pair bridges
     const disk = (u, R) => { const o = []; for (let i = 0; i < 16; i++) { const a = 2 * Math.PI * i / 16; o.push([u[0] + R * Math.cos(a) / Math.cos(Math.PI / 16), u[1] + R * Math.sin(a) / Math.cos(Math.PI / 16)]); } return o; };   // circumscribed 16-gon of a disk of radius R, shrunk below
@@ -1176,7 +1179,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
         let cur = pl.map((p, i) => ({ i, p })), ok_ = false, stp = 0.5;
         for (let it = 0; it < 12 && cur.length; it++) {
           const polysC = cur.map(c => c.p), K = ccw(hull2([].concat(...polysC)));
-          const prs = []; for (let a = 0; a < polysC.length; a++) for (let b = a + 1; b < polysC.length; b++) if (dmax(polysC[a], polysC[b]) <= BRIDGE) prs.push(ccw(hull2(polysC[a].concat(polysC[b]))));
+          const prs = []; for (let a = 0; a < polysC.length; a++) for (let b = a + 1; b < polysC.length; b++) if (bridgeSpan(polysC[a], polysC[b]) <= BRIDGE) prs.push(ccw(hull2(polysC[a].concat(polysC[b]))));
           let ax_ = 1e9, bx_ = -1e9, ay_ = 1e9, by_ = -1e9; for (const v of K) { ax_ = Math.min(ax_, v[0]); bx_ = Math.max(bx_, v[0]); ay_ = Math.min(ay_, v[1]); by_ = Math.max(by_, v[1]); }
           const unc = [], span = (P_, y) => { let lo = 1e9, hi = -1e9; for (let i = 0, n = P_.length; i < n; i++) { const A = P_[i], B_ = P_[i + 1 === n ? 0 : i + 1]; if ((A[1] <= y) !== (B_[1] <= y)) { const x = A[0] + (y - A[1]) * (B_[0] - A[0]) / (B_[1] - A[1]); if (x < lo) lo = x; if (x > hi) hi = x; } } return hi < lo ? null : [lo, hi]; };
           const shp = polysC.concat(prs);   // the covered row by row: spans of the convex pieces, the gaps inside the hull are the holes (grid points of step stp)
@@ -1199,7 +1202,7 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
     };
     if (pat.length >= 3) {
       const pl = pat.map(r => ccw(r.poly)), pairs = [];
-      for (let i = 0; i < pl.length; i++) for (let j = i + 1; j < pl.length; j++) if (dmax(pl[i], pl[j]) <= BRIDGE) pairs.push({ i, j, h: ccw(hull2(pl[i].concat(pl[j]))) });
+      for (let i = 0; i < pl.length; i++) for (let j = i + 1; j < pl.length; j++) if (bridgeSpan(pl[i], pl[j]) <= BRIDGE) pairs.push({ i, j, h: ccw(hull2(pl[i].concat(pl[j]))) });
       let bad = true;
       if (thin) {   // thin layers: every patch is kept while the hull of all of them is covered by the patches and the hulls of pairs within BRIDGE (the measure's own test)
         const hs = ccw(hull2([].concat(...pl))); let ax_ = 1e9, bx_ = -1e9, ay_ = 1e9, by_ = -1e9; for (const v of hs) { ax_ = Math.min(ax_, v[0]); bx_ = Math.max(bx_, v[0]); ay_ = Math.min(ay_, v[1]); by_ = Math.max(by_, v[1]); }
@@ -1233,17 +1236,17 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
         if (best) pat.splice(0, pat.length, pat[best.i], pat[best.j]);
         else { let bi = 0, ba = -1; pat.forEach((r, i) => { const a_ = Math.abs(area2(r.poly)); if (a_ > ba) { ba = a_; bi = i; } }); pat.splice(0, pat.length, pat[bi]); }
       }
-    } else if (thin && pat.length === 2 && dmax(pat[0].poly, pat[1].poly) > BRIDGE && (() => {   // ct: the two patches too far apart: cut the hull where the pair cannot be held, when that keeps more than trimming the smaller one
+    } else if (thin && pat.length === 2 && bridgeSpan(pat[0].poly, pat[1].poly) > BRIDGE && (() => {   // ct: the two patches too far apart: cut the hull where the pair cannot be held, when that keeps more than trimming the smaller one
       const pl2 = pat.map(r => ccw(r.poly)), cr = cutOf(pl2); if (!cr) return false;
       const a0 = Math.abs(area2(pat[0].poly)), a1 = Math.abs(area2(pat[1].poly)), big = a0 >= a1 ? 0 : 1, sm = 1 - big, tr = trimNear(pat[sm].poly, [pat[big].poly]);
       let trA = Math.max(a0, a1); if (tr && Math.abs(area2(tr)) >= MINBR && minW2(tr) >= MINSW) trA = Math.abs(area2(hull2(pat[big].poly.concat(tr))));
       if (cr.area <= trA) return false;
       for (const c of cr.cur) pat[c.i].poly = c.p; const keep = cr.cur.map(c => pat[c.i]); pat.splice(0, pat.length, ...keep); q.cut = 1; return true; })()) { /* cut */
-    } else if (thin && pat.length === 2 && dmax(pat[0].poly, pat[1].poly) > BRIDGE && (() => {
+    } else if (thin && pat.length === 2 && bridgeSpan(pat[0].poly, pat[1].poly) > BRIDGE && (() => {
       const a0 = Math.abs(area2(pat[0].poly)), a1 = Math.abs(area2(pat[1].poly)), big = a0 >= a1 ? 0 : 1, sm = 1 - big;
       const tr = trimNear(pat[sm].poly, [pat[big].poly]); if (!tr || Math.abs(area2(tr)) < MINBR || minW2(tr) < MINSW) return false;
       pat[sm].poly = tr; q.trim = 1; return true; })()) { /* the smaller patch is trimmed and both stay */
-    } else if (pat.length === 2 && dmax(pat[0].poly, pat[1].poly) > BRIDGE) { q.far = 1; nPeel++; pat.splice(0, 2, Math.abs(area2(pat[0].poly)) > Math.abs(area2(pat[1].poly)) ? pat[0] : pat[1]); }
+    } else if (pat.length === 2 && bridgeSpan(pat[0].poly, pat[1].poly) > BRIDGE) { q.far = 1; nPeel++; pat.splice(0, 2, Math.abs(area2(pat[0].poly)) > Math.abs(area2(pat[1].poly)) ? pat[0] : pat[1]); }
     if (pat.length === 2 && MINBR > 0) { const a0 = Math.abs(area2(pat[0].poly)), a1 = Math.abs(area2(pat[1].poly)); if (Math.min(a0, a1) < MINBR) { q.minbr = 1; pat.splice(0, 2, a0 >= a1 ? pat[0] : pat[1]); } }   // a bridge needs both ends to be a real patch
     // the bottom plane is laid to the holders' own top planes: one patch, parallel to its holder's top; two, through both holders' tops at the
     // patches' centres (across the line between them, the mean of the two tops' slopes). The stone then sits flush on a flat holder top, so no part
@@ -2178,7 +2181,7 @@ function passII(w, opt = {}) {
       fl.push({ f, cols, bad, steep });
     }
     // the stone's held columns as components (8-connected cells); a column is bridged when it lies in the hull of two components (or of one)
-    // whose farthest points are at most BRIDGE apart: on a line between two held points at most BRIDGE apart
+    // that span at most BRIDGE (bridgeSpan): on a line between two held points at most BRIDGE apart
     const lab = new Int32Array(mw * mh), hulls = []; let nl = 0; const stack = [];
     for (let m0 = 0; m0 < mask.length; m0++) if (mask[m0] && !lab[m0]) {
       nl++; lab[m0] = nl; stack.push(m0); const pts = [];
@@ -2188,7 +2191,7 @@ function passII(w, opt = {}) {
       const h = hullP(pts); if (h.length >= 3) hulls.push(h);
     }
     const shapes = hulls.slice();
-    for (let i = 0; i < hulls.length; i++) for (let j = i + 1; j < hulls.length; j++) { let dm = 0; for (const u of hulls[i]) for (const v of hulls[j]) { const d = Math.hypot(u[0] - v[0], u[1] - v[1]); if (d > dm) dm = d; } if (dm <= BRIDGE) shapes.push(hullP(hulls[i].concat(hulls[j]))); }
+    for (let i = 0; i < hulls.length; i++) for (let j = i + 1; j < hulls.length; j++) { if (bridgeSpan(hulls[i], hulls[j]) <= BRIDGE) shapes.push(hullP(hulls[i].concat(hulls[j]))); }
     for (const { f, cols, bad, steep } of fl) {
       total += cols * R * R; faces++;
       let un = 0;
