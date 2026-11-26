@@ -120,7 +120,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .styles button[aria-pressed="true"] { border-color: var(--accent); }
 .styles .note { color: var(--muted); }
 .stage { display: grid; gap: 10px; min-width: 0; }
-.einfo { position: absolute; left: 12px; bottom: 12px; max-width: min(440px, calc(100% - 110px)); z-index: 3; background: #fff; color: #1b1f22; border: 1px solid #c9d0da; border-radius: 8px; padding: 10px 12px; font: 13px/1.45 var(--sans, system-ui); box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+.einfo { position: absolute; left: 12px; bottom: 12px; max-width: min(440px, calc(100% - 110px)); z-index: 3; background: var(--stone-bg, #fff); color: var(--stone-ink, #1b1f22); border: 1px solid var(--stone-edge, #c9d0da); border-left: 8px solid var(--stone, #c9d0da); border-radius: 8px; padding: 10px 12px; font: 13px/1.45 var(--sans, system-ui); box-shadow: 0 4px 16px rgba(0,0,0,.18); }
 .einfo b { font-weight: 650; } .einfo a.slink { color: #0a58ca; text-decoration: underline; cursor: pointer; } .einfo .why { margin-top: 4px; } .einfo .dim { color: #5c6670; font-size: 12px; margin-bottom: 4px; }
 .viewer.max { position: fixed; inset: 0; height: 100dvh; min-height: 0; border-radius: 0; border: 0; z-index: 1000; }
 body.vmax { overflow: hidden; }
@@ -2293,8 +2293,33 @@ let selObj = null;
 // three levels of light, one per step out: what is selected, the thing holding it, the thing holding that
 // (an edge selected: the edge, its stone, the stones fused with it; a stone selected: the stone, the stones fused with it)
 const LIT = [0.22, 0.11, 0.05], LIT_LINE = [1, 0.45, 0.2];
+/* the info box in the selected stone's own colour (the one it is drawn in): a strip down its left edge, a tint of it as the ground, the ink dark or light by the ground's luminance */
+function tintInfo(i) {
+  const box = $('einfo').style, names = ['--stone', '--stone-bg', '--stone-edge', '--stone-ink'];
+  if (i == null || !shown) { for (const n of names) box.removeProperty(n); return; }
+  const c = shadeOf(shown.surf.stoneOf[i][0]), mix = t => c.map(v => Math.round(v + t * (255 - v))), css = a => `rgb(${a.join(',')})`, bg = mix(0.82);
+  const lum = (0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]) / 255;
+  box.setProperty('--stone', css(c)); box.setProperty('--stone-bg', css(bg)); box.setProperty('--stone-edge', css(mix(0.4))); box.setProperty('--stone-ink', lum > 0.5 ? '#1b1f22' : '#f4f6f8');
+}
+/* the selected mass's spine(s), found by body id as the glass finds them (V.spineGrp[q] + 1 is the body), a fat yellow rod with a dark rim, drawn over everything (structure view only: the rocks view draws no spines) */
+let spineSelObj = null;
+function selectSpine(i) {
+  if (spineSelObj) { scene.remove(spineSelObj); disposeGroup(spineSelObj); spineSelObj = null; }
+  if (i == null || !shown || state.draw !== 'structure' || !shown.view.spineGrp) return;
+  const V = shown.view, bid = shown.surf.stoneOf[i][0] + 1, S = V.spines; spineSelObj = new THREE.Group(); spineSelObj.userData.spineIds = [];
+  for (let q = 0; q < V.spineGrp.length; q++) {
+    if (V.spineGrp[q] + 1 !== bid) continue; spineSelObj.userData.spineIds.push(q);
+    const A = new THREE.Vector3(S[6 * q], S[6 * q + 1], S[6 * q + 2]), B = new THREE.Vector3(S[6 * q + 3], S[6 * q + 4], S[6 * q + 5]), L = A.distanceTo(B); if (L < 1e-6) continue;
+    for (const [r, col, order] of [[0.95, 0x806000, 12], [0.62, 0xFFE600, 13]]) {
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 8), new THREE.MeshBasicMaterial({ color: col, depthTest: false, depthWrite: false }));
+      rod.position.copy(A).add(B).multiplyScalar(0.5); rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize()); rod.renderOrder = order; spineSelObj.add(rod);
+    }
+  }
+  scene.add(spineSelObj);
+}
 function selectStone(i, edge) {   // the stone lit yellow, seen through whatever is in front of it; edge: an edge of it is what is selected
   if (selObj) { scene.remove(selObj); disposeGroup(selObj); selObj = null; }
+  tintInfo(i); selectSpine(i);
   if (i == null || !shown) { draw(); return; }
   const st = shown.surf.stoneTri, lv = edge ? 1 : 0; selObj = new THREE.Group();
   const lite = (j, k) => {
@@ -2683,7 +2708,7 @@ function drawGlass() {
   };
   renderer.autoClear = true;
   renderer.setRenderTarget(glass.F); renderer.render(R.idScene, camera);
-  R.mass.visible = false; renderer.setRenderTarget(glass.B); withVisible(c => !marks(c), () => renderer.render(scene, camera)); R.mass.visible = true;
+  R.mass.visible = false; renderer.setRenderTarget(glass.B); withVisible(c => !marks(c) && c !== spineSelObj, () => renderer.render(scene, camera)); R.mass.visible = true;
   renderer.autoClear = false;
   const quad = (mat, target) => { K.quad.material = mat; renderer.setRenderTarget(target); renderer.render(K.quadScene, K.quadCam); };
   K.blur.uniforms.t.value = glass.B.texture; K.blur.uniforms.dir.value.set(1 / glass.H1.width, 0); quad(K.blur, glass.H1);
@@ -2694,7 +2719,8 @@ function drawGlass() {
   const bg = scene.background; scene.background = null;   /* a colour background would clear what is drawn */
   withVisible(marks, () => renderer.render(scene, camera)); scene.background = bg;
   renderer.clearDepth(); renderer.render(R.envScene, camera);
-  renderer.clearDepth(); renderer.render(R.spineScene, camera);   /* the crisp spines last, over the selection's tint, so a lit stone's spine still shows */
+  renderer.clearDepth(); renderer.render(R.spineScene, camera);
+  if (spineSelObj) { renderer.clearDepth(); const bg2 = scene.background; scene.background = null; withVisible(c => c === spineSelObj, () => renderer.render(scene, camera)); scene.background = bg2; }   /* the selected mass's spine over all of it */   /* the crisp spines last, over the selection's tint, so a lit stone's spine still shows */
   renderer.autoClear = true;
 }
 let renderer, scene, camera, persp, ortho, controls, rockObj = null, extraObj = null, mini = null, thumbR, thumbScene, thumbPersp, thumbOrtho;
