@@ -114,8 +114,10 @@ body.vmax { overflow: hidden; }
 .viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .vbtn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; box-shadow: 0 8px 24px -12px rgb(26 23 20 / .45); }
 .vbtn:hover, .vbtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
-.vpanel { position: absolute; right: 52px; top: 10px; max-height: calc(100% - 20px); overflow: auto; display: grid; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 12px 32px -12px rgb(26 23 20 / .5); z-index: 2; }
-.vpanel[hidden] { display: none; }
+.grip { flex: none; height: 14px; display: grid; place-items: center; cursor: ns-resize; touch-action: none; background: var(--panel); }   /* drag it to resize the sheet */
+.grip::before { content: ""; width: 36px; height: 4px; border-radius: 2px; background: var(--line-2); }
+.grip:hover::before, .grip.dragging::before { background: var(--accent); }
+.sbody { overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 6px; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); }   /* the view sheet's one page */
 .zooms { position: absolute; right: 10px; top: 10px; display: grid; gap: 6px; z-index: 3; }
 .chip { position: absolute; left: 10px; top: 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font: 600 12px var(--f-code); box-shadow: 0 8px 24px -12px rgb(26 23 20 / .45); }
 .legend { position: absolute; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 10px; background: rgb(255 255 255 / .88); color: #1A1714; border-radius: var(--r); padding: 4px 8px; font-size: 12px; max-width: calc(100% - 20px); }
@@ -226,7 +228,15 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
             <section class="pg" id="pgDetail"></section>
           </div>
         </div>
-        <div class="vpanel" id="vpanel" hidden>
+        <div class="sheet" id="vpanel" role="dialog" aria-label="View" inert>
+          <div class="shead"><b>View</b>
+            <button class="btn" id="vclose" title="Close" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg></button>
+          </div>
+          <div class="sbody">
+          <span class="lbl">Theme</span>
+          <div class="seg" id="theme" role="group" aria-label="Theme">
+            <button data-theme="auto">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button>
+          </div>
           <span class="lbl">Projection</span>
           <div class="seg" id="view" role="group" aria-label="Projection">
             <button data-view="persp">Perspective</button><button data-view="ortho">Orthographic</button>
@@ -242,6 +252,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
             <label><input type="checkbox" id="lines" checked> Edges</label>
             <label><input type="checkbox" id="bevelsOn" checked> Bevels</label>
             <label><input type="checkbox" id="mini" checked> The miniature</label>
+          </div>
           </div>
         </div>
       </div>
@@ -3185,12 +3196,39 @@ field.addEventListener('focus', () => field.select());
 for (const b of $('view').children) b.addEventListener('click', () => setView(b.dataset.view));
 for (const b of $('draw').children) b.addEventListener('click', () => { state.draw = b.dataset.draw; syncUI(); update(); });
 // the view options: a button on the 3D view opens a small panel; a click elsewhere or Escape closes it
-const vopts = $('vopts'), vpanel = $('vpanel');
-const showPanel = open => { vpanel.hidden = !open; vopts.setAttribute('aria-expanded', open ? 'true' : 'false'); };
-vopts.addEventListener('click', e => { e.stopPropagation(); showPanel(vpanel.hidden); });
-vpanel.addEventListener('click', e => e.stopPropagation());
-document.addEventListener('click', () => showPanel(false));
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented && !vpanel.hidden) { showPanel(false); vopts.focus(); } });
+/* the view options: the eye opens a bottom sheet like the settings' (one sheet at a time); a tap outside, Close or Escape closes it */
+const vopts = $('vopts'), vpanel = $('vpanel'), viewOpen = () => vpanel.classList.contains('open');
+const showPanel = open => { if (open && sheetOpen()) closeSheet(); vpanel.classList.toggle('open', open); vpanel.inert = !open; vopts.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+vopts.addEventListener('click', () => showPanel(!viewOpen()));
+$('vclose').addEventListener('click', () => { showPanel(false); vopts.focus(); });
+codeBtn.addEventListener('click', () => showPanel(false));
+document.addEventListener('pointerdown', e => { if (viewOpen() && !e.target.closest('#vpanel, #vopts')) showPanel(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && viewOpen()) { e.preventDefault(); showPanel(false); vopts.focus(); } }, true);
+/* a sheet's top edge is a grip: dragging it sets the height of both sheets (15% to 90% of the view), remembered in this browser */
+const SHEET_KEY = 'cliffs-sheet-height', sheets = [sheetEl, vpanel];
+const sheetHeight = h => { for (const el of sheets) { el.style.height = h ? h + 'px' : ''; el.style.maxHeight = h ? 'none' : ''; } };
+for (const el of sheets) {
+  const grip = document.createElement('div'); grip.className = 'grip'; grip.setAttribute('aria-hidden', 'true'); el.prepend(grip);
+  grip.addEventListener('pointerdown', e => {
+    e.preventDefault(); grip.setPointerCapture(e.pointerId); grip.classList.add('dragging');
+    const y0 = e.clientY, h0 = el.getBoundingClientRect().height, H = viewerEl.clientHeight;
+    const move = ev => sheetHeight(Math.round(clamp(h0 + y0 - ev.clientY, 0.15 * H, 0.9 * H)));
+    const up = () => { grip.classList.remove('dragging'); grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
+      try { localStorage.setItem(SHEET_KEY, String(el.getBoundingClientRect().height / H)); } catch (err) { /* storage refused: the height holds for this visit */ } };
+    grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
+  });
+}
+{ let f = NaN; try { f = parseFloat(localStorage.getItem(SHEET_KEY)); } catch (e) { /* storage refused: the default height */ } if (f >= 0.15 && f <= 0.9) sheetHeight(Math.round(f * viewerEl.clientHeight)); }
+window.addEventListener('resize', () => { let f = NaN; try { f = parseFloat(localStorage.getItem(SHEET_KEY)); } catch (e) { /* storage refused */ } if (f >= 0.15 && f <= 0.9) sheetHeight(Math.round(f * viewerEl.clientHeight)); });
+/* the theme: Auto follows the system; Light or Dark is set on the page and remembered in this browser */
+const THEME_KEY = 'cliffs-theme';
+const setTheme = t => {
+  if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  for (const b of $('theme').children) b.setAttribute('aria-pressed', b.dataset.theme === t ? 'true' : 'false');
+  try { localStorage.setItem(THEME_KEY, t); } catch (e) { /* storage refused (a private window): the theme holds for this visit only */ }
+};
+for (const b of $('theme').children) b.addEventListener('click', () => setTheme(b.dataset.theme));
+{ let t = 'auto'; try { t = localStorage.getItem(THEME_KEY) || 'auto'; } catch (e) { /* storage refused: Auto */ } setTheme(['auto', 'light', 'dark'].includes(t) ? t : 'auto'); }
 for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.target.checked; update(); });
 $('zin').addEventListener('click', () => zoomBy(0.8));
 $('zout').addEventListener('click', () => zoomBy(1.25));
