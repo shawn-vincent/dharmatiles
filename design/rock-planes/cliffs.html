@@ -2186,7 +2186,7 @@ function overhangOf(w, bridge) {
   return { faces: Int32Array.from(faces), red: Uint8Array.from(red), down: r.downTotal, redArea: r.red, bandArea: r.orange, unsupported: r.unsupported, ms: r.ms };
 }
 // what the view shows of a wall besides its stones: the envelope, the layers' faces and the spines
-const viewOf = w => ({ lo: [-w.W / 2, w.y0, 0], hi: [w.W / 2, w.y1, w.H], spines: w.spines, spineRGB: Uint8Array.from(Array.from(w.spineGrp, g => vividOf(g)).flat()), layers: w.layers });
+const viewOf = w => ({ lo: [-w.W / 2, w.y0, 0], hi: [w.W / 2, w.y1, w.H], spines: w.spines, spineRGB: Uint8Array.from(Array.from(w.spineGrp, g => vividOf(g)).flat()), spineGrp: w.spineGrp, layers: w.layers });
 // the arrays a message hands over, not copies
 const transfers = o => { const out = []; for (const k of ['pos', 'col', 'faceTri', 'lines']) if (o[k]) out.push(o[k].buffer); if (o.cracks) out.push(o.cracks.lines.on.buffer, o.cracks.lines.off.buffer); if (o.report) for (const k of ['D', 'K', 'O', 'AD', 'AK']) out.push(o.report[k].buffer); return out; };
 // ---------- drawing ----------
@@ -2423,7 +2423,7 @@ const viewerEl = $('viewer');
 /* Per pixel, the frontmost mass is a frosted pane: it is drawn translucent over a blurred picture of everything behind it. Spines are crisp
    where they belong to that mass or lie in front of its surface, and blurred and fainter where they are behind it. Passes: F, the frontmost
    mass's body and depth; B, the scene without the masses, spines behind a pane faded; the blur of B at half size; then on the screen the
-   blurred (under a mass) or sharp (elsewhere) picture, the pane, the crisp spines, and the selection marks */
+   blurred (under a mass) or sharp (elsewhere) picture, the pane, the selection marks, and the crisp spines */
 const GLASS_FADE = 0.3, GLASS_EPS = 2e-5;
 const QUAD_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const glass = { rig: null, kit: null, W: 0, H: 0 };
@@ -2491,9 +2491,9 @@ function drawGlass() {
   K.compose.uniforms.tF.value = glass.F.texture; K.compose.uniforms.tB.value = glass.B.texture; K.compose.uniforms.tBlur.value = glass.H2.texture;
   renderer.setRenderTarget(null); renderer.clear(); K.quad.material = K.compose; renderer.render(K.quadScene, K.quadCam);
   renderer.render(R.paneScene, camera);
-  renderer.clearDepth(); renderer.render(R.spineScene, camera);
   const bg = scene.background; scene.background = null;   /* a colour background would clear what is drawn */
   withVisible(marks, () => renderer.render(scene, camera)); scene.background = bg;
+  renderer.clearDepth(); renderer.render(R.spineScene, camera);   /* the crisp spines last, over the selection's tint, so a lit stone's spine still shows */
   renderer.autoClear = true;
 }
 let renderer, scene, camera, persp, ortho, controls, rockObj = null, extraObj = null, mini = null, thumbR, thumbScene, thumbPersp, thumbOrtho;
@@ -2616,17 +2616,16 @@ function extras(V, surf = null) {
   }
   if (state.spinesOn || state.draw === 'masses') {   /* each spine a six-sided tube in its body's colour, saturated; seen through the rocks when they are drawn */
     const S = V.spines, C = V.spineRGB, n = S.length / 6, r = 0.32, pos = new Float32Array(n * 6 * 18), col = new Uint8Array(n * 6 * 18), glassy = state.draw === 'masses' && surf && surf.stoneOf, bod = new Float32Array(n * 6 * 6);
-    const bodyOfRGB = new Map(); if (glassy) for (const [g] of surf.stoneOf) bodyOfRGB.set(vividOf(g).join(','), g);   /* a spine's body, from its colour */
     let o = 0;
     for (let q = 0; q < n; q++) {
       const a = [S[6 * q], S[6 * q + 1], S[6 * q + 2]], b = [S[6 * q + 3], S[6 * q + 4], S[6 * q + 5]], L = len(sub(b, a)); if (L < 1e-6) continue;
-      const bid = (bodyOfRGB.get(C[3 * q] + ',' + C[3 * q + 1] + ',' + C[3 * q + 2]) ?? -1) + 1, d = mul(sub(b, a), 1 / L), p0 = unit(cross(d, Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), p1 = cross(d, p0), R = [];
+      const bid = V.spineGrp[q] + 1, d = mul(sub(b, a), 1 / L), p0 = unit(cross(d, Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), p1 = cross(d, p0), R = [];
       for (let k = 0; k < 6; k++) { const th = TWO_PI * k / 6, c = Math.cos(th) * r, s_ = Math.sin(th) * r; R.push([p0[0] * c + p1[0] * s_, p0[1] * c + p1[1] * s_, p0[2] * c + p1[2] * s_]); }
       for (let k = 0; k < 6; k++) { const u = R[k], w_ = R[(k + 1) % 6]; for (const [P, Q] of [[a, u], [b, u], [b, w_], [a, u], [b, w_], [a, w_]]) { pos[o] = P[0] + Q[0]; pos[o + 1] = P[1] + Q[1]; pos[o + 2] = P[2] + Q[2]; col[o] = C[3 * q]; col[o + 1] = C[3 * q + 1]; col[o + 2] = C[3 * q + 2]; bod[o / 3] = bid; o += 3; } }
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, o), 3)); g.setAttribute('color', new THREE.BufferAttribute(col.subarray(0, o), 3, true));
     if (glassy) { g.setAttribute('body', new THREE.BufferAttribute(bod.subarray(0, o / 3), 1)); const m = new THREE.Mesh(g, glassKit().spineBehind); m.renderOrder = 5; m.userData.spines = g; grp.add(m); }   /* the glass draws the crisp ones itself, from this geometry */
-    else { const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, depthTest: false })); m.renderOrder = 5; grp.add(m); }
+    else { const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, depthTest: false, transparent: true })); m.renderOrder = 10; grp.add(m); }   /* drawn after the selection's tint (transparent, so it sorts with it), so a lit stone's spine still shows */
   }
   // the network's lines on the stones: every line a crack could follow faint, the ones cut strong
   if (state.crackLines && surf && surf.cracks) for (const on of [false, true]) {
