@@ -206,7 +206,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 <div class="wrap">
   <header>
     <h1>Cliffs from Spines</h1>
-    <p class="lede">A cliff as a population of stones. The envelope is cut into layers; spines are thrown in each, Width and Thickness apart, and the layer is divided between them into cells, one power diagram a layer. Every cell is carved on its own into a faceted rock that rests on what holds it, and cracks follow one hidden network. Granite, Columns, Layered, Fieldstone and Ashlar are settings of one engine; Random picks one of them.</p>
+    <p class="lede">A cliff as a population of stones. The envelope is cut into layers; spines are thrown in each, Width and Thickness apart, and each spine is one convex stone, cut flat where it starts and stops and halfway between it and each neighbouring spine (or, with Split set to Layers, each layer is one power diagram). Every cell is carved on its own into a faceted rock that rests on what holds it, and cracks follow one hidden network. Granite, Columns, Layered, Fieldstone and Ashlar are settings of one engine; Random picks one of them.</p>
   </header>
 
   <div class="main">
@@ -892,6 +892,38 @@ function wall(seed, P, opt = {}) {
   const siteAt = (s, k) => [clamp(s.x + s.sx * ((k + 0.5) * step - s.zd), -hu + 0.05, hu - 0.05), clamp(s.y + s.sy * ((k + 0.5) * step - s.zd), y0 + 0.05, y1 - 0.05)];
   const NB2 = P.width[1] > 8 ? Math.pow(2.2 * P.width[1] / (1), 2) * Math.max(1, AB * AB) : 100;   // neighbours considered: within this squared reach (the wider the spines, the farther; fieldstone keeps 10 mm)
   const od = new Float64Array(400), oi = new Int32Array(400);
+  /* Split by spines: each spine is one convex stone. Its ends are the layer faces where it starts and stops; between it and each spine that shares a
+     layer with it, the plane halfway between their closest points (drawn in the diagram's aspect AB, so a global stretch, planes stay planes), each
+     moved back half the pair's Joint. Each layer's piece is then a slice of that one stone. Unweighted: Width and Thickness space the spines, they
+     do not move the planes. */
+  const BY_SPINES = P.split !== 'layers', spineEnds = new Map(), spinePlanes = new Map();
+  if (BY_SPINES) for (const s of sites) {
+    fitFace(s.i, s.x, s.y); const za = fit[0]; fitFace(s.j, s.x, s.y); const zb = fit[0];
+    const at = z => [s.x + s.sx * (z - s.zd), (s.y + s.sy * (z - s.zd)) / AB, z];
+    spineEnds.set(s.id, [at(za), at(zb)]);
+  }
+  const closestOf = (A, B, C, D) => {   /* the closest points of two segments: the four end-to-segment cases and the interior one */
+    const u = sub(B, A), v = sub(D, C), w = sub(A, C), a = dot(u, u), b = dot(u, v), c = dot(v, v), d = dot(u, w), e = dot(v, w);
+    const onSeg = (x, P_, Q) => { const q = sub(Q, P_), qq = dot(q, q); return qq < 1e-12 ? P_ : add(P_, mul(q, clamp(dot(sub(x, P_), q) / qq, 0, 1))); };
+    const cand = [[A, onSeg(A, C, D)], [B, onSeg(B, C, D)], [onSeg(C, A, B), C], [onSeg(D, A, B), D]];
+    const den = a * c - b * b; if (den > 1e-12 * a * c) { const s_ = (b * e - c * d) / den, t_ = (a * e - b * d) / den; if (s_ >= 0 && s_ <= 1 && t_ >= 0 && t_ <= 1) cand.push([add(A, mul(u, s_)), add(C, mul(v, t_))]); }
+    let best = cand[0], bd = Infinity; for (const pq of cand) { const dd = dot(sub(pq[1], pq[0]), sub(pq[1], pq[0])); if (dd < bd) { bd = dd; best = pq; } } return best;
+  };
+  function planesOfSpine(s) {
+    let pl = spinePlanes.get(s.id); if (pl) return pl; pl = [];
+    const [A, B] = spineEnds.get(s.id), seen = new Set([s.id]);
+    for (let l = s.i; l < s.j; l++) for (const o of layerSites[l]) {
+      if (seen.has(o.id)) continue; seen.add(o.id);
+      const [C, D] = spineEnds.get(o.id), [p, q] = closestOf(A, B, C, D), g = sub(q, p);
+      if (g[0] * g[0] + g[1] * g[1] > NB2) continue;
+      const dl = len(g); if (dl < 1e-6) continue;   /* two spines that meet have no plane between them */
+      const jt = lerp(P.joint[0], P.joint[1], uh(Math.min(s.id, o.id), Math.max(s.id, o.id), seed));
+      /* n.(X - m) <= 0 in the diagram's space, X = (x, y/AB, z): back to the wall's space and made unit */
+      const n = mul(g, 1 / dl), m = mul(add(p, q), 0.5), wx = n[0], wy = n[1] / AB, wz = n[2], L = Math.hypot(wx, wy, wz);
+      pl.push([wx / L, wy / L, wz / L, dot(n, m) / L - jt / 2, o.id]);
+    }
+    spinePlanes.set(s.id, pl); return pl;
+  }
   for (let k = 0; k < N - 1; k++) {
     const S = layerSites[k], n = S.length, px = new Float64Array(n), py = new Float64Array(n);
     for (let a = 0; a < n; a++) { const p = siteAt(S[a], k); px[a] = p[0]; py[a] = p[1] / AB; }
@@ -904,6 +936,7 @@ function wall(seed, P, opt = {}) {
       // neighbours nearest first
       let no = 0; for (let b = 0; b < n; b++) if (b !== a) { const dx = px[b] - cx, dy = py[b] - cy, d2 = dx * dx + dy * dy; if (d2 > NB2) continue; let q = no++; while (q > 0 && od[q - 1] > d2) { od[q] = od[q - 1]; oi[q] = oi[q - 1]; q--; } od[q] = d2; oi[q] = b; }
       const zm = (bz + tz) / 2;
+      if (BY_SPINES) { for (const e of planesOfSpine(s)) { clip(e[0], e[1], e[2], e[3], KIND.SIDE | pl.length << 4); pl.push([e[0], e[1], e[2], e[3], KIND.SIDE, e[4]]); } no = 0; }
       for (let oq = 0; oq < no; oq++) {
         const b = oi[oq];
         const o = S[b], jt = lerp(P.joint[0], P.joint[1], uh(Math.min(s.id, o.id), Math.max(s.id, o.id), seed));
@@ -2452,11 +2485,11 @@ function bigSolid(planes) { let p = boxPoly([-200, -200, -200], [200, 200, 200])
 // every style's height, exactly: a tall wall's top above the ground, DungeonBlocks' tall wall top, 72.3 dmm above the base, less ordinary ground's 3.5 (here 1 dmm is 1 mm)
 const TALL = 68.8;
 const PRESETS = {   // ranges are [lo, hi]
-  granite: { squares: 2, height: [TALL, TALL], depth: [5, 15], direction: 'through', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 15], width: [22, 30], thickness: [5, 16.5], order: 0, joint: [-10.8, -9.4], bevel: [1.4, 2], weather: [0, 0], cracks: 12.5, network: 'blocks', spacing: [3.5, 6.5], branching: 30, opening: [0.2, 0.5], wiggle: 88 },
-  columnar: { squares: 2, height: [TALL, TALL], depth: [12, 16], direction: 'up', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.8, 0], bevel: [0.9, 1.5], weather: [0, 0], cracks: 19.5, network: 'columns', spacing: [3.5, 5.5], branching: 15, opening: [0.4, 0.6], wiggle: 20 },
-  layered: { squares: 2, height: [TALL, TALL], depth: [13, 16], direction: 'up', layers: 38, lean: [0, 6], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-0.8, 0], bevel: [0.4, 0.7], weather: [0, 0], cracks: 90, network: 'planes', spacing: [3, 5], branching: 25, opening: [0.4, 0.6], wiggle: 40 },
-  fieldstone: { squares: 2, height: [63.1, TALL], depth: [15.5, 16], direction: 'up', layers: 18, lean: [-1.5, 1.5], pitch: [0, 0], sag: [-5, 2.5], bow: [-0.5, 2.75], span: 30, fuse: 0, wander: [0, 15], width: [2.8, 5.8], thickness: [2, 8], order: 0, joint: [-1.9, 0], bevel: [0.5, 1], weather: [100, 100], cracks: 0, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
-  ashlar: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: [1.2, 1.6], weather: [0, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
+  granite: { squares: 2, height: [TALL, TALL], depth: [5, 15], direction: 'through', split: 'spines', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 15], width: [22, 30], thickness: [5, 16.5], order: 0, joint: [-10.8, -9.4], bevel: [1.4, 2], weather: [0, 0], cracks: 12.5, network: 'blocks', spacing: [3.5, 6.5], branching: 30, opening: [0.2, 0.5], wiggle: 88 },
+  columnar: { squares: 2, height: [TALL, TALL], depth: [12, 16], direction: 'up', split: 'spines', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.8, 0], bevel: [0.9, 1.5], weather: [0, 0], cracks: 19.5, network: 'columns', spacing: [3.5, 5.5], branching: 15, opening: [0.4, 0.6], wiggle: 20 },
+  layered: { squares: 2, height: [TALL, TALL], depth: [13, 16], direction: 'up', split: 'spines', layers: 38, lean: [0, 6], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-0.8, 0], bevel: [0.4, 0.7], weather: [0, 0], cracks: 90, network: 'planes', spacing: [3, 5], branching: 25, opening: [0.4, 0.6], wiggle: 40 },
+  fieldstone: { squares: 2, height: [63.1, TALL], depth: [15.5, 16], direction: 'up', split: 'spines', layers: 18, lean: [-1.5, 1.5], pitch: [0, 0], sag: [-5, 2.5], bow: [-0.5, 2.75], span: 30, fuse: 0, wander: [0, 15], width: [2.8, 5.8], thickness: [2, 8], order: 0, joint: [-1.9, 0], bevel: [0.5, 1], weather: [100, 100], cracks: 0, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
+  ashlar: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', split: 'spines', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: [1.2, 1.6], weather: [0, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['fieldstone', 'Fieldstone', 'A dry wall of irregular, roundish stones placed at random in rough courses, some running up through the next course, no cracks'], ['ashlar', 'Ashlar', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
 const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', ghost: true, layersOn: false, spinesOn: false, crackLines: false, lines: true, bevelsOn: true, mini: true };
@@ -2494,6 +2527,7 @@ const GROUPS = [
     R_('depth', 'Depth', 4, 35, 0.5, MM, 'How far forward each stone reaches from the back of the square, drawn the same way, so the front wanders. The back is crisp.')] },
   { label: 'Structure', icon: () => dirIcon(state.direction), value: 'layers', items: [
     { key: 'direction', label: 'Direction', choices: [['up', 'Up'], ['through', 'Through'], ['along', 'Along']], idleChoices: ['along'], icon: dirIcon, help: 'Which way the spines run: up (columns; with many layers, courses), through the wall back to front (stones show their ends), or along it (slabs: not built by the cells engine, which says so). Through is one layer, so Layers, Lean, Pitch, Sag, Bow, Span, Fuse and Order do not apply to it.' },
+    { key: 'split', label: 'Split', choices: [['spines', 'Spines'], ['layers', 'Layers']], help: 'How the space is shared out. Spines: each spine is one convex stone, cut flat where it starts and stops, and between it and each spine that shares a layer with it, by the plane halfway between the two spines\u2019 closest points; the planes are drawn pair by pair, so some space can be left to no stone. Layers: each layer is its own power diagram, a bigger spine end taking more, and a spine through several layers is a stack of its cells.' },
     P_('layers', 'Layers', 1, 50, 1, '', 'How many layers the envelope is cut into across the direction; a spine starts and ends where layers meet (or at the envelope).'),
     R_('lean', 'Lean', -30, 30, 0.5, '°', 'How far each face between layers slopes along Width (along the wall for Up and Through, front to back for Along), drawn for each face. Where neighbouring faces cross, a layer pinches out.'),
     R_('pitch', 'Pitch', -30, 30, 0.5, '°', 'How far each face between layers slopes along Thickness (front to back for Up, vertically for Through and Along), drawn for each face.'),
@@ -2839,7 +2873,7 @@ const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return
 const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
 // a setting the cells engine does not read, always or with the settings as they are: shown red (the interface's error colour, not
 // overhang paint) so what is missing can be seen; it keeps its value
-const IDLE_ALWAYS = new Set([]), IDLE_THROUGH = new Set(['layers', 'lean', 'pitch', 'sag', 'bow', 'span', 'fuse', 'order']);
+const IDLE_ALWAYS = new Set([]), IDLE_THROUGH = new Set(['split', 'layers', 'lean', 'pitch', 'sag', 'bow', 'span', 'fuse', 'order']);
 const idle = p => !!p && (IDLE_ALWAYS.has(p.key) || (state.direction === 'through' && IDLE_THROUGH.has(p.key)) || (p.idleChoices || []).includes(state[p.key]));
 // one setting's row in a popover: a box to type in, its slider and its help
 function row(p, box) {
