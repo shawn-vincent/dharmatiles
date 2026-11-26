@@ -62,7 +62,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .code { position: absolute; left: 10px; bottom: 10px; z-index: 3; display: block; padding: 0; border: 0; border-radius: 0; background: #fff; cursor: pointer; line-height: 0; box-shadow: 0 0 0 1px rgb(26 23 20 / .25); }
 .code svg { display: block; shape-rendering: crispEdges; }
 .code:hover, .code:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
-.sheet { position: absolute; left: 0; right: 0; bottom: 0; margin-inline: auto; z-index: 5; width: min(760px, 100%); max-height: 70%; display: flex; flex-direction: column; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); visibility: hidden; transform: translateY(100%); transition: transform .2s ease, visibility 0s .2s; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; margin-inline: auto; z-index: 5; width: min(760px, 100%); max-height: 35%; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--panel) 74%, transparent); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); visibility: hidden; transform: translateY(100%); transition: transform .2s ease, visibility 0s .2s; }
 .sheet.open { visibility: visible; transform: none; transition: transform .2s ease; }
 .slides { display: flex; width: 200%; flex: 1 1 auto; min-height: 0; transition: transform .2s ease; }
 .slides.deep { transform: translateX(-50%); }
