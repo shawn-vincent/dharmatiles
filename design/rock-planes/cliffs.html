@@ -59,8 +59,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pbox.rng { width: 11ch; }
 .pbox { width: 6ch; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--ink); font: 600 14px var(--f-code); text-align: right; }
 /* the settings: the corner code opens a bottom sheet over the view; its top level lists the settings, a row slides to its page */
-.code { position: absolute; left: 10px; bottom: 10px; z-index: 3; display: block; padding: 0; border: 0; border-radius: 0; background: #fff; cursor: pointer; line-height: 0; box-shadow: 0 0 0 1px rgb(26 23 20 / .25); }
-.code svg { display: block; shape-rendering: crispEdges; }
+.code { position: absolute; left: 10px; bottom: 10px; z-index: 3; display: block; padding: 0; border: 0; border-radius: 0; background: #fff; cursor: pointer; line-height: 0; }
+.code canvas { display: block; image-rendering: pixelated; }
 .code:hover, .code:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
 .sheet { position: absolute; left: 0; right: 0; bottom: 0; margin-inline: auto; z-index: 5; width: min(760px, 100%); max-height: 35%; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--panel) 74%, transparent); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); visibility: hidden; transform: translateY(100%); transition: transform .2s ease, visibility 0s .2s; }
 .sheet.open { visibility: visible; transform: none; transition: transform .2s ease; }
@@ -271,7 +271,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
     </ol>
     <p class="hint"><b>Layered</b>: thirty-eight thin level layers, a handful of slabs in each, the joints staggered, with cracks along Planes. <b>Granite</b>: Direction Through, one layer: every spine runs from the back to the front, and the stones show their ends; Joint under zero, so they overlap into one irregular mass; cracks along Blocks. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart; cracks along Columns. <b>Fieldstone</b>: eighteen rough courses, the stones thrown at random (Order 0%), many-faced and tilted so they read round; Span 30% lets a stone run up through the next course; no cracks. <b>Ashlar</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone; cracks along Blocks.</p>
-    <p class="hint"><b>The settings code</b> is the small QR in the corner of the view, and opens the settings sheet: a row for the style, the seed and each group, each opening its page, and under them the code as text (with the camera) to copy, paste into or edit, and as a large QR. One code holds every setting that differs from its style, the seed and optionally the view; its last character checks it, and a code made by another version of this page is refused.</p>
+    <p class="hint"><b>The settings code</b> is the small colour mosaic in the corner of the view (the code with the camera, in eight colours and error correction, for a screenshot to carry; the page's decoder reads it back), and opens the settings sheet: a row for the style, the seed and each group, each opening its page, and under them the code as text (with the camera) to copy, paste into or edit, and as a large QR. One code holds every setting that differs from its style, the seed and optionally the view; its last character checks it, and a code made by another version of this page is refused.</p>
     <p class="hint">Not here yet: envelopes with concavities and holes (each cell is clipped by a box envelope), curved or irregular ends, twisting sections, erosion, seams between stones, and two networks at once. A cell is a convex region, so a stone is convex before its cracks.</p>
     <p class="hint">The glassy figure at the front left, for scale, is <a href="https://www.printables.com/model/77914-fighter-female-no-supports-needed">Fighter - Female</a> by Teirale, a 28 mm miniature on a 25 mm base (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), with fewer triangles.</p>
   </section>
@@ -2454,7 +2454,7 @@ const baseOf = (p, style) => PRESETS[style][p.key] !== undefined ? PRESETS[style
 const ends = (p, v) => p.range ? v : [v];
 const checkChar = digits => digits.reduce((s, d, i) => s + d * (2 * i + 1), 0) % 32;   /* odd weights: any one misread character changes it */
 const eyeNow = () => ({ position: [camera.position.x, camera.position.y, camera.position.z], target: [controls.target.x, controls.target.y, controls.target.z] });
-function encode(st, opts = {}) {
+function codeBits(st, opts = {}) {
   const bits = [], put = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push(Math.floor(v / 2 ** i) % 2); };
   put(opts.camera ? 1 : 0, 1); put(CODE_FP, 8);
   for (const p of SETTINGS) if (p.own) put(indexOf(p, st[p.key]), widthOf(stepsOf(p)));
@@ -2466,11 +2466,19 @@ function encode(st, opts = {}) {
     const e = eyeNow(), top = 2 ** CAMERA.bits - 1;
     for (const n of [...e.position, ...e.target]) put(Math.min(top, Math.max(0, Math.round(n / CAMERA.step) + 2 ** (CAMERA.bits - 1))), CAMERA.bits);
   }
-  while (bits.length % 5) bits.push(0);
-  const digits = []; for (let i = 0; i < bits.length; i += 5) digits.push(bits.slice(i, i + 5).reduce((a, b) => a * 2 + b, 0));
+  return bits;
+}
+/* the bits packed into bytes, most significant first, the last byte padded with zeros */
+const bytesOf = bits => { const out = new Uint8Array(Math.ceil(bits.length / 8)); bits.forEach((b, i) => { out[i >> 3] |= b << (7 - (i & 7)); }); return out; };
+/* the bits in Crockford base32 (padded with zeros to whole characters), grouped by four, with the check character at the end */
+function base32Of(bits) {
+  const pad = bits.slice(); while (pad.length % 5) pad.push(0);
+  const digits = []; for (let i = 0; i < pad.length; i += 5) digits.push(pad.slice(i, i + 5).reduce((a, b) => a * 2 + b, 0));
   digits.push(checkChar(digits));
   return digits.map(d => CROCKFORD[d]).join('').replace(/(.{4})(?=.)/g, '$1-');
 }
+const encode = (st, opts = {}) => base32Of(codeBits(st, opts));
+const encodeBits = (st, opts = {}) => bytesOf(codeBits(st, opts));
 /* the settings (every GROUPS key) and, when the code has a view part, { draw, view, position, target }; an error says what is wrong in words */
 function decode(text) {
   const raw = String(text).replace(/[\s-]+/g, '').toUpperCase().replace(/[IL]/g, '1').replace(/O/g, '0');
@@ -2478,7 +2486,11 @@ function decode(text) {
   if (digits.length < 4) throw new Error('too short to be a settings code');
   const check = digits.pop();
   if (checkChar(digits) !== check) throw new Error('the check character does not match: a character was misread, lost or added');
-  const bits = digits.flatMap(d => [4, 3, 2, 1, 0].map(i => (d >> i) & 1)); let at = 0;
+  return readBits(digits.flatMap(d => [4, 3, 2, 1, 0].map(i => (d >> i) & 1)));
+}
+const decodeBits = bytes => readBits(Array.from(bytes).flatMap(b => [7, 6, 5, 4, 3, 2, 1, 0].map(i => (b >> i) & 1)));
+function readBits(bits) {
+  let at = 0;
   const take = n => { if (at + n > bits.length) throw new Error('the code is cut short'); let v = 0; for (let i = 0; i < n; i++) v = v * 2 + bits[at++]; return v; };
   const withView = take(1) === 1, fp = take(8);
   if (fp !== CODE_FP) throw new Error(`made by another version of this page (fingerprint ${fp.toString(16).toUpperCase().padStart(2, '0')})`);
@@ -2498,8 +2510,44 @@ function decode(text) {
     const n = Array.from({ length: 6 }, () => +((take(CAMERA.bits) - 2 ** (CAMERA.bits - 1)) * CAMERA.step).toFixed(4));
     view.position = n.slice(0, 3); view.target = n.slice(3);
   }
-  if (bits.length - at >= 5) throw new Error('the code holds more than this page reads');
+  if (bits.length - at >= 8) throw new Error('the code holds more than this page reads');
   return { values, view };
+}
+/* The corner icon: the code's bytes with Reed-Solomon parity (over GF(256), polynomial 0x11d, roots 1, 2, 4, ...) as a square mosaic of cells in eight colours, the corners of the RGB cube (3 bits a cell).
+   The size is 16, 20 or 24 cells, the smallest that fits, and is read from the border, not stored: the left column and bottom row are black (where the grid is, which way up), and the top row and
+   right column alternate black with the other seven colours in order (white, red, green, blue, cyan, magenta, yellow, again), counted from the corner they share with the black ones: the black
+   cells are the clock (the cell size and count) and the colour cells, each colour met several times, are what a reader calibrates by. Inside the border, from the top left, are three cells
+   holding the byte count of the code (9 bits), then the code's bytes and the parity, the cells that are left filled with a fixed pattern. */
+const MOSAIC = { sizes: [16, 20, 24], colours: [[0, 0, 0], [255, 255, 255], [255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 255, 255], [255, 0, 255], [255, 255, 0]], head: 3, parity: 0.25, minParity: 4 };
+const rsParityCount = k => Math.max(MOSAIC.minParity, Math.ceil(k * MOSAIC.parity));
+const GF = (() => { const exp = new Uint8Array(512), log = new Uint8Array(256); let x = 1; for (let i = 0; i < 255; i++) { exp[i] = x; log[x] = i; x <<= 1; if (x & 256) x ^= 0x11d; } for (let i = 255; i < 512; i++) exp[i] = exp[i - 255]; return { exp, log }; })();
+const gfMul = (a, b) => a && b ? GF.exp[GF.log[a] + GF.log[b]] : 0;
+function rsParity(data, nsym) {
+  let gen = [1]; for (let i = 0; i < nsym; i++) { const next = new Array(gen.length + 1).fill(0); gen.forEach((g, j) => { next[j] ^= g; next[j + 1] ^= gfMul(g, GF.exp[i]); }); gen = next; }
+  const rem = new Uint8Array(nsym);
+  for (const d of data) { const f = d ^ rem[0]; rem.copyWithin(0, 1); rem[nsym - 1] = 0; if (f) for (let j = 0; j < nsym; j++) rem[j] ^= gfMul(gen[j + 1], f); }
+  return rem;
+}
+/* the palette index of every cell, row by row, of a mosaic holding these bytes; { size, cells } */
+function mosaicOf(bytes) {
+  const k = bytes.length, word = Uint8Array.from([...bytes, ...rsParity(bytes, rsParityCount(k))]);
+  const need = MOSAIC.head + Math.ceil(word.length * 8 / 3), size = MOSAIC.sizes.find(n => (n - 2) ** 2 >= need);
+  if (!size || k > 511) throw new Error('the code is too long for the corner icon');
+  const cells = new Uint8Array(size * size), inner = [];
+  for (let i = 0; i < size; i++) { cells[i * size] = 0; cells[(size - 1) * size + i] = 0; cells[i] = i % 2 ? 1 + (((i - 1) >> 1) % 7) : 0; const j = size - 1 - i; cells[i * size + size - 1] = j % 2 ? 1 + (((j - 1) >> 1) % 7) : 0; }
+  inner.push(k >> 6, (k >> 3) & 7, k & 7);
+  for (let i = 0; i < word.length * 8; i += 3) { let v = 0; for (let j = 0; j < 3; j++) v = v * 2 + (i + j < word.length * 8 ? (word[(i + j) >> 3] >> (7 - ((i + j) & 7))) & 1 : 0); inner.push(v); }
+  for (let i = inner.length; i < (size - 2) ** 2; i++) inner.push((i * 3 + 1) % 8);
+  inner.forEach((v, i) => { cells[(1 + Math.floor(i / (size - 2))) * size + 1 + (i % (size - 2))] = v; });
+  return { size, cells };
+}
+/* the other way: the bytes of the code and its parity (k bytes first) from a function giving the palette index of the cell at a row and column; the layout, not the error correction */
+function mosaicWord(size, at) {
+  const inner = []; for (let i = 0; i < (size - 2) ** 2; i++) inner.push(at(1 + Math.floor(i / (size - 2)), 1 + (i % (size - 2))));
+  const k = inner[0] * 64 + inner[1] * 8 + inner[2], n = k + rsParityCount(k), bits = [];
+  for (let i = MOSAIC.head; i < inner.length && bits.length < n * 8; i++) for (const s of [2, 1, 0]) bits.push((inner[i] >> s) & 1);
+  if (bits.length < n * 8) throw new Error('the icon is cut short');
+  return { k, word: bytesOf(bits.slice(0, n * 8)) };
 }
 // ---------- end of settings code ----------
 
@@ -2625,7 +2673,7 @@ function initGL() {
     ME = i; selectStone(i); highlightEdge(null); $('einfo').innerHTML = stoneWords(i);
   });
   controls.target.copy(focus()); controls.enablePan = true; controls.minDistance = 20; controls.maxDistance = 600;
-  controls.addEventListener('change', draw); controls.addEventListener('change', fieldSync); controls.update();
+  controls.addEventListener('change', draw); controls.addEventListener('change', fieldSync); controls.addEventListener('end', () => codeSync()); controls.update();
   // a scroll over the view scrolls the page; only a pinch zooms (on a trackpad a pinch comes as a wheel event with Ctrl held)
   viewerEl.addEventListener('wheel', e => { if (!e.ctrlKey) e.stopPropagation(); }, { capture: true });
   new ResizeObserver(resize).observe(viewerEl); resize();
@@ -2656,7 +2704,7 @@ function draw() { if (!renderer) return; if (glass.rig && state.draw === 'struct
 function zoomBy(f) {
   if (camera === ortho) { ortho.zoom = clamp(ortho.zoom / f, 0.2, 8); ortho.updateProjectionMatrix(); }
   else { const d = camera.position.distanceTo(controls.target), to = clamp(d * f, controls.minDistance, controls.maxDistance); camera.position.sub(controls.target).multiplyScalar(to / d).add(controls.target); }
-  controls.update(); draw();
+  controls.update(); draw(); codeSync();
 }
 // zoom to fit: the shape shown, centred, its bounding sphere just inside the view (the view's direction is kept)
 function zoomFit() {
@@ -2666,7 +2714,7 @@ function zoomFit() {
   controls.target.copy(sph.center);
   if (camera === ortho) { const half = ortho.top; ortho.zoom = Math.min(half, half * w / h) / R; ortho.updateProjectionMatrix(); camera.position.copy(dir.multiplyScalar(reachOf())).add(sph.center); }
   else { const vf = persp.fov * DEG / 2, hf = Math.atan(Math.tan(vf) * w / h), d = clamp(R / Math.sin(Math.min(vf, hf)), controls.minDistance, controls.maxDistance); camera.position.copy(dir.multiplyScalar(d)).add(sph.center); }
-  controls.update(); draw();
+  controls.update(); draw(); codeSync();
 }
 
 // what else the view shows: the envelope, the layers' faces and the spines, and the crack network's lines on the stones
@@ -2993,7 +3041,7 @@ function slider(p, get, put) {
   return { el, paint, keys: grip ? [...ends, grip] : ends };
 }
 // ---------- the settings sheet ----------
-/* The corner code is a QR of the settings code and the button that opens a bottom sheet over the view (inside it, so it works full screen). The sheet's top level is a row for each
+/* The corner code is a colour mosaic of the settings code with the camera (see MOSAIC; the page's screenshots are read by it) and the button that opens a bottom sheet over the view (inside it, so it works full screen). The sheet's top level is a row for each
    group, then the code with the camera as text to copy, paste into or edit, and as a large QR; a row slides to its page; Back, Escape or a tap outside goes back or closes */
 const sheetEl = $('sheet'), slides = $('slides'), pgTop = $('pgTop'), pgDetail = $('pgDetail'), rowsEl = $('srows'), codeBtn = $('code'), field = $('codefield'), codeErr = $('codeerr'), said = $('said');
 const plain = (p, v) => p.range ? rangeText(v) + (p.unit || '') : p.choices ? p.choices.find(c => c[0] === v)[1] : v + (p.unit || '');
@@ -3013,12 +3061,18 @@ function qrSvg(q, quiet, px) {
 }
 const sheetOpen = () => sheetEl.classList.contains('open');
 let shownCorner = '', shownField = '', page = null, pageSync = null, saidTimer = 0;
-/* the corner: the code without the camera, so it holds still while orbiting */
+/* the corner: the mosaic of the code with the camera, drawn in cells of whole device pixels (2 CSS px, as near as the screen allows) inside a one-cell quiet zone. It is made again when the
+   settings change and when the camera stops (the end of a drag, a zoom, a view change), not while it moves */
 function codeSync() {
-  const c = encode(state); if (c === shownCorner) return;
-  shownCorner = c; const q = qrOf(c);
-  codeBtn.innerHTML = q ? qrSvg(q, 2, 2) : c;
+  const bits = codeBits(state, { camera: true }), c = base32Of(bits), dpr = window.devicePixelRatio || 1, key = c + '|' + dpr; if (key === shownCorner) return;
+  shownCorner = key;
   codeBtn.setAttribute('aria-label', `Settings (code ${c})`); codeBtn.title = `Settings (code ${c})`;
+  let m; try { m = mosaicOf(bytesOf(bits)); } catch (e) { codeBtn.textContent = 'Settings'; codeBtn.title = e.message; return; }
+  const cell = Math.max(1, Math.round(2 * dpr)), side = (m.size + 2) * cell, cv = document.createElement('canvas'), g = cv.getContext('2d');
+  cv.width = cv.height = side; cv.style.width = cv.style.height = side / dpr + 'px'; cv.setAttribute('aria-hidden', 'true');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, side, side);
+  for (let r = 0; r < m.size; r++) for (let q = 0; q < m.size; q++) { g.fillStyle = `rgb(${MOSAIC.colours[m.cells[r * m.size + q]].join(',')})`; g.fillRect((q + 1) * cell, (r + 1) * cell, cell, cell); }
+  codeBtn.replaceChildren(cv);
 }
 /* the field and the large QR: the code with the camera, left alone while the field is being typed in */
 let fieldQueued = false;
@@ -3085,6 +3139,8 @@ function openSheet() { sheetEl.inert = false; sheetEl.classList.add('open'); cod
 function closeSheet(refocus) { back(); sheetEl.classList.remove('open'); sheetEl.inert = true; codeBtn.setAttribute('aria-expanded', 'false'); if (refocus) codeBtn.focus(); }
 pgDetail.inert = true; sheetEl.inert = true;
 codeBtn.addEventListener('click', () => sheetOpen() ? closeSheet() : openSheet());
+/* a change of pixel ratio (page zoom, another screen) draws the mosaic again in whole device pixels */
+window.addEventListener('resize', () => codeSync());
 $('sclose').addEventListener('click', () => closeSheet(true));
 document.addEventListener('pointerdown', e => { if (sheetOpen() && !e.target.closest('#sheet, #code')) closeSheet(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen()) { e.preventDefault(); if (page) back(); else closeSheet(true); } }, true);   /* first, so what else Escape does waits for the next press */
