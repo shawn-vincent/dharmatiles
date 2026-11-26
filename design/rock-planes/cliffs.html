@@ -2697,16 +2697,15 @@ function readBits(bits) {
   if (bits.length - at >= 8) throw new Error('the code holds more than this page reads');
   return { values, view };
 }
-/* The corner button: the code's bytes with Reed-Solomon parity (over GF(256), polynomial 0x11d, roots 1, 2, 4, ...) as a square mosaic of cells in eight colours (3 bits a cell) that fills the button's whole face, the page's own: the theme's
-   ink is colour 0 and the quiet zone round the mosaic is the theme's raised colour (the button's own background). The size is 30 cells (a button as big as the others at 2 device pixels a cell on a 2x screen), read from the border, not stored: the left column and
+/* The corner button: the code's bytes with Reed-Solomon parity (over GF(256), polynomial 0x11d, roots 1, 2, 4, ...) as a square mosaic of cells in eight colours (3 bits a cell) that fills the button's whole face, the page's own: colour 0 is the theme's matrix tone (a dark one in the dark theme, a light one in the light, apart from the data colours and the quiet zone, so the L is found) and the quiet zone round the mosaic is the theme's raised colour (the button's own background). The size is 30 cells (a button as big as the others at 2 device pixels a cell on a 2x screen), read from the border, not stored: the left column and
    bottom row are colour 0 (an L of one colour on the quiet zone: where the grid is, which way up), and the top row and right column alternate colour 0 with the other seven in order (1 to 7, again),
    counted from the corner they share with the L: the colour-0 cells are the clock (the cell size and count) and the other cells, each colour met several times, are what a reader calibrates by, so a
-   reader needs no palette. Inside the border, a sliders icon sits in the middle on a plate: MOSAIC.face holds, for each size, the grid as rows of characters ('#' an icon cell, drawn in ink; 'o' the plate round it, one cell of halo, drawn in the quiet colour; '.' a
+   reader needs no palette. Inside the border, a sliders icon sits in the middle on a plate: MOSAIC.face holds, for each size, the grid as rows of characters ('#' an icon cell, drawn in MOSAIC.icon, the theme's ink; 'o' the plate round it, one cell of halo, drawn in the quiet colour; '.' a
    cell of data), written out once, so the page and a reader in node agree on every cell and nothing is rasterised at run time. Plate and icon cells carry no data. The data cells, in reading order from the top left, are three cells
    holding the byte count of the code (9 bits), then the code's bytes and the parity, the cells that are left filled with a fixed pattern. Each theme has its own eight (a '--name' is that token of the page, a '#hex' a colour added to it): soft, so the data reads as the button's background behind the icon (light tints in the light theme, deep tones in the dark one), none red or orange (they mean overhang on a model); every two are at least 50 apart in RGB and each at least 45 from the quiet zone. */
 const MOSAIC = { sizes: [30], palettes: {
-  light: ['--ink', '#C3DFC3', '#8888DD', '#DD88AA', '#88DD88', '#E6A8E6', '#DDCC88', '#88CCDD'],
-  dark: ['--ink', '#59264F', '#367D7D', '#7D7D36', '#367D36', '#363D7D', '#7D367D', '#47471F'] }, quiet: '--raised', head: 3, parity: 0.25, minParity: 4, face: {
+  light: ['#A2A8A8', '#C3DFC3', '#8888DD', '#DD88AA', '#88DD88', '#E6A8E6', '#DDCC88', '#88CCDD'],
+  dark: ['#030809', '#59264F', '#367D7D', '#7D7D36', '#367D36', '#363D7D', '#7D367D', '#5A4A1A'] }, quiet: '--raised', icon: '--ink', head: 3, parity: 0.25, minParity: 4, face: {
   30: '............................../............................../............................../............................../............................../............................../............................../............................../.........ooooo................/......oooo###oooooooooo......./......o###############o......./......oooo###oooooooooo......./.........ooooo.ooooo........../......oooooooooo###oooo......./......o###############o......./......oooooooooo###oooo......./...........ooooooooo........../......oooooo###oooooooo......./......o###############o......./......oooooo###oooooooo......./...........ooooo............../............................../............................../............................../............................../............................../............................../............................../............................../..............................'
 } };
 /* the grid of a size as a row of characters each, and its data cells (row, column) in reading order inside the border */
@@ -2715,7 +2714,7 @@ const dataCells = size => { const f = faceOf(size), out = []; for (let r = 1; r 
 /* a theme's eight colours as [r, g, b] and its quiet zone, a token's value from tokenValue(name) (the page: getComputedStyle) */
 const mosaicColours = (theme, tokenValue) => {
   const rgb = t => { const v = t.startsWith('--') ? tokenValue(t).trim() : t; return [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16)); };
-  return { colours: MOSAIC.palettes[theme].map(rgb), quiet: rgb(MOSAIC.quiet) };
+  return { colours: MOSAIC.palettes[theme].map(rgb), quiet: rgb(MOSAIC.quiet), icon: rgb(MOSAIC.icon) };
 };
 const rsParityCount = k => Math.max(MOSAIC.minParity, Math.ceil(k * MOSAIC.parity));
 const GF = (() => { const exp = new Uint8Array(512), log = new Uint8Array(256); let x = 1; for (let i = 0; i < 255; i++) { exp[i] = x; log[x] = i; x <<= 1; if (x & 256) x ^= 0x11d; } for (let i = 255; i < 512; i++) exp[i] = exp[i - 255]; return { exp, log }; })();
@@ -3339,10 +3338,10 @@ function codeSync() {
   let m; try { m = mosaicOf(bytesOf(bits)); } catch (e) { codeBtn.textContent = 'Settings'; codeBtn.title = e.message; return; }
   const cell = Math.max(2, Math.round(dpr)), side = (m.size + 2) * cell, cv = document.createElement('canvas'), g = cv.getContext('2d');
   cv.width = cv.height = side; cv.style.width = cv.style.height = side / dpr + 'px'; cv.setAttribute('aria-hidden', 'true');
-  const { colours, quiet } = mosaicColours(themeNow(), t => getComputedStyle(document.documentElement).getPropertyValue(t));
+  const { colours, quiet, icon } = mosaicColours(themeNow(), t => getComputedStyle(document.documentElement).getPropertyValue(t));
   g.fillStyle = `rgb(${quiet.join(',')})`; g.fillRect(0, 0, side, side);
   const face = faceOf(m.size);
-  for (let r = 0; r < m.size; r++) for (let q = 0; q < m.size; q++) { const f = face[r][q], c = f === 'o' ? quiet : colours[f === '#' ? 0 : m.cells[r * m.size + q]]; g.fillStyle = `rgb(${c.join(',')})`; g.fillRect((q + 1) * cell, (r + 1) * cell, cell, cell); }
+  for (let r = 0; r < m.size; r++) for (let q = 0; q < m.size; q++) { const f = face[r][q], c = f === 'o' ? quiet : (f === '#' ? icon : colours[m.cells[r * m.size + q]]); g.fillStyle = `rgb(${c.join(',')})`; g.fillRect((q + 1) * cell, (r + 1) * cell, cell, cell); }
   codeBtn.replaceChildren(cv);
 }
 /* the field and the large QR: the code with the camera, left alone while the field is being typed in */

@@ -63,7 +63,7 @@ const SIZES = P.MOSAIC.sizes;
 export function read(png) {
   const { width: W, height: H, data } = png, at = (x, y) => (y * W + x) * 4, inside = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
   const px = (x, y) => inside(x, y) ? [data[at(x, y)], data[at(x, y) + 1], data[at(x, y) + 2]] : [0, 0, 0], dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-  const TOL = 80; let lastError = 'no mosaic found';
+  const TOL = 36; let lastError = 'no mosaic found';
   /* the L is one colour (the seed): runs of pixels within TOL of it, and the fraction of it in an edge pixel, measured from the quiet zone's colour just outside */
   const same = (x, y, seed) => inside(x, y) && dist(px(x, y), seed) < TOL;
   const vrun = (x, y, seed) => { let a = y, b = y; while (same(x, a - 1, seed)) a--; while (same(x, b + 1, seed)) b++; return [a, b]; };
@@ -105,7 +105,7 @@ export function read(png) {
       const cache = new Map(), cell = (r, c) => { const k = r * 64 + c; if (!cache.has(k)) cache.set(k, sample(r, c)); return cache.get(k); };
       /* the borders: the left column and bottom row are the L's colour, the clock's even cells are too and its odd cells are another colour */
       const Lc = [0, 1, 2].map(t => { let sum = 0; for (let i = 0; i < N; i++) sum += cell(i, 0)[t] + cell(N - 1, i)[t]; return sum / (2 * N); });
-      const near = v => dist(v, Lc) < 45; let ok = true;
+      const near = v => dist(v, Lc) < 33; let ok = true;
       for (let i = 0; i < N && ok; i++) {
         if (!near(cell(i, 0)) || !near(cell(N - 1, i))) ok = false;
         if ((i % 2 === 0) !== near(cell(0, i))) ok = false;
@@ -115,9 +115,9 @@ export function read(png) {
       /* calibration: colour 0 from the finder L, each other colour from every clock cell that shows it */
       const acc = Array.from({ length: 8 }, () => ({ n: 0, v: [0, 0, 0] })), add = (k, v) => { acc[k].n++; for (let t = 0; t < 3; t++) acc[k].v[t] += v[t]; };
       for (let i = 0; i < N; i++) { add(0, cell(i, 0)); add(0, cell(N - 1, i)); if (i % 2 === 0) { add(0, cell(0, i)); } else add(1 + (((i - 1) >> 1) % 7), cell(0, i)); const j = N - 1 - i; if (j % 2 === 0) add(0, cell(i, N - 1)); else add(1 + (((j - 1) >> 1) % 7), cell(i, N - 1)); }
-      const pal = acc.map(a => a.v.map(t => t / a.n)); let close = false;
-      for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) if (Math.hypot(...pal[a].map((t, i) => t - pal[b][i])) < 50) close = true;
-      if (close) { lastError = 'the colours are not distinct'; continue; }
+      const pal = acc.map(a => a.v.map(t => t / a.n)); let close = false, who = '';
+      for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) if (Math.hypot(...pal[a].map((t, i) => t - pal[b][i])) < 50) { close = true; who = ' ' + a + ' and ' + b; }
+      if (close) { lastError = 'the colours are not distinct:' + who; continue; }
       const idx = (r, c) => { const v = cell(r, c); let best = 0, bd = 1e9; pal.forEach((p, k) => { const d = (p[0] - v[0]) ** 2 + (p[1] - v[1]) ** 2 + (p[2] - v[2]) ** 2; if (d < bd) { bd = d; best = k; } }); return best; };
       let k, word; try { ({ k, word } = P.mosaicWord(N, idx)); } catch (e) { lastError = e.message; continue; }
       const fixed = rsDecode(word, word.length - k);
