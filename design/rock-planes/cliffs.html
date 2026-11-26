@@ -15,7 +15,7 @@
   --ink: #1D2922; --muted: #657168;
   --accent: #287B62; --accent-hi: #1F654F; --on-accent: #F5FFF9;
   --ok: #397A55; --err: #B83B2E;
-  --r: 5px; --r-lg: 10px;
+  --r: 5px; --r-lg: 10px; --prow: 40px; --shead: 41px;   /* the Parts list's row height and the sheet header's: set again for a touch screen below; the page reads --prow */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
@@ -96,10 +96,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ctl.number .slider { flex: 1 1 0; min-width: 0; }
 .pctl { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .pctl > .ctl { flex: 1 1 0; min-width: 0; }
-.pval { flex: none; width: 78px; text-align: right; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }   /* one width on every line, so the sliders line up */
-/* a range's top row ends with its two dots; the low row keeps their room unseen, so the numbers stand in one column */
-.pval .gh { visibility: hidden; font-style: normal; }   /* the decimal place of a whole value: its room kept, so the digits stay where they are, and nothing shown */
-.pval.r2 { display: flex; flex-direction: column; justify-content: center; font-size: 10.5px; line-height: 12px; }   /* a range: low end over high end */
+.pval { flex: none; width: 76px; display: grid; grid-template-columns: 2ch 3ch 2ch 3.5ch; align-content: center; font: 600 12px/13px var(--f-code); color: var(--accent); white-space: nowrap; }   /* one width on every line, so the sliders line up */
+/* a value in four columns, the same on every line: the dots of a range's high end, the whole part (right-aligned), the decimal point and its places (left-aligned), the unit (left-aligned), so the decimal points and the units each stand in a column down the page; a range is two rows, low end over ..high end */
+.pval .d { grid-column: 1; }
+.pval .i { grid-column: 2; text-align: right; }
+.pval .f { grid-column: 3; }
+.pval .u { grid-column: 4; padding-left: 0.5ch; }
 .slider .tick { position: absolute; top: 24px; width: 1px; height: 5px; margin-left: -0.5px; background: var(--muted); pointer-events: none; }
 .slider.one .tick { top: 8px; }
 .pline .slider:not(.one) .tick { top: 20px; }
@@ -149,12 +151,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 #pgProp.stone { box-shadow: inset 8px 0 0 var(--part); background: color-mix(in srgb, var(--part) 22%, transparent); }
 .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent); flex: none; }
 #pgGroup { position: relative; }
-.ptools { position: sticky; top: 41px; z-index: 1; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.ptools { position: sticky; top: var(--shead); z-index: 1; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .ptools input { min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 3px; background: var(--bg); color: var(--ink); font: 500 14px var(--f-body); }
 .ptools input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
 .ptools .pcount { font: 600 12px var(--f-code); color: var(--muted); white-space: nowrap; }
 .plist { position: relative; }
-.prow { position: absolute; left: 0; right: 0; height: 40px; display: grid; grid-template-columns: 14px 5.5em 4.5em 1fr; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: 500 14px var(--f-body); text-align: left; cursor: pointer; }
+.prow { position: absolute; left: 0; right: 0; height: var(--prow); display: grid; grid-template-columns: 14px 5.5em 4.5em 1fr; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: 500 14px var(--f-body); text-align: left; cursor: pointer; }
 .prow:hover, .prow:focus-visible { background: var(--raised); }
 .prow .l, .prow .r { color: var(--muted); font-size: 13px; }
 .prow .r { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -239,6 +241,41 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 @media (max-width: 860px) {
   .main { grid-template-columns: minmax(0, 1fr); }
   .viewer { height: 380px; }
+}
+/* a touch screen: the controls are about 44 px to tap (rows, property lines, the header's buttons, sliders and their handles, choices, boxes) */
+@media (pointer: coarse) {
+  :root { --prow: 48px; --shead: 53px; }
+  .seg button { height: 40px; padding: 0 12px; }
+  .seg button.withicon, .pline .seg button.withicon { height: 40px; }
+  .sel, .btn { height: 44px; }
+  .pbox, .codefield, .ptools input { height: 40px; }
+  .num { height: 36px; }
+  .shead { padding: 4px 12px; }
+  .shead .btn { width: 44px; height: 44px; min-width: 44px; }
+  .srow { min-height: 48px; }
+  .pline { min-height: 48px; }
+  .plabel { height: 44px; }
+  .styles button { padding: 10px 8px; }
+  .checks label { min-height: 40px; }
+  .slider .track::before { content: ""; position: absolute; left: -10px; right: -10px; top: -16px; bottom: -16px; }
+  .slider { height: 54px; }
+  .slider .track, .slider .band { top: 25px; }
+  .slider .tick { top: 30px; }
+  .slider .end { top: 27px; width: 32px; height: 27px; margin-left: -16px; }
+  .slider .end.lo { width: 16px; margin-left: -16px; }
+  .slider .end.hi { width: 16px; margin-left: 0; }
+  .slider .grip { height: 29px; min-width: 48px; background-position: center 8px; }
+  .slider .dim { top: 35px; height: 15px; }
+  .slider.one { height: 44px; }
+  .slider.one .track, .slider.one .band { top: 18px; }
+  .slider.one .tick { top: 23px; }
+  .slider.one .end { top: 20px; height: 24px; }
+  .pline .slider:not(.one) { height: 54px; }
+  .pline .slider:not(.one) .track, .pline .slider:not(.one) .band { top: 25px; }
+  .pline .slider:not(.one) .tick { top: 30px; }
+  .pline .slider:not(.one) .end { top: 27px; height: 27px; }
+  .pline .slider:not(.one) .grip { height: 29px; background-position: center 9px; }
+  .pline .slider:not(.one) .dim { top: 31px; height: 14px; font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -3195,19 +3232,21 @@ const distText = (p, d) => {
   return isU(p) ? amount(p, +t, ' ') : t + (p.unit || '').replace('&nbsp;', ' ');
 };
 const valueText = p => p.range ? isU(p) ? rangeAmount(p, state[p.key], ' ') : rangeText(state[p.key]) : String(state[p.key]);
-/* one number of a setting for a readout: its unit, and room for one decimal place at least (a whole value gets an invisible ".0", so the digits stay where they are as the value changes) */
+/* one number of a setting for a readout, in the columns of .pval: its whole part, its decimal places (with the point; none for a whole value) and its unit (a setting with a square writes a whole number of them as "sq", any other value as mm) */
 function readNum(p, v) {
-  if (isU(p) && v > 0 && Math.abs(v / p.square.mm - Math.round(v / p.square.mm)) < 1e-9) return amount(p, v);
-  const places = (String(p.step).split('.')[1] || '').length, want = places;
-  let t = (+v).toFixed(places); if (t.includes('.')) t = t.replace(/0+$/, '').replace(/\.$/, '');
-  const [ip, fp = ''] = t.split('.'), ghost = (fp ? '' : '.') + '0'.repeat(want - fp.length);
-  return `${ip}${fp ? '.' + fp : ''}${want ? `<i class="gh">${ghost}</i>` : ''}${sfx(p)}`;
+  let n, unit;
+  if (isU(p) && v > 0 && Math.abs(v / p.square.mm - Math.round(v / p.square.mm)) < 1e-9) { n = String(Math.round(v / p.square.mm)); unit = p.square.word; }
+  else {
+    const places = (String(p.step).split('.')[1] || '').length; n = (+v).toFixed(places); if (n.includes('.')) n = n.replace(/0+$/, '').replace(/\.$/, '');
+    unit = sfx(p).replace('&nbsp;', '');
+  }
+  const [ip, fp = ''] = n.split('.');
+  return `<span class="i">${ip}</span><span class="f">${fp ? '.' + fp : ''}</span><span class="u">${unit}</span>`;
 }
-/* the value shown, read-only, beside the slider on a line of a group page: { el, paint } */
+/* the value shown, read-only, beside the slider on a line of a group page: { el, paint }; a range is its low end over its high end after two dots */
 function readout(p) {
   const o = document.createElement('output'); o.className = 'pval';
-  if (p.range) o.classList.add('r2');
-  const paint = () => { const v = state[p.key]; o.innerHTML = p.range ? `<span>${readNum(p, v[0])}..</span><span>${readNum(p, v[1])}<i class="gh">..</i></span>` : readNum(p, v); }; paint();
+  const paint = () => { const v = state[p.key]; o.innerHTML = p.range ? readNum(p, v[0]) + '<span class="d">..</span>' + readNum(p, v[1]) : readNum(p, v); }; paint();
   return { el: o, paint };
 }
 /* the value as a box to type in, on a property page: { el, paint } */
@@ -3442,7 +3481,9 @@ function closeSheet(refocus) { stack.length = 0; propPaint = null; pageSync = nu
 showDepth(); sheetEl.inert = true;
 /* Parts: the stones the generator made, under the settings (they are what the settings asked for, made). The list page is [PARTS] (a search, the count, one fixed-height row for each stone, only the rows in view in the page) and a stone's page is [PARTS, STONE],
    derived from SEL. selectStone is the one way a stone is chosen (a 3D tap, a row, a link): it sets SEL, opens the sheet and shows the stone's page; Back from a stone's page clears SEL, and an empty tap clears it and shows the list */
-const PARTS = { page: 'parts' }, STONE = { page: 'stone' }, ROW = 40, PBUF = 4;
+const PARTS = { page: 'parts' }, STONE = { page: 'stone' }, PBUF = 4;
+const cssPx = name => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+let ROW = cssPx('--prow');   /* the Parts list's row height, from the page's --prow (a touch screen's is taller) */
 const partsRow = document.createElement('button'); partsRow.className = 'srow';
 partsRow.innerHTML = `${ICON.parts}<span class="k">Parts</span><span class="v"></span>${svg('<path d="M9 6l6 6-6 6"/>', 'chev')}`; partsRow.setAttribute('aria-label', 'Parts: open');
 partsRow.addEventListener('click', () => openParts()); rowsEl.append(partsRow);
@@ -3465,6 +3506,7 @@ Object.assign(pbox, { type: 'text', placeholder: 'Search parts', className: 'pse
 partsTools.append(pbox, pcount);
 let pQuery = '', pFilter = [], pFirst = -1, pLast = -1;
 const partsLive = () => stack[0] === PARTS && pgGroup.firstChild === partsHead;
+matchMedia('(pointer: coarse)').addEventListener('change', () => { ROW = cssPx('--prow'); filterParts(); });
 /* the rows whose visible words hold the search, and the list as tall as all of them; the rows in view are painted */
 function filterParts() {
   const P = shown && shown.surf.stoneRel ? partsOf(shown.surf) : null, q = pQuery.trim().toLowerCase(); pFilter = [];
